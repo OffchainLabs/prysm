@@ -176,7 +176,7 @@ func TestAdmissiblePeersForDataColumns(t *testing.T) {
 			// Call the function we want to test
 			admissiblePeersByDataColumn, dataColumnsByAdmissiblePeer, _, err := AdmissiblePeersForDataColumns(
 				peerList,
-				tc.neededDataColumns,
+				uint64MapToSortedSlice(tc.neededDataColumns),
 				service,
 			)
 			require.NoError(t, err)
@@ -336,7 +336,7 @@ func TestSelectPeersToFetchDataColumnsFrom(t *testing.T) {
 			}
 			params.OverrideBeaconConfig(cfg)
 
-			actual, err := SelectPeersToFetchDataColumnsFrom(tc.neededDataColumns, tc.dataColumnsByPeer)
+			actual, err := SelectPeersToFetchDataColumnsFrom(uint64MapToSortedSlice(tc.neededDataColumns), tc.dataColumnsByPeer)
 
 			if tc.err != nil {
 				require.Equal(t, tc.err.Error(), err.Error())
@@ -585,7 +585,7 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 			// Call the function under test
 			responseCols, err := RequestDataColumnSidecarsByRoot(
 				context.Background(),
-				tc.dataColumns,
+				uint64MapToSortedSlice(tc.dataColumns),
 				roBlock,
 				peerIDs,
 				clock,

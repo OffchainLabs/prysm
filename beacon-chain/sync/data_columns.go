@@ -27,7 +27,7 @@ import (
 // and verify them according to `newColumnsVerifier` rules.
 func RequestDataColumnSidecarsByRoot(
 	ctx context.Context,
-	dataColumnsToFetch map[uint64]bool,
+	dataColumnsToFetch []uint64,
 	block blocks.ROBlock,
 	peers []core.PeerID,
 	clock *startup.Clock,
@@ -47,14 +47,14 @@ func RequestDataColumnSidecarsByRoot(
 
 	verifiedSidecars := make([]blocks.VerifiedRODataColumn, 0, len(dataColumnsToFetch))
 	remainingMissingColumns := make(map[uint64]bool, len(dataColumnsToFetch))
-	for column := range dataColumnsToFetch {
+	for _, column := range dataColumnsToFetch {
 		remainingMissingColumns[column] = true
 	}
 
 	blockRoot := block.Root()
 
 	for len(dataColumnsByAdmissiblePeer) > 0 {
-		peersToFetchFrom, err := SelectPeersToFetchDataColumnsFrom(remainingMissingColumns, dataColumnsByAdmissiblePeer)
+		peersToFetchFrom, err := SelectPeersToFetchDataColumnsFrom(uint64MapToSortedSlice(remainingMissingColumns), dataColumnsByAdmissiblePeer)
 		if err != nil {
 			return nil, errors.Wrap(err, "select peers to fetch data columns from")
 		}
@@ -165,7 +165,7 @@ func RequestDataColumnSidecarsByRoot(
 
 // MissingDataColumns looks at the data columns we should store for a given block regarding `custodyGroupCount`,
 // and returns the indices of the missing ones.
-func MissingDataColumns(block blocks.ROBlock, nodeID enode.ID, custodyGroupCount uint64, dataColumnStorage filesystem.DataColumnStorageSummarizer) (map[uint64]bool, error) {
+func MissingDataColumns(block blocks.ROBlock, nodeID enode.ID, custodyGroupCount uint64, dataColumnStorage filesystem.DataColumnStorageSummarizer) ([]uint64, error) {
 	// Blocks before Fulu have no data columns.
 	if block.Version() < version.Fulu {
 		return nil, nil
@@ -202,10 +202,10 @@ func MissingDataColumns(block blocks.ROBlock, nodeID enode.ID, custodyGroupCount
 	}
 
 	// Compute the missing columns.
-	missingColumns := make(map[uint64]bool, len(expectedColumns))
+	missingColumns := make([]uint64, 0, len(expectedColumns))
 	for column := range expectedColumns {
 		if !storedColumns[column] {
-			missingColumns[column] = true
+			missingColumns = append(missingColumns, column)
 		}
 	}
 
@@ -214,13 +214,10 @@ func MissingDataColumns(block blocks.ROBlock, nodeID enode.ID, custodyGroupCount
 
 // SelectPeersToFetchDataColumnsFrom implements greedy algorithm in order to select peers to fetch data columns from.
 // https://en.wikipedia.org/wiki/Set_cover_problem#Greedy_algorithm
-func SelectPeersToFetchDataColumnsFrom(
-	neededDataColumns map[uint64]bool,
-	dataColumnsByPeer map[peer.ID]map[uint64]bool,
-) (map[peer.ID][]uint64, error) {
+func SelectPeersToFetchDataColumnsFrom(neededDataColumns []uint64, dataColumnsByPeer map[peer.ID]map[uint64]bool) (map[peer.ID][]uint64, error) {
 	// Copy the provided needed data columns into a set that we will remove elements from.
 	remainingDataColumns := make(map[uint64]bool, len(neededDataColumns))
-	for dataColumn := range neededDataColumns {
+	for _, dataColumn := range neededDataColumns {
 		remainingDataColumns[dataColumn] = true
 	}
 
@@ -298,7 +295,7 @@ func SelectPeersToFetchDataColumnsFrom(
 // but with only one column queried in each request.
 func AdmissiblePeersForDataColumns(
 	peers []peer.ID,
-	neededDataColumns map[uint64]bool,
+	neededDataColumns []uint64,
 	p2p p2p.P2P,
 ) (map[peer.ID]map[uint64]bool, map[uint64][]peer.ID, []string, error) {
 	peerCount := len(peers)
@@ -320,7 +317,7 @@ func AdmissiblePeersForDataColumns(
 	// Compute a map from needed data columns to their peers.
 	admissiblePeersByDataColumn := make(map[uint64][]peer.ID, neededDataColumnsCount)
 	for peerId, peerDataColumns := range dataColumnsByAdmissiblePeer {
-		for dataColumn := range neededDataColumns {
+		for _, dataColumn := range neededDataColumns {
 			if peerDataColumns[dataColumn] {
 				admissiblePeersByDataColumn[dataColumn] = append(admissiblePeersByDataColumn[dataColumn], peerId)
 			}
@@ -381,10 +378,7 @@ func custodyColumnsFromPeers(peers []peer.ID, p2p p2p.P2P) (map[peer.ID]map[uint
 
 // `filterPeerWhichCustodyAtLeastOneDataColumn` filters peers which custody at least one data column
 // specified in `neededDataColumns`. It returns also a list of descriptions for non admissible peers.
-func filterPeerWhichCustodyAtLeastOneDataColumn(
-	neededDataColumns map[uint64]bool,
-	inputDataColumnsByPeer map[peer.ID]map[uint64]bool,
-) (map[peer.ID]map[uint64]bool, []string) {
+func filterPeerWhichCustodyAtLeastOneDataColumn(neededDataColumns []uint64, inputDataColumnsByPeer map[peer.ID]map[uint64]bool) (map[peer.ID]map[uint64]bool, []string) {
 	// Get the count of needed data columns.
 	neededDataColumnsCount := uint64(len(neededDataColumns))
 
@@ -393,7 +387,7 @@ func filterPeerWhichCustodyAtLeastOneDataColumn(
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
 	if neededDataColumnsCount < numberOfColumns {
-		neededDataColumnsLog = uint64MapToSortedSlice(neededDataColumns)
+		neededDataColumnsLog = neededDataColumns
 	}
 
 	outputDataColumnsByPeer := make(map[peer.ID]map[uint64]bool, len(inputDataColumnsByPeer))
@@ -401,7 +395,7 @@ func filterPeerWhichCustodyAtLeastOneDataColumn(
 
 outerLoop:
 	for peer, peerCustodyDataColumns := range inputDataColumnsByPeer {
-		for neededDataColumn := range neededDataColumns {
+		for _, neededDataColumn := range neededDataColumns {
 			if peerCustodyDataColumns[neededDataColumn] {
 				outputDataColumnsByPeer[peer] = peerCustodyDataColumns
 

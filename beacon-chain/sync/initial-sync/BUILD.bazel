@@ -21,7 +21,6 @@ go_library(
         "//beacon-chain/core/feed/block:go_default_library",
         "//beacon-chain/core/feed/state:go_default_library",
         "//beacon-chain/core/peerdas:go_default_library",
-        "//beacon-chain/core/time:go_default_library",
         "//beacon-chain/core/transition:go_default_library",
         "//beacon-chain/das:go_default_library",
         "//beacon-chain/db:go_default_library",

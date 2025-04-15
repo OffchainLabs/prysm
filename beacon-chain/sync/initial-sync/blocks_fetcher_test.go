@@ -1470,36 +1470,7 @@ func defaultMockChain(t *testing.T, currentSlot uint64) (*mock.ChainService, *st
 	return chain, clock
 }
 
-func TestBuildBwbSlices(t *testing.T) {
-	areBwbSlicesEqual := func(lefts, rights []bwbSlice) bool {
-		if len(lefts) != len(rights) {
-			return false
-		}
-
-		for i := range lefts {
-			left, right := lefts[i], rights[i]
-			if left.start != right.start {
-				return false
-			}
-
-			if left.end != right.end {
-				return false
-			}
-
-			if len(left.dataColumns) != len(right.dataColumns) {
-				return false
-			}
-
-			for dataColumn := range left.dataColumns {
-				if _, ok := right.dataColumns[dataColumn]; !ok {
-					return false
-				}
-			}
-		}
-
-		return true
-	}
-
+func TestBuildDataColumnByRangeRequests(t *testing.T) {
 	type missingColumnsWithCommitment struct {
 		areCommitments bool
 		missingColumns map[uint64]bool
@@ -1513,25 +1484,25 @@ func TestBuildBwbSlices(t *testing.T) {
 		missingColumnsWithCommitments []*missingColumnsWithCommitment
 
 		// output
-		bwbSlices []bwbSlice
+		requests []*ethpb.DataColumnSidecarsByRangeRequest
 	}{
 		{
 			name:                          "no item",
 			batchSize:                     32,
 			missingColumnsWithCommitments: []*missingColumnsWithCommitment{},
-			bwbSlices:                     []bwbSlice{},
+			requests:                      nil,
 		},
 		{
-			name:                          "one item, - no missing columns",
+			name:                          "one item - no missing columns",
 			batchSize:                     32,
 			missingColumnsWithCommitments: []*missingColumnsWithCommitment{{areCommitments: true, missingColumns: map[uint64]bool{}}},
-			bwbSlices:                     []bwbSlice{{start: 0, end: 0, dataColumns: map[uint64]bool{}}},
+			requests:                      []*ethpb.DataColumnSidecarsByRangeRequest{{StartSlot: 0, Count: 1, Columns: []uint64{}}},
 		},
 		{
 			name:                          "one item - some missing columns",
 			batchSize:                     32,
 			missingColumnsWithCommitments: []*missingColumnsWithCommitment{{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}}},
-			bwbSlices:                     []bwbSlice{{start: 0, end: 0, dataColumns: map[uint64]bool{1: true, 3: true, 5: true}}},
+			requests:                      []*ethpb.DataColumnSidecarsByRangeRequest{{StartSlot: 0, Count: 1, Columns: []uint64{1, 3, 5}}},
 		},
 		{
 			name:      "two items - no break",
@@ -1540,7 +1511,7 @@ func TestBuildBwbSlices(t *testing.T) {
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
 			},
-			bwbSlices: []bwbSlice{{start: 0, end: 1, dataColumns: map[uint64]bool{1: true, 3: true, 5: true}}},
+			requests: []*ethpb.DataColumnSidecarsByRangeRequest{{StartSlot: 0, Count: 2, Columns: []uint64{1, 3, 5}}},
 		},
 		{
 			name:      "three items - no break",
@@ -1550,7 +1521,7 @@ func TestBuildBwbSlices(t *testing.T) {
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
 			},
-			bwbSlices: []bwbSlice{{start: 0, end: 2, dataColumns: map[uint64]bool{1: true, 3: true, 5: true}}},
+			requests: []*ethpb.DataColumnSidecarsByRangeRequest{{StartSlot: 0, Count: 3, Columns: []uint64{1, 3, 5}}},
 		},
 		{
 			name:      "five items - columns break",
@@ -1562,69 +1533,69 @@ func TestBuildBwbSlices(t *testing.T) {
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true}},
 				{areCommitments: true, missingColumns: map[uint64]bool{}},
 			},
-			bwbSlices: []bwbSlice{
-				{start: 0, end: 1, dataColumns: map[uint64]bool{1: true, 3: true, 5: true}},
-				{start: 2, end: 3, dataColumns: map[uint64]bool{1: true, 3: true}},
-				{start: 4, end: 4, dataColumns: map[uint64]bool{}},
+			requests: []*ethpb.DataColumnSidecarsByRangeRequest{
+				{StartSlot: 0, Count: 2, Columns: []uint64{1, 3, 5}},
+				{StartSlot: 2, Count: 2, Columns: []uint64{1, 3}},
+				{StartSlot: 4, Count: 1, Columns: []uint64{}},
 			},
 		},
 		{
 			name:      "seven items - gap",
 			batchSize: 32,
 			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
-				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}}, // 0
-				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}}, // 1
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
 				nil,
 				nil,
-				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}}, // 2
-				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}}, // 3
-				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}}, // 4
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
 			},
-			bwbSlices: []bwbSlice{
-				{start: 0, end: 4, dataColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+			requests: []*ethpb.DataColumnSidecarsByRangeRequest{
+				{StartSlot: 0, Count: 7, Columns: []uint64{1, 3, 5}},
 			},
 		},
 		{
 			name:      "seven items - only breaks",
 			batchSize: 32,
 			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
-				{areCommitments: true, missingColumns: map[uint64]bool{}},                          // 0
-				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}}, // 1
+				{areCommitments: true, missingColumns: map[uint64]bool{}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
 				nil,
-				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}}, // 2
-				{areCommitments: true, missingColumns: map[uint64]bool{2: true}},                   // 3
-				{areCommitments: true, missingColumns: map[uint64]bool{}},                          // 4
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{2: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{}},
 			},
-			bwbSlices: []bwbSlice{
-				{start: 0, end: 0, dataColumns: map[uint64]bool{}},
-				{start: 1, end: 2, dataColumns: map[uint64]bool{1: true, 3: true, 5: true}},
-				{start: 3, end: 3, dataColumns: map[uint64]bool{2: true}},
-				{start: 4, end: 4, dataColumns: map[uint64]bool{}},
+			requests: []*ethpb.DataColumnSidecarsByRangeRequest{
+				{StartSlot: 0, Count: 1, Columns: []uint64{}},
+				{StartSlot: 1, Count: 3, Columns: []uint64{1, 3, 5}},
+				{StartSlot: 4, Count: 1, Columns: []uint64{2}},
+				{StartSlot: 5, Count: 1, Columns: []uint64{}},
 			},
 		},
 		{
 			name:      "thirteen items - some blocks without commitments",
 			batchSize: 32,
 			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
-				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}}, // 0
-				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}}, // 1
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
 				nil,
-				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}}, // 2
-				{areCommitments: true, missingColumns: map[uint64]bool{2: true, 4: true}},          // 3
-				{areCommitments: false, missingColumns: nil},                                       // 4
-				{areCommitments: false, missingColumns: nil},                                       // 5
-				{areCommitments: true, missingColumns: map[uint64]bool{2: true, 4: true}},          // 6
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{2: true, 4: true}},
+				{areCommitments: false, missingColumns: nil},
+				{areCommitments: false, missingColumns: nil},
+				{areCommitments: true, missingColumns: map[uint64]bool{2: true, 4: true}},
 				nil,
 				nil,
-				{areCommitments: true, missingColumns: map[uint64]bool{1: true}}, // 7
-				{areCommitments: true, missingColumns: map[uint64]bool{1: true}}, // 8
-				{areCommitments: false, missingColumns: nil},                     // 9
-				{areCommitments: false, missingColumns: nil},                     // 10
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true}},
+				{areCommitments: false, missingColumns: nil},
+				{areCommitments: false, missingColumns: nil},
 			},
-			bwbSlices: []bwbSlice{
-				{start: 0, end: 2, dataColumns: map[uint64]bool{1: true, 3: true, 5: true}},
-				{start: 3, end: 6, dataColumns: map[uint64]bool{2: true, 4: true}},
-				{start: 7, end: 10, dataColumns: map[uint64]bool{1: true}},
+			requests: []*ethpb.DataColumnSidecarsByRangeRequest{
+				{StartSlot: 0, Count: 4, Columns: []uint64{1, 3, 5}},
+				{StartSlot: 4, Count: 6, Columns: []uint64{2, 4}},
+				{StartSlot: 10, Count: 4, Columns: []uint64{1}},
 			},
 		},
 		{
@@ -1637,9 +1608,9 @@ func TestBuildBwbSlices(t *testing.T) {
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
 				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
 			},
-			bwbSlices: []bwbSlice{
-				{start: 0, end: 2, dataColumns: map[uint64]bool{1: true, 3: true, 5: true}},
-				{start: 3, end: 4, dataColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+			requests: []*ethpb.DataColumnSidecarsByRangeRequest{
+				{StartSlot: 0, Count: 3, Columns: []uint64{1, 3, 5}},
+				{StartSlot: 3, Count: 2, Columns: []uint64{1, 3, 5}},
 			},
 		},
 		{
@@ -1658,12 +1629,12 @@ func TestBuildBwbSlices(t *testing.T) {
 				{areCommitments: false, missingColumns: nil},
 				{areCommitments: true, missingColumns: map[uint64]bool{}},
 			},
-			bwbSlices: []bwbSlice{
-				{start: 0, end: 2, dataColumns: map[uint64]bool{1: true, 3: true, 5: true}},
-				{start: 3, end: 5, dataColumns: map[uint64]bool{1: true, 3: true}},
-				{start: 6, end: 6, dataColumns: map[uint64]bool{1: true, 3: true}},
-				{start: 7, end: 9, dataColumns: map[uint64]bool{}},
-				{start: 10, end: 10, dataColumns: map[uint64]bool{}},
+			requests: []*ethpb.DataColumnSidecarsByRangeRequest{
+				{StartSlot: 0, Count: 3, Columns: []uint64{1, 3, 5}},
+				{StartSlot: 3, Count: 3, Columns: []uint64{1, 3}},
+				{StartSlot: 6, Count: 1, Columns: []uint64{1, 3}},
+				{StartSlot: 7, Count: 3, Columns: []uint64{}},
+				{StartSlot: 10, Count: 1, Columns: []uint64{}},
 			},
 		},
 	}
@@ -1673,7 +1644,7 @@ func TestBuildBwbSlices(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			bwbs := make([]blocks.BlockWithROSidecars, 0, len(tt.missingColumnsWithCommitments))
+			roBlocks := make([]blocks.ROBlock, 0, len(tt.missingColumnsWithCommitments))
 			missingColumnsByRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool, len(tt.missingColumnsWithCommitments))
 			for i, missingColumnsWithCommitments := range tt.missingColumnsWithCommitments {
 				if missingColumnsWithCommitments == nil {
@@ -1682,7 +1653,7 @@ func TestBuildBwbSlices(t *testing.T) {
 
 				missingColumns := missingColumnsWithCommitments.missingColumns
 
-				pbSignedBeaconBlock := util.NewBeaconBlockDeneb()
+				pbSignedBeaconBlock := util.NewBeaconBlockFulu()
 
 				signedBeaconBlock, err := blocks.NewSignedBeaconBlock(pbSignedBeaconBlock)
 				require.NoError(t, err)
@@ -1697,21 +1668,15 @@ func TestBuildBwbSlices(t *testing.T) {
 				roBlock, err := blocks.NewROBlock(signedBeaconBlock)
 				require.NoError(t, err)
 
-				bwb := blocks.BlockWithROSidecars{Block: roBlock}
-				bwbs = append(bwbs, bwb)
+				roBlocks = append(roBlocks, roBlock)
+				roBlockRoot := roBlock.Root()
 
-				blockRoot := bwb.Block.Root()
-				missingColumnsByRoot[blockRoot] = missingColumns
+				missingColumnsByRoot[roBlockRoot] = missingColumns
 			}
 
-			wrappedBwbsMissingColumns := &bwbsMissingColumns{
-				bwbs:                 bwbs,
-				missingColumnsByRoot: missingColumnsByRoot,
-			}
-
-			bwbSlices, err := buildBwbSlices(wrappedBwbsMissingColumns, tt.batchSize)
+			requests, err := buildDataColumnByRangeRequests(roBlocks, missingColumnsByRoot, tt.batchSize)
 			require.NoError(t, err)
-			require.Equal(t, true, areBwbSlicesEqual(tt.bwbSlices, bwbSlices))
+			require.DeepSSZEqual(t, tt.requests, requests)
 		})
 	}
 }
@@ -1720,7 +1685,6 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 	const (
 		blobsCount    = 6
 		peersHeadSlot = 100
-		delay         = 0 * time.Second
 	)
 
 	testCases := []struct {
@@ -2100,7 +2064,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			// Create blocks, RO data columns and data columns sidecar from slot.
 			roBlocks := make([]blocks.ROBlock, len(tc.blocksParams))
 			roDatasColumns := make([][]blocks.RODataColumn, len(tc.blocksParams))
-			dataColumnsSidecarFromSlot := make(map[primitives.Slot][]*ethpb.DataColumnSidecar, len(tc.blocksParams))
+			dataColumnsSidecarBySlot := make(map[primitives.Slot][]*ethpb.DataColumnSidecar, len(tc.blocksParams))
 
 			for i, blockParams := range tc.blocksParams {
 				pbSignedBeaconBlock := util.NewBeaconBlockFulu()
@@ -2128,7 +2092,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 					pbDataColumnsSidecar, err := peerdas.DataColumnSidecars(signedBeaconBlock, cellsAndProofs)
 					require.NoError(t, err)
 
-					dataColumnsSidecarFromSlot[blockParams.slot] = pbDataColumnsSidecar
+					dataColumnsSidecarBySlot[blockParams.slot] = pbDataColumnsSidecar
 
 					roDataColumns := make([]blocks.RODataColumn, 0, len(pbDataColumnsSidecar))
 					for _, pbDataColumnSidecar := range pbDataColumnsSidecar {
@@ -2141,6 +2105,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 					roDatasColumns[i] = roDataColumns
 				}
 
+				roDatasColumns = append(roDatasColumns, nil)
 				signedBeaconBlock, err := blocks.NewSignedBeaconBlock(pbSignedBeaconBlock)
 				require.NoError(t, err)
 
@@ -2180,7 +2145,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			// Connect the peers.
 			peers := make([]*p2ptest.TestP2P, 0, len(tc.peersParams))
 			for i, peerParams := range tc.peersParams {
-				peer := createAndConnectPeer(t, p2pSvc, chain, dataColumnsSidecarFromSlot, peerParams, i)
+				peer := createAndConnectPeer(t, p2pSvc, chain, dataColumnsSidecarBySlot, peerParams, i)
 				peers = append(peers, peer)
 			}
 
@@ -2196,11 +2161,6 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 				p2pSvc.Peers().SetChainState(peerID, status)
 			}
 
-			// Create `bwb`.
-			bwb := make([]blocks.BlockWithROSidecars, 0, len(tc.blocksParams))
-			for _, roBlock := range roBlocks {
-				bwb = append(bwb, blocks.BlockWithROSidecars{Block: roBlock})
-			}
 			clockSync := startup.NewClockSynchronizer()
 			require.NoError(t, clockSync.SetClock(clock))
 			iniWaiter := verification.NewInitializerWaiter(clockSync, nil, nil)
@@ -2218,7 +2178,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			})
 
 			// Fetch the data columns from the peers.
-			err = blocksFetcher.fetchMissingDataColumnsFromPeers(ctx, bwb, peersID, delay, tc.batchSize)
+			fetchedRoDataColumnsByRoot, err := blocksFetcher.fetchMissingDataColumnsFromPeers(ctx, roBlocks, peersID, tc.batchSize)
 			if !tc.isError {
 				require.NoError(t, err)
 			} else {
@@ -2226,24 +2186,36 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 				return
 			}
 
-			// Check the added RO data columns.
-			for i := range bwb {
-				blockWithROBlobs := bwb[i]
-				addedRODataColumns := tc.addedRODataColumns[i]
+			expectedDataColumnsByRoot := make(map[[fieldparams.RootLength]byte][]blocks.RODataColumn)
 
-				if addedRODataColumns == nil {
-					require.Equal(t, 0, len(blockWithROBlobs.Columns))
-					continue
-				}
-
+			for i, addedColumns := range tc.addedRODataColumns {
+				root := roBlocks[i].Root()
 				expectedRODataColumns := make([]blocks.RODataColumn, 0, len(tc.addedRODataColumns[i]))
-				for _, column := range addedRODataColumns {
+				for _, column := range addedColumns {
 					roDataColumn := roDatasColumns[i][column]
 					expectedRODataColumns = append(expectedRODataColumns, roDataColumn)
 				}
 
-				actualRODataColumns := blockWithROBlobs.Columns
-				require.DeepSSZEqual(t, expectedRODataColumns, actualRODataColumns)
+				if len(expectedRODataColumns) > 0 {
+					expectedDataColumnsByRoot[root] = expectedRODataColumns
+				}
+			}
+
+			require.Equal(t, len(expectedDataColumnsByRoot), len(fetchedRoDataColumnsByRoot))
+
+			for root := range expectedDataColumnsByRoot {
+				expectedDataColumns := expectedDataColumnsByRoot[root]
+				fetchedDataColumns := fetchedRoDataColumnsByRoot[root]
+
+				sort.Slice(expectedDataColumns, func(i, j int) bool {
+					return expectedDataColumns[i].Index < expectedDataColumns[j].Index
+				})
+
+				sort.Slice(fetchedDataColumns, func(i, j int) bool {
+					return fetchedDataColumns[i].Index < fetchedDataColumns[j].Index
+				})
+
+				require.DeepSSZEqual(t, expectedDataColumns, fetchedDataColumns)
 			}
 		})
 	}

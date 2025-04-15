@@ -4,11 +4,9 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
 	p2pTypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -190,7 +188,7 @@ func (f *blocksFetcher) findFork(ctx context.Context, slot primitives.Slot) (*fo
 			"peer": pid,
 			"step": fmt.Sprintf("%d/%d", i+1, len(peers)),
 		}).Debug("Searching for alternative blocks")
-		fork, err := f.findForkWithPeer(ctx, pid, slot)
+		fork, err := f.findForkWithPeer(ctx, pid, peers, slot)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"peer":  pid,
@@ -210,12 +208,7 @@ func findForkReqRangeSize() uint64 {
 }
 
 // findForkWithPeer loads some blocks from a peer in an attempt to find alternative blocks.
-func (f *blocksFetcher) findForkWithPeer(ctx context.Context, pid peer.ID, slot primitives.Slot) (*forkData, error) {
-	const (
-		delay     = 5 * time.Second
-		batchSize = 32
-	)
-
+func (f *blocksFetcher) findForkWithPeer(ctx context.Context, pid peer.ID, peers []peer.ID, slot primitives.Slot) (*forkData, error) {
 	reqCount := findForkReqRangeSize()
 	// Safe-guard, since previous epoch is used when calculating.
 	if uint64(slot) < reqCount {
@@ -258,7 +251,7 @@ func (f *blocksFetcher) findForkWithPeer(ctx context.Context, pid peer.ID, slot 
 	first := reqBlocks[0]
 	if !f.chain.HasBlock(ctx, first.Block().ParentRoot()) {
 		// Backtrack on a root, to find a common ancestor from which we can resume syncing.
-		fork, err := f.findAncestor(ctx, pid, first)
+		fork, err := f.findAncestor(ctx, pid, peers, first)
 		if err != nil {
 			return nil, fmt.Errorf("failed to find common ancestor: %w", err)
 		}
@@ -286,15 +279,11 @@ func (f *blocksFetcher) findForkWithPeer(ctx context.Context, pid peer.ID, slot 
 		if err != nil {
 			return nil, errors.Wrap(err, "invalid blocks received in findForkWithPeer")
 		}
-		if coreTime.PeerDASIsActive(block.Block().Slot()) {
-			if err := f.fetchMissingDataColumnsFromPeers(ctx, bwb, []peer.ID{pid}, delay, batchSize); err != nil {
-				return nil, errors.Wrap(err, "unable to retrieve blobs for blocks found in findForkWithPeer")
-			}
-		} else {
-			if err = f.fetchBlobsFromPeer(ctx, bwb, pid, []peer.ID{pid}); err != nil {
-				return nil, errors.Wrap(err, "unable to retrieve blobs for blocks found in findForkWithPeer")
-			}
+
+		if err := f.fetchSidecars(ctx, pid, peers, bwb); err != nil {
+			return nil, errors.Wrap(err, "fetch sidecars")
 		}
+
 		// We need to fetch the blobs for the given alt-chain if any exist, so that we can try to verify and import
 		// the blocks.
 
@@ -306,11 +295,8 @@ func (f *blocksFetcher) findForkWithPeer(ctx context.Context, pid peer.ID, slot 
 }
 
 // findAncestor tries to figure out common ancestor slot that connects a given root to known block.
-func (f *blocksFetcher) findAncestor(ctx context.Context, pid peer.ID, b interfaces.ReadOnlySignedBeaconBlock) (*forkData, error) {
-	const (
-		delay     = 5 * time.Second
-		batchSize = 32
-	)
+func (f *blocksFetcher) findAncestor(ctx context.Context, pid peer.ID, peers []peer.ID, b interfaces.ReadOnlySignedBeaconBlock) (*forkData, error) {
+
 	outBlocks := []interfaces.ReadOnlySignedBeaconBlock{b}
 	for i := uint64(0); i < backtrackingMaxHops; i++ {
 		parentRoot := outBlocks[len(outBlocks)-1].Block().ParentRoot()
@@ -320,14 +306,8 @@ func (f *blocksFetcher) findAncestor(ctx context.Context, pid peer.ID, b interfa
 			if err != nil {
 				return nil, errors.Wrap(err, "received invalid blocks in findAncestor")
 			}
-			if coreTime.PeerDASIsActive(b.Block().Slot()) {
-				if err := f.fetchMissingDataColumnsFromPeers(ctx, bwb, []peer.ID{pid}, delay, batchSize); err != nil {
-					return nil, errors.Wrap(err, "unable to retrieve columns for blocks found in findAncestor")
-				}
-			} else {
-				if err = f.fetchBlobsFromPeer(ctx, bwb, pid, []peer.ID{pid}); err != nil {
-					return nil, errors.Wrap(err, "unable to retrieve blobs for blocks found in findAncestor")
-				}
+			if err := f.fetchSidecars(ctx, pid, peers, bwb); err != nil {
+				return nil, errors.Wrap(err, "fetch sidecars")
 			}
 			return &forkData{
 				peer: pid,
