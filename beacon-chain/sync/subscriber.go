@@ -346,7 +346,7 @@ func (s *Service) wrapAndReportValidation(topic string, v wrappedVal) (string, p
 			if features.Get().EnableFullSSZDataLogging {
 				fields["message"] = hexutil.Encode(msg.Data)
 			}
-			log.WithError(err).WithFields(fields).Debugf("Gossip message was rejected")
+			log.WithError(err).WithFields(fields).Debug("Gossip message was rejected")
 			messageFailedValidationCounter.WithLabelValues(topic).Inc()
 		}
 		if b == pubsub.ValidationIgnore {

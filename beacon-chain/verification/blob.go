@@ -16,7 +16,6 @@ import (
 
 const (
 	RequireBlobIndexInBounds Requirement = iota
-	RequireDataColumnIndexInBounds
 	RequireNotFromFutureSlot
 	RequireSlotAboveFinalized
 	RequireValidProposerSignature
@@ -27,6 +26,9 @@ const (
 	RequireSidecarInclusionProven
 	RequireSidecarKzgProofVerified
 	RequireSidecarProposerExpected
+
+	RequireValid
+	RequireCorrectSubnet
 )
 
 var allBlobSidecarRequirements = []Requirement{

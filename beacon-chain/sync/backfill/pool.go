@@ -117,7 +117,7 @@ func (p *p2pBatchWorkerPool) batchRouter(pa PeerAssigner) {
 		case b := <-p.fromWorkers:
 			pid := b.busy
 			busy[pid] = false
-			if b.state == batchBlobSync {
+			if b.state == batchSidecarSync {
 				todo = append(todo, b)
 				sortBatchDesc(todo)
 			} else {

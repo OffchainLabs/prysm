@@ -17,132 +17,150 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/logging"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/sirupsen/logrus"
 )
 
-// RequestDataColumnSidecarsByRoot sends a data column sidecars by root request to one
-// or more peers that can provide the needed data columns.
+// RequestDataColumnSidecarsByRoot carefully selects, among `peers`,
+// the peers that can provide the requested data columns, requests them
+// and verify them according to `newColumnsVerifier` rules.
 func RequestDataColumnSidecarsByRoot(
 	ctx context.Context,
-	dataColumns map[uint64]bool,
-	block interfaces.ReadOnlySignedBeaconBlock,
-	blkRoot [32]byte,
+	dataColumnsToFetch map[uint64]bool,
+	block blocks.ROBlock,
 	peers []core.PeerID,
 	clock *startup.Clock,
 	p2p p2p.P2P,
 	ctxMap ContextByteVersions,
 	newColumnsVerifier verification.NewDataColumnsVerifier,
-) ([]blocks.RODataColumn, error) {
-	if len(dataColumns) == 0 {
+) ([]blocks.VerifiedRODataColumn, error) {
+	if len(dataColumnsToFetch) == 0 {
 		return nil, nil
 	}
 
 	// Assemble the peers who can provide the needed data columns.
-	dataColumnsByAdmissiblePeer, _, _, err := AdmissiblePeersForDataColumns(peers, dataColumns, p2p)
+	dataColumnsByAdmissiblePeer, _, _, err := AdmissiblePeersForDataColumns(peers, dataColumnsToFetch, p2p)
 	if err != nil {
 		return nil, errors.Wrap(err, "couldn't get admissible peers for data columns")
 	}
 
-	sidecars := make([]blocks.RODataColumn, 0, len(dataColumns))
-	remainingColumns := make(map[uint64]bool, len(dataColumns))
-	for col := range dataColumns {
-		remainingColumns[col] = true
+	verifiedSidecars := make([]blocks.VerifiedRODataColumn, 0, len(dataColumnsToFetch))
+	remainingMissingColumns := make(map[uint64]bool, len(dataColumnsToFetch))
+	for column := range dataColumnsToFetch {
+		remainingMissingColumns[column] = true
 	}
 
+	blockRoot := block.Root()
+
 	for len(dataColumnsByAdmissiblePeer) > 0 {
-		peersToFetchFrom, err := SelectPeersToFetchDataColumnsFrom(remainingColumns, dataColumnsByAdmissiblePeer)
+		peersToFetchFrom, err := SelectPeersToFetchDataColumnsFrom(remainingMissingColumns, dataColumnsByAdmissiblePeer)
 		if err != nil {
-			// Return an error if some columns are unavailable from the filtered set
-			// of peers. Filtering out bad peers can make columns unavailable, and
-			// when that happens, the caller needs to know about it.
-			return nil, errors.Wrap(err, "couldn't select peers to fetch data columns from")
+			return nil, errors.Wrap(err, "select peers to fetch data columns from")
 		}
 
-		// Request the data columns from each peer
-		successfulColumns := make(map[uint64]bool)
-		for peer, dataColumns := range peersToFetchFrom {
-			request, err := RequestsForDataColumnsByRoot(blkRoot, dataColumns)
+		// Request the data columns from each peer.
+		successfulColumns := make(map[uint64]bool, len(remainingMissingColumns))
+		for peer, peerRequestedColumns := range peersToFetchFrom {
+			log := log.WithFields(logrus.Fields{"peer": peer.String(), "blockRoot": fmt.Sprintf("%#x", blockRoot)})
+
+			// Build the requests for the data columns.
+			byRootRequests := make(types.DataColumnSidecarsByRootReq, 0, len(peerRequestedColumns))
+			for _, column := range peerRequestedColumns {
+				byRootRequest := &eth.DataColumnIdentifier{BlockRoot: blockRoot[:], Index: column}
+				byRootRequests = append(byRootRequests, byRootRequest)
+			}
+
+			// Send the requests to the peer.
+			peerSidecars, err := SendDataColumnSidecarsByRootRequest(ctx, clock, p2p, peer, ctxMap, &byRootRequests)
 			if err != nil {
-				log.WithError(err).Debug("Failed to build request for data columns")
+				// Remove this peer since it failed to respond correctly.
+				delete(dataColumnsByAdmissiblePeer, peer)
+
+				log.WithFields(logrus.Fields{
+					"peer":      peer.String(),
+					"blockRoot": fmt.Sprintf("%#x", block.Root()),
+				}).WithError(err).Debug("Failed to request data columns from peer")
+
 				continue
 			}
 
-			peerSidecars, err := SendDataColumnSidecarsByRootRequest(ctx, clock, p2p, peer, ctxMap, &request)
-			if err != nil {
-				// Remove this peer since it failed to respond correctly
+			// Check if returned data columns align with the block.
+			if err := verify.DataColumnsAlignWithBlock(block, peerSidecars); err != nil {
+				// Remove this peer since it failed to respond correctly.
 				delete(dataColumnsByAdmissiblePeer, peer)
-				log.WithFields(logrus.Fields{
-					"peer":      peer.String(),
-					"blockRoot": fmt.Sprintf("%#x", blkRoot),
-					"error":     err.Error(),
-				}).Debug("Failed to request data columns from peer")
+				log.WithError(err).Debug("Align with block failed")
 				continue
+			}
+
+			// Verify the received sidecars.
+			verifier := newColumnsVerifier(peerSidecars, verification.ByRootRequestDataColumnSidecarRequirements)
+
+			if err := verifier.Valid(); err != nil {
+				// Remove this peer if the verification failed.
+				delete(dataColumnsByAdmissiblePeer, peer)
+				log.WithError(err).Debug("Valid verification failed")
+				continue
+			}
+
+			if err := verifier.SidecarInclusionProven(); err != nil {
+				// Remove this peer if the verification failed.
+				delete(dataColumnsByAdmissiblePeer, peer)
+				log.WithError(err).Debug("Sidecar inclusion proof verification failed")
+				continue
+			}
+
+			if err := verifier.SidecarKzgProofVerified(); err != nil {
+				// Remove this peer if the verification failed.
+				delete(dataColumnsByAdmissiblePeer, peer)
+				log.WithError(err).Debug("Sidecar KZG proof verification failed")
+				continue
+			}
+
+			// Upgrade the sidecars to verified sidecars.
+			verifiedPeerSidecars, err := verifier.VerifiedRODataColumns()
+			if err != nil {
+				// This should never happen.
+				return nil, errors.Wrap(err, "verified data columns")
 			}
 
 			// Mark columns as successful
-			for _, sidecar := range peerSidecars {
-				index := sidecar.Index
-				successfulColumns[index] = true
+			for _, sidecar := range verifiedPeerSidecars {
+				successfulColumns[sidecar.Index] = true
 			}
 
-			for _, index := range dataColumns {
+			// Check if all requested columns were successfully returned.
+			peerMissingColumns := make(map[uint64]bool)
+			for _, index := range peerRequestedColumns {
 				if !successfulColumns[index] {
-					// Remove this peer if any requested column wasn't successful
-					delete(dataColumnsByAdmissiblePeer, peer)
-					log.WithFields(logrus.Fields{
-						"peer":          peer.String(),
-						"missingColumn": index,
-					}).Debug("Peer failed to return requested data column")
-					break
+					peerMissingColumns[index] = true
 				}
 			}
 
-			sidecars = append(sidecars, peerSidecars...)
+			if len(peerMissingColumns) > 0 {
+				// Remove this peer if some requested columns were not correctly returned.
+				delete(dataColumnsByAdmissiblePeer, peer)
+				log.WithField("missingColumns", uint64MapToSortedSlice(peerMissingColumns)).Debug("Peer did not provide all requested data columns")
+			}
+
+			verifiedSidecars = append(verifiedSidecars, verifiedPeerSidecars...)
 		}
 
-		// Update remaining columns for the next retry
+		// Update remaining columns for the next retry.
 		for col := range successfulColumns {
-			delete(remainingColumns, col)
+			delete(remainingMissingColumns, col)
 		}
 
-		if len(remainingColumns) > 0 {
+		if len(remainingMissingColumns) > 0 {
 			// Some columns are still missing, retry with the remaining peers.
 			continue
 		}
 
-		// All columns have been successfully retrieved, validate the received sidecars.
-		roBlock, err := blocks.NewROBlock(block)
-		if err != nil {
-			return nil, err
-		}
-
-		wrappedBlockDataColumns := make([]verify.WrappedBlockDataColumn, 0, len(sidecars))
-		for _, sidecar := range sidecars {
-			wrappedBlockDataColumn := verify.WrappedBlockDataColumn{
-				ROBlock:      roBlock.Block(),
-				RODataColumn: sidecar,
-			}
-
-			wrappedBlockDataColumns = append(wrappedBlockDataColumns, wrappedBlockDataColumn)
-		}
-
-		if err := verify.DataColumnsAlignWithBlock(wrappedBlockDataColumns, newColumnsVerifier); err != nil {
-			return nil, errors.Wrap(err, "data columns align with block")
-		}
-
-		for _, sidecar := range sidecars {
-			log.WithFields(logging.DataColumnFields(sidecar)).Debug("Received data column sidecar RPC")
-		}
-
-		return sidecars, nil
+		return verifiedSidecars, nil
 	}
 
 	// If we still have remaining columns after all retries, return error
-	return nil, errors.Errorf("failed to retrieve all requested data columns after retries for block root=%#x, missing columns=%v", blkRoot, uint64MapToSortedSlice(remainingColumns))
+	return nil, errors.Errorf("failed to retrieve all requested data columns after retries for block root=%#x, missing columns=%v", blockRoot, uint64MapToSortedSlice(remainingMissingColumns))
 }
 
 // SaveDataColumns saves the received data columns to disk.
@@ -150,29 +168,17 @@ func RequestDataColumnSidecarsByRoot(
 // NOTE: During the initial sync, LazilyPersistentStoreColumn caches sidecars
 // and saves them to disk within IsDataAvailable. SaveDataColumns is intended
 // for use when no caching is done (e.g. in the pending blocks queue).
-func SaveDataColumns(sidecars []blocks.RODataColumn, dataColumnStorage *filesystem.DataColumnStorage) error {
-	verifiedRODataColumns := make([]blocks.VerifiedRODataColumn, 0, len(sidecars))
-	for _, sidecar := range sidecars {
-		verifiedRODataColumn := blocks.NewVerifiedRODataColumn(sidecar)
-		verifiedRODataColumns = append(verifiedRODataColumns, verifiedRODataColumn)
-	}
-
-	if err := dataColumnStorage.Save(verifiedRODataColumns); err != nil {
+func SaveDataColumns(sidecars []blocks.VerifiedRODataColumn, dataColumnStorage *filesystem.DataColumnStorage) error {
+	if err := dataColumnStorage.Save(sidecars); err != nil {
 		return errors.Wrap(err, "save data column sidecars")
 	}
 
 	return nil
 }
 
-// FindMissingDataColumns looks at the data columns we should sample from and have via custody sampling
-// and that we don't actually store for a given block, and returns the corresponding data column indices.
-func FindMissingDataColumns(
-	root [32]byte,
-	block interfaces.ReadOnlySignedBeaconBlock,
-	nodeID enode.ID,
-	custodyGroupCount uint64,
-	dataColumnStorage *filesystem.DataColumnStorage,
-) (map[uint64]bool, error) {
+// MissingDataColumns looks at the data columns we should store for a given block regarding `custodyGroupCount`,
+// and returns the indices of the missing ones.
+func MissingDataColumns(block blocks.ROBlock, nodeID enode.ID, custodyGroupCount uint64, dataColumnStorage *filesystem.DataColumnStorage) (map[uint64]bool, error) {
 	// Blocks before Fulu have no data columns.
 	if block.Version() < version.Fulu {
 		return nil, nil
@@ -189,9 +195,17 @@ func FindMissingDataColumns(
 		return nil, nil
 	}
 
-	// Retrieve the columns we store for the root.
+	// Compute the expected columns.
+	peerInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
+	if err != nil {
+		return nil, errors.Wrap(err, "peer info")
+	}
+
+	expectedColumns := peerInfo.CustodyColumns
+
+	// Get the stored columns.
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
-	summary := dataColumnStorage.Summary(root)
+	summary := dataColumnStorage.Summary(block.Root())
 
 	storedColumns := make(map[uint64]bool, numberOfColumns)
 	for i := range numberOfColumns {
@@ -200,38 +214,15 @@ func FindMissingDataColumns(
 		}
 	}
 
-	// Retrieve the peer info.
-	peerInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
-	if err != nil {
-		return nil, errors.Wrap(err, "peer info")
-	}
-
-	samplingColumns := peerInfo.CustodyColumns
-
-	// Build the request for the columns we should sample from and we don't actually store.
-	missingColumns := make(map[uint64]bool, len(samplingColumns))
-	for column := range samplingColumns {
+	// Compute the missing columns.
+	missingColumns := make(map[uint64]bool, len(expectedColumns))
+	for column := range expectedColumns {
 		if !storedColumns[column] {
 			missingColumns[column] = true
 		}
 	}
 
 	return missingColumns, nil
-}
-
-func RequestsForDataColumnsByRoot(
-	root [32]byte,
-	missingColumns []uint64,
-) (types.DataColumnSidecarsByRootReq, error) {
-	req := make(types.DataColumnSidecarsByRootReq, 0, len(missingColumns))
-	for _, column := range missingColumns {
-		req = append(req, &eth.DataColumnIdentifier{
-			BlockRoot: root[:],
-			Index:     column,
-		})
-	}
-
-	return req, nil
 }
 
 // SelectPeersToFetchDataColumnsFrom implements greedy algorithm in order to select peers to fetch data columns from.

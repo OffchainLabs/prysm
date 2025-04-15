@@ -43,54 +43,83 @@ func GenerateTestDataColumns(t *testing.T, parent [fieldparams.RootLength]byte, 
 	return roDataColumns
 }
 
-func TestDataColumnsIndexInBounds(t *testing.T) {
-	testCases := []struct {
-		name         string
-		columnsIndex uint64
-		isError      bool
-	}{
-		{
-			name:         "column index in bounds",
-			columnsIndex: 0,
-			isError:      false,
-		},
-		{
-			name:         "column index out of bounds",
-			columnsIndex: fieldparams.NumberOfColumns,
-			isError:      true,
-		},
-	}
+func TestColumnSatisfyRequirement(t *testing.T) {
+	const (
+		columnSlot = 1
+		blobCount  = 1
+	)
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			const (
-				columnSlot = 0
-				blobCount  = 1
-			)
+	parentRoot := [fieldparams.RootLength]byte{}
 
-			parentRoot := [32]byte{}
-			initializer := Initializer{}
+	columns := GenerateTestDataColumns(t, parentRoot, columnSlot, blobCount)
+	intializer := Initializer{}
 
-			columns := GenerateTestDataColumns(t, parentRoot, columnSlot, blobCount)
-			for _, column := range columns {
-				column.Index = tc.columnsIndex
-			}
+	v := intializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
+	require.Equal(t, false, v.results.executed(RequireValidProposerSignature))
+	v.SatisfyRequirement(RequireValidProposerSignature)
+	require.Equal(t, true, v.results.executed(RequireValidProposerSignature))
+}
 
-			verifier := initializer.NewDataColumnsVerifier(columns, GossipColumnSidecarRequirements)
+func TestValid(t *testing.T) {
+	var initializer Initializer
 
-			err := verifier.DataColumnsIndexInBounds()
-			require.Equal(t, true, verifier.results.executed(RequireDataColumnIndexInBounds))
+	t.Run("one invalid column", func(t *testing.T) {
+		columns := GenerateTestDataColumns(t, [fieldparams.RootLength]byte{}, 1, 1)
+		columns[0].KzgCommitments = [][]byte{}
+		verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
 
-			if tc.isError {
-				require.ErrorIs(t, err, ErrColumnIndexInvalid)
-				require.NotNil(t, verifier.results.result(RequireDataColumnIndexInBounds))
-				return
-			}
+		err := verifier.Valid()
+		require.NotNil(t, err)
+		require.NotNil(t, verifier.results.result(RequireValid))
+	})
 
-			require.NoError(t, err)
-			require.NoError(t, verifier.results.result(RequireDataColumnIndexInBounds))
+	t.Run("nominal", func(t *testing.T) {
+		columns := GenerateTestDataColumns(t, [fieldparams.RootLength]byte{}, 1, 1)
+		verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
+
+		err := verifier.Valid()
+		require.NoError(t, err)
+		require.IsNil(t, verifier.results.result(RequireValid))
+	})
+}
+
+func TestCorrectSubnet(t *testing.T) {
+	var initializer Initializer
+
+	t.Run("lengths mismatch", func(t *testing.T) {
+		columns := GenerateTestDataColumns(t, [fieldparams.RootLength]byte{}, 1, 1)
+		verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
+
+		err := verifier.CorrectSubnet([]string{})
+		require.ErrorIs(t, err, errBadTopicLength)
+		require.NotNil(t, verifier.results.result(RequireCorrectSubnet))
+	})
+
+	t.Run("wrong topic", func(t *testing.T) {
+		columns := GenerateTestDataColumns(t, [fieldparams.RootLength]byte{}, 1, 1)
+		verifier := initializer.NewDataColumnsVerifier(columns[:2], GossipDataColumnSidecarRequirements)
+
+		err := verifier.CorrectSubnet([]string{
+			"/eth2/9dc47cc6/data_column_sidecar_1/ssz_snappy",
+			"/eth2/9dc47cc6/data_column_sidecar_0/ssz_snappy",
 		})
-	}
+
+		require.ErrorIs(t, err, errBadTopic)
+		require.NotNil(t, verifier.results.result(RequireCorrectSubnet))
+	})
+
+	t.Run("nominal", func(t *testing.T) {
+		columns := GenerateTestDataColumns(t, [fieldparams.RootLength]byte{}, 1, 1)
+		verifier := initializer.NewDataColumnsVerifier(columns[:2], GossipDataColumnSidecarRequirements)
+
+		err := verifier.CorrectSubnet([]string{
+			"/eth2/9dc47cc6/data_column_sidecar_0/ssz_snappy",
+			"/eth2/9dc47cc6/data_column_sidecar_1",
+		})
+
+		require.NoError(t, err)
+		require.IsNil(t, verifier.results.result(RequireCorrectSubnet))
+	})
 }
 
 func TestNotFromFutureSlot(t *testing.T) {
@@ -152,7 +181,7 @@ func TestNotFromFutureSlot(t *testing.T) {
 			initializer := Initializer{shared: &sharedResources{clock: clock}}
 
 			columns := GenerateTestDataColumns(t, parentRoot, tc.columnSlot, blobCount)
-			verifier := initializer.NewDataColumnsVerifier(columns, GossipColumnSidecarRequirements)
+			verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
 
 			err := verifier.NotFromFutureSlot()
 			require.Equal(t, true, verifier.results.executed(RequireNotFromFutureSlot))
@@ -218,7 +247,7 @@ func TestColumnSlotAboveFinalized(t *testing.T) {
 
 			columns := GenerateTestDataColumns(t, parentRoot, tc.columnSlot, blobCount)
 
-			v := initializer.NewDataColumnsVerifier(columns, GossipColumnSidecarRequirements)
+			v := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
 
 			err := v.SlotAboveFinalized()
 			require.Equal(t, true, v.results.executed(RequireSlotAboveFinalized))
@@ -336,12 +365,12 @@ func TestValidProposerSignature(t *testing.T) {
 				},
 			}
 
-			verifier := initializer.NewDataColumnsVerifier(columns, GossipColumnSidecarRequirements)
+			verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
 			err := verifier.ValidProposerSignature(context.Background())
 			require.Equal(t, true, verifier.results.executed(RequireValidProposerSignature))
 
 			if tc.isError {
-				require.ErrorIs(t, err, ErrInvalidProposerSignature)
+				require.NotNil(t, err)
 				require.NotNil(t, verifier.results.result(RequireValidProposerSignature))
 				return
 			}
@@ -418,7 +447,7 @@ func TestDataColumnsSidecarParentSeen(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			initializer := Initializer{shared: &sharedResources{fc: tc.forkChoicer}}
-			verifier := initializer.NewDataColumnsVerifier(columns, GossipColumnSidecarRequirements)
+			verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
 			err := verifier.SidecarParentSeen(tc.parentSeen)
 			require.Equal(t, true, verifier.results.executed(RequireSidecarParentSeen))
 
@@ -465,7 +494,7 @@ func TestDataColumnsSidecarParentValid(t *testing.T) {
 			firstColumn := columns[0]
 
 			initializer := Initializer{shared: &sharedResources{}}
-			verifier := initializer.NewDataColumnsVerifier(columns, GossipColumnSidecarRequirements)
+			verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
 			err := verifier.SidecarParentValid(badParentCb(t, firstColumn.ParentRoot(), tc.badParentCbReturn))
 			require.Equal(t, true, verifier.results.executed(RequireSidecarParentValid))
 
@@ -489,6 +518,7 @@ func TestColumnSidecarParentSlotLower(t *testing.T) {
 		name                 string
 		forkChoiceSlot       primitives.Slot
 		forkChoiceError, err error
+		errCheckValue        bool
 	}{
 		{
 			name:            "Not in forkchoice",
@@ -503,11 +533,13 @@ func TestColumnSidecarParentSlotLower(t *testing.T) {
 			name:           "In forkchoice, slot equal",
 			forkChoiceSlot: firstColumn.Slot(),
 			err:            ErrSlotNotAfterParent,
+			errCheckValue:  true,
 		},
 		{
 			name:           "In forkchoice, slot higher",
 			forkChoiceSlot: firstColumn.Slot() + 1,
 			err:            ErrSlotNotAfterParent,
+			errCheckValue:  true,
 		},
 	}
 
@@ -525,7 +557,7 @@ func TestColumnSidecarParentSlotLower(t *testing.T) {
 				}},
 			}
 
-			verifier := initializer.NewDataColumnsVerifier(columns, GossipColumnSidecarRequirements)
+			verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
 			err := verifier.SidecarParentSlotLower()
 			require.Equal(t, true, verifier.results.executed(RequireSidecarParentSlotLower))
 
@@ -535,8 +567,12 @@ func TestColumnSidecarParentSlotLower(t *testing.T) {
 				return
 			}
 
-			require.ErrorIs(t, err, c.err)
+			require.NotNil(t, err)
 			require.NotNil(t, verifier.results.result(RequireSidecarParentSlotLower))
+
+			if c.errCheckValue {
+				require.ErrorIs(t, err, c.err)
+			}
 		})
 	}
 }
@@ -585,7 +621,7 @@ func TestDataColumnsSidecarDescendsFromFinalized(t *testing.T) {
 				},
 			}
 
-			verifier := initializer.NewDataColumnsVerifier(columns, GossipColumnSidecarRequirements)
+			verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
 			err := verifier.SidecarDescendsFromFinalized()
 			require.Equal(t, true, verifier.results.executed(RequireSidecarDescendsFromFinalized))
 
@@ -635,7 +671,7 @@ func TestDataColumnsSidecarInclusionProven(t *testing.T) {
 			}
 
 			initializer := Initializer{}
-			verifier := initializer.NewDataColumnsVerifier(columns, GossipColumnSidecarRequirements)
+			verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
 			err := verifier.SidecarInclusionProven()
 			require.Equal(t, true, verifier.results.executed(RequireSidecarInclusionProven))
 
@@ -653,28 +689,19 @@ func TestDataColumnsSidecarInclusionProven(t *testing.T) {
 
 func TestDataColumnsSidecarKzgProofVerified(t *testing.T) {
 	testCases := []struct {
-		isError                           bool
-		verifyDataColumnsCommitmentReturn bool
-		verifyDataColumnsCommitmentError  error
-		name                              string
+		isError                          bool
+		verifyDataColumnsCommitmentError error
+		name                             string
 	}{
 		{
-			name:                              "KZG proof verified",
-			verifyDataColumnsCommitmentReturn: true,
-			verifyDataColumnsCommitmentError:  nil,
-			isError:                           false,
+			name:                             "KZG proof verified",
+			verifyDataColumnsCommitmentError: nil,
+			isError:                          false,
 		},
 		{
-			name:                              "KZG proof error",
-			verifyDataColumnsCommitmentReturn: false,
-			verifyDataColumnsCommitmentError:  errors.New("KZG proof error"),
-			isError:                           true,
-		},
-		{
-			name:                              "KZG proof not verified",
-			verifyDataColumnsCommitmentReturn: false,
-			verifyDataColumnsCommitmentError:  nil,
-			isError:                           true,
+			name:                             "KZG proof not verified",
+			verifyDataColumnsCommitmentError: errors.New("KZG proof error"),
+			isError:                          true,
 		},
 	}
 
@@ -689,12 +716,12 @@ func TestDataColumnsSidecarKzgProofVerified(t *testing.T) {
 			columns := GenerateTestDataColumns(t, parentRoot, columnSlot, blobCount)
 			firstColumn := columns[0]
 
-			verifyDataColumnsCommitment := func(roDataColumns []blocks.RODataColumn) (bool, error) {
+			verifyDataColumnsCommitment := func(roDataColumns []blocks.RODataColumn) error {
 				for _, roDataColumn := range roDataColumns {
 					require.Equal(t, true, reflect.DeepEqual(firstColumn.KzgCommitments, roDataColumn.KzgCommitments))
 				}
 
-				return tc.verifyDataColumnsCommitmentReturn, tc.verifyDataColumnsCommitmentError
+				return tc.verifyDataColumnsCommitmentError
 			}
 
 			verifier := &RODataColumnsVerifier{
@@ -707,7 +734,7 @@ func TestDataColumnsSidecarKzgProofVerified(t *testing.T) {
 			require.Equal(t, true, verifier.results.executed(RequireSidecarKzgProofVerified))
 
 			if tc.isError {
-				require.ErrorIs(t, err, ErrSidecarKzgProofInvalid)
+				require.NotNil(t, err)
 				require.NotNil(t, verifier.results.result(RequireSidecarKzgProofVerified))
 				return
 			}
@@ -849,7 +876,7 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 				},
 			}
 
-			verifier := initializer.NewDataColumnsVerifier(tc.columns, GossipColumnSidecarRequirements)
+			verifier := initializer.NewDataColumnsVerifier(tc.columns, GossipDataColumnSidecarRequirements)
 			err := verifier.SidecarProposerExpected(context.Background())
 
 			require.Equal(t, true, verifier.results.executed(RequireSidecarProposerExpected))
@@ -876,10 +903,11 @@ func TestColumnRequirementSatisfaction(t *testing.T) {
 
 	columns := GenerateTestDataColumns(t, parentRoot, columnSlot, blobCount)
 	initializer := Initializer{}
-	verifier := initializer.NewDataColumnsVerifier(columns, GossipColumnSidecarRequirements)
+	verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
 
+	// We haven't performed any verification, VerifiedRODataColumns should error.
 	_, err := verifier.VerifiedRODataColumns()
-	require.ErrorIs(t, err, ErrColumnInvalid)
+	require.ErrorIs(t, err, errColumnsInvalid)
 
 	var me VerificationMultiError
 	ok := errors.As(err, &me)
@@ -891,30 +919,20 @@ func TestColumnRequirementSatisfaction(t *testing.T) {
 		require.ErrorIs(t, v, ErrMissingVerification)
 	}
 
-	// Satisfy everything through the backdoor and ensure we get the verified ro blob at the end.
-	for _, r := range GossipColumnSidecarRequirements {
+	// Satisfy everything but the first requirement through the backdoor.
+	for _, r := range GossipDataColumnSidecarRequirements[1:] {
 		verifier.results.record(r, nil)
 	}
 
+	// One requirement is missing, VerifiedRODataColumns should still error.
+	_, err = verifier.VerifiedRODataColumns()
+	require.ErrorIs(t, err, errColumnsInvalid)
+
+	// Now, satisfy the first requirement.
+	verifier.results.record(GossipDataColumnSidecarRequirements[0], nil)
+
+	// VerifiedRODataColumns should now succeed.
 	require.Equal(t, true, verifier.results.allSatisfied())
 	_, err = verifier.VerifiedRODataColumns()
-
 	require.NoError(t, err)
-}
-
-func TestColumnSatisfyRequirement(t *testing.T) {
-	const (
-		columnSlot = 1
-		blobCount  = 1
-	)
-
-	parentRoot := [fieldparams.RootLength]byte{}
-
-	columns := GenerateTestDataColumns(t, parentRoot, columnSlot, blobCount)
-	intializer := Initializer{}
-
-	v := intializer.NewDataColumnsVerifier(columns, GossipColumnSidecarRequirements)
-	require.Equal(t, false, v.results.executed(RequireDataColumnIndexInBounds))
-	v.SatisfyRequirement(RequireDataColumnIndexInBounds)
-	require.Equal(t, true, v.results.executed(RequireDataColumnIndexInBounds))
 }

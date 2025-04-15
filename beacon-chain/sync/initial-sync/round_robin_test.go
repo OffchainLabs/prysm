@@ -373,7 +373,7 @@ func TestService_processBlock(t *testing.T) {
 		require.NoError(t, err)
 		rowsb, err := blocks.NewROBlock(wsb)
 		require.NoError(t, err)
-		err = s.processBlock(ctx, genesis, blocks.BlockWithROBlobs{Block: rowsb}, func(
+		err = s.processBlock(ctx, genesis, blocks.BlockWithROSidecars{Block: rowsb}, func(
 			ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, _ das.AvailabilityStore) error {
 			assert.NoError(t, s.cfg.Chain.ReceiveBlock(ctx, block, blockRoot, nil))
 			return nil
@@ -385,7 +385,7 @@ func TestService_processBlock(t *testing.T) {
 		require.NoError(t, err)
 		rowsb, err = blocks.NewROBlock(wsb)
 		require.NoError(t, err)
-		err = s.processBlock(ctx, genesis, blocks.BlockWithROBlobs{Block: rowsb}, func(
+		err = s.processBlock(ctx, genesis, blocks.BlockWithROSidecars{Block: rowsb}, func(
 			ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, _ das.AvailabilityStore) error {
 			return nil
 		}, nil)
@@ -396,7 +396,7 @@ func TestService_processBlock(t *testing.T) {
 		require.NoError(t, err)
 		rowsb, err = blocks.NewROBlock(wsb)
 		require.NoError(t, err)
-		err = s.processBlock(ctx, genesis, blocks.BlockWithROBlobs{Block: rowsb}, func(
+		err = s.processBlock(ctx, genesis, blocks.BlockWithROSidecars{Block: rowsb}, func(
 			ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, _ das.AvailabilityStore) error {
 			assert.NoError(t, s.cfg.Chain.ReceiveBlock(ctx, block, blockRoot, nil))
 			return nil
@@ -431,7 +431,7 @@ func TestService_processBlockBatch(t *testing.T) {
 	genesis := makeGenesisTime(32)
 
 	t.Run("process non-linear batch", func(t *testing.T) {
-		var batch []blocks.BlockWithROBlobs
+		var batch []blocks.BlockWithROSidecars
 		currBlockRoot := genesisBlkRoot
 		for i := primitives.Slot(1); i < 10; i++ {
 			parentRoot := currBlockRoot
@@ -445,11 +445,11 @@ func TestService_processBlockBatch(t *testing.T) {
 			require.NoError(t, err)
 			rowsb, err := blocks.NewROBlock(wsb)
 			require.NoError(t, err)
-			batch = append(batch, blocks.BlockWithROBlobs{Block: rowsb})
+			batch = append(batch, blocks.BlockWithROSidecars{Block: rowsb})
 			currBlockRoot = blk1Root
 		}
 
-		var batch2 []blocks.BlockWithROBlobs
+		var batch2 []blocks.BlockWithROSidecars
 		for i := primitives.Slot(10); i < 20; i++ {
 			parentRoot := currBlockRoot
 			blk1 := util.NewBeaconBlock()
@@ -462,7 +462,7 @@ func TestService_processBlockBatch(t *testing.T) {
 			require.NoError(t, err)
 			rowsb, err := blocks.NewROBlock(wsb)
 			require.NoError(t, err)
-			batch2 = append(batch2, blocks.BlockWithROBlobs{Block: rowsb})
+			batch2 = append(batch2, blocks.BlockWithROSidecars{Block: rowsb})
 			currBlockRoot = blk1Root
 		}
 
@@ -482,7 +482,7 @@ func TestService_processBlockBatch(t *testing.T) {
 		err = s.processBatchedBlocks(ctx, genesis, batch, cbnil)
 		assert.ErrorContains(t, "block is already processed", err)
 
-		var badBatch2 []blocks.BlockWithROBlobs
+		var badBatch2 []blocks.BlockWithROSidecars
 		for i, b := range batch2 {
 			// create a non-linear batch
 			if i%3 == 0 && i != 0 {
@@ -677,7 +677,7 @@ func TestService_ValidUnprocessed(t *testing.T) {
 	require.NoError(t, err)
 	util.SaveBlock(t, context.Background(), beaconDB, genesisBlk)
 
-	var batch []blocks.BlockWithROBlobs
+	var batch []blocks.BlockWithROSidecars
 	currBlockRoot := genesisBlkRoot
 	for i := primitives.Slot(1); i < 10; i++ {
 		parentRoot := currBlockRoot
@@ -691,7 +691,7 @@ func TestService_ValidUnprocessed(t *testing.T) {
 		require.NoError(t, err)
 		rowsb, err := blocks.NewROBlock(wsb)
 		require.NoError(t, err)
-		batch = append(batch, blocks.BlockWithROBlobs{Block: rowsb})
+		batch = append(batch, blocks.BlockWithROSidecars{Block: rowsb})
 		currBlockRoot = blk1Root
 	}
 

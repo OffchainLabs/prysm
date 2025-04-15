@@ -58,7 +58,7 @@ func (ini *Initializer) NewBlobVerifier(b blocks.ROBlob, reqs []Requirement) *RO
 	}
 }
 
-// NewDataColumnsVerifier creates a DataColumnVerifier for a single data column, with the given set of requirements.
+// NewDataColumnsVerifier creates a DataColumnVerifier for a slice of data columns, with the given set of requirements.
 func (ini *Initializer) NewDataColumnsVerifier(roDataColumns []blocks.RODataColumn, reqs []Requirement) *RODataColumnsVerifier {
 	return &RODataColumnsVerifier{
 		sharedResources:             ini.shared,

@@ -1,75 +1,63 @@
 package verify
 
 import (
-	"reflect"
+	"bytes"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
+	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
-type WrappedBlockDataColumn struct {
-	ROBlock      interfaces.ReadOnlyBeaconBlock
-	RODataColumn blocks.RODataColumn
-}
+var (
+	errSizeMismatch       = errors.New("size mismatch between data column and block")
+	errTooManyCommitments = errors.New("too many commitments")
+	errRootMismatch       = errors.New("root mismatch between data column and block")
+	errCommitmentMismatch = errors.New("commitment mismatch between data column and block")
+)
 
-func DataColumnsAlignWithBlock(
-	wrappedBlockDataColumns []WrappedBlockDataColumn,
-	dataColumnsVerifier verification.NewDataColumnsVerifier,
-) error {
-	for _, wrappedBlockDataColumn := range wrappedBlockDataColumns {
-		dataColumn := wrappedBlockDataColumn.RODataColumn
-		block := wrappedBlockDataColumn.ROBlock
+func DataColumnsAlignWithBlock(block blocks.ROBlock, dataColumns []blocks.RODataColumn) error {
+	// No data columns before Fulu.
+	if block.Version() < version.Fulu {
+		return nil
+	}
 
-		// Extract the block root from the data column.
-		blockRoot := dataColumn.BlockRoot()
+	// Compute the maximum number of blobs per block.
+	blockSlot := block.Block().Slot()
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(blockSlot)
 
-		// Retrieve the KZG commitments from the block.
-		blockKZGCommitments, err := block.Body().BlobKzgCommitments()
-		if err != nil {
-			return errors.Wrap(err, "blob KZG commitments")
+	// Check if the block has not too many commitments.
+	blockCommitments, err := block.Block().Body().BlobKzgCommitments()
+	if err != nil {
+		return errors.Wrap(err, "blob KZG commitments")
+	}
+
+	blockCommitmentCount := len(blockCommitments)
+	if blockCommitmentCount > maxBlobsPerBlock {
+		return errTooManyCommitments
+	}
+
+	blockRoot := block.Root()
+
+	for _, dataColumn := range dataColumns {
+		// Check if the root of the data column sidecar matches the block root.
+		if dataColumn.BlockRoot() != blockRoot {
+			return errRootMismatch
 		}
 
-		// Retrieve the KZG commitments from the data column.
-		dataColumnKZGCommitments := dataColumn.KzgCommitments
-
-		// Verify the commitments in the block match the commitments in the data column.
-		if !reflect.DeepEqual(blockKZGCommitments, dataColumnKZGCommitments) {
-			// Retrieve the data columns slot.
-			dataColumSlot := dataColumn.Slot()
-
-			return errors.Wrapf(
-				ErrMismatchedColumnCommitments,
-				"data column commitments `%#v` != block commitments `%#v` for block root %#x at slot %d",
-				dataColumnKZGCommitments,
-				blockKZGCommitments,
-				blockRoot,
-				dataColumSlot,
-			)
+		// Check if the content length of the data column sidecar matches the block.
+		if len(dataColumn.Column) != blockCommitmentCount ||
+			len(dataColumn.KzgCommitments) != blockCommitmentCount ||
+			len(dataColumn.KzgProofs) != blockCommitmentCount {
+			return errSizeMismatch
 		}
-	}
 
-	dataColumns := make([]blocks.RODataColumn, 0, len(wrappedBlockDataColumns))
-	for _, wrappedBlowrappedBlockDataColumn := range wrappedBlockDataColumns {
-		dataColumn := wrappedBlowrappedBlockDataColumn.RODataColumn
-		dataColumns = append(dataColumns, dataColumn)
-	}
-
-	// Verify if data columns index are in bounds.
-	verifier := dataColumnsVerifier(dataColumns, verification.InitsyncColumnSidecarRequirements)
-	if err := verifier.DataColumnsIndexInBounds(); err != nil {
-		return errors.Wrap(err, "data column index in bounds")
-	}
-
-	// Verify the KZG inclusion proof verification.
-	if err := verifier.SidecarInclusionProven(); err != nil {
-		return errors.Wrap(err, "inclusion proof verification")
-	}
-
-	// Verify the KZG proof verification.
-	if err := verifier.SidecarKzgProofVerified(); err != nil {
-		return errors.Wrap(err, "KZG proof verification")
+		// Check if the commitments of the data column sidecar match the block.
+		for i := range blockCommitments {
+			if !bytes.Equal(blockCommitments[i], dataColumn.KzgCommitments[i]) {
+				return errCommitmentMismatch
+			}
+		}
 	}
 
 	return nil

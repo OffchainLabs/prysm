@@ -134,7 +134,7 @@ type fetchRequestResponse struct {
 	pid   peer.ID
 	start primitives.Slot
 	count uint64
-	bwb   []blocks.BlockWithROBlobs
+	bwb   []blocks.BlockWithROSidecars
 	err   error
 }
 
@@ -309,7 +309,7 @@ func (f *blocksFetcher) handleRequest(ctx context.Context, start primitives.Slot
 	response := &fetchRequestResponse{
 		start: start,
 		count: count,
-		bwb:   []blocks.BlockWithROBlobs{},
+		bwb:   []blocks.BlockWithROSidecars{},
 		err:   nil,
 	}
 
@@ -374,7 +374,7 @@ func (f *blocksFetcher) fetchBlocksFromPeer(
 	ctx context.Context,
 	start primitives.Slot, count uint64,
 	peers []peer.ID,
-) ([]blocks.BlockWithROBlobs, peer.ID, error) {
+) ([]blocks.BlockWithROSidecars, peer.ID, error) {
 	ctx, span := trace.StartSpan(ctx, "initialsync.fetchBlocksFromPeer")
 	defer span.End()
 
@@ -406,14 +406,14 @@ func (f *blocksFetcher) fetchBlocksFromPeer(
 	return nil, "", errNoPeersAvailable
 }
 
-func sortedBlockWithVerifiedBlobSlice(blks []interfaces.ReadOnlySignedBeaconBlock) ([]blocks.BlockWithROBlobs, error) {
-	rb := make([]blocks.BlockWithROBlobs, len(blks))
+func sortedBlockWithVerifiedBlobSlice(blks []interfaces.ReadOnlySignedBeaconBlock) ([]blocks.BlockWithROSidecars, error) {
+	rb := make([]blocks.BlockWithROSidecars, len(blks))
 	for i, b := range blks {
 		ro, err := blocks.NewROBlock(b)
 		if err != nil {
 			return nil, err
 		}
-		rb[i] = blocks.BlockWithROBlobs{Block: ro}
+		rb[i] = blocks.BlockWithROSidecars{Block: ro}
 	}
 	sort.Sort(blocks.BlockWithROBlobsSlice(rb))
 	return rb, nil
@@ -429,7 +429,7 @@ type commitmentCountList []commitmentCount
 
 // countCommitments makes a list of all blocks that have commitments that need to be satisfied.
 // This gives us a representation to finish building the request that is lightweight and readable for testing.
-func countCommitments(bwb []blocks.BlockWithROBlobs, retentionStart primitives.Slot) commitmentCountList {
+func countCommitments(bwb []blocks.BlockWithROSidecars, retentionStart primitives.Slot) commitmentCountList {
 	if len(bwb) == 0 {
 		return nil
 	}
@@ -513,7 +513,7 @@ var errMissingBlobsForBlockCommitments = errors.Wrap(errBlobVerification, "blobs
 
 // verifyAndPopulateBlobs mutate the input `bwb` argument by adding verified blobs.
 // This function mutates the input `bwb` argument.
-func verifyAndPopulateBlobs(bwb []blocks.BlockWithROBlobs, blobs []blocks.ROBlob, req *p2ppb.BlobSidecarsByRangeRequest, bss filesystem.BlobStorageSummarizer) error {
+func verifyAndPopulateBlobs(bwb []blocks.BlockWithROSidecars, blobs []blocks.ROBlob, req *p2ppb.BlobSidecarsByRangeRequest, bss filesystem.BlobStorageSummarizer) error {
 	blobsByRoot := make(map[[32]byte][]blocks.ROBlob)
 	for i := range blobs {
 		if blobs[i].Slot() < req.StartSlot {
@@ -538,7 +538,7 @@ var errDidntPopulate = errors.New("skipping population of block")
 
 // populateBlock verifies and populates blobs for a block.
 // This function mutates the input `bw` argument.
-func populateBlock(bw *blocks.BlockWithROBlobs, blobs []blocks.ROBlob, req *p2ppb.BlobSidecarsByRangeRequest, bss filesystem.BlobStorageSummarizer) error {
+func populateBlock(bw *blocks.BlockWithROSidecars, blobs []blocks.ROBlob, req *p2ppb.BlobSidecarsByRangeRequest, bss filesystem.BlobStorageSummarizer) error {
 	blk := bw.Block
 	if blk.Version() < version.Deneb || blk.Block().Slot() < req.StartSlot {
 		return errDidntPopulate
@@ -583,7 +583,7 @@ func missingCommitError(root [32]byte, slot primitives.Slot, missing [][]byte) e
 
 // fetchBlobsFromPeer fetches blocks from a single randomly selected peer.
 // This function mutates the input `bwb` argument.
-func (f *blocksFetcher) fetchBlobsFromPeer(ctx context.Context, bwb []blocks.BlockWithROBlobs, pid peer.ID, peers []peer.ID) error {
+func (f *blocksFetcher) fetchBlobsFromPeer(ctx context.Context, bwb []blocks.BlockWithROSidecars, pid peer.ID, peers []peer.ID) error {
 	if len(bwb) == 0 {
 		return nil
 	}
@@ -794,7 +794,7 @@ func (f *blocksFetcher) custodyColumns() (map[uint64]bool, error) {
 func (f *blocksFetcher) missingColumnsFromRoot(
 	custodyColumns map[uint64]bool,
 	minSlot primitives.Slot,
-	bwbs []blocks.BlockWithROBlobs,
+	bwbs []blocks.BlockWithROSidecars,
 ) (map[[fieldparams.RootLength]byte]map[uint64]bool, error) {
 	missingColumnsByRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool)
 	for _, bwb := range bwbs {
@@ -844,7 +844,7 @@ func (f *blocksFetcher) missingColumnsFromRoot(
 }
 
 // indicesFromRoot returns the indices indexed by root.
-func indicesFromRoot(bwbs []blocks.BlockWithROBlobs) map[[fieldparams.RootLength]byte][]int {
+func indicesFromRoot(bwbs []blocks.BlockWithROSidecars) map[[fieldparams.RootLength]byte][]int {
 	result := make(map[[fieldparams.RootLength]byte][]int, len(bwbs))
 	for i := 0; i < len(bwbs); i++ {
 		root := bwbs[i].Block.Root()
@@ -855,7 +855,7 @@ func indicesFromRoot(bwbs []blocks.BlockWithROBlobs) map[[fieldparams.RootLength
 }
 
 // blockFromRoot returns the block indexed by root.
-func blockFromRoot(bwb []blocks.BlockWithROBlobs) map[[fieldparams.RootLength]byte]blocks.ROBlock {
+func blockFromRoot(bwb []blocks.BlockWithROSidecars) map[[fieldparams.RootLength]byte]blocks.ROBlock {
 	result := make(map[[fieldparams.RootLength]byte]blocks.ROBlock, len(bwb))
 	for i := 0; i < len(bwb); i++ {
 		root := bwb[i].Block.Root()
@@ -955,18 +955,18 @@ func (f *blocksFetcher) fetchBwbSliceFromPeers(
 type bwbsMissingColumns struct {
 	mu sync.RWMutex
 
-	bwbs                 []blocks.BlockWithROBlobs
+	bwbs                 []blocks.BlockWithROSidecars
 	missingColumnsByRoot map[[fieldparams.RootLength]byte]map[uint64]bool
 }
 
-// fetchDataColumnsFromPeers looks at the blocks in `bwb` and retrieves all
-// data columns for with the block has blob commitments, and for which our store is missing data columns
+// fetchDataColumnsFromPeers looks at the blocks in `bwbs` and retrieves all
+// data columns for blocks that have commitments, and for which our store is missing data columns
 // we should custody.
 // This function mutates `bwbs` by adding the retrieved data columns.
-// Prerequisite: bwb is sorted by slot.
+// Prerequisite: `bwbs“ is sorted by slot.
 func (f *blocksFetcher) fetchDataColumnsFromPeers(
 	ctx context.Context,
-	bwbs []blocks.BlockWithROBlobs,
+	bwbs []blocks.BlockWithROSidecars,
 	peers []peer.ID,
 	delay time.Duration,
 	batchSize int,
@@ -1086,7 +1086,7 @@ func (f *blocksFetcher) fetchDataColumnsFromPeers(
 }
 
 // sortBwbsByColumnIndex sorts `bwbs` by column index.
-func sortBwbsByColumnIndex(bwbs []blocks.BlockWithROBlobs) {
+func sortBwbsByColumnIndex(bwbs []blocks.BlockWithROSidecars) {
 	for _, bwb := range bwbs {
 		sort.Slice(bwb.Columns, func(i, j int) bool {
 			return bwb.Columns[i].Index < bwb.Columns[j].Index
@@ -1208,17 +1208,10 @@ func (f *blocksFetcher) processDataColumns(
 	blockByRoot map[[fieldparams.RootLength]byte]blocks.ROBlock,
 	indicesByRoot map[[fieldparams.RootLength]byte][]int,
 	dataColumns []blocks.RODataColumn,
-) bool {
-	// Fiter out data columns:
-	// - that are not expected and,
-	// - which correspond to blocks before Deneb.
-
-	// Not expected data columns are among others possible when
-	// the peer is not on the same fork, due to the nature of
-	// data columns by range requests.
-	wrappedBlockDataColumns := make([]verify.WrappedBlockDataColumn, 0, len(dataColumns))
+) error {
+	// Group data columns by block root.
+	dataColumnsByBlockRoot := make(map[[fieldparams.RootLength]byte][]blocks.RODataColumn)
 	for _, dataColumn := range dataColumns {
-		// Extract the block root from the data column.
 		blockRoot := dataColumn.BlockRoot()
 
 		// Skip if the block root is not expected.
@@ -1228,31 +1221,20 @@ func (f *blocksFetcher) processDataColumns(
 			continue
 		}
 
-		// Retrieve the block from the block root.
-		block, ok := blockByRoot[blockRoot]
-		if !ok {
-			// This should never happen.
-			log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Error("Fetch data columns from peers - block not found for root")
-			return false
-		}
-
-		// Skip if the block is before Deneb.
-		if block.Version() < version.Deneb {
-			continue
-		}
-
-		wrappedBlockDataColumn := verify.WrappedBlockDataColumn{
-			ROBlock:      block.Block(),
-			RODataColumn: dataColumn,
-		}
-
-		wrappedBlockDataColumns = append(wrappedBlockDataColumns, wrappedBlockDataColumn)
+		dataColumnsByBlockRoot[blockRoot] = append(dataColumnsByBlockRoot[blockRoot], dataColumn)
 	}
 
-	// Verify the data columns.
-	if err := verify.DataColumnsAlignWithBlock(wrappedBlockDataColumns, f.cv); err != nil {
-		// TODO: Should we downscore the peer for that?
-		return false
+	for root, dataColumns := range dataColumnsByBlockRoot {
+		// Retrieve the block from the block root.
+		block, ok := blockByRoot[root]
+		if !ok {
+			// This should never happen.
+			return errors.Errorf("cannot find block for root %#x", root)
+		}
+
+		if err := verify.DataColumnsAlignWithBlock(block, dataColumns); err != nil {
+			return errors.Wrapf(err, "data column does not align with block for root %#x", root)
+		}
 	}
 
 	wrappedBwbsMissingColumns.mu.Lock()
@@ -1261,9 +1243,7 @@ func (f *blocksFetcher) processDataColumns(
 	bwbs := wrappedBwbsMissingColumns.bwbs
 	missingColumnsByRoot := wrappedBwbsMissingColumns.missingColumnsByRoot
 
-	for _, wrappedBlockDataColumn := range wrappedBlockDataColumns {
-		dataColumn := wrappedBlockDataColumn.RODataColumn
-
+	for _, dataColumn := range dataColumns {
 		// Extract the block root from the data column.
 		blockRoot := dataColumn.BlockRoot()
 
@@ -1271,8 +1251,7 @@ func (f *blocksFetcher) processDataColumns(
 		indices, ok := indicesByRoot[blockRoot]
 		if !ok {
 			// This should never happen.
-			log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Error("Fetch data columns from peers - indices not found for root")
-			return false
+			return errors.Errorf("cannot find indices for root %#x", blockRoot)
 		}
 
 		// Populate the corresponding items in `bwbs`.
@@ -1286,7 +1265,7 @@ func (f *blocksFetcher) processDataColumns(
 		}
 	}
 
-	return true
+	return nil
 }
 
 // fetchDataColumnsFromPeer sends `request` to `peer`, then mutates:
@@ -1365,8 +1344,8 @@ func (f *blocksFetcher) fetchDataColumnFromPeer(
 		return
 	}
 
-	if !f.processDataColumns(wrappedBwbsMissingColumns, blocksByRoot, indicesByRoot, roDataColumns) {
-		log.Warning("Fetch data columns from peers - at least one data column is invalid")
+	if err := f.processDataColumns(wrappedBwbsMissingColumns, blocksByRoot, indicesByRoot, roDataColumns); err != nil {
+		log.WithError(err).Warning("Error when processing data columns")
 		return
 	}
 

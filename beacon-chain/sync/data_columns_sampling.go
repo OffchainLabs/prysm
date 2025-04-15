@@ -576,23 +576,9 @@ func verifyColumn(
 	blockProcessedData *statefeed.BlockProcessedData,
 	pid peer.ID,
 	requestedColumns map[uint64]bool,
-	dataColumnsVerifier verification.NewDataColumnsVerifier,
+	newDataColumnsVerifier verification.NewDataColumnsVerifier,
 ) bool {
 	retrievedColumn := roDataColumn.Index
-
-	// Filter out columns with incorrect root.
-	columnRoot := roDataColumn.BlockRoot()
-	blockRoot := blockProcessedData.BlockRoot
-
-	if columnRoot != blockRoot {
-		log.WithFields(logrus.Fields{
-			"peerID":        pid,
-			"requestedRoot": fmt.Sprintf("%#x", blockRoot),
-			"columnRoot":    fmt.Sprintf("%#x", columnRoot),
-		}).Debug("Retrieved root does not match requested root")
-
-		return false
-	}
 
 	// Filter out columns that were not requested.
 	if !requestedColumns[retrievedColumn] {
@@ -607,17 +593,35 @@ func verifyColumn(
 		return false
 	}
 
-	roBlock := blockProcessedData.SignedBlock.Block()
-
-	wrappedBlockDataColumns := []verify.WrappedBlockDataColumn{
-		{
-			ROBlock:      roBlock,
-			RODataColumn: roDataColumn,
-		},
+	roBlock, err := blocks.NewROBlock(blockProcessedData.SignedBlock)
+	if err != nil {
+		log.WithError(err).WithField("peerID", pid).Error("Failed to create ROBlock")
 	}
 
-	if err := verify.DataColumnsAlignWithBlock(wrappedBlockDataColumns, dataColumnsVerifier); err != nil {
+	roDataColumns := []blocks.RODataColumn{roDataColumn}
+
+	if err := verify.DataColumnsAlignWithBlock(roBlock, roDataColumns); err != nil {
 		return false
+	}
+
+	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#datacolumnsidecarsbyroot-v1
+	verifier := newDataColumnsVerifier(roDataColumns, verification.ByRootRequestDataColumnSidecarRequirements)
+
+	if err := verifier.Valid(); err != nil {
+		log.WithError(err).WithField("peerID", pid).Error("Failed to verify data column")
+	}
+
+	if err := verifier.SidecarInclusionProven(); err != nil {
+		log.WithError(err).WithField("peerID", pid).Error("Failed to prove inclusion")
+	}
+
+	if err := verifier.SidecarKzgProofVerified(); err != nil {
+		log.WithError(err).WithField("peerID", pid).Error("Failed to verify KZG proof")
+	}
+
+	_, err = verifier.VerifiedRODataColumns()
+	if err != nil {
+		log.WithError(err).WithField("peerID", pid).Error("Failed to upgrade RODataColumns to VerifiedRODataColumns - should never happen")
 	}
 
 	return true

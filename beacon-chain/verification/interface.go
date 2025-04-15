@@ -3,6 +3,7 @@ package verification
 import (
 	"context"
 
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 )
 
@@ -34,18 +35,20 @@ type NewBlobVerifier func(b blocks.ROBlob, reqs []Requirement) BlobVerifier
 // It serves a very similar purpose as the blob verifier interface for data columns.
 type DataColumnsVerifier interface {
 	VerifiedRODataColumns() ([]blocks.VerifiedRODataColumn, error)
-	DataColumnsIndexInBounds() (err error)
-	NotFromFutureSlot() (err error)
-	SlotAboveFinalized() (err error)
-	ValidProposerSignature(ctx context.Context) (err error)
-	SidecarParentSeen(parentSeen func([32]byte) bool) (err error)
-	SidecarParentValid(badParent func([32]byte) bool) (err error)
-	SidecarParentSlotLower() (err error)
-	SidecarDescendsFromFinalized() (err error)
-	SidecarInclusionProven() (err error)
-	SidecarKzgProofVerified() (err error)
-	SidecarProposerExpected(ctx context.Context) (err error)
 	SatisfyRequirement(Requirement)
+
+	Valid() error
+	CorrectSubnet(expectedTopics []string) error
+	NotFromFutureSlot() error
+	SlotAboveFinalized() error
+	ValidProposerSignature(ctx context.Context) error
+	SidecarParentSeen(parentSeen func([fieldparams.RootLength]byte) bool) error
+	SidecarParentValid(badParent func([fieldparams.RootLength]byte) bool) error
+	SidecarParentSlotLower() error
+	SidecarDescendsFromFinalized() error
+	SidecarInclusionProven() error
+	SidecarKzgProofVerified() error
+	SidecarProposerExpected(ctx context.Context) error
 }
 
 // NewDataColumnsVerifier is a function signature that can be used to mock a setup where a

@@ -323,9 +323,9 @@ func TestBlocksFetcher_RoundRobin(t *testing.T) {
 				fetcher.stop()
 			}()
 
-			processFetchedBlocks := func() ([]blocks.BlockWithROBlobs, error) {
+			processFetchedBlocks := func() ([]blocks.BlockWithROSidecars, error) {
 				defer cancel()
-				var unionRespBlocks []blocks.BlockWithROBlobs
+				var unionRespBlocks []blocks.BlockWithROSidecars
 
 				for {
 					select {
@@ -472,7 +472,7 @@ func TestBlocksFetcher_handleRequest(t *testing.T) {
 			}
 		}()
 
-		var bwb []blocks.BlockWithROBlobs
+		var bwb []blocks.BlockWithROSidecars
 		select {
 		case <-ctx.Done():
 			t.Error(ctx.Err())
@@ -1010,7 +1010,7 @@ func TestBlobRangeForBlocks(t *testing.T) {
 func TestBlobRequest(t *testing.T) {
 	var nilReq *ethpb.BlobSidecarsByRangeRequest
 	// no blocks
-	req := countCommitments([]blocks.BlockWithROBlobs{}, 0).blobRange(nil).Request()
+	req := countCommitments([]blocks.BlockWithROSidecars{}, 0).blobRange(nil).Request()
 	require.Equal(t, nilReq, req)
 	blks, _ := util.ExtendBlocksPlusBlobs(t, []blocks.ROBlock{}, 10)
 	sbbs := make([]interfaces.ReadOnlySignedBeaconBlock, len(blks))
@@ -1045,14 +1045,14 @@ func TestBlobRequest(t *testing.T) {
 func TestCountCommitments(t *testing.T) {
 	type testcase struct {
 		name     string
-		bwb      func(t *testing.T, c testcase) []blocks.BlockWithROBlobs
+		bwb      func(t *testing.T, c testcase) []blocks.BlockWithROSidecars
 		retStart primitives.Slot
 		resCount int
 	}
 	cases := []testcase{
 		{
 			name: "nil blocks is safe",
-			bwb: func(t *testing.T, c testcase) []blocks.BlockWithROBlobs {
+			bwb: func(t *testing.T, c testcase) []blocks.BlockWithROSidecars {
 				return nil
 			},
 			retStart: 0,
@@ -1190,7 +1190,7 @@ func TestCommitmentCountList(t *testing.T) {
 	}
 }
 
-func testSequenceBlockWithBlob(t *testing.T, nblocks int) ([]blocks.BlockWithROBlobs, []blocks.ROBlob) {
+func testSequenceBlockWithBlob(t *testing.T, nblocks int) ([]blocks.BlockWithROSidecars, []blocks.ROBlob) {
 	blks, blobs := util.ExtendBlocksPlusBlobs(t, []blocks.ROBlock{}, nblocks)
 	sbbs := make([]interfaces.ReadOnlySignedBeaconBlock, len(blks))
 	for i := range blks {
@@ -1201,7 +1201,7 @@ func testSequenceBlockWithBlob(t *testing.T, nblocks int) ([]blocks.BlockWithROB
 	return bwb, blobs
 }
 
-func testReqFromResp(bwb []blocks.BlockWithROBlobs) *ethpb.BlobSidecarsByRangeRequest {
+func testReqFromResp(bwb []blocks.BlockWithROSidecars) *ethpb.BlobSidecarsByRangeRequest {
 	return &ethpb.BlobSidecarsByRangeRequest{
 		StartSlot: bwb[0].Block.Block().Slot(),
 		Count:     uint64(bwb[len(bwb)-1].Block.Block().Slot()-bwb[0].Block.Block().Slot()) + 1,
@@ -1374,7 +1374,6 @@ type (
 	responseParams struct {
 		slot        primitives.Slot
 		columnIndex uint64
-		alterate    bool
 	}
 
 	peerParams struct {
@@ -1434,23 +1433,9 @@ func createAndConnectPeer(
 			// Get the data column sidecar.
 			dataColumn := dataColumnsSidecar[responseParams.columnIndex]
 
-			// Alter the data column if needed.
-			initialValue0, initialValue1 := dataColumn.Column[0][0], dataColumn.Column[0][1]
-
-			if responseParams.alterate {
-				dataColumn.Column[0][0] = 0
-				dataColumn.Column[0][1] = 0
-			}
-
 			// Send the response.
 			err := beaconsync.WriteDataColumnSidecarChunk(stream, chainService, p2pService.Encoding(), dataColumn)
 			require.NoError(t, err)
-
-			if responseParams.alterate {
-				// Restore the data column.
-				dataColumn.Column[0][0] = initialValue0
-				dataColumn.Column[0][1] = initialValue1
-			}
 		}
 
 		// Close the stream.
@@ -1703,7 +1688,7 @@ func TestBuildBwbSlices(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			bwbs := make([]blocks.BlockWithROBlobs, 0, len(tt.missingColumnsWithCommitments))
+			bwbs := make([]blocks.BlockWithROSidecars, 0, len(tt.missingColumnsWithCommitments))
 			missingColumnsByRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool, len(tt.missingColumnsWithCommitments))
 			for i, missingColumnsWithCommitments := range tt.missingColumnsWithCommitments {
 				if missingColumnsWithCommitments == nil {
@@ -1727,7 +1712,7 @@ func TestBuildBwbSlices(t *testing.T) {
 				roBlock, err := blocks.NewROBlock(signedBeaconBlock)
 				require.NoError(t, err)
 
-				bwb := blocks.BlockWithROBlobs{Block: roBlock}
+				bwb := blocks.BlockWithROSidecars{Block: roBlock}
 				bwbs = append(bwbs, bwb)
 
 				blockRoot := bwb.Block.Root()
@@ -2011,39 +1996,6 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			},
 		},
 		{
-			name:          "Some blocks with blobs with missing data columns - first response is invalid",
-			fuluForkEpoch: 1,
-			currentSlot:   40,
-			blocksParams: []blockParams{
-				{slot: 38, hasBlobs: true},
-			},
-			storedDataColumns: []map[uint64]bool{{38: true, 102: true}},
-			peersParams: []peerParams{
-				{
-					cgc: 128,
-					toRespond: map[string][][]responseParams{
-						(&ethpb.DataColumnSidecarsByRangeRequest{
-							StartSlot: 38,
-							Count:     1,
-							Columns:   []uint64{6, 70},
-						}).String(): {
-							{
-								{slot: 38, columnIndex: 6, alterate: true},
-								{slot: 38, columnIndex: 70},
-							},
-							{
-								{slot: 38, columnIndex: 6},
-								{slot: 38, columnIndex: 70},
-							},
-						},
-					},
-				},
-			},
-			batchSize:          32,
-			addedRODataColumns: [][]int{{6, 70}},
-			isError:            false,
-		},
-		{
 			name:              "Some blocks with blobs with missing data columns - first response is empty",
 			fuluForkEpoch:     1,
 			currentSlot:       40,
@@ -2260,9 +2212,9 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			}
 
 			// Create `bwb`.
-			bwb := make([]blocks.BlockWithROBlobs, 0, len(tc.blocksParams))
+			bwb := make([]blocks.BlockWithROSidecars, 0, len(tc.blocksParams))
 			for _, roBlock := range roBlocks {
-				bwb = append(bwb, blocks.BlockWithROBlobs{Block: roBlock})
+				bwb = append(bwb, blocks.BlockWithROSidecars{Block: roBlock})
 			}
 			clockSync := startup.NewClockSynchronizer()
 			require.NoError(t, clockSync.SetClock(clock))

@@ -719,6 +719,7 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, block inter
 			return nil, wrapWithBlockRoot(err, blockRoot, "new read-only data column with root")
 		}
 
+		// We trust the execution layer we are connected to, so we can upgrade the read only data column sidecar into a verified one.
 		verifiedRODataColumns[i] = blocks.NewVerifiedRODataColumn(roDataColumn)
 	}
 
