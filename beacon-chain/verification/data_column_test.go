@@ -905,6 +905,7 @@ func TestColumnRequirementSatisfaction(t *testing.T) {
 	initializer := Initializer{}
 	verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
 
+	// We haven't performed any verification, VerifiedRODataColumns should error.
 	_, err := verifier.VerifiedRODataColumns()
 	require.ErrorIs(t, err, errColumnsInvalid)
 
@@ -918,13 +919,20 @@ func TestColumnRequirementSatisfaction(t *testing.T) {
 		require.ErrorIs(t, v, ErrMissingVerification)
 	}
 
-	// Satisfy everything through the backdoor and ensure we get the verified ro blob at the end.
-	for _, r := range GossipDataColumnSidecarRequirements {
+	// Satisfy everything but the first requirement through the backdoor.
+	for _, r := range GossipDataColumnSidecarRequirements[1:] {
 		verifier.results.record(r, nil)
 	}
 
+	// One requirement is missing, VerifiedRODataColumns should still error.
+	_, err = verifier.VerifiedRODataColumns()
+	require.ErrorIs(t, err, errColumnsInvalid)
+
+	// Now, satisfy the first requirement.
+	verifier.results.record(GossipDataColumnSidecarRequirements[0], nil)
+
+	// VerifiedRODataColumns should now succeed.
 	require.Equal(t, true, verifier.results.allSatisfied())
 	_, err = verifier.VerifiedRODataColumns()
-
 	require.NoError(t, err)
 }
