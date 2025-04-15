@@ -183,6 +183,12 @@ var (
 		Usage:  "Experimental: enables the use of random linear network coding for gossiping.",
 		Hidden: true,
 	}
+	// delayBlockBroadcast is a flag for delaying the block broadcast to the network.
+	delayBlockBroadcast = &cli.DurationFlag{
+		Name:  "delay-block-broadcast",
+		Usage: "Delays the block broadcast to the network.",
+		Value: 0,
+	}
 )
 
 // devModeFlags holds list of flags that are set when development mode is on.
@@ -245,6 +251,7 @@ var BeaconChainFlags = append(deprecatedBeaconFlags, append(deprecatedFlags, []c
 	EnableDiscoveryReboot,
 	enableExperimentalAttestationPool,
 	useRLNC,
+	delayBlockBroadcast,
 }...)...)
 
 // E2EBeaconChainFlags contains a list of the beacon chain feature flags to be tested in E2E.
