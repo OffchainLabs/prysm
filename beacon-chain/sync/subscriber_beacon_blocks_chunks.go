@@ -155,7 +155,8 @@ func (s *Service) startChunkPruner() {
 }
 
 func (s *Service) logReceivedBlock(blk interfaces.ReadOnlySignedBeaconBlock) {
-	parentRoot := fmt.Sprintf("%#x", blk.Block().ParentRoot())
+	pr := blk.Block().ParentRoot()
+	parentRoot := fmt.Sprintf("%#x", pr[:8])
 	since := time.Since(slots.StartTime(uint64(s.cfg.chain.GenesisTime().Unix()), blk.Block().Slot()))
 	log.WithFields(logrus.Fields{
 		"slot":           blk.Block().Slot(),

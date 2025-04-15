@@ -433,6 +433,9 @@ func (vs *Server) broadcastReceiveChunkedBlock(ctx context.Context, req *ethpb.C
 	if err != nil {
 		return errors.Wrap(err, "could not construct messages")
 	}
+	if err := slots.WaitUntil(ctx, vs.TimeFetcher.GenesisTime(), block.Block().Slot(), features.Get().DelayBlockBroadcast); err != nil {
+		return errors.Wrap(err, "could not wait until broadcast time")
+	}
 	if err := vs.P2P.BroadcastBlockChunks(ctx, messages); err != nil {
 		return errors.Wrap(err, "broadcast failed")
 	}
