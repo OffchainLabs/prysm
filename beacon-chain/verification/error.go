@@ -16,6 +16,11 @@ func AsVerificationFailure(err error) error {
 	return errors.Join(ErrInvalid, err)
 }
 
+// IsBlobValidationFailure checks if the given error is a blob validation failure.
+func IsBlobValidationFailure(err error) bool {
+	return errors.Is(err, ErrBlobInvalid)
+}
+
 var (
 	// ErrBlobInvalid is joined with all other blob verification errors. This enables other packages to check for any sort of
 	// verification error at one point, like sync code checking for peer scoring purposes.
