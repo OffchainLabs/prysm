@@ -64,6 +64,11 @@ func (s *Service) validateBeaconBlockChunkPubSub(ctx context.Context, pid peer.I
 		return pubsub.ValidationReject, errors.New("chunk is nil")
 	}
 
+	// Ignore the chunk if we have seen the block
+	if s.hasSeenBlockIndexSlot(chunk.Slot(), chunk.ProposerIndex()) {
+		return pubsub.ValidationIgnore, nil
+	}
+
 	// Check if parent is a bad block and then reject the chunk.
 	if s.hasBadBlock(chunk.ParentRoot()) {
 		err := fmt.Errorf("received chunk that has an invalid parent %#x", chunk.ParentRoot())
@@ -107,10 +112,11 @@ func (s *Service) validateBeaconBlockChunkPubSub(ctx context.Context, pid peer.I
 		log.WithError(err).Debug("Could not validate beacon block chunk")
 		return pubsub.ValidationReject, err
 	}
+	pr := chunk.ParentRoot()
 	logFields := logrus.Fields{
 		"chunkSlot":     chunk.Slot(),
 		"proposerIndex": chunk.ProposerIndex(),
-		"parentRoot":    fmt.Sprintf("%#x", chunk.ParentRoot()),
+		"parentRoot":    fmt.Sprintf("%#x", pr[:8]),
 	}
 	log.WithFields(logFields).Debug("Received block chunk")
 
@@ -187,6 +193,11 @@ func (s *Service) reconstructBlockFromChunk(ctx context.Context, chunk interface
 	blk, err := blocks.NewSignedBeaconBlock(msg)
 	if err != nil {
 		logrus.WithError(err).Error("Could not create signed beacon block")
+		return
+	}
+	// return early if we have already synced the block, this can happen by contention with the chunk syncing
+	if s.hasSeenBlockIndexSlot(chunk.Slot(), chunk.ProposerIndex()) {
+		return
 	}
 	sig := chunk.Signature()
 	blk.SetSignature(sig[:])
