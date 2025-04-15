@@ -1,6 +1,7 @@
 package slots
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"time"
@@ -17,6 +18,23 @@ import (
 // MaxSlotBuffer specifies the max buffer given to slots from
 // incoming objects. (24 mins with mainnet spec)
 const MaxSlotBuffer = uint64(1 << 7)
+
+// WaitUntil waits until the given slot plus a delay has been attained or the context is canceled.
+func WaitUntil(ctx context.Context, genesis time.Time, slot primitives.Slot, delay time.Duration) error {
+	deadline := startFromTime(genesis, slot).Add(delay)
+	waitTime := time.Until(deadline)
+	if waitTime <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(waitTime)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
 
 // startFromTime returns the slot start in terms of genesis time.Time
 func startFromTime(genesis time.Time, slot primitives.Slot) time.Time {

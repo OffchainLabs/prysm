@@ -19,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/rlnc"
+	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
@@ -469,6 +470,9 @@ func (vs *Server) broadcastReceiveBlock(ctx context.Context, block interfaces.Si
 	protoBlock, err := block.Proto()
 	if err != nil {
 		return errors.Wrap(err, "protobuf conversion failed")
+	}
+	if err := slots.WaitUntil(ctx, vs.TimeFetcher.GenesisTime(), block.Block().Slot(), features.Get().DelayBlockBroadcast); err != nil {
+		return errors.Wrap(err, "could not wait until broadcast time")
 	}
 	if err := vs.P2P.Broadcast(ctx, protoBlock); err != nil {
 		return errors.Wrap(err, "broadcast failed")

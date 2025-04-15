@@ -86,7 +86,8 @@ type Flags struct {
 	KeystoreImportDebounceInterval time.Duration
 
 	// AggregateIntervals specifies the time durations at which we aggregate attestations preparing for forkchoice.
-	AggregateIntervals [3]time.Duration
+	AggregateIntervals  [3]time.Duration
+	DelayBlockBroadcast time.Duration // DelayBlockBroadcast is the time duration to delay block broadcast.
 
 	// Feature related flags (alignment forced in the end)
 	ForceHead        string                // ForceHead forces the head block to be a specific block root, the last head block, or the last finalized block.
@@ -278,6 +279,11 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	if ctx.IsSet(useRLNC.Name) {
 		logEnabled(useRLNC)
 		cfg.UseRLNC = true
+	}
+
+	if ctx.IsSet(delayBlockBroadcast.Name) {
+		logEnabled(delayBlockBroadcast)
+		cfg.DelayBlockBroadcast = ctx.Duration(delayBlockBroadcast.Name)
 	}
 	if ctx.IsSet(forceHeadFlag.Name) {
 		logEnabled(forceHeadFlag)

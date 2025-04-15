@@ -193,6 +193,12 @@ var (
 		Name:  "blacklist-roots",
 		Usage: "A comma-separatted list of 0x-prefixed hexstrings. Declares blocks with the given blockroots to be invalid. It downscores peers that send these blocks.",
 	}
+	// delayBlockBroadcast is a flag for delaying the block broadcast to the network.
+	delayBlockBroadcast = &cli.DurationFlag{
+		Name:  "delay-block-broadcast",
+		Usage: "Delays the block broadcast to the network.",
+		Value: 0,
+	}
 )
 
 // devModeFlags holds list of flags that are set when development mode is on.
@@ -254,6 +260,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	EnableDiscoveryReboot,
 	enableExperimentalAttestationPool,
 	useRLNC,
+	delayBlockBroadcast,
 	forceHeadFlag,
 	blacklistRoots,
 }, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
