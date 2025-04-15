@@ -223,7 +223,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	FuluForkVersion:      []byte{6, 0, 0, 0},
 	FuluForkEpoch:        mainnetFuluForkEpoch,
 	Eip7805ForkEpoch:     math.MaxUint64,
-	Eip7805ForkVersion:   []byte{7, 0, 0, 0},
+	Eip7805ForkVersion:   []byte{10, 0, 0, 0},
 
 	// New values introduced in Altair hard fork 1.
 	// Participation flag indices.

@@ -225,6 +225,7 @@ func WithSlasherEnabled(enabled bool) Option {
 func WithLightClientStore(lcs *lightclient.Store) Option {
 	return func(s *Service) error {
 		s.lcStore = lcs
+		return nil
 	}
 }
 

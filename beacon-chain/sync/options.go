@@ -194,6 +194,7 @@ func WithAvailableBlocker(avb coverage.AvailableBlocker) Option {
 func WithSlasherEnabled(enabled bool) Option {
 	return func(s *Service) error {
 		s.slasherEnabled = enabled
+		return nil
 	}
 }
 

@@ -1,6 +1,8 @@
 package assert
 
 import (
+	"fmt"
+
 	"github.com/OffchainLabs/prysm/v6/testing/assertions"
 	"github.com/sirupsen/logrus/hooks/test"
 )
@@ -20,6 +22,7 @@ func NotEqual(tb assertions.AssertionTestingTB, expected, actual interface{}, ms
 // For arrays/slices, please use DeepSSZEqual.
 // For maps, please iterate through and compare the individual keys and values.
 func DeepEqual(tb assertions.AssertionTestingTB, expected, actual interface{}, msg ...interface{}) {
+	fmt.Println(expected, actual, msg)
 	assertions.DeepEqual(tb.Errorf, expected, actual, msg...)
 }
 

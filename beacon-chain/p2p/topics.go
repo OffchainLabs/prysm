@@ -62,6 +62,5 @@ const (
 	LightClientFinalityUpdateTopicFormat = GossipProtocolAndDigest + GossipLightClientFinalityUpdateMessage
 	// LightClientOptimisticUpdateTopicFormat is the topic format for the light client optimistic update subnet.
 	LightClientOptimisticUpdateTopicFormat = GossipProtocolAndDigest + GossipLightClientOptimisticUpdateMessage
-	BlobSubnetTopicFormat                  = GossipProtocolAndDigest + GossipBlobSidecarMessage + "_%d"
 	InclusionListTopicFormat               = GossipProtocolAndDigest + GossipInclusionList
 )

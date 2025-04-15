@@ -11,7 +11,7 @@ import (
 	sync "sync"
 
 	_ "github.com/OffchainLabs/prysm/v6/proto/eth/ext"
-	github_com_prysmaticlabs_prysm_v5_consensus_types_primitives "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	github_com_prysmaticlabs_prysm_v5_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
@@ -28,8 +28,8 @@ type InclusionList struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Slot                       github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot           `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"`
-	ValidatorIndex             github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex `protobuf:"varint,2,opt,name=validator_index,json=validatorIndex,proto3" json:"validator_index,omitempty" cast-type:"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.ValidatorIndex"`
+	Slot                       github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot           `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	ValidatorIndex             github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex `protobuf:"varint,2,opt,name=validator_index,json=validatorIndex,proto3" json:"validator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.ValidatorIndex"`
 	InclusionListCommitteeRoot []byte                                                                      `protobuf:"bytes,3,opt,name=inclusion_list_committee_root,json=inclusionListCommitteeRoot,proto3" json:"inclusion_list_committee_root,omitempty" ssz-size:"32"`
 	Transactions               [][]byte                                                                    `protobuf:"bytes,4,rep,name=transactions,proto3" json:"transactions,omitempty" ssz-max:"1048576,1073741824" ssz-size:"?,?"`
 }

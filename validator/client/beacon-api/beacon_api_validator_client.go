@@ -336,9 +336,9 @@ func (c *beaconApiValidatorClient) SetHost(host string) {
 }
 
 func (c *beaconApiValidatorClient) GetInclusionList(request *ethpb.GetInclusionListRequest) (*ethpb.InclusionList, error) {
-	panic("implement me")
+	return nil, nil
 }
 
 func (c *beaconApiValidatorClient) SubmitInclusionList(il *ethpb.SignedInclusionList) (*empty.Empty, error) {
-	panic("implement me")
+	return nil, nil
 }

@@ -13,7 +13,7 @@ import (
 
 	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	_ "github.com/OffchainLabs/prysm/v6/proto/eth/ext"
-	github_com_prysmaticlabs_prysm_v5_consensus_types_primitives "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	github_com_prysmaticlabs_prysm_v5_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
@@ -103,7 +103,7 @@ type GetInclusionListRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Slot github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"`
+	Slot github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
 }
 
 func (x *GetInclusionListRequest) Reset() {
@@ -2912,7 +2912,7 @@ type DutiesResponse_Duty struct {
 	ValidatorIndex             github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex   `protobuf:"varint,7,opt,name=validator_index,json=validatorIndex,proto3" json:"validator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.ValidatorIndex"`
 	IsSyncCommittee            bool                                                                         `protobuf:"varint,8,opt,name=is_sync_committee,json=isSyncCommittee,proto3" json:"is_sync_committee,omitempty"`
 	CommitteesAtSlot           uint64                                                                       `protobuf:"varint,9,opt,name=committees_at_slot,json=committeesAtSlot,proto3" json:"committees_at_slot,omitempty"`
-	InclusionListCommitteeSlot github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot            `protobuf:"varint,100,opt,name=inclusion_list_committee_slot,json=inclusionListCommitteeSlot,proto3" json:"inclusion_list_committee_slot,omitempty" cast-type:"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"`
+	InclusionListCommitteeSlot github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot            `protobuf:"varint,100,opt,name=inclusion_list_committee_slot,json=inclusionListCommitteeSlot,proto3" json:"inclusion_list_committee_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
 }
 
 func (x *DutiesResponse_Duty) Reset() {

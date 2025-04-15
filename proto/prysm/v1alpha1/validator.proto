@@ -426,7 +426,7 @@ service BeaconNodeValidator {
 message GetInclusionListRequest {
   uint64 slot = 1 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
 }
 
@@ -755,7 +755,7 @@ message DutiesResponse {
 
     uint64 inclusion_list_committee_slot = 100 [
       (ethereum.eth.ext.cast_type) =
-          "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+          "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
     ];
   }
 }

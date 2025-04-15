@@ -580,7 +580,7 @@ func TestGetSpec(t *testing.T) {
 			case "DOMAIN_INCLUSION_LIST_COMMITTEE":
 				assert.Equal(t, "0x00000000", v)
 			case "EIP7805_FORK_VERSION":
-				assert.Equal(t, "0x07000000", v)
+				assert.Equal(t, "0x0a000000", v)
 			case "EIP7805_FORK_EPOCH":
 				assert.Equal(t, "18446744073709551615", v)
 			default:
