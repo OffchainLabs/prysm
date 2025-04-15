@@ -319,11 +319,11 @@ func TestClient_HTTP(t *testing.T) {
 		require.DeepEqual(t, uint64(2), g)
 
 		commitments := [][]byte{bytesutil.PadTo([]byte("commitment1"), fieldparams.BLSPubkeyLength), bytesutil.PadTo([]byte("commitment2"), fieldparams.BLSPubkeyLength)}
-		require.DeepEqual(t, commitments, resp.BlobsBundle.GetKzgCommitments())
+		require.DeepEqual(t, commitments, resp.BlobsBundler.GetKzgCommitments())
 		proofs := [][]byte{bytesutil.PadTo([]byte("proof1"), fieldparams.BLSPubkeyLength), bytesutil.PadTo([]byte("proof2"), fieldparams.BLSPubkeyLength)}
-		require.DeepEqual(t, proofs, resp.BlobsBundle.GetProofs())
+		require.DeepEqual(t, proofs, resp.BlobsBundler.GetProofs())
 		blobs := [][]byte{bytesutil.PadTo([]byte("a"), fieldparams.BlobLength), bytesutil.PadTo([]byte("b"), fieldparams.BlobLength)}
-		require.DeepEqual(t, blobs, resp.BlobsBundle.GetBlobs())
+		require.DeepEqual(t, blobs, resp.BlobsBundler.GetBlobs())
 	})
 	t.Run(GetPayloadMethodV4, func(t *testing.T) {
 		payloadId := [8]byte{1}
@@ -374,11 +374,11 @@ func TestClient_HTTP(t *testing.T) {
 		require.DeepEqual(t, uint64(2), g)
 
 		commitments := [][]byte{bytesutil.PadTo([]byte("commitment1"), fieldparams.BLSPubkeyLength), bytesutil.PadTo([]byte("commitment2"), fieldparams.BLSPubkeyLength)}
-		require.DeepEqual(t, commitments, resp.BlobsBundle.GetKzgCommitments())
+		require.DeepEqual(t, commitments, resp.BlobsBundler.GetKzgCommitments())
 		proofs := [][]byte{bytesutil.PadTo([]byte("proof1"), fieldparams.BLSPubkeyLength), bytesutil.PadTo([]byte("proof2"), fieldparams.BLSPubkeyLength)}
-		require.DeepEqual(t, proofs, resp.BlobsBundle.GetProofs())
+		require.DeepEqual(t, proofs, resp.BlobsBundler.GetProofs())
 		blobs := [][]byte{bytesutil.PadTo([]byte("a"), fieldparams.BlobLength), bytesutil.PadTo([]byte("b"), fieldparams.BlobLength)}
-		require.DeepEqual(t, blobs, resp.BlobsBundle.GetBlobs())
+		require.DeepEqual(t, blobs, resp.BlobsBundler.GetBlobs())
 		requests := &pb.ExecutionRequests{
 			Deposits: []*pb.DepositRequest{
 				{
@@ -447,9 +447,9 @@ func TestClient_HTTP(t *testing.T) {
 		// We call the RPC method via HTTP and expect a proper result.
 		resp, err := client.GetPayload(ctx, payloadId, 4*params.BeaconConfig().SlotsPerEpoch)
 		require.NoError(t, err)
-		_, ok = resp.BlobsBundle.(*pb.BlobsBundleV2)
+		_, ok = resp.BlobsBundler.(*pb.BlobsBundleV2)
 		if !ok {
-			t.Logf("resp.BlobsBundle has unexpected type: %T", resp.BlobsBundle)
+			t.Logf("resp.BlobsBundler has unexpected type: %T", resp.BlobsBundler)
 		}
 		require.Equal(t, ok, true)
 	})

@@ -12,7 +12,7 @@ import (
 // GetPayloadResponseV(1|2|3|4) value.
 type GetPayloadResponse struct {
 	ExecutionData   interfaces.ExecutionData
-	BlobsBundle     pb.BlobsBundler
+	BlobsBundler    pb.BlobsBundler
 	OverrideBuilder bool
 	// todo: should we convert this to Gwei up front?
 	Bid               primitives.Wei
@@ -45,14 +45,13 @@ func NewGetPayloadResponse(msg proto.Message) (*GetPayloadResponse, error) {
 	r := &GetPayloadResponse{}
 	bundleGetter, hasBundle := msg.(bundleGetter)
 	if hasBundle {
-		r.BlobsBundle = bundleGetter.GetBlobsBundle()
+		r.BlobsBundler = bundleGetter.GetBlobsBundle()
 	}
 	bundleV2Getter, hasBundle := msg.(bundleV2Getter)
 	if hasBundle {
-		r.BlobsBundle = bundleV2Getter.GetBlobsBundle()
+		r.BlobsBundler = bundleV2Getter.GetBlobsBundle()
 	}
 	bidValueGetter, hasBid := msg.(bidValueGetter)
-	executionRequestsGetter, hasExecutionRequests := msg.(executionRequestsGetter)
 	wei := primitives.ZeroWei()
 	if hasBid {
 		// The protobuf types that engine api responses unmarshal into store their values in little endian form.
@@ -71,6 +70,8 @@ func NewGetPayloadResponse(msg proto.Message) (*GetPayloadResponse, error) {
 		return nil, errors.Wrap(err, "new wrapped execution data")
 	}
 	r.ExecutionData = ed
+
+	executionRequestsGetter, hasExecutionRequests := msg.(executionRequestsGetter)
 	if hasExecutionRequests {
 		requests, err := executionRequestsGetter.GetDecodedExecutionRequests()
 		if err != nil {

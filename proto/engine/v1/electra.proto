@@ -81,11 +81,3 @@ message ExecutionBundleElectra {
   bool should_override_builder = 4;
   repeated bytes execution_requests = 5;
 }
-
-message ExecutionBundleFulu {
-  ExecutionPayloadDeneb payload = 1;
-  bytes value = 2;
-  BlobsBundleV2 blobs_bundle = 3;
-  bool should_override_builder = 4;
-  repeated bytes execution_requests = 5;
-}

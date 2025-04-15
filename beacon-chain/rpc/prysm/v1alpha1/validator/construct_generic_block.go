@@ -15,7 +15,7 @@ import (
 // constructGenericBeaconBlock constructs a `GenericBeaconBlock` based on the block version and other parameters.
 func (vs *Server) constructGenericBeaconBlock(
 	sBlk interfaces.SignedBeaconBlock,
-	blobsBundle enginev1.BlobsBundler,
+	blobsBundler enginev1.BlobsBundler,
 	winningBid primitives.Wei,
 ) (*ethpb.GenericBeaconBlock, error) {
 	if sBlk == nil || sBlk.Block() == nil {
@@ -40,18 +40,18 @@ func (vs *Server) constructGenericBeaconBlock(
 	case version.Capella:
 		return vs.constructCapellaBlock(blockProto, isBlinded, bidStr), nil
 	case version.Deneb, version.Electra:
-		bundle, ok := blobsBundle.(*enginev1.BlobsBundle)
-		if blobsBundle != nil && !ok {
-			return nil, fmt.Errorf("expected *BlobsBundle, got %T", blobsBundle)
+		bundle, ok := blobsBundler.(*enginev1.BlobsBundle)
+		if blobsBundler != nil && !ok {
+			return nil, fmt.Errorf("expected *BlobsBundler, got %T", blobsBundler)
 		}
 		if sBlk.Version() == version.Deneb {
 			return vs.constructDenebBlock(blockProto, isBlinded, bidStr, bundle), nil
 		}
 		return vs.constructElectraBlock(blockProto, isBlinded, bidStr, bundle), nil
 	case version.Fulu:
-		bundle, ok := blobsBundle.(*enginev1.BlobsBundleV2)
-		if blobsBundle != nil && !ok {
-			return nil, fmt.Errorf("expected *BlobsBundleV2, got %T", blobsBundle)
+		bundle, ok := blobsBundler.(*enginev1.BlobsBundleV2)
+		if blobsBundler != nil && !ok {
+			return nil, fmt.Errorf("expected *BlobsBundleV2, got %T", blobsBundler)
 		}
 		return vs.constructFuluBlock(blockProto, isBlinded, bidStr, bundle), nil
 	default:
