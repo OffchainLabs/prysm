@@ -1608,7 +1608,6 @@ func TestLightClientHandler_GetLightClientOptimisticUpdate(t *testing.T) {
 	for testVersion := 1; testVersion < 6; testVersion++ {
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			ctx := context.Background()
-
 			l := util.NewTestLightClient(t, testVersion)
 			update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
 			require.NoError(t, err)
@@ -1639,7 +1638,6 @@ func TestLightClientHandler_GetLightClientOptimisticUpdate(t *testing.T) {
 
 		t.Run(version.String(testVersion)+" SSZ", func(t *testing.T) {
 			ctx := context.Background()
-
 			l := util.NewTestLightClient(t, testVersion)
 			update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
 			require.NoError(t, err)
