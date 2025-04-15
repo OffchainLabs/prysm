@@ -270,7 +270,7 @@ func (s *Service) internalBroadcastBlob(ctx context.Context, subnet uint64, blob
 	}
 }
 
-func (s *Service) BroadcastLightClientOptimisticUpdate(ctx context.Context, subnet uint64, update interfaces.LightClientOptimisticUpdate) error {
+func (s *Service) BroadcastLightClientOptimisticUpdate(ctx context.Context, update interfaces.LightClientOptimisticUpdate) error {
 	ctx, span := trace.StartSpan(ctx, "p2p.BroadcastLightClientOptimisticUpdate")
 	defer span.End()
 
@@ -287,13 +287,7 @@ func (s *Service) BroadcastLightClientOptimisticUpdate(ctx context.Context, subn
 
 	// TODO: should we check if the update is too early or too late to broadcast?
 
-	topic, ok := GossipTypeMapping[reflect.TypeOf(update)]
-	if !ok {
-		tracing.AnnotateError(span, ErrMessageNotMapped)
-		return ErrMessageNotMapped
-	}
-
-	if err := s.broadcastObject(ctx, update, fmt.Sprintf(topic, forkDigest, subnet)); err != nil {
+	if err := s.broadcastObject(ctx, update, lcOptimisticToTopic(forkDigest)); err != nil {
 		err := errors.Wrap(err, "could not publish message")
 		tracing.AnnotateError(span, err)
 		return err
@@ -302,7 +296,7 @@ func (s *Service) BroadcastLightClientOptimisticUpdate(ctx context.Context, subn
 	return nil
 }
 
-func (s *Service) BroadcastLightClientFinalityUpdate(ctx context.Context, subnet uint64, update interfaces.LightClientFinalityUpdate) error {
+func (s *Service) BroadcastLightClientFinalityUpdate(ctx context.Context, update interfaces.LightClientFinalityUpdate) error {
 	ctx, span := trace.StartSpan(ctx, "p2p.BroadcastLightClientFinalityUpdate")
 	defer span.End()
 
@@ -319,13 +313,7 @@ func (s *Service) BroadcastLightClientFinalityUpdate(ctx context.Context, subnet
 
 	// TODO: should we check if the update is too early or too late to broadcast?
 
-	topic, ok := GossipTypeMapping[reflect.TypeOf(update)]
-	if !ok {
-		tracing.AnnotateError(span, ErrMessageNotMapped)
-		return ErrMessageNotMapped
-	}
-
-	if err := s.broadcastObject(ctx, update, fmt.Sprintf(topic, forkDigest, subnet)); err != nil {
+	if err := s.broadcastObject(ctx, update, lcFinalityToTopic(forkDigest)); err != nil {
 		err := errors.Wrap(err, "could not publish message")
 		tracing.AnnotateError(span, err)
 		return err
@@ -373,4 +361,12 @@ func syncCommitteeToTopic(subnet uint64, forkDigest [4]byte) string {
 
 func blobSubnetToTopic(subnet uint64, forkDigest [4]byte) string {
 	return fmt.Sprintf(BlobSubnetTopicFormat, forkDigest, subnet)
+}
+
+func lcOptimisticToTopic(forkDigest [4]byte) string {
+	return fmt.Sprintf(LightClientOptimisticUpdateTopicFormat, forkDigest)
+}
+
+func lcFinalityToTopic(forkDigest [4]byte) string {
+	return fmt.Sprintf(LightClientFinalityUpdateTopicFormat, forkDigest)
 }

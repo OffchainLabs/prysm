@@ -546,13 +546,12 @@ func TestService_BroadcastLightClientOptimisticUpdate(t *testing.T) {
 	l := util.NewTestLightClient(t, version.Altair)
 	msg, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
 	require.NoError(t, err)
-	subnet := uint64(0)
 
 	topic := LightClientOptimisticUpdateTopicFormat
 	GossipTypeMapping[reflect.TypeOf(msg)] = topic
 	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(msg.AttestedHeader().Beacon().Slot), p.genesisValidatorsRoot)
 	require.NoError(t, err)
-	topic = fmt.Sprintf(topic, digest, subnet)
+	topic = fmt.Sprintf(topic, digest)
 
 	// External peer subscribes to the topic.
 	topic += p.Encoding().ProtocolSuffix()
@@ -581,10 +580,10 @@ func TestService_BroadcastLightClientOptimisticUpdate(t *testing.T) {
 
 	// Broadcasting nil should fail.
 	ctx := context.Background()
-	require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastLightClientOptimisticUpdate(ctx, subnet, nil))
+	require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastLightClientOptimisticUpdate(ctx, nil))
 
 	// Broadcast to peers and wait.
-	require.NoError(t, p.BroadcastLightClientOptimisticUpdate(ctx, subnet, msg))
+	require.NoError(t, p.BroadcastLightClientOptimisticUpdate(ctx, msg))
 	if util.WaitTimeout(&wg, 1*time.Second) {
 		t.Error("Failed to receive pubsub within 1s")
 	}
@@ -615,13 +614,12 @@ func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
 	l := util.NewTestLightClient(t, version.Altair)
 	msg, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 	require.NoError(t, err)
-	subnet := uint64(0)
 
 	topic := LightClientFinalityUpdateTopicFormat
 	GossipTypeMapping[reflect.TypeOf(msg)] = topic
 	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(msg.AttestedHeader().Beacon().Slot), p.genesisValidatorsRoot)
 	require.NoError(t, err)
-	topic = fmt.Sprintf(topic, digest, subnet)
+	topic = fmt.Sprintf(topic, digest)
 
 	// External peer subscribes to the topic.
 	topic += p.Encoding().ProtocolSuffix()
@@ -650,10 +648,10 @@ func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
 
 	// Broadcasting nil should fail.
 	ctx := context.Background()
-	require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastLightClientFinalityUpdate(ctx, subnet, nil))
+	require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastLightClientFinalityUpdate(ctx, nil))
 
 	// Broadcast to peers and wait.
-	require.NoError(t, p.BroadcastLightClientFinalityUpdate(ctx, subnet, msg))
+	require.NoError(t, p.BroadcastLightClientFinalityUpdate(ctx, msg))
 	if util.WaitTimeout(&wg, 1*time.Second) {
 		t.Error("Failed to receive pubsub within 1s")
 	}
