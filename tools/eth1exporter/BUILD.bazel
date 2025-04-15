@@ -26,7 +26,7 @@ prysm_image_upload(
     name = "push_images",
     binary = ":eth1exporter",
     entrypoint = ["/eth1exporter"],
-    repository = "gcr.io/prysmaticlabs/prysm/eth1monitor",
+    repository = "gcr.io/offchainlabs/prysm/eth1monitor",
     symlinks = {
         # Backwards compatibility for images that depended on the old filepath.
         "/app/tools/eth1exporter/eth1exporter": "/eth1exporter",

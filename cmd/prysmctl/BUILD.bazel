@@ -29,7 +29,7 @@ prysm_image_upload(
     name = "push_images",
     binary = ":prysmctl",
     entrypoint = ["/prysmctl"],
-    repository = "gcr.io/prysmaticlabs/prysm/cmd/prysmctl",
+    repository = "gcr.io/offchainlabs/prysm/cmd/prysmctl",
     symlinks = {
         # Backwards compatibility for images that depended on the old filepath.
         "/app/cmd/prysmctl/prysmctl": "/prysmctl",
