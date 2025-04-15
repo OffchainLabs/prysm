@@ -38,7 +38,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 var (
@@ -410,28 +409,30 @@ func TestClient_HTTP(t *testing.T) {
 	})
 	t.Run(GetPayloadMethodV5, func(t *testing.T) {
 		payloadId := [8]byte{1}
-		want, ok := fix["ExecutionBundleFulu"].(*pb.ExecutionBundleFulu)
+		want, ok := fix["ExecutionBundleFulu"].(*pb.GetPayloadV5ResponseJson)
 		require.Equal(t, true, ok)
-
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			defer func() {
 				require.NoError(t, r.Body.Close())
 			}()
-			// Read and verify request
 			enc, err := io.ReadAll(r.Body)
 			require.NoError(t, err)
 			jsonRequestString := string(enc)
+
 			reqArg, err := json.Marshal(pb.PayloadIDBytes(payloadId))
 			require.NoError(t, err)
-			require.Equal(t, strings.Contains(jsonRequestString, string(reqArg)), true)
 
-			// Use protojson to marshal the result correctly
-			marshaled, err := protojson.Marshal(want)
-			require.NoError(t, err)
-
-			response := `{"jsonrpc":"2.0","id":1,"result":` + string(marshaled) + `}`
-			_, err = w.Write([]byte(response))
+			// We expect the JSON string RPC request contains the right arguments.
+			require.Equal(t, true, strings.Contains(
+				jsonRequestString, string(reqArg),
+			))
+			resp := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      1,
+				"result":  want,
+			}
+			err = json.NewEncoder(w).Encode(resp)
 			require.NoError(t, err)
 		}))
 		defer srv.Close()
@@ -440,15 +441,17 @@ func TestClient_HTTP(t *testing.T) {
 		require.NoError(t, err)
 		defer rpcClient.Close()
 
-		client := &Service{rpcClient: rpcClient}
+		client := &Service{}
+		client.rpcClient = rpcClient
+
+		// We call the RPC method via HTTP and expect a proper result.
 		resp, err := client.GetPayload(ctx, payloadId, 4*params.BeaconConfig().SlotsPerEpoch)
 		require.NoError(t, err)
-
 		_, ok = resp.BlobsBundle.(*pb.BlobsBundleV2)
 		if !ok {
 			t.Logf("resp.BlobsBundle has unexpected type: %T", resp.BlobsBundle)
 		}
-		require.Equal(t, true, ok)
+		require.Equal(t, ok, true)
 	})
 	t.Run(ForkchoiceUpdatedMethod+" VALID status", func(t *testing.T) {
 		forkChoiceState := &pb.ForkchoiceState{
@@ -1819,6 +1822,36 @@ func fixturesStruct() *payloadFixtures {
 			append([]byte{pb.WithdrawalRequestType}, withdrawalRequestBytes...),
 			append([]byte{pb.ConsolidationRequestType}, consolidationRequestBytes...)},
 	}
+	executionBundleFixtureFulu := &pb.GetPayloadV5ResponseJson{
+		ShouldOverrideBuilder: true,
+		ExecutionPayload: &pb.ExecutionPayloadDenebJSON{
+			ParentHash:    &common.Hash{'a'},
+			FeeRecipient:  &common.Address{'b'},
+			StateRoot:     &common.Hash{'c'},
+			ReceiptsRoot:  &common.Hash{'d'},
+			LogsBloom:     &hexutil.Bytes{'e'},
+			PrevRandao:    &common.Hash{'f'},
+			BaseFeePerGas: "0x123",
+			BlockHash:     &common.Hash{'g'},
+			Transactions:  []hexutil.Bytes{{'h'}},
+			Withdrawals:   []*pb.Withdrawal{},
+			BlockNumber:   &hexUint,
+			GasLimit:      &hexUint,
+			GasUsed:       &hexUint,
+			Timestamp:     &hexUint,
+			BlobGasUsed:   &bgu,
+			ExcessBlobGas: &ebg,
+		},
+		BlockValue: "0x11fffffffff",
+		BlobsBundle: &pb.BlobBundleV2JSON{
+			Commitments: []hexutil.Bytes{[]byte("commitment1"), []byte("commitment2")},
+			Proofs:      []hexutil.Bytes{[]byte("proof1"), []byte("proof2")},
+			Blobs:       []hexutil.Bytes{{'a'}, {'b'}},
+		},
+		ExecutionRequests: []hexutil.Bytes{append([]byte{pb.DepositRequestType}, depositRequestBytes...),
+			append([]byte{pb.WithdrawalRequestType}, withdrawalRequestBytes...),
+			append([]byte{pb.ConsolidationRequestType}, consolidationRequestBytes...)},
+	}
 	parent := bytesutil.PadTo([]byte("parentHash"), fieldparams.RootLength)
 	sha3Uncles := bytesutil.PadTo([]byte("sha3Uncles"), fieldparams.RootLength)
 	miner := bytesutil.PadTo([]byte("miner"), fieldparams.FeeRecipientLength)
@@ -1904,20 +1937,16 @@ func fixturesStruct() *payloadFixtures {
 		LatestValidHash: foo[:],
 	}
 	return &payloadFixtures{
-		ExecutionBlock:                   executionBlock,
-		ExecutionPayloadBody:             executionPayloadBodyFixture,
-		ExecutionPayload:                 executionPayloadFixture,
-		ExecutionPayloadCapella:          executionPayloadFixtureCapella,
-		ExecutionPayloadDeneb:            executionPayloadFixtureDeneb,
-		EmptyExecutionPayloadDeneb:       emptyExecutionPayloadDeneb,
-		ExecutionPayloadWithValueCapella: executionPayloadWithValueFixtureCapella,
-		ExecutionPayloadWithValueDeneb:   executionPayloadWithValueFixtureDeneb,
-		ExecutionBundleElectra:           executionBundleFixtureElectra,
-		ExecutionBundleFulu: &pb.ExecutionBundleFulu{
-			Payload:           &pb.ExecutionPayloadDeneb{},
-			BlobsBundle:       &pb.BlobsBundleV2{},
-			ExecutionRequests: [][]byte{},
-		},
+		ExecutionBlock:                    executionBlock,
+		ExecutionPayloadBody:              executionPayloadBodyFixture,
+		ExecutionPayload:                  executionPayloadFixture,
+		ExecutionPayloadCapella:           executionPayloadFixtureCapella,
+		ExecutionPayloadDeneb:             executionPayloadFixtureDeneb,
+		EmptyExecutionPayloadDeneb:        emptyExecutionPayloadDeneb,
+		ExecutionPayloadWithValueCapella:  executionPayloadWithValueFixtureCapella,
+		ExecutionPayloadWithValueDeneb:    executionPayloadWithValueFixtureDeneb,
+		ExecutionBundleElectra:            executionBundleFixtureElectra,
+		ExecutionBundleFulu:               executionBundleFixtureFulu,
 		ValidPayloadStatus:                validStatus,
 		InvalidBlockHashStatus:            inValidBlockHashStatus,
 		AcceptedStatus:                    acceptedStatus,
@@ -1942,7 +1971,7 @@ type payloadFixtures struct {
 	ExecutionPayloadWithValueCapella  *pb.GetPayloadV2ResponseJson
 	ExecutionPayloadWithValueDeneb    *pb.GetPayloadV3ResponseJson
 	ExecutionBundleElectra            *pb.GetPayloadV4ResponseJson
-	ExecutionBundleFulu               *pb.ExecutionBundleFulu
+	ExecutionBundleFulu               *pb.GetPayloadV5ResponseJson
 	ValidPayloadStatus                *pb.PayloadStatus
 	InvalidBlockHashStatus            *pb.PayloadStatus
 	AcceptedStatus                    *pb.PayloadStatus
