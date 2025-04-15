@@ -1667,7 +1667,7 @@ func TestLightClientHandler_GetLightClientOptimisticUpdate(t *testing.T) {
 			case version.Electra:
 				resp = &pb.LightClientOptimisticUpdateDeneb{}
 			default:
-				t.Fatalf("unsupported version: %d", testVersion)
+				t.Fatalf("Unsupported version %s", version.String(testVersion))
 			}
 			obj := resp.(ssz.Unmarshaler)
 			err = obj.UnmarshalSSZ(writer.Body.Bytes())
