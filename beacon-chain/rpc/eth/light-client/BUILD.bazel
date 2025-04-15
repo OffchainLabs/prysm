@@ -57,5 +57,6 @@ go_test(
         "//testing/util:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_prysmaticlabs_fastssz//:go_default_library",
+        "@org_golang_google_protobuf//proto:go_default_library",
     ],
 )

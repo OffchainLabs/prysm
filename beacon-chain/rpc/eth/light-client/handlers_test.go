@@ -30,6 +30,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ssz "github.com/prysmaticlabs/fastssz"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
@@ -1515,55 +1516,76 @@ func TestLightClientHandler_GetLightClientFinalityUpdate(t *testing.T) {
 		require.Equal(t, http.StatusNotFound, writer.Code)
 	})
 
-	t.Run("altair", func(t *testing.T) {
-		ctx := context.Background()
+	for testVersion := 1; testVersion < 6; testVersion++ {
+		t.Run(version.String(testVersion), func(t *testing.T) {
+			ctx := context.Background()
 
-		l := util.NewTestLightClient(t, version.Altair)
-		update, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
-		require.NoError(t, err)
+			l := util.NewTestLightClient(t, testVersion)
+			update, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+			require.NoError(t, err)
 
-		s := &Server{LCStore: &lightclient.Store{}}
-		s.LCStore.SetLastFinalityUpdate(update)
+			s := &Server{LCStore: &lightclient.Store{}}
+			s.LCStore.SetLastFinalityUpdate(update)
 
-		request := httptest.NewRequest("GET", "http://foo.com", nil)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		s.GetLightClientFinalityUpdate(writer, request)
-		require.Equal(t, http.StatusOK, writer.Code)
+			request := httptest.NewRequest("GET", "http://foo.com", nil)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+			s.GetLightClientFinalityUpdate(writer, request)
+			require.Equal(t, http.StatusOK, writer.Code)
 
-		data, err := structs.LightClientFinalityUpdateFromConsensus(update)
-		require.NoError(t, err)
-		var resp structs.LightClientFinalityUpdateResponse
-		err = json.Unmarshal(writer.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		require.Equal(t, "altair", resp.Version)
-		require.DeepEqual(t, data, resp.Data)
-	})
+			data, err := structs.LightClientFinalityUpdateFromConsensus(update)
+			require.NoError(t, err)
+			var resp structs.LightClientFinalityUpdateResponse
+			err = json.Unmarshal(writer.Body.Bytes(), &resp)
+			require.NoError(t, err)
+			if testVersion == version.Bellatrix {
+				require.Equal(t, version.String(version.Altair), resp.Version)
+			} else {
+				require.Equal(t, version.String(testVersion), resp.Version)
+			}
+			require.DeepEqual(t, data, resp.Data)
+		})
 
-	t.Run("altair SSZ", func(t *testing.T) {
-		ctx := context.Background()
+		t.Run(version.String(testVersion)+" SSZ", func(t *testing.T) {
+			ctx := context.Background()
 
-		l := util.NewTestLightClient(t, version.Altair)
-		update, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
-		require.NoError(t, err)
+			l := util.NewTestLightClient(t, testVersion)
+			update, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+			require.NoError(t, err)
 
-		s := &Server{LCStore: &lightclient.Store{}}
-		s.LCStore.SetLastFinalityUpdate(update)
+			s := &Server{LCStore: &lightclient.Store{}}
+			s.LCStore.SetLastFinalityUpdate(update)
 
-		request := httptest.NewRequest("GET", "http://foo.com", nil)
-		request.Header.Add("Accept", "application/octet-stream")
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		s.GetLightClientFinalityUpdate(writer, request)
-		require.Equal(t, http.StatusOK, writer.Code)
+			request := httptest.NewRequest("GET", "http://foo.com", nil)
+			request.Header.Add("Accept", "application/octet-stream")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+			s.GetLightClientFinalityUpdate(writer, request)
+			require.Equal(t, http.StatusOK, writer.Code)
 
-		var resp pb.LightClientFinalityUpdateAltair
-		err = resp.UnmarshalSSZ(writer.Body.Bytes())
-		require.NoError(t, err)
-		updateSSZ, err := update.MarshalSSZ()
-		require.NoError(t, err)
-		require.DeepSSZEqual(t, updateSSZ, writer.Body.Bytes())
-	})
+			var resp proto.Message
+			switch testVersion {
+			case version.Altair:
+				resp = &pb.LightClientFinalityUpdateAltair{}
+			case version.Bellatrix:
+				resp = &pb.LightClientFinalityUpdateAltair{}
+			case version.Capella:
+				resp = &pb.LightClientFinalityUpdateCapella{}
+			case version.Deneb:
+				resp = &pb.LightClientFinalityUpdateDeneb{}
+			case version.Electra:
+				resp = &pb.LightClientFinalityUpdateElectra{}
+			default:
+				t.Fatalf("Unsupported version %s", version.String(testVersion))
+			}
+			obj := resp.(ssz.Unmarshaler)
+			err = obj.UnmarshalSSZ(writer.Body.Bytes())
+			require.NoError(t, err)
+			updateSSZ, err := update.MarshalSSZ()
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, updateSSZ, writer.Body.Bytes())
+		})
+	}
 }
 
 func TestLightClientHandler_GetLightClientOptimisticUpdate(t *testing.T) {
@@ -1583,205 +1605,76 @@ func TestLightClientHandler_GetLightClientOptimisticUpdate(t *testing.T) {
 		require.Equal(t, http.StatusNotFound, writer.Code)
 	})
 
-	t.Run("altair", func(t *testing.T) {
-		ctx := context.Background()
+	for testVersion := 1; testVersion < 6; testVersion++ {
+		t.Run(version.String(testVersion), func(t *testing.T) {
+			ctx := context.Background()
+			l := util.NewTestLightClient(t, testVersion)
+			update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
+			require.NoError(t, err)
 
-		l := util.NewTestLightClient(t, version.Altair)
-		update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
-		require.NoError(t, err)
+			s := &Server{LCStore: &lightclient.Store{}}
+			s.LCStore.SetLastOptimisticUpdate(update)
 
-		s := &Server{LCStore: &lightclient.Store{}}
-		s.LCStore.SetLastOptimisticUpdate(update)
+			request := httptest.NewRequest("GET", "http://foo.com", nil)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+			s.GetLightClientOptimisticUpdate(writer, request)
+			require.Equal(t, http.StatusOK, writer.Code)
 
-		request := httptest.NewRequest("GET", "http://foo.com", nil)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		s.GetLightClientOptimisticUpdate(writer, request)
-		require.Equal(t, http.StatusOK, writer.Code)
+			data, err := structs.LightClientOptimisticUpdateFromConsensus(update)
+			require.NoError(t, err)
+			var resp structs.LightClientOptimisticUpdateResponse
+			err = json.Unmarshal(writer.Body.Bytes(), &resp)
+			require.NoError(t, err)
+			if testVersion == version.Bellatrix {
+				require.Equal(t, version.String(version.Altair), resp.Version)
+			} else if testVersion == version.Electra {
+				require.Equal(t, version.String(version.Deneb), resp.Version)
+			} else {
+				require.Equal(t, version.String(testVersion), resp.Version)
+			}
+			require.DeepEqual(t, data, resp.Data)
+		})
 
-		data, err := structs.LightClientOptimisticUpdateFromConsensus(update)
-		require.NoError(t, err)
-		var resp structs.LightClientOptimisticUpdateResponse
-		err = json.Unmarshal(writer.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		require.Equal(t, "altair", resp.Version)
-		require.DeepEqual(t, data, resp.Data)
-	})
+		t.Run(version.String(testVersion)+" SSZ", func(t *testing.T) {
+			ctx := context.Background()
+			l := util.NewTestLightClient(t, testVersion)
+			update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
+			require.NoError(t, err)
 
-	t.Run("altair SSZ", func(t *testing.T) {
-		ctx := context.Background()
+			s := &Server{LCStore: &lightclient.Store{}}
+			s.LCStore.SetLastOptimisticUpdate(update)
 
-		l := util.NewTestLightClient(t, version.Altair)
-		update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
-		require.NoError(t, err)
+			request := httptest.NewRequest("GET", "http://foo.com", nil)
+			request.Header.Add("Accept", "application/octet-stream")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+			s.GetLightClientOptimisticUpdate(writer, request)
+			require.Equal(t, http.StatusOK, writer.Code)
 
-		s := &Server{LCStore: &lightclient.Store{}}
-		s.LCStore.SetLastOptimisticUpdate(update)
-
-		request := httptest.NewRequest("GET", "http://foo.com", nil)
-		request.Header.Add("Accept", "application/octet-stream")
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		s.GetLightClientOptimisticUpdate(writer, request)
-		require.Equal(t, http.StatusOK, writer.Code)
-
-		var resp pb.LightClientOptimisticUpdateAltair
-		err = resp.UnmarshalSSZ(writer.Body.Bytes())
-		require.NoError(t, err)
-		updateSSZ, err := update.MarshalSSZ()
-		require.NoError(t, err)
-		require.DeepSSZEqual(t, updateSSZ, writer.Body.Bytes())
-	})
-
-	t.Run("capella", func(t *testing.T) {
-		ctx := context.Background()
-
-		l := util.NewTestLightClient(t, version.Capella)
-		update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
-		require.NoError(t, err)
-
-		s := &Server{LCStore: &lightclient.Store{}}
-		s.LCStore.SetLastOptimisticUpdate(update)
-
-		request := httptest.NewRequest("GET", "http://foo.com", nil)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		s.GetLightClientOptimisticUpdate(writer, request)
-		require.Equal(t, http.StatusOK, writer.Code)
-
-		data, err := structs.LightClientOptimisticUpdateFromConsensus(update)
-		require.NoError(t, err)
-		var resp structs.LightClientOptimisticUpdateResponse
-		err = json.Unmarshal(writer.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		require.Equal(t, "capella", resp.Version)
-		require.DeepEqual(t, data, resp.Data)
-	})
-
-	t.Run("capella SSZ", func(t *testing.T) {
-		ctx := context.Background()
-
-		l := util.NewTestLightClient(t, version.Capella)
-		update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
-		require.NoError(t, err)
-
-		s := &Server{LCStore: &lightclient.Store{}}
-		s.LCStore.SetLastOptimisticUpdate(update)
-
-		request := httptest.NewRequest("GET", "http://foo.com", nil)
-		request.Header.Add("Accept", "application/octet-stream")
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		s.GetLightClientOptimisticUpdate(writer, request)
-		require.Equal(t, http.StatusOK, writer.Code)
-
-		var resp pb.LightClientOptimisticUpdateCapella
-		err = resp.UnmarshalSSZ(writer.Body.Bytes())
-		require.NoError(t, err)
-		updateSSZ, err := update.MarshalSSZ()
-		require.NoError(t, err)
-		require.DeepSSZEqual(t, updateSSZ, writer.Body.Bytes())
-	})
-
-	t.Run("deneb", func(t *testing.T) {
-		ctx := context.Background()
-
-		l := util.NewTestLightClient(t, version.Deneb)
-		update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
-		require.NoError(t, err)
-
-		s := &Server{LCStore: &lightclient.Store{}}
-		s.LCStore.SetLastOptimisticUpdate(update)
-
-		request := httptest.NewRequest("GET", "http://foo.com", nil)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		s.GetLightClientOptimisticUpdate(writer, request)
-		require.Equal(t, http.StatusOK, writer.Code)
-
-		data, err := structs.LightClientOptimisticUpdateFromConsensus(update)
-		require.NoError(t, err)
-		var resp structs.LightClientOptimisticUpdateResponse
-		err = json.Unmarshal(writer.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		require.Equal(t, "deneb", resp.Version)
-		require.DeepEqual(t, data, resp.Data)
-	})
-
-	t.Run("deneb SSZ", func(t *testing.T) {
-		ctx := context.Background()
-
-		l := util.NewTestLightClient(t, version.Deneb)
-		update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
-		require.NoError(t, err)
-
-		s := &Server{LCStore: &lightclient.Store{}}
-		s.LCStore.SetLastOptimisticUpdate(update)
-
-		request := httptest.NewRequest("GET", "http://foo.com", nil)
-		request.Header.Add("Accept", "application/octet-stream")
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		s.GetLightClientOptimisticUpdate(writer, request)
-		require.Equal(t, http.StatusOK, writer.Code)
-
-		var resp pb.LightClientOptimisticUpdateDeneb
-		err = resp.UnmarshalSSZ(writer.Body.Bytes())
-		require.NoError(t, err)
-		updateSSZ, err := update.MarshalSSZ()
-		require.NoError(t, err)
-		require.DeepSSZEqual(t, updateSSZ, writer.Body.Bytes())
-	})
-
-	t.Run("electra", func(t *testing.T) {
-		ctx := context.Background()
-
-		l := util.NewTestLightClient(t, version.Electra)
-		update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
-		require.NoError(t, err)
-
-		s := &Server{LCStore: &lightclient.Store{}}
-		s.LCStore.SetLastOptimisticUpdate(update)
-
-		request := httptest.NewRequest("GET", "http://foo.com", nil)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		s.GetLightClientOptimisticUpdate(writer, request)
-		require.Equal(t, http.StatusOK, writer.Code)
-
-		data, err := structs.LightClientOptimisticUpdateFromConsensus(update)
-		require.NoError(t, err)
-		var resp structs.LightClientOptimisticUpdateResponse
-		err = json.Unmarshal(writer.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		require.Equal(t, "deneb", resp.Version)
-		require.DeepEqual(t, data, resp.Data)
-	})
-
-	t.Run("electra SSZ", func(t *testing.T) {
-		ctx := context.Background()
-
-		l := util.NewTestLightClient(t, version.Electra)
-		update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
-		require.NoError(t, err)
-
-		s := &Server{LCStore: &lightclient.Store{}}
-		s.LCStore.SetLastOptimisticUpdate(update)
-
-		request := httptest.NewRequest("GET", "http://foo.com", nil)
-		request.Header.Add("Accept", "application/octet-stream")
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		s.GetLightClientOptimisticUpdate(writer, request)
-		require.Equal(t, http.StatusOK, writer.Code)
-
-		var resp pb.LightClientOptimisticUpdateDeneb
-		err = resp.UnmarshalSSZ(writer.Body.Bytes())
-		require.NoError(t, err)
-		updateSSZ, err := update.MarshalSSZ()
-		require.NoError(t, err)
-		require.DeepSSZEqual(t, updateSSZ, writer.Body.Bytes())
-	})
+			var resp proto.Message
+			switch testVersion {
+			case version.Altair:
+				resp = &pb.LightClientOptimisticUpdateAltair{}
+			case version.Bellatrix:
+				resp = &pb.LightClientOptimisticUpdateAltair{}
+			case version.Capella:
+				resp = &pb.LightClientOptimisticUpdateCapella{}
+			case version.Deneb:
+				resp = &pb.LightClientOptimisticUpdateDeneb{}
+			case version.Electra:
+				resp = &pb.LightClientOptimisticUpdateDeneb{}
+			default:
+				t.Fatalf("Unsupported version %s", version.String(testVersion))
+			}
+			obj := resp.(ssz.Unmarshaler)
+			err = obj.UnmarshalSSZ(writer.Body.Bytes())
+			require.NoError(t, err)
+			updateSSZ, err := update.MarshalSSZ()
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, updateSSZ, writer.Body.Bytes())
+		})
+	}
 }
 
 func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
