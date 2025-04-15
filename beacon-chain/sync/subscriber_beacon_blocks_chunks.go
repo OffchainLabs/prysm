@@ -110,7 +110,7 @@ func (s *Service) validateBeaconBlockChunkPubSub(ctx context.Context, pid peer.I
 	logFields := logrus.Fields{
 		"chunkSlot":     chunk.Slot(),
 		"proposerIndex": chunk.ProposerIndex(),
-		"parentRoot":    chunk.ParentRoot(),
+		"parentRoot":    fmt.Sprintf("%#x", chunk.ParentRoot()),
 	}
 	log.WithFields(logFields).Debug("Received block chunk")
 
@@ -154,6 +154,16 @@ func (s *Service) startChunkPruner() {
 	}
 }
 
+func (s *Service) logReceivedBlock(blk interfaces.ReadOnlySignedBeaconBlock) {
+	parentRoot := fmt.Sprintf("%#x", blk.Block().ParentRoot())
+	since := time.Since(slots.StartTime(uint64(s.cfg.chain.GenesisTime().Unix()), blk.Block().Slot()))
+	log.WithFields(logrus.Fields{
+		"slot":           blk.Block().Slot(),
+		"parentRoot":     parentRoot,
+		"sinceSlotStart": since,
+	}).Debug("Received block")
+}
+
 func (s *Service) reconstructBlockFromChunk(ctx context.Context, chunk interfaces.ReadOnlyBeaconBlockChunk) {
 	data, err := s.blockChunkCache.GetBlockData(chunk.Slot(), chunk.ProposerIndex())
 	if err != nil {
@@ -194,6 +204,9 @@ func (s *Service) reconstructBlockFromChunk(ctx context.Context, chunk interface
 			SignedBlock: blk,
 		},
 	})
+
+	// log the received block data
+	s.logReceivedBlock(blk)
 
 	// create a new context to process the block
 	go func() {
