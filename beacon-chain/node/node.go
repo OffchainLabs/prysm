@@ -1010,6 +1010,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		BlobStorage:               b.BlobStorage,
 		TrackedValidatorsCache:    b.trackedValidatorsCache,
 		PayloadIDCache:            b.payloadIDCache,
+		LCStore:                   b.lcStore,
 	})
 
 	return b.services.RegisterService(rpcService)
