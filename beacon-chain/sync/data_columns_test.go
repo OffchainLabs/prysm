@@ -3,13 +3,16 @@ package sync
 import (
 	"context"
 	"crypto/ecdsa"
+	"encoding/hex"
+	"math"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p/core"
+	core "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -17,15 +20,19 @@ import (
 	kzg "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
 	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
 	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
 	p2pTypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
+	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
+	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/wrapper"
+	leakybucket "github.com/prysmaticlabs/prysm/v5/container/leaky-bucket"
 	ecdsaprysm "github.com/prysmaticlabs/prysm/v5/crypto/ecdsa"
 	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
@@ -389,7 +396,7 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 	cfg.FuluForkEpoch = 0
 	params.OverrideBeaconConfig(cfg)
 
-	chainService, clock := defaultMockChain(t)
+	chainService, clock := defaultMockChain(t, 0)
 
 	// Create test block with blobs
 	pbSignedBeaconBlock := util.NewBeaconBlockDeneb()
@@ -400,7 +407,7 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 	blobKzgCommitments := make([][]byte, blobsCount)
 
 	for j := range blobs {
-		blob := getRandBlob(int64(j))
+		blob := getRandBlob(t, int64(j))
 		blobs[j] = blob
 
 		blobKzgCommitment, err := kzg.BlobToKZGCommitment(&blob)
@@ -740,4 +747,853 @@ func createCustodyPeer(t *testing.T, privateKeyOffset int, custodyCount uint64) 
 	record.Set(enode.Secp256k1(privateKey.PublicKey))
 
 	return record, peerID, privateKey
+}
+
+func TestBuildDataColumnByRangeRequests(t *testing.T) {
+	type missingColumnsWithCommitment struct {
+		areCommitments bool
+		missingColumns map[uint64]bool
+	}
+
+	testCases := []struct {
+		name      string
+		batchSize int
+
+		// input
+		missingColumnsWithCommitments []*missingColumnsWithCommitment
+
+		// output
+		requests []*pb.DataColumnSidecarsByRangeRequest
+	}{
+		{
+			name:                          "no item",
+			batchSize:                     32,
+			missingColumnsWithCommitments: []*missingColumnsWithCommitment{},
+			requests:                      nil,
+		},
+		{
+			name:                          "one item - no missing columns",
+			batchSize:                     32,
+			missingColumnsWithCommitments: []*missingColumnsWithCommitment{{areCommitments: true, missingColumns: map[uint64]bool{}}},
+			requests:                      []*pb.DataColumnSidecarsByRangeRequest{{StartSlot: 0, Count: 1, Columns: []uint64{}}},
+		},
+		{
+			name:                          "one item - some missing columns",
+			batchSize:                     32,
+			missingColumnsWithCommitments: []*missingColumnsWithCommitment{{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}}},
+			requests:                      []*pb.DataColumnSidecarsByRangeRequest{{StartSlot: 0, Count: 1, Columns: []uint64{1, 3, 5}}},
+		},
+		{
+			name:      "two items - no break",
+			batchSize: 32,
+			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+			},
+			requests: []*pb.DataColumnSidecarsByRangeRequest{{StartSlot: 0, Count: 2, Columns: []uint64{1, 3, 5}}},
+		},
+		{
+			name:      "three items - no break",
+			batchSize: 32,
+			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+			},
+			requests: []*pb.DataColumnSidecarsByRangeRequest{{StartSlot: 0, Count: 3, Columns: []uint64{1, 3, 5}}},
+		},
+		{
+			name:      "five items - columns break",
+			batchSize: 32,
+			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{}},
+			},
+			requests: []*pb.DataColumnSidecarsByRangeRequest{
+				{StartSlot: 0, Count: 2, Columns: []uint64{1, 3, 5}},
+				{StartSlot: 2, Count: 2, Columns: []uint64{1, 3}},
+				{StartSlot: 4, Count: 1, Columns: []uint64{}},
+			},
+		},
+		{
+			name:      "seven items - gap",
+			batchSize: 32,
+			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				nil,
+				nil,
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+			},
+			requests: []*pb.DataColumnSidecarsByRangeRequest{
+				{StartSlot: 0, Count: 7, Columns: []uint64{1, 3, 5}},
+			},
+		},
+		{
+			name:      "seven items - only breaks",
+			batchSize: 32,
+			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
+				{areCommitments: true, missingColumns: map[uint64]bool{}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				nil,
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{2: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{}},
+			},
+			requests: []*pb.DataColumnSidecarsByRangeRequest{
+				{StartSlot: 0, Count: 1, Columns: []uint64{}},
+				{StartSlot: 1, Count: 3, Columns: []uint64{1, 3, 5}},
+				{StartSlot: 4, Count: 1, Columns: []uint64{2}},
+				{StartSlot: 5, Count: 1, Columns: []uint64{}},
+			},
+		},
+		{
+			name:      "thirteen items - some blocks without commitments",
+			batchSize: 32,
+			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				nil,
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{2: true, 4: true}},
+				{areCommitments: false, missingColumns: nil},
+				{areCommitments: false, missingColumns: nil},
+				{areCommitments: true, missingColumns: map[uint64]bool{2: true, 4: true}},
+				nil,
+				nil,
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true}},
+				{areCommitments: false, missingColumns: nil},
+				{areCommitments: false, missingColumns: nil},
+			},
+			requests: []*pb.DataColumnSidecarsByRangeRequest{
+				{StartSlot: 0, Count: 4, Columns: []uint64{1, 3, 5}},
+				{StartSlot: 4, Count: 6, Columns: []uint64{2, 4}},
+				{StartSlot: 10, Count: 4, Columns: []uint64{1}},
+			},
+		},
+		{
+			name:      "five items - no break, limiting batch size",
+			batchSize: 3,
+			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+			},
+			requests: []*pb.DataColumnSidecarsByRangeRequest{
+				{StartSlot: 0, Count: 3, Columns: []uint64{1, 3, 5}},
+				{StartSlot: 3, Count: 2, Columns: []uint64{1, 3, 5}},
+			},
+		},
+		{
+			name:      "eleven items - columns break, limiting batch size",
+			batchSize: 3,
+			missingColumnsWithCommitments: []*missingColumnsWithCommitment{
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true, 5: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{1: true, 3: true}},
+				{areCommitments: true, missingColumns: map[uint64]bool{}},
+				{areCommitments: false, missingColumns: nil},
+				{areCommitments: false, missingColumns: nil},
+				{areCommitments: true, missingColumns: map[uint64]bool{}},
+			},
+			requests: []*pb.DataColumnSidecarsByRangeRequest{
+				{StartSlot: 0, Count: 3, Columns: []uint64{1, 3, 5}},
+				{StartSlot: 3, Count: 3, Columns: []uint64{1, 3}},
+				{StartSlot: 6, Count: 1, Columns: []uint64{1, 3}},
+				{StartSlot: 7, Count: 3, Columns: []uint64{}},
+				{StartSlot: 10, Count: 1, Columns: []uint64{}},
+			},
+		},
+	}
+
+	// We don't care about the actual content of commitments, so we use a fake commitment.
+	fakeCommitment := make([]byte, 48)
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			roBlocks := make([]blocks.ROBlock, 0, len(tt.missingColumnsWithCommitments))
+			missingColumnsByRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool, len(tt.missingColumnsWithCommitments))
+			for i, missingColumnsWithCommitments := range tt.missingColumnsWithCommitments {
+				if missingColumnsWithCommitments == nil {
+					continue
+				}
+
+				missingColumns := missingColumnsWithCommitments.missingColumns
+
+				pbSignedBeaconBlock := util.NewBeaconBlockFulu()
+
+				signedBeaconBlock, err := blocks.NewSignedBeaconBlock(pbSignedBeaconBlock)
+				require.NoError(t, err)
+
+				signedBeaconBlock.SetSlot(primitives.Slot(i))
+
+				if missingColumnsWithCommitments.areCommitments {
+					err := signedBeaconBlock.SetBlobKzgCommitments([][]byte{fakeCommitment})
+					require.NoError(t, err)
+				}
+
+				roBlock, err := blocks.NewROBlock(signedBeaconBlock)
+				require.NoError(t, err)
+
+				roBlocks = append(roBlocks, roBlock)
+				roBlockRoot := roBlock.Root()
+
+				missingColumnsByRoot[roBlockRoot] = missingColumns
+			}
+
+			requests, err := buildDataColumnByRangeRequests(roBlocks, missingColumnsByRoot, tt.batchSize)
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, tt.requests, requests)
+		})
+	}
+}
+
+type (
+	blockParams struct {
+		slot     primitives.Slot
+		hasBlobs bool
+	}
+
+	responseParams struct {
+		slot        primitives.Slot
+		columnIndex uint64
+	}
+
+	peerParams struct {
+		// Custody subnet count
+		cgc uint64
+
+		// key: RPCDataColumnSidecarsByRangeTopicV1 stringified
+		// value: The list of all slotxindex to respond by request number
+		toRespond map[string][][]responseParams
+	}
+)
+
+func TestFetchDataColumnsFromPeers(t *testing.T) {
+	const (
+		blobsCount    = 6
+		peersHeadSlot = 100
+	)
+
+	testCases := []struct {
+		// Name of the test case.
+		name string
+
+		// INPUTS
+		// ------
+
+		// Fork epochs.
+		fuluForkEpoch primitives.Epoch
+
+		// Current slot.
+		currentSlot uint64
+
+		// Blocks with blobs parameters that will be used as `bwb` parameter.
+		blocksParams []blockParams
+
+		// What data columns do we store for the block in the same position in blocksParams.
+		// len(storedDataColumns) has to be the same than len(blocksParams).
+		storedDataColumns []map[uint64]bool
+
+		// Each item in the list represents a peer.
+		// We can specify what the peer will respond to each data column by range request.
+		// For the exact same data columns by range request, the peer will respond in the order they are specified.
+		peersParams []peerParams
+
+		// The max count of data columns that will be requested in each batch.
+		batchSize int
+
+		// OUTPUTS
+		// -------
+
+		// Data columns that should be added to `bwb`.
+		addedRODataColumns [][]int
+		isError            bool
+	}{
+		{
+			name:          "Fulu fork epoch is set to far futur epoch",
+			fuluForkEpoch: primitives.Epoch(math.MaxUint64),
+			blocksParams: []blockParams{
+				{slot: 1, hasBlobs: true}, // Before Fulu fork epoch
+				{slot: 2, hasBlobs: true}, // Before Fulu fork epoch
+				{slot: 3, hasBlobs: true}, // Before Fulu fork epoch
+			},
+			batchSize:          32,
+			addedRODataColumns: [][]int{nil, nil, nil},
+			isError:            false,
+		},
+		{
+			name:          "All blocks are before Fulu fork epoch",
+			fuluForkEpoch: 1,
+			currentSlot:   40,
+			blocksParams: []blockParams{
+				{slot: 25, hasBlobs: false}, // Before Fulu fork epoch
+				{slot: 26, hasBlobs: false}, // Before Fulu fork epoch
+				{slot: 27, hasBlobs: false}, // Before Fulu fork epoch
+				{slot: 28, hasBlobs: false}, // Before Fulu fork epoch
+			},
+			batchSize:          32,
+			addedRODataColumns: [][]int{nil, nil, nil, nil},
+			isError:            false,
+		},
+		{
+			name:          "All blocks with commitments are before Fulu fork epoch",
+			fuluForkEpoch: 1,
+			currentSlot:   40,
+			blocksParams: []blockParams{
+				{slot: 25, hasBlobs: false}, // Before Fulu fork epoch
+				{slot: 26, hasBlobs: true},  // Before Fulu fork epoch
+				{slot: 27, hasBlobs: true},  // Before Fulu fork epoch
+				{slot: 32, hasBlobs: false},
+				{slot: 33, hasBlobs: false},
+			},
+			batchSize:          32,
+			addedRODataColumns: [][]int{nil, nil, nil, nil, nil},
+		},
+		{
+			name:          "Some blocks with blobs but without any missing data columns",
+			fuluForkEpoch: 1,
+			currentSlot:   40,
+			blocksParams: []blockParams{
+				{slot: 25, hasBlobs: false}, // Before Fulu fork epoch
+				{slot: 26, hasBlobs: true},  // Before Fulu fork epoch
+				{slot: 27, hasBlobs: true},  // Before Fulu fork epoch
+				{slot: 32, hasBlobs: false},
+				{slot: 33, hasBlobs: true},
+			},
+			storedDataColumns: []map[uint64]bool{
+				nil,
+				nil,
+				nil,
+				nil,
+				{6: true, 38: true, 70: true, 102: true},
+			},
+			batchSize:          32,
+			addedRODataColumns: [][]int{nil, nil, nil, nil, nil},
+			isError:            false,
+		},
+		{
+			name:          "Some blocks with blobs with missing data columns - one round needed",
+			fuluForkEpoch: 1,
+			currentSlot:   40,
+			blocksParams: []blockParams{
+				{slot: 25, hasBlobs: false}, // Before Fulu fork epoch
+				{slot: 27, hasBlobs: true},  // Before Fulu fork epoch
+				{slot: 32, hasBlobs: false},
+				{slot: 33, hasBlobs: true},
+				{slot: 34, hasBlobs: true},
+				{slot: 35, hasBlobs: false},
+				{slot: 36, hasBlobs: true},
+				{slot: 37, hasBlobs: true},
+				{slot: 38, hasBlobs: true},
+				{slot: 39, hasBlobs: false},
+			},
+			storedDataColumns: []map[uint64]bool{
+				nil,                                      // Slot 25
+				nil,                                      // Slot 27
+				nil,                                      // Slot 32
+				{6: true, 38: true},                      // Slot 33
+				{6: true, 38: true},                      // Slot 34
+				nil,                                      // Slot 35
+				{6: true, 38: true},                      // Slot 36
+				{38: true, 102: true},                    // Slot 37
+				{6: true, 38: true, 70: true, 102: true}, // Slot 38
+				nil,                                      // Slot 39
+			},
+			peersParams: []peerParams{
+				{
+					cgc:       0,
+					toRespond: map[string][][]responseParams{},
+				},
+				{
+					cgc: 128,
+					toRespond: map[string][][]responseParams{
+						(&pb.DataColumnSidecarsByRangeRequest{
+							StartSlot: 33,
+							Count:     4,
+							Columns:   []uint64{70, 102},
+						}).String(): {
+							{
+								{slot: 33, columnIndex: 70},
+								{slot: 33, columnIndex: 102},
+								{slot: 34, columnIndex: 70},
+								{slot: 34, columnIndex: 102},
+								{slot: 36, columnIndex: 70},
+								{slot: 36, columnIndex: 102},
+							},
+						},
+						(&pb.DataColumnSidecarsByRangeRequest{
+							StartSlot: 37,
+							Count:     1,
+							Columns:   []uint64{6, 70},
+						}).String(): {
+							{
+								{slot: 37, columnIndex: 6},
+								{slot: 37, columnIndex: 70},
+							},
+						},
+					},
+				},
+				{
+					cgc: 128,
+					toRespond: map[string][][]responseParams{
+						(&pb.DataColumnSidecarsByRangeRequest{
+							StartSlot: 33,
+							Count:     4,
+							Columns:   []uint64{70, 102},
+						}).String(): {
+							{
+								{slot: 33, columnIndex: 70},
+								{slot: 33, columnIndex: 102},
+								{slot: 34, columnIndex: 70},
+								{slot: 34, columnIndex: 102},
+								{slot: 36, columnIndex: 70},
+								{slot: 36, columnIndex: 102},
+							},
+						},
+						(&pb.DataColumnSidecarsByRangeRequest{
+							StartSlot: 37,
+							Count:     1,
+							Columns:   []uint64{6, 70},
+						}).String(): {
+							{
+								{slot: 37, columnIndex: 6},
+								{slot: 37, columnIndex: 70},
+							},
+						},
+					},
+				},
+			},
+			batchSize: 32,
+			addedRODataColumns: [][]int{
+				nil,       // Slot 25
+				nil,       // Slot 27
+				nil,       // Slot 32
+				{70, 102}, // Slot 33
+				{70, 102}, // Slot 34
+				nil,       // Slot 35
+				{70, 102}, // Slot 36
+				{6, 70},   // Slot 37
+				nil,       // Slot 38
+				nil,       // Slot 39
+			},
+			isError: false,
+		},
+		{
+			name:          "Some blocks with blobs with missing data columns - partial responses",
+			fuluForkEpoch: 1,
+			currentSlot:   40,
+			blocksParams: []blockParams{
+				{slot: 33, hasBlobs: true},
+				{slot: 34, hasBlobs: true},
+				{slot: 35, hasBlobs: false},
+				{slot: 36, hasBlobs: true},
+			},
+			storedDataColumns: []map[uint64]bool{
+				{6: true, 38: true}, // Slot 33
+				{6: true, 38: true}, // Slot 34
+				nil,                 // Slot 35
+				{6: true, 38: true}, // Slot 36
+			},
+			peersParams: []peerParams{
+				{
+					cgc: 128,
+					toRespond: map[string][][]responseParams{
+						(&pb.DataColumnSidecarsByRangeRequest{
+							StartSlot: 33,
+							Count:     4,
+							Columns:   []uint64{70, 102},
+						}).String(): {
+							{
+								{slot: 33, columnIndex: 70},
+								{slot: 34, columnIndex: 70},
+								{slot: 36, columnIndex: 70},
+							},
+						},
+						(&pb.DataColumnSidecarsByRangeRequest{
+							StartSlot: 33,
+							Count:     4,
+							Columns:   []uint64{102},
+						}).String(): {
+							{
+								{slot: 33, columnIndex: 102},
+								{slot: 34, columnIndex: 102},
+								{slot: 36, columnIndex: 102},
+							},
+						},
+					},
+				},
+			},
+			batchSize: 32,
+			addedRODataColumns: [][]int{
+				{70, 102}, // Slot 33
+				{70, 102}, // Slot 34
+				nil,       // Slot 35
+				{70, 102}, // Slot 36
+			},
+		},
+		{
+			name:              "Some blocks with blobs with missing data columns - first response is empty",
+			fuluForkEpoch:     1,
+			currentSlot:       40,
+			blocksParams:      []blockParams{{slot: 38, hasBlobs: true}},
+			storedDataColumns: []map[uint64]bool{{38: true, 102: true}},
+			peersParams: []peerParams{
+				{
+					cgc: 128,
+					toRespond: map[string][][]responseParams{
+						(&pb.DataColumnSidecarsByRangeRequest{
+							StartSlot: 38,
+							Count:     1,
+							Columns:   []uint64{6, 70},
+						}).String(): {
+							{},
+							{
+								{slot: 38, columnIndex: 6},
+								{slot: 38, columnIndex: 70},
+							},
+						},
+					},
+				},
+			},
+			batchSize:          32,
+			addedRODataColumns: [][]int{{6, 70}},
+			isError:            false,
+		},
+		{
+			name:              "Some blocks with blobs with missing data columns - no response at all",
+			fuluForkEpoch:     1,
+			currentSlot:       40,
+			blocksParams:      []blockParams{{slot: 38, hasBlobs: true}},
+			storedDataColumns: []map[uint64]bool{{38: true, 102: true}},
+			peersParams: []peerParams{
+				{
+					cgc: 128,
+					toRespond: map[string][][]responseParams{
+						(&pb.DataColumnSidecarsByRangeRequest{
+							StartSlot: 38,
+							Count:     1,
+							Columns:   []uint64{6, 70},
+						}).String(): {{}, {}, {}, {}, {}, {}, {}, {}, {}, {}},
+					},
+				},
+			},
+			batchSize:          32,
+			addedRODataColumns: [][]int{{}},
+			isError:            true,
+		},
+		{
+			name:          "Some blocks with blobs with missing data columns - request has to be split",
+			fuluForkEpoch: 1,
+			currentSlot:   40,
+			blocksParams: []blockParams{
+				{slot: 32, hasBlobs: true}, {slot: 33, hasBlobs: true}, {slot: 34, hasBlobs: true}, {slot: 35, hasBlobs: true}, // 4
+				{slot: 36, hasBlobs: true}, {slot: 37, hasBlobs: true}, // 6
+			},
+			storedDataColumns: []map[uint64]bool{
+				nil, nil, nil, nil, // 4
+				nil, nil, // 6
+
+			},
+			peersParams: []peerParams{
+				{
+					cgc: 128,
+					toRespond: map[string][][]responseParams{
+						(&pb.DataColumnSidecarsByRangeRequest{
+							StartSlot: 32,
+							Count:     4,
+							Columns:   []uint64{6, 38, 70, 102},
+						}).String(): {
+							{
+								{slot: 32, columnIndex: 6}, {slot: 32, columnIndex: 38}, {slot: 32, columnIndex: 70}, {slot: 32, columnIndex: 102},
+								{slot: 33, columnIndex: 6}, {slot: 33, columnIndex: 38}, {slot: 33, columnIndex: 70}, {slot: 33, columnIndex: 102},
+								{slot: 34, columnIndex: 6}, {slot: 34, columnIndex: 38}, {slot: 34, columnIndex: 70}, {slot: 34, columnIndex: 102},
+								{slot: 35, columnIndex: 6}, {slot: 35, columnIndex: 38}, {slot: 35, columnIndex: 70}, {slot: 35, columnIndex: 102},
+							},
+						},
+						(&pb.DataColumnSidecarsByRangeRequest{
+							StartSlot: 36,
+							Count:     2,
+							Columns:   []uint64{6, 38, 70, 102},
+						}).String(): {
+							{
+								{slot: 36, columnIndex: 6}, {slot: 36, columnIndex: 38}, {slot: 36, columnIndex: 70}, {slot: 36, columnIndex: 102},
+								{slot: 37, columnIndex: 6}, {slot: 37, columnIndex: 38}, {slot: 37, columnIndex: 70}, {slot: 37, columnIndex: 102},
+							},
+						},
+					},
+				},
+			},
+			batchSize: 4,
+			addedRODataColumns: [][]int{
+				{6, 38, 70, 102}, // Slot 32
+				{6, 38, 70, 102}, // Slot 33
+				{6, 38, 70, 102}, // Slot 34
+				{6, 38, 70, 102}, // Slot 35
+				{6, 38, 70, 102}, // Slot 36
+				{6, 38, 70, 102}, // Slot 37
+			},
+			isError: false,
+		},
+	}
+
+	// Initialize the trusted setup.
+	err := kzg.Start()
+	require.NoError(t, err)
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Consistency checks.
+			require.Equal(t, len(tc.blocksParams), len(tc.addedRODataColumns))
+
+			// Create a context.
+			ctx := context.Background()
+
+			// Create blocks, RO data columns and data columns sidecar from slot.
+			roBlocks := make([]blocks.ROBlock, len(tc.blocksParams))
+			roDatasColumns := make([][]blocks.RODataColumn, len(tc.blocksParams))
+			dataColumnsSidecarBySlot := make(map[primitives.Slot][]*pb.DataColumnSidecar, len(tc.blocksParams))
+
+			for i, blockParams := range tc.blocksParams {
+				pbSignedBeaconBlock := util.NewBeaconBlockFulu()
+				pbSignedBeaconBlock.Block.Slot = blockParams.slot
+
+				if blockParams.hasBlobs {
+					blobs := make([]kzg.Blob, blobsCount)
+					blobKzgCommitments := make([][]byte, blobsCount)
+
+					for j := range blobsCount {
+						blob := getRandBlob(t, int64(i+j))
+						blobs[j] = blob
+
+						blobKzgCommitment, err := kzg.BlobToKZGCommitment(&blob)
+						require.NoError(t, err)
+
+						blobKzgCommitments[j] = blobKzgCommitment[:]
+					}
+
+					pbSignedBeaconBlock.Block.Body.BlobKzgCommitments = blobKzgCommitments
+					signedBeaconBlock, err := blocks.NewSignedBeaconBlock(pbSignedBeaconBlock)
+					require.NoError(t, err)
+
+					cellsAndProofs := util.GenerateCellsAndProofs(t, blobs)
+					pbDataColumnsSidecar, err := peerdas.DataColumnSidecars(signedBeaconBlock, cellsAndProofs)
+					require.NoError(t, err)
+
+					dataColumnsSidecarBySlot[blockParams.slot] = pbDataColumnsSidecar
+
+					roDataColumns := make([]blocks.RODataColumn, 0, len(pbDataColumnsSidecar))
+					for _, pbDataColumnSidecar := range pbDataColumnsSidecar {
+						roDataColumn, err := blocks.NewRODataColumn(pbDataColumnSidecar)
+						require.NoError(t, err)
+
+						roDataColumns = append(roDataColumns, roDataColumn)
+					}
+
+					roDatasColumns[i] = roDataColumns
+				}
+
+				roDatasColumns = append(roDatasColumns, nil)
+				signedBeaconBlock, err := blocks.NewSignedBeaconBlock(pbSignedBeaconBlock)
+				require.NoError(t, err)
+
+				roBlock, err := blocks.NewROBlock(signedBeaconBlock)
+				require.NoError(t, err)
+
+				roBlocks[i] = roBlock
+			}
+
+			// Set the Fulu fork epoch.
+			params.SetupTestConfigCleanup(t)
+			conf := params.BeaconConfig()
+			conf.FuluForkEpoch = tc.fuluForkEpoch
+			params.OverrideBeaconConfig(conf)
+
+			// Save the blocks in the store.
+			storage := make(map[[fieldparams.RootLength]byte][]uint64)
+			for index, columns := range tc.storedDataColumns {
+				root := roBlocks[index].Root()
+
+				columnsSlice := make([]uint64, 0, len(columns))
+				for column := range columns {
+					columnsSlice = append(columnsSlice, column)
+				}
+
+				storage[root] = columnsSlice
+			}
+
+			dataColumnStorageSummarizer := filesystem.NewMockDataColumnStorageSummarizer(t, storage)
+
+			// Create a chain and a clock.
+			chain, clock := defaultMockChain(t, tc.currentSlot)
+
+			// Create the P2P service.
+			p2pSvc := p2ptest.NewTestP2P(t, libp2p.Identity(genFixedCustodyPeer(t)))
+			nodeID, err := p2p.ConvertPeerIDToNodeID(p2pSvc.PeerID())
+			require.NoError(t, err)
+			p2pSvc.EnodeID = nodeID
+
+			// Connect the peers.
+			peers := make([]*p2ptest.TestP2P, 0, len(tc.peersParams))
+			for i, peerParams := range tc.peersParams {
+				peer := createAndConnectPeerForRange(t, p2pSvc, chain, dataColumnsSidecarBySlot, peerParams, i)
+				peers = append(peers, peer)
+			}
+
+			peersID := make([]peer.ID, 0, len(peers))
+			for _, peer := range peers {
+				peerID := peer.PeerID()
+				peersID = append(peersID, peerID)
+			}
+
+			status := &pb.Status{HeadSlot: peersHeadSlot}
+
+			for _, peerID := range peersID {
+				p2pSvc.Peers().SetChainState(peerID, status)
+			}
+
+			clockSync := startup.NewClockSynchronizer()
+			require.NoError(t, clockSync.SetClock(clock))
+			require.NoError(t, err)
+
+			ctxMap := map[[4]byte]int{{245, 165, 253, 66}: version.Fulu}
+			rateLimiter := leakybucket.NewCollector(1_000, 1_000, 1*time.Hour, false)
+
+			// Fetch the data columns from the peers.
+			fetchedRoDataColumnsByRoot, err := RequestMissingDataColumnsByRange(ctx, clock, ctxMap, p2pSvc, rateLimiter, 4, dataColumnStorageSummarizer, peersID, roBlocks, tc.batchSize)
+			if !tc.isError {
+				require.NoError(t, err)
+			} else {
+				require.NotNil(t, err)
+				return
+			}
+
+			expectedDataColumnsByRoot := make(map[[fieldparams.RootLength]byte][]blocks.RODataColumn)
+
+			for i, addedColumns := range tc.addedRODataColumns {
+				root := roBlocks[i].Root()
+				expectedRODataColumns := make([]blocks.RODataColumn, 0, len(tc.addedRODataColumns[i]))
+				for _, column := range addedColumns {
+					roDataColumn := roDatasColumns[i][column]
+					expectedRODataColumns = append(expectedRODataColumns, roDataColumn)
+				}
+
+				if len(expectedRODataColumns) > 0 {
+					expectedDataColumnsByRoot[root] = expectedRODataColumns
+				}
+			}
+
+			require.Equal(t, len(expectedDataColumnsByRoot), len(fetchedRoDataColumnsByRoot))
+
+			for root := range expectedDataColumnsByRoot {
+				expectedDataColumns := expectedDataColumnsByRoot[root]
+				fetchedDataColumns := fetchedRoDataColumnsByRoot[root]
+
+				sort.Slice(expectedDataColumns, func(i, j int) bool {
+					return expectedDataColumns[i].Index < expectedDataColumns[j].Index
+				})
+
+				sort.Slice(fetchedDataColumns, func(i, j int) bool {
+					return fetchedDataColumns[i].Index < fetchedDataColumns[j].Index
+				})
+
+				require.DeepSSZEqual(t, expectedDataColumns, fetchedDataColumns)
+			}
+		})
+	}
+}
+
+// createAndConnectPeer creates a peer and connects it to the p2p service.
+// The peer will respond to the `RPCDataColumnSidecarsByRangeTopicV1` topic.
+func createAndConnectPeerForRange(
+	t *testing.T,
+	p2pService *p2ptest.TestP2P,
+	chainService *mock.ChainService,
+	dataColumnsSidecarFromSlot map[primitives.Slot][]*pb.DataColumnSidecar,
+	peerParams peerParams,
+	offset int,
+) *p2ptest.TestP2P {
+	// Create the private key, depending on the offset.
+	privateKeyBytes := make([]byte, 32)
+	for i := range 32 {
+		privateKeyBytes[i] = byte(offset + i)
+	}
+
+	privateKey, err := crypto.UnmarshalSecp256k1PrivateKey(privateKeyBytes)
+	require.NoError(t, err)
+
+	// Create the peer.
+	peer := p2ptest.NewTestP2P(t, libp2p.Identity(privateKey))
+
+	// Create a call counter.
+	countFromRequest := make(map[string]int, len(peerParams.toRespond))
+
+	peer.SetStreamHandler(p2p.RPCDataColumnSidecarsByRangeTopicV1+"/ssz_snappy", func(stream network.Stream) {
+		// Decode the request.
+		req := new(pb.DataColumnSidecarsByRangeRequest)
+
+		err := peer.Encoding().DecodeWithMaxLength(stream, req)
+		require.NoError(t, err)
+
+		// Convert the request to a string.
+		reqString := req.String()
+
+		// Get the response to send.
+		items, ok := peerParams.toRespond[reqString]
+		require.Equal(t, true, ok, "no response to send for request %s", reqString)
+
+		for _, responseParams := range items[countFromRequest[reqString]] {
+			// Get data columns sidecars for this slot.
+			dataColumnsSidecar, ok := dataColumnsSidecarFromSlot[responseParams.slot]
+			require.Equal(t, true, ok)
+
+			// Get the data column sidecar.
+			dataColumn := dataColumnsSidecar[responseParams.columnIndex]
+
+			// Send the response.
+			err := WriteDataColumnSidecarChunk(stream, chainService, p2pService.Encoding(), dataColumn)
+			require.NoError(t, err)
+		}
+
+		// Close the stream.
+		err = stream.Close()
+		require.NoError(t, err)
+
+		// Increment the call counter.
+		countFromRequest[reqString]++
+	})
+
+	// Create the record and set the custody count.
+	enr := &enr.Record{}
+	enr.Set(peerdas.Cgc(peerParams.cgc))
+
+	// Add the peer and connect it.
+	p2pService.Peers().Add(enr, peer.PeerID(), nil, network.DirOutbound)
+	p2pService.Peers().SetConnectionState(peer.PeerID(), peers.Connected)
+	p2pService.Connect(peer)
+
+	return peer
+}
+
+// This generates a peer which custodies the columns of 6,38,70 and 102.
+func genFixedCustodyPeer(t *testing.T) crypto.PrivKey {
+	rawObj, err := hex.DecodeString("58f40e5010e67d07e5fb37c62d6027964de2bef532acf06cf4f1766f5273ae95")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkey, err := crypto.UnmarshalSecp256k1PrivateKey(rawObj)
+	require.NoError(t, err)
+	return pkey
 }

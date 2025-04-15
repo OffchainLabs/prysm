@@ -30,7 +30,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	"github.com/sirupsen/logrus"
 )
 
 func TestRandomizeColumns(t *testing.T) {
@@ -167,7 +166,7 @@ func setupDataColumnSamplerTest(t *testing.T, blobCount uint64) (*dataSamplerTes
 	kzgProofs := make([][]byte, blobCount)
 
 	for i := uint64(0); i < blobCount; i++ {
-		blob := getRandBlob(int64(i))
+		blob := getRandBlob(t, int64(i))
 
 		kzgCommitment, kzgProof, err := generateCommitmentAndProof(&blob)
 		require.NoError(t, err)
@@ -195,7 +194,7 @@ func setupDataColumnSamplerTest(t *testing.T, blobCount uint64) (*dataSamplerTes
 	}
 
 	p2pSvc := p2ptest.NewTestP2P(t)
-	chainSvc, clock := defaultMockChain(t)
+	chainSvc, clock := defaultMockChain(t, 0)
 
 	test := &dataSamplerTest{
 		ctx:                context.Background(),
@@ -511,22 +510,19 @@ func TestDataColumnSampler1D_IncrementalDAS(t *testing.T) {
 	}
 }
 
-func deterministicRandomness(seed int64) [32]byte {
+func deterministicRandomness(t *testing.T, seed int64) [32]byte {
 	// Converts an int64 to a byte slice
 	buf := new(bytes.Buffer)
 	err := binary.Write(buf, binary.BigEndian, seed)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to write int64 to bytes buffer")
-		return [32]byte{}
-	}
+	require.NoError(t, err)
 	bytes := buf.Bytes()
 
 	return sha256.Sum256(bytes)
 }
 
 // Returns a serialized random field element in big-endian
-func getRandFieldElement(seed int64) [32]byte {
-	bytes := deterministicRandomness(seed)
+func getRandFieldElement(t *testing.T, seed int64) [32]byte {
+	bytes := deterministicRandomness(t, seed)
 	var r fr.Element
 	r.SetBytes(bytes[:])
 
@@ -534,10 +530,10 @@ func getRandFieldElement(seed int64) [32]byte {
 }
 
 // Returns a random blob using the passed seed as entropy
-func getRandBlob(seed int64) kzg.Blob {
+func getRandBlob(t *testing.T, seed int64) kzg.Blob {
 	var blob kzg.Blob
 	for i := 0; i < len(blob); i += 32 {
-		fieldElementBytes := getRandFieldElement(seed + int64(i))
+		fieldElementBytes := getRandFieldElement(t, seed+int64(i))
 		copy(blob[i:i+32], fieldElementBytes[:])
 	}
 	return blob
