@@ -129,6 +129,8 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	}
 
 	// [REJECT] The proposer signature of `sidecar.signed_block_header`, is valid with respect to the `block_header.proposer_index` pubkey.
+	//          We do not strictly respect the spec ordering here. This is necessary because signature verification depends on the parent root,
+	//          which is only available if the parent block is known.
 	if err := verifier.ValidProposerSignature(ctx); err != nil {
 		return pubsub.ValidationReject, err
 	}
