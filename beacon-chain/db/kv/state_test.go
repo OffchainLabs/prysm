@@ -321,15 +321,11 @@ func TestState_CanSaveRetrieveValidatorEntriesFromCache(t *testing.T) {
 		hash, hashErr := stateValidators[i].HashTreeRoot()
 		assert.NoError(t, hashErr)
 
-		data, ok := db.validatorEntryCache.Get(string(hash[:]))
+		data, ok := db.validatorEntryCache.Get(hash[:])
 		assert.Equal(t, true, ok)
 		require.NotNil(t, data)
 
-		valEntry, vType := data.(*ethpb.Validator)
-		assert.Equal(t, true, vType)
-		require.NotNil(t, valEntry)
-
-		require.DeepSSZEqual(t, stateValidators[i], valEntry, "validator entry is not matching")
+		require.DeepSSZEqual(t, stateValidators[i], data, "validator entry is not matching")
 	}
 
 	// check if all the validator entries are still intact in the validator entry bucket.
