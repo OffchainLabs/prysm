@@ -710,15 +710,10 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 	pr := ev.HeadBlock.Block().ParentRoot()
 	ev.ParentBlockRoot = pr[:]
 
-	hsr, err := ev.HeadState.LatestBlockHeader().HashTreeRoot()
-	if err != nil {
-		return ev, errors.Wrap(err, "could not compute latest block header root")
-	}
-
 	pse := slots.ToEpoch(ev.ProposalSlot)
 	st := ev.HeadState
 	if slots.ToEpoch(st.Slot()) != pse {
-		st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, hsr[:], ev.ProposalSlot)
+		st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, ev.HeadRoot[:], ev.ProposalSlot)
 		if err != nil {
 			return ev, errors.Wrap(err, "could not run process blocks on head state into the proposal slot epoch")
 		}
@@ -743,7 +738,7 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 	if err != nil {
 		return ev, errors.Wrap(err, "could not get head state slot time")
 	}
-	ev.Attributer, err = s.computePayloadAttributes(ctx, st, hsr, ev.ProposerIndex, uint64(t.Unix()), randao)
+	ev.Attributer, err = s.computePayloadAttributes(ctx, st, ev.HeadRoot, ev.ProposerIndex, uint64(t.Unix()), randao)
 	return ev, err
 }
 
