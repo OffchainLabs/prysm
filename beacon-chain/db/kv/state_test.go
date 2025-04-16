@@ -443,7 +443,7 @@ func TestState_DeleteState(t *testing.T) {
 		assert.NoError(t, hashErr)
 		v, found := db.validatorEntryCache.Get(hash[:])
 		require.Equal(t, false, found)
-		require.Equal(t, nil, v)
+		require.IsNil(t, v)
 	}
 
 	// check if the index of the first state is deleted.
