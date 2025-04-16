@@ -6,11 +6,9 @@ import (
 	"sort"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
-	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 const (
@@ -45,8 +43,7 @@ type stateMachine struct {
 	smm     *stateMachineManager
 	start   primitives.Slot
 	state   stateID
-	pid     peer.ID
-	bwb     []blocks.BlockWithROBlobs
+	fetched fetchRequestResponse
 	updated time.Time
 }
 
@@ -78,7 +75,7 @@ func (smm *stateMachineManager) addStateMachine(startSlot primitives.Slot) *stat
 		smm:     smm,
 		start:   startSlot,
 		state:   stateNew,
-		bwb:     []blocks.BlockWithROBlobs{},
+		fetched: fetchRequestResponse{},
 		updated: prysmTime.Now(),
 	}
 	smm.recalculateMachineAttribs()
@@ -90,7 +87,7 @@ func (smm *stateMachineManager) removeStateMachine(startSlot primitives.Slot) er
 	if _, ok := smm.machines[startSlot]; !ok {
 		return fmt.Errorf("state for machine %v is not found", startSlot)
 	}
-	smm.machines[startSlot].bwb = nil
+	smm.machines[startSlot].fetched = fetchRequestResponse{}
 	delete(smm.machines, startSlot)
 	smm.recalculateMachineAttribs()
 	return nil
@@ -185,6 +182,10 @@ func (m *stateMachine) isFirst() bool {
 // isLast checks whether a given machine has the highest start slot.
 func (m *stateMachine) isLast() bool {
 	return m.start == m.smm.keys[len(m.smm.keys)-1]
+}
+
+func (m *stateMachine) numFetched() int {
+	return len(m.fetched.bwb)
 }
 
 // String returns human-readable representation of a FSM state.
