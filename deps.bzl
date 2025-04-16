@@ -637,6 +637,12 @@ def prysm_deps():
         version = "v1.6.2",
     )
     go_repository(
+        name = "com_github_dgraph_io_ristretto",
+        importpath = "github.com/dgraph-io/ristretto",
+        sum = "h1:a5WaUrDa0qm0YrAAS1tUykT5El3kt62KNZZeMxQn3po=",
+        version = "v0.0.2",
+    )
+    go_repository(
         name = "com_github_dgraph_io_ristretto_v2",
         importpath = "github.com/dgraph-io/ristretto/v2",
         sum = "h1:bkY3XzJcXoMuELV8F+vS8kzNgicwQFAaGINAEJdWGOM=",
@@ -651,8 +657,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_dgryski_go_farm",
         importpath = "github.com/dgryski/go-farm",
-        sum = "h1:tdlZCpZ/P9DhczCTSixgIKmwPv6+wP5DGjqLYw5SUiA=",
-        version = "v0.0.0-20190423205320-6a90982ecee2",
+        sum = "h1:aIftn67I1fkbMa512G+w+Pxci9hJPB8oMnkcP3iZF38=",
+        version = "v0.0.0-20240924180020-3414d57e47da",
     )
     go_repository(
         name = "com_github_dlclark_regexp2",
@@ -687,8 +693,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_dustin_go_humanize",
         importpath = "github.com/dustin/go-humanize",
-        sum = "h1:VSnTsYCnlFHaM2/igO1h6X3HA71jcobQuxemgkq4zYo=",
-        version = "v1.0.0",
+        sum = "h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=",
+        version = "v1.0.1",
     )
     go_repository(
         name = "com_github_eapache_go_resiliency",
@@ -2460,12 +2466,6 @@ def prysm_deps():
         importpath = "github.com/olekukonko/tablewriter",
         sum = "h1:P2Ga83D34wi1o9J6Wh1mRuqd4mF/x/lgBS7N7AbDhec=",
         version = "v0.0.5",
-    )
-    go_repository(
-        name = "com_github_oneofone_xxhash",
-        importpath = "github.com/OneOfOne/xxhash",
-        sum = "h1:KMrpdQIwFcEqXDklaen+P1axHaj9BSKzvpUUfnHldSE=",
-        version = "v1.2.2",
     )
     go_repository(
         name = "com_github_onsi_ginkgo",
@@ -4805,8 +4805,8 @@ def prysm_deps():
     go_repository(
         name = "org_golang_x_sys",
         importpath = "golang.org/x/sys",
-        sum = "h1:QjkSwP/36a20jFYWkSue1YwXzLmsV5Gfq7Eiy72C1uc=",
-        version = "v0.30.0",
+        sum = "h1:ioabZlmFYtWhL+TRYpcnNlLwhyxaM9kWTDEmfnprqik=",
+        version = "v0.31.0",
     )
     go_repository(
         name = "org_golang_x_telemetry",
