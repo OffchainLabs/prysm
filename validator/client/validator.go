@@ -933,7 +933,7 @@ func (v *validator) domainData(ctx context.Context, epoch primitives.Epoch, doma
 
 	if val, ok := v.domainDataCache.Get(key); ok {
 		v.domainDataLock.RUnlock()
-		return proto.Clone(val.(proto.Message)).(*ethpb.DomainResponse), nil
+		return proto.Clone(val).(*ethpb.DomainResponse), nil
 	}
 	v.domainDataLock.RUnlock()
 
@@ -945,7 +945,7 @@ func (v *validator) domainData(ctx context.Context, epoch primitives.Epoch, doma
 	// the same domain data, the cache might have been filled while we were waiting
 	// to acquire the lock.
 	if val, ok := v.domainDataCache.Get(key); ok {
-		return proto.Clone(val.(proto.Message)).(*ethpb.DomainResponse), nil
+		return proto.Clone(val).(*ethpb.DomainResponse), nil
 	}
 
 	res, err := v.validatorClient.DomainData(ctx, req)
