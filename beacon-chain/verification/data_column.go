@@ -19,57 +19,59 @@ import (
 
 const dataColumnSidecarSubTopic = "/data_column_sidecar_%d/"
 
-// GossipDataColumnSidecarRequirements defines the set of requirements that DataColumnSidecars received on gossip
-// must satisfy in order to upgrade an RODataColumn to a VerifiedRODataColumn.
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#data_column_sidecar_subnet_id
-var GossipDataColumnSidecarRequirements = []Requirement{
-	RequireValid,
-	RequireCorrectSubnet,
-	RequireNotFromFutureSlot,
-	RequireSlotAboveFinalized,
-	RequireValidProposerSignature,
-	RequireSidecarParentSeen,
-	RequireSidecarParentValid,
-	RequireSidecarParentSlotLower,
-	RequireSidecarDescendsFromFinalized,
-	RequireSidecarInclusionProven,
-	RequireSidecarKzgProofVerified,
-	RequireSidecarProposerExpected,
-}
-
-// ByRootRequestDataColumnSidecarRequirements defines the set of requirements that DataColumnSidecars received
-// via the by root request must satisfy in order to upgrade an RODataColumn to a VerifiedRODataColumn.
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#datacolumnsidecarsbyroot-v1
-var ByRootRequestDataColumnSidecarRequirements = []Requirement{
-	RequireValid,
-	RequireSidecarInclusionProven,
-	RequireSidecarKzgProofVerified,
-}
-
-// ByRangeRequestDataColumnSidecarRequirements defines the set of requirements that DataColumnSidecars received
-// via the by rag
-// nge request must satisfy in order to upgrade an RODataColumn to a VerifiedRODataColumn.
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#datacolumnsidecarsbyrange-v1
-var ByRangeRequestDataColumnSidecarRequirements = []Requirement{
-	RequireValid,
-	RequireSidecarInclusionProven,
-	RequireSidecarKzgProofVerified,
-}
-
 var (
+	// GossipDataColumnSidecarRequirements defines the set of requirements that DataColumnSidecars received on gossip
+	// must satisfy in order to upgrade an RODataColumn to a VerifiedRODataColumn.
+	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#data_column_sidecar_subnet_id
+	GossipDataColumnSidecarRequirements = []Requirement{
+		RequireValid,
+		RequireCorrectSubnet,
+		RequireNotFromFutureSlot,
+		RequireSlotAboveFinalized,
+		RequireValidProposerSignature,
+		RequireSidecarParentSeen,
+		RequireSidecarParentValid,
+		RequireSidecarParentSlotLower,
+		RequireSidecarDescendsFromFinalized,
+		RequireSidecarInclusionProven,
+		RequireSidecarKzgProofVerified,
+		RequireSidecarProposerExpected,
+	}
+
+	// ByRootRequestDataColumnSidecarRequirements defines the set of requirements that DataColumnSidecars received
+	// via the by root request must satisfy in order to upgrade an RODataColumn to a VerifiedRODataColumn.
+	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#datacolumnsidecarsbyroot-v1
+	ByRootRequestDataColumnSidecarRequirements = []Requirement{
+		RequireValid,
+		RequireSidecarInclusionProven,
+		RequireSidecarKzgProofVerified,
+	}
+
+	// ByRangeRequestDataColumnSidecarRequirements defines the set of requirements that DataColumnSidecars received
+	// via the by rag
+	// nge request must satisfy in order to upgrade an RODataColumn to a VerifiedRODataColumn.
+	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#datacolumnsidecarsbyrange-v1
+	ByRangeRequestDataColumnSidecarRequirements = []Requirement{
+		RequireValid,
+		RequireSidecarInclusionProven,
+		RequireSidecarKzgProofVerified,
+	}
+
 	errColumnsInvalid = errors.New("data columns failed verification")
 	errBadTopicLength = errors.New("topic length is invalid")
 	errBadTopic       = errors.New("topic is not of the one expected")
 )
 
-type RODataColumnsVerifier struct {
-	*sharedResources
-	results                     *results
-	dataColumns                 []blocks.RODataColumn
-	verifyDataColumnsCommitment rodataColumnsCommitmentVerifier
-}
+type (
+	RODataColumnsVerifier struct {
+		*sharedResources
+		results                     *results
+		dataColumns                 []blocks.RODataColumn
+		verifyDataColumnsCommitment rodataColumnsCommitmentVerifier
+	}
 
-type rodataColumnsCommitmentVerifier func([]blocks.RODataColumn) error
+	rodataColumnsCommitmentVerifier func([]blocks.RODataColumn) error
+)
 
 var _ DataColumnsVerifier = &RODataColumnsVerifier{}
 
@@ -109,6 +111,10 @@ func (dv *RODataColumnsVerifier) recordResult(req Requirement, err *error) {
 }
 
 func (dv *RODataColumnsVerifier) Valid() (err error) {
+	if ok, err := dv.results.cached(RequireValid); ok {
+		return err
+	}
+
 	defer dv.recordResult(RequireValid, &err)
 
 	for _, dataColumn := range dv.dataColumns {
@@ -121,6 +127,10 @@ func (dv *RODataColumnsVerifier) Valid() (err error) {
 }
 
 func (dv *RODataColumnsVerifier) CorrectSubnet(expectedTopics []string) (err error) {
+	if ok, err := dv.results.cached(RequireCorrectSubnet); ok {
+		return err
+	}
+
 	defer dv.recordResult(RequireCorrectSubnet, &err)
 
 	if len(expectedTopics) != len(dv.dataColumns) {
@@ -145,6 +155,10 @@ func (dv *RODataColumnsVerifier) CorrectSubnet(expectedTopics []string) (err err
 }
 
 func (dv *RODataColumnsVerifier) NotFromFutureSlot() (err error) {
+	if ok, err := dv.results.cached(RequireNotFromFutureSlot); ok {
+		return err
+	}
+
 	defer dv.recordResult(RequireNotFromFutureSlot, &err)
 
 	// Retrieve the current slot.
@@ -179,6 +193,10 @@ func (dv *RODataColumnsVerifier) NotFromFutureSlot() (err error) {
 }
 
 func (dv *RODataColumnsVerifier) SlotAboveFinalized() (err error) {
+	if ok, err := dv.results.cached(RequireSlotAboveFinalized); ok {
+		return err
+	}
+
 	defer dv.recordResult(RequireSlotAboveFinalized, &err)
 
 	// Retrieve the finalized checkpoint.
@@ -204,6 +222,10 @@ func (dv *RODataColumnsVerifier) SlotAboveFinalized() (err error) {
 }
 
 func (dv *RODataColumnsVerifier) ValidProposerSignature(ctx context.Context) (err error) {
+	if ok, err := dv.results.cached(RequireValidProposerSignature); ok {
+		return err
+	}
+
 	defer dv.recordResult(RequireValidProposerSignature, &err)
 
 	for _, dataColumn := range dv.dataColumns {
@@ -250,6 +272,10 @@ func (dv *RODataColumnsVerifier) ValidProposerSignature(ctx context.Context) (er
 }
 
 func (dv *RODataColumnsVerifier) SidecarParentSeen(parentSeen func([fieldparams.RootLength]byte) bool) (err error) {
+	if ok, err := dv.results.cached(RequireSidecarParentSeen); ok {
+		return err
+	}
+
 	defer dv.recordResult(RequireSidecarParentSeen, &err)
 
 	for _, dataColumn := range dv.dataColumns {
@@ -270,6 +296,10 @@ func (dv *RODataColumnsVerifier) SidecarParentSeen(parentSeen func([fieldparams.
 }
 
 func (dv *RODataColumnsVerifier) SidecarParentValid(badParent func([fieldparams.RootLength]byte) bool) (err error) {
+	if ok, err := dv.results.cached(RequireSidecarParentValid); ok {
+		return err
+	}
+
 	defer dv.recordResult(RequireSidecarParentValid, &err)
 
 	for _, dataColumn := range dv.dataColumns {
@@ -285,6 +315,10 @@ func (dv *RODataColumnsVerifier) SidecarParentValid(badParent func([fieldparams.
 }
 
 func (dv *RODataColumnsVerifier) SidecarParentSlotLower() (err error) {
+	if ok, err := dv.results.cached(RequireSidecarParentSlotLower); ok {
+		return err
+	}
+
 	defer dv.recordResult(RequireSidecarParentSlotLower, &err)
 
 	for _, dataColumn := range dv.dataColumns {
@@ -310,6 +344,10 @@ func (dv *RODataColumnsVerifier) SidecarParentSlotLower() (err error) {
 }
 
 func (dv *RODataColumnsVerifier) SidecarDescendsFromFinalized() (err error) {
+	if ok, err := dv.results.cached(RequireSidecarDescendsFromFinalized); ok {
+		return err
+	}
+
 	defer dv.recordResult(RequireSidecarDescendsFromFinalized, &err)
 
 	for _, dataColumn := range dv.dataColumns {
@@ -325,6 +363,10 @@ func (dv *RODataColumnsVerifier) SidecarDescendsFromFinalized() (err error) {
 }
 
 func (dv *RODataColumnsVerifier) SidecarInclusionProven() (err error) {
+	if ok, err := dv.results.cached(RequireSidecarInclusionProven); ok {
+		return err
+	}
+
 	defer dv.recordResult(RequireSidecarInclusionProven, &err)
 
 	startTime := time.Now()
@@ -341,6 +383,10 @@ func (dv *RODataColumnsVerifier) SidecarInclusionProven() (err error) {
 }
 
 func (dv *RODataColumnsVerifier) SidecarKzgProofVerified() (err error) {
+	if ok, err := dv.results.cached(RequireSidecarKzgProofVerified); ok {
+		return err
+	}
+
 	defer dv.recordResult(RequireSidecarKzgProofVerified, &err)
 
 	startTime := time.Now()
@@ -355,6 +401,10 @@ func (dv *RODataColumnsVerifier) SidecarKzgProofVerified() (err error) {
 }
 
 func (dv *RODataColumnsVerifier) SidecarProposerExpected(ctx context.Context) (err error) {
+	if ok, err := dv.results.cached(RequireSidecarProposerExpected); ok {
+		return err
+	}
+
 	defer dv.recordResult(RequireSidecarProposerExpected, &err)
 
 	for _, dataColumn := range dv.dataColumns {

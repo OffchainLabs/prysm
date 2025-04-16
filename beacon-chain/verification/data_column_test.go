@@ -80,6 +80,9 @@ func TestValid(t *testing.T) {
 		err := verifier.Valid()
 		require.NoError(t, err)
 		require.IsNil(t, verifier.results.result(RequireValid))
+
+		err = verifier.Valid()
+		require.NoError(t, err)
 	})
 }
 
@@ -109,16 +112,20 @@ func TestCorrectSubnet(t *testing.T) {
 	})
 
 	t.Run("nominal", func(t *testing.T) {
+		subnets := []string{
+			"/eth2/9dc47cc6/data_column_sidecar_0/ssz_snappy",
+			"/eth2/9dc47cc6/data_column_sidecar_1",
+		}
+
 		columns := GenerateTestDataColumns(t, [fieldparams.RootLength]byte{}, 1, 1)
 		verifier := initializer.NewDataColumnsVerifier(columns[:2], GossipDataColumnSidecarRequirements)
 
-		err := verifier.CorrectSubnet([]string{
-			"/eth2/9dc47cc6/data_column_sidecar_0/ssz_snappy",
-			"/eth2/9dc47cc6/data_column_sidecar_1",
-		})
-
+		err := verifier.CorrectSubnet(subnets)
 		require.NoError(t, err)
 		require.IsNil(t, verifier.results.result(RequireCorrectSubnet))
+
+		err = verifier.CorrectSubnet(subnets)
+		require.NoError(t, err)
 	})
 }
 
@@ -194,6 +201,9 @@ func TestNotFromFutureSlot(t *testing.T) {
 
 			require.NoError(t, err)
 			require.NoError(t, verifier.results.result(RequireNotFromFutureSlot))
+
+			err = verifier.NotFromFutureSlot()
+			require.NoError(t, err)
 		})
 	}
 }
@@ -260,6 +270,9 @@ func TestColumnSlotAboveFinalized(t *testing.T) {
 
 			require.NoError(t, err)
 			require.NoError(t, v.results.result(RequireSlotAboveFinalized))
+
+			err = v.SlotAboveFinalized()
+			require.NoError(t, err)
 		})
 	}
 }
@@ -377,6 +390,9 @@ func TestValidProposerSignature(t *testing.T) {
 
 			require.NoError(t, err)
 			require.NoError(t, verifier.results.result(RequireValidProposerSignature))
+
+			err = verifier.ValidProposerSignature(context.Background())
+			require.NoError(t, err)
 		})
 	}
 }
@@ -459,6 +475,9 @@ func TestDataColumnsSidecarParentSeen(t *testing.T) {
 
 			require.NoError(t, err)
 			require.NoError(t, verifier.results.result(RequireSidecarParentSeen))
+
+			err = verifier.SidecarParentSeen(tc.parentSeen)
+			require.NoError(t, err)
 		})
 	}
 }
@@ -506,6 +525,9 @@ func TestDataColumnsSidecarParentValid(t *testing.T) {
 
 			require.NoError(t, err)
 			require.NoError(t, verifier.results.result(RequireSidecarParentValid))
+
+			err = verifier.SidecarParentValid(badParentCb(t, firstColumn.ParentRoot(), tc.badParentCbReturn))
+			require.NoError(t, err)
 		})
 	}
 }
@@ -564,6 +586,10 @@ func TestColumnSidecarParentSlotLower(t *testing.T) {
 			if c.err == nil {
 				require.NoError(t, err)
 				require.NoError(t, verifier.results.result(RequireSidecarParentSlotLower))
+
+				err = verifier.SidecarParentSlotLower()
+				require.NoError(t, err)
+
 				return
 			}
 
@@ -633,6 +659,9 @@ func TestDataColumnsSidecarDescendsFromFinalized(t *testing.T) {
 
 			require.NoError(t, err)
 			require.NoError(t, verifier.results.result(RequireSidecarDescendsFromFinalized))
+
+			err = verifier.SidecarDescendsFromFinalized()
+			require.NoError(t, err)
 		})
 	}
 }
@@ -683,6 +712,9 @@ func TestDataColumnsSidecarInclusionProven(t *testing.T) {
 
 			require.NoError(t, err)
 			require.NoError(t, verifier.results.result(RequireSidecarInclusionProven))
+
+			err = verifier.SidecarInclusionProven()
+			require.NoError(t, err)
 		})
 	}
 }
@@ -741,6 +773,9 @@ func TestDataColumnsSidecarKzgProofVerified(t *testing.T) {
 
 			require.NoError(t, err)
 			require.NoError(t, verifier.results.result(RequireSidecarKzgProofVerified))
+
+			err = verifier.SidecarKzgProofVerified()
+			require.NoError(t, err)
 		})
 	}
 }
@@ -889,6 +924,9 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 
 			require.NoError(t, err)
 			require.NoError(t, verifier.results.result(RequireSidecarProposerExpected))
+
+			err = verifier.SidecarProposerExpected(context.Background())
+			require.NoError(t, err)
 		})
 	}
 }

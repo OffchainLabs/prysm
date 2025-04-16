@@ -181,7 +181,7 @@ func (c *blobsTestCase) setup(t *testing.T) (*Service, []blocks.ROBlob, func()) 
 		params.OverrideBeaconConfig(cfg)
 	}
 	maxBlobs := int(params.BeaconConfig().MaxBlobsPerBlock(0))
-	chain, clock := defaultMockChain(t)
+	chain, clock := defaultMockChain(t, 0)
 	if c.chain == nil {
 		c.chain = chain
 	}
@@ -279,7 +279,7 @@ func repositionFutureEpochs(cfg *params.BeaconChainConfig) {
 	}
 }
 
-func defaultMockChain(t *testing.T) (*mock.ChainService, *startup.Clock) {
+func defaultMockChain(t *testing.T, currentSlot uint64) (*mock.ChainService, *startup.Clock) {
 	de := params.BeaconConfig().DenebForkEpoch
 	df, err := forks.Fork(de)
 	require.NoError(t, err)
@@ -290,8 +290,14 @@ func defaultMockChain(t *testing.T) (*mock.ChainService, *startup.Clock) {
 	require.NoError(t, err)
 	now := time.Now()
 	genOffset := types.Slot(params.BeaconConfig().SecondsPerSlot) * cs
-	genesis := now.Add(-1 * time.Second * time.Duration(int64(genOffset)))
-	clock := startup.NewClock(genesis, [32]byte{})
+	genesisTime := now.Add(-1 * time.Second * time.Duration(int64(genOffset)))
+
+	clock := startup.NewClock(genesisTime, [32]byte{}, startup.WithNower(
+		func() time.Time {
+			return genesisTime.Add(time.Duration(currentSlot*params.BeaconConfig().SecondsPerSlot) * time.Second)
+		},
+	))
+
 	chain := &mock.ChainService{
 		FinalizedCheckPoint: &ethpb.Checkpoint{Epoch: fe},
 		Fork:                df,
