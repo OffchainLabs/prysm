@@ -4,9 +4,9 @@ package slots
 import (
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 )
 
 // The Ticker interface defines a type which can expose a
@@ -75,6 +75,8 @@ func (s *SlotIntervalTicker) Done() {
 }
 
 // NewSlotTicker starts and returns a new SlotTicker instance.
+// This method panics if genesis time is zero.
+// lint:nopanic -- Communicated panic in godoc commentary.
 func NewSlotTicker(genesisTime time.Time, secondsPerSlot uint64) *SlotTicker {
 	if genesisTime.IsZero() {
 		panic("zero genesis time")
@@ -89,6 +91,8 @@ func NewSlotTicker(genesisTime time.Time, secondsPerSlot uint64) *SlotTicker {
 
 // NewSlotTickerWithOffset starts and returns a SlotTicker instance that allows a offset of time from genesis,
 // entering a offset greater than secondsPerSlot is not allowed.
+// This method will panic if genesis time is zero or the offset is less than seconds per slot.
+// lint:nopanic -- Communicated panic in godoc commentary.
 func NewSlotTickerWithOffset(genesisTime time.Time, offset time.Duration, secondsPerSlot uint64) *SlotTicker {
 	if genesisTime.Unix() == 0 {
 		panic("zero genesis time")
@@ -176,6 +180,8 @@ func (s *SlotIntervalTicker) startWithIntervals(
 // several offsets of time from genesis,
 // Caller is responsible to input the intervals in increasing order and none bigger or equal than
 // SecondsPerSlot
+// This method will panic if genesis time is zero, intervals is 0 length, or offsets are invalid.
+// lint:nopanic -- Communicated panic in godoc commentary.
 func NewSlotTickerWithIntervals(genesisTime time.Time, intervals []time.Duration) *SlotIntervalTicker {
 	if genesisTime.Unix() == 0 {
 		panic("zero genesis time")

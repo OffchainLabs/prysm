@@ -3,21 +3,21 @@ package electra
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/contracts/deposit"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/contracts/deposit"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -374,47 +374,38 @@ func ProcessPendingDeposits(ctx context.Context, st state.BeaconState, activeBal
 
 // batchProcessNewPendingDeposits should only be used to process new deposits that require validator registration
 func batchProcessNewPendingDeposits(ctx context.Context, state state.BeaconState, pendingDeposits []*ethpb.PendingDeposit) error {
-	// Return early if there are no deposits to process
 	if len(pendingDeposits) == 0 {
 		return nil
 	}
 
-	// Try batch verification of all deposit signatures
 	allSignaturesVerified, err := blocks.BatchVerifyPendingDepositsSignatures(ctx, pendingDeposits)
 	if err != nil {
 		return errors.Wrap(err, "batch signature verification failed")
 	}
 
-	// Process each deposit individually
-	for _, pendingDeposit := range pendingDeposits {
-		validSignature := allSignaturesVerified
+	for _, pd := range pendingDeposits {
+		validSig := allSignaturesVerified
 
-		// If batch verification failed, check the individual deposit signature
 		if !allSignaturesVerified {
-			validSignature, err = blocks.IsValidDepositSignature(&ethpb.Deposit_Data{
-				PublicKey:             bytesutil.SafeCopyBytes(pendingDeposit.PublicKey),
-				WithdrawalCredentials: bytesutil.SafeCopyBytes(pendingDeposit.WithdrawalCredentials),
-				Amount:                pendingDeposit.Amount,
-				Signature:             bytesutil.SafeCopyBytes(pendingDeposit.Signature),
+			validSig, err = blocks.IsValidDepositSignature(&ethpb.Deposit_Data{
+				PublicKey:             bytesutil.SafeCopyBytes(pd.PublicKey),
+				WithdrawalCredentials: bytesutil.SafeCopyBytes(pd.WithdrawalCredentials),
+				Amount:                pd.Amount,
+				Signature:             bytesutil.SafeCopyBytes(pd.Signature),
 			})
 			if err != nil {
 				return errors.Wrap(err, "individual deposit signature verification failed")
 			}
 		}
 
-		// Add validator to the registry if the signature is valid
-		if validSignature {
-			_, has := state.ValidatorIndexByPubkey(bytesutil.ToBytes48(pendingDeposit.PublicKey))
-			if has {
-				index, _ := state.ValidatorIndexByPubkey(bytesutil.ToBytes48(pendingDeposit.PublicKey))
-				if err := helpers.IncreaseBalance(state, index, pendingDeposit.Amount); err != nil {
-					return errors.Wrap(err, "could not increase balance")
-				}
-			} else {
-				err = AddValidatorToRegistry(state, pendingDeposit.PublicKey, pendingDeposit.WithdrawalCredentials, pendingDeposit.Amount)
-				if err != nil {
-					return errors.Wrap(err, "failed to add validator to registry")
-				}
+		pubkey := bytesutil.ToBytes48(pd.PublicKey)
+		if index, exists := state.ValidatorIndexByPubkey(pubkey); exists {
+			if err := helpers.IncreaseBalance(state, index, pd.Amount); err != nil {
+				return errors.Wrap(err, "could not increase balance")
+			}
+		} else if validSig {
+			if err := AddValidatorToRegistry(state, pd.PublicKey, pd.WithdrawalCredentials, pd.Amount); err != nil {
+				return errors.Wrap(err, "failed to add validator to registry")
 			}
 		}
 	}

@@ -6,15 +6,15 @@ import (
 	"fmt"
 	"testing"
 
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -25,7 +25,7 @@ func TestSubmitSyncCommitteeMessage_ValidatorDutiesRequestFailure(t *testing.T) 
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
 			hook := logTest.NewGlobal()
 			validator, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
-			validator.duties = &ethpb.DutiesResponse{CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{}}
+			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{}}
 			defer finish()
 
 			m.validatorClient.EXPECT().SyncMessageBlockRoot(
@@ -51,11 +51,11 @@ func TestSubmitSyncCommitteeMessage_BadDomainData(t *testing.T) {
 			hook := logTest.NewGlobal()
 			validatorIndex := primitives.ValidatorIndex(7)
 			committee := []primitives.ValidatorIndex{0, 3, 4, 2, validatorIndex, 6, 8, 9, 10}
-			validator.duties = &ethpb.DutiesResponse{CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
-					PublicKey:      validatorKey.PublicKey().Marshal(),
-					Committee:      committee,
-					ValidatorIndex: validatorIndex,
+					PublicKey:       validatorKey.PublicKey().Marshal(),
+					CommitteeLength: uint64(len(committee)),
+					ValidatorIndex:  validatorIndex,
 				},
 			}}
 
@@ -87,11 +87,11 @@ func TestSubmitSyncCommitteeMessage_CouldNotSubmit(t *testing.T) {
 			hook := logTest.NewGlobal()
 			validatorIndex := primitives.ValidatorIndex(7)
 			committee := []primitives.ValidatorIndex{0, 3, 4, 2, validatorIndex, 6, 8, 9, 10}
-			validator.duties = &ethpb.DutiesResponse{CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
-					PublicKey:      validatorKey.PublicKey().Marshal(),
-					Committee:      committee,
-					ValidatorIndex: validatorIndex,
+					PublicKey:       validatorKey.PublicKey().Marshal(),
+					CommitteeLength: uint64(len(committee)),
+					ValidatorIndex:  validatorIndex,
 				},
 			}}
 
@@ -132,11 +132,11 @@ func TestSubmitSyncCommitteeMessage_OK(t *testing.T) {
 			hook := logTest.NewGlobal()
 			validatorIndex := primitives.ValidatorIndex(7)
 			committee := []primitives.ValidatorIndex{0, 3, 4, 2, validatorIndex, 6, 8, 9, 10}
-			validator.duties = &ethpb.DutiesResponse{CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
-					PublicKey:      validatorKey.PublicKey().Marshal(),
-					Committee:      committee,
-					ValidatorIndex: validatorIndex,
+					PublicKey:       validatorKey.PublicKey().Marshal(),
+					CommitteeLength: uint64(len(committee)),
+					ValidatorIndex:  validatorIndex,
 				},
 			}}
 
@@ -180,7 +180,7 @@ func TestSubmitSignedContributionAndProof_ValidatorDutiesRequestFailure(t *testi
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
 			hook := logTest.NewGlobal()
 			validator, _, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
-			validator.duties = &ethpb.DutiesResponse{CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{}}
+			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{}}
 			defer finish()
 
 			var pubKey [fieldparams.BLSPubkeyLength]byte
@@ -198,11 +198,11 @@ func TestSubmitSignedContributionAndProof_SyncSubcommitteeIndexFailure(t *testin
 			validator, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
 			validatorIndex := primitives.ValidatorIndex(7)
 			committee := []primitives.ValidatorIndex{0, 3, 4, 2, validatorIndex, 6, 8, 9, 10}
-			validator.duties = &ethpb.DutiesResponse{CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
-					PublicKey:      validatorKey.PublicKey().Marshal(),
-					Committee:      committee,
-					ValidatorIndex: validatorIndex,
+					PublicKey:       validatorKey.PublicKey().Marshal(),
+					CommitteeLength: uint64(len(committee)),
+					ValidatorIndex:  validatorIndex,
 				},
 			}}
 			defer finish()
@@ -230,11 +230,11 @@ func TestSubmitSignedContributionAndProof_NothingToDo(t *testing.T) {
 			validator, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
 			validatorIndex := primitives.ValidatorIndex(7)
 			committee := []primitives.ValidatorIndex{0, 3, 4, 2, validatorIndex, 6, 8, 9, 10}
-			validator.duties = &ethpb.DutiesResponse{CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
-					PublicKey:      validatorKey.PublicKey().Marshal(),
-					Committee:      committee,
-					ValidatorIndex: validatorIndex,
+					PublicKey:       validatorKey.PublicKey().Marshal(),
+					CommitteeLength: uint64(len(committee)),
+					ValidatorIndex:  validatorIndex,
 				},
 			}}
 			defer finish()
@@ -262,11 +262,11 @@ func TestSubmitSignedContributionAndProof_BadDomain(t *testing.T) {
 			validator, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
 			validatorIndex := primitives.ValidatorIndex(7)
 			committee := []primitives.ValidatorIndex{0, 3, 4, 2, validatorIndex, 6, 8, 9, 10}
-			validator.duties = &ethpb.DutiesResponse{CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
-					PublicKey:      validatorKey.PublicKey().Marshal(),
-					Committee:      committee,
-					ValidatorIndex: validatorIndex,
+					PublicKey:       validatorKey.PublicKey().Marshal(),
+					CommitteeLength: uint64(len(committee)),
+					ValidatorIndex:  validatorIndex,
 				},
 			}}
 			defer finish()
@@ -308,11 +308,11 @@ func TestSubmitSignedContributionAndProof_CouldNotGetContribution(t *testing.T) 
 			validator, m, validatorKey, finish := setupWithKey(t, validatorKey, isSlashingProtectionMinimal)
 			validatorIndex := primitives.ValidatorIndex(7)
 			committee := []primitives.ValidatorIndex{0, 3, 4, 2, validatorIndex, 6, 8, 9, 10}
-			validator.duties = &ethpb.DutiesResponse{CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
-					PublicKey:      validatorKey.PublicKey().Marshal(),
-					Committee:      committee,
-					ValidatorIndex: validatorIndex,
+					PublicKey:       validatorKey.PublicKey().Marshal(),
+					CommitteeLength: uint64(len(committee)),
+					ValidatorIndex:  validatorIndex,
 				},
 			}}
 			defer finish()
@@ -362,11 +362,11 @@ func TestSubmitSignedContributionAndProof_CouldNotSubmitContribution(t *testing.
 			validator, m, validatorKey, finish := setupWithKey(t, validatorKey, isSlashingProtectionMinimal)
 			validatorIndex := primitives.ValidatorIndex(7)
 			committee := []primitives.ValidatorIndex{0, 3, 4, 2, validatorIndex, 6, 8, 9, 10}
-			validator.duties = &ethpb.DutiesResponse{CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
-					PublicKey:      validatorKey.PublicKey().Marshal(),
-					Committee:      committee,
-					ValidatorIndex: validatorIndex,
+					PublicKey:       validatorKey.PublicKey().Marshal(),
+					CommitteeLength: uint64(len(committee)),
+					ValidatorIndex:  validatorIndex,
 				},
 			}}
 			defer finish()
@@ -444,11 +444,11 @@ func TestSubmitSignedContributionAndProof_Ok(t *testing.T) {
 			validator, m, validatorKey, finish := setupWithKey(t, validatorKey, isSlashingProtectionMinimal)
 			validatorIndex := primitives.ValidatorIndex(7)
 			committee := []primitives.ValidatorIndex{0, 3, 4, 2, validatorIndex, 6, 8, 9, 10}
-			validator.duties = &ethpb.DutiesResponse{CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
-					PublicKey:      validatorKey.PublicKey().Marshal(),
-					Committee:      committee,
-					ValidatorIndex: validatorIndex,
+					PublicKey:       validatorKey.PublicKey().Marshal(),
+					CommitteeLength: uint64(len(committee)),
+					ValidatorIndex:  validatorIndex,
 				},
 			}}
 			defer finish()

@@ -4,19 +4,19 @@ import (
 	"context"
 	"testing"
 
-	chainMock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
-	blockfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/block"
-	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
-	dbTest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/mock"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	chainMock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
+	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
+	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	dbTest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/mock"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"go.uber.org/mock/gomock"
 )
 
@@ -297,15 +297,20 @@ func TestServer_StreamSlots_OnHeadUpdated(t *testing.T) {
 
 	chainService := &chainMock.ChainService{}
 	server := &Server{
-		Ctx:           ctx,
-		BlockNotifier: chainService.BlockNotifier(),
+		Ctx:               ctx,
+		ForkchoiceFetcher: chainService,
+		BlockNotifier:     chainService.BlockNotifier(),
 	}
 	exitRoutine := make(chan bool)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockStream := mock.NewMockBeaconNodeValidator_StreamSlotsServer(ctrl)
 
-	mockStream.EXPECT().Send(&ethpb.StreamSlotsResponse{Slot: 123}).Do(func(arg0 interface{}) {
+	mockStream.EXPECT().Send(&ethpb.StreamSlotsResponse{
+		Slot:                      123,
+		PreviousDutyDependentRoot: params.BeaconConfig().ZeroHash[:],
+		CurrentDutyDependentRoot:  params.BeaconConfig().ZeroHash[:],
+	}).Do(func(arg0 interface{}) {
 		exitRoutine <- true
 	})
 	mockStream.EXPECT().Context().Return(ctx).AnyTimes()
@@ -329,14 +334,19 @@ func TestServer_StreamSlotsVerified_OnHeadUpdated(t *testing.T) {
 	ctx := context.Background()
 	chainService := &chainMock.ChainService{}
 	server := &Server{
-		Ctx:           ctx,
-		StateNotifier: chainService.StateNotifier(),
+		Ctx:               ctx,
+		ForkchoiceFetcher: chainService,
+		StateNotifier:     chainService.StateNotifier(),
 	}
 	exitRoutine := make(chan bool)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockStream := mock.NewMockBeaconNodeValidator_StreamSlotsServer(ctrl)
-	mockStream.EXPECT().Send(&ethpb.StreamSlotsResponse{Slot: 123}).Do(func(arg0 interface{}) {
+	mockStream.EXPECT().Send(&ethpb.StreamSlotsResponse{
+		Slot:                      123,
+		PreviousDutyDependentRoot: params.BeaconConfig().ZeroHash[:],
+		CurrentDutyDependentRoot:  params.BeaconConfig().ZeroHash[:],
+	}).Do(func(arg0 interface{}) {
 		exitRoutine <- true
 	})
 	mockStream.EXPECT().Context().Return(ctx).AnyTimes()

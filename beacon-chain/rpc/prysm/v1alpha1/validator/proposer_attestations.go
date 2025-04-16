@@ -8,20 +8,22 @@ import (
 	"slices"
 	"sort"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/electra"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation/aggregation"
+	attaggregation "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation/aggregation/attestations"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation/aggregation"
-	attaggregation "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation/aggregation/attestations"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 )
 
@@ -40,10 +42,7 @@ func (vs *Server) packAttestations(ctx context.Context, latestState state.Beacon
 		atts = vs.AttPool.AggregatedAttestations()
 		atts = vs.validateAndDeleteAttsInPool(ctx, latestState, atts)
 
-		uAtts, err := vs.AttPool.UnaggregatedAttestations()
-		if err != nil {
-			return nil, errors.Wrap(err, "could not get unaggregated attestations")
-		}
+		uAtts := vs.AttPool.UnaggregatedAttestations()
 		uAtts = vs.validateAndDeleteAttsInPool(ctx, latestState, uAtts)
 		atts = append(atts, uAtts...)
 	}
@@ -113,7 +112,7 @@ func (vs *Server) packAttestations(ctx context.Context, latestState state.Beacon
 
 	var sorted proposerAtts
 	if postElectra {
-		sorted, err = deduped.sortOnChainAggregates()
+		sorted, err = deduped.sortOnChainAggregates(ctx, latestState)
 		if err != nil {
 			return nil, err
 		}
@@ -189,73 +188,6 @@ func (a proposerAtts) filter(ctx context.Context, st state.BeaconState) (propose
 	return validAtts, invalidAtts
 }
 
-// sortByProfitabilityUsingMaxCover orders attestations by highest slot and by highest aggregation bit count.
-// Duplicate bits are counted only once, using max-cover algorithm.
-func (a proposerAtts) sortByProfitabilityUsingMaxCover() (proposerAtts, error) {
-	// Separate attestations by slot, as slot number takes higher precedence when sorting.
-	var slots []primitives.Slot
-	attsBySlot := map[primitives.Slot]proposerAtts{}
-	for _, att := range a {
-		if _, ok := attsBySlot[att.GetData().Slot]; !ok {
-			slots = append(slots, att.GetData().Slot)
-		}
-		attsBySlot[att.GetData().Slot] = append(attsBySlot[att.GetData().Slot], att)
-	}
-
-	selectAtts := func(atts proposerAtts) (proposerAtts, error) {
-		if len(atts) < 2 {
-			return atts, nil
-		}
-		candidates := make([]*bitfield.Bitlist64, len(atts))
-		for i := 0; i < len(atts); i++ {
-			var err error
-			candidates[i], err = atts[i].GetAggregationBits().ToBitlist64()
-			if err != nil {
-				return nil, err
-			}
-		}
-		// Add selected candidates on top, those that are not selected - append at bottom.
-		selectedKeys, _, err := aggregation.MaxCover(candidates, len(candidates), true /* allowOverlaps */)
-		if err == nil {
-			// Pick selected attestations first, leftover attestations will be appended at the end.
-			// Both lists will be sorted by number of bits set.
-			selectedAtts := make(proposerAtts, selectedKeys.Count())
-			leftoverAtts := make(proposerAtts, selectedKeys.Not().Count())
-			for i, key := range selectedKeys.BitIndices() {
-				selectedAtts[i] = atts[key]
-			}
-			for i, key := range selectedKeys.Not().BitIndices() {
-				leftoverAtts[i] = atts[key]
-			}
-			sort.Slice(selectedAtts, func(i, j int) bool {
-				return selectedAtts[i].GetAggregationBits().Count() > selectedAtts[j].GetAggregationBits().Count()
-			})
-			sort.Slice(leftoverAtts, func(i, j int) bool {
-				return leftoverAtts[i].GetAggregationBits().Count() > leftoverAtts[j].GetAggregationBits().Count()
-			})
-			return append(selectedAtts, leftoverAtts...), nil
-		}
-		return atts, nil
-	}
-
-	// Select attestations. Slots are sorted from higher to lower at this point. Within slots attestations
-	// are sorted to maximize profitability (greedily selected, with previous attestations' bits
-	// evaluated before including any new attestation).
-	var sortedAtts proposerAtts
-	sort.Slice(slots, func(i, j int) bool {
-		return slots[i] > slots[j]
-	})
-	for _, slot := range slots {
-		selected, err := selectAtts(attsBySlot[slot])
-		if err != nil {
-			return nil, err
-		}
-		sortedAtts = append(sortedAtts, selected...)
-	}
-
-	return sortedAtts, nil
-}
-
 // sort attestations as follows:
 //
 //   - all attestations selected by max-cover are taken, leftover attestations are discarded
@@ -267,23 +199,39 @@ func (a proposerAtts) sort() (proposerAtts, error) {
 	if len(a) < 2 {
 		return a, nil
 	}
-
-	if features.Get().DisableCommitteeAwarePacking {
-		return a.sortByProfitabilityUsingMaxCover()
-	}
 	return a.sortBySlotAndCommittee()
 }
 
-func (a proposerAtts) sortOnChainAggregates() (proposerAtts, error) {
+func (a proposerAtts) sortOnChainAggregates(ctx context.Context, st state.ReadOnlyBeaconState) (proposerAtts, error) {
 	if len(a) < 2 {
 		return a, nil
 	}
 
-	// Sort by slot first, then by bit count.
+	totalBalance, err := helpers.TotalActiveBalance(st)
+	if err != nil {
+		return nil, err
+	}
+
+	// Sort attestation by proposer reward numerator using a cache.
+	cache := make(map[ethpb.Att]uint64)
+
+	getCachedReward := func(att ethpb.Att) uint64 {
+		if val, ok := cache[att]; ok {
+			return val
+		}
+		r, err := electra.GetProposerRewardNumerator(ctx, st, att, totalBalance)
+		if err != nil {
+			log.WithError(err).Debug("Failed to get proposer reward numerator")
+			return 0
+		}
+		cache[att] = r
+		return r
+	}
+
 	slices.SortFunc(a, func(a, b ethpb.Att) int {
-		return cmp.Or(
-			-cmp.Compare(a.GetData().Slot, b.GetData().Slot),
-			-cmp.Compare(a.GetAggregationBits().Count(), b.GetAggregationBits().Count()))
+		r1 := getCachedReward(a)
+		r2 := getCachedReward(b)
+		return cmp.Compare(r2, r1)
 	})
 
 	return a, nil

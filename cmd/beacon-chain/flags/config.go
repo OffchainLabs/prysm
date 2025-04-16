@@ -1,9 +1,8 @@
 package flags
 
 import (
+	"github.com/OffchainLabs/prysm/v6/cmd"
 	"github.com/urfave/cli/v2"
-
-	"github.com/prysmaticlabs/prysm/v5/cmd"
 )
 
 // GlobalFlags specifies all the global flags for the

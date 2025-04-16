@@ -2,30 +2,30 @@ package sync
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"reflect"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/slasher/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/slasher/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 // Validation
@@ -34,7 +34,11 @@ import (
 // - The attestation is unaggregated -- that is, it has exactly one participating validator (len(get_attesting_indices(state, attestation.data, attestation.aggregation_bits)) == 1).
 // - attestation.data.slot is within the last ATTESTATION_PROPAGATION_SLOT_RANGE slots (attestation.data.slot + ATTESTATION_PROPAGATION_SLOT_RANGE >= current_slot >= attestation.data.slot).
 // - The signature of attestation is valid.
-func (s *Service) validateCommitteeIndexBeaconAttestation(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
+func (s *Service) validateCommitteeIndexBeaconAttestation(
+	ctx context.Context,
+	pid peer.ID,
+	msg *pubsub.Message,
+) (pubsub.ValidationResult, error) {
 	if pid == s.cfg.p2p.PeerID() {
 		return pubsub.ValidationAccept, nil
 	}
@@ -64,6 +68,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(ctx context.Context, p
 	if err := helpers.ValidateNilAttestation(att); err != nil {
 		return pubsub.ValidationReject, err
 	}
+
 	data := att.GetData()
 
 	// Do not process slot 0 attestations.
@@ -73,8 +78,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(ctx context.Context, p
 
 	// Attestation's slot is within ATTESTATION_PROPAGATION_SLOT_RANGE and early attestation
 	// processing tolerance.
-	if err := helpers.ValidateAttestationTime(data.Slot, s.cfg.clock.GenesisTime(),
-		earlyAttestationProcessingTolerance); err != nil {
+	if err := helpers.ValidateAttestationTime(data.Slot, s.cfg.clock.GenesisTime(), earlyAttestationProcessingTolerance); err != nil {
 		tracing.AnnotateError(span, err)
 		return pubsub.ValidationIgnore, err
 	}
@@ -84,12 +88,11 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(ctx context.Context, p
 
 	committeeIndex := att.GetCommitteeIndex()
 
-	if !features.Get().EnableSlasher {
+	if !s.slasherEnabled {
 		// Verify this the first attestation received for the participating validator for the slot.
-		if s.hasSeenCommitteeIndicesSlot(data.Slot, committeeIndex, att.GetAggregationBits()) {
+		if s.hasSeenUnaggregatedAtt(att) {
 			return pubsub.ValidationIgnore, nil
 		}
-
 		// Reject an attestation if it references an invalid block.
 		if s.hasBadBlock(bytesutil.ToBytes32(data.BeaconBlockRoot)) ||
 			s.hasBadBlock(bytesutil.ToBytes32(data.Target.Root)) ||
@@ -99,15 +102,12 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(ctx context.Context, p
 		}
 	}
 
-	var validationRes pubsub.ValidationResult
-
 	// Verify the block being voted and the processed state is in beaconDB and the block has passed validation if it's in the beaconDB.
 	blockRoot := bytesutil.ToBytes32(data.BeaconBlockRoot)
 	if !s.hasBlockAndState(ctx, blockRoot) {
 		return s.saveToPendingAttPool(att)
 	}
-
-	if !s.cfg.chain.InForkchoice(bytesutil.ToBytes32(data.BeaconBlockRoot)) {
+	if !s.cfg.chain.InForkchoice(blockRoot) {
 		tracing.AnnotateError(span, blockchain.ErrNotDescendantOfFinalized)
 		return pubsub.ValidationIgnore, blockchain.ErrNotDescendantOfFinalized
 	}
@@ -123,12 +123,12 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(ctx context.Context, p
 		return pubsub.ValidationIgnore, err
 	}
 
-	validationRes, err = s.validateUnaggregatedAttTopic(ctx, att, preState, *msg.Topic)
+	validationRes, err := s.validateUnaggregatedAttTopic(ctx, att, preState, *msg.Topic)
 	if validationRes != pubsub.ValidationAccept {
 		return validationRes, err
 	}
 
-	committee, err := helpers.BeaconCommitteeFromState(ctx, preState, att.GetData().Slot, committeeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(ctx, preState, data.Slot, committeeIndex)
 	if err != nil {
 		tracing.AnnotateError(span, err)
 		return pubsub.ValidationIgnore, err
@@ -139,21 +139,42 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(ctx context.Context, p
 		return validationRes, err
 	}
 
-	var singleAtt *eth.SingleAttestation
+	// Consolidated handling of Electra SingleAttestation vs Phase0 unaggregated attestation
+	var (
+		attForValidation eth.Att // what we'll pass to further validation
+		eventType        feed.EventType
+		eventData        interface{}
+	)
+
 	if att.Version() >= version.Electra {
-		singleAtt, ok = att.(*eth.SingleAttestation)
+		singleAtt, ok := att.(*eth.SingleAttestation)
 		if !ok {
-			return pubsub.ValidationIgnore, fmt.Errorf("attestation has wrong type (expected %T, got %T)", &eth.SingleAttestation{}, att)
+			return pubsub.ValidationIgnore, fmt.Errorf(
+				"attestation has wrong type (expected %T, got %T)",
+				&eth.SingleAttestation{}, att,
+			)
 		}
-		att = singleAtt.ToAttestationElectra(committee)
+		// Convert Electra SingleAttestation to unaggregated ElectraAttestation. This is needed because many parts of the codebase assume that attestations have a certain structure and SingleAttestation validates these assumptions.
+		attForValidation = singleAtt.ToAttestationElectra(committee)
+		eventType = operation.SingleAttReceived
+		eventData = &operation.SingleAttReceivedData{
+			Attestation: singleAtt,
+		}
+	} else {
+		// Phase0 unaggregated attestation
+		attForValidation = att
+		eventType = operation.UnaggregatedAttReceived
+		eventData = &operation.UnAggregatedAttReceivedData{
+			Attestation: att,
+		}
 	}
 
-	validationRes, err = s.validateUnaggregatedAttWithState(ctx, att, preState)
+	validationRes, err = s.validateUnaggregatedAttWithState(ctx, attForValidation, preState)
 	if validationRes != pubsub.ValidationAccept {
 		return validationRes, err
 	}
 
-	if features.Get().EnableSlasher {
+	if s.slasherEnabled {
 		// Feed the indexed attestation to slasher if enabled. This action
 		// is done in the background to avoid adding more load to this critical code path.
 		go func() {
@@ -172,7 +193,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(ctx context.Context, p
 				tracing.AnnotateError(span, err)
 				return
 			}
-			indexedAtt, err := attestation.ConvertToIndexed(ctx, att, committee)
+			indexedAtt, err := attestation.ConvertToIndexed(ctx, attForValidation, committee)
 			if err != nil {
 				log.WithError(err).Error("Could not convert to indexed attestation")
 				tracing.AnnotateError(span, err)
@@ -182,27 +203,16 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(ctx context.Context, p
 		}()
 	}
 
-	// Broadcast the unaggregated attestation on a feed to notify other services in the beacon node
-	// of a received unaggregated attestation.
-	if singleAtt != nil {
-		s.cfg.attestationNotifier.OperationFeed().Send(&feed.Event{
-			Type: operation.SingleAttReceived,
-			Data: &operation.SingleAttReceivedData{
-				Attestation: singleAtt,
-			},
-		})
-	} else {
-		s.cfg.attestationNotifier.OperationFeed().Send(&feed.Event{
-			Type: operation.UnaggregatedAttReceived,
-			Data: &operation.UnAggregatedAttReceivedData{
-				Attestation: att,
-			},
-		})
-	}
+	// Notify other services in the beacon node
+	s.cfg.attestationNotifier.OperationFeed().Send(&feed.Event{
+		Type: eventType,
+		Data: eventData,
+	})
 
-	s.setSeenCommitteeIndicesSlot(data.Slot, committeeIndex, att.GetAggregationBits())
+	s.setSeenUnaggregatedAtt(att)
 
-	msg.ValidatorData = att
+	// Attach final validated attestation to the message for further pipeline use
+	msg.ValidatorData = attForValidation
 
 	return pubsub.ValidationAccept, nil
 }
@@ -244,7 +254,19 @@ func (s *Service) validateCommitteeIndexAndCount(
 		return 0, 0, pubsub.ValidationIgnore, err
 	}
 	count := helpers.SlotCommitteeCount(valCount)
-	ci := a.GetCommitteeIndex()
+	var ci primitives.CommitteeIndex
+	if a.Version() >= version.Electra && !a.IsSingle() {
+		bitCount := a.CommitteeBitsVal().Count()
+		if bitCount == 0 {
+			return 0, 0, pubsub.ValidationReject, fmt.Errorf("committee bits have no bit set")
+		}
+		if bitCount != 1 {
+			return 0, 0, pubsub.ValidationReject, fmt.Errorf("expected 1 committee bit indice got %d", bitCount)
+		}
+		ci = primitives.CommitteeIndex(a.CommitteeBitsVal().BitIndices()[0])
+	} else {
+		ci = a.GetCommitteeIndex()
+	}
 	if uint64(ci) > count {
 		return 0, 0, pubsub.ValidationReject, fmt.Errorf("committee index %d > %d", ci, count)
 	}
@@ -318,21 +340,59 @@ func validateAttestingIndex(
 }
 
 // Returns true if the attestation was already seen for the participating validator for the slot.
-func (s *Service) hasSeenCommitteeIndicesSlot(slot primitives.Slot, committeeID primitives.CommitteeIndex, aggregateBits []byte) bool {
+func (s *Service) hasSeenUnaggregatedAtt(att eth.Att) bool {
 	s.seenUnAggregatedAttestationLock.RLock()
 	defer s.seenUnAggregatedAttestationLock.RUnlock()
-	b := append(bytesutil.Bytes32(uint64(slot)), bytesutil.Bytes32(uint64(committeeID))...)
-	b = append(b, aggregateBits...)
+
+	var attester uint64
+	if att.Version() >= version.Electra {
+		if !att.IsSingle() {
+			log.Debug("Called hasSeenUnaggregatedAtt with a non-single Electra attestation")
+			return false
+		}
+		attester = uint64(att.GetAttestingIndex())
+	} else {
+		aggBits := att.GetAggregationBits()
+		if aggBits.Count() != 1 {
+			log.Debug("Attestation does not have exactly 1 bit set")
+			return false
+		}
+		attester = uint64(att.GetAggregationBits().BitIndices()[0])
+	}
+
+	b := make([]byte, 24)
+	binary.LittleEndian.PutUint64(b, uint64(att.GetData().Slot))
+	binary.LittleEndian.PutUint64(b[8:16], uint64(att.GetCommitteeIndex()))
+	binary.LittleEndian.PutUint64(b[16:], attester)
 	_, seen := s.seenUnAggregatedAttestationCache.Get(string(b))
 	return seen
 }
 
-// Set committee's indices and slot as seen for incoming attestations.
-func (s *Service) setSeenCommitteeIndicesSlot(slot primitives.Slot, committeeID primitives.CommitteeIndex, aggregateBits []byte) {
+// Set an incoming attestation as seen for the participating validator for the slot.
+func (s *Service) setSeenUnaggregatedAtt(att eth.Att) {
 	s.seenUnAggregatedAttestationLock.Lock()
 	defer s.seenUnAggregatedAttestationLock.Unlock()
-	b := append(bytesutil.Bytes32(uint64(slot)), bytesutil.Bytes32(uint64(committeeID))...)
-	b = append(b, bytesutil.SafeCopyBytes(aggregateBits)...)
+
+	var attester uint64
+	if att.Version() >= version.Electra {
+		if !att.IsSingle() {
+			log.Debug("Called setSeenUnaggregatedAtt with a non-single Electra attestation. It will not be marked as seen")
+			return
+		}
+		attester = uint64(att.GetAttestingIndex())
+	} else {
+		aggBits := att.GetAggregationBits()
+		if aggBits.Count() != 1 {
+			log.Debug("Attestation does not have exactly 1 bit set. It will not be marked as seen")
+			return
+		}
+		attester = uint64(att.GetAggregationBits().BitIndices()[0])
+	}
+
+	b := make([]byte, 24)
+	binary.LittleEndian.PutUint64(b, uint64(att.GetData().Slot))
+	binary.LittleEndian.PutUint64(b[8:16], uint64(att.GetCommitteeIndex()))
+	binary.LittleEndian.PutUint64(b[16:], attester)
 	s.seenUnAggregatedAttestationCache.Add(string(b), true)
 }
 

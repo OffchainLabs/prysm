@@ -3,7 +3,7 @@ package synccommittee
 import (
 	"sync"
 
-	"github.com/prysmaticlabs/prysm/v5/container/queue"
+	"github.com/OffchainLabs/prysm/v6/container/queue"
 )
 
 // Store defines the caches for various sync committee objects

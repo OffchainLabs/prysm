@@ -4,20 +4,13 @@ go_library(
     name = "go_default_library",
     testonly = 1,
     srcs = ["mock.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v5/validator/accounts/testing",
+    importpath = "github.com/OffchainLabs/prysm/v6/validator/accounts/testing",
     visibility = [
         "//validator:__pkg__",
         "//validator:__subpackages__",
     ],
     deps = [
-        "//api/client/beacon:go_default_library",
-        "//api/client/event:go_default_library",
-        "//config/fieldparams:go_default_library",
-        "//config/proposer:go_default_library",
-        "//consensus-types/primitives:go_default_library",
-        "//proto/prysm/v1alpha1:go_default_library",
         "//validator/accounts/iface:go_default_library",
-        "//validator/client/iface:go_default_library",
         "//validator/keymanager:go_default_library",
     ],
 )

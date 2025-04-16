@@ -7,11 +7,12 @@ import (
 	"errors"
 	"time"
 
-	prysmTrace "github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
+	prysmTrace "github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
@@ -55,5 +56,7 @@ func Setup(ctx context.Context, serviceName, processName, endpoint string, sampl
 	)
 
 	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+
 	return nil
 }

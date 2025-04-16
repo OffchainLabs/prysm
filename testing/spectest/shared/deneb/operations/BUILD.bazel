@@ -16,7 +16,7 @@ go_library(
         "voluntary_exit.go",
         "withdrawals.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/deneb/operations",
+    importpath = "github.com/OffchainLabs/prysm/v6/testing/spectest/shared/deneb/operations",
     visibility = ["//testing/spectest:__subpackages__"],
     deps = [
         "//beacon-chain/core/altair:go_default_library",

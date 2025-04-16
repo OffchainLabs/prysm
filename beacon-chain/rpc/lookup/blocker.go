@@ -6,24 +6,23 @@ import (
 	"math"
 	"slices"
 	"strconv"
-	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -89,8 +88,7 @@ func (p *BeaconDbBlocker) Block(ctx context.Context, id []byte) (interfaces.Read
 			return nil, errors.Wrap(err, "could not retrieve genesis block")
 		}
 	default:
-		stringId := strings.ToLower(string(id))
-		if len(stringId) >= 2 && stringId[:2] == "0x" {
+		if bytesutil.IsHex(id) {
 			decoded, err := hexutil.Decode(string(id))
 			if err != nil {
 				e := NewBlockIdParseError(err)
@@ -373,13 +371,13 @@ func (p *BeaconDbBlocker) blobsFromStoredDataColumns(indices map[uint64]bool, ro
 //     we are technically not supposed to import a block to forkchoice unless we have the blobs, so the nuance here is if we can't find the file and we are inside the protocol-defined retention period, then it's actually a 500.
 //   - block exists, has commitments, outside retention period (greater of protocol- or user-specified) - ie just like block exists, no commitment
 func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices map[uint64]bool) ([]*blocks.VerifiedROBlob, *core.RpcError) {
-	var root []byte
+	var rootSlice []byte
 	switch id {
 	case "genesis":
 		return nil, &core.RpcError{Err: errors.New("blobs are not supported for Phase 0 fork"), Reason: core.BadRequest}
 	case "head":
 		var err error
-		root, err = p.ChainInfoFetcher.HeadRoot(ctx)
+		rootSlice, err = p.ChainInfoFetcher.HeadRoot(ctx)
 		if err != nil {
 			return nil, &core.RpcError{Err: errors.Wrapf(err, "could not retrieve head root"), Reason: core.Internal}
 		}
@@ -388,20 +386,17 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices map[uint
 		if fcp == nil {
 			return nil, &core.RpcError{Err: errors.New("received nil finalized checkpoint"), Reason: core.Internal}
 		}
-		root = fcp.Root
+		rootSlice = fcp.Root
 	case "justified":
 		jcp := p.ChainInfoFetcher.CurrentJustifiedCheckpt()
 		if jcp == nil {
 			return nil, &core.RpcError{Err: errors.New("received nil justified checkpoint"), Reason: core.Internal}
 		}
-		root = jcp.Root
+		rootSlice = jcp.Root
 	default:
 		if bytesutil.IsHex([]byte(id)) {
 			var err error
-			root, err = hexutil.Decode(id)
-			if len(root) != fieldparams.RootLength {
-				return nil, &core.RpcError{Err: fmt.Errorf("invalid block root of length %d", len(root)), Reason: core.BadRequest}
-			}
+			rootSlice, err = bytesutil.DecodeHexWithLength(id, fieldparams.RootLength)
 			if err != nil {
 				return nil, &core.RpcError{Err: NewBlockIdParseError(err), Reason: core.BadRequest}
 			}
@@ -419,41 +414,46 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices map[uint
 			}
 			ok, roots, err := p.BeaconDB.BlockRootsBySlot(ctx, primitives.Slot(slot))
 			if !ok {
-				return nil, &core.RpcError{Err: fmt.Errorf("block not found: no block roots at slot %d", slot), Reason: core.NotFound}
+				return nil, &core.RpcError{Err: fmt.Errorf("no block roots at slot %d", slot), Reason: core.NotFound}
 			}
 			if err != nil {
-				return nil, &core.RpcError{Err: errors.Wrap(err, "failed to get block roots by slot"), Reason: core.Internal}
+				return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to get block roots for slot %d", slot), Reason: core.Internal}
 			}
-			root = roots[0][:]
+			rootSlice = roots[0][:]
 			if len(roots) == 1 {
 				break
 			}
 			for _, blockRoot := range roots {
 				canonical, err := p.ChainInfoFetcher.IsCanonical(ctx, blockRoot)
 				if err != nil {
-					return nil, &core.RpcError{Err: errors.Wrap(err, "could not determine if block root is canonical"), Reason: core.Internal}
+					return nil, &core.RpcError{Err: errors.Wrapf(err, "could not determine if block %#x is canonical", blockRoot), Reason: core.Internal}
 				}
 				if canonical {
-					root = blockRoot[:]
+					rootSlice = blockRoot[:]
 					break
 				}
 			}
 		}
 	}
-	if !p.BeaconDB.HasBlock(ctx, bytesutil.ToBytes32(root)) {
-		return nil, &core.RpcError{Err: errors.New("block not found"), Reason: core.NotFound}
-	}
-	b, err := p.BeaconDB.Block(ctx, bytesutil.ToBytes32(root))
+
+	root := bytesutil.ToBytes32(rootSlice)
+
+	b, err := p.BeaconDB.Block(ctx, root)
 	if err != nil {
-		return nil, &core.RpcError{Err: errors.Wrap(err, "failed to retrieve block from db"), Reason: core.Internal}
+		return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to retrieve block %#x from db", rootSlice), Reason: core.Internal}
 	}
-	// if block is not in the retention window  return 200 w/ empty list
+	if b == nil {
+		return nil, &core.RpcError{Err: fmt.Errorf("block %#x not found in db", rootSlice), Reason: core.NotFound}
+	}
+
+	// if block is not in the retention window, return 200 w/ empty list
 	if !p.BlobStorage.WithinRetentionPeriod(slots.ToEpoch(b.Block().Slot()), slots.ToEpoch(p.GenesisTimeFetcher.CurrentSlot())) {
 		return make([]*blocks.VerifiedROBlob, 0), nil
 	}
+
 	commitments, err := b.Block().Body().BlobKzgCommitments()
 	if err != nil {
-		return nil, &core.RpcError{Err: errors.Wrap(err, "failed to retrieve kzg commitments from block"), Reason: core.Internal}
+		return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to retrieve kzg commitments from block %#x", rootSlice), Reason: core.Internal}
 	}
 	// if there are no commitments return 200 w/ empty list
 	if len(commitments) == 0 {
@@ -483,8 +483,8 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices map[uint
 	isPeerDASEnabledForBlock := blockSlot >= peerDASStartSlot
 
 	if isPeerDASEnabledForBlock {
-		return p.blobsFromStoredDataColumns(indices, root)
+		return p.blobsFromStoredDataColumns(indices, rootSlice)
 	}
 
-	return p.blobsFromStoredBlobs(indices, root, blockSlot, commitments)
+	return p.blobsFromStoredBlobs(indices, rootSlice, blockSlot, commitments)
 }

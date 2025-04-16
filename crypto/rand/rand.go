@@ -7,7 +7,7 @@ This limits the scope of code that needs to be hardened.
 There are two modes, one for deterministic and another non-deterministic randomness:
 1. If deterministic pseudo-random generator is enough, use:
 
-		import "github.com/prysmaticlabs/prysm/v5/crypto/rand"
+		import "github.com/OffchainLabs/prysm/v6/crypto/rand"
 		randGen := rand.NewDeterministicGenerator()
 		randGen.Intn(32) // or any other func defined in math.rand API
 
@@ -20,7 +20,7 @@ There are two modes, one for deterministic and another non-deterministic randomn
 
 2. For cryptographically secure non-deterministic mode (CSPRNG), use:
 
-		import "github.com/prysmaticlabs/prysm/v5/crypto/rand"
+		import "github.com/OffchainLabs/prysm/v6/crypto/rand"
 		randGen := rand.NewGenerator()
 		randGen.Intn(32) // or any other func defined in math.rand API
 
@@ -57,7 +57,7 @@ func (_ *source) Uint64() (val uint64) {
 	lock.RLock()
 	defer lock.RUnlock()
 	if err := binary.Read(rand.Reader, binary.BigEndian, &val); err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- Panic risk is communicated in the godoc commentary.
 	}
 	return
 }

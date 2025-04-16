@@ -3,7 +3,7 @@ package operations
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/altair/operations"
+	"github.com/OffchainLabs/prysm/v6/testing/spectest/shared/altair/operations"
 )
 
 func TestMinimal_Altair_Operations_SyncCommittee(t *testing.T) {

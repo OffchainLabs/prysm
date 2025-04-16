@@ -1,14 +1,14 @@
 package p2p
 
 import (
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/hash"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/math"
+	"github.com/OffchainLabs/prysm/v6/network/forks"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/hash"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/math"
-	"github.com/prysmaticlabs/prysm/v5/network/forks"
 )
 
 // MsgID is a content addressable ID function.
@@ -50,7 +50,7 @@ func MsgID(genesisValidatorsRoot []byte, pmsg *pubsubpb.Message) string {
 	if fEpoch >= params.BeaconConfig().AltairForkEpoch {
 		return postAltairMsgID(pmsg, fEpoch)
 	}
-	decodedData, err := encoder.DecodeSnappy(pmsg.Data, params.BeaconConfig().GossipMaxSize)
+	decodedData, err := encoder.DecodeSnappy(pmsg.Data, params.BeaconConfig().MaxPayloadSize)
 	if err != nil {
 		combinedData := append(params.BeaconConfig().MessageDomainInvalidSnappy[:], pmsg.Data...)
 		h := hash.Hash(combinedData)
@@ -77,10 +77,9 @@ func postAltairMsgID(pmsg *pubsubpb.Message, fEpoch primitives.Epoch) string {
 	topicLen := len(topic)
 	topicLenBytes := bytesutil.Uint64ToBytesLittleEndian(uint64(topicLen)) // topicLen cannot be negative
 
-	// beyond Bellatrix epoch, allow 10 Mib gossip data size
-	gossipPubSubSize := params.BeaconConfig().GossipMaxSize
+	gossipPayloadSize := params.BeaconConfig().MaxPayloadSize
 
-	decodedData, err := encoder.DecodeSnappy(pmsg.Data, gossipPubSubSize)
+	decodedData, err := encoder.DecodeSnappy(pmsg.Data, gossipPayloadSize)
 	if err != nil {
 		totalLength, err := math.AddInt(
 			len(params.BeaconConfig().MessageDomainInvalidSnappy),
@@ -95,7 +94,7 @@ func postAltairMsgID(pmsg *pubsubpb.Message, fEpoch primitives.Epoch) string {
 			copy(msg, "invalid")
 			return bytesutil.UnsafeCastToString(msg)
 		}
-		if uint64(totalLength) > gossipPubSubSize {
+		if uint64(totalLength) > gossipPayloadSize {
 			// this should never happen
 			msg := make([]byte, 20)
 			copy(msg, "invalid")

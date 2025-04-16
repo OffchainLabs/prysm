@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
 )
 
 func Test_endpoints(t *testing.T) {
@@ -24,6 +24,7 @@ func Test_endpoints(t *testing.T) {
 		"/eth/v1/beacon/states/{state_id}/validators":                  {http.MethodGet, http.MethodPost},
 		"/eth/v1/beacon/states/{state_id}/validators/{validator_id}":   {http.MethodGet},
 		"/eth/v1/beacon/states/{state_id}/validator_balances":          {http.MethodGet, http.MethodPost},
+		"/eth/v1/beacon/states/{state_id}/validator_identities":        {http.MethodPost},
 		"/eth/v1/beacon/states/{state_id}/committees":                  {http.MethodGet},
 		"/eth/v1/beacon/states/{state_id}/sync_committees":             {http.MethodGet},
 		"/eth/v1/beacon/states/{state_id}/randao":                      {http.MethodGet},
@@ -98,9 +99,7 @@ func Test_endpoints(t *testing.T) {
 		"/eth/v1/validator/duties/attester/{epoch}":        {http.MethodPost},
 		"/eth/v1/validator/duties/proposer/{epoch}":        {http.MethodGet},
 		"/eth/v1/validator/duties/sync/{epoch}":            {http.MethodPost},
-		"/eth/v2/validator/blocks/{slot}":                  {http.MethodGet},
 		"/eth/v3/validator/blocks/{slot}":                  {http.MethodGet},
-		"/eth/v1/validator/blinded_blocks/{slot}":          {http.MethodGet},
 		"/eth/v1/validator/attestation_data":               {http.MethodGet},
 		"/eth/v1/validator/aggregate_attestation":          {http.MethodGet},
 		"/eth/v2/validator/aggregate_attestation":          {http.MethodGet},
@@ -150,7 +149,14 @@ func Test_endpoints(t *testing.T) {
 			actualRoutes[e.template] = e.methods
 		}
 	}
-	expectedRoutes := combineMaps(beaconRoutes, builderRoutes, configRoutes, debugRoutes, eventsRoutes, nodeRoutes, validatorRoutes, rewardsRoutes, lightClientRoutes, blobRoutes, prysmValidatorRoutes, prysmNodeRoutes, prysmBeaconRoutes)
+	expectedRoutes := make(map[string][]string)
+	for _, m := range []map[string][]string{
+		beaconRoutes, builderRoutes, configRoutes, debugRoutes, eventsRoutes,
+		nodeRoutes, validatorRoutes, rewardsRoutes, lightClientRoutes, blobRoutes,
+		prysmValidatorRoutes, prysmNodeRoutes, prysmBeaconRoutes,
+	} {
+		maps.Copy(expectedRoutes, m)
+	}
 
 	assert.Equal(t, true, maps.EqualFunc(expectedRoutes, actualRoutes, func(actualMethods []string, expectedMethods []string) bool {
 		return slices.Equal(expectedMethods, actualMethods)

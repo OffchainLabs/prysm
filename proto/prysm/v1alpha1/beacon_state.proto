@@ -10,7 +10,7 @@ import "proto/eth/ext/options.proto";
 import "proto/prysm/v1alpha1/eip_7251.proto";
 
 option csharp_namespace = "Ethereum.Eth.V1Alpha1";
-option go_package = "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1;eth";
+option go_package = "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1;eth";
 option java_multiple_files = true;
 option java_outer_classname = "BeaconStateProto";
 option java_package = "org.ethereum.eth.v1alpha1";
@@ -26,7 +26,7 @@ message BeaconState {
   bytes genesis_validators_root = 1002 [ (ethereum.eth.ext.ssz_size) = "32" ];
   uint64 slot = 1003 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
   Fork fork = 1004;
 
@@ -84,7 +84,7 @@ message Fork {
   bytes current_version = 2 [ (ethereum.eth.ext.ssz_size) = "4" ];
   uint64 epoch = 3 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Epoch"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
   ];
 }
 
@@ -100,11 +100,11 @@ message PendingAttestation {
   // The difference of when attestation gets created and get included on chain.
   uint64 inclusion_delay = 3 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
   // The proposer who included the attestation in the block.
   uint64 proposer_index = 4 [ (ethereum.eth.ext.cast_type) =
-                                  "github.com/prysmaticlabs/prysm/v5/"
+                                  "github.com/OffchainLabs/prysm/v6/"
                                   "consensus-types/primitives.ValidatorIndex" ];
 }
 
@@ -123,7 +123,7 @@ message StateSummary {
   // The slot of the state.
   uint64 slot = 1 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
   // The block root of the state.
   bytes root = 2;
@@ -198,7 +198,7 @@ message BeaconStateAltair {
   bytes genesis_validators_root = 1002 [ (ethereum.eth.ext.ssz_size) = "32" ];
   uint64 slot = 1003 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
   Fork fork = 1004;
 
@@ -273,7 +273,7 @@ message SyncAggregatorSelectionData {
   // Slot of this signing data.
   uint64 slot = 1 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
   // Subcommittee index of this signing data.
   uint64 subcommittee_index = 2;
@@ -289,7 +289,7 @@ message BeaconStateBellatrix {
   bytes genesis_validators_root = 1002 [ (ethereum.eth.ext.ssz_size) = "32" ];
   uint64 slot = 1003 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
   Fork fork = 1004;
 
@@ -362,7 +362,7 @@ message BeaconStateCapella {
   bytes genesis_validators_root = 1002 [ (ethereum.eth.ext.ssz_size) = "32" ];
   uint64 slot = 1003 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
   Fork fork = 1004;
 
@@ -428,7 +428,7 @@ message BeaconStateCapella {
   uint64 next_withdrawal_index = 11001; // [New in Capella]
   uint64 next_withdrawal_validator_index = 11002
       [ (ethereum.eth.ext.cast_type) =
-            "github.com/prysmaticlabs/prysm/v5/consensus-types/"
+            "github.com/OffchainLabs/prysm/v6/consensus-types/"
             "primitives.ValidatorIndex" ]; // [New in Capella]
   repeated HistoricalSummary historical_summaries = 11003
       [ (ethereum.eth.ext.ssz_max) = "16777216" ]; // [New in Capella]
@@ -451,7 +451,7 @@ message BeaconStateDeneb {
   bytes genesis_validators_root = 1002 [ (ethereum.eth.ext.ssz_size) = "32" ];
   uint64 slot = 1003 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
   Fork fork = 1004;
 
@@ -517,7 +517,7 @@ message BeaconStateDeneb {
   uint64 next_withdrawal_index = 11001;
   uint64 next_withdrawal_validator_index = 11002
       [ (ethereum.eth.ext.cast_type) =
-            "github.com/prysmaticlabs/prysm/v5/consensus-types/"
+            "github.com/OffchainLabs/prysm/v6/consensus-types/"
             "primitives.ValidatorIndex" ];
   repeated HistoricalSummary historical_summaries = 11003
       [ (ethereum.eth.ext.ssz_max) = "16777216" ];
@@ -533,7 +533,7 @@ message BeaconStateElectra {
   bytes genesis_validators_root = 1002 [ (ethereum.eth.ext.ssz_size) = "32" ];
   uint64 slot = 1003 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
   Fork fork = 1004;
 
@@ -599,7 +599,7 @@ message BeaconStateElectra {
   uint64 next_withdrawal_index = 11001;
   uint64 next_withdrawal_validator_index = 11002
       [ (ethereum.eth.ext.cast_type) =
-            "github.com/prysmaticlabs/prysm/v5/consensus-types/"
+            "github.com/OffchainLabs/prysm/v6/consensus-types/"
             "primitives.ValidatorIndex" ];
   repeated HistoricalSummary historical_summaries = 11003
       [ (ethereum.eth.ext.ssz_max) = "16777216" ];
@@ -608,23 +608,23 @@ message BeaconStateElectra {
   uint64 deposit_requests_start_index = 12001;
   uint64 deposit_balance_to_consume = 12002 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Gwei"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Gwei"
   ];
   uint64 exit_balance_to_consume = 12003 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Gwei"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Gwei"
   ];
   uint64 earliest_exit_epoch = 12004 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Epoch"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
   ];
   uint64 consolidation_balance_to_consume = 12005 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Gwei"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Gwei"
   ];
   uint64 earliest_consolidation_epoch = 12006 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Epoch"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
   ];
   repeated PendingDeposit pending_deposits = 12007
       [ (ethereum.eth.ext.ssz_max) = "pending_deposits_limit" ];

@@ -1,11 +1,9 @@
 package checkpoint
 
 import (
-	"fmt"
-
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/node"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/checkpoint"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/node"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/checkpoint"
 	"github.com/urfave/cli/v2"
 )
 
@@ -53,10 +51,10 @@ func BeaconNodeOptions(c *cli.Context) ([]node.Option, error) {
 		return nil, nil
 	}
 	if blockPath != "" && statePath == "" {
-		return nil, fmt.Errorf("--checkpoint-block specified, but not --checkpoint-state. both are required")
+		return nil, errors.New("--checkpoint-block specified, but not --checkpoint-state. both are required")
 	}
 	if blockPath == "" && statePath != "" {
-		return nil, fmt.Errorf("--checkpoint-state specified, but not --checkpoint-block. both are required")
+		return nil, errors.New("--checkpoint-state specified, but not --checkpoint-block. both are required")
 	}
 
 	opt := func(node *node.BeaconNode) (err error) {

@@ -8,15 +8,15 @@ import (
 	"math"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	gogo "github.com/gogo/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	fastssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -555,9 +555,17 @@ func TestSszNetworkEncoder_FailsSnappyLength(t *testing.T) {
 	e := &encoder.SszNetworkEncoder{}
 	att := &ethpb.Fork{}
 	data := make([]byte, 32)
-	binary.PutUvarint(data, encoder.MaxGossipSize+32)
+	binary.PutUvarint(data, encoder.MaxPayloadSize+1)
 	err := e.DecodeGossip(data, att)
 	require.ErrorContains(t, "snappy message exceeds max size", err)
+}
+
+func TestSszNetworkEncoder_ExceedsMaxCompressedLimit(t *testing.T) {
+	e := &encoder.SszNetworkEncoder{}
+	att := &ethpb.Fork{}
+	data := make([]byte, encoder.MaxCompressedLen(encoder.MaxPayloadSize)+1)
+	err := e.DecodeGossip(data, att)
+	require.ErrorContains(t, "gossip message exceeds maximum compressed limit", err)
 }
 
 func testRoundTripWithLength(t *testing.T, e *encoder.SszNetworkEncoder) {
@@ -604,31 +612,28 @@ func TestSszNetworkEncoder_EncodeWithMaxLength(t *testing.T) {
 	e := &encoder.SszNetworkEncoder{}
 	params.SetupTestConfigCleanup(t)
 	c := params.BeaconNetworkConfig()
-	encoder.MaxChunkSize = uint64(5)
+	encoder.MaxPayloadSize = uint64(5)
 	params.OverrideBeaconNetworkConfig(c)
 	_, err := e.EncodeWithMaxLength(buf, msg)
-	wanted := fmt.Sprintf("which is larger than the provided max limit of %d", encoder.MaxChunkSize)
+	wanted := fmt.Sprintf("which is larger than the provided max limit of %d", encoder.MaxPayloadSize)
 	assert.ErrorContains(t, wanted, err)
 }
 
 func TestSszNetworkEncoder_DecodeWithMaxLength(t *testing.T) {
 	buf := new(bytes.Buffer)
-	msg := &ethpb.Fork{
-		PreviousVersion: []byte("fooo"),
-		CurrentVersion:  []byte("barr"),
-		Epoch:           4242,
-	}
 	e := &encoder.SszNetworkEncoder{}
 	params.SetupTestConfigCleanup(t)
 	c := params.BeaconNetworkConfig()
-	maxChunkSize := uint64(5)
-	encoder.MaxChunkSize = maxChunkSize
-	params.OverrideBeaconNetworkConfig(c)
-	_, err := e.EncodeGossip(buf, msg)
+	maxPayloadSize := uint64(5)
+	encoder.MaxPayloadSize = maxPayloadSize
+	_, err := buf.Write(gogo.EncodeVarint(maxPayloadSize + 1))
 	require.NoError(t, err)
+	_, err = buf.Write(make([]byte, maxPayloadSize+1))
+	require.NoError(t, err)
+	params.OverrideBeaconNetworkConfig(c)
 	decoded := &ethpb.Fork{}
 	err = e.DecodeWithMaxLength(buf, decoded)
-	wanted := fmt.Sprintf("goes over the provided max limit of %d", maxChunkSize)
+	wanted := fmt.Sprintf("goes over the provided max limit of %d", maxPayloadSize)
 	assert.ErrorContains(t, wanted, err)
 }
 
@@ -639,8 +644,8 @@ func TestSszNetworkEncoder_DecodeWithMultipleFrames(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	c := params.BeaconNetworkConfig()
 	// 4 * 1 Mib
-	maxChunkSize := uint64(1 << 22)
-	encoder.MaxChunkSize = maxChunkSize
+	maxPayloadSize := uint64(1 << 22)
+	encoder.MaxPayloadSize = maxPayloadSize
 	params.OverrideBeaconNetworkConfig(c)
 	_, err := e.EncodeWithMaxLength(buf, st.ToProtoUnsafe().(*ethpb.BeaconState))
 	require.NoError(t, err)

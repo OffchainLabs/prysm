@@ -4,11 +4,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/sirupsen/logrus"
 )
 
@@ -25,7 +25,7 @@ type (
 	}
 
 	TrackedValidatorsCache struct {
-		trackedValidators cache.Cache
+		trackedValidators *cache.Cache
 	}
 )
 
@@ -50,7 +50,7 @@ var (
 // NewTrackedValidatorsCache creates a new cache for tracking validators.
 func NewTrackedValidatorsCache() *TrackedValidatorsCache {
 	return &TrackedValidatorsCache{
-		trackedValidators: *cache.New(defaultExpiration, cleanupInterval),
+		trackedValidators: cache.New(defaultExpiration, cleanupInterval),
 	}
 }
 

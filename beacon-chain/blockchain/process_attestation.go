@@ -4,13 +4,13 @@ import (
 	"context"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 // OnAttestation is called whenever an attestation is received, verifies the attestation is valid and saves
@@ -80,7 +80,7 @@ func (s *Service) OnAttestation(ctx context.Context, a ethpb.Att, disparity time
 	}
 
 	// Use the target state to verify attesting indices are valid.
-	committees, err := helpers.AttestationCommittees(ctx, baseState, a)
+	committees, err := helpers.AttestationCommitteesFromState(ctx, baseState, a)
 	if err != nil {
 		return err
 	}

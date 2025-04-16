@@ -7,16 +7,69 @@ import (
 	"testing"
 	"time"
 
-	eventClient "github.com/prysmaticlabs/prysm/v5/api/client/event"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	mock2 "github.com/prysmaticlabs/prysm/v5/testing/mock"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	eventClient "github.com/OffchainLabs/prysm/v6/api/client/event"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	mock2 "github.com/OffchainLabs/prysm/v6/testing/mock"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
+
+// toValidatorDutiesContainer is assumed to be available from your package, returning a *v1alpha1.ValidatorDutiesContainer.
+func TestToValidatorDutiesContainer_HappyPath(t *testing.T) {
+	// Create a mock DutiesResponse with current and next duties.
+	dutiesResp := &eth.DutiesResponse{
+		CurrentEpochDuties: []*eth.DutiesResponse_Duty{
+			{
+				Committee:        []primitives.ValidatorIndex{100, 101},
+				CommitteeIndex:   4,
+				AttesterSlot:     200,
+				ProposerSlots:    []primitives.Slot{400},
+				PublicKey:        []byte{0xAA, 0xBB},
+				Status:           eth.ValidatorStatus_ACTIVE,
+				ValidatorIndex:   101,
+				IsSyncCommittee:  false,
+				CommitteesAtSlot: 2,
+			},
+		},
+		NextEpochDuties: []*eth.DutiesResponse_Duty{
+			{
+				Committee:        []primitives.ValidatorIndex{300, 301},
+				CommitteeIndex:   8,
+				AttesterSlot:     600,
+				ProposerSlots:    []primitives.Slot{700, 701},
+				PublicKey:        []byte{0xCC, 0xDD},
+				Status:           eth.ValidatorStatus_ACTIVE,
+				ValidatorIndex:   301,
+				IsSyncCommittee:  true,
+				CommitteesAtSlot: 3,
+			},
+		},
+	}
+
+	gotContainer, err := toValidatorDutiesContainer(dutiesResp)
+	require.NoError(t, err)
+
+	// Validate we have the correct number of duties in current and next epochs.
+	assert.Equal(t, len(gotContainer.CurrentEpochDuties), len(dutiesResp.CurrentEpochDuties))
+	assert.Equal(t, len(gotContainer.NextEpochDuties), len(dutiesResp.NextEpochDuties))
+
+	firstCurrentDuty := gotContainer.CurrentEpochDuties[0]
+	expectedCurrentDuty := dutiesResp.CurrentEpochDuties[0]
+	assert.DeepEqual(t, firstCurrentDuty.PublicKey, expectedCurrentDuty.PublicKey)
+	assert.Equal(t, firstCurrentDuty.ValidatorIndex, expectedCurrentDuty.ValidatorIndex)
+	assert.DeepEqual(t, firstCurrentDuty.ProposerSlots, expectedCurrentDuty.ProposerSlots)
+
+	firstNextDuty := gotContainer.NextEpochDuties[0]
+	expectedNextDuty := dutiesResp.NextEpochDuties[0]
+	assert.DeepEqual(t, firstNextDuty.PublicKey, expectedNextDuty.PublicKey)
+	assert.Equal(t, firstNextDuty.ValidatorIndex, expectedNextDuty.ValidatorIndex)
+	assert.DeepEqual(t, firstNextDuty.ProposerSlots, expectedNextDuty.ProposerSlots)
+}
 
 func TestWaitForChainStart_StreamSetupFails(t *testing.T) {
 	ctrl := gomock.NewController(t)

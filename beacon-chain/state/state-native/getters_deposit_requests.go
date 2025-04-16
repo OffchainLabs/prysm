@@ -1,7 +1,7 @@
 package state_native
 
 import (
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 )
 
 // DepositRequestsStartIndex is used for returning the deposit requests start index which is used for eip6110

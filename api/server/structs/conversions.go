@@ -4,20 +4,20 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/OffchainLabs/prysm/v6/api/server"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/validator"
+	"github.com/OffchainLabs/prysm/v6/container/slice"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/math"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethv1 "github.com/OffchainLabs/prysm/v6/proto/eth/v1"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/server"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
-	"github.com/prysmaticlabs/prysm/v5/container/slice"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/math"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethv1 "github.com/prysmaticlabs/prysm/v5/proto/eth/v1"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 var errNilValue = errors.New("nil value")
@@ -887,126 +887,6 @@ func WithdrawalFromConsensus(w *enginev1.Withdrawal) *Withdrawal {
 		ExecutionAddress: hexutil.Encode(w.Address),
 		Amount:           fmt.Sprintf("%d", w.Amount),
 	}
-}
-
-func WithdrawalRequestsFromConsensus(ws []*enginev1.WithdrawalRequest) []*WithdrawalRequest {
-	result := make([]*WithdrawalRequest, len(ws))
-	for i, w := range ws {
-		result[i] = WithdrawalRequestFromConsensus(w)
-	}
-	return result
-}
-
-func WithdrawalRequestFromConsensus(w *enginev1.WithdrawalRequest) *WithdrawalRequest {
-	return &WithdrawalRequest{
-		SourceAddress:   hexutil.Encode(w.SourceAddress),
-		ValidatorPubkey: hexutil.Encode(w.ValidatorPubkey),
-		Amount:          fmt.Sprintf("%d", w.Amount),
-	}
-}
-
-func (w *WithdrawalRequest) ToConsensus() (*enginev1.WithdrawalRequest, error) {
-	src, err := bytesutil.DecodeHexWithLength(w.SourceAddress, common.AddressLength)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "SourceAddress")
-	}
-	pubkey, err := bytesutil.DecodeHexWithLength(w.ValidatorPubkey, fieldparams.BLSPubkeyLength)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "ValidatorPubkey")
-	}
-	amount, err := strconv.ParseUint(w.Amount, 10, 64)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "Amount")
-	}
-	return &enginev1.WithdrawalRequest{
-		SourceAddress:   src,
-		ValidatorPubkey: pubkey,
-		Amount:          amount,
-	}, nil
-}
-
-func ConsolidationRequestsFromConsensus(cs []*enginev1.ConsolidationRequest) []*ConsolidationRequest {
-	result := make([]*ConsolidationRequest, len(cs))
-	for i, c := range cs {
-		result[i] = ConsolidationRequestFromConsensus(c)
-	}
-	return result
-}
-
-func ConsolidationRequestFromConsensus(c *enginev1.ConsolidationRequest) *ConsolidationRequest {
-	return &ConsolidationRequest{
-		SourceAddress: hexutil.Encode(c.SourceAddress),
-		SourcePubkey:  hexutil.Encode(c.SourcePubkey),
-		TargetPubkey:  hexutil.Encode(c.TargetPubkey),
-	}
-}
-
-func (c *ConsolidationRequest) ToConsensus() (*enginev1.ConsolidationRequest, error) {
-	srcAddress, err := bytesutil.DecodeHexWithLength(c.SourceAddress, common.AddressLength)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "SourceAddress")
-	}
-	srcPubkey, err := bytesutil.DecodeHexWithLength(c.SourcePubkey, fieldparams.BLSPubkeyLength)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "SourcePubkey")
-	}
-	targetPubkey, err := bytesutil.DecodeHexWithLength(c.TargetPubkey, fieldparams.BLSPubkeyLength)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "TargetPubkey")
-	}
-	return &enginev1.ConsolidationRequest{
-		SourceAddress: srcAddress,
-		SourcePubkey:  srcPubkey,
-		TargetPubkey:  targetPubkey,
-	}, nil
-}
-
-func DepositRequestsFromConsensus(ds []*enginev1.DepositRequest) []*DepositRequest {
-	result := make([]*DepositRequest, len(ds))
-	for i, d := range ds {
-		result[i] = DepositRequestFromConsensus(d)
-	}
-	return result
-}
-
-func DepositRequestFromConsensus(d *enginev1.DepositRequest) *DepositRequest {
-	return &DepositRequest{
-		Pubkey:                hexutil.Encode(d.Pubkey),
-		WithdrawalCredentials: hexutil.Encode(d.WithdrawalCredentials),
-		Amount:                fmt.Sprintf("%d", d.Amount),
-		Signature:             hexutil.Encode(d.Signature),
-		Index:                 fmt.Sprintf("%d", d.Index),
-	}
-}
-
-func (d *DepositRequest) ToConsensus() (*enginev1.DepositRequest, error) {
-	pubkey, err := bytesutil.DecodeHexWithLength(d.Pubkey, fieldparams.BLSPubkeyLength)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "Pubkey")
-	}
-	withdrawalCredentials, err := bytesutil.DecodeHexWithLength(d.WithdrawalCredentials, fieldparams.RootLength)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "WithdrawalCredentials")
-	}
-	amount, err := strconv.ParseUint(d.Amount, 10, 64)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "Amount")
-	}
-	sig, err := bytesutil.DecodeHexWithLength(d.Signature, fieldparams.BLSSignatureLength)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "Signature")
-	}
-	index, err := strconv.ParseUint(d.Index, 10, 64)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "Index")
-	}
-	return &enginev1.DepositRequest{
-		Pubkey:                pubkey,
-		WithdrawalCredentials: withdrawalCredentials,
-		Amount:                amount,
-		Signature:             sig,
-		Index:                 index,
-	}, nil
 }
 
 func ProposerSlashingsToConsensus(src []*ProposerSlashing) ([]*eth.ProposerSlashing, error) {

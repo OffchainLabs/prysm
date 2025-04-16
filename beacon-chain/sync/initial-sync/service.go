@@ -8,33 +8,32 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/async/abool"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
+	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/crypto/rand"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	prysmTime "github.com/OffchainLabs/prysm/v6/time"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/paulbellamy/ratecounter"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-
-	"github.com/prysmaticlabs/prysm/v5/async/abool"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	blockfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/block"
-	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/das"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 var _ runtime.Service = (*Service)(nil)
@@ -73,6 +72,7 @@ type Service struct {
 	newBlobVerifier        verification.NewBlobVerifier
 	newDataColumnsVerifier verification.NewDataColumnsVerifier
 	ctxMap                 sync.ContextByteVersions
+	genesisTime            time.Time
 }
 
 // Option is a functional option for the initial-sync Service.
@@ -160,20 +160,21 @@ func (s *Service) Start() {
 		log.Debug("Exiting Initial Sync Service")
 		return
 	}
+	s.genesisTime = gt
 	// Exit entering round-robin sync if we require 0 peers to sync.
 	if flags.Get().MinimumSyncPeers == 0 {
 		s.markSynced()
-		log.WithField("genesisTime", gt).Info("Due to number of peers required for sync being set at 0, entering regular sync immediately.")
+		log.WithField("genesisTime", s.genesisTime).Info("Due to number of peers required for sync being set at 0, entering regular sync immediately.")
 		return
 	}
-	if gt.After(prysmTime.Now()) {
+	if s.genesisTime.After(prysmTime.Now()) {
 		s.markSynced()
-		log.WithField("genesisTime", gt).Info("Genesis time has not arrived - not syncing")
+		log.WithField("genesisTime", s.genesisTime).Info("Genesis time has not arrived - not syncing")
 		return
 	}
 	currentSlot := clock.CurrentSlot()
 	if slots.ToEpoch(currentSlot) == 0 {
-		log.WithField("genesisTime", gt).Info("Chain started within the last epoch - not syncing")
+		log.WithField("genesisTime", s.genesisTime).Info("Chain started within the last epoch - not syncing")
 		s.markSynced()
 		return
 	}
@@ -196,12 +197,11 @@ func (s *Service) Start() {
 	if err := s.fetchOriginSidecars(peers); err != nil {
 		log.WithError(err).Error("Error fetching origin sidecars")
 	}
-
-	if err := s.roundRobinSync(gt); err != nil {
+	if err := s.roundRobinSync(); err != nil {
 		if errors.Is(s.ctx.Err(), context.Canceled) {
 			return
 		}
-		panic(err)
+		panic(err) // lint:nopanic -- Unexpected error. This should probably be surfaced with a returned error.
 	}
 	log.WithField("slot", s.cfg.Chain.HeadSlot()).Info("Synced up to")
 	s.markSynced()
@@ -287,14 +287,13 @@ func (s *Service) Resync() error {
 
 	// Set it to false since we are syncing again.
 	s.synced.UnSet()
-	defer func() { s.synced.Set() }()                       // Reset it at the end of the method.
-	genesis := time.Unix(int64(headState.GenesisTime()), 0) // lint:ignore uintcast -- Genesis time will not exceed int64 in your lifetime.
+	defer func() { s.synced.Set() }() // Reset it at the end of the method.
 
 	_, err = s.waitForMinimumPeers()
 	if err != nil {
 		return err
 	}
-	if err = s.roundRobinSync(genesis); err != nil {
+	if err = s.roundRobinSync(); err != nil {
 		log = log.WithError(err)
 	}
 	log.WithField("slot", s.cfg.Chain.HeadSlot()).Info("Resync attempt complete")

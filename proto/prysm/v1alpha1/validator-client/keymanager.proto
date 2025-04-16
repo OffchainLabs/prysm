@@ -8,7 +8,7 @@ import "proto/prysm/v1alpha1/beacon_state.proto";
 import "proto/prysm/v1alpha1/sync_committee.proto";
 
 option csharp_namespace = "Ethereum.Validator.Accounts.V2";
-option go_package = "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client;validatorpb";
+option go_package = "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client;validatorpb";
 option java_multiple_files = true;
 option java_outer_classname = "KeymanagerProto";
 option java_package = "org.ethereum.validator.accounts.v2";
@@ -40,11 +40,11 @@ message SignRequest {
     ethereum.eth.v1alpha1.VoluntaryExit exit = 104;
     uint64 slot = 105 [
       (ethereum.eth.ext.cast_type) =
-          "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+          "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
     ];
     uint64 epoch = 106 [
       (ethereum.eth.ext.cast_type) =
-          "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Epoch"
+          "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
     ];
 
     // Altair objects.
@@ -84,7 +84,7 @@ message SignRequest {
   reserved 4, 5; // Reserving old, deleted fields.
   uint64 signing_slot = 6 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
 }
 
@@ -118,7 +118,7 @@ message BuilderConfig {
   bool enabled = 1;
   uint64 gas_limit = 2 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/validator.Uint64"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/validator.Uint64"
   ];
   repeated string relays = 3;
 }

@@ -4,12 +4,12 @@ import (
 	"context"
 	"time"
 
+	coreState "github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	statenative "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/container/trie"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
-	coreState "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	statenative "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/container/trie"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 // GeneratePreminedGenesisState deterministically given a genesis time and number of validators.

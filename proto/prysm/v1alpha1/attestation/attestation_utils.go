@@ -6,18 +6,19 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"runtime/debug"
 	"slices"
 	"sort"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
 // ConvertToIndexed converts attestation to (almost) indexed-verifiable form.
@@ -100,13 +101,17 @@ func AttestingIndices(att ethpb.Att, committees ...[]primitives.ValidatorIndex) 
 	for _, c := range committees {
 		committeesLen += len(c)
 	}
+	if aggBits.Len() == 0 {
+		fmt.Printf("committee_bits: %v, aggregation_bits: %v, slot: %d", att.CommitteeBitsVal(), att.GetAggregationBits(), att.GetData().Slot)
+		debug.PrintStack()
+	}
 	if aggBits.Len() != uint64(committeesLen) {
 		return nil, fmt.Errorf("bitfield length %d is not equal to committee length %d", aggBits.Len(), committeesLen)
 	}
 
 	attesters := make([]uint64, 0, aggBits.Count())
 	committeeOffset := 0
-	for _, c := range committees {
+	for ci, c := range committees {
 		committeeAttesters := make([]uint64, 0, len(c))
 		for i, vi := range c {
 			if aggBits.BitAt(uint64(committeeOffset + i)) {
@@ -114,7 +119,7 @@ func AttestingIndices(att ethpb.Att, committees ...[]primitives.ValidatorIndex) 
 			}
 		}
 		if len(committeeAttesters) == 0 {
-			return nil, fmt.Errorf("no attesting indices found in committee %v", c)
+			return nil, fmt.Errorf("no attesting indices found for committee index %d", ci)
 		}
 		attesters = append(attesters, committeeAttesters...)
 		committeeOffset += len(c)

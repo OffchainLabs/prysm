@@ -7,9 +7,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls/common"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls/common"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 func TestSignVerify(t *testing.T) {
@@ -171,8 +171,7 @@ func TestEth2FastAggregateVerify_ReturnsTrueOnG2PointAtInfinity(t *testing.T) {
 	var pubkeys []common.PublicKey
 	msg := [32]byte{'h', 'e', 'l', 'l', 'o'}
 
-	g2PointAtInfinity := append([]byte{0xC0}, make([]byte, 95)...)
-	aggSig, err := SignatureFromBytes(g2PointAtInfinity)
+	aggSig, err := SignatureFromBytes(common.InfiniteSignature[:])
 	require.NoError(t, err)
 	assert.Equal(t, true, aggSig.Eth2FastAggregateVerify(pubkeys, msg))
 }

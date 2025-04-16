@@ -73,6 +73,7 @@ ssz_phase0_objs = [
     "Status",
     "Status",
     "Validator",
+    "ValidatorIdentity",
     "VoluntaryExit",
 ]
 
@@ -124,6 +125,7 @@ ssz_capella_objs = [
     "SignedBeaconBlockCapella",
     "SignedBlindedBeaconBlockCapella",
     "Withdrawal",
+    "SignedBuilderBidCapella",
 ]
 
 ssz_deneb_objs = [
@@ -145,6 +147,7 @@ ssz_deneb_objs = [
     "SignedBeaconBlockContentsDeneb",
     "SignedBeaconBlockDeneb",
     "SignedBlindedBeaconBlockDeneb",
+    "SignedBuilderBidDeneb",
 ]
 
 ssz_electra_objs = [
@@ -175,7 +178,8 @@ ssz_electra_objs = [
     "SignedBeaconBlockElectra",
     "SignedBlindedBeaconBlockElectra",
     "SignedConsolidation",
-    "SingleAttestation"
+    "SingleAttestation",
+    "SignedBuilderBidElectra",
 ]
 
 ssz_fulu_objs = [
@@ -185,7 +189,7 @@ ssz_fulu_objs = [
     "DataColumnSidecar",
     "SignedBeaconBlockContentsFulu",
     "SignedBeaconBlockFulu",
-    "SignedBlindedBeaconBlockFulu"
+    "SignedBlindedBeaconBlockFulu",
 ]
 
 ssz_gen_marshal(
@@ -297,6 +301,7 @@ ssz_gen_marshal(
         "SignedValidatorRegistrationV1",
         "ValidatorRegistrationV1",
         "BuilderBid",
+        "SignedBuilderBid",
         "DepositSnapshot",
     ],
 )
@@ -306,7 +311,7 @@ go_proto_library(
     compilers = [
         "@com_github_prysmaticlabs_protoc_gen_go_cast//:go_cast_grpc",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1",
+    importpath = "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1",
     proto = ":proto",
     visibility = ["//visibility:public"],
     deps = [
@@ -335,8 +340,10 @@ go_library(
         "beacon_block.go",
         "cloners.go",
         "eip_7521.go",
+        "log.go",
         "sync_committee_mainnet.go",
         "sync_committee_minimal.go",  # keep
+        "validator.go",
         ":ssz_generated_altair",  # keep
         ":ssz_generated_bellatrix",  # keep
         ":ssz_generated_capella",  # keep
@@ -347,7 +354,7 @@ go_library(
         ":ssz_generated_phase0",  # keep
     ],
     embed = [":go_proto"],
-    importpath = "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1",
+    importpath = "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1",
     visibility = ["//visibility:public"],
     deps = SSZ_DEPS + [
         "//encoding/bytesutil:go_default_library",
@@ -373,6 +380,8 @@ go_library(
         "@org_golang_google_protobuf//runtime/protoimpl:go_default_library",
         "@org_golang_google_protobuf//types/descriptorpb:go_default_library",
         "@org_golang_google_protobuf//types/known/emptypb:go_default_library",
+        "@com_github_sirupsen_logrus//:go_default_library",
+        "@com_github_sirupsen_logrus//hooks/test:go_default_library",
     ],
 )
 

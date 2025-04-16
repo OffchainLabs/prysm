@@ -6,7 +6,7 @@ go_library(
         "blob.go",
         "data_columns.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/verify",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/verify",
     visibility = ["//visibility:public"],
     deps = [
         "//config/params:go_default_library",

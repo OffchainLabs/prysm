@@ -3,7 +3,7 @@ package peerdas
 import (
 	"math/big"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 )
 
 // ExtendedSampleCount computes, for a given number of samples per slot and allowed failures the
