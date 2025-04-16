@@ -106,11 +106,6 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		return pubsub.ValidationIgnore, err
 	}
 
-	// [REJECT] The proposer signature of `sidecar.signed_block_header`, is valid with respect to the `block_header.proposer_index` pubkey.
-	if err := verifier.ValidProposerSignature(ctx); err != nil {
-		return pubsub.ValidationReject, err
-	}
-
 	// [IGNORE] The sidecar's block's parent (defined by `block_header.parent_root`) has been seen (via gossip or non-gossip sources
 	// (a client MAY queue sidecars for processing once the parent block is retrieved).
 	if err := verifier.SidecarParentSeen(s.hasBadBlock); err != nil {
@@ -130,6 +125,11 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 
 	// [REJECT] The sidecar's block's parent (defined by `block_header.parent_root`) passes validation.
 	if err := verifier.SidecarParentValid(s.hasBadBlock); err != nil {
+		return pubsub.ValidationReject, err
+	}
+
+	// [REJECT] The proposer signature of `sidecar.signed_block_header`, is valid with respect to the `block_header.proposer_index` pubkey.
+	if err := verifier.ValidProposerSignature(ctx); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
