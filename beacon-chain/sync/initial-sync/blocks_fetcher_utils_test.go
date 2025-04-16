@@ -263,7 +263,7 @@ func TestBlocksFetcher_findFork(t *testing.T) {
 	reqEnd := testForkStartSlot(t, 251) + primitives.Slot(findForkReqRangeSize())
 	require.Equal(t, primitives.Slot(len(chain1)), fork.bwb[0].Block.Block().Slot())
 	require.Equal(t, int(reqEnd-forkSlot1b), len(fork.bwb))
-	require.Equal(t, curForkMoreBlocksPeer, fork.peer)
+	require.Equal(t, curForkMoreBlocksPeer, fork.blocksFrom)
 	// Save all chain1b blocks (so that they do not interfere with alternative fork)
 	for _, blk := range chain1b {
 		util.SaveBlock(t, ctx, beaconDB, blk)
@@ -283,7 +283,7 @@ func TestBlocksFetcher_findFork(t *testing.T) {
 	alternativePeer := connectPeerHavingBlocks(t, p2p, chain2, finalizedSlot, p2p.Peers())
 	fork, err = fetcher.findFork(ctx, 251)
 	require.NoError(t, err)
-	assert.Equal(t, alternativePeer, fork.peer)
+	assert.Equal(t, alternativePeer, fork.blocksFrom)
 	assert.Equal(t, 65, len(fork.bwb))
 	ind := forkSlot
 	for _, blk := range fork.bwb {

@@ -156,7 +156,7 @@ func readChunkEncodedBlobsLowMax(t *testing.T, s *Service, expect []*expectedBlo
 	}
 	return func(stream network.Stream) {
 		_, err := readChunkEncodedBlobs(stream, encoding, ctxMap, vf, 1)
-		require.ErrorIs(t, err, ErrInvalidFetchedData)
+		require.ErrorIs(t, err, errMaxRequestBlobSidecarsExceeded)
 	}
 }
 
