@@ -142,10 +142,6 @@ func (v *validator) Init(ctx context.Context) error {
 	defer ticker.Stop()
 
 	firstTime := true
-	var (
-		currentSlot primitives.Slot
-		err         error
-	)
 
 	for {
 		if !firstTime {
@@ -157,8 +153,7 @@ func (v *validator) Init(ctx context.Context) error {
 		}
 
 		firstTime = false
-		currentSlot, err = v.WaitForChainStart(ctx)
-		if err != nil {
+		if err := v.WaitForChainStart(ctx); err != nil {
 			if isConnectionError(err) {
 				log.WithError(err).Warn("Could not determine if beacon chain started")
 				continue
@@ -194,7 +189,7 @@ func (v *validator) Init(ctx context.Context) error {
 		}
 		break
 	}
-
+	currentSlot := slots.CurrentSlot(v.genesisTime) // set in v.WaitForChainStart
 	if err := v.UpdateDuties(ctx, currentSlot); err != nil {
 		handleAssignmentError(err, currentSlot)
 	}

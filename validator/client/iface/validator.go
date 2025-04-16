@@ -37,7 +37,7 @@ const (
 type Validator interface {
 	Done()
 	Init(ctx context.Context) error
-	WaitForChainStart(ctx context.Context) (primitives.Slot, error)
+	WaitForChainStart(ctx context.Context) error
 	WaitForSync(ctx context.Context) error
 	WaitForActivation(ctx context.Context, accountsChangedChan chan [][fieldparams.BLSPubkeyLength]byte) error
 	CanonicalHeadSlot(ctx context.Context) (primitives.Slot, error)

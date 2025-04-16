@@ -84,12 +84,12 @@ func (fv *FakeValidator) WaitForKeymanagerInitialization(_ context.Context) erro
 func (fv *FakeValidator) LogSubmittedSyncCommitteeMessages() {}
 
 // WaitForChainStart for mocking.
-func (fv *FakeValidator) WaitForChainStart(_ context.Context) (primitives.Slot, error) {
+func (fv *FakeValidator) WaitForChainStart(_ context.Context) error {
 	fv.WaitForChainStartCalled++
 	if fv.RetryTillSuccess >= fv.WaitForChainStartCalled {
-		return 0, api.ErrConnectionIssue
+		return api.ErrConnectionIssue
 	}
-	return 0, nil
+	return nil
 }
 
 // WaitForActivation for mocking.

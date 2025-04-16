@@ -267,7 +267,7 @@ func TestWaitForChainStart_SetsGenesisInfo(t *testing.T) {
 				GenesisTime:           genesis,
 				GenesisValidatorsRoot: genesisValidatorsRoot[:],
 			}, nil)
-			_, err = v.WaitForChainStart(context.Background())
+			err = v.WaitForChainStart(context.Background())
 			require.NoError(t, err)
 			savedGenValRoot, err = db.GenesisValidatorsRoot(context.Background())
 			require.NoError(t, err)
@@ -285,7 +285,7 @@ func TestWaitForChainStart_SetsGenesisInfo(t *testing.T) {
 				GenesisTime:           genesis,
 				GenesisValidatorsRoot: genesisValidatorsRoot[:],
 			}, nil)
-			_, err = v.WaitForChainStart(context.Background())
+			err = v.WaitForChainStart(context.Background())
 			require.NoError(t, err)
 		})
 	}
@@ -313,7 +313,7 @@ func TestWaitForChainStart_SetsGenesisInfo_IncorrectSecondTry(t *testing.T) {
 				GenesisTime:           genesis,
 				GenesisValidatorsRoot: genesisValidatorsRoot[:],
 			}, nil)
-			_, err := v.WaitForChainStart(context.Background())
+			err := v.WaitForChainStart(context.Background())
 			require.NoError(t, err)
 			savedGenValRoot, err := db.GenesisValidatorsRoot(context.Background())
 			require.NoError(t, err)
@@ -333,7 +333,7 @@ func TestWaitForChainStart_SetsGenesisInfo_IncorrectSecondTry(t *testing.T) {
 				GenesisTime:           genesis,
 				GenesisValidatorsRoot: genesisValidatorsRoot[:],
 			}, nil)
-			_, err = v.WaitForChainStart(context.Background())
+			err = v.WaitForChainStart(context.Background())
 			require.ErrorContains(t, "does not match root saved", err)
 		})
 	}
@@ -360,7 +360,7 @@ func TestWaitForChainStart_ContextCanceled(t *testing.T) {
 	}, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err := v.WaitForChainStart(ctx)
+	err := v.WaitForChainStart(ctx)
 	assert.ErrorContains(t, cancelledCtx, err)
 }
 
@@ -376,7 +376,7 @@ func TestWaitForChainStart_ReceiveErrorFromStream(t *testing.T) {
 		gomock.Any(),
 		&emptypb.Empty{},
 	).Return(nil, errors.New("fails"))
-	_, err := v.WaitForChainStart(context.Background())
+	err := v.WaitForChainStart(context.Background())
 	want := "could not receive ChainStart from stream"
 	assert.ErrorContains(t, want, err)
 }
