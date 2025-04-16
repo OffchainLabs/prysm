@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
 	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
@@ -30,14 +31,14 @@ var errBlobUnmarshal = errors.New("Could not unmarshal chunk-encoded blob")
 var (
 	// ErrInvalidFetchedData is used to signal that an error occurred which should result in peer downscoring.
 	ErrInvalidFetchedData             = errors.New("invalid data returned from peer")
-	errBlobIndexOutOfBounds           = errors.Wrap(ErrInvalidFetchedData, "blob index out of range")
-	errMaxRequestBlobSidecarsExceeded = errors.Wrap(ErrInvalidFetchedData, "peer exceeded req blob chunk tx limit")
-	errChunkResponseSlotNotAsc        = errors.Wrap(ErrInvalidFetchedData, "blob slot not higher than previous block root")
-	errChunkResponseIndexNotAsc       = errors.Wrap(ErrInvalidFetchedData, "blob indices for a block must start at 0 and increase by 1")
-	errUnrequested                    = errors.Wrap(ErrInvalidFetchedData, "received BlobSidecar in response that was not requested")
-	errBlobResponseOutOfBounds        = errors.Wrap(ErrInvalidFetchedData, "received BlobSidecar with slot outside BlobSidecarsByRangeRequest bounds")
-	errChunkResponseBlockMismatch     = errors.Wrap(ErrInvalidFetchedData, "blob block details do not match")
-	errChunkResponseParentMismatch    = errors.Wrap(ErrInvalidFetchedData, "parent root for response element doesn't match previous element root")
+	errBlobIndexOutOfBounds           = errors.Wrap(verification.ErrBlobInvalid, "blob index out of range")
+	errMaxRequestBlobSidecarsExceeded = errors.Wrap(verification.ErrBlobInvalid, "peer exceeded req blob chunk tx limit")
+	errChunkResponseSlotNotAsc        = errors.Wrap(verification.ErrBlobInvalid, "blob slot not higher than previous block root")
+	errChunkResponseIndexNotAsc       = errors.Wrap(verification.ErrBlobInvalid, "blob indices for a block must start at 0 and increase by 1")
+	errUnrequested                    = errors.Wrap(verification.ErrBlobInvalid, "received BlobSidecar in response that was not requested")
+	errBlobResponseOutOfBounds        = errors.Wrap(verification.ErrBlobInvalid, "received BlobSidecar with slot outside BlobSidecarsByRangeRequest bounds")
+	errChunkResponseBlockMismatch     = errors.Wrap(verification.ErrBlobInvalid, "blob block details do not match")
+	errChunkResponseParentMismatch    = errors.Wrap(verification.ErrBlobInvalid, "parent root for response element doesn't match previous element root")
 )
 
 // BeaconBlockProcessor defines a block processing function, which allows to start utilizing

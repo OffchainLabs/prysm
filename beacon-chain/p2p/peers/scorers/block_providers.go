@@ -124,6 +124,9 @@ func (s *BlockProviderScorer) Params() *BlockProviderScorerConfig {
 
 // IncrementProcessedBlocks increments the number of blocks that have been successfully processed.
 func (s *BlockProviderScorer) IncrementProcessedBlocks(pid peer.ID, cnt uint64) {
+	if pid == "" {
+		return
+	}
 	s.store.Lock()
 	defer s.store.Unlock()
 	defer s.touchNoLock(pid)
