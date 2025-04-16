@@ -168,6 +168,7 @@ func TestClient_HTTP(t *testing.T) {
 	cfg.CapellaForkEpoch = 1
 	cfg.DenebForkEpoch = 2
 	cfg.ElectraForkEpoch = 3
+	cfg.FuluForkEpoch = 4
 	params.OverrideBeaconConfig(cfg)
 
 	t.Run(GetPayloadMethod, func(t *testing.T) {
@@ -318,11 +319,11 @@ func TestClient_HTTP(t *testing.T) {
 		require.DeepEqual(t, uint64(2), g)
 
 		commitments := [][]byte{bytesutil.PadTo([]byte("commitment1"), fieldparams.BLSPubkeyLength), bytesutil.PadTo([]byte("commitment2"), fieldparams.BLSPubkeyLength)}
-		require.DeepEqual(t, commitments, resp.BlobsBundle.GetKzgCommitments())
+		require.DeepEqual(t, commitments, resp.BlobsBundler.GetKzgCommitments())
 		proofs := [][]byte{bytesutil.PadTo([]byte("proof1"), fieldparams.BLSPubkeyLength), bytesutil.PadTo([]byte("proof2"), fieldparams.BLSPubkeyLength)}
-		require.DeepEqual(t, proofs, resp.BlobsBundle.GetProofs())
+		require.DeepEqual(t, proofs, resp.BlobsBundler.GetProofs())
 		blobs := [][]byte{bytesutil.PadTo([]byte("a"), fieldparams.BlobLength), bytesutil.PadTo([]byte("b"), fieldparams.BlobLength)}
-		require.DeepEqual(t, blobs, resp.BlobsBundle.GetBlobs())
+		require.DeepEqual(t, blobs, resp.BlobsBundler.GetBlobs())
 	})
 	t.Run(GetPayloadMethodV4, func(t *testing.T) {
 		payloadId := [8]byte{1}
@@ -373,11 +374,11 @@ func TestClient_HTTP(t *testing.T) {
 		require.DeepEqual(t, uint64(2), g)
 
 		commitments := [][]byte{bytesutil.PadTo([]byte("commitment1"), fieldparams.BLSPubkeyLength), bytesutil.PadTo([]byte("commitment2"), fieldparams.BLSPubkeyLength)}
-		require.DeepEqual(t, commitments, resp.BlobsBundle.GetKzgCommitments())
+		require.DeepEqual(t, commitments, resp.BlobsBundler.GetKzgCommitments())
 		proofs := [][]byte{bytesutil.PadTo([]byte("proof1"), fieldparams.BLSPubkeyLength), bytesutil.PadTo([]byte("proof2"), fieldparams.BLSPubkeyLength)}
-		require.DeepEqual(t, proofs, resp.BlobsBundle.GetProofs())
+		require.DeepEqual(t, proofs, resp.BlobsBundler.GetProofs())
 		blobs := [][]byte{bytesutil.PadTo([]byte("a"), fieldparams.BlobLength), bytesutil.PadTo([]byte("b"), fieldparams.BlobLength)}
-		require.DeepEqual(t, blobs, resp.BlobsBundle.GetBlobs())
+		require.DeepEqual(t, blobs, resp.BlobsBundler.GetBlobs())
 		requests := &pb.ExecutionRequests{
 			Deposits: []*pb.DepositRequest{
 				{
@@ -406,7 +407,52 @@ func TestClient_HTTP(t *testing.T) {
 
 		require.DeepEqual(t, requests, resp.ExecutionRequests)
 	})
+	t.Run(GetPayloadMethodV5, func(t *testing.T) {
+		payloadId := [8]byte{1}
+		want, ok := fix["ExecutionBundleFulu"].(*pb.GetPayloadV5ResponseJson)
+		require.Equal(t, true, ok)
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			defer func() {
+				require.NoError(t, r.Body.Close())
+			}()
+			enc, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			jsonRequestString := string(enc)
 
+			reqArg, err := json.Marshal(pb.PayloadIDBytes(payloadId))
+			require.NoError(t, err)
+
+			// We expect the JSON string RPC request contains the right arguments.
+			require.Equal(t, true, strings.Contains(
+				jsonRequestString, string(reqArg),
+			))
+			resp := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      1,
+				"result":  want,
+			}
+			err = json.NewEncoder(w).Encode(resp)
+			require.NoError(t, err)
+		}))
+		defer srv.Close()
+
+		rpcClient, err := rpc.DialHTTP(srv.URL)
+		require.NoError(t, err)
+		defer rpcClient.Close()
+
+		client := &Service{}
+		client.rpcClient = rpcClient
+
+		// We call the RPC method via HTTP and expect a proper result.
+		resp, err := client.GetPayload(ctx, payloadId, 4*params.BeaconConfig().SlotsPerEpoch)
+		require.NoError(t, err)
+		_, ok = resp.BlobsBundler.(*pb.BlobsBundleV2)
+		if !ok {
+			t.Logf("resp.BlobsBundler has unexpected type: %T", resp.BlobsBundler)
+		}
+		require.Equal(t, ok, true)
+	})
 	t.Run(ForkchoiceUpdatedMethod+" VALID status", func(t *testing.T) {
 		forkChoiceState := &pb.ForkchoiceState{
 			HeadBlockHash:      []byte("head"),
@@ -1540,6 +1586,7 @@ func fixtures() map[string]interface{} {
 		"ExecutionPayloadCapellaWithValue":  s.ExecutionPayloadWithValueCapella,
 		"ExecutionPayloadDenebWithValue":    s.ExecutionPayloadWithValueDeneb,
 		"ExecutionBundleElectra":            s.ExecutionBundleElectra,
+		"ExecutionBundleFulu":               s.ExecutionBundleFulu,
 		"ValidPayloadStatus":                s.ValidPayloadStatus,
 		"InvalidBlockHashStatus":            s.InvalidBlockHashStatus,
 		"AcceptedStatus":                    s.AcceptedStatus,
@@ -1775,6 +1822,36 @@ func fixturesStruct() *payloadFixtures {
 			append([]byte{pb.WithdrawalRequestType}, withdrawalRequestBytes...),
 			append([]byte{pb.ConsolidationRequestType}, consolidationRequestBytes...)},
 	}
+	executionBundleFixtureFulu := &pb.GetPayloadV5ResponseJson{
+		ShouldOverrideBuilder: true,
+		ExecutionPayload: &pb.ExecutionPayloadDenebJSON{
+			ParentHash:    &common.Hash{'a'},
+			FeeRecipient:  &common.Address{'b'},
+			StateRoot:     &common.Hash{'c'},
+			ReceiptsRoot:  &common.Hash{'d'},
+			LogsBloom:     &hexutil.Bytes{'e'},
+			PrevRandao:    &common.Hash{'f'},
+			BaseFeePerGas: "0x123",
+			BlockHash:     &common.Hash{'g'},
+			Transactions:  []hexutil.Bytes{{'h'}},
+			Withdrawals:   []*pb.Withdrawal{},
+			BlockNumber:   &hexUint,
+			GasLimit:      &hexUint,
+			GasUsed:       &hexUint,
+			Timestamp:     &hexUint,
+			BlobGasUsed:   &bgu,
+			ExcessBlobGas: &ebg,
+		},
+		BlockValue: "0x11fffffffff",
+		BlobsBundle: &pb.BlobBundleV2JSON{
+			Commitments: []hexutil.Bytes{[]byte("commitment1"), []byte("commitment2")},
+			Proofs:      []hexutil.Bytes{[]byte("proof1"), []byte("proof2")},
+			Blobs:       []hexutil.Bytes{{'a'}, {'b'}},
+		},
+		ExecutionRequests: []hexutil.Bytes{append([]byte{pb.DepositRequestType}, depositRequestBytes...),
+			append([]byte{pb.WithdrawalRequestType}, withdrawalRequestBytes...),
+			append([]byte{pb.ConsolidationRequestType}, consolidationRequestBytes...)},
+	}
 	parent := bytesutil.PadTo([]byte("parentHash"), fieldparams.RootLength)
 	sha3Uncles := bytesutil.PadTo([]byte("sha3Uncles"), fieldparams.RootLength)
 	miner := bytesutil.PadTo([]byte("miner"), fieldparams.FeeRecipientLength)
@@ -1869,6 +1946,7 @@ func fixturesStruct() *payloadFixtures {
 		ExecutionPayloadWithValueCapella:  executionPayloadWithValueFixtureCapella,
 		ExecutionPayloadWithValueDeneb:    executionPayloadWithValueFixtureDeneb,
 		ExecutionBundleElectra:            executionBundleFixtureElectra,
+		ExecutionBundleFulu:               executionBundleFixtureFulu,
 		ValidPayloadStatus:                validStatus,
 		InvalidBlockHashStatus:            inValidBlockHashStatus,
 		AcceptedStatus:                    acceptedStatus,
@@ -1893,6 +1971,7 @@ type payloadFixtures struct {
 	ExecutionPayloadWithValueCapella  *pb.GetPayloadV2ResponseJson
 	ExecutionPayloadWithValueDeneb    *pb.GetPayloadV3ResponseJson
 	ExecutionBundleElectra            *pb.GetPayloadV4ResponseJson
+	ExecutionBundleFulu               *pb.GetPayloadV5ResponseJson
 	ValidPayloadStatus                *pb.PayloadStatus
 	InvalidBlockHashStatus            *pb.PayloadStatus
 	AcceptedStatus                    *pb.PayloadStatus
