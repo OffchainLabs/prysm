@@ -11,7 +11,8 @@ import (
 )
 
 var (
-	//go:embed trusted_setup.json
+	// https://github.com/ethereum/consensus-specs/blob/dev/presets/mainnet/trusted_setups/trusted_setup_4096.json
+	//go:embed trusted_setup_4096.json
 	embeddedTrustedSetup []byte // 1.2Mb
 	kzgContext           *GoKZG.Context
 	kzgLoaded            bool
