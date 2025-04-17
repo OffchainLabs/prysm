@@ -10,6 +10,7 @@ go_library(
         "peer_sampling.go",
         "reconstruction.go",
         "util.go",
+        "validator.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas",
     visibility = ["//visibility:public"],
@@ -47,6 +48,7 @@ go_test(
         "peer_sampling_test.go",
         "reconstruction_test.go",
         "utils_test.go",
+        "validator_test.go",
     ],
     deps = [
         ":go_default_library",

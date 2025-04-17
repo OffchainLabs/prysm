@@ -12,14 +12,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type Config struct {
-	NodeId            *big.Int `yaml:"node_id"`
-	CustodyGroupCount uint64   `yaml:"custody_group_count"`
-	Expected          []uint64 `yaml:"result"`
-}
-
-// RunCustodyGroupsTest executes custody columns spec tests.
+// RunCustodyGroupsTest executes custody groups spec tests.
 func RunCustodyGroupsTest(t *testing.T, config string) {
+	type configuration struct {
+		NodeId            *big.Int `yaml:"node_id"`
+		CustodyGroupCount uint64   `yaml:"custody_group_count"`
+		Expected          []uint64 `yaml:"result"`
+	}
+
 	err := utils.SetConfig(t, config)
 	require.NoError(t, err, "failed to set config")
 
@@ -32,7 +32,7 @@ func RunCustodyGroupsTest(t *testing.T, config string) {
 	for _, folder := range testFolders {
 		t.Run(folder.Name(), func(t *testing.T) {
 			var (
-				config        Config
+				config        configuration
 				nodeIdBytes32 [32]byte
 			)
 
@@ -55,11 +55,53 @@ func RunCustodyGroupsTest(t *testing.T, config string) {
 			require.NoError(t, err, "failed to compute the custody groups")
 
 			// Compare the results.
-			require.Equal(t, len(config.Expected), len(actual), "expected %d custody columns, got %d", len(config.Expected), len(actual))
+			require.Equal(t, len(config.Expected), len(actual), "expected %d custody groups, got %d", len(config.Expected), len(actual))
 
 			for _, result := range config.Expected {
 				ok := actual[result]
-				require.Equal(t, true, ok, "expected column %d to be in custody columns", result)
+				require.Equal(t, true, ok, "expected group %d to be in custody groups", result)
+			}
+		})
+	}
+}
+
+// RunComputeColumnsForCustodyGroupTest executes compute columns for custody group spec tests.
+func RunComputeColumnsForCustodyGroupTest(t *testing.T, config string) {
+	type configuration struct {
+		CustodyGroup uint64   `yaml:"custody_group"`
+		Expected     []uint64 `yaml:"result"`
+	}
+
+	err := utils.SetConfig(t, config)
+	require.NoError(t, err, "failed to set config")
+
+	// Retrieve the test vector folders.
+	testFolders, testsFolderPath := utils.TestFolders(t, config, "fulu", "networking/compute_columns_for_custody_group/pyspec_tests")
+	if len(testFolders) == 0 {
+		t.Fatalf("no test folders found for %s", testsFolderPath)
+	}
+
+	for _, folder := range testFolders {
+		t.Run(folder.Name(), func(t *testing.T) {
+			var config configuration
+
+			// Load the test vector.
+			file, err := util.BazelFileBytes(testsFolderPath, folder.Name(), "meta.yaml")
+			require.NoError(t, err, "failed to retrieve the `meta.yaml` YAML file")
+
+			// Unmarshal the test vector.
+			err = yaml.Unmarshal(file, &config)
+			require.NoError(t, err, "failed to unmarshal the YAML file")
+
+			// Compute the custody columns.
+			actual, err := peerdas.ComputeColumnsForCustodyGroup(config.CustodyGroup)
+			require.NoError(t, err, "failed to compute the custody columns")
+
+			// Compare the results.
+			require.Equal(t, len(config.Expected), len(actual), "expected %d custody columns, got %d", len(config.Expected), len(actual))
+
+			for i := range config.Expected {
+				require.Equal(t, config.Expected[i], actual[i], "expected column at index %i differs from actual column", i)
 			}
 		})
 	}

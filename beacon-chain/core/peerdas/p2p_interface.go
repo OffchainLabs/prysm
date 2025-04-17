@@ -27,13 +27,13 @@ var (
 	ErrCannotLoadCustodyGroupCount = errors.New("cannot load the custody group count from peer")
 )
 
-// https://github.com/ethereum/consensus-specs/blob/v1.5.0-alpha.10/specs/fulu/p2p-interface.md#the-discovery-domain-discv5
+// https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/p2p-interface.md#custody-group-count
 type Cgc uint64
 
 func (Cgc) ENRKey() string { return CustodyGroupCountEnrKey }
 
 // VerifyDataColumnSidecar verifies if the data column sidecar is valid.
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#verify_data_column_sidecar
+// https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/p2p-interface.md#verify_data_column_sidecar
 func VerifyDataColumnSidecar(sidecar blocks.RODataColumn) error {
 	// The sidecar index must be within the valid range.
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
@@ -60,7 +60,7 @@ func VerifyDataColumnSidecar(sidecar blocks.RODataColumn) error {
 // while we are verifying all the KZG proofs from multiple sidecars in a batch.
 // This is done to improve performance since the internal KZG library is way more
 // efficient when verifying in batch.
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#verify_data_column_sidecar_kzg_proofs
+// https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/p2p-interface.md#verify_data_column_sidecar_kzg_proofs
 func VerifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn) error {
 	// Compute the total count.
 	count := 0
@@ -96,7 +96,7 @@ func VerifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn) error {
 }
 
 // VerifyDataColumnSidecarInclusionProof verifies if the given KZG commitments included in the given beacon block.
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#verify_data_column_sidecar_inclusion_proof
+// https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/p2p-interface.md#verify_data_column_sidecar_inclusion_proof
 func VerifyDataColumnSidecarInclusionProof(sidecar blocks.RODataColumn) error {
 	if sidecar.SignedBlockHeader == nil || sidecar.SignedBlockHeader.Header == nil {
 		return ErrNilBlockHeader
@@ -128,7 +128,7 @@ func VerifyDataColumnSidecarInclusionProof(sidecar blocks.RODataColumn) error {
 }
 
 // ComputeSubnetForDataColumnSidecar computes the subnet for a data column sidecar.
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#compute_subnet_for_data_column_sidecar
+// https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/p2p-interface.md#compute_subnet_for_data_column_sidecar
 func ComputeSubnetForDataColumnSidecar(columnIndex uint64) uint64 {
 	dataColumnSidecarSubnetCount := params.BeaconConfig().DataColumnSidecarSubnetCount
 	return columnIndex % dataColumnSidecarSubnetCount
