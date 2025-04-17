@@ -63,8 +63,8 @@ func (b *BeaconState) NextWithdrawalValidatorIndex() (primitives.ValidatorIndex,
 //			validator = state.validators[withdrawal.index]
 //			has_sufficient_effective_balance = validator.effective_balance >= MIN_ACTIVATION_BALANCE
 //			total_withdrawn = sum(w.amount for w in withdrawals if w.validator_index == withdrawal.validator_index)
-//	        balance = state.balances[withdrawal.validator_index] - total_withdrawn
-//	        has_excess_balance = balance > MIN_ACTIVATION_BALANCE
+//	       	balance = state.balances[withdrawal.validator_index] - total_withdrawn
+//	       	has_excess_balance = balance > MIN_ACTIVATION_BALANCE
 //			if validator.exit_epoch == FAR_FUTURE_EPOCH and has_sufficient_effective_balance and has_excess_balance:
 //				withdrawable_balance = min(balance - MIN_ACTIVATION_BALANCE, withdrawal.amount)
 //				withdrawals.append(Withdrawal(
