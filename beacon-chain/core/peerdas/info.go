@@ -103,6 +103,61 @@ func Info(nodeID enode.ID, custodyGroupCount uint64) (*info, bool, error) {
 	return result, false, nil
 }
 
+// ActualGroupCount returns the actual custody group count.
+func (custodyInfo *CustodyInfo) ActualGroupCount() uint64 {
+	return min(custodyInfo.TargetGroupCount.Get(), custodyInfo.ToAdvertiseGroupCount.Get())
+}
+
+// CustodyGroupCount returns the number of groups we should participate in for custody.
+func (tcgc *targetCustodyGroupCount) Get() uint64 {
+	// If subscribed to all subnets, return the number of custody groups.
+	if flags.Get().SubscribeToAllSubnets {
+		return params.BeaconConfig().NumberOfCustodyGroups
+	}
+
+	tcgc.mut.RLock()
+	defer tcgc.mut.RUnlock()
+
+	// If no validators are tracked, return the default custody requirement.
+	if tcgc.validatorsCustodyRequirement == 0 {
+		return params.BeaconConfig().CustodyRequirement
+	}
+
+	// Return the validators custody requirement.
+	return tcgc.validatorsCustodyRequirement
+}
+
+// setValidatorsCustodyRequirement sets the validators custody requirement.
+func (tcgc *targetCustodyGroupCount) SetValidatorsCustodyRequirement(value uint64) {
+	tcgc.mut.Lock()
+	defer tcgc.mut.Unlock()
+
+	tcgc.validatorsCustodyRequirement = value
+}
+
+// Get returns the to advertise custody group count.
+func (tacgc *toAdverstiseCustodyGroupCount) Get() uint64 {
+	// If subscribed to all subnets, return the number of custody groups.
+	if flags.Get().SubscribeToAllSubnets {
+		return params.BeaconConfig().NumberOfCustodyGroups
+	}
+
+	custodyRequirement := params.BeaconConfig().CustodyRequirement
+
+	tacgc.mut.RLock()
+	defer tacgc.mut.RUnlock()
+
+	return max(tacgc.value, custodyRequirement)
+}
+
+// Set sets the to advertise custody group count.
+func (tacgc *toAdverstiseCustodyGroupCount) Set(value uint64) {
+	tacgc.mut.Lock()
+	defer tacgc.mut.Unlock()
+
+	tacgc.value = value
+}
+
 // createInfoCacheIfNeeded creates a new cache if it doesn't exist.
 func createInfoCacheIfNeeded() error {
 	nodeInfoCacheMut.Lock()
@@ -128,59 +183,4 @@ func computeInfoCacheKey(nodeID enode.ID, custodyGroupCount uint64) [nodeInfoCac
 	binary.BigEndian.PutUint64(key[32:], custodyGroupCount)
 
 	return key
-}
-
-// setValidatorsCustodyRequirement sets the validators custody requirement.
-func (tcgc *targetCustodyGroupCount) SetValidatorsCustodyRequirement(value uint64) {
-	tcgc.mut.Lock()
-	defer tcgc.mut.Unlock()
-
-	tcgc.validatorsCustodyRequirement = value
-}
-
-// CustodyGroupCount returns the number of groups we should participate in for custody.
-func (tcgc *targetCustodyGroupCount) Get() uint64 {
-	// If subscribed to all subnets, return the number of custody groups.
-	if flags.Get().SubscribeToAllSubnets {
-		return params.BeaconConfig().NumberOfCustodyGroups
-	}
-
-	tcgc.mut.RLock()
-	defer tcgc.mut.RUnlock()
-
-	// If no validators are tracked, return the default custody requirement.
-	if tcgc.validatorsCustodyRequirement == 0 {
-		return params.BeaconConfig().CustodyRequirement
-	}
-
-	// Return the validators custody requirement.
-	return tcgc.validatorsCustodyRequirement
-}
-
-// Set sets the to advertise custody group count.
-func (tacgc *toAdverstiseCustodyGroupCount) Set(value uint64) {
-	tacgc.mut.Lock()
-	defer tacgc.mut.Unlock()
-
-	tacgc.value = value
-}
-
-// Get returns the to advertise custody group count.
-func (tacgc *toAdverstiseCustodyGroupCount) Get() uint64 {
-	// If subscribed to all subnets, return the number of custody groups.
-	if flags.Get().SubscribeToAllSubnets {
-		return params.BeaconConfig().NumberOfCustodyGroups
-	}
-
-	custodyRequirement := params.BeaconConfig().CustodyRequirement
-
-	tacgc.mut.RLock()
-	defer tacgc.mut.RUnlock()
-
-	return max(tacgc.value, custodyRequirement)
-}
-
-// ActualGroupCount returns the actual custody group count.
-func (custodyInfo *CustodyInfo) ActualGroupCount() uint64 {
-	return min(custodyInfo.TargetGroupCount.Get(), custodyInfo.ToAdvertiseGroupCount.Get())
 }

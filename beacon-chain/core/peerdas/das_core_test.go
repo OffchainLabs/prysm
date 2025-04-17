@@ -5,15 +5,18 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/pkg/errors"
 )
+
+// ---------------------------------------------------------------
+// ( CustodyGroups is unit tested in spec tests.                 )
+// ( ComputeColumnsForCustodyGroup is unit tested in spec tests. )
+// ---------------------------------------------------------------
 
 func TestDataColumnSidecars(t *testing.T) {
 	var expected []*ethpb.DataColumnSidecar = nil
@@ -151,46 +154,6 @@ func TestDataColumnsSidecarsBlobsRoundtrip(t *testing.T) {
 	require.DeepSSZEqual(t, verifiedROBlobs, roundtripBlobs)
 }
 
-func TestValidatorsCustodyRequirement(t *testing.T) {
-	testCases := []struct {
-		name     string
-		count    uint64
-		expected uint64
-	}{
-		{name: "0 validators", count: 0, expected: 8},
-		{name: "1 validator", count: 1, expected: 8},
-		{name: "8 validators", count: 8, expected: 8},
-		{name: "9 validators", count: 9, expected: 9},
-		{name: "100 validators", count: 100, expected: 100},
-		{name: "128 validators", count: 128, expected: 128},
-		{name: "129 validators", count: 129, expected: 128},
-		{name: "1000 validators", count: 1000, expected: 128},
-	}
-
-	const balance = uint64(32_000_000_000)
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			balances := make([]uint64, 0, tc.count)
-			for range tc.count {
-				balances = append(balances, balance)
-			}
-
-			validatorsIndex := make(map[primitives.ValidatorIndex]bool)
-			for i := range tc.count {
-				validatorsIndex[primitives.ValidatorIndex(i)] = true
-			}
-
-			beaconState, err := state_native.InitializeFromProtoFulu(&ethpb.BeaconStateElectra{Balances: balances})
-			require.NoError(t, err)
-
-			actual, err := peerdas.ValidatorsCustodyRequirement(beaconState, validatorsIndex)
-			require.NoError(t, err)
-			require.Equal(t, tc.expected, actual)
-		})
-	}
-}
-
 func TestCustodyGroupSamplingSize(t *testing.T) {
 	testCases := []struct {
 		name                         string
@@ -245,4 +208,23 @@ func TestCustodyGroupSamplingSize(t *testing.T) {
 			require.Equal(t, tc.expected, actual)
 		})
 	}
+}
+
+func TestCustodyColumns(t *testing.T) {
+	t.Run("group too large", func(t *testing.T) {
+		_, err := peerdas.CustodyColumns(map[uint64]bool{1_000_000: true})
+		require.ErrorIs(t, err, peerdas.ErrCustodyGroupTooLarge)
+	})
+
+	t.Run("nominal", func(t *testing.T) {
+		input := map[uint64]bool{1: true, 2: true}
+		expected := map[uint64]bool{1: true, 2: true}
+
+		actual, err := peerdas.CustodyColumns(input)
+		require.NoError(t, err)
+		require.Equal(t, len(expected), len(actual))
+		for i := range actual {
+			require.Equal(t, expected[i], actual[i])
+		}
+	})
 }

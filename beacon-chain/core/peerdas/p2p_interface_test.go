@@ -16,28 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 )
 
-func createTestSidecar(t *testing.T, index uint64, column, kzgCommitments, kzgProofs [][]byte) blocks.RODataColumn {
-	pbSignedBeaconBlock := util.NewBeaconBlockDeneb()
-	signedBeaconBlock, err := blocks.NewSignedBeaconBlock(pbSignedBeaconBlock)
-	require.NoError(t, err)
-
-	signedBlockHeader, err := signedBeaconBlock.Header()
-	require.NoError(t, err)
-
-	sidecar := &ethpb.DataColumnSidecar{
-		Index:             index,
-		Column:            column,
-		KzgCommitments:    kzgCommitments,
-		KzgProofs:         kzgProofs,
-		SignedBlockHeader: signedBlockHeader,
-	}
-
-	roSidecar, err := blocks.NewRODataColumn(sidecar)
-	require.NoError(t, err)
-
-	return roSidecar
-}
-
 func TestVerifyDataColumnSidecar(t *testing.T) {
 	t.Run("index too large", func(t *testing.T) {
 		roSidecar := createTestSidecar(t, 1_000_000, nil, nil, nil)
@@ -331,4 +309,26 @@ func TestCustodyGroupCountFromRecord(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, expected, actual)
 	})
+}
+
+func createTestSidecar(t *testing.T, index uint64, column, kzgCommitments, kzgProofs [][]byte) blocks.RODataColumn {
+	pbSignedBeaconBlock := util.NewBeaconBlockDeneb()
+	signedBeaconBlock, err := blocks.NewSignedBeaconBlock(pbSignedBeaconBlock)
+	require.NoError(t, err)
+
+	signedBlockHeader, err := signedBeaconBlock.Header()
+	require.NoError(t, err)
+
+	sidecar := &ethpb.DataColumnSidecar{
+		Index:             index,
+		Column:            column,
+		KzgCommitments:    kzgCommitments,
+		KzgProofs:         kzgProofs,
+		SignedBlockHeader: signedBlockHeader,
+	}
+
+	roSidecar, err := blocks.NewRODataColumn(sidecar)
+	require.NoError(t, err)
+
+	return roSidecar
 }

@@ -7,12 +7,10 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
-	beaconState "github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/crypto/hash"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -23,6 +21,7 @@ import (
 
 var (
 	// Custom errors
+	ErrCustodyGroupTooLarge           = errors.New("custody group too large")
 	errCustodyGroupCountTooLarge      = errors.New("custody group count too large")
 	errWrongComputedCustodyGroupCount = errors.New("wrong computed custody group count, should never happen")
 
@@ -38,7 +37,7 @@ const (
 )
 
 // CustodyGroups computes the custody groups the node should participate in for custody.
-// https://github.com/ethereum/consensus-specs/blob/v1.5.0-alpha.10/specs/fulu/das-core.md#get_custody_groups
+// https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/das-core.md#get_custody_groups
 func CustodyGroups(nodeId enode.ID, custodyGroupCount uint64) (map[uint64]bool, error) {
 	numberOfCustodyGroup := params.BeaconConfig().NumberOfCustodyGroups
 
@@ -81,7 +80,7 @@ func CustodyGroups(nodeId enode.ID, custodyGroupCount uint64) (map[uint64]bool, 
 }
 
 // ComputeColumnsForCustodyGroup computes the columns for a given custody group.
-// https://github.com/ethereum/consensus-specs/blob/v1.5.0-alpha.10/specs/fulu/das-core.md#compute_columns_for_custody_group
+// https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/das-core.md#compute_columns_for_custody_group
 func ComputeColumnsForCustodyGroup(custodyGroup uint64) ([]uint64, error) {
 	beaconConfig := params.BeaconConfig()
 	numberOfCustodyGroup := beaconConfig.NumberOfCustodyGroups
@@ -174,67 +173,6 @@ func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, cellsA
 
 	dataColumnComputationTime.Observe(float64(time.Since(start).Milliseconds()))
 	return sidecars, nil
-}
-
-// CustodyGroupSamplingSize returns the number of custody groups the node should sample from.
-// https://github.com/ethereum/consensus-specs/blob/v1.5.0-alpha.10/specs/fulu/das-core.md#custody-sampling
-func (custodyInfo *CustodyInfo) CustodyGroupSamplingSize(ct CustodyType) uint64 {
-	custodyGroupCount := custodyInfo.TargetGroupCount.Get()
-
-	if ct == Actual {
-		custodyGroupCount = custodyInfo.ActualGroupCount()
-	}
-
-	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
-	return max(samplesPerSlot, custodyGroupCount)
-}
-
-// CustodyColumns computes the custody columns from the custody groups.
-func CustodyColumns(custodyGroups map[uint64]bool) (map[uint64]bool, error) {
-	numberOfCustodyGroups := params.BeaconConfig().NumberOfCustodyGroups
-
-	custodyGroupCount := len(custodyGroups)
-
-	// Compute the columns for each custody group.
-	columns := make(map[uint64]bool, custodyGroupCount)
-	for group := range custodyGroups {
-		if group >= numberOfCustodyGroups {
-			return nil, errCustodyGroupCountTooLarge
-		}
-
-		groupColumns, err := ComputeColumnsForCustodyGroup(group)
-		if err != nil {
-			return nil, errors.Wrap(err, "compute columns for custody group")
-		}
-
-		for _, column := range groupColumns {
-			columns[column] = true
-		}
-	}
-
-	return columns, nil
-}
-
-// ValidatorsCustodyRequirement returns the number of custody groups regarding the validator indices attached to the beacon node.
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/das-core.md#validator-custody
-func ValidatorsCustodyRequirement(state beaconState.ReadOnlyBeaconState, validatorsIndex map[primitives.ValidatorIndex]bool) (uint64, error) {
-	totalNodeBalance := uint64(0)
-	for index := range validatorsIndex {
-		balance, err := state.BalanceAtIndex(index)
-		if err != nil {
-			return 0, errors.Wrapf(err, "balance at index for validator index %v", index)
-		}
-
-		totalNodeBalance += balance
-	}
-
-	beaconConfig := params.BeaconConfig()
-	numberOfCustodyGroup := beaconConfig.NumberOfCustodyGroups
-	validatorCustodyRequirement := beaconConfig.ValidatorCustodyRequirement
-	balancePerAdditionalCustodyGroup := beaconConfig.BalancePerAdditionalCustodyGroup
-
-	count := totalNodeBalance / balancePerAdditionalCustodyGroup
-	return min(max(count, validatorCustodyRequirement), numberOfCustodyGroup), nil
 }
 
 // Blobs extract blobs from `dataColumnsSidecar`.
@@ -342,6 +280,45 @@ func Blobs(indices map[uint64]bool, dataColumnsSidecar []*ethpb.DataColumnSideca
 	}
 
 	return verifiedROBlobs, nil
+}
+
+// CustodyGroupSamplingSize returns the number of custody groups the node should sample from.
+// https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/das-core.md#custody-sampling
+func (custodyInfo *CustodyInfo) CustodyGroupSamplingSize(ct CustodyType) uint64 {
+	custodyGroupCount := custodyInfo.TargetGroupCount.Get()
+
+	if ct == Actual {
+		custodyGroupCount = custodyInfo.ActualGroupCount()
+	}
+
+	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
+	return max(samplesPerSlot, custodyGroupCount)
+}
+
+// CustodyColumns computes the custody columns from the custody groups.
+func CustodyColumns(custodyGroups map[uint64]bool) (map[uint64]bool, error) {
+	numberOfCustodyGroups := params.BeaconConfig().NumberOfCustodyGroups
+
+	custodyGroupCount := len(custodyGroups)
+
+	// Compute the columns for each custody group.
+	columns := make(map[uint64]bool, custodyGroupCount)
+	for group := range custodyGroups {
+		if group >= numberOfCustodyGroups {
+			return nil, ErrCustodyGroupTooLarge
+		}
+
+		groupColumns, err := ComputeColumnsForCustodyGroup(group)
+		if err != nil {
+			return nil, errors.Wrap(err, "compute columns for custody group")
+		}
+
+		for _, column := range groupColumns {
+			columns[column] = true
+		}
+	}
+
+	return columns, nil
 }
 
 // populateAndFilterIndices returns a sorted slices of indices, setting all indices if none are provided,
