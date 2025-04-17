@@ -48,8 +48,7 @@ func (b *BeaconState) NextWithdrawalValidatorIndex() (primitives.ValidatorIndex,
 //
 // Spec definition:
 //
-// def get_expected_withdrawals(state: BeaconState) -> Tuple[Sequence[Withdrawal], uint64]:
-//
+//		def get_expected_withdrawals(state: BeaconState) -> Tuple[Sequence[Withdrawal], uint64]:
 //			epoch = get_current_epoch(state)
 //			withdrawal_index = state.next_withdrawal_index
 //			validator_index = state.next_withdrawal_validator_index
