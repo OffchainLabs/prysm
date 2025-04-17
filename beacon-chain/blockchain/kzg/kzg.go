@@ -39,7 +39,8 @@ type CellsAndProofs struct {
 
 // BlobToKZGCommitment computes a KZG commitment from a given blob.
 func BlobToKZGCommitment(blob *Blob) (Commitment, error) {
-	kzgBlob := kzg4844.Blob(*blob)
+	var kzgBlob kzg4844.Blob
+	copy(kzgBlob[:], blob[:])
 
 	commitment, err := kzg4844.BlobToCommitment(&kzgBlob)
 	if err != nil {
@@ -51,9 +52,10 @@ func BlobToKZGCommitment(blob *Blob) (Commitment, error) {
 
 // ComputeCells computes the (extended) cells from a given blob.
 func ComputeCells(blob *Blob) ([]Cell, error) {
-	ckzgBlob := (*ckzg4844.Blob)(blob)
+	var ckzgBlob ckzg4844.Blob
+	copy(ckzgBlob[:], blob[:])
 
-	ckzgCells, err := ckzg4844.ComputeCells(ckzgBlob)
+	ckzgCells, err := ckzg4844.ComputeCells(&ckzgBlob)
 	if err != nil {
 		return nil, errors.Wrap(err, "compute cells")
 	}
@@ -68,7 +70,8 @@ func ComputeCells(blob *Blob) ([]Cell, error) {
 
 // ComputeBlobKZGProof computes the blob KZG proof from a given blob and its commitment.
 func ComputeBlobKZGProof(blob *Blob, commitment Commitment) (Proof, error) {
-	kzgBlob := kzg4844.Blob(*blob)
+	var kzgBlob kzg4844.Blob
+	copy(kzgBlob[:], blob[:])
 
 	proof, err := kzg4844.ComputeBlobProof(&kzgBlob, kzg4844.Commitment(commitment))
 	if err != nil {
@@ -79,9 +82,10 @@ func ComputeBlobKZGProof(blob *Blob, commitment Commitment) (Proof, error) {
 
 // ComputeCellsAndKZGProofs computes the cells and cells KZG proofs from a given blob.
 func ComputeCellsAndKZGProofs(blob *Blob) (CellsAndProofs, error) {
-	ckzgBlob := (*ckzg4844.Blob)(blob)
+	var ckzgBlob ckzg4844.Blob
+	copy(ckzgBlob[:], blob[:])
 
-	ckzgCells, ckzgProofs, err := ckzg4844.ComputeCellsAndKZGProofs(ckzgBlob)
+	ckzgCells, ckzgProofs, err := ckzg4844.ComputeCellsAndKZGProofs(&ckzgBlob)
 	if err != nil {
 		return CellsAndProofs{}, err
 	}
@@ -89,7 +93,7 @@ func ComputeCellsAndKZGProofs(blob *Blob) (CellsAndProofs, error) {
 	return makeCellsAndProofs(ckzgCells[:], ckzgProofs[:])
 }
 
-// VerifyBlobKZGProof verifies the KZG proofs for a given slice of commitments, cells indices, cells and proofs.
+// VerifyCellKZGProofBatch verifies the KZG proofs for a given slice of commitments, cells indices, cells and proofs.
 // Note: It is way more efficient to call once this function with big slices than calling it multiple times with small slices.
 func VerifyCellKZGProofBatch(commitmentsBytes []Bytes48, cellIndices []uint64, cells []Cell, proofsBytes []Bytes48) (bool, error) {
 	// Convert `Cell` type to `ckzg4844.Cell`
@@ -124,8 +128,9 @@ func makeCellsAndProofs(ckzgCells []ckzg4844.Cell, ckzgProofs []ckzg4844.KZGProo
 		return CellsAndProofs{}, errors.New("different number of cells/proofs")
 	}
 
-	var cells []Cell
-	var proofs []Proof
+	cells := make([]Cell, 0, len(ckzgCells))
+	proofs := make([]Proof, 0, len(ckzgProofs))
+
 	for i := range ckzgCells {
 		cells = append(cells, Cell(ckzgCells[i]))
 		proofs = append(proofs, Proof(ckzgProofs[i]))
