@@ -57,7 +57,6 @@ type verifier struct {
 	domain *domainCache
 }
 
-// TODO: rewrite this to use ROBlock.
 func (vr verifier) verify(blks []blocks.ROBlock) (verifiedROBlocks, error) {
 	var err error
 	result := blks // Use the input directly
