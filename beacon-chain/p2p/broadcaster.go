@@ -274,7 +274,7 @@ func (s *Service) BroadcastLightClientOptimisticUpdate(ctx context.Context, upda
 	ctx, span := trace.StartSpan(ctx, "p2p.BroadcastLightClientOptimisticUpdate")
 	defer span.End()
 
-	if update == nil {
+	if update == nil || update.IsNil() {
 		return errors.New("attempted to broadcast nil light client optimistic update")
 	}
 
@@ -300,7 +300,7 @@ func (s *Service) BroadcastLightClientFinalityUpdate(ctx context.Context, update
 	ctx, span := trace.StartSpan(ctx, "p2p.BroadcastLightClientFinalityUpdate")
 	defer span.End()
 
-	if update == nil {
+	if update == nil || update.IsNil() {
 		return errors.New("attempted to broadcast nil light client finality update")
 	}
 

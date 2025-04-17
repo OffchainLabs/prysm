@@ -99,6 +99,10 @@ type finalityUpdateAltair struct {
 	finalityBranch  interfaces.LightClientFinalityBranch
 }
 
+func (u *finalityUpdateAltair) IsNil() bool {
+	return u == nil || u.p == nil
+}
+
 var _ interfaces.LightClientFinalityUpdate = &finalityUpdateAltair{}
 
 func NewWrappedFinalityUpdateAltair(p *pb.LightClientFinalityUpdateAltair) (interfaces.LightClientFinalityUpdate, error) {
@@ -199,6 +203,10 @@ type finalityUpdateCapella struct {
 	attestedHeader  interfaces.LightClientHeader
 	finalizedHeader interfaces.LightClientHeader
 	finalityBranch  interfaces.LightClientFinalityBranch
+}
+
+func (u *finalityUpdateCapella) IsNil() bool {
+	return u == nil || u.p == nil
 }
 
 var _ interfaces.LightClientFinalityUpdate = &finalityUpdateCapella{}
@@ -303,6 +311,10 @@ type finalityUpdateDeneb struct {
 	finalityBranch  interfaces.LightClientFinalityBranch
 }
 
+func (u *finalityUpdateDeneb) IsNil() bool {
+	return u == nil || u.p == nil
+}
+
 var _ interfaces.LightClientFinalityUpdate = &finalityUpdateDeneb{}
 
 func NewWrappedFinalityUpdateDeneb(p *pb.LightClientFinalityUpdateDeneb) (interfaces.LightClientFinalityUpdate, error) {
@@ -403,6 +415,10 @@ type finalityUpdateElectra struct {
 	attestedHeader  interfaces.LightClientHeader
 	finalizedHeader interfaces.LightClientHeader
 	finalityBranch  interfaces.LightClientFinalityBranchElectra
+}
+
+func (u *finalityUpdateElectra) IsNil() bool {
+	return u == nil || u.p == nil
 }
 
 var _ interfaces.LightClientFinalityUpdate = &finalityUpdateElectra{}
