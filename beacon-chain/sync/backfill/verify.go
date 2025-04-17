@@ -58,15 +58,12 @@ type verifier struct {
 }
 
 // TODO: rewrite this to use ROBlock.
-func (vr verifier) verify(blks []interfaces.ReadOnlySignedBeaconBlock) (verifiedROBlocks, error) {
+func (vr verifier) verify(blks []blocks.ROBlock) (verifiedROBlocks, error) {
 	var err error
-	result := make([]blocks.ROBlock, len(blks))
+	result := blks // Use the input directly
 	sigSet := bls.NewSet()
-	for i := range blks {
-		result[i], err = blocks.NewROBlock(blks[i])
-		if err != nil {
-			return nil, err
-		}
+	for i := range result {
+		// Conversion loop removed
 		if i > 0 && result[i-1].Root() != result[i].Block().ParentRoot() {
 			p, b := result[i-1], result[i]
 			return nil, errors.Wrapf(errInvalidBatchChain,
