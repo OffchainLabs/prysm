@@ -2,7 +2,7 @@
 package eth
 
 import (
-	github_com_prysmaticlabs_prysm_v5_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	v1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	ssz "github.com/prysmaticlabs/fastssz"
 )
@@ -173,10 +173,10 @@ func (b *BeaconBlockCapella) UnmarshalSSZ(buf []byte) error {
 	var o4 uint64
 
 	// Field (0) 'Slot'
-	b.Slot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	b.Slot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Field (1) 'ProposerIndex'
-	b.ProposerIndex = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
+	b.ProposerIndex = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
 
 	// Field (2) 'ParentRoot'
 	if cap(b.ParentRoot) == 0 {
@@ -976,10 +976,10 @@ func (b *BlindedBeaconBlockCapella) UnmarshalSSZ(buf []byte) error {
 	var o4 uint64
 
 	// Field (0) 'Slot'
-	b.Slot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	b.Slot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Field (1) 'ProposerIndex'
-	b.ProposerIndex = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
+	b.ProposerIndex = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
 
 	// Field (2) 'ParentRoot'
 	if cap(b.ParentRoot) == 0 {
@@ -2148,7 +2148,7 @@ func (b *BeaconStateCapella) UnmarshalSSZ(buf []byte) error {
 	b.GenesisValidatorsRoot = append(b.GenesisValidatorsRoot, buf[8:40]...)
 
 	// Field (2) 'Slot'
-	b.Slot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[40:48]))
+	b.Slot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[40:48]))
 
 	// Field (3) 'Fork'
 	if b.Fork == nil {
@@ -2304,7 +2304,7 @@ func (b *BeaconStateCapella) UnmarshalSSZ(buf []byte) error {
 	b.NextWithdrawalIndex = ssz.UnmarshallUint64(buf[2736633:2736641])
 
 	// Field (26) 'NextWithdrawalValidatorIndex'
-	b.NextWithdrawalValidatorIndex = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[2736641:2736649]))
+	b.NextWithdrawalValidatorIndex = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[2736641:2736649]))
 
 	// Offset (27) 'HistoricalSummaries'
 	if o27 = ssz.ReadOffset(buf[2736649:2736653]); o27 > size || o24 > o27 {
@@ -3128,7 +3128,7 @@ func (l *LightClientUpdateCapella) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (6) 'SignatureSlot'
-	l.SignatureSlot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[25144:25152]))
+	l.SignatureSlot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[25144:25152]))
 
 	// Field (0) 'AttestedHeader'
 	{
@@ -3347,7 +3347,7 @@ func (l *LightClientFinalityUpdateCapella) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (4) 'SignatureSlot'
-	l.SignatureSlot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[360:368]))
+	l.SignatureSlot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[360:368]))
 
 	// Field (0) 'AttestedHeader'
 	{
@@ -3505,7 +3505,7 @@ func (l *LightClientOptimisticUpdateCapella) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (2) 'SignatureSlot'
-	l.SignatureSlot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[164:172]))
+	l.SignatureSlot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[164:172]))
 
 	// Field (0) 'AttestedHeader'
 	{
@@ -3829,7 +3829,7 @@ func (b *BLSToExecutionChange) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'ValidatorIndex'
-	b.ValidatorIndex = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[0:8]))
+	b.ValidatorIndex = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Field (1) 'FromBlsPubkey'
 	if cap(b.FromBlsPubkey) == 0 {

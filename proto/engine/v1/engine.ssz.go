@@ -2,7 +2,7 @@
 package enginev1
 
 import (
-	github_com_prysmaticlabs_prysm_v5_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ssz "github.com/prysmaticlabs/fastssz"
 )
 
@@ -2944,7 +2944,7 @@ func (w *Withdrawal) UnmarshalSSZ(buf []byte) error {
 	w.Index = ssz.UnmarshallUint64(buf[0:8])
 
 	// Field (1) 'ValidatorIndex'
-	w.ValidatorIndex = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
+	w.ValidatorIndex = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
 
 	// Field (2) 'Address'
 	if cap(w.Address) == 0 {
@@ -3198,6 +3198,236 @@ func (b *BlobsBundle) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 
 		numItems := uint64(len(b.Proofs))
 		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
+	}
+
+	// Field (2) 'Blobs'
+	{
+		if size := len(b.Blobs); size > 4096 {
+			err = ssz.ErrListTooBigFn("--.Blobs", size, 4096)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.Blobs {
+			if len(i) != 131072 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.PutBytes(i)
+		}
+
+		numItems := uint64(len(b.Blobs))
+		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the BlobsBundleV2 object
+func (b *BlobsBundleV2) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BlobsBundleV2 object to a target array
+func (b *BlobsBundleV2) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(12)
+
+	// Offset (0) 'KzgCommitments'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.KzgCommitments) * 48
+
+	// Offset (1) 'Proofs'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.Proofs) * 48
+
+	// Offset (2) 'Blobs'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.Blobs) * 131072
+
+	// Field (0) 'KzgCommitments'
+	if size := len(b.KzgCommitments); size > 4096 {
+		err = ssz.ErrListTooBigFn("--.KzgCommitments", size, 4096)
+		return
+	}
+	for ii := 0; ii < len(b.KzgCommitments); ii++ {
+		if size := len(b.KzgCommitments[ii]); size != 48 {
+			err = ssz.ErrBytesLengthFn("--.KzgCommitments[ii]", size, 48)
+			return
+		}
+		dst = append(dst, b.KzgCommitments[ii]...)
+	}
+
+	// Field (1) 'Proofs'
+	if size := len(b.Proofs); size > 33554432 {
+		err = ssz.ErrListTooBigFn("--.Proofs", size, 33554432)
+		return
+	}
+	for ii := 0; ii < len(b.Proofs); ii++ {
+		if size := len(b.Proofs[ii]); size != 48 {
+			err = ssz.ErrBytesLengthFn("--.Proofs[ii]", size, 48)
+			return
+		}
+		dst = append(dst, b.Proofs[ii]...)
+	}
+
+	// Field (2) 'Blobs'
+	if size := len(b.Blobs); size > 4096 {
+		err = ssz.ErrListTooBigFn("--.Blobs", size, 4096)
+		return
+	}
+	for ii := 0; ii < len(b.Blobs); ii++ {
+		if size := len(b.Blobs[ii]); size != 131072 {
+			err = ssz.ErrBytesLengthFn("--.Blobs[ii]", size, 131072)
+			return
+		}
+		dst = append(dst, b.Blobs[ii]...)
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BlobsBundleV2 object
+func (b *BlobsBundleV2) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 12 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0, o1, o2 uint64
+
+	// Offset (0) 'KzgCommitments'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 12 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Offset (1) 'Proofs'
+	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (2) 'Blobs'
+	if o2 = ssz.ReadOffset(buf[8:12]); o2 > size || o1 > o2 {
+		return ssz.ErrOffset
+	}
+
+	// Field (0) 'KzgCommitments'
+	{
+		buf = tail[o0:o1]
+		num, err := ssz.DivideInt2(len(buf), 48, 4096)
+		if err != nil {
+			return err
+		}
+		b.KzgCommitments = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(b.KzgCommitments[ii]) == 0 {
+				b.KzgCommitments[ii] = make([]byte, 0, len(buf[ii*48:(ii+1)*48]))
+			}
+			b.KzgCommitments[ii] = append(b.KzgCommitments[ii], buf[ii*48:(ii+1)*48]...)
+		}
+	}
+
+	// Field (1) 'Proofs'
+	{
+		buf = tail[o1:o2]
+		num, err := ssz.DivideInt2(len(buf), 48, 33554432)
+		if err != nil {
+			return err
+		}
+		b.Proofs = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(b.Proofs[ii]) == 0 {
+				b.Proofs[ii] = make([]byte, 0, len(buf[ii*48:(ii+1)*48]))
+			}
+			b.Proofs[ii] = append(b.Proofs[ii], buf[ii*48:(ii+1)*48]...)
+		}
+	}
+
+	// Field (2) 'Blobs'
+	{
+		buf = tail[o2:]
+		num, err := ssz.DivideInt2(len(buf), 131072, 4096)
+		if err != nil {
+			return err
+		}
+		b.Blobs = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(b.Blobs[ii]) == 0 {
+				b.Blobs[ii] = make([]byte, 0, len(buf[ii*131072:(ii+1)*131072]))
+			}
+			b.Blobs[ii] = append(b.Blobs[ii], buf[ii*131072:(ii+1)*131072]...)
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BlobsBundleV2 object
+func (b *BlobsBundleV2) SizeSSZ() (size int) {
+	size = 12
+
+	// Field (0) 'KzgCommitments'
+	size += len(b.KzgCommitments) * 48
+
+	// Field (1) 'Proofs'
+	size += len(b.Proofs) * 48
+
+	// Field (2) 'Blobs'
+	size += len(b.Blobs) * 131072
+
+	return
+}
+
+// HashTreeRoot ssz hashes the BlobsBundleV2 object
+func (b *BlobsBundleV2) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BlobsBundleV2 object with a hasher
+func (b *BlobsBundleV2) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'KzgCommitments'
+	{
+		if size := len(b.KzgCommitments); size > 4096 {
+			err = ssz.ErrListTooBigFn("--.KzgCommitments", size, 4096)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.KzgCommitments {
+			if len(i) != 48 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.PutBytes(i)
+		}
+
+		numItems := uint64(len(b.KzgCommitments))
+		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
+	}
+
+	// Field (1) 'Proofs'
+	{
+		if size := len(b.Proofs); size > 33554432 {
+			err = ssz.ErrListTooBigFn("--.Proofs", size, 33554432)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.Proofs {
+			if len(i) != 48 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.PutBytes(i)
+		}
+
+		numItems := uint64(len(b.Proofs))
+		hh.MerkleizeWithMixin(subIndx, numItems, 33554432)
 	}
 
 	// Field (2) 'Blobs'

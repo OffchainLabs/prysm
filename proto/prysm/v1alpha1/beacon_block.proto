@@ -1188,11 +1188,11 @@ message SignedBeaconBlockContentsFulu {
   SignedBeaconBlockFulu block = 1;
   repeated bytes kzg_proofs = 2 [
     (ethereum.eth.ext.ssz_size) = "?,48",
-    (ethereum.eth.ext.ssz_max) = "4096"
+    (ethereum.eth.ext.ssz_max) = "max_cell_proofs_length.size"
   ];
   repeated bytes blobs = 3 [
     (ethereum.eth.ext.ssz_size) = "?,blob.size",
-    (ethereum.eth.ext.ssz_max) = "4096"
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
   ];
 }
 
@@ -1208,11 +1208,11 @@ message BeaconBlockContentsFulu {
   BeaconBlockElectra block = 1;
   repeated bytes kzg_proofs = 2 [
     (ethereum.eth.ext.ssz_size) = "?,48",
-    (ethereum.eth.ext.ssz_max) = "4096"
+    (ethereum.eth.ext.ssz_max) = "max_cell_proofs_length.size"
   ];
   repeated bytes blobs = 3 [
     (ethereum.eth.ext.ssz_size) = "?,blob.size",
-    (ethereum.eth.ext.ssz_max) = "4096"
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
   ];
 }
 
@@ -1245,4 +1245,3 @@ message BlindedBeaconBlockFulu {
   // The blinded beacon block body.
   BlindedBeaconBlockBodyElectra body = 5;
 }
-
