@@ -30,7 +30,7 @@ Mainnet operators are recommended to update to this release at their regular cad
 - changed request object for `POST /eth/v1/beacon/states/head/validators` to omit the field if empty for satisfying other clients. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15031)
 - Update spec test to v1.5.0-beta.3. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15050)
 - Update Gossip and RPC message limits to comply with the spec. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14799)
-- Return 404 instead of 500 from API when when a blob for a requested index is not found. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14845)
+- Return 404 instead of 500 from API when a blob for a requested index is not found. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14845)
 - Save Electra orphaned attestations into attestations pool's block attestations. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15060)
 - Removed redundant string conversion in `BeaconDbStater.State` to improve code clarity and maintainability. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15081)
 
