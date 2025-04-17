@@ -140,7 +140,10 @@ func (b *BeaconState) ExpectedWithdrawals() ([]*enginev1.Withdrawal, uint64, err
 					totalWithdrawn += wi.Amount
 				}
 			}
-			balance := vBal - totalWithdrawn
+			balance, err := mathutil.Sub64(vBal, totalWithdrawn)
+			if err != nil {
+				return nil, 0, fmt.Errorf("failed to subtract balance %d with %d", vBal, totalWithdrawn)
+			}
 			hasExcessBalance := balance > params.BeaconConfig().MinActivationBalance
 			if v.ExitEpoch() == params.BeaconConfig().FarFutureEpoch && hasSufficientEffectiveBalance && hasExcessBalance {
 				amount := min(balance-params.BeaconConfig().MinActivationBalance, w.Amount)
@@ -174,7 +177,10 @@ func (b *BeaconState) ExpectedWithdrawals() ([]*enginev1.Withdrawal, uint64, err
 					partiallyWithdrawnBalance += w.Amount
 				}
 			}
-			balance = balance - partiallyWithdrawnBalance
+			balance, err = mathutil.Sub64(balance, partiallyWithdrawnBalance)
+			if err != nil {
+				return nil, 0, errors.Wrapf(err, "could not subtract balance %d with partial withdrawan balance %d", balance, partiallyWithdrawnBalance)
+			}
 		}
 		if helpers.IsFullyWithdrawableValidator(val, balance, epoch, b.version) {
 			withdrawals = append(withdrawals, &enginev1.Withdrawal{
