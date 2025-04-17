@@ -72,12 +72,7 @@ func TestVerify(t *testing.T) {
 	}
 	v, err := newBackfillVerifier(vr, pubkeys)
 	require.NoError(t, err)
-	notrob := make([]interfaces.ReadOnlySignedBeaconBlock, len(blks))
-	// We have to unwrap the ROBlocks for this code because that's what it expects (for now).
-	for i := range blks {
-		notrob[i] = blks[i].ReadOnlySignedBeaconBlock
-	}
-	vbs, err := v.verify(notrob)
+	vbs, err := v.verify(blks)
 	require.NoError(t, err)
 	require.Equal(t, len(blks), len(vbs))
 }
