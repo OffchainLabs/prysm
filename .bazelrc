@@ -22,6 +22,7 @@ coverage --define=coverage_enabled=1
 build --workspace_status_command=./hack/workspace_status.sh
 
 build --define blst_disabled=false
+build --compilation_mode=opt
 run --define blst_disabled=false
 
 build:blst_disabled --define blst_disabled=true
