@@ -525,9 +525,7 @@ func TestService_BroadcastLightClientOptimisticUpdate(t *testing.T) {
 	p1 := p2ptest.NewTestP2P(t)
 	p2 := p2ptest.NewTestP2P(t)
 	p1.Connect(p2)
-	if len(p1.BHost.Network().Peers()) == 0 {
-		t.Fatal("No peers")
-	}
+	require.NotEqual(t, 0, len(p1.BHost.Network().Peers()))
 
 	p := &Service{
 		host:                  p1.BHost,
