@@ -105,9 +105,6 @@ func RequestDataColumnSidecarsByRoot(
 	for len(dataColumnsByAdmissiblePeer) > 0 {
 		peersToFetchFrom, err := SelectPeersToFetchDataColumnsFrom(uint64MapToSortedSlice(remainingMissingColumns), dataColumnsByAdmissiblePeer)
 		if err != nil {
-			if errors.Is(err, &UnavailableColumnsError{}) {
-				return nil, err
-			}
 			return nil, errors.Wrap(err, "select peers to fetch data columns from")
 		}
 
@@ -181,7 +178,7 @@ func RequestDataColumnSidecarsByRoot(
 	}
 
 	// If we still have remaining columns after all retries, return error
-	return nil, errors.Errorf("failed to retrieve all requested data columns after retries for block root=%#x, missing columns=%v", blockRoot, uint64MapToSortedSlice(remainingMissingColumns))
+	return nil, fmt.Errorf("failed to retrieve all requested data columns after retries for block root=%#x, %w", blockRoot, NewUnavailableColumnsError(uint64MapToSortedSlice(remainingMissingColumns)))
 }
 
 func verifyColumnsForBlock(block blocks.ROBlock, columns []blocks.RODataColumn, newColumnsVerifier verification.NewDataColumnsVerifier) ([]blocks.VerifiedRODataColumn, error) {
