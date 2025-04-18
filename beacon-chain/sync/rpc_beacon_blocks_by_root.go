@@ -108,16 +108,9 @@ func (s *Service) requestAndSaveMissingDataColumnSidecars(block blocks.ROBlock) 
 	}
 
 	peers := s.getBestPeers()
-	sidecars, err := RequestDataColumnSidecarsByRoot(s.ctx, missingColumns, block, peers, s.cfg.clock, s.cfg.p2p, s.ctxMap, s.newColumnsVerifier)
+	sidecars, err := FetchOrReconstructDataColumnsByRoot(s.ctx, missingColumns, block, peers, s.cfg.clock, s.cfg.p2p, s.ctxMap, s.newColumnsVerifier)
 	if err != nil {
-		if errors.Is(err, &UnavailableColumnsError{}) {
-			// If specific data columns are missing, try to recover the data column sidecars.
-			if recoverErr := s.reconstructAndSaveDataColumnSidecars(s.ctx, missingColumns, block); recoverErr != nil {
-				return errors.Wrapf(err, "could not request or recover and save data column sidecars. recoverErr: %v", recoverErr)
-			}
-		} else {
-			return errors.Wrap(err, "could not request and save data column sidecars")
-		}
+		return errors.Wrap(err, "request data column sidecars")
 	}
 
 	if err := s.cfg.dataColumnStorage.Save(sidecars); err != nil {
@@ -247,44 +240,6 @@ func (s *Service) sendAndSaveBlobSidecars(ctx context.Context, request types.Blo
 			return err
 		}
 	}
-	return nil
-}
-
-// reconstructAndSaveDataColumnSidecars attempts reconstruction using ReconstructDataColumnsByRoot and saves the results.
-// It is intended to be called when requesting sidecars from peers fails.
-func (s *Service) reconstructAndSaveDataColumnSidecars(
-	ctx context.Context,
-	missingColumns []uint64,
-	block blocks.ROBlock,
-) error {
-	if len(missingColumns) == 0 {
-		return nil
-	}
-
-	peers := s.getBestPeers()
-	if len(peers) == 0 {
-		return errors.New("no peers available for data column recovery")
-	}
-	sidecars, err := ReconstructDataColumnsByRoot(
-		ctx,
-		missingColumns,
-		block,
-		peers,
-		s.cfg.clock,
-		s.cfg.p2p,
-		s.ctxMap,
-		s.newColumnsVerifier,
-	)
-	if err != nil {
-		// If fetching/reconstruction failed, return the error.
-		return errors.Wrap(err, "could not fetch or reconstruct data column sidecars")
-	}
-
-	// If successful, save the obtained sidecars.
-	if err := s.cfg.dataColumnStorage.Save(sidecars); err != nil {
-		return errors.Wrap(err, "could not save fetched/reconstructed data column sidecars")
-	}
-
 	return nil
 }
 
