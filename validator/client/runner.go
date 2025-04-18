@@ -117,7 +117,8 @@ func run(ctx context.Context, v iface.Validator) {
 					select {
 					case <-time.After(backoffDelay):
 					case <-ctx.Done():
-						return
+						log.Info("Context canceled, stopping validator")
+						return // Exit if context is canceled.
 					}
 				}
 			}
@@ -139,8 +140,7 @@ func onAccountsChanged(ctx context.Context, v iface.Validator, current [][48]byt
 	}
 	if !anyActive {
 		log.Warn("No active keys found. Waiting for activation...")
-		err := v.WaitForActivation(ctx)
-		if err != nil {
+		if err = v.WaitForActivation(ctx); err != nil {
 			log.WithError(err).Warn("Could not wait for validator activation")
 		}
 	}
