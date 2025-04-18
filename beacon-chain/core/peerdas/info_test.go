@@ -60,7 +60,7 @@ func TestTargetCustodyGroupCount(t *testing.T) {
 			if tc.subscribeToAllColumns {
 				resetFlags := flags.Get()
 				gFlags := new(flags.GlobalFlags)
-				gFlags.SubscribeToAllSubnets = true
+				gFlags.SubscribeAllColumnSubnets = true
 				flags.Init(gFlags)
 				defer flags.Init(resetFlags)
 			}
