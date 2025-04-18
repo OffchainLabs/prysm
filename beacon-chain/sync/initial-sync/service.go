@@ -402,28 +402,9 @@ func (s *Service) fetchOriginColumns(pids []peer.ID, roBlock blocks.ROBlock) err
 		return errors.Wrap(err, "missing data columns")
 	}
 
-	sidecars, err := sync.RequestDataColumnSidecarsByRoot(s.ctx, missingColumns, roBlock, pids, s.clock, s.cfg.P2P, s.ctxMap, s.newDataColumnsVerifier)
+	sidecars, err := sync.FetchOrReconstructDataColumnsByRoot(s.ctx, missingColumns, roBlock, pids, s.clock, s.cfg.P2P, s.ctxMap, s.newDataColumnsVerifier)
 	if err != nil {
-		if errors.Is(err, sync.ErrNoPeersForDataColumns) {
-			// If specific data columns are missing, try to recover the data column sidecars.
-			var reconstructErr error
-			sidecars, reconstructErr = sync.ReconstructDataColumnsByRoot(
-				s.ctx,
-				missingColumns,
-				roBlock,
-				roBlock.Root(),
-				pids,
-				s.clock,
-				s.cfg.P2P,
-				s.ctxMap,
-				s.newDataColumnsVerifier,
-			)
-			if reconstructErr != nil {
-				return errors.Wrapf(err, "could not reconstruct data column sidecars. reconstructErr: %v", reconstructErr)
-			}
-		} else {
-			return errors.Wrap(err, "could not request and save data column sidecars")
-		}
+		return errors.Wrap(err, "request data column sidecars")
 	}
 
 	log.WithFields(logrus.Fields{
