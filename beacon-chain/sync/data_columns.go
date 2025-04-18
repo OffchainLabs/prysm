@@ -7,7 +7,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
@@ -999,12 +998,6 @@ outerLoop:
 	}
 
 	return outputDataColumnsByPeer, descriptions
-}
-
-// getBestPeers returns the list of best peers based on finalized checkpoint epoch.
-func getBestPeers(p2p p2p.P2P, chain blockchain.FinalizationFetcher) []core.PeerID {
-	_, bestPeers := p2p.Peers().BestFinalized(maxPeerRequest, chain.FinalizedCheckpt().Epoch)
-	return bestPeers
 }
 
 // buildDataColumnByRangeRequests builds an optimized slices of data column by range requests:
