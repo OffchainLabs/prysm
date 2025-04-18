@@ -40,7 +40,7 @@ func run(ctx context.Context, v iface.Validator) {
 		if errors.Is(err, context.Canceled) {
 			return // Exit if context is canceled.
 		}
-		log.WithError(err).Error("Failed to initialize validator")
+		log.WithError(err).Fatal("Failed to initialize validator")
 		return
 	}
 	tracker := v.HealthTracker()
@@ -98,9 +98,27 @@ func run(ctx context.Context, v iface.Validator) {
 			performRoles(slotCtx, allRoles, v, slot, &wg, span)
 		case isHealthyAgain := <-tracker.HealthUpdates():
 			if isHealthyAgain {
-				if err := v.Init(ctx); err != nil {
-					log.WithError(err).Fatal("Failed to reinitialize validator")
-					continue
+				const maxAttempts = 5
+				const backoffDelay = 2 * time.Second
+				for attempt := 1; attempt <= maxAttempts; attempt++ {
+					err := v.Init(ctx)
+					if err == nil {
+						break // success
+					}
+
+					log.WithError(err).
+						Errorf("re‑initialization attempt %d/%d failed", attempt, maxAttempts)
+
+					if attempt == maxAttempts {
+						log.Fatal("maximum re‑initialization attempts reached")
+					}
+
+					// brief back‑off or exit early if the parent context ends
+					select {
+					case <-time.After(backoffDelay):
+					case <-ctx.Done():
+						return
+					}
 				}
 			}
 		case e := <-v.EventsChan():

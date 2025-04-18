@@ -143,7 +143,9 @@ func (v *validator) Done() {
 	if v.eventsChannel != nil {
 		close(v.eventsChannel)
 	}
-	v.ticker.Done()
+	if v.ticker != nil {
+		v.ticker.Done()
+	}
 }
 
 func (v *validator) EventsChan() <-chan *eventClient.Event {
@@ -211,6 +213,7 @@ func (v *validator) Init(ctx context.Context) error {
 	currentSlot := slots.CurrentSlot(v.genesisTime) // set in v.WaitForChainStart
 	if err := v.UpdateDuties(ctx, currentSlot); err != nil {
 		handleAssignmentError(err, currentSlot)
+		return errors.Wrap(err, "Could not update duties")
 	}
 
 	// Check if proposer settings is still nil.
