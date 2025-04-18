@@ -582,8 +582,6 @@ func RequestMissingDataColumnsByRange(
 	blks []blocks.ROBlock,
 	batchSize int,
 ) (map[[fieldparams.RootLength]byte][]blocks.RODataColumn, error) {
-	const maxAllowedStall = 5 // Number of trials before giving up.
-
 	if len(blks) == 0 {
 		return nil, nil
 	}
@@ -598,14 +596,10 @@ func RequestMissingDataColumnsByRange(
 	}
 
 	// Get blocks by root and compute all missing columns by root.
-	blockByRoot := make(map[[fieldparams.RootLength]byte]blocks.ROBlock, len(blks))
 	missingColumnsByRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool, len(blks))
 	for _, blk := range blks {
 		// Extract the block root and the block slot
 		blockRoot, blockSlot := blk.Root(), blk.Block().Slot()
-
-		// Populate the block by root.
-		blockByRoot[blockRoot] = blk
 
 		// Skip blocks that are not in the retention period.
 		if blockSlot < minimumSlot {
@@ -625,6 +619,20 @@ func RequestMissingDataColumnsByRange(
 		}
 	}
 
+	return RequestDataColumnSidecarsByRange(ctx, missingColumnsByRoot, blks, peers, batchSize, clock, p2p, ctxMap, rateLimiter)
+}
+
+func RequestDataColumnSidecarsByRange(
+	ctx context.Context,
+	missingColumnsByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
+	blks []blocks.ROBlock,
+	peers []peer.ID,
+	batchSize int,
+	clock *startup.Clock,
+	p2p p2p.P2P,
+	ctxMap ContextByteVersions,
+	rateLimiter *leakybucket.Collector,
+) (map[[fieldparams.RootLength]byte][]blocks.RODataColumn, error) {
 	// Return early if there are no missing data columns.
 	if len(missingColumnsByRoot) == 0 {
 		return nil, nil
@@ -634,7 +642,13 @@ func RequestMissingDataColumnsByRange(
 	previousMissingDataColumnsCount := itemsCount(missingColumnsByRoot)
 
 	// Count the number of retries for the same amount of missing data columns.
+	const maxAllowedStall = 5 // Number of trials before giving up.
 	stallCount := 0
+
+	blockByRoot := make(map[[fieldparams.RootLength]byte]blocks.ROBlock, len(blks))
+	for _, blk := range blks {
+		blockByRoot[blk.Root()] = blk
+	}
 
 	// Add log fields.
 	log := log.WithFields(logrus.Fields{
