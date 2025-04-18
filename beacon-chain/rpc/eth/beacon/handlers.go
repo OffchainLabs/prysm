@@ -13,12 +13,14 @@ import (
 	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
+	coreHelpers "github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	corehelpers "github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filters"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/v1alpha1/validator"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/slasher/types"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -28,6 +30,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -1737,4 +1740,64 @@ func serializeItems[T interface{ MarshalSSZ() ([]byte, error) }](items []T) ([]b
 		result = append(result, b...)
 	}
 	return result, nil
+}
+
+func (s *Server) GetAttestashionSlashings(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "beacon.GetAttestashionSlashings")
+	defer span.End()
+
+	epoch := r.PathValue("epoch")
+	if epoch == "" {
+		httputil.HandleError(w, "epoch is required in URL params", http.StatusBadRequest)
+		return
+	}
+	epochInt, err := strconv.ParseUint(epoch, 10, 64)
+	if err != nil {
+		httputil.HandleError(w, "Could not parse epoch: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var indexedAtts []*types.WrappedIndexedAtt
+	startSlot, err := slots.EpochStart(primitives.Epoch(epochInt))
+	if err != nil {
+		httputil.HandleError(w, "Could not get epoch start slot: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	endSlot, err := slots.EpochEnd(primitives.Epoch(epochInt))
+	if err != nil {
+		httputil.HandleError(w, "Could not get epoch end slot: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	for slot := startSlot; slot <= endSlot; slot++ {
+		blks, err := s.BeaconDB.BlocksBySlot(ctx, slot)
+		if err != nil {
+			httputil.HandleError(w, "Could not retrieve blocks for slot: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		for _, blk := range blks {
+			atts := blk.Block().Body().Attestations()
+
+			preState, err := s.StateGenService.StateByRoot(ctx, blk.Block().ParentRoot())
+			if err != nil {
+				httputil.HandleError(w, "Could not get pre-state: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			for _, att := range atts {
+				committees, err := coreHelpers.AttestationCommitteesFromState(ctx, preState, att)
+				if err != nil {
+					httputil.HandleError(w, "Could not get attestation committees: "+err.Error(), http.StatusInternalServerError)
+					return
+				}
+				indexedAtt, err := attestation.ConvertToIndexed(ctx, att, committees...)
+				if err != nil {
+					httputil.HandleError(w, "Could not convert to indexed attestation: "+err.Error(), http.StatusInternalServerError)
+					return
+				}
+				indexedAtts = append(indexedAtts, &types.WrappedIndexedAtt{IndexedAtt: indexedAtt})
+			}
+
+		}
+	}
 }
