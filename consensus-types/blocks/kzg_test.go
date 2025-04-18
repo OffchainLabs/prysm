@@ -150,7 +150,7 @@ func ceilLog2(x uint32) (uint32, error) {
 }
 
 func getBlobKzgCommitmentsRoot(commitments [][]byte) ([32]byte, error) {
-	commitmentsLeaves := leavesFromCommitments(commitments)
+	commitmentsLeaves := LeavesFromCommitments(commitments)
 	commitmentsSparse, err := trie.GenerateTrieFromItems(
 		commitmentsLeaves,
 		fieldparams.LogMaxBlobCommitments,
