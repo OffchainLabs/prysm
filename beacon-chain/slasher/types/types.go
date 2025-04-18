@@ -1,8 +1,8 @@
 package types
 
 import (
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
 // ChunkKind to differentiate what kind of span we are working

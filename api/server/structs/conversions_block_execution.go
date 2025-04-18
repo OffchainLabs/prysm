@@ -4,15 +4,15 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/OffchainLabs/prysm/v6/api/server"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/container/slice"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/api/server"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/container/slice"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 )
 
 // ----------------------------------------------------------------------------

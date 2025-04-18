@@ -6,13 +6,13 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/contracts/deposit"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
-	"github.com/prysmaticlabs/prysm/v5/contracts/deposit"
 )
 
 var (

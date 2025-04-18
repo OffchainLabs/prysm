@@ -755,11 +755,11 @@ def prysm_deps():
         build_directives = [
             "gazelle:resolve go github.com/supranational/blst/bindings/go @com_github_supranational_blst//:go_default_library",
         ],
-        importpath = "github.com/ethereum/c-kzg-4844",
+        importpath = "github.com/ethereum/c-kzg-4844/v2",
         patch_args = ["-p1"],
         patches = ["//third_party:com_github_ethereum_c_kzg_4844.patch"],
-        sum = "h1:0X1LBXxaEtYD9xsyj9B9ctQEZIpnvVDeoBx8aHEwTNA=",
-        version = "v1.0.0",
+        sum = "h1:KhzBVjmURsfr1+S3k/VE35T02+AW2qU9t9gr4R6YpSo=",
+        version = "v2.1.1",
     )
     go_repository(
         name = "com_github_ethereum_go_ethereum",

@@ -3,12 +3,12 @@ package light_client
 import (
 	"fmt"
 
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	consensustypes "github.com/prysmaticlabs/prysm/v5/consensus-types"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	consensustypes "github.com/OffchainLabs/prysm/v6/consensus-types"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -97,6 +97,10 @@ type finalityUpdateAltair struct {
 	attestedHeader  interfaces.LightClientHeader
 	finalizedHeader interfaces.LightClientHeader
 	finalityBranch  interfaces.LightClientFinalityBranch
+}
+
+func (u *finalityUpdateAltair) IsNil() bool {
+	return u == nil || u.p == nil
 }
 
 var _ interfaces.LightClientFinalityUpdate = &finalityUpdateAltair{}
@@ -201,6 +205,10 @@ type finalityUpdateCapella struct {
 	finalityBranch  interfaces.LightClientFinalityBranch
 }
 
+func (u *finalityUpdateCapella) IsNil() bool {
+	return u == nil || u.p == nil
+}
+
 var _ interfaces.LightClientFinalityUpdate = &finalityUpdateCapella{}
 
 func NewWrappedFinalityUpdateCapella(p *pb.LightClientFinalityUpdateCapella) (interfaces.LightClientFinalityUpdate, error) {
@@ -303,6 +311,10 @@ type finalityUpdateDeneb struct {
 	finalityBranch  interfaces.LightClientFinalityBranch
 }
 
+func (u *finalityUpdateDeneb) IsNil() bool {
+	return u == nil || u.p == nil
+}
+
 var _ interfaces.LightClientFinalityUpdate = &finalityUpdateDeneb{}
 
 func NewWrappedFinalityUpdateDeneb(p *pb.LightClientFinalityUpdateDeneb) (interfaces.LightClientFinalityUpdate, error) {
@@ -403,6 +415,10 @@ type finalityUpdateElectra struct {
 	attestedHeader  interfaces.LightClientHeader
 	finalizedHeader interfaces.LightClientHeader
 	finalityBranch  interfaces.LightClientFinalityBranchElectra
+}
+
+func (u *finalityUpdateElectra) IsNil() bool {
+	return u == nil || u.p == nil
 }
 
 var _ interfaces.LightClientFinalityUpdate = &finalityUpdateElectra{}

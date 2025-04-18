@@ -6,19 +6,19 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/prysmaticlabs/prysm/v5/api/pagination"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filters"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation"
+	"github.com/OffchainLabs/prysm/v6/api/pagination"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filters"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -49,6 +49,8 @@ func mapAttestationsByTargetRoot(atts []ethpb.Att) map[[32]byte][]ethpb.Att {
 	return attsMap
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // ListAttestations retrieves attestations by block root, slot, or epoch.
 // Attestations are sorted by data slot by default.
 //
@@ -113,6 +115,8 @@ func (bs *Server) ListAttestations(
 	}, nil
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // ListAttestationsElectra retrieves attestations by block root, slot, or epoch.
 // Attestations are sorted by data slot by default.
 //
@@ -176,6 +180,8 @@ func (bs *Server) ListAttestationsElectra(ctx context.Context, req *ethpb.ListAt
 	}, nil
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // ListIndexedAttestations retrieves indexed attestations by block root.
 // IndexedAttestationsForEpoch are sorted by data slot by default. Start-end epoch
 // filter is used to retrieve blocks with.
@@ -236,6 +242,8 @@ func (bs *Server) ListIndexedAttestations(
 	}, nil
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // ListIndexedAttestationsElectra retrieves indexed attestations by block root.
 // IndexedAttestationsForEpoch are sorted by data slot by default. Start-end epoch
 // filter is used to retrieve blocks with.
@@ -297,6 +305,8 @@ func (bs *Server) ListIndexedAttestationsElectra(
 	}, nil
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // AttestationPool retrieves pending attestations.
 //
 // The server returns a list of attestations that have been seen but not
@@ -340,6 +350,7 @@ func (bs *Server) AttestationPool(_ context.Context, req *ethpb.AttestationPoolR
 	}, nil
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
 func (bs *Server) AttestationPoolElectra(_ context.Context, req *ethpb.AttestationPoolRequest) (*ethpb.AttestationPoolElectraResponse, error) {
 	var atts []*ethpb.AttestationElectra
 	var err error

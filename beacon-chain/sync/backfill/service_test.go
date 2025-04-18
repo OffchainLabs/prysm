@@ -5,17 +5,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
-	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/proto/dbval"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
+	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/proto/dbval"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 )
 
 type mockMinimumSlotter struct {

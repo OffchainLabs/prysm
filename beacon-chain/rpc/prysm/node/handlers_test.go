@@ -8,19 +8,19 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
+	mockp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	corenet "github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	libp2ptest "github.com/libp2p/go-libp2p/p2p/host/peerstore/test"
 	ma "github.com/multiformats/go-multiaddr"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
-	mockp2p "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 type testIdentity enode.ID

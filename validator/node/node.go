@@ -17,32 +17,31 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api/server/middleware"
+	"github.com/OffchainLabs/prysm/v6/async/event"
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/config/proposer"
+	"github.com/OffchainLabs/prysm/v6/config/proposer/loader"
+	"github.com/OffchainLabs/prysm/v6/io/file"
+	"github.com/OffchainLabs/prysm/v6/monitoring/prometheus"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v6/runtime"
+	"github.com/OffchainLabs/prysm/v6/runtime/prereqs"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts/wallet"
+	"github.com/OffchainLabs/prysm/v6/validator/client"
+	"github.com/OffchainLabs/prysm/v6/validator/db"
+	"github.com/OffchainLabs/prysm/v6/validator/db/filesystem"
+	"github.com/OffchainLabs/prysm/v6/validator/db/iface"
+	"github.com/OffchainLabs/prysm/v6/validator/db/kv"
+	g "github.com/OffchainLabs/prysm/v6/validator/graffiti"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager/local"
+	remoteweb3signer "github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer"
+	"github.com/OffchainLabs/prysm/v6/validator/rpc"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/server/middleware"
-	"github.com/prysmaticlabs/prysm/v5/async/event"
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/config/proposer"
-	"github.com/prysmaticlabs/prysm/v5/config/proposer/loader"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/backup"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/prometheus"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	"github.com/prysmaticlabs/prysm/v5/runtime"
-	"github.com/prysmaticlabs/prysm/v5/runtime/prereqs"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
-	"github.com/prysmaticlabs/prysm/v5/validator/client"
-	"github.com/prysmaticlabs/prysm/v5/validator/db"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/filesystem"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/iface"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/kv"
-	g "github.com/prysmaticlabs/prysm/v5/validator/graffiti"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/local"
-	remoteweb3signer "github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer"
-	"github.com/prysmaticlabs/prysm/v5/validator/rpc"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
@@ -376,20 +375,9 @@ func (c *ValidatorClient) registerPrometheusService(cliCtx *cli.Context) error {
 		log.Info("Prometheus service disabled")
 		return nil
 	}
-	var additionalHandlers []prometheus.Handler
-	if cliCtx.IsSet(cmd.EnableBackupWebhookFlag.Name) {
-		additionalHandlers = append(
-			additionalHandlers,
-			prometheus.Handler{
-				Path:    "/db/backup",
-				Handler: backup.Handler(c.db, cliCtx.String(cmd.BackupWebhookOutputDir.Name)),
-			},
-		)
-	}
 	service := prometheus.NewService(
 		fmt.Sprintf("%s:%d", cliCtx.String(cmd.MonitoringHostFlag.Name), cliCtx.Int(flags.MonitoringPortFlag.Name)),
 		c.services,
-		additionalHandlers...,
 	)
 	logrus.AddHook(prometheus.NewLogrusCollector())
 	return c.services.RegisterService(service)

@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/time"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/time"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 // pingHandler reads the incoming ping rpc message from the peer.

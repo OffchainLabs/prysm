@@ -7,17 +7,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	prysmP2P "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
+	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	prysmP2P "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
-	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func init() {

@@ -4,15 +4,15 @@ import (
 	"bytes"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/io/file"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts/userprompt"
+	"github.com/OffchainLabs/prysm/v6/validator/db/filesystem"
+	"github.com/OffchainLabs/prysm/v6/validator/db/iface"
+	"github.com/OffchainLabs/prysm/v6/validator/db/kv"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/userprompt"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/filesystem"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/iface"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/kv"
 	"github.com/urfave/cli/v2"
 )
 

@@ -4,14 +4,14 @@ import (
 	"context"
 	"testing"
 
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/prysmaticlabs/go-bitfield"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestAttestingIndices(t *testing.T) {
@@ -80,6 +80,14 @@ func TestAttestingIndices(t *testing.T) {
 				committees: [][]primitives.ValidatorIndex{{0, 1}, {0, 1}},
 			},
 			want: []uint64{0, 1},
+		},
+		{
+			name: "Electra - No attester in committee",
+			args: args{
+				att:        &eth.AttestationElectra{AggregationBits: bitfield.Bitlist{0b11100}},
+				committees: [][]primitives.ValidatorIndex{{0, 1}, {0, 1}},
+			},
+			err: "no attesting indices found for committee index 0",
 		},
 	}
 	for _, tt := range tests {

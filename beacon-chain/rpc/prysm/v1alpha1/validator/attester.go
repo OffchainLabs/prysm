@@ -2,23 +2,28 @@ package validator
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // GetAttestationData requests that the beacon node produce an attestation data object,
 // which the validator acting as an attester will then sign.
 func (vs *Server) GetAttestationData(ctx context.Context, req *ethpb.AttestationDataRequest) (*ethpb.AttestationData, error) {
@@ -39,6 +44,8 @@ func (vs *Server) GetAttestationData(ctx context.Context, req *ethpb.Attestation
 	return res, nil
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // ProposeAttestation is a function called by an attester to vote
 // on a block via an attestation object as defined in the Ethereum specification.
 func (vs *Server) ProposeAttestation(ctx context.Context, att *ethpb.Attestation) (*ethpb.AttestResponse, error) {
@@ -67,6 +74,8 @@ func (vs *Server) ProposeAttestation(ctx context.Context, att *ethpb.Attestation
 	return resp, nil
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // ProposeAttestationElectra is a function called by an attester to vote
 // on a block via an attestation object as defined in the Ethereum specification.
 func (vs *Server) ProposeAttestationElectra(ctx context.Context, singleAtt *ethpb.SingleAttestation) (*ethpb.AttestResponse, error) {
@@ -105,6 +114,8 @@ func (vs *Server) ProposeAttestationElectra(ctx context.Context, singleAtt *ethp
 	return resp, nil
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // SubscribeCommitteeSubnets subscribes to the committee ID subnet given subscribe request.
 func (vs *Server) SubscribeCommitteeSubnets(ctx context.Context, req *ethpb.CommitteeSubnetsSubscribeRequest) (*emptypb.Empty, error) {
 	ctx, span := trace.StartSpan(ctx, "AttesterServer.SubscribeCommitteeSubnets")
@@ -165,6 +176,14 @@ func (vs *Server) proposeAtt(
 	root, err := att.GetData().HashTreeRoot()
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get attestation root: %v", err)
+	}
+
+	if att.Version() < version.Electra && slots.ToEpoch(vs.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().ElectraForkEpoch {
+		return nil, status.Error(codes.InvalidArgument, "old attestation format, ProposeAttestationElectra should be called post Electra")
+	}
+
+	if att.Version() >= version.Electra && slots.ToEpoch(vs.TimeFetcher.CurrentSlot()) < params.BeaconConfig().ElectraForkEpoch {
+		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("ProposeAttestationElectra not supported yet. The current epoch is %d supported starting epoch is %d", slots.ToEpoch(vs.TimeFetcher.CurrentSlot()), params.BeaconConfig().ElectraForkEpoch))
 	}
 
 	// Broadcast the unaggregated attestation on a feed to notify other services in the beacon node

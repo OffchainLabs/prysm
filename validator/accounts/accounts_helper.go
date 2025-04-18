@@ -7,16 +7,16 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/io/prompt"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts/petnames"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts/userprompt"
 	"github.com/logrusorgru/aurora"
 	"github.com/manifoldco/promptui"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/io/prompt"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/petnames"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/userprompt"
 	"github.com/urfave/cli/v2"
 )
 

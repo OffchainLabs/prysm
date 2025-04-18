@@ -6,10 +6,10 @@ import (
 	"context"
 	"time"
 
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	gcache "github.com/patrickmn/go-cache"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"google.golang.org/protobuf/proto"
 )
 

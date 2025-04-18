@@ -4,10 +4,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/spf13/afero"
 )
 

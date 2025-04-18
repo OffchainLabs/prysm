@@ -11,12 +11,12 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api/server"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/api/server"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	logtest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/urfave/cli/v2"
 )

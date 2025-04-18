@@ -1,9 +1,9 @@
 package validators
 
 import (
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
 // SlashingParamsPerVersion returns the slashing parameters for the given state version.

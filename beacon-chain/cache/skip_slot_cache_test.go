@@ -5,12 +5,12 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 func TestSkipSlotCache_RoundTrip(t *testing.T) {

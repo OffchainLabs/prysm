@@ -3,8 +3,8 @@ package forkchoice
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/common/forkchoice"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/spectest/shared/common/forkchoice"
 )
 
 func TestMinimal_Capella_Forkchoice(t *testing.T) {

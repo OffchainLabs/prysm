@@ -15,37 +15,37 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api/client"
+	"github.com/OffchainLabs/prysm/v6/api/client/beacon/health"
+	eventClient "github.com/OffchainLabs/prysm/v6/api/client/event"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/async/event"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/config/proposer"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/hash"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
+	accountsiface "github.com/OffchainLabs/prysm/v6/validator/accounts/iface"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts/wallet"
+	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
+	"github.com/OffchainLabs/prysm/v6/validator/db"
+	dbCommon "github.com/OffchainLabs/prysm/v6/validator/db/common"
+	"github.com/OffchainLabs/prysm/v6/validator/graffiti"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager/local"
+	remoteweb3signer "github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer"
 	"github.com/dgraph-io/ristretto"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/client"
-	"github.com/prysmaticlabs/prysm/v5/api/client/beacon/health"
-	eventClient "github.com/prysmaticlabs/prysm/v5/api/client/event"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/async/event"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/config/proposer"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/hash"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	accountsiface "github.com/prysmaticlabs/prysm/v5/validator/accounts/iface"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
-	"github.com/prysmaticlabs/prysm/v5/validator/db"
-	dbCommon "github.com/prysmaticlabs/prysm/v5/validator/db/common"
-	"github.com/prysmaticlabs/prysm/v5/validator/graffiti"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/local"
-	remoteweb3signer "github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
@@ -112,6 +112,7 @@ type validator struct {
 	blacklistedPubkeysLock             sync.RWMutex
 	attSelectionLock                   sync.Mutex
 	dutiesLock                         sync.RWMutex
+	disableDutiesPolling               bool
 }
 
 type validatorStatus struct {
@@ -1139,7 +1140,49 @@ func (v *validator) StartEventStream(ctx context.Context, topics []string, event
 	v.validatorClient.StartEventStream(ctx, topics, eventsChannel)
 }
 
-func (v *validator) ProcessEvent(event *eventClient.Event) {
+func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadEvent) error {
+	if head == nil {
+		return errors.New("received empty head event")
+	}
+	prevDepedentRoot, err := bytesutil.DecodeHexWithLength(head.PreviousDutyDependentRoot, fieldparams.RootLength)
+	if err != nil {
+		return errors.Wrap(err, "failed to decode previous duty dependent root")
+	}
+	uintSlot, err := strconv.ParseUint(head.Slot, 10, 64)
+	if err != nil {
+		return errors.Wrap(err, "Failed to parse slot")
+	}
+
+	slot := primitives.Slot(uintSlot)
+	currEpochStart, err := slots.EpochStart(slots.ToEpoch(slot))
+	if err != nil {
+		return err
+	}
+	deadline := v.SlotDeadline(slot)
+	slotCtx, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
+	if !bytes.Equal(prevDepedentRoot, v.duties.PrevDependentRoot) {
+		if err := v.UpdateDuties(slotCtx, currEpochStart); err != nil {
+			return errors.Wrap(err, "failed to update duties")
+		}
+		log.Info("Updated duties due to previous dependent root change")
+		return nil
+	}
+	currDepedentRoot, err := bytesutil.DecodeHexWithLength(head.CurrentDutyDependentRoot, fieldparams.RootLength)
+	if err != nil {
+		return errors.Wrap(err, "failed to decode current duty dependent root")
+	}
+	if !bytes.Equal(currDepedentRoot, v.duties.CurrDependentRoot) {
+		if err := v.UpdateDuties(slotCtx, currEpochStart); err != nil {
+			return errors.Wrap(err, "failed to update duties")
+		}
+		log.Info("Updated duties due to current dependent root change")
+		return nil
+	}
+	return nil
+}
+
+func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) {
 	if event == nil || event.Data == nil {
 		log.Warn("Received empty event")
 	}
@@ -1157,8 +1200,14 @@ func (v *validator) ProcessEvent(event *eventClient.Event) {
 		uintSlot, err := strconv.ParseUint(head.Slot, 10, 64)
 		if err != nil {
 			log.WithError(err).Error("Failed to parse slot")
+			return
 		}
 		v.setHighestSlot(primitives.Slot(uintSlot))
+		if !v.disableDutiesPolling {
+			if err := v.checkDependentRoots(ctx, head); err != nil {
+				log.WithError(err).Error("Failed to check dependent roots")
+			}
+		}
 	default:
 		// just keep going and log the error
 		log.WithField("type", event.EventType).WithField("data", string(event.Data)).Warn("Received an unknown event")

@@ -6,26 +6,26 @@ import (
 	"testing"
 	"time"
 
+	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
+	p2pt "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	beaconsync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
+	"github.com/OffchainLabs/prysm/v6/container/slice"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	prysmTime "github.com/OffchainLabs/prysm/v6/time"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/libp2p/go-libp2p/core/peer"
-	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	dbtest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
-	p2pt "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	beaconsync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	leakybucket "github.com/prysmaticlabs/prysm/v5/container/leaky-bucket"
-	"github.com/prysmaticlabs/prysm/v5/container/slice"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -472,8 +472,8 @@ func TestBlocksQueue_onDataReceivedEvent(t *testing.T) {
 		updatedState, err := handlerFn(&stateMachine{
 			state: stateScheduled,
 		}, &fetchRequestResponse{
-			pid: "abc",
-			err: errSlotIsTooHigh,
+			blocksFrom: "abc",
+			err:        errSlotIsTooHigh,
 		})
 		assert.ErrorContains(t, errSlotIsTooHigh.Error(), err)
 		assert.Equal(t, stateScheduled, updatedState)
@@ -495,9 +495,9 @@ func TestBlocksQueue_onDataReceivedEvent(t *testing.T) {
 		updatedState, err := handlerFn(&stateMachine{
 			state: stateScheduled,
 		}, &fetchRequestResponse{
-			pid:   "abc",
-			err:   errSlotIsTooHigh,
-			start: 256,
+			blocksFrom: "abc",
+			err:        errSlotIsTooHigh,
+			start:      256,
 		})
 		assert.ErrorContains(t, errSlotIsTooHigh.Error(), err)
 		assert.Equal(t, stateScheduled, updatedState)
@@ -517,8 +517,8 @@ func TestBlocksQueue_onDataReceivedEvent(t *testing.T) {
 		updatedState, err := handlerFn(&stateMachine{
 			state: stateScheduled,
 		}, &fetchRequestResponse{
-			pid: "abc",
-			err: beaconsync.ErrInvalidFetchedData,
+			blocksFrom: "abc",
+			err:        beaconsync.ErrInvalidFetchedData,
 		})
 		assert.ErrorContains(t, beaconsync.ErrInvalidFetchedData.Error(), err)
 		assert.Equal(t, stateScheduled, updatedState)
@@ -537,7 +537,7 @@ func TestBlocksQueue_onDataReceivedEvent(t *testing.T) {
 		wsbCopy, err := wsb.Copy()
 		require.NoError(t, err)
 		response := &fetchRequestResponse{
-			pid: "abc",
+			blocksFrom: "abc",
 			bwb: []blocks.BlockWithROBlobs{
 				{Block: blocks.ROBlock{ReadOnlySignedBeaconBlock: wsb}},
 				{Block: blocks.ROBlock{ReadOnlySignedBeaconBlock: wsbCopy}},
@@ -546,13 +546,15 @@ func TestBlocksQueue_onDataReceivedEvent(t *testing.T) {
 		fsm := &stateMachine{
 			state: stateScheduled,
 		}
-		assert.Equal(t, peer.ID(""), fsm.pid)
-		assert.Equal(t, 0, len(fsm.bwb))
+		assert.Equal(t, peer.ID(""), fsm.fetched.blocksFrom)
+		assert.Equal(t, peer.ID(""), fsm.fetched.blobsFrom)
+		assert.Equal(t, 0, fsm.numFetched())
 		updatedState, err := handlerFn(fsm, response)
 		assert.NoError(t, err)
 		assert.Equal(t, stateDataParsed, updatedState)
-		assert.Equal(t, response.pid, fsm.pid)
-		assert.DeepSSZEqual(t, response.bwb, fsm.bwb)
+		assert.Equal(t, response.blocksFrom, fsm.fetched.blocksFrom)
+		assert.Equal(t, response.blobsFrom, fsm.fetched.blobsFrom)
+		assert.DeepSSZEqual(t, response.bwb, fsm.fetched.bwb)
 	})
 }
 
@@ -635,10 +637,10 @@ func TestBlocksQueue_onReadyToSendEvent(t *testing.T) {
 		queue.smm.addStateMachine(256)
 		queue.smm.addStateMachine(320)
 		queue.smm.machines[256].state = stateDataParsed
-		queue.smm.machines[256].pid = pidDataParsed
+		queue.smm.machines[256].fetched.blocksFrom = pidDataParsed
 		rwsb, err := blocks.NewROBlock(wsb)
 		require.NoError(t, err)
-		queue.smm.machines[256].bwb = []blocks.BlockWithROBlobs{
+		queue.smm.machines[256].fetched.bwb = []blocks.BlockWithROBlobs{
 			{Block: rwsb},
 		}
 
@@ -669,10 +671,10 @@ func TestBlocksQueue_onReadyToSendEvent(t *testing.T) {
 		queue.smm.machines[256].state = stateDataParsed
 		queue.smm.addStateMachine(320)
 		queue.smm.machines[320].state = stateDataParsed
-		queue.smm.machines[320].pid = pidDataParsed
+		queue.smm.machines[320].fetched.blocksFrom = pidDataParsed
 		rwsb, err := blocks.NewROBlock(wsb)
 		require.NoError(t, err)
-		queue.smm.machines[320].bwb = []blocks.BlockWithROBlobs{
+		queue.smm.machines[320].fetched.bwb = []blocks.BlockWithROBlobs{
 			{Block: rwsb},
 		}
 
@@ -700,10 +702,10 @@ func TestBlocksQueue_onReadyToSendEvent(t *testing.T) {
 		queue.smm.machines[256].state = stateSkipped
 		queue.smm.addStateMachine(320)
 		queue.smm.machines[320].state = stateDataParsed
-		queue.smm.machines[320].pid = pidDataParsed
+		queue.smm.machines[320].fetched.blocksFrom = pidDataParsed
 		rwsb, err := blocks.NewROBlock(wsb)
 		require.NoError(t, err)
-		queue.smm.machines[320].bwb = []blocks.BlockWithROBlobs{
+		queue.smm.machines[320].fetched.bwb = []blocks.BlockWithROBlobs{
 			{Block: rwsb},
 		}
 
@@ -1199,17 +1201,17 @@ func TestBlocksQueue_stuckInUnfavourableFork(t *testing.T) {
 		firstFSM, ok := queue.smm.findStateMachine(forkedSlot)
 		require.Equal(t, true, ok)
 		require.Equal(t, stateDataParsed, firstFSM.state)
-		require.Equal(t, forkedPeer, firstFSM.pid)
+		require.Equal(t, forkedPeer, firstFSM.fetched.blocksFrom)
 		reqEnd := testForkStartSlot(t, 251) + primitives.Slot(findForkReqRangeSize())
-		require.Equal(t, int(reqEnd-forkedSlot), len(firstFSM.bwb))
-		require.Equal(t, forkedSlot, firstFSM.bwb[0].Block.Block().Slot())
+		require.Equal(t, int(reqEnd-forkedSlot), len(firstFSM.fetched.bwb))
+		require.Equal(t, forkedSlot, firstFSM.fetched.bwb[0].Block.Block().Slot())
 
 		// Assert that forked data from chain2 is available (within 64 fetched blocks).
 		for i, blk := range chain2[forkedSlot:] {
-			if i >= len(firstFSM.bwb) {
+			if i >= len(firstFSM.fetched.bwb) {
 				break
 			}
-			rootFromFSM := firstFSM.bwb[i].Block.Root()
+			rootFromFSM := firstFSM.fetched.bwb[i].Block.Root()
 			blkRoot, err := blk.Block.HashTreeRoot()
 			require.NoError(t, err)
 			assert.Equal(t, blkRoot, rootFromFSM)
@@ -1217,7 +1219,7 @@ func TestBlocksQueue_stuckInUnfavourableFork(t *testing.T) {
 
 		// Assert that machines are in the expected state.
 		startSlot = forkedEpochStartSlot.Add(1 + blocksPerRequest)
-		require.Equal(t, int(blocksPerRequest)-int(forkedSlot-(forkedEpochStartSlot+1)), len(firstFSM.bwb))
+		require.Equal(t, int(blocksPerRequest)-int(forkedSlot-(forkedEpochStartSlot+1)), len(firstFSM.fetched.bwb))
 		for i := startSlot; i < startSlot.Add(blocksPerRequest*(lookaheadSteps-1)); i += primitives.Slot(blocksPerRequest) {
 			fsm, ok := queue.smm.findStateMachine(i)
 			require.Equal(t, true, ok)

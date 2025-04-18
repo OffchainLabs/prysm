@@ -26,7 +26,7 @@ func UseSepoliaNetworkConfig() {
 
 // SepoliaConfig defines the config for the Sepolia beacon chain testnet.
 func SepoliaConfig() *BeaconChainConfig {
-	cfg := MainnetConfig().Copy()
+	cfg := MainnetConfig()
 	cfg.MinGenesisTime = 1655647200
 	cfg.GenesisDelay = 86400
 	cfg.MinGenesisActiveValidatorCount = 1300
