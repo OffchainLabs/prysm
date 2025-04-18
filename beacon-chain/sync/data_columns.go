@@ -1340,6 +1340,274 @@ func filterPeersByTargetSlot(p2p p2p.P2P, peers []peer.ID, targetSlot primitives
 	return filteredPeers, descriptions, nil
 }
 
+// ReconstructDataColumnsByRange attempts to reconstruct requested data columns for blocks within a given slot range.
+// It identifies available columns from peers across the range, fetches a set of 'recoveryThreshold' distinct columns
+// for the entire range, and then attempts reconstruction for each block individually using the fetched set.
+// It returns successfully reconstructed columns grouped by block root. Errors during fetch or reconstruction are returned.
+func ReconstructDataColumnsByRange(
+	ctx context.Context,
+	missingColumnsByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
+	blks []blocks.ROBlock,
+	peers []peer.ID,
+	batchSize int,
+	clock *startup.Clock,
+	p2p p2p.P2P,
+	ctxMap ContextByteVersions,
+	rateLimiter *leakybucket.Collector,
+	newColumnsVerifier verification.NewDataColumnsVerifier,
+) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
+	if len(missingColumnsByRoot) == 0 || len(blks) == 0 {
+		return nil, nil // Nothing requested or no relevant blocks.
+	}
+
+	// Determine recovery threshold.
+	numberOfColumns := int(params.BeaconConfig().NumberOfColumns)
+	recoveryThreshold := numberOfColumns/2 + numberOfColumns%2
+	log := log.WithFields(logrus.Fields{
+		"startSlot":         blks[0].Block().Slot(),
+		"count":             blks[len(blks)-1].Block().Slot() - blks[0].Block().Slot() + 1,
+		"totalColumns":      numberOfColumns,
+		"recoveryThreshold": recoveryThreshold,
+	})
+	log.Debug("Attempting data column recovery for range")
+
+	allCols := make([]uint64, numberOfColumns)
+	for i := 0; i < numberOfColumns; i++ {
+		allCols[i] = uint64(i)
+	}
+	_, admissiblePeersByDataColumn, _, err := AdmissiblePeersForDataColumns(peers, allCols, p2p)
+	if err != nil {
+		return nil, errors.Wrap(err, "couldn't get admissible peers for all data columns for range")
+	}
+
+	availableColumns := make([]uint64, 0, len(admissiblePeersByDataColumn))
+	for colIdx := range admissiblePeersByDataColumn {
+		availableColumns = append(availableColumns, colIdx)
+	}
+
+	if len(availableColumns) < recoveryThreshold {
+		return nil, ErrNotEnoughColsAvailable
+	}
+
+	log.WithFields(logrus.Fields{
+		"availableColumns": availableColumns,
+		"numPeers":         len(peers),
+	}).Debug("Available columns for range reconstruction")
+
+	fetchedSidecarsByRoot, err := fetchAndVerifyRecoveryColumnsByRange(
+		ctx, missingColumnsByRoot, availableColumns, recoveryThreshold,
+		blks, peers, batchSize, clock, p2p, ctxMap, rateLimiter, newColumnsVerifier,
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to fetch recovery columns for range")
+	}
+
+	// Perform reconstruction for each block individually using the fetched sidecars.
+	requestedColumns := make([]uint64, 0)
+	for _, col := range fetchedSidecarsByRoot[blks[0].Root()] {
+		requestedColumns = append(requestedColumns, col.Index)
+	}
+	reconstructedColumnsByRoot := make(map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn)
+	for _, block := range blks {
+		commits, _ := block.Block().Body().BlobKzgCommitments()
+		if len(commits) == 0 {
+			continue
+		}
+
+		root := block.Root()
+		fetchedForThisRoot := fetchedSidecarsByRoot[root]
+
+		// Check if enough columns were actually retrieved *for this specific block*.
+		if len(fetchedForThisRoot) < recoveryThreshold {
+			errMsg := fmt.Errorf("received only %d columns for block %#x, need %d for reconstruction", len(fetchedForThisRoot), root, recoveryThreshold)
+			return nil, errors.Wrap(ErrReconstructionFailed, errMsg.Error())
+		}
+
+		// Perform reconstruction using the fetched columns for this block.
+		reconstructed, err := reconstructAndFilterColumns(requestedColumns, fetchedForThisRoot, block, newColumnsVerifier)
+		if err != nil {
+			return nil, errors.Wrapf(err, "reconstruction failed for block %#x", root)
+		}
+
+		// Add successfully reconstructed columns to the result map.
+		for _, col := range reconstructed {
+			if _, ok := missingColumnsByRoot[root][col.Index]; ok {
+				reconstructedColumnsByRoot[root] = append(reconstructedColumnsByRoot[root], col)
+			}
+		}
+	}
+
+	return reconstructedColumnsByRoot, nil
+}
+
+// FetchOrReconstructDataColumnsByRange attempts to fetch requested data columns for blocks in a range.
+// If fetching fails specifically because no peers are available for the *initial* request (UnavailableColumnsError),
+// it attempts to reconstruct the columns using available data from other peers.
+// Results are returned grouped by block root.
+func FetchOrReconstructDataColumnsByRange(
+	ctx context.Context,
+	missingColumnsByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
+	blks []blocks.ROBlock,
+	peers []peer.ID,
+	batchSize int,
+	clock *startup.Clock,
+	p2p p2p.P2P,
+	ctxMap ContextByteVersions,
+	rateLimiter *leakybucket.Collector,
+	newColumnsVerifier verification.NewDataColumnsVerifier,
+) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
+	log := log.WithFields(logrus.Fields{
+		"startSlot": blks[0].Block().Slot(),
+		"count":     blks[len(blks)-1].Block().Slot() - blks[0].Block().Slot() + 1,
+	})
+	log.Debug("Attempting to fetch or reconstruct data columns for range")
+
+	// First, try to request the columns directly for the range.
+	fetchedColumnsByRoot, err := RequestDataColumnSidecarsByRange(
+		ctx,
+		missingColumnsByRoot,
+		blks,
+		peers,
+		batchSize,
+		clock,
+		p2p,
+		ctxMap,
+		rateLimiter,
+		newColumnsVerifier,
+	)
+	if err == nil {
+		return fetchedColumnsByRoot, nil
+	}
+
+	// If the error is specifically UnavailableColumnsError, attempt reconstruction for the range.
+	if errors.Is(err, &UnavailableColumnsError{}) {
+		log.WithError(err).Debug("Fetching range failed due to no available peers for initial request, attempting reconstruction")
+		reconstructedColumnsByRoot, reconstructErr := ReconstructDataColumnsByRange(
+			ctx,
+			missingColumnsByRoot,
+			blks,
+			peers,
+			batchSize,
+			clock,
+			p2p,
+			ctxMap,
+			rateLimiter,
+			newColumnsVerifier,
+		)
+		if reconstructErr != nil {
+			joinedErr := goErrors.Join(err, reconstructErr)
+			return nil, errors.Wrap(joinedErr, "failed to fetch range (no peers) and reconstruction failed")
+		}
+
+		return reconstructedColumnsByRoot, nil
+	}
+
+	return nil, errors.Wrap(err, "failed to fetch all data columns for range")
+}
+
+// fetchAndVerifyRecoveryColumnsByRange selects a prioritized set of recoveryThreshold columns,
+// requests them for the given range using RequestDataColumnSidecarsByRange, retrying if specific
+// columns are unavailable, verifies enough were received *per block*, and returns them grouped by block root.
+// Returns all successfully fetched columns grouped by root, even if some blocks failed recovery criteria.
+func fetchAndVerifyRecoveryColumnsByRange(
+	ctx context.Context,
+	missingColumnsByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
+	availableColumns []uint64,
+	recoveryThreshold int,
+	blks []blocks.ROBlock,
+	peers []peer.ID,
+	batchSize int,
+	clock *startup.Clock,
+	p2p p2p.P2P,
+	ctxMap ContextByteVersions,
+	rateLimiter *leakybucket.Collector,
+	newColumnsVerifier verification.NewDataColumnsVerifier,
+) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
+	remainingAvailableCols := make(map[uint64]bool, len(availableColumns))
+	for _, col := range availableColumns {
+		remainingAvailableCols[col] = true
+	}
+
+	colsMissingInRange := make(map[uint64]bool)
+	for _, missingCols := range missingColumnsByRoot {
+		for col := range missingCols {
+			colsMissingInRange[col] = true
+		}
+	}
+	dataColumnsToFetch := make([]uint64, 0, len(colsMissingInRange))
+	for col := range colsMissingInRange {
+		dataColumnsToFetch = append(dataColumnsToFetch, col)
+	}
+
+	var fetchedColumnsByRoot map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn
+	var err error
+
+	for {
+		// Select columns to fetch using the helper function based on currently known available columns.
+		dataColumnsAvailable := make([]uint64, 0, len(remainingAvailableCols))
+		for col := range remainingAvailableCols {
+			dataColumnsAvailable = append(dataColumnsAvailable, col)
+		}
+
+		columnsToFetch, selectionErr := selectRecoveryColumnsToFetch(dataColumnsToFetch, dataColumnsAvailable, recoveryThreshold)
+		if selectionErr != nil {
+			return nil, errors.Wrapf(ErrReconstructionFailed, "failed to select sufficient recovery columns: %v", selectionErr)
+		}
+		requestColumnsByRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool)
+		for root := range missingColumnsByRoot {
+			requestColumnsByRoot[root] = make(map[uint64]bool)
+			for _, col := range columnsToFetch {
+				requestColumnsByRoot[root][col] = true
+			}
+		}
+
+		log.WithFields(logrus.Fields{
+			"columnsToFetch":    columnsToFetch,
+			"recoveryThreshold": recoveryThreshold,
+			"startSlot":         blks[0].Block().Slot(),
+			"count":             blks[len(blks)-1].Block().Slot() - blks[0].Block().Slot() + 1,
+		}).Debug("Selected columns for fetch for range recovery attempt")
+
+		fetchedColumnsByRoot, err = RequestDataColumnSidecarsByRange(
+			ctx,
+			requestColumnsByRoot,
+			blks,
+			peers,
+			batchSize,
+			clock,
+			p2p,
+			ctxMap,
+			rateLimiter,
+			newColumnsVerifier,
+		)
+		if err == nil {
+			// Successfully fetched data columns. Break the loop.
+			break
+		}
+
+		// Check if the error is UnavailableColumnsError for retry logic.
+		ucErr := &UnavailableColumnsError{}
+		if errors.As(err, &ucErr) {
+			log.WithFields(logrus.Fields{
+				"unavailableColumns": ucErr.Columns,
+				"startSlot":          blks[0].Block().Slot(),
+				"count":              blks[len(blks)-1].Block().Slot() - blks[0].Block().Slot() + 1,
+			}).Warn("Some selected recovery columns were unavailable for range, removing and retrying selection")
+
+			// Remove the unavailable columns from our local availability map.
+			for _, unavailableCol := range ucErr.Columns {
+				delete(remainingAvailableCols, unavailableCol)
+			}
+			// Continue the loop to select a new set of columns and retry fetching.
+			continue
+		}
+
+		return nil, errors.Wrap(err, "failed to request data columns for range recovery")
+	}
+
+	return fetchedColumnsByRoot, nil
+}
+
 // itemsCount returns the total count of items
 func itemsCount(missingColumnsByRoot map[[fieldparams.RootLength]byte]map[uint64]bool) int {
 	count := 0
