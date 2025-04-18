@@ -3,15 +3,19 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "kzg.go",
         "trusted_setup.go",
         "validation.go",
     ],
-    embedsrcs = ["trusted_setup.json"],
+    embedsrcs = ["trusted_setup_4096.json"],
     importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg",
     visibility = ["//visibility:public"],
     deps = [
         "//consensus-types/blocks:go_default_library",
         "@com_github_crate_crypto_go_kzg_4844//:go_default_library",
+        "@com_github_ethereum_c_kzg_4844//bindings/go:go_default_library",
+        "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
+        "@com_github_ethereum_go_ethereum//crypto/kzg4844:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
     ],
 )

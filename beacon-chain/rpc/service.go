@@ -16,6 +16,7 @@ import (
 	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
 	opfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
@@ -121,6 +122,7 @@ type Config struct {
 	BlobStorage               *filesystem.BlobStorage
 	TrackedValidatorsCache    *cache.TrackedValidatorsCache
 	PayloadIDCache            *cache.PayloadIDCache
+	LCStore                   *lightClient.Store
 }
 
 // NewService instantiates a new RPC service instance that will

@@ -62,9 +62,11 @@ func (b *BeaconState) NextWithdrawalValidatorIndex() (primitives.ValidatorIndex,
 //
 //			validator = state.validators[withdrawal.index]
 //			has_sufficient_effective_balance = validator.effective_balance >= MIN_ACTIVATION_BALANCE
-//			has_excess_balance = state.balances[withdrawal.index] > MIN_ACTIVATION_BALANCE
+//			total_withdrawn = sum(w.amount for w in withdrawals if w.validator_index == withdrawal.validator_index)
+//			balance = state.balances[withdrawal.validator_index] - total_withdrawn
+//			has_excess_balance = balance > MIN_ACTIVATION_BALANCE
 //			if validator.exit_epoch == FAR_FUTURE_EPOCH and has_sufficient_effective_balance and has_excess_balance:
-//				withdrawable_balance = min(state.balances[withdrawal.index] - MIN_ACTIVATION_BALANCE, withdrawal.amount)
+//				withdrawable_balance = min(balance - MIN_ACTIVATION_BALANCE, withdrawal.amount)
 //				withdrawals.append(Withdrawal(
 //					index=withdrawal_index,
 //					validator_index=withdrawal.index,
@@ -132,9 +134,19 @@ func (b *BeaconState) ExpectedWithdrawals() ([]*enginev1.Withdrawal, uint64, err
 				return nil, 0, fmt.Errorf("could not retrieve balance at index %d: %w", w.Index, err)
 			}
 			hasSufficientEffectiveBalance := v.EffectiveBalance() >= params.BeaconConfig().MinActivationBalance
-			hasExcessBalance := vBal > params.BeaconConfig().MinActivationBalance
+			var totalWithdrawn uint64
+			for _, wi := range withdrawals {
+				if wi.ValidatorIndex == w.Index {
+					totalWithdrawn += wi.Amount
+				}
+			}
+			balance, err := mathutil.Sub64(vBal, totalWithdrawn)
+			if err != nil {
+				return nil, 0, errors.Wrapf(err, "failed to subtract balance %d with total withdrawn %d", vBal, totalWithdrawn)
+			}
+			hasExcessBalance := balance > params.BeaconConfig().MinActivationBalance
 			if v.ExitEpoch() == params.BeaconConfig().FarFutureEpoch && hasSufficientEffectiveBalance && hasExcessBalance {
-				amount := min(vBal-params.BeaconConfig().MinActivationBalance, w.Amount)
+				amount := min(balance-params.BeaconConfig().MinActivationBalance, w.Amount)
 				withdrawals = append(withdrawals, &enginev1.Withdrawal{
 					Index:          withdrawalIndex,
 					ValidatorIndex: w.Index,
@@ -165,7 +177,10 @@ func (b *BeaconState) ExpectedWithdrawals() ([]*enginev1.Withdrawal, uint64, err
 					partiallyWithdrawnBalance += w.Amount
 				}
 			}
-			balance = balance - partiallyWithdrawnBalance
+			balance, err = mathutil.Sub64(balance, partiallyWithdrawnBalance)
+			if err != nil {
+				return nil, 0, errors.Wrapf(err, "could not subtract balance %d with partial withdrawn balance %d", balance, partiallyWithdrawnBalance)
+			}
 		}
 		if helpers.IsFullyWithdrawableValidator(val, balance, epoch, b.version) {
 			withdrawals = append(withdrawals, &enginev1.Withdrawal{
