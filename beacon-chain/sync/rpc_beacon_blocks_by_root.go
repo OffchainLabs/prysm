@@ -110,9 +110,9 @@ func (s *Service) requestAndSaveMissingDataColumnSidecars(block blocks.ROBlock) 
 	peers := s.getBestPeers()
 	sidecars, err := RequestDataColumnSidecarsByRoot(s.ctx, missingColumns, block, peers, s.cfg.clock, s.cfg.p2p, s.ctxMap, s.newColumnsVerifier)
 	if err != nil {
-		if errors.Is(err, ErrNoPeersForDataColumns) {
+		if errors.Is(err, &UnavailableColumnsError{}) {
 			// If specific data columns are missing, try to recover the data column sidecars.
-			if recoverErr := s.recoverAndSaveDataColumnSidecars(ctx, missingColumns, block, blkRoot); recoverErr != nil {
+			if recoverErr := s.reconstructAndSaveDataColumnSidecars(s.ctx, missingColumns, block); recoverErr != nil {
 				return errors.Wrapf(err, "could not request or recover and save data column sidecars. recoverErr: %v", recoverErr)
 			}
 		} else {
@@ -250,41 +250,12 @@ func (s *Service) sendAndSaveBlobSidecars(ctx context.Context, request types.Blo
 	return nil
 }
 
-// requestAndSaveDataColumnSidecars sends a data column sidecars by root request
-// to a peer and saves the received sidecars.
-//
-// NOTE: During the initial sync, LazilyPersistentStoreColumn caches sidecars
-// and saves them to disk within IsDataAvailable. requestAndSaveDataColumnSidecars is called
-// when no caching is done in the pending blocks queue.
-func (s *Service) requestAndSaveDataColumnSidecars(
-	ctx context.Context,
-	dataColumns map[uint64]bool,
-	block interfaces.ReadOnlySignedBeaconBlock,
-	blkRoot [32]byte,
-) error {
-	if len(dataColumns) == 0 {
-		return nil
-	}
-	peers := s.getBestPeers()
-	sidecars, err := RequestDataColumnSidecarsByRoot(ctx, dataColumns, block, blkRoot, peers, s.cfg.clock, s.cfg.p2p, s.ctxMap, s.newColumnsVerifier)
-	if err != nil {
-		return errors.Wrap(err, "request data column sidecars")
-	}
-
-	if err := SaveDataColumns(sidecars, s.cfg.blobStorage); err != nil {
-		return errors.Wrap(err, "save data column")
-	}
-
-	return nil
-}
-
 // reconstructAndSaveDataColumnSidecars attempts reconstruction using ReconstructDataColumnsByRoot and saves the results.
 // It is intended to be called when requesting sidecars from peers fails.
 func (s *Service) reconstructAndSaveDataColumnSidecars(
 	ctx context.Context,
-	missingColumns map[uint64]bool,
-	block interfaces.ReadOnlySignedBeaconBlock,
-	blkRoot [32]byte,
+	missingColumns []uint64,
+	block blocks.ROBlock,
 ) error {
 	if len(missingColumns) == 0 {
 		return nil
@@ -298,10 +269,9 @@ func (s *Service) reconstructAndSaveDataColumnSidecars(
 		ctx,
 		missingColumns,
 		block,
-		blkRoot,
+		peers,
 		s.cfg.clock,
 		s.cfg.p2p,
-		s.cfg.chain,
 		s.ctxMap,
 		s.newColumnsVerifier,
 	)
@@ -311,7 +281,7 @@ func (s *Service) reconstructAndSaveDataColumnSidecars(
 	}
 
 	// If successful, save the obtained sidecars.
-	if err := SaveDataColumns(sidecars, s.cfg.blobStorage); err != nil {
+	if err := s.cfg.dataColumnStorage.Save(sidecars); err != nil {
 		return errors.Wrap(err, "could not save fetched/reconstructed data column sidecars")
 	}
 

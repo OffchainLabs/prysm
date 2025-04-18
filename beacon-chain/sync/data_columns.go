@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
@@ -20,27 +21,13 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
 	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/verify"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/sirupsen/logrus"
 )
 
@@ -53,22 +40,7 @@ type UnavailableColumnsError struct {
 	Columns []uint64
 }
 
-func (e *UnavailableColumnsError) Error() string {
-	return fmt.Sprintf("no peers available to fetch data columns from: %v", e.Columns)
-}
-
-func (e *UnavailableColumnsError) Is(target error) bool {
-	_, ok := target.(*UnavailableColumnsError)
-	return ok
-}
-
-func NewUnavailableColumnsError(columns []uint64) *UnavailableColumnsError {
-	return &UnavailableColumnsError{Columns: columns}
-}
-
-type UnavailableColumnsError struct {
-	Columns []uint64
-}
+var _ error = &UnavailableColumnsError{}
 
 func (e *UnavailableColumnsError) Error() string {
 	return fmt.Sprintf("no peers available to fetch data columns from: %v", e.Columns)
@@ -102,17 +74,11 @@ func RequestDataColumnSidecarsByRoot(
 	peers []core.PeerID,
 	clock *startup.Clock,
 	p2p p2p.P2P,
-	chain blockchain.FinalizationFetcher,
 	ctxMap ContextByteVersions,
 	newColumnsVerifier verification.NewDataColumnsVerifier,
 ) ([]blocks.VerifiedRODataColumn, error) {
 	if len(dataColumnsToFetch) == 0 {
 		return nil, nil
-	}
-
-	if len(peers) == 0 {
-		// Get the best peers to fetch from.
-		peers = getBestPeers(p2p, chain)
 	}
 
 	// Assemble the peers who can provide the needed data columns.
@@ -123,16 +89,9 @@ func RequestDataColumnSidecarsByRoot(
 
 	// If the request was non-empty but no peers were found for any needed column,
 	// return the specific error immediately.
-	if len(dataColumns) > 0 && len(dataColumnsByAdmissiblePeer) == 0 {
+	if len(dataColumnsToFetch) > 0 && len(dataColumnsByAdmissiblePeer) == 0 {
 		// No peer has any of the requested columns.
-		return nil, NewUnavailableColumnsError(uint64MapToSortedSlice(dataColumns))
-	}
-
-	// If the request was non-empty but no peers were found for any needed column,
-	// return the specific error immediately.
-	if len(dataColumns) > 0 && len(dataColumnsByAdmissiblePeer) == 0 {
-		// No peer has any of the requested columns.
-		return nil, NewUnavailableColumnsError(uint64MapToSortedSlice(dataColumns))
+		return nil, NewUnavailableColumnsError(dataColumnsToFetch)
 	}
 
 	verifiedSidecars := make([]blocks.VerifiedRODataColumn, 0, len(dataColumnsToFetch))
@@ -178,43 +137,12 @@ func RequestDataColumnSidecarsByRoot(
 				continue
 			}
 
-			// Check if returned data columns align with the block.
-			if err := verify.DataColumnsAlignWithBlock(block, peerSidecars); err != nil {
+			verifiedPeerSidecars, err := verifyColumnsForBlock(block, peerSidecars, newColumnsVerifier)
+			if err != nil {
 				// Remove this peer since it failed to respond correctly.
 				delete(dataColumnsByAdmissiblePeer, peer)
-				log.WithError(err).Debug("Align with block failed")
-				continue
-			}
-
-			// Verify the received sidecars.
-			verifier := newColumnsVerifier(peerSidecars, verification.ByRootRequestDataColumnSidecarRequirements)
-
-			if err := verifier.Valid(); err != nil {
-				// Remove this peer if the verification failed.
-				delete(dataColumnsByAdmissiblePeer, peer)
-				log.WithError(err).Debug("Valid verification failed")
-				continue
-			}
-
-			if err := verifier.SidecarInclusionProven(); err != nil {
-				// Remove this peer if the verification failed.
-				delete(dataColumnsByAdmissiblePeer, peer)
-				log.WithError(err).Debug("Sidecar inclusion proof verification failed")
-				continue
-			}
-
-			if err := verifier.SidecarKzgProofVerified(); err != nil {
-				// Remove this peer if the verification failed.
-				delete(dataColumnsByAdmissiblePeer, peer)
-				log.WithError(err).Debug("Sidecar KZG proof verification failed")
-				continue
-			}
-
-			// Upgrade the sidecars to verified sidecars.
-			verifiedPeerSidecars, err := verifier.VerifiedRODataColumns()
-			if err != nil {
-				// This should never happen.
-				return nil, errors.Wrap(err, "verified data columns")
+				log.WithError(err).Debug("Failed to verify columns for block")
+				return nil, errors.Wrap(err, "verify columns for block")
 			}
 
 			// Mark columns as successful
@@ -256,76 +184,103 @@ func RequestDataColumnSidecarsByRoot(
 	return nil, errors.Errorf("failed to retrieve all requested data columns after retries for block root=%#x, missing columns=%v", blockRoot, uint64MapToSortedSlice(remainingMissingColumns))
 }
 
+func verifyColumnsForBlock(block blocks.ROBlock, columns []blocks.RODataColumn, newColumnsVerifier verification.NewDataColumnsVerifier) ([]blocks.VerifiedRODataColumn, error) {
+	// Check if returned data columns align with the block.
+	if err := verify.DataColumnsAlignWithBlock(block, columns); err != nil {
+		return nil, errors.Wrap(err, "align with block failed")
+	}
+
+	// Verify the received sidecars.
+	verifier := newColumnsVerifier(columns, verification.ByRootRequestDataColumnSidecarRequirements)
+
+	if err := verifier.Valid(); err != nil {
+		return nil, errors.Wrap(err, "valid verification failed")
+	}
+
+	if err := verifier.SidecarInclusionProven(); err != nil {
+		return nil, errors.Wrap(err, "sidecar inclusion proof verification failed")
+	}
+
+	if err := verifier.SidecarKzgProofVerified(); err != nil {
+		return nil, errors.Wrap(err, "sidecar KZG proof verification failed")
+	}
+
+	// Upgrade the sidecars to verified sidecars.
+	verifiedColumns, err := verifier.VerifiedRODataColumns()
+	if err != nil {
+		// This should never happen.
+		return nil, errors.Wrap(err, "verified data columns")
+	}
+
+	return verifiedColumns, nil
+}
+
 // ReconstructDataColumnsByRoot attempts to reconstruct a requested set of data columns for a given block.
 // It identifies available columns from peers, calculates the recovery threshold, fetches a set of 'recoveryThreshold' columns.
 // Once a fetch succeeds, it uses erasure coding to reconstruct the full set of columns and returns
 // the originally requested ones. Errors during fetch or reconstruction are fatal.
 func ReconstructDataColumnsByRoot(
 	ctx context.Context,
-	requestedColumns map[uint64]bool,
-	block interfaces.ReadOnlySignedBeaconBlock,
-	blkRoot [32]byte,
+	dataColumnsToFetch []uint64,
+	block blocks.ROBlock,
+	peers []core.PeerID,
 	clock *startup.Clock,
 	p2p p2p.P2P,
-	chain blockchain.FinalizationFetcher,
 	ctxMap ContextByteVersions,
 	newColumnsVerifier verification.NewDataColumnsVerifier,
-) ([]blocks.RODataColumn, error) {
-	if len(requestedColumns) == 0 {
+) ([]blocks.VerifiedRODataColumn, error) {
+	if len(dataColumnsToFetch) == 0 {
 		return nil, nil // Nothing requested, nothing to recover.
 	}
 
 	// Determine recovery threshold.
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
+	numberOfColumns := int(params.BeaconConfig().NumberOfColumns)
 	// If total is odd, then we need total / 2 + 1 columns to reconstruct.
 	// If total is even, then we need total / 2 columns to reconstruct.
 	recoveryThreshold := numberOfColumns/2 + numberOfColumns%2
 	log := log.WithFields(logrus.Fields{
-		"blockRoot":         fmt.Sprintf("%#x", blkRoot),
+		"blockRoot":         fmt.Sprintf("%#x", block.Root()),
 		"totalColumns":      numberOfColumns,
 		"recoveryThreshold": recoveryThreshold,
-		"requestedColumns":  uint64MapToSortedSlice(requestedColumns),
+		"requestedColumns":  dataColumnsToFetch,
 	})
 	log.Debug("Attempting data column recovery")
 
-	// Get the best peers to fetch from.
-	peers := getBestPeers(p2p, chain)
-
 	// Find available columns from peers.
-	allCols := make(map[uint64]bool, numberOfColumns)
-	for i := uint64(0); i < numberOfColumns; i++ {
-		allCols[i] = true
+	allCols := make([]uint64, numberOfColumns)
+	for i := 0; i < numberOfColumns; i++ {
+		allCols[i] = uint64(i)
 	}
 	_, admissiblePeersByDataColumn, _, err := AdmissiblePeersForDataColumns(peers, allCols, p2p)
 	if err != nil {
 		return nil, errors.Wrap(err, "couldn't get admissible peers for all data columns")
 	}
 
-	availableColumns := make(map[uint64]bool, len(admissiblePeersByDataColumn))
+	dataColumnsAvailable := make([]uint64, len(admissiblePeersByDataColumn))
 	for colIdx := range admissiblePeersByDataColumn {
-		availableColumns[colIdx] = true
+		dataColumnsAvailable = append(dataColumnsAvailable, colIdx)
 	}
 
-	if uint64(len(availableColumns)) < recoveryThreshold {
+	if len(dataColumnsAvailable) < recoveryThreshold {
 		return nil, ErrNotEnoughColsAvailable
 	}
 
 	log.WithFields(logrus.Fields{
-		"availableColumns": uint64MapToSortedSlice(availableColumns),
-		"numPeers":         len(peers),
+		"dataColumnsAvailable": dataColumnsAvailable,
+		"numPeers":             len(peers),
 	}).Debug("Available columns for reconstruction")
 
 	// Fetch the required sidecars for reconstruction.
 	fetchedSidecars, err := fetchAndVerifyRecoveryColumns(
-		ctx, requestedColumns, availableColumns, recoveryThreshold,
-		block, blkRoot, clock, p2p, chain, ctxMap, newColumnsVerifier,
+		ctx, dataColumnsToFetch, dataColumnsAvailable, recoveryThreshold,
+		block, peers, clock, p2p, ctxMap, newColumnsVerifier,
 	)
 	if err != nil {
 		return nil, err
 	}
 
 	// Perform reconstruction and filter for originally requested columns.
-	return reconstructAndFilterColumns(requestedColumns, fetchedSidecars, block, blkRoot)
+	return reconstructAndFilterColumns(dataColumnsToFetch, fetchedSidecars, block, newColumnsVerifier)
 }
 
 // FetchOrReconstructDataColumnsByRoot attempts to fetch the requested data columns from peers.
@@ -333,30 +288,28 @@ func ReconstructDataColumnsByRoot(
 // it attempts to reconstruct the columns using available data from other peers.
 func FetchOrReconstructDataColumnsByRoot(
 	ctx context.Context,
-	requestedColumns map[uint64]bool,
-	block interfaces.ReadOnlySignedBeaconBlock,
-	blkRoot [32]byte,
+	dataColumnsToFetch []uint64,
+	block blocks.ROBlock,
+	peers []core.PeerID,
 	clock *startup.Clock,
 	p2p p2p.P2P,
-	chain blockchain.FinalizationFetcher,
 	ctxMap ContextByteVersions,
 	newColumnsVerifier verification.NewDataColumnsVerifier,
-) ([]blocks.RODataColumn, error) {
+) ([]blocks.VerifiedRODataColumn, error) {
 	log := log.WithFields(logrus.Fields{
-		"blockRoot":        fmt.Sprintf("%#x", blkRoot),
-		"requestedColumns": uint64MapToSortedSlice(requestedColumns),
+		"blockRoot":          fmt.Sprintf("%#x", block.Root()),
+		"dataColumnsToFetch": dataColumnsToFetch,
 	})
 	log.Debug("Attempting to fetch or reconstruct data columns")
 
 	// First, try to request the columns directly.
 	sidecars, err := RequestDataColumnSidecarsByRoot(
 		ctx,
-		requestedColumns,
+		dataColumnsToFetch,
 		block,
-		blkRoot,
+		peers,
 		clock,
 		p2p,
-		chain,
 		ctxMap,
 		newColumnsVerifier,
 	)
@@ -371,12 +324,11 @@ func FetchOrReconstructDataColumnsByRoot(
 		log.WithError(err).Debug("Fetching failed due to no available peers, attempting reconstruction")
 		reconstructedSidecars, reconstructErr := ReconstructDataColumnsByRoot(
 			ctx,
-			requestedColumns,
+			dataColumnsToFetch,
 			block,
-			blkRoot,
+			peers,
 			clock,
 			p2p,
-			chain,
 			ctxMap,
 			newColumnsVerifier,
 		)
@@ -397,44 +349,43 @@ func FetchOrReconstructDataColumnsByRoot(
 // requests them using RequestDataColumnSidecarsByRoot, and verifies enough were received.
 func fetchAndVerifyRecoveryColumns(
 	ctx context.Context,
-	requestedColumns map[uint64]bool,
-	availableColumns map[uint64]bool,
-	recoveryThreshold uint64,
-	block interfaces.ReadOnlySignedBeaconBlock,
-	blkRoot [32]byte,
+	dataColumnsToFetch []uint64,
+	dataColumnsAvailable []uint64,
+	recoveryThreshold int,
+	block blocks.ROBlock,
+	peers []core.PeerID,
 	clock *startup.Clock,
 	p2p p2p.P2P,
-	chain blockchain.FinalizationFetcher,
 	ctxMap ContextByteVersions,
 	newColumnsVerifier verification.NewDataColumnsVerifier,
-) ([]blocks.RODataColumn, error) {
+) ([]blocks.VerifiedRODataColumn, error) {
 	// Select columns to fetch using the helper function.
-	columnsToFetch, err := selectRecoveryColumnsToFetch(requestedColumns, availableColumns, recoveryThreshold)
+	columnsToFetch, err := selectRecoveryColumnsToFetch(dataColumnsToFetch, dataColumnsAvailable, recoveryThreshold)
 	if err != nil {
 		return nil, err // Propagate the error if selection failed.
 	}
 
 	log.WithFields(logrus.Fields{
-		"columnsToFetch":    uint64MapToSortedSlice(columnsToFetch),
+		"columnsToFetch":    columnsToFetch,
 		"recoveryThreshold": recoveryThreshold,
 	}).Debug("Selected columns for fetch for recovery")
 
-	localAvailableColumns := make(map[uint64]bool, len(availableColumns))
-	for k, v := range availableColumns {
-		localAvailableColumns[k] = v
+	// If we encounter advertised columns that are not available, we filter them during each iteration.
+	filteredAvailableColumns := make(map[uint64]bool, len(dataColumnsAvailable))
+	for _, col := range dataColumnsAvailable {
+		filteredAvailableColumns[col] = true
 	}
 
-	var fetchedSidecars []blocks.RODataColumn
+	var fetchedSidecars []blocks.VerifiedRODataColumn
 	for {
 		// Fetch selected columns.
 		fetchedSidecars, err = RequestDataColumnSidecarsByRoot(
 			ctx,
 			columnsToFetch,
 			block,
-			blkRoot,
+			peers,
 			clock,
 			p2p,
-			chain,
 			ctxMap,
 			newColumnsVerifier,
 		)
@@ -447,9 +398,14 @@ func fetchAndVerifyRecoveryColumns(
 		if errors.As(err, &ucErr) {
 			// If some of the columns for reconstruction are unavailable, try again with those columns removed from the available columns.
 			for _, unavailableCol := range ucErr.Columns {
-				delete(localAvailableColumns, unavailableCol)
+				delete(filteredAvailableColumns, unavailableCol)
 			}
-			columnsToFetch, err = selectRecoveryColumnsToFetch(requestedColumns, localAvailableColumns, recoveryThreshold)
+			localAvailableColumns := make([]uint64, 0, len(filteredAvailableColumns))
+			for col := range filteredAvailableColumns {
+				localAvailableColumns = append(localAvailableColumns, col)
+			}
+
+			columnsToFetch, err = selectRecoveryColumnsToFetch(dataColumnsToFetch, localAvailableColumns, recoveryThreshold)
 			if err != nil {
 				return nil, errors.Wrap(err, "failed to select columns for recovery")
 			}
@@ -460,7 +416,7 @@ func fetchAndVerifyRecoveryColumns(
 	}
 
 	// Check if we actually got enough sidecars after the request.
-	if uint64(len(fetchedSidecars)) < recoveryThreshold {
+	if len(fetchedSidecars) < recoveryThreshold {
 		return nil, errors.Wrapf(ErrReconstructionFailed, "received only %d columns, need %d", len(fetchedSidecars), recoveryThreshold)
 	}
 
@@ -473,37 +429,41 @@ func fetchAndVerifyRecoveryColumns(
 // then fills the remaining slots up to the recoveryThreshold with other available columns,
 // sorted by index.
 func selectRecoveryColumnsToFetch(
-	requestedColumns map[uint64]bool,
-	availableColumns map[uint64]bool,
-	recoveryThreshold uint64,
-) (map[uint64]bool, error) {
-	if uint64(len(availableColumns)) < recoveryThreshold {
+	dataColumnsToFetch []uint64,
+	dataColumnsAvailable []uint64,
+	recoveryThreshold int,
+) ([]uint64, error) {
+	if len(dataColumnsAvailable) < recoveryThreshold {
 		return nil, ErrNotEnoughColsAvailable
 	}
 
-	columnsToFetch := make(map[uint64]bool)
+	columnsToFetch := make([]uint64, 0, recoveryThreshold)
+	isColumnAvailable := make(map[uint64]bool, len(dataColumnsAvailable))
+	for _, col := range dataColumnsAvailable {
+		isColumnAvailable[col] = true
+	}
 
 	// Add requested and available columns first.
-	for col := range requestedColumns {
-		if availableColumns[col] {
-			columnsToFetch[col] = true
+	usedColumns := make(map[uint64]bool, len(dataColumnsToFetch))
+	for _, col := range dataColumnsToFetch {
+		if isColumnAvailable[col] {
+			columnsToFetch = append(columnsToFetch, col)
+			usedColumns[col] = true
 		}
 	}
 
 	// Prepare a sorted list of other available columns not yet selected.
-	otherAvailable := make([]uint64, 0, len(availableColumns))
-	for col := range availableColumns {
-		if !columnsToFetch[col] { // If not already added
+	otherAvailable := make([]uint64, 0, len(dataColumnsAvailable))
+	for _, col := range dataColumnsAvailable {
+		if !usedColumns[col] { // If not already added
 			otherAvailable = append(otherAvailable, col)
+			usedColumns[col] = true
 		}
 	}
 	sort.Slice(otherAvailable, func(i, j int) bool { return otherAvailable[i] < otherAvailable[j] })
 
 	// Fill up to the recovery threshold.
-	for uint64(len(columnsToFetch)) < recoveryThreshold {
-		columnsToFetch[otherAvailable[0]] = true
-		otherAvailable = otherAvailable[1:]
-	}
+	columnsToFetch = append(columnsToFetch, otherAvailable[:recoveryThreshold-len(columnsToFetch)]...)
 
 	return columnsToFetch, nil
 }
@@ -512,19 +472,18 @@ func selectRecoveryColumnsToFetch(
 // reconstruction process. It then filters the results to return only the columns
 // originally requested.
 func reconstructAndFilterColumns(
-	requestedColumns map[uint64]bool,
-	fetchedSidecars []blocks.RODataColumn,
-	block interfaces.ReadOnlySignedBeaconBlock,
-	blkRoot [32]byte,
-) ([]blocks.RODataColumn, error) {
-	// Convert fetched RODataColumn to []*ethpb.DataColumnSidecar for peerdas functions.
-	pbFetchedSidecars := make([]*ethpb.DataColumnSidecar, 0, len(fetchedSidecars))
+	dataColumnsToFetch []uint64,
+	fetchedSidecars []blocks.VerifiedRODataColumn,
+	block blocks.ROBlock,
+	newColumnsVerifier verification.NewDataColumnsVerifier,
+) ([]blocks.VerifiedRODataColumn, error) {
+	// Convert fetched VerifiedRODataColumn to []*ethpb.DataColumnSidecar for peerdas functions.
+	pbFetchedSidecars := make([]*ethpb.DataColumnSidecar, len(fetchedSidecars))
 	for i := range fetchedSidecars {
-		verifiedCol := blocks.NewVerifiedRODataColumn(fetchedSidecars[i])
-		pbFetchedSidecars = append(pbFetchedSidecars, verifiedCol.DataColumnSidecar)
+		pbFetchedSidecars[i] = fetchedSidecars[i].DataColumnSidecar
 	}
 
-	recoveredCellsAndProofs, err := peerdas.RecoverCellsAndProofs(pbFetchedSidecars, blkRoot)
+	recoveredCellsAndProofs, err := peerdas.RecoverCellsAndProofs(pbFetchedSidecars, block.Root())
 	if err != nil {
 		log.WithError(err).Error("Failed to recover cells and proofs after fetching columns")
 		return nil, errors.Wrapf(ErrReconstructionFailed, "peerdas.RecoverCellsAndProofs failed: %v", err)
@@ -544,7 +503,7 @@ func reconstructAndFilterColumns(
 		return nil, errors.Wrap(err, "could not get KZG commitments inclusion proof")
 	}
 
-	allPbSidecars, err := peerdas.DataColumnSidecarsForReconstruct(
+	pbSidecars, err := peerdas.DataColumnSidecarsForReconstruct(
 		blobKzgCommitments,
 		signedBlockHeader,
 		kzgCommitmentsInclusionProof,
@@ -555,21 +514,31 @@ func reconstructAndFilterColumns(
 		return nil, errors.Wrapf(ErrReconstructionFailed, "peerdas.DataColumnSidecarsForReconstruct failed: %v", err)
 	}
 
-	// Convert all reconstructed sidecars back to RODataColumn.
-	allROSidecars := make(map[uint64]blocks.RODataColumn, len(allPbSidecars))
-	for _, pbSidecar := range allPbSidecars {
-		roSidecar, err := blocks.NewRODataColumn(pbSidecar)
+	// Verify all reconstructed sidecars.
+	roColumns := make([]blocks.RODataColumn, len(pbSidecars))
+	for i := range pbSidecars {
+		roColumns[i], err = blocks.NewRODataColumn(pbSidecars[i])
 		if err != nil {
-			return nil, errors.Wrapf(ErrReconstructionFailed, "failed to create RODataColumn from reconstructed sidecar index %d: %v", pbSidecar.ColumnIndex, err)
+			return nil, errors.Wrapf(ErrReconstructionFailed, "failed to create RODataColumn from reconstructed sidecar index %d: %v", pbSidecars[i].Index, err)
 		}
-		allROSidecars[roSidecar.ColumnIndex] = roSidecar
+	}
+
+	verifiedSidecars, err := verifyColumnsForBlock(block, roColumns, newColumnsVerifier)
+	if err != nil {
+		return nil, errors.Wrap(err, "verify columns for block")
+	}
+
+	// Convert all reconstructed sidecars back to VerifiedRODataColumn.
+	verifiedColsByIndex := make(map[uint64]blocks.VerifiedRODataColumn, len(verifiedSidecars))
+	for _, verifiedSidecar := range verifiedSidecars {
+		verifiedColsByIndex[verifiedSidecar.Index] = verifiedSidecar
 	}
 
 	// Filter to return only the originally requested columns.
-	resultColumns := make([]blocks.RODataColumn, 0, len(requestedColumns))
+	resultColumns := make([]blocks.VerifiedRODataColumn, 0, len(dataColumnsToFetch))
 	missingRecovered := make(map[uint64]bool)
-	for colIdx := range requestedColumns {
-		if recoveredCol, ok := allROSidecars[colIdx]; ok {
+	for _, colIdx := range dataColumnsToFetch {
+		if recoveredCol, ok := verifiedColsByIndex[colIdx]; ok {
 			resultColumns = append(resultColumns, recoveredCol)
 		} else {
 			// This indicates a potential issue with reconstruction or the returned data.
@@ -584,22 +553,6 @@ func reconstructAndFilterColumns(
 
 	log.Info("Successfully reconstructed and recovered requested data columns")
 	return resultColumns, nil
-}
-
-// SaveDataColumns saves the received data columns to disk.
-//
-// NOTE: During the initial sync, LazilyPersistentStoreColumn caches sidecars
-// and saves them to disk within IsDataAvailable. SaveDataColumns is intended
-// for use when no caching is done (e.g. in the pending blocks queue).
-func SaveDataColumns(sidecars []blocks.RODataColumn, blobStorage *filesystem.BlobStorage) error {
-	for i := range sidecars {
-		verfiedCol := blocks.NewVerifiedRODataColumn(sidecars[i])
-		if err := blobStorage.SaveDataColumn(verfiedCol); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 // RequestMissingDataColumnsByRange is an opinionated, high level function which, for each block in `blks`:
@@ -832,21 +785,6 @@ func MissingDataColumns(block blocks.ROBlock, nodeID enode.ID, custodyGroupCount
 	}
 
 	return missingColumns, nil
-}
-
-func RequestsForDataColumnsByRoot(
-	root [32]byte,
-	missingColumns []uint64,
-) (types.DataColumnSidecarsByRootReq, error) {
-	req := make(types.DataColumnSidecarsByRootReq, 0, len(missingColumns))
-	for _, column := range missingColumns {
-		req = append(req, &ethpb.DataColumnIdentifier{
-			BlockRoot:   root[:],
-			ColumnIndex: column,
-		})
-	}
-
-	return req, nil
 }
 
 // SelectPeersToFetchDataColumnsFrom implements greedy algorithm in order to select peers to fetch data columns from.

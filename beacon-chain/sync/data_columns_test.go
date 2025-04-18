@@ -622,24 +622,20 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 			tracker := newRequestTracker()
 
 			// Create responding peers with deterministic peer IDs
+			peerIDs := make([]peer.ID, 0, len(tc.peerSetup))
 			for _, setup := range tc.peerSetup {
 				skipColumnsMap := make(map[uint64]bool)
 				if cols, exists := tc.skipColumns[setup.offset]; exists {
 					skipColumnsMap = cols
 				}
-				createAndConnectCustodyPeer(t, setup, dataColumnSidecars, chainService, hostP2P, tracker, skipColumnsMap)
+				peer := createAndConnectCustodyPeer(t, setup, dataColumnSidecars, chainService, hostP2P, tracker, skipColumnsMap)
+				peerIDs = append(peerIDs, peer.PeerID())
 			}
 
 			ctxMap := map[[4]byte]int{{245, 165, 253, 66}: version.Fulu}
 			verifier := func(cols []blocks.RODataColumn, reqs []verification.Requirement) verification.DataColumnsVerifier {
 				initializer := &verification.Initializer{}
 				return initializer.NewDataColumnsVerifier(cols, reqs)
-			}
-
-			// Create mock finalization fetcher explicitly setting epoch 0
-			mockChain := &mockFinalizationFetcher{
-				finalizedCheckpoint: &pb.Checkpoint{Epoch: 0},
-				justifiedCheckpoint: &pb.Checkpoint{Epoch: 0},
 			}
 
 			// Call the function under test
@@ -650,7 +646,6 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 				peerIDs,
 				clock,
 				hostP2P,
-				mockChain,
 				ctxMap,
 				verifier,
 			)
@@ -785,7 +780,7 @@ func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 	// Recovery threshold calculation (mirrors logic in ReconstructDataColumnsByRoot)
 	recoveryThreshold := cfg.NumberOfColumns/2 + cfg.NumberOfColumns%2
 
-	chainService, clock := defaultMockChain(t)
+	chainService, clock := defaultMockChain(t, 0)
 
 	// Create test block with blobs
 	pbSignedBeaconBlock := util.NewBeaconBlockDeneb()
@@ -796,7 +791,7 @@ func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 	blobKzgCommitments := make([][]byte, blobsCount)
 
 	for j := range blobs {
-		blob := getRandBlob(int64(j))
+		blob := getRandBlob(t, int64(j))
 		blobs[j] = blob
 
 		blobKzgCommitment, err := kzg.BlobToKZGCommitment(&blob)
@@ -810,25 +805,16 @@ func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 	signedBlock, err := blocks.NewSignedBeaconBlock(pbSignedBeaconBlock)
 	require.NoError(t, err)
 
-	dataColumnSidecars, err := peerdas.DataColumnSidecars(signedBlock, blobs)
+	roBlock, err := blocks.NewROBlock(signedBlock)
 	require.NoError(t, err)
 
-	// Calculate block root
-	blockRoot, err := signedBlock.Block().HashTreeRoot()
+	cellsAndProofs := util.GenerateCellsAndProofs(t, blobs)
+	dataColumnSidecars, err := peerdas.DataColumnSidecars(signedBlock, cellsAndProofs)
 	require.NoError(t, err)
-
-	// Helper to create a map of columns from a slice
-	colsToMap := func(cols []uint64) map[uint64]bool {
-		m := make(map[uint64]bool, len(cols))
-		for _, col := range cols {
-			m[col] = true
-		}
-		return m
-	}
 
 	testCases := []struct {
 		name                   string
-		requestedColumns       map[uint64]bool
+		requestedColumns       []uint64
 		peerSetup              []peerSetup     // Peers available in the network (if nil, generate covering set)
 		unavailableColumns     []uint64        // Columns that all custodians should refuse to serve (used if targetCoverageCount is 0)
 		skipColumnsDuringFetch map[uint64]bool // Columns that peers should advertise but refuse to serve during fetch
@@ -838,7 +824,7 @@ func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 	}{
 		{
 			name:             "Success - Direct Fetch",
-			requestedColumns: colsToMap([]uint64{6, 37}),
+			requestedColumns: []uint64{6, 37},
 			peerSetup: []peerSetup{
 				{offset: 1, custodyGroupCount: 4}, // Custodies [6, 37, 48, 113]
 			},
@@ -848,7 +834,7 @@ func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 		},
 		{
 			name:                 "Success - Reconstruction Needed - Target column initially unavailable",
-			requestedColumns:     colsToMap([]uint64{6, 28}),
+			requestedColumns:     []uint64{6, 28},
 			peerSetup:            nil,         // Generate a covering set
 			unavailableColumns:   []uint64{6}, // Make column 6 unavailable from all its custodians
 			expectedError:        nil,
@@ -856,7 +842,7 @@ func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 		},
 		{
 			name:             "Failure - Reconstruction Impossible - Limited Peers",
-			requestedColumns: colsToMap([]uint64{6, 500}), // Request one known (6) and one unknown (500) column
+			requestedColumns: []uint64{6, 500}, // Request one known (6) and one unknown (500) column
 			peerSetup: []peerSetup{ // Intentionally few peers
 				{offset: 1, custodyGroupCount: 4},
 				{offset: 10, custodyGroupCount: 4},
@@ -868,7 +854,7 @@ func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 		},
 		{
 			name:                "Failure - Reconstruction Impossible - Target Coverage 50",
-			requestedColumns:    colsToMap([]uint64{6, 500}), // Request one potentially covered (6) and one uncovered (500)
+			requestedColumns:    []uint64{6, 500}, // Request one potentially covered (6) and one uncovered (500)
 			peerSetup:           nil,
 			unavailableColumns:  nil,
 			targetCoverageCount: 50, // Generate peers covering only 50 columns total.
@@ -877,14 +863,14 @@ func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 		},
 		{
 			name:               "Failure - Direct Fetch Fails & Reconstruction Impossible",
-			requestedColumns:   colsToMap([]uint64{1000, 1001}), // Columns no peer custodies
-			peerSetup:          nil,                             // Generate a covering set
-			unavailableColumns: nil,                             // No columns need to be made unavailable
+			requestedColumns:   []uint64{1000, 1001}, // Columns no peer custodies
+			peerSetup:          nil,                  // Generate a covering set
+			unavailableColumns: nil,                  // No columns need to be made unavailable
 			expectedError:      &UnavailableColumnsError{},
 		},
 		{
 			name:                 "Success - Empty Request",
-			requestedColumns:     map[uint64]bool{},
+			requestedColumns:     []uint64{},
 			peerSetup:            []peerSetup{{offset: 1, custodyGroupCount: 4}},
 			unavailableColumns:   nil,
 			expectedError:        nil,
@@ -892,18 +878,18 @@ func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 		},
 		{
 			name:                   "Success - Reconstruction Retry Needed - Peer skips advertised column",
-			requestedColumns:       colsToMap([]uint64{6, 37}), // Request columns 6 and 37
-			peerSetup:              nil,                        // Generate a covering set
-			unavailableColumns:     nil,                        // No inherent unavailability
-			skipColumnsDuringFetch: colsToMap([]uint64{6}),     // Make peers that advertise 6 skip it during fetch
+			requestedColumns:       []uint64{6, 37},          // Request columns 6 and 37
+			peerSetup:              nil,                      // Generate a covering set
+			unavailableColumns:     nil,                      // No inherent unavailability
+			skipColumnsDuringFetch: map[uint64]bool{6: true}, // Make peers that advertise 6 skip it during fetch
 			expectedError:          nil,
 			expectReconstruction:   true, // Expect reconstruction because column 6 will be initially missed
 		},
 		{
 			name:               "Failure - Reconstruction Impossible - Peers skip required columns",
-			requestedColumns:   colsToMap([]uint64{0}), // Request a column that will be skipped
-			peerSetup:          nil,                    // Generate a covering set
-			unavailableColumns: nil,                    // All columns advertised initially
+			requestedColumns:   []uint64{0}, // Request a column that will be skipped
+			peerSetup:          nil,         // Generate a covering set
+			unavailableColumns: nil,         // All columns advertised initially
 			skipColumnsDuringFetch: func() map[uint64]bool { // Skip recoveryThreshold+1 columns
 				skipMap := make(map[uint64]bool)
 				for i := uint64(0); i < recoveryThreshold+1; i++ {
@@ -942,9 +928,11 @@ func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 			hostP2P := p2ptest.NewTestP2P(t)
 			tracker := newRequestTracker()
 
+			peerIDs := make([]peer.ID, 0, len(peerSetups))
 			for _, setup := range peerSetups {
 				// Pass the new skipColumnsDuringFetch map here
-				createAndConnectCustodyPeer(t, setup, dataColumnSidecars, chainService, hostP2P, tracker, tc.skipColumnsDuringFetch)
+				peer := createAndConnectCustodyPeer(t, setup, dataColumnSidecars, chainService, hostP2P, tracker, tc.skipColumnsDuringFetch)
+				peerIDs = append(peerIDs, peer.PeerID())
 			}
 
 			ctxMap := map[[4]byte]int{{245, 165, 253, 66}: version.Fulu}
@@ -953,20 +941,14 @@ func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 				return initializer.NewDataColumnsVerifier(cols, reqs)
 			}
 
-			mockChain := &mockFinalizationFetcher{
-				finalizedCheckpoint: &pb.Checkpoint{Epoch: 0},
-				justifiedCheckpoint: &pb.Checkpoint{Epoch: 0},
-			}
-
 			// Call the function under test
 			responseCols, err := FetchOrReconstructDataColumnsByRoot(
 				context.Background(),
 				tc.requestedColumns,
-				signedBlock,
-				blockRoot,
+				roBlock,
+				peerIDs,
 				clock,
 				hostP2P,
-				mockChain,
 				ctxMap,
 				verifier,
 			)
@@ -982,7 +964,7 @@ func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 				require.Equal(t, len(tc.requestedColumns), len(responseCols), "Number of returned columns mismatch")
 
 				expectedColumns := make([]uint64, 0, len(tc.requestedColumns))
-				for col := range tc.requestedColumns {
+				for _, col := range tc.requestedColumns {
 					expectedColumns = append(expectedColumns, col)
 				}
 				sort.Slice(expectedColumns, func(i, j int) bool {
@@ -994,12 +976,12 @@ func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 					// Assuming responseCols is []blocks.RODataColumn based on function signature
 					// Need to access ColumnIndex correctly. Adjust if type is different.
 					// Let's assume RODataColumn has a method or field ColumnIndex
-					return responseCols[i].ColumnIndex < responseCols[j].ColumnIndex
+					return responseCols[i].Index < responseCols[j].Index
 				})
 
 				// Compare element by element
 				for i := range responseCols {
-					require.Equal(t, expectedColumns[i], responseCols[i].ColumnIndex, "Mismatch at index %d", i)
+					require.Equal(t, expectedColumns[i], responseCols[i].Index, "Mismatch at index %d", i)
 				}
 			}
 
@@ -1035,7 +1017,7 @@ func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 				}
 
 				require.Equal(t, len(tc.requestedColumns), len(requestedColSet), "Map lengths should be equal for direct fetch")
-				for k := range tc.requestedColumns {
+				for _, k := range tc.requestedColumns {
 					_, ok := requestedColSet[k]
 					require.Equal(t, true, ok, "Key %d expected in actual requests map", k)
 				}
@@ -1117,7 +1099,6 @@ func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSideca
 
 	// Add the peer and connect it
 	hostP2P.Peers().Add(enr, peerP2P.PeerID(), nil, network.DirOutbound)
-	// Explicitly set metadata using the simpler, working pattern
 	metadata := wrapper.WrappedMetadataV2(&pb.MetaDataV2{
 		CustodyGroupCount: setup.custodyGroupCount,
 	})
