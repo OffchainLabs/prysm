@@ -108,7 +108,7 @@ func (s *Service) requestAndSaveMissingDataColumnSidecars(block blocks.ROBlock) 
 	}
 
 	peers := s.getBestPeers()
-	sidecars, err := FetchOrReconstructDataColumnsByRoot(s.ctx, missingColumns, block, peers, s.cfg.clock, s.cfg.p2p, s.ctxMap, s.newColumnsVerifier)
+	sidecars, err := RequestDataColumnSidecarsByRoot(s.ctx, missingColumns, block, peers, s.cfg.clock, s.cfg.p2p, s.ctxMap, s.newColumnsVerifier)
 	if err != nil {
 		return errors.Wrap(err, "request data column sidecars")
 	}

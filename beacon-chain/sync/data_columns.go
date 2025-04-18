@@ -63,10 +63,70 @@ func NewUnavailableColumnsError(columns []uint64) *UnavailableColumnsError {
 //   - returns on success when all the initially missing sidecars in `dataColumnsToFetch` are retrieved, or
 //   - returns an error if all peers in `peers` are exhausted and at least one data column sidecar is still missing.
 //
-// TODO: In case at least one column is still missing after peer exhaustion,
-//
-//	but `peers` custody more than 64 columns, then try to fetch enough columns to reconstruct needed ones.
+// In case at least one column is still missing after peer exhaustion,
+// but `peers` custody more than 64 columns, then try to fetch enough columns to reconstruct needed ones.
 func RequestDataColumnSidecarsByRoot(
+	ctx context.Context,
+	dataColumnsToFetch []uint64,
+	block blocks.ROBlock,
+	peers []core.PeerID,
+	clock *startup.Clock,
+	p2p p2p.P2P,
+	ctxMap ContextByteVersions,
+	newColumnsVerifier verification.NewDataColumnsVerifier,
+) ([]blocks.VerifiedRODataColumn, error) {
+	log := log.WithFields(logrus.Fields{
+		"blockRoot":          fmt.Sprintf("%#x", block.Root()),
+		"dataColumnsToFetch": dataColumnsToFetch,
+	})
+	log.Debug("Attempting to fetch or reconstruct data columns")
+
+	// First, try to request the columns directly.
+	sidecars, err := OnlyRequestDataColumnSidecarsByRoot(
+		ctx,
+		dataColumnsToFetch,
+		block,
+		peers,
+		clock,
+		p2p,
+		ctxMap,
+		newColumnsVerifier,
+	)
+	if err == nil {
+		// Successfully fetched.
+		log.Debug("Successfully fetched requested data columns")
+		return sidecars, nil
+	}
+
+	// If the error is specifically UnavailableColumnsError, attempt reconstruction.
+	if errors.Is(err, &UnavailableColumnsError{}) {
+		log.WithError(err).Debug("Fetching failed due to no available peers, attempting reconstruction")
+		reconstructedSidecars, reconstructErr := ReconstructDataColumnsByRoot(
+			ctx,
+			dataColumnsToFetch,
+			block,
+			peers,
+			clock,
+			p2p,
+			ctxMap,
+			newColumnsVerifier,
+		)
+		if reconstructErr != nil {
+			joinedErr := goErrors.Join(err, reconstructErr)
+			return nil, errors.Wrap(joinedErr, "failed to fetch (no peers) and reconstruction failed")
+		}
+		// Successfully reconstructed.
+		log.Debug("Successfully reconstructed requested data columns")
+		return reconstructedSidecars, nil
+	}
+
+	// If fetching failed for a different reason, return that error directly.
+	return nil, errors.Wrap(err, "failed to fetch data columns")
+}
+
+// OnlyRequestDataColumnSidecarsByRoot attempts to fetch the requested data columns from peers. It
+// performs the portion of RequestDataColumnSidecarsByRoot that does not attempt reconstruction.
+func OnlyRequestDataColumnSidecarsByRoot(
 	ctx context.Context,
 	dataColumnsToFetch []uint64,
 	block blocks.ROBlock,
@@ -277,68 +337,6 @@ func ReconstructDataColumnsByRoot(
 
 	// Perform reconstruction and filter for originally requested columns.
 	return reconstructAndFilterColumns(dataColumnsToFetch, fetchedSidecars, block, newColumnsVerifier)
-}
-
-// FetchOrReconstructDataColumnsByRoot attempts to fetch the requested data columns from peers.
-// If fetching fails specifically because no peers are available (UnavailableColumnsError),
-// it attempts to reconstruct the columns using available data from other peers.
-func FetchOrReconstructDataColumnsByRoot(
-	ctx context.Context,
-	dataColumnsToFetch []uint64,
-	block blocks.ROBlock,
-	peers []core.PeerID,
-	clock *startup.Clock,
-	p2p p2p.P2P,
-	ctxMap ContextByteVersions,
-	newColumnsVerifier verification.NewDataColumnsVerifier,
-) ([]blocks.VerifiedRODataColumn, error) {
-	log := log.WithFields(logrus.Fields{
-		"blockRoot":          fmt.Sprintf("%#x", block.Root()),
-		"dataColumnsToFetch": dataColumnsToFetch,
-	})
-	log.Debug("Attempting to fetch or reconstruct data columns")
-
-	// First, try to request the columns directly.
-	sidecars, err := RequestDataColumnSidecarsByRoot(
-		ctx,
-		dataColumnsToFetch,
-		block,
-		peers,
-		clock,
-		p2p,
-		ctxMap,
-		newColumnsVerifier,
-	)
-	if err == nil {
-		// Successfully fetched.
-		log.Debug("Successfully fetched requested data columns")
-		return sidecars, nil
-	}
-
-	// If the error is specifically UnavailableColumnsError, attempt reconstruction.
-	if errors.Is(err, &UnavailableColumnsError{}) {
-		log.WithError(err).Debug("Fetching failed due to no available peers, attempting reconstruction")
-		reconstructedSidecars, reconstructErr := ReconstructDataColumnsByRoot(
-			ctx,
-			dataColumnsToFetch,
-			block,
-			peers,
-			clock,
-			p2p,
-			ctxMap,
-			newColumnsVerifier,
-		)
-		if reconstructErr != nil {
-			joinedErr := goErrors.Join(err, reconstructErr)
-			return nil, errors.Wrap(joinedErr, "failed to fetch (no peers) and reconstruction failed")
-		}
-		// Successfully reconstructed.
-		log.Debug("Successfully reconstructed requested data columns")
-		return reconstructedSidecars, nil
-	}
-
-	// If fetching failed for a different reason, return that error directly.
-	return nil, errors.Wrap(err, "failed to fetch data columns")
 }
 
 // fetchAndVerifyRecoveryColumns selects a prioritized set of recoveryThreshold columns to fetch,
@@ -567,9 +565,8 @@ func reconstructAndFilterColumns(
 // In case of success, initially missing data columns grouped by block root are returned.
 // This function expects blocks to be sorted by slot.
 //
-// TODO: In case at least one column is still missing after all allowed retries,
-//
-//	but `peers` custody more than 64 columns, then try to fetch enough columns to reconstruct needed ones.
+// In case at least one column is still missing after all allowed retries,
+// but `peers` custody more than 64 columns, then try to fetch enough columns to reconstruct needed ones.
 func RequestMissingDataColumnsByRange(
 	ctx context.Context,
 	clock *startup.Clock,
@@ -623,7 +620,85 @@ func RequestMissingDataColumnsByRange(
 	return RequestDataColumnSidecarsByRange(ctx, missingColumnsByRoot, blks, peers, batchSize, clock, p2p, ctxMap, rateLimiter, newColumnsVerifier)
 }
 
+// RequestDataColumnSidecarsByRange is an opinionated, high level function which, for each block in `blks`:
+//   - Builds an optimized set of data column sidecars by range requests in order to never request a data column that is already stored in the DB,
+//     and in order to minimize the number of total requests, while not exceeding `batchSize` sidecars per requests.
+//   - Greedily selects, among `peers`, the peers that can provide the requested data columns, to minimize the number of requests.
+//   - Request the data column sidecars from the selected peers.
+//   - In case of peers unable to actually provide all the requested data columns, retry with other peers.
+//
+// This function:
+//   - returns on success when all the initially missing sidecars for `blks` are retrieved, or
+//   - returns an error if no progress at all is made after 5 consecutives trials.
+//     (If at least one additional data column sidecar is retrieved between two trials, the counter is reset.)
+//
+// In case of success, initially missing data columns grouped by block root are returned.
+// This function expects blocks to be sorted by slot.
+//
+// In case at least one column is still missing after all allowed retries,
+// but `peers` custody more than 64 columns, then try to fetch enough columns to reconstruct needed ones.
 func RequestDataColumnSidecarsByRange(
+	ctx context.Context,
+	missingColumnsByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
+	blks []blocks.ROBlock,
+	peers []peer.ID,
+	batchSize int,
+	clock *startup.Clock,
+	p2p p2p.P2P,
+	ctxMap ContextByteVersions,
+	rateLimiter *leakybucket.Collector,
+	newColumnsVerifier verification.NewDataColumnsVerifier,
+) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
+	log := log.WithFields(logrus.Fields{
+		"startSlot": blks[0].Block().Slot(),
+		"count":     blks[len(blks)-1].Block().Slot() - blks[0].Block().Slot() + 1,
+	})
+	log.Debug("Attempting to fetch or reconstruct data columns for range")
+
+	// First, try to request the columns directly for the range.
+	fetchedColumnsByRoot, err := OnlyRequestDataColumnSidecarsByRange(
+		ctx,
+		missingColumnsByRoot,
+		blks,
+		peers,
+		batchSize,
+		clock,
+		p2p,
+		ctxMap,
+		rateLimiter,
+		newColumnsVerifier,
+	)
+	if err == nil {
+		return fetchedColumnsByRoot, nil
+	}
+
+	// If the error is specifically UnavailableColumnsError, attempt reconstruction for the range.
+	if errors.Is(err, &UnavailableColumnsError{}) {
+		log.WithError(err).Debug("Fetching range failed due to no available peers for initial request, attempting reconstruction")
+		reconstructedColumnsByRoot, reconstructErr := ReconstructDataColumnsByRange(
+			ctx,
+			missingColumnsByRoot,
+			blks,
+			peers,
+			batchSize,
+			clock,
+			p2p,
+			ctxMap,
+			rateLimiter,
+			newColumnsVerifier,
+		)
+		if reconstructErr != nil {
+			joinedErr := goErrors.Join(err, reconstructErr)
+			return nil, errors.Wrap(joinedErr, "failed to fetch range (no peers) and reconstruction failed")
+		}
+
+		return reconstructedColumnsByRoot, nil
+	}
+
+	return nil, errors.Wrap(err, "failed to fetch all data columns for range")
+}
+
+func OnlyRequestDataColumnSidecarsByRange(
 	ctx context.Context,
 	missingColumnsByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
 	blks []blocks.ROBlock,
@@ -1438,71 +1513,6 @@ func ReconstructDataColumnsByRange(
 	}
 
 	return reconstructedColumnsByRoot, nil
-}
-
-// FetchOrReconstructDataColumnsByRange attempts to fetch requested data columns for blocks in a range.
-// If fetching fails specifically because no peers are available for the *initial* request (UnavailableColumnsError),
-// it attempts to reconstruct the columns using available data from other peers.
-// Results are returned grouped by block root.
-func FetchOrReconstructDataColumnsByRange(
-	ctx context.Context,
-	missingColumnsByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
-	blks []blocks.ROBlock,
-	peers []peer.ID,
-	batchSize int,
-	clock *startup.Clock,
-	p2p p2p.P2P,
-	ctxMap ContextByteVersions,
-	rateLimiter *leakybucket.Collector,
-	newColumnsVerifier verification.NewDataColumnsVerifier,
-) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
-	log := log.WithFields(logrus.Fields{
-		"startSlot": blks[0].Block().Slot(),
-		"count":     blks[len(blks)-1].Block().Slot() - blks[0].Block().Slot() + 1,
-	})
-	log.Debug("Attempting to fetch or reconstruct data columns for range")
-
-	// First, try to request the columns directly for the range.
-	fetchedColumnsByRoot, err := RequestDataColumnSidecarsByRange(
-		ctx,
-		missingColumnsByRoot,
-		blks,
-		peers,
-		batchSize,
-		clock,
-		p2p,
-		ctxMap,
-		rateLimiter,
-		newColumnsVerifier,
-	)
-	if err == nil {
-		return fetchedColumnsByRoot, nil
-	}
-
-	// If the error is specifically UnavailableColumnsError, attempt reconstruction for the range.
-	if errors.Is(err, &UnavailableColumnsError{}) {
-		log.WithError(err).Debug("Fetching range failed due to no available peers for initial request, attempting reconstruction")
-		reconstructedColumnsByRoot, reconstructErr := ReconstructDataColumnsByRange(
-			ctx,
-			missingColumnsByRoot,
-			blks,
-			peers,
-			batchSize,
-			clock,
-			p2p,
-			ctxMap,
-			rateLimiter,
-			newColumnsVerifier,
-		)
-		if reconstructErr != nil {
-			joinedErr := goErrors.Join(err, reconstructErr)
-			return nil, errors.Wrap(joinedErr, "failed to fetch range (no peers) and reconstruction failed")
-		}
-
-		return reconstructedColumnsByRoot, nil
-	}
-
-	return nil, errors.Wrap(err, "failed to fetch all data columns for range")
 }
 
 // fetchAndVerifyRecoveryColumnsByRange selects a prioritized set of recoveryThreshold columns,

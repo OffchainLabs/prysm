@@ -380,7 +380,7 @@ func (rt *requestTracker) trackRequest(offset int, columns []uint64) {
 	rt.requests[offset] = columns
 }
 
-func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
+func TestOnlyRequestDataColumnSidecarsByRoot(t *testing.T) {
 	const blobsCount = 6
 
 	// Start the trusted setup.
@@ -587,7 +587,7 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 			}
 
 			// Call the function under test
-			responseCols, err := RequestDataColumnSidecarsByRoot(
+			responseCols, err := OnlyRequestDataColumnSidecarsByRoot(
 				context.Background(),
 				uint64MapToSortedSlice(tc.dataColumns),
 				roBlock,
@@ -711,7 +711,7 @@ func createCoveringPeerSet(t *testing.T, numberOfColumns uint64, unavailableColu
 	return peerSetups
 }
 
-func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
+func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 	const blobsCount = 6
 
 	// Start the trusted setup.
@@ -890,7 +890,7 @@ func TestFetchOrReconstructDataColumnsByRoot(t *testing.T) {
 			}
 
 			// Call the function under test
-			responseCols, err := FetchOrReconstructDataColumnsByRoot(
+			responseCols, err := RequestDataColumnSidecarsByRoot(
 				context.Background(),
 				tc.requestedColumns,
 				roBlock,
