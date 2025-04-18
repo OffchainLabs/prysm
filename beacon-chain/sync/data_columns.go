@@ -373,7 +373,7 @@ func fetchAndVerifyRecoveryColumns(
 	var fetchedSidecars []blocks.VerifiedRODataColumn
 	for {
 		// Fetch selected columns.
-		fetchedSidecars, err = RequestDataColumnSidecarsByRoot(
+		fetchedSidecars, err = OnlyRequestDataColumnSidecarsByRoot(
 			ctx,
 			columnsToFetch,
 			block,
@@ -1578,7 +1578,7 @@ func fetchAndVerifyRecoveryColumnsByRange(
 			"count":             blks[len(blks)-1].Block().Slot() - blks[0].Block().Slot() + 1,
 		}).Debug("Selected columns for fetch for range recovery attempt")
 
-		fetchedColumnsByRoot, err = RequestDataColumnSidecarsByRange(
+		fetchedColumnsByRoot, err = OnlyRequestDataColumnSidecarsByRange(
 			ctx,
 			requestColumnsByRoot,
 			blks,
