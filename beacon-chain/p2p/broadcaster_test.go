@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/network/forks"
@@ -545,11 +546,10 @@ func TestService_BroadcastLightClientOptimisticUpdate(t *testing.T) {
 	msg, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
 	require.NoError(t, err)
 
-	topic := LightClientOptimisticUpdateTopicFormat
-	GossipTypeMapping[reflect.TypeOf(msg)] = topic
+	GossipTypeMapping[reflect.TypeOf(msg)] = LightClientOptimisticUpdateTopicFormat
 	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(msg.AttestedHeader().Beacon().Slot), p.genesisValidatorsRoot)
 	require.NoError(t, err)
-	topic = fmt.Sprintf(topic, digest)
+	topic := fmt.Sprintf(LightClientOptimisticUpdateTopicFormat, digest)
 
 	// External peer subscribes to the topic.
 	topic += p.Encoding().ProtocolSuffix()
@@ -579,6 +579,8 @@ func TestService_BroadcastLightClientOptimisticUpdate(t *testing.T) {
 	// Broadcasting nil should fail.
 	ctx := context.Background()
 	require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastLightClientOptimisticUpdate(ctx, nil))
+	var nilUpdate interfaces.LightClientOptimisticUpdate
+	require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastLightClientOptimisticUpdate(ctx, nilUpdate))
 
 	// Broadcast to peers and wait.
 	require.NoError(t, p.BroadcastLightClientOptimisticUpdate(ctx, msg))
@@ -613,11 +615,10 @@ func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
 	msg, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 	require.NoError(t, err)
 
-	topic := LightClientFinalityUpdateTopicFormat
-	GossipTypeMapping[reflect.TypeOf(msg)] = topic
+	GossipTypeMapping[reflect.TypeOf(msg)] = LightClientFinalityUpdateTopicFormat
 	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(msg.AttestedHeader().Beacon().Slot), p.genesisValidatorsRoot)
 	require.NoError(t, err)
-	topic = fmt.Sprintf(topic, digest)
+	topic := fmt.Sprintf(LightClientFinalityUpdateTopicFormat, digest)
 
 	// External peer subscribes to the topic.
 	topic += p.Encoding().ProtocolSuffix()
@@ -647,6 +648,8 @@ func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
 	// Broadcasting nil should fail.
 	ctx := context.Background()
 	require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastLightClientFinalityUpdate(ctx, nil))
+	var nilUpdate interfaces.LightClientFinalityUpdate
+	require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastLightClientFinalityUpdate(ctx, nilUpdate))
 
 	// Broadcast to peers and wait.
 	require.NoError(t, p.BroadcastLightClientFinalityUpdate(ctx, msg))
