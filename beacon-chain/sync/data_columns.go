@@ -581,7 +581,8 @@ func RequestMissingDataColumnsByRange(
 	peers []peer.ID,
 	blks []blocks.ROBlock,
 	batchSize int,
-) (map[[fieldparams.RootLength]byte][]blocks.RODataColumn, error) {
+	newColumnsVerifier verification.NewDataColumnsVerifier,
+) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
 	if len(blks) == 0 {
 		return nil, nil
 	}
@@ -619,7 +620,7 @@ func RequestMissingDataColumnsByRange(
 		}
 	}
 
-	return RequestDataColumnSidecarsByRange(ctx, missingColumnsByRoot, blks, peers, batchSize, clock, p2p, ctxMap, rateLimiter)
+	return RequestDataColumnSidecarsByRange(ctx, missingColumnsByRoot, blks, peers, batchSize, clock, p2p, ctxMap, rateLimiter, newColumnsVerifier)
 }
 
 func RequestDataColumnSidecarsByRange(
@@ -632,7 +633,8 @@ func RequestDataColumnSidecarsByRange(
 	p2p p2p.P2P,
 	ctxMap ContextByteVersions,
 	rateLimiter *leakybucket.Collector,
-) (map[[fieldparams.RootLength]byte][]blocks.RODataColumn, error) {
+	newColumnsVerifier verification.NewDataColumnsVerifier,
+) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
 	// Return early if there are no missing data columns.
 	if len(missingColumnsByRoot) == 0 {
 		return nil, nil
@@ -662,7 +664,7 @@ func RequestDataColumnSidecarsByRange(
 	start := time.Now()
 	log.Debug("Requesting data column sidecars - start")
 
-	alignedDataColumnsByRoot := make(map[[fieldparams.RootLength]byte][]blocks.RODataColumn, len(blks))
+	alignedDataColumnsByRoot := make(map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, len(blks))
 	for len(missingColumnsByRoot) > 0 {
 		// Build requests.
 		requests, err := buildDataColumnByRangeRequests(blks, missingColumnsByRoot, batchSize)
@@ -696,13 +698,13 @@ func RequestDataColumnSidecarsByRange(
 				return nil, errors.New("block not found - this should never happen")
 			}
 
-			// Check if the data columns align with blocks.
-			if err := verify.DataColumnsAlignWithBlock(block, dataColumns); err != nil {
-				log.WithField("root", root).WithError(err).Debug("Data columns do not align with block")
+			verifiedDataColumns, err := verifyColumnsForBlock(block, dataColumns, newColumnsVerifier)
+			if err != nil {
+				log.WithField("root", root).WithError(err).Debug("Data columns errored during verification")
 				continue
 			}
 
-			alignedDataColumnsByRoot[root] = append(alignedDataColumnsByRoot[root], dataColumns...)
+			alignedDataColumnsByRoot[root] = append(alignedDataColumnsByRoot[root], verifiedDataColumns...)
 
 			// Remove aligned data columns from the missing columns.
 			for _, dataColumn := range dataColumns {

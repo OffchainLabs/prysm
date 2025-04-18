@@ -1856,14 +1856,25 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 
 			ctxMap := map[[4]byte]int{{245, 165, 253, 66}: version.Fulu}
 			rateLimiter := leakybucket.NewCollector(1_000, 1_000, 1*time.Hour, false)
+			verifier := func(cols []blocks.RODataColumn, reqs []verification.Requirement) verification.DataColumnsVerifier {
+				initializer := &verification.Initializer{}
+				return initializer.NewDataColumnsVerifier(cols, reqs)
+			}
 
 			// Fetch the data columns from the peers.
-			fetchedRoDataColumnsByRoot, err := RequestMissingDataColumnsByRange(ctx, clock, ctxMap, p2pSvc, rateLimiter, 4, dataColumnStorageSummarizer, peersID, roBlocks, tc.batchSize)
+			fetchedVerifiedDataColumnsByRoot, err := RequestMissingDataColumnsByRange(ctx, clock, ctxMap, p2pSvc, rateLimiter, 4, dataColumnStorageSummarizer, peersID, roBlocks, tc.batchSize, verifier)
 			if !tc.isError {
 				require.NoError(t, err)
 			} else {
 				require.NotNil(t, err)
 				return
+			}
+
+			fetchedRoDataColumnsByRoot := make(map[[fieldparams.RootLength]byte][]blocks.RODataColumn)
+			for root, verifiedDataColumns := range fetchedVerifiedDataColumnsByRoot {
+				for _, dataColumn := range verifiedDataColumns {
+					fetchedRoDataColumnsByRoot[root] = append(fetchedRoDataColumnsByRoot[root], dataColumn.RODataColumn)
+				}
 			}
 
 			expectedDataColumnsByRoot := make(map[[fieldparams.RootLength]byte][]blocks.RODataColumn)
