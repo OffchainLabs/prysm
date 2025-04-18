@@ -40,58 +40,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Mock implementation for blockchain.FinalizationFetcher
-type mockFinalizationFetcher struct {
-	finalizedCheckpoint *pb.Checkpoint
-	justifiedCheckpoint *pb.Checkpoint
-	finalizedRoot       [32]byte // Added field for finalized block root
-}
-
-func (m *mockFinalizationFetcher) FinalizedCheckpt() *pb.Checkpoint {
-	if m.finalizedCheckpoint == nil {
-		return &pb.Checkpoint{Epoch: 0} // Default checkpoint if not set
-	}
-	return m.finalizedCheckpoint
-}
-
-func (m *mockFinalizationFetcher) CurrentJustifiedCheckpt() *pb.Checkpoint {
-	if m.justifiedCheckpoint == nil {
-		return &pb.Checkpoint{Epoch: 0} // Default checkpoint if not set
-	}
-	return m.justifiedCheckpoint
-}
-
-// Corrected FinalizedBlockHash method signature
-func (m *mockFinalizationFetcher) FinalizedBlockHash() [32]byte {
-	return m.finalizedRoot // Return the stored root (or zero value)
-}
-
-// Added missing InForkchoice method
-func (m *mockFinalizationFetcher) InForkchoice(root [32]byte) bool {
-	return true // Default mock behavior: assume block is in forkchoice
-}
-
-// Corrected IsFinalized method signature
-func (m *mockFinalizationFetcher) IsFinalized(ctx context.Context, root [32]byte) bool {
-	// Basic mock implementation - check if the root matches the stored finalized root
-	return m.finalizedRoot == root
-}
-
-// Added missing PreviousJustifiedCheckpt method
-func (m *mockFinalizationFetcher) PreviousJustifiedCheckpt() *pb.Checkpoint {
-	// For simplicity, returning the same as current justified in the mock
-	if m.justifiedCheckpoint == nil {
-		return &pb.Checkpoint{Epoch: 0} // Default checkpoint if not set
-	}
-	return m.justifiedCheckpoint
-}
-
-// Corrected UnrealizedJustifiedPayloadBlockHash method signature
-func (m *mockFinalizationFetcher) UnrealizedJustifiedPayloadBlockHash() [32]byte {
-	// Basic mock implementation: return zero hash
-	return [32]byte{}
-}
-
 func TestAdmissiblePeersForDataColumns(t *testing.T) {
 	type testCase struct {
 		name              string
