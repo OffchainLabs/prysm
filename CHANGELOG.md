@@ -6,6 +6,12 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [v6.0.0](https://github.com/prysmaticlabs/prysm/compare/v5.3.2...v6.0.0) - 2025-04-21
 
+This release introduces Mainnet support for the upcoming Electra + Prague (Pectra) fork. The fork is scheduled for mainnet epoch 364032 (May 7, 2025, 10:05:11 UTC). You MUST update Prysm Beacon Node, Prysm Validator Client, and your execution layer client to the Pectra ready release prior to the fork to stay on the correct chain.
+
+Besides Pectra, we have more light client API support, cleanups, and a few bugfixes. Please review the changelog below and update your client as soon as practical before May 7.
+
+This release is **mandatory** for all operators before May 7.
+
 ### Added
 
 - Implemented validator identities Beacon API endpoint. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15086)
