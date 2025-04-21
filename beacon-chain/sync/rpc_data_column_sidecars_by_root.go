@@ -57,6 +57,15 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		return errors.Wrap(err, "validate data columns by root request")
 	}
 
+	// Record the request with the DataColumnRPCRequestScorer
+	if scorer := s.cfg.p2p.Peers().Scorers().DataColumnRPCRequestScorer(); scorer != nil {
+		scorer.RecordRequest(stream.Conn().RemotePeer(), int(len(requestedColumnIdents)))
+		log.WithFields(logrus.Fields{
+			"peer":           stream.Conn().RemotePeer(),
+			"requestedCount": len(requestedColumnIdents),
+		}).Debug("Recorded data column RPC request")
+	}
+
 	// Sort the identifiers so that requests for the same data columns root will be adjacent, minimizing db lookups.
 	sort.Sort(&requestedColumnIdents)
 

@@ -111,6 +111,18 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 		return err
 	}
 
+	// Record the request with the DataColumnRPCRequestScorer
+	if scorer := s.cfg.p2p.Peers().Scorers().DataColumnRPCRequestScorer(); scorer != nil {
+		totalColumns := int(r.Count) * len(r.Columns)
+		scorer.RecordRequest(stream.Conn().RemotePeer(), totalColumns)
+		log.WithFields(logrus.Fields{
+			"peer":           stream.Conn().RemotePeer(),
+			"requestedCount": totalColumns,
+			"rangeCount":     r.Count,
+			"columnCount":    len(r.Columns),
+		}).Debug("Recorded data column RPC request")
+	}
+
 	// Ticker to stagger out large requests.
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
