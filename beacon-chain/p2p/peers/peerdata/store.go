@@ -65,6 +65,8 @@ type PeerData struct {
 	TopicScores      map[string]*ethpb.TopicScoreSnapshot
 	GossipScore      float64
 	BehaviourPenalty float64
+	// Data Column RPC request tracking
+	DataColumnRequestCount uint64
 }
 
 // NewStore creates new peer data store.

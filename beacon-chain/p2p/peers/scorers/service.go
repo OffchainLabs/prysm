@@ -33,10 +33,11 @@ type Scorer interface {
 type Service struct {
 	store   *peerdata.Store
 	scorers struct {
-		badResponsesScorer  *BadResponsesScorer
-		blockProviderScorer *BlockProviderScorer
-		peerStatusScorer    *PeerStatusScorer
-		gossipScorer        *GossipScorer
+		badResponsesScorer         *BadResponsesScorer
+		blockProviderScorer        *BlockProviderScorer
+		peerStatusScorer           *PeerStatusScorer
+		gossipScorer               *GossipScorer
+		dataColumnRPCRequestScorer *DataColumnRPCRequestScorer
 	}
 	weights     map[Scorer]float64
 	totalWeight float64
@@ -44,10 +45,11 @@ type Service struct {
 
 // Config holds configuration parameters for scoring service.
 type Config struct {
-	BadResponsesScorerConfig  *BadResponsesScorerConfig
-	BlockProviderScorerConfig *BlockProviderScorerConfig
-	PeerStatusScorerConfig    *PeerStatusScorerConfig
-	GossipScorerConfig        *GossipScorerConfig
+	BadResponsesScorerConfig         *BadResponsesScorerConfig
+	BlockProviderScorerConfig        *BlockProviderScorerConfig
+	PeerStatusScorerConfig           *PeerStatusScorerConfig
+	GossipScorerConfig               *GossipScorerConfig
+	DataColumnRPCRequestScorerConfig *DataColumnRPCRequestScorerConfig
 }
 
 // NewService provides fully initialized peer scoring service.
@@ -59,13 +61,15 @@ func NewService(ctx context.Context, store *peerdata.Store, config *Config) *Ser
 
 	// Register scorers.
 	s.scorers.badResponsesScorer = newBadResponsesScorer(store, config.BadResponsesScorerConfig)
-	s.setScorerWeight(s.scorers.badResponsesScorer, 0.3)
+	s.setScorerWeight(s.scorers.badResponsesScorer, 0.25)
 	s.scorers.blockProviderScorer = newBlockProviderScorer(store, config.BlockProviderScorerConfig)
 	s.setScorerWeight(s.scorers.blockProviderScorer, 0.0)
 	s.scorers.peerStatusScorer = newPeerStatusScorer(store, config.PeerStatusScorerConfig)
-	s.setScorerWeight(s.scorers.peerStatusScorer, 0.3)
+	s.setScorerWeight(s.scorers.peerStatusScorer, 0.25)
 	s.scorers.gossipScorer = newGossipScorer(store, config.GossipScorerConfig)
-	s.setScorerWeight(s.scorers.gossipScorer, 0.4)
+	s.setScorerWeight(s.scorers.gossipScorer, 0.35)
+	s.scorers.dataColumnRPCRequestScorer = newDataColumnRPCRequestScorer(store, config.DataColumnRPCRequestScorerConfig)
+	s.setScorerWeight(s.scorers.dataColumnRPCRequestScorer, 0.15)
 
 	// Start background tasks.
 	go s.loop(ctx)
@@ -91,6 +95,11 @@ func (s *Service) PeerStatusScorer() *PeerStatusScorer {
 // GossipScorer exposes the peer's gossip scoring service.
 func (s *Service) GossipScorer() *GossipScorer {
 	return s.scorers.gossipScorer
+}
+
+// DataColumnRPCRequestScorer exposes data column RPC request scoring service.
+func (s *Service) DataColumnRPCRequestScorer() *DataColumnRPCRequestScorer {
+	return s.scorers.dataColumnRPCRequestScorer
 }
 
 // ActiveScorersCount returns number of scorers that can affect score (have non-zero weight).
@@ -121,6 +130,7 @@ func (s *Service) ScoreNoLock(pid peer.ID) float64 {
 	score += s.scorers.blockProviderScorer.scoreNoLock(pid) * s.scorerWeight(s.scorers.blockProviderScorer)
 	score += s.scorers.peerStatusScorer.scoreNoLock(pid) * s.scorerWeight(s.scorers.peerStatusScorer)
 	score += s.scorers.gossipScorer.scoreNoLock(pid) * s.scorerWeight(s.scorers.gossipScorer)
+	score += s.scorers.dataColumnRPCRequestScorer.scoreNoLock(pid) * s.scorerWeight(s.scorers.dataColumnRPCRequestScorer)
 	return math.Round(score*ScoreRoundingFactor) / ScoreRoundingFactor
 }
 
@@ -144,6 +154,9 @@ func (s *Service) IsBadPeerNoLock(pid peer.ID) error {
 	if features.Get().EnablePeerScorer {
 		if err := s.scorers.gossipScorer.isBadPeerNoLock(pid); err != nil {
 			return errors.Wrap(err, "gossip scorer")
+		}
+		if err := s.scorers.dataColumnRPCRequestScorer.isBadPeerNoLock(pid); err != nil {
+			return errors.Wrap(err, "data column RPC request scorer")
 		}
 	}
 
@@ -183,6 +196,8 @@ func (s *Service) loop(ctx context.Context) {
 	defer decayBadResponsesStats.Stop()
 	decayBlockProviderStats := time.NewTicker(s.scorers.blockProviderScorer.Params().DecayInterval)
 	defer decayBlockProviderStats.Stop()
+	decayDataColumnRPCRequestStats := time.NewTicker(s.scorers.dataColumnRPCRequestScorer.Params().DecayInterval)
+	defer decayDataColumnRPCRequestStats.Stop()
 
 	for {
 		select {
@@ -198,6 +213,12 @@ func (s *Service) loop(ctx context.Context) {
 				return
 			}
 			s.scorers.blockProviderScorer.Decay()
+		case <-decayDataColumnRPCRequestStats.C:
+			// Exit early if context is canceled.
+			if ctx.Err() != nil {
+				return
+			}
+			s.scorers.dataColumnRPCRequestScorer.Decay()
 		case <-ctx.Done():
 			return
 		}
