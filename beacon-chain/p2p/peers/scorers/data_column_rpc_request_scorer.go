@@ -122,6 +122,7 @@ func (s *DataColumnRPCRequestScorer) RecordRequest(pid peer.ID, numColumns int) 
 
 	peerData := s.store.PeerDataGetOrCreate(pid)
 	peerData.DataColumnRequestCount += uint64(numColumns)
+	peerData.DataColumnRPCLastRequestTime = time.Now()
 }
 
 // Decay implements periodic decay of request counts.

@@ -66,7 +66,8 @@ type PeerData struct {
 	GossipScore      float64
 	BehaviourPenalty float64
 	// Data Column RPC request tracking
-	DataColumnRequestCount uint64
+	DataColumnRequestCount       uint64
+	DataColumnRPCLastRequestTime time.Time
 }
 
 // NewStore creates new peer data store.
