@@ -10,7 +10,7 @@ go_library(
         "premine-state.go",
         "premined_genesis_state.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/runtime/interop",
+    importpath = "github.com/OffchainLabs/prysm/v6/runtime/interop",
     visibility = ["//visibility:public"],
     deps = [
         "//async:go_default_library",

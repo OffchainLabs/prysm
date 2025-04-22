@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/async"
+	"github.com/OffchainLabs/prysm/v6/async"
 )
 
 func TestEveryRuns(t *testing.T) {

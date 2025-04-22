@@ -7,7 +7,7 @@ go_library(
         "metrics.go",
         "version.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/runtime/version",
+    importpath = "github.com/OffchainLabs/prysm/v6/runtime/version",
     visibility = ["//visibility:public"],
     x_defs = {
         "gitCommit": "{STABLE_GIT_COMMIT}",
@@ -26,4 +26,5 @@ go_test(
     name = "go_default_test",
     srcs = ["fork_test.go"],
     embed = [":go_default_library"],
+    deps = ["@com_github_stretchr_testify//assert:go_default_library"],
 )

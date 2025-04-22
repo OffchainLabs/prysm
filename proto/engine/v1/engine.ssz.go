@@ -2,8 +2,8 @@
 package enginev1
 
 import (
+	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ssz "github.com/prysmaticlabs/fastssz"
-	github_com_prysmaticlabs_prysm_v5_consensus_types_primitives "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 )
 
 // MarshalSSZ ssz marshals the WithdrawalRequest object
@@ -2944,7 +2944,7 @@ func (w *Withdrawal) UnmarshalSSZ(buf []byte) error {
 	w.Index = ssz.UnmarshallUint64(buf[0:8])
 
 	// Field (1) 'ValidatorIndex'
-	w.ValidatorIndex = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
+	w.ValidatorIndex = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
 
 	// Field (2) 'Address'
 	if cap(w.Address) == 0 {

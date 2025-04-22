@@ -22,7 +22,7 @@ func UseHoleskyNetworkConfig() {
 
 // HoleskyConfig defines the config for the Holesky beacon chain testnet.
 func HoleskyConfig() *BeaconChainConfig {
-	cfg := MainnetConfig().Copy()
+	cfg := MainnetConfig()
 	cfg.MinGenesisTime = 1695902100
 	cfg.GenesisDelay = 300
 	cfg.ConfigName = HoleskyName

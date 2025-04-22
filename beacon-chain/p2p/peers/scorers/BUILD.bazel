@@ -9,7 +9,7 @@ go_library(
         "peer_status.go",
         "service.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/scorers",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers",
     visibility = ["//beacon-chain:__subpackages__"],
     deps = [
         "//beacon-chain/p2p/peers/peerdata:go_default_library",

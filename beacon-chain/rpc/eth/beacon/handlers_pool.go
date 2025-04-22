@@ -10,26 +10,27 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/api/server"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
+	corehelpers "github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api"
-	"github.com/prysmaticlabs/prysm/v5/api/server"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
-	corehelpers "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 const broadcastBLSChangesRateLimit = 128
@@ -68,7 +69,7 @@ func (s *Server) ListAttestations(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		includeAttestation = shouldIncludeAttestation(att.GetData(), rawSlot, slot, rawCommitteeIndex, committeeIndex)
+		includeAttestation = shouldIncludeAttestation(att, rawSlot, slot, rawCommitteeIndex, committeeIndex)
 		if includeAttestation {
 			attStruct := structs.AttFromConsensus(att)
 			filteredAtts = append(filteredAtts, attStruct)
@@ -124,21 +125,21 @@ func (s *Server) ListAttestationsV2(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			includeAttestation = shouldIncludeAttestation(attElectra.GetData(), rawSlot, slot, rawCommitteeIndex, committeeIndex)
+			includeAttestation = shouldIncludeAttestation(attElectra, rawSlot, slot, rawCommitteeIndex, committeeIndex)
 			if includeAttestation {
 				attStruct := structs.AttElectraFromConsensus(attElectra)
 				filteredAtts = append(filteredAtts, attStruct)
 			}
 		} else if v < version.Electra && att.Version() < version.Electra {
-			attOld, ok := att.(*eth.Attestation)
+			attPhase0, ok := att.(*eth.Attestation)
 			if !ok {
 				httputil.HandleError(w, fmt.Sprintf("Unable to convert attestation of type %T", att), http.StatusInternalServerError)
 				return
 			}
 
-			includeAttestation = shouldIncludeAttestation(attOld.GetData(), rawSlot, slot, rawCommitteeIndex, committeeIndex)
+			includeAttestation = shouldIncludeAttestation(attPhase0, rawSlot, slot, rawCommitteeIndex, committeeIndex)
 			if includeAttestation {
-				attStruct := structs.AttFromConsensus(attOld)
+				attStruct := structs.AttFromConsensus(attPhase0)
 				filteredAtts = append(filteredAtts, attStruct)
 			}
 		}
@@ -159,7 +160,7 @@ func (s *Server) ListAttestationsV2(w http.ResponseWriter, r *http.Request) {
 
 // Helper function to determine if an attestation should be included
 func shouldIncludeAttestation(
-	data *eth.AttestationData,
+	att eth.Att,
 	rawSlot string,
 	slot uint64,
 	rawCommitteeIndex string,
@@ -167,10 +168,10 @@ func shouldIncludeAttestation(
 ) bool {
 	committeeIndexMatch := true
 	slotMatch := true
-	if rawCommitteeIndex != "" && data.CommitteeIndex != primitives.CommitteeIndex(committeeIndex) {
+	if rawCommitteeIndex != "" && att.GetCommitteeIndex() != primitives.CommitteeIndex(committeeIndex) {
 		committeeIndexMatch = false
 	}
-	if rawSlot != "" && data.Slot != primitives.Slot(slot) {
+	if rawSlot != "" && att.GetData().Slot != primitives.Slot(slot) {
 		slotMatch = false
 	}
 	return committeeIndexMatch && slotMatch
@@ -283,6 +284,10 @@ func (s *Server) handleAttestationsElectra(
 	data json.RawMessage,
 ) (attFailures []*server.IndexedVerificationFailure, failedBroadcasts []string, err error) {
 	var sourceAttestations []*structs.SingleAttestation
+	currentEpoch := slots.ToEpoch(s.TimeFetcher.CurrentSlot())
+	if currentEpoch < params.BeaconConfig().ElectraForkEpoch {
+		return nil, nil, errors.Errorf("electra attestations have not been enabled, current epoch %d enabled epoch %d", currentEpoch, params.BeaconConfig().ElectraForkEpoch)
+	}
 
 	if err = json.Unmarshal(data, &sourceAttestations); err != nil {
 		return nil, nil, errors.Wrap(err, "failed to unmarshal attestation")
@@ -359,6 +364,10 @@ func (s *Server) handleAttestationsElectra(
 
 func (s *Server) handleAttestations(ctx context.Context, data json.RawMessage) (attFailures []*server.IndexedVerificationFailure, failedBroadcasts []string, err error) {
 	var sourceAttestations []*structs.Attestation
+
+	if slots.ToEpoch(s.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().ElectraForkEpoch {
+		return nil, nil, errors.New("old attestation format, only electra attestations should be sent")
+	}
 
 	if err = json.Unmarshal(data, &sourceAttestations); err != nil {
 		return nil, nil, errors.Wrap(err, "failed to unmarshal attestation")

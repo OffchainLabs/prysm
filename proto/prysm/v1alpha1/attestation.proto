@@ -18,7 +18,7 @@ package ethereum.eth.v1alpha1;
 import "proto/eth/ext/options.proto";
 
 option csharp_namespace = "Ethereum.Eth.v1alpha1";
-option go_package = "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1;eth";
+option go_package = "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1;eth";
 option java_multiple_files = true;
 option java_outer_classname = "AttestationProto";
 option java_package = "org.ethereum.eth.v1alpha1";
@@ -40,7 +40,7 @@ message AggregateAttestationAndProof {
   // The aggregator index that submitted this aggregated attestation and proof.
   uint64 aggregator_index = 1
       [ (ethereum.eth.ext.cast_type) =
-            "github.com/prysmaticlabs/prysm/v5/consensus-types/"
+            "github.com/OffchainLabs/prysm/v6/consensus-types/"
             "primitives.ValidatorIndex" ];
 
   // The aggregated attestation that was submitted.
@@ -73,13 +73,13 @@ message AttestationData {
   // Slot of the attestation attesting for.
   uint64 slot = 1 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
 
   // The committee index that submitted this attestation.
   uint64 committee_index = 2
       [ (ethereum.eth.ext.cast_type) =
-            "github.com/prysmaticlabs/prysm/v5/consensus-types/"
+            "github.com/OffchainLabs/prysm/v6/consensus-types/"
             "primitives.CommitteeIndex" ];
 
   // 32 byte root of the LMD GHOST block vote.
@@ -100,7 +100,7 @@ message Checkpoint {
   // Epoch the checkpoint references.
   uint64 epoch = 1 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Epoch"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
   ];
 
   // Block root of the checkpoint references.
@@ -123,7 +123,7 @@ message AggregateAttestationAndProofElectra {
   // The aggregator index that submitted this aggregated attestation and proof.
   uint64 aggregator_index = 1
       [ (ethereum.eth.ext.cast_type) =
-            "github.com/prysmaticlabs/prysm/v5/consensus-types/"
+            "github.com/OffchainLabs/prysm/v6/consensus-types/"
             "primitives.ValidatorIndex" ];
 
   // The aggregated attestation that was submitted.
@@ -166,7 +166,7 @@ message AggregateAttestationAndProofSingle {
   // The aggregator index that submitted this aggregated attestation and proof.
   uint64 aggregator_index = 1
       [ (ethereum.eth.ext.cast_type) =
-            "github.com/prysmaticlabs/prysm/v5/consensus-types/"
+            "github.com/OffchainLabs/prysm/v6/consensus-types/"
             "primitives.ValidatorIndex" ];
 
   // The aggregated attestation that was submitted.
@@ -179,10 +179,10 @@ message AggregateAttestationAndProofSingle {
 
 message SingleAttestation {
   uint64 committee_id = 1 [ (ethereum.eth.ext.cast_type) =
-                                "github.com/prysmaticlabs/prysm/v5/"
+                                "github.com/OffchainLabs/prysm/v6/"
                                 "consensus-types/primitives.CommitteeIndex" ];
   uint64 attester_index = 2 [ (ethereum.eth.ext.cast_type) =
-                                  "github.com/prysmaticlabs/prysm/v5/"
+                                  "github.com/OffchainLabs/prysm/v6/"
                                   "consensus-types/primitives.ValidatorIndex" ];
   AttestationData data = 3;
   bytes signature = 4 [ (ethereum.eth.ext.ssz_size) = "96" ];

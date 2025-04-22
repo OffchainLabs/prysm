@@ -52,7 +52,7 @@ go_library(
         "validate_sync_contribution_proof.go",
         "validate_voluntary_exit.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/sync",
     visibility = [
         "//beacon-chain:__subpackages__",
         "//cmd:__subpackages__",

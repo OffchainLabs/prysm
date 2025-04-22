@@ -9,27 +9,27 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/container/slice"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/network/forks"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/messagehandler"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/container/slice"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/network/forks"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/messagehandler"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
@@ -350,10 +350,9 @@ func (s *Service) wrapAndReportValidation(topic string, v wrappedVal) (string, p
 	}
 }
 
-// reValidateSubscriptions unsubscribe from topics we are currently subscribed to but that are
+// pruneSubscriptions unsubscribe from topics we are currently subscribed to but that are
 // not in the list of wanted subnets.
-// TODO: Rename this functions as it does not only revalidate subscriptions.
-func (s *Service) reValidateSubscriptions(
+func (s *Service) pruneSubscriptions(
 	subscriptions map[uint64]*pubsub.Subscription,
 	wantedSubs []uint64,
 	topicFormat string,
@@ -452,7 +451,7 @@ func (s *Service) subscribeToSubnets(
 			"digest":  fmt.Sprintf("%#x", digest),
 			"subnets": description,
 		}).Debug("Subnets with this digest are no longer valid, unsubscribing from all of them")
-		s.reValidateSubscriptions(subscriptions, []uint64{}, topicFormat, digest)
+		s.pruneSubscriptions(subscriptions, []uint64{}, topicFormat, digest)
 		return false
 	}
 
@@ -460,7 +459,7 @@ func (s *Service) subscribeToSubnets(
 	subnetsToSubscribeIndex := getSubnetsToSubscribe(currentSlot)
 
 	// Remove subscriptions that are no longer wanted.
-	s.reValidateSubscriptions(subscriptions, subnetsToSubscribeIndex, topicFormat, digest)
+	s.pruneSubscriptions(subscriptions, subnetsToSubscribeIndex, topicFormat, digest)
 
 	// Subscribe to wanted subnets.
 	for _, subnetIndex := range subnetsToSubscribeIndex {

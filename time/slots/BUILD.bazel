@@ -7,7 +7,7 @@ go_library(
         "slotticker.go",
         "slottime.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/time/slots",
+    importpath = "github.com/OffchainLabs/prysm/v6/time/slots",
     visibility = ["//visibility:public"],
     deps = [
         "//config/params:go_default_library",
