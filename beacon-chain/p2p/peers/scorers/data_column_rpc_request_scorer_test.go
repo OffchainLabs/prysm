@@ -494,3 +494,123 @@ func TestScorers_DataColumnRPCRequest_Decay(t *testing.T) {
 			"Wrong score after decay with custom decay value")
 	})
 }
+
+func TestScorers_DataColumnRPCRequest_BadPeer(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	peerStatuses := peers.NewStatus(ctx, &peers.StatusConfig{
+		ScorerParams: &scorers.Config{},
+	})
+	scorer := peerStatuses.Scorers().DataColumnRPCRequestScorer()
+
+	// Test transition from good to bad
+	t.Run("good to bad transition", func(t *testing.T) {
+		pid := peer.ID("peer1")
+
+		// Start with requests below threshold
+		requestsBelow := int(scorers.DefaultDataColumnRPCRequestThreshold - 10)
+		scorer.RecordRequest(pid, requestsBelow)
+		assert.NoError(t, scorer.IsBadPeer(pid), "Peer should not be bad when below threshold")
+		assert.Equal(t, 0, len(scorer.BadPeers()), "Should have no bad peers")
+
+		// Add more requests to exceed threshold
+		scorer.RecordRequest(pid, 15)
+		assert.NotNil(t, scorer.IsBadPeer(pid), "Peer should be bad after exceeding threshold")
+		assert.Equal(t, 1, len(scorer.BadPeers()), "Should have one bad peer")
+		assert.Equal(t, pid, scorer.BadPeers()[0], "Bad peer should match test peer")
+	})
+
+	// Test peer remaining bad after decay
+	t.Run("remain bad after decay", func(t *testing.T) {
+		pid := peer.ID("peer2")
+
+		// Push well over threshold
+		scorer.RecordRequest(pid, int(scorers.DefaultDataColumnRPCRequestThreshold*2))
+		assert.NotNil(t, scorer.IsBadPeer(pid), "Peer should be bad when significantly over threshold")
+
+		// Apply decay
+		scorer.Decay()
+		assert.NotNil(t, scorer.IsBadPeer(pid),
+			"Peer should remain bad after decay if still above threshold")
+	})
+
+	// Test peer recovery through decay
+	t.Run("recovery through decay", func(t *testing.T) {
+		pid := peer.ID("peer3")
+
+		// Set just over threshold
+		scorer.RecordRequest(pid, int(scorers.DefaultDataColumnRPCRequestThreshold+1))
+		assert.NotNil(t, scorer.IsBadPeer(pid), "Peer should be bad when just over threshold")
+
+		// Apply multiple decays until peer recovers
+		decaysNeeded := (scorers.DefaultDataColumnRPCRequestThreshold+1)/
+			scorers.DefaultDataColumnRPCRequestDecay + 1
+		for i := uint64(0); i < decaysNeeded; i++ {
+			scorer.Decay()
+		}
+		assert.NoError(t, scorer.IsBadPeer(pid),
+			"Peer should recover after sufficient decay cycles")
+	})
+
+	// Test multiple peers with different statuses
+	t.Run("multiple peer statuses", func(t *testing.T) {
+		// Create peers with different request counts
+		goodPeer1 := peer.ID("good1")
+		goodPeer2 := peer.ID("good2")
+		badPeer1 := peer.ID("bad1")
+		badPeer2 := peer.ID("bad2")
+
+		// Set request counts
+		scorer.RecordRequest(goodPeer1, 1)                                                   // Well below threshold
+		scorer.RecordRequest(goodPeer2, int(scorers.DefaultDataColumnRPCRequestThreshold-1)) // Just below
+		scorer.RecordRequest(badPeer1, int(scorers.DefaultDataColumnRPCRequestThreshold+1))  // Just above
+		scorer.RecordRequest(badPeer2, int(scorers.DefaultDataColumnRPCRequestThreshold*2))  // Well above
+
+		// Verify individual statuses
+		assert.NoError(t, scorer.IsBadPeer(goodPeer1), "goodPeer1 should not be bad")
+		assert.NoError(t, scorer.IsBadPeer(goodPeer2), "goodPeer2 should not be bad")
+		assert.NotNil(t, scorer.IsBadPeer(badPeer1), "badPeer1 should be bad")
+		assert.NotNil(t, scorer.IsBadPeer(badPeer2), "badPeer2 should be bad")
+
+		// Verify bad peers list
+		badPeers := scorer.BadPeers()
+		assert.Equal(t, 2, len(badPeers), "Should have exactly two bad peers")
+		assert.Equal(t, true, containsPeer(badPeers, badPeer1), "badPeer1 should be in bad peers list")
+		assert.Equal(t, true, containsPeer(badPeers, badPeer2), "badPeer2 should be in bad peers list")
+	})
+
+	// Test with custom threshold
+	t.Run("custom threshold", func(t *testing.T) {
+		customConfig := &scorers.DataColumnRPCRequestScorerConfig{
+			Threshold: 50, // Lower threshold
+		}
+		peerStatuses := peers.NewStatus(ctx, &peers.StatusConfig{
+			ScorerParams: &scorers.Config{
+				DataColumnRPCRequestScorerConfig: customConfig,
+			},
+		})
+		customScorer := peerStatuses.Scorers().DataColumnRPCRequestScorer()
+
+		pid := peer.ID("peer4")
+
+		// Test with custom threshold
+		customScorer.RecordRequest(pid, 40)
+		assert.NoError(t, customScorer.IsBadPeer(pid),
+			"Peer should not be bad when below custom threshold")
+
+		customScorer.RecordRequest(pid, 11)
+		assert.NotNil(t, customScorer.IsBadPeer(pid),
+			"Peer should be bad when above custom threshold")
+	})
+}
+
+// containsPeer is a helper function to check if a peer ID is in a list
+func containsPeer(peers []peer.ID, pid peer.ID) bool {
+	for _, p := range peers {
+		if p == pid {
+			return true
+		}
+	}
+	return false
+}
