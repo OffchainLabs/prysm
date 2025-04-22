@@ -362,3 +362,135 @@ func TestScorers_DataColumnRPCRequest_Count(t *testing.T) {
 		assert.Equal(t, expectedScore, scorer.Score(pid), "Wrong score after multiple ByRange requests")
 	})
 }
+
+// assertFloatEqual is a helper function to compare floating point values with a small epsilon
+func assertFloatEqual(t *testing.T, expected, actual float64, msg string) {
+	t.Helper()
+	epsilon := 1e-10
+	diff := expected - actual
+	if diff < -epsilon || diff > epsilon {
+		t.Errorf("%s, want: %f, got: %f", msg, expected, actual)
+	}
+}
+
+func TestScorers_DataColumnRPCRequest_Decay(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	peerStatuses := peers.NewStatus(ctx, &peers.StatusConfig{
+		ScorerParams: &scorers.Config{},
+	})
+	scorer := peerStatuses.Scorers().DataColumnRPCRequestScorer()
+
+	// Test basic decay
+	t.Run("basic decay", func(t *testing.T) {
+		pid := peer.ID("peer1")
+		scorer.RecordRequest(pid, 50)
+
+		// Trigger decay
+		scorer.Decay()
+
+		// After decay, count should be (50 - DefaultDataColumnRPCRequestDecay)
+		expectedCount := uint64(50 - scorers.DefaultDataColumnRPCRequestDecay)
+		expectedScore := -float64(expectedCount) * scorers.DefaultDataColumnRPCRequestPenaltyFactor
+		assertFloatEqual(t, expectedScore, scorer.Score(pid), "Wrong score after decay")
+	})
+
+	// Test multiple decay cycles
+	t.Run("multiple decay cycles", func(t *testing.T) {
+		pid := peer.ID("peer2")
+		scorer.RecordRequest(pid, 100)
+
+		// Apply decay multiple times
+		for i := 0; i < 3; i++ {
+			scorer.Decay()
+		}
+
+		// After 3 decays, count should be (100 - 3*DefaultDataColumnRPCRequestDecay)
+		expectedCount := uint64(100 - 3*scorers.DefaultDataColumnRPCRequestDecay)
+		expectedScore := -float64(expectedCount) * scorers.DefaultDataColumnRPCRequestPenaltyFactor
+		assertFloatEqual(t, expectedScore, scorer.Score(pid), "Wrong score after multiple decays")
+	})
+
+	// Test decay to zero
+	t.Run("decay to zero", func(t *testing.T) {
+		pid := peer.ID("peer3")
+		// Use a small value that will decay to zero
+		scorer.RecordRequest(pid, 10)
+
+		// Single decay should bring count to 0
+		scorer.Decay()
+		assertFloatEqual(t, float64(0), scorer.Score(pid), "Score should be zero after decay")
+
+		// Additional decay should not make score positive
+		scorer.Decay()
+		assertFloatEqual(t, float64(0), scorer.Score(pid), "Score should remain zero after additional decay")
+	})
+
+	// Test decay with multiple peers
+	t.Run("multiple peers decay", func(t *testing.T) {
+		pid1 := peer.ID("peer4")
+		pid2 := peer.ID("peer5")
+		pid3 := peer.ID("peer6")
+
+		// Set different initial counts
+		scorer.RecordRequest(pid1, 30)  // Will decay but remain > 0
+		scorer.RecordRequest(pid2, 10)  // Will decay to 0
+		scorer.RecordRequest(pid3, 100) // Will decay but remain well above 0
+
+		// Record initial scores
+		scores := make(map[peer.ID]float64)
+		scores[pid1] = scorer.Score(pid1)
+		scores[pid2] = scorer.Score(pid2)
+		scores[pid3] = scorer.Score(pid3)
+
+		// Apply decay
+		scorer.Decay()
+
+		// Verify each peer's decay
+		for _, pid := range []peer.ID{pid1, pid2, pid3} {
+			initialScore := scores[pid]
+			newScore := scorer.Score(pid)
+
+			// New score should be less negative (closer to 0) than initial score
+			assert.Equal(t, true, newScore > initialScore || newScore == 0,
+				"Score should either increase towards 0 or remain at 0 after decay")
+			// Score should never become positive
+			assert.Equal(t, true, newScore <= 0,
+				"Score should never become positive after decay")
+		}
+
+		// Specific checks for each peer
+		decayedScore1 := -float64(30-scorers.DefaultDataColumnRPCRequestDecay) *
+			scorers.DefaultDataColumnRPCRequestPenaltyFactor
+		assertFloatEqual(t, decayedScore1, scorer.Score(pid1), "Wrong score for peer1 after decay")
+		assertFloatEqual(t, float64(0), scorer.Score(pid2), "Score for peer2 should be 0 after decay")
+		decayedScore3 := -float64(100-scorers.DefaultDataColumnRPCRequestDecay) *
+			scorers.DefaultDataColumnRPCRequestPenaltyFactor
+		assertFloatEqual(t, decayedScore3, scorer.Score(pid3), "Wrong score for peer3 after decay")
+	})
+
+	// Test decay with custom decay value
+	t.Run("custom decay value", func(t *testing.T) {
+		customConfig := &scorers.DataColumnRPCRequestScorerConfig{
+			Decay: 30,
+		}
+		peerStatuses := peers.NewStatus(ctx, &peers.StatusConfig{
+			ScorerParams: &scorers.Config{
+				DataColumnRPCRequestScorerConfig: customConfig,
+			},
+		})
+		customScorer := peerStatuses.Scorers().DataColumnRPCRequestScorer()
+
+		pid := peer.ID("peer7")
+		customScorer.RecordRequest(pid, 100)
+
+		// Apply decay with custom value
+		customScorer.Decay()
+
+		expectedCount := uint64(100 - customConfig.Decay)
+		expectedScore := -float64(expectedCount) * scorers.DefaultDataColumnRPCRequestPenaltyFactor
+		assertFloatEqual(t, expectedScore, customScorer.Score(pid),
+			"Wrong score after decay with custom decay value")
+	})
+}
