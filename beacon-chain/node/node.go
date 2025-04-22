@@ -779,6 +779,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithPayloadIDCache(b.payloadIDCache),
 		blockchain.WithSyncChecker(b.syncChecker),
 		blockchain.WithSlasherEnabled(b.slasherEnabled),
+		blockchain.WithLightClientStore(b.lcStore),
 	)
 
 	blockchainService, err := blockchain.NewService(b.ctx, opts...)
@@ -1010,6 +1011,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		BlobStorage:               b.BlobStorage,
 		TrackedValidatorsCache:    b.trackedValidatorsCache,
 		PayloadIDCache:            b.payloadIDCache,
+		LCStore:                   b.lcStore,
 	})
 
 	return b.services.RegisterService(rpcService)

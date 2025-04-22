@@ -12,6 +12,7 @@ import (
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	p2pTypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -876,4 +877,8 @@ func TestSendBlobsByRangeRequest(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, int(totalElectraBlobs), len(blobs))
 	})
+}
+
+func TestErrInvalidFetchedDataDistinction(t *testing.T) {
+	require.Equal(t, false, errors.Is(ErrInvalidFetchedData, verification.ErrBlobInvalid))
 }

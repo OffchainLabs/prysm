@@ -106,7 +106,7 @@ func VerifyAttestationNoVerifySignature(
 	if err != nil {
 		return err
 	}
-	c := helpers.SlotCommitteeCount(activeValidatorCount)
+	committeeCount := helpers.SlotCommitteeCount(activeValidatorCount)
 
 	var indexedAtt ethpb.IndexedAtt
 
@@ -115,13 +115,14 @@ func VerifyAttestationNoVerifySignature(
 			return errors.New("committee index must be 0 post-Electra")
 		}
 
+		aggBits := att.GetAggregationBits()
 		committeeIndices := att.CommitteeBitsVal().BitIndices()
 		committees := make([][]primitives.ValidatorIndex, len(committeeIndices))
 		participantsCount := 0
 		var err error
 		for i, ci := range committeeIndices {
-			if uint64(ci) >= c {
-				return fmt.Errorf("committee index %d >= committee count %d", ci, c)
+			if uint64(ci) >= committeeCount {
+				return fmt.Errorf("committee index %d >= committee count %d", ci, committeeCount)
 			}
 			committees[i], err = helpers.BeaconCommitteeFromState(ctx, beaconState, att.GetData().Slot, primitives.CommitteeIndex(ci))
 			if err != nil {
@@ -129,16 +130,32 @@ func VerifyAttestationNoVerifySignature(
 			}
 			participantsCount += len(committees[i])
 		}
-		if att.GetAggregationBits().Len() != uint64(participantsCount) {
+		if aggBits.Len() != uint64(participantsCount) {
 			return fmt.Errorf("aggregation bits count %d is different than participant count %d", att.GetAggregationBits().Len(), participantsCount)
 		}
+
+		committeeOffset := 0
+		for ci, c := range committees {
+			attesterFound := false
+			for i := range c {
+				if aggBits.BitAt(uint64(committeeOffset + i)) {
+					attesterFound = true
+					break
+				}
+			}
+			if !attesterFound {
+				return fmt.Errorf("no attesting indices found for committee index %d", ci)
+			}
+			committeeOffset += len(c)
+		}
+
 		indexedAtt, err = attestation.ConvertToIndexed(ctx, att, committees...)
 		if err != nil {
 			return err
 		}
 	} else {
-		if uint64(att.GetData().CommitteeIndex) >= c {
-			return fmt.Errorf("committee index %d >= committee count %d", att.GetData().CommitteeIndex, c)
+		if uint64(att.GetData().CommitteeIndex) >= committeeCount {
+			return fmt.Errorf("committee index %d >= committee count %d", att.GetData().CommitteeIndex, committeeCount)
 		}
 
 		// Verify attesting indices are correct.

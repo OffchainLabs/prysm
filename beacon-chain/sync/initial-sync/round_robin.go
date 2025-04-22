@@ -14,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
-	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/paulbellamy/ratecounter"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -127,7 +126,7 @@ func (s *Service) syncToNonFinalizedEpoch(ctx context.Context) error {
 	}
 	for data := range queue.fetchedData {
 		count, err := s.processFetchedDataRegSync(ctx, data)
-		s.updatePeerScorerStats(data.pid, count, err)
+		s.updatePeerScorerStats(data, count, err)
 	}
 	log.WithFields(logrus.Fields{
 		"syncedSlot":  s.cfg.Chain.HeadSlot(),
@@ -147,7 +146,7 @@ func (s *Service) processFetchedData(ctx context.Context, data *blocksQueueFetch
 	if err != nil {
 		log.WithError(err).Warn("Skip processing batched blocks")
 	}
-	s.updatePeerScorerStats(data.pid, count, err)
+	s.updatePeerScorerStats(data, count, err)
 }
 
 // processFetchedDataRegSync processes data received from queue.
@@ -339,18 +338,19 @@ func isPunishableError(err error) bool {
 }
 
 // updatePeerScorerStats adjusts monitored metrics for a peer.
-func (s *Service) updatePeerScorerStats(pid peer.ID, count uint64, err error) {
-	if pid == "" {
-		return
-	}
+func (s *Service) updatePeerScorerStats(data *blocksQueueFetchedData, count uint64, err error) {
 	if isPunishableError(err) {
-		log.WithError(err).WithField("peer_id", pid).Warn("Incrementing peers bad response count")
-		s.cfg.P2P.Peers().Scorers().BadResponsesScorer().Increment(pid)
+		if verification.IsBlobValidationFailure(err) {
+			log.WithError(err).WithField("peer_id", data.blobsFrom).Warn("Downscoring peer for invalid blobs")
+			s.cfg.P2P.Peers().Scorers().BadResponsesScorer().Increment(data.blobsFrom)
+		} else {
+			log.WithError(err).WithField("peer_id", data.blocksFrom).Warn("Downscoring peer for invalid blocks")
+			s.cfg.P2P.Peers().Scorers().BadResponsesScorer().Increment(data.blocksFrom)
+		}
 		// If the error is punishable, exit here so that we don't give them credit for providing bad blocks.
 		return
 	}
-	scorer := s.cfg.P2P.Peers().Scorers().BlockProviderScorer()
-	scorer.IncrementProcessedBlocks(pid, count)
+	s.cfg.P2P.Peers().Scorers().BlockProviderScorer().IncrementProcessedBlocks(data.blocksFrom, count)
 }
 
 // isProcessedBlock checks DB and local cache for presence of a given block, to avoid duplicates.

@@ -30,7 +30,7 @@ prysm_image_upload(
     name = "push_images",
     binary = ":http-request-sink",
     entrypoint = ["/http-request-sink"],
-    repository = "gcr.io/prysmaticlabs/prysm/http-request-sink",
+    repository = "gcr.io/offchainlabs/prysm/http-request-sink",
     symlinks = {
         # Backwards compatibility for images that depended on the old filepath.
         "/app/tools/http-request-sink/http-request-sink": "/http-request-sink",

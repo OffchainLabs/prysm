@@ -38,7 +38,7 @@ prysm_image_upload(
     name = "push_images",
     binary = ":pcli",
     entrypoint = ["/pcli"],
-    repository = "gcr.io/prysmaticlabs/prysm/pcli",
+    repository = "gcr.io/offchainlabs/prysm/pcli",
     symlinks = {
         # Backwards compatibility for images that depended on the old filepath.
         "/app/tools/pcli/pcli": "/pcli",

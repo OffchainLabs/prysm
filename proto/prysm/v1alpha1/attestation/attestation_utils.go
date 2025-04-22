@@ -111,7 +111,7 @@ func AttestingIndices(att ethpb.Att, committees ...[]primitives.ValidatorIndex) 
 
 	attesters := make([]uint64, 0, aggBits.Count())
 	committeeOffset := 0
-	for _, c := range committees {
+	for ci, c := range committees {
 		committeeAttesters := make([]uint64, 0, len(c))
 		for i, vi := range c {
 			if aggBits.BitAt(uint64(committeeOffset + i)) {
@@ -119,7 +119,7 @@ func AttestingIndices(att ethpb.Att, committees ...[]primitives.ValidatorIndex) 
 			}
 		}
 		if len(committeeAttesters) == 0 {
-			return nil, fmt.Errorf("no attesting indices found in committee %v", c)
+			return nil, fmt.Errorf("no attesting indices found for committee index %d", ci)
 		}
 		attesters = append(attesters, committeeAttesters...)
 		committeeOffset += len(c)

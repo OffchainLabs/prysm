@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	coreTime "github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
@@ -64,6 +65,7 @@ type Service struct {
 	blockBeingSynced     *currentlySyncingBlock
 	blobStorage          *filesystem.BlobStorage
 	slasherEnabled       bool
+	lcStore              *lightClient.Store
 }
 
 // config options for the service.
