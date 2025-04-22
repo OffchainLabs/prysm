@@ -159,9 +159,22 @@ func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.
 		validatorAssignments = append(validatorAssignments, assignment)
 		nextValidatorAssignments = append(nextValidatorAssignments, nextAssignment)
 	}
+	currDependentRoot, err := vs.ForkchoiceFetcher.DependentRoot(currentEpoch)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get dependent root: %v", err)
+	}
+	prevDependentRoot := currDependentRoot
+	if currDependentRoot != [32]byte{} && currentEpoch > 0 {
+		prevDependentRoot, err = vs.ForkchoiceFetcher.DependentRoot(currentEpoch - 1)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not get previous dependent root: %v", err)
+		}
+	}
 	return &ethpb.DutiesResponse{
-		CurrentEpochDuties: validatorAssignments,
-		NextEpochDuties:    nextValidatorAssignments,
+		PreviousDutyDependentRoot: prevDependentRoot[:],
+		CurrentDutyDependentRoot:  currDependentRoot[:],
+		CurrentEpochDuties:        validatorAssignments,
+		NextEpochDuties:           nextValidatorAssignments,
 	}, nil
 }
 

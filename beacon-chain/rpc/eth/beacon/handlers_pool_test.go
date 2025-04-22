@@ -42,6 +42,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
 )
 
@@ -525,11 +526,12 @@ func TestSubmitAttestations(t *testing.T) {
 	require.NoError(t, err)
 	b := bitfield.NewBitlist(1)
 	b.SetBitAt(0, true)
-
-	chainService := &blockchainmock.ChainService{State: bs}
+	slot := primitives.Slot(0)
+	chainService := &blockchainmock.ChainService{State: bs, Slot: &slot}
 	s := &Server{
 		HeadFetcher:             chainService,
 		ChainInfoFetcher:        chainService,
+		TimeFetcher:             chainService,
 		OperationNotifier:       &blockchainmock.MockOperationNotifier{},
 		AttestationStateFetcher: chainService,
 	}
@@ -579,6 +581,26 @@ func TestSubmitAttestations(t *testing.T) {
 			assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
 			assert.Equal(t, 2, broadcaster.NumAttestations())
 			assert.Equal(t, 2, s.AttestationsPool.UnaggregatedAttestationCount())
+		})
+		t.Run("wrong fork", func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			config := params.BeaconConfig()
+			config.ElectraForkEpoch = 0
+			params.OverrideBeaconConfig(config)
+
+			var body bytes.Buffer
+			_, err := body.WriteString(singleAtt)
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.SubmitAttestations(writer, request)
+			assert.Equal(t, http.StatusBadRequest, writer.Code)
+			e := &httputil.DefaultJsonError{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+			assert.Equal(t, http.StatusBadRequest, e.Code)
+			assert.ErrorContains(t, "old attestation format", errors.New(e.Message))
 		})
 		t.Run("no body", func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
@@ -674,6 +696,43 @@ func TestSubmitAttestations(t *testing.T) {
 				assert.Equal(t, 2, broadcaster.NumAttestations())
 				assert.Equal(t, 2, s.AttestationsPool.UnaggregatedAttestationCount())
 			})
+			t.Run("phase0 att post electra", func(t *testing.T) {
+				params.SetupTestConfigCleanup(t)
+				config := params.BeaconConfig()
+				config.ElectraForkEpoch = 0
+				params.OverrideBeaconConfig(config)
+
+				var body bytes.Buffer
+				_, err := body.WriteString(singleAtt)
+				require.NoError(t, err)
+				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+
+				s.SubmitAttestationsV2(writer, request)
+				assert.Equal(t, http.StatusBadRequest, writer.Code)
+				e := &httputil.DefaultJsonError{}
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+				assert.Equal(t, http.StatusBadRequest, e.Code)
+				assert.ErrorContains(t, "old attestation format", errors.New(e.Message))
+			})
+			t.Run("electra att before electra", func(t *testing.T) {
+				var body bytes.Buffer
+				_, err := body.WriteString(singleAttElectra)
+				require.NoError(t, err)
+				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+				request.Header.Set(api.VersionHeader, version.String(version.Electra))
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+
+				s.SubmitAttestationsV2(writer, request)
+				assert.Equal(t, http.StatusBadRequest, writer.Code)
+				e := &httputil.DefaultJsonError{}
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+				assert.Equal(t, http.StatusBadRequest, e.Code)
+				assert.ErrorContains(t, "electra attestations have not been enabled", errors.New(e.Message))
+			})
 			t.Run("no body", func(t *testing.T) {
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
 				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
@@ -722,6 +781,11 @@ func TestSubmitAttestations(t *testing.T) {
 			})
 		})
 		t.Run("post-electra", func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			config := params.BeaconConfig()
+			config.ElectraForkEpoch = 0
+			params.OverrideBeaconConfig(config)
+
 			t.Run("single", func(t *testing.T) {
 				broadcaster := &p2pMock.MockBroadcaster{}
 				s.Broadcaster = broadcaster

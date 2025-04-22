@@ -37,6 +37,7 @@ func TestProposeAttestation(t *testing.T) {
 		P2P:                     &mockp2p.MockBroadcaster{},
 		AttPool:                 attestations.NewPool(),
 		OperationNotifier:       (&mock.ChainService{}).OperationNotifier(),
+		TimeFetcher:             chainService,
 		AttestationStateFetcher: chainService,
 	}
 	head := util.NewBeaconBlock()
@@ -76,7 +77,34 @@ func TestProposeAttestation(t *testing.T) {
 		_, err = attesterServer.ProposeAttestation(context.Background(), req)
 		assert.NoError(t, err)
 	})
+	t.Run("Phase 0 post electra", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		config := params.BeaconConfig()
+		config.ElectraForkEpoch = 0
+		params.OverrideBeaconConfig(config)
+		
+		state, err := util.NewBeaconState()
+		require.NoError(t, err)
+		require.NoError(t, state.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))
+		require.NoError(t, state.SetValidators(validators))
+
+		req := &ethpb.Attestation{
+			Signature: sig.Marshal(),
+			Data: &ethpb.AttestationData{
+				BeaconBlockRoot: root[:],
+				Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+				Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+			},
+		}
+		_, err = attesterServer.ProposeAttestation(context.Background(), req)
+		assert.ErrorContains(t, "old attestation format", err)
+	})
 	t.Run("Electra", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		config := params.BeaconConfig()
+		config.ElectraForkEpoch = 0
+		params.OverrideBeaconConfig(config)
+
 		state, err := util.NewBeaconStateElectra()
 		require.NoError(t, err)
 		require.NoError(t, state.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))
@@ -93,6 +121,18 @@ func TestProposeAttestation(t *testing.T) {
 		}
 		_, err = attesterServer.ProposeAttestationElectra(context.Background(), req)
 		assert.NoError(t, err)
+	})
+	t.Run("Electra att too early", func(t *testing.T) {
+		req := &ethpb.SingleAttestation{
+			Signature: sig.Marshal(),
+			Data: &ethpb.AttestationData{
+				BeaconBlockRoot: root[:],
+				Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+				Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+			},
+		}
+		_, err = attesterServer.ProposeAttestationElectra(context.Background(), req)
+		assert.ErrorContains(t, "ProposeAttestationElectra not supported yet", err)
 	})
 }
 

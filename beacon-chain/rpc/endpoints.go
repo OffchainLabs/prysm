@@ -373,24 +373,6 @@ func (s *Service) validatorEndpoints(
 			methods: []string{http.MethodPost},
 		},
 		{
-			template: "/eth/v2/validator/blocks/{slot}",
-			name:     namespace + ".ProduceBlockV2",
-			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
-			},
-			handler: server.ProduceBlockV2,
-			methods: []string{http.MethodGet},
-		},
-		{
-			template: "/eth/v1/validator/blinded_blocks/{slot}",
-			name:     namespace + ".ProduceBlindedBlock",
-			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
-			},
-			handler: server.ProduceBlindedBlock,
-			methods: []string{http.MethodGet},
-		},
-		{
 			template: "/eth/v3/validator/blocks/{slot}",
 			name:     namespace + ".ProduceBlockV3",
 			middleware: []middleware.Middleware{
@@ -964,6 +946,7 @@ func (s *Service) lightClientEndpoints(blocker lookup.Blocker, stater lookup.Sta
 		HeadFetcher:      s.cfg.HeadFetcher,
 		ChainInfoFetcher: s.cfg.ChainInfoFetcher,
 		BeaconDB:         s.cfg.BeaconDB,
+		LCStore:          s.cfg.LCStore,
 	}
 
 	const namespace = "lightclient"

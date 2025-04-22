@@ -78,6 +78,10 @@ type optimisticUpdateAltair struct {
 	attestedHeader interfaces.LightClientHeader
 }
 
+func (u *optimisticUpdateAltair) IsNil() bool {
+	return u == nil || u.p == nil
+}
+
 var _ interfaces.LightClientOptimisticUpdate = &optimisticUpdateAltair{}
 
 func NewWrappedOptimisticUpdateAltair(p *pb.LightClientOptimisticUpdateAltair) (interfaces.LightClientOptimisticUpdate, error) {
@@ -152,6 +156,10 @@ type optimisticUpdateCapella struct {
 	attestedHeader interfaces.LightClientHeader
 }
 
+func (u *optimisticUpdateCapella) IsNil() bool {
+	return u == nil || u.p == nil
+}
+
 var _ interfaces.LightClientOptimisticUpdate = &optimisticUpdateCapella{}
 
 func NewWrappedOptimisticUpdateCapella(p *pb.LightClientOptimisticUpdateCapella) (interfaces.LightClientOptimisticUpdate, error) {
@@ -224,6 +232,10 @@ func (u *optimisticUpdateCapella) SignatureSlot() primitives.Slot {
 type optimisticUpdateDeneb struct {
 	p              *pb.LightClientOptimisticUpdateDeneb
 	attestedHeader interfaces.LightClientHeader
+}
+
+func (u *optimisticUpdateDeneb) IsNil() bool {
+	return u == nil || u.p == nil
 }
 
 var _ interfaces.LightClientOptimisticUpdate = &optimisticUpdateDeneb{}

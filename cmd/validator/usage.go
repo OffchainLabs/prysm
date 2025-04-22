@@ -61,7 +61,6 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.ClearDB,
 			cmd.ForceClearDB,
 			cmd.EnableBackupWebhookFlag,
-			cmd.BackupWebhookOutputDir,
 			cmd.EnableTracingFlag,
 			cmd.TracingProcessNameFlag,
 			cmd.TracingEndpointFlag,
@@ -142,6 +141,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.DisableAccountMetricsFlag,
 			flags.EnableDistributed,
 			flags.AuthTokenPathFlag,
+			flags.DisableDutiesPolling,
 		},
 	},
 	{
@@ -156,11 +156,8 @@ var appHelpFlagGroups = []flagGroup{
 		},
 	},
 	{
-		Name: "deprecated",
-		Flags: []cli.Flag{
-			debug.CPUProfileFlag,
-			debug.TraceFlag,
-		},
+		Name:  "deprecated",
+		Flags: []cli.Flag{},
 	},
 }
 

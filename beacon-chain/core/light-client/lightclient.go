@@ -1013,3 +1013,9 @@ func createDefaultLightClientBootstrap(currentSlot primitives.Slot) (interfaces.
 
 	return light_client.NewWrappedBootstrap(m)
 }
+
+func UpdateHasSupermajority(syncAggregate *pb.SyncAggregate) bool {
+	maxActiveParticipants := syncAggregate.SyncCommitteeBits.Len()
+	numActiveParticipants := syncAggregate.SyncCommitteeBits.Count()
+	return numActiveParticipants*3 >= maxActiveParticipants*2
+}

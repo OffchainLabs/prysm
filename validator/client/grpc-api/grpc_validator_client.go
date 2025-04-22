@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -50,6 +51,8 @@ func toValidatorDutiesContainer(dutiesResponse *ethpb.DutiesResponse) (*ethpb.Va
 		nextDuties[i] = duty
 	}
 	return &ethpb.ValidatorDutiesContainer{
+		PrevDependentRoot:  dutiesResponse.PreviousDutyDependentRoot,
+		CurrDependentRoot:  dutiesResponse.CurrentDutyDependentRoot,
 		CurrentEpochDuties: currentDuties,
 		NextEpochDuties:    nextDuties,
 	}, nil
@@ -224,7 +227,7 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 		}
 		return
 	}
-	// TODO(13563): ONLY WORKS WITH HEAD TOPIC RIGHT NOW/ONLY PROVIDES THE SLOT
+	// TODO(13563): ONLY WORKS WITH HEAD TOPIC.
 	containsHead := false
 	for i := range topics {
 		if topics[i] == eventClient.EventHead {
@@ -286,7 +289,9 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 				continue
 			}
 			b, err := json.Marshal(structs.HeadEvent{
-				Slot: strconv.FormatUint(uint64(res.Slot), 10),
+				Slot:                      strconv.FormatUint(uint64(res.Slot), 10),
+				PreviousDutyDependentRoot: hexutil.Encode(res.PreviousDutyDependentRoot),
+				CurrentDutyDependentRoot:  hexutil.Encode(res.CurrentDutyDependentRoot),
 			})
 			if err != nil {
 				eventsChannel <- &eventClient.Event{

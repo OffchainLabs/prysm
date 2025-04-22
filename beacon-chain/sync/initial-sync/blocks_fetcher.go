@@ -120,11 +120,20 @@ type fetchRequestParams struct {
 // fetchRequestResponse is a combined type to hold results of both successful executions and errors.
 // Valid usage pattern will be to check whether result's `err` is nil, before using `blocks`.
 type fetchRequestResponse struct {
-	pid   peer.ID
-	start primitives.Slot
-	count uint64
-	bwb   []blocks.BlockWithROBlobs
-	err   error
+	blocksFrom peer.ID
+	blobsFrom  peer.ID
+	start      primitives.Slot
+	count      uint64
+	bwb        []blocks.BlockWithROBlobs
+	err        error
+}
+
+func (r *fetchRequestResponse) blocksQueueFetchedData() *blocksQueueFetchedData {
+	return &blocksQueueFetchedData{
+		blocksFrom: r.blocksFrom,
+		blobsFrom:  r.blobsFrom,
+		bwb:        r.bwb,
+	}
 }
 
 // newBlocksFetcher creates ready to use fetcher.
@@ -314,13 +323,14 @@ func (f *blocksFetcher) handleRequest(ctx context.Context, start primitives.Slot
 		}
 	}
 
-	response.bwb, response.pid, response.err = f.fetchBlocksFromPeer(ctx, start, count, peers)
+	response.bwb, response.blocksFrom, response.err = f.fetchBlocksFromPeer(ctx, start, count, peers)
 	if response.err == nil {
-		bwb, err := f.fetchBlobsFromPeer(ctx, response.bwb, response.pid, peers)
+		pid, bwb, err := f.fetchBlobsFromPeer(ctx, response.bwb, response.blocksFrom, peers)
 		if err != nil {
 			response.err = err
 		}
 		response.bwb = bwb
+		response.blobsFrom = pid
 	}
 	return response
 }
@@ -537,20 +547,20 @@ func missingCommitError(root [32]byte, slot primitives.Slot, missing [][]byte) e
 }
 
 // fetchBlobsFromPeer fetches blocks from a single randomly selected peer.
-func (f *blocksFetcher) fetchBlobsFromPeer(ctx context.Context, bwb []blocks.BlockWithROBlobs, pid peer.ID, peers []peer.ID) ([]blocks.BlockWithROBlobs, error) {
+func (f *blocksFetcher) fetchBlobsFromPeer(ctx context.Context, bwb []blocks.BlockWithROBlobs, pid peer.ID, peers []peer.ID) (peer.ID, []blocks.BlockWithROBlobs, error) {
 	ctx, span := trace.StartSpan(ctx, "initialsync.fetchBlobsFromPeer")
 	defer span.End()
 	if slots.ToEpoch(f.clock.CurrentSlot()) < params.BeaconConfig().DenebForkEpoch {
-		return bwb, nil
+		return "", bwb, nil
 	}
 	blobWindowStart, err := prysmsync.BlobRPCMinValidSlot(f.clock.CurrentSlot())
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 	// Construct request message based on observed interval of blocks in need of blobs.
 	req := countCommitments(bwb, blobWindowStart).blobRange(f.bs).Request()
 	if req == nil {
-		return bwb, nil
+		return "", bwb, nil
 	}
 	peers = f.filterPeers(ctx, peers, peersPercentagePerRequest)
 	// We dial the initial peer first to ensure that we get the desired set of blobs.
@@ -573,9 +583,9 @@ func (f *blocksFetcher) fetchBlobsFromPeer(ctx context.Context, bwb []blocks.Blo
 			log.WithField("peer", p).WithError(err).Debug("Invalid BeaconBlobsByRange response")
 			continue
 		}
-		return robs, err
+		return p, robs, err
 	}
-	return nil, errNoPeersAvailable
+	return "", nil, errNoPeersAvailable
 }
 
 // requestBlocks is a wrapper for handling BeaconBlocksByRangeRequest requests/streams.
