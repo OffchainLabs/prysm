@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
@@ -57,6 +58,65 @@ func (s *Service) validateLightClientOptimisticUpdate(ctx context.Context, pid p
 
 		// [IGNORE] The attested_header.beacon.slot is greater than that of all previously forwarded optimistic_updates
 		if newUpdateSlot <= lastUpdateSlot {
+			return pubsub.ValidationIgnore, nil
+		}
+	}
+
+	msg.ValidatorData = newUpdate.Proto()
+	return pubsub.ValidationAccept, nil
+}
+
+func (s *Service) validateLightClientFinalityUpdate(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
+	// Validation runs on publish (not just subscriptions), so we should approve any message from
+	// ourselves.
+	if pid == s.cfg.p2p.PeerID() {
+		return pubsub.ValidationAccept, nil
+	}
+
+	// Ignore updates while syncing
+	if s.cfg.initialSync.Syncing() {
+		return pubsub.ValidationIgnore, nil
+	}
+
+	_, span := trace.StartSpan(ctx, "sync.validateLightClientFinalityUpdate")
+	defer span.End()
+
+	m, err := s.decodePubsubMessage(msg)
+	if err != nil {
+		tracing.AnnotateError(span, err)
+		return pubsub.ValidationReject, err
+	}
+
+	newUpdate, ok := m.(interfaces.LightClientFinalityUpdate)
+	if !ok {
+		return pubsub.ValidationReject, errWrongMessage
+	}
+
+	// [IGNORE] The optimistic_update is received after the block at signature_slot was given enough time
+	// to propagate through the network -- i.e. validate that one-third of optimistic_update.signature_slot
+	// has transpired (SECONDS_PER_SLOT / INTERVALS_PER_SLOT seconds after the start of the slot,
+	// with a MAXIMUM_GOSSIP_CLOCK_DISPARITY allowance)
+	earliestValidTime := slots.StartTime(uint64(s.cfg.clock.GenesisTime().Unix()), newUpdate.SignatureSlot()).
+		Add(time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot/params.BeaconConfig().IntervalsPerSlot)).
+		Add(-params.BeaconConfig().MaximumGossipClockDisparityDuration())
+	if s.cfg.clock.Now().Before(earliestValidTime) {
+		return pubsub.ValidationIgnore, nil
+	}
+
+	lastStoredUpdate := s.lcStore.LastFinalityUpdate()
+	if lastStoredUpdate != nil {
+		lastUpdateSlot := lastStoredUpdate.FinalizedHeader().Beacon().Slot
+		newUpdateSlot := newUpdate.FinalizedHeader().Beacon().Slot
+		lastUpdateHasSupermajority := lightClient.UpdateHasSupermajority(lastStoredUpdate.SyncAggregate())
+		newUpdateHasSupermajority := lightClient.UpdateHasSupermajority(newUpdate.SyncAggregate())
+
+		// [IGNORE] The finalized_header.beacon.slot is greater than that of all previously forwarded finality_updates,
+		// or it matches the highest previously forwarded slot and also has a sync_aggregate indicating supermajority (> 2/3)
+		// sync committee participation while the previously forwarded finality_update for that slot did not indicate supermajority
+		if newUpdateSlot < lastUpdateSlot {
+			return pubsub.ValidationIgnore, nil
+		}
+		if newUpdateSlot == lastUpdateSlot && (lastUpdateHasSupermajority || !newUpdateHasSupermajority) {
 			return pubsub.ValidationIgnore, nil
 		}
 	}
