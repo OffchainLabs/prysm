@@ -2,6 +2,7 @@ package scorers_test
 
 import (
 	"context"
+	"math"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/stretchr/testify/require"
 )
 
 func TestScorers_Service_Init(t *testing.T) {
@@ -209,6 +211,32 @@ func TestScorers_Service_Score(t *testing.T) {
 		// If peer continues to misbehave, score becomes negative.
 		s2.Increment("peer1")
 		assert.Equal(t, roundScore(3*penalty), s.Score("peer1"), "Unexpected overall score")
+	})
+
+	t.Run("data column RPC request score", func(t *testing.T) {
+		s, _ := setupScorer()
+		s1 := s.DataColumnRPCRequestScorer()
+
+		// Record some requests
+		pid := peer.ID("peer1")
+		s1.RecordRequest(pid, 10)
+		expectedScore := -10.0 * scorers.DefaultDataColumnRPCRequestPenaltyFactor * 0.15
+		expectedScore = math.Round(expectedScore*scorers.ScoreRoundingFactor) / scorers.ScoreRoundingFactor
+		assert.Equal(t, roundScore(expectedScore), s.Score(pid), "Wrong weighted score")
+
+		// Test decay
+		initialScore := s.Score(pid)
+		s1.Decay()
+		decayedScore := s.Score(pid)
+		require.Greater(t, decayedScore, initialScore, "Score should increase after decay")
+		require.LessOrEqual(t, decayedScore, float64(0), "Score should not become positive after decay")
+
+		// Test bad peer detection
+		for i := 0; i < int(scorers.DefaultDataColumnRPCRequestThreshold/10)+1; i++ {
+			s1.RecordRequest(pid, 10)
+		}
+		require.NotNil(t, s.IsBadPeer(pid), "Peer should be marked as bad")
+		require.Contains(t, s.BadPeers(), pid, "Bad peer should be in service's bad peers list")
 	})
 }
 
