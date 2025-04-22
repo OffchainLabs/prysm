@@ -2,12 +2,14 @@ package scorers_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
@@ -245,5 +247,118 @@ func TestScorers_DataColumnRPCRequest_Params(t *testing.T) {
 		assert.Equal(t, uint64(20), params.Decay, "Config should be immutable")
 		assert.Equal(t, uint64(200), params.Threshold, "Config should be immutable")
 		assert.Equal(t, 0.05, params.PenaltyFactor, "Config should be immutable")
+	})
+}
+
+func TestScorers_DataColumnRPCRequest_Count(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	peerStatuses := peers.NewStatus(ctx, &peers.StatusConfig{
+		ScorerParams: &scorers.Config{},
+	})
+	scorer := peerStatuses.Scorers().DataColumnRPCRequestScorer()
+
+	// Test unknown peer
+	t.Run("unknown peer", func(t *testing.T) {
+		pid := peer.ID("peer1")
+		// Verify peer is unknown initially
+		_, err := peerStatuses.ConnectionState(pid)
+		assert.ErrorContains(t, "peer unknown", err, "Peer should not exist")
+
+		// Record request for unknown peer
+		scorer.RecordRequest(pid, 5)
+
+		// Verify peer data after request
+		state, err := peerStatuses.ConnectionState(pid)
+		require.NoError(t, err, "Peer should exist")
+		assert.Equal(t, peers.Disconnected, state, "Wrong connection state")
+		assert.Equal(t, float64(-0.1), scorer.Score(pid), "Wrong score for request count of 5")
+	})
+
+	// Test multiple requests accumulation
+	t.Run("request accumulation", func(t *testing.T) {
+		pid := peer.ID("peer2")
+
+		// Record series of requests
+		scorer.RecordRequest(pid, 10)
+		assert.Equal(t, float64(-0.2), scorer.Score(pid), "Wrong score after first request")
+
+		scorer.RecordRequest(pid, 15)
+		assert.Equal(t, float64(-0.5), scorer.Score(pid), "Wrong score after second request")
+
+		scorer.RecordRequest(pid, 20)
+		assert.Equal(t, float64(-0.9), scorer.Score(pid), "Wrong score after third request")
+	})
+
+	// Test invalid requests
+	t.Run("invalid requests", func(t *testing.T) {
+		pid := peer.ID("peer3")
+
+		// Record initial valid request
+		scorer.RecordRequest(pid, 10)
+		initialScore := scorer.Score(pid)
+
+		// Try invalid requests
+		scorer.RecordRequest(pid, 0)  // Zero columns
+		scorer.RecordRequest(pid, -1) // Negative columns
+		scorer.RecordRequest("", 5)   // Empty peer ID
+
+		// Verify score unchanged
+		assert.Equal(t, initialScore, scorer.Score(pid), "Score should not change for invalid requests")
+	})
+
+	// Test request timing
+	t.Run("request timing", func(t *testing.T) {
+		pid := peer.ID("peer4")
+
+		// Record first request
+		scorer.RecordRequest(pid, 5)
+		time.Sleep(time.Millisecond)
+		firstScore := scorer.Score(pid)
+
+		// Record second request
+		scorer.RecordRequest(pid, 5)
+		secondScore := scorer.Score(pid)
+
+		// Verify scores reflect accumulation
+		assert.Equal(t, 2*firstScore, secondScore, "Second score should be double the first")
+	})
+
+	// Test concurrent requests
+	t.Run("concurrent requests", func(t *testing.T) {
+		pid := peer.ID("peer5")
+		const numRequests = 100
+		const columnsPerRequest = 5
+
+		// Launch multiple goroutines to record requests concurrently
+		var wg sync.WaitGroup
+		for i := 0; i < numRequests; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				scorer.RecordRequest(pid, columnsPerRequest)
+			}()
+		}
+		wg.Wait()
+
+		// Verify final score
+		expectedScore := -float64(numRequests*columnsPerRequest) * scorers.DefaultDataColumnRPCRequestPenaltyFactor
+		assert.Equal(t, expectedScore, scorer.Score(pid), "Wrong score after concurrent requests")
+	})
+
+	// Test ByRange requests with count multiplier
+	t.Run("byrange requests", func(t *testing.T) {
+		pid := peer.ID("peer6")
+
+		// Record a ByRange request with count=3 and 2 columns
+		scorer.RecordRequest(pid, 6) // 3 * 2 columns
+		expectedScore := -float64(6) * scorers.DefaultDataColumnRPCRequestPenaltyFactor
+		assert.Equal(t, expectedScore, scorer.Score(pid), "Wrong score for ByRange request")
+
+		// Record another ByRange request with count=2 and 3 columns
+		scorer.RecordRequest(pid, 6) // 2 * 3 columns
+		expectedScore = -float64(12) * scorers.DefaultDataColumnRPCRequestPenaltyFactor
+		assert.Equal(t, expectedScore, scorer.Score(pid), "Wrong score after multiple ByRange requests")
 	})
 }
