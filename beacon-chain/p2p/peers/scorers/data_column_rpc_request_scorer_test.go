@@ -3,6 +3,7 @@ package scorers_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
@@ -144,4 +145,105 @@ func TestScorers_DataColumnRPCRequest_BadPeers(t *testing.T) {
 	assert.NoError(t, scorer.IsBadPeer(pid1), "Peer1 should not be bad")
 	assert.NotNil(t, scorer.IsBadPeer(pid2), "Peer2 should be bad")
 	assert.NotNil(t, scorer.IsBadPeer(pid3), "Peer3 should be bad")
+}
+
+func TestScorers_DataColumnRPCRequest_Params(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Test with default config (nil config)
+	t.Run("default config", func(t *testing.T) {
+		peerStatuses := peers.NewStatus(ctx, &peers.StatusConfig{
+			ScorerParams: &scorers.Config{},
+		})
+		scorer := peerStatuses.Scorers().DataColumnRPCRequestScorer()
+		params := scorer.Params()
+
+		assert.Equal(t, scorers.DefaultDataColumnRPCRequestDecayInterval, params.DecayInterval, "Wrong default decay interval")
+		assert.Equal(t, scorers.DefaultDataColumnRPCRequestDecay, params.Decay, "Wrong default decay value")
+		assert.Equal(t, scorers.DefaultDataColumnRPCRequestThreshold, params.Threshold, "Wrong default threshold")
+		assert.Equal(t, scorers.DefaultDataColumnRPCRequestPenaltyFactor, params.PenaltyFactor, "Wrong default penalty factor")
+	})
+
+	// Test with custom config
+	t.Run("custom config", func(t *testing.T) {
+		customConfig := &scorers.DataColumnRPCRequestScorerConfig{
+			DecayInterval: time.Minute,
+			Decay:         20,
+			Threshold:     200,
+			PenaltyFactor: 0.05,
+		}
+		peerStatuses := peers.NewStatus(ctx, &peers.StatusConfig{
+			ScorerParams: &scorers.Config{
+				DataColumnRPCRequestScorerConfig: customConfig,
+			},
+		})
+		scorer := peerStatuses.Scorers().DataColumnRPCRequestScorer()
+		params := scorer.Params()
+
+		assert.Equal(t, customConfig.DecayInterval, params.DecayInterval, "Wrong custom decay interval")
+		assert.Equal(t, customConfig.Decay, params.Decay, "Wrong custom decay value")
+		assert.Equal(t, customConfig.Threshold, params.Threshold, "Wrong custom threshold")
+		assert.Equal(t, customConfig.PenaltyFactor, params.PenaltyFactor, "Wrong custom penalty factor")
+
+		// Verify the config affects scoring
+		scorer.RecordRequest("peer1", 150)
+		expectedScore := -150.0 * customConfig.PenaltyFactor
+		assert.Equal(t, expectedScore, scorer.Score("peer1"), "Wrong score with custom penalty factor")
+		assert.NoError(t, scorer.IsBadPeer("peer1"), "Peer should not be bad yet")
+
+		// Push peer over custom threshold
+		scorer.RecordRequest("peer1", 51)
+		assert.NotNil(t, scorer.IsBadPeer("peer1"), "Peer should be bad after exceeding custom threshold")
+	})
+
+	// Test partial config (some values specified, others default)
+	t.Run("partial config", func(t *testing.T) {
+		partialConfig := &scorers.DataColumnRPCRequestScorerConfig{
+			DecayInterval: time.Minute,
+			Threshold:     200,
+		}
+		peerStatuses := peers.NewStatus(ctx, &peers.StatusConfig{
+			ScorerParams: &scorers.Config{
+				DataColumnRPCRequestScorerConfig: partialConfig,
+			},
+		})
+		scorer := peerStatuses.Scorers().DataColumnRPCRequestScorer()
+		params := scorer.Params()
+
+		assert.Equal(t, partialConfig.DecayInterval, params.DecayInterval, "Wrong decay interval")
+		assert.Equal(t, partialConfig.Threshold, params.Threshold, "Wrong threshold")
+		// Unspecified values should use defaults
+		assert.Equal(t, scorers.DefaultDataColumnRPCRequestDecay, params.Decay, "Should use default decay")
+		assert.Equal(t, scorers.DefaultDataColumnRPCRequestPenaltyFactor, params.PenaltyFactor, "Should use default penalty factor")
+	})
+
+	// Test config immutability
+	t.Run("config immutability", func(t *testing.T) {
+		customConfig := &scorers.DataColumnRPCRequestScorerConfig{
+			DecayInterval: time.Minute,
+			Decay:         20,
+			Threshold:     200,
+			PenaltyFactor: 0.05,
+		}
+		peerStatuses := peers.NewStatus(ctx, &peers.StatusConfig{
+			ScorerParams: &scorers.Config{
+				DataColumnRPCRequestScorerConfig: customConfig,
+			},
+		})
+		scorer := peerStatuses.Scorers().DataColumnRPCRequestScorer()
+
+		// Modify original config
+		customConfig.DecayInterval = time.Hour
+		customConfig.Decay = 50
+		customConfig.Threshold = 500
+		customConfig.PenaltyFactor = 0.1
+
+		// Verify scorer's config is unchanged
+		params := scorer.Params()
+		assert.Equal(t, time.Minute, params.DecayInterval, "Config should be immutable")
+		assert.Equal(t, uint64(20), params.Decay, "Config should be immutable")
+		assert.Equal(t, uint64(200), params.Threshold, "Config should be immutable")
+		assert.Equal(t, 0.05, params.PenaltyFactor, "Config should be immutable")
+	})
 }

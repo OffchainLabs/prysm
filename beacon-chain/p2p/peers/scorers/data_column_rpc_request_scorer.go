@@ -44,26 +44,34 @@ type DataColumnRPCRequestScorerConfig struct {
 
 // newDataColumnRPCRequestScorer creates new scoring service for data column RPC requests.
 func newDataColumnRPCRequestScorer(store *peerdata.Store, config *DataColumnRPCRequestScorerConfig) *DataColumnRPCRequestScorer {
-	if config == nil {
-		config = &DataColumnRPCRequestScorerConfig{}
+	// Create a new config with default values
+	cfg := &DataColumnRPCRequestScorerConfig{
+		DecayInterval: DefaultDataColumnRPCRequestDecayInterval,
+		Decay:         DefaultDataColumnRPCRequestDecay,
+		Threshold:     DefaultDataColumnRPCRequestThreshold,
+		PenaltyFactor: DefaultDataColumnRPCRequestPenaltyFactor,
 	}
-	scorer := &DataColumnRPCRequestScorer{
-		config: config,
+
+	// Override with provided config values if present
+	if config != nil {
+		if config.DecayInterval != 0 {
+			cfg.DecayInterval = config.DecayInterval
+		}
+		if config.Decay != 0 {
+			cfg.Decay = config.Decay
+		}
+		if config.Threshold != 0 {
+			cfg.Threshold = config.Threshold
+		}
+		if config.PenaltyFactor != 0 {
+			cfg.PenaltyFactor = config.PenaltyFactor
+		}
+	}
+
+	return &DataColumnRPCRequestScorer{
+		config: cfg,
 		store:  store,
 	}
-	if scorer.config.DecayInterval == 0 {
-		scorer.config.DecayInterval = DefaultDataColumnRPCRequestDecayInterval
-	}
-	if scorer.config.Decay == 0 {
-		scorer.config.Decay = DefaultDataColumnRPCRequestDecay
-	}
-	if scorer.config.Threshold == 0 {
-		scorer.config.Threshold = DefaultDataColumnRPCRequestThreshold
-	}
-	if scorer.config.PenaltyFactor == 0 {
-		scorer.config.PenaltyFactor = DefaultDataColumnRPCRequestPenaltyFactor
-	}
-	return scorer
 }
 
 // Score returns calculated peer score.
