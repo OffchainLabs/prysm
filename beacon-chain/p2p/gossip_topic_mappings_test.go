@@ -73,6 +73,12 @@ func TestGossipTopicMappings_CorrectType(t *testing.T) {
 	pMessage = GossipTopicMappings(AggregateAndProofSubnetTopicFormat, altairForkEpoch)
 	_, ok = pMessage.(*ethpb.SignedAggregateAttestationAndProof)
 	assert.Equal(t, true, ok)
+	pMessage = GossipTopicMappings(LightClientOptimisticUpdateTopicFormat, altairForkEpoch)
+	_, ok = pMessage.(*ethpb.LightClientOptimisticUpdateAltair)
+	assert.Equal(t, true, ok)
+	pMessage = GossipTopicMappings(LightClientFinalityUpdateTopicFormat, altairForkEpoch)
+	_, ok = pMessage.(*ethpb.LightClientFinalityUpdateAltair)
+	assert.Equal(t, true, ok)
 
 	// Bellatrix Fork
 	pMessage = GossipTopicMappings(BlockSubnetTopicFormat, bellatrixForkEpoch)
@@ -86,6 +92,12 @@ func TestGossipTopicMappings_CorrectType(t *testing.T) {
 	assert.Equal(t, true, ok)
 	pMessage = GossipTopicMappings(AggregateAndProofSubnetTopicFormat, bellatrixForkEpoch)
 	_, ok = pMessage.(*ethpb.SignedAggregateAttestationAndProof)
+	assert.Equal(t, true, ok)
+	pMessage = GossipTopicMappings(LightClientOptimisticUpdateTopicFormat, bellatrixForkEpoch)
+	_, ok = pMessage.(*ethpb.LightClientOptimisticUpdateAltair)
+	assert.Equal(t, true, ok)
+	pMessage = GossipTopicMappings(LightClientFinalityUpdateTopicFormat, bellatrixForkEpoch)
+	_, ok = pMessage.(*ethpb.LightClientFinalityUpdateAltair)
 	assert.Equal(t, true, ok)
 
 	// Capella Fork
@@ -101,6 +113,12 @@ func TestGossipTopicMappings_CorrectType(t *testing.T) {
 	pMessage = GossipTopicMappings(AggregateAndProofSubnetTopicFormat, capellaForkEpoch)
 	_, ok = pMessage.(*ethpb.SignedAggregateAttestationAndProof)
 	assert.Equal(t, true, ok)
+	pMessage = GossipTopicMappings(LightClientOptimisticUpdateTopicFormat, capellaForkEpoch)
+	_, ok = pMessage.(*ethpb.LightClientOptimisticUpdateCapella)
+	assert.Equal(t, true, ok)
+	pMessage = GossipTopicMappings(LightClientFinalityUpdateTopicFormat, capellaForkEpoch)
+	_, ok = pMessage.(*ethpb.LightClientFinalityUpdateCapella)
+	assert.Equal(t, true, ok)
 
 	// Deneb Fork
 	pMessage = GossipTopicMappings(BlockSubnetTopicFormat, denebForkEpoch)
@@ -115,6 +133,12 @@ func TestGossipTopicMappings_CorrectType(t *testing.T) {
 	pMessage = GossipTopicMappings(AggregateAndProofSubnetTopicFormat, denebForkEpoch)
 	_, ok = pMessage.(*ethpb.SignedAggregateAttestationAndProof)
 	assert.Equal(t, true, ok)
+	pMessage = GossipTopicMappings(LightClientOptimisticUpdateTopicFormat, denebForkEpoch)
+	_, ok = pMessage.(*ethpb.LightClientOptimisticUpdateDeneb)
+	assert.Equal(t, true, ok)
+	pMessage = GossipTopicMappings(LightClientFinalityUpdateTopicFormat, denebForkEpoch)
+	_, ok = pMessage.(*ethpb.LightClientFinalityUpdateDeneb)
+	assert.Equal(t, true, ok)
 
 	// Electra Fork
 	pMessage = GossipTopicMappings(BlockSubnetTopicFormat, electraForkEpoch)
@@ -128,5 +152,11 @@ func TestGossipTopicMappings_CorrectType(t *testing.T) {
 	assert.Equal(t, true, ok)
 	pMessage = GossipTopicMappings(AggregateAndProofSubnetTopicFormat, electraForkEpoch)
 	_, ok = pMessage.(*ethpb.SignedAggregateAttestationAndProofElectra)
+	assert.Equal(t, true, ok)
+	pMessage = GossipTopicMappings(LightClientOptimisticUpdateTopicFormat, electraForkEpoch)
+	_, ok = pMessage.(*ethpb.LightClientOptimisticUpdateDeneb)
+	assert.Equal(t, true, ok)
+	pMessage = GossipTopicMappings(LightClientFinalityUpdateTopicFormat, electraForkEpoch)
+	_, ok = pMessage.(*ethpb.LightClientFinalityUpdateElectra)
 	assert.Equal(t, true, ok)
 }

@@ -40,6 +40,9 @@ var (
 	// LightClientOptimisticUpdateMap maps the fork-version to the underlying data type for that
 	// particular fork period.
 	LightClientOptimisticUpdateMap map[[4]byte]func() (interfaces.LightClientOptimisticUpdate, error)
+	//// LightClientFinalityUpdateMap maps the fork-version to the underlying data type for that
+	//// particular fork period.
+	//LightClientFinalityUpdateMap map[[4]byte]func() (interfaces.LightClientFinalityUpdate, error)
 )
 
 // InitializeDataMaps initializes all the relevant object maps. This function is called to
@@ -187,19 +190,24 @@ func InitializeDataMaps() {
 	// Reset our light client optimistic update map.
 	LightClientOptimisticUpdateMap = map[[4]byte]func() (interfaces.LightClientOptimisticUpdate, error){
 		bytesutil.ToBytes4(params.BeaconConfig().AltairForkVersion): func() (interfaces.LightClientOptimisticUpdate, error) {
-			return lightclientTypes.NewWrappedOptimisticUpdate(&ethpb.LightClientOptimisticUpdateAltair{})
+			return lightclientTypes.NewWrappedOptimisticUpdate(&ethpb.LightClientOptimisticUpdateAltair{AttestedHeader: &ethpb.LightClientHeaderAltair{}})
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().BellatrixForkVersion): func() (interfaces.LightClientOptimisticUpdate, error) {
-			return lightclientTypes.NewWrappedOptimisticUpdate(&ethpb.LightClientOptimisticUpdateAltair{})
+			return lightclientTypes.NewWrappedOptimisticUpdate(&ethpb.LightClientOptimisticUpdateAltair{AttestedHeader: &ethpb.LightClientHeaderAltair{}})
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().CapellaForkVersion): func() (interfaces.LightClientOptimisticUpdate, error) {
-			return lightclientTypes.NewWrappedOptimisticUpdate(&ethpb.LightClientOptimisticUpdateCapella{})
+			return lightclientTypes.NewWrappedOptimisticUpdate(&ethpb.LightClientOptimisticUpdateCapella{AttestedHeader: &ethpb.LightClientHeaderCapella{}})
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().DenebForkVersion): func() (interfaces.LightClientOptimisticUpdate, error) {
-			return lightclientTypes.NewWrappedOptimisticUpdate(&ethpb.LightClientOptimisticUpdateDeneb{})
+			return lightclientTypes.NewWrappedOptimisticUpdate(&ethpb.LightClientOptimisticUpdateDeneb{AttestedHeader: &ethpb.LightClientHeaderDeneb{}})
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().ElectraForkVersion): func() (interfaces.LightClientOptimisticUpdate, error) {
-			return lightclientTypes.NewWrappedOptimisticUpdate(&ethpb.LightClientOptimisticUpdateDeneb{})
+			return lightclientTypes.NewWrappedOptimisticUpdate(&ethpb.LightClientOptimisticUpdateDeneb{AttestedHeader: &ethpb.LightClientHeaderDeneb{}})
 		},
 	}
+	//LightClientFinalityUpdateMap = map[[4]byte]func() (interfaces.LightClientFinalityUpdate, error){
+	//	bytesutil.ToBytes4(params.BeaconConfig().AltairForkVersion): func() (interfaces.LightClientFinalityUpdate, error) {
+	//		return lightclientTypes.NewWrappedFinalityUpdate(&ethpb.LightClientFinalityUpdateAltair{AttestedHeader: &ethpb.LightClientHeaderAltair{}})
+	//	},
+	//}
 }
