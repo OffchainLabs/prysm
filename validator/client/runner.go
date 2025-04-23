@@ -25,6 +25,9 @@ import (
 // Time to wait before trying to reconnect with beacon node.
 var backOffPeriod = 10 * time.Second
 
+// dutiesDeadline is the deadline we give to update duties
+const dutiesDeadline = primitives.Slot(5)
+
 // Run the main validator routine. This routine exits if the context is
 // canceled.
 //
@@ -43,7 +46,10 @@ func run(ctx context.Context, v iface.Validator) {
 	if err != nil {
 		return // Exit if context is canceled.
 	}
-	if err := v.UpdateDuties(ctx, headSlot); err != nil {
+	deadline := v.SlotDeadline(headSlot + dutiesDeadline)
+	dutiesCtx, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
+	if err := v.UpdateDuties(dutiesCtx, headSlot); err != nil {
 		handleAssignmentError(err, headSlot)
 	}
 	eventsChan := make(chan *event.Event, 1)
@@ -77,7 +83,7 @@ func run(ctx context.Context, v iface.Validator) {
 				continue
 			}
 
-			deadline := v.SlotDeadline(slot)
+			deadline := v.SlotDeadline(slot + dutiesDeadline)
 			slotCtx, cancel := context.WithDeadline(ctx, deadline)
 
 			var span trace.Span
@@ -91,8 +97,8 @@ func run(ctx context.Context, v iface.Validator) {
 			// epoch transition in the beacon node's state.
 			if err := v.UpdateDuties(slotCtx, slot); err != nil {
 				handleAssignmentError(err, slot)
-				cancel()
 				span.End()
+				cancel()
 				continue
 			}
 
@@ -113,11 +119,13 @@ func run(ctx context.Context, v iface.Validator) {
 			allRoles, err := v.RolesAt(slotCtx, slot)
 			if err != nil {
 				log.WithError(err).Error("Could not get validator roles")
-				cancel()
 				span.End()
+				cancel()
 				continue
 			}
 			performRoles(slotCtx, allRoles, v, slot, &wg, span)
+			span.End()
+			cancel()
 		case isHealthyAgain := <-healthTracker.HealthUpdates():
 			if isHealthyAgain {
 				headSlot, err = initializeValidatorAndGetHeadSlot(ctx, v)
@@ -125,10 +133,13 @@ func run(ctx context.Context, v iface.Validator) {
 					log.WithError(err).Error("Failed to re initialize validator and get head slot")
 					continue
 				}
-				if err := v.UpdateDuties(ctx, headSlot); err != nil {
+				dutiesCtx, cancel := context.WithDeadline(ctx, v.SlotDeadline(headSlot+dutiesDeadline))
+				if err := v.UpdateDuties(dutiesCtx, headSlot); err != nil {
 					handleAssignmentError(err, headSlot)
+					cancel()
 					continue
 				}
+				cancel()
 			}
 		case e := <-eventsChan:
 			v.ProcessEvent(ctx, e)
