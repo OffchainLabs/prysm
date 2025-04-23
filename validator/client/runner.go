@@ -84,10 +84,10 @@ func run(ctx context.Context, v iface.Validator) {
 			}
 
 			deadline := v.SlotDeadline(slot + dutiesDeadline)
-			slotCtx, cancel := context.WithDeadline(ctx, deadline)
+			dutiesCtx, cancel := context.WithDeadline(ctx, deadline)
 
 			var span trace.Span
-			slotCtx, span = prysmTrace.StartSpan(slotCtx, "validator.processSlot")
+			dutiesCtx, span = prysmTrace.StartSpan(dutiesCtx, "validator.processSlot.updateDuties")
 			span.SetAttributes(prysmTrace.Int64Attribute("slot", int64(slot))) // lint:ignore uintcast -- This conversion is OK for tracing.
 
 			log := log.WithField("slot", slot)
@@ -95,12 +95,19 @@ func run(ctx context.Context, v iface.Validator) {
 
 			// Keep trying to update assignments if they are nil or if we are past an
 			// epoch transition in the beacon node's state.
-			if err := v.UpdateDuties(slotCtx, slot); err != nil {
+			if err := v.UpdateDuties(dutiesCtx, slot); err != nil {
 				handleAssignmentError(err, slot)
 				span.End()
 				cancel()
 				continue
 			}
+			span.End()
+			cancel()
+
+			deadline = v.SlotDeadline(slot)
+			slotCtx, cancel := context.WithDeadline(ctx, deadline)
+			slotCtx, span = prysmTrace.StartSpan(slotCtx, "validator.processSlot.performRoles")
+			span.SetAttributes(prysmTrace.Int64Attribute("slot", int64(slot))) // lint:ignore uintcast -- This conversion is OK for tracing.
 
 			// call push proposer settings often to account for the following edge cases:
 			// proposer is activated at the start of epoch and tries to propose immediately
