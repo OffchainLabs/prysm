@@ -585,7 +585,11 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 
 			ctxMap := map[[4]byte]int{{245, 165, 253, 66}: version.Fulu}
 			verifier := func(cols []blocks.RODataColumn, reqs []verification.Requirement) verification.DataColumnsVerifier {
-				initializer := &verification.Initializer{}
+				clockSync := startup.NewClockSynchronizer()
+				require.NoError(t, clockSync.SetClock(clock))
+				w := verification.NewInitializerWaiter(clockSync, nil, nil)
+				initializer, err := w.WaitForInitializer(context.Background())
+				require.NoError(t, err)
 				return initializer.NewDataColumnsVerifier(cols, reqs)
 			}
 

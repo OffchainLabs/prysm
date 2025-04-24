@@ -1,7 +1,9 @@
 package verification
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"strings"
 	"time"
@@ -372,8 +374,21 @@ func (dv *RODataColumnsVerifier) SidecarInclusionProven() (err error) {
 	startTime := time.Now()
 
 	for _, dataColumn := range dv.dataColumns {
+		k, keyErr := inclusionProofKey(dataColumn)
+		if keyErr == nil {
+			if _, ok := dv.ic.Get(k); ok {
+				continue
+			}
+		} else {
+			log.WithError(keyErr).Error("Failed to get inclusion proof key")
+		}
+
 		if err = peerdas.VerifyDataColumnSidecarInclusionProof(dataColumn); err != nil {
 			return columnErrBuilder(ErrSidecarInclusionProofInvalid)
+		}
+
+		if keyErr == nil {
+			dv.ic.Add(k, struct{}{})
 		}
 	}
 
@@ -468,4 +483,24 @@ func columnToSignatureData(d blocks.RODataColumn) SignatureData {
 
 func columnErrBuilder(baseErr error) error {
 	return errors.Wrap(baseErr, errColumnsInvalid.Error())
+}
+
+func inclusionProofKey(c blocks.RODataColumn) ([32]byte, error) {
+	var buf bytes.Buffer
+
+	r, err := c.SignedBlockHeader.HashTreeRoot()
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "hash tree root")
+	}
+	buf.Write(r[:])
+
+	for _, proof := range c.KzgCommitmentsInclusionProof {
+		buf.Write(proof)
+	}
+
+	for _, commitment := range c.KzgCommitments {
+		buf.Write(commitment)
+	}
+
+	return sha256.Sum256(buf.Bytes()), nil
 }

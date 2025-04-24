@@ -39,6 +39,7 @@ type sharedResources struct {
 	sc    SignatureCache
 	pc    ProposerCache
 	sr    StateByRooter
+	ic    *inclusionProofCache
 }
 
 // Initializer is used to create different Verifiers.
@@ -97,6 +98,7 @@ func NewInitializerWaiter(cw startup.ClockWaiter, fc Forkchoicer, sr StateByRoot
 		fc: fc,
 		pc: pc,
 		sr: sr,
+		ic: newInclusionProofCache(DefaultInclusionProofCacheSize),
 	}
 	iw := &InitializerWaiter{cw: cw, ini: &Initializer{shared: shared}}
 	for _, o := range opts {
@@ -118,6 +120,7 @@ func (w *InitializerWaiter) WaitForInitializer(ctx context.Context) (*Initialize
 	vr := w.ini.shared.clock.GenesisValidatorsRoot()
 	sc := newSigCache(vr[:], DefaultSignatureCacheSize, w.getFork)
 	w.ini.shared.sc = sc
+	w.ini.shared.ic = newInclusionProofCache(DefaultInclusionProofCacheSize)
 	return w.ini, nil
 }
 
