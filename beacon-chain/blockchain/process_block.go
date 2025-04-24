@@ -729,9 +729,13 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	attribute := s.getPayloadAttribute(ctx, headState, s.CurrentSlot()+1, headRoot[:])
 	// return early if we are not proposing next slot
 	if attribute.IsEmpty() {
+		headBlock, err := s.headBlock()
+		if err != nil {
+			log.WithError(err).WithField("head_root", headRoot).Error("unable to retrieve head block to fire payload attributes event")
+		}
 		// notifyForkchoiceUpdate fires the payload attribute event. But in this case, we won't
 		// call notifyForkchoiceUpdate, so the event is fired here.
-		go firePayloadAttributesEvent(ctx, s.cfg.StateNotifier.StateFeed(), s.CurrentSlot()+1)
+		go firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), headBlock, headRoot, s.CurrentSlot()+1)
 		return
 	}
 

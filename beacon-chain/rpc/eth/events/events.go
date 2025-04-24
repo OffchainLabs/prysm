@@ -681,48 +681,33 @@ var zeroRoot [32]byte
 // needsFill allows tests to provide filled EventData values. An ordinary event data value fired by the blockchain package will have
 // all of the checked fields empty, so the logical short circuit should hit immediately.
 func needsFill(ev payloadattribute.EventData) bool {
-	return ev.HeadState == nil || ev.HeadState.IsNil() || ev.HeadState.LatestBlockHeader() == nil ||
-		ev.HeadBlock == nil || ev.HeadBlock.IsNil() ||
-		ev.HeadRoot == zeroRoot || len(ev.ParentBlockRoot) == 0 || len(ev.ParentBlockHash) == 0 ||
+	return len(ev.ParentBlockHash) == 0 ||
 		ev.Attributer == nil || ev.Attributer.IsEmpty()
 }
 
 func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventData) (payloadattribute.EventData, error) {
-	var err error
-
 	if !needsFill(ev) {
 		return ev, nil
 	}
+	if ev.HeadBlock == nil || ev.HeadBlock.IsNil() {
+		return ev, errors.New("head block is nil")
+	}
+	if ev.HeadRoot == zeroRoot {
+		return ev, errors.New("head root is empty")
+	}
 
-	ev.HeadState, err = s.HeadFetcher.HeadState(ctx)
+	st, err := s.StateGen.StateByRoot(ctx, ev.HeadRoot)
 	if err != nil {
 		return ev, errors.Wrap(err, "could not get head state")
 	}
-
-	ev.HeadBlock, err = s.HeadFetcher.HeadBlock(ctx)
-	if err != nil {
-		return ev, errors.Wrap(err, "could not look up head block")
-	}
-	ev.HeadRoot, err = ev.HeadBlock.Block().HashTreeRoot()
-	if err != nil {
-		return ev, errors.Wrap(err, "could not compute head block root")
-	}
-	pr := ev.HeadBlock.Block().ParentRoot()
-	ev.ParentBlockRoot = pr[:]
-
-	hsr, err := ev.HeadState.LatestBlockHeader().HashTreeRoot()
-	if err != nil {
-		return ev, errors.Wrap(err, "could not compute latest block header root")
-	}
-
 	pse := slots.ToEpoch(ev.ProposalSlot)
-	st := ev.HeadState
 	if slots.ToEpoch(st.Slot()) != pse {
-		st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, hsr[:], ev.ProposalSlot)
+		st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, ev.HeadRoot[:], ev.ProposalSlot)
 		if err != nil {
 			return ev, errors.Wrap(err, "could not run process blocks on head state into the proposal slot epoch")
 		}
 	}
+
 	ev.ProposerIndex, err = helpers.BeaconProposerIndexAtSlot(ctx, st, ev.ProposalSlot)
 	if err != nil {
 		return ev, errors.Wrap(err, "failed to compute proposer index")
@@ -743,7 +728,7 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 	if err != nil {
 		return ev, errors.Wrap(err, "could not get head state slot time")
 	}
-	ev.Attributer, err = s.computePayloadAttributes(ctx, st, hsr, ev.ProposerIndex, uint64(t.Unix()), randao)
+	ev.Attributer, err = s.computePayloadAttributes(ctx, st, ev.HeadRoot, ev.ProposerIndex, uint64(t.Unix()), randao)
 	return ev, err
 }
 
@@ -772,7 +757,7 @@ func (s *Server) payloadAttributesReader(ctx context.Context, ev payloadattribut
 			ProposerIndex:     strconv.FormatUint(uint64(ev.ProposerIndex), 10),
 			ProposalSlot:      strconv.FormatUint(uint64(ev.ProposalSlot), 10),
 			ParentBlockNumber: strconv.FormatUint(ev.ParentBlockNumber, 10),
-			ParentBlockRoot:   hexutil.Encode(ev.ParentBlockRoot),
+			ParentBlockRoot:   hexutil.Encode(ev.HeadRoot[:]),
 			ParentBlockHash:   hexutil.Encode(ev.ParentBlockHash),
 			PayloadAttributes: attributesBytes,
 		})
