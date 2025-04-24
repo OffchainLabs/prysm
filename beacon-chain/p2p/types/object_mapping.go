@@ -40,9 +40,9 @@ var (
 	// LightClientOptimisticUpdateMap maps the fork-version to the underlying data type for that
 	// particular fork period.
 	LightClientOptimisticUpdateMap map[[4]byte]func() (interfaces.LightClientOptimisticUpdate, error)
-	//// LightClientFinalityUpdateMap maps the fork-version to the underlying data type for that
-	//// particular fork period.
-	//LightClientFinalityUpdateMap map[[4]byte]func() (interfaces.LightClientFinalityUpdate, error)
+	// LightClientFinalityUpdateMap maps the fork-version to the underlying data type for that
+	// particular fork period.
+	LightClientFinalityUpdateMap map[[4]byte]func() (interfaces.LightClientFinalityUpdate, error)
 )
 
 // InitializeDataMaps initializes all the relevant object maps. This function is called to
@@ -205,9 +205,23 @@ func InitializeDataMaps() {
 			return &lightclientConsensusTypes.OptimisticUpdateDeneb{}, nil
 		},
 	}
-	//LightClientFinalityUpdateMap = map[[4]byte]func() (interfaces.LightClientFinalityUpdate, error){
-	//	bytesutil.ToBytes4(params.BeaconConfig().AltairForkVersion): func() (interfaces.LightClientFinalityUpdate, error) {
-	//		return lightclientConsensusTypes.NewWrappedFinalityUpdate(&ethpb.LightClientFinalityUpdateAltair{AttestedHeader: &ethpb.LightClientHeaderAltair{}})
-	//	},
-	//}
+
+	// Reset our light client finality update map.
+	LightClientFinalityUpdateMap = map[[4]byte]func() (interfaces.LightClientFinalityUpdate, error){
+		bytesutil.ToBytes4(params.BeaconConfig().AltairForkVersion): func() (interfaces.LightClientFinalityUpdate, error) {
+			return &lightclientConsensusTypes.FinalityUpdateAltair{}, nil
+		},
+		bytesutil.ToBytes4(params.BeaconConfig().BellatrixForkVersion): func() (interfaces.LightClientFinalityUpdate, error) {
+			return &lightclientConsensusTypes.FinalityUpdateAltair{}, nil
+		},
+		bytesutil.ToBytes4(params.BeaconConfig().CapellaForkVersion): func() (interfaces.LightClientFinalityUpdate, error) {
+			return &lightclientConsensusTypes.FinalityUpdateCapella{}, nil
+		},
+		bytesutil.ToBytes4(params.BeaconConfig().DenebForkVersion): func() (interfaces.LightClientFinalityUpdate, error) {
+			return &lightclientConsensusTypes.FinalityUpdateDeneb{}, nil
+		},
+		bytesutil.ToBytes4(params.BeaconConfig().ElectraForkVersion): func() (interfaces.LightClientFinalityUpdate, error) {
+			return &lightclientConsensusTypes.FinalityUpdateElectra{}, nil
+		},
+	}
 }
