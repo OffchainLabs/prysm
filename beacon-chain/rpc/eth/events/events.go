@@ -712,7 +712,11 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 		}
 		// double check that we need to process_slots, just in case we got here via a hot state cache miss.
 		if slots.ToEpoch(st.Slot()) == pse {
-			st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, ev.HeadRoot[:], ev.ProposalSlot)
+			start, err := slots.EpochStart(pse)
+			if err != nil {
+				return ev, errors.Wrap(err, "invalid state slot; could not compute epoch start")
+			}
+			st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, ev.HeadRoot[:], start)
 			if err != nil {
 				return ev, errors.Wrap(err, "could not run process blocks on head state into the proposal slot epoch")
 			}
