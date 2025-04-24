@@ -696,15 +696,26 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 		return ev, errors.New("head root is empty")
 	}
 
-	st, err := s.StateGen.StateByRoot(ctx, ev.HeadRoot)
-	if err != nil {
-		return ev, errors.Wrap(err, "could not get head state")
-	}
+	var err error
+	var st state.BeaconState
+
+	// If head is in the same block as the proposal slot, we can use the "read only" state cache.
 	pse := slots.ToEpoch(ev.ProposalSlot)
-	if slots.ToEpoch(st.Slot()) != pse {
-		st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, ev.HeadRoot[:], ev.ProposalSlot)
+	if slots.ToEpoch(ev.HeadBlock.Block().Slot()) == pse {
+		st = s.StateGen.StateByRootIfCachedNoCopy(ev.HeadRoot)
+	}
+	// If st is nil, we couldn't get the state from the cache, or it isn't in the same epoch.
+	if st == nil || st.IsNil() {
+		st, err = s.StateGen.StateByRoot(ctx, ev.HeadRoot)
 		if err != nil {
-			return ev, errors.Wrap(err, "could not run process blocks on head state into the proposal slot epoch")
+			return ev, errors.Wrap(err, "could not get head state")
+		}
+		// double check that we need to process_slots, just in case we got here via a hot state cache miss.
+		if slots.ToEpoch(st.Slot()) == pse {
+			st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, ev.HeadRoot[:], ev.ProposalSlot)
+			if err != nil {
+				return ev, errors.Wrap(err, "could not run process blocks on head state into the proposal slot epoch")
+			}
 		}
 	}
 
