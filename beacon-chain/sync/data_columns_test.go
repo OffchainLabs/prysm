@@ -669,7 +669,7 @@ func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSideca
 	// Set up the peer to respond with data columns it custodies
 	peerP2P.SetStreamHandler(p2p.RPCDataColumnSidecarsByRootTopicV1+"/ssz_snappy", func(stream network.Stream) {
 		// Decode the request
-		req := new(p2pTypes.DataColumnSidecarsByRootReq)
+		req := new(p2pTypes.DataColumnsByRootIdentifiers)
 		if err := peerP2P.Encoding().DecodeWithMaxLength(stream, req); err != nil {
 			log.WithError(err).Error("Failed to decode request")
 			closeStream(stream, log)
@@ -680,7 +680,7 @@ func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSideca
 		if tracker != nil {
 			requestedColumns := make([]uint64, 0, len(*req))
 			for _, identifier := range *req {
-				requestedColumns = append(requestedColumns, identifier.Index)
+				requestedColumns = append(requestedColumns, identifier.Columns[0])
 			}
 			tracker.trackRequest(setup.offset, requestedColumns)
 		}
@@ -702,14 +702,14 @@ func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSideca
 
 		for _, identifier := range *req {
 			// Check if this column should be skipped using direct map lookup
-			if skipColumns[identifier.Index] {
+			if skipColumns[identifier.Columns[0]] {
 				continue
 			}
 
-			if !peerInfo.CustodyColumns[identifier.Index] {
+			if !peerInfo.CustodyColumns[identifier.Columns[0]] {
 				continue
 			}
-			col := dataColumnSidecars[identifier.Index]
+			col := dataColumnSidecars[identifier.Columns[0]]
 			if err := WriteDataColumnSidecarChunk(stream, chainService, peerP2P.Encoding(), col); err != nil {
 				log.WithError(err).Error("Failed to write data column sidecar chunk")
 				closeStream(stream, log)

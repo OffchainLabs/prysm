@@ -205,14 +205,14 @@ func hexDecodeOrDie(t *testing.T, str string) []byte {
 }
 
 // =====================================
-// DataColumnSidecarsByRootReq section
+// DataColumnsByRootIdentifiers section
 // =====================================
-func generateDataColumnIdentifiers(n int) []*eth.DataColumnIdentifier {
-	r := make([]*eth.DataColumnIdentifier, n)
+func generateDataColumnIdentifiers(n int) []*eth.DataColumnsByRootIdentifier {
+	r := make([]*eth.DataColumnsByRootIdentifier, n)
 	for i := 0; i < n; i++ {
-		r[i] = &eth.DataColumnIdentifier{
+		r[i] = &eth.DataColumnsByRootIdentifier{
 			BlockRoot: bytesutil.PadTo([]byte{byte(i)}, 32),
-			Index:     uint64(i),
+			Columns:   []uint64{uint64(i)},
 		}
 	}
 	return r
@@ -221,7 +221,7 @@ func generateDataColumnIdentifiers(n int) []*eth.DataColumnIdentifier {
 func TestDataColumnSidecarsByRootReq_MarshalUnmarshal(t *testing.T) {
 	cases := []struct {
 		name         string
-		ids          []*eth.DataColumnIdentifier
+		ids          []*eth.DataColumnsByRootIdentifier
 		marshalErr   error
 		unmarshalErr string
 		unmarshalMod func([]byte) []byte
@@ -261,7 +261,7 @@ func TestDataColumnSidecarsByRootReq_MarshalUnmarshal(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			req := DataColumnSidecarsByRootReq(c.ids)
+			req := DataColumnsByRootIdentifiers(c.ids)
 			bytes, err := req.MarshalSSZ()
 			if c.marshalErr != nil {
 				require.ErrorIs(t, err, c.marshalErr)
@@ -271,7 +271,7 @@ func TestDataColumnSidecarsByRootReq_MarshalUnmarshal(t *testing.T) {
 			if c.unmarshalMod != nil {
 				bytes = c.unmarshalMod(bytes)
 			}
-			got := &DataColumnSidecarsByRootReq{}
+			got := &DataColumnsByRootIdentifiers{}
 			err = got.UnmarshalSSZ(bytes)
 			if c.unmarshalErr != "" {
 				require.ErrorContains(t, c.unmarshalErr, err)
@@ -285,54 +285,54 @@ func TestDataColumnSidecarsByRootReq_MarshalUnmarshal(t *testing.T) {
 	}
 
 	// Test MarshalSSZTo
-	req := DataColumnSidecarsByRootReq(generateDataColumnIdentifiers(10))
+	req := DataColumnsByRootIdentifiers(generateDataColumnIdentifiers(10))
 	buf := make([]byte, 0)
 	buf, err := req.MarshalSSZTo(buf)
 	require.NoError(t, err)
 	require.Equal(t, len(buf), int(req.SizeSSZ()))
 
-	var unmarshalled DataColumnSidecarsByRootReq
+	var unmarshalled DataColumnsByRootIdentifiers
 	err = unmarshalled.UnmarshalSSZ(buf)
 	require.NoError(t, err)
 	require.DeepEqual(t, req, unmarshalled)
 }
 
 func TestDataColumnSidecarsByRootReq_Sort(t *testing.T) {
-	ids := []*eth.DataColumnIdentifier{
+	ids := []*eth.DataColumnsByRootIdentifier{
 		{
 			BlockRoot: bytesutil.PadTo([]byte{3}, 32),
-			Index:     0,
+			Columns:   []uint64{0},
 		},
 		{
 			BlockRoot: bytesutil.PadTo([]byte{2}, 32),
-			Index:     2,
+			Columns:   []uint64{2},
 		},
 		{
 			BlockRoot: bytesutil.PadTo([]byte{2}, 32),
-			Index:     1,
+			Columns:   []uint64{1},
 		},
 		{
 			BlockRoot: bytesutil.PadTo([]byte{1}, 32),
-			Index:     2,
+			Columns:   []uint64{2},
 		},
 		{
 			BlockRoot: bytesutil.PadTo([]byte{0}, 32),
-			Index:     3,
+			Columns:   []uint64{3},
 		},
 	}
-	req := DataColumnSidecarsByRootReq(ids)
+	req := DataColumnsByRootIdentifiers(ids)
 	require.Equal(t, true, req.Less(4, 3))
 	require.Equal(t, true, req.Less(3, 2))
 	require.Equal(t, true, req.Less(2, 1))
 	require.Equal(t, true, req.Less(1, 0))
 	require.Equal(t, 5, req.Len())
 
-	ids = []*eth.DataColumnIdentifier{
+	ids = []*eth.DataColumnsByRootIdentifier{
 		{
 			BlockRoot: bytesutil.PadTo([]byte{0}, 32),
-			Index:     3,
+			Columns:   []uint64{3},
 		},
 	}
-	req = DataColumnSidecarsByRootReq(ids)
+	req = DataColumnsByRootIdentifiers(ids)
 	require.Equal(t, 1, req.Len())
 }

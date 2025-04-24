@@ -44,9 +44,9 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 
 	// We use the same type as for blobs as they are the same data structure.
 	// TODO: Make the type naming more generic to be extensible to data columns
-	ref, ok := msg.(*types.DataColumnSidecarsByRootReq)
+	ref, ok := msg.(*types.DataColumnsByRootIdentifiers)
 	if !ok {
-		return errors.New("message is not type DataColumnSidecarsByRootReq")
+		return errors.New("message is not type DataColumnsByRootIdentifiers")
 	}
 
 	requestedColumnIdents := *ref
@@ -66,7 +66,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 	for _, columnIdent := range requestedColumnIdents {
 		var root [fieldparams.RootLength]byte
 		copy(root[:], columnIdent.BlockRoot)
-		requestedColumnsByRoot[root] = append(requestedColumnsByRoot[root], columnIdent.Index)
+		requestedColumnsByRoot[root] = append(requestedColumnsByRoot[root], columnIdent.Columns...)
 	}
 
 	// Sort by column index for each root.
@@ -155,8 +155,12 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 	return nil
 }
 
-func validateDataColumnsByRootRequest(colIdents types.DataColumnSidecarsByRootReq) error {
-	if uint64(len(colIdents)) > params.BeaconConfig().MaxRequestDataColumnSidecars {
+func validateDataColumnsByRootRequest(colIdents types.DataColumnsByRootIdentifiers) error {
+	total := 0
+	for _, id := range colIdents {
+		total += len(id.Columns)
+	}
+	if uint64(total) > params.BeaconConfig().MaxRequestDataColumnSidecars {
 		return types.ErrMaxDataColumnReqExceeded
 	}
 	return nil

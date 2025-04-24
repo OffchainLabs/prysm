@@ -79,14 +79,10 @@ func RequestDataColumnSidecarsByRoot(
 			log := log.WithFields(logrus.Fields{"peer": peer.String(), "blockRoot": fmt.Sprintf("%#x", blockRoot)})
 
 			// Build the requests for the data columns.
-			byRootRequests := make(types.DataColumnSidecarsByRootReq, 0, len(peerRequestedColumns))
-			for _, column := range peerRequestedColumns {
-				byRootRequest := &eth.DataColumnIdentifier{BlockRoot: blockRoot[:], Index: column}
-				byRootRequests = append(byRootRequests, byRootRequest)
-			}
+			byRootRequest := &eth.DataColumnsByRootIdentifier{BlockRoot: blockRoot[:], Columns: peerRequestedColumns}
 
 			// Send the requests to the peer.
-			peerSidecars, err := SendDataColumnSidecarsByRootRequest(ctx, clock, p2p, peer, ctxMap, &byRootRequests)
+			peerSidecars, err := SendDataColumnSidecarsByRootRequest(ctx, clock, p2p, peer, ctxMap, &types.DataColumnsByRootIdentifiers{byRootRequest})
 			if err != nil {
 				// Remove this peer since it failed to respond correctly.
 				delete(dataColumnsByAdmissiblePeer, peer)

@@ -231,7 +231,7 @@ func SendDataColumnSidecarsByRootRequest(
 	p2pApi p2p.P2P,
 	pid peer.ID,
 	ctxMap ContextByteVersions,
-	req *p2ptypes.DataColumnSidecarsByRootReq,
+	req *p2ptypes.DataColumnsByRootIdentifiers,
 ) ([]blocks.RODataColumn, error) {
 	reqCount := uint64(len(*req))
 	maxRequestDataColumnSideCar := params.BeaconConfig().MaxRequestDataColumnSidecars
@@ -590,7 +590,7 @@ func blobValidatorFromRangeReq(req *ethpb.BlobSidecarsByRangeRequest) BlobRespon
 	}
 }
 
-func dataColumnValidatorFromRootReq(req *p2ptypes.DataColumnSidecarsByRootReq) DataColumnResponseValidation {
+func dataColumnValidatorFromRootReq(req *p2ptypes.DataColumnsByRootIdentifiers) DataColumnResponseValidation {
 	columnsIndexFromRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool)
 
 	for _, sc := range *req {
@@ -598,8 +598,9 @@ func dataColumnValidatorFromRootReq(req *p2ptypes.DataColumnSidecarsByRootReq) D
 		if columnsIndexFromRoot[blockRoot] == nil {
 			columnsIndexFromRoot[blockRoot] = make(map[uint64]bool)
 		}
-
-		columnsIndexFromRoot[blockRoot][sc.Index] = true
+		for _, col := range sc.Columns {
+			columnsIndexFromRoot[blockRoot][col] = true
+		}
 	}
 
 	return func(sc blocks.RODataColumn) bool {

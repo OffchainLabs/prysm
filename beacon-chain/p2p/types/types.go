@@ -5,6 +5,7 @@ package types
 
 import (
 	"bytes"
+	"encoding/binary"
 	"sort"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -207,86 +208,128 @@ func (s *BlobSidecarsByRootReq) Len() int {
 }
 
 // ===================================
-// DataColumnSidecarsByRootReq section
+// DataColumnsByRootIdentifiers section
 // ===================================
-var _ ssz.Marshaler = (*DataColumnSidecarsByRootReq)(nil)
-var _ ssz.Unmarshaler = (*DataColumnSidecarsByRootReq)(nil)
-var _ sort.Interface = (*DataColumnSidecarsByRootReq)(nil)
+var _ ssz.Marshaler = (*DataColumnsByRootIdentifiers)(nil)
+var _ ssz.Unmarshaler = (*DataColumnsByRootIdentifiers)(nil)
+var _ sort.Interface = (*DataColumnsByRootIdentifiers)(nil)
 
-// DataColumnSidecarsByRootReq is used to specify a list of data column targets (root+index) in a DataColumnSidecarsByRoot RPC request.
-type DataColumnSidecarsByRootReq []*eth.DataColumnIdentifier
+// DataColumnsByRootIdentifiers is used to specify a list of data column targets (root+index) in a DataColumnSidecarsByRoot RPC request.
+type DataColumnsByRootIdentifiers []*eth.DataColumnsByRootIdentifier
 
 // DataColumnIdentifier is a fixed size value, so we can compute its fixed size at start time (see init below)
 var dataColumnIdSize int
 
 // UnmarshalSSZ implements ssz.Unmarshaler. It unmarshals the provided bytes buffer into the DataColumnSidecarsByRootReq value.
-func (d *DataColumnSidecarsByRootReq) UnmarshalSSZ(buf []byte) error {
-	bufLen := len(buf)
-	maxLen := int(params.BeaconConfig().MaxRequestDataColumnSidecars) * dataColumnIdSize
-	if bufLen > maxLen {
-		return errors.Errorf("expected buffer with length of up to %d but received length %d", maxLen, bufLen)
+func (d *DataColumnsByRootIdentifiers) UnmarshalSSZ(buf []byte) error {
+	num, err := ssz.DecodeDynamicLength(buf, 128)
+	if err != nil {
+		return err
 	}
-	if bufLen%dataColumnIdSize != 0 {
-		return errors.Wrapf(ssz.ErrIncorrectByteSize, "size=%d", bufLen)
-	}
-	count := bufLen / dataColumnIdSize
-	*d = make([]*eth.DataColumnIdentifier, count)
-	for i := 0; i < count; i++ {
-		id := &eth.DataColumnIdentifier{}
-		err := id.UnmarshalSSZ(buf[i*dataColumnIdSize : (i+1)*dataColumnIdSize])
-		if err != nil {
-			return err
-		}
-		(*d)[i] = id
-	}
-	return nil
+
+	*d = make([]*eth.DataColumnsByRootIdentifier, num)
+	return ssz.UnmarshalDynamic(buf, num, func(i int, elem []byte) error {
+		(*d)[i] = new(eth.DataColumnsByRootIdentifier)
+		return (*d)[i].UnmarshalSSZ(elem)
+	})
 }
 
-// MarshalSSZ implements ssz.Marshaler. It serializes the DataColumnSidecarsByRootReq value to a byte slice.
-func (d *DataColumnSidecarsByRootReq) MarshalSSZ() ([]byte, error) {
-	buf := make([]byte, d.SizeSSZ())
-	for i, id := range *d {
-		bytes, err := id.MarshalSSZ()
-		if err != nil {
-			return nil, err
-		}
-		copy(buf[i*dataColumnIdSize:(i+1)*dataColumnIdSize], bytes)
+func (d *DataColumnsByRootIdentifiers) MarshalSSZ() ([]byte, error) {
+	num := len(*d)
+	if num > 128 {
+		return nil, errors.Errorf("data column identifiers list exceeds max size: %d > %d", num, 128)
 	}
 
-	return buf, nil
+	// Each struct has:
+	// 4 bytes offset + 32 bytes block root + n * 8 bytes indices
+	payloads := make([][]byte, num)
+	totalSize := 4 + 4*num // 4 bytes for length + offset table
+
+	for i, item := range *d {
+		if item == nil {
+			return nil, errors.New("nil item in DataColumnsByRootIdentifiers list")
+		}
+
+		indicesLen := len(item.Columns)
+		payloadLen := 4 + 32 + 8*indicesLen // offset + blockRoot + indices
+
+		buf := make([]byte, payloadLen)
+
+		// Offset to indices section (fixed: 36)
+		binary.LittleEndian.PutUint32(buf[0:4], 36)
+
+		// Block root
+		copy(buf[4:36], item.BlockRoot[:])
+
+		// Indices
+		cursor := 36
+		for _, idx := range item.Columns {
+			binary.LittleEndian.PutUint64(buf[cursor:], idx)
+			cursor += 8
+		}
+
+		payloads[i] = buf
+		totalSize += payloadLen
+	}
+
+	out := make([]byte, totalSize)
+	cursor := 0
+
+	binary.LittleEndian.PutUint32(out[cursor:], uint32(num))
+	cursor += 4
+
+	dataOffset := 4 + 4*num
+	for _, p := range payloads {
+		binary.LittleEndian.PutUint32(out[cursor:], uint32(dataOffset))
+		cursor += 4
+		dataOffset += len(p)
+	}
+
+	// Payloads
+	for _, p := range payloads {
+		copy(out[cursor:], p)
+		cursor += len(p)
+	}
+
+	return out, nil
 }
 
 // MarshalSSZTo implements ssz.Marshaler. It appends the serialized DataColumnSidecarsByRootReq value to the provided byte slice.
-func (d *DataColumnSidecarsByRootReq) MarshalSSZTo(dst []byte) ([]byte, error) {
-	mobj, err := d.MarshalSSZ()
+func (d *DataColumnsByRootIdentifiers) MarshalSSZTo(dst []byte) ([]byte, error) {
+	obj, err := d.MarshalSSZ()
 	if err != nil {
 		return nil, err
 	}
-	return append(dst, mobj...), nil
+	return append(dst, obj...), nil
 }
 
 // SizeSSZ implements ssz.Marshaler. It returns the size of the serialized representation.
-func (d *DataColumnSidecarsByRootReq) SizeSSZ() int {
-	return len(*d) * dataColumnIdSize
+func (d *DataColumnsByRootIdentifiers) SizeSSZ() int {
+	size := 0
+	for i := 0; i < len(*d); i++ {
+		size += 4
+		size += (*d)[i].SizeSSZ()
+	}
+	return size
 }
 
 // Len implements sort.Interface. It returns the number of elements in the collection.
-func (d *DataColumnSidecarsByRootReq) Len() int {
+func (d *DataColumnsByRootIdentifiers) Len() int {
 	return len(*d)
 }
 
 // Less implements sort.Interface. It reports whether the element with index i must sort before the element with index j.
-func (d *DataColumnSidecarsByRootReq) Less(i, j int) bool {
+func (d *DataColumnsByRootIdentifiers) Less(i, j int) bool {
 	rootCmp := bytes.Compare((*d)[i].BlockRoot, (*d)[j].BlockRoot)
 	if rootCmp != 0 {
 		return rootCmp < 0
 	}
 
-	return (*d)[i].Index < (*d)[j].Index
+	return (*d)[i].Columns[0] < (*d)[j].Columns[0]
 }
 
 // Swap implements sort.Interface. It swaps the elements with indexes i and j.
-func (d *DataColumnSidecarsByRootReq) Swap(i, j int) {
+func (d *DataColumnsByRootIdentifiers) Swap(i, j int) {
 	(*d)[i], (*d)[j] = (*d)[j], (*d)[i]
 }
 
@@ -294,6 +337,6 @@ func init() {
 	blobSizer := &eth.BlobIdentifier{}
 	blobIdSize = blobSizer.SizeSSZ()
 
-	dataColumnSizer := &eth.DataColumnIdentifier{}
+	dataColumnSizer := &eth.DataColumnSidecarsByRangeRequest{}
 	dataColumnIdSize = dataColumnSizer.SizeSSZ()
 }
