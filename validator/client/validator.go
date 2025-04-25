@@ -520,7 +520,7 @@ func (v *validator) UpdateDuties(ctx context.Context, slot primitives.Slot) erro
 		return nil
 	}
 	// Set deadline to end of epoch.
-	ss, err := slots.EpochStart(slots.ToEpoch(slot) + 1)
+	ss, err := slots.EpochStart(primitives.Epoch(slots.CurrentSlot(v.genesisTime) + 1))
 	if err != nil {
 		return err
 	}
@@ -1158,11 +1158,8 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 	if err != nil {
 		return err
 	}
-	deadline := v.SlotDeadline(slot)
-	slotCtx, cancel := context.WithDeadline(ctx, deadline)
-	defer cancel()
 	if !bytes.Equal(prevDepedentRoot, v.duties.PrevDependentRoot) {
-		if err := v.UpdateDuties(slotCtx, currEpochStart); err != nil {
+		if err := v.UpdateDuties(ctx, currEpochStart); err != nil {
 			return errors.Wrap(err, "failed to update duties")
 		}
 		log.Info("Updated duties due to previous dependent root change")
@@ -1173,7 +1170,7 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 		return errors.Wrap(err, "failed to decode current duty dependent root")
 	}
 	if !bytes.Equal(currDepedentRoot, v.duties.CurrDependentRoot) {
-		if err := v.UpdateDuties(slotCtx, currEpochStart); err != nil {
+		if err := v.UpdateDuties(ctx, currEpochStart); err != nil {
 			return errors.Wrap(err, "failed to update duties")
 		}
 		log.Info("Updated duties due to current dependent root change")
