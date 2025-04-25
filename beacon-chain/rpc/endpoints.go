@@ -895,6 +895,15 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodGet},
 		},
 		{
+			template: "/eth/v1/beacon/states/{state_id}/pending_consolidations",
+			name:     namespace + ".GetPendingConsolidations",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+			},
+			handler: server.GetPendingDeposits,
+			methods: []string{http.MethodGet},
+		},
+		{
 			template: "/eth/v1/beacon/states/{state_id}/pending_partial_withdrawals",
 			name:     namespace + ".GetPendingPartialWithdrawals",
 			middleware: []middleware.Middleware{
