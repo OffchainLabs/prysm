@@ -26,7 +26,7 @@ type blockContainer struct {
 	isCanonical bool
 }
 
-// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // ListBeaconBlocks retrieves blocks by root, slot, or epoch.
 //
@@ -246,7 +246,7 @@ func (bs *Server) listBlocksForGenesis(ctx context.Context, _ *ethpb.ListBlocksR
 	}}, 1, strconv.Itoa(0), nil
 }
 
-// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // GetChainHead retrieves information about the head of the beacon chain from
 // the view of the beacon chain node.
