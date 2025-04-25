@@ -21,11 +21,12 @@ type GetCommitteesResponse struct {
 }
 
 type ListAttestationsResponse struct {
-	Data []*Attestation `json:"data"`
+	Version string          `json:"version,omitempty"`
+	Data    json.RawMessage `json:"data"`
 }
 
 type SubmitAttestationsRequest struct {
-	Data []*Attestation `json:"data"`
+	Data json.RawMessage `json:"data"`
 }
 
 type ListVoluntaryExitsResponse struct {
@@ -77,8 +78,8 @@ type GetBlockHeaderResponse struct {
 }
 
 type GetValidatorsRequest struct {
-	Ids      []string `json:"ids"`
-	Statuses []string `json:"statuses"`
+	Ids      []string `json:"ids,omitempty"`
+	Statuses []string `json:"statuses,omitempty"`
 }
 
 type GetValidatorsResponse struct {
@@ -99,6 +100,12 @@ type GetValidatorBalancesResponse struct {
 	Data                []*ValidatorBalance `json:"data"`
 }
 
+type GetValidatorIdentitiesResponse struct {
+	ExecutionOptimistic bool                 `json:"execution_optimistic"`
+	Finalized           bool                 `json:"finalized"`
+	Data                []*ValidatorIdentity `json:"data"`
+}
+
 type ValidatorContainer struct {
 	Index     string     `json:"index"`
 	Balance   string     `json:"balance"`
@@ -109,6 +116,12 @@ type ValidatorContainer struct {
 type ValidatorBalance struct {
 	Index   string `json:"index"`
 	Balance string `json:"balance"`
+}
+
+type ValidatorIdentity struct {
+	Index           string `json:"index"`
+	Pubkey          string `json:"pubkey"`
+	ActivationEpoch string `json:"activation_epoch"`
 }
 
 type GetBlockResponse struct {
@@ -131,6 +144,13 @@ type GetBlockAttestationsResponse struct {
 	ExecutionOptimistic bool           `json:"execution_optimistic"`
 	Finalized           bool           `json:"finalized"`
 	Data                []*Attestation `json:"data"`
+}
+
+type GetBlockAttestationsV2Response struct {
+	Version             string          `json:"version"`
+	ExecutionOptimistic bool            `json:"execution_optimistic"`
+	Finalized           bool            `json:"finalized"`
+	Data                json.RawMessage `json:"data"` // Accepts both `Attestation` and `AttestationElectra` types
 }
 
 type GetStateRootResponse struct {
@@ -169,7 +189,8 @@ type BLSToExecutionChangesPoolResponse struct {
 }
 
 type GetAttesterSlashingsResponse struct {
-	Data []*AttesterSlashing `json:"data"`
+	Version string          `json:"version,omitempty"`
+	Data    json.RawMessage `json:"data"` // Accepts both `[]*AttesterSlashing` and `[]*AttesterSlashingElectra` types
 }
 
 type GetProposerSlashingsResponse struct {
@@ -195,4 +216,63 @@ type DepositSnapshot struct {
 	DepositCount         string   `json:"deposit_count"`
 	ExecutionBlockHash   string   `json:"execution_block_hash"`
 	ExecutionBlockHeight string   `json:"execution_block_height"`
+}
+
+type GetIndividualVotesRequest struct {
+	Epoch      string   `json:"epoch"`
+	PublicKeys []string `json:"public_keys,omitempty"`
+	Indices    []string `json:"indices,omitempty"`
+}
+
+type GetIndividualVotesResponse struct {
+	IndividualVotes []*IndividualVote `json:"individual_votes"`
+}
+
+type IndividualVote struct {
+	Epoch                            string `json:"epoch"`
+	PublicKey                        string `json:"public_keys,omitempty"`
+	ValidatorIndex                   string `json:"validator_index"`
+	IsSlashed                        bool   `json:"is_slashed"`
+	IsWithdrawableInCurrentEpoch     bool   `json:"is_withdrawable_in_current_epoch"`
+	IsActiveInCurrentEpoch           bool   `json:"is_active_in_current_epoch"`
+	IsActiveInPreviousEpoch          bool   `json:"is_active_in_previous_epoch"`
+	IsCurrentEpochAttester           bool   `json:"is_current_epoch_attester"`
+	IsCurrentEpochTargetAttester     bool   `json:"is_current_epoch_target_attester"`
+	IsPreviousEpochAttester          bool   `json:"is_previous_epoch_attester"`
+	IsPreviousEpochTargetAttester    bool   `json:"is_previous_epoch_target_attester"`
+	IsPreviousEpochHeadAttester      bool   `json:"is_previous_epoch_head_attester"`
+	CurrentEpochEffectiveBalanceGwei string `json:"current_epoch_effective_balance_gwei"`
+	InclusionSlot                    string `json:"inclusion_slot"`
+	InclusionDistance                string `json:"inclusion_distance"`
+	InactivityScore                  string `json:"inactivity_score"`
+}
+
+type ChainHead struct {
+	HeadSlot                   string `json:"head_slot"`
+	HeadEpoch                  string `json:"head_epoch"`
+	HeadBlockRoot              string `json:"head_block_root"`
+	FinalizedSlot              string `json:"finalized_slot"`
+	FinalizedEpoch             string `json:"finalized_epoch"`
+	FinalizedBlockRoot         string `json:"finalized_block_root"`
+	JustifiedSlot              string `json:"justified_slot"`
+	JustifiedEpoch             string `json:"justified_epoch"`
+	JustifiedBlockRoot         string `json:"justified_block_root"`
+	PreviousJustifiedSlot      string `json:"previous_justified_slot"`
+	PreviousJustifiedEpoch     string `json:"previous_justified_epoch"`
+	PreviousJustifiedBlockRoot string `json:"previous_justified_block_root"`
+	OptimisticStatus           bool   `json:"optimistic_status"`
+}
+
+type GetPendingDepositsResponse struct {
+	Version             string            `json:"version"`
+	ExecutionOptimistic bool              `json:"execution_optimistic"`
+	Finalized           bool              `json:"finalized"`
+	Data                []*PendingDeposit `json:"data"`
+}
+
+type GetPendingPartialWithdrawalsResponse struct {
+	Version             string                      `json:"version"`
+	ExecutionOptimistic bool                        `json:"execution_optimistic"`
+	Finalized           bool                        `json:"finalized"`
+	Data                []*PendingPartialWithdrawal `json:"data"`
 }

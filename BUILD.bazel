@@ -6,13 +6,13 @@ load("@io_bazel_rules_go//go:def.bzl", "nogo")
 load("@bazel_skylib//rules:common_settings.bzl", "string_setting")
 load("@prysm//tools/nogo_config:def.bzl", "nogo_config_exclude")
 
-prefix = "github.com/prysmaticlabs/prysm"
+prefix = "github.com/OffchainLabs/prysm"
 
 exports_files([
     "LICENSE.md",
 ])
 
-# gazelle:prefix github.com/prysmaticlabs/prysm/v5
+# gazelle:prefix github.com/OffchainLabs/prysm/v6
 # gazelle:map_kind go_library go_library @prysm//tools/go:def.bzl
 # gazelle:map_kind go_test go_test @prysm//tools/go:def.bzl
 # gazelle:map_kind go_repository go_repository @prysm//tools/go:def.bzl
@@ -52,13 +52,6 @@ alias(
 alias(
     name = "cast_grpc_proto_compiler",
     actual = "@com_github_prysmaticlabs_protoc_gen_go_cast//:go_cast_grpc",
-    visibility = ["//visibility:public"],
-)
-
-# Protobuf gRPC gateway compiler
-alias(
-    name = "grpc_gateway_proto_compiler",
-    actual = "@com_github_grpc_ecosystem_grpc_gateway_v2//protoc-gen-grpc-gateway:go_gen_grpc_gateway",
     visibility = ["//visibility:public"],
 )
 
@@ -172,7 +165,7 @@ STATICCHECK_ANALYZERS = [
     "sa6006",
     "sa9001",
     "sa9002",
-    #"sa9003", # Doesn't build. See https://github.com/dominikh/go-tools/pull/1483
+    "sa9003",
     "sa9004",
     "sa9005",
     "sa9006",
@@ -204,6 +197,7 @@ nogo(
         "//tools/analyzers/logruswitherror:go_default_library",
         "//tools/analyzers/maligned:go_default_library",
         "//tools/analyzers/nop:go_default_library",
+        "//tools/analyzers/nopanic:go_default_library",
         "//tools/analyzers/properpermissions:go_default_library",
         "//tools/analyzers/recursivelock:go_default_library",
         "//tools/analyzers/shadowpredecl:go_default_library",
@@ -224,6 +218,7 @@ nogo(
         "@org_golang_x_tools//go/analysis/passes/deepequalerrors:go_default_library",
         "@org_golang_x_tools//go/analysis/passes/defers:go_default_library",
         "@org_golang_x_tools//go/analysis/passes/directive:go_default_library",
+        "@org_golang_x_tools//go/analysis/passes/errorsas:go_default_library",
         # fieldalignment disabled
         #"@org_golang_x_tools//go/analysis/passes/fieldalignment:go_default_library",
         "@org_golang_x_tools//go/analysis/passes/findcall:go_default_library",

@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/prysmaticlabs/prysm/v5/async/event"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
+	"github.com/OffchainLabs/prysm/v6/async/event"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
 )
 
 // IKeymanager defines a general keymanager interface for Prysm wallets.
@@ -61,7 +61,7 @@ type KeyStoreExtractor interface {
 
 // PublicKeyAdder allows adding public keys to the keymanager.
 type PublicKeyAdder interface {
-	AddPublicKeys(publicKeys []string) []*KeyStatus
+	AddPublicKeys(publicKeys []string) ([]*KeyStatus, error)
 }
 
 // KeyStatus is a json representation of the status fields for the keymanager apis
@@ -85,7 +85,7 @@ const (
 
 // PublicKeyDeleter allows deleting public keys set in keymanager.
 type PublicKeyDeleter interface {
-	DeletePublicKeys(publicKeys []string) []*KeyStatus
+	DeletePublicKeys(publicKeys []string) ([]*KeyStatus, error)
 }
 
 type ListKeymanagerAccountConfig struct {

@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/validator/client/beacon-api/mock"
+	testhelpers "github.com/OffchainLabs/prysm/v6/validator/client/beacon-api/test-helpers"
+	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
-	test_helpers "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/test-helpers"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	"go.uber.org/mock/gomock"
 )
 
@@ -26,7 +26,7 @@ func TestGetAggregatedSyncSelections(t *testing.T) {
 			name: "valid",
 			req: []iface.SyncCommitteeSelection{
 				{
-					SelectionProof:    test_helpers.FillByteSlice(96, 82),
+					SelectionProof:    testhelpers.FillByteSlice(96, 82),
 					Slot:              75,
 					ValidatorIndex:    76,
 					SubcommitteeIndex: 77,
@@ -34,7 +34,7 @@ func TestGetAggregatedSyncSelections(t *testing.T) {
 			},
 			res: []iface.SyncCommitteeSelection{
 				{
-					SelectionProof:    test_helpers.FillByteSlice(96, 100),
+					SelectionProof:    testhelpers.FillByteSlice(96, 100),
 					Slot:              75,
 					ValidatorIndex:    76,
 					SubcommitteeIndex: 77,
@@ -45,7 +45,7 @@ func TestGetAggregatedSyncSelections(t *testing.T) {
 			name: "endpoint error",
 			req: []iface.SyncCommitteeSelection{
 				{
-					SelectionProof:    test_helpers.FillByteSlice(96, 82),
+					SelectionProof:    testhelpers.FillByteSlice(96, 82),
 					Slot:              75,
 					ValidatorIndex:    76,
 					SubcommitteeIndex: 77,
@@ -58,7 +58,7 @@ func TestGetAggregatedSyncSelections(t *testing.T) {
 			name: "no response error",
 			req: []iface.SyncCommitteeSelection{
 				{
-					SelectionProof:    test_helpers.FillByteSlice(96, 82),
+					SelectionProof:    testhelpers.FillByteSlice(96, 82),
 					Slot:              75,
 					ValidatorIndex:    76,
 					SubcommitteeIndex: 77,
@@ -70,13 +70,13 @@ func TestGetAggregatedSyncSelections(t *testing.T) {
 			name: "mismatch response",
 			req: []iface.SyncCommitteeSelection{
 				{
-					SelectionProof:    test_helpers.FillByteSlice(96, 82),
+					SelectionProof:    testhelpers.FillByteSlice(96, 82),
 					Slot:              75,
 					ValidatorIndex:    76,
 					SubcommitteeIndex: 77,
 				},
 				{
-					SelectionProof:    test_helpers.FillByteSlice(96, 100),
+					SelectionProof:    testhelpers.FillByteSlice(96, 100),
 					Slot:              75,
 					ValidatorIndex:    76,
 					SubcommitteeIndex: 78,
@@ -84,7 +84,7 @@ func TestGetAggregatedSyncSelections(t *testing.T) {
 			},
 			res: []iface.SyncCommitteeSelection{
 				{
-					SelectionProof:    test_helpers.FillByteSlice(96, 100),
+					SelectionProof:    testhelpers.FillByteSlice(96, 100),
 					Slot:              75,
 					ValidatorIndex:    76,
 					SubcommitteeIndex: 77,
@@ -104,7 +104,7 @@ func TestGetAggregatedSyncSelections(t *testing.T) {
 
 			ctx := context.Background()
 			jsonRestHandler.EXPECT().Post(
-				ctx,
+				gomock.Any(),
 				"/eth/v1/validator/sync_committee_selections",
 				nil,
 				bytes.NewBuffer(reqBody),
@@ -117,7 +117,7 @@ func TestGetAggregatedSyncSelections(t *testing.T) {
 			).Times(1)
 
 			validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
-			res, err := validatorClient.GetAggregatedSyncSelections(ctx, test.req)
+			res, err := validatorClient.AggregatedSyncSelections(ctx, test.req)
 			if test.expectedErrorMessage != "" {
 				require.ErrorContains(t, test.expectedErrorMessage, err)
 				return

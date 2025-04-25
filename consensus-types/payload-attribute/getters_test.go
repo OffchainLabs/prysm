@@ -3,9 +3,9 @@ package payloadattribute
 import (
 	"testing"
 
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 func TestPayloadAttributeGetters(t *testing.T) {
@@ -44,7 +44,7 @@ func TestPayloadAttributeGetters(t *testing.T) {
 				r := uint64(123)
 				a, err := New(&enginev1.PayloadAttributes{Timestamp: r})
 				require.NoError(t, err)
-				require.Equal(t, r, a.Timestamps())
+				require.Equal(t, r, a.Timestamp())
 			},
 		},
 		{

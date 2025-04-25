@@ -3,12 +3,12 @@ package state_native_test
 import (
 	"testing"
 
-	statenative "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	statenative "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 func TestReadOnlyValidator_ReturnsErrorOnNil(t *testing.T) {
@@ -63,7 +63,7 @@ func TestReadOnlyValidator_WithdrawalCredentials(t *testing.T) {
 	creds := []byte{0xFA, 0xCC}
 	v, err := statenative.NewValidator(&ethpb.Validator{WithdrawalCredentials: creds})
 	require.NoError(t, err)
-	assert.DeepEqual(t, creds, v.WithdrawalCredentials())
+	assert.DeepEqual(t, creds, v.GetWithdrawalCredentials())
 }
 
 func TestReadOnlyValidator_Slashed(t *testing.T) {

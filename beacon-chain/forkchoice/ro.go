@@ -1,9 +1,9 @@
 package forkchoice
 
 import (
-	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 )
 
 // ROForkChoice is an implementation of forkchoice.Getter which calls `Rlock`/`RUnlock`
@@ -114,6 +114,13 @@ func (ro *ROForkChoice) HighestReceivedBlockSlot() primitives.Slot {
 	return ro.getter.HighestReceivedBlockSlot()
 }
 
+// HighestReceivedBlockRoot delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) HighestReceivedBlockRoot() [32]byte {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+	return ro.getter.HighestReceivedBlockRoot()
+}
+
 // HighestReceivedBlockDelay delegates to the underlying forkchoice call, under a lock.
 func (ro *ROForkChoice) HighestReceivedBlockDelay() primitives.Slot {
 	ro.l.RLock()
@@ -163,9 +170,23 @@ func (ro *ROForkChoice) LastRoot(e primitives.Epoch) [32]byte {
 	return ro.getter.LastRoot(e)
 }
 
+// DependentRoot delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) DependentRoot(epoch primitives.Epoch) ([32]byte, error) {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+	return ro.getter.DependentRoot(epoch)
+}
+
 // TargetRootForEpoch delegates to the underlying forkchoice call, under a lock.
 func (ro *ROForkChoice) TargetRootForEpoch(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
 	ro.l.RLock()
 	defer ro.l.RUnlock()
 	return ro.getter.TargetRootForEpoch(root, epoch)
+}
+
+// ParentRoot delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) ParentRoot(root [32]byte) ([32]byte, error) {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+	return ro.getter.ParentRoot(root)
 }

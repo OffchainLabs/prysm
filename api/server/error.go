@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -15,7 +16,8 @@ type DecodeError struct {
 // NewDecodeError wraps an error (either the initial decoding error or another DecodeError).
 // The current field that failed decoding must be passed in.
 func NewDecodeError(err error, field string) *DecodeError {
-	de, ok := err.(*DecodeError)
+	var de *DecodeError
+	ok := errors.As(err, &de)
 	if ok {
 		return &DecodeError{path: append([]string{field}, de.path...), err: de.err}
 	}

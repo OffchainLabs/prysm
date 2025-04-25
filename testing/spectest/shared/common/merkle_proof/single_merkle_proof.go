@@ -6,16 +6,16 @@ import (
 	"path"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	consensus_blocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/container/trie"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/spectest/shared/common/ssz_static"
+	"github.com/OffchainLabs/prysm/v6/testing/spectest/utils"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/golang/snappy"
 	fssz "github.com/prysmaticlabs/fastssz"
-	field_params "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	consensus_blocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/container/trie"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/common/ssz_static"
-	"github.com/prysmaticlabs/prysm/v5/testing/spectest/utils"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 // SingleMerkleProof is the format used to read spectest Merkle Proof test data.
@@ -80,7 +80,7 @@ func runSingleMerkleProofTests(t *testing.T, config, forkOrPhase string, unmarsh
 				if err != nil {
 					return
 				}
-				if index < consensus_blocks.KZGOffset || index > consensus_blocks.KZGOffset+field_params.MaxBlobsPerBlock {
+				if index < consensus_blocks.KZGOffset || index > uint64(consensus_blocks.KZGOffset+params.BeaconConfig().MaxBlobsPerBlock(0)) {
 					return
 				}
 				localProof, err := consensus_blocks.MerkleProofKZGCommitment(body, int(index-consensus_blocks.KZGOffset))

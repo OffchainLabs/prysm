@@ -1,19 +1,22 @@
 package validator
 
 import (
+	"github.com/OffchainLabs/prysm/v6/async/event"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
+	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
+	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/async/event"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
-	blockfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/block"
-	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // StreamBlocksAltair to clients every single time a block is received by the beacon node.
 func (vs *Server) StreamBlocksAltair(req *ethpb.StreamBlocksRequest, stream ethpb.BeaconNodeValidator_StreamBlocksAltairServer) error {
 	blocksChannel := make(chan *feed.Event, 1)
@@ -47,7 +50,9 @@ func (vs *Server) StreamBlocksAltair(req *ethpb.StreamBlocksRequest, stream ethp
 	}
 }
 
-// StreamSlots sends a block's slot to clients every single time a block is received by the beacon node.
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
+// StreamSlots sends a the block's slot and dependent roots to clients every single time a block is received by the beacon node.
 func (vs *Server) StreamSlots(req *ethpb.StreamSlotsRequest, stream ethpb.BeaconNodeValidator_StreamSlotsServer) error {
 	ch := make(chan *feed.Event, 1)
 	var sub event.Subscription
@@ -81,7 +86,24 @@ func (vs *Server) StreamSlots(req *ethpb.StreamSlotsRequest, stream ethpb.Beacon
 				}
 				s = data.SignedBlock.Block().Slot()
 			}
-			if err := stream.Send(&ethpb.StreamSlotsResponse{Slot: s}); err != nil {
+			currEpoch := slots.ToEpoch(s)
+			currDepRoot, err := vs.ForkchoiceFetcher.DependentRoot(currEpoch)
+			if err != nil {
+				return status.Errorf(codes.Internal, "Could not get dependent root: %v", err)
+			}
+			prevDepRoot := currDepRoot
+			if currEpoch > 0 {
+				prevDepRoot, err = vs.ForkchoiceFetcher.DependentRoot(currEpoch - 1)
+				if err != nil {
+					return status.Errorf(codes.Internal, "Could not get dependent root: %v", err)
+				}
+			}
+			if err := stream.Send(
+				&ethpb.StreamSlotsResponse{
+					Slot:                      s,
+					PreviousDutyDependentRoot: prevDepRoot[:],
+					CurrentDutyDependentRoot:  currDepRoot[:],
+				}); err != nil {
 				return status.Errorf(codes.Unavailable, "Could not send over stream: %v", err)
 			}
 		case <-sub.Err():
@@ -159,6 +181,28 @@ func sendVerifiedBlocks(stream ethpb.BeaconNodeValidator_StreamBlocksAltairServe
 			return nil
 		}
 		b.Block = &ethpb.StreamBlocksResponse_DenebBlock{DenebBlock: phBlk}
+	case version.Electra:
+		pb, err := data.SignedBlock.Proto()
+		if err != nil {
+			return errors.Wrap(err, "could not get protobuf block")
+		}
+		phBlk, ok := pb.(*ethpb.SignedBeaconBlockElectra)
+		if !ok {
+			log.Warn("Mismatch between version and block type, was expecting SignedBeaconBlockElectra")
+			return nil
+		}
+		b.Block = &ethpb.StreamBlocksResponse_ElectraBlock{ElectraBlock: phBlk}
+	case version.Fulu:
+		pb, err := data.SignedBlock.Proto()
+		if err != nil {
+			return errors.Wrap(err, "could not get protobuf block")
+		}
+		phBlk, ok := pb.(*ethpb.SignedBeaconBlockFulu)
+		if !ok {
+			log.Warn("Mismatch between version and block type, was expecting SignedBeaconBlockFulu")
+			return nil
+		}
+		b.Block = &ethpb.StreamBlocksResponse_FuluBlock{FuluBlock: phBlk}
 	}
 
 	if err := stream.Send(b); err != nil {
@@ -210,6 +254,8 @@ func (vs *Server) sendBlocks(stream ethpb.BeaconNodeValidator_StreamBlocksAltair
 		b.Block = &ethpb.StreamBlocksResponse_CapellaBlock{CapellaBlock: p}
 	case *ethpb.SignedBeaconBlockDeneb:
 		b.Block = &ethpb.StreamBlocksResponse_DenebBlock{DenebBlock: p}
+	case *ethpb.SignedBeaconBlockElectra:
+		b.Block = &ethpb.StreamBlocksResponse_ElectraBlock{ElectraBlock: p}
 	default:
 		log.Errorf("Unknown block type %T", p)
 	}

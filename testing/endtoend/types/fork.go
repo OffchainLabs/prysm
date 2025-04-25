@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 )
 
 func InitForkCfg(start, end int, c *params.BeaconChainConfig) *params.BeaconChainConfig {
 	c = c.Copy()
 	if end < start {
-		panic("end fork is less than the start fork")
+		panic("end fork is less than the start fork") // lint:nopanic -- test code.
 	}
 	if start >= version.Altair {
 		c.AltairForkEpoch = 0
@@ -24,6 +24,12 @@ func InitForkCfg(start, end int, c *params.BeaconChainConfig) *params.BeaconChai
 	}
 	if start >= version.Deneb {
 		c.DenebForkEpoch = 0
+	}
+	if start >= version.Electra {
+		c.ElectraForkEpoch = 0
+	}
+	if end < version.Electra {
+		c.ElectraForkEpoch = math.MaxUint64
 	}
 	if end < version.Deneb {
 		c.DenebForkEpoch = math.MaxUint64

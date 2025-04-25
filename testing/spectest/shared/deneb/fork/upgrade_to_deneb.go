@@ -4,15 +4,17 @@ import (
 	"path"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/deneb"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/spectest/utils"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/golang/snappy"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/deneb"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/spectest/utils"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
 )
 
 // RunUpgradeToDeneb is a helper function that runs Deneb's fork spec tests.
@@ -51,8 +53,7 @@ func RunUpgradeToDeneb(t *testing.T, config string) {
 			}
 
 			if !proto.Equal(postStateFromFile, postStateFromFunction) {
-				t.Log(postStateFromFile.LatestExecutionPayloadHeader)
-				t.Log(postStateFromFunction.LatestExecutionPayloadHeader)
+				t.Log(cmp.Diff(postStateFromFile, postStateFromFunction, protocmp.Transform()))
 				t.Fatal("Post state does not match expected")
 			}
 		})

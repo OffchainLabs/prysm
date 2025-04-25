@@ -12,8 +12,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
 )
 
 type ObjType int
@@ -198,7 +198,7 @@ func RecursiveFileFind(filename, dir string) (bool, string, error) {
 		// no errors or file found
 		return nil
 	})
-	if err != nil && err != errStopWalk {
+	if err != nil && !errors.Is(err, errStopWalk) {
 		return false, "", err
 	}
 	return found, fpath, nil
@@ -231,7 +231,7 @@ func RecursiveDirFind(dirname, dir string) (bool, string, error) {
 		return nil
 	})
 
-	if err != nil && err != errStopWalk {
+	if err != nil && !errors.Is(err, errStopWalk) {
 		return false, "", errors.Wrapf(err, "error walking directory %s", dir)
 	}
 
@@ -381,4 +381,28 @@ func DirFiles(dir string) ([]string, error) {
 		return nil, err
 	}
 	return files, nil
+}
+
+// WriteLinesToFile writes a slice of strings to a file, each string on a new line.
+func WriteLinesToFile(lines []string, filename string) error {
+	// Open the file for writing. If the file does not exist, create it, or truncate it if it does.
+	f, err := os.Create(filepath.Clean(filename))
+	if err != nil {
+		return fmt.Errorf("error creating file: %w", err)
+	}
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			log.Error(err.Error())
+		}
+	}(f)
+
+	// Iterate through all lines in the slice and write them to the file
+	for _, line := range lines {
+		if _, err := f.WriteString(line + "\n"); err != nil {
+			return fmt.Errorf("error writing line to file: %w", err)
+		}
+	}
+
+	return nil
 }

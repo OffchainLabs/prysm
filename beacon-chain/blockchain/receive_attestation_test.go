@@ -5,18 +5,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	prysmTime "github.com/OffchainLabs/prysm/v6/time"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -46,7 +46,7 @@ func TestVerifyLMDFFGConsistent(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, r32))
 
-	state, r33, err := prepareForkchoiceState(ctx, 33, [32]byte{'b'}, r32, params.BeaconConfig().ZeroHash, fc, fc)
+	state, r33, err := prepareForkchoiceState(ctx, 33, [32]byte{'b'}, r32.Root(), params.BeaconConfig().ZeroHash, fc, fc)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, r33))
 
@@ -54,10 +54,12 @@ func TestVerifyLMDFFGConsistent(t *testing.T) {
 	a := util.NewAttestation()
 	a.Data.Target.Epoch = 1
 	a.Data.Target.Root = []byte{'c'}
-	a.Data.BeaconBlockRoot = r33[:]
+	r33Root := r33.Root()
+	a.Data.BeaconBlockRoot = r33Root[:]
 	require.ErrorContains(t, wanted, service.VerifyLmdFfgConsistency(context.Background(), a))
 
-	a.Data.Target.Root = r32[:]
+	r32Root := r32.Root()
+	a.Data.Target.Root = r32Root[:]
 	err = service.VerifyLmdFfgConsistency(context.Background(), a)
 	require.NoError(t, err, "Could not verify LMD and FFG votes to be consistent")
 }
@@ -73,7 +75,7 @@ func TestProcessAttestations_Ok(t *testing.T) {
 	require.NoError(t, service.saveGenesisData(ctx, genesisState))
 	atts, err := util.GenerateAttestations(genesisState, pks, 1, 0, false)
 	require.NoError(t, err)
-	tRoot := bytesutil.ToBytes32(atts[0].Data.Target.Root)
+	tRoot := bytesutil.ToBytes32(atts[0].GetData().Target.Root)
 	copied := genesisState.Copy()
 	copied, err = transition.ProcessSlots(ctx, copied, 1)
 	require.NoError(t, err)
@@ -83,7 +85,9 @@ func TestProcessAttestations_Ok(t *testing.T) {
 	state, blkRoot, err := prepareForkchoiceState(ctx, 0, tRoot, tRoot, params.BeaconConfig().ZeroHash, ojc, ofc)
 	require.NoError(t, err)
 	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, state, blkRoot))
-	require.NoError(t, service.cfg.AttPool.SaveForkchoiceAttestations(atts))
+	attsToSave := make([]ethpb.Att, len(atts))
+	copy(attsToSave, atts)
+	require.NoError(t, service.cfg.AttPool.SaveForkchoiceAttestations(attsToSave))
 	service.processAttestations(ctx, 0)
 	require.Equal(t, 0, len(service.cfg.AttPool.ForkchoiceAttestations()))
 	require.LogsDoNotContain(t, hook, "Could not process attestation for fork choice")
@@ -112,7 +116,9 @@ func TestService_ProcessAttestationsAndUpdateHead(t *testing.T) {
 	postState, err := service.validateStateTransition(ctx, preState, wsb)
 	require.NoError(t, err)
 	require.NoError(t, service.savePostStateInfo(ctx, tRoot, wsb, postState))
-	require.NoError(t, service.postBlockProcess(&postBlockProcessConfig{ctx, wsb, tRoot, [32]byte{}, postState, false}))
+	roblock, err := blocks.NewROBlockWithRoot(wsb, tRoot)
+	require.NoError(t, err)
+	require.NoError(t, service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false}))
 	copied, err = service.cfg.StateGen.StateByRoot(ctx, tRoot)
 	require.NoError(t, err)
 	require.Equal(t, 2, fcs.NodeCount())
@@ -121,10 +127,12 @@ func TestService_ProcessAttestationsAndUpdateHead(t *testing.T) {
 	// Generate attestations for this block in Slot 1
 	atts, err := util.GenerateAttestations(copied, pks, 1, 1, false)
 	require.NoError(t, err)
-	require.NoError(t, service.cfg.AttPool.SaveForkchoiceAttestations(atts))
+	attsToSave := make([]ethpb.Att, len(atts))
+	copy(attsToSave, atts)
+	require.NoError(t, service.cfg.AttPool.SaveForkchoiceAttestations(attsToSave))
 	// Verify the target is in forkchoice
-	require.Equal(t, true, fcs.HasNode(bytesutil.ToBytes32(atts[0].Data.BeaconBlockRoot)))
-	require.Equal(t, tRoot, bytesutil.ToBytes32(atts[0].Data.BeaconBlockRoot))
+	require.Equal(t, true, fcs.HasNode(bytesutil.ToBytes32(atts[0].GetData().BeaconBlockRoot)))
+	require.Equal(t, tRoot, bytesutil.ToBytes32(atts[0].GetData().BeaconBlockRoot))
 	require.Equal(t, true, fcs.HasNode(service.originBlockRoot))
 
 	// Insert a new block to forkchoice
@@ -168,7 +176,9 @@ func TestService_UpdateHead_NoAtts(t *testing.T) {
 	postState, err := service.validateStateTransition(ctx, preState, wsb)
 	require.NoError(t, err)
 	require.NoError(t, service.savePostStateInfo(ctx, tRoot, wsb, postState))
-	require.NoError(t, service.postBlockProcess(&postBlockProcessConfig{ctx, wsb, tRoot, [32]byte{}, postState, false}))
+	roblock, err := blocks.NewROBlockWithRoot(wsb, tRoot)
+	require.NoError(t, err)
+	require.NoError(t, service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false}))
 	require.Equal(t, 2, fcs.NodeCount())
 	require.NoError(t, service.cfg.BeaconDB.SaveBlock(ctx, wsb))
 	require.Equal(t, tRoot, service.head.root)

@@ -2,32 +2,51 @@ package util
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/crypto/rand"
+	attv1 "github.com/OffchainLabs/prysm/v6/proto/eth/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
-	attv1 "github.com/prysmaticlabs/prysm/v5/proto/eth/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	log "github.com/sirupsen/logrus"
 )
 
-// NewAttestation creates an attestation block with minimum marshalable fields.
+// NewAttestation creates a block attestation with minimum marshalable fields.
 func NewAttestation() *ethpb.Attestation {
 	return &ethpb.Attestation{
 		AggregationBits: bitfield.Bitlist{0b1101},
+		Data: &ethpb.AttestationData{
+			BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+			Source: &ethpb.Checkpoint{
+				Root: make([]byte, fieldparams.RootLength),
+			},
+			Target: &ethpb.Checkpoint{
+				Root: make([]byte, fieldparams.RootLength),
+			},
+		},
+		Signature: make([]byte, 96),
+	}
+}
+
+// NewAttestationElectra creates a block attestation with minimum marshalable fields.
+func NewAttestationElectra() *ethpb.AttestationElectra {
+	cb := primitives.NewAttestationCommitteeBits()
+	cb.SetBitAt(0, true)
+	return &ethpb.AttestationElectra{
+		AggregationBits: bitfield.Bitlist{0b1101},
+		CommitteeBits:   cb,
 		Data: &ethpb.AttestationData{
 			BeaconBlockRoot: make([]byte, fieldparams.RootLength),
 			Source: &ethpb.Checkpoint{
@@ -48,10 +67,8 @@ func NewAttestation() *ethpb.Attestation {
 // for the same data with their aggregation bits split uniformly.
 //
 // If you request 4 attestations, but there are 8 committees, you will get 4 fully aggregated attestations.
-func GenerateAttestations(
-	bState state.BeaconState, privs []bls.SecretKey, numToGen uint64, slot primitives.Slot, randomRoot bool,
-) ([]*ethpb.Attestation, error) {
-	var attestations []*ethpb.Attestation
+func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numToGen uint64, slot primitives.Slot, randomRoot bool) ([]ethpb.Att, error) { // nolint:gocognit
+	var attestations []ethpb.Att
 	generateHeadState := false
 	bState = bState.Copy()
 	if slot > bState.Slot() {
@@ -108,8 +125,38 @@ func GenerateAttestations(
 				return nil, err
 			}
 			headState = genState
+		case version.Deneb:
+			pbState, err := state_native.ProtobufBeaconStateDeneb(bState.ToProto())
+			if err != nil {
+				return nil, err
+			}
+			genState, err := state_native.InitializeFromProtoUnsafeDeneb(pbState)
+			if err != nil {
+				return nil, err
+			}
+			headState = genState
+		case version.Electra:
+			pbState, err := state_native.ProtobufBeaconStateElectra(bState.ToProto())
+			if err != nil {
+				return nil, err
+			}
+			genState, err := state_native.InitializeFromProtoUnsafeElectra(pbState)
+			if err != nil {
+				return nil, err
+			}
+			headState = genState
+		case version.Fulu:
+			pbState, err := state_native.ProtobufBeaconStateFulu(bState.ToProto())
+			if err != nil {
+				return nil, err
+			}
+			genState, err := state_native.InitializeFromProtoUnsafeFulu(pbState)
+			if err != nil {
+				return nil, err
+			}
+			headState = genState
 		default:
-			return nil, errors.New("state type isn't supported")
+			return nil, fmt.Errorf("state version %s isn't supported", version.String(bState.Version()))
 		}
 
 		headState, err = transition.ProcessSlots(context.Background(), headState, slot+1)
@@ -180,9 +227,14 @@ func GenerateAttestations(
 			return nil, err
 		}
 
+		ci := c
+		if bState.Version() >= version.Electra {
+			// committee index must be 0 post-Electra
+			ci = 0
+		}
 		attData := &ethpb.AttestationData{
 			Slot:            slot,
-			CommitteeIndex:  c,
+			CommitteeIndex:  ci,
 			BeaconBlockRoot: headRoot,
 			Source:          bState.CurrentJustifiedCheckpoint(),
 			Target: &ethpb.Checkpoint{
@@ -211,10 +263,22 @@ func GenerateAttestations(
 				continue
 			}
 
-			att := &ethpb.Attestation{
-				Data:            attData,
-				AggregationBits: aggregationBits,
-				Signature:       bls.AggregateSignatures(sigs).Marshal(),
+			var att ethpb.Att
+			if bState.Version() >= version.Electra {
+				cb := primitives.NewAttestationCommitteeBits()
+				cb.SetBitAt(uint64(c), true)
+				att = &ethpb.AttestationElectra{
+					Data:            attData,
+					CommitteeBits:   cb,
+					AggregationBits: aggregationBits,
+					Signature:       bls.AggregateSignatures(sigs).Marshal(),
+				}
+			} else {
+				att = &ethpb.Attestation{
+					Data:            attData,
+					AggregationBits: aggregationBits,
+					Signature:       bls.AggregateSignatures(sigs).Marshal(),
+				}
 			}
 			attestations = append(attestations, att)
 		}
@@ -230,6 +294,36 @@ func HydrateAttestation(a *ethpb.Attestation) *ethpb.Attestation {
 	}
 	if a.AggregationBits == nil {
 		a.AggregationBits = make([]byte, 1)
+	}
+	if a.Data == nil {
+		a.Data = &ethpb.AttestationData{}
+	}
+	a.Data = HydrateAttestationData(a.Data)
+	return a
+}
+
+// HydrateAttestationElectra hydrates an attestation object with correct field length sizes
+// to comply with fssz marshalling and unmarshalling rules.
+func HydrateAttestationElectra(a *ethpb.AttestationElectra) *ethpb.AttestationElectra {
+	if a.Signature == nil {
+		a.Signature = make([]byte, 96)
+	}
+	if a.AggregationBits == nil {
+		a.AggregationBits = make([]byte, 1)
+	}
+	if a.CommitteeBits == nil {
+		a.CommitteeBits = primitives.NewAttestationCommitteeBits()
+	}
+	if a.Data == nil {
+		a.Data = &ethpb.AttestationData{}
+	}
+	a.Data = HydrateAttestationData(a.Data)
+	return a
+}
+
+func HydrateSingleAttestation(a *ethpb.SingleAttestation) *ethpb.SingleAttestation {
+	if a.Signature == nil {
+		a.Signature = make([]byte, 96)
 	}
 	if a.Data == nil {
 		a.Data = &ethpb.AttestationData{}
@@ -299,6 +393,19 @@ func HydrateV1AttestationData(d *attv1.AttestationData) *attv1.AttestationData {
 // HydrateIndexedAttestation hydrates an indexed attestation with correct field length sizes
 // to comply with fssz marshalling and unmarshalling rules.
 func HydrateIndexedAttestation(a *ethpb.IndexedAttestation) *ethpb.IndexedAttestation {
+	if a.Signature == nil {
+		a.Signature = make([]byte, 96)
+	}
+	if a.Data == nil {
+		a.Data = &ethpb.AttestationData{}
+	}
+	a.Data = HydrateAttestationData(a.Data)
+	return a
+}
+
+// HydrateIndexedAttestationElectra hydrates an indexed attestation with correct field length sizes
+// to comply with fssz marshalling and unmarshalling rules.
+func HydrateIndexedAttestationElectra(a *ethpb.IndexedAttestationElectra) *ethpb.IndexedAttestationElectra {
 	if a.Signature == nil {
 		a.Signature = make([]byte, 96)
 	}

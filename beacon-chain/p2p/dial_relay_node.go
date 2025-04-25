@@ -3,9 +3,9 @@ package p2p
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"go.opencensus.io/trace"
 )
 
 // MakePeer from multiaddress string.

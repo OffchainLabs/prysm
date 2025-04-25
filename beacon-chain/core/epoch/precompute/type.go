@@ -1,6 +1,6 @@
 package precompute
 
-import "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+import "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 
 // Validator stores the pre computation of individual validator's attesting records these records
 // consist of attestation votes, block inclusion record. Pre computing and storing such record
@@ -24,7 +24,7 @@ type Validator struct {
 	IsPrevEpochSourceAttester bool
 	// IsPrevEpochTargetAttester is true if the validator attested previous epoch target.
 	IsPrevEpochTargetAttester bool
-	// IsHeadAttester is true if the validator attested head.
+	// IsPrevEpochHeadAttester is true if the validator attested the previous epoch head.
 	IsPrevEpochHeadAttester bool
 
 	// CurrentEpochEffectiveBalance is how much effective balance this validator has current epoch.

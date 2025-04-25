@@ -5,8 +5,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/hash"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/hash"
+	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 )
 
@@ -32,7 +33,8 @@ func ParseGraffitiFile(f string) (*Graffiti, error) {
 	}
 	g := &Graffiti{}
 	if err := yaml.UnmarshalStrict(yamlFile, g); err != nil {
-		if _, ok := err.(*yaml.TypeError); !ok {
+		var typeError *yaml.TypeError
+		if !errors.As(err, &typeError) {
 			return nil, err
 		} else {
 			log.WithError(err).Error("There were some issues parsing graffiti from a yaml file.")

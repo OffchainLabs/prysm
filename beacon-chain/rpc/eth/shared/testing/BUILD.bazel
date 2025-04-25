@@ -3,7 +3,11 @@ load("@prysm//tools/go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     testonly = True,
-    srcs = ["json.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared/testing",
+    srcs = [
+        "json.go",
+        "json_mainnet.go",
+        "json_minimal.go",  # keep
+    ],
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared/testing",
     visibility = ["//visibility:public"],
 )

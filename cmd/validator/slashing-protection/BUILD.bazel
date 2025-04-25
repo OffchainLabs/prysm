@@ -8,7 +8,7 @@ go_library(
         "log.go",
         "slashing-protection.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/cmd/validator/slashing-protection",
+    importpath = "github.com/OffchainLabs/prysm/v6/cmd/validator/slashing-protection",
     visibility = ["//visibility:public"],
     deps = [
         "//cmd:go_default_library",

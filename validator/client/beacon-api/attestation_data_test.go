@@ -7,12 +7,12 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/validator/client/beacon-api/mock"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
 	"go.uber.org/mock/gomock"
 )
 
@@ -33,7 +33,7 @@ func TestGetAttestationData_ValidAttestation(t *testing.T) {
 	produceAttestationDataResponseJson := structs.GetAttestationDataResponse{}
 
 	jsonRestHandler.EXPECT().Get(
-		ctx,
+		gomock.Any(),
 		fmt.Sprintf("/eth/v1/validator/attestation_data?committee_index=%d&slot=%d", expectedCommitteeIndex, expectedSlot),
 		&produceAttestationDataResponseJson,
 	).Return(
@@ -58,7 +58,7 @@ func TestGetAttestationData_ValidAttestation(t *testing.T) {
 	).Times(1)
 
 	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
-	resp, err := validatorClient.getAttestationData(ctx, primitives.Slot(expectedSlot), primitives.CommitteeIndex(expectedCommitteeIndex))
+	resp, err := validatorClient.attestationData(ctx, primitives.Slot(expectedSlot), primitives.CommitteeIndex(expectedCommitteeIndex))
 	assert.NoError(t, err)
 
 	require.NotNil(t, resp)
@@ -108,7 +108,7 @@ func TestGetAttestationData_InvalidData(t *testing.T) {
 				attestation.Data.BeaconBlockRoot = "foo"
 				return attestation
 			},
-			expectedErrorMessage: "invalid beacon block root: foo",
+			expectedErrorMessage: "failed to decode beacon block root: foo",
 		},
 		{
 			name: "invalid slot",
@@ -144,7 +144,7 @@ func TestGetAttestationData_InvalidData(t *testing.T) {
 				attestation.Data.Source.Root = "foo"
 				return attestation
 			},
-			expectedErrorMessage: "invalid attestation source root: foo",
+			expectedErrorMessage: "failed to decode attestation source root: foo",
 		},
 		{
 			name: "nil target",
@@ -171,7 +171,7 @@ func TestGetAttestationData_InvalidData(t *testing.T) {
 				attestation.Data.Target.Root = "foo"
 				return attestation
 			},
-			expectedErrorMessage: "invalid attestation target root: foo",
+			expectedErrorMessage: "failed to decode attestation target root: foo",
 		},
 	}
 
@@ -183,7 +183,7 @@ func TestGetAttestationData_InvalidData(t *testing.T) {
 			produceAttestationDataResponseJson := structs.GetAttestationDataResponse{}
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 			jsonRestHandler.EXPECT().Get(
-				ctx,
+				gomock.Any(),
 				"/eth/v1/validator/attestation_data?committee_index=2&slot=1",
 				&produceAttestationDataResponseJson,
 			).Return(
@@ -194,7 +194,7 @@ func TestGetAttestationData_InvalidData(t *testing.T) {
 			).Times(1)
 
 			validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
-			_, err := validatorClient.getAttestationData(ctx, 1, 2)
+			_, err := validatorClient.attestationData(ctx, 1, 2)
 			assert.ErrorContains(t, testCase.expectedErrorMessage, err)
 		})
 	}
@@ -212,7 +212,7 @@ func TestGetAttestationData_JsonResponseError(t *testing.T) {
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	produceAttestationDataResponseJson := structs.GetAttestationDataResponse{}
 	jsonRestHandler.EXPECT().Get(
-		ctx,
+		gomock.Any(),
 		fmt.Sprintf("/eth/v1/validator/attestation_data?committee_index=%d&slot=%d", committeeIndex, slot),
 		&produceAttestationDataResponseJson,
 	).Return(
@@ -220,11 +220,11 @@ func TestGetAttestationData_JsonResponseError(t *testing.T) {
 	).Times(1)
 
 	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
-	_, err := validatorClient.getAttestationData(ctx, slot, committeeIndex)
+	_, err := validatorClient.attestationData(ctx, slot, committeeIndex)
 	assert.ErrorContains(t, "some specific json response error", err)
 }
 
-func generateValidAttestation(slot uint64, committeeIndex uint64) structs.GetAttestationDataResponse {
+func generateValidAttestation(slot, committeeIndex uint64) structs.GetAttestationDataResponse {
 	return structs.GetAttestationDataResponse{
 		Data: &structs.AttestationData{
 			Slot:            strconv.FormatUint(slot, 10),

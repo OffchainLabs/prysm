@@ -44,6 +44,12 @@ CAPELLA_FORK_EPOCH: 10
 # Deneb
 DENEB_FORK_VERSION: 0x040000fd
 DENEB_FORK_EPOCH: 12
+# Electra
+ELECTRA_FORK_VERSION: 0x050000fd
+ELECTRA_FORK_EPOCH: 14
+# Fulu
+FULU_FORK_VERSION: 0x060000fd
+FULU_FORK_EPOCH: 18446744073709551615
 
 
 # Time parameters
@@ -82,7 +88,7 @@ PROPOSER_SCORE_BOOST: 40
 
 # Deposit contract
 # ---------------------------------------------------------------
-# Ethereum Goerli testnet
+# Testnet
 DEPOSIT_CHAIN_ID: 1337 # Override for e2e tests
 DEPOSIT_NETWORK_ID: 1337 # Override for e2e tests
 # Configured on a per testnet basis

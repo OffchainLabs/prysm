@@ -6,20 +6,38 @@ import (
 	"sort"
 	"testing"
 
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	c "github.com/patrickmn/go-cache"
-	fssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/go-bitfield"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
+
+func TestKV_Unaggregated_UnaggregatedAttestations(t *testing.T) {
+	t.Run("not returned when hasSeenBit fails", func(t *testing.T) {
+		att := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1}, AggregationBits: bitfield.Bitlist{0b101}})
+		id, err := attestation.NewId(att, attestation.Data)
+		require.NoError(t, err)
+
+		cache := NewAttCaches()
+		require.NoError(t, cache.SaveUnaggregatedAttestation(att))
+		cache.seenAtt.Delete(id.String())
+		// cache a bitlist whose length is different from the attestation bitlist's length
+		cache.seenAtt.Set(id.String(), []bitfield.Bitlist{{0b1001}}, c.DefaultExpiration)
+
+		atts := cache.UnaggregatedAttestations()
+		assert.Equal(t, 0, len(atts))
+	})
+}
 
 func TestKV_Unaggregated_SaveUnaggregatedAttestation(t *testing.T) {
 	tests := []struct {
 		name          string
-		att           *ethpb.Attestation
+		att           ethpb.Att
 		count         int
 		wantErrString string
 	}{
@@ -39,7 +57,7 @@ func TestKV_Unaggregated_SaveUnaggregatedAttestation(t *testing.T) {
 					BeaconBlockRoot: []byte{0b0},
 				},
 			},
-			wantErrString: fssz.ErrBytesLength.Error(),
+			wantErrString: "could not create attestation ID",
 		},
 		{
 			name:  "normal save",
@@ -57,17 +75,17 @@ func TestKV_Unaggregated_SaveUnaggregatedAttestation(t *testing.T) {
 			count: 0,
 		},
 	}
-	r, err := hashFn(util.HydrateAttestationData(&ethpb.AttestationData{Slot: 100}))
+	id, err := attestation.NewId(util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 100}}), attestation.Data)
 	require.NoError(t, err)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cache := NewAttCaches()
-			cache.seenAtt.Set(string(r[:]), []bitfield.Bitlist{{0xff}}, c.DefaultExpiration)
+			cache.seenAtt.Set(id.String(), []bitfield.Bitlist{{0xff}}, c.DefaultExpiration)
 			assert.Equal(t, 0, len(cache.unAggregatedAtt), "Invalid start pool, atts: %d", len(cache.unAggregatedAtt))
 
-			if tt.att != nil && tt.att.Signature == nil {
-				tt.att.Signature = make([]byte, fieldparams.BLSSignatureLength)
+			if tt.att != nil && tt.att.GetSignature() == nil {
+				tt.att.(*ethpb.Attestation).Signature = make([]byte, fieldparams.BLSSignatureLength)
 			}
 
 			err := cache.SaveUnaggregatedAttestation(tt.att)
@@ -85,13 +103,13 @@ func TestKV_Unaggregated_SaveUnaggregatedAttestation(t *testing.T) {
 func TestKV_Unaggregated_SaveUnaggregatedAttestations(t *testing.T) {
 	tests := []struct {
 		name          string
-		atts          []*ethpb.Attestation
+		atts          []ethpb.Att
 		count         int
 		wantErrString string
 	}{
 		{
 			name: "unaggregated only",
-			atts: []*ethpb.Attestation{
+			atts: []ethpb.Att{
 				util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1}}),
 				util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 2}}),
 				util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 3}}),
@@ -100,9 +118,9 @@ func TestKV_Unaggregated_SaveUnaggregatedAttestations(t *testing.T) {
 		},
 		{
 			name: "has aggregated",
-			atts: []*ethpb.Attestation{
+			atts: []ethpb.Att{
 				util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1}}),
-				{AggregationBits: bitfield.Bitlist{0b1111}, Data: &ethpb.AttestationData{Slot: 2}},
+				&ethpb.Attestation{AggregationBits: bitfield.Bitlist{0b1111}, Data: &ethpb.AttestationData{Slot: 2}},
 				util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 3}}),
 			},
 			wantErrString: "attestation is aggregated",
@@ -145,14 +163,28 @@ func TestKV_Unaggregated_DeleteUnaggregatedAttestation(t *testing.T) {
 		att1 := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1}, AggregationBits: bitfield.Bitlist{0b101}})
 		att2 := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 2}, AggregationBits: bitfield.Bitlist{0b110}})
 		att3 := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 3}, AggregationBits: bitfield.Bitlist{0b110}})
-		atts := []*ethpb.Attestation{att1, att2, att3}
+		atts := []ethpb.Att{att1, att2, att3}
 		require.NoError(t, cache.SaveUnaggregatedAttestations(atts))
 		for _, att := range atts {
 			assert.NoError(t, cache.DeleteUnaggregatedAttestation(att))
 		}
-		returned, err := cache.UnaggregatedAttestations()
+		returned := cache.UnaggregatedAttestations()
+		assert.DeepEqual(t, []ethpb.Att{}, returned)
+	})
+
+	t.Run("deleted when insertSeenBit fails", func(t *testing.T) {
+		att := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1}, AggregationBits: bitfield.Bitlist{0b101}})
+		id, err := attestation.NewId(att, attestation.Data)
 		require.NoError(t, err)
-		assert.DeepEqual(t, []*ethpb.Attestation{}, returned)
+
+		cache := NewAttCaches()
+		require.NoError(t, cache.SaveUnaggregatedAttestation(att))
+		cache.seenAtt.Delete(id.String())
+		// cache a bitlist whose length is different from the attestation bitlist's length
+		cache.seenAtt.Set(id.String(), []bitfield.Bitlist{{0b1001}}, c.DefaultExpiration)
+
+		require.NoError(t, cache.DeleteUnaggregatedAttestation(att))
+		assert.Equal(t, 0, len(cache.unAggregatedAtt), "Attestation was not deleted")
 	})
 }
 
@@ -168,7 +200,7 @@ func TestKV_Unaggregated_DeleteSeenUnaggregatedAttestations(t *testing.T) {
 
 	t.Run("none seen", func(t *testing.T) {
 		cache := NewAttCaches()
-		atts := []*ethpb.Attestation{
+		atts := []ethpb.Att{
 			util.HydrateAttestation(&ethpb.Attestation{Data: d, AggregationBits: bitfield.Bitlist{0b1001}}),
 			util.HydrateAttestation(&ethpb.Attestation{Data: d, AggregationBits: bitfield.Bitlist{0b1010}}),
 			util.HydrateAttestation(&ethpb.Attestation{Data: d, AggregationBits: bitfield.Bitlist{0b1100}}),
@@ -185,7 +217,7 @@ func TestKV_Unaggregated_DeleteSeenUnaggregatedAttestations(t *testing.T) {
 
 	t.Run("some seen", func(t *testing.T) {
 		cache := NewAttCaches()
-		atts := []*ethpb.Attestation{
+		atts := []ethpb.Att{
 			util.HydrateAttestation(&ethpb.Attestation{Data: d, AggregationBits: bitfield.Bitlist{0b1001}}),
 			util.HydrateAttestation(&ethpb.Attestation{Data: d, AggregationBits: bitfield.Bitlist{0b1010}}),
 			util.HydrateAttestation(&ethpb.Attestation{Data: d, AggregationBits: bitfield.Bitlist{0b1100}}),
@@ -200,17 +232,16 @@ func TestKV_Unaggregated_DeleteSeenUnaggregatedAttestations(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 1, count)
 		assert.Equal(t, 2, cache.UnaggregatedAttestationCount())
-		returned, err := cache.UnaggregatedAttestations()
+		returned := cache.UnaggregatedAttestations()
 		sort.Slice(returned, func(i, j int) bool {
-			return bytes.Compare(returned[i].AggregationBits, returned[j].AggregationBits) < 0
+			return bytes.Compare(returned[i].GetAggregationBits(), returned[j].GetAggregationBits()) < 0
 		})
-		require.NoError(t, err)
-		assert.DeepEqual(t, []*ethpb.Attestation{atts[0], atts[2]}, returned)
+		assert.DeepEqual(t, []ethpb.Att{atts[0], atts[2]}, returned)
 	})
 
 	t.Run("all seen", func(t *testing.T) {
 		cache := NewAttCaches()
-		atts := []*ethpb.Attestation{
+		atts := []ethpb.Att{
 			util.HydrateAttestation(&ethpb.Attestation{Data: d, AggregationBits: bitfield.Bitlist{0b1001}}),
 			util.HydrateAttestation(&ethpb.Attestation{Data: d, AggregationBits: bitfield.Bitlist{0b1010}}),
 			util.HydrateAttestation(&ethpb.Attestation{Data: d, AggregationBits: bitfield.Bitlist{0b1100}}),
@@ -227,9 +258,25 @@ func TestKV_Unaggregated_DeleteSeenUnaggregatedAttestations(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 3, count)
 		assert.Equal(t, 0, cache.UnaggregatedAttestationCount())
-		returned, err := cache.UnaggregatedAttestations()
+		returned := cache.UnaggregatedAttestations()
+		assert.DeepEqual(t, []ethpb.Att{}, returned)
+	})
+
+	t.Run("deleted when hasSeenBit fails", func(t *testing.T) {
+		att := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1}, AggregationBits: bitfield.Bitlist{0b101}})
+		id, err := attestation.NewId(att, attestation.Data)
 		require.NoError(t, err)
-		assert.DeepEqual(t, []*ethpb.Attestation{}, returned)
+
+		cache := NewAttCaches()
+		require.NoError(t, cache.SaveUnaggregatedAttestation(att))
+		cache.seenAtt.Delete(id.String())
+		// cache a bitlist whose length is different from the attestation bitlist's length
+		cache.seenAtt.Set(id.String(), []bitfield.Bitlist{{0b1001}}, c.DefaultExpiration)
+
+		count, err := cache.DeleteSeenUnaggregatedAttestations()
+		require.NoError(t, err)
+		assert.Equal(t, 1, count)
+		assert.Equal(t, 0, len(cache.unAggregatedAtt), "Attestation was not deleted")
 	})
 }
 
@@ -251,4 +298,30 @@ func TestKV_Unaggregated_UnaggregatedAttestationsBySlotIndex(t *testing.T) {
 	assert.DeepEqual(t, []*ethpb.Attestation{att2}, returned)
 	returned = cache.UnaggregatedAttestationsBySlotIndex(ctx, 2, 1)
 	assert.DeepEqual(t, []*ethpb.Attestation{att3}, returned)
+}
+
+func TestKV_Unaggregated_UnaggregatedAttestationsBySlotIndexElectra(t *testing.T) {
+	cache := NewAttCaches()
+
+	committeeBits := primitives.NewAttestationCommitteeBits()
+	committeeBits.SetBitAt(1, true)
+	att1 := util.HydrateAttestationElectra(&ethpb.AttestationElectra{Data: &ethpb.AttestationData{Slot: 1}, AggregationBits: bitfield.Bitlist{0b101}, CommitteeBits: committeeBits})
+	committeeBits = primitives.NewAttestationCommitteeBits()
+	committeeBits.SetBitAt(2, true)
+	att2 := util.HydrateAttestationElectra(&ethpb.AttestationElectra{Data: &ethpb.AttestationData{Slot: 1}, AggregationBits: bitfield.Bitlist{0b110}, CommitteeBits: committeeBits})
+	committeeBits = primitives.NewAttestationCommitteeBits()
+	committeeBits.SetBitAt(1, true)
+	att3 := util.HydrateAttestationElectra(&ethpb.AttestationElectra{Data: &ethpb.AttestationData{Slot: 2}, AggregationBits: bitfield.Bitlist{0b110}, CommitteeBits: committeeBits})
+	atts := []*ethpb.AttestationElectra{att1, att2, att3}
+
+	for _, att := range atts {
+		require.NoError(t, cache.SaveUnaggregatedAttestation(att))
+	}
+	ctx := context.Background()
+	returned := cache.UnaggregatedAttestationsBySlotIndexElectra(ctx, 1, 1)
+	assert.DeepEqual(t, []*ethpb.AttestationElectra{att1}, returned)
+	returned = cache.UnaggregatedAttestationsBySlotIndexElectra(ctx, 1, 2)
+	assert.DeepEqual(t, []*ethpb.AttestationElectra{att2}, returned)
+	returned = cache.UnaggregatedAttestationsBySlotIndexElectra(ctx, 2, 1)
+	assert.DeepEqual(t, []*ethpb.AttestationElectra{att3}, returned)
 }

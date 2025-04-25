@@ -5,19 +5,19 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/interop"
+	"github.com/OffchainLabs/prysm/v6/testing/endtoend/components"
+	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
+	"github.com/OffchainLabs/prysm/v6/testing/endtoend/policies"
+	"github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/interop"
-	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/components"
-	e2e "github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
-	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/policies"
-	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/types"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -127,7 +127,7 @@ func feeRecipientIsPresent(_ *types.EvaluationContext, conns ...*grpc.ClientConn
 			// In e2e we generate deterministic keys by validator index, and then use a slice of their public key bytes
 			// as the fee recipient, so that this will also be deterministic, so this test can statelessly verify it.
 			// These should be the only keys we see.
-			// Otherwise something has changed in e2e and this test needs to be updated.
+			// Otherwise, something has changed in e2e and this test needs to be updated.
 			_, knownKey := valkeys[pk]
 			if !knownKey {
 				log.WithField("pubkey", pk).

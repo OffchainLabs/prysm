@@ -1,10 +1,10 @@
 package historycmd
 
 import (
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/runtime/tos"
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/runtime/tos"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
@@ -22,9 +22,9 @@ var Commands = &cli.Command{
 				cmd.DataDirFlag,
 				flags.SlashingProtectionExportDirFlag,
 				features.Mainnet,
-				features.PraterTestnet,
 				features.SepoliaTestnet,
 				features.HoleskyTestnet,
+				features.HoodiTestnet,
 				features.EnableMinimalSlashingProtection,
 				cmd.AcceptTosFlag,
 			}),
@@ -51,9 +51,9 @@ var Commands = &cli.Command{
 				cmd.DataDirFlag,
 				flags.SlashingProtectionJSONFileFlag,
 				features.Mainnet,
-				features.PraterTestnet,
 				features.SepoliaTestnet,
 				features.HoleskyTestnet,
+				features.HoodiTestnet,
 				features.EnableMinimalSlashingProtection,
 				cmd.AcceptTosFlag,
 			}),

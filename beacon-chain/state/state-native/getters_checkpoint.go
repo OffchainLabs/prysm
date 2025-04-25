@@ -3,9 +3,9 @@ package state_native
 import (
 	"bytes"
 
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 // JustificationBits marking which epochs have been justified in the beacon chain.
@@ -47,7 +47,7 @@ func (b *BeaconState) PreviousJustifiedCheckpoint() *ethpb.Checkpoint {
 // previousJustifiedCheckpointVal denoting an epoch and block root.
 // This assumes that a lock is already held on BeaconState.
 func (b *BeaconState) previousJustifiedCheckpointVal() *ethpb.Checkpoint {
-	return ethpb.CopyCheckpoint(b.previousJustifiedCheckpoint)
+	return b.previousJustifiedCheckpoint.Copy()
 }
 
 // CurrentJustifiedCheckpoint denoting an epoch and block root.
@@ -65,7 +65,7 @@ func (b *BeaconState) CurrentJustifiedCheckpoint() *ethpb.Checkpoint {
 // currentJustifiedCheckpointVal denoting an epoch and block root.
 // This assumes that a lock is already held on BeaconState.
 func (b *BeaconState) currentJustifiedCheckpointVal() *ethpb.Checkpoint {
-	return ethpb.CopyCheckpoint(b.currentJustifiedCheckpoint)
+	return b.currentJustifiedCheckpoint.Copy()
 }
 
 // MatchCurrentJustifiedCheckpoint returns true if input justified checkpoint matches
@@ -109,7 +109,7 @@ func (b *BeaconState) FinalizedCheckpoint() *ethpb.Checkpoint {
 // finalizedCheckpointVal denoting an epoch and block root.
 // This assumes that a lock is already held on BeaconState.
 func (b *BeaconState) finalizedCheckpointVal() *ethpb.Checkpoint {
-	return ethpb.CopyCheckpoint(b.finalizedCheckpoint)
+	return b.finalizedCheckpoint.Copy()
 }
 
 // FinalizedCheckpointEpoch returns the epoch value of the finalized checkpoint.

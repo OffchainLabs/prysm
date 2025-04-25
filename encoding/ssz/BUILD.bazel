@@ -7,8 +7,9 @@ go_library(
         "helpers.go",
         "htrutils.go",
         "merkleize.go",
+        "slice_root.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/encoding/ssz",
+    importpath = "github.com/OffchainLabs/prysm/v6/encoding/ssz",
     visibility = ["//visibility:public"],
     deps = [
         "//config/fieldparams:go_default_library",
@@ -40,6 +41,7 @@ go_test(
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//crypto/hash:go_default_library",
+        "//encoding/bytesutil:go_default_library",
         "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//testing/assert:go_default_library",

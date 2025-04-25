@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"encoding/binary"
 
+	"github.com/OffchainLabs/prysm/v6/container/trie"
+	"github.com/OffchainLabs/prysm/v6/crypto/hash"
+	"github.com/OffchainLabs/prysm/v6/crypto/hash/htr"
+	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
+	"github.com/OffchainLabs/prysm/v6/math"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/container/trie"
-	"github.com/prysmaticlabs/prysm/v5/crypto/hash"
-	"github.com/prysmaticlabs/prysm/v5/crypto/hash/htr"
-	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
-	"github.com/prysmaticlabs/prysm/v5/math"
 )
 
 // ReturnTrieLayer returns the representation of a merkle trie when
@@ -250,11 +250,11 @@ func AddInMixin(root [32]byte, length uint64) ([32]byte, error) {
 
 // Merkleize 32-byte leaves into a Merkle trie for its adequate depth, returning
 // the resulting layers of the trie based on the appropriate depth. This function
-// pads the leaves to a length of 32.
+// pads the leaves to a length of a multiple of 32.
 func Merkleize(leaves [][]byte) [][][]byte {
 	hashFunc := hash.CustomSHA256Hasher()
 	layers := make([][][]byte, ssz.Depth(uint64(len(leaves)))+1)
-	for len(leaves) != 32 {
+	for len(leaves)%32 != 0 {
 		leaves = append(leaves, make([]byte, 32))
 	}
 	currentLayer := leaves

@@ -6,59 +6,16 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/lookup"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/grpc"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/lookup"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
-
-// ValidateSyncGRPC checks whether the node is currently syncing and returns an error if it is.
-// It also appends syncing info to gRPC headers.
-func ValidateSyncGRPC(
-	ctx context.Context,
-	syncChecker sync.Checker,
-	headFetcher blockchain.HeadFetcher,
-	timeFetcher blockchain.TimeFetcher,
-	optimisticModeFetcher blockchain.OptimisticModeFetcher,
-) error {
-	if !syncChecker.Syncing() {
-		return nil
-	}
-	headSlot := headFetcher.HeadSlot()
-	isOptimistic, err := optimisticModeFetcher.IsOptimistic(ctx)
-	if err != nil {
-		return status.Errorf(codes.Internal, "Could not check optimistic status: %v", err)
-	}
-
-	syncDetailsContainer := &structs.SyncDetailsContainer{
-		Data: &structs.SyncDetails{
-			HeadSlot:     strconv.FormatUint(uint64(headSlot), 10),
-			SyncDistance: strconv.FormatUint(uint64(timeFetcher.CurrentSlot()-headSlot), 10),
-			IsSyncing:    true,
-			IsOptimistic: isOptimistic,
-		},
-	}
-
-	err = grpc.AppendCustomErrorHeader(ctx, syncDetailsContainer)
-	if err != nil {
-		return status.Errorf(
-			codes.Internal,
-			"Syncing to latest head, not ready to respond. Could not prepare sync details: %v",
-			err,
-		)
-	}
-	return status.Error(codes.Unavailable, "Syncing to latest head, not ready to respond")
-}
 
 // IsOptimistic checks whether the beacon state's block is optimistic.
 func IsOptimistic(
@@ -96,7 +53,7 @@ func IsOptimistic(
 		}
 		return optimisticModeFetcher.IsOptimisticForRoot(ctx, bytesutil.ToBytes32(jcp.Root))
 	default:
-		if len(stateIdString) >= 2 && stateIdString[:2] == "0x" {
+		if bytesutil.IsHex(stateId) {
 			id, err := hexutil.Decode(stateIdString)
 			if err != nil {
 				return false, err

@@ -13,7 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	structs "github.com/prysmaticlabs/prysm/v5/api/server/structs"
+	structs "github.com/OffchainLabs/prysm/v6/api/server/structs"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -21,6 +21,7 @@ import (
 type MockGenesisProvider struct {
 	ctrl     *gomock.Controller
 	recorder *MockGenesisProviderMockRecorder
+	isgomock struct{}
 }
 
 // MockGenesisProviderMockRecorder is the mock recorder for MockGenesisProvider.
@@ -40,17 +41,17 @@ func (m *MockGenesisProvider) EXPECT() *MockGenesisProviderMockRecorder {
 	return m.recorder
 }
 
-// GetGenesis mocks base method.
-func (m *MockGenesisProvider) GetGenesis(ctx context.Context) (*structs.Genesis, error) {
+// Genesis mocks base method.
+func (m *MockGenesisProvider) Genesis(ctx context.Context) (*structs.Genesis, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetGenesis", ctx)
+	ret := m.ctrl.Call(m, "Genesis", ctx)
 	ret0, _ := ret[0].(*structs.Genesis)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetGenesis indicates an expected call of GetGenesis.
-func (mr *MockGenesisProviderMockRecorder) GetGenesis(ctx any) *gomock.Call {
+// Genesis indicates an expected call of Genesis.
+func (mr *MockGenesisProviderMockRecorder) Genesis(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGenesis", reflect.TypeOf((*MockGenesisProvider)(nil).GetGenesis), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Genesis", reflect.TypeOf((*MockGenesisProvider)(nil).Genesis), ctx)
 }

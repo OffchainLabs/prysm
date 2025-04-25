@@ -2,13 +2,12 @@ package rpc
 
 import (
 	"net/http"
-	"path/filepath"
 
+	"github.com/OffchainLabs/prysm/v6/io/file"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts/wallet"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
-	"go.opencensus.io/trace"
 )
 
 // Initialize returns metadata regarding whether the caller has authenticated and has a wallet.
@@ -20,8 +19,7 @@ func (s *Server) Initialize(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, errors.Wrap(err, "Could not check if wallet exists").Error(), http.StatusInternalServerError)
 		return
 	}
-	authTokenPath := filepath.Join(s.walletDir, AuthTokenFileName)
-	exists, err := file.Exists(authTokenPath, file.Regular)
+	exists, err := file.Exists(s.authTokenPath, file.Regular)
 	if err != nil {
 		httputil.HandleError(w, errors.Wrap(err, "Could not check if auth token exists").Error(), http.StatusInternalServerError)
 		return

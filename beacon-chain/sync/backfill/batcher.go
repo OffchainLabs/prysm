@@ -1,8 +1,8 @@
 package backfill
 
 import (
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 )
 
 var errMaxBatches = errors.New("backfill batch requested in excess of max outstanding batches")
@@ -78,6 +78,10 @@ func (c *batchSequencer) update(b batch) {
 		// when i==2, done==2 (since done was incremented for a and b)
 		// so we want to copy c to a, then on i=3, d to b, then on i=4 e to c.
 		c.seq[i-done] = c.seq[i]
+	}
+	if done == 1 && len(c.seq) == 1 {
+		c.seq[0] = c.batcher.beforeBatch(c.seq[0])
+		return
 	}
 	// Overwrite the moved batches with the next ones in the sequence.
 	// Continuing the example in the comment above, len(c.seq)==5, done=2, so i=3.

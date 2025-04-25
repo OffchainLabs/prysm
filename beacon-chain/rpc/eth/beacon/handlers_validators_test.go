@@ -10,21 +10,21 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	chainMock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/lookup"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/testutil"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/gorilla/mux"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	chainMock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/lookup"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/testutil"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestGetValidators(t *testing.T) {
@@ -47,7 +47,7 @@ func TestGetValidators(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/validators", nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -86,7 +86,7 @@ func TestGetValidators(t *testing.T) {
 			"http://example.com/eth/v1/beacon/states/{state_id}/validators?id=0&id=1",
 			nil,
 		)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -118,7 +118,7 @@ func TestGetValidators(t *testing.T) {
 			fmt.Sprintf("http://example.com/eth/v1/beacon/states/{state_id}/validators?id=%s&id=%s", hexPubkey1, hexPubkey2),
 			nil,
 		)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -148,7 +148,7 @@ func TestGetValidators(t *testing.T) {
 			fmt.Sprintf("http://example.com/eth/v1/beacon/states/{state_id}/validators?id=%s&id=1", hexPubkey),
 			nil,
 		)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -197,7 +197,7 @@ func TestGetValidators(t *testing.T) {
 			fmt.Sprintf("http://example.com/eth/v1/beacon/states/{state_id}/validators?id=%s&id=%s", hexPubkey, hexutil.Encode([]byte(strings.Repeat("x", fieldparams.BLSPubkeyLength)))),
 			nil,
 		)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -220,7 +220,7 @@ func TestGetValidators(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/validators?id=1&id=99999", nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -243,7 +243,7 @@ func TestGetValidators(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/validators", nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -271,7 +271,7 @@ func TestGetValidators(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/validators", nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -306,7 +306,7 @@ func TestGetValidators(t *testing.T) {
 			"http://example.com/eth/v1/beacon/states/{state_id}/validators",
 			&body,
 		)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -342,7 +342,7 @@ func TestGetValidators(t *testing.T) {
 			"http://example.com/eth/v1/beacon/states/{state_id}/validators",
 			&body,
 		)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -368,7 +368,7 @@ func TestGetValidators(t *testing.T) {
 			"http://example.com/eth/v1/beacon/states/{state_id}/validators",
 			nil,
 		)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -398,7 +398,7 @@ func TestGetValidators(t *testing.T) {
 			"http://example.com/eth/v1/beacon/states/{state_id}/validators",
 			&body,
 		)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -492,7 +492,7 @@ func TestGetValidators_FilterByStatus(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/validators?status=active", nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -523,7 +523,7 @@ func TestGetValidators_FilterByStatus(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/validators?status=active_ongoing", nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -553,7 +553,7 @@ func TestGetValidators_FilterByStatus(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/validators?status=exited", nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -586,7 +586,7 @@ func TestGetValidators_FilterByStatus(t *testing.T) {
 			"http://example.com/eth/v1/beacon/states/{state_id}/validators?status=pending_initialized&status=exited_unslashed",
 			nil,
 		)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -619,7 +619,7 @@ func TestGetValidators_FilterByStatus(t *testing.T) {
 			"http://example.com/eth/v1/beacon/states/{state_id}/validators?status=pending&status=exited_slashed",
 			nil,
 		)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -654,7 +654,8 @@ func TestGetValidator(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/validators/{validator_id}", nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head", "validator_id": "0"})
+		request.SetPathValue("state_id", "head")
+		request.SetPathValue("validator_id", "0")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -689,7 +690,8 @@ func TestGetValidator(t *testing.T) {
 		pubKey := st.PubkeyAtIndex(primitives.ValidatorIndex(0))
 		hexPubkey := hexutil.Encode(pubKey[:])
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/validators/{validator_id}", nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head", "validator_id": hexPubkey})
+		request.SetPathValue("state_id", "head")
+		request.SetPathValue("validator_id", hexPubkey)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -708,7 +710,7 @@ func TestGetValidator(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/validators/{validator_id}", nil)
-		request = mux.SetURLVars(request, map[string]string{"validator_id": "1"})
+		request.SetPathValue("validator_id", "1")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -728,7 +730,7 @@ func TestGetValidator(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/validators/{validator_id}", nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -748,7 +750,8 @@ func TestGetValidator(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/validators/{validator_id}", nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head", "validator_id": "99999"})
+		request.SetPathValue("state_id", "head")
+		request.SetPathValue("validator_id", "99999")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -768,7 +771,8 @@ func TestGetValidator(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/validators/{validator_id}", nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head", "validator_id": hexutil.Encode([]byte(strings.Repeat("x", fieldparams.BLSPubkeyLength)))})
+		request.SetPathValue("state_id", "head")
+		request.SetPathValue("validator_id", hexutil.Encode([]byte(strings.Repeat("x", fieldparams.BLSPubkeyLength))))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -791,7 +795,8 @@ func TestGetValidator(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/validators/{validator_id}", nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head", "validator_id": "0"})
+		request.SetPathValue("state_id", "head")
+		request.SetPathValue("validator_id", "0")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -819,7 +824,8 @@ func TestGetValidator(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/validators/{validator_id}", nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head", "validator_id": "0"})
+		request.SetPathValue("state_id", "head")
+		request.SetPathValue("validator_id", "0")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -853,7 +859,7 @@ func TestGetValidatorBalances(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/validator_balances", nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -882,7 +888,7 @@ func TestGetValidatorBalances(t *testing.T) {
 			"http://example.com/eth/v1/beacon/states/{state_id}/validator_balances?id=0&id=1",
 			nil,
 		)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -914,7 +920,7 @@ func TestGetValidatorBalances(t *testing.T) {
 			fmt.Sprintf("http://example.com/eth/v1/beacon/states/{state_id}/validator_balances?id=%s&id=%s", hexPubkey1, hexPubkey2),
 			nil,
 		)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -941,16 +947,16 @@ func TestGetValidatorBalances(t *testing.T) {
 		hexPubkey := hexutil.Encode(pubkey[:])
 		request := httptest.NewRequest(
 			http.MethodGet,
-			fmt.Sprintf("http://example.com/eth/v1/beacon/states/{state_id}/validators?id=%s&id=1", hexPubkey),
+			fmt.Sprintf("http://example.com/eth/v1/beacon/states/{state_id}/validator_balances?id=%s&id=1", hexPubkey),
 			nil,
 		)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
-		s.GetValidators(writer, request)
+		s.GetValidatorBalances(writer, request)
 		assert.Equal(t, http.StatusOK, writer.Code)
-		resp := &structs.GetValidatorsResponse{}
+		resp := &structs.GetValidatorBalancesResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		require.Equal(t, 2, len(resp.Data))
 		assert.Equal(t, "0", resp.Data[0].Index)
@@ -974,7 +980,7 @@ func TestGetValidatorBalances(t *testing.T) {
 			fmt.Sprintf("http://example.com/eth/v1/beacon/states/{state_id}/validator_balances?id=%s&id=%s", hexPubkey, hexutil.Encode([]byte(strings.Repeat("x", fieldparams.BLSPubkeyLength)))),
 			nil,
 		)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -997,7 +1003,7 @@ func TestGetValidatorBalances(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/validator_balances?id=1&id=99999", nil)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -1020,7 +1026,7 @@ func TestGetValidatorBalances(t *testing.T) {
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
-		s.GetValidator(writer, request)
+		s.GetValidatorBalances(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
 		e := &httputil.DefaultJsonError{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
@@ -1043,7 +1049,7 @@ func TestGetValidatorBalances(t *testing.T) {
 			"http://example.com/eth/v1/beacon/states/{state_id}/validator_balances?id=0",
 			nil,
 		)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -1075,7 +1081,7 @@ func TestGetValidatorBalances(t *testing.T) {
 			"http://example.com/eth/v1/beacon/states/{state_id}/validator_balances?id=0",
 			nil,
 		)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -1108,7 +1114,7 @@ func TestGetValidatorBalances(t *testing.T) {
 			"http://example.com/eth/v1/beacon/states/{state_id}/validator_balances",
 			&body,
 		)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -1136,7 +1142,7 @@ func TestGetValidatorBalances(t *testing.T) {
 			"http://example.com/eth/v1/beacon/states/{state_id}/validator_balances",
 			nil,
 		)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -1166,7 +1172,7 @@ func TestGetValidatorBalances(t *testing.T) {
 			"http://example.com/eth/v1/beacon/states/{state_id}/validator_balances",
 			&body,
 		)
-		request = mux.SetURLVars(request, map[string]string{"state_id": "head"})
+		request.SetPathValue("state_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -1176,5 +1182,480 @@ func TestGetValidatorBalances(t *testing.T) {
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 		assert.Equal(t, http.StatusBadRequest, e.Code)
 		assert.StringContains(t, "Could not decode request body", e.Message)
+	})
+}
+
+func TestGetValidatorIdentities(t *testing.T) {
+	count := uint64(4)
+	genesisState, _ := util.DeterministicGenesisState(t, count)
+	st := genesisState.ToProtoUnsafe().(*eth.BeaconState)
+	for i := uint64(0); i < count; i++ {
+		st.Validators[i].ActivationEpoch = primitives.Epoch(i)
+	}
+
+	t.Run("json", func(t *testing.T) {
+		t.Run("get all", func(t *testing.T) {
+			chainService := &chainMock.ChainService{}
+			s := Server{
+				Stater: &testutil.MockStater{
+					BeaconState: genesisState,
+				},
+				HeadFetcher:           chainService,
+				OptimisticModeFetcher: chainService,
+				FinalizationFetcher:   chainService,
+			}
+
+			body := bytes.Buffer{}
+			_, err := body.WriteString("[]")
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/states/{state_id}/validator_identities", &body)
+			request.SetPathValue("state_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetValidatorIdentities(writer, request)
+			assert.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.GetValidatorIdentitiesResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+			require.Equal(t, 4, len(resp.Data))
+			for i := uint64(0); i < count; i++ {
+				assert.Equal(t, fmt.Sprintf("%d", i), resp.Data[i].Index)
+				assert.DeepEqual(t, hexutil.Encode(st.Validators[i].PublicKey), resp.Data[i].Pubkey)
+				assert.Equal(t, fmt.Sprintf("%d", st.Validators[i].ActivationEpoch), resp.Data[i].ActivationEpoch)
+			}
+		})
+		t.Run("get by index", func(t *testing.T) {
+			chainService := &chainMock.ChainService{}
+			s := Server{
+				Stater: &testutil.MockStater{
+					BeaconState: genesisState,
+				},
+				HeadFetcher:           chainService,
+				OptimisticModeFetcher: chainService,
+				FinalizationFetcher:   chainService,
+			}
+
+			body := bytes.Buffer{}
+			_, err := body.WriteString("[\"0\",\"1\"]")
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/states/{state_id}/validator_identities", &body)
+			request.SetPathValue("state_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetValidatorIdentities(writer, request)
+			assert.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.GetValidatorIdentitiesResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+			require.Equal(t, 2, len(resp.Data))
+			assert.Equal(t, "0", resp.Data[0].Index)
+			assert.Equal(t, "1", resp.Data[1].Index)
+		})
+		t.Run("get by pubkey", func(t *testing.T) {
+			chainService := &chainMock.ChainService{}
+			s := Server{
+				Stater: &testutil.MockStater{
+					BeaconState: genesisState,
+				},
+				HeadFetcher:           chainService,
+				OptimisticModeFetcher: chainService,
+				FinalizationFetcher:   chainService,
+			}
+			pubkey1 := st.Validators[0].PublicKey
+			pubkey2 := st.Validators[1].PublicKey
+			hexPubkey1 := hexutil.Encode(pubkey1)
+			hexPubkey2 := hexutil.Encode(pubkey2)
+
+			body := bytes.Buffer{}
+			_, err := body.WriteString(fmt.Sprintf("[\"%s\",\"%s\"]", hexPubkey1, hexPubkey2))
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/states/{state_id}/validator_identities", &body)
+			request.SetPathValue("state_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetValidatorIdentities(writer, request)
+			assert.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.GetValidatorIdentitiesResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+			require.Equal(t, 2, len(resp.Data))
+			assert.Equal(t, "0", resp.Data[0].Index)
+			assert.Equal(t, "1", resp.Data[1].Index)
+		})
+		t.Run("get by both index and pubkey", func(t *testing.T) {
+			chainService := &chainMock.ChainService{}
+			s := Server{
+				Stater: &testutil.MockStater{
+					BeaconState: genesisState,
+				},
+				HeadFetcher:           chainService,
+				OptimisticModeFetcher: chainService,
+				FinalizationFetcher:   chainService,
+			}
+
+			pubkey := st.Validators[0].PublicKey
+			hexPubkey := hexutil.Encode(pubkey)
+
+			body := bytes.Buffer{}
+			_, err := body.WriteString(fmt.Sprintf("[\"%s\",\"1\"]", hexPubkey))
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/states/{state_id}/validator_identities", &body)
+			request.SetPathValue("state_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetValidatorIdentities(writer, request)
+			assert.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.GetValidatorIdentitiesResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+			require.Equal(t, 2, len(resp.Data))
+			assert.Equal(t, "0", resp.Data[0].Index)
+			assert.Equal(t, "1", resp.Data[1].Index)
+		})
+		t.Run("unknown pubkey is ignored", func(t *testing.T) {
+			chainService := &chainMock.ChainService{}
+			s := Server{
+				Stater: &testutil.MockStater{
+					BeaconState: genesisState,
+				},
+				HeadFetcher:           chainService,
+				OptimisticModeFetcher: chainService,
+				FinalizationFetcher:   chainService,
+			}
+
+			pubkey := st.Validators[1].PublicKey
+			hexPubkey := hexutil.Encode(pubkey)
+
+			body := bytes.Buffer{}
+			_, err := body.WriteString(fmt.Sprintf("[\"%s\",\"%s\"]", hexPubkey, hexutil.Encode([]byte(strings.Repeat("x", fieldparams.BLSPubkeyLength)))))
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/states/{state_id}/validator_identities", &body)
+			request.SetPathValue("state_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetValidatorIdentities(writer, request)
+			assert.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.GetValidatorIdentitiesResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+			require.Equal(t, 1, len(resp.Data))
+			assert.Equal(t, "1", resp.Data[0].Index)
+		})
+		t.Run("unknown index is ignored", func(t *testing.T) {
+			chainService := &chainMock.ChainService{}
+			s := Server{
+				Stater: &testutil.MockStater{
+					BeaconState: genesisState,
+				},
+				HeadFetcher:           chainService,
+				OptimisticModeFetcher: chainService,
+				FinalizationFetcher:   chainService,
+			}
+
+			body := bytes.Buffer{}
+			_, err := body.WriteString("[\"1\",\"99999\"]")
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/states/{state_id}/validator_identities", &body)
+			request.SetPathValue("state_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetValidatorIdentities(writer, request)
+			assert.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.GetValidatorIdentitiesResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+			require.Equal(t, 1, len(resp.Data))
+			assert.Equal(t, "1", resp.Data[0].Index)
+		})
+		t.Run("execution optimistic", func(t *testing.T) {
+			chainService := &chainMock.ChainService{Optimistic: true}
+			s := Server{
+				Stater: &testutil.MockStater{
+					BeaconState: genesisState,
+				},
+				HeadFetcher:           chainService,
+				OptimisticModeFetcher: chainService,
+				FinalizationFetcher:   chainService,
+			}
+
+			body := bytes.Buffer{}
+			_, err := body.WriteString("[]")
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/states/{state_id}/validator_identities", &body)
+			request.SetPathValue("state_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetValidatorIdentities(writer, request)
+			assert.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.GetValidatorIdentitiesResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+			assert.Equal(t, true, resp.ExecutionOptimistic)
+		})
+		t.Run("finalized", func(t *testing.T) {
+			headerRoot, err := genesisState.LatestBlockHeader().HashTreeRoot()
+			require.NoError(t, err)
+			chainService := &chainMock.ChainService{
+				FinalizedRoots: map[[32]byte]bool{
+					headerRoot: true,
+				},
+			}
+			s := Server{
+				Stater: &testutil.MockStater{
+					BeaconState: genesisState,
+				},
+				HeadFetcher:           chainService,
+				OptimisticModeFetcher: chainService,
+				FinalizationFetcher:   chainService,
+			}
+
+			body := bytes.Buffer{}
+			_, err = body.WriteString("[]")
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/states/{state_id}/validator_identities", &body)
+			request.SetPathValue("state_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetValidatorIdentities(writer, request)
+			assert.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.GetValidatorIdentitiesResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+			assert.Equal(t, true, resp.Finalized)
+		})
+	})
+	t.Run("ssz", func(t *testing.T) {
+		size := uint64((&eth.ValidatorIdentity{}).SizeSSZ())
+
+		t.Run("get all", func(t *testing.T) {
+			chainService := &chainMock.ChainService{}
+			s := Server{
+				Stater: &testutil.MockStater{
+					BeaconState: genesisState,
+				},
+				HeadFetcher:           chainService,
+				OptimisticModeFetcher: chainService,
+				FinalizationFetcher:   chainService,
+			}
+
+			body := bytes.Buffer{}
+			_, err := body.WriteString("[]")
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/states/{state_id}/validator_identities", &body)
+			request.Header.Set("Accept", api.OctetStreamMediaType)
+			request.SetPathValue("state_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetValidatorIdentities(writer, request)
+			assert.Equal(t, http.StatusOK, writer.Code)
+			assert.Equal(t, size*count, uint64(len(writer.Body.Bytes())))
+		})
+		t.Run("get by index", func(t *testing.T) {
+			chainService := &chainMock.ChainService{}
+			s := Server{
+				Stater: &testutil.MockStater{
+					BeaconState: genesisState,
+				},
+				HeadFetcher:           chainService,
+				OptimisticModeFetcher: chainService,
+				FinalizationFetcher:   chainService,
+			}
+
+			body := bytes.Buffer{}
+			_, err := body.WriteString("[\"0\",\"1\"]")
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/states/{state_id}/validator_identities", &body)
+			request.Header.Set("Accept", api.OctetStreamMediaType)
+			request.SetPathValue("state_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetValidatorIdentities(writer, request)
+			assert.Equal(t, http.StatusOK, writer.Code)
+			assert.Equal(t, size*2, uint64(len(writer.Body.Bytes())))
+		})
+		t.Run("get by pubkey", func(t *testing.T) {
+			chainService := &chainMock.ChainService{}
+			s := Server{
+				Stater: &testutil.MockStater{
+					BeaconState: genesisState,
+				},
+				HeadFetcher:           chainService,
+				OptimisticModeFetcher: chainService,
+				FinalizationFetcher:   chainService,
+			}
+			pubkey1 := st.Validators[0].PublicKey
+			pubkey2 := st.Validators[1].PublicKey
+			hexPubkey1 := hexutil.Encode(pubkey1)
+			hexPubkey2 := hexutil.Encode(pubkey2)
+
+			body := bytes.Buffer{}
+			_, err := body.WriteString(fmt.Sprintf("[\"%s\",\"%s\"]", hexPubkey1, hexPubkey2))
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/states/{state_id}/validator_identities", &body)
+			request.Header.Set("Accept", api.OctetStreamMediaType)
+			request.SetPathValue("state_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetValidatorIdentities(writer, request)
+			assert.Equal(t, http.StatusOK, writer.Code)
+			assert.Equal(t, size*2, uint64(len(writer.Body.Bytes())))
+		})
+		t.Run("get by both index and pubkey", func(t *testing.T) {
+			chainService := &chainMock.ChainService{}
+			s := Server{
+				Stater: &testutil.MockStater{
+					BeaconState: genesisState,
+				},
+				HeadFetcher:           chainService,
+				OptimisticModeFetcher: chainService,
+				FinalizationFetcher:   chainService,
+			}
+
+			pubkey := st.Validators[0].PublicKey
+			hexPubkey := hexutil.Encode(pubkey)
+
+			body := bytes.Buffer{}
+			_, err := body.WriteString(fmt.Sprintf("[\"%s\",\"1\"]", hexPubkey))
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/states/{state_id}/validator_identities", &body)
+			request.Header.Set("Accept", api.OctetStreamMediaType)
+			request.SetPathValue("state_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetValidatorIdentities(writer, request)
+			assert.Equal(t, http.StatusOK, writer.Code)
+			assert.Equal(t, size*2, uint64(len(writer.Body.Bytes())))
+		})
+		t.Run("unknown pubkey is ignored", func(t *testing.T) {
+			chainService := &chainMock.ChainService{}
+			s := Server{
+				Stater: &testutil.MockStater{
+					BeaconState: genesisState,
+				},
+				HeadFetcher:           chainService,
+				OptimisticModeFetcher: chainService,
+				FinalizationFetcher:   chainService,
+			}
+
+			pubkey := st.Validators[1].PublicKey
+			hexPubkey := hexutil.Encode(pubkey)
+
+			body := bytes.Buffer{}
+			_, err := body.WriteString(fmt.Sprintf("[\"%s\",\"%s\"]", hexPubkey, hexutil.Encode([]byte(strings.Repeat("x", fieldparams.BLSPubkeyLength)))))
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/states/{state_id}/validator_identities", &body)
+			request.Header.Set("Accept", api.OctetStreamMediaType)
+			request.SetPathValue("state_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetValidatorIdentities(writer, request)
+			assert.Equal(t, http.StatusOK, writer.Code)
+			assert.Equal(t, size, uint64(len(writer.Body.Bytes())))
+		})
+		t.Run("unknown index is ignored", func(t *testing.T) {
+			chainService := &chainMock.ChainService{}
+			s := Server{
+				Stater: &testutil.MockStater{
+					BeaconState: genesisState,
+				},
+				HeadFetcher:           chainService,
+				OptimisticModeFetcher: chainService,
+				FinalizationFetcher:   chainService,
+			}
+
+			body := bytes.Buffer{}
+			_, err := body.WriteString("[\"1\",\"99999\"]")
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/states/{state_id}/validator_identities", &body)
+			request.Header.Set("Accept", api.OctetStreamMediaType)
+			request.SetPathValue("state_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetValidatorIdentities(writer, request)
+			assert.Equal(t, http.StatusOK, writer.Code)
+			assert.Equal(t, size, uint64(len(writer.Body.Bytes())))
+		})
+	})
+	t.Run("errors", func(t *testing.T) {
+		t.Run("state ID required", func(t *testing.T) {
+			s := Server{
+				Stater: &testutil.MockStater{
+					BeaconState: genesisState,
+				},
+				HeadFetcher: &chainMock.ChainService{},
+			}
+
+			body := bytes.Buffer{}
+			_, err := body.WriteString("[]")
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/states/{state_id}/validator_identities", &body)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetValidatorIdentities(writer, request)
+			assert.Equal(t, http.StatusBadRequest, writer.Code)
+			e := &httputil.DefaultJsonError{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+			assert.Equal(t, http.StatusBadRequest, e.Code)
+			assert.StringContains(t, "state_id is required in URL params", e.Message)
+		})
+		t.Run("empty body", func(t *testing.T) {
+			chainService := &chainMock.ChainService{}
+			s := Server{
+				Stater: &testutil.MockStater{
+					BeaconState: genesisState,
+				},
+				HeadFetcher:           chainService,
+				OptimisticModeFetcher: chainService,
+				FinalizationFetcher:   chainService,
+			}
+
+			body := bytes.Buffer{}
+			_, err := body.WriteString("")
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/states/{state_id}/validator_identities", nil)
+			request.SetPathValue("state_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetValidatorIdentities(writer, request)
+			assert.Equal(t, http.StatusBadRequest, writer.Code)
+			e := &httputil.DefaultJsonError{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+			assert.Equal(t, http.StatusBadRequest, e.Code)
+			assert.StringContains(t, "No data submitted", e.Message)
+		})
+		t.Run("invalid body", func(t *testing.T) {
+			chainService := &chainMock.ChainService{}
+			s := Server{
+				Stater: &testutil.MockStater{
+					BeaconState: genesisState,
+				},
+				HeadFetcher:           chainService,
+				OptimisticModeFetcher: chainService,
+				FinalizationFetcher:   chainService,
+			}
+
+			body := bytes.Buffer{}
+			_, err := body.WriteString("foo")
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/states/{state_id}/validator_identities", &body)
+			request.SetPathValue("state_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetValidatorIdentities(writer, request)
+			assert.Equal(t, http.StatusBadRequest, writer.Code)
+			e := &httputil.DefaultJsonError{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+			assert.Equal(t, http.StatusBadRequest, e.Code)
+			assert.StringContains(t, "Could not decode request body", e.Message)
+		})
 	})
 }

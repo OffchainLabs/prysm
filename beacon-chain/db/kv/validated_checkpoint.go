@@ -1,11 +1,13 @@
 package kv
 
 import (
+	"bytes"
 	"context"
 
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	bolt "go.etcd.io/bbolt"
-	"go.opencensus.io/trace"
 )
 
 // LastValidatedCheckpoint returns the latest fully validated checkpoint in beacon chain.
@@ -19,7 +21,17 @@ func (s *Store) LastValidatedCheckpoint(ctx context.Context) (*ethpb.Checkpoint,
 		if enc == nil {
 			var finErr error
 			checkpoint, finErr = s.FinalizedCheckpoint(ctx)
-			return finErr
+			if finErr != nil {
+				return finErr
+			}
+			if bytes.Equal(checkpoint.Root, params.BeaconConfig().ZeroHash[:]) {
+				bkt = tx.Bucket(blocksBucket)
+				r := bkt.Get(genesisBlockRootKey)
+				if r != nil {
+					checkpoint.Root = r
+				}
+			}
+			return nil
 		}
 		checkpoint = &ethpb.Checkpoint{}
 		return decode(ctx, enc, checkpoint)

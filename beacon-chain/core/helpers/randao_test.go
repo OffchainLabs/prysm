@@ -1,16 +1,17 @@
-package helpers
+package helpers_test
 
 import (
 	"encoding/binary"
 	"testing"
 
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 func TestRandaoMix_OK(t *testing.T) {
@@ -40,10 +41,10 @@ func TestRandaoMix_OK(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		ClearCache()
+		helpers.ClearCache()
 
 		require.NoError(t, state.SetSlot(params.BeaconConfig().SlotsPerEpoch.Mul(uint64(test.epoch+1))))
-		mix, err := RandaoMix(state, test.epoch)
+		mix, err := helpers.RandaoMix(state, test.epoch)
 		require.NoError(t, err)
 		assert.DeepEqual(t, test.randaoMix, mix, "Incorrect randao mix")
 	}
@@ -76,10 +77,10 @@ func TestRandaoMix_CopyOK(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		ClearCache()
+		helpers.ClearCache()
 
 		require.NoError(t, state.SetSlot(params.BeaconConfig().SlotsPerEpoch.Mul(uint64(test.epoch+1))))
-		mix, err := RandaoMix(state, test.epoch)
+		mix, err := helpers.RandaoMix(state, test.epoch)
 		require.NoError(t, err)
 		uniqueNumber := uint64(params.BeaconConfig().EpochsPerHistoricalVector.Add(1000))
 		binary.LittleEndian.PutUint64(mix, uniqueNumber)
@@ -92,7 +93,7 @@ func TestRandaoMix_CopyOK(t *testing.T) {
 }
 
 func TestGenerateSeed_OK(t *testing.T) {
-	ClearCache()
+	helpers.ClearCache()
 
 	randaoMixes := make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector)
 	for i := 0; i < len(randaoMixes); i++ {
@@ -107,7 +108,7 @@ func TestGenerateSeed_OK(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	got, err := Seed(state, 10, params.BeaconConfig().DomainBeaconAttester)
+	got, err := helpers.Seed(state, 10, params.BeaconConfig().DomainBeaconAttester)
 	require.NoError(t, err)
 
 	wanted := [32]byte{102, 82, 23, 40, 226, 79, 171, 11, 203, 23, 175, 7, 88, 202, 80,

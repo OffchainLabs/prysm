@@ -1,15 +1,17 @@
 package interfaces
 
 import (
+	field_params "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
+	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
-	field_params "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/math"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
 	"google.golang.org/protobuf/proto"
 )
+
+var ErrIncompatibleFork = errors.New("Can't convert to fork-specific interface")
 
 // ReadOnlySignedBeaconBlock is an interface describing the method set of
 // a signed beacon block.
@@ -20,21 +22,11 @@ type ReadOnlySignedBeaconBlock interface {
 	Copy() (SignedBeaconBlock, error)
 	Proto() (proto.Message, error)
 	PbGenericBlock() (*ethpb.GenericSignedBeaconBlock, error)
-	PbPhase0Block() (*ethpb.SignedBeaconBlock, error)
-	PbAltairBlock() (*ethpb.SignedBeaconBlockAltair, error)
 	ToBlinded() (ReadOnlySignedBeaconBlock, error)
-	PbBellatrixBlock() (*ethpb.SignedBeaconBlockBellatrix, error)
-	PbBlindedBellatrixBlock() (*ethpb.SignedBlindedBeaconBlockBellatrix, error)
-	PbCapellaBlock() (*ethpb.SignedBeaconBlockCapella, error)
-	PbDenebBlock() (*ethpb.SignedBeaconBlockDeneb, error)
-	PbBlindedCapellaBlock() (*ethpb.SignedBlindedBeaconBlockCapella, error)
-	PbBlindedDenebBlock() (*ethpb.SignedBlindedBeaconBlockDeneb, error)
 	ssz.Marshaler
 	ssz.Unmarshaler
 	Version() int
 	IsBlinded() bool
-	ValueInWei() math.Wei
-	ValueInGwei() uint64
 	Header() (*ethpb.SignedBeaconBlockHeader, error)
 }
 
@@ -55,7 +47,6 @@ type ReadOnlyBeaconBlock interface {
 	ssz.HashRoot
 	Version() int
 	AsSignRequestObject() (validatorpb.SignRequestObject, error)
-	Copy() (ReadOnlyBeaconBlock, error)
 }
 
 // ReadOnlyBeaconBlockBody describes the method set employed by an object
@@ -66,8 +57,8 @@ type ReadOnlyBeaconBlockBody interface {
 	Eth1Data() *ethpb.Eth1Data
 	Graffiti() [field_params.RootLength]byte
 	ProposerSlashings() []*ethpb.ProposerSlashing
-	AttesterSlashings() []*ethpb.AttesterSlashing
-	Attestations() []*ethpb.Attestation
+	AttesterSlashings() []ethpb.AttSlashing
+	Attestations() []ethpb.Att
 	Deposits() []*ethpb.Deposit
 	VoluntaryExits() []*ethpb.SignedVoluntaryExit
 	SyncAggregate() (*ethpb.SyncAggregate, error)
@@ -77,6 +68,7 @@ type ReadOnlyBeaconBlockBody interface {
 	Execution() (ExecutionData, error)
 	BLSToExecutionChanges() ([]*ethpb.SignedBLSToExecutionChange, error)
 	BlobKzgCommitments() ([][]byte, error)
+	ExecutionRequests() (*enginev1.ExecutionRequests, error)
 }
 
 type SignedBeaconBlock interface {
@@ -87,8 +79,8 @@ type SignedBeaconBlock interface {
 	SetSyncAggregate(*ethpb.SyncAggregate) error
 	SetVoluntaryExits([]*ethpb.SignedVoluntaryExit)
 	SetDeposits([]*ethpb.Deposit)
-	SetAttestations([]*ethpb.Attestation)
-	SetAttesterSlashings([]*ethpb.AttesterSlashing)
+	SetAttestations([]ethpb.Att) error
+	SetAttesterSlashings([]ethpb.AttSlashing) error
 	SetProposerSlashings([]*ethpb.ProposerSlashing)
 	SetGraffiti([]byte)
 	SetEth1Data(*ethpb.Eth1Data)
@@ -98,6 +90,7 @@ type SignedBeaconBlock interface {
 	SetProposerIndex(idx primitives.ValidatorIndex)
 	SetSlot(slot primitives.Slot)
 	SetSignature(sig []byte)
+	SetExecutionRequests(er *enginev1.ExecutionRequests) error
 	Unblind(e ExecutionData) error
 }
 
@@ -129,9 +122,4 @@ type ExecutionData interface {
 	TransactionsRoot() ([]byte, error)
 	Withdrawals() ([]*enginev1.Withdrawal, error)
 	WithdrawalsRoot() ([]byte, error)
-	PbCapella() (*enginev1.ExecutionPayloadCapella, error)
-	PbBellatrix() (*enginev1.ExecutionPayload, error)
-	PbDeneb() (*enginev1.ExecutionPayloadDeneb, error)
-	ValueInWei() (math.Wei, error)
-	ValueInGwei() (uint64, error)
 }

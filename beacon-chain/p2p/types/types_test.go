@@ -4,13 +4,13 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func generateBlobIdentifiers(n int) []*eth.BlobIdentifier {
@@ -42,6 +42,15 @@ func TestBlobSidecarsByRootReq_MarshalSSZ(t *testing.T) {
 		{
 			name: "10 item list",
 			ids:  generateBlobIdentifiers(10),
+		},
+		{
+			name: "max list",
+			ids:  generateBlobIdentifiers(int(params.BeaconConfig().MaxRequestBlobSidecarsElectra)),
+		},
+		{
+			name:         "beyond max list",
+			ids:          generateBlobIdentifiers(int(params.BeaconConfig().MaxRequestBlobSidecarsElectra) + 1),
+			unmarshalErr: ssz.ErrIncorrectListSize,
 		},
 		{
 			name: "wonky unmarshal size",

@@ -1,39 +1,56 @@
 package events
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
-	time2 "time"
+	"runtime/debug"
+	"strconv"
+	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
+	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	payloadattribute "github.com/OffchainLabs/prysm/v6/consensus-types/payload-attribute"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	engine "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/eth/v1"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/api"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
-	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/eth/v1"
-	ethpbv2 "github.com/prysmaticlabs/prysm/v5/proto/eth/v2"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	log "github.com/sirupsen/logrus"
-	"go.opencensus.io/trace"
+	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
+const DefaultEventFeedDepth = 1000
+const payloadAttributeTimeout = 2 * time.Second
+
 const (
+	InvalidTopic = "__invalid__"
 	// HeadTopic represents a new chain head event topic.
 	HeadTopic = "head"
 	// BlockTopic represents a new produced block event topic.
 	BlockTopic = "block"
+	// BlockGossipTopic represents a block received from gossip or API that passes validation rules.
+	BlockGossipTopic = "block_gossip"
 	// AttestationTopic represents a new submitted attestation event topic.
 	AttestationTopic = "attestation"
+	// SingleAttestationTopic represents a new submitted single attestation event topic.
+	SingleAttestationTopic = "single_attestation"
 	// VoluntaryExitTopic represents a new performed voluntary exit event topic.
 	VoluntaryExitTopic = "voluntary_exit"
 	// FinalizedCheckpointTopic represents a new finalized checkpoint event topic.
@@ -58,25 +75,87 @@ const (
 	LightClientOptimisticUpdateTopic = "light_client_optimistic_update"
 )
 
-const topicDataMismatch = "Event data type %T does not correspond to event topic %s"
+var (
+	errInvalidTopicName   = errors.New("invalid topic name")
+	errNoValidTopics      = errors.New("no valid topics specified")
+	errSlowReader         = errors.New("client failed to read fast enough to keep outgoing buffer below threshold")
+	errNotRequested       = errors.New("event not requested by client")
+	errUnhandledEventData = errors.New("unable to represent event data in the event stream")
+	errWriterUnusable     = errors.New("http response writer is unusable")
+)
 
-const chanBuffer = 1000
+var httpSSEErrorCount = promauto.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "http_sse_error_count",
+		Help: "Total HTTP errors for server sent events endpoint",
+	},
+	[]string{"endpoint", "error"},
+)
 
-var casesHandled = map[string]bool{
-	HeadTopic:                        true,
-	BlockTopic:                       true,
-	AttestationTopic:                 true,
-	VoluntaryExitTopic:               true,
-	FinalizedCheckpointTopic:         true,
-	ChainReorgTopic:                  true,
-	SyncCommitteeContributionTopic:   true,
-	BLSToExecutionChangeTopic:        true,
-	PayloadAttributesTopic:           true,
-	BlobSidecarTopic:                 true,
-	ProposerSlashingTopic:            true,
-	AttesterSlashingTopic:            true,
-	LightClientFinalityUpdateTopic:   true,
-	LightClientOptimisticUpdateTopic: true,
+// The eventStreamer uses lazyReaders to defer serialization until the moment the value is ready to be written to the client.
+type lazyReader func() io.Reader
+
+var opsFeedEventTopics = map[feed.EventType]string{
+	operation.AggregatedAttReceived:             AttestationTopic,
+	operation.UnaggregatedAttReceived:           AttestationTopic,
+	operation.SingleAttReceived:                 SingleAttestationTopic,
+	operation.ExitReceived:                      VoluntaryExitTopic,
+	operation.SyncCommitteeContributionReceived: SyncCommitteeContributionTopic,
+	operation.BLSToExecutionChangeReceived:      BLSToExecutionChangeTopic,
+	operation.BlobSidecarReceived:               BlobSidecarTopic,
+	operation.AttesterSlashingReceived:          AttesterSlashingTopic,
+	operation.ProposerSlashingReceived:          ProposerSlashingTopic,
+	operation.BlockGossipReceived:               BlockGossipTopic,
+}
+
+var stateFeedEventTopics = map[feed.EventType]string{
+	statefeed.NewHead:                     HeadTopic,
+	statefeed.FinalizedCheckpoint:         FinalizedCheckpointTopic,
+	statefeed.LightClientFinalityUpdate:   LightClientFinalityUpdateTopic,
+	statefeed.LightClientOptimisticUpdate: LightClientOptimisticUpdateTopic,
+	statefeed.Reorg:                       ChainReorgTopic,
+	statefeed.BlockProcessed:              BlockTopic,
+	statefeed.PayloadAttributes:           PayloadAttributesTopic,
+}
+
+var topicsForStateFeed = topicsForFeed(stateFeedEventTopics)
+var topicsForOpsFeed = topicsForFeed(opsFeedEventTopics)
+
+func topicsForFeed(em map[feed.EventType]string) map[string]bool {
+	topics := make(map[string]bool, len(em))
+	for _, topic := range em {
+		topics[topic] = true
+	}
+	return topics
+}
+
+type topicRequest struct {
+	topics        map[string]bool
+	needStateFeed bool
+	needOpsFeed   bool
+}
+
+func (req *topicRequest) requested(topic string) bool {
+	return req.topics[topic]
+}
+
+func newTopicRequest(topics []string) (*topicRequest, error) {
+	req := &topicRequest{topics: make(map[string]bool)}
+	for _, name := range topics {
+		if topicsForStateFeed[name] {
+			req.needStateFeed = true
+		} else if topicsForOpsFeed[name] {
+			req.needOpsFeed = true
+		} else {
+			return nil, errors.Wrap(errInvalidTopicName, name)
+		}
+		req.topics[name] = true
+	}
+	if len(req.topics) == 0 || (!req.needStateFeed && !req.needOpsFeed) {
+		return nil, errNoValidTopics
+	}
+
+	return req, nil
 }
 
 // StreamEvents provides an endpoint to subscribe to the beacon node Server-Sent-Events stream.
@@ -84,445 +163,728 @@ var casesHandled = map[string]bool{
 // Servers may send SSE comments beginning with ':' for any purpose,
 // including to keep the event stream connection alive in the presence of proxy servers.
 func (s *Server) StreamEvents(w http.ResponseWriter, r *http.Request) {
+	var err error
+	defer func() {
+		if err != nil {
+			httpSSEErrorCount.WithLabelValues(r.URL.Path, err.Error()).Inc()
+		}
+	}()
+
+	log.Debug("Starting StreamEvents handler")
 	ctx, span := trace.StartSpan(r.Context(), "events.StreamEvents")
 	defer span.End()
 
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		httputil.HandleError(w, "Streaming unsupported!", http.StatusInternalServerError)
+	topics, err := newTopicRequest(r.URL.Query()["topics"])
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	topics := r.URL.Query()["topics"]
-	if len(topics) == 0 {
-		httputil.HandleError(w, "No topics specified to subscribe to", http.StatusBadRequest)
-		return
+	timeout := s.EventWriteTimeout
+	if timeout == 0 {
+		timeout = time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
 	}
-	topicsMap := make(map[string]bool)
-	for _, topic := range topics {
-		if _, ok := casesHandled[topic]; !ok {
-			httputil.HandleError(w, fmt.Sprintf("Invalid topic: %s", topic), http.StatusBadRequest)
-			return
-		}
-		topicsMap[topic] = true
+	ka := s.KeepAliveInterval
+	if ka == 0 {
+		ka = timeout
+	}
+	buffSize := s.EventFeedDepth
+	if buffSize == 0 {
+		buffSize = DefaultEventFeedDepth
 	}
 
-	// Subscribe to event feeds from information received in the beacon node runtime.
-	opsChan := make(chan *feed.Event, chanBuffer)
-	opsSub := s.OperationNotifier.OperationFeed().Subscribe(opsChan)
-	stateChan := make(chan *feed.Event, chanBuffer)
-	stateSub := s.StateNotifier.StateFeed().Subscribe(stateChan)
-	defer opsSub.Unsubscribe()
-	defer stateSub.Unsubscribe()
+	api.SetSSEHeaders(w)
+	sw := newStreamingResponseController(w, timeout)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	es := newEventStreamer(buffSize, ka)
 
-	// Set up SSE response headers
-	w.Header().Set("Content-Type", api.EventStreamMediaType)
-	w.Header().Set("Connection", api.KeepAlive)
+	go es.outboxWriteLoop(ctx, cancel, sw, r.URL.Path)
+	if err := es.recvEventLoop(ctx, cancel, topics, s); err != nil {
+		log.WithError(err).Debug("Shutting down StreamEvents handler.")
+	}
+	cleanupStart := time.Now()
+	es.waitForExit()
+	log.WithField("cleanup_wait", time.Since(cleanupStart)).Debug("streamEvents shutdown complete")
+}
 
-	// Handle each event received and context cancellation.
-	// We send a keepalive dummy message immediately to prevent clients
-	// stalling while waiting for the first response chunk.
-	// After that we send a keepalive dummy message every SECONDS_PER_SLOT
-	// to prevent anyone (e.g. proxy servers) from closing connections.
-	sendKeepalive(w, flusher)
-	keepaliveTicker := time2.NewTicker(time2.Duration(params.BeaconConfig().SecondsPerSlot) * time2.Second)
+func newEventStreamer(buffSize int, ka time.Duration) *eventStreamer {
+	return &eventStreamer{
+		outbox:        make(chan lazyReader, buffSize),
+		keepAlive:     ka,
+		openUntilExit: make(chan struct{}),
+	}
+}
+
+type eventStreamer struct {
+	outbox        chan lazyReader
+	keepAlive     time.Duration
+	openUntilExit chan struct{}
+}
+
+func (es *eventStreamer) recvEventLoop(ctx context.Context, cancel context.CancelFunc, req *topicRequest, s *Server) error {
+	defer close(es.outbox)
+	defer cancel()
+	eventsChan := make(chan *feed.Event, len(es.outbox))
+	if req.needOpsFeed {
+		opsSub := s.OperationNotifier.OperationFeed().Subscribe(eventsChan)
+		defer opsSub.Unsubscribe()
+	}
+	if req.needStateFeed {
+		stateSub := s.StateNotifier.StateFeed().Subscribe(eventsChan)
+		defer stateSub.Unsubscribe()
+	}
 	for {
 		select {
-		case event := <-opsChan:
-			handleBlockOperationEvents(w, flusher, topicsMap, event)
-		case event := <-stateChan:
-			s.handleStateEvents(ctx, w, flusher, topicsMap, event)
-		case <-keepaliveTicker.C:
-			sendKeepalive(w, flusher)
 		case <-ctx.Done():
-			return
+			return ctx.Err()
+		case event := <-eventsChan:
+			lr, err := s.lazyReaderForEvent(ctx, event, req)
+			if err != nil {
+				if !errors.Is(err, errNotRequested) {
+					log.WithField("event_type", fmt.Sprintf("%v", event.Data)).WithError(err).Error("StreamEvents API endpoint received an event it was unable to handle.")
+				}
+				continue
+			}
+			// If the client can't keep up, the outbox will eventually completely fill, at which
+			// safeWrite will error, and we'll hit the below return statement, at which point the deferred
+			// Unsuscribe calls will be made and the event feed will stop writing to this channel.
+			// Since the outbox and event stream channels are separately buffered, the event subscription
+			// channel should stay relatively empty, which gives this loop time to unsubscribe
+			// and cleanup before the event stream channel fills and disrupts other readers.
+			if err := es.safeWrite(ctx, lr); err != nil {
+				// note: we could hijack the connection and close it here. Does that cause issues? What are the benefits?
+				// A benefit of hijack and close is that it may force an error on the remote end, however just closing the context of the
+				// http handler may be sufficient to cause the remote http response reader to close.
+				if errors.Is(err, errSlowReader) {
+					log.WithError(err).Warn("Client is unable to keep up with event stream, shutting down.")
+				}
+				return err
+			}
 		}
 	}
 }
 
-func handleBlockOperationEvents(w http.ResponseWriter, flusher http.Flusher, requestedTopics map[string]bool, event *feed.Event) {
-	switch event.Type {
-	case operation.AggregatedAttReceived:
-		if _, ok := requestedTopics[AttestationTopic]; !ok {
-			return
-		}
-		attData, ok := event.Data.(*operation.AggregatedAttReceivedData)
-		if !ok {
-			write(w, flusher, topicDataMismatch, event.Data, AttestationTopic)
-			return
-		}
-		att := structs.AttFromConsensus(attData.Attestation.Aggregate)
-		send(w, flusher, AttestationTopic, att)
-	case operation.UnaggregatedAttReceived:
-		if _, ok := requestedTopics[AttestationTopic]; !ok {
-			return
-		}
-		attData, ok := event.Data.(*operation.UnAggregatedAttReceivedData)
-		if !ok {
-			write(w, flusher, topicDataMismatch, event.Data, AttestationTopic)
-			return
-		}
-		att := structs.AttFromConsensus(attData.Attestation)
-		send(w, flusher, AttestationTopic, att)
-	case operation.ExitReceived:
-		if _, ok := requestedTopics[VoluntaryExitTopic]; !ok {
-			return
-		}
-		exitData, ok := event.Data.(*operation.ExitReceivedData)
-		if !ok {
-			write(w, flusher, topicDataMismatch, event.Data, VoluntaryExitTopic)
-			return
-		}
-		exit := structs.SignedExitFromConsensus(exitData.Exit)
-		send(w, flusher, VoluntaryExitTopic, exit)
-	case operation.SyncCommitteeContributionReceived:
-		if _, ok := requestedTopics[SyncCommitteeContributionTopic]; !ok {
-			return
-		}
-		contributionData, ok := event.Data.(*operation.SyncCommitteeContributionReceivedData)
-		if !ok {
-			write(w, flusher, topicDataMismatch, event.Data, SyncCommitteeContributionTopic)
-			return
-		}
-		contribution := structs.SignedContributionAndProofFromConsensus(contributionData.Contribution)
-		send(w, flusher, SyncCommitteeContributionTopic, contribution)
-	case operation.BLSToExecutionChangeReceived:
-		if _, ok := requestedTopics[BLSToExecutionChangeTopic]; !ok {
-			return
-		}
-		changeData, ok := event.Data.(*operation.BLSToExecutionChangeReceivedData)
-		if !ok {
-			write(w, flusher, topicDataMismatch, event.Data, BLSToExecutionChangeTopic)
-			return
-		}
-		send(w, flusher, BLSToExecutionChangeTopic, structs.SignedBLSChangeFromConsensus(changeData.Change))
-	case operation.BlobSidecarReceived:
-		if _, ok := requestedTopics[BlobSidecarTopic]; !ok {
-			return
-		}
-		blobData, ok := event.Data.(*operation.BlobSidecarReceivedData)
-		if !ok {
-			write(w, flusher, topicDataMismatch, event.Data, BlobSidecarTopic)
-			return
-		}
-		versionedHash := blockchain.ConvertKzgCommitmentToVersionedHash(blobData.Blob.KzgCommitment)
-		blobEvent := &structs.BlobSidecarEvent{
-			BlockRoot:     hexutil.Encode(blobData.Blob.BlockRootSlice()),
-			Index:         fmt.Sprintf("%d", blobData.Blob.Index),
-			Slot:          fmt.Sprintf("%d", blobData.Blob.Slot()),
-			VersionedHash: versionedHash.String(),
-			KzgCommitment: hexutil.Encode(blobData.Blob.KzgCommitment),
-		}
-		send(w, flusher, BlobSidecarTopic, blobEvent)
-	case operation.AttesterSlashingReceived:
-		if _, ok := requestedTopics[AttesterSlashingTopic]; !ok {
-			return
-		}
-		attesterSlashingData, ok := event.Data.(*operation.AttesterSlashingReceivedData)
-		if !ok {
-			write(w, flusher, topicDataMismatch, event.Data, AttesterSlashingTopic)
-			return
-		}
-		send(w, flusher, AttesterSlashingTopic, structs.AttesterSlashingFromConsensus(attesterSlashingData.AttesterSlashing))
-	case operation.ProposerSlashingReceived:
-		if _, ok := requestedTopics[ProposerSlashingTopic]; !ok {
-			return
-		}
-		proposerSlashingData, ok := event.Data.(*operation.ProposerSlashingReceivedData)
-		if !ok {
-			write(w, flusher, topicDataMismatch, event.Data, ProposerSlashingTopic)
-			return
-		}
-		send(w, flusher, ProposerSlashingTopic, structs.ProposerSlashingFromConsensus(proposerSlashingData.ProposerSlashing))
+func (es *eventStreamer) safeWrite(ctx context.Context, rf func() io.Reader) error {
+	if rf == nil {
+		return nil
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case es.outbox <- rf:
+		return nil
+	default:
+		// If this is the case, the select case to write to the outbox could not proceed, meaning the outbox is full.
+		// If a reader can't keep up with the stream, we shut them down.
+		return errSlowReader
 	}
 }
 
-func (s *Server) handleStateEvents(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, requestedTopics map[string]bool, event *feed.Event) {
-	switch event.Type {
-	case statefeed.NewHead:
-		if _, ok := requestedTopics[HeadTopic]; ok {
-			headData, ok := event.Data.(*ethpb.EventHead)
-			if !ok {
-				write(w, flusher, topicDataMismatch, event.Data, HeadTopic)
+// newlineReader is used to write keep-alives to the client.
+// keep-alives in the sse protocol are a single ':' colon followed by 2 newlines.
+func newlineReader() io.Reader {
+	return bytes.NewBufferString(":\n\n")
+}
+
+// outboxWriteLoop runs in a separate goroutine. Its job is to write the values in the outbox to
+// the client as fast as the client can read them.
+func (es *eventStreamer) outboxWriteLoop(ctx context.Context, cancel context.CancelFunc, w *streamingResponseWriterController, endpoint string) {
+	var err error
+	defer func() {
+		if err != nil {
+			log.WithError(err).Debug("Event streamer shutting down due to error.")
+			httpSSEErrorCount.WithLabelValues(endpoint, err.Error()).Inc()
+		}
+		es.exit()
+	}()
+	defer cancel()
+	// Write a keepalive at the start to test the connection and simplify test setup.
+	if err = es.writeOutbox(ctx, w, nil); err != nil {
+		return
+	}
+
+	kaT := time.NewTimer(es.keepAlive)
+	// Ensure the keepalive timer is stopped and drained if it has fired.
+	defer func() {
+		if !kaT.Stop() {
+			<-kaT.C
+		}
+	}()
+	for {
+		select {
+		case <-ctx.Done():
+			err = ctx.Err()
+			return
+		case <-kaT.C:
+			if err = es.writeOutbox(ctx, w, nil); err != nil {
 				return
 			}
-			head := &structs.HeadEvent{
-				Slot:                      fmt.Sprintf("%d", headData.Slot),
-				Block:                     hexutil.Encode(headData.Block),
-				State:                     hexutil.Encode(headData.State),
-				EpochTransition:           headData.EpochTransition,
-				ExecutionOptimistic:       headData.ExecutionOptimistic,
-				PreviousDutyDependentRoot: hexutil.Encode(headData.PreviousDutyDependentRoot),
-				CurrentDutyDependentRoot:  hexutil.Encode(headData.CurrentDutyDependentRoot),
+			// In this case the timer doesn't need to be Stopped before the Reset call after the select statement,
+			// because the timer has already fired.
+		case lr := <-es.outbox:
+			if err = es.writeOutbox(ctx, w, lr); err != nil {
+				return
 			}
-			send(w, flusher, HeadTopic, head)
+			// We don't know if the timer fired concurrently to this case being ready, so we need to check the return
+			// of Stop and drain the timer channel if it fired. We won't need to do this in go 1.23.
+			if !kaT.Stop() {
+				<-kaT.C
+			}
 		}
-		if _, ok := requestedTopics[PayloadAttributesTopic]; ok {
-			s.sendPayloadAttributes(ctx, w, flusher)
-		}
-	case statefeed.MissedSlot:
-		if _, ok := requestedTopics[PayloadAttributesTopic]; ok {
-			s.sendPayloadAttributes(ctx, w, flusher)
-		}
-	case statefeed.FinalizedCheckpoint:
-		if _, ok := requestedTopics[FinalizedCheckpointTopic]; !ok {
-			return
-		}
-		checkpointData, ok := event.Data.(*ethpb.EventFinalizedCheckpoint)
-		if !ok {
-			write(w, flusher, topicDataMismatch, event.Data, FinalizedCheckpointTopic)
-			return
-		}
-		checkpoint := &structs.FinalizedCheckpointEvent{
-			Block:               hexutil.Encode(checkpointData.Block),
-			State:               hexutil.Encode(checkpointData.State),
-			Epoch:               fmt.Sprintf("%d", checkpointData.Epoch),
-			ExecutionOptimistic: checkpointData.ExecutionOptimistic,
-		}
-		send(w, flusher, FinalizedCheckpointTopic, checkpoint)
-	case statefeed.LightClientFinalityUpdate:
-		if _, ok := requestedTopics[LightClientFinalityUpdateTopic]; !ok {
-			return
-		}
-		updateData, ok := event.Data.(*ethpbv2.LightClientFinalityUpdateWithVersion)
-		if !ok {
-			write(w, flusher, topicDataMismatch, event.Data, LightClientFinalityUpdateTopic)
-			return
-		}
-
-		var finalityBranch []string
-		for _, b := range updateData.Data.FinalityBranch {
-			finalityBranch = append(finalityBranch, hexutil.Encode(b))
-		}
-		update := &structs.LightClientFinalityUpdateEvent{
-			Version: version.String(int(updateData.Version)),
-			Data: &structs.LightClientFinalityUpdate{
-				AttestedHeader: &structs.BeaconBlockHeader{
-					Slot:          fmt.Sprintf("%d", updateData.Data.AttestedHeader.Slot),
-					ProposerIndex: fmt.Sprintf("%d", updateData.Data.AttestedHeader.ProposerIndex),
-					ParentRoot:    hexutil.Encode(updateData.Data.AttestedHeader.ParentRoot),
-					StateRoot:     hexutil.Encode(updateData.Data.AttestedHeader.StateRoot),
-					BodyRoot:      hexutil.Encode(updateData.Data.AttestedHeader.BodyRoot),
-				},
-				FinalizedHeader: &structs.BeaconBlockHeader{
-					Slot:          fmt.Sprintf("%d", updateData.Data.FinalizedHeader.Slot),
-					ProposerIndex: fmt.Sprintf("%d", updateData.Data.FinalizedHeader.ProposerIndex),
-					ParentRoot:    hexutil.Encode(updateData.Data.FinalizedHeader.ParentRoot),
-					StateRoot:     hexutil.Encode(updateData.Data.FinalizedHeader.StateRoot),
-				},
-				FinalityBranch: finalityBranch,
-				SyncAggregate: &structs.SyncAggregate{
-					SyncCommitteeBits:      hexutil.Encode(updateData.Data.SyncAggregate.SyncCommitteeBits),
-					SyncCommitteeSignature: hexutil.Encode(updateData.Data.SyncAggregate.SyncCommitteeSignature),
-				},
-				SignatureSlot: fmt.Sprintf("%d", updateData.Data.SignatureSlot),
-			},
-		}
-		send(w, flusher, LightClientFinalityUpdateTopic, update)
-	case statefeed.LightClientOptimisticUpdate:
-		if _, ok := requestedTopics[LightClientOptimisticUpdateTopic]; !ok {
-			return
-		}
-		updateData, ok := event.Data.(*ethpbv2.LightClientOptimisticUpdateWithVersion)
-		if !ok {
-			write(w, flusher, topicDataMismatch, event.Data, LightClientOptimisticUpdateTopic)
-			return
-		}
-		update := &structs.LightClientOptimisticUpdateEvent{
-			Version: version.String(int(updateData.Version)),
-			Data: &structs.LightClientOptimisticUpdate{
-				AttestedHeader: &structs.BeaconBlockHeader{
-					Slot:          fmt.Sprintf("%d", updateData.Data.AttestedHeader.Slot),
-					ProposerIndex: fmt.Sprintf("%d", updateData.Data.AttestedHeader.ProposerIndex),
-					ParentRoot:    hexutil.Encode(updateData.Data.AttestedHeader.ParentRoot),
-					StateRoot:     hexutil.Encode(updateData.Data.AttestedHeader.StateRoot),
-					BodyRoot:      hexutil.Encode(updateData.Data.AttestedHeader.BodyRoot),
-				},
-				SyncAggregate: &structs.SyncAggregate{
-					SyncCommitteeBits:      hexutil.Encode(updateData.Data.SyncAggregate.SyncCommitteeBits),
-					SyncCommitteeSignature: hexutil.Encode(updateData.Data.SyncAggregate.SyncCommitteeSignature),
-				},
-				SignatureSlot: fmt.Sprintf("%d", updateData.Data.SignatureSlot),
-			},
-		}
-		send(w, flusher, LightClientOptimisticUpdateTopic, update)
-	case statefeed.Reorg:
-		if _, ok := requestedTopics[ChainReorgTopic]; !ok {
-			return
-		}
-		reorgData, ok := event.Data.(*ethpb.EventChainReorg)
-		if !ok {
-			write(w, flusher, topicDataMismatch, event.Data, ChainReorgTopic)
-			return
-		}
-		reorg := &structs.ChainReorgEvent{
-			Slot:                fmt.Sprintf("%d", reorgData.Slot),
-			Depth:               fmt.Sprintf("%d", reorgData.Depth),
-			OldHeadBlock:        hexutil.Encode(reorgData.OldHeadBlock),
-			NewHeadBlock:        hexutil.Encode(reorgData.NewHeadBlock),
-			OldHeadState:        hexutil.Encode(reorgData.OldHeadState),
-			NewHeadState:        hexutil.Encode(reorgData.NewHeadState),
-			Epoch:               fmt.Sprintf("%d", reorgData.Epoch),
-			ExecutionOptimistic: reorgData.ExecutionOptimistic,
-		}
-		send(w, flusher, ChainReorgTopic, reorg)
-	case statefeed.BlockProcessed:
-		if _, ok := requestedTopics[BlockTopic]; !ok {
-			return
-		}
-		blkData, ok := event.Data.(*statefeed.BlockProcessedData)
-		if !ok {
-			write(w, flusher, topicDataMismatch, event.Data, BlockTopic)
-			return
-		}
-		blockRoot, err := blkData.SignedBlock.Block().HashTreeRoot()
-		if err != nil {
-			write(w, flusher, "Could not get block root: "+err.Error())
-			return
-		}
-		blk := &structs.BlockEvent{
-			Slot:                fmt.Sprintf("%d", blkData.Slot),
-			Block:               hexutil.Encode(blockRoot[:]),
-			ExecutionOptimistic: blkData.Optimistic,
-		}
-		send(w, flusher, BlockTopic, blk)
+		kaT.Reset(es.keepAlive)
 	}
+}
+
+func (es *eventStreamer) exit() {
+	drained := 0
+	for range es.outbox {
+		drained += 1
+	}
+	log.WithField("undelivered_events", drained).Debug("Event stream outbox drained.")
+	close(es.openUntilExit)
+}
+
+// waitForExit blocks until the outboxWriteLoop has exited.
+// While this function blocks, it is not yet safe to exit the http handler,
+// because the outboxWriteLoop may still be writing to the http ResponseWriter.
+func (es *eventStreamer) waitForExit() {
+	<-es.openUntilExit
+}
+
+func writeLazyReaderWithRecover(w *streamingResponseWriterController, lr lazyReader) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.WithField("panic", r).Error("Recovered from panic while writing event to client.")
+			err = errWriterUnusable
+			debug.PrintStack()
+		}
+	}()
+	if lr == nil {
+		log.Warn("Event stream skipping a nil lazy event reader callback")
+		return nil
+	}
+	r := lr()
+	if r == nil {
+		log.Warn("Event stream skipping a nil event reader")
+		return nil
+	}
+	out, err := io.ReadAll(r)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(out)
+	return err
+}
+
+func (es *eventStreamer) writeOutbox(ctx context.Context, w *streamingResponseWriterController, first lazyReader) error {
+	// The outboxWriteLoop is responsible for managing the keep-alive timer and toggling between reading from the outbox
+	// when it is ready, only allowing the keep-alive to fire when there hasn't been a write in the keep-alive interval.
+	// Since outboxWriteLoop will get either the first event or the keep-alive, we let it pass in the first event to write,
+	// either the event's lazyReader, or nil for a keep-alive.
+	needKeepAlive := true
+	if first != nil {
+		if err := writeLazyReaderWithRecover(w, first); err != nil {
+			return err
+		}
+		needKeepAlive = false
+	}
+	// While the first event was being read by the client, further events may be queued in the outbox.
+	// We can drain them right away rather than go back out to the outer select statement, where the keepAlive timer
+	// may have fired, triggering an unnecessary extra keep-alive write and flush.
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case rf := <-es.outbox:
+			// We don't want to call Flush until we've exhausted all the writes - it's always preferable to
+			// just keep draining the outbox and rely on the underlying Write code to flush+block when it
+			// needs to based on buffering. Whenever we fill the buffer with a string of writes, the underlying
+			// code will flush on its own, so it's better to explicitly flush only once, after we've totally
+			// drained the outbox, to catch any dangling bytes stuck in a buffer.
+			if err := writeLazyReaderWithRecover(w, rf); err != nil {
+				return err
+			}
+			needKeepAlive = false
+		default:
+			if needKeepAlive {
+				if err := writeLazyReaderWithRecover(w, newlineReader); err != nil {
+					return err
+				}
+			}
+			return w.Flush()
+		}
+	}
+}
+
+func jsonMarshalReader(name string, v any) io.Reader {
+	d, err := json.Marshal(v)
+	if err != nil {
+		log.WithError(err).WithField("type_name", fmt.Sprintf("%T", v)).Error("Could not marshal event data")
+		return nil
+	}
+	return bytes.NewBufferString("event: " + name + "\ndata: " + string(d) + "\n\n")
+}
+
+func topicForEvent(event *feed.Event) string {
+	switch event.Data.(type) {
+	case *operation.AggregatedAttReceivedData:
+		return AttestationTopic
+	case *operation.UnAggregatedAttReceivedData:
+		return AttestationTopic
+	case *operation.SingleAttReceivedData:
+		return SingleAttestationTopic
+	case *operation.ExitReceivedData:
+		return VoluntaryExitTopic
+	case *operation.SyncCommitteeContributionReceivedData:
+		return SyncCommitteeContributionTopic
+	case *operation.BLSToExecutionChangeReceivedData:
+		return BLSToExecutionChangeTopic
+	case *operation.BlobSidecarReceivedData:
+		return BlobSidecarTopic
+	case *operation.AttesterSlashingReceivedData:
+		return AttesterSlashingTopic
+	case *operation.ProposerSlashingReceivedData:
+		return ProposerSlashingTopic
+	case *operation.BlockGossipReceivedData:
+		return BlockGossipTopic
+	case *ethpb.EventHead:
+		return HeadTopic
+	case *ethpb.EventFinalizedCheckpoint:
+		return FinalizedCheckpointTopic
+	case interfaces.LightClientFinalityUpdate:
+		return LightClientFinalityUpdateTopic
+	case interfaces.LightClientOptimisticUpdate:
+		return LightClientOptimisticUpdateTopic
+	case *ethpb.EventChainReorg:
+		return ChainReorgTopic
+	case *statefeed.BlockProcessedData:
+		return BlockTopic
+	case payloadattribute.EventData:
+		return PayloadAttributesTopic
+	default:
+		return InvalidTopic
+	}
+}
+
+func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topics *topicRequest) (lazyReader, error) {
+	eventName := topicForEvent(event)
+	if !topics.requested(eventName) {
+		return nil, errNotRequested
+	}
+	if event == nil || event.Data == nil {
+		return nil, errors.New("event or event data is nil")
+	}
+	switch v := event.Data.(type) {
+	case payloadattribute.EventData:
+		return s.payloadAttributesReader(ctx, v)
+	case *ethpb.EventHead:
+		// The head event is a special case because, if the client requested the payload attributes topic,
+		// we send two event messages in reaction; the head event and the payload attributes.
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, structs.HeadEventFromV1(v))
+		}, nil
+	case *operation.BlockGossipReceivedData:
+		blockRoot, err := v.SignedBlock.Block().HashTreeRoot()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not compute block root for BlockGossipReceivedData")
+		}
+		return func() io.Reader {
+			blk := &structs.BlockGossipEvent{
+				Slot:  fmt.Sprintf("%d", v.SignedBlock.Block().Slot()),
+				Block: hexutil.Encode(blockRoot[:]),
+			}
+			return jsonMarshalReader(eventName, blk)
+		}, nil
+	case *operation.AggregatedAttReceivedData:
+		switch att := v.Attestation.AggregateVal().(type) {
+		case *eth.Attestation:
+			return func() io.Reader {
+				att := structs.AttFromConsensus(att)
+				return jsonMarshalReader(eventName, att)
+			}, nil
+		case *eth.AttestationElectra:
+			return func() io.Reader {
+				att := structs.AttElectraFromConsensus(att)
+				return jsonMarshalReader(eventName, att)
+			}, nil
+		default:
+			return nil, errors.Wrapf(errUnhandledEventData, "Unexpected type %T for the .Attestation field of AggregatedAttReceivedData", v.Attestation)
+		}
+	case *operation.UnAggregatedAttReceivedData:
+		switch att := v.Attestation.(type) {
+		case *eth.Attestation:
+			return func() io.Reader {
+				att := structs.AttFromConsensus(att)
+				return jsonMarshalReader(eventName, att)
+			}, nil
+		case *eth.AttestationElectra:
+			return func() io.Reader {
+				att := structs.AttElectraFromConsensus(att)
+				return jsonMarshalReader(eventName, att)
+			}, nil
+		default:
+			return nil, errors.Wrapf(errUnhandledEventData, "Unexpected type %T for the .Attestation field of UnAggregatedAttReceivedData", v.Attestation)
+		}
+	case *operation.SingleAttReceivedData:
+		switch att := v.Attestation.(type) {
+		case *eth.SingleAttestation:
+			return func() io.Reader {
+				att := structs.SingleAttFromConsensus(att)
+				return jsonMarshalReader(eventName, att)
+			}, nil
+		default:
+			return nil, errors.Wrapf(errUnhandledEventData, "Unexpected type %T for the .Attestation field of SingleAttReceivedData", v.Attestation)
+		}
+	case *operation.ExitReceivedData:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, structs.SignedExitFromConsensus(v.Exit))
+		}, nil
+	case *operation.SyncCommitteeContributionReceivedData:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, structs.SignedContributionAndProofFromConsensus(v.Contribution))
+		}, nil
+	case *operation.BLSToExecutionChangeReceivedData:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, structs.SignedBLSChangeFromConsensus(v.Change))
+		}, nil
+	case *operation.BlobSidecarReceivedData:
+		return func() io.Reader {
+			versionedHash := primitives.ConvertKzgCommitmentToVersionedHash(v.Blob.KzgCommitment)
+			return jsonMarshalReader(eventName, &structs.BlobSidecarEvent{
+				BlockRoot:     hexutil.Encode(v.Blob.BlockRootSlice()),
+				Index:         fmt.Sprintf("%d", v.Blob.Index),
+				Slot:          fmt.Sprintf("%d", v.Blob.Slot()),
+				VersionedHash: versionedHash.String(),
+				KzgCommitment: hexutil.Encode(v.Blob.KzgCommitment),
+			})
+		}, nil
+	case *operation.AttesterSlashingReceivedData:
+		switch slashing := v.AttesterSlashing.(type) {
+		case *eth.AttesterSlashing:
+			return func() io.Reader {
+				return jsonMarshalReader(eventName, structs.AttesterSlashingFromConsensus(slashing))
+			}, nil
+		case *eth.AttesterSlashingElectra:
+			return func() io.Reader {
+				return jsonMarshalReader(eventName, structs.AttesterSlashingElectraFromConsensus(slashing))
+			}, nil
+		default:
+			return nil, errors.Wrapf(errUnhandledEventData, "Unexpected type %T for the .AttesterSlashing field of AttesterSlashingReceivedData", v.AttesterSlashing)
+		}
+	case *operation.ProposerSlashingReceivedData:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, structs.ProposerSlashingFromConsensus(v.ProposerSlashing))
+		}, nil
+	case *ethpb.EventFinalizedCheckpoint:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, structs.FinalizedCheckpointEventFromV1(v))
+		}, nil
+	case interfaces.LightClientFinalityUpdate:
+		cv, err := structs.LightClientFinalityUpdateFromConsensus(v)
+		if err != nil {
+			return nil, errors.Wrap(err, "LightClientFinalityUpdate conversion failure")
+		}
+		ev := &structs.LightClientFinalityUpdateEvent{
+			Version: version.String(v.Version()),
+			Data:    cv,
+		}
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, ev)
+		}, nil
+	case interfaces.LightClientOptimisticUpdate:
+		cv, err := structs.LightClientOptimisticUpdateFromConsensus(v)
+		if err != nil {
+			return nil, errors.Wrap(err, "LightClientOptimisticUpdate conversion failure")
+		}
+		ev := &structs.LightClientOptimisticUpdateEvent{
+			Version: version.String(v.Version()),
+			Data:    cv,
+		}
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, ev)
+		}, nil
+	case *ethpb.EventChainReorg:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, structs.EventChainReorgFromV1(v))
+		}, nil
+	case *statefeed.BlockProcessedData:
+		blockRoot, err := v.SignedBlock.Block().HashTreeRoot()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not compute block root for BlockProcessedData state feed event")
+		}
+		return func() io.Reader {
+			blk := &structs.BlockEvent{
+				Slot:                fmt.Sprintf("%d", v.Slot),
+				Block:               hexutil.Encode(blockRoot[:]),
+				ExecutionOptimistic: v.Optimistic,
+			}
+			return jsonMarshalReader(eventName, blk)
+		}, nil
+	default:
+		return nil, errors.Wrapf(errUnhandledEventData, "event data type %T unsupported", v)
+	}
+}
+
+var errUnsupportedPayloadAttribute = errors.New("cannot compute payload attributes pre-Bellatrix")
+
+func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnlyBeaconState, root [32]byte, proposer primitives.ValidatorIndex, timestamp uint64, randao []byte) (payloadattribute.Attributer, error) {
+	v := st.Version()
+	if v < version.Bellatrix {
+		return nil, errors.Wrapf(errUnsupportedPayloadAttribute, "%s is not supported", version.String(v))
+	}
+
+	feeRecpt := params.BeaconConfig().DefaultFeeRecipient.Bytes()
+	tValidator, exists := s.TrackedValidatorsCache.Validator(proposer)
+	if exists {
+		feeRecpt = tValidator.FeeRecipient[:]
+	}
+
+	if v == version.Bellatrix {
+		return payloadattribute.New(&engine.PayloadAttributes{
+			Timestamp:             timestamp,
+			PrevRandao:            randao,
+			SuggestedFeeRecipient: feeRecpt,
+		})
+	}
+
+	w, _, err := st.ExpectedWithdrawals()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get withdrawals from head state")
+	}
+	if v == version.Capella {
+		return payloadattribute.New(&engine.PayloadAttributesV2{
+			Timestamp:             timestamp,
+			PrevRandao:            randao,
+			SuggestedFeeRecipient: feeRecpt,
+			Withdrawals:           w,
+		})
+	}
+
+	return payloadattribute.New(&engine.PayloadAttributesV3{
+		Timestamp:             timestamp,
+		PrevRandao:            randao,
+		SuggestedFeeRecipient: feeRecpt,
+		Withdrawals:           w,
+		ParentBeaconBlockRoot: root[:],
+	})
+}
+
+type asyncPayloadAttrData struct {
+	data    json.RawMessage
+	version string
+	err     error
+}
+
+var zeroRoot [32]byte
+
+// needsFill allows tests to provide filled EventData values. An ordinary event data value fired by the blockchain package will have
+// all of the checked fields empty, so the logical short circuit should hit immediately.
+func needsFill(ev payloadattribute.EventData) bool {
+	return ev.HeadState == nil || ev.HeadState.IsNil() || ev.HeadState.LatestBlockHeader() == nil ||
+		ev.HeadBlock == nil || ev.HeadBlock.IsNil() ||
+		ev.HeadRoot == zeroRoot || len(ev.ParentBlockRoot) == 0 || len(ev.ParentBlockHash) == 0 ||
+		ev.Attributer == nil || ev.Attributer.IsEmpty()
+}
+
+func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventData) (payloadattribute.EventData, error) {
+	var err error
+
+	if !needsFill(ev) {
+		return ev, nil
+	}
+
+	ev.HeadState, err = s.HeadFetcher.HeadState(ctx)
+	if err != nil {
+		return ev, errors.Wrap(err, "could not get head state")
+	}
+
+	ev.HeadBlock, err = s.HeadFetcher.HeadBlock(ctx)
+	if err != nil {
+		return ev, errors.Wrap(err, "could not look up head block")
+	}
+	ev.HeadRoot, err = ev.HeadBlock.Block().HashTreeRoot()
+	if err != nil {
+		return ev, errors.Wrap(err, "could not compute head block root")
+	}
+	pr := ev.HeadBlock.Block().ParentRoot()
+	ev.ParentBlockRoot = pr[:]
+
+	hsr, err := ev.HeadState.LatestBlockHeader().HashTreeRoot()
+	if err != nil {
+		return ev, errors.Wrap(err, "could not compute latest block header root")
+	}
+
+	pse := slots.ToEpoch(ev.ProposalSlot)
+	st := ev.HeadState
+	if slots.ToEpoch(st.Slot()) != pse {
+		st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, hsr[:], ev.ProposalSlot)
+		if err != nil {
+			return ev, errors.Wrap(err, "could not run process blocks on head state into the proposal slot epoch")
+		}
+	}
+	ev.ProposerIndex, err = helpers.BeaconProposerIndexAtSlot(ctx, st, ev.ProposalSlot)
+	if err != nil {
+		return ev, errors.Wrap(err, "failed to compute proposer index")
+	}
+	randao, err := helpers.RandaoMix(st, pse)
+	if err != nil {
+		return ev, errors.Wrap(err, "could not get head state randado")
+	}
+
+	payload, err := ev.HeadBlock.Block().Body().Execution()
+	if err != nil {
+		return ev, errors.Wrap(err, "could not get execution payload for head block")
+	}
+	ev.ParentBlockHash = payload.BlockHash()
+	ev.ParentBlockNumber = payload.BlockNumber()
+
+	t, err := slots.ToTime(st.GenesisTime(), ev.ProposalSlot)
+	if err != nil {
+		return ev, errors.Wrap(err, "could not get head state slot time")
+	}
+	ev.Attributer, err = s.computePayloadAttributes(ctx, st, hsr, ev.ProposerIndex, uint64(t.Unix()), randao)
+	return ev, err
 }
 
 // This event stream is intended to be used by builders and relays.
 // Parent fields are based on state at N_{current_slot}, while the rest of fields are based on state of N_{current_slot + 1}
-func (s *Server) sendPayloadAttributes(ctx context.Context, w http.ResponseWriter, flusher http.Flusher) {
-	headRoot, err := s.HeadFetcher.HeadRoot(ctx)
-	if err != nil {
-		write(w, flusher, "Could not get head root: "+err.Error())
-		return
-	}
-	st, err := s.HeadFetcher.HeadState(ctx)
-	if err != nil {
-		write(w, flusher, "Could not get head state: "+err.Error())
-		return
-	}
-	// advance the head state
-	headState, err := transition.ProcessSlotsIfPossible(ctx, st, s.ChainInfoFetcher.CurrentSlot()+1)
-	if err != nil {
-		write(w, flusher, "Could not advance head state: "+err.Error())
-		return
-	}
-
-	headBlock, err := s.HeadFetcher.HeadBlock(ctx)
-	if err != nil {
-		write(w, flusher, "Could not get head block: "+err.Error())
-		return
-	}
-
-	headPayload, err := headBlock.Block().Body().Execution()
-	if err != nil {
-		write(w, flusher, "Could not get execution payload: "+err.Error())
-		return
-	}
-
-	t, err := slots.ToTime(headState.GenesisTime(), headState.Slot())
-	if err != nil {
-		write(w, flusher, "Could not get head state slot time: "+err.Error())
-		return
-	}
-
-	prevRando, err := helpers.RandaoMix(headState, time.CurrentEpoch(headState))
-	if err != nil {
-		write(w, flusher, "Could not get head state randao mix: "+err.Error())
-		return
-	}
-
-	proposerIndex, err := helpers.BeaconProposerIndex(ctx, headState)
-	if err != nil {
-		write(w, flusher, "Could not get head state proposer index: "+err.Error())
-		return
-	}
-
-	var attributes interface{}
-	switch headState.Version() {
-	case version.Bellatrix:
-		attributes = &structs.PayloadAttributesV1{
-			Timestamp:             fmt.Sprintf("%d", t.Unix()),
-			PrevRandao:            hexutil.Encode(prevRando),
-			SuggestedFeeRecipient: hexutil.Encode(headPayload.FeeRecipient()),
-		}
-	case version.Capella:
-		withdrawals, err := headState.ExpectedWithdrawals()
+func (s *Server) payloadAttributesReader(ctx context.Context, ev payloadattribute.EventData) (lazyReader, error) {
+	ctx, cancel := context.WithTimeout(ctx, payloadAttributeTimeout)
+	edc := make(chan asyncPayloadAttrData)
+	go func() {
+		d := asyncPayloadAttrData{}
+		defer func() {
+			edc <- d
+		}()
+		ev, err := s.fillEventData(ctx, ev)
 		if err != nil {
-			write(w, flusher, "Could not get head state expected withdrawals: "+err.Error())
+			d.err = errors.Wrap(err, "Could not fill event data")
 			return
 		}
-		attributes = &structs.PayloadAttributesV2{
-			Timestamp:             fmt.Sprintf("%d", t.Unix()),
-			PrevRandao:            hexutil.Encode(prevRando),
-			SuggestedFeeRecipient: hexutil.Encode(headPayload.FeeRecipient()),
-			Withdrawals:           structs.WithdrawalsFromConsensus(withdrawals),
-		}
-	case version.Deneb:
-		withdrawals, err := headState.ExpectedWithdrawals()
+		d.version = version.String(ev.HeadBlock.Version())
+		attributesBytes, err := marshalAttributes(ev.Attributer)
 		if err != nil {
-			write(w, flusher, "Could not get head state expected withdrawals: "+err.Error())
+			d.err = errors.Wrap(err, "errors marshaling payload attributes to json")
 			return
 		}
-		parentRoot, err := headBlock.Block().HashTreeRoot()
-		if err != nil {
-			write(w, flusher, "Could not get head block root: "+err.Error())
-			return
+		d.data, d.err = json.Marshal(structs.PayloadAttributesEventData{
+			ProposerIndex:     strconv.FormatUint(uint64(ev.ProposerIndex), 10),
+			ProposalSlot:      strconv.FormatUint(uint64(ev.ProposalSlot), 10),
+			ParentBlockNumber: strconv.FormatUint(ev.ParentBlockNumber, 10),
+			ParentBlockRoot:   hexutil.Encode(ev.ParentBlockRoot),
+			ParentBlockHash:   hexutil.Encode(ev.ParentBlockHash),
+			PayloadAttributes: attributesBytes,
+		})
+		if d.err != nil {
+			d.err = errors.Wrap(d.err, "errors marshaling payload attributes event data to json")
 		}
-		attributes = &structs.PayloadAttributesV3{
-			Timestamp:             fmt.Sprintf("%d", t.Unix()),
-			PrevRandao:            hexutil.Encode(prevRando),
-			SuggestedFeeRecipient: hexutil.Encode(headPayload.FeeRecipient()),
-			Withdrawals:           structs.WithdrawalsFromConsensus(withdrawals),
-			ParentBeaconBlockRoot: hexutil.Encode(parentRoot[:]),
+	}()
+	return func() io.Reader {
+		defer cancel()
+		select {
+		case <-ctx.Done():
+			log.WithError(ctx.Err()).Warn("Context canceled while waiting for payload attributes event data")
+			return nil
+		case ed := <-edc:
+			if ed.err != nil {
+				log.WithError(ed.err).Warn("Error while marshaling payload attributes event data")
+				return nil
+			}
+			return jsonMarshalReader(PayloadAttributesTopic, &structs.PayloadAttributesEvent{
+				Version: ed.version,
+				Data:    ed.data,
+			})
 		}
-	default:
-		write(w, flusher, "Payload version %s is not supported", version.String(headState.Version()))
-		return
+	}, nil
+}
+
+func marshalAttributes(attr payloadattribute.Attributer) ([]byte, error) {
+	v := attr.Version()
+	if v < version.Bellatrix {
+		return nil, errors.Wrapf(errUnsupportedPayloadAttribute, "Payload version %s is not supported", version.String(v))
 	}
 
-	attributesBytes, err := json.Marshal(attributes)
+	timestamp := strconv.FormatUint(attr.Timestamp(), 10)
+	prevRandao := hexutil.Encode(attr.PrevRandao())
+	feeRecpt := hexutil.Encode(attr.SuggestedFeeRecipient())
+	if v == version.Bellatrix {
+		return json.Marshal(&structs.PayloadAttributesV1{
+			Timestamp:             timestamp,
+			PrevRandao:            prevRandao,
+			SuggestedFeeRecipient: feeRecpt,
+		})
+	}
+	w, err := attr.Withdrawals()
 	if err != nil {
-		write(w, flusher, err.Error())
-		return
+		return nil, errors.Wrap(err, "could not get withdrawals from payload attributes event")
 	}
-	eventData := structs.PayloadAttributesEventData{
-		ProposerIndex:     fmt.Sprintf("%d", proposerIndex),
-		ProposalSlot:      fmt.Sprintf("%d", headState.Slot()),
-		ParentBlockNumber: fmt.Sprintf("%d", headPayload.BlockNumber()),
-		ParentBlockRoot:   hexutil.Encode(headRoot),
-		ParentBlockHash:   hexutil.Encode(headPayload.BlockHash()),
-		PayloadAttributes: attributesBytes,
+	withdrawals := structs.WithdrawalsFromConsensus(w)
+	if v == version.Capella {
+		return json.Marshal(&structs.PayloadAttributesV2{
+			Timestamp:             timestamp,
+			PrevRandao:            prevRandao,
+			SuggestedFeeRecipient: feeRecpt,
+			Withdrawals:           withdrawals,
+		})
 	}
-	eventDataBytes, err := json.Marshal(eventData)
+	parentRoot, err := attr.ParentBeaconBlockRoot()
 	if err != nil {
-		write(w, flusher, err.Error())
-		return
+		return nil, errors.Wrap(err, "could not get parent beacon block root from payload attributes event")
 	}
-	send(w, flusher, PayloadAttributesTopic, &structs.PayloadAttributesEvent{
-		Version: version.String(headState.Version()),
-		Data:    eventDataBytes,
+	return json.Marshal(&structs.PayloadAttributesV3{
+		Timestamp:             timestamp,
+		PrevRandao:            prevRandao,
+		SuggestedFeeRecipient: feeRecpt,
+		Withdrawals:           withdrawals,
+		ParentBeaconBlockRoot: hexutil.Encode(parentRoot),
 	})
 }
 
-func send(w http.ResponseWriter, flusher http.Flusher, name string, data interface{}) {
-	j, err := json.Marshal(data)
-	if err != nil {
-		write(w, flusher, "Could not marshal event to JSON: "+err.Error())
-		return
+func newStreamingResponseController(rw http.ResponseWriter, timeout time.Duration) *streamingResponseWriterController {
+	rc := http.NewResponseController(rw)
+	return &streamingResponseWriterController{
+		timeout: timeout,
+		rw:      rw,
+		rc:      rc,
 	}
-	write(w, flusher, "event: %s\ndata: %s\n\n", name, string(j))
 }
 
-func sendKeepalive(w http.ResponseWriter, flusher http.Flusher) {
-	write(w, flusher, ":\n\n")
+// streamingResponseWriterController provides an interface similar to an http.ResponseWriter,
+// wrapping an http.ResponseWriter and an http.ResponseController, using the ResponseController
+// to set and clear deadlines for Write and Flush methods, and delegating to the underlying
+// types to Write and Flush.
+type streamingResponseWriterController struct {
+	timeout time.Duration
+	rw      http.ResponseWriter
+	rc      *http.ResponseController
 }
 
-func write(w http.ResponseWriter, flusher http.Flusher, format string, a ...any) {
-	_, err := fmt.Fprintf(w, format, a...)
-	if err != nil {
-		log.WithError(err).Error("Could not write to response writer")
+func (c *streamingResponseWriterController) Write(b []byte) (int, error) {
+	if err := c.setDeadline(); err != nil {
+		return 0, err
 	}
-	flusher.Flush()
+	out, err := c.rw.Write(b)
+	if err != nil {
+		return out, err
+	}
+	return out, c.clearDeadline()
+}
+
+func (c *streamingResponseWriterController) setDeadline() error {
+	return c.rc.SetWriteDeadline(time.Now().Add(c.timeout))
+}
+
+func (c *streamingResponseWriterController) clearDeadline() error {
+	return c.rc.SetWriteDeadline(time.Time{})
+}
+
+func (c *streamingResponseWriterController) Flush() error {
+	if err := c.setDeadline(); err != nil {
+		return err
+	}
+	if err := c.rc.Flush(); err != nil {
+		return err
+	}
+	return c.clearDeadline()
 }

@@ -4,13 +4,13 @@ import (
 	"context"
 	"strings"
 
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/validator/db/common"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/common"
-	"go.opencensus.io/trace"
 )
 
 const failedAttLocalProtectionErr = "attempted to make slashable attestation, rejected by local slashing protection"
@@ -27,7 +27,7 @@ func (*Store) SaveEIPImportBlacklistedPublicKeys(_ context.Context, _ [][fieldpa
 
 // SigningRootAtTargetEpoch is implemented only to satisfy the interface.
 func (*Store) SigningRootAtTargetEpoch(_ context.Context, _ [fieldparams.BLSPubkeyLength]byte, _ primitives.Epoch) ([]byte, error) {
-	panic("not implemented")
+	return nil, errors.New("not implemented")
 }
 
 // LowestSignedTargetEpoch returns the lowest signed target epoch for a public key, a boolean indicating if it exists and an error.
@@ -99,7 +99,7 @@ func (s *Store) AttestedPublicKeys(_ context.Context) ([][fieldparams.BLSPubkeyL
 // If it is not, it updates the database.
 func (s *Store) SlashableAttestationCheck(
 	ctx context.Context,
-	indexedAtt *ethpb.IndexedAttestation,
+	indexedAtt ethpb.IndexedAtt,
 	pubKey [fieldparams.BLSPubkeyLength]byte,
 	signingRoot32 [32]byte,
 	_ bool,
@@ -128,21 +128,20 @@ func (s *Store) SaveAttestationForPubKey(
 	_ context.Context,
 	pubkey [fieldparams.BLSPubkeyLength]byte,
 	_ [32]byte,
-	att *ethpb.IndexedAttestation,
+	att ethpb.IndexedAtt,
 ) error {
 	// If there is no attestation, return on error.
-	if att == nil || att.Data == nil || att.Data.Source == nil || att.Data.Target == nil {
+	if att == nil || att.IsNil() || att.GetData().Source == nil || att.GetData().Target == nil {
 		return errors.New("incoming attestation does not contain source and/or target epoch")
 	}
-
 	// Get validator slashing protection.
 	validatorSlashingProtection, err := s.validatorSlashingProtection(pubkey)
 	if err != nil {
 		return errors.Wrap(err, "could not get validator slashing protection")
 	}
 
-	incomingSourceEpochUInt64 := uint64(att.Data.Source.Epoch)
-	incomingTargetEpochUInt64 := uint64(att.Data.Target.Epoch)
+	incomingSourceEpochUInt64 := uint64(att.GetData().Source.Epoch)
+	incomingTargetEpochUInt64 := uint64(att.GetData().Target.Epoch)
 
 	if validatorSlashingProtection == nil {
 		// If there is no validator slashing protection, create one.
@@ -167,7 +166,7 @@ func (s *Store) SaveAttestationForPubKey(
 	if incomingSourceEpochUInt64 < savedSourceEpoch {
 		return errors.Errorf(
 			"could not sign attestation with source lower than recorded source epoch, %d < %d",
-			att.Data.Source.Epoch,
+			att.GetData().Source.Epoch,
 			validatorSlashingProtection.LastSignedAttestationSourceEpoch,
 		)
 	}
@@ -177,7 +176,7 @@ func (s *Store) SaveAttestationForPubKey(
 	if savedTargetEpoch != nil && incomingTargetEpochUInt64 <= *savedTargetEpoch {
 		return errors.Errorf(
 			"could not sign attestation with target lower than or equal to recorded target epoch, %d <= %d",
-			att.Data.Target.Epoch,
+			att.GetData().Target.Epoch,
 			*savedTargetEpoch,
 		)
 	}

@@ -14,20 +14,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	validatormock "github.com/OffchainLabs/prysm/v6/testing/validator-mock"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts/iface"
+	"github.com/OffchainLabs/prysm/v6/validator/client"
+	"github.com/OffchainLabs/prysm/v6/validator/client/testutil"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager/derived"
+	constant "github.com/OffchainLabs/prysm/v6/validator/testing"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/api"
-	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	validatormock "github.com/prysmaticlabs/prysm/v5/testing/validator-mock"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/iface"
-	mock "github.com/prysmaticlabs/prysm/v5/validator/accounts/testing"
-	"github.com/prysmaticlabs/prysm/v5/validator/client"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/derived"
-	constant "github.com/prysmaticlabs/prysm/v5/validator/testing"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -55,7 +55,7 @@ func TestServer_ListAccounts(t *testing.T) {
 	require.NoError(t, err)
 	vs, err := client.NewValidatorService(ctx, &client.Config{
 		Wallet: w,
-		Validator: &mock.Validator{
+		Validator: &testutil.FakeValidator{
 			Km: km,
 		},
 	})
@@ -160,7 +160,7 @@ func TestServer_BackupAccounts(t *testing.T) {
 	require.NoError(t, err)
 	vs, err := client.NewValidatorService(ctx, &client.Config{
 		Wallet: w,
-		Validator: &mock.Validator{
+		Validator: &testutil.FakeValidator{
 			Km: km,
 		},
 	})
@@ -253,7 +253,7 @@ func TestServer_VoluntaryExit(t *testing.T) {
 	}
 
 	mockNodeClient.EXPECT().
-		GetGenesis(gomock.Any(), gomock.Any()).
+		Genesis(gomock.Any(), gomock.Any()).
 		Return(&ethpb.Genesis{GenesisTime: genesisTime}, nil)
 
 	mockValidatorClient.EXPECT().
@@ -284,7 +284,7 @@ func TestServer_VoluntaryExit(t *testing.T) {
 	require.NoError(t, err)
 	vs, err := client.NewValidatorService(ctx, &client.Config{
 		Wallet: w,
-		Validator: &mock.Validator{
+		Validator: &testutil.FakeValidator{
 			Km: km,
 		},
 	})
@@ -292,7 +292,7 @@ func TestServer_VoluntaryExit(t *testing.T) {
 	s := &Server{
 		walletInitialized:         true,
 		wallet:                    w,
-		beaconNodeClient:          mockNodeClient,
+		nodeClient:                mockNodeClient,
 		beaconNodeValidatorClient: mockValidatorClient,
 		validatorService:          vs,
 	}

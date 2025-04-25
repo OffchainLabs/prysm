@@ -5,16 +5,16 @@ import (
 	"context"
 	"testing"
 
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -237,6 +237,50 @@ func makeBlocksAltair(t *testing.T, startIdx, num uint64, previousRoot [32]byte)
 	return ifaceBlocks
 }
 
+func TestStore_BackfillFinalizedIndexSingle(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	// we're making 4 blocks so we can test an element without a valid child at the end
+	blks, err := consensusblocks.NewROBlockSlice(makeBlocks(t, 0, 4, [32]byte{}))
+	require.NoError(t, err)
+
+	// existing is the child that we'll set up in the index by hand to seed the index.
+	existing := blks[3]
+
+	// toUpdate is a single item update, emulating a backfill batch size of 1. it is the parent of `existing`.
+	toUpdate := blks[2]
+
+	// set up existing finalized block
+	ebpr := existing.Block().ParentRoot()
+	ebr := existing.Root()
+	ebf := &ethpb.FinalizedBlockRootContainer{
+		ParentRoot: ebpr[:],
+		ChildRoot:  make([]byte, 32), // we're bypassing validation to seed the db, so we don't need a valid child.
+	}
+	enc, err := encode(ctx, ebf)
+	require.NoError(t, err)
+	// writing this to the index outside of the validating function to seed the test.
+	err = db.db.Update(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(finalizedBlockRootsIndexBucket)
+		return bkt.Put(ebr[:], enc)
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, db.BackfillFinalizedIndex(ctx, []consensusblocks.ROBlock{toUpdate}, ebr))
+
+	// make sure that we still correctly validate descendents in the single item case.
+	noChild := blks[0] // will fail to update because we don't have blks[1] in the db.
+	// test wrong child param
+	require.ErrorIs(t, db.BackfillFinalizedIndex(ctx, []consensusblocks.ROBlock{noChild}, ebr), errNotConnectedToFinalized)
+	// test parent of child that isn't finalized
+	require.ErrorIs(t, db.BackfillFinalizedIndex(ctx, []consensusblocks.ROBlock{noChild}, blks[1].Root()), errFinalizedChildNotFound)
+
+	// now make it work by writing the missing block
+	require.NoError(t, db.BackfillFinalizedIndex(ctx, []consensusblocks.ROBlock{blks[1]}, blks[2].Root()))
+	// since blks[1] is now in the index, we should be able to update blks[0]
+	require.NoError(t, db.BackfillFinalizedIndex(ctx, []consensusblocks.ROBlock{blks[0]}, blks[1].Root()))
+}
+
 func TestStore_BackfillFinalizedIndex(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
@@ -252,23 +296,23 @@ func TestStore_BackfillFinalizedIndex(t *testing.T) {
 		ParentRoot: ebpr[:],
 		ChildRoot:  chldr[:],
 	}
-	disjoint := []consensusblocks.ROBlock{
-		blks[0],
-		blks[2],
-	}
 	enc, err := encode(ctx, ebf)
 	require.NoError(t, err)
 	err = db.db.Update(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(finalizedBlockRootsIndexBucket)
 		return bkt.Put(ebr[:], enc)
 	})
+	require.NoError(t, err)
 
 	// reslice to remove the existing blocks
 	blks = blks[0:64]
 	// check the other error conditions with a descendent root that really doesn't exist
-	require.NoError(t, err)
+
+	disjoint := []consensusblocks.ROBlock{
+		blks[0],
+		blks[2],
+	}
 	require.ErrorIs(t, db.BackfillFinalizedIndex(ctx, disjoint, [32]byte{}), errIncorrectBlockParent)
-	require.NoError(t, err)
 	require.ErrorIs(t, errFinalizedChildNotFound, db.BackfillFinalizedIndex(ctx, blks, [32]byte{}))
 
 	// use the real root so that it succeeds

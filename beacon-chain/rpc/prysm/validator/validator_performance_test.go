@@ -10,21 +10,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/epoch/precompute"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epoch/precompute"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	mockSync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/initial-sync/testing"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestServer_GetValidatorPerformance(t *testing.T) {
@@ -35,13 +35,13 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 			},
 		}
 
-		srv := httptest.NewServer(http.HandlerFunc(vs.GetValidatorPerformance))
+		srv := httptest.NewServer(http.HandlerFunc(vs.GetPerformance))
 		req := httptest.NewRequest("POST", "/foo", nil)
 
 		client := &http.Client{}
 		rawResp, err := client.Post(srv.URL, "application/json", req.Body)
 		require.NoError(t, err)
-		require.Equal(t, http.StatusServiceUnavailable, rawResp.StatusCode)
+		require.Equal(t, http.StatusBadRequest, rawResp.StatusCode)
 	})
 	t.Run("OK", func(t *testing.T) {
 		helpers.ClearCache()
@@ -86,7 +86,7 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 		err = json.NewEncoder(&buf).Encode(request)
 		require.NoError(t, err)
 
-		srv := httptest.NewServer(http.HandlerFunc(vs.GetValidatorPerformance))
+		srv := httptest.NewServer(http.HandlerFunc(vs.GetPerformance))
 		req := httptest.NewRequest("POST", "/foo", &buf)
 		client := &http.Client{}
 		rawResp, err := client.Post(srv.URL, "application/json", req.Body)
@@ -151,7 +151,7 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 		err = json.NewEncoder(&buf).Encode(request)
 		require.NoError(t, err)
 
-		srv := httptest.NewServer(http.HandlerFunc(vs.GetValidatorPerformance))
+		srv := httptest.NewServer(http.HandlerFunc(vs.GetPerformance))
 		req := httptest.NewRequest("POST", "/foo", &buf)
 		client := &http.Client{}
 		rawResp, err := client.Post(srv.URL, "application/json", req.Body)
@@ -216,7 +216,7 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 		err = json.NewEncoder(&buf).Encode(request)
 		require.NoError(t, err)
 
-		srv := httptest.NewServer(http.HandlerFunc(vs.GetValidatorPerformance))
+		srv := httptest.NewServer(http.HandlerFunc(vs.GetPerformance))
 		req := httptest.NewRequest("POST", "/foo", &buf)
 		client := &http.Client{}
 		rawResp, err := client.Post(srv.URL, "application/json", req.Body)
@@ -278,7 +278,7 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 		err := json.NewEncoder(&buf).Encode(request)
 		require.NoError(t, err)
 
-		srv := httptest.NewServer(http.HandlerFunc(vs.GetValidatorPerformance))
+		srv := httptest.NewServer(http.HandlerFunc(vs.GetPerformance))
 		req := httptest.NewRequest("POST", "/foo", &buf)
 		client := &http.Client{}
 		rawResp, err := client.Post(srv.URL, "application/json", req.Body)
@@ -340,7 +340,7 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 		err := json.NewEncoder(&buf).Encode(request)
 		require.NoError(t, err)
 
-		srv := httptest.NewServer(http.HandlerFunc(vs.GetValidatorPerformance))
+		srv := httptest.NewServer(http.HandlerFunc(vs.GetPerformance))
 		req := httptest.NewRequest("POST", "/foo", &buf)
 		client := &http.Client{}
 		rawResp, err := client.Post(srv.URL, "application/json", req.Body)
@@ -402,7 +402,7 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 		err := json.NewEncoder(&buf).Encode(request)
 		require.NoError(t, err)
 
-		srv := httptest.NewServer(http.HandlerFunc(vs.GetValidatorPerformance))
+		srv := httptest.NewServer(http.HandlerFunc(vs.GetPerformance))
 		req := httptest.NewRequest("POST", "/foo", &buf)
 		client := &http.Client{}
 		rawResp, err := client.Post(srv.URL, "application/json", req.Body)

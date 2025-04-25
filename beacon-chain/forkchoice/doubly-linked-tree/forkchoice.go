@@ -5,21 +5,20 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	consensus_blocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	forkchoice2 "github.com/OffchainLabs/prysm/v6/consensus-types/forkchoice"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice"
-	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	forkchoice2 "github.com/prysmaticlabs/prysm/v5/consensus-types/forkchoice"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
-	"go.opencensus.io/trace"
 )
 
 // New initializes a new fork choice store.
@@ -105,26 +104,10 @@ func (f *ForkChoice) ProcessAttestation(ctx context.Context, validatorIndices []
 }
 
 // InsertNode processes a new block by inserting it to the fork choice store.
-func (f *ForkChoice) InsertNode(ctx context.Context, state state.BeaconState, root [32]byte) error {
+func (f *ForkChoice) InsertNode(ctx context.Context, state state.BeaconState, roblock consensus_blocks.ROBlock) error {
 	ctx, span := trace.StartSpan(ctx, "doublyLinkedForkchoice.InsertNode")
 	defer span.End()
 
-	slot := state.Slot()
-	bh := state.LatestBlockHeader()
-	if bh == nil {
-		return errNilBlockHeader
-	}
-	parentRoot := bytesutil.ToBytes32(bh.ParentRoot)
-	var payloadHash [32]byte
-	if state.Version() >= version.Bellatrix {
-		ph, err := state.LatestExecutionPayloadHeader()
-		if err != nil {
-			return err
-		}
-		if ph != nil {
-			copy(payloadHash[:], ph.BlockHash())
-		}
-	}
 	jc := state.CurrentJustifiedCheckpoint()
 	if jc == nil {
 		return errInvalidNilCheckpoint
@@ -135,13 +118,20 @@ func (f *ForkChoice) InsertNode(ctx context.Context, state state.BeaconState, ro
 		return errInvalidNilCheckpoint
 	}
 	finalizedEpoch := fc.Epoch
-	node, err := f.store.insert(ctx, slot, root, parentRoot, payloadHash, justifiedEpoch, finalizedEpoch)
+	node, err := f.store.insert(ctx, roblock, justifiedEpoch, finalizedEpoch)
 	if err != nil {
 		return err
 	}
 
 	jc, fc = f.store.pullTips(state, node, jc, fc)
-	return f.updateCheckpoints(ctx, jc, fc)
+	if err := f.updateCheckpoints(ctx, jc, fc); err != nil {
+		_, remErr := f.store.removeNode(ctx, node)
+		if remErr != nil {
+			log.WithError(remErr).Error("could not remove node")
+		}
+		return errors.Wrap(err, "could not update checkpoints")
+	}
+	return nil
 }
 
 // updateCheckpoints update the checkpoints when inserting a new node.
@@ -267,11 +257,12 @@ func (f *ForkChoice) updateBalances() error {
 	newBalances := f.justifiedBalances
 	zHash := params.BeaconConfig().ZeroHash
 
-	for index, vote := range f.votes {
+	for index := 0; index < len(f.votes); index++ {
 		// Skip if validator has been slashed
 		if f.store.slashedIndices[primitives.ValidatorIndex(index)] {
 			continue
 		}
+		vote := &f.votes[index]
 		// Skip if validator has never voted for current root and next root (i.e. if the
 		// votes are zero hash aka genesis block), there's nothing to compute.
 		if vote.currentRoot == zHash && vote.nextRoot == zHash {
@@ -482,15 +473,8 @@ func (f *ForkChoice) InsertChain(ctx context.Context, chain []*forkchoicetypes.B
 		return nil
 	}
 	for i := len(chain) - 1; i > 0; i-- {
-		b := chain[i].Block
-		r := chain[i-1].Block.ParentRoot()
-		parentRoot := b.ParentRoot()
-		payloadHash, err := blocks.GetBlockPayloadHash(b)
-		if err != nil {
-			return err
-		}
 		if _, err := f.store.insert(ctx,
-			b.Slot(), r, parentRoot, payloadHash,
+			chain[i].Block,
 			chain[i].JustifiedCheckpoint.Epoch, chain[i].FinalizedCheckpoint.Epoch); err != nil {
 			return err
 		}
@@ -638,6 +622,25 @@ func (f *ForkChoice) Slot(root [32]byte) (primitives.Slot, error) {
 	return n.slot, nil
 }
 
+// DependentRoot returns the last root of the epoch prior to the requested ecoch in the canonical chain.
+func (f *ForkChoice) DependentRoot(epoch primitives.Epoch) ([32]byte, error) {
+	tr, err := f.TargetRootForEpoch(f.CachedHeadRoot(), epoch)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	if tr == [32]byte{} {
+		return [32]byte{}, nil
+	}
+	n, ok := f.store.nodeByRoot[tr]
+	if !ok || n == nil {
+		return [32]byte{}, ErrNilNode
+	}
+	if slots.ToEpoch(n.slot) == epoch && n.parent != nil {
+		n = n.parent
+	}
+	return n.root, nil
+}
+
 // TargetRootForEpoch returns the root of the target block for a given epoch.
 // The epoch parameter is crucial to identify the correct target root. For example:
 // When inserting a block at slot 63 with block root 0xA and target root 0xB (pointing to the block at slot 32),
@@ -674,4 +677,19 @@ func (f *ForkChoice) TargetRootForEpoch(root [32]byte, epoch primitives.Epoch) (
 		}
 	}
 	return f.TargetRootForEpoch(targetNode.root, epoch)
+}
+
+// ParentRoot returns the block root of the parent node if it is in forkchoice.
+// The exception is for the finalized checkpoint root which we return the zero
+// hash.
+func (f *ForkChoice) ParentRoot(root [32]byte) ([32]byte, error) {
+	n, ok := f.store.nodeByRoot[root]
+	if !ok || n == nil {
+		return [32]byte{}, ErrNilNode
+	}
+	// Return the zero hash for the tree root
+	if n.parent == nil {
+		return [32]byte{}, nil
+	}
+	return n.parent.root, nil
 }

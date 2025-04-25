@@ -9,6 +9,19 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/async"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	prysmnetwork "github.com/OffchainLabs/prysm/v6/network"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
+	"github.com/OffchainLabs/prysm/v6/runtime"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p"
@@ -19,19 +32,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/async"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/scorers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	leakybucket "github.com/prysmaticlabs/prysm/v5/container/leaky-bucket"
-	prysmnetwork "github.com/prysmaticlabs/prysm/v5/network"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/metadata"
-	"github.com/prysmaticlabs/prysm/v5/runtime"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
-	"go.opencensus.io/trace"
 )
 
 var _ runtime.Service = (*Service)(nil)
@@ -41,6 +42,10 @@ var _ runtime.Service = (*Service)(nil)
 // for the current peer limit status for the time period
 // defined below.
 var pollingPeriod = 6 * time.Second
+
+// When looking for new nodes, if not enough nodes are found,
+// we stop after this spent time.
+var batchPeriod = 2 * time.Second
 
 // Refresh rate of ENR set at twice per slot.
 var refreshRate = slots.DivideSlotBy(2)
@@ -70,7 +75,7 @@ type Service struct {
 	subnetsLock           map[uint64]*sync.RWMutex
 	subnetsLockLock       sync.Mutex // Lock access to subnetsLock
 	initializationLock    sync.Mutex
-	dv5Listener           Listener
+	dv5Listener           ListenerRebooter
 	startupErr            error
 	ctx                   context.Context
 	host                  host.Host
@@ -82,67 +87,76 @@ type Service struct {
 // NewService initializes a new p2p service compatible with shared.Service interface. No
 // connections are made until the Start function is called during the service registry startup.
 func NewService(ctx context.Context, cfg *Config) (*Service, error) {
-	var err error
 	ctx, cancel := context.WithCancel(ctx)
 	_ = cancel // govet fix for lost cancel. Cancel is handled in service.Stop().
+
+	cfg = validateConfig(cfg)
+	privKey, err := privKey(cfg)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to generate p2p private key")
+	}
+
+	metaData, err := metaDataFromConfig(cfg)
+	if err != nil {
+		log.WithError(err).Error("Failed to create peer metadata")
+		return nil, err
+	}
+
+	addrFilter, err := configureFilter(cfg)
+	if err != nil {
+		log.WithError(err).Error("Failed to create address filter")
+		return nil, err
+	}
+
+	ipLimiter := leakybucket.NewCollector(ipLimit, ipBurst, 30*time.Second, true /* deleteEmptyBuckets */)
 
 	s := &Service{
 		ctx:          ctx,
 		cancel:       cancel,
 		cfg:          cfg,
+		addrFilter:   addrFilter,
+		ipLimiter:    ipLimiter,
+		privKey:      privKey,
+		metaData:     metaData,
 		isPreGenesis: true,
 		joinedTopics: make(map[string]*pubsub.Topic, len(gossipTopicMappings)),
 		subnetsLock:  make(map[uint64]*sync.RWMutex),
 	}
 
-	s.cfg = validateConfig(s.cfg)
-
-	dv5Nodes := parseBootStrapAddrs(s.cfg.BootstrapNodeAddr)
-
-	cfg.Discv5BootStrapAddr = dv5Nodes
-
 	ipAddr := prysmnetwork.IPAddr()
-	s.privKey, err = privKey(s.cfg)
-	if err != nil {
-		log.WithError(err).Error("Failed to generate p2p private key")
-		return nil, err
-	}
-	s.metaData, err = metaDataFromConfig(s.cfg)
-	if err != nil {
-		log.WithError(err).Error("Failed to create peer metadata")
-		return nil, err
-	}
-	s.addrFilter, err = configureFilter(s.cfg)
-	if err != nil {
-		log.WithError(err).Error("Failed to create address filter")
-		return nil, err
-	}
-	s.ipLimiter = leakybucket.NewCollector(ipLimit, ipBurst, 30*time.Second, true /* deleteEmptyBuckets */)
 
-	opts := s.buildOptions(ipAddr, s.privKey)
+	opts, err := s.buildOptions(ipAddr, s.privKey)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to build p2p options")
+	}
+
+	// Sets mplex timeouts
+	configureMplex()
 	h, err := libp2p.New(opts...)
 	if err != nil {
-		log.WithError(err).Error("Failed to create p2p host")
-		return nil, err
+		return nil, errors.Wrapf(err, "failed to create p2p host")
 	}
 
 	s.host = h
+
 	// Gossipsub registration is done before we add in any new peers
 	// due to libp2p's gossipsub implementation not taking into
 	// account previously added peers when creating the gossipsub
 	// object.
 	psOpts := s.pubsubOptions()
+
 	// Set the pubsub global parameters that we require.
 	setPubSubParameters()
+
 	// Reinitialize them in the event we are running a custom config.
 	attestationSubnetCount = params.BeaconConfig().AttestationSubnetCount
 	syncCommsSubnetCount = params.BeaconConfig().SyncCommitteeSubnetCount
 
 	gs, err := pubsub.NewGossipSub(s.ctx, s.host, psOpts...)
 	if err != nil {
-		log.WithError(err).Error("Failed to start pubsub")
-		return nil, err
+		return nil, errors.Wrapf(err, "failed to create p2p pubsub")
 	}
+
 	s.pubsub = gs
 
 	s.peers = peers.NewStatus(ctx, &peers.StatusConfig{
@@ -192,12 +206,13 @@ func (s *Service) Start() {
 			s.startupErr = err
 			return
 		}
-		err = s.connectToBootnodes()
-		if err != nil {
-			log.WithError(err).Error("Could not add bootnode to the exclusion list")
+
+		if err := s.connectToBootnodes(); err != nil {
+			log.WithError(err).Error("Could not connect to boot nodes")
 			s.startupErr = err
 			return
 		}
+
 		s.dv5Listener = listener
 		go s.listenForNewNodes()
 	}
@@ -207,7 +222,7 @@ func (s *Service) Start() {
 	if len(s.cfg.StaticPeers) > 0 {
 		addrs, err := PeersFromStringAddrs(s.cfg.StaticPeers)
 		if err != nil {
-			log.WithError(err).Error("Could not connect to static peer")
+			log.WithError(err).Error("could not convert ENR to multiaddr")
 		}
 		// Set trusted peers for those that are provided as static addresses.
 		pids := peerIdsFromMultiAddrs(addrs)
@@ -216,7 +231,7 @@ func (s *Service) Start() {
 	}
 	// Initialize metadata according to the
 	// current epoch.
-	s.RefreshENR()
+	s.RefreshPersistentSubnets()
 
 	// Periodic functions.
 	async.RunEvery(s.ctx, params.BeaconConfig().TtfbTimeoutDuration(), func() {
@@ -224,13 +239,26 @@ func (s *Service) Start() {
 	})
 	async.RunEvery(s.ctx, 30*time.Minute, s.Peers().Prune)
 	async.RunEvery(s.ctx, time.Duration(params.BeaconConfig().RespTimeout)*time.Second, s.updateMetrics)
-	async.RunEvery(s.ctx, refreshRate, s.RefreshENR)
+	async.RunEvery(s.ctx, refreshRate, s.RefreshPersistentSubnets)
 	async.RunEvery(s.ctx, 1*time.Minute, func() {
-		log.WithFields(logrus.Fields{
-			"inbound":     len(s.peers.InboundConnected()),
-			"outbound":    len(s.peers.OutboundConnected()),
-			"activePeers": len(s.peers.Active()),
-		}).Info("Peer summary")
+		inboundQUICCount := len(s.peers.InboundConnectedWithProtocol(peers.QUIC))
+		inboundTCPCount := len(s.peers.InboundConnectedWithProtocol(peers.TCP))
+		outboundQUICCount := len(s.peers.OutboundConnectedWithProtocol(peers.QUIC))
+		outboundTCPCount := len(s.peers.OutboundConnectedWithProtocol(peers.TCP))
+		total := inboundQUICCount + inboundTCPCount + outboundQUICCount + outboundTCPCount
+
+		fields := logrus.Fields{
+			"inboundTCP":  inboundTCPCount,
+			"outboundTCP": outboundTCPCount,
+			"total":       total,
+		}
+
+		if features.Get().EnableQUIC {
+			fields["inboundQUIC"] = inboundQUICCount
+			fields["outboundQUIC"] = outboundQUICCount
+		}
+
+		log.WithFields(fields).Info("Connected peers")
 	})
 
 	multiAddrs := s.host.Network().ListenAddresses()
@@ -238,9 +266,10 @@ func (s *Service) Start() {
 
 	p2pHostAddress := s.cfg.HostAddress
 	p2pTCPPort := s.cfg.TCPPort
+	p2pQUICPort := s.cfg.QUICPort
 
 	if p2pHostAddress != "" {
-		logExternalIPAddr(s.host.ID(), p2pHostAddress, p2pTCPPort)
+		logExternalIPAddr(s.host.ID(), p2pHostAddress, p2pTCPPort, p2pQUICPort)
 		verifyConnectivity(p2pHostAddress, p2pTCPPort, "tcp")
 	}
 
@@ -285,7 +314,7 @@ func (s *Service) Started() bool {
 }
 
 // Encoding returns the configured networking encoding.
-func (_ *Service) Encoding() encoder.NetworkEncoding {
+func (*Service) Encoding() encoder.NetworkEncoding {
 	return &encoder.SszNetworkEncoder{}
 }
 
@@ -360,12 +389,17 @@ func (s *Service) AddPingMethod(reqFunc func(ctx context.Context, id peer.ID) er
 	s.pingMethodLock.Unlock()
 }
 
-func (s *Service) pingPeers() {
+func (s *Service) pingPeersAndLogEnr() {
 	s.pingMethodLock.RLock()
 	defer s.pingMethodLock.RUnlock()
+
+	localENR := s.dv5Listener.Self()
+	log.WithField("ENR", localENR).Info("New node record")
+
 	if s.pingMethod == nil {
 		return
 	}
+
 	for _, pid := range s.peers.Connected() {
 		go func(id peer.ID) {
 			if err := s.pingMethod(s.ctx, id); err != nil {
@@ -438,8 +472,8 @@ func (s *Service) connectWithPeer(ctx context.Context, info peer.AddrInfo) error
 	if info.ID == s.host.ID() {
 		return nil
 	}
-	if s.Peers().IsBad(info.ID) {
-		return errors.New("refused to connect to bad peer")
+	if err := s.Peers().IsBad(info.ID); err != nil {
+		return errors.Wrap(err, "refused to connect to bad peer")
 	}
 	ctx, cancel := context.WithTimeout(ctx, maxDialTimeout)
 	defer cancel()
@@ -451,8 +485,8 @@ func (s *Service) connectWithPeer(ctx context.Context, info peer.AddrInfo) error
 }
 
 func (s *Service) connectToBootnodes() error {
-	nodes := make([]*enode.Node, 0, len(s.cfg.Discv5BootStrapAddr))
-	for _, addr := range s.cfg.Discv5BootStrapAddr {
+	nodes := make([]*enode.Node, 0, len(s.cfg.Discv5BootStrapAddrs))
+	for _, addr := range s.cfg.Discv5BootStrapAddrs {
 		bootNode, err := enode.Parse(enode.ValidSchemes, addr)
 		if err != nil {
 			return err

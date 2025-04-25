@@ -29,6 +29,20 @@ type Attestation struct {
 	Signature       string           `json:"signature"`
 }
 
+type AttestationElectra struct {
+	AggregationBits string           `json:"aggregation_bits"`
+	Data            *AttestationData `json:"data"`
+	Signature       string           `json:"signature"`
+	CommitteeBits   string           `json:"committee_bits"`
+}
+
+type SingleAttestation struct {
+	CommitteeIndex string           `json:"committee_index"`
+	AttesterIndex  string           `json:"attester_index"`
+	Data           *AttestationData `json:"data"`
+	Signature      string           `json:"signature"`
+}
+
 type AttestationData struct {
 	Slot            string      `json:"slot"`
 	CommitteeIndex  string      `json:"index"`
@@ -76,6 +90,17 @@ type AggregateAttestationAndProof struct {
 	AggregatorIndex string       `json:"aggregator_index"`
 	Aggregate       *Attestation `json:"aggregate"`
 	SelectionProof  string       `json:"selection_proof"`
+}
+
+type SignedAggregateAttestationAndProofElectra struct {
+	Message   *AggregateAttestationAndProofElectra `json:"message"`
+	Signature string                               `json:"signature"`
+}
+
+type AggregateAttestationAndProofElectra struct {
+	AggregatorIndex string              `json:"aggregator_index"`
+	Aggregate       *AttestationElectra `json:"aggregate"`
+	SelectionProof  string              `json:"selection_proof"`
 }
 
 type SyncCommitteeSubscription struct {
@@ -178,6 +203,11 @@ type AttesterSlashing struct {
 	Attestation2 *IndexedAttestation `json:"attestation_2"`
 }
 
+type AttesterSlashingElectra struct {
+	Attestation1 *IndexedAttestationElectra `json:"attestation_1"`
+	Attestation2 *IndexedAttestationElectra `json:"attestation_2"`
+}
+
 type Deposit struct {
 	Proof []string     `json:"proof"`
 	Data  *DepositData `json:"data"`
@@ -196,6 +226,12 @@ type IndexedAttestation struct {
 	Signature        string           `json:"signature"`
 }
 
+type IndexedAttestationElectra struct {
+	AttestingIndices []string         `json:"attesting_indices"`
+	Data             *AttestationData `json:"data"`
+	Signature        string           `json:"signature"`
+}
+
 type SyncAggregate struct {
 	SyncCommitteeBits      string `json:"sync_committee_bits"`
 	SyncCommitteeSignature string `json:"sync_committee_signature"`
@@ -206,4 +242,23 @@ type Withdrawal struct {
 	ValidatorIndex   string `json:"validator_index"`
 	ExecutionAddress string `json:"address"`
 	Amount           string `json:"amount"`
+}
+
+type PendingDeposit struct {
+	Pubkey                string `json:"pubkey"`
+	WithdrawalCredentials string `json:"withdrawal_credentials"`
+	Amount                string `json:"amount"`
+	Signature             string `json:"signature"`
+	Slot                  string `json:"slot"`
+}
+
+type PendingPartialWithdrawal struct {
+	Index             string `json:"index"`
+	Amount            string `json:"amount"`
+	WithdrawableEpoch string `json:"withdrawable_epoch"`
+}
+
+type PendingConsolidation struct {
+	SourceIndex string `json:"source_index"`
+	TargetIndex string `json:"target_index"`
 }

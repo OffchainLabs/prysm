@@ -6,6 +6,12 @@ import %workspace%/build/bazelrc/debug.bazelrc
 import %workspace%/build/bazelrc/hermetic-cc.bazelrc
 import %workspace%/build/bazelrc/performance.bazelrc
 
+# hermetic_cc_toolchain v3.0.1 required changes.
+common --enable_platform_specific_config
+build:linux --sandbox_add_mount_pair=/tmp
+build:macos --sandbox_add_mount_pair=/var/tmp
+build:windows --sandbox_add_mount_pair=C:\Temp
+
 # E2E run with debug gotag
 test:e2e --define gotags=debug
 

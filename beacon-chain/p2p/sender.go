@@ -3,15 +3,15 @@ package p2p
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/kr/pretty"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
 	"github.com/sirupsen/logrus"
-	"go.opencensus.io/trace"
 )
 
 // Send a message to a specific peer. The returned stream may be used for reading, but has been
@@ -25,7 +25,7 @@ func (s *Service) Send(ctx context.Context, message interface{}, baseTopic strin
 		return nil, err
 	}
 	topic := baseTopic + s.Encoding().ProtocolSuffix()
-	span.AddAttributes(trace.StringAttribute("topic", topic))
+	span.SetAttributes(trace.StringAttribute("topic", topic))
 
 	log.WithFields(logrus.Fields{
 		"topic":   topic,

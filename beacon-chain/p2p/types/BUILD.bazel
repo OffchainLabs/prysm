@@ -8,7 +8,7 @@ go_library(
         "rpc_goodbye_codes.go",
         "types.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types",
     visibility = [
         "//beacon-chain:__subpackages__",
         "//cmd:__subpackages__",
@@ -17,6 +17,7 @@ go_library(
         "//validator/client:__pkg__",
     ],
     deps = [
+        "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/interfaces:go_default_library",
@@ -43,6 +44,7 @@ go_test(
         "//consensus-types/primitives:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
+        "//runtime/version:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
         "@com_github_prysmaticlabs_fastssz//:go_default_library",

@@ -3,11 +3,10 @@ package state_native_test
 import (
 	"testing"
 
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 func BenchmarkAppendEth1DataVotes(b *testing.B) {
@@ -32,7 +31,7 @@ func BenchmarkAppendEth1DataVotes(b *testing.B) {
 	ref := st.Copy()
 
 	for i := 0; i < b.N; i++ {
-		err := ref.AppendEth1DataVotes(&eth.Eth1Data{DepositCount: uint64(i)})
+		err := ref.AppendEth1DataVotes(&ethpb.Eth1Data{DepositCount: uint64(i)})
 		require.NoError(b, err)
 		ref = st.Copy()
 	}

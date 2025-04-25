@@ -7,17 +7,17 @@ import (
 	"sync"
 	"time"
 
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/slashings"
+	"github.com/OffchainLabs/prysm/v6/validator/db/common"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/slashings"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/common"
 	bolt "go.etcd.io/bbolt"
-	"go.opencensus.io/trace"
 )
 
 // SlashingKind used for helpful information upon detection.
@@ -139,7 +139,7 @@ func (s *Store) AttestationHistoryForPubKey(ctx context.Context, pubKey [fieldpa
 // If it is not, it updates the database.
 func (s *Store) SlashableAttestationCheck(
 	ctx context.Context,
-	indexedAtt *ethpb.IndexedAttestation,
+	indexedAtt ethpb.IndexedAtt,
 	pubKey [fieldparams.BLSPubkeyLength]byte,
 	signingRoot32 [32]byte,
 	emitAccountMetrics bool,
@@ -156,14 +156,14 @@ func (s *Store) SlashableAttestationCheck(
 	if err != nil {
 		return err
 	}
-	if exists && indexedAtt.Data.Source.Epoch < lowestSourceEpoch {
+	if exists && indexedAtt.GetData().Source.Epoch < lowestSourceEpoch {
 		return fmt.Errorf(
 			"could not sign attestation lower than lowest source epoch in db, %d < %d",
-			indexedAtt.Data.Source.Epoch,
+			indexedAtt.GetData().Source.Epoch,
 			lowestSourceEpoch,
 		)
 	}
-	existingSigningRoot, err := s.SigningRootAtTargetEpoch(ctx, pubKey, indexedAtt.Data.Target.Epoch)
+	existingSigningRoot, err := s.SigningRootAtTargetEpoch(ctx, pubKey, indexedAtt.GetData().Target.Epoch)
 	if err != nil {
 		return err
 	}
@@ -176,10 +176,10 @@ func (s *Store) SlashableAttestationCheck(
 	if err != nil {
 		return err
 	}
-	if signingRootsDiffer && exists && indexedAtt.Data.Target.Epoch <= lowestTargetEpoch {
+	if signingRootsDiffer && exists && indexedAtt.GetData().Target.Epoch <= lowestTargetEpoch {
 		return fmt.Errorf(
 			"could not sign attestation lower than or equal to lowest target epoch in db if signing roots differ, %d <= %d",
-			indexedAtt.Data.Target.Epoch,
+			indexedAtt.GetData().Target.Epoch,
 			lowestTargetEpoch,
 		)
 	}
@@ -210,7 +210,7 @@ func (s *Store) SlashableAttestationCheck(
 // CheckSlashableAttestation verifies an incoming attestation is
 // not a double vote for a validator public key nor a surround vote.
 func (s *Store) CheckSlashableAttestation(
-	ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, signingRoot []byte, att *ethpb.IndexedAttestation,
+	ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, signingRoot []byte, att ethpb.IndexedAtt,
 ) (SlashingKind, error) {
 	ctx, span := trace.StartSpan(ctx, "Validator.CheckSlashableAttestation")
 	defer span.End()
@@ -228,14 +228,14 @@ func (s *Store) CheckSlashableAttestation(
 		// First we check for double votes.
 		signingRootsBucket := pkBucket.Bucket(attestationSigningRootsBucket)
 		if signingRootsBucket != nil {
-			targetEpochBytes := bytesutil.EpochToBytesBigEndian(att.Data.Target.Epoch)
+			targetEpochBytes := bytesutil.EpochToBytesBigEndian(att.GetData().Target.Epoch)
 			existingSigningRoot := signingRootsBucket.Get(targetEpochBytes)
 
 			// If a signing root exists in the database, and if this database signing root is empty => We consider the new attestation as a double vote.
 			// If a signing root exists in the database, and if this database signing differs from the signing root of the new attestation => We consider the new attestation as a double vote.
 			if existingSigningRoot != nil && (len(existingSigningRoot) == 0 || slashings.SigningRootsDiffer(existingSigningRoot, signingRoot)) {
 				slashKind = DoubleVote
-				return fmt.Errorf(doubleVoteMessage, att.Data.Target.Epoch, existingSigningRoot)
+				return fmt.Errorf(doubleVoteMessage, att.GetData().Target.Epoch, existingSigningRoot)
 			}
 		}
 
@@ -269,12 +269,12 @@ func (s *Store) CheckSlashableAttestation(
 
 // Iterate from the back of the bucket since we are looking for target_epoch > att.target_epoch
 func (*Store) checkSurroundedVote(
-	targetEpochsBucket *bolt.Bucket, att *ethpb.IndexedAttestation,
+	targetEpochsBucket *bolt.Bucket, att ethpb.IndexedAtt,
 ) (SlashingKind, error) {
 	c := targetEpochsBucket.Cursor()
 	for k, v := c.Last(); k != nil; k, v = c.Prev() {
 		existingTargetEpoch := bytesutil.BytesToEpochBigEndian(k)
-		if existingTargetEpoch <= att.Data.Target.Epoch {
+		if existingTargetEpoch <= att.GetData().Target.Epoch {
 			break
 		}
 
@@ -296,8 +296,8 @@ func (*Store) checkSurroundedVote(
 			if surrounded {
 				return SurroundedVote, fmt.Errorf(
 					surroundedVoteMessage,
-					att.Data.Source.Epoch,
-					att.Data.Target.Epoch,
+					att.GetData().Source.Epoch,
+					att.GetData().Target.Epoch,
 					existingSourceEpoch,
 					existingTargetEpoch,
 				)
@@ -309,12 +309,12 @@ func (*Store) checkSurroundedVote(
 
 // Iterate from the back of the bucket since we are looking for source_epoch > att.source_epoch
 func (*Store) checkSurroundingVote(
-	sourceEpochsBucket *bolt.Bucket, att *ethpb.IndexedAttestation,
+	sourceEpochsBucket *bolt.Bucket, att ethpb.IndexedAtt,
 ) (SlashingKind, error) {
 	c := sourceEpochsBucket.Cursor()
 	for k, v := c.Last(); k != nil; k, v = c.Prev() {
 		existingSourceEpoch := bytesutil.BytesToEpochBigEndian(k)
-		if existingSourceEpoch <= att.Data.Source.Epoch {
+		if existingSourceEpoch <= att.GetData().Source.Epoch {
 			break
 		}
 
@@ -336,8 +336,8 @@ func (*Store) checkSurroundingVote(
 			if surrounding {
 				return SurroundingVote, fmt.Errorf(
 					surroundingVoteMessage,
-					att.Data.Source.Epoch,
-					att.Data.Target.Epoch,
+					att.GetData().Source.Epoch,
+					att.GetData().Target.Epoch,
 					existingSourceEpoch,
 					existingTargetEpoch,
 				)
@@ -375,7 +375,7 @@ func (s *Store) SaveAttestationsForPubKey(
 // SaveAttestationForPubKey saves an attestation for a validator public
 // key for local validator slashing protection.
 func (s *Store) SaveAttestationForPubKey(
-	ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, signingRoot [fieldparams.RootLength]byte, att *ethpb.IndexedAttestation,
+	ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, signingRoot [fieldparams.RootLength]byte, att ethpb.IndexedAtt,
 ) error {
 	ctx, span := trace.StartSpan(ctx, "Validator.SaveAttestationForPubKey")
 	defer span.End()
@@ -383,8 +383,8 @@ func (s *Store) SaveAttestationForPubKey(
 		ctx: ctx,
 		record: &common.AttestationRecord{
 			PubKey:      pubKey,
-			Source:      att.Data.Source.Epoch,
-			Target:      att.Data.Target.Epoch,
+			Source:      att.GetData().Source.Epoch,
+			Target:      att.GetData().Target.Epoch,
 			SigningRoot: signingRoot[:],
 		},
 	}
@@ -419,7 +419,7 @@ func (s *Store) batchAttestationWrites(ctx context.Context) {
 			_, span := trace.StartSpan(v.ctx, "batchAttestationWrites.handleBatchedAttestationSaveRequest")
 			s.batchedAttestations.Append(v.record)
 
-			span.AddAttributes(trace.Int64Attribute("num_records", int64(s.batchedAttestations.Len())))
+			span.SetAttributes(trace.Int64Attribute("num_records", int64(s.batchedAttestations.Len())))
 
 			if numRecords := s.batchedAttestations.Len(); numRecords >= attestationBatchCapacity {
 				log.WithField("recordCount", numRecords).Debug(

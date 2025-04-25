@@ -9,25 +9,25 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	mockp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/testutil"
+	syncmock "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	mockp2p "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/testutil"
-	syncmock "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/initial-sync/testing"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/wrapper"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 type dummyIdentity enode.ID
@@ -91,8 +91,10 @@ func TestGetVersion(t *testing.T) {
 
 func TestGetHealth(t *testing.T) {
 	checker := &syncmock.Sync{}
+	optimisticFetcher := &mock.ChainService{Optimistic: false}
 	s := &Server{
-		SyncChecker: checker,
+		SyncChecker:           checker,
+		OptimisticModeFetcher: optimisticFetcher,
 	}
 
 	request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/node/health", nil)
@@ -101,25 +103,30 @@ func TestGetHealth(t *testing.T) {
 	s.GetHealth(writer, request)
 	assert.Equal(t, http.StatusServiceUnavailable, writer.Code)
 
-	checker.IsInitialized = true
-	request = httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/node/health", nil)
-	writer = httptest.NewRecorder()
-	writer.Body = &bytes.Buffer{}
-	s.GetHealth(writer, request)
-	assert.Equal(t, http.StatusPartialContent, writer.Code)
-
+	checker.IsSyncing = true
+	checker.IsSynced = false
 	request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://example.com/eth/v1/node/health?syncing_status=%d", http.StatusPaymentRequired), nil)
 	writer = httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
 	s.GetHealth(writer, request)
 	assert.Equal(t, http.StatusPaymentRequired, writer.Code)
 
+	checker.IsSyncing = false
 	checker.IsSynced = true
 	request = httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/node/health", nil)
 	writer = httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
 	s.GetHealth(writer, request)
 	assert.Equal(t, http.StatusOK, writer.Code)
+
+	checker.IsSyncing = false
+	checker.IsSynced = true
+	optimisticFetcher.Optimistic = true
+	request = httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/node/health", nil)
+	writer = httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+	s.GetHealth(writer, request)
+	assert.Equal(t, http.StatusPartialContent, writer.Code)
 }
 
 func TestGetIdentity(t *testing.T) {

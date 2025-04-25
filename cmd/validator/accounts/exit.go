@@ -4,18 +4,18 @@ import (
 	"io"
 	"strings"
 
+	grpcutil "github.com/OffchainLabs/prysm/v6/api/grpc"
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts/wallet"
+	"github.com/OffchainLabs/prysm/v6/validator/client"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager/local"
+	"github.com/OffchainLabs/prysm/v6/validator/node"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
-	grpcutil "github.com/prysmaticlabs/prysm/v5/api/grpc"
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
-	"github.com/prysmaticlabs/prysm/v5/validator/client"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/local"
-	"github.com/prysmaticlabs/prysm/v5/validator/node"
 	"github.com/urfave/cli/v2"
 	"google.golang.org/grpc"
 )
@@ -27,14 +27,14 @@ func Exit(c *cli.Context, r io.Reader) error {
 	dialOpts := client.ConstructDialOptions(
 		c.Int(cmd.GrpcMaxCallRecvMsgSizeFlag.Name),
 		c.String(flags.CertFlag.Name),
-		c.Uint(flags.GrpcRetriesFlag.Name),
-		c.Duration(flags.GrpcRetryDelayFlag.Name),
+		c.Uint(flags.GRPCRetriesFlag.Name),
+		c.Duration(flags.GRPCRetryDelayFlag.Name),
 	)
-	grpcHeaders := strings.Split(c.String(flags.GrpcHeadersFlag.Name), ",")
+	grpcHeaders := strings.Split(c.String(flags.GRPCHeadersFlag.Name), ",")
 	beaconRPCProvider := c.String(flags.BeaconRPCProviderFlag.Name)
 	if !c.IsSet(flags.Web3SignerURLFlag.Name) && !c.IsSet(flags.WalletDirFlag.Name) && !c.IsSet(flags.InteropNumValidators.Name) {
 		return errors.Errorf("No validators found, please provide a prysm wallet directory via flag --%s "+
-			"or a web3signer location with corresponding public keys via flags --%s and --%s ",
+			"or a remote signer location with corresponding public keys via flags --%s and --%s ",
 			flags.WalletDirFlag.Name,
 			flags.Web3SignerURLFlag.Name,
 			flags.Web3SignerPublicValidatorKeysFlag,
@@ -62,7 +62,7 @@ func Exit(c *cli.Context, r io.Reader) error {
 		}
 		config, err := node.Web3SignerConfig(c)
 		if err != nil {
-			return errors.Wrapf(err, "could not configure web3signer")
+			return errors.Wrapf(err, "could not configure remote signer")
 		}
 		config.GenesisValidatorsRoot = resp.GenesisValidatorsRoot
 		w, km, err = walletWithWeb3SignerKeymanager(c, config)
@@ -83,7 +83,7 @@ func Exit(c *cli.Context, r io.Reader) error {
 		accounts.WithBeaconRPCProvider(beaconRPCProvider),
 		accounts.WithBeaconRESTApiProvider(c.String(flags.BeaconRESTApiProviderFlag.Name)),
 		accounts.WithGRPCHeaders(grpcHeaders),
-		accounts.WithExitJSONOutputPath(c.String(flags.VoluntaryExitJSONOutputPath.Name)),
+		accounts.WithExitJSONOutputPath(c.String(flags.VoluntaryExitJSONOutputPathFlag.Name)),
 	}
 	// Get full set of public keys from the keymanager.
 	validatingPublicKeys, err := km.FetchValidatingPublicKeys(c.Context)

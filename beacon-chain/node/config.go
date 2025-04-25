@@ -4,6 +4,11 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
 	"github.com/ethereum/go-ethereum/common"
 	fastssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/prysm/v5/cmd"
@@ -23,7 +28,8 @@ const (
 )
 
 func configureTracing(cliCtx *cli.Context) error {
-	return tracing2.Setup(
+	return tracing.Setup(
+		cliCtx.Context,
 		"beacon-chain", // service name
 		cliCtx.String(cmd.TracingProcessNameFlag.Name),
 		cliCtx.String(cmd.TracingEndpointFlag.Name),
@@ -83,6 +89,21 @@ func configureBuilderCircuitBreaker(cliCtx *cli.Context) error {
 			return err
 		}
 	}
+	if cliCtx.IsSet(flags.MinBuilderBid.Name) {
+		c := params.BeaconConfig().Copy()
+		c.MinBuilderBid = cliCtx.Uint64(flags.MinBuilderBid.Name)
+		if err := params.SetActive(c); err != nil {
+			return err
+		}
+	}
+	if cliCtx.IsSet(flags.MinBuilderDiff.Name) {
+		c := params.BeaconConfig().Copy()
+		c.MinBuilderDiff = cliCtx.Uint64(flags.MinBuilderDiff.Name)
+		if err := params.SetActive(c); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -127,7 +148,7 @@ func configureEth1Config(cliCtx *cli.Context) error {
 }
 
 func configureNetwork(cliCtx *cli.Context) {
-	if len(cliCtx.StringSlice(cmd.BootstrapNode.Name)) > 0 {
+	if cliCtx.IsSet(cmd.BootstrapNode.Name) {
 		c := params.BeaconNetworkConfig()
 		c.BootstrapNodes = cliCtx.StringSlice(cmd.BootstrapNode.Name)
 		params.OverrideBeaconNetworkConfig(c)
@@ -137,23 +158,6 @@ func configureNetwork(cliCtx *cli.Context) {
 		networkCfg.ContractDeploymentBlock = uint64(cliCtx.Int(flags.ContractDeploymentBlock.Name))
 		params.OverrideBeaconNetworkConfig(networkCfg)
 	}
-}
-
-func configureInteropConfig(cliCtx *cli.Context) error {
-	// an explicit chain config was specified, don't mess with it
-	if cliCtx.IsSet(cmd.ChainConfigFileFlag.Name) {
-		return nil
-	}
-	genTimeIsSet := cliCtx.IsSet(flags.InteropGenesisTimeFlag.Name)
-	numValsIsSet := cliCtx.IsSet(flags.InteropNumValidatorsFlag.Name)
-	votesIsSet := cliCtx.IsSet(flags.InteropMockEth1DataVotesFlag.Name)
-
-	if genTimeIsSet || numValsIsSet || votesIsSet {
-		if err := params.SetActive(params.InteropConfig().Copy()); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func configureExecutionSetting(cliCtx *cli.Context) error {
@@ -177,7 +181,7 @@ func configureExecutionSetting(cliCtx *cli.Context) error {
 	}
 
 	if !cliCtx.IsSet(flags.SuggestedFeeRecipient.Name) {
-		log.Warnf("In order to receive transaction fees from proposing blocks, " +
+		log.Warn("In order to receive transaction fees from proposing blocks, " +
 			"you must provide flag --" + flags.SuggestedFeeRecipient.Name + " with a valid ethereum address when starting your beacon node. " +
 			"Please see our documentation for more information on this requirement (https://docs.prylabs.network/docs/execution-node/fee-recipient).")
 		return nil

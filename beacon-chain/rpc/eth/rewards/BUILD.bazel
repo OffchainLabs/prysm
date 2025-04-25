@@ -7,7 +7,7 @@ go_library(
         "server.go",
         "service.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/rewards",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/rewards",
     visibility = ["//visibility:public"],
     deps = [
         "//api/server/structs:go_default_library",
@@ -15,7 +15,9 @@ go_library(
         "//beacon-chain/core/altair:go_default_library",
         "//beacon-chain/core/blocks:go_default_library",
         "//beacon-chain/core/epoch/precompute:go_default_library",
+        "//beacon-chain/core/transition:go_default_library",
         "//beacon-chain/core/validators:go_default_library",
+        "//beacon-chain/db:go_default_library",
         "//beacon-chain/rpc/eth/shared:go_default_library",
         "//beacon-chain/rpc/lookup:go_default_library",
         "//beacon-chain/state:go_default_library",
@@ -25,17 +27,20 @@ go_library(
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/interfaces:go_default_library",
         "//consensus-types/primitives:go_default_library",
+        "//monitoring/tracing/trace:go_default_library",
         "//network/httputil:go_default_library",
         "//runtime/version:go_default_library",
         "//time/slots:go_default_library",
         "@com_github_wealdtech_go_bytesutil//:go_default_library",
-        "@io_opencensus_go//trace:go_default_library",
     ],
 )
 
 go_test(
     name = "go_default_test",
-    srcs = ["handlers_test.go"],
+    srcs = [
+        "handlers_test.go",
+        "service_test.go",
+    ],
     embed = [":go_default_library"],
     deps = [
         "//api/server/structs:go_default_library",
@@ -43,6 +48,8 @@ go_test(
         "//beacon-chain/core/altair:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
+        "//beacon-chain/core/transition:go_default_library",
+        "//beacon-chain/db/testing:go_default_library",
         "//beacon-chain/rpc/testutil:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//beacon-chain/state/stategen/mock:go_default_library",
@@ -56,6 +63,7 @@ go_test(
         "//encoding/bytesutil:go_default_library",
         "//network/httputil:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
+        "//runtime/version:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
         "//testing/util:go_default_library",

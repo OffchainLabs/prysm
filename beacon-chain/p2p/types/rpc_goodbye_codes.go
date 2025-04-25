@@ -1,7 +1,9 @@
 package types
 
 import (
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"errors"
+
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 )
 
 // RPCGoodbyeCode represents goodbye code, used in sync package.
@@ -35,8 +37,8 @@ var GoodbyeCodeMessages = map[RPCGoodbyeCode]string{
 
 // ErrToGoodbyeCode converts given error to RPC goodbye code.
 func ErrToGoodbyeCode(err error) RPCGoodbyeCode {
-	switch err {
-	case ErrWrongForkDigestVersion:
+	switch {
+	case errors.Is(err, ErrWrongForkDigestVersion):
 		return GoodbyeCodeWrongNetwork
 	default:
 		return GoodbyeCodeGenericError

@@ -1,10 +1,11 @@
 package beacon
 
 import (
+	"os"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 )
 
 func TestMain(m *testing.M) {
@@ -21,5 +22,5 @@ func TestMain(m *testing.M) {
 		flags.Init(resetFlags)
 	}()
 
-	m.Run()
+	os.Exit(m.Run())
 }

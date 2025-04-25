@@ -6,8 +6,8 @@ package state
 import (
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 )
 
 const (
@@ -31,6 +31,8 @@ const (
 	LightClientFinalityUpdate
 	// LightClientOptimisticUpdate event
 	LightClientOptimisticUpdate
+	// PayloadAttributes events are fired upon a missed slot or new head.
+	PayloadAttributes
 )
 
 // BlockProcessedData is the data sent with BlockProcessed events.

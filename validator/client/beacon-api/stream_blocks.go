@@ -4,15 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"strconv"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/events"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"google.golang.org/grpc"
 )
 
@@ -23,19 +21,10 @@ type abstractSignedBlockResponseJson struct {
 	Data                json.RawMessage `json:"data"`
 }
 
-type streamSlotsClient struct {
-	grpc.ClientStream
-	ctx                context.Context
-	beaconApiClient    beaconApiValidatorClient
-	streamSlotsRequest *ethpb.StreamSlotsRequest
-	pingDelay          time.Duration
-	ch                 chan event
-}
-
 type streamBlocksAltairClient struct {
 	grpc.ClientStream
 	ctx                 context.Context
-	beaconApiClient     beaconApiValidatorClient
+	beaconApiClient     *beaconApiValidatorClient
 	streamBlocksRequest *ethpb.StreamBlocksRequest
 	prevBlockSlot       primitives.Slot
 	pingDelay           time.Duration
@@ -47,19 +36,7 @@ type headSignedBeaconBlockResult struct {
 	slot                 primitives.Slot
 }
 
-func (c beaconApiValidatorClient) streamSlots(ctx context.Context, in *ethpb.StreamSlotsRequest, pingDelay time.Duration) ethpb.BeaconNodeValidator_StreamSlotsClient {
-	ch := make(chan event, 1)
-	c.eventHandler.subscribe(eventSub{name: "stream slots", ch: ch})
-	return &streamSlotsClient{
-		ctx:                ctx,
-		beaconApiClient:    c,
-		streamSlotsRequest: in,
-		pingDelay:          pingDelay,
-		ch:                 ch,
-	}
-}
-
-func (c beaconApiValidatorClient) streamBlocks(ctx context.Context, in *ethpb.StreamBlocksRequest, pingDelay time.Duration) ethpb.BeaconNodeValidator_StreamBlocksAltairClient {
+func (c *beaconApiValidatorClient) streamBlocks(ctx context.Context, in *ethpb.StreamBlocksRequest, pingDelay time.Duration) ethpb.BeaconNodeValidator_StreamBlocksAltairClient {
 	return &streamBlocksAltairClient{
 		ctx:                 ctx,
 		beaconApiClient:     c,
@@ -68,32 +45,8 @@ func (c beaconApiValidatorClient) streamBlocks(ctx context.Context, in *ethpb.St
 	}
 }
 
-func (c *streamSlotsClient) Recv() (*ethpb.StreamSlotsResponse, error) {
-	for {
-		select {
-		case rawEvent := <-c.ch:
-			if rawEvent.eventType != events.HeadTopic {
-				continue
-			}
-			e := &structs.HeadEvent{}
-			if err := json.Unmarshal([]byte(rawEvent.data), e); err != nil {
-				return nil, errors.Wrap(err, "failed to unmarshal head event into JSON")
-			}
-			uintSlot, err := strconv.ParseUint(e.Slot, 10, 64)
-			if err != nil {
-				return nil, errors.Wrap(err, "failed to parse slot")
-			}
-			return &ethpb.StreamSlotsResponse{
-				Slot: primitives.Slot(uintSlot),
-			}, nil
-		case <-c.ctx.Done():
-			return nil, errors.New("context canceled")
-		}
-	}
-}
-
 func (c *streamBlocksAltairClient) Recv() (*ethpb.StreamBlocksResponse, error) {
-	result, err := c.beaconApiClient.getHeadSignedBeaconBlock(c.ctx)
+	result, err := c.beaconApiClient.headSignedBeaconBlock(c.ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get latest signed block")
 	}
@@ -102,7 +55,7 @@ func (c *streamBlocksAltairClient) Recv() (*ethpb.StreamBlocksResponse, error) {
 	for (c.streamBlocksRequest.VerifiedOnly && result.executionOptimistic) || c.prevBlockSlot == result.slot {
 		select {
 		case <-time.After(c.pingDelay):
-			result, err = c.beaconApiClient.getHeadSignedBeaconBlock(c.ctx)
+			result, err = c.beaconApiClient.headSignedBeaconBlock(c.ctx)
 			if err != nil {
 				return nil, errors.Wrap(err, "failed to get latest signed block")
 			}
@@ -115,7 +68,7 @@ func (c *streamBlocksAltairClient) Recv() (*ethpb.StreamBlocksResponse, error) {
 	return result.streamBlocksResponse, nil
 }
 
-func (c beaconApiValidatorClient) getHeadSignedBeaconBlock(ctx context.Context) (*headSignedBeaconBlockResult, error) {
+func (c *beaconApiValidatorClient) headSignedBeaconBlock(ctx context.Context) (*headSignedBeaconBlockResult, error) {
 	// Since we don't know yet what the json looks like, we unmarshal into an abstract structure that has only a version
 	// and a blob of data
 	signedBlockResponseJson := abstractSignedBlockResponseJson{}

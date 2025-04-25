@@ -1,3 +1,4 @@
+// lint:nopanic -- Test tooling / code.
 package components
 
 import (
@@ -15,15 +16,15 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/io/file"
+	"github.com/OffchainLabs/prysm/v6/runtime/interop"
+	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
+	e2etypes "github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
-	"github.com/prysmaticlabs/prysm/v5/runtime/interop"
-	e2e "github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
-	e2etypes "github.com/prysmaticlabs/prysm/v5/testing/endtoend/types"
 	"gopkg.in/yaml.v2"
 )
 
@@ -148,7 +149,7 @@ func (w *Web3RemoteSigner) monitorStart() {
 		}
 		res, err := client.Do(req)
 		_ = err
-		if res != nil && res.StatusCode == 200 {
+		if res != nil && res.StatusCode == http.StatusOK {
 			close(w.started)
 			return
 		}

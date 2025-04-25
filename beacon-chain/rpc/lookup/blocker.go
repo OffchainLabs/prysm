@@ -4,22 +4,20 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	log "github.com/sirupsen/logrus"
 )
 
 // BlockIdParseError represents an error scenario where a block ID could not be parsed.
@@ -83,8 +81,7 @@ func (p *BeaconDbBlocker) Block(ctx context.Context, id []byte) (interfaces.Read
 			return nil, errors.Wrap(err, "could not retrieve genesis block")
 		}
 	default:
-		stringId := strings.ToLower(string(id))
-		if len(stringId) >= 2 && stringId[:2] == "0x" {
+		if bytesutil.IsHex(id) {
 			decoded, err := hexutil.Decode(string(id))
 			if err != nil {
 				e := NewBlockIdParseError(err)
@@ -148,13 +145,13 @@ func (p *BeaconDbBlocker) Block(ctx context.Context, id []byte) (interfaces.Read
 //     we are technically not supposed to import a block to forkchoice unless we have the blobs, so the nuance here is if we can't find the file and we are inside the protocol-defined retention period, then it's actually a 500.
 //   - block exists, has commitments, outside retention period (greater of protocol- or user-specified) - ie just like block exists, no commitment
 func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices []uint64) ([]*blocks.VerifiedROBlob, *core.RpcError) {
-	var root []byte
+	var rootSlice []byte
 	switch id {
 	case "genesis":
 		return nil, &core.RpcError{Err: errors.New("blobs are not supported for Phase 0 fork"), Reason: core.BadRequest}
 	case "head":
 		var err error
-		root, err = p.ChainInfoFetcher.HeadRoot(ctx)
+		rootSlice, err = p.ChainInfoFetcher.HeadRoot(ctx)
 		if err != nil {
 			return nil, &core.RpcError{Err: errors.Wrapf(err, "could not retrieve head root"), Reason: core.Internal}
 		}
@@ -163,20 +160,17 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices []uint64
 		if fcp == nil {
 			return nil, &core.RpcError{Err: errors.New("received nil finalized checkpoint"), Reason: core.Internal}
 		}
-		root = fcp.Root
+		rootSlice = fcp.Root
 	case "justified":
 		jcp := p.ChainInfoFetcher.CurrentJustifiedCheckpt()
 		if jcp == nil {
 			return nil, &core.RpcError{Err: errors.New("received nil justified checkpoint"), Reason: core.Internal}
 		}
-		root = jcp.Root
+		rootSlice = jcp.Root
 	default:
 		if bytesutil.IsHex([]byte(id)) {
 			var err error
-			root, err = hexutil.Decode(id)
-			if len(root) != fieldparams.RootLength {
-				return nil, &core.RpcError{Err: fmt.Errorf("invalid block root of length %d", len(root)), Reason: core.BadRequest}
-			}
+			rootSlice, err = bytesutil.DecodeHexWithLength(id, fieldparams.RootLength)
 			if err != nil {
 				return nil, &core.RpcError{Err: NewBlockIdParseError(err), Reason: core.BadRequest}
 			}
@@ -194,72 +188,88 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices []uint64
 			}
 			ok, roots, err := p.BeaconDB.BlockRootsBySlot(ctx, primitives.Slot(slot))
 			if !ok {
-				return nil, &core.RpcError{Err: fmt.Errorf("block not found: no block roots at slot %d", slot), Reason: core.NotFound}
+				return nil, &core.RpcError{Err: fmt.Errorf("no block roots at slot %d", slot), Reason: core.NotFound}
 			}
 			if err != nil {
-				return nil, &core.RpcError{Err: errors.Wrap(err, "failed to get block roots by slot"), Reason: core.Internal}
+				return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to get block roots for slot %d", slot), Reason: core.Internal}
 			}
-			root = roots[0][:]
+			rootSlice = roots[0][:]
 			if len(roots) == 1 {
 				break
 			}
 			for _, blockRoot := range roots {
 				canonical, err := p.ChainInfoFetcher.IsCanonical(ctx, blockRoot)
 				if err != nil {
-					return nil, &core.RpcError{Err: errors.Wrap(err, "could not determine if block root is canonical"), Reason: core.Internal}
+					return nil, &core.RpcError{Err: errors.Wrapf(err, "could not determine if block %#x is canonical", blockRoot), Reason: core.Internal}
 				}
 				if canonical {
-					root = blockRoot[:]
+					rootSlice = blockRoot[:]
 					break
 				}
 			}
 		}
 	}
-	if !p.BeaconDB.HasBlock(ctx, bytesutil.ToBytes32(root)) {
-		return nil, &core.RpcError{Err: errors.New("block not found"), Reason: core.NotFound}
-	}
-	b, err := p.BeaconDB.Block(ctx, bytesutil.ToBytes32(root))
+
+	root := bytesutil.ToBytes32(rootSlice)
+
+	b, err := p.BeaconDB.Block(ctx, root)
 	if err != nil {
-		return nil, &core.RpcError{Err: errors.Wrap(err, "failed to retrieve block from db"), Reason: core.Internal}
+		return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to retrieve block %#x from db", rootSlice), Reason: core.Internal}
 	}
-	// if block is not in the retention window  return 200 w/ empty list
-	if !params.WithinDAPeriod(slots.ToEpoch(b.Block().Slot()), slots.ToEpoch(p.GenesisTimeFetcher.CurrentSlot())) {
+	if b == nil {
+		return nil, &core.RpcError{Err: fmt.Errorf("block %#x not found in db", rootSlice), Reason: core.NotFound}
+	}
+
+	// if block is not in the retention window, return 200 w/ empty list
+	if !p.BlobStorage.WithinRetentionPeriod(slots.ToEpoch(b.Block().Slot()), slots.ToEpoch(p.GenesisTimeFetcher.CurrentSlot())) {
 		return make([]*blocks.VerifiedROBlob, 0), nil
 	}
+
 	commitments, err := b.Block().Body().BlobKzgCommitments()
 	if err != nil {
-		return nil, &core.RpcError{Err: errors.Wrap(err, "failed to retrieve kzg commitments from block"), Reason: core.Internal}
+		return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to retrieve kzg commitments from block %#x", rootSlice), Reason: core.Internal}
 	}
 	// if there are no commitments return 200 w/ empty list
 	if len(commitments) == 0 {
 		return make([]*blocks.VerifiedROBlob, 0), nil
 	}
+
+	sum := p.BlobStorage.Summary(root)
+
 	if len(indices) == 0 {
-		m, err := p.BlobStorage.Indices(bytesutil.ToBytes32(root))
-		if err != nil {
-			log.WithFields(log.Fields{
-				"blockRoot": hexutil.Encode(root),
-			}).Error(errors.Wrapf(err, "could not retrieve blob indices for root %#x", root))
-			return nil, &core.RpcError{Err: fmt.Errorf("could not retrieve blob indices for root %#x", root), Reason: core.Internal}
+		for i := range commitments {
+			if sum.HasIndex(uint64(i)) {
+				indices = append(indices, uint64(i))
+			}
 		}
-		for k, v := range m {
-			if v {
-				indices = append(indices, uint64(k))
+	} else {
+		for _, ix := range indices {
+			if ix >= sum.MaxBlobsForEpoch() {
+				return nil, &core.RpcError{
+					Err:    fmt.Errorf("requested index %d is bigger than the maximum possible blob count %d", ix, sum.MaxBlobsForEpoch()),
+					Reason: core.BadRequest,
+				}
+			}
+			if !sum.HasIndex(ix) {
+				return nil, &core.RpcError{
+					Err:    fmt.Errorf("requested index %d not found", ix),
+					Reason: core.NotFound,
+				}
 			}
 		}
 	}
-	// returns empty slice if there are no indices
+
 	blobs := make([]*blocks.VerifiedROBlob, len(indices))
 	for i, index := range indices {
-		vblob, err := p.BlobStorage.Get(bytesutil.ToBytes32(root), index)
+		vblob, err := p.BlobStorage.Get(root, index)
 		if err != nil {
-			log.WithFields(log.Fields{
-				"blockRoot": hexutil.Encode(root),
-				"blobIndex": index,
-			}).Error(errors.Wrapf(err, "could not retrieve blob for block root %#x at index %d", root, index))
-			return nil, &core.RpcError{Err: fmt.Errorf("could not retrieve blob for block root %#x at index %d", root, index), Reason: core.Internal}
+			return nil, &core.RpcError{
+				Err:    fmt.Errorf("could not retrieve blob for block root %#x at index %d", rootSlice, index),
+				Reason: core.Internal,
+			}
 		}
 		blobs[i] = &vblob
 	}
+
 	return blobs, nil
 }

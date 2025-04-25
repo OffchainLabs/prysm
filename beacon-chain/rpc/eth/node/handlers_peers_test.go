@@ -9,19 +9,18 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
+	mockp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/gorilla/mux"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	libp2ptest "github.com/libp2p/go-libp2p/p2p/host/peerstore/test"
 	ma "github.com/multiformats/go-multiaddr"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
-	mockp2p "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestGetPeer(t *testing.T) {
@@ -43,7 +42,7 @@ func TestGetPeer(t *testing.T) {
 
 	t.Run("OK", func(t *testing.T) {
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/node/peers/{peer_id}", nil)
-		request = mux.SetURLVars(request, map[string]string{"peer_id": rawId})
+		request.SetPathValue("peer_id", rawId)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -60,7 +59,7 @@ func TestGetPeer(t *testing.T) {
 
 	t.Run("Invalid ID", func(t *testing.T) {
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/node/peers/{peer_id}", nil)
-		request = mux.SetURLVars(request, map[string]string{"peer_id": "foo"})
+		request.SetPathValue("peer_id", "foo")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -74,7 +73,7 @@ func TestGetPeer(t *testing.T) {
 
 	t.Run("Peer not found", func(t *testing.T) {
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/node/peers/{peer_id}", nil)
-		request = mux.SetURLVars(request, map[string]string{"peer_id": "16Uiu2HAmQqFdEcHbSmQTQuLoAhnMUrgoWoraKK4cUJT6FuuqHqTU"})
+		request.SetPathValue("peer_id", "16Uiu2HAmQqFdEcHbSmQTQuLoAhnMUrgoWoraKK4cUJT6FuuqHqTU")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -118,13 +117,13 @@ func TestGetPeers(t *testing.T) {
 
 			switch i {
 			case 0, 1:
-				peerStatus.SetConnectionState(id, peers.PeerConnecting)
+				peerStatus.SetConnectionState(id, peers.Connecting)
 			case 2, 3:
-				peerStatus.SetConnectionState(id, peers.PeerConnected)
+				peerStatus.SetConnectionState(id, peers.Connected)
 			case 4, 5:
-				peerStatus.SetConnectionState(id, peers.PeerDisconnecting)
+				peerStatus.SetConnectionState(id, peers.Disconnecting)
 			case 6, 7:
-				peerStatus.SetConnectionState(id, peers.PeerDisconnected)
+				peerStatus.SetConnectionState(id, peers.Disconnected)
 			default:
 				t.Fatalf("Failed to set connection state for peer")
 			}
@@ -240,7 +239,7 @@ func TestGetPeers(t *testing.T) {
 					}
 				}
 				if !found {
-					t.Errorf("Expected ID '" + expectedId + "' not found")
+					t.Error("Expected ID '" + expectedId + "' not found")
 				}
 			}
 		})
@@ -290,13 +289,13 @@ func TestGetPeerCount(t *testing.T) {
 
 		switch i {
 		case 0:
-			peerStatus.SetConnectionState(id, peers.PeerConnecting)
+			peerStatus.SetConnectionState(id, peers.Connecting)
 		case 1, 2:
-			peerStatus.SetConnectionState(id, peers.PeerConnected)
+			peerStatus.SetConnectionState(id, peers.Connected)
 		case 3, 4, 5:
-			peerStatus.SetConnectionState(id, peers.PeerDisconnecting)
+			peerStatus.SetConnectionState(id, peers.Disconnecting)
 		case 6, 7, 8, 9:
-			peerStatus.SetConnectionState(id, peers.PeerDisconnected)
+			peerStatus.SetConnectionState(id, peers.Disconnected)
 		default:
 			t.Fatalf("Failed to set connection state for peer")
 		}

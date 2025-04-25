@@ -10,21 +10,21 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/OffchainLabs/prysm/v6/api/pagination"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts/petnames"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager/derived"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager/local"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/pagination"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/petnames"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/derived"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/local"
-	"go.opencensus.io/trace"
 )
 
 // ListAccounts allows retrieval of validating keys and their petnames
@@ -95,7 +95,7 @@ func (s *Server) ListAccounts(w http.ResponseWriter, r *http.Request) {
 	}
 	start, end, nextPageToken, err := pagination.StartAndEndPage(pageToken, int(ps), len(keys))
 	if err != nil {
-		httputil.HandleError(w, fmt.Errorf("Could not paginate results: %v",
+		httputil.HandleError(w, fmt.Errorf("Could not paginate results: %w",
 			err).Error(), http.StatusInternalServerError)
 		return
 	}
@@ -123,7 +123,7 @@ func (s *Server) BackupAccounts(w http.ResponseWriter, r *http.Request) {
 	var req BackupAccountsRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	switch {
-	case err == io.EOF:
+	case errors.Is(err, io.EOF):
 		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
@@ -131,7 +131,7 @@ func (s *Server) BackupAccounts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.PublicKeys == nil || len(req.PublicKeys) < 1 {
+	if len(req.PublicKeys) < 1 {
 		httputil.HandleError(w, "No public keys specified to backup", http.StatusBadRequest)
 		return
 	}
@@ -232,7 +232,7 @@ func (s *Server) VoluntaryExit(w http.ResponseWriter, r *http.Request) {
 	var req VoluntaryExitRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	switch {
-	case err == io.EOF:
+	case errors.Is(err, io.EOF):
 		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
@@ -258,7 +258,7 @@ func (s *Server) VoluntaryExit(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg := accounts.PerformExitCfg{
 		ValidatorClient:  s.beaconNodeValidatorClient,
-		NodeClient:       s.beaconNodeClient,
+		NodeClient:       s.nodeClient,
 		Keymanager:       km,
 		RawPubKeys:       pubKeys,
 		FormattedPubKeys: req.PublicKeys,

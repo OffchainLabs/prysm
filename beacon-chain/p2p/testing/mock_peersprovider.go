@@ -4,16 +4,21 @@ import (
 	"context"
 	"sync"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
+	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/scorers"
-	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	log "github.com/sirupsen/logrus"
+)
+
+const (
+	MockRawPeerId0 = "16Uiu2HAkyWZ4Ni1TpvDS8dPxsozmHY85KaiFjodQuV6Tz5tkHVeR"
+	MockRawPeerId1 = "16Uiu2HAm4HgJ9N1o222xK61o7LSgToYWoAy1wNTJRkh9gLZapVAy"
 )
 
 // MockPeersProvider implements PeersProvider for testing.
@@ -50,7 +55,7 @@ func (m *MockPeersProvider) Peers() *peers.Status {
 			},
 		})
 		// Pretend we are connected to two peers
-		id0, err := peer.Decode("16Uiu2HAkyWZ4Ni1TpvDS8dPxsozmHY85KaiFjodQuV6Tz5tkHVeR")
+		id0, err := peer.Decode(MockRawPeerId0)
 		if err != nil {
 			log.WithError(err).Debug("Cannot decode")
 		}
@@ -59,9 +64,9 @@ func (m *MockPeersProvider) Peers() *peers.Status {
 			log.WithError(err).Debug("Cannot decode")
 		}
 		m.peers.Add(createENR(), id0, ma0, network.DirInbound)
-		m.peers.SetConnectionState(id0, peers.PeerConnected)
+		m.peers.SetConnectionState(id0, peers.Connected)
 		m.peers.SetChainState(id0, &pb.Status{FinalizedEpoch: 10})
-		id1, err := peer.Decode("16Uiu2HAm4HgJ9N1o222xK61o7LSgToYWoAy1wNTJRkh9gLZapVAy")
+		id1, err := peer.Decode(MockRawPeerId1)
 		if err != nil {
 			log.WithError(err).Debug("Cannot decode")
 		}
@@ -70,7 +75,7 @@ func (m *MockPeersProvider) Peers() *peers.Status {
 			log.WithError(err).Debug("Cannot decode")
 		}
 		m.peers.Add(createENR(), id1, ma1, network.DirOutbound)
-		m.peers.SetConnectionState(id1, peers.PeerConnected)
+		m.peers.SetConnectionState(id1, peers.Connected)
 		m.peers.SetChainState(id1, &pb.Status{FinalizedEpoch: 11})
 	}
 	return m.peers

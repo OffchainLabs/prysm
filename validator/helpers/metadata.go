@@ -5,9 +5,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v6/validator/db/iface"
+	"github.com/OffchainLabs/prysm/v6/validator/slashing-protection-history/format"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/iface"
-	"github.com/prysmaticlabs/prysm/v5/validator/slashing-protection-history/format"
 )
 
 func ValidateMetadata(ctx context.Context, validatorDB iface.ValidatorDB, interchangeJSON *format.EIPSlashingProtectionFormat) error {

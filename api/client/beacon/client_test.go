@@ -4,8 +4,8 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/api/client"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/OffchainLabs/prysm/v6/api/client"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 func TestParseNodeVersion(t *testing.T) {
@@ -97,31 +97,31 @@ func TestValidHostname(t *testing.T) {
 		{
 			name:    "hostname with port",
 			hostArg: "mydomain.org:3500",
-			path:    getNodeVersionPath,
+			path:    GetNodeVersionPath,
 			joined:  "http://mydomain.org:3500/eth/v1/node/version",
 		},
 		{
 			name:    "https scheme, hostname with port",
 			hostArg: "https://mydomain.org:3500",
-			path:    getNodeVersionPath,
+			path:    GetNodeVersionPath,
 			joined:  "https://mydomain.org:3500/eth/v1/node/version",
 		},
 		{
 			name:    "http scheme, hostname without port",
 			hostArg: "http://mydomain.org",
-			path:    getNodeVersionPath,
+			path:    GetNodeVersionPath,
 			joined:  "http://mydomain.org/eth/v1/node/version",
 		},
 		{
 			name:    "http scheme, trailing slash, hostname without port",
 			hostArg: "http://mydomain.org/",
-			path:    getNodeVersionPath,
+			path:    GetNodeVersionPath,
 			joined:  "http://mydomain.org/eth/v1/node/version",
 		},
 		{
 			name:    "http scheme, hostname with basic auth creds and no port",
 			hostArg: "http://username:pass@mydomain.org/",
-			path:    getNodeVersionPath,
+			path:    GetNodeVersionPath,
 			joined:  "http://username:pass@mydomain.org/eth/v1/node/version",
 		},
 	}

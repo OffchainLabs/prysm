@@ -1,21 +1,22 @@
 package blocks
 
 import (
+	field_params "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/container/trie"
+	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/gohashtree"
-	field_params "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/container/trie"
-	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
 const (
-	bodyLength    = 12 // The number of elements in the BeaconBlockBody Container
+	bodyLength    = 13 // The number of elements in the BeaconBlockBody Container for Electra
 	logBodyLength = 4  // The log 2 of bodyLength
 	kzgPosition   = 11 // The index of the KZG commitment list in the Body
-	KZGOffset     = 54 * field_params.MaxBlobCommitmentsPerBlock
+	kzgRootIndex  = 54 // The Merkle index of the KZG commitment list's root in the Body's Merkle tree
+	KZGOffset     = kzgRootIndex * field_params.MaxBlobCommitmentsPerBlock
 )
 
 var (
@@ -37,9 +38,7 @@ func VerifyKZGInclusionProof(blob ROBlob) error {
 	if len(root) != field_params.RootLength {
 		return errInvalidBodyRoot
 	}
-	chunks := make([][32]byte, 2)
-	copy(chunks[0][:], blob.KzgCommitment)
-	copy(chunks[1][:], blob.KzgCommitment[field_params.RootLength:])
+	chunks := makeChunk(blob.KzgCommitment)
 	gohashtree.HashChunks(chunks, chunks)
 	verified := trie.VerifyMerkleProof(root, chunks[0][:], blob.Index+KZGOffset, blob.CommitmentInclusionProof)
 	if !verified {
@@ -85,13 +84,19 @@ func MerkleProofKZGCommitment(body interfaces.ReadOnlyBeaconBlockBody, index int
 func leavesFromCommitments(commitments [][]byte) [][]byte {
 	leaves := make([][]byte, len(commitments))
 	for i, kzg := range commitments {
-		chunk := make([][32]byte, 2)
-		copy(chunk[0][:], kzg)
-		copy(chunk[1][:], kzg[field_params.RootLength:])
+		chunk := makeChunk(kzg)
 		gohashtree.HashChunks(chunk, chunk)
 		leaves[i] = chunk[0][:]
 	}
 	return leaves
+}
+
+// makeChunk constructs a chunk from a KZG commitment.
+func makeChunk(commitment []byte) [][32]byte {
+	chunk := make([][32]byte, 2)
+	copy(chunk[0][:], commitment)
+	copy(chunk[1][:], commitment[field_params.RootLength:])
+	return chunk
 }
 
 // bodyProof returns the Merkle proof of the subtree up to the root of the KZG
@@ -151,7 +156,12 @@ func topLevelRoots(body interfaces.ReadOnlyBeaconBlockBody) ([][]byte, error) {
 
 	// Attester slashings
 	as := body.AttesterSlashings()
-	root, err = ssz.MerkleizeListSSZ(as, params.BeaconConfig().MaxAttesterSlashings)
+	bodyVersion := body.Version()
+	if bodyVersion < version.Electra {
+		root, err = ssz.MerkleizeListSSZ(as, params.BeaconConfig().MaxAttesterSlashings)
+	} else {
+		root, err = ssz.MerkleizeListSSZ(as, params.BeaconConfig().MaxAttesterSlashingsElectra)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +169,11 @@ func topLevelRoots(body interfaces.ReadOnlyBeaconBlockBody) ([][]byte, error) {
 
 	// Attestations
 	att := body.Attestations()
-	root, err = ssz.MerkleizeListSSZ(att, params.BeaconConfig().MaxAttestations)
+	if bodyVersion < version.Electra {
+		root, err = ssz.MerkleizeListSSZ(att, params.BeaconConfig().MaxAttestations)
+	} else {
+		root, err = ssz.MerkleizeListSSZ(att, params.BeaconConfig().MaxAttestationsElectra)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -215,5 +229,18 @@ func topLevelRoots(body interfaces.ReadOnlyBeaconBlockBody) ([][]byte, error) {
 	copy(layer[10], root[:])
 
 	// KZG commitments is not needed
+
+	// Execution requests
+	if body.Version() >= version.Electra {
+		er, err := body.ExecutionRequests()
+		if err != nil {
+			return nil, err
+		}
+		root, err = er.HashTreeRoot()
+		if err != nil {
+			return nil, err
+		}
+		copy(layer[12], root[:])
+	}
 	return layer, nil
 }

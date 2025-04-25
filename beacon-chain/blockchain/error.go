@@ -1,8 +1,14 @@
 package blockchain
 
-import "github.com/pkg/errors"
+import (
+	stderrors "errors"
+
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
+	"github.com/pkg/errors"
+)
 
 var (
+	// ErrInvalid indicates a verification failure that should result in peer downscoring.
 	// ErrInvalidPayload is returned when the payload is invalid
 	ErrInvalidPayload = invalidBlock{error: errors.New("received an INVALID payload from execution engine")}
 	// ErrInvalidBlockHashPayloadStatus is returned when the payload has invalid block hash.
@@ -30,9 +36,13 @@ var (
 	ErrNotCheckpoint = errors.New("not a checkpoint in forkchoice")
 	// ErrNilHead is returned when no head is present in the blockchain service.
 	ErrNilHead = errors.New("nil head")
+	// errNotGenesisRoot is returned when the root is not the genesis block root.
+	errNotGenesisRoot = errors.New("root is not the genesis block root")
+	// errBlacklistedBlock is returned when a block is blacklisted as invalid.
+	errBlacklistedRoot = verification.AsVerificationFailure(errors.New("block root is blacklisted"))
 )
 
-var errMaxBlobsExceeded = errors.New("Expected commitments in block exceeds MAX_BLOBS_PER_BLOCK")
+var errMaxBlobsExceeded = verification.AsVerificationFailure(errors.New("Expected commitments in block exceeds MAX_BLOBS_PER_BLOCK"))
 
 // An invalid block is the block that fails state transition based on the core protocol rules.
 // The beacon node shall not be accepting nor building blocks that branch off from an invalid block.
@@ -76,6 +86,15 @@ func IsInvalidBlock(e error) bool {
 	}
 	var d invalidBlockError
 	return errors.As(e, &d)
+}
+
+// Unwrap ensures that any error using invalidBlock passes an errors.Is check for
+// verification.ErrInvalid.
+func (e invalidBlock) Unwrap() error {
+	if !errors.Is(e.error, verification.ErrInvalid) {
+		return stderrors.Join(e.error, verification.ErrInvalid)
+	}
+	return e.error
 }
 
 // InvalidBlockLVH returns the invalid block last valid hash root. If the error

@@ -4,9 +4,10 @@ go_library(
     name = "go_default_library",
     testonly = True,
     srcs = ["mock.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations/mock",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations/mock",
     visibility = ["//visibility:public"],
     deps = [
+        "//beacon-chain/operations/attestations:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
     ],

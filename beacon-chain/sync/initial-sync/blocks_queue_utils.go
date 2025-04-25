@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 )
 
 // resetWithBlocks removes all state machines, then re-adds enough machines to contain all provided
@@ -24,8 +24,8 @@ func (q *blocksQueue) resetFromFork(fork *forkData) error {
 		return err
 	}
 	fsm := q.smm.addStateMachine(firstBlock.Slot())
-	fsm.pid = fork.peer
-	fsm.bwb = fork.bwb
+	fsm.fetched.bwb = fork.bwb
+	fsm.fetched.blocksFrom, fsm.fetched.blobsFrom = fork.blocksFrom, fork.blobsFrom
 	fsm.state = stateDataParsed
 
 	// The rest of machines are in skipped state.

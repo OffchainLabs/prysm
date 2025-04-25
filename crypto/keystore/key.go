@@ -24,9 +24,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/io/file"
 	"github.com/pborman/uuid"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
 )
 
 const (

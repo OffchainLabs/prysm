@@ -6,16 +6,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	prysmTime "github.com/OffchainLabs/prysm/v6/time"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 )
 
 func TestAttestation_IsAggregator(t *testing.T) {
@@ -73,21 +73,37 @@ func TestAttestation_ComputeSubnetForAttestation(t *testing.T) {
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 	})
 	require.NoError(t, err)
-	att := &ethpb.Attestation{
-		AggregationBits: []byte{'A'},
-		Data: &ethpb.AttestationData{
-			Slot:            34,
-			CommitteeIndex:  4,
-			BeaconBlockRoot: []byte{'C'},
-			Source:          nil,
-			Target:          nil,
-		},
-		Signature: []byte{'B'},
-	}
-	valCount, err := helpers.ActiveValidatorCount(context.Background(), state, slots.ToEpoch(att.Data.Slot))
+	valCount, err := helpers.ActiveValidatorCount(context.Background(), state, slots.ToEpoch(34))
 	require.NoError(t, err)
-	sub := helpers.ComputeSubnetForAttestation(valCount, att)
-	assert.Equal(t, uint64(6), sub, "Did not get correct subnet for attestation")
+
+	t.Run("Phase 0", func(t *testing.T) {
+		att := &ethpb.Attestation{
+			AggregationBits: []byte{'A'},
+			Data: &ethpb.AttestationData{
+				Slot:            34,
+				CommitteeIndex:  4,
+				BeaconBlockRoot: []byte{'C'},
+			},
+			Signature: []byte{'B'},
+		}
+		sub := helpers.ComputeSubnetForAttestation(valCount, att)
+		assert.Equal(t, uint64(6), sub, "Did not get correct subnet for attestation")
+	})
+	t.Run("Electra", func(t *testing.T) {
+		cb := primitives.NewAttestationCommitteeBits()
+		cb.SetBitAt(4, true)
+		att := &ethpb.AttestationElectra{
+			AggregationBits: []byte{'A'},
+			CommitteeBits:   cb,
+			Data: &ethpb.AttestationData{
+				Slot:            34,
+				BeaconBlockRoot: []byte{'C'},
+			},
+			Signature: []byte{'B'},
+		}
+		sub := helpers.ComputeSubnetForAttestation(valCount, att)
+		assert.Equal(t, uint64(6), sub, "Did not get correct subnet for attestation")
+	})
 }
 
 func Test_ValidateAttestationTime(t *testing.T) {
@@ -197,7 +213,7 @@ func Test_ValidateAttestationTime(t *testing.T) {
 					-500 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second,
 				).Add(200 * time.Millisecond),
 			},
-			wantedErr: "attestation epoch 8 not within current epoch 15 or previous epoch 14",
+			wantedErr: "attestation epoch 8 not within current epoch 15 or previous epoch",
 		},
 		{
 			name: "attestation.slot is well beyond current slot",
@@ -205,7 +221,7 @@ func Test_ValidateAttestationTime(t *testing.T) {
 				attSlot:     1 << 32,
 				genesisTime: prysmTime.Now().Add(-15 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
 			},
-			wantedErr: "which exceeds max allowed value relative to the local clock",
+			wantedErr: "attestation slot 4294967296 not within attestation propagation range of 0 to 15 (current slot)",
 		},
 	}
 	for _, tt := range tests {
@@ -238,18 +254,18 @@ func TestVerifyCheckpointEpoch_Ok(t *testing.T) {
 func TestValidateNilAttestation(t *testing.T) {
 	tests := []struct {
 		name        string
-		attestation *ethpb.Attestation
+		attestation ethpb.Att
 		errString   string
 	}{
 		{
 			name:        "nil attestation",
 			attestation: nil,
-			errString:   "attestation can't be nil",
+			errString:   "attestation is nil",
 		},
 		{
 			name:        "nil attestation data",
 			attestation: &ethpb.Attestation{},
-			errString:   "attestation's data can't be nil",
+			errString:   "attestation is nil",
 		},
 		{
 			name: "nil attestation source",
@@ -289,6 +305,16 @@ func TestValidateNilAttestation(t *testing.T) {
 					Source: &ethpb.Checkpoint{},
 				},
 				AggregationBits: []byte{},
+			},
+			errString: "",
+		},
+		{
+			name: "single attestation",
+			attestation: &ethpb.SingleAttestation{
+				Data: &ethpb.AttestationData{
+					Target: &ethpb.Checkpoint{},
+					Source: &ethpb.Checkpoint{},
+				},
 			},
 			errString: "",
 		},

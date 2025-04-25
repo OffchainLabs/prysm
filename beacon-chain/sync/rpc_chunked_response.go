@@ -1,20 +1,18 @@
 package sync
 
 import (
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/network/forks"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/network/forks"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 // chunkBlockWriter writes the given message as a chunked response to the given network
@@ -65,6 +63,18 @@ func WriteBlockChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, en
 			return err
 		}
 		obtainedCtx = digest[:]
+	case version.Electra:
+		digest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().ElectraForkEpoch, valRoot[:])
+		if err != nil {
+			return err
+		}
+		obtainedCtx = digest[:]
+	case version.Fulu:
+		digest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().FuluForkEpoch, valRoot[:])
+		if err != nil {
+			return err
+		}
+		obtainedCtx = digest[:]
 	default:
 		return errors.Wrapf(ErrUnrecognizedVersion, "block version %d is not recognized", blk.Version())
 	}
@@ -101,7 +111,7 @@ func readFirstChunkedBlock(stream libp2pcore.Stream, tor blockchain.TemporalOrac
 	if err != nil {
 		return nil, err
 	}
-	blk, err := extractBlockDataType(rpcCtx, tor)
+	blk, err := extractDataTypeFromTypeMap(types.BlockMap, rpcCtx, tor)
 	if err != nil {
 		return nil, err
 	}
@@ -125,36 +135,12 @@ func readResponseChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, 
 	if err != nil {
 		return nil, err
 	}
-	blk, err := extractBlockDataType(rpcCtx, tor)
+	blk, err := extractDataTypeFromTypeMap(types.BlockMap, rpcCtx, tor)
 	if err != nil {
 		return nil, err
 	}
 	err = p2p.Encoding().DecodeWithMaxLength(stream, blk)
 	return blk, err
-}
-
-func extractBlockDataType(digest []byte, tor blockchain.TemporalOracle) (interfaces.ReadOnlySignedBeaconBlock, error) {
-	if len(digest) == 0 {
-		bFunc, ok := types.BlockMap[bytesutil.ToBytes4(params.BeaconConfig().GenesisForkVersion)]
-		if !ok {
-			return nil, errors.New("no block type exists for the genesis fork version.")
-		}
-		return bFunc()
-	}
-	if len(digest) != forkDigestLength {
-		return nil, errors.Errorf("invalid digest returned, wanted a length of %d but received %d", forkDigestLength, len(digest))
-	}
-	vRoot := tor.GenesisValidatorsRoot()
-	for k, blkFunc := range types.BlockMap {
-		rDigest, err := signing.ComputeForkDigest(k[:], vRoot[:])
-		if err != nil {
-			return nil, err
-		}
-		if rDigest == bytesutil.ToBytes4(digest) {
-			return blkFunc()
-		}
-	}
-	return nil, errors.Wrapf(ErrNoValidDigest, "could not extract block data type, saw digest=%#x, genesis=%v, vr=%#x", digest, tor.GenesisTime(), tor.GenesisValidatorsRoot())
 }
 
 // WriteBlobSidecarChunk writes blob chunk object to stream.

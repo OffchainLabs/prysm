@@ -1,8 +1,8 @@
 package types
 
 import (
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
 // ChunkKind to differentiate what kind of span we are working
@@ -14,10 +14,29 @@ const (
 	MaxSpan
 )
 
+// String returns the string representation of the chunk kind.
+func (c ChunkKind) String() string {
+	switch c {
+	case MinSpan:
+		return "minspan"
+	case MaxSpan:
+		return "maxspan"
+	default:
+		return "unknown"
+	}
+}
+
+// WrappedIndexedAtt is a wrapper over the IndexedAtt interface.
+// The wrapper is needed to overcome the limitation of the event feed library
+// which doesn't work well with interface types.
+type WrappedIndexedAtt struct {
+	ethpb.IndexedAtt
+}
+
 // IndexedAttestationWrapper contains an indexed attestation with its
 // data root to reduce duplicated computation.
 type IndexedAttestationWrapper struct {
-	IndexedAttestation *ethpb.IndexedAttestation
+	IndexedAttestation ethpb.IndexedAtt
 	DataRoot           [32]byte
 }
 

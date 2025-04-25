@@ -4,11 +4,11 @@ import (
 	"context"
 	"testing"
 
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/proposer"
+	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/proposer"
-	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func getPubkeyFromString(t *testing.T, pubkeyString string) [fieldparams.BLSPubkeyLength]byte {
@@ -61,7 +61,7 @@ func TestStore_ProposerSettings(t *testing.T) {
 			configuration: &Configuration{
 				ProposerSettings: &validatorpb.ProposerSettingsPayload{
 					ProposerConfig: map[string]*validatorpb.ProposerOptionPayload{
-						pubkeyString: &validatorpb.ProposerOptionPayload{
+						pubkeyString: {
 							FeeRecipient: customFeeRecipientString,
 						},
 					},
@@ -72,7 +72,7 @@ func TestStore_ProposerSettings(t *testing.T) {
 			},
 			expectedProposerSettings: &proposer.Settings{
 				ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
-					pubkey: &proposer.Option{
+					pubkey: {
 						FeeRecipientConfig: &proposer.FeeRecipientConfig{
 							FeeRecipient: customFeeRecipient,
 						},

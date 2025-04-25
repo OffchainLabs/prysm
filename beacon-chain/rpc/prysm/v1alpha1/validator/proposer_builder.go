@@ -3,14 +3,14 @@ package validator
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/kv"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
 	"github.com/sirupsen/logrus"
-	"go.opencensus.io/trace"
 )
 
 // Returns true if builder (ie outsourcing block construction) can be used. Both conditions have to meet:
@@ -24,7 +24,7 @@ func (vs *Server) canUseBuilder(ctx context.Context, slot primitives.Slot, idx p
 		return false, nil
 	}
 	activated, err := vs.circuitBreakBuilder(slot)
-	span.AddAttributes(trace.BoolAttribute("circuitBreakerActivated", activated))
+	span.SetAttributes(trace.BoolAttribute("circuitBreakerActivated", activated))
 	if err != nil {
 		tracing.AnnotateError(span, err)
 		return false, err

@@ -5,21 +5,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 )
 
 func TestSyncCommitteeIndices_CanGet(t *testing.T) {
-	getState := func(t *testing.T, count uint64) state.BeaconState {
+	getState := func(t *testing.T, count uint64, vers int) state.BeaconState {
 		validators := make([]*ethpb.Validator, count)
 		for i := 0; i < len(validators); i++ {
 			validators[i] = &ethpb.Validator{
@@ -27,17 +28,28 @@ func TestSyncCommitteeIndices_CanGet(t *testing.T) {
 				EffectiveBalance: params.BeaconConfig().MinDepositAmount,
 			}
 		}
-		st, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
-			RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
-		})
+		var st state.BeaconState
+		var err error
+		switch vers {
+		case version.Altair:
+			st, err = state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+				RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
+			})
+		case version.Electra:
+			st, err = state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{
+				RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
+			})
+		default:
+			t.Fatal("Unknown version")
+		}
 		require.NoError(t, err)
 		require.NoError(t, st.SetValidators(validators))
 		return st
 	}
 
 	type args struct {
-		state state.BeaconState
-		epoch primitives.Epoch
+		validatorCount uint64
+		epoch          primitives.Epoch
 	}
 	tests := []struct {
 		name      string
@@ -48,32 +60,32 @@ func TestSyncCommitteeIndices_CanGet(t *testing.T) {
 		{
 			name: "genesis validator count, epoch 0",
 			args: args{
-				state: getState(t, params.BeaconConfig().MinGenesisActiveValidatorCount),
-				epoch: 0,
+				validatorCount: params.BeaconConfig().MinGenesisActiveValidatorCount,
+				epoch:          0,
 			},
 			wantErr: false,
 		},
 		{
 			name: "genesis validator count, epoch 100",
 			args: args{
-				state: getState(t, params.BeaconConfig().MinGenesisActiveValidatorCount),
-				epoch: 100,
+				validatorCount: params.BeaconConfig().MinGenesisActiveValidatorCount,
+				epoch:          100,
 			},
 			wantErr: false,
 		},
 		{
 			name: "less than optimal validator count, epoch 100",
 			args: args{
-				state: getState(t, params.BeaconConfig().MaxValidatorsPerCommittee),
-				epoch: 100,
+				validatorCount: params.BeaconConfig().MaxValidatorsPerCommittee,
+				epoch:          100,
 			},
 			wantErr: false,
 		},
 		{
 			name: "no active validators, epoch 100",
 			args: args{
-				state: getState(t, 0), // Regression test for divide by zero. Issue #13051.
-				epoch: 100,
+				validatorCount: 0, // Regression test for divide by zero. Issue #13051.
+				epoch:          100,
 			},
 			wantErr:   true,
 			errString: "no active validator indices",
@@ -81,13 +93,18 @@ func TestSyncCommitteeIndices_CanGet(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			helpers.ClearCache()
-			got, err := altair.NextSyncCommitteeIndices(context.Background(), tt.args.state)
-			if tt.wantErr {
-				require.ErrorContains(t, tt.errString, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, int(params.BeaconConfig().SyncCommitteeSize), len(got))
+			for _, v := range []int{version.Altair, version.Electra} {
+				t.Run(version.String(v), func(t *testing.T) {
+					helpers.ClearCache()
+					st := getState(t, tt.args.validatorCount, v)
+					got, err := altair.NextSyncCommitteeIndices(context.Background(), st)
+					if tt.wantErr {
+						require.ErrorContains(t, tt.errString, err)
+					} else {
+						require.NoError(t, err)
+						require.Equal(t, int(params.BeaconConfig().SyncCommitteeSize), len(got))
+					}
+				})
 			}
 		})
 	}

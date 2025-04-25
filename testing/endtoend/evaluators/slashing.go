@@ -4,20 +4,20 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/container/slice"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
+	"github.com/OffchainLabs/prysm/v6/testing/endtoend/policies"
+	e2eTypes "github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/container/slice"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	e2e "github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
-	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/policies"
-	e2eTypes "github.com/prysmaticlabs/prysm/v5/testing/endtoend/types"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -52,7 +52,7 @@ var ValidatorsSlashedAfterEpoch = func(n primitives.Epoch) e2eTypes.Evaluator {
 // SlashedValidatorsLoseBalanceAfterEpoch checks if the validators slashed lose the right balance.
 var SlashedValidatorsLoseBalanceAfterEpoch = func(n primitives.Epoch) e2eTypes.Evaluator {
 	return e2eTypes.Evaluator{
-		Name:       "slashed_validators_lose_valance_epoch_%d",
+		Name:       "slashed_validators_lose_balance_epoch_%d",
 		Policy:     policies.AfterNthEpoch(n),
 		Evaluation: validatorsLoseBalance,
 	}
@@ -109,7 +109,7 @@ func validatorsLoseBalance(_ *e2eTypes.EvaluationContext, conns ...*grpc.ClientC
 		slashedBal := params.BeaconConfig().MaxEffectiveBalance - slashedPenalty + params.BeaconConfig().EffectiveBalanceIncrement/10
 		if valResp.EffectiveBalance >= slashedBal {
 			return fmt.Errorf(
-				"expected slashed validator %d to balance less than %d, received %d",
+				"expected slashed validator %d balance to be less than %d, received %d",
 				i,
 				slashedBal,
 				valResp.EffectiveBalance,

@@ -3,7 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = ["server.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/prysm/v1alpha1/node",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/v1alpha1/node",
     visibility = ["//beacon-chain:__subpackages__"],
     deps = [
         "//beacon-chain/blockchain:go_default_library",
@@ -12,6 +12,7 @@ go_library(
         "//beacon-chain/p2p:go_default_library",
         "//beacon-chain/sync:go_default_library",
         "//io/logs:go_default_library",
+        "//monitoring/tracing/trace:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//runtime/version:go_default_library",
         "@com_github_golang_protobuf//ptypes/empty",
@@ -20,6 +21,7 @@ go_library(
         "@com_github_libp2p_go_libp2p//core/peer:go_default_library",
         "@org_golang_google_grpc//:go_default_library",
         "@org_golang_google_grpc//codes:go_default_library",
+        "@org_golang_google_grpc//metadata:go_default_library",
         "@org_golang_google_grpc//status:go_default_library",
         "@org_golang_google_protobuf//types/known/timestamppb:go_default_library",
     ],

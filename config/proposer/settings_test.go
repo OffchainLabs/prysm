@@ -3,13 +3,13 @@ package proposer
 import (
 	"testing"
 
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/validator"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func Test_Proposer_Setting_Cloning(t *testing.T) {
@@ -76,26 +76,14 @@ func Test_Proposer_Setting_Cloning(t *testing.T) {
 		require.Equal(t, option.FeeRecipientConfig.FeeRecipient.Hex(), potion.FeeRecipient)
 		require.Equal(t, settings.DefaultConfig.FeeRecipientConfig.FeeRecipient.Hex(), payload.DefaultConfig.FeeRecipient)
 		require.Equal(t, settings.DefaultConfig.BuilderConfig.Enabled, payload.DefaultConfig.Builder.Enabled)
-		potion.FeeRecipient = ""
+		potion.FeeRecipient = fee
 		newSettings, err := SettingFromConsensus(payload)
 		require.NoError(t, err)
-
-		// when converting to settings if a fee recipient is empty string then it will be skipped
 		noption, ok := newSettings.ProposeConfig[bytesutil.ToBytes48(key1)]
-		require.Equal(t, false, ok)
-		require.Equal(t, true, noption == nil)
-		require.DeepEqual(t, newSettings.DefaultConfig, settings.DefaultConfig)
-
-		// if fee recipient is set it will not skip
-		potion.FeeRecipient = fee
-		newSettings, err = SettingFromConsensus(payload)
-		require.NoError(t, err)
-		noption, ok = newSettings.ProposeConfig[bytesutil.ToBytes48(key1)]
 		require.Equal(t, true, ok)
 		require.Equal(t, option.FeeRecipientConfig.FeeRecipient.Hex(), noption.FeeRecipientConfig.FeeRecipient.Hex())
 		require.Equal(t, option.BuilderConfig.GasLimit, option.BuilderConfig.GasLimit)
 		require.Equal(t, option.BuilderConfig.Enabled, option.BuilderConfig.Enabled)
-
 	})
 }
 

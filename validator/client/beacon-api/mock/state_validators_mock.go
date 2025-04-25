@@ -13,8 +13,8 @@ import (
 	context "context"
 	reflect "reflect"
 
-	structs "github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	primitives "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	structs "github.com/OffchainLabs/prysm/v6/api/server/structs"
+	primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -22,6 +22,7 @@ import (
 type MockStateValidatorsProvider struct {
 	ctrl     *gomock.Controller
 	recorder *MockStateValidatorsProviderMockRecorder
+	isgomock struct{}
 }
 
 // MockStateValidatorsProviderMockRecorder is the mock recorder for MockStateValidatorsProvider.
@@ -41,47 +42,47 @@ func (m *MockStateValidatorsProvider) EXPECT() *MockStateValidatorsProviderMockR
 	return m.recorder
 }
 
-// GetStateValidators mocks base method.
-func (m *MockStateValidatorsProvider) GetStateValidators(arg0 context.Context, arg1 []string, arg2 []primitives.ValidatorIndex, arg3 []string) (*structs.GetValidatorsResponse, error) {
+// StateValidators mocks base method.
+func (m *MockStateValidatorsProvider) StateValidators(arg0 context.Context, arg1 []string, arg2 []primitives.ValidatorIndex, arg3 []string) (*structs.GetValidatorsResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetStateValidators", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "StateValidators", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(*structs.GetValidatorsResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetStateValidators indicates an expected call of GetStateValidators.
-func (mr *MockStateValidatorsProviderMockRecorder) GetStateValidators(arg0, arg1, arg2, arg3 any) *gomock.Call {
+// StateValidators indicates an expected call of StateValidators.
+func (mr *MockStateValidatorsProviderMockRecorder) StateValidators(arg0, arg1, arg2, arg3 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStateValidators", reflect.TypeOf((*MockStateValidatorsProvider)(nil).GetStateValidators), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StateValidators", reflect.TypeOf((*MockStateValidatorsProvider)(nil).StateValidators), arg0, arg1, arg2, arg3)
 }
 
-// GetStateValidatorsForHead mocks base method.
-func (m *MockStateValidatorsProvider) GetStateValidatorsForHead(arg0 context.Context, arg1 []string, arg2 []primitives.ValidatorIndex, arg3 []string) (*structs.GetValidatorsResponse, error) {
+// StateValidatorsForHead mocks base method.
+func (m *MockStateValidatorsProvider) StateValidatorsForHead(arg0 context.Context, arg1 []string, arg2 []primitives.ValidatorIndex, arg3 []string) (*structs.GetValidatorsResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetStateValidatorsForHead", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "StateValidatorsForHead", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(*structs.GetValidatorsResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetStateValidatorsForHead indicates an expected call of GetStateValidatorsForHead.
-func (mr *MockStateValidatorsProviderMockRecorder) GetStateValidatorsForHead(arg0, arg1, arg2, arg3 any) *gomock.Call {
+// StateValidatorsForHead indicates an expected call of StateValidatorsForHead.
+func (mr *MockStateValidatorsProviderMockRecorder) StateValidatorsForHead(arg0, arg1, arg2, arg3 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStateValidatorsForHead", reflect.TypeOf((*MockStateValidatorsProvider)(nil).GetStateValidatorsForHead), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StateValidatorsForHead", reflect.TypeOf((*MockStateValidatorsProvider)(nil).StateValidatorsForHead), arg0, arg1, arg2, arg3)
 }
 
-// GetStateValidatorsForSlot mocks base method.
-func (m *MockStateValidatorsProvider) GetStateValidatorsForSlot(arg0 context.Context, arg1 primitives.Slot, arg2 []string, arg3 []primitives.ValidatorIndex, arg4 []string) (*structs.GetValidatorsResponse, error) {
+// StateValidatorsForSlot mocks base method.
+func (m *MockStateValidatorsProvider) StateValidatorsForSlot(arg0 context.Context, arg1 primitives.Slot, arg2 []string, arg3 []primitives.ValidatorIndex, arg4 []string) (*structs.GetValidatorsResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetStateValidatorsForSlot", arg0, arg1, arg2, arg3, arg4)
+	ret := m.ctrl.Call(m, "StateValidatorsForSlot", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(*structs.GetValidatorsResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetStateValidatorsForSlot indicates an expected call of GetStateValidatorsForSlot.
-func (mr *MockStateValidatorsProviderMockRecorder) GetStateValidatorsForSlot(arg0, arg1, arg2, arg3, arg4 any) *gomock.Call {
+// StateValidatorsForSlot indicates an expected call of StateValidatorsForSlot.
+func (mr *MockStateValidatorsProviderMockRecorder) StateValidatorsForSlot(arg0, arg1, arg2, arg3, arg4 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStateValidatorsForSlot", reflect.TypeOf((*MockStateValidatorsProvider)(nil).GetStateValidatorsForSlot), arg0, arg1, arg2, arg3, arg4)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StateValidatorsForSlot", reflect.TypeOf((*MockStateValidatorsProvider)(nil).StateValidatorsForSlot), arg0, arg1, arg2, arg3, arg4)
 }

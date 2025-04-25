@@ -4,9 +4,9 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 )
 
 func TestDefaultParams(t *testing.T) {
@@ -468,7 +468,7 @@ func TestParams_validatorIndicesInChunk(t *testing.T) {
 			c := &Parameters{
 				validatorChunkSize: tt.fields.validatorChunkSize,
 			}
-			if got := c.validatorIndexesInChunk(tt.validatorChunkIdx); !reflect.DeepEqual(got, tt.want) {
+			if got := c.ValidatorIndexesInChunk(tt.validatorChunkIdx); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("validatorIndicesInChunk() = %v, want %v", got, tt.want)
 			}
 		})

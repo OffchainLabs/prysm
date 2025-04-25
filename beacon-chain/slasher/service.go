@@ -9,18 +9,19 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/async/event"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/slashings"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
-	beaconChainSync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/OffchainLabs/prysm/v6/async/event"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/slashings"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/slasher/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
+	beaconChainSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 )
 
 const (
@@ -48,7 +49,7 @@ type ServiceConfig struct {
 type Service struct {
 	params                         *Parameters
 	serviceCfg                     *ServiceConfig
-	indexedAttsChan                chan *ethpb.IndexedAttestation
+	indexedAttsChan                chan ethpb.IndexedAtt
 	beaconBlockHeadersChan         chan *ethpb.SignedBeaconBlockHeader
 	attsQueue                      *attestationsQueue
 	blksQueue                      *blocksQueue
@@ -68,7 +69,7 @@ func New(ctx context.Context, srvCfg *ServiceConfig) (*Service, error) {
 	return &Service{
 		params:                         DefaultParams(),
 		serviceCfg:                     srvCfg,
-		indexedAttsChan:                make(chan *ethpb.IndexedAttestation, 1),
+		indexedAttsChan:                make(chan ethpb.IndexedAtt, 1),
 		beaconBlockHeadersChan:         make(chan *ethpb.SignedBeaconBlockHeader, 1),
 		attsQueue:                      newAttestationsQueue(),
 		blksQueue:                      newBlocksQueue(),
@@ -117,8 +118,28 @@ func (s *Service) run() {
 		"Finished retrieving last epoch written per validator",
 	)
 
-	indexedAttsChan := make(chan *ethpb.IndexedAttestation, 1)
+	indexedAttsChan := make(chan *types.WrappedIndexedAtt, 1)
 	beaconBlockHeadersChan := make(chan *ethpb.SignedBeaconBlockHeader, 1)
+
+	// This section can be totally removed once Electra is on mainnet.
+	headSlot := s.serviceCfg.HeadStateFetcher.HeadSlot()
+	headEpoch := slots.ToEpoch(headSlot)
+
+	maxPruningEpoch := primitives.Epoch(0)
+	if headEpoch >= s.params.historyLength {
+		maxPruningEpoch = headEpoch - s.params.historyLength
+	}
+
+	// For database performance reasons, database read/write operations
+	// are chunked into batches of maximum `batchSize` elements.
+	const migrationBatchSize = 100_000
+
+	err = s.serviceCfg.Database.Migrate(s.ctx, headEpoch, maxPruningEpoch, migrationBatchSize)
+	if err != nil {
+		log.WithError(err).Error("Failed to migrate slasher database")
+		return
+	}
+	// End of section that can be removed once Electra is on mainnet.
 
 	s.wg.Add(1)
 	go s.receiveAttestations(s.ctx, indexedAttsChan)
@@ -161,7 +182,7 @@ func (s *Service) Stop() error {
 	ctx, innerCancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer innerCancel()
 	log.Info("Flushing last epoch written for each validator to disk, please wait")
-	if err := s.serviceCfg.Database.SaveLastEpochsWrittenForValidators(
+	if err := s.serviceCfg.Database.SaveLastEpochWrittenForValidators(
 		ctx, s.latestEpochUpdatedForValidator,
 	); err != nil {
 		log.Error(err)

@@ -1,9 +1,10 @@
 package scorers
 
 import (
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
+	pbrpc "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/peerdata"
-	pbrpc "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/pkg/errors"
 )
 
 var _ Scorer = (*GossipScorer)(nil)
@@ -38,11 +39,11 @@ func newGossipScorer(store *peerdata.Store, config *GossipScorerConfig) *GossipS
 func (s *GossipScorer) Score(pid peer.ID) float64 {
 	s.store.RLock()
 	defer s.store.RUnlock()
-	return s.score(pid)
+	return s.scoreNoLock(pid)
 }
 
-// score is a lock-free version of Score.
-func (s *GossipScorer) score(pid peer.ID) float64 {
+// scoreNoLock is a lock-free version of Score.
+func (s *GossipScorer) scoreNoLock(pid peer.ID) float64 {
 	peerData, ok := s.store.PeerData(pid)
 	if !ok {
 		return 0
@@ -51,19 +52,24 @@ func (s *GossipScorer) score(pid peer.ID) float64 {
 }
 
 // IsBadPeer states if the peer is to be considered bad.
-func (s *GossipScorer) IsBadPeer(pid peer.ID) bool {
+func (s *GossipScorer) IsBadPeer(pid peer.ID) error {
 	s.store.RLock()
 	defer s.store.RUnlock()
-	return s.isBadPeer(pid)
+	return s.isBadPeerNoLock(pid)
 }
 
-// isBadPeer is lock-free version of IsBadPeer.
-func (s *GossipScorer) isBadPeer(pid peer.ID) bool {
+// isBadPeerNoLock is lock-free version of IsBadPeer.
+func (s *GossipScorer) isBadPeerNoLock(pid peer.ID) error {
 	peerData, ok := s.store.PeerData(pid)
 	if !ok {
-		return false
+		return nil
 	}
-	return peerData.GossipScore < gossipThreshold
+
+	if peerData.GossipScore < gossipThreshold {
+		return errors.Errorf("gossip score below threshold: got %f - threshold %f", peerData.GossipScore, gossipThreshold)
+	}
+
+	return nil
 }
 
 // BadPeers returns the peers that are considered bad.
@@ -73,7 +79,7 @@ func (s *GossipScorer) BadPeers() []peer.ID {
 
 	badPeers := make([]peer.ID, 0)
 	for pid := range s.store.Peers() {
-		if s.isBadPeer(pid) {
+		if s.isBadPeerNoLock(pid) != nil {
 			badPeers = append(badPeers, pid)
 		}
 	}
@@ -98,11 +104,11 @@ func (s *GossipScorer) SetGossipData(pid peer.ID, gScore float64,
 func (s *GossipScorer) GossipData(pid peer.ID) (float64, float64, map[string]*pbrpc.TopicScoreSnapshot, error) {
 	s.store.RLock()
 	defer s.store.RUnlock()
-	return s.gossipData(pid)
+	return s.gossipDataNoLock(pid)
 }
 
-// gossipData lock-free version of GossipData.
-func (s *GossipScorer) gossipData(pid peer.ID) (float64, float64, map[string]*pbrpc.TopicScoreSnapshot, error) {
+// gossipDataNoLock lock-free version of GossipData.
+func (s *GossipScorer) gossipDataNoLock(pid peer.ID) (float64, float64, map[string]*pbrpc.TopicScoreSnapshot, error) {
 	if peerData, ok := s.store.PeerData(pid); ok {
 		return peerData.GossipScore, peerData.BehaviourPenalty, peerData.TopicScores, nil
 	}

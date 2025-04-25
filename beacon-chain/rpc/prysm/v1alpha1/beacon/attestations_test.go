@@ -8,27 +8,27 @@ import (
 	"testing"
 	"time"
 
+	chainMock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	dbTest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/prysmaticlabs/go-bitfield"
-	chainMock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	dbTest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	doublylinkedtree "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/doubly-linked-tree"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -263,7 +263,7 @@ func TestServer_ListAttestations_Pagination_CustomPageParameters(t *testing.T) {
 	ctx := context.Background()
 
 	count := params.BeaconConfig().SlotsPerEpoch * 4
-	atts := make([]*ethpb.Attestation, 0, count)
+	atts := make([]ethpb.Att, 0, count)
 	for i := primitives.Slot(0); i < params.BeaconConfig().SlotsPerEpoch; i++ {
 		for s := primitives.CommitteeIndex(0); s < 4; s++ {
 			blockExample := util.NewBeaconBlock()
@@ -278,7 +278,11 @@ func TestServer_ListAttestations_Pagination_CustomPageParameters(t *testing.T) {
 				}),
 			}
 			util.SaveBlock(t, ctx, db, blockExample)
-			atts = append(atts, blockExample.Block.Body.Attestations...)
+			as := make([]ethpb.Att, len(blockExample.Block.Body.Attestations))
+			for i, a := range blockExample.Block.Body.Attestations {
+				as[i] = a
+			}
+			atts = append(atts, as...)
 		}
 	}
 	sort.Sort(sortableAttestations(atts))
@@ -303,9 +307,9 @@ func TestServer_ListAttestations_Pagination_CustomPageParameters(t *testing.T) {
 			},
 			res: &ethpb.ListAttestationsResponse{
 				Attestations: []*ethpb.Attestation{
-					atts[3],
-					atts[4],
-					atts[5],
+					atts[3].(*ethpb.Attestation),
+					atts[4].(*ethpb.Attestation),
+					atts[5].(*ethpb.Attestation),
 				},
 				NextPageToken: strconv.Itoa(2),
 				TotalSize:     int32(count),
@@ -322,7 +326,7 @@ func TestServer_ListAttestations_Pagination_CustomPageParameters(t *testing.T) {
 			},
 			res: &ethpb.ListAttestationsResponse{
 				Attestations: []*ethpb.Attestation{
-					atts[10],
+					atts[10].(*ethpb.Attestation),
 				},
 				NextPageToken: strconv.Itoa(11),
 				TotalSize:     int32(count),
@@ -339,14 +343,14 @@ func TestServer_ListAttestations_Pagination_CustomPageParameters(t *testing.T) {
 			},
 			res: &ethpb.ListAttestationsResponse{
 				Attestations: []*ethpb.Attestation{
-					atts[16],
-					atts[17],
-					atts[18],
-					atts[19],
-					atts[20],
-					atts[21],
-					atts[22],
-					atts[23],
+					atts[16].(*ethpb.Attestation),
+					atts[17].(*ethpb.Attestation),
+					atts[18].(*ethpb.Attestation),
+					atts[19].(*ethpb.Attestation),
+					atts[20].(*ethpb.Attestation),
+					atts[21].(*ethpb.Attestation),
+					atts[22].(*ethpb.Attestation),
+					atts[23].(*ethpb.Attestation),
 				},
 				NextPageToken: strconv.Itoa(3),
 				TotalSize:     int32(count)},
@@ -458,9 +462,62 @@ func TestServer_ListAttestations_Pagination_DefaultPageSize(t *testing.T) {
 	assert.DeepEqual(t, atts[i:j], res.Attestations, "Incorrect attestations response")
 }
 
+func TestServer_ListAttestationsElectra(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.ElectraForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	db := dbTest.SetupDB(t)
+	ctx := context.Background()
+
+	st, err := state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{
+		Slot: 0,
+	})
+	require.NoError(t, err)
+	bs := &Server{
+		BeaconDB: db,
+		HeadFetcher: &chainMock.ChainService{
+			State: st,
+		},
+	}
+
+	cb := primitives.NewAttestationCommitteeBits()
+	cb.SetBitAt(2, true)
+	att := util.HydrateAttestationElectra(&ethpb.AttestationElectra{
+		AggregationBits: bitfield.NewBitlist(0),
+		Data: &ethpb.AttestationData{
+			Slot: 2,
+		},
+		CommitteeBits: cb,
+	})
+
+	parentRoot := [32]byte{1, 2, 3}
+	signedBlock := util.NewBeaconBlockElectra()
+	signedBlock.Block.ParentRoot = bytesutil.PadTo(parentRoot[:], 32)
+	signedBlock.Block.Body.Attestations = []*ethpb.AttestationElectra{att}
+	root, err := signedBlock.Block.HashTreeRoot()
+	require.NoError(t, err)
+	util.SaveBlock(t, ctx, db, signedBlock)
+	require.NoError(t, db.SaveGenesisBlockRoot(ctx, root))
+	wanted := &ethpb.ListAttestationsElectraResponse{
+		Attestations:  []*ethpb.AttestationElectra{att},
+		NextPageToken: "",
+		TotalSize:     1,
+	}
+
+	res, err := bs.ListAttestationsElectra(ctx, &ethpb.ListAttestationsRequest{
+		QueryFilter: &ethpb.ListAttestationsRequest_Epoch{
+			Epoch: params.BeaconConfig().ElectraForkEpoch,
+		},
+	})
+	require.NoError(t, err)
+	require.DeepSSZEqual(t, wanted, res)
+}
+
 func TestServer_mapAttestationToTargetRoot(t *testing.T) {
 	count := primitives.Slot(100)
-	atts := make([]*ethpb.Attestation, count)
+	atts := make([]ethpb.Att, count)
 	targetRoot1 := bytesutil.ToBytes32([]byte("root1"))
 	targetRoot2 := bytesutil.ToBytes32([]byte("root2"))
 
@@ -490,8 +547,6 @@ func TestServer_mapAttestationToTargetRoot(t *testing.T) {
 }
 
 func TestServer_ListIndexedAttestations_GenesisEpoch(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	params.OverrideBeaconConfig(params.BeaconConfig())
 	db := dbTest.SetupDB(t)
 	helpers.ClearCache()
 	ctx := context.Background()
@@ -548,7 +603,9 @@ func TestServer_ListIndexedAttestations_GenesisEpoch(t *testing.T) {
 		require.NoError(t, err)
 		idxAtt, err := attestation.ConvertToIndexed(ctx, atts[i], committee)
 		require.NoError(t, err, "Could not convert attestation to indexed")
-		indexedAtts[i] = idxAtt
+		a, ok := idxAtt.(*ethpb.IndexedAttestation)
+		require.Equal(t, true, ok, "unexpected type of indexed attestation")
+		indexedAtts[i] = a
 	}
 	for i := 0; i < len(atts2); i++ {
 		att := atts2[i]
@@ -556,7 +613,9 @@ func TestServer_ListIndexedAttestations_GenesisEpoch(t *testing.T) {
 		require.NoError(t, err)
 		idxAtt, err := attestation.ConvertToIndexed(ctx, atts2[i], committee)
 		require.NoError(t, err, "Could not convert attestation to indexed")
-		indexedAtts[i+len(atts)] = idxAtt
+		a, ok := idxAtt.(*ethpb.IndexedAttestation)
+		require.Equal(t, true, ok, "unexpected type of indexed attestation")
+		indexedAtts[i+len(atts)] = a
 	}
 
 	bs := &Server{
@@ -588,7 +647,7 @@ func TestServer_ListIndexedAttestations_GenesisEpoch(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, len(indexedAtts), len(res.IndexedAttestations), "Incorrect indexted attestations length")
 	sort.Slice(indexedAtts, func(i, j int) bool {
-		return indexedAtts[i].Data.Slot < indexedAtts[j].Data.Slot
+		return indexedAtts[i].GetData().Slot < indexedAtts[j].GetData().Slot
 	})
 	sort.Slice(res.IndexedAttestations, func(i, j int) bool {
 		return res.IndexedAttestations[i].Data.Slot < res.IndexedAttestations[j].Data.Slot
@@ -598,8 +657,6 @@ func TestServer_ListIndexedAttestations_GenesisEpoch(t *testing.T) {
 }
 
 func TestServer_ListIndexedAttestations_OldEpoch(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	params.OverrideBeaconConfig(params.BeaconConfig())
 	db := dbTest.SetupDB(t)
 	helpers.ClearCache()
 	ctx := context.Background()
@@ -655,7 +712,9 @@ func TestServer_ListIndexedAttestations_OldEpoch(t *testing.T) {
 		require.NoError(t, err)
 		idxAtt, err := attestation.ConvertToIndexed(ctx, atts[i], committee)
 		require.NoError(t, err, "Could not convert attestation to indexed")
-		indexedAtts[i] = idxAtt
+		a, ok := idxAtt.(*ethpb.IndexedAttestation)
+		require.Equal(t, true, ok, "unexpected type of indexed attestation")
+		indexedAtts[i] = a
 	}
 
 	bs := &Server{
@@ -680,6 +739,125 @@ func TestServer_ListIndexedAttestations_OldEpoch(t *testing.T) {
 	require.DeepEqual(t, indexedAtts, res.IndexedAttestations, "Incorrect list indexed attestations response")
 }
 
+func TestServer_ListIndexedAttestationsElectra(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.ElectraForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	db := dbTest.SetupDB(t)
+	helpers.ClearCache()
+	ctx := context.Background()
+	targetRoot1 := bytesutil.ToBytes32([]byte("root"))
+	targetRoot2 := bytesutil.ToBytes32([]byte("root2"))
+
+	count := params.BeaconConfig().SlotsPerEpoch
+	atts := make([]*ethpb.AttestationElectra, 0, count)
+	atts2 := make([]*ethpb.AttestationElectra, 0, count)
+
+	for i := primitives.Slot(0); i < count; i++ {
+		var targetRoot [32]byte
+		if i%2 == 0 {
+			targetRoot = targetRoot1
+		} else {
+			targetRoot = targetRoot2
+		}
+		cb := primitives.NewAttestationCommitteeBits()
+		cb.SetBitAt(0, true)
+		blockExample := util.NewBeaconBlockElectra()
+		ab := bitfield.NewBitlist(128 / uint64(params.BeaconConfig().SlotsPerEpoch))
+		ab.SetBitAt(0, true)
+		blockExample.Block.Body.Attestations = []*ethpb.AttestationElectra{
+			{
+				Signature: make([]byte, fieldparams.BLSSignatureLength),
+				Data: &ethpb.AttestationData{
+					BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+					Target: &ethpb.Checkpoint{
+						Root: targetRoot[:],
+					},
+					Source: &ethpb.Checkpoint{
+						Root: make([]byte, fieldparams.RootLength),
+					},
+					Slot: i,
+				},
+				AggregationBits: ab,
+				CommitteeBits:   cb,
+			},
+		}
+		util.SaveBlock(t, ctx, db, blockExample)
+		if i%2 == 0 {
+			atts = append(atts, blockExample.Block.Body.Attestations...)
+		} else {
+			atts2 = append(atts2, blockExample.Block.Body.Attestations...)
+		}
+
+	}
+
+	// We setup 512 validators so that committee size matches the length of attestations' aggregation bits.
+	numValidators := uint64(512)
+	state, _ := util.DeterministicGenesisStateElectra(t, numValidators)
+
+	// Next up we convert the test attestations to indexed form:
+	indexedAtts := make([]*ethpb.IndexedAttestationElectra, len(atts)+len(atts2))
+	for i := 0; i < len(atts); i++ {
+		att := atts[i]
+		committee, err := helpers.BeaconCommitteeFromState(context.Background(), state, att.Data.Slot, 0)
+		require.NoError(t, err)
+		idxAtt, err := attestation.ConvertToIndexed(ctx, atts[i], committee)
+		require.NoError(t, err, "Could not convert attestation to indexed")
+		a, ok := idxAtt.(*ethpb.IndexedAttestationElectra)
+		require.Equal(t, true, ok, "unexpected type of indexed attestation")
+		indexedAtts[i] = a
+	}
+	for i := 0; i < len(atts2); i++ {
+		att := atts2[i]
+		committee, err := helpers.BeaconCommitteeFromState(context.Background(), state, att.Data.Slot, 0)
+		require.NoError(t, err)
+		idxAtt, err := attestation.ConvertToIndexed(ctx, atts2[i], committee)
+		require.NoError(t, err, "Could not convert attestation to indexed")
+		a, ok := idxAtt.(*ethpb.IndexedAttestationElectra)
+		require.Equal(t, true, ok, "unexpected type of indexed attestation")
+		indexedAtts[i+len(atts)] = a
+	}
+
+	bs := &Server{
+		BeaconDB:           db,
+		GenesisTimeFetcher: &chainMock.ChainService{State: state},
+		HeadFetcher:        &chainMock.ChainService{State: state},
+		StateGen:           stategen.New(db, doublylinkedtree.New()),
+	}
+	err := db.SaveStateSummary(ctx, &ethpb.StateSummary{
+		Root: targetRoot1[:],
+		Slot: 1,
+	})
+	require.NoError(t, err)
+
+	err = db.SaveStateSummary(ctx, &ethpb.StateSummary{
+		Root: targetRoot2[:],
+		Slot: 2,
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, db.SaveState(ctx, state, bytesutil.ToBytes32(targetRoot1[:])))
+	require.NoError(t, state.SetSlot(state.Slot()+1))
+	require.NoError(t, db.SaveState(ctx, state, bytesutil.ToBytes32(targetRoot2[:])))
+	res, err := bs.ListIndexedAttestationsElectra(ctx, &ethpb.ListIndexedAttestationsRequest{
+		QueryFilter: &ethpb.ListIndexedAttestationsRequest_Epoch{
+			Epoch: 0,
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, len(indexedAtts), len(res.IndexedAttestations), "Incorrect indexted attestations length")
+	sort.Slice(indexedAtts, func(i, j int) bool {
+		return indexedAtts[i].GetData().Slot < indexedAtts[j].GetData().Slot
+	})
+	sort.Slice(res.IndexedAttestations, func(i, j int) bool {
+		return res.IndexedAttestations[i].Data.Slot < res.IndexedAttestations[j].Data.Slot
+	})
+
+	assert.DeepEqual(t, indexedAtts, res.IndexedAttestations, "Incorrect list indexed attestations response")
+}
+
 func TestServer_AttestationPool_Pagination_ExceedsMaxPageSize(t *testing.T) {
 	ctx := context.Background()
 	bs := &Server{}
@@ -697,8 +875,8 @@ func TestServer_AttestationPool_Pagination_OutOfRange(t *testing.T) {
 		AttestationsPool: attestations.NewPool(),
 	}
 
-	atts := []*ethpb.Attestation{
-		{
+	atts := []ethpb.Att{
+		&ethpb.Attestation{
 			Data: &ethpb.AttestationData{
 				Slot:            1,
 				BeaconBlockRoot: bytesutil.PadTo([]byte{1}, 32),
@@ -708,7 +886,7 @@ func TestServer_AttestationPool_Pagination_OutOfRange(t *testing.T) {
 			AggregationBits: bitfield.Bitlist{0b1101},
 			Signature:       bytesutil.PadTo([]byte{1}, fieldparams.BLSSignatureLength),
 		},
-		{
+		&ethpb.Attestation{
 			Data: &ethpb.AttestationData{
 				Slot:            2,
 				BeaconBlockRoot: bytesutil.PadTo([]byte{2}, 32),
@@ -718,7 +896,7 @@ func TestServer_AttestationPool_Pagination_OutOfRange(t *testing.T) {
 			AggregationBits: bitfield.Bitlist{0b1101},
 			Signature:       bytesutil.PadTo([]byte{2}, fieldparams.BLSSignatureLength),
 		},
-		{
+		&ethpb.Attestation{
 			Data: &ethpb.AttestationData{
 				Slot:            3,
 				BeaconBlockRoot: bytesutil.PadTo([]byte{3}, 32),
@@ -746,7 +924,7 @@ func TestServer_AttestationPool_Pagination_DefaultPageSize(t *testing.T) {
 		AttestationsPool: attestations.NewPool(),
 	}
 
-	atts := make([]*ethpb.Attestation, params.BeaconConfig().DefaultPageSize+1)
+	atts := make([]ethpb.Att, params.BeaconConfig().DefaultPageSize+1)
 	for i := 0; i < len(atts); i++ {
 		att := util.NewAttestation()
 		att.Data.Slot = primitives.Slot(i)
@@ -768,7 +946,7 @@ func TestServer_AttestationPool_Pagination_CustomPageSize(t *testing.T) {
 	}
 
 	numAtts := 100
-	atts := make([]*ethpb.Attestation, numAtts)
+	atts := make([]ethpb.Att, numAtts)
 	for i := 0; i < len(atts); i++ {
 		att := util.NewAttestation()
 		att.Data.Slot = primitives.Slot(i)
@@ -816,4 +994,25 @@ func TestServer_AttestationPool_Pagination_CustomPageSize(t *testing.T) {
 		assert.Equal(t, tt.res.TotalSize, res.TotalSize, "Unexpected total size")
 		assert.Equal(t, tt.res.NextPageToken, res.NextPageToken, "Unexpected next page token")
 	}
+}
+
+func TestServer_AttestationPoolElectra(t *testing.T) {
+	ctx := context.Background()
+	bs := &Server{
+		AttestationsPool: attestations.NewPool(),
+	}
+
+	atts := make([]ethpb.Att, params.BeaconConfig().DefaultPageSize+1)
+	for i := 0; i < len(atts); i++ {
+		att := util.NewAttestationElectra()
+		att.Data.Slot = primitives.Slot(i)
+		atts[i] = att
+	}
+	require.NoError(t, bs.AttestationsPool.SaveAggregatedAttestations(atts))
+
+	req := &ethpb.AttestationPoolRequest{}
+	res, err := bs.AttestationPoolElectra(ctx, req)
+	require.NoError(t, err)
+	assert.Equal(t, params.BeaconConfig().DefaultPageSize, len(res.Attestations), "Unexpected number of attestations")
+	assert.Equal(t, params.BeaconConfig().DefaultPageSize+1, int(res.TotalSize), "Unexpected total size")
 }

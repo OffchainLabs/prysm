@@ -2,9 +2,10 @@ package validator
 
 import (
 	"io"
+	"os"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/sirupsen/logrus"
 )
 
@@ -16,5 +17,5 @@ func TestMain(m *testing.M) {
 	defer params.OverrideBeaconConfig(prevConfig)
 	params.OverrideBeaconConfig(params.MinimalSpecConfig())
 
-	m.Run()
+	os.Exit(m.Run())
 }

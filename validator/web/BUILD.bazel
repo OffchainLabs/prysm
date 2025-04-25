@@ -9,9 +9,8 @@ go_library(
         "log.go",
         "site_data.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/validator/web",
+    importpath = "github.com/OffchainLabs/prysm/v6/validator/web",
     visibility = [
-        "//api/gateway:__pkg__",
         "//validator:__subpackages__",
     ],
     deps = ["@com_github_sirupsen_logrus//:go_default_library"],

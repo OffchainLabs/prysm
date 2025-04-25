@@ -4,10 +4,10 @@ import (
 	"context"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/validator/accounts/wallet"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager/derived"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/derived"
 )
 
 const (
@@ -19,7 +19,7 @@ var (
 	ErrEmptyMnemonic       = errors.New("phrase cannot be empty")
 )
 
-// WalletRecover uses a menmonic seed phrase to recover a wallet into the path provided.
+// WalletRecover uses a mnemonic seed phrase to recover a wallet into the path provided.
 func (acm *CLIManager) WalletRecover(ctx context.Context) (*wallet.Wallet, error) {
 	// Ensure that the wallet directory does not contain a wallet already
 	dirExists, err := wallet.Exists(acm.walletDir)

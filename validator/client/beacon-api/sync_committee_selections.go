@@ -5,15 +5,15 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 )
 
 type aggregatedSyncSelectionResponse struct {
 	Data []iface.SyncCommitteeSelection `json:"data"`
 }
 
-func (c *beaconApiValidatorClient) getAggregatedSyncSelections(ctx context.Context, selections []iface.SyncCommitteeSelection) ([]iface.SyncCommitteeSelection, error) {
+func (c *beaconApiValidatorClient) aggregatedSyncSelections(ctx context.Context, selections []iface.SyncCommitteeSelection) ([]iface.SyncCommitteeSelection, error) {
 	body, err := json.Marshal(selections)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to marshal selections")

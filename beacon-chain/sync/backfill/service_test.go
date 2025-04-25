@@ -5,17 +5,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
-	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/proto/dbval"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
+	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/proto/dbval"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 )
 
 type mockMinimumSlotter struct {
@@ -29,7 +29,7 @@ func (m mockMinimumSlotter) minimumSlot(_ primitives.Slot) primitives.Slot {
 type mockInitalizerWaiter struct {
 }
 
-func (mi *mockInitalizerWaiter) WaitForInitializer(ctx context.Context) (*verification.Initializer, error) {
+func (*mockInitalizerWaiter) WaitForInitializer(_ context.Context) (*verification.Initializer, error) {
 	return &verification.Initializer{}, nil
 }
 
@@ -67,7 +67,7 @@ func TestServiceInit(t *testing.T) {
 	}
 	go srv.Start()
 	todo := make([]batch, 0)
-	todo = testReadN(t, ctx, pool.todoChan, nWorkers, todo)
+	todo = testReadN(ctx, t, pool.todoChan, nWorkers, todo)
 	require.Equal(t, nWorkers, len(todo))
 	for i := 0; i < remaining; i++ {
 		b := todo[i]
@@ -75,7 +75,7 @@ func TestServiceInit(t *testing.T) {
 			b.state = batchImportable
 		}
 		pool.finishedChan <- b
-		todo = testReadN(t, ctx, pool.todoChan, 1, todo)
+		todo = testReadN(ctx, t, pool.todoChan, 1, todo)
 	}
 	require.Equal(t, remaining+nWorkers, len(todo))
 	for i := remaining; i < remaining+nWorkers; i++ {
@@ -90,14 +90,12 @@ func TestMinimumBackfillSlot(t *testing.T) {
 	minSlot := minimumBackfillSlot(primitives.Slot(currSlot))
 	require.Equal(t, 100*params.BeaconConfig().SlotsPerEpoch, minSlot)
 
-	oe = helpers.MinEpochsForBlockRequests()
-
 	currSlot = oe.Mul(uint64(params.BeaconConfig().SlotsPerEpoch))
 	minSlot = minimumBackfillSlot(primitives.Slot(currSlot))
 	require.Equal(t, primitives.Slot(1), minSlot)
 }
 
-func testReadN(t *testing.T, ctx context.Context, c chan batch, n int, into []batch) []batch {
+func testReadN(ctx context.Context, t *testing.T, c chan batch, n int, into []batch) []batch {
 	for i := 0; i < n; i++ {
 		select {
 		case b := <-c:
@@ -108,4 +106,29 @@ func testReadN(t *testing.T, ctx context.Context, c chan batch, n int, into []ba
 		}
 	}
 	return into
+}
+
+func TestBackfillMinSlotDefault(t *testing.T) {
+	oe := helpers.MinEpochsForBlockRequests()
+	current := primitives.Slot((oe + 100).Mul(uint64(params.BeaconConfig().SlotsPerEpoch)))
+	s := &Service{}
+	specMin := minimumBackfillSlot(current)
+
+	t.Run("equal to specMin", func(t *testing.T) {
+		opt := WithMinimumSlot(specMin)
+		require.NoError(t, opt(s))
+		require.Equal(t, specMin, s.ms(current))
+	})
+	t.Run("older than specMin", func(t *testing.T) {
+		opt := WithMinimumSlot(specMin - 1)
+		require.NoError(t, opt(s))
+		// if WithMinimumSlot is older than the spec minimum, we should use it.
+		require.Equal(t, specMin-1, s.ms(current))
+	})
+	t.Run("newer than specMin", func(t *testing.T) {
+		opt := WithMinimumSlot(specMin + 1)
+		require.NoError(t, opt(s))
+		// if WithMinimumSlot is newer than the spec minimum, we should use the spec minimum
+		require.Equal(t, specMin, s.ms(current))
+	})
 }

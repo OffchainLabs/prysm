@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 func TestBatcherBefore(t *testing.T) {
@@ -62,6 +62,35 @@ func TestBatcherBefore(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestBatchSingleItem(t *testing.T) {
+	var min, max, size primitives.Slot
+	// seqLen = 1 means just one worker
+	seqLen := 1
+	min = 0
+	max = 11235
+	size = 64
+	seq := newBatchSequencer(seqLen, min, max, size)
+	got, err := seq.sequence()
+	require.NoError(t, err)
+	require.Equal(t, 1, len(got))
+	b := got[0]
+
+	//  calling sequence again should give you the next (earlier) batch
+	seq.update(b.withState(batchImportComplete))
+	next, err := seq.sequence()
+	require.NoError(t, err)
+	require.Equal(t, 1, len(next))
+	require.Equal(t, b.end, next[0].end+size)
+
+	// should get the same batch again when update is called with an error
+	seq.update(next[0].withState(batchErrRetryable))
+	same, err := seq.sequence()
+	require.NoError(t, err)
+	require.Equal(t, 1, len(same))
+	require.Equal(t, next[0].begin, same[0].begin)
+	require.Equal(t, next[0].end, same[0].end)
 }
 
 func TestBatchSequencer(t *testing.T) {

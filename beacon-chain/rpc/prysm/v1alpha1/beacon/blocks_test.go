@@ -6,21 +6,22 @@ import (
 	"strconv"
 	"testing"
 
-	chainMock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	dbTest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	chainMock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	dbTest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -68,16 +69,19 @@ func TestServer_GetChainHead_NoGenesis(t *testing.T) {
 		wsb, err := blocks.NewSignedBeaconBlock(genBlock)
 		require.NoError(t, err)
 		bs := &Server{
-			BeaconDB:    db,
-			HeadFetcher: &chainMock.ChainService{Block: wsb, State: s},
-			FinalizationFetcher: &chainMock.ChainService{
-				FinalizedCheckPoint:         s.FinalizedCheckpoint(),
-				CurrentJustifiedCheckPoint:  s.CurrentJustifiedCheckpoint(),
-				PreviousJustifiedCheckPoint: s.PreviousJustifiedCheckpoint()},
-			OptimisticModeFetcher: &chainMock.ChainService{},
+			CoreService: &core.Service{
+				BeaconDB:    db,
+				HeadFetcher: &chainMock.ChainService{Block: wsb, State: s},
+				FinalizedFetcher: &chainMock.ChainService{
+					FinalizedCheckPoint:         s.FinalizedCheckpoint(),
+					CurrentJustifiedCheckPoint:  s.CurrentJustifiedCheckpoint(),
+					PreviousJustifiedCheckPoint: s.PreviousJustifiedCheckpoint(),
+				},
+				OptimisticModeFetcher: &chainMock.ChainService{},
+			},
 		}
 		_, err = bs.GetChainHead(context.Background(), nil)
-		require.ErrorContains(t, "Could not get genesis block", err)
+		require.ErrorContains(t, "could not get genesis block", err)
 	}
 }
 
@@ -102,26 +106,30 @@ func TestServer_GetChainHead_NoFinalizedBlock(t *testing.T) {
 	require.NoError(t, err)
 
 	bs := &Server{
-		BeaconDB:    db,
-		HeadFetcher: &chainMock.ChainService{Block: wsb, State: s},
-		FinalizationFetcher: &chainMock.ChainService{
-			FinalizedCheckPoint:         s.FinalizedCheckpoint(),
-			CurrentJustifiedCheckPoint:  s.CurrentJustifiedCheckpoint(),
-			PreviousJustifiedCheckPoint: s.PreviousJustifiedCheckpoint()},
-		OptimisticModeFetcher: &chainMock.ChainService{},
+		CoreService: &core.Service{
+			BeaconDB:    db,
+			HeadFetcher: &chainMock.ChainService{Block: wsb, State: s},
+			FinalizedFetcher: &chainMock.ChainService{
+				FinalizedCheckPoint:         s.FinalizedCheckpoint(),
+				CurrentJustifiedCheckPoint:  s.CurrentJustifiedCheckpoint(),
+				PreviousJustifiedCheckPoint: s.PreviousJustifiedCheckpoint()},
+			OptimisticModeFetcher: &chainMock.ChainService{},
+		},
 	}
 
 	_, err = bs.GetChainHead(context.Background(), nil)
-	require.ErrorContains(t, "Could not get finalized block", err)
+	require.ErrorContains(t, "could not get finalized block", err)
 }
 
 func TestServer_GetChainHead_NoHeadBlock(t *testing.T) {
 	bs := &Server{
-		HeadFetcher:           &chainMock.ChainService{Block: nil},
-		OptimisticModeFetcher: &chainMock.ChainService{},
+		CoreService: &core.Service{
+			HeadFetcher:           &chainMock.ChainService{Block: nil},
+			OptimisticModeFetcher: &chainMock.ChainService{},
+		},
 	}
 	_, err := bs.GetChainHead(context.Background(), nil)
-	assert.ErrorContains(t, "Head block of chain was nil", err)
+	assert.ErrorContains(t, "head block of chain was nil", err)
 }
 
 func TestServer_GetChainHead(t *testing.T) {
@@ -172,13 +180,15 @@ func TestServer_GetChainHead(t *testing.T) {
 	wsb, err := blocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
 	bs := &Server{
-		BeaconDB:              db,
-		HeadFetcher:           &chainMock.ChainService{Block: wsb, State: s},
-		OptimisticModeFetcher: &chainMock.ChainService{},
-		FinalizationFetcher: &chainMock.ChainService{
-			FinalizedCheckPoint:         s.FinalizedCheckpoint(),
-			CurrentJustifiedCheckPoint:  s.CurrentJustifiedCheckpoint(),
-			PreviousJustifiedCheckPoint: s.PreviousJustifiedCheckpoint()},
+		CoreService: &core.Service{
+			BeaconDB:              db,
+			HeadFetcher:           &chainMock.ChainService{Block: wsb, State: s},
+			OptimisticModeFetcher: &chainMock.ChainService{},
+			FinalizedFetcher: &chainMock.ChainService{
+				FinalizedCheckPoint:         s.FinalizedCheckpoint(),
+				CurrentJustifiedCheckPoint:  s.CurrentJustifiedCheckpoint(),
+				PreviousJustifiedCheckPoint: s.PreviousJustifiedCheckpoint()},
+		},
 	}
 
 	head, err := bs.GetChainHead(context.Background(), nil)
@@ -265,8 +275,10 @@ func TestServer_ListBeaconBlocks_Genesis(t *testing.T) {
 		assert.NoError(t, err)
 		blinded, err := wrapped.ToBlinded()
 		assert.NoError(t, err)
-		blindedProto, err := blinded.PbBlindedBellatrixBlock()
+		pb, err := blinded.Proto()
 		assert.NoError(t, err)
+		blindedProto, ok := pb.(*ethpb.SignedBlindedBeaconBlockBellatrix)
+		require.Equal(t, true, ok)
 		blkContainer := &ethpb.BeaconBlockContainer{
 			Block: &ethpb.BeaconBlockContainer_BlindedBellatrixBlock{BlindedBellatrixBlock: blindedProto}}
 		runListBlocksGenesis(t, wrapped, blkContainer)
@@ -279,7 +291,10 @@ func TestServer_ListBeaconBlocks_Genesis(t *testing.T) {
 		assert.NoError(t, err)
 		blinded, err := wrapped.ToBlinded()
 		assert.NoError(t, err)
-		blindedProto, err := blinded.PbBlindedCapellaBlock()
+		pb, err := blinded.Proto()
+		assert.NoError(t, err)
+		blindedProto, ok := pb.(*ethpb.SignedBlindedBeaconBlockCapella)
+		require.Equal(t, true, ok)
 		assert.NoError(t, err)
 		blkContainer := &ethpb.BeaconBlockContainer{
 			Block: &ethpb.BeaconBlockContainer_BlindedCapellaBlock{BlindedCapellaBlock: blindedProto}}

@@ -6,10 +6,10 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v6/crypto/hash"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	protodb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/crypto/hash"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	protodb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 // SparseMerkleTrie implements a sparse, general purpose Merkle trie to be used
@@ -258,4 +258,19 @@ func (m *SparseMerkleTrie) NumOfItems() int {
 		return 0
 	}
 	return len(m.originalItems)
+}
+
+// ProofFromMerkleLayers creates a proof starting at the leaf index of the merkle layers.
+func ProofFromMerkleLayers(layers [][][]byte, startingLeafIndex int) [][]byte {
+	// The merkle tree structure looks as follows:
+	// [[r1, r2, r3, r4], [parent1, parent2], [root]]
+	proof := make([][]byte, 0)
+	currentIndex := startingLeafIndex
+	for i := 0; i < len(layers)-1; i++ {
+		neighborIdx := currentIndex ^ 1
+		neighbor := layers[i][neighborIdx]
+		proof = append(proof, neighbor)
+		currentIndex = currentIndex / 2
+	}
+	return proof
 }

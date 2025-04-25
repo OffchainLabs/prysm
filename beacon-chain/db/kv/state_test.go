@@ -2,25 +2,25 @@ package kv
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/binary"
-	"math/big"
-	"math/rand"
+	mathRand "math/rand"
 	"strconv"
 	"testing"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -100,7 +100,7 @@ func TestState_CanSaveRetrieve(t *testing.T) {
 					BlockHash:        make([]byte, 32),
 					TransactionsRoot: make([]byte, 32),
 					WithdrawalsRoot:  make([]byte, 32),
-				}, big.NewInt(0))
+				})
 				require.NoError(t, err)
 				require.NoError(t, st.SetLatestExecutionPayloadHeader(p))
 				return st
@@ -125,12 +125,37 @@ func TestState_CanSaveRetrieve(t *testing.T) {
 					BlockHash:        make([]byte, 32),
 					TransactionsRoot: make([]byte, 32),
 					WithdrawalsRoot:  make([]byte, 32),
-				}, big.NewInt(0))
+				})
 				require.NoError(t, err)
 				require.NoError(t, st.SetLatestExecutionPayloadHeader(p))
 				return st
 			},
 			rootSeed: 'D',
+		},
+		{
+			name: "electra",
+			s: func() state.BeaconState {
+				st, err := util.NewBeaconStateElectra()
+				require.NoError(t, err)
+				require.NoError(t, st.SetSlot(100))
+				p, err := blocks.WrappedExecutionPayloadHeaderDeneb(&enginev1.ExecutionPayloadHeaderDeneb{
+					ParentHash:       make([]byte, 32),
+					FeeRecipient:     make([]byte, 20),
+					StateRoot:        make([]byte, 32),
+					ReceiptsRoot:     make([]byte, 32),
+					LogsBloom:        make([]byte, 256),
+					PrevRandao:       make([]byte, 32),
+					ExtraData:        []byte("foo"),
+					BaseFeePerGas:    make([]byte, 32),
+					BlockHash:        make([]byte, 32),
+					TransactionsRoot: make([]byte, 32),
+					WithdrawalsRoot:  make([]byte, 32),
+				})
+				require.NoError(t, err)
+				require.NoError(t, st.SetLatestExecutionPayloadHeader(p))
+				return st
+			},
+			rootSeed: 'E',
 		},
 	}
 
@@ -854,16 +879,16 @@ func validators(limit int) []*ethpb.Validator {
 	var vals []*ethpb.Validator
 	for i := 0; i < limit; i++ {
 		pubKey := make([]byte, params.BeaconConfig().BLSPubkeyLength)
-		binary.LittleEndian.PutUint64(pubKey, rand.Uint64())
+		binary.LittleEndian.PutUint64(pubKey, mathRand.Uint64())
 		val := &ethpb.Validator{
 			PublicKey:                  pubKey,
-			WithdrawalCredentials:      bytesutil.ToBytes(rand.Uint64(), 32),
-			EffectiveBalance:           rand.Uint64(),
+			WithdrawalCredentials:      bytesutil.ToBytes(mathRand.Uint64(), 32),
+			EffectiveBalance:           mathRand.Uint64(),
 			Slashed:                    i%2 != 0,
-			ActivationEligibilityEpoch: primitives.Epoch(rand.Uint64()),
-			ActivationEpoch:            primitives.Epoch(rand.Uint64()),
-			ExitEpoch:                  primitives.Epoch(rand.Uint64()),
-			WithdrawableEpoch:          primitives.Epoch(rand.Uint64()),
+			ActivationEligibilityEpoch: primitives.Epoch(mathRand.Uint64()),
+			ActivationEpoch:            primitives.Epoch(mathRand.Uint64()),
+			ExitEpoch:                  primitives.Epoch(mathRand.Uint64()),
+			WithdrawableEpoch:          primitives.Epoch(mathRand.Uint64()),
 		}
 		vals = append(vals, val)
 	}
@@ -889,8 +914,8 @@ func checkStateSaveTime(b *testing.B, saveCount int) {
 		allValidators := append(initialSetOfValidators, validatosToAddInTest...)
 
 		// shuffle validators.
-		rand.Seed(time.Now().UnixNano())
-		rand.Shuffle(len(allValidators), func(i, j int) { allValidators[i], allValidators[j] = allValidators[j], allValidators[i] })
+		mathRand.New(mathRand.NewSource(time.Now().UnixNano()))
+		mathRand.Shuffle(len(allValidators), func(i, j int) { allValidators[i], allValidators[j] = allValidators[j], allValidators[i] })
 
 		require.NoError(b, st.SetValidators(allValidators))
 		require.NoError(b, db.SaveState(context.Background(), st, bytesutil.ToBytes32(key)))
@@ -935,8 +960,8 @@ func checkStateReadTime(b *testing.B, saveCount int) {
 		allValidators := append(initialSetOfValidators, validatosToAddInTest...)
 
 		// shuffle validators.
-		rand.Seed(time.Now().UnixNano())
-		rand.Shuffle(len(allValidators), func(i, j int) { allValidators[i], allValidators[j] = allValidators[j], allValidators[i] })
+		mathRand.New(mathRand.NewSource(time.Now().UnixNano()))
+		mathRand.Shuffle(len(allValidators), func(i, j int) { allValidators[i], allValidators[j] = allValidators[j], allValidators[i] })
 
 		require.NoError(b, st.SetValidators(allValidators))
 		require.NoError(b, db.SaveState(context.Background(), st, bytesutil.ToBytes32(key)))
@@ -1044,6 +1069,31 @@ func TestBellatrixState_CanDelete(t *testing.T) {
 	require.Equal(t, state.ReadOnlyBeaconState(nil), savedS, "Unsaved state should've been nil")
 }
 
+func TestBellatrixState_CanDeleteWithBlock(t *testing.T) {
+	db := setupDB(t)
+
+	b := util.NewBeaconBlockBellatrix()
+	b.Block.Slot = 100
+	r, err := b.Block.HashTreeRoot()
+	require.NoError(t, err)
+	wsb, err := blocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	require.NoError(t, db.SaveBlock(context.Background(), wsb))
+
+	require.Equal(t, false, db.HasState(context.Background(), r))
+
+	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
+	require.NoError(t, st.SetSlot(100))
+
+	require.NoError(t, db.SaveState(context.Background(), st, r))
+	require.Equal(t, true, db.HasState(context.Background(), r))
+
+	require.NoError(t, db.DeleteState(context.Background(), r))
+	savedS, err := db.State(context.Background(), r)
+	require.NoError(t, err)
+	require.Equal(t, state.ReadOnlyBeaconState(nil), savedS, "Unsaved state should've been nil")
+}
+
 func TestDenebState_CanSaveRetrieve(t *testing.T) {
 	db := setupDB(t)
 
@@ -1101,6 +1151,100 @@ func TestStateDeneb_CanSaveRetrieveValidatorEntries(t *testing.T) {
 
 	stateValidators := validators(10)
 	st, _ := util.DeterministicGenesisStateDeneb(t, 20)
+	require.NoError(t, st.SetSlot(100))
+	require.NoError(t, st.SetValidators(stateValidators))
+
+	ctx := context.Background()
+	require.NoError(t, db.SaveState(ctx, st, r))
+	assert.Equal(t, true, db.HasState(context.Background(), r))
+
+	savedS, err := db.State(context.Background(), r)
+	require.NoError(t, err)
+
+	require.DeepSSZEqual(t, st.Validators(), savedS.Validators(), "saved state with validators and retrieved state are not matching")
+
+	// check if the index of the second state is still present.
+	err = db.db.Update(func(tx *bolt.Tx) error {
+		idxBkt := tx.Bucket(blockRootValidatorHashesBucket)
+		data := idxBkt.Get(r[:])
+		require.NotEqual(t, 0, len(data))
+		return nil
+	})
+	require.NoError(t, err)
+
+	// check if all the validator entries are still intact in the validator entry bucket.
+	err = db.db.Update(func(tx *bolt.Tx) error {
+		valBkt := tx.Bucket(stateValidatorsBucket)
+		// if any of the original validator entry is not present, then fail the test.
+		for _, val := range stateValidators {
+			hash, hashErr := val.HashTreeRoot()
+			assert.NoError(t, hashErr)
+			data := valBkt.Get(hash[:])
+			require.NotNil(t, data)
+			require.NotEqual(t, 0, len(data))
+		}
+		return nil
+	})
+	require.NoError(t, err)
+}
+
+func TestElectraState_CanSaveRetrieve(t *testing.T) {
+	db := setupDB(t)
+
+	r := [32]byte{'A'}
+
+	require.Equal(t, false, db.HasState(context.Background(), r))
+
+	st, _ := util.DeterministicGenesisStateElectra(t, 1)
+	require.NoError(t, st.SetSlot(100))
+
+	require.NoError(t, db.SaveState(context.Background(), st, r))
+	require.Equal(t, true, db.HasState(context.Background(), r))
+
+	savedS, err := db.State(context.Background(), r)
+	require.NoError(t, err)
+
+	assert.DeepSSZEqual(t, st.ToProtoUnsafe(), savedS.ToProtoUnsafe())
+
+	savedS, err = db.State(context.Background(), [32]byte{'B'})
+	require.NoError(t, err)
+	require.Equal(t, state.ReadOnlyBeaconState(nil), savedS, "Unsaved state should've been nil")
+}
+
+func TestElectraState_CanDelete(t *testing.T) {
+	db := setupDB(t)
+
+	r := [32]byte{'A'}
+
+	require.Equal(t, false, db.HasState(context.Background(), r))
+
+	st, _ := util.DeterministicGenesisStateElectra(t, 1)
+	require.NoError(t, st.SetSlot(100))
+
+	require.NoError(t, db.SaveState(context.Background(), st, r))
+	require.Equal(t, true, db.HasState(context.Background(), r))
+
+	require.NoError(t, db.DeleteState(context.Background(), r))
+	savedS, err := db.State(context.Background(), r)
+	require.NoError(t, err)
+	require.Equal(t, state.ReadOnlyBeaconState(nil), savedS, "Unsaved state should've been nil")
+}
+
+func TestStateElectra_CanSaveRetrieveValidatorEntries(t *testing.T) {
+	db := setupDB(t)
+
+	// enable historical state representation flag to test this
+	resetCfg := features.InitWithReset(&features.Flags{
+		EnableHistoricalSpaceRepresentation: true,
+	})
+	defer resetCfg()
+
+	r := [32]byte{'A'}
+
+	require.Equal(t, false, db.HasState(context.Background(), r))
+
+	stateValidators := validators(10)
+	st, _ := util.DeterministicGenesisStateElectra(t, 20)
 	require.NoError(t, st.SetSlot(100))
 	require.NoError(t, st.SetValidators(stateValidators))
 

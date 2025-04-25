@@ -3,7 +3,7 @@ package verification
 import (
 	"context"
 
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 )
 
 type MockBlobVerifier struct {
@@ -18,11 +18,11 @@ type MockBlobVerifier struct {
 	ErrSidecarInclusionProven       error
 	ErrSidecarKzgProofVerified      error
 	ErrSidecarProposerExpected      error
-	cbVerifiedROBlob                func() (blocks.VerifiedROBlob, error)
+	CbVerifiedROBlob                func() (blocks.VerifiedROBlob, error)
 }
 
 func (m *MockBlobVerifier) VerifiedROBlob() (blocks.VerifiedROBlob, error) {
-	return m.cbVerifiedROBlob()
+	return m.CbVerifiedROBlob()
 }
 
 func (m *MockBlobVerifier) BlobIndexInBounds() (err error) {

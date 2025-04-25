@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/async"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/prysmaticlabs/prysm/v5/async"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 )
 
@@ -42,9 +42,10 @@ func (s *Service) goodbyeRPCHandler(_ context.Context, msg interface{}, stream l
 		return fmt.Errorf("wrong message type for goodbye, got %T, wanted *uint64", msg)
 	}
 	if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
-		return err
+		log.WithError(err).Debug("Goodbye message from rate-limited peer.")
+	} else {
+		s.rateLimiter.add(stream, 1)
 	}
-	s.rateLimiter.add(stream, 1)
 	log := log.WithField("Reason", goodbyeMessage(*m))
 	log.WithField("peer", stream.Conn().RemotePeer()).Trace("Peer has sent a goodbye message")
 	s.cfg.p2p.Peers().SetNextValidTime(stream.Conn().RemotePeer(), goodByeBackoff(*m))
@@ -54,10 +55,7 @@ func (s *Service) goodbyeRPCHandler(_ context.Context, msg interface{}, stream l
 
 // disconnectBadPeer checks whether peer is considered bad by some scorer, and tries to disconnect
 // the peer, if that is the case. Additionally, disconnection reason is obtained from scorer.
-func (s *Service) disconnectBadPeer(ctx context.Context, id peer.ID) {
-	if !s.cfg.p2p.Peers().IsBad(id) {
-		return
-	}
+func (s *Service) disconnectBadPeer(ctx context.Context, id peer.ID, badPeerErr error) {
 	err := s.cfg.p2p.Peers().Scorers().ValidationError(id)
 	goodbyeCode := p2ptypes.ErrToGoodbyeCode(err)
 	if err == nil {
@@ -66,6 +64,8 @@ func (s *Service) disconnectBadPeer(ctx context.Context, id peer.ID) {
 	if err := s.sendGoodByeAndDisconnect(ctx, goodbyeCode, id); err != nil {
 		log.WithError(err).Debug("Error when disconnecting with bad peer")
 	}
+
+	log.WithError(badPeerErr).WithField("peerID", id).Debug("Initiate peer disconnection")
 }
 
 // A custom goodbye method that is used by our connection handler, in the

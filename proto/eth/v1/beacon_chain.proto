@@ -18,7 +18,7 @@ package ethereum.eth.v1;
 import "google/protobuf/descriptor.proto";
 
 option csharp_namespace = "Ethereum.Eth.V1";
-option go_package = "github.com/prysmaticlabs/prysm/v5/proto/eth/v1";
+option go_package = "github.com/OffchainLabs/prysm/v6/proto/eth/v1";
 option java_multiple_files = true;
 option java_outer_classname = "BeaconChainProto";
 option java_package = "org.ethereum.eth.v1";
@@ -27,7 +27,8 @@ option php_namespace = "Ethereum\\Eth\\v1";
 // Beacon State API related messages.
 
 message StateRequest {
-    // The state id which can be any of: "head" (canonical head in node's view),
-    // "genesis", "finalized", "justified", <slot>, <hex encoded stateRoot with 0x prefix>.
-    bytes state_id = 1;
+  // The state id which can be any of: "head" (canonical head in node's view),
+  // "genesis", "finalized", "justified", <slot>, <hex encoded stateRoot with 0x
+  // prefix>.
+  bytes state_id = 1;
 }

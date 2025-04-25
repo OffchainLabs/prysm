@@ -1,9 +1,9 @@
 package state_native
 
 import (
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 )
 
 // Id is the identifier of the beacon state.
@@ -103,5 +103,5 @@ func (b *BeaconState) HistoricalSummaries() ([]*ethpb.HistoricalSummary, error) 
 // historicalSummariesVal of the beacon state.
 // This assumes that a lock is already held on BeaconState.
 func (b *BeaconState) historicalSummariesVal() []*ethpb.HistoricalSummary {
-	return ethpb.CopyHistoricalSummaries(b.historicalSummaries)
+	return ethpb.CopySlice(b.historicalSummaries)
 }

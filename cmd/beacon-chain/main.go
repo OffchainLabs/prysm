@@ -7,10 +7,35 @@ import (
 	"os"
 	"path/filepath"
 	runtimeDebug "runtime/debug"
+	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/node"
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	blockchaincmd "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/blockchain"
+	dbcommands "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/execution"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	jwtcommands "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/jwt"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/storage"
+	backfill "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/backfill"
+	bflags "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/backfill/flags"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/checkpoint"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/genesis"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/io/file"
+	"github.com/OffchainLabs/prysm/v6/io/logs"
+	"github.com/OffchainLabs/prysm/v6/monitoring/journald"
+	"github.com/OffchainLabs/prysm/v6/runtime/debug"
+	"github.com/OffchainLabs/prysm/v6/runtime/fdlimits"
+	prefixed "github.com/OffchainLabs/prysm/v6/runtime/logging/logrus-prefixed-formatter"
+	_ "github.com/OffchainLabs/prysm/v6/runtime/maxprocs"
+	"github.com/OffchainLabs/prysm/v6/runtime/tos"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	gethlog "github.com/ethereum/go-ethereum/log"
 	golog "github.com/ipfs/go-log/v2"
 	joonix "github.com/joonix/log"
+	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/builder"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/node"
 	"github.com/prysmaticlabs/prysm/v5/cmd"
@@ -49,10 +74,9 @@ var appFlags = []cli.Flag{
 	flags.CertFlag,
 	flags.KeyFlag,
 	flags.HTTPModules,
-	flags.DisableGRPCGateway,
-	flags.GRPCGatewayHost,
-	flags.GRPCGatewayPort,
-	flags.GPRCGatewayCorsDomain,
+	flags.HTTPServerHost,
+	flags.HTTPServerPort,
+	flags.HTTPServerCorsDomain,
 	flags.MinSyncPeers,
 	flags.ContractDeploymentBlock,
 	flags.SetGCPercent,
@@ -61,10 +85,8 @@ var appFlags = []cli.Flag{
 	flags.BlobBatchLimit,
 	flags.BlobBatchLimitBurstFactor,
 	flags.InteropMockEth1DataVotesFlag,
-	flags.InteropNumValidatorsFlag,
-	flags.InteropGenesisTimeFlag,
 	flags.SlotsPerArchivedPoint,
-	flags.EnableDebugRPCEndpoints,
+	flags.DisableDebugRPCEndpoints,
 	flags.SubscribeToAllSubnets,
 	flags.HistoricalSlasherNode,
 	flags.ChainID,
@@ -72,6 +94,7 @@ var appFlags = []cli.Flag{
 	flags.WeakSubjectivityCheckpoint,
 	flags.Eth1HeaderReqLimit,
 	flags.MinPeersPerSubnet,
+	flags.MaxConcurrentDials,
 	flags.SuggestedFeeRecipient,
 	flags.TerminalTotalDifficultyOverride,
 	flags.TerminalBlockHashOverride,
@@ -81,7 +104,11 @@ var appFlags = []cli.Flag{
 	flags.MaxBuilderConsecutiveMissedSlots,
 	flags.EngineEndpointTimeoutSeconds,
 	flags.LocalBlockValueBoost,
-	cmd.BackupWebhookOutputDir,
+	flags.MinBuilderBid,
+	flags.MinBuilderDiff,
+	flags.BeaconDBPruning,
+	flags.PrunerRetentionEpochs,
+	flags.EnableBuilderSSZ,
 	cmd.MinimalConfigFlag,
 	cmd.E2EConfigFlag,
 	cmd.RPCMaxPageSizeFlag,
@@ -90,6 +117,7 @@ var appFlags = []cli.Flag{
 	cmd.StaticPeers,
 	cmd.RelayNode,
 	cmd.P2PUDPPort,
+	cmd.P2PQUICPort,
 	cmd.P2PTCPPort,
 	cmd.P2PIP,
 	cmd.P2PHost,
@@ -118,8 +146,6 @@ var appFlags = []cli.Flag{
 	debug.PProfAddrFlag,
 	debug.PProfPortFlag,
 	debug.MemProfileRateFlag,
-	debug.CPUProfileFlag,
-	debug.TraceFlag,
 	debug.BlockProfileRateFlag,
 	debug.MutexProfileFractionFlag,
 	cmd.LogFileName,
@@ -138,97 +164,115 @@ var appFlags = []cli.Flag{
 	genesis.StatePath,
 	genesis.BeaconAPIURL,
 	flags.SlasherDirFlag,
+	flags.SlasherFlag,
 	flags.JwtId,
 	flags.ArchivalNodeFlag,
 	storageFlags.BlobStoragePathFlag,
 	storageFlags.BlobRetentionEpochFlag,
+	storage.BlobStorageLayout,
 	bflags.EnableExperimentalBackfill,
 	bflags.BackfillBatchSize,
 	bflags.BackfillWorkerCount,
+	bflags.BackfillOldestSlot,
 }
 
 func init() {
 	appFlags = cmd.WrapFlags(append(appFlags, features.BeaconChainFlags...))
 }
 
+func before(ctx *cli.Context) error {
+	// Load flags from config file, if specified.
+	if err := cmd.LoadFlagsFromConfig(ctx, appFlags); err != nil {
+		return errors.Wrap(err, "failed to load flags from config file")
+	}
+
+	format := ctx.String(cmd.LogFormat.Name)
+
+	switch format {
+	case "text":
+		formatter := new(prefixed.TextFormatter)
+		formatter.TimestampFormat = time.DateTime
+		formatter.FullTimestamp = true
+
+		// If persistent log files are written - we disable the log messages coloring because
+		// the colors are ANSI codes and seen as gibberish in the log files.
+		formatter.DisableColors = ctx.String(cmd.LogFileName.Name) != ""
+		logrus.SetFormatter(formatter)
+	case "fluentd":
+		f := joonix.NewFormatter()
+
+		if err := joonix.DisableTimestampFormat(f); err != nil {
+			panic(err) // lint:nopanic -- This shouldn't happen, but crashing immediately at startup is OK.
+		}
+
+		logrus.SetFormatter(f)
+	case "json":
+		logrus.SetFormatter(&logrus.JSONFormatter{})
+	case "journald":
+		if err := journald.Enable(); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("unknown log format %s", format)
+	}
+
+	logFileName := ctx.String(cmd.LogFileName.Name)
+	if logFileName != "" {
+		if err := logs.ConfigurePersistentLogging(logFileName); err != nil {
+			log.WithError(err).Error("Failed to configuring logging to disk.")
+		}
+	}
+
+	if err := cmd.ExpandSingleEndpointIfFile(ctx, flags.ExecutionEngineEndpoint); err != nil {
+		return errors.Wrap(err, "failed to expand single endpoint")
+	}
+
+	if ctx.IsSet(flags.SetGCPercent.Name) {
+		runtimeDebug.SetGCPercent(ctx.Int(flags.SetGCPercent.Name))
+	}
+
+	if err := debug.Setup(ctx); err != nil {
+		return errors.Wrap(err, "failed to setup debug")
+	}
+
+	if err := fdlimits.SetMaxFdLimits(); err != nil {
+		return errors.Wrap(err, "failed to set max fd limits")
+	}
+
+	if err := features.ValidateNetworkFlags(ctx); err != nil {
+		return errors.Wrap(err, "provided multiple network flags")
+	}
+
+	return cmd.ValidateNoArgs(ctx)
+}
+
 func main() {
 	// rctx = root context with cancellation.
 	// note other instances of ctx in this func are *cli.Context.
 	rctx, cancel := context.WithCancel(context.Background())
-	app := cli.App{}
-	app.Name = "beacon-chain"
-	app.Usage = "this is a beacon chain implementation for Ethereum"
-	app.Action = func(ctx *cli.Context) error {
-		if err := startNode(ctx, cancel); err != nil {
-			return cli.Exit(err.Error(), 1)
-		}
-		return nil
-	}
-	app.Version = version.Version()
-	app.Commands = []*cli.Command{
-		dbcommands.Commands,
-		jwtcommands.Commands,
-	}
-
-	app.Flags = appFlags
-
-	app.Before = func(ctx *cli.Context) error {
-		// Load flags from config file, if specified.
-		if err := cmd.LoadFlagsFromConfig(ctx, app.Flags); err != nil {
-			return err
-		}
-
-		format := ctx.String(cmd.LogFormat.Name)
-		switch format {
-		case "text":
-			formatter := new(prefixed.TextFormatter)
-			formatter.TimestampFormat = "2006-01-02 15:04:05"
-			formatter.FullTimestamp = true
-			// If persistent log files are written - we disable the log messages coloring because
-			// the colors are ANSI codes and seen as gibberish in the log files.
-			formatter.DisableColors = ctx.String(cmd.LogFileName.Name) != ""
-			logrus.SetFormatter(formatter)
-		case "fluentd":
-			f := joonix.NewFormatter()
-			if err := joonix.DisableTimestampFormat(f); err != nil {
-				panic(err)
-			}
-			logrus.SetFormatter(f)
-		case "json":
-			logrus.SetFormatter(&logrus.JSONFormatter{})
-		case "journald":
-			if err := journald.Enable(); err != nil {
+	app := cli.App{
+		Name:  "beacon-chain",
+		Usage: "this is a beacon chain implementation for Ethereum",
+		Action: func(ctx *cli.Context) error {
+			if err := startNode(ctx, cancel); err != nil {
+				log.Fatal(err.Error())
 				return err
 			}
-		default:
-			return fmt.Errorf("unknown log format %s", format)
-		}
-
-		logFileName := ctx.String(cmd.LogFileName.Name)
-		if logFileName != "" {
-			if err := logs.ConfigurePersistentLogging(logFileName); err != nil {
-				log.WithError(err).Error("Failed to configuring logging to disk.")
-			}
-		}
-		if err := cmd.ExpandSingleEndpointIfFile(ctx, flags.ExecutionEngineEndpoint); err != nil {
-			return err
-		}
-		if ctx.IsSet(flags.SetGCPercent.Name) {
-			runtimeDebug.SetGCPercent(ctx.Int(flags.SetGCPercent.Name))
-		}
-		if err := debug.Setup(ctx); err != nil {
-			return err
-		}
-		if err := fdlimits.SetMaxFdLimits(); err != nil {
-			return err
-		}
-		return cmd.ValidateNoArgs(ctx)
+			return nil
+		},
+		Version: version.Version(),
+		Commands: []*cli.Command{
+			dbcommands.Commands,
+			jwtcommands.Commands,
+		},
+		Flags:  appFlags,
+		Before: before,
 	}
 
 	defer func() {
 		if x := recover(); x != nil {
 			log.Errorf("Runtime panic: %v\n%v", x, string(runtimeDebug.Stack()))
-			panic(x)
+			panic(x) // lint:nopanic -- This is just resurfacing the original panic.
 		}
 	}()
 
@@ -267,9 +311,7 @@ func startNode(ctx *cli.Context, cancel context.CancelFunc) error {
 		// libp2p specific logging.
 		golog.SetAllLoggers(golog.LevelDebug)
 		// Geth specific logging.
-		glogger := gethlog.NewGlogHandler(gethlog.StreamHandler(os.Stderr, gethlog.TerminalFormat(true)))
-		glogger.Verbosity(gethlog.LvlTrace)
-		gethlog.Root().SetHandler(glogger)
+		gethlog.SetDefault(gethlog.NewLogger(gethlog.NewTerminalHandlerWithLevel(os.Stderr, gethlog.LvlTrace, true)))
 	}
 
 	blockchainFlagOpts, err := blockchaincmd.FlagOptions(ctx)

@@ -9,15 +9,15 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts/iface"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts/wallet"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
+	remoteweb3signer "github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/iface"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
-	remoteweb3signer "github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
@@ -61,7 +61,11 @@ func Test_IsValid_RandomFiles(t *testing.T) {
 }
 
 func TestWallet_InitializeKeymanager_web3Signer_HappyPath(t *testing.T) {
-	w := wallet.NewWalletForWeb3Signer()
+	app := cli.App{}
+	set := flag.NewFlagSet("test", 0)
+	newDir := filepath.Join(t.TempDir(), "new")
+	set.String(flags.WalletDirFlag.Name, newDir, "")
+	w := wallet.NewWalletForWeb3Signer(cli.NewContext(&app, set, nil))
 	ctx := context.Background()
 	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
 	require.NoError(t, err)
@@ -70,7 +74,6 @@ func TestWallet_InitializeKeymanager_web3Signer_HappyPath(t *testing.T) {
 		Web3SignerConfig: &remoteweb3signer.SetupConfig{
 			BaseEndpoint:          "http://localhost:8545",
 			GenesisValidatorsRoot: root,
-			PublicKeysURL:         "http://localhost:8545/public_keys",
 		},
 	}
 	km, err := w.InitializeKeymanager(ctx, config)
@@ -79,7 +82,11 @@ func TestWallet_InitializeKeymanager_web3Signer_HappyPath(t *testing.T) {
 }
 
 func TestWallet_InitializeKeymanager_web3Signer_nilConfig(t *testing.T) {
-	w := wallet.NewWalletForWeb3Signer()
+	app := cli.App{}
+	set := flag.NewFlagSet("test", 0)
+	newDir := filepath.Join(t.TempDir(), "new")
+	set.String(flags.WalletDirFlag.Name, newDir, "")
+	w := wallet.NewWalletForWeb3Signer(cli.NewContext(&app, set, nil))
 	ctx := context.Background()
 	config := iface.InitKeymanagerConfig{
 		ListenForChanges: false,

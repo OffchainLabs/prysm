@@ -5,9 +5,9 @@ import (
 	"sort"
 	"testing"
 
+	aggtesting "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation/aggregation/testing"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/prysmaticlabs/go-bitfield"
-	aggtesting "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation/aggregation/testing"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 )
 
 func TestMaxCover_MaxCoverCandidates_filter(t *testing.T) {
@@ -662,6 +662,18 @@ func TestMaxCover_MaxCover(t *testing.T) {
 				bitfield.NewBitlist64From([]uint64{0b00000000, 0b01110000, 0b01110000}),
 			}},
 			wantedErr: "empty bitlists: invalid max_cover problem",
+		},
+		{
+			name: "doesn't select bitlist which is a subset of another bitlist",
+			args: args{k: 3, allowOverlaps: true, candidates: []*bitfield.Bitlist64{
+				bitfield.NewBitlist64From([]uint64{0b00011100}),
+				bitfield.NewBitlist64From([]uint64{0b00011110}),
+				bitfield.NewBitlist64From([]uint64{0b00000001}),
+			}},
+			want: &BitSetAggregation{
+				Coverage: bitfield.NewBitlist64From([]uint64{0b00011111}),
+				Keys:     []int{1, 2},
+			},
 		},
 	}
 	for _, tt := range tests {

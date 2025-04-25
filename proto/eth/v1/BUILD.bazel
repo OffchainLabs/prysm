@@ -35,6 +35,7 @@ load("//tools:ssz.bzl", "SSZ_DEPS", "ssz_gen_marshal")
 ssz_gen_marshal(
     name = "ssz_generated_files",
     go_proto = ":go_proto",
+    out = "gateway.ssz.go",
     includes = [
         "//consensus-types/primitives:go_default_library",
         "//proto/engine/v1:go_default_library",
@@ -67,7 +68,7 @@ go_proto_library(
     compilers = [
         "@com_github_prysmaticlabs_protoc_gen_go_cast//:go_cast_grpc",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/proto/eth/v1",
+    importpath = "github.com/OffchainLabs/prysm/v6/proto/eth/v1",
     proto = ":proto",
     visibility = ["//visibility:public"],
     deps = [
@@ -83,26 +84,15 @@ go_proto_library(
     ],
 )
 
-go_proto_library(
-    name = "go_grpc_gateway_library",
-    compilers = [
-        "@com_github_grpc_ecosystem_grpc_gateway_v2//protoc-gen-grpc-gateway:go_gen_grpc_gateway",
-    ],
-    embed = [":go_proto"],
-    importpath = "github.com/prysmaticlabs/prysm/v5/proto/eth/v1",
-    protos = [":proto"],
-    visibility = ["//proto:__subpackages__"],
-)
-
 go_library(
     name = "go_default_library",
     srcs = [
         ":ssz_generated_files",
     ],
     embed = [
-        ":go_grpc_gateway_library",
+        ":go_proto",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/proto/eth/v1",
+    importpath = "github.com/OffchainLabs/prysm/v6/proto/eth/v1",
     visibility = ["//visibility:public"],
     deps = SSZ_DEPS + [
         "@org_golang_google_protobuf//types/descriptorpb",
@@ -113,7 +103,6 @@ ssz_proto_files(
     name = "ssz_proto_files",
     srcs = [
         "beacon_block.proto",
-        "beacon_state.proto",
     ],
     config = select({
         "//conditions:default": "mainnet",

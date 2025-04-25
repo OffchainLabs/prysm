@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/ethereum/go-ethereum/common"
 	bolt "go.etcd.io/bbolt"
-	"go.opencensus.io/trace"
 )
 
 // DepositContractAddress returns contract address is the address of
@@ -20,7 +20,7 @@ func (s *Store) DepositContractAddress(ctx context.Context) ([]byte, error) {
 		addr = chainInfo.Get(depositContractAddressKey)
 		return nil
 	}); err != nil { // This view never returns an error, but we'll handle anyway for sanity.
-		panic(err)
+		panic(err) // lint:nopanic -- View never returns an error.
 	}
 	return addr, nil
 }

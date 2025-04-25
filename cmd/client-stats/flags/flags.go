@@ -28,6 +28,6 @@ var (
 	ScrapeIntervalFlag = &cli.DurationFlag{
 		Name:  "scrape-interval",
 		Usage: "Frequency of scraping expressed as a duration, eg 2m or 1m5s.",
-		Value: 60 * time.Second,
+		Value: 120 * time.Second,
 	}
 )

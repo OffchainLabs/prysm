@@ -7,31 +7,34 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/async/event"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
+	dbutil "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	mockExecution "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/container/trie"
+	contracts "github.com/OffchainLabs/prysm/v6/contracts/deposit"
+	"github.com/OffchainLabs/prysm/v6/contracts/deposit/mock"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/clientstats"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/async/event"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache/depositcache"
-	dbutil "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	mockExecution "github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/types"
-	doublylinkedtree "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/doubly-linked-tree"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/container/trie"
-	contracts "github.com/prysmaticlabs/prysm/v5/contracts/deposit"
-	"github.com/prysmaticlabs/prysm/v5/contracts/deposit/mock"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/clientstats"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -41,7 +44,7 @@ var _ POWBlockFetcher = (*Service)(nil)
 var _ Chain = (*Service)(nil)
 
 type goodLogger struct {
-	backend *backends.SimulatedBackend
+	backend *simulated.Backend
 }
 
 func (_ *goodLogger) Close() {}
@@ -50,7 +53,7 @@ func (g *goodLogger) SubscribeFilterLogs(ctx context.Context, q ethereum.FilterQ
 	if g.backend == nil {
 		return new(event.Feed).Subscribe(ch), nil
 	}
-	return g.backend.SubscribeFilterLogs(ctx, q, ch)
+	return g.backend.Client().SubscribeFilterLogs(ctx, q, ch)
 }
 
 func (g *goodLogger) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]gethTypes.Log, error) {
@@ -66,14 +69,14 @@ func (g *goodLogger) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]
 		}
 		return logs, nil
 	}
-	return g.backend.FilterLogs(ctx, q)
+	return g.backend.Client().FilterLogs(ctx, q)
 }
 
 type goodNotifier struct {
 	MockStateFeed *event.Feed
 }
 
-func (g *goodNotifier) StateFeed() *event.Feed {
+func (g *goodNotifier) StateFeed() event.SubscriberSender {
 	if g.MockStateFeed == nil {
 		g.MockStateFeed = new(event.Feed)
 	}
@@ -92,15 +95,21 @@ func TestStart_OK(t *testing.T) {
 	t.Cleanup(func() {
 		server.Stop()
 	})
+	c := startup.NewClockSynchronizer()
+	require.NoError(t, c.SetClock(startup.NewClock(time.Unix(0, 0), [32]byte{})))
+	waiter := verification.NewInitializerWaiter(
+		c, forkchoice.NewROForkChoice(nil), nil)
+
 	web3Service, err := NewService(context.Background(),
 		WithHttpEndpoint(endpoint),
 		WithDepositContractAddress(testAcc.ContractAddr),
 		WithDatabase(beaconDB),
+		WithVerifierWaiter(waiter),
 	)
 	require.NoError(t, err, "unable to setup execution service")
 	web3Service = setDefaultMocks(web3Service)
 	web3Service.rpcClient = &mockExecution.RPCClient{Backend: testAcc.Backend}
-	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend)
+	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend.Client())
 	require.NoError(t, err)
 	testAcc.Backend.Commit()
 
@@ -147,7 +156,7 @@ func TestStop_OK(t *testing.T) {
 	)
 	require.NoError(t, err, "unable to setup web3 ETH1.0 chain service")
 	web3Service = setDefaultMocks(web3Service)
-	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend)
+	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend.Client())
 	require.NoError(t, err)
 
 	testAcc.Backend.Commit()
@@ -177,10 +186,12 @@ func TestService_Eth1Synced(t *testing.T) {
 	)
 	require.NoError(t, err, "unable to setup web3 ETH1.0 chain service")
 	web3Service = setDefaultMocks(web3Service)
-	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend)
+	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend.Client())
 	require.NoError(t, err)
 
-	currTime := testAcc.Backend.Blockchain().CurrentHeader().Time
+	header, err := testAcc.Backend.Client().HeaderByNumber(context.Background(), nil)
+	require.NoError(t, err)
+	currTime := header.Time
 	now := time.Now()
 	assert.NoError(t, testAcc.Backend.AdjustTime(now.Sub(time.Unix(int64(currTime), 0))))
 	testAcc.Backend.Commit()
@@ -203,22 +214,29 @@ func TestFollowBlock_OK(t *testing.T) {
 	require.NoError(t, err, "unable to setup web3 ETH1.0 chain service")
 
 	// simulated backend sets eth1 block
-	// time as 10 seconds
 	params.SetupTestConfigCleanup(t)
 	conf := params.BeaconConfig().Copy()
-	conf.SecondsPerETH1Block = 10
+	conf.SecondsPerETH1Block = 1
 	params.OverrideBeaconConfig(conf)
 
 	web3Service = setDefaultMocks(web3Service)
 	web3Service.rpcClient = &mockExecution.RPCClient{Backend: testAcc.Backend}
-	baseHeight := testAcc.Backend.Blockchain().CurrentBlock().Number.Uint64()
+	block, err := testAcc.Backend.Client().BlockByNumber(context.Background(), nil)
+	require.NoError(t, err)
+	baseHeight := block.NumberU64()
 	// process follow_distance blocks
+	var lastHash common.Hash
 	for i := 0; i < int(params.BeaconConfig().Eth1FollowDistance); i++ {
-		testAcc.Backend.Commit()
+		lastHash = testAcc.Backend.Commit()
 	}
+	lb, err := testAcc.Backend.Client().BlockByHash(context.Background(), lastHash)
+	require.NoError(t, err)
+	log.Println(lb.NumberU64())
 	// set current height
-	web3Service.latestEth1Data.BlockHeight = testAcc.Backend.Blockchain().CurrentBlock().Number.Uint64()
-	web3Service.latestEth1Data.BlockTime = testAcc.Backend.Blockchain().CurrentBlock().Time
+	block, err = testAcc.Backend.Client().BlockByNumber(context.Background(), nil)
+	require.NoError(t, err)
+	web3Service.latestEth1Data.BlockHeight = block.NumberU64()
+	web3Service.latestEth1Data.BlockTime = block.Time()
 
 	h, err := web3Service.followedBlockHeight(context.Background())
 	require.NoError(t, err)
@@ -229,9 +247,12 @@ func TestFollowBlock_OK(t *testing.T) {
 	for i := uint64(0); i < numToForward; i++ {
 		testAcc.Backend.Commit()
 	}
+
+	newBlock, err := testAcc.Backend.Client().BlockByNumber(context.Background(), nil)
+	require.NoError(t, err)
 	// set current height
-	web3Service.latestEth1Data.BlockHeight = testAcc.Backend.Blockchain().CurrentBlock().Number.Uint64()
-	web3Service.latestEth1Data.BlockTime = testAcc.Backend.Blockchain().CurrentBlock().Time
+	web3Service.latestEth1Data.BlockHeight = newBlock.NumberU64()
+	web3Service.latestEth1Data.BlockTime = newBlock.Time()
 
 	h, err = web3Service.followedBlockHeight(context.Background())
 	require.NoError(t, err)
@@ -316,11 +337,11 @@ func TestLogTillGenesis_OK(t *testing.T) {
 		WithDatabase(beaconDB),
 	)
 	require.NoError(t, err, "unable to setup web3 ETH1.0 chain service")
-	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend)
+	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend.Client())
 	require.NoError(t, err)
 
 	web3Service.rpcClient = &mockExecution.RPCClient{Backend: testAcc.Backend}
-	web3Service.httpLogger = testAcc.Backend
+	web3Service.httpLogger = testAcc.Backend.Client()
 	for i := 0; i < 30; i++ {
 		testAcc.Backend.Commit()
 	}
@@ -348,7 +369,7 @@ func TestInitDepositCache_OK(t *testing.T) {
 		cfg:             &config{beaconDB: beaconDB},
 	}
 	var err error
-	s.cfg.depositCache, err = depositcache.New()
+	s.cfg.depositCache, err = depositsnapshot.New()
 	require.NoError(t, err)
 	require.NoError(t, s.initDepositCaches(context.Background(), ctrs))
 
@@ -409,7 +430,7 @@ func TestInitDepositCacheWithFinalization_OK(t *testing.T) {
 		cfg:             &config{beaconDB: beaconDB},
 	}
 	var err error
-	s.cfg.depositCache, err = depositcache.New()
+	s.cfg.depositCache, err = depositsnapshot.New()
 	require.NoError(t, err)
 	require.NoError(t, s.initDepositCaches(context.Background(), ctrs))
 
@@ -476,15 +497,18 @@ func TestNewService_EarliestVotingBlock(t *testing.T) {
 	for i := 0; i < numToForward; i++ {
 		testAcc.Backend.Commit()
 	}
-	currTime := testAcc.Backend.Blockchain().CurrentHeader().Time
+	currHeader, err := testAcc.Backend.Client().HeaderByNumber(context.Background(), nil)
+	require.NoError(t, err)
+	currTime := currHeader.Time
 	now := time.Now()
 	err = testAcc.Backend.AdjustTime(now.Sub(time.Unix(int64(currTime), 0)))
 	require.NoError(t, err)
 	testAcc.Backend.Commit()
-
-	currTime = testAcc.Backend.Blockchain().CurrentHeader().Time
-	web3Service.latestEth1Data.BlockHeight = testAcc.Backend.Blockchain().CurrentHeader().Number.Uint64()
-	web3Service.latestEth1Data.BlockTime = testAcc.Backend.Blockchain().CurrentHeader().Time
+	currHeader, err = testAcc.Backend.Client().HeaderByNumber(context.Background(), nil)
+	require.NoError(t, err)
+	currTime = currHeader.Time
+	web3Service.latestEth1Data.BlockHeight = currHeader.Number.Uint64()
+	web3Service.latestEth1Data.BlockTime = currHeader.Time
 	web3Service.chainStartData.GenesisTime = currTime
 
 	// With a current slot of zero, only request follow_blocks behind.
@@ -553,7 +577,7 @@ func Test_batchRequestHeaders_UnderflowChecks(t *testing.T) {
 
 func TestService_EnsureConsistentPowchainData(t *testing.T) {
 	beaconDB := dbutil.SetupDB(t)
-	cache, err := depositcache.New()
+	cache, err := depositsnapshot.New()
 	require.NoError(t, err)
 	srv, endpoint, err := mockExecution.SetupRPCServer()
 	require.NoError(t, err)
@@ -583,7 +607,7 @@ func TestService_EnsureConsistentPowchainData(t *testing.T) {
 
 func TestService_InitializeCorrectly(t *testing.T) {
 	beaconDB := dbutil.SetupDB(t)
-	cache, err := depositcache.New()
+	cache, err := depositsnapshot.New()
 	require.NoError(t, err)
 
 	srv, endpoint, err := mockExecution.SetupRPCServer()
@@ -614,7 +638,7 @@ func TestService_InitializeCorrectly(t *testing.T) {
 
 func TestService_EnsureValidPowchainData(t *testing.T) {
 	beaconDB := dbutil.SetupDB(t)
-	cache, err := depositcache.New()
+	cache, err := depositsnapshot.New()
 	require.NoError(t, err)
 	srv, endpoint, err := mockExecution.SetupRPCServer()
 	require.NoError(t, err)
@@ -809,7 +833,7 @@ func (s *slowRPCClient) CallContext(_ context.Context, _ interface{}, _ string, 
 
 func TestService_migrateOldDepositTree(t *testing.T) {
 	beaconDB := dbutil.SetupDB(t)
-	cache, err := depositcache.New()
+	cache, err := depositsnapshot.New()
 	require.NoError(t, err)
 
 	srv, endpoint, err := mockExecution.SetupRPCServer()

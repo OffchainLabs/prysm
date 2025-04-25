@@ -4,9 +4,11 @@ package cmd
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strings"
+	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/urfave/cli/v2"
 	"github.com/urfave/cli/v2/altsrc"
 )
@@ -45,11 +47,6 @@ var (
 		Name: "enable-db-backup-webhook",
 		Usage: `Serves HTTP handler to initiate database backups.
 		The handler is served on the monitoring port at path /db/backup.`,
-	}
-	// BackupWebhookOutputDir to customize the output directory for db backups.
-	BackupWebhookOutputDir = &cli.StringFlag{
-		Name:  "db-backup-output-dir",
-		Usage: "Output directory for db backups.",
 	}
 	// EnableTracingFlag defines a flag to enable p2p message tracing.
 	EnableTracingFlag = &cli.BoolFlag{
@@ -91,15 +88,20 @@ var (
 		Name:  "no-discovery",
 		Usage: "Enable only local network p2p and do not connect to cloud bootstrap nodes",
 	}
-	// StaticPeers specifies a set of peers to connect to explicitly.
+	// StaticPeers specifies a set of peers to connect to explicitly, accepting following format of addresses:
+	// enode, multiaddr, enr.
 	StaticPeers = &cli.StringSliceFlag{
-		Name:  "peer",
-		Usage: "Connect with this peer, this flag may be used multiple times. This peer is recognized as a trusted peer.",
+		Name: "peer",
+		Usage: "Connect with this peer, this flag may be used multiple times. " +
+			"This peer is recognized as a trusted peer." +
+			"Accepts enode, multiaddr, and enr formats.",
 	}
 	// BootstrapNode tells the beacon node which bootstrap node to connect to
 	BootstrapNode = &cli.StringSliceFlag{
-		Name:  "bootstrap-node",
-		Usage: "The address of bootstrap node. Beacon node will connect for peer discovery via DHT.  Multiple nodes can be passed by using the flag multiple times but not comma-separated. You can also pass YAML files containing multiple nodes.",
+		Name: "bootstrap-node",
+		Usage: "The enr/enode address of bootstrap node. Beacon node will connect for peer discovery via DHT. " +
+			"Multiple nodes can be passed by using the flag multiple times but not comma-separated. " +
+			"You can also pass YAML files containing multiple nodes.",
 		Value: cli.NewStringSlice(params.BeaconNetworkConfig().BootstrapNodes...),
 	}
 	// RelayNode tells the beacon node which relay node to connect to.
@@ -112,13 +114,19 @@ var (
 	// P2PUDPPort defines the port to be used by discv5.
 	P2PUDPPort = &cli.IntFlag{
 		Name:  "p2p-udp-port",
-		Usage: "The port used by discv5.",
+		Usage: "The UDP port used by the discovery service discv5.",
 		Value: 12000,
 	}
-	// P2PTCPPort defines the port to be used by libp2p.
+	// P2PQUICPort defines the QUIC port to be used by libp2p.
+	P2PQUICPort = &cli.IntFlag{
+		Name:  "p2p-quic-port",
+		Usage: "The QUIC port used by libp2p.",
+		Value: 13000,
+	}
+	// P2PTCPPort defines the TCP port to be used by libp2p.
 	P2PTCPPort = &cli.IntFlag{
 		Name:  "p2p-tcp-port",
-		Usage: "The port used by libp2p.",
+		Usage: "The TCP port used by libp2p.",
 		Value: 13000,
 	}
 	// P2PIP defines the local IP to be used by libp2p.
@@ -228,7 +236,8 @@ var (
 	// GrpcMaxCallRecvMsgSizeFlag defines the max call message size for GRPC
 	GrpcMaxCallRecvMsgSizeFlag = &cli.IntFlag{
 		Name: "grpc-max-msg-size",
-		Usage: `Integer to define max receive message call size (in bytes).
+		Usage: `WARNING: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+		Integer to define max receive message call size (in bytes).
 		If serving a public gRPC server, set this to a more reasonable size to avoid
 		resource exhaustion from large messages. 
 		Validators with as many as 10000 keys can be run with a max message size of less than 
@@ -260,10 +269,10 @@ var (
 		Value: DefaultDataDir(),
 	}
 	// ApiTimeoutFlag specifies the timeout value for API requests in seconds. A timeout of zero means no timeout.
-	ApiTimeoutFlag = &cli.IntFlag{
+	ApiTimeoutFlag = &cli.DurationFlag{
 		Name:  "api-timeout",
 		Usage: "Specifies the timeout value for API requests in seconds.",
-		Value: 120,
+		Value: 10 * time.Second,
 	}
 	// JwtOutputFileFlag specifies the JWT file path that gets generated into when invoked by generate-jwt-secret.
 	JwtOutputFileFlag = &cli.StringFlag{
@@ -323,10 +332,10 @@ func ValidateNoArgs(ctx *cli.Context) error {
 
 // verifies that the provided command is in the command list.
 func checkCommandList(commands []*cli.Command, name string) *cli.Command {
-	for _, c := range commands {
-		if c.Name == name {
-			return c
-		}
+	if i := slices.IndexFunc(commands, func(c *cli.Command) bool {
+		return c.Name == name
+	}); i >= 0 {
+		return commands[i]
 	}
 	return nil
 }

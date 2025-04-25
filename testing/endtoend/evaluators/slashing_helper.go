@@ -4,15 +4,15 @@ import (
 	"context"
 	"crypto/rand"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -27,7 +27,7 @@ type doubleAttestationHelper struct {
 	committee []primitives.ValidatorIndex
 }
 
-// Initializes helper with details needed to make a double attestation for testint purposes
+// Initializes helper with details needed to make a double attestation for testing purposes
 // Populates the committee of that is responsible for the
 func (h *doubleAttestationHelper) setup(ctx context.Context) error {
 	chainHead, err := h.beaconClient.GetChainHead(ctx, &emptypb.Empty{})

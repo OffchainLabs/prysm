@@ -3,10 +3,10 @@ package ssz
 import (
 	"encoding/binary"
 
+	"github.com/OffchainLabs/prysm/v6/container/trie"
+	"github.com/OffchainLabs/prysm/v6/crypto/hash/htr"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/gohashtree"
-	"github.com/prysmaticlabs/prysm/v5/container/trie"
-	"github.com/prysmaticlabs/prysm/v5/crypto/hash/htr"
 )
 
 var errInvalidNilSlice = errors.New("invalid empty slice")
@@ -68,9 +68,10 @@ func Depth(v uint64) (out uint8) {
 }
 
 // Merkleize with log(N) space allocation
+// This method will panic when count > limit.
 func Merkleize(hasher Hasher, count, limit uint64, leaf func(i uint64) []byte) (out [32]byte) {
 	if count > limit {
-		panic("merkleizing list that is too large, over limit")
+		panic("merkleizing list that is too large, over limit") // lint:nopanic -- Panic is communicated in godoc commentary.
 	}
 	if limit == 0 {
 		return

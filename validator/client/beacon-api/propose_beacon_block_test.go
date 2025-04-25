@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/validator/client/beacon-api/mock"
 	"go.uber.org/mock/gomock"
 )
 
@@ -51,7 +51,7 @@ func TestProposeBeaconBlock_Error(t *testing.T) {
 		{
 			name:             "phase0",
 			consensusVersion: "phase0",
-			endpoint:         "/eth/v1/beacon/blocks",
+			endpoint:         "/eth/v2/beacon/blocks",
 			block: &ethpb.GenericSignedBeaconBlock{
 				Block: generateSignedPhase0Block(),
 			},
@@ -59,7 +59,7 @@ func TestProposeBeaconBlock_Error(t *testing.T) {
 		{
 			name:             "altair",
 			consensusVersion: "altair",
-			endpoint:         "/eth/v1/beacon/blocks",
+			endpoint:         "/eth/v2/beacon/blocks",
 			block: &ethpb.GenericSignedBeaconBlock{
 				Block: generateSignedAltairBlock(),
 			},
@@ -67,7 +67,7 @@ func TestProposeBeaconBlock_Error(t *testing.T) {
 		{
 			name:             "bellatrix",
 			consensusVersion: "bellatrix",
-			endpoint:         "/eth/v1/beacon/blocks",
+			endpoint:         "/eth/v2/beacon/blocks",
 			block: &ethpb.GenericSignedBeaconBlock{
 				Block: generateSignedBellatrixBlock(),
 			},
@@ -75,15 +75,23 @@ func TestProposeBeaconBlock_Error(t *testing.T) {
 		{
 			name:             "blinded bellatrix",
 			consensusVersion: "bellatrix",
-			endpoint:         "/eth/v1/beacon/blinded_blocks",
+			endpoint:         "/eth/v2/beacon/blinded_blocks",
 			block: &ethpb.GenericSignedBeaconBlock{
 				Block: generateSignedBlindedBellatrixBlock(),
 			},
 		},
 		{
+			name:             "capella",
+			consensusVersion: "capella",
+			endpoint:         "/eth/v2/beacon/blocks",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedCapellaBlock(),
+			},
+		},
+		{
 			name:             "blinded capella",
 			consensusVersion: "capella",
-			endpoint:         "/eth/v1/beacon/blinded_blocks",
+			endpoint:         "/eth/v2/beacon/blinded_blocks",
 			block: &ethpb.GenericSignedBeaconBlock{
 				Block: generateSignedBlindedCapellaBlock(),
 			},
@@ -101,7 +109,7 @@ func TestProposeBeaconBlock_Error(t *testing.T) {
 
 				headers := map[string]string{"Eth-Consensus-Version": testCase.consensusVersion}
 				jsonRestHandler.EXPECT().Post(
-					ctx,
+					gomock.Any(),
 					testCase.endpoint,
 					headers,
 					gomock.Any(),

@@ -3,11 +3,12 @@ package structs
 import (
 	"encoding/json"
 
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 )
 
 type AggregateAttestationResponse struct {
-	Data *Attestation `json:"data"`
+	Version string          `json:"version,omitempty"`
+	Data    json.RawMessage `json:"data"`
 }
 
 type SubmitContributionAndProofsRequest struct {
@@ -15,7 +16,7 @@ type SubmitContributionAndProofsRequest struct {
 }
 
 type SubmitAggregateAndProofsRequest struct {
-	Data []*SignedAggregateAttestationAndProof `json:"data"`
+	Data []json.RawMessage `json:"data"`
 }
 
 type SubmitSyncCommitteeSubscriptionsRequest struct {
@@ -117,4 +118,35 @@ type GetValidatorPerformanceResponse struct {
 	BalancesAfterEpochTransition  []uint64 `json:"balances_after_epoch_transition,omitempty"`
 	MissingValidators             [][]byte `json:"missing_validators,omitempty"`
 	InactivityScores              []uint64 `json:"inactivity_scores,omitempty"`
+}
+
+type GetValidatorParticipationResponse struct {
+	Epoch         string                  `json:"epoch"`
+	Finalized     bool                    `json:"finalized"`
+	Participation *ValidatorParticipation `json:"participation"`
+}
+
+type ValidatorParticipation struct {
+	GlobalParticipationRate          string `json:"global_participation_rate" deprecated:"true"`
+	VotedEther                       string `json:"voted_ether" deprecated:"true"`
+	EligibleEther                    string `json:"eligible_ether" deprecated:"true"`
+	CurrentEpochActiveGwei           string `json:"current_epoch_active_gwei"`
+	CurrentEpochAttestingGwei        string `json:"current_epoch_attesting_gwei"`
+	CurrentEpochTargetAttestingGwei  string `json:"current_epoch_target_attesting_gwei"`
+	PreviousEpochActiveGwei          string `json:"previous_epoch_active_gwei"`
+	PreviousEpochAttestingGwei       string `json:"previous_epoch_attesting_gwei"`
+	PreviousEpochTargetAttestingGwei string `json:"previous_epoch_target_attesting_gwei"`
+	PreviousEpochHeadAttestingGwei   string `json:"previous_epoch_head_attesting_gwei"`
+}
+
+type ActiveSetChanges struct {
+	Epoch               string   `json:"epoch"`
+	ActivatedPublicKeys []string `json:"activated_public_keys"`
+	ActivatedIndices    []string `json:"activated_indices"`
+	ExitedPublicKeys    []string `json:"exited_public_keys"`
+	ExitedIndices       []string `json:"exited_indices"`
+	SlashedPublicKeys   []string `json:"slashed_public_keys"`
+	SlashedIndices      []string `json:"slashed_indices"`
+	EjectedPublicKeys   []string `json:"ejected_public_keys"`
+	EjectedIndices      []string `json:"ejected_indices"`
 }

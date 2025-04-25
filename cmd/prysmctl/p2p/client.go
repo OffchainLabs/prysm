@@ -7,6 +7,19 @@ import (
 	"net"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
+	ecdsaprysm "github.com/OffchainLabs/prysm/v6/crypto/ecdsa"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/network"
+	"github.com/OffchainLabs/prysm/v6/network/forks"
+	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -14,23 +27,11 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
-	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
+	libp2pquic "github.com/libp2p/go-libp2p/p2p/transport/quic"
+	libp2ptcp "github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/wrapper"
-	ecdsaprysm "github.com/prysmaticlabs/prysm/v5/crypto/ecdsa"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	"github.com/prysmaticlabs/prysm/v5/network"
-	"github.com/prysmaticlabs/prysm/v5/network/forks"
-	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/metadata"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -43,7 +44,7 @@ type client struct {
 	nodeClient   pb.NodeClient
 }
 
-func newClient(beaconEndpoints []string, clientPort uint) (*client, error) {
+func newClient(beaconEndpoints []string, tcpPort, quicPort uint) (*client, error) {
 	ipAdd := ipAddr()
 	priv, err := privKey()
 	if err != nil {
@@ -53,15 +54,16 @@ func newClient(beaconEndpoints []string, clientPort uint) (*client, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "could not set up p2p metadata")
 	}
-	listen, err := p2p.MultiAddressBuilder(ipAdd.String(), clientPort)
+	multiaddrs, err := p2p.MultiAddressBuilder(ipAdd, tcpPort, quicPort)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not set up listening multiaddr")
 	}
 	options := []libp2p.Option{
 		privKeyOption(priv),
-		libp2p.ListenAddrs(listen),
+		libp2p.ListenAddrs(multiaddrs...),
 		libp2p.UserAgent(version.BuildData()),
-		libp2p.Transport(tcp.NewTCPTransport),
+		libp2p.Transport(libp2pquic.NewTransport),
+		libp2p.Transport(libp2ptcp.NewTCPTransport),
 	}
 	options = append(options, libp2p.Security(noise.ID, noise.New))
 	options = append(options, libp2p.Ping(false))
@@ -88,7 +90,7 @@ func newClient(beaconEndpoints []string, clientPort uint) (*client, error) {
 
 func (c *client) Close() {
 	if err := c.host.Close(); err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- The client is closing anyway...
 	}
 }
 
@@ -112,7 +114,7 @@ func (c *client) Send(
 	ctx, span := trace.StartSpan(ctx, "p2p.Send")
 	defer span.End()
 	topic := baseTopic + c.Encoding().ProtocolSuffix()
-	span.AddAttributes(trace.StringAttribute("topic", topic))
+	span.SetAttributes(trace.StringAttribute("topic", topic))
 
 	// Apply max dial timeout when opening a new stream.
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
@@ -191,7 +193,7 @@ func (c *client) initializeMockChainService(ctx context.Context) (*mockChain, er
 func ipAddr() net.IP {
 	ip, err := network.ExternalIP()
 	if err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- Only returns an error when network interfaces are not available. This is a requirement for the application anyway.
 	}
 	return net.ParseIP(ip)
 }

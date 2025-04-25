@@ -5,29 +5,14 @@ import (
 	"fmt"
 	"reflect"
 
+	customtypes "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/custom-types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stateutil"
+	multi_value_slice "github.com/OffchainLabs/prysm/v6/container/multi-value-slice"
+	pmath "github.com/OffchainLabs/prysm/v6/math"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
-	customtypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/custom-types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stateutil"
-	multi_value_slice "github.com/prysmaticlabs/prysm/v5/container/multi-value-slice"
-	pmath "github.com/prysmaticlabs/prysm/v5/math"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
-
-// ProofFromMerkleLayers creates a proof starting at the leaf index of the state Merkle layers.
-func ProofFromMerkleLayers(layers [][][]byte, startingLeafIndex int) [][]byte {
-	// The merkle tree structure looks as follows:
-	// [[r1, r2, r3, r4], [parent1, parent2], [root]]
-	proof := make([][]byte, 0)
-	currentIndex := startingLeafIndex
-	for i := 0; i < len(layers)-1; i++ {
-		neighborIdx := currentIndex ^ 1
-		neighbor := layers[i][neighborIdx]
-		proof = append(proof, neighbor)
-		currentIndex = currentIndex / 2
-	}
-	return proof
-}
 
 func (f *FieldTrie) validateIndices(idxs []uint64) error {
 	length := f.length

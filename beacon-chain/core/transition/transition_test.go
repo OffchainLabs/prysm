@@ -5,26 +5,26 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func init() {
@@ -311,7 +311,7 @@ func createFullBlockWithOperations(t *testing.T) (state.BeaconState,
 
 	committee, err := helpers.BeaconCommitteeFromState(context.Background(), beaconState, blockAtt.Data.Slot, blockAtt.Data.CommitteeIndex)
 	assert.NoError(t, err)
-	attestingIndices, err := attestation.AttestingIndices(blockAtt.AggregationBits, committee)
+	attestingIndices, err := attestation.AttestingIndices(blockAtt, committee)
 	require.NoError(t, err)
 	assert.NoError(t, err)
 	hashTreeRoot, err = signing.ComputeSigningRoot(blockAtt.Data, domain)
@@ -437,6 +437,25 @@ func TestProcessBlock_OverMaxAttesterSlashings(t *testing.T) {
 	assert.ErrorContains(t, want, err)
 }
 
+func TestProcessBlock_OverMaxAttesterSlashingsElectra(t *testing.T) {
+	maxSlashings := params.BeaconConfig().MaxAttesterSlashingsElectra
+	b := &ethpb.SignedBeaconBlockElectra{
+		Block: &ethpb.BeaconBlockElectra{
+			Body: &ethpb.BeaconBlockBodyElectra{
+				AttesterSlashings: make([]*ethpb.AttesterSlashingElectra, maxSlashings+1),
+			},
+		},
+	}
+	want := fmt.Sprintf("number of attester slashings (%d) in block body exceeds allowed threshold of %d",
+		len(b.Block.Body.AttesterSlashings), params.BeaconConfig().MaxAttesterSlashingsElectra)
+	s, err := state_native.InitializeFromProtoUnsafeElectra(&ethpb.BeaconStateElectra{})
+	require.NoError(t, err)
+	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	_, err = transition.VerifyOperationLengths(context.Background(), s, wsb.Block())
+	assert.ErrorContains(t, want, err)
+}
+
 func TestProcessBlock_OverMaxAttestations(t *testing.T) {
 	b := &ethpb.SignedBeaconBlock{
 		Block: &ethpb.BeaconBlock{
@@ -448,6 +467,24 @@ func TestProcessBlock_OverMaxAttestations(t *testing.T) {
 	want := fmt.Sprintf("number of attestations (%d) in block body exceeds allowed threshold of %d",
 		len(b.Block.Body.Attestations), params.BeaconConfig().MaxAttestations)
 	s, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
+	require.NoError(t, err)
+	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	_, err = transition.VerifyOperationLengths(context.Background(), s, wsb.Block())
+	assert.ErrorContains(t, want, err)
+}
+
+func TestProcessBlock_OverMaxAttestationsElectra(t *testing.T) {
+	b := &ethpb.SignedBeaconBlockElectra{
+		Block: &ethpb.BeaconBlockElectra{
+			Body: &ethpb.BeaconBlockBodyElectra{
+				Attestations: make([]*ethpb.AttestationElectra, params.BeaconConfig().MaxAttestationsElectra+1),
+			},
+		},
+	}
+	want := fmt.Sprintf("number of attestations (%d) in block body exceeds allowed threshold of %d",
+		len(b.Block.Body.Attestations), params.BeaconConfig().MaxAttestationsElectra)
+	s, err := state_native.InitializeFromProtoUnsafeElectra(&ethpb.BeaconStateElectra{})
 	require.NoError(t, err)
 	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
@@ -651,6 +688,34 @@ func TestProcessSlots_ThroughDenebEpoch(t *testing.T) {
 	require.Equal(t, params.BeaconConfig().SlotsPerEpoch*10, st.Slot())
 }
 
+func TestProcessSlots_ThroughElectraEpoch(t *testing.T) {
+	transition.SkipSlotCache.Disable()
+	params.SetupTestConfigCleanup(t)
+	conf := params.BeaconConfig()
+	conf.ElectraForkEpoch = 5
+	params.OverrideBeaconConfig(conf)
+
+	st, _ := util.DeterministicGenesisStateDeneb(t, params.BeaconConfig().MaxValidatorsPerCommittee)
+	st, err := transition.ProcessSlots(context.Background(), st, params.BeaconConfig().SlotsPerEpoch*10)
+	require.NoError(t, err)
+	require.Equal(t, version.Electra, st.Version())
+	require.Equal(t, params.BeaconConfig().SlotsPerEpoch*10, st.Slot())
+}
+
+func TestProcessSlots_ThroughFuluEpoch(t *testing.T) {
+	transition.SkipSlotCache.Disable()
+	params.SetupTestConfigCleanup(t)
+	conf := params.BeaconConfig()
+	conf.FuluForkEpoch = 5
+	params.OverrideBeaconConfig(conf)
+
+	st, _ := util.DeterministicGenesisStateElectra(t, params.BeaconConfig().MaxValidatorsPerCommittee)
+	st, err := transition.ProcessSlots(context.Background(), st, params.BeaconConfig().SlotsPerEpoch*10)
+	require.NoError(t, err)
+	require.Equal(t, version.Fulu, st.Version())
+	require.Equal(t, params.BeaconConfig().SlotsPerEpoch*10, st.Slot())
+}
+
 func TestProcessSlotsUsingNextSlotCache(t *testing.T) {
 	s, _ := util.DeterministicGenesisState(t, 1)
 	r := []byte{'a'}
@@ -683,4 +748,46 @@ func TestProcessSlotsConditionally(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, primitives.Slot(6), s.Slot())
 	})
+}
+
+func BenchmarkProcessSlots_Capella(b *testing.B) {
+	st, _ := util.DeterministicGenesisStateCapella(b, params.BeaconConfig().MaxValidatorsPerCommittee)
+
+	var err error
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		st, err = transition.ProcessSlots(context.Background(), st, st.Slot()+1)
+		if err != nil {
+			b.Fatalf("Failed to process slot %v", err)
+		}
+	}
+}
+
+func BenchmarkProcessSlots_Deneb(b *testing.B) {
+	st, _ := util.DeterministicGenesisStateDeneb(b, params.BeaconConfig().MaxValidatorsPerCommittee)
+
+	var err error
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		st, err = transition.ProcessSlots(context.Background(), st, st.Slot()+1)
+		if err != nil {
+			b.Fatalf("Failed to process slot %v", err)
+		}
+	}
+}
+
+func BenchmarkProcessSlots_Electra(b *testing.B) {
+	st, _ := util.DeterministicGenesisStateElectra(b, params.BeaconConfig().MaxValidatorsPerCommittee)
+
+	var err error
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		st, err = transition.ProcessSlots(context.Background(), st, st.Slot()+1)
+		if err != nil {
+			b.Fatalf("Failed to process slot %v", err)
+		}
+	}
 }

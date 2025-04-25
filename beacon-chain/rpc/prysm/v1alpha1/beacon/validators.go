@@ -6,27 +6,26 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/prysmaticlabs/prysm/v5/api/pagination"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epoch/precompute"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/validators"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/OffchainLabs/prysm/v6/api/pagination"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	coreTime "github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // ListValidatorBalances retrieves the validator balances for a given set of public keys.
 // An optional Epoch parameter is provided to request historical validator balances from
 // archived, persistent data.
@@ -183,6 +182,8 @@ func (bs *Server) ListValidatorBalances(
 	}, nil
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // ListValidators retrieves the current list of active validators with an optional historical epoch flag to
 // retrieve validator set in time.
 func (bs *Server) ListValidators(
@@ -341,6 +342,8 @@ func (bs *Server) ListValidators(
 	}, nil
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // GetValidator information from any validator in the registry by index or public key.
 func (bs *Server) GetValidator(
 	ctx context.Context, req *ethpb.GetValidatorRequest,
@@ -385,6 +388,8 @@ func (bs *Server) GetValidator(
 	return nil, status.Error(codes.NotFound, "No validator matched filter criteria")
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // GetValidatorActiveSetChanges retrieves the active set changes for a given epoch.
 //
 // This data includes any activations, voluntary exits, and involuntary
@@ -392,7 +397,7 @@ func (bs *Server) GetValidator(
 func (bs *Server) GetValidatorActiveSetChanges(
 	ctx context.Context, req *ethpb.GetValidatorActiveSetChangesRequest,
 ) (*ethpb.ActiveSetChanges, error) {
-	currentEpoch := slots.ToEpoch(bs.GenesisTimeFetcher.CurrentSlot())
+	currentEpoch := slots.ToEpoch(bs.CoreService.GenesisTimeFetcher.CurrentSlot())
 
 	var requestedEpoch primitives.Epoch
 	switch q := req.QueryFilter.(type) {
@@ -403,81 +408,23 @@ func (bs *Server) GetValidatorActiveSetChanges(
 	default:
 		requestedEpoch = currentEpoch
 	}
-	if requestedEpoch > currentEpoch {
-		return nil, status.Errorf(
-			codes.InvalidArgument,
-			errEpoch,
-			currentEpoch,
-			requestedEpoch,
-		)
-	}
 
-	s, err := slots.EpochStart(requestedEpoch)
+	as, err := bs.CoreService.ValidatorActiveSetChanges(ctx, requestedEpoch)
 	if err != nil {
-		return nil, err
+		return nil, status.Errorf(core.ErrorReasonToGRPC(err.Reason), "Could not retrieve validator active set changes: %v", err.Err)
 	}
-	requestedState, err := bs.ReplayerBuilder.ReplayerForSlot(s).ReplayBlocks(ctx)
-	if err != nil {
-		return nil, status.Error(codes.Internal, fmt.Sprintf("error replaying blocks for state at slot %d: %v", s, err))
-	}
-
-	activeValidatorCount, err := helpers.ActiveValidatorCount(ctx, requestedState, coreTime.CurrentEpoch(requestedState))
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not get active validator count: %v", err)
-	}
-	vs := requestedState.Validators()
-	activatedIndices := validators.ActivatedValidatorIndices(coreTime.CurrentEpoch(requestedState), vs)
-	exitedIndices, err := validators.ExitedValidatorIndices(coreTime.CurrentEpoch(requestedState), vs, activeValidatorCount)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not determine exited validator indices: %v", err)
-	}
-	slashedIndices := validators.SlashedValidatorIndices(coreTime.CurrentEpoch(requestedState), vs)
-	ejectedIndices, err := validators.EjectedValidatorIndices(coreTime.CurrentEpoch(requestedState), vs, activeValidatorCount)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not determine ejected validator indices: %v", err)
-	}
-
-	// Retrieve public keys for the indices.
-	activatedKeys := make([][]byte, len(activatedIndices))
-	exitedKeys := make([][]byte, len(exitedIndices))
-	slashedKeys := make([][]byte, len(slashedIndices))
-	ejectedKeys := make([][]byte, len(ejectedIndices))
-	for i, idx := range activatedIndices {
-		pubkey := requestedState.PubkeyAtIndex(idx)
-		activatedKeys[i] = pubkey[:]
-	}
-	for i, idx := range exitedIndices {
-		pubkey := requestedState.PubkeyAtIndex(idx)
-		exitedKeys[i] = pubkey[:]
-	}
-	for i, idx := range slashedIndices {
-		pubkey := requestedState.PubkeyAtIndex(idx)
-		slashedKeys[i] = pubkey[:]
-	}
-	for i, idx := range ejectedIndices {
-		pubkey := requestedState.PubkeyAtIndex(idx)
-		ejectedKeys[i] = pubkey[:]
-	}
-	return &ethpb.ActiveSetChanges{
-		Epoch:               requestedEpoch,
-		ActivatedPublicKeys: activatedKeys,
-		ActivatedIndices:    activatedIndices,
-		ExitedPublicKeys:    exitedKeys,
-		ExitedIndices:       exitedIndices,
-		SlashedPublicKeys:   slashedKeys,
-		SlashedIndices:      slashedIndices,
-		EjectedPublicKeys:   ejectedKeys,
-		EjectedIndices:      ejectedIndices,
-	}, nil
+	return as, nil
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // GetValidatorParticipation retrieves the validator participation information for a given epoch,
 // it returns the information about validator's participation rate in voting on the proof of stake
 // rules based on their balance compared to the total active validator balance.
 func (bs *Server) GetValidatorParticipation(
 	ctx context.Context, req *ethpb.GetValidatorParticipationRequest,
 ) (*ethpb.ValidatorParticipationResponse, error) {
-	currentSlot := bs.GenesisTimeFetcher.CurrentSlot()
+	currentSlot := bs.CoreService.GenesisTimeFetcher.CurrentSlot()
 	currentEpoch := slots.ToEpoch(currentSlot)
 
 	var requestedEpoch primitives.Epoch
@@ -489,81 +436,15 @@ func (bs *Server) GetValidatorParticipation(
 	default:
 		requestedEpoch = currentEpoch
 	}
-
-	if requestedEpoch > currentEpoch {
-		return nil, status.Errorf(
-			codes.InvalidArgument,
-			"Cannot retrieve information about an epoch greater than current epoch, current epoch %d, requesting %d",
-			currentEpoch,
-			requestedEpoch,
-		)
-	}
-	// Use the last slot of requested epoch to obtain current and previous epoch attestations.
-	// This ensures that we don't miss previous attestations when input requested epochs.
-	endSlot, err := slots.EpochEnd(requestedEpoch)
+	vp, err := bs.CoreService.ValidatorParticipation(ctx, requestedEpoch)
 	if err != nil {
-		return nil, err
+		return nil, status.Errorf(core.ErrorReasonToGRPC(err.Reason), "Could not retrieve validator participation: %v", err.Err)
 	}
-	// Get as close as we can to the end of the current epoch without going past the current slot.
-	// The above check ensures a future *epoch* isn't requested, but the end slot of the requested epoch could still
-	// be past the current slot. In that case, use the current slot as the best approximation of the requested epoch.
-	// Replayer will make sure the slot ultimately used is canonical.
-	if endSlot > currentSlot {
-		endSlot = currentSlot
-	}
-
-	// ReplayerBuilder ensures that a canonical chain is followed to the slot
-	beaconState, err := bs.ReplayerBuilder.ReplayerForSlot(endSlot).ReplayBlocks(ctx)
-	if err != nil {
-		return nil, status.Error(codes.Internal, fmt.Sprintf("error replaying blocks for state at slot %d: %v", endSlot, err))
-	}
-	var v []*precompute.Validator
-	var b *precompute.Balance
-
-	if beaconState.Version() == version.Phase0 {
-		v, b, err = precompute.New(ctx, beaconState)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not set up pre compute instance: %v", err)
-		}
-		_, b, err = precompute.ProcessAttestations(ctx, beaconState, v, b)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not pre compute attestations: %v", err)
-		}
-	} else if beaconState.Version() >= version.Altair {
-		v, b, err = altair.InitializePrecomputeValidators(ctx, beaconState)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not set up altair pre compute instance: %v", err)
-		}
-		_, b, err = altair.ProcessEpochParticipation(ctx, beaconState, b, v)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not pre compute attestations: %v", err)
-		}
-	} else {
-		return nil, status.Errorf(codes.Internal, "Invalid state type retrieved with a version of %d", beaconState.Version())
-	}
-
-	cp := bs.FinalizationFetcher.FinalizedCheckpt()
-	p := &ethpb.ValidatorParticipationResponse{
-		Epoch:     requestedEpoch,
-		Finalized: requestedEpoch <= cp.Epoch,
-		Participation: &ethpb.ValidatorParticipation{
-			// TODO(7130): Remove these three deprecated fields.
-			GlobalParticipationRate:          float32(b.PrevEpochTargetAttested) / float32(b.ActivePrevEpoch),
-			VotedEther:                       b.PrevEpochTargetAttested,
-			EligibleEther:                    b.ActivePrevEpoch,
-			CurrentEpochActiveGwei:           b.ActiveCurrentEpoch,
-			CurrentEpochAttestingGwei:        b.CurrentEpochAttested,
-			CurrentEpochTargetAttestingGwei:  b.CurrentEpochTargetAttested,
-			PreviousEpochActiveGwei:          b.ActivePrevEpoch,
-			PreviousEpochAttestingGwei:       b.PrevEpochAttested,
-			PreviousEpochTargetAttestingGwei: b.PrevEpochTargetAttested,
-			PreviousEpochHeadAttestingGwei:   b.PrevEpochHeadAttested,
-		},
-	}
-
-	return p, nil
+	return vp, nil
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // GetValidatorQueue retrieves the current validator queue information.
 func (bs *Server) GetValidatorQueue(
 	ctx context.Context, _ *emptypb.Empty,
@@ -655,6 +536,8 @@ func (bs *Server) GetValidatorQueue(
 	}, nil
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // GetValidatorPerformance reports the validator's latest balance along with other important metrics on
 // rewards and penalties throughout its lifecycle in the beacon chain.
 func (bs *Server) GetValidatorPerformance(
@@ -667,110 +550,18 @@ func (bs *Server) GetValidatorPerformance(
 	return response, nil
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // GetIndividualVotes retrieves individual voting status of validators.
 func (bs *Server) GetIndividualVotes(
 	ctx context.Context,
 	req *ethpb.IndividualVotesRequest,
 ) (*ethpb.IndividualVotesRespond, error) {
-	currentEpoch := slots.ToEpoch(bs.GenesisTimeFetcher.CurrentSlot())
-	if req.Epoch > currentEpoch {
-		return nil, status.Errorf(
-			codes.InvalidArgument,
-			errEpoch,
-			currentEpoch,
-			req.Epoch,
-		)
-	}
-
-	s, err := slots.EpochEnd(req.Epoch)
+	response, err := bs.CoreService.IndividualVotes(ctx, req)
 	if err != nil {
-		return nil, err
+		return nil, status.Errorf(core.ErrorReasonToGRPC(err.Reason), "Could not retrieve individual votes: %v", err.Err)
 	}
-	st, err := bs.ReplayerBuilder.ReplayerForSlot(s).ReplayBlocks(ctx)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to replay blocks for state at epoch %d: %v", req.Epoch, err)
-	}
-	// Track filtered validators to prevent duplication in the response.
-	filtered := map[primitives.ValidatorIndex]bool{}
-	filteredIndices := make([]primitives.ValidatorIndex, 0)
-	votes := make([]*ethpb.IndividualVotesRespond_IndividualVote, 0, len(req.Indices)+len(req.PublicKeys))
-	// Filter out assignments by public keys.
-	for _, pubKey := range req.PublicKeys {
-		index, ok := st.ValidatorIndexByPubkey(bytesutil.ToBytes48(pubKey))
-		if !ok {
-			votes = append(votes, &ethpb.IndividualVotesRespond_IndividualVote{PublicKey: pubKey, ValidatorIndex: primitives.ValidatorIndex(^uint64(0))})
-			continue
-		}
-		filtered[index] = true
-		filteredIndices = append(filteredIndices, index)
-	}
-	// Filter out assignments by validator indices.
-	for _, index := range req.Indices {
-		if !filtered[index] {
-			filteredIndices = append(filteredIndices, index)
-		}
-	}
-	sort.Slice(filteredIndices, func(i, j int) bool {
-		return filteredIndices[i] < filteredIndices[j]
-	})
-
-	var v []*precompute.Validator
-	var bal *precompute.Balance
-	if st.Version() == version.Phase0 {
-		v, bal, err = precompute.New(ctx, st)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not set up pre compute instance: %v", err)
-		}
-		v, _, err = precompute.ProcessAttestations(ctx, st, v, bal)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not pre compute attestations: %v", err)
-		}
-	} else if st.Version() >= version.Altair {
-		v, bal, err = altair.InitializePrecomputeValidators(ctx, st)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not set up altair pre compute instance: %v", err)
-		}
-		v, _, err = altair.ProcessEpochParticipation(ctx, st, bal, v)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not pre compute attestations: %v", err)
-		}
-	} else {
-		return nil, status.Errorf(codes.Internal, "Invalid state type retrieved with a version of %d", st.Version())
-	}
-
-	for _, index := range filteredIndices {
-		if uint64(index) >= uint64(len(v)) {
-			votes = append(votes, &ethpb.IndividualVotesRespond_IndividualVote{ValidatorIndex: index})
-			continue
-		}
-		val, err := st.ValidatorAtIndexReadOnly(index)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not retrieve validator: %v", err)
-		}
-		pb := val.PublicKey()
-		votes = append(votes, &ethpb.IndividualVotesRespond_IndividualVote{
-			Epoch:                            req.Epoch,
-			PublicKey:                        pb[:],
-			ValidatorIndex:                   index,
-			IsSlashed:                        v[index].IsSlashed,
-			IsWithdrawableInCurrentEpoch:     v[index].IsWithdrawableCurrentEpoch,
-			IsActiveInCurrentEpoch:           v[index].IsActiveCurrentEpoch,
-			IsActiveInPreviousEpoch:          v[index].IsActivePrevEpoch,
-			IsCurrentEpochAttester:           v[index].IsCurrentEpochAttester,
-			IsCurrentEpochTargetAttester:     v[index].IsCurrentEpochTargetAttester,
-			IsPreviousEpochAttester:          v[index].IsPrevEpochAttester,
-			IsPreviousEpochTargetAttester:    v[index].IsPrevEpochTargetAttester,
-			IsPreviousEpochHeadAttester:      v[index].IsPrevEpochHeadAttester,
-			CurrentEpochEffectiveBalanceGwei: v[index].CurrentEpochEffectiveBalance,
-			InclusionSlot:                    v[index].InclusionSlot,
-			InclusionDistance:                v[index].InclusionDistance,
-			InactivityScore:                  v[index].InactivityScore,
-		})
-	}
-
-	return &ethpb.IndividualVotesRespond{
-		IndividualVotes: votes,
-	}, nil
+	return response, nil
 }
 
 // Determines whether a validator has already exited.

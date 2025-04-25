@@ -8,23 +8,24 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/async"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/rand"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/encoding/ssz/equality"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
+	prysmTrace "github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/async"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/encoding/ssz/equality"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 	"github.com/trailofbits/go-mutexasserts"
-	"go.opencensus.io/trace"
+	"go.opentelemetry.io/otel/trace"
 )
 
 var processPendingBlocksPeriod = slots.DivideSlotBy(3 /* times per slot */)
@@ -52,7 +53,7 @@ func (s *Service) processPendingBlocksQueue() {
 
 // processPendingBlocks validates, processes, and broadcasts pending blocks.
 func (s *Service) processPendingBlocks(ctx context.Context) error {
-	ctx, span := trace.StartSpan(ctx, "processPendingBlocks")
+	ctx, span := prysmTrace.StartSpan(ctx, "processPendingBlocks")
 	defer span.End()
 
 	// Remove old blocks from our expiration cache.
@@ -66,7 +67,7 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 	// Sort slots for ordered processing.
 	sortedSlots := s.sortedPendingSlots()
 
-	span.AddAttributes(trace.Int64Attribute("numSlots", int64(len(sortedSlots))), trace.Int64Attribute("numPeers", int64(len(s.cfg.p2p.Peers().Connected()))))
+	span.SetAttributes(prysmTrace.Int64Attribute("numSlots", int64(len(sortedSlots))), prysmTrace.Int64Attribute("numPeers", int64(len(s.cfg.p2p.Peers().Connected()))))
 
 	randGen := rand.NewGenerator()
 	var parentRoots [][32]byte
@@ -157,9 +158,9 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 }
 
 // startInnerSpan starts a new tracing span for an inner loop and returns the new context and span.
-func startInnerSpan(ctx context.Context, slot primitives.Slot) (context.Context, *trace.Span) {
-	ctx, span := trace.StartSpan(ctx, "processPendingBlocks.InnerLoop")
-	span.AddAttributes(trace.Int64Attribute("slot", int64(slot))) // lint:ignore uintcast -- This conversion is OK for tracing.
+func startInnerSpan(ctx context.Context, slot primitives.Slot) (context.Context, trace.Span) {
+	ctx, span := prysmTrace.StartSpan(ctx, "processPendingBlocks.InnerLoop")
+	span.SetAttributes(prysmTrace.Int64Attribute("slot", int64(slot))) // lint:ignore uintcast -- This conversion is OK for tracing.
 	return ctx, span
 }
 
@@ -254,7 +255,7 @@ func (s *Service) getBestPeers() []core.PeerID {
 
 func (s *Service) checkIfBlockIsBad(
 	ctx context.Context,
-	span *trace.Span,
+	span trace.Span,
 	slot primitives.Slot,
 	b interfaces.ReadOnlySignedBeaconBlock,
 	blkRoot [32]byte,
@@ -282,7 +283,7 @@ func (s *Service) checkIfBlockIsBad(
 }
 
 func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, randGen *rand.Rand) error {
-	ctx, span := trace.StartSpan(ctx, "sendBatchRootRequest")
+	ctx, span := prysmTrace.StartSpan(ctx, "sendBatchRootRequest")
 	defer span.End()
 
 	roots = dedupRoots(roots)
@@ -314,7 +315,7 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 		if uint64(len(roots)) > maxReqBlock {
 			req = roots[:maxReqBlock]
 		}
-		if err := s.sendRecentBeaconBlocksRequest(ctx, &req, pid); err != nil {
+		if err := s.sendBeaconBlocksRequest(ctx, &req, pid); err != nil {
 			tracing.AnnotateError(span, err)
 			log.WithError(err).Debug("Could not send recent block request")
 		}

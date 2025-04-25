@@ -1,19 +1,20 @@
 package kv
 
 import (
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
 	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
-func (c *AttCaches) insertSeenBit(att *ethpb.Attestation) error {
-	r, err := hashFn(att.Data)
+func (c *AttCaches) insertSeenBit(att ethpb.Att) error {
+	id, err := attestation.NewId(att, attestation.Data)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "could not create attestation ID")
 	}
 
-	v, ok := c.seenAtt.Get(string(r[:]))
+	v, ok := c.seenAtt.Get(id.String())
 	if ok {
 		seenBits, ok := v.([]bitfield.Bitlist)
 		if !ok {
@@ -21,7 +22,7 @@ func (c *AttCaches) insertSeenBit(att *ethpb.Attestation) error {
 		}
 		alreadyExists := false
 		for _, bit := range seenBits {
-			if c, err := bit.Contains(att.AggregationBits); err != nil {
+			if c, err := bit.Contains(att.GetAggregationBits()); err != nil {
 				return err
 			} else if c {
 				alreadyExists = true
@@ -29,30 +30,30 @@ func (c *AttCaches) insertSeenBit(att *ethpb.Attestation) error {
 			}
 		}
 		if !alreadyExists {
-			seenBits = append(seenBits, att.AggregationBits)
+			seenBits = append(seenBits, att.GetAggregationBits())
 		}
-		c.seenAtt.Set(string(r[:]), seenBits, cache.DefaultExpiration /* one epoch */)
+		c.seenAtt.Set(id.String(), seenBits, cache.DefaultExpiration /* one epoch */)
 		return nil
 	}
 
-	c.seenAtt.Set(string(r[:]), []bitfield.Bitlist{att.AggregationBits}, cache.DefaultExpiration /* one epoch */)
+	c.seenAtt.Set(id.String(), []bitfield.Bitlist{att.GetAggregationBits()}, cache.DefaultExpiration /* one epoch */)
 	return nil
 }
 
-func (c *AttCaches) hasSeenBit(att *ethpb.Attestation) (bool, error) {
-	r, err := hashFn(att.Data)
+func (c *AttCaches) hasSeenBit(att ethpb.Att) (bool, error) {
+	id, err := attestation.NewId(att, attestation.Data)
 	if err != nil {
-		return false, err
+		return false, errors.Wrap(err, "could not create attestation ID")
 	}
 
-	v, ok := c.seenAtt.Get(string(r[:]))
+	v, ok := c.seenAtt.Get(id.String())
 	if ok {
 		seenBits, ok := v.([]bitfield.Bitlist)
 		if !ok {
 			return false, errors.New("could not convert to bitlist type")
 		}
 		for _, bit := range seenBits {
-			if c, err := bit.Contains(att.AggregationBits); err != nil {
+			if c, err := bit.Contains(att.GetAggregationBits()); err != nil {
 				return false, err
 			} else if c {
 				return true, nil

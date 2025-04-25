@@ -6,14 +6,14 @@ import (
 	"runtime"
 	"strconv"
 
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/eth/v1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/eth/v1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"go.opencensus.io/trace"
 )
 
 var (
@@ -108,7 +108,7 @@ func (*Server) GetVersion(w http.ResponseWriter, r *http.Request) {
 
 // GetHealth returns node health status in http status codes. Useful for load balancers.
 func (s *Server) GetHealth(w http.ResponseWriter, r *http.Request) {
-	_, span := trace.StartSpan(r.Context(), "node.GetHealth")
+	ctx, span := trace.StartSpan(r.Context(), "node.GetHealth")
 	defer span.End()
 
 	rawSyncingStatus, syncingStatus, ok := shared.UintFromQuery(w, r, "syncing_status", false)
@@ -119,10 +119,14 @@ func (s *Server) GetHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.SyncChecker.Synced() {
+	optimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
+	if err != nil {
+		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+	}
+	if s.SyncChecker.Synced() && !optimistic {
 		return
 	}
-	if s.SyncChecker.Syncing() || s.SyncChecker.Initialized() {
+	if s.SyncChecker.Syncing() || optimistic {
 		if rawSyncingStatus != "" {
 			w.WriteHeader(intSyncingStatus)
 		} else {
@@ -130,5 +134,6 @@ func (s *Server) GetHealth(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+
 	w.WriteHeader(http.StatusServiceUnavailable)
 }

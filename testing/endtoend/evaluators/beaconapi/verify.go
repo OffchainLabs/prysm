@@ -4,19 +4,21 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	params2 "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
+	"github.com/OffchainLabs/prysm/v6/testing/endtoend/policies"
+	e2etypes "github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/policies"
-	e2etypes "github.com/prysmaticlabs/prysm/v5/testing/endtoend/types"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"google.golang.org/grpc"
 )
 
@@ -54,7 +56,7 @@ func run(nodeIdx int) error {
 	}
 	currentEpoch := slots.EpochsSinceGenesis(time.Unix(genesisTime, 0))
 
-	for path, m := range requests {
+	for path, m := range getRequests {
 		if currentEpoch < m.getStart() {
 			continue
 		}
@@ -62,26 +64,57 @@ func run(nodeIdx int) error {
 		if m.getParams(currentEpoch) != nil {
 			apiPath = pathFromParams(path, m.getParams(currentEpoch))
 		}
-		fmt.Printf("executing JSON path: %s\n", apiPath)
-		if err = compareJSONMultiClient(nodeIdx, m.getBasePath(), apiPath, m.getReq(), m.getPResp(), m.getLHResp(), m.getCustomEval()); err != nil {
-			return err
-		}
-		if m.sszEnabled() {
-			fmt.Printf("executing SSZ path: %s\n", apiPath)
-			b, err := compareSSZMultiClient(nodeIdx, m.getBasePath(), apiPath)
-			if err != nil {
+
+		if m.sanityCheckOnlyEnabled() {
+			resp := m.getPResp()
+			if err = doJSONGetRequest(m.getBasePath(), apiPath, nodeIdx, resp); err != nil {
+				return errors.Wrapf(err, "issue during Prysm JSON GET request for path %s", apiPath)
+			}
+			if resp == nil {
+				return fmt.Errorf("nil response from Prysm JSON GET request for path %s", apiPath)
+			}
+			if m.sszEnabled() {
+				sszResp, err := doSSZGetRequest(m.getBasePath(), apiPath, nodeIdx)
+				if err != nil {
+					return errors.Wrapf(err, "issue during Prysm SSZ GET request for path %s", apiPath)
+				}
+				if sszResp == nil {
+					return fmt.Errorf("nil response from Prysm SSZ GET request for path %s", apiPath)
+				}
+			}
+		} else {
+			if err = compareGETJSON(nodeIdx, m.getBasePath(), apiPath, m.getPResp(), m.getLHResp(), m.getCustomEval()); err != nil {
 				return err
 			}
-			m.setSszResp(b)
+			if m.sszEnabled() {
+				b, err := compareGETSSZ(nodeIdx, m.getBasePath(), apiPath)
+				if err != nil {
+					return err
+				}
+				m.setSszResp(b)
+			}
 		}
 	}
 
-	return postEvaluation(requests, currentEpoch)
+	for path, m := range postRequests {
+		if currentEpoch < m.getStart() {
+			continue
+		}
+		apiPath := path
+		if m.getParams(currentEpoch) != nil {
+			apiPath = pathFromParams(path, m.getParams(currentEpoch))
+		}
+		if err = comparePOSTJSON(nodeIdx, m.getBasePath(), apiPath, m.getPOSTObj(), m.getPResp(), m.getLHResp(), m.getCustomEval()); err != nil {
+			return err
+		}
+	}
+
+	return postEvaluation(nodeIdx, getRequests, currentEpoch)
 }
 
 // postEvaluation performs additional evaluation after all requests have been completed.
 // It is useful for things such as checking if specific fields match between endpoints.
-func postEvaluation(requests map[string]endpoint, epoch primitives.Epoch) error {
+func postEvaluation(nodeIdx int, requests map[string]endpoint, epoch primitives.Epoch) error {
 	// verify that block SSZ responses have the correct structure
 	blockData := requests["/beacon/blocks/{param1}"]
 	blindedBlockData := requests["/beacon/blinded_blocks/{param1}"]
@@ -121,12 +154,21 @@ func postEvaluation(requests map[string]endpoint, epoch primitives.Epoch) error 
 		if err := bb.UnmarshalSSZ(blindedBlockData.getSszResp()); err != nil {
 			return errors.Wrap(err, msgSSZUnmarshalFailed)
 		}
-	} else {
+	} else if epoch < params.BeaconConfig().ElectraForkEpoch {
 		b := &ethpb.SignedBeaconBlockDeneb{}
 		if err := b.UnmarshalSSZ(blockData.getSszResp()); err != nil {
 			return errors.Wrap(err, msgSSZUnmarshalFailed)
 		}
 		bb := &ethpb.SignedBlindedBeaconBlockDeneb{}
+		if err := bb.UnmarshalSSZ(blindedBlockData.getSszResp()); err != nil {
+			return errors.Wrap(err, msgSSZUnmarshalFailed)
+		}
+	} else {
+		b := &ethpb.SignedBeaconBlockElectra{}
+		if err := b.UnmarshalSSZ(blockData.getSszResp()); err != nil {
+			return errors.Wrap(err, msgSSZUnmarshalFailed)
+		}
+		bb := &ethpb.SignedBlindedBeaconBlockElectra{}
 		if err := bb.UnmarshalSSZ(blindedBlockData.getSszResp()); err != nil {
 			return errors.Wrap(err, msgSSZUnmarshalFailed)
 		}
@@ -147,24 +189,31 @@ func postEvaluation(requests map[string]endpoint, epoch primitives.Epoch) error 
 		return fmt.Errorf("header root %s does not match duties root %s ", header.Data.Root, duties.DependentRoot)
 	}
 
+	// perform a health check
+	basePath := fmt.Sprintf(v1PathTemplate, params2.TestParams.Ports.PrysmBeaconNodeHTTPPort+nodeIdx)
+	resp, err := http.Get(basePath + "/node/health")
+	if err != nil {
+		return errors.Wrap(err, "could not perform a health check")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("health check response's status code is %d", resp.StatusCode)
+	}
+
 	return nil
 }
 
-func compareJSONMultiClient(nodeIdx int, base, path string, req, pResp, lhResp interface{}, customEval func(interface{}, interface{}) error) error {
-	if req != nil {
-		if err := doJSONPostRequest(base, path, nodeIdx, req, pResp); err != nil {
-			return errors.Wrapf(err, "could not perform Prysm JSON POST request for path %s", path)
-		}
-		if err := doJSONPostRequest(base, path, nodeIdx, req, lhResp, "lighthouse"); err != nil {
-			return errors.Wrapf(err, "could not perform Lighthouse JSON POST request for path %s", path)
-		}
-	} else {
-		if err := doJSONGetRequest(base, path, nodeIdx, pResp); err != nil {
-			return errors.Wrapf(err, "could not perform Prysm JSON GET request for path %s", path)
-		}
-		if err := doJSONGetRequest(base, path, nodeIdx, lhResp, "lighthouse"); err != nil {
-			return errors.Wrapf(err, "could not perform Lighthouse JSON GET request for path %s", path)
-		}
+func compareGETJSON(nodeIdx int, base, path string, pResp, lhResp interface{}, customEval func(interface{}, interface{}) error) error {
+	if err := doJSONGetRequest(base, path, nodeIdx, pResp); err != nil {
+		return errors.Wrapf(err, "issue during Prysm JSON GET request for path %s", path)
+	}
+	if err := doJSONGetRequest(base, path, nodeIdx, lhResp, "Lighthouse"); err != nil {
+		return errors.Wrapf(err, "issue during Lighthouse JSON GET request for path %s", path)
+	}
+	if pResp == nil {
+		return errEmptyPrysmData
+	}
+	if lhResp == nil {
+		return errEmptyLighthouseData
 	}
 	if customEval != nil {
 		return customEval(pResp, lhResp)
@@ -173,14 +222,34 @@ func compareJSONMultiClient(nodeIdx int, base, path string, req, pResp, lhResp i
 	}
 }
 
-func compareSSZMultiClient(nodeIdx int, base, path string) ([]byte, error) {
+func comparePOSTJSON(nodeIdx int, base, path string, postObj, pResp, lhResp interface{}, customEval func(interface{}, interface{}) error) error {
+	if err := doJSONPostRequest(base, path, nodeIdx, postObj, pResp); err != nil {
+		return errors.Wrapf(err, "issue during Prysm JSON POST request for path %s", path)
+	}
+	if err := doJSONPostRequest(base, path, nodeIdx, postObj, lhResp, "Lighthouse"); err != nil {
+		return errors.Wrapf(err, "issue during Lighthouse JSON POST request for path %s", path)
+	}
+	if pResp == nil {
+		return errEmptyPrysmData
+	}
+	if lhResp == nil {
+		return errEmptyLighthouseData
+	}
+	if customEval != nil {
+		return customEval(pResp, lhResp)
+	} else {
+		return compareJSON(pResp, lhResp)
+	}
+}
+
+func compareGETSSZ(nodeIdx int, base, path string) ([]byte, error) {
 	pResp, err := doSSZGetRequest(base, path, nodeIdx)
 	if err != nil {
-		return nil, errors.Wrapf(err, "could not perform Prysm SSZ GET request for path %s", path)
+		return nil, errors.Wrapf(err, "issue during Prysm SSZ GET request for path %s", path)
 	}
-	lhResp, err := doSSZGetRequest(base, path, nodeIdx, "lighthouse")
+	lhResp, err := doSSZGetRequest(base, path, nodeIdx, "Lighthouse")
 	if err != nil {
-		return nil, errors.Wrapf(err, "could not perform Lighthouse SSZ GET request for path %s", path)
+		return nil, errors.Wrapf(err, "issue during Lighthouse SSZ GET request for path %s", path)
 	}
 	if !bytes.Equal(pResp, lhResp) {
 		return nil, errors.New("Prysm SSZ response does not match Lighthouse SSZ response")
@@ -188,7 +257,7 @@ func compareSSZMultiClient(nodeIdx int, base, path string) ([]byte, error) {
 	return pResp, nil
 }
 
-func compareJSON(pResp interface{}, lhResp interface{}) error {
+func compareJSON(pResp, lhResp interface{}) error {
 	if !reflect.DeepEqual(pResp, lhResp) {
 		p, err := json.Marshal(pResp)
 		if err != nil {

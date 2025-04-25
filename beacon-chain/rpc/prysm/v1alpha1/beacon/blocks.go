@@ -4,17 +4,15 @@ import (
 	"context"
 	"strconv"
 
+	"github.com/OffchainLabs/prysm/v6/api/pagination"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filters"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/pagination"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filters"
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -28,6 +26,8 @@ type blockContainer struct {
 	isCanonical bool
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // ListBeaconBlocks retrieves blocks by root, slot, or epoch.
 //
 // The server may return multiple blocks in the case that a slot or epoch is
@@ -90,64 +90,40 @@ func convertToBlockContainer(blk interfaces.ReadOnlySignedBeaconBlock, root [32]
 		Canonical: isCanonical,
 	}
 
-	switch blk.Version() {
-	case version.Phase0:
-		rBlk, err := blk.PbPhase0Block()
-		if err != nil {
-			return nil, err
-		}
-		ctr.Block = &ethpb.BeaconBlockContainer_Phase0Block{Phase0Block: rBlk}
-	case version.Altair:
-		rBlk, err := blk.PbAltairBlock()
-		if err != nil {
-			return nil, err
-		}
-		ctr.Block = &ethpb.BeaconBlockContainer_AltairBlock{AltairBlock: rBlk}
-	case version.Bellatrix:
-		if blk.IsBlinded() {
-			rBlk, err := blk.PbBlindedBellatrixBlock()
-			if err != nil {
-				return nil, err
-			}
-			ctr.Block = &ethpb.BeaconBlockContainer_BlindedBellatrixBlock{BlindedBellatrixBlock: rBlk}
-		} else {
-			rBlk, err := blk.PbBellatrixBlock()
-			if err != nil {
-				return nil, err
-			}
-			ctr.Block = &ethpb.BeaconBlockContainer_BellatrixBlock{BellatrixBlock: rBlk}
-		}
-	case version.Capella:
-		if blk.IsBlinded() {
-			rBlk, err := blk.PbBlindedCapellaBlock()
-			if err != nil {
-				return nil, err
-			}
-			ctr.Block = &ethpb.BeaconBlockContainer_BlindedCapellaBlock{BlindedCapellaBlock: rBlk}
-		} else {
-			rBlk, err := blk.PbCapellaBlock()
-			if err != nil {
-				return nil, err
-			}
-			ctr.Block = &ethpb.BeaconBlockContainer_CapellaBlock{CapellaBlock: rBlk}
-		}
-	case version.Deneb:
-		if blk.IsBlinded() {
-			rBlk, err := blk.PbBlindedDenebBlock()
-			if err != nil {
-				return nil, err
-			}
-			ctr.Block = &ethpb.BeaconBlockContainer_BlindedDenebBlock{BlindedDenebBlock: rBlk}
-		} else {
-			rBlk, err := blk.PbDenebBlock()
-			if err != nil {
-				return nil, err
-			}
-			ctr.Block = &ethpb.BeaconBlockContainer_DenebBlock{DenebBlock: rBlk}
-		}
+	pb, err := blk.Proto()
+	if err != nil {
+		return nil, err
+	}
+
+	switch pbStruct := pb.(type) {
+	case *ethpb.SignedBeaconBlock:
+		ctr.Block = &ethpb.BeaconBlockContainer_Phase0Block{Phase0Block: pbStruct}
+	case *ethpb.SignedBeaconBlockAltair:
+		ctr.Block = &ethpb.BeaconBlockContainer_AltairBlock{AltairBlock: pbStruct}
+	case *ethpb.SignedBlindedBeaconBlockBellatrix:
+		ctr.Block = &ethpb.BeaconBlockContainer_BlindedBellatrixBlock{BlindedBellatrixBlock: pbStruct}
+	case *ethpb.SignedBeaconBlockBellatrix:
+		ctr.Block = &ethpb.BeaconBlockContainer_BellatrixBlock{BellatrixBlock: pbStruct}
+	case *ethpb.SignedBlindedBeaconBlockCapella:
+		ctr.Block = &ethpb.BeaconBlockContainer_BlindedCapellaBlock{BlindedCapellaBlock: pbStruct}
+	case *ethpb.SignedBeaconBlockCapella:
+		ctr.Block = &ethpb.BeaconBlockContainer_CapellaBlock{CapellaBlock: pbStruct}
+	case *ethpb.SignedBlindedBeaconBlockDeneb:
+		ctr.Block = &ethpb.BeaconBlockContainer_BlindedDenebBlock{BlindedDenebBlock: pbStruct}
+	case *ethpb.SignedBeaconBlockDeneb:
+		ctr.Block = &ethpb.BeaconBlockContainer_DenebBlock{DenebBlock: pbStruct}
+	case *ethpb.SignedBlindedBeaconBlockElectra:
+		ctr.Block = &ethpb.BeaconBlockContainer_BlindedElectraBlock{BlindedElectraBlock: pbStruct}
+	case *ethpb.SignedBeaconBlockElectra:
+		ctr.Block = &ethpb.BeaconBlockContainer_ElectraBlock{ElectraBlock: pbStruct}
+	case *ethpb.SignedBlindedBeaconBlockFulu:
+		ctr.Block = &ethpb.BeaconBlockContainer_BlindedFuluBlock{BlindedFuluBlock: pbStruct}
+	case *ethpb.SignedBeaconBlockFulu:
+		ctr.Block = &ethpb.BeaconBlockContainer_FuluBlock{FuluBlock: pbStruct}
 	default:
 		return nil, errors.Errorf("block type is not recognized: %d", blk.Version())
 	}
+
 	return ctr, nil
 }
 
@@ -270,98 +246,17 @@ func (bs *Server) listBlocksForGenesis(ctx context.Context, _ *ethpb.ListBlocksR
 	}}, 1, strconv.Itoa(0), nil
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // GetChainHead retrieves information about the head of the beacon chain from
 // the view of the beacon chain node.
 //
 // This includes the head block slot and root as well as information about
 // the most recent finalized and justified slots.
-// DEPRECATED: This endpoint is superseded by the /eth/v1/beacon API endpoint
 func (bs *Server) GetChainHead(ctx context.Context, _ *emptypb.Empty) (*ethpb.ChainHead, error) {
-	return bs.chainHeadRetrieval(ctx)
-}
-
-// Retrieve chain head information from the DB and the current beacon state.
-func (bs *Server) chainHeadRetrieval(ctx context.Context) (*ethpb.ChainHead, error) {
-	headBlock, err := bs.HeadFetcher.HeadBlock(ctx)
+	ch, err := bs.CoreService.ChainHead(ctx)
 	if err != nil {
-		return nil, status.Error(codes.Internal, "Could not get head block")
+		return nil, status.Errorf(core.ErrorReasonToGRPC(err.Reason), "Could not retrieve chain head: %v", err.Err)
 	}
-	optimisticStatus, err := bs.OptimisticModeFetcher.IsOptimistic(ctx)
-	if err != nil {
-		return nil, status.Error(codes.Internal, "Could not get optimistic status")
-	}
-	if err := consensusblocks.BeaconBlockIsNil(headBlock); err != nil {
-		return nil, status.Errorf(codes.NotFound, "Head block of chain was nil: %v", err)
-	}
-	headBlockRoot, err := headBlock.Block().HashTreeRoot()
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not get head block root: %v", err)
-	}
-
-	validGenesis := false
-	validateCP := func(cp *ethpb.Checkpoint, name string) error {
-		if bytesutil.ToBytes32(cp.Root) == params.BeaconConfig().ZeroHash && cp.Epoch == 0 {
-			if validGenesis {
-				return nil
-			}
-			// Retrieve genesis block in the event we have genesis checkpoints.
-			genBlock, err := bs.BeaconDB.GenesisBlock(ctx)
-			if err != nil || consensusblocks.BeaconBlockIsNil(genBlock) != nil {
-				return status.Error(codes.Internal, "Could not get genesis block")
-			}
-			validGenesis = true
-			return nil
-		}
-		b, err := bs.BeaconDB.Block(ctx, bytesutil.ToBytes32(cp.Root))
-		if err != nil {
-			return status.Errorf(codes.Internal, "Could not get %s block: %v", name, err)
-		}
-		if err := consensusblocks.BeaconBlockIsNil(b); err != nil {
-			return status.Errorf(codes.Internal, "Could not get %s block: %v", name, err)
-		}
-		return nil
-	}
-
-	finalizedCheckpoint := bs.FinalizationFetcher.FinalizedCheckpt()
-	if err := validateCP(finalizedCheckpoint, "finalized"); err != nil {
-		return nil, err
-	}
-
-	justifiedCheckpoint := bs.FinalizationFetcher.CurrentJustifiedCheckpt()
-	if err := validateCP(justifiedCheckpoint, "justified"); err != nil {
-		return nil, err
-	}
-
-	prevJustifiedCheckpoint := bs.FinalizationFetcher.PreviousJustifiedCheckpt()
-	if err := validateCP(prevJustifiedCheckpoint, "prev justified"); err != nil {
-		return nil, err
-	}
-
-	fSlot, err := slots.EpochStart(finalizedCheckpoint.Epoch)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get epoch start slot from finalized checkpoint epoch")
-	}
-	jSlot, err := slots.EpochStart(justifiedCheckpoint.Epoch)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get epoch start slot from justified checkpoint epoch")
-	}
-	pjSlot, err := slots.EpochStart(prevJustifiedCheckpoint.Epoch)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get epoch start slot from prev justified checkpoint epoch")
-	}
-	return &ethpb.ChainHead{
-		HeadSlot:                   headBlock.Block().Slot(),
-		HeadEpoch:                  slots.ToEpoch(headBlock.Block().Slot()),
-		HeadBlockRoot:              headBlockRoot[:],
-		FinalizedSlot:              fSlot,
-		FinalizedEpoch:             finalizedCheckpoint.Epoch,
-		FinalizedBlockRoot:         finalizedCheckpoint.Root,
-		JustifiedSlot:              jSlot,
-		JustifiedEpoch:             justifiedCheckpoint.Epoch,
-		JustifiedBlockRoot:         justifiedCheckpoint.Root,
-		PreviousJustifiedSlot:      pjSlot,
-		PreviousJustifiedEpoch:     prevJustifiedCheckpoint.Epoch,
-		PreviousJustifiedBlockRoot: prevJustifiedCheckpoint.Root,
-		OptimisticStatus:           optimisticStatus,
-	}, nil
+	return ch, nil
 }

@@ -17,14 +17,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
+	e2etypes "github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	e2e "github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
-	e2etypes "github.com/prysmaticlabs/prysm/v5/testing/endtoend/types"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
@@ -132,7 +132,7 @@ func WaitForTextInFile(src *os.File, match string) error {
 
 	select {
 	case <-ctx.Done():
-		return fmt.Errorf("could not find requested text \"%s\" in %s before deadline:\n", match, f.Name())
+		return fmt.Errorf("could not find requested text \"%s\" in %s before deadline", match, f.Name())
 	case <-foundChan:
 		return nil
 	case err = <-errChan:
@@ -196,7 +196,7 @@ random:
   - "Takoyaki"
 `)
 	f := filepath.Join(testDir, "graffiti.yaml")
-	if err := os.WriteFile(f, b, os.ModePerm); err != nil {
+	if err := os.WriteFile(f, b, 0600); err != nil {
 		return "", err
 	}
 	return f, nil
@@ -323,7 +323,7 @@ func NewLocalConnections(ctx context.Context, numConns int) ([]*grpc.ClientConn,
 func BeaconAPIHostnames(numConns int) []string {
 	hostnames := make([]string, 0)
 	for i := 0; i < numConns; i++ {
-		port := e2e.TestParams.Ports.PrysmBeaconNodeGatewayPort + i
+		port := e2e.TestParams.Ports.PrysmBeaconNodeHTTPPort + i
 		hostnames = append(hostnames, net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
 	}
 	return hostnames
@@ -358,7 +358,6 @@ func WaitOnNodes(ctx context.Context, nodes []e2etypes.ComponentRunner, nodesSta
 	// Start nodes.
 	g, ctx := errgroup.WithContext(ctx)
 	for _, node := range nodes {
-		node := node
 		g.Go(func() error {
 			return node.Start(ctx)
 		})

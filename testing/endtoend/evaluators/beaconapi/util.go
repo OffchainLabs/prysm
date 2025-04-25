@@ -7,9 +7,9 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api"
-	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -25,16 +25,16 @@ const (
 	msgSSZUnmarshalFailed = "failed to unmarshal SSZ"
 )
 
-func doJSONGetRequest(template string, requestPath string, beaconNodeIdx int, resp interface{}, bnType ...string) error {
+func doJSONGetRequest(template, requestPath string, beaconNodeIdx int, resp interface{}, bnType ...string) error {
 	if len(bnType) == 0 {
-		bnType = []string{"prysm"}
+		bnType = []string{"Prysm"}
 	}
 
 	var port int
 	switch bnType[0] {
-	case "prysm":
-		port = params.TestParams.Ports.PrysmBeaconNodeGatewayPort
-	case "lighthouse":
+	case "Prysm":
+		port = params.TestParams.Ports.PrysmBeaconNodeHTTPPort
+	case "Lighthouse":
 		port = params.TestParams.Ports.LighthouseBeaconNodeHTTPPort
 	default:
 		return fmt.Errorf(msgUnknownNode, bnType[0])
@@ -55,6 +55,7 @@ func doJSONGetRequest(template string, requestPath string, beaconNodeIdx int, re
 				return err
 			}
 		} else {
+			defer closeBody(httpResp.Body)
 			body, err = io.ReadAll(httpResp.Body)
 			if err != nil {
 				return err
@@ -65,17 +66,16 @@ func doJSONGetRequest(template string, requestPath string, beaconNodeIdx int, re
 	return json.NewDecoder(httpResp.Body).Decode(&resp)
 }
 
-func doSSZGetRequest(template string, requestPath string, beaconNodeIdx int, bnType ...string) ([]byte, error) {
+func doSSZGetRequest(template, requestPath string, beaconNodeIdx int, bnType ...string) ([]byte, error) {
 	if len(bnType) == 0 {
-		bnType = []string{"prysm"}
+		bnType = []string{"Prysm"}
 	}
 
-	client := &http.Client{}
 	var port int
 	switch bnType[0] {
-	case "prysm":
-		port = params.TestParams.Ports.PrysmBeaconNodeGatewayPort
-	case "lighthouse":
+	case "Prysm":
+		port = params.TestParams.Ports.PrysmBeaconNodeHTTPPort
+	case "Lighthouse":
 		port = params.TestParams.Ports.LighthouseBeaconNodeHTTPPort
 	default:
 		return nil, fmt.Errorf(msgUnknownNode, bnType[0])
@@ -83,24 +83,24 @@ func doSSZGetRequest(template string, requestPath string, beaconNodeIdx int, bnT
 
 	basePath := fmt.Sprintf(template, port+beaconNodeIdx)
 
-	req, err := http.NewRequest(http.MethodGet, basePath+requestPath, nil)
+	req, err := http.NewRequest(http.MethodGet, basePath+requestPath, http.NoBody)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/octet-stream")
-	rsp, err := client.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
-	if rsp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK {
 		var body interface{}
-		if err := json.NewDecoder(rsp.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 			return nil, err
 		}
-		return nil, fmt.Errorf(msgRequestFailed, bnType[0], rsp.StatusCode, body)
+		return nil, fmt.Errorf(msgRequestFailed, bnType[0], resp.StatusCode, body)
 	}
-	defer closeBody(rsp.Body)
-	body, err := io.ReadAll(rsp.Body)
+	defer closeBody(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -108,23 +108,23 @@ func doSSZGetRequest(template string, requestPath string, beaconNodeIdx int, bnT
 	return body, nil
 }
 
-func doJSONPostRequest(template string, requestPath string, beaconNodeIdx int, postData, resp interface{}, bnType ...string) error {
+func doJSONPostRequest(template, requestPath string, beaconNodeIdx int, postObj, resp interface{}, bnType ...string) error {
 	if len(bnType) == 0 {
-		bnType = []string{"prysm"}
+		bnType = []string{"Prysm"}
 	}
 
 	var port int
 	switch bnType[0] {
-	case "prysm":
-		port = params.TestParams.Ports.PrysmBeaconNodeGatewayPort
-	case "lighthouse":
+	case "Prysm":
+		port = params.TestParams.Ports.PrysmBeaconNodeHTTPPort
+	case "Lighthouse":
 		port = params.TestParams.Ports.LighthouseBeaconNodeHTTPPort
 	default:
 		return fmt.Errorf(msgUnknownNode, bnType[0])
 	}
 
 	basePath := fmt.Sprintf(template, port+beaconNodeIdx)
-	b, err := json.Marshal(postData)
+	b, err := json.Marshal(postObj)
 	if err != nil {
 		return err
 	}
@@ -144,6 +144,7 @@ func doJSONPostRequest(template string, requestPath string, beaconNodeIdx int, p
 				return err
 			}
 		} else {
+			defer closeBody(httpResp.Body)
 			body, err = io.ReadAll(httpResp.Body)
 			if err != nil {
 				return err

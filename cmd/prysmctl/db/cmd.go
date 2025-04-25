@@ -9,6 +9,7 @@ var Commands = []*cli.Command{
 		Subcommands: []*cli.Command{
 			queryCmd,
 			bucketsCmd,
+			spanCmd,
 		},
 	},
 }

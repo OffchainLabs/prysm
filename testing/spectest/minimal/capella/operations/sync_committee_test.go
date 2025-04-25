@@ -3,9 +3,9 @@ package operations
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/testing/spectest/shared/capella/operations"
+	"github.com/OffchainLabs/prysm/v6/testing/spectest/shared/capella/operations"
 )
 
 func TestMinimal_Capella_Operations_SyncCommittee(t *testing.T) {
-	operations.RunProposerSlashingTest(t, "minimal")
+	operations.RunSyncCommitteeTest(t, "minimal")
 }

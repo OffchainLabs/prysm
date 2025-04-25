@@ -4,23 +4,23 @@ import (
 	"context"
 	"testing"
 
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/filesystem"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/iface"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/kv"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/validator/db/filesystem"
+	"github.com/OffchainLabs/prysm/v6/validator/db/iface"
+	"github.com/OffchainLabs/prysm/v6/validator/db/kv"
 )
 
 // SetupDB instantiates and returns a DB instance for the validator client.
 // The `minimal` flag indicates whether the DB should be instantiated with minimal, filesystem
 // slashing protection database.
-func SetupDB(t testing.TB, pubkeys [][fieldparams.BLSPubkeyLength]byte, mimimal bool) iface.ValidatorDB {
+func SetupDB(t testing.TB, pubkeys [][fieldparams.BLSPubkeyLength]byte, minimal bool) iface.ValidatorDB {
 	var (
 		db  iface.ValidatorDB
 		err error
 	)
 
 	// Create a new DB instance.
-	if mimimal {
+	if minimal {
 		config := &filesystem.Config{PubKeys: pubkeys}
 		db, err = filesystem.NewStore(t.TempDir(), config)
 	} else {

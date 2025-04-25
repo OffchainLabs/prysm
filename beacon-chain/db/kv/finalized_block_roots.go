@@ -4,15 +4,15 @@ import (
 	"bytes"
 	"context"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filters"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filters"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	bolt "go.etcd.io/bbolt"
-	"go.opencensus.io/trace"
 )
 
 var previousFinalizedCheckpointKey = []byte("previous-finalized-checkpoint")
@@ -201,20 +201,19 @@ func (s *Store) BackfillFinalizedIndex(ctx context.Context, blocks []blocks.ROBl
 			return err
 		}
 		encs[i-1] = penc
-
-		// The final element is the parent of finalizedChildRoot. This is checked inside the db transaction using
-		// the parent_root value stored in the index data for finalizedChildRoot.
-		if i == len(blocks)-1 {
-			fbrs[i].ChildRoot = finalizedChildRoot[:]
-			// Final element is complete, so it is pre-encoded like the others.
-			enc, err := encode(ctx, fbrs[i])
-			if err != nil {
-				tracing.AnnotateError(span, err)
-				return err
-			}
-			encs[i] = enc
-		}
 	}
+
+	// The final element is the parent of finalizedChildRoot. This is checked inside the db transaction using
+	// the parent_root value stored in the index data for finalizedChildRoot.
+	lastIdx := len(blocks) - 1
+	fbrs[lastIdx].ChildRoot = finalizedChildRoot[:]
+	// Final element is complete, so it is pre-encoded like the others.
+	enc, err := encode(ctx, fbrs[lastIdx])
+	if err != nil {
+		tracing.AnnotateError(span, err)
+		return err
+	}
+	encs[lastIdx] = enc
 
 	return s.db.Update(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(finalizedBlockRootsIndexBucket)

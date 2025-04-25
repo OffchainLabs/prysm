@@ -8,34 +8,37 @@ import (
 	"errors"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	lru "github.com/hashicorp/golang-lru"
-	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
 )
 
-var forkChoiceProcessedRootsSize = 1 << 16
+var forkChoiceProcessedAttsSize = 1 << 16
 
 // Service of attestation pool operations.
 type Service struct {
-	cfg                      *Config
-	ctx                      context.Context
-	cancel                   context.CancelFunc
-	err                      error
-	forkChoiceProcessedRoots *lru.Cache
-	genesisTime              uint64
+	cfg                     *Config
+	ctx                     context.Context
+	cancel                  context.CancelFunc
+	err                     error
+	forkChoiceProcessedAtts *lru.Cache
+	genesisTime             uint64
 }
 
 // Config options for the service.
 type Config struct {
+	Cache               *cache.AttestationCache
 	Pool                Pool
 	pruneInterval       time.Duration
 	InitialSyncComplete chan struct{}
 }
 
-// NewService instantiates a new attestation pool service instance that will
+// NewService instantiates a new attestation service instance that will
 // be registered into a running beacon node.
 func NewService(ctx context.Context, cfg *Config) (*Service, error) {
-	cache := lruwrpr.New(forkChoiceProcessedRootsSize)
+	cache := lruwrpr.New(forkChoiceProcessedAttsSize)
 
 	if cfg.pruneInterval == 0 {
 		// Prune expired attestations from the pool every slot interval.
@@ -44,10 +47,10 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 
 	ctx, cancel := context.WithCancel(ctx)
 	return &Service{
-		cfg:                      cfg,
-		ctx:                      ctx,
-		cancel:                   cancel,
-		forkChoiceProcessedRoots: cache,
+		cfg:                     cfg,
+		ctx:                     ctx,
+		cancel:                  cancel,
+		forkChoiceProcessedAtts: cache,
 	}, nil
 }
 
@@ -58,7 +61,12 @@ func (s *Service) Start() {
 		return
 	}
 	go s.prepareForkChoiceAtts()
-	go s.pruneAttsPool()
+
+	if features.Get().EnableExperimentalAttestationPool {
+		go s.pruneExpiredExperimental()
+	} else {
+		go s.pruneExpired()
+	}
 }
 
 // waitForSync waits until the beacon node is synced to the latest head.

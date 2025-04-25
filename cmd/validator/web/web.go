@@ -2,12 +2,14 @@ package web
 
 import (
 	"fmt"
+	"path/filepath"
 
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/runtime/tos"
-	"github.com/prysmaticlabs/prysm/v5/validator/rpc"
+	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/runtime/tos"
+	"github.com/OffchainLabs/prysm/v6/validator/rpc"
 	"github.com/urfave/cli/v2"
 )
 
@@ -22,8 +24,9 @@ var Commands = &cli.Command{
 			Description: `Generate an authentication token for the Prysm web interface`,
 			Flags: cmd.WrapFlags([]cli.Flag{
 				flags.WalletDirFlag,
-				flags.GRPCGatewayHost,
-				flags.GRPCGatewayPort,
+				flags.HTTPServerHost,
+				flags.HTTPServerPort,
+				flags.AuthTokenPathFlag,
 				cmd.AcceptTosFlag,
 			}),
 			Before: func(cliCtx *cli.Context) error {
@@ -40,10 +43,15 @@ var Commands = &cli.Command{
 				if walletDirPath == "" {
 					log.Fatal("--wallet-dir not specified")
 				}
-				gatewayHost := cliCtx.String(flags.GRPCGatewayHost.Name)
-				gatewayPort := cliCtx.Int(flags.GRPCGatewayPort.Name)
-				validatorWebAddr := fmt.Sprintf("%s:%d", gatewayHost, gatewayPort)
-				if err := rpc.CreateAuthToken(walletDirPath, validatorWebAddr); err != nil {
+				host := cliCtx.String(flags.HTTPServerHost.Name)
+				port := cliCtx.Int(flags.HTTPServerPort.Name)
+				validatorWebAddr := fmt.Sprintf("%s:%d", host, port)
+				authTokenPath := filepath.Join(walletDirPath, api.AuthTokenFileName)
+				tempAuthTokenPath := cliCtx.String(flags.AuthTokenPathFlag.Name)
+				if tempAuthTokenPath != "" {
+					authTokenPath = tempAuthTokenPath
+				}
+				if err := rpc.CreateAuthToken(authTokenPath, validatorWebAddr); err != nil {
 					log.WithError(err).Fatal("Could not create web auth token")
 				}
 				return nil

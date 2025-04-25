@@ -8,18 +8,18 @@ import (
 	"path"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/io/file"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/validator/client"
+	beacon_api "github.com/OffchainLabs/prysm/v6/validator/client/beacon-api"
+	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/validator/client"
-	beacon_api "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -47,7 +47,7 @@ func (acm *CLIManager) Exit(ctx context.Context) error {
 	if nodeClient == nil {
 		return errors.New("could not prepare beacon node client")
 	}
-	syncStatus, err := (*nodeClient).GetSyncStatus(ctx, &emptypb.Empty{})
+	syncStatus, err := (*nodeClient).SyncStatus(ctx, &emptypb.Empty{})
 	if err != nil {
 		return err
 	}
@@ -81,7 +81,7 @@ func PerformVoluntaryExit(
 	ctx context.Context, cfg PerformExitCfg,
 ) (rawExitedKeys [][]byte, formattedExitedKeys []string, err error) {
 	var rawNotExitedKeys [][]byte
-	genesisResponse, err := cfg.NodeClient.GetGenesis(ctx, &emptypb.Empty{})
+	genesisResponse, err := cfg.NodeClient.Genesis(ctx, &emptypb.Empty{})
 	if err != nil {
 		log.WithError(err).Errorf("voluntary exit failed: %v", err)
 	}
@@ -175,8 +175,6 @@ func formatBeaconChaURL(key []byte) string {
 	keyWithout0x := hexutil.Encode(key)[2:]
 
 	switch env := params.BeaconConfig().ConfigName; env {
-	case params.PraterName, params.GoerliName:
-		return fmt.Sprintf(baseURL, "prater.", keyWithout0x)
 	case params.HoleskyName:
 		return fmt.Sprintf(baseURL, "holesky.", keyWithout0x)
 	case params.SepoliaName:

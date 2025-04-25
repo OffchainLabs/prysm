@@ -4,19 +4,24 @@ import (
 	"context"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	chainMock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
+	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
+	mockExecution "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
+	mockp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v6/time"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	chainMock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	dbtest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations"
-	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -66,13 +71,15 @@ func TestService_beaconBlockSubscriber(t *testing.T) {
 						DB:   db,
 						Root: make([]byte, 32),
 					},
-					attPool: attestations.NewPool(),
+					attPool:                attestations.NewPool(),
+					blobStorage:            filesystem.NewEphemeralBlobStorage(t),
+					executionReconstructor: &mockExecution.EngineClient{},
 				},
 			}
 			s.initCaches()
 			// Set up attestation pool.
 			for _, att := range pooledAttestations {
-				if helpers.IsAggregated(att) {
+				if att.IsAggregated() {
 					assert.NoError(t, s.cfg.attPool.SaveAggregatedAttestation(att))
 				} else {
 					assert.NoError(t, s.cfg.attPool.SaveUnaggregatedAttestation(att))
@@ -123,4 +130,66 @@ func TestService_BeaconBlockSubscribe_UndefinedEeError(t *testing.T) {
 	require.ErrorIs(t, s.beaconBlockSubscriber(context.Background(), util.NewBeaconBlock()), blockchain.ErrUndefinedExecutionEngineError)
 	require.Equal(t, 0, len(s.badBlockCache.Keys()))
 	require.Equal(t, 1, len(s.seenBlockCache.Keys()))
+}
+
+func TestReconstructAndBroadcastBlobs(t *testing.T) {
+	rob, err := blocks.NewROBlob(
+		&ethpb.BlobSidecar{
+			SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
+				Header: &ethpb.BeaconBlockHeader{
+					ParentRoot: make([]byte, 32),
+					BodyRoot:   make([]byte, 32),
+					StateRoot:  make([]byte, 32),
+				},
+				Signature: []byte("signature"),
+			},
+		})
+	require.NoError(t, err)
+
+	chainService := &chainMock.ChainService{
+		Genesis: time.Now(),
+	}
+
+	b := util.NewBeaconBlockDeneb()
+	sb, err := blocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name              string
+		blobSidecars      []blocks.VerifiedROBlob
+		expectedBlobCount int
+	}{
+		{
+			name:              "Constructed 0 blobs",
+			blobSidecars:      nil,
+			expectedBlobCount: 0,
+		},
+		{
+			name: "Constructed 6 blobs",
+			blobSidecars: []blocks.VerifiedROBlob{
+				{ROBlob: rob}, {ROBlob: rob}, {ROBlob: rob}, {ROBlob: rob}, {ROBlob: rob}, {ROBlob: rob},
+			},
+			expectedBlobCount: 6,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := Service{
+				cfg: &config{
+					p2p:         mockp2p.NewTestP2P(t),
+					chain:       chainService,
+					clock:       startup.NewClock(time.Now(), [32]byte{}),
+					blobStorage: filesystem.NewEphemeralBlobStorage(t),
+					executionReconstructor: &mockExecution.EngineClient{
+						BlobSidecars: tt.blobSidecars,
+					},
+					operationNotifier: &chainMock.MockOperationNotifier{},
+				},
+				seenBlobCache: lruwrpr.New(1),
+			}
+			s.reconstructAndBroadcastBlobs(context.Background(), sb)
+			require.Equal(t, tt.expectedBlobCount, len(chainService.Blobs))
+		})
+	}
 }

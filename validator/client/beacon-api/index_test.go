@@ -7,14 +7,15 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api/apiutil"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/validator/client/beacon-api/mock"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
 	"go.uber.org/mock/gomock"
 )
 
@@ -44,7 +45,7 @@ func TestIndex_Nominal(t *testing.T) {
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
 	jsonRestHandler.EXPECT().Post(
-		ctx,
+		gomock.Any(),
 		"/eth/v1/beacon/states/head/validators",
 		nil,
 		reqBuffer,
@@ -94,7 +95,7 @@ func TestIndex_UnexistingValidator(t *testing.T) {
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
 	jsonRestHandler.EXPECT().Post(
-		ctx,
+		gomock.Any(),
 		"/eth/v1/beacon/states/head/validators",
 		nil,
 		reqBuffer,
@@ -136,7 +137,7 @@ func TestIndex_BadIndexError(t *testing.T) {
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
 	jsonRestHandler.EXPECT().Post(
-		ctx,
+		gomock.Any(),
 		"/eth/v1/beacon/states/head/validators",
 		nil,
 		reqBuffer,
@@ -185,7 +186,7 @@ func TestIndex_JsonResponseError(t *testing.T) {
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
 	jsonRestHandler.EXPECT().Post(
-		ctx,
+		gomock.Any(),
 		"/eth/v1/beacon/states/head/validators",
 		nil,
 		reqBuffer,
@@ -208,8 +209,8 @@ func TestIndex_JsonResponseError(t *testing.T) {
 	}
 
 	jsonRestHandler.EXPECT().Get(
-		ctx,
-		buildURL("/eth/v1/beacon/states/head/validators", queryParams),
+		gomock.Any(),
+		apiutil.BuildURL("/eth/v1/beacon/states/head/validators", queryParams),
 		&stateValidatorsResponseJson,
 	).Return(
 		errors.New("some specific json error"),

@@ -19,7 +19,7 @@ cygwin*) system="windows" ;;
 esac
 readonly system
 
-# Get locations of pb.go and pb.gw.go files.
+# Get locations of pb.go files.
 findutil="find"
 # On OSX `find` is not GNU find compatible, so require "findutils" package.
 if [ "$system" == "darwin" ]; then

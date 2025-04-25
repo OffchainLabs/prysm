@@ -14,10 +14,7 @@ var (
 		Name: "remote_web3signer_errored_responses_total",
 		Help: "Total number of errored responses when calling web3signer",
 	})
-	blockSignRequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "remote_web3signer_block_sign_requests_total",
-		Help: "Total number of block sign requests",
-	})
+
 	aggregationSlotSignRequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "remote_web3signer_aggregation_slot_requests_total",
 		Help: "Total number of aggregation slot requests",
@@ -30,34 +27,12 @@ var (
 		Name: "remote_web3signer_attestation_sign_requests_total",
 		Help: "Total number of attestation sign requests",
 	})
-	blockAltairSignRequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "remote_web3signer_block_altair_sign_requests_total",
-		Help: "Total number of block altair sign requests",
-	})
-	blockBellatrixSignRequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "remote_web3signer_block_bellatrix_sign_requests_total",
-		Help: "Total number of block bellatrix sign requests",
-	})
-	blindedBlockBellatrixSignRequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "remote_web3signer_blinded_block_bellatrix_sign_requests_total",
-		Help: "Total number of blinded block bellatrix sign requests",
-	})
-	blockCapellaSignRequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "remote_web3signer_block_capella_sign_requests_total",
-		Help: "Total number of block capella sign requests",
-	})
-	blindedBlockCapellaSignRequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "remote_web3signer_blinded_block_capella_sign_requests_total",
-		Help: "Total number of block capella sign requests",
-	})
-	blockDenebSignRequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "remote_web3signer_block_deneb_sign_requests_total",
-		Help: "Total number of block deneb sign requests",
-	})
-	blindedBlockDenebSignRequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "remote_web3signer_blinded_block_deneb_sign_requests_total",
-		Help: "Total number of blinded block deneb sign requests",
-	})
+
+	remoteBlockSignRequestsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "remote_block_sign_requests_total",
+		Help: "Total number of block sign requests with fork and blinded block check",
+	}, []string{"fork", "isBlinded"})
+
 	randaoRevealSignRequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "remote_web3signer_randao_reveal_sign_requests_total",
 		Help: "Total number of randao reveal sign requests",

@@ -7,25 +7,25 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/async"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
+	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	prysmTime "github.com/OffchainLabs/prysm/v6/time"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/async"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
-	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 )
 
-// maintainPeerStatuses by infrequently polling peers for their latest status.
+// maintainPeerStatuses maintains peer statuses by polling peers for their latest status twice per epoch.
 func (s *Service) maintainPeerStatuses() {
 	// Run twice per epoch.
 	interval := time.Duration(params.BeaconConfig().SlotsPerEpoch.Div(2).Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second
@@ -38,16 +38,20 @@ func (s *Service) maintainPeerStatuses() {
 				// If our peer status has not been updated correctly we disconnect over here
 				// and set the connection state over here instead.
 				if s.cfg.p2p.Host().Network().Connectedness(id) != network.Connected {
-					s.cfg.p2p.Peers().SetConnectionState(id, peers.PeerDisconnecting)
+					s.cfg.p2p.Peers().SetConnectionState(id, peers.Disconnecting)
 					if err := s.cfg.p2p.Disconnect(id); err != nil {
 						log.WithError(err).Debug("Error when disconnecting with peer")
 					}
-					s.cfg.p2p.Peers().SetConnectionState(id, peers.PeerDisconnected)
+					s.cfg.p2p.Peers().SetConnectionState(id, peers.Disconnected)
+					log.WithFields(logrus.Fields{
+						"peer":   id,
+						"reason": "maintain peer statuses - peer is not connected",
+					}).Debug("Initiate peer disconnection")
 					return
 				}
 				// Disconnect from peers that are considered bad by any of the registered scorers.
-				if s.cfg.p2p.Peers().IsBad(id) {
-					s.disconnectBadPeer(s.ctx, id)
+				if err := s.cfg.p2p.Peers().IsBad(id); err != nil {
+					s.disconnectBadPeer(s.ctx, id, err)
 					return
 				}
 				// If the status hasn't been updated in the recent interval time.
@@ -73,6 +77,11 @@ func (s *Service) maintainPeerStatuses() {
 			if err := s.sendGoodByeAndDisconnect(s.ctx, p2ptypes.GoodbyeCodeTooManyPeers, id); err != nil {
 				log.WithField("peer", id).WithError(err).Debug("Could not disconnect with peer")
 			}
+
+			log.WithFields(logrus.Fields{
+				"peer":   id,
+				"reason": "to be pruned",
+			}).Debug("Initiate peer disconnection")
 		}
 	})
 }
@@ -169,8 +178,8 @@ func (s *Service) sendRPCStatusRequest(ctx context.Context, id peer.ID) error {
 	// If validation fails, validation error is logged, and peer status scorer will mark peer as bad.
 	err = s.validateStatusMessage(ctx, msg)
 	s.cfg.p2p.Peers().Scorers().PeerStatusScorer().SetPeerStatus(id, msg, err)
-	if s.cfg.p2p.Peers().IsBad(id) {
-		s.disconnectBadPeer(s.ctx, id)
+	if err := s.cfg.p2p.Peers().IsBad(id); err != nil {
+		s.disconnectBadPeer(s.ctx, id, err)
 	}
 	return err
 }
@@ -182,7 +191,7 @@ func (s *Service) reValidatePeer(ctx context.Context, id peer.ID) error {
 	}
 	// Do not return an error for ping requests.
 	if err := s.sendPingRequest(ctx, id); err != nil && !isUnwantedError(err) {
-		log.WithError(err).Debug("Could not ping peer")
+		log.WithError(err).WithField("pid", id).Debug("Could not ping peer")
 	}
 	return nil
 }
@@ -211,10 +220,10 @@ func (s *Service) statusRPCHandler(ctx context.Context, msg interface{}, stream 
 		}).Debug("Invalid status message from peer")
 
 		var respCode byte
-		switch err {
-		case p2ptypes.ErrGeneric:
+		switch {
+		case errors.Is(err, p2ptypes.ErrGeneric):
 			respCode = responseCodeServerError
-		case p2ptypes.ErrWrongForkDigestVersion:
+		case errors.Is(err, p2ptypes.ErrWrongForkDigestVersion):
 			// Respond with our status and disconnect with the peer.
 			s.cfg.p2p.Peers().SetChainState(remotePeer, m)
 			if err := s.respondWithStatus(ctx, stream); err != nil {
@@ -286,7 +295,7 @@ func (s *Service) validateStatusMessage(ctx context.Context, msg *pb.Status) err
 		return err
 	}
 	if !bytes.Equal(forkDigest[:], msg.ForkDigest) {
-		return p2ptypes.ErrWrongForkDigestVersion
+		return fmt.Errorf("mismatch fork digest: expected %#x, got %#x: %w", forkDigest[:], msg.ForkDigest, p2ptypes.ErrWrongForkDigestVersion)
 	}
 	genesis := s.cfg.clock.GenesisTime()
 	cp := s.cfg.chain.FinalizedCheckpt()

@@ -1,5 +1,7 @@
 package params
 
+import "math"
+
 // UseHoleskyNetworkConfig uses the Holesky beacon chain specific network config.
 func UseHoleskyNetworkConfig() {
 	cfg := BeaconNetworkConfig().Copy()
@@ -20,10 +22,11 @@ func UseHoleskyNetworkConfig() {
 
 // HoleskyConfig defines the config for the Holesky beacon chain testnet.
 func HoleskyConfig() *BeaconChainConfig {
-	cfg := MainnetConfig().Copy()
+	cfg := MainnetConfig()
 	cfg.MinGenesisTime = 1695902100
 	cfg.GenesisDelay = 300
 	cfg.ConfigName = HoleskyName
+	cfg.GenesisValidatorsRoot = [32]byte{145, 67, 170, 124, 97, 90, 127, 113, 21, 226, 182, 170, 195, 25, 192, 53, 41, 223, 130, 66, 174, 112, 95, 186, 157, 243, 155, 121, 197, 159, 168, 177}
 	cfg.GenesisForkVersion = []byte{0x01, 0x01, 0x70, 0x00}
 	cfg.SecondsPerETH1Block = 14
 	cfg.DepositChainID = 17000
@@ -36,6 +39,10 @@ func HoleskyConfig() *BeaconChainConfig {
 	cfg.CapellaForkVersion = []byte{0x4, 0x1, 0x70, 0x0}
 	cfg.DenebForkEpoch = 29696
 	cfg.DenebForkVersion = []byte{0x05, 0x1, 0x70, 0x0}
+	cfg.ElectraForkEpoch = 115968 // Mon, Feb 24 at 21:55:12 UTC
+	cfg.ElectraForkVersion = []byte{0x06, 0x1, 0x70, 0x0}
+	cfg.FuluForkEpoch = math.MaxUint64
+	cfg.FuluForkVersion = []byte{0x07, 0x1, 0x70, 0x0} // TODO: Define holesky fork version for fulu. This is a placeholder value.
 	cfg.TerminalTotalDifficulty = "0"
 	cfg.DepositContractAddress = "0x4242424242424242424242424242424242424242"
 	cfg.EjectionBalance = 28000000000

@@ -6,23 +6,23 @@ import (
 	"testing"
 	"time"
 
-	mockChain "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache/depositcache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/execution"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	mockExecution "github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/testing"
-	mockSync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/initial-sync/testing"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/execution"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	mockExecution "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing"
+	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 )
 
 // pubKey is a helper to generate a well-formed public key.
@@ -55,10 +55,11 @@ func TestGetDuties_OK(t *testing.T) {
 		State: bs, Root: genesisRoot[:], Genesis: time.Now(),
 	}
 	vs := &Server{
-		HeadFetcher:    chain,
-		TimeFetcher:    chain,
-		SyncChecker:    &mockSync.Sync{IsSyncing: false},
-		PayloadIDCache: cache.NewPayloadIDCache(),
+		HeadFetcher:       chain,
+		TimeFetcher:       chain,
+		ForkchoiceFetcher: chain,
+		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		PayloadIDCache:    cache.NewPayloadIDCache(),
 	}
 
 	// Test the first validator in registry.
@@ -140,11 +141,12 @@ func TestGetAltairDuties_SyncCommitteeOK(t *testing.T) {
 		State: bs, Root: genesisRoot[:], Genesis: time.Now().Add(time.Duration(-1*int64(slot-1)) * time.Second),
 	}
 	vs := &Server{
-		HeadFetcher:     chain,
-		TimeFetcher:     chain,
-		Eth1InfoFetcher: &mockExecution.Chain{},
-		SyncChecker:     &mockSync.Sync{IsSyncing: false},
-		PayloadIDCache:  cache.NewPayloadIDCache(),
+		HeadFetcher:       chain,
+		TimeFetcher:       chain,
+		ForkchoiceFetcher: chain,
+		Eth1InfoFetcher:   &mockExecution.Chain{},
+		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		PayloadIDCache:    cache.NewPayloadIDCache(),
 	}
 
 	// Test the first validator in registry.
@@ -246,11 +248,12 @@ func TestGetBellatrixDuties_SyncCommitteeOK(t *testing.T) {
 		State: bs, Root: genesisRoot[:], Genesis: time.Now().Add(time.Duration(-1*int64(slot-1)) * time.Second),
 	}
 	vs := &Server{
-		HeadFetcher:     chain,
-		TimeFetcher:     chain,
-		Eth1InfoFetcher: &mockExecution.Chain{},
-		SyncChecker:     &mockSync.Sync{IsSyncing: false},
-		PayloadIDCache:  cache.NewPayloadIDCache(),
+		HeadFetcher:       chain,
+		TimeFetcher:       chain,
+		ForkchoiceFetcher: chain,
+		Eth1InfoFetcher:   &mockExecution.Chain{},
+		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		PayloadIDCache:    cache.NewPayloadIDCache(),
 	}
 
 	// Test the first validator in registry.
@@ -334,16 +337,17 @@ func TestGetAltairDuties_UnknownPubkey(t *testing.T) {
 	chain := &mockChain.ChainService{
 		State: bs, Root: genesisRoot[:], Genesis: time.Now().Add(time.Duration(-1*int64(slot-1)) * time.Second),
 	}
-	depositCache, err := depositcache.New()
+	depositCache, err := depositsnapshot.New()
 	require.NoError(t, err)
 
 	vs := &Server{
-		HeadFetcher:     chain,
-		TimeFetcher:     chain,
-		Eth1InfoFetcher: &mockExecution.Chain{},
-		SyncChecker:     &mockSync.Sync{IsSyncing: false},
-		DepositFetcher:  depositCache,
-		PayloadIDCache:  cache.NewPayloadIDCache(),
+		HeadFetcher:       chain,
+		ForkchoiceFetcher: chain,
+		TimeFetcher:       chain,
+		Eth1InfoFetcher:   &mockExecution.Chain{},
+		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		DepositFetcher:    depositCache,
+		PayloadIDCache:    cache.NewPayloadIDCache(),
 	}
 
 	unknownPubkey := bytesutil.PadTo([]byte{'u'}, 48)
@@ -361,7 +365,8 @@ func TestGetDuties_SlotOutOfUpperBound(t *testing.T) {
 		Genesis: time.Now(),
 	}
 	vs := &Server{
-		TimeFetcher: chain,
+		ForkchoiceFetcher: chain,
+		TimeFetcher:       chain,
 	}
 	req := &ethpb.DutiesRequest{
 		Epoch: primitives.Epoch(chain.CurrentSlot()/params.BeaconConfig().SlotsPerEpoch + 2),
@@ -396,10 +401,11 @@ func TestGetDuties_CurrentEpoch_ShouldNotFail(t *testing.T) {
 		State: bState, Root: genesisRoot[:], Genesis: time.Now(),
 	}
 	vs := &Server{
-		HeadFetcher:    chain,
-		TimeFetcher:    chain,
-		SyncChecker:    &mockSync.Sync{IsSyncing: false},
-		PayloadIDCache: cache.NewPayloadIDCache(),
+		HeadFetcher:       chain,
+		ForkchoiceFetcher: chain,
+		TimeFetcher:       chain,
+		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		PayloadIDCache:    cache.NewPayloadIDCache(),
 	}
 
 	// Test the first validator in registry.
@@ -435,10 +441,11 @@ func TestGetDuties_MultipleKeys_OK(t *testing.T) {
 		State: bs, Root: genesisRoot[:], Genesis: time.Now(),
 	}
 	vs := &Server{
-		HeadFetcher:    chain,
-		TimeFetcher:    chain,
-		SyncChecker:    &mockSync.Sync{IsSyncing: false},
-		PayloadIDCache: cache.NewPayloadIDCache(),
+		HeadFetcher:       chain,
+		ForkchoiceFetcher: chain,
+		TimeFetcher:       chain,
+		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		PayloadIDCache:    cache.NewPayloadIDCache(),
 	}
 
 	pubkey0 := deposits[0].Data.PublicKey

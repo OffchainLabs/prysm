@@ -9,63 +9,19 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stateutil"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/math"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/validators"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stateutil"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/math"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
-
-// sortableIndices implements the Sort interface to sort newly activated validator indices
-// by activation epoch and by index number.
-type sortableIndices struct {
-	indices    []primitives.ValidatorIndex
-	validators []*ethpb.Validator
-}
-
-// Len is the number of elements in the collection.
-func (s sortableIndices) Len() int { return len(s.indices) }
-
-// Swap swaps the elements with indexes i and j.
-func (s sortableIndices) Swap(i, j int) { s.indices[i], s.indices[j] = s.indices[j], s.indices[i] }
-
-// Less reports whether the element with index i must sort before the element with index j.
-func (s sortableIndices) Less(i, j int) bool {
-	if s.validators[s.indices[i]].ActivationEligibilityEpoch == s.validators[s.indices[j]].ActivationEligibilityEpoch {
-		return s.indices[i] < s.indices[j]
-	}
-	return s.validators[s.indices[i]].ActivationEligibilityEpoch < s.validators[s.indices[j]].ActivationEligibilityEpoch
-}
-
-// AttestingBalance returns the total balance from all the attesting indices.
-//
-// WARNING: This method allocates a new copy of the attesting validator indices set and is
-// considered to be very memory expensive. Avoid using this unless you really
-// need to get attesting balance from attestations.
-//
-// Spec pseudocode definition:
-//
-//	def get_attesting_balance(state: BeaconState, attestations: Sequence[PendingAttestation]) -> Gwei:
-//	  """
-//	  Return the combined effective balance of the set of unslashed validators participating in ``attestations``.
-//	  Note: ``get_total_balance`` returns ``EFFECTIVE_BALANCE_INCREMENT`` Gwei minimum to avoid divisions by zero.
-//	  """
-//	  return get_total_balance(state, get_unslashed_attesting_indices(state, attestations))
-func AttestingBalance(ctx context.Context, state state.ReadOnlyBeaconState, atts []*ethpb.PendingAttestation) (uint64, error) {
-	indices, err := UnslashedAttestingIndices(ctx, state, atts)
-	if err != nil {
-		return 0, errors.Wrap(err, "could not get attesting indices")
-	}
-	return helpers.TotalBalance(state, indices), nil
-}
 
 // ProcessRegistryUpdates rotates validators in and out of active pool.
 // the amount to rotate is determined churn limit.
@@ -91,55 +47,78 @@ func AttestingBalance(ctx context.Context, state state.ReadOnlyBeaconState, atts
 //	 for index in activation_queue[:get_validator_churn_limit(state)]:
 //	     validator = state.validators[index]
 //	     validator.activation_epoch = compute_activation_exit_epoch(get_current_epoch(state))
-func ProcessRegistryUpdates(ctx context.Context, state state.BeaconState) (state.BeaconState, error) {
-	currentEpoch := time.CurrentEpoch(state)
-	vals := state.Validators()
+func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) (state.BeaconState, error) {
+	currentEpoch := time.CurrentEpoch(st)
 	var err error
 	ejectionBal := params.BeaconConfig().EjectionBalance
-	activationEligibilityEpoch := time.CurrentEpoch(state) + 1
-	for idx, validator := range vals {
-		// Process the validators for activation eligibility.
-		if helpers.IsEligibleForActivationQueue(validator) {
-			validator.ActivationEligibilityEpoch = activationEligibilityEpoch
-			if err := state.UpdateValidatorAtIndex(primitives.ValidatorIndex(idx), validator); err != nil {
-				return nil, err
-			}
+
+	// To avoid copying the state validator set via st.Validators(), we will perform a read only pass
+	// over the validator set while collecting validator indices where the validator copy is actually
+	// necessary, then we will process these operations.
+	eligibleForActivationQ := make([]primitives.ValidatorIndex, 0)
+	eligibleForActivation := make([]primitives.ValidatorIndex, 0)
+	eligibleForEjection := make([]primitives.ValidatorIndex, 0)
+
+	if err := st.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
+		// Collect validators eligible to enter the activation queue.
+		if helpers.IsEligibleForActivationQueue(val, currentEpoch) {
+			eligibleForActivationQ = append(eligibleForActivationQ, primitives.ValidatorIndex(idx))
 		}
 
-		// Process the validators for ejection.
-		isActive := helpers.IsActiveValidator(validator, currentEpoch)
-		belowEjectionBalance := validator.EffectiveBalance <= ejectionBal
+		// Collect validators to eject.
+		isActive := helpers.IsActiveValidatorUsingTrie(val, currentEpoch)
+		belowEjectionBalance := val.EffectiveBalance() <= ejectionBal
 		if isActive && belowEjectionBalance {
-			// Here is fine to do a quadratic loop since this should
-			// barely happen
-			maxExitEpoch, churn := validators.MaxExitEpochAndChurn(state)
-			state, _, err = validators.InitiateValidatorExit(ctx, state, primitives.ValidatorIndex(idx), maxExitEpoch, churn)
-			if err != nil && !errors.Is(err, validators.ErrValidatorAlreadyExited) {
-				return nil, errors.Wrapf(err, "could not initiate exit for validator %d", idx)
-			}
+			eligibleForEjection = append(eligibleForEjection, primitives.ValidatorIndex(idx))
+		}
+
+		// Collect validators eligible for activation and not yet dequeued for activation.
+		if helpers.IsEligibleForActivationUsingROVal(st, val) {
+			eligibleForActivation = append(eligibleForActivation, primitives.ValidatorIndex(idx))
+		}
+
+		return nil
+	}); err != nil {
+		return st, fmt.Errorf("failed to read validators: %w", err)
+	}
+
+	// Process validators for activation eligibility.
+	activationEligibilityEpoch := time.CurrentEpoch(st) + 1
+	for _, idx := range eligibleForActivationQ {
+		v, err := st.ValidatorAtIndex(idx)
+		if err != nil {
+			return nil, err
+		}
+		v.ActivationEligibilityEpoch = activationEligibilityEpoch
+		if err := st.UpdateValidatorAtIndex(idx, v); err != nil {
+			return nil, err
+		}
+	}
+
+	// Process validators eligible for ejection.
+	for _, idx := range eligibleForEjection {
+		// Here is fine to do a quadratic loop since this should
+		// barely happen
+		maxExitEpoch, churn := validators.MaxExitEpochAndChurn(st)
+		st, _, err = validators.InitiateValidatorExit(ctx, st, idx, maxExitEpoch, churn)
+		if err != nil && !errors.Is(err, validators.ErrValidatorAlreadyExited) {
+			return nil, errors.Wrapf(err, "could not initiate exit for validator %d", idx)
 		}
 	}
 
 	// Queue validators eligible for activation and not yet dequeued for activation.
-	var activationQ []primitives.ValidatorIndex
-	for idx, validator := range vals {
-		if helpers.IsEligibleForActivation(state, validator) {
-			activationQ = append(activationQ, primitives.ValidatorIndex(idx))
-		}
-	}
-
-	sort.Sort(sortableIndices{indices: activationQ, validators: vals})
+	sort.Sort(sortableIndices{indices: eligibleForActivation, state: st})
 
 	// Only activate just enough validators according to the activation churn limit.
-	limit := uint64(len(activationQ))
-	activeValidatorCount, err := helpers.ActiveValidatorCount(ctx, state, currentEpoch)
+	limit := uint64(len(eligibleForActivation))
+	activeValidatorCount, err := helpers.ActiveValidatorCount(ctx, st, currentEpoch)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get active validator count")
 	}
 
 	churnLimit := helpers.ValidatorActivationChurnLimit(activeValidatorCount)
 
-	if state.Version() >= version.Deneb {
+	if st.Version() >= version.Deneb {
 		churnLimit = helpers.ValidatorActivationChurnLimitDeneb(activeValidatorCount)
 	}
 
@@ -149,48 +128,101 @@ func ProcessRegistryUpdates(ctx context.Context, state state.BeaconState) (state
 	}
 
 	activationExitEpoch := helpers.ActivationExitEpoch(currentEpoch)
-	for _, index := range activationQ[:limit] {
-		validator, err := state.ValidatorAtIndex(index)
+	for _, index := range eligibleForActivation[:limit] {
+		validator, err := st.ValidatorAtIndex(index)
 		if err != nil {
 			return nil, err
 		}
 		validator.ActivationEpoch = activationExitEpoch
-		if err := state.UpdateValidatorAtIndex(index, validator); err != nil {
+		if err := st.UpdateValidatorAtIndex(index, validator); err != nil {
 			return nil, err
 		}
 	}
-	return state, nil
+	return st, nil
 }
 
-// ProcessSlashings processes the slashed validators during epoch processing,
+// ProcessSlashings processes the slashed validators during epoch processing. This is a state mutating method.
+//
+// Electra spec definition:
 //
 //	def process_slashings(state: BeaconState) -> None:
-//	  epoch = get_current_epoch(state)
-//	  total_balance = get_total_active_balance(state)
-//	  adjusted_total_slashing_balance = min(sum(state.slashings) * PROPORTIONAL_SLASHING_MULTIPLIER, total_balance)
-//	  for index, validator in enumerate(state.validators):
-//	      if validator.slashed and epoch + EPOCHS_PER_SLASHINGS_VECTOR // 2 == validator.withdrawable_epoch:
-//	          increment = EFFECTIVE_BALANCE_INCREMENT  # Factored out from penalty numerator to avoid uint64 overflow
-//	          penalty_numerator = validator.effective_balance // increment * adjusted_total_slashing_balance
-//	          penalty = penalty_numerator // total_balance * increment
-//	          decrease_balance(state, ValidatorIndex(index), penalty)
-func ProcessSlashings(state state.BeaconState, slashingMultiplier uint64) (state.BeaconState, error) {
-	currentEpoch := time.CurrentEpoch(state)
-	totalBalance, err := helpers.TotalActiveBalance(state)
+//	    epoch = get_current_epoch(state)
+//	    total_balance = get_total_active_balance(state)
+//	    adjusted_total_slashing_balance = min(
+//	        sum(state.slashings) * PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX,
+//	        total_balance
+//	    )
+//	    increment = EFFECTIVE_BALANCE_INCREMENT  # Factored out from total balance to avoid uint64 overflow
+//	    penalty_per_effective_balance_increment = adjusted_total_slashing_balance // (total_balance // increment)
+//	    for index, validator in enumerate(state.validators):
+//	        if validator.slashed and epoch + EPOCHS_PER_SLASHINGS_VECTOR // 2 == validator.withdrawable_epoch:
+//	            effective_balance_increments = validator.effective_balance // increment
+//	            # [Modified in Electra:EIP7251]
+//	            penalty = penalty_per_effective_balance_increment * effective_balance_increments
+//	            decrease_balance(state, ValidatorIndex(index), penalty)
+//
+// Bellatrix spec definition:
+//
+//	def process_slashings(state: BeaconState) -> None:
+//	    epoch = get_current_epoch(state)
+//	    total_balance = get_total_active_balance(state)
+//	    adjusted_total_slashing_balance = min(
+//	        sum(state.slashings) * PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX,  # [Modified in Bellatrix]
+//	        total_balance
+//	    )
+//	    for index, validator in enumerate(state.validators):
+//	        if validator.slashed and epoch + EPOCHS_PER_SLASHINGS_VECTOR // 2 == validator.withdrawable_epoch:
+//	            increment = EFFECTIVE_BALANCE_INCREMENT  # Factored out from penalty numerator to avoid uint64 overflow
+//	            penalty_numerator = validator.effective_balance // increment * adjusted_total_slashing_balance
+//	            penalty = penalty_numerator // total_balance * increment
+//	            decrease_balance(state, ValidatorIndex(index), penalty)
+//
+// Altair spec definition:
+//
+//	def process_slashings(state: BeaconState) -> None:
+//	    epoch = get_current_epoch(state)
+//	    total_balance = get_total_active_balance(state)
+//	    adjusted_total_slashing_balance = min(sum(state.slashings) * PROPORTIONAL_SLASHING_MULTIPLIER_ALTAIR, total_balance)
+//	    for index, validator in enumerate(state.validators):
+//	        if validator.slashed and epoch + EPOCHS_PER_SLASHINGS_VECTOR // 2 == validator.withdrawable_epoch:
+//	            increment = EFFECTIVE_BALANCE_INCREMENT  # Factored out from penalty numerator to avoid uint64 overflow
+//	            penalty_numerator = validator.effective_balance // increment * adjusted_total_slashing_balance
+//	            penalty = penalty_numerator // total_balance * increment
+//	            decrease_balance(state, ValidatorIndex(index), penalty)
+//
+// Phase0 spec definition:
+//
+//	def process_slashings(state: BeaconState) -> None:
+//	    epoch = get_current_epoch(state)
+//	    total_balance = get_total_active_balance(state)
+//	    adjusted_total_slashing_balance = min(sum(state.slashings) * PROPORTIONAL_SLASHING_MULTIPLIER, total_balance)
+//	    for index, validator in enumerate(state.validators):
+//	        if validator.slashed and epoch + EPOCHS_PER_SLASHINGS_VECTOR // 2 == validator.withdrawable_epoch:
+//	            increment = EFFECTIVE_BALANCE_INCREMENT  # Factored out from penalty numerator to avoid uint64 overflow
+//	            penalty_numerator = validator.effective_balance // increment * adjusted_total_slashing_balance
+//	            penalty = penalty_numerator // total_balance * increment
+//	            decrease_balance(state, ValidatorIndex(index), penalty)
+func ProcessSlashings(st state.BeaconState) error {
+	slashingMultiplier, err := st.ProportionalSlashingMultiplier()
 	if err != nil {
-		return nil, errors.Wrap(err, "could not get total active balance")
+		return errors.Wrap(err, "could not get proportional slashing multiplier")
+	}
+	currentEpoch := time.CurrentEpoch(st)
+	totalBalance, err := helpers.TotalActiveBalance(st)
+	if err != nil {
+		return errors.Wrap(err, "could not get total active balance")
 	}
 
 	// Compute slashed balances in the current epoch
 	exitLength := params.BeaconConfig().EpochsPerSlashingsVector
 
 	// Compute the sum of state slashings
-	slashings := state.Slashings()
+	slashings := st.Slashings()
 	totalSlashing := uint64(0)
 	for _, slashing := range slashings {
 		totalSlashing, err = math.Add64(totalSlashing, slashing)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
@@ -198,19 +230,40 @@ func ProcessSlashings(state state.BeaconState, slashingMultiplier uint64) (state
 	// below equally.
 	increment := params.BeaconConfig().EffectiveBalanceIncrement
 	minSlashing := math.Min(totalSlashing*slashingMultiplier, totalBalance)
-	err = state.ApplyToEveryValidator(func(idx int, val *ethpb.Validator) (bool, *ethpb.Validator, error) {
-		correctEpoch := (currentEpoch + exitLength/2) == val.WithdrawableEpoch
-		if val.Slashed && correctEpoch {
-			penaltyNumerator := val.EffectiveBalance / increment * minSlashing
-			penalty := penaltyNumerator / totalBalance * increment
-			if err := helpers.DecreaseBalance(state, primitives.ValidatorIndex(idx), penalty); err != nil {
-				return false, val, err
+
+	// Modified in Electra:EIP7251
+	var penaltyPerEffectiveBalanceIncrement uint64
+	if st.Version() >= version.Electra {
+		penaltyPerEffectiveBalanceIncrement = minSlashing / (totalBalance / increment)
+	}
+
+	bals := st.Balances()
+	changed := false
+	err = st.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
+		correctEpoch := (currentEpoch + exitLength/2) == val.WithdrawableEpoch()
+		if val.Slashed() && correctEpoch {
+			var penalty uint64
+			if st.Version() >= version.Electra {
+				effectiveBalanceIncrements := val.EffectiveBalance() / increment
+				penalty = penaltyPerEffectiveBalanceIncrement * effectiveBalanceIncrements
+			} else {
+				penaltyNumerator := val.EffectiveBalance() / increment * minSlashing
+				penalty = penaltyNumerator / totalBalance * increment
 			}
-			return true, val, nil
+			bals[idx] = helpers.DecreaseBalanceWithVal(bals[idx], penalty)
+			changed = true
 		}
-		return false, val, nil
+		return nil
 	})
-	return state, err
+	if err != nil {
+		return err
+	}
+	if changed {
+		if err := st.SetBalances(bals); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ProcessEth1DataReset processes updates to ETH1 data votes during epoch processing.
@@ -252,45 +305,43 @@ func ProcessEth1DataReset(state state.BeaconState) (state.BeaconState, error) {
 //	          or validator.effective_balance + UPWARD_THRESHOLD < balance
 //	      ):
 //	          validator.effective_balance = min(balance - balance % EFFECTIVE_BALANCE_INCREMENT, MAX_EFFECTIVE_BALANCE)
-func ProcessEffectiveBalanceUpdates(state state.BeaconState) (state.BeaconState, error) {
+func ProcessEffectiveBalanceUpdates(st state.BeaconState) (state.BeaconState, error) {
 	effBalanceInc := params.BeaconConfig().EffectiveBalanceIncrement
 	maxEffBalance := params.BeaconConfig().MaxEffectiveBalance
 	hysteresisInc := effBalanceInc / params.BeaconConfig().HysteresisQuotient
 	downwardThreshold := hysteresisInc * params.BeaconConfig().HysteresisDownwardMultiplier
 	upwardThreshold := hysteresisInc * params.BeaconConfig().HysteresisUpwardMultiplier
 
-	bals := state.Balances()
+	bals := st.Balances()
 
 	// Update effective balances with hysteresis.
-	validatorFunc := func(idx int, val *ethpb.Validator) (bool, *ethpb.Validator, error) {
+	validatorFunc := func(idx int, val state.ReadOnlyValidator) (newVal *ethpb.Validator, err error) {
 		if val == nil {
-			return false, nil, fmt.Errorf("validator %d is nil in state", idx)
+			return nil, fmt.Errorf("validator %d is nil in state", idx)
 		}
 		if idx >= len(bals) {
-			return false, nil, fmt.Errorf("validator index exceeds validator length in state %d >= %d", idx, len(state.Balances()))
+			return nil, fmt.Errorf("validator index exceeds validator length in state %d >= %d", idx, len(st.Balances()))
 		}
 		balance := bals[idx]
 
-		if balance+downwardThreshold < val.EffectiveBalance || val.EffectiveBalance+upwardThreshold < balance {
+		if balance+downwardThreshold < val.EffectiveBalance() || val.EffectiveBalance()+upwardThreshold < balance {
 			effectiveBal := maxEffBalance
 			if effectiveBal > balance-balance%effBalanceInc {
 				effectiveBal = balance - balance%effBalanceInc
 			}
-			if effectiveBal != val.EffectiveBalance {
-				newVal := ethpb.CopyValidator(val)
+			if effectiveBal != val.EffectiveBalance() {
+				newVal = val.Copy()
 				newVal.EffectiveBalance = effectiveBal
-				return true, newVal, nil
 			}
-			return false, val, nil
 		}
-		return false, val, nil
+		return
 	}
 
-	if err := state.ApplyToEveryValidator(validatorFunc); err != nil {
+	if err := st.ApplyToEveryValidator(validatorFunc); err != nil {
 		return nil, err
 	}
 
-	return state, nil
+	return st, nil
 }
 
 // ProcessSlashingsReset processes the total slashing balances updates during epoch processing.
@@ -452,52 +503,4 @@ func ProcessFinalUpdates(state state.BeaconState) (state.BeaconState, error) {
 	}
 
 	return state, nil
-}
-
-// UnslashedAttestingIndices returns all the attesting indices from a list of attestations,
-// it sorts the indices and filters out the slashed ones.
-//
-// Spec pseudocode definition:
-//
-//	def get_unslashed_attesting_indices(state: BeaconState,
-//	                                  attestations: Sequence[PendingAttestation]) -> Set[ValidatorIndex]:
-//	  output = set()  # type: Set[ValidatorIndex]
-//	  for a in attestations:
-//	      output = output.union(get_attesting_indices(state, a.data, a.aggregation_bits))
-//	  return set(filter(lambda index: not state.validators[index].slashed, output))
-func UnslashedAttestingIndices(ctx context.Context, state state.ReadOnlyBeaconState, atts []*ethpb.PendingAttestation) ([]primitives.ValidatorIndex, error) {
-	var setIndices []primitives.ValidatorIndex
-	seen := make(map[uint64]bool)
-
-	for _, att := range atts {
-		committee, err := helpers.BeaconCommitteeFromState(ctx, state, att.Data.Slot, att.Data.CommitteeIndex)
-		if err != nil {
-			return nil, err
-		}
-		attestingIndices, err := attestation.AttestingIndices(att.AggregationBits, committee)
-		if err != nil {
-			return nil, err
-		}
-		// Create a set for attesting indices
-		for _, index := range attestingIndices {
-			if !seen[index] {
-				setIndices = append(setIndices, primitives.ValidatorIndex(index))
-			}
-			seen[index] = true
-		}
-	}
-	// Sort the attesting set indices by increasing order.
-	sort.Slice(setIndices, func(i, j int) bool { return setIndices[i] < setIndices[j] })
-	// Remove the slashed validator indices.
-	for i := 0; i < len(setIndices); i++ {
-		v, err := state.ValidatorAtIndexReadOnly(setIndices[i])
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to look up validator")
-		}
-		if !v.IsNil() && v.Slashed() {
-			setIndices = append(setIndices[:i], setIndices[i+1:]...)
-		}
-	}
-
-	return setIndices, nil
 }

@@ -3,13 +3,15 @@ package state_native_test
 import (
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	statenative "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	testtmpl "github.com/OffchainLabs/prysm/v6/beacon-chain/state/testing"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	statenative "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	testtmpl "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/testing"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestBeaconState_ValidatorAtIndexReadOnly_HandlesNilSlice_Phase0(t *testing.T) {
@@ -65,4 +67,79 @@ func TestValidatorIndexes(t *testing.T) {
 		require.NotEmpty(t, readOnlyBytes)
 		require.Equal(t, hexutil.Encode(readOnlyBytes[:]), hexutil.Encode(byteValue[:]))
 	})
+}
+
+func TestPendingBalanceToWithdraw(t *testing.T) {
+	pb := &ethpb.BeaconStateElectra{
+		PendingPartialWithdrawals: []*ethpb.PendingPartialWithdrawal{
+			{
+				Amount: 100,
+			},
+			{
+				Amount: 200,
+			},
+			{
+				Amount: 300,
+			},
+		},
+	}
+	state, err := statenative.InitializeFromProtoUnsafeElectra(pb)
+	require.NoError(t, err)
+
+	ab, err := state.PendingBalanceToWithdraw(0)
+	require.NoError(t, err)
+	require.Equal(t, uint64(600), ab)
+}
+
+func TestAggregateKeyFromIndices(t *testing.T) {
+	dState, _ := util.DeterministicGenesisState(t, 10)
+	pKey1 := dState.PubkeyAtIndex(3)
+	pKey2 := dState.PubkeyAtIndex(7)
+	pKey3 := dState.PubkeyAtIndex(9)
+
+	aggKey, err := bls.AggregatePublicKeys([][]byte{pKey1[:], pKey2[:], pKey3[:]})
+	require.NoError(t, err)
+
+	retKey, err := dState.AggregateKeyFromIndices([]uint64{3, 7, 9})
+	require.NoError(t, err)
+
+	assert.Equal(t, true, aggKey.Equals(retKey), "unequal aggregated keys")
+}
+
+func TestHasPendingBalanceToWithdraw(t *testing.T) {
+	pb := &ethpb.BeaconStateElectra{
+		PendingPartialWithdrawals: []*ethpb.PendingPartialWithdrawal{
+			{
+				Amount: 100,
+				Index:  1,
+			},
+			{
+				Amount: 200,
+				Index:  2,
+			},
+			{
+				Amount: 300,
+				Index:  3,
+			},
+			{
+				Amount: 0,
+				Index:  4,
+			},
+		},
+	}
+	state, err := statenative.InitializeFromProtoUnsafeElectra(pb)
+	require.NoError(t, err)
+
+	ok, err := state.HasPendingBalanceToWithdraw(1)
+	require.NoError(t, err)
+	require.Equal(t, true, ok)
+
+	ok, err = state.HasPendingBalanceToWithdraw(5)
+	require.NoError(t, err)
+	require.Equal(t, false, ok)
+
+	// Handle 0 amount case.
+	ok, err = state.HasPendingBalanceToWithdraw(4)
+	require.NoError(t, err)
+	require.Equal(t, false, ok)
 }

@@ -12,6 +12,7 @@ package mock
 import (
 	bytes "bytes"
 	context "context"
+	http "net/http"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
@@ -21,6 +22,7 @@ import (
 type MockJsonRestHandler struct {
 	ctrl     *gomock.Controller
 	recorder *MockJsonRestHandlerMockRecorder
+	isgomock struct{}
 }
 
 // MockJsonRestHandlerMockRecorder is the mock recorder for MockJsonRestHandler.
@@ -54,6 +56,34 @@ func (mr *MockJsonRestHandlerMockRecorder) Get(ctx, endpoint, resp any) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockJsonRestHandler)(nil).Get), ctx, endpoint, resp)
 }
 
+// Host mocks base method.
+func (m *MockJsonRestHandler) Host() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Host")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// Host indicates an expected call of Host.
+func (mr *MockJsonRestHandlerMockRecorder) Host() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Host", reflect.TypeOf((*MockJsonRestHandler)(nil).Host))
+}
+
+// HttpClient mocks base method.
+func (m *MockJsonRestHandler) HttpClient() *http.Client {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HttpClient")
+	ret0, _ := ret[0].(*http.Client)
+	return ret0
+}
+
+// HttpClient indicates an expected call of HttpClient.
+func (mr *MockJsonRestHandlerMockRecorder) HttpClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HttpClient", reflect.TypeOf((*MockJsonRestHandler)(nil).HttpClient))
+}
+
 // Post mocks base method.
 func (m *MockJsonRestHandler) Post(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer, resp any) error {
 	m.ctrl.T.Helper()
@@ -66,4 +96,16 @@ func (m *MockJsonRestHandler) Post(ctx context.Context, endpoint string, headers
 func (mr *MockJsonRestHandlerMockRecorder) Post(ctx, endpoint, headers, data, resp any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Post", reflect.TypeOf((*MockJsonRestHandler)(nil).Post), ctx, endpoint, headers, data, resp)
+}
+
+// SetHost mocks base method.
+func (m *MockJsonRestHandler) SetHost(host string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetHost", host)
+}
+
+// SetHost indicates an expected call of SetHost.
+func (mr *MockJsonRestHandlerMockRecorder) SetHost(host any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetHost", reflect.TypeOf((*MockJsonRestHandler)(nil).SetHost), host)
 }

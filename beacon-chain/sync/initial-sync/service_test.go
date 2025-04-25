@@ -6,25 +6,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/async/abool"
+	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
+	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	p2pt "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/paulbellamy/ratecounter"
-	"github.com/prysmaticlabs/prysm/v5/async/abool"
-	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/kv"
-	dbtest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	p2pt "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -464,7 +464,7 @@ func TestMissingBlobRequest(t *testing.T) {
 			setup: func(t *testing.T) (blocks.ROBlock, *filesystem.BlobStorage) {
 				bk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 2)
 				bm, fs := filesystem.NewEphemeralBlobStorageWithMocker(t)
-				require.NoError(t, bm.CreateFakeIndices(bk.Root(), 1))
+				require.NoError(t, bm.CreateFakeIndices(bk.Root(), bk.Block().Slot(), 1))
 				return bk, fs
 			},
 			nReq: 1,
@@ -474,7 +474,7 @@ func TestMissingBlobRequest(t *testing.T) {
 			setup: func(t *testing.T) (blocks.ROBlock, *filesystem.BlobStorage) {
 				bk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 2)
 				bm, fs := filesystem.NewEphemeralBlobStorageWithMocker(t)
-				require.NoError(t, bm.CreateFakeIndices(bk.Root(), 0, 1))
+				require.NoError(t, bm.CreateFakeIndices(bk.Root(), bk.Block().Slot(), 0, 1))
 				return bk, fs
 			},
 			nReq: 0,
@@ -495,8 +495,8 @@ func TestOriginOutsideRetention(t *testing.T) {
 	bdb := dbtest.SetupDB(t)
 	genesis := time.Unix(0, 0)
 	secsPerEpoch := params.BeaconConfig().SecondsPerSlot * uint64(params.BeaconConfig().SlotsPerEpoch)
-	retentionSeconds := time.Second * time.Duration(uint64(params.BeaconConfig().MinEpochsForBlobsSidecarsRequest+1)*secsPerEpoch)
-	outsideRetention := genesis.Add(retentionSeconds)
+	retentionPeriod := time.Second * time.Duration(uint64(params.BeaconConfig().MinEpochsForBlobsSidecarsRequest+1)*secsPerEpoch)
+	outsideRetention := genesis.Add(retentionPeriod)
 	now := func() time.Time {
 		return outsideRetention
 	}

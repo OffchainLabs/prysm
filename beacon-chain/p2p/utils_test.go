@@ -1,14 +1,14 @@
 package p2p
 
 import (
-	"fmt"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/libp2p/go-libp2p/core/peer"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -27,7 +27,7 @@ func TestVerifyConnectivity(t *testing.T) {
 		{"123.123.123.123", 19000, false, "Dialing an unreachable IP: 123.123.123.123:19000"},
 	}
 	for _, tc := range cases {
-		t.Run(fmt.Sprintf(tc.name),
+		t.Run(tc.name,
 			func(t *testing.T) {
 				verifyConnectivity(tc.address, tc.port, "tcp")
 				logMessage := "IP address is not accessible"
@@ -63,4 +63,20 @@ func TestSerializeENR(t *testing.T) {
 		require.NotNil(t, err)
 		assert.ErrorContains(t, "could not serialize nil record", err)
 	})
+}
+
+func TestConvertPeerIDToNodeID(t *testing.T) {
+	const (
+		peerIDStr         = "16Uiu2HAmRrhnqEfybLYimCiAYer2AtZKDGamQrL1VwRCyeh2YiFc"
+		expectedNodeIDStr = "eed26c5d2425ab95f57246a5dca87317c41cacee4bcafe8bbe57e5965527c290"
+	)
+
+	peerID, err := peer.Decode(peerIDStr)
+	require.NoError(t, err)
+
+	actualNodeID, err := ConvertPeerIDToNodeID(peerID)
+	require.NoError(t, err)
+
+	actualNodeIDStr := actualNodeID.String()
+	require.Equal(t, expectedNodeIDStr, actualNodeIDStr)
 }

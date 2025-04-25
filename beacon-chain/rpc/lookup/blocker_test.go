@@ -3,25 +3,26 @@ package lookup
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"reflect"
 	"testing"
 	"time"
 
+	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
+	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/testutil"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpbalpha "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	mockChain "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
-	testDB "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/testutil"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpbalpha "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestGetBlock(t *testing.T) {
@@ -146,8 +147,10 @@ func TestGetBlock(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			pbBlock, err := result.PbPhase0Block()
+			pb, err := result.Proto()
 			require.NoError(t, err)
+			pbBlock, ok := pb.(*ethpbalpha.SignedBeaconBlock)
+			require.Equal(t, true, ok)
 			if !reflect.DeepEqual(pbBlock, tt.want) {
 				t.Error("Expected blocks to equal")
 			}
@@ -164,10 +167,8 @@ func TestGetBlob(t *testing.T) {
 	db := testDB.SetupDB(t)
 	denebBlock, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 123, 4)
 	require.NoError(t, db.SaveBlock(context.Background(), denebBlock))
-	_, bs, err := filesystem.NewEphemeralBlobStorageWithFs(t)
-	require.NoError(t, err)
-	testSidecars, err := verification.BlobSidecarSliceNoop(blobs)
-	require.NoError(t, err)
+	_, bs := filesystem.NewEphemeralBlobStorageAndFs(t)
+	testSidecars := verification.FakeVerifySliceForTest(t, blobs)
 	for i := range testSidecars {
 		require.NoError(t, bs.Save(testSidecars[i]))
 	}
@@ -298,5 +299,32 @@ func TestGetBlob(t *testing.T) {
 		verifiedBlobs, rpcErr := blocker.Blobs(ctx, "123", nil)
 		assert.Equal(t, rpcErr == nil, true)
 		require.Equal(t, 0, len(verifiedBlobs))
+	})
+	t.Run("no blob at index", func(t *testing.T) {
+		blocker := &BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &ethpbalpha.Checkpoint{Root: blockRoot[:]}},
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:    db,
+			BlobStorage: bs,
+		}
+		noBlobIndex := uint64(len(blobs)) + 1
+		_, rpcErr := blocker.Blobs(ctx, "123", []uint64{0, noBlobIndex})
+		require.NotNil(t, rpcErr)
+		assert.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
+	})
+	t.Run("index too big", func(t *testing.T) {
+		blocker := &BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &ethpbalpha.Checkpoint{Root: blockRoot[:]}},
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:    db,
+			BlobStorage: bs,
+		}
+		_, rpcErr := blocker.Blobs(ctx, "123", []uint64{0, math.MaxUint})
+		require.NotNil(t, rpcErr)
+		assert.Equal(t, core.ErrorReason(core.BadRequest), rpcErr.Reason)
 	})
 }

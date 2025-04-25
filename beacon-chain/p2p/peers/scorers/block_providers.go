@@ -6,11 +6,11 @@ import (
 	"sort"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/crypto/rand"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/peerdata"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
 )
 
 var _ Scorer = (*BlockProviderScorer)(nil)
@@ -98,11 +98,11 @@ func newBlockProviderScorer(store *peerdata.Store, config *BlockProviderScorerCo
 func (s *BlockProviderScorer) Score(pid peer.ID) float64 {
 	s.store.RLock()
 	defer s.store.RUnlock()
-	return s.score(pid)
+	return s.scoreNoLock(pid)
 }
 
-// score is a lock-free version of Score.
-func (s *BlockProviderScorer) score(pid peer.ID) float64 {
+// scoreNoLock is a lock-free version of Score.
+func (s *BlockProviderScorer) scoreNoLock(pid peer.ID) float64 {
 	score := float64(0)
 	peerData, ok := s.store.PeerData(pid)
 	// Boost score of new peers or peers that haven't been accessed for too long.
@@ -124,9 +124,12 @@ func (s *BlockProviderScorer) Params() *BlockProviderScorerConfig {
 
 // IncrementProcessedBlocks increments the number of blocks that have been successfully processed.
 func (s *BlockProviderScorer) IncrementProcessedBlocks(pid peer.ID, cnt uint64) {
+	if pid == "" {
+		return
+	}
 	s.store.Lock()
 	defer s.store.Unlock()
-	defer s.touch(pid)
+	defer s.touchNoLock(pid)
 
 	if cnt <= 0 {
 		return
@@ -145,11 +148,11 @@ func (s *BlockProviderScorer) IncrementProcessedBlocks(pid peer.ID, cnt uint64) 
 func (s *BlockProviderScorer) Touch(pid peer.ID, t ...time.Time) {
 	s.store.Lock()
 	defer s.store.Unlock()
-	s.touch(pid, t...)
+	s.touchNoLock(pid, t...)
 }
 
-// touch is a lock-free version of Touch.
-func (s *BlockProviderScorer) touch(pid peer.ID, t ...time.Time) {
+// touchNoLock is a lock-free version of Touch.
+func (s *BlockProviderScorer) touchNoLock(pid peer.ID, t ...time.Time) {
 	peerData := s.store.PeerDataGetOrCreate(pid)
 	if len(t) == 1 {
 		peerData.BlockProviderUpdated = t[0]
@@ -162,11 +165,11 @@ func (s *BlockProviderScorer) touch(pid peer.ID, t ...time.Time) {
 func (s *BlockProviderScorer) ProcessedBlocks(pid peer.ID) uint64 {
 	s.store.RLock()
 	defer s.store.RUnlock()
-	return s.processedBlocks(pid)
+	return s.processedBlocksNoLock(pid)
 }
 
-// processedBlocks is a lock-free version of ProcessedBlocks.
-func (s *BlockProviderScorer) processedBlocks(pid peer.ID) uint64 {
+// processedBlocksNoLock is a lock-free version of ProcessedBlocks.
+func (s *BlockProviderScorer) processedBlocksNoLock(pid peer.ID) uint64 {
 	if peerData, ok := s.store.PeerData(pid); ok {
 		return peerData.ProcessedBlocks
 	}
@@ -177,13 +180,13 @@ func (s *BlockProviderScorer) processedBlocks(pid peer.ID) uint64 {
 // Block provider scorer cannot guarantee that lower score of a peer is indeed a sign of a bad peer.
 // Therefore this scorer never marks peers as bad, and relies on scores to probabilistically sort
 // out low-scorers (see WeightSorted method).
-func (_ *BlockProviderScorer) IsBadPeer(_ peer.ID) bool {
-	return false
+func (*BlockProviderScorer) IsBadPeer(_ peer.ID) error {
+	return nil
 }
 
 // BadPeers returns the peers that are considered bad.
 // No peers are considered bad by block providers scorer.
-func (_ *BlockProviderScorer) BadPeers() []peer.ID {
+func (*BlockProviderScorer) BadPeers() []peer.ID {
 	return []peer.ID{}
 }
 
@@ -277,9 +280,9 @@ func (s *BlockProviderScorer) mapScoresAndPeers(
 	peers := make([]peer.ID, len(pids))
 	for i, pid := range pids {
 		if scoreFn != nil {
-			scores[pid] = scoreFn(pid, s.score(pid))
+			scores[pid] = scoreFn(pid, s.scoreNoLock(pid))
 		} else {
-			scores[pid] = s.score(pid)
+			scores[pid] = s.scoreNoLock(pid)
 		}
 		peers[i] = pid
 	}
@@ -293,9 +296,9 @@ func (s *BlockProviderScorer) FormatScorePretty(pid peer.ID) string {
 	if !features.Get().EnablePeerScorer {
 		return "disabled"
 	}
-	score := s.score(pid)
+	score := s.scoreNoLock(pid)
 	return fmt.Sprintf("[%0.1f%%, raw: %0.2f,  blocks: %d/%d]",
-		(score/s.MaxScore())*100, score, s.processedBlocks(pid), s.config.ProcessedBlocksCap)
+		(score/s.MaxScore())*100, score, s.processedBlocksNoLock(pid), s.config.ProcessedBlocksCap)
 }
 
 // MaxScore exposes maximum score attainable by peers.

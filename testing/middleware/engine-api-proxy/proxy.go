@@ -9,15 +9,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/network"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/network"
 	"github.com/sirupsen/logrus"
 )
 
@@ -240,7 +239,7 @@ func (p *Proxy) sendHttpRequest(req *http.Request, requestBytes []byte) (*http.R
 	}
 
 	// Set the modified request as the proxy request body.
-	proxyReq.Body = ioutil.NopCloser(bytes.NewBuffer(requestBytes))
+	proxyReq.Body = io.NopCloser(bytes.NewBuffer(requestBytes))
 
 	// Required proxy headers for forwarding JSON-RPC requests to the execution client.
 	proxyReq.Header.Set("Host", req.Host)
@@ -261,14 +260,14 @@ func (p *Proxy) sendHttpRequest(req *http.Request, requestBytes []byte) (*http.R
 
 // Peek into the bytes of an HTTP request's body.
 func parseRequestBytes(req *http.Request) ([]byte, error) {
-	requestBytes, err := ioutil.ReadAll(req.Body)
+	requestBytes, err := io.ReadAll(req.Body)
 	if err != nil {
 		return nil, err
 	}
 	if err = req.Body.Close(); err != nil {
 		return nil, err
 	}
-	req.Body = ioutil.NopCloser(bytes.NewBuffer(requestBytes))
+	req.Body = io.NopCloser(bytes.NewBuffer(requestBytes))
 	return requestBytes, nil
 }
 

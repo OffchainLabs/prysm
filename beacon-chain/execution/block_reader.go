@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution/types"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/types"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	"go.opencensus.io/trace"
 )
 
 // searchThreshold to apply for when searching for blocks of a particular time. If the buffer
@@ -31,10 +31,10 @@ func (s *Service) BlockExists(ctx context.Context, hash common.Hash) (bool, *big
 		if err != nil {
 			return false, nil, err
 		}
-		span.AddAttributes(trace.BoolAttribute("blockCacheHit", true))
+		span.SetAttributes(trace.BoolAttribute("blockCacheHit", true))
 		return true, hdrInfo.Number, nil
 	}
-	span.AddAttributes(trace.BoolAttribute("blockCacheHit", false))
+	span.SetAttributes(trace.BoolAttribute("blockCacheHit", false))
 	header, err := s.HeaderByHash(ctx, hash)
 	if err != nil {
 		return false, big.NewInt(0), errors.Wrap(err, "could not query block with given hash")
@@ -56,10 +56,10 @@ func (s *Service) BlockHashByHeight(ctx context.Context, height *big.Int) (commo
 		if err != nil {
 			return [32]byte{}, err
 		}
-		span.AddAttributes(trace.BoolAttribute("headerCacheHit", true))
+		span.SetAttributes(trace.BoolAttribute("headerCacheHit", true))
 		return hInfo.Hash, nil
 	}
-	span.AddAttributes(trace.BoolAttribute("headerCacheHit", false))
+	span.SetAttributes(trace.BoolAttribute("headerCacheHit", false))
 
 	if s.rpcClient == nil {
 		err := errors.New("nil rpc client")

@@ -6,7 +6,7 @@ go_library(
         "progress.go",
         "structs.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/validator/db/common",
+    importpath = "github.com/OffchainLabs/prysm/v6/validator/db/common",
     visibility = ["//visibility:public"],
     deps = [
         "//config/fieldparams:go_default_library",

@@ -4,21 +4,20 @@ import (
 	"context"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/math"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epoch"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/math"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestProcessRewardsAndPenaltiesPrecompute(t *testing.T) {
@@ -57,90 +56,6 @@ func TestProcessRewardsAndPenaltiesPrecompute(t *testing.T) {
 	// Indices that did not vote, lost more money
 	wanted = uint64(31999873505)
 	assert.Equal(t, wanted, beaconState.Balances()[0], "Unexpected balance")
-}
-
-func TestAttestationDeltaPrecompute(t *testing.T) {
-	e := params.BeaconConfig().SlotsPerEpoch
-	validatorCount := uint64(2048)
-	base := buildState(e+2, validatorCount)
-	atts := make([]*ethpb.PendingAttestation, 3)
-	var emptyRoot [32]byte
-	for i := 0; i < len(atts); i++ {
-		atts[i] = &ethpb.PendingAttestation{
-			Data: &ethpb.AttestationData{
-				Target: &ethpb.Checkpoint{
-					Root: emptyRoot[:],
-				},
-				Source: &ethpb.Checkpoint{
-					Root: emptyRoot[:],
-				},
-				BeaconBlockRoot: emptyRoot[:],
-			},
-			AggregationBits: bitfield.Bitlist{0xC0, 0xC0, 0xC0, 0xC0, 0x00, 0x00, 0x00, 0x00, 0x01},
-			InclusionDelay:  1,
-		}
-	}
-	base.PreviousEpochAttestations = atts
-	beaconState, err := state_native.InitializeFromProtoPhase0(base)
-	require.NoError(t, err)
-	slashedAttestedIndices := []primitives.ValidatorIndex{1413}
-	for _, i := range slashedAttestedIndices {
-		vs := beaconState.Validators()
-		vs[i].Slashed = true
-		require.Equal(t, nil, beaconState.SetValidators(vs))
-	}
-
-	vp, bp, err := New(context.Background(), beaconState)
-	require.NoError(t, err)
-	vp, bp, err = ProcessAttestations(context.Background(), beaconState, vp, bp)
-	require.NoError(t, err)
-
-	// Add some variances to target and head balances.
-	// See: https://github.com/prysmaticlabs/prysm/issues/5593
-	bp.PrevEpochTargetAttested /= 2
-	bp.PrevEpochHeadAttested = bp.PrevEpochHeadAttested * 2 / 3
-	rewards, penalties, err := AttestationsDelta(beaconState, bp, vp)
-	require.NoError(t, err)
-	attestedBalance, err := epoch.AttestingBalance(context.Background(), beaconState, atts)
-	require.NoError(t, err)
-	totalBalance, err := helpers.TotalActiveBalance(beaconState)
-	require.NoError(t, err)
-
-	attestedIndices := []primitives.ValidatorIndex{55, 1339, 1746, 1811, 1569}
-	for _, i := range attestedIndices {
-		base, err := baseReward(beaconState, i)
-		require.NoError(t, err, "Could not get base reward")
-
-		// Base rewards for getting source right
-		wanted := attestedBalance*base/totalBalance +
-			bp.PrevEpochTargetAttested*base/totalBalance +
-			bp.PrevEpochHeadAttested*base/totalBalance
-		// Base rewards for proposer and attesters working together getting attestation
-		// on chain in the fatest manner
-		proposerReward := base / params.BeaconConfig().ProposerRewardQuotient
-		wanted += (base-proposerReward)*uint64(params.BeaconConfig().MinAttestationInclusionDelay) - 1
-		assert.Equal(t, wanted, rewards[i], "Unexpected reward balance for validator with index %d", i)
-		// Since all these validators attested, they shouldn't get penalized.
-		assert.Equal(t, uint64(0), penalties[i], "Unexpected penalty balance")
-	}
-
-	for _, i := range slashedAttestedIndices {
-		base, err := baseReward(beaconState, i)
-		assert.NoError(t, err, "Could not get base reward")
-		assert.Equal(t, uint64(0), rewards[i], "Unexpected slashed indices reward balance")
-		assert.Equal(t, 3*base, penalties[i], "Unexpected slashed indices penalty balance")
-	}
-
-	nonAttestedIndices := []primitives.ValidatorIndex{434, 677, 872, 791}
-	for _, i := range nonAttestedIndices {
-		base, err := baseReward(beaconState, i)
-		assert.NoError(t, err, "Could not get base reward")
-		wanted := 3 * base
-		// Since all these validators did not attest, they shouldn't get rewarded.
-		assert.Equal(t, uint64(0), rewards[i], "Unexpected reward balance")
-		// Base penalties for not attesting.
-		assert.Equal(t, wanted, penalties[i], "Unexpected penalty balance")
-	}
 }
 
 func TestAttestationDeltas_ZeroEpoch(t *testing.T) {

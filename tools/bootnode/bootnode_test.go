@@ -5,17 +5,18 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io"
+	"os"
 	"testing"
 	"time"
 
+	ecdsaprysm "github.com/OffchainLabs/prysm/v6/crypto/ecdsa"
+	"github.com/OffchainLabs/prysm/v6/network"
+	_ "github.com/OffchainLabs/prysm/v6/runtime/maxprocs"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/libp2p/go-libp2p/core/crypto"
-	ecdsaprysm "github.com/prysmaticlabs/prysm/v5/crypto/ecdsa"
-	"github.com/prysmaticlabs/prysm/v5/network"
-	_ "github.com/prysmaticlabs/prysm/v5/runtime/maxprocs"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/sirupsen/logrus"
 )
 
@@ -23,7 +24,7 @@ func TestMain(m *testing.M) {
 	logrus.SetLevel(logrus.DebugLevel)
 	logrus.SetOutput(io.Discard)
 
-	m.Run()
+	os.Exit(m.Run())
 }
 
 func TestBootnode_OK(t *testing.T) {
@@ -31,10 +32,13 @@ func TestBootnode_OK(t *testing.T) {
 	require.NoError(t, err)
 	privKey := extractPrivateKey()
 	cfg := discover.Config{
-		PrivateKey: privKey,
+		PrivateKey:              privKey,
+		PingInterval:            100 * time.Millisecond,
+		NoFindnodeLivenessCheck: true,
 	}
 	listener := createListener(ipAddr, 4000, cfg)
 	defer listener.Close()
+	time.Sleep(5 * time.Second)
 
 	cfg.PrivateKey = extractPrivateKey()
 	bootNode, err := enode.Parse(enode.ValidSchemes, listener.Self().String())

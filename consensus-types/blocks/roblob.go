@@ -1,13 +1,10 @@
 package blocks
 
 import (
-	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 )
-
-var errNilBlockHeader = errors.New("received nil beacon block header")
 
 // ROBlob represents a read-only blob sidecar with its block root.
 type ROBlob struct {
@@ -15,21 +12,31 @@ type ROBlob struct {
 	root [32]byte
 }
 
+func roblobNilCheck(b *ethpb.BlobSidecar) error {
+	if b == nil {
+		return errNilBlob
+	}
+	if b.SignedBlockHeader == nil || b.SignedBlockHeader.Header == nil {
+		return errNilBlockHeader
+	}
+	if len(b.SignedBlockHeader.Signature) == 0 {
+		return errMissingBlockSignature
+	}
+	return nil
+}
+
 // NewROBlobWithRoot creates a new ROBlob with a given root.
 func NewROBlobWithRoot(b *ethpb.BlobSidecar, root [32]byte) (ROBlob, error) {
-	if b == nil {
-		return ROBlob{}, errNilBlock
+	if err := roblobNilCheck(b); err != nil {
+		return ROBlob{}, err
 	}
 	return ROBlob{BlobSidecar: b, root: root}, nil
 }
 
 // NewROBlob creates a new ROBlob by computing the HashTreeRoot of the header.
 func NewROBlob(b *ethpb.BlobSidecar) (ROBlob, error) {
-	if b == nil {
-		return ROBlob{}, errNilBlock
-	}
-	if b.SignedBlockHeader == nil || b.SignedBlockHeader.Header == nil {
-		return ROBlob{}, errNilBlockHeader
+	if err := roblobNilCheck(b); err != nil {
+		return ROBlob{}, err
 	}
 	root, err := b.SignedBlockHeader.Header.HashTreeRoot()
 	if err != nil {

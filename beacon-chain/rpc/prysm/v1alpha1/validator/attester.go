@@ -2,28 +2,34 @@ package validator
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	"go.opencensus.io/trace"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // GetAttestationData requests that the beacon node produce an attestation data object,
 // which the validator acting as an attester will then sign.
 func (vs *Server) GetAttestationData(ctx context.Context, req *ethpb.AttestationDataRequest) (*ethpb.AttestationData, error) {
 	ctx, span := trace.StartSpan(ctx, "AttesterServer.RequestAttestation")
 	defer span.End()
-	span.AddAttributes(
+	span.SetAttributes(
 		trace.Int64Attribute("slot", int64(req.Slot)),
 		trace.Int64Attribute("committeeIndex", int64(req.CommitteeIndex)),
 	)
@@ -38,57 +44,78 @@ func (vs *Server) GetAttestationData(ctx context.Context, req *ethpb.Attestation
 	return res, nil
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // ProposeAttestation is a function called by an attester to vote
-// on a block via an attestation object as defined in the Ethereum Serenity specification.
+// on a block via an attestation object as defined in the Ethereum specification.
 func (vs *Server) ProposeAttestation(ctx context.Context, att *ethpb.Attestation) (*ethpb.AttestResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "AttesterServer.ProposeAttestation")
 	defer span.End()
 
-	if _, err := bls.SignatureFromBytes(att.Signature); err != nil {
-		return nil, status.Error(codes.InvalidArgument, "Incorrect attestation signature")
-	}
-
-	root, err := att.Data.HashTreeRoot()
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not tree hash attestation: %v", err)
-	}
-
-	// Broadcast the unaggregated attestation on a feed to notify other services in the beacon node
-	// of a received unaggregated attestation.
-	vs.OperationNotifier.OperationFeed().Send(&feed.Event{
-		Type: operation.UnaggregatedAttReceived,
-		Data: &operation.UnAggregatedAttReceivedData{
-			Attestation: att,
-		},
-	})
-
-	// Determine subnet to broadcast attestation to
-	wantedEpoch := slots.ToEpoch(att.Data.Slot)
-	vals, err := vs.HeadFetcher.HeadValidatorsIndices(ctx, wantedEpoch)
+	resp, err := vs.proposeAtt(ctx, att, att.GetData().CommitteeIndex)
 	if err != nil {
 		return nil, err
 	}
-	subnet := helpers.ComputeSubnetFromCommitteeAndSlot(uint64(len(vals)), att.Data.CommitteeIndex, att.Data.Slot)
 
-	// Broadcast the new attestation to the network.
-	if err := vs.P2P.BroadcastAttestation(ctx, subnet, att); err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not broadcast attestation: %v", err)
+	if features.Get().EnableExperimentalAttestationPool {
+		if err = vs.AttestationCache.Add(att); err != nil {
+			log.WithError(err).Error("Could not save attestation")
+		}
+	} else {
+		go func() {
+			attCopy := att.Copy()
+			if err := vs.AttPool.SaveUnaggregatedAttestation(attCopy); err != nil {
+				log.WithError(err).Error("Could not save unaggregated attestation")
+				return
+			}
+		}()
 	}
 
-	go func() {
-		ctx = trace.NewContext(context.Background(), trace.FromContext(ctx))
-		attCopy := ethpb.CopyAttestation(att)
-		if err := vs.AttPool.SaveUnaggregatedAttestation(attCopy); err != nil {
-			log.WithError(err).Error("Could not handle attestation in operations service")
-			return
-		}
-	}()
-
-	return &ethpb.AttestResponse{
-		AttestationDataRoot: root[:],
-	}, nil
+	return resp, nil
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
+// ProposeAttestationElectra is a function called by an attester to vote
+// on a block via an attestation object as defined in the Ethereum specification.
+func (vs *Server) ProposeAttestationElectra(ctx context.Context, singleAtt *ethpb.SingleAttestation) (*ethpb.AttestResponse, error) {
+	ctx, span := trace.StartSpan(ctx, "AttesterServer.ProposeAttestationElectra")
+	defer span.End()
+
+	resp, err := vs.proposeAtt(ctx, singleAtt, singleAtt.GetCommitteeIndex())
+	if err != nil {
+		return nil, err
+	}
+
+	targetState, err := vs.AttestationStateFetcher.AttestationTargetState(ctx, singleAtt.Data.Target)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "Could not get target state")
+	}
+	committee, err := helpers.BeaconCommitteeFromState(ctx, targetState, singleAtt.Data.Slot, singleAtt.GetCommitteeIndex())
+	if err != nil {
+		return nil, status.Error(codes.Internal, "Could not get committee")
+	}
+
+	singleAttCopy := singleAtt.Copy()
+	att := singleAttCopy.ToAttestationElectra(committee)
+	if features.Get().EnableExperimentalAttestationPool {
+		if err = vs.AttestationCache.Add(att); err != nil {
+			log.WithError(err).Error("Could not save attestation")
+		}
+	} else {
+		go func() {
+			if err := vs.AttPool.SaveUnaggregatedAttestation(att); err != nil {
+				log.WithError(err).Error("Could not save unaggregated attestation")
+				return
+			}
+		}()
+	}
+
+	return resp, nil
+}
+
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // SubscribeCommitteeSubnets subscribes to the committee ID subnet given subscribe request.
 func (vs *Server) SubscribeCommitteeSubnets(ctx context.Context, req *ethpb.CommitteeSubnetsSubscribeRequest) (*emptypb.Empty, error) {
 	ctx, span := trace.StartSpan(ctx, "AttesterServer.SubscribeCommitteeSubnets")
@@ -135,4 +162,62 @@ func (vs *Server) SubscribeCommitteeSubnets(ctx context.Context, req *ethpb.Comm
 	}
 
 	return &emptypb.Empty{}, nil
+}
+
+func (vs *Server) proposeAtt(
+	ctx context.Context,
+	att ethpb.Att,
+	committeeIndex primitives.CommitteeIndex,
+) (*ethpb.AttestResponse, error) {
+	if _, err := bls.SignatureFromBytes(att.GetSignature()); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "Incorrect attestation signature")
+	}
+
+	root, err := att.GetData().HashTreeRoot()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get attestation root: %v", err)
+	}
+
+	if att.Version() < version.Electra && slots.ToEpoch(vs.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().ElectraForkEpoch {
+		return nil, status.Error(codes.InvalidArgument, "old attestation format, ProposeAttestationElectra should be called post Electra")
+	}
+
+	if att.Version() >= version.Electra && slots.ToEpoch(vs.TimeFetcher.CurrentSlot()) < params.BeaconConfig().ElectraForkEpoch {
+		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("ProposeAttestationElectra not supported yet. The current epoch is %d supported starting epoch is %d", slots.ToEpoch(vs.TimeFetcher.CurrentSlot()), params.BeaconConfig().ElectraForkEpoch))
+	}
+
+	// Broadcast the unaggregated attestation on a feed to notify other services in the beacon node
+	// of a received unaggregated attestation.
+	if att.IsSingle() {
+		vs.OperationNotifier.OperationFeed().Send(&feed.Event{
+			Type: operation.SingleAttReceived,
+			Data: &operation.SingleAttReceivedData{
+				Attestation: att,
+			},
+		})
+	} else {
+		vs.OperationNotifier.OperationFeed().Send(&feed.Event{
+			Type: operation.UnaggregatedAttReceived,
+			Data: &operation.UnAggregatedAttReceivedData{
+				Attestation: att,
+			},
+		})
+	}
+
+	// Determine subnet to broadcast attestation to
+	wantedEpoch := slots.ToEpoch(att.GetData().Slot)
+	vals, err := vs.HeadFetcher.HeadValidatorsIndices(ctx, wantedEpoch)
+	if err != nil {
+		return nil, err
+	}
+	subnet := helpers.ComputeSubnetFromCommitteeAndSlot(uint64(len(vals)), committeeIndex, att.GetData().Slot)
+
+	// Broadcast the new attestation to the network.
+	if err := vs.P2P.BroadcastAttestation(ctx, subnet, att); err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not broadcast attestation: %v", err)
+	}
+
+	return &ethpb.AttestResponse{
+		AttestationDataRoot: root[:],
+	}, nil
 }

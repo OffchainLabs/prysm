@@ -1,7 +1,10 @@
 package structs
 
 type SidecarsResponse struct {
-	Data []*Sidecar `json:"data"`
+	Version             string     `json:"version"`
+	Data                []*Sidecar `json:"data"`
+	ExecutionOptimistic bool       `json:"execution_optimistic"`
+	Finalized           bool       `json:"finalized"`
 }
 
 type Sidecar struct {
@@ -11,4 +14,13 @@ type Sidecar struct {
 	KzgCommitment            string                   `json:"kzg_commitment"`
 	KzgProof                 string                   `json:"kzg_proof"`
 	CommitmentInclusionProof []string                 `json:"kzg_commitment_inclusion_proof"`
+}
+
+type BlobSidecars struct {
+	Sidecars []*Sidecar `json:"sidecars"`
+}
+
+type PublishBlobsRequest struct {
+	BlobSidecars *BlobSidecars `json:"blob_sidecars"`
+	BlockRoot    string        `json:"block_root"`
 }

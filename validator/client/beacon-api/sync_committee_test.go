@@ -8,16 +8,17 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api/apiutil"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v6/validator/client/beacon-api/mock"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
 	"go.uber.org/mock/gomock"
 )
 
@@ -46,7 +47,7 @@ func TestSubmitSyncMessage_Valid(t *testing.T) {
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
-		context.Background(),
+		gomock.Any(),
 		"/eth/v1/beacon/pool/sync_committees",
 		nil,
 		bytes.NewBuffer(marshalledJsonRegistrations),
@@ -55,7 +56,7 @@ func TestSubmitSyncMessage_Valid(t *testing.T) {
 		nil,
 	).Times(1)
 
-	protoSyncCommiteeMessage := ethpb.SyncCommitteeMessage{
+	protoSyncCommitteeMessage := ethpb.SyncCommitteeMessage{
 		Slot:           primitives.Slot(42),
 		BlockRoot:      decodedBeaconBlockRoot,
 		ValidatorIndex: primitives.ValidatorIndex(12345),
@@ -63,7 +64,7 @@ func TestSubmitSyncMessage_Valid(t *testing.T) {
 	}
 
 	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
-	res, err := validatorClient.SubmitSyncMessage(context.Background(), &protoSyncCommiteeMessage)
+	res, err := validatorClient.SubmitSyncMessage(context.Background(), &protoSyncCommitteeMessage)
 
 	assert.DeepEqual(t, new(empty.Empty), res)
 	require.NoError(t, err)
@@ -75,7 +76,7 @@ func TestSubmitSyncMessage_BadRequest(t *testing.T) {
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
-		context.Background(),
+		gomock.Any(),
 		"/eth/v1/beacon/pool/sync_committees",
 		nil,
 		gomock.Any(),
@@ -139,7 +140,7 @@ func TestGetSyncMessageBlockRoot(t *testing.T) {
 			ctx := context.Background()
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 			jsonRestHandler.EXPECT().Get(
-				ctx,
+				gomock.Any(),
 				"/eth/v1/beacon/blocks/head/root",
 				&structs.BlockRootResponse{},
 			).SetArg(
@@ -150,7 +151,7 @@ func TestGetSyncMessageBlockRoot(t *testing.T) {
 			).Times(1)
 
 			validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
-			actualResponse, err := validatorClient.getSyncMessageBlockRoot(ctx)
+			actualResponse, err := validatorClient.syncMessageBlockRoot(ctx)
 			if test.expectedErrorMessage != "" {
 				require.ErrorContains(t, test.expectedErrorMessage, err)
 				return
@@ -209,7 +210,7 @@ func TestGetSyncCommitteeContribution(t *testing.T) {
 			ctx := context.Background()
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 			jsonRestHandler.EXPECT().Get(
-				ctx,
+				gomock.Any(),
 				"/eth/v1/beacon/blocks/head/root",
 				&structs.BlockRootResponse{},
 			).SetArg(
@@ -224,7 +225,7 @@ func TestGetSyncCommitteeContribution(t *testing.T) {
 			).Times(1)
 
 			jsonRestHandler.EXPECT().Get(
-				ctx,
+				gomock.Any(),
 				fmt.Sprintf("/eth/v1/validator/sync_committee_contribution?beacon_block_root=%s&slot=%d&subcommittee_index=%d",
 					blockRoot, uint64(request.Slot), request.SubnetId),
 				&structs.ProduceSyncCommitteeContributionResponse{},
@@ -236,7 +237,7 @@ func TestGetSyncCommitteeContribution(t *testing.T) {
 			).Times(1)
 
 			validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
-			actualResponse, err := validatorClient.getSyncCommitteeContribution(ctx, request)
+			actualResponse, err := validatorClient.syncCommitteeContribution(ctx, request)
 			if test.expectedErrMsg != "" {
 				require.ErrorContains(t, test.expectedErrMsg, err)
 				return
@@ -316,7 +317,7 @@ func TestGetSyncSubCommitteeIndex(t *testing.T) {
 			require.NoError(t, err)
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 			jsonRestHandler.EXPECT().Post(
-				ctx,
+				gomock.Any(),
 				validatorsEndpoint,
 				nil,
 				bytes.NewBuffer(valsReqBytes),
@@ -348,10 +349,10 @@ func TestGetSyncSubCommitteeIndex(t *testing.T) {
 					queryParams.Add("status", st)
 				}
 
-				query := buildURL("/eth/v1/beacon/states/head/validators", queryParams)
+				query := apiutil.BuildURL("/eth/v1/beacon/states/head/validators", queryParams)
 
 				jsonRestHandler.EXPECT().Get(
-					ctx,
+					gomock.Any(),
 					query,
 					&structs.GetValidatorsResponse{},
 				).Return(
@@ -368,7 +369,7 @@ func TestGetSyncSubCommitteeIndex(t *testing.T) {
 			}
 
 			jsonRestHandler.EXPECT().Post(
-				ctx,
+				gomock.Any(),
 				fmt.Sprintf("%s/%d", syncDutiesEndpoint, slots.ToEpoch(slot)),
 				nil,
 				bytes.NewBuffer(validatorIndicesBytes),
@@ -394,7 +395,7 @@ func TestGetSyncSubCommitteeIndex(t *testing.T) {
 					jsonRestHandler: jsonRestHandler,
 				},
 			}
-			actualResponse, err := validatorClient.getSyncSubcommitteeIndex(ctx, &ethpb.SyncSubcommitteeIndexRequest{
+			actualResponse, err := validatorClient.syncSubcommitteeIndex(ctx, &ethpb.SyncSubcommitteeIndexRequest{
 				PublicKey: pubkey,
 				Slot:      slot,
 			})

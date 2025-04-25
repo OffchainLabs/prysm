@@ -5,20 +5,20 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/prysmaticlabs/prysm/v5/api"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"go.opencensus.io/trace"
+	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // GetVersion returns the beacon node and validator client versions
 func (s *Server) GetVersion(w http.ResponseWriter, r *http.Request) {
-	ctx, span := trace.StartSpan(r.Context(), "validator.web.health.GetVersion")
+	ctx, span := trace.StartSpan(r.Context(), "validator.web.health.Version")
 	defer span.End()
 
-	beacon, err := s.beaconNodeClient.GetVersion(ctx, &emptypb.Empty{})
+	beacon, err := s.nodeClient.Version(ctx, &emptypb.Empty{})
 	if err != nil {
 		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -51,7 +51,7 @@ func (s *Server) StreamBeaconLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// TODO: StreamBeaconLogs grpc will need to be replaced in the future
-	client, err := s.beaconNodeHealthClient.StreamBeaconLogs(ctx, &emptypb.Empty{})
+	client, err := s.healthClient.StreamBeaconLogs(ctx, &emptypb.Empty{})
 	if err != nil {
 		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -102,8 +102,8 @@ func (s *Server) StreamValidatorLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ch := make(chan []byte, s.streamLogsBufferSize)
-	sub := s.logsStreamer.LogsFeed().Subscribe(ch)
+	ch := make(chan []byte, s.logStreamerBufferSize)
+	sub := s.logStreamer.LogsFeed().Subscribe(ch)
 	defer func() {
 		sub.Unsubscribe()
 		close(ch)
@@ -113,7 +113,7 @@ func (s *Server) StreamValidatorLogs(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", api.KeepAlive)
 
-	recentLogs := s.logsStreamer.GetLastFewLogs()
+	recentLogs := s.logStreamer.GetLastFewLogs()
 	logStrings := make([]string, len(recentLogs))
 	for i, l := range recentLogs {
 		logStrings[i] = string(l)

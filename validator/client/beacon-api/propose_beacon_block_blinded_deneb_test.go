@@ -6,16 +6,15 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	rpctesting "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared/testing"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	rpctesting "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared/testing"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/validator/client/beacon-api/mock"
 	"go.uber.org/mock/gomock"
 )
 
 func TestProposeBeaconBlock_BlindedDeneb(t *testing.T) {
-	t.Skip("TODO: Fix this in the beacon-API PR")
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
@@ -31,8 +30,8 @@ func TestProposeBeaconBlock_BlindedDeneb(t *testing.T) {
 	// Make sure that what we send in the POST body is the marshalled version of the protobuf block
 	headers := map[string]string{"Eth-Consensus-Version": "deneb"}
 	jsonRestHandler.EXPECT().Post(
-		context.Background(),
-		"/eth/v1/beacon/blinded_blocks",
+		gomock.Any(),
+		"/eth/v2/beacon/blinded_blocks",
 		headers,
 		bytes.NewBuffer(denebBytes),
 		nil,

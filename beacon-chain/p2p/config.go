@@ -1,9 +1,11 @@
 package p2p
 
 import (
-	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
+	"time"
+
+	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 )
 
 // This is the default queue size used if we have specified an invalid one.
@@ -12,28 +14,30 @@ const defaultPubsubQueueSize = 600
 // Config for the p2p service. These parameters are set from application level flags
 // to initialize the p2p service.
 type Config struct {
-	NoDiscovery         bool
-	EnableUPnP          bool
-	StaticPeerID        bool
-	StaticPeers         []string
-	BootstrapNodeAddr   []string
-	Discv5BootStrapAddr []string
-	RelayNodeAddr       string
-	LocalIP             string
-	HostAddress         string
-	HostDNS             string
-	PrivateKey          string
-	DataDir             string
-	MetaDataDir         string
-	TCPPort             uint
-	UDPPort             uint
-	MaxPeers            uint
-	QueueSize           uint
-	AllowListCIDR       string
-	DenyListCIDR        []string
-	StateNotifier       statefeed.Notifier
-	DB                  db.ReadOnlyDatabase
-	ClockWaiter         startup.ClockWaiter
+	NoDiscovery          bool
+	EnableUPnP           bool
+	StaticPeerID         bool
+	DisableLivenessCheck bool
+	StaticPeers          []string
+	Discv5BootStrapAddrs []string
+	RelayNodeAddr        string
+	LocalIP              string
+	HostAddress          string
+	HostDNS              string
+	PrivateKey           string
+	DataDir              string
+	MetaDataDir          string
+	QUICPort             uint
+	TCPPort              uint
+	UDPPort              uint
+	PingInterval         time.Duration
+	MaxPeers             uint
+	QueueSize            uint
+	AllowListCIDR        string
+	DenyListCIDR         []string
+	StateNotifier        statefeed.Notifier
+	DB                   db.ReadOnlyDatabase
+	ClockWaiter          startup.ClockWaiter
 }
 
 // validateConfig validates whether the values provided are accurate and will set

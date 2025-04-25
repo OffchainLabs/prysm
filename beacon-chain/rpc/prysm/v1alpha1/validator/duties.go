@@ -3,18 +3,21 @@ package validator
 import (
 	"context"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	coreTime "github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // GetDuties returns the duties assigned to a list of validators specified
 // in the request object.
 func (vs *Server) GetDuties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.DutiesResponse, error) {
@@ -52,14 +55,29 @@ func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.
 			return nil, status.Errorf(codes.Internal, "Could not process slots up to %d: %v", epochStartSlot, err)
 		}
 	}
-	committeeAssignments, proposerIndexToSlots, err := helpers.CommitteeAssignments(ctx, s, req.Epoch)
+
+	requestIndices := make([]primitives.ValidatorIndex, 0, len(req.PublicKeys))
+	for _, pubKey := range req.PublicKeys {
+		idx, ok := s.ValidatorIndexByPubkey(bytesutil.ToBytes48(pubKey))
+		if !ok {
+			continue
+		}
+		requestIndices = append(requestIndices, idx)
+	}
+
+	assignments, err := helpers.CommitteeAssignments(ctx, s, req.Epoch, requestIndices)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not compute committee assignments: %v", err)
 	}
 	// Query the next epoch assignments for committee subnet subscriptions.
-	nextCommitteeAssignments, _, err := helpers.CommitteeAssignments(ctx, s, req.Epoch+1)
+	nextEpochAssignments, err := helpers.CommitteeAssignments(ctx, s, req.Epoch+1, requestIndices)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not compute next committee assignments: %v", err)
+	}
+
+	proposalSlots, err := helpers.ProposerAssignments(ctx, s, req.Epoch)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not compute proposer slots: %v", err)
 	}
 
 	validatorAssignments := make([]*ethpb.DutiesResponse_Duty, 0, len(req.PublicKeys))
@@ -81,20 +99,20 @@ func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.
 
 			assignment.ValidatorIndex = idx
 			assignment.Status = s
-			assignment.ProposerSlots = proposerIndexToSlots[idx]
+			assignment.ProposerSlots = proposalSlots[idx]
 
 			// The next epoch has no lookup for proposer indexes.
 			nextAssignment.ValidatorIndex = idx
 			nextAssignment.Status = s
 
-			ca, ok := committeeAssignments[idx]
+			ca, ok := assignments[idx]
 			if ok {
 				assignment.Committee = ca.Committee
 				assignment.AttesterSlot = ca.AttesterSlot
 				assignment.CommitteeIndex = ca.CommitteeIndex
 			}
 			// Save the next epoch assignments.
-			ca, ok = nextCommitteeAssignments[idx]
+			ca, ok = nextEpochAssignments[idx]
 			if ok {
 				nextAssignment.Committee = ca.Committee
 				nextAssignment.AttesterSlot = ca.AttesterSlot
@@ -123,9 +141,9 @@ func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.
 			// Next epoch sync committee duty is assigned with next period sync committee only during
 			// sync period epoch boundary (ie. EPOCHS_PER_SYNC_COMMITTEE_PERIOD - 1). Else wise
 			// next epoch sync committee duty is the same as current epoch.
-			nextSlotToEpoch := slots.ToEpoch(s.Slot() + 1)
+			nextEpoch := req.Epoch + 1
 			currentEpoch := coreTime.CurrentEpoch(s)
-			if slots.SyncCommitteePeriod(nextSlotToEpoch) == slots.SyncCommitteePeriod(currentEpoch)+1 {
+			if slots.SyncCommitteePeriod(nextEpoch) > slots.SyncCommitteePeriod(currentEpoch) {
 				nextAssignment.IsSyncCommittee, err = helpers.IsNextPeriodSyncCommittee(s, idx)
 				if err != nil {
 					return nil, status.Errorf(codes.Internal, "Could not determine next epoch sync committee: %v", err)
@@ -141,12 +159,27 @@ func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.
 		validatorAssignments = append(validatorAssignments, assignment)
 		nextValidatorAssignments = append(nextValidatorAssignments, nextAssignment)
 	}
+	currDependentRoot, err := vs.ForkchoiceFetcher.DependentRoot(currentEpoch)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get dependent root: %v", err)
+	}
+	prevDependentRoot := currDependentRoot
+	if currDependentRoot != [32]byte{} && currentEpoch > 0 {
+		prevDependentRoot, err = vs.ForkchoiceFetcher.DependentRoot(currentEpoch - 1)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not get previous dependent root: %v", err)
+		}
+	}
 	return &ethpb.DutiesResponse{
-		CurrentEpochDuties: validatorAssignments,
-		NextEpochDuties:    nextValidatorAssignments,
+		PreviousDutyDependentRoot: prevDependentRoot[:],
+		CurrentDutyDependentRoot:  currDependentRoot[:],
+		CurrentEpochDuties:        validatorAssignments,
+		NextEpochDuties:           nextValidatorAssignments,
 	}, nil
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // AssignValidatorToSubnet checks the status and pubkey of a particular validator
 // to discern whether persistent subnets need to be registered for them.
 func (vs *Server) AssignValidatorToSubnet(_ context.Context, req *ethpb.AssignValidatorToSubnetRequest) (*emptypb.Empty, error) {

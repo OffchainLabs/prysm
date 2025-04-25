@@ -8,6 +8,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/prysmaticlabs/prysm/v5/cmd"
 	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
@@ -172,64 +178,27 @@ func TestConfigureNetwork_ConfigFile(t *testing.T) {
 	require.NoError(t, os.Remove("flags_test.yaml"))
 }
 
-func TestConfigureInterop(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-
-	tests := []struct {
-		name       string
-		flagSetter func() *cli.Context
-		configName string
-	}{
-		{
-			"nothing set",
-			func() *cli.Context {
-				app := cli.App{}
-				set := flag.NewFlagSet("test", 0)
-				return cli.NewContext(&app, set, nil)
-			},
-			"mainnet",
-		},
-		{
-			"mock votes set",
-			func() *cli.Context {
-				app := cli.App{}
-				set := flag.NewFlagSet("test", 0)
-				set.Bool(flags.InteropMockEth1DataVotesFlag.Name, false, "")
-				assert.NoError(t, set.Set(flags.InteropMockEth1DataVotesFlag.Name, "true"))
-				return cli.NewContext(&app, set, nil)
-			},
-			"interop",
-		},
-		{
-			"validators set",
-			func() *cli.Context {
-				app := cli.App{}
-				set := flag.NewFlagSet("test", 0)
-				set.Uint64(flags.InteropNumValidatorsFlag.Name, 0, "")
-				assert.NoError(t, set.Set(flags.InteropNumValidatorsFlag.Name, "20"))
-				return cli.NewContext(&app, set, nil)
-			},
-			"interop",
-		},
-		{
-			"genesis time set",
-			func() *cli.Context {
-				app := cli.App{}
-				set := flag.NewFlagSet("test", 0)
-				set.Uint64(flags.InteropGenesisTimeFlag.Name, 0, "")
-				assert.NoError(t, set.Set(flags.InteropGenesisTimeFlag.Name, "200"))
-				return cli.NewContext(&app, set, nil)
-			},
-			"interop",
+func TestAliasFlag(t *testing.T) {
+	// Create a new app with the flag
+	app := &cli.App{
+		Flags: []cli.Flag{flags.HTTPServerHost},
+		Action: func(c *cli.Context) error {
+			// Test if the alias works and sets the flag correctly
+			if c.IsSet("grpc-gateway-host") && c.IsSet("http-host") {
+				return nil
+			}
+			return cli.Exit("Alias or flag not set", 1)
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			require.NoError(t, configureInteropConfig(tt.flagSetter()))
-			assert.DeepEqual(t, tt.configName, params.BeaconConfig().ConfigName)
-		})
-	}
+	// Simulate command line arguments that include the alias
+	args := []string{"app", "--grpc-gateway-host", "config.yml"}
+
+	// Run the app with the simulated arguments
+	err := app.Run(args)
+
+	// Check if the alias set the flag correctly
+	assert.NoError(t, err)
 }
 
 func TestConfigureArchivalNode(t *testing.T) {

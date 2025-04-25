@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"encoding/binary"
 
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 // Uint64Root computes the HashTreeRoot Merkleization of
@@ -139,6 +139,25 @@ func WithdrawalSliceRoot(withdrawals []*enginev1.Withdrawal, limit uint64) ([32]
 	bytesRootBufRoot := make([]byte, 32)
 	copy(bytesRootBufRoot, bytesRootBuf.Bytes())
 	return MixInLength(bytesRoot, bytesRootBufRoot), nil
+}
+
+// DepositRequestsSliceRoot computes the HTR of a slice of deposit requests.
+// The limit parameter is used as input to the bitwise merkleization algorithm.
+func DepositRequestsSliceRoot(depositRequests []*enginev1.DepositRequest, limit uint64) ([32]byte, error) {
+	return SliceRoot(depositRequests, limit)
+}
+
+// WithdrawalRequestsSliceRoot computes the HTR of a slice of withdrawal requests from the EL.
+// The limit parameter is used as input to the bitwise merkleization algorithm.
+func WithdrawalRequestsSliceRoot(withdrawalRequests []*enginev1.WithdrawalRequest, limit uint64) ([32]byte, error) {
+	return SliceRoot(withdrawalRequests, limit)
+}
+
+// ConsolidationRequestsSliceRoot computes the HTR of a slice of consolidation requests from the EL.
+// The limit parameter is used as input to the bitwise merkleization algorithm.
+
+func ConsolidationRequestsSliceRoot(consolidationRequests []*enginev1.ConsolidationRequest, limit uint64) ([32]byte, error) {
+	return SliceRoot(consolidationRequests, limit)
 }
 
 // ByteSliceRoot is a helper func to merkleize an arbitrary List[Byte, N]

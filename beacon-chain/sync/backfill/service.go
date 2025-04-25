@@ -3,20 +3,20 @@ package backfill
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/proto/dbval"
+	"github.com/OffchainLabs/prysm/v6/runtime"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/proto/dbval"
-	"github.com/prysmaticlabs/prysm/v5/runtime"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 type Service struct {
@@ -39,6 +39,7 @@ type Service struct {
 	batchImporter   batchImporter
 	blobStore       *filesystem.BlobStorage
 	initSyncWaiter  func() error
+	complete        chan struct{}
 }
 
 var _ runtime.Service = (*Service)(nil)
@@ -118,6 +119,24 @@ func WithVerifierWaiter(viw InitializerWaiter) ServiceOption {
 	}
 }
 
+// WithMinimumSlot allows the user to specify a different backfill minimum slot than the spec default of current - MIN_EPOCHS_FOR_BLOCK_REQUESTS.
+// If this value is greater than current - MIN_EPOCHS_FOR_BLOCK_REQUESTS, it will be ignored with a warning log.
+func WithMinimumSlot(s primitives.Slot) ServiceOption {
+	ms := func(current primitives.Slot) primitives.Slot {
+		specMin := minimumBackfillSlot(current)
+		if s < specMin {
+			return s
+		}
+		log.WithField("userSlot", s).WithField("specMinSlot", specMin).
+			Warn("Ignoring user-specified slot > MIN_EPOCHS_FOR_BLOCK_REQUESTS.")
+		return specMin
+	}
+	return func(s *Service) error {
+		s.ms = ms
+		return nil
+	}
+}
+
 // NewService initializes the backfill Service. Like all implementations of the Service interface,
 // the service won't begin its runloop until Start() is called.
 func NewService(ctx context.Context, su *Store, bStore *filesystem.BlobStorage, cw startup.ClockWaiter, p p2p.P2P, pa PeerAssigner, opts ...ServiceOption) (*Service, error) {
@@ -130,6 +149,7 @@ func NewService(ctx context.Context, su *Store, bStore *filesystem.BlobStorage, 
 		p2p:           p,
 		pa:            pa,
 		batchImporter: defaultBatchImporter,
+		complete:      make(chan struct{}),
 	}
 	for _, o := range opts {
 		if err := o(s); err != nil {
@@ -232,6 +252,7 @@ func (s *Service) scheduleTodos() {
 func (s *Service) Start() {
 	if !s.enabled {
 		log.Info("Backfill service not enabled")
+		s.markComplete()
 		return
 	}
 	ctx, cancel := context.WithCancel(s.ctx)
@@ -255,6 +276,7 @@ func (s *Service) Start() {
 
 	if s.store.isGenesisSync() {
 		log.Info("Backfill short-circuit; node synced from genesis")
+		s.markComplete()
 		return
 	}
 	status := s.store.status()
@@ -263,6 +285,7 @@ func (s *Service) Start() {
 		log.WithField("minimumRequiredSlot", s.ms(s.clock.CurrentSlot())).
 			WithField("backfillLowestSlot", status.LowSlot).
 			Info("Exiting backfill service; minimum block retention slot > lowest backfilled block")
+		s.markComplete()
 		return
 	}
 	s.verifier, s.ctxMap, err = s.initVerifier(ctx)
@@ -289,7 +312,8 @@ func (s *Service) Start() {
 		if ctx.Err() != nil {
 			return
 		}
-		if allComplete := s.updateComplete(); allComplete {
+		if s.updateComplete() {
+			s.markComplete()
 			return
 		}
 		s.importBatches(ctx)
@@ -316,11 +340,11 @@ func (s *Service) downscore(b batch) {
 	s.p2p.Peers().Scorers().BadResponsesScorer().Increment(b.blockPid)
 }
 
-func (s *Service) Stop() error {
+func (*Service) Stop() error {
 	return nil
 }
 
-func (s *Service) Status() error {
+func (*Service) Status() error {
 	return nil
 }
 
@@ -343,5 +367,19 @@ func minimumBackfillSlot(current primitives.Slot) primitives.Slot {
 func newBlobVerifierFromInitializer(ini *verification.Initializer) verification.NewBlobVerifier {
 	return func(b blocks.ROBlob, reqs []verification.Requirement) verification.BlobVerifier {
 		return ini.NewBlobVerifier(b, reqs)
+	}
+}
+
+func (s *Service) markComplete() {
+	close(s.complete)
+	log.Info("Backfill service marked as complete")
+}
+
+func (s *Service) WaitForCompletion() error {
+	select {
+	case <-s.ctx.Done():
+		return s.ctx.Err()
+	case <-s.complete:
+		return nil
 	}
 }

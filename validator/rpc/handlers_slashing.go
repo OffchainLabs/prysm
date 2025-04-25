@@ -6,10 +6,10 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	slashing "github.com/OffchainLabs/prysm/v6/validator/slashing-protection-history"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	slashing "github.com/prysmaticlabs/prysm/v5/validator/slashing-protection-history"
-	"go.opencensus.io/trace"
 )
 
 // ExportSlashingProtection handles the rpc call returning the json slashing history.
@@ -24,12 +24,12 @@ func (s *Server) ExportSlashingProtection(w http.ResponseWriter, r *http.Request
 	ctx, span := trace.StartSpan(r.Context(), "validator.ExportSlashingProtection")
 	defer span.End()
 
-	if s.valDB == nil {
+	if s.db == nil {
 		httputil.HandleError(w, "could not find validator database", http.StatusInternalServerError)
 		return
 	}
 
-	eipJSON, err := slashing.ExportStandardProtectionJSON(ctx, s.valDB)
+	eipJSON, err := slashing.ExportStandardProtectionJSON(ctx, s.db)
 	if err != nil {
 		httputil.HandleError(w, errors.Wrap(err, "could not export slashing protection history").Error(), http.StatusInternalServerError)
 		return
@@ -54,7 +54,7 @@ func (s *Server) ImportSlashingProtection(w http.ResponseWriter, r *http.Request
 	ctx, span := trace.StartSpan(r.Context(), "validator.ImportSlashingProtection")
 	defer span.End()
 
-	if s.valDB == nil {
+	if s.db == nil {
 		httputil.HandleError(w, "could not find validator database", http.StatusInternalServerError)
 		return
 	}
@@ -62,7 +62,7 @@ func (s *Server) ImportSlashingProtection(w http.ResponseWriter, r *http.Request
 	var req ImportSlashingProtectionRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	switch {
-	case err == io.EOF:
+	case errors.Is(err, io.EOF):
 		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
@@ -76,7 +76,7 @@ func (s *Server) ImportSlashingProtection(w http.ResponseWriter, r *http.Request
 	}
 	enc := []byte(req.SlashingProtectionJson)
 	buf := bytes.NewBuffer(enc)
-	if err := s.valDB.ImportStandardProtectionJSON(ctx, buf); err != nil {
+	if err := s.db.ImportStandardProtectionJSON(ctx, buf); err != nil {
 		httputil.HandleError(w, errors.Wrap(err, "could not import slashing protection history").Error(), http.StatusInternalServerError)
 		return
 	}

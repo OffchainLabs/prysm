@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	bolt "go.etcd.io/bbolt"
-	"go.opencensus.io/trace"
 )
 
 // lookupValuesForIndices takes in a list of indices and looks up
@@ -113,4 +113,28 @@ func splitRoots(b []byte) ([][32]byte, error) {
 		rl = append(rl, bytesutil.ToBytes32(b[s:f]))
 	}
 	return rl, nil
+}
+
+func removeRoot(roots []byte, root [32]byte) ([]byte, error) {
+	if len(roots) == 0 {
+		return []byte{}, nil
+	}
+	if len(roots) == 32 && bytes.Equal(roots, root[:]) {
+		return []byte{}, nil
+	}
+	if len(roots)%32 != 0 {
+		return nil, errors.Wrapf(errMisalignedRootList, "root list len=%d", len(roots))
+	}
+
+	search := root[:]
+	for i := 0; i <= len(roots)-32; i += 32 {
+		if bytes.Equal(roots[i:i+32], search) {
+			result := make([]byte, len(roots)-32)
+			copy(result, roots[:i])
+			copy(result[i:], roots[i+32:])
+			return result, nil
+		}
+	}
+
+	return roots, nil
 }

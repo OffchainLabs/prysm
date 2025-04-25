@@ -10,6 +10,7 @@
    in review.
 4. Note that PRs updating dependencies and new Go versions are not accepted.
    Please file an issue instead.
+5. A changelog entry is required for user facing issues.
 -->
 
 **What type of PR is this?**
@@ -28,3 +29,9 @@
 Fixes #
 
 **Other notes for review**
+
+**Acknowledgements**
+
+- [ ] I have read [CONTRIBUTING.md](https://github.com/prysmaticlabs/prysm/blob/develop/CONTRIBUTING.md).
+- [ ] I have included a uniquely named [changelog fragment file](https://github.com/prysmaticlabs/prysm/blob/develop/CONTRIBUTING.md#maintaining-changelogmd).
+- [ ] I have added a description to this PR with sufficient context for reviewers to understand this PR.

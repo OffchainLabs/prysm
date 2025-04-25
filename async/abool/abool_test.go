@@ -88,7 +88,7 @@ func TestToggle(t *testing.T) {
 	}
 }
 
-func TestToogleMultipleTimes(t *testing.T) {
+func TestToggleMultipleTimes(t *testing.T) {
 	t.Parallel()
 
 	v := New()
@@ -101,16 +101,16 @@ func TestToogleMultipleTimes(t *testing.T) {
 
 		expected := i%2 != 0
 		if v.IsSet() != expected {
-			t.Fatalf("AtomicBool.Toogle() doesn't work after %d calls, expected: %v, got %v", i, expected, v.IsSet())
+			t.Fatalf("AtomicBool.Toggle() doesn't work after %d calls, expected: %v, got %v", i, expected, v.IsSet())
 		}
 
 		if pre == v.IsSet() {
-			t.Fatalf("AtomicBool.Toogle() returned wrong value at the %dth calls, expected: %v, got %v", i, !v.IsSet(), pre)
+			t.Fatalf("AtomicBool.Toggle() returned wrong value at the %dth calls, expected: %v, got %v", i, !v.IsSet(), pre)
 		}
 	}
 }
 
-func TestToogleAfterOverflow(t *testing.T) {
+func TestToggleAfterOverflow(t *testing.T) {
 	t.Parallel()
 
 	var value int32 = math.MaxInt32
@@ -122,7 +122,7 @@ func TestToogleAfterOverflow(t *testing.T) {
 	v.Toggle()
 	expected := math.MaxInt32%2 == 0
 	if v.IsSet() != expected {
-		t.Fatalf("AtomicBool.Toogle() doesn't work after overflow, expected: %v, got %v", expected, v.IsSet())
+		t.Fatalf("AtomicBool.Toggle() doesn't work after overflow, expected: %v, got %v", expected, v.IsSet())
 	}
 
 	// make sure overflow happened
@@ -135,7 +135,7 @@ func TestToogleAfterOverflow(t *testing.T) {
 	v.Toggle()
 	expected = !expected
 	if v.IsSet() != expected {
-		t.Fatalf("AtomicBool.Toogle() doesn't work after the second call after overflow, expected: %v, got %v", expected, v.IsSet())
+		t.Fatalf("AtomicBool.Toggle() doesn't work after the second call after overflow, expected: %v, got %v", expected, v.IsSet())
 	}
 }
 

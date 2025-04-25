@@ -6,9 +6,9 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 )
 
 func TestTruncate(t *testing.T) {
@@ -215,6 +215,50 @@ func TestToBytes20(t *testing.T) {
 		b := bytesutil.ToBytes20(tt.a)
 		assert.DeepEqual(t, tt.b, b)
 	}
+}
+
+func TestCastToString(t *testing.T) {
+	bSlice := []byte{'a', 'b', 'c'}
+	bString := bytesutil.UnsafeCastToString(bSlice)
+
+	originalString := "abc"
+
+	// Mutate original slice to make sure that a copy was not performed.
+	bSlice[0] = 'd'
+	assert.NotEqual(t, originalString, bString)
+	assert.Equal(t, "dbc", bString)
+}
+
+func BenchmarkUnsafeCastToString(b *testing.B) {
+	data := []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+	empty := []byte{}
+	var nilData []byte
+
+	b.Run("string(b)", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			_ = string(data)
+			_ = string(empty)
+			_ = string(nilData)
+		}
+	})
+
+	b.Run("bytesutil.UnsafeCastToString(b)", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			_ = bytesutil.UnsafeCastToString(data)
+			_ = bytesutil.UnsafeCastToString(empty)
+			_ = bytesutil.UnsafeCastToString(nilData)
+		}
+	})
+}
+
+func FuzzUnsafeCastToString(f *testing.F) {
+	f.Fuzz(func(t *testing.T, input []byte) {
+		want := string(input)
+		result := bytesutil.UnsafeCastToString(input)
+		if result != want {
+			t.Fatalf("input (%v) result (%s) did not match expected (%s)", input, result, want)
+		}
+	})
 }
 
 func BenchmarkToBytes32(b *testing.B) {

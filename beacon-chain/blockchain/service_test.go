@@ -7,35 +7,37 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
+	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
+	mockExecution "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/slashings"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/voluntaryexits"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/container/trie"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache/depositcache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
-	testDB "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
-	mockExecution "github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/testing"
-	doublylinkedtree "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/doubly-linked-tree"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/slashings"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/voluntaryexits"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/container/trie"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -80,7 +82,7 @@ func setupBeaconChain(t *testing.T, beaconDB db.Database) *Service {
 	attService, err := attestations.NewService(ctx, &attestations.Config{Pool: attestations.NewPool()})
 	require.NoError(t, err)
 
-	depositCache, err := depositcache.New()
+	depositCache, err := depositsnapshot.New()
 	require.NoError(t, err)
 
 	fc := doublylinkedtree.New()
@@ -203,7 +205,7 @@ func TestChainService_InitializeBeaconChain(t *testing.T) {
 		BlockHash:    make([]byte, 32),
 	})
 	require.NoError(t, err)
-	genState, err = blocks.ProcessPreGenesisDeposits(ctx, genState, deposits)
+	genState, err = altair.ProcessPreGenesisDeposits(ctx, genState, deposits)
 	require.NoError(t, err)
 
 	_, err = bc.initializeBeaconChain(ctx, time.Unix(0, 0), genState, &ethpb.Eth1Data{DepositRoot: hashTreeRoot[:], BlockHash: make([]byte, 32)})
@@ -374,11 +376,15 @@ func TestHasBlock_ForkChoiceAndDB_DoublyLinkedTree(t *testing.T) {
 		cfg: &config{ForkChoiceStore: doublylinkedtree.New(), BeaconDB: beaconDB},
 	}
 	b := util.NewBeaconBlock()
+	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
 	r, err := b.Block.HashTreeRoot()
+	require.NoError(t, err)
+	roblock, err := consensusblocks.NewROBlockWithRoot(wsb, r)
 	require.NoError(t, err)
 	beaconState, err := util.NewBeaconState()
 	require.NoError(t, err)
-	require.NoError(t, s.cfg.ForkChoiceStore.InsertNode(ctx, beaconState, r))
+	require.NoError(t, s.cfg.ForkChoiceStore.InsertNode(ctx, beaconState, roblock))
 
 	assert.Equal(t, false, s.hasBlock(ctx, [32]byte{}), "Should not have block")
 	assert.Equal(t, true, s.hasBlock(ctx, r), "Should have block")
@@ -451,7 +457,11 @@ func BenchmarkHasBlockForkChoiceStore_DoublyLinkedTree(b *testing.B) {
 	require.NoError(b, err)
 	beaconState, err := util.NewBeaconState()
 	require.NoError(b, err)
-	require.NoError(b, s.cfg.ForkChoiceStore.InsertNode(ctx, beaconState, r))
+	wsb, err := consensusblocks.NewSignedBeaconBlock(blk)
+	require.NoError(b, err)
+	roblock, err := consensusblocks.NewROBlockWithRoot(wsb, r)
+	require.NoError(b, err)
+	require.NoError(b, s.cfg.ForkChoiceStore.InsertNode(ctx, beaconState, roblock))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -499,6 +509,65 @@ func TestChainService_EverythingOptimistic(t *testing.T) {
 	require.Equal(t, true, op)
 }
 
+func TestStartFromSavedState_ValidatorIndexCacheUpdated(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableStartOptimistic: true,
+	})
+	defer resetFn()
+
+	genesis := util.NewBeaconBlockElectra()
+	genesisRoot, err := genesis.Block.HashTreeRoot()
+	require.NoError(t, err)
+	finalizedSlot := params.BeaconConfig().SlotsPerEpoch*2 + 1
+	headBlock := util.NewBeaconBlockElectra()
+	headBlock.Block.Slot = finalizedSlot
+	headBlock.Block.ParentRoot = bytesutil.PadTo(genesisRoot[:], 32)
+	headState, err := util.NewBeaconState()
+	require.NoError(t, err)
+	hexKey := "0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"
+	key, err := hexutil.Decode(hexKey)
+	require.NoError(t, err)
+	hexKey2 := "0x42247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"
+	key2, err := hexutil.Decode(hexKey2)
+	require.NoError(t, err)
+	require.NoError(t, headState.SetValidators([]*ethpb.Validator{
+		{
+			PublicKey:             key,
+			WithdrawalCredentials: make([]byte, fieldparams.RootLength),
+		},
+		{
+			PublicKey:             key2,
+			WithdrawalCredentials: make([]byte, fieldparams.RootLength),
+		},
+	}))
+	require.NoError(t, headState.SetSlot(finalizedSlot))
+	require.NoError(t, headState.SetGenesisValidatorsRoot(params.BeaconConfig().ZeroHash[:]))
+	headRoot, err := headBlock.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	c, tr := minimalTestService(t, WithFinalizedStateAtStartUp(headState))
+	ctx, beaconDB, stateGen := tr.ctx, tr.db, tr.sg
+
+	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, genesisRoot))
+	util.SaveBlock(t, ctx, beaconDB, genesis)
+	require.NoError(t, beaconDB.SaveState(ctx, headState, headRoot))
+	require.NoError(t, beaconDB.SaveState(ctx, headState, genesisRoot))
+	util.SaveBlock(t, ctx, beaconDB, headBlock)
+	require.NoError(t, beaconDB.SaveFinalizedCheckpoint(ctx, &ethpb.Checkpoint{Epoch: slots.ToEpoch(finalizedSlot), Root: headRoot[:]}))
+
+	require.NoError(t, err)
+	require.NoError(t, stateGen.SaveState(ctx, headRoot, headState))
+	require.NoError(t, beaconDB.SaveLastValidatedCheckpoint(ctx, &ethpb.Checkpoint{Epoch: slots.ToEpoch(finalizedSlot), Root: headRoot[:]}))
+	require.NoError(t, c.StartFromSavedState(headState))
+
+	index, ok := headState.ValidatorIndexByPubkey(bytesutil.ToBytes48(key))
+	require.Equal(t, true, ok)
+	require.Equal(t, primitives.ValidatorIndex(0), index) // first index
+	index2, ok := headState.ValidatorIndexByPubkey(bytesutil.ToBytes48(key2))
+	require.Equal(t, true, ok)
+	require.Equal(t, primitives.ValidatorIndex(1), index2) // first index
+}
+
 // MockClockSetter satisfies the ClockSetter interface for testing the conditions where blockchain.Service should
 // call SetGenesis.
 type MockClockSetter struct {
@@ -518,7 +587,7 @@ func (s *MockClockSetter) SetClock(g *startup.Clock) error {
 func TestNotifyIndex(t *testing.T) {
 	// Initialize a blobNotifierMap
 	bn := &blobNotifierMap{
-		seenIndex: make(map[[32]byte][fieldparams.MaxBlobsPerBlock]bool),
+		seenIndex: make(map[[32]byte][]bool),
 		notifiers: make(map[[32]byte]chan uint64),
 	}
 
@@ -527,7 +596,7 @@ func TestNotifyIndex(t *testing.T) {
 	copy(root[:], "exampleRoot")
 
 	// Test notifying a new index
-	bn.notifyIndex(root, 1)
+	bn.notifyIndex(root, 1, 1)
 	if !bn.seenIndex[root][1] {
 		t.Errorf("Index was not marked as seen")
 	}
@@ -538,13 +607,13 @@ func TestNotifyIndex(t *testing.T) {
 	}
 
 	// Test notifying an already seen index
-	bn.notifyIndex(root, 1)
+	bn.notifyIndex(root, 1, 1)
 	if len(bn.notifiers[root]) > 1 {
 		t.Errorf("Notifier channel should not receive multiple messages for the same index")
 	}
 
 	// Test notifying a new index again
-	bn.notifyIndex(root, 2)
+	bn.notifyIndex(root, 2, 1)
 	if !bn.seenIndex[root][2] {
 		t.Errorf("Index was not marked as seen")
 	}

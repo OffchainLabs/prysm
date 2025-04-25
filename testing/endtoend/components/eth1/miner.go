@@ -10,19 +10,19 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	contracts "github.com/OffchainLabs/prysm/v6/contracts/deposit"
+	"github.com/OffchainLabs/prysm/v6/io/file"
+	"github.com/OffchainLabs/prysm/v6/runtime/interop"
+	"github.com/OffchainLabs/prysm/v6/testing/endtoend/helpers"
+	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
+	e2etypes "github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	contracts "github.com/prysmaticlabs/prysm/v5/contracts/deposit"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
-	"github.com/prysmaticlabs/prysm/v5/runtime/interop"
-	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/helpers"
-	e2e "github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
-	e2etypes "github.com/prysmaticlabs/prysm/v5/testing/endtoend/types"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -143,11 +143,10 @@ func (m *Miner) initAttempt(ctx context.Context, attempt int) (*os.File, error) 
 		"--ws.origins=\"*\"",
 		"--ipcdisable",
 		"--verbosity=4",
-		"--mine",
 		fmt.Sprintf("--unlock=%s", EthAddress),
 		"--allow-insecure-unlock",
 		"--syncmode=full",
-		fmt.Sprintf("--miner.etherbase=%s", EthAddress),
+		fmt.Sprintf("--miner.gaslimit=%d", params.BeaconConfig().DefaultBuilderGasLimit),
 		fmt.Sprintf("--txpool.locals=%s", EthAddress),
 		fmt.Sprintf("--password=%s", pwFile),
 	}

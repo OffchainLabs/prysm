@@ -5,14 +5,14 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 var (
@@ -144,6 +144,16 @@ var (
 			Help: "Time for gossiped blob sidecars to arrive",
 		},
 	)
+	blobSidecarVerificationGossipSummary = promauto.NewSummary(
+		prometheus.SummaryOpts{
+			Name: "gossip_blob_sidecar_verification_milliseconds",
+			Help: "Time to verify gossiped blob sidecars",
+		},
+	)
+	pendingAttCount = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "gossip_pending_attestations_total",
+		Help: "increased when receiving a new pending attestation",
+	})
 
 	// Sync committee verification performance.
 	syncMessagesForUnknownBlocks = promauto.NewCounter(
@@ -158,6 +168,20 @@ var (
 		prometheus.CounterOpts{
 			Name: "gossip_missing_parent_blob_sidecar_total",
 			Help: "The number of blob sidecars that were dropped due to missing parent block",
+		},
+	)
+
+	blobRecoveredFromELTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "blob_recovered_from_el_total",
+			Help: "Count the number of times blobs have been recovered from the execution layer.",
+		},
+	)
+
+	blobExistedInDBTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "blob_existed_in_db_total",
+			Help: "Count the number of times blobs have been found in the database.",
 		},
 	)
 )

@@ -3,7 +3,7 @@ package params
 import (
 	"math"
 
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 )
 
 // MinimalSpecConfig retrieves the minimal config used in spec tests.
@@ -64,10 +64,13 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	// Max operations per block
 	minimalConfig.MaxProposerSlashings = 16
 	minimalConfig.MaxAttesterSlashings = 2
+	minimalConfig.MaxAttesterSlashingsElectra = 1
 	minimalConfig.MaxAttestations = 128
+	minimalConfig.MaxAttestationsElectra = 8
 	minimalConfig.MaxDeposits = 16
 	minimalConfig.MaxVoluntaryExits = 16
 	minimalConfig.MaxWithdrawalsPerPayload = 4
+	minimalConfig.MaxBlsToExecutionChanges = 16
 	minimalConfig.MaxValidatorsPerWithdrawalsSweep = 16
 
 	// Signature domains
@@ -82,7 +85,6 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.FarFutureEpoch = math.MaxUint64
 	minimalConfig.FarFutureSlot = math.MaxUint64
 
-	// New Altair params
 	minimalConfig.AltairForkVersion = []byte{1, 0, 0, 1} // Highest byte set to 0x01 to avoid collisions with mainnet versioning
 	minimalConfig.AltairForkEpoch = math.MaxUint64
 	minimalConfig.BellatrixForkVersion = []byte{2, 0, 0, 1}
@@ -91,11 +93,31 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.CapellaForkEpoch = math.MaxUint64
 	minimalConfig.DenebForkVersion = []byte{4, 0, 0, 1}
 	minimalConfig.DenebForkEpoch = math.MaxUint64
+	minimalConfig.ElectraForkVersion = []byte{5, 0, 0, 1}
+	minimalConfig.ElectraForkEpoch = math.MaxUint64
+	minimalConfig.FuluForkVersion = []byte{6, 0, 0, 1}
+	minimalConfig.FuluForkEpoch = math.MaxUint64
 
 	minimalConfig.SyncCommitteeSize = 32
 	minimalConfig.InactivityScoreBias = 4
 	minimalConfig.EpochsPerSyncCommitteePeriod = 8
 	minimalConfig.MinEpochsForBlockRequests = 272
+
+	// New Deneb params
+	minimalConfig.MaxBlobCommitmentsPerBlock = 32
+	minimalConfig.KzgCommitmentInclusionProofDepth = 10
+
+	// New Electra params
+	minimalConfig.MinPerEpochChurnLimitElectra = 64000000000
+	minimalConfig.MaxPerEpochActivationExitChurnLimit = 128000000000
+	minimalConfig.PendingConsolidationsLimit = 64
+	minimalConfig.MaxPartialWithdrawalsPerPayload = 1
+	minimalConfig.MaxWithdrawalRequestsPerPayload = 2
+	minimalConfig.MaxDepositRequestsPerPayload = 4
+	minimalConfig.PendingPartialWithdrawalsLimit = 64
+	minimalConfig.MaxPendingPartialsPerWithdrawalsSweep = 2
+	minimalConfig.PendingDepositsLimit = 134217728
+	minimalConfig.MaxPendingDepositsPerEpoch = 16
 
 	// Ethereum PoW parameters.
 	minimalConfig.DepositChainID = 5   // Chain ID of eth1 goerli.

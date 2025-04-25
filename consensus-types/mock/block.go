@@ -1,13 +1,16 @@
+// package mock
+// lint:nopanic -- This is test / mock code, allowed to panic.
 package mock
 
 import (
+	field_params "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/eth/v1"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
 	ssz "github.com/prysmaticlabs/fastssz"
-	field_params "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/math"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -43,38 +46,6 @@ func (SignedBeaconBlock) Proto() (proto.Message, error) {
 	panic("implement me")
 }
 
-func (SignedBeaconBlock) PbPhase0Block() (*eth.SignedBeaconBlock, error) {
-	panic("implement me")
-}
-
-func (SignedBeaconBlock) PbAltairBlock() (*eth.SignedBeaconBlockAltair, error) {
-	panic("implement me")
-}
-
-func (SignedBeaconBlock) PbBellatrixBlock() (*eth.SignedBeaconBlockBellatrix, error) {
-	panic("implement me")
-}
-
-func (SignedBeaconBlock) PbBlindedBellatrixBlock() (*eth.SignedBlindedBeaconBlockBellatrix, error) {
-	panic("implement me")
-}
-
-func (SignedBeaconBlock) PbCapellaBlock() (*eth.SignedBeaconBlockCapella, error) {
-	panic("implement me")
-}
-
-func (SignedBeaconBlock) PbBlindedCapellaBlock() (*eth.SignedBlindedBeaconBlockCapella, error) {
-	panic("implement me")
-}
-
-func (SignedBeaconBlock) PbDenebBlock() (*eth.SignedBeaconBlockDeneb, error) {
-	panic("implement me")
-}
-
-func (SignedBeaconBlock) PbBlindedDenebBlock() (*eth.SignedBlindedBeaconBlockDeneb, error) {
-	panic("implement me")
-}
-
 func (SignedBeaconBlock) MarshalSSZTo(_ []byte) ([]byte, error) {
 	panic("implement me")
 }
@@ -104,14 +75,6 @@ func (SignedBeaconBlock) ToBlinded() (interfaces.ReadOnlySignedBeaconBlock, erro
 }
 
 func (SignedBeaconBlock) Header() (*eth.SignedBeaconBlockHeader, error) {
-	panic("implement me")
-}
-
-func (SignedBeaconBlock) ValueInWei() math.Wei {
-	panic("implement me")
-}
-
-func (SignedBeaconBlock) ValueInGwei() uint64 {
 	panic("implement me")
 }
 
@@ -202,10 +165,6 @@ func (BeaconBlock) SetParentRoot(_ []byte) {
 	panic("implement me")
 }
 
-func (BeaconBlock) Copy() (interfaces.ReadOnlyBeaconBlock, error) {
-	panic("implement me")
-}
-
 type BeaconBlockBody struct{}
 
 func (BeaconBlockBody) RandaoReveal() [field_params.BLSSignatureLength]byte {
@@ -224,7 +183,7 @@ func (BeaconBlockBody) ProposerSlashings() []*eth.ProposerSlashing {
 	panic("implement me")
 }
 
-func (BeaconBlockBody) AttesterSlashings() []*eth.AttesterSlashing {
+func (BeaconBlockBody) AttesterSlashings() []eth.AttSlashing {
 	panic("implement me")
 }
 
@@ -280,7 +239,7 @@ func (b *BeaconBlockBody) SetProposerSlashings([]*eth.ProposerSlashing) {
 	panic("implement me")
 }
 
-func (b *BeaconBlockBody) SetAttesterSlashings([]*eth.AttesterSlashing) {
+func (b *BeaconBlockBody) SetAttesterSlashings([]ethpb.AttesterSlashing) {
 	panic("implement me")
 }
 
@@ -313,10 +272,13 @@ func (b *BeaconBlockBody) BlobKzgCommitments() ([][]byte, error) {
 	panic("implement me")
 }
 
-func (b *BeaconBlockBody) Attestations() []*eth.Attestation {
+func (b *BeaconBlockBody) ExecutionRequests() (*enginev1.ExecutionRequests, error) {
 	panic("implement me")
 }
 
+func (b *BeaconBlockBody) Attestations() []eth.Att {
+	panic("implement me")
+}
 func (b *BeaconBlockBody) Version() int {
 	panic("implement me")
 }

@@ -3,10 +3,10 @@ package accounts
 import (
 	"os"
 
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/runtime/tos"
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/runtime/tos"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
@@ -27,9 +27,9 @@ var Commands = &cli.Command{
 				flags.WalletPasswordFileFlag,
 				flags.DeletePublicKeysFlag,
 				features.Mainnet,
-				features.PraterTestnet,
 				features.SepoliaTestnet,
 				features.HoleskyTestnet,
+				features.HoodiTestnet,
 				cmd.AcceptTosFlag,
 			}),
 			Before: func(cliCtx *cli.Context) error {
@@ -59,13 +59,13 @@ var Commands = &cli.Command{
 				flags.BeaconRPCProviderFlag,
 				cmd.GrpcMaxCallRecvMsgSizeFlag,
 				flags.CertFlag,
-				flags.GrpcHeadersFlag,
-				flags.GrpcRetriesFlag,
-				flags.GrpcRetryDelayFlag,
+				flags.GRPCHeadersFlag,
+				flags.GRPCRetriesFlag,
+				flags.GRPCRetryDelayFlag,
 				features.Mainnet,
-				features.PraterTestnet,
 				features.SepoliaTestnet,
 				features.HoleskyTestnet,
+				features.HoodiTestnet,
 				cmd.AcceptTosFlag,
 			}),
 			Before: func(cliCtx *cli.Context) error {
@@ -95,11 +95,11 @@ var Commands = &cli.Command{
 				flags.WalletPasswordFileFlag,
 				flags.BackupDirFlag,
 				flags.BackupPublicKeysFlag,
-				flags.BackupPasswordFile,
+				flags.BackupPasswordFileFlag,
 				features.Mainnet,
-				features.PraterTestnet,
 				features.SepoliaTestnet,
 				features.HoleskyTestnet,
+				features.HoodiTestnet,
 				cmd.AcceptTosFlag,
 			}),
 			Before: func(cliCtx *cli.Context) error {
@@ -128,9 +128,9 @@ var Commands = &cli.Command{
 				flags.AccountPasswordFileFlag,
 				flags.ImportPrivateKeyFileFlag,
 				features.Mainnet,
-				features.PraterTestnet,
 				features.SepoliaTestnet,
 				features.HoleskyTestnet,
+				features.HoodiTestnet,
 				cmd.AcceptTosFlag,
 			}),
 			Before: func(cliCtx *cli.Context) error {
@@ -164,16 +164,16 @@ var Commands = &cli.Command{
 				flags.InteropStartIndex,
 				cmd.GrpcMaxCallRecvMsgSizeFlag,
 				flags.CertFlag,
-				flags.GrpcHeadersFlag,
-				flags.GrpcRetriesFlag,
-				flags.GrpcRetryDelayFlag,
+				flags.GRPCHeadersFlag,
+				flags.GRPCRetriesFlag,
+				flags.GRPCRetryDelayFlag,
 				flags.ExitAllFlag,
 				flags.ForceExitFlag,
-				flags.VoluntaryExitJSONOutputPath,
+				flags.VoluntaryExitJSONOutputPathFlag,
 				features.Mainnet,
-				features.PraterTestnet,
 				features.SepoliaTestnet,
 				features.HoleskyTestnet,
+				features.HoodiTestnet,
 				cmd.AcceptTosFlag,
 			}),
 			Before: func(cliCtx *cli.Context) error {

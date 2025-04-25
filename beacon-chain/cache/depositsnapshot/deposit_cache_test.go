@@ -7,14 +7,14 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/container/trie"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/container/trie"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 )
 
 var _ cache.DepositCache = (*Cache)(nil)
@@ -784,7 +784,7 @@ func TestFinalizedDeposits_ReturnsTrieCorrectly(t *testing.T) {
 	depositTrie, err := trie.GenerateTrieFromItems(trieItems, params.BeaconConfig().DepositContractTreeDepth)
 	assert.NoError(t, err)
 
-	// Perform this in a non-sensical ordering
+	// Perform this in a nonsensical ordering
 	err = dc.InsertFinalizedDeposits(context.Background(), 1, [32]byte{}, 0)
 	require.NoError(t, err)
 	err = dc.InsertFinalizedDeposits(context.Background(), 2, [32]byte{}, 0)
@@ -901,189 +901,6 @@ func TestMin(t *testing.T) {
 		insertIndex++
 	}
 
-}
-
-func TestPruneProofs_Ok(t *testing.T) {
-	dc, err := New()
-	require.NoError(t, err)
-
-	deposits := []struct {
-		blkNum  uint64
-		deposit *ethpb.Deposit
-		index   int64
-	}{
-		{
-			blkNum: 0,
-			deposit: &ethpb.Deposit{Proof: makeDepositProof(),
-				Data: &ethpb.Deposit_Data{PublicKey: bytesutil.PadTo([]byte("pk0"), 48)}},
-			index: 0,
-		},
-		{
-			blkNum: 0,
-			deposit: &ethpb.Deposit{Proof: makeDepositProof(),
-				Data: &ethpb.Deposit_Data{PublicKey: bytesutil.PadTo([]byte("pk1"), 48)}},
-			index: 1,
-		},
-		{
-			blkNum: 0,
-			deposit: &ethpb.Deposit{Proof: makeDepositProof(),
-				Data: &ethpb.Deposit_Data{PublicKey: bytesutil.PadTo([]byte("pk2"), 48)}},
-			index: 2,
-		},
-		{
-			blkNum: 0,
-			deposit: &ethpb.Deposit{Proof: makeDepositProof(),
-				Data: &ethpb.Deposit_Data{PublicKey: bytesutil.PadTo([]byte("pk3"), 48)}},
-			index: 3,
-		},
-	}
-
-	for _, ins := range deposits {
-		assert.NoError(t, dc.InsertDeposit(context.Background(), ins.deposit, ins.blkNum, ins.index, [32]byte{}))
-	}
-
-	require.NoError(t, dc.PruneProofs(context.Background(), 1))
-
-	assert.DeepEqual(t, [][]byte(nil), dc.deposits[0].Deposit.Proof)
-	assert.DeepEqual(t, [][]byte(nil), dc.deposits[1].Deposit.Proof)
-	assert.NotNil(t, dc.deposits[2].Deposit.Proof)
-	assert.NotNil(t, dc.deposits[3].Deposit.Proof)
-}
-
-func TestPruneProofs_SomeAlreadyPruned(t *testing.T) {
-	dc, err := New()
-	require.NoError(t, err)
-
-	deposits := []struct {
-		blkNum  uint64
-		deposit *ethpb.Deposit
-		index   int64
-	}{
-		{
-			blkNum: 0,
-			deposit: &ethpb.Deposit{Proof: nil, Data: &ethpb.Deposit_Data{
-				PublicKey: bytesutil.PadTo([]byte("pk0"), 48)}},
-			index: 0,
-		},
-		{
-			blkNum: 0,
-			deposit: &ethpb.Deposit{Proof: nil, Data: &ethpb.Deposit_Data{
-				PublicKey: bytesutil.PadTo([]byte("pk1"), 48)}}, index: 1,
-		},
-		{
-			blkNum:  0,
-			deposit: &ethpb.Deposit{Proof: makeDepositProof(), Data: &ethpb.Deposit_Data{PublicKey: bytesutil.PadTo([]byte("pk2"), 48)}},
-			index:   2,
-		},
-		{
-			blkNum: 0,
-			deposit: &ethpb.Deposit{Proof: makeDepositProof(),
-				Data: &ethpb.Deposit_Data{PublicKey: bytesutil.PadTo([]byte("pk3"), 48)}},
-			index: 3,
-		},
-	}
-
-	for _, ins := range deposits {
-		assert.NoError(t, dc.InsertDeposit(context.Background(), ins.deposit, ins.blkNum, ins.index, [32]byte{}))
-	}
-
-	require.NoError(t, dc.PruneProofs(context.Background(), 2))
-
-	assert.DeepEqual(t, [][]byte(nil), dc.deposits[2].Deposit.Proof)
-}
-
-func TestPruneProofs_PruneAllWhenDepositIndexTooBig(t *testing.T) {
-	dc, err := New()
-	require.NoError(t, err)
-
-	deposits := []struct {
-		blkNum  uint64
-		deposit *ethpb.Deposit
-		index   int64
-	}{
-		{
-			blkNum: 0,
-			deposit: &ethpb.Deposit{Proof: makeDepositProof(),
-				Data: &ethpb.Deposit_Data{PublicKey: bytesutil.PadTo([]byte("pk0"), 48)}},
-			index: 0,
-		},
-		{
-			blkNum: 0,
-			deposit: &ethpb.Deposit{Proof: makeDepositProof(),
-				Data: &ethpb.Deposit_Data{PublicKey: bytesutil.PadTo([]byte("pk1"), 48)}},
-			index: 1,
-		},
-		{
-			blkNum: 0,
-			deposit: &ethpb.Deposit{Proof: makeDepositProof(),
-				Data: &ethpb.Deposit_Data{PublicKey: bytesutil.PadTo([]byte("pk2"), 48)}},
-			index: 2,
-		},
-		{
-			blkNum: 0,
-			deposit: &ethpb.Deposit{Proof: makeDepositProof(),
-				Data: &ethpb.Deposit_Data{PublicKey: bytesutil.PadTo([]byte("pk3"), 48)}},
-			index: 3,
-		},
-	}
-
-	for _, ins := range deposits {
-		assert.NoError(t, dc.InsertDeposit(context.Background(), ins.deposit, ins.blkNum, ins.index, [32]byte{}))
-	}
-
-	require.NoError(t, dc.PruneProofs(context.Background(), 99))
-
-	assert.DeepEqual(t, [][]byte(nil), dc.deposits[0].Deposit.Proof)
-	assert.DeepEqual(t, [][]byte(nil), dc.deposits[1].Deposit.Proof)
-	assert.DeepEqual(t, [][]byte(nil), dc.deposits[2].Deposit.Proof)
-	assert.DeepEqual(t, [][]byte(nil), dc.deposits[3].Deposit.Proof)
-}
-
-func TestPruneProofs_CorrectlyHandleLastIndex(t *testing.T) {
-	dc, err := New()
-	require.NoError(t, err)
-
-	deposits := []struct {
-		blkNum  uint64
-		deposit *ethpb.Deposit
-		index   int64
-	}{
-		{
-			blkNum: 0,
-			deposit: &ethpb.Deposit{Proof: makeDepositProof(),
-				Data: &ethpb.Deposit_Data{PublicKey: bytesutil.PadTo([]byte("pk0"), 48)}},
-			index: 0,
-		},
-		{
-			blkNum: 0,
-			deposit: &ethpb.Deposit{Proof: makeDepositProof(),
-				Data: &ethpb.Deposit_Data{PublicKey: bytesutil.PadTo([]byte("pk1"), 48)}},
-			index: 1,
-		},
-		{
-			blkNum: 0,
-			deposit: &ethpb.Deposit{Proof: makeDepositProof(),
-				Data: &ethpb.Deposit_Data{PublicKey: bytesutil.PadTo([]byte("pk2"), 48)}},
-			index: 2,
-		},
-		{
-			blkNum: 0,
-			deposit: &ethpb.Deposit{Proof: makeDepositProof(),
-				Data: &ethpb.Deposit_Data{PublicKey: bytesutil.PadTo([]byte("pk3"), 48)}},
-			index: 3,
-		},
-	}
-
-	for _, ins := range deposits {
-		assert.NoError(t, dc.InsertDeposit(context.Background(), ins.deposit, ins.blkNum, ins.index, [32]byte{}))
-	}
-
-	require.NoError(t, dc.PruneProofs(context.Background(), 4))
-
-	assert.DeepEqual(t, [][]byte(nil), dc.deposits[0].Deposit.Proof)
-	assert.DeepEqual(t, [][]byte(nil), dc.deposits[1].Deposit.Proof)
-	assert.DeepEqual(t, [][]byte(nil), dc.deposits[2].Deposit.Proof)
-	assert.DeepEqual(t, [][]byte(nil), dc.deposits[3].Deposit.Proof)
 }
 
 func TestDepositMap_WorksCorrectly(t *testing.T) {

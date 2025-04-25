@@ -3,8 +3,8 @@ package params
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 func Test_port(t *testing.T) {
@@ -30,8 +30,8 @@ func TestStandardPorts(t *testing.T) {
 	var existingRegistrations []int
 	testPorts := &ports{}
 	assert.NoError(t, initializeStandardPorts(2, 0, testPorts, &existingRegistrations))
-	assert.Equal(t, 16, len(existingRegistrations))
-	assert.NotEqual(t, 0, testPorts.PrysmBeaconNodeGatewayPort)
+	assert.Equal(t, 17, len(existingRegistrations))
+	assert.NotEqual(t, 0, testPorts.PrysmBeaconNodeHTTPPort)
 	assert.NotEqual(t, 0, testPorts.PrysmBeaconNodeTCPPort)
 	assert.NotEqual(t, 0, testPorts.JaegerTracingPort)
 }

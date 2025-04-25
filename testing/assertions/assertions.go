@@ -9,10 +9,12 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/encoding/ssz/equality"
 	"github.com/d4l3k/messagediff"
-	"github.com/prysmaticlabs/prysm/v5/encoding/ssz/equality"
+	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus/hooks/test"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
 )
 
 // AssertionTestingTB exposes enough testing.TB methods for assertions.
@@ -52,13 +54,12 @@ func DeepEqual(loggerFn assertionLoggerFn, expected, actual interface{}, msg ...
 	if !isDeepEqual(expected, actual) {
 		errMsg := parseMsg("Values are not equal", msg...)
 		_, file, line, _ := runtime.Caller(2)
-		var diff string
+		opts := cmp.Options{cmp.AllowUnexported(expected), cmp.AllowUnexported(actual)}
 		if _, isProto := expected.(proto.Message); isProto {
-			diff = ProtobufPrettyDiff(expected, actual)
-		} else {
-			diff, _ = messagediff.PrettyDiff(expected, actual)
+			opts = append(opts, protocmp.Transform())
 		}
-		loggerFn("%s:%d %s, want: %#v, got: %#v, diff: %s", filepath.Base(file), line, errMsg, expected, actual, diff)
+		diff := cmp.Diff(expected, actual, opts...)
+		loggerFn("%s:%d %s, expected != actual, diff: %s", filepath.Base(file), line, errMsg, diff)
 	}
 }
 

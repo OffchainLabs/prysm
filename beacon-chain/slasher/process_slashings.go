@@ -3,19 +3,19 @@ package slasher
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 // Verifies attester slashings, logs them, and submits them to the slashing operations pool
 // in the beacon node if they pass validation.
 func (s *Service) processAttesterSlashings(
-	ctx context.Context, slashings map[[fieldparams.RootLength]byte]*ethpb.AttesterSlashing,
-) (map[[fieldparams.RootLength]byte]*ethpb.AttesterSlashing, error) {
-	processedSlashings := map[[fieldparams.RootLength]byte]*ethpb.AttesterSlashing{}
+	ctx context.Context, slashings map[[fieldparams.RootLength]byte]ethpb.AttSlashing,
+) (map[[fieldparams.RootLength]byte]ethpb.AttSlashing, error) {
+	processedSlashings := map[[fieldparams.RootLength]byte]ethpb.AttSlashing{}
 
 	// If no slashings, return early.
 	if len(slashings) == 0 {
@@ -30,8 +30,8 @@ func (s *Service) processAttesterSlashings(
 
 	for root, slashing := range slashings {
 		// Verify the signature of the first attestation.
-		if err := s.verifyAttSignature(ctx, slashing.Attestation_1); err != nil {
-			log.WithError(err).WithField("a", slashing.Attestation_1).Warn(
+		if err := s.verifyAttSignature(ctx, slashing.FirstAttestation()); err != nil {
+			log.WithError(err).WithField("a", slashing.FirstAttestation()).Warn(
 				"Invalid signature for attestation in detected slashing offense",
 			)
 
@@ -39,8 +39,8 @@ func (s *Service) processAttesterSlashings(
 		}
 
 		// Verify the signature of the second attestation.
-		if err := s.verifyAttSignature(ctx, slashing.Attestation_2); err != nil {
-			log.WithError(err).WithField("b", slashing.Attestation_2).Warn(
+		if err := s.verifyAttSignature(ctx, slashing.SecondAttestation()); err != nil {
+			log.WithError(err).WithField("b", slashing.SecondAttestation()).Warn(
 				"Invalid signature for attestation in detected slashing offense",
 			)
 
@@ -110,8 +110,8 @@ func (s *Service) verifyBlockSignature(ctx context.Context, header *ethpb.Signed
 	return blocks.VerifyBlockHeaderSignature(parentState, header)
 }
 
-func (s *Service) verifyAttSignature(ctx context.Context, att *ethpb.IndexedAttestation) error {
-	preState, err := s.serviceCfg.AttestationStateFetcher.AttestationTargetState(ctx, att.Data.Target)
+func (s *Service) verifyAttSignature(ctx context.Context, att ethpb.IndexedAtt) error {
+	preState, err := s.serviceCfg.AttestationStateFetcher.AttestationTargetState(ctx, att.GetData().Target)
 	if err != nil {
 		return err
 	}

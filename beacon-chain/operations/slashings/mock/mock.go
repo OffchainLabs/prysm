@@ -3,18 +3,18 @@ package mock
 import (
 	"context"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
 // PoolMock is a fake implementation of PoolManager.
 type PoolMock struct {
-	PendingAttSlashings  []*ethpb.AttesterSlashing
+	PendingAttSlashings  []ethpb.AttSlashing
 	PendingPropSlashings []*ethpb.ProposerSlashing
 }
 
 // PendingAttesterSlashings --
-func (m *PoolMock) PendingAttesterSlashings(_ context.Context, _ state.ReadOnlyBeaconState, _ bool) []*ethpb.AttesterSlashing {
+func (m *PoolMock) PendingAttesterSlashings(_ context.Context, _ state.ReadOnlyBeaconState, _ bool) []ethpb.AttSlashing {
 	return m.PendingAttSlashings
 }
 
@@ -24,7 +24,7 @@ func (m *PoolMock) PendingProposerSlashings(_ context.Context, _ state.ReadOnlyB
 }
 
 // InsertAttesterSlashing --
-func (m *PoolMock) InsertAttesterSlashing(_ context.Context, _ state.ReadOnlyBeaconState, slashing *ethpb.AttesterSlashing) error {
+func (m *PoolMock) InsertAttesterSlashing(_ context.Context, _ state.ReadOnlyBeaconState, slashing ethpb.AttSlashing) error {
 	m.PendingAttSlashings = append(m.PendingAttSlashings, slashing)
 	return nil
 }
@@ -35,12 +35,15 @@ func (m *PoolMock) InsertProposerSlashing(_ context.Context, _ state.ReadOnlyBea
 	return nil
 }
 
+// ConvertToElectra --
+func (*PoolMock) ConvertToElectra() {}
+
 // MarkIncludedAttesterSlashing --
-func (*PoolMock) MarkIncludedAttesterSlashing(_ *ethpb.AttesterSlashing) {
-	panic("implement me")
+func (*PoolMock) MarkIncludedAttesterSlashing(_ ethpb.AttSlashing) {
+	panic("implement me") // lint:nopanic -- Test / mock code.
 }
 
 // MarkIncludedProposerSlashing --
 func (*PoolMock) MarkIncludedProposerSlashing(_ *ethpb.ProposerSlashing) {
-	panic("implement me")
+	panic("implement me") // lint:nopanic -- Test / mock code.
 }

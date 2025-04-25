@@ -4,15 +4,15 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/runtime/logging"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	errors "github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/runtime/logging"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -83,10 +83,10 @@ func (s *LazilyPersistentStore) Persist(current primitives.Slot, sc ...blocks.RO
 func (s *LazilyPersistentStore) IsDataAvailable(ctx context.Context, current primitives.Slot, b blocks.ROBlock) error {
 	blockCommitments, err := commitmentsToCheck(b, current)
 	if err != nil {
-		return errors.Wrapf(err, "could check data availability for block %#x", b.Root())
+		return errors.Wrapf(err, "could not check data availability for block %#x", b.Root())
 	}
 	// Return early for blocks that are pre-deneb or which do not have any commitments.
-	if blockCommitments.count() == 0 {
+	if len(blockCommitments) == 0 {
 		return nil
 	}
 
@@ -94,10 +94,12 @@ func (s *LazilyPersistentStore) IsDataAvailable(ctx context.Context, current pri
 	entry := s.cache.ensure(key)
 	defer s.cache.delete(key)
 	root := b.Root()
+	entry.setDiskSummary(s.store.Summary(root))
+
 	// Verify we have all the expected sidecars, and fail fast if any are missing or inconsistent.
 	// We don't try to salvage problematic batches because this indicates a misbehaving peer and we'd rather
 	// ignore their response and decrease their peer score.
-	sidecars, err := entry.filter(root, blockCommitments)
+	sidecars, err := entry.filter(root, blockCommitments, b.Block().Slot())
 	if err != nil {
 		return errors.Wrap(err, "incomplete BlobSidecar batch")
 	}
@@ -128,22 +130,28 @@ func (s *LazilyPersistentStore) IsDataAvailable(ctx context.Context, current pri
 	return nil
 }
 
-func commitmentsToCheck(b blocks.ROBlock, current primitives.Slot) (safeCommitmentArray, error) {
-	var ar safeCommitmentArray
+func commitmentsToCheck(b blocks.ROBlock, current primitives.Slot) ([][]byte, error) {
 	if b.Version() < version.Deneb {
-		return ar, nil
+		return nil, nil
 	}
-	// We are only required to check within MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS
+
+	// We are only required to check within MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUEST
 	if !params.WithinDAPeriod(slots.ToEpoch(b.Block().Slot()), slots.ToEpoch(current)) {
-		return ar, nil
+		return nil, nil
 	}
-	kc, err := b.Block().Body().BlobKzgCommitments()
+
+	kzgCommitments, err := b.Block().Body().BlobKzgCommitments()
 	if err != nil {
-		return ar, err
+		return nil, err
 	}
-	if len(kc) > len(ar) {
-		return ar, errIndexOutOfBounds
+
+	maxBlobCount := params.BeaconConfig().MaxBlobsPerBlock(b.Block().Slot())
+	if len(kzgCommitments) > maxBlobCount {
+		return nil, errIndexOutOfBounds
 	}
-	copy(ar[:], kc)
-	return ar, nil
+
+	result := make([][]byte, len(kzgCommitments))
+	copy(result, kzgCommitments)
+
+	return result, nil
 }

@@ -4,10 +4,10 @@ import (
 	"io"
 	"testing"
 
-	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 type mockCall int
@@ -29,6 +29,7 @@ const (
 	unrealizedJustifiedPayloadBlockHashCalled
 	nodeCountCalled
 	highestReceivedBlockSlotCalled
+	highestReceivedBlockRootCalled
 	highestReceivedBlockDelayCalled
 	receivedBlocksLastEpochCalled
 	weightCalled
@@ -37,6 +38,8 @@ const (
 	slotCalled
 	lastRootCalled
 	targetRootForEpochCalled
+	parentRootCalled
+	dependentRootCalled
 )
 
 func _discard(t *testing.T, e error) {
@@ -154,6 +157,11 @@ func TestROLocking(t *testing.T) {
 			call: targetRootForEpochCalled,
 			cb:   func(g FastGetter) { _, err := g.TargetRootForEpoch([32]byte{}, 0); _discard(t, err) },
 		},
+		{
+			name: "dependentRootCalled",
+			call: dependentRootCalled,
+			cb:   func(g FastGetter) { _, err := g.DependentRoot(0); _discard(t, err) },
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -251,6 +259,11 @@ func (ro *mockROForkchoice) HighestReceivedBlockSlot() primitives.Slot {
 	return 0
 }
 
+func (ro *mockROForkchoice) HighestReceivedBlockRoot() [32]byte {
+	ro.calls = append(ro.calls, highestReceivedBlockRootCalled)
+	return [32]byte{}
+}
+
 func (ro *mockROForkchoice) HighestReceivedBlockDelay() primitives.Slot {
 	ro.calls = append(ro.calls, highestReceivedBlockDelayCalled)
 	return 0
@@ -286,8 +299,19 @@ func (ro *mockROForkchoice) LastRoot(_ primitives.Epoch) [32]byte {
 	return [32]byte{}
 }
 
+// DependentRoot impoements FastGetter.
+func (ro *mockROForkchoice) DependentRoot(_ primitives.Epoch) ([32]byte, error) {
+	ro.calls = append(ro.calls, dependentRootCalled)
+	return [32]byte{}, nil
+}
+
 // TargetRootForEpoch implements FastGetter.
 func (ro *mockROForkchoice) TargetRootForEpoch(_ [32]byte, _ primitives.Epoch) ([32]byte, error) {
 	ro.calls = append(ro.calls, targetRootForEpochCalled)
+	return [32]byte{}, nil
+}
+
+func (ro *mockROForkchoice) ParentRoot(_ [32]byte) ([32]byte, error) {
+	ro.calls = append(ro.calls, parentRootCalled)
 	return [32]byte{}, nil
 }

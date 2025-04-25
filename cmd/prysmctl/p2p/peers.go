@@ -3,8 +3,8 @@ package p2p
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 )
 
 func (c *client) connectToPeers(ctx context.Context, peerMultiaddrs ...string) error {
@@ -14,7 +14,7 @@ func (c *client) connectToPeers(ctx context.Context, peerMultiaddrs ...string) e
 	}
 	addrInfos, err := peer.AddrInfosFromP2pAddrs(peers...)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	for _, info := range addrInfos {
 		if info.ID == c.host.ID() {

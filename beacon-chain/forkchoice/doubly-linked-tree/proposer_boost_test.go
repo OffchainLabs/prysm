@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 // Helper function to simulate the block being on time or delayed for proposer
@@ -484,23 +484,23 @@ func TestForkChoice_missingProposerBoostRoots(t *testing.T) {
 	}
 	f.justifiedBalances = balances
 	driftGenesisTime(f, 1, 0)
-	st, root, err := prepareForkchoiceState(ctx, 1, [32]byte{'r'}, [32]byte{}, [32]byte{}, 1, 1)
+	st, blk, err := prepareForkchoiceState(ctx, 1, [32]byte{'r'}, [32]byte{}, [32]byte{}, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, root))
+	require.NoError(t, f.InsertNode(ctx, st, blk))
 
 	f.store.previousProposerBoostRoot = [32]byte{'p'}
 	headRoot, err := f.Head(ctx)
 	require.NoError(t, err)
-	require.Equal(t, root, headRoot)
+	require.Equal(t, blk.Root(), headRoot)
 	require.Equal(t, [32]byte{'r'}, f.store.proposerBoostRoot)
 
 	f.store.proposerBoostRoot = [32]byte{'p'}
 	driftGenesisTime(f, 3, 0)
-	st, root, err = prepareForkchoiceState(ctx, 2, [32]byte{'a'}, [32]byte{'r'}, [32]byte{}, 1, 1)
+	st, blk, err = prepareForkchoiceState(ctx, 2, [32]byte{'a'}, [32]byte{'r'}, [32]byte{}, 1, 1)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, root))
+	require.NoError(t, f.InsertNode(ctx, st, blk))
 	headRoot, err = f.Head(ctx)
 	require.NoError(t, err)
-	require.Equal(t, root, headRoot)
+	require.Equal(t, blk.Root(), headRoot)
 	require.Equal(t, [32]byte{'p'}, f.store.proposerBoostRoot)
 }

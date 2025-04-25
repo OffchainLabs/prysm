@@ -1,11 +1,14 @@
 package blocks
 
 import (
-	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"fmt"
+
+	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 )
 
 // SetSignature sets the signature of the signed beacon block.
@@ -64,14 +67,56 @@ func (b *SignedBeaconBlock) SetProposerSlashings(p []*eth.ProposerSlashing) {
 
 // SetAttesterSlashings sets the attester slashings in the block.
 // This function is not thread safe, it is only used during block creation.
-func (b *SignedBeaconBlock) SetAttesterSlashings(a []*eth.AttesterSlashing) {
-	b.block.body.attesterSlashings = a
+func (b *SignedBeaconBlock) SetAttesterSlashings(slashings []eth.AttSlashing) error {
+	if b.version < version.Electra {
+		blockSlashings := make([]*eth.AttesterSlashing, 0, len(slashings))
+		for _, slashing := range slashings {
+			s, ok := slashing.(*eth.AttesterSlashing)
+			if !ok {
+				return fmt.Errorf("slashing of type %T is not *eth.AttesterSlashing", slashing)
+			}
+			blockSlashings = append(blockSlashings, s)
+		}
+		b.block.body.attesterSlashings = blockSlashings
+	} else {
+		blockSlashings := make([]*eth.AttesterSlashingElectra, 0, len(slashings))
+		for _, slashing := range slashings {
+			s, ok := slashing.(*eth.AttesterSlashingElectra)
+			if !ok {
+				return fmt.Errorf("slashing of type %T is not *eth.AttesterSlashingElectra", slashing)
+			}
+			blockSlashings = append(blockSlashings, s)
+		}
+		b.block.body.attesterSlashingsElectra = blockSlashings
+	}
+	return nil
 }
 
 // SetAttestations sets the attestations in the block.
 // This function is not thread safe, it is only used during block creation.
-func (b *SignedBeaconBlock) SetAttestations(a []*eth.Attestation) {
-	b.block.body.attestations = a
+func (b *SignedBeaconBlock) SetAttestations(atts []eth.Att) error {
+	if b.version < version.Electra {
+		blockAtts := make([]*eth.Attestation, 0, len(atts))
+		for _, att := range atts {
+			a, ok := att.(*eth.Attestation)
+			if !ok {
+				return fmt.Errorf("attestation of type %T is not *eth.Attestation", att)
+			}
+			blockAtts = append(blockAtts, a)
+		}
+		b.block.body.attestations = blockAtts
+	} else {
+		blockAtts := make([]*eth.AttestationElectra, 0, len(atts))
+		for _, att := range atts {
+			a, ok := att.(*eth.AttestationElectra)
+			if !ok {
+				return fmt.Errorf("attestation of type %T is not *eth.AttestationElectra", att)
+			}
+			blockAtts = append(blockAtts, a)
+		}
+		b.block.body.attestationsElectra = blockAtts
+	}
+	return nil
 }
 
 // SetDeposits sets the deposits in the block.
@@ -122,13 +167,18 @@ func (b *SignedBeaconBlock) SetBLSToExecutionChanges(blsToExecutionChanges []*et
 
 // SetBlobKzgCommitments sets the blob kzg commitments in the block.
 func (b *SignedBeaconBlock) SetBlobKzgCommitments(c [][]byte) error {
-	switch b.version {
-	case version.Phase0, version.Altair, version.Bellatrix, version.Capella:
+	if b.version < version.Deneb {
 		return consensus_types.ErrNotSupported("SetBlobKzgCommitments", b.version)
-	case version.Deneb:
-		b.block.body.blobKzgCommitments = c
-		return nil
-	default:
-		return errIncorrectBlockVersion
 	}
+	b.block.body.blobKzgCommitments = c
+	return nil
+}
+
+// SetExecutionRequests sets the execution requests in the block.
+func (b *SignedBeaconBlock) SetExecutionRequests(req *enginev1.ExecutionRequests) error {
+	if b.version < version.Electra {
+		return consensus_types.ErrNotSupported("SetExecutionRequests", b.version)
+	}
+	b.block.body.executionRequests = req
+	return nil
 }

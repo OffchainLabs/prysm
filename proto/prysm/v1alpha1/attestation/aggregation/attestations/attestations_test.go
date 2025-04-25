@@ -2,24 +2,25 @@ package attestations
 
 import (
 	"io"
+	"os"
 	"sort"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/encoding/ssz/equality"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation/aggregation"
+	aggtesting "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation/aggregation/testing"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/encoding/ssz/equality"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation/aggregation"
-	aggtesting "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation/aggregation/testing"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/sirupsen/logrus"
 )
 
 func TestMain(m *testing.M) {
 	logrus.SetLevel(logrus.DebugLevel)
 	logrus.SetOutput(io.Discard)
-	m.Run()
+	os.Exit(m.Run())
 }
 
 func TestAggregateAttestations_AggregatePair(t *testing.T) {
@@ -215,14 +216,14 @@ func TestAggregateAttestations_Aggregate(t *testing.T) {
 			}
 			require.NoError(t, err)
 			sort.Slice(got, func(i, j int) bool {
-				return got[i].AggregationBits.Bytes()[0] < got[j].AggregationBits.Bytes()[0]
+				return got[i].GetAggregationBits().Bytes()[0] < got[j].GetAggregationBits().Bytes()[0]
 			})
 			sort.Slice(tt.want, func(i, j int) bool {
 				return tt.want[i].Bytes()[0] < tt.want[j].Bytes()[0]
 			})
 			assert.Equal(t, len(tt.want), len(got))
 			for i, w := range tt.want {
-				assert.DeepEqual(t, w.Bytes(), got[i].AggregationBits.Bytes())
+				assert.DeepEqual(t, w.Bytes(), got[i].GetAggregationBits().Bytes())
 			}
 		}
 		t.Run(tt.name, func(t *testing.T) {
@@ -259,7 +260,7 @@ func TestAggregateAttestations_Aggregate(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, len(want), len(got))
 		for i, w := range want {
-			assert.DeepEqual(t, w.Bytes(), got[i].AggregationBits.Bytes())
+			assert.DeepEqual(t, w.Bytes(), got[i].GetAggregationBits().Bytes())
 		}
 	})
 }

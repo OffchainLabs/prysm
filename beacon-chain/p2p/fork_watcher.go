@@ -1,8 +1,8 @@
 package p2p
 
 import (
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 )
 
 // A background routine which listens for new and upcoming forks and
@@ -17,7 +17,9 @@ func (s *Service) forkWatcher() {
 			if currEpoch == params.BeaconConfig().AltairForkEpoch ||
 				currEpoch == params.BeaconConfig().BellatrixForkEpoch ||
 				currEpoch == params.BeaconConfig().CapellaForkEpoch ||
-				currEpoch == params.BeaconConfig().DenebForkEpoch {
+				currEpoch == params.BeaconConfig().DenebForkEpoch ||
+				currEpoch == params.BeaconConfig().ElectraForkEpoch ||
+				currEpoch == params.BeaconConfig().FuluForkEpoch {
 				// If we are in the fork epoch, we update our enr with
 				// the updated fork digest. These repeatedly does
 				// this over the epoch, which might be slightly wasteful

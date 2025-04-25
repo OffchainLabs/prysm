@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/sirupsen/logrus"
 )
 
@@ -121,17 +121,20 @@ func (s *Service) processSlashings(blk interfaces.ReadOnlyBeaconBlock) {
 	for _, slashing := range blk.Body().AttesterSlashings() {
 		for _, idx := range blocks.SlashableAttesterIndices(slashing) {
 			if s.trackedIndex(primitives.ValidatorIndex(idx)) {
+				data1 := slashing.FirstAttestation().GetData()
+				data2 := slashing.SecondAttestation().GetData()
+
 				log.WithFields(logrus.Fields{
 					"attesterIndex":      idx,
 					"blockInclusionSlot": blk.Slot(),
-					"attestationSlot1":   slashing.Attestation_1.Data.Slot,
-					"beaconBlockRoot1":   fmt.Sprintf("%#x", bytesutil.Trunc(slashing.Attestation_1.Data.BeaconBlockRoot)),
-					"sourceEpoch1":       slashing.Attestation_1.Data.Source.Epoch,
-					"targetEpoch1":       slashing.Attestation_1.Data.Target.Epoch,
-					"attestationSlot2":   slashing.Attestation_2.Data.Slot,
-					"beaconBlockRoot2":   fmt.Sprintf("%#x", bytesutil.Trunc(slashing.Attestation_2.Data.BeaconBlockRoot)),
-					"sourceEpoch2":       slashing.Attestation_2.Data.Source.Epoch,
-					"targetEpoch2":       slashing.Attestation_2.Data.Target.Epoch,
+					"attestationSlot1":   data1.Slot,
+					"beaconBlockRoot1":   fmt.Sprintf("%#x", bytesutil.Trunc(data1.BeaconBlockRoot)),
+					"sourceEpoch1":       data1.Source.Epoch,
+					"targetEpoch1":       data1.Target.Epoch,
+					"attestationSlot2":   data2.Slot,
+					"beaconBlockRoot2":   fmt.Sprintf("%#x", bytesutil.Trunc(data2.BeaconBlockRoot)),
+					"sourceEpoch2":       data2.Source.Epoch,
+					"targetEpoch2":       data2.Target.Epoch,
 				}).Info("Attester slashing was included")
 			}
 		}

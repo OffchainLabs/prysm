@@ -2,20 +2,18 @@ package iface
 
 import (
 	"context"
-	"errors"
 	"time"
 
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/proposer"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v6/api/client/beacon/health"
+	"github.com/OffchainLabs/prysm/v6/api/client/event"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/proposer"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
 )
-
-// ErrConnectionIssue represents a connection problem.
-var ErrConnectionIssue = errors.New("could not connect")
 
 // ValidatorRole defines the validator role.
 type ValidatorRole int8
@@ -57,17 +55,22 @@ type Validator interface {
 	UpdateDomainDataCaches(ctx context.Context, slot primitives.Slot)
 	WaitForKeymanagerInitialization(ctx context.Context) error
 	Keymanager() (keymanager.IKeymanager, error)
-	ReceiveSlots(ctx context.Context, connectionErrorChannel chan<- error)
 	HandleKeyReload(ctx context.Context, currentKeys [][fieldparams.BLSPubkeyLength]byte) (bool, error)
 	CheckDoppelGanger(ctx context.Context) error
-	PushProposerSettings(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, deadline time.Time) error
-	SignValidatorRegistrationRequest(ctx context.Context, signer SigningFunc, newValidatorRegistration *ethpb.ValidatorRegistrationV1) (*ethpb.SignedValidatorRegistrationV1, error)
+	PushProposerSettings(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, forceFullPush bool) error
+	SignValidatorRegistrationRequest(ctx context.Context, signer SigningFunc, newValidatorRegistration *ethpb.ValidatorRegistrationV1) (*ethpb.SignedValidatorRegistrationV1, bool /* isCached */, error)
+	StartEventStream(ctx context.Context, topics []string, eventsChan chan<- *event.Event)
+	EventStreamIsRunning() bool
+	ProcessEvent(ctx context.Context, event *event.Event)
 	ProposerSettings() *proposer.Settings
 	SetProposerSettings(context.Context, *proposer.Settings) error
-	StartEventStream(ctx context.Context) error
-	EventStreamIsRunning() bool
-	NodeIsHealthy(ctx context.Context) bool
+	Graffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) ([]byte, error)
+	SetGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, graffiti []byte) error
+	DeleteGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) error
+	HealthTracker() health.Tracker
+	Host() string
+	ChangeHost()
 }
 
-// SigningFunc interface defines a type for the a function that signs a message
+// SigningFunc interface defines a type for the function that signs a message
 type SigningFunc func(context.Context, *validatorpb.SignRequest) (bls.Signature, error)

@@ -5,9 +5,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
 // ProcessEth1DataInBlock is an operation performed on each
@@ -58,10 +58,9 @@ func AreEth1DataEqual(a, b *ethpb.Eth1Data) bool {
 // votes to see if they match the eth1data.
 func Eth1DataHasEnoughSupport(beaconState state.ReadOnlyBeaconState, data *ethpb.Eth1Data) (bool, error) {
 	voteCount := uint64(0)
-	data = ethpb.CopyETH1Data(data)
 
 	for _, vote := range beaconState.Eth1DataVotes() {
-		if AreEth1DataEqual(vote, data) {
+		if AreEth1DataEqual(vote, data.Copy()) {
 			voteCount++
 		}
 	}

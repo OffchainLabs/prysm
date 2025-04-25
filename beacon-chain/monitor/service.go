@@ -6,16 +6,16 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/prysmaticlabs/prysm/v5/async/event"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
-	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/OffchainLabs/prysm/v6/async/event"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
+	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/sirupsen/logrus"
 )
 
@@ -235,6 +235,13 @@ func (s *Service) monitorRoutine(stateChannel chan *feed.Event, stateSub event.S
 					log.Error("Event feed data is not of type *operation.AggregatedAttReceivedData")
 				} else {
 					s.processAggregatedAttestation(s.ctx, data.Attestation)
+				}
+			case operation.SingleAttReceived:
+				data, ok := e.Data.(*operation.SingleAttReceivedData)
+				if !ok {
+					log.Error("Event feed data is not of type *operation.SingleAttReceivedData")
+				} else {
+					s.processSingleAttestation(data.Attestation)
 				}
 			case operation.ExitReceived:
 				data, ok := e.Data.(*operation.ExitReceivedData)

@@ -1,0 +1,6 @@
+### Security
+
+- Fix CVE-2025-22869
+- Fix CVE-2025-22870
+- Fix CVE-2025-22872
+- Fix CVE-2025-30204

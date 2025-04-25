@@ -4,14 +4,14 @@ import (
 	"context"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	mock "github.com/prysmaticlabs/prysm/v5/testing/validator-mock"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/validator"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	mock "github.com/OffchainLabs/prysm/v6/testing/validator-mock"
+	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
 	"go.uber.org/mock/gomock"
 )
 
@@ -83,8 +83,8 @@ func TestGetValidatorCount(t *testing.T) {
 			Slashed:           false,
 		},
 	}
-	for _, validator := range validators {
-		require.NoError(t, st.AppendValidator(validator))
+	for _, v := range validators {
+		require.NoError(t, st.AppendValidator(v))
 		require.NoError(t, st.AppendBalance(params.BeaconConfig().MaxEffectiveBalance))
 	}
 
@@ -291,8 +291,8 @@ func TestGetValidatorCount(t *testing.T) {
 				})
 			}
 
-			beaconChainClient := mock.NewMockBeaconChainClient(ctrl)
-			beaconChainClient.EXPECT().ListValidators(
+			chainClient := mock.NewMockChainClient(ctrl)
+			chainClient.EXPECT().Validators(
 				gomock.Any(),
 				gomock.Any(),
 			).Return(
@@ -300,7 +300,7 @@ func TestGetValidatorCount(t *testing.T) {
 				nil,
 			)
 
-			beaconChainClient.EXPECT().GetChainHead(
+			chainClient.EXPECT().ChainHead(
 				gomock.Any(),
 				gomock.Any(),
 			).Return(
@@ -308,8 +308,8 @@ func TestGetValidatorCount(t *testing.T) {
 				nil,
 			)
 
-			prysmBeaconChainClient := &grpcPrysmBeaconChainClient{
-				beaconChainClient: beaconChainClient,
+			prysmBeaconChainClient := &grpcPrysmChainClient{
+				chainClient: chainClient,
 			}
 
 			var statuses []validator.Status
@@ -318,7 +318,7 @@ func TestGetValidatorCount(t *testing.T) {
 				require.Equal(t, true, ok)
 				statuses = append(statuses, valStatus)
 			}
-			vcCountResp, err := prysmBeaconChainClient.GetValidatorCount(context.Background(), "", statuses)
+			vcCountResp, err := prysmBeaconChainClient.ValidatorCount(context.Background(), "", statuses)
 			require.NoError(t, err)
 			require.DeepEqual(t, test.expectedResponse, vcCountResp)
 		})

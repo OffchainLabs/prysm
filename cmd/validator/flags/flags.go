@@ -8,16 +8,17 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
+	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/io/file"
 	"github.com/urfave/cli/v2"
 )
 
 const (
 	// WalletDefaultDirName for accounts.
 	WalletDefaultDirName = "prysm-wallet-v2"
-	// DefaultGatewayHost for the validator client.
-	DefaultGatewayHost = "127.0.0.1"
+	// DefaultHTTPServerHost for the validator client.
+	DefaultHTTPServerHost = "127.0.0.1"
 )
 
 var (
@@ -30,16 +31,12 @@ var (
 	}
 	// BeaconRPCProviderFlag defines a beacon node RPC endpoint.
 	BeaconRPCProviderFlag = &cli.StringFlag{
-		Name:  "beacon-rpc-provider",
-		Usage: "Beacon node RPC provider endpoint.",
+		Name: "beacon-rpc-provider",
+		Usage: `WARNING: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+		Beacon node RPC provider endpoint.`,
 		Value: "127.0.0.1:4000",
 	}
-	// BeaconRPCGatewayProviderFlag defines a beacon node JSON-RPC endpoint.
-	BeaconRPCGatewayProviderFlag = &cli.StringFlag{
-		Name:  "beacon-rpc-gateway-provider",
-		Usage: "Beacon node RPC gateway provider endpoint.",
-		Value: "127.0.0.1:3500",
-	}
+
 	// BeaconRESTApiProviderFlag defines a beacon node REST API endpoint.
 	BeaconRESTApiProviderFlag = &cli.StringFlag{
 		Name:  "beacon-rest-api-provider",
@@ -90,48 +87,61 @@ var (
 		Name:  "graffiti",
 		Usage: "String to include in proposed blocks.",
 	}
-	// GrpcRetriesFlag defines the number of times to retry a failed gRPC request.
-	GrpcRetriesFlag = &cli.UintFlag{
-		Name:  "grpc-retries",
-		Usage: "Number of attempts to retry gRPC requests.",
+	// GRPCRetriesFlag defines the number of times to retry a failed gRPC request.
+	GRPCRetriesFlag = &cli.UintFlag{
+		Name: "grpc-retries",
+		Usage: `WARNING: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+		Number of attempts to retry gRPC requests.`,
 		Value: 5,
 	}
-	// GrpcRetryDelayFlag defines the interval to retry a failed gRPC request.
-	GrpcRetryDelayFlag = &cli.DurationFlag{
-		Name:  "grpc-retry-delay",
-		Usage: "Amount of time between gRPC retry requests.",
+	// GRPCRetryDelayFlag defines the interval to retry a failed gRPC request.
+	GRPCRetryDelayFlag = &cli.DurationFlag{
+		Name: "grpc-retry-delay",
+		Usage: `WARNING: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+		Amount of time between gRPC retry requests.`,
 		Value: 1 * time.Second,
 	}
-	// GrpcHeadersFlag defines a list of headers to send with all gRPC requests.
-	GrpcHeadersFlag = &cli.StringFlag{
+	// GRPCHeadersFlag defines a list of headers to send with all gRPC requests.
+	GRPCHeadersFlag = &cli.StringFlag{
 		Name: "grpc-headers",
-		Usage: `Comma separated list of key value pairs to pass as gRPC headers for all gRPC calls.
+		Usage: `WARNING: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+		Comma separated list of key value pairs to pass as gRPC headers for all gRPC calls.
 		Example: --grpc-headers=key=value`,
 	}
-	// GRPCGatewayHost specifies a gRPC gateway host for the validator client.
-	GRPCGatewayHost = &cli.StringFlag{
-		Name:  "grpc-gateway-host",
-		Usage: "Host on which the gateway server runs on.",
-		Value: DefaultGatewayHost,
+	// HTTPServerHost specifies a HTTP server host for the validator client.
+	HTTPServerHost = &cli.StringFlag{
+		Name:    "http-host",
+		Usage:   "Host on which the HTTP server runs on.",
+		Value:   DefaultHTTPServerHost,
+		Aliases: []string{"grpc-gateway-host"},
 	}
-	// GRPCGatewayPort enables a gRPC gateway to be exposed for the validator client.
-	GRPCGatewayPort = &cli.IntFlag{
-		Name:  "grpc-gateway-port",
-		Usage: "Enables gRPC gateway for JSON requests.",
-		Value: 7500,
+	// HTTPServerPort enables a HTTP server port to be exposed for the validator client.
+	HTTPServerPort = &cli.IntFlag{
+		Name:    "http-port",
+		Usage:   "Port on which the HTTP server runs on.",
+		Value:   7500,
+		Aliases: []string{"grpc-gateway-port"},
 	}
-	// GPRCGatewayCorsDomain serves preflight requests when serving gRPC JSON gateway.
-	GPRCGatewayCorsDomain = &cli.StringFlag{
-		Name: "grpc-gateway-corsdomain",
-		Usage: `Comma separated list of domains from which to accept cross origin requests (browser enforced).
-		This flag has no effect if not used with --grpc-gateway-port.
-`,
-		Value: "http://localhost:7500,http://127.0.0.1:7500,http://0.0.0.0:7500,http://localhost:4242,http://127.0.0.1:4242,http://localhost:4200,http://0.0.0.0:4242,http://127.0.0.1:4200,http://0.0.0.0:4200,http://localhost:3000,http://0.0.0.0:3000,http://127.0.0.1:3000"}
+	// HTTPServerCorsDomain adds accepted cross origin request addresses.
+	HTTPServerCorsDomain = &cli.StringFlag{
+		Name:    "http-cors-domain",
+		Usage:   `Comma separated list of domains from which to accept cross origin requests (browser enforced).`,
+		Value:   "http://localhost:7500,http://127.0.0.1:7500,http://0.0.0.0:7500,http://localhost:4242,http://127.0.0.1:4242,http://localhost:4200,http://0.0.0.0:4242,http://127.0.0.1:4200,http://0.0.0.0:4200,http://localhost:3000,http://0.0.0.0:3000,http://127.0.0.1:3000",
+		Aliases: []string{"grpc-gateway-corsdomain"},
+	}
 	// MonitoringPortFlag defines the http port used to serve prometheus metrics.
 	MonitoringPortFlag = &cli.IntFlag{
 		Name:  "monitoring-port",
 		Usage: "Port used to listening and respond metrics for Prometheus.",
 		Value: 8081,
+	}
+
+	// AuthTokenPathFlag defines the path to the auth token used to secure the validator api.
+	AuthTokenPathFlag = &cli.StringFlag{
+		Name:    "keymanager-token-file",
+		Usage:   "Path to auth token file used for validator apis.",
+		Value:   filepath.Join(filepath.Join(DefaultValidatorDir(), WalletDefaultDirName), api.AuthTokenFileName),
+		Aliases: []string{"validator-api-bearer-file"},
 	}
 	// WalletDirFlag defines the path to a wallet directory for Prysm accounts.
 	WalletDirFlag = &cli.StringFlag{
@@ -174,7 +184,6 @@ var (
 		Name:  "mnemonic-language",
 		Usage: "Allows specifying mnemonic language. Supported languages are: english|chinese_traditional|chinese_simplified|czech|french|japanese|korean|italian|spanish.",
 	}
-
 	// ShowPrivateKeysFlag for accounts.
 	ShowPrivateKeysFlag = &cli.BoolFlag{
 		Name:  "show-private-keys",
@@ -226,14 +235,15 @@ var (
 		Name:  "force-exit",
 		Usage: "Exits without displaying the confirmation prompt.",
 	}
-	VoluntaryExitJSONOutputPath = &cli.StringFlag{
+	// VoluntaryExitJSONOutputPathFlag to write voluntary exits as JSON files instead of broadcasting them.
+	VoluntaryExitJSONOutputPathFlag = &cli.StringFlag{
 		Name: "exit-json-output-dir",
 		Usage: "Output directory to write voluntary exits as individual unencrypted JSON " +
 			"files. If this flag is provided, voluntary exits will be written to the provided " +
 			"directory and will not be broadcasted.",
 	}
-	// BackupPasswordFile for encrypting accounts a user wishes to back up.
-	BackupPasswordFile = &cli.StringFlag{
+	// BackupPasswordFileFlag for encrypting accounts a user wishes to back up.
+	BackupPasswordFileFlag = &cli.StringFlag{
 		Name:  "backup-password-file",
 		Usage: "Path to a plain-text, .txt file containing the desired password for your backed up accounts.",
 		Value: "",
@@ -254,7 +264,6 @@ var (
 		Name:  "keys-dir",
 		Usage: "Path to a directory where keystores to be imported are stored.",
 	}
-
 	// RemoteSignerCertPathFlag defines the path to a client.crt file for a wallet to connect to
 	// a secure signer via TLS and gRPC.
 	RemoteSignerCertPathFlag = &cli.StringFlag{
@@ -280,18 +289,28 @@ var (
 	// example:--validators-external-signer-url=http://localhost:9000
 	// web3signer documentation can be found in Consensys' web3signer project docs
 	Web3SignerURLFlag = &cli.StringFlag{
-		Name:  "validators-external-signer-url",
-		Usage: "URL for consensys' web3signer software to use with the Prysm validator client.",
-		Value: "",
+		Name:    "validators-external-signer-url",
+		Usage:   "URL for consensys' web3signer software to use with the Prysm validator client.",
+		Value:   "",
+		Aliases: []string{"remote-signer-url"},
 	}
-
 	// Web3SignerPublicValidatorKeysFlag defines a comma-separated list of hex string public keys or external url for web3signer to use for validator signing.
 	// example with external url: --validators-external-signer-public-keys= https://web3signer.com/api/v1/eth2/publicKeys
 	// example with public key: --validators-external-signer-public-keys=0xa99a...e44c,0xb89b...4a0b
 	// web3signer documentation can be found in Consensys' web3signer project docs```
 	Web3SignerPublicValidatorKeysFlag = &cli.StringSliceFlag{
-		Name:  "validators-external-signer-public-keys",
-		Usage: "Comma separated list of public keys OR an external url endpoint for the validator to retrieve public keys from for usage with web3signer.",
+		Name:    "validators-external-signer-public-keys",
+		Usage:   "Comma separated list of public keys OR an external url endpoint for the validator to retrieve public keys from for usage with web3signer.",
+		Aliases: []string{"remote-signer-keys"},
+	}
+
+	// Web3SignerKeyFileFlag defines a file for keys to persist to.
+	// example:--validators-external-signer-key-file=./path/to/keys.txt
+	Web3SignerKeyFileFlag = &cli.StringFlag{
+		Name:    "validators-external-signer-key-file",
+		Usage:   "A file path used to load remote public validator keys and persist them through restarts.",
+		Value:   "",
+		Aliases: []string{"remote-signer-keys-file"},
 	}
 
 	// KeymanagerKindFlag defines the kind of keymanager desired by a user during wallet creation.
@@ -312,7 +331,7 @@ var (
 		Usage: "(Work in progress): Enables the web portal for the validator client.",
 		Value: false,
 	}
-	// SlashingProtectionExportDirFlag allows specifying the outpt directory
+	// SlashingProtectionExportDirFlag allows specifying the output directory
 	// for a validator's slashing protection history.
 	SlashingProtectionExportDirFlag = &cli.StringFlag{
 		Name:  "slashing-protection-export-dir",
@@ -338,7 +357,6 @@ var (
 		fee recipient and gas limit. File format found in docs`,
 		Value: "",
 	}
-
 	// SuggestedFeeRecipientFlag defines the address of the fee recipient.
 	SuggestedFeeRecipientFlag = &cli.StringFlag{
 		Name: "suggested-fee-recipient",
@@ -348,7 +366,6 @@ var (
 		--` + ProposerSettingsFlag.Name + " or --" + ProposerSettingsURLFlag.Name + " flags.",
 		Value: params.BeaconConfig().EthBurnAddressHex,
 	}
-
 	// EnableBuilderFlag enables the periodic validator registration API calls that will update the custom builder with validator settings.
 	EnableBuilderFlag = &cli.BoolFlag{
 		Name: "enable-builder",
@@ -358,25 +375,28 @@ var (
 		Value:   false,
 		Aliases: []string{"enable-validator-registration"},
 	}
-
 	// BuilderGasLimitFlag defines the gas limit for the builder to use for constructing a payload.
 	BuilderGasLimitFlag = &cli.StringFlag{
 		Name:  "suggested-gas-limit",
 		Usage: "Sets gas limit for the builder to use for constructing a payload for all the validators.",
 		Value: fmt.Sprint(params.BeaconConfig().DefaultBuilderGasLimit),
 	}
-
 	// ValidatorsRegistrationBatchSizeFlag sets the maximum size for one batch of validator registrations. Use a non-positive value to disable batching.
 	ValidatorsRegistrationBatchSizeFlag = &cli.IntFlag{
 		Name:  "validators-registration-batch-size",
 		Usage: "Sets the maximum size for one batch of validator registrations. Use a non-positive value to disable batching.",
-		Value: 0,
+		Value: 200,
 	}
-
 	// EnableDistributed enables the usage of prysm validator client in a Distributed Validator Cluster.
 	EnableDistributed = &cli.BoolFlag{
 		Name:  "distributed",
 		Usage: "To enable the use of prysm validator client in Distributed Validator Cluster",
+		Value: false,
+	}
+	// DisableDutiesPolling disables the polling of duties on dependent root changes.
+	DisableDutiesPolling = &cli.BoolFlag{
+		Name:  "disable-duties-polling",
+		Usage: "Disables polling of duties on dependent root changes.",
 		Value: false,
 	}
 )

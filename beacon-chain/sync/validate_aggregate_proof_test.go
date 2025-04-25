@@ -7,29 +7,29 @@ import (
 	"testing"
 	"time"
 
+	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
+	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/prysmaticlabs/go-bitfield"
-	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	dbtest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	mockSync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/initial-sync/testing"
-	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestVerifyIndexInCommittee_CanVerify(t *testing.T) {
@@ -44,20 +44,19 @@ func TestVerifyIndexInCommittee_CanVerify(t *testing.T) {
 
 	bf := bitfield.NewBitlist(validators / uint64(params.BeaconConfig().SlotsPerEpoch))
 	bf.SetBitAt(0, true)
-	att := &ethpb.Attestation{Data: &ethpb.AttestationData{
-		Target: &ethpb.Checkpoint{Epoch: 0}},
-		AggregationBits: bf}
+	att := &ethpb.Attestation{Data: &ethpb.AttestationData{}, AggregationBits: bf}
 
 	committee, err := helpers.BeaconCommitteeFromState(context.Background(), s, att.Data.Slot, att.Data.CommitteeIndex)
 	assert.NoError(t, err)
-	indices, err := attestation.AttestingIndices(att.AggregationBits, committee)
+	indices, err := attestation.AttestingIndices(att, committee)
 	require.NoError(t, err)
-	result, err := service.validateIndexInCommittee(ctx, s, att, primitives.ValidatorIndex(indices[0]))
+
+	result, err := service.validateIndexInCommittee(ctx, att, primitives.ValidatorIndex(indices[0]), committee)
 	require.NoError(t, err)
 	assert.Equal(t, pubsub.ValidationAccept, result)
 
 	wanted := "validator index 1000 is not within the committee"
-	result, err = service.validateIndexInCommittee(ctx, s, att, 1000)
+	result, err = service.validateIndexInCommittee(ctx, att, 1000, committee)
 	assert.ErrorContains(t, wanted, err)
 	assert.Equal(t, pubsub.ValidationReject, result)
 }
@@ -71,8 +70,7 @@ func TestVerifyIndexInCommittee_ExistsInBeaconCommittee(t *testing.T) {
 	s, _ := util.DeterministicGenesisState(t, validators)
 	require.NoError(t, s.SetSlot(params.BeaconConfig().SlotsPerEpoch))
 
-	att := &ethpb.Attestation{Data: &ethpb.AttestationData{
-		Target: &ethpb.Checkpoint{Epoch: 0}}}
+	att := &ethpb.Attestation{Data: &ethpb.AttestationData{}}
 
 	committee, err := helpers.BeaconCommitteeFromState(context.Background(), s, att.Data.Slot, att.Data.CommitteeIndex)
 	require.NoError(t, err)
@@ -81,30 +79,101 @@ func TestVerifyIndexInCommittee_ExistsInBeaconCommittee(t *testing.T) {
 	att.AggregationBits = bl
 
 	service := &Service{}
-	result, err := service.validateIndexInCommittee(ctx, s, att, committee[0])
+	result, err := service.validateIndexInCommittee(ctx, att, committee[0], committee)
 	require.ErrorContains(t, "no attesting indices", err)
 	assert.Equal(t, pubsub.ValidationReject, result)
 
 	att.AggregationBits.SetBitAt(0, true)
 
-	result, err = service.validateIndexInCommittee(ctx, s, att, committee[0])
+	result, err = service.validateIndexInCommittee(ctx, att, committee[0], committee)
 	require.NoError(t, err)
 	assert.Equal(t, pubsub.ValidationAccept, result)
 
 	wanted := "validator index 1000 is not within the committee"
-	result, err = service.validateIndexInCommittee(ctx, s, att, 1000)
+	result, err = service.validateIndexInCommittee(ctx, att, 1000, committee)
 	assert.ErrorContains(t, wanted, err)
 	assert.Equal(t, pubsub.ValidationReject, result)
 
-	att.AggregationBits = bitfield.NewBitlist(1)
-	result, err = service.validateIndexInCommittee(ctx, s, att, committee[0])
-	require.ErrorContains(t, "wanted participants bitfield length 4, got: 1", err)
-	assert.Equal(t, pubsub.ValidationReject, result)
-
 	att.Data.CommitteeIndex = 10000
-	result, err = service.validateIndexInCommittee(ctx, s, att, committee[0])
+	_, _, result, err = service.validateCommitteeIndexAndCount(ctx, att, s)
 	require.ErrorContains(t, "committee index 10000 > 2", err)
 	assert.Equal(t, pubsub.ValidationReject, result)
+}
+
+func TestVerifyIndexInCommittee_ExistsInBeaconCommittee_Electra(t *testing.T) {
+	ctx := context.Background()
+	params.SetupTestConfigCleanup(t)
+	params.OverrideBeaconConfig(params.MinimalSpecConfig())
+
+	validators := uint64(64)
+	s, _ := util.DeterministicGenesisState(t, validators)
+	require.NoError(t, s.SetSlot(params.BeaconConfig().SlotsPerEpoch))
+
+	att := &ethpb.AttestationElectra{Data: &ethpb.AttestationData{}}
+
+	committee, err := helpers.BeaconCommitteeFromState(context.Background(), s, att.Data.Slot, att.Data.CommitteeIndex)
+	require.NoError(t, err)
+
+	bl := bitfield.NewBitlist(uint64(len(committee)))
+	att.AggregationBits = bl
+	att.CommitteeBits = primitives.NewAttestationCommitteeBits()
+
+	service := &Service{}
+
+	att.Data.CommitteeIndex = 1
+	_, _, result, err := service.validateCommitteeIndexAndCount(ctx, att, s)
+	require.ErrorContains(t, "attestation data's committee index must be 0", err)
+	assert.Equal(t, pubsub.ValidationReject, result)
+
+	att.Data.CommitteeIndex = 0
+	_, _, result, err = service.validateCommitteeIndexAndCount(ctx, att, s)
+	require.ErrorContains(t, "committee bits have no bit set", err)
+	assert.Equal(t, pubsub.ValidationReject, result)
+
+	att.CommitteeBits.SetBitAt(0, true)
+	att.CommitteeBits.SetBitAt(1, true)
+
+	_, _, result, err = service.validateCommitteeIndexAndCount(ctx, att, s)
+	require.ErrorContains(t, "expected 1 committee bit indice got 2", err)
+	assert.Equal(t, pubsub.ValidationReject, result)
+
+	// Unset committee index 0
+	att.CommitteeBits.SetBitAt(0, false)
+	ci, _, result, err := service.validateCommitteeIndexAndCount(ctx, att, s)
+	require.NoError(t, err)
+	assert.Equal(t, pubsub.ValidationAccept, result)
+	assert.Equal(t, ci, primitives.CommitteeIndex(1))
+
+	newAtt := &ethpb.SingleAttestation{Data: &ethpb.AttestationData{}, CommitteeId: 1}
+
+	newAtt.Data.CommitteeIndex = 1
+	_, _, result, err = service.validateCommitteeIndexAndCount(ctx, newAtt, s)
+	require.ErrorContains(t, "attestation data's committee index must be 0", err)
+	assert.Equal(t, pubsub.ValidationReject, result)
+
+	newAtt.Data.CommitteeIndex = 0
+	ci, _, result, err = service.validateCommitteeIndexAndCount(ctx, newAtt, s)
+	require.NoError(t, err)
+	assert.Equal(t, pubsub.ValidationAccept, result)
+	assert.Equal(t, ci, primitives.CommitteeIndex(1))
+}
+
+func TestVerifyIndexInCommittee_Electra(t *testing.T) {
+	ctx := context.Background()
+	s, _ := util.DeterministicGenesisStateElectra(t, 64)
+	service := &Service{}
+	cb := primitives.NewAttestationCommitteeBits()
+	cb.SetBitAt(0, true)
+	att := &ethpb.AttestationElectra{Data: &ethpb.AttestationData{}, CommitteeBits: cb}
+	committee, err := helpers.BeaconCommitteeFromState(context.Background(), s, att.Data.Slot, att.Data.CommitteeIndex)
+	require.NoError(t, err)
+	bl := bitfield.NewBitlist(uint64(len(committee)))
+	bl.SetBitAt(0, true)
+	att.AggregationBits = bl
+
+	result, err := service.validateIndexInCommittee(ctx, att, committee[0], committee)
+	require.NoError(t, err)
+	assert.Equal(t, pubsub.ValidationAccept, result)
 }
 
 func TestVerifySelection_NotAnAggregator(t *testing.T) {
@@ -116,8 +185,9 @@ func TestVerifySelection_NotAnAggregator(t *testing.T) {
 
 	sig := privKeys[0].Sign([]byte{'A'})
 	data := util.HydrateAttestationData(&ethpb.AttestationData{})
-
-	_, err := validateSelectionIndex(ctx, beaconState, data, 0, sig.Marshal())
+	committee, err := helpers.BeaconCommitteeFromState(ctx, beaconState, data.Slot, data.CommitteeIndex)
+	require.NoError(t, err)
+	_, err = validateSelectionIndex(ctx, beaconState, data.Slot, committee, 0, sig.Marshal())
 	wanted := "validator is not an aggregator for slot"
 	assert.ErrorContains(t, wanted, err)
 }
@@ -149,7 +219,7 @@ func TestValidateAggregateAndProof_NoBlock(t *testing.T) {
 			attPool:     attestations.NewPool(),
 			chain:       &mock.ChainService{},
 		},
-		blkRootToPendingAtts:           make(map[[32]byte][]*ethpb.SignedAggregateAttestationAndProof),
+		blkRootToPendingAtts:           make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
 		seenAggregatedAttestationCache: c,
 	}
 	r.initCaches()
@@ -302,7 +372,7 @@ func TestValidateAggregateAndProof_ExistedInPool(t *testing.T) {
 			attestationNotifier: (&mock.ChainService{}).OperationNotifier(),
 		},
 		seenAggregatedAttestationCache: lruwrpr.New(10),
-		blkRootToPendingAtts:           make(map[[32]byte][]*ethpb.SignedAggregateAttestationAndProof),
+		blkRootToPendingAtts:           make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
 	}
 	r.initCaches()
 
@@ -354,7 +424,7 @@ func TestValidateAggregateAndProof_CanValidate(t *testing.T) {
 
 	committee, err := helpers.BeaconCommitteeFromState(context.Background(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
 	assert.NoError(t, err)
-	attestingIndices, err := attestation.AttestingIndices(att.AggregationBits, committee)
+	attestingIndices, err := attestation.AttestingIndices(att, committee)
 	require.NoError(t, err)
 	assert.NoError(t, err)
 	attesterDomain, err := signing.Domain(beaconState.Fork(), 0, params.BeaconConfig().DomainBeaconAttester, beaconState.GenesisValidatorsRoot())
@@ -458,7 +528,7 @@ func TestVerifyIndexInCommittee_SeenAggregatorEpoch(t *testing.T) {
 
 	committee, err := helpers.BeaconCommitteeFromState(context.Background(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
 	require.NoError(t, err)
-	attestingIndices, err := attestation.AttestingIndices(att.AggregationBits, committee)
+	attestingIndices, err := attestation.AttestingIndices(att, committee)
 	require.NoError(t, err)
 	attesterDomain, err := signing.Domain(beaconState.Fork(), 0, params.BeaconConfig().DomainBeaconAttester, beaconState.GenesisValidatorsRoot())
 	require.NoError(t, err)
@@ -577,7 +647,7 @@ func TestValidateAggregateAndProof_BadBlock(t *testing.T) {
 
 	committee, err := helpers.BeaconCommitteeFromState(context.Background(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
 	assert.NoError(t, err)
-	attestingIndices, err := attestation.AttestingIndices(att.AggregationBits, committee)
+	attestingIndices, err := attestation.AttestingIndices(att, committee)
 	require.NoError(t, err)
 	assert.NoError(t, err)
 	attesterDomain, err := signing.Domain(beaconState.Fork(), 0, params.BeaconConfig().DomainBeaconAttester, beaconState.GenesisValidatorsRoot())
@@ -668,7 +738,7 @@ func TestValidateAggregateAndProof_RejectWhenAttEpochDoesntEqualTargetEpoch(t *t
 
 	committee, err := helpers.BeaconCommitteeFromState(context.Background(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
 	assert.NoError(t, err)
-	attestingIndices, err := attestation.AttestingIndices(att.AggregationBits, committee)
+	attestingIndices, err := attestation.AttestingIndices(att, committee)
 	require.NoError(t, err)
 	assert.NoError(t, err)
 	attesterDomain, err := signing.Domain(beaconState.Fork(), 0, params.BeaconConfig().DomainBeaconAttester, beaconState.GenesisValidatorsRoot())

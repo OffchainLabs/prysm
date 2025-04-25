@@ -2,25 +2,25 @@ package beacon
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/lookup"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	ethpbalpha "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/gorilla/mux"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/lookup"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	ethpbalpha "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	"go.opencensus.io/trace"
 )
 
 type syncCommitteeStateRequest struct {
@@ -33,7 +33,7 @@ func (s *Server) GetStateRoot(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.GetStateRoot")
 	defer span.End()
 
-	stateId := mux.Vars(r)["state_id"]
+	stateId := r.PathValue("state_id")
 	if stateId == "" {
 		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
 		return
@@ -41,11 +41,9 @@ func (s *Server) GetStateRoot(w http.ResponseWriter, r *http.Request) {
 
 	stateRoot, err := s.Stater.StateRoot(ctx, []byte(stateId))
 	if err != nil {
-		if rootNotFoundErr, ok := err.(*lookup.StateRootNotFoundError); ok {
+		var rootNotFoundErr *lookup.StateRootNotFoundError
+		if errors.As(err, &rootNotFoundErr) {
 			httputil.HandleError(w, "State root not found: "+rootNotFoundErr.Error(), http.StatusNotFound)
-			return
-		} else if parseErr, ok := err.(*lookup.StateIdParseError); ok {
-			httputil.HandleError(w, "Invalid state ID: "+parseErr.Error(), http.StatusBadRequest)
 			return
 		}
 		httputil.HandleError(w, "Could not get state root: "+err.Error(), http.StatusInternalServerError)
@@ -86,7 +84,7 @@ func (s *Server) GetRandao(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.GetRandao")
 	defer span.End()
 
-	stateId := mux.Vars(r)["state_id"]
+	stateId := r.PathValue("state_id")
 	if stateId == "" {
 		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
 		return
@@ -152,7 +150,7 @@ func (s *Server) GetSyncCommittees(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.GetSyncCommittees")
 	defer span.End()
 
-	stateId := mux.Vars(r)["state_id"]
+	stateId := r.PathValue("state_id")
 	if stateId == "" {
 		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
 		return
@@ -270,7 +268,7 @@ func currentCommitteeIndicesFromState(st state.BeaconState) ([]string, *ethpbalp
 	committee, err := st.CurrentSyncCommittee()
 	if err != nil {
 		return nil, nil, fmt.Errorf(
-			"could not get sync committee: %v", err,
+			"could not get sync committee: %w", err,
 		)
 	}
 
@@ -281,7 +279,7 @@ func nextCommitteeIndicesFromState(st state.BeaconState) ([]string, *ethpbalpha.
 	committee, err := st.NextSyncCommittee()
 	if err != nil {
 		return nil, nil, fmt.Errorf(
-			"could not get sync committee: %v", err,
+			"could not get sync committee: %w", err,
 		)
 	}
 
@@ -295,7 +293,7 @@ func extractSyncSubcommittees(st state.BeaconState, committee *ethpbalpha.SyncCo
 		pubkeys, err := altair.SyncSubCommitteePubkeys(committee, primitives.CommitteeIndex(i))
 		if err != nil {
 			return nil, fmt.Errorf(
-				"failed to get subcommittee pubkeys: %v", err,
+				"failed to get subcommittee pubkeys: %w", err,
 			)
 		}
 		subcommittee := make([]string, len(pubkeys))

@@ -6,14 +6,14 @@ import (
 	runtimeDebug "runtime/debug"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/cmd/client-stats/flags"
+	"github.com/OffchainLabs/prysm/v6/io/logs"
+	"github.com/OffchainLabs/prysm/v6/monitoring/clientstats"
+	"github.com/OffchainLabs/prysm/v6/monitoring/journald"
+	prefixed "github.com/OffchainLabs/prysm/v6/runtime/logging/logrus-prefixed-formatter"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	joonix "github.com/joonix/log"
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/cmd/client-stats/flags"
-	"github.com/prysmaticlabs/prysm/v5/io/logs"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/clientstats"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/journald"
-	prefixed "github.com/prysmaticlabs/prysm/v5/runtime/logging/logrus-prefixed-formatter"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
@@ -60,7 +60,7 @@ func main() {
 		switch format {
 		case "text":
 			formatter := new(prefixed.TextFormatter)
-			formatter.TimestampFormat = "2006-01-02 15:04:05"
+			formatter.TimestampFormat = time.DateTime
 			formatter.FullTimestamp = true
 			// If persistent log files are written - we disable the log messages coloring because
 			// the colors are ANSI codes and seen as gibberish in the log files.
@@ -69,7 +69,7 @@ func main() {
 		case "fluentd":
 			f := joonix.NewFormatter()
 			if err := joonix.DisableTimestampFormat(f); err != nil {
-				panic(err)
+				panic(err) // lint:nopanic -- This shouldn't happen, but crashing immediately at startup is OK.
 			}
 			logrus.SetFormatter(f)
 		case "json":
@@ -94,7 +94,7 @@ func main() {
 	defer func() {
 		if x := recover(); x != nil {
 			log.Errorf("Runtime panic: %v\n%v", x, string(runtimeDebug.Stack()))
-			panic(x)
+			panic(x) // lint:nopanic -- This is just resurfacing the original panic.
 		}
 	}()
 

@@ -9,7 +9,7 @@ var (
 	backfillWorkerCountName = "backfill-worker-count"
 
 	// EnableExperimentalBackfill enables backfill for checkpoint synced nodes.
-	// This flag will be removed onced backfill is enabled by default.
+	// This flag will be removed once backfill is enabled by default.
 	EnableExperimentalBackfill = &cli.BoolFlag{
 		Name: "enable-experimental-backfill",
 		Usage: "Backfill is still experimental at this time. " +
@@ -22,7 +22,7 @@ var (
 		Usage: "Number of blocks per backfill batch. " +
 			"A larger number will request more blocks at once from peers, but also consume more system memory to " +
 			"hold batches in memory during processing. This has a multiplicative effect with " + backfillWorkerCountName + ".",
-		Value: 64,
+		Value: 32,
 	}
 	// BackfillWorkerCount allows users to tune the number of concurrent backfill batches to download, to maximize
 	// network utilization at the cost of higher memory.
@@ -34,5 +34,10 @@ var (
 			"average block size (~2MB before deneb) to find the right number for your system. " +
 			"This has a multiplicative effect with " + backfillBatchSizeName + ".",
 		Value: 2,
+	}
+	BackfillOldestSlot = &cli.Uint64Flag{
+		Name: "backfill-oldest-slot",
+		Usage: "Specifies the oldest slot that backfill should download. " +
+			"If this value is greater than current_slot - MIN_EPOCHS_FOR_BLOCK_REQUESTS, it will be ignored with a warning log.",
 	}
 )

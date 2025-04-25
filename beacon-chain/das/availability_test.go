@@ -5,17 +5,16 @@ import (
 	"context"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	errors "github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 func Test_commitmentsToCheck(t *testing.T) {
@@ -89,7 +88,7 @@ func Test_commitmentsToCheck(t *testing.T) {
 				require.NoError(t, err)
 				c, err := rb.Block().Body().BlobKzgCommitments()
 				require.NoError(t, err)
-				require.Equal(t, true, len(c) > fieldparams.MaxBlobsPerBlock)
+				require.Equal(t, true, len(c) > params.BeaconConfig().MaxBlobsPerBlock(sb.Block().Slot()))
 				return rb
 			},
 			slot: windowSlots + 1,
@@ -105,7 +104,7 @@ func Test_commitmentsToCheck(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			require.Equal(t, len(c.commits), co.count())
+			require.Equal(t, len(c.commits), len(co))
 			for i := 0; i < len(c.commits); i++ {
 				require.Equal(t, true, bytes.Equal(c.commits[i], co[i]))
 			}

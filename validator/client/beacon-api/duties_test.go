@@ -9,17 +9,14 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	validatormock "github.com/prysmaticlabs/prysm/v5/testing/validator-mock"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
-
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/validator/client/beacon-api/mock"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
 	"go.uber.org/mock/gomock"
 )
 
@@ -66,7 +63,7 @@ func TestGetAttesterDuties_Valid(t *testing.T) {
 	validatorIndices := []primitives.ValidatorIndex{2, 9}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
-		ctx,
+		gomock.Any(),
 		fmt.Sprintf("%s/%d", getAttesterDutiesTestEndpoint, epoch),
 		nil,
 		bytes.NewBuffer(validatorIndicesBytes),
@@ -79,9 +76,9 @@ func TestGetAttesterDuties_Valid(t *testing.T) {
 	).Times(1)
 
 	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
-	attesterDuties, err := dutiesProvider.GetAttesterDuties(ctx, epoch, validatorIndices)
+	attesterDuties, err := dutiesProvider.AttesterDuties(ctx, epoch, validatorIndices)
 	require.NoError(t, err)
-	assert.DeepEqual(t, expectedAttesterDuties.Data, attesterDuties)
+	assert.DeepEqual(t, expectedAttesterDuties.Data, attesterDuties.Data)
 }
 
 func TestGetAttesterDuties_HttpError(t *testing.T) {
@@ -94,7 +91,7 @@ func TestGetAttesterDuties_HttpError(t *testing.T) {
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
-		ctx,
+		gomock.Any(),
 		fmt.Sprintf("%s/%d", getAttesterDutiesTestEndpoint, epoch),
 		gomock.Any(),
 		gomock.Any(),
@@ -104,7 +101,7 @@ func TestGetAttesterDuties_HttpError(t *testing.T) {
 	).Times(1)
 
 	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
-	_, err := dutiesProvider.GetAttesterDuties(ctx, epoch, nil)
+	_, err := dutiesProvider.AttesterDuties(ctx, epoch, nil)
 	assert.ErrorContains(t, "foo error", err)
 }
 
@@ -118,7 +115,7 @@ func TestGetAttesterDuties_NilAttesterDuty(t *testing.T) {
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
-		ctx,
+		gomock.Any(),
 		fmt.Sprintf("%s/%d", getAttesterDutiesTestEndpoint, epoch),
 		gomock.Any(),
 		gomock.Any(),
@@ -133,7 +130,7 @@ func TestGetAttesterDuties_NilAttesterDuty(t *testing.T) {
 	).Times(1)
 
 	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
-	_, err := dutiesProvider.GetAttesterDuties(ctx, epoch, nil)
+	_, err := dutiesProvider.AttesterDuties(ctx, epoch, nil)
 	assert.ErrorContains(t, "attester duty at index `0` is nil", err)
 }
 
@@ -162,7 +159,7 @@ func TestGetProposerDuties_Valid(t *testing.T) {
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
-		ctx,
+		gomock.Any(),
 		fmt.Sprintf("%s/%d", getProposerDutiesTestEndpoint, epoch),
 		&structs.GetProposerDutiesResponse{},
 	).Return(
@@ -173,9 +170,9 @@ func TestGetProposerDuties_Valid(t *testing.T) {
 	).Times(1)
 
 	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
-	proposerDuties, err := dutiesProvider.GetProposerDuties(ctx, epoch)
+	proposerDuties, err := dutiesProvider.ProposerDuties(ctx, epoch)
 	require.NoError(t, err)
-	assert.DeepEqual(t, expectedProposerDuties.Data, proposerDuties)
+	assert.DeepEqual(t, expectedProposerDuties.Data, proposerDuties.Data)
 }
 
 func TestGetProposerDuties_HttpError(t *testing.T) {
@@ -188,7 +185,7 @@ func TestGetProposerDuties_HttpError(t *testing.T) {
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
-		ctx,
+		gomock.Any(),
 		fmt.Sprintf("%s/%d", getProposerDutiesTestEndpoint, epoch),
 		gomock.Any(),
 	).Return(
@@ -196,7 +193,7 @@ func TestGetProposerDuties_HttpError(t *testing.T) {
 	).Times(1)
 
 	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
-	_, err := dutiesProvider.GetProposerDuties(ctx, epoch)
+	_, err := dutiesProvider.ProposerDuties(ctx, epoch)
 	assert.ErrorContains(t, "foo error", err)
 }
 
@@ -210,7 +207,7 @@ func TestGetProposerDuties_NilData(t *testing.T) {
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
-		ctx,
+		gomock.Any(),
 		fmt.Sprintf("%s/%d", getProposerDutiesTestEndpoint, epoch),
 		gomock.Any(),
 	).Return(
@@ -223,7 +220,7 @@ func TestGetProposerDuties_NilData(t *testing.T) {
 	).Times(1)
 
 	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
-	_, err := dutiesProvider.GetProposerDuties(ctx, epoch)
+	_, err := dutiesProvider.ProposerDuties(ctx, epoch)
 	assert.ErrorContains(t, "proposer duties data is nil", err)
 }
 
@@ -237,7 +234,7 @@ func TestGetProposerDuties_NilProposerDuty(t *testing.T) {
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
-		ctx,
+		gomock.Any(),
 		fmt.Sprintf("%s/%d", getProposerDutiesTestEndpoint, epoch),
 		gomock.Any(),
 	).Return(
@@ -250,7 +247,7 @@ func TestGetProposerDuties_NilProposerDuty(t *testing.T) {
 	).Times(1)
 
 	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
-	_, err := dutiesProvider.GetProposerDuties(ctx, epoch)
+	_, err := dutiesProvider.ProposerDuties(ctx, epoch)
 	assert.ErrorContains(t, "proposer duty at index `0` is nil", err)
 }
 
@@ -290,7 +287,7 @@ func TestGetSyncDuties_Valid(t *testing.T) {
 	validatorIndices := []primitives.ValidatorIndex{2, 6}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
-		ctx,
+		gomock.Any(),
 		fmt.Sprintf("%s/%d", getSyncDutiesTestEndpoint, epoch),
 		nil,
 		bytes.NewBuffer(validatorIndicesBytes),
@@ -303,7 +300,7 @@ func TestGetSyncDuties_Valid(t *testing.T) {
 	).Times(1)
 
 	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
-	syncDuties, err := dutiesProvider.GetSyncDuties(ctx, epoch, validatorIndices)
+	syncDuties, err := dutiesProvider.SyncDuties(ctx, epoch, validatorIndices)
 	require.NoError(t, err)
 	assert.DeepEqual(t, expectedSyncDuties.Data, syncDuties)
 }
@@ -318,7 +315,7 @@ func TestGetSyncDuties_HttpError(t *testing.T) {
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
-		ctx,
+		gomock.Any(),
 		fmt.Sprintf("%s/%d", getSyncDutiesTestEndpoint, epoch),
 		gomock.Any(),
 		gomock.Any(),
@@ -328,7 +325,7 @@ func TestGetSyncDuties_HttpError(t *testing.T) {
 	).Times(1)
 
 	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
-	_, err := dutiesProvider.GetSyncDuties(ctx, epoch, nil)
+	_, err := dutiesProvider.SyncDuties(ctx, epoch, nil)
 	assert.ErrorContains(t, "foo error", err)
 }
 
@@ -342,7 +339,7 @@ func TestGetSyncDuties_NilData(t *testing.T) {
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
-		ctx,
+		gomock.Any(),
 		fmt.Sprintf("%s/%d", getSyncDutiesTestEndpoint, epoch),
 		gomock.Any(),
 		gomock.Any(),
@@ -357,7 +354,7 @@ func TestGetSyncDuties_NilData(t *testing.T) {
 	).Times(1)
 
 	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
-	_, err := dutiesProvider.GetSyncDuties(ctx, epoch, nil)
+	_, err := dutiesProvider.SyncDuties(ctx, epoch, nil)
 	assert.ErrorContains(t, "sync duties data is nil", err)
 }
 
@@ -371,7 +368,7 @@ func TestGetSyncDuties_NilSyncDuty(t *testing.T) {
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
-		ctx,
+		gomock.Any(),
 		fmt.Sprintf("%s/%d", getSyncDutiesTestEndpoint, epoch),
 		gomock.Any(),
 		gomock.Any(),
@@ -386,7 +383,7 @@ func TestGetSyncDuties_NilSyncDuty(t *testing.T) {
 	).Times(1)
 
 	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
-	_, err := dutiesProvider.GetSyncDuties(ctx, epoch, nil)
+	_, err := dutiesProvider.SyncDuties(ctx, epoch, nil)
 	assert.ErrorContains(t, "sync duty at index `0` is nil", err)
 }
 
@@ -421,7 +418,7 @@ func TestGetCommittees_Valid(t *testing.T) {
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
-		ctx,
+		gomock.Any(),
 		fmt.Sprintf("%s?epoch=%d", getCommitteesTestEndpoint, epoch),
 		&structs.GetCommitteesResponse{},
 	).Return(
@@ -432,7 +429,7 @@ func TestGetCommittees_Valid(t *testing.T) {
 	).Times(1)
 
 	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
-	committees, err := dutiesProvider.GetCommittees(ctx, epoch)
+	committees, err := dutiesProvider.Committees(ctx, epoch)
 	require.NoError(t, err)
 	assert.DeepEqual(t, expectedCommittees.Data, committees)
 }
@@ -447,7 +444,7 @@ func TestGetCommittees_HttpError(t *testing.T) {
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
-		ctx,
+		gomock.Any(),
 		fmt.Sprintf("%s?epoch=%d", getCommitteesTestEndpoint, epoch),
 		gomock.Any(),
 	).Return(
@@ -455,7 +452,7 @@ func TestGetCommittees_HttpError(t *testing.T) {
 	).Times(1)
 
 	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
-	_, err := dutiesProvider.GetCommittees(ctx, epoch)
+	_, err := dutiesProvider.Committees(ctx, epoch)
 	assert.ErrorContains(t, "foo error", err)
 }
 
@@ -469,7 +466,7 @@ func TestGetCommittees_NilData(t *testing.T) {
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
-		ctx,
+		gomock.Any(),
 		fmt.Sprintf("%s?epoch=%d", getCommitteesTestEndpoint, epoch),
 		gomock.Any(),
 	).Return(
@@ -482,7 +479,7 @@ func TestGetCommittees_NilData(t *testing.T) {
 	).Times(1)
 
 	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
-	_, err := dutiesProvider.GetCommittees(ctx, epoch)
+	_, err := dutiesProvider.Committees(ctx, epoch)
 	assert.ErrorContains(t, "state committees data is nil", err)
 }
 
@@ -496,7 +493,7 @@ func TestGetCommittees_NilCommittee(t *testing.T) {
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
-		ctx,
+		gomock.Any(),
 		fmt.Sprintf("%s?epoch=%d", getCommitteesTestEndpoint, epoch),
 		gomock.Any(),
 	).Return(
@@ -509,7 +506,7 @@ func TestGetCommittees_NilCommittee(t *testing.T) {
 	).Times(1)
 
 	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
-	_, err := dutiesProvider.GetCommittees(ctx, epoch)
+	_, err := dutiesProvider.Committees(ctx, epoch)
 	assert.ErrorContains(t, "committee at index `0` is nil", err)
 }
 
@@ -530,8 +527,6 @@ func TestGetDutiesForEpoch_Error(t *testing.T) {
 		fetchProposerDutiesError error
 		generateSyncDuties       func() []*structs.SyncCommitteeDuty
 		fetchSyncDutiesError     error
-		generateCommittees       func() []*structs.Committee
-		fetchCommitteesError     error
 	}{
 		{
 			name:                     "get attester duties failed",
@@ -541,18 +536,12 @@ func TestGetDutiesForEpoch_Error(t *testing.T) {
 		{
 			name:                     "get proposer duties failed",
 			expectedError:            "failed to get proposer duties for epoch `1`: foo error",
-			fetchAttesterDutiesError: nil,
 			fetchProposerDutiesError: errors.New("foo error"),
 		},
 		{
 			name:                 "get sync duties failed",
 			expectedError:        "failed to get sync duties for epoch `1`: foo error",
 			fetchSyncDutiesError: errors.New("foo error"),
-		},
-		{
-			name:                 "get committees failed",
-			expectedError:        "failed to get committees for epoch `1`: foo error",
-			fetchCommitteesError: errors.New("foo error"),
 		},
 		{
 			name:          "bad attester validator index",
@@ -608,46 +597,6 @@ func TestGetDutiesForEpoch_Error(t *testing.T) {
 				return syncDuties
 			},
 		},
-		{
-			name:          "bad committee index",
-			expectedError: "failed to parse committee index `foo`",
-			generateCommittees: func() []*structs.Committee {
-				committees := generateValidCommittees(committeeIndices, committeeSlots, validatorIndices)
-				committees[0].Index = "foo"
-				return committees
-			},
-		},
-		{
-			name:          "bad committee slot",
-			expectedError: "failed to parse slot `foo`",
-			generateCommittees: func() []*structs.Committee {
-				committees := generateValidCommittees(committeeIndices, committeeSlots, validatorIndices)
-				committees[0].Slot = "foo"
-				return committees
-			},
-		},
-		{
-			name:          "bad committee validator index",
-			expectedError: "failed to parse committee validator index `foo`",
-			generateCommittees: func() []*structs.Committee {
-				committees := generateValidCommittees(committeeIndices, committeeSlots, validatorIndices)
-				committees[0].Validators[0] = "foo"
-				return committees
-			},
-		},
-		{
-			name:          "committee index and slot not found in committees mapping",
-			expectedError: "failed to find validators for committee index `1` and slot `2`",
-			generateAttesterDuties: func() []*structs.AttesterDuty {
-				attesterDuties := generateValidAttesterDuties(pubkeys, validatorIndices, committeeIndices, committeeSlots)
-				attesterDuties[0].CommitteeIndex = "1"
-				attesterDuties[0].Slot = "2"
-				return attesterDuties
-			},
-			generateCommittees: func() []*structs.Committee {
-				return []*structs.Committee{}
-			},
-		},
 	}
 
 	for _, testCase := range testCases {
@@ -678,32 +627,27 @@ func TestGetDutiesForEpoch_Error(t *testing.T) {
 				syncDuties = testCase.generateSyncDuties()
 			}
 
-			var committees []*structs.Committee
-			if testCase.generateCommittees == nil {
-				committees = generateValidCommittees(committeeIndices, committeeSlots, validatorIndices)
-			} else {
-				committees = testCase.generateCommittees()
-			}
-
 			dutiesProvider := mock.NewMockdutiesProvider(ctrl)
-			dutiesProvider.EXPECT().GetAttesterDuties(
+			dutiesProvider.EXPECT().AttesterDuties(
 				ctx,
 				epoch,
 				gomock.Any(),
 			).Return(
-				attesterDuties,
+				&structs.GetAttesterDutiesResponse{Data: attesterDuties},
 				testCase.fetchAttesterDutiesError,
 			).AnyTimes()
 
-			dutiesProvider.EXPECT().GetProposerDuties(
+			dutiesProvider.EXPECT().ProposerDuties(
 				ctx,
 				epoch,
 			).Return(
-				proposerDuties,
+				&structs.GetProposerDutiesResponse{
+					DependentRoot: "0xdeadbeef000000000000000000000000000000000000000000000000",
+					Data:          proposerDuties},
 				testCase.fetchProposerDutiesError,
 			).AnyTimes()
 
-			dutiesProvider.EXPECT().GetSyncDuties(
+			dutiesProvider.EXPECT().SyncDuties(
 				ctx,
 				epoch,
 				gomock.Any(),
@@ -712,36 +656,21 @@ func TestGetDutiesForEpoch_Error(t *testing.T) {
 				testCase.fetchSyncDutiesError,
 			).AnyTimes()
 
-			dutiesProvider.EXPECT().GetCommittees(
-				ctx,
-				epoch,
-			).Return(
-				committees,
-				testCase.fetchCommitteesError,
-			).AnyTimes()
+			vals := make([]validatorForDuty, len(pubkeys))
+			for i := 0; i < len(pubkeys); i++ {
+				vals[i] = validatorForDuty{
+					pubkey: pubkeys[i],
+					index:  validatorIndices[i],
+					status: ethpb.ValidatorStatus_ACTIVE,
+				}
+			}
 
 			validatorClient := &beaconApiValidatorClient{dutiesProvider: dutiesProvider}
-			_, err := validatorClient.getDutiesForEpoch(
+			err := validatorClient.dutiesForEpoch(
 				ctx,
+				&ethpb.ValidatorDutiesContainer{},
 				epoch,
-				&ethpb.MultipleValidatorStatusResponse{
-					PublicKeys: pubkeys,
-					Indices:    validatorIndices,
-					Statuses: []*ethpb.ValidatorStatusResponse{
-						{Status: ethpb.ValidatorStatus_UNKNOWN_STATUS},
-						{Status: ethpb.ValidatorStatus_DEPOSITED},
-						{Status: ethpb.ValidatorStatus_PENDING},
-						{Status: ethpb.ValidatorStatus_ACTIVE},
-						{Status: ethpb.ValidatorStatus_EXITING},
-						{Status: ethpb.ValidatorStatus_SLASHING},
-						{Status: ethpb.ValidatorStatus_EXITED},
-						{Status: ethpb.ValidatorStatus_INVALID},
-						{Status: ethpb.ValidatorStatus_PARTIALLY_DEPOSITED},
-						{Status: ethpb.ValidatorStatus_UNKNOWN_STATUS},
-						{Status: ethpb.ValidatorStatus_DEPOSITED},
-						{Status: ethpb.ValidatorStatus_PENDING},
-					},
-				},
+				vals,
 				true,
 			)
 			assert.ErrorContains(t, testCase.expectedError, err)
@@ -773,76 +702,41 @@ func TestGetDutiesForEpoch_Valid(t *testing.T) {
 			committeeSlots := []primitives.Slot{28, 29, 30}
 			proposerSlots := []primitives.Slot{31, 32, 33, 34, 35, 36, 37, 38}
 
-			statuses := []ethpb.ValidatorStatus{
-				ethpb.ValidatorStatus_UNKNOWN_STATUS,
-				ethpb.ValidatorStatus_DEPOSITED,
-				ethpb.ValidatorStatus_PENDING,
-				ethpb.ValidatorStatus_ACTIVE,
-				ethpb.ValidatorStatus_EXITING,
-				ethpb.ValidatorStatus_SLASHING,
-				ethpb.ValidatorStatus_EXITED,
-				ethpb.ValidatorStatus_INVALID,
-				ethpb.ValidatorStatus_PARTIALLY_DEPOSITED,
-				ethpb.ValidatorStatus_UNKNOWN_STATUS,
-				ethpb.ValidatorStatus_DEPOSITED,
-				ethpb.ValidatorStatus_PENDING,
-			}
-
-			multipleValidatorStatus := &ethpb.MultipleValidatorStatusResponse{
-				PublicKeys: pubkeys,
-				Indices:    validatorIndices,
-				Statuses: []*ethpb.ValidatorStatusResponse{
-					{Status: statuses[0]},
-					{Status: statuses[1]},
-					{Status: statuses[2]},
-					{Status: statuses[3]},
-					{Status: statuses[4]},
-					{Status: statuses[5]},
-					{Status: statuses[6]},
-					{Status: statuses[7]},
-					{Status: statuses[8]},
-					{Status: statuses[9]},
-					{Status: statuses[10]},
-					{Status: statuses[11]},
-				},
-			}
-
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
 			ctx := context.Background()
 
 			dutiesProvider := mock.NewMockdutiesProvider(ctrl)
-			dutiesProvider.EXPECT().GetCommittees(
+
+			dutiesProvider.EXPECT().AttesterDuties(
 				ctx,
 				epoch,
+				validatorIndices,
 			).Return(
-				generateValidCommittees(committeeIndices, committeeSlots, validatorIndices),
+				&structs.GetAttesterDutiesResponse{
+					DependentRoot: "0xdeadbeef000000000000000000000000000000000000000000000000",
+					Data:          generateValidAttesterDuties(pubkeys, validatorIndices, committeeIndices, committeeSlots),
+				},
 				nil,
 			).Times(1)
 
-			dutiesProvider.EXPECT().GetAttesterDuties(
-				ctx,
-				epoch,
-				multipleValidatorStatus.Indices,
-			).Return(
-				generateValidAttesterDuties(pubkeys, validatorIndices, committeeIndices, committeeSlots),
-				nil,
-			).Times(1)
-
-			dutiesProvider.EXPECT().GetProposerDuties(
+			dutiesProvider.EXPECT().ProposerDuties(
 				ctx,
 				epoch,
 			).Return(
-				generateValidProposerDuties(pubkeys, validatorIndices, proposerSlots),
+				&structs.GetProposerDutiesResponse{
+					DependentRoot: "0xdeadbeef000000000000000000000000000000000000000000000000",
+					Data:          generateValidProposerDuties(pubkeys, validatorIndices, proposerSlots),
+				},
 				nil,
 			).Times(1)
 
 			if testCase.fetchSyncDuties {
-				dutiesProvider.EXPECT().GetSyncDuties(
+				dutiesProvider.EXPECT().SyncDuties(
 					ctx,
 					epoch,
-					multipleValidatorStatus.Indices,
+					validatorIndices,
 				).Return(
 					generateValidSyncDuties(pubkeys, validatorIndices),
 					nil,
@@ -883,7 +777,7 @@ func TestGetDutiesForEpoch_Valid(t *testing.T) {
 					CommitteeIndex:   committeeIndices[0],
 					AttesterSlot:     committeeSlots[0],
 					PublicKey:        pubkeys[0],
-					Status:           statuses[0],
+					Status:           ethpb.ValidatorStatus_ACTIVE,
 					ValidatorIndex:   validatorIndices[0],
 					CommitteesAtSlot: 1,
 				},
@@ -895,7 +789,7 @@ func TestGetDutiesForEpoch_Valid(t *testing.T) {
 					CommitteeIndex:   committeeIndices[0],
 					AttesterSlot:     committeeSlots[0],
 					PublicKey:        pubkeys[1],
-					Status:           statuses[1],
+					Status:           ethpb.ValidatorStatus_ACTIVE,
 					ValidatorIndex:   validatorIndices[1],
 					CommitteesAtSlot: 1,
 				},
@@ -907,7 +801,7 @@ func TestGetDutiesForEpoch_Valid(t *testing.T) {
 					CommitteeIndex:   committeeIndices[1],
 					AttesterSlot:     committeeSlots[1],
 					PublicKey:        pubkeys[2],
-					Status:           statuses[2],
+					Status:           ethpb.ValidatorStatus_ACTIVE,
 					ValidatorIndex:   validatorIndices[2],
 					CommitteesAtSlot: 1,
 				},
@@ -919,7 +813,7 @@ func TestGetDutiesForEpoch_Valid(t *testing.T) {
 					CommitteeIndex:   committeeIndices[1],
 					AttesterSlot:     committeeSlots[1],
 					PublicKey:        pubkeys[3],
-					Status:           statuses[3],
+					Status:           ethpb.ValidatorStatus_ACTIVE,
 					ValidatorIndex:   validatorIndices[3],
 					CommitteesAtSlot: 1,
 				},
@@ -931,7 +825,7 @@ func TestGetDutiesForEpoch_Valid(t *testing.T) {
 					CommitteeIndex:   committeeIndices[2],
 					AttesterSlot:     committeeSlots[2],
 					PublicKey:        pubkeys[4],
-					Status:           statuses[4],
+					Status:           ethpb.ValidatorStatus_ACTIVE,
 					ValidatorIndex:   validatorIndices[4],
 					ProposerSlots:    expectedProposerSlots1,
 					CommitteesAtSlot: 1,
@@ -944,7 +838,7 @@ func TestGetDutiesForEpoch_Valid(t *testing.T) {
 					CommitteeIndex:   committeeIndices[2],
 					AttesterSlot:     committeeSlots[2],
 					PublicKey:        pubkeys[5],
-					Status:           statuses[5],
+					Status:           ethpb.ValidatorStatus_ACTIVE,
 					ValidatorIndex:   validatorIndices[5],
 					ProposerSlots:    expectedProposerSlots2,
 					IsSyncCommittee:  testCase.fetchSyncDuties,
@@ -952,51 +846,69 @@ func TestGetDutiesForEpoch_Valid(t *testing.T) {
 				},
 				{
 					PublicKey:       pubkeys[6],
-					Status:          statuses[6],
+					Status:          ethpb.ValidatorStatus_ACTIVE,
 					ValidatorIndex:  validatorIndices[6],
 					ProposerSlots:   expectedProposerSlots3,
 					IsSyncCommittee: testCase.fetchSyncDuties,
 				},
 				{
 					PublicKey:       pubkeys[7],
-					Status:          statuses[7],
+					Status:          ethpb.ValidatorStatus_ACTIVE,
 					ValidatorIndex:  validatorIndices[7],
 					ProposerSlots:   expectedProposerSlots4,
 					IsSyncCommittee: testCase.fetchSyncDuties,
 				},
 				{
 					PublicKey:       pubkeys[8],
-					Status:          statuses[8],
+					Status:          ethpb.ValidatorStatus_ACTIVE,
 					ValidatorIndex:  validatorIndices[8],
 					IsSyncCommittee: testCase.fetchSyncDuties,
 				},
 				{
 					PublicKey:       pubkeys[9],
-					Status:          statuses[9],
+					Status:          ethpb.ValidatorStatus_ACTIVE,
 					ValidatorIndex:  validatorIndices[9],
 					IsSyncCommittee: testCase.fetchSyncDuties,
 				},
 				{
 					PublicKey:      pubkeys[10],
-					Status:         statuses[10],
+					Status:         ethpb.ValidatorStatus_ACTIVE,
 					ValidatorIndex: validatorIndices[10],
 				},
 				{
 					PublicKey:      pubkeys[11],
-					Status:         statuses[11],
+					Status:         ethpb.ValidatorStatus_ACTIVE,
 					ValidatorIndex: validatorIndices[11],
 				},
 			}
 
 			validatorClient := &beaconApiValidatorClient{dutiesProvider: dutiesProvider}
-			duties, err := validatorClient.getDutiesForEpoch(
+			vals := make([]validatorForDuty, len(pubkeys))
+			for i := 0; i < len(pubkeys); i++ {
+				vals[i] = validatorForDuty{
+					pubkey: pubkeys[i],
+					index:  validatorIndices[i],
+					status: ethpb.ValidatorStatus_ACTIVE,
+				}
+			}
+			dutiesContainer := &ethpb.ValidatorDutiesContainer{}
+			err := validatorClient.dutiesForEpoch(
 				ctx,
+				dutiesContainer,
 				epoch,
-				multipleValidatorStatus,
+				vals,
 				testCase.fetchSyncDuties,
 			)
 			require.NoError(t, err)
-			assert.DeepEqual(t, expectedDuties, duties)
+			duties := dutiesContainer.CurrentEpochDuties
+			require.Equal(t, len(expectedDuties), len(duties))
+			for i, duty := range expectedDuties {
+				assert.Equal(t, duty.CommitteeIndex, duties[i].CommitteeIndex)
+				assert.DeepEqual(t, duty.ProposerSlots, duties[i].ProposerSlots)
+				assert.Equal(t, duty.ValidatorIndex, duties[i].ValidatorIndex)
+				assert.Equal(t, duty.IsSyncCommittee, duties[i].IsSyncCommittee)
+				assert.Equal(t, duty.Status, duties[i].Status)
+			}
 		})
 	}
 }
@@ -1018,40 +930,23 @@ func TestGetDuties_Valid(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			statuses := []ethpb.ValidatorStatus{
-				ethpb.ValidatorStatus_DEPOSITED,
-				ethpb.ValidatorStatus_PENDING,
-				ethpb.ValidatorStatus_ACTIVE,
-				ethpb.ValidatorStatus_EXITING,
-				ethpb.ValidatorStatus_SLASHING,
-				ethpb.ValidatorStatus_EXITED,
-				ethpb.ValidatorStatus_EXITED,
-				ethpb.ValidatorStatus_EXITED,
-				ethpb.ValidatorStatus_EXITED,
-				ethpb.ValidatorStatus_DEPOSITED,
-				ethpb.ValidatorStatus_PENDING,
-				ethpb.ValidatorStatus_ACTIVE,
-			}
-			pubkeys := make([][]byte, len(statuses))
-			validatorIndices := make([]primitives.ValidatorIndex, len(statuses))
-			for i := range statuses {
+			valCount := 12
+			pubkeys := make([][]byte, valCount)
+			validatorIndices := make([]primitives.ValidatorIndex, valCount)
+			vals := make([]validatorForDuty, valCount)
+			for i := 0; i < valCount; i++ {
 				pubkeys[i] = []byte(strconv.Itoa(i))
 				validatorIndices[i] = primitives.ValidatorIndex(i)
+				vals[i] = validatorForDuty{
+					pubkey: pubkeys[i],
+					index:  validatorIndices[i],
+					status: ethpb.ValidatorStatus_ACTIVE,
+				}
 			}
 
 			committeeIndices := []primitives.CommitteeIndex{25, 26, 27}
 			committeeSlots := []primitives.Slot{28, 29, 30}
 			proposerSlots := []primitives.Slot{31, 32, 33, 34, 35, 36, 37, 38}
-
-			statusResps := make([]*ethpb.ValidatorStatusResponse, len(statuses))
-			for i, s := range statuses {
-				statusResps[i] = &ethpb.ValidatorStatusResponse{Status: s}
-			}
-			multipleValidatorStatus := &ethpb.MultipleValidatorStatusResponse{
-				PublicKeys: pubkeys,
-				Indices:    validatorIndices,
-				Statuses:   statusResps,
-			}
 
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
@@ -1059,70 +954,67 @@ func TestGetDuties_Valid(t *testing.T) {
 			ctx := context.Background()
 
 			dutiesProvider := mock.NewMockdutiesProvider(ctrl)
-			dutiesProvider.EXPECT().GetCommittees(
+
+			dutiesProvider.EXPECT().AttesterDuties(
 				ctx,
 				testCase.epoch,
+				validatorIndices,
 			).Return(
-				generateValidCommittees(committeeIndices, committeeSlots, validatorIndices),
+				&structs.GetAttesterDutiesResponse{
+					DependentRoot: "0xdeadbeef000000000000000000000000000000000000000000000000",
+					Data:          generateValidAttesterDuties(pubkeys, validatorIndices, committeeIndices, committeeSlots),
+				},
 				nil,
 			).Times(2)
 
-			dutiesProvider.EXPECT().GetAttesterDuties(
-				ctx,
-				testCase.epoch,
-				multipleValidatorStatus.Indices,
-			).Return(
-				generateValidAttesterDuties(pubkeys, validatorIndices, committeeIndices, committeeSlots),
-				nil,
-			).Times(2)
-
-			dutiesProvider.EXPECT().GetProposerDuties(
+			dutiesProvider.EXPECT().ProposerDuties(
 				ctx,
 				testCase.epoch,
 			).Return(
-				generateValidProposerDuties(pubkeys, validatorIndices, proposerSlots),
+				&structs.GetProposerDutiesResponse{
+					DependentRoot: "0xdeadbeef000000000000000000000000000000000000000000000000",
+					Data:          generateValidProposerDuties(pubkeys, validatorIndices, proposerSlots),
+				},
 				nil,
 			).Times(2)
 
 			fetchSyncDuties := testCase.epoch >= params.BeaconConfig().AltairForkEpoch
 			if fetchSyncDuties {
-				dutiesProvider.EXPECT().GetSyncDuties(
+				dutiesProvider.EXPECT().SyncDuties(
 					ctx,
 					testCase.epoch,
-					multipleValidatorStatus.Indices,
+					validatorIndices,
 				).Return(
 					generateValidSyncDuties(pubkeys, validatorIndices),
 					nil,
 				).Times(2)
 			}
 
-			dutiesProvider.EXPECT().GetCommittees(
-				ctx,
-				testCase.epoch+1,
-			).Return(
-				reverseSlice(generateValidCommittees(committeeIndices, committeeSlots, validatorIndices)),
-				nil,
-			).Times(2)
-
-			dutiesProvider.EXPECT().GetAttesterDuties(
+			dutiesProvider.EXPECT().AttesterDuties(
 				ctx,
 				testCase.epoch+1,
 				validatorIndices,
 			).Return(
-				reverseSlice(generateValidAttesterDuties(pubkeys, validatorIndices, committeeIndices, committeeSlots)),
+				&structs.GetAttesterDutiesResponse{
+					DependentRoot: "0xdeadbeef000000000000000000000000000000000000000000000000",
+					Data:          reverseSlice(generateValidAttesterDuties(pubkeys, validatorIndices, committeeIndices, committeeSlots)),
+				},
 				nil,
 			).Times(2)
 
-			dutiesProvider.EXPECT().GetProposerDuties(
+			dutiesProvider.EXPECT().ProposerDuties(
 				ctx,
 				testCase.epoch+1,
 			).Return(
-				generateValidProposerDuties(pubkeys, validatorIndices, proposerSlots),
+				&structs.GetProposerDutiesResponse{
+					DependentRoot: "0xdeadbeef000000000000000000000000000000000000000000000000",
+					Data:          generateValidProposerDuties(pubkeys, validatorIndices, proposerSlots),
+				},
 				nil,
 			).Times(2)
 
 			if fetchSyncDuties {
-				dutiesProvider.EXPECT().GetSyncDuties(
+				dutiesProvider.EXPECT().SyncDuties(
 					ctx,
 					testCase.epoch+1,
 					validatorIndices,
@@ -1133,8 +1025,8 @@ func TestGetDuties_Valid(t *testing.T) {
 			}
 
 			stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
-			stateValidatorsProvider.EXPECT().GetStateValidators(
-				ctx,
+			stateValidatorsProvider.EXPECT().StateValidators(
+				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
@@ -1143,7 +1035,7 @@ func TestGetDuties_Valid(t *testing.T) {
 					Data: []*structs.ValidatorContainer{
 						{
 							Index:  strconv.FormatUint(uint64(validatorIndices[0]), 10),
-							Status: "pending_initialized",
+							Status: "active_ongoing",
 							Validator: &structs.Validator{
 								Pubkey:          hexutil.Encode(pubkeys[0]),
 								ActivationEpoch: strconv.FormatUint(uint64(testCase.epoch), 10),
@@ -1151,7 +1043,7 @@ func TestGetDuties_Valid(t *testing.T) {
 						},
 						{
 							Index:  strconv.FormatUint(uint64(validatorIndices[1]), 10),
-							Status: "pending_queued",
+							Status: "active_ongoing",
 							Validator: &structs.Validator{
 								Pubkey:          hexutil.Encode(pubkeys[1]),
 								ActivationEpoch: strconv.FormatUint(uint64(testCase.epoch), 10),
@@ -1167,7 +1059,7 @@ func TestGetDuties_Valid(t *testing.T) {
 						},
 						{
 							Index:  strconv.FormatUint(uint64(validatorIndices[3]), 10),
-							Status: "active_exiting",
+							Status: "active_ongoing",
 							Validator: &structs.Validator{
 								Pubkey:          hexutil.Encode(pubkeys[3]),
 								ActivationEpoch: strconv.FormatUint(uint64(testCase.epoch), 10),
@@ -1175,7 +1067,7 @@ func TestGetDuties_Valid(t *testing.T) {
 						},
 						{
 							Index:  strconv.FormatUint(uint64(validatorIndices[4]), 10),
-							Status: "active_slashed",
+							Status: "active_ongoing",
 							Validator: &structs.Validator{
 								Pubkey:          hexutil.Encode(pubkeys[4]),
 								ActivationEpoch: strconv.FormatUint(uint64(testCase.epoch), 10),
@@ -1183,7 +1075,7 @@ func TestGetDuties_Valid(t *testing.T) {
 						},
 						{
 							Index:  strconv.FormatUint(uint64(validatorIndices[5]), 10),
-							Status: "exited_unslashed",
+							Status: "active_ongoing",
 							Validator: &structs.Validator{
 								Pubkey:          hexutil.Encode(pubkeys[5]),
 								ActivationEpoch: strconv.FormatUint(uint64(testCase.epoch), 10),
@@ -1191,7 +1083,7 @@ func TestGetDuties_Valid(t *testing.T) {
 						},
 						{
 							Index:  strconv.FormatUint(uint64(validatorIndices[6]), 10),
-							Status: "exited_slashed",
+							Status: "active_ongoing",
 							Validator: &structs.Validator{
 								Pubkey:          hexutil.Encode(pubkeys[6]),
 								ActivationEpoch: strconv.FormatUint(uint64(testCase.epoch), 10),
@@ -1199,7 +1091,7 @@ func TestGetDuties_Valid(t *testing.T) {
 						},
 						{
 							Index:  strconv.FormatUint(uint64(validatorIndices[7]), 10),
-							Status: "withdrawal_possible",
+							Status: "active_ongoing",
 							Validator: &structs.Validator{
 								Pubkey:          hexutil.Encode(pubkeys[7]),
 								ActivationEpoch: strconv.FormatUint(uint64(testCase.epoch), 10),
@@ -1207,7 +1099,7 @@ func TestGetDuties_Valid(t *testing.T) {
 						},
 						{
 							Index:  strconv.FormatUint(uint64(validatorIndices[8]), 10),
-							Status: "withdrawal_done",
+							Status: "active_ongoing",
 							Validator: &structs.Validator{
 								Pubkey:          hexutil.Encode(pubkeys[8]),
 								ActivationEpoch: strconv.FormatUint(uint64(testCase.epoch), 10),
@@ -1215,7 +1107,7 @@ func TestGetDuties_Valid(t *testing.T) {
 						},
 						{
 							Index:  strconv.FormatUint(uint64(validatorIndices[9]), 10),
-							Status: "pending_initialized",
+							Status: "active_ongoing",
 							Validator: &structs.Validator{
 								Pubkey:          hexutil.Encode(pubkeys[9]),
 								ActivationEpoch: strconv.FormatUint(uint64(testCase.epoch), 10),
@@ -1223,7 +1115,7 @@ func TestGetDuties_Valid(t *testing.T) {
 						},
 						{
 							Index:  strconv.FormatUint(uint64(validatorIndices[10]), 10),
-							Status: "pending_queued",
+							Status: "active_ongoing",
 							Validator: &structs.Validator{
 								Pubkey:          hexutil.Encode(pubkeys[10]),
 								ActivationEpoch: strconv.FormatUint(uint64(testCase.epoch), 10),
@@ -1242,64 +1134,60 @@ func TestGetDuties_Valid(t *testing.T) {
 				nil,
 			).MinTimes(1)
 
-			prysmBeaconChainClient := validatormock.NewMockPrysmBeaconChainClient(ctrl)
-			prysmBeaconChainClient.EXPECT().GetValidatorCount(
-				ctx,
-				gomock.Any(),
-				gomock.Any(),
-			).Return(
-				nil,
-				iface.ErrNotSupported,
-			).MinTimes(1)
-
-			// Make sure that our values are equal to what would be returned by calling getDutiesForEpoch individually
+			// Make sure that our values are equal to what would be returned by calling dutiesForEpoch individually
 			validatorClient := &beaconApiValidatorClient{
 				dutiesProvider:          dutiesProvider,
 				stateValidatorsProvider: stateValidatorsProvider,
-				prysmBeaconChainCLient:  prysmBeaconChainClient,
 			}
 
-			expectedCurrentEpochDuties, err := validatorClient.getDutiesForEpoch(
+			expectedContainer := &ethpb.ValidatorDutiesContainer{}
+			err := validatorClient.dutiesForEpoch(
 				ctx,
+				expectedContainer,
 				testCase.epoch,
-				multipleValidatorStatus,
+				vals,
 				fetchSyncDuties,
 			)
 			require.NoError(t, err)
 
-			expectedNextEpochDuties, err := validatorClient.getDutiesForEpoch(
+			expectedCurrentEpochDuties := expectedContainer.CurrentEpochDuties
+			expectedNextContainer := &ethpb.ValidatorDutiesContainer{}
+			err = validatorClient.dutiesForEpoch(
 				ctx,
+				expectedNextContainer,
 				testCase.epoch+1,
-				multipleValidatorStatus,
+				vals,
 				fetchSyncDuties,
 			)
 			require.NoError(t, err)
 
-			expectedDuties := &ethpb.DutiesResponse{
+			expectedNextEpochDuties := expectedNextContainer.CurrentEpochDuties
+			expectedDuties := &ethpb.ValidatorDutiesContainer{
 				CurrentEpochDuties: expectedCurrentEpochDuties,
 				NextEpochDuties:    expectedNextEpochDuties,
 			}
 
-			duties, err := validatorClient.getDuties(ctx, &ethpb.DutiesRequest{
+			duties, err := validatorClient.duties(ctx, &ethpb.DutiesRequest{
 				Epoch:      testCase.epoch,
 				PublicKeys: append(pubkeys, []byte("0xunknown")),
 			})
 			require.NoError(t, err)
 
-			assert.DeepEqual(t, expectedDuties, duties)
+			assert.DeepEqual(t, expectedDuties.NextEpochDuties, duties.NextEpochDuties)
+			assert.DeepEqual(t, expectedDuties.CurrentEpochDuties, duties.CurrentEpochDuties)
 		})
 	}
 }
 
-func TestGetDuties_GetValidatorStatusFailed(t *testing.T) {
+func TestGetDuties_GetStateValidatorsFailed(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	ctx := context.Background()
 
 	stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
-	stateValidatorsProvider.EXPECT().GetStateValidators(
-		ctx,
+	stateValidatorsProvider.EXPECT().StateValidators(
+		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
@@ -1312,11 +1200,11 @@ func TestGetDuties_GetValidatorStatusFailed(t *testing.T) {
 		stateValidatorsProvider: stateValidatorsProvider,
 	}
 
-	_, err := validatorClient.getDuties(ctx, &ethpb.DutiesRequest{
+	_, err := validatorClient.duties(ctx, &ethpb.DutiesRequest{
 		Epoch:      1,
 		PublicKeys: [][]byte{},
 	})
-	assert.ErrorContains(t, "failed to get validator status", err)
+	assert.ErrorContains(t, "failed to get state validators", err)
 	assert.ErrorContains(t, "foo error", err)
 }
 
@@ -1325,120 +1213,117 @@ func TestGetDuties_GetDutiesForEpochFailed(t *testing.T) {
 	defer ctrl.Finish()
 
 	ctx := context.Background()
+	pubkey := []byte{1, 2, 3}
 
 	stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
-	stateValidatorsProvider.EXPECT().GetStateValidators(
-		ctx,
+	stateValidatorsProvider.EXPECT().StateValidators(
+		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
 	).Return(
 		&structs.GetValidatorsResponse{
-			Data: []*structs.ValidatorContainer{},
+			Data: []*structs.ValidatorContainer{{
+				Index:  "0",
+				Status: "active_ongoing",
+				Validator: &structs.Validator{
+					Pubkey: hexutil.Encode(pubkey),
+				},
+			}},
 		},
 		nil,
 	).Times(1)
 
 	dutiesProvider := mock.NewMockdutiesProvider(ctrl)
-	dutiesProvider.EXPECT().GetAttesterDuties(
+	dutiesProvider.EXPECT().AttesterDuties(
 		ctx,
-		primitives.Epoch(1),
+		gomock.Any(),
 		gomock.Any(),
 	).Return(
-		nil,
+		&structs.GetAttesterDutiesResponse{
+			DependentRoot: "0xdeadbeef000000000000000000000000000000000000000000000000",
+			Data:          []*structs.AttesterDuty{}},
 		errors.New("foo error"),
-	).Times(1)
-
-	prysmBeaconChainClient := validatormock.NewMockPrysmBeaconChainClient(ctrl)
-	prysmBeaconChainClient.EXPECT().GetValidatorCount(
+	).Times(2)
+	dutiesProvider.EXPECT().ProposerDuties(
 		ctx,
 		gomock.Any(),
-		gomock.Any(),
 	).Return(
+		&structs.GetProposerDutiesResponse{
+			DependentRoot: "0xdeadbeef000000000000000000000000000000000000000000000000",
+			Data:          []*structs.ProposerDuty{},
+		},
 		nil,
-		iface.ErrNotSupported,
-	).MinTimes(1)
+	).Times(2)
 
 	validatorClient := &beaconApiValidatorClient{
 		stateValidatorsProvider: stateValidatorsProvider,
 		dutiesProvider:          dutiesProvider,
-		prysmBeaconChainCLient:  prysmBeaconChainClient,
 	}
 
-	_, err := validatorClient.getDuties(ctx, &ethpb.DutiesRequest{
+	_, err := validatorClient.duties(ctx, &ethpb.DutiesRequest{
 		Epoch:      1,
-		PublicKeys: [][]byte{},
+		PublicKeys: [][]byte{pubkey},
 	})
-	assert.ErrorContains(t, "failed to get duties for current epoch `1`", err)
+	assert.ErrorContains(t, "failed to get duties for", err)
 	assert.ErrorContains(t, "foo error", err)
-}
-
-func generateValidCommittees(committeeIndices []primitives.CommitteeIndex, slots []primitives.Slot, validatorIndices []primitives.ValidatorIndex) []*structs.Committee {
-	return []*structs.Committee{
-		{
-			Index: strconv.FormatUint(uint64(committeeIndices[0]), 10),
-			Slot:  strconv.FormatUint(uint64(slots[0]), 10),
-			Validators: []string{
-				strconv.FormatUint(uint64(validatorIndices[0]), 10),
-				strconv.FormatUint(uint64(validatorIndices[1]), 10),
-			},
-		},
-		{
-			Index: strconv.FormatUint(uint64(committeeIndices[1]), 10),
-			Slot:  strconv.FormatUint(uint64(slots[1]), 10),
-			Validators: []string{
-				strconv.FormatUint(uint64(validatorIndices[2]), 10),
-				strconv.FormatUint(uint64(validatorIndices[3]), 10),
-			},
-		},
-		{
-			Index: strconv.FormatUint(uint64(committeeIndices[2]), 10),
-			Slot:  strconv.FormatUint(uint64(slots[2]), 10),
-			Validators: []string{
-				strconv.FormatUint(uint64(validatorIndices[4]), 10),
-				strconv.FormatUint(uint64(validatorIndices[5]), 10),
-			},
-		},
-	}
 }
 
 func generateValidAttesterDuties(pubkeys [][]byte, validatorIndices []primitives.ValidatorIndex, committeeIndices []primitives.CommitteeIndex, slots []primitives.Slot) []*structs.AttesterDuty {
 	return []*structs.AttesterDuty{
 		{
-			Pubkey:         hexutil.Encode(pubkeys[0]),
-			ValidatorIndex: strconv.FormatUint(uint64(validatorIndices[0]), 10),
-			CommitteeIndex: strconv.FormatUint(uint64(committeeIndices[0]), 10),
-			Slot:           strconv.FormatUint(uint64(slots[0]), 10),
+			Pubkey:                  hexutil.Encode(pubkeys[0]),
+			ValidatorIndex:          strconv.FormatUint(uint64(validatorIndices[0]), 10),
+			CommitteeIndex:          strconv.FormatUint(uint64(committeeIndices[0]), 10),
+			CommitteeLength:         fmt.Sprintf("%d", len(committeeIndices)),
+			ValidatorCommitteeIndex: strconv.FormatUint(uint64(0), 10),
+			CommitteesAtSlot:        strconv.FormatUint(uint64(10), 10),
+			Slot:                    strconv.FormatUint(uint64(slots[0]), 10),
 		},
 		{
-			Pubkey:         hexutil.Encode(pubkeys[1]),
-			ValidatorIndex: strconv.FormatUint(uint64(validatorIndices[1]), 10),
-			CommitteeIndex: strconv.FormatUint(uint64(committeeIndices[0]), 10),
-			Slot:           strconv.FormatUint(uint64(slots[0]), 10),
+			Pubkey:                  hexutil.Encode(pubkeys[1]),
+			ValidatorIndex:          strconv.FormatUint(uint64(validatorIndices[1]), 10),
+			CommitteeIndex:          strconv.FormatUint(uint64(committeeIndices[0]), 10),
+			CommitteeLength:         fmt.Sprintf("%d", len(committeeIndices)),
+			ValidatorCommitteeIndex: strconv.FormatUint(uint64(0), 10),
+			CommitteesAtSlot:        strconv.FormatUint(uint64(10), 10),
+			Slot:                    strconv.FormatUint(uint64(slots[0]), 10),
 		},
 		{
-			Pubkey:         hexutil.Encode(pubkeys[2]),
-			ValidatorIndex: strconv.FormatUint(uint64(validatorIndices[2]), 10),
-			CommitteeIndex: strconv.FormatUint(uint64(committeeIndices[1]), 10),
-			Slot:           strconv.FormatUint(uint64(slots[1]), 10),
+			Pubkey:                  hexutil.Encode(pubkeys[2]),
+			ValidatorIndex:          strconv.FormatUint(uint64(validatorIndices[2]), 10),
+			CommitteeIndex:          strconv.FormatUint(uint64(committeeIndices[1]), 10),
+			CommitteeLength:         fmt.Sprintf("%d", len(committeeIndices)),
+			ValidatorCommitteeIndex: strconv.FormatUint(uint64(0), 10),
+			CommitteesAtSlot:        strconv.FormatUint(uint64(10), 10),
+			Slot:                    strconv.FormatUint(uint64(slots[1]), 10),
 		},
 		{
-			Pubkey:         hexutil.Encode(pubkeys[3]),
-			ValidatorIndex: strconv.FormatUint(uint64(validatorIndices[3]), 10),
-			CommitteeIndex: strconv.FormatUint(uint64(committeeIndices[1]), 10),
-			Slot:           strconv.FormatUint(uint64(slots[1]), 10),
+			Pubkey:                  hexutil.Encode(pubkeys[3]),
+			ValidatorIndex:          strconv.FormatUint(uint64(validatorIndices[3]), 10),
+			CommitteeIndex:          strconv.FormatUint(uint64(committeeIndices[1]), 10),
+			CommitteeLength:         fmt.Sprintf("%d", len(committeeIndices)),
+			ValidatorCommitteeIndex: strconv.FormatUint(uint64(0), 10),
+			CommitteesAtSlot:        strconv.FormatUint(uint64(10), 10),
+			Slot:                    strconv.FormatUint(uint64(slots[1]), 10),
 		},
 		{
-			Pubkey:         hexutil.Encode(pubkeys[4]),
-			ValidatorIndex: strconv.FormatUint(uint64(validatorIndices[4]), 10),
-			CommitteeIndex: strconv.FormatUint(uint64(committeeIndices[2]), 10),
-			Slot:           strconv.FormatUint(uint64(slots[2]), 10),
+			Pubkey:                  hexutil.Encode(pubkeys[4]),
+			ValidatorIndex:          strconv.FormatUint(uint64(validatorIndices[4]), 10),
+			CommitteeIndex:          strconv.FormatUint(uint64(committeeIndices[2]), 10),
+			CommitteeLength:         fmt.Sprintf("%d", len(committeeIndices)),
+			ValidatorCommitteeIndex: strconv.FormatUint(uint64(0), 10),
+			CommitteesAtSlot:        strconv.FormatUint(uint64(10), 10),
+			Slot:                    strconv.FormatUint(uint64(slots[2]), 10),
 		},
 		{
-			Pubkey:         hexutil.Encode(pubkeys[5]),
-			ValidatorIndex: strconv.FormatUint(uint64(validatorIndices[5]), 10),
-			CommitteeIndex: strconv.FormatUint(uint64(committeeIndices[2]), 10),
-			Slot:           strconv.FormatUint(uint64(slots[2]), 10),
+			Pubkey:                  hexutil.Encode(pubkeys[5]),
+			ValidatorIndex:          strconv.FormatUint(uint64(validatorIndices[5]), 10),
+			CommitteeIndex:          strconv.FormatUint(uint64(committeeIndices[2]), 10),
+			CommitteeLength:         fmt.Sprintf("%d", len(committeeIndices)),
+			ValidatorCommitteeIndex: strconv.FormatUint(uint64(0), 10),
+			CommitteesAtSlot:        strconv.FormatUint(uint64(10), 10),
+			Slot:                    strconv.FormatUint(uint64(slots[2]), 10),
 		},
 	}
 }
@@ -1513,7 +1398,7 @@ func generateValidSyncDuties(pubkeys [][]byte, validatorIndices []primitives.Val
 	}
 }
 
-// We will use a reverse function to easily make sure that the current epoch and next epoch data returned by getDutiesForEpoch
+// We will use a reverse function to easily make sure that the current epoch and next epoch data returned by dutiesForEpoch
 // are not the same
 func reverseSlice[T interface{}](slice []T) []T {
 	reversedSlice := make([]T, len(slice))

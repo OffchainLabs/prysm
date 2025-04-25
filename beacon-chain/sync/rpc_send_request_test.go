@@ -8,21 +8,23 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	p2pTypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/libp2p/go-libp2p/core/network"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	p2pTypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestSendRequest_SendBeaconBlocksByRangeRequest(t *testing.T) {
@@ -482,7 +484,10 @@ func TestSendRequest_SendBeaconBlocksByRootRequest(t *testing.T) {
 func TestBlobValidatorFromRootReq(t *testing.T) {
 	rootA := bytesutil.PadTo([]byte("valid"), 32)
 	rootB := bytesutil.PadTo([]byte("invalid"), 32)
-	header := &ethpb.SignedBeaconBlockHeader{}
+	header := &ethpb.SignedBeaconBlockHeader{
+		Header:    &ethpb.BeaconBlockHeader{Slot: 0},
+		Signature: make([]byte, fieldparams.BLSSignatureLength),
+	}
 	blobSidecarA0 := util.GenerateTestDenebBlobSidecar(t, bytesutil.ToBytes32(rootA), header, 0, []byte{}, make([][]byte, 0))
 	blobSidecarA1 := util.GenerateTestDenebBlobSidecar(t, bytesutil.ToBytes32(rootA), header, 1, []byte{}, make([][]byte, 0))
 	blobSidecarB0 := util.GenerateTestDenebBlobSidecar(t, bytesutil.ToBytes32(rootB), header, 0, []byte{}, make([][]byte, 0))
@@ -590,7 +595,8 @@ func TestBlobValidatorFromRangeReq(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			vf := blobValidatorFromRangeReq(c.req)
 			header := &ethpb.SignedBeaconBlockHeader{
-				Header: &ethpb.BeaconBlockHeader{Slot: c.responseSlot},
+				Header:    &ethpb.BeaconBlockHeader{Slot: c.responseSlot},
+				Signature: make([]byte, fieldparams.BLSSignatureLength),
 			}
 			sc := util.GenerateTestDenebBlobSidecar(t, [32]byte{}, header, 0, []byte{}, make([][]byte, 0))
 			err := vf(sc)
@@ -615,7 +621,7 @@ func TestSeqBlobValid(t *testing.T) {
 	wrongRoot, err := blocks.NewROBlobWithRoot(oops[2].BlobSidecar, bytesutil.ToBytes32([]byte("parentderp")))
 	require.NoError(t, err)
 	oob := oops[3]
-	oob.Index = fieldparams.MaxBlobsPerBlock
+	oob.Index = uint64(params.BeaconConfig().MaxBlobsPerBlock(0))
 
 	cases := []struct {
 		name  string
@@ -686,4 +692,193 @@ func TestSeqBlobValid(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSendBlobsByRangeRequest(t *testing.T) {
+	topic := fmt.Sprintf("%s/ssz_snappy", p2p.RPCBlobSidecarsByRangeTopicV1)
+	ctx := context.Background()
+
+	t.Run("single blob - Deneb", func(t *testing.T) {
+		// Setup genesis such that we are currently in deneb.
+		s := uint64(slots.UnsafeEpochStart(params.BeaconConfig().DenebForkEpoch)) * params.BeaconConfig().SecondsPerSlot
+		clock := startup.NewClock(time.Now().Add(-time.Second*time.Duration(s)), [32]byte{})
+		ctxByte, err := ContextByteVersionsForValRoot(clock.GenesisValidatorsRoot())
+		require.NoError(t, err)
+		// Setup peers
+		p1 := p2ptest.NewTestP2P(t)
+		p2 := p2ptest.NewTestP2P(t)
+		p1.Connect(p2)
+		// Set current slot to a deneb slot.
+		slot := slots.UnsafeEpochStart(params.BeaconConfig().DenebForkEpoch + 1)
+		// Create a simple handler that will return a valid response.
+		p2.SetStreamHandler(topic, func(stream network.Stream) {
+			defer func() {
+				assert.NoError(t, stream.Close())
+			}()
+
+			req := &ethpb.BlobSidecarsByRangeRequest{}
+			assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
+			assert.Equal(t, slot, req.StartSlot)
+			assert.Equal(t, uint64(1), req.Count)
+
+			// Create a sequential set of blobs with the appropriate header information.
+			var prevRoot [32]byte
+			for i := req.StartSlot; i < req.StartSlot+primitives.Slot(req.Count); i++ {
+				b := util.HydrateBlobSidecar(&ethpb.BlobSidecar{})
+				b.SignedBlockHeader.Header.Slot = i
+				b.SignedBlockHeader.Header.ParentRoot = prevRoot[:]
+				ro, err := blocks.NewROBlob(b)
+				require.NoError(t, err)
+				vro := blocks.NewVerifiedROBlob(ro)
+				prevRoot = vro.BlockRoot()
+				assert.NoError(t, WriteBlobSidecarChunk(stream, clock, p2.Encoding(), vro))
+			}
+		})
+		req := &ethpb.BlobSidecarsByRangeRequest{
+			StartSlot: slot,
+			Count:     1,
+		}
+
+		blobs, err := SendBlobsByRangeRequest(ctx, clock, p1, p2.PeerID(), ctxByte, req)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(blobs))
+	})
+
+	t.Run("Deneb - Electra epoch boundary crossing", func(t *testing.T) {
+		cfg := params.BeaconConfig()
+		cfg.ElectraForkEpoch = cfg.DenebForkEpoch + 1
+		undo, err := params.SetActiveWithUndo(cfg)
+		require.NoError(t, err)
+		defer func() {
+			require.NoError(t, undo())
+		}()
+		// Setup genesis such that we are currently in deneb.
+		s := uint64(slots.UnsafeEpochStart(params.BeaconConfig().DenebForkEpoch)) * params.BeaconConfig().SecondsPerSlot
+		clock := startup.NewClock(time.Now().Add(-time.Second*time.Duration(s)), [32]byte{})
+		ctxByte, err := ContextByteVersionsForValRoot(clock.GenesisValidatorsRoot())
+		require.NoError(t, err)
+		// Setup peers
+		p1 := p2ptest.NewTestP2P(t)
+		p2 := p2ptest.NewTestP2P(t)
+		p1.Connect(p2)
+		// Set current slot to the first slot of the last deneb epoch.
+		slot := slots.UnsafeEpochStart(params.BeaconConfig().DenebForkEpoch)
+		// Create a simple handler that will return a valid response.
+		p2.SetStreamHandler(topic, func(stream network.Stream) {
+			defer func() {
+				assert.NoError(t, stream.Close())
+			}()
+
+			req := &ethpb.BlobSidecarsByRangeRequest{}
+			assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
+			assert.Equal(t, slot, req.StartSlot)
+			assert.Equal(t, uint64(params.BeaconConfig().SlotsPerEpoch)*3, req.Count)
+
+			// Create a sequential set of blobs with the appropriate header information.
+			var prevRoot [32]byte
+			for i := req.StartSlot; i < req.StartSlot+primitives.Slot(req.Count); i++ {
+				maxBlobsForSlot := cfg.MaxBlobsPerBlock(i)
+				parentRoot := prevRoot
+				header := util.HydrateSignedBeaconHeader(&ethpb.SignedBeaconBlockHeader{})
+				header.Header.Slot = i
+				header.Header.ParentRoot = parentRoot[:]
+				bRoot, err := header.Header.HashTreeRoot()
+				require.NoError(t, err)
+				prevRoot = bRoot
+				// Send the maximum possible blobs per slot.
+				for j := 0; j < maxBlobsForSlot; j++ {
+					b := util.HydrateBlobSidecar(&ethpb.BlobSidecar{})
+					b.SignedBlockHeader = header
+					b.Index = uint64(j)
+					ro, err := blocks.NewROBlob(b)
+					require.NoError(t, err)
+					vro := blocks.NewVerifiedROBlob(ro)
+					assert.NoError(t, WriteBlobSidecarChunk(stream, clock, p2.Encoding(), vro))
+				}
+			}
+		})
+		req := &ethpb.BlobSidecarsByRangeRequest{
+			StartSlot: slot,
+			Count:     uint64(params.BeaconConfig().SlotsPerEpoch) * 3,
+		}
+		maxDenebBlobs := cfg.MaxBlobsPerBlockAtEpoch(cfg.DenebForkEpoch)
+		maxElectraBlobs := cfg.MaxBlobsPerBlockAtEpoch(cfg.ElectraForkEpoch)
+		totalDenebBlobs := primitives.Slot(maxDenebBlobs) * params.BeaconConfig().SlotsPerEpoch
+		totalElectraBlobs := primitives.Slot(maxElectraBlobs) * 2 * params.BeaconConfig().SlotsPerEpoch
+		totalExpectedBlobs := totalDenebBlobs + totalElectraBlobs
+
+		blobs, err := SendBlobsByRangeRequest(ctx, clock, p1, p2.PeerID(), ctxByte, req)
+		assert.NoError(t, err)
+		assert.Equal(t, int(totalExpectedBlobs), len(blobs))
+	})
+
+	t.Run("Starting from Electra", func(t *testing.T) {
+		cfg := params.BeaconConfig()
+		cfg.ElectraForkEpoch = cfg.DenebForkEpoch + 1
+		undo, err := params.SetActiveWithUndo(cfg)
+		require.NoError(t, err)
+		defer func() {
+			require.NoError(t, undo())
+		}()
+
+		s := uint64(slots.UnsafeEpochStart(params.BeaconConfig().ElectraForkEpoch)) * params.BeaconConfig().SecondsPerSlot
+		clock := startup.NewClock(time.Now().Add(-time.Second*time.Duration(s)), [32]byte{})
+		ctxByte, err := ContextByteVersionsForValRoot(clock.GenesisValidatorsRoot())
+		require.NoError(t, err)
+		// Setup peers
+		p1 := p2ptest.NewTestP2P(t)
+		p2 := p2ptest.NewTestP2P(t)
+		p1.Connect(p2)
+
+		slot := slots.UnsafeEpochStart(params.BeaconConfig().ElectraForkEpoch)
+		// Create a simple handler that will return a valid response.
+		p2.SetStreamHandler(topic, func(stream network.Stream) {
+			defer func() {
+				assert.NoError(t, stream.Close())
+			}()
+
+			req := &ethpb.BlobSidecarsByRangeRequest{}
+			assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, req))
+			assert.Equal(t, slot, req.StartSlot)
+			assert.Equal(t, uint64(params.BeaconConfig().SlotsPerEpoch)*3, req.Count)
+
+			// Create a sequential set of blobs with the appropriate header information.
+			var prevRoot [32]byte
+			for i := req.StartSlot; i < req.StartSlot+primitives.Slot(req.Count); i++ {
+				maxBlobsForSlot := cfg.MaxBlobsPerBlock(i)
+				parentRoot := prevRoot
+				header := util.HydrateSignedBeaconHeader(&ethpb.SignedBeaconBlockHeader{})
+				header.Header.Slot = i
+				header.Header.ParentRoot = parentRoot[:]
+				bRoot, err := header.Header.HashTreeRoot()
+				require.NoError(t, err)
+				prevRoot = bRoot
+				// Send the maximum possible blobs per slot.
+				for j := 0; j < maxBlobsForSlot; j++ {
+					b := util.HydrateBlobSidecar(&ethpb.BlobSidecar{})
+					b.SignedBlockHeader = header
+					b.Index = uint64(j)
+					ro, err := blocks.NewROBlob(b)
+					require.NoError(t, err)
+					vro := blocks.NewVerifiedROBlob(ro)
+					assert.NoError(t, WriteBlobSidecarChunk(stream, clock, p2.Encoding(), vro))
+				}
+			}
+		})
+		req := &ethpb.BlobSidecarsByRangeRequest{
+			StartSlot: slot,
+			Count:     uint64(params.BeaconConfig().SlotsPerEpoch) * 3,
+		}
+
+		maxElectraBlobs := cfg.MaxBlobsPerBlockAtEpoch(cfg.ElectraForkEpoch)
+		totalElectraBlobs := primitives.Slot(maxElectraBlobs) * 3 * params.BeaconConfig().SlotsPerEpoch
+
+		blobs, err := SendBlobsByRangeRequest(ctx, clock, p1, p2.PeerID(), ctxByte, req)
+		assert.NoError(t, err)
+		assert.Equal(t, int(totalElectraBlobs), len(blobs))
+	})
+}
+
+func TestErrInvalidFetchedDataDistinction(t *testing.T) {
+	require.Equal(t, false, errors.Is(ErrInvalidFetchedData, verification.ErrBlobInvalid))
 }

@@ -11,15 +11,18 @@ import (
 	"os"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/math"
+	v1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/math"
-	v1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func ezDecode(t *testing.T, s string) []byte {
@@ -144,6 +147,64 @@ var testExampleHeaderResponseDeneb = `{
       "blob_kzg_commitments": [
           "0x8dab030c51e16e84be9caab84ee3d0b8bbec1db4a0e4de76439da8424d9b957370a10a78851f97e4b54d2ce1ab0d686f"
 	  ],
+      "value": "652312848583266388373324160190187140051835877600158453279131187530910662656",
+      "pubkey": "0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"
+    },
+    "signature": "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505"
+  }
+}`
+
+var testExampleHeaderResponseElectra = `{
+  "version": "electra",
+  "data": {
+    "message": {
+      "header": {
+        "parent_hash": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+        "fee_recipient": "0xabcf8e0d4e9587369b2301d0790347320302cc09",
+        "state_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+        "receipts_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+        "logs_bloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "prev_randao": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+        "block_number": "1",
+        "gas_limit": "1",
+        "gas_used": "1",
+        "timestamp": "1",
+        "extra_data": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+        "base_fee_per_gas": "1",
+        "blob_gas_used": "1",
+        "excess_blob_gas": "1",
+        "block_hash": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+        "transactions_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+        "withdrawals_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"
+      },
+      "blob_kzg_commitments": [
+        "0xa94170080872584e54a1cf092d845703b13907f2e6b3b1c0ad573b910530499e3bcd48c6378846b80d2bfa58c81cf3d5"
+      ],
+      "execution_requests": {
+        "deposits": [
+          {
+            "pubkey": "0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a",
+            "withdrawal_credentials": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+            "amount": "1",
+            "signature": "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505",
+            "index": "1"
+          }
+        ],
+        "withdrawals": [
+          {
+            "source_address": "0xabcf8e0d4e9587369b2301d0790347320302cc09",
+            "validator_pubkey": "0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a",
+            "amount": "1"
+          }
+        ],
+        "consolidations": [
+          {
+            "source_address": "0xabcf8e0d4e9587369b2301d0790347320302cc09",
+            "source_pubkey": "0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a",
+            "target_pubkey": "0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"
+          }
+        ]
+      },
       "value": "652312848583266388373324160190187140051835877600158453279131187530910662656",
       "pubkey": "0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"
     },
@@ -1600,7 +1661,6 @@ func TestBuilderBidUnmarshalUint256(t *testing.T) {
 	require.NoError(t, expectedValue.UnmarshalText([]byte(base10)))
 	r := &ExecHeaderResponse{}
 	require.NoError(t, json.Unmarshal([]byte(testBuilderBid), r))
-	//require.Equal(t, expectedValue, r.Data.Message.Value)
 	marshaled := r.Data.Message.Value.String()
 	require.Equal(t, base10, marshaled)
 	require.Equal(t, 0, expectedValue.Cmp(r.Data.Message.Value.Int))
@@ -1903,6 +1963,44 @@ func TestErrorMessage_non200Err(t *testing.T) {
 			err := non200Err(tt.args)
 			if err != nil && tt.wantMessage != "" {
 				require.ErrorContains(t, tt.wantMessage, err)
+			}
+		})
+	}
+}
+
+func TestEmptyResponseBody(t *testing.T) {
+	t.Run("empty buffer", func(t *testing.T) {
+		var b []byte
+		r := &ExecutionPayloadResponse{}
+		err := json.Unmarshal(b, r)
+		var syntaxError *json.SyntaxError
+		ok := errors.As(err, &syntaxError)
+		require.Equal(t, true, ok)
+	})
+	t.Run("empty object", func(t *testing.T) {
+		empty := []byte("{}")
+		emptyResponse := &ExecutionPayloadResponse{}
+		require.NoError(t, json.Unmarshal(empty, emptyResponse))
+		_, err := emptyResponse.ParsePayload()
+		require.ErrorContains(t, "unsupported version", err)
+	})
+	versions := []int{version.Bellatrix, version.Capella, version.Deneb, version.Electra}
+	for i := range versions {
+		vstr := version.String(versions[i])
+		t.Run("populated version without payload"+vstr, func(t *testing.T) {
+			in := &ExecutionPayloadResponse{Version: vstr}
+			encoded, err := json.Marshal(in)
+			require.NoError(t, err)
+			epr := &ExecutionPayloadResponse{}
+			require.NoError(t, json.Unmarshal(encoded, epr))
+			pp, err := epr.ParsePayload()
+			require.NoError(t, err)
+			pb, err := pp.PayloadProto()
+			if err == nil {
+				require.NoError(t, err)
+				require.Equal(t, false, pb == nil)
+			} else {
+				require.ErrorIs(t, err, consensusblocks.ErrNilObject)
 			}
 		})
 	}

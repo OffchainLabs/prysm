@@ -26,6 +26,21 @@ mainnet = {
     "max_blobs_per_block.size": "6",
     "max_blob_commitments.size": "4096",
     "kzg_commitment_inclusion_proof_depth.size": "17",
+    "max_withdrawal_requests_per_payload.size": "16",
+    "max_deposit_requests_per_payload.size": "8192",
+    "max_attesting_indices.size": "131072",
+    "max_committees_per_slot.size": "64",
+    "committee_bits.size": "8",
+    "committee_bits.type": "github.com/prysmaticlabs/go-bitfield.Bitvector64",
+    "pending_deposits_limit": "134217728",
+    "pending_partial_withdrawals_limit": "134217728",
+    "pending_consolidations_limit": "262144",
+    "max_consolidation_requests_per_payload.size": "2",
+    "field_elements_per_cell.size": "64",
+    "field_elements_per_ext_blob.size": "8192",
+    "bytes_per_cell.size": "2048",  # FIELD_ELEMENTS_PER_CELL * BYTES_PER_FIELD_ELEMENT
+    "cells_per_blob.size": "128",
+    "kzg_commitments_inclusion_proof_depth.size": "4",
 }
 
 minimal = {
@@ -46,8 +61,23 @@ minimal = {
     "logs_bloom.size": "256",
     "extra_data.size": "32",
     "max_blobs_per_block.size": "6",
-    "max_blob_commitments.size": "16",
-    "kzg_commitment_inclusion_proof_depth.size": "9",
+    "max_blob_commitments.size": "32",
+    "kzg_commitment_inclusion_proof_depth.size": "10",
+    "max_withdrawal_requests_per_payload.size": "2",
+    "max_deposit_requests_per_payload.size": "4",
+    "max_attesting_indices.size": "8192",
+    "max_committees_per_slot.size": "4",
+    "committee_bits.size": "1",
+    "committee_bits.type": "github.com/prysmaticlabs/go-bitfield.Bitvector4",
+    "pending_deposits_limit": "134217728",
+    "pending_partial_withdrawals_limit": "64",
+    "pending_consolidations_limit": "64",
+    "max_consolidation_requests_per_payload.size": "2",
+    "field_elements_per_cell.size": "64",
+    "field_elements_per_ext_blob.size": "8192",
+    "bytes_per_cell.size": "2048",  # FIELD_ELEMENTS_PER_CELL * BYTES_PER_FIELD_ELEMENT
+    "cells_per_blob.size": "128",
+    "kzg_commitments_inclusion_proof_depth.size": "4",
 }
 
 ###### Rules definitions #######

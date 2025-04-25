@@ -7,7 +7,7 @@ go_library(
         "endpoint.go",
         "external_ip.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/network",
+    importpath = "github.com/OffchainLabs/prysm/v6/network",
     visibility = ["//visibility:public"],
     deps = [
         "//network/authorization:go_default_library",
@@ -15,6 +15,7 @@ go_library(
         "@com_github_golang_jwt_jwt_v4//:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
         "@com_github_sirupsen_logrus//:go_default_library",
+        "@io_opentelemetry_go_contrib_instrumentation_net_http_otelhttp//:go_default_library",
     ],
 )
 

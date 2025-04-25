@@ -3,13 +3,13 @@ package cache_test
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
 	"github.com/stretchr/testify/require"
 )
 
 func TestAttestationCache_RoundTrip(t *testing.T) {
-	c := cache.NewAttestationCache()
+	c := cache.NewAttestationDataCache()
 
 	a := c.Get()
 	require.Nil(t, a)

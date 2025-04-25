@@ -4,18 +4,17 @@ import (
 	"context"
 	"testing"
 
-	coreBlock "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition/stateutils"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpbv1 "github.com/prysmaticlabs/prysm/v5/proto/eth/v1"
-	ethpbv2 "github.com/prysmaticlabs/prysm/v5/proto/eth/v2"
-	ethpbalpha "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	coreBlock "github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition/stateutils"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpbv1 "github.com/OffchainLabs/prysm/v6/proto/eth/v1"
+	ethpbalpha "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 func TestGenerateFullBlock_PassesStateTransition(t *testing.T) {
@@ -33,7 +32,7 @@ func TestGenerateFullBlock_PassesStateTransition(t *testing.T) {
 
 func TestGenerateFullBlock_ThousandValidators(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	params.OverrideBeaconConfig(params.MainnetConfig().Copy())
+	params.OverrideBeaconConfig(params.MainnetConfig())
 	beaconState, privs := DeterministicGenesisState(t, 1024)
 	conf := &BlockGenConfig{
 		NumAttestations: 4,
@@ -48,7 +47,7 @@ func TestGenerateFullBlock_ThousandValidators(t *testing.T) {
 
 func TestGenerateFullBlock_Passes4Epochs(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	params.OverrideBeaconConfig(params.MainnetConfig().Copy())
+	params.OverrideBeaconConfig(params.MainnetConfig())
 	beaconState, privs := DeterministicGenesisState(t, 64)
 
 	conf := &BlockGenConfig{
@@ -79,7 +78,7 @@ func TestGenerateFullBlock_Passes4Epochs(t *testing.T) {
 
 func TestGenerateFullBlock_ValidProposerSlashings(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	params.OverrideBeaconConfig(params.MainnetConfig().Copy())
+	params.OverrideBeaconConfig(params.MainnetConfig())
 	beaconState, privs := DeterministicGenesisState(t, 32)
 	conf := &BlockGenConfig{
 		NumProposerSlashings: 1,
@@ -100,7 +99,7 @@ func TestGenerateFullBlock_ValidProposerSlashings(t *testing.T) {
 
 func TestGenerateFullBlock_ValidAttesterSlashings(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	params.OverrideBeaconConfig(params.MainnetConfig().Copy())
+	params.OverrideBeaconConfig(params.MainnetConfig())
 	beaconState, privs := DeterministicGenesisState(t, 256)
 	conf := &BlockGenConfig{
 		NumAttesterSlashings: 1,
@@ -121,7 +120,7 @@ func TestGenerateFullBlock_ValidAttesterSlashings(t *testing.T) {
 
 func TestGenerateFullBlock_ValidAttestations(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	params.OverrideBeaconConfig(params.MainnetConfig().Copy())
+	params.OverrideBeaconConfig(params.MainnetConfig())
 
 	beaconState, privs := DeterministicGenesisState(t, 256)
 	conf := &BlockGenConfig{
@@ -216,28 +215,6 @@ func TestHydrateV1SignedBeaconBlock_NoError(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestHydrateV2AltairSignedBeaconBlock_NoError(t *testing.T) {
-	b := &ethpbv2.SignedBeaconBlockAltair{}
-	b = HydrateV2AltairSignedBeaconBlock(b)
-	_, err := b.HashTreeRoot()
-	require.NoError(t, err)
-	_, err = b.Message.HashTreeRoot()
-	require.NoError(t, err)
-	_, err = b.Message.Body.HashTreeRoot()
-	require.NoError(t, err)
-}
-
-func TestHydrateV2BellatrixSignedBeaconBlock_NoError(t *testing.T) {
-	b := &ethpbv2.SignedBeaconBlockBellatrix{}
-	b = HydrateV2BellatrixSignedBeaconBlock(b)
-	_, err := b.HashTreeRoot()
-	require.NoError(t, err)
-	_, err = b.Message.HashTreeRoot()
-	require.NoError(t, err)
-	_, err = b.Message.Body.HashTreeRoot()
-	require.NoError(t, err)
-}
-
 func TestHydrateSignedBeaconBlockAltair_NoError(t *testing.T) {
 	b := &ethpbalpha.SignedBeaconBlockAltair{}
 	b = HydrateSignedBeaconBlockAltair(b)
@@ -274,33 +251,6 @@ func TestHydrateBlindedBeaconBlockBellatrix_NoError(t *testing.T) {
 func TestHydrateBlindedBeaconBlockBodyBellatrix_NoError(t *testing.T) {
 	b := &ethpbalpha.BlindedBeaconBlockBodyBellatrix{}
 	b = HydrateBlindedBeaconBlockBodyBellatrix(b)
-	_, err := b.HashTreeRoot()
-	require.NoError(t, err)
-}
-
-func TestHydrateV2SignedBlindedBeaconBlockBellatrix_NoError(t *testing.T) {
-	b := &ethpbv2.SignedBlindedBeaconBlockBellatrix{}
-	b = HydrateV2SignedBlindedBeaconBlockBellatrix(b)
-	_, err := b.HashTreeRoot()
-	require.NoError(t, err)
-	_, err = b.Message.HashTreeRoot()
-	require.NoError(t, err)
-	_, err = b.Message.Body.HashTreeRoot()
-	require.NoError(t, err)
-}
-
-func TestHydrateV2BlindedBeaconBlockBellatrix_NoError(t *testing.T) {
-	b := &ethpbv2.BlindedBeaconBlockBellatrix{}
-	b = HydrateV2BlindedBeaconBlockBellatrix(b)
-	_, err := b.HashTreeRoot()
-	require.NoError(t, err)
-	_, err = b.Body.HashTreeRoot()
-	require.NoError(t, err)
-}
-
-func TestHydrateV2BlindedBeaconBlockBodyBellatrix_NoError(t *testing.T) {
-	b := &ethpbv2.BlindedBeaconBlockBodyBellatrix{}
-	b = HydrateV2BlindedBeaconBlockBodyBellatrix(b)
 	_, err := b.HashTreeRoot()
 	require.NoError(t, err)
 }
@@ -371,4 +321,31 @@ func TestGenerateVoluntaryExits(t *testing.T) {
 	val, err := beaconState.ValidatorAtIndexReadOnly(0)
 	require.NoError(t, err)
 	require.NoError(t, coreBlock.VerifyExitAndSignature(val, beaconState, exit))
+}
+
+func Test_PostDenebPbGenericBlock_ErrorsForPlainBlock(t *testing.T) {
+	t.Run("Deneb block returns type error", func(t *testing.T) {
+		eb := NewBeaconBlockDeneb()
+		b, err := blocks.NewSignedBeaconBlock(eb)
+		require.NoError(t, err)
+
+		_, err = b.PbGenericBlock()
+		require.ErrorContains(t, "PbGenericBlock() only supports block content type but got", err)
+	})
+	t.Run("Electra block returns type error", func(t *testing.T) {
+		eb := NewBeaconBlockElectra()
+		b, err := blocks.NewSignedBeaconBlock(eb)
+		require.NoError(t, err)
+
+		_, err = b.PbGenericBlock()
+		require.ErrorContains(t, "PbGenericBlock() only supports block content type but got", err)
+	})
+	t.Run("Fulu block returns type error", func(t *testing.T) {
+		eb := NewBeaconBlockFulu()
+		b, err := blocks.NewSignedBeaconBlock(eb)
+		require.NoError(t, err)
+
+		_, err = b.PbGenericBlock()
+		require.ErrorContains(t, "PbGenericBlock() only supports block content type but got", err)
+	})
 }

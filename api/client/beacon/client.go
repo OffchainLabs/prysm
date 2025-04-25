@@ -11,17 +11,16 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
-	"text/template"
 
+	"github.com/OffchainLabs/prysm/v6/api/client"
+	"github.com/OffchainLabs/prysm/v6/api/server"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/network/forks"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/client"
-	"github.com/prysmaticlabs/prysm/v5/api/server"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/network/forks"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/sirupsen/logrus"
 )
 
@@ -29,12 +28,13 @@ const (
 	getSignedBlockPath       = "/eth/v2/beacon/blocks"
 	getBlockRootPath         = "/eth/v1/beacon/blocks/{{.Id}}/root"
 	getForkForStatePath      = "/eth/v1/beacon/states/{{.Id}}/fork"
-	getWeakSubjectivityPath  = "/prysm/v1/beacon/weak_subjectivity"
 	getForkSchedulePath      = "/eth/v1/config/fork_schedule"
 	getConfigSpecPath        = "/eth/v1/config/spec"
 	getStatePath             = "/eth/v2/debug/beacon/states"
-	getNodeVersionPath       = "/eth/v1/node/version"
 	changeBLStoExecutionPath = "/eth/v1/beacon/pool/bls_to_execution_changes"
+
+	GetNodeVersionPath      = "/eth/v1/node/version"
+	GetWeakSubjectivityPath = "/prysm/v1/beacon/weak_subjectivity"
 )
 
 // StateOrBlockId represents the block_id / state_id parameters that several of the Eth Beacon API methods accept.
@@ -63,24 +63,8 @@ func IdFromSlot(s primitives.Slot) StateOrBlockId {
 	return StateOrBlockId(strconv.FormatUint(uint64(s), 10))
 }
 
-// idTemplate is used to create template functions that can interpolate StateOrBlockId values.
-func idTemplate(ts string) func(StateOrBlockId) string {
-	t := template.Must(template.New("").Parse(ts))
-	f := func(id StateOrBlockId) string {
-		b := bytes.NewBuffer(nil)
-		err := t.Execute(b, struct{ Id string }{Id: string(id)})
-		if err != nil {
-			panic(fmt.Sprintf("invalid idTemplate: %s", ts))
-		}
-		return b.String()
-	}
-	// run the template to ensure that it is valid
-	// this should happen load time (using package scoped vars) to ensure runtime errors aren't possible
-	_ = f(IdGenesis)
-	return f
-}
-
-func renderGetBlockPath(id StateOrBlockId) string {
+// RenderGetBlockPath formats a block id into a path for the GetBlock API endpoint.
+func RenderGetBlockPath(id StateOrBlockId) string {
 	return path.Join(getSignedBlockPath, string(id))
 }
 
@@ -104,15 +88,13 @@ func NewClient(host string, opts ...client.ClientOpt) (*Client, error) {
 // for the named identifiers.
 // The return value contains the ssz-encoded bytes.
 func (c *Client) GetBlock(ctx context.Context, blockId StateOrBlockId) ([]byte, error) {
-	blockPath := renderGetBlockPath(blockId)
+	blockPath := RenderGetBlockPath(blockId)
 	b, err := c.Get(ctx, blockPath, client.WithSSZEncoding())
 	if err != nil {
 		return nil, errors.Wrapf(err, "error requesting state by id = %s", blockId)
 	}
 	return b, nil
 }
-
-var getBlockRootTpl = idTemplate(getBlockRootPath)
 
 // GetBlockRoot retrieves the hash_tree_root of the BeaconBlock for the given block id.
 // Block identifier can be one of: "head" (canonical head in node's view), "genesis", "finalized",
@@ -135,8 +117,6 @@ func (c *Client) GetBlockRoot(ctx context.Context, blockId StateOrBlockId) ([32]
 	}
 	return bytesutil.ToBytes32(rs), nil
 }
-
-var getForkTpl = idTemplate(getForkForStatePath)
 
 // GetFork queries the Beacon Node API for the Fork from the state identified by stateId.
 // Block identifier can be one of: "head" (canonical head in node's view), "genesis", "finalized",
@@ -195,6 +175,10 @@ type NodeVersion struct {
 	systemInfo     string
 }
 
+func (nv *NodeVersion) SetImplementation(impl string) {
+	nv.implementation = impl
+}
+
 var versionRE = regexp.MustCompile(`^(\w+)/(v\d+\.\d+\.\d+[-a-zA-Z0-9]*)\s*/?(.*)$`)
 
 func parseNodeVersion(v string) (*NodeVersion, error) {
@@ -212,7 +196,7 @@ func parseNodeVersion(v string) (*NodeVersion, error) {
 // GetNodeVersion requests that the beacon node identify information about its implementation in a format
 // similar to a HTTP User-Agent field. ex: Lighthouse/v0.1.5 (Linux x86_64)
 func (c *Client) GetNodeVersion(ctx context.Context) (*NodeVersion, error) {
-	b, err := c.Get(ctx, getNodeVersionPath)
+	b, err := c.Get(ctx, GetNodeVersionPath)
 	if err != nil {
 		return nil, errors.Wrap(err, "error requesting node version")
 	}
@@ -228,7 +212,8 @@ func (c *Client) GetNodeVersion(ctx context.Context) (*NodeVersion, error) {
 	return parseNodeVersion(d.Data.Version)
 }
 
-func renderGetStatePath(id StateOrBlockId) string {
+// RenderGetStatePath formats a state id into a path for the GetState API endpoint.
+func RenderGetStatePath(id StateOrBlockId) string {
 	return path.Join(getStatePath, string(id))
 }
 
@@ -246,13 +231,29 @@ func (c *Client) GetState(ctx context.Context, stateId StateOrBlockId) ([]byte, 
 	return b, nil
 }
 
+// WeakSubjectivityData represents the state root, block root and epoch of the BeaconState + ReadOnlySignedBeaconBlock
+// that falls at the beginning of the current weak subjectivity period. These values can be used to construct
+// a weak subjectivity checkpoint beacon node flag to be used for validation.
+type WeakSubjectivityData struct {
+	BlockRoot [32]byte
+	StateRoot [32]byte
+	Epoch     primitives.Epoch
+}
+
+// CheckpointString returns the standard string representation of a Checkpoint.
+// The format is a hex-encoded block root, followed by the epoch of the block, separated by a colon. For example:
+// "0x1c35540cac127315fabb6bf29181f2ae0de1a3fc909d2e76ba771e61312cc49a:74888"
+func (wsd *WeakSubjectivityData) CheckpointString() string {
+	return fmt.Sprintf("%#x:%d", wsd.BlockRoot, wsd.Epoch)
+}
+
 // GetWeakSubjectivity calls a proposed API endpoint that is unique to prysm
 // This api method does the following:
 // - computes weak subjectivity epoch
 // - finds the highest non-skipped block preceding the epoch
 // - returns the htr of the found block and returns this + the value of state_root from the block
 func (c *Client) GetWeakSubjectivity(ctx context.Context) (*WeakSubjectivityData, error) {
-	body, err := c.Get(ctx, getWeakSubjectivityPath)
+	body, err := c.Get(ctx, GetWeakSubjectivityPath)
 	if err != nil {
 		return nil, err
 	}

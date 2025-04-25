@@ -4,8 +4,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"gopkg.in/yaml.v2"
 )
@@ -31,9 +33,9 @@ func P2PPreregistration(cliCtx *cli.Context) (bootstrapNodeAddrs []string, dataD
 	if dataDir == "" {
 		dataDir = cmd.DefaultDataDir()
 		if dataDir == "" {
-			log.Fatal(
-				"Could not determine your system's HOME path, please specify a --datadir you wish " +
-					"to use for your chain data",
+			err = errors.Errorf(
+				"Could not determine your system's HOME path, please specify a --%s you wish to use for your chain data",
+				cmd.DataDirFlag.Name,
 			)
 		}
 	}
@@ -49,7 +51,8 @@ func readbootNodes(fileName string) ([]string, error) {
 	listNodes := make([]string, 0)
 	err = yaml.UnmarshalStrict(fileContent, &listNodes)
 	if err != nil {
-		if _, ok := err.(*yaml.TypeError); !ok {
+		var typeError *yaml.TypeError
+		if !errors.As(err, &typeError) {
 			return nil, err
 		} else {
 			log.WithError(err).Error("There were some issues parsing the bootnodes from a yaml file.")

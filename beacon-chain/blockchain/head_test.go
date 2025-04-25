@@ -7,20 +7,21 @@ import (
 	"testing"
 	"time"
 
-	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	testDB "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/blstoexec"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpbv1 "github.com/prysmaticlabs/prysm/v5/proto/eth/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/blstoexec"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpbv1 "github.com/OffchainLabs/prysm/v6/proto/eth/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -156,14 +157,17 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 		notifier := &mock.MockStateNotifier{RecordEvents: true}
 		srv := &Service{
 			cfg: &config{
-				StateNotifier: notifier,
+				StateNotifier:   notifier,
+				ForkChoiceStore: doublylinkedtree.New(),
 			},
 			originBlockRoot: [32]byte{1},
 		}
+		st, blk, err := prepareForkchoiceState(context.Background(), 0, [32]byte{}, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+		require.NoError(t, err)
+		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(context.Background(), st, blk))
 		newHeadStateRoot := [32]byte{2}
 		newHeadRoot := [32]byte{3}
-		err := srv.notifyNewHeadEvent(context.Background(), 1, bState, newHeadStateRoot[:], newHeadRoot[:])
-		require.NoError(t, err)
+		require.NoError(t, srv.notifyNewHeadEvent(context.Background(), 1, bState, newHeadStateRoot[:], newHeadRoot[:]))
 		events := notifier.ReceivedEvents()
 		require.Equal(t, 1, len(events))
 
@@ -185,10 +189,14 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 		genesisRoot := [32]byte{1}
 		srv := &Service{
 			cfg: &config{
-				StateNotifier: notifier,
+				StateNotifier:   notifier,
+				ForkChoiceStore: doublylinkedtree.New(),
 			},
 			originBlockRoot: genesisRoot,
 		}
+		st, blk, err := prepareForkchoiceState(context.Background(), 0, [32]byte{}, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+		require.NoError(t, err)
+		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(context.Background(), st, blk))
 		epoch1Start, err := slots.EpochStart(1)
 		require.NoError(t, err)
 		epoch2Start, err := slots.EpochStart(1)
@@ -209,8 +217,8 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 			Block:                     newHeadRoot[:],
 			State:                     newHeadStateRoot[:],
 			EpochTransition:           true,
-			PreviousDutyDependentRoot: genesisRoot[:],
-			CurrentDutyDependentRoot:  make([]byte, 32),
+			PreviousDutyDependentRoot: make([]byte, 32),
+			CurrentDutyDependentRoot:  srv.originBlockRoot[:],
 		}
 		require.DeepSSZEqual(t, wanted, eventHead)
 	})
@@ -312,14 +320,80 @@ func TestSaveOrphanedAtts(t *testing.T) {
 
 	require.NoError(t, service.saveOrphanedOperations(ctx, r3, r4))
 	require.Equal(t, 3, service.cfg.AttPool.AggregatedAttestationCount())
-	wantAtts := []*ethpb.Attestation{
+	wantAtts := []ethpb.Att{
 		blk3.Block.Body.Attestations[0],
 		blk2.Block.Body.Attestations[0],
 		blk1.Block.Body.Attestations[0],
 	}
 	atts := service.cfg.AttPool.AggregatedAttestations()
 	sort.Slice(atts, func(i, j int) bool {
-		return atts[i].Data.Slot > atts[j].Data.Slot
+		return atts[i].GetData().Slot > atts[j].GetData().Slot
+	})
+	require.DeepEqual(t, wantAtts, atts)
+}
+
+func TestSaveOrphanedAttsElectra(t *testing.T) {
+	ctx := context.Background()
+	beaconDB := testDB.SetupDB(t)
+	service := setupBeaconChain(t, beaconDB)
+	service.genesisTime = time.Now().Add(time.Duration(-10*int64(1)*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second)
+
+	// Chain setup
+	// 0 -- 1 -- 2 -- 3
+	//  \-4
+	st, keys := util.DeterministicGenesisStateElectra(t, 64)
+	blkG, err := util.GenerateFullBlockElectra(st, keys, util.DefaultBlockGenConfig(), 1)
+	assert.NoError(t, err)
+
+	util.SaveBlock(t, ctx, service.cfg.BeaconDB, blkG)
+	rG, err := blkG.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	blk1, err := util.GenerateFullBlockElectra(st, keys, util.DefaultBlockGenConfig(), 2)
+	assert.NoError(t, err)
+	blk1.Block.ParentRoot = rG[:]
+	r1, err := blk1.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	blk2, err := util.GenerateFullBlockElectra(st, keys, util.DefaultBlockGenConfig(), 3)
+	assert.NoError(t, err)
+	blk2.Block.ParentRoot = r1[:]
+	r2, err := blk2.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	blk3, err := util.GenerateFullBlockElectra(st, keys, util.DefaultBlockGenConfig(), 4)
+	assert.NoError(t, err)
+	blk3.Block.ParentRoot = r2[:]
+	r3, err := blk3.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	blk4 := util.NewBeaconBlockElectra()
+	blk4.Block.Slot = 4
+	blk4.Block.ParentRoot = rG[:]
+	r4, err := blk4.Block.HashTreeRoot()
+	require.NoError(t, err)
+	ojc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
+	ofc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
+
+	for _, blk := range []*ethpb.SignedBeaconBlockElectra{blkG, blk1, blk2, blk3, blk4} {
+		r, err := blk.Block.HashTreeRoot()
+		require.NoError(t, err)
+		state, blkRoot, err := prepareForkchoiceState(ctx, blk.Block.Slot, r, bytesutil.ToBytes32(blk.Block.ParentRoot), [32]byte{}, ojc, ofc)
+		require.NoError(t, err)
+		require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, state, blkRoot))
+		util.SaveBlock(t, ctx, beaconDB, blk)
+	}
+
+	require.NoError(t, service.saveOrphanedOperations(ctx, r3, r4))
+	require.Equal(t, 3, len(service.cfg.AttPool.BlockAttestations()))
+	wantAtts := []ethpb.Att{
+		blk3.Block.Body.Attestations[0],
+		blk2.Block.Body.Attestations[0],
+		blk1.Block.Body.Attestations[0],
+	}
+	atts := service.cfg.AttPool.BlockAttestations()
+	sort.Slice(atts, func(i, j int) bool {
+		return atts[i].GetData().Slot > atts[j].GetData().Slot
 	})
 	require.DeepEqual(t, wantAtts, atts)
 }
@@ -389,14 +463,14 @@ func TestSaveOrphanedOps(t *testing.T) {
 
 	require.NoError(t, service.saveOrphanedOperations(ctx, r3, r4))
 	require.Equal(t, 3, service.cfg.AttPool.AggregatedAttestationCount())
-	wantAtts := []*ethpb.Attestation{
+	wantAtts := []ethpb.Att{
 		blk3.Block.Body.Attestations[0],
 		blk2.Block.Body.Attestations[0],
 		blk1.Block.Body.Attestations[0],
 	}
 	atts := service.cfg.AttPool.AggregatedAttestations()
 	sort.Slice(atts, func(i, j int) bool {
-		return atts[i].Data.Slot > atts[j].Data.Slot
+		return atts[i].GetData().Slot > atts[j].GetData().Slot
 	})
 	require.DeepEqual(t, wantAtts, atts)
 	require.Equal(t, 1, len(service.cfg.SlashingPool.PendingProposerSlashings(ctx, st, false)))
@@ -517,14 +591,14 @@ func TestSaveOrphanedAtts_DoublyLinkedTrie(t *testing.T) {
 
 	require.NoError(t, service.saveOrphanedOperations(ctx, r3, r4))
 	require.Equal(t, 3, service.cfg.AttPool.AggregatedAttestationCount())
-	wantAtts := []*ethpb.Attestation{
+	wantAtts := []ethpb.Att{
 		blk3.Block.Body.Attestations[0],
 		blk2.Block.Body.Attestations[0],
 		blk1.Block.Body.Attestations[0],
 	}
 	atts := service.cfg.AttPool.AggregatedAttestations()
 	sort.Slice(atts, func(i, j int) bool {
-		return atts[i].Data.Slot > atts[j].Data.Slot
+		return atts[i].GetData().Slot > atts[j].GetData().Slot
 	})
 	require.DeepEqual(t, wantAtts, atts)
 }

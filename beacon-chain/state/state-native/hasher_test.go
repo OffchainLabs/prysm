@@ -2,19 +2,18 @@ package state_native_test
 
 import (
 	"context"
-	"math/big"
 	"testing"
 
+	statenative "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/prysmaticlabs/go-bitfield"
-	statenative "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestComputeFieldRootsWithHasher_Phase0(t *testing.T) {
@@ -254,7 +253,7 @@ func TestComputeFieldRootsWithHasher_Capella(t *testing.T) {
 	require.NoError(t, beaconState.SetInactivityScores([]uint64{1, 2, 3}))
 	require.NoError(t, beaconState.SetCurrentSyncCommittee(syncCommittee("current")))
 	require.NoError(t, beaconState.SetNextSyncCommittee(syncCommittee("next")))
-	wrappedHeader, err := blocks.WrappedExecutionPayloadHeaderCapella(executionPayloadHeaderCapella(), big.NewInt(0))
+	wrappedHeader, err := blocks.WrappedExecutionPayloadHeaderCapella(executionPayloadHeaderCapella())
 	require.NoError(t, err)
 	require.NoError(t, beaconState.SetLatestExecutionPayloadHeader(wrappedHeader))
 	require.NoError(t, beaconState.SetNextWithdrawalIndex(123))

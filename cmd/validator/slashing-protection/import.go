@@ -4,15 +4,15 @@ import (
 	"bytes"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/io/file"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts/userprompt"
+	"github.com/OffchainLabs/prysm/v6/validator/db/filesystem"
+	"github.com/OffchainLabs/prysm/v6/validator/db/iface"
+	"github.com/OffchainLabs/prysm/v6/validator/db/kv"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/userprompt"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/filesystem"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/iface"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/kv"
 	"github.com/urfave/cli/v2"
 )
 
@@ -33,7 +33,7 @@ func importSlashingProtectionJSON(cliCtx *cli.Context) error {
 	)
 
 	// Check if a minimal database is requested
-	isDatabaseMimimal := cliCtx.Bool(features.EnableMinimalSlashingProtection.Name)
+	isDatabaseMinimal := cliCtx.Bool(features.EnableMinimalSlashingProtection.Name)
 
 	// Get the data directory from the CLI context.
 	dataDir := cliCtx.String(cmd.DataDirFlag.Name)
@@ -45,7 +45,7 @@ func importSlashingProtectionJSON(cliCtx *cli.Context) error {
 	}
 
 	// Ensure that the database is found under the specified directory or its subdirectories
-	if isDatabaseMimimal {
+	if isDatabaseMinimal {
 		found, _, err = file.RecursiveDirFind(filesystem.DatabaseDirName, dataDir)
 	} else {
 		found, _, err = file.RecursiveFileFind(kv.ProtectionDbFileName, dataDir)
@@ -63,7 +63,7 @@ func importSlashingProtectionJSON(cliCtx *cli.Context) error {
 	log.Infof(message, dataDir)
 
 	// Open the validator database.
-	if isDatabaseMimimal {
+	if isDatabaseMinimal {
 		valDB, err = filesystem.NewStore(dataDir, nil)
 	} else {
 		valDB, err = kv.NewKVStore(cliCtx.Context, dataDir, nil)

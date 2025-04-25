@@ -6,48 +6,46 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"sync"
 
-	"github.com/gorilla/mux"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
+	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
+	opfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
+	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/blstoexec"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/slashings"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/synccommittee"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/voluntaryexits"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/rewards"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/lookup"
+	beaconv1alpha1 "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/v1alpha1/beacon"
+	debugv1alpha1 "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/v1alpha1/debug"
+	nodev1alpha1 "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/v1alpha1/node"
+	validatorv1alpha1 "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/v1alpha1/validator"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
+	chainSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/io/logs"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
+	ethpbv1alpha1 "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	grpcopentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	grpcprometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/pkg/errors"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/builder"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache/depositcache"
-	blockfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/block"
-	opfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
-	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/blstoexec"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/slashings"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/synccommittee"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/voluntaryexits"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/rewards"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/lookup"
-	beaconv1alpha1 "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/prysm/v1alpha1/beacon"
-	debugv1alpha1 "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/prysm/v1alpha1/debug"
-	nodev1alpha1 "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/prysm/v1alpha1/node"
-	validatorv1alpha1 "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/prysm/v1alpha1/validator"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
-	chainSync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/io/logs"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	ethpbv1alpha1 "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/sirupsen/logrus"
 	"go.opencensus.io/plugin/ocgrpc"
 	"google.golang.org/grpc"
@@ -57,24 +55,6 @@ import (
 )
 
 const attestationBufferSize = 100
-
-var (
-	httpRequestLatency = promauto.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "http_request_latency_seconds",
-			Help:    "Latency of HTTP requests in seconds",
-			Buckets: []float64{0.001, 0.01, 0.025, 0.1, 0.25, 1, 2.5, 10},
-		},
-		[]string{"endpoint", "code", "method"},
-	)
-	httpRequestCount = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "http_request_count",
-			Help: "Number of HTTP requests",
-		},
-		[]string{"endpoint", "code", "method"},
-	)
-)
 
 // Service defining an RPC server for a beacon node.
 type Service struct {
@@ -92,55 +72,57 @@ type Service struct {
 
 // Config options for the beacon node RPC server.
 type Config struct {
-	ExecutionPayloadReconstructor execution.PayloadReconstructor
-	Host                          string
-	Port                          string
-	CertFlag                      string
-	KeyFlag                       string
-	BeaconMonitoringHost          string
-	BeaconMonitoringPort          int
-	BeaconDB                      db.HeadAccessDatabase
-	ChainInfoFetcher              blockchain.ChainInfoFetcher
-	HeadFetcher                   blockchain.HeadFetcher
-	CanonicalFetcher              blockchain.CanonicalFetcher
-	ForkFetcher                   blockchain.ForkFetcher
-	ForkchoiceFetcher             blockchain.ForkchoiceFetcher
-	FinalizationFetcher           blockchain.FinalizationFetcher
-	AttestationReceiver           blockchain.AttestationReceiver
-	BlockReceiver                 blockchain.BlockReceiver
-	BlobReceiver                  blockchain.BlobReceiver
-	ExecutionChainService         execution.Chain
-	ChainStartFetcher             execution.ChainStartFetcher
-	ExecutionChainInfoFetcher     execution.ChainInfoFetcher
-	GenesisTimeFetcher            blockchain.TimeFetcher
-	GenesisFetcher                blockchain.GenesisFetcher
-	EnableDebugRPCEndpoints       bool
-	MockEth1Votes                 bool
-	AttestationsPool              attestations.Pool
-	ExitPool                      voluntaryexits.PoolManager
-	SlashingsPool                 slashings.PoolManager
-	SyncCommitteeObjectPool       synccommittee.Pool
-	BLSChangesPool                blstoexec.PoolManager
-	SyncService                   chainSync.Checker
-	Broadcaster                   p2p.Broadcaster
-	PeersFetcher                  p2p.PeersProvider
-	PeerManager                   p2p.PeerManager
-	MetadataProvider              p2p.MetadataProvider
-	DepositFetcher                cache.DepositFetcher
-	PendingDepositFetcher         depositcache.PendingDepositsFetcher
-	StateNotifier                 statefeed.Notifier
-	BlockNotifier                 blockfeed.Notifier
-	OperationNotifier             opfeed.Notifier
-	StateGen                      *stategen.State
-	MaxMsgSize                    int
-	ExecutionEngineCaller         execution.EngineCaller
-	OptimisticModeFetcher         blockchain.OptimisticModeFetcher
-	BlockBuilder                  builder.BlockBuilder
-	Router                        *mux.Router
-	ClockWaiter                   startup.ClockWaiter
-	BlobStorage                   *filesystem.BlobStorage
-	TrackedValidatorsCache        *cache.TrackedValidatorsCache
-	PayloadIDCache                *cache.PayloadIDCache
+	ExecutionReconstructor    execution.Reconstructor
+	Host                      string
+	Port                      string
+	CertFlag                  string
+	KeyFlag                   string
+	BeaconMonitoringHost      string
+	BeaconMonitoringPort      int
+	BeaconDB                  db.HeadAccessDatabase
+	ChainInfoFetcher          blockchain.ChainInfoFetcher
+	HeadFetcher               blockchain.HeadFetcher
+	CanonicalFetcher          blockchain.CanonicalFetcher
+	ForkFetcher               blockchain.ForkFetcher
+	ForkchoiceFetcher         blockchain.ForkchoiceFetcher
+	FinalizationFetcher       blockchain.FinalizationFetcher
+	AttestationReceiver       blockchain.AttestationReceiver
+	BlockReceiver             blockchain.BlockReceiver
+	BlobReceiver              blockchain.BlobReceiver
+	ExecutionChainService     execution.Chain
+	ChainStartFetcher         execution.ChainStartFetcher
+	ExecutionChainInfoFetcher execution.ChainInfoFetcher
+	GenesisTimeFetcher        blockchain.TimeFetcher
+	GenesisFetcher            blockchain.GenesisFetcher
+	MockEth1Votes             bool
+	EnableDebugRPCEndpoints   bool
+	AttestationCache          *cache.AttestationCache
+	AttestationsPool          attestations.Pool
+	ExitPool                  voluntaryexits.PoolManager
+	SlashingsPool             slashings.PoolManager
+	SyncCommitteeObjectPool   synccommittee.Pool
+	BLSChangesPool            blstoexec.PoolManager
+	SyncService               chainSync.Checker
+	Broadcaster               p2p.Broadcaster
+	PeersFetcher              p2p.PeersProvider
+	PeerManager               p2p.PeerManager
+	MetadataProvider          p2p.MetadataProvider
+	DepositFetcher            cache.DepositFetcher
+	PendingDepositFetcher     depositsnapshot.PendingDepositsFetcher
+	StateNotifier             statefeed.Notifier
+	BlockNotifier             blockfeed.Notifier
+	OperationNotifier         opfeed.Notifier
+	StateGen                  *stategen.State
+	MaxMsgSize                int
+	ExecutionEngineCaller     execution.EngineCaller
+	OptimisticModeFetcher     blockchain.OptimisticModeFetcher
+	BlockBuilder              builder.BlockBuilder
+	Router                    *http.ServeMux
+	ClockWaiter               startup.ClockWaiter
+	BlobStorage               *filesystem.BlobStorage
+	TrackedValidatorsCache    *cache.TrackedValidatorsCache
+	PayloadIDCache            *cache.PayloadIDCache
+	LCStore                   *lightClient.Store
 }
 
 // NewService instantiates a new RPC service instance that will
@@ -155,7 +137,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		connectedRPCClients: make(map[net.Addr]bool),
 	}
 
-	address := fmt.Sprintf("%s:%s", s.cfg.Host, s.cfg.Port)
+	address := net.JoinHostPort(s.cfg.Host, s.cfg.Port)
 	lis, err := net.Listen("tcp", address)
 	if err != nil {
 		log.WithError(err).Errorf("Could not listen to port in Start() %s", address)
@@ -215,57 +197,61 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		GenesisTimeFetcher: s.cfg.GenesisTimeFetcher,
 		BlobStorage:        s.cfg.BlobStorage,
 	}
-	rewardFetcher := &rewards.BlockRewardService{Replayer: ch}
+	rewardFetcher := &rewards.BlockRewardService{Replayer: ch, DB: s.cfg.BeaconDB}
 	coreService := &core.Service{
+		BeaconDB:              s.cfg.BeaconDB,
 		HeadFetcher:           s.cfg.HeadFetcher,
 		GenesisTimeFetcher:    s.cfg.GenesisTimeFetcher,
 		SyncChecker:           s.cfg.SyncService,
 		Broadcaster:           s.cfg.Broadcaster,
 		SyncCommitteePool:     s.cfg.SyncCommitteeObjectPool,
 		OperationNotifier:     s.cfg.OperationNotifier,
-		AttestationCache:      cache.NewAttestationCache(),
+		AttestationCache:      cache.NewAttestationDataCache(),
 		StateGen:              s.cfg.StateGen,
 		P2P:                   s.cfg.Broadcaster,
 		FinalizedFetcher:      s.cfg.FinalizationFetcher,
+		ReplayerBuilder:       ch,
 		OptimisticModeFetcher: s.cfg.OptimisticModeFetcher,
 	}
 	validatorServer := &validatorv1alpha1.Server{
-		Ctx:                    s.ctx,
-		AttPool:                s.cfg.AttestationsPool,
-		ExitPool:               s.cfg.ExitPool,
-		HeadFetcher:            s.cfg.HeadFetcher,
-		ForkFetcher:            s.cfg.ForkFetcher,
-		ForkchoiceFetcher:      s.cfg.ForkchoiceFetcher,
-		GenesisFetcher:         s.cfg.GenesisFetcher,
-		FinalizationFetcher:    s.cfg.FinalizationFetcher,
-		TimeFetcher:            s.cfg.GenesisTimeFetcher,
-		BlockFetcher:           s.cfg.ExecutionChainService,
-		DepositFetcher:         s.cfg.DepositFetcher,
-		ChainStartFetcher:      s.cfg.ChainStartFetcher,
-		Eth1InfoFetcher:        s.cfg.ExecutionChainService,
-		OptimisticModeFetcher:  s.cfg.OptimisticModeFetcher,
-		SyncChecker:            s.cfg.SyncService,
-		StateNotifier:          s.cfg.StateNotifier,
-		BlockNotifier:          s.cfg.BlockNotifier,
-		OperationNotifier:      s.cfg.OperationNotifier,
-		P2P:                    s.cfg.Broadcaster,
-		BlockReceiver:          s.cfg.BlockReceiver,
-		BlobReceiver:           s.cfg.BlobReceiver,
-		MockEth1Votes:          s.cfg.MockEth1Votes,
-		Eth1BlockFetcher:       s.cfg.ExecutionChainService,
-		PendingDepositsFetcher: s.cfg.PendingDepositFetcher,
-		SlashingsPool:          s.cfg.SlashingsPool,
-		StateGen:               s.cfg.StateGen,
-		SyncCommitteePool:      s.cfg.SyncCommitteeObjectPool,
-		ReplayerBuilder:        ch,
-		ExecutionEngineCaller:  s.cfg.ExecutionEngineCaller,
-		BeaconDB:               s.cfg.BeaconDB,
-		BlockBuilder:           s.cfg.BlockBuilder,
-		BLSChangesPool:         s.cfg.BLSChangesPool,
-		ClockWaiter:            s.cfg.ClockWaiter,
-		CoreService:            coreService,
-		TrackedValidatorsCache: s.cfg.TrackedValidatorsCache,
-		PayloadIDCache:         s.cfg.PayloadIDCache,
+		Ctx:                     s.ctx,
+		AttestationCache:        s.cfg.AttestationCache,
+		AttPool:                 s.cfg.AttestationsPool,
+		ExitPool:                s.cfg.ExitPool,
+		HeadFetcher:             s.cfg.HeadFetcher,
+		ForkFetcher:             s.cfg.ForkFetcher,
+		ForkchoiceFetcher:       s.cfg.ForkchoiceFetcher,
+		GenesisFetcher:          s.cfg.GenesisFetcher,
+		FinalizationFetcher:     s.cfg.FinalizationFetcher,
+		TimeFetcher:             s.cfg.GenesisTimeFetcher,
+		BlockFetcher:            s.cfg.ExecutionChainService,
+		DepositFetcher:          s.cfg.DepositFetcher,
+		ChainStartFetcher:       s.cfg.ChainStartFetcher,
+		Eth1InfoFetcher:         s.cfg.ExecutionChainService,
+		OptimisticModeFetcher:   s.cfg.OptimisticModeFetcher,
+		SyncChecker:             s.cfg.SyncService,
+		StateNotifier:           s.cfg.StateNotifier,
+		BlockNotifier:           s.cfg.BlockNotifier,
+		OperationNotifier:       s.cfg.OperationNotifier,
+		P2P:                     s.cfg.Broadcaster,
+		BlockReceiver:           s.cfg.BlockReceiver,
+		BlobReceiver:            s.cfg.BlobReceiver,
+		MockEth1Votes:           s.cfg.MockEth1Votes,
+		Eth1BlockFetcher:        s.cfg.ExecutionChainService,
+		PendingDepositsFetcher:  s.cfg.PendingDepositFetcher,
+		SlashingsPool:           s.cfg.SlashingsPool,
+		StateGen:                s.cfg.StateGen,
+		SyncCommitteePool:       s.cfg.SyncCommitteeObjectPool,
+		ReplayerBuilder:         ch,
+		ExecutionEngineCaller:   s.cfg.ExecutionEngineCaller,
+		BeaconDB:                s.cfg.BeaconDB,
+		BlockBuilder:            s.cfg.BlockBuilder,
+		BLSChangesPool:          s.cfg.BLSChangesPool,
+		ClockWaiter:             s.cfg.ClockWaiter,
+		CoreService:             coreService,
+		TrackedValidatorsCache:  s.cfg.TrackedValidatorsCache,
+		PayloadIDCache:          s.cfg.PayloadIDCache,
+		AttestationStateFetcher: s.cfg.AttestationReceiver,
 	}
 	s.validatorServer = validatorServer
 	nodeServer := &nodev1alpha1.Server{
@@ -285,6 +271,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 	beaconChainServer := &beaconv1alpha1.Server{
 		Ctx:                         s.ctx,
 		BeaconDB:                    s.cfg.BeaconDB,
+		AttestationCache:            s.cfg.AttestationCache,
 		AttestationsPool:            s.cfg.AttestationsPool,
 		SlashingsPool:               s.cfg.SlashingsPool,
 		OptimisticModeFetcher:       s.cfg.OptimisticModeFetcher,
@@ -309,23 +296,18 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 
 	endpoints := s.endpoints(s.cfg.EnableDebugRPCEndpoints, blocker, stater, rewardFetcher, validatorServer, coreService, ch)
 	for _, e := range endpoints {
-		s.cfg.Router.HandleFunc(
-			e.template,
-			promhttp.InstrumentHandlerDuration(
-				httpRequestLatency.MustCurryWith(prometheus.Labels{"endpoint": e.name}),
-				promhttp.InstrumentHandlerCounter(
-					httpRequestCount.MustCurryWith(prometheus.Labels{"endpoint": e.name}),
-					e.handler,
-				),
-			),
-		).Methods(e.methods...)
+		for i := range e.methods {
+			s.cfg.Router.HandleFunc(
+				fmt.Sprintf("%s %s", e.methods[i], e.template),
+				e.handlerWithMiddleware(),
+			)
+		}
 	}
 
 	ethpbv1alpha1.RegisterNodeServer(s.grpcServer, nodeServer)
 	ethpbv1alpha1.RegisterHealthServer(s.grpcServer, nodeServer)
 	ethpbv1alpha1.RegisterBeaconChainServer(s.grpcServer, beaconChainServer)
 	if s.cfg.EnableDebugRPCEndpoints {
-		log.Info("Enabled debug gRPC endpoints")
 		debugServer := &debugv1alpha1.Server{
 			GenesisTimeFetcher: s.cfg.GenesisTimeFetcher,
 			BeaconDB:           s.cfg.BeaconDB,
@@ -351,7 +333,6 @@ var _ stategen.CurrentSlotter = blockchain.ChainInfoFetcher(nil)
 // Start the gRPC server.
 func (s *Service) Start() {
 	grpcprometheus.EnableHandlingTimeHistogram()
-	s.validatorServer.PruneBlobsBundleCacheRoutine()
 	go func() {
 		if s.listener != nil {
 			if err := s.grpcServer.Serve(s.listener); err != nil {

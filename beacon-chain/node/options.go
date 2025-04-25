@@ -1,11 +1,10 @@
 package node
 
 import (
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/builder"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
 )
 
 // Option for beacon node configuration.
@@ -48,14 +47,6 @@ func WithBlobStorage(bs *filesystem.BlobStorage) Option {
 func WithBlobStorageOptions(opt ...filesystem.BlobStorageOption) Option {
 	return func(bn *BeaconNode) error {
 		bn.BlobStorageOptions = append(bn.BlobStorageOptions, opt...)
-		return nil
-	}
-}
-
-// WithBlobRetentionEpochs sets the blobRetentionEpochs value, used in kv store initialization.
-func WithBlobRetentionEpochs(e primitives.Epoch) Option {
-	return func(bn *BeaconNode) error {
-		bn.blobRetentionEpochs = e
 		return nil
 	}
 }

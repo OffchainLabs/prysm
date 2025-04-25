@@ -6,17 +6,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
+	mockp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/eth/v1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/peerdata"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/scorers"
-	mockp2p "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	leakybucket "github.com/prysmaticlabs/prysm/v5/container/leaky-bucket"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/eth/v1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestPeer_AtMaxLimit(t *testing.T) {
@@ -50,7 +50,7 @@ func TestPeer_AtMaxLimit(t *testing.T) {
 	}()
 
 	for i := 0; i < highWatermarkBuffer; i++ {
-		addPeer(t, s.peers, peers.PeerConnected)
+		addPeer(t, s.peers, peers.Connected, false)
 	}
 
 	// create alternate host
@@ -159,7 +159,7 @@ func TestService_RejectInboundPeersBeyondLimit(t *testing.T) {
 	inboundLimit += 1
 	// Add in up to inbound peer limit.
 	for i := 0; i < int(inboundLimit); i++ {
-		addPeer(t, s.peers, peerdata.PeerConnectionState(ethpb.ConnectionState_CONNECTED))
+		addPeer(t, s.peers, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED), false)
 	}
 	valid = s.InterceptAccept(&maEndpoints{raddr: multiAddress})
 	if valid {
@@ -336,7 +336,7 @@ func TestService_InterceptAddrDial_Public(t *testing.T) {
 		}),
 	}
 	var err error
-	//test with public filter
+	// test with public filter
 	cidr := "public"
 	ip := "212.67.10.122"
 	s.addrFilter, err = configureFilter(&Config{AllowListCIDR: cidr})
@@ -348,7 +348,7 @@ func TestService_InterceptAddrDial_Public(t *testing.T) {
 		t.Errorf("Expected multiaddress with ip %s to not be rejected since we allow public addresses", ip)
 	}
 
-	ip = "192.168.1.0" //this is private and should fail
+	ip = "192.168.1.0" // this is private and should fail
 	multiAddress, err = ma.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", ip, 3000))
 	require.NoError(t, err)
 	valid = s.InterceptAddrDial("", multiAddress)
@@ -356,7 +356,7 @@ func TestService_InterceptAddrDial_Public(t *testing.T) {
 		t.Errorf("Expected multiaddress with ip %s to be rejected since we are only allowing public addresses", ip)
 	}
 
-	//test with public allow filter, with a public address added to the deny list
+	// test with public allow filter, with a public address added to the deny list
 	invalidPublicIp := "212.67.10.122"
 	validPublicIp := "91.65.69.69"
 	s.addrFilter, err = configureFilter(&Config{AllowListCIDR: "public", DenyListCIDR: []string{"212.67.89.112/16"}})
@@ -384,7 +384,7 @@ func TestService_InterceptAddrDial_Private(t *testing.T) {
 		}),
 	}
 	var err error
-	//test with private filter
+	// test with private filter
 	cidr := "private"
 	s.addrFilter, err = configureFilter(&Config{DenyListCIDR: []string{cidr}})
 	require.NoError(t, err)
@@ -413,7 +413,7 @@ func TestService_InterceptAddrDial_AllowPrivate(t *testing.T) {
 		}),
 	}
 	var err error
-	//test with private filter
+	// test with private filter
 	cidr := "private"
 	s.addrFilter, err = configureFilter(&Config{AllowListCIDR: cidr})
 	require.NoError(t, err)
@@ -442,7 +442,7 @@ func TestService_InterceptAddrDial_DenyPublic(t *testing.T) {
 		}),
 	}
 	var err error
-	//test with private filter
+	// test with private filter
 	cidr := "public"
 	s.addrFilter, err = configureFilter(&Config{DenyListCIDR: []string{cidr}})
 	require.NoError(t, err)
@@ -471,7 +471,7 @@ func TestService_InterceptAddrDial_AllowConflict(t *testing.T) {
 		}),
 	}
 	var err error
-	//test with private filter
+	// test with private filter
 	cidr := "public"
 	s.addrFilter, err = configureFilter(&Config{DenyListCIDR: []string{cidr, "192.168.0.0/16"}})
 	require.NoError(t, err)

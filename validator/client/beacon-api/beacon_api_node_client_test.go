@@ -5,11 +5,11 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/validator/client/beacon-api/mock"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -112,8 +112,8 @@ func TestGetGenesis(t *testing.T) {
 			ctx := context.Background()
 
 			genesisProvider := mock.NewMockGenesisProvider(ctrl)
-			genesisProvider.EXPECT().GetGenesis(
-				ctx,
+			genesisProvider.EXPECT().Genesis(
+				gomock.Any(),
 			).Return(
 				testCase.genesisResponse,
 				testCase.genesisError,
@@ -124,7 +124,7 @@ func TestGetGenesis(t *testing.T) {
 
 			if testCase.queriesDepositContract {
 				jsonRestHandler.EXPECT().Get(
-					ctx,
+					gomock.Any(),
 					"/eth/v1/config/deposit_contract",
 					&depositContractJson,
 				).Return(
@@ -139,7 +139,7 @@ func TestGetGenesis(t *testing.T) {
 				genesisProvider: genesisProvider,
 				jsonRestHandler: jsonRestHandler,
 			}
-			response, err := nodeClient.GetGenesis(ctx, &emptypb.Empty{})
+			response, err := nodeClient.Genesis(ctx, &emptypb.Empty{})
 
 			if testCase.expectedResponse == nil {
 				assert.ErrorContains(t, testCase.expectedError, err)
@@ -203,7 +203,7 @@ func TestGetSyncStatus(t *testing.T) {
 			syncingResponse := structs.SyncStatusResponse{}
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 			jsonRestHandler.EXPECT().Get(
-				ctx,
+				gomock.Any(),
 				syncingEndpoint,
 				&syncingResponse,
 			).Return(
@@ -214,7 +214,7 @@ func TestGetSyncStatus(t *testing.T) {
 			)
 
 			nodeClient := &beaconApiNodeClient{jsonRestHandler: jsonRestHandler}
-			syncStatus, err := nodeClient.GetSyncStatus(ctx, &emptypb.Empty{})
+			syncStatus, err := nodeClient.SyncStatus(ctx, &emptypb.Empty{})
 
 			if testCase.expectedResponse == nil {
 				assert.ErrorContains(t, testCase.expectedError, err)
@@ -267,7 +267,7 @@ func TestGetVersion(t *testing.T) {
 			var versionResponse structs.GetVersionResponse
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 			jsonRestHandler.EXPECT().Get(
-				ctx,
+				gomock.Any(),
 				versionEndpoint,
 				&versionResponse,
 			).Return(
@@ -278,7 +278,7 @@ func TestGetVersion(t *testing.T) {
 			)
 
 			nodeClient := &beaconApiNodeClient{jsonRestHandler: jsonRestHandler}
-			version, err := nodeClient.GetVersion(ctx, &emptypb.Empty{})
+			version, err := nodeClient.Version(ctx, &emptypb.Empty{})
 
 			if testCase.expectedResponse == nil {
 				assert.ErrorContains(t, testCase.expectedError, err)

@@ -7,46 +7,18 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stateutil"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stateutil"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
-
-func TestValidatorMap_DistinctCopy(t *testing.T) {
-	count := uint64(100)
-	vals := make([]*ethpb.Validator, 0, count)
-	for i := uint64(1); i < count; i++ {
-		var someRoot [32]byte
-		var someKey [fieldparams.BLSPubkeyLength]byte
-		copy(someRoot[:], strconv.Itoa(int(i)))
-		copy(someKey[:], strconv.Itoa(int(i)))
-		vals = append(vals, &ethpb.Validator{
-			PublicKey:                  someKey[:],
-			WithdrawalCredentials:      someRoot[:],
-			EffectiveBalance:           params.BeaconConfig().MaxEffectiveBalance,
-			Slashed:                    false,
-			ActivationEligibilityEpoch: 1,
-			ActivationEpoch:            1,
-			ExitEpoch:                  1,
-			WithdrawableEpoch:          1,
-		})
-	}
-	handler := stateutil.NewValMapHandler(vals)
-	newHandler := handler.Copy()
-	wantedPubkey := strconv.Itoa(22)
-	handler.Set(bytesutil.ToBytes48([]byte(wantedPubkey)), 27)
-	val1, _ := handler.Get(bytesutil.ToBytes48([]byte(wantedPubkey)))
-	val2, _ := newHandler.Get(bytesutil.ToBytes48([]byte(wantedPubkey)))
-	assert.NotEqual(t, val1, val2, "Values are supposed to be unequal due to copy")
-}
 
 func TestBeaconState_NoDeadlock_Phase0(t *testing.T) {
 	count := uint64(100)
@@ -501,4 +473,14 @@ func generateState(t *testing.T) state.BeaconState {
 	})
 	assert.NoError(t, err)
 	return newState
+}
+
+func EmptyStateFromVersion(t *testing.T, v int) state.BeaconState {
+	gen := generateState(t)
+	s, ok := gen.(*BeaconState)
+	if !ok {
+		t.Fatal("not a beacon state")
+	}
+	s.version = v
+	return s
 }

@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/hash"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	log "github.com/sirupsen/logrus"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/hash"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	prysmTime "github.com/OffchainLabs/prysm/v6/time"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 )
 
 var (
@@ -22,20 +21,20 @@ var (
 // ValidateNilAttestation checks if any composite field of input attestation is nil.
 // Access to these nil fields will result in run time panic,
 // it is recommended to run these checks as first line of defense.
-func ValidateNilAttestation(attestation *ethpb.Attestation) error {
-	if attestation == nil {
-		return errors.New("attestation can't be nil")
+func ValidateNilAttestation(attestation ethpb.Att) error {
+	if attestation == nil || attestation.IsNil() {
+		return errors.New("attestation is nil")
 	}
-	if attestation.Data == nil {
-		return errors.New("attestation's data can't be nil")
-	}
-	if attestation.Data.Source == nil {
+	if attestation.GetData().Source == nil {
 		return errors.New("attestation's source can't be nil")
 	}
-	if attestation.Data.Target == nil {
+	if attestation.GetData().Target == nil {
 		return errors.New("attestation's target can't be nil")
 	}
-	if attestation.AggregationBits == nil {
+	if attestation.IsSingle() {
+		return nil
+	}
+	if attestation.GetAggregationBits() == nil {
 		return errors.New("attestation's bitfield can't be nil")
 	}
 	return nil
@@ -70,12 +69,6 @@ func IsAggregator(committeeCount uint64, slotSig []byte) (bool, error) {
 	return binary.LittleEndian.Uint64(b[:8])%modulo == 0, nil
 }
 
-// IsAggregated returns true if the attestation is an aggregated attestation,
-// false otherwise.
-func IsAggregated(attestation *ethpb.Attestation) bool {
-	return attestation.AggregationBits.Count() > 1
-}
-
 // ComputeSubnetForAttestation returns the subnet for which the provided attestation will be broadcasted to.
 // This differs from the spec definition by instead passing in the active validators indices in the attestation's
 // given epoch.
@@ -91,8 +84,8 @@ func IsAggregated(attestation *ethpb.Attestation) bool {
 //	committees_since_epoch_start = committees_per_slot * slots_since_epoch_start
 //
 //	return uint64((committees_since_epoch_start + committee_index) % ATTESTATION_SUBNET_COUNT)
-func ComputeSubnetForAttestation(activeValCount uint64, att *ethpb.Attestation) uint64 {
-	return ComputeSubnetFromCommitteeAndSlot(activeValCount, att.Data.CommitteeIndex, att.Data.Slot)
+func ComputeSubnetForAttestation(activeValCount uint64, att ethpb.Att) uint64 {
+	return ComputeSubnetFromCommitteeAndSlot(activeValCount, att.GetCommitteeIndex(), att.GetData().Slot)
 }
 
 // ComputeSubnetFromCommitteeAndSlot is a flattened version of ComputeSubnetForAttestation where we only pass in
@@ -133,9 +126,6 @@ func ComputeSubnetFromCommitteeAndSlot(activeValCount uint64, comIdx primitives.
 //
 // In the attestation must be within the range of 95 to 102 in the example above.
 func ValidateAttestationTime(attSlot primitives.Slot, genesisTime time.Time, clockDisparity time.Duration) error {
-	if err := slots.ValidateClock(attSlot, uint64(genesisTime.Unix())); err != nil {
-		return err
-	}
 	attTime, err := slots.ToTime(uint64(genesisTime.Unix()), attSlot)
 	if err != nil {
 		return err
@@ -182,24 +172,15 @@ func ValidateAttestationTime(attSlot primitives.Slot, genesisTime time.Time, clo
 	}
 
 	// EIP-7045: Starting in Deneb, allow any attestations from the current or previous epoch.
-
 	currentEpoch := slots.ToEpoch(currentSlot)
-	prevEpoch, err := currentEpoch.SafeSub(1)
-	if err != nil {
-		log.WithError(err).Debug("Ignoring underflow for a deneb attestation inclusion check in epoch 0")
-		prevEpoch = 0
-	}
-	attSlotEpoch := slots.ToEpoch(attSlot)
-	if attSlotEpoch != currentEpoch && attSlotEpoch != prevEpoch {
+	if attEpoch+1 < currentEpoch {
 		attError = fmt.Errorf(
-			"attestation epoch %d not within current epoch %d or previous epoch %d",
-			attSlot/params.BeaconConfig().SlotsPerEpoch,
+			"attestation epoch %d not within current epoch %d or previous epoch",
+			attEpoch,
 			currentEpoch,
-			prevEpoch,
 		)
 		return errors.Join(ErrTooLate, attError)
 	}
-
 	return nil
 }
 

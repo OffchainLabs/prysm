@@ -4,15 +4,15 @@ import (
 	"context"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
+	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/peerdata"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/scorers"
-	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestScorers_PeerStatus_Score(t *testing.T) {
@@ -122,7 +122,7 @@ func TestScorers_PeerStatus_Score(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, func(*testing.T) {
 			peerStatuses := peers.NewStatus(ctx, &peers.StatusConfig{
 				ScorerParams: &scorers.Config{},
 			})
@@ -140,12 +140,12 @@ func TestScorers_PeerStatus_IsBadPeer(t *testing.T) {
 		ScorerParams: &scorers.Config{},
 	})
 	pid := peer.ID("peer1")
-	assert.Equal(t, false, peerStatuses.Scorers().IsBadPeer(pid))
-	assert.Equal(t, false, peerStatuses.Scorers().PeerStatusScorer().IsBadPeer(pid))
+	assert.NoError(t, peerStatuses.Scorers().IsBadPeer(pid))
+	assert.NoError(t, peerStatuses.Scorers().PeerStatusScorer().IsBadPeer(pid))
 
 	peerStatuses.Scorers().PeerStatusScorer().SetPeerStatus(pid, &pb.Status{}, p2ptypes.ErrWrongForkDigestVersion)
-	assert.Equal(t, true, peerStatuses.Scorers().IsBadPeer(pid))
-	assert.Equal(t, true, peerStatuses.Scorers().PeerStatusScorer().IsBadPeer(pid))
+	assert.NotNil(t, peerStatuses.Scorers().IsBadPeer(pid))
+	assert.NotNil(t, peerStatuses.Scorers().PeerStatusScorer().IsBadPeer(pid))
 }
 
 func TestScorers_PeerStatus_BadPeers(t *testing.T) {
@@ -155,22 +155,22 @@ func TestScorers_PeerStatus_BadPeers(t *testing.T) {
 	pid1 := peer.ID("peer1")
 	pid2 := peer.ID("peer2")
 	pid3 := peer.ID("peer3")
-	assert.Equal(t, false, peerStatuses.Scorers().IsBadPeer(pid1))
-	assert.Equal(t, false, peerStatuses.Scorers().PeerStatusScorer().IsBadPeer(pid1))
-	assert.Equal(t, false, peerStatuses.Scorers().IsBadPeer(pid2))
-	assert.Equal(t, false, peerStatuses.Scorers().PeerStatusScorer().IsBadPeer(pid2))
-	assert.Equal(t, false, peerStatuses.Scorers().IsBadPeer(pid3))
-	assert.Equal(t, false, peerStatuses.Scorers().PeerStatusScorer().IsBadPeer(pid3))
+	assert.NoError(t, peerStatuses.Scorers().IsBadPeer(pid1))
+	assert.NoError(t, peerStatuses.Scorers().PeerStatusScorer().IsBadPeer(pid1))
+	assert.NoError(t, peerStatuses.Scorers().IsBadPeer(pid2))
+	assert.NoError(t, peerStatuses.Scorers().PeerStatusScorer().IsBadPeer(pid2))
+	assert.NoError(t, peerStatuses.Scorers().IsBadPeer(pid3))
+	assert.NoError(t, peerStatuses.Scorers().PeerStatusScorer().IsBadPeer(pid3))
 
 	peerStatuses.Scorers().PeerStatusScorer().SetPeerStatus(pid1, &pb.Status{}, p2ptypes.ErrWrongForkDigestVersion)
 	peerStatuses.Scorers().PeerStatusScorer().SetPeerStatus(pid2, &pb.Status{}, nil)
 	peerStatuses.Scorers().PeerStatusScorer().SetPeerStatus(pid3, &pb.Status{}, p2ptypes.ErrWrongForkDigestVersion)
-	assert.Equal(t, true, peerStatuses.Scorers().IsBadPeer(pid1))
-	assert.Equal(t, true, peerStatuses.Scorers().PeerStatusScorer().IsBadPeer(pid1))
-	assert.Equal(t, false, peerStatuses.Scorers().IsBadPeer(pid2))
-	assert.Equal(t, false, peerStatuses.Scorers().PeerStatusScorer().IsBadPeer(pid2))
-	assert.Equal(t, true, peerStatuses.Scorers().IsBadPeer(pid3))
-	assert.Equal(t, true, peerStatuses.Scorers().PeerStatusScorer().IsBadPeer(pid3))
+	assert.NotNil(t, peerStatuses.Scorers().IsBadPeer(pid1))
+	assert.NotNil(t, peerStatuses.Scorers().PeerStatusScorer().IsBadPeer(pid1))
+	assert.NoError(t, peerStatuses.Scorers().IsBadPeer(pid2))
+	assert.NoError(t, peerStatuses.Scorers().PeerStatusScorer().IsBadPeer(pid2))
+	assert.NotNil(t, peerStatuses.Scorers().IsBadPeer(pid3))
+	assert.NotNil(t, peerStatuses.Scorers().PeerStatusScorer().IsBadPeer(pid3))
 	assert.Equal(t, 2, len(peerStatuses.Scorers().PeerStatusScorer().BadPeers()))
 	assert.Equal(t, 2, len(peerStatuses.Scorers().BadPeers()))
 }

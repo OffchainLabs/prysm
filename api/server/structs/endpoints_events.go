@@ -20,6 +20,11 @@ type BlockEvent struct {
 	ExecutionOptimistic bool   `json:"execution_optimistic"`
 }
 
+type BlockGossipEvent struct {
+	Slot  string `json:"slot"`
+	Block string `json:"block"`
+}
+
 type AggregatedAttEventSource struct {
 	Aggregate *Attestation `json:"aggregate"`
 }
@@ -96,21 +101,7 @@ type LightClientFinalityUpdateEvent struct {
 	Data    *LightClientFinalityUpdate `json:"data"`
 }
 
-type LightClientFinalityUpdate struct {
-	AttestedHeader  *BeaconBlockHeader `json:"attested_header"`
-	FinalizedHeader *BeaconBlockHeader `json:"finalized_header"`
-	FinalityBranch  []string           `json:"finality_branch"`
-	SyncAggregate   *SyncAggregate     `json:"sync_aggregate"`
-	SignatureSlot   string             `json:"signature_slot"`
-}
-
 type LightClientOptimisticUpdateEvent struct {
 	Version string                       `json:"version"`
 	Data    *LightClientOptimisticUpdate `json:"data"`
-}
-
-type LightClientOptimisticUpdate struct {
-	AttestedHeader *BeaconBlockHeader `json:"attested_header"`
-	SyncAggregate  *SyncAggregate     `json:"sync_aggregate"`
-	SignatureSlot  string             `json:"signature_slot"`
 }

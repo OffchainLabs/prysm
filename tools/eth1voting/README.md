@@ -7,7 +7,7 @@ Flags:
   -beacon string
         gRPC address of the Prysm beacon node (default "127.0.0.1:4000")
   -genesis uint
-        Genesis time. mainnet=1606824023, prater=1616508000 (default 1606824023)
+        Genesis time. mainnet=1606824023, holesky=1695902400 (default 1606824023)
 ```
 
 Usage:

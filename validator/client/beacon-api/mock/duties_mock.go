@@ -13,8 +13,8 @@ import (
 	context "context"
 	reflect "reflect"
 
-	structs "github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	primitives "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	structs "github.com/OffchainLabs/prysm/v6/api/server/structs"
+	primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -22,6 +22,7 @@ import (
 type MockdutiesProvider struct {
 	ctrl     *gomock.Controller
 	recorder *MockdutiesProviderMockRecorder
+	isgomock struct{}
 }
 
 // MockdutiesProviderMockRecorder is the mock recorder for MockdutiesProvider.
@@ -41,62 +42,62 @@ func (m *MockdutiesProvider) EXPECT() *MockdutiesProviderMockRecorder {
 	return m.recorder
 }
 
-// GetAttesterDuties mocks base method.
-func (m *MockdutiesProvider) GetAttesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) ([]*structs.AttesterDuty, error) {
+// AttesterDuties mocks base method.
+func (m *MockdutiesProvider) AttesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*structs.GetAttesterDutiesResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAttesterDuties", ctx, epoch, validatorIndices)
-	ret0, _ := ret[0].([]*structs.AttesterDuty)
+	ret := m.ctrl.Call(m, "AttesterDuties", ctx, epoch, validatorIndices)
+	ret0, _ := ret[0].(*structs.GetAttesterDutiesResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetAttesterDuties indicates an expected call of GetAttesterDuties.
-func (mr *MockdutiesProviderMockRecorder) GetAttesterDuties(ctx, epoch, validatorIndices any) *gomock.Call {
+// AttesterDuties indicates an expected call of AttesterDuties.
+func (mr *MockdutiesProviderMockRecorder) AttesterDuties(ctx, epoch, validatorIndices any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAttesterDuties", reflect.TypeOf((*MockdutiesProvider)(nil).GetAttesterDuties), ctx, epoch, validatorIndices)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AttesterDuties", reflect.TypeOf((*MockdutiesProvider)(nil).AttesterDuties), ctx, epoch, validatorIndices)
 }
 
-// GetCommittees mocks base method.
-func (m *MockdutiesProvider) GetCommittees(ctx context.Context, epoch primitives.Epoch) ([]*structs.Committee, error) {
+// Committees mocks base method.
+func (m *MockdutiesProvider) Committees(ctx context.Context, epoch primitives.Epoch) ([]*structs.Committee, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetCommittees", ctx, epoch)
+	ret := m.ctrl.Call(m, "Committees", ctx, epoch)
 	ret0, _ := ret[0].([]*structs.Committee)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetCommittees indicates an expected call of GetCommittees.
-func (mr *MockdutiesProviderMockRecorder) GetCommittees(ctx, epoch any) *gomock.Call {
+// Committees indicates an expected call of Committees.
+func (mr *MockdutiesProviderMockRecorder) Committees(ctx, epoch any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCommittees", reflect.TypeOf((*MockdutiesProvider)(nil).GetCommittees), ctx, epoch)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Committees", reflect.TypeOf((*MockdutiesProvider)(nil).Committees), ctx, epoch)
 }
 
-// GetProposerDuties mocks base method.
-func (m *MockdutiesProvider) GetProposerDuties(ctx context.Context, epoch primitives.Epoch) ([]*structs.ProposerDuty, error) {
+// ProposerDuties mocks base method.
+func (m *MockdutiesProvider) ProposerDuties(ctx context.Context, epoch primitives.Epoch) (*structs.GetProposerDutiesResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetProposerDuties", ctx, epoch)
-	ret0, _ := ret[0].([]*structs.ProposerDuty)
+	ret := m.ctrl.Call(m, "ProposerDuties", ctx, epoch)
+	ret0, _ := ret[0].(*structs.GetProposerDutiesResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetProposerDuties indicates an expected call of GetProposerDuties.
-func (mr *MockdutiesProviderMockRecorder) GetProposerDuties(ctx, epoch any) *gomock.Call {
+// ProposerDuties indicates an expected call of ProposerDuties.
+func (mr *MockdutiesProviderMockRecorder) ProposerDuties(ctx, epoch any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposerDuties", reflect.TypeOf((*MockdutiesProvider)(nil).GetProposerDuties), ctx, epoch)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProposerDuties", reflect.TypeOf((*MockdutiesProvider)(nil).ProposerDuties), ctx, epoch)
 }
 
-// GetSyncDuties mocks base method.
-func (m *MockdutiesProvider) GetSyncDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) ([]*structs.SyncCommitteeDuty, error) {
+// SyncDuties mocks base method.
+func (m *MockdutiesProvider) SyncDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) ([]*structs.SyncCommitteeDuty, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetSyncDuties", ctx, epoch, validatorIndices)
+	ret := m.ctrl.Call(m, "SyncDuties", ctx, epoch, validatorIndices)
 	ret0, _ := ret[0].([]*structs.SyncCommitteeDuty)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetSyncDuties indicates an expected call of GetSyncDuties.
-func (mr *MockdutiesProviderMockRecorder) GetSyncDuties(ctx, epoch, validatorIndices any) *gomock.Call {
+// SyncDuties indicates an expected call of SyncDuties.
+func (mr *MockdutiesProviderMockRecorder) SyncDuties(ctx, epoch, validatorIndices any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSyncDuties", reflect.TypeOf((*MockdutiesProvider)(nil).GetSyncDuties), ctx, epoch, validatorIndices)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncDuties", reflect.TypeOf((*MockdutiesProvider)(nil).SyncDuties), ctx, epoch, validatorIndices)
 }

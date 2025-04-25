@@ -7,117 +7,170 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/network"
-	"github.com/libp2p/go-libp2p/core/protocol"
+	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	"go.opencensus.io/trace"
 )
 
-// Time to first byte timeout. The maximum time to wait for first byte of
-// request response (time-to-first-byte). The client is expected to give up if
-// they don't receive the first byte within 5 seconds.
-var ttfbTimeout = params.BeaconConfig().TtfbTimeoutDuration()
+var (
+	// Time to first byte timeout. The maximum time to wait for first byte of
+	// request response (time-to-first-byte). The client is expected to give up if
+	// they don't receive the first byte within 5 seconds.
+	ttfbTimeout = params.BeaconConfig().TtfbTimeoutDuration()
 
-// respTimeout is the maximum time for complete response transfer.
-var respTimeout = params.BeaconConfig().RespTimeoutDuration()
+	// respTimeout is the maximum time for complete response transfer.
+	respTimeout = params.BeaconConfig().RespTimeoutDuration()
+)
 
 // rpcHandler is responsible for handling and responding to any incoming message.
 // This method may return an error to internal monitoring, but the error will
 // not be relayed to the peer.
 type rpcHandler func(context.Context, interface{}, libp2pcore.Stream) error
 
-// registerRPCHandlers for p2p RPC.
-func (s *Service) registerRPCHandlers() {
-	currEpoch := slots.ToEpoch(s.cfg.clock.CurrentSlot())
-	// Register V2 handlers if we are past altair fork epoch.
-	if currEpoch >= params.BeaconConfig().AltairForkEpoch {
-		s.registerRPC(
-			p2p.RPCStatusTopicV1,
-			s.statusRPCHandler,
-		)
-		s.registerRPC(
-			p2p.RPCGoodByeTopicV1,
-			s.goodbyeRPCHandler,
-		)
-		s.registerRPC(
-			p2p.RPCPingTopicV1,
-			s.pingHandler,
-		)
-		s.registerRPCHandlersAltair()
-		if currEpoch >= params.BeaconConfig().DenebForkEpoch {
-			s.registerRPCHandlersDeneb()
-		}
-		return
+// rpcHandlerByTopicFromFork returns the RPC handlers for a given fork index.
+func (s *Service) rpcHandlerByTopicFromFork(forkIndex int) (map[string]rpcHandler, error) {
+	// Electra: https://github.com/ethereum/consensus-specs/blob/dev/specs/electra/p2p-interface.md#messages
+	if forkIndex >= version.Electra {
+		return map[string]rpcHandler{
+			p2p.RPCStatusTopicV1:              s.statusRPCHandler,
+			p2p.RPCGoodByeTopicV1:             s.goodbyeRPCHandler,
+			p2p.RPCBlocksByRangeTopicV2:       s.beaconBlocksByRangeRPCHandler,
+			p2p.RPCBlocksByRootTopicV2:        s.beaconBlocksRootRPCHandler,
+			p2p.RPCPingTopicV1:                s.pingHandler,
+			p2p.RPCMetaDataTopicV2:            s.metaDataHandler,
+			p2p.RPCBlobSidecarsByRootTopicV1:  s.blobSidecarByRootRPCHandler,   // Modified in Electra
+			p2p.RPCBlobSidecarsByRangeTopicV1: s.blobSidecarsByRangeRPCHandler, // Modified in Electra
+		}, nil
 	}
-	s.registerRPC(
-		p2p.RPCStatusTopicV1,
-		s.statusRPCHandler,
-	)
-	s.registerRPC(
-		p2p.RPCGoodByeTopicV1,
-		s.goodbyeRPCHandler,
-	)
-	s.registerRPC(
-		p2p.RPCBlocksByRangeTopicV1,
-		s.beaconBlocksByRangeRPCHandler,
-	)
-	s.registerRPC(
-		p2p.RPCBlocksByRootTopicV1,
-		s.beaconBlocksRootRPCHandler,
-	)
-	s.registerRPC(
-		p2p.RPCPingTopicV1,
-		s.pingHandler,
-	)
-	s.registerRPC(
-		p2p.RPCMetaDataTopicV1,
-		s.metaDataHandler,
-	)
+
+	// Deneb: https://github.com/ethereum/consensus-specs/blob/dev/specs/deneb/p2p-interface.md#messages
+	if forkIndex >= version.Deneb {
+		return map[string]rpcHandler{
+			p2p.RPCStatusTopicV1:              s.statusRPCHandler,
+			p2p.RPCGoodByeTopicV1:             s.goodbyeRPCHandler,
+			p2p.RPCBlocksByRangeTopicV2:       s.beaconBlocksByRangeRPCHandler, // Modified in Deneb
+			p2p.RPCBlocksByRootTopicV2:        s.beaconBlocksRootRPCHandler,    // Modified in Deneb
+			p2p.RPCPingTopicV1:                s.pingHandler,
+			p2p.RPCMetaDataTopicV2:            s.metaDataHandler,
+			p2p.RPCBlobSidecarsByRootTopicV1:  s.blobSidecarByRootRPCHandler,   // Added in Deneb
+			p2p.RPCBlobSidecarsByRangeTopicV1: s.blobSidecarsByRangeRPCHandler, // Added in Deneb
+		}, nil
+	}
+
+	// Capella: https://github.com/ethereum/consensus-specs/blob/dev/specs/capella/p2p-interface.md#messages
+	// Bellatrix: https://github.com/ethereum/consensus-specs/blob/dev/specs/bellatrix/p2p-interface.md#messages
+	// Altair: https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/p2p-interface.md#messages
+	if forkIndex >= version.Altair {
+		return map[string]rpcHandler{
+			p2p.RPCStatusTopicV1:        s.statusRPCHandler,
+			p2p.RPCGoodByeTopicV1:       s.goodbyeRPCHandler,
+			p2p.RPCBlocksByRangeTopicV2: s.beaconBlocksByRangeRPCHandler, // Updated in Altair and modified in Capella
+			p2p.RPCBlocksByRootTopicV2:  s.beaconBlocksRootRPCHandler,    // Updated in Altair and modified in Capella
+			p2p.RPCPingTopicV1:          s.pingHandler,
+			p2p.RPCMetaDataTopicV2:      s.metaDataHandler, // Updated in Altair
+		}, nil
+	}
+
+	// PhaseO: https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/p2p-interface.md#messages
+	if forkIndex >= version.Phase0 {
+		return map[string]rpcHandler{
+			p2p.RPCStatusTopicV1:        s.statusRPCHandler,
+			p2p.RPCGoodByeTopicV1:       s.goodbyeRPCHandler,
+			p2p.RPCBlocksByRangeTopicV1: s.beaconBlocksByRangeRPCHandler,
+			p2p.RPCBlocksByRootTopicV1:  s.beaconBlocksRootRPCHandler,
+			p2p.RPCPingTopicV1:          s.pingHandler,
+			p2p.RPCMetaDataTopicV1:      s.metaDataHandler,
+		}, nil
+	}
+
+	return nil, errors.Errorf("RPC handler not found for fork index %d", forkIndex)
 }
 
-// registerRPCHandlers for altair.
-func (s *Service) registerRPCHandlersAltair() {
-	s.registerRPC(
-		p2p.RPCBlocksByRangeTopicV2,
-		s.beaconBlocksByRangeRPCHandler,
-	)
-	s.registerRPC(
-		p2p.RPCBlocksByRootTopicV2,
-		s.beaconBlocksRootRPCHandler,
-	)
-	s.registerRPC(
-		p2p.RPCMetaDataTopicV2,
-		s.metaDataHandler,
-	)
+// rpcHandlerByTopic returns the RPC handlers for a given epoch.
+func (s *Service) rpcHandlerByTopicFromEpoch(epoch primitives.Epoch) (map[string]rpcHandler, error) {
+	// Get the beacon config.
+	beaconConfig := params.BeaconConfig()
+
+	if epoch >= beaconConfig.FuluForkEpoch {
+		return s.rpcHandlerByTopicFromFork(version.Fulu)
+	}
+
+	if epoch >= beaconConfig.ElectraForkEpoch {
+		return s.rpcHandlerByTopicFromFork(version.Electra)
+	}
+
+	if epoch >= beaconConfig.DenebForkEpoch {
+		return s.rpcHandlerByTopicFromFork(version.Deneb)
+	}
+
+	if epoch >= beaconConfig.CapellaForkEpoch {
+		return s.rpcHandlerByTopicFromFork(version.Capella)
+	}
+
+	if epoch >= beaconConfig.BellatrixForkEpoch {
+		return s.rpcHandlerByTopicFromFork(version.Bellatrix)
+	}
+
+	if epoch >= beaconConfig.AltairForkEpoch {
+		return s.rpcHandlerByTopicFromFork(version.Altair)
+	}
+
+	return s.rpcHandlerByTopicFromFork(version.Phase0)
 }
 
-func (s *Service) registerRPCHandlersDeneb() {
-	s.registerRPC(
-		p2p.RPCBlobSidecarsByRangeTopicV1,
-		s.blobSidecarsByRangeRPCHandler,
-	)
-	s.registerRPC(
-		p2p.RPCBlobSidecarsByRootTopicV1,
-		s.blobSidecarByRootRPCHandler,
-	)
+// addedRPCHandlerByTopic returns the RPC handlers that are added in the new map that are not present in the old map.
+func addedRPCHandlerByTopic(previous, next map[string]rpcHandler) map[string]rpcHandler {
+	added := make(map[string]rpcHandler)
+
+	for topic, handler := range next {
+		if _, ok := previous[topic]; !ok {
+			added[topic] = handler
+		}
+	}
+
+	return added
 }
 
-// Remove all v1 Stream handlers that are no longer supported
-// from altair onwards.
-func (s *Service) unregisterPhase0Handlers() {
-	fullBlockRangeTopic := p2p.RPCBlocksByRangeTopicV1 + s.cfg.p2p.Encoding().ProtocolSuffix()
-	fullBlockRootTopic := p2p.RPCBlocksByRootTopicV1 + s.cfg.p2p.Encoding().ProtocolSuffix()
-	fullMetadataTopic := p2p.RPCMetaDataTopicV1 + s.cfg.p2p.Encoding().ProtocolSuffix()
+// removedTopics returns the topics that are removed in the new map that are not present in the old map.
+func removedRPCTopics(previous, next map[string]rpcHandler) map[string]bool {
+	removed := make(map[string]bool)
 
-	s.cfg.p2p.Host().RemoveStreamHandler(protocol.ID(fullBlockRangeTopic))
-	s.cfg.p2p.Host().RemoveStreamHandler(protocol.ID(fullBlockRootTopic))
-	s.cfg.p2p.Host().RemoveStreamHandler(protocol.ID(fullMetadataTopic))
+	for topic := range previous {
+		if _, ok := next[topic]; !ok {
+			removed[topic] = true
+		}
+	}
+
+	return removed
+}
+
+// registerRPCHandlers for p2p RPC.
+func (s *Service) registerRPCHandlers() error {
+	// Get the current epoch.
+	currentSlot := s.cfg.clock.CurrentSlot()
+	currentEpoch := slots.ToEpoch(currentSlot)
+
+	// Get the RPC handlers for the current epoch.
+	handlerByTopic, err := s.rpcHandlerByTopicFromEpoch(currentEpoch)
+	if err != nil {
+		return errors.Wrap(err, "rpc handler by topic from epoch")
+	}
+
+	// Register the RPC handlers for the current epoch.
+	for topic, handler := range handlerByTopic {
+		s.registerRPC(topic, handler)
+	}
+
+	return nil
 }
 
 // registerRPC for a given topic with an expected protobuf message type.
@@ -137,25 +190,34 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 		ctx, cancel := context.WithTimeout(s.ctx, ttfbTimeout)
 		defer cancel()
 
+		conn := stream.Conn()
+		remotePeer := conn.RemotePeer()
+
 		// Resetting after closing is a no-op so defer a reset in case something goes wrong.
 		// It's up to the handler to Close the stream (send an EOF) if
 		// it successfully writes a response. We don't blindly call
 		// Close here because we may have only written a partial
 		// response.
+		// About the special case for quic-v1, please see:
+		// https://github.com/quic-go/quic-go/issues/3291
 		defer func() {
+			if strings.Contains(stream.Conn().RemoteMultiaddr().String(), "quic-v1") {
+				time.Sleep(2 * time.Second)
+			}
+
 			_err := stream.Reset()
 			_ = _err
 		}()
 
 		ctx, span := trace.StartSpan(ctx, "sync.rpc")
 		defer span.End()
-		span.AddAttributes(trace.StringAttribute("topic", topic))
-		span.AddAttributes(trace.StringAttribute("peer", stream.Conn().RemotePeer().String()))
+		span.SetAttributes(trace.StringAttribute("topic", topic))
+		span.SetAttributes(trace.StringAttribute("peer", remotePeer.String()))
 		log := log.WithField("peer", stream.Conn().RemotePeer().String()).WithField("topic", string(stream.Protocol()))
 
 		// Check before hand that peer is valid.
-		if s.cfg.p2p.Peers().IsBad(stream.Conn().RemotePeer()) {
-			if err := s.sendGoodByeAndDisconnect(ctx, p2ptypes.GoodbyeCodeBanned, stream.Conn().RemotePeer()); err != nil {
+		if err := s.cfg.p2p.Peers().IsBad(remotePeer); err != nil {
+			if err := s.sendGoodByeAndDisconnect(ctx, p2ptypes.GoodbyeCodeBanned, remotePeer); err != nil {
 				log.WithError(err).Debug("Could not disconnect from peer")
 			}
 			return
@@ -189,7 +251,7 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 		if baseTopic == p2p.RPCMetaDataTopicV1 || baseTopic == p2p.RPCMetaDataTopicV2 {
 			if err := handle(ctx, base, stream); err != nil {
 				messageFailedProcessingCounter.WithLabelValues(topic).Inc()
-				if err != p2ptypes.ErrWrongForkDigestVersion {
+				if !errors.Is(err, p2ptypes.ErrWrongForkDigestVersion) {
 					log.WithError(err).Debug("Could not handle p2p RPC")
 				}
 				tracing.AnnotateError(span, err)
@@ -214,7 +276,7 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 			}
 			if err := handle(ctx, msg, stream); err != nil {
 				messageFailedProcessingCounter.WithLabelValues(topic).Inc()
-				if err != p2ptypes.ErrWrongForkDigestVersion {
+				if !errors.Is(err, p2ptypes.ErrWrongForkDigestVersion) {
 					log.WithError(err).Debug("Could not handle p2p RPC")
 				}
 				tracing.AnnotateError(span, err)
@@ -234,13 +296,14 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 			}
 			if err := handle(ctx, nTyp.Elem().Interface(), stream); err != nil {
 				messageFailedProcessingCounter.WithLabelValues(topic).Inc()
-				if err != p2ptypes.ErrWrongForkDigestVersion {
+				if !errors.Is(err, p2ptypes.ErrWrongForkDigestVersion) {
 					log.WithError(err).Debug("Could not handle p2p RPC")
 				}
 				tracing.AnnotateError(span, err)
 			}
 		}
 	})
+	log.Debug("Registered new RPC handler")
 }
 
 func logStreamErrors(err error, topic string) {

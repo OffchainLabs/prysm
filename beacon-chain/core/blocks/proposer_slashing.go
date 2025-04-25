@@ -4,20 +4,25 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"google.golang.org/protobuf/proto"
 )
 
-type slashValidatorFunc func(ctx context.Context, st state.BeaconState, vid primitives.ValidatorIndex, penaltyQuotient, proposerRewardQuotient uint64) (state.BeaconState, error)
+// ErrCouldNotVerifyBlockHeader is returned when a block header's signature cannot be verified.
+var ErrCouldNotVerifyBlockHeader = errors.New("could not verify beacon block header")
+
+type slashValidatorFunc func(
+	ctx context.Context,
+	st state.BeaconState,
+	vid primitives.ValidatorIndex) (state.BeaconState, error)
 
 // ProcessProposerSlashings is one of the operations performed
 // on each processed beacon block to slash proposers based on
@@ -75,19 +80,7 @@ func ProcessProposerSlashing(
 	if err = VerifyProposerSlashing(beaconState, slashing); err != nil {
 		return nil, errors.Wrap(err, "could not verify proposer slashing")
 	}
-	cfg := params.BeaconConfig()
-	var slashingQuotient uint64
-	switch {
-	case beaconState.Version() == version.Phase0:
-		slashingQuotient = cfg.MinSlashingPenaltyQuotient
-	case beaconState.Version() == version.Altair:
-		slashingQuotient = cfg.MinSlashingPenaltyQuotientAltair
-	case beaconState.Version() >= version.Bellatrix:
-		slashingQuotient = cfg.MinSlashingPenaltyQuotientBellatrix
-	default:
-		return nil, errors.New("unknown state version")
-	}
-	beaconState, err = slashFunc(ctx, beaconState, slashing.Header_1.Header.ProposerIndex, slashingQuotient, cfg.ProposerRewardQuotient)
+	beaconState, err = slashFunc(ctx, beaconState, slashing.Header_1.Header.ProposerIndex)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not slash proposer index %d", slashing.Header_1.Header.ProposerIndex)
 	}
@@ -124,7 +117,7 @@ func VerifyProposerSlashing(
 	for _, header := range headers {
 		if err := signing.ComputeDomainVerifySigningRoot(beaconState, pIdx, slots.ToEpoch(hSlot),
 			header.Header, params.BeaconConfig().DomainBeaconProposer, header.Signature); err != nil {
-			return errors.Wrap(err, "could not verify beacon block header")
+			return errors.Wrap(ErrCouldNotVerifyBlockHeader, err.Error())
 		}
 	}
 	return nil

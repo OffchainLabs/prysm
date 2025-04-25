@@ -3,12 +3,12 @@ package beacon_api
 import (
 	"strconv"
 
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 func convertProposerSlashingsToProto(jsonProposerSlashings []*structs.ProposerSlashing) ([]*ethpb.ProposerSlashing, error) {
@@ -194,6 +194,39 @@ func convertAttestationToProto(jsonAttestation *structs.Attestation) (*ethpb.Att
 		AggregationBits: aggregationBits,
 		Data:            attestationData,
 		Signature:       signature,
+	}, nil
+}
+
+func convertAttestationElectraToProto(jsonAttestation *structs.AttestationElectra) (*ethpb.AttestationElectra, error) {
+	if jsonAttestation == nil {
+		return nil, errors.New("json attestation is nil")
+	}
+
+	aggregationBits, err := hexutil.Decode(jsonAttestation.AggregationBits)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to decode aggregation bits `%s`", jsonAttestation.AggregationBits)
+	}
+
+	attestationData, err := convertAttestationDataToProto(jsonAttestation.Data)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get attestation data")
+	}
+
+	signature, err := hexutil.Decode(jsonAttestation.Signature)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to decode attestation signature `%s`", jsonAttestation.Signature)
+	}
+
+	committeeBits, err := hexutil.Decode(jsonAttestation.CommitteeBits)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to decode committee bits `%s`", jsonAttestation.CommitteeBits)
+	}
+
+	return &ethpb.AttestationElectra{
+		AggregationBits: aggregationBits,
+		Data:            attestationData,
+		Signature:       signature,
+		CommitteeBits:   committeeBits,
 	}, nil
 }
 

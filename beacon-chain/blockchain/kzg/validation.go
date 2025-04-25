@@ -1,8 +1,8 @@
 package kzg
 
 import (
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	GoKZG "github.com/crate-crypto/go-kzg-4844"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 )
 
 // Verify performs single or batch verification of commitments depending on the number of given BlobSidecars.
@@ -20,16 +20,17 @@ func Verify(sidecars ...blocks.ROBlob) error {
 	cmts := make([]GoKZG.KZGCommitment, len(sidecars))
 	proofs := make([]GoKZG.KZGProof, len(sidecars))
 	for i, sidecar := range sidecars {
-		blobs[i] = bytesToBlob(sidecar.Blob)
+		blobs[i] = *bytesToBlob(sidecar.Blob)
 		cmts[i] = bytesToCommitment(sidecar.KzgCommitment)
 		proofs[i] = bytesToKZGProof(sidecar.KzgProof)
 	}
 	return kzgContext.VerifyBlobKZGProofBatch(blobs, cmts, proofs)
 }
 
-func bytesToBlob(blob []byte) (ret GoKZG.Blob) {
+func bytesToBlob(blob []byte) *GoKZG.Blob {
+	var ret GoKZG.Blob
 	copy(ret[:], blob)
-	return
+	return &ret
 }
 
 func bytesToCommitment(commitment []byte) (ret GoKZG.KZGCommitment) {

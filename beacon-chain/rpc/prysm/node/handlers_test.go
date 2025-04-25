@@ -8,25 +8,25 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
+	mockp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	corenet "github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	libp2ptest "github.com/libp2p/go-libp2p/p2p/host/peerstore/test"
 	ma "github.com/multiformats/go-multiaddr"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
-	mockp2p "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 type testIdentity enode.ID
 
-func (_ testIdentity) Verify(_ *enr.Record, _ []byte) error { return nil }
-func (id testIdentity) NodeAddr(_ *enr.Record) []byte       { return id[:] }
+func (testIdentity) Verify(*enr.Record, []byte) error { return nil }
+func (id testIdentity) NodeAddr(*enr.Record) []byte   { return id[:] }
 
 func TestListTrustedPeer(t *testing.T) {
 	ids := libp2ptest.GeneratePeerIDs(9)
@@ -62,13 +62,13 @@ func TestListTrustedPeer(t *testing.T) {
 
 		switch i {
 		case 0, 1:
-			peerStatus.SetConnectionState(id, peers.PeerConnecting)
+			peerStatus.SetConnectionState(id, peers.Connecting)
 		case 2, 3:
-			peerStatus.SetConnectionState(id, peers.PeerConnected)
+			peerStatus.SetConnectionState(id, peers.Connected)
 		case 4, 5:
-			peerStatus.SetConnectionState(id, peers.PeerDisconnecting)
+			peerStatus.SetConnectionState(id, peers.Disconnecting)
 		case 6, 7:
-			peerStatus.SetConnectionState(id, peers.PeerDisconnected)
+			peerStatus.SetConnectionState(id, peers.Disconnected)
 		default:
 			t.Fatalf("Failed to set connection state for peer")
 		}

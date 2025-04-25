@@ -1,15 +1,15 @@
 package attestations
 
 import (
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation/aggregation"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation/aggregation"
 	"github.com/sirupsen/logrus"
 )
 
 // attList represents list of attestations, defined for easier en masse operations (filtering, sorting).
-type attList []*ethpb.Attestation
+type attList []ethpb.Att
 
 // BLS aggregate signature aliases for testing / benchmark substitution. These methods are
 // significantly more expensive than the inner logic of AggregateAttestations so they must be
@@ -32,25 +32,25 @@ var ErrInvalidAttestationCount = errors.New("invalid number of attestations")
 //	    clonedAtts[i] = stateTrie.CopyAttestation(a)
 //	}
 //	aggregatedAtts, err := attaggregation.Aggregate(clonedAtts)
-func Aggregate(atts []*ethpb.Attestation) ([]*ethpb.Attestation, error) {
+func Aggregate(atts []ethpb.Att) ([]ethpb.Att, error) {
 	return MaxCoverAttestationAggregation(atts)
 }
 
 // AggregateDisjointOneBitAtts aggregates unaggregated attestations with the
 // exact same attestation data.
-func AggregateDisjointOneBitAtts(atts []*ethpb.Attestation) (*ethpb.Attestation, error) {
+func AggregateDisjointOneBitAtts(atts []ethpb.Att) (ethpb.Att, error) {
 	if len(atts) == 0 {
 		return nil, nil
 	}
 	if len(atts) == 1 {
 		return atts[0], nil
 	}
-	coverage, err := atts[0].AggregationBits.ToBitlist64()
+	coverage, err := atts[0].GetAggregationBits().ToBitlist64()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get aggregation bits")
 	}
 	for _, att := range atts[1:] {
-		bits, err := att.AggregationBits.ToBitlist64()
+		bits, err := att.GetAggregationBits().ToBitlist64()
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get aggregation bits")
 		}
@@ -83,8 +83,8 @@ func AggregatePair(a1, a2 *ethpb.Attestation) (*ethpb.Attestation, error) {
 		return nil, aggregation.ErrBitsOverlap
 	}
 
-	baseAtt := ethpb.CopyAttestation(a1)
-	newAtt := ethpb.CopyAttestation(a2)
+	baseAtt := a1.Copy()
+	newAtt := a2.Copy()
 	if newAtt.AggregationBits.Count() > baseAtt.AggregationBits.Count() {
 		baseAtt, newAtt = newAtt, baseAtt
 	}

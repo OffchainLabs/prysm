@@ -5,10 +5,10 @@ import (
 	"io"
 	"sort"
 
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/runtime/debug"
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/runtime/debug"
 	"github.com/urfave/cli/v2"
 )
 
@@ -56,10 +56,11 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.E2EConfigFlag,
 			cmd.VerbosityFlag,
 			cmd.DataDirFlag,
+			flags.WalletDirFlag,
+			flags.WalletPasswordFileFlag,
 			cmd.ClearDB,
 			cmd.ForceClearDB,
 			cmd.EnableBackupWebhookFlag,
-			cmd.BackupWebhookOutputDir,
 			cmd.EnableTracingFlag,
 			cmd.TracingProcessNameFlag,
 			cmd.TracingEndpointFlag,
@@ -83,46 +84,64 @@ var appHelpFlagGroups = []flagGroup{
 			debug.PProfAddrFlag,
 			debug.PProfPortFlag,
 			debug.MemProfileRateFlag,
-			debug.CPUProfileFlag,
-			debug.TraceFlag,
 			debug.BlockProfileRateFlag,
 			debug.MutexProfileFractionFlag,
 		},
 	},
 	{
-		Name: "validator",
+		Name: "rpc",
 		Flags: []cli.Flag{
-			flags.BeaconRPCProviderFlag,
-			flags.BeaconRPCGatewayProviderFlag,
-			flags.BeaconRESTApiProviderFlag,
 			flags.CertFlag,
-			flags.EnableWebFlag,
-			flags.DisablePenaltyRewardLogFlag,
-			flags.GraffitiFlag,
+			flags.BeaconRPCProviderFlag,
 			flags.EnableRPCFlag,
 			flags.RPCHost,
 			flags.RPCPort,
-			flags.GRPCGatewayPort,
-			flags.GRPCGatewayHost,
-			flags.GrpcRetriesFlag,
-			flags.GrpcRetryDelayFlag,
-			flags.GPRCGatewayCorsDomain,
-			flags.GrpcHeadersFlag,
-			flags.SlasherRPCProviderFlag,
-			flags.SlasherCertFlag,
-			flags.DisableAccountMetricsFlag,
-			flags.WalletDirFlag,
-			flags.WalletPasswordFileFlag,
-			flags.GraffitiFileFlag,
-			flags.Web3SignerURLFlag,
-			flags.Web3SignerPublicValidatorKeysFlag,
+			flags.HTTPServerPort,
+			flags.HTTPServerHost,
+			flags.GRPCRetriesFlag,
+			flags.GRPCRetryDelayFlag,
+			flags.HTTPServerCorsDomain,
+			flags.GRPCHeadersFlag,
+			flags.BeaconRESTApiProviderFlag,
+		},
+	},
+	{
+		Name: "proposer",
+		Flags: []cli.Flag{
 			flags.ProposerSettingsFlag,
 			flags.ProposerSettingsURLFlag,
 			flags.SuggestedFeeRecipientFlag,
 			flags.EnableBuilderFlag,
 			flags.BuilderGasLimitFlag,
 			flags.ValidatorsRegistrationBatchSizeFlag,
+			flags.GraffitiFlag,
+			flags.GraffitiFileFlag,
+		},
+	},
+	{
+		Name: "remote signer",
+		Flags: []cli.Flag{
+			flags.Web3SignerURLFlag,
+			flags.Web3SignerPublicValidatorKeysFlag,
+			flags.Web3SignerKeyFileFlag,
+		},
+	},
+	{
+		Name: "slasher",
+		Flags: []cli.Flag{
+			flags.SlasherRPCProviderFlag,
+			flags.SlasherCertFlag,
+		},
+	},
+	{
+		Name: "misc",
+		Flags: []cli.Flag{
+			flags.EnableWebFlag,
+			flags.DisablePenaltyRewardLogFlag,
+			flags.DisableAccountMetricsFlag,
 			flags.EnableDistributed,
+			flags.AuthTokenPathFlag,
+			flags.DisableDutiesPolling,
 		},
 	},
 	{
@@ -135,6 +154,10 @@ var appHelpFlagGroups = []flagGroup{
 			flags.InteropNumValidators,
 			flags.InteropStartIndex,
 		},
+	},
+	{
+		Name:  "deprecated",
+		Flags: []cli.Flag{},
 	},
 }
 

@@ -8,17 +8,17 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/io/file"
+	"github.com/OffchainLabs/prysm/v6/io/prompt"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts/iface"
+	accountsprompt "github.com/OffchainLabs/prysm/v6/validator/accounts/userprompt"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager/derived"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager/local"
+	remoteweb3signer "github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
-	"github.com/prysmaticlabs/prysm/v5/io/prompt"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/iface"
-	accountsprompt "github.com/prysmaticlabs/prysm/v5/validator/accounts/userprompt"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/derived"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/local"
-	remoteweb3signer "github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
@@ -119,9 +119,7 @@ func IsValid(walletDir string) (bool, error) {
 	}
 	f, err := os.Open(expanded) // #nosec G304
 	if err != nil {
-		if strings.Contains(err.Error(), "no such file") ||
-			strings.Contains(err.Error(), "cannot find the file") ||
-			strings.Contains(err.Error(), "cannot find the path") {
+		if os.IsNotExist(err) {
 			return false, nil
 		}
 		return false, err
@@ -188,6 +186,7 @@ func OpenWalletOrElseCli(cliCtx *cli.Context, otherwise func(cliCtx *cli.Context
 	if err != nil {
 		return nil, err
 	}
+
 	return OpenWallet(cliCtx.Context, &Config{
 		WalletDir:      walletDir,
 		WalletPassword: walletPassword,
@@ -254,10 +253,11 @@ func OpenOrCreateNewWallet(cliCtx *cli.Context) (*Wallet, error) {
 }
 
 // NewWalletForWeb3Signer returns a new wallet for web3 signer which is temporary and not stored locally.
-func NewWalletForWeb3Signer() *Wallet {
+func NewWalletForWeb3Signer(cliCtx *cli.Context) *Wallet {
+	walletDir := cliCtx.String(flags.WalletDirFlag.Name)
 	// wallet is just a temporary wallet for web3 signer used to call initialize keymanager.
 	return &Wallet{
-		walletDir:      "",
+		walletDir:      walletDir, // it's ok if there's an existing wallet
 		accountsPath:   "",
 		keymanagerKind: keymanager.Web3Signer,
 		walletPassword: "",
@@ -292,6 +292,10 @@ func OpenWallet(_ context.Context, cfg *Config) (*Wallet, error) {
 		return nil, errors.Wrap(err, "could not read keymanager kind for wallet")
 	}
 	accountsPath := filepath.Join(cfg.WalletDir, keymanagerKind.String())
+	log.WithFields(logrus.Fields{
+		"wallet":         accountsPath,
+		"keymanagerKind": keymanagerKind.String(),
+	}).Info("Opened validator wallet")
 	return &Wallet{
 		walletDir:      cfg.WalletDir,
 		accountsPath:   accountsPath,
@@ -316,6 +320,11 @@ func (w *Wallet) KeymanagerKind() keymanager.Kind {
 // AccountsDir for the wallet.
 func (w *Wallet) AccountsDir() string {
 	return w.accountsPath
+}
+
+// Dir for the wallet.
+func (w *Wallet) Dir() string {
+	return w.walletDir
 }
 
 // Password for the wallet.

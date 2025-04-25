@@ -8,26 +8,27 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/network/forks"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	noise "github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/multiformats/go-multiaddr"
-	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/scorers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/network/forks"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
+
+const testPingInterval = 100 * time.Millisecond
 
 type mockListener struct {
 	localNode *enode.LocalNode
@@ -69,6 +70,8 @@ func (mockListener) RandomNodes() enode.Iterator {
 	panic("implement me")
 }
 
+func (mockListener) RebootListener() error { panic("implement me") }
+
 func createHost(t *testing.T, port int) (host.Host, *ecdsa.PrivateKey, net.IP) {
 	_, pkey := createAddrAndPrivKey(t)
 	ipAddr := net.ParseIP("127.0.0.1")
@@ -102,8 +105,9 @@ func TestService_Start_OnlyStartsOnce(t *testing.T) {
 
 	cs := startup.NewClockSynchronizer()
 	cfg := &Config{
-		TCPPort:     2000,
 		UDPPort:     2000,
+		TCPPort:     3000,
+		QUICPort:    3000,
 		ClockWaiter: cs,
 	}
 	s, err := NewService(context.Background(), cfg)
@@ -147,8 +151,9 @@ func TestService_Start_NoDiscoverFlag(t *testing.T) {
 
 	cs := startup.NewClockSynchronizer()
 	cfg := &Config{
-		TCPPort:       2000,
 		UDPPort:       2000,
+		TCPPort:       3000,
+		QUICPort:      3000,
 		StateNotifier: &mock.MockStateNotifier{},
 		NoDiscovery:   true, // <-- no s.dv5Listener is created
 		ClockWaiter:   cs,
@@ -183,7 +188,7 @@ func TestListenForNewNodes(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	// Setup bootnode.
 	notifier := &mock.MockStateNotifier{}
-	cfg := &Config{StateNotifier: notifier}
+	cfg := &Config{StateNotifier: notifier, PingInterval: testPingInterval, DisableLivenessCheck: true}
 	port := 2000
 	cfg.UDPPort = uint(port)
 	_, pkey := createAddrAndPrivKey(t)
@@ -199,6 +204,10 @@ func TestListenForNewNodes(t *testing.T) {
 	require.NoError(t, err)
 	defer bootListener.Close()
 
+	// Allow bootnode's table to have its initial refresh. This allows
+	// inbound nodes to be added in.
+	time.Sleep(5 * time.Second)
+
 	// Use shorter period for testing.
 	currentPeriod := pollingPeriod
 	pollingPeriod = 1 * time.Second
@@ -208,15 +217,16 @@ func TestListenForNewNodes(t *testing.T) {
 
 	bootNode := bootListener.Self()
 
-	var listeners []*discover.UDPv5
+	var listeners []*listenerWrapper
 	var hosts []host.Host
 	// setup other nodes.
 	cs := startup.NewClockSynchronizer()
 	cfg = &Config{
-		BootstrapNodeAddr:   []string{bootNode.String()},
-		Discv5BootStrapAddr: []string{bootNode.String()},
-		MaxPeers:            30,
-		ClockWaiter:         cs,
+		Discv5BootStrapAddrs: []string{bootNode.String()},
+		PingInterval:         testPingInterval,
+		DisableLivenessCheck: true,
+		MaxPeers:             30,
+		ClockWaiter:          cs,
 	}
 	for i := 1; i <= 5; i++ {
 		h, pkey, ipAddr := createHost(t, port+i)

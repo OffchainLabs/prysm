@@ -3,8 +3,8 @@ package iface
 import (
 	"context"
 
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
-	remoteweb3signer "github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
+	remoteweb3signer "github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer"
 )
 
 // InitKeymanagerConfig defines configuration options for initializing a keymanager.
@@ -19,6 +19,8 @@ type InitKeymanagerConfig struct {
 type Wallet interface {
 	// Methods to retrieve wallet and accounts metadata.
 	AccountsDir() string
+	// Method to retrieve wallet directory.
+	Dir() string
 	Password() string
 	// Read methods for important wallet and accounts-related files.
 	ReadFileAtPath(ctx context.Context, filePath string, fileName string) ([]byte, error)
@@ -26,4 +28,6 @@ type Wallet interface {
 	WriteFileAtPath(ctx context.Context, pathName string, fileName string, data []byte) (bool, error)
 	// Method for initializing a new keymanager.
 	InitializeKeymanager(ctx context.Context, cfg InitKeymanagerConfig) (keymanager.IKeymanager, error)
+	// Method for returning keymanager kind.
+	KeymanagerKind() keymanager.Kind
 }

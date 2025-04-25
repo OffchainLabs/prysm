@@ -8,12 +8,12 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/validator/client/beacon-api/mock"
 	"go.uber.org/mock/gomock"
 )
 
@@ -47,7 +47,7 @@ func TestSubscribeCommitteeSubnets_Valid(t *testing.T) {
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
-		ctx,
+		gomock.Any(),
 		subscribeCommitteeSubnetsTestEndpoint,
 		nil,
 		bytes.NewBuffer(committeeSubscriptionsBytes),
@@ -76,7 +76,7 @@ func TestSubscribeCommitteeSubnets_Valid(t *testing.T) {
 			CommitteeIds: committeeIndices,
 			IsAggregator: isAggregator,
 		},
-		[]*ethpb.DutiesResponse_Duty{
+		[]*ethpb.ValidatorDuty{
 			{
 				ValidatorIndex:   validatorIndices[0],
 				CommitteesAtSlot: committeesAtSlot[0],
@@ -100,7 +100,7 @@ func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
 	testCases := []struct {
 		name                    string
 		subscribeRequest        *ethpb.CommitteeSubnetsSubscribeRequest
-		duties                  []*ethpb.DutiesResponse_Duty
+		duties                  []*ethpb.ValidatorDuty
 		expectSubscribeRestCall bool
 		expectedErrorMessage    string
 	}{
@@ -116,7 +116,7 @@ func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
 				Slots:        []primitives.Slot{1, 2},
 				IsAggregator: []bool{false, true},
 			},
-			duties: []*ethpb.DutiesResponse_Duty{
+			duties: []*ethpb.ValidatorDuty{
 				{
 					ValidatorIndex:   1,
 					CommitteesAtSlot: 1,
@@ -135,7 +135,7 @@ func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
 				Slots:        []primitives.Slot{1},
 				IsAggregator: []bool{false, true},
 			},
-			duties: []*ethpb.DutiesResponse_Duty{
+			duties: []*ethpb.ValidatorDuty{
 				{
 					ValidatorIndex:   1,
 					CommitteesAtSlot: 1,
@@ -154,7 +154,7 @@ func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
 				Slots:        []primitives.Slot{1, 2},
 				IsAggregator: []bool{false},
 			},
-			duties: []*ethpb.DutiesResponse_Duty{
+			duties: []*ethpb.ValidatorDuty{
 				{
 					ValidatorIndex:   1,
 					CommitteesAtSlot: 1,
@@ -173,7 +173,7 @@ func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
 				Slots:        []primitives.Slot{1, 2},
 				IsAggregator: []bool{false, true},
 			},
-			duties: []*ethpb.DutiesResponse_Duty{
+			duties: []*ethpb.ValidatorDuty{
 				{
 					ValidatorIndex:   1,
 					CommitteesAtSlot: 1,
@@ -188,7 +188,7 @@ func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
 				CommitteeIds: []primitives.CommitteeIndex{2},
 				IsAggregator: []bool{false},
 			},
-			duties: []*ethpb.DutiesResponse_Duty{
+			duties: []*ethpb.ValidatorDuty{
 				{
 					ValidatorIndex:   1,
 					CommitteesAtSlot: 1,
@@ -209,7 +209,7 @@ func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 			if testCase.expectSubscribeRestCall {
 				jsonRestHandler.EXPECT().Post(
-					ctx,
+					gomock.Any(),
 					subscribeCommitteeSubnetsTestEndpoint,
 					gomock.Any(),
 					gomock.Any(),

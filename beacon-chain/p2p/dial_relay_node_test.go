@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"testing"
 
-	bh "github.com/libp2p/go-libp2p/p2p/host/blank"
-	swarmt "github.com/libp2p/go-libp2p/p2p/net/swarm/testing"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p/core/network"
 )
 
 func TestMakePeer_InvalidMultiaddress(t *testing.T) {
@@ -29,8 +29,10 @@ func TestDialRelayNode_InvalidPeerString(t *testing.T) {
 
 func TestDialRelayNode_OK(t *testing.T) {
 	ctx := context.Background()
-	relay := bh.NewBlankHost(swarmt.GenSwarm(t))
-	host := bh.NewBlankHost(swarmt.GenSwarm(t))
+	relay, err := libp2p.New(libp2p.ResourceManager(&network.NullResourceManager{}))
+	require.NoError(t, err)
+	host, err := libp2p.New(libp2p.ResourceManager(&network.NullResourceManager{}))
+	require.NoError(t, err)
 	relayAddr := fmt.Sprintf("%s/p2p/%s", relay.Addrs()[0], relay.ID().String())
 
 	assert.NoError(t, dialRelayNode(ctx, host, relayAddr), "Unexpected error when dialing relay node")

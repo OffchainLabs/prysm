@@ -4,23 +4,23 @@ import (
 	"context"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation/aggregation"
+	attaggregation "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation/aggregation/attestations"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation/aggregation"
-	attaggregation "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation/aggregation/attestations"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestProcessAggregatedAttestation_OverlappingBits(t *testing.T) {
@@ -44,7 +44,7 @@ func TestProcessAggregatedAttestation_OverlappingBits(t *testing.T) {
 
 	committee, err := helpers.BeaconCommitteeFromState(context.Background(), beaconState, att1.Data.Slot, att1.Data.CommitteeIndex)
 	require.NoError(t, err)
-	attestingIndices1, err := attestation.AttestingIndices(att1.AggregationBits, committee)
+	attestingIndices1, err := attestation.AttestingIndices(att1, committee)
 	require.NoError(t, err)
 	sigs := make([]bls.Signature, len(attestingIndices1))
 	for i, indice := range attestingIndices1 {
@@ -66,7 +66,7 @@ func TestProcessAggregatedAttestation_OverlappingBits(t *testing.T) {
 
 	committee, err = helpers.BeaconCommitteeFromState(context.Background(), beaconState, att2.Data.Slot, att2.Data.CommitteeIndex)
 	require.NoError(t, err)
-	attestingIndices2, err := attestation.AttestingIndices(att2.AggregationBits, committee)
+	attestingIndices2, err := attestation.AttestingIndices(att2, committee)
 	require.NoError(t, err)
 	sigs = make([]bls.Signature, len(attestingIndices2))
 	for i, indice := range attestingIndices2 {
@@ -221,6 +221,99 @@ func TestVerifyAttestationNoVerifySignature_BadAttIdx(t *testing.T) {
 	require.ErrorContains(t, "committee index 100 >= committee count 1", err)
 }
 
+func TestVerifyAttestationNoVerifySignature_Electra(t *testing.T) {
+	var mockRoot [32]byte
+	copy(mockRoot[:], "hello-world")
+	var zeroSig [fieldparams.BLSSignatureLength]byte
+
+	beaconState, _ := util.DeterministicGenesisState(t, 100)
+	err := beaconState.SetSlot(beaconState.Slot() + params.BeaconConfig().MinAttestationInclusionDelay)
+	require.NoError(t, err)
+	ckp := beaconState.CurrentJustifiedCheckpoint()
+	copy(ckp.Root, "hello-world")
+	require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(ckp))
+	require.NoError(t, beaconState.AppendCurrentEpochAttestations(&ethpb.PendingAttestation{}))
+
+	t.Run("ok", func(t *testing.T) {
+		aggBits := bitfield.NewBitlist(3)
+		aggBits.SetBitAt(1, true)
+		committeeBits := bitfield.NewBitvector64()
+		committeeBits.SetBitAt(0, true)
+		att := &ethpb.AttestationElectra{
+			Data: &ethpb.AttestationData{
+				Source: &ethpb.Checkpoint{Epoch: 0, Root: mockRoot[:]},
+				Target: &ethpb.Checkpoint{Epoch: 0, Root: make([]byte, 32)},
+			},
+			AggregationBits: aggBits,
+			CommitteeBits:   committeeBits,
+		}
+		att.Signature = zeroSig[:]
+		err = blocks.VerifyAttestationNoVerifySignature(context.TODO(), beaconState, att)
+		assert.NoError(t, err)
+	})
+	t.Run("non-zero committee index", func(t *testing.T) {
+		att := &ethpb.AttestationElectra{
+			Data: &ethpb.AttestationData{
+				Source:         &ethpb.Checkpoint{Epoch: 0, Root: mockRoot[:]},
+				Target:         &ethpb.Checkpoint{Epoch: 0, Root: make([]byte, 32)},
+				CommitteeIndex: 1,
+			},
+			AggregationBits: bitfield.NewBitlist(1),
+			CommitteeBits:   bitfield.NewBitvector64(),
+		}
+		err = blocks.VerifyAttestationNoVerifySignature(context.TODO(), beaconState, att)
+		assert.ErrorContains(t, "committee index must be 0 post-Electra", err)
+	})
+	t.Run("index of committee too big", func(t *testing.T) {
+		aggBits := bitfield.NewBitlist(3)
+		committeeBits := bitfield.NewBitvector64()
+		committeeBits.SetBitAt(63, true)
+		att := &ethpb.AttestationElectra{
+			Data: &ethpb.AttestationData{
+				Source: &ethpb.Checkpoint{Epoch: 0, Root: mockRoot[:]},
+				Target: &ethpb.Checkpoint{Epoch: 0, Root: make([]byte, 32)},
+			},
+			AggregationBits: aggBits,
+			CommitteeBits:   committeeBits,
+		}
+		att.Signature = zeroSig[:]
+		err = blocks.VerifyAttestationNoVerifySignature(context.TODO(), beaconState, att)
+		assert.ErrorContains(t, "committee index 63 >= committee count 1", err)
+	})
+	t.Run("wrong aggregation bits count", func(t *testing.T) {
+		aggBits := bitfield.NewBitlist(123)
+		committeeBits := bitfield.NewBitvector64()
+		committeeBits.SetBitAt(0, true)
+		att := &ethpb.AttestationElectra{
+			Data: &ethpb.AttestationData{
+				Source: &ethpb.Checkpoint{Epoch: 0, Root: mockRoot[:]},
+				Target: &ethpb.Checkpoint{Epoch: 0, Root: make([]byte, 32)},
+			},
+			AggregationBits: aggBits,
+			CommitteeBits:   committeeBits,
+		}
+		att.Signature = zeroSig[:]
+		err = blocks.VerifyAttestationNoVerifySignature(context.TODO(), beaconState, att)
+		assert.ErrorContains(t, "aggregation bits count 123 is different than participant count 3", err)
+	})
+	t.Run("no attester in committee", func(t *testing.T) {
+		aggBits := bitfield.NewBitlist(3)
+		committeeBits := bitfield.NewBitvector64()
+		committeeBits.SetBitAt(0, true)
+		att := &ethpb.AttestationElectra{
+			Data: &ethpb.AttestationData{
+				Source: &ethpb.Checkpoint{Epoch: 0, Root: mockRoot[:]},
+				Target: &ethpb.Checkpoint{Epoch: 0, Root: make([]byte, 32)},
+			},
+			AggregationBits: aggBits,
+			CommitteeBits:   committeeBits,
+		}
+		att.Signature = zeroSig[:]
+		err = blocks.VerifyAttestationNoVerifySignature(context.TODO(), beaconState, att)
+		assert.ErrorContains(t, "no attesting indices found for committee index 0", err)
+	})
+}
+
 func TestConvertToIndexed_OK(t *testing.T) {
 	helpers.ClearCache()
 	validators := make([]*ethpb.Validator, 2*params.BeaconConfig().SlotsPerEpoch)
@@ -371,6 +464,7 @@ func TestValidateIndexedAttestation_AboveMaxLength(t *testing.T) {
 			Target: &ethpb.Checkpoint{
 				Epoch: primitives.Epoch(i),
 			},
+			Source: &ethpb.Checkpoint{},
 		}
 	}
 
@@ -386,7 +480,7 @@ func TestValidateIndexedAttestation_BadAttestationsSignatureSet(t *testing.T) {
 
 	sig := keys[0].Sign([]byte{'t', 'e', 's', 't'})
 	list := bitfield.Bitlist{0b11111}
-	var atts []*ethpb.Attestation
+	var atts []ethpb.Att
 	for i := uint64(0); i < 1000; i++ {
 		atts = append(atts, &ethpb.Attestation{
 			Data: &ethpb.AttestationData{
@@ -402,7 +496,7 @@ func TestValidateIndexedAttestation_BadAttestationsSignatureSet(t *testing.T) {
 	_, err := blocks.AttestationSignatureBatch(context.Background(), beaconState, atts)
 	assert.ErrorContains(t, want, err)
 
-	atts = []*ethpb.Attestation{}
+	atts = []ethpb.Att{}
 	list = bitfield.Bitlist{0b10000}
 	for i := uint64(0); i < 1000; i++ {
 		atts = append(atts, &ethpb.Attestation{
@@ -412,6 +506,7 @@ func TestValidateIndexedAttestation_BadAttestationsSignatureSet(t *testing.T) {
 				Target: &ethpb.Checkpoint{
 					Root: []byte{},
 				},
+				Source: &ethpb.Checkpoint{},
 			},
 			Signature:       sig.Marshal(),
 			AggregationBits: list,
@@ -501,53 +596,109 @@ func TestRetrieveAttestationSignatureSet_VerifiesMultipleAttestations(t *testing
 		}
 	}
 
-	st, err := util.NewBeaconState()
-	require.NoError(t, err)
-	require.NoError(t, st.SetSlot(5))
-	require.NoError(t, st.SetValidators(validators))
+	t.Run("pre-Electra", func(t *testing.T) {
+		st, err := util.NewBeaconState()
+		require.NoError(t, err)
+		require.NoError(t, st.SetSlot(5))
+		require.NoError(t, st.SetValidators(validators))
 
-	comm1, err := helpers.BeaconCommitteeFromState(context.Background(), st, 1 /*slot*/, 0 /*committeeIndex*/)
-	require.NoError(t, err)
-	att1 := util.HydrateAttestation(&ethpb.Attestation{
-		AggregationBits: bitfield.NewBitlist(uint64(len(comm1))),
-		Data: &ethpb.AttestationData{
-			Slot: 1,
-		},
+		comm1, err := helpers.BeaconCommitteeFromState(context.Background(), st, 1 /*slot*/, 0 /*committeeIndex*/)
+		require.NoError(t, err)
+		att1 := util.HydrateAttestation(&ethpb.Attestation{
+			AggregationBits: bitfield.NewBitlist(uint64(len(comm1))),
+			Data: &ethpb.AttestationData{
+				Slot: 1,
+			},
+		})
+		domain, err := signing.Domain(st.Fork(), st.Fork().Epoch, params.BeaconConfig().DomainBeaconAttester, st.GenesisValidatorsRoot())
+		require.NoError(t, err)
+		root, err := signing.ComputeSigningRoot(att1.Data, domain)
+		require.NoError(t, err)
+		var sigs []bls.Signature
+		for i, u := range comm1 {
+			att1.AggregationBits.SetBitAt(uint64(i), true)
+			sigs = append(sigs, keys[u].Sign(root[:]))
+		}
+		att1.Signature = bls.AggregateSignatures(sigs).Marshal()
+
+		comm2, err := helpers.BeaconCommitteeFromState(context.Background(), st, 1 /*slot*/, 1 /*committeeIndex*/)
+		require.NoError(t, err)
+		att2 := util.HydrateAttestation(&ethpb.Attestation{
+			AggregationBits: bitfield.NewBitlist(uint64(len(comm2))),
+			Data: &ethpb.AttestationData{
+				Slot:           1,
+				CommitteeIndex: 1,
+			},
+		})
+		root, err = signing.ComputeSigningRoot(att2.Data, domain)
+		require.NoError(t, err)
+		sigs = nil
+		for i, u := range comm2 {
+			att2.AggregationBits.SetBitAt(uint64(i), true)
+			sigs = append(sigs, keys[u].Sign(root[:]))
+		}
+		att2.Signature = bls.AggregateSignatures(sigs).Marshal()
+
+		set, err := blocks.AttestationSignatureBatch(ctx, st, []ethpb.Att{att1, att2})
+		require.NoError(t, err)
+		verified, err := set.Verify()
+		require.NoError(t, err)
+		assert.Equal(t, true, verified, "Multiple signatures were unable to be verified.")
 	})
-	domain, err := signing.Domain(st.Fork(), st.Fork().Epoch, params.BeaconConfig().DomainBeaconAttester, st.GenesisValidatorsRoot())
-	require.NoError(t, err)
-	root, err := signing.ComputeSigningRoot(att1.Data, domain)
-	require.NoError(t, err)
-	var sigs []bls.Signature
-	for i, u := range comm1 {
-		att1.AggregationBits.SetBitAt(uint64(i), true)
-		sigs = append(sigs, keys[u].Sign(root[:]))
-	}
-	att1.Signature = bls.AggregateSignatures(sigs).Marshal()
+	t.Run("post-Electra", func(t *testing.T) {
+		st, err := util.NewBeaconStateElectra()
+		require.NoError(t, err)
+		require.NoError(t, st.SetSlot(5))
+		require.NoError(t, st.SetValidators(validators))
 
-	comm2, err := helpers.BeaconCommitteeFromState(context.Background(), st, 1 /*slot*/, 1 /*committeeIndex*/)
-	require.NoError(t, err)
-	att2 := util.HydrateAttestation(&ethpb.Attestation{
-		AggregationBits: bitfield.NewBitlist(uint64(len(comm2))),
-		Data: &ethpb.AttestationData{
-			Slot:           1,
-			CommitteeIndex: 1,
-		},
+		comm1, err := helpers.BeaconCommitteeFromState(context.Background(), st, 1 /*slot*/, 0 /*committeeIndex*/)
+		require.NoError(t, err)
+		commBits1 := primitives.NewAttestationCommitteeBits()
+		commBits1.SetBitAt(0, true)
+		att1 := util.HydrateAttestationElectra(&ethpb.AttestationElectra{
+			AggregationBits: bitfield.NewBitlist(uint64(len(comm1))),
+			CommitteeBits:   commBits1,
+			Data: &ethpb.AttestationData{
+				Slot: 1,
+			},
+		})
+		domain, err := signing.Domain(st.Fork(), st.Fork().Epoch, params.BeaconConfig().DomainBeaconAttester, st.GenesisValidatorsRoot())
+		require.NoError(t, err)
+		root, err := signing.ComputeSigningRoot(att1.Data, domain)
+		require.NoError(t, err)
+		var sigs []bls.Signature
+		for i, u := range comm1 {
+			att1.AggregationBits.SetBitAt(uint64(i), true)
+			sigs = append(sigs, keys[u].Sign(root[:]))
+		}
+		att1.Signature = bls.AggregateSignatures(sigs).Marshal()
+
+		comm2, err := helpers.BeaconCommitteeFromState(context.Background(), st, 1 /*slot*/, 1 /*committeeIndex*/)
+		require.NoError(t, err)
+		commBits2 := primitives.NewAttestationCommitteeBits()
+		commBits2.SetBitAt(1, true)
+		att2 := util.HydrateAttestationElectra(&ethpb.AttestationElectra{
+			AggregationBits: bitfield.NewBitlist(uint64(len(comm2))),
+			CommitteeBits:   commBits2,
+			Data: &ethpb.AttestationData{
+				Slot: 1,
+			},
+		})
+		root, err = signing.ComputeSigningRoot(att2.Data, domain)
+		require.NoError(t, err)
+		sigs = nil
+		for i, u := range comm2 {
+			att2.AggregationBits.SetBitAt(uint64(i), true)
+			sigs = append(sigs, keys[u].Sign(root[:]))
+		}
+		att2.Signature = bls.AggregateSignatures(sigs).Marshal()
+
+		set, err := blocks.AttestationSignatureBatch(ctx, st, []ethpb.Att{att1, att2})
+		require.NoError(t, err)
+		verified, err := set.Verify()
+		require.NoError(t, err)
+		assert.Equal(t, true, verified, "Multiple signatures were unable to be verified.")
 	})
-	root, err = signing.ComputeSigningRoot(att2.Data, domain)
-	require.NoError(t, err)
-	sigs = nil
-	for i, u := range comm2 {
-		att2.AggregationBits.SetBitAt(uint64(i), true)
-		sigs = append(sigs, keys[u].Sign(root[:]))
-	}
-	att2.Signature = bls.AggregateSignatures(sigs).Marshal()
-
-	set, err := blocks.AttestationSignatureBatch(ctx, st, []*ethpb.Attestation{att1, att2})
-	require.NoError(t, err)
-	verified, err := set.Verify()
-	require.NoError(t, err)
-	assert.Equal(t, true, verified, "Multiple signatures were unable to be verified.")
 }
 
 func TestRetrieveAttestationSignatureSet_AcrossFork(t *testing.T) {
@@ -607,6 +758,6 @@ func TestRetrieveAttestationSignatureSet_AcrossFork(t *testing.T) {
 	}
 	att2.Signature = bls.AggregateSignatures(sigs).Marshal()
 
-	_, err = blocks.AttestationSignatureBatch(ctx, st, []*ethpb.Attestation{att1, att2})
+	_, err = blocks.AttestationSignatureBatch(ctx, st, []ethpb.Att{att1, att2})
 	require.NoError(t, err)
 }

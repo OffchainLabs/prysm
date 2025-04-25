@@ -6,13 +6,13 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/validator/client/beacon-api/mock"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
 	"go.uber.org/mock/gomock"
 )
 
@@ -228,7 +228,7 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 						{Index: "22222", Validator: &structs.Validator{Pubkey: stringPubKey2}}, // not recent - duplicate on previous epoch
 						{Index: "33333", Validator: &structs.Validator{Pubkey: stringPubKey3}}, // not recent - duplicate on current epoch
 						{Index: "44444", Validator: &structs.Validator{Pubkey: stringPubKey4}}, // not recent - duplicate on both previous and current epoch
-						// No "55555" sicee corresponding validator does not exist
+						// No "55555" since corresponding validator does not exist
 						{Index: "66666", Validator: &structs.Validator{Pubkey: stringPubKey6}}, // not recent - not duplicate
 					},
 				},
@@ -291,14 +291,12 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
-			ctx := context.Background()
-
 			if testCase.getSyncingOutput != nil {
 				syncingResponseJson := structs.SyncStatusResponse{}
 
 				jsonRestHandler.EXPECT().Get(
-					ctx,
-					syncingEnpoint,
+					gomock.Any(),
+					syncingEndpoint,
 					&syncingResponseJson,
 				).Return(
 					nil,
@@ -312,7 +310,7 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 				stateForkResponseJson := structs.GetStateForkResponse{}
 
 				jsonRestHandler.EXPECT().Get(
-					ctx,
+					gomock.Any(),
 					forkEndpoint,
 					&stateForkResponseJson,
 				).Return(
@@ -327,7 +325,7 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 				blockHeadersResponseJson := structs.GetBlockHeadersResponse{}
 
 				jsonRestHandler.EXPECT().Get(
-					ctx,
+					gomock.Any(),
 					headersEndpoint,
 					&blockHeadersResponseJson,
 				).Return(
@@ -346,7 +344,7 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 					require.NoError(t, err)
 
 					jsonRestHandler.EXPECT().Post(
-						ctx,
+						gomock.Any(),
 						iface.inputUrl,
 						nil,
 						bytes.NewBuffer(marshalledIndexes),
@@ -363,8 +361,8 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 			stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
 
 			if testCase.getStateValidatorsInterface != nil {
-				stateValidatorsProvider.EXPECT().GetStateValidators(
-					ctx,
+				stateValidatorsProvider.EXPECT().StateValidators(
+					gomock.Any(),
 					testCase.getStateValidatorsInterface.input,
 					nil,
 					nil,
@@ -489,7 +487,7 @@ func TestCheckDoppelGanger_Errors(t *testing.T) {
 			},
 		},
 		{
-			name:                   "getFork on error",
+			name:                   "fork on error",
 			expectedErrorMessage:   "failed to get fork",
 			inputValidatorRequests: standardInputValidatorRequests,
 			getSyncingOutput:       standardGetSyncingOutput,
@@ -727,14 +725,12 @@ func TestCheckDoppelGanger_Errors(t *testing.T) {
 
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
-			ctx := context.Background()
-
 			if testCase.getSyncingOutput != nil {
 				syncingResponseJson := structs.SyncStatusResponse{}
 
 				jsonRestHandler.EXPECT().Get(
-					ctx,
-					syncingEnpoint,
+					gomock.Any(),
+					syncingEndpoint,
 					&syncingResponseJson,
 				).Return(
 					testCase.getSyncingError,
@@ -748,7 +744,7 @@ func TestCheckDoppelGanger_Errors(t *testing.T) {
 				stateForkResponseJson := structs.GetStateForkResponse{}
 
 				jsonRestHandler.EXPECT().Get(
-					ctx,
+					gomock.Any(),
 					forkEndpoint,
 					&stateForkResponseJson,
 				).Return(
@@ -763,7 +759,7 @@ func TestCheckDoppelGanger_Errors(t *testing.T) {
 				blockHeadersResponseJson := structs.GetBlockHeadersResponse{}
 
 				jsonRestHandler.EXPECT().Get(
-					ctx,
+					gomock.Any(),
 					headersEndpoint,
 					&blockHeadersResponseJson,
 				).Return(
@@ -777,8 +773,8 @@ func TestCheckDoppelGanger_Errors(t *testing.T) {
 			stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
 
 			if testCase.getStateValidatorsInterface != nil {
-				stateValidatorsProvider.EXPECT().GetStateValidators(
-					ctx,
+				stateValidatorsProvider.EXPECT().StateValidators(
+					gomock.Any(),
 					testCase.getStateValidatorsInterface.input,
 					nil,
 					nil,
@@ -796,7 +792,7 @@ func TestCheckDoppelGanger_Errors(t *testing.T) {
 					require.NoError(t, err)
 
 					jsonRestHandler.EXPECT().Post(
-						ctx,
+						gomock.Any(),
 						iface.inputUrl,
 						nil,
 						bytes.NewBuffer(marshalledIndexes),

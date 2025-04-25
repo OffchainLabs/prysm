@@ -1,9 +1,10 @@
 package epoch_processing
 
 import (
+	"os"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 )
 
 func TestMain(m *testing.M) {
@@ -13,5 +14,5 @@ func TestMain(m *testing.M) {
 	c.MinGenesisActiveValidatorCount = 16384
 	params.OverrideBeaconConfig(c)
 
-	m.Run()
+	os.Exit(m.Run())
 }

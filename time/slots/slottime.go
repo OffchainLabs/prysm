@@ -5,11 +5,13 @@ import (
 	"math"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	mathutil "github.com/OffchainLabs/prysm/v6/math"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	mathutil "github.com/prysmaticlabs/prysm/v5/math"
-	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
+	"github.com/sirupsen/logrus"
 )
 
 // MaxSlotBuffer specifies the max buffer given to slots from
@@ -80,6 +82,27 @@ func ToEpoch(slot primitives.Slot) primitives.Epoch {
 	return primitives.Epoch(slot.DivSlot(params.BeaconConfig().SlotsPerEpoch))
 }
 
+// ToForkVersion translates a slot into it's corresponding version.
+func ToForkVersion(slot primitives.Slot) int {
+	epoch := ToEpoch(slot)
+	switch {
+	case epoch >= params.BeaconConfig().FuluForkEpoch:
+		return version.Fulu
+	case epoch >= params.BeaconConfig().ElectraForkEpoch:
+		return version.Electra
+	case epoch >= params.BeaconConfig().DenebForkEpoch:
+		return version.Deneb
+	case epoch >= params.BeaconConfig().CapellaForkEpoch:
+		return version.Capella
+	case epoch >= params.BeaconConfig().BellatrixForkEpoch:
+		return version.Bellatrix
+	case epoch >= params.BeaconConfig().AltairForkEpoch:
+		return version.Altair
+	default:
+		return version.Phase0
+	}
+}
+
 // EpochStart returns the first slot number of the
 // current epoch.
 //
@@ -103,7 +126,7 @@ func EpochStart(epoch primitives.Epoch) (primitives.Slot, error) {
 func UnsafeEpochStart(epoch primitives.Epoch) primitives.Slot {
 	es, err := EpochStart(epoch)
 	if err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- Unsafe is implied and communicated in the godoc commentary.
 	}
 	return es
 }
@@ -260,11 +283,12 @@ func SyncCommitteePeriodStartEpoch(e primitives.Epoch) (primitives.Epoch, error)
 	return primitives.Epoch(startEpoch), nil
 }
 
-// SecondsSinceSlotStart returns the number of seconds transcurred since the
+// SecondsSinceSlotStart returns the number of seconds elapsed since the
 // given slot start time
 func SecondsSinceSlotStart(s primitives.Slot, genesisTime, timeStamp uint64) (uint64, error) {
-	if timeStamp < genesisTime+uint64(s)*params.BeaconConfig().SecondsPerSlot {
-		return 0, errors.New("could not compute seconds since slot start: invalid timestamp")
+	limit := genesisTime + uint64(s)*params.BeaconConfig().SecondsPerSlot
+	if timeStamp < limit {
+		return 0, fmt.Errorf("could not compute seconds since slot %d start: invalid timestamp, got %d < want %d", s, timeStamp, limit)
 	}
 	return timeStamp - genesisTime - uint64(s)*params.BeaconConfig().SecondsPerSlot, nil
 }
@@ -285,4 +309,26 @@ func WithinVotingWindow(genesisTime uint64, slot primitives.Slot) bool {
 // MaxSafeEpoch gives the largest epoch value that can be safely converted to a slot.
 func MaxSafeEpoch() primitives.Epoch {
 	return primitives.Epoch(math.MaxUint64 / uint64(params.BeaconConfig().SlotsPerEpoch))
+}
+
+// SecondsUntilNextEpochStart returns how many seconds until the next Epoch start from the current time and slot
+func SecondsUntilNextEpochStart(genesisTimeSec uint64) (uint64, error) {
+	currentSlot := CurrentSlot(genesisTimeSec)
+	firstSlotOfNextEpoch, err := EpochStart(ToEpoch(currentSlot) + 1)
+	if err != nil {
+		return 0, err
+	}
+	nextEpochStartTime, err := ToTime(genesisTimeSec, firstSlotOfNextEpoch)
+	if err != nil {
+		return 0, err
+	}
+	es := nextEpochStartTime.Unix()
+	n := time.Now().Unix()
+	waitTime := uint64(es - n)
+	log.WithFields(logrus.Fields{
+		"current_slot":          currentSlot,
+		"next_epoch_start_slot": firstSlotOfNextEpoch,
+		"is_epoch_start":        IsEpochStart(currentSlot),
+	}).Debugf("%d seconds until next epoch", waitTime)
+	return waitTime, nil
 }

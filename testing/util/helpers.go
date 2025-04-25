@@ -3,21 +3,25 @@ package util
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
+	"math"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/crypto/rand"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 // RandaoReveal returns a signature of the requested epoch using the beacon proposer private key.
@@ -54,8 +58,12 @@ func BlockSignature(
 		wsb, err = blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockBellatrix{Block: b})
 	case *ethpb.BeaconBlockCapella:
 		wsb, err = blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockCapella{Block: b})
+	case *ethpb.BeaconBlockDeneb:
+		wsb, err = blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockDeneb{Block: b})
+	case *ethpb.BeaconBlockElectra:
+		wsb, err = blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockElectra{Block: b})
 	default:
-		return nil, errors.New("unsupported block type")
+		return nil, fmt.Errorf("unsupported block type %T", b)
 	}
 	if err != nil {
 		return nil, errors.Wrap(err, "could not wrap block")
@@ -74,6 +82,10 @@ func BlockSignature(
 		b.StateRoot = s[:]
 	case *ethpb.BeaconBlockCapella:
 		b.StateRoot = s[:]
+	case *ethpb.BeaconBlockDeneb:
+		b.StateRoot = s[:]
+	case *ethpb.BeaconBlockElectra:
+		b.StateRoot = s[:]
 	}
 
 	// Temporarily increasing the beacon state slot here since BeaconProposerIndex is a
@@ -87,6 +99,10 @@ func BlockSignature(
 	case *ethpb.BeaconBlockBellatrix:
 		blockSlot = b.Slot
 	case *ethpb.BeaconBlockCapella:
+		blockSlot = b.Slot
+	case *ethpb.BeaconBlockDeneb:
+		blockSlot = b.Slot
+	case *ethpb.BeaconBlockElectra:
 		blockSlot = b.Slot
 	}
 
@@ -111,6 +127,10 @@ func BlockSignature(
 		blockRoot, err = signing.ComputeSigningRoot(b, domain)
 	case *ethpb.BeaconBlockCapella:
 		blockRoot, err = signing.ComputeSigningRoot(b, domain)
+	case *ethpb.BeaconBlockDeneb:
+		blockRoot, err = signing.ComputeSigningRoot(b, domain)
+	case *ethpb.BeaconBlockElectra:
+		blockRoot, err = signing.ComputeSigningRoot(b, domain)
 	}
 	if err != nil {
 		return nil, err
@@ -131,4 +151,29 @@ func Random32Bytes(t *testing.T) []byte {
 		t.Fatal(err)
 	}
 	return b
+}
+
+// HackForksMaxuint is helpful for tests that need to set up cases for some future forks.
+// We have unit tests that assert our config matches the upstream config, where some forks epoch are always
+// set to MaxUint64 until they are formally set. This creates an issue for tests that want to
+// work with slots that are defined to be after these forks because converting the max epoch to a slot leads
+// to multiplication overflow.
+// Monkey patching tests with this function is the simplest workaround in these cases.
+func HackForksMaxuint(t *testing.T, forksVersion []int) func() {
+	bc := params.MainnetConfig()
+	for _, forkVersion := range forksVersion {
+		switch forkVersion {
+		case version.Electra:
+			bc.ElectraForkEpoch = math.MaxUint32 - 1
+		case version.Fulu:
+			bc.FuluForkEpoch = math.MaxUint32
+		default:
+			t.Fatalf("unsupported fork version %d", forkVersion)
+		}
+	}
+	undo, err := params.SetActiveWithUndo(bc)
+	require.NoError(t, err)
+	return func() {
+		require.NoError(t, undo())
+	}
 }

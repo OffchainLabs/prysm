@@ -6,15 +6,15 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
+	"github.com/OffchainLabs/prysm/v6/testing/endtoend/policies"
+	"github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
-	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/policies"
-	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/types"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"google.golang.org/grpc"
 )
 
@@ -27,7 +27,7 @@ var OptimisticSyncEnabled = types.Evaluator{
 
 func optimisticSyncEnabled(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
 	for nodeIndex := range conns {
-		path := fmt.Sprintf("http://localhost:%d/eth/v1/beacon/blinded_blocks/head", params.TestParams.Ports.PrysmBeaconNodeGatewayPort+nodeIndex)
+		path := fmt.Sprintf("http://localhost:%d/eth/v1/beacon/blinded_blocks/head", params.TestParams.Ports.PrysmBeaconNodeHTTPPort+nodeIndex)
 		resp := structs.GetBlockV2Response{}
 		httpResp, err := http.Get(path) // #nosec G107 -- path can't be constant because it depends on port param and node index
 		if err != nil {
@@ -53,7 +53,7 @@ func optimisticSyncEnabled(_ *types.EvaluationContext, conns ...*grpc.ClientConn
 			return err
 		}
 		for i := startSlot; i <= primitives.Slot(headSlot); i++ {
-			path = fmt.Sprintf("http://localhost:%d/eth/v1/beacon/blinded_blocks/%d", params.TestParams.Ports.PrysmBeaconNodeGatewayPort+nodeIndex, i)
+			path = fmt.Sprintf("http://localhost:%d/eth/v1/beacon/blinded_blocks/%d", params.TestParams.Ports.PrysmBeaconNodeHTTPPort+nodeIndex, i)
 			resp = structs.GetBlockV2Response{}
 			httpResp, err = http.Get(path) // #nosec G107 -- path can't be constant because it depends on port param and node index
 			if err != nil {
@@ -123,6 +123,15 @@ func retrieveHeadSlot(resp *structs.GetBlockV2Response) (uint64, error) {
 		}
 	case version.String(version.Deneb):
 		b := &structs.BeaconBlockDeneb{}
+		if err := json.Unmarshal(resp.Data.Message, b); err != nil {
+			return 0, err
+		}
+		headSlot, err = strconv.ParseUint(b.Slot, 10, 64)
+		if err != nil {
+			return 0, err
+		}
+	case version.String(version.Electra):
+		b := &structs.BeaconBlockElectra{}
 		if err := json.Unmarshal(resp.Data.Message, b); err != nil {
 			return 0, err
 		}

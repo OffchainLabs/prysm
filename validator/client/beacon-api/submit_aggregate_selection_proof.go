@@ -2,19 +2,92 @@ package beacon_api
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
 	"net/url"
 	"strconv"
 
+	"github.com/OffchainLabs/prysm/v6/api/apiutil"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
-func (c *beaconApiValidatorClient) submitAggregateSelectionProof(ctx context.Context, in *ethpb.AggregateSelectionRequest) (*ethpb.AggregateSelectionResponse, error) {
+func (c *beaconApiValidatorClient) submitAggregateSelectionProof(
+	ctx context.Context,
+	in *ethpb.AggregateSelectionRequest,
+	index primitives.ValidatorIndex,
+	committeeLength uint64,
+) (*ethpb.AggregateSelectionResponse, error) {
+	attestationDataRoot, err := c.getAttestationDataRootFromRequest(ctx, in, committeeLength)
+	if err != nil {
+		return nil, err
+	}
+
+	aggregateAttestationResponse, err := c.aggregateAttestation(ctx, in.Slot, attestationDataRoot, in.CommitteeIndex)
+	if err != nil {
+		return nil, err
+	}
+
+	var attData *structs.Attestation
+	if err := json.Unmarshal(aggregateAttestationResponse.Data, &attData); err != nil {
+		return nil, errors.Wrap(err, "failed to unmarshal aggregate attestation data")
+	}
+
+	aggregatedAttestation, err := convertAttestationToProto(attData)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to convert aggregate attestation json to proto")
+	}
+
+	return &ethpb.AggregateSelectionResponse{
+		AggregateAndProof: &ethpb.AggregateAttestationAndProof{
+			AggregatorIndex: index,
+			Aggregate:       aggregatedAttestation,
+			SelectionProof:  in.SlotSignature,
+		},
+	}, nil
+}
+
+func (c *beaconApiValidatorClient) submitAggregateSelectionProofElectra(
+	ctx context.Context,
+	in *ethpb.AggregateSelectionRequest,
+	index primitives.ValidatorIndex,
+	committeeLength uint64,
+) (*ethpb.AggregateSelectionElectraResponse, error) {
+	attestationDataRoot, err := c.getAttestationDataRootFromRequest(ctx, in, committeeLength)
+	if err != nil {
+		return nil, err
+	}
+
+	aggregateAttestationResponse, err := c.aggregateAttestationElectra(ctx, in.Slot, attestationDataRoot, in.CommitteeIndex)
+	if err != nil {
+		return nil, err
+	}
+
+	var attData *structs.AttestationElectra
+	if err := json.Unmarshal(aggregateAttestationResponse.Data, &attData); err != nil {
+		return nil, errors.Wrap(err, "failed to unmarshal aggregate attestation electra data")
+	}
+
+	aggregatedAttestation, err := convertAttestationElectraToProto(attData)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to convert aggregate attestation json to proto")
+	}
+
+	return &ethpb.AggregateSelectionElectraResponse{
+		AggregateAndProof: &ethpb.AggregateAttestationAndProofElectra{
+			AggregatorIndex: index,
+			Aggregate:       aggregatedAttestation,
+			SelectionProof:  in.SlotSignature,
+		},
+	}, nil
+}
+
+func (c *beaconApiValidatorClient) getAttestationDataRootFromRequest(ctx context.Context, in *ethpb.AggregateSelectionRequest, committeeLength uint64) ([]byte, error) {
 	isOptimistic, err := c.isOptimistic(ctx)
 	if err != nil {
 		return nil, err
@@ -25,29 +98,7 @@ func (c *beaconApiValidatorClient) submitAggregateSelectionProof(ctx context.Con
 		return nil, errors.New("the node is currently optimistic and cannot serve validators")
 	}
 
-	validatorIndexResponse, err := c.validatorIndex(ctx, &ethpb.ValidatorIndexRequest{PublicKey: in.PublicKey})
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get validator index")
-	}
-
-	attesterDuties, err := c.dutiesProvider.GetAttesterDuties(ctx, slots.ToEpoch(in.Slot), []primitives.ValidatorIndex{validatorIndexResponse.Index})
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get attester duties")
-	}
-
-	if len(attesterDuties) == 0 {
-		return nil, errors.Errorf("no attester duty for the given slot %d", in.Slot)
-	}
-
-	// First attester duty is required since we requested attester duties for one validator index.
-	attesterDuty := attesterDuties[0]
-
-	committeeLen, err := strconv.ParseUint(attesterDuty.CommitteeLength, 10, 64)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to parse committee length")
-	}
-
-	isAggregator, err := helpers.IsAggregator(committeeLen, in.SlotSignature)
+	isAggregator, err := helpers.IsAggregator(committeeLength, in.SlotSignature)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get aggregator status")
 	}
@@ -55,7 +106,7 @@ func (c *beaconApiValidatorClient) submitAggregateSelectionProof(ctx context.Con
 		return nil, errors.New("validator is not an aggregator")
 	}
 
-	attestationData, err := c.getAttestationData(ctx, in.Slot, in.CommitteeIndex)
+	attestationData, err := c.attestationData(ctx, in.Slot, in.CommitteeIndex)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get attestation data for slot=%d and committee_index=%d", in.Slot, in.CommitteeIndex)
 	}
@@ -64,35 +115,56 @@ func (c *beaconApiValidatorClient) submitAggregateSelectionProof(ctx context.Con
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to calculate attestation data root")
 	}
-
-	aggregateAttestationResponse, err := c.getAggregateAttestation(ctx, in.Slot, attestationDataRoot[:])
-	if err != nil {
-		return nil, err
-	}
-
-	aggregatedAttestation, err := convertAttestationToProto(aggregateAttestationResponse.Data)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to convert aggregate attestation json to proto")
-	}
-
-	return &ethpb.AggregateSelectionResponse{
-		AggregateAndProof: &ethpb.AggregateAttestationAndProof{
-			AggregatorIndex: validatorIndexResponse.Index,
-			Aggregate:       aggregatedAttestation,
-			SelectionProof:  in.SlotSignature,
-		},
-	}, nil
+	return attestationDataRoot[:], nil
 }
 
-func (c *beaconApiValidatorClient) getAggregateAttestation(
+func (c *beaconApiValidatorClient) aggregateAttestation(
 	ctx context.Context,
 	slot primitives.Slot,
 	attestationDataRoot []byte,
+	committeeIndex primitives.CommitteeIndex,
 ) (*structs.AggregateAttestationResponse, error) {
 	params := url.Values{}
 	params.Add("slot", strconv.FormatUint(uint64(slot), 10))
 	params.Add("attestation_data_root", hexutil.Encode(attestationDataRoot))
-	endpoint := buildURL("/eth/v1/validator/aggregate_attestation", params)
+	params.Add("committee_index", strconv.FormatUint(uint64(committeeIndex), 10))
+	endpoint := apiutil.BuildURL("/eth/v2/validator/aggregate_attestation", params)
+
+	var aggregateAttestationResponse structs.AggregateAttestationResponse
+	err := c.jsonRestHandler.Get(ctx, endpoint, &aggregateAttestationResponse)
+	errJson := &httputil.DefaultJsonError{}
+	if err != nil {
+		// TODO: remove this when v2 becomes default
+		if !errors.As(err, &errJson) {
+			return nil, err
+		}
+		if errJson.Code != http.StatusNotFound {
+			return nil, errJson
+		}
+		log.Debug("Endpoint /eth/v2/validator/aggregate_attestation is not supported, falling back to older endpoints for get aggregated attestation.")
+		params = url.Values{}
+		params.Add("slot", strconv.FormatUint(uint64(slot), 10))
+		params.Add("attestation_data_root", hexutil.Encode(attestationDataRoot))
+		oldEndpoint := apiutil.BuildURL("/eth/v1/validator/aggregate_attestation", params)
+		if err = c.jsonRestHandler.Get(ctx, oldEndpoint, &aggregateAttestationResponse); err != nil {
+			return nil, err
+		}
+	}
+
+	return &aggregateAttestationResponse, nil
+}
+
+func (c *beaconApiValidatorClient) aggregateAttestationElectra(
+	ctx context.Context,
+	slot primitives.Slot,
+	attestationDataRoot []byte,
+	committeeIndex primitives.CommitteeIndex,
+) (*structs.AggregateAttestationResponse, error) {
+	params := url.Values{}
+	params.Add("slot", strconv.FormatUint(uint64(slot), 10))
+	params.Add("attestation_data_root", hexutil.Encode(attestationDataRoot))
+	params.Add("committee_index", strconv.FormatUint(uint64(committeeIndex), 10))
+	endpoint := apiutil.BuildURL("/eth/v2/validator/aggregate_attestation", params)
 
 	var aggregateAttestationResponse structs.AggregateAttestationResponse
 	if err := c.jsonRestHandler.Get(ctx, endpoint, &aggregateAttestationResponse); err != nil {

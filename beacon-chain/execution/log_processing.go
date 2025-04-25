@@ -8,26 +8,24 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
+	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	coreState "github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution/types"
+	statenative "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	contracts "github.com/OffchainLabs/prysm/v6/contracts/deposit"
+	"github.com/OffchainLabs/prysm/v6/crypto/hash"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	gethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache/depositsnapshot"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
-	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	coreState "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/types"
-	statenative "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/container/trie"
-	contracts "github.com/prysmaticlabs/prysm/v5/contracts/deposit"
-	"github.com/prysmaticlabs/prysm/v5/crypto/hash"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 )
 
@@ -226,16 +224,14 @@ func (s *Service) ProcessDepositLog(ctx context.Context, depositLog *gethtypes.L
 			"merkleTreeIndex": index,
 		}).Info("Invalid deposit registered in deposit contract")
 	}
-	if features.Get().EnableEIP4881 {
-		// We finalize the trie here so that old deposits are not kept around, as they make
-		// deposit tree htr computation expensive.
-		dTrie, ok := s.depositTrie.(*depositsnapshot.DepositTree)
-		if !ok {
-			return errors.Errorf("wrong trie type initialized: %T", dTrie)
-		}
-		if err := dTrie.Finalize(index, depositLog.BlockHash, depositLog.BlockNumber); err != nil {
-			log.WithError(err).Error("Could not finalize trie")
-		}
+	// We finalize the trie here so that old deposits are not kept around, as they make
+	// deposit tree htr computation expensive.
+	dTrie, ok := s.depositTrie.(*depositsnapshot.DepositTree)
+	if !ok {
+		return errors.Errorf("wrong trie type initialized: %T", dTrie)
+	}
+	if err := dTrie.Finalize(index, depositLog.BlockHash, depositLog.BlockNumber); err != nil {
+		log.WithError(err).Error("Could not finalize trie")
 	}
 
 	return nil
@@ -579,25 +575,17 @@ func (s *Service) savePowchainData(ctx context.Context) error {
 		BeaconState:       pbState, // I promise not to mutate it!
 		DepositContainers: s.cfg.depositCache.AllDepositContainers(ctx),
 	}
-	if features.Get().EnableEIP4881 {
-		fd, err := s.cfg.depositCache.FinalizedDeposits(ctx)
-		if err != nil {
-			return errors.Errorf("could not get finalized deposit tree: %v", err)
-		}
-		tree, ok := fd.Deposits().(*depositsnapshot.DepositTree)
-		if !ok {
-			return errors.New("deposit tree was not EIP4881 DepositTree")
-		}
-		eth1Data.DepositSnapshot, err = tree.ToProto()
-		if err != nil {
-			return err
-		}
-	} else {
-		tree, ok := s.depositTrie.(*trie.SparseMerkleTrie)
-		if !ok {
-			return errors.New("deposit tree was not SparseMerkleTrie")
-		}
-		eth1Data.Trie = tree.ToProto()
+	fd, err := s.cfg.depositCache.FinalizedDeposits(ctx)
+	if err != nil {
+		return errors.Errorf("could not get finalized deposit tree: %v", err)
+	}
+	tree, ok := fd.Deposits().(*depositsnapshot.DepositTree)
+	if !ok {
+		return errors.New("deposit tree was not EIP4881 DepositTree")
+	}
+	eth1Data.DepositSnapshot, err = tree.ToProto()
+	if err != nil {
+		return err
 	}
 	return s.cfg.beaconDB.SaveExecutionChainData(ctx, eth1Data)
 }

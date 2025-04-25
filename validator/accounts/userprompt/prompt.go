@@ -1,12 +1,12 @@
 package userprompt
 
 import (
+	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v6/io/file"
+	"github.com/OffchainLabs/prysm/v6/io/prompt"
 	"github.com/logrusorgru/aurora"
 	"github.com/manifoldco/promptui"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
-	"github.com/prysmaticlabs/prysm/v5/io/prompt"
 	"github.com/urfave/cli/v2"
 )
 
@@ -59,12 +59,12 @@ func InputDirectory(cliCtx *cli.Context, promptText string, flag *cli.StringFlag
 
 // FormatPromptError for the user.
 func FormatPromptError(err error) error {
-	switch err {
-	case promptui.ErrAbort:
+	switch {
+	case errors.Is(err, promptui.ErrAbort):
 		return errors.New("wallet creation aborted, closing")
-	case promptui.ErrInterrupt:
+	case errors.Is(err, promptui.ErrInterrupt):
 		return errors.New("keyboard interrupt, closing")
-	case promptui.ErrEOF:
+	case errors.Is(err, promptui.ErrEOF):
 		return errors.New("no input received, closing")
 	default:
 		return err

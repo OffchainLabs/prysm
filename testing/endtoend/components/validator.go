@@ -11,21 +11,21 @@ import (
 	"strings"
 	"syscall"
 
+	cmdshared "github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/io/file"
+	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
+	"github.com/OffchainLabs/prysm/v6/runtime/interop"
+	"github.com/OffchainLabs/prysm/v6/testing/endtoend/helpers"
+	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
+	e2etypes "github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	cmdshared "github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
-	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
-	"github.com/prysmaticlabs/prysm/v5/runtime/interop"
-	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/helpers"
-	e2e "github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
-	e2etypes "github.com/prysmaticlabs/prysm/v5/testing/endtoend/types"
 )
 
 const DefaultFeeRecipientAddress = "0x099FB65722e7b2455043bfebF6177f1D2E9738d9"
@@ -198,7 +198,7 @@ func (v *ValidatorNode) Start(ctx context.Context) error {
 		beaconRPCPort = e2e.TestParams.Ports.PrysmBeaconNodeRPCPort
 	}
 
-	file, err := helpers.DeleteAndCreateFile(e2e.TestParams.LogPath, fmt.Sprintf(e2e.ValidatorLogFileName, index))
+	logFile, err := helpers.DeleteAndCreateFile(e2e.TestParams.LogPath, fmt.Sprintf(e2e.ValidatorLogFileName, index))
 	if err != nil {
 		return err
 	}
@@ -221,15 +221,16 @@ func (v *ValidatorNode) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	portFlagName := "grpc-gateway-port" // TODO: replace port flag name with flags.HTTPServerPort.Name in a future release
 	args := []string{
 		fmt.Sprintf("--%s=%s/eth2-val-%d", cmdshared.DataDirFlag.Name, e2e.TestParams.TestPath, index),
-		fmt.Sprintf("--%s=%s", cmdshared.LogFileName.Name, file.Name()),
+		fmt.Sprintf("--%s=%s", cmdshared.LogFileName.Name, logFile.Name()),
 		fmt.Sprintf("--%s=%s", flags.GraffitiFileFlag.Name, gFile),
 		fmt.Sprintf("--%s=%d", flags.MonitoringPortFlag.Name, e2e.TestParams.Ports.ValidatorMetricsPort+index),
-		fmt.Sprintf("--%s=%d", flags.GRPCGatewayPort.Name, e2e.TestParams.Ports.ValidatorGatewayPort+index),
+		fmt.Sprintf("--%s=%d", portFlagName, e2e.TestParams.Ports.ValidatorHTTPPort+index),
 		fmt.Sprintf("--%s=localhost:%d", flags.BeaconRPCProviderFlag.Name, beaconRPCPort),
 
-		fmt.Sprintf("--%s=%s", flags.GrpcHeadersFlag.Name, "dummy=value,foo=bar"), // Sending random headers shouldn't break anything.
+		fmt.Sprintf("--%s=%s", flags.GRPCHeadersFlag.Name, "dummy=value,foo=bar"), // Sending random headers shouldn't break anything.
 		fmt.Sprintf("--%s=%s", cmdshared.VerbosityFlag.Name, "debug"),
 		fmt.Sprintf("--%s=%s", flags.ProposerSettingsFlag.Name, proposerSettingsPathPath),
 		fmt.Sprintf("--%s=%s", cmdshared.ChainConfigFileFlag.Name, cfgPath),
@@ -238,10 +239,10 @@ func (v *ValidatorNode) Start(ctx context.Context) error {
 	}
 
 	if v.config.UseBeaconRestApi {
-		beaconRestApiPort := e2e.TestParams.Ports.PrysmBeaconNodeGatewayPort + index
-		if beaconRestApiPort >= e2e.TestParams.Ports.PrysmBeaconNodeGatewayPort+e2e.TestParams.BeaconNodeCount {
+		beaconRestApiPort := e2e.TestParams.Ports.PrysmBeaconNodeHTTPPort + index
+		if beaconRestApiPort >= e2e.TestParams.Ports.PrysmBeaconNodeHTTPPort+e2e.TestParams.BeaconNodeCount {
 			// Point any extra validator clients to a node we know is running.
-			beaconRestApiPort = e2e.TestParams.Ports.PrysmBeaconNodeGatewayPort
+			beaconRestApiPort = e2e.TestParams.Ports.PrysmBeaconNodeHTTPPort
 		}
 
 		args = append(args,
@@ -258,7 +259,16 @@ func (v *ValidatorNode) Start(ctx context.Context) error {
 		// See: https://docs.teku.consensys.net/en/latest/HowTo/External-Signer/Use-External-Signer/
 		args = append(args,
 			fmt.Sprintf("--%s=http://localhost:%d", flags.Web3SignerURLFlag.Name, Web3RemoteSignerPort),
-			fmt.Sprintf("--%s=%s", flags.Web3SignerPublicValidatorKeysFlag.Name, strings.Join(validatorHexPubKeys, ",")))
+		)
+		if v.config.UsePersistentKeyFile {
+			keysPath := filepath.Join(e2e.TestParams.TestPath, "proposer-settings", fmt.Sprintf("validator_%d", index), "keys.txt")
+			if err := file.WriteLinesToFile(validatorHexPubKeys, keysPath); err != nil {
+				return err
+			}
+			args = append(args, fmt.Sprintf("--%s=%s", flags.Web3SignerKeyFileFlag.Name, keysPath))
+		} else {
+			args = append(args, fmt.Sprintf("--%s=%s", flags.Web3SignerPublicValidatorKeysFlag.Name, strings.Join(validatorHexPubKeys, ",")))
+		}
 	} else {
 		// When not using remote key signer, use interop keys.
 		args = append(args,

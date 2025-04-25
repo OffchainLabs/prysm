@@ -9,15 +9,15 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/common"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/filesystem"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/iface"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/kv"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
-	"github.com/prysmaticlabs/prysm/v5/validator/slashing-protection-history/format"
-	mocks "github.com/prysmaticlabs/prysm/v5/validator/testing"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts"
+	"github.com/OffchainLabs/prysm/v6/validator/db/common"
+	"github.com/OffchainLabs/prysm/v6/validator/db/filesystem"
+	"github.com/OffchainLabs/prysm/v6/validator/db/iface"
+	"github.com/OffchainLabs/prysm/v6/validator/db/kv"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v6/validator/slashing-protection-history/format"
+	mocks "github.com/OffchainLabs/prysm/v6/validator/testing"
 )
 
 func TestImportSlashingProtection_Preconditions(t *testing.T) {
@@ -77,7 +77,7 @@ func TestImportSlashingProtection_Preconditions(t *testing.T) {
 				})
 			}
 			require.NoError(t, err)
-			s.valDB = validatorDB
+			s.db = validatorDB
 
 			// Have to close it after import is done otherwise it complains db is not open.
 			defer func() {
@@ -151,7 +151,7 @@ func TestExportSlashingProtection_Preconditions(t *testing.T) {
 				})
 			}
 			require.NoError(t, err)
-			s.valDB = validatorDB
+			s.db = validatorDB
 
 			// Have to close it after export is done otherwise it complains db is not open.
 			defer func() {
@@ -189,7 +189,7 @@ func TestImportExportSlashingProtection_RoundTrip(t *testing.T) {
 		PubKeys: pubKeys,
 	})
 	require.NoError(t, err)
-	s.valDB = validatorDB
+	s.db = validatorDB
 
 	// Have to close it after import is done otherwise it complains db is not open.
 	defer func() {

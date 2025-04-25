@@ -3,10 +3,10 @@ package kv
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/proto/dbval"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/proto/dbval"
 	bolt "go.etcd.io/bbolt"
-	"go.opencensus.io/trace"
 	"google.golang.org/protobuf/proto"
 )
 

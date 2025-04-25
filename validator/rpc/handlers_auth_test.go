@@ -9,9 +9,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
 )
 
 func TestInitialize(t *testing.T) {
@@ -19,7 +20,7 @@ func TestInitialize(t *testing.T) {
 	localWalletDir := setupWalletDir(t)
 
 	// Step 2: Optionally create a temporary 'auth-token' file
-	authTokenPath := filepath.Join(localWalletDir, AuthTokenFileName)
+	authTokenPath := filepath.Join(localWalletDir, api.AuthTokenFileName)
 	_, err := os.Create(authTokenPath)
 	require.NoError(t, err)
 
@@ -34,7 +35,7 @@ func TestInitialize(t *testing.T) {
 	require.NoError(t, err)
 	_, err = acc.WalletCreate(context.Background())
 	require.NoError(t, err)
-	server := &Server{walletDir: localWalletDir}
+	server := &Server{walletDir: localWalletDir, authTokenPath: authTokenPath}
 
 	// Step 4: Create an HTTP request and response recorder
 	req := httptest.NewRequest(http.MethodGet, "/initialize", nil)
@@ -42,6 +43,8 @@ func TestInitialize(t *testing.T) {
 
 	// Step 5: Call the Initialize function
 	server.Initialize(w, req)
+
+	require.Equal(t, w.Code, http.StatusOK)
 
 	// Step 6: Assert expectations
 	result := w.Result()

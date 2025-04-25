@@ -3,9 +3,22 @@
 package flags
 
 import (
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"strings"
+
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/urfave/cli/v2"
+)
+
+var (
+	DefaultWebDomains        = []string{"http://localhost:4200", "http://127.0.0.1:4200", "http://0.0.0.0:4200"}
+	DefaultHTTPServerDomains = []string{"http://localhost:7500", "http://127.0.0.1:7500", "http://0.0.0.0:7500"}
+	DefaultHTTPCorsDomains   = func() []string {
+		s := []string{"http://localhost:3000", "http://0.0.0.0:3000", "http://127.0.0.1:3000"}
+		s = append(s, DefaultWebDomains...)
+		s = append(s, DefaultHTTPServerDomains...)
+		return s
+	}()
 )
 
 var (
@@ -15,20 +28,47 @@ var (
 		Usage: "A MEV builder relay string http endpoint, this will be used to interact MEV builder network using API defined in: https://ethereum.github.io/builder-specs/#/Builder",
 		Value: "",
 	}
+
+	// EnableBuilderSSZ enables Builder APIs to send and receive in SSZ format
+	EnableBuilderSSZ = &cli.BoolFlag{
+		Name:    "enable-builder-ssz",
+		Aliases: []string{"builder-ssz"},
+		Usage:   "Enables Builder APIs to send and receive in SSZ format",
+	}
+
 	MaxBuilderConsecutiveMissedSlots = &cli.IntFlag{
 		Name:  "max-builder-consecutive-missed-slots",
 		Usage: "Number of consecutive skip slot to fallback from using relay/builder to local execution engine for block construction",
 		Value: 3,
 	}
 	MaxBuilderEpochMissedSlots = &cli.IntFlag{
-		Name:  "max-builder-epoch-missed-slots",
-		Usage: "Number of total skip slot to fallback from using relay/builder to local execution engine for block construction in last epoch rolling window",
+		Name: "max-builder-epoch-missed-slots",
+		Usage: "Number of total skip slot to fallback from using relay/builder to local execution engine for block construction in last epoch rolling window. " +
+			"The values are on the basis of the networks and the default value for mainnet is 5.",
 	}
 	// LocalBlockValueBoost sets a percentage boost for local block construction while using a custom builder.
 	LocalBlockValueBoost = &cli.Uint64Flag{
 		Name: "local-block-value-boost",
 		Usage: "A percentage boost for local block construction as a Uint64. This is used to prioritize local block construction over relay/builder block construction" +
 			"Boost is an additional percentage to multiple local block value. Use builder block if: builder_bid_value * 100 > local_block_value * (local-block-value-boost + 100)",
+		Value: 10,
+	}
+	// MinBuilderBid sets an absolute value for the builder bid that this
+	// node will accept without reverting to local building
+	MinBuilderBid = &cli.Uint64Flag{
+		Name: "min-builder-bid",
+		Usage: "An absolute value in Gwei that the builder bid has to have in order for this beacon node to use the builder's block. Anything less than this value" +
+			" and the beacon will revert to local building.",
+		Value: 0,
+	}
+	// MinBuilderDiff sets an absolute value for the difference between the
+	// builder's bid and the local block value that this node will accept
+	// without reverting to local building
+	MinBuilderDiff = &cli.Uint64Flag{
+		Name: "min-builder-to-local-difference",
+		Usage: "An absolute value in Gwei that the builder bid has to have in order for this beacon node to use the builder's block. Anything less than this value" +
+			" and the beacon will revert to local building.",
+		Value: 0,
 	}
 	// ExecutionEngineEndpoint provides an HTTP access endpoint to connect to an execution client on the execution layer
 	ExecutionEngineEndpoint = &cli.StringFlag{
@@ -99,30 +139,29 @@ var (
 		Usage: "Comma-separated list of API module names. Possible values: `" + PrysmAPIModule + `,` + EthAPIModule + "`.",
 		Value: PrysmAPIModule + `,` + EthAPIModule,
 	}
-	// DisableGRPCGateway for JSON-HTTP requests to the beacon node.
-	DisableGRPCGateway = &cli.BoolFlag{
-		Name:  "disable-grpc-gateway",
-		Usage: "Disable the gRPC gateway for JSON-HTTP requests",
+
+	// HTTPServerHost specifies a HTTP server host for the validator client.
+	HTTPServerHost = &cli.StringFlag{
+		Name:    "http-host",
+		Usage:   "Host on which the HTTP server runs on.",
+		Value:   "127.0.0.1",
+		Aliases: []string{"grpc-gateway-host"},
 	}
-	// GRPCGatewayHost specifies a gRPC gateway host for Prysm.
-	GRPCGatewayHost = &cli.StringFlag{
-		Name:  "grpc-gateway-host",
-		Usage: "The host on which the gateway server runs on",
-		Value: "127.0.0.1",
+	// HTTPServerPort enables a REST server port to be exposed for the validator client.
+	HTTPServerPort = &cli.IntFlag{
+		Name:    "http-port",
+		Usage:   "Port on which the HTTP server runs on.",
+		Value:   3500,
+		Aliases: []string{"grpc-gateway-port"},
 	}
-	// GRPCGatewayPort specifies a gRPC gateway port for Prysm.
-	GRPCGatewayPort = &cli.IntFlag{
-		Name:  "grpc-gateway-port",
-		Usage: "The port on which the gateway server runs on",
-		Value: 3500,
+	// HTTPServerCorsDomain serves preflight requests when serving HTTP.
+	HTTPServerCorsDomain = &cli.StringFlag{
+		Name:    "http-cors-domain",
+		Usage:   "Comma separated list of domains from which to accept cross origin requests.",
+		Value:   strings.Join(DefaultHTTPCorsDomains, ", "),
+		Aliases: []string{"grpc-gateway-corsdomain"},
 	}
-	// GPRCGatewayCorsDomain serves preflight requests when serving gRPC JSON gateway.
-	GPRCGatewayCorsDomain = &cli.StringFlag{
-		Name: "grpc-gateway-corsdomain",
-		Usage: "Comma separated list of domains from which to accept cross origin requests " +
-			"(browser enforced). This flag has no effect if not used with --grpc-gateway-port.",
-		Value: "http://localhost:4200,http://localhost:7500,http://127.0.0.1:4200,http://127.0.0.1:7500,http://0.0.0.0:4200,http://0.0.0.0:7500,http://localhost:3000,http://0.0.0.0:3000,http://127.0.0.1:3000",
-	}
+
 	// MinSyncPeers specifies the required number of successful peer handshakes in order
 	// to start syncing with external peers.
 	MinSyncPeers = &cli.IntFlag{
@@ -165,18 +204,18 @@ var (
 	BlobBatchLimit = &cli.IntFlag{
 		Name:  "blob-batch-limit",
 		Usage: "The amount of blobs the local peer is bounded to request and respond to in a batch.",
-		Value: 64,
+		Value: 192,
 	}
 	// BlobBatchLimitBurstFactor specifies the factor by which blob batch size may increase.
 	BlobBatchLimitBurstFactor = &cli.IntFlag{
 		Name:  "blob-batch-limit-burst-factor",
 		Usage: "The factor by which blob batch limit may increase on burst.",
-		Value: 2,
+		Value: 3,
 	}
-	// EnableDebugRPCEndpoints as /v1/beacon/state.
-	EnableDebugRPCEndpoints = &cli.BoolFlag{
-		Name:  "enable-debug-rpc-endpoints",
-		Usage: "Enables the debug rpc service, containing utility endpoints such as /eth/v1alpha1/beacon/state.",
+	// DisableDebugRPCEndpoints disables the debug Beacon API namespace.
+	DisableDebugRPCEndpoints = &cli.BoolFlag{
+		Name:  "disable-debug-rpc-endpoints",
+		Usage: "Disables the debug Beacon API namespace.",
 	}
 	// SubscribeToAllSubnets defines a flag to specify whether to subscribe to all possible attestation/sync subnets or not.
 	SubscribeToAllSubnets = &cli.BoolFlag{
@@ -226,6 +265,12 @@ var (
 		Usage: "Sets the minimum number of peers that a node will attempt to peer with that are subscribed to a subnet.",
 		Value: 6,
 	}
+	// MaxConcurrentDials defines a flag to set the maximum number of peers that a node will attempt to dial with from discovery.
+	MaxConcurrentDials = &cli.Uint64Flag{
+		Name: "max-concurrent-dials",
+		Usage: "Sets the maximum number of peers that a node will attempt to dial with from discovery. By default we will dials as " +
+			"many peers as possible.",
+	}
 	// SuggestedFeeRecipient specifies the fee recipient for the transaction fees.
 	SuggestedFeeRecipient = &cli.StringFlag{
 		Name:  "suggested-fee-recipient",
@@ -258,6 +303,23 @@ var (
 		Name:  "slasher-datadir",
 		Usage: "Directory for the slasher database",
 		Value: cmd.DefaultDataDir(),
+	}
+	// SlasherFlag defines a flag to enable the beacon chain slasher.
+	SlasherFlag = &cli.BoolFlag{
+		Name:  "slasher",
+		Usage: "Enables a slasher in the beacon node for detecting slashable offenses.",
+	}
+	// BeaconDBPruning enables the pruning of beacon db.
+	BeaconDBPruning = &cli.BoolFlag{
+		Name: "beacon-db-pruning",
+		Usage: "Enables pruning of beacon db beyond MIN_EPOCHS_FOR_BLOCK_REQUESTS duration. This is an opt-in feature," +
+			" and should only be enabled if operators doesn't require historical data.",
+	}
+	// PrunerRetentionEpochs defines the retention period for the pruner service in terms of epochs.
+	PrunerRetentionEpochs = &cli.Uint64Flag{
+		Name: "pruner-retention-epochs",
+		Usage: "Specifies the retention period for the pruner service in terms of epochs. " +
+			"If this value is less than MIN_EPOCHS_FOR_BLOCK_REQUESTS, it will be ignored.",
 	}
 	// ArchivalNodeFlag defines the flag that enables archival mode on a prysm beacon node.
 	ArchivalNodeFlag = &cli.BoolFlag{

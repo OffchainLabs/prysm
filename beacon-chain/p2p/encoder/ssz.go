@@ -5,19 +5,18 @@ import (
 	"io"
 	"sync"
 
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/math"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 	fastssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/math"
 )
 
 var _ NetworkEncoding = (*SszNetworkEncoder)(nil)
 
-// MaxGossipSize allowed for gossip messages.
-var MaxGossipSize = params.BeaconConfig().GossipMaxSize // 10 Mib.
-var MaxChunkSize = params.BeaconConfig().MaxChunkSize   // 10 Mib.
+// MaxPayloadSize allowed for gossip and rpc messages.
+var MaxPayloadSize = params.BeaconConfig().MaxPayloadSize // 10 Mib.
 
 // This pool defines the sync pool for our buffered snappy writers, so that they
 // can be constantly reused.
@@ -43,8 +42,8 @@ func (_ SszNetworkEncoder) EncodeGossip(w io.Writer, msg fastssz.Marshaler) (int
 	if err != nil {
 		return 0, err
 	}
-	if uint64(len(b)) > MaxGossipSize {
-		return 0, errors.Errorf("gossip message exceeds max gossip size: %d bytes > %d bytes", len(b), MaxGossipSize)
+	if uint64(len(b)) > MaxPayloadSize {
+		return 0, errors.Errorf("gossip message exceeds max gossip size: %d bytes > %d bytes", len(b), MaxPayloadSize)
 	}
 	b = snappy.Encode(nil /*dst*/, b)
 	return w.Write(b)
@@ -60,11 +59,11 @@ func (_ SszNetworkEncoder) EncodeWithMaxLength(w io.Writer, msg fastssz.Marshale
 	if err != nil {
 		return 0, err
 	}
-	if uint64(len(b)) > MaxChunkSize {
+	if uint64(len(b)) > MaxPayloadSize {
 		return 0, fmt.Errorf(
 			"size of encoded message is %d which is larger than the provided max limit of %d",
 			len(b),
-			MaxChunkSize,
+			MaxPayloadSize,
 		)
 	}
 	// write varint first
@@ -81,7 +80,10 @@ func doDecode(b []byte, to fastssz.Unmarshaler) error {
 
 // DecodeGossip decodes the bytes to the protobuf gossip message provided.
 func (_ SszNetworkEncoder) DecodeGossip(b []byte, to fastssz.Unmarshaler) error {
-	b, err := DecodeSnappy(b, MaxGossipSize)
+	if uint64(len(b)) > MaxCompressedLen(MaxPayloadSize) {
+		return fmt.Errorf("gossip message exceeds maximum compressed limit: %d", MaxCompressedLen(MaxPayloadSize))
+	}
+	b, err := DecodeSnappy(b, MaxPayloadSize)
 	if err != nil {
 		return err
 	}
@@ -111,11 +113,11 @@ func (e SszNetworkEncoder) DecodeWithMaxLength(r io.Reader, to fastssz.Unmarshal
 	if err != nil {
 		return err
 	}
-	if msgLen > MaxChunkSize {
+	if msgLen > MaxPayloadSize {
 		return fmt.Errorf(
 			"remaining bytes %d goes over the provided max limit of %d",
 			msgLen,
-			MaxChunkSize,
+			MaxPayloadSize,
 		)
 	}
 	msgMax, err := e.MaxLength(msgLen)
@@ -154,6 +156,18 @@ func (_ SszNetworkEncoder) MaxLength(length uint64) (int, error) {
 		return 0, errors.Errorf("max encoded length is negative: %d", maxLen)
 	}
 	return maxLen, nil
+}
+
+// MaxCompressedLen returns the maximum compressed size for a given payload size.
+//
+// Spec pseudocode definition:
+// def max_compressed_len(n: uint64) -> uint64:
+//
+//	# Worst-case compressed length for a given payload of size n when using snappy:
+//	# https://github.com/google/snappy/blob/32ded457c0b1fe78ceb8397632c416568d6714a0/snappy.cc#L218C1-L218C47
+//	return uint64(32 + n + n / 6)
+func MaxCompressedLen(n uint64) uint64 {
+	return 32 + n + n/6
 }
 
 // Writes a bytes value through a snappy buffered writer.

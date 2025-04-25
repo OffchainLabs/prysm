@@ -31,7 +31,7 @@ func LogThis(err error) {
 
 	log.WithError(err).Error("Something bad happened, but this log statement is OK :)")
 
-	_ = fmt.Errorf("this is ok: %v", err)
+	_ = fmt.Errorf("this is ok: %w", err)
 }
 
 func do() (bool, error) {

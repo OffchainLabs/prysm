@@ -3,11 +3,12 @@ package forkchoice
 import (
 	"context"
 
-	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	forkchoice2 "github.com/prysmaticlabs/prysm/v5/consensus-types/forkchoice"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	consensus_blocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	forkchoice2 "github.com/OffchainLabs/prysm/v6/consensus-types/forkchoice"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 )
 
 // BalancesByRooter is a handler to obtain the effective balances of the state
@@ -41,7 +42,7 @@ type HeadRetriever interface {
 
 // BlockProcessor processes the block that's used for accounting fork choice.
 type BlockProcessor interface {
-	InsertNode(context.Context, state.BeaconState, [32]byte) error
+	InsertNode(context.Context, state.BeaconState, consensus_blocks.ROBlock) error
 	InsertChain(context.Context, []*forkchoicetypes.BlockAndCheckpoints) error
 }
 
@@ -64,6 +65,7 @@ type FastGetter interface {
 	FinalizedPayloadBlockHash() [32]byte
 	HasNode([32]byte) bool
 	HighestReceivedBlockSlot() primitives.Slot
+	HighestReceivedBlockRoot() [32]byte
 	HighestReceivedBlockDelay() primitives.Slot
 	IsCanonical(root [32]byte) bool
 	IsOptimistic(root [32]byte) (bool, error)
@@ -77,9 +79,11 @@ type FastGetter interface {
 	ReceivedBlocksLastEpoch() (uint64, error)
 	ShouldOverrideFCU() bool
 	Slot([32]byte) (primitives.Slot, error)
+	DependentRoot(primitives.Epoch) ([32]byte, error)
 	TargetRootForEpoch([32]byte, primitives.Epoch) ([32]byte, error)
 	UnrealizedJustifiedPayloadBlockHash() [32]byte
 	Weight(root [32]byte) (uint64, error)
+	ParentRoot(root [32]byte) ([32]byte, error)
 }
 
 // Setter allows to set forkchoice information

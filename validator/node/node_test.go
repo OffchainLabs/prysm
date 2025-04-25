@@ -9,18 +9,16 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/kv"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
-	remoteweb3signer "github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer"
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v6/io/file"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts/wallet"
+	"github.com/OffchainLabs/prysm/v6/validator/db/kv"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
+	remoteweb3signer "github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer"
 	logtest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/urfave/cli/v2"
 )
@@ -211,17 +209,10 @@ func TestClearDB(t *testing.T) {
 
 // TestWeb3SignerConfig tests the web3 signer config returns the correct values.
 func TestWeb3SignerConfig(t *testing.T) {
-	pubkey1decoded, err := hexutil.Decode("0xa99a76ed7796f7be22d5b7e85deeb7c5677e88e511e0b337618f8c4eb61349b4bf2d153f649f7b53359fe8b94a38e44c")
-	require.NoError(t, err)
-	bytepubkey1 := bytesutil.ToBytes48(pubkey1decoded)
-
-	pubkey2decoded, err := hexutil.Decode("0xb89bebc699769726a318c8e9971bd3171297c61aea4a6578a7a4f94b547dcba5bac16a89108b6b6a1fe3695d1a874a0b")
-	require.NoError(t, err)
-	bytepubkey2 := bytesutil.ToBytes48(pubkey2decoded)
-
 	type args struct {
 		baseURL          string
 		publicKeysOrURLs []string
+		persistentFile   string
 	}
 	tests := []struct {
 		name       string
@@ -240,9 +231,9 @@ func TestWeb3SignerConfig(t *testing.T) {
 				BaseEndpoint:          "http://localhost:8545",
 				GenesisValidatorsRoot: nil,
 				PublicKeysURL:         "",
-				ProvidedPublicKeys: [][48]byte{
-					bytepubkey1,
-					bytepubkey2,
+				ProvidedPublicKeys: []string{
+					"0xa99a76ed7796f7be22d5b7e85deeb7c5677e88e511e0b337618f8c4eb61349b4bf2d153f649f7b53359fe8b94a38e44c",
+					"0xb89bebc699769726a318c8e9971bd3171297c61aea4a6578a7a4f94b547dcba5bac16a89108b6b6a1fe3695d1a874a0b",
 				},
 			},
 		},
@@ -270,25 +261,6 @@ func TestWeb3SignerConfig(t *testing.T) {
 			wantErrMsg: "web3signer url 0xa99a76ed7796f7be22d5b7e85deeb7c5677e88, is invalid: parse \"0xa99a76ed7796f7be22d5b7e85deeb7c5677e88,\": invalid URI for request",
 		},
 		{
-			name: "Bad publicKeys",
-			args: &args{
-				baseURL: "http://localhost:8545",
-				publicKeysOrURLs: []string{"0xa99a76ed7796f7be22c," +
-					"0xb89bebc699769726a318c8e9971bd3171297c61aea4a6578a7a4f94b547dcba5bac16a89108b6b6a1fe3695d1a874a0b"},
-			},
-			want:       nil,
-			wantErrMsg: "could not decode public key for web3signer: 0xa99a76ed7796f7be22c: hex string of odd length",
-		},
-		{
-			name: "Bad publicKeysURL",
-			args: &args{
-				baseURL:          "http://localhost:8545",
-				publicKeysOrURLs: []string{"localhost"},
-			},
-			want:       nil,
-			wantErrMsg: "could not decode public key for web3signer: localhost: hex string without 0x prefix",
-		},
-		{
 			name: "Base URL missing scheme or host",
 			args: &args{
 				baseURL:          "localhost:8545",
@@ -298,23 +270,15 @@ func TestWeb3SignerConfig(t *testing.T) {
 			wantErrMsg: "web3signer url must be in the format of http(s)://host:port url used: localhost:8545",
 		},
 		{
-			name: "Public Keys URL missing scheme or host",
+			name: "happy path with persistentFile",
 			args: &args{
-				baseURL:          "http://localhost:8545",
-				publicKeysOrURLs: []string{"localhost:8545"},
+				baseURL:        "http://localhost:8545",
+				persistentFile: "/remote/key/file.txt",
 			},
-			want:       nil,
-			wantErrMsg: "could not decode public key for web3signer: localhost:8545: hex string without 0x prefix",
-		},
-		{
-			name: "incorrect amount of flag calls used with url",
-			args: &args{
-				baseURL: "http://localhost:8545",
-				publicKeysOrURLs: []string{"0xa99a76ed7796f7be22d5b7e85deeb7c5677e88e511e0b337618f8c4eb61349b4bf2d153f649f7b53359fe8b94a38e44c," +
-					"0xb89bebc699769726a318c8e9971bd3171297c61aea4a6578a7a4f94b547dcba5bac16a89108b6b6a1fe3695d1a874a0b", "http://localhost:8545/api/v1/eth2/publicKeys"},
+			want: &remoteweb3signer.SetupConfig{
+				BaseEndpoint: "http://localhost:8545",
+				KeyFilePath:  "/remote/key/file.txt",
 			},
-			want:       nil,
-			wantErrMsg: "could not decode public key for web3signer",
 		},
 	}
 	for _, tt := range tests {
@@ -322,6 +286,7 @@ func TestWeb3SignerConfig(t *testing.T) {
 			app := cli.App{}
 			set := flag.NewFlagSet(tt.name, 0)
 			set.String("validators-external-signer-url", tt.args.baseURL, "baseUrl")
+			set.String(flags.Web3SignerKeyFileFlag.Name, "", "")
 			c := &cli.StringSliceFlag{
 				Name: "validators-external-signer-public-keys",
 			}
@@ -330,6 +295,9 @@ func TestWeb3SignerConfig(t *testing.T) {
 			require.NoError(t, set.Set(flags.Web3SignerURLFlag.Name, tt.args.baseURL))
 			for _, key := range tt.args.publicKeysOrURLs {
 				require.NoError(t, set.Set(flags.Web3SignerPublicValidatorKeysFlag.Name, key))
+			}
+			if tt.args.persistentFile != "" {
+				require.NoError(t, set.Set(flags.Web3SignerKeyFileFlag.Name, tt.args.persistentFile))
 			}
 			cliCtx := cli.NewContext(&app, set, nil)
 			got, err := Web3SignerConfig(cliCtx)

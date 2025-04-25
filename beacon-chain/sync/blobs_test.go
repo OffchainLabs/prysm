@@ -8,30 +8,30 @@ import (
 	"testing"
 	"time"
 
+	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
+	db "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	types "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/network/forks"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
-	db "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	types "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	leakybucket "github.com/prysmaticlabs/prysm/v5/container/leaky-bucket"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/network/forks"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 type blobsTestCase struct {
@@ -180,7 +180,7 @@ func (c *blobsTestCase) setup(t *testing.T) (*Service, []blocks.ROBlob, func()) 
 	cleanup := func() {
 		params.OverrideBeaconConfig(cfg)
 	}
-	maxBlobs := fieldparams.MaxBlobsPerBlock
+	maxBlobs := int(params.BeaconConfig().MaxBlobsPerBlock(0))
 	chain, clock := defaultMockChain(t)
 	if c.chain == nil {
 		c.chain = chain
@@ -218,8 +218,8 @@ func (c *blobsTestCase) setup(t *testing.T) (*Service, []blocks.ROBlob, func()) 
 		rateLimiter: newRateLimiter(client),
 	}
 
-	byRootRate := params.BeaconConfig().MaxRequestBlobSidecars * fieldparams.MaxBlobsPerBlock
-	byRangeRate := params.BeaconConfig().MaxRequestBlobSidecars * fieldparams.MaxBlobsPerBlock
+	byRootRate := params.BeaconConfig().MaxRequestBlobSidecars * uint64(params.BeaconConfig().MaxBlobsPerBlock(0))
+	byRangeRate := params.BeaconConfig().MaxRequestBlobSidecars * uint64(params.BeaconConfig().MaxBlobsPerBlock(0))
 	s.setRateCollector(p2p.RPCBlobSidecarsByRootTopicV1, leakybucket.NewCollector(0.000001, int64(byRootRate), time.Second, false))
 	s.setRateCollector(p2p.RPCBlobSidecarsByRangeTopicV1, leakybucket.NewCollector(0.000001, int64(byRangeRate), time.Second, false))
 
@@ -250,8 +250,7 @@ func (c *blobsTestCase) run(t *testing.T) {
 		}
 	}
 	for _, blobSidecars := range m {
-		v, err := verification.BlobSidecarSliceNoop(blobSidecars)
-		require.NoError(t, err)
+		v := verification.FakeVerifySliceForTest(t, blobSidecars)
 		for i := range v {
 			require.NoError(t, s.cfg.blobStorage.Save(v[i]))
 		}
@@ -310,7 +309,7 @@ func TestTestcaseSetup_BlocksAndBlobs(t *testing.T) {
 	req := blobRootRequestFromSidecars(sidecars)
 	expect := c.filterExpectedByRoot(t, sidecars, req)
 	defer cleanup()
-	maxed := nblocks * fieldparams.MaxBlobsPerBlock
+	maxed := nblocks * params.BeaconConfig().MaxBlobsPerBlock(0)
 	require.Equal(t, maxed, len(sidecars))
 	require.Equal(t, maxed, len(expect))
 	for _, sc := range sidecars {
@@ -325,42 +324,5 @@ func TestTestcaseSetup_BlocksAndBlobs(t *testing.T) {
 			}
 		}
 		require.Equal(t, true, found != nil)
-	}
-}
-
-func TestRoundTripDenebSave(t *testing.T) {
-	ctx := context.Background()
-	cfg := params.BeaconConfig()
-	repositionFutureEpochs(cfg)
-	undo, err := params.SetActiveWithUndo(cfg)
-	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, undo())
-	}()
-	parentRoot := [32]byte{}
-	c := blobsTestCase{}
-	chain, clock := defaultMockChain(t)
-	c.chain = chain
-	c.clock = clock
-	oldest, err := slots.EpochStart(blobMinReqEpoch(c.chain.FinalizedCheckPoint.Epoch, slots.ToEpoch(c.clock.CurrentSlot())))
-	require.NoError(t, err)
-	maxBlobs := fieldparams.MaxBlobsPerBlock
-	block, bsc := generateTestBlockWithSidecars(t, parentRoot, oldest, maxBlobs)
-	require.Equal(t, len(block.Block.Body.BlobKzgCommitments), len(bsc))
-	require.Equal(t, maxBlobs, len(bsc))
-	for i := range bsc {
-		require.DeepEqual(t, block.Block.Body.BlobKzgCommitments[i], bsc[i].KzgCommitment)
-	}
-	d := db.SetupDB(t)
-	util.SaveBlock(t, ctx, d, block)
-	root, err := block.Block.HashTreeRoot()
-	require.NoError(t, err)
-	dbBlock, err := d.Block(ctx, root)
-	require.NoError(t, err)
-	comms, err := dbBlock.Block().Body().BlobKzgCommitments()
-	require.NoError(t, err)
-	require.Equal(t, maxBlobs, len(comms))
-	for i := range bsc {
-		require.DeepEqual(t, comms[i], bsc[i].KzgCommitment)
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/k0kubun/go-ansi"
-
 	"github.com/schollz/progressbar/v3"
 )
 

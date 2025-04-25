@@ -7,9 +7,10 @@ go_library(
         "file.go",
         "log.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/genesis",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/genesis",
     visibility = ["//visibility:public"],
     deps = [
+        "//api/client:go_default_library",
         "//api/client/beacon:go_default_library",
         "//beacon-chain/db:go_default_library",
         "//crypto/hash:go_default_library",

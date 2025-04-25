@@ -5,28 +5,19 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filters"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/capella"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/deneb"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/execution"
-	prysmtime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filters"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/sirupsen/logrus"
-	"go.opencensus.io/trace"
 )
 
 // ReplayBlocks replays the input blocks on the input state until the target slot is reached.
-//
-// WARNING Blocks passed to the function must be in decreasing slots order.
-func (_ *State) replayBlocks(
+func (*State) replayBlocks(
 	ctx context.Context,
 	state state.BeaconState,
 	signed []interfaces.ReadOnlySignedBeaconBlock,
@@ -44,22 +35,20 @@ func (_ *State) replayBlocks(
 	})
 	rLog.Debug("Replaying state")
 	// The input block list is sorted in decreasing slots order.
-	if len(signed) > 0 {
-		for i := len(signed) - 1; i >= 0; i-- {
-			if ctx.Err() != nil {
-				return nil, ctx.Err()
-			}
-			if state.Slot() >= targetSlot {
-				break
-			}
-			// A node shouldn't process the block if the block slot is lower than the state slot.
-			if state.Slot() >= signed[i].Block().Slot() {
-				continue
-			}
-			state, err = executeStateTransitionStateGen(ctx, state, signed[i])
-			if err != nil {
-				return nil, err
-			}
+	for _, blk := range signed {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if state.Slot() >= targetSlot {
+			break
+		}
+		// A node shouldn't process the block if the block slot is lower than the state slot.
+		if state.Slot() >= blk.Block().Slot() {
+			continue
+		}
+		state, err = executeStateTransitionStateGen(ctx, state, blk)
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -88,53 +77,13 @@ func (s *State) loadBlocks(ctx context.Context, startSlot, endSlot primitives.Sl
 	if startSlot > endSlot {
 		return nil, fmt.Errorf("start slot %d > end slot %d", startSlot, endSlot)
 	}
-	filter := filters.NewFilter().SetStartSlot(startSlot).SetEndSlot(endSlot)
-	blocks, blockRoots, err := s.beaconDB.Blocks(ctx, filter)
+	query := filters.AncestryQuery{Earliest: startSlot, Descendent: filters.SlotRoot{Slot: endSlot, Root: endBlockRoot}}
+	filter := filters.NewFilter().SetAncestryQuery(query)
+	blocks, _, err := s.beaconDB.Blocks(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
-	// The retrieved blocks and block roots have to be in the same length given same filter.
-	if len(blocks) != len(blockRoots) {
-		return nil, errors.New("length of blocks and roots don't match")
-	}
-	// Return early if there's no block given the input.
-	length := len(blocks)
-	if length == 0 {
-		return nil, nil
-	}
-
-	// The last retrieved block root has to match input end block root.
-	// Covers the edge case if there's multiple blocks on the same end slot,
-	// the end root may not be the last index in `blockRoots`.
-	for length >= 3 && blocks[length-1].Block().Slot() == blocks[length-2].Block().Slot() && blockRoots[length-1] != endBlockRoot {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		length--
-		if blockRoots[length-2] == endBlockRoot {
-			length--
-			break
-		}
-	}
-
-	if blockRoots[length-1] != endBlockRoot {
-		return nil, errors.New("end block roots don't match")
-	}
-
-	filteredBlocks := []interfaces.ReadOnlySignedBeaconBlock{blocks[length-1]}
-	// Starting from second to last index because the last block is already in the filtered block list.
-	for i := length - 2; i >= 0; i-- {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		b := filteredBlocks[len(filteredBlocks)-1]
-		if b.Block().ParentRoot() != blockRoots[i] {
-			continue
-		}
-		filteredBlocks = append(filteredBlocks, blocks[i])
-	}
-
-	return filteredBlocks, nil
+	return blocks, nil
 }
 
 // executeStateTransitionStateGen applies state transition on input historical state and block for state gen usages.
@@ -184,7 +133,6 @@ func ReplayProcessSlots(ctx context.Context, state state.BeaconState, slot primi
 	if state == nil || state.IsNil() {
 		return nil, errUnknownState
 	}
-
 	if state.Slot() > slot {
 		err := fmt.Errorf("expected state.slot %d <= slot %d", state.Slot(), slot)
 		return nil, err
@@ -194,69 +142,7 @@ func ReplayProcessSlots(ctx context.Context, state state.BeaconState, slot primi
 		return state, nil
 	}
 
-	var err error
-	for state.Slot() < slot {
-		state, err = transition.ProcessSlot(ctx, state)
-		if err != nil {
-			return nil, errors.Wrap(err, "could not process slot")
-		}
-		if prysmtime.CanProcessEpoch(state) {
-			switch state.Version() {
-			case version.Phase0:
-				state, err = transition.ProcessEpochPrecompute(ctx, state)
-				if err != nil {
-					tracing.AnnotateError(span, err)
-					return nil, errors.Wrap(err, "could not process epoch with optimizations")
-				}
-			case version.Altair, version.Bellatrix, version.Capella, version.Deneb:
-				state, err = altair.ProcessEpoch(ctx, state)
-				if err != nil {
-					tracing.AnnotateError(span, err)
-					return nil, errors.Wrap(err, "could not process epoch")
-				}
-			default:
-				return nil, fmt.Errorf("unsupported beacon state version: %s", version.String(state.Version()))
-			}
-		}
-		if err := state.SetSlot(state.Slot() + 1); err != nil {
-			tracing.AnnotateError(span, err)
-			return nil, errors.Wrap(err, "failed to increment state slot")
-		}
-
-		if prysmtime.CanUpgradeToAltair(state.Slot()) {
-			state, err = altair.UpgradeToAltair(ctx, state)
-			if err != nil {
-				tracing.AnnotateError(span, err)
-				return nil, err
-			}
-		}
-
-		if prysmtime.CanUpgradeToBellatrix(state.Slot()) {
-			state, err = execution.UpgradeToBellatrix(state)
-			if err != nil {
-				tracing.AnnotateError(span, err)
-				return nil, err
-			}
-		}
-
-		if prysmtime.CanUpgradeToCapella(state.Slot()) {
-			state, err = capella.UpgradeToCapella(state)
-			if err != nil {
-				tracing.AnnotateError(span, err)
-				return nil, err
-			}
-		}
-
-		if prysmtime.CanUpgradeToDeneb(state.Slot()) {
-			state, err = deneb.UpgradeToDeneb(state)
-			if err != nil {
-				tracing.AnnotateError(span, err)
-				return nil, err
-			}
-		}
-	}
-
-	return state, nil
+	return transition.ProcessSlotsCore(ctx, span, state, slot, nil)
 }
 
 // Given the start slot and the end slot, this returns the finalized beacon blocks in between.

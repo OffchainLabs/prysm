@@ -3,16 +3,14 @@ package verification
 import (
 	"context"
 
+	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/runtime/logging"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
-	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/runtime/logging"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -29,7 +27,7 @@ const (
 	RequireSidecarProposerExpected
 )
 
-var allSidecarRequirements = []Requirement{
+var allBlobSidecarRequirements = []Requirement{
 	RequireBlobIndexInBounds,
 	RequireNotFromFutureSlot,
 	RequireSlotAboveFinalized,
@@ -43,21 +41,21 @@ var allSidecarRequirements = []Requirement{
 	RequireSidecarProposerExpected,
 }
 
-// GossipSidecarRequirements defines the set of requirements that BlobSidecars received on gossip
+// GossipBlobSidecarRequirements defines the set of requirements that BlobSidecars received on gossip
 // must satisfy in order to upgrade an ROBlob to a VerifiedROBlob.
-var GossipSidecarRequirements = requirementList(allSidecarRequirements).excluding()
+var GossipBlobSidecarRequirements = requirementList(allBlobSidecarRequirements).excluding()
 
-// SpectestSidecarRequirements is used by the forkchoice spectests when verifying blobs used in the on_block tests.
+// SpectestBlobSidecarRequirements is used by the forkchoice spectests when verifying blobs used in the on_block tests.
 // The only requirements we exclude for these tests are the parent validity and seen tests, as these are specific to
 // gossip processing and require the bad block cache that we only use there.
-var SpectestSidecarRequirements = requirementList(GossipSidecarRequirements).excluding(
+var SpectestBlobSidecarRequirements = requirementList(GossipBlobSidecarRequirements).excluding(
 	RequireSidecarParentSeen, RequireSidecarParentValid)
 
-// InitsyncSidecarRequirements is the list of verification requirements to be used by the init-sync service
+// InitsyncBlobSidecarRequirements is the list of verification requirements to be used by the init-sync service
 // for batch-mode syncing. Because we only perform batch verification as part of the IsDataAvailable method
 // for blobs after the block has been verified, and the blobs to be verified are keyed in the cache by the
 // block root, the list of required verifications is much shorter than gossip.
-var InitsyncSidecarRequirements = requirementList(GossipSidecarRequirements).excluding(
+var InitsyncBlobSidecarRequirements = requirementList(GossipBlobSidecarRequirements).excluding(
 	RequireNotFromFutureSlot,
 	RequireSlotAboveFinalized,
 	RequireSidecarParentSeen,
@@ -67,34 +65,17 @@ var InitsyncSidecarRequirements = requirementList(GossipSidecarRequirements).exc
 	RequireSidecarProposerExpected,
 )
 
-// BackfillSidecarRequirements is the same as InitsyncSidecarRequirements.
-var BackfillSidecarRequirements = requirementList(InitsyncSidecarRequirements).excluding()
+// ELMemPoolRequirements defines the verification requirements for importing blobs and proofs
+// from the execution layer's mempool. Currently, no requirements are enforced because it is
+// assumed that blobs and proofs from the execution layer are correctly formatted,
+// given the trusted relationship between the consensus layer and execution layer.
+var ELMemPoolRequirements []Requirement
 
-var (
-	ErrBlobInvalid = errors.New("blob failed verification")
-	// ErrBlobIndexInvalid means RequireBlobIndexInBounds failed.
-	ErrBlobIndexInvalid = errors.Wrap(ErrBlobInvalid, "incorrect blob sidecar index")
-	// ErrFromFutureSlot means RequireSlotNotTooEarly failed.
-	ErrFromFutureSlot = errors.Wrap(ErrBlobInvalid, "slot is too far in the future")
-	// ErrSlotNotAfterFinalized means RequireSlotAboveFinalized failed.
-	ErrSlotNotAfterFinalized = errors.Wrap(ErrBlobInvalid, "slot <= finalized checkpoint")
-	// ErrInvalidProposerSignature means RequireValidProposerSignature failed.
-	ErrInvalidProposerSignature = errors.Wrap(ErrBlobInvalid, "proposer signature could not be verified")
-	// ErrSidecarParentNotSeen means RequireSidecarParentSeen failed.
-	ErrSidecarParentNotSeen = errors.Wrap(ErrBlobInvalid, "parent root has not been seen")
-	// ErrSidecarParentInvalid means RequireSidecarParentValid failed.
-	ErrSidecarParentInvalid = errors.Wrap(ErrBlobInvalid, "parent block is not valid")
-	// ErrSlotNotAfterParent means RequireSidecarParentSlotLower failed.
-	ErrSlotNotAfterParent = errors.Wrap(ErrBlobInvalid, "slot <= slot")
-	// ErrSidecarNotFinalizedDescendent means RequireSidecarDescendsFromFinalized failed.
-	ErrSidecarNotFinalizedDescendent = errors.Wrap(ErrBlobInvalid, "blob parent is not descended from the finalized block")
-	// ErrSidecarInclusionProofInvalid means RequireSidecarInclusionProven failed.
-	ErrSidecarInclusionProofInvalid = errors.Wrap(ErrBlobInvalid, "sidecar inclusion proof verification failed")
-	// ErrSidecarKzgProofInvalid means RequireSidecarKzgProofVerified failed.
-	ErrSidecarKzgProofInvalid = errors.Wrap(ErrBlobInvalid, "sidecar kzg commitment proof verification failed")
-	// ErrSidecarUnexpectedProposer means RequireSidecarProposerExpected failed.
-	ErrSidecarUnexpectedProposer = errors.Wrap(ErrBlobInvalid, "sidecar was not proposed by the expected proposer_index")
-)
+// BackfillBlobSidecarRequirements is the same as InitsyncBlobSidecarRequirements.
+var BackfillBlobSidecarRequirements = requirementList(InitsyncBlobSidecarRequirements).excluding()
+
+// PendingQueueBlobSidecarRequirements is the same as InitsyncBlobSidecarRequirements, used by the pending blocks queue.
+var PendingQueueBlobSidecarRequirements = requirementList(InitsyncBlobSidecarRequirements).excluding()
 
 type ROBlobVerifier struct {
 	*sharedResources
@@ -123,7 +104,7 @@ func (bv *ROBlobVerifier) VerifiedROBlob() (blocks.VerifiedROBlob, error) {
 // For example, when batch syncing, forkchoice is only updated at the end of the batch. So the checks that use
 // forkchoice, like descends from finalized or parent seen, would necessarily fail. Allowing the caller to
 // assert the requirement has been satisfied ensures we have an easy way to audit which piece of code is satisfying
-// a requireent outside of this package.
+// a requirement outside of this package.
 func (bv *ROBlobVerifier) SatisfyRequirement(req Requirement) {
 	bv.recordResult(req, nil)
 }
@@ -140,7 +121,8 @@ func (bv *ROBlobVerifier) recordResult(req Requirement, err *error) {
 // [REJECT] The sidecar's index is consistent with MAX_BLOBS_PER_BLOCK -- i.e. blob_sidecar.index < MAX_BLOBS_PER_BLOCK.
 func (bv *ROBlobVerifier) BlobIndexInBounds() (err error) {
 	defer bv.recordResult(RequireBlobIndexInBounds, &err)
-	if bv.blob.Index >= fieldparams.MaxBlobsPerBlock {
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(bv.blob.Slot())
+	if bv.blob.Index >= uint64(maxBlobsPerBlock) {
 		log.WithFields(logging.BlobFields(bv.blob)).Debug("Sidecar index >= MAX_BLOBS_PER_BLOCK")
 		return ErrBlobIndexInvalid
 	}
@@ -160,6 +142,7 @@ func (bv *ROBlobVerifier) NotFromFutureSlot() (err error) {
 	earliestStart := bv.clock.SlotStart(bv.blob.Slot()).Add(-1 * params.BeaconConfig().MaximumGossipClockDisparityDuration())
 	// If the system time is still before earliestStart, we consider the blob from a future slot and return an error.
 	if bv.clock.Now().Before(earliestStart) {
+		log.WithFields(logging.BlobFields(bv.blob)).Debug("sidecar slot is too far in the future")
 		return ErrFromFutureSlot
 	}
 	return nil
@@ -176,6 +159,7 @@ func (bv *ROBlobVerifier) SlotAboveFinalized() (err error) {
 		return errors.Wrapf(ErrSlotNotAfterFinalized, "error computing epoch start slot for finalized checkpoint (%d) %s", fcp.Epoch, err.Error())
 	}
 	if bv.blob.Slot() <= fSlot {
+		log.WithFields(logging.BlobFields(bv.blob)).Debug("sidecar slot is not after finalized checkpoint")
 		return ErrSlotNotAfterFinalized
 	}
 	return nil
@@ -190,12 +174,15 @@ func (bv *ROBlobVerifier) ValidProposerSignature(ctx context.Context) (err error
 	// First check if there is a cached verification that can be reused.
 	seen, err := bv.sc.SignatureVerified(sd)
 	if seen {
+		blobVerificationProposerSignatureCache.WithLabelValues("hit-valid").Inc()
 		if err != nil {
 			log.WithFields(logging.BlobFields(bv.blob)).WithError(err).Debug("reusing failed proposer signature validation from cache")
+			blobVerificationProposerSignatureCache.WithLabelValues("hit-invalid").Inc()
 			return ErrInvalidProposerSignature
 		}
 		return nil
 	}
+	blobVerificationProposerSignatureCache.WithLabelValues("miss").Inc()
 
 	// Retrieve the parent state to fallback to full verification.
 	parent, err := bv.parentState(ctx)
@@ -222,6 +209,7 @@ func (bv *ROBlobVerifier) SidecarParentSeen(parentSeen func([32]byte) bool) (err
 	if bv.fc.HasNode(bv.blob.ParentRoot()) {
 		return nil
 	}
+	log.WithFields(logging.BlobFields(bv.blob)).Debug("parent root has not been seen")
 	return ErrSidecarParentNotSeen
 }
 
@@ -230,6 +218,7 @@ func (bv *ROBlobVerifier) SidecarParentSeen(parentSeen func([32]byte) bool) (err
 func (bv *ROBlobVerifier) SidecarParentValid(badParent func([32]byte) bool) (err error) {
 	defer bv.recordResult(RequireSidecarParentValid, &err)
 	if badParent != nil && badParent(bv.blob.ParentRoot()) {
+		log.WithFields(logging.BlobFields(bv.blob)).Debug("parent root is invalid")
 		return ErrSidecarParentInvalid
 	}
 	return nil
@@ -255,6 +244,7 @@ func (bv *ROBlobVerifier) SidecarParentSlotLower() (err error) {
 func (bv *ROBlobVerifier) SidecarDescendsFromFinalized() (err error) {
 	defer bv.recordResult(RequireSidecarDescendsFromFinalized, &err)
 	if !bv.fc.HasNode(bv.blob.ParentRoot()) {
+		log.WithFields(logging.BlobFields(bv.blob)).Debug("parent root not in forkchoice")
 		return ErrSidecarNotFinalizedDescendent
 	}
 	return nil

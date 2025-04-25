@@ -1,17 +1,21 @@
 package beaconapi
 
-import "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+import (
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+)
 
 type endpoint interface {
 	getBasePath() string
+	sanityCheckOnlyEnabled() bool
+	enableSanityCheckOnly()
 	sszEnabled() bool
 	enableSsz()
 	getSszResp() []byte     // retrieves the Prysm SSZ response
 	setSszResp(resp []byte) // sets the Prysm SSZ response
 	getStart() primitives.Epoch
 	setStart(start primitives.Epoch)
-	getReq() interface{}
-	setReq(req interface{})
+	getPOSTObj() interface{}
+	setPOSTObj(obj interface{})
 	getPResp() interface{}  // retrieves the Prysm JSON response
 	getLHResp() interface{} // retrieves the Lighthouse JSON response
 	getParams(epoch primitives.Epoch) []string
@@ -22,9 +26,10 @@ type endpoint interface {
 
 type apiEndpoint[Resp any] struct {
 	basePath   string
+	sanity     bool
 	ssz        bool
 	start      primitives.Epoch
-	req        interface{}
+	postObj    interface{}
 	pResp      *Resp  // Prysm JSON response
 	lhResp     *Resp  // Lighthouse JSON response
 	sszResp    []byte // Prysm SSZ response
@@ -34,6 +39,14 @@ type apiEndpoint[Resp any] struct {
 
 func (e *apiEndpoint[Resp]) getBasePath() string {
 	return e.basePath
+}
+
+func (e *apiEndpoint[Resp]) sanityCheckOnlyEnabled() bool {
+	return e.sanity
+}
+
+func (e *apiEndpoint[Resp]) enableSanityCheckOnly() {
+	e.sanity = true
 }
 
 func (e *apiEndpoint[Resp]) sszEnabled() bool {
@@ -60,12 +73,12 @@ func (e *apiEndpoint[Resp]) setStart(start primitives.Epoch) {
 	e.start = start
 }
 
-func (e *apiEndpoint[Resp]) getReq() interface{} {
-	return e.req
+func (e *apiEndpoint[Resp]) getPOSTObj() interface{} {
+	return e.postObj
 }
 
-func (e *apiEndpoint[Resp]) setReq(req interface{}) {
-	e.req = req
+func (e *apiEndpoint[Resp]) setPOSTObj(obj interface{}) {
+	e.postObj = obj
 }
 
 func (e *apiEndpoint[Resp]) getPResp() interface{} {
@@ -109,30 +122,42 @@ func newMetadata[Resp any](basePath string, opts ...endpointOpt) *apiEndpoint[Re
 
 type endpointOpt func(endpoint)
 
+// We only care if the request was successful, without comparing responses.
+func withSanityCheckOnly() endpointOpt {
+	return func(e endpoint) {
+		e.enableSanityCheckOnly()
+	}
+}
+
+// We request SSZ data too.
 func withSsz() endpointOpt {
 	return func(e endpoint) {
 		e.enableSsz()
 	}
 }
 
+// We begin issuing the request at a particular epoch.
 func withStart(start primitives.Epoch) endpointOpt {
 	return func(e endpoint) {
 		e.setStart(start)
 	}
 }
 
-func withReq(req interface{}) endpointOpt {
+// We perform a POST instead of GET, sending an object.
+func withPOSTObj(obj interface{}) endpointOpt {
 	return func(e endpoint) {
-		e.setReq(req)
+		e.setPOSTObj(obj)
 	}
 }
 
+// We specify URL parameters.
 func withParams(f func(currentEpoch primitives.Epoch) []string) endpointOpt {
 	return func(e endpoint) {
 		e.setParams(f)
 	}
 }
 
+// We perform custom evaluation on responses.
 func withCustomEval(f func(interface{}, interface{}) error) endpointOpt {
 	return func(e endpoint) {
 		e.setCustomEval(f)

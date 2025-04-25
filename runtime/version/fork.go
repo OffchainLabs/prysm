@@ -1,6 +1,10 @@
 package version
 
-import "github.com/pkg/errors"
+import (
+	"sort"
+
+	"github.com/pkg/errors"
+)
 
 const (
 	Phase0 = iota
@@ -8,6 +12,8 @@ const (
 	Bellatrix
 	Capella
 	Deneb
+	Electra
+	Fulu
 )
 
 var versionToString = map[int]string{
@@ -16,6 +22,8 @@ var versionToString = map[int]string{
 	Bellatrix: "bellatrix",
 	Capella:   "capella",
 	Deneb:     "deneb",
+	Electra:   "electra",
+	Fulu:      "fulu",
 }
 
 // stringToVersion and allVersions are populated in init()
@@ -57,4 +65,5 @@ func init() {
 		stringToVersion[s] = v
 		i++
 	}
+	sort.Ints(allVersions)
 }

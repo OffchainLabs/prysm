@@ -10,9 +10,9 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer/internal"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer/internal"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -153,24 +153,7 @@ func TestClient_GetPublicKeys_HappyPath(t *testing.T) {
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	// we would like them as 48byte base64 without 0x
-	assert.EqualValues(t, "[162 181 170 173 156 110 254 254 123 185 177 36 58 4 52 4 243 54 41 55 207 182 179 24 51 146 152 51 23 63 71 102 48 234 44 254 176 217 221 241 95 151 202 134 133 148 136 32]", fmt.Sprintf("%v", resp[0][:]))
-}
-
-func TestClient_GetPublicKeys_EncodingError(t *testing.T) {
-	// public keys are returned hex encoded with 0x
-	j := `["a2b5aaad9c6efefe7bb9b1243a043404f3362937c","fb6b31833929833173f476630ea2cfe","b0d9ddf15fca8685948820"]`
-	// create a new reader with that JSON
-	r := io.NopCloser(bytes.NewReader([]byte(j)))
-	mock := &mockTransport{mockResponse: &http.Response{
-		StatusCode: 200,
-		Body:       r,
-	}}
-	u, err := url.Parse("example.com")
-	assert.NoError(t, err)
-	cl := internal.ApiClient{BaseURL: u, RestClient: &http.Client{Transport: mock}}
-	resp, err := cl.GetPublicKeys(context.Background(), "example.com/api/publickeys")
-	assert.Equal(t, err.Error(), "failed to decode from Hex from the following public key index locations: 0, 1, 2, ")
-	assert.Nil(t, resp)
+	require.Equal(t, "[0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820]", fmt.Sprintf("%v", resp))
 }
 
 // TODO: not really in use, should be revisited

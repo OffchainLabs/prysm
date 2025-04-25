@@ -5,72 +5,44 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	neturl "net/url"
 
+	"github.com/OffchainLabs/prysm/v6/api/apiutil"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
-type abstractProduceBlockResponseJson struct {
-	Version string          `json:"version"`
-	Data    json.RawMessage `json:"data"`
-}
-
-func (c beaconApiValidatorClient) getBeaconBlock(ctx context.Context, slot primitives.Slot, randaoReveal []byte, graffiti []byte) (*ethpb.GenericBeaconBlock, error) {
+func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primitives.Slot, randaoReveal, graffiti []byte) (*ethpb.GenericBeaconBlock, error) {
 	queryParams := neturl.Values{}
 	queryParams.Add("randao_reveal", hexutil.Encode(randaoReveal))
 	if len(graffiti) > 0 {
 		queryParams.Add("graffiti", hexutil.Encode(graffiti))
 	}
 
-	var ver string
-	var blinded bool
-	var decoder *json.Decoder
-
-	// Try v3 endpoint first. If it's not supported, then we fall back to older endpoints.
-	// We try the blinded block endpoint first. If it fails, we assume that we got a full block and try the full block endpoint.
-	queryUrl := buildURL(fmt.Sprintf("/eth/v3/validator/blocks/%d", slot), queryParams)
+	queryUrl := apiutil.BuildURL(fmt.Sprintf("/eth/v3/validator/blocks/%d", slot), queryParams)
 	produceBlockV3ResponseJson := structs.ProduceBlockV3Response{}
 	err := c.jsonRestHandler.Get(ctx, queryUrl, &produceBlockV3ResponseJson)
-	errJson := &httputil.DefaultJsonError{}
 	if err != nil {
-		if !errors.As(err, &errJson) {
-			return nil, err
-		}
-		if errJson.Code != http.StatusNotFound {
-			return nil, errJson
-		}
-		log.Debug("Endpoint /eth/v3/validator/blocks is not supported, falling back to older endpoints for block proposal.")
-		fallbackResp, err := c.fallBackToBlinded(ctx, slot, queryParams)
-		errJson = &httputil.DefaultJsonError{}
-		if err != nil {
-			if !errors.As(err, &errJson) {
-				return nil, err
-			}
-			log.Debug("Endpoint /eth/v1/validator/blinded_blocks failed to produce a blinded block, trying /eth/v2/validator/blocks.")
-			fallbackResp, err = c.fallBackToFull(ctx, slot, queryParams)
-			if err != nil {
-				return nil, err
-			}
-			blinded = false
-		} else {
-			blinded = true
-		}
-		ver = fallbackResp.Version
-		decoder = json.NewDecoder(bytes.NewReader(fallbackResp.Data))
-	} else {
-		ver = produceBlockV3ResponseJson.Version
-		blinded = produceBlockV3ResponseJson.ExecutionPayloadBlinded
-		decoder = json.NewDecoder(bytes.NewReader(produceBlockV3ResponseJson.Data))
+		return nil, err
 	}
 
+	return processBlockResponse(
+		produceBlockV3ResponseJson.Version,
+		produceBlockV3ResponseJson.ExecutionPayloadBlinded,
+		json.NewDecoder(bytes.NewReader(produceBlockV3ResponseJson.Data)),
+	)
+}
+
+// nolint: gocognit
+func processBlockResponse(ver string, isBlinded bool, decoder *json.Decoder) (*ethpb.GenericBeaconBlock, error) {
 	var response *ethpb.GenericBeaconBlock
+	if decoder == nil {
+		return nil, errors.New("no produce block json decoder found")
+	}
 	switch ver {
 	case version.String(version.Phase0):
 		jsonPhase0Block := structs.BeaconBlock{}
@@ -93,7 +65,7 @@ func (c beaconApiValidatorClient) getBeaconBlock(ctx context.Context, slot primi
 		}
 		response = genericBlock
 	case version.String(version.Bellatrix):
-		if blinded {
+		if isBlinded {
 			jsonBellatrixBlock := structs.BlindedBeaconBlockBellatrix{}
 			if err := decoder.Decode(&jsonBellatrixBlock); err != nil {
 				return nil, errors.Wrap(err, "failed to decode blinded bellatrix block response json")
@@ -115,7 +87,7 @@ func (c beaconApiValidatorClient) getBeaconBlock(ctx context.Context, slot primi
 			response = genericBlock
 		}
 	case version.String(version.Capella):
-		if blinded {
+		if isBlinded {
 			jsonCapellaBlock := structs.BlindedBeaconBlockCapella{}
 			if err := decoder.Decode(&jsonCapellaBlock); err != nil {
 				return nil, errors.Wrap(err, "failed to decode blinded capella block response json")
@@ -137,7 +109,7 @@ func (c beaconApiValidatorClient) getBeaconBlock(ctx context.Context, slot primi
 			response = genericBlock
 		}
 	case version.String(version.Deneb):
-		if blinded {
+		if isBlinded {
 			jsonDenebBlock := structs.BlindedBeaconBlockDeneb{}
 			if err := decoder.Decode(&jsonDenebBlock); err != nil {
 				return nil, errors.Wrap(err, "failed to decode blinded deneb block response json")
@@ -158,34 +130,52 @@ func (c beaconApiValidatorClient) getBeaconBlock(ctx context.Context, slot primi
 			}
 			response = genericBlock
 		}
+	case version.String(version.Electra):
+		if isBlinded {
+			jsonElectraBlock := structs.BlindedBeaconBlockElectra{}
+			if err := decoder.Decode(&jsonElectraBlock); err != nil {
+				return nil, errors.Wrap(err, "failed to decode blinded electra block response json")
+			}
+			genericBlock, err := jsonElectraBlock.ToGeneric()
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to get blinded electra block")
+			}
+			response = genericBlock
+		} else {
+			jsonElectraBlockContents := structs.BeaconBlockContentsElectra{}
+			if err := decoder.Decode(&jsonElectraBlockContents); err != nil {
+				return nil, errors.Wrap(err, "failed to decode electra block response json")
+			}
+			genericBlock, err := jsonElectraBlockContents.ToGeneric()
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to get electra block")
+			}
+			response = genericBlock
+		}
+	case version.String(version.Fulu):
+		if isBlinded {
+			jsonFuluBlock := structs.BlindedBeaconBlockFulu{}
+			if err := decoder.Decode(&jsonFuluBlock); err != nil {
+				return nil, errors.Wrap(err, "failed to decode blinded fulu block response json")
+			}
+			genericBlock, err := jsonFuluBlock.ToGeneric()
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to get blinded fulu block")
+			}
+			response = genericBlock
+		} else {
+			jsonFuluBlockContents := structs.BeaconBlockContentsFulu{}
+			if err := decoder.Decode(&jsonFuluBlockContents); err != nil {
+				return nil, errors.Wrap(err, "failed to decode fulu block response json")
+			}
+			genericBlock, err := jsonFuluBlockContents.ToGeneric()
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to get fulu block")
+			}
+			response = genericBlock
+		}
 	default:
 		return nil, errors.Errorf("unsupported consensus version `%s`", ver)
 	}
 	return response, nil
-}
-
-func (c beaconApiValidatorClient) fallBackToBlinded(
-	ctx context.Context,
-	slot primitives.Slot,
-	queryParams neturl.Values,
-) (*abstractProduceBlockResponseJson, error) {
-	resp := &abstractProduceBlockResponseJson{}
-	url := buildURL(fmt.Sprintf("/eth/v1/validator/blinded_blocks/%d", slot), queryParams)
-	if err := c.jsonRestHandler.Get(ctx, url, resp); err != nil {
-		return nil, err
-	}
-	return resp, nil
-}
-
-func (c beaconApiValidatorClient) fallBackToFull(
-	ctx context.Context,
-	slot primitives.Slot,
-	queryParams neturl.Values,
-) (*abstractProduceBlockResponseJson, error) {
-	resp := &abstractProduceBlockResponseJson{}
-	url := buildURL(fmt.Sprintf("/eth/v2/validator/blocks/%d", slot), queryParams)
-	if err := c.jsonRestHandler.Get(ctx, url, resp); err != nil {
-		return nil, err
-	}
-	return resp, nil
 }

@@ -1,25 +1,29 @@
 package util
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
-	"math"
 	"math/big"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/network/forks"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
+	GoKZG "github.com/crate-crypto/go-kzg-4844"
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/network/forks"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/sirupsen/logrus"
 )
 
 type DenebBlockGeneratorOption func(*denebBlockGenerator)
@@ -32,6 +36,7 @@ type denebBlockGenerator struct {
 	sk       bls.SecretKey
 	proposer primitives.ValidatorIndex
 	valRoot  []byte
+	payload  *enginev1.ExecutionPayloadDeneb
 }
 
 func WithProposerSigning(idx primitives.ValidatorIndex, sk bls.SecretKey, valRoot []byte) DenebBlockGeneratorOption {
@@ -40,6 +45,12 @@ func WithProposerSigning(idx primitives.ValidatorIndex, sk bls.SecretKey, valRoo
 		g.proposer = idx
 		g.sk = sk
 		g.valRoot = valRoot
+	}
+}
+
+func WithPayloadSetter(p *enginev1.ExecutionPayloadDeneb) DenebBlockGeneratorOption {
+	return func(g *denebBlockGenerator) {
+		g.payload = p
 	}
 }
 
@@ -52,47 +63,51 @@ func GenerateTestDenebBlockWithSidecar(t *testing.T, parent [32]byte, slot primi
 	for _, o := range opts {
 		o(g)
 	}
-	stateRoot := bytesutil.PadTo([]byte("stateRoot"), fieldparams.RootLength)
-	receiptsRoot := bytesutil.PadTo([]byte("receiptsRoot"), fieldparams.RootLength)
-	logsBloom := bytesutil.PadTo([]byte("logs"), fieldparams.LogsBloomLength)
-	parentHash := bytesutil.PadTo([]byte("parentHash"), fieldparams.RootLength)
-	ads := common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87")
-	tx := gethTypes.NewTx(&gethTypes.LegacyTx{
-		Nonce:    0,
-		To:       &ads,
-		Value:    big.NewInt(0),
-		Gas:      0,
-		GasPrice: big.NewInt(0),
-		Data:     nil,
-	})
 
-	txs := []*gethTypes.Transaction{tx}
-	encodedBinaryTxs := make([][]byte, 1)
-	var err error
-	encodedBinaryTxs[0], err = txs[0].MarshalBinary()
-	require.NoError(t, err)
-	blockHash := bytesutil.ToBytes32([]byte("foo"))
-	payload := &enginev1.ExecutionPayloadDeneb{
-		ParentHash:    parentHash,
-		FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),
-		StateRoot:     stateRoot,
-		ReceiptsRoot:  receiptsRoot,
-		LogsBloom:     logsBloom,
-		PrevRandao:    blockHash[:],
-		BlockNumber:   0,
-		GasLimit:      0,
-		GasUsed:       0,
-		Timestamp:     0,
-		ExtraData:     make([]byte, 0),
-		BaseFeePerGas: bytesutil.PadTo([]byte("baseFeePerGas"), fieldparams.RootLength),
-		BlockHash:     blockHash[:],
-		Transactions:  encodedBinaryTxs,
-		Withdrawals:   make([]*enginev1.Withdrawal, 0),
-		BlobGasUsed:   0,
-		ExcessBlobGas: 0,
+	if g.payload == nil {
+		stateRoot := bytesutil.PadTo([]byte("stateRoot"), fieldparams.RootLength)
+		ads := common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87")
+		tx := gethTypes.NewTx(&gethTypes.LegacyTx{
+			Nonce:    0,
+			To:       &ads,
+			Value:    big.NewInt(0),
+			Gas:      0,
+			GasPrice: big.NewInt(0),
+			Data:     nil,
+		})
+
+		txs := []*gethTypes.Transaction{tx}
+		encodedBinaryTxs := make([][]byte, 1)
+		var err error
+		encodedBinaryTxs[0], err = txs[0].MarshalBinary()
+		require.NoError(t, err)
+		blockHash := bytesutil.ToBytes32([]byte("foo"))
+		logsBloom := bytesutil.PadTo([]byte("logs"), fieldparams.LogsBloomLength)
+		receiptsRoot := bytesutil.PadTo([]byte("receiptsRoot"), fieldparams.RootLength)
+		parentHash := bytesutil.PadTo([]byte("parentHash"), fieldparams.RootLength)
+		g.payload = &enginev1.ExecutionPayloadDeneb{
+			ParentHash:    parentHash,
+			FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),
+			StateRoot:     stateRoot,
+			ReceiptsRoot:  receiptsRoot,
+			LogsBloom:     logsBloom,
+			PrevRandao:    blockHash[:],
+			BlockNumber:   0,
+			GasLimit:      0,
+			GasUsed:       0,
+			Timestamp:     0,
+			ExtraData:     make([]byte, 0),
+			BaseFeePerGas: bytesutil.PadTo([]byte("baseFeePerGas"), fieldparams.RootLength),
+			BlockHash:     blockHash[:],
+			Transactions:  encodedBinaryTxs,
+			Withdrawals:   make([]*enginev1.Withdrawal, 0),
+			BlobGasUsed:   0,
+			ExcessBlobGas: 0,
+		}
 	}
+
 	block := NewBeaconBlockDeneb()
-	block.Block.Body.ExecutionPayload = payload
+	block.Block.Body.ExecutionPayload = g.payload
 	block.Block.Slot = g.slot
 	block.Block.ParentRoot = g.parent[:]
 	block.Block.ProposerIndex = g.proposer
@@ -188,18 +203,35 @@ func ExtendBlocksPlusBlobs(t *testing.T, blks []blocks.ROBlock, size int) ([]blo
 	return blks, blobs
 }
 
-// HackDenebMaxuint is helpful for tests that need to set up cases where the deneb fork has passed.
-// We have unit tests that assert our config matches the upstream config, where the next fork is always
-// set to MaxUint64 until the fork epoch is formally set. This creates an issue for tests that want to
-// work with slots that are defined to be after deneb because converting the max epoch to a slot leads
-// to multiplication overflow.
-// Monkey patching tests with this function is the simplest workaround in these cases.
-func HackDenebMaxuint(t *testing.T) func() {
-	bc := params.MainnetConfig().Copy()
-	bc.DenebForkEpoch = math.MaxUint32
-	undo, err := params.SetActiveWithUndo(bc)
-	require.NoError(t, err)
-	return func() {
-		require.NoError(t, undo())
+func deterministicRandomness(seed int64) [32]byte {
+	// Converts an int64 to a byte slice
+	buf := new(bytes.Buffer)
+	err := binary.Write(buf, binary.BigEndian, seed)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to write int64 to bytes buffer")
+		return [32]byte{}
 	}
+	bytes := buf.Bytes()
+
+	return sha256.Sum256(bytes)
+}
+
+// Returns a serialized random field element in big-endian
+func GetRandFieldElement(seed int64) [32]byte {
+	bytes := deterministicRandomness(seed)
+	var r fr.Element
+	r.SetBytes(bytes[:])
+
+	return GoKZG.SerializeScalar(r)
+}
+
+// Returns a random blob using the passed seed as entropy
+func GetRandBlob(seed int64) GoKZG.Blob {
+	var blob GoKZG.Blob
+	bytesPerBlob := GoKZG.ScalarsPerBlob * GoKZG.SerializedScalarSize
+	for i := 0; i < bytesPerBlob; i += GoKZG.SerializedScalarSize {
+		fieldElementBytes := GetRandFieldElement(seed + int64(i))
+		copy(blob[i:i+GoKZG.SerializedScalarSize], fieldElementBytes[:])
+	}
+	return blob
 }

@@ -2,41 +2,48 @@ package validator
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"sort"
 	"strconv"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
+	rpchelpers "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	validator2 "github.com/OffchainLabs/prysm/v6/consensus-types/validator"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	ethpbalpha "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation/aggregation/attestations"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/builder"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
-	rpchelpers "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	validator2 "github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	ethpbalpha "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	log "github.com/sirupsen/logrus"
-	"go.opencensus.io/trace"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
+// Deprecated: use GetAggregateAttestationV2 instead
 // GetAggregateAttestation aggregates all attestations matching the given attestation data root and slot, returning the aggregated result.
 func (s *Server) GetAggregateAttestation(w http.ResponseWriter, r *http.Request) {
 	_, span := trace.StartSpan(r.Context(), "validator.GetAggregateAttestation")
@@ -46,71 +53,167 @@ func (s *Server) GetAggregateAttestation(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-
 	_, slot, ok := shared.UintFromQuery(w, r, "slot", true)
 	if !ok {
 		return
 	}
 
-	var match *ethpbalpha.Attestation
-	var err error
-
-	match, err = matchingAtt(s.AttestationsPool.AggregatedAttestations(), primitives.Slot(slot), attDataRoot)
+	agg := s.aggregatedAttestation(w, primitives.Slot(slot), attDataRoot, 0)
+	if agg == nil {
+		return
+	}
+	typedAgg, ok := agg.(*ethpbalpha.Attestation)
+	if !ok {
+		httputil.HandleError(w, fmt.Sprintf("Attestation is not of type %T", &ethpbalpha.Attestation{}), http.StatusInternalServerError)
+		return
+	}
+	data, err := json.Marshal(structs.AttFromConsensus(typedAgg))
 	if err != nil {
-		httputil.HandleError(w, "Could not get matching attestation: "+err.Error(), http.StatusInternalServerError)
+		httputil.HandleError(w, "Could not marshal attestation: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if match == nil {
-		atts, err := s.AttestationsPool.UnaggregatedAttestations()
-		if err != nil {
-			httputil.HandleError(w, "Could not get unaggregated attestations: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		match, err = matchingAtt(atts, primitives.Slot(slot), attDataRoot)
-		if err != nil {
-			httputil.HandleError(w, "Could not get matching attestation: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
-	if match == nil {
-		httputil.HandleError(w, "No matching attestation found", http.StatusNotFound)
-		return
-	}
-
-	response := &structs.AggregateAttestationResponse{
-		Data: &structs.Attestation{
-			AggregationBits: hexutil.Encode(match.AggregationBits),
-			Data: &structs.AttestationData{
-				Slot:            strconv.FormatUint(uint64(match.Data.Slot), 10),
-				CommitteeIndex:  strconv.FormatUint(uint64(match.Data.CommitteeIndex), 10),
-				BeaconBlockRoot: hexutil.Encode(match.Data.BeaconBlockRoot),
-				Source: &structs.Checkpoint{
-					Epoch: strconv.FormatUint(uint64(match.Data.Source.Epoch), 10),
-					Root:  hexutil.Encode(match.Data.Source.Root),
-				},
-				Target: &structs.Checkpoint{
-					Epoch: strconv.FormatUint(uint64(match.Data.Target.Epoch), 10),
-					Root:  hexutil.Encode(match.Data.Target.Root),
-				},
-			},
-			Signature: hexutil.Encode(match.Signature),
-		}}
-	httputil.WriteJson(w, response)
+	httputil.WriteJson(w, &structs.AggregateAttestationResponse{Data: data})
 }
 
-func matchingAtt(atts []*ethpbalpha.Attestation, slot primitives.Slot, attDataRoot []byte) (*ethpbalpha.Attestation, error) {
-	for _, att := range atts {
-		if att.Data.Slot == slot {
-			root, err := att.Data.HashTreeRoot()
-			if err != nil {
-				return nil, errors.Wrap(err, "could not get attestation data root")
-			}
-			if bytes.Equal(root[:], attDataRoot) {
-				return att, nil
-			}
+// GetAggregateAttestationV2 aggregates all attestations matching the given attestation data root and slot, returning the aggregated result.
+func (s *Server) GetAggregateAttestationV2(w http.ResponseWriter, r *http.Request) {
+	_, span := trace.StartSpan(r.Context(), "validator.GetAggregateAttestationV2")
+	defer span.End()
+
+	_, attDataRoot, ok := shared.HexFromQuery(w, r, "attestation_data_root", fieldparams.RootLength, true)
+	if !ok {
+		return
+	}
+	_, slot, ok := shared.UintFromQuery(w, r, "slot", true)
+	if !ok {
+		return
+	}
+	_, index, ok := shared.UintFromQuery(w, r, "committee_index", true)
+	if !ok {
+		return
+	}
+
+	v := slots.ToForkVersion(primitives.Slot(slot))
+	agg := s.aggregatedAttestation(w, primitives.Slot(slot), attDataRoot, primitives.CommitteeIndex(index))
+	if agg == nil {
+		return
+	}
+	resp := &structs.AggregateAttestationResponse{
+		Version: version.String(v),
+	}
+	if v >= version.Electra {
+		typedAgg, ok := agg.(*ethpbalpha.AttestationElectra)
+		if !ok {
+			httputil.HandleError(w, fmt.Sprintf("Attestation is not of type %T", &ethpbalpha.AttestationElectra{}), http.StatusInternalServerError)
+			return
+		}
+		data, err := json.Marshal(structs.AttElectraFromConsensus(typedAgg))
+		if err != nil {
+			httputil.HandleError(w, "Could not marshal attestation: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		resp.Data = data
+	} else {
+		typedAgg, ok := agg.(*ethpbalpha.Attestation)
+		if !ok {
+			httputil.HandleError(w, fmt.Sprintf("Attestation is not of type %T", &ethpbalpha.Attestation{}), http.StatusInternalServerError)
+			return
+		}
+		data, err := json.Marshal(structs.AttFromConsensus(typedAgg))
+		if err != nil {
+			httputil.HandleError(w, "Could not marshal attestation: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		resp.Data = data
+	}
+	w.Header().Set(api.VersionHeader, version.String(v))
+	httputil.WriteJson(w, resp)
+}
+
+func (s *Server) aggregatedAttestation(w http.ResponseWriter, slot primitives.Slot, attDataRoot []byte, index primitives.CommitteeIndex) ethpbalpha.Att {
+	var match []ethpbalpha.Att
+	var err error
+
+	if features.Get().EnableExperimentalAttestationPool {
+		match, err = matchingAtts(s.AttestationCache.GetAll(), slot, attDataRoot, index)
+		if err != nil {
+			httputil.HandleError(w, "Could not get matching attestations: "+err.Error(), http.StatusInternalServerError)
+			return nil
+		}
+	} else {
+		match, err = matchingAtts(s.AttestationsPool.AggregatedAttestations(), slot, attDataRoot, index)
+		if err != nil {
+			httputil.HandleError(w, "Could not get matching attestations: "+err.Error(), http.StatusInternalServerError)
+			return nil
 		}
 	}
-	return nil, nil
+
+	if len(match) > 0 {
+		// If there are multiple matching aggregated attestations,
+		// then we return the one with the most aggregation bits.
+		slices.SortFunc(match, func(a, b ethpbalpha.Att) int {
+			return cmp.Compare(b.GetAggregationBits().Count(), a.GetAggregationBits().Count())
+		})
+		return match[0]
+	}
+
+	// No match was found and the new pool doesn't store aggregated and unaggregated attestations separately.
+	if features.Get().EnableExperimentalAttestationPool {
+		return nil
+	}
+
+	atts := s.AttestationsPool.UnaggregatedAttestations()
+	match, err = matchingAtts(atts, slot, attDataRoot, index)
+	if err != nil {
+		httputil.HandleError(w, "Could not get matching attestations: "+err.Error(), http.StatusInternalServerError)
+		return nil
+	}
+	if len(match) == 0 {
+		httputil.HandleError(w, "No matching attestations found", http.StatusNotFound)
+		return nil
+	}
+	agg, err := attestations.Aggregate(match)
+	if err != nil {
+		httputil.HandleError(w, "Could not aggregate unaggregated attestations: "+err.Error(), http.StatusInternalServerError)
+		return nil
+	}
+
+	// Aggregating unaggregated attestations will in theory always return just one aggregate,
+	// so we can take the first one and be done with it.
+	return agg[0]
+}
+
+func matchingAtts(atts []ethpbalpha.Att, slot primitives.Slot, attDataRoot []byte, index primitives.CommitteeIndex) ([]ethpbalpha.Att, error) {
+	if len(atts) == 0 {
+		return []ethpbalpha.Att{}, nil
+	}
+
+	postElectra := slots.ToForkVersion(slot) >= version.Electra
+	result := make([]ethpbalpha.Att, 0)
+	for _, att := range atts {
+		if att.GetData().Slot != slot {
+			continue
+		}
+
+		root, err := att.GetData().HashTreeRoot()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get attestation data root")
+		}
+		if !bytes.Equal(root[:], attDataRoot) {
+			continue
+		}
+
+		// We ignore the committee index from the request before Electra.
+		// This is because before Electra the committee index is part of the attestation data,
+		// meaning that comparing the data root is sufficient.
+		// Post-Electra the committee index in the data root is always 0, so we need to
+		// compare the committee index separately.
+		if (!postElectra && att.Version() < version.Electra) || (postElectra && att.Version() >= version.Electra && att.GetCommitteeIndex() == index) {
+			result = append(result, att)
+		}
+	}
+
+	return result, nil
 }
 
 // SubmitContributionAndProofs publishes multiple signed sync committee contribution and proofs.
@@ -118,34 +221,39 @@ func (s *Server) SubmitContributionAndProofs(w http.ResponseWriter, r *http.Requ
 	ctx, span := trace.StartSpan(r.Context(), "validator.SubmitContributionAndProofs")
 	defer span.End()
 
-	var req structs.SubmitContributionAndProofsRequest
-	err := json.NewDecoder(r.Body).Decode(&req.Data)
-	switch {
-	case err == io.EOF:
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
-		return
-	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+	var reqData []json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+		if errors.Is(err, io.EOF) {
+			httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		} else {
+			httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		}
 		return
 	}
-	if len(req.Data) == 0 {
+	if len(reqData) == 0 {
 		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	}
 
-	for _, item := range req.Data {
-		consensusItem, err := item.ToConsensus()
-		if err != nil {
-			httputil.HandleError(w, "Could not convert request contribution to consensus contribution: "+err.Error(), http.StatusBadRequest)
+	for _, item := range reqData {
+		var contribution structs.SignedContributionAndProof
+		if err := json.Unmarshal(item, &contribution); err != nil {
+			httputil.HandleError(w, "Could not decode item: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		rpcError := s.CoreService.SubmitSignedContributionAndProof(ctx, consensusItem)
-		if rpcError != nil {
+		consensusItem, err := contribution.ToConsensus()
+		if err != nil {
+			httputil.HandleError(w, "Could not convert contribution to consensus format: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		if rpcError := s.CoreService.SubmitSignedContributionAndProof(ctx, consensusItem); rpcError != nil {
 			httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
+			return
 		}
 	}
 }
 
+// Deprecated: use SubmitAggregateAndProofsV2 instead
 // SubmitAggregateAndProofs verifies given aggregate and proofs and publishes them on appropriate gossipsub topic.
 func (s *Server) SubmitAggregateAndProofs(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.SubmitAggregateAndProofs")
@@ -154,7 +262,7 @@ func (s *Server) SubmitAggregateAndProofs(w http.ResponseWriter, r *http.Request
 	var req structs.SubmitAggregateAndProofsRequest
 	err := json.NewDecoder(r.Body).Decode(&req.Data)
 	switch {
-	case err == io.EOF:
+	case errors.Is(err, io.EOF):
 		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
@@ -168,17 +276,21 @@ func (s *Server) SubmitAggregateAndProofs(w http.ResponseWriter, r *http.Request
 
 	broadcastFailed := false
 	for _, item := range req.Data {
-		consensusItem, err := item.ToConsensus()
+		var signedAggregate structs.SignedAggregateAttestationAndProof
+		err := json.Unmarshal(item, &signedAggregate)
+		if err != nil {
+			httputil.HandleError(w, "Could not decode item: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		consensusItem, err := signedAggregate.ToConsensus()
 		if err != nil {
 			httputil.HandleError(w, "Could not convert request aggregate to consensus aggregate: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		rpcError := s.CoreService.SubmitSignedAggregateSelectionProof(
-			ctx,
-			&ethpbalpha.SignedAggregateSubmitRequest{SignedAggregateAndProof: consensusItem},
-		)
+		rpcError := s.CoreService.SubmitSignedAggregateSelectionProof(ctx, consensusItem)
 		if rpcError != nil {
-			_, ok := rpcError.Err.(*core.AggregateBroadcastFailedError)
+			var aggregateBroadcastFailedError *core.AggregateBroadcastFailedError
+			ok := errors.As(rpcError.Err, &aggregateBroadcastFailedError)
 			if ok {
 				broadcastFailed = true
 			} else {
@@ -188,6 +300,82 @@ func (s *Server) SubmitAggregateAndProofs(w http.ResponseWriter, r *http.Request
 		}
 	}
 
+	if broadcastFailed {
+		httputil.HandleError(w, "Could not broadcast one or more signed aggregated attestations", http.StatusInternalServerError)
+	}
+}
+
+// SubmitAggregateAndProofsV2 verifies given aggregate and proofs and publishes them on appropriate gossipsub topic.
+func (s *Server) SubmitAggregateAndProofsV2(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "validator.SubmitAggregateAndProofsV2")
+	defer span.End()
+
+	var reqData []json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+		if errors.Is(err, io.EOF) {
+			httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		} else {
+			httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		}
+		return
+	}
+	if len(reqData) == 0 {
+		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		return
+	}
+
+	versionHeader := r.Header.Get(api.VersionHeader)
+	if versionHeader == "" {
+		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
+		return
+	}
+	v, err := version.FromString(versionHeader)
+	if err != nil {
+		httputil.HandleError(w, "Invalid version: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	broadcastFailed := false
+	var rpcError *core.RpcError
+	for _, raw := range reqData {
+		if v >= version.Electra {
+			var signedAggregate structs.SignedAggregateAttestationAndProofElectra
+			err = json.Unmarshal(raw, &signedAggregate)
+			if err != nil {
+				httputil.HandleError(w, "Failed to parse aggregate attestation and proof: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			consensusItem, err := signedAggregate.ToConsensus()
+			if err != nil {
+				httputil.HandleError(w, "Could not convert request aggregate to consensus aggregate: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			rpcError = s.CoreService.SubmitSignedAggregateSelectionProof(ctx, consensusItem)
+		} else {
+			var signedAggregate structs.SignedAggregateAttestationAndProof
+			err = json.Unmarshal(raw, &signedAggregate)
+			if err != nil {
+				httputil.HandleError(w, "Failed to parse aggregate attestation and proof: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			consensusItem, err := signedAggregate.ToConsensus()
+			if err != nil {
+				httputil.HandleError(w, "Could not convert request aggregate to consensus aggregate: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			rpcError = s.CoreService.SubmitSignedAggregateSelectionProof(ctx, consensusItem)
+		}
+
+		if rpcError != nil {
+			var aggregateBroadcastFailedError *core.AggregateBroadcastFailedError
+			if errors.As(rpcError.Err, &aggregateBroadcastFailedError) {
+				broadcastFailed = true
+			} else {
+				httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
+				return
+			}
+		}
+	}
 	if broadcastFailed {
 		httputil.HandleError(w, "Could not broadcast one or more signed aggregated attestations", http.StatusInternalServerError)
 	}
@@ -209,7 +397,7 @@ func (s *Server) SubmitSyncCommitteeSubscription(w http.ResponseWriter, r *http.
 	var req structs.SubmitSyncCommitteeSubscriptionsRequest
 	err := json.NewDecoder(r.Body).Decode(&req.Data)
 	switch {
-	case err == io.EOF:
+	case errors.Is(err, io.EOF):
 		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
@@ -319,7 +507,7 @@ func (s *Server) SubmitBeaconCommitteeSubscription(w http.ResponseWriter, r *htt
 	var req structs.SubmitBeaconCommitteeSubscriptionsRequest
 	err := json.NewDecoder(r.Body).Decode(&req.Data)
 	switch {
-	case err == io.EOF:
+	case errors.Is(err, io.EOF):
 		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
@@ -445,6 +633,16 @@ func (s *Server) ProduceSyncCommitteeContribution(w http.ResponseWriter, r *http
 	ctx, span := trace.StartSpan(r.Context(), "validator.ProduceSyncCommitteeContribution")
 	defer span.End()
 
+	isOptimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if isOptimistic {
+		httputil.HandleError(w, "Beacon node is currently syncing and not serving request on that endpoint", http.StatusServiceUnavailable)
+		return
+	}
+
 	_, index, ok := shared.UintFromQuery(w, r, "subcommittee_index", true)
 	if !ok {
 		return
@@ -522,7 +720,7 @@ func (s *Server) RegisterValidator(w http.ResponseWriter, r *http.Request) {
 	var jsonRegistrations []*structs.SignedValidatorRegistration
 	err := json.NewDecoder(r.Body).Decode(&jsonRegistrations)
 	switch {
-	case err == io.EOF:
+	case errors.Is(err, io.EOF):
 		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
@@ -555,7 +753,7 @@ func (s *Server) PrepareBeaconProposer(w http.ResponseWriter, r *http.Request) {
 	var jsonFeeRecipients []*structs.FeeRecipient
 	err := json.NewDecoder(r.Body).Decode(&jsonFeeRecipients)
 	switch {
-	case err == io.EOF:
+	case errors.Is(err, io.EOF):
 		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
@@ -592,7 +790,7 @@ func (s *Server) PrepareBeaconProposer(w http.ResponseWriter, r *http.Request) {
 	if len(validatorIndices) == 0 {
 		return
 	}
-	log.WithFields(log.Fields{
+	log.WithFields(logrus.Fields{
 		"validatorIndices": validatorIndices,
 	}).Info("Updated fee recipient addresses")
 }
@@ -615,7 +813,7 @@ func (s *Server) GetAttesterDuties(w http.ResponseWriter, r *http.Request) {
 	var indices []string
 	err := json.NewDecoder(r.Body).Decode(&indices)
 	switch {
-	case err == io.EOF:
+	case errors.Is(err, io.EOF):
 		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
@@ -664,7 +862,7 @@ func (s *Server) GetAttesterDuties(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	committeeAssignments, _, err := helpers.CommitteeAssignments(ctx, st, requestedEpoch)
+	assignments, err := helpers.CommitteeAssignments(ctx, st, requestedEpoch, requestedValIndices)
 	if err != nil {
 		httputil.HandleError(w, "Could not compute committee assignments: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -684,7 +882,7 @@ func (s *Server) GetAttesterDuties(w http.ResponseWriter, r *http.Request) {
 			httputil.HandleError(w, fmt.Sprintf("Invalid validator index %d", index), http.StatusBadRequest)
 			return
 		}
-		committee := committeeAssignments[index]
+		committee := assignments[index]
 		if committee == nil {
 			continue
 		}
@@ -708,10 +906,20 @@ func (s *Server) GetAttesterDuties(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	dependentRoot, err := attestationDependentRoot(st, requestedEpoch)
-	if err != nil {
-		httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
-		return
+	var dependentRoot []byte
+	if requestedEpoch <= 1 {
+		r, err := s.BeaconDB.GenesisBlockRoot(ctx)
+		if err != nil {
+			httputil.HandleError(w, "Could not get genesis block root: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		dependentRoot = r[:]
+	} else {
+		dependentRoot, err = attestationDependentRoot(st, requestedEpoch)
+		if err != nil {
+			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 	isOptimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
 	if err != nil {
@@ -793,11 +1001,11 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var proposals map[primitives.ValidatorIndex][]primitives.Slot
+	var assignments map[primitives.ValidatorIndex][]primitives.Slot
 	if nextEpochLookahead {
-		_, proposals, err = helpers.CommitteeAssignments(ctx, st, nextEpoch)
+		assignments, err = helpers.ProposerAssignments(ctx, st, nextEpoch)
 	} else {
-		_, proposals, err = helpers.CommitteeAssignments(ctx, st, requestedEpoch)
+		assignments, err = helpers.ProposerAssignments(ctx, st, requestedEpoch)
 	}
 	if err != nil {
 		httputil.HandleError(w, "Could not compute committee assignments: "+err.Error(), http.StatusInternalServerError)
@@ -805,7 +1013,7 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 	}
 
 	duties := make([]*structs.ProposerDuty, 0)
-	for index, proposalSlots := range proposals {
+	for index, proposalSlots := range assignments {
 		val, err := st.ValidatorAtIndexReadOnly(index)
 		if err != nil {
 			httputil.HandleError(w, fmt.Sprintf("Could not get validator at index %d: %v", index, err), http.StatusInternalServerError)
@@ -822,10 +1030,20 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	dependentRoot, err := proposalDependentRoot(st, requestedEpoch)
-	if err != nil {
-		httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
-		return
+	var dependentRoot []byte
+	if requestedEpoch == 0 {
+		r, err := s.BeaconDB.GenesisBlockRoot(ctx)
+		if err != nil {
+			httputil.HandleError(w, "Could not get genesis block root: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		dependentRoot = r[:]
+	} else {
+		dependentRoot, err = proposalDependentRoot(st, requestedEpoch)
+		if err != nil {
+			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 	isOptimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
 	if err != nil {
@@ -875,7 +1093,7 @@ func (s *Server) GetSyncCommitteeDuties(w http.ResponseWriter, r *http.Request) 
 	var indices []string
 	err := json.NewDecoder(r.Body).Decode(&indices)
 	switch {
-	case err == io.EOF:
+	case errors.Is(err, io.EOF):
 		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
@@ -1000,7 +1218,7 @@ func (s *Server) GetLiveness(w http.ResponseWriter, r *http.Request) {
 	var indices []string
 	err := json.NewDecoder(r.Body).Decode(&indices)
 	switch {
-	case err == io.EOF:
+	case errors.Is(err, io.EOF):
 		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:

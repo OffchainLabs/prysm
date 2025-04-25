@@ -2,20 +2,19 @@ package testing
 
 import (
 	"context"
-	"math/big"
 
+	"github.com/OffchainLabs/prysm/v6/api/client/builder"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	v1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/client/builder"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	v1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 // Config defines a config struct for dependencies into the service.
@@ -34,6 +33,7 @@ type MockBuilderService struct {
 	Bid                   *ethpb.SignedBuilderBid
 	BidCapella            *ethpb.SignedBuilderBidCapella
 	BidDeneb              *ethpb.SignedBuilderBidDeneb
+	BidElectra            *ethpb.SignedBuilderBidElectra
 	RegistrationCache     *cache.RegistrationCache
 	ErrGetHeader          error
 	ErrRegisterValidator  error
@@ -55,13 +55,13 @@ func (s *MockBuilderService) SubmitBlindedBlock(_ context.Context, b interfaces.
 		}
 		return w, nil, s.ErrSubmitBlindedBlock
 	case version.Capella:
-		w, err := blocks.WrappedExecutionPayloadCapella(s.PayloadCapella, big.NewInt(0))
+		w, err := blocks.WrappedExecutionPayloadCapella(s.PayloadCapella)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "could not wrap capella payload")
 		}
 		return w, nil, s.ErrSubmitBlindedBlock
-	case version.Deneb:
-		w, err := blocks.WrappedExecutionPayloadDeneb(s.PayloadDeneb, big.NewInt(0))
+	case version.Deneb, version.Electra:
+		w, err := blocks.WrappedExecutionPayloadDeneb(s.PayloadDeneb)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "could not wrap deneb payload")
 		}
@@ -73,6 +73,9 @@ func (s *MockBuilderService) SubmitBlindedBlock(_ context.Context, b interfaces.
 
 // GetHeader for mocking.
 func (s *MockBuilderService) GetHeader(_ context.Context, slot primitives.Slot, _ [32]byte, _ [48]byte) (builder.SignedBid, error) {
+	if slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch || s.BidElectra != nil {
+		return builder.WrappedSignedBuilderBidElectra(s.BidElectra)
+	}
 	if slots.ToEpoch(slot) >= params.BeaconConfig().DenebForkEpoch || s.BidDeneb != nil {
 		return builder.WrappedSignedBuilderBidDeneb(s.BidDeneb)
 	}

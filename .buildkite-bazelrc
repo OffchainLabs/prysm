@@ -12,8 +12,7 @@
 build:remote-cache --remote_download_minimal
 build:remote-cache --remote_build_event_upload=minimal
 build:remote-cache --remote_cache=grpc://bazel-remote-cache:9092
-# Does not work with rules_oci. See https://github.com/bazel-contrib/rules_oci/issues/292
-#build:remote-cache --experimental_remote_downloader=grpc://bazel-remote-cache:9092
+build:remote-cache --experimental_remote_downloader=grpc://bazel-remote-cache:9092
 build:remote-cache --remote_local_fallback
 build:remote-cache --experimental_remote_cache_async
 build:remote-cache --experimental_remote_merkle_tree_cache
@@ -51,7 +50,7 @@ build:nostamp --nostamp
 
 # Build metadata
 build --build_metadata=ROLE=CI
-build --build_metadata=REPO_URL=https://github.com/prysmaticlabs/prysm.git
+build --build_metadata=REPO_URL=https://github.com/OffchainLabs/prysm.git
 build --workspace_status_command=./hack/workspace_status_ci.sh
 
 # Buildbuddy

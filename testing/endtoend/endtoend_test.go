@@ -16,30 +16,29 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
-	"github.com/prysmaticlabs/prysm/v5/network/forks"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
+	"github.com/OffchainLabs/prysm/v6/api/client/beacon"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/io/file"
+	"github.com/OffchainLabs/prysm/v6/network/forks"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/endtoend/components"
+	"github.com/OffchainLabs/prysm/v6/testing/endtoend/components/eth1"
+	ev "github.com/OffchainLabs/prysm/v6/testing/endtoend/evaluators"
+	"github.com/OffchainLabs/prysm/v6/testing/endtoend/helpers"
+	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
+	e2etypes "github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/components"
-	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/components/eth1"
-	ev "github.com/prysmaticlabs/prysm/v5/testing/endtoend/evaluators"
-	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/helpers"
-	e2e "github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
-	e2etypes "github.com/prysmaticlabs/prysm/v5/testing/endtoend/types"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -226,6 +225,7 @@ func (r *testRunner) testDepositsAndTx(ctx context.Context, g *errgroup.Group,
 
 func (r *testRunner) testTxGeneration(ctx context.Context, g *errgroup.Group, keystorePath string, requiredNodes []e2etypes.ComponentRunner) {
 	txGenerator := eth1.NewTransactionGenerator(keystorePath, r.config.Seed)
+	r.comHandler.txGen = txGenerator
 	g.Go(func() error {
 		if err := helpers.ComponentsStarted(ctx, requiredNodes); err != nil {
 			return fmt.Errorf("transaction generator requires eth1 nodes to be run: %w", err)
@@ -417,7 +417,7 @@ func (r *testRunner) testDoppelGangerProtection(ctx context.Context) error {
 	}
 	logFile, err := os.Create(path.Join(e2e.TestParams.LogPath, fmt.Sprintf(e2e.ValidatorLogFileName, valIndex)))
 	if err != nil {
-		return fmt.Errorf("unable to open log file: %v", err)
+		return fmt.Errorf("unable to open log file: %w", err)
 	}
 	r.t.Run("doppelganger found", func(t *testing.T) {
 		assert.NoError(t, helpers.WaitForTextInFile(logFile, "Duplicate instances exists in the network for validator keys"), "Failed to carry out doppelganger check correctly")
@@ -501,6 +501,19 @@ func (r *testRunner) defaultEndToEndRun() error {
 	// Run assigned evaluators.
 	if err := r.runEvaluators(ec, conns, tickingStartTime); err != nil {
 		return errors.Wrap(err, "one or more evaluators failed")
+	}
+	// Test execution request processing in electra.
+	if r.config.TestDeposits && params.ElectraEnabled() {
+		if err := r.comHandler.txGen.Pause(); err != nil {
+			r.t.Error(err)
+		}
+		err = r.depositor.SendAndMineByBatch(ctx, int(params.BeaconConfig().MinGenesisActiveValidatorCount)+int(e2e.DepositCount), int(e2e.PostElectraDepositCount), int(params.BeaconConfig().MaxDepositRequestsPerPayload), e2etypes.PostElectraDepositBatch, false)
+		if err != nil {
+			r.t.Error(err)
+		}
+		if err := r.comHandler.txGen.Resume(); err != nil {
+			r.t.Error(err)
+		}
 	}
 
 	index := e2e.TestParams.BeaconNodeCount + e2e.TestParams.LighthouseBeaconNodeCount
@@ -634,12 +647,12 @@ func (r *testRunner) multiScenarioMulticlient(ec *e2etypes.EvaluationContext, ep
 	recoveryEpochStart, recoveryEpochEnd := lastForkEpoch+3, lastForkEpoch+4
 	secondRecoveryEpochStart, secondRecoveryEpochEnd := lastForkEpoch+8, lastForkEpoch+9
 
-	newPayloadMethod := "engine_newPayloadV3"
+	newPayloadMethod := "engine_newPayloadV4"
 	forkChoiceUpdatedMethod := "engine_forkchoiceUpdatedV3"
-	//  Fallback if deneb is not set.
-	if params.BeaconConfig().DenebForkEpoch == math.MaxUint64 {
-		newPayloadMethod = "engine_newPayloadV2"
-		forkChoiceUpdatedMethod = "engine_forkchoiceUpdatedV2"
+	//  Fallback if Electra is not set.
+	if params.BeaconConfig().ElectraForkEpoch == math.MaxUint64 {
+		newPayloadMethod = "engine_newPayloadV3"
+		forkChoiceUpdatedMethod = "engine_forkchoiceUpdatedV3"
 	}
 
 	switch primitives.Epoch(epoch) {
@@ -755,10 +768,10 @@ func (r *testRunner) multiScenario(ec *e2etypes.EvaluationContext, epoch uint64,
 	secondRecoveryEpochStart, secondRecoveryEpochEnd := lastForkEpoch+8, lastForkEpoch+9
 	thirdRecoveryEpochStart, thirdRecoveryEpochEnd := lastForkEpoch+13, lastForkEpoch+14
 
-	newPayloadMethod := "engine_newPayloadV3"
-	//  Fallback if deneb is not set.
-	if params.BeaconConfig().DenebForkEpoch == math.MaxUint64 {
-		newPayloadMethod = "engine_newPayloadV2"
+	newPayloadMethod := "engine_newPayloadV4"
+	//  Fallback if Electra is not set.
+	if params.BeaconConfig().ElectraForkEpoch == math.MaxUint64 {
+		newPayloadMethod = "engine_newPayloadV3"
 	}
 	switch primitives.Epoch(epoch) {
 	case freezeStartEpoch:

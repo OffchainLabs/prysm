@@ -8,32 +8,33 @@ import (
 	"testing"
 	"time"
 
+	chainMock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	db2 "github.com/OffchainLabs/prysm/v6/beacon-chain/db"
+	db "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	mockExecution "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
+	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	chainMock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	db2 "github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
-	db "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	mockExecution "github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
-	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	leakybucket "github.com/prysmaticlabs/prysm/v5/container/leaky-bucket"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/pkg/errors"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -238,11 +239,11 @@ func TestRPCBeaconBlocksByRange_ReconstructsPayloads(t *testing.T) {
 	// Start service with 160 as allowed blocks capacity (and almost zero capacity recovery).
 	r := &Service{
 		cfg: &config{
-			p2p:                           p1,
-			beaconDB:                      d,
-			chain:                         &chainMock.ChainService{},
-			clock:                         clock,
-			executionPayloadReconstructor: mockEngine,
+			p2p:                    p1,
+			beaconDB:               d,
+			chain:                  &chainMock.ChainService{},
+			clock:                  clock,
+			executionReconstructor: mockEngine,
 		},
 		rateLimiter:      newRateLimiter(p1),
 		availableBlocker: mockBlocker{avail: true},
@@ -432,11 +433,12 @@ func TestRPCBeaconBlocksByRange_RPCHandlerRateLimitOverflow(t *testing.T) {
 	}
 	sendRequest := func(p1, p2 *p2ptest.TestP2P, r *Service,
 		req *ethpb.BeaconBlocksByRangeRequest, validateBlocks bool, success bool) error {
-		var wg sync.WaitGroup
-		wg.Add(1)
 		pcl := protocol.ID(p2p.RPCBlocksByRangeTopicV1)
+		reqAnswered := false
 		p2.BHost.SetStreamHandler(pcl, func(stream network.Stream) {
-			defer wg.Done()
+			defer func() {
+				reqAnswered = true
+			}()
 			if !validateBlocks {
 				return
 			}
@@ -457,9 +459,8 @@ func TestRPCBeaconBlocksByRange_RPCHandlerRateLimitOverflow(t *testing.T) {
 		if err := r.beaconBlocksByRangeRPCHandler(context.Background(), req, stream); err != nil {
 			return err
 		}
-		if util.WaitTimeout(&wg, 1*time.Second) {
-			t.Fatal("Did not receive stream within 1 sec")
-		}
+		time.Sleep(100 * time.Millisecond)
+		assert.Equal(t, reqAnswered, true)
 		return nil
 	}
 
@@ -857,7 +858,7 @@ func TestRPCBeaconBlocksByRange_FilterBlocks(t *testing.T) {
 				if err != nil && err != io.EOF {
 					t.Fatal(err)
 				}
-				if code != 0 || err == io.EOF {
+				if code != 0 || errors.Is(err, io.EOF) {
 					break
 				}
 				blk := util.NewBeaconBlock()

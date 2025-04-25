@@ -10,11 +10,18 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	MaxBodySize      int64 = 1 << 23 // 8MB default, WithMaxBodySize can override
+	MaxBodySizeState int64 = 1 << 29 // 512MB
+	MaxErrBodySize   int64 = 1 << 17 // 128KB
+)
+
 // Client is a wrapper object around the HTTP client.
 type Client struct {
-	hc      *http.Client
-	baseURL *url.URL
-	token   string
+	hc          *http.Client
+	baseURL     *url.URL
+	token       string
+	maxBodySize int64
 }
 
 // NewClient constructs a new client with the provided options (ex WithTimeout).
@@ -26,8 +33,9 @@ func NewClient(host string, opts ...ClientOpt) (*Client, error) {
 		return nil, err
 	}
 	c := &Client{
-		hc:      &http.Client{},
-		baseURL: u,
+		hc:          &http.Client{},
+		baseURL:     u,
+		maxBodySize: MaxBodySize,
 	}
 	for _, o := range opts {
 		o(c)
@@ -72,7 +80,7 @@ func (c *Client) NodeURL() string {
 // Get is a generic, opinionated GET function to reduce boilerplate amongst the getters in this package.
 func (c *Client) Get(ctx context.Context, path string, opts ...ReqOption) ([]byte, error) {
 	u := c.baseURL.ResolveReference(&url.URL{Path: path})
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), http.NoBody)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +97,7 @@ func (c *Client) Get(ctx context.Context, path string, opts ...ReqOption) ([]byt
 	if r.StatusCode != http.StatusOK {
 		return nil, Non200Err(r)
 	}
-	b, err := io.ReadAll(r.Body)
+	b, err := io.ReadAll(io.LimitReader(r.Body, c.maxBodySize))
 	if err != nil {
 		return nil, errors.Wrap(err, "error reading http response body")
 	}

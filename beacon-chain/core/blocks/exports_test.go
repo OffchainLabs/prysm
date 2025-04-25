@@ -1,3 +1,5 @@
 package blocks
 
 var ProcessBLSToExecutionChange = processBLSToExecutionChange
+var ErrInvalidBLSPrefix = errInvalidBLSPrefix
+var VerifyBlobCommitmentCount = verifyBlobCommitmentCount

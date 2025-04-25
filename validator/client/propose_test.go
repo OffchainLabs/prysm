@@ -8,25 +8,27 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	blocktest "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks/testing"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	validatormock "github.com/prysmaticlabs/prysm/v5/testing/validator-mock"
-	testing2 "github.com/prysmaticlabs/prysm/v5/validator/db/testing"
-	"github.com/prysmaticlabs/prysm/v5/validator/graffiti"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/config/proposer"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	blocktest "github.com/OffchainLabs/prysm/v6/consensus-types/blocks/testing"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	validatormock "github.com/OffchainLabs/prysm/v6/testing/validator-mock"
+	testing2 "github.com/OffchainLabs/prysm/v6/validator/db/testing"
+	"github.com/OffchainLabs/prysm/v6/validator/graffiti"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
 )
@@ -92,7 +94,7 @@ func setupWithKey(t *testing.T, validatorKey bls.SecretKey, isSlashingProtection
 
 	validator := &validator{
 		db:                             valDB,
-		keyManager:                     newMockKeymanager(t, keypair{pub: pubKey, pri: validatorKey}),
+		km:                             newMockKeymanager(t, keypair{pub: pubKey, pri: validatorKey}),
 		validatorClient:                m.validatorClient,
 		graffiti:                       []byte{},
 		submittedAtts:                  make(map[submittedAttKey]*submittedAtt),
@@ -197,7 +199,7 @@ func TestProposeBlock_RequestBlockFailed(t *testing.T) {
 					gomock.Any(), // epoch
 				).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil /*err*/)
 
-				m.validatorClient.EXPECT().GetBeaconBlock(
+				m.validatorClient.EXPECT().BeaconBlock(
 					gomock.Any(), // ctx
 					gomock.AssignableToTypeOf(&ethpb.BlockRequest{}),
 				).Return(nil /*response*/, errors.New("uh oh"))
@@ -253,7 +255,7 @@ func TestProposeBlock_ProposeBlockFailed(t *testing.T) {
 					gomock.Any(), // epoch
 				).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil /*err*/)
 
-				m.validatorClient.EXPECT().GetBeaconBlock(
+				m.validatorClient.EXPECT().BeaconBlock(
 					gomock.Any(), // ctx
 					gomock.AssignableToTypeOf(&ethpb.BlockRequest{}),
 				).Return(tt.block, nil /*err*/)
@@ -292,16 +294,16 @@ func TestProposeBlock_BlocksDoubleProposal(t *testing.T) {
 				block0, block1 := util.NewBeaconBlock(), util.NewBeaconBlock()
 				block1.Block.Body.Graffiti = blockGraffiti[:]
 
-				var blocks []*ethpb.GenericBeaconBlock
+				var bs []*ethpb.GenericBeaconBlock
 				for _, block := range []*ethpb.SignedBeaconBlock{block0, block1} {
 					block.Block.Slot = slot
-					blocks = append(blocks, &ethpb.GenericBeaconBlock{
+					bs = append(bs, &ethpb.GenericBeaconBlock{
 						Block: &ethpb.GenericBeaconBlock_Phase0{
 							Phase0: block.Block,
 						},
 					})
 				}
-				return blocks
+				return bs
 			}(),
 		},
 		{
@@ -310,16 +312,16 @@ func TestProposeBlock_BlocksDoubleProposal(t *testing.T) {
 				block0, block1 := util.NewBeaconBlockAltair(), util.NewBeaconBlockAltair()
 				block1.Block.Body.Graffiti = blockGraffiti[:]
 
-				var blocks []*ethpb.GenericBeaconBlock
+				var bs []*ethpb.GenericBeaconBlock
 				for _, block := range []*ethpb.SignedBeaconBlockAltair{block0, block1} {
 					block.Block.Slot = slot
-					blocks = append(blocks, &ethpb.GenericBeaconBlock{
+					bs = append(bs, &ethpb.GenericBeaconBlock{
 						Block: &ethpb.GenericBeaconBlock_Altair{
 							Altair: block.Block,
 						},
 					})
 				}
-				return blocks
+				return bs
 			}(),
 		},
 		{
@@ -328,16 +330,16 @@ func TestProposeBlock_BlocksDoubleProposal(t *testing.T) {
 				block0, block1 := util.NewBeaconBlockBellatrix(), util.NewBeaconBlockBellatrix()
 				block1.Block.Body.Graffiti = blockGraffiti[:]
 
-				var blocks []*ethpb.GenericBeaconBlock
+				var bs []*ethpb.GenericBeaconBlock
 				for _, block := range []*ethpb.SignedBeaconBlockBellatrix{block0, block1} {
 					block.Block.Slot = slot
-					blocks = append(blocks, &ethpb.GenericBeaconBlock{
+					bs = append(bs, &ethpb.GenericBeaconBlock{
 						Block: &ethpb.GenericBeaconBlock_Bellatrix{
 							Bellatrix: block.Block,
 						},
 					})
 				}
-				return blocks
+				return bs
 			}(),
 		},
 	}
@@ -360,12 +362,12 @@ func TestProposeBlock_BlocksDoubleProposal(t *testing.T) {
 					gomock.Any(), // epoch
 				).Times(1).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil /*err*/)
 
-				m.validatorClient.EXPECT().GetBeaconBlock(
+				m.validatorClient.EXPECT().BeaconBlock(
 					gomock.Any(), // ctx
 					gomock.AssignableToTypeOf(&ethpb.BlockRequest{}),
 				).Return(tt.blocks[0], nil /*err*/)
 
-				m.validatorClient.EXPECT().GetBeaconBlock(
+				m.validatorClient.EXPECT().BeaconBlock(
 					gomock.Any(), // ctx
 					gomock.AssignableToTypeOf(&ethpb.BlockRequest{}),
 				).Return(tt.blocks[1], nil /*err*/)
@@ -412,7 +414,7 @@ func TestProposeBlock_BlocksDoubleProposal_After54KEpochs(t *testing.T) {
 			testBlock := util.NewBeaconBlock()
 			farFuture := params.BeaconConfig().SlotsPerEpoch.Mul(uint64(params.BeaconConfig().WeakSubjectivityPeriod + 9))
 			testBlock.Block.Slot = farFuture
-			m.validatorClient.EXPECT().GetBeaconBlock(
+			m.validatorClient.EXPECT().BeaconBlock(
 				gomock.Any(), // ctx
 				gomock.AssignableToTypeOf(&ethpb.BlockRequest{}),
 			).Return(&ethpb.GenericBeaconBlock{
@@ -426,7 +428,7 @@ func TestProposeBlock_BlocksDoubleProposal_After54KEpochs(t *testing.T) {
 			var blockGraffiti [32]byte
 			copy(blockGraffiti[:], "someothergraffiti")
 			secondTestBlock.Block.Body.Graffiti = blockGraffiti[:]
-			m.validatorClient.EXPECT().GetBeaconBlock(
+			m.validatorClient.EXPECT().BeaconBlock(
 				gomock.Any(), // ctx
 				gomock.AssignableToTypeOf(&ethpb.BlockRequest{}),
 			).Return(&ethpb.GenericBeaconBlock{
@@ -489,7 +491,7 @@ func TestProposeBlock_AllowsOrNotPastProposals(t *testing.T) {
 
 				blk := util.NewBeaconBlock()
 				blk.Block.Slot = slot
-				m.validatorClient.EXPECT().GetBeaconBlock(
+				m.validatorClient.EXPECT().BeaconBlock(
 					gomock.Any(), // ctx
 					gomock.AssignableToTypeOf(&ethpb.BlockRequest{}),
 				).Return(&ethpb.GenericBeaconBlock{
@@ -518,7 +520,7 @@ func TestProposeBlock_AllowsOrNotPastProposals(t *testing.T) {
 
 				blk2 := util.NewBeaconBlock()
 				blk2.Block.Slot = tt.pastSlot
-				m.validatorClient.EXPECT().GetBeaconBlock(
+				m.validatorClient.EXPECT().BeaconBlock(
 					gomock.Any(), // ctx
 					gomock.AssignableToTypeOf(&ethpb.BlockRequest{}),
 				).Return(&ethpb.GenericBeaconBlock{
@@ -650,6 +652,32 @@ func testProposeBlock(t *testing.T, graffiti []byte) {
 				},
 			},
 		},
+		{
+			name:    "electra block",
+			version: version.Electra,
+			block: &ethpb.GenericBeaconBlock{
+				Block: &ethpb.GenericBeaconBlock_Electra{
+					Electra: func() *ethpb.BeaconBlockContentsElectra {
+						blk := util.NewBeaconBlockContentsElectra()
+						blk.Block.Block.Body.Graffiti = graffiti
+						return &ethpb.BeaconBlockContentsElectra{Block: blk.Block.Block, KzgProofs: blk.KzgProofs, Blobs: blk.Blobs}
+					}(),
+				},
+			},
+		},
+		{
+			name:    "fulu block",
+			version: version.Fulu,
+			block: &ethpb.GenericBeaconBlock{
+				Block: &ethpb.GenericBeaconBlock_Fulu{
+					Fulu: func() *ethpb.BeaconBlockContentsFulu {
+						blk := util.NewBeaconBlockContentsFulu()
+						blk.Block.Block.Body.Graffiti = graffiti
+						return &ethpb.BeaconBlockContentsFulu{Block: blk.Block.Block, KzgProofs: blk.KzgProofs, Blobs: blk.Blobs}
+					}(),
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -668,7 +696,7 @@ func testProposeBlock(t *testing.T, graffiti []byte) {
 					gomock.Any(), // epoch
 				).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil /*err*/)
 
-				m.validatorClient.EXPECT().GetBeaconBlock(
+				m.validatorClient.EXPECT().BeaconBlock(
 					gomock.Any(), // ctx
 					gomock.AssignableToTypeOf(&ethpb.BlockRequest{}),
 				).DoAndReturn(func(ctx context.Context, req *ethpb.BlockRequest) (*ethpb.GenericBeaconBlock, error) {
@@ -864,7 +892,7 @@ func TestSignBlock(t *testing.T) {
 
 			kp := testKeyFromBytes(t, []byte{1})
 
-			validator.keyManager = newMockKeymanager(t, kp)
+			validator.km = newMockKeymanager(t, kp)
 			b, err := blocks.NewBeaconBlock(blk.Block)
 			require.NoError(t, err)
 			sig, blockRoot, err := validator.signBlock(ctx, kp.pub, 0, 0, b)
@@ -900,7 +928,7 @@ func TestSignAltairBlock(t *testing.T) {
 			blk := util.NewBeaconBlockAltair()
 			blk.Block.Slot = 1
 			blk.Block.ProposerIndex = 100
-			validator.keyManager = newMockKeymanager(t, kp)
+			validator.km = newMockKeymanager(t, kp)
 			wb, err := blocks.NewBeaconBlock(blk.Block)
 			require.NoError(t, err)
 			sig, blockRoot, err := validator.signBlock(ctx, kp.pub, 0, 0, wb)
@@ -933,7 +961,7 @@ func TestSignBellatrixBlock(t *testing.T) {
 			blk.Block.ProposerIndex = 100
 
 			kp := randKeypair(t)
-			validator.keyManager = newMockKeymanager(t, kp)
+			validator.km = newMockKeymanager(t, kp)
 			wb, err := blocks.NewBeaconBlock(blk.Block)
 			require.NoError(t, err)
 			sig, blockRoot, err := validator.signBlock(ctx, kp.pub, 0, 0, wb)
@@ -955,6 +983,13 @@ func TestGetGraffiti_Ok(t *testing.T) {
 		validatorClient: validatormock.NewMockValidatorClient(ctrl),
 	}
 	pubKey := [fieldparams.BLSPubkeyLength]byte{'a'}
+	config := make(map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option)
+	config[pubKey] = &proposer.Option{
+		GraffitiConfig: &proposer.GraffitiConfig{
+			Graffiti: "specific graffiti",
+		},
+	}
+
 	tests := []struct {
 		name string
 		v    *validator
@@ -1014,16 +1049,52 @@ func TestGetGraffiti_Ok(t *testing.T) {
 			},
 			want: []byte{},
 		},
+		{name: "graffiti from proposer settings for specific pubkey",
+			v: &validator{
+				validatorClient: m.validatorClient,
+				proposerSettings: &proposer.Settings{
+					ProposeConfig: config,
+				},
+			},
+			want: []byte("specific graffiti"),
+		},
+		{name: "graffiti from proposer settings default config",
+			v: &validator{
+				validatorClient: m.validatorClient,
+				proposerSettings: &proposer.Settings{
+					DefaultConfig: &proposer.Option{
+						GraffitiConfig: &proposer.GraffitiConfig{
+							Graffiti: "default graffiti",
+						},
+					},
+				},
+			},
+			want: []byte("default graffiti"),
+		},
+		{name: "graffiti from proposer settings , specific pubkey overrides default config",
+			v: &validator{
+				validatorClient: m.validatorClient,
+				proposerSettings: &proposer.Settings{
+					ProposeConfig: config,
+					DefaultConfig: &proposer.Option{
+						GraffitiConfig: &proposer.GraffitiConfig{
+							Graffiti: "default graffiti",
+						},
+					},
+				},
+			},
+			want: []byte("specific graffiti"),
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if !strings.Contains(tt.name, "use default cli graffiti") {
+			if !strings.Contains(tt.name, "use default cli graffiti") && tt.v.proposerSettings == nil {
 				m.validatorClient.EXPECT().
 					ValidatorIndex(gomock.Any(), &ethpb.ValidatorIndexRequest{PublicKey: pubKey[:]}).
 					Return(&ethpb.ValidatorIndexResponse{Index: 2}, nil)
 			}
-			got, err := tt.v.getGraffiti(context.Background(), pubKey)
+			got, err := tt.v.Graffiti(context.Background(), pubKey)
 			require.NoError(t, err)
 			require.DeepEqual(t, tt.want, got)
 		})
@@ -1053,9 +1124,164 @@ func TestGetGraffitiOrdered_Ok(t *testing.T) {
 				},
 			}
 			for _, want := range [][]byte{bytesutil.PadTo([]byte{'a'}, 32), bytesutil.PadTo([]byte{'b'}, 32), bytesutil.PadTo([]byte{'c'}, 32), bytesutil.PadTo([]byte{'d'}, 32), bytesutil.PadTo([]byte{'d'}, 32)} {
-				got, err := v.getGraffiti(context.Background(), pubKey)
+				got, err := v.Graffiti(context.Background(), pubKey)
 				require.NoError(t, err)
 				require.DeepEqual(t, want, got)
+			}
+		})
+	}
+}
+
+func Test_validator_DeleteGraffiti(t *testing.T) {
+	pubKey := [fieldparams.BLSPubkeyLength]byte{'a'}
+	tests := []struct {
+		name             string
+		proposerSettings *proposer.Settings
+		wantErr          string
+	}{
+		{
+			name: "delete existing graffiti ok",
+			proposerSettings: &proposer.Settings{
+				ProposeConfig: func() map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option {
+					config := make(map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option)
+					config[pubKey] = &proposer.Option{
+						GraffitiConfig: &proposer.GraffitiConfig{
+							Graffiti: "specific graffiti",
+						},
+					}
+					return config
+				}(),
+			},
+		},
+		{
+			name: "delete with proposer settings but only default configs",
+			proposerSettings: &proposer.Settings{
+				DefaultConfig: &proposer.Option{
+					GraffitiConfig: &proposer.GraffitiConfig{
+						Graffiti: "default graffiti",
+					},
+				},
+			},
+			wantErr: "attempted to delete graffiti without proposer settings, graffiti will default to flag options",
+		},
+		{
+			name: "delete with proposer settings but without the specific public key setting",
+			proposerSettings: &proposer.Settings{
+				ProposeConfig: func() map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option {
+					config := make(map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option)
+					pk := make([]byte, fieldparams.BLSPubkeyLength)
+					config[bytesutil.ToBytes48(pk)] = &proposer.Option{
+						GraffitiConfig: &proposer.GraffitiConfig{
+							Graffiti: "specific graffiti",
+						},
+					}
+					return config
+				}(),
+			},
+			wantErr: fmt.Sprintf("graffiti not found in proposer settings for pubkey:%s", hexutil.Encode(pubKey[:])),
+		},
+		{
+			name:    "delete without proposer settings",
+			wantErr: "attempted to delete graffiti without proposer settings, graffiti will default to flag options",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := &validator{
+				db:               testing2.SetupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubKey}, false),
+				proposerSettings: tt.proposerSettings,
+			}
+			err := v.DeleteGraffiti(context.Background(), pubKey)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, tt.wantErr, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, v.proposerSettings.ProposeConfig[pubKey].GraffitiConfig == nil, true)
+			}
+		})
+	}
+}
+
+func Test_validator_SetGraffiti(t *testing.T) {
+	pubKey := [fieldparams.BLSPubkeyLength]byte{'a'}
+	tests := []struct {
+		name                 string
+		graffiti             string
+		proposerSettings     *proposer.Settings
+		wantProposerSettings *proposer.Settings
+		wantErr              string
+	}{
+		{
+			name:     "setting existing graffiti ok",
+			graffiti: "new graffiti",
+			proposerSettings: &proposer.Settings{
+				ProposeConfig: func() map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option {
+					config := make(map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option)
+					config[pubKey] = &proposer.Option{
+						GraffitiConfig: &proposer.GraffitiConfig{
+							Graffiti: "specific graffiti",
+						},
+					}
+					return config
+				}(),
+			},
+		},
+		{
+			name: "set with proposer settings but only default configs",
+			proposerSettings: &proposer.Settings{
+				DefaultConfig: &proposer.Option{
+					GraffitiConfig: &proposer.GraffitiConfig{
+						Graffiti: "default graffiti",
+					},
+				},
+			},
+		},
+		{
+			name: "set with proposer settings but without the specific public key setting",
+			proposerSettings: &proposer.Settings{
+				ProposeConfig: func() map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option {
+					config := make(map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option)
+					pk := make([]byte, fieldparams.BLSPubkeyLength)
+					config[bytesutil.ToBytes48(pk)] = &proposer.Option{
+						GraffitiConfig: &proposer.GraffitiConfig{
+							Graffiti: "specific graffiti",
+						},
+					}
+					return config
+				}(),
+			},
+		},
+		{
+			name:     "set without proposer settings",
+			graffiti: "specific graffiti",
+			wantProposerSettings: func() *proposer.Settings {
+				config := make(map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option)
+				config[pubKey] = &proposer.Option{
+					GraffitiConfig: &proposer.GraffitiConfig{
+						Graffiti: "specific graffiti",
+					},
+				}
+				return &proposer.Settings{ProposeConfig: config}
+			}(),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := &validator{
+				db:               testing2.SetupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubKey}, false),
+				proposerSettings: tt.proposerSettings,
+			}
+			err := v.SetGraffiti(context.Background(), pubKey, []byte(tt.graffiti))
+			if tt.wantErr != "" {
+				require.ErrorContains(t, tt.wantErr, err)
+			} else {
+				require.NoError(t, err)
+				if tt.wantProposerSettings != nil {
+					require.DeepEqual(t, tt.wantProposerSettings, v.proposerSettings)
+				} else {
+					require.Equal(t, v.proposerSettings.ProposeConfig[pubKey].GraffitiConfig.Graffiti, tt.graffiti)
+				}
+
 			}
 		})
 	}

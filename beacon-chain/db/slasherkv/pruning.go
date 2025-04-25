@@ -5,9 +5,8 @@ import (
 	"context"
 	"encoding/binary"
 
-	fssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -17,7 +16,8 @@ func (s *Store) PruneAttestationsAtEpoch(
 	_ context.Context, maxEpoch primitives.Epoch,
 ) (numPruned uint, err error) {
 	// We can prune everything less than the current epoch - history length.
-	encodedEndPruneEpoch := fssz.MarshalUint64([]byte{}, uint64(maxEpoch))
+	encodedEndPruneEpoch := make([]byte, 8)
+	binary.BigEndian.PutUint64(encodedEndPruneEpoch, uint64(maxEpoch))
 
 	// We retrieve the lowest stored epoch in the attestations bucket.
 	var lowestEpoch primitives.Epoch
@@ -30,7 +30,7 @@ func (s *Store) PruneAttestationsAtEpoch(
 			return nil
 		}
 		hasData = true
-		lowestEpoch = primitives.Epoch(binary.LittleEndian.Uint64(k))
+		lowestEpoch = primitives.Epoch(binary.BigEndian.Uint64(k))
 		return nil
 	}); err != nil {
 		return
@@ -92,7 +92,8 @@ func (s *Store) PruneProposalsAtEpoch(
 	if err != nil {
 		return
 	}
-	encodedEndPruneSlot := fssz.MarshalUint64([]byte{}, uint64(endPruneSlot))
+	encodedEndPruneSlot := make([]byte, 8)
+	binary.BigEndian.PutUint64(encodedEndPruneSlot, uint64(endPruneSlot))
 
 	// We retrieve the lowest stored slot in the proposals bucket.
 	var lowestSlot primitives.Slot
@@ -157,7 +158,7 @@ func (s *Store) PruneProposalsAtEpoch(
 }
 
 func slotFromProposalKey(key []byte) primitives.Slot {
-	return primitives.Slot(binary.LittleEndian.Uint64(key[:8]))
+	return primitives.Slot(binary.BigEndian.Uint64(key[:8]))
 }
 
 func uint64PrefixGreaterThan(key, lessThan []byte) bool {

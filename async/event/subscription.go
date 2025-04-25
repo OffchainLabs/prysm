@@ -21,31 +21,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/time/mclock"
+	"github.com/OffchainLabs/prysm/v6/time/mclock"
 )
 
 // waitQuotient is divided against the max backoff time, in order to have N requests based on the full
 // request backoff time.
 const waitQuotient = 10
-
-// Subscription represents a stream of events. The carrier of the events is typically a
-// channel, but isn't part of the interface.
-//
-// Subscriptions can fail while established. Failures are reported through an error
-// channel. It receives a value if there is an issue with the subscription (e.g. the
-// network connection delivering the events has been closed). Only one value will ever be
-// sent.
-//
-// The error channel is closed when the subscription ends successfully (i.e. when the
-// source of events is closed). It is also closed when Unsubscribe is called.
-//
-// The Unsubscribe method cancels the sending of events. You must call Unsubscribe in all
-// cases to ensure that resources related to the subscription are released. It can be
-// called any number of times.
-type Subscription interface {
-	Err() <-chan error // returns the error channel
-	Unsubscribe()      // cancels sending of events, closing the error channel
-}
 
 // NewSubscription runs a producer function as a subscription in a new goroutine. The
 // channel given to the producer is closed when Unsubscribe is called. If fn returns an
@@ -173,7 +154,7 @@ retry:
 				continue retry
 			}
 			if sub == nil {
-				panic("event: ResubscribeFunc returned nil subscription and no error")
+				panic("event: ResubscribeFunc returned nil subscription and no error") // lint:nopanic -- This should never happen.
 			}
 			return sub
 		case <-s.unsub:

@@ -10,10 +10,11 @@ go_library(
         "slashing.go",
         "type.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epoch/precompute",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/core/epoch/precompute",
     visibility = [
         "//beacon-chain:__subpackages__",
         "//testing/spectest:__subpackages__",
+        "//tools:__subpackages__",
     ],
     deps = [
         "//beacon-chain/core/helpers:go_default_library",
@@ -23,13 +24,13 @@ go_library(
         "//consensus-types/primitives:go_default_library",
         "//math:go_default_library",
         "//monitoring/tracing:go_default_library",
+        "//monitoring/tracing/trace:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//proto/prysm/v1alpha1/attestation:go_default_library",
         "//runtime/version:go_default_library",
         "//time/slots:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
-        "@io_opencensus_go//trace:go_default_library",
     ],
 )
 
@@ -46,7 +47,6 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//beacon-chain/core/altair:go_default_library",
-        "//beacon-chain/core/epoch:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/time:go_default_library",
         "//beacon-chain/state:go_default_library",

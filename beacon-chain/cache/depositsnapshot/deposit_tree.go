@@ -6,12 +6,12 @@ package depositsnapshot
 import (
 	"encoding/binary"
 
+	"github.com/OffchainLabs/prysm/v6/crypto/hash"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/math"
+	protodb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/crypto/hash"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/math"
-	protodb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 var (
@@ -99,11 +99,23 @@ func (d *DepositTree) getProof(index uint64) ([32]byte, [][32]byte, error) {
 	if d.depositCount <= 0 {
 		return [32]byte{}, nil, ErrInvalidDepositCount
 	}
-	finalizedDeposits, _ := d.tree.GetFinalized([][32]byte{})
-	if finalizedDeposits != 0 {
-		finalizedDeposits = finalizedDeposits - 1
+	if index >= d.depositCount {
+		return [32]byte{}, nil, ErrInvalidIndex
 	}
-	if index <= finalizedDeposits {
+	finalizedDeposits, _ := d.tree.GetFinalized([][32]byte{})
+	finalizedIdx := -1
+	if finalizedDeposits != 0 {
+		fd, err := math.Int(finalizedDeposits)
+		if err != nil {
+			return [32]byte{}, nil, err
+		}
+		finalizedIdx = fd - 1
+	}
+	i, err := math.Int(index)
+	if err != nil {
+		return [32]byte{}, nil, err
+	}
+	if finalizedDeposits > 0 && i <= finalizedIdx {
 		return [32]byte{}, nil, ErrInvalidIndex
 	}
 	leaf, proof := generateProof(d.tree, index, DepositContractDepth)

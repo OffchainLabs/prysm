@@ -6,12 +6,13 @@ import (
 	"runtime/debug"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	corenet "github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
+	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
 )
 
 type rpcHandler func(context.Context, interface{}, libp2pcore.Stream) error
@@ -51,7 +52,7 @@ func (c *client) registerRPCHandler(baseTopic string, handle rpcHandler) {
 		// do not decode anything.
 		if baseTopic == p2p.RPCMetaDataTopicV1 || baseTopic == p2p.RPCMetaDataTopicV2 {
 			if err := handle(context.Background(), base, stream); err != nil {
-				if err != p2ptypes.ErrWrongForkDigestVersion {
+				if !errors.Is(err, p2ptypes.ErrWrongForkDigestVersion) {
 					log.WithError(err).Debug("Could not handle p2p RPC")
 				}
 			}
@@ -73,7 +74,7 @@ func (c *client) registerRPCHandler(baseTopic string, handle rpcHandler) {
 				return
 			}
 			if err := handle(context.Background(), msg, stream); err != nil {
-				if err != p2ptypes.ErrWrongForkDigestVersion {
+				if !errors.Is(err, p2ptypes.ErrWrongForkDigestVersion) {
 					log.WithError(err).Debug("Could not handle p2p RPC")
 				}
 			}
@@ -89,7 +90,7 @@ func (c *client) registerRPCHandler(baseTopic string, handle rpcHandler) {
 				return
 			}
 			if err := handle(context.Background(), nTyp.Elem().Interface(), stream); err != nil {
-				if err != p2ptypes.ErrWrongForkDigestVersion {
+				if !errors.Is(err, p2ptypes.ErrWrongForkDigestVersion) {
 					log.WithError(err).Debug("Could not handle p2p RPC")
 				}
 			}

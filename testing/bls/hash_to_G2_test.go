@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/testing/bls/utils"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ghodss/yaml"
-	"github.com/prysmaticlabs/prysm/v5/testing/bls/utils"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	blst "github.com/supranational/blst/bindings/go"
 )
 
@@ -17,7 +17,7 @@ func TestHashToG2(t *testing.T) {
 }
 
 func testHashToG2(t *testing.T) {
-	t.Skip("Hash To G2 needs co-ordinates exposed")
+	t.Skip("Hash To G2 needs coordinates exposed")
 	fNames, fContent := utils.RetrieveFiles("hash_to_G2", t)
 
 	for i, file := range fNames {

@@ -7,29 +7,32 @@ import (
 	"sync"
 	"time"
 
+	builderapi "github.com/OffchainLabs/prysm/v6/api/client/builder"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
+	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	emptypb "github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/builder"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
-	blockfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/block"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/kv"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
-	"go.opencensus.io/trace"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -39,15 +42,17 @@ var eth1DataNotification bool
 
 const (
 	eth1dataTimeout           = 2 * time.Second
-	defaultBuilderBoostFactor = uint64(100)
+	defaultBuilderBoostFactor = primitives.Gwei(100)
 )
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // GetBeaconBlock is called by a proposer during its assigned slot to request a block to sign
 // by passing in the slot and the signed randao reveal of the slot.
 func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (*ethpb.GenericBeaconBlock, error) {
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.GetBeaconBlock")
 	defer span.End()
-	span.AddAttributes(trace.Int64Attribute("slot", int64(req.Slot)))
+	span.SetAttributes(trace.Int64Attribute("slot", int64(req.Slot)))
 
 	t, err := slots.ToTime(uint64(vs.TimeFetcher.GenesisTime().Unix()), req.Slot)
 	if err != nil {
@@ -86,36 +91,32 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	// Set proposer index.
 	idx, err := helpers.BeaconProposerIndex(ctx, head)
 	if err != nil {
-		return nil, fmt.Errorf("could not calculate proposer index %v", err)
+		return nil, fmt.Errorf("could not calculate proposer index %w", err)
 	}
 	sBlk.SetProposerIndex(idx)
 
 	builderBoostFactor := defaultBuilderBoostFactor
 	if req.BuilderBoostFactor != nil {
-		builderBoostFactor = req.BuilderBoostFactor.Value
+		builderBoostFactor = primitives.Gwei(req.BuilderBoostFactor.Value)
 	}
 
-	if err = vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor); err != nil {
-		return nil, errors.Wrap(err, "could not build block in parallel")
-	}
-
-	sr, err := vs.computeStateRoot(ctx, sBlk)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not compute state root: %v", err)
-	}
-	sBlk.SetStateRoot(sr)
-
-	log.WithFields(logrus.Fields{
+	resp, err := vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor)
+	log := log.WithFields(logrus.Fields{
 		"slot":               req.Slot,
 		"sinceSlotStartTime": time.Since(t),
 		"validator":          sBlk.Block().ProposerIndex(),
-	}).Info("Finished building block")
+	})
 
-	// Blob cache is updated after BuildBlockParallel
-	return vs.constructGenericBeaconBlock(sBlk, bundleCache.get(req.Slot))
+	if err != nil {
+		log.WithError(err).Error("Finished building block")
+		return nil, errors.Wrap(err, "could not build block in parallel")
+	}
+
+	log.Info("Finished building block")
+	return resp, nil
 }
 
-func (vs *Server) handleSuccesfulReorgAttempt(ctx context.Context, slot primitives.Slot, parentRoot, headRoot [32]byte) (state.BeaconState, error) {
+func (vs *Server) handleSuccesfulReorgAttempt(ctx context.Context, slot primitives.Slot, parentRoot, _ [32]byte) (state.BeaconState, error) {
 	// Try to get the state from the NSC
 	head := transition.NextSlotState(parentRoot[:], slot)
 	if head != nil {
@@ -183,7 +184,7 @@ func (vs *Server) getParentState(ctx context.Context, slot primitives.Slot) (sta
 	return head, parentRoot, err
 }
 
-func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor uint64) error {
+func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei) (*ethpb.GenericBeaconBlock, error) {
 	// Build consensus fields in background
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -199,20 +200,26 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 		sBlk.SetEth1Data(eth1Data)
 
 		// Set deposit and attestation.
-		deposits, atts, err := vs.packDepositsAndAttestations(ctx, head, eth1Data) // TODO: split attestations and deposits
+		deposits, atts, err := vs.packDepositsAndAttestations(ctx, head, sBlk.Block().Slot(), eth1Data) // TODO: split attestations and deposits
 		if err != nil {
 			sBlk.SetDeposits([]*ethpb.Deposit{})
-			sBlk.SetAttestations([]*ethpb.Attestation{})
+			if err := sBlk.SetAttestations([]ethpb.Att{}); err != nil {
+				log.WithError(err).Error("Could not set attestations on block")
+			}
 			log.WithError(err).Error("Could not pack deposits and attestations")
 		} else {
 			sBlk.SetDeposits(deposits)
-			sBlk.SetAttestations(atts)
+			if err := sBlk.SetAttestations(atts); err != nil {
+				log.WithError(err).Error("Could not set attestations on block")
+			}
 		}
 
 		// Set slashings.
 		validProposerSlashings, validAttSlashings := vs.getSlashings(ctx, head)
 		sBlk.SetProposerSlashings(validProposerSlashings)
-		sBlk.SetAttesterSlashings(validAttSlashings)
+		if err := sBlk.SetAttesterSlashings(validAttSlashings); err != nil {
+			log.WithError(err).Error("Could not set attester slashings on block")
+		}
 
 		// Set exits.
 		sBlk.SetVoluntaryExits(vs.getExits(head, sBlk.Block().Slot()))
@@ -224,32 +231,48 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 		vs.setBlsToExecData(sBlk, head)
 	}()
 
-	localPayload, overrideBuilder, err := vs.getLocalPayload(ctx, sBlk.Block(), head)
-	if err != nil {
-		return status.Errorf(codes.Internal, "Could not get local payload: %v", err)
-	}
-
-	// There's no reason to try to get a builder bid if local override is true.
-	var builderPayload interfaces.ExecutionData
-	var builderKzgCommitments [][]byte
-	overrideBuilder = overrideBuilder || skipMevBoost // Skip using mev-boost if requested by the caller.
-	if !overrideBuilder {
-		builderPayload, builderKzgCommitments, err = vs.getBuilderPayloadAndBlobs(ctx, sBlk.Block().Slot(), sBlk.Block().ProposerIndex())
+	winningBid := primitives.ZeroWei()
+	var bundle *enginev1.BlobsBundle
+	if sBlk.Version() >= version.Bellatrix {
+		local, err := vs.getLocalPayload(ctx, sBlk.Block(), head)
 		if err != nil {
-			builderGetPayloadMissCount.Inc()
-			log.WithError(err).Error("Could not get builder payload")
+			return nil, status.Errorf(codes.Internal, "Could not get local payload: %v", err)
+		}
+
+		// There's no reason to try to get a builder bid if local override is true.
+		var builderBid builderapi.Bid
+		if !(local.OverrideBuilder || skipMevBoost) {
+			latestHeader, err := head.LatestExecutionPayloadHeader()
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "Could not get latest execution payload header: %v", err)
+			}
+			parentGasLimit := latestHeader.GasLimit()
+			builderBid, err = vs.getBuilderPayloadAndBlobs(ctx, sBlk.Block().Slot(), sBlk.Block().ProposerIndex(), parentGasLimit)
+			if err != nil {
+				builderGetPayloadMissCount.Inc()
+				log.WithError(err).Error("Could not get builder payload")
+			}
+		}
+
+		winningBid, bundle, err = setExecutionData(ctx, sBlk, local, builderBid, builderBoostFactor)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not set execution data: %v", err)
 		}
 	}
 
-	if err := setExecutionData(ctx, sBlk, localPayload, builderPayload, builderKzgCommitments, builderBoostFactor); err != nil {
-		return status.Errorf(codes.Internal, "Could not set execution data: %v", err)
+	wg.Wait()
+
+	sr, err := vs.computeStateRoot(ctx, sBlk)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not compute state root: %v", err)
 	}
+	sBlk.SetStateRoot(sr)
 
-	wg.Wait() // Wait until block is built via consensus and execution fields.
-
-	return nil
+	return vs.constructGenericBeaconBlock(sBlk, bundle, winningBid)
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // ProposeBeaconBlock handles the proposal of beacon blocks.
 func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSignedBeaconBlock) (*ethpb.ProposeResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.ProposeBeaconBlock")
@@ -267,8 +290,8 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	var sidecars []*ethpb.BlobSidecar
 	if block.IsBlinded() {
 		block, sidecars, err = vs.handleBlindedBlock(ctx, block)
-	} else {
-		sidecars, err = vs.handleUnblindedBlock(block, req)
+	} else if block.Version() >= version.Deneb {
+		sidecars, err = vs.blobSidecarsFromUnblindedBlock(block, req)
 	}
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "%s: %v", "handle block failed", err)
@@ -329,19 +352,18 @@ func (vs *Server) handleBlindedBlock(ctx context.Context, block interfaces.Signe
 
 	sidecars, err := unblindBlobsSidecars(copiedBlock, bundle)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "unblind sidecars failed")
+		return nil, nil, errors.Wrap(err, "unblind blobs sidecars: commitment value doesn't match block")
 	}
 
 	return copiedBlock, sidecars, nil
 }
 
-// handleUnblindedBlock processes unblinded beacon blocks.
-func (vs *Server) handleUnblindedBlock(block interfaces.SignedBeaconBlock, req *ethpb.GenericSignedBeaconBlock) ([]*ethpb.BlobSidecar, error) {
-	dbBlockContents := req.GetDeneb()
-	if dbBlockContents == nil {
-		return nil, nil
+func (vs *Server) blobSidecarsFromUnblindedBlock(block interfaces.SignedBeaconBlock, req *ethpb.GenericSignedBeaconBlock) ([]*ethpb.BlobSidecar, error) {
+	rawBlobs, proofs, err := blobsAndProofs(req)
+	if err != nil {
+		return nil, err
 	}
-	return buildBlobSidecars(block, dbBlockContents.Blobs, dbBlockContents.KzgProofs)
+	return BuildBlobSidecars(block, rawBlobs, proofs)
 }
 
 // broadcastReceiveBlock broadcasts a block and handles its reception.
@@ -362,27 +384,36 @@ func (vs *Server) broadcastReceiveBlock(ctx context.Context, block interfaces.Si
 
 // broadcastAndReceiveBlobs handles the broadcasting and reception of blob sidecars.
 func (vs *Server) broadcastAndReceiveBlobs(ctx context.Context, sidecars []*ethpb.BlobSidecar, root [32]byte) error {
+	eg, eCtx := errgroup.WithContext(ctx)
 	for i, sc := range sidecars {
-		if err := vs.P2P.BroadcastBlob(ctx, uint64(i), sc); err != nil {
-			return errors.Wrap(err, "broadcast blob failed")
-		}
-
-		readOnlySc, err := blocks.NewROBlobWithRoot(sc, root)
-		if err != nil {
-			return errors.Wrap(err, "ROBlob creation failed")
-		}
-		verifiedBlob := blocks.NewVerifiedROBlob(readOnlySc)
-		if err := vs.BlobReceiver.ReceiveBlob(ctx, verifiedBlob); err != nil {
-			return errors.Wrap(err, "receive blob failed")
-		}
-		vs.OperationNotifier.OperationFeed().Send(&feed.Event{
-			Type: operation.BlobSidecarReceived,
-			Data: &operation.BlobSidecarReceivedData{Blob: &verifiedBlob},
+		// Copy the iteration instance to a local variable to give each go-routine its own copy to play with.
+		// See https://golang.org/doc/faq#closures_and_goroutines for more details.
+		subIdx := i
+		sCar := sc
+		eg.Go(func() error {
+			if err := vs.P2P.BroadcastBlob(eCtx, uint64(subIdx), sCar); err != nil {
+				return errors.Wrap(err, "broadcast blob failed")
+			}
+			readOnlySc, err := blocks.NewROBlobWithRoot(sCar, root)
+			if err != nil {
+				return errors.Wrap(err, "ROBlob creation failed")
+			}
+			verifiedBlob := blocks.NewVerifiedROBlob(readOnlySc)
+			if err := vs.BlobReceiver.ReceiveBlob(ctx, verifiedBlob); err != nil {
+				return errors.Wrap(err, "receive blob failed")
+			}
+			vs.OperationNotifier.OperationFeed().Send(&feed.Event{
+				Type: operation.BlobSidecarReceived,
+				Data: &operation.BlobSidecarReceivedData{Blob: &verifiedBlob},
+			})
+			return nil
 		})
 	}
-	return nil
+	return eg.Wait()
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // PrepareBeaconProposer caches and updates the fee recipient for the given proposer.
 func (vs *Server) PrepareBeaconProposer(
 	_ context.Context, request *ethpb.PrepareBeaconProposerRequest,
@@ -392,7 +423,7 @@ func (vs *Server) PrepareBeaconProposer(
 	for _, r := range request.Recipients {
 		recipient := hexutil.Encode(r.FeeRecipient)
 		if !common.IsHexAddress(recipient) {
-			return nil, status.Errorf(codes.InvalidArgument, fmt.Sprintf("Invalid fee recipient address: %v", recipient))
+			return nil, status.Errorf(codes.InvalidArgument, "Invalid fee recipient address: %v", recipient)
 		}
 		// Use default address if the burn address is return
 		feeRecipient := primitives.ExecutionAddress(r.FeeRecipient)
@@ -413,11 +444,13 @@ func (vs *Server) PrepareBeaconProposer(
 	if len(validatorIndices) != 0 {
 		log.WithFields(logrus.Fields{
 			"validatorCount": len(validatorIndices),
-		}).Info("Updated fee recipient addresses for validator indices")
+		}).Debug("Updated fee recipient addresses for validator indices")
 	}
 	return &emptypb.Empty{}, nil
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // GetFeeRecipientByPubKey returns a fee recipient from the beacon node's settings or db based on a given public key
 func (vs *Server) GetFeeRecipientByPubKey(ctx context.Context, request *ethpb.FeeRecipientByPubKeyRequest) (*ethpb.FeeRecipientByPubKeyResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "validator.GetFeeRecipientByPublicKey")
@@ -445,7 +478,7 @@ func (vs *Server) GetFeeRecipientByPubKey(ctx context.Context, request *ethpb.Fe
 			}, nil
 		} else {
 			log.WithError(err).Error("An error occurred while retrieving fee recipient from db")
-			return nil, status.Errorf(codes.Internal, err.Error())
+			return nil, status.Errorf(codes.Internal, "error=%s", err)
 		}
 	}
 	return &ethpb.FeeRecipientByPubKeyResponse{
@@ -473,6 +506,8 @@ func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.ReadOnl
 	return root[:], nil
 }
 
+// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+//
 // SubmitValidatorRegistrations submits validator registrations.
 func (vs *Server) SubmitValidatorRegistrations(ctx context.Context, reg *ethpb.SignedValidatorRegistrationsV1) (*emptypb.Empty, error) {
 	if vs.BlockBuilder == nil || !vs.BlockBuilder.Configured() {
@@ -484,4 +519,20 @@ func (vs *Server) SubmitValidatorRegistrations(ctx context.Context, reg *ethpb.S
 	}
 
 	return &emptypb.Empty{}, nil
+}
+
+func blobsAndProofs(req *ethpb.GenericSignedBeaconBlock) ([][]byte, [][]byte, error) {
+	switch {
+	case req.GetDeneb() != nil:
+		dbBlockContents := req.GetDeneb()
+		return dbBlockContents.Blobs, dbBlockContents.KzgProofs, nil
+	case req.GetElectra() != nil:
+		dbBlockContents := req.GetElectra()
+		return dbBlockContents.Blobs, dbBlockContents.KzgProofs, nil
+	case req.GetFulu() != nil:
+		dbBlockContents := req.GetFulu()
+		return dbBlockContents.Blobs, dbBlockContents.KzgProofs, nil
+	default:
+		return nil, nil, errors.Errorf("unknown request type provided: %T", req)
+	}
 }

@@ -10,29 +10,31 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
+	corehelpers "github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filters"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/v1alpha1/validator"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/gorilla/mux"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache/depositsnapshot"
-	corehelpers "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filters"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	"go.opencensus.io/trace"
+	ssz "github.com/prysmaticlabs/fastssz"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -42,17 +44,113 @@ const (
 )
 
 var (
-	errNilBlock = errors.New("nil block")
+	errNilBlock         = errors.New("nil block")
+	errEquivocatedBlock = errors.New("block is equivocated")
+	errMarshalSSZ       = errors.New("could not marshal block into SSZ")
 )
 
-type handled bool
+type blockDecoder func([]byte) (*eth.GenericSignedBeaconBlock, error)
+
+func decodingError(v string, err error) error {
+	return fmt.Errorf("could not decode request body into %s consensus block: %w", v, err)
+}
+
+type signedBlockContentPeeker struct {
+	Block json.RawMessage `json:"signed_block"`
+}
+type slotPeeker struct {
+	Block struct {
+		Slot primitives.Slot `json:"slot,string"`
+	} `json:"message"`
+}
+
+func versionHeaderFromRequest(body []byte) (string, error) {
+	// check is required for post deneb fork blocks contents
+	p := &signedBlockContentPeeker{}
+	if err := json.Unmarshal(body, p); err != nil {
+		return "", errors.Wrap(err, "unable to peek slot from block contents")
+	}
+	data := body
+	if len(p.Block) > 0 {
+		data = p.Block
+	}
+	sp := &slotPeeker{}
+	if err := json.Unmarshal(data, sp); err != nil {
+		return "", errors.Wrap(err, "unable to peek slot from block")
+	}
+	ce := slots.ToEpoch(sp.Block.Slot)
+	if ce >= params.BeaconConfig().FuluForkEpoch {
+		return version.String(version.Fulu), nil
+	} else if ce >= params.BeaconConfig().ElectraForkEpoch {
+		return version.String(version.Electra), nil
+	} else if ce >= params.BeaconConfig().DenebForkEpoch {
+		return version.String(version.Deneb), nil
+	} else if ce >= params.BeaconConfig().CapellaForkEpoch {
+		return version.String(version.Capella), nil
+	} else if ce >= params.BeaconConfig().BellatrixForkEpoch {
+		return version.String(version.Bellatrix), nil
+	} else if ce >= params.BeaconConfig().AltairForkEpoch {
+		return version.String(version.Altair), nil
+	} else {
+		return version.String(version.Phase0), nil
+	}
+}
+
+// validateVersionHeader checks if the version header is required and retrieves it
+// from the request. If the version header is not provided and not required, it attempts
+// to derive it from the request body.
+func validateVersionHeader(r *http.Request, body []byte, versionRequired bool) (string, error) {
+	versionHeader := r.Header.Get(api.VersionHeader)
+	if versionRequired && versionHeader == "" {
+		return "", fmt.Errorf("%s header is required", api.VersionHeader)
+	}
+
+	if !versionRequired && versionHeader == "" {
+		var err error
+		versionHeader, err = versionHeaderFromRequest(body)
+		if err != nil {
+			return "", errors.Wrap(err, "could not decode request body for version header")
+		}
+	}
+
+	return versionHeader, nil
+}
+
+func readRequestBody(r *http.Request) ([]byte, error) {
+	return io.ReadAll(r.Body)
+}
+
+// GenericConverter is an example interface that your block structs could implement.
+type GenericConverter interface {
+	ToGeneric() (*eth.GenericSignedBeaconBlock, error)
+}
+
+// decodeGenericJSON uses generics to unmarshal JSON into a type T that also
+// provides a ToGeneric() method to produce a *eth.GenericSignedBeaconBlock.
+func decodeGenericJSON[T GenericConverter](body []byte, forkVersion string) (*eth.GenericSignedBeaconBlock, error) {
+	// Create a pointer to the zero value of T.
+	blockPtr := new(T)
+
+	// Unmarshal JSON into blockPtr.
+	if err := unmarshalStrict(body, blockPtr); err != nil {
+		return nil, decodingError(forkVersion, err)
+	}
+
+	// Call the ToGeneric method on the underlying value.
+	consensusBlock, err := (*blockPtr).ToGeneric()
+	if err != nil {
+		return nil, decodingError(forkVersion, err)
+	}
+
+	return consensusBlock, nil
+}
 
 // GetBlockV2 retrieves block details for given block ID.
 func (s *Server) GetBlockV2(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.GetBlockV2")
 	defer span.End()
 
-	blockId := mux.Vars(r)["block_id"]
+	blockId := r.PathValue("block_id")
 	if blockId == "" {
 		httputil.HandleError(w, "block_id is required in URL params", http.StatusBadRequest)
 		return
@@ -62,89 +160,20 @@ func (s *Server) GetBlockV2(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Deal with block unblinding.
+	if blk.Version() >= version.Bellatrix && blk.IsBlinded() {
+		blk, err = s.ExecutionReconstructor.ReconstructFullBlock(ctx, blk)
+		if err != nil {
+			httputil.HandleError(w, errors.Wrapf(err, "could not reconstruct full execution payload to create signed beacon block").Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
 	if httputil.RespondWithSsz(r) {
-		s.getBlockSSZV2(ctx, w, blk)
+		s.getBlockV2Ssz(w, blk)
 	} else {
-		s.getBlockV2(ctx, w, blk)
+		s.getBlockV2Json(ctx, w, blk)
 	}
-}
-
-// getBlockV2 returns the JSON-serialized version of the beacon block for given block ID.
-func (s *Server) getBlockV2(ctx context.Context, w http.ResponseWriter, blk interfaces.ReadOnlySignedBeaconBlock) {
-	blkRoot, err := blk.Block().HashTreeRoot()
-	if err != nil {
-		httputil.HandleError(w, "Could not get block root "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	finalized := s.FinalizationFetcher.IsFinalized(ctx, blkRoot)
-
-	getBlockHandler := func(get func(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) (*structs.GetBlockV2Response, error)) handled {
-		result, err := get(ctx, blk)
-		if result != nil {
-			result.Finalized = finalized
-			w.Header().Set(api.VersionHeader, result.Version)
-			httputil.WriteJson(w, result)
-			return true
-		}
-		// ErrUnsupportedField means that we have another block type
-		if !errors.Is(err, consensus_types.ErrUnsupportedField) {
-			httputil.HandleError(w, "Could not get signed beacon block: "+err.Error(), http.StatusInternalServerError)
-			return true
-		}
-		return false
-	}
-
-	if getBlockHandler(s.getBlockDeneb) {
-		return
-	}
-	if getBlockHandler(s.getBlockCapella) {
-		return
-	}
-	if getBlockHandler(s.getBlockBellatrix) {
-		return
-	}
-	if getBlockHandler(s.getBlockAltair) {
-		return
-	}
-	if getBlockHandler(s.getBlockPhase0) {
-		return
-	}
-	httputil.HandleError(w, fmt.Sprintf("Unknown block type %T", blk), http.StatusInternalServerError)
-}
-
-// getBlockSSZV2 returns the SSZ-serialized version of the beacon block for given block ID.
-func (s *Server) getBlockSSZV2(ctx context.Context, w http.ResponseWriter, blk interfaces.ReadOnlySignedBeaconBlock) {
-	getBlockHandler := func(get func(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) ([]byte, error), ver string) handled {
-		result, err := get(ctx, blk)
-		if result != nil {
-			w.Header().Set(api.VersionHeader, ver)
-			httputil.WriteSsz(w, result, "beacon_block.ssz")
-			return true
-		}
-		// ErrUnsupportedField means that we have another block type
-		if !errors.Is(err, consensus_types.ErrUnsupportedField) {
-			httputil.HandleError(w, "Could not get signed beacon block: "+err.Error(), http.StatusInternalServerError)
-			return true
-		}
-		return false
-	}
-
-	if getBlockHandler(s.getBlockDenebSSZ, version.String(version.Deneb)) {
-		return
-	}
-	if getBlockHandler(s.getBlockCapellaSSZ, version.String(version.Capella)) {
-		return
-	}
-	if getBlockHandler(s.getBlockBellatrixSSZ, version.String(version.Bellatrix)) {
-		return
-	}
-	if getBlockHandler(s.getBlockAltairSSZ, version.String(version.Altair)) {
-		return
-	}
-	if getBlockHandler(s.getBlockPhase0SSZ, version.String(version.Phase0)) {
-		return
-	}
-	httputil.HandleError(w, fmt.Sprintf("Unknown block type %T", blk), http.StatusInternalServerError)
 }
 
 // GetBlindedBlock retrieves blinded block for given block id.
@@ -152,7 +181,7 @@ func (s *Server) GetBlindedBlock(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.GetBlindedBlock")
 	defer span.End()
 
-	blockId := mux.Vars(r)["block_id"]
+	blockId := r.PathValue("block_id")
 	if blockId == "" {
 		httputil.HandleError(w, "block_id is required in URL params", http.StatusBadRequest)
 		return
@@ -162,732 +191,128 @@ func (s *Server) GetBlindedBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Convert to blinded block (if it's not already).
+	if blk.Version() >= version.Bellatrix && !blk.IsBlinded() {
+		blk, err = blk.ToBlinded()
+		if err != nil {
+			shared.WriteBlockFetchError(w, blk, errors.Wrapf(err, "could not convert block to blinded block"))
+			return
+		}
+	}
+
 	if httputil.RespondWithSsz(r) {
-		s.getBlindedBlockSSZ(ctx, w, blk)
+		s.getBlockV2Ssz(w, blk)
 	} else {
-		s.getBlindedBlock(ctx, w, blk)
+		s.getBlockV2Json(ctx, w, blk)
 	}
 }
 
-// getBlindedBlock returns the JSON-serialized version of the blinded beacon block for given block id.
-func (s *Server) getBlindedBlock(ctx context.Context, w http.ResponseWriter, blk interfaces.ReadOnlySignedBeaconBlock) {
+// getBlockV2Ssz returns the SSZ-serialized version of the beacon block for given block ID.
+func (s *Server) getBlockV2Ssz(w http.ResponseWriter, blk interfaces.ReadOnlySignedBeaconBlock) {
+	result, err := s.getBlockResponseBodySsz(blk)
+	if err != nil {
+		httputil.HandleError(w, "Could not get signed beacon block: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if result == nil {
+		httputil.HandleError(w, fmt.Sprintf("Unknown block type %T", blk), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(api.VersionHeader, version.String(blk.Version()))
+	httputil.WriteSsz(w, result)
+}
+
+func (*Server) getBlockResponseBodySsz(blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
+	err := blocks.BeaconBlockIsNil(blk)
+	if err != nil {
+		return nil, errNilBlock
+	}
+	pb, err := blk.Proto()
+	if err != nil {
+		return nil, err
+	}
+	marshaler, ok := pb.(ssz.Marshaler)
+	if !ok {
+		return nil, errMarshalSSZ
+	}
+	sszData, err := marshaler.MarshalSSZ()
+	if err != nil {
+		return nil, errors.Wrapf(err, "could not marshal block into SSZ")
+	}
+	return sszData, nil
+}
+
+// getBlockV2Json returns the JSON-serialized version of the beacon block for given block ID.
+func (s *Server) getBlockV2Json(ctx context.Context, w http.ResponseWriter, blk interfaces.ReadOnlySignedBeaconBlock) {
+	result, err := s.getBlockResponseBodyJson(ctx, blk)
+	if err != nil {
+		httputil.HandleError(w, "Error processing request: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if result == nil {
+		httputil.HandleError(w, fmt.Sprintf("Unknown block type %T", blk), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(api.VersionHeader, result.Version)
+	httputil.WriteJson(w, result)
+}
+
+func (s *Server) getBlockResponseBodyJson(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) (*structs.GetBlockV2Response, error) {
+	if err := blocks.BeaconBlockIsNil(blk); err != nil {
+		return nil, err
+	}
 	blkRoot, err := blk.Block().HashTreeRoot()
 	if err != nil {
-		httputil.HandleError(w, "Could not get block root "+err.Error(), http.StatusInternalServerError)
-		return
+		return nil, errors.Wrap(err, "could not get block root")
 	}
 	finalized := s.FinalizationFetcher.IsFinalized(ctx, blkRoot)
-
-	getBlockHandler := func(get func(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) (*structs.GetBlockV2Response, error)) handled {
-		result, err := get(ctx, blk)
-		if result != nil {
-			result.Finalized = finalized
-			w.Header().Set(api.VersionHeader, result.Version)
-			httputil.WriteJson(w, result)
-			return true
+	isOptimistic := false
+	if blk.Version() >= version.Bellatrix {
+		isOptimistic, err = s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, blkRoot)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not check if block is optimistic")
 		}
-		// ErrUnsupportedField means that we have another block type
-		if !errors.Is(err, consensus_types.ErrUnsupportedField) {
-			httputil.HandleError(w, "Could not get signed beacon block: "+err.Error(), http.StatusInternalServerError)
-			return true
-		}
-		return false
 	}
-
-	if getBlockHandler(s.getBlockPhase0) {
-		return
-	}
-	if getBlockHandler(s.getBlockAltair) {
-		return
-	}
-	if getBlockHandler(s.getBlindedBlockBellatrix) {
-		return
-	}
-	if getBlockHandler(s.getBlindedBlockCapella) {
-		return
-	}
-	if getBlockHandler(s.getBlindedBlockDeneb) {
-		return
-	}
-	httputil.HandleError(w, fmt.Sprintf("Unknown block type %T", blk), http.StatusInternalServerError)
-}
-
-// getBlindedBlockSSZ returns the SSZ-serialized version of the blinded beacon block for given block id.
-func (s *Server) getBlindedBlockSSZ(ctx context.Context, w http.ResponseWriter, blk interfaces.ReadOnlySignedBeaconBlock) {
-	getBlockHandler := func(get func(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) ([]byte, error), ver string) handled {
-		result, err := get(ctx, blk)
-		if result != nil {
-			w.Header().Set(api.VersionHeader, ver)
-			httputil.WriteSsz(w, result, "beacon_block.ssz")
-			return true
-		}
-		// ErrUnsupportedField means that we have another block type
-		if !errors.Is(err, consensus_types.ErrUnsupportedField) {
-			httputil.HandleError(w, "Could not get signed beacon block: "+err.Error(), http.StatusInternalServerError)
-			return true
-		}
-		return false
-	}
-
-	if getBlockHandler(s.getBlockPhase0SSZ, version.String(version.Phase0)) {
-		return
-	}
-	if getBlockHandler(s.getBlockAltairSSZ, version.String(version.Altair)) {
-		return
-	}
-	if getBlockHandler(s.getBlindedBlockBellatrixSSZ, version.String(version.Bellatrix)) {
-		return
-	}
-	if getBlockHandler(s.getBlindedBlockCapellaSSZ, version.String(version.Capella)) {
-		return
-	}
-	if getBlockHandler(s.getBlindedBlockDenebSSZ, version.String(version.Deneb)) {
-		return
-	}
-	httputil.HandleError(w, fmt.Sprintf("Unknown block type %T", blk), http.StatusInternalServerError)
-}
-
-func (*Server) getBlockPhase0(_ context.Context, blk interfaces.ReadOnlySignedBeaconBlock) (*structs.GetBlockV2Response, error) {
-	consensusBlk, err := blk.PbPhase0Block()
+	mj, err := structs.SignedBeaconBlockMessageJsoner(blk)
 	if err != nil {
 		return nil, err
 	}
-	if consensusBlk == nil {
-		return nil, errNilBlock
-	}
-	respBlk := structs.SignedBeaconBlockFromConsensus(consensusBlk)
-	jsonBytes, err := json.Marshal(respBlk.Message)
+	jb, err := mj.MessageRawJson()
 	if err != nil {
 		return nil, err
 	}
 	return &structs.GetBlockV2Response{
-		Version:             version.String(version.Phase0),
-		ExecutionOptimistic: false,
-		Data: &structs.SignedBlock{
-			Message:   jsonBytes,
-			Signature: respBlk.Signature,
-		},
-	}, nil
-}
-
-func (*Server) getBlockAltair(_ context.Context, blk interfaces.ReadOnlySignedBeaconBlock) (*structs.GetBlockV2Response, error) {
-	consensusBlk, err := blk.PbAltairBlock()
-	if err != nil {
-		return nil, err
-	}
-	if consensusBlk == nil {
-		return nil, errNilBlock
-	}
-	respBlk := structs.SignedBeaconBlockAltairFromConsensus(consensusBlk)
-	jsonBytes, err := json.Marshal(respBlk.Message)
-	if err != nil {
-		return nil, err
-	}
-	return &structs.GetBlockV2Response{
-		Version:             version.String(version.Altair),
-		ExecutionOptimistic: false,
-		Data: &structs.SignedBlock{
-			Message:   jsonBytes,
-			Signature: respBlk.Signature,
-		},
-	}, nil
-}
-
-func (s *Server) getBlockBellatrix(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) (*structs.GetBlockV2Response, error) {
-	consensusBlk, err := blk.PbBellatrixBlock()
-	if err != nil {
-		// ErrUnsupportedField means that we have another block type
-		if errors.Is(err, consensus_types.ErrUnsupportedField) {
-			blindedConsensusBlk, err := blk.PbBlindedBellatrixBlock()
-			if err != nil {
-				return nil, err
-			}
-			if blindedConsensusBlk == nil {
-				return nil, errNilBlock
-			}
-			fullBlk, err := s.ExecutionPayloadReconstructor.ReconstructFullBlock(ctx, blk)
-			if err != nil {
-				return nil, errors.Wrapf(err, "could not reconstruct full execution payload to create signed beacon block")
-			}
-			consensusBlk, err = fullBlk.PbBellatrixBlock()
-			if err != nil {
-				return nil, errors.Wrapf(err, "could not get signed beacon block")
-			}
-		} else {
-			return nil, err
-		}
-	}
-
-	if consensusBlk == nil {
-		return nil, errNilBlock
-	}
-	root, err := blk.Block().HashTreeRoot()
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not get block root")
-	}
-	isOptimistic, err := s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, root)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not check if block is optimistic")
-	}
-	respBlk, err := structs.SignedBeaconBlockBellatrixFromConsensus(consensusBlk)
-	if err != nil {
-		return nil, err
-	}
-	jsonBytes, err := json.Marshal(respBlk.Message)
-	if err != nil {
-		return nil, err
-	}
-	return &structs.GetBlockV2Response{
-		Version:             version.String(version.Bellatrix),
+		Finalized:           finalized,
 		ExecutionOptimistic: isOptimistic,
+		Version:             version.String(blk.Version()),
 		Data: &structs.SignedBlock{
-			Message:   jsonBytes,
-			Signature: respBlk.Signature,
+			Message:   jb,
+			Signature: mj.SigString(),
 		},
 	}, nil
 }
 
-func (s *Server) getBlockCapella(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) (*structs.GetBlockV2Response, error) {
-	consensusBlk, err := blk.PbCapellaBlock()
-	if err != nil {
-		// ErrUnsupportedField means that we have another block type
-		if errors.Is(err, consensus_types.ErrUnsupportedField) {
-			blindedConsensusBlk, err := blk.PbBlindedCapellaBlock()
-			if err != nil {
-				return nil, err
-			}
-			if blindedConsensusBlk == nil {
-				return nil, errNilBlock
-			}
-			fullBlk, err := s.ExecutionPayloadReconstructor.ReconstructFullBlock(ctx, blk)
-			if err != nil {
-				return nil, errors.Wrapf(err, "could not reconstruct full execution payload to create signed beacon block")
-			}
-			consensusBlk, err = fullBlk.PbCapellaBlock()
-			if err != nil {
-				return nil, errors.Wrapf(err, "could not get signed beacon block")
-			}
-		} else {
-			return nil, err
-		}
-	}
-
-	if consensusBlk == nil {
-		return nil, errNilBlock
-	}
-	root, err := blk.Block().HashTreeRoot()
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not get block root")
-	}
-	isOptimistic, err := s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, root)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not check if block is optimistic")
-	}
-	respBlk, err := structs.SignedBeaconBlockCapellaFromConsensus(consensusBlk)
-	if err != nil {
-		return nil, err
-	}
-	jsonBytes, err := json.Marshal(respBlk.Message)
-	if err != nil {
-		return nil, err
-	}
-	return &structs.GetBlockV2Response{
-		Version:             version.String(version.Capella),
-		ExecutionOptimistic: isOptimistic,
-		Data: &structs.SignedBlock{
-			Message:   jsonBytes,
-			Signature: respBlk.Signature,
-		},
-	}, nil
-}
-
-func (s *Server) getBlockDeneb(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) (*structs.GetBlockV2Response, error) {
-	consensusBlk, err := blk.PbDenebBlock()
-	if err != nil {
-		// ErrUnsupportedGetter means that we have another block type
-		if errors.Is(err, consensus_types.ErrUnsupportedField) {
-			blindedConsensusBlk, err := blk.PbBlindedDenebBlock()
-			if err != nil {
-				return nil, err
-			}
-			if blindedConsensusBlk == nil {
-				return nil, errNilBlock
-			}
-			fullBlk, err := s.ExecutionPayloadReconstructor.ReconstructFullBlock(ctx, blk)
-			if err != nil {
-				return nil, errors.Wrapf(err, "could not reconstruct full execution payload to create signed beacon block")
-			}
-			consensusBlk, err = fullBlk.PbDenebBlock()
-			if err != nil {
-				return nil, errors.Wrapf(err, "could not get signed beacon block")
-			}
-		} else {
-			return nil, err
-		}
-	}
-
-	if consensusBlk == nil {
-		return nil, errNilBlock
-	}
-	root, err := blk.Block().HashTreeRoot()
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not get block root")
-	}
-	isOptimistic, err := s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, root)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not check if block is optimistic")
-	}
-	respBlk, err := structs.SignedBeaconBlockDenebFromConsensus(consensusBlk)
-	if err != nil {
-		return nil, err
-	}
-	jsonBytes, err := json.Marshal(respBlk.Message)
-	if err != nil {
-		return nil, err
-	}
-	return &structs.GetBlockV2Response{
-		Version:             version.String(version.Deneb),
-		ExecutionOptimistic: isOptimistic,
-		Data: &structs.SignedBlock{
-			Message:   jsonBytes,
-			Signature: respBlk.Signature,
-		},
-	}, nil
-}
-
-func (*Server) getBlockPhase0SSZ(_ context.Context, blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
-	consensusBlk, err := blk.PbPhase0Block()
-	if err != nil {
-		return nil, err
-	}
-	if consensusBlk == nil {
-		return nil, errNilBlock
-	}
-	sszData, err := consensusBlk.MarshalSSZ()
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not marshal block into SSZ")
-	}
-	return sszData, nil
-}
-
-func (*Server) getBlockAltairSSZ(_ context.Context, blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
-	consensusBlk, err := blk.PbAltairBlock()
-	if err != nil {
-		return nil, err
-	}
-	if consensusBlk == nil {
-		return nil, errNilBlock
-	}
-	sszData, err := consensusBlk.MarshalSSZ()
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not marshal block into SSZ")
-	}
-	return sszData, nil
-}
-
-func (s *Server) getBlockBellatrixSSZ(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
-	consensusBlk, err := blk.PbBellatrixBlock()
-	if err != nil {
-		// ErrUnsupportedField means that we have another block type
-		if errors.Is(err, consensus_types.ErrUnsupportedField) {
-			blindedConsensusBlk, err := blk.PbBlindedBellatrixBlock()
-			if err != nil {
-				return nil, err
-			}
-			if blindedConsensusBlk == nil {
-				return nil, errNilBlock
-			}
-			fullBlk, err := s.ExecutionPayloadReconstructor.ReconstructFullBlock(ctx, blk)
-			if err != nil {
-				return nil, errors.Wrapf(err, "could not reconstruct full execution payload to create signed beacon block")
-			}
-			consensusBlk, err = fullBlk.PbBellatrixBlock()
-			if err != nil {
-				return nil, errors.Wrapf(err, "could not get signed beacon block")
-			}
-		} else {
-			return nil, err
-		}
-	}
-
-	if consensusBlk == nil {
-		return nil, errNilBlock
-	}
-	sszData, err := consensusBlk.MarshalSSZ()
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not marshal block into SSZ")
-	}
-	return sszData, nil
-}
-
-func (s *Server) getBlockCapellaSSZ(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
-	consensusBlk, err := blk.PbCapellaBlock()
-	if err != nil {
-		// ErrUnsupportedField means that we have another block type
-		if errors.Is(err, consensus_types.ErrUnsupportedField) {
-			blindedConsensusBlk, err := blk.PbBlindedCapellaBlock()
-			if err != nil {
-				return nil, err
-			}
-			if blindedConsensusBlk == nil {
-				return nil, errNilBlock
-			}
-			fullBlk, err := s.ExecutionPayloadReconstructor.ReconstructFullBlock(ctx, blk)
-			if err != nil {
-				return nil, errors.Wrapf(err, "could not reconstruct full execution payload to create signed beacon block")
-			}
-			consensusBlk, err = fullBlk.PbCapellaBlock()
-			if err != nil {
-				return nil, errors.Wrapf(err, "could not get signed beacon block")
-			}
-		} else {
-			return nil, err
-		}
-	}
-
-	if consensusBlk == nil {
-		return nil, errNilBlock
-	}
-	sszData, err := consensusBlk.MarshalSSZ()
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not marshal block into SSZ")
-	}
-	return sszData, nil
-}
-
-func (s *Server) getBlockDenebSSZ(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
-	consensusBlk, err := blk.PbDenebBlock()
-	if err != nil {
-		// ErrUnsupportedGetter means that we have another block type
-		if errors.Is(err, consensus_types.ErrUnsupportedField) {
-			blindedConsensusBlk, err := blk.PbBlindedDenebBlock()
-			if err != nil {
-				return nil, err
-			}
-			if blindedConsensusBlk == nil {
-				return nil, errNilBlock
-			}
-			fullBlk, err := s.ExecutionPayloadReconstructor.ReconstructFullBlock(ctx, blk)
-			if err != nil {
-				return nil, errors.Wrapf(err, "could not reconstruct full execution payload to create signed beacon block")
-			}
-			consensusBlk, err = fullBlk.PbDenebBlock()
-			if err != nil {
-				return nil, errors.Wrapf(err, "could not get signed beacon block")
-			}
-		} else {
-			return nil, err
-		}
-	}
-
-	if consensusBlk == nil {
-		return nil, errNilBlock
-	}
-	sszData, err := consensusBlk.MarshalSSZ()
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not marshal block into SSZ")
-	}
-	return sszData, nil
-}
-
-func (s *Server) getBlindedBlockBellatrix(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) (*structs.GetBlockV2Response, error) {
-	blindedConsensusBlk, err := blk.PbBlindedBellatrixBlock()
-	if err != nil {
-		// ErrUnsupportedField means that we have another block type
-		if errors.Is(err, consensus_types.ErrUnsupportedField) {
-			consensusBlk, err := blk.PbBellatrixBlock()
-			if err != nil {
-				return nil, err
-			}
-			if consensusBlk == nil {
-				return nil, errNilBlock
-			}
-			blkInterface, err := blk.ToBlinded()
-			if err != nil {
-				return nil, errors.Wrapf(err, "could not convert block to blinded block")
-			}
-			blindedConsensusBlk, err = blkInterface.PbBlindedBellatrixBlock()
-			if err != nil {
-				return nil, errors.Wrapf(err, "could not get signed beacon block")
-			}
-		} else {
-			return nil, err
-		}
-	}
-
-	if blindedConsensusBlk == nil {
-		return nil, errNilBlock
-	}
-	root, err := blk.Block().HashTreeRoot()
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not get block root")
-	}
-	isOptimistic, err := s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, root)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not check if block is optimistic")
-	}
-	respBlk, err := structs.SignedBlindedBeaconBlockBellatrixFromConsensus(blindedConsensusBlk)
-	if err != nil {
-		return nil, err
-	}
-	jsonBytes, err := json.Marshal(respBlk.Message)
-	if err != nil {
-		return nil, err
-	}
-	return &structs.GetBlockV2Response{
-		Version:             version.String(version.Bellatrix),
-		ExecutionOptimistic: isOptimistic,
-		Data: &structs.SignedBlock{
-			Message:   jsonBytes,
-			Signature: respBlk.Signature,
-		},
-	}, nil
-}
-
-func (s *Server) getBlindedBlockCapella(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) (*structs.GetBlockV2Response, error) {
-	blindedConsensusBlk, err := blk.PbBlindedCapellaBlock()
-	if err != nil {
-		// ErrUnsupportedField means that we have another block type
-		if errors.Is(err, consensus_types.ErrUnsupportedField) {
-			consensusBlk, err := blk.PbCapellaBlock()
-			if err != nil {
-				return nil, err
-			}
-			if consensusBlk == nil {
-				return nil, errNilBlock
-			}
-			blkInterface, err := blk.ToBlinded()
-			if err != nil {
-				return nil, errors.Wrapf(err, "could not convert block to blinded block")
-			}
-			blindedConsensusBlk, err = blkInterface.PbBlindedCapellaBlock()
-			if err != nil {
-				return nil, errors.Wrapf(err, "could not get signed beacon block")
-			}
-		} else {
-			return nil, err
-		}
-	}
-
-	if blindedConsensusBlk == nil {
-		return nil, errNilBlock
-	}
-	root, err := blk.Block().HashTreeRoot()
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not get block root")
-	}
-	isOptimistic, err := s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, root)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not check if block is optimistic")
-	}
-	respBlk, err := structs.SignedBlindedBeaconBlockCapellaFromConsensus(blindedConsensusBlk)
-	if err != nil {
-		return nil, err
-	}
-	jsonBytes, err := json.Marshal(respBlk.Message)
-	if err != nil {
-		return nil, err
-	}
-	return &structs.GetBlockV2Response{
-		Version:             version.String(version.Capella),
-		ExecutionOptimistic: isOptimistic,
-		Data: &structs.SignedBlock{
-			Message:   jsonBytes,
-			Signature: respBlk.Signature,
-		},
-	}, nil
-}
-
-func (s *Server) getBlindedBlockDeneb(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) (*structs.GetBlockV2Response, error) {
-	blindedConsensusBlk, err := blk.PbBlindedDenebBlock()
-	if err != nil {
-		// ErrUnsupportedGetter means that we have another block type
-		if errors.Is(err, consensus_types.ErrUnsupportedField) {
-			consensusBlk, err := blk.PbDenebBlock()
-			if err != nil {
-				return nil, err
-			}
-			if consensusBlk == nil {
-				return nil, errNilBlock
-			}
-			blkInterface, err := blk.ToBlinded()
-			if err != nil {
-				return nil, errors.Wrapf(err, "could not convert block to blinded block")
-			}
-			blindedConsensusBlk, err = blkInterface.PbBlindedDenebBlock()
-			if err != nil {
-				return nil, errors.Wrapf(err, "could not get signed beacon block")
-			}
-		} else {
-			return nil, err
-		}
-	}
-
-	if blindedConsensusBlk == nil {
-		return nil, errNilBlock
-	}
-	root, err := blk.Block().HashTreeRoot()
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not get block root")
-	}
-	isOptimistic, err := s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, root)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not check if block is optimistic")
-	}
-	respBlk, err := structs.SignedBlindedBeaconBlockDenebFromConsensus(blindedConsensusBlk)
-	if err != nil {
-		return nil, err
-	}
-	jsonBytes, err := json.Marshal(respBlk.Message)
-	if err != nil {
-		return nil, err
-	}
-	return &structs.GetBlockV2Response{
-		Version:             version.String(version.Deneb),
-		ExecutionOptimistic: isOptimistic,
-		Data: &structs.SignedBlock{
-			Message:   jsonBytes,
-			Signature: respBlk.Signature,
-		},
-	}, nil
-}
-
-func (*Server) getBlindedBlockBellatrixSSZ(_ context.Context, blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
-	blindedConsensusBlk, err := blk.PbBlindedBellatrixBlock()
-	if err != nil {
-		// ErrUnsupportedField means that we have another block type
-		if errors.Is(err, consensus_types.ErrUnsupportedField) {
-			consensusBlk, err := blk.PbBellatrixBlock()
-			if err != nil {
-				return nil, err
-			}
-			if consensusBlk == nil {
-				return nil, errNilBlock
-			}
-			blkInterface, err := blk.ToBlinded()
-			if err != nil {
-				return nil, errors.Wrapf(err, "could not convert block to blinded block")
-			}
-			blindedConsensusBlk, err = blkInterface.PbBlindedBellatrixBlock()
-			if err != nil {
-				return nil, errors.Wrapf(err, "could not get signed beacon block")
-			}
-		} else {
-			return nil, err
-		}
-	}
-
-	if blindedConsensusBlk == nil {
-		return nil, errNilBlock
-	}
-	sszData, err := blindedConsensusBlk.MarshalSSZ()
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not marshal block into SSZ")
-	}
-	return sszData, nil
-}
-
-func (*Server) getBlindedBlockCapellaSSZ(_ context.Context, blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
-	blindedConsensusBlk, err := blk.PbBlindedCapellaBlock()
-	if err != nil {
-		// ErrUnsupportedField means that we have another block type
-		if errors.Is(err, consensus_types.ErrUnsupportedField) {
-			consensusBlk, err := blk.PbCapellaBlock()
-			if err != nil {
-				return nil, err
-			}
-			if consensusBlk == nil {
-				return nil, errNilBlock
-			}
-			blkInterface, err := blk.ToBlinded()
-			if err != nil {
-				return nil, errors.Wrapf(err, "could not convert block to blinded block")
-			}
-			blindedConsensusBlk, err = blkInterface.PbBlindedCapellaBlock()
-			if err != nil {
-				return nil, errors.Wrapf(err, "could not get signed beacon block")
-			}
-		} else {
-			return nil, err
-		}
-	}
-
-	if blindedConsensusBlk == nil {
-		return nil, errNilBlock
-	}
-	sszData, err := blindedConsensusBlk.MarshalSSZ()
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not marshal block into SSZ")
-	}
-	return sszData, nil
-}
-
-func (*Server) getBlindedBlockDenebSSZ(_ context.Context, blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
-	blindedConsensusBlk, err := blk.PbBlindedDenebBlock()
-	if err != nil {
-		// ErrUnsupportedGetter means that we have another block type
-		if errors.Is(err, consensus_types.ErrUnsupportedField) {
-			consensusBlk, err := blk.PbDenebBlock()
-			if err != nil {
-				return nil, err
-			}
-			if consensusBlk == nil {
-				return nil, errNilBlock
-			}
-			blkInterface, err := blk.ToBlinded()
-			if err != nil {
-				return nil, errors.Wrapf(err, "could not convert block to blinded block")
-			}
-			blindedConsensusBlk, err = blkInterface.PbBlindedDenebBlock()
-			if err != nil {
-				return nil, errors.Wrapf(err, "could not get signed beacon block")
-			}
-		} else {
-			return nil, err
-		}
-	}
-
-	if blindedConsensusBlk == nil {
-		return nil, errNilBlock
-	}
-	sszData, err := blindedConsensusBlk.MarshalSSZ()
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not marshal block into SSZ")
-	}
-	return sszData, nil
-}
-
+// Deprecated: use GetBlockAttestationsV2 instead
 // GetBlockAttestations retrieves attestation included in requested block.
 func (s *Server) GetBlockAttestations(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.GetBlockAttestations")
 	defer span.End()
 
-	blockId := mux.Vars(r)["block_id"]
-	if blockId == "" {
-		httputil.HandleError(w, "block_id is required in URL params", http.StatusBadRequest)
+	blk, isOptimistic, root := s.blockData(ctx, w, r)
+	if blk == nil {
 		return
 	}
-	blk, err := s.Blocker.Block(ctx, []byte(blockId))
-	if !shared.WriteBlockFetchError(w, blk, err) {
-		return
-	}
-
 	consensusAtts := blk.Block().Body().Attestations()
 	atts := make([]*structs.Attestation, len(consensusAtts))
 	for i, att := range consensusAtts {
-		atts[i] = structs.AttFromConsensus(att)
+		a, ok := att.(*eth.Attestation)
+		if ok {
+			atts[i] = structs.AttFromConsensus(a)
+		} else {
+			httputil.HandleError(w, fmt.Sprintf("unable to convert consensus attestations of type %T", att), http.StatusInternalServerError)
+			return
+		}
 	}
-	root, err := blk.Block().HashTreeRoot()
-	if err != nil {
-		httputil.HandleError(w, "Could not get block root: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	isOptimistic, err := s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, root)
-	if err != nil {
-		httputil.HandleError(w, "Could not check if block is optimistic: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
 	resp := &structs.GetBlockAttestationsResponse{
 		Data:                atts,
 		ExecutionOptimistic: isOptimistic,
@@ -896,6 +321,81 @@ func (s *Server) GetBlockAttestations(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJson(w, resp)
 }
 
+// GetBlockAttestationsV2 retrieves attestation included in requested block.
+func (s *Server) GetBlockAttestationsV2(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "beacon.GetBlockAttestationsV2")
+	defer span.End()
+
+	blk, isOptimistic, root := s.blockData(ctx, w, r)
+	if blk == nil {
+		return
+	}
+	consensusAtts := blk.Block().Body().Attestations()
+
+	v := blk.Block().Version()
+	var attStructs []interface{}
+	if v >= version.Electra {
+		for _, att := range consensusAtts {
+			a, ok := att.(*eth.AttestationElectra)
+			if !ok {
+				httputil.HandleError(w, fmt.Sprintf("unable to convert consensus attestations electra of type %T", att), http.StatusInternalServerError)
+				return
+			}
+			attStruct := structs.AttElectraFromConsensus(a)
+			attStructs = append(attStructs, attStruct)
+		}
+	} else {
+		for _, att := range consensusAtts {
+			a, ok := att.(*eth.Attestation)
+			if !ok {
+				httputil.HandleError(w, fmt.Sprintf("unable to convert consensus attestation of type %T", att), http.StatusInternalServerError)
+				return
+			}
+			attStruct := structs.AttFromConsensus(a)
+			attStructs = append(attStructs, attStruct)
+		}
+	}
+
+	attBytes, err := json.Marshal(attStructs)
+	if err != nil {
+		httputil.HandleError(w, fmt.Sprintf("failed to marshal attestations: %v", err), http.StatusInternalServerError)
+		return
+	}
+	resp := &structs.GetBlockAttestationsV2Response{
+		Version:             version.String(v),
+		ExecutionOptimistic: isOptimistic,
+		Finalized:           s.FinalizationFetcher.IsFinalized(ctx, root),
+		Data:                attBytes,
+	}
+	w.Header().Set(api.VersionHeader, version.String(v))
+	httputil.WriteJson(w, resp)
+}
+
+func (s *Server) blockData(ctx context.Context, w http.ResponseWriter, r *http.Request) (interfaces.ReadOnlySignedBeaconBlock, bool, [32]byte) {
+	blockId := r.PathValue("block_id")
+	if blockId == "" {
+		httputil.HandleError(w, "block_id is required in URL params", http.StatusBadRequest)
+		return nil, false, [32]byte{}
+	}
+	blk, err := s.Blocker.Block(ctx, []byte(blockId))
+	if !shared.WriteBlockFetchError(w, blk, err) {
+		return nil, false, [32]byte{}
+	}
+
+	root, err := blk.Block().HashTreeRoot()
+	if err != nil {
+		httputil.HandleError(w, "Could not get block root: "+err.Error(), http.StatusInternalServerError)
+		return nil, false, [32]byte{}
+	}
+	isOptimistic, err := s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, root)
+	if err != nil {
+		httputil.HandleError(w, "Could not check if block is optimistic: "+err.Error(), http.StatusInternalServerError)
+		return nil, false, [32]byte{}
+	}
+	return blk, isOptimistic, root
+}
+
+// Deprecated: use PublishBlindedBlockV2 instead
 // PublishBlindedBlock instructs the beacon node to use the components of the `SignedBlindedBeaconBlock` to construct
 // and publish a SignedBeaconBlock by swapping out the transactions_root for the corresponding full list of `transactions`.
 // The beacon node should broadcast a newly constructed SignedBeaconBlock to the beacon network, to be included in the
@@ -941,256 +441,192 @@ func (s *Server) PublishBlindedBlockV2(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// publishBlindedBlockSSZ reads SSZ-encoded data and publishes a blinded block.
 func (s *Server) publishBlindedBlockSSZ(ctx context.Context, w http.ResponseWriter, r *http.Request, versionRequired bool) {
-	body, err := io.ReadAll(r.Body)
+	body, err := readRequestBody(r)
 	if err != nil {
 		httputil.HandleError(w, "Could not read request body: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	versionHeader := r.Header.Get(api.VersionHeader)
-	if versionRequired && versionHeader == "" {
-		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
-	}
 
-	denebBlock := &eth.SignedBlindedBeaconBlockDeneb{}
-	if err = denebBlock.UnmarshalSSZ(body); err == nil {
-		genericBlock := &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_BlindedDeneb{
-				BlindedDeneb: denebBlock,
-			},
-		}
-		if err = s.validateBroadcast(ctx, r, genericBlock); err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		s.proposeBlock(ctx, w, genericBlock)
-		return
-	}
-	if versionHeader == version.String(version.Deneb) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Deneb), err.Error()),
-			http.StatusBadRequest,
-		)
+	versionHeader, err := validateVersionHeader(r, body, versionRequired)
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	capellaBlock := &eth.SignedBlindedBeaconBlockCapella{}
-	if err = capellaBlock.UnmarshalSSZ(body); err == nil {
-		genericBlock := &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_BlindedCapella{
-				BlindedCapella: capellaBlock,
-			},
-		}
-		if err = s.validateBroadcast(ctx, r, genericBlock); err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		s.proposeBlock(ctx, w, genericBlock)
-		return
-	}
-	if versionHeader == version.String(version.Capella) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Capella), err.Error()),
-			http.StatusBadRequest,
-		)
+	genericBlock, err := decodeBlindedBlockSSZ(versionHeader, body)
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	bellatrixBlock := &eth.SignedBlindedBeaconBlockBellatrix{}
-	if err = bellatrixBlock.UnmarshalSSZ(body); err == nil {
-		genericBlock := &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_BlindedBellatrix{
-				BlindedBellatrix: bellatrixBlock,
-			},
-		}
-		if err = s.validateBroadcast(ctx, r, genericBlock); err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		s.proposeBlock(ctx, w, genericBlock)
+	if err := s.validateBroadcast(ctx, r, genericBlock); err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if versionHeader == version.String(version.Bellatrix) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Bellatrix), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
-
-	altairBlock := &eth.SignedBeaconBlockAltair{}
-	if err = altairBlock.UnmarshalSSZ(body); err == nil {
-		genericBlock := &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_Altair{
-				Altair: altairBlock,
-			},
-		}
-		if err = s.validateBroadcast(ctx, r, genericBlock); err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		s.proposeBlock(ctx, w, genericBlock)
-		return
-	}
-	if versionHeader == version.String(version.Altair) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Altair), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
-
-	phase0Block := &eth.SignedBeaconBlock{}
-	if err = phase0Block.UnmarshalSSZ(body); err == nil {
-		genericBlock := &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_Phase0{
-				Phase0: phase0Block,
-			},
-		}
-		if err = s.validateBroadcast(ctx, r, genericBlock); err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		s.proposeBlock(ctx, w, genericBlock)
-		return
-	}
-	if versionHeader == version.String(version.Phase0) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Phase0), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
-
-	httputil.HandleError(w, "Body does not represent a valid block type", http.StatusBadRequest)
+	s.proposeBlock(ctx, w, genericBlock)
 }
 
+// decodeBlindedBlockSSZ dispatches to the correct SSZ decoder based on versionHeader.
+func decodeBlindedBlockSSZ(versionHeader string, body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	if decoder, exists := blindedSSZDecoders[versionHeader]; exists {
+		return decoder(body)
+	}
+	return nil, fmt.Errorf("body does not represent a valid blinded block type")
+}
+
+var blindedSSZDecoders = map[string]blockDecoder{
+	version.String(version.Fulu):      decodeBlindedFuluSSZ,
+	version.String(version.Electra):   decodeBlindedElectraSSZ,
+	version.String(version.Deneb):     decodeBlindedDenebSSZ,
+	version.String(version.Capella):   decodeBlindedCapellaSSZ,
+	version.String(version.Bellatrix): decodeBlindedBellatrixSSZ,
+	version.String(version.Altair):    decodeAltairSSZ,
+	version.String(version.Phase0):    decodePhase0SSZ,
+}
+
+func decodeBlindedFuluSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	fuluBlock := &eth.SignedBlindedBeaconBlockFulu{}
+	if err := fuluBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(version.String(version.Fulu), err)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_BlindedFulu{
+			BlindedFulu: fuluBlock,
+		},
+	}, nil
+}
+
+func decodeBlindedElectraSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	electraBlock := &eth.SignedBlindedBeaconBlockElectra{}
+	if err := electraBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(version.String(version.Electra), err)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_BlindedElectra{
+			BlindedElectra: electraBlock,
+		},
+	}, nil
+}
+
+func decodeBlindedDenebSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	denebBlock := &eth.SignedBlindedBeaconBlockDeneb{}
+	if err := denebBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(version.String(version.Deneb), err)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_BlindedDeneb{
+			BlindedDeneb: denebBlock,
+		},
+	}, nil
+}
+
+func decodeBlindedCapellaSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	capellaBlock := &eth.SignedBlindedBeaconBlockCapella{}
+	if err := capellaBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(version.String(version.Capella), err)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_BlindedCapella{
+			BlindedCapella: capellaBlock,
+		},
+	}, nil
+}
+
+func decodeBlindedBellatrixSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	bellatrixBlock := &eth.SignedBlindedBeaconBlockBellatrix{}
+	if err := bellatrixBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(version.String(version.Bellatrix), err)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_BlindedBellatrix{
+			BlindedBellatrix: bellatrixBlock,
+		},
+	}, nil
+}
+
+// publishBlindedBlock reads JSON-encoded data and publishes a blinded block.
 func (s *Server) publishBlindedBlock(ctx context.Context, w http.ResponseWriter, r *http.Request, versionRequired bool) {
-	body, err := io.ReadAll(r.Body)
+	body, err := readRequestBody(r)
 	if err != nil {
 		httputil.HandleError(w, "Could not read request body", http.StatusInternalServerError)
 		return
 	}
-	versionHeader := r.Header.Get(api.VersionHeader)
-	if versionRequired && versionHeader == "" {
-		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
-	}
 
-	var consensusBlock *eth.GenericSignedBeaconBlock
-
-	var denebBlock *structs.SignedBlindedBeaconBlockDeneb
-	if err = unmarshalStrict(body, &denebBlock); err == nil {
-		consensusBlock, err = denebBlock.ToGeneric()
-		if err == nil {
-			if err = s.validateBroadcast(ctx, r, consensusBlock); err != nil {
-				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			s.proposeBlock(ctx, w, consensusBlock)
-			return
-		}
-	}
-	if versionHeader == version.String(version.Deneb) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Deneb), err.Error()),
-			http.StatusBadRequest,
-		)
+	versionHeader, err := validateVersionHeader(r, body, versionRequired)
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	var capellaBlock *structs.SignedBlindedBeaconBlockCapella
-	if err = unmarshalStrict(body, &capellaBlock); err == nil {
-		consensusBlock, err = capellaBlock.ToGeneric()
-		if err == nil {
-			if err = s.validateBroadcast(ctx, r, consensusBlock); err != nil {
-				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			s.proposeBlock(ctx, w, consensusBlock)
-			return
-		}
-	}
-	if versionHeader == version.String(version.Capella) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Capella), err.Error()),
-			http.StatusBadRequest,
-		)
+	genericBlock, err := decodeBlindedBlockJSON(versionHeader, body)
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	var bellatrixBlock *structs.SignedBlindedBeaconBlockBellatrix
-	if err = unmarshalStrict(body, &bellatrixBlock); err == nil {
-		consensusBlock, err = bellatrixBlock.ToGeneric()
-		if err == nil {
-			if err = s.validateBroadcast(ctx, r, consensusBlock); err != nil {
-				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			s.proposeBlock(ctx, w, consensusBlock)
-			return
-		}
-	}
-	if versionHeader == version.String(version.Bellatrix) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Bellatrix), err.Error()),
-			http.StatusBadRequest,
-		)
+	if err := s.validateBroadcast(ctx, r, genericBlock); err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
-	var altairBlock *structs.SignedBeaconBlockAltair
-	if err = unmarshalStrict(body, &altairBlock); err == nil {
-		consensusBlock, err = altairBlock.ToGeneric()
-		if err == nil {
-			if err = s.validateBroadcast(ctx, r, consensusBlock); err != nil {
-				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			s.proposeBlock(ctx, w, consensusBlock)
-			return
-		}
-	}
-	if versionHeader == version.String(version.Altair) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Altair), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
-
-	var phase0Block *structs.SignedBeaconBlock
-	if err = unmarshalStrict(body, &phase0Block); err == nil {
-		consensusBlock, err = phase0Block.ToGeneric()
-		if err == nil {
-			if err = s.validateBroadcast(ctx, r, consensusBlock); err != nil {
-				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			s.proposeBlock(ctx, w, consensusBlock)
-			return
-		}
-	}
-	if versionHeader == version.String(version.Phase0) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Phase0), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
-
-	httputil.HandleError(w, "Body does not represent a valid block type", http.StatusBadRequest)
+	s.proposeBlock(ctx, w, genericBlock)
 }
 
+// decodeBlindedBlockJSON dispatches to the correct JSON decoder based on versionHeader.
+func decodeBlindedBlockJSON(versionHeader string, body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	if decoder, exists := blindedJSONDecoders[versionHeader]; exists {
+		return decoder(body)
+	}
+	return nil, fmt.Errorf("body does not represent a valid blinded block type")
+}
+
+var blindedJSONDecoders = map[string]blockDecoder{
+	version.String(version.Fulu):      decodeBlindedFuluJSON,
+	version.String(version.Electra):   decodeBlindedElectraJSON,
+	version.String(version.Deneb):     decodeBlindedDenebJSON,
+	version.String(version.Capella):   decodeBlindedCapellaJSON,
+	version.String(version.Bellatrix): decodeBlindedBellatrixJSON,
+	version.String(version.Altair):    decodeAltairJSON,
+	version.String(version.Phase0):    decodePhase0JSON,
+}
+
+func decodeBlindedFuluJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBlindedBeaconBlockFulu](
+		body,
+		version.String(version.Fulu),
+	)
+}
+
+func decodeBlindedElectraJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBlindedBeaconBlockElectra](
+		body,
+		version.String(version.Electra),
+	)
+}
+
+func decodeBlindedDenebJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBlindedBeaconBlockDeneb](
+		body,
+		version.String(version.Deneb),
+	)
+}
+
+func decodeBlindedCapellaJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBlindedBeaconBlockCapella](
+		body,
+		version.String(version.Capella),
+	)
+}
+
+func decodeBlindedBellatrixJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBlindedBeaconBlockBellatrix](
+		body,
+		version.String(version.Bellatrix),
+	)
+}
+
+// Deprecated: use PublishBlockV2 instead
 // PublishBlock instructs the beacon node to broadcast a newly signed beacon block to the beacon network,
 // to be included in the beacon chain. A success response (20x) indicates that the block
 // passed gossip validation and was successfully broadcast onto the network.
@@ -1234,256 +670,281 @@ func (s *Server) PublishBlockV2(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// publishBlockSSZ handles publishing an SSZ-encoded block to the beacon node.
 func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *http.Request, versionRequired bool) {
-	body, err := io.ReadAll(r.Body)
+	body, err := readRequestBody(r)
 	if err != nil {
 		httputil.HandleError(w, "Could not read request body", http.StatusInternalServerError)
 		return
 	}
-	versionHeader := r.Header.Get(api.VersionHeader)
-	if versionRequired && versionHeader == "" {
-		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
+
+	versionHeader, err := validateVersionHeader(r, body, versionRequired)
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	denebBlock := &eth.SignedBeaconBlockContentsDeneb{}
-	if err = denebBlock.UnmarshalSSZ(body); err == nil {
-		genericBlock := &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_Deneb{
-				Deneb: denebBlock,
-			},
-		}
-		if err = s.validateBroadcast(ctx, r, genericBlock); err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		s.proposeBlock(ctx, w, genericBlock)
-		return
-	}
-	if versionHeader == version.String(version.Deneb) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Deneb), err.Error()),
-			http.StatusBadRequest,
-		)
+	// Decode SSZ into a generic block.
+	genericBlock, err := decodeSSZToGenericBlock(versionHeader, body)
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	capellaBlock := &eth.SignedBeaconBlockCapella{}
-	if err = capellaBlock.UnmarshalSSZ(body); err == nil {
-		genericBlock := &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_Capella{
-				Capella: capellaBlock,
-			},
+	// Validate and optionally broadcast sidecars on equivocation.
+	if err := s.validateBroadcast(ctx, r, genericBlock); err != nil {
+		if errors.Is(err, errEquivocatedBlock) {
+			b, err := blocks.NewSignedBeaconBlock(genericBlock)
+			if err != nil {
+				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			if err = broadcastSidecarsIfSupported(ctx, s, b, genericBlock, versionHeader); err != nil {
+				log.WithError(err).Error("Failed to broadcast blob sidecars")
+			}
 		}
-		if err = s.validateBroadcast(ctx, r, genericBlock); err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		s.proposeBlock(ctx, w, genericBlock)
-		return
-	}
-	if versionHeader == version.String(version.Capella) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Capella), err.Error()),
-			http.StatusBadRequest,
-		)
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	bellatrixBlock := &eth.SignedBeaconBlockBellatrix{}
-	if err = bellatrixBlock.UnmarshalSSZ(body); err == nil {
-		genericBlock := &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_Bellatrix{
-				Bellatrix: bellatrixBlock,
-			},
-		}
-		if err = s.validateBroadcast(ctx, r, genericBlock); err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		s.proposeBlock(ctx, w, genericBlock)
-		return
-	}
-	if versionHeader == version.String(version.Bellatrix) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Bellatrix), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
-
-	altairBlock := &eth.SignedBeaconBlockAltair{}
-	if err = altairBlock.UnmarshalSSZ(body); err == nil {
-		genericBlock := &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_Altair{
-				Altair: altairBlock,
-			},
-		}
-		if err = s.validateBroadcast(ctx, r, genericBlock); err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		s.proposeBlock(ctx, w, genericBlock)
-		return
-	}
-	if versionHeader == version.String(version.Altair) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Altair), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
-
-	phase0Block := &eth.SignedBeaconBlock{}
-	if err = phase0Block.UnmarshalSSZ(body); err == nil {
-		genericBlock := &eth.GenericSignedBeaconBlock{
-			Block: &eth.GenericSignedBeaconBlock_Phase0{
-				Phase0: phase0Block,
-			},
-		}
-		if err = s.validateBroadcast(ctx, r, genericBlock); err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		s.proposeBlock(ctx, w, genericBlock)
-		return
-	}
-	if versionHeader == version.String(version.Phase0) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Phase0), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
-
-	httputil.HandleError(w, "Body does not represent a valid block type", http.StatusBadRequest)
+	s.proposeBlock(ctx, w, genericBlock)
 }
 
+var sszDecoders = map[string]blockDecoder{
+	version.String(version.Fulu):      decodeFuluSSZ,
+	version.String(version.Electra):   decodeElectraSSZ,
+	version.String(version.Deneb):     decodeDenebSSZ,
+	version.String(version.Capella):   decodeCapellaSSZ,
+	version.String(version.Bellatrix): decodeBellatrixSSZ,
+	version.String(version.Altair):    decodeAltairSSZ,
+	version.String(version.Phase0):    decodePhase0SSZ,
+}
+
+// decodeSSZToGenericBlock uses a lookup table to map a version string to the proper decoder.
+func decodeSSZToGenericBlock(versionHeader string, body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	if decoder, found := sszDecoders[versionHeader]; found {
+		return decoder(body)
+	}
+	return nil, errors.New("body does not represent a valid block type")
+}
+
+func decodeFuluSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	fuluBlock := &eth.SignedBeaconBlockContentsFulu{}
+	if err := fuluBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(
+			version.String(version.Fulu), err,
+		)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_Fulu{Fulu: fuluBlock},
+	}, nil
+}
+
+func decodeElectraSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	electraBlock := &eth.SignedBeaconBlockContentsElectra{}
+	if err := electraBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(
+			version.String(version.Electra), err,
+		)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_Electra{Electra: electraBlock},
+	}, nil
+}
+
+func decodeDenebSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	denebBlock := &eth.SignedBeaconBlockContentsDeneb{}
+	if err := denebBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(
+			version.String(version.Deneb),
+			err,
+		)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_Deneb{
+			Deneb: denebBlock,
+		},
+	}, nil
+}
+
+func decodeCapellaSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	capellaBlock := &eth.SignedBeaconBlockCapella{}
+	if err := capellaBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(
+			version.String(version.Capella),
+			err,
+		)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_Capella{
+			Capella: capellaBlock,
+		},
+	}, nil
+}
+
+func decodeBellatrixSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	bellatrixBlock := &eth.SignedBeaconBlockBellatrix{}
+	if err := bellatrixBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(
+			version.String(version.Bellatrix),
+			err,
+		)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_Bellatrix{
+			Bellatrix: bellatrixBlock,
+		},
+	}, nil
+}
+
+func decodeAltairSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	altairBlock := &eth.SignedBeaconBlockAltair{}
+	if err := altairBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(
+			version.String(version.Altair),
+			err,
+		)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_Altair{
+			Altair: altairBlock,
+		},
+	}, nil
+}
+
+func decodePhase0SSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	phase0Block := &eth.SignedBeaconBlock{}
+	if err := phase0Block.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(
+			version.String(version.Phase0), err,
+		)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_Phase0{Phase0: phase0Block},
+	}, nil
+}
+
+// publishBlock handles publishing a JSON-encoded block to the beacon node.
 func (s *Server) publishBlock(ctx context.Context, w http.ResponseWriter, r *http.Request, versionRequired bool) {
-	body, err := io.ReadAll(r.Body)
+	body, err := readRequestBody(r)
 	if err != nil {
 		httputil.HandleError(w, "Could not read request body", http.StatusInternalServerError)
 		return
 	}
-	versionHeader := r.Header.Get(api.VersionHeader)
-	if versionRequired && versionHeader == "" {
-		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
+
+	versionHeader, err := validateVersionHeader(r, body, versionRequired)
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	var consensusBlock *eth.GenericSignedBeaconBlock
+	// Decode JSON into a generic block.
+	genericBlock, decodeErr := decodeJSONToGenericBlock(versionHeader, body)
+	if decodeErr != nil {
+		httputil.HandleError(w, decodeErr.Error(), http.StatusBadRequest)
+		return
+	}
 
-	var denebBlockContents *structs.SignedBeaconBlockContentsDeneb
-	if err = unmarshalStrict(body, &denebBlockContents); err == nil {
-		consensusBlock, err = denebBlockContents.ToGeneric()
-		if err == nil {
-			if err = s.validateBroadcast(ctx, r, consensusBlock); err != nil {
+	// Validate and optionally broadcast sidecars on equivocation.
+	if err := s.validateBroadcast(ctx, r, genericBlock); err != nil {
+		if errors.Is(err, errEquivocatedBlock) {
+			b, err := blocks.NewSignedBeaconBlock(genericBlock)
+			if err != nil {
 				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			s.proposeBlock(ctx, w, consensusBlock)
-			return
-		}
-	}
-	if versionHeader == version.String(version.Deneb) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Deneb), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
 
-	var capellaBlock *structs.SignedBeaconBlockCapella
-	if err = unmarshalStrict(body, &capellaBlock); err == nil {
-		consensusBlock, err = capellaBlock.ToGeneric()
-		if err == nil {
-			if err = s.validateBroadcast(ctx, r, consensusBlock); err != nil {
-				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-				return
+			if err := broadcastSidecarsIfSupported(ctx, s, b, genericBlock, versionHeader); err != nil {
+				log.WithError(err).Error("Failed to broadcast blob sidecars")
 			}
-			s.proposeBlock(ctx, w, consensusBlock)
-			return
 		}
-	}
-	if versionHeader == version.String(version.Capella) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Capella), err.Error()),
-			http.StatusBadRequest,
-		)
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	var bellatrixBlock *structs.SignedBeaconBlockBellatrix
-	if err = unmarshalStrict(body, &bellatrixBlock); err == nil {
-		consensusBlock, err = bellatrixBlock.ToGeneric()
-		if err == nil {
-			if err = s.validateBroadcast(ctx, r, consensusBlock); err != nil {
-				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			s.proposeBlock(ctx, w, consensusBlock)
-			return
-		}
-	}
-	if versionHeader == version.String(version.Bellatrix) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Bellatrix), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
+	s.proposeBlock(ctx, w, genericBlock)
+}
 
-	var altairBlock *structs.SignedBeaconBlockAltair
-	if err = unmarshalStrict(body, &altairBlock); err == nil {
-		consensusBlock, err = altairBlock.ToGeneric()
-		if err == nil {
-			if err = s.validateBroadcast(ctx, r, consensusBlock); err != nil {
-				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			s.proposeBlock(ctx, w, consensusBlock)
-			return
-		}
-	}
-	if versionHeader == version.String(version.Altair) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Altair), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
+var jsonDecoders = map[string]blockDecoder{
+	version.String(version.Fulu):      decodeFuluJSON,
+	version.String(version.Electra):   decodeElectraJSON,
+	version.String(version.Deneb):     decodeDenebJSON,
+	version.String(version.Capella):   decodeCapellaJSON,
+	version.String(version.Bellatrix): decodeBellatrixJSON,
+	version.String(version.Altair):    decodeAltairJSON,
+	version.String(version.Phase0):    decodePhase0JSON,
+}
 
-	var phase0Block *structs.SignedBeaconBlock
-	if err = unmarshalStrict(body, &phase0Block); err == nil {
-		consensusBlock, err = phase0Block.ToGeneric()
-		if err == nil {
-			if err = s.validateBroadcast(ctx, r, consensusBlock); err != nil {
-				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			s.proposeBlock(ctx, w, consensusBlock)
-			return
-		}
+// decodeJSONToGenericBlock uses a lookup table to map a version string to the proper decoder.
+func decodeJSONToGenericBlock(versionHeader string, body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	if decoder, found := jsonDecoders[versionHeader]; found {
+		return decoder(body)
 	}
-	if versionHeader == version.String(version.Phase0) {
-		httputil.HandleError(
-			w,
-			fmt.Sprintf("Could not decode request body into %s consensus block: %v", version.String(version.Phase0), err.Error()),
-			http.StatusBadRequest,
-		)
-		return
-	}
+	return nil, fmt.Errorf("body does not represent a valid block type")
+}
 
-	httputil.HandleError(w, "Body does not represent a valid block type", http.StatusBadRequest)
+func decodeFuluJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBeaconBlockContentsFulu](
+		body,
+		version.String(version.Fulu),
+	)
+}
+
+func decodeElectraJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBeaconBlockContentsElectra](
+		body,
+		version.String(version.Electra),
+	)
+}
+
+func decodeDenebJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBeaconBlockContentsDeneb](
+		body,
+		version.String(version.Deneb),
+	)
+}
+
+func decodeCapellaJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBeaconBlockCapella](
+		body,
+		version.String(version.Capella),
+	)
+}
+
+func decodeBellatrixJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBeaconBlockBellatrix](
+		body,
+		version.String(version.Bellatrix),
+	)
+}
+
+func decodeAltairJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBeaconBlockAltair](
+		body,
+		version.String(version.Altair),
+	)
+}
+
+func decodePhase0JSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBeaconBlock](
+		body,
+		version.String(version.Phase0),
+	)
+}
+
+// broadcastSidecarsIfSupported broadcasts blob sidecars when an equivocated block occurs.
+func broadcastSidecarsIfSupported(ctx context.Context, s *Server, b interfaces.SignedBeaconBlock, gb *eth.GenericSignedBeaconBlock, versionHeader string) error {
+	switch versionHeader {
+	case version.String(version.Fulu):
+		return s.broadcastSeenBlockSidecars(ctx, b, gb.GetFulu().Blobs, gb.GetFulu().KzgProofs)
+	case version.String(version.Electra):
+		return s.broadcastSeenBlockSidecars(ctx, b, gb.GetElectra().Blobs, gb.GetElectra().KzgProofs)
+	case version.String(version.Deneb):
+		return s.broadcastSeenBlockSidecars(ctx, b, gb.GetDeneb().Blobs, gb.GetDeneb().KzgProofs)
+	default:
+		// other forks before Deneb do not support blob sidecars
+		return nil
+	}
 }
 
 func (s *Server) proposeBlock(ctx context.Context, w http.ResponseWriter, blk *eth.GenericSignedBeaconBlock) {
@@ -1503,20 +964,16 @@ func unmarshalStrict(data []byte, v interface{}) error {
 func (s *Server) validateBroadcast(ctx context.Context, r *http.Request, blk *eth.GenericSignedBeaconBlock) error {
 	switch r.URL.Query().Get(broadcastValidationQueryParam) {
 	case broadcastValidationConsensus:
-		b, err := blocks.NewSignedBeaconBlock(blk.Block)
-		if err != nil {
-			return errors.Wrapf(err, "could not create signed beacon block")
-		}
-		if err = s.validateConsensus(ctx, b); err != nil {
+		if err := s.validateConsensus(ctx, blk); err != nil {
 			return errors.Wrap(err, "consensus validation failed")
 		}
 	case broadcastValidationConsensusAndEquivocation:
+		if err := s.validateConsensus(r.Context(), blk); err != nil {
+			return errors.Wrap(err, "consensus validation failed")
+		}
 		b, err := blocks.NewSignedBeaconBlock(blk.Block)
 		if err != nil {
 			return errors.Wrapf(err, "could not create signed beacon block")
-		}
-		if err = s.validateConsensus(r.Context(), b); err != nil {
-			return errors.Wrap(err, "consensus validation failed")
 		}
 		if err = s.validateEquivocation(b.Block()); err != nil {
 			return errors.Wrap(err, "equivocation validation failed")
@@ -1527,12 +984,22 @@ func (s *Server) validateBroadcast(ctx context.Context, r *http.Request, blk *et
 	return nil
 }
 
-func (s *Server) validateConsensus(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) error {
+func (s *Server) validateConsensus(ctx context.Context, b *eth.GenericSignedBeaconBlock) error {
+	blk, err := blocks.NewSignedBeaconBlock(b.Block)
+	if err != nil {
+		return errors.Wrapf(err, "could not create signed beacon block")
+	}
+
 	parentBlockRoot := blk.Block().ParentRoot()
 	parentBlock, err := s.Blocker.Block(ctx, parentBlockRoot[:])
 	if err != nil {
 		return errors.Wrap(err, "could not get parent block")
 	}
+
+	if err := blocks.BeaconBlockIsNil(blk); err != nil {
+		return errors.Wrap(err, "could not validate block")
+	}
+
 	parentStateRoot := parentBlock.Block().StateRoot()
 	parentState, err := s.Stater.State(ctx, parentStateRoot[:])
 	if err != nil {
@@ -1542,12 +1009,53 @@ func (s *Server) validateConsensus(ctx context.Context, blk interfaces.ReadOnlyS
 	if err != nil {
 		return errors.Wrap(err, "could not execute state transition")
 	}
+
+	var blobs [][]byte
+	var proofs [][]byte
+	switch blk.Version() {
+	case version.Deneb:
+		blobs = b.GetDeneb().Blobs
+		proofs = b.GetDeneb().KzgProofs
+	case version.Electra:
+		blobs = b.GetElectra().Blobs
+		proofs = b.GetElectra().KzgProofs
+	case version.Fulu:
+		blobs = b.GetFulu().Blobs
+		proofs = b.GetFulu().KzgProofs
+	default:
+		return nil
+	}
+
+	if err := s.validateBlobSidecars(blk, blobs, proofs); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func (s *Server) validateEquivocation(blk interfaces.ReadOnlyBeaconBlock) error {
 	if s.ForkchoiceFetcher.HighestReceivedBlockSlot() == blk.Slot() {
-		return fmt.Errorf("block for slot %d already exists in fork choice", blk.Slot())
+		return errors.Wrapf(errEquivocatedBlock, "block for slot %d already exists in fork choice", blk.Slot())
+	}
+	return nil
+}
+
+func (s *Server) validateBlobSidecars(blk interfaces.SignedBeaconBlock, blobs [][]byte, proofs [][]byte) error {
+	if blk.Version() < version.Deneb {
+		return nil
+	}
+	kzgs, err := blk.Block().Body().BlobKzgCommitments()
+	if err != nil {
+		return errors.Wrap(err, "could not get blob kzg commitments")
+	}
+	if len(blobs) != len(proofs) || len(blobs) != len(kzgs) {
+		return errors.New("number of blobs, proofs, and commitments do not match")
+	}
+	for i, blob := range blobs {
+		b := kzg4844.Blob(blob)
+		if err := kzg4844.VerifyBlobProof(&b, kzg4844.Commitment(kzgs[i]), kzg4844.Proof(proofs[i])); err != nil {
+			return errors.Wrap(err, "could not verify blob proof")
+		}
 	}
 	return nil
 }
@@ -1559,7 +1067,7 @@ func (s *Server) GetBlockRoot(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	var root []byte
-	blockID := mux.Vars(r)["block_id"]
+	blockID := r.PathValue("block_id")
 	if blockID == "" {
 		httputil.HandleError(w, "block_id is required in URL params", http.StatusBadRequest)
 		return
@@ -1671,7 +1179,8 @@ func (s *Server) GetBlockRoot(w http.ResponseWriter, r *http.Request) {
 func (s *Server) GetStateFork(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.GetStateFork")
 	defer span.End()
-	stateId := mux.Vars(r)["state_id"]
+
+	stateId := r.PathValue("state_id")
 	if stateId == "" {
 		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
 		return
@@ -1711,7 +1220,7 @@ func (s *Server) GetCommittees(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.GetCommittees")
 	defer span.End()
 
-	stateId := mux.Vars(r)["state_id"]
+	stateId := r.PathValue("state_id")
 	if stateId == "" {
 		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
 		return
@@ -1896,7 +1405,7 @@ func (s *Server) GetBlockHeader(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.GetBlockHeader")
 	defer span.End()
 
-	blockID := mux.Vars(r)["block_id"]
+	blockID := r.PathValue("block_id")
 	if blockID == "" {
 		httputil.HandleError(w, "block_id is required in URL params", http.StatusBadRequest)
 		return
@@ -1954,7 +1463,7 @@ func (s *Server) GetFinalityCheckpoints(w http.ResponseWriter, r *http.Request) 
 	ctx, span := trace.StartSpan(r.Context(), "beacon.GetFinalityCheckpoints")
 	defer span.End()
 
-	stateId := mux.Vars(r)["state_id"]
+	stateId := r.PathValue("state_id")
 	if stateId == "" {
 		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
 		return
@@ -2028,16 +1537,13 @@ func (s *Server) GetGenesis(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJson(w, resp)
 }
 
+// Deprecated: no longer needed post Electra
 // GetDepositSnapshot retrieves the EIP-4881 Deposit Tree Snapshot. Either a JSON or,
 // if the Accept header was added, bytes serialized by SSZ will be returned.
 func (s *Server) GetDepositSnapshot(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.GetDepositSnapshot")
 	defer span.End()
 
-	if s.BeaconDB == nil {
-		httputil.HandleError(w, "Could not retrieve beaconDB", http.StatusInternalServerError)
-		return
-	}
 	eth1data, err := s.BeaconDB.ExecutionChainData(ctx)
 	if err != nil {
 		httputil.HandleError(w, "Could not retrieve execution chain data: "+err.Error(), http.StatusInternalServerError)
@@ -2049,7 +1555,7 @@ func (s *Server) GetDepositSnapshot(w http.ResponseWriter, r *http.Request) {
 	}
 	snapshot := eth1data.DepositSnapshot
 	if snapshot == nil || len(snapshot.Finalized) == 0 {
-		httputil.HandleError(w, "No Finalized Snapshot Available", http.StatusNotFound)
+		httputil.HandleError(w, "No finalized snapshot available", http.StatusNotFound)
 		return
 	}
 	if len(snapshot.Finalized) > depositsnapshot.DepositContractDepth {
@@ -2062,7 +1568,7 @@ func (s *Server) GetDepositSnapshot(w http.ResponseWriter, r *http.Request) {
 			httputil.HandleError(w, "Could not marshal deposit snapshot into SSZ: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszData, "deposit_snapshot.ssz")
+		httputil.WriteSsz(w, sszData)
 		return
 	}
 	httputil.WriteJson(
@@ -2071,4 +1577,164 @@ func (s *Server) GetDepositSnapshot(w http.ResponseWriter, r *http.Request) {
 			Data: structs.DepositSnapshotFromConsensus(snapshot),
 		},
 	)
+}
+
+// Broadcast blob sidecars even if the block of the same slot has been imported.
+// To ensure safety, we will only broadcast blob sidecars if the header references the same block that was previously seen.
+// Otherwise, a proposer could get slashed through a different blob sidecar header reference.
+func (s *Server) broadcastSeenBlockSidecars(
+	ctx context.Context,
+	b interfaces.SignedBeaconBlock,
+	blobs [][]byte,
+	kzgProofs [][]byte) error {
+	scs, err := validator.BuildBlobSidecars(b, blobs, kzgProofs)
+	if err != nil {
+		return err
+	}
+	for _, sc := range scs {
+		r, err := sc.SignedBlockHeader.Header.HashTreeRoot()
+		if err != nil {
+			log.WithError(err).Error("Failed to hash block header for blob sidecar")
+			continue
+		}
+		if !s.FinalizationFetcher.InForkchoice(r) {
+			log.WithField("root", fmt.Sprintf("%#x", r)).Debug("Block header not in forkchoice, skipping blob sidecar broadcast")
+			continue
+		}
+		if err := s.Broadcaster.BroadcastBlob(ctx, sc.Index, sc); err != nil {
+			log.WithError(err).Error("Failed to broadcast blob sidecar for index ", sc.Index)
+		}
+		log.WithFields(logrus.Fields{
+			"index":         sc.Index,
+			"slot":          sc.SignedBlockHeader.Header.Slot,
+			"kzgCommitment": fmt.Sprintf("%#x", sc.KzgCommitment),
+		}).Info("Broadcasted blob sidecar for already seen block")
+	}
+	return nil
+}
+
+// GetPendingDeposits returns pending deposits for state with given 'stateId'.
+// Should return 400 if the state retrieved is prior to Electra.
+// Supports both JSON and SSZ responses based on Accept header.
+func (s *Server) GetPendingDeposits(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "beacon.GetPendingDeposits")
+	defer span.End()
+
+	stateId := r.PathValue("state_id")
+	if stateId == "" {
+		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		return
+	}
+	st, err := s.Stater.State(ctx, []byte(stateId))
+	if err != nil {
+		shared.WriteStateFetchError(w, err)
+		return
+	}
+	if st.Version() < version.Electra {
+		httputil.HandleError(w, "state_id is prior to electra", http.StatusBadRequest)
+		return
+	}
+	pd, err := st.PendingDeposits()
+	if err != nil {
+		httputil.HandleError(w, "Could not get pending deposits: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(api.VersionHeader, version.String(st.Version()))
+	if httputil.RespondWithSsz(r) {
+		sszData, err := serializeItems(pd)
+		if err != nil {
+			httputil.HandleError(w, "Failed to serialize pending deposits: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		httputil.WriteSsz(w, sszData)
+	} else {
+		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
+		if err != nil {
+			httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		if err != nil {
+			httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
+		resp := structs.GetPendingDepositsResponse{
+			Version:             version.String(st.Version()),
+			ExecutionOptimistic: isOptimistic,
+			Finalized:           isFinalized,
+			Data:                structs.PendingDepositsFromConsensus(pd),
+		}
+		httputil.WriteJson(w, resp)
+	}
+}
+
+// GetPendingPartialWithdrawals returns pending partial withdrawals for state with given 'stateId'.
+// Should return 400 if the state retrieved is prior to Electra.
+// Supports both JSON and SSZ responses based on Accept header.
+func (s *Server) GetPendingPartialWithdrawals(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "beacon.GetPendingPartialWithdrawals")
+	defer span.End()
+
+	stateId := r.PathValue("state_id")
+	if stateId == "" {
+		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		return
+	}
+	st, err := s.Stater.State(ctx, []byte(stateId))
+	if err != nil {
+		shared.WriteStateFetchError(w, err)
+		return
+	}
+	if st.Version() < version.Electra {
+		httputil.HandleError(w, "state_id is prior to electra", http.StatusBadRequest)
+		return
+	}
+	ppw, err := st.PendingPartialWithdrawals()
+	if err != nil {
+		httputil.HandleError(w, "Could not get pending partial withdrawals: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(api.VersionHeader, version.String(st.Version()))
+	if httputil.RespondWithSsz(r) {
+		sszData, err := serializeItems(ppw)
+		if err != nil {
+			httputil.HandleError(w, "Failed to serialize pending partial withdrawals: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		httputil.WriteSsz(w, sszData)
+	} else {
+		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
+		if err != nil {
+			httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		if err != nil {
+			httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
+		resp := structs.GetPendingPartialWithdrawalsResponse{
+			Version:             version.String(st.Version()),
+			ExecutionOptimistic: isOptimistic,
+			Finalized:           isFinalized,
+			Data:                structs.PendingPartialWithdrawalsFromConsensus(ppw),
+		}
+		httputil.WriteJson(w, resp)
+	}
+}
+
+// SerializeItems serializes a slice of items, each of which implements the MarshalSSZ method,
+// into a single byte array.
+func serializeItems[T interface{ MarshalSSZ() ([]byte, error) }](items []T) ([]byte, error) {
+	var result []byte
+	for _, item := range items {
+		b, err := item.MarshalSSZ()
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, b...)
+	}
+	return result, nil
 }

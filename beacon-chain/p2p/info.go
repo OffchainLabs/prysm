@@ -20,7 +20,7 @@ self=%s
 %d peers
 %v
 `,
-		s.cfg.BootstrapNodeAddr,
+		s.cfg.Discv5BootStrapAddrs,
 		s.selfAddresses(),
 		len(s.host.Network().Peers()),
 		formatPeers(s.host), // Must be last. Writes one entry per row.

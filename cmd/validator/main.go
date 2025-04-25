@@ -8,26 +8,27 @@ import (
 	"os"
 	"path/filepath"
 	runtimeDebug "runtime/debug"
+	"time"
 
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	accountcommands "github.com/OffchainLabs/prysm/v6/cmd/validator/accounts"
+	dbcommands "github.com/OffchainLabs/prysm/v6/cmd/validator/db"
+	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
+	slashingprotectioncommands "github.com/OffchainLabs/prysm/v6/cmd/validator/slashing-protection"
+	walletcommands "github.com/OffchainLabs/prysm/v6/cmd/validator/wallet"
+	"github.com/OffchainLabs/prysm/v6/cmd/validator/web"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/io/file"
+	"github.com/OffchainLabs/prysm/v6/io/logs"
+	"github.com/OffchainLabs/prysm/v6/monitoring/journald"
+	"github.com/OffchainLabs/prysm/v6/runtime/debug"
+	prefixed "github.com/OffchainLabs/prysm/v6/runtime/logging/logrus-prefixed-formatter"
+	_ "github.com/OffchainLabs/prysm/v6/runtime/maxprocs"
+	"github.com/OffchainLabs/prysm/v6/runtime/tos"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/validator/node"
 	joonix "github.com/joonix/log"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	accountcommands "github.com/prysmaticlabs/prysm/v5/cmd/validator/accounts"
-	dbcommands "github.com/prysmaticlabs/prysm/v5/cmd/validator/db"
-	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
-	slashingprotectioncommands "github.com/prysmaticlabs/prysm/v5/cmd/validator/slashing-protection"
-	walletcommands "github.com/prysmaticlabs/prysm/v5/cmd/validator/wallet"
-	"github.com/prysmaticlabs/prysm/v5/cmd/validator/web"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
-	"github.com/prysmaticlabs/prysm/v5/io/logs"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/journald"
-	"github.com/prysmaticlabs/prysm/v5/runtime/debug"
-	prefixed "github.com/prysmaticlabs/prysm/v5/runtime/logging/logrus-prefixed-formatter"
-	_ "github.com/prysmaticlabs/prysm/v5/runtime/maxprocs"
-	"github.com/prysmaticlabs/prysm/v5/runtime/tos"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/validator/node"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
@@ -50,7 +51,6 @@ func startNode(ctx *cli.Context) error {
 
 var appFlags = []cli.Flag{
 	flags.BeaconRPCProviderFlag,
-	flags.BeaconRPCGatewayProviderFlag,
 	flags.BeaconRESTApiProviderFlag,
 	flags.CertFlag,
 	flags.GraffitiFlag,
@@ -60,12 +60,12 @@ var appFlags = []cli.Flag{
 	flags.EnableRPCFlag,
 	flags.RPCHost,
 	flags.RPCPort,
-	flags.GRPCGatewayPort,
-	flags.GRPCGatewayHost,
-	flags.GrpcRetriesFlag,
-	flags.GrpcRetryDelayFlag,
-	flags.GrpcHeadersFlag,
-	flags.GPRCGatewayCorsDomain,
+	flags.HTTPServerPort,
+	flags.HTTPServerHost,
+	flags.GRPCRetriesFlag,
+	flags.GRPCRetryDelayFlag,
+	flags.GRPCHeadersFlag,
+	flags.HTTPServerCorsDomain,
 	flags.DisableAccountMetricsFlag,
 	flags.MonitoringPortFlag,
 	flags.SlasherRPCProviderFlag,
@@ -75,9 +75,12 @@ var appFlags = []cli.Flag{
 	flags.EnableWebFlag,
 	flags.GraffitiFileFlag,
 	flags.EnableDistributed,
+	flags.AuthTokenPathFlag,
+	flags.DisableDutiesPolling,
 	// Consensys' Web3Signer flags
 	flags.Web3SignerURLFlag,
 	flags.Web3SignerPublicValidatorKeysFlag,
+	flags.Web3SignerKeyFileFlag,
 	flags.SuggestedFeeRecipientFlag,
 	flags.ProposerSettingsURLFlag,
 	flags.ProposerSettingsFlag,
@@ -87,7 +90,6 @@ var appFlags = []cli.Flag{
 	////////////////////
 	cmd.DisableMonitoringFlag,
 	cmd.MonitoringHostFlag,
-	cmd.BackupWebhookOutputDir,
 	cmd.EnableBackupWebhookFlag,
 	cmd.MinimalConfigFlag,
 	cmd.E2EConfigFlag,
@@ -109,8 +111,6 @@ var appFlags = []cli.Flag{
 	debug.PProfAddrFlag,
 	debug.PProfPortFlag,
 	debug.MemProfileRateFlag,
-	debug.CPUProfileFlag,
-	debug.TraceFlag,
 	debug.BlockProfileRateFlag,
 	debug.MutexProfileFractionFlag,
 	cmd.AcceptTosFlag,
@@ -152,7 +152,7 @@ func main() {
 			switch format {
 			case "text":
 				formatter := new(prefixed.TextFormatter)
-				formatter.TimestampFormat = "2006-01-02 15:04:05"
+				formatter.TimestampFormat = time.DateTime
 				formatter.FullTimestamp = true
 				// If persistent log files are written - we disable the log messages coloring because
 				// the colors are ANSI codes and seen as gibberish in the log files.
@@ -161,7 +161,7 @@ func main() {
 			case "fluentd":
 				f := joonix.NewFormatter()
 				if err := joonix.DisableTimestampFormat(f); err != nil {
-					panic(err)
+					panic(err) // lint:nopanic -- This shouldn't happen, but crashing immediately at startup is OK.
 				}
 				logrus.SetFormatter(f)
 			case "json":
@@ -191,18 +191,18 @@ func main() {
 				return errors.Wrap(err, "failed to setup debug")
 			}
 
+			if err := features.ValidateNetworkFlags(ctx); err != nil {
+				return errors.Wrap(err, "provided multiple network flags")
+			}
+
 			return cmd.ValidateNoArgs(ctx)
-		},
-		After: func(ctx *cli.Context) error {
-			debug.Exit(ctx)
-			return nil
 		},
 	}
 
 	defer func() {
 		if x := recover(); x != nil {
 			log.Errorf("Runtime panic: %v\n%v", x, string(runtimeDebug.Stack()))
-			panic(x)
+			panic(x) // lint:nopanic -- This is just resurfacing the original panic.
 		}
 	}()
 

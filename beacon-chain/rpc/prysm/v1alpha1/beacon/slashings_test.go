@@ -4,17 +4,16 @@ import (
 	"context"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/slashings"
+	mockp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"google.golang.org/protobuf/proto"
-
-	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/slashings"
-	mockp2p "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestServer_SubmitProposerSlashing(t *testing.T) {
@@ -66,13 +65,13 @@ func TestServer_SubmitAttesterSlashing(t *testing.T) {
 		Broadcaster:   mb,
 	}
 
-	slashing, err := util.GenerateAttesterSlashingForValidator(st, privs[2], primitives.ValidatorIndex(2))
+	generatedSlashing, err := util.GenerateAttesterSlashingForValidator(st, privs[2], primitives.ValidatorIndex(2))
 	require.NoError(t, err)
 
 	// We want the intersection of the slashing attesting indices
 	// to be slashed, so we expect validators 2 and 3 to be in the response
 	// slashed indices.
-	_, err = bs.SubmitAttesterSlashing(ctx, slashing)
+	_, err = bs.SubmitAttesterSlashing(ctx, generatedSlashing.(*ethpb.AttesterSlashing))
 	require.NoError(t, err)
 	assert.Equal(t, true, mb.BroadcastCalled.Load(), "Expected broadcast to be called when flag is set")
 }
@@ -144,7 +143,7 @@ func TestServer_SubmitAttesterSlashing_DontBroadcast(t *testing.T) {
 		Broadcaster:   mb,
 	}
 
-	slashing, err := util.GenerateAttesterSlashingForValidator(st, privs[2], primitives.ValidatorIndex(2))
+	generatedSlashing, err := util.GenerateAttesterSlashingForValidator(st, privs[2], primitives.ValidatorIndex(2))
 	require.NoError(t, err)
 
 	// We want the intersection of the slashing attesting indices
@@ -153,17 +152,42 @@ func TestServer_SubmitAttesterSlashing_DontBroadcast(t *testing.T) {
 	wanted := &ethpb.SubmitSlashingResponse{
 		SlashedIndices: []primitives.ValidatorIndex{2},
 	}
-	res, err := bs.SubmitAttesterSlashing(ctx, slashing)
+	res, err := bs.SubmitAttesterSlashing(ctx, generatedSlashing.(*ethpb.AttesterSlashing))
 	require.NoError(t, err)
 	if !proto.Equal(wanted, res) {
 		t.Errorf("Wanted %v, received %v", wanted, res)
 	}
 	assert.Equal(t, false, mb.BroadcastCalled.Load(), "Expected broadcast not to be called by default")
 
-	slashing, err = util.GenerateAttesterSlashingForValidator(st, privs[5], primitives.ValidatorIndex(5))
+	generatedSlashing, err = util.GenerateAttesterSlashingForValidator(st, privs[5], primitives.ValidatorIndex(5))
 	require.NoError(t, err)
 	// If any of the attesting indices in the slashing object have already
 	// been slashed, we should fail to insert properly into the attester slashing pool.
-	_, err = bs.SubmitAttesterSlashing(ctx, slashing)
+	_, err = bs.SubmitAttesterSlashing(ctx, generatedSlashing.(*ethpb.AttesterSlashing))
 	assert.NotNil(t, err, "Expected including a attester slashing for an already slashed validator to fail")
+}
+
+func TestServer_SubmitAttesterSlashingElectra(t *testing.T) {
+	ctx := context.Background()
+	st, privs := util.DeterministicGenesisStateElectra(t, 64)
+	slashedVal, err := st.ValidatorAtIndex(5)
+	require.NoError(t, err)
+	slashedVal.Slashed = true
+	require.NoError(t, st.UpdateValidatorAtIndex(5, slashedVal))
+
+	mb := &mockp2p.MockBroadcaster{}
+	bs := &Server{
+		HeadFetcher: &mock.ChainService{
+			State: st,
+		},
+		SlashingsPool: slashings.NewPool(),
+		Broadcaster:   mb,
+	}
+
+	generatedSlashing, err := util.GenerateAttesterSlashingForValidator(st, privs[2], primitives.ValidatorIndex(2))
+	require.NoError(t, err)
+
+	_, err = bs.SubmitAttesterSlashingElectra(ctx, generatedSlashing.(*ethpb.AttesterSlashingElectra))
+	require.NoError(t, err)
+	assert.Equal(t, true, mb.BroadcastCalled.Load(), "Expected broadcast to be called when flag is set")
 }

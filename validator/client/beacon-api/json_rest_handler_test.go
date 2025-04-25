@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestGet(t *testing.T) {
@@ -41,8 +41,8 @@ func TestGet(t *testing.T) {
 	defer server.Close()
 
 	jsonRestHandler := BeaconApiJsonRestHandler{
-		HttpClient: http.Client{Timeout: time.Second * 5},
-		Host:       server.URL,
+		client: http.Client{Timeout: time.Second * 5},
+		host:   server.URL,
 	}
 	resp := &structs.GetGenesisResponse{}
 	require.NoError(t, jsonRestHandler.Get(ctx, endpoint+"?arg1=abc&arg2=def", resp))
@@ -87,8 +87,8 @@ func TestPost(t *testing.T) {
 	defer server.Close()
 
 	jsonRestHandler := BeaconApiJsonRestHandler{
-		HttpClient: http.Client{Timeout: time.Second * 5},
-		Host:       server.URL,
+		client: http.Client{Timeout: time.Second * 5},
+		host:   server.URL,
 	}
 	resp := &structs.GetGenesisResponse{}
 	require.NoError(t, jsonRestHandler.Post(ctx, endpoint, headers, bytes.NewBuffer(dataBytes), resp))
@@ -99,7 +99,16 @@ func Test_decodeResp(t *testing.T) {
 	type j struct {
 		Foo string `json:"foo"`
 	}
-
+	t.Run("200 JSON with charset", func(t *testing.T) {
+		body := bytes.Buffer{}
+		r := &http.Response{
+			Status:     "200",
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(&body),
+			Header:     map[string][]string{"Content-Type": {"application/json; charset=utf-8"}},
+		}
+		require.NoError(t, decodeResp(r, nil))
+	})
 	t.Run("200 non-JSON", func(t *testing.T) {
 		body := bytes.Buffer{}
 		r := &http.Response{

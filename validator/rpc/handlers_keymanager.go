@@ -7,26 +7,27 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
+	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/config/proposer"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/validator"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	"github.com/OffchainLabs/prysm/v6/validator/client"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager/derived"
+	slashingprotection "github.com/OffchainLabs/prysm/v6/validator/slashing-protection-history"
+	"github.com/OffchainLabs/prysm/v6/validator/slashing-protection-history/format"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
-	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/config/proposer"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	"github.com/prysmaticlabs/prysm/v5/validator/client"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/derived"
-	slashingprotection "github.com/prysmaticlabs/prysm/v5/validator/slashing-protection-history"
-	"github.com/prysmaticlabs/prysm/v5/validator/slashing-protection-history/format"
-	"go.opencensus.io/trace"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -49,7 +50,11 @@ func (s *Server) ListKeystores(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.wallet.KeymanagerKind() != keymanager.Derived && s.wallet.KeymanagerKind() != keymanager.Local {
-		httputil.HandleError(w, errors.Wrap(err, "Prysm validator keys are not stored locally with this keymanager type").Error(), http.StatusInternalServerError)
+		log.Debugf("List keystores keymanager api expected wallet type %s but got %s", s.wallet.KeymanagerKind().String(), keymanager.Local.String())
+		response := &ListKeystoresResponse{
+			Data: make([]*Keystore, 0),
+		}
+		httputil.WriteJson(w, response)
 		return
 	}
 	pubKeys, err := km.FetchValidatingPublicKeys(ctx)
@@ -94,7 +99,7 @@ func (s *Server) ImportKeystores(w http.ResponseWriter, r *http.Request) {
 	var req ImportKeystoresRequest
 	err = json.NewDecoder(r.Body).Decode(&req)
 	switch {
-	case err == io.EOF:
+	case errors.Is(err, io.EOF):
 		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
@@ -132,7 +137,7 @@ func (s *Server) ImportKeystores(w http.ResponseWriter, r *http.Request) {
 		keystores[i] = k
 	}
 	if req.SlashingProtection != "" {
-		if s.valDB == nil || s.valDB.ImportStandardProtectionJSON(ctx, bytes.NewBufferString(req.SlashingProtection)) != nil {
+		if s.db == nil || s.db.ImportStandardProtectionJSON(ctx, bytes.NewBufferString(req.SlashingProtection)) != nil {
 			statuses := make([]*keymanager.KeyStatus, len(req.Keystores))
 			for i := 0; i < len(req.Keystores); i++ {
 				statuses[i] = &keymanager.KeyStatus{
@@ -189,7 +194,7 @@ func (s *Server) DeleteKeystores(w http.ResponseWriter, r *http.Request) {
 	var req DeleteKeystoresRequest
 	err = json.NewDecoder(r.Body).Decode(&req)
 	switch {
-	case err == io.EOF:
+	case errors.Is(err, io.EOF):
 		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
@@ -284,13 +289,13 @@ func (s *Server) transformDeletedKeysStatuses(
 // Gets a map of all public keys in the database, useful for O(1) lookups.
 func (s *Server) publicKeysInDB(ctx context.Context) (map[[fieldparams.BLSPubkeyLength]byte]bool, error) {
 	pubKeysInDB := make(map[[fieldparams.BLSPubkeyLength]byte]bool)
-	attestedPublicKeys, err := s.valDB.AttestedPublicKeys(ctx)
+	attestedPublicKeys, err := s.db.AttestedPublicKeys(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("could not get attested public keys from DB: %v", err)
+		return nil, fmt.Errorf("could not get attested public keys from DB: %w", err)
 	}
-	proposedPublicKeys, err := s.valDB.ProposedPublicKeys(ctx)
+	proposedPublicKeys, err := s.db.ProposedPublicKeys(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("could not get proposed public keys from DB: %v", err)
+		return nil, fmt.Errorf("could not get proposed public keys from DB: %w", err)
 	}
 	for _, pk := range append(attestedPublicKeys, proposedPublicKeys...) {
 		pubKeysInDB[pk] = true
@@ -312,7 +317,7 @@ func (s *Server) slashingProtectionHistoryForDeletedKeys(
 			filteredKeys = append(filteredKeys, pk)
 		}
 	}
-	return slashingprotection.ExportStandardProtectionJSON(ctx, s.valDB, filteredKeys...)
+	return slashingprotection.ExportStandardProtectionJSON(ctx, s.db, filteredKeys...)
 }
 
 // SetVoluntaryExit creates a signed voluntary exit message and returns a VoluntaryExit object.
@@ -346,7 +351,7 @@ func (s *Server) SetVoluntaryExit(w http.ResponseWriter, r *http.Request) {
 	epoch := primitives.Epoch(e)
 
 	if rawEpoch == "" {
-		genesisResponse, err := s.beaconNodeClient.GetGenesis(ctx, &emptypb.Empty{})
+		genesisResponse, err := s.nodeClient.Genesis(ctx, &emptypb.Empty{})
 		if err != nil {
 			httputil.HandleError(w, errors.Wrap(err, "Failed to get genesis time").Error(), http.StatusInternalServerError)
 			return
@@ -401,7 +406,11 @@ func (s *Server) ListRemoteKeys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.wallet.KeymanagerKind() != keymanager.Web3Signer {
-		httputil.HandleError(w, "Prysm Wallet is not of type Web3Signer. Please execute validator client with web3signer flags.", http.StatusInternalServerError)
+		log.Debugf("List remote keys keymanager api expected wallet type %s but got %s", s.wallet.KeymanagerKind().String(), keymanager.Web3Signer.String())
+		response := &ListKeystoresResponse{
+			Data: make([]*Keystore, 0),
+		}
+		httputil.WriteJson(w, response)
 		return
 	}
 	pubKeys, err := km.FetchValidatingPublicKeys(ctx)
@@ -413,7 +422,7 @@ func (s *Server) ListRemoteKeys(w http.ResponseWriter, r *http.Request) {
 	for i := 0; i < len(pubKeys); i++ {
 		keystoreResponse[i] = &RemoteKey{
 			Pubkey:   hexutil.Encode(pubKeys[i][:]),
-			Url:      s.validatorService.Web3SignerConfig.BaseEndpoint,
+			Url:      s.validatorService.RemoteSignerConfig().BaseEndpoint,
 			Readonly: true,
 		}
 	}
@@ -450,7 +459,7 @@ func (s *Server) ImportRemoteKeys(w http.ResponseWriter, r *http.Request) {
 	var req ImportRemoteKeysRequest
 	err = json.NewDecoder(r.Body).Decode(&req)
 	switch {
-	case err == io.EOF:
+	case errors.Is(err, io.EOF):
 		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
@@ -483,7 +492,12 @@ func (s *Server) ImportRemoteKeys(w http.ResponseWriter, r *http.Request) {
 		log.Warnf("Setting the remote signer base url within the request is not supported. The remote signer url can only be set from the --%s flag.", flags.Web3SignerURLFlag.Name)
 	}
 
-	httputil.WriteJson(w, &RemoteKeysResponse{Data: adder.AddPublicKeys(remoteKeys)})
+	ks, err := adder.AddPublicKeys(remoteKeys)
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	httputil.WriteJson(w, &RemoteKeysResponse{Data: ks})
 }
 
 // DeleteRemoteKeys deletes a list of public keys defined for web3signer keymanager type.
@@ -512,7 +526,7 @@ func (s *Server) DeleteRemoteKeys(w http.ResponseWriter, r *http.Request) {
 	var req DeleteRemoteKeysRequest
 	err = json.NewDecoder(r.Body).Decode(&req)
 	switch {
-	case err == io.EOF:
+	case errors.Is(err, io.EOF):
 		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
@@ -532,8 +546,12 @@ func (s *Server) DeleteRemoteKeys(w http.ResponseWriter, r *http.Request) {
 		httputil.WriteJson(w, &RemoteKeysResponse{Data: statuses})
 		return
 	}
-
-	httputil.WriteJson(w, RemoteKeysResponse{Data: deleter.DeletePublicKeys(req.Pubkeys)})
+	data, err := deleter.DeletePublicKeys(req.Pubkeys)
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	httputil.WriteJson(w, RemoteKeysResponse{Data: data})
 }
 
 // ListFeeRecipientByPubkey returns the public key to eth address mapping object to the end user.
@@ -595,7 +613,7 @@ func (s *Server) SetFeeRecipientByPubkey(w http.ResponseWriter, r *http.Request)
 	var req SetFeeRecipientByPubkeyRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	switch {
-	case err == io.EOF:
+	case errors.Is(err, io.EOF):
 		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
@@ -746,7 +764,7 @@ func (s *Server) SetGasLimit(w http.ResponseWriter, r *http.Request) {
 	var req SetGasLimitRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	switch {
-	case err == io.EOF:
+	case errors.Is(err, io.EOF):
 		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
 		return
 	case err != nil:
@@ -838,4 +856,87 @@ func (s *Server) DeleteGasLimit(w http.ResponseWriter, r *http.Request) {
 	// Otherwise, either no proposerOption is found for the pubkey or proposerOption.BuilderConfig is not enabled at all,
 	// we respond "not found".
 	httputil.HandleError(w, fmt.Sprintf("No gas limit found for pubkey %q", rawPubkey), http.StatusNotFound)
+}
+
+func (s *Server) GetGraffiti(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.Graffiti")
+	defer span.End()
+
+	if s.validatorService == nil {
+		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
+		return
+	}
+	rawPubkey, pubkey, ok := shared.HexFromRoute(w, r, "pubkey", fieldparams.BLSPubkeyLength)
+	if !ok {
+		return
+	}
+
+	graffiti, err := s.validatorService.Graffiti(ctx, bytesutil.ToBytes48(pubkey))
+	if err != nil {
+		if strings.Contains(err.Error(), "unavailable") {
+			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		httputil.HandleError(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	httputil.WriteJson(w, &GetGraffitiResponse{
+		Data: &GraffitiData{
+			Pubkey:   rawPubkey,
+			Graffiti: string(graffiti),
+		},
+	})
+}
+
+func (s *Server) SetGraffiti(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.SetGraffiti")
+	defer span.End()
+
+	if s.validatorService == nil {
+		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
+		return
+	}
+	_, pubkey, ok := shared.HexFromRoute(w, r, "pubkey", fieldparams.BLSPubkeyLength)
+	if !ok {
+		return
+	}
+
+	var req struct {
+		Graffiti string `json:"graffiti"`
+	}
+	err := json.NewDecoder(r.Body).Decode(&req)
+	switch {
+	case errors.Is(err, io.EOF):
+		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		return
+	case err != nil:
+		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := s.validatorService.SetGraffiti(ctx, bytesutil.ToBytes48(pubkey), []byte(req.Graffiti)); err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (s *Server) DeleteGraffiti(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.DeleteGraffiti")
+	defer span.End()
+
+	if s.validatorService == nil {
+		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
+		return
+	}
+
+	_, pubkey, ok := shared.HexFromRoute(w, r, "pubkey", fieldparams.BLSPubkeyLength)
+	if !ok {
+		return
+	}
+
+	if err := s.validatorService.DeleteGraffiti(ctx, bytesutil.ToBytes48(pubkey)); err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusNotFound)
+		return
+	}
 }

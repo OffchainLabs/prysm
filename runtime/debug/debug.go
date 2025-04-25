@@ -37,7 +37,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fjl/memsize/memsizeui"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
@@ -45,8 +44,6 @@ import (
 // Handler is the global debugging handler.
 var Handler = new(HandlerT)
 
-// Memsize is the memsizeui Handler(?).
-var Memsize memsizeui.Handler
 var (
 	// PProfFlag to enable pprof HTTP server.
 	PProfFlag = &cli.BoolFlag{
@@ -80,16 +77,6 @@ var (
 	BlockProfileRateFlag = &cli.IntFlag{
 		Name:  "blockprofilerate",
 		Usage: "Turns on block profiling with the given rate.",
-	}
-	// CPUProfileFlag to specify where to write the CPU profile.
-	CPUProfileFlag = &cli.StringFlag{
-		Name:  "cpuprofile",
-		Usage: "Writes CPU profile to the given file.",
-	}
-	// TraceFlag to specify where to write the trace execution profile.
-	TraceFlag = &cli.StringFlag{
-		Name:  "trace",
-		Usage: "Writes execution trace to the given file.",
 	}
 )
 
@@ -331,17 +318,6 @@ func Setup(ctx *cli.Context) error {
 	if ctx.IsSet(MutexProfileFractionFlag.Name) {
 		runtime.SetMutexProfileFraction(ctx.Int(MutexProfileFractionFlag.Name))
 	}
-	if traceFile := ctx.String(TraceFlag.Name); traceFile != "" {
-		if err := Handler.StartGoTrace(TraceFlag.Name); err != nil {
-			return err
-		}
-	}
-	if cpuFile := ctx.String(CPUProfileFlag.Name); cpuFile != "" {
-		if err := Handler.StartCPUProfile(cpuFile); err != nil {
-			return err
-		}
-	}
-
 	// pprof server
 	if ctx.Bool(PProfFlag.Name) {
 		address := fmt.Sprintf("%s:%d", ctx.String(PProfAddrFlag.Name), ctx.Int(PProfPortFlag.Name))
@@ -351,7 +327,6 @@ func Setup(ctx *cli.Context) error {
 }
 
 func startPProf(address string) {
-	http.Handle("/memsize/", http.StripPrefix("/memsize", &Memsize))
 	log.WithField("addr", fmt.Sprintf("http://%s/debug/pprof", address)).Info("Starting pprof server")
 	go func() {
 		srv := &http.Server{
@@ -362,19 +337,4 @@ func startPProf(address string) {
 			log.Error("Failure in running pprof server", "err", err)
 		}
 	}()
-}
-
-// Exit stops all running profiles, flushing their output to the
-// respective file.
-func Exit(ctx *cli.Context) {
-	if traceFile := ctx.String(TraceFlag.Name); traceFile != "" {
-		if err := Handler.StopGoTrace(); err != nil {
-			log.WithError(err).Error("Failed to stop go tracing")
-		}
-	}
-	if cpuFile := ctx.String(CPUProfileFlag.Name); cpuFile != "" {
-		if err := Handler.StopCPUProfile(); err != nil {
-			log.WithError(err).Error("Failed to stop CPU profiling")
-		}
-	}
 }

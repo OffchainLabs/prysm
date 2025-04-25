@@ -7,26 +7,24 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations/attmap"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
 	"github.com/patrickmn/go-cache"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/crypto/hash"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
-
-var hashFn = hash.Proto
 
 // AttCaches defines the caches used to satisfy attestation pool interface.
 // These caches are KV store for various attestations
 // such are unaggregated, aggregated or attestations within a block.
 type AttCaches struct {
 	aggregatedAttLock  sync.RWMutex
-	aggregatedAtt      map[[32]byte][]*ethpb.Attestation
+	aggregatedAtt      map[attestation.Id][]ethpb.Att
 	unAggregateAttLock sync.RWMutex
-	unAggregatedAtt    map[[32]byte]*ethpb.Attestation
-	forkchoiceAttLock  sync.RWMutex
-	forkchoiceAtt      map[[32]byte]*ethpb.Attestation
+	unAggregatedAtt    map[attestation.Id]ethpb.Att
+	forkchoiceAtt      *attmap.Attestations
 	blockAttLock       sync.RWMutex
-	blockAtt           map[[32]byte][]*ethpb.Attestation
+	blockAtt           map[attestation.Id][]ethpb.Att
 	seenAtt            *cache.Cache
 }
 
@@ -34,14 +32,39 @@ type AttCaches struct {
 // various kind of attestations.
 func NewAttCaches() *AttCaches {
 	secsInEpoch := time.Duration(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
-	c := cache.New(secsInEpoch*time.Second, 2*secsInEpoch*time.Second)
+	c := cache.New(2*secsInEpoch*time.Second, 2*secsInEpoch*time.Second)
 	pool := &AttCaches{
-		unAggregatedAtt: make(map[[32]byte]*ethpb.Attestation),
-		aggregatedAtt:   make(map[[32]byte][]*ethpb.Attestation),
-		forkchoiceAtt:   make(map[[32]byte]*ethpb.Attestation),
-		blockAtt:        make(map[[32]byte][]*ethpb.Attestation),
+		unAggregatedAtt: make(map[attestation.Id]ethpb.Att),
+		aggregatedAtt:   make(map[attestation.Id][]ethpb.Att),
+		forkchoiceAtt:   attmap.New(),
+		blockAtt:        make(map[attestation.Id][]ethpb.Att),
 		seenAtt:         c,
 	}
 
 	return pool
+}
+
+// saveForkchoiceAttestation saves a forkchoice attestation.
+func (c *AttCaches) saveForkchoiceAttestation(att ethpb.Att) error {
+	return c.forkchoiceAtt.Save(att)
+}
+
+// SaveForkchoiceAttestations saves forkchoice attestations.
+func (c *AttCaches) SaveForkchoiceAttestations(att []ethpb.Att) error {
+	return c.forkchoiceAtt.SaveMany(att)
+}
+
+// ForkchoiceAttestations returns all forkchoice attestations.
+func (c *AttCaches) ForkchoiceAttestations() []ethpb.Att {
+	return c.forkchoiceAtt.GetAll()
+}
+
+// DeleteForkchoiceAttestation deletes a forkchoice attestation.
+func (c *AttCaches) DeleteForkchoiceAttestation(att ethpb.Att) error {
+	return c.forkchoiceAtt.Delete(att)
+}
+
+// ForkchoiceAttestationCount returns the number of forkchoice attestation keys.
+func (c *AttCaches) ForkchoiceAttestationCount() int {
+	return c.forkchoiceAtt.Count()
 }

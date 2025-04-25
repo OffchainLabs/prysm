@@ -4,11 +4,11 @@ import (
 	"context"
 	"testing"
 
+	statenative "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v6/container/trie"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	statenative "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v5/container/trie"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestBeaconStateMerkleProofs_phase0_notsupported(t *testing.T) {
@@ -43,17 +43,17 @@ func TestBeaconStateMerkleProofs_altair(t *testing.T) {
 	t.Run("current sync committee", func(t *testing.T) {
 		cscp, err := altair.CurrentSyncCommitteeProof(ctx)
 		require.NoError(t, err)
-		require.Equal(t, len(cscp), 5)
+		require.Equal(t, 5, len(cscp))
 		for i, bytes := range cscp {
-			require.Equal(t, hexutil.Encode(bytes), results[i])
+			require.Equal(t, results[i], hexutil.Encode(bytes))
 		}
 	})
 	t.Run("next sync committee", func(t *testing.T) {
 		nscp, err := altair.NextSyncCommitteeProof(ctx)
 		require.NoError(t, err)
-		require.Equal(t, len(nscp), 5)
+		require.Equal(t, 5, len(nscp))
 		for i, bytes := range nscp {
-			require.Equal(t, hexutil.Encode(bytes), results[i])
+			require.Equal(t, results[i], hexutil.Encode(bytes))
 		}
 	})
 	t.Run("finalized root", func(t *testing.T) {
@@ -112,17 +112,17 @@ func TestBeaconStateMerkleProofs_bellatrix(t *testing.T) {
 	t.Run("current sync committee", func(t *testing.T) {
 		cscp, err := bellatrix.CurrentSyncCommitteeProof(ctx)
 		require.NoError(t, err)
-		require.Equal(t, len(cscp), 5)
+		require.Equal(t, 5, len(cscp))
 		for i, bytes := range cscp {
-			require.Equal(t, hexutil.Encode(bytes), results[i])
+			require.Equal(t, results[i], hexutil.Encode(bytes))
 		}
 	})
 	t.Run("next sync committee", func(t *testing.T) {
 		nscp, err := bellatrix.NextSyncCommitteeProof(ctx)
 		require.NoError(t, err)
-		require.Equal(t, len(nscp), 5)
+		require.Equal(t, 5, len(nscp))
 		for i, bytes := range nscp {
-			require.Equal(t, hexutil.Encode(bytes), results[i])
+			require.Equal(t, results[i], hexutil.Encode(bytes))
 		}
 	})
 	t.Run("finalized root", func(t *testing.T) {

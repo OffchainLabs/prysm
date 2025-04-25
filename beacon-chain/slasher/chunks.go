@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
+	slashertypes "github.com/OffchainLabs/prysm/v6/beacon-chain/slasher/types"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
-	slashertypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/slasher/types"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/sirupsen/logrus"
 )
 
@@ -26,7 +27,7 @@ type Chunker interface {
 		slasherDB db.SlasherDatabase,
 		validatorIdx primitives.ValidatorIndex,
 		attestation *slashertypes.IndexedAttestationWrapper,
-	) (*ethpb.AttesterSlashing, error)
+	) (ethpb.AttSlashing, error)
 	Update(
 		chunkIndex uint64,
 		currentEpoch primitives.Epoch,
@@ -185,9 +186,9 @@ func (m *MinSpanChunksSlice) CheckSlashable(
 	slasherDB db.SlasherDatabase,
 	validatorIdx primitives.ValidatorIndex,
 	incomingAttWrapper *slashertypes.IndexedAttestationWrapper,
-) (*ethpb.AttesterSlashing, error) {
-	sourceEpoch := incomingAttWrapper.IndexedAttestation.Data.Source.Epoch
-	targetEpoch := incomingAttWrapper.IndexedAttestation.Data.Target.Epoch
+) (ethpb.AttSlashing, error) {
+	sourceEpoch := incomingAttWrapper.IndexedAttestation.GetData().Source.Epoch
+	targetEpoch := incomingAttWrapper.IndexedAttestation.GetData().Target.Epoch
 
 	minTarget, err := chunkDataAtEpoch(m.params, m.data, validatorIdx, sourceEpoch)
 	if err != nil {
@@ -208,8 +209,8 @@ func (m *MinSpanChunksSlice) CheckSlashable(
 	}
 
 	if existingAttWrapper == nil {
-		// This case should normally not happen. If this happen, it means we previously
-		// recorded in our min/max DB an distance corresponding to an attestaiton, but WITHOUT
+		// This case should normally not happen. If this happens, it means we previously
+		// recorded in our min/max DB a distance corresponding to an attestation, but WITHOUT
 		// recording the attestation itself. As a consequence, we say there is no surrounding vote,
 		// but we log an error.
 		fields := logrus.Fields{
@@ -221,7 +222,7 @@ func (m *MinSpanChunksSlice) CheckSlashable(
 		return nil, nil
 	}
 
-	if existingAttWrapper.IndexedAttestation.Data.Source.Epoch <= sourceEpoch {
+	if existingAttWrapper.IndexedAttestation.GetData().Source.Epoch <= sourceEpoch {
 		// This case should normally not happen, since if we have targetEpoch > minTarget,
 		// then there is at least one attestation we surround.
 		// However, it can happens if we have multiple attestation with the same target
@@ -232,16 +233,70 @@ func (m *MinSpanChunksSlice) CheckSlashable(
 
 	surroundingVotesTotal.Inc()
 
+	// Both attestations should have the same type. If not, we convert both to Electra attestations.
+	unifyAttWrapperVersion(existingAttWrapper, incomingAttWrapper)
+
+	postElectra := existingAttWrapper.IndexedAttestation.Version() >= version.Electra
+	if postElectra {
+		existing, ok := existingAttWrapper.IndexedAttestation.(*ethpb.IndexedAttestationElectra)
+		if !ok {
+			return nil, fmt.Errorf(
+				"existing attestation has wrong type (expected %T, got %T)",
+				&ethpb.IndexedAttestationElectra{},
+				existingAttWrapper.IndexedAttestation,
+			)
+		}
+		incoming, ok := incomingAttWrapper.IndexedAttestation.(*ethpb.IndexedAttestationElectra)
+		if !ok {
+			return nil, fmt.Errorf(
+				"incoming attestation has wrong type (expected %T, got %T)",
+				&ethpb.IndexedAttestationElectra{},
+				incomingAttWrapper.IndexedAttestation,
+			)
+		}
+		slashing := &ethpb.AttesterSlashingElectra{
+			Attestation_1: existing,
+			Attestation_2: incoming,
+		}
+
+		// Ensure the attestation with the lower data root is the first attestation.
+		if bytes.Compare(existingAttWrapper.DataRoot[:], incomingAttWrapper.DataRoot[:]) > 0 {
+			slashing = &ethpb.AttesterSlashingElectra{
+				Attestation_1: incoming,
+				Attestation_2: existing,
+			}
+		}
+
+		return slashing, nil
+	}
+
+	existing, ok := existingAttWrapper.IndexedAttestation.(*ethpb.IndexedAttestation)
+	if !ok {
+		return nil, fmt.Errorf(
+			"existing attestation has wrong type (expected %T, got %T)",
+			&ethpb.IndexedAttestation{},
+			existingAttWrapper.IndexedAttestation,
+		)
+	}
+	incoming, ok := incomingAttWrapper.IndexedAttestation.(*ethpb.IndexedAttestation)
+	if !ok {
+		return nil, fmt.Errorf(
+			"incoming attestation has wrong type (expected %T, got %T)",
+			&ethpb.IndexedAttestation{},
+			incomingAttWrapper.IndexedAttestation,
+		)
+	}
+
 	slashing := &ethpb.AttesterSlashing{
-		Attestation_1: existingAttWrapper.IndexedAttestation,
-		Attestation_2: incomingAttWrapper.IndexedAttestation,
+		Attestation_1: existing,
+		Attestation_2: incoming,
 	}
 
 	// Ensure the attestation with the lower data root is the first attestation.
 	if bytes.Compare(existingAttWrapper.DataRoot[:], incomingAttWrapper.DataRoot[:]) > 0 {
 		slashing = &ethpb.AttesterSlashing{
-			Attestation_1: incomingAttWrapper.IndexedAttestation,
-			Attestation_2: existingAttWrapper.IndexedAttestation,
+			Attestation_1: incoming,
+			Attestation_2: existing,
 		}
 	}
 
@@ -264,9 +319,9 @@ func (m *MaxSpanChunksSlice) CheckSlashable(
 	slasherDB db.SlasherDatabase,
 	validatorIdx primitives.ValidatorIndex,
 	incomingAttWrapper *slashertypes.IndexedAttestationWrapper,
-) (*ethpb.AttesterSlashing, error) {
-	sourceEpoch := incomingAttWrapper.IndexedAttestation.Data.Source.Epoch
-	targetEpoch := incomingAttWrapper.IndexedAttestation.Data.Target.Epoch
+) (ethpb.AttSlashing, error) {
+	sourceEpoch := incomingAttWrapper.IndexedAttestation.GetData().Source.Epoch
+	targetEpoch := incomingAttWrapper.IndexedAttestation.GetData().Target.Epoch
 
 	maxTarget, err := chunkDataAtEpoch(m.params, m.data, validatorIdx, sourceEpoch)
 	if err != nil {
@@ -287,8 +342,8 @@ func (m *MaxSpanChunksSlice) CheckSlashable(
 	}
 
 	if existingAttWrapper == nil {
-		// This case should normally not happen. If this happen, it means we previously
-		// recorded in our min/max DB an distance corresponding to an attestaiton, but WITHOUT
+		// This case should normally not happen. If this happens, it means we previously
+		// recorded in our min/max DB a distance corresponding to an attestation, but WITHOUT
 		// recording the attestation itself. As a consequence, we say there is no surrounded vote,
 		// but we log an error.
 		fields := logrus.Fields{
@@ -300,7 +355,7 @@ func (m *MaxSpanChunksSlice) CheckSlashable(
 		return nil, nil
 	}
 
-	if existingAttWrapper.IndexedAttestation.Data.Source.Epoch >= sourceEpoch {
+	if existingAttWrapper.IndexedAttestation.GetData().Source.Epoch >= sourceEpoch {
 		// This case should normally not happen, since if we have targetEpoch < maxTarget,
 		// then there is at least one attestation that surrounds us.
 		// However, it can happens if we have multiple attestation with the same target
@@ -311,16 +366,70 @@ func (m *MaxSpanChunksSlice) CheckSlashable(
 
 	surroundedVotesTotal.Inc()
 
+	// Both attestations should have the same type. If not, we convert the non-Electra attestation into an Electra attestation.
+	unifyAttWrapperVersion(existingAttWrapper, incomingAttWrapper)
+
+	postElectra := existingAttWrapper.IndexedAttestation.Version() >= version.Electra
+	if postElectra {
+		existing, ok := existingAttWrapper.IndexedAttestation.(*ethpb.IndexedAttestationElectra)
+		if !ok {
+			return nil, fmt.Errorf(
+				"existing attestation has wrong type (expected %T, got %T)",
+				&ethpb.IndexedAttestationElectra{},
+				existingAttWrapper.IndexedAttestation,
+			)
+		}
+		incoming, ok := incomingAttWrapper.IndexedAttestation.(*ethpb.IndexedAttestationElectra)
+		if !ok {
+			return nil, fmt.Errorf(
+				"incoming attestation has wrong type (expected %T, got %T)",
+				&ethpb.IndexedAttestationElectra{},
+				incomingAttWrapper.IndexedAttestation,
+			)
+		}
+		slashing := &ethpb.AttesterSlashingElectra{
+			Attestation_1: existing,
+			Attestation_2: incoming,
+		}
+
+		// Ensure the attestation with the lower data root is the first attestation.
+		if bytes.Compare(existingAttWrapper.DataRoot[:], incomingAttWrapper.DataRoot[:]) > 0 {
+			slashing = &ethpb.AttesterSlashingElectra{
+				Attestation_1: incoming,
+				Attestation_2: existing,
+			}
+		}
+
+		return slashing, nil
+	}
+
+	existing, ok := existingAttWrapper.IndexedAttestation.(*ethpb.IndexedAttestation)
+	if !ok {
+		return nil, fmt.Errorf(
+			"existing attestation has wrong type (expected %T, got %T)",
+			&ethpb.IndexedAttestation{},
+			existingAttWrapper.IndexedAttestation,
+		)
+	}
+	incoming, ok := incomingAttWrapper.IndexedAttestation.(*ethpb.IndexedAttestation)
+	if !ok {
+		return nil, fmt.Errorf(
+			"incoming attestation has wrong type (expected %T, got %T)",
+			&ethpb.IndexedAttestation{},
+			incomingAttWrapper.IndexedAttestation,
+		)
+	}
+
 	slashing := &ethpb.AttesterSlashing{
-		Attestation_1: existingAttWrapper.IndexedAttestation,
-		Attestation_2: incomingAttWrapper.IndexedAttestation,
+		Attestation_1: existing,
+		Attestation_2: incoming,
 	}
 
 	// Ensure the attestation with the lower data root is the first attestation.
 	if bytes.Compare(existingAttWrapper.DataRoot[:], incomingAttWrapper.DataRoot[:]) > 0 {
 		slashing = &ethpb.AttesterSlashing{
-			Attestation_1: incomingAttWrapper.IndexedAttestation,
-			Attestation_2: existingAttWrapper.IndexedAttestation,
+			Attestation_1: incoming,
+			Attestation_2: existing,
 		}
 	}
 

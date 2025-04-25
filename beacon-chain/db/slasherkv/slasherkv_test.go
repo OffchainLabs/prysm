@@ -2,6 +2,7 @@ package slasherkv
 
 import (
 	"io"
+	"os"
 	"testing"
 
 	"github.com/sirupsen/logrus"
@@ -10,5 +11,5 @@ import (
 func TestMain(m *testing.M) {
 	logrus.SetLevel(logrus.DebugLevel)
 	logrus.SetOutput(io.Discard)
-	m.Run()
+	os.Exit(m.Run())
 }

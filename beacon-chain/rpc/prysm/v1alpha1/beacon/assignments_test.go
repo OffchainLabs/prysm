@@ -7,20 +7,20 @@ import (
 	"strconv"
 	"testing"
 
-	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	dbTest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	doublylinkedtree "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/doubly-linked-tree"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
-	mockstategen "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen/mock"
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	dbTest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
+	mockstategen "github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen/mock"
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 )
 
 func TestServer_ListAssignments_CannotRequestFutureEpoch(t *testing.T) {
@@ -174,16 +174,18 @@ func TestServer_ListAssignments_Pagination_DefaultPageSize_NoArchive(t *testing.
 
 	activeIndices, err := helpers.ActiveValidatorIndices(ctx, s, 0)
 	require.NoError(t, err)
-	committeeAssignments, proposerIndexToSlots, err := helpers.CommitteeAssignments(context.Background(), s, 0)
+	assignments, err := helpers.CommitteeAssignments(context.Background(), s, 0, activeIndices[0:params.BeaconConfig().DefaultPageSize])
+	require.NoError(t, err)
+	proposerSlots, err := helpers.ProposerAssignments(ctx, s, 0)
 	require.NoError(t, err)
 	for _, index := range activeIndices[0:params.BeaconConfig().DefaultPageSize] {
 		val, err := s.ValidatorAtIndex(index)
 		require.NoError(t, err)
 		wanted = append(wanted, &ethpb.ValidatorAssignments_CommitteeAssignment{
-			BeaconCommittees: committeeAssignments[index].Committee,
-			CommitteeIndex:   committeeAssignments[index].CommitteeIndex,
-			AttesterSlot:     committeeAssignments[index].AttesterSlot,
-			ProposerSlots:    proposerIndexToSlots[index],
+			BeaconCommittees: assignments[index].Committee,
+			CommitteeIndex:   assignments[index].CommitteeIndex,
+			AttesterSlot:     assignments[index].AttesterSlot,
+			ProposerSlots:    proposerSlots[index],
 			PublicKey:        val.PublicKey,
 			ValidatorIndex:   index,
 		})
@@ -244,16 +246,18 @@ func TestServer_ListAssignments_FilterPubkeysIndices_NoPagination(t *testing.T) 
 
 	activeIndices, err := helpers.ActiveValidatorIndices(ctx, s, 0)
 	require.NoError(t, err)
-	committeeAssignments, proposerIndexToSlots, err := helpers.CommitteeAssignments(context.Background(), s, 0)
+	assignments, err := helpers.CommitteeAssignments(context.Background(), s, 0, activeIndices[1:4])
+	require.NoError(t, err)
+	proposerSlots, err := helpers.ProposerAssignments(ctx, s, 0)
 	require.NoError(t, err)
 	for _, index := range activeIndices[1:4] {
 		val, err := s.ValidatorAtIndex(index)
 		require.NoError(t, err)
 		wanted = append(wanted, &ethpb.ValidatorAssignments_CommitteeAssignment{
-			BeaconCommittees: committeeAssignments[index].Committee,
-			CommitteeIndex:   committeeAssignments[index].CommitteeIndex,
-			AttesterSlot:     committeeAssignments[index].AttesterSlot,
-			ProposerSlots:    proposerIndexToSlots[index],
+			BeaconCommittees: assignments[index].Committee,
+			CommitteeIndex:   assignments[index].CommitteeIndex,
+			AttesterSlot:     assignments[index].AttesterSlot,
+			ProposerSlots:    proposerSlots[index],
 			PublicKey:        val.PublicKey,
 			ValidatorIndex:   index,
 		})
@@ -312,16 +316,18 @@ func TestServer_ListAssignments_CanFilterPubkeysIndices_WithPagination(t *testin
 
 	activeIndices, err := helpers.ActiveValidatorIndices(ctx, s, 0)
 	require.NoError(t, err)
-	committeeAssignments, proposerIndexToSlots, err := helpers.CommitteeAssignments(context.Background(), s, 0)
+	as, err := helpers.CommitteeAssignments(context.Background(), s, 0, activeIndices[3:5])
+	require.NoError(t, err)
+	proposalSlots, err := helpers.ProposerAssignments(ctx, s, 0)
 	require.NoError(t, err)
 	for _, index := range activeIndices[3:5] {
 		val, err := s.ValidatorAtIndex(index)
 		require.NoError(t, err)
 		assignments = append(assignments, &ethpb.ValidatorAssignments_CommitteeAssignment{
-			BeaconCommittees: committeeAssignments[index].Committee,
-			CommitteeIndex:   committeeAssignments[index].CommitteeIndex,
-			AttesterSlot:     committeeAssignments[index].AttesterSlot,
-			ProposerSlots:    proposerIndexToSlots[index],
+			BeaconCommittees: as[index].Committee,
+			CommitteeIndex:   as[index].CommitteeIndex,
+			AttesterSlot:     as[index].AttesterSlot,
+			ProposerSlots:    proposalSlots[index],
 			PublicKey:        val.PublicKey,
 			ValidatorIndex:   index,
 		})
@@ -340,16 +346,18 @@ func TestServer_ListAssignments_CanFilterPubkeysIndices_WithPagination(t *testin
 	req = &ethpb.ListValidatorAssignmentsRequest{Indices: []primitives.ValidatorIndex{1, 2, 3, 4, 5, 6}, PageSize: 5, PageToken: "1"}
 	res, err = bs.ListValidatorAssignments(context.Background(), req)
 	require.NoError(t, err)
-	cAssignments, proposerIndexToSlots, err := helpers.CommitteeAssignments(context.Background(), s, 0)
+	as, err = helpers.CommitteeAssignments(context.Background(), s, 0, activeIndices[6:7])
+	require.NoError(t, err)
+	proposalSlots, err = helpers.ProposerAssignments(ctx, s, 0)
 	require.NoError(t, err)
 	for _, index := range activeIndices[6:7] {
 		val, err := s.ValidatorAtIndex(index)
 		require.NoError(t, err)
 		assignments = append(assignments, &ethpb.ValidatorAssignments_CommitteeAssignment{
-			BeaconCommittees: cAssignments[index].Committee,
-			CommitteeIndex:   cAssignments[index].CommitteeIndex,
-			AttesterSlot:     cAssignments[index].AttesterSlot,
-			ProposerSlots:    proposerIndexToSlots[index],
+			BeaconCommittees: as[index].Committee,
+			CommitteeIndex:   as[index].CommitteeIndex,
+			AttesterSlot:     as[index].AttesterSlot,
+			ProposerSlots:    proposalSlots[index],
 			PublicKey:        val.PublicKey,
 			ValidatorIndex:   index,
 		})

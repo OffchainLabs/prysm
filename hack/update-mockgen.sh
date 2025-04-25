@@ -7,7 +7,7 @@
 mock_path="testing/mock"
 iface_mock_path="testing/validator-mock"
 
-# github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1
+# github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1
 # ------------------------------------------------------
 proto_mocks_v1alpha1=(
       "$mock_path/beacon_service_mock.go BeaconChainClient"
@@ -21,14 +21,14 @@ for ((i = 0; i < ${#proto_mocks_v1alpha1[@]}; i++)); do
     interfaces=${proto_mocks_v1alpha1[i]#* };
     echo "generating $file for interfaces: $interfaces";
     echo
-    GO11MODULE=on mockgen -package=mock -destination="$file" github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1 "$interfaces"
+    GO11MODULE=on mockgen -package=mock -destination="$file" github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1 "$interfaces"
 done
 
-# github.com/prysmaticlabs/prysm/v5/validator/client/iface
+# github.com/OffchainLabs/prysm/v6/validator/client/iface
 # --------------------------------------------------------
 iface_mocks=(
-      "$iface_mock_path/beacon_chain_client_mock.go BeaconChainClient"
-      "$iface_mock_path/prysm_beacon_chain_client_mock.go PrysmBeaconChainClient"
+      "$iface_mock_path/chain_client_mock.go ChainClient"
+      "$iface_mock_path/prysm_chain_client_mock.go PrysmChainClient"
       "$iface_mock_path/node_client_mock.go NodeClient"
       "$iface_mock_path/validator_client_mock.go ValidatorClient"
 )
@@ -37,13 +37,13 @@ for ((i = 0; i < ${#iface_mocks[@]}; i++)); do
     file=${iface_mocks[i]% *};
     interfaces=${iface_mocks[i]#* };
     echo "generating $file for interfaces: $interfaces";
-    GO11MODULE=on mockgen -package=validator_mock -destination="$file" github.com/prysmaticlabs/prysm/v5/validator/client/iface "$interfaces"
+    GO11MODULE=on mockgen -package=validator_mock -destination="$file" github.com/OffchainLabs/prysm/v6/validator/client/iface "$interfaces"
 done
 
 goimports -w "$mock_path/."
 gofmt -s -w "$mock_path/."
 
-# github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api
+# github.com/OffchainLabs/prysm/v6/validator/client/beacon-api
 # -------------------------------------------------------------
 beacon_api_mock_path="validator/client/beacon-api/mock"
 beacon_api_mocks=(
@@ -64,7 +64,7 @@ done
 goimports -w "$beacon_api_mock_path/."
 gofmt -s -w "$beacon_api_mock_path/."
 
-# github.com/prysmaticlabs/prysm/v5/crypto/bls
+# github.com/OffchainLabs/prysm/v6/crypto/bls
 # --------------------------------------------
 crypto_bls_common_mock_path="crypto/bls/common/mock"
 crypto_bls_common_mocks=(

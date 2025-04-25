@@ -3,11 +3,11 @@ package kv
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v6/config/proposer"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/config/proposer"
-	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
 	bolt "go.etcd.io/bbolt"
-	"go.opencensus.io/trace"
 	"google.golang.org/protobuf/proto"
 )
 

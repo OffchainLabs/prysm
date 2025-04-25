@@ -1,8 +1,8 @@
 package slasher
 
 import (
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 )
 
 // Parameters for slashing detection.
@@ -14,6 +14,21 @@ type Parameters struct {
 	chunkSize          uint64           // C - defines how many elements are in a chunk for a validator min or max span slice.
 	validatorChunkSize uint64           // K - defines how many validators' chunks we store in a single flat byte slice on disk.
 	historyLength      primitives.Epoch // H - defines how many epochs we keep of min or max spans.
+}
+
+// ChunkSize returns the chunk size.
+func (p *Parameters) ChunkSize() uint64 {
+	return p.chunkSize
+}
+
+// ValidatorChunkSize returns the validator chunk size.
+func (p *Parameters) ValidatorChunkSize() uint64 {
+	return p.validatorChunkSize
+}
+
+// HistoryLength returns the history length.
+func (p *Parameters) HistoryLength() primitives.Epoch {
+	return p.historyLength
 }
 
 // DefaultParams defines default values for slasher's important parameters, defined
@@ -32,7 +47,15 @@ func DefaultParams() *Parameters {
 	}
 }
 
-// Validator min and max spans are split into chunks of length C = chunkSize.
+func NewParams(chunkSize, validatorChunkSize uint64, historyLength primitives.Epoch) *Parameters {
+	return &Parameters{
+		chunkSize:          chunkSize,
+		validatorChunkSize: validatorChunkSize,
+		historyLength:      historyLength,
+	}
+}
+
+// ChunkIndex Validator min and max spans are split into chunks of length C = chunkSize.
 // That is, if we are keeping N epochs worth of attesting history, finding what
 // chunk a certain epoch, e, falls into can be computed as (e % N) / C. For example,
 // if we are keeping 6 epochs worth of data, and we have chunks of size 2, then epoch
@@ -139,9 +162,9 @@ func (p *Parameters) flatSliceID(validatorChunkIndex, chunkIndex uint64) []byte 
 	return ssz.MarshalUint64(make([]byte, 0), uint64(width.Mul(validatorChunkIndex).Add(chunkIndex)))
 }
 
-// Given a validator chunk index, we determine all of the validator
+// ValidatorIndexesInChunk Given a validator chunk index, we determine all the validators
 // indices that will belong in that chunk.
-func (p *Parameters) validatorIndexesInChunk(validatorChunkIndex uint64) []primitives.ValidatorIndex {
+func (p *Parameters) ValidatorIndexesInChunk(validatorChunkIndex uint64) []primitives.ValidatorIndex {
 	validatorIndices := make([]primitives.ValidatorIndex, 0)
 	low := validatorChunkIndex * p.validatorChunkSize
 	high := (validatorChunkIndex + 1) * p.validatorChunkSize

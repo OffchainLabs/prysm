@@ -3,25 +3,22 @@ package proposer
 import (
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v6/config"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/validator"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/config"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
 )
 
 // SettingFromConsensus converts struct to Settings while verifying the fields
 func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, error) {
 	settings := &Settings{}
-	if ps.ProposerConfig != nil && len(ps.ProposerConfig) != 0 {
+	if len(ps.ProposerConfig) != 0 {
 		settings.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*Option)
 		for key, optionPayload := range ps.ProposerConfig {
-			if optionPayload.FeeRecipient == "" {
-				continue
-			}
 			decodedKey, err := hexutil.Decode(key)
 			if err != nil {
 				return nil, errors.Wrap(err, fmt.Sprintf("cannot decode public key %s", key))
@@ -29,13 +26,15 @@ func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, e
 			if len(decodedKey) != fieldparams.BLSPubkeyLength {
 				return nil, fmt.Errorf("%v is not a bls public key", key)
 			}
-			if err := verifyOption(key, optionPayload); err != nil {
-				return nil, err
+			p := &Option{}
+			if optionPayload.Graffiti != nil {
+				p.GraffitiConfig = &GraffitiConfig{*optionPayload.Graffiti}
 			}
-			p := &Option{
-				FeeRecipientConfig: &FeeRecipientConfig{
-					FeeRecipient: common.HexToAddress(optionPayload.FeeRecipient),
-				},
+			if optionPayload.FeeRecipient != "" {
+				if err := verifyOption(key, optionPayload); err != nil {
+					return nil, err
+				}
+				p.FeeRecipientConfig = &FeeRecipientConfig{FeeRecipient: common.HexToAddress(optionPayload.FeeRecipient)}
 			}
 			if optionPayload.Builder != nil {
 				p.BuilderConfig = BuilderConfigFromConsensus(optionPayload.Builder)
@@ -141,10 +140,16 @@ type FeeRecipientConfig struct {
 	FeeRecipient common.Address
 }
 
+// GraffitiConfig is a prysm internal representation to see if the graffiti was set.
+type GraffitiConfig struct {
+	Graffiti string
+}
+
 // Option is a Prysm internal representation of the ProposerOptionPayload on the validator client in bytes format instead of hex.
 type Option struct {
 	FeeRecipientConfig *FeeRecipientConfig
 	BuilderConfig      *BuilderConfig
+	GraffitiConfig     *GraffitiConfig
 }
 
 // Clone creates a deep copy of proposer option
@@ -159,6 +164,9 @@ func (po *Option) Clone() *Option {
 	if po.BuilderConfig != nil {
 		p.BuilderConfig = po.BuilderConfig.Clone()
 	}
+	if po.GraffitiConfig != nil {
+		p.GraffitiConfig = po.GraffitiConfig.Clone()
+	}
 	return p
 }
 
@@ -172,6 +180,9 @@ func (po *Option) ToConsensus() *validatorpb.ProposerOptionPayload {
 	}
 	if po.BuilderConfig != nil {
 		p.Builder = po.BuilderConfig.ToConsensus()
+	}
+	if po.GraffitiConfig != nil {
+		p.Graffiti = &po.GraffitiConfig.Graffiti
 	}
 	return p
 }
@@ -220,6 +231,14 @@ func (bc *BuilderConfig) Clone() *BuilderConfig {
 		c.Relays = relays
 	}
 	return c
+}
+
+// Clone creates a deep copy of graffiti config
+func (gc *GraffitiConfig) Clone() *GraffitiConfig {
+	if gc == nil {
+		return nil
+	}
+	return &GraffitiConfig{gc.Graffiti}
 }
 
 // ToConsensus converts Builder Config to the protobuf object

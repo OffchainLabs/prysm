@@ -91,6 +91,7 @@ package mvslice
 
 import (
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -578,10 +579,8 @@ func (s *Slice[V]) updateAppendedItem(obj Identifiable, index uint64, val V) err
 }
 
 func containsId(ids []uint64, wanted uint64) (int, bool) {
-	for i, id := range ids {
-		if id == wanted {
-			return i, true
-		}
+	if i := slices.Index(ids, wanted); i >= 0 {
+		return i, true
 	}
 	return 0, false
 }

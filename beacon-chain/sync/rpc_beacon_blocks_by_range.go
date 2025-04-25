@@ -4,18 +4,19 @@ import (
 	"context"
 	"time"
 
+	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
-	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	"go.opencensus.io/trace"
+	"github.com/sirupsen/logrus"
 )
 
 // beaconBlocksByRangeRPCHandler looks up the request blocks from the database from a given start block.
@@ -26,21 +27,34 @@ func (s *Service) beaconBlocksByRangeRPCHandler(ctx context.Context, msg interfa
 	defer cancel()
 	SetRPCStreamDeadlines(stream)
 
+	remotePeer := stream.Conn().RemotePeer()
+
 	m, ok := msg.(*pb.BeaconBlocksByRangeRequest)
 	if !ok {
 		return errors.New("message is not type *pb.BeaconBlockByRangeRequest")
 	}
-	log.WithField("startSlot", m.StartSlot).WithField("count", m.Count).Debug("Serving block by range request")
+
+	log.WithFields(logrus.Fields{
+		"startSlot": m.StartSlot,
+		"count":     m.Count,
+		"peer":      remotePeer,
+	}).Debug("Serving block by range request")
+
 	rp, err := validateRangeRequest(m, s.cfg.clock.CurrentSlot())
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
 		tracing.AnnotateError(span, err)
 		return err
 	}
 	available := s.validateRangeAvailability(rp)
 	if !available {
-		log.Debug("error in validating range availability")
+		log.WithFields(logrus.Fields{
+			"startSlot": rp.start,
+			"endSlot":   rp.end,
+			"size":      rp.size,
+			"current":   s.cfg.clock.CurrentSlot(),
+		}).Debug("error in validating range availability")
 		s.writeErrorResponseToStream(responseCodeResourceUnavailable, p2ptypes.ErrResourceUnavailable.Error(), stream)
 		tracing.AnnotateError(span, err)
 		return nil
@@ -50,12 +64,12 @@ func (s *Service) beaconBlocksByRangeRPCHandler(ctx context.Context, msg interfa
 	if err != nil {
 		return err
 	}
-	remainingBucketCapacity := blockLimiter.Remaining(stream.Conn().RemotePeer().String())
-	span.AddAttributes(
+	remainingBucketCapacity := blockLimiter.Remaining(remotePeer.String())
+	span.SetAttributes(
 		trace.Int64Attribute("start", int64(rp.start)), // lint:ignore uintcast -- This conversion is OK for tracing.
 		trace.Int64Attribute("end", int64(rp.end)),     // lint:ignore uintcast -- This conversion is OK for tracing.
 		trace.Int64Attribute("count", int64(m.Count)),
-		trace.StringAttribute("peer", stream.Conn().RemotePeer().String()),
+		trace.StringAttribute("peer", remotePeer.String()),
 		trace.Int64Attribute("remaining_capacity", remainingBucketCapacity),
 	)
 
@@ -82,12 +96,19 @@ func (s *Service) beaconBlocksByRangeRPCHandler(ctx context.Context, msg interfa
 		}
 		rpcBlocksByRangeResponseLatency.Observe(float64(time.Since(batchStart).Milliseconds()))
 	}
+
 	if err := batch.error(); err != nil {
-		log.WithError(err).Debug("error in BlocksByRange batch")
-		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
+		log.WithError(err).Debug("Serving block by range request - BlocksByRange batch")
+
+		// If a rate limit is hit, it means an error response has already been sent and the stream has been closed.
+		if !errors.Is(err, p2ptypes.ErrRateLimited) {
+			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
+		}
+
 		tracing.AnnotateError(span, err)
 		return err
 	}
+
 	closeStream(stream, log)
 	return nil
 }
@@ -160,7 +181,7 @@ func (s *Service) writeBlockBatchToStream(ctx context.Context, batch blockBatch,
 		return nil
 	}
 
-	reconstructed, err := s.cfg.executionPayloadReconstructor.ReconstructFullBellatrixBlockBatch(ctx, blinded)
+	reconstructed, err := s.cfg.executionReconstructor.ReconstructFullBellatrixBlockBatch(ctx, blinded)
 	if err != nil {
 		log.WithError(err).Error("Could not reconstruct full bellatrix block batch from blinded bodies")
 		return err

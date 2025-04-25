@@ -1,23 +1,24 @@
 package sync
 
 import (
-	"github.com/prysmaticlabs/prysm/v5/async/event"
-	blockfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/block"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
-	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/blstoexec"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/slashings"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/synccommittee"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/voluntaryexits"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/backfill/coverage"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v6/async/event"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
+	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/blstoexec"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/slashings"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/synccommittee"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/voluntaryexits"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/backfill/coverage"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 )
 
 type Option func(s *Service) error
@@ -39,6 +40,13 @@ func WithP2P(p2p p2p.P2P) Option {
 func WithDatabase(db db.NoHeadAccessDatabase) Option {
 	return func(s *Service) error {
 		s.cfg.beaconDB = db
+		return nil
+	}
+}
+
+func WithAttestationCache(c *cache.AttestationCache) Option {
+	return func(s *Service) error {
+		s.cfg.attestationCache = c
 		return nil
 	}
 }
@@ -127,9 +135,9 @@ func WithSlasherBlockHeadersFeed(slasherBlockHeadersFeed *event.Feed) Option {
 	}
 }
 
-func WithPayloadReconstructor(r execution.PayloadReconstructor) Option {
+func WithReconstructor(r execution.Reconstructor) Option {
 	return func(s *Service) error {
-		s.cfg.executionPayloadReconstructor = r
+		s.cfg.executionReconstructor = r
 		return nil
 	}
 }
@@ -177,6 +185,14 @@ func WithVerifierWaiter(v *verification.InitializerWaiter) Option {
 func WithAvailableBlocker(avb coverage.AvailableBlocker) Option {
 	return func(s *Service) error {
 		s.availableBlocker = avb
+		return nil
+	}
+}
+
+// WithSlasherEnabled configures the sync package to support slashing detection.
+func WithSlasherEnabled(enabled bool) Option {
+	return func(s *Service) error {
+		s.slasherEnabled = enabled
 		return nil
 	}
 }

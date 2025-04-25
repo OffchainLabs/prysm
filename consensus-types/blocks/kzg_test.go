@@ -1,15 +1,16 @@
 package blocks
 
 import (
-	"math/rand"
+	"crypto/rand"
+	"errors"
 	"testing"
 
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/container/trie"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/prysmaticlabs/gohashtree"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/container/trie"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func Test_MerkleProofKZGCommitment_Altair(t *testing.T) {
@@ -74,14 +75,79 @@ func Test_MerkleProofKZGCommitment(t *testing.T) {
 	proof, err := MerkleProofKZGCommitment(body, index)
 	require.NoError(t, err)
 
-	chunk := make([][32]byte, 2)
-	copy(chunk[0][:], kzgs[index])
-	copy(chunk[1][:], kzgs[index][32:])
-	gohashtree.HashChunks(chunk, chunk)
+	// Test the logic of topProof in MerkleProofKZGCommitment.
+	commitmentsRoot, err := getBlobKzgCommitmentsRoot(kzgs)
+	require.NoError(t, err)
+	bodyMembersRoots, err := topLevelRoots(body)
+	require.NoError(t, err, "Failed to get top level roots")
+	bodySparse, err := trie.GenerateTrieFromItems(
+		bodyMembersRoots,
+		logBodyLength,
+	)
+	require.NoError(t, err, "Failed to generate trie from member roots")
+	require.Equal(t, bodyLength, bodySparse.NumOfItems())
+	topProof, err := bodySparse.MerkleProof(kzgPosition)
+	require.NoError(t, err, "Failed to generate Merkle proof")
+	require.DeepEqual(t,
+		topProof[:len(topProof)-1],
+		proof[fieldparams.LogMaxBlobCommitments+1:],
+	)
+
 	root, err := body.HashTreeRoot()
 	require.NoError(t, err)
-	kzgOffset := 54 * fieldparams.MaxBlobCommitmentsPerBlock
-	require.Equal(t, true, trie.VerifyMerkleProof(root[:], chunk[0][:], uint64(index+kzgOffset), proof))
+	// Partially verify if the commitments root is in the body root.
+	// Proof of the commitment length is not needed.
+	require.Equal(t, true, trie.VerifyMerkleProof(root[:], commitmentsRoot[:], kzgPosition, topProof[:len(topProof)-1]))
+
+	chunk := makeChunk(kzgs[index])
+	gohashtree.HashChunks(chunk, chunk)
+	require.Equal(t, true, trie.VerifyMerkleProof(root[:], chunk[0][:], uint64(index+KZGOffset), proof))
+}
+
+// This test explains the calculation of the KZG commitment root's Merkle index
+// in the Body's Merkle tree based on the index of the KZG commitment list in the Body.
+func Test_KZGRootIndex(t *testing.T) {
+	// Level of the KZG commitment root's parent.
+	kzgParentRootLevel, err := ceilLog2(kzgPosition)
+	require.NoError(t, err)
+	// Merkle index of the KZG commitment root's parent.
+	// The parent's left child is the KZG commitment root,
+	// and its right child is the KZG commitment size.
+	kzgParentRootIndex := kzgPosition + (1 << kzgParentRootLevel)
+	// The KZG commitment root is the left child of its parent.
+	// Its Merkle index is the double of its parent's Merkle index.
+	require.Equal(t, 2*kzgParentRootIndex, kzgRootIndex)
+}
+
+// ceilLog2 returns the smallest integer greater than or equal to
+// the base-2 logarithm of x.
+func ceilLog2(x uint32) (uint32, error) {
+	if x == 0 {
+		return 0, errors.New("log2(0) is undefined")
+	}
+	var y uint32
+	if (x & (x - 1)) == 0 {
+		y = 0
+	} else {
+		y = 1
+	}
+	for x > 1 {
+		x >>= 1
+		y += 1
+	}
+	return y, nil
+}
+
+func getBlobKzgCommitmentsRoot(commitments [][]byte) ([32]byte, error) {
+	commitmentsLeaves := leavesFromCommitments(commitments)
+	commitmentsSparse, err := trie.GenerateTrieFromItems(
+		commitmentsLeaves,
+		fieldparams.LogMaxBlobCommitments,
+	)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	return commitmentsSparse.HashTreeRoot()
 }
 
 func Benchmark_MerkleProofKZGCommitment(b *testing.B) {
@@ -178,7 +244,8 @@ func Test_VerifyKZGInclusionProof(t *testing.T) {
 		StateRoot:  make([]byte, 32),
 	}
 	signedHeader := &ethpb.SignedBeaconBlockHeader{
-		Header: header,
+		Header:    header,
+		Signature: make([]byte, fieldparams.BLSSignatureLength),
 	}
 	sidecar := &ethpb.BlobSidecar{
 		Index:                    uint64(index),

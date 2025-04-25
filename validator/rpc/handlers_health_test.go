@@ -9,13 +9,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/io/logs/mock"
+	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	validatormock "github.com/OffchainLabs/prysm/v6/testing/validator-mock"
 	"github.com/golang/protobuf/ptypes/empty"
-	"github.com/prysmaticlabs/prysm/v5/api"
-	"github.com/prysmaticlabs/prysm/v5/io/logs/mock"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	validatormock "github.com/prysmaticlabs/prysm/v5/testing/validator-mock"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc"
 )
@@ -26,11 +25,11 @@ type MockBeaconNodeHealthClient struct {
 	err  error
 }
 
-func (m *MockBeaconNodeHealthClient) StreamBeaconLogs(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (eth.Health_StreamBeaconLogsClient, error) {
+func (m *MockBeaconNodeHealthClient) StreamBeaconLogs(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (pb.Health_StreamBeaconLogsClient, error) {
 	return m, m.err
 }
 
-func (m *MockBeaconNodeHealthClient) Recv() (*eth.LogsResponse, error) {
+func (m *MockBeaconNodeHealthClient) Recv() (*pb.LogsResponse, error) {
 	if len(m.logs) == 0 {
 		return nil, io.EOF
 	}
@@ -73,8 +72,8 @@ func TestStreamBeaconLogs(t *testing.T) {
 
 	// Setting up the mock in the server struct
 	s := Server{
-		ctx:                    context.Background(),
-		beaconNodeHealthClient: mockClient,
+		ctx:          context.Background(),
+		healthClient: mockClient,
 	}
 
 	// Create a mock ResponseWriter and Request
@@ -119,9 +118,9 @@ func TestStreamValidatorLogs(t *testing.T) {
 	logStreamer := mock.NewMockStreamer(mockLogs)
 	// Setting up the mock in the server struct
 	s := Server{
-		ctx:                  ctx,
-		logsStreamer:         logStreamer,
-		streamLogsBufferSize: 100,
+		ctx:                   ctx,
+		logStreamer:           logStreamer,
+		logStreamerBufferSize: 100,
 	}
 
 	w := &flushableResponseRecorder{
@@ -170,10 +169,10 @@ func TestServer_GetVersion(t *testing.T) {
 	ctx := context.Background()
 	mockNodeClient := validatormock.NewMockNodeClient(ctrl)
 	s := Server{
-		ctx:              ctx,
-		beaconNodeClient: mockNodeClient,
+		ctx:        ctx,
+		nodeClient: mockNodeClient,
 	}
-	mockNodeClient.EXPECT().GetVersion(gomock.Any(), gomock.Any()).Return(&eth.Version{
+	mockNodeClient.EXPECT().Version(gomock.Any(), gomock.Any()).Return(&pb.Version{
 		Version:  "4.10.1",
 		Metadata: "beacon node",
 	}, nil)

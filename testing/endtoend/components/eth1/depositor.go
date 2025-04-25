@@ -8,19 +8,19 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	contracts "github.com/OffchainLabs/prysm/v6/contracts/deposit"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
+	"github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	gethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	contracts "github.com/prysmaticlabs/prysm/v5/contracts/deposit"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	e2e "github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
-	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/types"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -171,6 +171,62 @@ func (d *Depositor) SendAndMine(ctx context.Context, offset, nvals int, batch ty
 	// This is the "AndMine" part of the function. WaitForBlocks will spam transactions to/from the given key
 	// to advance the EL chain and until the chain has advanced the requested amount.
 	if err = WaitForBlocks(d.Client, d.Key, params.BeaconConfig().Eth1FollowDistance); err != nil {
+		return fmt.Errorf("failed to mine blocks %w", err)
+	}
+	return nil
+}
+
+// SendAndMineByBatch uses the deterministic validator generator to generate deposits for `nvals` (number of validators).
+// To control which validators should receive deposits, so that we can generate deposits at different stages of e2e,
+// the `offset` parameter skips the first N validators in the deterministic list.
+// In order to test the requirement that our deposit follower is able to handle multiple partial deposits,
+// the `partial` flag specifies that half of the deposits should be broken up into 2 transactions.
+// Once the set of deposits has been generated, it submits a transaction for each deposit
+// (using 2 transactions for partial deposits) and then uses WaitForBlocks to send these transactions by one batch per block.
+// The batch size is determined by the provided batch size provided as an argument.
+func (d *Depositor) SendAndMineByBatch(ctx context.Context, offset, nvals, batchSize int, batch types.DepositBatch, partial bool) error {
+	balance, err := d.Client.BalanceAt(ctx, d.Key.Address, nil)
+	if err != nil {
+		return err
+	}
+	// This is the "Send" part of the function. Compute deposits for `nvals` validators,
+	// with half of those deposits being split over 2 transactions if the `partial` flag is true,
+	// and throwing away any validators before `offset`.
+	deposits, err := computeDeposits(offset, nvals, partial)
+	if err != nil {
+		return err
+	}
+	numBatch := len(deposits) / batchSize
+	log.WithField("numDeposits", len(deposits)).WithField("batchSize", batchSize).WithField("numBatches", numBatch).WithField("balance", balance.String()).WithField("account", d.Key.Address.Hex()).Info("SendAndMineByBatch check")
+	for i := 0; i < numBatch; i++ {
+		txo, err := d.txops(ctx)
+		if err != nil {
+			return err
+		}
+		for _, dd := range deposits[i*batchSize : (i+1)*batchSize] {
+			if err := d.SendDeposit(dd, txo, batch); err != nil {
+				return err
+			}
+		}
+		// This is the "AndMine" part of the function. WaitForBlocks will spam transactions to/from the given key
+		// to advance the EL chain and until the chain has advanced the requested amount.
+		if err = WaitForBlocks(d.Client, d.Key, 1); err != nil {
+			return fmt.Errorf("failed to mine blocks %w", err)
+		}
+	}
+	txo, err := d.txops(ctx)
+	if err != nil {
+		return err
+	}
+	// Send out the last partial batch
+	for _, dd := range deposits[numBatch*batchSize:] {
+		if err := d.SendDeposit(dd, txo, batch); err != nil {
+			return err
+		}
+	}
+	// This is the "AndMine" part of the function. WaitForBlocks will spam transactions to/from the given key
+	// to advance the EL chain and until the chain has advanced the requested amount.
+	if err = WaitForBlocks(d.Client, d.Key, 1); err != nil {
 		return fmt.Errorf("failed to mine blocks %w", err)
 	}
 	return nil
