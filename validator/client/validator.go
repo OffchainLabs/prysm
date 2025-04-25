@@ -520,7 +520,7 @@ func (v *validator) UpdateDuties(ctx context.Context, slot primitives.Slot) erro
 		return nil
 	}
 	// Set deadline to end of epoch.
-	ss, err := slots.EpochStart(slots.ToEpoch(slot) + 1)
+	ss, err := slots.EpochStart(primitives.Epoch(slots.CurrentSlot(v.genesisTime) + 1))
 	if err != nil {
 		return err
 	}
