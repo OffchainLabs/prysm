@@ -49,13 +49,13 @@ func (m *MockBroadcaster) BroadcastBlob(context.Context, uint64, *ethpb.BlobSide
 	return nil
 }
 
-// BroadcastLightClientOptimisticUpdate records a broadcast occured.
+// BroadcastLightClientOptimisticUpdate records a broadcast occurred.
 func (m *MockBroadcaster) BroadcastLightClientOptimisticUpdate(_ context.Context, _ interfaces.LightClientOptimisticUpdate) error {
 	m.BroadcastCalled.Store(true)
 	return nil
 }
 
-// BroadcastLightClientFinalityUpdate records a broadcast occured.
+// BroadcastLightClientFinalityUpdate records a broadcast occurred.
 func (m *MockBroadcaster) BroadcastLightClientFinalityUpdate(_ context.Context, _ interfaces.LightClientFinalityUpdate) error {
 	m.BroadcastCalled.Store(true)
 	return nil
