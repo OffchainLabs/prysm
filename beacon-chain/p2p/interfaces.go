@@ -5,6 +5,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -36,6 +37,8 @@ type Broadcaster interface {
 	BroadcastAttestation(ctx context.Context, subnet uint64, att ethpb.Att) error
 	BroadcastSyncCommitteeMessage(ctx context.Context, subnet uint64, sMsg *ethpb.SyncCommitteeMessage) error
 	BroadcastBlob(ctx context.Context, subnet uint64, blob *ethpb.BlobSidecar) error
+	BroadcastLightClientOptimisticUpdate(ctx context.Context, update interfaces.LightClientOptimisticUpdate) error
+	BroadcastLightClientFinalityUpdate(ctx context.Context, update interfaces.LightClientFinalityUpdate) error
 }
 
 // SetStreamHandler configures p2p to handle streams of a certain topic ID.
