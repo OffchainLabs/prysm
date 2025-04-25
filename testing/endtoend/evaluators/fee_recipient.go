@@ -72,6 +72,9 @@ func feeRecipientIsPresent(_ *types.EvaluationContext, conns ...*grpc.ClientConn
 	if err != nil {
 		return errors.Wrap(err, "failed to get chain head")
 	}
+	if chainHead.HeadEpoch == 0 {
+		return nil
+	}
 	req := &ethpb.ListBlocksRequest{QueryFilter: &ethpb.ListBlocksRequest_Epoch{Epoch: chainHead.HeadEpoch.Sub(1)}}
 	blks, err := client.ListBeaconBlocks(context.Background(), req)
 	if err != nil {
