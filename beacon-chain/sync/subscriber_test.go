@@ -642,10 +642,16 @@ func createPeer(t *testing.T, topics ...string) *p2ptest.TestP2P {
 }
 
 func TestSubscribe_ReceivesLCOptimisticUpdate(t *testing.T) {
+	origNC := params.BeaconConfig()
+	// restore network config after test completes
+	defer func() {
+		params.OverrideBeaconConfig(origNC)
+	}()
+
+	params.SetupTestConfigCleanup(t)
 	p2pService := p2ptest.NewTestP2P(t)
 	ctx := context.Background()
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig()
+	cfg := params.BeaconConfig().Copy()
 	cfg.AltairForkEpoch = 1
 	cfg.ForkVersionSchedule[[4]byte{1, 0, 0, 0}] = 1
 	params.OverrideBeaconConfig(cfg)
@@ -703,10 +709,16 @@ func TestSubscribe_ReceivesLCOptimisticUpdate(t *testing.T) {
 }
 
 func TestSubscribe_ReceivesLCFinalityUpdate(t *testing.T) {
+	origNC := params.BeaconConfig()
+	// restore network config after test completes
+	defer func() {
+		params.OverrideBeaconConfig(origNC)
+	}()
+
+	params.SetupTestConfigCleanup(t)
 	p2pService := p2ptest.NewTestP2P(t)
 	ctx := context.Background()
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig()
+	cfg := params.BeaconConfig().Copy()
 	cfg.AltairForkEpoch = 1
 	cfg.ForkVersionSchedule[[4]byte{1, 0, 0, 0}] = 1
 	params.OverrideBeaconConfig(cfg)

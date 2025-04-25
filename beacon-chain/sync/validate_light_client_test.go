@@ -22,6 +22,7 @@ import (
 )
 
 func TestValidateLightClientOptimisticUpdate_NilMessageOrTopic(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
 	ctx := context.Background()
 	p := p2ptest.NewTestP2P(t)
 	s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}}}
@@ -40,7 +41,8 @@ func TestValidateLightClientOptimisticUpdate_NilMessageOrTopic(t *testing.T) {
 }
 
 func TestValidateLightClientOptimisticUpdate(t *testing.T) {
-	cfg := params.BeaconConfig()
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
 	cfg.AltairForkEpoch = 1
 	cfg.BellatrixForkEpoch = 2
 	cfg.CapellaForkEpoch = 3
@@ -142,6 +144,7 @@ func TestValidateLightClientOptimisticUpdate(t *testing.T) {
 }
 
 func TestValidateLightClientFinalityUpdate_NilMessageOrTopic(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
 	ctx := context.Background()
 	p := p2ptest.NewTestP2P(t)
 	s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}}}
@@ -160,7 +163,8 @@ func TestValidateLightClientFinalityUpdate_NilMessageOrTopic(t *testing.T) {
 }
 
 func TestValidateLightClientFinalityUpdate(t *testing.T) {
-	cfg := params.BeaconConfig()
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
 	cfg.AltairForkEpoch = 1
 	cfg.BellatrixForkEpoch = 2
 	cfg.CapellaForkEpoch = 3
