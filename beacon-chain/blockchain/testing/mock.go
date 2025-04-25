@@ -53,6 +53,7 @@ type ChainService struct {
 	InitSyncBlockRoots          map[[32]byte]bool
 	DB                          db.Database
 	State                       state.BeaconState
+	HeadStateErr                error
 	Block                       interfaces.ReadOnlySignedBeaconBlock
 	VerifyBlkDescendantErr      error
 	stateNotifier               statefeed.Notifier
@@ -364,6 +365,9 @@ func (s *ChainService) HeadState(context.Context) (state.BeaconState, error) {
 
 // HeadStateReadOnly mocks HeadStateReadOnly method in chain service.
 func (s *ChainService) HeadStateReadOnly(context.Context) (state.ReadOnlyBeaconState, error) {
+	if s.HeadStateErr != nil {
+		return nil, s.HeadStateErr
+	}
 	return s.State, nil
 }
 

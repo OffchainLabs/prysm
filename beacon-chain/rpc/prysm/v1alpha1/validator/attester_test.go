@@ -82,7 +82,7 @@ func TestProposeAttestation(t *testing.T) {
 		config := params.BeaconConfig()
 		config.ElectraForkEpoch = 0
 		params.OverrideBeaconConfig(config)
-		
+
 		state, err := util.NewBeaconState()
 		require.NoError(t, err)
 		require.NoError(t, state.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))
