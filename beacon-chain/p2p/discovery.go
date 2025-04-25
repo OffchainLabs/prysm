@@ -105,7 +105,8 @@ func (l *listenerWrapper) RandomNodes() enode.Iterator {
 func (l *listenerWrapper) Ping(node *enode.Node) error {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
-	return l.listener.Ping(node)
+	_, err := l.listener.Ping(node)
+	return err
 }
 
 func (l *listenerWrapper) RequestENR(node *enode.Node) (*enode.Node, error) {

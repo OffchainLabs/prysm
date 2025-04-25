@@ -1050,6 +1050,7 @@ func (s *Service) eventsEndpoints() []endpoint {
 		HeadFetcher:            s.cfg.HeadFetcher,
 		ChainInfoFetcher:       s.cfg.ChainInfoFetcher,
 		TrackedValidatorsCache: s.cfg.TrackedValidatorsCache,
+		StateGen:               s.cfg.StateGen,
 	}
 
 	const namespace = "events"
