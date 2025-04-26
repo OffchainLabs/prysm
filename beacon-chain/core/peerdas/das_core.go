@@ -105,7 +105,7 @@ func ComputeColumnsForCustodyGroup(custodyGroup uint64) ([]uint64, error) {
 // https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.3/specs/fulu/das-core.md#get_data_column_sidecars
 func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, cellsAndProofs []kzg.CellsAndProofs) ([]*ethpb.DataColumnSidecar, error) {
 	start := time.Now()
-	if signedBlock.IsNil() || len(cellsAndProofs) == 0 {
+	if signedBlock == nil || signedBlock.IsNil() || len(cellsAndProofs) == 0 {
 		return nil, nil
 	}
 
