@@ -24,7 +24,7 @@ var (
 	errCustodyGroupCountTooLarge      = errors.New("custody group count too large")
 	errWrongComputedCustodyGroupCount = errors.New("wrong computed custody group count, should never happen")
 
-	// maxUint256 is the maximum value of a uint256.
+	// maxUint256 is the maximum value of an uint256.
 	maxUint256 = &uint256.Int{math.MaxUint64, math.MaxUint64, math.MaxUint64, math.MaxUint64}
 )
 
