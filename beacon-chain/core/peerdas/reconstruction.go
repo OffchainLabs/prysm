@@ -14,8 +14,7 @@ func CanSelfReconstruct(custodyGroupCount uint64) bool {
 	total := params.BeaconConfig().NumberOfCustodyGroups
 	// If total is odd, then we need total / 2 + 1 columns to reconstruct.
 	// If total is even, then we need total / 2 columns to reconstruct.
-	custodyGroupsNeeded := total/2 + total%2
-	return custodyGroupCount >= custodyGroupsNeeded
+	return custodyGroupCount >= (total+1)/2
 }
 
 // RecoverCellsAndProofs recovers the cells and proofs from the data column sidecars.
