@@ -276,3 +276,13 @@ message BlobAndProof {
   bytes blob = 1 [ (ethereum.eth.ext.ssz_size) = "blob.size" ];
   bytes kzg_proof = 2 [ (ethereum.eth.ext.ssz_size) = "48" ];
 }
+
+// BlobAndProofV2 consists of the blob and the cell proofs for each cell in the blob.
+// It is introduced in Fulu network upgrade.
+message BlobAndProofV2 {
+  bytes blob = 1 [ (ethereum.eth.ext.ssz_size) = "blob.size" ];
+  repeated bytes kzg_proofs = 2 [ 
+    (ethereum.eth.ext.ssz_size) = "48",
+    (ethereum.eth.ext.ssz_max) = "max_cell_proofs_length.size"
+  ];
+}
