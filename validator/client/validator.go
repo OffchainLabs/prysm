@@ -516,7 +516,7 @@ func retrieveLatestRecord(recs []*dbCommon.AttestationRecord) *dbCommon.Attestat
 // beginning of a new epoch.
 func (v *validator) UpdateDuties(ctx context.Context) error {
 	// Set deadline to end of epoch.
-	epoch := primitives.Epoch(slots.CurrentSlot(v.genesisTime))
+	epoch := slots.ToEpoch(slots.CurrentSlot(v.genesisTime))
 	ss, err := slots.EpochStart(epoch + 1)
 	if err != nil {
 		return err
