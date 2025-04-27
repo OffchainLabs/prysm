@@ -94,7 +94,7 @@ func ComputeColumnsForCustodyGroup(custodyGroup uint64) ([]uint64, error) {
 	beaconConfig := params.BeaconConfig()
 	numberOfCustodyGroup := beaconConfig.NumberOfCustodyGroups
 
-	if custodyGroup > numberOfCustodyGroup {
+	if custodyGroup >= numberOfCustodyGroup {
 		return nil, errCustodyGroupCountTooLarge
 	}
 
