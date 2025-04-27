@@ -15,8 +15,14 @@ import (
 
 // ---------------------------------------------------------------
 // ( CustodyGroups is unit tested in spec tests.                 )
-// ( ComputeColumnsForCustodyGroup is unit tested in spec tests. )
 // ---------------------------------------------------------------
+
+func TestComputeColumnsForCustodyGroup(t *testing.T) {
+	// The happy path is unit tested in spec tests.
+	numberOfCustodyGroup := params.BeaconConfig().NumberOfCustodyGroups
+	_, err := peerdas.ComputeColumnsForCustodyGroup(numberOfCustodyGroup)
+	require.ErrorIs(t, err, peerdas.ErrCustodyGroupTooLarge)
+}
 
 func TestDataColumnSidecars(t *testing.T) {
 	var expected []*ethpb.DataColumnSidecar = nil
