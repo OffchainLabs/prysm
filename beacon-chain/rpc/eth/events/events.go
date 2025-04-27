@@ -627,6 +627,7 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 }
 
 var errUnsupportedPayloadAttribute = errors.New("cannot compute payload attributes pre-Bellatrix")
+var errPayloadAttributeExpired = errors.New("skipping payload attribute event for past slot")
 
 func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnlyBeaconState, root [32]byte, proposer primitives.ValidatorIndex, timestamp uint64, randao []byte) (payloadattribute.Attributer, error) {
 	v := st.Version()
@@ -752,8 +753,7 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 func (s *Server) payloadAttributesReader(ctx context.Context, ev payloadattribute.EventData) (lazyReader, error) {
 	deadline := slots.BeginsAt(ev.ProposalSlot, s.ChainInfoFetcher.GenesisTime())
 	if deadline.Before(time.Now()) {
-		log.WithField("proposalSlotBeginsAt", deadline.Unix()).Error("Payload attributes event deadline is in the past, using current time")
-		deadline = time.Now().Add(payloadAttributeTimeout)
+		return nil, errors.Wrapf(errPayloadAttributeExpired, "proposal slot time %d", deadline.Unix())
 	}
 	ctx, cancel := context.WithDeadline(ctx, deadline)
 	edc := make(chan asyncPayloadAttrData)
