@@ -45,6 +45,16 @@ func CustodyGroups(nodeId enode.ID, custodyGroupCount uint64) ([]uint64, error) 
 		return nil, ErrCustodyGroupCountTooLarge
 	}
 
+	// Shortcut if all custody groups are needed.
+	if custodyGroupCount == numberOfCustodyGroup {
+		custodyGroups := make([]uint64, 0, numberOfCustodyGroup)
+		for i := range numberOfCustodyGroup {
+			custodyGroups = append(custodyGroups, i)
+		}
+
+		return custodyGroups, nil
+	}
+
 	one := uint256.NewInt(1)
 
 	custodyGroupsMap := make(map[uint64]bool, custodyGroupCount)
