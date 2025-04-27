@@ -1148,6 +1148,9 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 	if err != nil {
 		return errors.Wrap(err, "failed to decode previous duty dependent root")
 	}
+	if bytes.Equal(prevDepedentRoot, params.BeaconConfig().ZeroHash[:]) {
+		return nil
+	}
 	uintSlot, err := strconv.ParseUint(head.Slot, 10, 64)
 	if err != nil {
 		return errors.Wrap(err, "Failed to parse slot")
@@ -1168,6 +1171,9 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 	currDepedentRoot, err := bytesutil.DecodeHexWithLength(head.CurrentDutyDependentRoot, fieldparams.RootLength)
 	if err != nil {
 		return errors.Wrap(err, "failed to decode current duty dependent root")
+	}
+	if bytes.Equal(currDepedentRoot, params.BeaconConfig().ZeroHash[:]) {
+		return nil
 	}
 	if !bytes.Equal(currDepedentRoot, v.duties.CurrDependentRoot) {
 		if err := v.UpdateDuties(ctx, currEpochStart); err != nil {
