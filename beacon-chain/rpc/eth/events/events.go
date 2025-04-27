@@ -750,7 +750,12 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 // This event stream is intended to be used by builders and relays.
 // Parent fields are based on state at N_{current_slot}, while the rest of fields are based on state of N_{current_slot + 1}
 func (s *Server) payloadAttributesReader(ctx context.Context, ev payloadattribute.EventData) (lazyReader, error) {
-	ctx, cancel := context.WithTimeout(ctx, payloadAttributeTimeout)
+	deadline := ev.ProposalTime
+	if deadline.Before(time.Now()) {
+		log.WithField("ProposalTime", ev.ProposalTime.Unix()).Error("Payload attributes event deadline is in the past, using current time")
+		deadline = time.Now().Add(payloadAttributeTimeout)
+	}
+	ctx, cancel := context.WithDeadline(ctx, deadline)
 	edc := make(chan asyncPayloadAttrData)
 	go func() {
 		d := asyncPayloadAttrData{}

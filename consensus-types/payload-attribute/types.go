@@ -1,6 +1,8 @@
 package payloadattribute
 
 import (
+	"time"
+
 	field_params "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
@@ -97,6 +99,7 @@ func initPayloadAttributeFromV3(a *enginev1.PayloadAttributesV3) (Attributer, er
 // EventData holds the values for a PayloadAttributes event.
 type EventData struct {
 	ProposerIndex     primitives.ValidatorIndex
+	ProposalTime      time.Time
 	ProposalSlot      primitives.Slot
 	ParentBlockNumber uint64
 	ParentBlockHash   []byte
