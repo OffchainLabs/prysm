@@ -37,7 +37,6 @@ import (
 )
 
 const DefaultEventFeedDepth = 1000
-const payloadAttributeTimeout = 2 * time.Second
 
 const (
 	InvalidTopic = "__invalid__"

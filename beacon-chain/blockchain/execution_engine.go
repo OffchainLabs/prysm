@@ -184,7 +184,11 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 	return payloadID, nil
 }
 
-func firePayloadAttributesEvent(f event.SubscriberSender, block interfaces.ReadOnlySignedBeaconBlock, root [32]byte, nextSlot primitives.Slot) {
+func (s *Service) firePayloadAttributesEvent(f event.SubscriberSender, block interfaces.ReadOnlySignedBeaconBlock, root [32]byte, nextSlot primitives.Slot) {
+	// If we're syncing a block in the past and init-sync is still running, we shouldn't fire this event.
+	if !s.cfg.SyncChecker.Synced() {
+		return
+	}
 	// the fcu args have differing amounts of completeness based on the code path,
 	// and there is work we only want to do if a client is actually listening to the events beacon api endpoint.
 	// temporary solution: just fire a blank event and fill in the details in the api handler.
