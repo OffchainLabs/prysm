@@ -184,18 +184,13 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 	return payloadID, nil
 }
 
-func (s *Service) firePayloadAttributesEvent(f event.SubscriberSender, block interfaces.ReadOnlySignedBeaconBlock, root [32]byte, nextSlot primitives.Slot) {
+func firePayloadAttributesEvent(f event.SubscriberSender, block interfaces.ReadOnlySignedBeaconBlock, root [32]byte, nextSlot primitives.Slot) {
 	// the fcu args have differing amounts of completeness based on the code path,
 	// and there is work we only want to do if a client is actually listening to the events beacon api endpoint.
 	// temporary solution: just fire a blank event and fill in the details in the api handler.
-	ptime, err := slots.BeginsAt(nextSlot, s.genesisTime)
-	if err != nil {
-		log.WithError(err).WithField("slot", nextSlot).Error("Could not compute time for slot")
-		return
-	}
 	f.Send(&feed.Event{
 		Type: statefeed.PayloadAttributes,
-		Data: payloadattribute.EventData{HeadBlock: block, HeadRoot: root, ProposalTime: ptime, ProposalSlot: nextSlot},
+		Data: payloadattribute.EventData{HeadBlock: block, HeadRoot: root, ProposalSlot: nextSlot},
 	})
 }
 
