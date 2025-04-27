@@ -20,6 +20,7 @@ func testServiceOptsWithDB(t *testing.T) []Option {
 		WithForkChoiceStore(fcs),
 		WithClockSynchronizer(cs),
 		WithStateNotifier(&mock.MockStateNotifier{RecordEvents: true}),
+		WithSyncChecker(&mock.MockSyncChecker{}),
 	}
 }
 
