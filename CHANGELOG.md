@@ -37,7 +37,7 @@ This release is **mandatory** for all operators before May 7.
 
 - deprecates and removes usage of the `--trace` flag and`--cpuprofile` flag in favor of just using `--pprof`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15083)
 
-- Removed and deprecated --WriteSSZStateTransitions flag [PR](https://github.com/OffchainLabs/prysm/pull/15226/files)
+- Removed and deprecated `--WriteSSZStateTransitions` flag [PR](https://github.com/OffchainLabs/prysm/pull/15226/files)
 
 ### Removed
 
