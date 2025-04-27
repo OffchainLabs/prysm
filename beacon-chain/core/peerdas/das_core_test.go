@@ -214,12 +214,12 @@ func TestCustodyGroupSamplingSize(t *testing.T) {
 
 func TestCustodyColumns(t *testing.T) {
 	t.Run("group too large", func(t *testing.T) {
-		_, err := peerdas.CustodyColumns(map[uint64]bool{1_000_000: true})
+		_, err := peerdas.CustodyColumns([]uint64{1_000_000})
 		require.ErrorIs(t, err, peerdas.ErrCustodyGroupTooLarge)
 	})
 
 	t.Run("nominal", func(t *testing.T) {
-		input := map[uint64]bool{1: true, 2: true}
+		input := []uint64{1, 2}
 		expected := map[uint64]bool{1: true, 2: true}
 
 		actual, err := peerdas.CustodyColumns(input)

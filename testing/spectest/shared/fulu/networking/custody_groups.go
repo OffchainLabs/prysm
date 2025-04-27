@@ -55,11 +55,10 @@ func RunCustodyGroupsTest(t *testing.T, config string) {
 			require.NoError(t, err, "failed to compute the custody groups")
 
 			// Compare the results.
-			require.Equal(t, len(config.Expected), len(actual), "expected %d custody groups, got %d", len(config.Expected), len(actual))
+			require.Equal(t, len(config.Expected), len(actual))
 
-			for _, result := range config.Expected {
-				ok := actual[result]
-				require.Equal(t, true, ok, "expected group %d to be in custody groups", result)
+			for i := range config.Expected {
+				require.Equal(t, config.Expected[i], actual[i], "at position %d", i)
 			}
 		})
 	}

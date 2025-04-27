@@ -37,7 +37,7 @@ const (
 
 // CustodyGroups computes the custody groups the node should participate in for custody.
 // https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/das-core.md#get_custody_groups
-func CustodyGroups(nodeId enode.ID, custodyGroupCount uint64) (map[uint64]bool, error) {
+func CustodyGroups(nodeId enode.ID, custodyGroupCount uint64) ([]uint64, error) {
 	numberOfCustodyGroup := params.BeaconConfig().NumberOfCustodyGroups
 
 	// Check if the custody group count is larger than the number of custody groups.
@@ -45,9 +45,10 @@ func CustodyGroups(nodeId enode.ID, custodyGroupCount uint64) (map[uint64]bool, 
 		return nil, errCustodyGroupCountTooLarge
 	}
 
-	custodyGroups := make(map[uint64]bool, custodyGroupCount)
 	one := uint256.NewInt(1)
 
+	custodyGroupsMap := make(map[uint64]bool, custodyGroupCount)
+	custodyGroups := make([]uint64, 0, custodyGroupCount)
 	for currentId := new(uint256.Int).SetBytes(nodeId.Bytes()); uint64(len(custodyGroups)) < custodyGroupCount; currentId.Add(currentId, one) {
 		// Convert to big endian bytes.
 		currentIdBytesBigEndian := currentId.Bytes32()
@@ -59,15 +60,21 @@ func CustodyGroups(nodeId enode.ID, custodyGroupCount uint64) (map[uint64]bool, 
 		hashedCurrentId := hash.Hash(currentIdBytesLittleEndian)
 
 		// Get the custody group ID.
-		custodyGroupId := binary.LittleEndian.Uint64(hashedCurrentId[:8]) % numberOfCustodyGroup
+		custodyGroup := binary.LittleEndian.Uint64(hashedCurrentId[:8]) % numberOfCustodyGroup
 
 		// Add the custody group to the map.
-		custodyGroups[custodyGroupId] = true
+		if !custodyGroupsMap[custodyGroup] {
+			custodyGroupsMap[custodyGroup] = true
+			custodyGroups = append(custodyGroups, custodyGroup)
+		}
 
 		// Overflow prevention.
 		if currentId.Cmp(maxUint256) == 0 {
 			currentId = uint256.NewInt(0)
 		}
+
+		// Sort the custody groups.
+		slices.Sort[[]uint64](custodyGroups)
 	}
 
 	// Final check.
@@ -297,14 +304,14 @@ func (custodyInfo *CustodyInfo) CustodyGroupSamplingSize(ct CustodyType) uint64 
 }
 
 // CustodyColumns computes the custody columns from the custody groups.
-func CustodyColumns(custodyGroups map[uint64]bool) (map[uint64]bool, error) {
+func CustodyColumns(custodyGroups []uint64) (map[uint64]bool, error) {
 	numberOfCustodyGroups := params.BeaconConfig().NumberOfCustodyGroups
 
 	custodyGroupCount := len(custodyGroups)
 
 	// Compute the columns for each custody group.
 	columns := make(map[uint64]bool, custodyGroupCount)
-	for group := range custodyGroups {
+	for _, group := range custodyGroups {
 		if group >= numberOfCustodyGroups {
 			return nil, ErrCustodyGroupTooLarge
 		}
