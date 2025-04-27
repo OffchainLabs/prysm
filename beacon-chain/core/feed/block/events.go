@@ -11,6 +11,8 @@ const (
 
 // ReceivedBlockData is the data sent with ReceivedBlock events.
 type ReceivedBlockData struct {
-	SignedBlock  interfaces.ReadOnlySignedBeaconBlock
-	IsOptimistic bool
+	SignedBlock       interfaces.ReadOnlySignedBeaconBlock
+	CurrDependentRoot [32]byte
+	PrevDependentRoot [32]byte
+	IsOptimistic      bool
 }
