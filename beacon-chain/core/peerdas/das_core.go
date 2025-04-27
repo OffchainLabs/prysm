@@ -49,7 +49,7 @@ func CustodyGroups(nodeId enode.ID, custodyGroupCount uint64) ([]uint64, error) 
 
 	custodyGroupsMap := make(map[uint64]bool, custodyGroupCount)
 	custodyGroups := make([]uint64, 0, custodyGroupCount)
-	for currentId := new(uint256.Int).SetBytes(nodeId.Bytes()); uint64(len(custodyGroups)) < custodyGroupCount; currentId.Add(currentId, one) {
+	for currentId := new(uint256.Int).SetBytes(nodeId.Bytes()); uint64(len(custodyGroups)) < custodyGroupCount; {
 		// Convert to big endian bytes.
 		currentIdBytesBigEndian := currentId.Bytes32()
 
@@ -68,9 +68,12 @@ func CustodyGroups(nodeId enode.ID, custodyGroupCount uint64) ([]uint64, error) 
 			custodyGroups = append(custodyGroups, custodyGroup)
 		}
 
-		// Overflow prevention.
 		if currentId.Cmp(maxUint256) == 0 {
+			// Overflow prevention.
 			currentId = uint256.NewInt(0)
+		} else {
+			// Increment the current ID.
+			currentId.Add(currentId, one)
 		}
 
 		// Sort the custody groups.
