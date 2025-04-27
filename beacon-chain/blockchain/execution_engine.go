@@ -188,7 +188,7 @@ func (s *Service) firePayloadAttributesEvent(f event.SubscriberSender, block int
 	// the fcu args have differing amounts of completeness based on the code path,
 	// and there is work we only want to do if a client is actually listening to the events beacon api endpoint.
 	// temporary solution: just fire a blank event and fill in the details in the api handler.
-	ptime, err := slots.ToTime(uint64(s.genesisTime.Unix()), nextSlot)
+	ptime, err := slots.BeginsAt(nextSlot, s.genesisTime)
 	if err != nil {
 		log.WithError(err).WithField("slot", nextSlot).Error("Could not compute time for slot")
 		return
