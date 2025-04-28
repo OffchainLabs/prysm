@@ -230,6 +230,9 @@ func configureArchivalNode(cliCtx *cli.Context) error {
 		if cliCtx.IsSet(backfill.BackfillOldestSlot.Name) {
 			log.Infof("Changing oldest backfill slot from %d to %d", cliCtx.Uint64(backfill.BackfillOldestSlot.Name), oldestBackFillSlot)
 		}
+		if err := cliCtx.Set(backfill.BackfillOldestSlot.Name, fmt.Sprintf("%d", oldestBackFillSlot)); err != nil {
+			return err
+		}
 		if cliCtx.IsSet(storageFlags.BlobRetentionEpochFlag.Name) {
 			log.Infof("Changing blob retention epochs from %d to %d", cliCtx.Uint64(storageFlags.BlobRetentionEpochFlag.Name), maxBlobRetentionEpoch)
 		}

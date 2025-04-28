@@ -216,6 +216,10 @@ func TestConfigureArchivalNode(t *testing.T) {
 	assert.LogsContain(t, hook, "Saving full execution payloads")
 	assert.LogsContain(t, hook, "Enabling backfill on nodes")
 
+	assert.Equal(t, true, cliCtx.Bool(flags.ArchivalNodeFlag.Name))
+	assert.Equal(t, true, cliCtx.Bool(features.SaveFullExecutionPayloads.Name))
+	assert.Equal(t, true, cliCtx.Bool(backfill.EnableExperimentalBackfill.Name))
+
 	hook.Reset()
 
 	require.NoError(t, set.Set(flags.SlotsPerArchivedPoint.Name, "256"))
@@ -231,4 +235,10 @@ func TestConfigureArchivalNode(t *testing.T) {
 	assert.LogsContain(t, hook, "Changing oldest backfill slot from 1000000 to 1")
 	assert.LogsContain(t, hook, "Changing blob retention epochs from 2048 to 4294967295")
 
+	assert.Equal(t, true, cliCtx.Bool(flags.ArchivalNodeFlag.Name))
+	assert.Equal(t, true, cliCtx.Bool(features.SaveFullExecutionPayloads.Name))
+	assert.Equal(t, true, cliCtx.Bool(backfill.EnableExperimentalBackfill.Name))
+	assert.Equal(t, archivalSlotsPerArchivedPoint, cliCtx.Int(flags.SlotsPerArchivedPoint.Name))
+	assert.Equal(t, uint64(oldestBackFillSlot), cliCtx.Uint64(backfill.BackfillOldestSlot.Name))
+	assert.Equal(t, uint64(maxBlobRetentionEpoch), cliCtx.Uint64(storageFlags.BlobRetentionEpochFlag.Name))
 }
