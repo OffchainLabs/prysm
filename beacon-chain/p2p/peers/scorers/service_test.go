@@ -219,8 +219,16 @@ func TestScorers_Service_Score(t *testing.T) {
 
 		// Record some requests
 		pid := peer.ID("peer1")
-		s1.RecordRequest(pid, 10)
-		expectedScore := -10.0 * scorers.DefaultDataColumnRPCRequestPenaltyFactor * 0.15
+		currentSlot := uint64(100)
+		recentColumnSlot := uint64(90) // Within MaxGossipAgeSlots (default 16)
+		oldColumnSlot := uint64(50)    // Older than MaxGossipAgeSlots
+		// Record a request for a recent column (should be penalized)
+		s1.RecordRequest(pid, currentSlot, recentColumnSlot)
+		// Record a request for an old column (should NOT be penalized)
+		s1.RecordRequest(pid, currentSlot, oldColumnSlot)
+
+		// Only the recent column request should count towards the score.
+		expectedScore := -1.0 * scorers.DefaultDataColumnRPCRequestPenaltyFactor * 0.15
 		expectedScore = math.Round(expectedScore*scorers.ScoreRoundingFactor) / scorers.ScoreRoundingFactor
 		assert.Equal(t, roundScore(expectedScore), s.Score(pid), "Wrong weighted score")
 
@@ -232,8 +240,8 @@ func TestScorers_Service_Score(t *testing.T) {
 		require.LessOrEqual(t, decayedScore, float64(0), "Score should not become positive after decay")
 
 		// Test bad peer detection
-		for i := 0; i < int(scorers.DefaultDataColumnRPCRequestThreshold/10)+1; i++ {
-			s1.RecordRequest(pid, 10)
+		for i := 0; i < int(scorers.DefaultDataColumnRPCRequestThreshold); i++ {
+			s1.RecordRequest(pid, currentSlot, recentColumnSlot) // Record enough recent requests
 		}
 		require.NotNil(t, s.IsBadPeer(pid), "Peer should be marked as bad")
 		require.Contains(t, s.BadPeers(), pid, "Bad peer should be in service's bad peers list")

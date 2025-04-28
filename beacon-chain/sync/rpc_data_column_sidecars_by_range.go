@@ -28,6 +28,8 @@ func (s *Service) streamDataColumnBatch(ctx context.Context, batch blockBatch, w
 		return 0, nil
 	}
 
+	currentSlot := s.cfg.chain.CurrentSlot()
+
 	for _, block := range batch.canonical() {
 		// Get the block blockRoot.
 		blockRoot := block.Root()
@@ -39,6 +41,11 @@ func (s *Service) streamDataColumnBatch(ctx context.Context, batch blockBatch, w
 		}
 
 		for _, verifiedRODataColumn := range verifiedRODataColumns {
+			// Record the request for scoring if the column is recent enough.
+			if scorer := s.cfg.p2p.Peers().Scorers().DataColumnRPCRequestScorer(); scorer != nil {
+				scorer.RecordRequest(stream.Conn().RemotePeer(), uint64(currentSlot), uint64(verifiedRODataColumn.SignedBlockHeader.Header.Slot))
+			}
+
 			SetStreamWriteDeadline(stream, defaultWriteDuration)
 			if chunkErr := WriteDataColumnSidecarChunk(stream, s.cfg.chain, s.cfg.p2p.Encoding(), verifiedRODataColumn.DataColumnSidecar); chunkErr != nil {
 				log.WithError(chunkErr).Debug("Could not send a chunked response")
@@ -109,18 +116,6 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
 		tracing.AnnotateError(span, err)
 		return err
-	}
-
-	// Record the request with the DataColumnRPCRequestScorer
-	if scorer := s.cfg.p2p.Peers().Scorers().DataColumnRPCRequestScorer(); scorer != nil {
-		totalColumns := int(r.Count) * len(r.Columns)
-		scorer.RecordRequest(stream.Conn().RemotePeer(), totalColumns)
-		log.WithFields(logrus.Fields{
-			"peer":           stream.Conn().RemotePeer(),
-			"requestedCount": totalColumns,
-			"rangeCount":     r.Count,
-			"columnCount":    len(r.Columns),
-		}).Debug("Recorded data column RPC request")
 	}
 
 	// Ticker to stagger out large requests.

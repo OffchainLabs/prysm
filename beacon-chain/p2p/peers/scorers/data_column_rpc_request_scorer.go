@@ -22,6 +22,9 @@ const (
 	DefaultDataColumnRPCRequestThreshold = uint64(100)
 	// DefaultDataColumnRPCRequestPenaltyFactor defines the penalty factor applied to request count.
 	DefaultDataColumnRPCRequestPenaltyFactor = float64(0.02)
+	// DefaultDataColumnMaxGossipAgeSlots defines the maximum age in slots for a requested column
+	// to trigger downscoring. Defaults to half an epoch on mainnet.
+	DefaultDataColumnMaxGossipAgeSlots = uint64(16)
 )
 
 // DataColumnRPCRequestScorer represents scoring service for tracking data column RPC requests.
@@ -40,16 +43,21 @@ type DataColumnRPCRequestScorerConfig struct {
 	Threshold uint64
 	// PenaltyFactor defines multiplier applied to request count when calculating score.
 	PenaltyFactor float64
+	// MaxGossipAgeSlots defines the maximum age in slots for a requested column
+	// to trigger downscoring. Columns requested for slots older than
+	// current_slot - MaxGossipAgeSlots will not be penalized.
+	MaxGossipAgeSlots uint64
 }
 
 // newDataColumnRPCRequestScorer creates new scoring service for data column RPC requests.
 func newDataColumnRPCRequestScorer(store *peerdata.Store, config *DataColumnRPCRequestScorerConfig) *DataColumnRPCRequestScorer {
 	// Create a new config with default values
 	cfg := &DataColumnRPCRequestScorerConfig{
-		DecayInterval: DefaultDataColumnRPCRequestDecayInterval,
-		Decay:         DefaultDataColumnRPCRequestDecay,
-		Threshold:     DefaultDataColumnRPCRequestThreshold,
-		PenaltyFactor: DefaultDataColumnRPCRequestPenaltyFactor,
+		DecayInterval:     DefaultDataColumnRPCRequestDecayInterval,
+		Decay:             DefaultDataColumnRPCRequestDecay,
+		Threshold:         DefaultDataColumnRPCRequestThreshold,
+		PenaltyFactor:     DefaultDataColumnRPCRequestPenaltyFactor,
+		MaxGossipAgeSlots: DefaultDataColumnMaxGossipAgeSlots,
 	}
 
 	// Override with provided config values if present
@@ -65,6 +73,9 @@ func newDataColumnRPCRequestScorer(store *peerdata.Store, config *DataColumnRPCR
 		}
 		if config.PenaltyFactor != 0 {
 			cfg.PenaltyFactor = config.PenaltyFactor
+		}
+		if config.MaxGossipAgeSlots != 0 {
+			cfg.MaxGossipAgeSlots = config.MaxGossipAgeSlots
 		}
 	}
 
@@ -120,16 +131,23 @@ func (s *DataColumnRPCRequestScorer) BadPeers() []peer.ID {
 	return badPeers
 }
 
-// RecordRequest records a data column RPC request for a peer.
-func (s *DataColumnRPCRequestScorer) RecordRequest(pid peer.ID, numColumns int) {
-	if pid == "" || numColumns <= 0 {
+// RecordRequest records a potentially downscorable data column RPC request for a peer.
+// Downscoring only occurs if the requested columnSlot is recent enough compared to the currentSlot.
+func (s *DataColumnRPCRequestScorer) RecordRequest(pid peer.ID, currentSlot, columnSlot uint64) {
+	if pid == "" {
 		return
 	}
+	// Check if the column is recent enough to warrant downscoring.
+	// A peer shouldn't be penalized for requesting old columns it might have missed.
+	if columnSlot+s.config.MaxGossipAgeSlots < currentSlot {
+		return
+	}
+
 	s.store.Lock()
 	defer s.store.Unlock()
 
 	peerData := s.store.PeerDataGetOrCreate(pid)
-	peerData.DataColumnRequestCount += uint64(numColumns)
+	peerData.DataColumnRequestCount++ // Increment count for each recent column requested
 	peerData.DataColumnRPCLastRequestTime = time.Now()
 }
 
