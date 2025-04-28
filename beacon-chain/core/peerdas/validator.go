@@ -12,12 +12,12 @@ import (
 func ValidatorsCustodyRequirement(state beaconState.ReadOnlyBeaconState, validatorsIndex map[primitives.ValidatorIndex]bool) (uint64, error) {
 	totalNodeBalance := uint64(0)
 	for index := range validatorsIndex {
-		balance, err := state.BalanceAtIndex(index)
+		validator, err := state.ValidatorAtIndex(index)
 		if err != nil {
-			return 0, errors.Wrapf(err, "balance at index for validator index %v", index)
+			return 0, errors.Wrapf(err, "validator at index %v", index)
 		}
 
-		totalNodeBalance += balance
+		totalNodeBalance += validator.GetEffectiveBalance()
 	}
 
 	beaconConfig := params.BeaconConfig()
