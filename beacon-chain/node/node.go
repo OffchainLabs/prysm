@@ -236,7 +236,7 @@ func configureBeacon(cliCtx *cli.Context) error {
 	}
 
 	if err := configureArchivalNode(cliCtx); err != nil {
-		return nil, err
+		return err
 	}
 
 	if err := features.ConfigureBeaconChain(cliCtx); err != nil {

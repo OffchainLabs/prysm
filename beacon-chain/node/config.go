@@ -13,13 +13,13 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
 	"github.com/ethereum/go-ethereum/common"
-	fastssz "github.com/prysmaticlabs/fastssz"
 	"github.com/urfave/cli/v2"
 )
 
 const (
 	maxBlobRetentionEpoch         = math.MaxUint32
 	archivalSlotsPerArchivedPoint = 32
+	oldestBackFillSlot            = 1
 )
 
 func configureTracing(cliCtx *cli.Context) error {
@@ -227,6 +227,9 @@ func configureArchivalNode(cliCtx *cli.Context) error {
 				return err
 			}
 		}
+		if cliCtx.IsSet(backfill.BackfillOldestSlot.Name) {
+			log.Infof("Changing oldest backfill slot from %d to %d", cliCtx.Uint64(backfill.BackfillOldestSlot.Name), oldestBackFillSlot)
+		}
 		if cliCtx.IsSet(storageFlags.BlobRetentionEpochFlag.Name) {
 			log.Infof("Changing blob retention epochs from %d to %d", cliCtx.Uint64(storageFlags.BlobRetentionEpochFlag.Name), maxBlobRetentionEpoch)
 		}
@@ -235,8 +238,4 @@ func configureArchivalNode(cliCtx *cli.Context) error {
 		}
 	}
 	return nil
-}
-
-func configureFastSSZHashingAlgorithm() {
-	fastssz.EnableVectorizedHTR = true
 }
