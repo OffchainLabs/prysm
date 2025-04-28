@@ -91,8 +91,8 @@ func run(ctx context.Context, v iface.Validator) {
 			// epoch transition in the beacon node's state.
 			if err := v.UpdateDuties(slotCtx, slot); err != nil {
 				handleAssignmentError(err, slot)
-				cancel()
 				span.End()
+				cancel()
 				continue
 			}
 
@@ -113,8 +113,8 @@ func run(ctx context.Context, v iface.Validator) {
 			allRoles, err := v.RolesAt(slotCtx, slot)
 			if err != nil {
 				log.WithError(err).Error("Could not get validator roles")
-				cancel()
 				span.End()
+				cancel()
 				continue
 			}
 			performRoles(slotCtx, allRoles, v, slot, &wg, span)

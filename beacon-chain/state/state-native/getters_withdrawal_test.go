@@ -416,3 +416,37 @@ func TestExpectedWithdrawals(t *testing.T) {
 		require.DeepEqual(t, withdrawalFull, expected[1])
 	})
 }
+
+func TestExpectedWithdrawals_underflow_electra(t *testing.T) {
+	s, err := state_native.InitializeFromProtoUnsafeElectra(&ethpb.BeaconStateElectra{})
+	require.NoError(t, err)
+	vals := make([]*ethpb.Validator, 1)
+	balances := make([]uint64, 1)
+	balances[0] = 2015_000_000_000 //Validator A begins leaking ETH due to inactivity, and over time, its balance decreases to 2,015 ETH
+	val := &ethpb.Validator{
+		WithdrawalCredentials: make([]byte, 32),
+		EffectiveBalance:      params.BeaconConfig().MaxEffectiveBalanceElectra,
+		WithdrawableEpoch:     primitives.Epoch(0),
+		ExitEpoch:             params.BeaconConfig().FarFutureEpoch,
+	}
+	val.WithdrawalCredentials[0] = params.BeaconConfig().CompoundingWithdrawalPrefixByte
+	val.WithdrawalCredentials[31] = byte(0)
+	vals[0] = val
+
+	require.NoError(t, s.SetValidators(vals))
+	require.NoError(t, s.SetBalances(balances))
+	require.NoError(t, s.AppendPendingPartialWithdrawal(&ethpb.PendingPartialWithdrawal{
+		Amount:            1008_000_000_000,
+		WithdrawableEpoch: primitives.Epoch(0),
+	}))
+	require.NoError(t, s.AppendPendingPartialWithdrawal(&ethpb.PendingPartialWithdrawal{
+		Amount:            1008_000_000_000,
+		WithdrawableEpoch: primitives.Epoch(0),
+	}))
+	expected, _, err := s.ExpectedWithdrawals()
+	require.NoError(t, err)
+	require.Equal(t, 3, len(expected)) // is a fully withdrawable validator
+	require.Equal(t, uint64(1008_000_000_000), expected[0].Amount)
+	require.Equal(t, uint64(975_000_000_000), expected[1].Amount)
+	require.Equal(t, uint64(32_000_000_000), expected[2].Amount)
+}

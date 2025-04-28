@@ -45,7 +45,7 @@ const (
 	defaultBuilderBoostFactor = primitives.Gwei(100)
 )
 
-// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // GetBeaconBlock is called by a proposer during its assigned slot to request a block to sign
 // by passing in the slot and the signed randao reveal of the slot.
@@ -271,7 +271,7 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 	return vs.constructGenericBeaconBlock(sBlk, bundle, winningBid)
 }
 
-// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // ProposeBeaconBlock handles the proposal of beacon blocks.
 func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSignedBeaconBlock) (*ethpb.ProposeResponse, error) {
@@ -412,7 +412,7 @@ func (vs *Server) broadcastAndReceiveBlobs(ctx context.Context, sidecars []*ethp
 	return eg.Wait()
 }
 
-// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // PrepareBeaconProposer caches and updates the fee recipient for the given proposer.
 func (vs *Server) PrepareBeaconProposer(
@@ -449,7 +449,7 @@ func (vs *Server) PrepareBeaconProposer(
 	return &emptypb.Empty{}, nil
 }
 
-// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // GetFeeRecipientByPubKey returns a fee recipient from the beacon node's settings or db based on a given public key
 func (vs *Server) GetFeeRecipientByPubKey(ctx context.Context, request *ethpb.FeeRecipientByPubKeyRequest) (*ethpb.FeeRecipientByPubKeyResponse, error) {
@@ -506,7 +506,7 @@ func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.ReadOnl
 	return root[:], nil
 }
 
-// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // SubmitValidatorRegistrations submits validator registrations.
 func (vs *Server) SubmitValidatorRegistrations(ctx context.Context, reg *ethpb.SignedValidatorRegistrationsV1) (*emptypb.Empty, error) {

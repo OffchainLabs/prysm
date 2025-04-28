@@ -69,6 +69,7 @@ type LightClientFinalityUpdate interface {
 	FinalityBranchElectra() (LightClientFinalityBranchElectra, error)
 	SyncAggregate() *pb.SyncAggregate
 	SignatureSlot() primitives.Slot
+	IsNil() bool
 }
 
 type LightClientOptimisticUpdate interface {
@@ -79,4 +80,5 @@ type LightClientOptimisticUpdate interface {
 	AttestedHeader() LightClientHeader
 	SyncAggregate() *pb.SyncAggregate
 	SignatureSlot() primitives.Slot
+	IsNil() bool
 }
