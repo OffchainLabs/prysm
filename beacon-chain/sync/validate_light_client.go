@@ -48,7 +48,7 @@ func (s *Service) validateLightClientOptimisticUpdate(ctx context.Context, pid p
 		Add(time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot/params.BeaconConfig().IntervalsPerSlot)).
 		Add(-params.BeaconConfig().MaximumGossipClockDisparityDuration())
 	if s.cfg.clock.Now().Before(earliestValidTime) {
-		log.Debug("newly received light client optimistic update ignored. not enough time passed for block to propagate")
+		log.Debug("Newly received light client optimistic update ignored. not enough time passed for block to propagate")
 		return pubsub.ValidationIgnore, nil
 	}
 
@@ -59,13 +59,13 @@ func (s *Service) validateLightClientOptimisticUpdate(ctx context.Context, pid p
 
 		// [IGNORE] The attested_header.beacon.slot is greater than that of all previously forwarded optimistic_updates
 		if newUpdateSlot <= lastUpdateSlot {
-			log.Debug("newly received light client optimistic update ignored. new update is older than stored update")
+			log.Debug("Newly received light client optimistic update ignored. new update is older than stored update")
 			return pubsub.ValidationIgnore, nil
 		}
 	}
 
 	msg.ValidatorData = newUpdate.Proto()
-	log.Debug("new gossiped light client optimistic update validated")
+	log.Debug("New gossiped light client optimistic update validated. Attested slot %d, Signature slot %d", newUpdate.AttestedHeader().Beacon().Slot, newUpdate.SignatureSlot())
 	return pubsub.ValidationAccept, nil
 }
 
@@ -103,7 +103,7 @@ func (s *Service) validateLightClientFinalityUpdate(ctx context.Context, pid pee
 		Add(time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot/params.BeaconConfig().IntervalsPerSlot)).
 		Add(-params.BeaconConfig().MaximumGossipClockDisparityDuration())
 	if s.cfg.clock.Now().Before(earliestValidTime) {
-		log.Debug("newly received light client finality update ignored. not enough time passed for block to propagate")
+		log.Debug("Newly received light client finality update ignored. not enough time passed for block to propagate")
 		return pubsub.ValidationIgnore, nil
 	}
 
@@ -118,16 +118,16 @@ func (s *Service) validateLightClientFinalityUpdate(ctx context.Context, pid pee
 		// or it matches the highest previously forwarded slot and also has a sync_aggregate indicating supermajority (> 2/3)
 		// sync committee participation while the previously forwarded finality_update for that slot did not indicate supermajority
 		if newUpdateSlot < lastUpdateSlot {
-			log.Debug("newly received light client finality update ignored. new update is older than stored update")
+			log.Debug("Newly received light client finality update ignored. new update is older than stored update")
 			return pubsub.ValidationIgnore, nil
 		}
 		if newUpdateSlot == lastUpdateSlot && (lastUpdateHasSupermajority || !newUpdateHasSupermajority) {
-			log.Debug("newly received light client finality update ignored. no supermajority advantage")
+			log.Debug("Newly received light client finality update ignored. no supermajority advantage. Attested slot %d, Signature slot %d", newUpdate.AttestedHeader().Beacon().Slot, newUpdate.SignatureSlot())
 			return pubsub.ValidationIgnore, nil
 		}
 	}
 
 	msg.ValidatorData = newUpdate.Proto()
-	log.Debug("new gossiped light client finality update validated")
+	log.Debug("New gossiped light client finality update validated. Attested slot %d, Signature slot %d", newUpdate.AttestedHeader().Beacon().Slot, newUpdate.SignatureSlot())
 	return pubsub.ValidationAccept, nil
 }
