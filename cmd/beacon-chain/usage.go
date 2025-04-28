@@ -106,7 +106,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.MinPeersPerSubnet,
 			flags.MinSyncPeers,
 			flags.SubscribeToAllSubnets,
-			flags.SubscribeAllColumns,
+			flags.SubscribeAllDataSubnets,
 		},
 	},
 	{ // Flags relevant to storing data on disk and configuring the beacon chain database.
