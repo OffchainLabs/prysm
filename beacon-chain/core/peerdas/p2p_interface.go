@@ -146,21 +146,6 @@ func DataColumnSubnets(dataColumns map[uint64]bool) map[uint64]bool {
 	return subnets
 }
 
-// ComputeCustodyGroupForColumn computes the custody group for a given column.
-// It is the reciprocal function of ComputeColumnsForCustodyGroup.
-func ComputeCustodyGroupForColumn(columnIndex uint64) (uint64, error) {
-	beaconConfig := params.BeaconConfig()
-	numberOfColumns := beaconConfig.NumberOfColumns
-	numberOfCustodyGroups := beaconConfig.NumberOfCustodyGroups
-
-	if columnIndex >= numberOfColumns {
-		return 0, ErrIndexTooLarge
-	}
-
-	columnsPerGroup := numberOfColumns / numberOfCustodyGroups
-	return columnIndex / columnsPerGroup, nil
-}
-
 // CustodyGroupCountFromRecord extracts the custody group count from an ENR record.
 func CustodyGroupCountFromRecord(record *enr.Record) (uint64, error) {
 	if record == nil {

@@ -196,6 +196,21 @@ func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, cellsA
 	return sidecars, nil
 }
 
+// ComputeCustodyGroupForColumn computes the custody group for a given column.
+// It is the reciprocal function of ComputeColumnsForCustodyGroup.
+func ComputeCustodyGroupForColumn(columnIndex uint64) (uint64, error) {
+	beaconConfig := params.BeaconConfig()
+	numberOfColumns := beaconConfig.NumberOfColumns
+	numberOfCustodyGroups := beaconConfig.NumberOfCustodyGroups
+
+	if columnIndex >= numberOfColumns {
+		return 0, ErrIndexTooLarge
+	}
+
+	columnsPerGroup := numberOfColumns / numberOfCustodyGroups
+	return columnIndex / columnsPerGroup, nil
+}
+
 // Blobs extract blobs from `dataColumnsSidecar`.
 // This can be seen as the reciprocal function of DataColumnSidecars.
 // `dataColumnsSidecar` needs to contain the datacolumns corresponding to the non-extended matrix,

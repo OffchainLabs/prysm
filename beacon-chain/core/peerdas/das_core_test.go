@@ -36,6 +36,36 @@ func TestDataColumnSidecars(t *testing.T) {
 	require.DeepSSZEqual(t, expected, actual)
 }
 
+func TestComputeCustodyGroupForColumn(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig()
+	config.NumberOfColumns = 128
+	config.NumberOfCustodyGroups = 64
+	params.OverrideBeaconConfig(config)
+
+	t.Run("index too large", func(t *testing.T) {
+		_, err := peerdas.ComputeCustodyGroupForColumn(1_000_000)
+		require.ErrorIs(t, err, peerdas.ErrIndexTooLarge)
+	})
+
+	t.Run("nominal", func(t *testing.T) {
+		expected := uint64(1)
+		actual, err := peerdas.ComputeCustodyGroupForColumn(2)
+		require.NoError(t, err)
+		require.Equal(t, expected, actual)
+
+		expected = uint64(1)
+		actual, err = peerdas.ComputeCustodyGroupForColumn(3)
+		require.NoError(t, err)
+		require.Equal(t, expected, actual)
+
+		expected = uint64(2)
+		actual, err = peerdas.ComputeCustodyGroupForColumn(4)
+		require.NoError(t, err)
+		require.Equal(t, expected, actual)
+	})
+}
+
 func TestBlobs(t *testing.T) {
 	blobsIndice := map[uint64]bool{}
 
