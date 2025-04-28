@@ -82,7 +82,6 @@ func MerkleProofKZGCommitment(body interfaces.ReadOnlyBeaconBlockBody, index int
 
 // MerkleProofKZGCommitments constructs a Merkle proof of inclusion of the KZG
 // commitments into the Beacon Block with the given `body`
-// TODO: Add missing tests.
 func MerkleProofKZGCommitments(body interfaces.ReadOnlyBeaconBlockBody) ([][]byte, error) {
 	bodyVersion := body.Version()
 	if bodyVersion < version.Deneb {
