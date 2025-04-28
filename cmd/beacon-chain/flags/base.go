@@ -336,7 +336,7 @@ var (
 	}
 	// SubscribeAllDataSubnets enables subscription to all data subnets.
 	SubscribeAllDataSubnets = &cli.BoolFlag{
-		Name:  "subscribe-data-subnets",
+		Name:  "subscribe-all-data-subnets",
 		Usage: "Enable subscription to all data subnets",
 	}
 )

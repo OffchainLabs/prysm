@@ -60,7 +60,7 @@ func TestTargetCustodyGroupCount(t *testing.T) {
 			if tc.subscribeToAllColumns {
 				resetFlags := flags.Get()
 				gFlags := new(flags.GlobalFlags)
-				gFlags.SubscribeAllColumnSubnets = true
+				gFlags.SubscribeAllDataSubnetsubnets = true
 				flags.Init(gFlags)
 				defer flags.Init(resetFlags)
 			}
@@ -112,7 +112,7 @@ func TestToAdvertiseCustodyGroupCount(t *testing.T) {
 			if tc.subscribeToAllColumns {
 				resetFlags := flags.Get()
 				gFlags := new(flags.GlobalFlags)
-				gFlags.SubscribeAllColumnSubnets = true
+				gFlags.SubscribeAllDataSubnetsubnets = true
 				flags.Init(gFlags)
 				defer flags.Init(resetFlags)
 			}
