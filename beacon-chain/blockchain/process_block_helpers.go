@@ -103,15 +103,29 @@ func (s *Service) sendStateFeedOnBlock(cfg *postBlockProcessConfig) {
 		log.WithError(err).Debug("Could not check if block is optimistic")
 		optimistic = true
 	}
+	currEpoch := slots.ToEpoch(s.CurrentSlot())
+	currDependenRoot, err := s.cfg.ForkChoiceStore.DependentRoot(currEpoch)
+	if err != nil {
+		log.WithError(err).Debug("Could not get dependent root")
+	}
+	prevDependentRoot := [32]byte{}
+	if currEpoch > 0 {
+		prevDependentRoot, err = s.cfg.ForkChoiceStore.DependentRoot(currEpoch - 1)
+		if err != nil {
+			log.WithError(err).Debug("Could not get previous dependent root")
+		}
+	}
 	// Send notification of the processed block to the state feed.
 	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.BlockProcessed,
 		Data: &statefeed.BlockProcessedData{
-			Slot:        cfg.roblock.Block().Slot(),
-			BlockRoot:   cfg.roblock.Root(),
-			SignedBlock: cfg.roblock,
-			Verified:    true,
-			Optimistic:  optimistic,
+			Slot:              cfg.roblock.Block().Slot(),
+			BlockRoot:         cfg.roblock.Root(),
+			SignedBlock:       cfg.roblock,
+			CurrDependentRoot: currDependenRoot,
+			PrevDependentRoot: prevDependentRoot,
+			Verified:          true,
+			Optimistic:        optimistic,
 		},
 	})
 }
