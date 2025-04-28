@@ -3259,8 +3259,8 @@ func (b *BlobsBundleV2) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	}
 
 	// Field (1) 'Proofs'
-	if size := len(b.Proofs); size > 33554432 {
-		err = ssz.ErrListTooBigFn("--.Proofs", size, 33554432)
+	if size := len(b.Proofs); size > 524288 {
+		err = ssz.ErrListTooBigFn("--.Proofs", size, 524288)
 		return
 	}
 	for ii := 0; ii < len(b.Proofs); ii++ {
@@ -3336,7 +3336,7 @@ func (b *BlobsBundleV2) UnmarshalSSZ(buf []byte) error {
 	// Field (1) 'Proofs'
 	{
 		buf = tail[o1:o2]
-		num, err := ssz.DivideInt2(len(buf), 48, 33554432)
+		num, err := ssz.DivideInt2(len(buf), 48, 524288)
 		if err != nil {
 			return err
 		}
@@ -3413,8 +3413,8 @@ func (b *BlobsBundleV2) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 
 	// Field (1) 'Proofs'
 	{
-		if size := len(b.Proofs); size > 33554432 {
-			err = ssz.ErrListTooBigFn("--.Proofs", size, 33554432)
+		if size := len(b.Proofs); size > 524288 {
+			err = ssz.ErrListTooBigFn("--.Proofs", size, 524288)
 			return
 		}
 		subIndx := hh.Index()
@@ -3427,7 +3427,7 @@ func (b *BlobsBundleV2) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		}
 
 		numItems := uint64(len(b.Proofs))
-		hh.MerkleizeWithMixin(subIndx, numItems, 33554432)
+		hh.MerkleizeWithMixin(subIndx, numItems, 524288)
 	}
 
 	// Field (2) 'Blobs'

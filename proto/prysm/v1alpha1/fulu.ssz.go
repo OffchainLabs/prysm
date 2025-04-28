@@ -37,8 +37,8 @@ func (s *SignedBeaconBlockContentsFulu) MarshalSSZTo(buf []byte) (dst []byte, er
 	}
 
 	// Field (1) 'KzgProofs'
-	if size := len(s.KzgProofs); size > 33554432 {
-		err = ssz.ErrListTooBigFn("--.KzgProofs", size, 33554432)
+	if size := len(s.KzgProofs); size > 524288 {
+		err = ssz.ErrListTooBigFn("--.KzgProofs", size, 524288)
 		return
 	}
 	for ii := 0; ii < len(s.KzgProofs); ii++ {
@@ -109,7 +109,7 @@ func (s *SignedBeaconBlockContentsFulu) UnmarshalSSZ(buf []byte) error {
 	// Field (1) 'KzgProofs'
 	{
 		buf = tail[o1:o2]
-		num, err := ssz.DivideInt2(len(buf), 48, 33554432)
+		num, err := ssz.DivideInt2(len(buf), 48, 524288)
 		if err != nil {
 			return err
 		}
@@ -175,8 +175,8 @@ func (s *SignedBeaconBlockContentsFulu) HashTreeRootWith(hh *ssz.Hasher) (err er
 
 	// Field (1) 'KzgProofs'
 	{
-		if size := len(s.KzgProofs); size > 33554432 {
-			err = ssz.ErrListTooBigFn("--.KzgProofs", size, 33554432)
+		if size := len(s.KzgProofs); size > 524288 {
+			err = ssz.ErrListTooBigFn("--.KzgProofs", size, 524288)
 			return
 		}
 		subIndx := hh.Index()
@@ -189,7 +189,7 @@ func (s *SignedBeaconBlockContentsFulu) HashTreeRootWith(hh *ssz.Hasher) (err er
 		}
 
 		numItems := uint64(len(s.KzgProofs))
-		hh.MerkleizeWithMixin(subIndx, numItems, 33554432)
+		hh.MerkleizeWithMixin(subIndx, numItems, 524288)
 	}
 
 	// Field (2) 'Blobs'
@@ -355,8 +355,8 @@ func (b *BeaconBlockContentsFulu) MarshalSSZTo(buf []byte) (dst []byte, err erro
 	}
 
 	// Field (1) 'KzgProofs'
-	if size := len(b.KzgProofs); size > 33554432 {
-		err = ssz.ErrListTooBigFn("--.KzgProofs", size, 33554432)
+	if size := len(b.KzgProofs); size > 524288 {
+		err = ssz.ErrListTooBigFn("--.KzgProofs", size, 524288)
 		return
 	}
 	for ii := 0; ii < len(b.KzgProofs); ii++ {
@@ -427,7 +427,7 @@ func (b *BeaconBlockContentsFulu) UnmarshalSSZ(buf []byte) error {
 	// Field (1) 'KzgProofs'
 	{
 		buf = tail[o1:o2]
-		num, err := ssz.DivideInt2(len(buf), 48, 33554432)
+		num, err := ssz.DivideInt2(len(buf), 48, 524288)
 		if err != nil {
 			return err
 		}
@@ -493,8 +493,8 @@ func (b *BeaconBlockContentsFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 
 	// Field (1) 'KzgProofs'
 	{
-		if size := len(b.KzgProofs); size > 33554432 {
-			err = ssz.ErrListTooBigFn("--.KzgProofs", size, 33554432)
+		if size := len(b.KzgProofs); size > 524288 {
+			err = ssz.ErrListTooBigFn("--.KzgProofs", size, 524288)
 			return
 		}
 		subIndx := hh.Index()
@@ -507,7 +507,7 @@ func (b *BeaconBlockContentsFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		}
 
 		numItems := uint64(len(b.KzgProofs))
-		hh.MerkleizeWithMixin(subIndx, numItems, 33554432)
+		hh.MerkleizeWithMixin(subIndx, numItems, 524288)
 	}
 
 	// Field (2) 'Blobs'
