@@ -146,7 +146,7 @@ var appFlags = []cli.Flag{
 	flags.ArchivalNodeFlag,
 	storageFlags.BlobStoragePathFlag,
 	storageFlags.BlobRetentionEpochFlag,
-	storage.BlobStorageLayout,
+	storageFlags.BlobStorageLayout,
 	bflags.EnableExperimentalBackfill,
 	bflags.BackfillBatchSize,
 	bflags.BackfillWorkerCount,
