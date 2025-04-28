@@ -44,6 +44,15 @@ func TestBlobSidecarsByRootReq_MarshalSSZ(t *testing.T) {
 			ids:  generateBlobIdentifiers(10),
 		},
 		{
+			name: "max list",
+			ids:  generateBlobIdentifiers(int(params.BeaconConfig().MaxRequestBlobSidecarsElectra)),
+		},
+		{
+			name:         "beyond max list",
+			ids:          generateBlobIdentifiers(int(params.BeaconConfig().MaxRequestBlobSidecarsElectra) + 1),
+			unmarshalErr: ssz.ErrIncorrectListSize,
+		},
+		{
 			name: "wonky unmarshal size",
 			ids:  generateBlobIdentifiers(10),
 			unmarshalMod: func(in []byte) []byte {

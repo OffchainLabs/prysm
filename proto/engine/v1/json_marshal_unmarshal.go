@@ -305,6 +305,14 @@ type GetPayloadV4ResponseJson struct {
 	ExecutionRequests     []hexutil.Bytes            `json:"executionRequests"`
 }
 
+type GetPayloadV5ResponseJson struct {
+	ExecutionPayload      *ExecutionPayloadDenebJSON `json:"executionPayload"`
+	BlockValue            string                     `json:"blockValue"`
+	BlobsBundle           *BlobBundleV2JSON          `json:"blobsBundle"`
+	ShouldOverrideBuilder bool                       `json:"shouldOverrideBuilder"`
+	ExecutionRequests     []hexutil.Bytes            `json:"executionRequests"`
+}
+
 // ExecutionPayloadBody represents the engine API ExecutionPayloadV1 or ExecutionPayloadV2 type.
 type ExecutionPayloadBody struct {
 	Transactions          []hexutil.Bytes          `json:"transactions"`
@@ -838,6 +846,20 @@ func (b BlobBundleJSON) ToProto() *BlobsBundle {
 	}
 }
 
+type BlobBundleV2JSON struct {
+	Commitments []hexutil.Bytes `json:"commitments"`
+	Proofs      []hexutil.Bytes `json:"proofs"`
+	Blobs       []hexutil.Bytes `json:"blobs"`
+}
+
+func (b BlobBundleV2JSON) ToProto() *BlobsBundleV2 {
+	return &BlobsBundleV2{
+		KzgCommitments: bytesutil.SafeCopy2dHexUtilBytes(b.Commitments),
+		Proofs:         bytesutil.SafeCopy2dHexUtilBytes(b.Proofs),
+		Blobs:          bytesutil.SafeCopy2dHexUtilBytes(b.Blobs),
+	}
+}
+
 type BlobAndProofJson struct {
 	Blob     hexutil.Bytes `json:"blob"`
 	KzgProof hexutil.Bytes `json:"proof"`
@@ -1256,6 +1278,137 @@ func (e *ExecutionBundleElectra) UnmarshalJSON(enc []byte) error {
 	return nil
 }
 
+func (e *ExecutionBundleFulu) UnmarshalJSON(enc []byte) error {
+	dec := GetPayloadV5ResponseJson{}
+	if err := json.Unmarshal(enc, &dec); err != nil {
+		return err
+	}
+
+	if dec.ExecutionPayload.ParentHash == nil {
+		return errors.New("missing required field 'parentHash' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.FeeRecipient == nil {
+		return errors.New("missing required field 'feeRecipient' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.StateRoot == nil {
+		return errors.New("missing required field 'stateRoot' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.ReceiptsRoot == nil {
+		return errors.New("missing required field 'receiptsRoot' for ExecutableDataV1")
+	}
+	if dec.ExecutionPayload.LogsBloom == nil {
+		return errors.New("missing required field 'logsBloom' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.PrevRandao == nil {
+		return errors.New("missing required field 'prevRandao' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.ExtraData == nil {
+		return errors.New("missing required field 'extraData' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.BlockHash == nil {
+		return errors.New("missing required field 'blockHash' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.Transactions == nil {
+		return errors.New("missing required field 'transactions' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.BlockNumber == nil {
+		return errors.New("missing required field 'blockNumber' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.Timestamp == nil {
+		return errors.New("missing required field 'timestamp' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.GasUsed == nil {
+		return errors.New("missing required field 'gasUsed' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.GasLimit == nil {
+		return errors.New("missing required field 'gasLimit' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.BlobGasUsed == nil {
+		return errors.New("missing required field 'blobGasUsed' for ExecutionPayload")
+	}
+	if dec.ExecutionPayload.ExcessBlobGas == nil {
+		return errors.New("missing required field 'excessBlobGas' for ExecutionPayload")
+	}
+
+	*e = ExecutionBundleFulu{Payload: &ExecutionPayloadDeneb{}}
+	e.Payload.ParentHash = dec.ExecutionPayload.ParentHash.Bytes()
+	e.Payload.FeeRecipient = dec.ExecutionPayload.FeeRecipient.Bytes()
+	e.Payload.StateRoot = dec.ExecutionPayload.StateRoot.Bytes()
+	e.Payload.ReceiptsRoot = dec.ExecutionPayload.ReceiptsRoot.Bytes()
+	e.Payload.LogsBloom = *dec.ExecutionPayload.LogsBloom
+	e.Payload.PrevRandao = dec.ExecutionPayload.PrevRandao.Bytes()
+	e.Payload.BlockNumber = uint64(*dec.ExecutionPayload.BlockNumber)
+	e.Payload.GasLimit = uint64(*dec.ExecutionPayload.GasLimit)
+	e.Payload.GasUsed = uint64(*dec.ExecutionPayload.GasUsed)
+	e.Payload.Timestamp = uint64(*dec.ExecutionPayload.Timestamp)
+	e.Payload.ExtraData = dec.ExecutionPayload.ExtraData
+	baseFee, err := hexutil.DecodeBig(dec.ExecutionPayload.BaseFeePerGas)
+	if err != nil {
+		return err
+	}
+	e.Payload.BaseFeePerGas = bytesutil.PadTo(bytesutil.ReverseByteOrder(baseFee.Bytes()), fieldparams.RootLength)
+
+	e.Payload.ExcessBlobGas = uint64(*dec.ExecutionPayload.ExcessBlobGas)
+	e.Payload.BlobGasUsed = uint64(*dec.ExecutionPayload.BlobGasUsed)
+
+	e.Payload.BlockHash = dec.ExecutionPayload.BlockHash.Bytes()
+	transactions := make([][]byte, len(dec.ExecutionPayload.Transactions))
+	for i, tx := range dec.ExecutionPayload.Transactions {
+		transactions[i] = tx
+	}
+	e.Payload.Transactions = transactions
+	if dec.ExecutionPayload.Withdrawals == nil {
+		dec.ExecutionPayload.Withdrawals = make([]*Withdrawal, 0)
+	}
+	e.Payload.Withdrawals = dec.ExecutionPayload.Withdrawals
+
+	v, err := hexutil.DecodeBig(dec.BlockValue)
+	if err != nil {
+		return err
+	}
+	e.Value = bytesutil.PadTo(bytesutil.ReverseByteOrder(v.Bytes()), fieldparams.RootLength)
+
+	if dec.BlobsBundle == nil {
+		return nil
+	}
+	e.BlobsBundle = &BlobsBundleV2{}
+
+	commitments := make([][]byte, len(dec.BlobsBundle.Commitments))
+	for i, kzg := range dec.BlobsBundle.Commitments {
+		k := kzg
+		commitments[i] = bytesutil.PadTo(k[:], fieldparams.BLSPubkeyLength)
+	}
+	e.BlobsBundle.KzgCommitments = commitments
+
+	proofs := make([][]byte, len(dec.BlobsBundle.Proofs))
+	for i, proof := range dec.BlobsBundle.Proofs {
+		p := proof
+		proofs[i] = bytesutil.PadTo(p[:], fieldparams.BLSPubkeyLength)
+	}
+	e.BlobsBundle.Proofs = proofs
+
+	blobs := make([][]byte, len(dec.BlobsBundle.Blobs))
+	for i, blob := range dec.BlobsBundle.Blobs {
+		b := make([]byte, fieldparams.BlobLength)
+		copy(b, blob)
+		blobs[i] = b
+	}
+	e.BlobsBundle.Blobs = blobs
+
+	e.ShouldOverrideBuilder = dec.ShouldOverrideBuilder
+
+	requests := make([][]byte, len(dec.ExecutionRequests))
+	for i, request := range dec.ExecutionRequests {
+		r := make([]byte, len(request))
+		copy(r, request)
+		requests[i] = r
+	}
+
+	e.ExecutionRequests = requests
+
+	return nil
+}
+
 // RecastHexutilByteSlice converts a []hexutil.Bytes to a [][]byte
 func RecastHexutilByteSlice(h []hexutil.Bytes) [][]byte {
 	r := make([][]byte, len(h))
@@ -1279,6 +1432,31 @@ func (b *BlobAndProof) UnmarshalJSON(enc []byte) error {
 	proof := make([]byte, fieldparams.BLSPubkeyLength)
 	copy(proof, dec.KzgProof)
 	b.KzgProof = proof
+
+	return nil
+}
+
+type BlobAndProofV2Json struct {
+	Blob      hexutil.Bytes   `json:"blob"`
+	KzgProofs []hexutil.Bytes `json:"proofs"`
+}
+
+func (b *BlobAndProofV2) UnmarshalJSON(enc []byte) error {
+	var dec *BlobAndProofV2Json
+	if err := json.Unmarshal(enc, &dec); err != nil {
+		return err
+	}
+
+	blob := make([]byte, fieldparams.BlobLength)
+	copy(blob, dec.Blob)
+	b.Blob = blob
+
+	proofs := make([][]byte, len(dec.KzgProofs))
+	for i, proof := range dec.KzgProofs {
+		p := proof
+		proofs[i] = bytesutil.PadTo(p[:], fieldparams.BLSPubkeyLength)
+	}
+	b.KzgProofs = proofs
 
 	return nil
 }

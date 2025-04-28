@@ -139,6 +139,8 @@ message DebugPeerResponse {
     string agent_version = 6;
     // Latency of responses from peer(in ms).
     uint64 peer_latency = 7;
+    // Metadata of the peer.
+    MetaDataV2 metadataV2 = 8;
   }
   // Listening addresses know of the peer.
   repeated string listening_addresses = 1;

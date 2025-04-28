@@ -37,8 +37,8 @@ func (s *SignedBeaconBlockContentsFulu) MarshalSSZTo(buf []byte) (dst []byte, er
 	}
 
 	// Field (1) 'KzgProofs'
-	if size := len(s.KzgProofs); size > 4096 {
-		err = ssz.ErrListTooBigFn("--.KzgProofs", size, 4096)
+	if size := len(s.KzgProofs); size > 524288 {
+		err = ssz.ErrListTooBigFn("--.KzgProofs", size, 524288)
 		return
 	}
 	for ii := 0; ii < len(s.KzgProofs); ii++ {
@@ -109,7 +109,7 @@ func (s *SignedBeaconBlockContentsFulu) UnmarshalSSZ(buf []byte) error {
 	// Field (1) 'KzgProofs'
 	{
 		buf = tail[o1:o2]
-		num, err := ssz.DivideInt2(len(buf), 48, 4096)
+		num, err := ssz.DivideInt2(len(buf), 48, 524288)
 		if err != nil {
 			return err
 		}
@@ -175,8 +175,8 @@ func (s *SignedBeaconBlockContentsFulu) HashTreeRootWith(hh *ssz.Hasher) (err er
 
 	// Field (1) 'KzgProofs'
 	{
-		if size := len(s.KzgProofs); size > 4096 {
-			err = ssz.ErrListTooBigFn("--.KzgProofs", size, 4096)
+		if size := len(s.KzgProofs); size > 524288 {
+			err = ssz.ErrListTooBigFn("--.KzgProofs", size, 524288)
 			return
 		}
 		subIndx := hh.Index()
@@ -189,7 +189,7 @@ func (s *SignedBeaconBlockContentsFulu) HashTreeRootWith(hh *ssz.Hasher) (err er
 		}
 
 		numItems := uint64(len(s.KzgProofs))
-		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
+		hh.MerkleizeWithMixin(subIndx, numItems, 524288)
 	}
 
 	// Field (2) 'Blobs'
@@ -355,8 +355,8 @@ func (b *BeaconBlockContentsFulu) MarshalSSZTo(buf []byte) (dst []byte, err erro
 	}
 
 	// Field (1) 'KzgProofs'
-	if size := len(b.KzgProofs); size > 4096 {
-		err = ssz.ErrListTooBigFn("--.KzgProofs", size, 4096)
+	if size := len(b.KzgProofs); size > 524288 {
+		err = ssz.ErrListTooBigFn("--.KzgProofs", size, 524288)
 		return
 	}
 	for ii := 0; ii < len(b.KzgProofs); ii++ {
@@ -427,7 +427,7 @@ func (b *BeaconBlockContentsFulu) UnmarshalSSZ(buf []byte) error {
 	// Field (1) 'KzgProofs'
 	{
 		buf = tail[o1:o2]
-		num, err := ssz.DivideInt2(len(buf), 48, 4096)
+		num, err := ssz.DivideInt2(len(buf), 48, 524288)
 		if err != nil {
 			return err
 		}
@@ -493,8 +493,8 @@ func (b *BeaconBlockContentsFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 
 	// Field (1) 'KzgProofs'
 	{
-		if size := len(b.KzgProofs); size > 4096 {
-			err = ssz.ErrListTooBigFn("--.KzgProofs", size, 4096)
+		if size := len(b.KzgProofs); size > 524288 {
+			err = ssz.ErrListTooBigFn("--.KzgProofs", size, 524288)
 			return
 		}
 		subIndx := hh.Index()
@@ -507,7 +507,7 @@ func (b *BeaconBlockContentsFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		}
 
 		numItems := uint64(len(b.KzgProofs))
-		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
+		hh.MerkleizeWithMixin(subIndx, numItems, 524288)
 	}
 
 	// Field (2) 'Blobs'
@@ -799,20 +799,20 @@ func (d *DataColumnSidecar) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
 	offset := int(356)
 
-	// Field (0) 'ColumnIndex'
-	dst = ssz.MarshalUint64(dst, d.ColumnIndex)
+	// Field (0) 'Index'
+	dst = ssz.MarshalUint64(dst, d.Index)
 
-	// Offset (1) 'DataColumn'
+	// Offset (1) 'Column'
 	dst = ssz.WriteOffset(dst, offset)
-	offset += len(d.DataColumn) * 2048
+	offset += len(d.Column) * 2048
 
 	// Offset (2) 'KzgCommitments'
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(d.KzgCommitments) * 48
 
-	// Offset (3) 'KzgProof'
+	// Offset (3) 'KzgProofs'
 	dst = ssz.WriteOffset(dst, offset)
-	offset += len(d.KzgProof) * 48
+	offset += len(d.KzgProofs) * 48
 
 	// Field (4) 'SignedBlockHeader'
 	if d.SignedBlockHeader == nil {
@@ -835,17 +835,17 @@ func (d *DataColumnSidecar) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		dst = append(dst, d.KzgCommitmentsInclusionProof[ii]...)
 	}
 
-	// Field (1) 'DataColumn'
-	if size := len(d.DataColumn); size > 4096 {
-		err = ssz.ErrListTooBigFn("--.DataColumn", size, 4096)
+	// Field (1) 'Column'
+	if size := len(d.Column); size > 4096 {
+		err = ssz.ErrListTooBigFn("--.Column", size, 4096)
 		return
 	}
-	for ii := 0; ii < len(d.DataColumn); ii++ {
-		if size := len(d.DataColumn[ii]); size != 2048 {
-			err = ssz.ErrBytesLengthFn("--.DataColumn[ii]", size, 2048)
+	for ii := 0; ii < len(d.Column); ii++ {
+		if size := len(d.Column[ii]); size != 2048 {
+			err = ssz.ErrBytesLengthFn("--.Column[ii]", size, 2048)
 			return
 		}
-		dst = append(dst, d.DataColumn[ii]...)
+		dst = append(dst, d.Column[ii]...)
 	}
 
 	// Field (2) 'KzgCommitments'
@@ -861,17 +861,17 @@ func (d *DataColumnSidecar) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		dst = append(dst, d.KzgCommitments[ii]...)
 	}
 
-	// Field (3) 'KzgProof'
-	if size := len(d.KzgProof); size > 4096 {
-		err = ssz.ErrListTooBigFn("--.KzgProof", size, 4096)
+	// Field (3) 'KzgProofs'
+	if size := len(d.KzgProofs); size > 4096 {
+		err = ssz.ErrListTooBigFn("--.KzgProofs", size, 4096)
 		return
 	}
-	for ii := 0; ii < len(d.KzgProof); ii++ {
-		if size := len(d.KzgProof[ii]); size != 48 {
-			err = ssz.ErrBytesLengthFn("--.KzgProof[ii]", size, 48)
+	for ii := 0; ii < len(d.KzgProofs); ii++ {
+		if size := len(d.KzgProofs[ii]); size != 48 {
+			err = ssz.ErrBytesLengthFn("--.KzgProofs[ii]", size, 48)
 			return
 		}
-		dst = append(dst, d.KzgProof[ii]...)
+		dst = append(dst, d.KzgProofs[ii]...)
 	}
 
 	return
@@ -888,10 +888,10 @@ func (d *DataColumnSidecar) UnmarshalSSZ(buf []byte) error {
 	tail := buf
 	var o1, o2, o3 uint64
 
-	// Field (0) 'ColumnIndex'
-	d.ColumnIndex = ssz.UnmarshallUint64(buf[0:8])
+	// Field (0) 'Index'
+	d.Index = ssz.UnmarshallUint64(buf[0:8])
 
-	// Offset (1) 'DataColumn'
+	// Offset (1) 'Column'
 	if o1 = ssz.ReadOffset(buf[8:12]); o1 > size {
 		return ssz.ErrOffset
 	}
@@ -905,7 +905,7 @@ func (d *DataColumnSidecar) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrOffset
 	}
 
-	// Offset (3) 'KzgProof'
+	// Offset (3) 'KzgProofs'
 	if o3 = ssz.ReadOffset(buf[16:20]); o3 > size || o2 > o3 {
 		return ssz.ErrOffset
 	}
@@ -927,19 +927,19 @@ func (d *DataColumnSidecar) UnmarshalSSZ(buf []byte) error {
 		d.KzgCommitmentsInclusionProof[ii] = append(d.KzgCommitmentsInclusionProof[ii], buf[228:356][ii*32:(ii+1)*32]...)
 	}
 
-	// Field (1) 'DataColumn'
+	// Field (1) 'Column'
 	{
 		buf = tail[o1:o2]
 		num, err := ssz.DivideInt2(len(buf), 2048, 4096)
 		if err != nil {
 			return err
 		}
-		d.DataColumn = make([][]byte, num)
+		d.Column = make([][]byte, num)
 		for ii := 0; ii < num; ii++ {
-			if cap(d.DataColumn[ii]) == 0 {
-				d.DataColumn[ii] = make([]byte, 0, len(buf[ii*2048:(ii+1)*2048]))
+			if cap(d.Column[ii]) == 0 {
+				d.Column[ii] = make([]byte, 0, len(buf[ii*2048:(ii+1)*2048]))
 			}
-			d.DataColumn[ii] = append(d.DataColumn[ii], buf[ii*2048:(ii+1)*2048]...)
+			d.Column[ii] = append(d.Column[ii], buf[ii*2048:(ii+1)*2048]...)
 		}
 	}
 
@@ -959,19 +959,19 @@ func (d *DataColumnSidecar) UnmarshalSSZ(buf []byte) error {
 		}
 	}
 
-	// Field (3) 'KzgProof'
+	// Field (3) 'KzgProofs'
 	{
 		buf = tail[o3:]
 		num, err := ssz.DivideInt2(len(buf), 48, 4096)
 		if err != nil {
 			return err
 		}
-		d.KzgProof = make([][]byte, num)
+		d.KzgProofs = make([][]byte, num)
 		for ii := 0; ii < num; ii++ {
-			if cap(d.KzgProof[ii]) == 0 {
-				d.KzgProof[ii] = make([]byte, 0, len(buf[ii*48:(ii+1)*48]))
+			if cap(d.KzgProofs[ii]) == 0 {
+				d.KzgProofs[ii] = make([]byte, 0, len(buf[ii*48:(ii+1)*48]))
 			}
-			d.KzgProof[ii] = append(d.KzgProof[ii], buf[ii*48:(ii+1)*48]...)
+			d.KzgProofs[ii] = append(d.KzgProofs[ii], buf[ii*48:(ii+1)*48]...)
 		}
 	}
 	return err
@@ -981,14 +981,14 @@ func (d *DataColumnSidecar) UnmarshalSSZ(buf []byte) error {
 func (d *DataColumnSidecar) SizeSSZ() (size int) {
 	size = 356
 
-	// Field (1) 'DataColumn'
-	size += len(d.DataColumn) * 2048
+	// Field (1) 'Column'
+	size += len(d.Column) * 2048
 
 	// Field (2) 'KzgCommitments'
 	size += len(d.KzgCommitments) * 48
 
-	// Field (3) 'KzgProof'
-	size += len(d.KzgProof) * 48
+	// Field (3) 'KzgProofs'
+	size += len(d.KzgProofs) * 48
 
 	return
 }
@@ -1002,17 +1002,17 @@ func (d *DataColumnSidecar) HashTreeRoot() ([32]byte, error) {
 func (d *DataColumnSidecar) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
-	// Field (0) 'ColumnIndex'
-	hh.PutUint64(d.ColumnIndex)
+	// Field (0) 'Index'
+	hh.PutUint64(d.Index)
 
-	// Field (1) 'DataColumn'
+	// Field (1) 'Column'
 	{
-		if size := len(d.DataColumn); size > 4096 {
-			err = ssz.ErrListTooBigFn("--.DataColumn", size, 4096)
+		if size := len(d.Column); size > 4096 {
+			err = ssz.ErrListTooBigFn("--.Column", size, 4096)
 			return
 		}
 		subIndx := hh.Index()
-		for _, i := range d.DataColumn {
+		for _, i := range d.Column {
 			if len(i) != 2048 {
 				err = ssz.ErrBytesLength
 				return
@@ -1020,7 +1020,7 @@ func (d *DataColumnSidecar) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 			hh.PutBytes(i)
 		}
 
-		numItems := uint64(len(d.DataColumn))
+		numItems := uint64(len(d.Column))
 		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
 	}
 
@@ -1043,14 +1043,14 @@ func (d *DataColumnSidecar) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
 	}
 
-	// Field (3) 'KzgProof'
+	// Field (3) 'KzgProofs'
 	{
-		if size := len(d.KzgProof); size > 4096 {
-			err = ssz.ErrListTooBigFn("--.KzgProof", size, 4096)
+		if size := len(d.KzgProofs); size > 4096 {
+			err = ssz.ErrListTooBigFn("--.KzgProofs", size, 4096)
 			return
 		}
 		subIndx := hh.Index()
-		for _, i := range d.KzgProof {
+		for _, i := range d.KzgProofs {
 			if len(i) != 48 {
 				err = ssz.ErrBytesLength
 				return
@@ -1058,7 +1058,7 @@ func (d *DataColumnSidecar) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 			hh.PutBytes(i)
 		}
 
-		numItems := uint64(len(d.KzgProof))
+		numItems := uint64(len(d.KzgProofs))
 		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
 	}
 
@@ -1104,8 +1104,8 @@ func (d *DataColumnIdentifier) MarshalSSZTo(buf []byte) (dst []byte, err error) 
 	}
 	dst = append(dst, d.BlockRoot...)
 
-	// Field (1) 'ColumnIndex'
-	dst = ssz.MarshalUint64(dst, d.ColumnIndex)
+	// Field (1) 'Index'
+	dst = ssz.MarshalUint64(dst, d.Index)
 
 	return
 }
@@ -1124,8 +1124,8 @@ func (d *DataColumnIdentifier) UnmarshalSSZ(buf []byte) error {
 	}
 	d.BlockRoot = append(d.BlockRoot, buf[0:32]...)
 
-	// Field (1) 'ColumnIndex'
-	d.ColumnIndex = ssz.UnmarshallUint64(buf[32:40])
+	// Field (1) 'Index'
+	d.Index = ssz.UnmarshallUint64(buf[32:40])
 
 	return err
 }
@@ -1152,8 +1152,8 @@ func (d *DataColumnIdentifier) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	}
 	hh.PutBytes(d.BlockRoot)
 
-	// Field (1) 'ColumnIndex'
-	hh.PutUint64(d.ColumnIndex)
+	// Field (1) 'Index'
+	hh.PutUint64(d.Index)
 
 	hh.Merkleize(indx)
 	return
