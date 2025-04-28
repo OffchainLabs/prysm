@@ -122,11 +122,11 @@ func TestWaitForActivation_AccountsChanged(t *testing.T) {
 			prysmChainClient:       prysmChainClient,
 			pubkeyToStatus:         make(map[[48]byte]*validatorStatus),
 			accountsChangedChannel: ch,
-			accountChangesSub:      km.SubscribeAccountChanges(ch),
+			accountChangedSub:      km.SubscribeAccountChanges(ch),
 		}
 		defer func() {
 			close(v.accountsChangedChannel)
-			v.accountChangesSub.Unsubscribe()
+			v.accountChangedSub.Unsubscribe()
 		}()
 
 		inactiveResp := testutil.GenerateMultipleValidatorStatusResponse([][]byte{inactive.pub[:]})

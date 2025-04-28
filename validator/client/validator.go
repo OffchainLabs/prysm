@@ -118,7 +118,7 @@ type validator struct {
 	disableDutiesPolling               bool
 	accountsChangedChannel             chan [][fieldparams.BLSPubkeyLength]byte
 	eventsChannel                      chan *eventClient.Event
-	accountChangesSub                  event.Subscription
+	accountChangedSub                  event.Subscription
 }
 
 type validatorStatus struct {
@@ -134,8 +134,8 @@ type attSelectionKey struct {
 
 // Done cleans up the validator.
 func (v *validator) Done() {
-	if v.accountChangesSub != nil {
-		v.accountChangesSub.Unsubscribe()
+	if v.accountChangedSub != nil {
+		v.accountChangedSub.Unsubscribe()
 	}
 	//if v.accountsChangedChannel != nil {
 	//	close(v.accountsChangedChannel)
@@ -283,7 +283,7 @@ func (v *validator) WaitForKeymanagerInitialization(ctx context.Context) error {
 		return errors.New("key manager not set")
 	}
 	recheckKeys(ctx, v.db, v.km)
-	v.accountChangesSub = v.km.SubscribeAccountChanges(v.accountsChangedChannel)
+	v.accountChangedSub = v.km.SubscribeAccountChanges(v.accountsChangedChannel)
 	return nil
 }
 
