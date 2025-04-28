@@ -42,6 +42,11 @@ func (s *Service) validateLightClientOptimisticUpdate(ctx context.Context, pid p
 		return pubsub.ValidationReject, errWrongMessage
 	}
 
+	attestedHeaderRoot, err := newUpdate.AttestedHeader().Beacon().HashTreeRoot()
+	if err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+
 	// [IGNORE] The optimistic_update is received after the block at signature_slot was given enough time
 	// to propagate through the network -- i.e. validate that one-third of optimistic_update.signature_slot
 	// has transpired (SECONDS_PER_SLOT / INTERVALS_PER_SLOT seconds after the start of the slot,
@@ -66,11 +71,13 @@ func (s *Service) validateLightClientOptimisticUpdate(ctx context.Context, pid p
 		}
 	}
 
-	msg.ValidatorData = newUpdate.Proto()
 	log.WithFields(logrus.Fields{
-		"attestedSlot":  fmt.Sprintf("%d", newUpdate.AttestedHeader().Beacon().Slot),
-		"signatureSlot": fmt.Sprintf("%d", newUpdate.SignatureSlot()),
+		"attestedSlot":       fmt.Sprintf("%d", newUpdate.AttestedHeader().Beacon().Slot),
+		"signatureSlot":      fmt.Sprintf("%d", newUpdate.SignatureSlot()),
+		"attestedHeaderRoot": fmt.Sprintf("%x", attestedHeaderRoot),
 	}).Debug("New gossiped light client optimistic update validated.")
+
+	msg.ValidatorData = newUpdate.Proto()
 	return pubsub.ValidationAccept, nil
 }
 
@@ -98,6 +105,11 @@ func (s *Service) validateLightClientFinalityUpdate(ctx context.Context, pid pee
 	newUpdate, ok := m.(interfaces.LightClientFinalityUpdate)
 	if !ok {
 		return pubsub.ValidationReject, errWrongMessage
+	}
+
+	attestedHeaderRoot, err := newUpdate.AttestedHeader().Beacon().HashTreeRoot()
+	if err != nil {
+		return pubsub.ValidationIgnore, err
 	}
 
 	// [IGNORE] The optimistic_update is received after the block at signature_slot was given enough time
@@ -128,17 +140,20 @@ func (s *Service) validateLightClientFinalityUpdate(ctx context.Context, pid pee
 		}
 		if newUpdateSlot == lastUpdateSlot && (lastUpdateHasSupermajority || !newUpdateHasSupermajority) {
 			log.WithFields(logrus.Fields{
-				"attestedSlot":  fmt.Sprintf("%d", newUpdate.AttestedHeader().Beacon().Slot),
-				"signatureSlot": fmt.Sprintf("%d", newUpdate.SignatureSlot()),
+				"attestedSlot":       fmt.Sprintf("%d", newUpdate.AttestedHeader().Beacon().Slot),
+				"signatureSlot":      fmt.Sprintf("%d", newUpdate.SignatureSlot()),
+				"attestedHeaderRoot": fmt.Sprintf("%x", attestedHeaderRoot),
 			}).Debug("Newly received light client finality update ignored. no supermajority advantage.")
 			return pubsub.ValidationIgnore, nil
 		}
 	}
 
-	msg.ValidatorData = newUpdate.Proto()
 	log.WithFields(logrus.Fields{
-		"attestedSlot":  fmt.Sprintf("%d", newUpdate.AttestedHeader().Beacon().Slot),
-		"signatureSlot": fmt.Sprintf("%d", newUpdate.SignatureSlot()),
+		"attestedSlot":       fmt.Sprintf("%d", newUpdate.AttestedHeader().Beacon().Slot),
+		"signatureSlot":      fmt.Sprintf("%d", newUpdate.SignatureSlot()),
+		"attestedHeaderRoot": fmt.Sprintf("%x", attestedHeaderRoot),
 	}).Debug("New gossiped light client finality update validated.")
+
+	msg.ValidatorData = newUpdate.Proto()
 	return pubsub.ValidationAccept, nil
 }

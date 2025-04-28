@@ -17,9 +17,15 @@ func (s *Service) lightClientOptimisticUpdateSubscriber(_ context.Context, msg p
 		return err
 	}
 
+	attestedHeaderRoot, err := update.AttestedHeader().Beacon().HashTreeRoot()
+	if err != nil {
+		return err
+	}
+
 	log.WithFields(logrus.Fields{
-		"attestedSlot":  fmt.Sprintf("%d", update.AttestedHeader().Beacon().Slot),
-		"signatureSlot": fmt.Sprintf("%d", update.SignatureSlot()),
+		"attestedSlot":       fmt.Sprintf("%d", update.AttestedHeader().Beacon().Slot),
+		"signatureSlot":      fmt.Sprintf("%d", update.SignatureSlot()),
+		"attestedHeaderRoot": fmt.Sprintf("%x", attestedHeaderRoot),
 	}).Debug("Saving newly received light client optimistic update.")
 
 	s.lcStore.SetLastOptimisticUpdate(update)
@@ -38,11 +44,17 @@ func (s *Service) lightClientFinalityUpdateSubscriber(_ context.Context, msg pro
 		return err
 	}
 
+	attestedHeaderRoot, err := update.AttestedHeader().Beacon().HashTreeRoot()
+	if err != nil {
+		return err
+	}
+
 	log.WithFields(logrus.Fields{
-		"attestedSlot":  fmt.Sprintf("%d", update.AttestedHeader().Beacon().Slot),
-		"signatureSlot": fmt.Sprintf("%d", update.SignatureSlot()),
+		"attestedSlot":       fmt.Sprintf("%d", update.AttestedHeader().Beacon().Slot),
+		"signatureSlot":      fmt.Sprintf("%d", update.SignatureSlot()),
+		"attestedHeaderRoot": fmt.Sprintf("%x", attestedHeaderRoot),
 	}).Debug("Saving newly received light client finality update.")
-	
+
 	s.lcStore.SetLastFinalityUpdate(update)
 
 	s.cfg.stateNotifier.StateFeed().Send(&feed.Event{
