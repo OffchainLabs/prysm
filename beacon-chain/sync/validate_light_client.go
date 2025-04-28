@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
@@ -12,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/sirupsen/logrus"
 )
 
 func (s *Service) validateLightClientOptimisticUpdate(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
@@ -65,7 +67,10 @@ func (s *Service) validateLightClientOptimisticUpdate(ctx context.Context, pid p
 	}
 
 	msg.ValidatorData = newUpdate.Proto()
-	log.Debug("New gossiped light client optimistic update validated. Attested slot %d, Signature slot %d", newUpdate.AttestedHeader().Beacon().Slot, newUpdate.SignatureSlot())
+	log.WithFields(logrus.Fields{
+		"attestedSlot":  fmt.Sprintf("%d", newUpdate.AttestedHeader().Beacon().Slot),
+		"signatureSlot": fmt.Sprintf("%d", newUpdate.SignatureSlot()),
+	}).Debug("New gossiped light client optimistic update validated.")
 	return pubsub.ValidationAccept, nil
 }
 
@@ -122,12 +127,18 @@ func (s *Service) validateLightClientFinalityUpdate(ctx context.Context, pid pee
 			return pubsub.ValidationIgnore, nil
 		}
 		if newUpdateSlot == lastUpdateSlot && (lastUpdateHasSupermajority || !newUpdateHasSupermajority) {
-			log.Debug("Newly received light client finality update ignored. no supermajority advantage. Attested slot %d, Signature slot %d", newUpdate.AttestedHeader().Beacon().Slot, newUpdate.SignatureSlot())
+			log.WithFields(logrus.Fields{
+				"attestedSlot":  fmt.Sprintf("%d", newUpdate.AttestedHeader().Beacon().Slot),
+				"signatureSlot": fmt.Sprintf("%d", newUpdate.SignatureSlot()),
+			}).Debug("Newly received light client finality update ignored. no supermajority advantage.")
 			return pubsub.ValidationIgnore, nil
 		}
 	}
 
 	msg.ValidatorData = newUpdate.Proto()
-	log.Debug("New gossiped light client finality update validated. Attested slot %d, Signature slot %d", newUpdate.AttestedHeader().Beacon().Slot, newUpdate.SignatureSlot())
+	log.WithFields(logrus.Fields{
+		"attestedSlot":  fmt.Sprintf("%d", newUpdate.AttestedHeader().Beacon().Slot),
+		"signatureSlot": fmt.Sprintf("%d", newUpdate.SignatureSlot()),
+	}).Debug("New gossiped light client finality update validated.")
 	return pubsub.ValidationAccept, nil
 }
