@@ -23,8 +23,8 @@ func NewService() *StateManager {
 }
 
 // StateByRootIfCachedNoCopy --
-func (_ *StateManager) StateByRootIfCachedNoCopy(_ [32]byte) state.BeaconState {
-	panic("implement me")
+func (m *StateManager) StateByRootIfCachedNoCopy(root [32]byte) state.BeaconState {
+	return m.StatesByRoot[root]
 }
 
 // Resume --
