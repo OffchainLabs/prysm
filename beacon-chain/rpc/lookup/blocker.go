@@ -331,7 +331,7 @@ func (p *BeaconDbBlocker) blobsFromStoredDataColumns(indices map[uint64]bool, ro
 	if !canReconstruct {
 		// There is no way to reconstruct the data columns.
 		return nil, &core.RpcError{
-			Err:    errors.Errorf("the node does not custody enough data columns to reconstruct blobs. Please start the beacon node with the `--%s` flag to ensure this call to success, or retry later if it already the case.", flags.SubscribeToAllSubnets.Name),
+			Err:    errors.Errorf("the node does not custody enough data columns to reconstruct blobs. Please start the beacon node with the `--%s` flag to ensure this call to success, or retry later if it already the case.", flags.SubscribeAllDataSubnets.Name),
 			Reason: core.NotFound,
 		}
 	}
