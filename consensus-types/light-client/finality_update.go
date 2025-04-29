@@ -99,6 +99,12 @@ type finalityUpdateAltair struct {
 	finalityBranch  interfaces.LightClientFinalityBranch
 }
 
+// NewEmptyFinalityUpdateAltair normally should never be called and NewFinalityUpdateFromUpdate should be used instead.
+// This function exists only for scenarios where an empty struct is required.
+func NewEmptyFinalityUpdateAltair() interfaces.LightClientFinalityUpdate {
+	return &finalityUpdateAltair{}
+}
+
 func (u *finalityUpdateAltair) IsNil() bool {
 	return u == nil || u.p == nil
 }
@@ -203,6 +209,12 @@ type finalityUpdateCapella struct {
 	attestedHeader  interfaces.LightClientHeader
 	finalizedHeader interfaces.LightClientHeader
 	finalityBranch  interfaces.LightClientFinalityBranch
+}
+
+// NewEmptyFinalityUpdateCapella normally should never be called and NewFinalityUpdateFromUpdate should be used instead.
+// This function exists only for scenarios where an empty struct is required.
+func NewEmptyFinalityUpdateCapella() interfaces.LightClientFinalityUpdate {
+	return &finalityUpdateCapella{}
 }
 
 func (u *finalityUpdateCapella) IsNil() bool {
@@ -311,6 +323,12 @@ type finalityUpdateDeneb struct {
 	finalityBranch  interfaces.LightClientFinalityBranch
 }
 
+// NewEmptyFinalityUpdateDeneb normally should never be called and NewFinalityUpdateFromUpdate should be used instead.
+// This function exists only for scenarios where an empty struct is required.
+func NewEmptyFinalityUpdateDeneb() interfaces.LightClientFinalityUpdate {
+	return &finalityUpdateDeneb{}
+}
+
 func (u *finalityUpdateDeneb) IsNil() bool {
 	return u == nil || u.p == nil
 }
@@ -415,6 +433,12 @@ type finalityUpdateElectra struct {
 	attestedHeader  interfaces.LightClientHeader
 	finalizedHeader interfaces.LightClientHeader
 	finalityBranch  interfaces.LightClientFinalityBranchElectra
+}
+
+// NewEmptyFinalityUpdateElectra normally should never be called and NewFinalityUpdateFromUpdate should be used instead.
+// This function exists only for scenarios where an empty struct is required.
+func NewEmptyFinalityUpdateElectra() interfaces.LightClientFinalityUpdate {
+	return &finalityUpdateElectra{}
 }
 
 func (u *finalityUpdateElectra) IsNil() bool {
