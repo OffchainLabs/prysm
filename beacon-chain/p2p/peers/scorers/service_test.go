@@ -15,6 +15,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	// Define scorer weights as used in service.go
+	badResponsesScorerWeight         = 0.3
+	blockProviderScorerWeight        = 0.0 // Note: This scorer's weight is 0 in the default config used by setupScorer.
+	peerStatusScorerWeight           = 0.3
+	gossipScorerWeight               = 0.4
+	dataColumnRPCRequestScorerWeight = 0.15
+
+	// Calculate total weight
+	totalWeight = badResponsesScorerWeight + peerStatusScorerWeight + gossipScorerWeight + dataColumnRPCRequestScorerWeight
+
+	// Calculate relative weights
+	badResponsesRelativeWeight         = badResponsesScorerWeight / totalWeight
+	dataColumnRPCRequestRelativeWeight = dataColumnRPCRequestScorerWeight / totalWeight
+)
+
 func TestScorers_Service_Init(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -145,7 +161,10 @@ func TestScorers_Service_Score(t *testing.T) {
 		s, pids := setupScorer()
 		// Peers start with boosted start score (new peers are boosted by block provider).
 		startScore := float64(0)
-		penalty := (-10 / float64(s.BadResponsesScorer().Params().Threshold)) * 0.3
+		// Calculate the raw penalty without weighting.
+		rawPenalty := -10 / float64(s.BadResponsesScorer().Params().Threshold)
+		// Apply the scorer's relative weight to the penalty.
+		penalty := rawPenalty * badResponsesRelativeWeight
 
 		// Update peers' stats and test the effect on peer order.
 		s.BadResponsesScorer().Increment("peer2")
@@ -199,7 +218,10 @@ func TestScorers_Service_Score(t *testing.T) {
 		s, _ := setupScorer()
 		s1 := s.BlockProviderScorer()
 		s2 := s.BadResponsesScorer()
-		penalty := (-10 / float64(s.BadResponsesScorer().Params().Threshold)) * 0.3
+		// Calculate the raw penalty without weighting.
+		rawPenalty := -10 / float64(s.BadResponsesScorer().Params().Threshold)
+		// Apply the scorer's relative weight to the penalty.
+		penalty := rawPenalty * badResponsesRelativeWeight
 
 		// Full score, no penalty.
 		s1.IncrementProcessedBlocks("peer1", batchSize*5)
@@ -228,7 +250,10 @@ func TestScorers_Service_Score(t *testing.T) {
 		s1.RecordRequest(pid, currentSlot, oldColumnSlot)
 
 		// Only the recent column request should count towards the score.
-		expectedScore := -1.0 * scorers.DefaultDataColumnRPCRequestPenaltyFactor * 0.15
+		// Calculate the raw penalty.
+		rawPenalty := -1.0 * scorers.DefaultDataColumnRPCRequestPenaltyFactor
+		// Apply the scorer's relative weight to the penalty.
+		expectedScore := rawPenalty * dataColumnRPCRequestRelativeWeight
 		expectedScore = math.Round(expectedScore*scorers.ScoreRoundingFactor) / scorers.ScoreRoundingFactor
 		assert.Equal(t, roundScore(expectedScore), s.Score(pid), "Wrong weighted score")
 
