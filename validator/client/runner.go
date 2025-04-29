@@ -85,11 +85,13 @@ func run(ctx context.Context, v iface.Validator) error {
 
 			// Keep trying to update assignments if they are nil or if we are past an
 			// epoch transition in the beacon node's state.
-			if err := v.UpdateDuties(slotCtx, slot); err != nil {
-				handleAssignmentError(err, slot)
-				span.End()
-				cancel()
-				continue
+			if slots.IsEpochStart(slot) {
+				if err := v.UpdateDuties(slotCtx); err != nil {
+					handleAssignmentError(err, slot)
+					span.End()
+					cancel()
+					continue
+				}
 			}
 
 			// call push proposer settings often to account for the following edge cases:

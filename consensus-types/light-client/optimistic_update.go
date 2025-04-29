@@ -78,6 +78,12 @@ type optimisticUpdateAltair struct {
 	attestedHeader interfaces.LightClientHeader
 }
 
+// NewEmptyOptimisticUpdateAltair normally should never be called and NewOptimisticUpdateFromUpdate should be used instead.
+// This function exists only for scenarios where an empty struct is required.
+func NewEmptyOptimisticUpdateAltair() interfaces.LightClientOptimisticUpdate {
+	return &optimisticUpdateAltair{}
+}
+
 func (u *optimisticUpdateAltair) IsNil() bool {
 	return u == nil || u.p == nil
 }
@@ -156,6 +162,12 @@ type optimisticUpdateCapella struct {
 	attestedHeader interfaces.LightClientHeader
 }
 
+// NewEmptyOptimisticUpdateCapella normally should never be called and NewOptimisticUpdateFromUpdate should be used instead.
+// This function exists only for scenarios where an empty struct is required.
+func NewEmptyOptimisticUpdateCapella() interfaces.LightClientOptimisticUpdate {
+	return &optimisticUpdateCapella{}
+}
+
 func (u *optimisticUpdateCapella) IsNil() bool {
 	return u == nil || u.p == nil
 }
@@ -232,6 +244,12 @@ func (u *optimisticUpdateCapella) SignatureSlot() primitives.Slot {
 type optimisticUpdateDeneb struct {
 	p              *pb.LightClientOptimisticUpdateDeneb
 	attestedHeader interfaces.LightClientHeader
+}
+
+// NewEmptyOptimisticUpdateDeneb normally should never be called and NewOptimisticUpdateFromUpdate should be used instead.
+// This function exists only for scenarios where an empty struct is required.
+func NewEmptyOptimisticUpdateDeneb() interfaces.LightClientOptimisticUpdate {
+	return &optimisticUpdateDeneb{}
 }
 
 func (u *optimisticUpdateDeneb) IsNil() bool {
