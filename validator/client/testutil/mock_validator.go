@@ -24,50 +24,50 @@ var _ iface.Validator = (*FakeValidator)(nil)
 
 // FakeValidator for mocking.
 type FakeValidator struct {
-	DoneCalled                        bool
-	WaitForWalletInitializationCalled bool
-	SlasherReadyCalled                bool
-	NextSlotCalled                    bool
-	UpdateDutiesCalled                bool
-	UpdateProtectionsCalled           bool
-	RoleAtCalled                      bool
-	AttestToBlockHeadCalled           bool
-	ProposeBlockCalled                bool
+	IsRegularDeadline                 bool
 	LogValidatorGainsAndLossesCalled  bool
 	SaveProtectionsCalled             bool
 	DeleteProtectionCalled            bool
 	SlotDeadlineCalled                bool
 	HandleKeyReloadCalled             bool
-	WaitForChainStartCalled           int
-	WaitForSyncCalled                 int
-	WaitForActivationCalled           int
-	CanonicalHeadSlotCalled           int
-	ReceiveBlocksCalled               int
-	RetryTillSuccess                  int
-	ProposeBlockArg1                  uint64
-	AttestToBlockHeadArg1             uint64
-	RoleAtArg1                        uint64
-	UpdateDutiesArg1                  uint64
-	NextSlotRet                       <-chan primitives.Slot
-	PublicKey                         string
-	UpdateDutiesRet                   error
-	ProposerSettingsErr               error
-	RolesAtRet                        []iface.ValidatorRole
-	Balances                          map[[fieldparams.BLSPubkeyLength]byte]uint64
+	WaitForWalletInitializationCalled bool
+	SlasherReadyCalled                bool
+	NextSlotCalled                    bool
+	AttestToBlockHeadCalled           bool
+	DoneCalled                        bool
+	ProposeBlockCalled                bool
+	UpdateProtectionsCalled           bool
+	UpdateDutiesCalled                bool
+	RoleAtCalled                      bool
 	IndexToPubkeyMap                  map[uint64][fieldparams.BLSPubkeyLength]byte
 	PubkeyToIndexMap                  map[[fieldparams.BLSPubkeyLength]byte]uint64
 	PubkeysToStatusesMap              map[[fieldparams.BLSPubkeyLength]byte]ethpb.ValidatorStatus
-	proposerSettings                  *proposer.Settings
 	ProposerSettingWait               time.Duration
-	Km                                keymanager.IKeymanager
-	graffiti                          string
-	Tracker                           health.Tracker
+	NextSlotRet                       <-chan primitives.Slot
+	UpdateDutiesArg1                  uint64
+	RoleAtArg1                        uint64
+	AttestToBlockHeadArg1             uint64
+	ProposeBlockArg1                  uint64
+	RetryTillSuccess                  int
+	Balances                          map[[fieldparams.BLSPubkeyLength]byte]uint64
+	CanonicalHeadSlotCalled           int
+	WaitForActivationCalled           int
+	WaitForSyncCalled                 int
+	WaitForChainStartCalled           int
 	AttSubmitted                      chan interface{}
 	BlockProposed                     chan interface{}
 	AccountsChannel                   chan [][fieldparams.BLSPubkeyLength]byte
 	EventsChannel                     chan *event.Event
 	GenesisT                          uint64
-	IsRegularDeadline                 bool
+	ReceiveBlocksCalled               int
+	proposerSettings                  *proposer.Settings
+	UpdateDutiesRet                   error
+	ProposerSettingsErr               error
+	Km                                keymanager.IKeymanager
+	graffiti                          string
+	Tracker                           health.Tracker
+	PublicKey                         string
+	RolesAtRet                        []iface.ValidatorRole
 }
 
 // Done for mocking.
