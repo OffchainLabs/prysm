@@ -699,7 +699,9 @@ func TestDataColumnsSidecarInclusionProven(t *testing.T) {
 				firstColumn.SignedBlockHeader.Header.BodyRoot[0] = byte0 ^ 255
 			}
 
-			initializer := Initializer{}
+			initializer := Initializer{
+				shared: &sharedResources{ic: newInclusionProofCache(1)},
+			}
 			verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
 			err := verifier.SidecarInclusionProven()
 			require.Equal(t, true, verifier.results.executed(RequireSidecarInclusionProven))
