@@ -10,7 +10,6 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v6/consensus-types/payload-attribute",
     visibility = ["//visibility:public"],
     deps = [
-        "//beacon-chain/state:go_default_library",
         "//config/fieldparams:go_default_library",
         "//consensus-types:go_default_library",
         "//consensus-types/blocks:go_default_library",
