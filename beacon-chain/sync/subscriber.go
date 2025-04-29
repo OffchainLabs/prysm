@@ -365,10 +365,9 @@ func (s *Service) wrapAndReportValidation(topic string, v wrappedVal) (string, p
 	}
 }
 
-// reValidateSubscriptions unsubscribe from topics we are currently subscribed to but that are
+// pruneSubscriptions unsubscribe from topics we are currently subscribed to but that are
 // not in the list of wanted subnets.
-// TODO: Rename this functions as it does not only revalidate subscriptions.
-func (s *Service) reValidateSubscriptions(
+func (s *Service) pruneSubscriptions(
 	subscriptions map[uint64]*pubsub.Subscription,
 	wantedSubs []uint64,
 	topicFormat string,
@@ -467,7 +466,7 @@ func (s *Service) subscribeToSubnets(
 			"digest":  fmt.Sprintf("%#x", digest),
 			"subnets": description,
 		}).Debug("Subnets with this digest are no longer valid, unsubscribing from all of them")
-		s.reValidateSubscriptions(subscriptions, []uint64{}, topicFormat, digest)
+		s.pruneSubscriptions(subscriptions, []uint64{}, topicFormat, digest)
 		return false
 	}
 
@@ -475,7 +474,7 @@ func (s *Service) subscribeToSubnets(
 	subnetsToSubscribeIndex := getSubnetsToSubscribe(currentSlot)
 
 	// Remove subscriptions that are no longer wanted.
-	s.reValidateSubscriptions(subscriptions, subnetsToSubscribeIndex, topicFormat, digest)
+	s.pruneSubscriptions(subscriptions, subnetsToSubscribeIndex, topicFormat, digest)
 
 	// Subscribe to wanted subnets.
 	for _, subnetIndex := range subnetsToSubscribeIndex {

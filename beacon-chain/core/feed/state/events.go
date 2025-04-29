@@ -43,6 +43,10 @@ type BlockProcessedData struct {
 	BlockRoot [32]byte
 	// SignedBlock is the physical processed block.
 	SignedBlock interfaces.ReadOnlySignedBeaconBlock
+	// CurrDependentRoot is the current dependent root
+	CurrDependentRoot [32]byte
+	// PrevDependentRoot is the previous dependent root
+	PrevDependentRoot [32]byte
 	// Verified is true if the block's BLS contents have been verified.
 	Verified bool
 	// Optimistic is true if the block is optimistic.

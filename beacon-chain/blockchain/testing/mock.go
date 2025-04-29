@@ -53,6 +53,7 @@ type ChainService struct {
 	InitSyncBlockRoots          map[[32]byte]bool
 	DB                          db.Database
 	State                       state.BeaconState
+	HeadStateErr                error
 	Block                       interfaces.ReadOnlySignedBeaconBlock
 	VerifyBlkDescendantErr      error
 	stateNotifier               statefeed.Notifier
@@ -365,6 +366,9 @@ func (s *ChainService) HeadState(context.Context) (state.BeaconState, error) {
 
 // HeadStateReadOnly mocks HeadStateReadOnly method in chain service.
 func (s *ChainService) HeadStateReadOnly(context.Context) (state.ReadOnlyBeaconState, error) {
+	if s.HeadStateErr != nil {
+		return nil, s.HeadStateErr
+	}
 	return s.State, nil
 }
 
@@ -726,4 +730,15 @@ func (*ChainService) ReceiveDataColumns(_ []blocks.VerifiedRODataColumn) error {
 // TargetRootForEpoch mocks the same method in the chain service
 func (c *ChainService) TargetRootForEpoch(_ [32]byte, _ primitives.Epoch) ([32]byte, error) {
 	return c.TargetRoot, nil
+}
+
+// MockSyncChecker is a mock implementation of blockchain.Checker.
+// We can't make an assertion here that this is true because that would create a circular dependency.
+type MockSyncChecker struct {
+	synced bool
+}
+
+// Synced satisfies the blockchain.Checker interface.
+func (m *MockSyncChecker) Synced() bool {
+	return m.synced
 }
