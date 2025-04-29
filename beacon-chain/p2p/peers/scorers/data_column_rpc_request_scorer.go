@@ -1,13 +1,13 @@
 package scorers
 
 import (
+	"fmt"
 	"math"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/pkg/errors"
 )
 
 var _ Scorer = (*DataColumnRPCRequestScorer)(nil)
@@ -113,7 +113,7 @@ func (s *DataColumnRPCRequestScorer) IsBadPeer(pid peer.ID) error {
 // isBadPeerNoLock is a lock-free version of IsBadPeer.
 func (s *DataColumnRPCRequestScorer) isBadPeerNoLock(pid peer.ID) error {
 	if peerData, ok := s.store.PeerData(pid); ok && peerData.DataColumnRequestCount >= s.config.Threshold {
-		return errors.New("exceeded data column request threshold")
+		return fmt.Errorf("bad peer %s: request count %d exceeds threshold %d", pid, peerData.DataColumnRequestCount, s.config.Threshold)
 	}
 	return nil
 }
