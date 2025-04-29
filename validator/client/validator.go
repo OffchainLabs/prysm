@@ -687,6 +687,10 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 	v.dutiesLock.RLock()
 	defer v.dutiesLock.RUnlock()
 
+	if v.duties == nil {
+		return nil, errors.New("validator duties are not initialized")
+	}
+
 	var (
 		rolesAt = make(map[[fieldparams.BLSPubkeyLength]byte][]iface.ValidatorRole)
 
