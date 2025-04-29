@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/api/client/beacon/health"
 	"github.com/OffchainLabs/prysm/v6/api/client/event"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/config/proposer"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -66,6 +67,7 @@ type FakeValidator struct {
 	AccountsChannel                   chan [][fieldparams.BLSPubkeyLength]byte
 	EventsChannel                     chan *event.Event
 	GenesisT                          uint64
+	IsRegularDeadline                 bool
 }
 
 // Done for mocking.
@@ -146,6 +148,9 @@ func (fv *FakeValidator) CanonicalHeadSlot(_ context.Context) (primitives.Slot, 
 // SlotDeadline for mocking.
 func (fv *FakeValidator) SlotDeadline(_ primitives.Slot) time.Time {
 	fv.SlotDeadlineCalled = true
+	if fv.IsRegularDeadline {
+		return prysmTime.Now().Add(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+	}
 	return prysmTime.Now()
 }
 

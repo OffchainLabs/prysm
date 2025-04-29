@@ -49,7 +49,7 @@ func TestUpdateDuties_NextSlot(t *testing.T) {
 	node.EXPECT().IsHealthy(gomock.Any()).Return(true).AnyTimes()
 	// avoid race condition between the cancellation of the context in the go stream from slot and the setting of IsHealthy
 	_ = tracker.CheckHealth(context.Background())
-	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, Tracker: tracker}
+	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, Tracker: tracker, IsRegularDeadline: true}
 	ctx, cancel := context.WithCancel(context.Background())
 
 	slot := primitives.Slot(55)
@@ -76,7 +76,7 @@ func TestUpdateDuties_HandlesError(t *testing.T) {
 	node.EXPECT().IsHealthy(gomock.Any()).Return(true).AnyTimes()
 	// avoid race condition between the cancellation of the context in the go stream from slot and the setting of IsHealthy
 	_ = tracker.CheckHealth(context.Background())
-	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, Tracker: tracker}
+	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, Tracker: tracker, IsRegularDeadline: true}
 	ctx, cancel := context.WithCancel(context.Background())
 
 	slot := primitives.Slot(55)
@@ -102,7 +102,7 @@ func TestRoleAt_NextSlot(t *testing.T) {
 	node.EXPECT().IsHealthy(gomock.Any()).Return(true).AnyTimes()
 	// avoid race condition between the cancellation of the context in the go stream from slot and the setting of IsHealthy
 	_ = tracker.CheckHealth(context.Background())
-	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, Tracker: tracker}
+	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, Tracker: tracker, IsRegularDeadline: true}
 	ctx, cancel := context.WithCancel(context.Background())
 
 	slot := primitives.Slot(55)
@@ -129,7 +129,7 @@ func TestAttests_NextSlot(t *testing.T) {
 	// avoid race condition between the cancellation of the context in the go stream from slot and the setting of IsHealthy
 	_ = tracker.CheckHealth(context.Background())
 	attSubmitted := make(chan interface{})
-	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, Tracker: tracker, AttSubmitted: attSubmitted}
+	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, Tracker: tracker, AttSubmitted: attSubmitted, IsRegularDeadline: true}
 	ctx, cancel := context.WithCancel(context.Background())
 
 	slot := primitives.Slot(55)
@@ -156,7 +156,7 @@ func TestProposes_NextSlot(t *testing.T) {
 	// avoid race condition between the cancellation of the context in the go stream from slot and the setting of IsHealthy
 	_ = tracker.CheckHealth(context.Background())
 	blockProposed := make(chan interface{})
-	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, Tracker: tracker, BlockProposed: blockProposed}
+	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, Tracker: tracker, BlockProposed: blockProposed, IsRegularDeadline: true}
 	ctx, cancel := context.WithCancel(context.Background())
 
 	slot := primitives.Slot(55)
@@ -185,7 +185,7 @@ func TestBothProposesAndAttests_NextSlot(t *testing.T) {
 	_ = tracker.CheckHealth(context.Background())
 	blockProposed := make(chan interface{})
 	attSubmitted := make(chan interface{})
-	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, Tracker: tracker, BlockProposed: blockProposed, AttSubmitted: attSubmitted}
+	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, Tracker: tracker, BlockProposed: blockProposed, AttSubmitted: attSubmitted, IsRegularDeadline: true}
 	ctx, cancel := context.WithCancel(context.Background())
 
 	slot := primitives.Slot(55)
@@ -258,7 +258,7 @@ func TestUpdateProposerSettingsAt_EpochStart(t *testing.T) {
 	node := health.NewMockHealthClient(ctrl)
 	tracker := health.NewTracker(node)
 	node.EXPECT().IsHealthy(gomock.Any()).Return(true).AnyTimes()
-	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, Tracker: tracker}
+	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, Tracker: tracker, IsRegularDeadline: true}
 	err := v.SetProposerSettings(context.Background(), &proposer.Settings{
 		DefaultConfig: &proposer.Option{
 			FeeRecipientConfig: &proposer.FeeRecipientConfig{
@@ -292,6 +292,7 @@ func TestUpdateProposerSettingsAt_EpochEndOk(t *testing.T) {
 		Km:                  &mockKeymanager{accountsChangedFeed: &event.Feed{}},
 		ProposerSettingWait: time.Duration(params.BeaconConfig().SecondsPerSlot-1) * time.Second,
 		Tracker:             tracker,
+		IsRegularDeadline:   true,
 	}
 	err := v.SetProposerSettings(context.Background(), &proposer.Settings{
 		DefaultConfig: &proposer.Option{
