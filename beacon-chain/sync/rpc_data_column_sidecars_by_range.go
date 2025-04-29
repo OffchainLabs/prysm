@@ -43,7 +43,7 @@ func (s *Service) streamDataColumnBatch(ctx context.Context, batch blockBatch, w
 		for _, verifiedRODataColumn := range verifiedRODataColumns {
 			// Record the request for scoring if the column is recent enough.
 			if scorer := s.cfg.p2p.Peers().Scorers().DataColumnRPCRequestScorer(); scorer != nil {
-				scorer.RecordRequest(stream.Conn().RemotePeer(), uint64(currentSlot), uint64(verifiedRODataColumn.SignedBlockHeader.Header.Slot))
+				scorer.RecordRequest(stream.Conn().RemotePeer(), currentSlot, verifiedRODataColumn.SignedBlockHeader.Header.Slot)
 			}
 
 			SetStreamWriteDeadline(stream, defaultWriteDuration)

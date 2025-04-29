@@ -143,7 +143,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 
 			// Record the request for scoring if the column is recent enough.
 			if scorer := s.cfg.p2p.Peers().Scorers().DataColumnRPCRequestScorer(); scorer != nil {
-				scorer.RecordRequest(stream.Conn().RemotePeer(), uint64(cs), uint64(verifiedRODataColumn.SignedBlockHeader.Header.Slot))
+				scorer.RecordRequest(stream.Conn().RemotePeer(), cs, verifiedRODataColumn.SignedBlockHeader.Header.Slot)
 			}
 
 			SetStreamWriteDeadline(stream, defaultWriteDuration)

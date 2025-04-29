@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -241,9 +242,9 @@ func TestScorers_Service_Score(t *testing.T) {
 
 		// Record some requests
 		pid := peer.ID("peer1")
-		currentSlot := uint64(100)
-		recentColumnSlot := uint64(90) // Within MaxGossipAgeSlots (default 16)
-		oldColumnSlot := uint64(50)    // Older than MaxGossipAgeSlots
+		currentSlot := primitives.Slot(100)
+		recentColumnSlot := primitives.Slot(90) // Within MaxGossipAgeSlots (default 16)
+		oldColumnSlot := primitives.Slot(50)    // Older than MaxGossipAgeSlots
 		// Record a request for a recent column (should be penalized)
 		s1.RecordRequest(pid, currentSlot, recentColumnSlot)
 		// Record a request for an old column (should NOT be penalized)

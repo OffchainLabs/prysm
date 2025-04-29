@@ -8,16 +8,17 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 // Use a fixed current slot for deterministic testing.
-const currentSlot uint64 = 1000
+const currentSlot primitives.Slot = 1000
 
 // Define MaxGossipAgeSlots based on default or ensure it's accessible if customized.
-const maxGossipAgeSlots = scorers.DefaultDataColumnMaxGossipAgeSlots
+const maxGossipAgeSlots = primitives.Slot(scorers.DefaultDataColumnMaxGossipAgeSlots)
 
 // Helper to create a new scorer for isolated sub-tests
 func newDataColumnScorer(ctx context.Context, cfg *scorers.DataColumnRPCRequestScorerConfig) *scorers.DataColumnRPCRequestScorer {
@@ -78,7 +79,8 @@ func TestScorers_DataColumnRPCRequest_Score(t *testing.T) {
 			update: func(scorer *scorers.DataColumnRPCRequestScorer) {
 				// Make 10 requests for recent slots (currentSlot - columnSlot < maxGossipAgeSlots)
 				for i := range 10 {
-					scorer.RecordRequest(peer.ID("peer1"), currentSlot, currentSlot-uint64(i%int(maxGossipAgeSlots))) // Vary recent slots
+					columnSlot := currentSlot - primitives.Slot(i%int(maxGossipAgeSlots))
+					scorer.RecordRequest(peer.ID("peer1"), currentSlot, columnSlot) // Vary recent slots
 				}
 			},
 			check: func(scorer *scorers.DataColumnRPCRequestScorer) {

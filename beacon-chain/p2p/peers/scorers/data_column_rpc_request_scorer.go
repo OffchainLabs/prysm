@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 )
@@ -133,13 +134,13 @@ func (s *DataColumnRPCRequestScorer) BadPeers() []peer.ID {
 
 // RecordRequest records a potentially downscorable data column RPC request for a peer.
 // Downscoring only occurs if the requested columnSlot is recent enough compared to the currentSlot.
-func (s *DataColumnRPCRequestScorer) RecordRequest(pid peer.ID, currentSlot, columnSlot uint64) {
+func (s *DataColumnRPCRequestScorer) RecordRequest(pid peer.ID, currentSlot, columnSlot primitives.Slot) {
 	if pid == "" {
 		return
 	}
 	// Check if the column is recent enough to warrant downscoring.
 	// A peer shouldn't be penalized for requesting old columns it might have missed.
-	if columnSlot+s.config.MaxGossipAgeSlots < currentSlot {
+	if uint64(columnSlot)+s.config.MaxGossipAgeSlots < uint64(currentSlot) {
 		return
 	}
 
