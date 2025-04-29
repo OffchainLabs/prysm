@@ -128,12 +128,13 @@ func (s *Service) validateLightClientFinalityUpdate(ctx context.Context, pid pee
 	if lastStoredUpdate != nil {
 		lastUpdateSlot := lastStoredUpdate.FinalizedHeader().Beacon().Slot
 		newUpdateSlot := newUpdate.FinalizedHeader().Beacon().Slot
-		lastUpdateHasSupermajority := lightClient.UpdateHasSupermajority(lastStoredUpdate.SyncAggregate())
-		newUpdateHasSupermajority := lightClient.UpdateHasSupermajority(newUpdate.SyncAggregate())
 
 		// [IGNORE] The finalized_header.beacon.slot is greater than that of all previously forwarded finality_updates,
 		// or it matches the highest previously forwarded slot and also has a sync_aggregate indicating supermajority (> 2/3)
 		// sync committee participation while the previously forwarded finality_update for that slot did not indicate supermajority
+		lastUpdateHasSupermajority := lightClient.UpdateHasSupermajority(lastStoredUpdate.SyncAggregate())
+		newUpdateHasSupermajority := lightClient.UpdateHasSupermajority(newUpdate.SyncAggregate())
+
 		if newUpdateSlot < lastUpdateSlot {
 			log.Debug("Newly received light client finality update ignored. new update is older than stored update")
 			return pubsub.ValidationIgnore, nil
