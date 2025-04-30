@@ -2587,6 +2587,18 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 		require.ErrorContains(t, "get blobs V2 for block", err)
 	})
 
+	t.Run("nothing received", func(t *testing.T) {
+		srv := createBlobServerV2(t, 0, []bool{})
+		defer srv.Close()
+
+		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
+		defer rpcClient.Close()
+
+		dataColumns, err := client.ReconstructDataColumnSidecars(ctx, sb, r)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(dataColumns))
+	})
+
 	t.Run("receiving all blobs", func(t *testing.T) {
 		blobMasks := []bool{true, true, true, true, true, true}
 		srv := createBlobServerV2(t, 6, blobMasks)

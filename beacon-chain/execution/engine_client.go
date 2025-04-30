@@ -655,8 +655,16 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 // ReconstructDataColumnSidecars reconstructs the verified data column sidecars for a given beacon block.
 // It retrieves the KZG commitments from the block body, fetches the associated blobs and cell proofs from the EL,
 // and constructs the corresponding verified read-only data column sidecars.
-func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte) ([]blocks.VerifiedRODataColumn, error) {
-	blockBody := block.Block().Body()
+func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, signedROBlock interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte) ([]blocks.VerifiedRODataColumn, error) {
+	block := signedROBlock.Block()
+	blockBody := block.Body()
+	blockSlot := block.Slot()
+
+	log := log.WithFields(logrus.Fields{
+		"root": fmt.Sprintf("%#x", blockRoot),
+		"slot": blockSlot,
+	})
+
 	kzgCommitments, err := blockBody.BlobKzgCommitments()
 	if err != nil {
 		return nil, wrapWithBlockRoot(err, blockRoot, "blob KZG commitments")
@@ -674,30 +682,44 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, block inter
 		return nil, wrapWithBlockRoot(err, blockRoot, "get blobs V2")
 	}
 
-	var cellsAndProofs []kzg.CellsAndProofs
+	// Return early if nothing is returned from the EL.
+	if len(blobAndProofV2s) == 0 {
+		log.Debug("No blobs returned from EL")
+		return nil, nil
+	}
+
+	// Compute all cells and proofs.
+	// Reminder: `engine_getBlobsV2` returns the (non extended) blob (64 cells),
+	// and the proofs corresponding to the extended blob (128 proofs, one per extended cell).
+	// We need to reconstruct the cells corresponding to the blob extension.
+	// https://github.com/ethereum/execution-apis/blob/main/src/engine/osaka.md#engine_getblobsv2
+	maxBlobCount := params.BeaconConfig().MaxBlobsPerBlock(blockSlot)
+	cellsAndProofs := make([]kzg.CellsAndProofs, 0, maxBlobCount)
 	for _, blobAndProof := range blobAndProofV2s {
 		if blobAndProof == nil {
-			return nil, wrapWithBlockRoot(errors.New("unable to reconstruct data column sidecars, did not get all blobs from EL"), blockRoot, "")
+			return nil, errors.Errorf("unable to reconstruct data column sidecars, did not get all blobs from EL for block %#x", blockRoot)
 		}
 
 		var blob kzg.Blob
 		copy(blob[:], blobAndProof.Blob)
+
 		cells, err := kzg.ComputeCells(&blob)
 		if err != nil {
-			return nil, wrapWithBlockRoot(err, blockRoot, "could not compute cells")
+			return nil, wrapWithBlockRoot(err, blockRoot, "compute cells")
 		}
 
-		proofs := make([]kzg.Proof, len(blobAndProof.KzgProofs))
-		for i, proof := range blobAndProof.KzgProofs {
-			proofs[i] = kzg.Proof(proof)
+		proofs := make([]kzg.Proof, 0, len(blobAndProof.KzgProofs))
+		for _, proof := range blobAndProof.KzgProofs {
+			proofs = append(proofs, kzg.Proof(proof))
 		}
+
 		cellsAndProofs = append(cellsAndProofs, kzg.CellsAndProofs{
 			Cells:  cells,
 			Proofs: proofs,
 		})
 	}
 
-	header, err := block.Header()
+	header, err := signedROBlock.Header()
 	if err != nil {
 		return nil, wrapWithBlockRoot(err, blockRoot, "could not get header")
 	}
@@ -723,10 +745,7 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, block inter
 		verifiedRODataColumns[i] = blocks.NewVerifiedRODataColumn(roDataColumn)
 	}
 
-	log.WithFields(logrus.Fields{
-		"root": fmt.Sprintf("%#x", blockRoot),
-		"slot": block.Block().Slot(),
-	}).Debug("Data columns successfully reconstructed from EL")
+	log.Debug("Data columns successfully reconstructed from EL")
 
 	return verifiedRODataColumns, nil
 }
