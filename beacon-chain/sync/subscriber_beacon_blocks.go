@@ -114,6 +114,11 @@ func (s *Service) reconstructAndBroadcastDataColumnSidecars(ctx context.Context,
 		return
 	}
 
+	// Return early if no blobs are retrieved from the EL.
+	if len(sidecars) == 0 {
+		return
+	}
+
 	nodeID := s.cfg.p2p.NodeID()
 
 	s.cfg.custodyInfo.Mut.RLock()
