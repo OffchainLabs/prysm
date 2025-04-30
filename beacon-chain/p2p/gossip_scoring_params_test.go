@@ -75,4 +75,6 @@ func TestLoggingParameters(_ *testing.T) {
 	logGossipParameters("testing", defaultAttesterSlashingTopicParams())
 	logGossipParameters("testing", defaultProposerSlashingTopicParams())
 	logGossipParameters("testing", defaultVoluntaryExitTopicParams())
+	logGossipParameters("testing", defaultLightClientOptimisticUpdateTopicParams())
+	logGossipParameters("testing", defaultLightClientFinalityUpdateTopicParams())
 }

@@ -43,7 +43,7 @@ func run(ctx context.Context, v iface.Validator) {
 	if err != nil {
 		return // Exit if context is canceled.
 	}
-	if err := v.UpdateDuties(ctx, headSlot); err != nil {
+	if err := v.UpdateDuties(ctx); err != nil {
 		handleAssignmentError(err, headSlot)
 	}
 	eventsChan := make(chan *event.Event, 1)
@@ -89,11 +89,13 @@ func run(ctx context.Context, v iface.Validator) {
 
 			// Keep trying to update assignments if they are nil or if we are past an
 			// epoch transition in the beacon node's state.
-			if err := v.UpdateDuties(slotCtx, slot); err != nil {
-				handleAssignmentError(err, slot)
-				span.End()
-				cancel()
-				continue
+			if slots.IsEpochStart(slot) {
+				if err := v.UpdateDuties(slotCtx); err != nil {
+					handleAssignmentError(err, slot)
+					span.End()
+					cancel()
+					continue
+				}
 			}
 
 			// call push proposer settings often to account for the following edge cases:
@@ -125,7 +127,7 @@ func run(ctx context.Context, v iface.Validator) {
 					log.WithError(err).Error("Failed to re initialize validator and get head slot")
 					continue
 				}
-				if err := v.UpdateDuties(ctx, headSlot); err != nil {
+				if err := v.UpdateDuties(ctx); err != nil {
 					handleAssignmentError(err, headSlot)
 					continue
 				}
