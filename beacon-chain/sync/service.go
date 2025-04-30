@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	lru "github.com/hashicorp/golang-lru"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
@@ -165,6 +166,7 @@ type Service struct {
 	availableBlocker                 coverage.AvailableBlocker
 	ctxMap                           ContextByteVersions
 	slasherEnabled                   bool
+	lcStore                          *lightClient.Store
 }
 
 // NewService initializes new regular sync service.

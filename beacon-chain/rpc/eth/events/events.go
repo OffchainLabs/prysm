@@ -37,7 +37,6 @@ import (
 )
 
 const DefaultEventFeedDepth = 1000
-const payloadAttributeTimeout = 2 * time.Second
 
 const (
 	InvalidTopic = "__invalid__"
@@ -627,6 +626,7 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 }
 
 var errUnsupportedPayloadAttribute = errors.New("cannot compute payload attributes pre-Bellatrix")
+var errPayloadAttributeExpired = errors.New("skipping payload attribute event for past slot")
 
 func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnlyBeaconState, root [32]byte, proposer primitives.ValidatorIndex, timestamp uint64, randao []byte) (payloadattribute.Attributer, error) {
 	v := st.Version()
@@ -711,7 +711,7 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 			return ev, errors.Wrap(err, "could not get head state")
 		}
 		// double check that we need to process_slots, just in case we got here via a hot state cache miss.
-		if slots.ToEpoch(st.Slot()) == pse {
+		if slots.ToEpoch(st.Slot()) < pse {
 			start, err := slots.EpochStart(pse)
 			if err != nil {
 				return ev, errors.Wrap(err, "invalid state slot; could not compute epoch start")
@@ -750,7 +750,11 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 // This event stream is intended to be used by builders and relays.
 // Parent fields are based on state at N_{current_slot}, while the rest of fields are based on state of N_{current_slot + 1}
 func (s *Server) payloadAttributesReader(ctx context.Context, ev payloadattribute.EventData) (lazyReader, error) {
-	ctx, cancel := context.WithTimeout(ctx, payloadAttributeTimeout)
+	deadline := slots.BeginsAt(ev.ProposalSlot, s.ChainInfoFetcher.GenesisTime())
+	if deadline.Before(time.Now()) {
+		return nil, errors.Wrapf(errPayloadAttributeExpired, "proposal slot time %d", deadline.Unix())
+	}
+	ctx, cancel := context.WithDeadline(ctx, deadline)
 	edc := make(chan asyncPayloadAttrData)
 	go func() {
 		d := asyncPayloadAttrData{}

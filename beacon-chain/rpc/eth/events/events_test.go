@@ -523,11 +523,14 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 				// to avoid slot processing
 				require.NoError(t, st.SetSlot(currentSlot+1))
 				b := tc.getBlock()
+				genesis := time.Now()
+				require.NoError(t, st.SetGenesisTime(uint64(genesis.Unix())))
 				mockChainService := &mockChain.ChainService{
-					Root:  make([]byte, 32),
-					State: st,
-					Block: b,
-					Slot:  &currentSlot,
+					Root:    make([]byte, 32),
+					State:   st,
+					Block:   b,
+					Slot:    &currentSlot,
+					Genesis: genesis,
 				}
 				headRoot, err := b.Block().HashTreeRoot()
 				require.NoError(t, err)
@@ -557,7 +560,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 						Type: statefeed.PayloadAttributes,
 						Data: payloadattribute.EventData{
 							ProposerIndex:     0,
-							ProposalSlot:      0,
+							ProposalSlot:      mockChainService.CurrentSlot() + 1,
 							ParentBlockNumber: 0,
 							ParentBlockHash:   make([]byte, 32),
 							HeadBlock:         b,

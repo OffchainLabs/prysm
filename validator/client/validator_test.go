@@ -392,11 +392,17 @@ func TestUpdateDuties_DoesNothingWhenNotEpochStart_AlreadyExistingAssignments(t 
 	defer ctrl.Finish()
 	client := validatormock.NewMockValidatorClient(ctrl)
 
-	slot := primitives.Slot(1)
 	v := validator{
+		km:              newMockKeymanager(t, randKeypair(t)),
 		validatorClient: client,
 		duties: &ethpb.ValidatorDutiesContainer{
 			CurrentEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					AttesterSlot:   10,
+					CommitteeIndex: 20,
+				},
+			},
+			NextEpochDuties: []*ethpb.ValidatorDuty{
 				{
 					AttesterSlot:   10,
 					CommitteeIndex: 20,
@@ -407,9 +413,9 @@ func TestUpdateDuties_DoesNothingWhenNotEpochStart_AlreadyExistingAssignments(t 
 	client.EXPECT().Duties(
 		gomock.Any(),
 		gomock.Any(),
-	).Times(0)
+	).Times(1)
 
-	assert.NoError(t, v.UpdateDuties(context.Background(), slot), "Could not update assignments")
+	assert.NoError(t, v.UpdateDuties(context.Background()), "Could not update assignments")
 }
 
 func TestUpdateDuties_ReturnsError(t *testing.T) {
@@ -436,7 +442,7 @@ func TestUpdateDuties_ReturnsError(t *testing.T) {
 		gomock.Any(),
 	).Return(nil, expected)
 
-	assert.ErrorContains(t, expected.Error(), v.UpdateDuties(context.Background(), params.BeaconConfig().SlotsPerEpoch))
+	assert.ErrorContains(t, expected.Error(), v.UpdateDuties(context.Background()))
 	assert.Equal(t, (*ethpb.ValidatorDutiesContainer)(nil), v.duties, "Assignments should have been cleared on failure")
 }
 
@@ -445,7 +451,6 @@ func TestUpdateDuties_OK(t *testing.T) {
 	defer ctrl.Finish()
 	client := validatormock.NewMockValidatorClient(ctrl)
 
-	slot := params.BeaconConfig().SlotsPerEpoch
 	resp := &ethpb.ValidatorDutiesContainer{
 		CurrentEpochDuties: []*ethpb.ValidatorDuty{
 			{
@@ -479,7 +484,7 @@ func TestUpdateDuties_OK(t *testing.T) {
 		return nil, nil
 	})
 
-	require.NoError(t, v.UpdateDuties(context.Background(), slot), "Could not update assignments")
+	require.NoError(t, v.UpdateDuties(context.Background()), "Could not update assignments")
 
 	util.WaitTimeout(&wg, 2*time.Second)
 
@@ -494,7 +499,6 @@ func TestUpdateDuties_OK_FilterBlacklistedPublicKeys(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	client := validatormock.NewMockValidatorClient(ctrl)
-	slot := params.BeaconConfig().SlotsPerEpoch
 
 	numValidators := 10
 	km := genMockKeymanager(t, numValidators)
@@ -527,7 +531,7 @@ func TestUpdateDuties_OK_FilterBlacklistedPublicKeys(t *testing.T) {
 		return nil, nil
 	})
 
-	require.NoError(t, v.UpdateDuties(context.Background(), slot), "Could not update assignments")
+	require.NoError(t, v.UpdateDuties(context.Background()), "Could not update assignments")
 
 	util.WaitTimeout(&wg, 2*time.Second)
 
@@ -541,7 +545,6 @@ func TestUpdateDuties_AllValidatorsExited(t *testing.T) {
 	defer ctrl.Finish()
 	client := validatormock.NewMockValidatorClient(ctrl)
 
-	slot := params.BeaconConfig().SlotsPerEpoch
 	resp := &ethpb.ValidatorDutiesContainer{
 		CurrentEpochDuties: []*ethpb.ValidatorDuty{
 			{
@@ -573,7 +576,7 @@ func TestUpdateDuties_AllValidatorsExited(t *testing.T) {
 		gomock.Any(),
 	).Return(resp, nil)
 
-	err := v.UpdateDuties(context.Background(), slot)
+	err := v.UpdateDuties(context.Background())
 	require.ErrorContains(t, ErrValidatorsAllExited.Error(), err)
 
 }
@@ -659,7 +662,7 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 		return nil, nil
 	})
 
-	require.NoError(t, v.UpdateDuties(context.Background(), slot), "Could not update assignments")
+	require.NoError(t, v.UpdateDuties(context.Background()), "Could not update assignments")
 	util.WaitTimeout(&wg, 2*time.Second)
 	require.Equal(t, 2, len(v.attSelections))
 }

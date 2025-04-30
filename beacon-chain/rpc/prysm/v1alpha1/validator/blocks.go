@@ -9,7 +9,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -67,6 +66,7 @@ func (vs *Server) StreamSlots(req *ethpb.StreamSlotsRequest, stream ethpb.Beacon
 		select {
 		case ev := <-ch:
 			var s primitives.Slot
+			var currDependentRoot, prevDependentRoot [32]byte
 			if req.VerifiedOnly {
 				if ev.Type != statefeed.BlockProcessed {
 					continue
@@ -76,6 +76,8 @@ func (vs *Server) StreamSlots(req *ethpb.StreamSlotsRequest, stream ethpb.Beacon
 					continue
 				}
 				s = data.Slot
+				currDependentRoot = data.CurrDependentRoot
+				prevDependentRoot = data.PrevDependentRoot
 			} else {
 				if ev.Type != blockfeed.ReceivedBlock {
 					continue
@@ -85,24 +87,14 @@ func (vs *Server) StreamSlots(req *ethpb.StreamSlotsRequest, stream ethpb.Beacon
 					continue
 				}
 				s = data.SignedBlock.Block().Slot()
-			}
-			currEpoch := slots.ToEpoch(s)
-			currDepRoot, err := vs.ForkchoiceFetcher.DependentRoot(currEpoch)
-			if err != nil {
-				return status.Errorf(codes.Internal, "Could not get dependent root: %v", err)
-			}
-			prevDepRoot := currDepRoot
-			if currEpoch > 0 {
-				prevDepRoot, err = vs.ForkchoiceFetcher.DependentRoot(currEpoch - 1)
-				if err != nil {
-					return status.Errorf(codes.Internal, "Could not get dependent root: %v", err)
-				}
+				currDependentRoot = data.CurrDependentRoot
+				prevDependentRoot = data.PrevDependentRoot
 			}
 			if err := stream.Send(
 				&ethpb.StreamSlotsResponse{
 					Slot:                      s,
-					PreviousDutyDependentRoot: prevDepRoot[:],
-					CurrentDutyDependentRoot:  currDepRoot[:],
+					PreviousDutyDependentRoot: prevDependentRoot[:],
+					CurrentDutyDependentRoot:  currDependentRoot[:],
 				}); err != nil {
 				return status.Errorf(codes.Unavailable, "Could not send over stream: %v", err)
 			}

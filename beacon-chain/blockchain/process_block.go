@@ -735,7 +735,7 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 		}
 		// notifyForkchoiceUpdate fires the payload attribute event. But in this case, we won't
 		// call notifyForkchoiceUpdate, so the event is fired here.
-		go firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), headBlock, headRoot, s.CurrentSlot()+1)
+		go s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), headBlock, headRoot, s.CurrentSlot()+1)
 		return
 	}
 

@@ -719,3 +719,14 @@ func (c *ChainService) ReceiveBlob(_ context.Context, b blocks.VerifiedROBlob) e
 func (c *ChainService) TargetRootForEpoch(_ [32]byte, _ primitives.Epoch) ([32]byte, error) {
 	return c.TargetRoot, nil
 }
+
+// MockSyncChecker is a mock implementation of blockchain.Checker.
+// We can't make an assertion here that this is true because that would create a circular dependency.
+type MockSyncChecker struct {
+	synced bool
+}
+
+// Synced satisfies the blockchain.Checker interface.
+func (m *MockSyncChecker) Synced() bool {
+	return m.synced
+}
