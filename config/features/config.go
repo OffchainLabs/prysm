@@ -40,7 +40,7 @@ const disabledFeatureFlag = "Disabled feature flag"
 // Flags is a struct to represent which features the client will perform on runtime.
 type Flags struct {
 	// Feature related flags.
-	EnableExperimentalState bool // EnableExperimentalState turns on the latest and greatest (but potentially unstable) changes to the beacon state.
+	EnableExperimentalState             bool // EnableExperimentalState turns on the latest and greatest (but potentially unstable) changes to the beacon state.
 	EnablePeerScorer                    bool // EnablePeerScorer enables experimental peer scoring in p2p.
 	EnableLightClient                   bool // EnableLightClient enables light client APIs.
 	EnableQUIC                          bool // EnableQUIC specifies whether to enable QUIC transport for libp2p.
@@ -189,7 +189,7 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(disableExperimentalState)
 		cfg.EnableExperimentalState = false
 	}
-	
+
 	if ctx.Bool(saveInvalidBlockTempFlag.Name) {
 		logEnabled(saveInvalidBlockTempFlag)
 		cfg.SaveInvalidBlock = true

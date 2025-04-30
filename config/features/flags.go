@@ -37,7 +37,7 @@ var (
 		Name:  "disable-experimental-state",
 		Usage: "Turns off the latest and greatest changes to the beacon state. Disabling this is safe to do after the feature has been enabled.",
 	}
-	
+
 	saveInvalidBlockTempFlag = &cli.BoolFlag{
 		Name:  "save-invalid-block-temp",
 		Usage: "Writes invalid blocks to temp directory.",
@@ -216,7 +216,6 @@ var E2EValidatorFlags = []string{
 var BeaconChainFlags = combinedFlags([]cli.Flag{
 	devModeFlag,
 	disableExperimentalState,
-	//writeSSZStateTransitionsFlag,
 	saveInvalidBlockTempFlag,
 	saveInvalidBlobTempFlag,
 	disableGRPCConnectionLogging,
