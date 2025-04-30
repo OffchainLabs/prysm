@@ -227,7 +227,7 @@ func (v *validator) Init(ctx context.Context) error {
 	if err := v.PushProposerSettings(ctx, currentSlot, true); err != nil {
 		return errors.Wrap(err, "Failed to update proposer settings")
 	}
-	v.setTicker()
+
 	log.WithFields(logrus.Fields{
 		"slot":                 currentSlot,
 		"time_until_next_slot": time.Until(v.SlotDeadline(currentSlot)),
@@ -393,7 +393,7 @@ func (v *validator) WaitForChainStart(ctx context.Context) error {
 		if err := v.db.SaveGenesisValidatorsRoot(ctx, chainStartRes.GenesisValidatorsRoot); err != nil {
 			return errors.Wrap(err, "could not save genesis validators root")
 		}
-
+		v.setTicker()
 		return nil
 	}
 
@@ -410,7 +410,7 @@ func (v *validator) WaitForChainStart(ctx context.Context) error {
 			curGenValRoot,
 		)
 	}
-
+	v.setTicker()
 	return nil
 }
 
