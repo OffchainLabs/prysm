@@ -576,16 +576,8 @@ func custodyColumnsFromPeers(peers []peer.ID, p2p p2p.P2P) (map[peer.ID]map[uint
 // `filterPeerWhichCustodyAtLeastOneDataColumn` filters peers which custody at least one data column
 // specified in `neededDataColumns`. It returns also a list of descriptions for non admissible peers.
 func filterPeerWhichCustodyAtLeastOneDataColumn(neededDataColumns []uint64, inputDataColumnsByPeer map[peer.ID]map[uint64]bool) (map[peer.ID]map[uint64]bool, []string) {
-	// Get the count of needed data columns.
-	neededDataColumnsCount := uint64(len(neededDataColumns))
-
 	// Create pretty needed data columns for logs.
-	var neededDataColumnsLog interface{} = "all"
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
-
-	if neededDataColumnsCount < numberOfColumns {
-		neededDataColumnsLog = neededDataColumns
-	}
 
 	outputDataColumnsByPeer := make(map[peer.ID]map[uint64]bool, len(inputDataColumnsByPeer))
 	descriptions := make([]string, 0)
@@ -607,11 +599,7 @@ outerLoop:
 			peerCustodyColumnsLog = uint64MapToSortedSlice(peerCustodyDataColumns)
 		}
 
-		description := fmt.Sprintf(
-			"peer %s: does not custody any needed column, custody columns: %v, needed columns: %v",
-			peer, peerCustodyColumnsLog, neededDataColumnsLog,
-		)
-
+		description := fmt.Sprintf("peer %s: does not custody any needed column, custody columns: %v", peer, peerCustodyColumnsLog)
 		descriptions = append(descriptions, description)
 	}
 
