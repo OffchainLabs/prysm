@@ -286,7 +286,7 @@ func (s *Service) BroadcastLightClientOptimisticUpdate(ctx context.Context, upda
 	}
 
 	if err := s.broadcastObject(ctx, update, lcOptimisticToTopic(forkDigest)); err != nil {
-		log.Debug("Failed to broadcast light client optimistic update")
+		log.WithError(err).Debug("Failed to broadcast light client optimistic update")
 		err := errors.Wrap(err, "could not publish message")
 		tracing.AnnotateError(span, err)
 		return err
