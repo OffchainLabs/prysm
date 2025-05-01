@@ -163,7 +163,23 @@ func WriteBlobSidecarChunk(stream libp2pcore.Stream, tor blockchain.TemporalOrac
 }
 
 func WriteLightClientBootstrapChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, encoding encoder.NetworkEncoding, bootstrap interfaces.LightClientBootstrap) error {
-	return nil
+	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
+		return err
+	}
+
+	valRoot := tor.GenesisValidatorsRoot()
+	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(bootstrap.Header().Beacon().Slot), valRoot[:])
+	if err != nil {
+		return err
+	}
+
+	obtainedCtx := digest[:]
+	if err = writeContextToStream(obtainedCtx, stream); err != nil {
+		return err
+	}
+
+	_, err = encoding.EncodeWithMaxLength(stream, bootstrap)
+	return err
 }
 
 func WriteLightClientUpdateChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, encoding encoder.NetworkEncoding, update interfaces.LightClientUpdate) error {
