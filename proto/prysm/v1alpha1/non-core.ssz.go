@@ -685,8 +685,8 @@ func (m *MetaDataV2) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	}
 	dst = append(dst, m.Syncnets...)
 
-	// Field (3) 'CustodySubnetCount'
-	dst = ssz.MarshalUint64(dst, m.CustodySubnetCount)
+	// Field (3) 'CustodyGroupCount'
+	dst = ssz.MarshalUint64(dst, m.CustodyGroupCount)
 
 	return
 }
@@ -714,8 +714,8 @@ func (m *MetaDataV2) UnmarshalSSZ(buf []byte) error {
 	}
 	m.Syncnets = append(m.Syncnets, buf[16:17]...)
 
-	// Field (3) 'CustodySubnetCount'
-	m.CustodySubnetCount = ssz.UnmarshallUint64(buf[17:25])
+	// Field (3) 'CustodyGroupCount'
+	m.CustodyGroupCount = ssz.UnmarshallUint64(buf[17:25])
 
 	return err
 }
@@ -752,8 +752,8 @@ func (m *MetaDataV2) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	}
 	hh.PutBytes(m.Syncnets)
 
-	// Field (3) 'CustodySubnetCount'
-	hh.PutUint64(m.CustodySubnetCount)
+	// Field (3) 'CustodyGroupCount'
+	hh.PutUint64(m.CustodyGroupCount)
 
 	hh.Merkleize(indx)
 	return

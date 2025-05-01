@@ -190,38 +190,38 @@ func InitializeDataMaps() {
 	// Reset our light client optimistic update map.
 	LightClientOptimisticUpdateMap = map[[4]byte]func() (interfaces.LightClientOptimisticUpdate, error){
 		bytesutil.ToBytes4(params.BeaconConfig().AltairForkVersion): func() (interfaces.LightClientOptimisticUpdate, error) {
-			return &lightclientConsensusTypes.OptimisticUpdateAltair{}, nil
+			return lightclientConsensusTypes.NewEmptyOptimisticUpdateAltair(), nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().BellatrixForkVersion): func() (interfaces.LightClientOptimisticUpdate, error) {
-			return &lightclientConsensusTypes.OptimisticUpdateAltair{}, nil
+			return lightclientConsensusTypes.NewEmptyOptimisticUpdateAltair(), nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().CapellaForkVersion): func() (interfaces.LightClientOptimisticUpdate, error) {
-			return &lightclientConsensusTypes.OptimisticUpdateCapella{}, nil
+			return lightclientConsensusTypes.NewEmptyOptimisticUpdateCapella(), nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().DenebForkVersion): func() (interfaces.LightClientOptimisticUpdate, error) {
-			return &lightclientConsensusTypes.OptimisticUpdateDeneb{}, nil
+			return lightclientConsensusTypes.NewEmptyOptimisticUpdateDeneb(), nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().ElectraForkVersion): func() (interfaces.LightClientOptimisticUpdate, error) {
-			return &lightclientConsensusTypes.OptimisticUpdateDeneb{}, nil
+			return lightclientConsensusTypes.NewEmptyOptimisticUpdateDeneb(), nil
 		},
 	}
 
 	// Reset our light client finality update map.
 	LightClientFinalityUpdateMap = map[[4]byte]func() (interfaces.LightClientFinalityUpdate, error){
 		bytesutil.ToBytes4(params.BeaconConfig().AltairForkVersion): func() (interfaces.LightClientFinalityUpdate, error) {
-			return &lightclientConsensusTypes.FinalityUpdateAltair{}, nil
+			return lightclientConsensusTypes.NewEmptyFinalityUpdateAltair(), nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().BellatrixForkVersion): func() (interfaces.LightClientFinalityUpdate, error) {
-			return &lightclientConsensusTypes.FinalityUpdateAltair{}, nil
+			return lightclientConsensusTypes.NewEmptyFinalityUpdateAltair(), nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().CapellaForkVersion): func() (interfaces.LightClientFinalityUpdate, error) {
-			return &lightclientConsensusTypes.FinalityUpdateCapella{}, nil
+			return lightclientConsensusTypes.NewEmptyFinalityUpdateCapella(), nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().DenebForkVersion): func() (interfaces.LightClientFinalityUpdate, error) {
-			return &lightclientConsensusTypes.FinalityUpdateDeneb{}, nil
+			return lightclientConsensusTypes.NewEmptyFinalityUpdateDeneb(), nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().ElectraForkVersion): func() (interfaces.LightClientFinalityUpdate, error) {
-			return &lightclientConsensusTypes.FinalityUpdateElectra{}, nil
+			return lightclientConsensusTypes.NewEmptyFinalityUpdateElectra(), nil
 		},
 	}
 }

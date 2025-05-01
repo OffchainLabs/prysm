@@ -514,13 +514,11 @@ func retrieveLatestRecord(recs []*dbCommon.AttestationRecord) *dbCommon.Attestat
 // UpdateDuties checks the slot number to determine if the validator's
 // list of upcoming assignments needs to be updated. For example, at the
 // beginning of a new epoch.
-func (v *validator) UpdateDuties(ctx context.Context, slot primitives.Slot) error {
-	if !slots.IsEpochStart(slot) && v.duties != nil {
-		// Do nothing if not epoch start AND assignments already exist.
-		return nil
-	}
+func (v *validator) UpdateDuties(ctx context.Context) error {
 	// Set deadline to end of epoch.
-	ss, err := slots.EpochStart(slots.ToEpoch(slot) + 1)
+	epoch := slots.ToEpoch(slots.CurrentSlot(v.genesisTime) + 1)
+
+	ss, err := slots.EpochStart(epoch + 1)
 	if err != nil {
 		return err
 	}
@@ -550,13 +548,13 @@ func (v *validator) UpdateDuties(ctx context.Context, slot primitives.Slot) erro
 	v.blacklistedPubkeysLock.RUnlock()
 
 	req := &ethpb.DutiesRequest{
-		Epoch:      primitives.Epoch(slot / params.BeaconConfig().SlotsPerEpoch),
+		Epoch:      epoch,
 		PublicKeys: bytesutil.FromBytes48Array(filteredKeys),
 	}
 
 	// If duties is nil it means we have had no prior duties and just started up.
 	resp, err := v.validatorClient.Duties(ctx, req)
-	if err != nil {
+	if err != nil || resp == nil {
 		v.dutiesLock.Lock()
 		v.duties = nil // Clear assignments so we know to retry the request.
 		v.dutiesLock.Unlock()
@@ -566,7 +564,7 @@ func (v *validator) UpdateDuties(ctx context.Context, slot primitives.Slot) erro
 
 	v.dutiesLock.Lock()
 	v.duties = resp
-	v.logDuties(slot, v.duties.CurrentEpochDuties, v.duties.NextEpochDuties)
+	v.logDuties(ss-params.BeaconConfig().SlotsPerEpoch, v.duties.CurrentEpochDuties, v.duties.NextEpochDuties)
 	v.dutiesLock.Unlock()
 
 	allExitedCounter := 0
@@ -688,6 +686,10 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 
 	v.dutiesLock.RLock()
 	defer v.dutiesLock.RUnlock()
+
+	if v.duties == nil {
+		return nil, errors.New("validator duties are not initialized")
+	}
 
 	var (
 		rolesAt = make(map[[fieldparams.BLSPubkeyLength]byte][]iface.ValidatorRole)
@@ -1148,21 +1150,11 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 	if err != nil {
 		return errors.Wrap(err, "failed to decode previous duty dependent root")
 	}
-	uintSlot, err := strconv.ParseUint(head.Slot, 10, 64)
-	if err != nil {
-		return errors.Wrap(err, "Failed to parse slot")
+	if bytes.Equal(prevDepedentRoot, params.BeaconConfig().ZeroHash[:]) {
+		return nil
 	}
-
-	slot := primitives.Slot(uintSlot)
-	currEpochStart, err := slots.EpochStart(slots.ToEpoch(slot))
-	if err != nil {
-		return err
-	}
-	deadline := v.SlotDeadline(slot)
-	slotCtx, cancel := context.WithDeadline(ctx, deadline)
-	defer cancel()
 	if !bytes.Equal(prevDepedentRoot, v.duties.PrevDependentRoot) {
-		if err := v.UpdateDuties(slotCtx, currEpochStart); err != nil {
+		if err := v.UpdateDuties(ctx); err != nil {
 			return errors.Wrap(err, "failed to update duties")
 		}
 		log.Info("Updated duties due to previous dependent root change")
@@ -1172,8 +1164,11 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 	if err != nil {
 		return errors.Wrap(err, "failed to decode current duty dependent root")
 	}
+	if bytes.Equal(currDepedentRoot, params.BeaconConfig().ZeroHash[:]) {
+		return nil
+	}
 	if !bytes.Equal(currDepedentRoot, v.duties.CurrDependentRoot) {
-		if err := v.UpdateDuties(slotCtx, currEpochStart); err != nil {
+		if err := v.UpdateDuties(ctx); err != nil {
 			return errors.Wrap(err, "failed to update duties")
 		}
 		log.Info("Updated duties due to current dependent root change")

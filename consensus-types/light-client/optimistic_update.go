@@ -78,7 +78,13 @@ type OptimisticUpdateAltair struct {
 	attestedHeader interfaces.LightClientHeader
 }
 
-func (u *OptimisticUpdateAltair) IsNil() bool {
+// NewEmptyOptimisticUpdateAltair normally should never be called and NewOptimisticUpdateFromUpdate should be used instead.
+// This function exists only for scenarios where an empty struct is required.
+func NewEmptyOptimisticUpdateAltair() interfaces.LightClientOptimisticUpdate {
+	return &optimisticUpdateAltair{}
+}
+
+func (u *optimisticUpdateAltair) IsNil() bool {
 	return u == nil || u.p == nil
 }
 
@@ -156,7 +162,13 @@ type OptimisticUpdateCapella struct {
 	attestedHeader interfaces.LightClientHeader
 }
 
-func (u *OptimisticUpdateCapella) IsNil() bool {
+// NewEmptyOptimisticUpdateCapella normally should never be called and NewOptimisticUpdateFromUpdate should be used instead.
+// This function exists only for scenarios where an empty struct is required.
+func NewEmptyOptimisticUpdateCapella() interfaces.LightClientOptimisticUpdate {
+	return &optimisticUpdateCapella{}
+}
+
+func (u *optimisticUpdateCapella) IsNil() bool {
 	return u == nil || u.p == nil
 }
 
@@ -234,7 +246,13 @@ type OptimisticUpdateDeneb struct {
 	attestedHeader interfaces.LightClientHeader
 }
 
-func (u *OptimisticUpdateDeneb) IsNil() bool {
+// NewEmptyOptimisticUpdateDeneb normally should never be called and NewOptimisticUpdateFromUpdate should be used instead.
+// This function exists only for scenarios where an empty struct is required.
+func NewEmptyOptimisticUpdateDeneb() interfaces.LightClientOptimisticUpdate {
+	return &optimisticUpdateDeneb{}
+}
+
+func (u *optimisticUpdateDeneb) IsNil() bool {
 	return u == nil || u.p == nil
 }
 

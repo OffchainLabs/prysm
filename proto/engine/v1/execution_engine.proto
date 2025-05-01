@@ -227,8 +227,8 @@ message Withdrawal {
 }
 
 // BlobsBundle is retrieved through engine-api from the execution layer client.
-// It consists of the necessary components for constructing a blobs sidecar
-// object to gossip through p2p.
+// It consists of the necessary components for constructing blob sidecars
+// objects to gossip through p2p.
 message BlobsBundle {
   // The KZG commitments of the blobs.
   repeated bytes kzg_commitments = 1 [
@@ -249,13 +249,45 @@ message BlobsBundle {
   ];
 }
 
+// BlobsBundleV2 is retrieved through engine-api from the execution layer client.
+// It consists of the necessary components for constructing data column sidecars
+// objects to gossip through p2p.
+// It is introduced in Fulu network upgrade.
+message BlobsBundleV2 {
+  repeated bytes kzg_commitments = 1 [
+    (ethereum.eth.ext.ssz_size) = "?,48",
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+  ];
+
+  repeated bytes proofs = 2 [
+    (ethereum.eth.ext.ssz_size) = "?,48",
+    (ethereum.eth.ext.ssz_max) = "max_cell_proofs_length.size" // Changed in EIP-7594
+  ];
+
+  repeated bytes blobs = 3 [
+    (ethereum.eth.ext.ssz_size) = "?,blob.size",
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+  ];
+}
+
 // Blob contains the data that is to be committed on chain.
 message Blob {
   // The blob bytes.
   bytes data = 1 [ (ethereum.eth.ext.ssz_size) = "blob.size" ];
 }
 
+// BlobAndProofV2 consists of the blob and the cell proofs for each cell in the blob.
 message BlobAndProof {
   bytes blob = 1 [ (ethereum.eth.ext.ssz_size) = "blob.size" ];
   bytes kzg_proof = 2 [ (ethereum.eth.ext.ssz_size) = "48" ];
+}
+
+// BlobAndProofV2 consists of the blob and the cell proofs for each cell in the blob.
+// It is introduced in Fulu network upgrade.
+message BlobAndProofV2 {
+  bytes blob = 1 [ (ethereum.eth.ext.ssz_size) = "blob.size" ];
+  repeated bytes kzg_proofs = 2 [ 
+    (ethereum.eth.ext.ssz_size) = "48",
+    (ethereum.eth.ext.ssz_max) = "max_cell_proofs_length.size"
+  ];
 }

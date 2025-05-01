@@ -12,7 +12,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // GetSyncMessageBlockRoot retrieves the sync committee block root of the beacon chain.
 func (vs *Server) GetSyncMessageBlockRoot(
@@ -34,7 +34,7 @@ func (vs *Server) GetSyncMessageBlockRoot(
 	}, nil
 }
 
-// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // SubmitSyncMessage submits the sync committee message to the network.
 // It also saves the sync committee message into the pending pool for block inclusion.
@@ -45,7 +45,7 @@ func (vs *Server) SubmitSyncMessage(ctx context.Context, msg *ethpb.SyncCommitte
 	return &emptypb.Empty{}, nil
 }
 
-// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // GetSyncSubcommitteeIndex is called by a sync committee participant to get
 // its subcommittee index for sync message aggregation duty.
@@ -63,7 +63,7 @@ func (vs *Server) GetSyncSubcommitteeIndex(
 	return &ethpb.SyncSubcommitteeIndexResponse{Indices: indices}, nil
 }
 
-// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // GetSyncCommitteeContribution is called by a sync committee aggregator
 // to retrieve sync committee contribution object.
@@ -106,7 +106,7 @@ func (vs *Server) GetSyncCommitteeContribution(
 	return contribution, nil
 }
 
-// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // SubmitSignedContributionAndProof is called by a sync committee aggregator
 // to submit signed contribution and proof object.
@@ -120,7 +120,7 @@ func (vs *Server) SubmitSignedContributionAndProof(
 	return &emptypb.Empty{}, nil
 }
 
-// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // AggregatedSigAndAggregationBits returns the aggregated signature and aggregation bits
 // associated with a particular set of sync committee messages.

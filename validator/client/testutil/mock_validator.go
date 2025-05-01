@@ -137,9 +137,8 @@ func (fv *FakeValidator) NextSlot() <-chan primitives.Slot {
 }
 
 // UpdateDuties for mocking.
-func (fv *FakeValidator) UpdateDuties(_ context.Context, slot primitives.Slot) error {
+func (fv *FakeValidator) UpdateDuties(_ context.Context) error {
 	fv.UpdateDutiesCalled = true
-	fv.UpdateDutiesArg1 = uint64(slot)
 	return fv.UpdateDutiesRet
 }
 
