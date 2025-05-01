@@ -30,7 +30,7 @@ func NewWrappedOptimisticUpdate(m proto.Message) (interfaces.LightClientOptimist
 func NewOptimisticUpdateFromUpdate(update interfaces.LightClientUpdate) (interfaces.LightClientOptimisticUpdate, error) {
 	switch t := update.(type) {
 	case *updateAltair:
-		return &OptimisticUpdateAltair{
+		return &optimisticUpdateAltair{
 			p: &pb.LightClientOptimisticUpdateAltair{
 				AttestedHeader: t.p.AttestedHeader,
 				SyncAggregate:  t.p.SyncAggregate,
@@ -39,7 +39,7 @@ func NewOptimisticUpdateFromUpdate(update interfaces.LightClientUpdate) (interfa
 			attestedHeader: t.attestedHeader,
 		}, nil
 	case *updateCapella:
-		return &OptimisticUpdateCapella{
+		return &optimisticUpdateCapella{
 			p: &pb.LightClientOptimisticUpdateCapella{
 				AttestedHeader: t.p.AttestedHeader,
 				SyncAggregate:  t.p.SyncAggregate,
@@ -48,7 +48,7 @@ func NewOptimisticUpdateFromUpdate(update interfaces.LightClientUpdate) (interfa
 			attestedHeader: t.attestedHeader,
 		}, nil
 	case *updateDeneb:
-		return &OptimisticUpdateDeneb{
+		return &optimisticUpdateDeneb{
 			p: &pb.LightClientOptimisticUpdateDeneb{
 				AttestedHeader: t.p.AttestedHeader,
 				SyncAggregate:  t.p.SyncAggregate,
@@ -57,7 +57,7 @@ func NewOptimisticUpdateFromUpdate(update interfaces.LightClientUpdate) (interfa
 			attestedHeader: t.attestedHeader,
 		}, nil
 	case *updateElectra:
-		return &OptimisticUpdateDeneb{
+		return &optimisticUpdateDeneb{
 			p: &pb.LightClientOptimisticUpdateDeneb{
 				AttestedHeader: t.p.AttestedHeader,
 				SyncAggregate:  t.p.SyncAggregate,
@@ -73,7 +73,7 @@ func NewOptimisticUpdateFromUpdate(update interfaces.LightClientUpdate) (interfa
 // In addition to the proto object being wrapped, we store some fields that have to be
 // constructed from the proto, so that we don't have to reconstruct them every time
 // in getters.
-type OptimisticUpdateAltair struct {
+type optimisticUpdateAltair struct {
 	p              *pb.LightClientOptimisticUpdateAltair
 	attestedHeader interfaces.LightClientHeader
 }
@@ -88,7 +88,7 @@ func (u *optimisticUpdateAltair) IsNil() bool {
 	return u == nil || u.p == nil
 }
 
-var _ interfaces.LightClientOptimisticUpdate = &OptimisticUpdateAltair{}
+var _ interfaces.LightClientOptimisticUpdate = &optimisticUpdateAltair{}
 
 func NewWrappedOptimisticUpdateAltair(p *pb.LightClientOptimisticUpdateAltair) (interfaces.LightClientOptimisticUpdate, error) {
 	if p == nil {
@@ -99,25 +99,25 @@ func NewWrappedOptimisticUpdateAltair(p *pb.LightClientOptimisticUpdateAltair) (
 		return nil, err
 	}
 
-	return &OptimisticUpdateAltair{
+	return &optimisticUpdateAltair{
 		p:              p,
 		attestedHeader: attestedHeader,
 	}, nil
 }
 
-func (u *OptimisticUpdateAltair) MarshalSSZTo(dst []byte) ([]byte, error) {
+func (u *optimisticUpdateAltair) MarshalSSZTo(dst []byte) ([]byte, error) {
 	return u.p.MarshalSSZTo(dst)
 }
 
-func (u *OptimisticUpdateAltair) MarshalSSZ() ([]byte, error) {
+func (u *optimisticUpdateAltair) MarshalSSZ() ([]byte, error) {
 	return u.p.MarshalSSZ()
 }
 
-func (u *OptimisticUpdateAltair) SizeSSZ() int {
+func (u *optimisticUpdateAltair) SizeSSZ() int {
 	return u.p.SizeSSZ()
 }
 
-func (u *OptimisticUpdateAltair) UnmarshalSSZ(buf []byte) error {
+func (u *optimisticUpdateAltair) UnmarshalSSZ(buf []byte) error {
 	p := &pb.LightClientOptimisticUpdateAltair{}
 	if err := p.UnmarshalSSZ(buf); err != nil {
 		return err
@@ -126,7 +126,7 @@ func (u *OptimisticUpdateAltair) UnmarshalSSZ(buf []byte) error {
 	if err != nil {
 		return err
 	}
-	update, ok := updateInterface.(*OptimisticUpdateAltair)
+	update, ok := updateInterface.(*optimisticUpdateAltair)
 	if !ok {
 		return fmt.Errorf("unexpected update type %T", updateInterface)
 	}
@@ -134,30 +134,30 @@ func (u *OptimisticUpdateAltair) UnmarshalSSZ(buf []byte) error {
 	return nil
 }
 
-func (u *OptimisticUpdateAltair) Proto() proto.Message {
+func (u *optimisticUpdateAltair) Proto() proto.Message {
 	return u.p
 }
 
-func (u *OptimisticUpdateAltair) Version() int {
+func (u *optimisticUpdateAltair) Version() int {
 	return version.Altair
 }
 
-func (u *OptimisticUpdateAltair) AttestedHeader() interfaces.LightClientHeader {
+func (u *optimisticUpdateAltair) AttestedHeader() interfaces.LightClientHeader {
 	return u.attestedHeader
 }
 
-func (u *OptimisticUpdateAltair) SyncAggregate() *pb.SyncAggregate {
+func (u *optimisticUpdateAltair) SyncAggregate() *pb.SyncAggregate {
 	return u.p.SyncAggregate
 }
 
-func (u *OptimisticUpdateAltair) SignatureSlot() primitives.Slot {
+func (u *optimisticUpdateAltair) SignatureSlot() primitives.Slot {
 	return u.p.SignatureSlot
 }
 
 // In addition to the proto object being wrapped, we store some fields that have to be
 // constructed from the proto, so that we don't have to reconstruct them every time
 // in getters.
-type OptimisticUpdateCapella struct {
+type optimisticUpdateCapella struct {
 	p              *pb.LightClientOptimisticUpdateCapella
 	attestedHeader interfaces.LightClientHeader
 }
@@ -172,7 +172,7 @@ func (u *optimisticUpdateCapella) IsNil() bool {
 	return u == nil || u.p == nil
 }
 
-var _ interfaces.LightClientOptimisticUpdate = &OptimisticUpdateCapella{}
+var _ interfaces.LightClientOptimisticUpdate = &optimisticUpdateCapella{}
 
 func NewWrappedOptimisticUpdateCapella(p *pb.LightClientOptimisticUpdateCapella) (interfaces.LightClientOptimisticUpdate, error) {
 	if p == nil {
@@ -183,25 +183,25 @@ func NewWrappedOptimisticUpdateCapella(p *pb.LightClientOptimisticUpdateCapella)
 		return nil, err
 	}
 
-	return &OptimisticUpdateCapella{
+	return &optimisticUpdateCapella{
 		p:              p,
 		attestedHeader: attestedHeader,
 	}, nil
 }
 
-func (u *OptimisticUpdateCapella) MarshalSSZTo(dst []byte) ([]byte, error) {
+func (u *optimisticUpdateCapella) MarshalSSZTo(dst []byte) ([]byte, error) {
 	return u.p.MarshalSSZTo(dst)
 }
 
-func (u *OptimisticUpdateCapella) MarshalSSZ() ([]byte, error) {
+func (u *optimisticUpdateCapella) MarshalSSZ() ([]byte, error) {
 	return u.p.MarshalSSZ()
 }
 
-func (u *OptimisticUpdateCapella) SizeSSZ() int {
+func (u *optimisticUpdateCapella) SizeSSZ() int {
 	return u.p.SizeSSZ()
 }
 
-func (u *OptimisticUpdateCapella) UnmarshalSSZ(buf []byte) error {
+func (u *optimisticUpdateCapella) UnmarshalSSZ(buf []byte) error {
 	p := &pb.LightClientOptimisticUpdateCapella{}
 	if err := p.UnmarshalSSZ(buf); err != nil {
 		return err
@@ -210,7 +210,7 @@ func (u *OptimisticUpdateCapella) UnmarshalSSZ(buf []byte) error {
 	if err != nil {
 		return err
 	}
-	update, ok := updateInterface.(*OptimisticUpdateCapella)
+	update, ok := updateInterface.(*optimisticUpdateCapella)
 	if !ok {
 		return fmt.Errorf("unexpected update type %T", updateInterface)
 	}
@@ -218,30 +218,30 @@ func (u *OptimisticUpdateCapella) UnmarshalSSZ(buf []byte) error {
 	return nil
 }
 
-func (u *OptimisticUpdateCapella) Proto() proto.Message {
+func (u *optimisticUpdateCapella) Proto() proto.Message {
 	return u.p
 }
 
-func (u *OptimisticUpdateCapella) Version() int {
+func (u *optimisticUpdateCapella) Version() int {
 	return version.Capella
 }
 
-func (u *OptimisticUpdateCapella) AttestedHeader() interfaces.LightClientHeader {
+func (u *optimisticUpdateCapella) AttestedHeader() interfaces.LightClientHeader {
 	return u.attestedHeader
 }
 
-func (u *OptimisticUpdateCapella) SyncAggregate() *pb.SyncAggregate {
+func (u *optimisticUpdateCapella) SyncAggregate() *pb.SyncAggregate {
 	return u.p.SyncAggregate
 }
 
-func (u *OptimisticUpdateCapella) SignatureSlot() primitives.Slot {
+func (u *optimisticUpdateCapella) SignatureSlot() primitives.Slot {
 	return u.p.SignatureSlot
 }
 
 // In addition to the proto object being wrapped, we store some fields that have to be
 // constructed from the proto, so that we don't have to reconstruct them every time
 // in getters.
-type OptimisticUpdateDeneb struct {
+type optimisticUpdateDeneb struct {
 	p              *pb.LightClientOptimisticUpdateDeneb
 	attestedHeader interfaces.LightClientHeader
 }
@@ -256,7 +256,7 @@ func (u *optimisticUpdateDeneb) IsNil() bool {
 	return u == nil || u.p == nil
 }
 
-var _ interfaces.LightClientOptimisticUpdate = &OptimisticUpdateDeneb{}
+var _ interfaces.LightClientOptimisticUpdate = &optimisticUpdateDeneb{}
 
 func NewWrappedOptimisticUpdateDeneb(p *pb.LightClientOptimisticUpdateDeneb) (interfaces.LightClientOptimisticUpdate, error) {
 	if p == nil {
@@ -267,25 +267,25 @@ func NewWrappedOptimisticUpdateDeneb(p *pb.LightClientOptimisticUpdateDeneb) (in
 		return nil, err
 	}
 
-	return &OptimisticUpdateDeneb{
+	return &optimisticUpdateDeneb{
 		p:              p,
 		attestedHeader: attestedHeader,
 	}, nil
 }
 
-func (u *OptimisticUpdateDeneb) MarshalSSZTo(dst []byte) ([]byte, error) {
+func (u *optimisticUpdateDeneb) MarshalSSZTo(dst []byte) ([]byte, error) {
 	return u.p.MarshalSSZTo(dst)
 }
 
-func (u *OptimisticUpdateDeneb) MarshalSSZ() ([]byte, error) {
+func (u *optimisticUpdateDeneb) MarshalSSZ() ([]byte, error) {
 	return u.p.MarshalSSZ()
 }
 
-func (u *OptimisticUpdateDeneb) SizeSSZ() int {
+func (u *optimisticUpdateDeneb) SizeSSZ() int {
 	return u.p.SizeSSZ()
 }
 
-func (u *OptimisticUpdateDeneb) UnmarshalSSZ(buf []byte) error {
+func (u *optimisticUpdateDeneb) UnmarshalSSZ(buf []byte) error {
 	p := &pb.LightClientOptimisticUpdateDeneb{}
 	if err := p.UnmarshalSSZ(buf); err != nil {
 		return err
@@ -294,7 +294,7 @@ func (u *OptimisticUpdateDeneb) UnmarshalSSZ(buf []byte) error {
 	if err != nil {
 		return err
 	}
-	update, ok := updateInterface.(*OptimisticUpdateDeneb)
+	update, ok := updateInterface.(*optimisticUpdateDeneb)
 	if !ok {
 		return fmt.Errorf("unexpected update type %T", updateInterface)
 	}
@@ -302,22 +302,22 @@ func (u *OptimisticUpdateDeneb) UnmarshalSSZ(buf []byte) error {
 	return nil
 }
 
-func (u *OptimisticUpdateDeneb) Proto() proto.Message {
+func (u *optimisticUpdateDeneb) Proto() proto.Message {
 	return u.p
 }
 
-func (u *OptimisticUpdateDeneb) Version() int {
+func (u *optimisticUpdateDeneb) Version() int {
 	return version.Deneb
 }
 
-func (u *OptimisticUpdateDeneb) AttestedHeader() interfaces.LightClientHeader {
+func (u *optimisticUpdateDeneb) AttestedHeader() interfaces.LightClientHeader {
 	return u.attestedHeader
 }
 
-func (u *OptimisticUpdateDeneb) SyncAggregate() *pb.SyncAggregate {
+func (u *optimisticUpdateDeneb) SyncAggregate() *pb.SyncAggregate {
 	return u.p.SyncAggregate
 }
 
-func (u *OptimisticUpdateDeneb) SignatureSlot() primitives.Slot {
+func (u *optimisticUpdateDeneb) SignatureSlot() primitives.Slot {
 	return u.p.SignatureSlot
 }

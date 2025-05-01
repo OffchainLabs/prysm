@@ -33,7 +33,7 @@ func NewWrappedFinalityUpdate(m proto.Message) (interfaces.LightClientFinalityUp
 func NewFinalityUpdateFromUpdate(update interfaces.LightClientUpdate) (interfaces.LightClientFinalityUpdate, error) {
 	switch t := update.(type) {
 	case *updateAltair:
-		return &FinalityUpdateAltair{
+		return &finalityUpdateAltair{
 			p: &pb.LightClientFinalityUpdateAltair{
 				AttestedHeader:  t.p.AttestedHeader,
 				FinalizedHeader: t.p.FinalizedHeader,
@@ -46,7 +46,7 @@ func NewFinalityUpdateFromUpdate(update interfaces.LightClientUpdate) (interface
 			finalityBranch:  t.finalityBranch,
 		}, nil
 	case *updateCapella:
-		return &FinalityUpdateCapella{
+		return &finalityUpdateCapella{
 			p: &pb.LightClientFinalityUpdateCapella{
 				AttestedHeader:  t.p.AttestedHeader,
 				FinalizedHeader: t.p.FinalizedHeader,
@@ -59,7 +59,7 @@ func NewFinalityUpdateFromUpdate(update interfaces.LightClientUpdate) (interface
 			finalityBranch:  t.finalityBranch,
 		}, nil
 	case *updateDeneb:
-		return &FinalityUpdateDeneb{
+		return &finalityUpdateDeneb{
 			p: &pb.LightClientFinalityUpdateDeneb{
 				AttestedHeader:  t.p.AttestedHeader,
 				FinalizedHeader: t.p.FinalizedHeader,
@@ -72,7 +72,7 @@ func NewFinalityUpdateFromUpdate(update interfaces.LightClientUpdate) (interface
 			finalityBranch:  t.finalityBranch,
 		}, nil
 	case *updateElectra:
-		return &FinalityUpdateElectra{
+		return &finalityUpdateElectra{
 			p: &pb.LightClientFinalityUpdateElectra{
 				AttestedHeader:  t.p.AttestedHeader,
 				FinalizedHeader: t.p.FinalizedHeader,
@@ -92,7 +92,7 @@ func NewFinalityUpdateFromUpdate(update interfaces.LightClientUpdate) (interface
 // In addition to the proto object being wrapped, we store some fields that have to be
 // constructed from the proto, so that we don't have to reconstruct them every time
 // in getters.
-type FinalityUpdateAltair struct {
+type finalityUpdateAltair struct {
 	p               *pb.LightClientFinalityUpdateAltair
 	attestedHeader  interfaces.LightClientHeader
 	finalizedHeader interfaces.LightClientHeader
@@ -109,7 +109,7 @@ func (u *finalityUpdateAltair) IsNil() bool {
 	return u == nil || u.p == nil
 }
 
-var _ interfaces.LightClientFinalityUpdate = &FinalityUpdateAltair{}
+var _ interfaces.LightClientFinalityUpdate = &finalityUpdateAltair{}
 
 func NewWrappedFinalityUpdateAltair(p *pb.LightClientFinalityUpdateAltair) (interfaces.LightClientFinalityUpdate, error) {
 	if p == nil {
@@ -132,7 +132,7 @@ func NewWrappedFinalityUpdateAltair(p *pb.LightClientFinalityUpdateAltair) (inte
 		return nil, err
 	}
 
-	return &FinalityUpdateAltair{
+	return &finalityUpdateAltair{
 		p:               p,
 		attestedHeader:  attestedHeader,
 		finalizedHeader: finalizedHeader,
@@ -140,19 +140,19 @@ func NewWrappedFinalityUpdateAltair(p *pb.LightClientFinalityUpdateAltair) (inte
 	}, nil
 }
 
-func (u *FinalityUpdateAltair) MarshalSSZTo(dst []byte) ([]byte, error) {
+func (u *finalityUpdateAltair) MarshalSSZTo(dst []byte) ([]byte, error) {
 	return u.p.MarshalSSZTo(dst)
 }
 
-func (u *FinalityUpdateAltair) MarshalSSZ() ([]byte, error) {
+func (u *finalityUpdateAltair) MarshalSSZ() ([]byte, error) {
 	return u.p.MarshalSSZ()
 }
 
-func (u *FinalityUpdateAltair) SizeSSZ() int {
+func (u *finalityUpdateAltair) SizeSSZ() int {
 	return u.p.SizeSSZ()
 }
 
-func (u *FinalityUpdateAltair) UnmarshalSSZ(buf []byte) error {
+func (u *finalityUpdateAltair) UnmarshalSSZ(buf []byte) error {
 	p := &pb.LightClientFinalityUpdateAltair{}
 	if err := p.UnmarshalSSZ(buf); err != nil {
 		return err
@@ -161,7 +161,7 @@ func (u *FinalityUpdateAltair) UnmarshalSSZ(buf []byte) error {
 	if err != nil {
 		return err
 	}
-	update, ok := updateInterface.(*FinalityUpdateAltair)
+	update, ok := updateInterface.(*finalityUpdateAltair)
 	if !ok {
 		return fmt.Errorf("unexpected update type %T", updateInterface)
 	}
@@ -169,42 +169,42 @@ func (u *FinalityUpdateAltair) UnmarshalSSZ(buf []byte) error {
 	return nil
 }
 
-func (u *FinalityUpdateAltair) Proto() proto.Message {
+func (u *finalityUpdateAltair) Proto() proto.Message {
 	return u.p
 }
 
-func (u *FinalityUpdateAltair) Version() int {
+func (u *finalityUpdateAltair) Version() int {
 	return version.Altair
 }
 
-func (u *FinalityUpdateAltair) AttestedHeader() interfaces.LightClientHeader {
+func (u *finalityUpdateAltair) AttestedHeader() interfaces.LightClientHeader {
 	return u.attestedHeader
 }
 
-func (u *FinalityUpdateAltair) FinalizedHeader() interfaces.LightClientHeader {
+func (u *finalityUpdateAltair) FinalizedHeader() interfaces.LightClientHeader {
 	return u.finalizedHeader
 }
 
-func (u *FinalityUpdateAltair) FinalityBranch() (interfaces.LightClientFinalityBranch, error) {
+func (u *finalityUpdateAltair) FinalityBranch() (interfaces.LightClientFinalityBranch, error) {
 	return u.finalityBranch, nil
 }
 
-func (u *FinalityUpdateAltair) FinalityBranchElectra() (interfaces.LightClientFinalityBranchElectra, error) {
+func (u *finalityUpdateAltair) FinalityBranchElectra() (interfaces.LightClientFinalityBranchElectra, error) {
 	return interfaces.LightClientFinalityBranchElectra{}, consensustypes.ErrNotSupported("FinalityBranchElectra", u.Version())
 }
 
-func (u *FinalityUpdateAltair) SyncAggregate() *pb.SyncAggregate {
+func (u *finalityUpdateAltair) SyncAggregate() *pb.SyncAggregate {
 	return u.p.SyncAggregate
 }
 
-func (u *FinalityUpdateAltair) SignatureSlot() primitives.Slot {
+func (u *finalityUpdateAltair) SignatureSlot() primitives.Slot {
 	return u.p.SignatureSlot
 }
 
 // In addition to the proto object being wrapped, we store some fields that have to be
 // constructed from the proto, so that we don't have to reconstruct them every time
 // in getters.
-type FinalityUpdateCapella struct {
+type finalityUpdateCapella struct {
 	p               *pb.LightClientFinalityUpdateCapella
 	attestedHeader  interfaces.LightClientHeader
 	finalizedHeader interfaces.LightClientHeader
@@ -221,7 +221,7 @@ func (u *finalityUpdateCapella) IsNil() bool {
 	return u == nil || u.p == nil
 }
 
-var _ interfaces.LightClientFinalityUpdate = &FinalityUpdateCapella{}
+var _ interfaces.LightClientFinalityUpdate = &finalityUpdateCapella{}
 
 func NewWrappedFinalityUpdateCapella(p *pb.LightClientFinalityUpdateCapella) (interfaces.LightClientFinalityUpdate, error) {
 	if p == nil {
@@ -244,7 +244,7 @@ func NewWrappedFinalityUpdateCapella(p *pb.LightClientFinalityUpdateCapella) (in
 		return nil, err
 	}
 
-	return &FinalityUpdateCapella{
+	return &finalityUpdateCapella{
 		p:               p,
 		attestedHeader:  attestedHeader,
 		finalizedHeader: finalizedHeader,
@@ -252,19 +252,19 @@ func NewWrappedFinalityUpdateCapella(p *pb.LightClientFinalityUpdateCapella) (in
 	}, nil
 }
 
-func (u *FinalityUpdateCapella) MarshalSSZTo(dst []byte) ([]byte, error) {
+func (u *finalityUpdateCapella) MarshalSSZTo(dst []byte) ([]byte, error) {
 	return u.p.MarshalSSZTo(dst)
 }
 
-func (u *FinalityUpdateCapella) MarshalSSZ() ([]byte, error) {
+func (u *finalityUpdateCapella) MarshalSSZ() ([]byte, error) {
 	return u.p.MarshalSSZ()
 }
 
-func (u *FinalityUpdateCapella) SizeSSZ() int {
+func (u *finalityUpdateCapella) SizeSSZ() int {
 	return u.p.SizeSSZ()
 }
 
-func (u *FinalityUpdateCapella) UnmarshalSSZ(buf []byte) error {
+func (u *finalityUpdateCapella) UnmarshalSSZ(buf []byte) error {
 	p := &pb.LightClientFinalityUpdateCapella{}
 	if err := p.UnmarshalSSZ(buf); err != nil {
 		return err
@@ -273,7 +273,7 @@ func (u *FinalityUpdateCapella) UnmarshalSSZ(buf []byte) error {
 	if err != nil {
 		return err
 	}
-	update, ok := updateInterface.(*FinalityUpdateCapella)
+	update, ok := updateInterface.(*finalityUpdateCapella)
 	if !ok {
 		return fmt.Errorf("unexpected update type %T", updateInterface)
 	}
@@ -281,42 +281,42 @@ func (u *FinalityUpdateCapella) UnmarshalSSZ(buf []byte) error {
 	return nil
 }
 
-func (u *FinalityUpdateCapella) Proto() proto.Message {
+func (u *finalityUpdateCapella) Proto() proto.Message {
 	return u.p
 }
 
-func (u *FinalityUpdateCapella) Version() int {
+func (u *finalityUpdateCapella) Version() int {
 	return version.Capella
 }
 
-func (u *FinalityUpdateCapella) AttestedHeader() interfaces.LightClientHeader {
+func (u *finalityUpdateCapella) AttestedHeader() interfaces.LightClientHeader {
 	return u.attestedHeader
 }
 
-func (u *FinalityUpdateCapella) FinalizedHeader() interfaces.LightClientHeader {
+func (u *finalityUpdateCapella) FinalizedHeader() interfaces.LightClientHeader {
 	return u.finalizedHeader
 }
 
-func (u *FinalityUpdateCapella) FinalityBranch() (interfaces.LightClientFinalityBranch, error) {
+func (u *finalityUpdateCapella) FinalityBranch() (interfaces.LightClientFinalityBranch, error) {
 	return u.finalityBranch, nil
 }
 
-func (u *FinalityUpdateCapella) FinalityBranchElectra() (interfaces.LightClientFinalityBranchElectra, error) {
+func (u *finalityUpdateCapella) FinalityBranchElectra() (interfaces.LightClientFinalityBranchElectra, error) {
 	return interfaces.LightClientFinalityBranchElectra{}, consensustypes.ErrNotSupported("FinalityBranchElectra", u.Version())
 }
 
-func (u *FinalityUpdateCapella) SyncAggregate() *pb.SyncAggregate {
+func (u *finalityUpdateCapella) SyncAggregate() *pb.SyncAggregate {
 	return u.p.SyncAggregate
 }
 
-func (u *FinalityUpdateCapella) SignatureSlot() primitives.Slot {
+func (u *finalityUpdateCapella) SignatureSlot() primitives.Slot {
 	return u.p.SignatureSlot
 }
 
 // In addition to the proto object being wrapped, we store some fields that have to be
 // constructed from the proto, so that we don't have to reconstruct them every time
 // in getters.
-type FinalityUpdateDeneb struct {
+type finalityUpdateDeneb struct {
 	p               *pb.LightClientFinalityUpdateDeneb
 	attestedHeader  interfaces.LightClientHeader
 	finalizedHeader interfaces.LightClientHeader
@@ -333,7 +333,7 @@ func (u *finalityUpdateDeneb) IsNil() bool {
 	return u == nil || u.p == nil
 }
 
-var _ interfaces.LightClientFinalityUpdate = &FinalityUpdateDeneb{}
+var _ interfaces.LightClientFinalityUpdate = &finalityUpdateDeneb{}
 
 func NewWrappedFinalityUpdateDeneb(p *pb.LightClientFinalityUpdateDeneb) (interfaces.LightClientFinalityUpdate, error) {
 	if p == nil {
@@ -356,7 +356,7 @@ func NewWrappedFinalityUpdateDeneb(p *pb.LightClientFinalityUpdateDeneb) (interf
 		return nil, err
 	}
 
-	return &FinalityUpdateDeneb{
+	return &finalityUpdateDeneb{
 		p:               p,
 		attestedHeader:  attestedHeader,
 		finalizedHeader: finalizedHeader,
@@ -364,19 +364,19 @@ func NewWrappedFinalityUpdateDeneb(p *pb.LightClientFinalityUpdateDeneb) (interf
 	}, nil
 }
 
-func (u *FinalityUpdateDeneb) MarshalSSZTo(dst []byte) ([]byte, error) {
+func (u *finalityUpdateDeneb) MarshalSSZTo(dst []byte) ([]byte, error) {
 	return u.p.MarshalSSZTo(dst)
 }
 
-func (u *FinalityUpdateDeneb) MarshalSSZ() ([]byte, error) {
+func (u *finalityUpdateDeneb) MarshalSSZ() ([]byte, error) {
 	return u.p.MarshalSSZ()
 }
 
-func (u *FinalityUpdateDeneb) SizeSSZ() int {
+func (u *finalityUpdateDeneb) SizeSSZ() int {
 	return u.p.SizeSSZ()
 }
 
-func (u *FinalityUpdateDeneb) UnmarshalSSZ(buf []byte) error {
+func (u *finalityUpdateDeneb) UnmarshalSSZ(buf []byte) error {
 	p := &pb.LightClientFinalityUpdateDeneb{}
 	if err := p.UnmarshalSSZ(buf); err != nil {
 		return err
@@ -385,7 +385,7 @@ func (u *FinalityUpdateDeneb) UnmarshalSSZ(buf []byte) error {
 	if err != nil {
 		return err
 	}
-	update, ok := updateInterface.(*FinalityUpdateDeneb)
+	update, ok := updateInterface.(*finalityUpdateDeneb)
 	if !ok {
 		return fmt.Errorf("unexpected update type %T", updateInterface)
 	}
@@ -393,42 +393,42 @@ func (u *FinalityUpdateDeneb) UnmarshalSSZ(buf []byte) error {
 	return nil
 }
 
-func (u *FinalityUpdateDeneb) Proto() proto.Message {
+func (u *finalityUpdateDeneb) Proto() proto.Message {
 	return u.p
 }
 
-func (u *FinalityUpdateDeneb) Version() int {
+func (u *finalityUpdateDeneb) Version() int {
 	return version.Deneb
 }
 
-func (u *FinalityUpdateDeneb) AttestedHeader() interfaces.LightClientHeader {
+func (u *finalityUpdateDeneb) AttestedHeader() interfaces.LightClientHeader {
 	return u.attestedHeader
 }
 
-func (u *FinalityUpdateDeneb) FinalizedHeader() interfaces.LightClientHeader {
+func (u *finalityUpdateDeneb) FinalizedHeader() interfaces.LightClientHeader {
 	return u.finalizedHeader
 }
 
-func (u *FinalityUpdateDeneb) FinalityBranch() (interfaces.LightClientFinalityBranch, error) {
+func (u *finalityUpdateDeneb) FinalityBranch() (interfaces.LightClientFinalityBranch, error) {
 	return u.finalityBranch, nil
 }
 
-func (u *FinalityUpdateDeneb) FinalityBranchElectra() (interfaces.LightClientFinalityBranchElectra, error) {
+func (u *finalityUpdateDeneb) FinalityBranchElectra() (interfaces.LightClientFinalityBranchElectra, error) {
 	return interfaces.LightClientFinalityBranchElectra{}, consensustypes.ErrNotSupported("FinalityBranchElectra", u.Version())
 }
 
-func (u *FinalityUpdateDeneb) SyncAggregate() *pb.SyncAggregate {
+func (u *finalityUpdateDeneb) SyncAggregate() *pb.SyncAggregate {
 	return u.p.SyncAggregate
 }
 
-func (u *FinalityUpdateDeneb) SignatureSlot() primitives.Slot {
+func (u *finalityUpdateDeneb) SignatureSlot() primitives.Slot {
 	return u.p.SignatureSlot
 }
 
 // In addition to the proto object being wrapped, we store some fields that have to be
 // constructed from the proto, so that we don't have to reconstruct them every time
 // in getters.
-type FinalityUpdateElectra struct {
+type finalityUpdateElectra struct {
 	p               *pb.LightClientFinalityUpdateElectra
 	attestedHeader  interfaces.LightClientHeader
 	finalizedHeader interfaces.LightClientHeader
@@ -445,7 +445,7 @@ func (u *finalityUpdateElectra) IsNil() bool {
 	return u == nil || u.p == nil
 }
 
-var _ interfaces.LightClientFinalityUpdate = &FinalityUpdateElectra{}
+var _ interfaces.LightClientFinalityUpdate = &finalityUpdateElectra{}
 
 func NewWrappedFinalityUpdateElectra(p *pb.LightClientFinalityUpdateElectra) (interfaces.LightClientFinalityUpdate, error) {
 	if p == nil {
@@ -469,7 +469,7 @@ func NewWrappedFinalityUpdateElectra(p *pb.LightClientFinalityUpdateElectra) (in
 		return nil, err
 	}
 
-	return &FinalityUpdateElectra{
+	return &finalityUpdateElectra{
 		p:               p,
 		attestedHeader:  attestedHeader,
 		finalizedHeader: finalizedHeader,
@@ -477,19 +477,19 @@ func NewWrappedFinalityUpdateElectra(p *pb.LightClientFinalityUpdateElectra) (in
 	}, nil
 }
 
-func (u *FinalityUpdateElectra) MarshalSSZTo(dst []byte) ([]byte, error) {
+func (u *finalityUpdateElectra) MarshalSSZTo(dst []byte) ([]byte, error) {
 	return u.p.MarshalSSZTo(dst)
 }
 
-func (u *FinalityUpdateElectra) MarshalSSZ() ([]byte, error) {
+func (u *finalityUpdateElectra) MarshalSSZ() ([]byte, error) {
 	return u.p.MarshalSSZ()
 }
 
-func (u *FinalityUpdateElectra) SizeSSZ() int {
+func (u *finalityUpdateElectra) SizeSSZ() int {
 	return u.p.SizeSSZ()
 }
 
-func (u *FinalityUpdateElectra) UnmarshalSSZ(buf []byte) error {
+func (u *finalityUpdateElectra) UnmarshalSSZ(buf []byte) error {
 	p := &pb.LightClientFinalityUpdateElectra{}
 	if err := p.UnmarshalSSZ(buf); err != nil {
 		return err
@@ -498,7 +498,7 @@ func (u *FinalityUpdateElectra) UnmarshalSSZ(buf []byte) error {
 	if err != nil {
 		return err
 	}
-	update, ok := updateInterface.(*FinalityUpdateElectra)
+	update, ok := updateInterface.(*finalityUpdateElectra)
 	if !ok {
 		return fmt.Errorf("unexpected update type %T", updateInterface)
 	}
@@ -506,34 +506,34 @@ func (u *FinalityUpdateElectra) UnmarshalSSZ(buf []byte) error {
 	return nil
 }
 
-func (u *FinalityUpdateElectra) Proto() proto.Message {
+func (u *finalityUpdateElectra) Proto() proto.Message {
 	return u.p
 }
 
-func (u *FinalityUpdateElectra) Version() int {
+func (u *finalityUpdateElectra) Version() int {
 	return version.Electra
 }
 
-func (u *FinalityUpdateElectra) AttestedHeader() interfaces.LightClientHeader {
+func (u *finalityUpdateElectra) AttestedHeader() interfaces.LightClientHeader {
 	return u.attestedHeader
 }
 
-func (u *FinalityUpdateElectra) FinalizedHeader() interfaces.LightClientHeader {
+func (u *finalityUpdateElectra) FinalizedHeader() interfaces.LightClientHeader {
 	return u.finalizedHeader
 }
 
-func (u *FinalityUpdateElectra) FinalityBranch() (interfaces.LightClientFinalityBranch, error) {
+func (u *finalityUpdateElectra) FinalityBranch() (interfaces.LightClientFinalityBranch, error) {
 	return interfaces.LightClientFinalityBranch{}, consensustypes.ErrNotSupported("FinalityBranch", u.Version())
 }
 
-func (u *FinalityUpdateElectra) FinalityBranchElectra() (interfaces.LightClientFinalityBranchElectra, error) {
+func (u *finalityUpdateElectra) FinalityBranchElectra() (interfaces.LightClientFinalityBranchElectra, error) {
 	return u.finalityBranch, nil
 }
 
-func (u *FinalityUpdateElectra) SyncAggregate() *pb.SyncAggregate {
+func (u *finalityUpdateElectra) SyncAggregate() *pb.SyncAggregate {
 	return u.p.SyncAggregate
 }
 
-func (u *FinalityUpdateElectra) SignatureSlot() primitives.Slot {
+func (u *finalityUpdateElectra) SignatureSlot() primitives.Slot {
 	return u.p.SignatureSlot
 }
