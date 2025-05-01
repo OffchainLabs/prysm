@@ -11,7 +11,7 @@ import (
 )
 
 // UpgradeToFulu updates inputs a generic state to return the version Fulu state.
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/fork.md#upgrading-the-state
+// https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/fork.md#upgrading-the-state
 func UpgradeToFulu(beaconState state.BeaconState) (state.BeaconState, error) {
 	currentSyncCommittee, err := beaconState.CurrentSyncCommittee()
 	if err != nil {
@@ -66,6 +66,10 @@ func UpgradeToFulu(beaconState state.BeaconState) (state.BeaconState, error) {
 		return nil, err
 	}
 	blobGasUsed, err := payloadHeader.BlobGasUsed()
+	if err != nil {
+		return nil, err
+	}
+	depositRequestsStartIndex, err := beaconState.DepositRequestsStartIndex()
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +158,7 @@ func UpgradeToFulu(beaconState state.BeaconState) (state.BeaconState, error) {
 		NextWithdrawalValidatorIndex: vi,
 		HistoricalSummaries:          summaries,
 
-		DepositRequestsStartIndex:     params.BeaconConfig().UnsetDepositRequestsStartIndex,
+		DepositRequestsStartIndex:     depositRequestsStartIndex,
 		DepositBalanceToConsume:       depositBalanceToConsume,
 		ExitBalanceToConsume:          exitBalanceToConsume,
 		EarliestExitEpoch:             earliestExitEpoch,

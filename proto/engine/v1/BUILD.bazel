@@ -2,14 +2,13 @@
 # Common
 ##############################################################################
 
-load("@rules_proto//proto:defs.bzl", "proto_library")
-
 ##############################################################################
 # Go
 ##############################################################################
 # gazelle:ignore
 load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
+load("@rules_proto//proto:defs.bzl", "proto_library")
 load("//proto:ssz_proto_library.bzl", "ssz_proto_files")
 load("//tools:ssz.bzl", "SSZ_DEPS", "ssz_gen_marshal")
 
@@ -30,8 +29,8 @@ proto_library(
 ##############################################################################
 ssz_gen_marshal(
     name = "ssz_generated_files",
-    go_proto = ":go_proto",
     out = "engine.ssz.go",
+    go_proto = ":go_proto",
     includes = [
         "//consensus-types/primitives:go_default_library",
     ],
@@ -42,9 +41,10 @@ ssz_gen_marshal(
         "ExecutionPayloadHeaderCapella",
         "ExecutionPayloadHeaderDeneb",
         "ExecutionPayloadDeneb",
-        'ExecutionPayloadDenebAndBlobsBundle',
+        "ExecutionPayloadDenebAndBlobsBundle",
         "BlindedBlobsBundle",
         "BlobsBundle",
+        "BlobsBundleV2",
         "Withdrawal",
         "WithdrawalRequest",
         "DepositRequest",
@@ -75,8 +75,10 @@ go_proto_library(
 go_library(
     name = "go_default_library",
     srcs = [
+        "blobs_bundle.go",
         "electra.go",
         "execution_engine.go",
+        "fulu.go",
         "json_marshal_unmarshal.go",
         ":ssz_generated_files",  # keep
     ],
@@ -111,8 +113,9 @@ go_library(
 ssz_proto_files(
     name = "ssz_proto_files",
     srcs = [
+        "electra.proto",
         "execution_engine.proto",
-	"electra.proto",
+        "fulu.proto",
     ],
     config = select({
         "//conditions:default": "mainnet",
@@ -124,8 +127,8 @@ ssz_proto_files(
 go_test(
     name = "go_default_test",
     srcs = [
-        "export_test.go",
         "execution_engine_fuzz_test.go",
+        "export_test.go",
         "json_marshal_unmarshal_test.go",
     ],
     embed = [":go_default_library"],
@@ -135,10 +138,10 @@ go_test(
         "//consensus-types/primitives:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//testing/require:go_default_library",
-        "@com_github_google_gofuzz//:go_default_library",
         "@com_github_ethereum_go_ethereum//common:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_ethereum_go_ethereum//core/types:go_default_library",
+        "@com_github_google_gofuzz//:go_default_library",
         "@com_github_holiman_uint256//:go_default_library",
     ],
 )

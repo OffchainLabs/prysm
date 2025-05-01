@@ -29,7 +29,7 @@ var nonExistentIndex = primitives.ValidatorIndex(^uint64(0))
 
 var errParticipation = status.Errorf(codes.Internal, "Failed to obtain epoch participation")
 
-// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // ValidatorStatus returns the validator status of the current epoch.
 // The status response can be one of the following:
@@ -54,7 +54,7 @@ func (vs *Server) ValidatorStatus(
 	return vStatus, nil
 }
 
-// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // MultipleValidatorStatus is the same as ValidatorStatus. Supports retrieval of multiple
 // validator statuses. Takes a list of public keys or a list of validator indices.
@@ -104,7 +104,7 @@ func (vs *Server) MultipleValidatorStatus(
 	}, nil
 }
 
-// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // CheckDoppelGanger checks if the provided keys are currently active in the network.
 func (vs *Server) CheckDoppelGanger(ctx context.Context, req *ethpb.DoppelGangerRequest) (*ethpb.DoppelGangerResponse, error) {

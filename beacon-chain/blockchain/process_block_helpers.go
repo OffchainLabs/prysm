@@ -103,15 +103,29 @@ func (s *Service) sendStateFeedOnBlock(cfg *postBlockProcessConfig) {
 		log.WithError(err).Debug("Could not check if block is optimistic")
 		optimistic = true
 	}
+	currEpoch := slots.ToEpoch(s.CurrentSlot())
+	currDependenRoot, err := s.cfg.ForkChoiceStore.DependentRoot(currEpoch)
+	if err != nil {
+		log.WithError(err).Debug("Could not get dependent root")
+	}
+	prevDependentRoot := [32]byte{}
+	if currEpoch > 0 {
+		prevDependentRoot, err = s.cfg.ForkChoiceStore.DependentRoot(currEpoch - 1)
+		if err != nil {
+			log.WithError(err).Debug("Could not get previous dependent root")
+		}
+	}
 	// Send notification of the processed block to the state feed.
 	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.BlockProcessed,
 		Data: &statefeed.BlockProcessedData{
-			Slot:        cfg.roblock.Block().Slot(),
-			BlockRoot:   cfg.roblock.Root(),
-			SignedBlock: cfg.roblock,
-			Verified:    true,
-			Optimistic:  optimistic,
+			Slot:              cfg.roblock.Block().Slot(),
+			BlockRoot:         cfg.roblock.Root(),
+			SignedBlock:       cfg.roblock,
+			CurrDependentRoot: currDependenRoot,
+			PrevDependentRoot: prevDependentRoot,
+			Verified:          true,
+			Optimistic:        optimistic,
 		},
 	})
 }
@@ -254,7 +268,7 @@ func (s *Service) processLightClientFinalityUpdate(
 		return errors.Wrapf(err, "could not get finalized block for root %#x", finalizedRoot)
 	}
 
-	update, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(
+	newUpdate, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(
 		ctx,
 		postState.Slot(),
 		postState,
@@ -268,9 +282,32 @@ func (s *Service) processLightClientFinalityUpdate(
 		return errors.Wrap(err, "could not create light client finality update")
 	}
 
+	lastUpdate := s.lcStore.LastFinalityUpdate()
+	if lastUpdate != nil {
+		// The finalized_header.beacon.lastUpdateSlot is greater than that of all previously forwarded finality_updates,
+		// or it matches the highest previously forwarded lastUpdateSlot and also has a sync_aggregate indicating supermajority (> 2/3)
+		// sync committee participation while the previously forwarded finality_update for that lastUpdateSlot did not indicate supermajority
+		newUpdateSlot := newUpdate.FinalizedHeader().Beacon().Slot
+		newHasSupermajority := lightclient.UpdateHasSupermajority(newUpdate.SyncAggregate())
+
+		lastUpdateSlot := lastUpdate.FinalizedHeader().Beacon().Slot
+		lastHasSupermajority := lightclient.UpdateHasSupermajority(lastUpdate.SyncAggregate())
+
+		if newUpdateSlot < lastUpdateSlot {
+			log.Debug("Skip saving light client finality newUpdate: Older than local newUpdate")
+			return nil
+		}
+		if newUpdateSlot == lastUpdateSlot && (lastHasSupermajority || !newHasSupermajority) {
+			log.Debug("Skip saving light client finality update: No supermajority advantage")
+			return nil
+		}
+	}
+	log.Debug("Saving new light client finality update")
+	s.lcStore.SetLastFinalityUpdate(newUpdate)
+
 	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.LightClientFinalityUpdate,
-		Data: update,
+		Data: newUpdate,
 	})
 	return nil
 }
@@ -287,7 +324,7 @@ func (s *Service) processLightClientOptimisticUpdate(ctx context.Context, signed
 		return errors.Wrapf(err, "could not get attested state for root %#x", attestedRoot)
 	}
 
-	update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(
+	newUpdate, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(
 		ctx,
 		postState.Slot(),
 		postState,
@@ -304,9 +341,21 @@ func (s *Service) processLightClientOptimisticUpdate(ctx context.Context, signed
 		return errors.Wrap(err, "could not create light client optimistic update")
 	}
 
+	lastUpdate := s.lcStore.LastOptimisticUpdate()
+	if lastUpdate != nil {
+		// The attested_header.beacon.slot is greater than that of all previously forwarded optimistic updates
+		if newUpdate.AttestedHeader().Beacon().Slot <= lastUpdate.AttestedHeader().Beacon().Slot {
+			log.Debug("Skip saving light client optimistic update: Older than local update")
+			return nil
+		}
+	}
+
+	log.Debug("Saving new light client optimistic update")
+	s.lcStore.SetLastOptimisticUpdate(newUpdate)
+
 	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.LightClientOptimisticUpdate,
-		Data: update,
+		Data: newUpdate,
 	})
 
 	return nil

@@ -10,9 +10,11 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/crypto/hash"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/network/forks"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
@@ -268,6 +270,58 @@ func (s *Service) internalBroadcastBlob(ctx context.Context, subnet uint64, blob
 	}
 }
 
+func (s *Service) BroadcastLightClientOptimisticUpdate(ctx context.Context, update interfaces.LightClientOptimisticUpdate) error {
+	ctx, span := trace.StartSpan(ctx, "p2p.BroadcastLightClientOptimisticUpdate")
+	defer span.End()
+
+	if update == nil || update.IsNil() {
+		return errors.New("attempted to broadcast nil light client optimistic update")
+	}
+
+	forkDigest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(update.AttestedHeader().Beacon().Slot), s.genesisValidatorsRoot)
+	if err != nil {
+		err := errors.Wrap(err, "could not retrieve fork digest")
+		tracing.AnnotateError(span, err)
+		return err
+	}
+
+	// TODO: should we check if the update is too early or too late to broadcast?
+
+	if err := s.broadcastObject(ctx, update, lcOptimisticToTopic(forkDigest)); err != nil {
+		err := errors.Wrap(err, "could not publish message")
+		tracing.AnnotateError(span, err)
+		return err
+	}
+
+	return nil
+}
+
+func (s *Service) BroadcastLightClientFinalityUpdate(ctx context.Context, update interfaces.LightClientFinalityUpdate) error {
+	ctx, span := trace.StartSpan(ctx, "p2p.BroadcastLightClientFinalityUpdate")
+	defer span.End()
+
+	if update == nil || update.IsNil() {
+		return errors.New("attempted to broadcast nil light client finality update")
+	}
+
+	forkDigest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(update.AttestedHeader().Beacon().Slot), s.genesisValidatorsRoot)
+	if err != nil {
+		err := errors.Wrap(err, "could not retrieve fork digest")
+		tracing.AnnotateError(span, err)
+		return err
+	}
+
+	// TODO: should we check if the update is too early or too late to broadcast?
+
+	if err := s.broadcastObject(ctx, update, lcFinalityToTopic(forkDigest)); err != nil {
+		err := errors.Wrap(err, "could not publish message")
+		tracing.AnnotateError(span, err)
+		return err
+	}
+
+	return nil
+}
+
 // method to broadcast messages to other peers in our gossip mesh.
 func (s *Service) broadcastObject(ctx context.Context, obj ssz.Marshaler, topic string) error {
 	ctx, span := trace.StartSpan(ctx, "p2p.broadcastObject")
@@ -307,4 +361,12 @@ func syncCommitteeToTopic(subnet uint64, forkDigest [4]byte) string {
 
 func blobSubnetToTopic(subnet uint64, forkDigest [4]byte) string {
 	return fmt.Sprintf(BlobSubnetTopicFormat, forkDigest, subnet)
+}
+
+func lcOptimisticToTopic(forkDigest [4]byte) string {
+	return fmt.Sprintf(LightClientOptimisticUpdateTopicFormat, forkDigest)
+}
+
+func lcFinalityToTopic(forkDigest [4]byte) string {
+	return fmt.Sprintf(LightClientFinalityUpdateTopicFormat, forkDigest)
 }

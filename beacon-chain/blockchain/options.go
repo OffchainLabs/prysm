@@ -4,6 +4,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/async/event"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
@@ -217,6 +218,13 @@ func WithSyncChecker(checker Checker) Option {
 func WithSlasherEnabled(enabled bool) Option {
 	return func(s *Service) error {
 		s.slasherEnabled = enabled
+		return nil
+	}
+}
+
+func WithLightClientStore(lcs *lightclient.Store) Option {
+	return func(s *Service) error {
+		s.lcStore = lcs
 		return nil
 	}
 }

@@ -895,6 +895,15 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodGet},
 		},
 		{
+			template: "/eth/v1/beacon/states/{state_id}/pending_consolidations",
+			name:     namespace + ".GetPendingConsolidations",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+			},
+			handler: server.GetPendingDeposits,
+			methods: []string{http.MethodGet},
+		},
+		{
 			template: "/eth/v1/beacon/states/{state_id}/pending_partial_withdrawals",
 			name:     namespace + ".GetPendingPartialWithdrawals",
 			middleware: []middleware.Middleware{
@@ -946,6 +955,7 @@ func (s *Service) lightClientEndpoints(blocker lookup.Blocker, stater lookup.Sta
 		HeadFetcher:      s.cfg.HeadFetcher,
 		ChainInfoFetcher: s.cfg.ChainInfoFetcher,
 		BeaconDB:         s.cfg.BeaconDB,
+		LCStore:          s.cfg.LCStore,
 	}
 
 	const namespace = "lightclient"
@@ -1040,6 +1050,7 @@ func (s *Service) eventsEndpoints() []endpoint {
 		HeadFetcher:            s.cfg.HeadFetcher,
 		ChainInfoFetcher:       s.cfg.ChainInfoFetcher,
 		TrackedValidatorsCache: s.cfg.TrackedValidatorsCache,
+		StateGen:               s.cfg.StateGen,
 	}
 
 	const namespace = "events"
