@@ -2,6 +2,7 @@ package beaconapi
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
@@ -210,6 +211,12 @@ var getRequests = map[string]endpoint{
 				lhResp.Data = lhResp.Data[1:]
 			}
 			return compareJSON(pResp, lhResp)
+		})),
+	"/validator/blocks/{param1}?randao_reveal=0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505": newMetadata[structs.ProduceBlockV3Response](
+		v3PathTemplate,
+		withSanityCheckOnly(),
+		withParams(func(currentEpoch primitives.Epoch) []string {
+			return []string{strconv.FormatUint(uint64(currentEpoch)*uint64(params.BeaconConfig().SlotsPerEpoch)+uint64(params.BeaconConfig().SlotsPerEpoch)/2+1, 10)}
 		})),
 }
 

@@ -1,7 +1,6 @@
 package payloadattribute
 
 import (
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	field_params "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
@@ -100,10 +99,8 @@ type EventData struct {
 	ProposerIndex     primitives.ValidatorIndex
 	ProposalSlot      primitives.Slot
 	ParentBlockNumber uint64
-	ParentBlockRoot   []byte
 	ParentBlockHash   []byte
 	Attributer        Attributer
-	HeadState         state.BeaconState
 	HeadBlock         interfaces.ReadOnlySignedBeaconBlock
 	HeadRoot          [field_params.RootLength]byte
 }
