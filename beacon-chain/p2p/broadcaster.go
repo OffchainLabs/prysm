@@ -312,7 +312,7 @@ func (s *Service) BroadcastLightClientFinalityUpdate(ctx context.Context, update
 	}
 
 	if err := s.broadcastObject(ctx, update, lcFinalityToTopic(forkDigest)); err != nil {
-		log.Debug("Failed to broadcast light client finality update")
+		log.WithError(err).Debug("Failed to broadcast light client finality update")
 		err := errors.Wrap(err, "could not publish message")
 		tracing.AnnotateError(span, err)
 		return err
