@@ -710,13 +710,13 @@ func OnlyRequestDataColumnSidecarsByRange(
 	rateLimiter *leakybucket.Collector,
 	newColumnsVerifier verification.NewDataColumnsVerifier,
 ) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
-	// Return early if there are no missing data columns.
-	if len(missingColumnsByRoot) == 0 {
-		return nil, nil
-	}
-
 	// Compute the number of missing data columns.
 	previousMissingDataColumnsCount := itemsCount(missingColumnsByRoot)
+
+	// Return early if there are no missing data columns or blocks.
+	if previousMissingDataColumnsCount == 0 || len(blks) == 0 {
+		return nil, nil
+	}
 
 	// Count the number of retries for the same amount of missing data columns.
 	const maxAllowedStall = 5 // Number of trials before giving up.
@@ -1099,7 +1099,7 @@ func buildDataColumnByRangeRequests(roBlocks []blocks.ROBlock, missingColumnsByR
 	batchSizeSlot := primitives.Slot(batchSize)
 
 	// Return early if there are no blocks to process.
-	if len(roBlocks) == 0 {
+	if len(roBlocks) == 0 || len(missingColumnsByRoot) == 0 {
 		return nil, nil
 	}
 
