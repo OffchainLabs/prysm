@@ -6,6 +6,15 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [v6.0.1](https://github.com/prysmaticlabs/prysm/compare/v6.0.0...v6.0.1) - 2025-05-02
 
+This release fixes two bugs related to the `payload_attributes` [event stream](https://ethereum.github.io/beacon-APIs/#/Events/eventstream). If you are using or planning to use this endpoint, upgrading to version 6.0.1 is mandatory.  
+Also, a reminder: like other Beacon API endpoints, when a node is syncing, it may return historical data as `finalized` or `head`. Until the node is fully synced to the head of the chain, you should avoid using this data, depending on your application's needs.
+
+We currently recommend against using the `--enable-beacon-rest-api` flag on Mainnet. As you may have noticed, we put a deprecation notice on our gRPC code, in particular on gRPC-related flags. The reason for this is that we want to eventually remove gRPC and have REST HTTP as the standard way of communication between the validator client and the beacon node. That being said, the REST option is still unstable and thus marked as experimental in the flag's description (the flag is `--enable-beacon-rest-api`). Therefore we encourage everyone to keep using gRPC, which is currently the default. It is fine to test the REST option on testnets, but doing it on Mainnet can lead to missing attestations and even missing blocks.
+
+**Updating to v6.0.0 or later is required for Pectra Mainnet!**
+
+This patch release has a few important fixes from v6.0.0. Updating to this release is encouraged.
+
 ### Added
 
 - `UpgradeToFulu` spectests. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15190)
