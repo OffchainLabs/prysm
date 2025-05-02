@@ -222,7 +222,7 @@ func configureArchivalNode(cliCtx *cli.Context) error {
 			}
 		}
 		if !cliCtx.IsSet(backfill.EnableExperimentalBackfill.Name) {
-			log.Info("Enabling backfill on nodes")
+			log.Info("Enabling backfill on node")
 			if err := cliCtx.Set(backfill.EnableExperimentalBackfill.Name, "true"); err != nil {
 				return err
 			}
