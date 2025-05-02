@@ -259,7 +259,7 @@ func (s *State) latestAncestor(ctx context.Context, blockRoot [32]byte) (state.B
 	defer span.End()
 
 	if s.isFinalizedRoot(blockRoot) {
-		finalizedState := s.finalizedState()
+		finalizedState := s.FinalizedState()
 		if finalizedState != nil {
 			return finalizedState, nil
 		}
@@ -297,7 +297,7 @@ func (s *State) latestAncestor(ctx context.Context, blockRoot [32]byte) (state.B
 
 		// Does the state exist in finalized info cache.
 		if s.isFinalizedRoot(parentRoot) {
-			return s.finalizedState(), nil
+			return s.FinalizedState(), nil
 		}
 
 		// Does the state exist in epoch boundary cache.
