@@ -229,10 +229,7 @@ func (v *ValidatorService) Start() {
 	v.validator = valStruct
 	go func() {
 		if err = run(v.ctx, v.validator); err != nil {
-			log.WithError(err).Error("Error running validator")
-			if err = v.Stop(); err != nil {
-				log.WithError(err).Fatal("Error stopping validator, abruptly shutting down.")
-			}
+			log.WithError(err).Fatal("Error running validator")
 		}
 	}()
 }
