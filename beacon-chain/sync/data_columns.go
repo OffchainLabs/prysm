@@ -204,7 +204,6 @@ func RequestMissingDataColumnsByRange(
 	rateLimiter *leakybucket.Collector,
 	groupCount uint64,
 	dataColumnsStorage filesystem.DataColumnStorageSummarizer,
-	peers []peer.ID,
 	blks []blocks.ROBlock,
 	batchSize int,
 ) (map[[fieldparams.RootLength]byte][]blocks.RODataColumn, error) {
@@ -285,7 +284,7 @@ func RequestMissingDataColumnsByRange(
 		// Requests data column sidecars from peers.
 		retrievedDataColumnsByRoot := make(map[[fieldparams.RootLength]byte][]blocks.RODataColumn)
 		for _, request := range requests {
-			roDataColumns, err := fetchDataColumnsFromPeers(ctx, clock, p2p, rateLimiter, ctxMap, peers, request)
+			roDataColumns, err := fetchDataColumnsFromPeers(ctx, clock, p2p, rateLimiter, ctxMap, request)
 			if err != nil {
 				return nil, errors.Wrap(err, "fetch data columns from peers")
 			}
@@ -720,7 +719,6 @@ func fetchDataColumnsFromPeers(
 	p2p p2p.P2P,
 	rateLimiter *leakybucket.Collector,
 	ctxMap ContextByteVersions,
-	peers []peer.ID,
 	targetRequest *eth.DataColumnSidecarsByRangeRequest,
 ) ([]blocks.RODataColumn, error) {
 	// Filter out requests with no data columns.
@@ -729,7 +727,7 @@ func fetchDataColumnsFromPeers(
 	}
 
 	// Get all admissible peers with the data columns they custody.
-	dataColumnsByAdmissiblePeer, err := waitForPeersForDataColumns(p2p, rateLimiter, peers, targetRequest)
+	dataColumnsByAdmissiblePeer, err := waitForPeersForDataColumns(p2p, rateLimiter, targetRequest)
 	if err != nil {
 		return nil, errors.Wrap(err, "wait for peers for data columns")
 	}
@@ -766,7 +764,7 @@ func fetchDataColumnsFromPeers(
 // - synced up to `lastSlot`, and
 // - have bandwidth to serve `blockCount` blocks.
 // It waits until at least one peer per data column is available.
-func waitForPeersForDataColumns(p2p p2p.P2P, rateLimiter *leakybucket.Collector, peers []peer.ID, request *eth.DataColumnSidecarsByRangeRequest) (map[peer.ID]map[uint64]bool, error) {
+func waitForPeersForDataColumns(p2p p2p.P2P, rateLimiter *leakybucket.Collector, request *eth.DataColumnSidecarsByRangeRequest) (map[peer.ID]map[uint64]bool, error) {
 	const delay = 5 * time.Second
 
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
@@ -788,7 +786,7 @@ func waitForPeersForDataColumns(p2p p2p.P2P, rateLimiter *leakybucket.Collector,
 
 	// Keep only peers with head epoch greater than or equal to the epoch corresponding to the target slot, and
 	// keep only peers with enough bandwidth.
-	filteredPeers, descriptions, err := filterPeersByTargetSlotAndBandwidth(p2p, rateLimiter, peers, lastSlot, request.Count)
+	filteredPeers, descriptions, err := filterPeersByTargetSlotAndBandwidth(p2p, rateLimiter, lastSlot, request.Count)
 	if err != nil {
 		return nil, errors.Wrap(err, "filter eers by target slot and bandwidth")
 	}
@@ -834,7 +832,7 @@ func waitForPeersForDataColumns(p2p p2p.P2P, rateLimiter *leakybucket.Collector,
 		time.Sleep(delay)
 
 		// Filter for peers with head epoch greater than or equal to our target epoch for ByRange requests.
-		filteredPeers, descriptions, err = filterPeersByTargetSlotAndBandwidth(p2p, rateLimiter, peers, lastSlot, request.Count)
+		filteredPeers, descriptions, err = filterPeersByTargetSlotAndBandwidth(p2p, rateLimiter, lastSlot, request.Count)
 		if err != nil {
 			return nil, errors.Wrap(err, "filter peers by target slot and bandwidth")
 		}
@@ -855,10 +853,8 @@ func waitForPeersForDataColumns(p2p p2p.P2P, rateLimiter *leakybucket.Collector,
 }
 
 // Filter peers to ensure they are synced to the target slot and have sufficient bandwidth to serve the request.
-func filterPeersByTargetSlotAndBandwidth(p2p p2p.P2P, rateLimiter *leakybucket.Collector, peers []peer.ID, lastSlot primitives.Slot, blockCount uint64) ([]peer.ID, []string, error) {
-	if len(peers) == 0 {
-		peers = p2p.Peers().Connected()
-	}
+func filterPeersByTargetSlotAndBandwidth(p2p p2p.P2P, rateLimiter *leakybucket.Collector, lastSlot primitives.Slot, blockCount uint64) ([]peer.ID, []string, error) {
+	peers := p2p.Peers().Connected()
 
 	slotPeers, descriptions, err := filterPeersByTargetSlot(p2p, peers, lastSlot)
 	if err != nil {
