@@ -324,6 +324,6 @@ var (
 	// ArchivalNodeFlag defines the flag that enables archival mode on a prysm beacon node.
 	ArchivalNodeFlag = &cli.BoolFlag{
 		Name:  "archive",
-		Usage: "Enables archival mode on a prysm beacon node.",
+		Usage: "Enables archival mode.",
 	}
 )
