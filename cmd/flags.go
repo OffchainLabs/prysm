@@ -42,12 +42,6 @@ var (
 		Usage: "Data directory for the databases.",
 		Value: DefaultDataDir(),
 	}
-	// EnableBackupWebhookFlag for users to trigger db backups via an HTTP webhook.
-	EnableBackupWebhookFlag = &cli.BoolFlag{
-		Name: "enable-db-backup-webhook",
-		Usage: `Serves HTTP handler to initiate database backups.
-		The handler is served on the monitoring port at path /db/backup.`,
-	}
 	// EnableTracingFlag defines a flag to enable p2p message tracing.
 	EnableTracingFlag = &cli.BoolFlag{
 		Name:  "enable-tracing",

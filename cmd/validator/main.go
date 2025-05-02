@@ -50,6 +50,8 @@ func startNode(ctx *cli.Context) error {
 }
 
 var appFlags = []cli.Flag{
+	flags.BackupWebhookOutputDir,
+	flags.EnableBackupWebhookFlag,
 	flags.BeaconRPCProviderFlag,
 	flags.BeaconRESTApiProviderFlag,
 	flags.CertFlag,
@@ -90,7 +92,6 @@ var appFlags = []cli.Flag{
 	////////////////////
 	cmd.DisableMonitoringFlag,
 	cmd.MonitoringHostFlag,
-	cmd.EnableBackupWebhookFlag,
 	cmd.MinimalConfigFlag,
 	cmd.E2EConfigFlag,
 	cmd.VerbosityFlag,
