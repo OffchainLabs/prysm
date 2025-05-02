@@ -1476,7 +1476,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			rateLimiter := leakybucket.NewCollector(1_000, 1_000, 1*time.Hour, false)
 
 			// Fetch the data columns from the peers.
-			fetchedRoDataColumnsByRoot, err := RequestMissingDataColumnsByRange(ctx, clock, ctxMap, p2pSvc, rateLimiter, 4, dataColumnStorageSummarizer, peersID, roBlocks, tc.batchSize)
+			fetchedRoDataColumnsByRoot, err := RequestMissingDataColumnsByRange(ctx, clock, ctxMap, p2pSvc, rateLimiter, 4, dataColumnStorageSummarizer, roBlocks, tc.batchSize)
 			if !tc.isError {
 				require.NoError(t, err)
 			} else {

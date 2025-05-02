@@ -396,7 +396,7 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []
 
 	// Fetch data column sidecars.
 	actualGroupCount := f.custodyInfo.ActualGroupCount()
-	fetchedDataColumnsByRoot, err := prysmsync.RequestMissingDataColumnsByRange(ctx, f.clock, f.ctxMap, f.p2p, f.rateLimiter, actualGroupCount, f.dcs, peers, dataColumnBlocks, batchSize)
+	fetchedDataColumnsByRoot, err := prysmsync.RequestMissingDataColumnsByRange(ctx, f.clock, f.ctxMap, f.p2p, f.rateLimiter, actualGroupCount, f.dcs, dataColumnBlocks, batchSize)
 	if err != nil {
 		return blobsPid, errors.Wrap(err, "fetch missing data columns from peers")
 	}
