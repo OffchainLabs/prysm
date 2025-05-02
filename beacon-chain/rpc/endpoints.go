@@ -1253,7 +1253,7 @@ func (s *Service) prysmValidatorEndpoints(stater lookup.Stater, coreService *cor
 			methods: []string{http.MethodPost},
 		},
 		{
-			template: "/prysm/v1/validators/participation",
+			template: "/prysm/v1/validators/{state_id}/participation",
 			name:     namespace + ".GetParticipation",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
@@ -1262,7 +1262,7 @@ func (s *Service) prysmValidatorEndpoints(stater lookup.Stater, coreService *cor
 			methods: []string{http.MethodGet},
 		},
 		{
-			template: "/prysm/v1/validators/active_set_changes",
+			template: "/prysm/v1/validators/{state_id}/active_set_changes",
 			name:     namespace + ".GetActiveSetChanges",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
