@@ -139,7 +139,7 @@ func (s *Service) reconstructAndBroadcastDataColumnSidecars(ctx context.Context,
 	for columnIndex := range info.CustodyColumns {
 		log := log.WithField("columnIndex", columnIndex)
 		if columnIndex >= sidecarCount {
-			log.Error("Sidecar index out of range - should never happen")
+			log.Error("Column custody index out of range - should never happen")
 			continue
 		}
 
