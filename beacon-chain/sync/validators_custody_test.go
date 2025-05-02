@@ -1,10 +1,8 @@
 package sync
 
 import (
-	"context"
 	"testing"
 
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
@@ -102,21 +100,18 @@ func TestSetTargetValidatorsCustodyRequirement(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx := context.Background()
 			beaconDB := testDB.SetupDB(t)
 			stateGen := stategen.New(beaconDB, doublylinkedtree.New())
 			state, _ := util.DeterministicGenesisState(t, 32)
 			err := state.SetBalances(tc.validatorsBalance)
 			require.NoError(t, err)
-			err = stateGen.SaveState(ctx, [32]byte{}, state)
-			require.NoError(t, err)
+
+			stateGen.SaveFinalizedState(0, [32]byte{}, state)
 
 			service := &Service{
 				trackedValidatorsCache: cache.NewTrackedValidatorsCache(),
 				cfg: &config{
-					chain: &mock.ChainService{
-						State: state,
-					},
+					stateGen:    stateGen,
 					custodyInfo: &peerdas.CustodyInfo{},
 				},
 			}
