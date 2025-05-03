@@ -1146,6 +1146,9 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 	if head == nil {
 		return errors.New("received empty head event")
 	}
+	if v.duties == nil {
+		return errors.New("duties are not initialized")
+	}
 	prevDepedentRoot, err := bytesutil.DecodeHexWithLength(head.PreviousDutyDependentRoot, fieldparams.RootLength)
 	if err != nil {
 		return errors.Wrap(err, "failed to decode previous duty dependent root")

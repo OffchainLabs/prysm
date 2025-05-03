@@ -1,0 +1,3 @@
+### Changed
+
+- Update hoodie bootnodes
