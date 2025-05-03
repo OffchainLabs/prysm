@@ -32,6 +32,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p"
@@ -400,6 +401,7 @@ func TestOnlyRequestDataColumnSidecarsByRoot(t *testing.T) {
 	// Create test block with blobs
 	pbSignedBeaconBlock := util.NewBeaconBlockDeneb()
 	blockSlot := primitives.Slot(100)
+	headSlot := blockSlot
 	pbSignedBeaconBlock.Block.Slot = blockSlot
 
 	blobs := make([]kzg.Blob, blobsCount)
@@ -578,7 +580,7 @@ func TestOnlyRequestDataColumnSidecarsByRoot(t *testing.T) {
 				if cols, exists := tc.skipColumns[setup.offset]; exists {
 					skipColumnsMap = cols
 				}
-				peer := createAndConnectCustodyPeer(t, setup, dataColumnSidecars, chainService, hostP2P, tracker, skipColumnsMap)
+				peer := createAndConnectCustodyPeerByRoot(t, setup, dataColumnSidecars, headSlot, chainService, hostP2P, tracker, skipColumnsMap)
 				peerIDs = append(peerIDs, peer.PeerID())
 			}
 
@@ -653,6 +655,7 @@ func TestOnlyRequestDataColumnSidecarsByRoot(t *testing.T) {
 // that custody that column.
 func createCoveringPeerSet(t *testing.T, numberOfColumns uint64, unavailableColumns []uint64) []peerSetup {
 	t.Helper()
+	t.Log("WARN: createCoveringPeerSet makes tests slow. Hardcode the resulting peer setups in test cases.")
 
 	if params.BeaconConfig().NumberOfColumns-uint64(len(unavailableColumns)) < numberOfColumns {
 		t.Fatalf("Not enough columns available to cover %d columns", numberOfColumns)
@@ -710,6 +713,7 @@ func createCoveringPeerSet(t *testing.T, numberOfColumns uint64, unavailableColu
 	}
 
 	t.Logf("Created a covering peer set with %d peers. Total unique columns covered: %d", len(peerSetups), len(coveredColumns))
+	t.Logf("Peer setups: %#v", peerSetups)
 	return peerSetups
 }
 
@@ -735,6 +739,7 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 	// Create test block with blobs
 	pbSignedBeaconBlock := util.NewBeaconBlockDeneb()
 	blockSlot := primitives.Slot(100)
+	headSlot := blockSlot
 	pbSignedBeaconBlock.Block.Slot = blockSlot
 
 	blobs := make([]kzg.Blob, blobsCount)
@@ -880,8 +885,7 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 
 			peerIDs := make([]peer.ID, 0, len(peerSetups))
 			for _, setup := range peerSetups {
-				// Pass the new skipColumnsDuringFetch map here
-				peer := createAndConnectCustodyPeer(t, setup, dataColumnSidecars, chainService, hostP2P, tracker, tc.skipColumnsDuringFetch)
+				peer := createAndConnectCustodyPeerByRoot(t, setup, dataColumnSidecars, headSlot, chainService, hostP2P, tracker, tc.skipColumnsDuringFetch)
 				peerIDs = append(peerIDs, peer.PeerID())
 			}
 
@@ -914,9 +918,7 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 				require.Equal(t, len(tc.requestedColumns), len(responseCols), "Number of returned columns mismatch")
 
 				expectedColumns := make([]uint64, 0, len(tc.requestedColumns))
-				for _, col := range tc.requestedColumns {
-					expectedColumns = append(expectedColumns, col)
-				}
+				expectedColumns = append(expectedColumns, tc.requestedColumns...)
 				sort.Slice(expectedColumns, func(i, j int) bool {
 					return expectedColumns[i] < expectedColumns[j]
 				})
@@ -976,9 +978,9 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 	}
 }
 
-// createAndConnectCustodyPeer creates a new peer with a deterministic private key and connects it to the p2p service.
+// createAndConnectCustodyPeerByRoot creates a new peer with a deterministic private key and connects it to the p2p service.
 // It then sets up the peer to respond with data columns it custodies.
-func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSidecars []*pb.DataColumnSidecar, chainService *mock.ChainService, hostP2P *p2ptest.TestP2P, tracker *requestTracker, skipColumns map[uint64]bool) *p2ptest.TestP2P {
+func createAndConnectCustodyPeerByRoot(t *testing.T, setup peerSetup, dataColumnSidecars []*pb.DataColumnSidecar, headSlot primitives.Slot, chainService *mock.ChainService, hostP2P *p2ptest.TestP2P, tracker *requestTracker, skipColumns map[uint64]bool) *p2ptest.TestP2P {
 	privateKeyBytes := make([]byte, 32)
 	for i := range 32 {
 		privateKeyBytes[i] = byte(setup.offset + i)
@@ -1056,8 +1058,105 @@ func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSideca
 	hostP2P.Peers().SetConnectionState(peerP2P.PeerID(), peers.Connected)
 	hostP2P.Connect(peerP2P)
 	hostP2P.Peers().SetChainState(peerP2P.PeerID(), &pb.Status{
-		FinalizedEpoch: 0,
-		HeadSlot:       0,
+		FinalizedEpoch: slots.ToEpoch(headSlot),
+		HeadSlot:       headSlot,
+	})
+
+	return peerP2P
+}
+
+// createAndConnectCustodyPeerByRange creates a new peer with a deterministic private key and connects it to the p2p service.
+// It then sets up the peer to respond with data columns it custodies.
+func createAndConnectCustodyPeerByRange(t *testing.T, setup peerSetup, dataColumnSidecarsBySlot map[primitives.Slot]map[uint64]*pb.DataColumnSidecar, headSlot primitives.Slot, chainService *mock.ChainService, hostP2P *p2ptest.TestP2P, tracker *requestTracker, skipColumns map[uint64]bool) *p2ptest.TestP2P {
+	privateKeyBytes := make([]byte, 32)
+	for i := range 32 {
+		privateKeyBytes[i] = byte(setup.offset + i)
+	}
+
+	privateKey, err := crypto.UnmarshalSecp256k1PrivateKey(privateKeyBytes)
+	require.NoError(t, err)
+
+	// Create the peerP2P
+	peerP2P := p2ptest.NewTestP2P(t, libp2p.Identity(privateKey))
+
+	// Set up the peer to respond with data columns it custodies
+	peerP2P.SetStreamHandler(p2p.RPCDataColumnSidecarsByRangeTopicV1+"/ssz_snappy", func(stream network.Stream) {
+		// Decode the request
+		req := new(pb.DataColumnSidecarsByRangeRequest)
+		if err := peerP2P.Encoding().DecodeWithMaxLength(stream, req); err != nil {
+			log.WithError(err).Error("Failed to decode request")
+			closeStream(stream, log)
+			return
+		}
+
+		// Track the request if we have a tracker
+		if tracker != nil {
+			requestedColumns := make([]uint64, 0, len(req.Columns))
+			requestedColumns = append(requestedColumns, req.Columns...)
+			tracker.trackRequest(setup.offset, requestedColumns)
+		}
+
+		// Continue with normal response handling
+		enodeID, err := p2p.ConvertPeerIDToNodeID(peerP2P.PeerID())
+		if err != nil {
+			log.WithError(err).Error("Failed to convert peer ID to enode ID")
+			closeStream(stream, log)
+			return
+		}
+
+		peerInfo, _, err := peerdas.Info(enodeID, setup.custodyGroupCount)
+		if err != nil {
+			log.WithError(err).Error("Failed to get peer info")
+			closeStream(stream, log)
+			return
+		}
+
+		for slotOffset := range req.Count {
+			for _, columnIndex := range req.Columns {
+				// Check if this column should be skipped using direct map lookup
+				if skipColumns[columnIndex] {
+					continue
+				}
+
+				if !peerInfo.CustodyColumns[columnIndex] {
+					continue
+				}
+				dataColumnSidecars, ok := dataColumnSidecarsBySlot[req.StartSlot+primitives.Slot(slotOffset)]
+				if !ok {
+					log.WithField("slot", req.StartSlot+primitives.Slot(slotOffset)).Debug("No data column sidecars for slot")
+					continue
+				}
+				col, ok := dataColumnSidecars[columnIndex]
+				if !ok {
+					log.WithField("slot", req.StartSlot+primitives.Slot(slotOffset)).WithField("column", columnIndex).Debug("No data column sidecar for column")
+					continue
+				}
+
+				if err := WriteDataColumnSidecarChunk(stream, chainService, peerP2P.Encoding(), col); err != nil {
+					log.WithError(err).Error("Failed to write data column sidecar chunk")
+					closeStream(stream, log)
+					return
+				}
+			}
+		}
+		closeStream(stream, log)
+	})
+
+	// Create the record and set the custody count
+	enr := &enr.Record{}
+	enr.Set(peerdas.Cgc(setup.custodyGroupCount))
+
+	// Add the peer and connect it
+	hostP2P.Peers().Add(enr, peerP2P.PeerID(), nil, network.DirOutbound)
+	metadata := wrapper.WrappedMetadataV2(&pb.MetaDataV2{
+		CustodyGroupCount: setup.custodyGroupCount,
+	})
+	hostP2P.Peers().SetMetadata(peerP2P.PeerID(), metadata)
+	hostP2P.Peers().SetConnectionState(peerP2P.PeerID(), peers.Connected)
+	hostP2P.Connect(peerP2P)
+	hostP2P.Peers().SetChainState(peerP2P.PeerID(), &pb.Status{
+		FinalizedEpoch: slots.ToEpoch(headSlot),
+		HeadSlot:       headSlot,
 	})
 
 	return peerP2P
@@ -1784,7 +1883,7 @@ func TestRequestMissingDataColumnsByRange(t *testing.T) {
 			// Connect the peers.
 			peers := make([]*p2ptest.TestP2P, 0, len(tc.peersParams))
 			for i, peerParams := range tc.peersParams {
-				peer := createAndConnectPeerForRange(t, p2pSvc, chain, dataColumnsSidecarBySlot, peerParams, i)
+				peer := createAndConnectCustomResponsePeerForRange(t, p2pSvc, chain, dataColumnsSidecarBySlot, peerParams, i)
 				peers = append(peers, peer)
 			}
 
@@ -1857,6 +1956,284 @@ func TestRequestMissingDataColumnsByRange(t *testing.T) {
 				})
 
 				require.DeepSSZEqual(t, expectedDataColumns, fetchedDataColumns)
+			}
+		})
+	}
+}
+
+func TestRequestDataColumnSidecarsByRange(t *testing.T) {
+	logrus.SetLevel(logrus.DebugLevel)
+	logrus.SetOutput(os.Stdout)
+
+	const (
+		blobsCount    = 6
+		blocksCount   = 5
+		peersHeadSlot = 100 + blocksCount - 1
+		batchSize     = 32
+	)
+
+	// Start the trusted setup.
+	err := kzg.Start()
+	require.NoError(t, err)
+
+	// Configure forks for testing with proper cleanup
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 0
+	cfg.NumberOfColumns = 128
+	params.OverrideBeaconConfig(cfg)
+
+	// Recovery threshold calculation (mirrors logic in ReconstructDataColumnsByRoot)
+	recoveryThreshold := cfg.NumberOfColumns/2 + cfg.NumberOfColumns%2
+
+	chainService, clock := defaultMockChain(t, 0)
+
+	// Create test blocks with blobs
+	var roBlocks []blocks.ROBlock
+	dataColumnsSidecarBySlot := make(map[primitives.Slot]map[uint64]*pb.DataColumnSidecar, blocksCount)
+	for i := range blocksCount {
+		pbSignedBeaconBlock := util.NewBeaconBlockDeneb()
+		blockSlot := primitives.Slot(100 + i)
+		pbSignedBeaconBlock.Block.Slot = blockSlot
+
+		blobs := make([]kzg.Blob, blobsCount)
+		blobKzgCommitments := make([][]byte, blobsCount)
+
+		for j := range blobs {
+			blob := getRandBlob(t, int64(j))
+			blobs[j] = blob
+
+			blobKzgCommitment, err := kzg.BlobToKZGCommitment(&blob)
+			require.NoError(t, err)
+
+			blobKzgCommitments[j] = blobKzgCommitment[:]
+		}
+
+		pbSignedBeaconBlock.Block.Body.BlobKzgCommitments = blobKzgCommitments
+
+		signedBlock, err := blocks.NewSignedBeaconBlock(pbSignedBeaconBlock)
+		require.NoError(t, err)
+
+		roBlock, err := blocks.NewROBlock(signedBlock)
+		require.NoError(t, err)
+
+		roBlocks = append(roBlocks, roBlock)
+
+		cellsAndProofs := util.GenerateCellsAndProofs(t, blobs)
+		dataColumnSidecars, err := peerdas.DataColumnSidecars(signedBlock, cellsAndProofs)
+		require.NoError(t, err)
+
+		dataColumnsSidecarBySlot[blockSlot] = make(map[uint64]*pb.DataColumnSidecar)
+		for _, dataColumnSidecar := range dataColumnSidecars {
+			dataColumnsSidecarBySlot[blockSlot][dataColumnSidecar.Index] = dataColumnSidecar
+		}
+	}
+
+	testCases := []struct {
+		name                   string
+		requestedColumns       []uint64
+		peerSetup              []peerSetup     // Peers available in the network (if nil, generate covering set)
+		unavailableColumns     []uint64        // Columns that all custodians should refuse to serve (used if targetCoverageCount is 0)
+		skipColumnsDuringFetch map[uint64]bool // Columns that peers should advertise but refuse to serve during fetch
+		targetCoverageCount    uint64          // Target number of unique columns for generated peer set (if peerSetup is nil and > 0)
+		expectedError          error           // Use errors.Is for checking wrapped errors
+		expectReconstruction   bool            // Crude check if reconstruction path likely taken
+	}{
+		{
+			name:                 "Success - Reconstruction Needed - Target column initially unavailable",
+			requestedColumns:     []uint64{6, 28},
+			peerSetup:            nil,         // Generate a covering set
+			unavailableColumns:   []uint64{6}, // Exclude column 6 from the covering set
+			expectedError:        nil,
+			expectReconstruction: true,
+		},
+		{
+			name:             "Failure - Reconstruction Impossible - Limited Peers",
+			requestedColumns: []uint64{6, 500}, // Request one known (6) and one unknown (500) column
+			peerSetup: []peerSetup{ // Intentionally few peers
+				{offset: 1, custodyGroupCount: 4},
+				{offset: 10, custodyGroupCount: 4},
+				{offset: 20, custodyGroupCount: 4},
+				{offset: 30, custodyGroupCount: 4},
+			},
+			unavailableColumns: nil,
+			expectedError:      ErrNotEnoughColsAvailable,
+		},
+		{
+			name:                "Failure - Reconstruction Impossible - Target Coverage 50",
+			requestedColumns:    []uint64{6, 500}, // Request one potentially covered (6) and one uncovered (500)
+			peerSetup:           nil,
+			unavailableColumns:  nil,
+			targetCoverageCount: 50, // Generate peers covering only 50 columns total.
+			// This is less than the recovery threshold (64).
+			expectedError: ErrNotEnoughColsAvailable,
+		},
+		{
+			name:               "Failure - Direct Fetch Fails & Reconstruction Impossible",
+			requestedColumns:   []uint64{1000, 1001}, // Columns no peer custodies
+			peerSetup:          nil,                  // Generate a covering set
+			unavailableColumns: nil,                  // No columns need to be made unavailable
+			expectedError:      &UnavailableColumnsError{},
+		},
+		{
+			name:                 "Success - Empty Request",
+			requestedColumns:     []uint64{},
+			peerSetup:            []peerSetup{{offset: 1, custodyGroupCount: 4}},
+			unavailableColumns:   nil,
+			expectedError:        nil,
+			expectReconstruction: false,
+		},
+		{
+			name:                   "Success - Reconstruction Retry Needed - Peer skips advertised column",
+			requestedColumns:       []uint64{6, 37},          // Request columns 6 and 37
+			peerSetup:              nil,                      // Generate a covering set
+			unavailableColumns:     nil,                      // No inherent unavailability
+			skipColumnsDuringFetch: map[uint64]bool{6: true}, // Make peers that advertise 6 skip it during fetch
+			expectedError:          nil,
+			expectReconstruction:   true, // Expect reconstruction because column 6 will be initially missed
+		},
+		{
+			name:               "Failure - Reconstruction Impossible - Peers skip required columns",
+			requestedColumns:   []uint64{0}, // Request a column that will be skipped
+			peerSetup:          nil,         // Generate a covering set
+			unavailableColumns: nil,         // All columns advertised initially
+			skipColumnsDuringFetch: func() map[uint64]bool { // Skip recoveryThreshold+1 columns
+				skipMap := make(map[uint64]bool)
+				for i := uint64(0); i < recoveryThreshold+1; i++ {
+					skipMap[i] = true
+				}
+				return skipMap
+			}(),
+			expectedError:        ErrNotEnoughColsAvailable, // Reconstruction needs 64 columns, but 0-63 are skipped
+			expectReconstruction: true,                      // It will attempt reconstruction before failing
+		},
+	}
+
+	// // Remove special setup for "Failure - Direct Fetch Fails..." as it's handled by peerSetup: nil now
+	// reconImpossiblePeerSetup, _ := createCoveringPeerSet(t, numberOfColumns) ...
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var peerSetups []peerSetup
+
+			// Determine the peer setup for this test case
+			if tc.peerSetup != nil {
+				peerSetups = tc.peerSetup
+			} else {
+				// Generate a covering set if specific setup not provided
+				if tc.targetCoverageCount > 0 {
+					// If a target count is specified, generate peers covering that many columns.
+					peerSetups = createCoveringPeerSet(t, tc.targetCoverageCount, nil)
+				} else {
+					// Otherwise, generate peers covering all available columns (excluding unavailable ones).
+					numColsToCover := params.BeaconConfig().NumberOfColumns - uint64(len(tc.unavailableColumns))
+					peerSetups = createCoveringPeerSet(t, numColsToCover, tc.unavailableColumns)
+				}
+			}
+
+			// --- Peer Connection & Availability Calculation ---
+			hostP2P := p2ptest.NewTestP2P(t)
+			tracker := newRequestTracker()
+
+			peerIDs := make([]peer.ID, 0, len(peerSetups))
+			for _, setup := range peerSetups {
+				peer := createAndConnectCustodyPeerByRange(t, setup, dataColumnsSidecarBySlot, peersHeadSlot, chainService, hostP2P, tracker, tc.skipColumnsDuringFetch)
+				peerIDs = append(peerIDs, peer.PeerID())
+			}
+
+			ctxMap := map[[4]byte]int{{245, 165, 253, 66}: version.Fulu}
+			rateLimiter := leakybucket.NewCollector(1_000, 1_000, 1*time.Hour, false)
+			verifier := func(cols []blocks.RODataColumn, reqs []verification.Requirement) verification.DataColumnsVerifier {
+				initializer := &verification.Initializer{}
+				return initializer.NewDataColumnsVerifier(cols, reqs)
+			}
+
+			missingColumnsByRoot := make(map[[32]byte]map[uint64]bool)
+			for _, roBlock := range roBlocks {
+				root := roBlock.Root()
+				missingColumnsByRoot[root] = make(map[uint64]bool)
+				for _, column := range tc.requestedColumns {
+					missingColumnsByRoot[root][column] = true
+				}
+			}
+
+			// Fetch the data columns from the peers.
+			fetchedVerifiedDataColumnsByRoot, err := RequestDataColumnSidecarsByRange(context.Background(), missingColumnsByRoot, roBlocks, peerIDs, 4, clock, hostP2P, ctxMap, rateLimiter, verifier)
+
+			// --- Assertions ---
+			if tc.expectedError != nil {
+				require.NotNil(t, err)
+				// Use errors.Is for wrapped errors like ErrNoPeersForDataColumns, ErrNotEnoughColsAvailable
+				require.Equal(t, true, errors.Is(err, tc.expectedError), "Unexpected error type: got %v, want %v", err, tc.expectedError)
+			} else {
+				require.NoError(t, err, "Expected no error but got: %v", err)
+
+				expectedColumns := make([]uint64, 0, len(tc.requestedColumns))
+				expectedColumns = append(expectedColumns, tc.requestedColumns...)
+				sort.Slice(expectedColumns, func(i, j int) bool {
+					return expectedColumns[i] < expectedColumns[j]
+				})
+
+				for _, dataColumns := range fetchedVerifiedDataColumnsByRoot {
+					// Verify response columns match requested columns on success
+					columnIndices := make([]uint64, 0, len(dataColumns))
+					for _, column := range dataColumns {
+						columnIndices = append(columnIndices, column.Index)
+					}
+					t.Logf("columnIndices: %#v", columnIndices)
+					require.Equal(t, len(tc.requestedColumns), len(dataColumns), "Number of returned columns mismatch")
+
+					// Sort actual response sidecars by index
+					sort.Slice(dataColumns, func(i, j int) bool {
+						// Assuming responseCols is []blocks.RODataColumn based on function signature
+						// Need to access ColumnIndex correctly. Adjust if type is different.
+						// Let's assume RODataColumn has a method or field ColumnIndex
+						return dataColumns[i].Index < dataColumns[j].Index
+					})
+
+					// Compare element by element
+					for i := range dataColumns {
+						require.Equal(t, expectedColumns[i], dataColumns[i].Index, "Mismatch at index %d", i)
+					}
+				}
+			}
+
+			// Crude check for reconstruction path (can be refined with logging/mocking)
+			if tc.expectReconstruction && tc.expectedError == nil {
+				// If reconstruction was expected and successful, we expect requests for columns
+				// *beyond* the initially requested set, up to the recovery threshold.
+				// This is hard to verify precisely without deep mocking, but we can check if
+				// *more* columns were requested than initially asked for.
+				totalRequestedCount := 0
+				requestedColSet := make(map[uint64]bool)
+				for _, cols := range tracker.requests {
+					for _, col := range cols {
+						if !requestedColSet[col] {
+							requestedColSet[col] = true
+							totalRequestedCount++
+						}
+					}
+				}
+				require.Equal(t, true, uint64(totalRequestedCount) >= recoveryThreshold, "Expected at least recoveryThreshold (%d) columns to be requested during reconstruction attempt, got %d", recoveryThreshold, totalRequestedCount)
+			} else if !tc.expectReconstruction && tc.expectedError == nil {
+				// If direct fetch was expected and successful, the requested columns should ideally
+				// match the initial request exactly (or be a subset if optimized).
+				totalRequestedCount := 0
+				for _, cols := range tracker.requests {
+					totalRequestedCount += len(cols) // Summing lengths might overestimate if peers overlap, use set count instead
+				}
+				requestedColSet := make(map[uint64]bool)
+				for _, cols := range tracker.requests {
+					for _, col := range cols {
+						requestedColSet[col] = true
+					}
+				}
+
+				require.Equal(t, len(tc.requestedColumns), len(requestedColSet), "Map lengths should be equal for direct fetch")
+				for _, k := range tc.requestedColumns {
+					_, ok := requestedColSet[k]
+					require.Equal(t, true, ok, "Key %d expected in actual requests map", k)
+				}
 			}
 		})
 	}
@@ -2293,7 +2670,7 @@ func TestOnlyRequestDataColumnSidecarsByRange(t *testing.T) {
 			// Connect the peers.
 			peers := make([]*p2ptest.TestP2P, 0, len(tc.peersParams))
 			for i, peerParams := range tc.peersParams {
-				peer := createAndConnectPeerForRange(t, p2pSvc, chain, dataColumnsSidecarBySlot, peerParams, i)
+				peer := createAndConnectCustomResponsePeerForRange(t, p2pSvc, chain, dataColumnsSidecarBySlot, peerParams, i)
 				peers = append(peers, peer)
 			}
 
@@ -2378,7 +2755,7 @@ func TestOnlyRequestDataColumnSidecarsByRange(t *testing.T) {
 
 // createAndConnectPeer creates a peer and connects it to the p2p service.
 // The peer will respond to the `RPCDataColumnSidecarsByRangeTopicV1` topic.
-func createAndConnectPeerForRange(
+func createAndConnectCustomResponsePeerForRange(
 	t *testing.T,
 	p2pService *p2ptest.TestP2P,
 	chainService *mock.ChainService,

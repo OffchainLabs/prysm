@@ -522,7 +522,6 @@ func reconstructAndFilterColumns(
 		return nil, errors.Wrap(err, "verify columns for block")
 	}
 
-	// Convert all reconstructed sidecars back to VerifiedRODataColumn.
 	verifiedColsByIndex := make(map[uint64]blocks.VerifiedRODataColumn, len(verifiedSidecars))
 	for _, verifiedSidecar := range verifiedSidecars {
 		verifiedColsByIndex[verifiedSidecar.Index] = verifiedSidecar
@@ -655,6 +654,16 @@ func RequestDataColumnSidecarsByRange(
 	})
 	log.Debug("Attempting to fetch or reconstruct data columns for range")
 
+	// missingColumnsByRoot is mutated within OnlyRequestDataColumnSidecarsByRange.
+	// Clone it to use unmodified during reconstruction.
+	clonedMissingColumnsByRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool, len(missingColumnsByRoot))
+	for root, columns := range missingColumnsByRoot {
+		clonedMissingColumnsByRoot[root] = make(map[uint64]bool, len(columns))
+		for column := range columns {
+			clonedMissingColumnsByRoot[root][column] = true
+		}
+	}
+
 	// First, try to request the columns directly for the range.
 	fetchedColumnsByRoot, err := OnlyRequestDataColumnSidecarsByRange(
 		ctx,
@@ -675,9 +684,10 @@ func RequestDataColumnSidecarsByRange(
 	// If the error is specifically UnavailableColumnsError, attempt reconstruction for the range.
 	if errors.Is(err, &UnavailableColumnsError{}) {
 		log.WithError(err).Debug("Fetching range failed due to no available peers for initial request, attempting reconstruction")
+
 		reconstructedColumnsByRoot, reconstructErr := ReconstructDataColumnsByRange(
 			ctx,
-			missingColumnsByRoot,
+			clonedMissingColumnsByRoot,
 			blks,
 			peers,
 			batchSize,
@@ -1241,6 +1251,7 @@ func fetchDataColumnsFromPeers(
 // It waits until at least one peer per data column is available.
 func waitForPeersForDataColumns(p2p p2p.P2P, rateLimiter *leakybucket.Collector, peers []peer.ID, request *eth.DataColumnSidecarsByRangeRequest) (map[peer.ID]map[uint64]bool, error) {
 	const delay = 5 * time.Second
+	const maxDelay = 30 * time.Second
 
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
@@ -1278,6 +1289,7 @@ func waitForPeersForDataColumns(p2p p2p.P2P, rateLimiter *leakybucket.Collector,
 	dataColumnsWithoutPeers := computeDataColumnsWithoutPeers(request.Columns, admissiblePeersByDataColumn)
 
 	// Wait if no suitable peers are available.
+	totalDelay := time.Duration(0)
 	for len(dataColumnsWithoutPeers) > 0 {
 		// Build a nice log fields.
 		var dataColumnsWithoutPeersLog interface{} = "all"
@@ -1305,6 +1317,14 @@ func waitForPeersForDataColumns(p2p p2p.P2P, rateLimiter *leakybucket.Collector,
 		}
 
 		time.Sleep(delay)
+		totalDelay += delay
+		if totalDelay > maxDelay {
+			unavailableColumns := make([]uint64, 0, len(dataColumnsWithoutPeers))
+			for column := range dataColumnsWithoutPeers {
+				unavailableColumns = append(unavailableColumns, column)
+			}
+			return nil, errors.Wrap(NewUnavailableColumnsError(unavailableColumns), "Waiting for peers to become available - maximum wait time exceeded")
+		}
 
 		// Filter for peers with head epoch greater than or equal to our target epoch for ByRange requests.
 		filteredPeers, descriptions, err = filterPeersByTargetSlotAndBandwidth(p2p, rateLimiter, peers, lastSlot, request.Count)
@@ -1478,10 +1498,6 @@ func ReconstructDataColumnsByRange(
 	}
 
 	// Perform reconstruction for each block individually using the fetched sidecars.
-	requestedColumns := make([]uint64, 0)
-	for _, col := range fetchedSidecarsByRoot[blks[0].Root()] {
-		requestedColumns = append(requestedColumns, col.Index)
-	}
 	reconstructedColumnsByRoot := make(map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn)
 	for _, block := range blks {
 		commits, _ := block.Block().Body().BlobKzgCommitments()
@@ -1496,6 +1512,11 @@ func ReconstructDataColumnsByRange(
 		if len(fetchedForThisRoot) < recoveryThreshold {
 			errMsg := fmt.Errorf("received only %d columns for block %#x, need %d for reconstruction", len(fetchedForThisRoot), root, recoveryThreshold)
 			return nil, errors.Wrap(ErrReconstructionFailed, errMsg.Error())
+		}
+
+		requestedColumns := make([]uint64, 0)
+		for col := range missingColumnsByRoot[root] {
+			requestedColumns = append(requestedColumns, col)
 		}
 
 		// Perform reconstruction using the fetched columns for this block.
