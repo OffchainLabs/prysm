@@ -51,6 +51,90 @@ func BenchmarkSignature_AggregateVerify(b *testing.B) {
 	}
 }
 
+func BenchmarkSignature_FastAggregateVerify(b *testing.B) {
+	sigN := 128 // MAX_ATTESTATIONS per block.
+
+	msg := [32]byte{'s', 'i', 'g', 'n', 'e', 'd', 'm', 's', 'g'}
+
+	var pks []common.PublicKey
+	var sigs []common.Signature
+
+	// Gen random keys and signatures for the same message
+	for i := 0; i < sigN; i++ {
+		sk, err := blst.RandKey()
+		require.NoError(b, err)
+		sig := sk.Sign(msg[:])
+		pks = append(pks, sk.PublicKey())
+		sigs = append(sigs, sig)
+	}
+
+	aggregated := blst.AggregateSignatures(sigs)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if !aggregated.FastAggregateVerify(pks, msg) {
+			b.Fatal("could not verify fast aggregate sig")
+		}
+	}
+}
+
+func BenchmarkSignature_Eth2FastAggregateVerify(b *testing.B) {
+	sigN := 128
+
+	msg := [32]byte{'s', 'i', 'g', 'n', 'e', 'd', 'm', 's', 'g'}
+
+	var pks []common.PublicKey
+	var sigs []common.Signature
+
+	for i := 0; i < sigN; i++ {
+		sk, err := blst.RandKey()
+		require.NoError(b, err)
+		sig := sk.Sign(msg[:])
+		pks = append(pks, sk.PublicKey())
+		sigs = append(sigs, sig)
+	}
+
+	aggregated := blst.AggregateSignatures(sigs)
+
+	b.Run("Regular case with signatures", func(b *testing.B) {
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			if !aggregated.Eth2FastAggregateVerify(pks, msg) {
+				b.Fatal("could not verify eth2 fast aggregate sig")
+			}
+		}
+	})
+
+	// Special case: Empty pubkeys with infinite signature (Should pass considering as empty aggregates)
+	infiniteSig, err := blst.SignatureFromBytes(common.InfiniteSignature[:])
+	require.NoError(b, err)
+
+	b.Run("Special case: empty pubkeys with infinite signature", func(b *testing.B) {
+		emptyPks := make([]common.PublicKey, 0)
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			if !infiniteSig.Eth2FastAggregateVerify(emptyPks, msg) {
+				b.Fatal("infinite signature check failed with empty pubkeys")
+			}
+		}
+	})
+
+	// Non-infinite signature with empty pubkeys (should fail)
+	b.Run("Invalid case: empty pubkeys with regular signature", func(b *testing.B) {
+		emptyPks := make([]common.PublicKey, 0)
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			if aggregated.Eth2FastAggregateVerify(emptyPks, msg) {
+				b.Fatal("verification unexpectedly passed with empty pubkeys and non-infinite sig")
+			}
+		}
+	})
+}
+
 func BenchmarkSecretKey_Marshal(b *testing.B) {
 	key, err := blst.RandKey()
 	require.NoError(b, err)
