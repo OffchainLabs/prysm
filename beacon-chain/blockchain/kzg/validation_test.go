@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
 	GoKZG "github.com/crate-crypto/go-kzg-4844"
 	"github.com/sirupsen/logrus"
 )

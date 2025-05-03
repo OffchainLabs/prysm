@@ -52,6 +52,7 @@ go_library(
         "//consensus-types/primitives:go_default_library",
         "//container/trie:go_default_library",
         "//crypto/bls:go_default_library",
+        "//crypto/fieldutils:go_default_library",
         "//crypto/hash:go_default_library",
         "//crypto/rand:go_default_library",
         "//encoding/bytesutil:go_default_library",
