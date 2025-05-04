@@ -821,7 +821,13 @@ func OnlyRequestDataColumnSidecarsByRange(
 				// We give up and let the state machine handle the situation.
 				const message = "Requesting data column sidecars - no progress, giving up"
 				log.Warning(message)
-				return nil, errors.New(message)
+				unavailableColumns := make(map[uint64]bool)
+				for _, columns := range missingColumnsByRoot {
+					for column := range columns {
+						unavailableColumns[column] = true
+					}
+				}
+				return nil, errors.Wrap(NewUnavailableColumnsError(uint64MapToSortedSlice(unavailableColumns)), message)
 			}
 
 			log.WithFields(logrus.Fields{

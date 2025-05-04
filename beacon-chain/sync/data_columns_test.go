@@ -2093,6 +2093,15 @@ func TestRequestDataColumnSidecarsByRange(t *testing.T) {
 			expectReconstruction:   true, // Expect reconstruction because column 6 will be initially missed
 		},
 		{
+			name:             "Failure - Reconstruction Impossible - Not enough columns available",
+			requestedColumns: []uint64{0}, // Request an unavailable column
+			peerSetup: []peerSetup{
+				{offset: 1, custodyGroupCount: 4}, // This peer will custody columns [6, 37, 48, 113]
+			},
+			expectedError:        ErrNotEnoughColsAvailable,
+			expectReconstruction: false,
+		},
+		{
 			name:               "Failure - Reconstruction Impossible - Peers skip required columns",
 			requestedColumns:   []uint64{0}, // Request a column that will be skipped
 			peerSetup:          nil,         // Generate a covering set
@@ -2104,8 +2113,8 @@ func TestRequestDataColumnSidecarsByRange(t *testing.T) {
 				}
 				return skipMap
 			}(),
-			expectedError:        ErrNotEnoughColsAvailable, // Reconstruction needs 64 columns, but 0-63 are skipped
-			expectReconstruction: true,                      // It will attempt reconstruction before failing
+			expectedError:        &UnavailableColumnsError{}, // Reconstruction needs 64 columns, but 0-63 are skipped
+			expectReconstruction: true,                       // It will attempt reconstruction before failing
 		},
 	}
 
