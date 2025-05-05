@@ -130,13 +130,6 @@ func requestDataColumnSidecarsByRoot(
 		return nil, errors.Wrap(err, "couldn't get admissible peers for data columns")
 	}
 
-	// If the request was non-empty but no peers were found for any needed column,
-	// return the specific error immediately.
-	if len(dataColumnsToFetch) > 0 && len(dataColumnsByAdmissiblePeer) == 0 {
-		// No peer has any of the requested columns.
-		return nil, newUnavailableColumnsError(dataColumnsToFetch)
-	}
-
 	verifiedSidecars := make([]blocks.VerifiedRODataColumn, 0, len(dataColumnsToFetch))
 	remainingMissingColumns := make(map[uint64]bool, len(dataColumnsToFetch))
 	for _, column := range dataColumnsToFetch {
