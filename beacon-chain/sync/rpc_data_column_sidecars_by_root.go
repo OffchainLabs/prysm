@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"slices"
-	"sort"
 	"time"
 
 	coreTime "github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
@@ -56,9 +55,6 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
 		return errors.Wrap(err, "validate data columns by root request")
 	}
-
-	// Sort the identifiers so that requests for the same data columns root will be adjacent, minimizing db lookups.
-	sort.Sort(&requestedColumnIdents)
 
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
