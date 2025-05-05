@@ -15,7 +15,10 @@ import (
 	ssz "github.com/prysmaticlabs/fastssz"
 )
 
-const maxErrorLength = 256
+const (
+	maxErrorLength       = 256
+	bytesPerLengthOffset = 4
+)
 
 // SSZBytes is a bytes slice that satisfies the fast-ssz interface.
 type SSZBytes []byte
@@ -222,76 +225,94 @@ var dataColumnIdSize int
 
 // UnmarshalSSZ implements ssz.Unmarshaler. It unmarshals the provided bytes buffer into the DataColumnSidecarsByRootReq value.
 func (d *DataColumnsByRootIdentifiers) UnmarshalSSZ(buf []byte) error {
-	num, err := ssz.DecodeDynamicLength(buf, 128)
-	if err != nil {
-		return err
+	// Exit early if the buffer is too small.
+	if len(buf) < bytesPerLengthOffset {
+		return nil
 	}
 
-	*d = make([]*eth.DataColumnsByRootIdentifier, num)
-	return ssz.UnmarshalDynamic(buf, num, func(i int, elem []byte) error {
-		(*d)[i] = new(eth.DataColumnsByRootIdentifier)
-		return (*d)[i].UnmarshalSSZ(elem)
-	})
+	// Get the size of the offsets.
+	offsetsSize := binary.LittleEndian.Uint32(buf[:bytesPerLengthOffset])
+	if offsetsSize%bytesPerLengthOffset != 0 {
+		return errors.Errorf("expected offsets size to be a multiple of %d but got %d", bytesPerLengthOffset, offsetsSize)
+	}
+
+	count := offsetsSize / bytesPerLengthOffset
+
+	// Decode the identifers.
+	*d = make([]*eth.DataColumnsByRootIdentifier, count)
+	for i := range count - 1 {
+		start := binary.LittleEndian.Uint32(buf[i*bytesPerLengthOffset : (i+1)*bytesPerLengthOffset])
+		// TODO: To optimise not to decode 2 times the same offset.
+		end := binary.LittleEndian.Uint32(buf[(i+1)*bytesPerLengthOffset : (i+2)*bytesPerLengthOffset])
+
+		identifier := new(eth.DataColumnsByRootIdentifier)
+		err := identifier.UnmarshalSSZ(buf[start:end])
+		if err != nil {
+			return errors.Wrap(err, "unmarshal SSZ")
+		}
+
+		(*d)[i] = identifier
+	}
+
+	// Decode the last identifier.
+	start := binary.LittleEndian.Uint32(buf[(count-1)*bytesPerLengthOffset : count*bytesPerLengthOffset])
+	identifer := new(eth.DataColumnsByRootIdentifier)
+	err := identifer.UnmarshalSSZ(buf[start:])
+	if err != nil {
+		return errors.Wrap(err, "unmarshal SSZ")
+	}
+
+	(*d)[count-1] = identifer
+
+	return nil
 }
 
 func (d *DataColumnsByRootIdentifiers) MarshalSSZ() ([]byte, error) {
-	num := len(*d)
-	if num > 128 {
-		return nil, errors.Errorf("data column identifiers list exceeds max size: %d > %d", num, 128)
+	// https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/ssz/simple-serialize.md#constants
+	maxSize := params.BeaconConfig().MaxRequestBlocksDeneb
+
+	// Check if the maximum size is exceeded.
+	count := uint32(len(*d))
+	if uint64(count) > maxSize {
+		return nil, errors.Errorf("data column identifiers list exceeds max size: %d > %d", count, maxSize)
 	}
 
-	// Each struct has:
-	// 4 bytes offset + 32 bytes block root + n * 8 bytes indices
-	payloads := make([][]byte, num)
-	totalSize := 4 + 4*num // 4 bytes for length + offset table
+	// Return early if the list is empty.
+	if count == 0 {
+		return nil, nil
+	}
 
-	for i, item := range *d {
-		if item == nil {
-			return nil, errors.New("nil item in DataColumnsByRootIdentifiers list")
+	// Encode each identifier of the list.
+	sizeEncodedIdentifiers := uint32(0)
+	encodedIdentifiers := make([][]byte, 0, count)
+	for _, identifier := range *d {
+		encodedIdentifier, err := identifier.MarshalSSZ()
+		if err != nil {
+			return nil, errors.Wrap(err, "identifier marshal SSZ")
 		}
 
-		indicesLen := len(item.Columns)
-		payloadLen := 4 + 32 + 8*indicesLen // offset + blockRoot + indices
-
-		buf := make([]byte, payloadLen)
-
-		// Offset to indices section (fixed: 36)
-		binary.LittleEndian.PutUint32(buf[0:4], 36)
-
-		// Block root
-		copy(buf[4:36], item.BlockRoot[:])
-
-		// Indices
-		cursor := 36
-		for _, idx := range item.Columns {
-			binary.LittleEndian.PutUint64(buf[cursor:], idx)
-			cursor += 8
-		}
-
-		payloads[i] = buf
-		totalSize += payloadLen
+		sizeEncodedIdentifiers += uint32(len(encodedIdentifier))
+		encodedIdentifiers = append(encodedIdentifiers, encodedIdentifier)
 	}
 
-	out := make([]byte, totalSize)
-	cursor := 0
+	// Compute offsets.
+	offset := count * bytesPerLengthOffset
+	encodedOffsets := make([]byte, count*bytesPerLengthOffset)
+	binary.LittleEndian.PutUint32(encodedOffsets[:bytesPerLengthOffset], offset)
 
-	binary.LittleEndian.PutUint32(out[cursor:], uint32(num))
-	cursor += 4
-
-	dataOffset := 4 + 4*num
-	for _, p := range payloads {
-		binary.LittleEndian.PutUint32(out[cursor:], uint32(dataOffset))
-		cursor += 4
-		dataOffset += len(p)
+	for i, encodedIdentifier := range encodedIdentifiers[:count-1] {
+		offset += uint32(len(encodedIdentifier))
+		binary.LittleEndian.PutUint32(encodedOffsets[(i+1)*bytesPerLengthOffset:], offset)
 	}
 
-	// Payloads
-	for _, p := range payloads {
-		copy(out[cursor:], p)
-		cursor += len(p)
+	// Create the final buffer.
+	buf := make([]byte, 0, count*bytesPerLengthOffset+sizeEncodedIdentifiers)
+	buf = append(buf, encodedOffsets...)
+	for _, encodedIdentifier := range encodedIdentifiers {
+		buf = append(buf, encodedIdentifier...)
 	}
 
-	return out, nil
+	return buf, nil
 }
 
 // MarshalSSZTo implements ssz.Marshaler. It appends the serialized DataColumnSidecarsByRootReq value to the provided byte slice.

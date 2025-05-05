@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"testing"
 
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
@@ -218,6 +219,56 @@ func generateDataColumnIdentifiers(n int) []*eth.DataColumnsByRootIdentifier {
 	return r
 }
 
+func TestDataColumnSidecarsByRootReq_Marshal(t *testing.T) {
+	/*
+		Python code to generate the expected value
+
+		# pip install eth2spec
+
+		from eth2spec.utils.ssz import ssz_typing
+
+		Container = ssz_typing.Container
+		List = ssz_typing.List
+
+		Root = ssz_typing.Bytes32
+		ColumnIndex = ssz_typing.uint64
+
+		NUMBER_OF_COLUMNS=128
+
+		class DataColumnsByRootIdentifier(Container):
+			block_root: Root
+			columns: List[ColumnIndex, NUMBER_OF_COLUMNS]
+
+		first = DataColumnsByRootIdentifier(block_root="0x0100000000000000000000000000000000000000000000000000000000000000", columns=[3,5,7])
+		second = DataColumnsByRootIdentifier(block_root="0x0200000000000000000000000000000000000000000000000000000000000000", columns=[])
+		third = DataColumnsByRootIdentifier(block_root="0x0300000000000000000000000000000000000000000000000000000000000000", columns=[6, 4])
+
+		expected = List[DataColumnsByRootIdentifier, 42](first, second, third).encode_bytes().hex()
+	*/
+
+	const expected = "0c000000480000006c00000001000000000000000000000000000000000000000000000000000000000000002400000003000000000000000500000000000000070000000000000002000000000000000000000000000000000000000000000000000000000000002400000003000000000000000000000000000000000000000000000000000000000000002400000006000000000000000400000000000000"
+	identifiers := &DataColumnsByRootIdentifiers{
+		{
+			BlockRoot: bytesutil.PadTo([]byte{1}, fieldparams.RootLength),
+			Columns:   []uint64{3, 5, 7},
+		},
+		{
+			BlockRoot: bytesutil.PadTo([]byte{2}, fieldparams.RootLength),
+			Columns:   []uint64{},
+		},
+		{
+			BlockRoot: bytesutil.PadTo([]byte{3}, fieldparams.RootLength),
+			Columns:   []uint64{6, 4},
+		},
+	}
+
+	marshalled, err := identifiers.MarshalSSZ()
+	require.NoError(t, err)
+
+	actual := hex.EncodeToString(marshalled)
+	require.Equal(t, expected, actual)
+}
+
 func TestDataColumnSidecarsByRootReq_MarshalUnmarshal(t *testing.T) {
 	cases := []struct {
 		name         string
@@ -244,7 +295,7 @@ func TestDataColumnSidecarsByRootReq_MarshalUnmarshal(t *testing.T) {
 				in = append(in, byte(0))
 				return in
 			},
-			unmarshalErr: ssz.ErrIncorrectByteSize.Error(),
+			unmarshalErr: "a is not evenly divisble by b",
 		},
 		{
 			name: "size too big",
@@ -255,7 +306,7 @@ func TestDataColumnSidecarsByRootReq_MarshalUnmarshal(t *testing.T) {
 				in = append(in, add...)
 				return in
 			},
-			unmarshalErr: "expected buffer with length of up to",
+			unmarshalErr: "a/b is greater than max",
 		},
 	}
 
@@ -267,10 +318,12 @@ func TestDataColumnSidecarsByRootReq_MarshalUnmarshal(t *testing.T) {
 				require.ErrorIs(t, err, c.marshalErr)
 				return
 			}
+
 			require.NoError(t, err)
 			if c.unmarshalMod != nil {
 				bytes = c.unmarshalMod(bytes)
 			}
+
 			got := &DataColumnsByRootIdentifiers{}
 			err = got.UnmarshalSSZ(bytes)
 			if c.unmarshalErr != "" {
@@ -278,8 +331,12 @@ func TestDataColumnSidecarsByRootReq_MarshalUnmarshal(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			for i, id := range *got {
-				require.DeepEqual(t, c.ids[i], id)
+
+			require.Equal(t, len(c.ids), len(*got))
+
+			for i, expected := range c.ids {
+				actual := (*got)[i]
+				require.DeepEqual(t, expected, actual)
 			}
 		})
 	}
