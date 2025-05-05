@@ -788,10 +788,12 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 			expectReconstruction: false,
 		},
 		{
-			name:                 "Success - Reconstruction Needed - Target column initially unavailable",
-			requestedColumns:     []uint64{6, 28},
-			peerSetup:            nil,         // Generate a covering set
-			unavailableColumns:   []uint64{6}, // Make column 6 unavailable from all its custodians
+			name:             "Success - Reconstruction Needed - Target column initially unavailable",
+			requestedColumns: []uint64{6, 28},
+			// Hardcode peer setups to cover all columns except for 6
+			peerSetup: []peerSetup{
+				{offset: 2, custodyGroupCount: 0x8}, {offset: 3, custodyGroupCount: 0x8}, {offset: 4, custodyGroupCount: 0x8}, {offset: 5, custodyGroupCount: 0x8}, {offset: 6, custodyGroupCount: 0x8}, {offset: 7, custodyGroupCount: 0x8}, {offset: 8, custodyGroupCount: 0x8}, {offset: 9, custodyGroupCount: 0x8}, {offset: 11, custodyGroupCount: 0x8}, {offset: 12, custodyGroupCount: 0x8}, {offset: 13, custodyGroupCount: 0x8}, {offset: 14, custodyGroupCount: 0x8}, {offset: 15, custodyGroupCount: 0x8}, {offset: 16, custodyGroupCount: 0x8}, {offset: 17, custodyGroupCount: 0x8}, {offset: 18, custodyGroupCount: 0x8}, {offset: 20, custodyGroupCount: 0x8}, {offset: 21, custodyGroupCount: 0x8}, {offset: 22, custodyGroupCount: 0x8}, {offset: 23, custodyGroupCount: 0x8}, {offset: 24, custodyGroupCount: 0x8}, {offset: 25, custodyGroupCount: 0x8}, {offset: 26, custodyGroupCount: 0x8}, {offset: 27, custodyGroupCount: 0x8}, {offset: 28, custodyGroupCount: 0x8}, {offset: 29, custodyGroupCount: 0x8}, {offset: 32, custodyGroupCount: 0x8}, {offset: 33, custodyGroupCount: 0x8}, {offset: 34, custodyGroupCount: 0x8}, {offset: 37, custodyGroupCount: 0x8}, {offset: 39, custodyGroupCount: 0x8}, {offset: 43, custodyGroupCount: 0x8}, {offset: 45, custodyGroupCount: 0x8}, {offset: 53, custodyGroupCount: 0x8}, {offset: 54, custodyGroupCount: 0x8}, {offset: 55, custodyGroupCount: 0x8}, {offset: 67, custodyGroupCount: 0x8}, {offset: 74, custodyGroupCount: 0x8}, {offset: 78, custodyGroupCount: 0x8},
+			},
 			expectedError:        nil,
 			expectReconstruction: true,
 		},
@@ -808,20 +810,22 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 			expectedError:      ErrNotEnoughColsAvailable,
 		},
 		{
-			name:                "Failure - Reconstruction Impossible - Target Coverage 50",
-			requestedColumns:    []uint64{6, 500}, // Request one potentially covered (6) and one uncovered (500)
-			peerSetup:           nil,
-			unavailableColumns:  nil,
-			targetCoverageCount: 50, // Generate peers covering only 50 columns total.
-			// This is less than the recovery threshold (64).
+			name:             "Failure - Reconstruction Impossible - Target Coverage 50",
+			requestedColumns: []uint64{6, 500}, // Request one potentially covered (6) and one uncovered (500)
+			// Hardcode peer setups that cover 50 columns.
+			peerSetup: []peerSetup{
+				{offset: 1, custodyGroupCount: 0x8}, {offset: 2, custodyGroupCount: 0x8}, {offset: 3, custodyGroupCount: 0x8}, {offset: 4, custodyGroupCount: 0x8}, {offset: 5, custodyGroupCount: 0x8}, {offset: 6, custodyGroupCount: 0x8}, {offset: 7, custodyGroupCount: 0x8},
+			},
 			expectedError: ErrNotEnoughColsAvailable,
 		},
 		{
-			name:               "Failure - Direct Fetch Fails & Reconstruction Impossible",
-			requestedColumns:   []uint64{1000, 1001}, // Columns no peer custodies
-			peerSetup:          nil,                  // Generate a covering set
-			unavailableColumns: nil,                  // No columns need to be made unavailable
-			expectedError:      &UnavailableColumnsError{},
+			name:             "Failure - Direct Fetch Fails & Reconstruction Impossible",
+			requestedColumns: []uint64{1000, 1001}, // Columns no peer custodies
+			// Hardcode peer setups that cover all 128 columns.
+			peerSetup: []peerSetup{
+				{offset: 1, custodyGroupCount: 0x8}, {offset: 2, custodyGroupCount: 0x8}, {offset: 3, custodyGroupCount: 0x8}, {offset: 4, custodyGroupCount: 0x8}, {offset: 5, custodyGroupCount: 0x8}, {offset: 6, custodyGroupCount: 0x8}, {offset: 7, custodyGroupCount: 0x8}, {offset: 8, custodyGroupCount: 0x8}, {offset: 9, custodyGroupCount: 0x8}, {offset: 10, custodyGroupCount: 0x8}, {offset: 11, custodyGroupCount: 0x8}, {offset: 12, custodyGroupCount: 0x8}, {offset: 13, custodyGroupCount: 0x8}, {offset: 14, custodyGroupCount: 0x8}, {offset: 15, custodyGroupCount: 0x8}, {offset: 16, custodyGroupCount: 0x8}, {offset: 17, custodyGroupCount: 0x8}, {offset: 18, custodyGroupCount: 0x8}, {offset: 20, custodyGroupCount: 0x8}, {offset: 21, custodyGroupCount: 0x8}, {offset: 22, custodyGroupCount: 0x8}, {offset: 24, custodyGroupCount: 0x8}, {offset: 25, custodyGroupCount: 0x8}, {offset: 26, custodyGroupCount: 0x8}, {offset: 27, custodyGroupCount: 0x8}, {offset: 28, custodyGroupCount: 0x8}, {offset: 32, custodyGroupCount: 0x8}, {offset: 33, custodyGroupCount: 0x8}, {offset: 34, custodyGroupCount: 0x8}, {offset: 37, custodyGroupCount: 0x8}, {offset: 39, custodyGroupCount: 0x8}, {offset: 43, custodyGroupCount: 0x8}, {offset: 45, custodyGroupCount: 0x8}, {offset: 53, custodyGroupCount: 0x8}, {offset: 54, custodyGroupCount: 0x8}, {offset: 55, custodyGroupCount: 0x8}, {offset: 74, custodyGroupCount: 0x8}, {offset: 78, custodyGroupCount: 0x8},
+			},
+			expectedError: &UnavailableColumnsError{},
 		},
 		{
 			name:                 "Success - Empty Request",
@@ -832,19 +836,23 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 			expectReconstruction: false,
 		},
 		{
-			name:                   "Success - Reconstruction Retry Needed - Peer skips advertised column",
-			requestedColumns:       []uint64{6, 37},          // Request columns 6 and 37
-			peerSetup:              nil,                      // Generate a covering set
-			unavailableColumns:     nil,                      // No inherent unavailability
+			name:             "Success - Reconstruction Retry Needed - Peer skips advertised column",
+			requestedColumns: []uint64{6, 37}, // Request columns 6 and 37
+			// Hardcode peer setups that cover all 128 columns.
+			peerSetup: []peerSetup{
+				{offset: 1, custodyGroupCount: 0x8}, {offset: 2, custodyGroupCount: 0x8}, {offset: 3, custodyGroupCount: 0x8}, {offset: 4, custodyGroupCount: 0x8}, {offset: 5, custodyGroupCount: 0x8}, {offset: 6, custodyGroupCount: 0x8}, {offset: 7, custodyGroupCount: 0x8}, {offset: 8, custodyGroupCount: 0x8}, {offset: 9, custodyGroupCount: 0x8}, {offset: 10, custodyGroupCount: 0x8}, {offset: 11, custodyGroupCount: 0x8}, {offset: 12, custodyGroupCount: 0x8}, {offset: 13, custodyGroupCount: 0x8}, {offset: 14, custodyGroupCount: 0x8}, {offset: 15, custodyGroupCount: 0x8}, {offset: 16, custodyGroupCount: 0x8}, {offset: 17, custodyGroupCount: 0x8}, {offset: 18, custodyGroupCount: 0x8}, {offset: 20, custodyGroupCount: 0x8}, {offset: 21, custodyGroupCount: 0x8}, {offset: 22, custodyGroupCount: 0x8}, {offset: 24, custodyGroupCount: 0x8}, {offset: 25, custodyGroupCount: 0x8}, {offset: 26, custodyGroupCount: 0x8}, {offset: 27, custodyGroupCount: 0x8}, {offset: 28, custodyGroupCount: 0x8}, {offset: 32, custodyGroupCount: 0x8}, {offset: 33, custodyGroupCount: 0x8}, {offset: 34, custodyGroupCount: 0x8}, {offset: 37, custodyGroupCount: 0x8}, {offset: 39, custodyGroupCount: 0x8}, {offset: 43, custodyGroupCount: 0x8}, {offset: 45, custodyGroupCount: 0x8}, {offset: 53, custodyGroupCount: 0x8}, {offset: 54, custodyGroupCount: 0x8}, {offset: 55, custodyGroupCount: 0x8}, {offset: 74, custodyGroupCount: 0x8}, {offset: 78, custodyGroupCount: 0x8},
+			},
 			skipColumnsDuringFetch: map[uint64]bool{6: true}, // Make peers that advertise 6 skip it during fetch
 			expectedError:          nil,
 			expectReconstruction:   true, // Expect reconstruction because column 6 will be initially missed
 		},
 		{
-			name:               "Failure - Reconstruction Impossible - Peers skip required columns",
-			requestedColumns:   []uint64{0}, // Request a column that will be skipped
-			peerSetup:          nil,         // Generate a covering set
-			unavailableColumns: nil,         // All columns advertised initially
+			name:             "Failure - Reconstruction Impossible - Peers skip required columns",
+			requestedColumns: []uint64{0}, // Request a column that will be skipped
+			// Hardcode peer setups that cover all 128 columns.
+			peerSetup: []peerSetup{
+				{offset: 1, custodyGroupCount: 0x8}, {offset: 2, custodyGroupCount: 0x8}, {offset: 3, custodyGroupCount: 0x8}, {offset: 4, custodyGroupCount: 0x8}, {offset: 5, custodyGroupCount: 0x8}, {offset: 6, custodyGroupCount: 0x8}, {offset: 7, custodyGroupCount: 0x8}, {offset: 8, custodyGroupCount: 0x8}, {offset: 9, custodyGroupCount: 0x8}, {offset: 10, custodyGroupCount: 0x8}, {offset: 11, custodyGroupCount: 0x8}, {offset: 12, custodyGroupCount: 0x8}, {offset: 13, custodyGroupCount: 0x8}, {offset: 14, custodyGroupCount: 0x8}, {offset: 15, custodyGroupCount: 0x8}, {offset: 16, custodyGroupCount: 0x8}, {offset: 17, custodyGroupCount: 0x8}, {offset: 18, custodyGroupCount: 0x8}, {offset: 20, custodyGroupCount: 0x8}, {offset: 21, custodyGroupCount: 0x8}, {offset: 22, custodyGroupCount: 0x8}, {offset: 24, custodyGroupCount: 0x8}, {offset: 25, custodyGroupCount: 0x8}, {offset: 26, custodyGroupCount: 0x8}, {offset: 27, custodyGroupCount: 0x8}, {offset: 28, custodyGroupCount: 0x8}, {offset: 32, custodyGroupCount: 0x8}, {offset: 33, custodyGroupCount: 0x8}, {offset: 34, custodyGroupCount: 0x8}, {offset: 37, custodyGroupCount: 0x8}, {offset: 39, custodyGroupCount: 0x8}, {offset: 43, custodyGroupCount: 0x8}, {offset: 45, custodyGroupCount: 0x8}, {offset: 53, custodyGroupCount: 0x8}, {offset: 54, custodyGroupCount: 0x8}, {offset: 55, custodyGroupCount: 0x8}, {offset: 74, custodyGroupCount: 0x8}, {offset: 78, custodyGroupCount: 0x8},
+			},
 			skipColumnsDuringFetch: func() map[uint64]bool { // Skip recoveryThreshold+1 columns
 				skipMap := make(map[uint64]bool)
 				for i := uint64(0); i < recoveryThreshold+1; i++ {
