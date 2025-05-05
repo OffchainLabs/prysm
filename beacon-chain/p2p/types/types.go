@@ -215,7 +215,6 @@ func (s *BlobSidecarsByRootReq) Len() int {
 // ===================================
 var _ ssz.Marshaler = (*DataColumnsByRootIdentifiers)(nil)
 var _ ssz.Unmarshaler = (*DataColumnsByRootIdentifiers)(nil)
-var _ sort.Interface = (*DataColumnsByRootIdentifiers)(nil)
 
 // DataColumnsByRootIdentifiers is used to specify a list of data column targets (root+index) in a DataColumnSidecarsByRoot RPC request.
 type DataColumnsByRootIdentifiers []*eth.DataColumnsByRootIdentifier
@@ -319,26 +318,6 @@ func (d *DataColumnsByRootIdentifiers) SizeSSZ() int {
 		size += (*d)[i].SizeSSZ()
 	}
 	return size
-}
-
-// Len implements sort.Interface. It returns the number of elements in the collection.
-func (d *DataColumnsByRootIdentifiers) Len() int {
-	return len(*d)
-}
-
-// Less implements sort.Interface. It reports whether the element with index i must sort before the element with index j.
-func (d *DataColumnsByRootIdentifiers) Less(i, j int) bool {
-	rootCmp := bytes.Compare((*d)[i].BlockRoot, (*d)[j].BlockRoot)
-	if rootCmp != 0 {
-		return rootCmp < 0
-	}
-
-	return (*d)[i].Columns[0] < (*d)[j].Columns[0]
-}
-
-// Swap implements sort.Interface. It swaps the elements with indexes i and j.
-func (d *DataColumnsByRootIdentifiers) Swap(i, j int) {
-	(*d)[i], (*d)[j] = (*d)[j], (*d)[i]
 }
 
 func init() {
