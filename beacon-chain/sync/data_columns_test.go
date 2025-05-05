@@ -1911,7 +1911,7 @@ func TestRequestMissingDataColumnsByRange(t *testing.T) {
 			}
 
 			// Fetch the data columns from the peers.
-			fetchedVerifiedDataColumnsByRoot, err := RequestMissingDataColumnsByRange(ctx, clock, ctxMap, p2pSvc, rateLimiter, 4, dataColumnStorageSummarizer, peersID, roBlocks, tc.batchSize, verifier)
+			fetchedVerifiedDataColumnsByRoot, err := RequestMissingDataColumnsByRange(ctx, clock, ctxMap, p2pSvc, rateLimiter, 4, dataColumnStorageSummarizer, peersID, roBlocks, tc.batchSize, verifier, 1*time.Microsecond)
 			if !tc.isError {
 				require.NoError(t, err)
 			} else {
@@ -2167,7 +2167,7 @@ func TestRequestDataColumnSidecarsByRange(t *testing.T) {
 			}
 
 			// Fetch the data columns from the peers.
-			fetchedVerifiedDataColumnsByRoot, err := RequestDataColumnSidecarsByRange(context.Background(), missingColumnsByRoot, roBlocks, peerIDs, 4, clock, hostP2P, ctxMap, rateLimiter, verifier)
+			fetchedVerifiedDataColumnsByRoot, err := RequestDataColumnSidecarsByRange(context.Background(), missingColumnsByRoot, roBlocks, peerIDs, 4, clock, hostP2P, ctxMap, rateLimiter, verifier, 1*time.Second)
 
 			// --- Assertions ---
 			if tc.expectedError != nil {
@@ -2712,7 +2712,7 @@ func TestOnlyRequestDataColumnSidecarsByRange(t *testing.T) {
 			}).Debug("About to request data columns")
 
 			// Fetch the data columns from the peers.
-			fetchedVerifiedDataColumnsByRoot, err := OnlyRequestDataColumnSidecarsByRange(ctx, missingColumnsByRoot, roBlocks, peersID, tc.batchSize, clock, p2pSvc, ctxMap, rateLimiter, verifier)
+			fetchedVerifiedDataColumnsByRoot, err := OnlyRequestDataColumnSidecarsByRange(ctx, missingColumnsByRoot, roBlocks, peersID, tc.batchSize, clock, p2pSvc, ctxMap, rateLimiter, verifier, 1*time.Second)
 			if !tc.isError {
 				require.NoError(t, err)
 			} else {

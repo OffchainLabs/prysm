@@ -35,6 +35,10 @@ var (
 	ErrReconstructionFailed   = errors.New("failed to reconstruct data columns")
 )
 
+const (
+	defaultMaxPeerDelay = 30 * time.Second
+)
+
 type UnavailableColumnsError struct {
 	Columns []uint64
 }
@@ -578,9 +582,14 @@ func RequestMissingDataColumnsByRange(
 	blks []blocks.ROBlock,
 	batchSize int,
 	newColumnsVerifier verification.NewDataColumnsVerifier,
+	maxPeerDelay time.Duration,
 ) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
 	if len(blks) == 0 {
 		return nil, nil
+	}
+
+	if maxPeerDelay == 0 {
+		maxPeerDelay = defaultMaxPeerDelay
 	}
 
 	// Get the current slot.
@@ -616,7 +625,7 @@ func RequestMissingDataColumnsByRange(
 		}
 	}
 
-	return RequestDataColumnSidecarsByRange(ctx, missingColumnsByRoot, blks, peers, batchSize, clock, p2p, ctxMap, rateLimiter, newColumnsVerifier)
+	return RequestDataColumnSidecarsByRange(ctx, missingColumnsByRoot, blks, peers, batchSize, clock, p2p, ctxMap, rateLimiter, newColumnsVerifier, maxPeerDelay)
 }
 
 // RequestDataColumnSidecarsByRange is an opinionated, high level function which, for each block in `blks`:
@@ -647,12 +656,17 @@ func RequestDataColumnSidecarsByRange(
 	ctxMap ContextByteVersions,
 	rateLimiter *leakybucket.Collector,
 	newColumnsVerifier verification.NewDataColumnsVerifier,
+	maxPeerDelay time.Duration,
 ) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
 	log := log.WithFields(logrus.Fields{
 		"startSlot": blks[0].Block().Slot(),
 		"count":     blks[len(blks)-1].Block().Slot() - blks[0].Block().Slot() + 1,
 	})
 	log.Debug("Attempting to fetch or reconstruct data columns for range")
+
+	if maxPeerDelay == 0 {
+		maxPeerDelay = defaultMaxPeerDelay
+	}
 
 	// missingColumnsByRoot is mutated within OnlyRequestDataColumnSidecarsByRange.
 	// Clone it to use unmodified during reconstruction.
@@ -676,6 +690,7 @@ func RequestDataColumnSidecarsByRange(
 		ctxMap,
 		rateLimiter,
 		newColumnsVerifier,
+		maxPeerDelay,
 	)
 	if err == nil {
 		return fetchedColumnsByRoot, nil
@@ -696,6 +711,7 @@ func RequestDataColumnSidecarsByRange(
 			ctxMap,
 			rateLimiter,
 			newColumnsVerifier,
+			maxPeerDelay,
 		)
 		if reconstructErr != nil {
 			joinedErr := goErrors.Join(err, reconstructErr)
@@ -719,7 +735,12 @@ func OnlyRequestDataColumnSidecarsByRange(
 	ctxMap ContextByteVersions,
 	rateLimiter *leakybucket.Collector,
 	newColumnsVerifier verification.NewDataColumnsVerifier,
+	maxPeerDelay time.Duration,
 ) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
+	if maxPeerDelay == 0 {
+		maxPeerDelay = defaultMaxPeerDelay
+	}
+
 	// Compute the number of missing data columns.
 	previousMissingDataColumnsCount := itemsCount(missingColumnsByRoot)
 
@@ -760,7 +781,7 @@ func OnlyRequestDataColumnSidecarsByRange(
 		// Requests data column sidecars from peers.
 		retrievedDataColumnsByRoot := make(map[[fieldparams.RootLength]byte][]blocks.RODataColumn)
 		for _, request := range requests {
-			roDataColumns, err := fetchDataColumnsFromPeers(ctx, clock, p2p, rateLimiter, ctxMap, peers, request)
+			roDataColumns, err := fetchDataColumnsFromPeers(ctx, clock, p2p, rateLimiter, ctxMap, peers, request, maxPeerDelay)
 			if err != nil {
 				return nil, errors.Wrap(err, "fetch data columns from peers")
 			}
@@ -1211,6 +1232,7 @@ func fetchDataColumnsFromPeers(
 	ctxMap ContextByteVersions,
 	peers []peer.ID,
 	targetRequest *eth.DataColumnSidecarsByRangeRequest,
+	maxPeerDelay time.Duration,
 ) ([]blocks.RODataColumn, error) {
 	// Filter out requests with no data columns.
 	if len(targetRequest.Columns) == 0 {
@@ -1218,7 +1240,7 @@ func fetchDataColumnsFromPeers(
 	}
 
 	// Get all admissible peers with the data columns they custody.
-	dataColumnsByAdmissiblePeer, err := waitForPeersForDataColumns(p2p, rateLimiter, peers, targetRequest)
+	dataColumnsByAdmissiblePeer, err := waitForPeersForDataColumns(p2p, rateLimiter, peers, targetRequest, maxPeerDelay)
 	if err != nil {
 		return nil, errors.Wrap(err, "wait for peers for data columns")
 	}
@@ -1255,9 +1277,8 @@ func fetchDataColumnsFromPeers(
 // - synced up to `lastSlot`, and
 // - have bandwidth to serve `blockCount` blocks.
 // It waits until at least one peer per data column is available.
-func waitForPeersForDataColumns(p2p p2p.P2P, rateLimiter *leakybucket.Collector, peers []peer.ID, request *eth.DataColumnSidecarsByRangeRequest) (map[peer.ID]map[uint64]bool, error) {
+func waitForPeersForDataColumns(p2p p2p.P2P, rateLimiter *leakybucket.Collector, peers []peer.ID, request *eth.DataColumnSidecarsByRangeRequest, maxPeerDelay time.Duration) (map[peer.ID]map[uint64]bool, error) {
 	const delay = 5 * time.Second
-	const maxDelay = 30 * time.Second
 
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
@@ -1322,15 +1343,16 @@ func waitForPeersForDataColumns(p2p p2p.P2P, rateLimiter *leakybucket.Collector,
 			}).Debug("Peer data columns")
 		}
 
-		time.Sleep(delay)
 		totalDelay += delay
-		if totalDelay > maxDelay {
+		if totalDelay > maxPeerDelay {
 			unavailableColumns := make([]uint64, 0, len(dataColumnsWithoutPeers))
 			for column := range dataColumnsWithoutPeers {
 				unavailableColumns = append(unavailableColumns, column)
 			}
 			return nil, errors.Wrap(NewUnavailableColumnsError(unavailableColumns), "Waiting for peers to become available - maximum wait time exceeded")
 		}
+
+		time.Sleep(delay)
 
 		// Filter for peers with head epoch greater than or equal to our target epoch for ByRange requests.
 		filteredPeers, descriptions, err = filterPeersByTargetSlotAndBandwidth(p2p, rateLimiter, peers, lastSlot, request.Count)
@@ -1456,6 +1478,7 @@ func ReconstructDataColumnsByRange(
 	ctxMap ContextByteVersions,
 	rateLimiter *leakybucket.Collector,
 	newColumnsVerifier verification.NewDataColumnsVerifier,
+	maxPeerDelay time.Duration,
 ) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
 	if len(missingColumnsByRoot) == 0 || len(blks) == 0 {
 		return nil, nil // Nothing requested or no relevant blocks.
@@ -1498,6 +1521,7 @@ func ReconstructDataColumnsByRange(
 	fetchedSidecarsByRoot, err := fetchAndVerifyRecoveryColumnsByRange(
 		ctx, missingColumnsByRoot, availableColumns, recoveryThreshold,
 		blks, peers, batchSize, clock, p2p, ctxMap, rateLimiter, newColumnsVerifier,
+		maxPeerDelay,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch recovery columns for range")
@@ -1559,6 +1583,7 @@ func fetchAndVerifyRecoveryColumnsByRange(
 	ctxMap ContextByteVersions,
 	rateLimiter *leakybucket.Collector,
 	newColumnsVerifier verification.NewDataColumnsVerifier,
+	maxPeerDelay time.Duration,
 ) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
 	remainingAvailableCols := make(map[uint64]bool, len(availableColumns))
 	for _, col := range availableColumns {
@@ -1616,6 +1641,7 @@ func fetchAndVerifyRecoveryColumnsByRange(
 			ctxMap,
 			rateLimiter,
 			newColumnsVerifier,
+			maxPeerDelay,
 		)
 		if err == nil {
 			// Successfully fetched data columns. Break the loop.
