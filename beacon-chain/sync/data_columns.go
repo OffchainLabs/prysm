@@ -84,28 +84,29 @@ func GetDataColumnSidecarsByRoot(
 	log.Debug("Attempting to fetch or reconstruct data columns")
 
 	// First, try to request the columns directly.
-	sidecars, err := requestDataColumnSidecarsByRoot(ctx, dataColumnsToFetch, block, peers, clock, p2p, ctxMap, newColumnsVerifier)
-	if err == nil {
+	sidecars, unavailableColumns, err := requestDataColumnSidecarsByRoot(ctx, dataColumnsToFetch, block, peers, clock, p2p, ctxMap, newColumnsVerifier)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to fetch data columns")
+	}
+
+	if len(unavailableColumns) == 0 {
 		// Successfully fetched.
 		log.Debug("Successfully fetched requested data columns")
 		return sidecars, nil
 	}
 
-	// If the error is specifically UnavailableColumnsError, attempt reconstruction.
-	if errors.Is(err, &unavailableColumnsError{}) {
-		log.WithError(err).Debug("Fetching failed due to no available peers, attempting reconstruction")
-		reconstructedSidecars, reconstructErr := ReconstructDataColumnsByRoot(ctx, dataColumnsToFetch, block, peers, clock, p2p, ctxMap, newColumnsVerifier)
-		if reconstructErr != nil {
-			joinedErr := goErrors.Join(err, reconstructErr)
-			return nil, errors.Wrap(joinedErr, "failed to fetch (no peers) and reconstruction failed")
-		}
-		// Successfully reconstructed.
-		log.Debug("Successfully reconstructed requested data columns")
-		return reconstructedSidecars, nil
+	// Some of the columns we need are unavailable. Attempt reconstruction.
+	log.WithError(err).Debug("Fetching failed due to no unavailable columns, attempting reconstruction")
+	// TODO: Use the sidecars we received to reduce the number of columns we need to reconstruct.
+	reconstructedSidecars, reconstructErr := ReconstructDataColumnsByRoot(ctx, dataColumnsToFetch, block, peers, clock, p2p, ctxMap, newColumnsVerifier)
+	if reconstructErr != nil {
+		joinedErr := goErrors.Join(err, reconstructErr)
+		return nil, errors.Wrap(joinedErr, "failed to fetch (no peers) and reconstruction failed")
 	}
 
-	// If fetching failed for a different reason, return that error directly.
-	return nil, errors.Wrap(err, "failed to fetch data columns")
+	// Successfully reconstructed.
+	log.Debug("Successfully reconstructed requested data columns")
+	return reconstructedSidecars, nil
 }
 
 // requestDataColumnSidecarsByRoot attempts to fetch the requested data columns from peers. It
@@ -119,15 +120,15 @@ func requestDataColumnSidecarsByRoot(
 	p2p p2p.P2P,
 	ctxMap ContextByteVersions,
 	newColumnsVerifier verification.NewDataColumnsVerifier,
-) ([]blocks.VerifiedRODataColumn, error) {
+) ([]blocks.VerifiedRODataColumn, []uint64, error) {
 	if len(dataColumnsToFetch) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	// Assemble the peers who can provide the needed data columns.
 	dataColumnsByAdmissiblePeer, _, _, err := AdmissiblePeersForDataColumns(peers, dataColumnsToFetch, p2p)
 	if err != nil {
-		return nil, errors.Wrap(err, "couldn't get admissible peers for data columns")
+		return nil, dataColumnsToFetch, errors.Wrap(err, "couldn't get admissible peers for data columns")
 	}
 
 	verifiedSidecars := make([]blocks.VerifiedRODataColumn, 0, len(dataColumnsToFetch))
@@ -141,7 +142,8 @@ func requestDataColumnSidecarsByRoot(
 	for len(dataColumnsByAdmissiblePeer) > 0 {
 		peersToFetchFrom, err := SelectPeersToFetchDataColumnsFrom(uint64MapToSortedSlice(remainingMissingColumns), dataColumnsByAdmissiblePeer)
 		if err != nil {
-			return nil, errors.Wrap(err, "select peers to fetch data columns from")
+			// We can't make any more progress on the remaining columns. Return our progress.
+			return verifiedSidecars, uint64MapToSortedSlice(remainingMissingColumns), nil
 		}
 
 		// Request the data columns from each peer.
@@ -209,11 +211,16 @@ func requestDataColumnSidecarsByRoot(
 			continue
 		}
 
-		return verifiedSidecars, nil
+		return verifiedSidecars, nil, nil
 	}
 
-	// If we still have remaining columns after all retries, return error
-	return nil, fmt.Errorf("failed to retrieve all requested data columns after retries for block root=%#x, %w", blockRoot, newUnavailableColumnsError(uint64MapToSortedSlice(remainingMissingColumns)))
+	// If we still have remaining columns after all retries, return the progress we made without an error.
+	log.WithFields(logrus.Fields{
+		"blockRoot":           fmt.Sprintf("%#x", blockRoot),
+		"missingColumns":      uint64MapToSortedSlice(remainingMissingColumns),
+		"successfullyFetched": len(verifiedSidecars),
+	}).Warnf("failed to retrieve all requested data columns after retries")
+	return verifiedSidecars, uint64MapToSortedSlice(remainingMissingColumns), nil
 }
 
 func verifyColumnsForBlock(block blocks.ROBlock, columns []blocks.RODataColumn, newColumnsVerifier verification.NewDataColumnsVerifier) ([]blocks.VerifiedRODataColumn, error) {
@@ -346,10 +353,10 @@ func fetchAndVerifyRecoveryColumns(
 		filteredAvailableColumns[col] = true
 	}
 
-	var fetchedSidecars []blocks.VerifiedRODataColumn
+	var collectedSidecars []blocks.VerifiedRODataColumn
 	for {
 		// Fetch selected columns.
-		fetchedSidecars, err = requestDataColumnSidecarsByRoot(
+		fetchedSidecars, remainingMissingColumns, err := requestDataColumnSidecarsByRoot(
 			ctx,
 			columnsToFetch,
 			block,
@@ -359,39 +366,44 @@ func fetchAndVerifyRecoveryColumns(
 			ctxMap,
 			newColumnsVerifier,
 		)
-		if err == nil {
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to request data columns for recovery")
+		}
+
+		collectedSidecars = append(collectedSidecars, fetchedSidecars...)
+		if len(remainingMissingColumns) == 0 {
 			// Successfully fetched data columns.
 			break
 		}
 
-		ucErr := &unavailableColumnsError{}
-		if errors.As(err, &ucErr) {
-			// If some of the columns for reconstruction are unavailable, try again with those columns removed from the available columns.
-			for _, unavailableCol := range ucErr.Columns {
-				delete(filteredAvailableColumns, unavailableCol)
-			}
-			localAvailableColumns := make([]uint64, 0, len(filteredAvailableColumns))
-			for col := range filteredAvailableColumns {
-				localAvailableColumns = append(localAvailableColumns, col)
-			}
+		// Prepare to try again with different columns. First, remove the columns we just fetched.
+		for _, col := range fetchedSidecars {
+			delete(filteredAvailableColumns, col.Index)
+		}
 
-			columnsToFetch, err = selectRecoveryColumnsToFetch(dataColumnsToFetch, localAvailableColumns, recoveryThreshold)
-			if err != nil {
-				return nil, errors.Wrap(err, "failed to select columns for recovery")
-			}
-		} else {
-			// If the error is not an UnavailableColumnsError, return the error directly.
-			return nil, errors.Wrap(err, "failed to request data columns for recovery")
+		// Remove any columns that we weren't actually able to fetch.
+		for _, unavailableCol := range remainingMissingColumns {
+			delete(filteredAvailableColumns, unavailableCol)
+		}
+
+		localAvailableColumns := make([]uint64, 0, len(filteredAvailableColumns))
+		for col := range filteredAvailableColumns {
+			localAvailableColumns = append(localAvailableColumns, col)
+		}
+
+		columnsToFetch, err = selectRecoveryColumnsToFetch(dataColumnsToFetch, localAvailableColumns, recoveryThreshold)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to select columns for recovery")
 		}
 	}
 
 	// Check if we actually got enough sidecars after the request.
-	if len(fetchedSidecars) < recoveryThreshold {
-		return nil, errors.Wrapf(errReconstructionFailed, "received only %d columns, need %d", len(fetchedSidecars), recoveryThreshold)
+	if len(collectedSidecars) < recoveryThreshold {
+		return nil, errors.Wrapf(errReconstructionFailed, "received only %d columns, need %d", len(collectedSidecars), recoveryThreshold)
 	}
 
-	log.WithField("fetchedCount", len(fetchedSidecars)).Debug("Successfully fetched required data columns")
-	return fetchedSidecars, nil
+	log.WithField("fetchedCount", len(collectedSidecars)).Debug("Successfully fetched required data columns")
+	return collectedSidecars, nil
 }
 
 // selectRecoveryColumnsToFetch determines the set of columns to fetch for recovery.

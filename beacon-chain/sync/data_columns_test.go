@@ -430,12 +430,12 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 	require.NoError(t, err)
 
 	testCases := []struct {
-		name                 string
-		dataColumns          map[uint64]bool
-		peerSetup            []peerSetup
-		expectError          bool
-		expectedPeerRequests map[int][]uint64
-		skipColumns          map[int]map[uint64]bool // Maps peer offset -> column index -> should skip
+		name                  string
+		dataColumns           map[uint64]bool
+		peerSetup             []peerSetup
+		expectUnavailableCols bool
+		expectedPeerRequests  map[int][]uint64
+		skipColumns           map[int]map[uint64]bool // Maps peer offset -> column index -> should skip
 	}{
 		{
 			name:        "No data columns requested",
@@ -443,8 +443,8 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 			peerSetup: []peerSetup{
 				{offset: 1, custodyGroupCount: 4},
 			},
-			expectError:          false,
-			expectedPeerRequests: map[int][]uint64{},
+			expectUnavailableCols: false,
+			expectedPeerRequests:  map[int][]uint64{},
 		},
 		{
 			name:        "Single data column successful request",
@@ -452,7 +452,7 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 			peerSetup: []peerSetup{
 				{offset: 1, custodyGroupCount: 4}, // This peer will custody columns [6, 37, 48, 113]
 			},
-			expectError: false,
+			expectUnavailableCols: false,
 			expectedPeerRequests: map[int][]uint64{
 				1: {37},
 			},
@@ -464,25 +464,25 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 				{offset: 1, custodyGroupCount: 4},  // This peer will custody columns [6, 37, 48, 113]
 				{offset: 10, custodyGroupCount: 4}, // This peer will custody columns [6, 28, 53, 71]
 			},
-			expectError: false,
+			expectUnavailableCols: false,
 			expectedPeerRequests: map[int][]uint64{
 				1:  {37},
 				10: {28},
 			},
 		},
 		{
-			name:                 "No peers respond",
-			dataColumns:          map[uint64]bool{37: true},
-			peerSetup:            []peerSetup{}, // No peers
-			expectError:          true,
-			expectedPeerRequests: map[int][]uint64{},
+			name:                  "No peers respond",
+			dataColumns:           map[uint64]bool{37: true},
+			peerSetup:             []peerSetup{}, // No peers
+			expectUnavailableCols: true,
+			expectedPeerRequests:  map[int][]uint64{},
 		},
 		{
-			name:                 "No peer has the requested column",
-			dataColumns:          map[uint64]bool{1000: true}, // Column that no peer will have
-			peerSetup:            []peerSetup{},               // No peers
-			expectError:          true,
-			expectedPeerRequests: map[int][]uint64{},
+			name:                  "No peer has the requested column",
+			dataColumns:           map[uint64]bool{1000: true}, // Column that no peer will have
+			peerSetup:             []peerSetup{},               // No peers
+			expectUnavailableCols: true,
+			expectedPeerRequests:  map[int][]uint64{},
 		},
 		{
 			name: "Multiple peers with overlapping custody",
@@ -496,7 +496,7 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 				{offset: 1, custodyGroupCount: 4},  // Peer 1 custodies [6, 37, 48, 113]
 				{offset: 10, custodyGroupCount: 4}, // Peer 2 custodies [6, 28, 53, 71]
 			},
-			expectError: false,
+			expectUnavailableCols: false,
 			expectedPeerRequests: map[int][]uint64{
 				1:  {6, 37, 113}, // Peer 1 should handle column 6 since it's already getting other columns
 				10: {28},         // Peer 2 should only handle column 28
@@ -512,8 +512,8 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 			peerSetup: []peerSetup{
 				{offset: 1, custodyGroupCount: 4}, // This peer will custody columns [6, 37, 48, 113]
 			},
-			expectError:          true,
-			expectedPeerRequests: map[int][]uint64{},
+			expectUnavailableCols: true,
+			expectedPeerRequests:  map[int][]uint64{},
 		},
 		{
 			name: "Peer doesn't respond with all claimed columns",
@@ -528,7 +528,7 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 					custodyGroupCount: 4, // This peer claims custody of [6, 37, 48, 113] but only responds with [37]
 				},
 			},
-			expectError: true, // Should error since not all requested columns were received
+			expectUnavailableCols: true, // Should error since not all requested columns were received
 			expectedPeerRequests: map[int][]uint64{
 				1: {6, 37, 48}, // Peer should be asked for all columns it claims to have
 			},
@@ -555,7 +555,7 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 					custodyGroupCount: 4, // Peer custodies [2, 37, 120, 121]
 				},
 			},
-			expectError: false, // Should succeed since peer with offset 12 can provide column 37
+			expectUnavailableCols: false, // Should succeed since peer with offset 12 can provide column 37
 			expectedPeerRequests: map[int][]uint64{
 				1:  {37, 48}, // First peer is asked for both columns initially
 				12: {37},     // Second peer is asked for column 37 as fallback
@@ -591,7 +591,7 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 			}
 
 			// Call the function under test
-			responseCols, err := requestDataColumnSidecarsByRoot(
+			responseCols, unavailableColumns, err := requestDataColumnSidecarsByRoot(
 				context.Background(),
 				uint64MapToSortedSlice(tc.dataColumns),
 				roBlock,
@@ -603,8 +603,8 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 			)
 
 			// Verify results
-			if tc.expectError {
-				require.NotNil(t, err)
+			if tc.expectUnavailableCols {
+				require.Equal(t, len(unavailableColumns) > 0, true)
 				return
 			}
 			require.NoError(t, err)
@@ -825,7 +825,7 @@ func TestGetDataColumnSidecarsByRoot(t *testing.T) {
 			peerSetup: []peerSetup{
 				{offset: 1, custodyGroupCount: 0x8}, {offset: 2, custodyGroupCount: 0x8}, {offset: 3, custodyGroupCount: 0x8}, {offset: 4, custodyGroupCount: 0x8}, {offset: 5, custodyGroupCount: 0x8}, {offset: 6, custodyGroupCount: 0x8}, {offset: 7, custodyGroupCount: 0x8}, {offset: 8, custodyGroupCount: 0x8}, {offset: 9, custodyGroupCount: 0x8}, {offset: 10, custodyGroupCount: 0x8}, {offset: 11, custodyGroupCount: 0x8}, {offset: 12, custodyGroupCount: 0x8}, {offset: 13, custodyGroupCount: 0x8}, {offset: 14, custodyGroupCount: 0x8}, {offset: 15, custodyGroupCount: 0x8}, {offset: 16, custodyGroupCount: 0x8}, {offset: 17, custodyGroupCount: 0x8}, {offset: 18, custodyGroupCount: 0x8}, {offset: 20, custodyGroupCount: 0x8}, {offset: 21, custodyGroupCount: 0x8}, {offset: 22, custodyGroupCount: 0x8}, {offset: 24, custodyGroupCount: 0x8}, {offset: 25, custodyGroupCount: 0x8}, {offset: 26, custodyGroupCount: 0x8}, {offset: 27, custodyGroupCount: 0x8}, {offset: 28, custodyGroupCount: 0x8}, {offset: 32, custodyGroupCount: 0x8}, {offset: 33, custodyGroupCount: 0x8}, {offset: 34, custodyGroupCount: 0x8}, {offset: 37, custodyGroupCount: 0x8}, {offset: 39, custodyGroupCount: 0x8}, {offset: 43, custodyGroupCount: 0x8}, {offset: 45, custodyGroupCount: 0x8}, {offset: 53, custodyGroupCount: 0x8}, {offset: 54, custodyGroupCount: 0x8}, {offset: 55, custodyGroupCount: 0x8}, {offset: 74, custodyGroupCount: 0x8}, {offset: 78, custodyGroupCount: 0x8},
 			},
-			expectedError: &unavailableColumnsError{},
+			expectedError: errReconstructionFailed,
 		},
 		{
 			name:                 "Success - Empty Request",
