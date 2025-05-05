@@ -664,26 +664,30 @@ func GetDataColumnSidecarsByRange(
 
 	// First, try to request the columns directly for the range.
 	fetchedColumnsByRoot, err := requestDataColumnSidecarsByRange(ctx, missingColumnsByRoot, blks, peers, batchSize, clock, p2p, ctxMap, rateLimiter, newColumnsVerifier, maxPeerDelay)
-	if err == nil {
+	if err != nil && !errors.Is(err, &unavailableColumnsError{}) {
+		return nil, errors.Wrap(err, "failed to fetch all data columns for range")
+	}
+
+	unavailableColumnsCount := itemsCount(missingColumnsByRoot)
+	if unavailableColumnsCount == 0 {
 		return fetchedColumnsByRoot, nil
 	}
 
-	// If the error is specifically UnavailableColumnsError, attempt reconstruction for the range.
-	if errors.Is(err, &unavailableColumnsError{}) {
-		log.WithError(err).Debug("Fetching range failed due to no available peers for initial request, attempting reconstruction")
-
-		reconstructedColumnsByRoot, reconstructErr := ReconstructDataColumnsByRange(ctx, clonedMissingColumnsByRoot, blks, peers, batchSize, clock, p2p, ctxMap, rateLimiter, newColumnsVerifier, maxPeerDelay)
-		if reconstructErr != nil {
-			joinedErr := goErrors.Join(err, reconstructErr)
-			return nil, errors.Wrap(joinedErr, "failed to fetch range (no peers) and reconstruction failed")
-		}
-
-		return reconstructedColumnsByRoot, nil
+	// We couldn't fetch all the columns. Attempt reconstruction for the range.
+	log.WithError(err).Debug("Fetching range failed due to unavailable columns, attempting reconstruction")
+	// TODO: Use the sidecars we received to reduce the number of columns we need to reconstruct.
+	reconstructedColumnsByRoot, reconstructErr := ReconstructDataColumnsByRange(ctx, clonedMissingColumnsByRoot, blks, peers, batchSize, clock, p2p, ctxMap, rateLimiter, newColumnsVerifier, maxPeerDelay)
+	if reconstructErr != nil {
+		joinedErr := goErrors.Join(err, reconstructErr)
+		return nil, errors.Wrap(joinedErr, "failed to fetch range (unavailable columns) and reconstruction failed")
 	}
 
-	return nil, errors.Wrap(err, "failed to fetch all data columns for range")
+	return reconstructedColumnsByRoot, nil
 }
 
+// requestDataColumnSidecarsByRange is a helper function which requests data column sidecars for a range of blocks.
+// The provided `missingColumnsByRoot` is mutated during the function. When some missing data columns are unavailable,
+// the function returns the aligned data columns that were retrieved, leaving the missing columns in `missingColumnsByRoot`.
 func requestDataColumnSidecarsByRange(
 	ctx context.Context,
 	missingColumnsByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
@@ -730,7 +734,7 @@ func requestDataColumnSidecarsByRange(
 	start := time.Now()
 	log.Debug("Requesting data column sidecars - start")
 
-	alignedDataColumnsByRoot := make(map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, len(blks))
+	colsByRoot := make(map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, len(blks))
 	for len(missingColumnsByRoot) > 0 {
 		// Build requests.
 		requests, err := buildDataColumnByRangeRequests(blks, missingColumnsByRoot, batchSize)
@@ -743,7 +747,8 @@ func requestDataColumnSidecarsByRange(
 		for _, request := range requests {
 			roDataColumns, err := fetchDataColumnsFromPeers(ctx, clock, p2p, rateLimiter, ctxMap, peers, request, maxPeerDelay)
 			if err != nil {
-				return nil, errors.Wrap(err, "fetch data columns from peers")
+				// Ignore the error and continue the loop. If the error persists, the loop will exceed its max allowed stall count.
+				continue
 			}
 
 			for _, roDataColumn := range roDataColumns {
@@ -770,7 +775,7 @@ func requestDataColumnSidecarsByRange(
 				continue
 			}
 
-			alignedDataColumnsByRoot[root] = append(alignedDataColumnsByRoot[root], verifiedDataColumns...)
+			colsByRoot[root] = append(colsByRoot[root], verifiedDataColumns...)
 
 			// Remove aligned data columns from the missing columns.
 			for _, dataColumn := range dataColumns {
@@ -799,16 +804,9 @@ func requestDataColumnSidecarsByRange(
 
 			if stallCount >= maxAllowedStall {
 				// It is very likely `bwbs` contains orphaned blocks, for which no peer has the data columns.
-				// We give up and let the state machine handle the situation.
-				const message = "Requesting data column sidecars - no progress, giving up"
-				log.Warning(message)
-				unavailableColumns := make(map[uint64]bool)
-				for _, columns := range missingColumnsByRoot {
-					for column := range columns {
-						unavailableColumns[column] = true
-					}
-				}
-				return nil, errors.Wrap(newUnavailableColumnsError(uint64MapToSortedSlice(unavailableColumns)), message)
+				// We give up and let either reconstruction or the state machine handle the situation.
+				log.Warning("Requesting data column sidecars - no progress, giving up")
+				return colsByRoot, nil
 			}
 
 			log.WithFields(logrus.Fields{
@@ -819,7 +817,7 @@ func requestDataColumnSidecarsByRange(
 	}
 
 	log.WithField("duration", time.Since(start)).Debug("Requesting data column sidecars - success")
-	return alignedDataColumnsByRoot, nil
+	return colsByRoot, nil
 }
 
 // MissingDataColumns looks at the data columns we should store for a given block regarding `custodyGroupCount`,
@@ -1603,32 +1601,29 @@ func fetchAndVerifyRecoveryColumnsByRange(
 			newColumnsVerifier,
 			maxPeerDelay,
 		)
-		if err == nil {
-			// Successfully fetched data columns. Break the loop.
-			break
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to request data columns for range recovery")
 		}
 
-		// Check if the error is UnavailableColumnsError for retry logic.
-		ucErr := &unavailableColumnsError{}
-		if errors.As(err, &ucErr) {
-			log.WithFields(logrus.Fields{
-				"unavailableColumns": ucErr.Columns,
-				"startSlot":          blks[0].Block().Slot(),
-				"count":              blks[len(blks)-1].Block().Slot() - blks[0].Block().Slot() + 1,
-			}).Warn("Some selected recovery columns were unavailable for range, removing and retrying selection")
+		unavailableColumnsCount := itemsCount(requestColumnsByRoot)
+		if unavailableColumnsCount == 0 {
+			return fetchedColumnsByRoot, nil
+		}
 
-			// Remove the unavailable columns from our local availability map.
-			for _, unavailableCol := range ucErr.Columns {
+		// Some columns were unavailable. Try again with different columns.
+		log.WithFields(logrus.Fields{
+			"unavailableColumns": unavailableColumnsCount,
+			"startSlot":          blks[0].Block().Slot(),
+			"count":              blks[len(blks)-1].Block().Slot() - blks[0].Block().Slot() + 1,
+		}).Warn("Some selected recovery columns were unavailable for range, removing and retrying selection")
+
+		// Remove the unavailable columns from our local availability map.
+		for root := range requestColumnsByRoot {
+			for unavailableCol := range requestColumnsByRoot[root] {
 				delete(remainingAvailableCols, unavailableCol)
 			}
-			// Continue the loop to select a new set of columns and retry fetching.
-			continue
 		}
-
-		return nil, errors.Wrap(err, "failed to request data columns for range recovery")
 	}
-
-	return fetchedColumnsByRoot, nil
 }
 
 // itemsCount returns the total count of items

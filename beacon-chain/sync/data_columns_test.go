@@ -2155,7 +2155,7 @@ func TestGetDataColumnSidecarsByRange(t *testing.T) {
 				{offset: 1, custodyGroupCount: 0x8}, {offset: 2, custodyGroupCount: 0x8}, {offset: 3, custodyGroupCount: 0x8}, {offset: 4, custodyGroupCount: 0x8}, {offset: 5, custodyGroupCount: 0x8}, {offset: 6, custodyGroupCount: 0x8}, {offset: 7, custodyGroupCount: 0x8}, {offset: 8, custodyGroupCount: 0x8}, {offset: 9, custodyGroupCount: 0x8}, {offset: 10, custodyGroupCount: 0x8}, {offset: 11, custodyGroupCount: 0x8}, {offset: 12, custodyGroupCount: 0x8}, {offset: 13, custodyGroupCount: 0x8}, {offset: 14, custodyGroupCount: 0x8}, {offset: 15, custodyGroupCount: 0x8}, {offset: 16, custodyGroupCount: 0x8}, {offset: 17, custodyGroupCount: 0x8}, {offset: 18, custodyGroupCount: 0x8}, {offset: 20, custodyGroupCount: 0x8}, {offset: 21, custodyGroupCount: 0x8}, {offset: 22, custodyGroupCount: 0x8}, {offset: 24, custodyGroupCount: 0x8}, {offset: 25, custodyGroupCount: 0x8}, {offset: 26, custodyGroupCount: 0x8}, {offset: 27, custodyGroupCount: 0x8}, {offset: 28, custodyGroupCount: 0x8}, {offset: 32, custodyGroupCount: 0x8}, {offset: 33, custodyGroupCount: 0x8}, {offset: 34, custodyGroupCount: 0x8}, {offset: 37, custodyGroupCount: 0x8}, {offset: 39, custodyGroupCount: 0x8}, {offset: 43, custodyGroupCount: 0x8}, {offset: 45, custodyGroupCount: 0x8}, {offset: 53, custodyGroupCount: 0x8}, {offset: 54, custodyGroupCount: 0x8}, {offset: 55, custodyGroupCount: 0x8}, {offset: 74, custodyGroupCount: 0x8}, {offset: 78, custodyGroupCount: 0x8},
 			},
 			unavailableColumns: nil, // No columns need to be made unavailable
-			expectedError:      &unavailableColumnsError{},
+			expectedError:      errReconstructionFailed,
 		},
 		{
 			name:                 "Success - Empty Request",
@@ -2199,8 +2199,8 @@ func TestGetDataColumnSidecarsByRange(t *testing.T) {
 				}
 				return skipMap
 			}(),
-			expectedError:        &unavailableColumnsError{}, // Reconstruction needs 64 columns, but 0-63 are skipped
-			expectReconstruction: true,                       // It will attempt reconstruction before failing
+			expectedError:        errReconstructionFailed, // Reconstruction needs 64 columns, but 0-63 are skipped
+			expectReconstruction: true,                    // It will attempt reconstruction before failing
 		},
 	}
 
@@ -2373,8 +2373,8 @@ func TestRequestDataColumnSidecarsByRange(t *testing.T) {
 		// -------
 
 		// Data columns that should be added to `bwb`.
-		addedRODataColumns [][]int
-		isError            bool
+		addedRODataColumns    [][]int
+		expectUnavailableCols bool
 	}{
 		{
 			name: "No missing columns",
@@ -2389,9 +2389,9 @@ func TestRequestDataColumnSidecarsByRange(t *testing.T) {
 					toRespond: map[string][][]responseParams{},
 				},
 			},
-			batchSize:          32,
-			addedRODataColumns: [][]int{nil, nil, nil},
-			isError:            false,
+			batchSize:             32,
+			addedRODataColumns:    [][]int{nil, nil, nil},
+			expectUnavailableCols: false,
 		},
 		{
 			name:        "All blocks are before Fulu fork epoch",
@@ -2408,9 +2408,9 @@ func TestRequestDataColumnSidecarsByRange(t *testing.T) {
 					toRespond: map[string][][]responseParams{},
 				},
 			},
-			batchSize:          32,
-			addedRODataColumns: [][]int{nil, nil, nil, nil},
-			isError:            false,
+			batchSize:             32,
+			addedRODataColumns:    [][]int{nil, nil, nil, nil},
+			expectUnavailableCols: false,
 		},
 		{
 			name:        "All blocks with commitments are before Fulu fork epoch",
@@ -2447,9 +2447,9 @@ func TestRequestDataColumnSidecarsByRange(t *testing.T) {
 					toRespond: map[string][][]responseParams{},
 				},
 			},
-			batchSize:          32,
-			addedRODataColumns: [][]int{nil, nil, nil, nil, nil},
-			isError:            false,
+			batchSize:             32,
+			addedRODataColumns:    [][]int{nil, nil, nil, nil, nil},
+			expectUnavailableCols: false,
 		},
 		{
 			name:        "Some blocks with blobs with missing data columns - one round needed",
@@ -2539,7 +2539,7 @@ func TestRequestDataColumnSidecarsByRange(t *testing.T) {
 				nil,       // Slot 38
 				nil,       // Slot 39
 			},
-			isError: false,
+			expectUnavailableCols: false,
 		},
 		{
 			name:        "Some blocks with blobs with missing data columns - partial responses",
@@ -2566,9 +2566,9 @@ func TestRequestDataColumnSidecarsByRange(t *testing.T) {
 					},
 				},
 			}}},
-			batchSize:          32,
-			addedRODataColumns: [][]int{{70, 102}, {70, 102}, nil, {70, 102}},
-			isError:            false,
+			batchSize:             32,
+			addedRODataColumns:    [][]int{{70, 102}, {70, 102}, nil, {70, 102}},
+			expectUnavailableCols: false,
 		},
 		{
 			name:        "Some blocks with blobs with missing data columns - first response is empty",
@@ -2594,9 +2594,9 @@ func TestRequestDataColumnSidecarsByRange(t *testing.T) {
 					},
 				},
 			},
-			batchSize:          32,
-			addedRODataColumns: [][]int{{6, 70}},
-			isError:            false,
+			batchSize:             32,
+			addedRODataColumns:    [][]int{{6, 70}},
+			expectUnavailableCols: false,
 		},
 		{
 			name:        "Some blocks with blobs with missing data columns - no response at all",
@@ -2616,9 +2616,9 @@ func TestRequestDataColumnSidecarsByRange(t *testing.T) {
 					},
 				},
 			},
-			batchSize:          32,
-			addedRODataColumns: [][]int{{}},
-			isError:            true,
+			batchSize:             32,
+			addedRODataColumns:    [][]int{{}},
+			expectUnavailableCols: true,
 		},
 		{
 			name:        "Some blocks with blobs with missing data columns - request has to be split",
@@ -2799,11 +2799,14 @@ func TestRequestDataColumnSidecarsByRange(t *testing.T) {
 
 			// Fetch the data columns from the peers.
 			fetchedVerifiedDataColumnsByRoot, err := requestDataColumnSidecarsByRange(ctx, missingColumnsByRoot, roBlocks, peersID, tc.batchSize, clock, p2pSvc, ctxMap, rateLimiter, verifier, 1*time.Microsecond)
-			if !tc.isError {
-				require.NoError(t, err)
-			} else {
-				require.NotNil(t, err)
+			require.NoError(t, err)
+
+			unavailableColumnsCount := itemsCount(missingColumnsByRoot)
+			if tc.expectUnavailableCols {
+				require.NotEqual(t, unavailableColumnsCount, 0)
 				return
+			} else {
+				require.Equal(t, unavailableColumnsCount, 0)
 			}
 
 			fetchedRoDataColumnsByRoot := make(map[[fieldparams.RootLength]byte][]blocks.RODataColumn)
