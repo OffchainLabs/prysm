@@ -81,6 +81,8 @@ func RecoverCellsAndProofs(
 
 // DataColumnSidecarsForReconstruct is a TEMPORARY function until there is an official specification for it.
 // It is scheduled for deletion.
+// The returned value contains pointers to functions parameters.
+// (If the caller alterates the function parameters afterwards, the returned value will be modified as well.)
 func DataColumnSidecarsForReconstruct(
 	blobKzgCommitments [][]byte,
 	signedBlockHeader *ethpb.SignedBeaconBlockHeader,
@@ -128,8 +130,7 @@ func DataColumnSidecarsForReconstruct(
 
 		kzgProofOfColumnBytes := make([][]byte, 0, blobsCount)
 		for _, kzgProof := range kzgProofOfColumn {
-			copiedProof := kzgProof
-			kzgProofOfColumnBytes = append(kzgProofOfColumnBytes, copiedProof[:])
+			kzgProofOfColumnBytes = append(kzgProofOfColumnBytes, kzgProof[:])
 		}
 
 		sidecar := &ethpb.DataColumnSidecar{

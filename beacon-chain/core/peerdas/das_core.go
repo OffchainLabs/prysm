@@ -123,6 +123,8 @@ func ComputeColumnsForCustodyGroup(custodyGroup uint64) ([]uint64, error) {
 }
 
 // DataColumnSidecars computes the data column sidecars from the signed block, cells and cell proofs.
+// The returned value contains pointers to function parameters.
+// (If the caller alterates `cellsAndProofs` afterwards, the returned value will be modified as well.)
 // https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.3/specs/fulu/das-core.md#get_data_column_sidecars
 func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, cellsAndProofs []kzg.CellsAndProofs) ([]*ethpb.DataColumnSidecar, error) {
 	start := time.Now()
@@ -177,8 +179,7 @@ func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, cellsA
 
 		kzgProofOfColumnBytes := make([][]byte, 0, blobsCount)
 		for _, kzgProof := range kzgProofOfColumn {
-			copiedProof := kzgProof
-			kzgProofOfColumnBytes = append(kzgProofOfColumnBytes, copiedProof[:])
+			kzgProofOfColumnBytes = append(kzgProofOfColumnBytes, kzgProof[:])
 		}
 
 		sidecar := &ethpb.DataColumnSidecar{
