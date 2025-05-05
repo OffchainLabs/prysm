@@ -174,8 +174,7 @@ func requestDataColumnSidecarsByRoot(
 			if err != nil {
 				// Remove this peer since it failed to respond correctly.
 				delete(dataColumnsByAdmissiblePeer, peer)
-				log.WithError(err).Debug("Failed to verify columns for block")
-				return nil, errors.Wrap(err, "verify columns for block")
+				continue
 			}
 
 			// Mark columns as successful
