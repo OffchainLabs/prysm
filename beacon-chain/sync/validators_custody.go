@@ -35,14 +35,14 @@ func (s *Service) setTargetValidatorsCustodyRequirement() {
 	}
 
 	// Retrieve the head state.
-	headState, err := s.cfg.chain.HeadStateReadOnly(s.ctx)
-	if err != nil || headState == nil {
-		log.WithError(err).Error("Failed to get head state")
+	finalizedState := s.cfg.stateGen.FinalizedState()
+	if finalizedState == nil || finalizedState.IsNil() {
+		log.Error("Finalized state is nil")
 		return
 	}
 
 	// Get the validators custody requirement.
-	validatorsCustodyRequirement, err := peerdas.ValidatorsCustodyRequirement(headState, indices)
+	validatorsCustodyRequirement, err := peerdas.ValidatorsCustodyRequirement(finalizedState, indices)
 	if err != nil {
 		log.WithError(err).Error("Failed to get validators custody requirement")
 		return
