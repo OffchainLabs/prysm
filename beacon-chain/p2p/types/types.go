@@ -258,10 +258,10 @@ func (d *DataColumnsByRootIdentifiers) UnmarshalSSZ(buf []byte) error {
 		offsetEnd -= bytesPerLengthOffset
 		start = binary.LittleEndian.Uint32(buf[offsetEnd : offsetEnd+bytesPerLengthOffset])
 		if start > end {
-			return errors.Errorf("expected offset[%d] %d to be less than %d", i, start, end)
+			return errors.Errorf("expected offset[%d] %d to be less than %d", i-1, start, end)
 		}
 		if start < valueStart {
-			return errors.Errorf("offset[%d] %d indexes before value section %d", i, start, valueStart)
+			return errors.Errorf("offset[%d] %d indexes before value section %d", i-1, start, valueStart)
 		}
 		// Decode the identifier.
 		ident := &eth.DataColumnsByRootIdentifier{}
