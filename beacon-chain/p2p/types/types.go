@@ -230,53 +230,63 @@ func (d *DataColumnsByRootIdentifiers) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Get the size of the offsets.
-	offsetsSize := binary.LittleEndian.Uint32(buf[:bytesPerLengthOffset])
-	if offsetsSize%bytesPerLengthOffset != 0 {
-		return errors.Errorf("expected offsets size to be a multiple of %d but got %d", bytesPerLengthOffset, offsetsSize)
+	offsetEnd := binary.LittleEndian.Uint32(buf[:bytesPerLengthOffset])
+	if offsetEnd%bytesPerLengthOffset != 0 {
+		return errors.Errorf("expected offsets size to be a multiple of %d but got %d", bytesPerLengthOffset, offsetEnd)
 	}
 
-	count := offsetsSize / bytesPerLengthOffset
+	count := offsetEnd / bytesPerLengthOffset
+	if count < 1 {
+		return nil
+	}
+
+	maxSize := params.BeaconConfig().MaxRequestBlocksDeneb
+	if uint64(count) > maxSize {
+		return errors.Errorf("data column identifiers list exceeds max size: %d > %d", count, maxSize)
+	}
+
+	if offsetEnd > uint32(len(buf)) {
+		return errors.Errorf("offsets value %d larger than buffer %d", offsetEnd, len(buf))
+	}
+	valueStart := offsetEnd
 
 	// Decode the identifers.
 	*d = make([]*eth.DataColumnsByRootIdentifier, count)
-	for i := range count - 1 {
-		start := binary.LittleEndian.Uint32(buf[i*bytesPerLengthOffset : (i+1)*bytesPerLengthOffset])
-		// TODO: To optimise not to decode 2 times the same offset.
-		end := binary.LittleEndian.Uint32(buf[(i+1)*bytesPerLengthOffset : (i+2)*bytesPerLengthOffset])
-
-		identifier := new(eth.DataColumnsByRootIdentifier)
-		err := identifier.UnmarshalSSZ(buf[start:end])
-		if err != nil {
-			return errors.Wrap(err, "unmarshal SSZ")
+	var start uint32
+	end := uint32(len(buf))
+	for i := count; i > 0; i-- {
+		offsetEnd -= bytesPerLengthOffset
+		start = binary.LittleEndian.Uint32(buf[offsetEnd : offsetEnd+bytesPerLengthOffset])
+		if start > end {
+			return errors.Errorf("expected offset[%d] %d to be less than %d", i, start, end)
 		}
-
-		(*d)[i] = identifier
+		if start < valueStart {
+			return errors.Errorf("offset[%d] %d indexes before value section %d", i, start, valueStart)
+		}
+		// Decode the identifier.
+		ident := &eth.DataColumnsByRootIdentifier{}
+		if err := ident.UnmarshalSSZ(buf[start:end]); err != nil {
+			return err
+		}
+		(*d)[i-1] = ident
+		end = start
 	}
-
-	// Decode the last identifier.
-	start := binary.LittleEndian.Uint32(buf[(count-1)*bytesPerLengthOffset : count*bytesPerLengthOffset])
-	identifer := new(eth.DataColumnsByRootIdentifier)
-	err := identifer.UnmarshalSSZ(buf[start:])
-	if err != nil {
-		return errors.Wrap(err, "unmarshal SSZ")
-	}
-
-	(*d)[count-1] = identifer
 
 	return nil
 }
 
 func (d *DataColumnsByRootIdentifiers) MarshalSSZ() ([]byte, error) {
 	var err error
-	num := len(*d)
-	if num > 128 {
-		return nil, errors.Errorf("data column identifiers list exceeds max size: %d > %d", num, 128)
+	count := len(*d)
+	maxSize := params.BeaconConfig().MaxRequestBlocksDeneb
+	if uint64(count) > maxSize {
+		return nil, errors.Errorf("data column identifiers list exceeds max size: %d > %d", count, maxSize)
 	}
 
 	if len(*d) == 0 {
 		return []byte{}, nil
 	}
-	sizes := make([]uint32, num)
+	sizes := make([]uint32, count)
 	valTotal := uint32(0)
 	for i, elem := range *d {
 		if elem == nil {
