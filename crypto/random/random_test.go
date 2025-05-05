@@ -1,4 +1,4 @@
-package fieldutils
+package random
 
 import (
 	"testing"

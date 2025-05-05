@@ -11,7 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/crypto/fieldutils"
+	"github.com/OffchainLabs/prysm/v6/crypto/random"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/network/forks"
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
@@ -200,17 +200,17 @@ func ExtendBlocksPlusBlobs(t *testing.T, blks []blocks.ROBlock, size int) ([]blo
 	return blks, blobs
 }
 
-// Using functions from the fieldutils package
+// Using functions from the random package
 func deterministicRandomness(seed int64) [32]byte {
-	return fieldutils.DeterministicRandomness(seed)
+	return random.DeterministicRandomness(seed)
 }
 
 // Returns a serialized random field element in big-endian
 func GetRandFieldElement(seed int64) [32]byte {
-	return fieldutils.GetRandFieldElement(seed)
+	return random.GetRandFieldElement(seed)
 }
 
 // Returns a random blob using the passed seed as entropy
 func GetRandBlob(seed int64) GoKZG.Blob {
-	return fieldutils.GetRandBlob(seed)
+	return random.GetRandBlob(seed)
 }

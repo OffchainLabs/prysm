@@ -2,8 +2,8 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["field.go"],
-    importpath = "github.com/OffchainLabs/prysm/v6/crypto/fieldutils",
+    srcs = ["random.go"],
+    importpath = "github.com/OffchainLabs/prysm/v6/crypto/random",
     visibility = ["//visibility:public"],
     deps = [
         "@com_github_consensys_gnark_crypto//ecc/bls12-381/fr:go_default_library",
@@ -14,8 +14,7 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    size = "small",
-    srcs = ["field_test.go"],
+    srcs = ["random_test.go"],
     embed = [":go_default_library"],
     deps = [
         "//testing/assert:go_default_library",
