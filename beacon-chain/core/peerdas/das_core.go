@@ -127,7 +127,6 @@ func ComputeColumnsForCustodyGroup(custodyGroup uint64) ([]uint64, error) {
 // (If the caller alterates `cellsAndProofs` afterwards, the returned value will be modified as well.)
 // https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.3/specs/fulu/das-core.md#get_data_column_sidecars
 func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, cellsAndProofs []kzg.CellsAndProofs) ([]*ethpb.DataColumnSidecar, error) {
-	start := time.Now()
 	if signedBlock == nil || signedBlock.IsNil() || len(cellsAndProofs) == 0 {
 		return nil, nil
 	}
@@ -151,6 +150,29 @@ func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, cellsA
 	kzgCommitmentsInclusionProof, err := blocks.MerkleProofKZGCommitments(blockBody)
 	if err != nil {
 		return nil, errors.Wrap(err, "merkle proof ZKG commitments")
+	}
+
+	dataColumnSidecars, err := DataColumnsSidecarsFromItems(signedBlockHeader, blobKzgCommitments, kzgCommitmentsInclusionProof, cellsAndProofs)
+	if err != nil {
+		return nil, errors.Wrap(err, "data column sidecars from items")
+	}
+
+	return dataColumnSidecars, nil
+}
+
+// DataColumnsSidecarsFromItems computes the data column sidecars from the signed block header, the blob KZG commiments,
+// the KZG commitment includion proofs and cells and cell proofs.
+// The returned value contains pointers to function parameters.
+// (If the caller alterates input parameters afterwards, the returned value will be modified as well.)
+func DataColumnsSidecarsFromItems(
+	signedBlockHeader *ethpb.SignedBeaconBlockHeader,
+	blobKzgCommitments [][]byte,
+	kzgCommitmentsInclusionProof [][]byte,
+	cellsAndProofs []kzg.CellsAndProofs,
+) ([]*ethpb.DataColumnSidecar, error) {
+	start := time.Now()
+	if len(blobKzgCommitments) != len(cellsAndProofs) {
+		return nil, ErrMismatchSize
 	}
 
 	numberOfColumns := params.BeaconConfig().NumberOfColumns

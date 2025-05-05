@@ -66,6 +66,10 @@ func TestDataColumnSidecars(t *testing.T) {
 	})
 }
 
+// --------------------------------------------------------------------------------------------------------------------------------------
+// DataColumnsSidecarsFromItems is tested as part of the DataColumnSidecars tests, in the TestDataColumnsSidecarsBlobsRoundtrip function.
+// --------------------------------------------------------------------------------------------------------------------------------------
+
 func TestComputeCustodyGroupForColumn(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	config := params.BeaconConfig()
