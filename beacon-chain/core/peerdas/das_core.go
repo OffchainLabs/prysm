@@ -220,7 +220,8 @@ func ComputeCustodyGroupForColumn(columnIndex uint64) (uint64, error) {
 func Blobs(indices map[uint64]bool, dataColumnsSidecar []*ethpb.DataColumnSidecar) ([]*blocks.VerifiedROBlob, error) {
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
-	neededColumnCount := numberOfColumns / 2
+	// Compute the number of needed columns, including the number of columns is odd case.
+	neededColumnCount := (numberOfColumns + 1) / 2
 
 	// Check if all needed columns are present.
 	sliceIndexFromColumnIndex := make(map[uint64]int, len(dataColumnsSidecar))
@@ -237,16 +238,12 @@ func Blobs(indices map[uint64]bool, dataColumnsSidecar []*ethpb.DataColumnSideca
 
 	// Get missing columns.
 	if actualColumnCount < neededColumnCount {
-		missingColumns := make(map[uint64]bool, neededColumnCount-actualColumnCount)
+		var missingColumnsSlice []uint64
+
 		for i := range neededColumnCount {
 			if _, ok := sliceIndexFromColumnIndex[i]; !ok {
-				missingColumns[i] = true
+				missingColumnsSlice = append(missingColumnsSlice, i)
 			}
-		}
-
-		missingColumnsSlice := make([]uint64, 0, len(missingColumns))
-		for i := range missingColumns {
-			missingColumnsSlice = append(missingColumnsSlice, i)
 		}
 
 		slices.Sort[[]uint64](missingColumnsSlice)
