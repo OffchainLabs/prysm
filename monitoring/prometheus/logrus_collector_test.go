@@ -27,7 +27,7 @@ func TestLogrusCollector(t *testing.T) {
 	service := prometheus.NewService(t.Context(), addr, nil)
 	hook := prometheus.NewLogrusCollector()
 	log.AddHook(hook)
-	go service.Start()
+	service.Start()
 	defer func() {
 		err := service.Stop()
 		require.NoError(t, err)
