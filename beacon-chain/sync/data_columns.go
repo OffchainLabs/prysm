@@ -62,13 +62,11 @@ func newUnavailableColumnsError(columns []uint64) *unavailableColumnsError {
 //   - Greedily selects, among `peers`, the peers that can provide the requested data columns, to minimize the number of requests.
 //   - Request the data column sidecars from the selected peers.
 //   - In case of peers unable to actually provide all the requested data columns, retry with other peers.
+//   - In case at least one column is still missing after peer exhaustion, but `peers` custody more than 64 columns, then try to fetch enough columns to reconstruct needed ones.
 //
 // This function:
 //   - returns on success when all the initially missing sidecars in `dataColumnsToFetch` are retrieved, or
 //   - returns an error if all peers in `peers` are exhausted and at least one data column sidecar is still missing.
-//
-// In case at least one column is still missing after peer exhaustion,
-// but `peers` custody more than 64 columns, then try to fetch enough columns to reconstruct needed ones.
 func GetDataColumnSidecarsByRoot(
 	ctx context.Context,
 	dataColumnsToFetch []uint64,
