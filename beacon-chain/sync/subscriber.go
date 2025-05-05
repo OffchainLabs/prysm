@@ -133,6 +133,20 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 			s.activeSyncSubnetIndices,
 			func(currentSlot primitives.Slot) []uint64 { return []uint64{} },
 		)
+		if features.Get().EnableLightClient {
+			s.subscribe(
+				p2p.LightClientOptimisticUpdateTopicFormat,
+				s.validateLightClientOptimisticUpdate,
+				s.lightClientOptimisticUpdateSubscriber,
+				digest,
+			)
+			s.subscribe(
+				p2p.LightClientFinalityUpdateTopicFormat,
+				s.validateLightClientFinalityUpdate,
+				s.lightClientFinalityUpdateSubscriber,
+				digest,
+			)
+		}
 	}
 
 	// New gossip topic in Capella

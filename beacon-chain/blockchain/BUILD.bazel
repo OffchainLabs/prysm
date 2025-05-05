@@ -163,6 +163,7 @@ go_test(
         "//beacon-chain/operations/slashings:go_default_library",
         "//beacon-chain/operations/voluntaryexits:go_default_library",
         "//beacon-chain/p2p:go_default_library",
+        "//beacon-chain/p2p/testing:go_default_library",
         "//beacon-chain/startup:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//beacon-chain/state/state-native:go_default_library",
