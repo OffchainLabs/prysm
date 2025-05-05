@@ -383,7 +383,7 @@ func (rt *requestTracker) trackRequest(offset int, columns []uint64) {
 	rt.requests[offset] = columns
 }
 
-func TestOnlyRequestDataColumnSidecarsByRoot(t *testing.T) {
+func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 	const blobsCount = 6
 
 	// Start the trusted setup.
@@ -591,7 +591,7 @@ func TestOnlyRequestDataColumnSidecarsByRoot(t *testing.T) {
 			}
 
 			// Call the function under test
-			responseCols, err := OnlyRequestDataColumnSidecarsByRoot(
+			responseCols, err := requestDataColumnSidecarsByRoot(
 				context.Background(),
 				uint64MapToSortedSlice(tc.dataColumns),
 				roBlock,
@@ -717,7 +717,7 @@ func createCoveringPeerSet(t *testing.T, numberOfColumns uint64, unavailableColu
 	return peerSetups
 }
 
-func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
+func TestGetDataColumnSidecarsByRoot(t *testing.T) {
 	const blobsCount = 6
 
 	// Start the trusted setup.
@@ -807,7 +807,7 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 				{offset: 30, custodyGroupCount: 4},
 			},
 			unavailableColumns: nil,
-			expectedError:      ErrNotEnoughColsAvailable,
+			expectedError:      errNotEnoughColsAvailable,
 		},
 		{
 			name:             "Failure - Reconstruction Impossible - Target Coverage 50",
@@ -816,7 +816,7 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 			peerSetup: []peerSetup{
 				{offset: 1, custodyGroupCount: 0x8}, {offset: 2, custodyGroupCount: 0x8}, {offset: 3, custodyGroupCount: 0x8}, {offset: 4, custodyGroupCount: 0x8}, {offset: 5, custodyGroupCount: 0x8}, {offset: 6, custodyGroupCount: 0x8}, {offset: 7, custodyGroupCount: 0x8},
 			},
-			expectedError: ErrNotEnoughColsAvailable,
+			expectedError: errNotEnoughColsAvailable,
 		},
 		{
 			name:             "Failure - Direct Fetch Fails & Reconstruction Impossible",
@@ -825,7 +825,7 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 			peerSetup: []peerSetup{
 				{offset: 1, custodyGroupCount: 0x8}, {offset: 2, custodyGroupCount: 0x8}, {offset: 3, custodyGroupCount: 0x8}, {offset: 4, custodyGroupCount: 0x8}, {offset: 5, custodyGroupCount: 0x8}, {offset: 6, custodyGroupCount: 0x8}, {offset: 7, custodyGroupCount: 0x8}, {offset: 8, custodyGroupCount: 0x8}, {offset: 9, custodyGroupCount: 0x8}, {offset: 10, custodyGroupCount: 0x8}, {offset: 11, custodyGroupCount: 0x8}, {offset: 12, custodyGroupCount: 0x8}, {offset: 13, custodyGroupCount: 0x8}, {offset: 14, custodyGroupCount: 0x8}, {offset: 15, custodyGroupCount: 0x8}, {offset: 16, custodyGroupCount: 0x8}, {offset: 17, custodyGroupCount: 0x8}, {offset: 18, custodyGroupCount: 0x8}, {offset: 20, custodyGroupCount: 0x8}, {offset: 21, custodyGroupCount: 0x8}, {offset: 22, custodyGroupCount: 0x8}, {offset: 24, custodyGroupCount: 0x8}, {offset: 25, custodyGroupCount: 0x8}, {offset: 26, custodyGroupCount: 0x8}, {offset: 27, custodyGroupCount: 0x8}, {offset: 28, custodyGroupCount: 0x8}, {offset: 32, custodyGroupCount: 0x8}, {offset: 33, custodyGroupCount: 0x8}, {offset: 34, custodyGroupCount: 0x8}, {offset: 37, custodyGroupCount: 0x8}, {offset: 39, custodyGroupCount: 0x8}, {offset: 43, custodyGroupCount: 0x8}, {offset: 45, custodyGroupCount: 0x8}, {offset: 53, custodyGroupCount: 0x8}, {offset: 54, custodyGroupCount: 0x8}, {offset: 55, custodyGroupCount: 0x8}, {offset: 74, custodyGroupCount: 0x8}, {offset: 78, custodyGroupCount: 0x8},
 			},
-			expectedError: &UnavailableColumnsError{},
+			expectedError: &unavailableColumnsError{},
 		},
 		{
 			name:                 "Success - Empty Request",
@@ -860,7 +860,7 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 				}
 				return skipMap
 			}(),
-			expectedError:        ErrNotEnoughColsAvailable, // Reconstruction needs 64 columns, but 0-63 are skipped
+			expectedError:        errNotEnoughColsAvailable, // Reconstruction needs 64 columns, but 0-63 are skipped
 			expectReconstruction: true,                      // It will attempt reconstruction before failing
 		},
 	}
@@ -904,7 +904,7 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 			}
 
 			// Call the function under test
-			responseCols, err := RequestDataColumnSidecarsByRoot(
+			responseCols, err := GetDataColumnSidecarsByRoot(
 				context.Background(),
 				tc.requestedColumns,
 				roBlock,
@@ -1424,7 +1424,7 @@ type (
 	}
 )
 
-func TestRequestMissingDataColumnsByRange(t *testing.T) {
+func TestGetMissingDataColumnsByRange(t *testing.T) {
 	const (
 		blobsCount    = 6
 		peersHeadSlot = 100
@@ -1991,7 +1991,7 @@ func TestRequestMissingDataColumnsByRange(t *testing.T) {
 			}
 
 			// Fetch the data columns from the peers.
-			fetchedVerifiedDataColumnsByRoot, err := RequestMissingDataColumnsByRange(ctx, clock, ctxMap, p2pSvc, rateLimiter, 4, dataColumnStorageSummarizer, peersID, roBlocks, tc.batchSize, verifier, 1*time.Microsecond)
+			fetchedVerifiedDataColumnsByRoot, err := GetMissingDataColumnsByRange(ctx, clock, ctxMap, p2pSvc, rateLimiter, 4, dataColumnStorageSummarizer, peersID, roBlocks, tc.batchSize, verifier, 1*time.Microsecond)
 			if !tc.isError {
 				require.NoError(t, err)
 			} else {
@@ -2041,7 +2041,7 @@ func TestRequestMissingDataColumnsByRange(t *testing.T) {
 	}
 }
 
-func TestRequestDataColumnSidecarsByRange(t *testing.T) {
+func TestGetDataColumnSidecarsByRange(t *testing.T) {
 	const (
 		blobsCount    = 6
 		blocksCount   = 5
@@ -2136,7 +2136,7 @@ func TestRequestDataColumnSidecarsByRange(t *testing.T) {
 				{offset: 30, custodyGroupCount: 4},
 			},
 			unavailableColumns: nil,
-			expectedError:      ErrNotEnoughColsAvailable,
+			expectedError:      errNotEnoughColsAvailable,
 		},
 		{
 			name:             "Failure - Reconstruction Impossible - Target Coverage 50",
@@ -2145,7 +2145,7 @@ func TestRequestDataColumnSidecarsByRange(t *testing.T) {
 			peerSetup: []peerSetup{
 				{offset: 1, custodyGroupCount: 0x8}, {offset: 2, custodyGroupCount: 0x8}, {offset: 3, custodyGroupCount: 0x8}, {offset: 4, custodyGroupCount: 0x8}, {offset: 5, custodyGroupCount: 0x8}, {offset: 6, custodyGroupCount: 0x8}, {offset: 7, custodyGroupCount: 0x8},
 			},
-			expectedError: ErrNotEnoughColsAvailable,
+			expectedError: errNotEnoughColsAvailable,
 		},
 		{
 			name:             "Failure - Direct Fetch Fails & Reconstruction Impossible",
@@ -2155,7 +2155,7 @@ func TestRequestDataColumnSidecarsByRange(t *testing.T) {
 				{offset: 1, custodyGroupCount: 0x8}, {offset: 2, custodyGroupCount: 0x8}, {offset: 3, custodyGroupCount: 0x8}, {offset: 4, custodyGroupCount: 0x8}, {offset: 5, custodyGroupCount: 0x8}, {offset: 6, custodyGroupCount: 0x8}, {offset: 7, custodyGroupCount: 0x8}, {offset: 8, custodyGroupCount: 0x8}, {offset: 9, custodyGroupCount: 0x8}, {offset: 10, custodyGroupCount: 0x8}, {offset: 11, custodyGroupCount: 0x8}, {offset: 12, custodyGroupCount: 0x8}, {offset: 13, custodyGroupCount: 0x8}, {offset: 14, custodyGroupCount: 0x8}, {offset: 15, custodyGroupCount: 0x8}, {offset: 16, custodyGroupCount: 0x8}, {offset: 17, custodyGroupCount: 0x8}, {offset: 18, custodyGroupCount: 0x8}, {offset: 20, custodyGroupCount: 0x8}, {offset: 21, custodyGroupCount: 0x8}, {offset: 22, custodyGroupCount: 0x8}, {offset: 24, custodyGroupCount: 0x8}, {offset: 25, custodyGroupCount: 0x8}, {offset: 26, custodyGroupCount: 0x8}, {offset: 27, custodyGroupCount: 0x8}, {offset: 28, custodyGroupCount: 0x8}, {offset: 32, custodyGroupCount: 0x8}, {offset: 33, custodyGroupCount: 0x8}, {offset: 34, custodyGroupCount: 0x8}, {offset: 37, custodyGroupCount: 0x8}, {offset: 39, custodyGroupCount: 0x8}, {offset: 43, custodyGroupCount: 0x8}, {offset: 45, custodyGroupCount: 0x8}, {offset: 53, custodyGroupCount: 0x8}, {offset: 54, custodyGroupCount: 0x8}, {offset: 55, custodyGroupCount: 0x8}, {offset: 74, custodyGroupCount: 0x8}, {offset: 78, custodyGroupCount: 0x8},
 			},
 			unavailableColumns: nil, // No columns need to be made unavailable
-			expectedError:      &UnavailableColumnsError{},
+			expectedError:      &unavailableColumnsError{},
 		},
 		{
 			name:                 "Success - Empty Request",
@@ -2182,7 +2182,7 @@ func TestRequestDataColumnSidecarsByRange(t *testing.T) {
 			peerSetup: []peerSetup{
 				{offset: 1, custodyGroupCount: 4}, // This peer will custody columns [6, 37, 48, 113]
 			},
-			expectedError:        ErrNotEnoughColsAvailable,
+			expectedError:        errNotEnoughColsAvailable,
 			expectReconstruction: false,
 		},
 		{
@@ -2199,7 +2199,7 @@ func TestRequestDataColumnSidecarsByRange(t *testing.T) {
 				}
 				return skipMap
 			}(),
-			expectedError:        &UnavailableColumnsError{}, // Reconstruction needs 64 columns, but 0-63 are skipped
+			expectedError:        &unavailableColumnsError{}, // Reconstruction needs 64 columns, but 0-63 are skipped
 			expectReconstruction: true,                       // It will attempt reconstruction before failing
 		},
 	}
@@ -2253,7 +2253,7 @@ func TestRequestDataColumnSidecarsByRange(t *testing.T) {
 			}
 
 			// Fetch the data columns from the peers.
-			fetchedVerifiedDataColumnsByRoot, err := RequestDataColumnSidecarsByRange(context.Background(), missingColumnsByRoot, roBlocks, peerIDs, 4, clock, hostP2P, ctxMap, rateLimiter, verifier, 1*time.Microsecond)
+			fetchedVerifiedDataColumnsByRoot, err := GetDataColumnSidecarsByRange(context.Background(), missingColumnsByRoot, roBlocks, peerIDs, 4, clock, hostP2P, ctxMap, rateLimiter, verifier, 1*time.Microsecond)
 
 			// --- Assertions ---
 			if tc.expectedError != nil {
@@ -2340,7 +2340,7 @@ type columnParams struct {
 	missingColumns []uint64
 }
 
-func TestOnlyRequestDataColumnSidecarsByRange(t *testing.T) {
+func TestRequestDataColumnSidecarsByRange(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
 	logrus.SetOutput(os.Stdout)
 
@@ -2798,7 +2798,7 @@ func TestOnlyRequestDataColumnSidecarsByRange(t *testing.T) {
 			}).Debug("About to request data columns")
 
 			// Fetch the data columns from the peers.
-			fetchedVerifiedDataColumnsByRoot, err := OnlyRequestDataColumnSidecarsByRange(ctx, missingColumnsByRoot, roBlocks, peersID, tc.batchSize, clock, p2pSvc, ctxMap, rateLimiter, verifier, 1*time.Microsecond)
+			fetchedVerifiedDataColumnsByRoot, err := requestDataColumnSidecarsByRange(ctx, missingColumnsByRoot, roBlocks, peersID, tc.batchSize, clock, p2pSvc, ctxMap, rateLimiter, verifier, 1*time.Microsecond)
 			if !tc.isError {
 				require.NoError(t, err)
 			} else {

@@ -402,7 +402,7 @@ func (s *Service) fetchOriginColumns(pids []peer.ID, roBlock blocks.ROBlock) err
 		return errors.Wrap(err, "missing data columns")
 	}
 
-	sidecars, err := sync.RequestDataColumnSidecarsByRoot(s.ctx, missingColumns, roBlock, pids, s.clock, s.cfg.P2P, s.ctxMap, s.newDataColumnsVerifier)
+	sidecars, err := sync.GetDataColumnSidecarsByRoot(s.ctx, missingColumns, roBlock, pids, s.clock, s.cfg.P2P, s.ctxMap, s.newDataColumnsVerifier)
 	if err != nil {
 		return errors.Wrap(err, "request data column sidecars")
 	}
