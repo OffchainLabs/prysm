@@ -1708,7 +1708,7 @@ func TestRequestMissingDataColumnsByRange(t *testing.T) {
 			isError:            false,
 		},
 		{
-			name:              "Some blocks with blobs with missing data columns - no response at all",
+			name:              "Some blocks with blobs with missing data columns - no response at all triggers reconstruction",
 			fuluForkEpoch:     1,
 			currentSlot:       40,
 			blocksParams:      []blockParams{{slot: 38, hasBlobs: true}},
@@ -1722,12 +1722,84 @@ func TestRequestMissingDataColumnsByRange(t *testing.T) {
 							Count:     1,
 							Columns:   []uint64{6, 70},
 						}).String(): {{}, {}, {}, {}, {}, {}, {}, {}, {}, {}},
+						(&pb.DataColumnSidecarsByRangeRequest{
+							StartSlot: 38,
+							Count:     1,
+							Columns:   []uint64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 70},
+						}).String(): {
+							{
+								{slot: 38, columnIndex: 0},
+								{slot: 38, columnIndex: 1},
+								{slot: 38, columnIndex: 2},
+								{slot: 38, columnIndex: 3},
+								{slot: 38, columnIndex: 4},
+								{slot: 38, columnIndex: 5},
+								{slot: 38, columnIndex: 6},
+								{slot: 38, columnIndex: 7},
+								{slot: 38, columnIndex: 8},
+								{slot: 38, columnIndex: 9},
+								{slot: 38, columnIndex: 10},
+								{slot: 38, columnIndex: 11},
+								{slot: 38, columnIndex: 12},
+								{slot: 38, columnIndex: 13},
+								{slot: 38, columnIndex: 14},
+								{slot: 38, columnIndex: 15},
+								{slot: 38, columnIndex: 16},
+								{slot: 38, columnIndex: 17},
+								{slot: 38, columnIndex: 18},
+								{slot: 38, columnIndex: 19},
+								{slot: 38, columnIndex: 20},
+								{slot: 38, columnIndex: 21},
+								{slot: 38, columnIndex: 22},
+								{slot: 38, columnIndex: 23},
+								{slot: 38, columnIndex: 24},
+								{slot: 38, columnIndex: 25},
+								{slot: 38, columnIndex: 26},
+								{slot: 38, columnIndex: 27},
+								{slot: 38, columnIndex: 28},
+								{slot: 38, columnIndex: 29},
+								{slot: 38, columnIndex: 30},
+								{slot: 38, columnIndex: 31},
+								{slot: 38, columnIndex: 32},
+								{slot: 38, columnIndex: 33},
+								{slot: 38, columnIndex: 34},
+								{slot: 38, columnIndex: 35},
+								{slot: 38, columnIndex: 36},
+								{slot: 38, columnIndex: 37},
+								{slot: 38, columnIndex: 38},
+								{slot: 38, columnIndex: 39},
+								{slot: 38, columnIndex: 40},
+								{slot: 38, columnIndex: 41},
+								{slot: 38, columnIndex: 42},
+								{slot: 38, columnIndex: 43},
+								{slot: 38, columnIndex: 44},
+								{slot: 38, columnIndex: 45},
+								{slot: 38, columnIndex: 46},
+								{slot: 38, columnIndex: 47},
+								{slot: 38, columnIndex: 48},
+								{slot: 38, columnIndex: 49},
+								{slot: 38, columnIndex: 50},
+								{slot: 38, columnIndex: 51},
+								{slot: 38, columnIndex: 52},
+								{slot: 38, columnIndex: 53},
+								{slot: 38, columnIndex: 54},
+								{slot: 38, columnIndex: 55},
+								{slot: 38, columnIndex: 56},
+								{slot: 38, columnIndex: 57},
+								{slot: 38, columnIndex: 58},
+								{slot: 38, columnIndex: 59},
+								{slot: 38, columnIndex: 60},
+								{slot: 38, columnIndex: 61},
+								{slot: 38, columnIndex: 62},
+								{slot: 38, columnIndex: 70},
+							},
+						},
 					},
 				},
 			},
 			batchSize:          32,
-			addedRODataColumns: [][]int{{}},
-			isError:            true,
+			addedRODataColumns: [][]int{{6, 70}},
+			isError:            false,
 		},
 		{
 			name:          "Some blocks with blobs with missing data columns - request has to be split",
@@ -1962,9 +2034,6 @@ func TestRequestMissingDataColumnsByRange(t *testing.T) {
 }
 
 func TestRequestDataColumnSidecarsByRange(t *testing.T) {
-	logrus.SetLevel(logrus.DebugLevel)
-	logrus.SetOutput(os.Stdout)
-
 	const (
 		blobsCount    = 6
 		blocksCount   = 5
@@ -2176,7 +2245,7 @@ func TestRequestDataColumnSidecarsByRange(t *testing.T) {
 			}
 
 			// Fetch the data columns from the peers.
-			fetchedVerifiedDataColumnsByRoot, err := RequestDataColumnSidecarsByRange(context.Background(), missingColumnsByRoot, roBlocks, peerIDs, 4, clock, hostP2P, ctxMap, rateLimiter, verifier, 1*time.Second)
+			fetchedVerifiedDataColumnsByRoot, err := RequestDataColumnSidecarsByRange(context.Background(), missingColumnsByRoot, roBlocks, peerIDs, 4, clock, hostP2P, ctxMap, rateLimiter, verifier, 1*time.Microsecond)
 
 			// --- Assertions ---
 			if tc.expectedError != nil {
@@ -2721,7 +2790,7 @@ func TestOnlyRequestDataColumnSidecarsByRange(t *testing.T) {
 			}).Debug("About to request data columns")
 
 			// Fetch the data columns from the peers.
-			fetchedVerifiedDataColumnsByRoot, err := OnlyRequestDataColumnSidecarsByRange(ctx, missingColumnsByRoot, roBlocks, peersID, tc.batchSize, clock, p2pSvc, ctxMap, rateLimiter, verifier, 1*time.Second)
+			fetchedVerifiedDataColumnsByRoot, err := OnlyRequestDataColumnSidecarsByRange(ctx, missingColumnsByRoot, roBlocks, peersID, tc.batchSize, clock, p2pSvc, ctxMap, rateLimiter, verifier, 1*time.Microsecond)
 			if !tc.isError {
 				require.NoError(t, err)
 			} else {
