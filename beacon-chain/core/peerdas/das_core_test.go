@@ -29,11 +29,41 @@ func TestComputeColumnsForCustodyGroup(t *testing.T) {
 }
 
 func TestDataColumnSidecars(t *testing.T) {
-	var expected []*ethpb.DataColumnSidecar = nil
-	actual, err := peerdas.DataColumnSidecars(nil, []kzg.CellsAndProofs{})
-	require.NoError(t, err)
+	t.Run("nil signed block", func(t *testing.T) {
+		var expected []*ethpb.DataColumnSidecar = nil
+		actual, err := peerdas.DataColumnSidecars(nil, []kzg.CellsAndProofs{})
+		require.NoError(t, err)
 
-	require.DeepSSZEqual(t, expected, actual)
+		require.DeepSSZEqual(t, expected, actual)
+	})
+
+	t.Run("empty cells and proofs", func(t *testing.T) {
+		// Create a protobuf signed beacon block.
+		signedBeaconBlockPb := util.NewBeaconBlockDeneb()
+
+		// Create a signed beacon block from the protobuf.
+		signedBeaconBlock, err := blocks.NewSignedBeaconBlock(signedBeaconBlockPb)
+		require.NoError(t, err)
+
+		actual, err := peerdas.DataColumnSidecars(signedBeaconBlock, []kzg.CellsAndProofs{})
+		require.NoError(t, err)
+		require.IsNil(t, actual)
+	})
+
+	t.Run("sizes mismatch", func(t *testing.T) {
+		// Create a protobuf signed beacon block.
+		signedBeaconBlockPb := util.NewBeaconBlockDeneb()
+
+		// Create a signed beacon block from the protobuf.
+		signedBeaconBlock, err := blocks.NewSignedBeaconBlock(signedBeaconBlockPb)
+		require.NoError(t, err)
+
+		// Create cells and proofs.
+		cellsAndProofs := make([]kzg.CellsAndProofs, 1)
+
+		_, err = peerdas.DataColumnSidecars(signedBeaconBlock, cellsAndProofs)
+		require.ErrorIs(t, err, peerdas.ErrMismatchSize)
+	})
 }
 
 func TestComputeCustodyGroupForColumn(t *testing.T) {

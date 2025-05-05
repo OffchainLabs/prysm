@@ -22,6 +22,7 @@ var (
 	// Custom errors
 	ErrCustodyGroupTooLarge           = errors.New("custody group too large")
 	ErrCustodyGroupCountTooLarge      = errors.New("custody group count too large")
+	ErrMismatchSize                   = errors.New("mismatch in the number of blob KZG commitments and cellsAndProofs")
 	errWrongComputedCustodyGroupCount = errors.New("wrong computed custody group count, should never happen")
 
 	// maxUint256 is the maximum value of an uint256.
@@ -137,7 +138,7 @@ func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, cellsA
 	}
 
 	if len(blobKzgCommitments) != len(cellsAndProofs) {
-		return nil, errors.New("mismatch in the number of blob KZG commitments and cellsAndProofs")
+		return nil, ErrMismatchSize
 	}
 
 	signedBlockHeader, err := signedBlock.Header()
