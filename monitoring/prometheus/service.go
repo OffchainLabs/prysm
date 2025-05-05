@@ -43,7 +43,7 @@ func NewService(ctx context.Context, addr string, svcRegistry *runtime.ServiceRe
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.HandlerFor(prometheus.DefaultGatherer, promhttp.HandlerOpts{
 		MaxRequestsInFlight: 5,
-		Timeout: 30 * time.Second,
+		Timeout:             30 * time.Second,
 	}))
 	mux.HandleFunc("/healthz", s.healthzHandler)
 	mux.HandleFunc("/goroutinez", s.goroutinezHandler)
