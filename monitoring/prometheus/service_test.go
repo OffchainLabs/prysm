@@ -2,7 +2,9 @@ package prometheus
 
 import (
 	"errors"
+	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -21,13 +23,14 @@ func init() {
 }
 
 func TestLifecycle(t *testing.T) {
-	prometheusService := NewService(t.Context(), ":2112", nil)
+	port := 1000 + rand.Intn(1000)
+	prometheusService := NewService(t.Context(), fmt.Sprintf(":%d", port), nil)
 	prometheusService.Start()
 	// Give service time to start.
 	time.Sleep(time.Second)
 
 	// Query the service to ensure it really started.
-	resp, err := http.Get("http://localhost:2112/metrics")
+	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/metrics", port))
 	require.NoError(t, err)
 	assert.NotEqual(t, uint64(0), resp.ContentLength, "Unexpected content length 0")
 
@@ -37,7 +40,7 @@ func TestLifecycle(t *testing.T) {
 	time.Sleep(time.Second)
 
 	// Query the service to ensure it really stopped.
-	_, err = http.Get("http://localhost:2112/metrics")
+	_, err = http.Get(fmt.Sprintf("http://localhost:%d/metrics", port))
 	assert.NotNil(t, err, "Service still running after Stop()")
 }
 
