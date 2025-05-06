@@ -88,22 +88,24 @@ func createAndConnectPeer(
 
 	peer.SetStreamHandler(p2p.RPCDataColumnSidecarsByRootTopicV1+"/ssz_snappy", func(stream network.Stream) {
 		// Decode the request.
-		req := new(p2pTypes.DataColumnSidecarsByRootReq)
+		req := new(p2pTypes.DataColumnsByRootIdentifiers)
 		err := peer.Encoding().DecodeWithMaxLength(stream, req)
 		require.NoError(t, err)
 
 		for _, identifier := range *req {
-			// Filter out the columns not to respond.
-			if columnsNotToRespond[identifier.Index] {
-				continue
+			for _, column := range identifier.Columns {
+				// Filter out the columns not to respond.
+				if columnsNotToRespond[column] {
+					continue
+				}
+
+				// Create the response.
+				resp := dataColumnSidecars[column]
+
+				// Send the response.
+				err := WriteDataColumnSidecarChunk(stream, chainService, p2pService.Encoding(), resp)
+				require.NoError(t, err)
 			}
-
-			// Create the response.
-			resp := dataColumnSidecars[identifier.Index]
-
-			// Send the response.
-			err := WriteDataColumnSidecarChunk(stream, chainService, p2pService.Encoding(), resp)
-			require.NoError(t, err)
 		}
 
 		// Close the stream.

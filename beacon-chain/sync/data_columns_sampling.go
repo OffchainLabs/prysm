@@ -460,16 +460,17 @@ func (d *dataColumnSampler1D) sampleDataColumnsFromPeer(
 ) map[uint64]bool {
 	retrievedColumns := make(map[uint64]bool)
 
-	req := make(types.DataColumnSidecarsByRootReq, 0)
+	cols := make([]uint64, 0, len(requestedColumns))
 	for col := range requestedColumns {
-		req = append(req, &eth.DataColumnIdentifier{
-			BlockRoot: blockProcessedData.BlockRoot[:],
-			Index:     col,
-		})
+		cols = append(cols, col)
+	}
+	req := &eth.DataColumnsByRootIdentifier{
+		BlockRoot: blockProcessedData.BlockRoot[:],
+		Columns:   cols,
 	}
 
 	// Send the request to the peer.
-	roDataColumns, err := SendDataColumnSidecarsByRootRequest(ctx, d.clock, d.p2p, pid, d.ctxMap, &req)
+	roDataColumns, err := SendDataColumnSidecarsByRootRequest(ctx, d.clock, d.p2p, pid, d.ctxMap, &types.DataColumnsByRootIdentifiers{req})
 	if err != nil {
 		log.WithError(err).Error("Failed to send data column sidecar by root")
 		return nil
