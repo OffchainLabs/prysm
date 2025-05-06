@@ -233,7 +233,12 @@ func SendDataColumnSidecarsByRootRequest(
 	ctxMap ContextByteVersions,
 	req *p2ptypes.DataColumnsByRootIdentifiers,
 ) ([]blocks.RODataColumn, error) {
-	reqCount := uint64(len(*req))
+	// Compute how many columns are requested.
+	reqCount := uint64(0)
+	for _, col := range *req {
+		reqCount += uint64(len(col.Columns))
+	}
+
 	maxRequestDataColumnSideCar := params.BeaconConfig().MaxRequestDataColumnSidecars
 
 	// Verify that the request count is within the maximum allowed.

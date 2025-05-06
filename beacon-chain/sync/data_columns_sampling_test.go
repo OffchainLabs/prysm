@@ -93,17 +93,19 @@ func createAndConnectPeer(
 		require.NoError(t, err)
 
 		for _, identifier := range *req {
-			// Filter out the columns not to respond.
-			if columnsNotToRespond[identifier.Columns[0]] {
-				continue
+			for _, column := range identifier.Columns {
+				// Filter out the columns not to respond.
+				if columnsNotToRespond[column] {
+					continue
+				}
+
+				// Create the response.
+				resp := dataColumnSidecars[column]
+
+				// Send the response.
+				err := WriteDataColumnSidecarChunk(stream, chainService, p2pService.Encoding(), resp)
+				require.NoError(t, err)
 			}
-
-			// Create the response.
-			resp := dataColumnSidecars[identifier.Columns[0]]
-
-			// Send the response.
-			err := WriteDataColumnSidecarChunk(stream, chainService, p2pService.Encoding(), resp)
-			require.NoError(t, err)
 		}
 
 		// Close the stream.

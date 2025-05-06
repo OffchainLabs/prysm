@@ -654,6 +654,7 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 
 // createAndConnectCustodyPeer creates a new peer with a deterministic private key and connects it to the p2p service.
 // It then sets up the peer to respond with data columns it custodies.
+// TODO: Before merging into develop, makes sure the blockRoot is taken into account in this mock.
 func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSidecars []*pb.DataColumnSidecar, chainService *mock.ChainService, hostP2P *p2ptest.TestP2P, tracker *requestTracker, skipColumns map[uint64]bool) *p2ptest.TestP2P {
 	privateKeyBytes := make([]byte, 32)
 	for i := range 32 {
@@ -678,9 +679,9 @@ func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSideca
 
 		// Track the request if we have a tracker
 		if tracker != nil {
-			requestedColumns := make([]uint64, 0, len(*req))
+			var requestedColumns []uint64
 			for _, identifier := range *req {
-				requestedColumns = append(requestedColumns, identifier.Columns[0])
+				requestedColumns = append(requestedColumns, identifier.Columns...)
 			}
 			tracker.trackRequest(setup.offset, requestedColumns)
 		}
@@ -701,21 +702,22 @@ func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSideca
 		}
 
 		for _, identifier := range *req {
-			// Check if this column should be skipped using direct map lookup
-			if skipColumns[identifier.Columns[0]] {
-				continue
-			}
+			for _, column := range identifier.Columns {
+				if skipColumns[column] || !peerInfo.CustodyColumns[column] {
+					continue
+				}
 
-			if !peerInfo.CustodyColumns[identifier.Columns[0]] {
-				continue
-			}
-			col := dataColumnSidecars[identifier.Columns[0]]
-			if err := WriteDataColumnSidecarChunk(stream, chainService, peerP2P.Encoding(), col); err != nil {
-				log.WithError(err).Error("Failed to write data column sidecar chunk")
-				closeStream(stream, log)
-				return
+				col := dataColumnSidecars[column]
+
+				if err := WriteDataColumnSidecarChunk(stream, chainService, peerP2P.Encoding(), col); err != nil {
+					log.WithError(err).Error("Failed to write data column sidecar chunk")
+					closeStream(stream, log)
+					return
+				}
+
 			}
 		}
+
 		closeStream(stream, log)
 	})
 
