@@ -90,12 +90,16 @@ func run(ctx context.Context, v iface.Validator) {
 			// Keep trying to update assignments if they are nil or if we are past an
 			// epoch transition in the beacon node's state.
 			if slots.IsEpochStart(slot) {
-				if err := v.UpdateDuties(slotCtx); err != nil {
+				deadline = v.SlotDeadline(slot + params.BeaconConfig().SlotsPerEpoch - 1)
+				dutiesCtx, dutiesCancel := context.WithDeadline(ctx, deadline)
+				if err := v.UpdateDuties(dutiesCtx); err != nil {
 					handleAssignmentError(err, slot)
+					dutiesCancel()
 					span.End()
 					cancel()
 					continue
 				}
+				dutiesCancel()
 			}
 
 			// call push proposer settings often to account for the following edge cases:
