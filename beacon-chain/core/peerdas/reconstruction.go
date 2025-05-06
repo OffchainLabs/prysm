@@ -2,7 +2,6 @@ package peerdas
 
 import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
@@ -18,10 +17,7 @@ func CanSelfReconstruct(custodyGroupCount uint64) bool {
 }
 
 // RecoverCellsAndProofs recovers the cells and proofs from the data column sidecars.
-func RecoverCellsAndProofs(
-	dataColumnSideCars []*ethpb.DataColumnSidecar,
-	blockRoot [fieldparams.RootLength]byte,
-) ([]kzg.CellsAndProofs, error) {
+func RecoverCellsAndProofs(dataColumnSideCars []*ethpb.DataColumnSidecar) ([]kzg.CellsAndProofs, error) {
 	var wg errgroup.Group
 
 	dataColumnSideCarsCount := len(dataColumnSideCars)
