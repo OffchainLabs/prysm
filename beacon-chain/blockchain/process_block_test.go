@@ -24,6 +24,7 @@ import (
 	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations/kv"
+	mockp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -3309,6 +3310,7 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 	params.OverrideBeaconConfig(beaconCfg)
 
 	s, tr := minimalTestService(t)
+	s.cfg.P2p = &mockp2p.FakeP2P{}
 	ctx := tr.ctx
 
 	testCases := []struct {
@@ -3444,6 +3446,7 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 	params.OverrideBeaconConfig(beaconCfg)
 
 	s, tr := minimalTestService(t)
+	s.cfg.P2p = &mockp2p.FakeP2P{}
 	ctx := tr.ctx
 
 	testCases := []struct {
