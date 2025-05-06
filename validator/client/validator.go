@@ -1141,11 +1141,11 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 	if head == nil {
 		return errors.New("received empty head event")
 	}
-	prevDepedentRoot, err := bytesutil.DecodeHexWithLength(head.PreviousDutyDependentRoot, fieldparams.RootLength)
+	prevDependentRoot, err := bytesutil.DecodeHexWithLength(head.PreviousDutyDependentRoot, fieldparams.RootLength)
 	if err != nil {
 		return errors.Wrap(err, "failed to decode previous duty dependent root")
 	}
-	if bytes.Equal(prevDepedentRoot, params.BeaconConfig().ZeroHash[:]) {
+	if bytes.Equal(prevDependentRoot, params.BeaconConfig().ZeroHash[:]) {
 		return nil
 	}
 	epoch := slots.ToEpoch(slots.CurrentSlot(v.genesisTime) + 1)
@@ -1157,15 +1157,17 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 	dutiesCtx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
 	v.dutiesLock.RLock()
-	if v.duties == nil || !bytes.Equal(prevDepedentRoot, v.duties.PrevDependentRoot) {
-		v.dutiesLock.RUnlock()
+	needsPrevDependentRootUpdate := v.duties == nil || !bytes.Equal(prevDependentRoot, v.duties.PrevDependentRoot)
+	v.dutiesLock.RUnlock()
+	if needsPrevDependentRootUpdate {
+		// There's an edge case when the initial duties are not set yet
+		// This routine will lock and recompute them right after the initial duties finishes.
 		if err := v.UpdateDuties(dutiesCtx); err != nil {
 			return errors.Wrap(err, "failed to update duties")
 		}
 		log.Info("Updated duties due to previous dependent root change")
 		return nil
 	}
-	v.dutiesLock.RUnlock()
 	currDepedentRoot, err := bytesutil.DecodeHexWithLength(head.CurrentDutyDependentRoot, fieldparams.RootLength)
 	if err != nil {
 		return errors.Wrap(err, "failed to decode current duty dependent root")
@@ -1174,15 +1176,15 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 		return nil
 	}
 	v.dutiesLock.RLock()
-	if v.duties == nil || !bytes.Equal(currDepedentRoot, v.duties.CurrDependentRoot) {
-		v.dutiesLock.RUnlock()
-		if err := v.UpdateDuties(dutiesCtx); err != nil {
-			return errors.Wrap(err, "failed to update duties")
-		}
-		log.Info("Updated duties due to current dependent root change")
+	needsCurrDependentRootUpdate := v.duties == nil || !bytes.Equal(currDepedentRoot, v.duties.CurrDependentRoot)
+	v.dutiesLock.RUnlock()
+	if !needsCurrDependentRootUpdate {
 		return nil
 	}
-	v.dutiesLock.RUnlock()
+	if err := v.UpdateDuties(dutiesCtx); err != nil {
+		return errors.Wrap(err, "failed to update duties")
+	}
+	log.Info("Updated duties due to current dependent root change")
 	return nil
 }
 
