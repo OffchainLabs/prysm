@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
-	"os"
 	"sort"
 	"testing"
 	"time"
@@ -370,17 +369,17 @@ type peerSetup struct {
 
 // requestTracker is used to track requests made to peers during tests
 type requestTracker struct {
-	requests map[int][]uint64 // maps peer offset to requested columns
+	requests map[int][][]uint64 // maps peer offset to requested columns
 }
 
 func newRequestTracker() *requestTracker {
 	return &requestTracker{
-		requests: make(map[int][]uint64),
+		requests: make(map[int][][]uint64),
 	}
 }
 
 func (rt *requestTracker) trackRequest(offset int, columns []uint64) {
-	rt.requests[offset] = columns
+	rt.requests[offset] = append(rt.requests[offset], columns)
 }
 
 func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
@@ -632,8 +631,9 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 				"Number of peers requested from doesn't match expected")
 
 			for offset, expectedCols := range tc.expectedPeerRequests {
-				actualCols, exists := tracker.requests[offset]
+				requests, exists := tracker.requests[offset]
 				require.Equal(t, true, exists, "Expected requests from peer with offset %d", offset)
+				actualCols := requests[len(requests)-1]
 				require.Equal(t, len(expectedCols), len(actualCols),
 					"Number of columns requested from peer with offset %d doesn't match expected", offset)
 
@@ -920,62 +920,54 @@ func TestGetDataColumnSidecarsByRoot(t *testing.T) {
 				require.NotNil(t, err)
 				// Use errors.Is for wrapped errors like ErrNoPeersForDataColumns, ErrNotEnoughColsAvailable
 				require.Equal(t, true, errors.Is(err, tc.expectedError), "Unexpected error type: got %v, want %v", err, tc.expectedError)
-			} else {
-				require.NoError(t, err, "Expected no error but got: %v", err)
-				// Verify response columns match requested columns on success
-				require.Equal(t, len(tc.requestedColumns), len(responseCols), "Number of returned columns mismatch")
+				// Skip the rest of the assertions as we expect an error.
+				return
+			}
 
-				expectedColumns := make([]uint64, 0, len(tc.requestedColumns))
-				expectedColumns = append(expectedColumns, tc.requestedColumns...)
-				sort.Slice(expectedColumns, func(i, j int) bool {
-					return expectedColumns[i] < expectedColumns[j]
-				})
+			require.NoError(t, err, "Expected no error but got: %v", err)
+			// Verify response columns match requested columns on success
+			require.Equal(t, len(tc.requestedColumns), len(responseCols), "Number of returned columns mismatch")
 
-				// Sort actual response sidecars by index
-				sort.Slice(responseCols, func(i, j int) bool {
-					// Assuming responseCols is []blocks.RODataColumn based on function signature
-					// Need to access ColumnIndex correctly. Adjust if type is different.
-					// Let's assume RODataColumn has a method or field ColumnIndex
-					return responseCols[i].Index < responseCols[j].Index
-				})
+			expectedColumns := make([]uint64, 0, len(tc.requestedColumns))
+			expectedColumns = append(expectedColumns, tc.requestedColumns...)
+			sort.Slice(expectedColumns, func(i, j int) bool {
+				return expectedColumns[i] < expectedColumns[j]
+			})
 
-				// Compare element by element
-				for i := range responseCols {
-					require.Equal(t, expectedColumns[i], responseCols[i].Index, "Mismatch at index %d", i)
+			// Sort actual response sidecars by index
+			sort.Slice(responseCols, func(i, j int) bool {
+				// Assuming responseCols is []blocks.RODataColumn based on function signature
+				// Need to access ColumnIndex correctly. Adjust if type is different.
+				// Let's assume RODataColumn has a method or field ColumnIndex
+				return responseCols[i].Index < responseCols[j].Index
+			})
+
+			// Compare element by element
+			for i := range responseCols {
+				require.Equal(t, expectedColumns[i], responseCols[i].Index, "Mismatch at index %d", i)
+			}
+
+			requestedColSet := make(map[uint64]bool)
+			for _, requests := range tracker.requests {
+				for _, cols := range requests {
+					for _, col := range cols {
+						if !requestedColSet[col] {
+							requestedColSet[col] = true
+						}
+					}
 				}
 			}
 
 			// Crude check for reconstruction path (can be refined with logging/mocking)
-			if tc.expectReconstruction && tc.expectedError == nil {
+			if tc.expectReconstruction {
 				// If reconstruction was expected and successful, we expect requests for columns
 				// *beyond* the initially requested set, up to the recovery threshold.
 				// This is hard to verify precisely without deep mocking, but we can check if
 				// *more* columns were requested than initially asked for.
-				totalRequestedCount := 0
-				requestedColSet := make(map[uint64]bool)
-				for _, cols := range tracker.requests {
-					for _, col := range cols {
-						if !requestedColSet[col] {
-							requestedColSet[col] = true
-							totalRequestedCount++
-						}
-					}
-				}
-				require.Equal(t, true, uint64(totalRequestedCount) >= recoveryThreshold, "Expected at least recoveryThreshold columns to be requested during reconstruction attempt")
-			} else if !tc.expectReconstruction && tc.expectedError == nil {
+				require.Equal(t, true, uint64(len(requestedColSet)) >= recoveryThreshold, "Expected at least recoveryThreshold columns to be requested during reconstruction attempt")
+			} else {
 				// If direct fetch was expected and successful, the requested columns should ideally
 				// match the initial request exactly (or be a subset if optimized).
-				totalRequestedCount := 0
-				for _, cols := range tracker.requests {
-					totalRequestedCount += len(cols) // Summing lengths might overestimate if peers overlap, use set count instead
-				}
-				requestedColSet := make(map[uint64]bool)
-				for _, cols := range tracker.requests {
-					for _, col := range cols {
-						requestedColSet[col] = true
-					}
-				}
-
 				require.Equal(t, len(tc.requestedColumns), len(requestedColSet), "Map lengths should be equal for direct fetch")
 				for _, k := range tc.requestedColumns {
 					_, ok := requestedColSet[k]
@@ -2260,70 +2252,57 @@ func TestGetDataColumnSidecarsByRange(t *testing.T) {
 				require.NotNil(t, err)
 				// Use errors.Is for wrapped errors like ErrNoPeersForDataColumns, ErrNotEnoughColsAvailable
 				require.Equal(t, true, errors.Is(err, tc.expectedError), "Unexpected error type: got %v, want %v", err, tc.expectedError)
-			} else {
-				require.NoError(t, err, "Expected no error but got: %v", err)
+				// Skip the rest of the assertions as we expect an error.
+				return
+			}
 
-				expectedColumns := make([]uint64, 0, len(tc.requestedColumns))
-				expectedColumns = append(expectedColumns, tc.requestedColumns...)
-				sort.Slice(expectedColumns, func(i, j int) bool {
-					return expectedColumns[i] < expectedColumns[j]
+			require.NoError(t, err, "Expected no error but got: %v", err)
+
+			expectedColumns := make([]uint64, 0, len(tc.requestedColumns))
+			expectedColumns = append(expectedColumns, tc.requestedColumns...)
+			sort.Slice(expectedColumns, func(i, j int) bool {
+				return expectedColumns[i] < expectedColumns[j]
+			})
+
+			for _, dataColumns := range fetchedVerifiedDataColumnsByRoot {
+				// Verify response columns match requested columns on success
+				require.Equal(t, len(tc.requestedColumns), len(dataColumns), "Number of returned columns mismatch")
+
+				// Sort actual response sidecars by index
+				sort.Slice(dataColumns, func(i, j int) bool {
+					// Assuming responseCols is []blocks.RODataColumn based on function signature
+					// Need to access ColumnIndex correctly. Adjust if type is different.
+					// Let's assume RODataColumn has a method or field ColumnIndex
+					return dataColumns[i].Index < dataColumns[j].Index
 				})
 
-				for _, dataColumns := range fetchedVerifiedDataColumnsByRoot {
-					// Verify response columns match requested columns on success
-					columnIndices := make([]uint64, 0, len(dataColumns))
-					for _, column := range dataColumns {
-						columnIndices = append(columnIndices, column.Index)
-					}
-					t.Logf("columnIndices: %#v", columnIndices)
-					require.Equal(t, len(tc.requestedColumns), len(dataColumns), "Number of returned columns mismatch")
+				// Compare element by element
+				for i := range dataColumns {
+					require.Equal(t, expectedColumns[i], dataColumns[i].Index, "Mismatch at index %d", i)
+				}
+			}
 
-					// Sort actual response sidecars by index
-					sort.Slice(dataColumns, func(i, j int) bool {
-						// Assuming responseCols is []blocks.RODataColumn based on function signature
-						// Need to access ColumnIndex correctly. Adjust if type is different.
-						// Let's assume RODataColumn has a method or field ColumnIndex
-						return dataColumns[i].Index < dataColumns[j].Index
-					})
-
-					// Compare element by element
-					for i := range dataColumns {
-						require.Equal(t, expectedColumns[i], dataColumns[i].Index, "Mismatch at index %d", i)
+			requestedColSet := make(map[uint64]bool)
+			for _, requests := range tracker.requests {
+				for _, cols := range requests {
+					for _, col := range cols {
+						if !requestedColSet[col] {
+							requestedColSet[col] = true
+						}
 					}
 				}
 			}
 
 			// Crude check for reconstruction path (can be refined with logging/mocking)
-			if tc.expectReconstruction && tc.expectedError == nil {
+			if tc.expectReconstruction {
 				// If reconstruction was expected and successful, we expect requests for columns
 				// *beyond* the initially requested set, up to the recovery threshold.
 				// This is hard to verify precisely without deep mocking, but we can check if
 				// *more* columns were requested than initially asked for.
-				totalRequestedCount := 0
-				requestedColSet := make(map[uint64]bool)
-				for _, cols := range tracker.requests {
-					for _, col := range cols {
-						if !requestedColSet[col] {
-							requestedColSet[col] = true
-							totalRequestedCount++
-						}
-					}
-				}
-				require.Equal(t, true, uint64(totalRequestedCount) >= recoveryThreshold, "Expected at least recoveryThreshold (%d) columns to be requested during reconstruction attempt, got %d", recoveryThreshold, totalRequestedCount)
-			} else if !tc.expectReconstruction && tc.expectedError == nil {
+				require.Equal(t, true, uint64(len(requestedColSet)) >= recoveryThreshold, "Expected at least recoveryThreshold (%d) columns to be requested during reconstruction attempt, got %d", recoveryThreshold, len(requestedColSet))
+			} else {
 				// If direct fetch was expected and successful, the requested columns should ideally
-				// match the initial request exactly (or be a subset if optimized).
-				totalRequestedCount := 0
-				for _, cols := range tracker.requests {
-					totalRequestedCount += len(cols) // Summing lengths might overestimate if peers overlap, use set count instead
-				}
-				requestedColSet := make(map[uint64]bool)
-				for _, cols := range tracker.requests {
-					for _, col := range cols {
-						requestedColSet[col] = true
-					}
-				}
-
+				// match the initial request exactly.
 				require.Equal(t, len(tc.requestedColumns), len(requestedColSet), "Map lengths should be equal for direct fetch")
 				for _, k := range tc.requestedColumns {
 					_, ok := requestedColSet[k]
@@ -2341,9 +2320,6 @@ type columnParams struct {
 }
 
 func TestRequestDataColumnSidecarsByRange(t *testing.T) {
-	logrus.SetLevel(logrus.DebugLevel)
-	logrus.SetOutput(os.Stdout)
-
 	const (
 		blobsCount    = 6
 		peersHeadSlot = 100
@@ -2798,10 +2774,10 @@ func TestRequestDataColumnSidecarsByRange(t *testing.T) {
 			}).Debug("About to request data columns")
 
 			// Fetch the data columns from the peers.
-			fetchedVerifiedDataColumnsByRoot, err := requestDataColumnSidecarsByRange(ctx, missingColumnsByRoot, roBlocks, peersID, tc.batchSize, clock, p2pSvc, ctxMap, rateLimiter, verifier, 1*time.Microsecond)
+			fetchedVerifiedDataColumnsByRoot, remainingColumnsByRoot, err := requestDataColumnSidecarsByRange(ctx, missingColumnsByRoot, roBlocks, peersID, tc.batchSize, clock, p2pSvc, ctxMap, rateLimiter, verifier, 1*time.Microsecond)
 			require.NoError(t, err)
 
-			unavailableColumnsCount := itemsCount(missingColumnsByRoot)
+			unavailableColumnsCount := itemsCount(remainingColumnsByRoot)
 			if tc.expectUnavailableCols {
 				require.NotEqual(t, unavailableColumnsCount, 0)
 				return
