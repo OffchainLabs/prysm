@@ -1032,6 +1032,7 @@ func (b *BeaconNode) registerPrometheusService(_ *cli.Context) error {
 	}
 
 	service := prometheus.NewService(
+		b.cliCtx.Context,
 		fmt.Sprintf("%s:%d", b.cliCtx.String(cmd.MonitoringHostFlag.Name), b.cliCtx.Int(flags.MonitoringPortFlag.Name)),
 		b.services,
 		additionalHandlers...,
