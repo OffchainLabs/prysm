@@ -43,9 +43,18 @@ func run(ctx context.Context, v iface.Validator) {
 	if err != nil {
 		return // Exit if context is canceled.
 	}
-	if err := v.UpdateDuties(ctx); err != nil {
+	ss, err := slots.EpochStart(slots.ToEpoch(headSlot + 1))
+	if err != nil {
+		log.WithError(err).Error("Failed to get epoch start")
+		ss = headSlot
+	}
+	startDeadline := v.SlotDeadline(ss + params.BeaconConfig().SlotsPerEpoch - 1)
+	startCtx, startCancel := context.WithDeadline(ctx, startDeadline)
+	if err := v.UpdateDuties(startCtx); err != nil {
+		startCancel()
 		handleAssignmentError(err, headSlot)
 	}
+	startCancel()
 	eventsChan := make(chan *event.Event, 1)
 	healthTracker := v.HealthTracker()
 	runHealthCheckRoutine(ctx, v, eventsChan)
@@ -131,10 +140,19 @@ func run(ctx context.Context, v iface.Validator) {
 					log.WithError(err).Error("Failed to re initialize validator and get head slot")
 					continue
 				}
-				if err := v.UpdateDuties(ctx); err != nil {
-					handleAssignmentError(err, headSlot)
+				ss, err := slots.EpochStart(slots.ToEpoch(headSlot + 1))
+				if err != nil {
+					log.WithError(err).Error("Failed to get epoch start")
 					continue
 				}
+				deadline := v.SlotDeadline(ss + params.BeaconConfig().SlotsPerEpoch - 1)
+				dutiesCtx, dutiesCancel := context.WithDeadline(ctx, deadline)
+				if err := v.UpdateDuties(dutiesCtx); err != nil {
+					handleAssignmentError(err, headSlot)
+					dutiesCancel()
+					continue
+				}
+				dutiesCancel()
 			}
 		case e := <-eventsChan:
 			v.ProcessEvent(ctx, e)
