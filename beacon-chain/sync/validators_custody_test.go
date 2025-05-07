@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 )
@@ -82,7 +83,7 @@ func TestSetTargetValidatorsCustodyRequirement(t *testing.T) {
 	testCases := []struct {
 		name                            string
 		latestProcessedEpoch            primitives.Epoch
-		validatorsBalance               []uint64
+		validatorsEffectiveBalance      []uint64
 		expectedTargetCustodyGroupCount uint64
 	}{
 		{
@@ -93,7 +94,7 @@ func TestSetTargetValidatorsCustodyRequirement(t *testing.T) {
 		{
 			name:                            "some tracked validators",
 			latestProcessedEpoch:            0,
-			validatorsBalance:               []uint64{64_000_000_000, 64_000_000_000, 64_000_000_000, 64_000_000_000, 33_000_000_000},
+			validatorsEffectiveBalance:      []uint64{64_000_000_000, 64_000_000_000, 64_000_000_000, 64_000_000_000, 33_000_000_000},
 			expectedTargetCustodyGroupCount: 9,
 		},
 	}
@@ -103,7 +104,14 @@ func TestSetTargetValidatorsCustodyRequirement(t *testing.T) {
 			beaconDB := testDB.SetupDB(t)
 			stateGen := stategen.New(beaconDB, doublylinkedtree.New())
 			state, _ := util.DeterministicGenesisState(t, 32)
-			err := state.SetBalances(tc.validatorsBalance)
+
+			validators := make([]*eth.Validator, 0, len(tc.validatorsEffectiveBalance))
+			for _, balance := range tc.validatorsEffectiveBalance {
+				validator := &eth.Validator{EffectiveBalance: balance}
+				validators = append(validators, validator)
+			}
+
+			err := state.SetValidators(validators)
 			require.NoError(t, err)
 
 			stateGen.SaveFinalizedState(0, [32]byte{}, state)
@@ -116,7 +124,7 @@ func TestSetTargetValidatorsCustodyRequirement(t *testing.T) {
 				},
 			}
 
-			for index := range tc.validatorsBalance {
+			for index := range tc.validatorsEffectiveBalance {
 				validator := cache.TrackedValidator{
 					Active: true,
 					Index:  primitives.ValidatorIndex(index),

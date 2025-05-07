@@ -557,7 +557,12 @@ func custodyColumnsFromPeers(peers []peer.ID, p2p p2p.P2P) (map[peer.ID]map[uint
 	// Compute the custody columns of the peers.
 	dataColumnsByPeer := make(map[peer.ID]map[uint64]bool, len(custodyGroupsByPeer))
 	for peer, custodyGroups := range custodyGroupsByPeer {
-		custodyColumns, err := peerdas.CustodyColumns(custodyGroups)
+		custodyGroupsSlice := make([]uint64, 0, len(custodyGroups))
+		for group := range custodyGroups {
+			custodyGroupsSlice = append(custodyGroupsSlice, group)
+		}
+
+		custodyColumns, err := peerdas.CustodyColumns(custodyGroupsSlice)
 		if err != nil {
 			return nil, errors.Wrap(err, "custody columns")
 		}

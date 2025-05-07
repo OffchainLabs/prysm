@@ -73,15 +73,15 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 	}
 
 	// Recover cells and proofs.
-	recoveredCellsAndProofs, err := peerdas.RecoverCellsAndProofs(dataColumnSideCars, blockRoot)
+	recoveredCellsAndProofs, err := peerdas.RecoverCellsAndProofs(dataColumnSideCars)
 	if err != nil {
 		return errors.Wrap(err, "recover cells and proofs")
 	}
 
 	// Reconstruct the data columns sidecars.
-	dataColumnSidecars, err := peerdas.DataColumnSidecarsForReconstruct(
-		verifiedRODataColumn.KzgCommitments,
+	dataColumnSidecars, err := peerdas.DataColumnsSidecarsFromItems(
 		verifiedRODataColumn.SignedBlockHeader,
+		verifiedRODataColumn.KzgCommitments,
 		verifiedRODataColumn.KzgCommitmentsInclusionProof,
 		recoveredCellsAndProofs,
 	)

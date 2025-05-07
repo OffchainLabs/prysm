@@ -91,8 +91,14 @@ func Info(nodeID enode.ID, custodyGroupCount uint64) (*info, bool, error) {
 	// Compute data columns subnets.
 	dataColumnsSubnets := DataColumnSubnets(custodyColumns)
 
+	// Convert the custody groups to a map.
+	custodyGroupsMap := make(map[uint64]bool, len(custodyGroups))
+	for _, group := range custodyGroups {
+		custodyGroupsMap[group] = true
+	}
+
 	result := &info{
-		CustodyGroups:      custodyGroups,
+		CustodyGroups:      custodyGroupsMap,
 		CustodyColumns:     custodyColumns,
 		DataColumnsSubnets: dataColumnsSubnets,
 	}

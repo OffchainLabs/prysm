@@ -6,6 +6,7 @@ import (
 	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
@@ -218,6 +219,14 @@ func WithCustodyInfo(custodyInfo *peerdas.CustodyInfo) Option {
 func WithSlasherEnabled(enabled bool) Option {
 	return func(s *Service) error {
 		s.slasherEnabled = enabled
+		return nil
+	}
+}
+
+// WithLightClientStore allows the sync package to access light client data.
+func WithLightClientStore(lcs *lightClient.Store) Option {
+	return func(s *Service) error {
+		s.lcStore = lcs
 		return nil
 	}
 }

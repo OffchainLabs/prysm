@@ -116,7 +116,6 @@ func TestUpdateDuties_NextSlot(t *testing.T) {
 	run(ctx, v)
 
 	require.Equal(t, true, v.UpdateDutiesCalled, "Expected UpdateAssignments(%d) to be called", slot)
-	assert.Equal(t, uint64(slot), v.UpdateDutiesArg1, "UpdateAssignments was called with wrong argument")
 }
 
 func TestUpdateDuties_HandlesError(t *testing.T) {

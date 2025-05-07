@@ -59,7 +59,7 @@ go_library(
         "//runtime/version:go_default_library",
         "//time:go_default_library",
         "//time/slots:go_default_library",
-        "@com_github_dgraph_io_ristretto//:go_default_library",
+        "@com_github_dgraph_io_ristretto_v2//:go_default_library",
         "@com_github_ethereum_go_ethereum//common:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_golang_snappy//:go_default_library",

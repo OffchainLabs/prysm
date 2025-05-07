@@ -30,9 +30,13 @@ func TestValidatorsCustodyRequirement(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			balances := make([]uint64, 0, tc.count)
+			validators := make([]*ethpb.Validator, 0, tc.count)
 			for range tc.count {
-				balances = append(balances, balance)
+				validator := &ethpb.Validator{
+					EffectiveBalance: balance,
+				}
+
+				validators = append(validators, validator)
 			}
 
 			validatorsIndex := make(map[primitives.ValidatorIndex]bool)
@@ -40,7 +44,7 @@ func TestValidatorsCustodyRequirement(t *testing.T) {
 				validatorsIndex[primitives.ValidatorIndex(i)] = true
 			}
 
-			beaconState, err := state_native.InitializeFromProtoFulu(&ethpb.BeaconStateElectra{Balances: balances})
+			beaconState, err := state_native.InitializeFromProtoFulu(&ethpb.BeaconStateElectra{Validators: validators})
 			require.NoError(t, err)
 
 			actual, err := peerdas.ValidatorsCustodyRequirement(beaconState, validatorsIndex)

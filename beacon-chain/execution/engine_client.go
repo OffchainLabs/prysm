@@ -729,7 +729,7 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, signedROBlo
 		return nil, wrapWithBlockRoot(err, blockRoot, "could not get Merkle proof for KZG commitments")
 	}
 
-	dataColumnSidecars, err := peerdas.DataColumnSidecarsForReconstruct(kzgCommitments, header, kzgCommitmentsInclusionProof, cellsAndProofs)
+	dataColumnSidecars, err := peerdas.DataColumnsSidecarsFromItems(header, kzgCommitments, kzgCommitmentsInclusionProof, cellsAndProofs)
 	if err != nil {
 		return nil, wrapWithBlockRoot(err, blockRoot, "could not reconstruct data column sidecars")
 	}

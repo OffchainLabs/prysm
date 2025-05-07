@@ -102,6 +102,7 @@ func MerkleProofKZGCommitments(body interfaces.ReadOnlyBeaconBlockBody) ([][]byt
 	if err != nil {
 		return nil, errors.Wrap(err, "merkle proof")
 	}
+
 	// Remove the last element as it is a mix in with the number of
 	// elements in the trie.
 	proof = proof[:len(proof)-1]

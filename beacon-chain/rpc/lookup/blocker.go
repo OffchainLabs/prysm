@@ -269,7 +269,7 @@ func (p *BeaconDbBlocker) blobsFromReconstructedDataColumns(
 	}
 
 	// Recover cells and proofs.
-	recoveredCellsAndProofs, err := peerdas.RecoverCellsAndProofs(storedDataColumnsSidecar, root)
+	recoveredCellsAndProofs, err := peerdas.RecoverCellsAndProofs(storedDataColumnsSidecar)
 	if err != nil {
 		log.WithField("blockRoot", hexutil.Encode(root[:])).Error(errors.Wrap(err, "could not recover cells and proofs"))
 		return nil, &core.RpcError{Err: errors.Wrap(err, "could not recover cells and proofs"), Reason: core.Internal}
@@ -279,9 +279,9 @@ func (p *BeaconDbBlocker) blobsFromReconstructedDataColumns(
 	firstDataColumnSidecar := storedDataColumnsSidecar[0]
 
 	// Reconstruct the data columns sidecars.
-	reconstructedDataColumnSidecars, err := peerdas.DataColumnSidecarsForReconstruct(
-		firstDataColumnSidecar.KzgCommitments,
+	reconstructedDataColumnSidecars, err := peerdas.DataColumnsSidecarsFromItems(
 		firstDataColumnSidecar.SignedBlockHeader,
+		firstDataColumnSidecar.KzgCommitments,
 		firstDataColumnSidecar.KzgCommitmentsInclusionProof,
 		recoveredCellsAndProofs,
 	)

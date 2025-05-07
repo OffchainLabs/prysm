@@ -891,6 +891,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithTrackedValidatorsCache(b.trackedValidatorsCache),
 		regularsync.WithCustodyInfo(b.custodyInfo),
 		regularsync.WithSlasherEnabled(b.slasherEnabled),
+		regularsync.WithLightClientStore(b.lcStore),
 	)
 	return b.services.RegisterService(rs)
 }
@@ -1061,6 +1062,7 @@ func (b *BeaconNode) registerPrometheusService(_ *cli.Context) error {
 	}
 
 	service := prometheus.NewService(
+		b.cliCtx.Context,
 		fmt.Sprintf("%s:%d", b.cliCtx.String(cmd.MonitoringHostFlag.Name), b.cliCtx.Int(flags.MonitoringPortFlag.Name)),
 		b.services,
 		additionalHandlers...,
