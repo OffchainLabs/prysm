@@ -37,6 +37,7 @@ var mainnetNetworkConfig = &NetworkConfig{
 	ETH2Key:                    "eth2",
 	AttSubnetKey:               "attnets",
 	SyncCommsSubnetKey:         "syncnets",
+	CustodyGroupCountKey:       "cgc",
 	MinimumPeersInSubnetSearch: 20,
 	ContractDeploymentBlock:    11184524, // Note: contract was deployed in block 11052984 but no transactions were sent until 11184524.
 	BootstrapNodes: []string{
@@ -286,10 +287,9 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	FieldElementsPerBlob:             4096,
 	MaxBlobCommitmentsPerBlock:       4096,
 	KzgCommitmentInclusionProofDepth: 17,
+	DeprecatedMaxBlobsPerBlock:       6,
 
 	// Values related to electra
-	MaxRequestDataColumnSidecars:          16384,
-	DataColumnSidecarSubnetCount:          128,
 	MinPerEpochChurnLimitElectra:          128_000_000_000,
 	MaxPerEpochActivationExitChurnLimit:   256_000_000_000,
 	MaxEffectiveBalanceElectra:            2048_000_000_000,
@@ -306,13 +306,22 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	MaxWithdrawalRequestsPerPayload:       16,
 	MaxDepositRequestsPerPayload:          8192, // 2**13 (= 8192)
 	UnsetDepositRequestsStartIndex:        math.MaxUint64,
+	DeprecatedMaxBlobsPerBlockElectra:     9,
+	DeprecatedTargetBlobsPerBlockElectra:  6,
+	MaxRequestBlobSidecarsElectra:         1152,
 
-	// PeerDAS
+	// Values related to fulu
+	MaxRequestDataColumnSidecars:          16384,
+	DataColumnSidecarSubnetCount:          128,
 	NumberOfColumns:                       128,
-	MaxCellsInExtendedMatrix:              768,
 	SamplesPerSlot:                        8,
+	NumberOfCustodyGroups:                 128,
 	CustodyRequirement:                    4,
 	MinEpochsForDataColumnSidecarsRequest: 4096,
+	MaxCellsInExtendedMatrix:              768,
+	ValidatorCustodyRequirement:           8,
+	BalancePerAdditionalCustodyGroup:      32_000_000_000,
+	DeprecatedMaxBlobsPerBlockFulu:        12,
 
 	// Values related to networking parameters.
 	MaxPayloadSize:                  10 * 1 << 20, // 10 MiB
@@ -330,11 +339,6 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	AttestationSubnetPrefixBits:     6,
 	SubnetsPerNode:                  2,
 	NodeIdBits:                      256,
-
-	DeprecatedMaxBlobsPerBlock:           6,
-	DeprecatedMaxBlobsPerBlockElectra:    9,
-	DeprecatedTargetBlobsPerBlockElectra: 6,
-	MaxRequestBlobSidecarsElectra:        1152,
 }
 
 // MainnetTestConfig provides a version of the mainnet config that has a different name

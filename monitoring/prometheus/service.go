@@ -23,6 +23,7 @@ var log = logrus.WithField("prefix", "prometheus")
 // Service provides Prometheus metrics via the /metrics route. This route will
 // show all the metrics registered with the Prometheus DefaultRegisterer.
 type Service struct {
+	ctx         context.Context
 	server      *http.Server
 	svcRegistry *runtime.ServiceRegistry
 	failStatus  error
@@ -36,8 +37,8 @@ type Handler struct {
 
 // NewService sets up a new instance for a given address host:port.
 // An empty host will match with any IP so an address like ":2121" is perfectly acceptable.
-func NewService(addr string, svcRegistry *runtime.ServiceRegistry, additionalHandlers ...Handler) *Service {
-	s := &Service{svcRegistry: svcRegistry}
+func NewService(ctx context.Context, addr string, svcRegistry *runtime.ServiceRegistry, additionalHandlers ...Handler) *Service {
+	s := &Service{ctx: ctx, svcRegistry: svcRegistry}
 
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.HandlerFor(prometheus.DefaultGatherer, promhttp.HandlerOpts{
@@ -148,7 +149,7 @@ func (s *Service) Start() {
 
 // Stop the service gracefully.
 func (s *Service) Stop() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(s.ctx, 2*time.Second)
 	defer cancel()
 	return s.server.Shutdown(ctx)
 }
