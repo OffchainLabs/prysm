@@ -51,7 +51,6 @@ func run(ctx context.Context, v iface.Validator) {
 	startDeadline := v.SlotDeadline(ss + params.BeaconConfig().SlotsPerEpoch - 1)
 	startCtx, startCancel := context.WithDeadline(ctx, startDeadline)
 	if err := v.UpdateDuties(startCtx); err != nil {
-		startCancel()
 		handleAssignmentError(err, headSlot)
 	}
 	startCancel()
