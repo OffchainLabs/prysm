@@ -37,7 +37,7 @@ type DataColumnsVerifier interface {
 	VerifiedRODataColumns() ([]blocks.VerifiedRODataColumn, error)
 	SatisfyRequirement(Requirement)
 
-	Valid() error
+	ValidFields() error
 	CorrectSubnet(expectedTopics []string) error
 	NotFromFutureSlot() error
 	SlotAboveFinalized() error

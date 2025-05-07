@@ -68,20 +68,20 @@ func TestValid(t *testing.T) {
 		columns[0].KzgCommitments = [][]byte{}
 		verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
 
-		err := verifier.Valid()
+		err := verifier.ValidFields()
 		require.NotNil(t, err)
-		require.NotNil(t, verifier.results.result(RequireValid))
+		require.NotNil(t, verifier.results.result(RequireValidFields))
 	})
 
 	t.Run("nominal", func(t *testing.T) {
 		columns := GenerateTestDataColumns(t, [fieldparams.RootLength]byte{}, 1, 1)
 		verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
 
-		err := verifier.Valid()
+		err := verifier.ValidFields()
 		require.NoError(t, err)
-		require.IsNil(t, verifier.results.result(RequireValid))
+		require.IsNil(t, verifier.results.result(RequireValidFields))
 
-		err = verifier.Valid()
+		err = verifier.ValidFields()
 		require.NoError(t, err)
 	})
 }

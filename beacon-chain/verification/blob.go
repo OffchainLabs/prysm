@@ -26,7 +26,7 @@ const (
 	RequireSidecarKzgProofVerified
 	RequireSidecarProposerExpected
 
-	RequireValid
+	RequireValidFields
 	RequireCorrectSubnet
 )
 

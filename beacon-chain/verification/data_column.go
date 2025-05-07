@@ -26,7 +26,7 @@ var (
 	// must satisfy in order to upgrade an RODataColumn to a VerifiedRODataColumn.
 	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#data_column_sidecar_subnet_id
 	GossipDataColumnSidecarRequirements = []Requirement{
-		RequireValid,
+		RequireValidFields,
 		RequireCorrectSubnet,
 		RequireNotFromFutureSlot,
 		RequireSlotAboveFinalized,
@@ -44,7 +44,7 @@ var (
 	// via the by root request must satisfy in order to upgrade an RODataColumn to a VerifiedRODataColumn.
 	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#datacolumnsidecarsbyroot-v1
 	ByRootRequestDataColumnSidecarRequirements = []Requirement{
-		RequireValid,
+		RequireValidFields,
 		RequireSidecarInclusionProven,
 		RequireSidecarKzgProofVerified,
 	}
@@ -54,7 +54,7 @@ var (
 	// nge request must satisfy in order to upgrade an RODataColumn to a VerifiedRODataColumn.
 	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#datacolumnsidecarsbyrange-v1
 	ByRangeRequestDataColumnSidecarRequirements = []Requirement{
-		RequireValid,
+		RequireValidFields,
 		RequireSidecarInclusionProven,
 		RequireSidecarKzgProofVerified,
 	}
@@ -112,12 +112,12 @@ func (dv *RODataColumnsVerifier) recordResult(req Requirement, err *error) {
 	dv.results.record(req, *err)
 }
 
-func (dv *RODataColumnsVerifier) Valid() (err error) {
-	if ok, err := dv.results.cached(RequireValid); ok {
+func (dv *RODataColumnsVerifier) ValidFields() (err error) {
+	if ok, err := dv.results.cached(RequireValidFields); ok {
 		return err
 	}
 
-	defer dv.recordResult(RequireValid, &err)
+	defer dv.recordResult(RequireValidFields, &err)
 
 	for _, dataColumn := range dv.dataColumns {
 		if err := peerdas.VerifyDataColumnSidecar(dataColumn); err != nil {
