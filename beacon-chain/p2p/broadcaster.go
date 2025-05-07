@@ -285,13 +285,13 @@ func (s *Service) BroadcastLightClientOptimisticUpdate(ctx context.Context, upda
 		return err
 	}
 
-	// TODO: should we check if the update is too early or too late to broadcast?
-
 	if err := s.broadcastObject(ctx, update, lcOptimisticToTopic(forkDigest)); err != nil {
+		log.WithError(err).Debug("Failed to broadcast light client optimistic update")
 		err := errors.Wrap(err, "could not publish message")
 		tracing.AnnotateError(span, err)
 		return err
 	}
+	log.Debug("Successfully broadcast light client optimistic update")
 
 	return nil
 }
@@ -311,13 +311,13 @@ func (s *Service) BroadcastLightClientFinalityUpdate(ctx context.Context, update
 		return err
 	}
 
-	// TODO: should we check if the update is too early or too late to broadcast?
-
 	if err := s.broadcastObject(ctx, update, lcFinalityToTopic(forkDigest)); err != nil {
+		log.WithError(err).Debug("Failed to broadcast light client finality update")
 		err := errors.Wrap(err, "could not publish message")
 		tracing.AnnotateError(span, err)
 		return err
 	}
+	log.Debug("Successfully broadcast light client finality update")
 
 	return nil
 }

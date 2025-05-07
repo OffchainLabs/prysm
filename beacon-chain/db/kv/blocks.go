@@ -40,7 +40,7 @@ func (s *Store) Block(ctx context.Context, blockRoot [32]byte) (interfaces.ReadO
 
 func (s *Store) getBlock(ctx context.Context, blockRoot [32]byte, tx *bolt.Tx) (interfaces.ReadOnlySignedBeaconBlock, error) {
 	if v, ok := s.blockCache.Get(string(blockRoot[:])); v != nil && ok {
-		return v.(interfaces.ReadOnlySignedBeaconBlock), nil
+		return v, nil
 	}
 	// This method allows the caller to pass in its tx if one is already open.
 	// Or if a nil value is used, a transaction will be managed intenally.

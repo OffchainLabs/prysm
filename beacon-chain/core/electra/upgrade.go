@@ -170,10 +170,6 @@ func UpgradeToElectra(beaconState state.BeaconState) (state.BeaconState, error) 
 	if err != nil {
 		return nil, err
 	}
-	historicalRoots, err := beaconState.HistoricalRoots()
-	if err != nil {
-		return nil, err
-	}
 	excessBlobGas, err := payloadHeader.ExcessBlobGas()
 	if err != nil {
 		return nil, err
@@ -223,7 +219,7 @@ func UpgradeToElectra(beaconState state.BeaconState) (state.BeaconState, error) 
 		LatestBlockHeader:           beaconState.LatestBlockHeader(),
 		BlockRoots:                  beaconState.BlockRoots(),
 		StateRoots:                  beaconState.StateRoots(),
-		HistoricalRoots:             historicalRoots,
+		HistoricalRoots:             beaconState.HistoricalRoots(),
 		Eth1Data:                    beaconState.Eth1Data(),
 		Eth1DataVotes:               beaconState.Eth1DataVotes(),
 		Eth1DepositIndex:            beaconState.Eth1DepositIndex(),
