@@ -124,6 +124,7 @@ func run(ctx context.Context, v iface.Validator) error {
 						return nil // Exit if context is canceled.
 					}
 					return errors.Wrap(err, "failed to re-initialize validator")
+				}
 			}
 		case e := <-v.EventsChan():
 			v.ProcessEvent(ctx, e)

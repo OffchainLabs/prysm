@@ -209,14 +209,18 @@ func (v *validator) Init(ctx context.Context) error {
 		break
 	}
 	currentSlot := slots.CurrentSlot(v.genesisTime) // set in v.WaitForChainStart
-	epochStart, err := slots.EpochStart(slots.ToEpoch(currentSlot) + 1)
+	epochStart, err := slots.EpochStart(slots.ToEpoch(currentSlot + 1))
 	if err != nil {
 		return errors.Wrapf(err, "Could not get epoch start from current slot %d", currentSlot)
 	}
-	if err := v.UpdateDuties(ctx); err != nil {
+	startDeadline := v.SlotDeadline(epochStart + params.BeaconConfig().SlotsPerEpoch - 1)
+	startCtx, startCancel := context.WithDeadline(ctx, startDeadline)
+	if err := v.UpdateDuties(startCtx); err != nil {
 		handleAssignmentError(err, epochStart)
+		startCancel()
 		return errors.Wrap(err, "Could not update duties")
 	}
+	startCancel()
 
 	// Check if proposer settings is still nil.
 	// Set properties on the beacon node like the fee recipient for validators that are being used & active.
