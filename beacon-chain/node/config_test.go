@@ -214,7 +214,7 @@ func TestConfigureArchivalNode(t *testing.T) {
 	require.NoError(t, configureArchivalNode(cliCtx))
 	assert.LogsContain(t, hook, "Enabling Archival mode on the beacon node")
 	assert.LogsContain(t, hook, "Saving full execution payloads")
-	assert.LogsContain(t, hook, "Enabling backfill on nodes")
+	assert.LogsContain(t, hook, "Enabling backfill on node")
 
 	assert.Equal(t, true, cliCtx.Bool(flags.ArchivalNodeFlag.Name))
 	assert.Equal(t, true, cliCtx.Bool(features.SaveFullExecutionPayloads.Name))
