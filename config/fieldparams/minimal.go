@@ -53,4 +53,7 @@ const (
 	MaxBlsToExecutionChanges              = 16                // Maximum number of bls to execution changes in a block.
 	MaxRandomByte                         = uint64(1<<8 - 1)  // Maximum value for a random value using for proposer and sync committee sampling.
 	MaxRandomValueElectra                 = uint64(1<<16 - 1) // Maximum value for a random value using for proposer and sync committee sampling.
+
+	// Introduced in Fulu network upgrade.
+	NumberOfColumns = 128 // NumberOfColumns refers to the specified number of data columns that can exist in a network.
 )

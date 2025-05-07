@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -8,6 +9,9 @@ import (
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/spf13/afero"
 )
+
+// Blobs
+// -----
 
 // NewEphemeralBlobStorage should only be used for tests.
 // The instance of BlobStorage returned is backed by an in-memory virtual filesystem,
@@ -74,4 +78,42 @@ func NewMockBlobStorageSummarizer(t *testing.T, set map[[32]byte][]int) BlobStor
 		}
 	}
 	return c
+}
+
+// Data columns
+// ------------
+
+// NewEphemeralDataColumnStorage should only be used for tests.
+// The instance of DataColumnStorage returned is backed by an in-memory virtual filesystem,
+// improving test performance and simplifying cleanup.
+func NewEphemeralDataColumnStorage(t testing.TB, opts ...DataColumnStorageOption) *DataColumnStorage {
+	return NewWarmedEphemeralDataColumnStorageUsingFs(t, afero.NewMemMapFs(), opts...)
+}
+
+// NewEphemeralDataColumnStorageAndFs can be used by tests that want access to the virtual filesystem
+// in order to interact with it outside the parameters of the DataColumnStorage API.
+func NewEphemeralDataColumnStorageAndFs(t testing.TB, opts ...DataColumnStorageOption) (afero.Fs, *DataColumnStorage) {
+	fs := afero.NewMemMapFs()
+	dcs := NewWarmedEphemeralDataColumnStorageUsingFs(t, fs, opts...)
+	return fs, dcs
+}
+
+func NewWarmedEphemeralDataColumnStorageUsingFs(t testing.TB, fs afero.Fs, opts ...DataColumnStorageOption) *DataColumnStorage {
+	bs := NewEphemeralDataColumnStorageUsingFs(t, fs, opts...)
+	bs.WarmCache()
+	return bs
+}
+
+func NewEphemeralDataColumnStorageUsingFs(t testing.TB, fs afero.Fs, opts ...DataColumnStorageOption) *DataColumnStorage {
+	opts = append(opts,
+		WithDataColumnRetentionEpochs(params.BeaconConfig().MinEpochsForBlobsSidecarsRequest),
+		WithDataColumnFs(fs),
+	)
+
+	bs, err := NewDataColumnStorage(context.Background(), opts...)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return bs
 }
