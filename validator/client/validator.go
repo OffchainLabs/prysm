@@ -515,15 +515,6 @@ func retrieveLatestRecord(recs []*dbCommon.AttestationRecord) *dbCommon.Attestat
 // list of upcoming assignments needs to be updated. For example, at the
 // beginning of a new epoch.
 func (v *validator) UpdateDuties(ctx context.Context) error {
-	// Set deadline to end of epoch.
-	epoch := slots.ToEpoch(slots.CurrentSlot(v.genesisTime) + 1)
-
-	ss, err := slots.EpochStart(epoch + 1)
-	if err != nil {
-		return err
-	}
-	ctx, cancel := context.WithDeadline(ctx, v.SlotDeadline(ss))
-	defer cancel()
 	ctx, span := trace.StartSpan(ctx, "validator.UpdateDuties")
 	defer span.End()
 
@@ -546,7 +537,7 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 		}
 	}
 	v.blacklistedPubkeysLock.RUnlock()
-
+	epoch := slots.ToEpoch(slots.CurrentSlot(v.genesisTime) + 1)
 	req := &ethpb.DutiesRequest{
 		Epoch:      epoch,
 		PublicKeys: bytesutil.FromBytes48Array(filteredKeys),
@@ -562,9 +553,13 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 		return err
 	}
 
+	ss, err := slots.EpochStart(epoch)
+	if err != nil {
+		return err
+	}
 	v.dutiesLock.Lock()
 	v.duties = resp
-	v.logDuties(ss-params.BeaconConfig().SlotsPerEpoch, v.duties.CurrentEpochDuties, v.duties.NextEpochDuties)
+	v.logDuties(ss, v.duties.CurrentEpochDuties, v.duties.NextEpochDuties)
 	v.dutiesLock.Unlock()
 
 	allExitedCounter := 0
@@ -1146,18 +1141,28 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 	if head == nil {
 		return errors.New("received empty head event")
 	}
-	if v.duties == nil {
-		return errors.New("duties are not initialized")
-	}
-	prevDepedentRoot, err := bytesutil.DecodeHexWithLength(head.PreviousDutyDependentRoot, fieldparams.RootLength)
+	prevDependentRoot, err := bytesutil.DecodeHexWithLength(head.PreviousDutyDependentRoot, fieldparams.RootLength)
 	if err != nil {
 		return errors.Wrap(err, "failed to decode previous duty dependent root")
 	}
-	if bytes.Equal(prevDepedentRoot, params.BeaconConfig().ZeroHash[:]) {
+	if bytes.Equal(prevDependentRoot, params.BeaconConfig().ZeroHash[:]) {
 		return nil
 	}
-	if !bytes.Equal(prevDepedentRoot, v.duties.PrevDependentRoot) {
-		if err := v.UpdateDuties(ctx); err != nil {
+	epoch := slots.ToEpoch(slots.CurrentSlot(v.genesisTime) + 1)
+	ss, err := slots.EpochStart(epoch + 1)
+	if err != nil {
+		return errors.Wrap(err, "failed to get epoch start")
+	}
+	deadline := v.SlotDeadline(ss - 1)
+	dutiesCtx, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
+	v.dutiesLock.RLock()
+	needsPrevDependentRootUpdate := v.duties == nil || !bytes.Equal(prevDependentRoot, v.duties.PrevDependentRoot)
+	v.dutiesLock.RUnlock()
+	if needsPrevDependentRootUpdate {
+		// There's an edge case when the initial duties are not set yet
+		// This routine will lock and recompute them right after the initial duties finishes.
+		if err := v.UpdateDuties(dutiesCtx); err != nil {
 			return errors.Wrap(err, "failed to update duties")
 		}
 		log.Info("Updated duties due to previous dependent root change")
@@ -1170,13 +1175,16 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 	if bytes.Equal(currDepedentRoot, params.BeaconConfig().ZeroHash[:]) {
 		return nil
 	}
-	if !bytes.Equal(currDepedentRoot, v.duties.CurrDependentRoot) {
-		if err := v.UpdateDuties(ctx); err != nil {
-			return errors.Wrap(err, "failed to update duties")
-		}
-		log.Info("Updated duties due to current dependent root change")
+	v.dutiesLock.RLock()
+	needsCurrDependentRootUpdate := v.duties == nil || !bytes.Equal(currDepedentRoot, v.duties.CurrDependentRoot)
+	v.dutiesLock.RUnlock()
+	if !needsCurrDependentRootUpdate {
 		return nil
 	}
+	if err := v.UpdateDuties(dutiesCtx); err != nil {
+		return errors.Wrap(err, "failed to update duties")
+	}
+	log.Info("Updated duties due to current dependent root change")
 	return nil
 }
 
