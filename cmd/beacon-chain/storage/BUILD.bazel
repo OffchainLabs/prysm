@@ -9,6 +9,7 @@ go_library(
         "//beacon-chain/db/filesystem:go_default_library",
         "//beacon-chain/node:go_default_library",
         "//cmd:go_default_library",
+        "//cmd/beacon-chain/storage/flags:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
@@ -22,6 +23,7 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//cmd:go_default_library",
+        "//cmd/beacon-chain/storage/flags:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//testing/assert:go_default_library",

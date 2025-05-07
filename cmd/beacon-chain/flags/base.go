@@ -321,4 +321,9 @@ var (
 		Usage: "Specifies the retention period for the pruner service in terms of epochs. " +
 			"If this value is less than MIN_EPOCHS_FOR_BLOCK_REQUESTS, it will be ignored.",
 	}
+	// ArchivalNodeFlag defines the flag that enables archival mode on a prysm beacon node.
+	ArchivalNodeFlag = &cli.BoolFlag{
+		Name:  "archive",
+		Usage: "Enables archival mode.",
+	}
 )

@@ -21,6 +21,7 @@ go_library(
         "//cmd/beacon-chain/flags:go_default_library",
         "//cmd/beacon-chain/jwt:go_default_library",
         "//cmd/beacon-chain/storage:go_default_library",
+        "//cmd/beacon-chain/storage/flags:go_default_library",
         "//cmd/beacon-chain/sync/backfill:go_default_library",
         "//cmd/beacon-chain/sync/backfill/flags:go_default_library",
         "//cmd/beacon-chain/sync/checkpoint:go_default_library",

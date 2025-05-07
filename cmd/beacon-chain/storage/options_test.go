@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/storage/flags"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
@@ -26,7 +27,7 @@ func TestBlobStoragePath_NoFlagSpecified(t *testing.T) {
 func TestBlobStoragePath_FlagSpecified(t *testing.T) {
 	app := cli.App{}
 	set := flag.NewFlagSet("test", 0)
-	set.String(BlobStoragePathFlag.Name, "/blah/blah", BlobStoragePathFlag.Usage)
+	set.String(flags.BlobStoragePathFlag.Name, "/blah/blah", flags.BlobStoragePathFlag.Usage)
 	cliCtx := cli.NewContext(&app, set, nil)
 	storagePath := blobStoragePath(cliCtx)
 
@@ -46,18 +47,18 @@ func TestConfigureBlobRetentionEpoch(t *testing.T) {
 	require.Equal(t, specMinEpochs, epochs)
 
 	// manually define the flag in the set, so the following code can use set.Set
-	set.Uint64(BlobRetentionEpochFlag.Name, 0, "")
+	set.Uint64(flags.BlobRetentionEpochFlag.Name, 0, "")
 
 	// Test case: Input epoch is greater than or equal to spec value.
 	expectedChange := specMinEpochs + 1
-	require.NoError(t, set.Set(BlobRetentionEpochFlag.Name, fmt.Sprintf("%d", expectedChange)))
+	require.NoError(t, set.Set(flags.BlobRetentionEpochFlag.Name, fmt.Sprintf("%d", expectedChange)))
 	epochs, err = blobRetentionEpoch(cliCtx)
 	require.NoError(t, err)
 	require.Equal(t, primitives.Epoch(expectedChange), epochs)
 
 	// Test case: Input epoch is less than spec value.
 	expectedChange = specMinEpochs - 1
-	require.NoError(t, set.Set(BlobRetentionEpochFlag.Name, fmt.Sprintf("%d", expectedChange)))
+	require.NoError(t, set.Set(flags.BlobRetentionEpochFlag.Name, fmt.Sprintf("%d", expectedChange)))
 	_, err = blobRetentionEpoch(cliCtx)
 	require.ErrorIs(t, err, errInvalidBlobRetentionEpochs)
 }

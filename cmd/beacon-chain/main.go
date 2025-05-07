@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	jwtcommands "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/jwt"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/storage"
+	storageFlags "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/storage/flags"
 	backfill "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/backfill"
 	bflags "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/backfill/flags"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/checkpoint"
@@ -142,9 +143,10 @@ var appFlags = []cli.Flag{
 	flags.SlasherDirFlag,
 	flags.SlasherFlag,
 	flags.JwtId,
-	storage.BlobStoragePathFlag,
-	storage.BlobRetentionEpochFlag,
-	storage.BlobStorageLayout,
+	flags.ArchivalNodeFlag,
+	storageFlags.BlobStoragePathFlag,
+	storageFlags.BlobRetentionEpochFlag,
+	storageFlags.BlobStorageLayout,
 	bflags.EnableExperimentalBackfill,
 	bflags.BackfillBatchSize,
 	bflags.BackfillWorkerCount,

@@ -235,6 +235,10 @@ func configureBeacon(cliCtx *cli.Context) error {
 		return fmt.Errorf("%s cannot be passed concurrently with network flag", cmd.ChainConfigFileFlag.Name)
 	}
 
+	if err := configureArchivalNode(cliCtx); err != nil {
+		return err
+	}
+
 	if err := features.ConfigureBeaconChain(cliCtx); err != nil {
 		return errors.Wrap(err, "could not configure beacon chain")
 	}

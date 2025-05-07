@@ -7,7 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/cmd"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/storage"
+	storageFlags "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/storage/flags"
 	backfill "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/backfill/flags"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/checkpoint"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/genesis"
@@ -121,9 +121,10 @@ var appHelpFlagGroups = []flagGroup{
 			flags.BeaconDBPruning,
 			flags.PrunerRetentionEpochs,
 			flags.SlotsPerArchivedPoint,
-			storage.BlobRetentionEpochFlag,
-			storage.BlobStorageLayout,
-			storage.BlobStoragePathFlag,
+			flags.ArchivalNodeFlag,
+			storageFlags.BlobStoragePathFlag,
+			storageFlags.BlobRetentionEpochFlag,
+			storageFlags.BlobStorageLayout,
 		},
 	},
 	{ // Flags relevant to configuring local block production or external builders such as mev-boost.

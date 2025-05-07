@@ -2,14 +2,24 @@ package node
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/OffchainLabs/prysm/v6/cmd"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	storageFlags "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/storage/flags"
+	backfill "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/backfill/flags"
+	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/urfave/cli/v2"
+)
+
+const (
+	maxBlobRetentionEpoch         = math.MaxUint32
+	archivalSlotsPerArchivedPoint = 32
+	oldestBackFillSlot            = 1
 )
 
 func configureTracing(cliCtx *cli.Context) error {
@@ -194,4 +204,41 @@ func configureExecutionSetting(cliCtx *cli.Context) error {
 	log.Infof("Default fee recipient is set to %s, recipient may be overwritten from validator client and persist in db."+
 		" Default fee recipient will be used as a fall back", checksumAddress.Hex())
 	return params.SetActive(c)
+}
+
+func configureArchivalNode(cliCtx *cli.Context) error {
+	if cliCtx.IsSet(flags.ArchivalNodeFlag.Name) {
+		log.Info("Enabling Archival mode on the beacon node")
+		if cliCtx.IsSet(flags.SlotsPerArchivedPoint.Name) {
+			log.Infof("Changing slots per archived point from %d to %d", cliCtx.Int(flags.SlotsPerArchivedPoint.Name), archivalSlotsPerArchivedPoint)
+		}
+		if err := cliCtx.Set(flags.SlotsPerArchivedPoint.Name, fmt.Sprintf("%d", archivalSlotsPerArchivedPoint)); err != nil {
+			return err
+		}
+		if !cliCtx.IsSet(features.SaveFullExecutionPayloads.Name) {
+			log.Info("Saving full execution payloads")
+			if err := cliCtx.Set(features.SaveFullExecutionPayloads.Name, "true"); err != nil {
+				return err
+			}
+		}
+		if !cliCtx.IsSet(backfill.EnableExperimentalBackfill.Name) {
+			log.Info("Enabling backfill on node")
+			if err := cliCtx.Set(backfill.EnableExperimentalBackfill.Name, "true"); err != nil {
+				return err
+			}
+		}
+		if cliCtx.IsSet(backfill.BackfillOldestSlot.Name) {
+			log.Infof("Changing oldest backfill slot from %d to %d", cliCtx.Uint64(backfill.BackfillOldestSlot.Name), oldestBackFillSlot)
+		}
+		if err := cliCtx.Set(backfill.BackfillOldestSlot.Name, fmt.Sprintf("%d", oldestBackFillSlot)); err != nil {
+			return err
+		}
+		if cliCtx.IsSet(storageFlags.BlobRetentionEpochFlag.Name) {
+			log.Infof("Changing blob retention epochs from %d to %d", cliCtx.Uint64(storageFlags.BlobRetentionEpochFlag.Name), maxBlobRetentionEpoch)
+		}
+		if err := cliCtx.Set(storageFlags.BlobRetentionEpochFlag.Name, fmt.Sprintf("%d", maxBlobRetentionEpoch)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
