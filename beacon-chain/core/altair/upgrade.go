@@ -67,7 +67,6 @@ func UpgradeToAltair(ctx context.Context, state state.BeaconState) (state.Beacon
 	epoch := time.CurrentEpoch(state)
 
 	numValidators := state.NumValidators()
-	hrs := state.HistoricalRoots()
 	s := &ethpb.BeaconStateAltair{
 		GenesisTime:           state.GenesisTime(),
 		GenesisValidatorsRoot: state.GenesisValidatorsRoot(),
@@ -80,7 +79,7 @@ func UpgradeToAltair(ctx context.Context, state state.BeaconState) (state.Beacon
 		LatestBlockHeader:           state.LatestBlockHeader(),
 		BlockRoots:                  state.BlockRoots(),
 		StateRoots:                  state.StateRoots(),
-		HistoricalRoots:             hrs,
+		HistoricalRoots:             state.HistoricalRoots(),
 		Eth1Data:                    state.Eth1Data(),
 		Eth1DataVotes:               state.Eth1DataVotes(),
 		Eth1DepositIndex:            state.Eth1DepositIndex(),
