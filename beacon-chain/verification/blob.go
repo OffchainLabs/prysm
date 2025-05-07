@@ -25,6 +25,9 @@ const (
 	RequireSidecarInclusionProven
 	RequireSidecarKzgProofVerified
 	RequireSidecarProposerExpected
+
+	RequireValid
+	RequireCorrectSubnet
 )
 
 var allBlobSidecarRequirements = []Requirement{
