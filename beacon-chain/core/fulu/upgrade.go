@@ -57,10 +57,7 @@ func UpgradeToFulu(beaconState state.BeaconState) (state.BeaconState, error) {
 	if err != nil {
 		return nil, err
 	}
-	historicalRoots, err := beaconState.HistoricalRoots()
-	if err != nil {
-		return nil, err
-	}
+	historicalRoots := beaconState.HistoricalRoots()
 	excessBlobGas, err := payloadHeader.ExcessBlobGas()
 	if err != nil {
 		return nil, err

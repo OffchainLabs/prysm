@@ -35,10 +35,7 @@ func UpgradeToBellatrix(state state.BeaconState) (state.BeaconState, error) {
 		return nil, err
 	}
 
-	hrs, err := state.HistoricalRoots()
-	if err != nil {
-		return nil, err
-	}
+	hrs := state.HistoricalRoots()
 	s := &ethpb.BeaconStateBellatrix{
 		GenesisTime:           state.GenesisTime(),
 		GenesisValidatorsRoot: state.GenesisValidatorsRoot(),

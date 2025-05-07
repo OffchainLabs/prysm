@@ -57,10 +57,7 @@ func UpgradeToDeneb(state state.BeaconState) (state.BeaconState, error) {
 	if err != nil {
 		return nil, err
 	}
-	historicalRoots, err := state.HistoricalRoots()
-	if err != nil {
-		return nil, err
-	}
+	historicalRoots := state.HistoricalRoots()
 
 	s := &ethpb.BeaconStateDeneb{
 		GenesisTime:           state.GenesisTime(),
