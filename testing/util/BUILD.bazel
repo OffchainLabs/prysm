@@ -19,6 +19,7 @@ go_library(
         "electra.go",
         "electra_block.go",
         "electra_state.go",
+        "fulu.go",
         "helpers.go",
         "lightclient.go",
         "logging.go",
@@ -31,6 +32,7 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v6/testing/util",
     visibility = ["//visibility:public"],
     deps = [
+        "//beacon-chain/blockchain/kzg:go_default_library",
         "//beacon-chain/core/altair:go_default_library",
         "//beacon-chain/core/blocks:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",

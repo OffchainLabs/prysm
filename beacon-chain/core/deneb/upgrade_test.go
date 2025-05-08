@@ -47,10 +47,8 @@ func TestUpgradeToDeneb(t *testing.T) {
 	require.NoError(t, err)
 	require.DeepSSZEqual(t, make([]uint64, numValidators), s)
 
-	hr1, err := preForkState.HistoricalRoots()
-	require.NoError(t, err)
-	hr2, err := mSt.HistoricalRoots()
-	require.NoError(t, err)
+	hr1 := preForkState.HistoricalRoots()
+	hr2 := mSt.HistoricalRoots()
 	require.DeepEqual(t, hr1, hr2)
 
 	f := mSt.Fork()

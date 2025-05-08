@@ -112,8 +112,6 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.MaxPerEpochActivationExitChurnLimit = 128000000000
 	minimalConfig.PendingConsolidationsLimit = 64
 	minimalConfig.MaxPartialWithdrawalsPerPayload = 1
-	minimalConfig.MaxWithdrawalRequestsPerPayload = 2
-	minimalConfig.MaxDepositRequestsPerPayload = 4
 	minimalConfig.PendingPartialWithdrawalsLimit = 64
 	minimalConfig.MaxPendingPartialsPerWithdrawalsSweep = 2
 	minimalConfig.PendingDepositsLimit = 134217728

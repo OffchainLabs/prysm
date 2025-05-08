@@ -241,6 +241,7 @@ func ConfigToYaml(cfg *BeaconChainConfig) []byte {
 		fmt.Sprintf("MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA: %d", cfg.MinPerEpochChurnLimitElectra),
 		fmt.Sprintf("MAX_BLOBS_PER_BLOCK: %d", cfg.DeprecatedMaxBlobsPerBlock),
 		fmt.Sprintf("MAX_BLOBS_PER_BLOCK_ELECTRA: %d", cfg.DeprecatedMaxBlobsPerBlockElectra),
+		fmt.Sprintf("MAX_BLOBS_PER_BLOCK_FULU: %d", cfg.DeprecatedMaxBlobsPerBlockFulu),
 	}
 
 	yamlFile := []byte(strings.Join(lines, "\n"))
