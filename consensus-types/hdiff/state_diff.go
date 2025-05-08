@@ -28,24 +28,24 @@ type stateDiff struct {
 	// genesis_time does not change.
 	// genesis_validators_root does not change.
 	targetVersion               int
-	eth1VotesAppend             bool                                                        // is eth1DataVotes an append only diff?. Positioned here because of alignement.
-	justificationBits           byte                                                        // override.
-	slot                        primitives.Slot                                             // override.
-	fork                        *ethpb.Fork                                                 // override.
-	latestBlockHeader           *ethpb.BeaconBlockHeader                                    // override.
-	blockRoots                  [fieldparams.BlockRootsLength][fieldparams.RootLength]byte  // zero or override.
-	stateRoots                  [fieldparams.StateRootsLength][fieldparams.RootLength]byte  // zero or override.
-	historicalRoots             [][fieldparams.RootLength]byte                              // append only.
-	eth1Data                    *ethpb.Eth1Data                                             // override.
-	eth1DataVotes               []*ethpb.Eth1Data                                           // append only or override.
-	eth1DepositIndex            uint64                                                      // override.
-	randaoMixes                 [fieldparams.RandaoMixesLength][fieldparams.RootLength]byte // zero or override.
-	slashings                   [fieldparams.SlashingsLength]int64                          // algebraic diff.
-	previousEpochParticipation  []byte                                                      // override.
-	currentEpochParticipation   []byte                                                      // override.
-	previousJustifiedCheckpoint *ethpb.Checkpoint                                           // override.
-	currentJustifiedCheckpoint  *ethpb.Checkpoint                                           // override.
-	finalizedCheckpoint         *ethpb.Checkpoint                                           // override.
+	eth1VotesAppend             bool                                  // is eth1DataVotes an append only diff?. Positioned here because of alignement.
+	justificationBits           byte                                  // override.
+	slot                        primitives.Slot                       // override.
+	fork                        *ethpb.Fork                           // override.
+	latestBlockHeader           *ethpb.BeaconBlockHeader              // override.
+	blockRoots                  [fieldparams.BlockRootsLength][]byte  // zero or override.
+	stateRoots                  [fieldparams.StateRootsLength][]byte  // zero or override.
+	historicalRoots             [][]byte                              // append only.
+	eth1Data                    *ethpb.Eth1Data                       // override.
+	eth1DataVotes               []*ethpb.Eth1Data                     // append only or override.
+	eth1DepositIndex            uint64                                // override.
+	randaoMixes                 [fieldparams.RandaoMixesLength][]byte // zero or override.
+	slashings                   [fieldparams.SlashingsLength]int64    // algebraic diff.
+	previousEpochParticipation  []byte                                // override.
+	currentEpochParticipation   []byte                                // override.
+	previousJustifiedCheckpoint *ethpb.Checkpoint                     // override.
+	currentJustifiedCheckpoint  *ethpb.Checkpoint                     // override.
+	finalizedCheckpoint         *ethpb.Checkpoint                     // override.
 	// Altair Fields
 	inactivityScores     []uint64             // override.
 	currentSyncCommittee *ethpb.SyncCommittee // override.
@@ -55,7 +55,7 @@ type stateDiff struct {
 	// Capella
 	nextWithdrawalIndex          uint64
 	nextWithdrawalValidatorIndex primitives.ValidatorIndex
-	historicalSummaries          []ethpb.HistoricalSummary // append only.
+	historicalSummaries          []*ethpb.HistoricalSummary // append only.
 	// Electra
 	depositRequestsStartIndex     uint64
 	depositBalanceToConsume       primitives.Gwei
@@ -67,9 +67,9 @@ type stateDiff struct {
 	pendingDepositIndex            uint64
 	pendingPartialWithdrawalsIndex uint64
 	pendingConsolidationsIndex     uint64
-	pendingDepositDiff             []ethpb.PendingDeposit
-	pendingPartialWithdrawalsDiff  []ethpb.PendingPartialWithdrawal
-	pendingConsolidationsDiffs     []ethpb.PendingConsolidation
+	pendingDepositDiff             []*ethpb.PendingDeposit
+	pendingPartialWithdrawalsDiff  []*ethpb.PendingPartialWithdrawal
+	pendingConsolidationsDiffs     []*ethpb.PendingConsolidation
 }
 
 type Hdiff struct {
@@ -208,7 +208,7 @@ func (ret *stateDiff) readBlockRoots(data *[]byte) error {
 		return errors.Wrap(errDataSmall, "blockRoots")
 	}
 	for i := range fieldparams.BlockRootsLength {
-		copy(ret.blockRoots[i][:], (*data)[i*fieldparams.RootLength:(i+1)*fieldparams.RootLength])
+		copy(ret.blockRoots[i], (*data)[i*fieldparams.RootLength:(i+1)*fieldparams.RootLength])
 	}
 	*data = (*data)[blockRootsLength:]
 	return nil
@@ -219,7 +219,7 @@ func (ret *stateDiff) readStateRoots(data *[]byte) error {
 		return errors.Wrap(errDataSmall, "stateRoots")
 	}
 	for i := range fieldparams.StateRootsLength {
-		copy(ret.stateRoots[i][:], (*data)[i*fieldparams.RootLength:(i+1)*fieldparams.RootLength])
+		copy(ret.stateRoots[i], (*data)[i*fieldparams.RootLength:(i+1)*fieldparams.RootLength])
 	}
 	*data = (*data)[stateRootsLength:]
 	return nil
@@ -234,9 +234,9 @@ func (ret *stateDiff) readHistoricalRoots(data *[]byte) error {
 	if len(*data) < historicalRootsLength*fieldparams.RootLength {
 		return errors.Wrap(errDataSmall, "historicalRoots")
 	}
-	ret.historicalRoots = make([][fieldparams.RootLength]byte, historicalRootsLength)
+	ret.historicalRoots = make([][]byte, historicalRootsLength)
 	for i := range historicalRootsLength {
-		copy(ret.historicalRoots[i][:], (*data)[i*fieldparams.RootLength:(i+1)*fieldparams.RootLength])
+		ret.historicalRoots[i] = slices.Clone((*data)[i*fieldparams.RootLength : (i+1)*fieldparams.RootLength])
 	}
 	*data = (*data)[historicalRootsLength*fieldparams.RootLength:]
 	return nil
@@ -305,7 +305,7 @@ func (ret *stateDiff) readRandaoMixes(data *[]byte) error {
 	}
 	cursor := 0
 	for i := range fieldparams.RandaoMixesLength {
-		copy(ret.randaoMixes[i][:], (*data)[cursor:cursor+fieldparams.RootLength])
+		copy(ret.randaoMixes[i], (*data)[cursor:cursor+fieldparams.RootLength])
 		cursor += fieldparams.RootLength
 	}
 	*data = (*data)[randaoMixesLength:]
@@ -517,10 +517,10 @@ func (ret *stateDiff) readHistoricalSummaries(data *[]byte) error {
 	if len(*data) < 8+historicalSummariesLength*fieldparams.RootLength*2 {
 		return errors.Wrap(errDataSmall, "historicalSummaries")
 	}
-	ret.historicalSummaries = make([]ethpb.HistoricalSummary, historicalSummariesLength)
+	ret.historicalSummaries = make([]*ethpb.HistoricalSummary, historicalSummariesLength)
 	cursor := 8
 	for i := range historicalSummariesLength {
-		ret.historicalSummaries[i] = ethpb.HistoricalSummary{
+		ret.historicalSummaries[i] = &ethpb.HistoricalSummary{
 			BlockSummaryRoot: slices.Clone((*data)[cursor : cursor+fieldparams.RootLength]),
 			StateSummaryRoot: slices.Clone((*data)[cursor+fieldparams.RootLength : cursor+2*fieldparams.RootLength]),
 		}
@@ -554,10 +554,10 @@ func (ret *stateDiff) readPendingDeposits(data *[]byte) error {
 	if len(*data) < 16+pendingDepositDiffLength*pendingDepositLength {
 		return errors.Wrap(errDataSmall, "pendingDepositDiff")
 	}
-	ret.pendingDepositDiff = make([]ethpb.PendingDeposit, pendingDepositDiffLength)
+	ret.pendingDepositDiff = make([]*ethpb.PendingDeposit, pendingDepositDiffLength)
 	cursor := 16
 	for i := range pendingDepositDiffLength {
-		ret.pendingDepositDiff[i] = ethpb.PendingDeposit{
+		ret.pendingDepositDiff[i] = &ethpb.PendingDeposit{
 			PublicKey:             slices.Clone((*data)[cursor : cursor+fieldparams.BLSPubkeyLength]),
 			WithdrawalCredentials: slices.Clone((*data)[cursor+fieldparams.BLSPubkeyLength : cursor+fieldparams.BLSPubkeyLength+fieldparams.RootLength]),
 			Amount:                binary.LittleEndian.Uint64((*data)[cursor+fieldparams.BLSPubkeyLength+fieldparams.RootLength : cursor+fieldparams.BLSPubkeyLength+fieldparams.RootLength+8]),
@@ -579,10 +579,10 @@ func (ret *stateDiff) readPendingPartialWithdrawals(data *[]byte) error {
 	if len(*data) < 16+pendingPartialWithdrawalsDiffLength*pendingPartialWithdrawalLength {
 		return errors.Wrap(errDataSmall, "pendingPartialWithdrawalsDiff")
 	}
-	ret.pendingPartialWithdrawalsDiff = make([]ethpb.PendingPartialWithdrawal, pendingPartialWithdrawalsDiffLength)
+	ret.pendingPartialWithdrawalsDiff = make([]*ethpb.PendingPartialWithdrawal, pendingPartialWithdrawalsDiffLength)
 	cursor := 16
 	for i := range pendingPartialWithdrawalsDiffLength {
-		ret.pendingPartialWithdrawalsDiff[i] = ethpb.PendingPartialWithdrawal{
+		ret.pendingPartialWithdrawalsDiff[i] = &ethpb.PendingPartialWithdrawal{
 			Index:             primitives.ValidatorIndex(binary.LittleEndian.Uint64((*data)[cursor : cursor+8])),
 			Amount:            binary.LittleEndian.Uint64((*data)[cursor+8 : cursor+16]),
 			WithdrawableEpoch: primitives.Epoch(binary.LittleEndian.Uint64((*data)[cursor+16 : cursor+24])),
@@ -602,10 +602,10 @@ func (ret *stateDiff) readPendingConsolidations(data *[]byte) error {
 	if len(*data) < 16+pendingConsolidationsDiffsLength*pendingConsolidationLength {
 		return errors.Wrap(errDataSmall, "pendingConsolidationsDiffs")
 	}
-	ret.pendingConsolidationsDiffs = make([]ethpb.PendingConsolidation, pendingConsolidationsDiffsLength)
+	ret.pendingConsolidationsDiffs = make([]*ethpb.PendingConsolidation, pendingConsolidationsDiffsLength)
 	cursor := 16
 	for i := range pendingConsolidationsDiffsLength {
-		ret.pendingConsolidationsDiffs[i] = ethpb.PendingConsolidation{
+		ret.pendingConsolidationsDiffs[i] = &ethpb.PendingConsolidation{
 			SourceIndex: primitives.ValidatorIndex(binary.LittleEndian.Uint64((*data)[cursor : cursor+8])),
 			TargetIndex: primitives.ValidatorIndex(binary.LittleEndian.Uint64((*data)[cursor+8 : cursor+16])),
 		}
@@ -824,16 +824,16 @@ func (s *stateDiff) serialize() []byte {
 	}
 
 	for _, r := range s.blockRoots {
-		ret = append(ret, r[:]...)
+		ret = append(ret, r...)
 	}
 
 	for _, r := range s.stateRoots {
-		ret = append(ret, r[:]...)
+		ret = append(ret, r...)
 	}
 
 	ret = binary.LittleEndian.AppendUint64(ret, uint64(len(s.historicalRoots)))
 	for _, r := range s.historicalRoots {
-		ret = append(ret, r[:]...)
+		ret = append(ret, r...)
 	}
 
 	if s.eth1Data == nil {
@@ -859,7 +859,7 @@ func (s *stateDiff) serialize() []byte {
 	ret = binary.LittleEndian.AppendUint64(ret, s.eth1DepositIndex)
 
 	for _, r := range s.randaoMixes {
-		ret = append(ret, r[:]...)
+		ret = append(ret, r...)
 	}
 
 	for _, s := range s.slashings {
@@ -939,7 +939,7 @@ func (s *stateDiff) serialize() []byte {
 	ret = binary.LittleEndian.AppendUint64(ret, s.pendingDepositIndex)
 	ret = binary.LittleEndian.AppendUint64(ret, uint64(len(s.pendingDepositDiff)))
 	for i := range s.pendingDepositDiff {
-		d := &s.pendingDepositDiff[i]
+		d := s.pendingDepositDiff[i]
 		ret = append(ret, d.PublicKey...)
 		ret = append(ret, d.WithdrawalCredentials...)
 		ret = binary.LittleEndian.AppendUint64(ret, d.Amount)
@@ -949,7 +949,7 @@ func (s *stateDiff) serialize() []byte {
 	ret = binary.LittleEndian.AppendUint64(ret, s.pendingPartialWithdrawalsIndex)
 	ret = binary.LittleEndian.AppendUint64(ret, uint64(len(s.pendingPartialWithdrawalsDiff)))
 	for i := range s.pendingPartialWithdrawalsDiff {
-		d := &s.pendingPartialWithdrawalsDiff[i]
+		d := s.pendingPartialWithdrawalsDiff[i]
 		ret = binary.LittleEndian.AppendUint64(ret, uint64(d.Index))
 		ret = binary.LittleEndian.AppendUint64(ret, d.Amount)
 		ret = binary.LittleEndian.AppendUint64(ret, uint64(d.WithdrawableEpoch))
@@ -957,7 +957,7 @@ func (s *stateDiff) serialize() []byte {
 	ret = binary.LittleEndian.AppendUint64(ret, s.pendingConsolidationsIndex)
 	ret = binary.LittleEndian.AppendUint64(ret, uint64(len(s.pendingConsolidationsDiffs)))
 	for i := range s.pendingConsolidationsDiffs {
-		d := &s.pendingConsolidationsDiffs[i]
+		d := s.pendingConsolidationsDiffs[i]
 		ret = binary.LittleEndian.AppendUint64(ret, uint64(d.SourceIndex))
 		ret = binary.LittleEndian.AppendUint64(ret, uint64(d.TargetIndex))
 	}
@@ -1221,8 +1221,7 @@ func diffBlockRoots(diff *stateDiff, source, target state.BeaconState) {
 	}
 	for i := range fieldparams.BlockRootsLength {
 		if !bytes.Equal(sRoots[i], tRoots[i]) {
-			// This copy can be avoided if we use [][]byte instead of [][32]byte.
-			copy(diff.blockRoots[i][:], tRoots[i])
+			diff.blockRoots[i] = tRoots[i]
 		}
 	}
 }
@@ -1241,25 +1240,18 @@ func diffStateRoots(diff *stateDiff, source, target state.BeaconState) {
 	}
 	for i := range fieldparams.StateRootsLength {
 		if !bytes.Equal(sRoots[i], tRoots[i]) {
-			// This copy can be avoided if we use [][]byte instead of [][32]byte.
-			copy(diff.stateRoots[i][:], tRoots[i])
+			diff.stateRoots[i] = tRoots[i]
 		}
 	}
 }
 
-func diffHistoricalRoots(source, target state.BeaconState) ([][fieldparams.RootLength]byte, error) {
+func diffHistoricalRoots(source, target state.BeaconState) ([][]byte, error) {
 	sRoots := source.HistoricalRoots()
 	tRoots := target.HistoricalRoots()
 	if len(tRoots) < len(sRoots) {
 		return nil, errors.New("target historical roots length is less than source")
 	}
-	ret := make([][fieldparams.RootLength]byte, len(tRoots)-len(sRoots))
-	// We assume the states are consistent.
-	for i, root := range tRoots[len(sRoots):] {
-		// This copy can be avoided if we use [][]byte instead of [][32]byte.
-		copy(ret[i][:], root)
-	}
-	return ret, nil
+	return tRoots[len(sRoots):], nil
 }
 
 func shouldAppendEth1DataVotes(sVotes, tVotes []*ethpb.Eth1Data) bool {
@@ -1299,8 +1291,7 @@ func diffRandaoMixes(diff *stateDiff, source, target state.BeaconState) {
 	}
 	for i := range fieldparams.RandaoMixesLength {
 		if !bytes.Equal(sMixes[i], tMixes[i]) {
-			// This copy can be avoided if we use [][]byte instead of [][32]byte.
-			copy(diff.randaoMixes[i][:], tMixes[i])
+			diff.randaoMixes[i] = tMixes[i]
 		}
 	}
 }
@@ -1333,14 +1324,7 @@ func diffHistoricalSummaries(diff *stateDiff, source, target state.BeaconState) 
 	if len(tSummaries) < start {
 		return errors.New("target historical summaries length is less than source")
 	}
-	// this copy can be avoided if we use []*ethpb.HistoricalSummary instead of []ethpb.HistoricalSummary.
-	diff.historicalSummaries = make([]ethpb.HistoricalSummary, len(tSummaries)-start)
-	for i, summary := range tSummaries[start:] {
-		diff.historicalSummaries[i] = ethpb.HistoricalSummary{
-			BlockSummaryRoot: slices.Clone(summary.BlockSummaryRoot),
-			StateSummaryRoot: slices.Clone(summary.StateSummaryRoot),
-		}
-	}
+	diff.historicalSummaries = tSummaries[start:]
 	return nil
 }
 
@@ -1427,16 +1411,7 @@ func diffPEndingDeposits(diff *stateDiff, source, target state.BeaconState) erro
 	index := kmpIndex(len(sPendingDeposits), tPendingDeposits, helpers.PendingDepositsEqual)
 
 	diff.pendingDepositIndex = uint64(index)
-	diff.pendingDepositDiff = make([]ethpb.PendingDeposit, tlen+index-len(sPendingDeposits))
-	for i, d := range tPendingDeposits[len(sPendingDeposits)-index : tlen] {
-		diff.pendingDepositDiff[i] = ethpb.PendingDeposit{
-			PublicKey:             slices.Clone(d.PublicKey),
-			WithdrawalCredentials: slices.Clone(d.WithdrawalCredentials),
-			Amount:                d.Amount,
-			Signature:             slices.Clone(d.Signature),
-			Slot:                  d.Slot,
-		}
-	}
+	diff.pendingDepositDiff = tPendingDeposits[len(sPendingDeposits)-index : tlen]
 	return nil
 }
 
@@ -1457,14 +1432,7 @@ func diffPendingPartialWithdrawals(diff *stateDiff, source, target state.BeaconS
 	tPendingPartialWithdrawals = append(tPendingPartialWithdrawals, sPendingPartialWithdrawals...)
 	index := kmpIndex(len(sPendingPartialWithdrawals), tPendingPartialWithdrawals, helpers.PendingPartialWithdrawalsEqual)
 	diff.pendingPartialWithdrawalsIndex = uint64(index)
-	diff.pendingPartialWithdrawalsDiff = make([]ethpb.PendingPartialWithdrawal, tlen+index-len(sPendingPartialWithdrawals))
-	for i, d := range tPendingPartialWithdrawals[len(sPendingPartialWithdrawals)-index : tlen] {
-		diff.pendingPartialWithdrawalsDiff[i] = ethpb.PendingPartialWithdrawal{
-			Index:             d.Index,
-			Amount:            d.Amount,
-			WithdrawableEpoch: d.WithdrawableEpoch,
-		}
-	}
+	diff.pendingPartialWithdrawalsDiff = tPendingPartialWithdrawals[len(sPendingPartialWithdrawals)-index : tlen]
 	return nil
 }
 
@@ -1485,12 +1453,6 @@ func diffPendingConsolidations(diff *stateDiff, source, target state.BeaconState
 	tPendingConsolidations = append(tPendingConsolidations, sPendingConsolidations...)
 	index := kmpIndex(len(sPendingConsolidations), tPendingConsolidations, helpers.PendingConsolidationsEqual)
 	diff.pendingConsolidationsIndex = uint64(index)
-	diff.pendingConsolidationsDiffs = make([]ethpb.PendingConsolidation, tlen+index-len(sPendingConsolidations))
-	for i, d := range tPendingConsolidations[len(sPendingConsolidations)-index : tlen] {
-		diff.pendingConsolidationsDiffs[i] = ethpb.PendingConsolidation{
-			SourceIndex: d.SourceIndex,
-			TargetIndex: d.TargetIndex,
-		}
-	}
+	diff.pendingConsolidationsDiffs = tPendingConsolidations[len(sPendingConsolidations)-index : tlen]
 	return nil
 }
