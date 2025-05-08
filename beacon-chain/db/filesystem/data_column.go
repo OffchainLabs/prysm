@@ -28,19 +28,18 @@ import (
 )
 
 const (
-	version                            = 0x01
-	versionOffset                      = 0                           // bytes
-	versionSize                        = 1                           // bytes
-	maxSszEncodedDataColumnSidecarSize = 536_870_912                 // 2**(4*8) / 8 bytes
-	sidecarSizeOffset                  = versionOffset + versionSize // (Offset of the encoded size of the SSZ encoded data column sidecar)
-	sidecarSizeSize                    = 4                           // bytes (Size of the encoded size of the SSZ encoded data column sidecar)
-	mandatoryNumberOfColumns           = 128                         // 2**7
-	indicesOffset                      = sidecarSizeOffset + sidecarSizeSize
-	indicesSize                        = mandatoryNumberOfColumns
-	nonZeroOffset                      = mandatoryNumberOfColumns
-	headerSize                         = versionSize + sidecarSizeSize + mandatoryNumberOfColumns
-	dataColumnsFileExtension           = "sszs"
-	prunePeriod                        = 1 * time.Minute
+	version                  = 0x01
+	versionOffset            = 0                           // bytes
+	versionSize              = 1                           // bytes
+	sidecarSizeOffset        = versionOffset + versionSize // (Offset of the encoded size of the SSZ encoded data column sidecar)
+	sidecarSizeSize          = 4                           // bytes (Size of the encoded size of the SSZ encoded data column sidecar)
+	mandatoryNumberOfColumns = 128                         // 2**7
+	indicesOffset            = sidecarSizeOffset + sidecarSizeSize
+	indicesSize              = mandatoryNumberOfColumns
+	nonZeroOffset            = mandatoryNumberOfColumns
+	headerSize               = versionSize + sidecarSizeSize + mandatoryNumberOfColumns
+	dataColumnsFileExtension = "sszs"
+	prunePeriod              = 1 * time.Minute
 )
 
 var (
