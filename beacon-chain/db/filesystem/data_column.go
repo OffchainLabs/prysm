@@ -35,7 +35,6 @@ const (
 	sidecarSizeSize          = 4                           // bytes (Size of the encoded size of the SSZ encoded data column sidecar)
 	mandatoryNumberOfColumns = 128                         // 2**7
 	indicesOffset            = sidecarSizeOffset + sidecarSizeSize
-	indicesSize              = mandatoryNumberOfColumns
 	nonZeroOffset            = mandatoryNumberOfColumns
 	headerSize               = versionSize + sidecarSizeSize + mandatoryNumberOfColumns
 	dataColumnsFileExtension = "sszs"
