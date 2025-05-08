@@ -69,7 +69,7 @@ type (
 	// DataColumnStorageOption is a functional option for configuring a DataColumnStorage.
 	DataColumnStorageOption func(*DataColumnStorage) error
 
-	// DataColumnIdent is the unique identifier for a data column sidecar.
+	// DataColumnsIdent is a collection of unique identifiers for data column sidecars.
 	DataColumnsIdent struct {
 		Root    [fieldparams.RootLength]byte
 		Epoch   primitives.Epoch
