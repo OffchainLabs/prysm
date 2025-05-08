@@ -315,7 +315,9 @@ func (dcs *DataColumnStorage) Save(dataColumnSidecars []blocks.VerifiedRODataCol
 		}
 
 		// Notify the data column feed.
-		dcs.DataColumnFeed.Send(dataColumnsIdent)
+		go func() {
+			dcs.DataColumnFeed.Send(dataColumnsIdent)
+		}()
 	}
 
 	dataColumnSaveLatency.Observe(float64(time.Since(startTime).Milliseconds()))
