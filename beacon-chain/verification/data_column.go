@@ -40,25 +40,6 @@ var (
 		RequireSidecarProposerExpected,
 	}
 
-	// ByRootRequestDataColumnSidecarRequirements defines the set of requirements that DataColumnSidecars received
-	// via the by root request must satisfy in order to upgrade an RODataColumn to a VerifiedRODataColumn.
-	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#datacolumnsidecarsbyroot-v1
-	ByRootRequestDataColumnSidecarRequirements = []Requirement{
-		RequireValidFields,
-		RequireSidecarInclusionProven,
-		RequireSidecarKzgProofVerified,
-	}
-
-	// ByRangeRequestDataColumnSidecarRequirements defines the set of requirements that DataColumnSidecars received
-	// via the by rag
-	// nge request must satisfy in order to upgrade an RODataColumn to a VerifiedRODataColumn.
-	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#datacolumnsidecarsbyrange-v1
-	ByRangeRequestDataColumnSidecarRequirements = []Requirement{
-		RequireValidFields,
-		RequireSidecarInclusionProven,
-		RequireSidecarKzgProofVerified,
-	}
-
 	errColumnsInvalid = errors.New("data columns failed verification")
 	errBadTopicLength = errors.New("topic length is invalid")
 	errBadTopic       = errors.New("topic is not of the one expected")
