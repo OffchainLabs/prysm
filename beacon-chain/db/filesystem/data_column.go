@@ -28,19 +28,19 @@ import (
 )
 
 const (
-	version                                      = 0x01
-	versionOffset                                = 0           // bytes
-	versionSize                                  = 1           // bytes
-	maxSszEncodedDataColumnSidecarSize           = 536_870_912 // 2**(4*8) / 8 bytes
-	encodedSszEncodedDataColumnSidecarSizeOffset = versionOffset + versionSize
-	encodedSszEncodedDataColumnSidecarSizeSize   = 4   // bytes (size of the encoded size of the SSZ encoded data column sidecar)
-	mandatoryNumberOfColumns                     = 128 // 2**7
-	indicesOffset                                = encodedSszEncodedDataColumnSidecarSizeOffset + encodedSszEncodedDataColumnSidecarSizeSize
-	indicesSize                                  = mandatoryNumberOfColumns
-	nonZeroOffset                                = mandatoryNumberOfColumns
-	headerSize                                   = versionSize + encodedSszEncodedDataColumnSidecarSizeSize + mandatoryNumberOfColumns
-	dataColumnsFileExtension                     = "sszs"
-	prunePeriod                                  = 1 * time.Minute
+	version                            = 0x01
+	versionOffset                      = 0                           // bytes
+	versionSize                        = 1                           // bytes
+	maxSszEncodedDataColumnSidecarSize = 536_870_912                 // 2**(4*8) / 8 bytes
+	sidecarSizeOffset                  = versionOffset + versionSize // (Offset of the encoded size of the SSZ encoded data column sidecar)
+	sidecarSizeSize                    = 4                           // bytes (Size of the encoded size of the SSZ encoded data column sidecar)
+	mandatoryNumberOfColumns           = 128                         // 2**7
+	indicesOffset                      = sidecarSizeOffset + sidecarSizeSize
+	indicesSize                        = mandatoryNumberOfColumns
+	nonZeroOffset                      = mandatoryNumberOfColumns
+	headerSize                         = versionSize + sidecarSizeSize + mandatoryNumberOfColumns
+	dataColumnsFileExtension           = "sszs"
+	prunePeriod                        = 1 * time.Minute
 )
 
 var (
@@ -650,7 +650,7 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsExistingFile(filePath string
 
 	// Save indices to the file.
 	indices := metadata.indices.raw()
-	count, err := file.WriteAt(indices[:], int64(versionSize+encodedSszEncodedDataColumnSidecarSizeSize))
+	count, err := file.WriteAt(indices[:], int64(versionSize+sidecarSizeSize))
 	if err != nil {
 		return errors.Wrap(err, "write indices")
 	}
@@ -761,7 +761,7 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsNewFile(filePath string, inp
 	}()
 
 	// Encode the SSZ encoded data column sidecar size.
-	var encodedSszEncodedDataColumnSidecarSize [encodedSszEncodedDataColumnSidecarSizeSize]byte
+	var encodedSszEncodedDataColumnSidecarSize [sidecarSizeSize]byte
 	binary.BigEndian.PutUint32(encodedSszEncodedDataColumnSidecarSize[:], uint32(sszEncodedDataColumnSidecarRefSize))
 
 	// Get the raw indices.
@@ -814,7 +814,7 @@ func (dcs *DataColumnStorage) metadata(file afero.File) (*metadata, error) {
 	}
 
 	// DataColumnSidecar is a variable sized ssz object, but all data columns for a block will be the same size.
-	encodedSszEncodedDataColumnSidecarSize := header[encodedSszEncodedDataColumnSidecarSizeOffset : encodedSszEncodedDataColumnSidecarSizeOffset+encodedSszEncodedDataColumnSidecarSizeSize]
+	encodedSszEncodedDataColumnSidecarSize := header[sidecarSizeOffset : sidecarSizeOffset+sidecarSizeSize]
 
 	// Convert the SSZ encoded data column sidecar size to an int.
 	sszEncodedDataColumnSidecarSize := binary.BigEndian.Uint32(encodedSszEncodedDataColumnSidecarSize)
