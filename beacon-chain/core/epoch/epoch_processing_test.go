@@ -148,8 +148,7 @@ func TestProcessFinalUpdates_CanProcess(t *testing.T) {
 	assert.DeepNotEqual(t, params.BeaconConfig().ZeroHash[:], mix, "latest RANDAO still zero hashes")
 
 	// Verify historical root accumulator was appended.
-	roots, err := newS.HistoricalRoots()
-	require.NoError(t, err)
+	roots := newS.HistoricalRoots()
 	assert.Equal(t, 1, len(roots), "Unexpected slashed balance")
 	currAtt, err := newS.CurrentEpochAttestations()
 	require.NoError(t, err)
@@ -379,8 +378,7 @@ func TestProcessHistoricalDataUpdate(t *testing.T) {
 				return st
 			},
 			verifier: func(st state.BeaconState) {
-				roots, err := st.HistoricalRoots()
-				require.NoError(t, err)
+				roots := st.HistoricalRoots()
 				require.Equal(t, 0, len(roots))
 			},
 		},
@@ -393,8 +391,7 @@ func TestProcessHistoricalDataUpdate(t *testing.T) {
 				return st
 			},
 			verifier: func(st state.BeaconState) {
-				roots, err := st.HistoricalRoots()
-				require.NoError(t, err)
+				roots := st.HistoricalRoots()
 				require.Equal(t, 1, len(roots))
 
 				b := &ethpb.HistoricalBatch{
@@ -431,8 +428,7 @@ func TestProcessHistoricalDataUpdate(t *testing.T) {
 					StateSummaryRoot: sr[:],
 				}
 				require.DeepEqual(t, b, summaries[0])
-				hrs, err := st.HistoricalRoots()
-				require.NoError(t, err)
+				hrs := st.HistoricalRoots()
 				require.DeepEqual(t, hrs, [][]byte{})
 			},
 		},

@@ -744,14 +744,9 @@ func (s *Store) validatorEntries(ctx context.Context, blockRoot [32]byte) ([]*et
 			// get the entry bytes from the cache or from the DB.
 			v, ok := s.validatorEntryCache.Get(key)
 			if ok {
-				valEntry, vType := v.(*ethpb.Validator)
-				if vType {
-					validatorEntries = append(validatorEntries, valEntry)
-					validatorEntryCacheHit.Inc()
-				} else {
-					// this should never happen, but anyway it's good to bail out if one happens.
-					return errors.New("validator cache does not have proper object type")
-				}
+				valEntry := v
+				validatorEntries = append(validatorEntries, valEntry)
+				validatorEntryCacheHit.Inc()
 			} else {
 				// not in cache, so get it from the DB, decode it and add to the entry list.
 				valEntryBytes := valBkt.Get(key)

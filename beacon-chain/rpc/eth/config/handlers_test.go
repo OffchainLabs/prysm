@@ -200,7 +200,7 @@ func TestGetSpec(t *testing.T) {
 	data, ok := resp.Data.(map[string]interface{})
 	require.Equal(t, true, ok)
 
-	assert.Equal(t, 169, len(data))
+	assert.Equal(t, 175, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -545,6 +545,18 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "9", v)
 			case "MAX_REQUEST_BLOB_SIDECARS_ELECTRA":
 				assert.Equal(t, "1152", v)
+			case "NUMBER_OF_CUSTODY_GROUPS":
+				assert.Equal(t, "128", v)
+			case "BALANCE_PER_ADDITIONAL_CUSTODY_GROUP":
+				assert.Equal(t, "32000000000", v)
+			case "CUSTODY_REQUIREMENT":
+				assert.Equal(t, "4", v)
+			case "SAMPLES_PER_SLOT":
+				assert.Equal(t, "8", v)
+			case "VALIDATOR_CUSTODY_REQUIREMENT":
+				assert.Equal(t, "8", v)
+			case "MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS":
+				assert.Equal(t, "4096", v)
 			case "MAX_BLOB_COMMITMENTS_PER_BLOCK":
 				assert.Equal(t, "95", v)
 			case "MAX_BYTES_PER_TRANSACTION":
@@ -559,6 +571,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "100", v)
 			case "KZG_COMMITMENT_INCLUSION_PROOF_DEPTH":
 				assert.Equal(t, "101", v)
+			case "MAX_BLOBS_PER_BLOCK_FULU":
+				assert.Equal(t, "12", v)
 			case "BLOB_SIDECAR_SUBNET_COUNT":
 				assert.Equal(t, "102", v)
 			case "BLOB_SIDECAR_SUBNET_COUNT_ELECTRA":

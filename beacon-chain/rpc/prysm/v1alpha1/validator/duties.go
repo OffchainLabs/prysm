@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"google.golang.org/grpc/codes"
@@ -80,9 +81,11 @@ func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.
 		return nil, status.Errorf(codes.Internal, "Could not compute proposer slots: %v", err)
 	}
 
+	ctx, span := trace.StartSpan(ctx, "getDuties.BuildResponse")
+	defer span.End()
+
 	validatorAssignments := make([]*ethpb.DutiesResponse_Duty, 0, len(req.PublicKeys))
 	nextValidatorAssignments := make([]*ethpb.DutiesResponse_Duty, 0, len(req.PublicKeys))
-
 	for _, pubKey := range req.PublicKeys {
 		if ctx.Err() != nil {
 			return nil, status.Errorf(codes.Aborted, "Could not continue fetching assignments: %v", ctx.Err())

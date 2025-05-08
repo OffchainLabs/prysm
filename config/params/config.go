@@ -242,7 +242,7 @@ type BeaconChainConfig struct {
 	MaxPerEpochActivationChurnLimit  uint64           `yaml:"MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT" spec:"true"`  // MaxPerEpochActivationChurnLimit is the maximum amount of churn allotted for validator activation.
 	MinEpochsForBlobsSidecarsRequest primitives.Epoch `yaml:"MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS" spec:"true"` // MinEpochsForBlobsSidecarsRequest is the minimum number of epochs the node will keep the blobs for.
 	MaxRequestBlobSidecars           uint64           `yaml:"MAX_REQUEST_BLOB_SIDECARS" spec:"true"`             // MaxRequestBlobSidecars is the maximum number of blobs to request in a single request.
-	MaxRequestBlobSidecarsElectra    uint64           `yaml:"MAX_REQUEST_BLOB_SIDECARS_ELECTRA" spec:"true"`     // MaxRequestBlobSidecarsElectra is the maximum number of blobs to request in a single request.
+	MaxRequestBlobSidecarsElectra    uint64           `yaml:"MAX_REQUEST_BLOB_SIDECARS_ELECTRA" spec:"true"`     // MaxRequestBlobSidecarsElectra is the maximum number of blobs to request in a single request after the electra epoch.
 	MaxRequestBlocksDeneb            uint64           `yaml:"MAX_REQUEST_BLOCKS_DENEB" spec:"true"`              // MaxRequestBlocksDeneb is the maximum number of blocks in a single request after the deneb epoch.
 	FieldElementsPerBlob             uint64           `yaml:"FIELD_ELEMENTS_PER_BLOB" spec:"true"`               // FieldElementsPerBlob is the number of field elements that constitute a single blob.
 	MaxBlobCommitmentsPerBlock       uint64           `yaml:"MAX_BLOB_COMMITMENTS_PER_BLOCK" spec:"true"`        // MaxBlobCommitmentsPerBlock is the maximum number of KZG commitments that a block can have.
@@ -265,14 +265,17 @@ type BeaconChainConfig struct {
 	MaxDepositRequestsPerPayload          uint64 `yaml:"MAX_DEPOSIT_REQUESTS_PER_PAYLOAD" spec:"true"`           // MaxDepositRequestsPerPayload is the maximum number of execution layer deposits in each payload
 	UnsetDepositRequestsStartIndex        uint64 `yaml:"UNSET_DEPOSIT_REQUESTS_START_INDEX" spec:"true"`         // UnsetDepositRequestsStartIndex is used to check the start index for eip6110
 
-	// PeerDAS Values
-	SamplesPerSlot                        uint64           `yaml:"SAMPLES_PER_SLOT"`                             // SamplesPerSlot refers to the number of random samples a node queries per slot.
-	CustodyRequirement                    uint64           `yaml:"CUSTODY_REQUIREMENT"`                          // CustodyRequirement refers to the minimum amount of subnets a peer must custody and serve samples from.
-	MinEpochsForDataColumnSidecarsRequest primitives.Epoch `yaml:"MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS"` // MinEpochsForDataColumnSidecarsRequest is the minimum number of epochs the node will keep the data columns for.
-	MaxRequestDataColumnSidecars          uint64           `yaml:"MAX_REQUEST_DATA_COLUMN_SIDECARS" spec:"true"` // MaxRequestDataColumnSidecars is the maximum number of data column sidecars in a single request
-	MaxCellsInExtendedMatrix              uint64           `yaml:"MAX_CELLS_IN_EXTENDED_MATRIX" spec:"true"`     // MaxCellsInExtendedMatrix is the full data of one-dimensional erasure coding extended blobs (in row major format).
-	NumberOfColumns                       uint64           `yaml:"NUMBER_OF_COLUMNS" spec:"true"`                // NumberOfColumns in the extended data matrix.
-	DataColumnSidecarSubnetCount          uint64           `yaml:"DATA_COLUMN_SIDECAR_SUBNET_COUNT" spec:"true"` // DataColumnSidecarSubnetCount is the number of data column sidecar subnets used in the gossipsub protocol
+	// Values introduced in Fulu upgrade
+	NumberOfColumns                       uint64           `yaml:"NUMBER_OF_COLUMNS" spec:"true"`                            // NumberOfColumns in the extended data matrix.
+	SamplesPerSlot                        uint64           `yaml:"SAMPLES_PER_SLOT" spec:"true"`                             // SamplesPerSlot refers to the number of random samples a node queries per slot.
+	NumberOfCustodyGroups                 uint64           `yaml:"NUMBER_OF_CUSTODY_GROUPS" spec:"true"`                     // NumberOfCustodyGroups available for nodes to custody.
+	CustodyRequirement                    uint64           `yaml:"CUSTODY_REQUIREMENT" spec:"true"`                          // CustodyRequirement refers to the minimum amount of subnets a peer must custody and serve samples from.
+	MinEpochsForDataColumnSidecarsRequest primitives.Epoch `yaml:"MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS" spec:"true"` // MinEpochsForDataColumnSidecarsRequest is the minimum number of epochs the node will keep the data columns for.
+	MaxCellsInExtendedMatrix              uint64           `yaml:"MAX_CELLS_IN_EXTENDED_MATRIX"`                             // MaxCellsInExtendedMatrix is the full data of one-dimensional erasure coding extended blobs (in row major format).
+	DataColumnSidecarSubnetCount          uint64           `yaml:"DATA_COLUMN_SIDECAR_SUBNET_COUNT" spec:"true"`             // DataColumnSidecarSubnetCount is the number of data column sidecar subnets used in the gossipsub protocol
+	MaxRequestDataColumnSidecars          uint64           `yaml:"MAX_REQUEST_DATA_COLUMN_SIDECARS" spec:"true"`             // MaxRequestDataColumnSidecars is the maximum number of data column sidecars in a single request
+	ValidatorCustodyRequirement           uint64           `yaml:"VALIDATOR_CUSTODY_REQUIREMENT" spec:"true"`                // ValidatorCustodyRequirement is the minimum number of custody groups an honest node with validators attached custodies and serves samples from
+	BalancePerAdditionalCustodyGroup      uint64           `yaml:"BALANCE_PER_ADDITIONAL_CUSTODY_GROUP" spec:"true"`         // BalancePerAdditionalCustodyGroup is the balance increment corresponding to one additional group to custody.
 
 	// Networking Specific Parameters
 	MaxPayloadSize                  uint64          `yaml:"MAX_PAYLOAD_SIZE" spec:"true"`                   // MAX_PAYLOAD_SIZE is the maximum allowed size of uncompressed payload in gossip messages and rpc chunks.
@@ -304,6 +307,10 @@ type BeaconChainConfig struct {
 	// DeprecatedTargetBlobsPerBlockElectra defines the target number of blobs per block post Electra hard fork.
 	// Deprecated: This field is no longer supported. Avoid using it.
 	DeprecatedTargetBlobsPerBlockElectra int `yaml:"TARGET_BLOBS_PER_BLOCK_ELECTRA" spec:"true"`
+
+	// DeprecatedMaxBlobsPerBlockFulu defines the max blobs that could exist in a block post Fulu hard fork.
+	// Deprecated: This field is no longer supported. Avoid using it.
+	DeprecatedMaxBlobsPerBlockFulu int `yaml:"MAX_BLOBS_PER_BLOCK_FULU" spec:"true"`
 }
 
 // InitializeForkSchedule initializes the schedules forks baked into the config.
@@ -389,32 +396,49 @@ func (b *BeaconChainConfig) TargetBlobsPerBlock(slot primitives.Slot) int {
 	if primitives.Epoch(slot.DivSlot(b.SlotsPerEpoch)) >= b.ElectraForkEpoch {
 		return b.DeprecatedTargetBlobsPerBlockElectra
 	}
+
 	return b.DeprecatedMaxBlobsPerBlock / 2
 }
 
-// MaxBlobsPerBlock returns the maximum number of blobs per block for the given slot,
-// adjusting for the Electra fork.
+// MaxBlobsPerBlock returns the maximum number of blobs per block for the given slot.
 func (b *BeaconChainConfig) MaxBlobsPerBlock(slot primitives.Slot) int {
-	if primitives.Epoch(slot.DivSlot(b.SlotsPerEpoch)) >= b.ElectraForkEpoch {
+	epoch := primitives.Epoch(slot.DivSlot(b.SlotsPerEpoch))
+
+	if epoch >= b.FuluForkEpoch {
+		return b.DeprecatedMaxBlobsPerBlockFulu
+	}
+
+	if epoch >= b.ElectraForkEpoch {
 		return b.DeprecatedMaxBlobsPerBlockElectra
 	}
+
 	return b.DeprecatedMaxBlobsPerBlock
 }
 
 // MaxBlobsPerBlockByVersion returns the maximum number of blobs per block for the given fork version
 func (b *BeaconChainConfig) MaxBlobsPerBlockByVersion(v int) int {
+	if v >= version.Fulu {
+		return b.DeprecatedMaxBlobsPerBlockFulu
+	}
+
 	if v >= version.Electra {
 		return b.DeprecatedMaxBlobsPerBlockElectra
 	}
+
 	return b.DeprecatedMaxBlobsPerBlock
 }
 
 // MaxBlobsPerBlockByEpoch returns the maximum number of blobs per block for the given epoch,
 // adjusting for the Electra fork.
 func (b *BeaconChainConfig) MaxBlobsPerBlockAtEpoch(epoch primitives.Epoch) int {
+	if epoch >= b.FuluForkEpoch {
+		return b.DeprecatedMaxBlobsPerBlockFulu
+	}
+
 	if epoch >= b.ElectraForkEpoch {
 		return b.DeprecatedMaxBlobsPerBlockElectra
 	}
+
 	return b.DeprecatedMaxBlobsPerBlock
 }
 
@@ -432,9 +456,9 @@ func ElectraEnabled() bool {
 	return BeaconConfig().ElectraForkEpoch < math.MaxUint64
 }
 
-// PeerDASEnabled centralizes the check to determine if code paths
-// that are specific to peerdas should be allowed to execute.
-func PeerDASEnabled() bool {
+// FuluEnabled centralizes the check to determine if code paths that are specific to Fulu should be allowed to execute.
+// This will make it easier to find call sites that do this kind of check and remove them post-fulu.
+func FuluEnabled() bool {
 	return BeaconConfig().FuluForkEpoch < math.MaxUint64
 }
 

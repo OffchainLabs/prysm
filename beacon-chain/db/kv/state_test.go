@@ -321,15 +321,11 @@ func TestState_CanSaveRetrieveValidatorEntriesFromCache(t *testing.T) {
 		hash, hashErr := stateValidators[i].HashTreeRoot()
 		assert.NoError(t, hashErr)
 
-		data, ok := db.validatorEntryCache.Get(string(hash[:]))
+		data, ok := db.validatorEntryCache.Get(hash[:])
 		assert.Equal(t, true, ok)
 		require.NotNil(t, data)
 
-		valEntry, vType := data.(*ethpb.Validator)
-		assert.Equal(t, true, vType)
-		require.NotNil(t, valEntry)
-
-		require.DeepSSZEqual(t, stateValidators[i], valEntry, "validator entry is not matching")
+		require.DeepSSZEqual(t, stateValidators[i], data, "validator entry is not matching")
 	}
 
 	// check if all the validator entries are still intact in the validator entry bucket.
@@ -447,7 +443,7 @@ func TestState_DeleteState(t *testing.T) {
 		assert.NoError(t, hashErr)
 		v, found := db.validatorEntryCache.Get(hash[:])
 		require.Equal(t, false, found)
-		require.Equal(t, nil, v)
+		require.IsNil(t, v)
 	}
 
 	// check if the index of the first state is deleted.

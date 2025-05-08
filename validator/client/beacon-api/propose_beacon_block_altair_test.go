@@ -6,14 +6,12 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/api/apiutil"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/validator/client/beacon-api/mock"
 	testhelpers "github.com/OffchainLabs/prysm/v6/validator/client/beacon-api/test-helpers"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"go.uber.org/mock/gomock"
 )
 
@@ -27,29 +25,7 @@ func TestProposeBeaconBlock_Altair(t *testing.T) {
 	genericSignedBlock := &ethpb.GenericSignedBeaconBlock{}
 	genericSignedBlock.Block = altairBlock
 
-	jsonAltairBlock := &structs.SignedBeaconBlockAltair{
-		Signature: hexutil.Encode(altairBlock.Altair.Signature),
-		Message: &structs.BeaconBlockAltair{
-			ParentRoot:    hexutil.Encode(altairBlock.Altair.Block.ParentRoot),
-			ProposerIndex: apiutil.Uint64ToString(altairBlock.Altair.Block.ProposerIndex),
-			Slot:          apiutil.Uint64ToString(altairBlock.Altair.Block.Slot),
-			StateRoot:     hexutil.Encode(altairBlock.Altair.Block.StateRoot),
-			Body: &structs.BeaconBlockBodyAltair{
-				Attestations:      jsonifyAttestations(altairBlock.Altair.Block.Body.Attestations),
-				AttesterSlashings: jsonifyAttesterSlashings(altairBlock.Altair.Block.Body.AttesterSlashings),
-				Deposits:          jsonifyDeposits(altairBlock.Altair.Block.Body.Deposits),
-				Eth1Data:          jsonifyEth1Data(altairBlock.Altair.Block.Body.Eth1Data),
-				Graffiti:          hexutil.Encode(altairBlock.Altair.Block.Body.Graffiti),
-				ProposerSlashings: jsonifyProposerSlashings(altairBlock.Altair.Block.Body.ProposerSlashings),
-				RandaoReveal:      hexutil.Encode(altairBlock.Altair.Block.Body.RandaoReveal),
-				VoluntaryExits:    JsonifySignedVoluntaryExits(altairBlock.Altair.Block.Body.VoluntaryExits),
-				SyncAggregate: &structs.SyncAggregate{
-					SyncCommitteeBits:      hexutil.Encode(altairBlock.Altair.Block.Body.SyncAggregate.SyncCommitteeBits),
-					SyncCommitteeSignature: hexutil.Encode(altairBlock.Altair.Block.Body.SyncAggregate.SyncCommitteeSignature),
-				},
-			},
-		},
-	}
+	jsonAltairBlock := structs.SignedBeaconBlockAltairFromConsensus(altairBlock.Altair)
 
 	marshalledBlock, err := json.Marshal(jsonAltairBlock)
 	require.NoError(t, err)
