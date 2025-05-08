@@ -194,7 +194,7 @@ func (dcs *DataColumnStorage) WarmCache() {
 		}
 
 		// Open the data column filesystem file.
-		file, err := dcs.fs.Open(path)
+		f, err := dcs.fs.Open(path)
 		if err != nil {
 			log.WithError(err).Error("Error encountered while opening data column filesystem file")
 			return nil
@@ -203,14 +203,14 @@ func (dcs *DataColumnStorage) WarmCache() {
 		// Close the file.
 		defer func() {
 			// Overwrite the existing error only if it is nil, since the close error is less important.
-			closeErr := file.Close()
+			closeErr := f.Close()
 			if closeErr != nil && err == nil {
 				err = closeErr
 			}
 		}()
 
 		// Read the metadata of the file.
-		metadata, err := dcs.metadata(file)
+		metadata, err := dcs.metadata(f)
 		if err != nil {
 			log.WithError(err).Error("Error encountered while reading metadata from data column filesystem file")
 			return nil
