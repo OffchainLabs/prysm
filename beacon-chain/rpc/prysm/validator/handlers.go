@@ -3,6 +3,7 @@ package validator
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
@@ -21,10 +22,9 @@ func (s *Server) GetParticipation(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.GetParticipation")
 	defer span.End()
 
-	stateId := r.PathValue("state_id")
+	stateId := strings.ToLower(r.URL.Query().Get("state_id"))
 	if stateId == "" {
-		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
-		return
+		stateId = "head"
 	}
 
 	st, err := s.Stater.State(ctx, []byte(stateId))

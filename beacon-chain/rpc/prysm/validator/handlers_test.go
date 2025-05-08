@@ -47,36 +47,6 @@ func addDefaultReplayerBuilder(s *Server, h stategen.HistoryAccessor) {
 	s.CoreService.ReplayerBuilder = stategen.NewCanonicalHistory(h, cc, cs)
 }
 
-func TestServer_GetValidatorParticipation_NoState(t *testing.T) {
-	headState, err := util.NewBeaconState()
-	require.NoError(t, err)
-	require.NoError(t, headState.SetSlot(0))
-
-	var st state.BeaconState
-	st, _ = util.DeterministicGenesisState(t, 4)
-
-	s := &Server{
-		Stater: &testutil.MockStater{
-			BeaconState: st,
-		},
-		CoreService: &core.Service{
-			HeadFetcher: &mock.ChainService{
-				State: headState,
-			},
-			GenesisTimeFetcher: &mock.ChainService{},
-		},
-	}
-
-	url := "http://example.com" + fmt.Sprintf("%d", slots.ToEpoch(s.CoreService.GenesisTimeFetcher.CurrentSlot())+1)
-	request := httptest.NewRequest(http.MethodGet, url, nil)
-	writer := httptest.NewRecorder()
-	writer.Body = &bytes.Buffer{}
-
-	s.GetParticipation(writer, request)
-	require.Equal(t, http.StatusBadRequest, writer.Code)
-	require.StringContains(t, "state_id is required in URL params", writer.Body.String())
-}
-
 func TestServer_GetValidatorParticipation_CurrentAndPrevEpoch(t *testing.T) {
 	helpers.ClearCache()
 	beaconDB := dbTest.SetupDB(t)
@@ -147,9 +117,8 @@ func TestServer_GetValidatorParticipation_CurrentAndPrevEpoch(t *testing.T) {
 	}
 	addDefaultReplayerBuilder(s, beaconDB)
 
-	url := "http://example.com"
+	url := "http://example.com?state_id=head"
 	request := httptest.NewRequest(http.MethodGet, url, nil)
-	request.SetPathValue("state_id", "head")
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
 
@@ -247,9 +216,8 @@ func TestServer_GetValidatorParticipation_OrphanedUntilGenesis(t *testing.T) {
 	}
 	addDefaultReplayerBuilder(s, beaconDB)
 
-	url := "http://example.com"
+	url := "http://example.com?state_id=head"
 	request := httptest.NewRequest(http.MethodGet, url, nil)
-	request.SetPathValue("state_id", "head")
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
 
@@ -377,9 +345,8 @@ func runGetValidatorParticipationCurrentEpoch(t *testing.T, genState state.Beaco
 	}
 	addDefaultReplayerBuilder(s, beaconDB)
 
-	url := "http://example.com"
+	url := "http://example.com?state_id=head"
 	request := httptest.NewRequest(http.MethodGet, url, nil)
-	request.SetPathValue("state_id", "head")
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
 
