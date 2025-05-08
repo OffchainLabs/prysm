@@ -62,9 +62,10 @@ type (
 		fs              afero.Fs
 		cache           *dataColumnStorageSummaryCache
 		DataColumnFeed  *event.Feed
-		muChans         map[[fieldparams.RootLength]byte]*muChan
-		mu              sync.Mutex // protect muChans
 		pruneMu         sync.RWMutex
+
+		mu      sync.Mutex // protects muChans
+		muChans map[[fieldparams.RootLength]byte]*muChan
 	}
 
 	// DataColumnStorageOption is a functional option for configuring a DataColumnStorage.
@@ -331,7 +332,7 @@ func (dcs *DataColumnStorage) saveFilesystem(root [fieldparams.RootLength]byte, 
 	dcs.pruneMu.RLock()
 	defer dcs.pruneMu.RUnlock()
 
-	fileMu, toStore := dcs.fileMutex(root)
+	fileMu, toStore := dcs.fileMutexChan(root)
 	toStore <- dataColumnSidecars
 
 	fileMu.Lock()
@@ -367,7 +368,7 @@ func (dcs *DataColumnStorage) Get(root [fieldparams.RootLength]byte, indices []u
 	dcs.pruneMu.RLock()
 	defer dcs.pruneMu.RUnlock()
 
-	fileMu, _ := dcs.fileMutex(root)
+	fileMu, _ := dcs.fileMutexChan(root)
 	fileMu.RLock()
 	defer fileMu.RUnlock()
 
@@ -444,7 +445,7 @@ func (dcs *DataColumnStorage) Remove(blockRoot [fieldparams.RootLength]byte) err
 	dcs.pruneMu.RLock()
 	defer dcs.pruneMu.RUnlock()
 
-	fileMu, _ := dcs.fileMutex(blockRoot)
+	fileMu, _ := dcs.fileMutexChan(blockRoot)
 	fileMu.Lock()
 	defer fileMu.Unlock()
 
@@ -489,9 +490,6 @@ func (dcs *DataColumnStorage) Clear() error {
 
 // prune clean the cache, the filesystem and mutexes.
 func (dcs *DataColumnStorage) prune() {
-	dcs.mu.Lock()
-	defer dcs.mu.Unlock()
-
 	highestStoredEpoch := dcs.cache.HighestEpoch()
 
 	// Check if we need to prune.
@@ -568,6 +566,8 @@ func (dcs *DataColumnStorage) prune() {
 		}
 	}
 
+	dcs.mu.Lock()
+	defer dcs.mu.Unlock()
 	clear(dcs.muChans)
 }
 
@@ -841,7 +841,7 @@ func (dcs *DataColumnStorage) metadata(file afero.File) (*metadata, error) {
 	return metadata, nil
 }
 
-func (dcs *DataColumnStorage) fileMutex(root [fieldparams.RootLength]byte) (*sync.RWMutex, chan []blocks.VerifiedRODataColumn) {
+func (dcs *DataColumnStorage) fileMutexChan(root [fieldparams.RootLength]byte) (*sync.RWMutex, chan []blocks.VerifiedRODataColumn) {
 	dcs.mu.Lock()
 	defer dcs.mu.Unlock()
 
