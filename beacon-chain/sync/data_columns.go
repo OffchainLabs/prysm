@@ -497,7 +497,7 @@ func AdmissiblePeersForDataColumns(
 	descriptions := make([]string, 0, peerCount)
 
 	// Compute custody columns for each peer.
-	dataColumnsByPeer, err := custodyColumnsFromPeers(peers, p2p)
+	dataColumnsByPeer, err := custodyColumnsFromPeers(p2p, peers)
 	if err != nil {
 		return nil, nil, nil, errors.Wrap(err, "custody columns from peers")
 	}
@@ -519,11 +519,11 @@ func AdmissiblePeersForDataColumns(
 	return dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, descriptions, nil
 }
 
-// custodyGroupsFromPeer computes all the custody groups indexed by peer.
-func custodyGroupsFromPeers(peers []peer.ID, p2pIface p2p.P2P) (map[peer.ID]map[uint64]bool, error) {
+// custodyColumnsFromPeers computes all the custody columns indexed by peer.
+func custodyColumnsFromPeers(p2pIface p2p.P2P, peers []peer.ID) (map[peer.ID]map[uint64]bool, error) {
 	peerCount := len(peers)
 
-	custodyGroupsByPeer := make(map[peer.ID]map[uint64]bool, peerCount)
+	custodyColumnsByPeer := make(map[peer.ID]map[uint64]bool, peerCount)
 	for _, peer := range peers {
 		// Get the node ID from the peer ID.
 		nodeID, err := p2p.ConvertPeerIDToNodeID(peer)
@@ -534,43 +534,16 @@ func custodyGroupsFromPeers(peers []peer.ID, p2pIface p2p.P2P) (map[peer.ID]map[
 		// Get the custody group count of the peer.
 		custodyGroupCount := p2pIface.CustodyGroupCountFromPeer(peer)
 
-		// Get the custody groups of the peer.
+		// Get peerdas info of the peer.
 		dasInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
 		if err != nil {
-			return nil, errors.Wrap(err, "custody groups")
+			return nil, errors.Wrap(err, "peerdas info")
 		}
 
-		custodyGroupsByPeer[peer] = dasInfo.CustodyGroups
+		custodyColumnsByPeer[peer] = dasInfo.CustodyColumns
 	}
 
-	return custodyGroupsByPeer, nil
-}
-
-// custodyColumnsFromPeers computes all the custody columns indexed by peer.
-func custodyColumnsFromPeers(peers []peer.ID, p2p p2p.P2P) (map[peer.ID]map[uint64]bool, error) {
-	// Get the custody groups of the peers.
-	custodyGroupsByPeer, err := custodyGroupsFromPeers(peers, p2p)
-	if err != nil {
-		return nil, errors.Wrap(err, "custody groups from peer")
-	}
-
-	// Compute the custody columns of the peers.
-	dataColumnsByPeer := make(map[peer.ID]map[uint64]bool, len(custodyGroupsByPeer))
-	for peer, custodyGroups := range custodyGroupsByPeer {
-		custodyGroupsSlice := make([]uint64, 0, len(custodyGroups))
-		for group := range custodyGroups {
-			custodyGroupsSlice = append(custodyGroupsSlice, group)
-		}
-
-		custodyColumns, err := peerdas.CustodyColumns(custodyGroupsSlice)
-		if err != nil {
-			return nil, errors.Wrap(err, "custody columns")
-		}
-
-		dataColumnsByPeer[peer] = custodyColumns
-	}
-
-	return dataColumnsByPeer, nil
+	return custodyColumnsByPeer, nil
 }
 
 // `filterPeerWhichCustodyAtLeastOneDataColumn` filters peers which custody at least one data column
