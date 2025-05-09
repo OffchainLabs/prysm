@@ -268,8 +268,8 @@ func (s *Service) setAggregatorIndexEpochSeen(epoch primitives.Epoch, aggregator
 	defer s.seenAggregatedAttestationLock.Unlock()
 
 	b := make([]byte, 64)
-	binary.BigEndian.PutUint64(b[24:], uint64(epoch))
-	binary.BigEndian.PutUint64(b[56:], uint64(aggregatorIndex))
+	binary.LittleEndian.PutUint64(b, uint64(epoch))
+	binary.LittleEndian.PutUint64(b[32:], uint64(aggregatorIndex))
 	s.seenAggregatedAttestationCache.Add(string(b), true)
 }
 
