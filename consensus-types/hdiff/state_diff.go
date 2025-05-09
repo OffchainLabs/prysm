@@ -79,9 +79,9 @@ type Hdiff struct {
 }
 
 type HdiffSerialized struct {
-	stateDiff      []byte
-	validatorDiffs []byte
-	balancesDiff   []byte
+	StateDiff      []byte
+	ValidatorDiffs []byte
+	BalancesDiff   []byte
 }
 
 // validatorDiff is a type that represents a difference between two validators.
@@ -118,17 +118,17 @@ const (
 
 // NewHdiff desrializes a new Hdiff object from the given seialized data.
 func NewHdiff(data HdiffSerialized) (*Hdiff, error) {
-	stateDiff, err := newStateDiff(data.stateDiff)
+	stateDiff, err := newStateDiff(data.StateDiff)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create state diff")
 	}
 
-	validatorDiffs, err := newValidatorDiffs(data.validatorDiffs)
+	validatorDiffs, err := newValidatorDiffs(data.ValidatorDiffs)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create validator diffs")
 	}
 
-	balancesDiff, err := newBalancesDiff(data.balancesDiff)
+	balancesDiff, err := newBalancesDiff(data.BalancesDiff)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create balances diff")
 	}
@@ -999,9 +999,9 @@ func (h Hdiff) Serialize() HdiffSerialized {
 		bals = binary.LittleEndian.AppendUint64(bals, uint64(b))
 	}
 	return HdiffSerialized{
-		stateDiff:      h.stateDiff.serialize(),
-		validatorDiffs: vals,
-		balancesDiff:   bals,
+		StateDiff:      h.stateDiff.serialize(),
+		ValidatorDiffs: vals,
+		BalancesDiff:   bals,
 	}
 }
 
