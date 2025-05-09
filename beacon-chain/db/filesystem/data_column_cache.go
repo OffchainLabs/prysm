@@ -72,6 +72,18 @@ func (s DataColumnStorageSummary) AllAvailable(indices map[uint64]bool) bool {
 	return true
 }
 
+// Stored returns a map of all stored data columns.
+func (s DataColumnStorageSummary) Stored() map[uint64]bool {
+	stored := make(map[uint64]bool, fieldparams.NumberOfColumns)
+	for index, exists := range s.mask {
+		if exists {
+			stored[uint64(index)] = true
+		}
+	}
+
+	return stored
+}
+
 // DataColumnStorageSummarizer can be used to receive a summary of metadata about data columns on disk for a given root.
 // The DataColumnStorageSummary can be used to check which indices (if any) are available for a given block by root.
 type DataColumnStorageSummarizer interface {

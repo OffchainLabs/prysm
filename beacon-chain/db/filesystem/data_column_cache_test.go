@@ -61,6 +61,18 @@ func TestAllAvailableDataColumns(t *testing.T) {
 	require.Equal(t, true, allAvailable)
 }
 
+func TestStored(t *testing.T) {
+	summary := NewDataColumnStorageSummary(0, [fieldparams.NumberOfColumns]bool{false, true, true, false})
+
+	expected := map[uint64]bool{1: true, 2: true}
+	actual := summary.Stored()
+
+	require.Equal(t, len(expected), len(actual))
+	for k, v := range expected {
+		require.Equal(t, v, actual[k])
+	}
+}
+
 func TestSummary(t *testing.T) {
 	root := [fieldparams.RootLength]byte{}
 
