@@ -808,7 +808,7 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 		stateByRooter StateByRooter
 		proposerCache ProposerCache
 		columns       []blocks.RODataColumn
-		isError       bool
+		error         string
 	}{
 		{
 			name:          "Cached, matches",
@@ -817,7 +817,6 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 				ProposerCB: pcReturnsIdx(firstColumn.ProposerIndex()),
 			},
 			columns: columns,
-			isError: false,
 		},
 		{
 			name:          "Cached, does not match",
@@ -826,7 +825,7 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 				ProposerCB: pcReturnsIdx(firstColumn.ProposerIndex() + 1),
 			},
 			columns: columns,
-			isError: true,
+			error:   ErrSidecarUnexpectedProposer.Error(),
 		},
 		{
 			name:          "Not cached, state lookup failure",
@@ -835,7 +834,7 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 				ProposerCB: pcReturnsNotFound(),
 			},
 			columns: columns,
-			isError: true,
+			error:   "state by root",
 		},
 		{
 			name:          "Not cached, proposer matches",
@@ -845,7 +844,6 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 				ComputeProposerCB: commonComputeProposerCB,
 			},
 			columns: columns,
-			isError: false,
 		},
 		{
 			name:          "Not cached, proposer matches",
@@ -855,7 +853,6 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 				ComputeProposerCB: commonComputeProposerCB,
 			},
 			columns: columns,
-			isError: false,
 		},
 		{
 			name:          "Not cached, proposer matches for next epoch",
@@ -869,7 +866,6 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 				},
 			},
 			columns: newColumns,
-			isError: false,
 		},
 		{
 			name:          "Not cached, proposer does not match",
@@ -883,7 +879,7 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 				},
 			},
 			columns: columns,
-			isError: true,
+			error:   ErrSidecarUnexpectedProposer.Error(),
 		},
 		{
 			name:          "Not cached, ComputeProposer fails",
@@ -897,7 +893,7 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 				},
 			},
 			columns: columns,
-			isError: true,
+			error:   "compute proposer",
 		},
 	}
 
@@ -918,8 +914,8 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 
 			require.Equal(t, true, verifier.results.executed(RequireSidecarProposerExpected))
 
-			if tc.isError {
-				require.ErrorIs(t, err, ErrSidecarUnexpectedProposer)
+			if len(tc.error) > 0 {
+				require.ErrorContains(t, tc.error, err)
 				require.NotNil(t, verifier.results.result(RequireSidecarProposerExpected))
 				return
 			}

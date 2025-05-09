@@ -419,7 +419,7 @@ func (dv *RODataColumnsVerifier) SidecarProposerExpected(ctx context.Context) (e
 		// Compute the target root for the epoch.
 		targetRoot, err := dv.fc.TargetRootForEpoch(parentRoot, dataColumnEpoch)
 		if err != nil {
-			return columnErrBuilder(ErrSidecarUnexpectedProposer)
+			return columnErrBuilder(errors.Wrap(err, "target root for epoch"))
 		}
 
 		// Create a checkpoint for the target root.
@@ -435,12 +435,12 @@ func (dv *RODataColumnsVerifier) SidecarProposerExpected(ctx context.Context) (e
 			// Retrieve the parentState state to fallback to full verification.
 			parentState, err := dv.sr.StateByRoot(ctx, parentRoot)
 			if err != nil {
-				return columnErrBuilder(ErrSidecarUnexpectedProposer)
+				return columnErrBuilder(errors.Wrap(err, "state by root"))
 			}
 
 			idx, err = dv.pc.ComputeProposer(ctx, parentRoot, dataColumnSlot, parentState)
 			if err != nil {
-				return columnErrBuilder(ErrSidecarUnexpectedProposer)
+				return columnErrBuilder(errors.Wrap(err, "compute proposer"))
 			}
 		}
 
