@@ -33,6 +33,17 @@ func (s DataColumnStorageSummary) HasIndex(index uint64) bool {
 	return s.mask[index]
 }
 
+// HasAtLeastOneIndex returns true if at least one of the DataColumnSidecars at the given indices is available in the filesystem.
+func (s DataColumnStorageSummary) HasAtLeastOneIndex(indices []uint64) bool {
+	for _, index := range indices {
+		if s.mask[index] {
+			return true
+		}
+	}
+
+	return false
+}
+
 // Count returns the number of available data columns.
 func (s DataColumnStorageSummary) Count() uint64 {
 	count := uint64(0)

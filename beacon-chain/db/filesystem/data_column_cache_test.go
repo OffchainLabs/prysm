@@ -22,6 +22,16 @@ func TestHasIndex(t *testing.T) {
 	require.Equal(t, true, hasIndex)
 }
 
+func TestHasAtLeastOneIndex(t *testing.T) {
+	summary := NewDataColumnStorageSummary(0, [fieldparams.NumberOfColumns]bool{false, true})
+
+	hasAtLeastOneIndex := summary.HasAtLeastOneIndex([]uint64{3, 1, 2})
+	require.Equal(t, true, hasAtLeastOneIndex)
+
+	hasAtLeastOneIndex = summary.HasAtLeastOneIndex([]uint64{3, 4, 2})
+	require.Equal(t, false, hasAtLeastOneIndex)
+}
+
 func TestCount(t *testing.T) {
 	summary := NewDataColumnStorageSummary(0, [fieldparams.NumberOfColumns]bool{false, true, false, true})
 
