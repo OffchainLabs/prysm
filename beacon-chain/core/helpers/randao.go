@@ -29,10 +29,13 @@ func Seed(state state.ReadOnlyBeaconState, epoch primitives.Epoch, domain [bls.D
 	if err != nil {
 		return [32]byte{}, err
 	}
-	seed := append(domain[:], bytesutil.Bytes8(uint64(epoch))...)
-	seed = append(seed, randaoMix...)
 
-	seed32 := hash.Hash(seed)
+	var seed [bls.DomainByteLength + 8 + 32]byte
+	copy(seed[0:], domain[:])
+	copy(seed[bls.DomainByteLength:], bytesutil.Bytes8(uint64(epoch)))
+	copy(seed[bls.DomainByteLength+8:], randaoMix)
+
+	seed32 := hash.Hash(seed[:])
 
 	return seed32, nil
 }

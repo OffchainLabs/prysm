@@ -32,6 +32,30 @@ func NewSet() *SignatureBatch {
 
 // Join merges the provided signature batch to out current one.
 func (s *SignatureBatch) Join(set *SignatureBatch) *SignatureBatch {
+	total := len(s.Signatures) + len(set.Signatures)
+
+	// Preallocate capacity if needed
+	if cap(s.Signatures) < total {
+		newSigs := make([][]byte, len(s.Signatures), total)
+		copy(newSigs, s.Signatures)
+		s.Signatures = newSigs
+	}
+	if cap(s.PublicKeys) < total {
+		newPKs := make([]PublicKey, len(s.PublicKeys), total)
+		copy(newPKs, s.PublicKeys)
+		s.PublicKeys = newPKs
+	}
+	if cap(s.Messages) < total {
+		newMsgs := make([][32]byte, len(s.Messages), total)
+		copy(newMsgs, s.Messages)
+		s.Messages = newMsgs
+	}
+	if cap(s.Descriptions) < total {
+		newDescs := make([]string, len(s.Descriptions), total)
+		copy(newDescs, s.Descriptions)
+		s.Descriptions = newDescs
+	}
+
 	s.Signatures = append(s.Signatures, set.Signatures...)
 	s.PublicKeys = append(s.PublicKeys, set.PublicKeys...)
 	s.Messages = append(s.Messages, set.Messages...)

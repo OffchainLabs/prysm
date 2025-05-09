@@ -247,9 +247,9 @@ func ComputeDomain(domainType [DomainByteLength]byte, forkVersion, genesisValida
 
 // This returns the bls domain given by the domain type and fork data root.
 func domain(domainType [DomainByteLength]byte, forkDataRoot []byte) []byte {
-	var b []byte
-	b = append(b, domainType[:4]...)
-	b = append(b, forkDataRoot[:28]...)
+	b := make([]byte, 32)
+	copy(b[0:4], domainType[:4])
+	copy(b[4:], forkDataRoot[:28])
 	return b
 }
 

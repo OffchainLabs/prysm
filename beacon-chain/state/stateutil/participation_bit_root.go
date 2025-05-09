@@ -32,7 +32,7 @@ func ParticipationBitsRoot(bits []byte) ([32]byte, error) {
 // it does not have length bytes per chunk.
 func packParticipationBits(bytes []byte) ([][32]byte, error) {
 	numItems := len(bytes)
-	chunks := make([][32]byte, 0, numItems/32)
+	chunks := make([][32]byte, 0, (numItems+31)/32)
 	for i := 0; i < numItems; i += 32 {
 		j := i + 32
 		// We create our upper bound index of the chunk, if it is greater than numItems,

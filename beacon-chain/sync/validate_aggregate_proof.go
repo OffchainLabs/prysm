@@ -265,7 +265,9 @@ func (s *Service) hasSeenAggregatorIndexEpoch(epoch primitives.Epoch, aggregator
 func (s *Service) setAggregatorIndexEpochSeen(epoch primitives.Epoch, aggregatorIndex primitives.ValidatorIndex) {
 	s.seenAggregatedAttestationLock.Lock()
 	defer s.seenAggregatedAttestationLock.Unlock()
-	b := append(bytesutil.Bytes32(uint64(epoch)), bytesutil.Bytes32(uint64(aggregatorIndex))...)
+	b := make([]byte, 64)
+	copy(b[0:32], bytesutil.Bytes32(uint64(epoch)))
+	copy(b[32:], bytesutil.Bytes32(uint64(aggregatorIndex)))
 	s.seenAggregatedAttestationCache.Add(string(b), true)
 }
 
