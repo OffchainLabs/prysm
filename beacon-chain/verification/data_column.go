@@ -10,6 +10,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -51,6 +52,7 @@ type (
 		results                     *results
 		dataColumns                 []blocks.RODataColumn
 		verifyDataColumnsCommitment rodataColumnsCommitmentVerifier
+		stateByRoot                 map[[fieldparams.RootLength]byte]state.BeaconState
 	}
 
 	rodataColumnsCommitmentVerifier func([]blocks.RODataColumn) error
@@ -236,13 +238,10 @@ func (dv *RODataColumnsVerifier) ValidProposerSignature(ctx context.Context) (er
 
 		columnVerificationProposerSignatureCache.WithLabelValues("miss").Inc()
 
-		// Retrieve the root of the parent block corresponding to the data column.
-		parentRoot := dataColumn.ParentRoot()
-
-		// Retrieve the parentState state to fallback to full verification.
-		parentState, err := dv.sr.StateByRoot(ctx, parentRoot)
+		// Retrieve the parent state.
+		parentState, err := dv.parentState(ctx, dataColumn)
 		if err != nil {
-			return columnErrBuilder(errors.Wrap(err, "state by root"))
+			return columnErrBuilder(errors.Wrap(err, "parent state"))
 		}
 
 		// Full verification, which will subsequently be cached for anything sharing the signature cache.
@@ -429,13 +428,10 @@ func (dv *RODataColumnsVerifier) SidecarProposerExpected(ctx context.Context) (e
 		idx, cached := dv.pc.Proposer(checkpoint, dataColumnSlot)
 
 		if !cached {
-			// Retrieve the root of the parent block corresponding to the data column.
-			parentRoot := dataColumn.ParentRoot()
-
-			// Retrieve the parentState state to fallback to full verification.
-			parentState, err := dv.sr.StateByRoot(ctx, parentRoot)
+			// Retrieve the parent state.
+			parentState, err := dv.parentState(ctx, dataColumn)
 			if err != nil {
-				return columnErrBuilder(errors.Wrap(err, "state by root"))
+				return columnErrBuilder(errors.Wrap(err, "parent state"))
 			}
 
 			idx, err = dv.pc.ComputeProposer(ctx, parentRoot, dataColumnSlot, parentState)
@@ -450,6 +446,27 @@ func (dv *RODataColumnsVerifier) SidecarProposerExpected(ctx context.Context) (e
 	}
 
 	return nil
+}
+
+// parentState retrieves the parent state of the data column from the cache if possible, else retrieves it from the state by rooter.
+func (dv *RODataColumnsVerifier) parentState(ctx context.Context, dataColumn blocks.RODataColumn) (state.BeaconState, error) {
+	parentRoot := dataColumn.ParentRoot()
+
+	// If the parent root is already in the cache, return it.
+	if st, ok := dv.stateByRoot[parentRoot]; ok {
+		return st, nil
+	}
+
+	// Retrieve the parent state from the state by rooter.
+	st, err := dv.sr.StateByRoot(ctx, parentRoot)
+	if err != nil {
+		return nil, errors.Wrap(err, "state by root")
+	}
+
+	// Store the parent state in the cache.
+	dv.stateByRoot[parentRoot] = st
+
+	return st, nil
 }
 
 func columnToSignatureData(d blocks.RODataColumn) SignatureData {
