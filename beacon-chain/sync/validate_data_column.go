@@ -3,23 +3,22 @@ package sync
 import (
 	"context"
 	"fmt"
-	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/rand"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/logging"
+	prysmTime "github.com/OffchainLabs/prysm/v6/time"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/logging"
-	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+
 	"github.com/sirupsen/logrus"
 )
 
@@ -76,33 +75,39 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		return pubsub.ValidationIgnore, err
 	}
 
+	// Compute a batch of only one data column sidecar.
 	roDataColumns := []blocks.RODataColumn{roDataColumn}
 
-	verifier := s.newColumnsVerifier(roDataColumns, verification.GossipColumnSidecarRequirements)
+	// Create the verifier.
+	verifier := s.newColumnsVerifier(roDataColumns, verification.GossipDataColumnSidecarRequirements)
 
-	if err := verifier.DataColumnsIndexInBounds(); err != nil {
+	// Start the verification process.
+	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#the-gossip-domain-gossipsub
+
+	// [REJECT] The sidecar is valid as verified by `verify_data_column_sidecar(sidecar)`.
+	if err := verifier.Valid(); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
-	// [REJECT] The sidecar is for the correct subnet -- i.e. compute_subnet_for_data_column_sidecar(sidecar.index) == subnet_id.
-	want := fmt.Sprintf("data_column_sidecar_%d", peerdas.ComputeSubnetForDataColumnSidecar(roDataColumn.Index))
-	if !strings.Contains(*msg.Topic, want) {
-		log.Debug("Column Sidecar index does not match topic")
-		return pubsub.ValidationReject, fmt.Errorf("wrong topic name: %s", *msg.Topic)
+	// [REJECT] The sidecar is for the correct subnet -- i.e. `compute_subnet_for_data_column_sidecar(sidecar.index) == subnet_id`.
+	if err := verifier.CorrectSubnet([]string{*msg.Topic}); err != nil {
+		return pubsub.ValidationReject, err
 	}
 
+	// [IGNORE] The sidecar is not from a future slot (with a `MAXIMUM_GOSSIP_CLOCK_DISPARITY`` allowance
+	//  -- i.e. validate that `block_header.slot <= current_slot` (a client MAY queue future sidecars for processing at the appropriate slot).
 	if err := verifier.NotFromFutureSlot(); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
 
-	// [IGNORE] The sidecar is the first sidecar for the tuple (block_header.slot, block_header.proposer_index, sidecar.index) with valid header signature, sidecar inclusion proof, and kzg proof.
-	if s.hasSeenDataColumnIndex(roDataColumn.Slot(), roDataColumn.ProposerIndex(), roDataColumn.DataColumnSidecar.Index) {
-		return pubsub.ValidationIgnore, nil
-	}
-
+	// [IGNORE] The sidecar is from a slot greater than the latest finalized slot
+	// -- i.e. validate that `block_header.slot > compute_start_slot_at_epoch(state.finalized_checkpoint.epoch)`
 	if err := verifier.SlotAboveFinalized(); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
+
+	// [IGNORE] The sidecar's block's parent (defined by `block_header.parent_root`) has been seen (via gossip or non-gossip sources
+	// (a client MAY queue sidecars for processing once the parent block is retrieved).
 	if err := verifier.SidecarParentSeen(s.hasBadBlock); err != nil {
 		// If we haven't seen the parent, request it asynchronously.
 		go func() {
@@ -117,28 +122,50 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 
 		return pubsub.ValidationIgnore, err
 	}
+
+	// [REJECT] The sidecar's block's parent (defined by `block_header.parent_root`) passes validation.
 	if err := verifier.SidecarParentValid(s.hasBadBlock); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
+	// [REJECT] The proposer signature of `sidecar.signed_block_header`, is valid with respect to the `block_header.proposer_index` pubkey.
+	//          We do not strictly respect the spec ordering here. This is necessary because signature verification depends on the parent root,
+	//          which is only available if the parent block is known.
+	if err := verifier.ValidProposerSignature(ctx); err != nil {
+		return pubsub.ValidationReject, err
+	}
+
+	// [REJECT] The sidecar is from a higher slot than the sidecar's block's parent (defined by `block_header.parent_root`).
 	if err := verifier.SidecarParentSlotLower(); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
+	// [REJECT] The current finalized_checkpoint is an ancestor of the sidecar's block
+	// -- i.e. `get_checkpoint_block(store, block_header.parent_root, store.finalized_checkpoint.epoch) == store.finalized_checkpoint.root`.
 	if err := verifier.SidecarDescendsFromFinalized(); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
+	// [REJECT] The sidecar's kzg_commitments field inclusion proof is valid as verified by `verify_data_column_sidecar_inclusion_proof(sidecar)`.
 	if err := verifier.SidecarInclusionProven(); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
+	// [REJECT] The sidecar's column data is valid as verified by `verify_data_column_sidecar_kzg_proofs(sidecar)`.
 	if err := verifier.SidecarKzgProofVerified(); err != nil {
 		return pubsub.ValidationReject, err
 	}
-	if err := verifier.ValidProposerSignature(ctx); err != nil {
-		return pubsub.ValidationReject, err
+
+	// TODO: Try to fit this requirement into the verifier.
+	// [IGNORE] The sidecar is the first sidecar for the tuple `(block_header.slot, block_header.proposer_index, sidecar.index)`
+	// with valid header signature, sidecar inclusion proof, and kzg proof.
+	if s.hasSeenDataColumnIndex(roDataColumn.Slot(), roDataColumn.ProposerIndex(), roDataColumn.DataColumnSidecar.Index) {
+		return pubsub.ValidationIgnore, nil
 	}
+
+	// [REJECT] The sidecar is proposed by the expected `proposer_index` for the block's slot in the context of the current shuffling (defined by block_header.parent_root/block_header.slot).
+	// If the `proposer_index` cannot immediately be verified against the expected shuffling, the sidecar MAY be queued for later processing while proposers for the block's branch are calculated
+	// -- in such a case do not REJECT, instead IGNORE this message.
 	if err := verifier.SidecarProposerExpected(ctx); err != nil {
 		return pubsub.ValidationReject, err
 	}
@@ -151,7 +178,9 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 
 	verifiedRODataColumns, err := verifier.VerifiedRODataColumns()
 	if err != nil {
-		return pubsub.ValidationReject, err
+		// This should never happen.
+		log.WithError(err).WithFields(logging.DataColumnFields(roDataColumn)).Error("Failed to get verified data columns")
+		return pubsub.ValidationIgnore, err
 	}
 
 	verifiedRODataColumnsCount := len(verifiedRODataColumns)

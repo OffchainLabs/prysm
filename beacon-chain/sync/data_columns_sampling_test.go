@@ -8,29 +8,28 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
+	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
+	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	p2pTypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
 	GoKZG "github.com/crate-crypto/go-kzg-4844"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/network"
-	kzg "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
-	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
-	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	p2pTypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	"github.com/sirupsen/logrus"
 )
 
 func TestRandomizeColumns(t *testing.T) {
@@ -89,22 +88,24 @@ func createAndConnectPeer(
 
 	peer.SetStreamHandler(p2p.RPCDataColumnSidecarsByRootTopicV1+"/ssz_snappy", func(stream network.Stream) {
 		// Decode the request.
-		req := new(p2pTypes.DataColumnSidecarsByRootReq)
+		req := new(p2pTypes.DataColumnsByRootIdentifiers)
 		err := peer.Encoding().DecodeWithMaxLength(stream, req)
 		require.NoError(t, err)
 
 		for _, identifier := range *req {
-			// Filter out the columns not to respond.
-			if columnsNotToRespond[identifier.Index] {
-				continue
+			for _, column := range identifier.Columns {
+				// Filter out the columns not to respond.
+				if columnsNotToRespond[column] {
+					continue
+				}
+
+				// Create the response.
+				resp := dataColumnSidecars[column]
+
+				// Send the response.
+				err := WriteDataColumnSidecarChunk(stream, chainService, p2pService.Encoding(), resp)
+				require.NoError(t, err)
 			}
-
-			// Create the response.
-			resp := dataColumnSidecars[identifier.Index]
-
-			// Send the response.
-			err := WriteDataColumnSidecarChunk(stream, chainService, p2pService.Encoding(), resp)
-			require.NoError(t, err)
 		}
 
 		// Close the stream.
@@ -167,7 +168,7 @@ func setupDataColumnSamplerTest(t *testing.T, blobCount uint64) (*dataSamplerTes
 	kzgProofs := make([][]byte, blobCount)
 
 	for i := uint64(0); i < blobCount; i++ {
-		blob := getRandBlob(int64(i))
+		blob := getRandBlob(t, int64(i))
 
 		kzgCommitment, kzgProof, err := generateCommitmentAndProof(&blob)
 		require.NoError(t, err)
@@ -195,7 +196,7 @@ func setupDataColumnSamplerTest(t *testing.T, blobCount uint64) (*dataSamplerTes
 	}
 
 	p2pSvc := p2ptest.NewTestP2P(t)
-	chainSvc, clock := defaultMockChain(t)
+	chainSvc, clock := defaultMockChain(t, 0)
 
 	test := &dataSamplerTest{
 		ctx:                context.Background(),
@@ -511,22 +512,19 @@ func TestDataColumnSampler1D_IncrementalDAS(t *testing.T) {
 	}
 }
 
-func deterministicRandomness(seed int64) [32]byte {
+func deterministicRandomness(t *testing.T, seed int64) [32]byte {
 	// Converts an int64 to a byte slice
 	buf := new(bytes.Buffer)
 	err := binary.Write(buf, binary.BigEndian, seed)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to write int64 to bytes buffer")
-		return [32]byte{}
-	}
+	require.NoError(t, err)
 	bytes := buf.Bytes()
 
 	return sha256.Sum256(bytes)
 }
 
 // Returns a serialized random field element in big-endian
-func getRandFieldElement(seed int64) [32]byte {
-	bytes := deterministicRandomness(seed)
+func getRandFieldElement(t *testing.T, seed int64) [32]byte {
+	bytes := deterministicRandomness(t, seed)
 	var r fr.Element
 	r.SetBytes(bytes[:])
 
@@ -534,10 +532,10 @@ func getRandFieldElement(seed int64) [32]byte {
 }
 
 // Returns a random blob using the passed seed as entropy
-func getRandBlob(seed int64) kzg.Blob {
+func getRandBlob(t *testing.T, seed int64) kzg.Blob {
 	var blob kzg.Blob
 	for i := 0; i < len(blob); i += 32 {
-		fieldElementBytes := getRandFieldElement(seed + int64(i))
+		fieldElementBytes := getRandFieldElement(t, seed+int64(i))
 		copy(blob[i:i+32], fieldElementBytes[:])
 	}
 	return blob

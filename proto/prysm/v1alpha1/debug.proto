@@ -9,7 +9,7 @@ import "google/api/annotations.proto";
 import "google/protobuf/empty.proto";
 
 option csharp_namespace = "Ethereum.Eth.V1alpha1";
-option go_package = "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1;eth";
+option go_package = "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1;eth";
 option java_multiple_files = true;
 option java_outer_classname = "DebugProto";
 option java_package = "org.ethereum.eth.v1alpha1";
@@ -24,30 +24,35 @@ option php_namespace = "Ethereum\\Eth\\v1alpha1";
 service Debug {
   // Returns a beacon state by filter criteria from the beacon node.
   rpc GetBeaconState(BeaconStateRequest) returns (SSZResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/debug/state"
     };
   }
   // Returns a beacon state by filter criteria from the beacon node.
   rpc GetBlock(BlockRequestByRoot) returns (SSZResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/debug/block"
     };
   }
   // SetLoggingLevel sets the log-level of the beacon node programmatically.
   rpc SetLoggingLevel(LoggingLevelRequest) returns (google.protobuf.Empty) {
+    option deprecated = true;
     option (google.api.http) = {
       post : "/eth/v1alpha1/debug/logging"
     };
   }
   // Returns all the related data for every peer tracked by the host node.
   rpc ListPeers(google.protobuf.Empty) returns (DebugPeerResponses) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/debug/peers"
     };
   }
   // Returns requested peer with specified peer id if it exists.
   rpc GetPeer(ethereum.eth.v1alpha1.PeerRequest) returns (DebugPeerResponse) {
+    option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/debug/peer"
     };
@@ -58,23 +63,25 @@ message InclusionSlotRequest {
   uint64 id = 1;
   uint64 slot = 2 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
 }
 
 message InclusionSlotResponse {
   uint64 slot = 2 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
 }
 
 message BeaconStateRequest {
+  option deprecated = true;
+
   oneof query_filter {
     // The slot corresponding to a desired beacon state.
     uint64 slot = 1 [
       (ethereum.eth.ext.cast_type) =
-          "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+          "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
     ];
 
     // The block root corresponding to a desired beacon state.
@@ -82,14 +89,22 @@ message BeaconStateRequest {
   }
 }
 
-message BlockRequestByRoot { bytes block_root = 1; }
+message BlockRequestByRoot {
+  option deprecated = true;
+
+  bytes block_root = 1;
+}
 
 message SSZResponse {
+  option deprecated = true;
+
   // Returns an ssz-encoded byte slice as a response.
   bytes encoded = 1;
 }
 
 message LoggingLevelRequest {
+  option deprecated = true;
+
   // The logging levels available in Prysm as an enum.
   enum Level {
     INFO = 0;
@@ -99,46 +114,52 @@ message LoggingLevelRequest {
   Level level = 1;
 }
 
-message DebugPeerResponses { repeated DebugPeerResponse responses = 1; }
+message DebugPeerResponses {
+  option deprecated = true;
+
+  repeated DebugPeerResponse responses = 1;
+}
 
 message DebugPeerResponse {
-    // Peer related metadata that is useful for debugging.
-    message PeerInfo {
-        // Metadata of the peer, containing their bitfield
-        // and sequence number.
-        MetaDataV0 metadataV0 = 1;
-        MetaDataV1 metadataV1 = 2;
-        // List of protocols the peer supports.
-        repeated string protocols = 3;
-        // Number of times peer has been penalised.
-        uint64 fault_count = 4;
-        // Protocol Version peer is running.
-        string protocol_version = 5;
-        // Agent Version peer is running.
-        string agent_version = 6;
-        // Latency of responses from peer(in ms).
-        uint64 peer_latency = 7;
-        // Metadata of the peer.
-        MetaDataV2 metadataV2 = 8;
-    }
-    // Listening addresses know of the peer.
-    repeated string listening_addresses = 1;
-    // Direction of current connection.
-    ethereum.eth.v1alpha1.PeerDirection direction = 2;
-    // Current connection between host and peer.
-    ethereum.eth.v1alpha1.ConnectionState connection_state = 3;
-    // Peer ID of peer.
-    string peer_id = 4;
-    // ENR of peer at the current moment.
-    string enr = 5;
-    // Peer Info of the peer containing all relevant metadata.
-    PeerInfo peer_info = 6;
-    // Peer Status of the peer.
-    Status peer_status = 7;
-    // Last know update time for peer status.
-    uint64 last_updated = 8;
-    // Score Info of the peer.
-    ScoreInfo score_info = 9;
+  option deprecated = true;
+
+  // Peer related metadata that is useful for debugging.
+  message PeerInfo {
+    // Metadata of the peer, containing their bitfield
+    // and sequence number.
+    MetaDataV0 metadataV0 = 1;
+    MetaDataV1 metadataV1 = 2;
+    // List of protocols the peer supports.
+    repeated string protocols = 3;
+    // Number of times peer has been penalised.
+    uint64 fault_count = 4;
+    // Protocol Version peer is running.
+    string protocol_version = 5;
+    // Agent Version peer is running.
+    string agent_version = 6;
+    // Latency of responses from peer(in ms).
+    uint64 peer_latency = 7;
+    // Metadata of the peer.
+    MetaDataV2 metadataV2 = 8;
+  }
+  // Listening addresses know of the peer.
+  repeated string listening_addresses = 1;
+  // Direction of current connection.
+  ethereum.eth.v1alpha1.PeerDirection direction = 2;
+  // Current connection between host and peer.
+  ethereum.eth.v1alpha1.ConnectionState connection_state = 3;
+  // Peer ID of peer.
+  string peer_id = 4;
+  // ENR of peer at the current moment.
+  string enr = 5;
+  // Peer Info of the peer containing all relevant metadata.
+  PeerInfo peer_info = 6;
+  // Peer Status of the peer.
+  Status peer_status = 7;
+  // Last know update time for peer status.
+  uint64 last_updated = 8;
+  // Score Info of the peer.
+  ScoreInfo score_info = 9;
 }
 
 // The Scoring related information of the particular peer.

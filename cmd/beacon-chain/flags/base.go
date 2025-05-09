@@ -5,8 +5,8 @@ package flags
 import (
 	"strings"
 
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/urfave/cli/v2"
 )
 
@@ -28,6 +28,14 @@ var (
 		Usage: "A MEV builder relay string http endpoint, this will be used to interact MEV builder network using API defined in: https://ethereum.github.io/builder-specs/#/Builder",
 		Value: "",
 	}
+
+	// EnableBuilderSSZ enables Builder APIs to send and receive in SSZ format
+	EnableBuilderSSZ = &cli.BoolFlag{
+		Name:    "enable-builder-ssz",
+		Aliases: []string{"builder-ssz"},
+		Usage:   "Enables Builder APIs to send and receive in SSZ format",
+	}
+
 	MaxBuilderConsecutiveMissedSlots = &cli.IntFlag{
 		Name:  "max-builder-consecutive-missed-slots",
 		Usage: "Number of consecutive skip slot to fallback from using relay/builder to local execution engine for block construction",
@@ -309,6 +317,11 @@ var (
 		Usage: "Directory for the slasher database",
 		Value: cmd.DefaultDataDir(),
 	}
+	// SlasherFlag defines a flag to enable the beacon chain slasher.
+	SlasherFlag = &cli.BoolFlag{
+		Name:  "slasher",
+		Usage: "Enables a slasher in the beacon node for detecting slashable offenses.",
+	}
 	// BeaconDBPruning enables the pruning of beacon db.
 	BeaconDBPruning = &cli.BoolFlag{
 		Name: "beacon-db-pruning",
@@ -320,5 +333,10 @@ var (
 		Name: "pruner-retention-epochs",
 		Usage: "Specifies the retention period for the pruner service in terms of epochs. " +
 			"If this value is less than MIN_EPOCHS_FOR_BLOCK_REQUESTS, it will be ignored.",
+	}
+	// SubscribeAllDataSubnets enables subscription to all data subnets.
+	SubscribeAllDataSubnets = &cli.BoolFlag{
+		Name:  "subscribe-all-data-subnets",
+		Usage: "Enable subscription to all data subnets.",
 	}
 )

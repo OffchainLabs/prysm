@@ -16,32 +16,33 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/async/event"
+	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/config/proposer"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	validatorType "github.com/OffchainLabs/prysm/v6/consensus-types/validator"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	blsmock "github.com/OffchainLabs/prysm/v6/crypto/bls/common/mock"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	validatormock "github.com/OffchainLabs/prysm/v6/testing/validator-mock"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts/wallet"
+	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
+	dbTest "github.com/OffchainLabs/prysm/v6/validator/db/testing"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager/local"
+	remoteweb3signer "github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
-	"github.com/prysmaticlabs/prysm/v5/async/event"
-	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/config/proposer"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	validatorType "github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	blsmock "github.com/prysmaticlabs/prysm/v5/crypto/bls/common/mock"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	validatormock "github.com/prysmaticlabs/prysm/v5/testing/validator-mock"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
-	dbTest "github.com/prysmaticlabs/prysm/v5/validator/db/testing"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/local"
-	remoteweb3signer "github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer"
 	"github.com/sirupsen/logrus"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/urfave/cli/v2"
@@ -391,13 +392,18 @@ func TestUpdateDuties_DoesNothingWhenNotEpochStart_AlreadyExistingAssignments(t 
 	defer ctrl.Finish()
 	client := validatormock.NewMockValidatorClient(ctrl)
 
-	slot := primitives.Slot(1)
 	v := validator{
+		km:              newMockKeymanager(t, randKeypair(t)),
 		validatorClient: client,
-		duties: &ethpb.DutiesResponse{
-			CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+		duties: &ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
-					Committee:      []primitives.ValidatorIndex{},
+					AttesterSlot:   10,
+					CommitteeIndex: 20,
+				},
+			},
+			NextEpochDuties: []*ethpb.ValidatorDuty{
+				{
 					AttesterSlot:   10,
 					CommitteeIndex: 20,
 				},
@@ -407,9 +413,9 @@ func TestUpdateDuties_DoesNothingWhenNotEpochStart_AlreadyExistingAssignments(t 
 	client.EXPECT().Duties(
 		gomock.Any(),
 		gomock.Any(),
-	).Times(0)
+	).Times(1)
 
-	assert.NoError(t, v.UpdateDuties(context.Background(), slot), "Could not update assignments")
+	assert.NoError(t, v.UpdateDuties(context.Background()), "Could not update assignments")
 }
 
 func TestUpdateDuties_ReturnsError(t *testing.T) {
@@ -420,8 +426,8 @@ func TestUpdateDuties_ReturnsError(t *testing.T) {
 	v := validator{
 		validatorClient: client,
 		km:              newMockKeymanager(t, randKeypair(t)),
-		duties: &ethpb.DutiesResponse{
-			CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+		duties: &ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
 					CommitteeIndex: 1,
 				},
@@ -436,8 +442,8 @@ func TestUpdateDuties_ReturnsError(t *testing.T) {
 		gomock.Any(),
 	).Return(nil, expected)
 
-	assert.ErrorContains(t, expected.Error(), v.UpdateDuties(context.Background(), params.BeaconConfig().SlotsPerEpoch))
-	assert.Equal(t, (*ethpb.DutiesResponse)(nil), v.duties, "Assignments should have been cleared on failure")
+	assert.ErrorContains(t, expected.Error(), v.UpdateDuties(context.Background()))
+	assert.Equal(t, (*ethpb.ValidatorDutiesContainer)(nil), v.duties, "Assignments should have been cleared on failure")
 }
 
 func TestUpdateDuties_OK(t *testing.T) {
@@ -445,16 +451,15 @@ func TestUpdateDuties_OK(t *testing.T) {
 	defer ctrl.Finish()
 	client := validatormock.NewMockValidatorClient(ctrl)
 
-	slot := params.BeaconConfig().SlotsPerEpoch
-	resp := &ethpb.DutiesResponse{
-		CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+	resp := &ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{
 			{
-				AttesterSlot:   params.BeaconConfig().SlotsPerEpoch,
-				ValidatorIndex: 200,
-				CommitteeIndex: 100,
-				Committee:      []primitives.ValidatorIndex{0, 1, 2, 3},
-				PublicKey:      []byte("testPubKey_1"),
-				ProposerSlots:  []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
+				AttesterSlot:    params.BeaconConfig().SlotsPerEpoch,
+				ValidatorIndex:  200,
+				CommitteeIndex:  100,
+				CommitteeLength: 4,
+				PublicKey:       []byte("testPubKey_1"),
+				ProposerSlots:   []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
 			},
 		},
 	}
@@ -474,12 +479,12 @@ func TestUpdateDuties_OK(t *testing.T) {
 		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
-	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.DutiesResponse_Duty) (*emptypb.Empty, error) {
+	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
 		wg.Done()
 		return nil, nil
 	})
 
-	require.NoError(t, v.UpdateDuties(context.Background(), slot), "Could not update assignments")
+	require.NoError(t, v.UpdateDuties(context.Background()), "Could not update assignments")
 
 	util.WaitTimeout(&wg, 2*time.Second)
 
@@ -494,7 +499,6 @@ func TestUpdateDuties_OK_FilterBlacklistedPublicKeys(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	client := validatormock.NewMockValidatorClient(ctrl)
-	slot := params.BeaconConfig().SlotsPerEpoch
 
 	numValidators := 10
 	km := genMockKeymanager(t, numValidators)
@@ -508,8 +512,8 @@ func TestUpdateDuties_OK_FilterBlacklistedPublicKeys(t *testing.T) {
 		blacklistedPubkeys: blacklistedPublicKeys,
 	}
 
-	resp := &ethpb.DutiesResponse{
-		CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{},
+	resp := &ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{},
 	}
 	client.EXPECT().Duties(
 		gomock.Any(),
@@ -522,12 +526,12 @@ func TestUpdateDuties_OK_FilterBlacklistedPublicKeys(t *testing.T) {
 		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
-	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.DutiesResponse_Duty) (*emptypb.Empty, error) {
+	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
 		wg.Done()
 		return nil, nil
 	})
 
-	require.NoError(t, v.UpdateDuties(context.Background(), slot), "Could not update assignments")
+	require.NoError(t, v.UpdateDuties(context.Background()), "Could not update assignments")
 
 	util.WaitTimeout(&wg, 2*time.Second)
 
@@ -541,26 +545,25 @@ func TestUpdateDuties_AllValidatorsExited(t *testing.T) {
 	defer ctrl.Finish()
 	client := validatormock.NewMockValidatorClient(ctrl)
 
-	slot := params.BeaconConfig().SlotsPerEpoch
-	resp := &ethpb.DutiesResponse{
-		CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+	resp := &ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{
 			{
-				AttesterSlot:   params.BeaconConfig().SlotsPerEpoch,
-				ValidatorIndex: 200,
-				CommitteeIndex: 100,
-				Committee:      []primitives.ValidatorIndex{0, 1, 2, 3},
-				PublicKey:      []byte("testPubKey_1"),
-				ProposerSlots:  []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
-				Status:         ethpb.ValidatorStatus_EXITED,
+				AttesterSlot:    params.BeaconConfig().SlotsPerEpoch,
+				ValidatorIndex:  200,
+				CommitteeIndex:  100,
+				CommitteeLength: 4,
+				PublicKey:       []byte("testPubKey_1"),
+				ProposerSlots:   []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
+				Status:          ethpb.ValidatorStatus_EXITED,
 			},
 			{
-				AttesterSlot:   params.BeaconConfig().SlotsPerEpoch,
-				ValidatorIndex: 201,
-				CommitteeIndex: 101,
-				Committee:      []primitives.ValidatorIndex{0, 1, 2, 3},
-				PublicKey:      []byte("testPubKey_2"),
-				ProposerSlots:  []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
-				Status:         ethpb.ValidatorStatus_EXITED,
+				AttesterSlot:    params.BeaconConfig().SlotsPerEpoch,
+				ValidatorIndex:  201,
+				CommitteeIndex:  101,
+				CommitteeLength: 4,
+				PublicKey:       []byte("testPubKey_2"),
+				ProposerSlots:   []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
+				Status:          ethpb.ValidatorStatus_EXITED,
 			},
 		},
 	}
@@ -573,7 +576,7 @@ func TestUpdateDuties_AllValidatorsExited(t *testing.T) {
 		gomock.Any(),
 	).Return(resp, nil)
 
-	err := v.UpdateDuties(context.Background(), slot)
+	err := v.UpdateDuties(context.Background())
 	require.ErrorContains(t, ErrValidatorsAllExited.Error(), err)
 
 }
@@ -586,8 +589,8 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 	// Start of third epoch.
 	slot := 2 * params.BeaconConfig().SlotsPerEpoch
 	keys := randKeypair(t)
-	resp := &ethpb.DutiesResponse{
-		CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+	resp := &ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{
 			{
 				AttesterSlot:   slot, // First slot in epoch.
 				ValidatorIndex: 200,
@@ -596,7 +599,7 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 				Status:         ethpb.ValidatorStatus_ACTIVE,
 			},
 		},
-		NextEpochDuties: []*ethpb.DutiesResponse_Duty{
+		NextEpochDuties: []*ethpb.ValidatorDuty{
 			{
 				AttesterSlot:   slot + params.BeaconConfig().SlotsPerEpoch, // First slot in next epoch.
 				ValidatorIndex: 200,
@@ -654,12 +657,12 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
-	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.DutiesResponse_Duty) (*emptypb.Empty, error) {
+	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
 		wg.Done()
 		return nil, nil
 	})
 
-	require.NoError(t, v.UpdateDuties(context.Background(), slot), "Could not update assignments")
+	require.NoError(t, v.UpdateDuties(context.Background()), "Could not update assignments")
 	util.WaitTimeout(&wg, 2*time.Second)
 	require.Equal(t, 2, len(v.attSelections))
 }
@@ -670,8 +673,8 @@ func TestRolesAt_OK(t *testing.T) {
 			v, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
 			defer finish()
 
-			v.duties = &ethpb.DutiesResponse{
-				CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+			v.duties = &ethpb.ValidatorDutiesContainer{
+				CurrentEpochDuties: []*ethpb.ValidatorDuty{
 					{
 						CommitteeIndex:  1,
 						AttesterSlot:    1,
@@ -679,7 +682,7 @@ func TestRolesAt_OK(t *testing.T) {
 						IsSyncCommittee: true,
 					},
 				},
-				NextEpochDuties: []*ethpb.DutiesResponse_Duty{
+				NextEpochDuties: []*ethpb.ValidatorDuty{
 					{
 						CommitteeIndex:  1,
 						AttesterSlot:    1,
@@ -710,8 +713,8 @@ func TestRolesAt_OK(t *testing.T) {
 			assert.Equal(t, iface.RoleSyncCommittee, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][2])
 
 			// Test sync committee role at epoch boundary.
-			v.duties = &ethpb.DutiesResponse{
-				CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+			v.duties = &ethpb.ValidatorDutiesContainer{
+				CurrentEpochDuties: []*ethpb.ValidatorDuty{
 					{
 						CommitteeIndex:  1,
 						AttesterSlot:    1,
@@ -719,7 +722,7 @@ func TestRolesAt_OK(t *testing.T) {
 						IsSyncCommittee: false,
 					},
 				},
-				NextEpochDuties: []*ethpb.DutiesResponse_Duty{
+				NextEpochDuties: []*ethpb.ValidatorDuty{
 					{
 						CommitteeIndex:  1,
 						AttesterSlot:    1,
@@ -750,8 +753,8 @@ func TestRolesAt_DoesNotAssignProposer_Slot0(t *testing.T) {
 			v, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
 			defer finish()
 
-			v.duties = &ethpb.DutiesResponse{
-				CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+			v.duties = &ethpb.ValidatorDutiesContainer{
+				CurrentEpochDuties: []*ethpb.ValidatorDuty{
 					{
 						CommitteeIndex: 1,
 						AttesterSlot:   0,
@@ -865,8 +868,8 @@ func TestCheckAndLogValidatorStatus_OK(t *testing.T) {
 			client := validatormock.NewMockValidatorClient(ctrl)
 			v := validator{
 				validatorClient: client,
-				duties: &ethpb.DutiesResponse{
-					CurrentEpochDuties: []*ethpb.DutiesResponse_Duty{
+				duties: &ethpb.ValidatorDutiesContainer{
+					CurrentEpochDuties: []*ethpb.ValidatorDuty{
 						{
 							CommitteeIndex: 1,
 						},
@@ -1312,9 +1315,9 @@ func TestValidator_WaitForKeymanagerInitialization_web3Signer(t *testing.T) {
 			set.String(flags.WalletDirFlag.Name, newDir, "")
 			w := wallet.NewWalletForWeb3Signer(cli.NewContext(&app, set, nil))
 			v := validator{
-				db:     db,
-				useWeb: false,
-				wallet: w,
+				db:        db,
+				enableAPI: false,
+				wallet:    w,
 				web3SignerConfig: &remoteweb3signer.SetupConfig{
 					BaseEndpoint:       "http://localhost:8545",
 					ProvidedPublicKeys: []string{"0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820"},
@@ -1341,7 +1344,7 @@ func TestValidator_WaitForKeymanagerInitialization_Web(t *testing.T) {
 			walletChan := make(chan *wallet.Wallet, 1)
 			v := validator{
 				db:                    db,
-				useWeb:                true,
+				enableAPI:             true,
 				walletInitializedFeed: &event.Feed{},
 				walletInitializedChan: walletChan,
 			}
@@ -1373,8 +1376,8 @@ func TestValidator_WaitForKeymanagerInitialization_Interop(t *testing.T) {
 			err := db.SaveGenesisValidatorsRoot(ctx, root)
 			require.NoError(t, err)
 			v := validator{
-				db:     db,
-				useWeb: false,
+				db:        db,
+				enableAPI: false,
 				interopKeysConfig: &local.InteropKeymanagerConfig{
 					NumValidatorKeys: 2,
 					Offset:           1,
@@ -1461,7 +1464,7 @@ func TestValidator_PushSettings(t *testing.T) {
 						db:                           db,
 						pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 						signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
-						useWeb:                       false,
+						enableAPI:                    false,
 						interopKeysConfig: &local.InteropKeymanagerConfig{
 							NumValidatorKeys: 2,
 							Offset:           1,
@@ -1552,7 +1555,7 @@ func TestValidator_PushSettings(t *testing.T) {
 						db:                           db,
 						pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 						signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
-						useWeb:                       false,
+						enableAPI:                    false,
 						interopKeysConfig: &local.InteropKeymanagerConfig{
 							NumValidatorKeys: 2,
 							Offset:           1,
@@ -1638,7 +1641,7 @@ func TestValidator_PushSettings(t *testing.T) {
 						db:                           db,
 						pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 						signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
-						useWeb:                       false,
+						enableAPI:                    false,
 						interopKeysConfig: &local.InteropKeymanagerConfig{
 							NumValidatorKeys: 2,
 							Offset:           1,
@@ -1708,7 +1711,7 @@ func TestValidator_PushSettings(t *testing.T) {
 						db:                           db,
 						pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 						signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
-						useWeb:                       false,
+						enableAPI:                    false,
 						interopKeysConfig: &local.InteropKeymanagerConfig{
 							NumValidatorKeys: 1,
 							Offset:           1,
@@ -1781,7 +1784,7 @@ func TestValidator_PushSettings(t *testing.T) {
 						db:                           db,
 						pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 						signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
-						useWeb:                       false,
+						enableAPI:                    false,
 						interopKeysConfig: &local.InteropKeymanagerConfig{
 							NumValidatorKeys: 1,
 							Offset:           1,
@@ -1850,7 +1853,7 @@ func TestValidator_PushSettings(t *testing.T) {
 						db:                           db,
 						pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 						signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
-						useWeb:                       false,
+						enableAPI:                    false,
 						interopKeysConfig: &local.InteropKeymanagerConfig{
 							NumValidatorKeys: 1,
 							Offset:           1,
@@ -1907,7 +1910,7 @@ func TestValidator_PushSettings(t *testing.T) {
 						db:                           db,
 						pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 						signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
-						useWeb:                       false,
+						enableAPI:                    false,
 						interopKeysConfig: &local.InteropKeymanagerConfig{
 							NumValidatorKeys: 1,
 							Offset:           1,
@@ -1954,7 +1957,7 @@ func TestValidator_PushSettings(t *testing.T) {
 						db:                           db,
 						pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 						signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
-						useWeb:                       false,
+						enableAPI:                    false,
 						interopKeysConfig: &local.InteropKeymanagerConfig{
 							NumValidatorKeys: 1,
 							Offset:           1,
@@ -2904,4 +2907,107 @@ func TestUpdateValidatorStatusCache(t *testing.T) {
 	assert.NoError(t, err)
 	// make sure the value is 0
 	assert.Equal(t, 0, len(v.pubkeyToStatus))
+}
+
+func TestValidator_CheckDependentRoots(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	client := validatormock.NewMockValidatorClient(ctrl)
+
+	v := &validator{
+		km:              newMockKeymanager(t, randKeypair(t)),
+		validatorClient: client,
+		duties: &ethpb.ValidatorDutiesContainer{
+			PrevDependentRoot: bytesutil.PadTo([]byte{0x01, 0x02, 0x03}, fieldparams.RootLength),
+			CurrDependentRoot: bytesutil.PadTo([]byte{0x04, 0x05, 0x06}, fieldparams.RootLength),
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					AttesterSlot:    params.BeaconConfig().SlotsPerEpoch,
+					ValidatorIndex:  200,
+					CommitteeIndex:  100,
+					CommitteeLength: 4,
+					PublicKey:       []byte("testPubKey_1"),
+					ProposerSlots:   []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
+				},
+			},
+		},
+	}
+
+	t.Run("nil head event", func(t *testing.T) {
+		err := v.checkDependentRoots(ctx, nil)
+		require.ErrorContains(t, "received empty head event", err)
+	})
+
+	t.Run("invalid previous duty dependent root", func(t *testing.T) {
+		head := &structs.HeadEvent{
+			Slot:                      "0",
+			PreviousDutyDependentRoot: "invalid_hex",
+		}
+		err := v.checkDependentRoots(ctx, head)
+		require.ErrorContains(t, "failed to decode previous duty dependent root", err)
+	})
+
+	t.Run("invalid current duty dependent root", func(t *testing.T) {
+		head := &structs.HeadEvent{
+			Slot:                      "0",
+			PreviousDutyDependentRoot: "0x0102030000000000000000000000000000000000000000000000000000000000",
+			CurrentDutyDependentRoot:  "invalid_hex",
+		}
+		err := v.checkDependentRoots(ctx, head)
+		require.ErrorContains(t, "failed to decode current duty dependent root", err)
+	})
+
+	t.Run("update duties for previous root mismatch", func(t *testing.T) {
+		head := &structs.HeadEvent{
+			Slot:                      "1",
+			PreviousDutyDependentRoot: "0xe3f7a1b2c489d56f03a6b8d9c7e1fa2456bb09f3de42a67c8910fc3e7a5d4b12",
+			CurrentDutyDependentRoot:  "0xe3f7a1b2c489d56f03a6b8d9c7e1fa2456bb09f3de42a67c8910fc3e7a5d4b12",
+		}
+		client.EXPECT().SubscribeCommitteeSubnets(
+			gomock.Any(),
+			gomock.Any(),
+			gomock.Any(),
+		).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+			return nil, nil
+		}).AnyTimes()
+		client.EXPECT().Duties(gomock.Any(), gomock.Any()).Return(v.duties, nil)
+		err := v.checkDependentRoots(ctx, head)
+		require.NoError(t, err)
+	})
+
+	t.Run("update duties for current root mismatch", func(t *testing.T) {
+		head := &structs.HeadEvent{
+			Slot:                      "1",
+			PreviousDutyDependentRoot: "0x0102030000000000000000000000000000000000000000000000000000000000",
+			CurrentDutyDependentRoot:  "0xe3f7a1b2c489d56f03a6b8d9c7e1fa2456bb09f3de42a67c8910fc3e7a5d4b12",
+		}
+		client.EXPECT().Duties(gomock.Any(), gomock.Any()).Return(v.duties, nil)
+		var wg sync.WaitGroup
+		wg.Add(1)
+
+		client.EXPECT().SubscribeCommitteeSubnets(
+			gomock.Any(),
+			gomock.Any(),
+			gomock.Any(),
+		).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+			wg.Done()
+			return nil, nil
+		}).AnyTimes()
+		err := v.checkDependentRoots(ctx, head)
+		require.NoError(t, err)
+		util.WaitTimeout(&wg, 2*time.Second)
+	})
+	t.Run("no updates needed", func(t *testing.T) {
+		head := &structs.HeadEvent{
+			Slot:                      "0",
+			PreviousDutyDependentRoot: "0x0102030000000000000000000000000000000000000000000000000000000000",
+			CurrentDutyDependentRoot:  "0x0405060000000000000000000000000000000000000000000000000000000000",
+		}
+		curr, err := bytesutil.DecodeHexWithLength(head.CurrentDutyDependentRoot, fieldparams.RootLength)
+		require.NoError(t, err)
+		require.DeepEqual(t, curr, v.duties.CurrDependentRoot)
+		require.NoError(t, v.checkDependentRoots(ctx, head))
+	})
 }

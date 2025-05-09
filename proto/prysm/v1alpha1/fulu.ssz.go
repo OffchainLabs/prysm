@@ -2,8 +2,8 @@
 package eth
 
 import (
+	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ssz "github.com/prysmaticlabs/fastssz"
-	github_com_prysmaticlabs_prysm_v5_consensus_types_primitives "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 )
 
 // MarshalSSZ ssz marshals the SignedBeaconBlockContentsFulu object
@@ -37,8 +37,8 @@ func (s *SignedBeaconBlockContentsFulu) MarshalSSZTo(buf []byte) (dst []byte, er
 	}
 
 	// Field (1) 'KzgProofs'
-	if size := len(s.KzgProofs); size > 33554432 {
-		err = ssz.ErrListTooBigFn("--.KzgProofs", size, 33554432)
+	if size := len(s.KzgProofs); size > 524288 {
+		err = ssz.ErrListTooBigFn("--.KzgProofs", size, 524288)
 		return
 	}
 	for ii := 0; ii < len(s.KzgProofs); ii++ {
@@ -109,7 +109,7 @@ func (s *SignedBeaconBlockContentsFulu) UnmarshalSSZ(buf []byte) error {
 	// Field (1) 'KzgProofs'
 	{
 		buf = tail[o1:o2]
-		num, err := ssz.DivideInt2(len(buf), 48, 33554432)
+		num, err := ssz.DivideInt2(len(buf), 48, 524288)
 		if err != nil {
 			return err
 		}
@@ -175,8 +175,8 @@ func (s *SignedBeaconBlockContentsFulu) HashTreeRootWith(hh *ssz.Hasher) (err er
 
 	// Field (1) 'KzgProofs'
 	{
-		if size := len(s.KzgProofs); size > 33554432 {
-			err = ssz.ErrListTooBigFn("--.KzgProofs", size, 33554432)
+		if size := len(s.KzgProofs); size > 524288 {
+			err = ssz.ErrListTooBigFn("--.KzgProofs", size, 524288)
 			return
 		}
 		subIndx := hh.Index()
@@ -189,7 +189,7 @@ func (s *SignedBeaconBlockContentsFulu) HashTreeRootWith(hh *ssz.Hasher) (err er
 		}
 
 		numItems := uint64(len(s.KzgProofs))
-		hh.MerkleizeWithMixin(subIndx, numItems, 33554432)
+		hh.MerkleizeWithMixin(subIndx, numItems, 524288)
 	}
 
 	// Field (2) 'Blobs'
@@ -355,8 +355,8 @@ func (b *BeaconBlockContentsFulu) MarshalSSZTo(buf []byte) (dst []byte, err erro
 	}
 
 	// Field (1) 'KzgProofs'
-	if size := len(b.KzgProofs); size > 33554432 {
-		err = ssz.ErrListTooBigFn("--.KzgProofs", size, 33554432)
+	if size := len(b.KzgProofs); size > 524288 {
+		err = ssz.ErrListTooBigFn("--.KzgProofs", size, 524288)
 		return
 	}
 	for ii := 0; ii < len(b.KzgProofs); ii++ {
@@ -427,7 +427,7 @@ func (b *BeaconBlockContentsFulu) UnmarshalSSZ(buf []byte) error {
 	// Field (1) 'KzgProofs'
 	{
 		buf = tail[o1:o2]
-		num, err := ssz.DivideInt2(len(buf), 48, 33554432)
+		num, err := ssz.DivideInt2(len(buf), 48, 524288)
 		if err != nil {
 			return err
 		}
@@ -493,8 +493,8 @@ func (b *BeaconBlockContentsFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 
 	// Field (1) 'KzgProofs'
 	{
-		if size := len(b.KzgProofs); size > 33554432 {
-			err = ssz.ErrListTooBigFn("--.KzgProofs", size, 33554432)
+		if size := len(b.KzgProofs); size > 524288 {
+			err = ssz.ErrListTooBigFn("--.KzgProofs", size, 524288)
 			return
 		}
 		subIndx := hh.Index()
@@ -507,7 +507,7 @@ func (b *BeaconBlockContentsFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		}
 
 		numItems := uint64(len(b.KzgProofs))
-		hh.MerkleizeWithMixin(subIndx, numItems, 33554432)
+		hh.MerkleizeWithMixin(subIndx, numItems, 524288)
 	}
 
 	// Field (2) 'Blobs'
@@ -699,10 +699,10 @@ func (b *BlindedBeaconBlockFulu) UnmarshalSSZ(buf []byte) error {
 	var o4 uint64
 
 	// Field (0) 'Slot'
-	b.Slot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	b.Slot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Field (1) 'ProposerIndex'
-	b.ProposerIndex = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
+	b.ProposerIndex = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
 
 	// Field (2) 'ParentRoot'
 	if cap(b.ParentRoot) == 0 {
@@ -1088,14 +1088,15 @@ func (d *DataColumnSidecar) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	return
 }
 
-// MarshalSSZ ssz marshals the DataColumnIdentifier object
-func (d *DataColumnIdentifier) MarshalSSZ() ([]byte, error) {
+// MarshalSSZ ssz marshals the DataColumnsByRootIdentifier object
+func (d *DataColumnsByRootIdentifier) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(d)
 }
 
-// MarshalSSZTo ssz marshals the DataColumnIdentifier object to a target array
-func (d *DataColumnIdentifier) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+// MarshalSSZTo ssz marshals the DataColumnsByRootIdentifier object to a target array
+func (d *DataColumnsByRootIdentifier) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
+	offset := int(36)
 
 	// Field (0) 'BlockRoot'
 	if size := len(d.BlockRoot); size != 32 {
@@ -1104,19 +1105,32 @@ func (d *DataColumnIdentifier) MarshalSSZTo(buf []byte) (dst []byte, err error) 
 	}
 	dst = append(dst, d.BlockRoot...)
 
-	// Field (1) 'Index'
-	dst = ssz.MarshalUint64(dst, d.Index)
+	// Offset (1) 'Columns'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(d.Columns) * 8
+
+	// Field (1) 'Columns'
+	if size := len(d.Columns); size > 128 {
+		err = ssz.ErrListTooBigFn("--.Columns", size, 128)
+		return
+	}
+	for ii := 0; ii < len(d.Columns); ii++ {
+		dst = ssz.MarshalUint64(dst, d.Columns[ii])
+	}
 
 	return
 }
 
-// UnmarshalSSZ ssz unmarshals the DataColumnIdentifier object
-func (d *DataColumnIdentifier) UnmarshalSSZ(buf []byte) error {
+// UnmarshalSSZ ssz unmarshals the DataColumnsByRootIdentifier object
+func (d *DataColumnsByRootIdentifier) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size != 40 {
+	if size < 36 {
 		return ssz.ErrSize
 	}
+
+	tail := buf
+	var o1 uint64
 
 	// Field (0) 'BlockRoot'
 	if cap(d.BlockRoot) == 0 {
@@ -1124,25 +1138,47 @@ func (d *DataColumnIdentifier) UnmarshalSSZ(buf []byte) error {
 	}
 	d.BlockRoot = append(d.BlockRoot, buf[0:32]...)
 
-	// Field (1) 'Index'
-	d.Index = ssz.UnmarshallUint64(buf[32:40])
+	// Offset (1) 'Columns'
+	if o1 = ssz.ReadOffset(buf[32:36]); o1 > size {
+		return ssz.ErrOffset
+	}
 
+	if o1 != 36 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (1) 'Columns'
+	{
+		buf = tail[o1:]
+		num, err := ssz.DivideInt2(len(buf), 8, 128)
+		if err != nil {
+			return err
+		}
+		d.Columns = ssz.ExtendUint64(d.Columns, num)
+		for ii := 0; ii < num; ii++ {
+			d.Columns[ii] = ssz.UnmarshallUint64(buf[ii*8 : (ii+1)*8])
+		}
+	}
 	return err
 }
 
-// SizeSSZ returns the ssz encoded size in bytes for the DataColumnIdentifier object
-func (d *DataColumnIdentifier) SizeSSZ() (size int) {
-	size = 40
+// SizeSSZ returns the ssz encoded size in bytes for the DataColumnsByRootIdentifier object
+func (d *DataColumnsByRootIdentifier) SizeSSZ() (size int) {
+	size = 36
+
+	// Field (1) 'Columns'
+	size += len(d.Columns) * 8
+
 	return
 }
 
-// HashTreeRoot ssz hashes the DataColumnIdentifier object
-func (d *DataColumnIdentifier) HashTreeRoot() ([32]byte, error) {
+// HashTreeRoot ssz hashes the DataColumnsByRootIdentifier object
+func (d *DataColumnsByRootIdentifier) HashTreeRoot() ([32]byte, error) {
 	return ssz.HashWithDefaultHasher(d)
 }
 
-// HashTreeRootWith ssz hashes the DataColumnIdentifier object with a hasher
-func (d *DataColumnIdentifier) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+// HashTreeRootWith ssz hashes the DataColumnsByRootIdentifier object with a hasher
+func (d *DataColumnsByRootIdentifier) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'BlockRoot'
@@ -1152,8 +1188,21 @@ func (d *DataColumnIdentifier) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	}
 	hh.PutBytes(d.BlockRoot)
 
-	// Field (1) 'Index'
-	hh.PutUint64(d.Index)
+	// Field (1) 'Columns'
+	{
+		if size := len(d.Columns); size > 128 {
+			err = ssz.ErrListTooBigFn("--.Columns", size, 128)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range d.Columns {
+			hh.AppendUint64(i)
+		}
+		hh.FillUpTo32()
+
+		numItems := uint64(len(d.Columns))
+		hh.MerkleizeWithMixin(subIndx, numItems, ssz.CalculateLimit(128, numItems, 8))
+	}
 
 	hh.Merkleize(indx)
 	return

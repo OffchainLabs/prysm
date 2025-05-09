@@ -6,7 +6,7 @@ import "google/protobuf/descriptor.proto";
 import "proto/eth/ext/options.proto";
 
 option csharp_namespace = "Ethereum.Eth.V1alpha1";
-option go_package = "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1;eth";
+option go_package = "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1;eth";
 option java_multiple_files = true;
 option java_outer_classname = "P2PMessagesProto";
 option java_package = "org.ethereum.eth.v1alpha1";
@@ -17,19 +17,19 @@ message Status {
   bytes finalized_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
   uint64 finalized_epoch = 3 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Epoch"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
   ];
   bytes head_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
   uint64 head_slot = 5 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
 }
 
 message BeaconBlocksByRangeRequest {
   uint64 start_slot = 1 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
   uint64 count = 2;
   uint64 step = 3;
@@ -40,7 +40,7 @@ message ENRForkID {
   bytes next_fork_version = 2 [ (ethereum.eth.ext.ssz_size) = "4" ];
   uint64 next_fork_epoch = 3 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Epoch"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
   ];
 }
 
@@ -119,7 +119,7 @@ message MetaDataV2 {
 message BlobSidecarsByRangeRequest {
   uint64 start_slot = 1 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
   uint64 count = 2;
 }
@@ -135,7 +135,7 @@ Spec Definition:
 message DataColumnSidecarsByRangeRequest {
   uint64 start_slot = 1 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
   uint64 count = 2;
   repeated uint64 columns = 3 [ (ethereum.eth.ext.ssz_max) = "128" ];

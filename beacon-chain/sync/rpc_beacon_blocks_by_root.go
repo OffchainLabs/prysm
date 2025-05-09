@@ -4,35 +4,31 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/verify"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
-	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/verify"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 // sendBeaconBlocksRequest sends the `requests` beacon blocks by root requests to
 // the peer with the given `id`. For each received block, it inserts the block into the
-// pending queue. Then, for each received blocks, it checks if all corresponding blobs
-// or data columns are stored, and, if not, sends the corresponding sidecar requests
-// and stores the received sidecars.
-func (s *Service) sendBeaconBlocksRequest(
-	ctx context.Context,
-	requests *types.BeaconBlockByRootsReq,
-	id peer.ID,
-) error {
+// pending queue. Then, for each received blocks, it checks if all corresponding sidecars
+// are stored, and, if not, sends the corresponding sidecar requests and stores the received sidecars.
+// For sidecars, only blob sidecars will be requested to the peer with the given `id`.
+// For other types of sidecars, the request will be sent to the best peers.
+func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.BeaconBlockByRootsReq, id peer.ID) error {
 	ctx, cancel := context.WithTimeout(ctx, respTimeout)
 	defer cancel()
 
@@ -61,63 +57,89 @@ func (s *Service) sendBeaconBlocksRequest(
 		return nil
 	})
 
-	// The following part deals with blobs and data columns (if any).
+	// The following part deals with sidecars.
 	for _, blk := range blks {
-		// Skip blocks before deneb because they have nor blobs neither data columns.
-		if blk.Version() < version.Deneb {
+		blockVersion := blk.Version()
+
+		if blockVersion < version.Deneb {
 			continue
 		}
 
-		blkRoot, err := blk.Block().HashTreeRoot()
+		roBlock, err := blocks.NewROBlock(blk)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "new ro block")
 		}
 
-		blockSlot := blk.Block().Slot()
-		peerDASIsActive := coreTime.PeerDASIsActive(blockSlot)
-
-		if peerDASIsActive {
-			// For the block, check if we store all the data columns we should custody.
-			missingColumns, err := FindMissingDataColumns(
-				blkRoot,
-				blk,
-				s.cfg.p2p.NodeID(),
-				s.cfg.custodyInfo.CustodyGroupSamplingSize(peerdas.Actual),
-				s.cfg.dataColumnStorage,
-			)
-			if err != nil {
-				return errors.Wrap(err, "find missing data columns")
-			}
-
-			// We already store all the data columns we should custody, nothing to request.
-			if len(missingColumns) == 0 {
-				continue
-			}
-
-			// Request and save the missing data column sidecars. This will issue multiple requests to
-			// different peers, not just the peer we happened to request the block from.
-			if err := s.requestAndSaveDataColumnSidecars(ctx, missingColumns, blk, blkRoot); err != nil {
-				return errors.Wrap(err, "send and save data column sidecars")
+		if blockVersion >= version.Fulu {
+			if err := s.requestAndSaveMissingDataColumnSidecars(roBlock); err != nil {
+				return errors.Wrap(err, "request and save missing data columns")
 			}
 
 			continue
 		}
 
-		request, err := s.pendingBlobsRequestForBlock(blkRoot, blk)
-		if err != nil {
-			return errors.Wrap(err, "pending blobs request for block")
-		}
+		if blockVersion >= version.Deneb {
+			if err := s.requestAndSaveMissingBlobSidecars(blk, id); err != nil {
+				return errors.Wrap(err, "request and save missing blob sidecars")
+			}
 
-		if len(request) == 0 {
 			continue
-		}
-
-		if err := s.sendAndSaveBlobSidecars(ctx, request, id, blk); err != nil {
-			return errors.Wrap(err, "send and save blob sidecars")
 		}
 	}
 
 	return err
+}
+
+// requestAndSaveMissingDataColumns checks if the data columns are missing for the given block.
+// If so, requests them and saves them to the storage.
+func (s *Service) requestAndSaveMissingDataColumnSidecars(block blocks.ROBlock) error {
+	nodeID := s.cfg.p2p.NodeID()
+	actualSamplingSize := s.cfg.custodyInfo.CustodyGroupSamplingSize(peerdas.Actual)
+	storage := s.cfg.dataColumnStorage
+
+	missingColumns, err := MissingDataColumns(block, nodeID, actualSamplingSize, storage)
+	if err != nil {
+		return errors.Wrap(err, "missing data columns")
+	}
+
+	// We already store all the data columns we should custody, nothing to do.
+	if len(missingColumns) == 0 {
+		return nil
+	}
+
+	peers := s.getBestPeers()
+	sidecars, err := RequestDataColumnSidecarsByRoot(s.ctx, missingColumns, block, peers, s.cfg.clock, s.cfg.p2p, s.ctxMap, s.newColumnsVerifier)
+	if err != nil {
+		return errors.Wrap(err, "request data column sidecars")
+	}
+
+	if err := s.cfg.dataColumnStorage.Save(sidecars); err != nil {
+		return errors.Wrap(err, "save")
+	}
+
+	return nil
+}
+
+func (s *Service) requestAndSaveMissingBlobSidecars(block interfaces.ReadOnlySignedBeaconBlock, peerID peer.ID) error {
+	blockRoot, err := block.Block().HashTreeRoot()
+	if err != nil {
+		return errors.Wrap(err, "hash tree root")
+	}
+
+	request, err := s.pendingBlobsRequestForBlock(blockRoot, block)
+	if err != nil {
+		return errors.Wrap(err, "pending blobs request for block")
+	}
+
+	if len(request) == 0 {
+		return nil
+	}
+
+	if err := s.sendAndSaveBlobSidecars(s.ctx, request, peerID, block); err != nil {
+		return errors.Wrap(err, "send and save blob sidecars")
+	}
+
+	return nil
 }
 
 // beaconBlocksRootRPCHandler looks up the request blocks from the database from the given block roots.
@@ -218,34 +240,6 @@ func (s *Service) sendAndSaveBlobSidecars(ctx context.Context, request types.Blo
 			return err
 		}
 	}
-	return nil
-}
-
-// requestAndSaveDataColumnSidecars sends a data column sidecars by root request
-// to a peer and saves the received sidecars.
-//
-// NOTE: During the initial sync, LazilyPersistentStoreColumn caches sidecars
-// and saves them to disk within IsDataAvailable. requestAndSaveDataColumnSidecars is called
-// when no caching is done in the pending blocks queue.
-func (s *Service) requestAndSaveDataColumnSidecars(
-	ctx context.Context,
-	dataColumns map[uint64]bool,
-	block interfaces.ReadOnlySignedBeaconBlock,
-	blkRoot [32]byte,
-) error {
-	if len(dataColumns) == 0 {
-		return nil
-	}
-	peers := s.getBestPeers()
-	sidecars, err := RequestDataColumnSidecarsByRoot(ctx, dataColumns, block, blkRoot, peers, s.cfg.clock, s.cfg.p2p, s.ctxMap, s.newColumnsVerifier)
-	if err != nil {
-		return errors.Wrap(err, "request data column sidecars")
-	}
-
-	if err := SaveDataColumns(sidecars, s.cfg.dataColumnStorage); err != nil {
-		return errors.Wrap(err, "save data column")
-	}
-
 	return nil
 }
 

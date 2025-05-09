@@ -3,9 +3,9 @@ package das
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	errors "github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 )
 
 // MockAvailabilityStore is an implementation of AvailabilityStore that can be used by other packages in tests.

@@ -2,7 +2,7 @@ package params
 
 // InteropConfig provides a generic config suitable for interop testing.
 func InteropConfig() *BeaconChainConfig {
-	c := MainnetConfig().Copy()
+	c := MainnetConfig()
 
 	// Prysm constants.
 	c.ConfigName = InteropName

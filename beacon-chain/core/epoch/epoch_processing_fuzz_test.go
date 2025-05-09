@@ -3,10 +3,10 @@ package epoch
 import (
 	"testing"
 
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	fuzz "github.com/google/gofuzz"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestFuzzFinalUpdates_10000(t *testing.T) {

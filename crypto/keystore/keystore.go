@@ -32,9 +32,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/minio/sha256-simd"
 	"github.com/pborman/uuid"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/crypto/scrypt"
@@ -130,7 +130,7 @@ func EncryptKey(key *Key, password string, scryptN, scryptP int) ([]byte, error)
 	authArray := []byte(password)
 	salt := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
-		panic("reading from crypto/rand failed: " + err.Error())
+		panic("reading from crypto/rand failed: " + err.Error()) // lint:nopanic -- This should never happen.
 	}
 
 	derivedKey, err := scrypt.Key(authArray, salt, scryptN, scryptR, scryptP, scryptDKLen)
@@ -146,7 +146,7 @@ func EncryptKey(key *Key, password string, scryptN, scryptP int) ([]byte, error)
 		return nil, errors.New("reading from crypto/rand failed: " + err.Error())
 	}
 
-	cipherText, err := aesCTRXOR(encryptKey, keyBytes, iv)
+	cipherText, err := aesCTRXOR(encryptKey, keyBytes, iv) // #nosec G407
 	if err != nil {
 		return nil, err
 	}

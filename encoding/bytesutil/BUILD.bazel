@@ -11,7 +11,7 @@ go_library(
         "hex.go",
         "integers.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/encoding/bytesutil",
+    importpath = "github.com/OffchainLabs/prysm/v6/encoding/bytesutil",
     visibility = ["//visibility:public"],
     deps = [
         "//config/fieldparams:go_default_library",

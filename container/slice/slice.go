@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 )
 
 // SubsetUint64 returns true if the first array is
@@ -354,7 +354,7 @@ func IsInSlots(a primitives.Slot, b []primitives.Slot) bool {
 
 // Unique returns an array with duplicates filtered based on the type given
 func Unique[T comparable](a []T) []T {
-	if a == nil || len(a) <= 1 {
+	if len(a) <= 1 {
 		return a
 	}
 	found := map[T]bool{}

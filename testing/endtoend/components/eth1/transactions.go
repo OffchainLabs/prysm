@@ -12,6 +12,10 @@ import (
 
 	"github.com/MariusVanDerWijden/FuzzyVM/filler"
 	txfuzz "github.com/MariusVanDerWijden/tx-fuzz"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/crypto/rand"
+	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
@@ -22,10 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
-	e2e "github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 )
@@ -321,7 +321,7 @@ func RandomBlobTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, nonc
 func New4844Tx(nonce uint64, to *common.Address, gasLimit uint64, chainID, tip, feeCap, value *big.Int, code []byte, blobFeeCap *big.Int, blobData []byte, al types.AccessList) *types.Transaction {
 	blobs, comms, proofs, versionedHashes, err := EncodeBlobs(blobData)
 	if err != nil {
-		panic(err)
+		panic(err) // lint:nopanic -- Test code.
 	}
 	tx := types.NewTx(&types.BlobTx{
 		ChainID:    uint256.MustFromBig(chainID),
@@ -427,7 +427,7 @@ func randomAddress() common.Address {
 		b := make([]byte, 20)
 		_, err := mathRand.Read(b) // #nosec G404
 		if err != nil {
-			panic(err)
+			panic(err) // lint:nopanic -- Test code.
 		}
 		return common.BytesToAddress(b)
 	case 3:

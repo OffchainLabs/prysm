@@ -6,8 +6,8 @@ package state
 import (
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 )
 
 const (
@@ -43,6 +43,10 @@ type BlockProcessedData struct {
 	BlockRoot [32]byte
 	// SignedBlock is the physical processed block.
 	SignedBlock interfaces.ReadOnlySignedBeaconBlock
+	// CurrDependentRoot is the current dependent root
+	CurrDependentRoot [32]byte
+	// PrevDependentRoot is the previous dependent root
+	PrevDependentRoot [32]byte
 	// Verified is true if the block's BLS contents have been verified.
 	Verified bool
 	// Optimistic is true if the block is optimistic.

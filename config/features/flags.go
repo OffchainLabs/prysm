@@ -3,7 +3,7 @@ package features
 import (
 	"time"
 
-	backfill "github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/sync/backfill/flags"
+	backfill "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/backfill/flags"
 	"github.com/urfave/cli/v2"
 )
 
@@ -17,6 +17,11 @@ var (
 	HoleskyTestnet = &cli.BoolFlag{
 		Name:  "holesky",
 		Usage: "Runs Prysm configured for the Holesky test network.",
+	}
+	// HoodiTestnet flag for ethereum testnet.
+	HoodiTestnet = &cli.BoolFlag{
+		Name:  "hoodi",
+		Usage: "Runs Prysm configured for the Hoodi test network.",
 	}
 	// Mainnet flag for easier tooling, no-op
 	Mainnet = &cli.BoolFlag{
@@ -45,8 +50,9 @@ var (
 		Usage: "Writes invalid blobs to temp directory.",
 	}
 	disableGRPCConnectionLogging = &cli.BoolFlag{
-		Name:  "disable-grpc-connection-logging",
-		Usage: "Disables displaying logs for newly connected grpc clients.",
+		Name: "disable-grpc-connection-logging",
+		Usage: `WARNING: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API..
+		Disables displaying logs for newly connected grpc clients.`,
 	}
 	disablePeerScorer = &cli.BoolFlag{
 		Name:  "disable-peer-scorer",
@@ -88,10 +94,6 @@ var (
 	attestTimely = &cli.BoolFlag{
 		Name:  "attest-timely",
 		Usage: "Fixes validator can attest timely after current block processes. See #8185 for more details.",
-	}
-	enableSlasherFlag = &cli.BoolFlag{
-		Name:  "slasher",
-		Usage: "Enables a slasher in the beacon node for detecting slashable offenses.",
 	}
 	enableSlashingProtectionPruning = &cli.BoolFlag{
 		Name:  "enable-slashing-protection-history-pruning",
@@ -166,10 +168,6 @@ var (
 		Name:  "disable-quic",
 		Usage: "Disables connecting using the QUIC protocol with peers.",
 	}
-	DisableCommitteeAwarePacking = &cli.BoolFlag{
-		Name:  "disable-committee-aware-packing",
-		Usage: "Changes the attestation packing algorithm to one that is not aware of attesting committees.",
-	}
 	EnableDiscoveryReboot = &cli.BoolFlag{
 		Name:  "enable-discovery-reboot",
 		Usage: "Experimental: Enables the discovery listener to rebooted in the event of connectivity issues.",
@@ -196,6 +194,18 @@ var (
 		Value:  0,
 		Hidden: true,
 	}
+	// forceHeadFlag is a flag to force the head of the beacon chain to a specific block.
+	forceHeadFlag = &cli.StringFlag{
+		Name: "sync-from",
+		Usage: "Forces the head of the beacon chain to a specific block root. Values can be 'head' or a block root." +
+			" The block root has to be known to the beacon node and correspond to a block newer than the current finalized checkpoint.",
+	}
+	// blacklistRoots is a flag for blacklisting block roots from gossip and
+	// downscore peers that send them.
+	blacklistRoots = &cli.StringSliceFlag{
+		Name:  "blacklist-roots",
+		Usage: "A comma-separatted list of 0x-prefixed hexstrings. Declares blocks with the given blockroots to be invalid. It downscores peers that send these blocks.",
+	}
 )
 
 // devModeFlags holds list of flags that are set when development mode is on.
@@ -208,6 +218,7 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	writeWalletPasswordOnWebOnboarding,
 	HoleskyTestnet,
 	SepoliaTestnet,
+	HoodiTestnet,
 	Mainnet,
 	dynamicKeyReloadDebounceInterval,
 	attestTimely,
@@ -232,10 +243,10 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	disableGRPCConnectionLogging,
 	HoleskyTestnet,
 	SepoliaTestnet,
+	HoodiTestnet,
 	Mainnet,
 	disablePeerScorer,
 	disableBroadcastSlashingFlag,
-	enableSlasherFlag,
 	disableStakinContractCheck,
 	SaveFullExecutionPayloads,
 	enableStartupOptimistic,
@@ -250,11 +261,12 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	EnableLightClient,
 	BlobSaveFsync,
 	DisableQUIC,
-	DisableCommitteeAwarePacking,
 	EnableDiscoveryReboot,
 	enableExperimentalAttestationPool,
 	DataColumnsWithholdCount,
 	DataColumnsIgnoreSlotMultiple,
+	forceHeadFlag,
+	blacklistRoots,
 }, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
 
 func combinedFlags(flags ...[]cli.Flag) []cli.Flag {
@@ -278,4 +290,5 @@ var NetworkFlags = []cli.Flag{
 	Mainnet,
 	SepoliaTestnet,
 	HoleskyTestnet,
+	HoodiTestnet,
 }

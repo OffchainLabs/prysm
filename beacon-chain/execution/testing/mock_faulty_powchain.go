@@ -4,13 +4,13 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/OffchainLabs/prysm/v6/async/event"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/async/event"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 // FaultyExecutionChain defines an incorrectly functioning powchain service.
@@ -57,7 +57,7 @@ func (*FaultyExecutionChain) ChainStartEth1Data() *ethpb.Eth1Data {
 func (*FaultyExecutionChain) PreGenesisState() state.BeaconState {
 	s, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
 	if err != nil {
-		panic("could not initialize state")
+		panic("could not initialize state") // lint:nopanic -- test code.
 	}
 	return s
 }

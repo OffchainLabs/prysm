@@ -7,26 +7,26 @@ import (
 	"testing"
 	"time"
 
+	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	p2pm "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	p2pt "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	p2pTypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
-	dbtest "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	p2pm "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	p2pt "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	p2pTypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	leakybucket "github.com/prysmaticlabs/prysm/v5/container/leaky-bucket"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 func TestBlocksFetcher_nonSkippedSlotAfter(t *testing.T) {
@@ -265,7 +265,7 @@ func TestBlocksFetcher_findFork(t *testing.T) {
 	reqEnd := testForkStartSlot(t, 251) + primitives.Slot(findForkReqRangeSize())
 	require.Equal(t, primitives.Slot(len(chain1)), fork.bwb[0].Block.Block().Slot())
 	require.Equal(t, int(reqEnd-forkSlot1b), len(fork.bwb))
-	require.Equal(t, curForkMoreBlocksPeer, fork.peer)
+	require.Equal(t, curForkMoreBlocksPeer, fork.blocksFrom)
 	// Save all chain1b blocks (so that they do not interfere with alternative fork)
 	for _, blk := range chain1b {
 		util.SaveBlock(t, ctx, beaconDB, blk)
@@ -285,7 +285,7 @@ func TestBlocksFetcher_findFork(t *testing.T) {
 	alternativePeer := connectPeerHavingBlocks(t, p2p, chain2, finalizedSlot, p2p.Peers())
 	fork, err = fetcher.findFork(ctx, 251)
 	require.NoError(t, err)
-	assert.Equal(t, alternativePeer, fork.peer)
+	assert.Equal(t, alternativePeer, fork.blocksFrom)
 	assert.Equal(t, 65, len(fork.bwb))
 	ind := forkSlot
 	for _, blk := range fork.bwb {
@@ -374,13 +374,13 @@ func TestBlocksFetcher_findForkWithPeer(t *testing.T) {
 
 	t.Run("slot is too early", func(t *testing.T) {
 		p2 := p2pt.NewTestP2P(t)
-		_, err := fetcher.findForkWithPeer(ctx, p2.PeerID(), 0)
+		_, err := fetcher.findForkWithPeer(ctx, p2.PeerID(), nil, 0)
 		assert.ErrorContains(t, "slot is too low to backtrack", err)
 	})
 
 	t.Run("no peer status", func(t *testing.T) {
 		p2 := p2pt.NewTestP2P(t)
-		_, err := fetcher.findForkWithPeer(ctx, p2.PeerID(), 64)
+		_, err := fetcher.findForkWithPeer(ctx, p2.PeerID(), nil, 64)
 		assert.ErrorContains(t, "cannot obtain peer's status", err)
 	})
 
@@ -394,7 +394,7 @@ func TestBlocksFetcher_findForkWithPeer(t *testing.T) {
 			HeadRoot: nil,
 			HeadSlot: 0,
 		})
-		_, err := fetcher.findForkWithPeer(ctx, p2.PeerID(), 64)
+		_, err := fetcher.findForkWithPeer(ctx, p2.PeerID(), nil, 64)
 		assert.ErrorContains(t, "cannot locate non-empty slot for a peer", err)
 	})
 
@@ -404,7 +404,7 @@ func TestBlocksFetcher_findForkWithPeer(t *testing.T) {
 		defer func() {
 			assert.NoError(t, p1.Disconnect(p2))
 		}()
-		_, err := fetcher.findForkWithPeer(ctx, p2, 64)
+		_, err := fetcher.findForkWithPeer(ctx, p2, nil, 64)
 		assert.ErrorContains(t, "no alternative blocks exist within scanned range", err)
 	})
 
@@ -416,7 +416,7 @@ func TestBlocksFetcher_findForkWithPeer(t *testing.T) {
 		defer func() {
 			assert.NoError(t, p1.Disconnect(p2))
 		}()
-		fork, err := fetcher.findForkWithPeer(ctx, p2, 64)
+		fork, err := fetcher.findForkWithPeer(ctx, p2, nil, 64)
 		require.NoError(t, err)
 		require.Equal(t, 10, len(fork.bwb))
 		assert.Equal(t, forkedSlot, fork.bwb[0].Block.Block().Slot(), "Expected slot %d to be ancestor", forkedSlot)
@@ -429,7 +429,7 @@ func TestBlocksFetcher_findForkWithPeer(t *testing.T) {
 		defer func() {
 			assert.NoError(t, p1.Disconnect(p2))
 		}()
-		_, err := fetcher.findForkWithPeer(ctx, p2, 64)
+		_, err := fetcher.findForkWithPeer(ctx, p2, nil, 64)
 		require.ErrorContains(t, "failed to find common ancestor", err)
 	})
 
@@ -441,7 +441,7 @@ func TestBlocksFetcher_findForkWithPeer(t *testing.T) {
 		defer func() {
 			assert.NoError(t, p1.Disconnect(p2))
 		}()
-		fork, err := fetcher.findForkWithPeer(ctx, p2, 64)
+		fork, err := fetcher.findForkWithPeer(ctx, p2, nil, 64)
 		require.NoError(t, err)
 
 		reqEnd := testForkStartSlot(t, 64) + primitives.Slot(findForkReqRangeSize())
@@ -515,7 +515,7 @@ func TestBlocksFetcher_findAncestor(t *testing.T) {
 
 		wsb, err := blocks.NewSignedBeaconBlock(knownBlocks[4])
 		require.NoError(t, err)
-		_, err = fetcher.findAncestor(ctx, p2.PeerID(), wsb)
+		_, err = fetcher.findAncestor(ctx, p2.PeerID(), nil, wsb)
 		assert.ErrorContains(t, "protocols not supported", err)
 	})
 
@@ -528,7 +528,7 @@ func TestBlocksFetcher_findAncestor(t *testing.T) {
 		wsb, err := blocks.NewSignedBeaconBlock(knownBlocks[4])
 		require.NoError(t, err)
 
-		fork, err := fetcher.findAncestor(ctx, p2.PeerID(), wsb)
+		fork, err := fetcher.findAncestor(ctx, p2.PeerID(), nil, wsb)
 		assert.ErrorContains(t, "no common ancestor found", err)
 		assert.Equal(t, (*forkData)(nil), fork)
 	})

@@ -5,20 +5,19 @@ import (
 	"fmt"
 	"math"
 	"slices"
-	"sort"
 	"time"
 
+	coreTime "github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
-	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 )
 
@@ -44,9 +43,9 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 
 	// We use the same type as for blobs as they are the same data structure.
 	// TODO: Make the type naming more generic to be extensible to data columns
-	ref, ok := msg.(*types.DataColumnSidecarsByRootReq)
+	ref, ok := msg.(*types.DataColumnsByRootIdentifiers)
 	if !ok {
-		return errors.New("message is not type DataColumnSidecarsByRootReq")
+		return errors.New("message is not type DataColumnsByRootIdentifiers")
 	}
 
 	requestedColumnIdents := *ref
@@ -57,16 +56,13 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		return errors.Wrap(err, "validate data columns by root request")
 	}
 
-	// Sort the identifiers so that requests for the same data columns root will be adjacent, minimizing db lookups.
-	sort.Sort(&requestedColumnIdents)
-
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
 	requestedColumnsByRoot := make(map[[fieldparams.RootLength]byte][]uint64)
 	for _, columnIdent := range requestedColumnIdents {
 		var root [fieldparams.RootLength]byte
 		copy(root[:], columnIdent.BlockRoot)
-		requestedColumnsByRoot[root] = append(requestedColumnsByRoot[root], columnIdent.Index)
+		requestedColumnsByRoot[root] = append(requestedColumnsByRoot[root], columnIdent.Columns...)
 	}
 
 	// Sort by column index for each root.
@@ -155,8 +151,12 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 	return nil
 }
 
-func validateDataColumnsByRootRequest(colIdents types.DataColumnSidecarsByRootReq) error {
-	if uint64(len(colIdents)) > params.BeaconConfig().MaxRequestDataColumnSidecars {
+func validateDataColumnsByRootRequest(colIdents types.DataColumnsByRootIdentifiers) error {
+	total := 0
+	for _, id := range colIdents {
+		total += len(id.Columns)
+	}
+	if uint64(total) > params.BeaconConfig().MaxRequestDataColumnSidecars {
 		return types.ErrMaxDataColumnReqExceeded
 	}
 	return nil

@@ -1,19 +1,18 @@
 package sync
 
 import (
-	"context"
 	"testing"
 
-	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
-	testDB "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	doublylinkedtree "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/doubly-linked-tree"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 )
 
 func TestUpdateToAdvertiseCustodyGroupCount(t *testing.T) {
@@ -84,7 +83,7 @@ func TestSetTargetValidatorsCustodyRequirement(t *testing.T) {
 	testCases := []struct {
 		name                            string
 		latestProcessedEpoch            primitives.Epoch
-		validatorsBalance               []uint64
+		validatorsEffectiveBalance      []uint64
 		expectedTargetCustodyGroupCount uint64
 	}{
 		{
@@ -95,33 +94,37 @@ func TestSetTargetValidatorsCustodyRequirement(t *testing.T) {
 		{
 			name:                            "some tracked validators",
 			latestProcessedEpoch:            0,
-			validatorsBalance:               []uint64{64_000_000_000, 64_000_000_000, 64_000_000_000, 64_000_000_000, 33_000_000_000},
+			validatorsEffectiveBalance:      []uint64{64_000_000_000, 64_000_000_000, 64_000_000_000, 64_000_000_000, 33_000_000_000},
 			expectedTargetCustodyGroupCount: 9,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx := context.Background()
 			beaconDB := testDB.SetupDB(t)
 			stateGen := stategen.New(beaconDB, doublylinkedtree.New())
 			state, _ := util.DeterministicGenesisState(t, 32)
-			err := state.SetBalances(tc.validatorsBalance)
+
+			validators := make([]*eth.Validator, 0, len(tc.validatorsEffectiveBalance))
+			for _, balance := range tc.validatorsEffectiveBalance {
+				validator := &eth.Validator{EffectiveBalance: balance}
+				validators = append(validators, validator)
+			}
+
+			err := state.SetValidators(validators)
 			require.NoError(t, err)
-			err = stateGen.SaveState(ctx, [32]byte{}, state)
-			require.NoError(t, err)
+
+			stateGen.SaveFinalizedState(0, [32]byte{}, state)
 
 			service := &Service{
 				trackedValidatorsCache: cache.NewTrackedValidatorsCache(),
 				cfg: &config{
-					chain: &mock.ChainService{
-						State: state,
-					},
+					stateGen:    stateGen,
 					custodyInfo: &peerdas.CustodyInfo{},
 				},
 			}
 
-			for index := range tc.validatorsBalance {
+			for index := range tc.validatorsEffectiveBalance {
 				validator := cache.TrackedValidator{
 					Active: true,
 					Index:  primitives.ValidatorIndex(index),

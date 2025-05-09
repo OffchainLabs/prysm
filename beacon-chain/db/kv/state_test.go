@@ -5,23 +5,22 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	mathRand "math/rand"
-
 	"strconv"
 	"testing"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -322,15 +321,11 @@ func TestState_CanSaveRetrieveValidatorEntriesFromCache(t *testing.T) {
 		hash, hashErr := stateValidators[i].HashTreeRoot()
 		assert.NoError(t, hashErr)
 
-		data, ok := db.validatorEntryCache.Get(string(hash[:]))
+		data, ok := db.validatorEntryCache.Get(hash[:])
 		assert.Equal(t, true, ok)
 		require.NotNil(t, data)
 
-		valEntry, vType := data.(*ethpb.Validator)
-		assert.Equal(t, true, vType)
-		require.NotNil(t, valEntry)
-
-		require.DeepSSZEqual(t, stateValidators[i], valEntry, "validator entry is not matching")
+		require.DeepSSZEqual(t, stateValidators[i], data, "validator entry is not matching")
 	}
 
 	// check if all the validator entries are still intact in the validator entry bucket.
@@ -448,7 +443,7 @@ func TestState_DeleteState(t *testing.T) {
 		assert.NoError(t, hashErr)
 		v, found := db.validatorEntryCache.Get(hash[:])
 		require.Equal(t, false, found)
-		require.Equal(t, nil, v)
+		require.IsNil(t, v)
 	}
 
 	// check if the index of the first state is deleted.
@@ -1055,6 +1050,31 @@ func TestBellatrixState_CanDelete(t *testing.T) {
 	db := setupDB(t)
 
 	r := [32]byte{'A'}
+
+	require.Equal(t, false, db.HasState(context.Background(), r))
+
+	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
+	require.NoError(t, st.SetSlot(100))
+
+	require.NoError(t, db.SaveState(context.Background(), st, r))
+	require.Equal(t, true, db.HasState(context.Background(), r))
+
+	require.NoError(t, db.DeleteState(context.Background(), r))
+	savedS, err := db.State(context.Background(), r)
+	require.NoError(t, err)
+	require.Equal(t, state.ReadOnlyBeaconState(nil), savedS, "Unsaved state should've been nil")
+}
+
+func TestBellatrixState_CanDeleteWithBlock(t *testing.T) {
+	db := setupDB(t)
+
+	b := util.NewBeaconBlockBellatrix()
+	b.Block.Slot = 100
+	r, err := b.Block.HashTreeRoot()
+	require.NoError(t, err)
+	wsb, err := blocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	require.NoError(t, db.SaveBlock(context.Background(), wsb))
 
 	require.Equal(t, false, db.HasState(context.Background(), r))
 

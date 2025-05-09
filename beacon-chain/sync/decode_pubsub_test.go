@@ -8,25 +8,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	p2ptesting "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/d4l3k/messagediff"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	p2ptesting "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/wrapper"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/metadata"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestService_decodePubsubMessage(t *testing.T) {
@@ -137,13 +137,14 @@ func TestExtractDataType(t *testing.T) {
 		chain  blockchain.ChainInfoFetcher
 	}
 	tests := []struct {
-		name          string
-		args          args
-		wantBlock     interfaces.ReadOnlySignedBeaconBlock
-		wantMd        metadata.Metadata
-		wantAtt       ethpb.Att
-		wantAggregate ethpb.SignedAggregateAttAndProof
-		wantErr       bool
+		name            string
+		args            args
+		wantBlock       interfaces.ReadOnlySignedBeaconBlock
+		wantMd          metadata.Metadata
+		wantAtt         ethpb.Att
+		wantAggregate   ethpb.SignedAggregateAttAndProof
+		wantAttSlashing ethpb.AttSlashing
+		wantErr         bool
 	}{
 		{
 			name: "no digest",
@@ -156,10 +157,11 @@ func TestExtractDataType(t *testing.T) {
 				require.NoError(t, err)
 				return wsb
 			}(),
-			wantMd:        wrapper.WrappedMetadataV0(&ethpb.MetaDataV0{}),
-			wantAtt:       &ethpb.Attestation{},
-			wantAggregate: &ethpb.SignedAggregateAttestationAndProof{},
-			wantErr:       false,
+			wantMd:          wrapper.WrappedMetadataV0(&ethpb.MetaDataV0{}),
+			wantAtt:         &ethpb.Attestation{},
+			wantAggregate:   &ethpb.SignedAggregateAttestationAndProof{},
+			wantAttSlashing: &ethpb.AttesterSlashing{},
+			wantErr:         false,
 		},
 		{
 			name: "invalid digest",
@@ -167,11 +169,12 @@ func TestExtractDataType(t *testing.T) {
 				digest: []byte{0x00, 0x01},
 				chain:  &mock.ChainService{ValidatorsRoot: [32]byte{}},
 			},
-			wantBlock:     nil,
-			wantMd:        nil,
-			wantAtt:       nil,
-			wantAggregate: nil,
-			wantErr:       true,
+			wantBlock:       nil,
+			wantMd:          nil,
+			wantAtt:         nil,
+			wantAggregate:   nil,
+			wantAttSlashing: nil,
+			wantErr:         true,
 		},
 		{
 			name: "non existent digest",
@@ -179,11 +182,12 @@ func TestExtractDataType(t *testing.T) {
 				digest: []byte{0x00, 0x01, 0x02, 0x03},
 				chain:  &mock.ChainService{ValidatorsRoot: [32]byte{}},
 			},
-			wantBlock:     nil,
-			wantMd:        nil,
-			wantAtt:       nil,
-			wantAggregate: nil,
-			wantErr:       true,
+			wantBlock:       nil,
+			wantMd:          nil,
+			wantAtt:         nil,
+			wantAggregate:   nil,
+			wantAttSlashing: nil,
+			wantErr:         true,
 		},
 		{
 			name: "genesis fork version",
@@ -196,9 +200,10 @@ func TestExtractDataType(t *testing.T) {
 				require.NoError(t, err)
 				return wsb
 			}(),
-			wantAtt:       &ethpb.Attestation{},
-			wantAggregate: &ethpb.SignedAggregateAttestationAndProof{},
-			wantErr:       false,
+			wantAtt:         &ethpb.Attestation{},
+			wantAggregate:   &ethpb.SignedAggregateAttestationAndProof{},
+			wantAttSlashing: &ethpb.AttesterSlashing{},
+			wantErr:         false,
 		},
 		{
 			name: "altair fork version",
@@ -211,10 +216,11 @@ func TestExtractDataType(t *testing.T) {
 				require.NoError(t, err)
 				return wsb
 			}(),
-			wantMd:        wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}),
-			wantAtt:       &ethpb.Attestation{},
-			wantAggregate: &ethpb.SignedAggregateAttestationAndProof{},
-			wantErr:       false,
+			wantMd:          wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}),
+			wantAtt:         &ethpb.Attestation{},
+			wantAggregate:   &ethpb.SignedAggregateAttestationAndProof{},
+			wantAttSlashing: &ethpb.AttesterSlashing{},
+			wantErr:         false,
 		},
 		{
 			name: "bellatrix fork version",
@@ -227,10 +233,11 @@ func TestExtractDataType(t *testing.T) {
 				require.NoError(t, err)
 				return wsb
 			}(),
-			wantMd:        wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}),
-			wantAtt:       &ethpb.Attestation{},
-			wantAggregate: &ethpb.SignedAggregateAttestationAndProof{},
-			wantErr:       false,
+			wantMd:          wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}),
+			wantAtt:         &ethpb.Attestation{},
+			wantAggregate:   &ethpb.SignedAggregateAttestationAndProof{},
+			wantAttSlashing: &ethpb.AttesterSlashing{},
+			wantErr:         false,
 		},
 		{
 			name: "capella fork version",
@@ -243,10 +250,11 @@ func TestExtractDataType(t *testing.T) {
 				require.NoError(t, err)
 				return wsb
 			}(),
-			wantMd:        wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}),
-			wantAtt:       &ethpb.Attestation{},
-			wantAggregate: &ethpb.SignedAggregateAttestationAndProof{},
-			wantErr:       false,
+			wantMd:          wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}),
+			wantAtt:         &ethpb.Attestation{},
+			wantAggregate:   &ethpb.SignedAggregateAttestationAndProof{},
+			wantAttSlashing: &ethpb.AttesterSlashing{},
+			wantErr:         false,
 		},
 		{
 			name: "deneb fork version",
@@ -259,10 +267,11 @@ func TestExtractDataType(t *testing.T) {
 				require.NoError(t, err)
 				return wsb
 			}(),
-			wantMd:        wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}),
-			wantAtt:       &ethpb.Attestation{},
-			wantAggregate: &ethpb.SignedAggregateAttestationAndProof{},
-			wantErr:       false,
+			wantMd:          wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}),
+			wantAtt:         &ethpb.Attestation{},
+			wantAggregate:   &ethpb.SignedAggregateAttestationAndProof{},
+			wantAttSlashing: &ethpb.AttesterSlashing{},
+			wantErr:         false,
 		},
 		{
 			name: "electra fork version",
@@ -275,10 +284,11 @@ func TestExtractDataType(t *testing.T) {
 				require.NoError(t, err)
 				return wsb
 			}(),
-			wantMd:        wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}),
-			wantAtt:       &ethpb.SingleAttestation{},
-			wantAggregate: &ethpb.SignedAggregateAttestationAndProofElectra{},
-			wantErr:       false,
+			wantMd:          wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}),
+			wantAtt:         &ethpb.SingleAttestation{},
+			wantAggregate:   &ethpb.SignedAggregateAttestationAndProofElectra{},
+			wantAttSlashing: &ethpb.AttesterSlashingElectra{},
+			wantErr:         false,
 		},
 		{
 			name: "fulu fork version",
@@ -291,10 +301,11 @@ func TestExtractDataType(t *testing.T) {
 				require.NoError(t, err)
 				return wsb
 			}(),
-			wantMd:        wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}),
-			wantAtt:       &ethpb.SingleAttestation{},
-			wantAggregate: &ethpb.SignedAggregateAttestationAndProofElectra{},
-			wantErr:       false,
+			wantMd:          wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}),
+			wantAtt:         &ethpb.SingleAttestation{},
+			wantAggregate:   &ethpb.SignedAggregateAttestationAndProofElectra{},
+			wantAttSlashing: &ethpb.AttesterSlashingElectra{},
+			wantErr:         false,
 		},
 	}
 	for _, tt := range tests {
@@ -322,6 +333,14 @@ func TestExtractDataType(t *testing.T) {
 			}
 			if !reflect.DeepEqual(gotAggregate, tt.wantAggregate) {
 				t.Errorf("aggregate: got = %v, want %v", gotAggregate, tt.wantAggregate)
+			}
+			gotAttSlashing, err := extractDataTypeFromTypeMap(types.AttesterSlashingMap, tt.args.digest, tt.args.chain)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("attester slashing: error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(gotAttSlashing, tt.wantAttSlashing) {
+				t.Errorf("attester slashin: got = %v, want %v", gotAttSlashing, tt.wantAttSlashing)
 			}
 		})
 	}

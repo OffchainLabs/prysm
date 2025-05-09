@@ -6,7 +6,7 @@ go_library(
         "slashing.go",
         "validator.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/validators",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators",
     visibility = [
         "//beacon-chain:__subpackages__",
         "//testing/endtoend:__subpackages__",

@@ -3,33 +3,117 @@ package peerdas_test
 import (
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
-func TestDataColumnSidecars(t *testing.T) {
-	var expected []*ethpb.DataColumnSidecar = nil
-	actual, err := peerdas.DataColumnSidecars(nil, []kzg.CellsAndProofs{})
-	require.NoError(t, err)
+func TestCustodyGroups(t *testing.T) {
+	// The happy path is unit tested in spec tests.
+	numberOfCustodyGroup := params.BeaconConfig().NumberOfCustodyGroups
+	_, err := peerdas.CustodyGroups(enode.ID{}, numberOfCustodyGroup+1)
+	require.ErrorIs(t, err, peerdas.ErrCustodyGroupCountTooLarge)
+}
 
-	require.DeepSSZEqual(t, expected, actual)
+func TestComputeColumnsForCustodyGroup(t *testing.T) {
+	// The happy path is unit tested in spec tests.
+	numberOfCustodyGroup := params.BeaconConfig().NumberOfCustodyGroups
+	_, err := peerdas.ComputeColumnsForCustodyGroup(numberOfCustodyGroup)
+	require.ErrorIs(t, err, peerdas.ErrCustodyGroupTooLarge)
+}
+
+func TestDataColumnSidecars(t *testing.T) {
+	t.Run("nil signed block", func(t *testing.T) {
+		var expected []*ethpb.DataColumnSidecar = nil
+		actual, err := peerdas.DataColumnSidecars(nil, []kzg.CellsAndProofs{})
+		require.NoError(t, err)
+
+		require.DeepSSZEqual(t, expected, actual)
+	})
+
+	t.Run("empty cells and proofs", func(t *testing.T) {
+		// Create a protobuf signed beacon block.
+		signedBeaconBlockPb := util.NewBeaconBlockDeneb()
+
+		// Create a signed beacon block from the protobuf.
+		signedBeaconBlock, err := blocks.NewSignedBeaconBlock(signedBeaconBlockPb)
+		require.NoError(t, err)
+
+		actual, err := peerdas.DataColumnSidecars(signedBeaconBlock, []kzg.CellsAndProofs{})
+		require.NoError(t, err)
+		require.IsNil(t, actual)
+	})
+
+	t.Run("sizes mismatch", func(t *testing.T) {
+		// Create a protobuf signed beacon block.
+		signedBeaconBlockPb := util.NewBeaconBlockDeneb()
+
+		// Create a signed beacon block from the protobuf.
+		signedBeaconBlock, err := blocks.NewSignedBeaconBlock(signedBeaconBlockPb)
+		require.NoError(t, err)
+
+		// Create cells and proofs.
+		cellsAndProofs := make([]kzg.CellsAndProofs, 1)
+
+		_, err = peerdas.DataColumnSidecars(signedBeaconBlock, cellsAndProofs)
+		require.ErrorIs(t, err, peerdas.ErrMismatchSize)
+	})
+}
+
+// --------------------------------------------------------------------------------------------------------------------------------------
+// DataColumnsSidecarsFromItems is tested as part of the DataColumnSidecars tests, in the TestDataColumnsSidecarsBlobsRoundtrip function.
+// --------------------------------------------------------------------------------------------------------------------------------------
+
+func TestComputeCustodyGroupForColumn(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig()
+	config.NumberOfColumns = 128
+	config.NumberOfCustodyGroups = 64
+	params.OverrideBeaconConfig(config)
+
+	t.Run("index too large", func(t *testing.T) {
+		_, err := peerdas.ComputeCustodyGroupForColumn(1_000_000)
+		require.ErrorIs(t, err, peerdas.ErrIndexTooLarge)
+	})
+
+	t.Run("nominal", func(t *testing.T) {
+		expected := uint64(2)
+		actual, err := peerdas.ComputeCustodyGroupForColumn(2)
+		require.NoError(t, err)
+		require.Equal(t, expected, actual)
+
+		expected = uint64(3)
+		actual, err = peerdas.ComputeCustodyGroupForColumn(3)
+		require.NoError(t, err)
+		require.Equal(t, expected, actual)
+
+		expected = uint64(2)
+		actual, err = peerdas.ComputeCustodyGroupForColumn(66)
+		require.NoError(t, err)
+		require.Equal(t, expected, actual)
+
+		expected = uint64(3)
+		actual, err = peerdas.ComputeCustodyGroupForColumn(67)
+		require.NoError(t, err)
+		require.Equal(t, expected, actual)
+	})
 }
 
 func TestBlobs(t *testing.T) {
 	blobsIndice := map[uint64]bool{}
 
-	almostAllColumns := make([]*ethpb.DataColumnSidecar, 0, fieldparams.NumberOfColumns/2)
-	for i := 2; i < fieldparams.NumberOfColumns/2+2; i++ {
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
+
+	almostAllColumns := make([]*ethpb.DataColumnSidecar, 0, numberOfColumns/2)
+	for i := uint64(2); i < numberOfColumns/2+2; i++ {
 		almostAllColumns = append(almostAllColumns, &ethpb.DataColumnSidecar{
-			Index: uint64(i),
+			Index: i,
 		})
 	}
 
@@ -151,46 +235,6 @@ func TestDataColumnsSidecarsBlobsRoundtrip(t *testing.T) {
 	require.DeepSSZEqual(t, verifiedROBlobs, roundtripBlobs)
 }
 
-func TestValidatorsCustodyRequirement(t *testing.T) {
-	testCases := []struct {
-		name     string
-		count    uint64
-		expected uint64
-	}{
-		{name: "0 validators", count: 0, expected: 8},
-		{name: "1 validator", count: 1, expected: 8},
-		{name: "8 validators", count: 8, expected: 8},
-		{name: "9 validators", count: 9, expected: 9},
-		{name: "100 validators", count: 100, expected: 100},
-		{name: "128 validators", count: 128, expected: 128},
-		{name: "129 validators", count: 129, expected: 128},
-		{name: "1000 validators", count: 1000, expected: 128},
-	}
-
-	const balance = uint64(32_000_000_000)
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			balances := make([]uint64, 0, tc.count)
-			for range tc.count {
-				balances = append(balances, balance)
-			}
-
-			validatorsIndex := make(map[primitives.ValidatorIndex]bool)
-			for i := range tc.count {
-				validatorsIndex[primitives.ValidatorIndex(i)] = true
-			}
-
-			beaconState, err := state_native.InitializeFromProtoFulu(&ethpb.BeaconStateElectra{Balances: balances})
-			require.NoError(t, err)
-
-			actual, err := peerdas.ValidatorsCustodyRequirement(beaconState, validatorsIndex)
-			require.NoError(t, err)
-			require.Equal(t, tc.expected, actual)
-		})
-	}
-}
-
 func TestCustodyGroupSamplingSize(t *testing.T) {
 	testCases := []struct {
 		name                         string
@@ -245,4 +289,23 @@ func TestCustodyGroupSamplingSize(t *testing.T) {
 			require.Equal(t, tc.expected, actual)
 		})
 	}
+}
+
+func TestCustodyColumns(t *testing.T) {
+	t.Run("group too large", func(t *testing.T) {
+		_, err := peerdas.CustodyColumns([]uint64{1_000_000})
+		require.ErrorIs(t, err, peerdas.ErrCustodyGroupTooLarge)
+	})
+
+	t.Run("nominal", func(t *testing.T) {
+		input := []uint64{1, 2}
+		expected := map[uint64]bool{1: true, 2: true}
+
+		actual, err := peerdas.CustodyColumns(input)
+		require.NoError(t, err)
+		require.Equal(t, len(expected), len(actual))
+		for i := range actual {
+			require.Equal(t, expected[i], actual[i])
+		}
+	})
 }

@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -178,7 +178,7 @@ func (e *epochBoundaryState) delete(blockRoot [32]byte) error {
 func trim(queue *cache.FIFO, maxSize uint64) {
 	for s := uint64(len(queue.ListKeys())); s > maxSize; s-- {
 		if _, err := queue.Pop(popProcessNoopFunc); err != nil { // This never returns an error, but we'll handle anyway for sanity.
-			panic(err)
+			panic(err) // lint:nopanic -- Never returns an error.
 		}
 	}
 }

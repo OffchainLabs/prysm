@@ -8,23 +8,22 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/async"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/rand"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/encoding/ssz/equality"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
+	prysmTrace "github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/async"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
-	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
-	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/encoding/ssz/equality"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	prysmTrace "github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 	"github.com/trailofbits/go-mutexasserts"
 	"go.opentelemetry.io/otel/trace"
@@ -196,7 +195,7 @@ func (s *Service) hasPeer() bool {
 var errNoPeersForPending = errors.New("no suitable peers to process pending block queue, delaying")
 
 // processAndBroadcastBlock validates, processes, and broadcasts a block.
-// Part of the function is to request missing blobs or data columns from peers if the block contains kzg commitments.
+// Part of the function is to request missing sidecars from peers if the block contains kzg commitments.
 func (s *Service) processAndBroadcastBlock(ctx context.Context, b interfaces.ReadOnlySignedBeaconBlock, blkRoot [32]byte) error {
 	blockSlot := b.Block().Slot()
 
@@ -207,43 +206,61 @@ func (s *Service) processAndBroadcastBlock(ctx context.Context, b interfaces.Rea
 		}
 	}
 
-	if coreTime.PeerDASIsActive(blockSlot) {
-		missingDataColumns, err := FindMissingDataColumns(
-			blkRoot,
-			b,
-			s.cfg.p2p.NodeID(),
-			s.cfg.custodyInfo.CustodyGroupSamplingSize(peerdas.Target),
-			s.cfg.dataColumnStorage,
-		)
+	blockEpoch, fuluForkEpoch, denebForkEpoch := slots.ToEpoch(blockSlot), params.BeaconConfig().FuluForkEpoch, params.BeaconConfig().DenebForkEpoch
 
-		if err != nil {
-			return errors.Wrap(err, "find missing data columns")
+	roBlock, err := blocks.NewROBlockWithRoot(b, blkRoot)
+	if err != nil {
+		return errors.Wrap(err, "new ro block with root")
+	}
+
+	if blockEpoch >= fuluForkEpoch {
+		if err := s.requestAndSaveMissingDataColumnSidecars(roBlock); err != nil {
+			return errors.Wrap(err, "request and save missing data column sidecars")
 		}
 
-		if len(missingDataColumns) > 0 {
-			if err := s.requestAndSaveDataColumnSidecars(ctx, missingDataColumns, b, blkRoot); err != nil {
-				return err
-			}
+		if err := s.receiveAndBroadCastBlock(ctx, b, blkRoot, blockSlot); err != nil {
+			return errors.Wrap(err, "receive and broadcast block")
 		}
-	} else {
+
+		return nil
+	}
+
+	if blockEpoch >= denebForkEpoch {
 		request, err := s.pendingBlobsRequestForBlock(blkRoot, b)
 		if err != nil {
 			return err
 		}
+
 		if len(request) > 0 {
 			peers := s.getBestPeers()
 			peerCount := len(peers)
+
 			if peerCount == 0 {
 				return errors.Wrapf(errNoPeersForPending, "block root=%#x", blkRoot)
 			}
+
 			if err := s.sendAndSaveBlobSidecars(ctx, request, peers[rand.NewGenerator().Int()%peerCount], b); err != nil {
 				return err
 			}
 		}
+
+		if err := s.receiveAndBroadCastBlock(ctx, b, blkRoot, blockSlot); err != nil {
+			return errors.Wrap(err, "receive and broadcast block")
+		}
+
+		return nil
 	}
 
+	if err := s.receiveAndBroadCastBlock(ctx, b, blkRoot, blockSlot); err != nil {
+		return errors.Wrap(err, "receive and broadcast block")
+	}
+
+	return nil
+}
+
+func (s *Service) receiveAndBroadCastBlock(ctx context.Context, b interfaces.ReadOnlySignedBeaconBlock, blkRoot [fieldparams.RootLength]byte, blockSlot primitives.Slot) error {
 	if err := s.cfg.chain.ReceiveBlock(ctx, b, blkRoot, nil); err != nil {
-		return err
+		return errors.Wrap(err, "receive block")
 	}
 
 	s.setSeenBlockIndexSlot(blockSlot, b.Block().ProposerIndex())
@@ -253,6 +270,7 @@ func (s *Service) processAndBroadcastBlock(ctx context.Context, b interfaces.Rea
 		log.WithError(err).Debug("Could not get protobuf block")
 		return err
 	}
+
 	if err := s.cfg.p2p.Broadcast(ctx, pb); err != nil {
 		log.WithError(err).Debug("Could not broadcast block")
 		return err

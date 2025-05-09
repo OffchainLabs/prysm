@@ -5,21 +5,21 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/network/forks"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/kzg"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/network/forks"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 type FuluBlockGeneratorOption func(*fuluBlockGenerator)
@@ -50,7 +50,7 @@ func WithFuluPayload(p *enginev1.ExecutionPayloadDeneb) FuluBlockGeneratorOption
 	}
 }
 
-func GenerateTestFuluBlockWithSidecar(
+func GenerateTestFuluBlockWithSidecars(
 	t *testing.T,
 	parent [32]byte,
 	slot primitives.Slot,
@@ -154,16 +154,18 @@ func GenerateTestFuluBlockWithSidecar(
 	for i, comt := range block.Block.Body.BlobKzgCommitments {
 		blobs[i] = kzg.Blob(GenerateTestDenebBlobSidecar(t, root, sh, i, comt, inclusion[i]).Blob)
 	}
-	sidecars := make([]blocks.RODataColumn, params.BeaconConfig().NumberOfColumns)
+	sidecars := make([]blocks.RODataColumn, 0, params.BeaconConfig().NumberOfColumns)
 	cellsAndProofs := GenerateCellsAndProofs(t, blobs)
 	dataColumns, err := peerdas.DataColumnSidecars(sbb, cellsAndProofs)
 	require.NoError(t, err)
-	for i, dc := range dataColumns {
-		sidecars[i], err = blocks.NewRODataColumnWithRoot(dc, root)
+	for _, dataColumn := range dataColumns {
+		sidecar, err := blocks.NewRODataColumnWithRoot(dataColumn, root)
 		require.NoError(t, err)
+
+		sidecars = append(sidecars, sidecar)
 	}
 
-	rob, err := blocks.NewROBlock(sbb)
+	rob, err := blocks.NewROBlockWithRoot(sbb, root)
 	require.NoError(t, err)
 
 	return rob, sidecars

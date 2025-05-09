@@ -6,15 +6,16 @@ import (
 	"os"
 	"path"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition/interop"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition/interop"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/io/file"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -78,6 +79,11 @@ func (s *Service) reconstructAndBroadcastSidecars(ctx context.Context, block int
 func (s *Service) reconstructAndBroadcastDataColumnSidecars(ctx context.Context, roSignedBlock interfaces.ReadOnlySignedBeaconBlock) {
 	block := roSignedBlock.Block()
 
+	log := log.WithFields(logrus.Fields{
+		"slot":          block.Slot(),
+		"proposerIndex": block.ProposerIndex(),
+	})
+
 	kzgCommitments, err := block.Body().BlobKzgCommitments()
 	if err != nil {
 		log.WithError(err).Error("Failed to read commitments from block")
@@ -95,6 +101,8 @@ func (s *Service) reconstructAndBroadcastDataColumnSidecars(ctx context.Context,
 		return
 	}
 
+	log = log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot))
+
 	if s.cfg.dataColumnStorage == nil {
 		log.Warning("Data column storage is not enabled, skip saving data column, but continue to reconstruct and broadcast data column")
 	}
@@ -103,6 +111,11 @@ func (s *Service) reconstructAndBroadcastDataColumnSidecars(ctx context.Context,
 	sidecars, err := s.cfg.executionReconstructor.ReconstructDataColumnSidecars(ctx, roSignedBlock, blockRoot)
 	if err != nil {
 		log.WithError(err).Debug("Cannot reconstruct data column sidecars after receiving the block")
+		return
+	}
+
+	// Return early if no blobs are retrieved from the EL.
+	if len(sidecars) == 0 {
 		return
 	}
 
@@ -124,8 +137,9 @@ func (s *Service) reconstructAndBroadcastDataColumnSidecars(ctx context.Context,
 	// Broadcast and save data columns sidecars to custody but not yet received.
 	sidecarCount := uint64(len(sidecars))
 	for columnIndex := range info.CustodyColumns {
+		log := log.WithField("columnIndex", columnIndex)
 		if columnIndex >= sidecarCount {
-			log.WithField("index", columnIndex).Error("Sidecar index out of range - should never happen")
+			log.Error("Column custody index out of range - should never happen")
 			continue
 		}
 
@@ -136,11 +150,11 @@ func (s *Service) reconstructAndBroadcastDataColumnSidecars(ctx context.Context,
 		sidecar := sidecars[columnIndex]
 
 		if err := s.cfg.p2p.BroadcastDataColumn(ctx, blockRoot, sidecar.Index, sidecar.DataColumnSidecar); err != nil {
-			log.WithFields(dataColumnFields(sidecar.RODataColumn)).WithError(err).Error("Failed to broadcast data column")
+			log.WithError(err).Error("Failed to broadcast data column")
 		}
 
 		if err := s.receiveDataColumn(ctx, sidecar); err != nil {
-			log.WithFields(dataColumnFields(sidecar.RODataColumn)).WithError(err).Error("Failed to receive data column")
+			log.WithError(err).Error("Failed to receive data column")
 		}
 	}
 }

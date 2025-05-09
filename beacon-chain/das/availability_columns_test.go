@@ -4,19 +4,19 @@ import (
 	"context"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 func roSidecarsFromDataColumnParamsByBlockRoot(t *testing.T, dataColumnParamsByBlockRoot verification.DataColumnsParamsByRoot) ([]blocks.ROSidecar, []blocks.RODataColumn) {
@@ -50,7 +50,7 @@ var commitments = [][]byte{
 func TestPersist(t *testing.T) {
 	t.Run("no sidecars", func(t *testing.T) {
 		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
-		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, &peerdas.CustodyInfo{})
+		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, nil, &peerdas.CustodyInfo{})
 		err := lazilyPersistentStoreColumns.Persist(0)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(lazilyPersistentStoreColumns.cache.entries))
@@ -65,7 +65,7 @@ func TestPersist(t *testing.T) {
 		}
 
 		roSidecars, _ := roSidecarsFromDataColumnParamsByBlockRoot(t, dataColumnParamsByBlockRoot)
-		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, &peerdas.CustodyInfo{})
+		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, nil, &peerdas.CustodyInfo{})
 
 		err := lazilyPersistentStoreColumns.Persist(0, roSidecars...)
 		require.ErrorIs(t, err, errMixedRoots)
@@ -80,7 +80,7 @@ func TestPersist(t *testing.T) {
 		}
 
 		roSidecars, _ := roSidecarsFromDataColumnParamsByBlockRoot(t, dataColumnParamsByBlockRoot)
-		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, &peerdas.CustodyInfo{})
+		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, nil, &peerdas.CustodyInfo{})
 
 		err := lazilyPersistentStoreColumns.Persist(1_000_000, roSidecars...)
 		require.NoError(t, err)
@@ -95,7 +95,7 @@ func TestPersist(t *testing.T) {
 		}
 
 		roSidecars, roDataColumns := roSidecarsFromDataColumnParamsByBlockRoot(t, dataColumnParamsByBlockRoot)
-		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, &peerdas.CustodyInfo{})
+		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, nil, &peerdas.CustodyInfo{})
 
 		err := lazilyPersistentStoreColumns.Persist(0, roSidecars...)
 		require.NoError(t, err)
@@ -121,39 +121,31 @@ func TestPersist(t *testing.T) {
 }
 
 func TestIsDataAvailable(t *testing.T) {
-	t.Run("No commitments", func(t *testing.T) {
-		ctx := context.Background()
+	newDataColumnsVerifier := func(dataColumnSidecars []blocks.RODataColumn, _ []verification.Requirement) verification.DataColumnsVerifier {
+		return &mockDataColumnsVerifier{t: t, dataColumnSidecars: dataColumnSidecars}
+	}
+
+	ctx := context.Background()
+
+	t.Run("without commitments", func(t *testing.T) {
 		signedBeaconBlockFulu := util.NewBeaconBlockFulu()
 		signedRoBlock := newSignedRoBlock(t, signedBeaconBlockFulu)
 
 		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
-		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, &peerdas.CustodyInfo{})
+		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, newDataColumnsVerifier, &peerdas.CustodyInfo{})
 
 		err := lazilyPersistentStoreColumns.IsDataAvailable(ctx, 0 /*current slot*/, signedRoBlock)
 		require.NoError(t, err)
 	})
 
-	t.Run("Some sidecars are not available", func(t *testing.T) {
-		ctx := context.Background()
-		signedBeaconBlockFulu := util.NewBeaconBlockFulu()
-		signedBeaconBlockFulu.Block.Body.BlobKzgCommitments = commitments
-		signedRoBlock := newSignedRoBlock(t, signedBeaconBlockFulu)
-
-		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
-		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, &peerdas.CustodyInfo{})
-		err := lazilyPersistentStoreColumns.IsDataAvailable(ctx, 0 /*current slot*/, signedRoBlock)
-		require.NotNil(t, err)
-	})
-
-	t.Run("All sidecars are available", func(t *testing.T) {
-		ctx := context.Background()
+	t.Run("with commitments", func(t *testing.T) {
 		signedBeaconBlockFulu := util.NewBeaconBlockFulu()
 		signedBeaconBlockFulu.Block.Body.BlobKzgCommitments = commitments
 		signedRoBlock := newSignedRoBlock(t, signedBeaconBlockFulu)
 		root := signedRoBlock.Root()
 
 		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
-		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, &peerdas.CustodyInfo{})
+		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, newDataColumnsVerifier, &peerdas.CustodyInfo{})
 
 		indices := [...]uint64{1, 17, 87, 102}
 		dataColumnsParams := make([]verification.DataColumnParams, 0, len(indices))
@@ -236,12 +228,12 @@ func TestFullCommitmentsToCheck(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			resetFlags := flags.Get()
 			gFlags := new(flags.GlobalFlags)
-			gFlags.SubscribeToAllSubnets = true
+			gFlags.SubscribeAllDataSubnetsubnets = true
 			flags.Init(gFlags)
 			defer flags.Init(resetFlags)
 
 			b := tc.block(t)
-			s := NewLazilyPersistentStoreColumn(nil, enode.ID{}, &peerdas.CustodyInfo{})
+			s := NewLazilyPersistentStoreColumn(nil, enode.ID{}, nil, &peerdas.CustodyInfo{})
 
 			commitmentsArray, err := s.fullCommitmentsToCheck(enode.ID{}, b, tc.slot)
 			require.NoError(t, err)
@@ -252,3 +244,58 @@ func TestFullCommitmentsToCheck(t *testing.T) {
 		})
 	}
 }
+
+type mockDataColumnsVerifier struct {
+	t                                                                        *testing.T
+	dataColumnSidecars                                                       []blocks.RODataColumn
+	validCalled, SidecarInclusionProvenCalled, SidecarKzgProofVerifiedCalled bool
+}
+
+var _ verification.DataColumnsVerifier = &mockDataColumnsVerifier{}
+
+func (m *mockDataColumnsVerifier) VerifiedRODataColumns() ([]blocks.VerifiedRODataColumn, error) {
+	require.Equal(m.t, true, m.validCalled && m.SidecarInclusionProvenCalled && m.SidecarKzgProofVerifiedCalled)
+
+	verifiedDataColumnSidecars := make([]blocks.VerifiedRODataColumn, 0, len(m.dataColumnSidecars))
+	for _, dataColumnSidecar := range m.dataColumnSidecars {
+		verifiedDataColumnSidecar := blocks.NewVerifiedRODataColumn(dataColumnSidecar)
+		verifiedDataColumnSidecars = append(verifiedDataColumnSidecars, verifiedDataColumnSidecar)
+	}
+
+	return verifiedDataColumnSidecars, nil
+}
+
+func (m *mockDataColumnsVerifier) SatisfyRequirement(verification.Requirement) {}
+
+func (m *mockDataColumnsVerifier) Valid() error {
+	m.validCalled = true
+	return nil
+}
+
+func (m *mockDataColumnsVerifier) CorrectSubnet(expectedTopics []string) error      { return nil }
+func (m *mockDataColumnsVerifier) NotFromFutureSlot() error                         { return nil }
+func (m *mockDataColumnsVerifier) SlotAboveFinalized() error                        { return nil }
+func (m *mockDataColumnsVerifier) ValidProposerSignature(ctx context.Context) error { return nil }
+
+func (m *mockDataColumnsVerifier) SidecarParentSeen(parentSeen func([fieldparams.RootLength]byte) bool) error {
+	return nil
+}
+
+func (m *mockDataColumnsVerifier) SidecarParentValid(badParent func([fieldparams.RootLength]byte) bool) error {
+	return nil
+}
+
+func (m *mockDataColumnsVerifier) SidecarParentSlotLower() error       { return nil }
+func (m *mockDataColumnsVerifier) SidecarDescendsFromFinalized() error { return nil }
+
+func (m *mockDataColumnsVerifier) SidecarInclusionProven() error {
+	m.SidecarInclusionProvenCalled = true
+	return nil
+}
+
+func (m *mockDataColumnsVerifier) SidecarKzgProofVerified() error {
+	m.SidecarKzgProofVerifiedCalled = true
+	return nil
+}
+
+func (m *mockDataColumnsVerifier) SidecarProposerExpected(ctx context.Context) error { return nil }

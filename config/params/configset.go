@@ -3,9 +3,9 @@ package params
 import (
 	"fmt"
 
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/pkg/errors"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
 var configs *configset
@@ -52,7 +52,7 @@ func newConfigset(configs ...*BeaconChainConfig) *configset {
 	}
 	for _, c := range configs {
 		if err := r.add(c); err != nil {
-			panic(err)
+			panic(err) // lint:nopanic -- This would only panic with an application misconfiguration and it should fail right away.
 		}
 	}
 	return r

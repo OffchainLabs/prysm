@@ -1,11 +1,12 @@
+// lint:nopanic -- Mock / test code, panic is allowed.
 package mock
 
 import (
 	"context"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
 var _ attestations.Pool = &PoolMock{}
@@ -79,8 +80,8 @@ func (m *PoolMock) SaveUnaggregatedAttestations(atts []ethpb.Att) error {
 }
 
 // UnaggregatedAttestations --
-func (m *PoolMock) UnaggregatedAttestations() ([]ethpb.Att, error) {
-	return m.UnaggregatedAtts, nil
+func (m *PoolMock) UnaggregatedAttestations() []ethpb.Att {
+	return m.UnaggregatedAtts
 }
 
 // UnaggregatedAttestationsBySlotIndex --

@@ -14,6 +14,21 @@ import (
 	"sync"
 	"time"
 
+	builderAPI "github.com/OffchainLabs/prysm/v6/api/client/builder"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	types "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/network"
+	"github.com/OffchainLabs/prysm/v6/network/authorization"
+	v1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -21,21 +36,6 @@ import (
 	gethRPC "github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/pkg/errors"
-	builderAPI "github.com/prysmaticlabs/prysm/v5/api/client/builder"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	types "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/network"
-	"github.com/prysmaticlabs/prysm/v5/network/authorization"
-	v1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/sirupsen/logrus"
 )
 
@@ -399,7 +399,7 @@ func (p *Builder) handleHeaderRequest(w http.ResponseWriter, req *http.Request) 
 			Message:   bid,
 		},
 	}
-
+	w.WriteHeader(http.StatusOK)
 	err = json.NewEncoder(w).Encode(hdrResp)
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not encode response")
@@ -408,7 +408,6 @@ func (p *Builder) handleHeaderRequest(w http.ResponseWriter, req *http.Request) 
 	}
 	p.currVersion = version.Bellatrix
 	p.currPayload = wObj
-	w.WriteHeader(http.StatusOK)
 }
 
 func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter) {
@@ -477,7 +476,7 @@ func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter) {
 			Message:   bid,
 		},
 	}
-
+	w.WriteHeader(http.StatusOK)
 	err = json.NewEncoder(w).Encode(hdrResp)
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not encode response")
@@ -486,7 +485,6 @@ func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter) {
 	}
 	p.currVersion = version.Capella
 	p.currPayload = wObj
-	w.WriteHeader(http.StatusOK)
 }
 
 func (p *Builder) handleHeaderRequestDeneb(w http.ResponseWriter) {
@@ -563,7 +561,7 @@ func (p *Builder) handleHeaderRequestDeneb(w http.ResponseWriter) {
 			Message:   bid,
 		},
 	}
-
+	w.WriteHeader(http.StatusOK)
 	err = json.NewEncoder(w).Encode(hdrResp)
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not encode response")
@@ -573,7 +571,6 @@ func (p *Builder) handleHeaderRequestDeneb(w http.ResponseWriter) {
 	p.currVersion = version.Deneb
 	p.currPayload = wObj
 	p.blobBundle = b.BlobsBundle
-	w.WriteHeader(http.StatusOK)
 }
 
 func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
@@ -697,7 +694,7 @@ func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
 			Message:   bid,
 		},
 	}
-
+	w.WriteHeader(http.StatusOK)
 	err = json.NewEncoder(w).Encode(hdrResp)
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not encode response")
@@ -707,7 +704,6 @@ func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
 	p.currVersion = version.Electra
 	p.currPayload = wObj
 	p.blobBundle = b.BlobsBundle
-	w.WriteHeader(http.StatusOK)
 }
 
 func (p *Builder) handleBlindedBlock(w http.ResponseWriter, req *http.Request) {
@@ -732,13 +728,13 @@ func (p *Builder) handleBlindedBlock(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	w.WriteHeader(http.StatusOK)
 	err = json.NewEncoder(w).Encode(resp)
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not encode full payload response")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
 }
 
 var errInvalidTypeConversion = errors.New("unable to translate between api and foreign type")

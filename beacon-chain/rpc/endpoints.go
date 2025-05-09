@@ -3,27 +3,27 @@ package rpc
 import (
 	"net/http"
 
+	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/api/server/middleware"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/beacon"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/blob"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/builder"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/config"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/debug"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/events"
+	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/light-client"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/node"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/rewards"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/validator"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/lookup"
+	beaconprysm "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/beacon"
+	nodeprysm "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/node"
+	validatorv1alpha1 "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/v1alpha1/validator"
+	validatorprysm "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/validator"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prysmaticlabs/prysm/v5/api"
-	"github.com/prysmaticlabs/prysm/v5/api/server/middleware"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/beacon"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/blob"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/builder"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/config"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/debug"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/events"
-	lightclient "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/light-client"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/node"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/rewards"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/validator"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/lookup"
-	beaconprysm "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/prysm/beacon"
-	nodeprysm "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/prysm/node"
-	validatorv1alpha1 "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/prysm/v1alpha1/validator"
-	validatorprysm "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/prysm/validator"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
 )
 
 type endpoint struct {
@@ -371,24 +371,6 @@ func (s *Service) validatorEndpoints(
 			},
 			handler: server.GetLiveness,
 			methods: []string{http.MethodPost},
-		},
-		{
-			template: "/eth/v2/validator/blocks/{slot}",
-			name:     namespace + ".ProduceBlockV2",
-			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
-			},
-			handler: server.ProduceBlockV2,
-			methods: []string{http.MethodGet},
-		},
-		{
-			template: "/eth/v1/validator/blinded_blocks/{slot}",
-			name:     namespace + ".ProduceBlindedBlock",
-			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
-			},
-			handler: server.ProduceBlindedBlock,
-			methods: []string{http.MethodGet},
 		},
 		{
 			template: "/eth/v3/validator/blocks/{slot}",
@@ -884,6 +866,16 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodGet, http.MethodPost},
 		},
 		{
+			template: "/eth/v1/beacon/states/{state_id}/validator_identities",
+			name:     namespace + ".GetValidatorIdentities",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+			},
+			handler: server.GetValidatorIdentities,
+			methods: []string{http.MethodPost},
+		},
+		{
 			// Deprecated: no longer needed post Electra
 			template: "/eth/v1/beacon/deposit_snapshot",
 			name:     namespace + ".GetDepositSnapshot",
@@ -896,6 +888,15 @@ func (s *Service) beaconEndpoints(
 		{
 			template: "/eth/v1/beacon/states/{state_id}/pending_deposits",
 			name:     namespace + ".GetPendingDeposits",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+			},
+			handler: server.GetPendingDeposits,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v1/beacon/states/{state_id}/pending_consolidations",
+			name:     namespace + ".GetPendingConsolidations",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
 			},
@@ -954,6 +955,7 @@ func (s *Service) lightClientEndpoints(blocker lookup.Blocker, stater lookup.Sta
 		HeadFetcher:      s.cfg.HeadFetcher,
 		ChainInfoFetcher: s.cfg.ChainInfoFetcher,
 		BeaconDB:         s.cfg.BeaconDB,
+		LCStore:          s.cfg.LCStore,
 	}
 
 	const namespace = "lightclient"
@@ -1048,6 +1050,7 @@ func (s *Service) eventsEndpoints() []endpoint {
 		HeadFetcher:            s.cfg.HeadFetcher,
 		ChainInfoFetcher:       s.cfg.ChainInfoFetcher,
 		TrackedValidatorsCache: s.cfg.TrackedValidatorsCache,
+		StateGen:               s.cfg.StateGen,
 	}
 
 	const namespace = "events"

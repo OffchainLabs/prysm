@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/urfave/cli/v2"
 	"github.com/urfave/cli/v2/altsrc"
 )
@@ -47,11 +47,6 @@ var (
 		Name: "enable-db-backup-webhook",
 		Usage: `Serves HTTP handler to initiate database backups.
 		The handler is served on the monitoring port at path /db/backup.`,
-	}
-	// BackupWebhookOutputDir to customize the output directory for db backups.
-	BackupWebhookOutputDir = &cli.StringFlag{
-		Name:  "db-backup-output-dir",
-		Usage: "Output directory for db backups.",
 	}
 	// EnableTracingFlag defines a flag to enable p2p message tracing.
 	EnableTracingFlag = &cli.BoolFlag{
@@ -93,15 +88,20 @@ var (
 		Name:  "no-discovery",
 		Usage: "Enable only local network p2p and do not connect to cloud bootstrap nodes",
 	}
-	// StaticPeers specifies a set of peers to connect to explicitly.
+	// StaticPeers specifies a set of peers to connect to explicitly, accepting following format of addresses:
+	// enode, multiaddr, enr.
 	StaticPeers = &cli.StringSliceFlag{
-		Name:  "peer",
-		Usage: "Connect with this peer, this flag may be used multiple times. This peer is recognized as a trusted peer.",
+		Name: "peer",
+		Usage: "Connect with this peer, this flag may be used multiple times. " +
+			"This peer is recognized as a trusted peer." +
+			"Accepts enode, multiaddr, and enr formats.",
 	}
 	// BootstrapNode tells the beacon node which bootstrap node to connect to
 	BootstrapNode = &cli.StringSliceFlag{
-		Name:  "bootstrap-node",
-		Usage: "The address of bootstrap node. Beacon node will connect for peer discovery via DHT.  Multiple nodes can be passed by using the flag multiple times but not comma-separated. You can also pass YAML files containing multiple nodes.",
+		Name: "bootstrap-node",
+		Usage: "The enr/enode address of bootstrap node. Beacon node will connect for peer discovery via DHT. " +
+			"Multiple nodes can be passed by using the flag multiple times but not comma-separated. " +
+			"You can also pass YAML files containing multiple nodes.",
 		Value: cli.NewStringSlice(params.BeaconNetworkConfig().BootstrapNodes...),
 	}
 	// RelayNode tells the beacon node which relay node to connect to.
@@ -236,7 +236,8 @@ var (
 	// GrpcMaxCallRecvMsgSizeFlag defines the max call message size for GRPC
 	GrpcMaxCallRecvMsgSizeFlag = &cli.IntFlag{
 		Name: "grpc-max-msg-size",
-		Usage: `Integer to define max receive message call size (in bytes).
+		Usage: `WARNING: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API..
+		Integer to define max receive message call size (in bytes).
 		If serving a public gRPC server, set this to a more reasonable size to avoid
 		resource exhaustion from large messages. 
 		Validators with as many as 10000 keys can be run with a max message size of less than 

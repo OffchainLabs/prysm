@@ -6,10 +6,11 @@ package events
 import (
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	opfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
-	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	opfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
+	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
 )
 
 // Server defines a server implementation of the http events service,
@@ -23,4 +24,5 @@ type Server struct {
 	KeepAliveInterval      time.Duration
 	EventFeedDepth         int
 	EventWriteTimeout      time.Duration
+	StateGen               stategen.StateManager
 }

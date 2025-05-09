@@ -5,12 +5,13 @@ import (
 	"errors"
 	"testing"
 
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/container/trie"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/prysmaticlabs/gohashtree"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/container/trie"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func Test_MerkleProofKZGCommitment_Altair(t *testing.T) {
@@ -32,7 +33,7 @@ func Test_MerkleProofKZGCommitment_Altair(t *testing.T) {
 	require.ErrorIs(t, errUnsupportedBeaconBlockBody, err)
 }
 
-func Test_MerkleProofKZGCommitment(t *testing.T) {
+func buildTestKzgsAndBody(t *testing.T) ([][]byte, interfaces.ReadOnlyBeaconBlockBody) {
 	kzgs := make([][]byte, 3)
 	kzgs[0] = make([]byte, 48)
 	_, err := rand.Read(kzgs[0])
@@ -69,8 +70,15 @@ func Test_MerkleProofKZGCommitment(t *testing.T) {
 
 	body, err := NewBeaconBlockBody(pbBody)
 	require.NoError(t, err)
-	index := 1
-	_, err = MerkleProofKZGCommitment(body, 10)
+
+	return kzgs, body
+}
+
+func Test_MerkleProofKZGCommitment(t *testing.T) {
+	const index = 1
+
+	kzgs, body := buildTestKzgsAndBody(t)
+	_, err := MerkleProofKZGCommitment(body, 10)
 	require.ErrorIs(t, errInvalidIndex, err)
 	proof, err := MerkleProofKZGCommitment(body, index)
 	require.NoError(t, err)
@@ -102,6 +110,40 @@ func Test_MerkleProofKZGCommitment(t *testing.T) {
 	chunk := makeChunk(kzgs[index])
 	gohashtree.HashChunks(chunk, chunk)
 	require.Equal(t, true, trie.VerifyMerkleProof(root[:], chunk[0][:], uint64(index+KZGOffset), proof))
+}
+
+func TestMerkleProofKZGCommitments(t *testing.T) {
+	t.Run("invalid version", func(t *testing.T) {
+		pbBody := &ethpb.BeaconBlockBodyAltair{}
+
+		body, err := NewBeaconBlockBody(pbBody)
+		require.NoError(t, err)
+		_, err = MerkleProofKZGCommitments(body)
+		require.ErrorIs(t, errUnsupportedBeaconBlockBody, err)
+	})
+
+	t.Run("nominal", func(t *testing.T) {
+		kzgs, body := buildTestKzgsAndBody(t)
+
+		proof, err := MerkleProofKZGCommitments(body)
+		require.NoError(t, err)
+
+		commitmentsRoot, err := getBlobKzgCommitmentsRoot(kzgs)
+		require.NoError(t, err)
+
+		bodyMembersRoots, err := topLevelRoots(body)
+		require.NoError(t, err, "Failed to get top level roots")
+
+		bodySparse, err := trie.GenerateTrieFromItems(bodyMembersRoots, logBodyLength)
+		require.NoError(t, err, "Failed to generate trie from member roots")
+
+		require.Equal(t, bodyLength, bodySparse.NumOfItems())
+
+		root, err := body.HashTreeRoot()
+		require.NoError(t, err)
+
+		require.Equal(t, true, trie.VerifyMerkleProof(root[:], commitmentsRoot[:], kzgPosition, proof))
+	})
 }
 
 // This test explains the calculation of the KZG commitment root's Merkle index
@@ -139,7 +181,7 @@ func ceilLog2(x uint32) (uint32, error) {
 }
 
 func getBlobKzgCommitmentsRoot(commitments [][]byte) ([32]byte, error) {
-	commitmentsLeaves := leavesFromCommitments(commitments)
+	commitmentsLeaves := LeavesFromCommitments(commitments)
 	commitmentsSparse, err := trie.GenerateTrieFromItems(
 		commitmentsLeaves,
 		fieldparams.LogMaxBlobCommitments,
@@ -258,120 +300,4 @@ func Test_VerifyKZGInclusionProof(t *testing.T) {
 	require.NoError(t, VerifyKZGInclusionProof(blob))
 	proof[2] = make([]byte, 32)
 	require.ErrorIs(t, errInvalidInclusionProof, VerifyKZGInclusionProof(blob))
-}
-
-func Test_VerifyKZGInclusionProofColumn(t *testing.T) {
-	const (
-		blobCount   = 3
-		columnIndex = 0
-	)
-
-	// Generate random KZG commitments `blobCount` blobs.
-	kzgCommitments := make([][]byte, blobCount)
-
-	for i := 0; i < blobCount; i++ {
-		kzgCommitments[i] = make([]byte, 48)
-		_, err := rand.Read(kzgCommitments[i])
-		require.NoError(t, err)
-	}
-
-	pbBody := &ethpb.BeaconBlockBodyDeneb{
-		RandaoReveal: make([]byte, 96),
-		Eth1Data: &ethpb.Eth1Data{
-			DepositRoot: make([]byte, fieldparams.RootLength),
-			BlockHash:   make([]byte, fieldparams.RootLength),
-		},
-		Graffiti: make([]byte, 32),
-		SyncAggregate: &ethpb.SyncAggregate{
-			SyncCommitteeBits:      make([]byte, fieldparams.SyncAggregateSyncCommitteeBytesLength),
-			SyncCommitteeSignature: make([]byte, fieldparams.BLSSignatureLength),
-		},
-		ExecutionPayload: &enginev1.ExecutionPayloadDeneb{
-			ParentHash:    make([]byte, fieldparams.RootLength),
-			FeeRecipient:  make([]byte, 20),
-			StateRoot:     make([]byte, fieldparams.RootLength),
-			ReceiptsRoot:  make([]byte, fieldparams.RootLength),
-			LogsBloom:     make([]byte, 256),
-			PrevRandao:    make([]byte, fieldparams.RootLength),
-			BaseFeePerGas: make([]byte, fieldparams.RootLength),
-			BlockHash:     make([]byte, fieldparams.RootLength),
-			Transactions:  make([][]byte, 0),
-			ExtraData:     make([]byte, 0),
-		},
-		BlobKzgCommitments: kzgCommitments,
-	}
-
-	root, err := pbBody.HashTreeRoot()
-	require.NoError(t, err)
-
-	body, err := NewBeaconBlockBody(pbBody)
-	require.NoError(t, err)
-
-	kzgCommitmentsInclusionProof, err := MerkleProofKZGCommitments(body)
-	require.NoError(t, err)
-
-	testCases := []struct {
-		name              string
-		expectedError     error
-		dataColumnSidecar *ethpb.DataColumnSidecar
-	}{
-		{
-			name:              "nilSignedBlockHeader",
-			expectedError:     errNilBlockHeader,
-			dataColumnSidecar: &ethpb.DataColumnSidecar{},
-		},
-		{
-			name:          "nilHeader",
-			expectedError: errNilBlockHeader,
-			dataColumnSidecar: &ethpb.DataColumnSidecar{
-				SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{},
-			},
-		},
-		{
-			name:          "invalidBodyRoot",
-			expectedError: errInvalidBodyRoot,
-			dataColumnSidecar: &ethpb.DataColumnSidecar{
-				SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
-					Header: &ethpb.BeaconBlockHeader{},
-				},
-			},
-		},
-		{
-			name:          "unverifiedMerkleProof",
-			expectedError: errInvalidInclusionProof,
-			dataColumnSidecar: &ethpb.DataColumnSidecar{
-				SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
-					Header: &ethpb.BeaconBlockHeader{
-						BodyRoot: make([]byte, 32),
-					},
-				},
-				KzgCommitments: kzgCommitments,
-			},
-		},
-		{
-			name:          "nominal",
-			expectedError: nil,
-			dataColumnSidecar: &ethpb.DataColumnSidecar{
-				KzgCommitments: kzgCommitments,
-				SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
-					Header: &ethpb.BeaconBlockHeader{
-						BodyRoot: root[:],
-					},
-				},
-				KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
-			},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			err = VerifyKZGInclusionProofColumn(RODataColumn{DataColumnSidecar: tc.dataColumnSidecar})
-			if tc.expectedError == nil {
-				require.NoError(t, err)
-				return
-			}
-
-			require.ErrorIs(t, tc.expectedError, err)
-		})
-	}
 }

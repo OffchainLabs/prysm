@@ -8,24 +8,23 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/async"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
+	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/verify"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/crypto/rand"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/verify"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
 	"github.com/sirupsen/logrus"
-
-	"github.com/prysmaticlabs/prysm/v5/async"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
-	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
 const PeerRefreshInterval = 1 * time.Minute
@@ -461,16 +460,17 @@ func (d *dataColumnSampler1D) sampleDataColumnsFromPeer(
 ) map[uint64]bool {
 	retrievedColumns := make(map[uint64]bool)
 
-	req := make(types.DataColumnSidecarsByRootReq, 0)
+	cols := make([]uint64, 0, len(requestedColumns))
 	for col := range requestedColumns {
-		req = append(req, &eth.DataColumnIdentifier{
-			BlockRoot: blockProcessedData.BlockRoot[:],
-			Index:     col,
-		})
+		cols = append(cols, col)
+	}
+	req := &eth.DataColumnsByRootIdentifier{
+		BlockRoot: blockProcessedData.BlockRoot[:],
+		Columns:   cols,
 	}
 
 	// Send the request to the peer.
-	roDataColumns, err := SendDataColumnSidecarsByRootRequest(ctx, d.clock, d.p2p, pid, d.ctxMap, &req)
+	roDataColumns, err := SendDataColumnSidecarsByRootRequest(ctx, d.clock, d.p2p, pid, d.ctxMap, &types.DataColumnsByRootIdentifiers{req})
 	if err != nil {
 		log.WithError(err).Error("Failed to send data column sidecar by root")
 		return nil
@@ -576,23 +576,9 @@ func verifyColumn(
 	blockProcessedData *statefeed.BlockProcessedData,
 	pid peer.ID,
 	requestedColumns map[uint64]bool,
-	dataColumnsVerifier verification.NewDataColumnsVerifier,
+	newDataColumnsVerifier verification.NewDataColumnsVerifier,
 ) bool {
 	retrievedColumn := roDataColumn.Index
-
-	// Filter out columns with incorrect root.
-	columnRoot := roDataColumn.BlockRoot()
-	blockRoot := blockProcessedData.BlockRoot
-
-	if columnRoot != blockRoot {
-		log.WithFields(logrus.Fields{
-			"peerID":        pid,
-			"requestedRoot": fmt.Sprintf("%#x", blockRoot),
-			"columnRoot":    fmt.Sprintf("%#x", columnRoot),
-		}).Debug("Retrieved root does not match requested root")
-
-		return false
-	}
 
 	// Filter out columns that were not requested.
 	if !requestedColumns[retrievedColumn] {
@@ -607,17 +593,35 @@ func verifyColumn(
 		return false
 	}
 
-	roBlock := blockProcessedData.SignedBlock.Block()
-
-	wrappedBlockDataColumns := []verify.WrappedBlockDataColumn{
-		{
-			ROBlock:      roBlock,
-			RODataColumn: roDataColumn,
-		},
+	roBlock, err := blocks.NewROBlock(blockProcessedData.SignedBlock)
+	if err != nil {
+		log.WithError(err).WithField("peerID", pid).Error("Failed to create ROBlock")
 	}
 
-	if err := verify.DataColumnsAlignWithBlock(wrappedBlockDataColumns, dataColumnsVerifier); err != nil {
+	roDataColumns := []blocks.RODataColumn{roDataColumn}
+
+	if err := verify.DataColumnsAlignWithBlock(roBlock, roDataColumns); err != nil {
 		return false
+	}
+
+	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#datacolumnsidecarsbyroot-v1
+	verifier := newDataColumnsVerifier(roDataColumns, verification.ByRootRequestDataColumnSidecarRequirements)
+
+	if err := verifier.Valid(); err != nil {
+		log.WithError(err).WithField("peerID", pid).Error("Failed to verify data column")
+	}
+
+	if err := verifier.SidecarInclusionProven(); err != nil {
+		log.WithError(err).WithField("peerID", pid).Error("Failed to prove inclusion")
+	}
+
+	if err := verifier.SidecarKzgProofVerified(); err != nil {
+		log.WithError(err).WithField("peerID", pid).Error("Failed to verify KZG proof")
+	}
+
+	_, err = verifier.VerifiedRODataColumns()
+	if err != nil {
+		log.WithError(err).WithField("peerID", pid).Error("Failed to upgrade RODataColumns to VerifiedRODataColumns - should never happen")
 	}
 
 	return true

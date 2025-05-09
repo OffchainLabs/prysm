@@ -3,11 +3,11 @@ package types
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 func TestInitializeDataMaps(t *testing.T) {
@@ -75,6 +75,13 @@ func TestInitializeDataMaps(t *testing.T) {
 				agg, err := aggFunc()
 				require.NoError(t, err)
 				assert.Equal(t, version.Phase0, agg.Version())
+			}
+			attSlashFunc, ok := AttesterSlashingMap[bytesutil.ToBytes4(params.BeaconConfig().GenesisForkVersion)]
+			assert.Equal(t, tt.exists, ok)
+			if tt.exists {
+				attSlash, err := attSlashFunc()
+				require.NoError(t, err)
+				assert.Equal(t, version.Phase0, attSlash.Version())
 			}
 		})
 	}

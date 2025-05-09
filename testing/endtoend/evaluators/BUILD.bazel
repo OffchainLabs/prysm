@@ -18,7 +18,7 @@ go_library(
         "slashing_helper.go",
         "validator.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/testing/endtoend/evaluators",
+    importpath = "github.com/OffchainLabs/prysm/v6/testing/endtoend/evaluators",
     visibility = ["//testing/endtoend:__subpackages__"],
     deps = [
         "//api/client/beacon:go_default_library",

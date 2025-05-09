@@ -1,10 +1,11 @@
+// lint:nopanic -- Mock code, OK to panic.
 package mock
 
 import (
 	"context"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 )
 
 // StateManager is a fake implementation of StateManager.
@@ -22,8 +23,8 @@ func NewService() *StateManager {
 }
 
 // StateByRootIfCachedNoCopy --
-func (_ *StateManager) StateByRootIfCachedNoCopy(_ [32]byte) state.BeaconState {
-	panic("implement me")
+func (m *StateManager) StateByRootIfCachedNoCopy(root [32]byte) state.BeaconState {
+	return m.StatesByRoot[root]
 }
 
 // Resume --

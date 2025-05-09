@@ -6,14 +6,13 @@ import (
 	"slices"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 const broadCastMissingDataColumnsTimeIntoSlot = 3 * time.Second
@@ -76,15 +75,15 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 	}
 
 	// Recover cells and proofs.
-	recoveredCellsAndProofs, err := peerdas.RecoverCellsAndProofs(dataColumnSideCars, blockRoot)
+	recoveredCellsAndProofs, err := peerdas.RecoverCellsAndProofs(dataColumnSideCars)
 	if err != nil {
 		return errors.Wrap(err, "recover cells and proofs")
 	}
 
 	// Reconstruct the data columns sidecars.
-	dataColumnSidecars, err := peerdas.DataColumnSidecarsForReconstruct(
-		verifiedRODataColumn.KzgCommitments,
+	dataColumnSidecars, err := peerdas.DataColumnsSidecarsFromItems(
 		verifiedRODataColumn.SignedBlockHeader,
+		verifiedRODataColumn.KzgCommitments,
 		verifiedRODataColumn.KzgCommitmentsInclusionProof,
 		recoveredCellsAndProofs,
 	)
@@ -106,6 +105,8 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 			return errors.Wrap(err, "new read-only data column with root")
 		}
 
+		// We reconstructed missing data columns base on verified read only data column sidecars,
+		// so we can upgrade the reconstructed sidecars into verified read only data column sidecars.
 		verifiedRoDataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
 		verifiedRODataColumns = append(verifiedRODataColumns, verifiedRoDataColumn)
 	}

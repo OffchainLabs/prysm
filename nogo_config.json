@@ -66,7 +66,8 @@
       "rules_go_work-.*": "Third party code",
       "config/params/config.go": "This config struct needs to be organized for now",
       "shared/featureconfig/config.go": "This config struct needs to be organized for now",
-      "proto/.*": "Excluding protobuf objects for now"
+      "proto/.*": "Excluding protobuf objects for now",
+      ".*_mock.go": "Excluding generated mock files"
     }
   },
   "errcheck": {
@@ -213,6 +214,14 @@
     "exclude_files": {
       "external/com_github_ethereum_go_ethereum/.*": "Unsafe third party code",
       "rules_go_work-.*": "Third party code"
+    }
+  }, 
+  "nopanic": {
+    "exclude_files": {
+      "validator/web/site_data.go": "generated code",
+      ".*/.*_test\\.go": "Tests are OK",
+      ".*/main\\.go": "main methods are OK",
+      "external/.*": "Third party code"
     }
   }
 }

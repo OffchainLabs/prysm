@@ -7,22 +7,22 @@ import (
 	"slices"
 	"sort"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
+	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
-	p2ptypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 )
 
@@ -231,9 +231,14 @@ func SendDataColumnSidecarsByRootRequest(
 	p2pApi p2p.P2P,
 	pid peer.ID,
 	ctxMap ContextByteVersions,
-	req *p2ptypes.DataColumnSidecarsByRootReq,
+	req *p2ptypes.DataColumnsByRootIdentifiers,
 ) ([]blocks.RODataColumn, error) {
-	reqCount := uint64(len(*req))
+	// Compute how many columns are requested.
+	reqCount := uint64(0)
+	for _, col := range *req {
+		reqCount += uint64(len(col.Columns))
+	}
+
 	maxRequestDataColumnSideCar := params.BeaconConfig().MaxRequestDataColumnSidecars
 
 	// Verify that the request count is within the maximum allowed.
@@ -590,7 +595,7 @@ func blobValidatorFromRangeReq(req *ethpb.BlobSidecarsByRangeRequest) BlobRespon
 	}
 }
 
-func dataColumnValidatorFromRootReq(req *p2ptypes.DataColumnSidecarsByRootReq) DataColumnResponseValidation {
+func dataColumnValidatorFromRootReq(req *p2ptypes.DataColumnsByRootIdentifiers) DataColumnResponseValidation {
 	columnsIndexFromRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool)
 
 	for _, sc := range *req {
@@ -598,8 +603,9 @@ func dataColumnValidatorFromRootReq(req *p2ptypes.DataColumnSidecarsByRootReq) D
 		if columnsIndexFromRoot[blockRoot] == nil {
 			columnsIndexFromRoot[blockRoot] = make(map[uint64]bool)
 		}
-
-		columnsIndexFromRoot[blockRoot][sc.Index] = true
+		for _, col := range sc.Columns {
+			columnsIndexFromRoot[blockRoot][col] = true
+		}
 	}
 
 	return func(sc blocks.RODataColumn) bool {
@@ -681,7 +687,7 @@ func readChunkedBlobSidecar(stream network.Stream, encoding encoder.NetworkEncod
 
 	v, found := ctxMap[bytesutil.ToBytes4(ctxb)]
 	if !found {
-		return b, errors.Wrapf(errBlobUnmarshal, fmt.Sprintf("unrecognized fork digest %#x", ctxb))
+		return b, errors.Wrapf(errBlobUnmarshal, "unrecognized fork digest %#x", ctxb)
 	}
 	// Only Deneb and beyond are supported at this time, because we lack a fork-spanning interface/union type for blobs.
 	if v < version.Deneb {

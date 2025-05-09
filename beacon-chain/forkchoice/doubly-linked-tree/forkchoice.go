@@ -5,19 +5,19 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	consensus_blocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	forkchoice2 "github.com/OffchainLabs/prysm/v6/consensus-types/forkchoice"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice"
-	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	consensus_blocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	forkchoice2 "github.com/prysmaticlabs/prysm/v5/consensus-types/forkchoice"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 )
 
@@ -620,6 +620,25 @@ func (f *ForkChoice) Slot(root [32]byte) (primitives.Slot, error) {
 		return 0, ErrNilNode
 	}
 	return n.slot, nil
+}
+
+// DependentRoot returns the last root of the epoch prior to the requested ecoch in the canonical chain.
+func (f *ForkChoice) DependentRoot(epoch primitives.Epoch) ([32]byte, error) {
+	tr, err := f.TargetRootForEpoch(f.CachedHeadRoot(), epoch)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	if tr == [32]byte{} {
+		return [32]byte{}, nil
+	}
+	n, ok := f.store.nodeByRoot[tr]
+	if !ok || n == nil {
+		return [32]byte{}, ErrNilNode
+	}
+	if slots.ToEpoch(n.slot) == epoch && n.parent != nil {
+		n = n.parent
+	}
+	return n.root, nil
 }
 
 // TargetRootForEpoch returns the root of the target block for a given epoch.

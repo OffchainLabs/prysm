@@ -7,17 +7,19 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/crypto/hash"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/network/forks"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/crypto/hash"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
@@ -279,6 +281,58 @@ func (s *Service) internalBroadcastBlob(
 	}
 }
 
+func (s *Service) BroadcastLightClientOptimisticUpdate(ctx context.Context, update interfaces.LightClientOptimisticUpdate) error {
+	ctx, span := trace.StartSpan(ctx, "p2p.BroadcastLightClientOptimisticUpdate")
+	defer span.End()
+
+	if update == nil || update.IsNil() {
+		return errors.New("attempted to broadcast nil light client optimistic update")
+	}
+
+	forkDigest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(update.AttestedHeader().Beacon().Slot), s.genesisValidatorsRoot)
+	if err != nil {
+		err := errors.Wrap(err, "could not retrieve fork digest")
+		tracing.AnnotateError(span, err)
+		return err
+	}
+
+	if err := s.broadcastObject(ctx, update, lcOptimisticToTopic(forkDigest)); err != nil {
+		log.WithError(err).Debug("Failed to broadcast light client optimistic update")
+		err := errors.Wrap(err, "could not publish message")
+		tracing.AnnotateError(span, err)
+		return err
+	}
+	log.Debug("Successfully broadcast light client optimistic update")
+
+	return nil
+}
+
+func (s *Service) BroadcastLightClientFinalityUpdate(ctx context.Context, update interfaces.LightClientFinalityUpdate) error {
+	ctx, span := trace.StartSpan(ctx, "p2p.BroadcastLightClientFinalityUpdate")
+	defer span.End()
+
+	if update == nil || update.IsNil() {
+		return errors.New("attempted to broadcast nil light client finality update")
+	}
+
+	forkDigest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(update.AttestedHeader().Beacon().Slot), s.genesisValidatorsRoot)
+	if err != nil {
+		err := errors.Wrap(err, "could not retrieve fork digest")
+		tracing.AnnotateError(span, err)
+		return err
+	}
+
+	if err := s.broadcastObject(ctx, update, lcFinalityToTopic(forkDigest)); err != nil {
+		log.WithError(err).Debug("Failed to broadcast light client finality update")
+		err := errors.Wrap(err, "could not publish message")
+		tracing.AnnotateError(span, err)
+		return err
+	}
+	log.Debug("Successfully broadcast light client finality update")
+
+	return nil
+}
+
 // BroadcastDataColumn broadcasts a data column to the p2p network, the message is assumed to be
 // broadcasted to the current fork and to the input column subnet.
 // TODO: Add tests
@@ -432,6 +486,14 @@ func syncCommitteeToTopic(subnet uint64, forkDigest [fieldparams.VersionLength]b
 
 func blobSubnetToTopic(subnet uint64, forkDigest [fieldparams.VersionLength]byte) string {
 	return fmt.Sprintf(BlobSubnetTopicFormat, forkDigest, subnet)
+}
+
+func lcOptimisticToTopic(forkDigest [4]byte) string {
+	return fmt.Sprintf(LightClientOptimisticUpdateTopicFormat, forkDigest)
+}
+
+func lcFinalityToTopic(forkDigest [4]byte) string {
+	return fmt.Sprintf(LightClientFinalityUpdateTopicFormat, forkDigest)
 }
 
 func dataColumnSubnetToTopic(subnet uint64, forkDigest [fieldparams.VersionLength]byte) string {

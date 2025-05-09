@@ -6,21 +6,21 @@ import (
 	"encoding/hex"
 	"sync"
 
+	"github.com/OffchainLabs/prysm/v6/async"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/rand"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/prysmaticlabs/prysm/v5/async"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 )
 
@@ -140,8 +140,7 @@ func (s *Service) processUnaggregated(ctx context.Context, att ethpb.Att) {
 	data := att.GetData()
 
 	// This is an important validation before retrieving attestation pre state to defend against
-	// attestation's target intentionally reference checkpoint that's long ago.
-	// Verify current finalized checkpoint is an ancestor of the block defined by the attestation's beacon block root.
+	// attestation's target intentionally referencing a checkpoint that's long ago.
 	if !s.cfg.chain.InForkchoice(bytesutil.ToBytes32(data.BeaconBlockRoot)) {
 		log.WithError(blockchain.ErrNotDescendantOfFinalized).Debug("Could not verify finalized consistency")
 		return
@@ -169,35 +168,57 @@ func (s *Service) processUnaggregated(ctx context.Context, att ethpb.Att) {
 		return
 	}
 
-	var singleAtt *ethpb.SingleAttestation
+	// Decide if the attestation is an Electra SingleAttestation or a Phase0 unaggregated attestation
+	var (
+		attForValidation ethpb.Att
+		broadcastAtt     ethpb.Att
+		eventType        feed.EventType
+		eventData        interface{}
+	)
+
 	if att.Version() >= version.Electra {
-		var ok bool
-		singleAtt, ok = att.(*ethpb.SingleAttestation)
+		singleAtt, ok := att.(*ethpb.SingleAttestation)
 		if !ok {
 			log.Debugf("Attestation has wrong type (expected %T, got %T)", &ethpb.SingleAttestation{}, att)
 			return
 		}
-		att = singleAtt.ToAttestationElectra(committee)
+		// Convert Electra SingleAttestation to unaggregated ElectraAttestation. This is needed because many parts of the codebase assume that attestations have a certain structure and SingleAttestation validates these assumptions.
+		attForValidation = singleAtt.ToAttestationElectra(committee)
+		broadcastAtt = singleAtt
+		eventType = operation.SingleAttReceived
+		eventData = &operation.SingleAttReceivedData{
+			Attestation: singleAtt,
+		}
+	} else {
+		// Phase0 attestation
+		attForValidation = att
+		broadcastAtt = att
+		eventType = operation.UnaggregatedAttReceived
+		eventData = &operation.UnAggregatedAttReceivedData{
+			Attestation: att,
+		}
 	}
 
-	valid, err = s.validateUnaggregatedAttWithState(ctx, att, preState)
+	valid, err = s.validateUnaggregatedAttWithState(ctx, attForValidation, preState)
 	if err != nil {
 		log.WithError(err).Debug("Pending unaggregated attestation failed validation")
 		return
 	}
+
 	if valid == pubsub.ValidationAccept {
 		if features.Get().EnableExperimentalAttestationPool {
-			if err = s.cfg.attestationCache.Add(att); err != nil {
+			if err = s.cfg.attestationCache.Add(attForValidation); err != nil {
 				log.WithError(err).Debug("Could not save unaggregated attestation")
 				return
 			}
 		} else {
-			if err := s.cfg.attPool.SaveUnaggregatedAttestation(att); err != nil {
+			if err := s.cfg.attPool.SaveUnaggregatedAttestation(attForValidation); err != nil {
 				log.WithError(err).Debug("Could not save unaggregated attestation")
 				return
 			}
 		}
-		s.setSeenCommitteeIndicesSlot(data.Slot, data.CommitteeIndex, att.GetAggregationBits())
+
+		s.setSeenUnaggregatedAtt(att)
 
 		valCount, err := helpers.ActiveValidatorCount(ctx, preState, slots.ToEpoch(data.Slot))
 		if err != nil {
@@ -205,34 +226,16 @@ func (s *Service) processUnaggregated(ctx context.Context, att ethpb.Att) {
 			return
 		}
 
-		// Broadcasting the signed attestation again once a node is able to process it.
-		var attToBroadcast ethpb.Att
-		if singleAtt != nil {
-			attToBroadcast = singleAtt
-		} else {
-			attToBroadcast = att
-		}
-		if err := s.cfg.p2p.BroadcastAttestation(ctx, helpers.ComputeSubnetForAttestation(valCount, attToBroadcast), attToBroadcast); err != nil {
+		// Broadcast the final 'broadcastAtt' object
+		if err := s.cfg.p2p.BroadcastAttestation(ctx, helpers.ComputeSubnetForAttestation(valCount, broadcastAtt), broadcastAtt); err != nil {
 			log.WithError(err).Debug("Could not broadcast")
 		}
 
-		// Broadcast the unaggregated attestation on a feed to notify other services in the beacon node
-		// of a received unaggregated attestation.
-		if singleAtt != nil {
-			s.cfg.attestationNotifier.OperationFeed().Send(&feed.Event{
-				Type: operation.SingleAttReceived,
-				Data: &operation.SingleAttReceivedData{
-					Attestation: singleAtt,
-				},
-			})
-		} else {
-			s.cfg.attestationNotifier.OperationFeed().Send(&feed.Event{
-				Type: operation.UnaggregatedAttReceived,
-				Data: &operation.UnAggregatedAttReceivedData{
-					Attestation: att,
-				},
-			})
-		}
+		// Feed event notification for other services
+		s.cfg.attestationNotifier.OperationFeed().Send(&feed.Event{
+			Type: eventType,
+			Data: eventData,
+		})
 	}
 }
 

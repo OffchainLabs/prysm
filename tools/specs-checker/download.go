@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/urfave/cli/v2"
 )
 
@@ -78,5 +78,5 @@ func getAndSaveFile(specDocUrl, outFilePath string) error {
 }
 
 func prepareDir(dirPath string) error {
-	return os.MkdirAll(dirPath, os.ModePerm)
+	return os.MkdirAll(dirPath, 0750)
 }

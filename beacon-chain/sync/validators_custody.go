@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/async"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/peerdas"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/async"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 )
 
 const validatorCustodyPeriod = 1 * time.Minute
@@ -35,14 +35,14 @@ func (s *Service) setTargetValidatorsCustodyRequirement() {
 	}
 
 	// Retrieve the head state.
-	headState, err := s.cfg.chain.HeadStateReadOnly(s.ctx)
-	if err != nil || headState == nil {
-		log.WithError(err).Error("Failed to get head state")
+	finalizedState := s.cfg.stateGen.FinalizedState()
+	if finalizedState == nil || finalizedState.IsNil() {
+		log.Error("Finalized state is nil")
 		return
 	}
 
 	// Get the validators custody requirement.
-	validatorsCustodyRequirement, err := peerdas.ValidatorsCustodyRequirement(headState, indices)
+	validatorsCustodyRequirement, err := peerdas.ValidatorsCustodyRequirement(finalizedState, indices)
 	if err != nil {
 		log.WithError(err).Error("Failed to get validators custody requirement")
 		return

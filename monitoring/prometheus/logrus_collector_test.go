@@ -3,19 +3,18 @@ package prometheus_test
 import (
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/monitoring/prometheus"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/OffchainLabs/prysm/v6/monitoring/prometheus"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	log "github.com/sirupsen/logrus"
 )
-
-const addr = "127.0.0.1:8989"
 
 type logger interface {
 	Info(args ...interface{})
@@ -24,10 +23,11 @@ type logger interface {
 }
 
 func TestLogrusCollector(t *testing.T) {
-	service := prometheus.NewService(addr, nil)
+	addr := fmt.Sprintf("0.0.0.0:%d", 1000+rand.Intn(1000))
+	service := prometheus.NewService(t.Context(), addr, nil)
 	hook := prometheus.NewLogrusCollector()
 	log.AddHook(hook)
-	go service.Start()
+	service.Start()
 	defer func() {
 		err := service.Stop()
 		require.NoError(t, err)
@@ -60,8 +60,8 @@ func TestLogrusCollector(t *testing.T) {
 				}
 				logExampleMessage(log.StandardLogger(), tt.level)
 			}
-			time.Sleep(time.Millisecond)
-			metrics := metrics(t)
+			time.Sleep(time.Second)
+			metrics := metrics(t, addr)
 			count := valueFor(t, metrics, prefix, tt.level)
 			if count != tt.want {
 				t.Errorf("Expecting %d and receive %d", tt.want, count)
@@ -70,7 +70,7 @@ func TestLogrusCollector(t *testing.T) {
 	}
 }
 
-func metrics(t *testing.T) []string {
+func metrics(t *testing.T, addr string) []string {
 	resp, err := http.Get(fmt.Sprintf("http://%s/metrics", addr))
 	require.NoError(t, err)
 	body, err := io.ReadAll(resp.Body)

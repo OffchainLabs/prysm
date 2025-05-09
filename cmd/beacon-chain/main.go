@@ -7,38 +7,36 @@ import (
 	"os"
 	"path/filepath"
 	runtimeDebug "runtime/debug"
-	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/node"
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	blockchaincmd "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/blockchain"
+	dbcommands "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/execution"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	jwtcommands "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/jwt"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/storage"
+	backfill "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/backfill"
+	bflags "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/backfill/flags"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/checkpoint"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/genesis"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/io/file"
+	"github.com/OffchainLabs/prysm/v6/io/logs"
+	"github.com/OffchainLabs/prysm/v6/monitoring/journald"
+	"github.com/OffchainLabs/prysm/v6/runtime/debug"
+	"github.com/OffchainLabs/prysm/v6/runtime/fdlimits"
+	prefixed "github.com/OffchainLabs/prysm/v6/runtime/logging/logrus-prefixed-formatter"
+	_ "github.com/OffchainLabs/prysm/v6/runtime/maxprocs"
+	"github.com/OffchainLabs/prysm/v6/runtime/tos"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	gethlog "github.com/ethereum/go-ethereum/log"
 	golog "github.com/ipfs/go-log/v2"
 	joonix "github.com/joonix/log"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
-
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/builder"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/node"
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	blockchaincmd "github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/blockchain"
-	dbcommands "github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/execution"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	jwtcommands "github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/jwt"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/storage"
-	backfill "github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/sync/backfill"
-	bflags "github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/sync/backfill/flags"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/sync/checkpoint"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/sync/genesis"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
-	"github.com/prysmaticlabs/prysm/v5/io/logs"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/journald"
-	"github.com/prysmaticlabs/prysm/v5/runtime/debug"
-	"github.com/prysmaticlabs/prysm/v5/runtime/fdlimits"
-	prefixed "github.com/prysmaticlabs/prysm/v5/runtime/logging/logrus-prefixed-formatter"
-	_ "github.com/prysmaticlabs/prysm/v5/runtime/maxprocs"
-	"github.com/prysmaticlabs/prysm/v5/runtime/tos"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
 var appFlags = []cli.Flag{
@@ -67,6 +65,7 @@ var appFlags = []cli.Flag{
 	flags.SlotsPerArchivedPoint,
 	flags.DisableDebugRPCEndpoints,
 	flags.SubscribeToAllSubnets,
+	flags.SubscribeAllDataSubnets,
 	flags.HistoricalSlasherNode,
 	flags.ChainID,
 	flags.NetworkID,
@@ -87,7 +86,7 @@ var appFlags = []cli.Flag{
 	flags.MinBuilderDiff,
 	flags.BeaconDBPruning,
 	flags.PrunerRetentionEpochs,
-	cmd.BackupWebhookOutputDir,
+	flags.EnableBuilderSSZ,
 	cmd.MinimalConfigFlag,
 	cmd.E2EConfigFlag,
 	cmd.RPCMaxPageSizeFlag,
@@ -125,8 +124,6 @@ var appFlags = []cli.Flag{
 	debug.PProfAddrFlag,
 	debug.PProfPortFlag,
 	debug.MemProfileRateFlag,
-	debug.CPUProfileFlag,
-	debug.TraceFlag,
 	debug.BlockProfileRateFlag,
 	debug.MutexProfileFractionFlag,
 	cmd.LogFileName,
@@ -145,6 +142,7 @@ var appFlags = []cli.Flag{
 	genesis.StatePath,
 	genesis.BeaconAPIURL,
 	flags.SlasherDirFlag,
+	flags.SlasherFlag,
 	flags.JwtId,
 	storage.BlobStoragePathFlag,
 	storage.BlobRetentionEpochFlag,
@@ -171,7 +169,7 @@ func before(ctx *cli.Context) error {
 	switch format {
 	case "text":
 		formatter := new(prefixed.TextFormatter)
-		formatter.TimestampFormat = time.DateTime
+		formatter.TimestampFormat = "2006-01-02 15:04:05.00"
 		formatter.FullTimestamp = true
 
 		// If persistent log files are written - we disable the log messages coloring because
@@ -182,7 +180,7 @@ func before(ctx *cli.Context) error {
 		f := joonix.NewFormatter()
 
 		if err := joonix.DisableTimestampFormat(f); err != nil {
-			panic(err)
+			panic(err) // lint:nopanic -- This shouldn't happen, but crashing immediately at startup is OK.
 		}
 
 		logrus.SetFormatter(f)
@@ -254,7 +252,7 @@ func main() {
 	defer func() {
 		if x := recover(); x != nil {
 			log.Errorf("Runtime panic: %v\n%v", x, string(runtimeDebug.Stack()))
-			panic(x)
+			panic(x) // lint:nopanic -- This is just resurfacing the original panic.
 		}
 	}()
 

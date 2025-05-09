@@ -3,12 +3,12 @@ package peerdas
 import (
 	"math/big"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 )
 
 // ExtendedSampleCount computes, for a given number of samples per slot and allowed failures the
 // number of samples we should actually query from peers.
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/peer-sampling.md#get_extended_sample_count
+// https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/peer-sampling.md#get_extended_sample_count
 func ExtendedSampleCount(samplesPerSlot, allowedFailures uint64) uint64 {
 	// Retrieve the columns count
 	columnsCount := params.BeaconConfig().NumberOfColumns

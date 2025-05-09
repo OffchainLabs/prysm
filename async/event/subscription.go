@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/time/mclock"
+	"github.com/OffchainLabs/prysm/v6/time/mclock"
 )
 
 // waitQuotient is divided against the max backoff time, in order to have N requests based on the full
@@ -154,7 +154,7 @@ retry:
 				continue retry
 			}
 			if sub == nil {
-				panic("event: ResubscribeFunc returned nil subscription and no error")
+				panic("event: ResubscribeFunc returned nil subscription and no error") // lint:nopanic -- This should never happen.
 			}
 			return sub
 		case <-s.unsub:

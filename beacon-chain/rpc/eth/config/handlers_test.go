@@ -9,15 +9,15 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/network/forks"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/network/forks"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestGetDepositContract(t *testing.T) {
@@ -160,6 +160,8 @@ func TestGetSpec(t *testing.T) {
 	config.MaxTransactionsPerPayload = 99
 	config.FieldElementsPerBlob = 100
 	config.KzgCommitmentInclusionProofDepth = 101
+	config.BlobsidecarSubnetCount = 102
+	config.BlobsidecarSubnetCountElectra = 103
 
 	var dbp [4]byte
 	copy(dbp[:], []byte{'0', '0', '0', '1'})
@@ -198,7 +200,7 @@ func TestGetSpec(t *testing.T) {
 	data, ok := resp.Data.(map[string]interface{})
 	require.Equal(t, true, ok)
 
-	assert.Equal(t, 174, len(data))
+	assert.Equal(t, 175, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -479,9 +481,7 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "5", v)
 			case "MIN_EPOCHS_FOR_BLOCK_REQUESTS":
 				assert.Equal(t, "33024", v)
-			case "GOSSIP_MAX_SIZE":
-				assert.Equal(t, "10485760", v)
-			case "MAX_CHUNK_SIZE":
+			case "MAX_PAYLOAD_SIZE":
 				assert.Equal(t, "10485760", v)
 			case "ATTESTATION_SUBNET_COUNT":
 				assert.Equal(t, "64", v)
@@ -573,6 +573,10 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "101", v)
 			case "MAX_BLOBS_PER_BLOCK_FULU":
 				assert.Equal(t, "12", v)
+			case "BLOB_SIDECAR_SUBNET_COUNT":
+				assert.Equal(t, "102", v)
+			case "BLOB_SIDECAR_SUBNET_COUNT_ELECTRA":
+				assert.Equal(t, "103", v)
 			default:
 				t.Errorf("Incorrect key: %s", k)
 			}

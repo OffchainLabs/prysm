@@ -34,7 +34,7 @@ go_proto_library(
     compilers = [
         "@com_github_prysmaticlabs_protoc_gen_go_cast//:go_cast_grpc",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client",
+    importpath = "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client",
     proto = ":proto",
     visibility = ["//visibility:public"],
     deps = [
@@ -64,7 +64,7 @@ go_library(
     embed = [
         ":go_proto",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client",
+    importpath = "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client",
     visibility = ["//visibility:public"],
     deps = [
         "//proto/eth/ext:go_default_library",

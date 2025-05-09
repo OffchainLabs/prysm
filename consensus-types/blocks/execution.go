@@ -4,14 +4,14 @@ import (
 	"bytes"
 	"errors"
 
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	errs "github.com/pkg/errors"
 	fastssz "github.com/prysmaticlabs/fastssz"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -40,6 +40,8 @@ func NewWrappedExecutionData(v proto.Message) (interfaces.ExecutionData, error) 
 		return WrappedExecutionPayloadDeneb(pbStruct.Payload)
 	case *enginev1.ExecutionBundleElectra:
 		// note: no payload changes in electra so using deneb
+		return WrappedExecutionPayloadDeneb(pbStruct.Payload)
+	case *enginev1.ExecutionBundleFulu:
 		return WrappedExecutionPayloadDeneb(pbStruct.Payload)
 	default:
 		// return nil, errors.Wrapf(ErrUnsupportedVersion, "type %T", pbStruct)

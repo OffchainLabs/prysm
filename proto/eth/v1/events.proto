@@ -19,7 +19,7 @@ import "google/protobuf/descriptor.proto";
 import "proto/eth/ext/options.proto";
 
 option csharp_namespace = "Ethereum.Eth.V1";
-option go_package = "github.com/prysmaticlabs/prysm/v5/proto/eth/v1";
+option go_package = "github.com/OffchainLabs/prysm/v6/proto/eth/v1";
 option java_multiple_files = true;
 option java_outer_classname = "BeaconEventsProto";
 option java_package = "org.ethereum.eth.v1";
@@ -29,7 +29,7 @@ message EventHead {
   // Slot of the new chain head.
   uint64 slot = 1 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
 
   // Block root of the new chain head.
@@ -55,7 +55,7 @@ message EventBlock {
   // The slot of the observed block.
   uint64 slot = 1 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
 
   // The root of the observed block.
@@ -69,7 +69,7 @@ message EventChainReorg {
   // The slot of the observed reorg.
   uint64 slot = 1 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
 
   // Depth of the reorg in slots.
@@ -90,7 +90,7 @@ message EventChainReorg {
   // Epoch of the observed reorg.
   uint64 epoch = 7 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Epoch"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
   ];
 
   // Information about optimistic sync.
@@ -107,7 +107,7 @@ message EventFinalizedCheckpoint {
   // Epoch the checkpoint references.
   uint64 epoch = 3 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Epoch"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
   ];
 
   // Information about optimistic sync.
