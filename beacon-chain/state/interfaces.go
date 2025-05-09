@@ -258,6 +258,8 @@ type WriteOnlyEth1Data interface {
 	AppendEth1DataVotes(val *ethpb.Eth1Data) error
 	SetEth1DepositIndex(val uint64) error
 	ExitEpochAndUpdateChurn(exitBalance primitives.Gwei) (primitives.Epoch, error)
+	SetExitBalanceToConsume(val primitives.Gwei) error
+	SetEarliestExitEpoch(val primitives.Epoch) error
 }
 
 // WriteOnlyValidators defines a struct which only has write access to validators methods.
@@ -325,6 +327,7 @@ type WriteOnlyWithdrawals interface {
 	DequeuePendingPartialWithdrawals(num uint64) error
 	SetNextWithdrawalIndex(i uint64) error
 	SetNextWithdrawalValidatorIndex(i primitives.ValidatorIndex) error
+	SetPendingPartialWithdrawals(val []*ethpb.PendingPartialWithdrawal) error
 }
 
 type WriteOnlyConsolidations interface {

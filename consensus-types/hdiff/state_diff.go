@@ -2,9 +2,15 @@ package hdiff
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"slices"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/capella"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/deneb"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/electra"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/execution"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -16,6 +22,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
+	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
@@ -41,15 +48,17 @@ type stateDiff struct {
 	eth1DepositIndex            uint64                                                      // override.
 	randaoMixes                 [fieldparams.RandaoMixesLength][fieldparams.RootLength]byte // zero or override.
 	slashings                   [fieldparams.SlashingsLength]int64                          // algebraic diff.
-	previousEpochParticipation  []byte                                                      // override.
-	currentEpochParticipation   []byte                                                      // override.
+	previousEpochAttestations   []*ethpb.PendingAttestation                                 // override.
+	currentEpochAttestations    []*ethpb.PendingAttestation                                 // override.
 	previousJustifiedCheckpoint *ethpb.Checkpoint                                           // override.
 	currentJustifiedCheckpoint  *ethpb.Checkpoint                                           // override.
 	finalizedCheckpoint         *ethpb.Checkpoint                                           // override.
 	// Altair Fields
-	inactivityScores     []uint64             // override.
-	currentSyncCommittee *ethpb.SyncCommittee // override.
-	nextSyncCommittee    *ethpb.SyncCommittee // override.
+	previousEpochParticipation []byte               // override.
+	currentEpochParticipation  []byte               // override.
+	inactivityScores           []uint64             // override.
+	currentSyncCommittee       *ethpb.SyncCommittee // override.
+	nextSyncCommittee          *ethpb.SyncCommittee // override.
 	// Bellatrix
 	executionPayloadHeader interfaces.ExecutionData // override.
 	// Capella
@@ -67,9 +76,9 @@ type stateDiff struct {
 	pendingDepositIndex            uint64
 	pendingPartialWithdrawalsIndex uint64
 	pendingConsolidationsIndex     uint64
-	pendingDepositDiff             []ethpb.PendingDeposit
-	pendingPartialWithdrawalsDiff  []ethpb.PendingPartialWithdrawal
-	pendingConsolidationsDiffs     []ethpb.PendingConsolidation
+	pendingDepositDiff             []*ethpb.PendingDeposit
+	pendingPartialWithdrawalsDiff  []*ethpb.PendingPartialWithdrawal
+	pendingConsolidationsDiffs     []*ethpb.PendingConsolidation
 }
 
 type Hdiff struct {
@@ -325,6 +334,57 @@ func (ret *stateDiff) readSlashings(data *[]byte) error {
 	return nil
 }
 
+func readPendingAttestation(data *[]byte) (*ethpb.PendingAttestation, error) {
+	if len(*data) < 8 {
+		return nil, errors.Wrap(errDataSmall, "pendingAttestation")
+	}
+	bitsLength := int(binary.LittleEndian.Uint64((*data)[:8])) // lint:ignore uintcast
+	if len(*data) < 144+8+bitsLength {
+		return nil, errors.Wrap(errDataSmall, "pendingAttestation")
+	}
+	pending := &ethpb.PendingAttestation{}
+	pending.AggregationBits = bitfield.Bitlist(slices.Clone((*data)[8 : 8+bitsLength]))
+	*data = (*data)[8+bitsLength:]
+	pending.Data = &ethpb.AttestationData{}
+	pending.Data.UnmarshalSSZ((*data)[:128]) // pending.Data is 128 bytes
+	pending.InclusionDelay = primitives.Slot(binary.LittleEndian.Uint64((*data)[128:136]))
+	pending.ProposerIndex = primitives.ValidatorIndex(binary.LittleEndian.Uint64((*data)[136:144]))
+	*data = (*data)[144:]
+	return pending, nil
+}
+
+func (ret *stateDiff) readPreviousEpochAttestations(data *[]byte) error {
+	if len(*data) < 8 {
+		return errors.Wrap(errDataSmall, "previousEpochAttestations")
+	}
+	previousEpochAttestationsLength := int(binary.LittleEndian.Uint64((*data)[:8])) // lint:ignore uintcast
+	ret.previousEpochAttestations = make([]*ethpb.PendingAttestation, previousEpochAttestationsLength)
+	var err error
+	for i := range previousEpochAttestationsLength {
+		ret.previousEpochAttestations[i], err = readPendingAttestation(data)
+		if err != nil {
+			return errors.Wrap(err, "failed to read previousEpochAttestation")
+		}
+	}
+	return nil
+}
+
+func (ret *stateDiff) readCurrentEpochAttestations(data *[]byte) error {
+	if len(*data) < 8 {
+		return errors.Wrap(errDataSmall, "currentEpochAttestations")
+	}
+	currentEpochAttestationsLength := int(binary.LittleEndian.Uint64((*data)[:8])) // lint:ignore uintcast
+	ret.currentEpochAttestations = make([]*ethpb.PendingAttestation, currentEpochAttestationsLength)
+	var err error
+	for i := range currentEpochAttestationsLength {
+		ret.currentEpochAttestations[i], err = readPendingAttestation(data)
+		if err != nil {
+			return errors.Wrap(err, "failed to read currentEpochAttestation")
+		}
+	}
+	return nil
+}
+
 func (ret *stateDiff) readPreviousEpochParticipation(data *[]byte) error {
 	if len(*data) < 8 {
 		return errors.Wrap(errDataSmall, "previousEpochParticipation")
@@ -554,10 +614,10 @@ func (ret *stateDiff) readPendingDeposits(data *[]byte) error {
 	if len(*data) < 16+pendingDepositDiffLength*pendingDepositLength {
 		return errors.Wrap(errDataSmall, "pendingDepositDiff")
 	}
-	ret.pendingDepositDiff = make([]ethpb.PendingDeposit, pendingDepositDiffLength)
+	ret.pendingDepositDiff = make([]*ethpb.PendingDeposit, pendingDepositDiffLength)
 	cursor := 16
 	for i := range pendingDepositDiffLength {
-		ret.pendingDepositDiff[i] = ethpb.PendingDeposit{
+		ret.pendingDepositDiff[i] = &ethpb.PendingDeposit{
 			PublicKey:             slices.Clone((*data)[cursor : cursor+fieldparams.BLSPubkeyLength]),
 			WithdrawalCredentials: slices.Clone((*data)[cursor+fieldparams.BLSPubkeyLength : cursor+fieldparams.BLSPubkeyLength+fieldparams.RootLength]),
 			Amount:                binary.LittleEndian.Uint64((*data)[cursor+fieldparams.BLSPubkeyLength+fieldparams.RootLength : cursor+fieldparams.BLSPubkeyLength+fieldparams.RootLength+8]),
@@ -579,10 +639,10 @@ func (ret *stateDiff) readPendingPartialWithdrawals(data *[]byte) error {
 	if len(*data) < 16+pendingPartialWithdrawalsDiffLength*pendingPartialWithdrawalLength {
 		return errors.Wrap(errDataSmall, "pendingPartialWithdrawalsDiff")
 	}
-	ret.pendingPartialWithdrawalsDiff = make([]ethpb.PendingPartialWithdrawal, pendingPartialWithdrawalsDiffLength)
+	ret.pendingPartialWithdrawalsDiff = make([]*ethpb.PendingPartialWithdrawal, pendingPartialWithdrawalsDiffLength)
 	cursor := 16
 	for i := range pendingPartialWithdrawalsDiffLength {
-		ret.pendingPartialWithdrawalsDiff[i] = ethpb.PendingPartialWithdrawal{
+		ret.pendingPartialWithdrawalsDiff[i] = &ethpb.PendingPartialWithdrawal{
 			Index:             primitives.ValidatorIndex(binary.LittleEndian.Uint64((*data)[cursor : cursor+8])),
 			Amount:            binary.LittleEndian.Uint64((*data)[cursor+8 : cursor+16]),
 			WithdrawableEpoch: primitives.Epoch(binary.LittleEndian.Uint64((*data)[cursor+16 : cursor+24])),
@@ -602,10 +662,10 @@ func (ret *stateDiff) readPendingConsolidations(data *[]byte) error {
 	if len(*data) < 16+pendingConsolidationsDiffsLength*pendingConsolidationLength {
 		return errors.Wrap(errDataSmall, "pendingConsolidationsDiffs")
 	}
-	ret.pendingConsolidationsDiffs = make([]ethpb.PendingConsolidation, pendingConsolidationsDiffsLength)
+	ret.pendingConsolidationsDiffs = make([]*ethpb.PendingConsolidation, pendingConsolidationsDiffsLength)
 	cursor := 16
 	for i := range pendingConsolidationsDiffsLength {
-		ret.pendingConsolidationsDiffs[i] = ethpb.PendingConsolidation{
+		ret.pendingConsolidationsDiffs[i] = &ethpb.PendingConsolidation{
 			SourceIndex: primitives.ValidatorIndex(binary.LittleEndian.Uint64((*data)[cursor : cursor+8])),
 			TargetIndex: primitives.ValidatorIndex(binary.LittleEndian.Uint64((*data)[cursor+8 : cursor+16])),
 		}
@@ -654,11 +714,20 @@ func newStateDiff(data []byte) (*stateDiff, error) {
 	if err := ret.readSlashings(&data); err != nil {
 		return nil, err
 	}
-	if err := ret.readPreviousEpochParticipation(&data); err != nil {
-		return nil, err
-	}
-	if err := ret.readCurrentEpochParticipation(&data); err != nil {
-		return nil, err
+	if ret.targetVersion == version.Phase0 {
+		if err := ret.readPreviousEpochAttestations(&data); err != nil {
+			return nil, err
+		}
+		if err := ret.readCurrentEpochAttestations(&data); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := ret.readPreviousEpochParticipation(&data); err != nil {
+			return nil, err
+		}
+		if err := ret.readCurrentEpochParticipation(&data); err != nil {
+			return nil, err
+		}
 	}
 	if err := ret.readJustificationBits(&data); err != nil {
 		return nil, err
@@ -866,10 +935,43 @@ func (s *stateDiff) serialize() []byte {
 		ret = binary.LittleEndian.AppendUint64(ret, uint64(s))
 	}
 
-	ret = binary.LittleEndian.AppendUint64(ret, uint64(len(s.previousEpochParticipation)))
-	ret = append(ret, s.previousEpochParticipation...)
-	ret = binary.LittleEndian.AppendUint64(ret, uint64(len(s.currentEpochParticipation)))
-	ret = append(ret, s.currentEpochParticipation...)
+	if s.targetVersion == version.Phase0 {
+		ret = binary.LittleEndian.AppendUint64(ret, uint64(len(s.previousEpochAttestations)))
+		for _, a := range s.previousEpochAttestations {
+			ret = binary.LittleEndian.AppendUint64(ret, uint64(len(a.AggregationBits)))
+			ret = append(ret, a.AggregationBits...)
+			cursor := len(ret)
+			ret = append(ret, make([]byte, 128)...)
+			_, err := a.Data.MarshalSSZTo(ret[cursor:])
+			if err != nil {
+				// this is impossible to happen.
+				logrus.WithError(err).Error("failed to marshal previousEpochAttestation")
+				return nil
+			}
+			ret = binary.LittleEndian.AppendUint64(ret, uint64(a.InclusionDelay))
+			ret = binary.LittleEndian.AppendUint64(ret, uint64(a.ProposerIndex))
+		}
+		ret = binary.LittleEndian.AppendUint64(ret, uint64(len(s.currentEpochAttestations)))
+		for _, a := range s.currentEpochAttestations {
+			ret = binary.LittleEndian.AppendUint64(ret, uint64(len(a.AggregationBits)))
+			ret = append(ret, a.AggregationBits...)
+			cursor := len(ret)
+			ret = append(ret, make([]byte, 128)...)
+			_, err := a.Data.MarshalSSZTo(ret[cursor:])
+			if err != nil {
+				// this is impossible to happen.
+				logrus.WithError(err).Error("failed to marshal currentEpochAttestation")
+				return nil
+			}
+			ret = binary.LittleEndian.AppendUint64(ret, uint64(a.InclusionDelay))
+			ret = binary.LittleEndian.AppendUint64(ret, uint64(a.ProposerIndex))
+		}
+	} else {
+		ret = binary.LittleEndian.AppendUint64(ret, uint64(len(s.previousEpochParticipation)))
+		ret = append(ret, s.previousEpochParticipation...)
+		ret = binary.LittleEndian.AppendUint64(ret, uint64(len(s.currentEpochParticipation)))
+		ret = append(ret, s.currentEpochParticipation...)
+	}
 
 	ret = append(ret, s.justificationBits)
 	ret = binary.LittleEndian.AppendUint64(ret, uint64(s.previousJustifiedCheckpoint.Epoch))
@@ -938,8 +1040,7 @@ func (s *stateDiff) serialize() []byte {
 
 	ret = binary.LittleEndian.AppendUint64(ret, s.pendingDepositIndex)
 	ret = binary.LittleEndian.AppendUint64(ret, uint64(len(s.pendingDepositDiff)))
-	for i := range s.pendingDepositDiff {
-		d := &s.pendingDepositDiff[i]
+	for _, d := range s.pendingDepositDiff {
 		ret = append(ret, d.PublicKey...)
 		ret = append(ret, d.WithdrawalCredentials...)
 		ret = binary.LittleEndian.AppendUint64(ret, d.Amount)
@@ -948,16 +1049,14 @@ func (s *stateDiff) serialize() []byte {
 	}
 	ret = binary.LittleEndian.AppendUint64(ret, s.pendingPartialWithdrawalsIndex)
 	ret = binary.LittleEndian.AppendUint64(ret, uint64(len(s.pendingPartialWithdrawalsDiff)))
-	for i := range s.pendingPartialWithdrawalsDiff {
-		d := &s.pendingPartialWithdrawalsDiff[i]
+	for _, d := range s.pendingPartialWithdrawalsDiff {
 		ret = binary.LittleEndian.AppendUint64(ret, uint64(d.Index))
 		ret = binary.LittleEndian.AppendUint64(ret, d.Amount)
 		ret = binary.LittleEndian.AppendUint64(ret, uint64(d.WithdrawableEpoch))
 	}
 	ret = binary.LittleEndian.AppendUint64(ret, s.pendingConsolidationsIndex)
 	ret = binary.LittleEndian.AppendUint64(ret, uint64(len(s.pendingConsolidationsDiffs)))
-	for i := range s.pendingConsolidationsDiffs {
-		d := &s.pendingConsolidationsDiffs[i]
+	for _, d := range s.pendingConsolidationsDiffs {
 		ret = binary.LittleEndian.AppendUint64(ret, uint64(d.SourceIndex))
 		ret = binary.LittleEndian.AppendUint64(ret, uint64(d.TargetIndex))
 	}
@@ -1427,9 +1526,9 @@ func diffPEndingDeposits(diff *stateDiff, source, target state.BeaconState) erro
 	index := kmpIndex(len(sPendingDeposits), tPendingDeposits, helpers.PendingDepositsEqual)
 
 	diff.pendingDepositIndex = uint64(index)
-	diff.pendingDepositDiff = make([]ethpb.PendingDeposit, tlen+index-len(sPendingDeposits))
+	diff.pendingDepositDiff = make([]*ethpb.PendingDeposit, tlen+index-len(sPendingDeposits))
 	for i, d := range tPendingDeposits[len(sPendingDeposits)-index : tlen] {
-		diff.pendingDepositDiff[i] = ethpb.PendingDeposit{
+		diff.pendingDepositDiff[i] = &ethpb.PendingDeposit{
 			PublicKey:             slices.Clone(d.PublicKey),
 			WithdrawalCredentials: slices.Clone(d.WithdrawalCredentials),
 			Amount:                d.Amount,
@@ -1457,9 +1556,9 @@ func diffPendingPartialWithdrawals(diff *stateDiff, source, target state.BeaconS
 	tPendingPartialWithdrawals = append(tPendingPartialWithdrawals, sPendingPartialWithdrawals...)
 	index := kmpIndex(len(sPendingPartialWithdrawals), tPendingPartialWithdrawals, helpers.PendingPartialWithdrawalsEqual)
 	diff.pendingPartialWithdrawalsIndex = uint64(index)
-	diff.pendingPartialWithdrawalsDiff = make([]ethpb.PendingPartialWithdrawal, tlen+index-len(sPendingPartialWithdrawals))
+	diff.pendingPartialWithdrawalsDiff = make([]*ethpb.PendingPartialWithdrawal, tlen+index-len(sPendingPartialWithdrawals))
 	for i, d := range tPendingPartialWithdrawals[len(sPendingPartialWithdrawals)-index : tlen] {
-		diff.pendingPartialWithdrawalsDiff[i] = ethpb.PendingPartialWithdrawal{
+		diff.pendingPartialWithdrawalsDiff[i] = &ethpb.PendingPartialWithdrawal{
 			Index:             d.Index,
 			Amount:            d.Amount,
 			WithdrawableEpoch: d.WithdrawableEpoch,
@@ -1485,12 +1584,342 @@ func diffPendingConsolidations(diff *stateDiff, source, target state.BeaconState
 	tPendingConsolidations = append(tPendingConsolidations, sPendingConsolidations...)
 	index := kmpIndex(len(sPendingConsolidations), tPendingConsolidations, helpers.PendingConsolidationsEqual)
 	diff.pendingConsolidationsIndex = uint64(index)
-	diff.pendingConsolidationsDiffs = make([]ethpb.PendingConsolidation, tlen+index-len(sPendingConsolidations))
+	diff.pendingConsolidationsDiffs = make([]*ethpb.PendingConsolidation, tlen+index-len(sPendingConsolidations))
 	for i, d := range tPendingConsolidations[len(sPendingConsolidations)-index : tlen] {
-		diff.pendingConsolidationsDiffs[i] = ethpb.PendingConsolidation{
+		diff.pendingConsolidationsDiffs[i] = &ethpb.PendingConsolidation{
 			SourceIndex: d.SourceIndex,
 			TargetIndex: d.TargetIndex,
 		}
 	}
 	return nil
+}
+
+// applyStateDiff applies the given diff to the source state in place.
+func applyStateDiff(ctx context.Context, source state.BeaconState, diff *stateDiff) error {
+	if err := updateToVersion(ctx, source, diff.targetVersion); err != nil {
+		return errors.Wrap(err, "failed to update state to target version")
+	}
+	if err := source.SetSlot(diff.slot); err != nil {
+		return errors.Wrap(err, "failed to set slot")
+	}
+	if diff.fork != nil {
+		if err := source.SetFork(diff.fork); err != nil {
+			return errors.Wrap(err, "failed to set fork")
+		}
+	}
+	if diff.latestBlockHeader != nil {
+		if err := source.SetLatestBlockHeader(diff.latestBlockHeader); err != nil {
+			return errors.Wrap(err, "failed to set latest block header")
+		}
+	}
+	if err := applyBlockRootsDiff(source, diff); err != nil {
+		return errors.Wrap(err, "failed to apply block roots diff")
+	}
+	if err := applyStateRootsDiff(source, diff); err != nil {
+		return errors.Wrap(err, "failed to apply state roots diff")
+	}
+	if err := applyHistoricalRootsDiff(source, diff); err != nil {
+		return errors.Wrap(err, "failed to apply historical roots diff")
+	}
+	if diff.eth1Data != nil {
+		if err := source.SetEth1Data(diff.eth1Data); err != nil {
+			return errors.Wrap(err, "failed to set eth1 data")
+		}
+	}
+	if err := applyEth1DataVotesDiff(source, diff); err != nil {
+		return errors.Wrap(err, "failed to apply eth1 data votes diff")
+	}
+	if err := source.SetEth1DepositIndex(diff.eth1DepositIndex); err != nil {
+		return errors.Wrap(err, "failed to set eth1 deposit index")
+	}
+	if err := applyRandaoMixesDiff(source, diff); err != nil {
+		return errors.Wrap(err, "failed to apply randao mixes diff")
+	}
+	if err := applySlashingsDiff(source, diff); err != nil {
+		return errors.Wrap(err, "failed to apply slashings diff")
+	}
+	if diff.targetVersion == version.Phase0 {
+		if err := source.SetPreviousEpochAttestations(diff.previousEpochAttestations); err != nil {
+			return errors.Wrap(err, "failed to set previous epoch attestations")
+		}
+		if err := source.SetCurrentEpochAttestations(diff.currentEpochAttestations); err != nil {
+			return errors.Wrap(err, "failed to set current epoch attestations")
+		}
+	} else {
+		if err := source.SetPreviousParticipationBits(diff.previousEpochParticipation); err != nil {
+			return errors.Wrap(err, "failed to set previous epoch participation")
+		}
+		if err := source.SetCurrentParticipationBits(diff.currentEpochParticipation); err != nil {
+			return errors.Wrap(err, "failed to set current epoch participation")
+		}
+	}
+	if err := source.SetJustificationBits(bitfield.Bitvector4([]byte{diff.justificationBits})); err != nil {
+		return errors.Wrap(err, "failed to set justification bits")
+	}
+	if diff.previousJustifiedCheckpoint != nil {
+		if err := source.SetPreviousJustifiedCheckpoint(diff.previousJustifiedCheckpoint); err != nil {
+			return errors.Wrap(err, "failed to set previous justified checkpoint")
+		}
+	}
+	if diff.currentJustifiedCheckpoint != nil {
+		if err := source.SetCurrentJustifiedCheckpoint(diff.currentJustifiedCheckpoint); err != nil {
+			return errors.Wrap(err, "failed to set current justified checkpoint")
+		}
+	}
+	if diff.finalizedCheckpoint != nil {
+		if err := source.SetFinalizedCheckpoint(diff.finalizedCheckpoint); err != nil {
+			return errors.Wrap(err, "failed to set finalized checkpoint")
+		}
+	}
+	if diff.targetVersion < version.Altair {
+		return nil
+	}
+	if err := source.SetInactivityScores(diff.inactivityScores); err != nil {
+		return errors.Wrap(err, "failed to set inactivity scores")
+	}
+	if diff.currentSyncCommittee != nil {
+		if err := source.SetCurrentSyncCommittee(diff.currentSyncCommittee); err != nil {
+			return errors.Wrap(err, "failed to set current sync committee")
+		}
+	}
+	if diff.nextSyncCommittee != nil {
+		if err := source.SetNextSyncCommittee(diff.nextSyncCommittee); err != nil {
+			return errors.Wrap(err, "failed to set next sync committee")
+		}
+	}
+	if diff.targetVersion < version.Bellatrix {
+		return nil
+	}
+	if diff.executionPayloadHeader != nil {
+		if err := source.SetLatestExecutionPayloadHeader(diff.executionPayloadHeader); err != nil {
+			return errors.Wrap(err, "failed to set latest execution payload header")
+		}
+	}
+	if diff.targetVersion < version.Capella {
+		return nil
+	}
+	if err := source.SetNextWithdrawalIndex(diff.nextWithdrawalIndex); err != nil {
+		return errors.Wrap(err, "failed to set next withdrawal index")
+	}
+	if err := source.SetNextWithdrawalValidatorIndex(diff.nextWithdrawalValidatorIndex); err != nil {
+		return errors.Wrap(err, "failed to set next withdrawal validator index")
+	}
+	if err := applyHistoricalSummariesDiff(source, diff); err != nil {
+		return errors.Wrap(err, "failed to apply historical summaries diff")
+	}
+	if diff.targetVersion < version.Electra {
+		return nil
+	}
+	if err := source.SetDepositRequestsStartIndex(diff.depositRequestsStartIndex); err != nil {
+		return errors.Wrap(err, "failed to set deposit requests start index")
+	}
+	if err := source.SetDepositBalanceToConsume(diff.depositBalanceToConsume); err != nil {
+		return errors.Wrap(err, "failed to set deposit balance to consume")
+	}
+	if err := source.SetExitBalanceToConsume(diff.exitBalanceToConsume); err != nil {
+		return errors.Wrap(err, "failed to set exit balance to consume")
+	}
+	if err := source.SetEarliestExitEpoch(diff.earliestExitEpoch); err != nil {
+		return errors.Wrap(err, "failed to set earliest exit epoch")
+	}
+	if err := source.SetConsolidationBalanceToConsume(diff.consolidationBalanceToConsume); err != nil {
+		return errors.Wrap(err, "failed to set consolidation balance to consume")
+	}
+	if err := source.SetEarliestConsolidationEpoch(diff.earliestConsolidationEpoch); err != nil {
+		return errors.Wrap(err, "failed to set earliest consolidation epoch")
+	}
+	if err := applyPendingDepositsDiff(source, diff); err != nil {
+		return errors.Wrap(err, "failed to apply pending deposits diff")
+	}
+
+	return nil
+}
+
+// applyPendingDepositsDiff applies the pending deposits diff to the source state in place.
+func applyPendingDepositsDiff(source state.BeaconState, diff *stateDiff) error {
+	sPendingDeposits, err := source.PendingDeposits()
+	if err != nil {
+		return errors.Wrap(err, "failed to get pending deposits")
+	}
+	sPendingDeposits = sPendingDeposits[int(diff.pendingDepositIndex):]
+	for _, t := range diff.pendingDepositDiff {
+		sPendingDeposits = append(sPendingDeposits, &ethpb.PendingDeposit{
+			PublicKey:             slices.Clone(t.PublicKey),
+			WithdrawalCredentials: slices.Clone(t.WithdrawalCredentials),
+			Amount:                t.Amount,
+			Signature:             slices.Clone(t.Signature),
+			Slot:                  t.Slot,
+		})
+	}
+	return source.SetPendingDeposits(sPendingDeposits)
+}
+
+// applyPendingPartialWithdrawalsDiff applies the pending partial withdrawals diff to the source state in place.
+func applyPendingPartialWithdrawalsDiff(source state.BeaconState, diff *stateDiff) error {
+	sPendingPartialWithdrawals, err := source.PendingPartialWithdrawals()
+	if err != nil {
+		return errors.Wrap(err, "failed to get pending partial withdrawals")
+	}
+	sPendingPartialWithdrawals = sPendingPartialWithdrawals[int(diff.pendingPartialWithdrawalsIndex):]
+	for _, t := range diff.pendingPartialWithdrawalsDiff {
+		sPendingPartialWithdrawals = append(sPendingPartialWithdrawals, &ethpb.PendingPartialWithdrawal{
+			Index:             t.Index,
+			Amount:            t.Amount,
+			WithdrawableEpoch: t.WithdrawableEpoch,
+		})
+	}
+	return source.SetPendingPartialWithdrawals(sPendingPartialWithdrawals)
+}
+
+// applyPendingConsolidationsDiff applies the pending consolidations diff to the source state in place.
+func applyPendingConsolidationsDiff(source state.BeaconState, diff *stateDiff) error {
+	sPendingConsolidations, err := source.PendingConsolidations()
+	if err != nil {
+		return errors.Wrap(err, "failed to get pending consolidations")
+	}
+	sPendingConsolidations = sPendingConsolidations[int(diff.pendingConsolidationsIndex):]
+	for _, t := range diff.pendingConsolidationsDiffs {
+		sPendingConsolidations = append(sPendingConsolidations, &ethpb.PendingConsolidation{
+			SourceIndex: t.SourceIndex,
+			TargetIndex: t.TargetIndex,
+		})
+	}
+	return source.SetPendingConsolidations(sPendingConsolidations)
+}
+
+// applyHistoricalSummariesDiff applies the historical summaries diff to the source state in place.
+func applyHistoricalSummariesDiff(source state.BeaconState, diff *stateDiff) error {
+	tSummaries := diff.historicalSummaries
+	for _, t := range tSummaries {
+		if err := source.AppendHistoricalSummaries(&ethpb.HistoricalSummary{
+			BlockSummaryRoot: slices.Clone(t.BlockSummaryRoot),
+			StateSummaryRoot: slices.Clone(t.StateSummaryRoot),
+		}); err != nil {
+			return errors.Wrap(err, "failed to append historical summary")
+		}
+	}
+	return nil
+}
+
+// applySlashingsDiff applies the slashings diff to the source state in place.
+func applySlashingsDiff(source state.BeaconState, diff *stateDiff) error {
+	sSlashings := source.Slashings()
+	tSlashings := diff.slashings
+	if len(sSlashings) != len(tSlashings) {
+		return errors.Errorf("slashings length mismatch: source %d, target %d", len(sSlashings), len(tSlashings))
+	}
+	if len(sSlashings) != fieldparams.SlashingsLength {
+		return errors.Errorf("slashings length mismatch: source %d", len(sSlashings))
+	}
+	for i, t := range tSlashings {
+		if t > 0 {
+			sSlashings[i] += uint64(t)
+		} else {
+			sSlashings[i] -= uint64(-t)
+		}
+	}
+	return source.SetSlashings(sSlashings)
+}
+
+// applyRandaoMixesDiff applies the randao mixes diff to the source state in place.
+func applyRandaoMixesDiff(source state.BeaconState, diff *stateDiff) error {
+	sMixes := source.RandaoMixes()
+	tMixes := diff.randaoMixes
+	if len(sMixes) != len(tMixes) {
+		return errors.Errorf("randao mixes length mismatch: source %d, target %d", len(sMixes), len(tMixes))
+	}
+	if len(sMixes) != fieldparams.RandaoMixesLength {
+		return errors.Errorf("randao mixes length mismatch: source %d", len(sMixes))
+	}
+	for i := range fieldparams.RandaoMixesLength {
+		if tMixes[i] != [fieldparams.RootLength]byte{} {
+			sMixes[i] = slices.Clone(tMixes[i][:])
+		}
+	}
+	return source.SetRandaoMixes(sMixes)
+}
+
+// applyEth1DataVotesDiff applies the eth1 data votes diff to the source state in place.
+func applyEth1DataVotesDiff(source state.BeaconState, diff *stateDiff) error {
+	sVotes := source.Eth1DataVotes()
+	tVotes := diff.eth1DataVotes
+	if diff.eth1VotesAppend {
+		sVotes = append(sVotes, tVotes...)
+		return source.SetEth1DataVotes(sVotes)
+	}
+	return source.SetEth1DataVotes(tVotes)
+}
+
+// applyHistoricalRootsDiff applies the historical roots diff to the source state in place.
+func applyHistoricalRootsDiff(source state.BeaconState, diff *stateDiff) error {
+	sRoots := source.HistoricalRoots()
+	tRoots := diff.historicalRoots
+	for _, t := range tRoots {
+		sRoots = append(sRoots, t[:])
+	}
+	return source.SetHistoricalRoots(sRoots)
+}
+
+// applyStateRootsDiff applies the state roots diff to the source state in place.
+func applyStateRootsDiff(source state.BeaconState, diff *stateDiff) error {
+	sRoots := source.StateRoots()
+	tRoots := diff.stateRoots
+	if len(sRoots) != len(tRoots) {
+		return errors.Errorf("state roots length mismatch: source %d, target %d", len(sRoots), len(tRoots))
+	}
+	if len(sRoots) != fieldparams.StateRootsLength {
+		return errors.Errorf("state roots length mismatch: source %d", len(sRoots))
+	}
+	for i := range fieldparams.StateRootsLength {
+		if tRoots[i] != [fieldparams.RootLength]byte{} {
+			sRoots[i] = slices.Clone(tRoots[i][:])
+		}
+	}
+	return source.SetStateRoots(sRoots)
+}
+
+// applyBlockRootsDiff applies the block roots diff to the source state in place.
+func applyBlockRootsDiff(source state.BeaconState, diff *stateDiff) error {
+	sRoots := source.BlockRoots()
+	tRoots := diff.blockRoots
+	if len(sRoots) != len(tRoots) {
+		return errors.Errorf("block roots length mismatch: source %d, target %d", len(sRoots), len(tRoots))
+	}
+	if len(sRoots) != fieldparams.BlockRootsLength {
+		return errors.Errorf("block roots length mismatch: source %d", len(sRoots))
+	}
+	for i := range fieldparams.BlockRootsLength {
+		if tRoots[i] != [fieldparams.RootLength]byte{} {
+			sRoots[i] = slices.Clone(tRoots[i][:])
+		}
+	}
+	return source.SetBlockRoots(sRoots)
+}
+
+// updateToVersion updates the state to the given version in place.
+func updateToVersion(ctx context.Context, source state.BeaconState, target int) (err error) {
+	if source.Version() == target {
+		return nil
+	}
+	if source.Version() > target {
+		return errors.Errorf("cannot downgrade state from %s to %s", version.String(source.Version()), version.String(target))
+	}
+	switch source.Version() {
+	case version.Phase0:
+		source, err = altair.UpgradeToAltair(ctx, source)
+	case version.Altair:
+		source, err = execution.UpgradeToBellatrix(source)
+	case version.Bellatrix:
+		source, err = capella.UpgradeToCapella(source)
+	case version.Capella:
+		source, err = deneb.UpgradeToDeneb(source)
+	case version.Deneb:
+		source, err = electra.UpgradeToElectra(source)
+	default:
+		return errors.Errorf("unsupported version %s", version.String(source.Version()))
+	}
+	if err != nil {
+		return errors.Wrap(err, "failed to upgrade state")
+	}
+	return updateToVersion(ctx, source, target)
 }
