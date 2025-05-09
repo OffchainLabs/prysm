@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
@@ -265,9 +266,10 @@ func (s *Service) hasSeenAggregatorIndexEpoch(epoch primitives.Epoch, aggregator
 func (s *Service) setAggregatorIndexEpochSeen(epoch primitives.Epoch, aggregatorIndex primitives.ValidatorIndex) {
 	s.seenAggregatedAttestationLock.Lock()
 	defer s.seenAggregatedAttestationLock.Unlock()
+
 	b := make([]byte, 64)
-	copy(b[0:32], bytesutil.Bytes32(uint64(epoch)))
-	copy(b[32:], bytesutil.Bytes32(uint64(aggregatorIndex)))
+	binary.BigEndian.PutUint64(b[24:], uint64(epoch))
+	binary.BigEndian.PutUint64(b[56:], uint64(aggregatorIndex))
 	s.seenAggregatedAttestationCache.Add(string(b), true)
 }
 
