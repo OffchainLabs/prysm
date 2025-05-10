@@ -7,20 +7,21 @@ import (
 	"testing"
 	"time"
 
-	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	testDB "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/blstoexec"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpbv1 "github.com/prysmaticlabs/prysm/v5/proto/eth/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/blstoexec"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpbv1 "github.com/OffchainLabs/prysm/v6/proto/eth/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -156,14 +157,17 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 		notifier := &mock.MockStateNotifier{RecordEvents: true}
 		srv := &Service{
 			cfg: &config{
-				StateNotifier: notifier,
+				StateNotifier:   notifier,
+				ForkChoiceStore: doublylinkedtree.New(),
 			},
 			originBlockRoot: [32]byte{1},
 		}
+		st, blk, err := prepareForkchoiceState(context.Background(), 0, [32]byte{}, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+		require.NoError(t, err)
+		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(context.Background(), st, blk))
 		newHeadStateRoot := [32]byte{2}
 		newHeadRoot := [32]byte{3}
-		err := srv.notifyNewHeadEvent(context.Background(), 1, bState, newHeadStateRoot[:], newHeadRoot[:])
-		require.NoError(t, err)
+		require.NoError(t, srv.notifyNewHeadEvent(context.Background(), 1, bState, newHeadStateRoot[:], newHeadRoot[:]))
 		events := notifier.ReceivedEvents()
 		require.Equal(t, 1, len(events))
 
@@ -185,10 +189,14 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 		genesisRoot := [32]byte{1}
 		srv := &Service{
 			cfg: &config{
-				StateNotifier: notifier,
+				StateNotifier:   notifier,
+				ForkChoiceStore: doublylinkedtree.New(),
 			},
 			originBlockRoot: genesisRoot,
 		}
+		st, blk, err := prepareForkchoiceState(context.Background(), 0, [32]byte{}, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+		require.NoError(t, err)
+		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(context.Background(), st, blk))
 		epoch1Start, err := slots.EpochStart(1)
 		require.NoError(t, err)
 		epoch2Start, err := slots.EpochStart(1)
@@ -209,8 +217,8 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 			Block:                     newHeadRoot[:],
 			State:                     newHeadStateRoot[:],
 			EpochTransition:           true,
-			PreviousDutyDependentRoot: genesisRoot[:],
-			CurrentDutyDependentRoot:  make([]byte, 32),
+			PreviousDutyDependentRoot: make([]byte, 32),
+			CurrentDutyDependentRoot:  srv.originBlockRoot[:],
 		}
 		require.DeepSSZEqual(t, wanted, eventHead)
 	})

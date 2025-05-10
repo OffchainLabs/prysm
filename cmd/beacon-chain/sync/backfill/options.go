@@ -1,10 +1,10 @@
 package backfill
 
 import (
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/node"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/backfill"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/sync/backfill/flags"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/node"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/backfill"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/backfill/flags"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/urfave/cli/v2"
 )
 

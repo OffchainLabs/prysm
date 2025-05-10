@@ -13,7 +13,7 @@ go_library(
         "slashings.go",
         "validators.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/prysm/v1alpha1/beacon",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/v1alpha1/beacon",
     visibility = ["//beacon-chain:__subpackages__"],
     deps = [
         "//api/pagination:go_default_library",

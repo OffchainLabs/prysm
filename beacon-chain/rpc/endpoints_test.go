@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
 )
 
 func Test_endpoints(t *testing.T) {
@@ -30,6 +30,7 @@ func Test_endpoints(t *testing.T) {
 		"/eth/v1/beacon/states/{state_id}/randao":                      {http.MethodGet},
 		"/eth/v1/beacon/states/{state_id}/pending_deposits":            {http.MethodGet},
 		"/eth/v1/beacon/states/{state_id}/pending_partial_withdrawals": {http.MethodGet},
+		"/eth/v1/beacon/states/{state_id}/pending_consolidations":      {http.MethodGet},
 		"/eth/v1/beacon/headers":                                       {http.MethodGet},
 		"/eth/v1/beacon/headers/{block_id}":                            {http.MethodGet},
 		"/eth/v1/beacon/blinded_blocks":                                {http.MethodPost},
@@ -99,9 +100,7 @@ func Test_endpoints(t *testing.T) {
 		"/eth/v1/validator/duties/attester/{epoch}":        {http.MethodPost},
 		"/eth/v1/validator/duties/proposer/{epoch}":        {http.MethodGet},
 		"/eth/v1/validator/duties/sync/{epoch}":            {http.MethodPost},
-		"/eth/v2/validator/blocks/{slot}":                  {http.MethodGet},
 		"/eth/v3/validator/blocks/{slot}":                  {http.MethodGet},
-		"/eth/v1/validator/blinded_blocks/{slot}":          {http.MethodGet},
 		"/eth/v1/validator/attestation_data":               {http.MethodGet},
 		"/eth/v1/validator/aggregate_attestation":          {http.MethodGet},
 		"/eth/v2/validator/aggregate_attestation":          {http.MethodGet},

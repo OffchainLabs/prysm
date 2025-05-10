@@ -9,7 +9,7 @@ go_library(
         "seen_bits.go",
         "unaggregated.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations/kv",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations/kv",
     visibility = ["//beacon-chain:__subpackages__"],
     deps = [
         "//beacon-chain/core/helpers:go_default_library",

@@ -3,7 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = ["interface.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v5/validator/db/iface",
+    importpath = "github.com/OffchainLabs/prysm/v6/validator/db/iface",
     visibility = [
         "//cmd/validator/slashing-protection:__subpackages__",
         "//config:__subpackages__",

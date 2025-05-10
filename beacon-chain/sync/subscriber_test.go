@@ -8,32 +8,34 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/async/abool"
+	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	db "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/slashings"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
+	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
+	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/network/forks"
+	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/prysmaticlabs/prysm/v5/async/abool"
-	mockChain "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	db "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/slashings"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
-	p2ptest "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	mockSync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/initial-sync/testing"
-	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/network/forks"
-	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"google.golang.org/protobuf/proto"
 )
@@ -123,7 +125,7 @@ func TestSubscribe_UnsubscribeTopic(t *testing.T) {
 
 func TestSubscribe_ReceivesAttesterSlashing(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	cfg := params.MainnetConfig().Copy()
+	cfg := params.MainnetConfig()
 	cfg.SecondsPerSlot = 1
 	params.OverrideBeaconConfig(cfg)
 
@@ -308,7 +310,7 @@ func TestRevalidateSubscription_CorrectlyFormatsTopic(t *testing.T) {
 	subscriptions[2], err = r.cfg.p2p.SubscribeToTopic(fullTopic)
 	require.NoError(t, err)
 
-	r.reValidateSubscriptions(subscriptions, []uint64{2}, defaultTopic, digest)
+	r.pruneSubscriptions(subscriptions, []uint64{2}, defaultTopic, digest)
 	require.LogsDoNotContain(t, hook, "Could not unregister topic validator")
 }
 
@@ -428,7 +430,7 @@ func Test_wrapAndReportValidation(t *testing.T) {
 
 func TestFilterSubnetPeers(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	cfg := params.MainnetConfig().Copy()
+	cfg := params.MainnetConfig()
 	cfg.SecondsPerSlot = 1
 	params.OverrideBeaconConfig(cfg)
 
@@ -510,7 +512,7 @@ func TestFilterSubnetPeers(t *testing.T) {
 
 func TestSubscribeWithSyncSubnets_DynamicOK(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	cfg := params.MainnetConfig().Copy()
+	cfg := params.MainnetConfig()
 	cfg.SecondsPerSlot = 1
 	params.OverrideBeaconConfig(cfg)
 
@@ -637,4 +639,138 @@ func createPeer(t *testing.T, topics ...string) *p2ptest.TestP2P {
 		}
 	}
 	return p
+}
+
+func TestSubscribe_ReceivesLCOptimisticUpdate(t *testing.T) {
+	origNC := params.BeaconConfig()
+	// restore network config after test completes
+	defer func() {
+		params.OverrideBeaconConfig(origNC)
+	}()
+
+	params.SetupTestConfigCleanup(t)
+	p2pService := p2ptest.NewTestP2P(t)
+	ctx := context.Background()
+	cfg := params.BeaconConfig().Copy()
+	cfg.AltairForkEpoch = 1
+	cfg.ForkVersionSchedule[[4]byte{1, 0, 0, 0}] = 1
+	params.OverrideBeaconConfig(cfg)
+
+	secondsPerSlot := int(params.BeaconConfig().SecondsPerSlot)
+	slotIntervals := int(params.BeaconConfig().IntervalsPerSlot)
+	slotsPerEpoch := int(params.BeaconConfig().SlotsPerEpoch)
+
+	genesisDrift := slotsPerEpoch*secondsPerSlot + 2*secondsPerSlot + secondsPerSlot/slotIntervals
+	chainService := &mockChain.ChainService{
+		ValidatorsRoot: [32]byte{'A'},
+		Genesis:        time.Unix(time.Now().Unix()-int64(genesisDrift), 0),
+	}
+	d := db.SetupDB(t)
+	r := Service{
+		ctx: ctx,
+		cfg: &config{
+			p2p:           p2pService,
+			initialSync:   &mockSync.Sync{IsSyncing: false},
+			chain:         chainService,
+			beaconDB:      d,
+			clock:         startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+			stateNotifier: &mockChain.MockStateNotifier{},
+		},
+		chainStarted: abool.New(),
+		lcStore:      &lightClient.Store{},
+		subHandler:   newSubTopicHandler(),
+	}
+	topic := p2p.LightClientOptimisticUpdateTopicFormat
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	var err error
+	p2pService.Digest, err = r.currentForkDigest()
+	require.NoError(t, err)
+	r.subscribe(topic, r.validateLightClientOptimisticUpdate, func(ctx context.Context, msg proto.Message) error {
+		require.NoError(t, r.lightClientOptimisticUpdateSubscriber(ctx, msg))
+		wg.Done()
+		return nil
+	}, p2pService.Digest)
+
+	r.markForChainStart()
+
+	l := util.NewTestLightClient(t, version.Altair, util.WithSupermajority())
+	update, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
+	require.NoError(t, err, "Error generating light client optimistic update")
+
+	p2pService.ReceivePubSub(topic, update.Proto())
+
+	if util.WaitTimeout(&wg, time.Second) {
+		t.Fatal("Did not receive PubSub in 1 second")
+	}
+	u := r.lcStore.LastOptimisticUpdate()
+	assert.DeepEqual(t, update.Proto(), u.Proto())
+}
+
+func TestSubscribe_ReceivesLCFinalityUpdate(t *testing.T) {
+	origNC := params.BeaconConfig()
+	// restore network config after test completes
+	defer func() {
+		params.OverrideBeaconConfig(origNC)
+	}()
+
+	params.SetupTestConfigCleanup(t)
+	p2pService := p2ptest.NewTestP2P(t)
+	ctx := context.Background()
+	cfg := params.BeaconConfig().Copy()
+	cfg.AltairForkEpoch = 1
+	cfg.ForkVersionSchedule[[4]byte{1, 0, 0, 0}] = 1
+	params.OverrideBeaconConfig(cfg)
+
+	secondsPerSlot := int(params.BeaconConfig().SecondsPerSlot)
+	slotIntervals := int(params.BeaconConfig().IntervalsPerSlot)
+	slotsPerEpoch := int(params.BeaconConfig().SlotsPerEpoch)
+
+	genesisDrift := slotsPerEpoch*secondsPerSlot + 2*secondsPerSlot + secondsPerSlot/slotIntervals
+	chainService := &mockChain.ChainService{
+		ValidatorsRoot: [32]byte{'A'},
+		Genesis:        time.Unix(time.Now().Unix()-int64(genesisDrift), 0),
+	}
+	d := db.SetupDB(t)
+	r := Service{
+		ctx: ctx,
+		cfg: &config{
+			p2p:           p2pService,
+			initialSync:   &mockSync.Sync{IsSyncing: false},
+			chain:         chainService,
+			beaconDB:      d,
+			clock:         startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+			stateNotifier: &mockChain.MockStateNotifier{},
+		},
+		chainStarted: abool.New(),
+		lcStore:      &lightClient.Store{},
+		subHandler:   newSubTopicHandler(),
+	}
+	topic := p2p.LightClientFinalityUpdateTopicFormat
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	var err error
+	p2pService.Digest, err = r.currentForkDigest()
+	require.NoError(t, err)
+	r.subscribe(topic, r.validateLightClientFinalityUpdate, func(ctx context.Context, msg proto.Message) error {
+		require.NoError(t, r.lightClientFinalityUpdateSubscriber(ctx, msg))
+		wg.Done()
+		return nil
+	}, p2pService.Digest)
+
+	r.markForChainStart()
+
+	l := util.NewTestLightClient(t, version.Altair, util.WithSupermajority())
+	update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+	require.NoError(t, err, "Error generating light client finality update")
+
+	p2pService.ReceivePubSub(topic, update.Proto())
+
+	if util.WaitTimeout(&wg, time.Second) {
+		t.Fatal("Did not receive PubSub in 1 second")
+	}
+	u := r.lcStore.LastFinalityUpdate()
+	assert.DeepEqual(t, update.Proto(), u.Proto())
 }

@@ -7,17 +7,17 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stateutil"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stateutil"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestBeaconState_NoDeadlock_Phase0(t *testing.T) {
@@ -400,11 +400,11 @@ func TestDuplicateDirtyIndices(t *testing.T) {
 	newState.dirtyIndices[types.Balances] = append(newState.dirtyIndices[types.Balances], []uint64{0, 1, 2, 3, 4}...)
 
 	// We would remove the duplicates and stay under the threshold
-	newState.addDirtyIndices(types.Balances, []uint64{9997, 9998})
+	newState.addDirtyIndices(types.Balances, []uint64{20997, 20998})
 	assert.Equal(t, false, newState.rebuildTrie[types.Balances])
 
 	// We would trigger above the threshold.
-	newState.addDirtyIndices(types.Balances, []uint64{10000, 10001, 10002, 10003})
+	newState.addDirtyIndices(types.Balances, []uint64{21000, 21001, 21002, 21003})
 	assert.Equal(t, true, newState.rebuildTrie[types.Balances])
 }
 

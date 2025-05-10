@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/urfave/cli/v2"
 )
 

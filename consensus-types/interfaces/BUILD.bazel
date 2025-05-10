@@ -9,7 +9,7 @@ go_library(
         "utils.go",
         "validator.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces",
+    importpath = "github.com/OffchainLabs/prysm/v6/consensus-types/interfaces",
     visibility = ["//visibility:public"],
     deps = [
         "//config/fieldparams:go_default_library",

@@ -5,18 +5,18 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -211,7 +211,7 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 		if npc, err := st.NumPendingConsolidations(); err != nil {
 			return fmt.Errorf("failed to fetch number of pending consolidations: %w", err) // This should never happen.
 		} else if npc >= pcLimit {
-			return nil
+			continue
 		}
 
 		activeBal, err := helpers.TotalActiveBalance(st)
@@ -220,7 +220,7 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 		}
 		churnLimit := helpers.ConsolidationChurnLimit(primitives.Gwei(activeBal))
 		if churnLimit <= primitives.Gwei(params.BeaconConfig().MinActivationBalance) {
-			return nil
+			continue
 		}
 
 		srcIdx, ok := st.ValidatorIndexByPubkey(sourcePubkey)

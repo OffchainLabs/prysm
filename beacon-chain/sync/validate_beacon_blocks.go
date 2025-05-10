@@ -5,34 +5,36 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
+	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	prysmTime "github.com/OffchainLabs/prysm/v6/time"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
-	blockfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/block"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 )
 
 var (
-	ErrOptimisticParent    = errors.New("parent of the block is optimistic")
-	errRejectCommitmentLen = errors.New("[REJECT] The length of KZG commitments is less than or equal to the limitation defined in Consensus Layer")
+	ErrOptimisticParent         = errors.New("parent of the block is optimistic")
+	errRejectCommitmentLen      = errors.New("[REJECT] The length of KZG commitments is less than or equal to the limitation defined in Consensus Layer")
+	ErrSlashingSignatureFailure = errors.New("proposer slashing signature verification failed")
 )
 
 // validateBeaconBlockPubSub checks that the incoming block has a valid BLS signature.
@@ -109,6 +111,16 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 
 	// Verify the block is the first block received for the proposer for the slot.
 	if s.hasSeenBlockIndexSlot(blk.Block().Slot(), blk.Block().ProposerIndex()) {
+		// Attempt to detect and broadcast equivocation before ignoring
+		err = s.detectAndBroadcastEquivocation(ctx, blk)
+		if err != nil {
+			// If signature verification fails, reject the block
+			if errors.Is(err, ErrSlashingSignatureFailure) {
+				return pubsub.ValidationReject, err
+			}
+			// In case there is some other error log but don't reject
+			log.WithError(err).Debug("Could not detect/broadcast equivocation")
+		}
 		return pubsub.ValidationIgnore, nil
 	}
 
@@ -468,4 +480,75 @@ func getBlockFields(b interfaces.ReadOnlySignedBeaconBlock) logrus.Fields {
 		"graffiti":      string(graffiti[:]),
 		"version":       b.Block().Version(),
 	}
+}
+
+// detectAndBroadcastEquivocation checks if the given block is an equivocating block by comparing it with
+// the head block. If the blocks are from the same slot and proposer but have different signatures,
+// it creates and broadcasts a proposer slashing object after verification.
+func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) error {
+	slot := blk.Block().Slot()
+	proposerIndex := blk.Block().ProposerIndex()
+
+	// Get head block for comparison
+	headBlock, err := s.cfg.chain.HeadBlock(ctx)
+	if err != nil {
+		return errors.Wrap(err, "could not get head block")
+	}
+
+	// Only proceed if this block is from same slot and proposer as head
+	if headBlock.Block().Slot() != slot || headBlock.Block().ProposerIndex() != proposerIndex {
+		return nil
+	}
+
+	// Compare signatures
+	sig1 := blk.Signature()
+	sig2 := headBlock.Signature()
+
+	// If signatures match, these are the same block
+	if sig1 == sig2 {
+		return nil
+	}
+
+	// Extract headers for slashing
+	header1, err := blk.Header()
+	if err != nil {
+		return errors.Wrap(err, "could not get header from new block")
+	}
+	header2, err := headBlock.Header()
+	if err != nil {
+		return errors.Wrap(err, "could not get header from head block")
+	}
+
+	slashing := &ethpb.ProposerSlashing{
+		Header_1: header1,
+		Header_2: header2,
+	}
+
+	// Get state for verification
+	headState, err := s.cfg.chain.HeadStateReadOnly(ctx)
+	if err != nil {
+		return errors.Wrap(err, "could not get head state")
+	}
+
+	// Verify the slashing against current state
+	if err := blocks.VerifyProposerSlashing(headState, slashing); err != nil {
+		if errors.Is(err, blocks.ErrCouldNotVerifyBlockHeader) {
+			return errors.Wrap(ErrSlashingSignatureFailure, err.Error())
+		}
+		return errors.Wrap(err, "could not verify proposer slashing")
+	}
+
+	// Broadcast if verification passes
+	if !features.Get().DisableBroadcastSlashings {
+		if err := s.cfg.p2p.Broadcast(ctx, slashing); err != nil {
+			return errors.Wrap(err, "could not broadcast slashing object")
+		}
+	}
+
+	// Insert into slashing pool
+	if err := s.cfg.slashingPool.InsertProposerSlashing(ctx, headState, slashing); err != nil {
+		return errors.Wrap(err, "could not insert proposer slashing into pool")
+	}
+
+	return nil
 }

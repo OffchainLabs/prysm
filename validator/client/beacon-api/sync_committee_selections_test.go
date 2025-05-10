@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/validator/client/beacon-api/mock"
+	testhelpers "github.com/OffchainLabs/prysm/v6/validator/client/beacon-api/test-helpers"
+	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
-	testhelpers "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/test-helpers"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	"go.uber.org/mock/gomock"
 )
 

@@ -1,17 +1,17 @@
 package fulu
 
 import (
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 // UpgradeToFulu updates inputs a generic state to return the version Fulu state.
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/fork.md#upgrading-the-state
+// https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/fork.md#upgrading-the-state
 func UpgradeToFulu(beaconState state.BeaconState) (state.BeaconState, error) {
 	currentSyncCommittee, err := beaconState.CurrentSyncCommittee()
 	if err != nil {
@@ -57,15 +57,15 @@ func UpgradeToFulu(beaconState state.BeaconState) (state.BeaconState, error) {
 	if err != nil {
 		return nil, err
 	}
-	historicalRoots, err := beaconState.HistoricalRoots()
-	if err != nil {
-		return nil, err
-	}
 	excessBlobGas, err := payloadHeader.ExcessBlobGas()
 	if err != nil {
 		return nil, err
 	}
 	blobGasUsed, err := payloadHeader.BlobGasUsed()
+	if err != nil {
+		return nil, err
+	}
+	depositRequestsStartIndex, err := beaconState.DepositRequestsStartIndex()
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +114,7 @@ func UpgradeToFulu(beaconState state.BeaconState) (state.BeaconState, error) {
 		LatestBlockHeader:           beaconState.LatestBlockHeader(),
 		BlockRoots:                  beaconState.BlockRoots(),
 		StateRoots:                  beaconState.StateRoots(),
-		HistoricalRoots:             historicalRoots,
+		HistoricalRoots:             beaconState.HistoricalRoots(),
 		Eth1Data:                    beaconState.Eth1Data(),
 		Eth1DataVotes:               beaconState.Eth1DataVotes(),
 		Eth1DepositIndex:            beaconState.Eth1DepositIndex(),
@@ -154,7 +154,7 @@ func UpgradeToFulu(beaconState state.BeaconState) (state.BeaconState, error) {
 		NextWithdrawalValidatorIndex: vi,
 		HistoricalSummaries:          summaries,
 
-		DepositRequestsStartIndex:     params.BeaconConfig().UnsetDepositRequestsStartIndex,
+		DepositRequestsStartIndex:     depositRequestsStartIndex,
 		DepositBalanceToConsume:       depositBalanceToConsume,
 		ExitBalanceToConsume:          exitBalanceToConsume,
 		EarliestExitEpoch:             earliestExitEpoch,

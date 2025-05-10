@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
 )
 
 func TestRoundtrip_HeaderInfo(t *testing.T) {

@@ -1,9 +1,9 @@
 package state_native
 
 import (
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 )
 
 // Id is the identifier of the beacon state.
@@ -73,15 +73,15 @@ func (b *BeaconState) forkVal() *ethpb.Fork {
 }
 
 // HistoricalRoots based on epochs stored in the beacon state.
-func (b *BeaconState) HistoricalRoots() ([][]byte, error) {
+func (b *BeaconState) HistoricalRoots() [][]byte {
 	if b.historicalRoots == nil {
-		return nil, nil
+		return nil
 	}
 
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
-	return b.historicalRoots.Slice(), nil
+	return b.historicalRoots.Slice()
 }
 
 // HistoricalSummaries of the beacon state.

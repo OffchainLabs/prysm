@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/validator/client/beacon-api/mock"
 	"go.uber.org/mock/gomock"
 )
 

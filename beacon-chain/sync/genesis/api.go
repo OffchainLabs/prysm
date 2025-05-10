@@ -3,10 +3,10 @@ package genesis
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v6/api/client"
+	"github.com/OffchainLabs/prysm/v6/api/client/beacon"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/client"
-	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
 )
 
 // APIInitializer manages initializing the genesis state and block to prepare the beacon node for syncing.

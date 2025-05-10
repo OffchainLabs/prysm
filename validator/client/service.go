@@ -6,36 +6,37 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/ristretto"
+	grpcutil "github.com/OffchainLabs/prysm/v6/api/grpc"
+	"github.com/OffchainLabs/prysm/v6/async/event"
+	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/config/proposer"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts/wallet"
+	beaconApi "github.com/OffchainLabs/prysm/v6/validator/client/beacon-api"
+	beaconChainClientFactory "github.com/OffchainLabs/prysm/v6/validator/client/beacon-chain-client-factory"
+	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
+	nodeclientfactory "github.com/OffchainLabs/prysm/v6/validator/client/node-client-factory"
+	validatorclientfactory "github.com/OffchainLabs/prysm/v6/validator/client/validator-client-factory"
+	"github.com/OffchainLabs/prysm/v6/validator/db"
+	"github.com/OffchainLabs/prysm/v6/validator/graffiti"
+	validatorHelpers "github.com/OffchainLabs/prysm/v6/validator/helpers"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager/local"
+	remoteweb3signer "github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer"
+	"github.com/dgraph-io/ristretto/v2"
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpcretry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
 	grpcopentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	grpcprometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/pkg/errors"
-	grpcutil "github.com/prysmaticlabs/prysm/v5/api/grpc"
-	"github.com/prysmaticlabs/prysm/v5/async/event"
-	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/config/proposer"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
-	beaconApi "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api"
-	beaconChainClientFactory "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-chain-client-factory"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
-	nodeclientfactory "github.com/prysmaticlabs/prysm/v5/validator/client/node-client-factory"
-	validatorclientfactory "github.com/prysmaticlabs/prysm/v5/validator/client/validator-client-factory"
-	"github.com/prysmaticlabs/prysm/v5/validator/db"
-	"github.com/prysmaticlabs/prysm/v5/validator/graffiti"
-	validatorHelpers "github.com/prysmaticlabs/prysm/v5/validator/helpers"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/local"
-	remoteweb3signer "github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer"
-	"go.opencensus.io/plugin/ocgrpc"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/protobuf/proto"
 )
 
 // ValidatorService represents a service to manage the validator client
@@ -58,6 +59,7 @@ type ValidatorService struct {
 	emitAccountMetrics      bool
 	logValidatorPerformance bool
 	distributed             bool
+	disableDutiesPolling    bool
 }
 
 // Config for the validator service.
@@ -84,6 +86,7 @@ type Config struct {
 	LogValidatorPerformance bool
 	EmitAccountMetrics      bool
 	Distributed             bool
+	DisableDutiesPolling    bool
 }
 
 // NewValidatorService creates a new validator service for the service
@@ -107,6 +110,7 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 		emitAccountMetrics:      cfg.EmitAccountMetrics,
 		logValidatorPerformance: cfg.LogValidatorPerformance,
 		distributed:             cfg.Distributed,
+		disableDutiesPolling:    cfg.DisableDutiesPolling,
 	}
 
 	dialOpts := ConstructDialOptions(
@@ -140,7 +144,7 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 // Start the validator service. Launches the main go routine for the validator
 // client.
 func (v *ValidatorService) Start() {
-	cache, err := ristretto.NewCache(&ristretto.Config{
+	cache, err := ristretto.NewCache(&ristretto.Config[string, proto.Message]{
 		NumCounters: 1920, // number of keys to track.
 		MaxCost:     192,  // maximum cost of cache, 1 item = 1 cost.
 		BufferItems: 64,   // number of keys per Get buffer.
@@ -217,6 +221,7 @@ func (v *ValidatorService) Start() {
 		emitAccountMetrics:             v.emitAccountMetrics,
 		enableAPI:                      v.enableAPI,
 		distributed:                    v.distributed,
+		disableDutiesPolling:           v.disableDutiesPolling,
 	}
 
 	v.validator = valStruct
@@ -310,7 +315,7 @@ func ConstructDialOptions(
 			grpcretry.WithMax(grpcRetries),
 			grpcretry.WithBackoff(grpcretry.BackoffLinear(grpcRetryDelay)),
 		),
-		grpc.WithStatsHandler(&ocgrpc.ClientHandler{}),
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 		grpc.WithUnaryInterceptor(middleware.ChainUnaryClient(
 			grpcopentracing.UnaryClientInterceptor(),
 			grpcprometheus.UnaryClientInterceptor,

@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	testpb "github.com/prysmaticlabs/prysm/v5/proto/testing"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	testpb "github.com/OffchainLabs/prysm/v6/proto/testing"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 func Test_encode_handlesNilFromFunction(t *testing.T) {

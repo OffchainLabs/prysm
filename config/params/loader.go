@@ -6,9 +6,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/math"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/math"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 )
@@ -35,7 +35,7 @@ func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConf
 			conf = MinimalSpecConfig().Copy()
 		} else {
 			// Default to using mainnet.
-			conf = MainnetConfig().Copy()
+			conf = MainnetConfig()
 		}
 	}
 	for i, line := range lines {
@@ -241,6 +241,7 @@ func ConfigToYaml(cfg *BeaconChainConfig) []byte {
 		fmt.Sprintf("MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA: %d", cfg.MinPerEpochChurnLimitElectra),
 		fmt.Sprintf("MAX_BLOBS_PER_BLOCK: %d", cfg.DeprecatedMaxBlobsPerBlock),
 		fmt.Sprintf("MAX_BLOBS_PER_BLOCK_ELECTRA: %d", cfg.DeprecatedMaxBlobsPerBlockElectra),
+		fmt.Sprintf("MAX_BLOBS_PER_BLOCK_FULU: %d", cfg.DeprecatedMaxBlobsPerBlockFulu),
 	}
 
 	yamlFile := []byte(strings.Join(lines, "\n"))

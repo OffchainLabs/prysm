@@ -9,7 +9,7 @@ go_library(
         "randao_mixes.go",
         "state_roots.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/custom-types",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/custom-types",
     visibility = ["//visibility:public"],
     deps = [
         "//config/fieldparams:go_default_library",

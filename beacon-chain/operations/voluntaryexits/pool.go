@@ -4,13 +4,13 @@ import (
 	"math"
 	"sync"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	types "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	doublylinkedlist "github.com/prysmaticlabs/prysm/v5/container/doubly-linked-list"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	types "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	doublylinkedlist "github.com/OffchainLabs/prysm/v6/container/doubly-linked-list"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/sirupsen/logrus"
 )
 

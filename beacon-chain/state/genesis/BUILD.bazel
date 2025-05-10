@@ -7,7 +7,7 @@ go_library(
         "genesis_mainnet.go",
     ],
     embedsrcs = ["mainnet.ssz.snappy"],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/genesis",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/state/genesis",
     visibility = [
         "//beacon-chain/db:__subpackages__",
         "//config/params:__pkg__",

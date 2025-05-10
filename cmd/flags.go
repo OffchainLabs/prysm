@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/urfave/cli/v2"
 	"github.com/urfave/cli/v2/altsrc"
 )
@@ -47,11 +47,6 @@ var (
 		Name: "enable-db-backup-webhook",
 		Usage: `Serves HTTP handler to initiate database backups.
 		The handler is served on the monitoring port at path /db/backup.`,
-	}
-	// BackupWebhookOutputDir to customize the output directory for db backups.
-	BackupWebhookOutputDir = &cli.StringFlag{
-		Name:  "db-backup-output-dir",
-		Usage: "Output directory for db backups.",
 	}
 	// EnableTracingFlag defines a flag to enable p2p message tracing.
 	EnableTracingFlag = &cli.BoolFlag{
@@ -241,7 +236,8 @@ var (
 	// GrpcMaxCallRecvMsgSizeFlag defines the max call message size for GRPC
 	GrpcMaxCallRecvMsgSizeFlag = &cli.IntFlag{
 		Name: "grpc-max-msg-size",
-		Usage: `Integer to define max receive message call size (in bytes).
+		Usage: `WARNING: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API..
+		Integer to define max receive message call size (in bytes).
 		If serving a public gRPC server, set this to a more reasonable size to avoid
 		resource exhaustion from large messages. 
 		Validators with as many as 10000 keys can be run with a max message size of less than 

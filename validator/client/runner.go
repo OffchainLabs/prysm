@@ -6,17 +6,17 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api/client"
+	"github.com/OffchainLabs/prysm/v6/api/client/event"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	prysmTrace "github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/client"
-	"github.com/prysmaticlabs/prysm/v5/api/client/event"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	prysmTrace "github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -43,9 +43,17 @@ func run(ctx context.Context, v iface.Validator) {
 	if err != nil {
 		return // Exit if context is canceled.
 	}
-	if err := v.UpdateDuties(ctx, headSlot); err != nil {
+	ss, err := slots.EpochStart(slots.ToEpoch(headSlot + 1))
+	if err != nil {
+		log.WithError(err).Error("Failed to get epoch start")
+		ss = headSlot
+	}
+	startDeadline := v.SlotDeadline(ss + params.BeaconConfig().SlotsPerEpoch - 1)
+	startCtx, startCancel := context.WithDeadline(ctx, startDeadline)
+	if err := v.UpdateDuties(startCtx); err != nil {
 		handleAssignmentError(err, headSlot)
 	}
+	startCancel()
 	eventsChan := make(chan *event.Event, 1)
 	healthTracker := v.HealthTracker()
 	runHealthCheckRoutine(ctx, v, eventsChan)
@@ -73,7 +81,7 @@ func run(ctx context.Context, v iface.Validator) {
 			close(accountsChangedChan)
 			return // Exit if context is canceled.
 		case slot := <-v.NextSlot():
-			if !healthTracker.IsHealthy() {
+			if !healthTracker.IsHealthy(ctx) {
 				continue
 			}
 
@@ -89,11 +97,17 @@ func run(ctx context.Context, v iface.Validator) {
 
 			// Keep trying to update assignments if they are nil or if we are past an
 			// epoch transition in the beacon node's state.
-			if err := v.UpdateDuties(slotCtx, slot); err != nil {
-				handleAssignmentError(err, slot)
-				cancel()
-				span.End()
-				continue
+			if slots.IsEpochStart(slot) {
+				deadline = v.SlotDeadline(slot + params.BeaconConfig().SlotsPerEpoch - 1)
+				dutiesCtx, dutiesCancel := context.WithDeadline(ctx, deadline)
+				if err := v.UpdateDuties(dutiesCtx); err != nil {
+					handleAssignmentError(err, slot)
+					dutiesCancel()
+					span.End()
+					cancel()
+					continue
+				}
+				dutiesCancel()
 			}
 
 			// call push proposer settings often to account for the following edge cases:
@@ -113,8 +127,8 @@ func run(ctx context.Context, v iface.Validator) {
 			allRoles, err := v.RolesAt(slotCtx, slot)
 			if err != nil {
 				log.WithError(err).Error("Could not get validator roles")
-				cancel()
 				span.End()
+				cancel()
 				continue
 			}
 			performRoles(slotCtx, allRoles, v, slot, &wg, span)
@@ -125,13 +139,22 @@ func run(ctx context.Context, v iface.Validator) {
 					log.WithError(err).Error("Failed to re initialize validator and get head slot")
 					continue
 				}
-				if err := v.UpdateDuties(ctx, headSlot); err != nil {
-					handleAssignmentError(err, headSlot)
+				ss, err := slots.EpochStart(slots.ToEpoch(headSlot + 1))
+				if err != nil {
+					log.WithError(err).Error("Failed to get epoch start")
 					continue
 				}
+				deadline := v.SlotDeadline(ss + params.BeaconConfig().SlotsPerEpoch - 1)
+				dutiesCtx, dutiesCancel := context.WithDeadline(ctx, deadline)
+				if err := v.UpdateDuties(dutiesCtx); err != nil {
+					handleAssignmentError(err, headSlot)
+					dutiesCancel()
+					continue
+				}
+				dutiesCancel()
 			}
 		case e := <-eventsChan:
-			v.ProcessEvent(e)
+			v.ProcessEvent(ctx, e)
 		case currentKeys := <-accountsChangedChan: // should be less of a priority than next slot
 			onAccountsChanged(ctx, v, currentKeys, accountsChangedChan)
 		}

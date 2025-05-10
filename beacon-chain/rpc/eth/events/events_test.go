@@ -12,24 +12,25 @@ import (
 	"testing"
 	"time"
 
+	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
+	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen/mock"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	payloadattribute "github.com/OffchainLabs/prysm/v6/consensus-types/payload-attribute"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/eth/v1"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/ethereum/go-ethereum/common"
-	mockChain "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
-	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	payloadattribute "github.com/prysmaticlabs/prysm/v5/consensus-types/payload-attribute"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/eth/v1"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	sse "github.com/r3labs/sse/v2"
 	"github.com/sirupsen/logrus"
 )
@@ -522,15 +523,22 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 				// to avoid slot processing
 				require.NoError(t, st.SetSlot(currentSlot+1))
 				b := tc.getBlock()
+				genesis := time.Now()
+				require.NoError(t, st.SetGenesisTime(uint64(genesis.Unix())))
 				mockChainService := &mockChain.ChainService{
-					Root:  make([]byte, 32),
-					State: st,
-					Block: b,
-					Slot:  &currentSlot,
+					Root:    make([]byte, 32),
+					State:   st,
+					Block:   b,
+					Slot:    &currentSlot,
+					Genesis: genesis,
 				}
+				headRoot, err := b.Block().HashTreeRoot()
+				require.NoError(t, err)
 
 				stn := mockChain.NewEventFeedWrapper()
 				opn := mockChain.NewEventFeedWrapper()
+				stategen := mock.NewService()
+				stategen.AddStateForRoot(st, headRoot)
 				s := &Server{
 					StateNotifier:          &mockChain.SimpleNotifier{Feed: stn},
 					OperationNotifier:      &mockChain.SimpleNotifier{Feed: opn},
@@ -538,6 +546,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 					ChainInfoFetcher:       mockChainService,
 					TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
 					EventWriteTimeout:      testEventWriteTimeout,
+					StateGen:               stategen,
 				}
 				if tc.SetTrackedValidatorsCache != nil {
 					tc.SetTrackedValidatorsCache(s.TrackedValidatorsCache)
@@ -551,13 +560,11 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 						Type: statefeed.PayloadAttributes,
 						Data: payloadattribute.EventData{
 							ProposerIndex:     0,
-							ProposalSlot:      0,
+							ProposalSlot:      mockChainService.CurrentSlot() + 1,
 							ParentBlockNumber: 0,
-							ParentBlockRoot:   make([]byte, 32),
 							ParentBlockHash:   make([]byte, 32),
-							HeadState:         st,
 							HeadBlock:         b,
-							HeadRoot:          [fieldparams.RootLength]byte{},
+							HeadRoot:          headRoot,
 						},
 					},
 				}
@@ -575,8 +582,6 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 func TestFillEventData(t *testing.T) {
 	ctx := context.Background()
 	t.Run("AlreadyFilledData_ShouldShortCircuitWithoutError", func(t *testing.T) {
-		st, err := util.NewBeaconStateBellatrix()
-		require.NoError(t, err)
 		b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockBellatrix(&eth.SignedBeaconBlockBellatrix{}))
 		require.NoError(t, err)
 		attributor, err := payloadattribute.New(&enginev1.PayloadAttributes{
@@ -584,11 +589,9 @@ func TestFillEventData(t *testing.T) {
 		})
 		require.NoError(t, err)
 		alreadyFilled := payloadattribute.EventData{
-			HeadState:       st,
 			HeadBlock:       b,
 			HeadRoot:        [32]byte{1, 2, 3},
 			Attributer:      attributor,
-			ParentBlockRoot: []byte{1, 2, 3},
 			ParentBlockHash: []byte{4, 5, 6},
 		}
 		srv := &Server{} // No real HeadFetcher needed here since it won't be called.
@@ -612,12 +615,14 @@ func TestFillEventData(t *testing.T) {
 			Timestamp: uint64(time.Now().Unix()),
 		})
 		require.NoError(t, err)
+		headRoot, err := b.Block().HashTreeRoot()
+		require.NoError(t, err)
 		// Create an event data object missing certain fields:
 		partial := payloadattribute.EventData{
-			// The presence of a nil HeadState, nil HeadBlock, zeroed HeadRoot, etc.
-			// will cause fillEventData to try to fill the values.
 			ProposalSlot: 42,         // different epoch from current slot
 			Attributer:   attributor, // Must be Bellatrix or later
+			HeadBlock:    b,
+			HeadRoot:     headRoot,
 		}
 		currentSlot := primitives.Slot(0)
 		// to avoid slot processing
@@ -629,6 +634,8 @@ func TestFillEventData(t *testing.T) {
 			Slot:  &currentSlot,
 		}
 
+		stategen := mock.NewService()
+		stategen.AddStateForRoot(st, headRoot)
 		stn := mockChain.NewEventFeedWrapper()
 		opn := mockChain.NewEventFeedWrapper()
 		srv := &Server{
@@ -638,16 +645,15 @@ func TestFillEventData(t *testing.T) {
 			ChainInfoFetcher:       mockChainService,
 			TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
 			EventWriteTimeout:      testEventWriteTimeout,
+			StateGen:               stategen,
 		}
 
 		filled, err := srv.fillEventData(ctx, partial)
 		require.NoError(t, err, "expected successful fill of partial event data")
 
 		// Verify that fields have been updated from the mock data:
-		require.NotNil(t, filled.HeadState, "HeadState should be assigned")
 		require.NotNil(t, filled.HeadBlock, "HeadBlock should be assigned")
 		require.NotEqual(t, [32]byte{}, filled.HeadRoot, "HeadRoot should no longer be zero")
-		require.NotEmpty(t, filled.ParentBlockRoot, "ParentBlockRoot should be filled")
 		require.NotEmpty(t, filled.ParentBlockHash, "ParentBlockHash should be filled")
 		require.Equal(t, uint64(0), filled.ParentBlockNumber, "ParentBlockNumber must match mock block")
 

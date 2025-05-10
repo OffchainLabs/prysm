@@ -6,7 +6,7 @@ go_library(
         "enums.go",
         "v1alpha1_to_v1.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/proto/migration",
+    importpath = "github.com/OffchainLabs/prysm/v6/proto/migration",
     visibility = ["//visibility:public"],
     deps = [
         "//proto/eth/v1:go_default_library",

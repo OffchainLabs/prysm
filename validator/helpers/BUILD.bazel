@@ -7,7 +7,7 @@ go_library(
         "metadata.go",
         "node_connection.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/validator/helpers",
+    importpath = "github.com/OffchainLabs/prysm/v6/validator/helpers",
     visibility = ["//visibility:public"],
     deps = [
         "//config/fieldparams:go_default_library",

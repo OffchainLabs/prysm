@@ -3,13 +3,13 @@ package deneb_test
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/deneb"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/deneb"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 )
 
 func TestUpgradeToDeneb(t *testing.T) {
@@ -47,10 +47,8 @@ func TestUpgradeToDeneb(t *testing.T) {
 	require.NoError(t, err)
 	require.DeepSSZEqual(t, make([]uint64, numValidators), s)
 
-	hr1, err := preForkState.HistoricalRoots()
-	require.NoError(t, err)
-	hr2, err := mSt.HistoricalRoots()
-	require.NoError(t, err)
+	hr1 := preForkState.HistoricalRoots()
+	hr2 := mSt.HistoricalRoots()
 	require.DeepEqual(t, hr1, hr2)
 
 	f := mSt.Fork()

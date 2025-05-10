@@ -255,7 +255,7 @@ filegroup(
     url = "https://github.com/ethereum/EIPs/archive/5480440fe51742ed23342b68cf106cefd427e39d.tar.gz",
 )
 
-consensus_spec_version = "v1.5.0-beta.3"
+consensus_spec_version = "v1.5.0"
 
 bls_test_version = "v0.1.1"
 
@@ -271,7 +271,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-z+j0BEJuXMBKbGL+7jq35zddzZMW1je8/uvTz5+wboQ=",
+    integrity = "sha256-JljxS/if/t0qvGWcf5CgsX+72fj90yGTg/uEgC56y7U=",
     url = "https://github.com/ethereum/consensus-spec-tests/releases/download/%s/general.tar.gz" % consensus_spec_version,
 )
 
@@ -287,7 +287,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-5/YUOXH65CmM1plZ8twJ3BQxwM51jgSpOB8/VSBI19k=",
+    integrity = "sha256-NRba2h4zqb2LAXyDPglHTtkT4gVyuwpY708XmwXKXV8=",
     url = "https://github.com/ethereum/consensus-spec-tests/releases/download/%s/minimal.tar.gz" % consensus_spec_version,
 )
 
@@ -303,7 +303,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-iZ2eNhwRnbxrjR+5gMBUYakaCXicvPChwFUkZtQUbbI=",
+    integrity = "sha256-hpbtKUbc3NHtVcUPk/Zm+Hn57G2ijI9qvXJwl9hc/tM=",
     url = "https://github.com/ethereum/consensus-spec-tests/releases/download/%s/mainnet.tar.gz" % consensus_spec_version,
 )
 
@@ -318,7 +318,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-inAXV7xNM5J1aUdP7JNXFO2iFFZ7dth38Ji+mJW50Ts=",
+    integrity = "sha256-Wy3YcJxoXiKQwrGgJecrtjtdokc4X/VUNBmyQXJf0Oc=",
     strip_prefix = "consensus-specs-" + consensus_spec_version[1:],
     url = "https://github.com/ethereum/consensus-specs/archive/refs/tags/%s.tar.gz" % consensus_spec_version,
 )
@@ -368,6 +368,22 @@ filegroup(
     integrity = "sha256-YVFFrCmjoGZ3fXMWpsCpSsYbANy1grnqYwOLKIg2SsA=",
     strip_prefix = "holesky-32a72e21c6e53c262f27d50dd540cb654517d03a",
     url = "https://github.com/eth-clients/holesky/archive/32a72e21c6e53c262f27d50dd540cb654517d03a.tar.gz",  # 2025-03-17
+)
+
+http_archive(
+    name = "mainnet",
+    build_file_content = """
+filegroup(
+    name = "configs",
+    srcs = [
+        "metadata/config.yaml",
+    ],
+    visibility = ["//visibility:public"],
+)
+""",
+    integrity = "sha256-NZr/gsQK9rBHRnznlPBiNzJpK8MPMrfUa3f+QYqn1+g=",
+    strip_prefix = "mainnet-978f1794eada6f85bee76e4d2d5959a5fb8e0cc5",
+    url = "https://github.com/eth-clients/mainnet/archive/978f1794eada6f85bee76e4d2d5959a5fb8e0cc5.tar.gz",
 )
 
 http_archive(

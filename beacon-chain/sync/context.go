@@ -1,12 +1,14 @@
 package sync
 
 import (
+	"io"
+
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
 )
 
 // Specifies the fixed size context length.
@@ -40,7 +42,7 @@ func readContextFromStream(stream network.Stream) ([]byte, error) {
 	}
 	// Read context (fork-digest) from stream
 	b := make([]byte, forkDigestLength)
-	if _, err := stream.Read(b); err != nil {
+	if _, err := io.ReadFull(stream, b); err != nil {
 		return nil, err
 	}
 	return b, nil
