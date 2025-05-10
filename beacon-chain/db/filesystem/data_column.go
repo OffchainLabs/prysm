@@ -31,12 +31,12 @@ const (
 	version                  = 0x01
 	versionOffset            = 0                           // bytes
 	versionSize              = 1                           // bytes
-	sidecarSizeOffset        = versionOffset + versionSize // (Offset of the encoded size of the SSZ encoded data column sidecar)
-	sidecarSizeSize          = 4                           // bytes (Size of the encoded size of the SSZ encoded data column sidecar)
+	sidecarByteLenOffset     = versionOffset + versionSize // (Offset of the encoded size of the SSZ encoded data column sidecar)
+	sidecarByteLenSize       = 4                           // bytes (Size of the encoded size of the SSZ encoded data column sidecar)
 	mandatoryNumberOfColumns = 128                         // 2**7
-	indicesOffset            = sidecarSizeOffset + sidecarSizeSize
+	indicesOffset            = sidecarByteLenOffset + sidecarByteLenSize
 	nonZeroOffset            = mandatoryNumberOfColumns
-	headerSize               = versionSize + sidecarSizeSize + mandatoryNumberOfColumns
+	headerSize               = versionSize + sidecarByteLenSize + mandatoryNumberOfColumns
 	dataColumnsFileExtension = "sszs"
 	prunePeriod              = 1 * time.Minute
 )
@@ -323,7 +323,7 @@ func (dcs *DataColumnStorage) Save(dataColumnSidecars []blocks.VerifiedRODataCol
 
 // Subscribe subscribes to the data column feed.
 // It returns the subscription and a 1-size buffer channel to receive data column sidecars.
-// It is the responsability of the caller to:
+// It is the responsibility of the caller to:
 // - call `subscription.Unsubscribe` when done, and to
 // - read from the channel as fast as possible until the channel is closed.
 // A call to `Save` will buffer a new value to the channel.
@@ -665,7 +665,7 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsExistingFile(filePath string
 
 	// Save indices to the file.
 	indices := metadata.indices.raw()
-	count, err := file.WriteAt(indices[:], int64(versionSize+sidecarSizeSize))
+	count, err := file.WriteAt(indices[:], int64(versionSize+sidecarByteLenSize))
 	if err != nil {
 		return errors.Wrap(err, "write indices")
 	}
@@ -776,7 +776,7 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsNewFile(filePath string, inp
 	}()
 
 	// Encode the SSZ encoded data column sidecar size.
-	var encodedSszEncodedDataColumnSidecarSize [sidecarSizeSize]byte
+	var encodedSszEncodedDataColumnSidecarSize [sidecarByteLenSize]byte
 	binary.BigEndian.PutUint32(encodedSszEncodedDataColumnSidecarSize[:], uint32(sszEncodedDataColumnSidecarRefSize))
 
 	// Get the raw indices.
@@ -829,7 +829,7 @@ func (dcs *DataColumnStorage) metadata(file afero.File) (*metadata, error) {
 	}
 
 	// DataColumnSidecar is a variable sized ssz object, but all data columns for a block will be the same size.
-	encodedSszEncodedDataColumnSidecarSize := header[sidecarSizeOffset : sidecarSizeOffset+sidecarSizeSize]
+	encodedSszEncodedDataColumnSidecarSize := header[sidecarByteLenOffset : sidecarByteLenOffset+sidecarByteLenSize]
 
 	// Convert the SSZ encoded data column sidecar size to an int.
 	sszEncodedDataColumnSidecarSize := binary.BigEndian.Uint32(encodedSszEncodedDataColumnSidecarSize)
