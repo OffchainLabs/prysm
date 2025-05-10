@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "endpoints.go",
+        "grpc_compression.go",
         "log.go",
         "metrics.go",
         "service.go",
@@ -69,6 +70,7 @@ go_library(
         "@io_opentelemetry_go_contrib_instrumentation_google_golang_org_grpc_otelgrpc//:go_default_library",
         "@org_golang_google_grpc//:go_default_library",
         "@org_golang_google_grpc//credentials:go_default_library",
+        "@org_golang_google_grpc//encoding/gzip:go_default_library",
         "@org_golang_google_grpc//peer:go_default_library",
         "@org_golang_google_grpc//reflection:go_default_library",
     ],
