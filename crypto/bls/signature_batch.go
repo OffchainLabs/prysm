@@ -32,16 +32,18 @@ func NewSet() *SignatureBatch {
 
 // Join merges the provided signature batch to out current one.
 func (s *SignatureBatch) Join(set *SignatureBatch) *SignatureBatch {
-	if cap(s.Signatures)-len(s.Signatures) < len(set.Signatures) &&
-		cap(set.Signatures)-len(set.Signatures) >= len(s.Signatures) {
-		return set.Join(s)
+	if cap(s.Signatures)-len(s.Signatures) < cap(set.Signatures)-len(set.Signatures) {
+		set.Signatures = append(set.Signatures, s.Signatures...)
+		set.PublicKeys = append(set.PublicKeys, s.PublicKeys...)
+		set.Messages = append(set.Messages, s.Messages...)
+		set.Descriptions = append(set.Descriptions, s.Descriptions...)
+		return set
 	}
 
 	s.Signatures = append(s.Signatures, set.Signatures...)
 	s.PublicKeys = append(s.PublicKeys, set.PublicKeys...)
 	s.Messages = append(s.Messages, set.Messages...)
 	s.Descriptions = append(s.Descriptions, set.Descriptions...)
-
 	return s
 }
 
