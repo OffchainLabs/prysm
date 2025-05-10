@@ -200,7 +200,6 @@ func ExtendBlocksPlusBlobs(t *testing.T, blks []blocks.ROBlock, size int) ([]blo
 	return blks, blobs
 }
 
-// Using functions from the random package
 func deterministicRandomness(seed int64) [32]byte {
 	return random.DeterministicRandomness(seed)
 }

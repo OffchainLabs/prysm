@@ -10,7 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// deterministicRandomness creates a deterministic 32 byte array from a seed
+// DeterministicRandomness creates a deterministic 32 byte array from a seed
 func DeterministicRandomness(seed int64) [32]byte {
 	// Converts an int64 to a byte slice
 	buf := new(bytes.Buffer)
