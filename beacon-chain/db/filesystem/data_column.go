@@ -59,7 +59,7 @@ type (
 		retentionEpochs primitives.Epoch
 		fs              afero.Fs
 		cache           *dataColumnStorageSummaryCache
-		DataColumnFeed  *event.Feed
+		dataColumnFeed  *event.Feed
 		pruneMu         sync.RWMutex
 
 		mu      sync.Mutex // protects muChans
@@ -129,7 +129,7 @@ func WithDataColumnFs(fs afero.Fs) DataColumnStorageOption {
 // initialized once per beacon node.
 func NewDataColumnStorage(ctx context.Context, opts ...DataColumnStorageOption) (*DataColumnStorage, error) {
 	storage := &DataColumnStorage{
-		DataColumnFeed: new(event.Feed),
+		dataColumnFeed: new(event.Feed),
 		muChans:        make(map[[fieldparams.RootLength]byte]*muChan),
 	}
 
@@ -313,14 +313,29 @@ func (dcs *DataColumnStorage) Save(dataColumnSidecars []blocks.VerifiedRODataCol
 		}
 
 		// Notify the data column feed.
-		go func() {
-			dcs.DataColumnFeed.Send(dataColumnsIdent)
-		}()
+		dcs.dataColumnFeed.Send(dataColumnsIdent)
 	}
 
 	dataColumnSaveLatency.Observe(float64(time.Since(startTime).Milliseconds()))
 
 	return nil
+}
+
+// Subscribe subscribes to the data column feed.
+// It returns the subscription and a 1-size buffer channel to receive data column sidecars.
+// It is the responsability of the caller to:
+// - call `subscription.Unsubscribe` when done, and to
+// - read from the channel as fast as possible until the channel is closed.
+// A call to `Save` will buffer a new value to the channel.
+// If a call to `Save` is done while a value is already in the buffer of the channel:
+// - the call to `Save` will block until the new value can be bufferized in the channel, and
+// - all other subscribers won't be notified until the new value can be bufferized in the channel.
+func (dcs *DataColumnStorage) Subscribe() (event.Subscription, <-chan DataColumnsIdent) {
+	// Subscribe to newly data columns stored in the database.
+	identsChan := make(chan DataColumnsIdent, 1)
+	subscription := dcs.dataColumnFeed.Subscribe(identsChan)
+
+	return subscription, identsChan
 }
 
 // saveFilesystem saves data column sidecars into the database.
