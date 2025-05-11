@@ -18,7 +18,6 @@ import (
 
 const (
 	payloadFieldIndex = 9
-	bodyFieldIndex    = 4
 )
 
 func ComputeBlockBodyFieldRoots(ctx context.Context, blockBody *BeaconBlockBody) ([][]byte, error) {
@@ -193,45 +192,6 @@ func ComputeBlockBodyFieldRoots(ctx context.Context, blockBody *BeaconBlockBody)
 		}
 		copy(fieldRoots[12], root[:])
 	}
-	return fieldRoots, nil
-}
-
-func ComputeBlockFieldRoots(ctx context.Context, block interfaces.ReadOnlyBeaconBlock) ([][]byte, error) {
-	_, span := trace.StartSpan(ctx, "blocks.ComputeBlockFieldRoots")
-	defer span.End()
-
-	if block == nil {
-		return nil, errNilBlock
-	}
-
-	fieldRoots := make([][]byte, 5)
-	for i := range fieldRoots {
-		fieldRoots[i] = make([]byte, 32)
-	}
-
-	// Slot
-	slotRoot := ssz.Uint64Root(uint64(block.Slot()))
-	copy(fieldRoots[0], slotRoot[:])
-
-	// Proposer Index
-	proposerRoot := ssz.Uint64Root(uint64(block.ProposerIndex()))
-	copy(fieldRoots[1], proposerRoot[:])
-
-	// Parent Root
-	parentRoot := block.ParentRoot()
-	copy(fieldRoots[2], parentRoot[:])
-
-	// State Root
-	stateRoot := block.StateRoot()
-	copy(fieldRoots[3], stateRoot[:])
-
-	// block body Root
-	blockBodyRoot, err := block.Body().HashTreeRoot()
-	if err != nil {
-		return nil, err
-	}
-	copy(fieldRoots[4], blockBodyRoot[:])
-
 	return fieldRoots, nil
 }
 
