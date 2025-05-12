@@ -2621,7 +2621,7 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 		defer rpcClient.Close()
 
 		dataColumns, err := client.ReconstructDataColumnSidecars(ctx, sb, r)
-		require.ErrorContains(t, "unable to reconstruct data column sidecars, did not get all blobs from EL", err)
+		require.ErrorContains(t, errMissingBlobsAndProofsFromEL.Error(), err)
 		require.Equal(t, 0, len(dataColumns))
 	})
 }

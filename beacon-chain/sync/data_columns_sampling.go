@@ -112,7 +112,8 @@ func (d *dataColumnSampler1D) Run(ctx context.Context) {
 		return
 	}
 
-	if peerdas.CanSelfReconstruct(custodyGroupCount) {
+	// TODO: custody group count != data column group count
+	if custodyGroupCount >= peerdas.MinimumColumnsCountToReconstruct() {
 		log.WithFields(logrus.Fields{
 			"custodyGroupCount": custodyGroupCount,
 			"totalGroups":       numberOfCustodyGroups,

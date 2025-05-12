@@ -7,9 +7,10 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -18,8 +19,8 @@ import (
 const broadCastMissingDataColumnsTimeIntoSlot = 3 * time.Second
 
 func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColumn blocks.VerifiedRODataColumn) error {
-	// Get the block root and the slot.
 	blockRoot := verifiedRODataColumn.BlockRoot()
+	proposerIndex := verifiedRODataColumn.ProposerIndex()
 	slot := verifiedRODataColumn.Slot()
 
 	// Get the columns we store.
@@ -27,13 +28,11 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 	storedColumnsCount := storedDataColumns.Count()
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
-	// If less than half of the columns are stored, reconstruction is not possible.
-	// If all columns are stored, no need to reconstruct.
-	if storedColumnsCount < numberOfColumns/2 || storedColumnsCount == numberOfColumns {
+	// If reconstruction is not possible or if all columns are already stored, exit early.
+	if storedColumnsCount < peerdas.MinimumColumnsCountToReconstruct() || storedColumnsCount == numberOfColumns {
 		return nil
 	}
 
-	// Reconstruction is possible.
 	// Lock to prevent concurrent reconstruction.
 	if !s.dataColumsnReconstructionLock.TryLock() {
 		// If the mutex is already locked, it means that another goroutine is already reconstructing the data columns.
@@ -62,62 +61,36 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 	}
 
 	// Load all the possible data columns sidecars, to minimize reconstruction time.
-	verifiedRODataColumnSidecars, err := s.cfg.dataColumnStorage.Get(blockRoot, nil)
+	verifiedSidecars, err := s.cfg.dataColumnStorage.Get(blockRoot, nil)
 	if err != nil {
 		return errors.Wrap(err, "get data column sidecars")
 	}
 
-	dataColumnSideCars := make([]*ethpb.DataColumnSidecar, 0, storedColumnsCount)
-	for _, verifiedRODataColumn := range verifiedRODataColumnSidecars {
-		dataColumnSideCars = append(dataColumnSideCars, verifiedRODataColumn.DataColumnSidecar)
-	}
-
 	// Recover cells and proofs.
-	recoveredCellsAndProofs, err := peerdas.RecoverCellsAndProofs(dataColumnSideCars)
+	reconstructedSidecars, err := peerdas.ReconstructDataColumnSidecars(verifiedSidecars)
 	if err != nil {
-		return errors.Wrap(err, "recover cells and proofs")
+		return errors.Wrap(err, "reconstruct data column sidecars")
 	}
 
-	// Reconstruct the data columns sidecars.
-	dataColumnSidecars, err := peerdas.DataColumnsSidecarsFromItems(
-		verifiedRODataColumn.SignedBlockHeader,
-		verifiedRODataColumn.KzgCommitments,
-		verifiedRODataColumn.KzgCommitmentsInclusionProof,
-		recoveredCellsAndProofs,
-	)
-	if err != nil {
-		return errors.Wrap(err, "data column sidecars")
-	}
+	// Filter reconstructed sidecars to save.
+	custodyColumns := localNodeInfo.CustodyColumns
+	toSaveSidecars := make([]blocks.VerifiedRODataColumn, 0, len(custodyColumns))
 
-	// Build verified read only data columns to save.
-	verifiedRODataColumns := make([]blocks.VerifiedRODataColumn, 0, len(localNodeInfo.CustodyColumns))
-	for _, dataColumnSidecar := range dataColumnSidecars {
-		shouldSave := localNodeInfo.CustodyColumns[dataColumnSidecar.Index]
-		if !shouldSave {
-			// We do not custody this column, so we dot not need to save it.
-			continue
+	for _, sidecar := range reconstructedSidecars {
+		if custodyColumns[sidecar.Index] {
+			toSaveSidecars = append(toSaveSidecars, sidecar)
 		}
-
-		roDataColumn, err := blocks.NewRODataColumnWithRoot(dataColumnSidecar, blockRoot)
-		if err != nil {
-			return errors.Wrap(err, "new read-only data column with root")
-		}
-
-		// We reconstructed missing data columns base on verified read only data column sidecars,
-		// so we can upgrade the reconstructed sidecars into verified read only data column sidecars.
-		verifiedRoDataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
-		verifiedRODataColumns = append(verifiedRODataColumns, verifiedRoDataColumn)
 	}
 
 	// Save the data columns sidecars in the database.
 	// Note: We do not call `receiveDataColumn`, because it will ignore
 	// incoming data columns via gossip while we did not broadcast (yet) the reconstructed data columns.
-	if err := s.cfg.dataColumnStorage.Save(verifiedRODataColumns); err != nil {
+	if err := s.cfg.dataColumnStorage.Save(toSaveSidecars); err != nil {
 		return errors.Wrap(err, "save data column sidecars")
 	}
 
 	// Schedule the broadcast.
-	if err := s.scheduleReconstructedDataColumnsBroadcast(ctx, verifiedRODataColumn); err != nil {
+	if err := s.scheduleReconstructedDataColumnsBroadcast(ctx, blockRoot, proposerIndex, slot); err != nil {
 		return errors.Wrap(err, "schedule reconstructed data columns broadcast")
 	}
 
@@ -132,13 +105,10 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 
 func (s *Service) scheduleReconstructedDataColumnsBroadcast(
 	ctx context.Context,
-	dataColumnSidecar blocks.VerifiedRODataColumn,
+	root [fieldparams.RootLength]byte,
+	proposerIndex primitives.ValidatorIndex,
+	slot primitives.Slot,
 ) error {
-	// Extract the block root, the proposer index and the slot from the data column sidecar
-	root := dataColumnSidecar.BlockRoot()
-	proposerIndex := dataColumnSidecar.ProposerIndex()
-	slot := dataColumnSidecar.Slot()
-
 	log := log.WithFields(logrus.Fields{
 		"root": fmt.Sprintf("%x", root),
 		"slot": slot,
