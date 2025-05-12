@@ -20,6 +20,7 @@ import (
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/go-bitfield"
@@ -676,7 +677,11 @@ func (ret *stateDiff) readPendingConsolidations(data *[]byte) error {
 }
 
 // newStateDiff deserializes a new StateDiff object from the given data.
-func newStateDiff(data []byte) (*stateDiff, error) {
+func newStateDiff(input []byte) (*stateDiff, error) {
+	data, err := snappy.Decode(nil, input)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to decode snappy")
+	}
 	ret := &stateDiff{}
 	if err := ret.readTargetVersion(&data); err != nil {
 		return nil, err
@@ -779,7 +784,11 @@ func newStateDiff(data []byte) (*stateDiff, error) {
 }
 
 // newValidatorDiffs deserializes a new validator diffs from the given data.
-func newValidatorDiffs(data []byte) ([]validatorDiff, error) {
+func newValidatorDiffs(input []byte) ([]validatorDiff, error) {
+	data, err := snappy.Decode(nil, input)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to decode snappy")
+	}
 	cursor := 0
 	if len(data[cursor:]) < 8 {
 		return nil, errors.Wrap(errDataSmall, "validatorDiffs")
@@ -853,7 +862,11 @@ func newValidatorDiffs(data []byte) ([]validatorDiff, error) {
 }
 
 // newBalancesDiff deserializes a new balances diff from the given data.
-func newBalancesDiff(data []byte) ([]int64, error) {
+func newBalancesDiff(input []byte) ([]int64, error) {
+	data, err := snappy.Decode(nil, input)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to decode snappy")
+	}
 	if len(data) < 8 {
 		return nil, errors.Wrap(errDataSmall, "balancesDiff")
 	}
@@ -1098,9 +1111,9 @@ func (h Hdiff) Serialize() HdiffSerialized {
 		bals = binary.LittleEndian.AppendUint64(bals, uint64(b))
 	}
 	return HdiffSerialized{
-		StateDiff:      h.stateDiff.serialize(),
-		ValidatorDiffs: vals,
-		BalancesDiff:   bals,
+		StateDiff:      snappy.Encode(nil, h.stateDiff.serialize()),
+		ValidatorDiffs: snappy.Encode(nil, vals),
+		BalancesDiff:   snappy.Encode(nil, bals),
 	}
 }
 
@@ -1731,8 +1744,10 @@ func applyStateDiff(ctx context.Context, source state.BeaconState, diff *stateDi
 	if err := applyPendingDepositsDiff(source, diff); err != nil {
 		return errors.Wrap(err, "failed to apply pending deposits diff")
 	}
-
-	return nil
+	if err := applyPendingPartialWithdrawalsDiff(source, diff); err != nil {
+		return errors.Wrap(err, "failed to apply pending partial withdrawals diff")
+	}
+	return applyPendingConsolidationsDiff(source, diff)
 }
 
 // applyPendingDepositsDiff applies the pending deposits diff to the source state in place.
