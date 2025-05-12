@@ -6,6 +6,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [v6.0.2](https://github.com/prysmaticlabs/prysm/compare/v6.0.1...v6.0.2) - 2025-05-12
 
+This is a patch release to fix a few important bugs. Most importantly, we have adjusted the index limit for field tries in the beacon state to better support Pectra states. This should alleviate memory issues that clients are seeing since Pectra mainnet fork.
+
 ### Added
 
 - Enable light client gossip for optimistic and finality updates. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15220)
