@@ -17,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -42,7 +41,7 @@ func TestRPC_LightClientBootstrap_Altair(t *testing.T) {
 	p1 := p2ptest.NewTestP2P(t)
 	p2 := p2ptest.NewTestP2P(t)
 	p1.Connect(p2)
-	assert.Equal(t, 1, len(p1.BHost.Network().Peers()), "Expected peers to be connected")
+	require.Equal(t, 1, len(p1.BHost.Network().Peers()), "Expected peers to be connected")
 
 	secondsPerSlot := int(params.BeaconConfig().SecondsPerSlot)
 	slotIntervals := int(params.BeaconConfig().IntervalsPerSlot)
@@ -87,7 +86,15 @@ func TestRPC_LightClientBootstrap_Altair(t *testing.T) {
 		defer wg.Done()
 		expectSuccess(t, stream)
 		var res pb.LightClientBootstrapAltair
-		assert.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, &res))
+		rpcCtx, err := readContextFromStream(stream)
+		require.NoError(t, err)
+		require.Equal(t, 4, len(rpcCtx))
+		require.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, &res))
+		resSSZ, err := res.MarshalSSZ()
+		require.NoError(t, err)
+		bootstrapSSZ, err := bootstrap.MarshalSSZ()
+		require.NoError(t, err)
+		require.DeepSSZEqual(t, resSSZ, bootstrapSSZ)
 	})
 
 	stream1, err := p1.BHost.NewStream(context.Background(), p2.BHost.ID(), pcl)
@@ -118,7 +125,7 @@ func TestRPC_LightClientOptimisticUpdate_Altair(t *testing.T) {
 	p1 := p2ptest.NewTestP2P(t)
 	p2 := p2ptest.NewTestP2P(t)
 	p1.Connect(p2)
-	assert.Equal(t, 1, len(p1.BHost.Network().Peers()), "Expected peers to be connected")
+	require.Equal(t, 1, len(p1.BHost.Network().Peers()), "Expected peers to be connected")
 
 	secondsPerSlot := int(params.BeaconConfig().SecondsPerSlot)
 	slotIntervals := int(params.BeaconConfig().IntervalsPerSlot)
@@ -162,7 +169,10 @@ func TestRPC_LightClientOptimisticUpdate_Altair(t *testing.T) {
 		defer wg.Done()
 		expectSuccess(t, stream)
 		var res pb.LightClientOptimisticUpdateAltair
-		assert.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, &res))
+		rpcCtx, err := readContextFromStream(stream)
+		require.NoError(t, err)
+		require.Equal(t, 4, len(rpcCtx))
+		require.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, &res))
 	})
 
 	stream1, err := p1.BHost.NewStream(context.Background(), p2.BHost.ID(), pcl)
