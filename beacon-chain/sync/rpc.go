@@ -71,12 +71,16 @@ func (s *Service) rpcHandlerByTopicFromFork(forkIndex int) (map[string]rpcHandle
 	// Altair: https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/p2p-interface.md#messages
 	if forkIndex >= version.Altair {
 		return map[string]rpcHandler{
-			p2p.RPCStatusTopicV1:        s.statusRPCHandler,
-			p2p.RPCGoodByeTopicV1:       s.goodbyeRPCHandler,
-			p2p.RPCBlocksByRangeTopicV2: s.beaconBlocksByRangeRPCHandler, // Updated in Altair and modified in Capella
-			p2p.RPCBlocksByRootTopicV2:  s.beaconBlocksRootRPCHandler,    // Updated in Altair and modified in Capella
-			p2p.RPCPingTopicV1:          s.pingHandler,
-			p2p.RPCMetaDataTopicV2:      s.metaDataHandler, // Updated in Altair
+			p2p.RPCStatusTopicV1:                      s.statusRPCHandler,
+			p2p.RPCGoodByeTopicV1:                     s.goodbyeRPCHandler,
+			p2p.RPCBlocksByRangeTopicV2:               s.beaconBlocksByRangeRPCHandler, // Updated in Altair and modified in Capella
+			p2p.RPCBlocksByRootTopicV2:                s.beaconBlocksRootRPCHandler,    // Updated in Altair and modified in Capella
+			p2p.RPCPingTopicV1:                        s.pingHandler,
+			p2p.RPCMetaDataTopicV2:                    s.metaDataHandler,                       // Updated in Altair
+			p2p.RPCLightClientBootstrapTopicV1:        s.lightClientBootstrapRPCHandler,        // Added in Altair
+			p2p.RPCLightClientUpdatesByRangeTopicV1:   s.lightClientUpdatesByRangeRPCHandler,   // Added in Altair
+			p2p.RPCLightClientFinalityUpdateTopicV1:   s.lightClientFinalityUpdateRPCHandler,   // Added in Altair
+			p2p.RPCLightClientOptimisticUpdateTopicV1: s.lightClientOptimisticUpdateRPCHandler, // Added in Altair
 		}, nil
 	}
 
@@ -246,9 +250,11 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 		// Increment message received counter.
 		messageReceivedCounter.WithLabelValues(topic).Inc()
 
-		// since metadata requests do not have any data in the payload, we
+		// since some requests do not have any data in the payload, we
 		// do not decode anything.
-		if baseTopic == p2p.RPCMetaDataTopicV1 || baseTopic == p2p.RPCMetaDataTopicV2 {
+		if baseTopic == p2p.RPCMetaDataTopicV1 || baseTopic == p2p.RPCMetaDataTopicV2 ||
+			baseTopic == p2p.RPCLightClientOptimisticUpdateTopicV1 ||
+			baseTopic == p2p.RPCLightClientFinalityUpdateTopicV1 {
 			if err := handle(ctx, base, stream); err != nil {
 				messageFailedProcessingCounter.WithLabelValues(topic).Inc()
 				if !errors.Is(err, p2ptypes.ErrWrongForkDigestVersion) {

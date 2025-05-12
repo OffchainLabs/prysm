@@ -183,13 +183,58 @@ func WriteLightClientBootstrapChunk(stream libp2pcore.Stream, tor blockchain.Tem
 }
 
 func WriteLightClientUpdateChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, encoding encoder.NetworkEncoding, update interfaces.LightClientUpdate) error {
-	return nil
+	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
+		return err
+	}
+
+	valRoot := tor.GenesisValidatorsRoot()
+	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(update.AttestedHeader().Beacon().Slot), valRoot[:])
+	if err != nil {
+		return err
+	}
+	obtainedCtx := digest[:]
+
+	if err = writeContextToStream(obtainedCtx, stream); err != nil {
+		return err
+	}
+	_, err = encoding.EncodeWithMaxLength(stream, update)
+	return err
 }
 
 func WriteLightClientOptimisticUpdateChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, encoding encoder.NetworkEncoding, update interfaces.LightClientOptimisticUpdate) error {
-	return nil
+	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
+		return err
+	}
+
+	valRoot := tor.GenesisValidatorsRoot()
+	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(update.AttestedHeader().Beacon().Slot), valRoot[:])
+	if err != nil {
+		return err
+	}
+	obtainedCtx := digest[:]
+
+	if err = writeContextToStream(obtainedCtx, stream); err != nil {
+		return err
+	}
+	_, err = encoding.EncodeWithMaxLength(stream, update)
+	return err
 }
 
 func WriteLightClientFinalityUpdateChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, encoding encoder.NetworkEncoding, update interfaces.LightClientFinalityUpdate) error {
-	return nil
+	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
+		return err
+	}
+
+	valRoot := tor.GenesisValidatorsRoot()
+	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(update.AttestedHeader().Beacon().Slot), valRoot[:])
+	if err != nil {
+		return err
+	}
+	obtainedCtx := digest[:]
+
+	if err = writeContextToStream(obtainedCtx, stream); err != nil {
+		return err
+	}
+	_, err = encoding.EncodeWithMaxLength(stream, update)
+	return err
 }
