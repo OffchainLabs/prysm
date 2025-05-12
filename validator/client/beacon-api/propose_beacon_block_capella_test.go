@@ -27,7 +27,7 @@ func TestProposeBeaconBlock_Capella(t *testing.T) {
 
 	jsonCapellaBlock, err := structs.SignedBeaconBlockCapellaFromConsensus(capellaBlock.Capella)
 	require.NoError(t, err)
-	
+
 	marshalledBlock, err := json.Marshal(jsonCapellaBlock)
 	require.NoError(t, err)
 
