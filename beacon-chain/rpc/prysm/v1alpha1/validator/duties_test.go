@@ -32,7 +32,7 @@ func pubKey(i uint64) []byte {
 	return pubKey
 }
 
-func TestGetDuties_OK(t *testing.T) {
+func TestGetDutiesV2_OK(t *testing.T) {
 	genesis := util.NewBeaconBlock()
 	depChainStart := params.BeaconConfig().MinGenesisActiveValidatorCount
 	deposits, _, err := util.DeterministicDepositsAndKeys(depChainStart)
@@ -66,7 +66,7 @@ func TestGetDuties_OK(t *testing.T) {
 	req := &ethpb.DutiesRequest{
 		PublicKeys: [][]byte{deposits[0].Data.PublicKey},
 	}
-	res, err := vs.GetDuties(context.Background(), req)
+	res, err := vs.GetDutiesV2(context.Background(), req)
 	require.NoError(t, err, "Could not call epoch committee assignment")
 	if res.CurrentEpochDuties[0].AttesterSlot > bs.Slot()+params.BeaconConfig().SlotsPerEpoch {
 		t.Errorf("Assigned slot %d can't be higher than %d",
@@ -78,7 +78,7 @@ func TestGetDuties_OK(t *testing.T) {
 	req = &ethpb.DutiesRequest{
 		PublicKeys: [][]byte{deposits[lastValidatorIndex].Data.PublicKey},
 	}
-	res, err = vs.GetDuties(context.Background(), req)
+	res, err = vs.GetDutiesV2(context.Background(), req)
 	require.NoError(t, err, "Could not call epoch committee assignment")
 	if res.CurrentEpochDuties[0].AttesterSlot > bs.Slot()+params.BeaconConfig().SlotsPerEpoch {
 		t.Errorf("Assigned slot %d can't be higher than %d",
@@ -90,7 +90,7 @@ func TestGetDuties_OK(t *testing.T) {
 		PublicKeys: pubKeys,
 		Epoch:      0,
 	}
-	res, err = vs.GetDuties(context.Background(), req)
+	res, err = vs.GetDutiesV2(context.Background(), req)
 	require.NoError(t, err, "Could not call epoch committee assignment")
 	for i := 0; i < len(res.CurrentEpochDuties); i++ {
 		assert.Equal(t, primitives.ValidatorIndex(i), res.CurrentEpochDuties[i].ValidatorIndex)
@@ -153,7 +153,7 @@ func TestGetAltairDuties_SyncCommitteeOK(t *testing.T) {
 	req := &ethpb.DutiesRequest{
 		PublicKeys: [][]byte{deposits[0].Data.PublicKey},
 	}
-	res, err := vs.GetDuties(context.Background(), req)
+	res, err := vs.GetDutiesV2(context.Background(), req)
 	require.NoError(t, err, "Could not call epoch committee assignment")
 	if res.CurrentEpochDuties[0].AttesterSlot > bs.Slot()+params.BeaconConfig().SlotsPerEpoch {
 		t.Errorf("Assigned slot %d can't be higher than %d",
@@ -165,7 +165,7 @@ func TestGetAltairDuties_SyncCommitteeOK(t *testing.T) {
 	req = &ethpb.DutiesRequest{
 		PublicKeys: [][]byte{deposits[lastValidatorIndex].Data.PublicKey},
 	}
-	res, err = vs.GetDuties(context.Background(), req)
+	res, err = vs.GetDutiesV2(context.Background(), req)
 	require.NoError(t, err, "Could not call epoch committee assignment")
 	if res.CurrentEpochDuties[0].AttesterSlot > bs.Slot()+params.BeaconConfig().SlotsPerEpoch {
 		t.Errorf("Assigned slot %d can't be higher than %d",
@@ -177,7 +177,7 @@ func TestGetAltairDuties_SyncCommitteeOK(t *testing.T) {
 		PublicKeys: pubKeys,
 		Epoch:      0,
 	}
-	res, err = vs.GetDuties(context.Background(), req)
+	res, err = vs.GetDutiesV2(context.Background(), req)
 	require.NoError(t, err, "Could not call epoch committee assignment")
 	for i := 0; i < len(res.CurrentEpochDuties); i++ {
 		require.Equal(t, primitives.ValidatorIndex(i), res.CurrentEpochDuties[i].ValidatorIndex)
@@ -193,7 +193,7 @@ func TestGetAltairDuties_SyncCommitteeOK(t *testing.T) {
 		PublicKeys: pubKeys,
 		Epoch:      params.BeaconConfig().EpochsPerSyncCommitteePeriod - 1,
 	}
-	res, err = vs.GetDuties(context.Background(), req)
+	res, err = vs.GetDutiesV2(context.Background(), req)
 	require.NoError(t, err, "Could not call epoch committee assignment")
 	for i := 0; i < len(res.CurrentEpochDuties); i++ {
 		require.NotEqual(t, res.CurrentEpochDuties[i].IsSyncCommittee, res.NextEpochDuties[i].IsSyncCommittee)
@@ -260,7 +260,7 @@ func TestGetBellatrixDuties_SyncCommitteeOK(t *testing.T) {
 	req := &ethpb.DutiesRequest{
 		PublicKeys: [][]byte{deposits[0].Data.PublicKey},
 	}
-	res, err := vs.GetDuties(context.Background(), req)
+	res, err := vs.GetDutiesV2(context.Background(), req)
 	require.NoError(t, err, "Could not call epoch committee assignment")
 	if res.CurrentEpochDuties[0].AttesterSlot > bs.Slot()+params.BeaconConfig().SlotsPerEpoch {
 		t.Errorf("Assigned slot %d can't be higher than %d",
@@ -272,7 +272,7 @@ func TestGetBellatrixDuties_SyncCommitteeOK(t *testing.T) {
 	req = &ethpb.DutiesRequest{
 		PublicKeys: [][]byte{deposits[lastValidatorIndex].Data.PublicKey},
 	}
-	res, err = vs.GetDuties(context.Background(), req)
+	res, err = vs.GetDutiesV2(context.Background(), req)
 	require.NoError(t, err, "Could not call epoch committee assignment")
 	if res.CurrentEpochDuties[0].AttesterSlot > bs.Slot()+params.BeaconConfig().SlotsPerEpoch {
 		t.Errorf("Assigned slot %d can't be higher than %d",
@@ -284,7 +284,7 @@ func TestGetBellatrixDuties_SyncCommitteeOK(t *testing.T) {
 		PublicKeys: pubKeys,
 		Epoch:      0,
 	}
-	res, err = vs.GetDuties(context.Background(), req)
+	res, err = vs.GetDutiesV2(context.Background(), req)
 	require.NoError(t, err, "Could not call epoch committee assignment")
 	for i := 0; i < len(res.CurrentEpochDuties); i++ {
 		assert.Equal(t, primitives.ValidatorIndex(i), res.CurrentEpochDuties[i].ValidatorIndex)
@@ -300,7 +300,7 @@ func TestGetBellatrixDuties_SyncCommitteeOK(t *testing.T) {
 		PublicKeys: pubKeys,
 		Epoch:      params.BeaconConfig().EpochsPerSyncCommitteePeriod - 1,
 	}
-	res, err = vs.GetDuties(context.Background(), req)
+	res, err = vs.GetDutiesV2(context.Background(), req)
 	require.NoError(t, err, "Could not call epoch committee assignment")
 	for i := 0; i < len(res.CurrentEpochDuties); i++ {
 		require.NotEqual(t, res.CurrentEpochDuties[i].IsSyncCommittee, res.NextEpochDuties[i].IsSyncCommittee)
@@ -354,13 +354,13 @@ func TestGetAltairDuties_UnknownPubkey(t *testing.T) {
 	req := &ethpb.DutiesRequest{
 		PublicKeys: [][]byte{unknownPubkey},
 	}
-	res, err := vs.GetDuties(context.Background(), req)
+	res, err := vs.GetDutiesV2(context.Background(), req)
 	require.NoError(t, err)
 	assert.Equal(t, false, res.CurrentEpochDuties[0].IsSyncCommittee)
 	assert.Equal(t, false, res.NextEpochDuties[0].IsSyncCommittee)
 }
 
-func TestGetDuties_SlotOutOfUpperBound(t *testing.T) {
+func TestGetDutiesV2_SlotOutOfUpperBound(t *testing.T) {
 	chain := &mockChain.ChainService{
 		Genesis: time.Now(),
 	}
@@ -375,7 +375,7 @@ func TestGetDuties_SlotOutOfUpperBound(t *testing.T) {
 	require.ErrorContains(t, "can not be greater than next epoch", err)
 }
 
-func TestGetDuties_CurrentEpoch_ShouldNotFail(t *testing.T) {
+func TestGetDutiesV2_CurrentEpoch_ShouldNotFail(t *testing.T) {
 	genesis := util.NewBeaconBlock()
 	depChainStart := params.BeaconConfig().MinGenesisActiveValidatorCount
 	deposits, _, err := util.DeterministicDepositsAndKeys(depChainStart)
@@ -412,12 +412,12 @@ func TestGetDuties_CurrentEpoch_ShouldNotFail(t *testing.T) {
 	req := &ethpb.DutiesRequest{
 		PublicKeys: [][]byte{deposits[0].Data.PublicKey},
 	}
-	res, err := vs.GetDuties(context.Background(), req)
+	res, err := vs.GetDutiesV2(context.Background(), req)
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(res.CurrentEpochDuties), "Expected 1 assignment")
 }
 
-func TestGetDuties_MultipleKeys_OK(t *testing.T) {
+func TestGetDutiesV2_MultipleKeys_OK(t *testing.T) {
 	genesis := util.NewBeaconBlock()
 	depChainStart := uint64(64)
 
@@ -455,18 +455,18 @@ func TestGetDuties_MultipleKeys_OK(t *testing.T) {
 	req := &ethpb.DutiesRequest{
 		PublicKeys: [][]byte{pubkey0, pubkey1},
 	}
-	res, err := vs.GetDuties(context.Background(), req)
+	res, err := vs.GetDutiesV2(context.Background(), req)
 	require.NoError(t, err, "Could not call epoch committee assignment")
 	assert.Equal(t, 2, len(res.CurrentEpochDuties))
 	assert.Equal(t, primitives.Slot(4), res.CurrentEpochDuties[0].AttesterSlot)
 	assert.Equal(t, primitives.Slot(4), res.CurrentEpochDuties[1].AttesterSlot)
 }
 
-func TestGetDuties_SyncNotReady(t *testing.T) {
+func TestGetDutiesV2_SyncNotReady(t *testing.T) {
 	vs := &Server{
 		SyncChecker: &mockSync.Sync{IsSyncing: true},
 	}
-	_, err := vs.GetDuties(context.Background(), &ethpb.DutiesRequest{})
+	_, err := vs.GetDutiesV2(context.Background(), &ethpb.DutiesRequest{})
 	assert.ErrorContains(t, "Syncing to latest head", err)
 }
 
@@ -508,7 +508,7 @@ func BenchmarkCommitteeAssignment(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := vs.GetDuties(context.Background(), req)
+		_, err := vs.GetDutiesV2(context.Background(), req)
 		assert.NoError(b, err)
 	}
 }

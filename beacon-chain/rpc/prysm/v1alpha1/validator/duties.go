@@ -12,6 +12,8 @@ import (
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -26,6 +28,17 @@ func (vs *Server) GetDuties(ctx context.Context, req *ethpb.DutiesRequest) (*eth
 		return nil, status.Error(codes.Unavailable, "Syncing to latest head, not ready to respond")
 	}
 	return vs.duties(ctx, req)
+}
+
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
+//
+// GetDutiesV2 returns the duties assigned to a list of validators specified
+// in the request object.
+func (vs *Server) GetDutiesV2(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.DutiesV2Response, error) {
+	if vs.SyncChecker.Syncing() {
+		return nil, status.Error(codes.Unavailable, "Syncing to latest head, not ready to respond")
+	}
+	return vs.dutiesv2(ctx, req)
 }
 
 // Compute the validator duties from the head state's corresponding epoch
@@ -81,6 +94,18 @@ func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.
 		return nil, status.Errorf(codes.Internal, "Could not compute proposer slots: %v", err)
 	}
 
+	activeValidatorCount, err := helpers.ActiveValidatorCount(ctx, s, req.Epoch)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get active validator count: %v", err)
+	}
+	committeesAtSlot := helpers.SlotCommitteeCount(activeValidatorCount)
+
+	nextActiveValidatorCount, err := helpers.ActiveValidatorCount(ctx, s, req.Epoch+1)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get active validator count: %v", err)
+	}
+	nextCommitteesAtSlot := helpers.SlotCommitteeCount(nextActiveValidatorCount)
+
 	ctx, span := trace.StartSpan(ctx, "getDuties.BuildResponse")
 	defer span.End()
 
@@ -113,6 +138,7 @@ func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.
 				assignment.Committee = ca.Committee
 				assignment.AttesterSlot = ca.AttesterSlot
 				assignment.CommitteeIndex = ca.CommitteeIndex
+				assignment.CommitteesAtSlot = committeesAtSlot
 			}
 			// Save the next epoch assignments.
 			ca, ok = nextEpochAssignments[idx]
@@ -120,12 +146,14 @@ func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.
 				nextAssignment.Committee = ca.Committee
 				nextAssignment.AttesterSlot = ca.AttesterSlot
 				nextAssignment.CommitteeIndex = ca.CommitteeIndex
+				nextAssignment.CommitteesAtSlot = nextCommitteesAtSlot
 			}
 		} else {
-			// If the validator isn't in the beacon state, try finding their deposit to determine their status.
-			// We don't need the lastActiveValidatorFn because we don't use the response in this.
-			vStatus, _ := vs.validatorStatus(ctx, s, pubKey, nil)
-			assignment.Status = vStatus.Status
+			log.WithFields(logrus.Fields{
+				"pubKey": hexutil.Encode(pubKey),
+				"idx":    idx,
+			}).Debug("Could not get validator assignment status")
+			assignment.Status = ethpb.ValidatorStatus_UNKNOWN_STATUS
 		}
 
 		// Are the validators in current or next epoch sync committee.
@@ -174,6 +202,188 @@ func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.
 		}
 	}
 	return &ethpb.DutiesResponse{
+		PreviousDutyDependentRoot: prevDependentRoot[:],
+		CurrentDutyDependentRoot:  currDependentRoot[:],
+		CurrentEpochDuties:        validatorAssignments,
+		NextEpochDuties:           nextValidatorAssignments,
+	}, nil
+}
+
+// Compute the validator duties from the head state's corresponding epoch
+// for validators public key / indices requested.
+func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.DutiesV2Response, error) {
+	currentEpoch := slots.ToEpoch(vs.TimeFetcher.CurrentSlot())
+	if req.Epoch > currentEpoch+1 {
+		return nil, status.Errorf(codes.Unavailable, "Request epoch %d can not be greater than next epoch %d", req.Epoch, currentEpoch+1)
+	}
+
+	s, err := vs.HeadFetcher.HeadState(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get head state: %v", err)
+	}
+
+	// Advance state with empty transitions up to the requested epoch start slot.
+	epochStartSlot, err := slots.EpochStart(req.Epoch)
+	if err != nil {
+		return nil, err
+	}
+	if s.Slot() < epochStartSlot {
+		headRoot, err := vs.HeadFetcher.HeadRoot(ctx)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not retrieve head root: %v", err)
+		}
+		s, err = transition.ProcessSlotsUsingNextSlotCache(ctx, s, headRoot, epochStartSlot)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not process slots up to %d: %v", epochStartSlot, err)
+		}
+	}
+
+	requestIndices := make([]primitives.ValidatorIndex, 0, len(req.PublicKeys))
+	for _, pubKey := range req.PublicKeys {
+		idx, ok := s.ValidatorIndexByPubkey(bytesutil.ToBytes48(pubKey))
+		if !ok {
+			continue
+		}
+		requestIndices = append(requestIndices, idx)
+	}
+
+	assignments, err := helpers.CommitteeAssignments(ctx, s, req.Epoch, requestIndices)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not compute committee assignments: %v", err)
+	}
+	// Query the next epoch assignments for committee subnet subscriptions.
+	nextEpochAssignments, err := helpers.CommitteeAssignments(ctx, s, req.Epoch+1, requestIndices)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not compute next committee assignments: %v", err)
+	}
+
+	activeValidatorCount, err := helpers.ActiveValidatorCount(ctx, s, req.Epoch)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get active validator count: %v", err)
+	}
+	committeesAtSlot := helpers.SlotCommitteeCount(activeValidatorCount)
+
+	nextActiveValidatorCount, err := helpers.ActiveValidatorCount(ctx, s, req.Epoch+1)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get active validator count: %v", err)
+	}
+	nextCommitteesAtSlot := helpers.SlotCommitteeCount(nextActiveValidatorCount)
+
+	proposalSlots, err := helpers.ProposerAssignments(ctx, s, req.Epoch)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not compute proposer slots: %v", err)
+	}
+
+	ctx, span := trace.StartSpan(ctx, "getDutiesV2.BuildResponse")
+	defer span.End()
+
+	validatorAssignments := make([]*ethpb.DutiesV2Response_Duty, 0, len(req.PublicKeys))
+	nextValidatorAssignments := make([]*ethpb.DutiesV2Response_Duty, 0, len(req.PublicKeys))
+	for _, pubKey := range req.PublicKeys {
+		if ctx.Err() != nil {
+			return nil, status.Errorf(codes.Aborted, "Could not continue fetching assignments: %v", ctx.Err())
+		}
+		assignment := &ethpb.DutiesV2Response_Duty{
+			PublicKey: pubKey,
+		}
+		nextAssignment := &ethpb.DutiesV2Response_Duty{
+			PublicKey: pubKey,
+		}
+		idx, ok := s.ValidatorIndexByPubkey(bytesutil.ToBytes48(pubKey))
+		if ok {
+			s := assignmentStatus(s, idx)
+
+			assignment.ValidatorIndex = idx
+			assignment.Status = s
+			assignment.ProposerSlots = proposalSlots[idx]
+			assignment.CommitteesAtSlot = committeesAtSlot
+
+			// The next epoch has no lookup for proposer indexes.
+			nextAssignment.ValidatorIndex = idx
+			nextAssignment.Status = s
+
+			ca, ok := assignments[idx]
+			if ok {
+				//assignment.Committee = ca.Committee
+				var valIndexInCommittee uint64
+				for cIndex, vIndex := range ca.Committee {
+					if vIndex == idx {
+						valIndexInCommittee = uint64(cIndex)
+						break
+					}
+				}
+				assignment.CommitteeLength = uint64(len(ca.Committee))
+				assignment.CommitteeIndex = ca.CommitteeIndex
+				assignment.ValidatorCommitteeIndex = valIndexInCommittee
+				assignment.AttesterSlot = ca.AttesterSlot
+			}
+			// Save the next epoch assignments.
+			ca, ok = nextEpochAssignments[idx]
+			if ok {
+				//nextAssignment.Committee = ca.Committee
+				var valIndexInCommittee uint64
+				for cIndex, vIndex := range ca.Committee {
+					if vIndex == idx {
+						valIndexInCommittee = uint64(cIndex)
+						break
+					}
+				}
+				nextAssignment.CommitteeLength = uint64(len(ca.Committee))
+				nextAssignment.CommitteeIndex = ca.CommitteeIndex
+				nextAssignment.ValidatorCommitteeIndex = valIndexInCommittee
+				nextAssignment.AttesterSlot = ca.AttesterSlot
+				nextAssignment.CommitteesAtSlot = nextCommitteesAtSlot
+			}
+		} else {
+			assignment.Status = ethpb.ValidatorStatus_UNKNOWN_STATUS
+		}
+
+		// Are the validators in current or next epoch sync committee.
+		if ok && coreTime.HigherEqualThanAltairVersionAndEpoch(s, req.Epoch) {
+			assignment.IsSyncCommittee, err = helpers.IsCurrentPeriodSyncCommittee(s, idx)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "Could not determine current epoch sync committee: %v", err)
+			}
+			if assignment.IsSyncCommittee {
+				if err := core.RegisterSyncSubnetCurrentPeriodProto(s, req.Epoch, pubKey, assignment.Status); err != nil {
+					return nil, err
+				}
+			}
+			nextAssignment.IsSyncCommittee = assignment.IsSyncCommittee
+
+			// Next epoch sync committee duty is assigned with next period sync committee only during
+			// sync period epoch boundary (ie. EPOCHS_PER_SYNC_COMMITTEE_PERIOD - 1). Else wise
+			// next epoch sync committee duty is the same as current epoch.
+			nextEpoch := req.Epoch + 1
+			currentEpoch := coreTime.CurrentEpoch(s)
+			if slots.SyncCommitteePeriod(nextEpoch) > slots.SyncCommitteePeriod(currentEpoch) {
+				nextAssignment.IsSyncCommittee, err = helpers.IsNextPeriodSyncCommittee(s, idx)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "Could not determine next epoch sync committee: %v", err)
+				}
+				if nextAssignment.IsSyncCommittee {
+					if err := core.RegisterSyncSubnetNextPeriodProto(s, req.Epoch, pubKey, nextAssignment.Status); err != nil {
+						return nil, err
+					}
+				}
+			}
+		}
+
+		validatorAssignments = append(validatorAssignments, assignment)
+		nextValidatorAssignments = append(nextValidatorAssignments, nextAssignment)
+	}
+	currDependentRoot, err := vs.ForkchoiceFetcher.DependentRoot(currentEpoch)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get dependent root: %v", err)
+	}
+	prevDependentRoot := currDependentRoot
+	if currDependentRoot != [32]byte{} && currentEpoch > 0 {
+		prevDependentRoot, err = vs.ForkchoiceFetcher.DependentRoot(currentEpoch - 1)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not get previous dependent root: %v", err)
+		}
+	}
+	return &ethpb.DutiesV2Response{
 		PreviousDutyDependentRoot: prevDependentRoot[:],
 		CurrentDutyDependentRoot:  currDependentRoot[:],
 		CurrentEpochDuties:        validatorAssignments,
