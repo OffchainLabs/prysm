@@ -133,8 +133,8 @@ func run(ctx context.Context, v iface.Validator) {
 				cancel()
 				continue
 			}
+			// performRoles calls span.End()
 			performRoles(slotCtx, allRoles, v, slot, &wg, span)
-			span.End()
 			cancel()
 		case isHealthyAgain := <-healthTracker.HealthUpdates():
 			if isHealthyAgain {
