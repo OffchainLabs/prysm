@@ -1314,11 +1314,11 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 			return
 		}
 		v.setHighestSlot(primitives.Slot(uintSlot))
-		//if !v.disableDutiesPolling {
-		//	if err := v.checkDependentRoots(ctx, head); err != nil {
-		//		log.WithError(err).Error("Failed to check dependent roots")
-		//	}
-		//}
+		if !v.disableDutiesPolling {
+			if err := v.checkDependentRoots(ctx, head); err != nil {
+				log.WithError(err).Error("Failed to check dependent roots")
+			}
+		}
 	default:
 		// just keep going and log the error
 		log.WithField("type", event.EventType).WithField("data", string(event.Data)).Warn("Received an unknown event")
