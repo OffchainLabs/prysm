@@ -119,9 +119,8 @@ func run(ctx context.Context, v iface.Validator) {
 
 			// Start fetching domain data for the next epoch.
 			if slots.IsEpochEnd(slot) {
-				domainCtx, domainCancel := context.WithDeadline(ctx, deadline)
+				domainCtx, _ := context.WithDeadline(ctx, deadline)
 				go v.UpdateDomainDataCaches(domainCtx, slot+1)
-				domainCancel()
 			}
 
 			var wg sync.WaitGroup
