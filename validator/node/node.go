@@ -376,6 +376,7 @@ func (c *ValidatorClient) registerPrometheusService(cliCtx *cli.Context) error {
 		return nil
 	}
 	service := prometheus.NewService(
+		cliCtx.Context,
 		fmt.Sprintf("%s:%d", cliCtx.String(cmd.MonitoringHostFlag.Name), cliCtx.Int(flags.MonitoringPortFlag.Name)),
 		c.services,
 	)

@@ -80,8 +80,38 @@ func MerkleProofKZGCommitment(body interfaces.ReadOnlyBeaconBlockBody, index int
 	return proof, nil
 }
 
-// leavesFromCommitments hashes each commitment to construct a slice of roots
-func leavesFromCommitments(commitments [][]byte) [][]byte {
+// MerkleProofKZGCommitments constructs a Merkle proof of inclusion of the KZG
+// commitments into the Beacon Block with the given `body`
+func MerkleProofKZGCommitments(body interfaces.ReadOnlyBeaconBlockBody) ([][]byte, error) {
+	bodyVersion := body.Version()
+	if bodyVersion < version.Deneb {
+		return nil, errUnsupportedBeaconBlockBody
+	}
+
+	membersRoots, err := topLevelRoots(body)
+	if err != nil {
+		return nil, errors.Wrap(err, "top level roots")
+	}
+
+	sparse, err := trie.GenerateTrieFromItems(membersRoots, logBodyLength)
+	if err != nil {
+		return nil, errors.Wrap(err, "generate trie from items")
+	}
+
+	proof, err := sparse.MerkleProof(kzgPosition)
+	if err != nil {
+		return nil, errors.Wrap(err, "merkle proof")
+	}
+
+	// Remove the last element as it is a mix in with the number of
+	// elements in the trie.
+	proof = proof[:len(proof)-1]
+
+	return proof, nil
+}
+
+// LeavesFromCommitments hashes each commitment to construct a slice of roots
+func LeavesFromCommitments(commitments [][]byte) [][]byte {
 	leaves := make([][]byte, len(commitments))
 	for i, kzg := range commitments {
 		chunk := makeChunk(kzg)
@@ -105,7 +135,7 @@ func bodyProof(commitments [][]byte, index int) ([][]byte, error) {
 	if index < 0 || index >= len(commitments) {
 		return nil, errInvalidIndex
 	}
-	leaves := leavesFromCommitments(commitments)
+	leaves := LeavesFromCommitments(commitments)
 	sparse, err := trie.GenerateTrieFromItems(leaves, field_params.LogMaxBlobCommitments)
 	if err != nil {
 		return nil, err
