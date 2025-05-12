@@ -22,31 +22,33 @@ import (
 // toValidatorDutiesContainer is assumed to be available from your package, returning a *v1alpha1.ValidatorDutiesContainer.
 func TestToValidatorDutiesContainer_HappyPath(t *testing.T) {
 	// Create a mock DutiesResponse with current and next duties.
-	dutiesResp := &eth.DutiesResponse{
-		CurrentEpochDuties: []*eth.DutiesResponse_Duty{
+	dutiesResp := &eth.DutiesV2Response{
+		CurrentEpochDuties: []*eth.DutiesV2Response_Duty{
 			{
-				Committee:        []primitives.ValidatorIndex{100, 101},
-				CommitteeIndex:   4,
-				AttesterSlot:     200,
-				ProposerSlots:    []primitives.Slot{400},
-				PublicKey:        []byte{0xAA, 0xBB},
-				Status:           eth.ValidatorStatus_ACTIVE,
-				ValidatorIndex:   101,
-				IsSyncCommittee:  false,
-				CommitteesAtSlot: 2,
+				CommitteeLength:         2,
+				ValidatorCommitteeIndex: 1,
+				CommitteeIndex:          4,
+				AttesterSlot:            200,
+				ProposerSlots:           []primitives.Slot{400},
+				PublicKey:               []byte{0xAA, 0xBB},
+				Status:                  eth.ValidatorStatus_ACTIVE,
+				ValidatorIndex:          101,
+				IsSyncCommittee:         false,
+				CommitteesAtSlot:        2,
 			},
 		},
-		NextEpochDuties: []*eth.DutiesResponse_Duty{
+		NextEpochDuties: []*eth.DutiesV2Response_Duty{
 			{
-				Committee:        []primitives.ValidatorIndex{300, 301},
-				CommitteeIndex:   8,
-				AttesterSlot:     600,
-				ProposerSlots:    []primitives.Slot{700, 701},
-				PublicKey:        []byte{0xCC, 0xDD},
-				Status:           eth.ValidatorStatus_ACTIVE,
-				ValidatorIndex:   301,
-				IsSyncCommittee:  true,
-				CommitteesAtSlot: 3,
+				CommitteeLength:         2,
+				ValidatorCommitteeIndex: 1,
+				CommitteeIndex:          8,
+				AttesterSlot:            600,
+				ProposerSlots:           []primitives.Slot{700, 701},
+				PublicKey:               []byte{0xCC, 0xDD},
+				Status:                  eth.ValidatorStatus_ACTIVE,
+				ValidatorIndex:          301,
+				IsSyncCommittee:         true,
+				CommitteesAtSlot:        3,
 			},
 		},
 	}
