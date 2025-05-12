@@ -65,7 +65,7 @@ type stateDiff struct {
 	// Capella
 	nextWithdrawalIndex          uint64
 	nextWithdrawalValidatorIndex primitives.ValidatorIndex
-	historicalSummaries          []ethpb.HistoricalSummary // append only.
+	historicalSummaries          []*ethpb.HistoricalSummary // append only.
 	// Electra
 	depositRequestsStartIndex     uint64
 	depositBalanceToConsume       primitives.Gwei
@@ -347,7 +347,9 @@ func readPendingAttestation(data *[]byte) (*ethpb.PendingAttestation, error) {
 	pending.AggregationBits = bitfield.Bitlist(slices.Clone((*data)[8 : 8+bitsLength]))
 	*data = (*data)[8+bitsLength:]
 	pending.Data = &ethpb.AttestationData{}
-	pending.Data.UnmarshalSSZ((*data)[:128]) // pending.Data is 128 bytes
+	if err := pending.Data.UnmarshalSSZ((*data)[:128]); err != nil { // pending.Data is 128 bytes
+		return nil, errors.Wrap(err, "failed to unmarshal pendingAttestation")
+	}
 	pending.InclusionDelay = primitives.Slot(binary.LittleEndian.Uint64((*data)[128:136]))
 	pending.ProposerIndex = primitives.ValidatorIndex(binary.LittleEndian.Uint64((*data)[136:144]))
 	*data = (*data)[144:]
@@ -578,10 +580,10 @@ func (ret *stateDiff) readHistoricalSummaries(data *[]byte) error {
 	if len(*data) < 8+historicalSummariesLength*fieldparams.RootLength*2 {
 		return errors.Wrap(errDataSmall, "historicalSummaries")
 	}
-	ret.historicalSummaries = make([]ethpb.HistoricalSummary, historicalSummariesLength)
+	ret.historicalSummaries = make([]*ethpb.HistoricalSummary, historicalSummariesLength)
 	cursor := 8
 	for i := range historicalSummariesLength {
-		ret.historicalSummaries[i] = ethpb.HistoricalSummary{
+		ret.historicalSummaries[i] = &ethpb.HistoricalSummary{
 			BlockSummaryRoot: slices.Clone((*data)[cursor : cursor+fieldparams.RootLength]),
 			StateSummaryRoot: slices.Clone((*data)[cursor+fieldparams.RootLength : cursor+2*fieldparams.RootLength]),
 		}
@@ -953,9 +955,8 @@ func (s *stateDiff) serialize() []byte {
 		for _, a := range s.previousEpochAttestations {
 			ret = binary.LittleEndian.AppendUint64(ret, uint64(len(a.AggregationBits)))
 			ret = append(ret, a.AggregationBits...)
-			cursor := len(ret)
-			ret = append(ret, make([]byte, 128)...)
-			_, err := a.Data.MarshalSSZTo(ret[cursor:])
+			var err error
+			ret, err = a.Data.MarshalSSZTo(ret)
 			if err != nil {
 				// this is impossible to happen.
 				logrus.WithError(err).Error("failed to marshal previousEpochAttestation")
@@ -968,9 +969,8 @@ func (s *stateDiff) serialize() []byte {
 		for _, a := range s.currentEpochAttestations {
 			ret = binary.LittleEndian.AppendUint64(ret, uint64(len(a.AggregationBits)))
 			ret = append(ret, a.AggregationBits...)
-			cursor := len(ret)
-			ret = append(ret, make([]byte, 128)...)
-			_, err := a.Data.MarshalSSZTo(ret[cursor:])
+			var err error
+			ret, err = a.Data.MarshalSSZTo(ret)
 			if err != nil {
 				// this is impossible to happen.
 				logrus.WithError(err).Error("failed to marshal currentEpochAttestation")
@@ -1024,10 +1024,8 @@ func (s *stateDiff) serialize() []byte {
 	} else {
 		ret = append(ret, 0x1)
 		ret = binary.LittleEndian.AppendUint64(ret, uint64(s.executionPayloadHeader.SizeSSZ()))
-		cursor := len(ret)
-		ret = append(ret, make([]byte, s.executionPayloadHeader.SizeSSZ())...)
 		var err error
-		_, err = s.executionPayloadHeader.MarshalSSZTo(ret[cursor:])
+		ret, err = s.executionPayloadHeader.MarshalSSZTo(ret)
 		if err != nil {
 			// this is impossible to happen.
 			logrus.WithError(err).Error("failed to marshal executionPayloadHeader")
@@ -1076,7 +1074,7 @@ func (s *stateDiff) serialize() []byte {
 	return ret
 }
 
-func (h Hdiff) Serialize() HdiffSerialized {
+func (h *Hdiff) serialize() HdiffSerialized {
 	vals := make([]byte, 0) // TODO: compute a sensible default capacity.
 	vals = binary.LittleEndian.AppendUint64(vals, uint64(len(h.validatorDiffs)))
 	for _, v := range h.validatorDiffs {
@@ -1209,7 +1207,15 @@ func diffToBalances(source, target state.BeaconState) ([]int64, error) {
 	return diffs, nil
 }
 
-func diff(source, target state.BeaconState) (*Hdiff, error) {
+func Diff(source, target state.BeaconState) (HdiffSerialized, error) {
+	h, err := diff_internal(source, target)
+	if err != nil {
+		return HdiffSerialized{}, err
+	}
+	return h.serialize(), nil
+}
+
+func diff_internal(source, target state.BeaconState) (*Hdiff, error) {
 	stateDiff, err := diffToState(source, target)
 	if err != nil {
 		return nil, err
@@ -1446,9 +1452,9 @@ func diffHistoricalSummaries(diff *stateDiff, source, target state.BeaconState) 
 		return errors.New("target historical summaries length is less than source")
 	}
 	// this copy can be avoided if we use []*ethpb.HistoricalSummary instead of []ethpb.HistoricalSummary.
-	diff.historicalSummaries = make([]ethpb.HistoricalSummary, len(tSummaries)-start)
+	diff.historicalSummaries = make([]*ethpb.HistoricalSummary, len(tSummaries)-start)
 	for i, summary := range tSummaries[start:] {
-		diff.historicalSummaries[i] = ethpb.HistoricalSummary{
+		diff.historicalSummaries[i] = &ethpb.HistoricalSummary{
 			BlockSummaryRoot: slices.Clone(summary.BlockSummaryRoot),
 			StateSummaryRoot: slices.Clone(summary.StateSummaryRoot),
 		}
@@ -1605,6 +1611,14 @@ func diffPendingConsolidations(diff *stateDiff, source, target state.BeaconState
 		}
 	}
 	return nil
+}
+
+func ApplyDiff(ctx context.Context, source state.BeaconState, diff HdiffSerialized) error {
+	hdiff, err := NewHdiff(diff)
+	if err != nil {
+		return errors.Wrap(err, "failed to create Hdiff")
+	}
+	return applyStateDiff(ctx, source, hdiff.stateDiff)
 }
 
 // applyStateDiff applies the given diff to the source state in place.

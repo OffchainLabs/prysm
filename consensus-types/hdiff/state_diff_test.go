@@ -1,8 +1,11 @@
 package hdiff
 
 import (
+	"context"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 )
@@ -57,4 +60,20 @@ func Test_kmpIndex(t *testing.T) {
 		require.Equal(t, len(source), kmpIndex(len(source), target, integerEquals))
 	})
 
+}
+
+func TestApplyDiff(t *testing.T) {
+	source, keys := util.DeterministicGenesisStateElectra(t, 256)
+	blk, err := util.GenerateFullBlockElectra(source, keys, util.DefaultBlockGenConfig(), 1)
+	require.NoError(t, err)
+	wsb, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	ctx := context.Background()
+	target, err := transition.ExecuteStateTransition(ctx, source, wsb)
+	require.NoError(t, err)
+
+	hdiff, err := Diff(source, target)
+	require.NoError(t, err)
+	require.NoError(t, ApplyDiff(ctx, source, hdiff))
+	require.DeepEqual(t, source, target)
 }
