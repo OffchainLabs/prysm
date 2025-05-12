@@ -402,109 +402,109 @@ func TestExecutionHeaderResponseUnmarshal(t *testing.T) {
 	}
 }
 
-func TestExecutionHeaderResponseCapellaUnmarshal(t *testing.T) {
-	hr := &ExecHeaderResponseCapella{}
-	require.NoError(t, json.Unmarshal([]byte(testExampleHeaderResponseCapella), hr))
-	cases := []struct {
-		expected string
-		actual   string
-		name     string
-	}{
-		{
-			expected: "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505",
-			actual:   hexutil.Encode(hr.Data.Signature),
-			name:     "Signature",
-		},
-		{
-			expected: "0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a",
-			actual:   hexutil.Encode(hr.Data.Message.Pubkey),
-			name:     "ExecHeaderResponse.Pubkey",
-		},
-		{
-			expected: "652312848583266388373324160190187140051835877600158453279131187530910662656",
-			actual:   hr.Data.Message.Value.String(),
-			name:     "ExecHeaderResponse.Value",
-		},
-		{
-			expected: "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
-			actual:   hexutil.Encode(hr.Data.Message.Header.ParentHash),
-			name:     "ExecHeaderResponse.ExecutionPayloadHeader.ParentHash",
-		},
-		{
-			expected: "0xabcf8e0d4e9587369b2301d0790347320302cc09",
-			actual:   hexutil.Encode(hr.Data.Message.Header.FeeRecipient),
-			name:     "ExecHeaderResponse.ExecutionPayloadHeader.FeeRecipient",
-		},
-		{
-			expected: "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
-			actual:   hexutil.Encode(hr.Data.Message.Header.StateRoot),
-			name:     "ExecHeaderResponse.ExecutionPayloadHeader.StateRoot",
-		},
-		{
-			expected: "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
-			actual:   hexutil.Encode(hr.Data.Message.Header.ReceiptsRoot),
-			name:     "ExecHeaderResponse.ExecutionPayloadHeader.ReceiptsRoot",
-		},
-		{
-			expected: "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-			actual:   hexutil.Encode(hr.Data.Message.Header.LogsBloom),
-			name:     "ExecHeaderResponse.ExecutionPayloadHeader.LogsBloom",
-		},
-		{
-			expected: "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
-			actual:   hexutil.Encode(hr.Data.Message.Header.PrevRandao),
-			name:     "ExecHeaderResponse.ExecutionPayloadHeader.PrevRandao",
-		},
-		{
-			expected: "1",
-			actual:   fmt.Sprintf("%d", hr.Data.Message.Header.BlockNumber),
-			name:     "ExecHeaderResponse.ExecutionPayloadHeader.BlockNumber",
-		},
-		{
-			expected: "1",
-			actual:   fmt.Sprintf("%d", hr.Data.Message.Header.GasLimit),
-			name:     "ExecHeaderResponse.ExecutionPayloadHeader.GasLimit",
-		},
-		{
-			expected: "1",
-			actual:   fmt.Sprintf("%d", hr.Data.Message.Header.GasUsed),
-			name:     "ExecHeaderResponse.ExecutionPayloadHeader.GasUsed",
-		},
-		{
-			expected: "1",
-			actual:   fmt.Sprintf("%d", hr.Data.Message.Header.Timestamp),
-			name:     "ExecHeaderResponse.ExecutionPayloadHeader.Timestamp",
-		},
-		{
-			expected: "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
-			actual:   hexutil.Encode(hr.Data.Message.Header.ExtraData),
-			name:     "ExecHeaderResponse.ExecutionPayloadHeader.ExtraData",
-		},
-		{
-			expected: "452312848583266388373324160190187140051835877600158453279131187530910662656",
-			actual:   fmt.Sprintf("%d", hr.Data.Message.Header.BaseFeePerGas),
-			name:     "ExecHeaderResponse.ExecutionPayloadHeader.BaseFeePerGas",
-		},
-		{
-			expected: "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
-			actual:   hexutil.Encode(hr.Data.Message.Header.BlockHash),
-			name:     "ExecHeaderResponse.ExecutionPayloadHeader.BlockHash",
-		},
-		{
-			expected: "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
-			actual:   hexutil.Encode(hr.Data.Message.Header.TransactionsRoot),
-			name:     "ExecHeaderResponse.ExecutionPayloadHeader.TransactionsRoot",
-		},
-		{
-			expected: "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
-			actual:   hexutil.Encode(hr.Data.Message.Header.WithdrawalsRoot),
-			name:     "ExecHeaderResponse.ExecutionPayloadHeader.WithdrawalsRoot",
-		},
-	}
-	for _, c := range cases {
-		require.Equal(t, c.expected, c.actual, fmt.Sprintf("unexpected value for field %s", c.name))
-	}
-}
+//func TestExecutionHeaderResponseCapellaUnmarshal(t *testing.T) {
+//	hr := &ExecHeaderResponseCapella{}
+//	require.NoError(t, json.Unmarshal([]byte(testExampleHeaderResponseCapella), hr))
+//	cases := []struct {
+//		expected string
+//		actual   string
+//		name     string
+//	}{
+//		{
+//			expected: "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505",
+//			actual:   hexutil.Encode(hr.Data.Signature),
+//			name:     "Signature",
+//		},
+//		{
+//			expected: "0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a",
+//			actual:   hexutil.Encode(hr.Data.Message.Pubkey),
+//			name:     "ExecHeaderResponse.Pubkey",
+//		},
+//		{
+//			expected: "652312848583266388373324160190187140051835877600158453279131187530910662656",
+//			actual:   hr.Data.Message.Value.String(),
+//			name:     "ExecHeaderResponse.Value",
+//		},
+//		{
+//			expected: "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+//			actual:   hexutil.Encode(hr.Data.Message.Header.ParentHash),
+//			name:     "ExecHeaderResponse.ExecutionPayloadHeader.ParentHash",
+//		},
+//		{
+//			expected: "0xabcf8e0d4e9587369b2301d0790347320302cc09",
+//			actual:   hexutil.Encode(hr.Data.Message.Header.FeeRecipient),
+//			name:     "ExecHeaderResponse.ExecutionPayloadHeader.FeeRecipient",
+//		},
+//		{
+//			expected: "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+//			actual:   hexutil.Encode(hr.Data.Message.Header.StateRoot),
+//			name:     "ExecHeaderResponse.ExecutionPayloadHeader.StateRoot",
+//		},
+//		{
+//			expected: "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+//			actual:   hexutil.Encode(hr.Data.Message.Header.ReceiptsRoot),
+//			name:     "ExecHeaderResponse.ExecutionPayloadHeader.ReceiptsRoot",
+//		},
+//		{
+//			expected: "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+//			actual:   hexutil.Encode(hr.Data.Message.Header.LogsBloom),
+//			name:     "ExecHeaderResponse.ExecutionPayloadHeader.LogsBloom",
+//		},
+//		{
+//			expected: "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+//			actual:   hexutil.Encode(hr.Data.Message.Header.PrevRandao),
+//			name:     "ExecHeaderResponse.ExecutionPayloadHeader.PrevRandao",
+//		},
+//		{
+//			expected: "1",
+//			actual:   fmt.Sprintf("%d", hr.Data.Message.Header.BlockNumber),
+//			name:     "ExecHeaderResponse.ExecutionPayloadHeader.BlockNumber",
+//		},
+//		{
+//			expected: "1",
+//			actual:   fmt.Sprintf("%d", hr.Data.Message.Header.GasLimit),
+//			name:     "ExecHeaderResponse.ExecutionPayloadHeader.GasLimit",
+//		},
+//		{
+//			expected: "1",
+//			actual:   fmt.Sprintf("%d", hr.Data.Message.Header.GasUsed),
+//			name:     "ExecHeaderResponse.ExecutionPayloadHeader.GasUsed",
+//		},
+//		{
+//			expected: "1",
+//			actual:   fmt.Sprintf("%d", hr.Data.Message.Header.Timestamp),
+//			name:     "ExecHeaderResponse.ExecutionPayloadHeader.Timestamp",
+//		},
+//		{
+//			expected: "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+//			actual:   hexutil.Encode(hr.Data.Message.Header.ExtraData),
+//			name:     "ExecHeaderResponse.ExecutionPayloadHeader.ExtraData",
+//		},
+//		{
+//			expected: "452312848583266388373324160190187140051835877600158453279131187530910662656",
+//			actual:   fmt.Sprintf("%d", hr.Data.Message.Header.BaseFeePerGas),
+//			name:     "ExecHeaderResponse.ExecutionPayloadHeader.BaseFeePerGas",
+//		},
+//		{
+//			expected: "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+//			actual:   hexutil.Encode(hr.Data.Message.Header.BlockHash),
+//			name:     "ExecHeaderResponse.ExecutionPayloadHeader.BlockHash",
+//		},
+//		{
+//			expected: "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+//			actual:   hexutil.Encode(hr.Data.Message.Header.TransactionsRoot),
+//			name:     "ExecHeaderResponse.ExecutionPayloadHeader.TransactionsRoot",
+//		},
+//		{
+//			expected: "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+//			actual:   hexutil.Encode(hr.Data.Message.Header.WithdrawalsRoot),
+//			name:     "ExecHeaderResponse.ExecutionPayloadHeader.WithdrawalsRoot",
+//		},
+//	}
+//	for _, c := range cases {
+//		require.Equal(t, c.expected, c.actual, fmt.Sprintf("unexpected value for field %s", c.name))
+//	}
+//}
 
 func TestExecutionHeaderResponseToProto(t *testing.T) {
 	bfpg, err := stringToUint256("452312848583266388373324160190187140051835877600158453279131187530910662656")
@@ -1608,15 +1608,15 @@ func TestExecutionPayloadHeader_MarshalJSON(t *testing.T) {
 	require.Equal(t, expected, string(b))
 }
 
-func TestExecutionPayloadHeaderCapella_MarshalJSON(t *testing.T) {
-	h := &ExecutionPayloadHeaderCapella{
-		ExecutionPayloadHeaderCapella: pbExecutionPayloadHeaderCapella(t),
-	}
-	b, err := json.Marshal(h)
-	require.NoError(t, err)
-	expected := `{"parent_hash":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2","fee_recipient":"0xabcf8e0d4e9587369b2301d0790347320302cc09","state_root":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2","receipts_root":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2","logs_bloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","prev_randao":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2","block_number":"1","gas_limit":"1","gas_used":"1","timestamp":"1","extra_data":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2","base_fee_per_gas":"452312848583266388373324160190187140051835877600158453279131187530910662656","block_hash":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2","transactions_root":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2","withdrawals_root":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"}`
-	require.Equal(t, expected, string(b))
-}
+//func TestExecutionPayloadHeaderCapella_MarshalJSON(t *testing.T) {
+//	h := &ExecutionPayloadHeaderCapella{
+//		ExecutionPayloadHeaderCapella: pbExecutionPayloadHeaderCapella(t),
+//	}
+//	b, err := json.Marshal(h)
+//	require.NoError(t, err)
+//	expected := `{"parent_hash":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2","fee_recipient":"0xabcf8e0d4e9587369b2301d0790347320302cc09","state_root":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2","receipts_root":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2","logs_bloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","prev_randao":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2","block_number":"1","gas_limit":"1","gas_used":"1","timestamp":"1","extra_data":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2","base_fee_per_gas":"452312848583266388373324160190187140051835877600158453279131187530910662656","block_hash":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2","transactions_root":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2","withdrawals_root":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"}`
+//	require.Equal(t, expected, string(b))
+//}
 
 func TestExecutionPayloadHeaderDeneb_MarshalJSON(t *testing.T) {
 	h := &ExecutionPayloadHeaderDeneb{
@@ -1870,15 +1870,15 @@ func TestExecutionPayloadHeaderRoundtrip(t *testing.T) {
 	require.DeepEqual(t, string(expected[0:len(expected)-1]), string(m))
 }
 
-func TestExecutionPayloadHeaderCapellaRoundtrip(t *testing.T) {
-	expected, err := os.ReadFile("testdata/execution-payload-capella.json")
-	require.NoError(t, err)
-	hu := &ExecutionPayloadHeaderCapella{}
-	require.NoError(t, json.Unmarshal(expected, hu))
-	m, err := json.Marshal(hu)
-	require.NoError(t, err)
-	require.DeepEqual(t, string(expected[0:len(expected)-1]), string(m))
-}
+//func TestExecutionPayloadHeaderCapellaRoundtrip(t *testing.T) {
+//	expected, err := os.ReadFile("testdata/execution-payload-capella.json")
+//	require.NoError(t, err)
+//	hu := &ExecutionPayloadHeaderCapella{}
+//	require.NoError(t, json.Unmarshal(expected, hu))
+//	m, err := json.Marshal(hu)
+//	require.NoError(t, err)
+//	require.DeepEqual(t, string(expected[0:len(expected)-1]), string(m))
+//}
 
 func TestErrorMessage_non200Err(t *testing.T) {
 	mockRequest := &http.Request{

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v6/api/server"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -439,7 +440,7 @@ func (ehr *ExecHeaderResponseCapella) ToProto() (*eth.SignedBuilderBidCapella, e
 
 // ToProto returns a BuilderBidCapella Proto.
 func (bb *BuilderBidCapella) ToProto() (*eth.BuilderBidCapella, error) {
-	header, err := bb.Header.ToProto()
+	header, err := bb.Header.ToConsensus()
 	if err != nil {
 		return nil, err
 	}
@@ -475,9 +476,9 @@ func (h *ExecutionPayloadHeaderCapella) ToProto() (*v1.ExecutionPayloadHeaderCap
 
 // BuilderBidCapella is field of ExecHeaderResponseCapella.
 type BuilderBidCapella struct {
-	Header *ExecutionPayloadHeaderCapella `json:"header"`
-	Value  Uint256                        `json:"value"`
-	Pubkey hexutil.Bytes                  `json:"pubkey"`
+	Header *structs.ExecutionPayloadHeaderCapella `json:"header"`
+	Value  Uint256                                `json:"value"`
+	Pubkey hexutil.Bytes                          `json:"pubkey"`
 }
 
 // ExecutionPayloadHeaderCapella is a field in BuilderBidCapella.

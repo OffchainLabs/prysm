@@ -440,7 +440,12 @@ func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter) {
 		return
 	}
 	val := builderAPI.Uint256{Int: v}
-	wrappedHdr := &builderAPI.ExecutionPayloadHeaderCapella{ExecutionPayloadHeaderCapella: hdr}
+	wrappedHdr, err := structs.ExecutionPayloadHeaderCapellaFromConsensus(hdr)
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not make execution payload")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	bid := &builderAPI.BuilderBidCapella{
 		Header: wrappedHdr,
 		Value:  val,
