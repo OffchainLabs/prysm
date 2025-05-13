@@ -770,7 +770,7 @@ func (p *Status) BestFinalized(maxPeers int, ourFinalizedEpoch primitives.Epoch)
 	}
 
 	// Trim potential peers to at most maxPeers.
-	if len(potentialPIDs) > maxPeers {
+	if maxPeers > 0 && len(potentialPIDs) > maxPeers {
 		potentialPIDs = potentialPIDs[:maxPeers]
 	}
 

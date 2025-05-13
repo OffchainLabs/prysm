@@ -408,6 +408,7 @@ func SendDataColumnSidecarsByRangeRequest(
 	p DataColumnSidecarsParams,
 	pid peer.ID,
 	request *ethpb.DataColumnSidecarsByRangeRequest,
+	vfs ...DataColumnResponseValidation,
 ) ([]blocks.RODataColumn, error) {
 	// Return early if nothing to request.
 	if request == nil || request.Count == 0 || len(request.Columns) == 0 {
@@ -457,6 +458,15 @@ func SendDataColumnSidecarsByRangeRequest(
 	}
 	defer closeStream(stream, log)
 
+	requestedSlot, err := isSidecarSlotRequested(request)
+	if err != nil {
+		return nil, errors.Wrap(err, "is sidecar slot within bounds")
+	}
+	vfs = append([]DataColumnResponseValidation{
+		isSidecarIndexRequested(request),
+		requestedSlot,
+	}, vfs...)
+
 	// Read the data column sidecars from the stream.
 	roDataColumns := make([]blocks.RODataColumn, 0, totalCount)
 	for range totalCount {
@@ -465,16 +475,7 @@ func SendDataColumnSidecarsByRangeRequest(
 			return nil, err
 		}
 
-		validatorSlotWithinBounds, err := isSidecarSlotWithinBounds(request)
-		if err != nil {
-			return nil, errors.Wrap(err, "is sidecar slot within bounds")
-		}
-
-		roDataColumn, err := readChunkedDataColumnSidecar(
-			stream, p.P2P, p.CtxMap,
-			validatorSlotWithinBounds,
-			isSidecarIndexRequested(request),
-		)
+		roDataColumn, err := readChunkedDataColumnSidecar(stream, p.P2P, p.CtxMap, vfs...)
 		if errors.Is(err, io.EOF) {
 			return roDataColumns, nil
 		}
@@ -497,8 +498,8 @@ func SendDataColumnSidecarsByRangeRequest(
 	return roDataColumns, nil
 }
 
-// isSidecarSlotWithinBounds verifies that the slot of the data column sidecar is within the bounds of the request.
-func isSidecarSlotWithinBounds(request *ethpb.DataColumnSidecarsByRangeRequest) (DataColumnResponseValidation, error) {
+// isSidecarSlotRequested verifies that the slot of the data column sidecar is within the bounds of the request.
+func isSidecarSlotRequested(request *ethpb.DataColumnSidecarsByRangeRequest) (DataColumnResponseValidation, error) {
 	// endSlot is exclusive (while request.StartSlot is inclusive).
 	endSlot, err := request.StartSlot.SafeAdd(request.Count)
 	if err != nil {

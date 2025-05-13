@@ -2,22 +2,18 @@ package backfill
 
 import (
 	"context"
-	"math"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 )
 
 type batchWorkerPool interface {
-	spawn(ctx context.Context, n int, clock *startup.Clock, a PeerAssigner, v *verifier, cm sync.ContextByteVersions, blobVerifier verification.NewBlobVerifier, bfs *filesystem.BlobStorage)
+	spawn(ctx context.Context, n int, a PeerAssigner, cfg *workerCfg)
 	todo(b batch)
 	complete() (batch, error)
 }
@@ -26,11 +22,11 @@ type worker interface {
 	run(context.Context)
 }
 
-type newWorker func(id workerId, in, out chan batch, c *startup.Clock, v *verifier, cm sync.ContextByteVersions, nbv verification.NewBlobVerifier, bfs *filesystem.BlobStorage) worker
+type newWorker func(id workerId, in, out chan batch, cfg *workerCfg) worker
 
 func defaultNewWorker(p p2p.P2P) newWorker {
-	return func(id workerId, in, out chan batch, c *startup.Clock, v *verifier, cm sync.ContextByteVersions, nbv verification.NewBlobVerifier, bfs *filesystem.BlobStorage) worker {
-		return newP2pWorker(id, p, in, out, c, v, cm, nbv, bfs)
+	return func(id workerId, in, out chan batch, cfg *workerCfg) worker {
+		return newP2pWorker(id, p, in, out, cfg)
 	}
 }
 
@@ -45,6 +41,8 @@ type p2pBatchWorkerPool struct {
 	endSeq      []batch
 	ctx         context.Context
 	cancel      func()
+	p2p         p2p.P2P
+	earliest    primitives.Slot
 }
 
 var _ batchWorkerPool = &p2pBatchWorkerPool{}
@@ -59,14 +57,15 @@ func newP2PBatchWorkerPool(p p2p.P2P, maxBatches int) *p2pBatchWorkerPool {
 		fromWorkers: make(chan batch),
 		maxBatches:  maxBatches,
 		shutdownErr: make(chan error),
+		p2p:         p,
 	}
 }
 
-func (p *p2pBatchWorkerPool) spawn(ctx context.Context, n int, c *startup.Clock, a PeerAssigner, v *verifier, cm sync.ContextByteVersions, nbv verification.NewBlobVerifier, bfs *filesystem.BlobStorage) {
+func (p *p2pBatchWorkerPool) spawn(ctx context.Context, n int, a PeerAssigner, cfg *workerCfg) {
 	p.ctx, p.cancel = context.WithCancel(ctx)
 	go p.batchRouter(a)
 	for i := 0; i < n; i++ {
-		go p.newWorker(workerId(i), p.toWorkers, p.fromWorkers, c, v, cm, nbv, bfs).run(p.ctx)
+		go p.newWorker(workerId(i), p.toWorkers, p.fromWorkers, cfg).run(p.ctx)
 	}
 }
 
@@ -103,7 +102,6 @@ func (p *p2pBatchWorkerPool) batchRouter(pa PeerAssigner) {
 	busy := make(map[peer.ID]bool)
 	todo := make([]batch, 0)
 	rt := time.NewTicker(time.Second)
-	earliest := primitives.Slot(math.MaxUint64)
 	for {
 		select {
 		case b := <-p.toRouter:
@@ -116,48 +114,70 @@ func (p *p2pBatchWorkerPool) batchRouter(pa PeerAssigner) {
 			// to retry failed assignments.
 		case b := <-p.fromWorkers:
 			pid := b.busy
-			busy[pid] = false
-			if b.state == batchBlobSync {
-				todo = append(todo, b)
-				sortBatchDesc(todo)
-			} else {
+			delete(busy, pid)
+			if b.workComplete() {
 				p.fromRouter <- b
+				break
 			}
+			todo = append(todo, b)
+			sortBatchDesc(todo)
 		case <-p.ctx.Done():
 			log.WithError(p.ctx.Err()).Info("p2pBatchWorkerPool context canceled, shutting down")
 			p.shutdown(p.ctx.Err())
 			return
 		}
-		if len(todo) == 0 {
-			continue
-		}
-		// Try to assign as many outstanding batches as possible to peers and feed the assigned batches to workers.
-		assigned, err := pa.Assign(busy, len(todo))
+		var err error
+		todo, err = p.processTodo(todo, pa, busy)
 		if err != nil {
-			if errors.Is(err, peers.ErrInsufficientSuitable) {
-				// Transient error resulting from insufficient number of connected peers. Leave batches in
-				// queue and get to them whenever the peer situation is resolved.
-				continue
-			}
 			p.shutdown(err)
-			return
-		}
-		for _, pid := range assigned {
-			if err := todo[0].waitUntilReady(p.ctx); err != nil {
-				log.WithError(p.ctx.Err()).Info("p2pBatchWorkerPool context canceled, shutting down")
-				p.shutdown(p.ctx.Err())
-				return
-			}
-			busy[pid] = true
-			todo[0].busy = pid
-			p.toWorkers <- todo[0].withPeer(pid)
-			if todo[0].begin < earliest {
-				earliest = todo[0].begin
-				oldestBatch.Set(float64(earliest))
-			}
-			todo = todo[1:]
 		}
 	}
+}
+
+func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map[peer.ID]bool) ([]batch, error) {
+	if len(todo) == 0 {
+		return todo, nil
+	}
+	notBusy, err := pa.Assign(peers.NotBusy(busy, -1))
+	if err != nil {
+		if errors.Is(err, peers.ErrInsufficientSuitable) {
+			// Transient error resulting from insufficient number of connected peers. Leave batches in
+			// queue and get to them whenever the peer situation is resolved.
+			return todo, nil
+		}
+		return nil, err
+	}
+	peerRank, err := sync.NewColumnScarcityRanking(notBusy, p.p2p)
+	if err != nil {
+		log.WithError(err).Error("Failed to compute column matrix for peer assignment")
+		return todo, nil
+	}
+	if len(notBusy) == 0 {
+		log.Warn("No suitable peers available for batch assignment")
+		return todo, nil
+	}
+	for i, b := range todo {
+		pid, cols, err := b.selectPeer(peerRank, busy)
+		if err != nil {
+			log.WithField("not_busy", len(notBusy)).WithError(err).WithFields(b.logFields()).Error("Failed to select peer for batch")
+			// Return the remaining todo items and allow the outer loop to control when we try again.
+			return todo[i:], nil
+		}
+		busy[pid] = true
+		b.busy = pid
+		b.nextReqCols = cols
+		p.toWorkers <- b.withPeer(pid)
+		p.updateEarliest(b.begin)
+	}
+	return []batch{}, nil
+}
+
+func (p *p2pBatchWorkerPool) updateEarliest(current primitives.Slot) {
+	if current >= p.earliest {
+		return
+	}
+	p.earliest = current
+	oldestBatch.Set(float64(p.earliest))
 }
 
 func (p *p2pBatchWorkerPool) shutdown(err error) {

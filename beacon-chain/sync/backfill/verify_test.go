@@ -8,7 +8,6 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
@@ -70,12 +69,7 @@ func TestVerify(t *testing.T) {
 	}
 	v, err := newBackfillVerifier(vr, pubkeys)
 	require.NoError(t, err)
-	notrob := make([]interfaces.ReadOnlySignedBeaconBlock, len(blks))
-	// We have to unwrap the ROBlocks for this code because that's what it expects (for now).
-	for i := range blks {
-		notrob[i] = blks[i].ReadOnlySignedBeaconBlock
-	}
-	vbs, err := v.verify(notrob)
+	vbs, err := v.verify(blks)
 	require.NoError(t, err)
 	require.Equal(t, len(blks), len(vbs))
 }
