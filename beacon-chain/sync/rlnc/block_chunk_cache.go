@@ -4,12 +4,12 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
-var numChunks = uint(10)
 var maxChunkSize = uint(65536) // 2MB for 10 chunks.
 
 type BlockChunkCache struct {
@@ -38,7 +38,7 @@ func (b *BlockChunkCache) AddChunk(chunk interfaces.ReadOnlyBeaconBlockChunk) er
 	} else if n, ok := b.nodes[chunk.Slot()][chunk.ProposerIndex()]; ok {
 		return n.receive(m)
 	}
-	node := NewNode(b.committer, numChunks)
+	node := NewNode(b.committer, features.Get().RLNCNumChunks)
 	if err := node.receive(m); err != nil {
 		return errors.Wrap(err, "failed to receive message")
 	}

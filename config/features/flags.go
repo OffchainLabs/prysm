@@ -183,6 +183,12 @@ var (
 		Usage:  "Experimental: enables the use of random linear network coding for gossiping.",
 		Hidden: true,
 	}
+	rlncBlockChunks = &cli.IntFlag{
+		Name:   "rlnc-block-chunks",
+		Usage:  "Experimental: number of chunks to split the block into for RLNC.",
+		Value:  10,
+		Hidden: true,
+	}
 	// delayBlockBroadcast is a flag for delaying the block broadcast to the network.
 	delayBlockBroadcast = &cli.DurationFlag{
 		Name:  "delay-block-broadcast",
@@ -210,6 +216,7 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	enableDoppelGangerProtection,
 	EnableBeaconRESTApi,
 	useRLNC,
+	rlncBlockChunks,
 }...)
 
 // E2EValidatorFlags contains a list of the validator feature flags to be tested in E2E.
@@ -251,6 +258,7 @@ var BeaconChainFlags = append(deprecatedBeaconFlags, append(deprecatedFlags, []c
 	EnableDiscoveryReboot,
 	enableExperimentalAttestationPool,
 	useRLNC,
+	rlncBlockChunks,
 	delayBlockBroadcast,
 }...)...)
 

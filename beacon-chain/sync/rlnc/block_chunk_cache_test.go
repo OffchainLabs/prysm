@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"testing"
 
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/chunks"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
@@ -18,10 +19,10 @@ func TestBlockChunkCache(t *testing.T) {
 	require.Equal(t, 0, len(cache.nodes))
 
 	chunkSize := uint(4)
-	block := make([]byte, numChunks*chunkSize*31)
+	block := make([]byte, features.Get().RLNCNumChunks*chunkSize*31)
 	_, err := rand.Read(block)
 	require.NoError(t, err)
-	node, err := NewSource(committer, numChunks, block)
+	node, err := NewSource(committer, features.Get().RLNCNumChunks, block)
 	require.NoError(t, err)
 
 	// Prepare a message

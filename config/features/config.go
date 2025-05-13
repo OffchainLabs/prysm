@@ -38,6 +38,7 @@ const disabledFeatureFlag = "Disabled feature flag"
 
 // Flags is a struct to represent which features the client will perform on runtime.
 type Flags struct {
+	RLNCNumChunks uint // RLNCNumChunks specifies the number of chunks to use for RLNC encoding.
 	// Feature related flags.
 	EnableExperimentalState             bool // EnableExperimentalState turns on the latest and greatest (but potentially unstable) changes to the beacon state.
 	WriteSSZStateTransitions            bool // WriteSSZStateTransitions to tmp directory.
@@ -100,7 +101,9 @@ func Get() *Flags {
 	defer featureConfigLock.RUnlock()
 
 	if featureConfig == nil {
-		return &Flags{}
+		return &Flags{
+			RLNCNumChunks: 10,
+		}
 	}
 	return featureConfig
 }
@@ -277,6 +280,18 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	if ctx.IsSet(useRLNC.Name) {
 		logEnabled(useRLNC)
 		cfg.UseRLNC = true
+		cfg.RLNCNumChunks = 10
+	}
+	if ctx.IsSet(rlncBlockChunks.Name) {
+		if !cfg.UseRLNC {
+			logEnabled(useRLNC)
+			cfg.UseRLNC = true
+		}
+		logEnabled(rlncBlockChunks)
+		if ctx.Int(rlncBlockChunks.Name) < 2 {
+			return fmt.Errorf("rlncBlockChunks must be greater than 1")
+		}
+		cfg.RLNCNumChunks = uint(ctx.Int(rlncBlockChunks.Name))
 	}
 
 	if ctx.IsSet(delayBlockBroadcast.Name) {
