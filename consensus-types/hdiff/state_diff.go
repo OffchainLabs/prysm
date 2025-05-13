@@ -1623,7 +1623,8 @@ func ApplyDiff(ctx context.Context, source state.BeaconState, diff HdiffSerializ
 
 // applyStateDiff applies the given diff to the source state in place.
 func applyStateDiff(ctx context.Context, source state.BeaconState, diff *stateDiff) error {
-	if err := updateToVersion(ctx, source, diff.targetVersion); err != nil {
+	var err error
+	if source, err = updateToVersion(ctx, source, diff.targetVersion); err != nil {
 		return errors.Wrap(err, "failed to update state to target version")
 	}
 	if err := source.SetSlot(diff.slot); err != nil {
@@ -1926,29 +1927,29 @@ func applyBlockRootsDiff(source state.BeaconState, diff *stateDiff) error {
 }
 
 // updateToVersion updates the state to the given version in place.
-func updateToVersion(ctx context.Context, source state.BeaconState, target int) (err error) {
+func updateToVersion(ctx context.Context, source state.BeaconState, target int) (ret state.BeaconState, err error) {
 	if source.Version() == target {
-		return nil
+		return source, nil
 	}
 	if source.Version() > target {
-		return errors.Errorf("cannot downgrade state from %s to %s", version.String(source.Version()), version.String(target))
+		return nil, errors.Errorf("cannot downgrade state from %s to %s", version.String(source.Version()), version.String(target))
 	}
 	switch source.Version() {
 	case version.Phase0:
-		source, err = altair.UpgradeToAltair(ctx, source)
+		ret, err = altair.UpgradeToAltair(ctx, source)
 	case version.Altair:
-		source, err = execution.UpgradeToBellatrix(source)
+		ret, err = execution.UpgradeToBellatrix(source)
 	case version.Bellatrix:
-		source, err = capella.UpgradeToCapella(source)
+		ret, err = capella.UpgradeToCapella(source)
 	case version.Capella:
-		source, err = deneb.UpgradeToDeneb(source)
+		ret, err = deneb.UpgradeToDeneb(source)
 	case version.Deneb:
-		source, err = electra.UpgradeToElectra(source)
+		ret, err = electra.UpgradeToElectra(source)
 	default:
-		return errors.Errorf("unsupported version %s", version.String(source.Version()))
+		return nil, errors.Errorf("unsupported version %s", version.String(source.Version()))
 	}
 	if err != nil {
-		return errors.Wrap(err, "failed to upgrade state")
+		return nil, errors.Wrap(err, "failed to upgrade state")
 	}
-	return updateToVersion(ctx, source, target)
+	return updateToVersion(ctx, ret, target)
 }

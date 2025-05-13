@@ -2,10 +2,14 @@ package hdiff
 
 import (
 	"context"
+	"flag"
+	"os"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 )
@@ -76,4 +80,69 @@ func TestApplyDiff(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, ApplyDiff(ctx, source, hdiff))
 	require.DeepEqual(t, source, target)
+}
+
+var sourceFile = flag.String("source", "", "Path to the source file")
+var targetFile = flag.String("target", "", "Path to the target file")
+
+func TestMain(m *testing.M) {
+	flag.Parse()
+	os.Exit(m.Run())
+}
+
+func BenchmarkGetDiff(b *testing.B) {
+	if *sourceFile == "" || *targetFile == "" {
+		b.Skip("source and target files not provided")
+	}
+	sourceBytes, err := os.ReadFile(*sourceFile)
+	if err != nil {
+		b.Fatalf("failed to read source file: %v", err)
+	}
+	targetBytes, err := os.ReadFile(*targetFile)
+	if err != nil {
+		b.Fatalf("failed to read target file: %v", err)
+	}
+	sourceProto := &ethpb.BeaconStateDeneb{}
+	require.NoError(b, sourceProto.UnmarshalSSZ(sourceBytes))
+	source, err := state_native.InitializeFromProtoDeneb(sourceProto)
+	require.NoError(b, err)
+	targetProto := &ethpb.BeaconStateElectra{}
+	require.NoError(b, targetProto.UnmarshalSSZ(targetBytes))
+	target, err := state_native.InitializeFromProtoElectra(targetProto)
+	require.NoError(b, err)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		hdiff, err := Diff(source, target)
+		b.Log("Diff size:", len(hdiff.StateDiff)+len(hdiff.BalancesDiff)+len(hdiff.ValidatorDiffs))
+		require.NoError(b, err)
+	}
+}
+
+func BenchmarkApplyDiff(b *testing.B) {
+	if *sourceFile == "" || *targetFile == "" {
+		b.Skip("source and target files not provided")
+	}
+	sourceBytes, err := os.ReadFile(*sourceFile)
+	if err != nil {
+		b.Fatalf("failed to read source file: %v", err)
+	}
+	targetBytes, err := os.ReadFile(*targetFile)
+	if err != nil {
+		b.Fatalf("failed to read target file: %v", err)
+	}
+	sourceProto := &ethpb.BeaconStateDeneb{}
+	require.NoError(b, sourceProto.UnmarshalSSZ(sourceBytes))
+	source, err := state_native.InitializeFromProtoDeneb(sourceProto)
+	require.NoError(b, err)
+	targetProto := &ethpb.BeaconStateElectra{}
+	require.NoError(b, targetProto.UnmarshalSSZ(targetBytes))
+	target, err := state_native.InitializeFromProtoElectra(targetProto)
+	require.NoError(b, err)
+	hdiff, err := Diff(source, target)
+	require.NoError(b, err)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		err := ApplyDiff(context.Background(), source, hdiff)
+		require.NoError(b, err)
+	}
 }
