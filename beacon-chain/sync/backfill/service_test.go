@@ -57,7 +57,8 @@ func TestServiceInit(t *testing.T) {
 	pool := &mockPool{todoChan: make(chan batch, nWorkers), finishedChan: make(chan batch, nWorkers)}
 	p2pt := p2ptest.NewTestP2P(t)
 	bfs := filesystem.NewEphemeralBlobStorage(t)
-	srv, err := NewService(ctx, su, bfs, cw, p2pt, &mockAssigner{},
+	dcs := filesystem.NewEphemeralDataColumnStorage(t)
+	srv, err := NewService(ctx, su, bfs, dcs, cw, p2pt, &mockAssigner{},
 		WithBatchSize(batchSize), WithWorkerCount(nWorkers), WithEnableBackfill(true), WithVerifierWaiter(&mockInitalizerWaiter{}))
 	require.NoError(t, err)
 	srv.ms = mockMinimumSlotter{min: primitives.Slot(high - batchSize*uint64(nBatches))}.minimumSlot

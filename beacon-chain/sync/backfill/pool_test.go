@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
@@ -24,7 +25,7 @@ type mockAssigner struct {
 
 // Assign satisfies the PeerAssigner interface so that mockAssigner can be used in tests
 // in place of the concrete p2p implementation of PeerAssigner.
-func (m mockAssigner) Assign(busy map[peer.ID]bool, n int) ([]peer.ID, error) {
+func (m mockAssigner) Assign(filter peers.AssignmentFilter) ([]peer.ID, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -53,7 +54,8 @@ func TestPoolDetectAllEnded(t *testing.T) {
 	ctxMap, err := sync.ContextByteVersionsForValRoot(bytesutil.ToBytes32(st.GenesisValidatorsRoot()))
 	require.NoError(t, err)
 	bfs := filesystem.NewEphemeralBlobStorage(t)
-	pool.spawn(ctx, nw, startup.NewClock(time.Now(), [32]byte{}), ma, v, ctxMap, mockNewBlobVerifier, bfs)
+	wcfg := &workerCfg{clock: startup.NewClock(time.Now(), [32]byte{}), newVB: mockNewBlobVerifier, verifier: v, ctxMap: ctxMap, blobStore: bfs}
+	pool.spawn(ctx, nw, ma, wcfg)
 	br := batcher{min: 10, size: 10}
 	endSeq := br.before(0)
 	require.Equal(t, batchEndSequence, endSeq.state)
@@ -72,7 +74,7 @@ type mockPool struct {
 	todoChan     chan batch
 }
 
-func (m *mockPool) spawn(_ context.Context, _ int, _ *startup.Clock, _ PeerAssigner, _ *verifier, _ sync.ContextByteVersions, _ verification.NewBlobVerifier, _ *filesystem.BlobStorage) {
+func (m *mockPool) spawn(_ context.Context, _ int, _ PeerAssigner, _ *workerCfg) {
 }
 
 func (m *mockPool) todo(b batch) {

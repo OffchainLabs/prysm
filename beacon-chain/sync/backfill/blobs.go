@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 )
 
@@ -48,17 +49,24 @@ func newBlobSync(current primitives.Slot, vbs verifiedROBlocks, cfg *blobSyncCon
 type blobVerifierMap map[[32]byte][]verification.BlobVerifier
 
 type blobSync struct {
-	store    das.AvailabilityStore
+	store    *das.LazilyPersistentStoreBlob
 	expected []blobSummary
 	next     int
 	bbv      *blobBatchVerifier
 	current  primitives.Slot
+	pid      peer.ID
 }
 
-func (bs *blobSync) blobsNeeded() int {
+func (bs *blobSync) needed() int {
 	return len(bs.expected) - bs.next
 }
 
+// validateNext is given to the RPC request code as one of the a validation callbacks.
+// It orchestrates setting up the batch verifier (blobBatchVerifier) and calls Persist on the
+// AvailabilityStore. This enables the rest of the code in between RPC and the AvailabilityStore
+// to stay decoupled from each other. The AvailabilityStore holds the blobs in memory between the
+// call to Persist, and the call to IsDataAvailable (where the blobs are actually written to disk
+// if successfully verified).
 func (bs *blobSync) validateNext(rb blocks.ROBlob) error {
 	if bs.next >= len(bs.expected) {
 		return errUnexpectedResponseSize
@@ -102,6 +110,7 @@ func newBlobBatchVerifier(nbv verification.NewBlobVerifier) *blobBatchVerifier {
 	return &blobBatchVerifier{newBlobVerifier: nbv, verifiers: make(blobVerifierMap)}
 }
 
+// blobBatchVerifier implements the BlobBatchVerifier interface required by the das store.
 type blobBatchVerifier struct {
 	newBlobVerifier verification.NewBlobVerifier
 	verifiers       blobVerifierMap
@@ -117,6 +126,7 @@ func (bbv *blobBatchVerifier) newVerifier(rb blocks.ROBlob) verification.BlobVer
 	return m[rb.Index]
 }
 
+// VerifiedROBlobs satisfies the BlobBatchVerifier interface expected by the AvailabilityChecker
 func (bbv *blobBatchVerifier) VerifiedROBlobs(_ context.Context, blk blocks.ROBlock, _ []blocks.ROBlob) ([]blocks.VerifiedROBlob, error) {
 	m, ok := bbv.verifiers[blk.Root()]
 	if !ok {

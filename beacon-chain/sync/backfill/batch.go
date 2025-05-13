@@ -6,9 +6,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -38,8 +36,10 @@ func (s batchState) String() string {
 		return "import_complete"
 	case batchEndSequence:
 		return "end_sequence"
-	case batchBlobSync:
-		return "blob_sync"
+	case batchSyncBlobs:
+		return "sync_blobs"
+	case batchSyncColumns:
+		return "sync_columns"
 	default:
 		return "unknown"
 	}
@@ -50,7 +50,8 @@ const (
 	batchInit
 	batchSequenced
 	batchErrRetryable
-	batchBlobSync
+	batchSyncBlobs
+	batchSyncColumns
 	batchImportable
 	batchImportComplete
 	batchEndSequence
@@ -68,13 +69,14 @@ type batch struct {
 	retryAfter     time.Time
 	begin          primitives.Slot
 	end            primitives.Slot // half-open interval, [begin, end), ie >= start, < end.
-	results        verifiedROBlocks
+	blocks         verifiedROBlocks
 	err            error
 	state          batchState
-	busy           peer.ID
+	peer           peer.ID
+	nextReqCols    []uint64
 	blockPid       peer.ID
-	blobPid        peer.ID
-	bs             *blobSync
+	blobs          *blobSync
+	columns        *columnSync
 }
 
 func (b batch) logFields() logrus.Fields {
@@ -86,12 +88,23 @@ func (b batch) logFields() logrus.Fields {
 		"retries":   b.retries,
 		"begin":     b.begin,
 		"end":       b.end,
-		"busyPid":   b.busy,
+		"busyPid":   b.peer,
 		"blockPid":  b.blockPid,
-		"blobPid":   b.blobPid,
+	}
+	if b.blobs != nil {
+		f["blobPid"] = b.blobs.pid
+	}
+	if b.columns != nil {
+		f["colPid"] = b.columns.peer
 	}
 	if b.retries > 0 {
 		f["retryAfter"] = b.retryAfter.String()
+	}
+	if b.state == batchSyncColumns {
+		f["nextColumns"] = fmt.Sprintf("%v", b.nextReqCols)
+	}
+	if b.state == batchErrRetryable && b.blobs != nil {
+		f["blobsMissing"] = b.blobs.needed()
 	}
 	return f
 }
@@ -114,7 +127,7 @@ func (b batch) id() batchId {
 }
 
 func (b batch) ensureParent(expected [32]byte) error {
-	tail := b.results[len(b.results)-1]
+	tail := b.blocks[len(b.blocks)-1]
 	if tail.Root() != expected {
 		return errors.Wrapf(ErrChainBroken, "last parent_root=%#x, tail root=%#x", expected, tail.Root())
 	}
@@ -136,21 +149,15 @@ func (b batch) blobRequest() *eth.BlobSidecarsByRangeRequest {
 	}
 }
 
-func (b batch) withResults(results verifiedROBlocks, bs *blobSync) batch {
-	b.results = results
-	b.bs = bs
-	if bs.blobsNeeded() > 0 {
-		return b.withState(batchBlobSync)
+func (b batch) transitionToNext() batch {
+	if len(b.blocks) == 0 {
+		return b.withState(batchSequenced)
 	}
-	return b.withState(batchImportable)
-}
-
-func (b batch) postBlobSync() batch {
-	if b.blobsNeeded() > 0 {
-		log.WithFields(b.logFields()).WithField("blobsMissing", b.blobsNeeded()).Error("Batch still missing blobs after downloading from peer")
-		b.bs = nil
-		b.results = []blocks.ROBlock{}
-		return b.withState(batchErrRetryable)
+	if len(b.columns.columnsNeeded()) > 0 {
+		return b.withState(batchSyncColumns)
+	}
+	if b.blobs != nil && b.blobs.needed() > 0 {
+		return b.withState(batchSyncBlobs)
 	}
 	return b.withState(batchImportable)
 }
@@ -176,27 +183,22 @@ func (b batch) withState(s batchState) batch {
 	return b
 }
 
-func (b batch) withPeer(p peer.ID) batch {
-	b.blockPid = p
-	backfillBatchTimeWaiting.Observe(float64(time.Since(b.scheduled).Milliseconds()))
-	return b
-}
-
 func (b batch) withRetryableError(err error) batch {
+	log.WithFields(b.logFields()).WithError(err).Warn("Could not proceed with batch processing due to error")
 	b.err = err
 	return b.withState(batchErrRetryable)
 }
 
-func (b batch) blobsNeeded() int {
-	return b.bs.blobsNeeded()
-}
-
-func (b batch) blobResponseValidator() sync.BlobResponseValidation {
-	return b.bs.validateNext
-}
-
-func (b batch) availabilityStore() das.AvailabilityStore {
-	return b.bs.store
+func (b batch) validatingColumnRequest(cb *columnBisector) *validatingColumnRequest {
+	req := b.columns.request(b.nextReqCols)
+	if req == nil {
+		return nil
+	}
+	return &validatingColumnRequest{
+		req:        req,
+		columnSync: b.columns,
+		bisector:   cb,
+	}
 }
 
 var batchBlockUntil = func(ctx context.Context, untilRetry time.Duration, b batch) error {
@@ -221,6 +223,18 @@ func (b batch) waitUntilReady(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func (b batch) workComplete() bool {
+	return b.state == batchImportable
+}
+
+func (b batch) selectPeer(picker *sync.PeerPicker, busy map[peer.ID]bool) (peer.ID, []uint64, error) {
+	if b.state == batchSyncColumns {
+		return picker.ForColumns(b.columns.columnsNeeded(), busy)
+	}
+	peer, err := picker.ForBlocks(busy)
+	return peer, nil, err
 }
 
 func sortBatchDesc(bb []batch) {

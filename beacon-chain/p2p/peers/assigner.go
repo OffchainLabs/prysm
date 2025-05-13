@@ -42,7 +42,7 @@ func (a *Assigner) freshPeers() ([]peer.ID, error) {
 	if flags.Get().MinimumSyncPeers < required {
 		required = flags.Get().MinimumSyncPeers
 	}
-	_, peers := a.ps.BestFinalized(params.BeaconConfig().MaxPeersToSync, a.fc.FinalizedCheckpoint().Epoch)
+	_, peers := a.ps.BestFinalized(-1, a.fc.FinalizedCheckpoint().Epoch)
 	if len(peers) < required {
 		log.WithFields(logrus.Fields{
 			"suitable": len(peers),
@@ -52,27 +52,35 @@ func (a *Assigner) freshPeers() ([]peer.ID, error) {
 	return peers, nil
 }
 
+// AssignmentFilter describes a function that takes a list of peer.IDs and returns a filtered subset.
+// An example is the NotBusy filter.
+type AssignmentFilter func([]peer.ID) []peer.ID
+
 // Assign uses the "BestFinalized" method to select the best peers that agree on a canonical block
 // for the configured finalized epoch. At most `n` peers will be returned. The `busy` param can be used
 // to filter out peers that we know we don't want to connect to, for instance if we are trying to limit
 // the number of outbound requests to each peer from a given component.
-func (a *Assigner) Assign(busy map[peer.ID]bool, n int) ([]peer.ID, error) {
+func (a *Assigner) Assign(filter AssignmentFilter) ([]peer.ID, error) {
 	best, err := a.freshPeers()
 	if err != nil {
 		return nil, err
 	}
-	return pickBest(busy, n, best), nil
+	return filter(best), nil
 }
 
-func pickBest(busy map[peer.ID]bool, n int, best []peer.ID) []peer.ID {
-	ps := make([]peer.ID, 0, n)
-	for _, p := range best {
-		if len(ps) == n {
-			return ps
+// NotBusy is a filter that returns a list of peer.IDs with len() <= n, which are not in the `busy` map.
+// n == -1 will return all peers that are not busy.
+func NotBusy(busy map[peer.ID]bool, n int) AssignmentFilter {
+	return func(peers []peer.ID) []peer.ID {
+		ps := make([]peer.ID, 0)
+		for _, p := range peers {
+			if n > 0 && len(ps) == n {
+				return ps
+			}
+			if !busy[p] {
+				ps = append(ps, p)
+			}
 		}
-		if !busy[p] {
-			ps = append(ps, p)
-		}
+		return ps
 	}
-	return ps
 }

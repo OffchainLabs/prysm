@@ -286,6 +286,19 @@ func MaxSafeEpoch() primitives.Epoch {
 	return primitives.Epoch(math.MaxUint64 / uint64(params.BeaconConfig().SlotsPerEpoch))
 }
 
+// SafeEpochStartOrMax returns the start slot of the given epoch if it will not overflow,
+// otherwise it returns the
+func SafeEpochStartOrMax(e primitives.Epoch) primitives.Slot {
+	// The max value converted to a slot can't be the start of a conceptual epoch,
+	// because the first slot of that epoch would be overflow
+	// so use the start slot of the epoch right before that value.
+	me := MaxSafeEpoch() - 1
+	if e > me {
+		return UnsafeEpochStart(me)
+	}
+	return UnsafeEpochStart(e)
+}
+
 // SecondsUntilNextEpochStart returns how many seconds until the next Epoch start from the current time and slot
 func SecondsUntilNextEpochStart(genesis time.Time) (uint64, error) {
 	currentSlot := CurrentSlot(genesis)
