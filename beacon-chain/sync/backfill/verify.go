@@ -5,7 +5,6 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
@@ -23,18 +22,34 @@ var errUnknownDomain = errors.New("runtime error looking up signing domain for f
 type verifiedROBlocks []blocks.ROBlock
 
 func (v verifiedROBlocks) blobIdents(retentionStart primitives.Slot) ([]blobSummary, error) {
-	// early return if the newest block is outside the retention window
-	if len(v) > 0 && v[len(v)-1].Block().Slot() < retentionStart {
+	if len(v) == 0 {
 		return nil, nil
 	}
+	latest := v[len(v)-1].Block().Slot()
+	// early return if the newest block is outside the retention window
+	if latest < retentionStart {
+		return nil, nil
+	}
+	fuluStart := params.BeaconConfig().FuluForkEpoch
+	// If the batch end slot or last result block are pre-fulu, so are the rest.
+	if slots.ToEpoch(latest) < fuluStart {
+		return nil, nil
+	}
+
 	bs := make([]blobSummary, 0)
 	for i := range v {
-		if v[i].Block().Slot() < retentionStart {
+		slot := v[i].Block().Slot()
+		if slot < retentionStart {
 			continue
 		}
 		if v[i].Block().Version() < version.Deneb {
 			continue
 		}
+		// Assuming blocks are sorted, as soon as we see 1 fulu block we know the rest will also be fulu.
+		if slots.ToEpoch(slot) >= fuluStart {
+			return bs, nil
+		}
+
 		c, err := v[i].Block().Body().BlobKzgCommitments()
 		if err != nil {
 			return nil, errors.Wrapf(err, "unexpected error checking commitments for block root %#x", v[i].Root())
@@ -57,37 +72,31 @@ type verifier struct {
 	domain *domainCache
 }
 
-// TODO: rewrite this to use ROBlock.
-func (vr verifier) verify(blks []interfaces.ReadOnlySignedBeaconBlock) (verifiedROBlocks, error) {
+func (vr verifier) verify(blks []blocks.ROBlock) (verifiedROBlocks, error) {
 	var err error
-	result := make([]blocks.ROBlock, len(blks))
 	sigSet := bls.NewSet()
 	for i := range blks {
-		result[i], err = blocks.NewROBlock(blks[i])
-		if err != nil {
-			return nil, err
-		}
-		if i > 0 && result[i-1].Root() != result[i].Block().ParentRoot() {
-			p, b := result[i-1], result[i]
+		if i > 0 && blks[i-1].Root() != blks[i].Block().ParentRoot() {
+			p, b := blks[i-1], blks[i]
 			return nil, errors.Wrapf(errInvalidBatchChain,
 				"slot %d parent_root=%#x, slot %d root=%#x",
 				b.Block().Slot(), b.Block().ParentRoot(),
 				p.Block().Slot(), p.Root())
 		}
-		set, err := vr.blockSignatureBatch(result[i])
+		set, err := vr.blockSignatureBatch(blks[i])
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "block signature batch")
 		}
 		sigSet.Join(set)
 	}
 	v, err := sigSet.Verify()
 	if err != nil {
-		return nil, errors.Wrap(err, "block signature verification error")
+		return nil, errors.Wrap(err, "SignatureBatch Verify")
 	}
 	if !v {
-		return nil, errors.New("batch block signature verification failed")
+		return nil, errors.New("SignatureBatch Verify invalid")
 	}
-	return result, nil
+	return blks, nil
 }
 
 func (vr verifier) blockSignatureBatch(b blocks.ROBlock) (*bls.SignatureBatch, error) {

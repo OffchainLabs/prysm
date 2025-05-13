@@ -358,6 +358,7 @@ func SendDataColumnSidecarsByRangeRequest(
 	pid peer.ID,
 	ctxMap ContextByteVersions,
 	req *ethpb.DataColumnSidecarsByRangeRequest,
+	vfs ...DataColumnResponseValidation,
 ) ([]blocks.RODataColumn, error) {
 	topic, err := p2p.TopicFromMessage(p2p.DataColumnSidecarsByRangeName, slots.ToEpoch(tor.CurrentSlot()))
 	if err != nil {
@@ -399,6 +400,7 @@ func SendDataColumnSidecarsByRangeRequest(
 		dataColumnValidatorFromRangeReq(req),
 		dataColumnIndexValidatorFromRangeReq(req),
 	}
+	vfuncs = append(vfuncs, vfs...)
 
 	// Read the data column sidecars from the stream.
 	roDataColumns := make([]blocks.RODataColumn, 0, max)

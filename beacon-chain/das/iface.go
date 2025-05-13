@@ -14,6 +14,12 @@ import (
 // IsDataAvailable guarantees that all blobs committed to in the block have been
 // durably persisted before returning a non-error value.
 type AvailabilityStore interface {
-	IsDataAvailable(ctx context.Context, current primitives.Slot, b blocks.ROBlock) error
+	AvailabilityChecker
 	Persist(current primitives.Slot, sc ...blocks.ROSidecar) error
+}
+
+// AvailabilityChecker is the minimum interface needed to check if data is available for a block.
+// We should prefer this interface over AvailabilityStore in places where we don't need to persist blob data.
+type AvailabilityChecker interface {
+	IsDataAvailable(ctx context.Context, current primitives.Slot, b blocks.ROBlock) error
 }

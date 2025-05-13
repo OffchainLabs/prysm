@@ -7,6 +7,7 @@ go_library(
         "block_batcher.go",
         "broadcast_bls_changes.go",
         "context.go",
+        "data_column_assignment.go",
         "data_columns.go",
         "data_columns_reconstruct.go",
         "data_columns_sampling.go",

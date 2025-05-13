@@ -18,8 +18,9 @@ func TestPickBest(t *testing.T) {
 		expected []peer.ID
 	}{
 		{
-			name: "",
-			n:    0,
+			name:     "don't limit",
+			n:        0,
+			expected: best,
 		},
 		{
 			name:     "none busy",
@@ -88,7 +89,8 @@ func TestPickBest(t *testing.T) {
 			if c.best == nil {
 				c.best = best
 			}
-			pb := pickBest(c.busy, c.n, c.best)
+			filt := NotBusy(c.busy, c.n)
+			pb := filt(c.best)
 			require.Equal(t, len(c.expected), len(pb))
 			for i := range c.expected {
 				require.Equal(t, c.expected[i], pb[i])

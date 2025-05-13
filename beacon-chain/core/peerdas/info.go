@@ -190,3 +190,29 @@ func computeInfoCacheKey(nodeID enode.ID, custodyGroupCount uint64) [nodeInfoCac
 
 	return key
 }
+
+// ColumnIndices is a map of column indices where the key is the column index and the value is a boolean.
+// The boolean could indicate different things, eg whether the column is needed (in the context of satisfying custody requirements)
+// or present (in the context of a custody check on disk or in cache).
+type ColumnIndices map[uint64]bool
+
+// CopyTrueIndices allows callers to get a copy of the given ColumnIndices, filtering out any keys
+// where the value == `false`.
+func CopyTrueIndices(src ColumnIndices) ColumnIndices {
+	dst := make(ColumnIndices, len(src))
+	for k, v := range src {
+		if v {
+			dst[k] = true
+		}
+	}
+	return dst
+}
+
+// ColumnIndicesFromSlice converts a slice of uint64 indices into the ColumnIndices equivalent.
+func ColumnIndicesFromSlice(indices []uint64) ColumnIndices {
+	ci := make(ColumnIndices, len(indices))
+	for _, index := range indices {
+		ci[index] = true
+	}
+	return ci
+}

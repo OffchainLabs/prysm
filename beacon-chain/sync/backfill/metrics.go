@@ -92,6 +92,33 @@ var (
 			Buckets: []float64{100, 300, 1000, 2000, 4000, 8000},
 		},
 	)
+	backfillBatchTimeDownloadingColumns = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "backfill_batch_columns_time_download",
+			Help:    "Time, in milliseconds, batch spent downloading DataColumnSidecars from peer.",
+			Buckets: []float64{100, 300, 1000, 2000, 4000, 8000},
+		},
+	)
+	backfillBatchTimeVerifyingColumns = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "backfill_batch_columns_time_verify",
+			Help:    "Time, in milliseconds, batch spent verifying DataColumnSidecars.",
+			Buckets: []float64{100, 300, 1000, 2000, 4000, 8000},
+		},
+	)
+	backfillBytesDataColumnSidecar = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "backfill_data_column_sidecar_bytes_downloaded",
+			Help: "DataColumnSidecar bytes downloaded from peers for backfill.",
+		},
+	)
+	backfillDataColumnSidecarDownloaded = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "backfill_data_column_sidecar_downloaded",
+			Help: "Number of DataColumnSidecar values downloaded from peers for backfill.",
+		},
+		[]string{"index", "validity"},
+	)
 )
 
 func blobValidationMetrics(_ blocks.ROBlob) error {
