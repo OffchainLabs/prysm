@@ -8,6 +8,7 @@ go_library(
         "broadcast_bls_changes.go",
         "context.go",
         "custody.go",
+        "data_column_assignment.go",
         "data_columns.go",
         "data_columns_reconstruct.go",
         "deadlines.go",

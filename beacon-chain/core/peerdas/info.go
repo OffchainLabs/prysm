@@ -9,8 +9,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-// info contains all useful peerDAS related information regarding a peer.
-type info struct {
+// CustodyInfo contains all useful peerDAS related information regarding a peer.
+type CustodyInfo struct {
 	CustodyGroups      map[uint64]bool
 	CustodyColumns     map[uint64]bool
 	DataColumnsSubnets map[uint64]bool
@@ -28,7 +28,7 @@ var (
 
 // Info returns the peerDAS information for a given nodeID and custodyGroupCount.
 // It returns a boolean indicating if the peer info was already in the cache and an error if any.
-func Info(nodeID enode.ID, custodyGroupCount uint64) (*info, bool, error) {
+func Info(nodeID enode.ID, custodyGroupCount uint64) (*CustodyInfo, bool, error) {
 	// Create a new cache if it doesn't exist.
 	if err := createInfoCacheIfNeeded(); err != nil {
 		return nil, false, errors.Wrap(err, "create cache if needed")
@@ -39,7 +39,7 @@ func Info(nodeID enode.ID, custodyGroupCount uint64) (*info, bool, error) {
 
 	// If the value is already in the cache, return it.
 	if value, ok := nodeInfoCache.Get(key); ok {
-		peerInfo, ok := value.(*info)
+		peerInfo, ok := value.(*CustodyInfo)
 		if !ok {
 			return nil, false, errors.New("failed to cast peer info (should never happen)")
 		}
@@ -69,7 +69,7 @@ func Info(nodeID enode.ID, custodyGroupCount uint64) (*info, bool, error) {
 		custodyGroupsMap[group] = true
 	}
 
-	result := &info{
+	result := &CustodyInfo{
 		CustodyGroups:      custodyGroupsMap,
 		CustodyColumns:     custodyColumns,
 		DataColumnsSubnets: dataColumnsSubnets,
@@ -106,4 +106,30 @@ func computeInfoCacheKey(nodeID enode.ID, custodyGroupCount uint64) [nodeInfoCac
 	binary.BigEndian.PutUint64(key[32:], custodyGroupCount)
 
 	return key
+}
+
+// ColumnIndices is a map of column indices where the key is the column index and the value is a boolean.
+// The boolean could indicate different things, eg whether the column is needed (in the context of satisfying custody requirements)
+// or present (in the context of a custody check on disk or in cache).
+type ColumnIndices map[uint64]bool
+
+// CopyTrueIndices allows callers to get a copy of the given ColumnIndices, filtering out any keys
+// where the value == `false`.
+func CopyTrueIndices(src ColumnIndices) ColumnIndices {
+	dst := make(ColumnIndices, len(src))
+	for k, v := range src {
+		if v {
+			dst[k] = true
+		}
+	}
+	return dst
+}
+
+// ColumnIndicesFromSlice converts a slice of uint64 indices into the ColumnIndices equivalent.
+func ColumnIndicesFromSlice(indices []uint64) ColumnIndices {
+	ci := make(ColumnIndices, len(indices))
+	for _, index := range indices {
+		ci[index] = true
+	}
+	return ci
 }

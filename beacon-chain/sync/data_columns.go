@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
@@ -921,4 +922,19 @@ func uint64MapDiffer(left, right map[uint64]bool) bool {
 	}
 
 	return false
+}
+
+func DataColumnSidecarsByRangeRequest(columns []uint64, start, end primitives.Slot) *eth.DataColumnSidecarsByRangeRequest {
+	sort.Slice(columns, func(i, j int) bool {
+		return columns[i] < columns[j]
+	})
+	return &eth.DataColumnSidecarsByRangeRequest{
+		StartSlot: start,
+		Count:     uint64(end-start) + 1,
+		Columns:   columns,
+	}
+}
+
+func RequestDataColumnsByRoot(ctx context.Context, ctxMap ContextByteVersions, pid peer.ID, reqs types.DataColumnsByRootIdentifiers) ([]blocks.RODataColumn, error) {
+	return nil, nil
 }

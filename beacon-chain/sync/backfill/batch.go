@@ -6,7 +6,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -38,8 +37,10 @@ func (s batchState) String() string {
 		return "import_complete"
 	case batchEndSequence:
 		return "end_sequence"
-	case batchSidecarSync:
-		return "sidecar_sync"
+	case batchSyncBlobs:
+		return "sync_blobs"
+	case batchSyncColumns:
+		return "sync_columns"
 	default:
 		return "unknown"
 	}
@@ -50,7 +51,9 @@ const (
 	batchInit
 	batchSequenced
 	batchErrRetryable
-	batchSidecarSync
+	batchErrFatal
+	batchSyncBlobs
+	batchSyncColumns
 	batchImportable
 	batchImportComplete
 	batchEndSequence
@@ -72,9 +75,12 @@ type batch struct {
 	err            error
 	state          batchState
 	busy           peer.ID
+	nextReqCols    []uint64
 	blockPid       peer.ID
 	blobPid        peer.ID
+	columnPid      peer.ID
 	bs             *blobSync
+	cs             *columnSync
 }
 
 func (b batch) logFields() logrus.Fields {
@@ -92,6 +98,9 @@ func (b batch) logFields() logrus.Fields {
 	}
 	if b.retries > 0 {
 		f["retryAfter"] = b.retryAfter.String()
+	}
+	if b.state == batchSyncColumns {
+		f["nextColumns"] = fmt.Sprintf("%v", b.nextReqCols)
 	}
 	return f
 }
@@ -136,21 +145,28 @@ func (b batch) blobRequest() *eth.BlobSidecarsByRangeRequest {
 	}
 }
 
-func (b batch) withResults(results verifiedROBlocks, bs *blobSync) batch {
+func (b batch) postBlockSync(results verifiedROBlocks, bs *blobSync, cs *columnSync) batch {
 	b.results = results
 	b.bs = bs
+	b.cs = cs
 	if bs.blobsNeeded() > 0 {
-		return b.withState(batchSidecarSync)
+		return b.withState(batchSyncBlobs)
+	}
+	if len(cs.columnsNeeded()) > 0 {
+		return b.withState(batchSyncColumns)
 	}
 	return b.withState(batchImportable)
 }
 
-func (b batch) postBlobSync() batch {
+func (b batch) postSidecarSync() batch {
 	if b.blobsNeeded() > 0 {
 		log.WithFields(b.logFields()).WithField("blobsMissing", b.blobsNeeded()).Error("Batch still missing blobs after downloading from peer")
 		b.bs = nil
 		b.results = []blocks.ROBlock{}
 		return b.withState(batchErrRetryable)
+	}
+	if len(b.cs.columnsNeeded()) > 0 {
+		return b.withState(batchSyncColumns)
 	}
 	return b.withState(batchImportable)
 }
@@ -187,6 +203,11 @@ func (b batch) withRetryableError(err error) batch {
 	return b.withState(batchErrRetryable)
 }
 
+func (b batch) withFatalError(err error) batch {
+	b.err = errors.Wrap(err, "fatal erorr in batch")
+	return b.withState(batchErrFatal)
+}
+
 func (b batch) blobsNeeded() int {
 	return b.bs.blobsNeeded()
 }
@@ -195,8 +216,8 @@ func (b batch) blobResponseValidator() sync.BlobResponseValidation {
 	return b.bs.validateNext
 }
 
-func (b batch) availabilityStore() das.AvailabilityStore {
-	return b.bs.store
+func (b batch) validatingColumnRequest() *validatingColumnRequest {
+	return b.cs.newValidatingColumnRequest(b.nextReqCols)
 }
 
 var batchBlockUntil = func(ctx context.Context, untilRetry time.Duration, b batch) error {
@@ -221,6 +242,21 @@ func (b batch) waitUntilReady(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func (b batch) workComplete() bool {
+	if b.state == batchImportable {
+		return true
+	}
+	return false
+}
+
+func (b batch) selectPeer(matrix *sync.ColumnPeerRank, busy map[peer.ID]bool) (peer.ID, []uint64, error) {
+	if b.state == batchSyncColumns {
+		return matrix.HighestForIndices(b.cs.columnsNeeded(), busy)
+	}
+	peer, err := matrix.Lowest(busy)
+	return peer, nil, err
 }
 
 func sortBatchDesc(bb []batch) {
