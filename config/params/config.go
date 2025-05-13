@@ -417,15 +417,7 @@ func (b *BeaconChainConfig) MaxBlobsPerBlock(slot primitives.Slot) int {
 			}
 		}
 	}
-
-	switch {
-	case epoch >= b.FuluForkEpoch:
-		return b.DeprecatedMaxBlobsPerBlockFulu
-	case epoch >= b.ElectraForkEpoch:
-		return b.DeprecatedMaxBlobsPerBlockElectra
-	default:
-		return b.DeprecatedMaxBlobsPerBlock
-	}
+	return b.DeprecatedMaxBlobsPerBlock
 }
 
 // MaxBlobsPerBlockAtEpoch returns the maximum number of blobs per block for the given epoch
@@ -438,15 +430,7 @@ func (b *BeaconChainConfig) MaxBlobsPerBlockAtEpoch(epoch primitives.Epoch) int 
 			}
 		}
 	}
-
-	switch {
-	case epoch >= b.FuluForkEpoch:
-		return b.DeprecatedMaxBlobsPerBlockFulu
-	case epoch >= b.ElectraForkEpoch:
-		return b.DeprecatedMaxBlobsPerBlockElectra
-	default:
-		return b.DeprecatedMaxBlobsPerBlock
-	}
+	return b.DeprecatedMaxBlobsPerBlock
 }
 
 // DenebEnabled centralizes the check to determine if code paths

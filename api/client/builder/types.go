@@ -1301,8 +1301,9 @@ func (bb *BuilderBidElectra) ToProto(slot types.Slot) (*eth.BuilderBidElectra, e
 	if err != nil {
 		return nil, err
 	}
-	if len(bb.BlobKzgCommitments) > params.BeaconConfig().MaxBlobsPerBlock(slot) {
-		return nil, fmt.Errorf("blob commitment count %d exceeds the maximum %d", len(bb.BlobKzgCommitments), params.BeaconConfig().MaxBlobsPerBlock(slot))
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(slot)
+	if len(bb.BlobKzgCommitments) > maxBlobsPerBlock {
+		return nil, fmt.Errorf("blob commitment count %d exceeds the maximum %d", len(bb.BlobKzgCommitments), maxBlobsPerBlock)
 	}
 	kzgCommitments := make([][]byte, len(bb.BlobKzgCommitments))
 	for i, commit := range bb.BlobKzgCommitments {

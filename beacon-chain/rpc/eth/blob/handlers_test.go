@@ -412,6 +412,10 @@ func TestBlobs_Electra(t *testing.T) {
 	cfg := params.BeaconConfig().Copy()
 	cfg.DenebForkEpoch = 0
 	cfg.ElectraForkEpoch = 1
+	cfg.BlobSchedule = []params.BlobScheduleEntry{
+		{Epoch: 0, MaxBlobsPerBlock: 6},
+		{Epoch: 1, MaxBlobsPerBlock: 9},
+	}
 	params.OverrideBeaconConfig(cfg)
 
 	db := testDB.SetupDB(t)
