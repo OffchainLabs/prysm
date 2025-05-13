@@ -1618,7 +1618,60 @@ func ApplyDiff(ctx context.Context, source state.BeaconState, diff HdiffSerializ
 	if err != nil {
 		return errors.Wrap(err, "failed to create Hdiff")
 	}
-	return applyStateDiff(ctx, source, hdiff.stateDiff)
+	if err := applyStateDiff(ctx, source, hdiff.stateDiff); err != nil {
+		return errors.Wrap(err, "failed to apply state diff")
+	}
+	if err := applyBalancesDiff(source, hdiff.balancesDiff); err != nil {
+		return errors.Wrap(err, "failed to apply balances diff")
+	}
+	return applyValidatorDiff(source, hdiff.validatorDiffs)
+}
+
+// applyValidatorDiff applies the validator diff to the source state in place.
+func applyValidatorDiff(source state.BeaconState, diff []validatorDiff) error {
+	sVals := source.Validators()
+	if len(sVals) < len(diff) {
+		return errors.Errorf("target validators length %d is less than source %d", len(diff), len(sVals))
+	}
+	for _, d := range diff {
+		if d.index > uint32(len(sVals)) {
+			return errors.Errorf("validator index %d is greater than length %d", d.index, len(diff))
+		}
+		if d.index == uint32(len(sVals)) {
+			// A valid diff should never have an index greater than the length of the source validators.
+			sVals = append(sVals, &ethpb.Validator{})
+		}
+		if d.PublicKey != nil {
+			sVals[d.index].PublicKey = slices.Clone(d.PublicKey)
+		}
+		if d.WithdrawalCredentials != nil {
+			sVals[d.index].WithdrawalCredentials = slices.Clone(d.WithdrawalCredentials)
+		}
+		sVals[d.index].EffectiveBalance = d.EffectiveBalance
+		sVals[d.index].Slashed = d.Slashed
+		sVals[d.index].ActivationEligibilityEpoch = d.ActivationEligibilityEpoch
+		sVals[d.index].ActivationEpoch = d.ActivationEpoch
+		sVals[d.index].ExitEpoch = d.ExitEpoch
+		sVals[d.index].WithdrawableEpoch = d.WithdrawableEpoch
+	}
+	return source.SetValidators(sVals)
+}
+
+// applyBalancesDiff applies the balances diff to the source state in place.
+func applyBalancesDiff(source state.BeaconState, diff []int64) error {
+	sBalances := source.Balances()
+	if len(diff) < len(sBalances) {
+		return errors.Errorf("target balances length %d is less than source %d", len(diff), len(sBalances))
+	}
+	sBalances = append(sBalances, make([]uint64, len(diff)-len(sBalances))...)
+	for i, t := range diff {
+		if t > 0 {
+			sBalances[i] += uint64(t)
+		} else {
+			sBalances[i] -= uint64(-t)
+		}
+	}
+	return source.SetBalances(sBalances)
 }
 
 // applyStateDiff applies the given diff to the source state in place.
