@@ -7,7 +7,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/hdiff"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/math"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/pkg/errors"
 	bolt "go.etcd.io/bbolt"
@@ -26,6 +25,10 @@ var (
 func (s *Store) SaveStateDiff(ctx context.Context, st state.ReadOnlyBeaconState) error {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveStateDiff")
 	defer span.End()
+
+	if st == nil {
+		return errors.New("state is nil")
+	}
 
 	slot := st.Slot()
 	offset, err := s.loadOrInitOffset(slot)
@@ -73,9 +76,14 @@ func (s *Store) StateDiff(ctx context.Context, slot primitives.Slot) (state.Beac
 
 	snapshot, diffChain, err := s.getBaseAndDiffChain(offset, slot)
 
-	// TODO: apply the diff chain to the snapshot and return the final state.
+	for _, diff := range diffChain {
+		err = hdiff.ApplyDiff(ctx, snapshot, diff)
+		if err != nil {
+			return nil, err
+		}
+	}
 
-	return nil, nil
+	return snapshot, nil
 }
 
 // SaveHdiff computes the diff between the anchor state and the current state and saves it to the database.
@@ -91,19 +99,18 @@ func (s *Store) saveHdiff(lvl int, anchor, st state.ReadOnlyBeaconState) error {
 		if bucket == nil {
 			return bolt.ErrBucketNotFound
 		}
-		// TODO: save the diff bytes per field with suffix
 		buf := make([]byte, len(key)+len("_s"))
 		copy(buf, key)
 		copy(buf[len(key):], "_s")
-		if err := bucket.Put(buf, diff); err != nil {
+		if err := bucket.Put(buf, diff.StateDiff); err != nil {
 			return err
 		}
 		copy(buf[len(key):], "_v")
-		if err := bucket.Put(buf, diff); err != nil {
+		if err := bucket.Put(buf, diff.ValidatorDiffs); err != nil {
 			return err
 		}
 		copy(buf[len(key):], "_b")
-		if err := bucket.Put(buf, diff); err != nil {
+		if err := bucket.Put(buf, diff.BalancesDiff); err != nil {
 			return err
 		}
 		return nil
@@ -151,57 +158,7 @@ func (s *Store) saveFullSnapshot(lvl int, st state.ReadOnlyBeaconState) error {
 	return nil
 }
 
-func addKey(v int, bytes []byte) ([]byte, error) {
-	key, err := keyForSnapshot(v)
-	if err != nil {
-		return nil, err
-	}
-	enc := make([]byte, len(key)+len(bytes))
-	copy(enc, key)
-	copy(enc[len(key):], bytes)
-	return enc, nil
-}
-
-func (s *Store) getBaseAndDiffChain(offset uint64, slot primitives.Slot) (state.BeaconState, []*hdiff.HdiffSerialized, error) {
-	rel := uint64(slot) - offset
-	lvl := computeLevel(offset, slot)
-	if lvl == -1 {
-		return nil, nil, errors.New("slot not in tree")
-	}
-
-	exponents := params.StateHierarchyExponents()
-
-	baseSpan := math.PowerOf2(exponents[0])
-	baseAnchorSlot := (rel / baseSpan * baseSpan) + offset
-
-	var diffChainIndices []uint64
-	for i := 1; i < lvl; i++ {
-		span := math.PowerOf2(exponents[i])
-		diffSlot := rel / span * span
-		if diffSlot == baseAnchorSlot {
-			continue
-		}
-		diffChainIndices = appendUnique(diffChainIndices, diffSlot+offset)
-	}
-
-	baseSnapshot, err := s.getFullSnapshot(lvl, baseAnchorSlot)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	diffChain := make([]*hdiff.HdiffSerialized, len(diffChainIndices))
-	for _, diffSlot := range diffChainIndices {
-		diff, err := s.getDiff(computeLevel(offset, primitives.Slot(diffSlot)), diffSlot)
-		if err != nil {
-			return nil, nil, err
-		}
-		diffChain = append(diffChain, diff)
-	}
-
-	return baseSnapshot, diffChain, nil
-}
-
-func (s *Store) getDiff(lvl int, slot uint64) (*hdiff.HdiffSerialized, error) {
+func (s *Store) getDiff(lvl int, slot uint64) (hdiff.HdiffSerialized, error) {
 	key := makeKey(lvl, slot)
 	var stateDiff []byte
 	var validatorDiff []byte
@@ -233,10 +190,14 @@ func (s *Store) getDiff(lvl int, slot uint64) (*hdiff.HdiffSerialized, error) {
 	})
 
 	if err != nil {
-		return nil, err
+		return hdiff.HdiffSerialized{}, err
 	}
 
-	return &hdiff.HdiffSerialized{}, nil
+	return hdiff.HdiffSerialized{
+		StateDiff:      stateDiff,
+		ValidatorDiffs: validatorDiff,
+		BalancesDiff:   balancesDiff,
+	}, nil
 }
 
 func (s *Store) getFullSnapshot(lvl int, slot uint64) (state.BeaconState, error) {
@@ -260,13 +221,4 @@ func (s *Store) getFullSnapshot(lvl int, slot uint64) (state.BeaconState, error)
 	}
 
 	return s.decodeStateSnapshot(enc)
-}
-
-func appendUnique(s []uint64, v uint64) []uint64 {
-	for _, x := range s {
-		if x == v {
-			return s
-		}
-	}
-	return append(s, v)
 }

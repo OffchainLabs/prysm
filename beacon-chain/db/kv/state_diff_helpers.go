@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"fmt"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/hdiff"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/math"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -112,56 +112,125 @@ func (s *Store) getOffset() (offset uint64, err error) {
 	})
 }
 
-func keyForSnapshot(v int) ([]byte, error) {
+func keyForSnapshot(v int) []byte {
 	switch v {
+	case version.Fulu:
+		return fuluKey
 	case version.Electra:
-		return ElectraKey, nil
+		return ElectraKey
 	case version.Deneb:
-		return denebKey, nil
+		return denebKey
 	case version.Capella:
-		return capellaKey, nil
+		return capellaKey
 	case version.Bellatrix:
-		return bellatrixKey, nil
+		return bellatrixKey
 	case version.Altair:
-		return altairKey, nil
+		return altairKey
 	default:
-		return nil, fmt.Errorf("unsupported version %s", version.String(v))
+		// Phase0
+		return []byte{}
 	}
+}
+
+func addKey(v int, bytes []byte) ([]byte, error) {
+	key := keyForSnapshot(v)
+	enc := make([]byte, len(key)+len(bytes))
+	copy(enc, key)
+	copy(enc[len(key):], bytes)
+	return enc, nil
 }
 
 func (s *Store) decodeStateSnapshot(enc []byte) (state.BeaconState, error) {
 	switch {
+	case hasFuluKey(enc):
+		var fuluState ethpb.BeaconStateElectra
+		if err := fuluState.UnmarshalSSZ(enc[len(ElectraKey):]); err != nil {
+			return nil, err
+		}
+		return state_native.InitializeFromProtoUnsafeFulu(&fuluState)
 	case HasElectraKey(enc):
 		var electraState ethpb.BeaconStateElectra
 		if err := electraState.UnmarshalSSZ(enc[len(ElectraKey):]); err != nil {
 			return nil, err
 		}
-		return state_native.InitializeFromProtoElectra(&electraState)
+		return state_native.InitializeFromProtoUnsafeElectra(&electraState)
 	case hasDenebKey(enc):
 		var denebState ethpb.BeaconStateDeneb
 		if err := denebState.UnmarshalSSZ(enc[len(denebKey):]); err != nil {
 			return nil, err
 		}
-		return state_native.InitializeFromProtoDeneb(&denebState)
+		return state_native.InitializeFromProtoUnsafeDeneb(&denebState)
 	case hasCapellaKey(enc):
 		var capellaState ethpb.BeaconStateCapella
 		if err := capellaState.UnmarshalSSZ(enc[len(capellaKey):]); err != nil {
 			return nil, err
 		}
-		return state_native.InitializeFromProtoCapella(&capellaState)
+		return state_native.InitializeFromProtoUnsafeCapella(&capellaState)
 	case hasBellatrixKey(enc):
 		var bellatrixState ethpb.BeaconStateBellatrix
 		if err := bellatrixState.UnmarshalSSZ(enc[len(bellatrixKey):]); err != nil {
 			return nil, err
 		}
-		return state_native.InitializeFromProtoBellatrix(&bellatrixState)
+		return state_native.InitializeFromProtoUnsafeBellatrix(&bellatrixState)
 	case hasAltairKey(enc):
 		var altairState ethpb.BeaconStateAltair
 		if err := altairState.UnmarshalSSZ(enc[len(altairKey):]); err != nil {
 			return nil, err
 		}
-		return state_native.InitializeFromProtoAltair(&altairState)
+		return state_native.InitializeFromProtoUnsafeAltair(&altairState)
 	default:
-		return nil, fmt.Errorf("unsupported encoding %x", enc)
+		var phase0State ethpb.BeaconState
+		if err := phase0State.UnmarshalSSZ(enc); err != nil {
+			return nil, err
+		}
+		return state_native.InitializeFromProtoUnsafePhase0(&phase0State)
 	}
+}
+
+func (s *Store) getBaseAndDiffChain(offset uint64, slot primitives.Slot) (state.BeaconState, []hdiff.HdiffSerialized, error) {
+	rel := uint64(slot) - offset
+	lvl := computeLevel(offset, slot)
+	if lvl == -1 {
+		return nil, nil, errors.New("slot not in tree")
+	}
+
+	exponents := params.StateHierarchyExponents()
+
+	baseSpan := math.PowerOf2(exponents[0])
+	baseAnchorSlot := (rel / baseSpan * baseSpan) + offset
+
+	var diffChainIndices []uint64
+	for i := 1; i < lvl; i++ {
+		span := math.PowerOf2(exponents[i])
+		diffSlot := rel / span * span
+		if diffSlot == baseAnchorSlot {
+			continue
+		}
+		diffChainIndices = appendUnique(diffChainIndices, diffSlot+offset)
+	}
+
+	baseSnapshot, err := s.getFullSnapshot(lvl, baseAnchorSlot)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	diffChain := make([]hdiff.HdiffSerialized, len(diffChainIndices))
+	for _, diffSlot := range diffChainIndices {
+		diff, err := s.getDiff(computeLevel(offset, primitives.Slot(diffSlot)), diffSlot)
+		if err != nil {
+			return nil, nil, err
+		}
+		diffChain = append(diffChain, diff)
+	}
+
+	return baseSnapshot, diffChain, nil
+}
+
+func appendUnique(s []uint64, v uint64) []uint64 {
+	for _, x := range s {
+		if x == v {
+			return s
+		}
+	}
+	return append(s, v)
 }
