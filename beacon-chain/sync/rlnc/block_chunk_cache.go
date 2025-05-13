@@ -10,7 +10,7 @@ import (
 )
 
 var numChunks = uint(10)
-var maxChunkSize = uint(6554) // 2MB for 10 chunks.
+var maxChunkSize = uint(65536) // 2MB for 10 chunks.
 
 type BlockChunkCache struct {
 	sync.Mutex

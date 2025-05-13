@@ -66,6 +66,7 @@ func TestDecode(t *testing.T) {
 	committer := newCommitter(chunkSize)
 	block := make([]byte, numChunks*chunkSize*31)
 	_, err := rand.Read(block)
+	block[len(block)-1] = 0xfe // termination byte
 	require.NoError(t, err)
 	node, err := NewSource(committer, numChunks, block)
 	require.NoError(t, err)
@@ -80,7 +81,7 @@ func TestDecode(t *testing.T) {
 	}
 	decoded, err := emptyNode.decode()
 	require.NoError(t, err)
-	require.DeepEqual(t, block, decoded)
+	require.DeepEqual(t, block[:len(block)-1], decoded)
 }
 
 func TestDecodeLarge(t *testing.T) {
