@@ -116,30 +116,13 @@ func TestMaxBlobsPerBlock(t *testing.T) {
 		require.Equal(t, cfg.MaxBlobsPerBlock(0), cfg.DeprecatedMaxBlobsPerBlock)
 	})
 
-	t.Run("After ElectraForkEpoch but before FuluForkEpoch", func(t *testing.T) {
-		cfg := params.MainnetConfig()
-		cfg.BlobSchedule = nil
-		cfg.ElectraForkEpoch = 10
-		cfg.FuluForkEpoch = 20
-		slot := primitives.Slot(cfg.ElectraForkEpoch * 32)
-		require.Equal(t, cfg.MaxBlobsPerBlock(slot), cfg.DeprecatedMaxBlobsPerBlockElectra)
-	})
-
-	t.Run("After FuluForkEpoch", func(t *testing.T) {
-		cfg := params.MainnetConfig()
-		cfg.BlobSchedule = nil
-		cfg.FuluForkEpoch = 15
-		slot := primitives.Slot(cfg.FuluForkEpoch * 32)
-		require.Equal(t, cfg.MaxBlobsPerBlock(slot), cfg.DeprecatedMaxBlobsPerBlockFulu)
-	})
-
 	t.Run("Uses latest matching BlobSchedule entry", func(t *testing.T) {
 		cfg := params.MainnetConfig()
 		cfg.BlobSchedule = []params.BlobScheduleEntry{
 			{Epoch: 5, MaxBlobsPerBlock: 7},
 			{Epoch: 10, MaxBlobsPerBlock: 11},
 		}
-		slot := primitives.Slot(11 * cfg.SlotsPerEpoch)
+		slot := 11 * cfg.SlotsPerEpoch
 		require.Equal(t, cfg.MaxBlobsPerBlock(slot), 11)
 	})
 
@@ -149,7 +132,7 @@ func TestMaxBlobsPerBlock(t *testing.T) {
 			{Epoch: 5, MaxBlobsPerBlock: 7},
 			{Epoch: 10, MaxBlobsPerBlock: 11},
 		}
-		slot := primitives.Slot(6 * cfg.SlotsPerEpoch)
+		slot := 6 * cfg.SlotsPerEpoch
 		require.Equal(t, cfg.MaxBlobsPerBlock(slot), 7)
 	})
 
