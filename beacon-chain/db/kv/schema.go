@@ -16,6 +16,7 @@ var (
 	stateValidatorsBucket = []byte("state-validators")
 	feeRecipientBucket    = []byte("fee-recipient")
 	registrationBucket    = []byte("registration")
+	stateDiffBucket       = []byte("state-diff")
 
 	// Light Client Updates Bucket
 	lightClientUpdatesBucket       = []byte("light-client-updates")
