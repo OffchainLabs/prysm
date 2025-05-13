@@ -29,7 +29,7 @@ type LazilyPersistentStoreBlob struct {
 	verifier BlobBatchVerifier
 }
 
-var _ AvailabilityStore = &LazilyPersistentStoreBlob{}
+var _ AvailabilityChecker = &LazilyPersistentStoreBlob{}
 
 // BlobBatchVerifier enables LazyAvailabilityStore to manage the verification process
 // going from ROBlob->VerifiedROBlob, while avoiding the decision of which individual verifications
@@ -81,7 +81,16 @@ func (s *LazilyPersistentStoreBlob) Persist(current primitives.Slot, sidecars ..
 
 // IsDataAvailable returns nil if all the commitments in the given block are persisted to the db and have been verified.
 // BlobSidecars already in the db are assumed to have been previously verified against the block.
-func (s *LazilyPersistentStoreBlob) IsDataAvailable(ctx context.Context, current primitives.Slot, b blocks.ROBlock) error {
+func (s *LazilyPersistentStoreBlob) IsDataAvailable(ctx context.Context, current primitives.Slot, blks ...blocks.ROBlock) error {
+	for _, b := range blks {
+		if err := s.checkOne(ctx, current, b); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *LazilyPersistentStoreBlob) checkOne(ctx context.Context, current primitives.Slot, b blocks.ROBlock) error {
 	blockCommitments, err := commitmentsToCheck(b, current)
 	if err != nil {
 		return errors.Wrapf(err, "could not check data availability for block %#x", b.Root())

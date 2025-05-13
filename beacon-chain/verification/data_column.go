@@ -60,7 +60,7 @@ var (
 	SpectestDataColumnSidecarRequirements = requirementList(GossipDataColumnSidecarRequirements).excluding(
 		RequireSidecarParentSeen, RequireSidecarParentValid)
 
-	errColumnsInvalid = errors.New("data columns failed verification")
+	ErrColumnsInvalid = errors.New("data columns failed verification")
 	errBadTopicLength = errors.New("topic length is invalid")
 	errBadTopic       = errors.New("topic is not of the one expected")
 )
@@ -84,7 +84,7 @@ var _ DataColumnsVerifier = &RODataColumnsVerifier{}
 // were not run, an error will be returned.
 func (dv *RODataColumnsVerifier) VerifiedRODataColumns() ([]blocks.VerifiedRODataColumn, error) {
 	if !dv.results.allSatisfied() {
-		return nil, dv.results.errors(errColumnsInvalid)
+		return nil, dv.results.errors(ErrColumnsInvalid)
 	}
 
 	verifiedRODataColumns := make([]blocks.VerifiedRODataColumn, 0, len(dv.dataColumns))
@@ -521,7 +521,7 @@ func columnToSignatureData(d blocks.RODataColumn) signatureData {
 }
 
 func columnErrBuilder(baseErr error) error {
-	return errors.Wrap(baseErr, errColumnsInvalid.Error())
+	return errors.Wrap(baseErr, ErrColumnsInvalid.Error())
 }
 
 func inclusionProofKey(c blocks.RODataColumn) ([160]byte, error) {

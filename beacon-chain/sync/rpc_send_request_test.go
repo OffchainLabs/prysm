@@ -1071,7 +1071,7 @@ func TestIsSidecarSlotWithinBounds(t *testing.T) {
 		Count:     10,
 	}
 
-	validator, err := isSidecarSlotWithinBounds(request)
+	validator, err := isSidecarSlotRequested(request)
 	require.NoError(t, err)
 
 	testCases := []struct {

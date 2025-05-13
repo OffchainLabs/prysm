@@ -107,3 +107,104 @@ func computeInfoCacheKey(nodeID enode.ID, custodyGroupCount uint64) [nodeInfoCac
 
 	return key
 }
+
+// ColumnIndices is a map of column indices where the key is the column index and the value is a boolean.
+// The boolean could indicate different things, eg whether the column is needed (in the context of satisfying custody requirements)
+// or present (in the context of a custody check on disk or in cache).
+type ColumnIndices map[uint64]bool
+
+func (ci ColumnIndices) Has(index uint64) bool {
+	_, ok := ci[index]
+	return ok
+}
+
+func (ci ColumnIndices) Count() int {
+	return len(ci)
+}
+
+func (ci ColumnIndices) Set(index uint64) {
+	ci[index] = true
+}
+
+func (ci ColumnIndices) Unset(index uint64) {
+	delete(ci, index)
+}
+
+func (ci ColumnIndices) Copy() ColumnIndices {
+	newCi := make(ColumnIndices, len(ci))
+	for index, set := range ci {
+		newCi[index] = set
+	}
+	return newCi
+}
+
+func (ci ColumnIndices) Intersection(other ColumnIndices) ColumnIndices {
+	result := make(ColumnIndices)
+	for index := range ci {
+		if other.Has(index) {
+			result.Set(index)
+		}
+	}
+	return result
+}
+
+// Union mutates the receiver so that any index that is set in either of
+// the two ColumnIndices is set in the receiver after the function finishes.
+// It does not mutate the other ColumnIndices given as a function argument.
+func (ci ColumnIndices) Union(other ColumnIndices) {
+	for index := range other {
+		ci.Set(index)
+	}
+}
+
+func (ci ColumnIndices) ToMap() map[uint64]bool {
+	m := make(map[uint64]bool, len(ci))
+	for index, set := range ci {
+		m[index] = set
+	}
+	return m
+}
+
+// ToSlice converts a ColumnIndices into a slice of uint64 indices.
+func (ci ColumnIndices) ToSlice() []uint64 {
+	indices := make([]uint64, 0, len(ci))
+	for index, _ := range ci {
+		indices = append(indices, index)
+	}
+	return indices
+}
+
+func MapFromColumnIndices(ci ColumnIndices) map[uint64]bool {
+	m := make(map[uint64]bool, len(ci))
+	for index, set := range ci {
+		m[index] = set
+	}
+	return m
+}
+
+// NewColumnIndicesFromSlice creates a ColumnIndices from a slice of uint64.
+// Unlike the untyped map, this explicitly indicates that the boolean value is meaningful.
+func NewColumnIndicesFromSlice(indices []uint64) ColumnIndices {
+	ci := make(ColumnIndices, len(indices))
+	for _, index := range indices {
+		ci[index] = true
+	}
+	return ci
+}
+
+// NewColumnIndicesFromMap creates a ColumnIndices from a map of uint64 to bool.
+// Unlike the untyped map, this explicitly indicates that the boolean value is meaningful.
+func NewColumnIndicesFromMap(indices map[uint64]bool) ColumnIndices {
+	ci := make(ColumnIndices, len(indices))
+	for index, set := range indices {
+		if !set {
+			continue
+		}
+		ci[index] = true
+	}
+	return ci
+}
+
+func NewColumnIndices() ColumnIndices {
+	return make(ColumnIndices)
+}
