@@ -6,8 +6,6 @@ import (
 	"time"
 )
 
-//TODO: Finer grained locking.
-
 type bucketMap map[string]*LeakyBucket
 
 // A Collector can keep track of multiple LeakyBucket's. The caller does not
@@ -17,13 +15,15 @@ type bucketMap map[string]*LeakyBucket
 //
 // All Collector methods are goroutine safe.
 type Collector struct {
-	buckets  bucketMap
-	heap     priorityQueue
-	rate     float64
-	capacity int64
-	period   time.Duration
-	lock     sync.Mutex
-	quit     chan bool
+	buckets     bucketMap
+	heap        priorityQueue
+	rate        float64
+	capacity    int64
+	period      time.Duration
+	bucketsLock sync.RWMutex
+	heapLock    sync.Mutex
+	bucketLocks sync.Map // map[string]*sync.Mutex
+	quit        chan bool
 }
 
 // NewCollector creates a new Collector. When new buckets are created within
@@ -63,12 +63,15 @@ func (c *Collector) Free() {
 // Reset removes all internal buckets and resets the collector back to as if it
 // was just created.
 func (c *Collector) Reset() {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+	c.bucketsLock.Lock()
+	defer c.bucketsLock.Unlock()
+	c.heapLock.Lock()
+	defer c.heapLock.Unlock()
 
 	// Let the garbage collector do all the work.
 	c.buckets = make(bucketMap)
 	c.heap = make(priorityQueue, 0, 4096)
+	c.bucketLocks = sync.Map{}
 }
 
 // Capacity returns the collector's capacity.
@@ -91,13 +94,18 @@ func (c *Collector) Remaining(key string) int64 {
 // Count returns the count of the internal bucket associated with key. If key
 // is not associated with a bucket internally, it is treated as being empty.
 func (c *Collector) Count(key string) int64 {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
+	c.bucketsLock.RLock()
 	b, ok := c.buckets[key]
+	c.bucketsLock.RUnlock()
+
 	if !ok || b == nil {
 		return 0
 	}
+
+	// Get or create bucket lock
+	bucketLock, _ := c.bucketLocks.LoadOrStore(key, &sync.Mutex{})
+	bucketLock.(*sync.Mutex).Lock()
+	defer bucketLock.(*sync.Mutex).Unlock()
 
 	return b.Count()
 }
@@ -106,13 +114,18 @@ func (c *Collector) Count(key string) int64 {
 // associated with key is empty. If key is not associated with a bucket
 // internally, it is treated as being empty.
 func (c *Collector) TillEmpty(key string) time.Duration {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
+	c.bucketsLock.RLock()
 	b, ok := c.buckets[key]
+	c.bucketsLock.RUnlock()
+
 	if !ok || b == nil {
 		return 0
 	}
+
+	// Get or create bucket lock
+	bucketLock, _ := c.bucketLocks.LoadOrStore(key, &sync.Mutex{})
+	bucketLock.(*sync.Mutex).Lock()
+	defer bucketLock.(*sync.Mutex).Unlock()
 
 	return b.TillEmpty()
 }
@@ -120,16 +133,21 @@ func (c *Collector) TillEmpty(key string) time.Duration {
 // Remove deletes the internal bucket associated with key. If key is not
 // associated with a bucket internally, nothing is done.
 func (c *Collector) Remove(key string) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
+	c.bucketsLock.Lock()
 	b, ok := c.buckets[key]
 	if !ok || b == nil {
+		c.bucketsLock.Unlock()
 		return
 	}
 
-	delete(c.buckets, b.key)
+	delete(c.buckets, key)
+	c.bucketsLock.Unlock()
+
+	c.heapLock.Lock()
 	heap.Remove(&c.heap, b.index)
+	c.heapLock.Unlock()
+
+	c.bucketLocks.Delete(key)
 }
 
 // Add 'amount' to the internal bucket associated with key, up to it's
@@ -139,13 +157,17 @@ func (c *Collector) Remove(key string) {
 // If key is not associated with a bucket internally, a new bucket is created
 // and amount is added to it.
 func (c *Collector) Add(key string, amount int64) int64 {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+	// Get or create bucket lock first
+	bucketLock, _ := c.bucketLocks.LoadOrStore(key, &sync.Mutex{})
+	bucketLock.(*sync.Mutex).Lock()
+	defer bucketLock.(*sync.Mutex).Unlock()
 
+	c.bucketsLock.RLock()
 	b, ok := c.buckets[key]
+	c.bucketsLock.RUnlock()
 
 	if !ok || b == nil {
-		// Create a new bucket.
+		// Create a new bucket
 		b = &LeakyBucket{
 			key:      key,
 			capacity: c.capacity,
@@ -153,14 +175,22 @@ func (c *Collector) Add(key string, amount int64) int64 {
 			period:   c.period,
 			p:        now(),
 		}
-		c.heap.Push(b)
+
+		c.bucketsLock.Lock()
 		c.buckets[key] = b
+		c.bucketsLock.Unlock()
+
+		c.heapLock.Lock()
+		c.heap.Push(b)
+		c.heapLock.Unlock()
 	}
 
 	n := b.Add(amount)
 
 	if n > 0 {
+		c.heapLock.Lock()
 		heap.Fix(&c.heap, b.index)
+		c.heapLock.Unlock()
 	}
 
 	return n
@@ -168,7 +198,7 @@ func (c *Collector) Add(key string, amount int64) int64 {
 
 // Prune removes all empty buckets in the collector.
 func (c *Collector) Prune() {
-	c.lock.Lock()
+	c.heapLock.Lock()
 	for c.heap.Peak() != nil {
 		b := c.heap.Peak()
 
@@ -178,10 +208,14 @@ func (c *Collector) Prune() {
 		}
 
 		// The bucket should be empty.
+		c.bucketsLock.Lock()
 		delete(c.buckets, b.key)
+		c.bucketsLock.Unlock()
+
 		heap.Remove(&c.heap, b.index)
+		c.bucketLocks.Delete(b.key)
 	}
-	c.lock.Unlock()
+	c.heapLock.Unlock()
 }
 
 // PeriodicPrune runs a concurrent goroutine that calls Prune() at the given
