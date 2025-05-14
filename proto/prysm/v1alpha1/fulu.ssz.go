@@ -1158,3 +1158,123 @@ func (d *DataColumnIdentifier) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.Merkleize(indx)
 	return
 }
+
+// MarshalSSZ ssz marshals the DataColumnsByRootIdentifier object
+func (d *DataColumnsByRootIdentifier) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(d)
+}
+
+// MarshalSSZTo ssz marshals the DataColumnsByRootIdentifier object to a target array
+func (d *DataColumnsByRootIdentifier) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(36)
+
+	// Field (0) 'BlockRoot'
+	if size := len(d.BlockRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BlockRoot", size, 32)
+		return
+	}
+	dst = append(dst, d.BlockRoot...)
+
+	// Offset (1) 'Columns'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(d.Columns) * 8
+
+	// Field (1) 'Columns'
+	if size := len(d.Columns); size > 128 {
+		err = ssz.ErrListTooBigFn("--.Columns", size, 128)
+		return
+	}
+	for ii := 0; ii < len(d.Columns); ii++ {
+		dst = ssz.MarshalUint64(dst, d.Columns[ii])
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the DataColumnsByRootIdentifier object
+func (d *DataColumnsByRootIdentifier) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 36 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o1 uint64
+
+	// Field (0) 'BlockRoot'
+	if cap(d.BlockRoot) == 0 {
+		d.BlockRoot = make([]byte, 0, len(buf[0:32]))
+	}
+	d.BlockRoot = append(d.BlockRoot, buf[0:32]...)
+
+	// Offset (1) 'Columns'
+	if o1 = ssz.ReadOffset(buf[32:36]); o1 > size {
+		return ssz.ErrOffset
+	}
+
+	if o1 != 36 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (1) 'Columns'
+	{
+		buf = tail[o1:]
+		num, err := ssz.DivideInt2(len(buf), 8, 128)
+		if err != nil {
+			return err
+		}
+		d.Columns = ssz.ExtendUint64(d.Columns, num)
+		for ii := 0; ii < num; ii++ {
+			d.Columns[ii] = ssz.UnmarshallUint64(buf[ii*8 : (ii+1)*8])
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the DataColumnsByRootIdentifier object
+func (d *DataColumnsByRootIdentifier) SizeSSZ() (size int) {
+	size = 36
+
+	// Field (1) 'Columns'
+	size += len(d.Columns) * 8
+
+	return
+}
+
+// HashTreeRoot ssz hashes the DataColumnsByRootIdentifier object
+func (d *DataColumnsByRootIdentifier) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(d)
+}
+
+// HashTreeRootWith ssz hashes the DataColumnsByRootIdentifier object with a hasher
+func (d *DataColumnsByRootIdentifier) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'BlockRoot'
+	if size := len(d.BlockRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BlockRoot", size, 32)
+		return
+	}
+	hh.PutBytes(d.BlockRoot)
+
+	// Field (1) 'Columns'
+	{
+		if size := len(d.Columns); size > 128 {
+			err = ssz.ErrListTooBigFn("--.Columns", size, 128)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range d.Columns {
+			hh.AppendUint64(i)
+		}
+		hh.FillUpTo32()
+
+		numItems := uint64(len(d.Columns))
+		hh.MerkleizeWithMixin(subIndx, numItems, ssz.CalculateLimit(128, numItems, 8))
+	}
+
+	hh.Merkleize(indx)
+	return
+}
