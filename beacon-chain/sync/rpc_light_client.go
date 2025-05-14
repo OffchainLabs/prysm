@@ -6,6 +6,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/math"
@@ -17,6 +18,11 @@ import (
 
 // lightClientBootstrapRPCHandler handles the /eth2/beacon_chain/req/light_client_bootstrap/1/ RPC request.
 func (s *Service) lightClientBootstrapRPCHandler(ctx context.Context, msg interface{}, stream libp2pcore.Stream) error {
+	if !features.Get().EnableLightClient {
+		s.writeErrorResponseToStream(responseCodeResourceUnavailable, "Light client feature flag is not enabled", stream)
+		return nil
+	}
+
 	ctx, span := trace.StartSpan(ctx, "sync.lightClientBootstrapRPCHandler")
 	defer span.End()
 	ctx, cancel := context.WithTimeout(ctx, ttfbTimeout)
@@ -68,6 +74,11 @@ func (s *Service) lightClientBootstrapRPCHandler(ctx context.Context, msg interf
 
 // lightClientUpdatesByRangeRPCHandler handles the /eth2/beacon_chain/req/light_client_updates_by_range/1/ RPC request.
 func (s *Service) lightClientUpdatesByRangeRPCHandler(ctx context.Context, msg interface{}, stream libp2pcore.Stream) error {
+	if !features.Get().EnableLightClient {
+		s.writeErrorResponseToStream(responseCodeResourceUnavailable, "Light client feature flag is not enabled", stream)
+		return nil
+	}
+
 	ctx, span := trace.StartSpan(ctx, "sync.lightClientUpdatesByRangeRPCHandler")
 	defer span.End()
 	ctx, cancel := context.WithTimeout(ctx, ttfbTimeout)
@@ -149,6 +160,11 @@ func (s *Service) lightClientUpdatesByRangeRPCHandler(ctx context.Context, msg i
 
 // lightClientFinalityUpdateRPCHandler handles the /eth2/beacon_chain/req/light_client_finality_update/1/ RPC request.
 func (s *Service) lightClientFinalityUpdateRPCHandler(ctx context.Context, _ interface{}, stream libp2pcore.Stream) error {
+	if !features.Get().EnableLightClient {
+		s.writeErrorResponseToStream(responseCodeResourceUnavailable, "Light client feature flag is not enabled", stream)
+		return nil
+	}
+
 	ctx, span := trace.StartSpan(ctx, "sync.lightClientFinalityUpdateRPCHandler")
 	defer span.End()
 	_, cancel := context.WithTimeout(ctx, ttfbTimeout)
@@ -185,6 +201,11 @@ func (s *Service) lightClientFinalityUpdateRPCHandler(ctx context.Context, _ int
 
 // lightClientOptimisticUpdateRPCHandler handles the /eth2/beacon_chain/req/light_client_optimistic_update/1/ RPC request.
 func (s *Service) lightClientOptimisticUpdateRPCHandler(ctx context.Context, _ interface{}, stream libp2pcore.Stream) error {
+	if !features.Get().EnableLightClient {
+		s.writeErrorResponseToStream(responseCodeResourceUnavailable, "Light client feature flag is not enabled", stream)
+		return nil
+	}
+
 	ctx, span := trace.StartSpan(ctx, "sync.lightClientOptimisticUpdateRPCHandler")
 	defer span.End()
 	_, cancel := context.WithTimeout(ctx, ttfbTimeout)
