@@ -45,7 +45,10 @@ var eth1DataNotification bool
 const (
 	eth1dataTimeout           = 2 * time.Second
 	defaultBuilderBoostFactor = primitives.Gwei(100)
-	meshSize                  = 40 // The number of peers to broadcast block chunks
+)
+
+var (
+	meshSize = 4 * features.Get().RLNCNumChunks // The number of peers to broadcast block chunks
 )
 
 // GetBeaconBlock is called by a proposer during its assigned slot to request a block to sign
@@ -448,7 +451,7 @@ func (s *Server) constructChunkMessages(cBlk *ethpb.ChunkedBeaconBlock) ([]*ethp
 		return nil, errors.Wrap(err, "could not construct node")
 	}
 	multipleMessages := make([]*ethpb.BeaconBlockChunk, 0, meshSize)
-	for i := 0; i < meshSize; i++ {
+	for i := uint(0); i < meshSize; i++ {
 		msg, err := node.PrepareMessage()
 		if err != nil {
 			return nil, errors.Wrap(err, "could not prepare message")

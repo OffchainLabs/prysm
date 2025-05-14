@@ -16,6 +16,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/rlnc"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/chunks"
@@ -28,7 +29,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const meshSize = 40 // number of peers to send chunks
+var meshSize = 4 * features.Get().RLNCNumChunks // number of peers to send chunks
 
 // beaconBlockChunkSubscriber is a noop since all syncing happens at the validation step
 func (s *Service) beaconBlockChunkSubscriber(_ context.Context, _ proto.Message) error {
@@ -232,7 +233,7 @@ func (s *Service) reconstructBlockFromChunk(ctx context.Context, chunk interface
 
 func (s *Service) broadcastBlockChunk(ctx context.Context, chunk interfaces.ReadOnlyBeaconBlockChunk) {
 	messages := make([]*ethpb.BeaconBlockChunk, 0, meshSize)
-	for i := 0; i < meshSize; i++ {
+	for i := uint(0); i < meshSize; i++ {
 		msg, err := s.blockChunkCache.PrepareMessage(chunk)
 		if err != nil {
 			log.WithError(err).Error("could not prepare message")
