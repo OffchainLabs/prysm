@@ -479,6 +479,93 @@ func TestProcessETH2GenesisLog_CorrectNumOfDeposits(t *testing.T) {
 	hook.Reset()
 }
 
+func TestProcessLogs_DepositRequestsStarted(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	hook := logTest.NewGlobal()
+	testAcc, err := mock.Setup()
+	require.NoError(t, err, "Unable to set up simulated backend")
+	kvStore := testDB.SetupDB(t)
+	depositCache, err := depositsnapshot.New()
+	require.NoError(t, err)
+	server, endpoint, err := mockExecution.SetupRPCServer()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		server.Stop()
+	})
+
+	web3Service, err := NewService(context.Background(),
+		WithHttpEndpoint(endpoint),
+		WithDepositContractAddress(testAcc.ContractAddr),
+		WithDatabase(kvStore),
+		WithDepositCache(depositCache),
+	)
+	require.NoError(t, err, "unable to setup web3 ETH1.0 chain service")
+	web3Service = setDefaultMocks(web3Service)
+	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend.Client())
+	require.NoError(t, err)
+	web3Service.rpcClient = &mockExecution.RPCClient{Backend: testAcc.Backend}
+	web3Service.httpLogger = testAcc.Backend.Client()
+	web3Service.latestEth1Data.LastRequestedBlock = 0
+	block, err := testAcc.Backend.Client().BlockByNumber(context.Background(), nil)
+	require.NoError(t, err)
+	web3Service.latestEth1Data.BlockHeight = block.NumberU64()
+	web3Service.latestEth1Data.BlockTime = block.Time()
+	bConfig := params.MinimalSpecConfig().Copy()
+	bConfig.MinGenesisTime = 0
+	bConfig.SecondsPerETH1Block = 1
+	params.OverrideBeaconConfig(bConfig)
+	nConfig := params.BeaconNetworkConfig()
+	nConfig.ContractDeploymentBlock = 0
+	params.OverrideBeaconNetworkConfig(nConfig)
+
+	testAcc.Backend.Commit()
+
+	totalNumOfDeposits := depositsReqForChainStart + 30
+
+	deposits, _, err := util.DeterministicDepositsAndKeys(uint64(totalNumOfDeposits))
+	require.NoError(t, err)
+	_, depositRoots, err := util.DeterministicDepositTrie(len(deposits))
+	require.NoError(t, err)
+	depositOffset := 5
+
+	// 64 Validators are used as size required for beacon-chain to start. This number
+	// is defined in the deposit contract as the number required for the testnet. The actual number
+	// is 2**14
+	for i := 0; i < totalNumOfDeposits; i++ {
+		data := deposits[i].Data
+		testAcc.TxOpts.Value = mock.Amount32Eth()
+		testAcc.TxOpts.GasLimit = 1000000
+		_, err = testAcc.Contract.Deposit(testAcc.TxOpts, data.PublicKey, data.WithdrawalCredentials, data.Signature, depositRoots[i])
+		require.NoError(t, err, "Could not deposit to deposit contract")
+		// pack 8 deposits into a block with an offset of
+		// 5
+		if (i+1)%8 == depositOffset {
+			testAcc.Backend.Commit()
+		}
+	}
+	// Forward the chain to account for the follow distance
+	for i := uint64(0); i < params.BeaconConfig().Eth1FollowDistance; i++ {
+		testAcc.Backend.Commit()
+	}
+	b, err := testAcc.Backend.Client().BlockByNumber(context.Background(), nil)
+	require.NoError(t, err)
+	web3Service.latestEth1Data.BlockHeight = b.NumberU64()
+	web3Service.latestEth1Data.BlockTime = b.Time()
+
+	// Set up our subscriber now to listen for the chain started event.
+	stateChannel := make(chan *feed.Event, 1)
+	stateSub := web3Service.cfg.stateNotifier.StateFeed().Subscribe(stateChannel)
+	defer stateSub.Unsubscribe()
+
+	web3Service.depositRequestsStarted = true
+	web3Service.initPOWService()
+	require.NoError(t, err)
+
+	require.Equal(t, int64(-1), web3Service.lastReceivedMerkleIndex, "Processed deposit logs even when requests are active")
+
+	hook.Reset()
+}
+
 func TestProcessETH2GenesisLog_LargePeriodOfNoLogs(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	hook := logTest.NewGlobal()
