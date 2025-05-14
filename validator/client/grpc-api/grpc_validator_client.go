@@ -26,14 +26,19 @@ type grpcValidatorClient struct {
 }
 
 func (c *grpcValidatorClient) Duties(ctx context.Context, in *ethpb.DutiesRequest) (*ethpb.ValidatorDutiesContainer, error) {
-	dutiesResponse, err := c.beaconNodeValidatorClient.GetDutiesV2(ctx, in)
+	dutiesResponse, err := c.beaconNodeValidatorClient.GetDuties(ctx, in)
 	if err != nil {
 		return nil, err
 	}
 	return toValidatorDutiesContainer(dutiesResponse)
 }
 
-func toValidatorDutiesContainer(dutiesResponse *ethpb.DutiesV2Response) (*ethpb.ValidatorDutiesContainer, error) {
+func (c *grpcValidatorClient) DutiesV2(ctx context.Context, in *ethpb.DutiesRequest) (*ethpb.ValidatorDutiesContainer, error) {
+	// TODO: update to v2 get duties in separate PR, used to satisfy interface
+	return nil, errors.New("not implemented")
+}
+
+func toValidatorDutiesContainer(dutiesResponse *ethpb.DutiesResponse) (*ethpb.ValidatorDutiesContainer, error) {
 	currentDuties := make([]*ethpb.ValidatorDuty, len(dutiesResponse.CurrentEpochDuties))
 	for i, cd := range dutiesResponse.CurrentEpochDuties {
 		duty, err := toValidatorDuty(cd)
@@ -58,12 +63,21 @@ func toValidatorDutiesContainer(dutiesResponse *ethpb.DutiesV2Response) (*ethpb.
 	}, nil
 }
 
-func toValidatorDuty(duty *ethpb.DutiesV2Response_Duty) (*ethpb.ValidatorDuty, error) {
+func toValidatorDuty(duty *ethpb.DutiesResponse_Duty) (*ethpb.ValidatorDuty, error) {
+	var valIndexInCommittee uint64
+	// valIndexInCommittee will be 0 in case we don't get a match. This is a potential false positive,
+	// however it's an impossible condition because every validator must be assigned to a committee.
+	for cIndex, vIndex := range duty.Committee {
+		if vIndex == duty.ValidatorIndex {
+			valIndexInCommittee = uint64(cIndex)
+			break
+		}
+	}
 	return &ethpb.ValidatorDuty{
-		CommitteeLength:         duty.CommitteeLength,
+		CommitteeLength:         uint64(len(duty.Committee)),
 		CommitteeIndex:          duty.CommitteeIndex,
 		CommitteesAtSlot:        duty.CommitteesAtSlot, // GRPC doesn't use this value though
-		ValidatorCommitteeIndex: duty.ValidatorCommitteeIndex,
+		ValidatorCommitteeIndex: valIndexInCommittee,
 		AttesterSlot:            duty.AttesterSlot,
 		ProposerSlots:           duty.ProposerSlots,
 		PublicKey:               bytesutil.SafeCopyBytes(duty.PublicKey),
