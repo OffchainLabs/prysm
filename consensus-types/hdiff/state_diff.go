@@ -28,6 +28,40 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// HdiffBytes represents the serialized difference between two beacon states.
+type HdiffBytes struct {
+	StateDiff      []byte
+	ValidatorDiffs []byte
+	BalancesDiff   []byte
+}
+
+// Diff computes the difference between two beacon states and returns it as a serialized HdiffBytes object.
+func Diff(source, target state.BeaconState) (HdiffBytes, error) {
+	h, err := diffInternal(source, target)
+	if err != nil {
+		return HdiffBytes{}, err
+	}
+	return h.serialize(), nil
+}
+
+// ApplyDiff appplies the given serialized diff to the source beacon state and returns the resulting state.
+func ApplyDiff(ctx context.Context, source state.BeaconState, diff HdiffBytes) (state.BeaconState, error) {
+	hdiff, err := newHdiff(diff)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create Hdiff")
+	}
+	if source, err = applyStateDiff(ctx, source, hdiff.stateDiff); err != nil {
+		return nil, errors.Wrap(err, "failed to apply state diff")
+	}
+	if source, err = applyBalancesDiff(source, hdiff.balancesDiff); err != nil {
+		return nil, errors.Wrap(err, "failed to apply balances diff")
+	}
+	if source, err = applyValidatorDiff(source, hdiff.validatorDiffs); err != nil {
+		return nil, errors.Wrap(err, "failed to apply validator diff")
+	}
+	return source, nil
+}
+
 // stateDiff is a type that represents a difference between two different beacon states. Except from the validator registry and the balances.
 // Fields marked as "override" are either zeroed out or nil when there is no diff or the full new value when there is a diff.
 // Except when zero may be a valid value, in which case override means the new value (eg. justificationBits).
@@ -82,16 +116,10 @@ type stateDiff struct {
 	pendingConsolidationsDiffs     []*ethpb.PendingConsolidation
 }
 
-type Hdiff struct {
+type hdiff struct {
 	stateDiff      *stateDiff
 	validatorDiffs []validatorDiff
 	balancesDiff   []int64
-}
-
-type HdiffSerialized struct {
-	StateDiff      []byte
-	ValidatorDiffs []byte
-	BalancesDiff   []byte
 }
 
 // validatorDiff is a type that represents a difference between two validators.
@@ -126,8 +154,8 @@ const (
 	pendingConsolidationLength     = 8 + 8
 )
 
-// NewHdiff desrializes a new Hdiff object from the given seialized data.
-func NewHdiff(data HdiffSerialized) (*Hdiff, error) {
+// newHdiff desrializes a new Hdiff object from the given seialized data.
+func newHdiff(data HdiffBytes) (*hdiff, error) {
 	stateDiff, err := newStateDiff(data.StateDiff)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create state diff")
@@ -143,7 +171,7 @@ func NewHdiff(data HdiffSerialized) (*Hdiff, error) {
 		return nil, errors.Wrap(err, "failed to create balances diff")
 	}
 
-	return &Hdiff{
+	return &hdiff{
 		stateDiff:      stateDiff,
 		validatorDiffs: validatorDiffs,
 		balancesDiff:   balancesDiff,
@@ -1074,7 +1102,7 @@ func (s *stateDiff) serialize() []byte {
 	return ret
 }
 
-func (h *Hdiff) serialize() HdiffSerialized {
+func (h *hdiff) serialize() HdiffBytes {
 	vals := make([]byte, 0) // TODO: compute a sensible default capacity.
 	vals = binary.LittleEndian.AppendUint64(vals, uint64(len(h.validatorDiffs)))
 	for _, v := range h.validatorDiffs {
@@ -1108,7 +1136,7 @@ func (h *Hdiff) serialize() HdiffSerialized {
 	for _, b := range h.balancesDiff {
 		bals = binary.LittleEndian.AppendUint64(bals, uint64(b))
 	}
-	return HdiffSerialized{
+	return HdiffBytes{
 		StateDiff:      snappy.Encode(nil, h.stateDiff.serialize()),
 		ValidatorDiffs: snappy.Encode(nil, vals),
 		BalancesDiff:   snappy.Encode(nil, bals),
@@ -1210,15 +1238,7 @@ func diffToBalances(source, target state.BeaconState) ([]int64, error) {
 	return diffs, nil
 }
 
-func Diff(source, target state.BeaconState) (HdiffSerialized, error) {
-	h, err := diff_internal(source, target)
-	if err != nil {
-		return HdiffSerialized{}, err
-	}
-	return h.serialize(), nil
-}
-
-func diff_internal(source, target state.BeaconState) (*Hdiff, error) {
+func diffInternal(source, target state.BeaconState) (*hdiff, error) {
 	stateDiff, err := diffToState(source, target)
 	if err != nil {
 		return nil, err
@@ -1231,7 +1251,7 @@ func diff_internal(source, target state.BeaconState) (*Hdiff, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Hdiff{
+	return &hdiff{
 		stateDiff:      stateDiff,
 		validatorDiffs: validatorDiffs,
 		balancesDiff:   balancesDiffs,
@@ -1615,23 +1635,6 @@ func diffPendingConsolidations(diff *stateDiff, source, target state.BeaconState
 		}
 	}
 	return nil
-}
-
-func ApplyDiff(ctx context.Context, source state.BeaconState, diff HdiffSerialized) (state.BeaconState, error) {
-	hdiff, err := NewHdiff(diff)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create Hdiff")
-	}
-	if source, err = applyStateDiff(ctx, source, hdiff.stateDiff); err != nil {
-		return nil, errors.Wrap(err, "failed to apply state diff")
-	}
-	if source, err = applyBalancesDiff(source, hdiff.balancesDiff); err != nil {
-		return nil, errors.Wrap(err, "failed to apply balances diff")
-	}
-	if source, err = applyValidatorDiff(source, hdiff.validatorDiffs); err != nil {
-		return nil, errors.Wrap(err, "failed to apply validator diff")
-	}
-	return source, nil
 }
 
 // applyValidatorDiff applies the validator diff to the source state in place.
