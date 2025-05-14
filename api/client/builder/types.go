@@ -257,7 +257,9 @@ func (r *ExecutionPayloadResponse) ParsePayload() (ParsedPayload, error) {
 	} else {
 		return nil, fmt.Errorf("unsupported version %s", strings.ToLower(r.Version))
 	}
-
+	if len(r.Data) == 0 {
+		return nil, errors.Wrap(consensusblocks.ErrNilObject, "empty payload data response")
+	}
 	if err := json.Unmarshal(r.Data, toProto); err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal the response .Data field with the stated version schema")
 	}

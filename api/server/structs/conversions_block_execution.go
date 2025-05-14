@@ -7,12 +7,14 @@ import (
 	"github.com/OffchainLabs/prysm/v6/api/server"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/container/slice"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -134,6 +136,9 @@ func (e *ExecutionPayload) ToConsensus() (*enginev1.ExecutionPayload, error) {
 }
 
 func (r *ExecutionPayload) PayloadProto() (proto.Message, error) {
+	if r == nil {
+		return nil, errors.Wrap(consensusblocks.ErrNilObject, "nil execution payload")
+	}
 	pb, err := r.ToConsensus()
 	return pb, err
 }
@@ -390,6 +395,9 @@ func (e *ExecutionPayloadCapella) ToConsensus() (*enginev1.ExecutionPayloadCapel
 }
 
 func (p *ExecutionPayloadCapella) PayloadProto() (proto.Message, error) {
+	if p == nil {
+		return nil, errors.Wrap(consensusblocks.ErrNilObject, "nil capella execution payload")
+	}
 	pb, err := p.ToConsensus()
 	return pb, err
 }
