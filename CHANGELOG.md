@@ -4,6 +4,54 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [v6.0.1](https://github.com/prysmaticlabs/prysm/compare/v6.0.0...v6.0.1) - 2025-05-02
+
+This release fixes two bugs related to the `payload_attributes` [event stream](https://ethereum.github.io/beacon-APIs/#/Events/eventstream). If you are using or planning to use this endpoint, upgrading to version 6.0.1 is mandatory.  
+Also, a reminder: like other Beacon API endpoints, when a node is syncing, it may return historical data as `finalized` or `head`. Until the node is fully synced to the head of the chain, you should avoid using this data, depending on your application's needs.
+
+We currently recommend against using the `--enable-beacon-rest-api` flag on Mainnet. As you may have noticed, we put a deprecation notice on our gRPC code, in particular on gRPC-related flags. The reason for this is that we want to eventually remove gRPC and have REST HTTP as the standard way of communication between the validator client and the beacon node. That being said, the REST option is still unstable and thus marked as experimental in the flag's description (the flag is `--enable-beacon-rest-api`). Therefore we encourage everyone to keep using gRPC, which is currently the default. It is fine to test the REST option on testnets, but doing it on Mainnet can lead to missing attestations and even missing blocks.
+
+**Updating to v6.0.0 or later is required for Pectra Mainnet!**
+
+This patch release has a few important fixes from v6.0.0. Updating to this release is encouraged.
+
+### Added
+
+- `UpgradeToFulu` spectests. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15190)
+- PeerDAS related KZG wrappers. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15186)
+- Add light client p2p broadcaster functions. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15175)
+- Added immediate broadcasting of proposer slashings when equivocating blocks are detected during block processing. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14693)
+- Added 2 new errors: `HeadStateErr` and `ErrCouldNotVerifyBlockHeader`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14693)
+- Implement pending consolidations Beacon API endpoint. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15219)
+- PeerDAS: Add needed proto files and corresponding generated code. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15187)
+- Add light client p2p validator and subscriber functions. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15214)
+
+### Changed
+
+- Refactored internal function `reValidateSubscriptions` to `pruneSubscriptions` in `beacon-chain/sync/subscriber.go` for improved clarity, addressing a TODO comment. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15160)
+- Updated geth to v1.15.9. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15216)
+- Removed the slot from `UpdateDuties`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15223)
+- Update hoodie bootnodes. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15240)
+
+### Fixed
+
+- avoid nondeterministic default fork value when generate genesis. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15151)
+- `UpgradeToFulu`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15190)
+- fixed underflow with balances in leaking edge case with expected withdrawals. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15191)
+- Fixes our generated ssz files to have the correct package name. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15199)
+- Fixes our blob sidecar by root request lists for electra. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15209)
+- Ensure that the `payload_attributes` event has a consistent view of the head state by passing the head block in the event and using stategen to retrieve the corresponding state. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15213)
+- Pass parent context to update duties when dependent roots change. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15221)
+- Process slots across epoch for payload attribute event. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15228)
+- extend the payload attribute computation deadline to the beginning of the proposal slot. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15230)
+
+### Security
+
+- Fix CVE-2025-22869. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15204)
+- Fix CVE-2025-22870. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15204)
+- Fix CVE-2025-22872. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15204)
+- Fix CVE-2025-30204. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15204)
+
 ## [v6.0.0](https://github.com/prysmaticlabs/prysm/compare/v5.3.2...v6.0.0) - 2025-04-21
 
 This release introduces Mainnet support for the upcoming Electra + Prague (Pectra) fork. The fork is scheduled for mainnet epoch 364032 (May 7, 2025, 10:05:11 UTC). You MUST update Prysm Beacon Node, Prysm Validator Client, and your execution layer client to the Pectra ready release prior to the fork to stay on the correct chain.
