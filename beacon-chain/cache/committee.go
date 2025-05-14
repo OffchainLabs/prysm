@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/container/slice"
 	mathutil "github.com/OffchainLabs/prysm/v6/math"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -104,11 +105,16 @@ func (c *CommitteeCache) CompressCommitteeCache() {
 // Committee fetches the shuffled indices by slot and committee index. Every list of indices
 // represent one committee. Returns true if the list exists with slot and committee index. Otherwise returns false, nil.
 func (c *CommitteeCache) Committee(ctx context.Context, slot primitives.Slot, seed [32]byte, index primitives.CommitteeIndex) ([]primitives.ValidatorIndex, error) {
+	ctx, span := trace.StartSpan(ctx, "committeeCache.Committee")
+	defer span.End()
+	span.SetAttributes(trace.Int64Attribute("slot", int64(slot)), trace.Int64Attribute("index", int64(index))) // lint:ignore uintcast -- OK for tracing.
+
 	if err := c.checkInProgress(ctx, seed); err != nil {
 		return nil, err
 	}
 
 	obj, exists := c.CommitteeCache.Get(key(seed))
+	span.SetAttributes(trace.BoolAttribute("cache_hit", exists))
 	if exists {
 		CommitteeCacheHit.Inc()
 	} else {
@@ -157,11 +163,14 @@ func (c *CommitteeCache) AddCommitteeShuffledList(ctx context.Context, committee
 
 // ActiveIndices returns the active indices of a given seed stored in cache.
 func (c *CommitteeCache) ActiveIndices(ctx context.Context, seed [32]byte) ([]primitives.ValidatorIndex, error) {
+	ctx, span := trace.StartSpan(ctx, "committeeCache.ActiveIndices")
+	defer span.End()
+
 	if err := c.checkInProgress(ctx, seed); err != nil {
 		return nil, err
 	}
 	obj, exists := c.CommitteeCache.Get(key(seed))
-
+	span.SetAttributes(trace.BoolAttribute("cache_hit", exists))
 	if exists {
 		CommitteeCacheHit.Inc()
 	} else {
