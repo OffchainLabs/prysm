@@ -625,50 +625,19 @@ func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
 		copiedC := c
 		commitments = append(commitments, copiedC)
 	}
-	wrappedHdr := &builderAPI.ExecutionPayloadHeaderDeneb{ExecutionPayloadHeaderDeneb: hdr}
+	wrappedHdr, err := structs.ExecutionPayloadHeaderDenebFromConsensus(hdr)
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not make execution payload")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	requests, err := b.GetDecodedExecutionRequests()
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not get decoded execution requests")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	rv1 := &builderAPI.ExecutionRequestsV1{
-		Deposits:       make([]*builderAPI.DepositRequestV1, len(requests.Deposits)),
-		Withdrawals:    make([]*builderAPI.WithdrawalRequestV1, len(requests.Withdrawals)),
-		Consolidations: make([]*builderAPI.ConsolidationRequestV1, len(requests.Consolidations)),
-	}
-
-	for i, d := range requests.Deposits {
-		amount := new(big.Int).SetUint64(d.Amount)
-		index := new(big.Int).SetUint64(d.Index)
-		dr := &builderAPI.DepositRequestV1{
-			PubKey:                d.Pubkey,
-			WithdrawalCredentials: d.WithdrawalCredentials,
-			Amount:                builderAPI.Uint256{Int: amount},
-			Signature:             d.Signature,
-			Index:                 builderAPI.Uint256{Int: index},
-		}
-		rv1.Deposits[i] = dr
-	}
-
-	for i, w := range requests.Withdrawals {
-		bi := new(big.Int).SetUint64(w.Amount)
-		wr := &builderAPI.WithdrawalRequestV1{
-			SourceAddress:   w.SourceAddress,
-			ValidatorPubkey: w.ValidatorPubkey,
-			Amount:          builderAPI.Uint256{Int: bi},
-		}
-		rv1.Withdrawals[i] = wr
-	}
-
-	for i, c := range requests.Consolidations {
-		cr := &builderAPI.ConsolidationRequestV1{
-			SourceAddress: c.SourceAddress,
-			SourcePubkey:  c.SourcePubkey,
-			TargetPubkey:  c.TargetPubkey,
-		}
-		rv1.Consolidations[i] = cr
-	}
+	rv1 := structs.ExecutionRequestsFromConsensus(requests)
 
 	bid := &builderAPI.BuilderBidElectra{
 		Header:             wrappedHdr,

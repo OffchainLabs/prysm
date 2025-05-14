@@ -7,18 +7,15 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/api/server"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	types "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/math"
 	v1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
@@ -1011,91 +1008,91 @@ type BuilderBidDeneb struct {
 }
 
 // ExecutionPayloadHeaderDeneb a field part of the BuilderBidDeneb.
-type ExecutionPayloadHeaderDeneb struct {
-	ParentHash       hexutil.Bytes `json:"parent_hash"`
-	FeeRecipient     hexutil.Bytes `json:"fee_recipient"`
-	StateRoot        hexutil.Bytes `json:"state_root"`
-	ReceiptsRoot     hexutil.Bytes `json:"receipts_root"`
-	LogsBloom        hexutil.Bytes `json:"logs_bloom"`
-	PrevRandao       hexutil.Bytes `json:"prev_randao"`
-	BlockNumber      Uint64String  `json:"block_number"`
-	GasLimit         Uint64String  `json:"gas_limit"`
-	GasUsed          Uint64String  `json:"gas_used"`
-	Timestamp        Uint64String  `json:"timestamp"`
-	ExtraData        hexutil.Bytes `json:"extra_data"`
-	BaseFeePerGas    Uint256       `json:"base_fee_per_gas"`
-	BlockHash        hexutil.Bytes `json:"block_hash"`
-	TransactionsRoot hexutil.Bytes `json:"transactions_root"`
-	WithdrawalsRoot  hexutil.Bytes `json:"withdrawals_root"`
-	BlobGasUsed      Uint64String  `json:"blob_gas_used"`   // new in deneb
-	ExcessBlobGas    Uint64String  `json:"excess_blob_gas"` // new in deneb
-	*v1.ExecutionPayloadHeaderDeneb
-}
-
-// MarshalJSON returns a JSON byte array representing the ExecutionPayloadHeaderDeneb struct.
-func (h *ExecutionPayloadHeaderDeneb) MarshalJSON() ([]byte, error) {
-	type MarshalCaller ExecutionPayloadHeaderDeneb
-	baseFeePerGas, err := sszBytesToUint256(h.ExecutionPayloadHeaderDeneb.BaseFeePerGas)
-	if err != nil {
-		return []byte{}, errors.Wrapf(err, "invalid BaseFeePerGas")
-	}
-	return json.Marshal(&MarshalCaller{
-		ParentHash:       h.ExecutionPayloadHeaderDeneb.ParentHash,
-		FeeRecipient:     h.ExecutionPayloadHeaderDeneb.FeeRecipient,
-		StateRoot:        h.ExecutionPayloadHeaderDeneb.StateRoot,
-		ReceiptsRoot:     h.ExecutionPayloadHeaderDeneb.ReceiptsRoot,
-		LogsBloom:        h.ExecutionPayloadHeaderDeneb.LogsBloom,
-		PrevRandao:       h.ExecutionPayloadHeaderDeneb.PrevRandao,
-		BlockNumber:      Uint64String(h.ExecutionPayloadHeaderDeneb.BlockNumber),
-		GasLimit:         Uint64String(h.ExecutionPayloadHeaderDeneb.GasLimit),
-		GasUsed:          Uint64String(h.ExecutionPayloadHeaderDeneb.GasUsed),
-		Timestamp:        Uint64String(h.ExecutionPayloadHeaderDeneb.Timestamp),
-		ExtraData:        h.ExecutionPayloadHeaderDeneb.ExtraData,
-		BaseFeePerGas:    baseFeePerGas,
-		BlockHash:        h.ExecutionPayloadHeaderDeneb.BlockHash,
-		TransactionsRoot: h.ExecutionPayloadHeaderDeneb.TransactionsRoot,
-		WithdrawalsRoot:  h.ExecutionPayloadHeaderDeneb.WithdrawalsRoot,
-		BlobGasUsed:      Uint64String(h.ExecutionPayloadHeaderDeneb.BlobGasUsed),
-		ExcessBlobGas:    Uint64String(h.ExecutionPayloadHeaderDeneb.ExcessBlobGas),
-	})
-}
-
-// UnmarshalJSON takes in a byte array and unmarshals the value into ExecutionPayloadHeaderDeneb.
-func (h *ExecutionPayloadHeaderDeneb) UnmarshalJSON(b []byte) error {
-	type UnmarshalCaller ExecutionPayloadHeaderDeneb
-	uc := &UnmarshalCaller{}
-	if err := json.Unmarshal(b, uc); err != nil {
-		return err
-	}
-	ep := ExecutionPayloadHeaderDeneb(*uc)
-	*h = ep
-	var err error
-	h.ExecutionPayloadHeaderDeneb, err = h.ToProto()
-	return err
-}
-
-// ToProto returns a ExecutionPayloadHeaderDeneb Proto object.
-func (h *ExecutionPayloadHeaderDeneb) ToProto() (*v1.ExecutionPayloadHeaderDeneb, error) {
-	return &v1.ExecutionPayloadHeaderDeneb{
-		ParentHash:       bytesutil.SafeCopyBytes(h.ParentHash),
-		FeeRecipient:     bytesutil.SafeCopyBytes(h.FeeRecipient),
-		StateRoot:        bytesutil.SafeCopyBytes(h.StateRoot),
-		ReceiptsRoot:     bytesutil.SafeCopyBytes(h.ReceiptsRoot),
-		LogsBloom:        bytesutil.SafeCopyBytes(h.LogsBloom),
-		PrevRandao:       bytesutil.SafeCopyBytes(h.PrevRandao),
-		BlockNumber:      uint64(h.BlockNumber),
-		GasLimit:         uint64(h.GasLimit),
-		GasUsed:          uint64(h.GasUsed),
-		Timestamp:        uint64(h.Timestamp),
-		ExtraData:        bytesutil.SafeCopyBytes(h.ExtraData),
-		BaseFeePerGas:    bytesutil.SafeCopyBytes(h.BaseFeePerGas.SSZBytes()),
-		BlockHash:        bytesutil.SafeCopyBytes(h.BlockHash),
-		TransactionsRoot: bytesutil.SafeCopyBytes(h.TransactionsRoot),
-		WithdrawalsRoot:  bytesutil.SafeCopyBytes(h.WithdrawalsRoot),
-		BlobGasUsed:      uint64(h.BlobGasUsed),
-		ExcessBlobGas:    uint64(h.ExcessBlobGas),
-	}, nil
-}
+//type ExecutionPayloadHeaderDeneb struct {
+//	ParentHash       hexutil.Bytes `json:"parent_hash"`
+//	FeeRecipient     hexutil.Bytes `json:"fee_recipient"`
+//	StateRoot        hexutil.Bytes `json:"state_root"`
+//	ReceiptsRoot     hexutil.Bytes `json:"receipts_root"`
+//	LogsBloom        hexutil.Bytes `json:"logs_bloom"`
+//	PrevRandao       hexutil.Bytes `json:"prev_randao"`
+//	BlockNumber      Uint64String  `json:"block_number"`
+//	GasLimit         Uint64String  `json:"gas_limit"`
+//	GasUsed          Uint64String  `json:"gas_used"`
+//	Timestamp        Uint64String  `json:"timestamp"`
+//	ExtraData        hexutil.Bytes `json:"extra_data"`
+//	BaseFeePerGas    Uint256       `json:"base_fee_per_gas"`
+//	BlockHash        hexutil.Bytes `json:"block_hash"`
+//	TransactionsRoot hexutil.Bytes `json:"transactions_root"`
+//	WithdrawalsRoot  hexutil.Bytes `json:"withdrawals_root"`
+//	BlobGasUsed      Uint64String  `json:"blob_gas_used"`   // new in deneb
+//	ExcessBlobGas    Uint64String  `json:"excess_blob_gas"` // new in deneb
+//	*v1.ExecutionPayloadHeaderDeneb
+//}
+//
+//// MarshalJSON returns a JSON byte array representing the ExecutionPayloadHeaderDeneb struct.
+//func (h *ExecutionPayloadHeaderDeneb) MarshalJSON() ([]byte, error) {
+//	type MarshalCaller ExecutionPayloadHeaderDeneb
+//	baseFeePerGas, err := sszBytesToUint256(h.ExecutionPayloadHeaderDeneb.BaseFeePerGas)
+//	if err != nil {
+//		return []byte{}, errors.Wrapf(err, "invalid BaseFeePerGas")
+//	}
+//	return json.Marshal(&MarshalCaller{
+//		ParentHash:       h.ExecutionPayloadHeaderDeneb.ParentHash,
+//		FeeRecipient:     h.ExecutionPayloadHeaderDeneb.FeeRecipient,
+//		StateRoot:        h.ExecutionPayloadHeaderDeneb.StateRoot,
+//		ReceiptsRoot:     h.ExecutionPayloadHeaderDeneb.ReceiptsRoot,
+//		LogsBloom:        h.ExecutionPayloadHeaderDeneb.LogsBloom,
+//		PrevRandao:       h.ExecutionPayloadHeaderDeneb.PrevRandao,
+//		BlockNumber:      Uint64String(h.ExecutionPayloadHeaderDeneb.BlockNumber),
+//		GasLimit:         Uint64String(h.ExecutionPayloadHeaderDeneb.GasLimit),
+//		GasUsed:          Uint64String(h.ExecutionPayloadHeaderDeneb.GasUsed),
+//		Timestamp:        Uint64String(h.ExecutionPayloadHeaderDeneb.Timestamp),
+//		ExtraData:        h.ExecutionPayloadHeaderDeneb.ExtraData,
+//		BaseFeePerGas:    baseFeePerGas,
+//		BlockHash:        h.ExecutionPayloadHeaderDeneb.BlockHash,
+//		TransactionsRoot: h.ExecutionPayloadHeaderDeneb.TransactionsRoot,
+//		WithdrawalsRoot:  h.ExecutionPayloadHeaderDeneb.WithdrawalsRoot,
+//		BlobGasUsed:      Uint64String(h.ExecutionPayloadHeaderDeneb.BlobGasUsed),
+//		ExcessBlobGas:    Uint64String(h.ExecutionPayloadHeaderDeneb.ExcessBlobGas),
+//	})
+//}
+//
+//// UnmarshalJSON takes in a byte array and unmarshals the value into ExecutionPayloadHeaderDeneb.
+//func (h *ExecutionPayloadHeaderDeneb) UnmarshalJSON(b []byte) error {
+//	type UnmarshalCaller ExecutionPayloadHeaderDeneb
+//	uc := &UnmarshalCaller{}
+//	if err := json.Unmarshal(b, uc); err != nil {
+//		return err
+//	}
+//	ep := ExecutionPayloadHeaderDeneb(*uc)
+//	*h = ep
+//	var err error
+//	h.ExecutionPayloadHeaderDeneb, err = h.ToProto()
+//	return err
+//}
+//
+//// ToProto returns a ExecutionPayloadHeaderDeneb Proto object.
+//func (h *ExecutionPayloadHeaderDeneb) ToProto() (*v1.ExecutionPayloadHeaderDeneb, error) {
+//	return &v1.ExecutionPayloadHeaderDeneb{
+//		ParentHash:       bytesutil.SafeCopyBytes(h.ParentHash),
+//		FeeRecipient:     bytesutil.SafeCopyBytes(h.FeeRecipient),
+//		StateRoot:        bytesutil.SafeCopyBytes(h.StateRoot),
+//		ReceiptsRoot:     bytesutil.SafeCopyBytes(h.ReceiptsRoot),
+//		LogsBloom:        bytesutil.SafeCopyBytes(h.LogsBloom),
+//		PrevRandao:       bytesutil.SafeCopyBytes(h.PrevRandao),
+//		BlockNumber:      uint64(h.BlockNumber),
+//		GasLimit:         uint64(h.GasLimit),
+//		GasUsed:          uint64(h.GasUsed),
+//		Timestamp:        uint64(h.Timestamp),
+//		ExtraData:        bytesutil.SafeCopyBytes(h.ExtraData),
+//		BaseFeePerGas:    bytesutil.SafeCopyBytes(h.BaseFeePerGas.SSZBytes()),
+//		BlockHash:        bytesutil.SafeCopyBytes(h.BlockHash),
+//		TransactionsRoot: bytesutil.SafeCopyBytes(h.TransactionsRoot),
+//		WithdrawalsRoot:  bytesutil.SafeCopyBytes(h.WithdrawalsRoot),
+//		BlobGasUsed:      uint64(h.BlobGasUsed),
+//		ExcessBlobGas:    uint64(h.ExcessBlobGas),
+//	}, nil
+//}
 
 // ExecPayloadResponseDeneb the response to the build API /eth/v1/builder/blinded_blocks that includes the version, execution payload object , and blobs bundle object.
 type ExecPayloadResponseDeneb struct {
@@ -1110,25 +1107,25 @@ type ExecutionPayloadDenebAndBlobsBundle struct {
 }
 
 // ExecutionPayloadDeneb is a field used in ExecutionPayloadDenebAndBlobsBundle.
-type ExecutionPayloadDeneb struct {
-	ParentHash    hexutil.Bytes   `json:"parent_hash"`
-	FeeRecipient  hexutil.Bytes   `json:"fee_recipient"`
-	StateRoot     hexutil.Bytes   `json:"state_root"`
-	ReceiptsRoot  hexutil.Bytes   `json:"receipts_root"`
-	LogsBloom     hexutil.Bytes   `json:"logs_bloom"`
-	PrevRandao    hexutil.Bytes   `json:"prev_randao"`
-	BlockNumber   Uint64String    `json:"block_number"`
-	GasLimit      Uint64String    `json:"gas_limit"`
-	GasUsed       Uint64String    `json:"gas_used"`
-	Timestamp     Uint64String    `json:"timestamp"`
-	ExtraData     hexutil.Bytes   `json:"extra_data"`
-	BaseFeePerGas Uint256         `json:"base_fee_per_gas"`
-	BlockHash     hexutil.Bytes   `json:"block_hash"`
-	Transactions  []hexutil.Bytes `json:"transactions"`
-	Withdrawals   []Withdrawal    `json:"withdrawals"`
-	BlobGasUsed   Uint64String    `json:"blob_gas_used"`   // new in deneb
-	ExcessBlobGas Uint64String    `json:"excess_blob_gas"` // new in deneb
-}
+//type ExecutionPayloadDeneb struct {
+//	ParentHash    hexutil.Bytes   `json:"parent_hash"`
+//	FeeRecipient  hexutil.Bytes   `json:"fee_recipient"`
+//	StateRoot     hexutil.Bytes   `json:"state_root"`
+//	ReceiptsRoot  hexutil.Bytes   `json:"receipts_root"`
+//	LogsBloom     hexutil.Bytes   `json:"logs_bloom"`
+//	PrevRandao    hexutil.Bytes   `json:"prev_randao"`
+//	BlockNumber   Uint64String    `json:"block_number"`
+//	GasLimit      Uint64String    `json:"gas_limit"`
+//	GasUsed       Uint64String    `json:"gas_used"`
+//	Timestamp     Uint64String    `json:"timestamp"`
+//	ExtraData     hexutil.Bytes   `json:"extra_data"`
+//	BaseFeePerGas Uint256         `json:"base_fee_per_gas"`
+//	BlockHash     hexutil.Bytes   `json:"block_hash"`
+//	Transactions  []hexutil.Bytes `json:"transactions"`
+//	Withdrawals   []Withdrawal    `json:"withdrawals"`
+//	BlobGasUsed   Uint64String    `json:"blob_gas_used"`   // new in deneb
+//	ExcessBlobGas Uint64String    `json:"excess_blob_gas"` // new in deneb
+//}
 
 // BlobsBundle is a field in ExecutionPayloadDenebAndBlobsBundle.
 type BlobsBundle struct {
@@ -1237,43 +1234,43 @@ func (r *ExecutionPayloadDenebAndBlobsBundle) BundleProto() (*v1.BlobsBundle, er
 }
 
 // ToProto returns the ExecutionPayloadDeneb Proto.
-func (p *ExecutionPayloadDeneb) ToProto() (*v1.ExecutionPayloadDeneb, error) {
-	if p == nil {
-		return nil, errors.Wrap(consensusblocks.ErrNilObject, "nil execution payload")
-	}
-	txs := make([][]byte, len(p.Transactions))
-	for i := range p.Transactions {
-		txs[i] = bytesutil.SafeCopyBytes(p.Transactions[i])
-	}
-	withdrawals := make([]*v1.Withdrawal, len(p.Withdrawals))
-	for i, w := range p.Withdrawals {
-		withdrawals[i] = &v1.Withdrawal{
-			Index:          w.Index.Uint64(),
-			ValidatorIndex: types.ValidatorIndex(w.ValidatorIndex.Uint64()),
-			Address:        bytesutil.SafeCopyBytes(w.Address),
-			Amount:         w.Amount.Uint64(),
-		}
-	}
-	return &v1.ExecutionPayloadDeneb{
-		ParentHash:    bytesutil.SafeCopyBytes(p.ParentHash),
-		FeeRecipient:  bytesutil.SafeCopyBytes(p.FeeRecipient),
-		StateRoot:     bytesutil.SafeCopyBytes(p.StateRoot),
-		ReceiptsRoot:  bytesutil.SafeCopyBytes(p.ReceiptsRoot),
-		LogsBloom:     bytesutil.SafeCopyBytes(p.LogsBloom),
-		PrevRandao:    bytesutil.SafeCopyBytes(p.PrevRandao),
-		BlockNumber:   uint64(p.BlockNumber),
-		GasLimit:      uint64(p.GasLimit),
-		GasUsed:       uint64(p.GasUsed),
-		Timestamp:     uint64(p.Timestamp),
-		ExtraData:     bytesutil.SafeCopyBytes(p.ExtraData),
-		BaseFeePerGas: bytesutil.SafeCopyBytes(p.BaseFeePerGas.SSZBytes()),
-		BlockHash:     bytesutil.SafeCopyBytes(p.BlockHash),
-		Transactions:  txs,
-		Withdrawals:   withdrawals,
-		BlobGasUsed:   uint64(p.BlobGasUsed),
-		ExcessBlobGas: uint64(p.ExcessBlobGas),
-	}, nil
-}
+//func (p *ExecutionPayloadDeneb) ToProto() (*v1.ExecutionPayloadDeneb, error) {
+//	if p == nil {
+//		return nil, errors.Wrap(consensusblocks.ErrNilObject, "nil execution payload")
+//	}
+//	txs := make([][]byte, len(p.Transactions))
+//	for i := range p.Transactions {
+//		txs[i] = bytesutil.SafeCopyBytes(p.Transactions[i])
+//	}
+//	withdrawals := make([]*v1.Withdrawal, len(p.Withdrawals))
+//	for i, w := range p.Withdrawals {
+//		withdrawals[i] = &v1.Withdrawal{
+//			Index:          w.Index.Uint64(),
+//			ValidatorIndex: types.ValidatorIndex(w.ValidatorIndex.Uint64()),
+//			Address:        bytesutil.SafeCopyBytes(w.Address),
+//			Amount:         w.Amount.Uint64(),
+//		}
+//	}
+//	return &v1.ExecutionPayloadDeneb{
+//		ParentHash:    bytesutil.SafeCopyBytes(p.ParentHash),
+//		FeeRecipient:  bytesutil.SafeCopyBytes(p.FeeRecipient),
+//		StateRoot:     bytesutil.SafeCopyBytes(p.StateRoot),
+//		ReceiptsRoot:  bytesutil.SafeCopyBytes(p.ReceiptsRoot),
+//		LogsBloom:     bytesutil.SafeCopyBytes(p.LogsBloom),
+//		PrevRandao:    bytesutil.SafeCopyBytes(p.PrevRandao),
+//		BlockNumber:   uint64(p.BlockNumber),
+//		GasLimit:      uint64(p.GasLimit),
+//		GasUsed:       uint64(p.GasUsed),
+//		Timestamp:     uint64(p.Timestamp),
+//		ExtraData:     bytesutil.SafeCopyBytes(p.ExtraData),
+//		BaseFeePerGas: bytesutil.SafeCopyBytes(p.BaseFeePerGas.SSZBytes()),
+//		BlockHash:     bytesutil.SafeCopyBytes(p.BlockHash),
+//		Transactions:  txs,
+//		Withdrawals:   withdrawals,
+//		BlobGasUsed:   uint64(p.BlobGasUsed),
+//		ExcessBlobGas: uint64(p.ExcessBlobGas),
+//	}, nil
+//}
 
 // ExecHeaderResponseElectra is the header response for builder API /eth/v1/builder/header/{slot}/{parent_hash}/{pubkey}.
 type ExecHeaderResponseElectra struct {
@@ -1298,7 +1295,7 @@ func (ehr *ExecHeaderResponseElectra) ToProto() (*eth.SignedBuilderBidElectra, e
 
 // ToProto creates a BuilderBidElectra Proto from BuilderBidElectra.
 func (bb *BuilderBidElectra) ToProto() (*eth.BuilderBidElectra, error) {
-	header, err := bb.Header.ToProto()
+	header, err := bb.Header.ToConsensus()
 	if err != nil {
 		return nil, err
 	}
@@ -1316,7 +1313,7 @@ func (bb *BuilderBidElectra) ToProto() (*eth.BuilderBidElectra, error) {
 	if bb.ExecutionRequests == nil {
 		return nil, errors.New("bid contains nil execution requests")
 	}
-	executionRequests, err := bb.ExecutionRequests.ToProto()
+	executionRequests, err := bb.ExecutionRequests.ToConsensus()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to convert ExecutionRequests")
 	}
@@ -1332,150 +1329,150 @@ func (bb *BuilderBidElectra) ToProto() (*eth.BuilderBidElectra, error) {
 }
 
 // ExecutionRequestsV1 is a wrapper for different execution requests
-type ExecutionRequestsV1 struct {
-	Deposits       []*DepositRequestV1       `json:"deposits"`
-	Withdrawals    []*WithdrawalRequestV1    `json:"withdrawals"`
-	Consolidations []*ConsolidationRequestV1 `json:"consolidations"`
-}
+//type ExecutionRequestsV1 struct {
+//	Deposits       []*DepositRequestV1       `json:"deposits"`
+//	Withdrawals    []*WithdrawalRequestV1    `json:"withdrawals"`
+//	Consolidations []*ConsolidationRequestV1 `json:"consolidations"`
+//}
 
-func (er *ExecutionRequestsV1) ToProto() (*v1.ExecutionRequests, error) {
-	if uint64(len(er.Deposits)) > params.BeaconConfig().MaxDepositRequestsPerPayload {
-		return nil, fmt.Errorf("deposit requests count %d exceeds the maximum %d", len(er.Deposits), params.BeaconConfig().MaxDepositRequestsPerPayload)
-	}
-	deposits := make([]*v1.DepositRequest, len(er.Deposits))
-	for i, dep := range er.Deposits {
-		d, err := dep.ToProto()
-		if err != nil {
-			return nil, err
-		}
-		deposits[i] = d
-	}
-	if uint64(len(er.Withdrawals)) > params.BeaconConfig().MaxWithdrawalRequestsPerPayload {
-		return nil, fmt.Errorf("withdrawal requests count %d exceeds the maximum %d", len(er.Withdrawals), params.BeaconConfig().MaxWithdrawalRequestsPerPayload)
-	}
-	withdrawals := make([]*v1.WithdrawalRequest, len(er.Withdrawals))
-	for i, wr := range er.Withdrawals {
-		w, err := wr.ToProto()
-		if err != nil {
-			return nil, err
-		}
-		withdrawals[i] = w
-	}
-	if uint64(len(er.Consolidations)) > params.BeaconConfig().MaxConsolidationsRequestsPerPayload {
-		return nil, fmt.Errorf("consolidation requests count %d exceeds the maximum %d", len(er.Consolidations), params.BeaconConfig().MaxConsolidationsRequestsPerPayload)
-	}
-	consolidations := make([]*v1.ConsolidationRequest, len(er.Consolidations))
-	for i, con := range er.Consolidations {
-		c, err := con.ToProto()
-		if err != nil {
-			return nil, err
-		}
-		consolidations[i] = c
-	}
-	return &v1.ExecutionRequests{
-		Deposits:       deposits,
-		Withdrawals:    withdrawals,
-		Consolidations: consolidations,
-	}, nil
-}
+//func (er *ExecutionRequestsV1) ToProto() (*v1.ExecutionRequests, error) {
+//	if uint64(len(er.Deposits)) > params.BeaconConfig().MaxDepositRequestsPerPayload {
+//		return nil, fmt.Errorf("deposit requests count %d exceeds the maximum %d", len(er.Deposits), params.BeaconConfig().MaxDepositRequestsPerPayload)
+//	}
+//	deposits := make([]*v1.DepositRequest, len(er.Deposits))
+//	for i, dep := range er.Deposits {
+//		d, err := dep.ToProto()
+//		if err != nil {
+//			return nil, err
+//		}
+//		deposits[i] = d
+//	}
+//	if uint64(len(er.Withdrawals)) > params.BeaconConfig().MaxWithdrawalRequestsPerPayload {
+//		return nil, fmt.Errorf("withdrawal requests count %d exceeds the maximum %d", len(er.Withdrawals), params.BeaconConfig().MaxWithdrawalRequestsPerPayload)
+//	}
+//	withdrawals := make([]*v1.WithdrawalRequest, len(er.Withdrawals))
+//	for i, wr := range er.Withdrawals {
+//		w, err := wr.ToProto()
+//		if err != nil {
+//			return nil, err
+//		}
+//		withdrawals[i] = w
+//	}
+//	if uint64(len(er.Consolidations)) > params.BeaconConfig().MaxConsolidationsRequestsPerPayload {
+//		return nil, fmt.Errorf("consolidation requests count %d exceeds the maximum %d", len(er.Consolidations), params.BeaconConfig().MaxConsolidationsRequestsPerPayload)
+//	}
+//	consolidations := make([]*v1.ConsolidationRequest, len(er.Consolidations))
+//	for i, con := range er.Consolidations {
+//		c, err := con.ToProto()
+//		if err != nil {
+//			return nil, err
+//		}
+//		consolidations[i] = c
+//	}
+//	return &v1.ExecutionRequests{
+//		Deposits:       deposits,
+//		Withdrawals:    withdrawals,
+//		Consolidations: consolidations,
+//	}, nil
+//}
 
 // BuilderBidElectra is a field of ExecHeaderResponseElectra.
 type BuilderBidElectra struct {
-	Header             *ExecutionPayloadHeaderDeneb `json:"header"`
-	BlobKzgCommitments []hexutil.Bytes              `json:"blob_kzg_commitments"`
-	ExecutionRequests  *ExecutionRequestsV1         `json:"execution_requests"`
-	Value              Uint256                      `json:"value"`
-	Pubkey             hexutil.Bytes                `json:"pubkey"`
+	Header             *structs.ExecutionPayloadHeaderDeneb `json:"header"`
+	BlobKzgCommitments []hexutil.Bytes                      `json:"blob_kzg_commitments"`
+	ExecutionRequests  *structs.ExecutionRequests           `json:"execution_requests"`
+	Value              Uint256                              `json:"value"`
+	Pubkey             hexutil.Bytes                        `json:"pubkey"`
 }
 
-// WithdrawalRequestV1 is a field of ExecutionRequestsV1.
-type WithdrawalRequestV1 struct {
-	SourceAddress   hexutil.Bytes `json:"source_address"`
-	ValidatorPubkey hexutil.Bytes `json:"validator_pubkey"`
-	Amount          Uint256       `json:"amount"`
-}
-
-func (wr *WithdrawalRequestV1) ToProto() (*v1.WithdrawalRequest, error) {
-	srcAddress, err := bytesutil.DecodeHexWithLength(wr.SourceAddress.String(), common.AddressLength)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "source_address")
-	}
-	pubkey, err := bytesutil.DecodeHexWithLength(wr.ValidatorPubkey.String(), fieldparams.BLSPubkeyLength)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "validator_pubkey")
-	}
-
-	return &v1.WithdrawalRequest{
-		SourceAddress:   srcAddress,
-		ValidatorPubkey: pubkey,
-		Amount:          wr.Amount.Uint64(),
-	}, nil
-}
-
-// DepositRequestV1 is a field of ExecutionRequestsV1.
-type DepositRequestV1 struct {
-	PubKey hexutil.Bytes `json:"pubkey"`
-	// withdrawalCredentials: DATA, 32 Bytes
-	WithdrawalCredentials hexutil.Bytes `json:"withdrawal_credentials"`
-	// amount: QUANTITY, 64 Bits
-	Amount Uint256 `json:"amount"`
-	// signature: DATA, 96 Bytes
-	Signature hexutil.Bytes `json:"signature"`
-	// index: QUANTITY, 64 Bits
-	Index Uint256 `json:"index"`
-}
-
-func (dr *DepositRequestV1) ToProto() (*v1.DepositRequest, error) {
-	pubkey, err := bytesutil.DecodeHexWithLength(dr.PubKey.String(), fieldparams.BLSPubkeyLength)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "pubkey")
-	}
-	wc, err := bytesutil.DecodeHexWithLength(dr.WithdrawalCredentials.String(), fieldparams.RootLength)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "withdrawal_credentials")
-	}
-	sig, err := bytesutil.DecodeHexWithLength(dr.Signature.String(), fieldparams.BLSSignatureLength)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "signature")
-	}
-	return &v1.DepositRequest{
-		Pubkey:                pubkey,
-		WithdrawalCredentials: wc,
-		Amount:                dr.Amount.Uint64(),
-		Signature:             sig,
-		Index:                 dr.Index.Uint64(),
-	}, nil
-}
-
-// ConsolidationRequestV1 is a field of ExecutionRequestsV1.
-type ConsolidationRequestV1 struct {
-	// sourceAddress: DATA, 20 Bytes
-	SourceAddress hexutil.Bytes `json:"source_address"`
-	// sourcePubkey: DATA, 48 Bytes
-	SourcePubkey hexutil.Bytes `json:"source_pubkey"`
-	// targetPubkey: DATA, 48 Bytes
-	TargetPubkey hexutil.Bytes `json:"target_pubkey"`
-}
-
-func (cr *ConsolidationRequestV1) ToProto() (*v1.ConsolidationRequest, error) {
-	srcAddress, err := bytesutil.DecodeHexWithLength(cr.SourceAddress.String(), common.AddressLength)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "source_address")
-	}
-	sourcePubkey, err := bytesutil.DecodeHexWithLength(cr.SourcePubkey.String(), fieldparams.BLSPubkeyLength)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "source_pubkey")
-	}
-	targetPubkey, err := bytesutil.DecodeHexWithLength(cr.TargetPubkey.String(), fieldparams.BLSPubkeyLength)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "target_pubkey")
-	}
-	return &v1.ConsolidationRequest{
-		SourceAddress: srcAddress,
-		SourcePubkey:  sourcePubkey,
-		TargetPubkey:  targetPubkey,
-	}, nil
-}
+//// WithdrawalRequestV1 is a field of ExecutionRequestsV1.
+//type WithdrawalRequestV1 struct {
+//	SourceAddress   hexutil.Bytes `json:"source_address"`
+//	ValidatorPubkey hexutil.Bytes `json:"validator_pubkey"`
+//	Amount          Uint256       `json:"amount"`
+//}
+//
+//func (wr *WithdrawalRequestV1) ToProto() (*v1.WithdrawalRequest, error) {
+//	srcAddress, err := bytesutil.DecodeHexWithLength(wr.SourceAddress.String(), common.AddressLength)
+//	if err != nil {
+//		return nil, server.NewDecodeError(err, "source_address")
+//	}
+//	pubkey, err := bytesutil.DecodeHexWithLength(wr.ValidatorPubkey.String(), fieldparams.BLSPubkeyLength)
+//	if err != nil {
+//		return nil, server.NewDecodeError(err, "validator_pubkey")
+//	}
+//
+//	return &v1.WithdrawalRequest{
+//		SourceAddress:   srcAddress,
+//		ValidatorPubkey: pubkey,
+//		Amount:          wr.Amount.Uint64(),
+//	}, nil
+//}
+//
+//// DepositRequestV1 is a field of ExecutionRequestsV1.
+//type DepositRequestV1 struct {
+//	PubKey hexutil.Bytes `json:"pubkey"`
+//	// withdrawalCredentials: DATA, 32 Bytes
+//	WithdrawalCredentials hexutil.Bytes `json:"withdrawal_credentials"`
+//	// amount: QUANTITY, 64 Bits
+//	Amount Uint256 `json:"amount"`
+//	// signature: DATA, 96 Bytes
+//	Signature hexutil.Bytes `json:"signature"`
+//	// index: QUANTITY, 64 Bits
+//	Index Uint256 `json:"index"`
+//}
+//
+//func (dr *DepositRequestV1) ToProto() (*v1.DepositRequest, error) {
+//	pubkey, err := bytesutil.DecodeHexWithLength(dr.PubKey.String(), fieldparams.BLSPubkeyLength)
+//	if err != nil {
+//		return nil, server.NewDecodeError(err, "pubkey")
+//	}
+//	wc, err := bytesutil.DecodeHexWithLength(dr.WithdrawalCredentials.String(), fieldparams.RootLength)
+//	if err != nil {
+//		return nil, server.NewDecodeError(err, "withdrawal_credentials")
+//	}
+//	sig, err := bytesutil.DecodeHexWithLength(dr.Signature.String(), fieldparams.BLSSignatureLength)
+//	if err != nil {
+//		return nil, server.NewDecodeError(err, "signature")
+//	}
+//	return &v1.DepositRequest{
+//		Pubkey:                pubkey,
+//		WithdrawalCredentials: wc,
+//		Amount:                dr.Amount.Uint64(),
+//		Signature:             sig,
+//		Index:                 dr.Index.Uint64(),
+//	}, nil
+//}
+//
+//// ConsolidationRequestV1 is a field of ExecutionRequestsV1.
+//type ConsolidationRequestV1 struct {
+//	// sourceAddress: DATA, 20 Bytes
+//	SourceAddress hexutil.Bytes `json:"source_address"`
+//	// sourcePubkey: DATA, 48 Bytes
+//	SourcePubkey hexutil.Bytes `json:"source_pubkey"`
+//	// targetPubkey: DATA, 48 Bytes
+//	TargetPubkey hexutil.Bytes `json:"target_pubkey"`
+//}
+//
+//func (cr *ConsolidationRequestV1) ToProto() (*v1.ConsolidationRequest, error) {
+//	srcAddress, err := bytesutil.DecodeHexWithLength(cr.SourceAddress.String(), common.AddressLength)
+//	if err != nil {
+//		return nil, server.NewDecodeError(err, "source_address")
+//	}
+//	sourcePubkey, err := bytesutil.DecodeHexWithLength(cr.SourcePubkey.String(), fieldparams.BLSPubkeyLength)
+//	if err != nil {
+//		return nil, server.NewDecodeError(err, "source_pubkey")
+//	}
+//	targetPubkey, err := bytesutil.DecodeHexWithLength(cr.TargetPubkey.String(), fieldparams.BLSPubkeyLength)
+//	if err != nil {
+//		return nil, server.NewDecodeError(err, "target_pubkey")
+//	}
+//	return &v1.ConsolidationRequest{
+//		SourceAddress: srcAddress,
+//		SourcePubkey:  sourcePubkey,
+//		TargetPubkey:  targetPubkey,
+//	}, nil
+//}
 
 // ErrorMessage is a JSON representation of the builder API's returned error message.
 type ErrorMessage struct {
