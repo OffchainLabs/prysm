@@ -33,15 +33,6 @@ type electraBlockGenerator struct {
 	payload  *enginev1.ExecutionPayloadDeneb
 }
 
-func WithElectraProposerSigning(idx primitives.ValidatorIndex, sk bls.SecretKey, valRoot []byte) ElectraBlockGeneratorOption {
-	return func(g *electraBlockGenerator) {
-		g.sign = true
-		g.proposer = idx
-		g.sk = sk
-		g.valRoot = valRoot
-	}
-}
-
 func WithElectraPayload(p *enginev1.ExecutionPayloadDeneb) ElectraBlockGeneratorOption {
 	return func(g *electraBlockGenerator) {
 		g.payload = p
