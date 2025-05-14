@@ -13,6 +13,7 @@ import (
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"google.golang.org/protobuf/proto"
 )
 
 // ----------------------------------------------------------------------------
@@ -130,6 +131,11 @@ func (e *ExecutionPayload) ToConsensus() (*enginev1.ExecutionPayload, error) {
 		BlockHash:     payloadBlockHash,
 		Transactions:  payloadTxs,
 	}, nil
+}
+
+func (r *ExecutionPayload) PayloadProto() (proto.Message, error) {
+	pb, err := r.ToConsensus()
+	return pb, err
 }
 
 func ExecutionPayloadHeaderFromConsensus(payload *enginev1.ExecutionPayloadHeader) (*ExecutionPayloadHeader, error) {
@@ -381,6 +387,11 @@ func (e *ExecutionPayloadCapella) ToConsensus() (*enginev1.ExecutionPayloadCapel
 		Transactions:  payloadTxs,
 		Withdrawals:   withdrawals,
 	}, nil
+}
+
+func (p *ExecutionPayloadCapella) PayloadProto() (proto.Message, error) {
+	pb, err := p.ToConsensus()
+	return pb, err
 }
 
 func ExecutionPayloadHeaderCapellaFromConsensus(payload *enginev1.ExecutionPayloadHeaderCapella) (*ExecutionPayloadHeaderCapella, error) {
