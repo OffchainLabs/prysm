@@ -77,7 +77,7 @@ func (s *Store) StateDiff(ctx context.Context, slot primitives.Slot) (state.Beac
 	snapshot, diffChain, err := s.getBaseAndDiffChain(offset, slot)
 
 	for _, diff := range diffChain {
-		err = hdiff.ApplyDiff(ctx, snapshot, diff)
+		snapshot, err = hdiff.ApplyDiff(ctx, snapshot, diff)
 		if err != nil {
 			return nil, err
 		}
@@ -92,7 +92,7 @@ func (s *Store) saveHdiff(lvl int, anchor, st state.ReadOnlyBeaconState) error {
 	key := makeKey(lvl, slot)
 
 	// TODO: compute actual diff
-	diff := hdiff.HdiffSerialized{}
+	diff := hdiff.HdiffBytes{}
 
 	err := s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(stateDiffBucket)
@@ -162,7 +162,7 @@ func (s *Store) saveFullSnapshot(lvl int, st state.ReadOnlyBeaconState) error {
 	return nil
 }
 
-func (s *Store) getDiff(lvl int, slot uint64) (hdiff.HdiffSerialized, error) {
+func (s *Store) getDiff(lvl int, slot uint64) (hdiff.HdiffBytes, error) {
 	key := makeKey(lvl, slot)
 	var stateDiff []byte
 	var validatorDiff []byte
@@ -194,10 +194,10 @@ func (s *Store) getDiff(lvl int, slot uint64) (hdiff.HdiffSerialized, error) {
 	})
 
 	if err != nil {
-		return hdiff.HdiffSerialized{}, err
+		return hdiff.HdiffBytes{}, err
 	}
 
-	return hdiff.HdiffSerialized{
+	return hdiff.HdiffBytes{
 		StateDiff:      stateDiff,
 		ValidatorDiffs: validatorDiff,
 		BalancesDiff:   balancesDiff,

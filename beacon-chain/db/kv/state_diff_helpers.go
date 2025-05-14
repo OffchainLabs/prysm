@@ -187,7 +187,7 @@ func (s *Store) decodeStateSnapshot(enc []byte) (state.BeaconState, error) {
 	}
 }
 
-func (s *Store) getBaseAndDiffChain(offset uint64, slot primitives.Slot) (state.BeaconState, []hdiff.HdiffSerialized, error) {
+func (s *Store) getBaseAndDiffChain(offset uint64, slot primitives.Slot) (state.BeaconState, []hdiff.HdiffBytes, error) {
 	rel := uint64(slot) - offset
 	lvl := computeLevel(offset, slot)
 	if lvl == -1 {
@@ -214,7 +214,7 @@ func (s *Store) getBaseAndDiffChain(offset uint64, slot primitives.Slot) (state.
 		return nil, nil, err
 	}
 
-	diffChain := make([]hdiff.HdiffSerialized, len(diffChainIndices))
+	diffChain := make([]hdiff.HdiffBytes, len(diffChainIndices))
 	for _, diffSlot := range diffChainIndices {
 		diff, err := s.getDiff(computeLevel(offset, primitives.Slot(diffSlot)), diffSlot)
 		if err != nil {
