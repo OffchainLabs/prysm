@@ -91,10 +91,12 @@ func (s *Store) saveHdiff(lvl int, anchor, st state.ReadOnlyBeaconState) error {
 	slot := uint64(st.Slot())
 	key := makeKey(lvl, slot)
 
-	// TODO: compute actual diff
-	diff := hdiff.HdiffBytes{}
+	diff, err := hdiff.Diff(anchor, st)
+	if err != nil {
+		return err
+	}
 
-	err := s.db.Update(func(tx *bolt.Tx) error {
+	err = s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(stateDiffBucket)
 		if bucket == nil {
 			return bolt.ErrBucketNotFound
