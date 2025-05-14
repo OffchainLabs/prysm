@@ -14,6 +14,7 @@ import (
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
+	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v6/network/forks"
@@ -26,6 +27,11 @@ import (
 )
 
 func TestRPC_LightClientBootstrap(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	ctx := context.Background()
 	p2pService := p2ptest.NewTestP2P(t)
 	p1 := p2ptest.NewTestP2P(t)
@@ -91,31 +97,31 @@ func TestRPC_LightClientBootstrap(t *testing.T) {
 
 				switch i {
 				case version.Altair:
-					require.DeepSSZEqual(t, altairDigest[:], rpcCtx[:])
+					require.DeepSSZEqual(t, altairDigest[:], rpcCtx)
 					var res pb.LightClientBootstrapAltair
 					require.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, &res))
 					resSSZ, err = res.MarshalSSZ()
 					require.NoError(t, err)
 				case version.Bellatrix:
-					require.DeepSSZEqual(t, bellatrixDigest[:], rpcCtx[:])
+					require.DeepSSZEqual(t, bellatrixDigest[:], rpcCtx)
 					var res pb.LightClientBootstrapAltair
 					require.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, &res))
 					resSSZ, err = res.MarshalSSZ()
 					require.NoError(t, err)
 				case version.Capella:
-					require.DeepSSZEqual(t, capellaDigest[:], rpcCtx[:])
+					require.DeepSSZEqual(t, capellaDigest[:], rpcCtx)
 					var res pb.LightClientBootstrapCapella
 					require.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, &res))
 					resSSZ, err = res.MarshalSSZ()
 					require.NoError(t, err)
 				case version.Deneb:
-					require.DeepSSZEqual(t, denebDigest[:], rpcCtx[:])
+					require.DeepSSZEqual(t, denebDigest[:], rpcCtx)
 					var res pb.LightClientBootstrapDeneb
 					require.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, &res))
 					resSSZ, err = res.MarshalSSZ()
 					require.NoError(t, err)
 				case version.Electra:
-					require.DeepSSZEqual(t, electraDigest[:], rpcCtx[:])
+					require.DeepSSZEqual(t, electraDigest[:], rpcCtx)
 					var res pb.LightClientBootstrapElectra
 					require.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, &res))
 					resSSZ, err = res.MarshalSSZ()
@@ -143,6 +149,11 @@ func TestRPC_LightClientBootstrap(t *testing.T) {
 }
 
 func TestRPC_LightClientOptimisticUpdate(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	ctx := context.Background()
 	p2pService := p2ptest.NewTestP2P(t)
 	p1 := p2ptest.NewTestP2P(t)
@@ -207,31 +218,31 @@ func TestRPC_LightClientOptimisticUpdate(t *testing.T) {
 
 				switch i {
 				case version.Altair:
-					require.DeepSSZEqual(t, altairDigest[:], rpcCtx[:])
+					require.DeepSSZEqual(t, altairDigest[:], rpcCtx)
 					var res pb.LightClientOptimisticUpdateAltair
 					require.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, &res))
 					resSSZ, err = res.MarshalSSZ()
 					require.NoError(t, err)
 				case version.Bellatrix:
-					require.DeepSSZEqual(t, bellatrixDigest[:], rpcCtx[:])
+					require.DeepSSZEqual(t, bellatrixDigest[:], rpcCtx)
 					var res pb.LightClientOptimisticUpdateAltair
 					require.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, &res))
 					resSSZ, err = res.MarshalSSZ()
 					require.NoError(t, err)
 				case version.Capella:
-					require.DeepSSZEqual(t, capellaDigest[:], rpcCtx[:])
+					require.DeepSSZEqual(t, capellaDigest[:], rpcCtx)
 					var res pb.LightClientOptimisticUpdateCapella
 					require.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, &res))
 					resSSZ, err = res.MarshalSSZ()
 					require.NoError(t, err)
 				case version.Deneb:
-					require.DeepSSZEqual(t, denebDigest[:], rpcCtx[:])
+					require.DeepSSZEqual(t, denebDigest[:], rpcCtx)
 					var res pb.LightClientOptimisticUpdateDeneb
 					require.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, &res))
 					resSSZ, err = res.MarshalSSZ()
 					require.NoError(t, err)
 				case version.Electra:
-					require.DeepSSZEqual(t, electraDigest[:], rpcCtx[:])
+					require.DeepSSZEqual(t, electraDigest[:], rpcCtx)
 					var res pb.LightClientOptimisticUpdateDeneb
 					require.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, &res))
 					resSSZ, err = res.MarshalSSZ()
@@ -258,6 +269,11 @@ func TestRPC_LightClientOptimisticUpdate(t *testing.T) {
 }
 
 func TestRPC_LightClientFinalityUpdate(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	ctx := context.Background()
 	p2pService := p2ptest.NewTestP2P(t)
 	p1 := p2ptest.NewTestP2P(t)
@@ -322,31 +338,31 @@ func TestRPC_LightClientFinalityUpdate(t *testing.T) {
 
 				switch i {
 				case version.Altair:
-					require.DeepSSZEqual(t, altairDigest[:], rpcCtx[:])
+					require.DeepSSZEqual(t, altairDigest[:], rpcCtx)
 					var res pb.LightClientFinalityUpdateAltair
 					require.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, &res))
 					resSSZ, err = res.MarshalSSZ()
 					require.NoError(t, err)
 				case version.Bellatrix:
-					require.DeepSSZEqual(t, bellatrixDigest[:], rpcCtx[:])
+					require.DeepSSZEqual(t, bellatrixDigest[:], rpcCtx)
 					var res pb.LightClientFinalityUpdateAltair
 					require.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, &res))
 					resSSZ, err = res.MarshalSSZ()
 					require.NoError(t, err)
 				case version.Capella:
-					require.DeepSSZEqual(t, capellaDigest[:], rpcCtx[:])
+					require.DeepSSZEqual(t, capellaDigest[:], rpcCtx)
 					var res pb.LightClientFinalityUpdateCapella
 					require.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, &res))
 					resSSZ, err = res.MarshalSSZ()
 					require.NoError(t, err)
 				case version.Deneb:
-					require.DeepSSZEqual(t, denebDigest[:], rpcCtx[:])
+					require.DeepSSZEqual(t, denebDigest[:], rpcCtx)
 					var res pb.LightClientFinalityUpdateDeneb
 					require.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, &res))
 					resSSZ, err = res.MarshalSSZ()
 					require.NoError(t, err)
 				case version.Electra:
-					require.DeepSSZEqual(t, electraDigest[:], rpcCtx[:])
+					require.DeepSSZEqual(t, electraDigest[:], rpcCtx)
 					var res pb.LightClientFinalityUpdateElectra
 					require.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, &res))
 					resSSZ, err = res.MarshalSSZ()
@@ -373,6 +389,11 @@ func TestRPC_LightClientFinalityUpdate(t *testing.T) {
 }
 
 func TestRPC_LightClientUpdatesByRange(t *testing.T) {
+	resetFn := features.InitWithReset(&features.Flags{
+		EnableLightClient: true,
+	})
+	defer resetFn()
+
 	ctx := context.Background()
 	p2pService := p2ptest.NewTestP2P(t)
 	p1 := p2ptest.NewTestP2P(t)
@@ -440,31 +461,31 @@ func TestRPC_LightClientUpdatesByRange(t *testing.T) {
 
 				switch i {
 				case version.Altair:
-					require.DeepSSZEqual(t, altairDigest[:], rpcCtx[:])
+					require.DeepSSZEqual(t, altairDigest[:], rpcCtx)
 					var res pb.LightClientUpdateAltair
 					require.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, &res))
 					resSSZ, err = res.MarshalSSZ()
 					require.NoError(t, err)
 				case version.Bellatrix:
-					require.DeepSSZEqual(t, bellatrixDigest[:], rpcCtx[:])
+					require.DeepSSZEqual(t, bellatrixDigest[:], rpcCtx)
 					var res pb.LightClientUpdateAltair
 					require.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, &res))
 					resSSZ, err = res.MarshalSSZ()
 					require.NoError(t, err)
 				case version.Capella:
-					require.DeepSSZEqual(t, capellaDigest[:], rpcCtx[:])
+					require.DeepSSZEqual(t, capellaDigest[:], rpcCtx)
 					var res pb.LightClientUpdateCapella
 					require.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, &res))
 					resSSZ, err = res.MarshalSSZ()
 					require.NoError(t, err)
 				case version.Deneb:
-					require.DeepSSZEqual(t, denebDigest[:], rpcCtx[:])
+					require.DeepSSZEqual(t, denebDigest[:], rpcCtx)
 					var res pb.LightClientUpdateDeneb
 					require.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, &res))
 					resSSZ, err = res.MarshalSSZ()
 					require.NoError(t, err)
 				case version.Electra:
-					require.DeepSSZEqual(t, electraDigest[:], rpcCtx[:])
+					require.DeepSSZEqual(t, electraDigest[:], rpcCtx)
 					var res pb.LightClientUpdateElectra
 					require.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, &res))
 					resSSZ, err = res.MarshalSSZ()
