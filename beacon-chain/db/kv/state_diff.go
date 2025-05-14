@@ -153,8 +153,12 @@ func (s *Store) saveFullSnapshot(lvl int, st state.ReadOnlyBeaconState) error {
 	if err != nil {
 		return err
 	}
-	// Save the full state to the cache.
+	// Save the full state to the cache, and invalidate other levels.
 	anchorCache[lvl] = st
+	for i := lvl + 1; i < len(params.StateHierarchyExponents()); i++ {
+		delete(anchorCache, i)
+	}
+
 	return nil
 }
 

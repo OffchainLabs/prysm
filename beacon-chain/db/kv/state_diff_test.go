@@ -182,14 +182,27 @@ func TestStateDiff_SaveDiff(t *testing.T) {
 	err = db.SaveStateDiff(context.Background(), st)
 	require.NoError(t, err)
 
-	// TODO: check the diff slices
+	key := makeKey(1, uint64(slot))
 	err = db.db.View(func(tx *bbolt.Tx) error {
 		bucket := tx.Bucket(stateDiffBucket)
 		if bucket == nil {
 			return bbolt.ErrBucketNotFound
 		}
-		s := bucket.Get(makeKey(1, uint64(slot)))
+		buf := make([]byte, len(key)+len("_s"))
+		copy(buf, key)
+		copy(buf[len(key):], "_s")
+		s := bucket.Get(buf)
 		if s == nil {
+			return bbolt.ErrIncompatibleValue
+		}
+		copy(buf[len(key):], "_v")
+		v := bucket.Get(buf)
+		if v == nil {
+			return bbolt.ErrIncompatibleValue
+		}
+		copy(buf[len(key):], "_b")
+		b := bucket.Get(buf)
+		if b == nil {
 			return bbolt.ErrIncompatibleValue
 		}
 		return nil
