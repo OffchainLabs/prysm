@@ -1622,7 +1622,6 @@ func ApplyDiff(ctx context.Context, source state.BeaconState, diff HdiffSerializ
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create Hdiff")
 	}
-	logrus.WithField("sbal", source.Balances()[396127]).Info("source balance")
 	if source, err = applyStateDiff(ctx, source, hdiff.stateDiff); err != nil {
 		return nil, errors.Wrap(err, "failed to apply state diff")
 	}
@@ -2006,7 +2005,7 @@ func updateToVersion(ctx context.Context, source state.BeaconState, target int) 
 	}
 	switch source.Version() {
 	case version.Phase0:
-		ret, err = altair.UpgradeToAltair(ctx, source)
+		ret, err = altair.ConvertToAltair(source)
 	case version.Altair:
 		ret, err = execution.UpgradeToBellatrix(source)
 	case version.Bellatrix:
@@ -2014,7 +2013,7 @@ func updateToVersion(ctx context.Context, source state.BeaconState, target int) 
 	case version.Capella:
 		ret, err = deneb.UpgradeToDeneb(source)
 	case version.Deneb:
-		ret, err = electra.UpgradeToElectra(source)
+		ret, err = electra.ConvertToElectra(source)
 	default:
 		return nil, errors.Errorf("unsupported version %s", version.String(source.Version()))
 	}
