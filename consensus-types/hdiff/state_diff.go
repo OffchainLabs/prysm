@@ -36,7 +36,7 @@ type HdiffBytes struct {
 }
 
 // Diff computes the difference between two beacon states and returns it as a serialized HdiffBytes object.
-func Diff(source, target state.BeaconState) (HdiffBytes, error) {
+func Diff(source, target state.ReadOnlyBeaconState) (HdiffBytes, error) {
 	h, err := diffInternal(source, target)
 	if err != nil {
 		return HdiffBytes{}, err
@@ -1144,7 +1144,7 @@ func (h *hdiff) serialize() HdiffBytes {
 }
 
 // diffToVals computes the difference between two BeaconStates and returns a slice of validatorDiffs.
-func diffToVals(source, target state.BeaconState) ([]validatorDiff, error) {
+func diffToVals(source, target state.ReadOnlyBeaconState) ([]validatorDiff, error) {
 	sVals := source.ValidatorsReadOnly()
 	tVals := target.ValidatorsReadOnly()
 	if len(tVals) < len(sVals) {
@@ -1218,7 +1218,7 @@ func validatorsEqual(s, t state.ReadOnlyValidator) bool {
 }
 
 // diffToBalances computes the difference between two BeaconStates' balances.
-func diffToBalances(source, target state.BeaconState) ([]int64, error) {
+func diffToBalances(source, target state.ReadOnlyBeaconState) ([]int64, error) {
 	sBalances := source.Balances()
 	tBalances := target.Balances()
 	if len(tBalances) < len(sBalances) {
@@ -1238,7 +1238,7 @@ func diffToBalances(source, target state.BeaconState) ([]int64, error) {
 	return diffs, nil
 }
 
-func diffInternal(source, target state.BeaconState) (*hdiff, error) {
+func diffInternal(source, target state.ReadOnlyBeaconState) (*hdiff, error) {
 	stateDiff, err := diffToState(source, target)
 	if err != nil {
 		return nil, err
@@ -1259,7 +1259,7 @@ func diffInternal(source, target state.BeaconState) (*hdiff, error) {
 }
 
 // diffToState computes the difference between two BeaconStates and returns a stateDiff object.
-func diffToState(source, target state.BeaconState) (*stateDiff, error) {
+func diffToState(source, target state.ReadOnlyBeaconState) (*stateDiff, error) {
 	ret := &stateDiff{}
 	ret.targetVersion = target.Version()
 	ret.slot = target.Slot()
@@ -1341,7 +1341,7 @@ func diffToState(source, target state.BeaconState) (*stateDiff, error) {
 	return ret, nil
 }
 
-func diffJustificationBits(target state.BeaconState) byte {
+func diffJustificationBits(target state.ReadOnlyBeaconState) byte {
 	j := target.JustificationBits().Bytes()
 	if len(j) != 0 {
 		return j[0]
@@ -1350,7 +1350,7 @@ func diffJustificationBits(target state.BeaconState) byte {
 }
 
 // diffBlockRoots computes the difference between two BeaconStates' block roots.
-func diffBlockRoots(diff *stateDiff, source, target state.BeaconState) {
+func diffBlockRoots(diff *stateDiff, source, target state.ReadOnlyBeaconState) {
 	sRoots := source.BlockRoots()
 	tRoots := target.BlockRoots()
 	if len(sRoots) != len(tRoots) {
@@ -1370,7 +1370,7 @@ func diffBlockRoots(diff *stateDiff, source, target state.BeaconState) {
 }
 
 // diffStateRoots computes the difference between two BeaconStates' state roots.
-func diffStateRoots(diff *stateDiff, source, target state.BeaconState) {
+func diffStateRoots(diff *stateDiff, source, target state.ReadOnlyBeaconState) {
 	sRoots := source.StateRoots()
 	tRoots := target.StateRoots()
 	if len(sRoots) != len(tRoots) {
@@ -1389,7 +1389,7 @@ func diffStateRoots(diff *stateDiff, source, target state.BeaconState) {
 	}
 }
 
-func diffHistoricalRoots(source, target state.BeaconState) ([][fieldparams.RootLength]byte, error) {
+func diffHistoricalRoots(source, target state.ReadOnlyBeaconState) ([][fieldparams.RootLength]byte, error) {
 	sRoots := source.HistoricalRoots()
 	tRoots := target.HistoricalRoots()
 	if len(tRoots) < len(sRoots) {
@@ -1416,7 +1416,7 @@ func shouldAppendEth1DataVotes(sVotes, tVotes []*ethpb.Eth1Data) bool {
 	return true
 }
 
-func diffEth1DataVotes(diff *stateDiff, source, target state.BeaconState) {
+func diffEth1DataVotes(diff *stateDiff, source, target state.ReadOnlyBeaconState) {
 	sVotes := source.Eth1DataVotes()
 	tVotes := target.Eth1DataVotes()
 	if shouldAppendEth1DataVotes(sVotes, tVotes) {
@@ -1428,7 +1428,7 @@ func diffEth1DataVotes(diff *stateDiff, source, target state.BeaconState) {
 	diff.eth1DataVotes = tVotes
 }
 
-func diffRandaoMixes(diff *stateDiff, source, target state.BeaconState) {
+func diffRandaoMixes(diff *stateDiff, source, target state.ReadOnlyBeaconState) {
 	sMixes := source.RandaoMixes()
 	tMixes := target.RandaoMixes()
 	if len(sMixes) != len(tMixes) {
@@ -1447,7 +1447,7 @@ func diffRandaoMixes(diff *stateDiff, source, target state.BeaconState) {
 	}
 }
 
-func diffSlashings(diff *stateDiff, source, target state.BeaconState) {
+func diffSlashings(diff *stateDiff, source, target state.ReadOnlyBeaconState) {
 	sSlashings := source.Slashings()
 	tSlashings := target.Slashings()
 	for i := range fieldparams.SlashingsLength {
@@ -1459,7 +1459,7 @@ func diffSlashings(diff *stateDiff, source, target state.BeaconState) {
 	}
 }
 
-func diffHistoricalSummaries(diff *stateDiff, source, target state.BeaconState) error {
+func diffHistoricalSummaries(diff *stateDiff, source, target state.ReadOnlyBeaconState) error {
 	tSummaries, err := target.HistoricalSummaries()
 	if err != nil {
 		return err
@@ -1486,7 +1486,7 @@ func diffHistoricalSummaries(diff *stateDiff, source, target state.BeaconState) 
 	return nil
 }
 
-func diffElectraFields(diff *stateDiff, source, target state.BeaconState) (err error) {
+func diffElectraFields(diff *stateDiff, source, target state.ReadOnlyBeaconState) (err error) {
 	diff.depositRequestsStartIndex, err = target.DepositRequestsStartIndex()
 	if err != nil {
 		return
@@ -1551,7 +1551,7 @@ func computeLPS[T any](combined []*T, equals func(a, b *T) bool) []int {
 	return lps
 }
 
-func diffPEndingDeposits(diff *stateDiff, source, target state.BeaconState) error {
+func diffPEndingDeposits(diff *stateDiff, source, target state.ReadOnlyBeaconState) error {
 	tPendingDeposits, err := target.PendingDeposits()
 	if err != nil {
 		return err
@@ -1582,7 +1582,7 @@ func diffPEndingDeposits(diff *stateDiff, source, target state.BeaconState) erro
 	return nil
 }
 
-func diffPendingPartialWithdrawals(diff *stateDiff, source, target state.BeaconState) error {
+func diffPendingPartialWithdrawals(diff *stateDiff, source, target state.ReadOnlyBeaconState) error {
 	tPendingPartialWithdrawals, err := target.PendingPartialWithdrawals()
 	if err != nil {
 		return err
@@ -1610,7 +1610,7 @@ func diffPendingPartialWithdrawals(diff *stateDiff, source, target state.BeaconS
 	return nil
 }
 
-func diffPendingConsolidations(diff *stateDiff, source, target state.BeaconState) error {
+func diffPendingConsolidations(diff *stateDiff, source, target state.ReadOnlyBeaconState) error {
 	tPendingConsolidations, err := target.PendingConsolidations()
 	if err != nil {
 		return err
