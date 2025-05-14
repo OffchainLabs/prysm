@@ -2658,7 +2658,7 @@ As we prepare our `v3` mainnet release for [The Merge](https://ethereum.org/en/u
 of the `v2` era. Node operators and validators are **highly encouraged** to upgrade to release `v2.1.4` - many bug fixes
 and improvements have been included in preparation for The Merge. `v3` will contain breaking changes, and will be
 released within the next few weeks. Using `v2.1.4` in the meantime will give you access to a more streamlined user
-experience. See our [v2.1.4 doc](https://docs.prylabs.network/docs/vnext/214-rc) to learn how to use v2.1.4 to run a
+experience. See our [v2.1.4 doc](https://www.offchainlabs.com/prysm/docs/prysm-usage/staying-up-to-date) to learn how to use v2.1.4 to run a
 Merge-ready configuration on the Goerli-Prater network pair.
 
 ### Added
@@ -2848,7 +2848,7 @@ There are two known issues with this release:
 
 ### Added
 
-- Web3Signer support. See the [documentation](https://docs.prylabs.network/docs/next/wallet/web3signer) for more
+- Web3Signer support. See the [documentation](https://docs.prylabs.network/docs/wallet/web3signer) for more
   details.
 - Bellatrix support. See [kiln testnet instructions](https://hackmd.io/OqIoTiQvS9KOIataIFksBQ?view)
 - Weak subjectivity sync / checkpoint sync. This is an experimental feature and may have unintended side effects for
