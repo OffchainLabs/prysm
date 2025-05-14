@@ -1,18 +1,29 @@
 package hdiff
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"os"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/pkg/errors"
 )
+
+var sourceFile = flag.String("source", "", "Path to the source file")
+var targetFile = flag.String("target", "", "Path to the target file")
+
+func TestMain(m *testing.M) {
+	flag.Parse()
+	os.Exit(m.Run())
+}
 
 func Test_diffToState(t *testing.T) {
 	source, _ := util.DeterministicGenesisStateElectra(t, 256)
@@ -78,38 +89,83 @@ func TestApplyDiff(t *testing.T) {
 
 	hdiff, err := Diff(source, target)
 	require.NoError(t, err)
-	require.NoError(t, ApplyDiff(ctx, source, hdiff))
+	source, err = ApplyDiff(ctx, source, hdiff)
+	require.NoError(t, err)
 	require.DeepEqual(t, source, target)
 }
 
-var sourceFile = flag.String("source", "", "Path to the source file")
-var targetFile = flag.String("target", "", "Path to the target file")
+func getMainnetStates() (state.BeaconState, state.BeaconState, error) {
+	sourceBytes, err := os.ReadFile(*sourceFile)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to read source file")
+	}
+	targetBytes, err := os.ReadFile(*targetFile)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to read target file")
+	}
+	sourceProto := &ethpb.BeaconStateDeneb{}
+	if err := sourceProto.UnmarshalSSZ(sourceBytes); err != nil {
+		return nil, nil, errors.Wrap(err, "failed to unmarshal source proto")
+	}
+	source, err := state_native.InitializeFromProtoDeneb(sourceProto)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to initialize source state")
+	}
+	targetProto := &ethpb.BeaconStateElectra{}
+	if err := targetProto.UnmarshalSSZ(targetBytes); err != nil {
+		return nil, nil, errors.Wrap(err, "failed to unmarshal target proto")
+	}
+	target, err := state_native.InitializeFromProtoElectra(targetProto)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to initialize target state")
+	}
+	return source, target, nil
+}
 
-func TestMain(m *testing.M) {
-	flag.Parse()
-	os.Exit(m.Run())
+func TestApplyDiffMainnet(t *testing.T) {
+	if *sourceFile == "" || *targetFile == "" {
+		t.Skip("source and target files not provided")
+	}
+	source, target, err := getMainnetStates()
+	require.NoError(t, err)
+	hdiff, err := Diff(source, target)
+	require.NoError(t, err)
+	source, err = ApplyDiff(context.Background(), source, hdiff)
+	require.NoError(t, err)
+	sourceSSZ, err := source.MarshalSSZ()
+	require.NoError(t, err)
+	targetSSZ, err := target.MarshalSSZ()
+	require.NoError(t, err)
+	sVals := source.Validators()
+	tVals := target.Validators()
+	require.Equal(t, len(sVals), len(tVals))
+	for i, v := range sVals {
+		require.Equal(t, true, bytes.Equal(v.PublicKey, tVals[i].PublicKey))
+		require.Equal(t, true, bytes.Equal(v.WithdrawalCredentials, tVals[i].WithdrawalCredentials))
+		require.Equal(t, v.EffectiveBalance, tVals[i].EffectiveBalance)
+		require.Equal(t, v.Slashed, tVals[i].Slashed)
+		require.Equal(t, v.ActivationEligibilityEpoch, tVals[i].ActivationEligibilityEpoch)
+		require.Equal(t, v.ActivationEpoch, tVals[i].ActivationEpoch)
+		require.Equal(t, v.ExitEpoch, tVals[i].ExitEpoch)
+		require.Equal(t, v.WithdrawableEpoch, tVals[i].WithdrawableEpoch)
+	}
+	sBals := source.Balances()
+	tBals := target.Balances()
+	require.Equal(t, len(sBals), len(tBals))
+	for i, v := range sBals {
+		require.Equal(t, v, tBals[i], "i: %d", i)
+	}
+
+	require.Equal(t, true, bytes.Equal(sourceSSZ, targetSSZ))
 }
 
 func BenchmarkGetDiff(b *testing.B) {
 	if *sourceFile == "" || *targetFile == "" {
 		b.Skip("source and target files not provided")
 	}
-	sourceBytes, err := os.ReadFile(*sourceFile)
-	if err != nil {
-		b.Fatalf("failed to read source file: %v", err)
-	}
-	targetBytes, err := os.ReadFile(*targetFile)
-	if err != nil {
-		b.Fatalf("failed to read target file: %v", err)
-	}
-	sourceProto := &ethpb.BeaconStateDeneb{}
-	require.NoError(b, sourceProto.UnmarshalSSZ(sourceBytes))
-	source, err := state_native.InitializeFromProtoDeneb(sourceProto)
+	source, target, err := getMainnetStates()
 	require.NoError(b, err)
-	targetProto := &ethpb.BeaconStateElectra{}
-	require.NoError(b, targetProto.UnmarshalSSZ(targetBytes))
-	target, err := state_native.InitializeFromProtoElectra(targetProto)
-	require.NoError(b, err)
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		hdiff, err := Diff(source, target)
@@ -122,27 +178,13 @@ func BenchmarkApplyDiff(b *testing.B) {
 	if *sourceFile == "" || *targetFile == "" {
 		b.Skip("source and target files not provided")
 	}
-	sourceBytes, err := os.ReadFile(*sourceFile)
-	if err != nil {
-		b.Fatalf("failed to read source file: %v", err)
-	}
-	targetBytes, err := os.ReadFile(*targetFile)
-	if err != nil {
-		b.Fatalf("failed to read target file: %v", err)
-	}
-	sourceProto := &ethpb.BeaconStateDeneb{}
-	require.NoError(b, sourceProto.UnmarshalSSZ(sourceBytes))
-	source, err := state_native.InitializeFromProtoDeneb(sourceProto)
-	require.NoError(b, err)
-	targetProto := &ethpb.BeaconStateElectra{}
-	require.NoError(b, targetProto.UnmarshalSSZ(targetBytes))
-	target, err := state_native.InitializeFromProtoElectra(targetProto)
+	source, target, err := getMainnetStates()
 	require.NoError(b, err)
 	hdiff, err := Diff(source, target)
 	require.NoError(b, err)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		err := ApplyDiff(context.Background(), source, hdiff)
+		source, err = ApplyDiff(context.Background(), source, hdiff)
 		require.NoError(b, err)
 	}
 }

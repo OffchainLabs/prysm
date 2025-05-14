@@ -1198,11 +1198,14 @@ func diffToBalances(source, target state.BeaconState) ([]int64, error) {
 	}
 	diffs := make([]int64, len(tBalances))
 	for i, s := range sBalances {
-		if tBalances[i] > s {
+		if tBalances[i] >= s {
 			diffs[i] = int64(tBalances[i] - s)
 		} else {
 			diffs[i] = -int64(s - tBalances[i])
 		}
+	}
+	for i, t := range tBalances[len(sBalances):] {
+		diffs[i+len(sBalances)] = int64(t) // lint:ignore uintcast
 	}
 	return diffs, nil
 }
@@ -1257,6 +1260,7 @@ func diffToState(source, target state.BeaconState) (*stateDiff, error) {
 		ret.eth1Data = target.Eth1Data()
 	}
 	diffEth1DataVotes(ret, source, target)
+	ret.eth1DepositIndex = target.Eth1DepositIndex()
 	diffRandaoMixes(ret, source, target)
 	diffSlashings(ret, source, target)
 	ret.previousEpochParticipation, err = target.PreviousEpochParticipation()
@@ -1613,29 +1617,33 @@ func diffPendingConsolidations(diff *stateDiff, source, target state.BeaconState
 	return nil
 }
 
-func ApplyDiff(ctx context.Context, source state.BeaconState, diff HdiffSerialized) error {
+func ApplyDiff(ctx context.Context, source state.BeaconState, diff HdiffSerialized) (state.BeaconState, error) {
 	hdiff, err := NewHdiff(diff)
 	if err != nil {
-		return errors.Wrap(err, "failed to create Hdiff")
+		return nil, errors.Wrap(err, "failed to create Hdiff")
 	}
-	if err := applyStateDiff(ctx, source, hdiff.stateDiff); err != nil {
-		return errors.Wrap(err, "failed to apply state diff")
+	logrus.WithField("sbal", source.Balances()[396127]).Info("source balance")
+	if source, err = applyStateDiff(ctx, source, hdiff.stateDiff); err != nil {
+		return nil, errors.Wrap(err, "failed to apply state diff")
 	}
-	if err := applyBalancesDiff(source, hdiff.balancesDiff); err != nil {
-		return errors.Wrap(err, "failed to apply balances diff")
+	if source, err = applyBalancesDiff(source, hdiff.balancesDiff); err != nil {
+		return nil, errors.Wrap(err, "failed to apply balances diff")
 	}
-	return applyValidatorDiff(source, hdiff.validatorDiffs)
+	if source, err = applyValidatorDiff(source, hdiff.validatorDiffs); err != nil {
+		return nil, errors.Wrap(err, "failed to apply validator diff")
+	}
+	return source, nil
 }
 
 // applyValidatorDiff applies the validator diff to the source state in place.
-func applyValidatorDiff(source state.BeaconState, diff []validatorDiff) error {
+func applyValidatorDiff(source state.BeaconState, diff []validatorDiff) (state.BeaconState, error) {
 	sVals := source.Validators()
 	if len(sVals) < len(diff) {
-		return errors.Errorf("target validators length %d is less than source %d", len(diff), len(sVals))
+		return nil, errors.Errorf("target validators length %d is less than source %d", len(diff), len(sVals))
 	}
 	for _, d := range diff {
 		if d.index > uint32(len(sVals)) {
-			return errors.Errorf("validator index %d is greater than length %d", d.index, len(diff))
+			return nil, errors.Errorf("validator index %d is greater than length %d", d.index, len(diff))
 		}
 		if d.index == uint32(len(sVals)) {
 			// A valid diff should never have an index greater than the length of the source validators.
@@ -1654,168 +1662,177 @@ func applyValidatorDiff(source state.BeaconState, diff []validatorDiff) error {
 		sVals[d.index].ExitEpoch = d.ExitEpoch
 		sVals[d.index].WithdrawableEpoch = d.WithdrawableEpoch
 	}
-	return source.SetValidators(sVals)
+	if err := source.SetValidators(sVals); err != nil {
+		return nil, errors.Wrap(err, "failed to set validators")
+	}
+	return source, nil
 }
 
 // applyBalancesDiff applies the balances diff to the source state in place.
-func applyBalancesDiff(source state.BeaconState, diff []int64) error {
+func applyBalancesDiff(source state.BeaconState, diff []int64) (state.BeaconState, error) {
 	sBalances := source.Balances()
 	if len(diff) < len(sBalances) {
-		return errors.Errorf("target balances length %d is less than source %d", len(diff), len(sBalances))
+		return nil, errors.Errorf("target balances length %d is less than source %d", len(diff), len(sBalances))
 	}
 	sBalances = append(sBalances, make([]uint64, len(diff)-len(sBalances))...)
 	for i, t := range diff {
-		if t > 0 {
+		if t >= 0 {
 			sBalances[i] += uint64(t)
 		} else {
 			sBalances[i] -= uint64(-t)
 		}
 	}
-	return source.SetBalances(sBalances)
+	if err := source.SetBalances(sBalances); err != nil {
+		return nil, errors.Wrap(err, "failed to set balances")
+	}
+	return source, nil
 }
 
 // applyStateDiff applies the given diff to the source state in place.
-func applyStateDiff(ctx context.Context, source state.BeaconState, diff *stateDiff) error {
+func applyStateDiff(ctx context.Context, source state.BeaconState, diff *stateDiff) (state.BeaconState, error) {
 	var err error
 	if source, err = updateToVersion(ctx, source, diff.targetVersion); err != nil {
-		return errors.Wrap(err, "failed to update state to target version")
+		return nil, errors.Wrap(err, "failed to update state to target version")
 	}
 	if err := source.SetSlot(diff.slot); err != nil {
-		return errors.Wrap(err, "failed to set slot")
+		return nil, errors.Wrap(err, "failed to set slot")
 	}
 	if diff.fork != nil {
 		if err := source.SetFork(diff.fork); err != nil {
-			return errors.Wrap(err, "failed to set fork")
+			return nil, errors.Wrap(err, "failed to set fork")
 		}
 	}
 	if diff.latestBlockHeader != nil {
 		if err := source.SetLatestBlockHeader(diff.latestBlockHeader); err != nil {
-			return errors.Wrap(err, "failed to set latest block header")
+			return nil, errors.Wrap(err, "failed to set latest block header")
 		}
 	}
 	if err := applyBlockRootsDiff(source, diff); err != nil {
-		return errors.Wrap(err, "failed to apply block roots diff")
+		return nil, errors.Wrap(err, "failed to apply block roots diff")
 	}
 	if err := applyStateRootsDiff(source, diff); err != nil {
-		return errors.Wrap(err, "failed to apply state roots diff")
+		return nil, errors.Wrap(err, "failed to apply state roots diff")
 	}
 	if err := applyHistoricalRootsDiff(source, diff); err != nil {
-		return errors.Wrap(err, "failed to apply historical roots diff")
+		return nil, errors.Wrap(err, "failed to apply historical roots diff")
 	}
 	if diff.eth1Data != nil {
 		if err := source.SetEth1Data(diff.eth1Data); err != nil {
-			return errors.Wrap(err, "failed to set eth1 data")
+			return nil, errors.Wrap(err, "failed to set eth1 data")
 		}
 	}
 	if err := applyEth1DataVotesDiff(source, diff); err != nil {
-		return errors.Wrap(err, "failed to apply eth1 data votes diff")
+		return nil, errors.Wrap(err, "failed to apply eth1 data votes diff")
 	}
 	if err := source.SetEth1DepositIndex(diff.eth1DepositIndex); err != nil {
-		return errors.Wrap(err, "failed to set eth1 deposit index")
+		return nil, errors.Wrap(err, "failed to set eth1 deposit index")
 	}
 	if err := applyRandaoMixesDiff(source, diff); err != nil {
-		return errors.Wrap(err, "failed to apply randao mixes diff")
+		return nil, errors.Wrap(err, "failed to apply randao mixes diff")
 	}
 	if err := applySlashingsDiff(source, diff); err != nil {
-		return errors.Wrap(err, "failed to apply slashings diff")
+		return nil, errors.Wrap(err, "failed to apply slashings diff")
 	}
 	if diff.targetVersion == version.Phase0 {
 		if err := source.SetPreviousEpochAttestations(diff.previousEpochAttestations); err != nil {
-			return errors.Wrap(err, "failed to set previous epoch attestations")
+			return nil, errors.Wrap(err, "failed to set previous epoch attestations")
 		}
 		if err := source.SetCurrentEpochAttestations(diff.currentEpochAttestations); err != nil {
-			return errors.Wrap(err, "failed to set current epoch attestations")
+			return nil, errors.Wrap(err, "failed to set current epoch attestations")
 		}
 	} else {
 		if err := source.SetPreviousParticipationBits(diff.previousEpochParticipation); err != nil {
-			return errors.Wrap(err, "failed to set previous epoch participation")
+			return nil, errors.Wrap(err, "failed to set previous epoch participation")
 		}
 		if err := source.SetCurrentParticipationBits(diff.currentEpochParticipation); err != nil {
-			return errors.Wrap(err, "failed to set current epoch participation")
+			return nil, errors.Wrap(err, "failed to set current epoch participation")
 		}
 	}
 	if err := source.SetJustificationBits(bitfield.Bitvector4([]byte{diff.justificationBits})); err != nil {
-		return errors.Wrap(err, "failed to set justification bits")
+		return nil, errors.Wrap(err, "failed to set justification bits")
 	}
 	if diff.previousJustifiedCheckpoint != nil {
 		if err := source.SetPreviousJustifiedCheckpoint(diff.previousJustifiedCheckpoint); err != nil {
-			return errors.Wrap(err, "failed to set previous justified checkpoint")
+			return nil, errors.Wrap(err, "failed to set previous justified checkpoint")
 		}
 	}
 	if diff.currentJustifiedCheckpoint != nil {
 		if err := source.SetCurrentJustifiedCheckpoint(diff.currentJustifiedCheckpoint); err != nil {
-			return errors.Wrap(err, "failed to set current justified checkpoint")
+			return nil, errors.Wrap(err, "failed to set current justified checkpoint")
 		}
 	}
 	if diff.finalizedCheckpoint != nil {
 		if err := source.SetFinalizedCheckpoint(diff.finalizedCheckpoint); err != nil {
-			return errors.Wrap(err, "failed to set finalized checkpoint")
+			return nil, errors.Wrap(err, "failed to set finalized checkpoint")
 		}
 	}
 	if diff.targetVersion < version.Altair {
-		return nil
+		return source, nil
 	}
 	if err := source.SetInactivityScores(diff.inactivityScores); err != nil {
-		return errors.Wrap(err, "failed to set inactivity scores")
+		return nil, errors.Wrap(err, "failed to set inactivity scores")
 	}
 	if diff.currentSyncCommittee != nil {
 		if err := source.SetCurrentSyncCommittee(diff.currentSyncCommittee); err != nil {
-			return errors.Wrap(err, "failed to set current sync committee")
+			return nil, errors.Wrap(err, "failed to set current sync committee")
 		}
 	}
 	if diff.nextSyncCommittee != nil {
 		if err := source.SetNextSyncCommittee(diff.nextSyncCommittee); err != nil {
-			return errors.Wrap(err, "failed to set next sync committee")
+			return nil, errors.Wrap(err, "failed to set next sync committee")
 		}
 	}
 	if diff.targetVersion < version.Bellatrix {
-		return nil
+		return source, nil
 	}
 	if diff.executionPayloadHeader != nil {
 		if err := source.SetLatestExecutionPayloadHeader(diff.executionPayloadHeader); err != nil {
-			return errors.Wrap(err, "failed to set latest execution payload header")
+			return nil, errors.Wrap(err, "failed to set latest execution payload header")
 		}
 	}
 	if diff.targetVersion < version.Capella {
-		return nil
+		return source, nil
 	}
 	if err := source.SetNextWithdrawalIndex(diff.nextWithdrawalIndex); err != nil {
-		return errors.Wrap(err, "failed to set next withdrawal index")
+		return nil, errors.Wrap(err, "failed to set next withdrawal index")
 	}
 	if err := source.SetNextWithdrawalValidatorIndex(diff.nextWithdrawalValidatorIndex); err != nil {
-		return errors.Wrap(err, "failed to set next withdrawal validator index")
+		return nil, errors.Wrap(err, "failed to set next withdrawal validator index")
 	}
 	if err := applyHistoricalSummariesDiff(source, diff); err != nil {
-		return errors.Wrap(err, "failed to apply historical summaries diff")
+		return nil, errors.Wrap(err, "failed to apply historical summaries diff")
 	}
 	if diff.targetVersion < version.Electra {
-		return nil
+		return source, nil
 	}
 	if err := source.SetDepositRequestsStartIndex(diff.depositRequestsStartIndex); err != nil {
-		return errors.Wrap(err, "failed to set deposit requests start index")
+		return nil, errors.Wrap(err, "failed to set deposit requests start index")
 	}
 	if err := source.SetDepositBalanceToConsume(diff.depositBalanceToConsume); err != nil {
-		return errors.Wrap(err, "failed to set deposit balance to consume")
+		return nil, errors.Wrap(err, "failed to set deposit balance to consume")
 	}
 	if err := source.SetExitBalanceToConsume(diff.exitBalanceToConsume); err != nil {
-		return errors.Wrap(err, "failed to set exit balance to consume")
+		return nil, errors.Wrap(err, "failed to set exit balance to consume")
 	}
 	if err := source.SetEarliestExitEpoch(diff.earliestExitEpoch); err != nil {
-		return errors.Wrap(err, "failed to set earliest exit epoch")
+		return nil, errors.Wrap(err, "failed to set earliest exit epoch")
 	}
 	if err := source.SetConsolidationBalanceToConsume(diff.consolidationBalanceToConsume); err != nil {
-		return errors.Wrap(err, "failed to set consolidation balance to consume")
+		return nil, errors.Wrap(err, "failed to set consolidation balance to consume")
 	}
 	if err := source.SetEarliestConsolidationEpoch(diff.earliestConsolidationEpoch); err != nil {
-		return errors.Wrap(err, "failed to set earliest consolidation epoch")
+		return nil, errors.Wrap(err, "failed to set earliest consolidation epoch")
 	}
 	if err := applyPendingDepositsDiff(source, diff); err != nil {
-		return errors.Wrap(err, "failed to apply pending deposits diff")
+		return nil, errors.Wrap(err, "failed to apply pending deposits diff")
 	}
 	if err := applyPendingPartialWithdrawalsDiff(source, diff); err != nil {
-		return errors.Wrap(err, "failed to apply pending partial withdrawals diff")
+		return nil, errors.Wrap(err, "failed to apply pending partial withdrawals diff")
 	}
-	return applyPendingConsolidationsDiff(source, diff)
+	if err := applyPendingConsolidationsDiff(source, diff); err != nil {
+		return nil, errors.Wrap(err, "failed to apply pending consolidations diff")
+	}
+	return source, nil
 }
 
 // applyPendingDepositsDiff applies the pending deposits diff to the source state in place.
