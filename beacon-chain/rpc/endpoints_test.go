@@ -144,10 +144,10 @@ func Test_endpoints(t *testing.T) {
 	endpoints := s.endpoints(true, nil, nil, nil, nil, nil, nil)
 	actualRoutes := make(map[string][]string, len(endpoints))
 	for _, e := range endpoints {
-		if _, ok := actualRoutes[e.template]; ok {
-			actualRoutes[e.template] = append(actualRoutes[e.template], e.methods...)
+		if _, ok := actualRoutes[e.Template]; ok {
+			actualRoutes[e.Template] = append(actualRoutes[e.Template], e.Methods...)
 		} else {
-			actualRoutes[e.template] = e.methods
+			actualRoutes[e.Template] = e.Methods
 		}
 	}
 	expectedRoutes := make(map[string][]string)

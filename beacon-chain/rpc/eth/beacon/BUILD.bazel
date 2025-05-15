@@ -14,7 +14,9 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//api:go_default_library",
+        "//api/apiutil:go_default_library",
         "//api/server:go_default_library",
+        "//api/server/middleware:go_default_library",
         "//api/server/structs:go_default_library",
         "//beacon-chain/blockchain:go_default_library",
         "//beacon-chain/cache:go_default_library",
@@ -74,6 +76,7 @@ go_test(
         "handlers_test.go",
         "handlers_validators_test.go",
         "init_test.go",
+        "server_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
