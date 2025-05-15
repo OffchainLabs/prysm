@@ -47,10 +47,6 @@ const (
 	defaultBuilderBoostFactor = primitives.Gwei(100)
 )
 
-var (
-	meshSize = 4 * features.Get().RLNCNumChunks // The number of peers to broadcast block chunks
-)
-
 // GetBeaconBlock is called by a proposer during its assigned slot to request a block to sign
 // by passing in the slot and the signed randao reveal of the slot.
 func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (*ethpb.GenericBeaconBlock, error) {
@@ -450,6 +446,7 @@ func (s *Server) constructChunkMessages(cBlk *ethpb.ChunkedBeaconBlock) ([]*ethp
 	if err != nil {
 		return nil, errors.Wrap(err, "could not construct node")
 	}
+	meshSize := features.Get().RLNCMeshSize
 	multipleMessages := make([]*ethpb.BeaconBlockChunk, 0, meshSize)
 	for i := uint(0); i < meshSize; i++ {
 		msg, err := node.PrepareMessage()

@@ -189,6 +189,12 @@ var (
 		Value:  10,
 		Hidden: true,
 	}
+	rlncMeshSize = &cli.IntFlag{
+		Name:   "rlnc-mesh-size",
+		Usage:  "Experimental: number of peers to send RLNC chunks to.",
+		Value:  80,
+		Hidden: true,
+	}
 	// delayBlockBroadcast is a flag for delaying the block broadcast to the network.
 	delayBlockBroadcast = &cli.DurationFlag{
 		Name:  "delay-block-broadcast",
@@ -259,6 +265,7 @@ var BeaconChainFlags = append(deprecatedBeaconFlags, append(deprecatedFlags, []c
 	enableExperimentalAttestationPool,
 	useRLNC,
 	rlncBlockChunks,
+	rlncMeshSize,
 	delayBlockBroadcast,
 }...)...)
 

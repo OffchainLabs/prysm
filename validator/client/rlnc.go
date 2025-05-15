@@ -8,6 +8,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/rlnc"
+	"github.com/prysmaticlabs/prysm/v5/config/features"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
@@ -17,8 +18,6 @@ import (
 	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
 	"github.com/sirupsen/logrus"
 )
-
-var numChunks = uint(10)
 
 // rlncBlockSuffix is a byte that is added to the end of the block to mark it's end.
 var rlncBlockSuffix = byte(0xfe)
@@ -48,7 +47,7 @@ func (v *validator) createSignedChunks(
 	}
 	buf.WriteByte(rlncBlockSuffix)
 
-	node, err := rlnc.NewSource(v.committer, numChunks, buf.Bytes())
+	node, err := rlnc.NewSource(v.committer, features.Get().RLNCNumChunks, buf.Bytes())
 	if err != nil {
 		return nil, [32]byte{}, nil, errors.Wrap(err, "could not create source node")
 	}

@@ -1,6 +1,8 @@
 package rlnc
 
 import (
+	"sync"
+
 	ristretto "github.com/gtank/ristretto255"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
@@ -144,13 +146,30 @@ func computeCommitments(c *Committer, data [][]*ristretto.Scalar) (commitments [
 		return nil, nil
 	}
 	commitments = make([]*ristretto.Element, len(data))
+	var wg sync.WaitGroup
+	errChan := make(chan error, 1)
+	var once sync.Once
 	for i, d := range data {
-		commitments[i], err = c.commit(d)
-		if err != nil {
-			return nil, err
-		}
+		wg.Add(1)
+		go func(i int, d []*ristretto.Scalar) {
+			defer wg.Done()
+			commitment, err := c.commit(d)
+			if err != nil {
+				once.Do(func() {
+					errChan <- err
+				})
+				return
+			}
+			commitments[i] = commitment
+		}(i, d)
 	}
-	return commitments, nil
+	wg.Wait()
+	select {
+	case err := <-errChan:
+		return nil, err
+	default:
+		return commitments, nil
+	}
 }
 
 func blockToChunks(numChunks uint, data []byte) [][]*ristretto.Scalar {

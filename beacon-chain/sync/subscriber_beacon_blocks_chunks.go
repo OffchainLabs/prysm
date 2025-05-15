@@ -29,8 +29,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-var meshSize = 4 * features.Get().RLNCNumChunks // number of peers to send chunks
-
 // beaconBlockChunkSubscriber is a noop since all syncing happens at the validation step
 func (s *Service) beaconBlockChunkSubscriber(_ context.Context, _ proto.Message) error {
 	return nil
@@ -232,6 +230,7 @@ func (s *Service) reconstructBlockFromChunk(ctx context.Context, chunk interface
 }
 
 func (s *Service) broadcastBlockChunk(ctx context.Context, chunk interfaces.ReadOnlyBeaconBlockChunk) {
+	meshSize := features.Get().RLNCMeshSize
 	messages := make([]*ethpb.BeaconBlockChunk, 0, meshSize)
 	for i := uint(0); i < meshSize; i++ {
 		msg, err := s.blockChunkCache.PrepareMessage(chunk)
