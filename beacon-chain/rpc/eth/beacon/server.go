@@ -439,7 +439,7 @@ func Endpoints(server *Server) []apiutil.Endpoint {
 			Middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
 			},
-			Handler: server.GetPendingDeposits,
+			Handler: server.GetPendingConsolidations,
 			Methods: []string{http.MethodGet},
 		},
 		{
