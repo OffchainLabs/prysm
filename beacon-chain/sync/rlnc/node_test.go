@@ -119,3 +119,48 @@ func TestOneScalar(t *testing.T) {
 	obtained := scalar.Encode(nil)
 	require.DeepEqual(t, scalarBytes, obtained)
 }
+
+func BenchmarkChunkMSM_6MB(b *testing.B) {
+	numChunks := uint(10)
+	chunkSize := uint(19660) // 6MB Blocks
+	committer, err := LoadTrustedSetup()
+	require.NoError(b, err)
+	block := make([]byte, numChunks*chunkSize*31)
+	_, err = rand.Read(block)
+	require.NoError(b, err)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := NewSource(committer, numChunks, block)
+		require.NoError(b, err)
+	}
+}
+
+func BenchmarkChunkMSM_2MB(b *testing.B) {
+	numChunks := uint(10)
+	chunkSize := uint(6554) // 2MB Blocks
+	committer, err := LoadTrustedSetup()
+	require.NoError(b, err)
+	block := make([]byte, numChunks*chunkSize*31)
+	_, err = rand.Read(block)
+	require.NoError(b, err)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := NewSource(committer, numChunks, block)
+		require.NoError(b, err)
+	}
+}
+
+func BenchmarkChunkMSM_200KB(b *testing.B) {
+	numChunks := uint(10)
+	chunkSize := uint(640) // 200KB Blocks
+	committer, err := LoadTrustedSetup()
+	require.NoError(b, err)
+	block := make([]byte, numChunks*chunkSize*31)
+	_, err = rand.Read(block)
+	require.NoError(b, err)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := NewSource(committer, numChunks, block)
+		require.NoError(b, err)
+	}
+}

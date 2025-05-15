@@ -11,5 +11,5 @@ func TestTrustedSetup(t *testing.T) {
 	committer, err := LoadTrustedSetup()
 	require.NoError(t, err)
 	require.NotNil(t, committer)
-	require.Equal(t, maxChunkSize, uint(committer.num()))
+	require.Equal(t, maxChunkSize, uint(committer.Num()))
 }

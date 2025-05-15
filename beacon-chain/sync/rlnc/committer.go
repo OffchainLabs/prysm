@@ -33,7 +33,7 @@ func (c *Committer) commit(scalars []*ristretto.Scalar) (*ristretto.Element, err
 	return result.VarTimeMultiScalarMult(scalars, c.generators[:len(scalars)]), nil
 }
 
-func (c *Committer) num() int {
+func (c *Committer) Num() int {
 	return len(c.generators)
 }
 

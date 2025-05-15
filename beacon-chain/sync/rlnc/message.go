@@ -53,7 +53,7 @@ func (m *Message) Verify(c *Committer) bool {
 		return false
 	}
 
-	if len(m.chunk.data) > c.num() {
+	if len(m.chunk.data) > c.Num() {
 		return false
 	}
 	com := ristretto.NewElement().VarTimeMultiScalarMult(m.chunk.coefficients, m.commitments)
