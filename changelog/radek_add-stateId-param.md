@@ -1,3 +1,3 @@
 ### Fixed
 
-- Add `{state_id}` to Prysm endpoints.
+- Fix Prysm endpoints `/prysm/v1/validators/participation` and `/prysm/v1/validators/{state_id}/active_set_changes` to properly handle `{state_id}`.
