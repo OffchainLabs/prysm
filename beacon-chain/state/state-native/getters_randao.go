@@ -37,7 +37,6 @@ func (b *BeaconState) RandaoMixAtIndex(idx uint64) ([]byte, error) {
 		return nil, err
 	}
 	return r[:], nil
-
 }
 
 // RandaoMixesLength returns the length of the randao mixes slice.
