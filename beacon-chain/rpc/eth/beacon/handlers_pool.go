@@ -751,9 +751,9 @@ func (s *Server) GetAttesterSlashingsV2(w http.ResponseWriter, r *http.Request) 
 		httputil.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	var attStructs []interface{}
-	sourceSlashings := s.SlashingsPool.PendingAttesterSlashings(ctx, headState, true /* return unlimited slashings */)
 
+	sourceSlashings := s.SlashingsPool.PendingAttesterSlashings(ctx, headState, true /* return unlimited slashings */)
+	attStructs := make([]interface{}, 0, len(sourceSlashings))
 	for _, slashing := range sourceSlashings {
 		var attStruct interface{}
 		if v >= version.Electra && slashing.Version() >= version.Electra {

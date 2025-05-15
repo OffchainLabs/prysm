@@ -1867,6 +1867,7 @@ func TestGetAttesterSlashings(t *testing.T) {
 			// Unmarshal resp.Data into a slice of slashings
 			var slashings []*structs.AttesterSlashingElectra
 			require.NoError(t, json.Unmarshal(resp.Data, &slashings))
+			require.NotNil(t, slashings)
 			require.Equal(t, 0, len(slashings))
 		})
 	})
