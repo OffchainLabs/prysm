@@ -8,7 +8,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/types"
-	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
@@ -1017,10 +1016,6 @@ func TestValidatorReferences_RemainsConsistent_Bellatrix(t *testing.T) {
 }
 
 func TestValidatorReferences_ApplyValidator_BalancesRead(t *testing.T) {
-	resetCfg := features.InitWithReset(&features.Flags{
-		EnableExperimentalState: true,
-	})
-	defer resetCfg()
 	s, err := InitializeFromProtoUnsafeAltair(&ethpb.BeaconStateAltair{
 		Validators: []*ethpb.Validator{
 			{PublicKey: []byte{'A'}},

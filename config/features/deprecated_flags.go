@@ -98,6 +98,11 @@ var (
 		Usage:  deprecatedUsage,
 		Hidden: true,
 	}
+	deprecatedDisableExperimentalState = &cli.BoolFlag{
+		Name:   "disable-experimental-state",
+		Usage:  deprecatedUsage,
+		Hidden: true,
+	}
 )
 
 // Deprecated flags for both the beacon node and validator client.
@@ -118,6 +123,7 @@ var deprecatedFlags = []cli.Flag{
 	deprecatedEnableCommitteeAwarePacking,
 	deprecatedInteropGenesisTimeFlag,
 	deprecatedEnableQuic,
+	deprecatedDisableExperimentalState,
 }
 
 var upcomingDeprecation = []cli.Flag{

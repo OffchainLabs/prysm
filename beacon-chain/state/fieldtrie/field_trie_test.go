@@ -7,7 +7,6 @@ import (
 	customtypes "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/custom-types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stateutil"
-	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	mvslice "github.com/OffchainLabs/prysm/v6/container/multi-value-slice"
@@ -21,32 +20,19 @@ func TestFieldTrie_NewTrie(t *testing.T) {
 	t.Run("native state", func(t *testing.T) {
 		runNewTrie(t)
 	})
-	t.Run("native state with multivalue slice", func(t *testing.T) {
-		cfg := &features.Flags{}
-		cfg.EnableExperimentalState = true
-		reset := features.InitWithReset(cfg)
-		runNewTrie(t)
-
-		reset()
-	})
 }
 
 func runNewTrie(t *testing.T) {
 	newState, _ := util.DeterministicGenesisState(t, 40)
 	roots := newState.BlockRoots()
-	var elements interface{}
 	blockRoots := make([][32]byte, len(roots))
 	for i, r := range roots {
 		blockRoots[i] = [32]byte(r)
 	}
-	elements = customtypes.BlockRoots(blockRoots)
-
-	if features.Get().EnableExperimentalState {
-		mvRoots := buildTestCompositeSlice[[32]byte](blockRoots)
-		elements = mvslice.MultiValueSliceComposite[[32]byte]{
-			Identifiable:    mockIdentifier{},
-			MultiValueSlice: mvRoots,
-		}
+	mvRoots := buildTestCompositeSlice[[32]byte](blockRoots)
+	elements := mvslice.MultiValueSliceComposite[[32]byte]{
+		Identifiable:    mockIdentifier{},
+		MultiValueSlice: mvRoots,
 	}
 
 	trie, err := NewFieldTrie(types.BlockRoots, types.BasicArray, elements, uint64(params.BeaconConfig().SlotsPerHistoricalRoot))
@@ -69,27 +55,15 @@ func TestFieldTrie_RecomputeTrie(t *testing.T) {
 	t.Run("native state", func(t *testing.T) {
 		runRecomputeTrie(t)
 	})
-	t.Run("native state with multivalue slice", func(t *testing.T) {
-		cfg := &features.Flags{}
-		cfg.EnableExperimentalState = true
-		reset := features.InitWithReset(cfg)
-		runRecomputeTrie(t)
-
-		reset()
-	})
 }
 
 func runRecomputeTrie(t *testing.T) {
 	newState, _ := util.DeterministicGenesisState(t, 32)
 
-	var elements interface{}
-	elements = newState.Validators()
-	if features.Get().EnableExperimentalState {
-		mvRoots := buildTestCompositeSlice[*ethpb.Validator](newState.Validators())
-		elements = mvslice.MultiValueSliceComposite[*ethpb.Validator]{
-			Identifiable:    mockIdentifier{},
-			MultiValueSlice: mvRoots,
-		}
+	mvRoots := buildTestCompositeSlice[*ethpb.Validator](newState.Validators())
+	elements := mvslice.MultiValueSliceComposite[*ethpb.Validator]{
+		Identifiable:    mockIdentifier{},
+		MultiValueSlice: mvRoots,
 	}
 
 	trie, err := NewFieldTrie(types.Validators, types.CompositeArray, elements, params.BeaconConfig().ValidatorRegistryLimit)
@@ -125,26 +99,14 @@ func TestFieldTrie_RecomputeTrie_CompressedArray(t *testing.T) {
 	t.Run("native state", func(t *testing.T) {
 		runRecomputeTrie_CompressedArray(t)
 	})
-	t.Run("native state with multivalue slice", func(t *testing.T) {
-		cfg := &features.Flags{}
-		cfg.EnableExperimentalState = true
-		reset := features.InitWithReset(cfg)
-		runRecomputeTrie_CompressedArray(t)
-
-		reset()
-	})
 }
 
 func runRecomputeTrie_CompressedArray(t *testing.T) {
 	newState, _ := util.DeterministicGenesisState(t, 32)
-	var elements interface{}
-	elements = newState.Balances()
-	if features.Get().EnableExperimentalState {
-		mvBals := buildTestCompositeSlice(newState.Balances())
-		elements = mvslice.MultiValueSliceComposite[uint64]{
-			Identifiable:    mockIdentifier{},
-			MultiValueSlice: mvBals,
-		}
+	mvBals := buildTestCompositeSlice(newState.Balances())
+	elements := mvslice.MultiValueSliceComposite[uint64]{
+		Identifiable:    mockIdentifier{},
+		MultiValueSlice: mvBals,
 	}
 
 	trie, err := NewFieldTrie(types.Balances, types.CompressedArray, elements, stateutil.ValidatorLimitForBalancesChunks())
