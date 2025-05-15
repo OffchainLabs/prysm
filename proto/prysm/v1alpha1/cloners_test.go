@@ -886,25 +886,6 @@ func genPayloadDeneb() *enginev1.ExecutionPayloadDeneb {
 
 var genPayloadElectra = genPayloadDeneb
 
-func genPayloadHeader() *enginev1.ExecutionPayloadHeader {
-	return &enginev1.ExecutionPayloadHeader{
-		ParentHash:       bytes(32),
-		FeeRecipient:     bytes(32),
-		StateRoot:        bytes(32),
-		ReceiptsRoot:     bytes(32),
-		LogsBloom:        bytes(32),
-		PrevRandao:       bytes(32),
-		BlockNumber:      1,
-		GasLimit:         2,
-		GasUsed:          3,
-		Timestamp:        4,
-		ExtraData:        bytes(32),
-		BaseFeePerGas:    bytes(32),
-		BlockHash:        bytes(32),
-		TransactionsRoot: bytes(32),
-	}
-}
-
 func genPayloadHeaderCapella() *enginev1.ExecutionPayloadHeaderCapella {
 	return &enginev1.ExecutionPayloadHeaderCapella{
 		ParentHash:       bytes(32),
@@ -948,14 +929,6 @@ func genPayloadHeaderDeneb() *enginev1.ExecutionPayloadHeaderDeneb {
 }
 
 var genPayloadHeaderElectra = genPayloadHeaderDeneb
-
-func genWithdrawals(num int) []*enginev1.Withdrawal {
-	ws := make([]*enginev1.Withdrawal, num)
-	for i := 0; i < num; i++ {
-		ws[i] = genWithdrawal()
-	}
-	return ws
-}
 
 func genWithdrawal() *enginev1.Withdrawal {
 	return &enginev1.Withdrawal{

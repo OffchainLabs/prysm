@@ -271,7 +271,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-JljxS/if/t0qvGWcf5CgsX+72fj90yGTg/uEgC56y7U=",
+    integrity = "sha256-cI+DJe3BXlZ0lr28w3USi2lnYOUUfdi/YZ3nJuRiiYU=",
     url = "https://github.com/ethereum/consensus-spec-tests/releases/download/%s/general.tar.gz" % consensus_spec_version,
 )
 
@@ -287,7 +287,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-NRba2h4zqb2LAXyDPglHTtkT4gVyuwpY708XmwXKXV8=",
+    integrity = "sha256-eBLWqO/RdcqsANmA/rwkJ4kI+LCL+Q0RmIDq6z85lYQ=",
     url = "https://github.com/ethereum/consensus-spec-tests/releases/download/%s/minimal.tar.gz" % consensus_spec_version,
 )
 
@@ -303,7 +303,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-hpbtKUbc3NHtVcUPk/Zm+Hn57G2ijI9qvXJwl9hc/tM=",
+    integrity = "sha256-ab0H0WTzhSwYJ2a+GHVbUMoNRActJw18EmX3o5hhDi0",
     url = "https://github.com/ethereum/consensus-spec-tests/releases/download/%s/mainnet.tar.gz" % consensus_spec_version,
 )
 

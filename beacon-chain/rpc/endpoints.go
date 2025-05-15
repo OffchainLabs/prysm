@@ -900,7 +900,7 @@ func (s *Service) beaconEndpoints(
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
 			},
-			handler: server.GetPendingDeposits,
+			handler: server.GetPendingConsolidations,
 			methods: []string{http.MethodGet},
 		},
 		{
