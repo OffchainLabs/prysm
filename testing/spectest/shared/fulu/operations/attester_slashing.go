@@ -22,5 +22,5 @@ func blockWithAttesterSlashing(asSSZ []byte) (interfaces.SignedBeaconBlock, erro
 }
 
 func RunAttesterSlashingTest(t *testing.T, config string) {
-	common.RunAttesterSlashingTest(t, config, version.String(version.Electra), blockWithAttesterSlashing, sszToState)
+	common.RunAttesterSlashingTest(t, config, version.String(version.Fulu), blockWithAttesterSlashing, sszToState)
 }

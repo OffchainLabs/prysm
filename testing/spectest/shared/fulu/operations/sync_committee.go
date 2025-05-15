@@ -22,5 +22,5 @@ func blockWithSyncAggregate(ssz []byte) (interfaces.SignedBeaconBlock, error) {
 }
 
 func RunSyncCommitteeTest(t *testing.T, config string) {
-	common.RunSyncCommitteeTest(t, config, version.String(version.Electra), blockWithSyncAggregate, sszToState)
+	common.RunSyncCommitteeTest(t, config, version.String(version.Fulu), blockWithSyncAggregate, sszToState)
 }

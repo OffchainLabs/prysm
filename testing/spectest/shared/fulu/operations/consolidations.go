@@ -26,5 +26,5 @@ func blockWithConsolidation(ssz []byte) (interfaces.SignedBeaconBlock, error) {
 }
 
 func RunConsolidationTest(t *testing.T, config string) {
-	common.RunConsolidationTest(t, config, version.String(version.Electra), blockWithConsolidation, sszToState)
+	common.RunConsolidationTest(t, config, version.String(version.Fulu), blockWithConsolidation, sszToState)
 }

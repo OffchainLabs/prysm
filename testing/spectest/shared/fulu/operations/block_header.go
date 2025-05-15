@@ -8,5 +8,5 @@ import (
 )
 
 func RunBlockHeaderTest(t *testing.T, config string) {
-	common.RunBlockHeaderTest(t, config, version.String(version.Electra), sszToBlock, sszToState)
+	common.RunBlockHeaderTest(t, config, version.String(version.Fulu), sszToBlock, sszToState)
 }

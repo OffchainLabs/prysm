@@ -22,5 +22,5 @@ func blockWithVoluntaryExit(ssz []byte) (interfaces.SignedBeaconBlock, error) {
 }
 
 func RunVoluntaryExitTest(t *testing.T, config string) {
-	common.RunVoluntaryExitTest(t, config, version.String(version.Electra), blockWithVoluntaryExit, sszToState)
+	common.RunVoluntaryExitTest(t, config, version.String(version.Fulu), blockWithVoluntaryExit, sszToState)
 }

@@ -8,5 +8,5 @@ import (
 )
 
 func RunExecutionPayloadTest(t *testing.T, config string) {
-	common.RunExecutionPayloadTest(t, config, version.String(version.Electra), sszToBlockBody, sszToState)
+	common.RunExecutionPayloadTest(t, config, version.String(version.Fulu), sszToBlockBody, sszToState)
 }

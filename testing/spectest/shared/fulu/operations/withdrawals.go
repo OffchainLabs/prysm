@@ -23,5 +23,5 @@ func blockWithWithdrawals(ssz []byte) (interfaces.SignedBeaconBlock, error) {
 }
 
 func RunWithdrawalsTest(t *testing.T, config string) {
-	common.RunWithdrawalsTest(t, config, version.String(version.Electra), blockWithWithdrawals, sszToState)
+	common.RunWithdrawalsTest(t, config, version.String(version.Fulu), blockWithWithdrawals, sszToState)
 }

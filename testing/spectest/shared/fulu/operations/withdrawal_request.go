@@ -26,5 +26,5 @@ func blockWithWithdrawalRequest(ssz []byte) (interfaces.SignedBeaconBlock, error
 }
 
 func RunWithdrawalRequestTest(t *testing.T, config string) {
-	common.RunWithdrawalRequestTest(t, config, version.String(version.Electra), blockWithWithdrawalRequest, sszToState)
+	common.RunWithdrawalRequestTest(t, config, version.String(version.Fulu), blockWithWithdrawalRequest, sszToState)
 }

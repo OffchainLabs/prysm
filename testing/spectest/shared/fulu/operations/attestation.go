@@ -23,5 +23,5 @@ func blockWithAttestation(attestationSSZ []byte) (interfaces.SignedBeaconBlock, 
 }
 
 func RunAttestationTest(t *testing.T, config string) {
-	common.RunAttestationTest(t, config, version.String(version.Electra), blockWithAttestation, electra.ProcessAttestationsNoVerifySignature, sszToState)
+	common.RunAttestationTest(t, config, version.String(version.Fulu), blockWithAttestation, electra.ProcessAttestationsNoVerifySignature, sszToState)
 }

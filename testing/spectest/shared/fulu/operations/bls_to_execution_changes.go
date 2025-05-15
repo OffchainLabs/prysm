@@ -22,5 +22,5 @@ func blockWithBlsChange(ssz []byte) (interfaces.SignedBeaconBlock, error) {
 }
 
 func RunBLSToExecutionChangeTest(t *testing.T, config string) {
-	common.RunBLSToExecutionChangeTest(t, config, version.String(version.Electra), blockWithBlsChange, sszToState)
+	common.RunBLSToExecutionChangeTest(t, config, version.String(version.Fulu), blockWithBlsChange, sszToState)
 }

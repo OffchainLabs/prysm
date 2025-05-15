@@ -22,5 +22,5 @@ func blockWithProposerSlashing(ssz []byte) (interfaces.SignedBeaconBlock, error)
 }
 
 func RunProposerSlashingTest(t *testing.T, config string) {
-	common.RunProposerSlashingTest(t, config, version.String(version.Electra), blockWithProposerSlashing, sszToState)
+	common.RunProposerSlashingTest(t, config, version.String(version.Fulu), blockWithProposerSlashing, sszToState)
 }

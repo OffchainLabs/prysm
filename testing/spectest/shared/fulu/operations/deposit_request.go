@@ -26,5 +26,5 @@ func blockWithDepositRequest(ssz []byte) (interfaces.SignedBeaconBlock, error) {
 }
 
 func RunDepositRequestsTest(t *testing.T, config string) {
-	common.RunDepositRequestsTest(t, config, version.String(version.Electra), blockWithDepositRequest, sszToState)
+	common.RunDepositRequestsTest(t, config, version.String(version.Fulu), blockWithDepositRequest, sszToState)
 }
