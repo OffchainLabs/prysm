@@ -56,7 +56,8 @@ type BeaconChainConfig struct {
 	// Time parameters constants.
 	GenesisDelay                     uint64           `yaml:"GENESIS_DELAY" spec:"true"`                   // GenesisDelay is the minimum number of seconds to delay starting the Ethereum Beacon Chain genesis. Must be at least 1 second.
 	MinAttestationInclusionDelay     primitives.Slot  `yaml:"MIN_ATTESTATION_INCLUSION_DELAY" spec:"true"` // MinAttestationInclusionDelay defines how many slots validator has to wait to include attestation for beacon block.
-	SecondsPerSlot                   uint64           `yaml:"SECONDS_PER_SLOT" spec:"true"`                // SecondsPerSlot is how many seconds are in a single slot.
+	DeprecatedSecondsPerSlot         uint64           `yaml:"SECONDS_PER_SLOT" spec:"true"`                // DeprecatedSecondsPerSlot is how many seconds are in a single slot.
+	DeprecatedSecondsPerSlotXYZ      uint64           `yaml:"SECONDS_PER_SLOT_XYZ" spec:"true"`            // DeprecatedSecondsPerSlotXYZ is how many seconds are in a single slot.
 	SlotsPerEpoch                    primitives.Slot  `yaml:"SLOTS_PER_EPOCH" spec:"true"`                 // SlotsPerEpoch is the number of slots in an epoch.
 	SqrRootSlotsPerEpoch             primitives.Slot  // SqrRootSlotsPerEpoch is a hard coded value where we take the square root of `SlotsPerEpoch` and round down.
 	MinSeedLookahead                 primitives.Epoch `yaml:"MIN_SEED_LOOKAHEAD" spec:"true"`                  // MinSeedLookahead is the duration of randao look ahead seed.
@@ -479,4 +480,12 @@ func FuluEnabled() bool {
 // WithinDAPeriod checks if the block epoch is within MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS of the given current epoch.
 func WithinDAPeriod(block, current primitives.Epoch) bool {
 	return block+BeaconConfig().MinEpochsForBlobsSidecarsRequest >= current
+}
+
+func SecondsPerSlot(slot primitives.Slot) uint64 {
+	epoch := primitives.Epoch(slot / BeaconConfig().SlotsPerEpoch)
+	if epoch >= BeaconConfig().FuluForkEpoch {
+		return BeaconConfig().DeprecatedSecondsPerSlotXYZ
+	}
+	return BeaconConfig().DeprecatedSecondsPerSlot
 }

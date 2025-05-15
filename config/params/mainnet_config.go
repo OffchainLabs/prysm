@@ -98,7 +98,8 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 
 	// Time parameter constants.
 	MinAttestationInclusionDelay:     1,
-	SecondsPerSlot:                   12,
+	DeprecatedSecondsPerSlot:         12,
+	DeprecatedSecondsPerSlotXYZ:      8,
 	SlotsPerEpoch:                    32,
 	SqrRootSlotsPerEpoch:             5,
 	MinSeedLookahead:                 1,

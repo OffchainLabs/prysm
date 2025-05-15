@@ -66,7 +66,7 @@ func New(ctx context.Context, db iface.Database, genesisTime uint64, initSyncWai
 		db:             db,
 		ps:             pruneStartSlotFunc(helpers.MinEpochsForBlockRequests() + 1), // Default retention epochs is MIN_EPOCHS_FOR_BLOCK_REQUESTS + 1 from the current slot.
 		done:           make(chan struct{}),
-		slotTicker:     slots.NewSlotTicker(slots.StartTime(genesisTime, 0), params.BeaconConfig().SecondsPerSlot),
+		slotTicker:     slots.NewSlotTicker(slots.StartTime(genesisTime, 0), params.BeaconConfig().DeprecatedSecondsPerSlot),
 		initSyncWaiter: initSyncWaiter,
 		backfillWaiter: backfillWaiter,
 	}

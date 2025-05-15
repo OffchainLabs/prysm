@@ -3,6 +3,7 @@ package slots
 import (
 	"fmt"
 	"math"
+	"math/bits"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -20,8 +21,22 @@ const MaxSlotBuffer = uint64(1 << 7)
 
 // startFromTime returns the slot start in terms of genesis time.Time
 func startFromTime(genesis time.Time, slot primitives.Slot) time.Time {
-	duration := time.Second * time.Duration(slot.Mul(params.BeaconConfig().SecondsPerSlot))
-	return genesis.Add(duration) // lint:ignore uintcast -- Genesis timestamp will not exceed int64 in your lifetime.
+	cfg := params.BeaconConfig()
+	epoch := ToEpoch(slot)
+
+	var duration time.Duration
+
+	if epoch >= cfg.FuluForkEpoch {
+		upgradeSlot := primitives.Slot(cfg.FuluForkEpoch) * cfg.SlotsPerEpoch
+		adjustedSlot := slot.SubSlot(upgradeSlot)
+
+		duration += time.Duration(adjustedSlot.Mul(cfg.DeprecatedSecondsPerSlotXYZ)) * time.Second
+		duration += time.Duration(upgradeSlot.Mul(cfg.DeprecatedSecondsPerSlot)) * time.Second
+	} else {
+		duration += time.Duration(slot.Mul(cfg.DeprecatedSecondsPerSlot)) * time.Second
+	}
+
+	return genesis.Add(duration)
 }
 
 // StartTime returns the start time in terms of its unix epoch
@@ -34,10 +49,25 @@ func StartTime(genesis uint64, slot primitives.Slot) time.Time {
 // SinceGenesis returns the number of slots since
 // the provided genesis time.
 func SinceGenesis(genesis time.Time) primitives.Slot {
-	if genesis.After(prysmTime.Now()) { // Genesis has not occurred yet.
+	now := prysmTime.Now()
+	if genesis.After(now) {
 		return 0
 	}
-	return primitives.Slot(uint64(prysmTime.Since(genesis).Seconds()) / params.BeaconConfig().SecondsPerSlot)
+
+	cfg := params.BeaconConfig()
+	elapsedSeconds := uint64(now.Sub(genesis).Seconds())
+
+	upgradeSlot := primitives.Slot(cfg.FuluForkEpoch) * cfg.SlotsPerEpoch
+	upgradeTime := uint64(upgradeSlot) * cfg.DeprecatedSecondsPerSlot
+
+	if elapsedSeconds <= upgradeTime {
+		return primitives.Slot(elapsedSeconds / cfg.DeprecatedSecondsPerSlot)
+	}
+
+	postUpgradeElapsed := elapsedSeconds - upgradeTime
+	postUpgradeSlots := primitives.Slot(postUpgradeElapsed / cfg.DeprecatedSecondsPerSlotXYZ)
+
+	return upgradeSlot + postUpgradeSlots
 }
 
 // EpochsSinceGenesis returns the number of epochs since
@@ -50,15 +80,21 @@ func EpochsSinceGenesis(genesis time.Time) primitives.Epoch {
 // parameter by a specified number. It returns a value of time.Duration
 // in milliseconds, useful for dividing values such as 1 second into
 // millisecond-based durations.
-func DivideSlotBy(timesPerSlot int64) time.Duration {
-	return time.Duration(int64(params.BeaconConfig().SecondsPerSlot*1000)/timesPerSlot) * time.Millisecond
+func DivideSlotBy(timesPerSlot int64, slot primitives.Slot) time.Duration {
+	if ToEpoch(slot) >= params.BeaconConfig().FuluForkEpoch {
+		return time.Duration(int64(params.BeaconConfig().DeprecatedSecondsPerSlotXYZ*1000)/timesPerSlot) * time.Millisecond
+	}
+	return time.Duration(int64(params.BeaconConfig().DeprecatedSecondsPerSlot*1000)/timesPerSlot) * time.Millisecond
 }
 
 // MultiplySlotBy multiplies the SECONDS_PER_SLOT configuration
 // parameter by a specified number. It returns a value of time.Duration
 // in millisecond-based durations.
-func MultiplySlotBy(times int64) time.Duration {
-	return time.Duration(int64(params.BeaconConfig().SecondsPerSlot)*times) * time.Second
+func MultiplySlotBy(times int64, slot primitives.Slot) time.Duration {
+	if ToEpoch(slot) >= params.BeaconConfig().FuluForkEpoch {
+		return time.Duration(int64(params.BeaconConfig().DeprecatedSecondsPerSlotXYZ)*times) * time.Second
+	}
+	return time.Duration(int64(params.BeaconConfig().DeprecatedSecondsPerSlot)*times) * time.Second
 }
 
 // AbsoluteValueSlotDifference between two slots.
@@ -183,23 +219,64 @@ func VerifyTime(genesisTime uint64, slot primitives.Slot, timeTolerance time.Dur
 	return nil
 }
 
-// ToTime takes the given slot and genesis time to determine the start time of the slot.
 func ToTime(genesisTimeSec uint64, slot primitives.Slot) (time.Time, error) {
-	timeSinceGenesis, err := slot.SafeMul(params.BeaconConfig().SecondsPerSlot)
-	if err != nil {
-		return time.Unix(0, 0), fmt.Errorf("slot (%d) is in the far distant future: %w", slot, err)
+	cfg := params.BeaconConfig()
+	upgradeSlot := primitives.Slot(cfg.FuluForkEpoch) * cfg.SlotsPerEpoch
+
+	var timeSinceGenesis primitives.Slot
+	var err error
+
+	if slot < upgradeSlot {
+		timeSinceGenesis, err = slot.SafeMul(cfg.DeprecatedSecondsPerSlot)
+		if err != nil {
+			return time.Time{}, fmt.Errorf("slot (%d) is in the far distant future: %w", slot, err)
+		}
+	} else {
+		adjustedSlot := slot - upgradeSlot
+
+		preUpgradeTime, err := upgradeSlot.SafeMul(cfg.DeprecatedSecondsPerSlot)
+		if err != nil {
+			return time.Time{}, fmt.Errorf("slot (%d) pre-upgrade mul overflow: %w", slot, err)
+		}
+
+		postUpgradeTime, err := adjustedSlot.SafeMul(cfg.DeprecatedSecondsPerSlotXYZ)
+		if err != nil {
+			return time.Time{}, fmt.Errorf("slot (%d) post-upgrade mul overflow: %w", slot, err)
+		}
+
+		timeSinceGenesis, err = preUpgradeTime.SafeAddSlot(postUpgradeTime)
+		if err != nil {
+			return time.Time{}, fmt.Errorf("slot (%d) addition overflow: %w", slot, err)
+		}
 	}
-	sTime, err := timeSinceGenesis.SafeAdd(genesisTimeSec)
+
+	absoluteTime, err := timeSinceGenesis.SafeAdd(genesisTimeSec)
 	if err != nil {
-		return time.Unix(0, 0), fmt.Errorf("slot (%d) is in the far distant future: %w", slot, err)
+		return time.Time{}, fmt.Errorf("slot (%d) genesis time addition overflow: %w", slot, err)
 	}
-	return time.Unix(int64(sTime), 0), nil // lint:ignore uintcast -- A timestamp will not exceed int64 in your lifetime.
+
+	if bits.Len64(uint64(absoluteTime)) >= 63 {
+		return time.Time{}, fmt.Errorf("slot (%d) resulting timestamp overflows int64: %d", slot, absoluteTime)
+	}
+
+	return time.Unix(0, 0).Add(time.Duration(absoluteTime) * time.Second), nil
 }
 
 // BeginsAt computes the timestamp where the given slot begins, relative to the genesis timestamp.
 func BeginsAt(slot primitives.Slot, genesis time.Time) time.Time {
-	sd := time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(slot)
-	return genesis.Add(sd)
+	cfg := params.BeaconConfig()
+	upgradeSlot := primitives.Slot(cfg.FuluForkEpoch) * cfg.SlotsPerEpoch
+
+	var seconds uint64
+	if slot < upgradeSlot {
+		seconds = uint64(slot) * cfg.DeprecatedSecondsPerSlot
+	} else {
+		preUpgrade := uint64(upgradeSlot) * cfg.DeprecatedSecondsPerSlot
+		postUpgrade := uint64(slot-upgradeSlot) * cfg.DeprecatedSecondsPerSlotXYZ
+		seconds = preUpgrade + postUpgrade
+	}
+
+	return genesis.Add(time.Duration(seconds) * time.Second)
 }
 
 // Since computes the number of time slots that have occurred since the given timestamp.
@@ -207,14 +284,26 @@ func Since(time time.Time) primitives.Slot {
 	return CurrentSlot(uint64(time.Unix()))
 }
 
-// CurrentSlot returns the current slot as determined by the local clock and
-// provided genesis time.
 func CurrentSlot(genesisTimeSec uint64) primitives.Slot {
 	now := uint64(prysmTime.Now().Unix())
 	if now < genesisTimeSec {
 		return 0
 	}
-	return primitives.Slot((now - genesisTimeSec) / params.BeaconConfig().SecondsPerSlot)
+
+	cfg := params.BeaconConfig()
+	elapsed := now - genesisTimeSec
+
+	upgradeSlot := primitives.Slot(cfg.FuluForkEpoch) * cfg.SlotsPerEpoch
+	upgradeTime := uint64(upgradeSlot) * cfg.DeprecatedSecondsPerSlot
+
+	if elapsed <= upgradeTime {
+		return primitives.Slot(elapsed / cfg.DeprecatedSecondsPerSlot)
+	}
+
+	postUpgradeElapsed := elapsed - upgradeTime
+	postUpgradeSlots := primitives.Slot(postUpgradeElapsed / cfg.DeprecatedSecondsPerSlotXYZ)
+
+	return upgradeSlot + postUpgradeSlots
 }
 
 // Duration computes the span of time between two instants, represented as Slots.
@@ -222,7 +311,21 @@ func Duration(start, end time.Time) primitives.Slot {
 	if end.Before(start) {
 		return 0
 	}
-	return primitives.Slot(uint64(end.Unix()-start.Unix()) / params.BeaconConfig().SecondsPerSlot)
+
+	cfg := params.BeaconConfig()
+	elapsed := uint64(end.Sub(start).Seconds())
+
+	upgradeSlot := primitives.Slot(cfg.FuluForkEpoch) * cfg.SlotsPerEpoch
+	upgradeTime := uint64(upgradeSlot) * cfg.DeprecatedSecondsPerSlot
+
+	if elapsed <= upgradeTime {
+		return primitives.Slot(elapsed / cfg.DeprecatedSecondsPerSlot)
+	}
+
+	postUpgradeElapsed := elapsed - upgradeTime
+	postUpgradeSlots := primitives.Slot(postUpgradeElapsed / cfg.DeprecatedSecondsPerSlotXYZ)
+
+	return upgradeSlot + postUpgradeSlots
 }
 
 // ValidateClock validates a provided slot against the local
@@ -251,7 +354,7 @@ func RoundUpToNearestEpoch(slot primitives.Slot) primitives.Slot {
 // depending on the provided genesis and current slot.
 func VotingPeriodStartTime(genesis uint64, slot primitives.Slot) uint64 {
 	slots := params.BeaconConfig().SlotsPerEpoch.Mul(uint64(params.BeaconConfig().EpochsPerEth1VotingPeriod))
-	startTime := uint64((slot - slot.ModSlot(slots)).Mul(params.BeaconConfig().SecondsPerSlot))
+	startTime := uint64((slot - slot.ModSlot(slots)).Mul(params.BeaconConfig().DeprecatedSecondsPerSlot)) // Can ignore this as it's used before Pectra. See EIP-6110
 	return genesis + startTime
 }
 
@@ -286,11 +389,23 @@ func SyncCommitteePeriodStartEpoch(e primitives.Epoch) (primitives.Epoch, error)
 // SecondsSinceSlotStart returns the number of seconds elapsed since the
 // given slot start time
 func SecondsSinceSlotStart(s primitives.Slot, genesisTime, timeStamp uint64) (uint64, error) {
-	limit := genesisTime + uint64(s)*params.BeaconConfig().SecondsPerSlot
-	if timeStamp < limit {
-		return 0, fmt.Errorf("could not compute seconds since slot %d start: invalid timestamp, got %d < want %d", s, timeStamp, limit)
+	cfg := params.BeaconConfig()
+	upgradeSlot := primitives.Slot(cfg.FuluForkEpoch) * cfg.SlotsPerEpoch
+
+	var slotStart uint64
+	if s < upgradeSlot {
+		slotStart = genesisTime + uint64(s)*cfg.DeprecatedSecondsPerSlot
+	} else {
+		preUpgrade := uint64(upgradeSlot) * cfg.DeprecatedSecondsPerSlot
+		postUpgrade := uint64(s-upgradeSlot) * cfg.DeprecatedSecondsPerSlotXYZ
+		slotStart = genesisTime + preUpgrade + postUpgrade
 	}
-	return timeStamp - genesisTime - uint64(s)*params.BeaconConfig().SecondsPerSlot, nil
+
+	if timeStamp < slotStart {
+		return 0, fmt.Errorf("could not compute seconds since slot %d start: invalid timestamp, got %d < want %d", s, timeStamp, slotStart)
+	}
+
+	return timeStamp - slotStart, nil
 }
 
 // TimeIntoSlot returns the time duration elapsed between the current time and
@@ -302,7 +417,12 @@ func TimeIntoSlot(genesisTime uint64) time.Duration {
 // WithinVotingWindow returns whether the current time is within the voting window
 // (eg. 4 seconds on mainnet) of the current slot.
 func WithinVotingWindow(genesisTime uint64, slot primitives.Slot) bool {
-	votingWindow := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
+	e := ToEpoch(slot)
+	if e >= params.BeaconConfig().FuluForkEpoch {
+		votingWindow := params.BeaconConfig().DeprecatedSecondsPerSlotXYZ / params.BeaconConfig().IntervalsPerSlot
+		return time.Since(StartTime(genesisTime, slot)) < time.Duration(votingWindow)*time.Second
+	}
+	votingWindow := params.BeaconConfig().DeprecatedSecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
 	return time.Since(StartTime(genesisTime, slot)) < time.Duration(votingWindow)*time.Second
 }
 
@@ -331,4 +451,22 @@ func SecondsUntilNextEpochStart(genesisTimeSec uint64) (uint64, error) {
 		"is_epoch_start":        IsEpochStart(currentSlot),
 	}).Debugf("%d seconds until next epoch", waitTime)
 	return waitTime, nil
+}
+
+func CurrentSecondsPerSlot(genesisTimeSec uint64) uint64 {
+	now := uint64(prysmTime.Now().Unix())
+	if now < genesisTimeSec {
+		return 0
+	}
+
+	cfg := params.BeaconConfig()
+	elapsed := now - genesisTimeSec
+
+	upgradeSlot := primitives.Slot(cfg.FuluForkEpoch) * cfg.SlotsPerEpoch
+	upgradeTime := uint64(upgradeSlot) * cfg.DeprecatedSecondsPerSlot
+
+	if elapsed <= upgradeTime {
+		return cfg.DeprecatedSecondsPerSlot
+	}
+	return cfg.DeprecatedSecondsPerSlotXYZ
 }

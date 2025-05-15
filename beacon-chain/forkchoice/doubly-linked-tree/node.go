@@ -133,7 +133,12 @@ func (n *Node) setNodeAndParentValidated(ctx context.Context) error {
 // slot will have secs = 3 below.
 func (n *Node) arrivedEarly(genesisTime uint64) (bool, error) {
 	secs, err := slots.SecondsSinceSlotStart(n.slot, genesisTime, n.timestamp)
-	votingWindow := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
+	e := slots.ToEpoch(n.slot)
+	if e >= params.BeaconConfig().FuluForkEpoch {
+		votingWindow := params.BeaconConfig().DeprecatedSecondsPerSlotXYZ / params.BeaconConfig().IntervalsPerSlot
+		return secs < votingWindow, err
+	}
+	votingWindow := params.BeaconConfig().DeprecatedSecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
 	return secs < votingWindow, err
 }
 

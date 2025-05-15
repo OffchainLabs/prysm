@@ -189,7 +189,7 @@ func NewSlotTickerWithIntervals(genesisTime time.Time, intervals []time.Duration
 	if len(intervals) == 0 {
 		panic("at least one interval has to be entered")
 	}
-	slotDuration := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+	slotDuration := time.Duration(params.SecondsPerSlot(CurrentSlot(uint64(genesisTime.Unix())))) * time.Second
 	lastOffset := time.Duration(0)
 	for _, offset := range intervals {
 		if offset < lastOffset {

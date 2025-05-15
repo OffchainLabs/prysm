@@ -33,7 +33,7 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.ETH1AddressWithdrawalPrefixByte = byte(1)
 
 	// Time parameters
-	minimalConfig.SecondsPerSlot = 6
+	minimalConfig.DeprecatedSecondsPerSlot = 6
 	minimalConfig.MinAttestationInclusionDelay = 1
 	minimalConfig.SlotsPerEpoch = 8
 	minimalConfig.SqrRootSlotsPerEpoch = 2

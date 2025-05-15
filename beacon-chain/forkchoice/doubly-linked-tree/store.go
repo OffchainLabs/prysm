@@ -132,9 +132,14 @@ func (s *Store) insert(ctx context.Context,
 		if timeNow < s.genesisTime {
 			return n, nil
 		}
-		secondsIntoSlot := (timeNow - s.genesisTime) % params.BeaconConfig().SecondsPerSlot
+		sps := params.BeaconConfig().DeprecatedSecondsPerSlot
+		e := slots.ToEpoch(roblock.Block().Slot())
+		if e >= params.BeaconConfig().FuluForkEpoch {
+			sps = params.BeaconConfig().DeprecatedSecondsPerSlotXYZ
+		}
+		secondsIntoSlot := (timeNow - s.genesisTime) % sps
 		currentSlot := slots.CurrentSlot(s.genesisTime)
-		boostThreshold := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
+		boostThreshold := sps / params.BeaconConfig().IntervalsPerSlot
 		isFirstBlock := s.proposerBoostRoot == [32]byte{}
 		if currentSlot == slot && secondsIntoSlot < boostThreshold && isFirstBlock {
 			s.proposerBoostRoot = root
@@ -278,7 +283,7 @@ func (f *ForkChoice) HighestReceivedBlockDelay() primitives.Slot {
 	if err != nil {
 		return 0
 	}
-	return primitives.Slot(secs / params.BeaconConfig().SecondsPerSlot)
+	return primitives.Slot(secs / params.BeaconConfig().DeprecatedSecondsPerSlot) // TODO: fix this, it's only used in test now
 }
 
 // ReceivedBlocksLastEpoch returns the number of blocks received in the last epoch

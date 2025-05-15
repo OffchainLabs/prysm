@@ -186,7 +186,7 @@ func ConfigToYaml(cfg *BeaconChainConfig) []byte {
 		fmt.Sprintf("MIN_GENESIS_TIME: %d", cfg.MinGenesisTime),
 		fmt.Sprintf("GENESIS_FORK_VERSION: %#x", cfg.GenesisForkVersion),
 		fmt.Sprintf("CHURN_LIMIT_QUOTIENT: %d", cfg.ChurnLimitQuotient),
-		fmt.Sprintf("SECONDS_PER_SLOT: %d", cfg.SecondsPerSlot),
+		fmt.Sprintf("SECONDS_PER_SLOT: %d", cfg.DeprecatedSecondsPerSlot),
 		fmt.Sprintf("SLOTS_PER_EPOCH: %d", cfg.SlotsPerEpoch),
 		fmt.Sprintf("SECONDS_PER_ETH1_BLOCK: %d", cfg.SecondsPerETH1Block),
 		fmt.Sprintf("ETH1_FOLLOW_DISTANCE: %d", cfg.Eth1FollowDistance),

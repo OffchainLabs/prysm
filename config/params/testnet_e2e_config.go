@@ -26,7 +26,7 @@ func E2ETestConfig() *BeaconChainConfig {
 	e2eConfig.MaxValidatorsPerWithdrawalsSweep = 128
 
 	// Time parameters.
-	e2eConfig.SecondsPerSlot = 10
+	e2eConfig.DeprecatedSecondsPerSlot = 10
 	e2eConfig.SlotsPerEpoch = 6
 	e2eConfig.SqrRootSlotsPerEpoch = 2
 	e2eConfig.SecondsPerETH1Block = 2
@@ -80,7 +80,7 @@ func E2EMainnetTestConfig() *BeaconChainConfig {
 	e2eConfig.ChurnLimitQuotient = 65536
 
 	// Time parameters.
-	e2eConfig.SecondsPerSlot = 6
+	e2eConfig.DeprecatedSecondsPerSlot = 6
 	e2eConfig.SqrRootSlotsPerEpoch = 5
 	e2eConfig.SecondsPerETH1Block = 2
 	e2eConfig.ShardCommitteePeriod = 4

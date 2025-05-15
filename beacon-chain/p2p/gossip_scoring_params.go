@@ -558,7 +558,7 @@ func defaultLightClientFinalityUpdateTopicParams() *pubsub.TopicScoreParams {
 }
 
 func oneSlotDuration() time.Duration {
-	return time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+	return time.Duration(params.BeaconConfig().DeprecatedSecondsPerSlot) * time.Second
 }
 
 func oneEpochDuration() time.Duration {
