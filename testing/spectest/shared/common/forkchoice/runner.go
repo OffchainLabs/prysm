@@ -41,7 +41,7 @@ func init() {
 // Run executes "forkchoice"  and "sync" test.
 func Run(t *testing.T, config string, fork int) {
 	runTest(t, config, fork, "fork_choice")
-	if fork >= version.Bellatrix && fork < version.Fulu {
+	if fork >= version.Bellatrix {
 		runTest(t, config, fork, "sync")
 	}
 }
