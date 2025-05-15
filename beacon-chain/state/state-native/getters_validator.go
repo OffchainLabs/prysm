@@ -89,7 +89,6 @@ func (b *BeaconState) validatorAtIndex(idx primitives.ValidatorIndex) (*ethpb.Va
 		return nil, err
 	}
 	return ethpb.CopyValidator(v), nil
-
 }
 
 // ValidatorAtIndexReadOnly is the validator at the provided index. This method
@@ -110,7 +109,6 @@ func (b *BeaconState) validatorAtIndexReadOnly(idx primitives.ValidatorIndex) (s
 		return nil, err
 	}
 	return NewValidator(v)
-
 }
 
 // ValidatorIndexByPubkey returns a given validator by its 48-byte public key.
