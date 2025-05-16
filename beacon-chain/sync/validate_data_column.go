@@ -3,6 +3,8 @@ package sync
 import (
 	"context"
 	"fmt"
+	"math"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v6/config/features"
@@ -196,22 +198,25 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 
 	sinceSlotStartTime := receivedTime.Sub(startTime)
 	validationTime := s.cfg.clock.Now().Sub(receivedTime)
-
 	dataColumnSidecarVerificationGossipHistogram.Observe(float64(validationTime.Milliseconds()))
 
 	peerGossipScore := s.cfg.p2p.Peers().Scorers().GossipScorer().Score(pid)
 
-	pidString := pid.String()
-
-	log.
-		WithFields(logging.DataColumnFields(roDataColumn)).
-		WithFields(logrus.Fields{
-			"sinceSlotStartTime": sinceSlotStartTime,
-			"validationTime":     validationTime,
-			"peer":               pidString[len(pidString)-6:],
-			"peerGossipScore":    peerGossipScore,
-		}).
-		Debug("Accepted data column sidecar gossip")
+	select {
+	case s.dataColumnLogCh <- dataColumnLogEntry{
+		Slot:            roDataColumn.Slot(),
+		ColIdx:          roDataColumn.Index,
+		PropIdx:         roDataColumn.ProposerIndex(),
+		BlockRoot:       roDataColumn.BlockRoot(),
+		ParentRoot:      roDataColumn.ParentRoot(),
+		PeerSuffix:      pid.String()[len(pid.String())-6:],
+		PeerGossipScore: peerGossipScore,
+		validationTime:  validationTime,
+		sinceStartTime:  sinceSlotStartTime,
+	}:
+	default:
+		log.WithField("slot", roDataColumn.Slot()).Warn("Failed to send data column log entry")
+	}
 
 	return pubsub.ValidationAccept, nil
 }
@@ -229,4 +234,71 @@ func (s *Service) setSeenDataColumnIndex(slot primitives.Slot, proposerIndex pri
 	b := append(bytesutil.Bytes32(uint64(slot)), bytesutil.Bytes32(uint64(proposerIndex))...)
 	b = append(b, bytesutil.Bytes32(index)...)
 	s.seenDataColumnCache.Add(string(b), true)
+}
+
+type dataColumnLogEntry struct {
+	Slot            primitives.Slot
+	ColIdx          uint64
+	PropIdx         primitives.ValidatorIndex
+	BlockRoot       [32]byte
+	ParentRoot      [32]byte
+	PeerSuffix      string
+	PeerGossipScore float64
+	validationTime  time.Duration
+	sinceStartTime  time.Duration
+}
+
+func (s *Service) processDataColumnLogs() {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	slotStats := make(map[primitives.Slot][fieldparams.NumberOfColumns]dataColumnLogEntry)
+
+	for {
+		select {
+		case entry := <-s.dataColumnLogCh:
+			cols := slotStats[entry.Slot]
+			cols[entry.ColIdx] = entry
+			slotStats[entry.Slot] = cols
+		case <-ticker.C:
+			for slot, columns := range slotStats {
+				var (
+					colIndices      = make([]uint64, 0, fieldparams.NumberOfColumns)
+					peers           = make([]string, 0, fieldparams.NumberOfColumns)
+					gossipScores    = make([]float64, 0, fieldparams.NumberOfColumns)
+					validationTimes = make([]string, 0, fieldparams.NumberOfColumns)
+					sinceStartTimes = make([]string, 0, fieldparams.NumberOfColumns)
+				)
+
+				totalReceived := 0
+				for _, entry := range columns {
+					if entry.PeerSuffix == "" {
+						continue
+					}
+					colIndices = append(colIndices, entry.ColIdx)
+					peers = append(peers, entry.PeerSuffix)
+					gossipScores = append(gossipScores, roundFloat(entry.PeerGossipScore, 2))
+					validationTimes = append(validationTimes, fmt.Sprintf("%.2fms", float64(entry.validationTime.Milliseconds())))
+					sinceStartTimes = append(sinceStartTimes, fmt.Sprintf("%.2fms", float64(entry.sinceStartTime.Milliseconds())))
+					totalReceived++
+				}
+
+				log.WithFields(logrus.Fields{
+					"slot":            slot,
+					"receivedCount":   totalReceived,
+					"columnIndices":   colIndices,
+					"peers":           peers,
+					"gossipScores":    gossipScores,
+					"validationTimes": validationTimes,
+					"sinceStartTimes": sinceStartTimes,
+				}).Debug("Accepted data column sidecars summary")
+			}
+			slotStats = make(map[primitives.Slot][fieldparams.NumberOfColumns]dataColumnLogEntry)
+		}
+	}
+}
+
+func roundFloat(f float64, decimals int) float64 {
+	mult := math.Pow(10, float64(decimals))
+	return math.Round(f*mult) / mult
 }

@@ -175,6 +175,7 @@ type Service struct {
 	ctxMap                           ContextByteVersions
 	slasherEnabled                   bool
 	lcStore                          *lightClient.Store
+	dataColumnLogCh                  chan dataColumnLogEntry
 }
 
 // NewService initializes new regular sync service.
@@ -189,6 +190,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 		seenPendingBlocks:    make(map[[32]byte]bool),
 		blkRootToPendingAtts: make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
 		signatureChan:        make(chan *signatureVerifier, verifierLimit),
+		dataColumnLogCh:      make(chan dataColumnLogEntry, 1000),
 	}
 
 	for _, opt := range opts {
@@ -249,6 +251,7 @@ func (s *Service) Start() {
 
 	go s.verifierRoutine()
 	go s.startTasksPostInitialSync()
+	go s.processDataColumnLogs()
 
 	s.cfg.p2p.AddConnectionHandler(s.reValidatePeer, s.sendGoodbye)
 	s.cfg.p2p.AddDisconnectionHandler(func(_ context.Context, _ peer.ID) error {
