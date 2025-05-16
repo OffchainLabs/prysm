@@ -36,13 +36,13 @@ func RunLightClientSingleMerkleProofTests(t *testing.T, config string) {
 			helpers.ClearCache()
 			t.Run(fmt.Sprintf("%v/%v", testType, folder.Name()), func(t *testing.T) {
 				folderPath := path.Join(testsFolderPath, folder.Name())
-				runLightClientSingleMerkleProofTest(t, folderPath, testType, folder.Name())
+				runLightClientSingleMerkleProofTest(t, folderPath, folder.Name())
 			})
 		}
 	}
 }
 
-func runLightClientSingleMerkleProofTest(t *testing.T, testFolderPath string, _ string, testName string) {
+func runLightClientSingleMerkleProofTest(t *testing.T, testFolderPath string, testName string) {
 	ctx := context.Background()
 
 	beaconStateFile, err := util.BazelFileBytes(path.Join(testFolderPath, "object.ssz_snappy"))

@@ -22,7 +22,7 @@ import (
 func RunLightClientSingleMerkleProofTests(t *testing.T, config string) {
 	require.NoError(t, utils.SetConfig(t, config))
 
-	_, testsFolderPath := utils.TestFolders(t, config, "altair", "light_client/single_merkle_proof")
+	_, testsFolderPath := utils.TestFolders(t, config, "capella", "light_client/single_merkle_proof")
 	testTypes, err := util.BazelListDirectories(testsFolderPath)
 	require.NoError(t, err)
 
@@ -31,27 +31,31 @@ func RunLightClientSingleMerkleProofTests(t *testing.T, config string) {
 	}
 
 	for _, testType := range testTypes {
-		testFolders, testsFolderPath := utils.TestFolders(t, config, "altair", fmt.Sprintf("light_client/single_merkle_proof/%s", testType))
+		testFolders, testsFolderPath := utils.TestFolders(t, config, "capella", fmt.Sprintf("light_client/single_merkle_proof/%s", testType))
 		for _, folder := range testFolders {
 			helpers.ClearCache()
 			t.Run(fmt.Sprintf("%v/%v", testType, folder.Name()), func(t *testing.T) {
 				folderPath := path.Join(testsFolderPath, folder.Name())
-				runLightClientSingleMerkleProofTest(t, folderPath, folder.Name())
+				if testType == "BeaconState" {
+					runLightClientSingleMerkleProofTestBeaconState(t, folderPath, folder.Name())
+				} else if testType == "BeaconBlockBody" {
+					runLightClientSingleMerkleProofTestBeaconBlockBody(t, folderPath)
+				}
 			})
 		}
 	}
 }
 
-func runLightClientSingleMerkleProofTest(t *testing.T, testFolderPath string, testName string) {
+func runLightClientSingleMerkleProofTestBeaconState(t *testing.T, testFolderPath string, testName string) {
 	ctx := context.Background()
 
 	beaconStateFile, err := util.BazelFileBytes(path.Join(testFolderPath, "object.ssz_snappy"))
 	require.NoError(t, err)
 	beaconStateSSZ, err := snappy.Decode(nil, beaconStateFile)
 	require.NoError(t, err, "Failed to decompress")
-	beaconStateBase := &ethpb.BeaconStateAltair{}
+	beaconStateBase := &ethpb.BeaconStateCapella{}
 	require.NoError(t, beaconStateBase.UnmarshalSSZ(beaconStateSSZ), "Failed to unmarshal")
-	beaconState, err := state_native.InitializeFromProtoAltair(beaconStateBase)
+	beaconState, err := state_native.InitializeFromProtoCapella(beaconStateBase)
 	require.NoError(t, err)
 	beaconStateRoot, err := beaconState.HashTreeRoot(ctx)
 	require.NoError(t, err)
@@ -96,4 +100,43 @@ func runLightClientSingleMerkleProofTest(t *testing.T, testFolderPath string, te
 	require.DeepSSZEqual(t, item, leaf)
 
 	require.Equal(t, true, trie.VerifyMerkleProof(beaconStateRoot[:], item, proof.LeafIndex, branch))
+}
+
+func runLightClientSingleMerkleProofTestBeaconBlockBody(t *testing.T, testFolderPath string) {
+	beaconBlockBodyFile, err := util.BazelFileBytes(path.Join(testFolderPath, "object.ssz_snappy"))
+	require.NoError(t, err)
+	beaconBlockBodySSZ, err := snappy.Decode(nil, beaconBlockBodyFile)
+	require.NoError(t, err, "Failed to decompress")
+	beaconBlockBody := &ethpb.BeaconBlockBodyCapella{}
+	require.NoError(t, beaconBlockBody.UnmarshalSSZ(beaconBlockBodySSZ), "Failed to unmarshal")
+	beaconBlockBodyRoot, err := beaconBlockBody.HashTreeRoot()
+	require.NoError(t, err)
+
+	type Proof struct {
+		Leaf      string   `json:"leaf"`
+		LeafIndex uint64   `json:"leaf_index"`
+		Branch    []string `json:"branch"`
+	}
+	proofFile, err := util.BazelFileBytes(path.Join(testFolderPath, "proof.yaml"))
+	require.NoError(t, err)
+	var proof Proof
+	require.NoError(t, utils.UnmarshalYaml(proofFile, &proof))
+	leaf, err := hex.DecodeString(proof.Leaf[2:])
+	if err != nil {
+		fmt.Printf("Error decoding leaf: %v\n", err)
+	}
+	require.NoError(t, err)
+	var branch [][]byte
+	for _, b := range proof.Branch {
+		bBytes, err := hex.DecodeString(b[2:])
+		require.NoError(t, err)
+		branch = append(branch, bBytes)
+	}
+
+	item, err := beaconBlockBody.ExecutionPayload.HashTreeRoot()
+	require.NoError(t, err)
+
+	require.DeepSSZEqual(t, item[:], leaf)
+
+	require.Equal(t, true, trie.VerifyMerkleProof(beaconBlockBodyRoot[:], item[:], proof.LeafIndex, branch))
 }
