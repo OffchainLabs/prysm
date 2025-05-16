@@ -700,9 +700,11 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [fieldparams
 	summary := s.dataColumnStorage.Summary(root)
 	storedDataColumnsCount := summary.Count()
 
-	// As soon as we have more than half of the data columns, we can reconstruct the missing ones.
+	minimumColumnCountToReconstruct := peerdas.MinimumColumnsCountToReconstruct()
+
+	// As soon as we have enough data column sidecars, we can reconstruct the missing ones.
 	// We don't need to wait for the rest of the data columns to declare the block as available.
-	if peerdas.CanSelfReconstruct(storedDataColumnsCount) {
+	if storedDataColumnsCount >= minimumColumnCountToReconstruct {
 		return nil
 	}
 
@@ -772,7 +774,7 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [fieldparams
 
 				// As soon as we have more than half of the data columns, we can reconstruct the missing ones.
 				// We don't need to wait for the rest of the data columns to declare the block as available.
-				if peerdas.CanSelfReconstruct(storedDataColumnsCount) {
+				if storedDataColumnsCount >= minimumColumnCountToReconstruct {
 					return nil
 				}
 

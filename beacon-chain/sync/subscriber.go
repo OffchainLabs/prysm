@@ -612,7 +612,7 @@ func (s *Service) dataColumnSubnetIndices(_ primitives.Slot) []uint64 {
 		return []uint64{}
 	}
 
-	return uint64MapToSortedSlice(nodeInfo.DataColumnsSubnets)
+	return sliceFromMap(nodeInfo.DataColumnsSubnets, true /*sorted*/)
 }
 
 func (s *Service) persistentAndAggregatorSubnetIndices(currentSlot primitives.Slot) []uint64 {

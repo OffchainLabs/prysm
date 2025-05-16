@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"sort"
 	"sync"
 	"time"
 
@@ -113,7 +112,8 @@ func (d *dataColumnSampler1D) Run(ctx context.Context) {
 		return
 	}
 
-	if peerdas.CanSelfReconstruct(custodyGroupCount) {
+	// TODO: custody group count != data column group count
+	if custodyGroupCount >= peerdas.MinimumColumnsCountToReconstruct() {
 		log.WithFields(logrus.Fields{
 			"custodyGroupCount": custodyGroupCount,
 			"totalGroups":       numberOfCustodyGroups,
@@ -487,14 +487,14 @@ func (d *dataColumnSampler1D) sampleDataColumnsFromPeer(
 		log.WithFields(logrus.Fields{
 			"peerID":           pid,
 			"root":             fmt.Sprintf("%#x", blockProcessedData.BlockRoot),
-			"requestedColumns": sortedSliceFromMap(requestedColumns),
+			"requestedColumns": sliceFromMap(requestedColumns, true /*sorted*/),
 		}).Debug("Sampled columns from peer successfully")
 	} else {
 		log.WithFields(logrus.Fields{
 			"peerID":           pid,
 			"root":             fmt.Sprintf("%#x", blockProcessedData.BlockRoot),
-			"requestedColumns": sortedSliceFromMap(requestedColumns),
-			"retrievedColumns": sortedSliceFromMap(retrievedColumns),
+			"requestedColumns": sliceFromMap(requestedColumns, true /*sorted*/),
+			"retrievedColumns": sliceFromMap(retrievedColumns, true /*sorted*/),
 		}).Debug("Sampled columns from peer with some errors")
 	}
 
@@ -538,16 +538,16 @@ func randomizeColumns(custodyGroups map[uint64]bool) ([]uint64, error) {
 	return columns, nil
 }
 
-// sortedSliceFromMap returns a sorted list of keys from a map.
-func sortedSliceFromMap(m map[uint64]bool) []uint64 {
+// sliceFromMap returns a sorted list of keys from a map.
+func sliceFromMap(m map[uint64]bool, sorted ...bool) []uint64 {
 	result := make([]uint64, 0, len(m))
 	for k := range m {
 		result = append(result, k)
 	}
 
-	sort.Slice(result, func(i, j int) bool {
-		return result[i] < result[j]
-	})
+	if len(sorted) > 0 && sorted[0] {
+		slices.Sort(result)
+	}
 
 	return result
 }
@@ -582,7 +582,7 @@ func verifyColumn(
 
 	// Filter out columns that were not requested.
 	if !requestedColumns[retrievedColumn] {
-		columnsToSampleList := sortedSliceFromMap(requestedColumns)
+		columnsToSampleList := sliceFromMap(requestedColumns, true /*sorted*/)
 
 		log.WithFields(logrus.Fields{
 			"peerID":           pid,
