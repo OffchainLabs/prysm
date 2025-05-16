@@ -356,6 +356,7 @@ func TestGetAltairDutiesV2_UnknownPubkey(t *testing.T) {
 }
 
 func TestGetDutiesV2_StateAdvancement(t *testing.T) {
+	st, _ := util.DeterministicGenesisStateElectra(t, 1)
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.ElectraForkEpoch = primitives.Epoch(0)
@@ -364,7 +365,6 @@ func TestGetDutiesV2_StateAdvancement(t *testing.T) {
 
 	epochStart, err := slots.EpochStart(1)
 	require.NoError(t, err)
-	st, _ := util.DeterministicGenesisStateElectra(t, 1)
 
 	require.NoError(t, st.SetSlot(epochStart-1))
 
