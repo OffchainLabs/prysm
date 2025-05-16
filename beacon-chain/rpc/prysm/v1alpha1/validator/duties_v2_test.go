@@ -356,16 +356,14 @@ func TestGetAltairDutiesV2_UnknownPubkey(t *testing.T) {
 }
 
 func TestGetDutiesV2_StateAdvancement(t *testing.T) {
-	st, _ := util.DeterministicGenesisStateElectra(t, 1)
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.ElectraForkEpoch = primitives.Epoch(0)
-	cfg.EpochsPerHistoricalVector = primitives.Epoch(65536)
 	params.OverrideBeaconConfig(cfg)
 
 	epochStart, err := slots.EpochStart(1)
 	require.NoError(t, err)
-
+	st, _ := util.DeterministicGenesisStateElectra(t, 1)
 	require.NoError(t, st.SetSlot(epochStart-1))
 
 	// Request epoch 1 which requires slot 32 processing
@@ -505,7 +503,6 @@ func TestGetDutiesV2_NextSyncCommitteePeriod(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.AltairForkEpoch = primitives.Epoch(0)
-	cfg.EpochsPerHistoricalVector = primitives.Epoch(65536)
 	cfg.EpochsPerSyncCommitteePeriod = 1
 	params.OverrideBeaconConfig(cfg)
 
