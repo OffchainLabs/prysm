@@ -2050,7 +2050,7 @@ func TestValidator_PushSettings(t *testing.T) {
 					require.Equal(t, len(tt.mockExpectedRequests), len(signedRegisterValidatorRequests))
 					require.Equal(t, len(signedRegisterValidatorRequests), len(v.signedValidatorRegistrations))
 				}
-				if err := v.PushProposerSettings(ctx, km, 0, false); tt.err != "" {
+				if err := v.PushProposerSettings(ctx, 0, false); tt.err != "" {
 					assert.ErrorContains(t, tt.err, err)
 				}
 				if len(tt.logMessages) > 0 {

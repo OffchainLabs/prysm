@@ -222,6 +222,7 @@ func (v *ValidatorService) Start() {
 		enableAPI:                      v.enableAPI,
 		distributed:                    v.distributed,
 		disableDutiesPolling:           v.disableDutiesPolling,
+		accountsChangedChannel:         make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
 	}
 
 	v.validator = valStruct
