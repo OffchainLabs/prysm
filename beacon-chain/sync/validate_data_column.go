@@ -215,7 +215,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		sinceStartTime:  sinceSlotStartTime,
 	}:
 	default:
-		// drop if channel is full
+		log.WithField("slot", roDataColumn.Slot()).Warn("Failed to send data column log entry")
 	}
 
 	return pubsub.ValidationAccept, nil
