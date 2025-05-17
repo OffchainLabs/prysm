@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/time"
@@ -22,5 +23,11 @@ func TestPremineGenesis_Electra(t *testing.T) {
 		BlobGasUsed:   &one,
 	})
 	_, err := NewPreminedGenesis(context.Background(), genesis.Time(), 10, 10, version.Electra, genesis)
+	require.NoError(t, err)
+
+	// Use minimal setup
+	require.NoError(t, params.SetActive(params.MinimalSpecConfig()))
+
+	_, err = NewPreminedGenesis(context.Background(), genesis.Time(), 10, 10, version.Electra, genesis)
 	require.NoError(t, err)
 }

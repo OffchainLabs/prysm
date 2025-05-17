@@ -4,7 +4,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v6/config/features"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
 	"github.com/pkg/errors"
 )
@@ -24,7 +24,7 @@ func (b *BeaconState) SetStateRoots(val [][]byte) error {
 		b.sharedFieldReferences[types.StateRoots].MinusRef()
 		b.sharedFieldReferences[types.StateRoots] = stateutil.NewRef(1)
 
-		rootsArr := make([][32]byte, fieldparams.StateRootsLength)
+		rootsArr := make([][32]byte, params.BeaconConfig().SlotsPerHistoricalRoot)
 		for i := 0; i < len(rootsArr); i++ {
 			copy(rootsArr[i][:], val[i])
 		}
