@@ -22,12 +22,18 @@ func TestPremineGenesis_Electra(t *testing.T) {
 		ExcessBlobGas: &one,
 		BlobGasUsed:   &one,
 	})
-	_, err := NewPreminedGenesis(context.Background(), genesis.Time(), 10, 10, version.Electra, genesis)
+	state1, err := NewPreminedGenesis(context.Background(), genesis.Time(), 10, 10, version.Electra, genesis)
+	require.NoError(t, err)
+
+	_, err = state1.MarshalSSZ()
 	require.NoError(t, err)
 
 	// Use minimal setup
 	require.NoError(t, params.SetActive(params.MinimalSpecConfig()))
 
-	_, err = NewPreminedGenesis(context.Background(), genesis.Time(), 10, 10, version.Electra, genesis)
+	state2, err := NewPreminedGenesis(context.Background(), genesis.Time(), 10, 10, version.Electra, genesis)
+	require.NoError(t, err)
+
+	_, err = state2.MarshalSSZ()
 	require.NoError(t, err)
 }
