@@ -17,10 +17,6 @@ import (
 	The data at level 0 is saved every 2**exponent[0] slots and always contains a full state snapshot that is used as a base for the delta saved at other levels.
 */
 
-var (
-	anchorCache = make(map[int]state.ReadOnlyBeaconState, len(params.StateHierarchyExponents())) // cache full states at the last node at each level
-)
-
 // SaveStateDiff takes a state and decides between saving a full state snapshot or a diff.
 func (s *Store) SaveStateDiff(ctx context.Context, st state.ReadOnlyBeaconState) error {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveStateDiff")
@@ -123,7 +119,7 @@ func (s *Store) saveHdiff(lvl int, anchor, st state.ReadOnlyBeaconState) error {
 
 	// Save the full state to the cache (if not the last level).
 	if lvl != len(params.StateHierarchyExponents())-1 {
-		anchorCache[lvl] = st
+		s.stateDiffCache.setAnchor(lvl, st)
 	}
 
 	return nil
@@ -156,10 +152,8 @@ func (s *Store) saveFullSnapshot(lvl int, st state.ReadOnlyBeaconState) error {
 		return err
 	}
 	// Save the full state to the cache, and invalidate other levels.
-	anchorCache[lvl] = st
-	for i := lvl + 1; i < len(params.StateHierarchyExponents()); i++ {
-		delete(anchorCache, i)
-	}
+	s.stateDiffCache.clearAnchors()
+	s.stateDiffCache.setAnchor(lvl, st)
 
 	return nil
 }
