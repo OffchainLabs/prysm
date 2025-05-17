@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -242,6 +243,16 @@ func ConfigToYaml(cfg *BeaconChainConfig) []byte {
 		fmt.Sprintf("MAX_BLOBS_PER_BLOCK: %d", cfg.DeprecatedMaxBlobsPerBlock),
 		fmt.Sprintf("MAX_BLOBS_PER_BLOCK_ELECTRA: %d", cfg.DeprecatedMaxBlobsPerBlockElectra),
 		fmt.Sprintf("MAX_BLOBS_PER_BLOCK_FULU: %d", cfg.DeprecatedMaxBlobsPerBlockFulu),
+	}
+
+	if len(cfg.BlobSchedule) > 0 {
+		lines = append(lines, "BLOB_SCHEDULE:")
+		for _, entry := range cfg.BlobSchedule {
+			lines = append(lines,
+				"  - EPOCH: "+strconv.FormatUint(uint64(entry.Epoch), 10),
+				"    MAX_BLOBS_PER_BLOCK: "+strconv.FormatUint(entry.MaxBlobsPerBlock, 10),
+			)
+		}
 	}
 
 	yamlFile := []byte(strings.Join(lines, "\n"))

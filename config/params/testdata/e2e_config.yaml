@@ -124,4 +124,13 @@ SLOTS_PER_EPOCH: 6
 EPOCHS_PER_ETH1_VOTING_PERIOD: 2
 MAX_SEED_LOOKAHEAD: 1
 
+# Blob Scheduling
+# ---------------------------------------------------------------
 
+BLOB_SCHEDULE:
+  # Deneb
+  - EPOCH: 12
+    MAX_BLOBS_PER_BLOCK: 6
+  # Electra
+  - EPOCH: 14
+    MAX_BLOBS_PER_BLOCK: 9
