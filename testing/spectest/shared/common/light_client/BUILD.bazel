@@ -1,0 +1,21 @@
+load("@prysm//tools/go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    testonly = True,
+    srcs = ["single_merkle_proof.go"],
+    importpath = "github.com/OffchainLabs/prysm/v6/testing/spectest/shared/common/light_client",
+    visibility = ["//testing/spectest:__subpackages__"],
+    deps = [
+        "//beacon-chain/core/helpers:go_default_library",
+        "//beacon-chain/state:go_default_library",
+        "//beacon-chain/state/state-native:go_default_library",
+        "//container/trie:go_default_library",
+        "//proto/prysm/v1alpha1:go_default_library",
+        "//runtime/version:go_default_library",
+        "//testing/require:go_default_library",
+        "//testing/spectest/utils:go_default_library",
+        "//testing/util:go_default_library",
+        "@com_github_golang_snappy//:go_default_library",
+    ],
+)

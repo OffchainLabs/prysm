@@ -1,8 +1,4 @@
 # LightClient
-tests/mainnet/altair/light_client/single_merkle_proof
-tests/mainnet/bellatrix/light_client/single_merkle_proof
-tests/mainnet/capella/light_client/single_merkle_proof
-tests/mainnet/deneb/light_client/single_merkle_proof
 tests/minimal/altair/light_client/single_merkle_proof
 tests/minimal/altair/light_client/sync
 tests/minimal/altair/light_client/update_ranking
