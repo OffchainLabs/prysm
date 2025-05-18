@@ -21,7 +21,6 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -320,8 +319,7 @@ func ProposeExit(
 }
 
 func CurrentEpoch(genesisTime *timestamp.Timestamp) (primitives.Epoch, error) {
-	totalSecondsPassed := prysmTime.Now().Unix() - genesisTime.Seconds
-	currentSlot := primitives.Slot((uint64(totalSecondsPassed)) / params.BeaconConfig().SecondsPerSlot)
+	currentSlot := slots.CurrentSlot(uint64(genesisTime.Seconds))
 	currentEpoch := slots.ToEpoch(currentSlot)
 	return currentEpoch, nil
 }
