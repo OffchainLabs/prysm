@@ -43,7 +43,7 @@ func RunLightClientSingleMerkleProofTests(t *testing.T, config string, v int) {
 				} else if testType == "BeaconBlockBody" {
 					runLightClientSingleMerkleProofTestBeaconBlockBody(t, folderPath, v)
 				} else {
-					t.Skipf("Skipping test because of unknown test type: %v", testType)
+					t.Fatalf("Unsupported test type: %s", testType)
 				}
 			})
 		}
@@ -126,7 +126,7 @@ func runLightClientSingleMerkleProofTestBeaconState(t *testing.T, testFolderPath
 	} else if strings.Contains(testName, "finality_root") {
 		item = beaconState.FinalizedCheckpoint().Root
 	} else {
-		t.Skipf("Skipping test because of unknown test type BeaconState/%s", testName)
+		t.Fatalf("Unsupported test type BeaconState/%s", testName)
 	}
 
 	require.DeepSSZEqual(t, item, leaf)
