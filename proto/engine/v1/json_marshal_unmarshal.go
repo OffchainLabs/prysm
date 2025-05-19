@@ -2,6 +2,7 @@ package enginev1
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"reflect"
 	"strings"
@@ -307,23 +308,24 @@ type ExecutionPayloadBody struct {
 }
 
 type ExecutionPayloadDenebJSON struct {
-	ParentHash    *common.Hash    `json:"parentHash"`
-	FeeRecipient  *common.Address `json:"feeRecipient"`
-	StateRoot     *common.Hash    `json:"stateRoot"`
-	ReceiptsRoot  *common.Hash    `json:"receiptsRoot"`
-	LogsBloom     *hexutil.Bytes  `json:"logsBloom"`
-	PrevRandao    *common.Hash    `json:"prevRandao"`
-	BlockNumber   *hexutil.Uint64 `json:"blockNumber"`
-	GasLimit      *hexutil.Uint64 `json:"gasLimit"`
-	GasUsed       *hexutil.Uint64 `json:"gasUsed"`
-	Timestamp     *hexutil.Uint64 `json:"timestamp"`
-	ExtraData     hexutil.Bytes   `json:"extraData"`
-	BaseFeePerGas string          `json:"baseFeePerGas"`
-	BlobGasUsed   *hexutil.Uint64 `json:"blobGasUsed"`
-	ExcessBlobGas *hexutil.Uint64 `json:"excessBlobGas"`
-	BlockHash     *common.Hash    `json:"blockHash"`
-	Transactions  []hexutil.Bytes `json:"transactions"`
-	Withdrawals   []*Withdrawal   `json:"withdrawals"`
+	ParentHash     *common.Hash    `json:"parentHash"`
+	FeeRecipient   *common.Address `json:"feeRecipient"`
+	StateRoot      *common.Hash    `json:"stateRoot"`
+	ReceiptsRoot   *common.Hash    `json:"receiptsRoot"`
+	LogsBloom      *hexutil.Bytes  `json:"logsBloom"`
+	PrevRandao     *common.Hash    `json:"prevRandao"`
+	BlockNumber    *hexutil.Uint64 `json:"blockNumber"`
+	GasLimit       *hexutil.Uint64 `json:"gasLimit"`
+	GasUsed        *hexutil.Uint64 `json:"gasUsed"`
+	Timestamp      *hexutil.Uint64 `json:"timestamp"`
+	ExtraData      hexutil.Bytes   `json:"extraData"`
+	BaseFeePerGas  string          `json:"baseFeePerGas"`
+	BlobGasUsed    *hexutil.Uint64 `json:"blobGasUsed"`
+	ExcessBlobGas  *hexutil.Uint64 `json:"excessBlobGas"`
+	BlockHash      *common.Hash    `json:"blockHash"`
+	Transactions   []hexutil.Bytes `json:"transactions"`
+	Withdrawals    []*Withdrawal   `json:"withdrawals"`
+	HelloWorldGeth hexutil.Bytes   `json:"helloworldgeth"`
 }
 
 // WithdrawalRequestV1 represents an execution engine WithdrawalRequestV1 value
@@ -855,25 +857,27 @@ func (e *ExecutionPayloadDeneb) MarshalJSON() ([]byte, error) {
 	}
 	blobGasUsed := hexutil.Uint64(e.BlobGasUsed)
 	excessBlobGas := hexutil.Uint64(e.ExcessBlobGas)
+	helloWorldGeth := hexutil.Bytes(e.HelloWorldGeth)
 
 	return json.Marshal(ExecutionPayloadDenebJSON{
-		ParentHash:    &pHash,
-		FeeRecipient:  &recipient,
-		StateRoot:     &sRoot,
-		ReceiptsRoot:  &recRoot,
-		LogsBloom:     &logsBloom,
-		PrevRandao:    &prevRan,
-		BlockNumber:   &blockNum,
-		GasLimit:      &gasLimit,
-		GasUsed:       &gasUsed,
-		Timestamp:     &timeStamp,
-		ExtraData:     e.ExtraData,
-		BaseFeePerGas: baseFeeHex,
-		BlockHash:     &bHash,
-		Transactions:  transactions,
-		Withdrawals:   withdrawals,
-		BlobGasUsed:   &blobGasUsed,
-		ExcessBlobGas: &excessBlobGas,
+		ParentHash:     &pHash,
+		FeeRecipient:   &recipient,
+		StateRoot:      &sRoot,
+		ReceiptsRoot:   &recRoot,
+		LogsBloom:      &logsBloom,
+		PrevRandao:     &prevRan,
+		BlockNumber:    &blockNum,
+		GasLimit:       &gasLimit,
+		GasUsed:        &gasUsed,
+		Timestamp:      &timeStamp,
+		ExtraData:      e.ExtraData,
+		BaseFeePerGas:  baseFeeHex,
+		BlockHash:      &bHash,
+		Transactions:   transactions,
+		Withdrawals:    withdrawals,
+		BlobGasUsed:    &blobGasUsed,
+		ExcessBlobGas:  &excessBlobGas,
+		HelloWorldGeth: helloWorldGeth,
 	})
 }
 
@@ -996,6 +1000,9 @@ func (e *ExecutionPayloadDenebWithValueAndBlobsBundle) UnmarshalJSON(enc []byte)
 		return err
 	}
 
+	fmt.Println("UNMARSHAL")
+	fmt.Println("WHAT DO WE GET FROM GETH: ", string(dec.ExecutionPayload.HelloWorldGeth))
+
 	if dec.ExecutionPayload.ParentHash == nil {
 		return errors.New("missing required field 'parentHash' for ExecutionPayload")
 	}
@@ -1073,6 +1080,8 @@ func (e *ExecutionPayloadDenebWithValueAndBlobsBundle) UnmarshalJSON(enc []byte)
 		dec.ExecutionPayload.Withdrawals = make([]*Withdrawal, 0)
 	}
 	e.Payload.Withdrawals = dec.ExecutionPayload.Withdrawals
+
+	e.Payload.HelloWorldGeth = dec.ExecutionPayload.HelloWorldGeth
 
 	v, err := hexutil.DecodeBig(dec.BlockValue)
 	if err != nil {

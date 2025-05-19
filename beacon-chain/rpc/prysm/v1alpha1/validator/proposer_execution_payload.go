@@ -71,11 +71,13 @@ func (vs *Server) getLocalPayloadFromEngine(
 	parentRoot [32]byte,
 	slot primitives.Slot,
 	proposerId primitives.ValidatorIndex) (*consensusblocks.GetPayloadResponse, error) {
+
 	logFields := logrus.Fields{
 		"validatorIndex": proposerId,
 		"slot":           slot,
 		"headRoot":       fmt.Sprintf("%#x", parentRoot),
 	}
+
 	payloadId, ok := vs.PayloadIDCache.PayloadID(slot, parentRoot)
 
 	val, tracked := vs.TrackedValidatorsCache.Validator(proposerId)

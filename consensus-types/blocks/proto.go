@@ -490,6 +490,7 @@ func (b *BeaconBlockBody) Proto() (proto.Message, error) {
 		var ok bool
 		if b.executionPayload != nil {
 			p, ok = b.executionPayload.Proto().(*enginev1.ExecutionPayloadDeneb)
+
 			if !ok {
 				return nil, errPayloadWrongType
 			}
@@ -1083,7 +1084,13 @@ func initBlockBodyFromProtoDeneb(pb *eth.BeaconBlockBodyDeneb) (*BeaconBlockBody
 		return nil, errNilBlockBody
 	}
 
+	// gethString := pb.ExecutionPayload.GetHelloWorldGeth()
+	// if gethString != nil {
+	// 	fmt.Println("Geth string we received: ", string(gethString))
+	// }
+
 	p, err := WrappedExecutionPayloadDeneb(pb.ExecutionPayload)
+
 	// We allow the payload to be nil
 	if err != nil && !errors.Is(err, consensus_types.ErrNilObjectWrapped) {
 		return nil, err
@@ -1103,6 +1110,18 @@ func initBlockBodyFromProtoDeneb(pb *eth.BeaconBlockBodyDeneb) (*BeaconBlockBody
 		blsToExecutionChanges: pb.BlsToExecutionChanges,
 		blobKzgCommitments:    pb.BlobKzgCommitments,
 	}
+
+	// if pb.ExecutionPayload.GetHelloWorldGeth() != nil {
+	// 	fmt.Println("from received payload: ", string(pb.ExecutionPayload.GetHelloWorldGeth()))
+	// 	x, y := b.executionPayload.HelloWorldGeth()
+	// 	if y != nil {
+	// 		fmt.Println("err", y)
+	// 	}
+	// 	fmt.Println("from signed beacon block", string(x), x)
+	// } else {
+	// 	fmt.Println("from signed beacon block is nil")
+	// }
+
 	return b, nil
 }
 

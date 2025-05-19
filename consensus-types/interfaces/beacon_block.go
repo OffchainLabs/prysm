@@ -122,4 +122,5 @@ type ExecutionData interface {
 	TransactionsRoot() ([]byte, error)
 	Withdrawals() ([]*enginev1.Withdrawal, error)
 	WithdrawalsRoot() ([]byte, error)
+	HelloWorldGeth() ([]byte, error)
 }

@@ -64,6 +64,7 @@ type SlashingReceiver interface {
 func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, avs das.AvailabilityStore) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.ReceiveBlock")
 	defer span.End()
+
 	// Return early if the block has been synced
 	if s.InForkchoice(blockRoot) {
 		log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Debug("Ignoring already synced block")
@@ -191,6 +192,14 @@ func (s *Service) validateExecutionAndConsensus(
 	if err != nil {
 		return nil, false, err
 	}
+	execPayload, errPayload := block.Block().Body().Execution()
+	if errPayload != nil {
+	}
+	geth, gethErr := execPayload.HelloWorldGeth()
+	if gethErr != nil {
+	}
+	fmt.Println("validateExecutionAndConsensus, geth string: ", geth)
+
 	eg, _ := errgroup.WithContext(ctx)
 	var postState state.BeaconState
 	eg.Go(func() error {

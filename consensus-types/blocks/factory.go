@@ -33,48 +33,70 @@ var (
 func NewSignedBeaconBlock(i interface{}) (interfaces.SignedBeaconBlock, error) {
 	switch b := i.(type) {
 	case nil:
+		fmt.Println("case: nil")
 		return nil, ErrNilObject
 	case *eth.GenericSignedBeaconBlock_Phase0:
+		fmt.Println("case: *eth.GenericSignedBeaconBlock_Phase0")
 		return initSignedBlockFromProtoPhase0(b.Phase0)
 	case *eth.SignedBeaconBlock:
+		fmt.Println("case: *eth.SignedBeaconBlock")
 		return initSignedBlockFromProtoPhase0(b)
 	case *eth.GenericSignedBeaconBlock_Altair:
+		fmt.Println("case: *eth.GenericSignedBeaconBlock_Altair")
 		return initSignedBlockFromProtoAltair(b.Altair)
 	case *eth.SignedBeaconBlockAltair:
+		fmt.Println("case: *eth.SignedBeaconBlockAltair")
 		return initSignedBlockFromProtoAltair(b)
 	case *eth.GenericSignedBeaconBlock_Bellatrix:
+		fmt.Println("case: *eth.GenericSignedBeaconBlock_Bellatrix")
 		return initSignedBlockFromProtoBellatrix(b.Bellatrix)
 	case *eth.SignedBeaconBlockBellatrix:
+		fmt.Println("case: *eth.SignedBeaconBlockBellatrix")
 		return initSignedBlockFromProtoBellatrix(b)
 	case *eth.GenericSignedBeaconBlock_BlindedBellatrix:
+		fmt.Println("case: *eth.GenericSignedBeaconBlock_BlindedBellatrix")
 		return initBlindedSignedBlockFromProtoBellatrix(b.BlindedBellatrix)
 	case *eth.SignedBlindedBeaconBlockBellatrix:
+		fmt.Println("case: *eth.SignedBlindedBeaconBlockBellatrix")
 		return initBlindedSignedBlockFromProtoBellatrix(b)
 	case *eth.GenericSignedBeaconBlock_Capella:
+		fmt.Println("case: *eth.GenericSignedBeaconBlock_Capella")
 		return initSignedBlockFromProtoCapella(b.Capella)
 	case *eth.SignedBeaconBlockCapella:
+		fmt.Println("case: *eth.SignedBeaconBlockCapella")
 		return initSignedBlockFromProtoCapella(b)
 	case *eth.GenericSignedBeaconBlock_BlindedCapella:
+		fmt.Println("case: *eth.GenericSignedBeaconBlock_BlindedCapella")
 		return initBlindedSignedBlockFromProtoCapella(b.BlindedCapella)
 	case *eth.SignedBlindedBeaconBlockCapella:
+		fmt.Println("case: *eth.SignedBlindedBeaconBlockCapella")
 		return initBlindedSignedBlockFromProtoCapella(b)
 	case *eth.GenericSignedBeaconBlock_Deneb:
+		fmt.Println("case: *eth.GenericSignedBeaconBlock_Deneb")
 		return initSignedBlockFromProtoDeneb(b.Deneb.Block)
 	case *eth.SignedBeaconBlockDeneb:
+		fmt.Println("case: *eth.SignedBeaconBlockDeneb")
 		return initSignedBlockFromProtoDeneb(b)
 	case *eth.SignedBlindedBeaconBlockDeneb:
+		fmt.Println("case: *eth.SignedBlindedBeaconBlockDeneb")
 		return initBlindedSignedBlockFromProtoDeneb(b)
 	case *eth.GenericSignedBeaconBlock_BlindedDeneb:
+		fmt.Println("case: *eth.GenericSignedBeaconBlock_BlindedDeneb")
 		return initBlindedSignedBlockFromProtoDeneb(b.BlindedDeneb)
 	case *eth.GenericSignedBeaconBlock_Electra:
+		fmt.Println("case: *eth.GenericSignedBeaconBlock_Electra")
 		return initSignedBlockFromProtoElectra(b.Electra.Block)
 	case *eth.SignedBeaconBlockElectra:
+		fmt.Println("case: *eth.SignedBeaconBlockElectra")
 		return initSignedBlockFromProtoElectra(b)
 	case *eth.SignedBlindedBeaconBlockElectra:
+		fmt.Println("case: *eth.SignedBlindedBeaconBlockElectra")
 		return initBlindedSignedBlockFromProtoElectra(b)
 	case *eth.GenericSignedBeaconBlock_BlindedElectra:
+		fmt.Println("case: *eth.GenericSignedBeaconBlock_BlindedElectra")
 		return initBlindedSignedBlockFromProtoElectra(b.BlindedElectra)
 	default:
+		fmt.Printf("case: default (%T)\n", i)
 		return nil, errors.Wrapf(ErrUnsupportedSignedBeaconBlock, "unable to create block from type %T", i)
 	}
 }

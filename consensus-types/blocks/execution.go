@@ -3,6 +3,8 @@ package blocks
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	"log"
 
 	fastssz "github.com/prysmaticlabs/fastssz"
 	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
@@ -26,6 +28,8 @@ func NewWrappedExecutionData(v proto.Message) (interfaces.ExecutionData, error) 
 	if v == nil {
 		return nil, consensus_types.ErrNilObjectWrapped
 	}
+	log.Printf("PROTOBUF: %+v\n", v)
+
 	switch pbStruct := v.(type) {
 	case *enginev1.ExecutionPayload:
 		return WrappedExecutionPayload(pbStruct)
@@ -46,6 +50,7 @@ var _ interfaces.ExecutionData = &executionPayload{}
 
 // WrappedExecutionPayload is a constructor which wraps a protobuf execution payload into an interface.
 func WrappedExecutionPayload(p *enginev1.ExecutionPayload) (interfaces.ExecutionData, error) {
+
 	w := executionPayload{p: p}
 	if w.IsNil() {
 		return nil, consensus_types.ErrNilObjectWrapped
@@ -191,6 +196,10 @@ func (e executionPayload) BlobGasUsed() (uint64, error) {
 // ExcessBlobGas --
 func (e executionPayload) ExcessBlobGas() (uint64, error) {
 	return 0, consensus_types.ErrUnsupportedField
+}
+
+func (e executionPayload) HelloWorldGeth() ([]byte, error) {
+	return e.p.HelloWorldGeth, nil
 }
 
 // executionPayloadHeader is a convenience wrapper around a blinded beacon block body's execution header data structure
@@ -349,6 +358,10 @@ func (e executionPayloadHeader) BlobGasUsed() (uint64, error) {
 // ExcessBlobGas --
 func (e executionPayloadHeader) ExcessBlobGas() (uint64, error) {
 	return 0, consensus_types.ErrUnsupportedField
+}
+
+func (e executionPayloadHeader) HelloWorldGeth() ([]byte, error) {
+	return e.p.HelloWorldGeth, nil
 }
 
 // PayloadToHeader converts `payload` into execution payload header format.
@@ -537,6 +550,10 @@ func (e executionPayloadCapella) ExcessBlobGas() (uint64, error) {
 	return 0, consensus_types.ErrUnsupportedField
 }
 
+func (e executionPayloadCapella) HelloWorldGeth() ([]byte, error) {
+	return e.p.HelloWorldGeth, nil
+}
+
 // executionPayloadHeaderCapella is a convenience wrapper around a blinded beacon block body's execution header data structure
 // This wrapper allows us to conform to a common interface so that beacon
 // blocks for future forks can also be applied across Prysm without issues.
@@ -693,6 +710,10 @@ func (e executionPayloadHeaderCapella) BlobGasUsed() (uint64, error) {
 // ExcessBlobGas --
 func (e executionPayloadHeaderCapella) ExcessBlobGas() (uint64, error) {
 	return 0, consensus_types.ErrUnsupportedField
+}
+
+func (e executionPayloadHeaderCapella) HelloWorldGeth() ([]byte, error) {
+	return e.p.HelloWorldGeth, nil
 }
 
 // PayloadToHeaderCapella converts `payload` into execution payload header format.
@@ -1003,6 +1024,10 @@ func (e executionPayloadHeaderDeneb) IsBlinded() bool {
 	return true
 }
 
+func (e executionPayloadHeaderDeneb) HelloWorldGeth() ([]byte, error) {
+	return e.p.HelloWorldGeth, nil
+}
+
 // executionPayloadDeneb is a convenience wrapper around a beacon block body's execution payload data structure
 // This wrapper allows us to conform to a common interface so that beacon
 // blocks for future forks can also be applied across Prysm without issues.
@@ -1014,10 +1039,21 @@ var _ interfaces.ExecutionData = &executionPayloadDeneb{}
 
 // WrappedExecutionPayloadDeneb is a constructor which wraps a protobuf execution payload into an interface.
 func WrappedExecutionPayloadDeneb(p *enginev1.ExecutionPayloadDeneb) (interfaces.ExecutionData, error) {
+	// Hier zit helloworldgeth string nog in
+
 	w := executionPayloadDeneb{p: p}
 	if w.IsNil() {
 		return nil, consensus_types.ErrNilObjectWrapped
 	}
+
+	ai := w.p.HelloWorldGeth
+	if ai != nil {
+		x, y := w.HelloWorldGeth()
+		if y != nil {
+		}
+		fmt.Println("WrappedExecutionPayloadDeneb", string(x), x)
+	}
+
 	return w, nil
 }
 
@@ -1159,4 +1195,8 @@ func (e executionPayloadDeneb) ExcessBlobGas() (uint64, error) {
 // IsBlinded returns true if the underlying data is blinded.
 func (e executionPayloadDeneb) IsBlinded() bool {
 	return false
+}
+
+func (e executionPayloadDeneb) HelloWorldGeth() ([]byte, error) {
+	return e.p.HelloWorldGeth, nil
 }

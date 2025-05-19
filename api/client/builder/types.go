@@ -1159,6 +1159,7 @@ type ExecutionPayloadDeneb struct {
 	Withdrawals   []Withdrawal    `json:"withdrawals"`
 	BlobGasUsed   Uint64String    `json:"blob_gas_used"`   // new in deneb
 	ExcessBlobGas Uint64String    `json:"excess_blob_gas"` // new in deneb
+
 }
 
 // BlobsBundle is a field in ExecutionPayloadDenebAndBlobsBundle.

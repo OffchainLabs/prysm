@@ -16,7 +16,17 @@ import (
 )
 
 func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) error {
+	fmt.Println("RECEIVED: ", msg)
 	signed, err := blocks.NewSignedBeaconBlock(msg)
+
+	execPayload, errPayload := signed.Block().Body().Execution()
+	if errPayload != nil {
+	}
+	geth, gethErr := execPayload.HelloWorldGeth()
+	if gethErr != nil {
+	}
+	fmt.Println("beaconBlockSubscriber, geth string: ", geth)
+
 	if err != nil {
 		return err
 	}

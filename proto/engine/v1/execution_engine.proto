@@ -39,6 +39,7 @@ message ExecutionPayload {
 	bytes base_fee_per_gas      = 12 [(ethereum.eth.ext.ssz_size) = "32"];
 	bytes block_hash            = 13 [(ethereum.eth.ext.ssz_size) = "32"];
 	repeated bytes transactions = 14 [(ethereum.eth.ext.ssz_size) = "?,?", (ethereum.eth.ext.ssz_max)  = "1048576,1073741824"];
+	bytes hello_world_geth = 15 [(ethereum.eth.ext.ssz_max) = "32"];
 }
 
 message ExecutionPayloadCapella {
@@ -58,6 +59,7 @@ message ExecutionPayloadCapella {
 	repeated bytes transactions = 14 [(ethereum.eth.ext.ssz_size) = "?,?", (ethereum.eth.ext.ssz_max)  = "1048576,1073741824"];
 	// MAX_WITHDRAWALS_PER_PAYLOAD
 	repeated Withdrawal withdrawals = 15 [(ethereum.eth.ext.ssz_max) = "withdrawal.size"]; // New in Capella.
+	bytes hello_world_geth = 16 [(ethereum.eth.ext.ssz_max) = "32"];
 }
 
 message ExecutionPayloadDeneb {
@@ -79,6 +81,7 @@ message ExecutionPayloadDeneb {
 	repeated Withdrawal withdrawals = 15 [(ethereum.eth.ext.ssz_max) = "withdrawal.size"];
 	uint64 blob_gas_used  = 16;
 	uint64 excess_blob_gas  = 17;
+	bytes hello_world_geth = 18 [(ethereum.eth.ext.ssz_max) = "32"];
 }
 
 message ExecutionPayloadCapellaWithValue {
@@ -109,6 +112,7 @@ message ExecutionPayloadHeader {
 	bytes base_fee_per_gas  = 12 [(ethereum.eth.ext.ssz_size) = "32"];
 	bytes block_hash        = 13 [(ethereum.eth.ext.ssz_size) = "32"];
 	bytes transactions_root = 14 [(ethereum.eth.ext.ssz_size) = "32"];
+	bytes hello_world_geth = 15 [(ethereum.eth.ext.ssz_max) = "32"];
 }
 
 message ExecutionPayloadHeaderCapella {
@@ -127,6 +131,7 @@ message ExecutionPayloadHeaderCapella {
 	bytes block_hash        = 13 [(ethereum.eth.ext.ssz_size) = "32"];
 	bytes transactions_root = 14 [(ethereum.eth.ext.ssz_size) = "32"];
 	bytes withdrawals_root  = 15 [(ethereum.eth.ext.ssz_size) = "32"]; // New in Capella.
+	bytes hello_world_geth = 16 [(ethereum.eth.ext.ssz_max) = "32"];
 }
 
 message ExecutionPayloadHeaderDeneb {
@@ -147,6 +152,7 @@ message ExecutionPayloadHeaderDeneb {
 	bytes withdrawals_root  = 15 [(ethereum.eth.ext.ssz_size) = "32"];
 	uint64 blob_gas_used  = 16;
 	uint64 excess_blob_gas  = 17;
+	bytes hello_world_geth = 18 [(ethereum.eth.ext.ssz_max) = "32"];
 }
 
 message PayloadAttributes {

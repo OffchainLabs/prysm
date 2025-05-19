@@ -145,6 +145,7 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 		if !ok {
 			return nil, errors.New("execution data must be a Bellatrix or Capella execution payload")
 		}
+
 		err := s.rpcClient.CallContext(ctx, result, NewPayloadMethod, payloadPb)
 		if err != nil {
 			return nil, handleRPCError(err)
@@ -163,6 +164,12 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 		if !ok {
 			return nil, errors.New("execution data must be a Deneb execution payload")
 		}
+		gethString, gethError := payload.HelloWorldGeth()
+		if gethError != nil {
+		}
+		fmt.Println("NewPayload: gethString: ", gethString)
+		fmt.Printf("Proto message back to geth: %+v\n", payloadPb)
+
 		err := s.rpcClient.CallContext(ctx, result, NewPayloadMethodV3, payloadPb, versionedHashes, parentBlockRoot)
 		if err != nil {
 			return nil, handleRPCError(err)
@@ -272,6 +279,7 @@ func getPayloadMethodAndMessage(slot primitives.Slot) (string, proto.Message) {
 // It returns the execution data as well as the blobs bundle.
 func (s *Service) GetPayload(ctx context.Context, payloadId [8]byte, slot primitives.Slot) (*blocks.GetPayloadResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetPayload")
+
 	defer span.End()
 	start := time.Now()
 	defer func() {
@@ -290,6 +298,12 @@ func (s *Service) GetPayload(ctx context.Context, payloadId [8]byte, slot primit
 	if err != nil {
 		return nil, err
 	}
+
+	gethString, fail := res.ExecutionData.HelloWorldGeth()
+	if fail != nil {
+	}
+	log.Printf("GetPayload: geth string from geth client: %+v\n", string(gethString))
+
 	return res, nil
 }
 
