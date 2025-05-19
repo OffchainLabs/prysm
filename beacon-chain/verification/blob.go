@@ -26,6 +26,7 @@ const (
 	RequireSidecarKzgProofVerified
 	RequireSidecarProposerExpected
 
+	// Data columns specific.
 	RequireValidFields
 	RequireCorrectSubnet
 )
