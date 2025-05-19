@@ -285,7 +285,8 @@ func BenchmarkVerifyDataColumnSidecarKZGProofs_DiffCommitments_Batch(b *testing.
 				allSidecars := make([]*ethpb.DataColumnSidecar, 0, numberOfColumns)
 				for k := int64(0); k < numberOfColumns; k += columnsCount {
 					// Use different seeds to generate different blobs/commitments
-					sidecars := generateRandomSidecars(b, int64(len(columnsCounts)*i)+int64(b.N)*j+numberOfColumns*k, blobCount)
+					seed := int64(b.N*i) + numberOfColumns*j + blobCount*k
+					sidecars := generateRandomSidecars(b, seed, blobCount)
 
 					// Pick sidecars.
 					allSidecars = append(allSidecars, sidecars[k:k+columnsCount]...)
@@ -297,9 +298,41 @@ func BenchmarkVerifyDataColumnSidecarKZGProofs_DiffCommitments_Batch(b *testing.
 				err := peerdas.VerifyDataColumnsSidecarKZGProofs(roDataColumnSidecars)
 				b.StopTimer()
 				require.NoError(b, err)
-
 			}
 		})
+	}
+}
+
+func BenchmarkVerifyDataColumnSidecarKZGProofs_DiffCommitments_Batch4(b *testing.B) {
+	const (
+		blobCount = 12
+
+		// columnsCount*batchCount = 128
+		columnsCount = 4
+		batchCount   = 32
+	)
+
+	err := kzg.Start()
+	require.NoError(b, err)
+
+	b.StopTimer()
+	b.ResetTimer()
+
+	for i := range int64(b.N) {
+		allSidecars := make([][]blocks.RODataColumn, 0, batchCount)
+		for j := range int64(batchCount) {
+			// Use different seeds to generate different blobs/commitments
+			sidecars := generateRandomSidecars(b, int64(batchCount)*i+j*blobCount, blobCount)
+			roDataColumnSidecars := generateRODataColumnSidecars(b, sidecars[:columnsCount])
+			allSidecars = append(allSidecars, roDataColumnSidecars)
+		}
+
+		for _, sidecars := range allSidecars {
+			b.StartTimer()
+			err := peerdas.VerifyDataColumnsSidecarKZGProofs(sidecars)
+			b.StopTimer()
+			require.NoError(b, err)
+		}
 	}
 }
 
@@ -332,7 +365,8 @@ func generateRandomSidecars(t testing.TB, seed, blobCount int64) []*ethpb.DataCo
 	blobs := make([]kzg.Blob, 0, blobCount)
 
 	for i := range blobCount {
-		blob := getRandBlob(seed + i)
+		subSeed := seed + i
+		blob := getRandBlob(subSeed)
 		commitment, err := generateCommitment(&blob)
 		require.NoError(t, err)
 
