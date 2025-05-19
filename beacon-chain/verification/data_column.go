@@ -517,11 +517,8 @@ func columnErrBuilder(baseErr error) error {
 func inclusionProofKey(c blocks.RODataColumn) ([32]byte, error) {
 	var buf bytes.Buffer
 
-	r, err := c.SignedBlockHeader.HashTreeRoot()
-	if err != nil {
-		return [32]byte{}, errors.Wrap(err, "hash tree root")
-	}
-	buf.Write(r[:])
+	root := c.BlockRoot()
+	buf.Write(root[:])
 
 	for _, proof := range c.KzgCommitmentsInclusionProof {
 		buf.Write(proof)
