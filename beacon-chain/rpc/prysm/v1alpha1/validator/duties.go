@@ -12,8 +12,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -83,18 +81,6 @@ func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.
 		return nil, status.Errorf(codes.Internal, "Could not compute proposer slots: %v", err)
 	}
 
-	activeValidatorCount, err := helpers.ActiveValidatorCount(ctx, s, req.Epoch)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not get active validator count: %v", err)
-	}
-	committeesAtSlot := helpers.SlotCommitteeCount(activeValidatorCount)
-
-	nextActiveValidatorCount, err := helpers.ActiveValidatorCount(ctx, s, req.Epoch+1)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not get active validator count: %v", err)
-	}
-	nextCommitteesAtSlot := helpers.SlotCommitteeCount(nextActiveValidatorCount)
-
 	ctx, span := trace.StartSpan(ctx, "getDuties.BuildResponse")
 	defer span.End()
 
@@ -127,7 +113,6 @@ func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.
 				assignment.Committee = ca.Committee
 				assignment.AttesterSlot = ca.AttesterSlot
 				assignment.CommitteeIndex = ca.CommitteeIndex
-				assignment.CommitteesAtSlot = committeesAtSlot
 			}
 			// Save the next epoch assignments.
 			ca, ok = nextEpochAssignments[idx]
@@ -135,15 +120,12 @@ func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.
 				nextAssignment.Committee = ca.Committee
 				nextAssignment.AttesterSlot = ca.AttesterSlot
 				nextAssignment.CommitteeIndex = ca.CommitteeIndex
-				nextAssignment.CommitteesAtSlot = nextCommitteesAtSlot
 			}
 		} else {
-			log.WithFields(logrus.Fields{
-				"pubKey": hexutil.Encode(pubKey),
-				"idx":    idx,
-			}).Debug("Could not get validator assignment status")
-			assignment.Status = ethpb.ValidatorStatus_UNKNOWN_STATUS
-			nextAssignment.Status = ethpb.ValidatorStatus_UNKNOWN_STATUS
+			// If the validator isn't in the beacon state, try finding their deposit to determine their status.
+			// We don't need the lastActiveValidatorFn because we don't use the response in this.
+			vStatus, _ := vs.validatorStatus(ctx, s, pubKey, nil)
+			assignment.Status = vStatus.Status
 		}
 
 		// Are the validators in current or next epoch sync committee.

@@ -351,7 +351,6 @@ func TestGetAltairDuties_UnknownPubkey(t *testing.T) {
 	}
 
 	unknownPubkey := bytesutil.PadTo([]byte{'u'}, 48)
-
 	req := &ethpb.DutiesRequest{
 		PublicKeys: [][]byte{unknownPubkey},
 	}
@@ -368,12 +367,11 @@ func TestGetDuties_SlotOutOfUpperBound(t *testing.T) {
 	vs := &Server{
 		ForkchoiceFetcher: chain,
 		TimeFetcher:       chain,
-		SyncChecker:       &mockSync.Sync{IsSyncing: false},
 	}
 	req := &ethpb.DutiesRequest{
 		Epoch: primitives.Epoch(chain.CurrentSlot()/params.BeaconConfig().SlotsPerEpoch + 2),
 	}
-	_, err := vs.GetDuties(context.Background(), req)
+	_, err := vs.duties(context.Background(), req)
 	require.ErrorContains(t, "can not be greater than next epoch", err)
 }
 
@@ -473,6 +471,7 @@ func TestGetDuties_SyncNotReady(t *testing.T) {
 }
 
 func BenchmarkCommitteeAssignment(b *testing.B) {
+
 	genesis := util.NewBeaconBlock()
 	depChainStart := uint64(8192 * 2)
 	deposits, _, err := util.DeterministicDepositsAndKeys(depChainStart)
@@ -508,7 +507,6 @@ func BenchmarkCommitteeAssignment(b *testing.B) {
 		Epoch:      0,
 	}
 	b.ResetTimer()
-
 	for i := 0; i < b.N; i++ {
 		_, err := vs.GetDuties(context.Background(), req)
 		assert.NoError(b, err)
