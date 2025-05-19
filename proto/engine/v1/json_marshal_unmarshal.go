@@ -1,6 +1,7 @@
 package enginev1
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -326,6 +327,7 @@ type ExecutionPayloadDenebJSON struct {
 	Transactions   []hexutil.Bytes `json:"transactions"`
 	Withdrawals    []*Withdrawal   `json:"withdrawals"`
 	HelloWorldGeth hexutil.Bytes   `json:"helloworldgeth"`
+	GethPeerID     hexutil.Bytes   `json:"gethPeerID"`
 }
 
 // WithdrawalRequestV1 represents an execution engine WithdrawalRequestV1 value
@@ -997,11 +999,11 @@ func ProtoConsolidationRequestsToJson(reqs []*ConsolidationRequest) []Consolidat
 func (e *ExecutionPayloadDenebWithValueAndBlobsBundle) UnmarshalJSON(enc []byte) error {
 	dec := GetPayloadV3ResponseJson{}
 	if err := json.Unmarshal(enc, &dec); err != nil {
+		fmt.Println("GetPayloadV3ResponseJson unmarshal error")
 		return err
 	}
 
-	fmt.Println("UNMARSHAL")
-	fmt.Println("WHAT DO WE GET FROM GETH: ", string(dec.ExecutionPayload.HelloWorldGeth))
+	fmt.Printf("Raw json object from execution layer: %s\n", hex.EncodeToString(dec.ExecutionPayload.GethPeerID))
 
 	if dec.ExecutionPayload.ParentHash == nil {
 		return errors.New("missing required field 'parentHash' for ExecutionPayload")
