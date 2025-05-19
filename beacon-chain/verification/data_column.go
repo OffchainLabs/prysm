@@ -20,8 +20,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-const dataColumnSidecarSubTopic = "/data_column_sidecar_%d/"
-
 var (
 	// GossipDataColumnSidecarRequirements defines the set of requirements that DataColumnSidecars received on gossip
 	// must satisfy in order to upgrade an RODataColumn to a VerifiedRODataColumn.
@@ -111,7 +109,7 @@ func (dv *RODataColumnsVerifier) ValidFields() (err error) {
 	return nil
 }
 
-func (dv *RODataColumnsVerifier) CorrectSubnet(expectedTopics []string) (err error) {
+func (dv *RODataColumnsVerifier) CorrectSubnet(dataColumnSidecarSubTopic string, expectedTopics []string) (err error) {
 	if ok, err := dv.results.cached(RequireCorrectSubnet); ok {
 		return err
 	}

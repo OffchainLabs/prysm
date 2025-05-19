@@ -87,13 +87,15 @@ func TestValid(t *testing.T) {
 }
 
 func TestCorrectSubnet(t *testing.T) {
+	const dataColumnSidecarSubTopic = "/data_column_sidecar_%d/"
+
 	var initializer Initializer
 
 	t.Run("lengths mismatch", func(t *testing.T) {
 		columns := GenerateTestDataColumns(t, [fieldparams.RootLength]byte{}, 1, 1)
 		verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
 
-		err := verifier.CorrectSubnet([]string{})
+		err := verifier.CorrectSubnet(dataColumnSidecarSubTopic, []string{})
 		require.ErrorIs(t, err, errBadTopicLength)
 		require.NotNil(t, verifier.results.result(RequireCorrectSubnet))
 	})
@@ -102,10 +104,12 @@ func TestCorrectSubnet(t *testing.T) {
 		columns := GenerateTestDataColumns(t, [fieldparams.RootLength]byte{}, 1, 1)
 		verifier := initializer.NewDataColumnsVerifier(columns[:2], GossipDataColumnSidecarRequirements)
 
-		err := verifier.CorrectSubnet([]string{
-			"/eth2/9dc47cc6/data_column_sidecar_1/ssz_snappy",
-			"/eth2/9dc47cc6/data_column_sidecar_0/ssz_snappy",
-		})
+		err := verifier.CorrectSubnet(
+			dataColumnSidecarSubTopic,
+			[]string{
+				"/eth2/9dc47cc6/data_column_sidecar_1/ssz_snappy",
+				"/eth2/9dc47cc6/data_column_sidecar_0/ssz_snappy",
+			})
 
 		require.ErrorIs(t, err, errBadTopic)
 		require.NotNil(t, verifier.results.result(RequireCorrectSubnet))
@@ -120,11 +124,11 @@ func TestCorrectSubnet(t *testing.T) {
 		columns := GenerateTestDataColumns(t, [fieldparams.RootLength]byte{}, 1, 1)
 		verifier := initializer.NewDataColumnsVerifier(columns[:2], GossipDataColumnSidecarRequirements)
 
-		err := verifier.CorrectSubnet(subnets)
+		err := verifier.CorrectSubnet(dataColumnSidecarSubTopic, subnets)
 		require.NoError(t, err)
 		require.IsNil(t, verifier.results.result(RequireCorrectSubnet))
 
-		err = verifier.CorrectSubnet(subnets)
+		err = verifier.CorrectSubnet(dataColumnSidecarSubTopic, subnets)
 		require.NoError(t, err)
 	})
 }
