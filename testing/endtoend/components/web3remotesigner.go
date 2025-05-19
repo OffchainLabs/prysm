@@ -256,7 +256,13 @@ func (w *Web3RemoteSigner) UnderlyingProcess() *os.Process {
 func createTestnetDir() (string, error) {
 	testNetDir := e2e.TestParams.TestPath + "/web3signer-testnet"
 	configPath := filepath.Join(testNetDir, "config.yaml")
-	rawYaml := params.ConfigToYaml(params.BeaconConfig())
+
+	// TODO: add blob schedule back in as soon as web3signer supports it!
+	configCopy := params.BeaconConfig().Copy()
+	configCopy.BlobSchedule = nil
+	// ---
+
+	rawYaml := params.ConfigToYaml(configCopy)
 
 	// Add in deposit contract in yaml
 	depContractStr := fmt.Sprintf("\nDEPOSIT_CONTRACT_ADDRESS: %s\n", params.BeaconConfig().DepositContractAddress)
