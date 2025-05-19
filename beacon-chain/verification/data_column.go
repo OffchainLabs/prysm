@@ -1,9 +1,7 @@
 package verification
 
 import (
-	"bytes"
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"strings"
 	"time"
@@ -514,19 +512,24 @@ func columnErrBuilder(baseErr error) error {
 	return errors.Wrap(baseErr, errColumnsInvalid.Error())
 }
 
-func inclusionProofKey(c blocks.RODataColumn) ([32]byte, error) {
-	var buf bytes.Buffer
-
-	root := c.BlockRoot()
-	buf.Write(root[:])
-
-	for _, proof := range c.KzgCommitmentsInclusionProof {
-		buf.Write(proof)
+func inclusionProofKey(c blocks.RODataColumn) ([160]byte, error) {
+	var key [160]byte
+	if len(c.KzgCommitmentsInclusionProof) != 4 {
+		// This should be already enforced by ssz unmarshaling; still check so we don't panic on array bounds.
+		return key, columnErrBuilder(ErrSidecarInclusionProofInvalid)
 	}
 
-	for _, commitment := range c.KzgCommitments {
-		buf.Write(commitment)
+	root, err := c.SignedBlockHeader.HashTreeRoot()
+	if err != nil {
+		return [160]byte{}, errors.Wrap(err, "hash tree root")
 	}
 
-	return sha256.Sum256(buf.Bytes()), nil
+	for i := range c.KzgCommitmentsInclusionProof {
+		if copy(key[32*i:32*i+32], c.KzgCommitmentsInclusionProof[i]) != 32 {
+			return key, columnErrBuilder(ErrSidecarInclusionProofInvalid)
+		}
+	}
+
+	copy(key[128:], root[:])
+	return key, nil
 }
