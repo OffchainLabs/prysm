@@ -14,6 +14,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/runtime/logging"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -400,23 +401,55 @@ func (dv *RODataColumnsVerifier) SidecarProposerExpected(ctx context.Context) (e
 
 	defer dv.recordResult(RequireSidecarProposerExpected, &err)
 
+	type slotParentRoot struct {
+		slot       primitives.Slot
+		parentRoot [fieldparams.RootLength]byte
+	}
+
+	targetRootBySlotParentRoot := make(map[slotParentRoot][fieldparams.RootLength]byte)
+
+	var targetRootFromCache = func(slot primitives.Slot, parentRoot [fieldparams.RootLength]byte) ([fieldparams.RootLength]byte, error) {
+		// Use cached values if available.
+		slotParentRoot := slotParentRoot{slot: slot, parentRoot: parentRoot}
+		if root, ok := targetRootBySlotParentRoot[slotParentRoot]; ok {
+			return root, nil
+		}
+
+		// Compute the epoch of the data column slot.
+		dataColumnEpoch := slots.ToEpoch(slot)
+		if dataColumnEpoch > 0 {
+			dataColumnEpoch = dataColumnEpoch - 1
+		}
+
+		// Compute the target root for the epoch.
+		targetRoot, err := dv.fc.TargetRootForEpoch(parentRoot, dataColumnEpoch)
+		if err != nil {
+			return [fieldparams.RootLength]byte{}, errors.Wrap(err, "target root from epoch")
+		}
+
+		// Store the target root in the cache.
+		targetRootBySlotParentRoot[slotParentRoot] = targetRoot
+
+		return targetRoot, nil
+	}
+
 	for _, dataColumn := range dv.dataColumns {
 		// Extract the slot of the data column.
 		dataColumnSlot := dataColumn.Slot()
+
+		// Extract the root of the parent block corresponding to the data column.
+		parentRoot := dataColumn.ParentRoot()
+
+		// Compute the target root for the data column.
+		targetRoot, err := targetRootFromCache(dataColumnSlot, parentRoot)
+		if err != nil {
+			return columnErrBuilder(errors.Wrap(err, "target root"))
+		}
 
 		// Compute the epoch of the data column slot.
 		dataColumnEpoch := slots.ToEpoch(dataColumnSlot)
 		if dataColumnEpoch > 0 {
 			dataColumnEpoch = dataColumnEpoch - 1
-		}
-
-		// Extract the root of the parent block corresponding to the data column.
-		parentRoot := dataColumn.ParentRoot()
-
-		// Compute the target root for the epoch.
-		targetRoot, err := dv.fc.TargetRootForEpoch(parentRoot, dataColumnEpoch)
-		if err != nil {
-			return columnErrBuilder(errors.Wrap(err, "target root for epoch"))
 		}
 
 		// Create a checkpoint for the target root.
