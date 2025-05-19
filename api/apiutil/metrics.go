@@ -1,4 +1,4 @@
-package rpc
+package apiutil
 
 import (
 	"github.com/prometheus/client_golang/prometheus"

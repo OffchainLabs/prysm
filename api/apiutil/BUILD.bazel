@@ -2,10 +2,20 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["common.go"],
+    srcs = [
+        "common.go",
+        "metrics.go",
+        "types.go",
+    ],
     importpath = "github.com/OffchainLabs/prysm/v6/api/apiutil",
     visibility = ["//visibility:public"],
-    deps = ["//consensus-types/primitives:go_default_library"],
+    deps = [
+        "//api/server/middleware:go_default_library",
+        "//consensus-types/primitives:go_default_library",
+        "@com_github_prometheus_client_golang//prometheus:go_default_library",
+        "@com_github_prometheus_client_golang//prometheus/promauto:go_default_library",
+        "@com_github_prometheus_client_golang//prometheus/promhttp:go_default_library",
+    ],
 )
 
 go_test(

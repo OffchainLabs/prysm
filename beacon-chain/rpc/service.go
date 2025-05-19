@@ -296,10 +296,10 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 
 	endpoints := s.endpoints(s.cfg.EnableDebugRPCEndpoints, blocker, stater, rewardFetcher, validatorServer, coreService, ch)
 	for _, e := range endpoints {
-		for i := range e.methods {
+		for i := range e.Methods {
 			s.cfg.Router.HandleFunc(
-				fmt.Sprintf("%s %s", e.methods[i], e.template),
-				e.handlerWithMiddleware(),
+				fmt.Sprintf("%s %s", e.Methods[i], e.Template),
+				e.HandlerWithMiddleware(),
 			)
 		}
 	}

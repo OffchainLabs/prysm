@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -128,17 +129,19 @@ func TestListAttestations(t *testing.T) {
 
 		require.NoError(t, s.AttestationsPool.SaveAggregatedAttestations([]ethpbv1alpha1.Att{att1, att2}))
 		require.NoError(t, s.AttestationsPool.SaveUnaggregatedAttestations([]ethpbv1alpha1.Att{att3, att4}))
-
+		ts := startServer(s)
+		defer ts.Close()
+		v1url := ts.URL + "/eth/v1/beacon/pool/attestations"
 		t.Run("empty request", func(t *testing.T) {
-			url := "http://example.com"
-			request := httptest.NewRequest(http.MethodGet, url, nil)
-			writer := httptest.NewRecorder()
-			writer.Body = &bytes.Buffer{}
+			url := v1url
+			r, err := http.Get(url)
+			require.NoError(t, err)
 
-			s.ListAttestations(writer, request)
-			assert.Equal(t, http.StatusOK, writer.Code)
+			assert.Equal(t, http.StatusOK, r.StatusCode)
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
 			resp := &structs.ListAttestationsResponse{}
-			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
+			require.NoError(t, json.Unmarshal(body, &resp))
 			require.NotNil(t, resp)
 			require.NotNil(t, resp.Data)
 
@@ -147,15 +150,16 @@ func TestListAttestations(t *testing.T) {
 			assert.Equal(t, 4, len(atts))
 		})
 		t.Run("slot request", func(t *testing.T) {
-			url := "http://example.com?slot=2"
-			request := httptest.NewRequest(http.MethodGet, url, nil)
-			writer := httptest.NewRecorder()
-			writer.Body = &bytes.Buffer{}
+			url := v1url + "?slot=2"
 
-			s.ListAttestations(writer, request)
-			assert.Equal(t, http.StatusOK, writer.Code)
+			r, err := http.Get(url)
+			require.NoError(t, err)
+
+			assert.Equal(t, http.StatusOK, r.StatusCode)
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
 			resp := &structs.ListAttestationsResponse{}
-			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
+			require.NoError(t, json.Unmarshal(body, &resp))
 			require.NotNil(t, resp)
 			require.NotNil(t, resp.Data)
 
@@ -167,15 +171,15 @@ func TestListAttestations(t *testing.T) {
 			}
 		})
 		t.Run("index request", func(t *testing.T) {
-			url := "http://example.com?committee_index=4"
-			request := httptest.NewRequest(http.MethodGet, url, nil)
-			writer := httptest.NewRecorder()
-			writer.Body = &bytes.Buffer{}
+			url := v1url + "?committee_index=4"
+			r, err := http.Get(url)
+			require.NoError(t, err)
 
-			s.ListAttestations(writer, request)
-			assert.Equal(t, http.StatusOK, writer.Code)
+			assert.Equal(t, http.StatusOK, r.StatusCode)
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
 			resp := &structs.ListAttestationsResponse{}
-			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
+			require.NoError(t, json.Unmarshal(body, &resp))
 			require.NotNil(t, resp)
 			require.NotNil(t, resp.Data)
 
@@ -187,15 +191,15 @@ func TestListAttestations(t *testing.T) {
 			}
 		})
 		t.Run("both slot + index request", func(t *testing.T) {
-			url := "http://example.com?slot=2&committee_index=4"
-			request := httptest.NewRequest(http.MethodGet, url, nil)
-			writer := httptest.NewRecorder()
-			writer.Body = &bytes.Buffer{}
+			url := v1url + "?slot=2&committee_index=4"
+			r, err := http.Get(url)
+			require.NoError(t, err)
 
-			s.ListAttestations(writer, request)
-			assert.Equal(t, http.StatusOK, writer.Code)
+			assert.Equal(t, http.StatusOK, r.StatusCode)
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
 			resp := &structs.ListAttestationsResponse{}
-			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
+			require.NoError(t, json.Unmarshal(body, &resp))
 			require.NotNil(t, resp)
 			require.NotNil(t, resp.Data)
 
@@ -227,16 +231,19 @@ func TestListAttestations(t *testing.T) {
 
 			require.NoError(t, s.AttestationsPool.SaveAggregatedAttestations([]ethpbv1alpha1.Att{att1, att2}))
 			require.NoError(t, s.AttestationsPool.SaveUnaggregatedAttestations([]ethpbv1alpha1.Att{att3, att4}))
+			ts := startServer(s)
+			defer ts.Close()
+			v2url := ts.URL + "/eth/v2/beacon/pool/attestations"
 			t.Run("empty request", func(t *testing.T) {
-				url := "http://example.com"
-				request := httptest.NewRequest(http.MethodGet, url, nil)
-				writer := httptest.NewRecorder()
-				writer.Body = &bytes.Buffer{}
+				url := v2url
+				r, err := http.Get(url)
+				require.NoError(t, err)
 
-				s.ListAttestationsV2(writer, request)
-				assert.Equal(t, http.StatusOK, writer.Code)
+				assert.Equal(t, http.StatusOK, r.StatusCode)
+				body, err := io.ReadAll(r.Body)
+				require.NoError(t, err)
 				resp := &structs.ListAttestationsResponse{}
-				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+				require.NoError(t, json.Unmarshal(body, resp))
 				require.NotNil(t, resp)
 				require.NotNil(t, resp.Data)
 
@@ -246,15 +253,15 @@ func TestListAttestations(t *testing.T) {
 				assert.Equal(t, "deneb", resp.Version)
 			})
 			t.Run("slot request", func(t *testing.T) {
-				url := "http://example.com?slot=2"
-				request := httptest.NewRequest(http.MethodGet, url, nil)
-				writer := httptest.NewRecorder()
-				writer.Body = &bytes.Buffer{}
+				url := v2url + "?slot=2"
+				r, err := http.Get(url)
+				require.NoError(t, err)
 
-				s.ListAttestationsV2(writer, request)
-				assert.Equal(t, http.StatusOK, writer.Code)
+				assert.Equal(t, http.StatusOK, r.StatusCode)
+				body, err := io.ReadAll(r.Body)
+				require.NoError(t, err)
 				resp := &structs.ListAttestationsResponse{}
-				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+				require.NoError(t, json.Unmarshal(body, resp))
 				require.NotNil(t, resp)
 				require.NotNil(t, resp.Data)
 
@@ -267,15 +274,15 @@ func TestListAttestations(t *testing.T) {
 				}
 			})
 			t.Run("index request", func(t *testing.T) {
-				url := "http://example.com?committee_index=4"
-				request := httptest.NewRequest(http.MethodGet, url, nil)
-				writer := httptest.NewRecorder()
-				writer.Body = &bytes.Buffer{}
+				url := v2url + "?committee_index=4"
+				r, err := http.Get(url)
+				require.NoError(t, err)
 
-				s.ListAttestationsV2(writer, request)
-				assert.Equal(t, http.StatusOK, writer.Code)
+				assert.Equal(t, http.StatusOK, r.StatusCode)
+				body, err := io.ReadAll(r.Body)
+				require.NoError(t, err)
 				resp := &structs.ListAttestationsResponse{}
-				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+				require.NoError(t, json.Unmarshal(body, resp))
 				require.NotNil(t, resp)
 				require.NotNil(t, resp.Data)
 
@@ -288,15 +295,15 @@ func TestListAttestations(t *testing.T) {
 				}
 			})
 			t.Run("both slot + index request", func(t *testing.T) {
-				url := "http://example.com?slot=2&committee_index=4"
-				request := httptest.NewRequest(http.MethodGet, url, nil)
-				writer := httptest.NewRecorder()
-				writer.Body = &bytes.Buffer{}
+				url := v2url + "?slot=2&committee_index=4"
+				r, err := http.Get(url)
+				require.NoError(t, err)
 
-				s.ListAttestationsV2(writer, request)
-				assert.Equal(t, http.StatusOK, writer.Code)
+				assert.Equal(t, http.StatusOK, r.StatusCode)
+				body, err := io.ReadAll(r.Body)
+				require.NoError(t, err)
 				resp := &structs.ListAttestationsResponse{}
-				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+				require.NoError(t, json.Unmarshal(body, resp))
 				require.NotNil(t, resp)
 				require.NotNil(t, resp.Data)
 
@@ -405,17 +412,19 @@ func TestListAttestations(t *testing.T) {
 			// Added one pre electra attestation to ensure it is ignored.
 			require.NoError(t, s.AttestationsPool.SaveAggregatedAttestations([]ethpbv1alpha1.Att{attElectra1, attElectra2, att1}))
 			require.NoError(t, s.AttestationsPool.SaveUnaggregatedAttestations([]ethpbv1alpha1.Att{attElectra3, attElectra4, att3}))
-
+			ts := startServer(s)
+			defer ts.Close()
+			v2url := ts.URL + "/eth/v2/beacon/pool/attestations"
 			t.Run("empty request", func(t *testing.T) {
-				url := "http://example.com"
-				request := httptest.NewRequest(http.MethodGet, url, nil)
-				writer := httptest.NewRecorder()
-				writer.Body = &bytes.Buffer{}
+				url := v2url
+				r, err := http.Get(url)
+				require.NoError(t, err)
 
-				s.ListAttestationsV2(writer, request)
-				assert.Equal(t, http.StatusOK, writer.Code)
+				assert.Equal(t, http.StatusOK, r.StatusCode)
+				body, err := io.ReadAll(r.Body)
+				require.NoError(t, err)
 				resp := &structs.ListAttestationsResponse{}
-				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+				require.NoError(t, json.Unmarshal(body, resp))
 				require.NotNil(t, resp)
 				require.NotNil(t, resp.Data)
 
@@ -425,15 +434,15 @@ func TestListAttestations(t *testing.T) {
 				assert.Equal(t, "electra", resp.Version)
 			})
 			t.Run("slot request", func(t *testing.T) {
-				url := "http://example.com?slot=2"
-				request := httptest.NewRequest(http.MethodGet, url, nil)
-				writer := httptest.NewRecorder()
-				writer.Body = &bytes.Buffer{}
+				url := v2url + "?slot=2"
+				r, err := http.Get(url)
+				require.NoError(t, err)
 
-				s.ListAttestationsV2(writer, request)
-				assert.Equal(t, http.StatusOK, writer.Code)
+				assert.Equal(t, http.StatusOK, r.StatusCode)
+				body, err := io.ReadAll(r.Body)
+				require.NoError(t, err)
 				resp := &structs.ListAttestationsResponse{}
-				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+				require.NoError(t, json.Unmarshal(body, resp))
 				require.NotNil(t, resp)
 				require.NotNil(t, resp.Data)
 
@@ -446,15 +455,15 @@ func TestListAttestations(t *testing.T) {
 				}
 			})
 			t.Run("index request", func(t *testing.T) {
-				url := "http://example.com?committee_index=2"
-				request := httptest.NewRequest(http.MethodGet, url, nil)
-				writer := httptest.NewRecorder()
-				writer.Body = &bytes.Buffer{}
+				url := v2url + "?committee_index=2"
+				r, err := http.Get(url)
+				require.NoError(t, err)
 
-				s.ListAttestationsV2(writer, request)
-				assert.Equal(t, http.StatusOK, writer.Code)
+				assert.Equal(t, http.StatusOK, r.StatusCode)
+				body, err := io.ReadAll(r.Body)
+				require.NoError(t, err)
 				resp := &structs.ListAttestationsResponse{}
-				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+				require.NoError(t, json.Unmarshal(body, resp))
 				require.NotNil(t, resp)
 				require.NotNil(t, resp.Data)
 
@@ -467,15 +476,15 @@ func TestListAttestations(t *testing.T) {
 				}
 			})
 			t.Run("both slot + index request", func(t *testing.T) {
-				url := "http://example.com?slot=2&committee_index=2"
-				request := httptest.NewRequest(http.MethodGet, url, nil)
-				writer := httptest.NewRecorder()
-				writer.Body = &bytes.Buffer{}
+				url := v2url + "?slot=2&committee_index=2"
+				r, err := http.Get(url)
+				require.NoError(t, err)
 
-				s.ListAttestationsV2(writer, request)
-				assert.Equal(t, http.StatusOK, writer.Code)
+				assert.Equal(t, http.StatusOK, r.StatusCode)
+				body, err := io.ReadAll(r.Body)
+				require.NoError(t, err)
 				resp := &structs.ListAttestationsResponse{}
-				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+				require.NoError(t, json.Unmarshal(body, resp))
 				require.NotNil(t, resp)
 				require.NotNil(t, resp.Data)
 
