@@ -31,6 +31,7 @@ const (
 	BlobLength                            = 131072            // BlobLength defines the byte length of a blob.
 	BlobSize                              = 131072            // defined to match blob.size in bazel ssz codegen
 	BlobSidecarSize                       = 131928            // defined to match blob sidecar size in bazel ssz codegen
+	KzgCommitmentSize                     = 48                // KzgCommitmentSize defines the byte length of a KZG commitment.
 	KzgCommitmentInclusionProofDepth      = 10                // Merkle proof depth for blob_kzg_commitments list item
 	ExecutionBranchDepth                  = 4                 // ExecutionBranchDepth defines the number of leaves in a merkle proof of the execution payload header.
 	SyncCommitteeBranchDepth              = 5                 // SyncCommitteeBranchDepth defines the number of leaves in a merkle proof of a sync committee.
