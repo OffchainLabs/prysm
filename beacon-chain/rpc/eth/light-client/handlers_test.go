@@ -17,7 +17,6 @@ import (
 	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	dbtesting "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
@@ -34,11 +33,6 @@ import (
 )
 
 func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
-	resetFn := features.InitWithReset(&features.Flags{
-		EnableLightClient: true,
-	})
-	defer resetFn()
-
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig()
 	cfg.AltairForkEpoch = 0
@@ -454,11 +448,6 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 }
 
 func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
-	resetFn := features.InitWithReset(&features.Flags{
-		EnableLightClient: true,
-	})
-	defer resetFn()
-
 	helpers.ClearCache()
 	ctx := context.Background()
 
@@ -1501,10 +1490,6 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 }
 
 func TestLightClientHandler_GetLightClientFinalityUpdate(t *testing.T) {
-	resetFn := features.InitWithReset(&features.Flags{
-		EnableLightClient: true,
-	})
-	defer resetFn()
 	helpers.ClearCache()
 
 	t.Run("no update", func(t *testing.T) {
@@ -1589,10 +1574,6 @@ func TestLightClientHandler_GetLightClientFinalityUpdate(t *testing.T) {
 }
 
 func TestLightClientHandler_GetLightClientOptimisticUpdate(t *testing.T) {
-	resetFn := features.InitWithReset(&features.Flags{
-		EnableLightClient: true,
-	})
-	defer resetFn()
 	helpers.ClearCache()
 
 	t.Run("no update", func(t *testing.T) {

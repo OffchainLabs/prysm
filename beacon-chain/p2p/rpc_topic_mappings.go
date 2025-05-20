@@ -4,6 +4,7 @@ import (
 	"reflect"
 
 	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -43,6 +44,18 @@ const BlobSidecarsByRangeName = "/blob_sidecars_by_range"
 // BlobSidecarsByRootName is the name for the BlobSidecarsByRoot v1 message topic.
 const BlobSidecarsByRootName = "/blob_sidecars_by_root"
 
+// LightClientBootstrapName is the name for the LightClientBootstrap message topic,
+const LightClientBootstrapName = "/light_client_bootstrap"
+
+// LightClientUpdatesByRangeName is the name for the LightClientUpdatesByRange topic.
+const LightClientUpdatesByRangeName = "/light_client_updates_by_range"
+
+// LightClientFinalityUpdateName is the name for the LightClientFinalityUpdate topic.
+const LightClientFinalityUpdateName = "/light_client_finality_update"
+
+// LightClientOptimisticUpdateName is the name for the LightClientOptimisticUpdate topic.
+const LightClientOptimisticUpdateName = "/light_client_optimistic_update"
+
 const (
 	// V1 RPC Topics
 	// RPCStatusTopicV1 defines the v1 topic for the status rpc method.
@@ -65,6 +78,15 @@ const (
 	// RPCBlobSidecarsByRootTopicV1 is a topic for requesting blob sidecars by their block root. New in deneb.
 	// /eth2/beacon_chain/req/blob_sidecars_by_root/1/
 	RPCBlobSidecarsByRootTopicV1 = protocolPrefix + BlobSidecarsByRootName + SchemaVersionV1
+
+	// RPCLightClientBootstrapTopicV1 is a topic for requesting a light client bootstrap.
+	RPCLightClientBootstrapTopicV1 = protocolPrefix + LightClientBootstrapName + SchemaVersionV1
+	// RPCLightClientUpdatesByRangeTopicV1 is a topic for requesting light client updates by range.
+	RPCLightClientUpdatesByRangeTopicV1 = protocolPrefix + LightClientUpdatesByRangeName + SchemaVersionV1
+	// RPCLightClientFinalityUpdateTopicV1 is a topic for requesting a light client finality update.
+	RPCLightClientFinalityUpdateTopicV1 = protocolPrefix + LightClientFinalityUpdateName + SchemaVersionV1
+	// RPCLightClientOptimisticUpdateTopicV1 is a topic for requesting a light client Optimistic update.
+	RPCLightClientOptimisticUpdateTopicV1 = protocolPrefix + LightClientOptimisticUpdateName + SchemaVersionV1
 
 	// V2 RPC Topics
 	// RPCBlocksByRangeTopicV2 defines v2 the topic for the blocks by range rpc method.
@@ -101,6 +123,12 @@ var RPCTopicMappings = map[string]interface{}{
 	RPCBlobSidecarsByRangeTopicV1: new(pb.BlobSidecarsByRangeRequest),
 	// BlobSidecarsByRoot v1 Message
 	RPCBlobSidecarsByRootTopicV1: new(p2ptypes.BlobSidecarsByRootReq),
+
+	// Light client
+	RPCLightClientBootstrapTopicV1:        new([fieldparams.RootLength]byte),
+	RPCLightClientUpdatesByRangeTopicV1:   new(pb.LightClientUpdatesByRangeRequest),
+	RPCLightClientFinalityUpdateTopicV1:   new(interface{}),
+	RPCLightClientOptimisticUpdateTopicV1: new(interface{}),
 }
 
 // Maps all registered protocol prefixes.
@@ -111,14 +139,18 @@ var protocolMapping = map[string]bool{
 // Maps all the protocol message names for the different rpc
 // topics.
 var messageMapping = map[string]bool{
-	StatusMessageName:              true,
-	GoodbyeMessageName:             true,
-	BeaconBlocksByRangeMessageName: true,
-	BeaconBlocksByRootsMessageName: true,
-	PingMessageName:                true,
-	MetadataMessageName:            true,
-	BlobSidecarsByRangeName:        true,
-	BlobSidecarsByRootName:         true,
+	StatusMessageName:               true,
+	GoodbyeMessageName:              true,
+	BeaconBlocksByRangeMessageName:  true,
+	BeaconBlocksByRootsMessageName:  true,
+	PingMessageName:                 true,
+	MetadataMessageName:             true,
+	BlobSidecarsByRangeName:         true,
+	BlobSidecarsByRootName:          true,
+	LightClientBootstrapName:        true,
+	LightClientUpdatesByRangeName:   true,
+	LightClientFinalityUpdateName:   true,
+	LightClientOptimisticUpdateName: true,
 }
 
 // Maps all the RPC messages which are to updated in altair.

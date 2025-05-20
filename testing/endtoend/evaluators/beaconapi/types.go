@@ -18,23 +18,26 @@ type endpoint interface {
 	setPOSTObj(obj interface{})
 	getPResp() interface{}  // retrieves the Prysm JSON response
 	getLHResp() interface{} // retrieves the Lighthouse JSON response
-	getParams(epoch primitives.Epoch) []string
-	setParams(f func(primitives.Epoch) []string)
+	getParams(currentEpoch primitives.Epoch) []string
+	setParams(f func(currentEpoch primitives.Epoch) []string)
+	getQueryParams(currentEpoch primitives.Epoch) []string
+	setQueryParams(f func(currentEpoch primitives.Epoch) []string)
 	getCustomEval() func(interface{}, interface{}) error
 	setCustomEval(f func(interface{}, interface{}) error)
 }
 
 type apiEndpoint[Resp any] struct {
-	basePath   string
-	sanity     bool
-	ssz        bool
-	start      primitives.Epoch
-	postObj    interface{}
-	pResp      *Resp  // Prysm JSON response
-	lhResp     *Resp  // Lighthouse JSON response
-	sszResp    []byte // Prysm SSZ response
-	params     func(currentEpoch primitives.Epoch) []string
-	customEval func(interface{}, interface{}) error
+	basePath    string
+	sanity      bool
+	ssz         bool
+	start       primitives.Epoch
+	postObj     interface{}
+	pResp       *Resp  // Prysm JSON response
+	lhResp      *Resp  // Lighthouse JSON response
+	sszResp     []byte // Prysm SSZ response
+	params      func(currentEpoch primitives.Epoch) []string
+	queryParams func(currentEpoch primitives.Epoch) []string
+	customEval  func(interface{}, interface{}) error
 }
 
 func (e *apiEndpoint[Resp]) getBasePath() string {
@@ -89,15 +92,26 @@ func (e *apiEndpoint[Resp]) getLHResp() interface{} {
 	return e.lhResp
 }
 
-func (e *apiEndpoint[Resp]) getParams(epoch primitives.Epoch) []string {
+func (e *apiEndpoint[Resp]) getParams(currentEpoch primitives.Epoch) []string {
 	if e.params == nil {
 		return nil
 	}
-	return e.params(epoch)
+	return e.params(currentEpoch)
 }
 
 func (e *apiEndpoint[Resp]) setParams(f func(currentEpoch primitives.Epoch) []string) {
 	e.params = f
+}
+
+func (e *apiEndpoint[Resp]) getQueryParams(currentEpoch primitives.Epoch) []string {
+	if e.queryParams == nil {
+		return nil
+	}
+	return e.queryParams(currentEpoch)
+}
+
+func (e *apiEndpoint[Resp]) setQueryParams(f func(currentEpoch primitives.Epoch) []string) {
+	e.queryParams = f
 }
 
 func (e *apiEndpoint[Resp]) getCustomEval() func(interface{}, interface{}) error {
@@ -154,6 +168,13 @@ func withPOSTObj(obj interface{}) endpointOpt {
 func withParams(f func(currentEpoch primitives.Epoch) []string) endpointOpt {
 	return func(e endpoint) {
 		e.setParams(f)
+	}
+}
+
+// We specify query parameters.
+func withQueryParams(f func(currentEpoch primitives.Epoch) []string) endpointOpt {
+	return func(e endpoint) {
+		e.setQueryParams(f)
 	}
 }
 

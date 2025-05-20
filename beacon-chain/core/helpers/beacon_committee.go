@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/crypto/hash"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/math"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -118,6 +119,9 @@ func attestationCommittees(
 
 // BeaconCommittees returns the list of all beacon committees for a given state at a given slot.
 func BeaconCommittees(ctx context.Context, state state.ReadOnlyBeaconState, slot primitives.Slot) ([][]primitives.ValidatorIndex, error) {
+	ctx, span := trace.StartSpan(ctx, "helpers.BeaconCommittees")
+	defer span.End()
+
 	epoch := slots.ToEpoch(slot)
 	activeCount, err := ActiveValidatorCount(ctx, state, epoch)
 	if err != nil {
@@ -244,6 +248,9 @@ func BeaconCommittee(
 	slot primitives.Slot,
 	committeeIndex primitives.CommitteeIndex,
 ) ([]primitives.ValidatorIndex, error) {
+	ctx, span := trace.StartSpan(ctx, "helpers.BeaconCommittee")
+	defer span.End()
+
 	committee, err := committeeCache.Committee(ctx, slot, seed, committeeIndex)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not interface with committee cache")
@@ -297,6 +304,9 @@ func verifyAssignmentEpoch(epoch primitives.Epoch, state state.BeaconState) erro
 // It verifies the validity of the epoch, then iterates through each slot in the epoch to determine the
 // proposer for that slot and assigns them accordingly.
 func ProposerAssignments(ctx context.Context, state state.BeaconState, epoch primitives.Epoch) (map[primitives.ValidatorIndex][]primitives.Slot, error) {
+	ctx, span := trace.StartSpan(ctx, "helpers.ProposerAssignments")
+	defer span.End()
+
 	// Verify if the epoch is valid for assignment based on the provided state.
 	if err := verifyAssignmentEpoch(epoch, state); err != nil {
 		return nil, err
@@ -345,6 +355,9 @@ func ProposerAssignments(ctx context.Context, state state.BeaconState, epoch pri
 // It retrieves active validator indices, determines the number of committees per slot, and computes
 // assignments for each validator based on their presence in the provided validators slice.
 func CommitteeAssignments(ctx context.Context, state state.BeaconState, epoch primitives.Epoch, validators []primitives.ValidatorIndex) (map[primitives.ValidatorIndex]*CommitteeAssignment, error) {
+	ctx, span := trace.StartSpan(ctx, "helpers.CommitteeAssignments")
+	defer span.End()
+
 	// Verify if the epoch is valid for assignment based on the provided state.
 	if err := verifyAssignmentEpoch(epoch, state); err != nil {
 		return nil, err
@@ -432,6 +445,9 @@ func CommitteeIndices(committeeBits bitfield.Bitfield) []primitives.CommitteeInd
 // UpdateCommitteeCache gets called at the beginning of every epoch to cache the committee shuffled indices
 // list with committee index and epoch number. It caches the shuffled indices for the input epoch.
 func UpdateCommitteeCache(ctx context.Context, state state.ReadOnlyBeaconState, e primitives.Epoch) error {
+	ctx, span := trace.StartSpan(ctx, "committeeCache.UpdateCommitteeCache")
+	defer span.End()
+
 	seed, err := Seed(state, e, params.BeaconConfig().DomainBeaconAttester)
 	if err != nil {
 		return err

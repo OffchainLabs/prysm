@@ -38,7 +38,7 @@ type DataColumnsVerifier interface {
 	SatisfyRequirement(Requirement)
 
 	ValidFields() error
-	CorrectSubnet(expectedTopics []string) error
+	CorrectSubnet(dataColumnSidecarSubTopic string, expectedTopics []string) error
 	NotFromFutureSlot() error
 	SlotAboveFinalized() error
 	ValidProposerSignature(ctx context.Context) error

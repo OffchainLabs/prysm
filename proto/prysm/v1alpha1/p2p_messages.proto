@@ -13,13 +13,13 @@ option java_package = "org.ethereum.eth.v1alpha1";
 option php_namespace = "Ethereum\\Eth\\v1alpha1";
 
 message Status {
-  bytes fork_digest = 1 [ (ethereum.eth.ext.ssz_size) = "4" ];
-  bytes finalized_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes fork_digest = 1 [(ethereum.eth.ext.ssz_size) = "4"];
+  bytes finalized_root = 2 [(ethereum.eth.ext.ssz_size) = "32"];
   uint64 finalized_epoch = 3 [
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
   ];
-  bytes head_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes head_root = 4 [(ethereum.eth.ext.ssz_size) = "32"];
   uint64 head_slot = 5 [
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
@@ -36,8 +36,8 @@ message BeaconBlocksByRangeRequest {
 }
 
 message ENRForkID {
-  bytes current_fork_digest = 1 [ (ethereum.eth.ext.ssz_size) = "4" ];
-  bytes next_fork_version = 2 [ (ethereum.eth.ext.ssz_size) = "4" ];
+  bytes current_fork_digest = 1 [(ethereum.eth.ext.ssz_size) = "4"];
+  bytes next_fork_version = 2 [(ethereum.eth.ext.ssz_size) = "4"];
   uint64 next_fork_epoch = 3 [
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
@@ -138,5 +138,17 @@ message DataColumnSidecarsByRangeRequest {
         "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
   uint64 count = 2;
-  repeated uint64 columns = 3 [ (ethereum.eth.ext.ssz_max) = "128" ];
+  repeated uint64 columns = 3 [(ethereum.eth.ext.ssz_max) = "128"];
+}
+
+/*
+ Spec Definition:
+ (
+  start_period: uint64
+  count: uint64
+ )
+*/
+message LightClientUpdatesByRangeRequest {
+  uint64 start_period = 1;
+  uint64 count = 2;
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution/types"
@@ -141,6 +142,7 @@ type config struct {
 type Service struct {
 	connectedETH1           bool
 	isRunning               bool
+	depositRequestsStarted  bool
 	processingLock          sync.RWMutex
 	latestEth1DataLock      sync.RWMutex
 	cfg                     *config
@@ -205,7 +207,7 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 			return nil, err
 		}
 	}
-
+	s.initDepositRequests()
 	eth1Data, err := s.validPowchainData(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to validate powchain data")
@@ -463,7 +465,9 @@ func safelyHandlePanic() {
 func (s *Service) handleETH1FollowDistance() {
 	defer safelyHandlePanic()
 	ctx := s.ctx
-
+	if s.depositRequestsStarted {
+		return
+	}
 	// use a 5 minutes timeout for block time, because the max mining time is 278 sec (block 7208027)
 	// (analyzed the time of the block from 2018-09-01 to 2019-02-13)
 	fiveMinutesTimeout := prysmTime.Now().Add(-5 * time.Minute)
@@ -530,25 +534,27 @@ func (s *Service) initPOWService() {
 			s.latestEth1Data.BlockTime = header.Time
 			s.latestEth1DataLock.Unlock()
 
-			if err := s.processPastLogs(ctx); err != nil {
-				err = errors.Wrap(err, "processPastLogs")
-				s.retryExecutionClientConnection(ctx, err)
-				errorLogger(
-					err,
-					"Unable to process past deposit contract logs, perhaps your execution client is not fully synced",
-				)
-				continue
-			}
-			// Cache eth1 headers from our voting period.
-			if err := s.cacheHeadersForEth1DataVote(ctx); err != nil {
-				err = errors.Wrap(err, "cacheHeadersForEth1DataVote")
-				s.retryExecutionClientConnection(ctx, err)
-				if errors.Is(err, errBlockTimeTooLate) {
-					log.WithError(err).Debug("Unable to cache headers for execution client votes")
-				} else {
-					errorLogger(err, "Unable to cache headers for execution client votes")
+			if !s.depositRequestsStarted {
+				if err := s.processPastLogs(ctx); err != nil {
+					err = errors.Wrap(err, "processPastLogs")
+					s.retryExecutionClientConnection(ctx, err)
+					errorLogger(
+						err,
+						"Unable to process past deposit contract logs, perhaps your execution client is not fully synced",
+					)
+					continue
 				}
-				continue
+				// Cache eth1 headers from our voting period.
+				if err := s.cacheHeadersForEth1DataVote(ctx); err != nil {
+					err = errors.Wrap(err, "cacheHeadersForEth1DataVote")
+					s.retryExecutionClientConnection(ctx, err)
+					if errors.Is(err, errBlockTimeTooLate) {
+						log.WithError(err).Debug("Unable to cache headers for execution client votes")
+					} else {
+						errorLogger(err, "Unable to cache headers for execution client votes")
+					}
+					continue
+				}
 			}
 			// Handle edge case with embedded genesis state by fetching genesis header to determine
 			// its height.
@@ -824,7 +830,7 @@ func (s *Service) validPowchainData(ctx context.Context) (*ethpb.ETH1ChainData, 
 	if genState == nil || genState.IsNil() {
 		return eth1Data, nil
 	}
-	if eth1Data == nil || !eth1Data.ChainstartData.Chainstarted || !validateDepositContainers(eth1Data.DepositContainers) {
+	if s.depositRequestsStarted || eth1Data == nil || !eth1Data.ChainstartData.Chainstarted || !validateDepositContainers(eth1Data.DepositContainers) {
 		pbState, err := native.ProtobufBeaconStatePhase0(s.preGenesisState.ToProtoUnsafe())
 		if err != nil {
 			return nil, err
@@ -898,6 +904,15 @@ func (s *Service) migrateOldDepositTree(eth1DataInDB *ethpb.ETH1ChainData) error
 
 func (s *Service) removeStartupState() {
 	s.cfg.finalizedStateAtStartup = nil
+}
+
+func (s *Service) initDepositRequests() {
+	fState := s.cfg.finalizedStateAtStartup
+	isNil := fState == nil || fState.IsNil()
+	if isNil {
+		return
+	}
+	s.depositRequestsStarted = helpers.DepositRequestsStarted(fState)
 }
 
 func newBlobVerifierFromInitializer(ini *verification.Initializer) verification.NewBlobVerifier {
