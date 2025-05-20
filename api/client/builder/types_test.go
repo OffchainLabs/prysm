@@ -1057,55 +1057,6 @@ func TestExecutionPayloadResponseDenebUnmarshal(t *testing.T) {
 	assert.Equal(t, "3", epr.Data.ExecutionPayload.ExcessBlobGas)
 }
 
-// TODO: What is the replacement?
-// func TestExecutionPayloadResponseToProto(t *testing.T) {
-// 	hr := &ExecPayloadResponse{}
-// 	require.NoError(t, json.Unmarshal([]byte(testExampleExecutionPayload), hr))
-// 	p, err := hr.ToProto()
-// 	require.NoError(t, err)
-
-// 	parentHash, err := hexutil.Decode("0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2")
-// 	require.NoError(t, err)
-// 	feeRecipient, err := hexutil.Decode("0xabcf8e0d4e9587369b2301d0790347320302cc09")
-// 	require.NoError(t, err)
-// 	stateRoot, err := hexutil.Decode("0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2")
-// 	require.NoError(t, err)
-// 	receiptsRoot, err := hexutil.Decode("0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2")
-// 	require.NoError(t, err)
-// 	logsBloom, err := hexutil.Decode("0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
-// 	require.NoError(t, err)
-// 	prevRandao, err := hexutil.Decode("0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2")
-// 	require.NoError(t, err)
-// 	extraData, err := hexutil.Decode("0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2")
-// 	require.NoError(t, err)
-// 	blockHash, err := hexutil.Decode("0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2")
-// 	require.NoError(t, err)
-
-// 	tx, err := hexutil.Decode("0x02f878831469668303f51d843b9ac9f9843b9aca0082520894c93269b73096998db66be0441e836d873535cb9c8894a19041886f000080c001a031cc29234036afbf9a1fb9476b463367cb1f957ac0b919b69bbc798436e604aaa018c4e9c3914eb27aadd0b91e10b18655739fcf8c1fc398763a9f1beecb8ddc86")
-// 	require.NoError(t, err)
-// 	txList := [][]byte{tx}
-
-// 	bfpg, err := stringToUint256("452312848583266388373324160190187140051835877600158453279131187530910662656")
-// 	require.NoError(t, err)
-// 	expected := &v1.ExecutionPayload{
-// 		ParentHash:    parentHash,
-// 		FeeRecipient:  feeRecipient,
-// 		StateRoot:     stateRoot,
-// 		ReceiptsRoot:  receiptsRoot,
-// 		LogsBloom:     logsBloom,
-// 		PrevRandao:    prevRandao,
-// 		BlockNumber:   1,
-// 		GasLimit:      1,
-// 		GasUsed:       1,
-// 		Timestamp:     1,
-// 		ExtraData:     extraData,
-// 		BaseFeePerGas: bfpg.SSZBytes(),
-// 		BlockHash:     blockHash,
-// 		Transactions:  txList,
-// 	}
-// 	require.DeepEqual(t, expected, p)
-// }
-
 func TestExecutionPayloadResponseCapellaToProto(t *testing.T) {
 	hr := &ExecPayloadResponseCapella{}
 	require.NoError(t, json.Unmarshal([]byte(testExampleExecutionPayloadCapella), hr))
