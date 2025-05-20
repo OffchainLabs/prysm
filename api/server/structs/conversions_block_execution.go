@@ -398,8 +398,7 @@ func (p *ExecutionPayloadCapella) PayloadProto() (proto.Message, error) {
 	if p == nil {
 		return nil, errors.Wrap(consensusblocks.ErrNilObject, "nil capella execution payload")
 	}
-	pb, err := p.ToConsensus()
-	return pb, err
+	return p.ToConsensus()
 }
 
 func ExecutionPayloadHeaderCapellaFromConsensus(payload *enginev1.ExecutionPayloadHeaderCapella) (*ExecutionPayloadHeaderCapella, error) {
