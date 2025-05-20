@@ -779,7 +779,7 @@ message DutiesV2Response {
     // The length of the committee
     uint64 committee_length = 1;
 
-    // The index into the committee where the validator belongs in.
+    // The index of the committee which the given validator has an assignment
     uint64 committee_index = 2
     [ (ethereum.eth.ext.cast_type) =
     "github.com/OffchainLabs/prysm/v6/consensus-types/"
@@ -788,7 +788,7 @@ message DutiesV2Response {
     // The number of committees in the duty's slot.
     uint64 committees_at_slot = 3;
 
-    // The index of the validator in the committee list
+    // The validator's index in the given committee
     uint64 validator_committee_index = 4;
 
     // Slot at which a validator must attest.

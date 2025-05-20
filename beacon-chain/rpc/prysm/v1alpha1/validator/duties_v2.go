@@ -57,7 +57,7 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 	}
 
 	// Load committee and proposer metadata
-	meta, err := loadCommitteeMetadata(ctx, s, req.Epoch, requestIndices)
+	meta, err := loadDutiesMetadata(ctx, s, req.Epoch, requestIndices)
 	if err != nil {
 		return nil, err
 	}
@@ -138,9 +138,9 @@ func (vs *Server) stateForEpoch(ctx context.Context, s state.BeaconState, reqEpo
 	return s, nil
 }
 
-// committeeMetadata bundles together committee‑related data needed for duty
+// dutiesMetadata bundles together related data needed for duty
 // construction.
-type committeeMetadata struct {
+type dutiesMetadata struct {
 	assignments          map[primitives.ValidatorIndex]*helpers.CommitteeAssignment
 	nextEpochAssignments map[primitives.ValidatorIndex]*helpers.CommitteeAssignment
 	committeesAtSlot     uint64
@@ -148,8 +148,8 @@ type committeeMetadata struct {
 	proposalSlots        map[primitives.ValidatorIndex][]primitives.Slot
 }
 
-func loadCommitteeMetadata(ctx context.Context, s state.BeaconState, reqEpoch primitives.Epoch, requestIndices []primitives.ValidatorIndex) (*committeeMetadata, error) {
-	meta := &committeeMetadata{}
+func loadDutiesMetadata(ctx context.Context, s state.BeaconState, reqEpoch primitives.Epoch, requestIndices []primitives.ValidatorIndex) (*dutiesMetadata, error) {
+	meta := &dutiesMetadata{}
 
 	var err error
 	meta.assignments, err = helpers.CommitteeAssignments(ctx, s, reqEpoch, requestIndices)
@@ -189,7 +189,7 @@ func (vs *Server) buildValidatorDuty(
 	idx primitives.ValidatorIndex,
 	s state.BeaconState,
 	reqEpoch primitives.Epoch,
-	meta *committeeMetadata,
+	meta *dutiesMetadata,
 ) (*ethpb.DutiesV2Response_Duty, *ethpb.DutiesV2Response_Duty, error) {
 	assignment := &ethpb.DutiesV2Response_Duty{PublicKey: pubKey}
 	nextAssignment := &ethpb.DutiesV2Response_Duty{PublicKey: pubKey}
