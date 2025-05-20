@@ -111,10 +111,6 @@ func (u *finalityUpdateAltair) IsNil() bool {
 
 var _ interfaces.LightClientFinalityUpdate = &finalityUpdateAltair{}
 
-func New() *finalityUpdateAltair {
-	return &finalityUpdateAltair{}
-}
-
 func NewWrappedFinalityUpdateAltair(p *pb.LightClientFinalityUpdateAltair) (interfaces.LightClientFinalityUpdate, error) {
 	if p == nil {
 		return nil, consensustypes.ErrNilObjectWrapped

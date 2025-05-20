@@ -256,15 +256,6 @@ var getRequests = map[string]endpoint{
 				"randao_reveal=0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505",
 			}
 		})),
-	// TODO: It needs the current slot. Can we get it here or should we move it to postEvaluation?
-	/*"/validator/attestation_data": newMetadata[structs.GetAttestationDataResponse](
-	v1PathTemplate,
-	withQueryParams(func(currentEpoch primitives.Epoch) []string {
-		return []string{
-			"slot=" + strconv.FormatUint(uint64(currentEpoch)*uint64(params.BeaconConfig().SlotsPerEpoch)+1, 10),
-			"committee_index=1",
-		}
-	})),*/
 }
 
 var (
