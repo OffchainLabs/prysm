@@ -25,6 +25,7 @@ import (
 // IMPORTANT: Use one field per line and sort these alphabetically to reduce conflicts.
 var placeholderFields = []string{
 	"ATTESTATION_DEADLINE",
+	"BLOB_SCHEDULE",
 	"BLOB_SIDECAR_SUBNET_COUNT_FULU",
 	"EIP6110_FORK_EPOCH",
 	"EIP6110_FORK_VERSION",
