@@ -22,6 +22,7 @@ import (
 	validatorv1alpha1 "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/v1alpha1/validator"
 	validatorprysm "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/validator"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
+	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -95,14 +96,19 @@ func (s *Service) endpoints(
 	endpoints = append(endpoints, s.nodeEndpoints()...)
 	endpoints = append(endpoints, s.beaconEndpoints(ch, stater, blocker, validatorServer, coreService)...)
 	endpoints = append(endpoints, s.configEndpoints()...)
-	endpoints = append(endpoints, s.lightClientEndpoints(blocker, stater)...)
 	endpoints = append(endpoints, s.eventsEndpoints()...)
 	endpoints = append(endpoints, s.prysmBeaconEndpoints(ch, stater, coreService)...)
 	endpoints = append(endpoints, s.prysmNodeEndpoints()...)
 	endpoints = append(endpoints, s.prysmValidatorEndpoints(stater, coreService)...)
+
+	if features.Get().EnableLightClient {
+		endpoints = append(endpoints, s.lightClientEndpoints(blocker, stater)...)
+	}
+
 	if enableDebug {
 		endpoints = append(endpoints, s.debugEndpoints(stater)...)
 	}
+
 	return endpoints
 }
 
