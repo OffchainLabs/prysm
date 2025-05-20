@@ -400,11 +400,11 @@ func TestDuplicateDirtyIndices(t *testing.T) {
 	newState.dirtyIndices[types.Balances] = append(newState.dirtyIndices[types.Balances], []uint64{0, 1, 2, 3, 4}...)
 
 	// We would remove the duplicates and stay under the threshold
-	newState.addDirtyIndices(types.Balances, []uint64{9997, 9998})
+	newState.addDirtyIndices(types.Balances, []uint64{20997, 20998})
 	assert.Equal(t, false, newState.rebuildTrie[types.Balances])
 
 	// We would trigger above the threshold.
-	newState.addDirtyIndices(types.Balances, []uint64{10000, 10001, 10002, 10003})
+	newState.addDirtyIndices(types.Balances, []uint64{21000, 21001, 21002, 21003})
 	assert.Equal(t, true, newState.rebuildTrie[types.Balances])
 }
 
