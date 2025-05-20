@@ -789,7 +789,7 @@ message DutiesV2Response {
     uint64 committees_at_slot = 3;
 
     // The index of the validator in the committee list
-    uint64 validator_committee_index =4;
+    uint64 validator_committee_index = 4;
 
     // Slot at which a validator must attest.
     uint64 attester_slot = 5 [
