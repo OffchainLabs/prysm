@@ -6,6 +6,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 )
 
@@ -139,27 +140,56 @@ func Test_endpoints(t *testing.T) {
 		"/prysm/v1/validators/{state_id}/active_set_changes": {http.MethodGet},
 	}
 
-	s := &Service{cfg: &Config{}}
-
-	endpoints := s.endpoints(true, nil, nil, nil, nil, nil, nil)
-	actualRoutes := make(map[string][]string, len(endpoints))
-	for _, e := range endpoints {
-		if _, ok := actualRoutes[e.template]; ok {
-			actualRoutes[e.template] = append(actualRoutes[e.template], e.methods...)
-		} else {
-			actualRoutes[e.template] = e.methods
-		}
+	testCases := []struct {
+		name                     string
+		flag                     *features.Flags
+		additionalExpectedRoutes []map[string][]string
+	}{
+		{
+			name: "no flags",
+		},
+		{
+			name: "light client enabled",
+			flag: &features.Flags{
+				EnableLightClient: true,
+			},
+			additionalExpectedRoutes: []map[string][]string{
+				lightClientRoutes,
+			},
+		},
 	}
-	expectedRoutes := make(map[string][]string)
-	for _, m := range []map[string][]string{
-		beaconRoutes, builderRoutes, configRoutes, debugRoutes, eventsRoutes,
-		nodeRoutes, validatorRoutes, rewardsRoutes, lightClientRoutes, blobRoutes,
-		prysmValidatorRoutes, prysmNodeRoutes, prysmBeaconRoutes,
-	} {
-		maps.Copy(expectedRoutes, m)
-	}
 
-	assert.Equal(t, true, maps.EqualFunc(expectedRoutes, actualRoutes, func(actualMethods []string, expectedMethods []string) bool {
-		return slices.Equal(expectedMethods, actualMethods)
-	}))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			resetFn := features.InitWithReset(tc.flag)
+			defer resetFn()
+
+			s := &Service{cfg: &Config{}}
+
+			endpoints := s.endpoints(true, nil, nil, nil, nil, nil, nil)
+			actualRoutes := make(map[string][]string, len(endpoints))
+			for _, e := range endpoints {
+				if _, ok := actualRoutes[e.template]; ok {
+					actualRoutes[e.template] = append(actualRoutes[e.template], e.methods...)
+				} else {
+					actualRoutes[e.template] = e.methods
+				}
+			}
+			expectedRoutes := make(map[string][]string)
+			for _, m := range []map[string][]string{
+				beaconRoutes, builderRoutes, configRoutes, debugRoutes, eventsRoutes,
+				nodeRoutes, validatorRoutes, rewardsRoutes, blobRoutes,
+				prysmValidatorRoutes, prysmNodeRoutes, prysmBeaconRoutes,
+			} {
+				maps.Copy(expectedRoutes, m)
+			}
+			for _, m := range tc.additionalExpectedRoutes {
+				maps.Copy(expectedRoutes, m)
+			}
+
+			assert.Equal(t, true, maps.EqualFunc(expectedRoutes, actualRoutes, func(actualMethods []string, expectedMethods []string) bool {
+				return slices.Equal(expectedMethods, actualMethods)
+			}))
+		})
+	}
 }
