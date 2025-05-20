@@ -139,8 +139,7 @@ func (r *ExecutionPayload) PayloadProto() (proto.Message, error) {
 	if r == nil {
 		return nil, errors.Wrap(consensusblocks.ErrNilObject, "nil execution payload")
 	}
-	pb, err := r.ToConsensus()
-	return pb, err
+	return r.ToConsensus()
 }
 
 func ExecutionPayloadHeaderFromConsensus(payload *enginev1.ExecutionPayloadHeader) (*ExecutionPayloadHeader, error) {
