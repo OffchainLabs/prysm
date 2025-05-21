@@ -417,6 +417,12 @@ func (b *BeaconChainConfig) MaxBlobsPerBlock(slot primitives.Slot) int {
 			}
 		}
 	}
+
+	// If the blob schedule is empty, we fall back to the deprecated value.
+	if epoch >= b.ElectraForkEpoch {
+		return b.DeprecatedMaxBlobsPerBlockElectra
+	}
+
 	return b.DeprecatedMaxBlobsPerBlock
 }
 
@@ -430,6 +436,12 @@ func (b *BeaconChainConfig) MaxBlobsPerBlockAtEpoch(epoch primitives.Epoch) int 
 			}
 		}
 	}
+
+	// If the blob schedule is empty, we fall back to the deprecated value.
+	if epoch >= b.ElectraForkEpoch {
+		return b.DeprecatedMaxBlobsPerBlockElectra
+	}
+
 	return b.DeprecatedMaxBlobsPerBlock
 }
 
