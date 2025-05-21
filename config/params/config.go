@@ -3,6 +3,7 @@ package params
 
 import (
 	"math"
+	"slices"
 	"time"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -410,7 +411,10 @@ func (b *BeaconChainConfig) MaxBlobsPerBlock(slot primitives.Slot) int {
 	epoch := primitives.Epoch(slot.DivSlot(b.SlotsPerEpoch))
 
 	if len(b.BlobSchedule) > 0 {
-		// Assume BlobSchedule is already sorted ascending by Epoch
+		slices.SortFunc(b.BlobSchedule, func(a, b BlobScheduleEntry) int {
+			return int(b.Epoch - a.Epoch)
+		})
+
 		for i := len(b.BlobSchedule) - 1; i >= 0; i-- {
 			if epoch >= b.BlobSchedule[i].Epoch {
 				return int(b.BlobSchedule[i].MaxBlobsPerBlock)
@@ -429,7 +433,10 @@ func (b *BeaconChainConfig) MaxBlobsPerBlock(slot primitives.Slot) int {
 // MaxBlobsPerBlockAtEpoch returns the maximum number of blobs per block for the given epoch
 func (b *BeaconChainConfig) MaxBlobsPerBlockAtEpoch(epoch primitives.Epoch) int {
 	if len(b.BlobSchedule) > 0 {
-		// Assume BlobSchedule is already sorted ascending by Epoch
+		slices.SortFunc(b.BlobSchedule, func(a, b BlobScheduleEntry) int {
+			return int(b.Epoch - a.Epoch)
+		})
+
 		for i := len(b.BlobSchedule) - 1; i >= 0; i-- {
 			if epoch >= b.BlobSchedule[i].Epoch {
 				return int(b.BlobSchedule[i].MaxBlobsPerBlock)
