@@ -145,6 +145,37 @@ func TestMaxBlobsPerBlock(t *testing.T) {
 		slot := primitives.Slot(2) // Epoch 0
 		require.Equal(t, cfg.MaxBlobsPerBlock(slot), cfg.DeprecatedMaxBlobsPerBlock)
 	})
+
+	t.Run("Unsorted BlobSchedule still picks latest matching entry", func(t *testing.T) {
+		cfg := params.MainnetConfig()
+		cfg.BlobSchedule = []params.BlobScheduleEntry{
+			{Epoch: 10, MaxBlobsPerBlock: 11},
+			{Epoch: 5, MaxBlobsPerBlock: 7},
+		}
+		slot := 11 * cfg.SlotsPerEpoch
+		require.Equal(t, cfg.MaxBlobsPerBlock(slot), 11)
+	})
+
+	t.Run("Unsorted BlobSchedule picks earlier matching entry correctly", func(t *testing.T) {
+		cfg := params.MainnetConfig()
+		cfg.BlobSchedule = []params.BlobScheduleEntry{
+			{Epoch: 10, MaxBlobsPerBlock: 11},
+			{Epoch: 5, MaxBlobsPerBlock: 7},
+		}
+		slot := 6 * cfg.SlotsPerEpoch
+		require.Equal(t, cfg.MaxBlobsPerBlock(slot), 7)
+	})
+
+	t.Run("Unsorted BlobSchedule falls back to fork logic when epoch is before all entries", func(t *testing.T) {
+		cfg := params.MainnetConfig()
+		cfg.ElectraForkEpoch = 2
+		cfg.BlobSchedule = []params.BlobScheduleEntry{
+			{Epoch: 10, MaxBlobsPerBlock: 11},
+			{Epoch: 5, MaxBlobsPerBlock: 7},
+		}
+		slot := primitives.Slot(1) // Epoch 0
+		require.Equal(t, cfg.MaxBlobsPerBlock(slot), cfg.DeprecatedMaxBlobsPerBlock)
+	})
 }
 
 func Test_TargetBlobCount(t *testing.T) {
