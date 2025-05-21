@@ -1,16 +1,14 @@
 # LightClient
-tests/minimal/altair/light_client/single_merkle_proof
 tests/minimal/altair/light_client/sync
-tests/minimal/altair/light_client/update_ranking
-tests/minimal/bellatrix/light_client/single_merkle_proof
 tests/minimal/bellatrix/light_client/sync
-tests/minimal/bellatrix/light_client/update_ranking
-tests/minimal/capella/light_client/single_merkle_proof
 tests/minimal/capella/light_client/sync
-tests/minimal/capella/light_client/update_ranking
-tests/minimal/deneb/light_client/single_merkle_proof
 tests/minimal/deneb/light_client/sync
-tests/minimal/deneb/light_client/update_ranking
+tests/minimal/electra/light_client/sync
+tests/minimal/altair/light_client/data_collection
+tests/minimal/bellatrix/light_client/data_collection
+tests/minimal/capella/light_client/data_collection
+tests/minimal/deneb/light_client/data_collection
+tests/minimal/electra/light_client/data_collection
 
 # SSZ Generic
 tests/general/phase0/ssz_generic/basic_vector

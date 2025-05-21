@@ -25,6 +25,10 @@ const (
 	RequireSidecarInclusionProven
 	RequireSidecarKzgProofVerified
 	RequireSidecarProposerExpected
+
+	// Data columns specific.
+	RequireValidFields
+	RequireCorrectSubnet
 )
 
 var allBlobSidecarRequirements = []Requirement{
