@@ -2,75 +2,321 @@ package peerdas
 
 import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
 
-// CanSelfReconstruct returns true if the node can self-reconstruct all the data columns from its custody group count.
-func CanSelfReconstruct(custodyGroupCount uint64) bool {
-	total := params.BeaconConfig().NumberOfCustodyGroups
-	// If total is odd, then we need total / 2 + 1 columns to reconstruct.
-	// If total is even, then we need total / 2 columns to reconstruct.
-	return custodyGroupCount >= (total+1)/2
+var (
+	ErrColumnLengthsDiffer      = errors.New("columns do not have the same length")
+	ErrBlobIndexTooHigh         = errors.New("blob index is too high")
+	ErrBlockRootMismatch        = errors.New("block root mismatch")
+	ErrBlobsCellsProofsMismatch = errors.New("blobs and cells proofs mismatch")
+)
+
+// MinimumColumnsCountToReconstruct return the minimum number of columns needed to proceed to a reconstruction.
+func MinimumColumnsCountToReconstruct() uint64 {
+	// If the number of columns is odd, then we need total / 2 + 1 columns to reconstruct.
+	// If the number of columns is even, then we need total / 2 columns to reconstruct.
+	return (params.BeaconConfig().NumberOfColumns + 1) / 2
 }
 
-// RecoverCellsAndProofs recovers the cells and proofs from the data column sidecars.
-func RecoverCellsAndProofs(dataColumnSideCars []*ethpb.DataColumnSidecar) ([]kzg.CellsAndProofs, error) {
-	var wg errgroup.Group
-
-	dataColumnSideCarsCount := len(dataColumnSideCars)
-
-	if dataColumnSideCarsCount == 0 {
-		return nil, errors.New("no data column sidecars")
+// ReconstructDataColumnSidecars reconstructs all the data column sidecars from the given input data column sidecars.
+// All input sidecars must be committed to the same block.
+// `inVerifiedRoSidecars` should contain enough (unique) sidecars to reconstruct the missing columns.
+func ReconstructDataColumnSidecars(inVerifiedRoSidecars []blocks.VerifiedRODataColumn) ([]blocks.VerifiedRODataColumn, error) {
+	// Check if there is at least one input sidecar.
+	if len(inVerifiedRoSidecars) == 0 {
+		return nil, ErrNotEnoughDataColumnSidecars
 	}
 
-	// Check if all columns have the same length.
-	blobCount := len(dataColumnSideCars[0].Column)
-	for _, sidecar := range dataColumnSideCars {
-		length := len(sidecar.Column)
+	// Safely retrieve the first sidecar as a reference.
+	referenceSidecar := inVerifiedRoSidecars[0]
 
-		if length != blobCount {
-			return nil, errors.New("columns do not have the same length")
+	// Check if all columns have the same length and are commmitted to the same block.
+	blobCount := len(referenceSidecar.Column)
+	blockRoot := referenceSidecar.BlockRoot()
+	for _, sidecar := range inVerifiedRoSidecars[1:] {
+		if len(sidecar.Column) != blobCount {
+			return nil, ErrColumnLengthsDiffer
+		}
+
+		if sidecar.BlockRoot() != blockRoot {
+			return nil, ErrBlockRootMismatch
 		}
 	}
 
+	// Deduplicate sidecars.
+	sidecarByIndex := make(map[uint64]blocks.VerifiedRODataColumn, len(inVerifiedRoSidecars))
+	for _, inVerifiedRoSidecar := range inVerifiedRoSidecars {
+		sidecarByIndex[inVerifiedRoSidecar.Index] = inVerifiedRoSidecar
+	}
+
+	// Check if there is enough sidecars to reconstruct the missing columns.
+	sidecarCount := len(sidecarByIndex)
+	if uint64(sidecarCount) < MinimumColumnsCountToReconstruct() {
+		return nil, ErrNotEnoughDataColumnSidecars
+	}
+
+	// Sidecars are verified and are committed to the same block.
+	// All signed block headers, KZG commitments, and inclusion proofs are the same.
+	signedBlockHeader := referenceSidecar.SignedBlockHeader
+	kzgCommitments := referenceSidecar.KzgCommitments
+	kzgCommitmentsInclusionProof := referenceSidecar.KzgCommitmentsInclusionProof
+
 	// Recover cells and compute proofs in parallel.
-	recoveredCellsAndProofs := make([]kzg.CellsAndProofs, blobCount)
-
-	for blobIndex := 0; blobIndex < blobCount; blobIndex++ {
-		bIndex := blobIndex
+	var wg errgroup.Group
+	cellsAndProofs := make([]kzg.CellsAndProofs, blobCount)
+	for blobIndex := range uint64(blobCount) {
 		wg.Go(func() error {
-			cellsIndices := make([]uint64, 0, dataColumnSideCarsCount)
-			cells := make([]kzg.Cell, 0, dataColumnSideCarsCount)
+			cellsIndices := make([]uint64, 0, sidecarCount)
+			cells := make([]kzg.Cell, 0, sidecarCount)
 
-			for _, sidecar := range dataColumnSideCars {
-				// Build the cell indices.
-				cellsIndices = append(cellsIndices, sidecar.Index)
-
-				// Get the cell.
-				column := sidecar.Column
-				cell := column[bIndex]
-
+			for columnIndex, sidecar := range sidecarByIndex {
+				cell := sidecar.Column[blobIndex]
 				cells = append(cells, kzg.Cell(cell))
+				cellsIndices = append(cellsIndices, columnIndex)
 			}
 
 			// Recover the cells and proofs for the corresponding blob
-			cellsAndProofs, err := kzg.RecoverCellsAndKZGProofs(cellsIndices, cells)
+			cellsAndProofsForBlob, err := kzg.RecoverCellsAndKZGProofs(cellsIndices, cells)
 
 			if err != nil {
-				return errors.Wrapf(err, "recover cells and KZG proofs for blob %d", bIndex)
+				return errors.Wrapf(err, "recover cells and KZG proofs for blob %d", blobIndex)
 			}
 
-			recoveredCellsAndProofs[bIndex] = cellsAndProofs
+			// It is safe for multiple goroutines to concurrently write to the same slice,
+			// as long as they are writing to different indices, which is the case here.
+			cellsAndProofs[blobIndex] = cellsAndProofsForBlob
 			return nil
 		})
 	}
 
 	if err := wg.Wait(); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "wait for RecoverCellsAndKZGProofs")
 	}
 
-	return recoveredCellsAndProofs, nil
+	outSidecars, err := dataColumnsSidecars(signedBlockHeader, kzgCommitments, kzgCommitmentsInclusionProof, cellsAndProofs)
+	if err != nil {
+		return nil, errors.Wrap(err, "data column sidecars from items")
+	}
+
+	// Input sidecars are verified, and we reconstructed ourselves the missing sidecars.
+	// As a consequence, reconstructed sidecars are also verified.
+	outVerifiedRoSidecars := make([]blocks.VerifiedRODataColumn, 0, len(outSidecars))
+	for _, sidecar := range outSidecars {
+		roSidecar, err := blocks.NewRODataColumnWithRoot(sidecar, blockRoot)
+		if err != nil {
+			return nil, errors.Wrap(err, "new RO data column with root")
+		}
+
+		verifiedRoSidecar := blocks.NewVerifiedRODataColumn(roSidecar)
+		outVerifiedRoSidecars = append(outVerifiedRoSidecars, verifiedRoSidecar)
+	}
+
+	return outVerifiedRoSidecars, nil
+}
+
+// ConstructDataColumnSidecars constructs data column sidecars from a block, (un-extended) blobs and
+// cell proofs corresponding the extended blobs. The main purpose of this function is to
+// construct data columns sidecars from data obtained from the execution client via:
+// - `engine_getBlobsV2` - https://github.com/ethereum/execution-apis/blob/main/src/engine/osaka.md#engine_getblobsv2, or
+// - `engine_getPayloadV5` - https://github.com/ethereum/execution-apis/blob/main/src/engine/osaka.md#engine_getpayloadv5
+// Note: In this function, to stick with the `BlobsBundleV2` format returned by the execution client in `engine_getPayloadV5`,
+// cell proofs are "flattened".
+func ConstructDataColumnSidecars(block interfaces.ReadOnlySignedBeaconBlock, blobs [][]byte, cellProofs [][]byte) ([]*ethpb.DataColumnSidecar, error) {
+	// Check if the cells count is equal to the cell proofs count.
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
+	blobCount := uint64(len(blobs))
+	cellProofsCount := uint64(len(cellProofs))
+
+	cellsCount := blobCount * numberOfColumns
+	if cellsCount != cellProofsCount {
+		return nil, ErrBlobsCellsProofsMismatch
+	}
+
+	cellsAndProofs := make([]kzg.CellsAndProofs, 0, blobCount)
+	for i, blob := range blobs {
+		var kzgBlob kzg.Blob
+		if copy(kzgBlob[:], blob) != len(kzgBlob) {
+			return nil, errors.New("wrong blob size - should never happen")
+		}
+
+		// Compute the extended cells from the (non-extended) blob.
+		cells, err := kzg.ComputeCells(&kzgBlob)
+		if err != nil {
+			return nil, errors.Wrap(err, "compute cells")
+		}
+
+		var proofs []kzg.Proof
+		for idx := uint64(i) * numberOfColumns; idx < (uint64(i)+1)*numberOfColumns; idx++ {
+			var kzgProof kzg.Proof
+			if copy(kzgProof[:], cellProofs[idx]) != len(kzgProof) {
+				return nil, errors.New("wrong KZG proof size - should never happen")
+			}
+
+			proofs = append(proofs, kzgProof)
+		}
+
+		cellsProofs := kzg.CellsAndProofs{Cells: cells, Proofs: proofs}
+		cellsAndProofs = append(cellsAndProofs, cellsProofs)
+	}
+
+	dataColumnSidecars, err := DataColumnSidecars(block, cellsAndProofs)
+	if err != nil {
+		return nil, errors.Wrap(err, "data column sidcars")
+	}
+
+	return dataColumnSidecars, nil
+}
+
+// ReconstructBlobs constructs verified read only blobs sidecars from verified read only blob sidecars.
+// The following constraints must be satisfied:
+//   - All `dataColumnSidecars` has to be committed to the same block, and
+//   - `dataColumnSidecars` must be sorted by index and should not contain duplicates.
+//   - `dataColumnSidecars` must contain either all sidecars corresponding to (non-extended) blobs,
+//     or either enough sidecars to reconstruct the blobs.
+func ReconstructBlobs(block blocks.ROBlock, verifiedDataColumnSidecars []blocks.VerifiedRODataColumn, indices []int) ([]*blocks.VerifiedROBlob, error) {
+	// Return early if no blobs are requested.
+	if len(indices) == 0 {
+		return nil, nil
+	}
+
+	if len(verifiedDataColumnSidecars) == 0 {
+		return nil, ErrNotEnoughDataColumnSidecars
+	}
+
+	// Check if the sidecars are sorted by index and do not contain duplicates.
+	previousColumnIndex := verifiedDataColumnSidecars[0].Index
+	for _, dataColumnSidecar := range verifiedDataColumnSidecars[1:] {
+		columnIndex := dataColumnSidecar.Index
+		if columnIndex <= previousColumnIndex {
+			return nil, ErrDataColumnSidecarsNotSortedByIndex
+		}
+
+		previousColumnIndex = columnIndex
+	}
+
+	// Check if we have enough columns.
+	cellsPerBlob := fieldparams.CellsPerBlob
+	if len(verifiedDataColumnSidecars) < cellsPerBlob {
+		return nil, ErrNotEnoughDataColumnSidecars
+	}
+
+	// Check if the blob index is too high.
+	commitments, err := block.Block().Body().BlobKzgCommitments()
+	if err != nil {
+		return nil, errors.Wrap(err, "blob KZG commitments")
+	}
+
+	for _, blobIndex := range indices {
+		if blobIndex >= len(commitments) {
+			return nil, ErrBlobIndexTooHigh
+		}
+	}
+
+	// Check if the data column sidecars are aligned with the block.
+	dataColumnSidecars := make([]blocks.RODataColumn, 0, len(verifiedDataColumnSidecars))
+	for _, verifiedDataColumnSidecar := range verifiedDataColumnSidecars {
+		dataColumnSicecar := verifiedDataColumnSidecar.RODataColumn
+		dataColumnSidecars = append(dataColumnSidecars, dataColumnSicecar)
+	}
+
+	if err := DataColumnsAlignWithBlock(block, dataColumnSidecars); err != nil {
+		return nil, errors.Wrap(err, "data columns align with block")
+	}
+
+	// If all column sidecars corresponding to (non-extended) blobs are present, no need to reconstruct.
+	if verifiedDataColumnSidecars[cellsPerBlob-1].Index == uint64(cellsPerBlob-1) {
+		// Convert verified data column sidecars to verified blob sidecars.
+		blobSidecars, err := blobSidecarsFromDataColumnSidecars(block, verifiedDataColumnSidecars, indices)
+		if err != nil {
+			return nil, errors.Wrap(err, "blob sidecars from data column sidecars")
+		}
+
+		return blobSidecars, nil
+	}
+
+	// We need to reconstruct the blobs.
+	reconstructedDataColumnSidecars, err := ReconstructDataColumnSidecars(verifiedDataColumnSidecars)
+	if err != nil {
+		return nil, errors.Wrap(err, "reconstruct data column sidecars")
+	}
+
+	// Convert verified data column sidecars to verified blob sidecars.
+	blobSidecars, err := blobSidecarsFromDataColumnSidecars(block, reconstructedDataColumnSidecars, indices)
+	if err != nil {
+		return nil, errors.Wrap(err, "blob sidecars from data column sidecars")
+	}
+
+	return blobSidecars, nil
+}
+
+// blobSidecarsFromDataColumnSidecars converts verified data column sidecars to verified blob sidecars.
+func blobSidecarsFromDataColumnSidecars(roBlock blocks.ROBlock, dataColumnSidecars []blocks.VerifiedRODataColumn, indices []int) ([]*blocks.VerifiedROBlob, error) {
+	referenceSidecar := dataColumnSidecars[0]
+
+	kzgCommitments := referenceSidecar.KzgCommitments
+	signedBlockHeader := referenceSidecar.SignedBlockHeader
+
+	verifiedROBlobs := make([]*blocks.VerifiedROBlob, 0, len(indices))
+	for _, blobIndex := range indices {
+		var blob kzg.Blob
+
+		// Compute the content of the blob.
+		for columnIndex := range fieldparams.CellsPerBlob {
+			dataColumnSidecar := dataColumnSidecars[columnIndex]
+			cell := dataColumnSidecar.Column[blobIndex]
+			if copy(blob[kzg.BytesPerCell*columnIndex:], cell) != kzg.BytesPerCell {
+				return nil, errors.New("wrong cell size - should never happen")
+			}
+		}
+
+		// Extract the KZG commitment.
+		var kzgCommitment kzg.Commitment
+		if copy(kzgCommitment[:], kzgCommitments[blobIndex]) != len(kzgCommitment) {
+			return nil, errors.New("wrong KZG commitment size - should never happen")
+		}
+
+		// Compute the blob KZG proof.
+		blobKzgProof, err := kzg.ComputeBlobKZGProof(&blob, kzgCommitment)
+		if err != nil {
+			return nil, errors.Wrap(err, "compute blob KZG proof")
+		}
+
+		// Build the inclusion proof for the blob.
+		var kzgBlob kzg.Blob
+		if copy(kzgBlob[:], blob[:]) != len(kzgBlob) {
+			return nil, errors.New("wrong blob size - should never happen")
+		}
+
+		commitmentInclusionProof, err := blocks.MerkleProofKZGCommitment(roBlock.Block().Body(), blobIndex)
+		if err != nil {
+			return nil, errors.Wrap(err, "merkle proof KZG commitment")
+		}
+
+		// Build the blob sidecar.
+		blobSidecar := &ethpb.BlobSidecar{
+			Index:                    uint64(blobIndex),
+			Blob:                     blob[:],
+			KzgCommitment:            kzgCommitment[:],
+			KzgProof:                 blobKzgProof[:],
+			SignedBlockHeader:        signedBlockHeader,
+			CommitmentInclusionProof: commitmentInclusionProof,
+		}
+
+		roBlob, err := blocks.NewROBlob(blobSidecar)
+		if err != nil {
+			return nil, errors.Wrap(err, "new RO blob")
+		}
+
+		verifiedROBlob := blocks.NewVerifiedROBlob(roBlob)
+		verifiedROBlobs = append(verifiedROBlobs, &verifiedROBlob)
+	}
+
+	return verifiedROBlobs, nil
 }
