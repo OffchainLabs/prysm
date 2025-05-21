@@ -1,13 +1,190 @@
 package util
 
 import (
+	"encoding/binary"
+	"math/big"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/network/forks"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/ethereum/go-ethereum/common"
+	gethTypes "github.com/ethereum/go-ethereum/core/types"
 )
 
-func GenerateCellsAndProofs(t *testing.T, blobs []kzg.Blob) []kzg.CellsAndProofs {
+type FuluBlockGeneratorOption func(*fuluBlockGenerator)
+
+type fuluBlockGenerator struct {
+	parent    [32]byte
+	slot      primitives.Slot
+	blobCount int
+	sign      bool
+	sk        bls.SecretKey
+	proposer  primitives.ValidatorIndex
+	valRoot   []byte
+	payload   *enginev1.ExecutionPayloadDeneb
+}
+
+func WithFuluProposerSigning(idx primitives.ValidatorIndex, sk bls.SecretKey, valRoot []byte) FuluBlockGeneratorOption {
+	return func(g *fuluBlockGenerator) {
+		g.sign = true
+		g.proposer = idx
+		g.sk = sk
+		g.valRoot = valRoot
+	}
+}
+
+func WithFuluPayload(p *enginev1.ExecutionPayloadDeneb) FuluBlockGeneratorOption {
+	return func(g *fuluBlockGenerator) {
+		g.payload = p
+	}
+}
+
+func WithParentRoot(root [fieldparams.RootLength]byte) FuluBlockGeneratorOption {
+	return func(g *fuluBlockGenerator) {
+		g.parent = root
+	}
+}
+
+func GenerateTestFuluBlockWithSidecars(t *testing.T, blobCount int, options ...FuluBlockGeneratorOption) (blocks.ROBlock, []blocks.RODataColumn, []blocks.VerifiedRODataColumn) {
+	generator := &fuluBlockGenerator{blobCount: blobCount}
+
+	for _, option := range options {
+		option(generator)
+	}
+
+	if generator.payload == nil {
+		ads := common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87")
+		tx := gethTypes.NewTx(&gethTypes.LegacyTx{
+			Nonce:    0,
+			To:       &ads,
+			Value:    big.NewInt(0),
+			Gas:      0,
+			GasPrice: big.NewInt(0),
+			Data:     nil,
+		})
+
+		txs := []*gethTypes.Transaction{tx}
+		encodedBinaryTxs := make([][]byte, 1)
+
+		var err error
+		encodedBinaryTxs[0], err = txs[0].MarshalBinary()
+		require.NoError(t, err)
+
+		blockHash := bytesutil.ToBytes32([]byte("foo"))
+
+		generator.payload = &enginev1.ExecutionPayloadDeneb{
+			ParentHash:    bytesutil.PadTo([]byte("parentHash"), fieldparams.RootLength),
+			FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),
+			StateRoot:     bytesutil.PadTo([]byte("stateRoot"), fieldparams.RootLength),
+			ReceiptsRoot:  bytesutil.PadTo([]byte("receiptsRoot"), fieldparams.RootLength),
+			LogsBloom:     bytesutil.PadTo([]byte("logs"), fieldparams.LogsBloomLength),
+			PrevRandao:    blockHash[:],
+			BlockNumber:   0,
+			GasLimit:      0,
+			GasUsed:       0,
+			Timestamp:     0,
+			ExtraData:     make([]byte, 0),
+			BaseFeePerGas: bytesutil.PadTo([]byte("baseFeePerGas"), fieldparams.RootLength),
+			BlockHash:     blockHash[:],
+			Transactions:  encodedBinaryTxs,
+			Withdrawals:   make([]*enginev1.Withdrawal, 0),
+			BlobGasUsed:   0,
+			ExcessBlobGas: 0,
+		}
+	}
+
+	block := NewBeaconBlockFulu()
+	block.Block.Body.ExecutionPayload = generator.payload
+	block.Block.Slot = generator.slot
+	block.Block.ParentRoot = generator.parent[:]
+	block.Block.ProposerIndex = generator.proposer
+
+	block.Block.Body.BlobKzgCommitments = make([][]byte, blobCount)
+	for i := range blobCount {
+		var commitment [fieldparams.KzgCommitmentSize]byte
+		binary.LittleEndian.PutUint16(commitment[:16], uint16(i))
+		binary.LittleEndian.PutUint16(commitment[16:32], uint16(generator.slot))
+		block.Block.Body.BlobKzgCommitments[i] = commitment[:]
+	}
+
+	body, err := blocks.NewBeaconBlockBody(block.Block.Body)
+	require.NoError(t, err)
+
+	inclusion := make([][][]byte, blobCount)
+	for i := range blobCount {
+		proof, err := blocks.MerkleProofKZGCommitment(body, i)
+		require.NoError(t, err)
+
+		inclusion[i] = proof
+	}
+
+	if generator.sign {
+		epoch := slots.ToEpoch(block.Block.Slot)
+		schedule := forks.NewOrderedSchedule(params.BeaconConfig())
+
+		version, err := schedule.VersionForEpoch(epoch)
+		require.NoError(t, err)
+
+		fork, err := schedule.ForkFromVersion(version)
+		require.NoError(t, err)
+
+		domain := params.BeaconConfig().DomainBeaconProposer
+		sig, err := signing.ComputeDomainAndSignWithoutState(fork, epoch, domain, generator.valRoot, block.Block, generator.sk)
+		require.NoError(t, err)
+
+		block.Signature = sig
+	}
+
+	root, err := block.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	sbb, err := blocks.NewSignedBeaconBlock(block)
+	require.NoError(t, err)
+
+	sh, err := sbb.Header()
+	require.NoError(t, err)
+
+	blobs := make([]kzg.Blob, blobCount)
+	for i, commitment := range block.Block.Body.BlobKzgCommitments {
+		roSidecars := GenerateTestDenebBlobSidecar(t, root, sh, i, commitment, inclusion[i])
+		blobs[i] = kzg.Blob(roSidecars.Blob)
+	}
+
+	cellsAndProofs := GenerateCellsAndProofs(t, blobs)
+
+	dataColumns, err := peerdas.DataColumnSidecars(sbb, cellsAndProofs)
+	require.NoError(t, err)
+
+	roSidecars := make([]blocks.RODataColumn, 0, len(dataColumns))
+	roVerifiedSidecars := make([]blocks.VerifiedRODataColumn, 0, len(dataColumns))
+	for _, dataColumn := range dataColumns {
+		roSidecar, err := blocks.NewRODataColumnWithRoot(dataColumn, root)
+		require.NoError(t, err)
+
+		roVerifiedSidecar := blocks.NewVerifiedRODataColumn(roSidecar)
+
+		roSidecars = append(roSidecars, roSidecar)
+		roVerifiedSidecars = append(roVerifiedSidecars, roVerifiedSidecar)
+	}
+
+	rob, err := blocks.NewROBlockWithRoot(sbb, root)
+	require.NoError(t, err)
+
+	return rob, roSidecars, roVerifiedSidecars
+}
+
+func GenerateCellsAndProofs(t testing.TB, blobs []kzg.Blob) []kzg.CellsAndProofs {
 	cellsAndProofs := make([]kzg.CellsAndProofs, len(blobs))
 	for i := range blobs {
 		cp, err := kzg.ComputeCellsAndKZGProofs(&blobs[i])

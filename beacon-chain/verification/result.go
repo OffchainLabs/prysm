@@ -90,6 +90,11 @@ func (r *results) result(req Requirement) error {
 	return r.done[req]
 }
 
+func (r *results) cached(req Requirement) (bool, error) {
+	result, ok := r.done[req]
+	return ok, result
+}
+
 func (r *results) errors(err error) error {
 	return newVerificationMultiError(r, err)
 }

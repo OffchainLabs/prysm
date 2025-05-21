@@ -11,8 +11,7 @@ import (
 )
 
 func TestStore_GetSetDelete(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	store := peerdata.NewStore(ctx, &peerdata.StoreConfig{
 		MaxPeers: 12,
@@ -52,8 +51,7 @@ func TestStore_GetSetDelete(t *testing.T) {
 }
 
 func TestStore_PeerDataGetOrCreate(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	store := peerdata.NewStore(ctx, &peerdata.StoreConfig{
 		MaxPeers: 12,

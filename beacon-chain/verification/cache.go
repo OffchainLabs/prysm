@@ -21,7 +21,8 @@ import (
 )
 
 const (
-	DefaultSignatureCacheSize = 256
+	DefaultSignatureCacheSize      = 256
+	DefaultInclusionProofCacheSize = 2
 )
 
 // ValidatorAtIndexer defines the method needed to retrieve a validator by its index.
@@ -71,6 +72,14 @@ type sigCache struct {
 	*lru.Cache
 	valRoot []byte
 	getFork forkLookup
+}
+
+type inclusionProofCache struct {
+	*lru.Cache
+}
+
+func newInclusionProofCache(size int) *inclusionProofCache {
+	return &inclusionProofCache{Cache: lruwrpr.New(size)}
 }
 
 // VerifySignature verifies the given signature data against the key obtained via ValidatorAtIndexer.

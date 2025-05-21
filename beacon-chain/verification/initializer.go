@@ -5,9 +5,11 @@ import (
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/network/forks"
@@ -38,6 +40,7 @@ type sharedResources struct {
 	sc    SignatureCache
 	pc    ProposerCache
 	sr    StateByRooter
+	ic    *inclusionProofCache
 }
 
 // Initializer is used to create different Verifiers.
@@ -54,6 +57,18 @@ func (ini *Initializer) NewBlobVerifier(b blocks.ROBlob, reqs []Requirement) *RO
 		blob:                 b,
 		results:              newResults(reqs...),
 		verifyBlobCommitment: kzg.Verify,
+	}
+}
+
+// NewDataColumnsVerifier creates a DataColumnVerifier for a slice of data columns, with the given set of requirements.
+// WARNING: The returned verifier is not thread-safe, and should not be used concurrently.
+func (ini *Initializer) NewDataColumnsVerifier(roDataColumns []blocks.RODataColumn, reqs []Requirement) *RODataColumnsVerifier {
+	return &RODataColumnsVerifier{
+		sharedResources:             ini.shared,
+		dataColumns:                 roDataColumns,
+		results:                     newResults(reqs...),
+		verifyDataColumnsCommitment: peerdas.VerifyDataColumnsSidecarKZGProofs,
+		stateByRoot:                 make(map[[fieldparams.RootLength]byte]state.BeaconState),
 	}
 }
 
@@ -86,6 +101,7 @@ func NewInitializerWaiter(cw startup.ClockWaiter, fc Forkchoicer, sr StateByRoot
 		fc: fc,
 		pc: pc,
 		sr: sr,
+		ic: newInclusionProofCache(DefaultInclusionProofCacheSize),
 	}
 	iw := &InitializerWaiter{cw: cw, ini: &Initializer{shared: shared}}
 	for _, o := range opts {
@@ -107,6 +123,7 @@ func (w *InitializerWaiter) WaitForInitializer(ctx context.Context) (*Initialize
 	vr := w.ini.shared.clock.GenesisValidatorsRoot()
 	sc := newSigCache(vr[:], DefaultSignatureCacheSize, w.getFork)
 	w.ini.shared.sc = sc
+	w.ini.shared.ic = newInclusionProofCache(DefaultInclusionProofCacheSize)
 	return w.ini, nil
 }
 
