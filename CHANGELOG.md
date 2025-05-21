@@ -6,6 +6,17 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [v6.0.3](https://github.com/prysmaticlabs/prysm/compare/v6.0.2...v6.0.3) - 2025-05-21
 
+This release has important bugfixes for users of the [Beacon API](https://ethereum.github.io/beacon-APIs/). These fixes include:
+- Fixed pending consolidations endpoint to return the correct response.
+- Fixed incorrect field name from pending partial withdrawals response.
+- Fixed attester slashing to return an empty array instead of nil/null. 
+- Fixed validator participation and active set changes endpoints to accept a `{state_id}` parameter. 
+
+Other improvements include:
+- Disabled deposit log processing routine for Electra and beyond.
+
+Operators are encouraged to update at their own convenience.
+
 ### Added
 
 - ssz static spec tests for fulu. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15279)
