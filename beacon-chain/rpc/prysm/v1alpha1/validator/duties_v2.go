@@ -198,6 +198,7 @@ func (vs *Server) buildValidatorDuty(
 
 	assignment.ValidatorIndex = idx
 	assignment.Status = statusEnum
+	// note: we only set the proposer slots for the current assignment and not the next epoch assignment
 	assignment.ProposerSlots = meta.proposalSlots[idx]
 	assignment.CommitteesAtSlot = meta.committeesAtSlot
 
