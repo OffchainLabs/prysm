@@ -9,6 +9,7 @@ import (
 	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/network/forks"
@@ -60,12 +61,14 @@ func (ini *Initializer) NewBlobVerifier(b blocks.ROBlob, reqs []Requirement) *RO
 }
 
 // NewDataColumnsVerifier creates a DataColumnVerifier for a slice of data columns, with the given set of requirements.
+// WARNING: The returned verifier is not thread-safe, and should not be used concurrently.
 func (ini *Initializer) NewDataColumnsVerifier(roDataColumns []blocks.RODataColumn, reqs []Requirement) *RODataColumnsVerifier {
 	return &RODataColumnsVerifier{
 		sharedResources:             ini.shared,
 		dataColumns:                 roDataColumns,
 		results:                     newResults(reqs...),
 		verifyDataColumnsCommitment: peerdas.VerifyDataColumnsSidecarKZGProofs,
+		stateByRoot:                 make(map[[fieldparams.RootLength]byte]state.BeaconState),
 	}
 }
 

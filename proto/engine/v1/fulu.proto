@@ -2,7 +2,6 @@ syntax = "proto3";
 
 package ethereum.engine.v1;
 
-import "proto/eth/ext/options.proto";
 import "proto/engine/v1/execution_engine.proto";
 
 option csharp_namespace = "Ethereum.Engine.V1";

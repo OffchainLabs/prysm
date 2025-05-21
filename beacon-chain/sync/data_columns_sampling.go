@@ -607,7 +607,7 @@ func verifyColumn(
 	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#datacolumnsidecarsbyroot-v1
 	verifier := newDataColumnsVerifier(roDataColumns, verification.ByRootRequestDataColumnSidecarRequirements)
 
-	if err := verifier.Valid(); err != nil {
+	if err := verifier.ValidFields(); err != nil {
 		log.WithError(err).WithField("peerID", pid).Error("Failed to verify data column")
 	}
 

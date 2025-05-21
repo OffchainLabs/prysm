@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"math"
@@ -215,6 +216,28 @@ func TestListDir(t *testing.T) {
 				sort.Strings(result)
 				require.DeepEqual(t, c.expected, result)
 			}
+		})
+	}
+}
+
+func TestSlotFromBlob(t *testing.T) {
+	cases := []struct {
+		slot primitives.Slot
+	}{
+		{slot: 0},
+		{slot: 2},
+		{slot: 1123581321},
+		{slot: math.MaxUint64},
+	}
+	for _, c := range cases {
+		t.Run(fmt.Sprintf("slot %d", c.slot), func(t *testing.T) {
+			_, sidecars := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, c.slot, 1)
+			sc := sidecars[0]
+			enc, err := sc.MarshalSSZ()
+			require.NoError(t, err)
+			slot, err := slotFromBlob(bytes.NewReader(enc))
+			require.NoError(t, err)
+			require.Equal(t, c.slot, slot)
 		})
 	}
 }

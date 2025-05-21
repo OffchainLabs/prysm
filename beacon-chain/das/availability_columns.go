@@ -127,7 +127,7 @@ func (s *LazilyPersistentStoreColumn) IsDataAvailable(ctx context.Context, curre
 	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#datacolumnsidecarsbyrange-v1
 	verifier := s.newDataColumnsVerifier(roDataColumns, verification.ByRangeRequestDataColumnSidecarRequirements)
 
-	if err := verifier.Valid(); err != nil {
+	if err := verifier.ValidFields(); err != nil {
 		return errors.Wrap(err, "valid")
 	}
 

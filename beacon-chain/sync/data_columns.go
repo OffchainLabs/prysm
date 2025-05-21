@@ -106,7 +106,7 @@ func RequestDataColumnSidecarsByRoot(
 			// Verify the received sidecars.
 			verifier := newColumnsVerifier(peerSidecars, verification.ByRootRequestDataColumnSidecarRequirements)
 
-			if err := verifier.Valid(); err != nil {
+			if err := verifier.ValidFields(); err != nil {
 				// Remove this peer if the verification failed.
 				delete(dataColumnsByAdmissiblePeer, peer)
 				log.WithError(err).Debug("Valid verification failed")

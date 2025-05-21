@@ -25,6 +25,7 @@ import (
 // IMPORTANT: Use one field per line and sort these alphabetically to reduce conflicts.
 var placeholderFields = []string{
 	"ATTESTATION_DEADLINE",
+	"BLOB_SCHEDULE",
 	"BLOB_SIDECAR_SUBNET_COUNT_FULU",
 	"EIP6110_FORK_EPOCH",
 	"EIP6110_FORK_VERSION",
@@ -37,9 +38,12 @@ var placeholderFields = []string{
 	"EIP7805_FORK_EPOCH",
 	"EIP7805_FORK_VERSION",
 	"EPOCHS_PER_SHUFFLING_PHASE",
+	"MAX_BYTES_PER_INCLUSION_LIST",
 	"MAX_REQUEST_BLOB_SIDECARS_FULU",
+	"MAX_REQUEST_INCLUSION_LIST",
 	"MAX_REQUEST_PAYLOADS", // Compile time constant on BeaconBlockBody.ExecutionRequests
 	"PROPOSER_INCLUSION_LIST_CUT_OFF",
+	"PROPOSER_SCORE_BOOST_EIP7732",
 	"PROPOSER_SELECTION_GAP",
 	"TARGET_NUMBER_OF_PEERS",
 	"UPDATE_TIMEOUT",

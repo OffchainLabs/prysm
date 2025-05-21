@@ -26,6 +26,8 @@ import (
 
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#the-gossip-domain-gossipsub
 func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
+	const dataColumnSidecarSubTopic = "/data_column_sidecar_%d/"
+
 	dataColumnSidecarVerificationRequestsCounter.Inc()
 	receivedTime := prysmTime.Now()
 
@@ -87,12 +89,12 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#the-gossip-domain-gossipsub
 
 	// [REJECT] The sidecar is valid as verified by `verify_data_column_sidecar(sidecar)`.
-	if err := verifier.Valid(); err != nil {
+	if err := verifier.ValidFields(); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
 	// [REJECT] The sidecar is for the correct subnet -- i.e. `compute_subnet_for_data_column_sidecar(sidecar.index) == subnet_id`.
-	if err := verifier.CorrectSubnet([]string{*msg.Topic}); err != nil {
+	if err := verifier.CorrectSubnet(dataColumnSidecarSubTopic, []string{*msg.Topic}); err != nil {
 		return pubsub.ValidationReject, err
 	}
 

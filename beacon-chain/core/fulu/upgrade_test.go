@@ -43,10 +43,8 @@ func TestUpgradeToFulu(t *testing.T) {
 	require.DeepSSZEqual(t, preForkState.BlockRoots(), mSt.BlockRoots())
 	require.DeepSSZEqual(t, preForkState.StateRoots(), mSt.StateRoots())
 
-	hr1, err := preForkState.HistoricalRoots()
-	require.NoError(t, err)
-	hr2, err := mSt.HistoricalRoots()
-	require.NoError(t, err)
+	hr1 := preForkState.HistoricalRoots()
+	hr2 := mSt.HistoricalRoots()
 	require.DeepEqual(t, hr1, hr2)
 
 	require.DeepSSZEqual(t, preForkState.Eth1Data(), mSt.Eth1Data())

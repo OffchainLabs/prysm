@@ -692,8 +692,7 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [fieldparams
 	}
 
 	// Subscribe to newly data columns stored in the database.
-	identsChan := make(chan filesystem.DataColumnsIdent)
-	subscription := s.dataColumnStorage.DataColumnFeed.Subscribe(identsChan)
+	subscription, identsChan := s.dataColumnStorage.Subscribe()
 	defer subscription.Unsubscribe()
 
 	// Get the count of data columns we already have in the store.

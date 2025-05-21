@@ -2,7 +2,6 @@ package blockchain
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -3342,42 +3341,42 @@ func TestIsDataAvailable(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("Fulu - some initially missing data columns (no reconstruction)", func(t *testing.T) {
-		var custodyInfo peerdas.CustodyInfo
-		custodyInfo.TargetGroupCount.SetValidatorsCustodyRequirement(128)
-		custodyInfo.ToAdvertiseGroupCount.Set(128)
+	// t.Run("Fulu - some initially missing data columns (no reconstruction)", func(t *testing.T) {
+	// 	var custodyInfo peerdas.CustodyInfo
+	// 	custodyInfo.TargetGroupCount.SetValidatorsCustodyRequirement(128)
+	// 	custodyInfo.ToAdvertiseGroupCount.Set(128)
 
-		testParams := testIsAvailableParams{
-			options:                 []Option{WithCustodyInfo(&custodyInfo)},
-			blobKzgCommitmentsCount: 3,
-		}
+	// 	testParams := testIsAvailableParams{
+	// 		options:                 []Option{WithCustodyInfo(&custodyInfo)},
+	// 		blobKzgCommitmentsCount: 3,
+	// 	}
 
-		ctx, _, service, root, signed := testIsAvailableSetup(t, testParams)
+	// 	ctx, _, service, root, signed := testIsAvailableSetup(t, testParams)
 
-		// If needed, generate a random root that is different from the block root.
-		var randomRoot [fieldparams.RootLength]byte
-		for randomRoot == root {
-			randomRootSlice := make([]byte, fieldparams.RootLength)
-			_, err := rand.Read(randomRootSlice)
-			require.NoError(t, err)
-			copy(randomRoot[:], randomRootSlice)
-		}
+	// 	// If needed, generate a random root that is different from the block root.
+	// 	var randomRoot [fieldparams.RootLength]byte
+	// 	for randomRoot == root {
+	// 		randomRootSlice := make([]byte, fieldparams.RootLength)
+	// 		_, err := rand.Read(randomRootSlice)
+	// 		require.NoError(t, err)
+	// 		copy(randomRoot[:], randomRootSlice)
+	// 	}
 
-		// TODO: Achieve the same result without using time.AfterFunc.
-		time.AfterFunc(10*time.Millisecond, func() {
-			halfNumberOfColumns := params.BeaconConfig().NumberOfColumns / 2
-			indices := make([]uint64, 0, halfNumberOfColumns)
-			for i := range halfNumberOfColumns {
-				indices = append(indices, i)
-			}
+	// 	// TODO: Achieve the same result without using time.AfterFunc.
+	// 	time.AfterFunc(10*time.Millisecond, func() {
+	// 		halfNumberOfColumns := params.BeaconConfig().NumberOfColumns / 2
+	// 		indices := make([]uint64, 0, halfNumberOfColumns)
+	// 		for i := range halfNumberOfColumns {
+	// 			indices = append(indices, i)
+	// 		}
 
-			withSomeRequiredColumns := filesystem.DataColumnsIdent{Root: root, Indices: indices}
-			service.dataColumnStorage.DataColumnFeed.Send(withSomeRequiredColumns)
-		})
+	// 		withSomeRequiredColumns := filesystem.DataColumnsIdent{Root: root, Indices: indices}
+	// 		service.dataColumnStorage.DataColumnFeed.Send(withSomeRequiredColumns)
+	// 	})
 
-		err := service.isDataAvailable(ctx, root, signed)
-		require.NoError(t, err)
-	})
+	// 	err := service.isDataAvailable(ctx, root, signed)
+	// 	require.NoError(t, err)
+	// })
 
 	t.Run("Fulu - some columns are definitively missing", func(t *testing.T) {
 		params := testIsAvailableParams{

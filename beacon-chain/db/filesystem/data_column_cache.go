@@ -145,10 +145,11 @@ func (sc *dataColumnStorageSummaryCache) set(dataColumnsIdent DataColumnsIdent) 
 		count++
 
 		summary.mask[index] = true
-		sc.cache[dataColumnsIdent.Root] = summary
 		sc.lowestCachedEpoch = min(sc.lowestCachedEpoch, dataColumnsIdent.Epoch)
 		sc.highestCachedEpoch = max(sc.highestCachedEpoch, dataColumnsIdent.Epoch)
 	}
+
+	sc.cache[dataColumnsIdent.Root] = summary
 
 	countFloat := float64(count)
 	sc.dataColumnCount += countFloat

@@ -60,19 +60,16 @@ func (dc *RODataColumn) BlockRoot() [fieldparams.RootLength]byte {
 }
 
 // Slot returns the slot of the data column sidecar.
-// TODO: Add test
 func (dc *RODataColumn) Slot() primitives.Slot {
 	return dc.SignedBlockHeader.Header.Slot
 }
 
 // ProposerIndex returns the proposer index of the data column sidecar.
-// TODO: Add test
 func (dc *RODataColumn) ProposerIndex() primitives.ValidatorIndex {
 	return dc.SignedBlockHeader.Header.ProposerIndex
 }
 
 // ParentRoot returns the parent root of the data column sidecar.
-// TODO: Add test
 func (dc *RODataColumn) ParentRoot() [fieldparams.RootLength]byte {
 	return bytesutil.ToBytes32(dc.SignedBlockHeader.Header.ParentRoot)
 }

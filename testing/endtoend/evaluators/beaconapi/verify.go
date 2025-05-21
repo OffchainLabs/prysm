@@ -48,7 +48,7 @@ func verify(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
 
 func run(nodeIdx int) error {
 	genesisResp := &structs.GetGenesisResponse{}
-	if err := doJSONGetRequest(v1PathTemplate, "/beacon/genesis", nodeIdx, genesisResp); err != nil {
+	if err := doJSONGETRequest(v1PathTemplate, "/beacon/genesis", nodeIdx, genesisResp); err != nil {
 		return errors.Wrap(err, "error getting genesis data")
 	}
 	genesisTime, err := strconv.ParseInt(genesisResp.Data.GenesisTime, 10, 64)
@@ -61,21 +61,19 @@ func run(nodeIdx int) error {
 		if currentEpoch < m.getStart() {
 			continue
 		}
-		apiPath := path
-		if m.getParams(currentEpoch) != nil {
-			apiPath = pathFromParams(path, m.getParams(currentEpoch))
-		}
+
+		apiPath := pathFromParams(path, m.getParams(currentEpoch), m.getQueryParams(currentEpoch))
 
 		if m.sanityCheckOnlyEnabled() {
 			resp := m.getPResp()
-			if err = doJSONGetRequest(m.getBasePath(), apiPath, nodeIdx, resp); err != nil {
+			if err = doJSONGETRequest(m.getBasePath(), apiPath, nodeIdx, resp); err != nil {
 				return errors.Wrapf(err, "issue during Prysm JSON GET request for path %s", apiPath)
 			}
 			if resp == nil {
 				return fmt.Errorf("nil response from Prysm JSON GET request for path %s", apiPath)
 			}
 			if m.sszEnabled() {
-				sszResp, err := doSSZGetRequest(m.getBasePath(), apiPath, nodeIdx)
+				sszResp, err := doSSZGETRequest(m.getBasePath(), apiPath, nodeIdx)
 				if err != nil {
 					return errors.Wrapf(err, "issue during Prysm SSZ GET request for path %s", apiPath)
 				}
@@ -101,12 +99,37 @@ func run(nodeIdx int) error {
 		if currentEpoch < m.getStart() {
 			continue
 		}
-		apiPath := path
-		if m.getParams(currentEpoch) != nil {
-			apiPath = pathFromParams(path, m.getParams(currentEpoch))
-		}
-		if err = comparePOSTJSON(nodeIdx, m.getBasePath(), apiPath, m.getPOSTObj(), m.getPResp(), m.getLHResp(), m.getCustomEval()); err != nil {
-			return err
+
+		apiPath := pathFromParams(path, m.getParams(currentEpoch), m.getQueryParams(currentEpoch))
+
+		if m.sanityCheckOnlyEnabled() {
+			resp := m.getPResp()
+			if err = doJSONPOSTRequest(m.getBasePath(), apiPath, nodeIdx, m.getPOSTObj(), resp); err != nil {
+				return errors.Wrapf(err, "issue during Prysm JSON POST request for path %s", apiPath)
+			}
+			if resp == nil {
+				return fmt.Errorf("nil response from Prysm JSON POST request for path %s", apiPath)
+			}
+			if m.sszEnabled() {
+				sszResp, err := doSSZPOSTRequest(m.getBasePath(), apiPath, nodeIdx, m.getPOSTObj())
+				if err != nil {
+					return errors.Wrapf(err, "issue during Prysm SSZ POST request for path %s", apiPath)
+				}
+				if sszResp == nil {
+					return fmt.Errorf("nil response from Prysm SSZ POST request for path %s", apiPath)
+				}
+			}
+		} else {
+			if err = comparePOSTJSON(nodeIdx, m.getBasePath(), apiPath, m.getPOSTObj(), m.getPResp(), m.getLHResp(), m.getCustomEval()); err != nil {
+				return err
+			}
+			if m.sszEnabled() {
+				b, err := comparePOSTSSZ(nodeIdx, m.getBasePath(), apiPath, m.getPOSTObj())
+				if err != nil {
+					return err
+				}
+				m.setSszResp(b)
+			}
 		}
 	}
 
@@ -179,12 +202,12 @@ func postEvaluation(nodeIdx int, requests map[string]endpoint, epoch primitives.
 	blockHeaderData := requests["/beacon/headers/{param1}"]
 	header, ok := blockHeaderData.getPResp().(*structs.GetBlockHeaderResponse)
 	if !ok {
-		return fmt.Errorf(msgWrongJson, &structs.GetBlockHeaderResponse{}, blockHeaderData.getPResp())
+		return fmt.Errorf(msgWrongJSON, &structs.GetBlockHeaderResponse{}, blockHeaderData.getPResp())
 	}
 	dutiesData := requests["/validator/duties/proposer/{param1}"]
 	duties, ok := dutiesData.getPResp().(*structs.GetProposerDutiesResponse)
 	if !ok {
-		return fmt.Errorf(msgWrongJson, &structs.GetProposerDutiesResponse{}, dutiesData.getPResp())
+		return fmt.Errorf(msgWrongJSON, &structs.GetProposerDutiesResponse{}, dutiesData.getPResp())
 	}
 	if header.Data.Root != duties.DependentRoot {
 		return fmt.Errorf("header root %s does not match duties root %s ", header.Data.Root, duties.DependentRoot)
@@ -200,14 +223,32 @@ func postEvaluation(nodeIdx int, requests map[string]endpoint, epoch primitives.
 		return fmt.Errorf("health check response's status code is %d", resp.StatusCode)
 	}
 
+	syncingData := requests["/node/syncing"]
+	sync, ok := syncingData.getPResp().(*structs.SyncStatusResponse)
+	if !ok {
+		return fmt.Errorf(msgWrongJSON, &structs.SyncStatusResponse{}, syncingData.getPResp())
+	}
+	headSlot := sync.Data.HeadSlot
+
+	// get attestation data (it needs the current slot)
+	if err = compareGETJSON(
+		nodeIdx,
+		v1PathTemplate,
+		fmt.Sprintf("/validator/attestation_data?slot=%s&committee_index=0", headSlot),
+		&structs.AttestationData{},
+		&structs.AttestationData{},
+		nil); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func compareGETJSON(nodeIdx int, base, path string, pResp, lhResp interface{}, customEval func(interface{}, interface{}) error) error {
-	if err := doJSONGetRequest(base, path, nodeIdx, pResp); err != nil {
+	if err := doJSONGETRequest(base, path, nodeIdx, pResp); err != nil {
 		return errors.Wrapf(err, "issue during Prysm JSON GET request for path %s", path)
 	}
-	if err := doJSONGetRequest(base, path, nodeIdx, lhResp, "Lighthouse"); err != nil {
+	if err := doJSONGETRequest(base, path, nodeIdx, lhResp, "Lighthouse"); err != nil {
 		return errors.Wrapf(err, "issue during Lighthouse JSON GET request for path %s", path)
 	}
 	if pResp == nil {
@@ -224,10 +265,10 @@ func compareGETJSON(nodeIdx int, base, path string, pResp, lhResp interface{}, c
 }
 
 func comparePOSTJSON(nodeIdx int, base, path string, postObj, pResp, lhResp interface{}, customEval func(interface{}, interface{}) error) error {
-	if err := doJSONPostRequest(base, path, nodeIdx, postObj, pResp); err != nil {
+	if err := doJSONPOSTRequest(base, path, nodeIdx, postObj, pResp); err != nil {
 		return errors.Wrapf(err, "issue during Prysm JSON POST request for path %s", path)
 	}
-	if err := doJSONPostRequest(base, path, nodeIdx, postObj, lhResp, "Lighthouse"); err != nil {
+	if err := doJSONPOSTRequest(base, path, nodeIdx, postObj, lhResp, "Lighthouse"); err != nil {
 		return errors.Wrapf(err, "issue during Lighthouse JSON POST request for path %s", path)
 	}
 	if pResp == nil {
@@ -244,13 +285,28 @@ func comparePOSTJSON(nodeIdx int, base, path string, postObj, pResp, lhResp inte
 }
 
 func compareGETSSZ(nodeIdx int, base, path string) ([]byte, error) {
-	pResp, err := doSSZGetRequest(base, path, nodeIdx)
+	pResp, err := doSSZGETRequest(base, path, nodeIdx)
 	if err != nil {
 		return nil, errors.Wrapf(err, "issue during Prysm SSZ GET request for path %s", path)
 	}
-	lhResp, err := doSSZGetRequest(base, path, nodeIdx, "Lighthouse")
+	lhResp, err := doSSZGETRequest(base, path, nodeIdx, "Lighthouse")
 	if err != nil {
 		return nil, errors.Wrapf(err, "issue during Lighthouse SSZ GET request for path %s", path)
+	}
+	if !bytes.Equal(pResp, lhResp) {
+		return nil, errors.New("Prysm SSZ response does not match Lighthouse SSZ response")
+	}
+	return pResp, nil
+}
+
+func comparePOSTSSZ(nodeIdx int, base, path string, postObj interface{}) ([]byte, error) {
+	pResp, err := doSSZPOSTRequest(base, path, nodeIdx, postObj)
+	if err != nil {
+		return nil, errors.Wrapf(err, "issue during Prysm SSZ POST request for path %s", path)
+	}
+	lhResp, err := doSSZPOSTRequest(base, path, nodeIdx, postObj, "Lighthouse")
+	if err != nil {
+		return nil, errors.Wrapf(err, "issue during Lighthouse SSZ POST request for path %s", path)
 	}
 	if !bytes.Equal(pResp, lhResp) {
 		return nil, errors.New("Prysm SSZ response does not match Lighthouse SSZ response")
@@ -273,10 +329,17 @@ func compareJSON(pResp, lhResp interface{}) error {
 	return nil
 }
 
-func pathFromParams(path string, params []string) string {
+func pathFromParams(path string, params []string, queryParams []string) string {
 	apiPath := path
 	for i := range params {
 		apiPath = strings.Replace(apiPath, fmt.Sprintf("{param%d}", i+1), params[i], 1)
+	}
+	for i := range queryParams {
+		if i == 0 {
+			apiPath = apiPath + "?" + queryParams[i]
+		} else {
+			apiPath = apiPath + "&" + queryParams[i]
+		}
 	}
 	return apiPath
 }

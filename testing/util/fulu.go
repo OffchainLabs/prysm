@@ -184,7 +184,7 @@ func GenerateTestFuluBlockWithSidecars(t *testing.T, blobCount int, options ...F
 	return rob, roSidecars, roVerifiedSidecars
 }
 
-func GenerateCellsAndProofs(t *testing.T, blobs []kzg.Blob) []kzg.CellsAndProofs {
+func GenerateCellsAndProofs(t testing.TB, blobs []kzg.Blob) []kzg.CellsAndProofs {
 	cellsAndProofs := make([]kzg.CellsAndProofs, len(blobs))
 	for i := range blobs {
 		cp, err := kzg.ComputeCellsAndKZGProofs(&blobs[i])

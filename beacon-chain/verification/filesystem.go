@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/afero"
 )
 
+// VerifiedROBlobError creates a verified read-only blob sidecar from an error.
 func VerifiedROBlobFromDisk(fs afero.Fs, root [32]byte, path string) (blocks.VerifiedROBlob, error) {
 	encoded, err := afero.ReadFile(fs, path)
 	if err != nil {
@@ -24,6 +25,7 @@ func VerifiedROBlobFromDisk(fs afero.Fs, root [32]byte, path string) (blocks.Ver
 	return blocks.NewVerifiedROBlob(ro), nil
 }
 
+// VerifiedRODataColumnFromDisk created a verified read-only data column sidecar from disk.
 func VerifiedRODataColumnFromDisk(file afero.File, root [fieldparams.RootLength]byte, sszEncodedDataColumnSidecarSize uint32) (blocks.VerifiedRODataColumn, error) {
 	// Read the ssz encoded data column sidecar from the file
 	sszEncodedDataColumnSidecar := make([]byte, sszEncodedDataColumnSidecarSize)

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
@@ -118,8 +119,52 @@ func TestNewRODataColumnWithAndWithoutRoot(t *testing.T) {
 
 func TestDataColumn_BlockRoot(t *testing.T) {
 	root := [fieldparams.RootLength]byte{1}
-	dataColumn := &RODataColumn{
-		root: root,
-	}
+	dataColumn := &RODataColumn{root: root}
 	assert.Equal(t, root, dataColumn.BlockRoot())
+}
+
+func TestDataColumn_Slot(t *testing.T) {
+	slot := primitives.Slot(1)
+
+	dataColumn := &RODataColumn{
+		DataColumnSidecar: &ethpb.DataColumnSidecar{
+			SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
+				Header: &ethpb.BeaconBlockHeader{
+					Slot: slot,
+				},
+			},
+		},
+	}
+
+	assert.Equal(t, slot, dataColumn.Slot())
+}
+
+func TestDataColumn_ParentRoot(t *testing.T) {
+	root := [fieldparams.RootLength]byte{1}
+	dataColumn := &RODataColumn{
+		DataColumnSidecar: &ethpb.DataColumnSidecar{
+			SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
+				Header: &ethpb.BeaconBlockHeader{
+					ParentRoot: root[:],
+				},
+			},
+		},
+	}
+
+	assert.Equal(t, root, dataColumn.ParentRoot())
+}
+
+func TestDataColumn_ProposerIndex(t *testing.T) {
+	proposerIndex := primitives.ValidatorIndex(1)
+	dataColumn := &RODataColumn{
+		DataColumnSidecar: &ethpb.DataColumnSidecar{
+			SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
+				Header: &ethpb.BeaconBlockHeader{
+					ProposerIndex: proposerIndex,
+				},
+			},
+		},
+	}
+
+	assert.Equal(t, proposerIndex, dataColumn.ProposerIndex())
 }

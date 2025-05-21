@@ -267,12 +267,14 @@ func (m *mockDataColumnsVerifier) VerifiedRODataColumns() ([]blocks.VerifiedRODa
 
 func (m *mockDataColumnsVerifier) SatisfyRequirement(verification.Requirement) {}
 
-func (m *mockDataColumnsVerifier) Valid() error {
+func (m *mockDataColumnsVerifier) ValidFields() error {
 	m.validCalled = true
 	return nil
 }
 
-func (m *mockDataColumnsVerifier) CorrectSubnet(expectedTopics []string) error      { return nil }
+func (m *mockDataColumnsVerifier) CorrectSubnet(dataColumnSidecarSubTopic string, expectedTopics []string) error {
+	return nil
+}
 func (m *mockDataColumnsVerifier) NotFromFutureSlot() error                         { return nil }
 func (m *mockDataColumnsVerifier) SlotAboveFinalized() error                        { return nil }
 func (m *mockDataColumnsVerifier) ValidProposerSignature(ctx context.Context) error { return nil }
