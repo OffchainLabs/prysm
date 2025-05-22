@@ -6,7 +6,7 @@ go_test(
     timeout = "short",
     srcs = ["forkchoice_test.go"],
     data = glob(["*.yaml"]) + [
-        "@consensus_spec_tests_mainnet//:test_data",
+        "@consensus_spec_tests//:test_data",
     ],
     tags = ["spectest"],
     deps = [

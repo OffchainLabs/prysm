@@ -5,7 +5,7 @@ go_test(
     size = "small",
     srcs = ["verify_blob_kzg_proof_batch_test.go"],
     data = [
-        "@consensus_spec_tests_general//:test_data",
+        "@consensus_spec_tests//:test_data",
     ],
     tags = ["spectest"],
     deps = [

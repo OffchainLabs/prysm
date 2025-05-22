@@ -18,7 +18,7 @@ go_test(
         "slashings_test.go",
     ],
     data = glob(["*.yaml"]) + [
-        "@consensus_spec_tests_mainnet//:test_data",
+        "@consensus_spec_tests//:test_data",
     ],
     deps = ["//testing/spectest/shared/fulu/epoch_processing:go_default_library"],
 )

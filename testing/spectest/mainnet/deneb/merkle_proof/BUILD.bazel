@@ -4,7 +4,7 @@ go_test(
     name = "go_default_test",
     srcs = ["merkle_proof_test.go"],
     data = glob(["*.yaml"]) + [
-        "@consensus_spec_tests_mainnet//:test_data",
+        "@consensus_spec_tests//:test_data",
     ],
     tags = ["spectest"],
     deps = ["//testing/spectest/shared/deneb/merkle_proof:go_default_library"],

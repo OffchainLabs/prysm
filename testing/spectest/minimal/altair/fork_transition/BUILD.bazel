@@ -5,7 +5,7 @@ go_test(
     timeout = "short",
     srcs = ["transition_test.go"],
     data = glob(["*.yaml"]) + [
-        "@consensus_spec_tests_minimal//:test_data",
+        "@consensus_spec_tests//:test_data",
     ],
     eth_network = "minimal",
     tags = ["spectest"],

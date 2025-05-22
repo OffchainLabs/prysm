@@ -57,8 +57,7 @@ go_test(
     data = glob(["*.yaml"]) + [
         "testdata/e2e_config.yaml",
         "@consensus_spec//:spec_data",
-        "@consensus_spec_tests_mainnet//:test_data",
-        "@consensus_spec_tests_minimal//:test_data",
+        "@consensus_spec_tests//:test_data",
         "@eth2_networks//:configs",
         "@holesky_testnet//:configs",
         "@hoodi_testnet//:configs",
