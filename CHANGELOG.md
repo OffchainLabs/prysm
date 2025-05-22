@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [v6.0.2](https://github.com/prysmaticlabs/prysm/compare/v6.0.1...v6.0.2) - 2025-05-12
+
+This is a patch release to fix a few important bugs. Most importantly, we have adjusted the index limit for field tries in the beacon state to better support Pectra states. This should alleviate memory issues that clients are seeing since Pectra mainnet fork.
+
+### Added
+
+- Enable light client gossip for optimistic and finality updates. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15220)
+- Implement peerDAS core functions. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15192)
+- Force duties start on received blocks. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15251)
+- Added additional tracing spans for the GetDuties routine. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15258)
+
+### Changed
+
+- Use otelgrpc for tracing grpc server and client. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15237)
+- Upgraded ristretto to v2.2.0, for RISC-V support. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15170)
+- Update spec to v1.5.0 compliance which changes minimal execution requests size. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15256)
+- Increase indices limit in field trie rebuilding. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15252)
+- Increase sepolia gas limit to 60M. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15253)
+
+### Fixed
+
+- Fixed wrong field name in pending partial withdrawals was returned on state json representation, described in https://github.com/ethereum/consensus-specs/blob/dev/specs/electra/beacon-chain.md#pendingpartialwithdrawal. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15254)
+- Fixed gocognit on propose block rest path. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15147)
+
 ## [v6.0.1](https://github.com/prysmaticlabs/prysm/compare/v6.0.0...v6.0.1) - 2025-05-02
 
 This release fixes two bugs related to the `payload_attributes` [event stream](https://ethereum.github.io/beacon-APIs/#/Events/eventstream). If you are using or planning to use this endpoint, upgrading to version 6.0.1 is mandatory.  

@@ -35,11 +35,11 @@ func RunLightClientUpdateRankingTests(t *testing.T, config string, v int) {
 	_, testsFolderPath = utils.TestFolders(t, config, version.String(v), "light_client/update_ranking/pyspec_tests/update_ranking")
 	helpers.ClearCache()
 	t.Run("update ranking", func(t *testing.T) {
-		runLightClientUpdateRankingProofTest(t, testsFolderPath, v)
+		runLightClientUpdateRankingTest(t, testsFolderPath, v)
 	})
 }
 
-func runLightClientUpdateRankingProofTest(t *testing.T, testFolderPath string, v int) {
+func runLightClientUpdateRankingTest(t *testing.T, testFolderPath string, v int) {
 	metaFile, err := util.BazelFileBytes(path.Join(testFolderPath, "meta.yaml"))
 	require.NoError(t, err)
 	var meta struct {

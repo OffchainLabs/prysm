@@ -14,8 +14,7 @@ import (
 )
 
 func TestScorers_Service_Init(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	batchSize := uint64(flags.Get().BlockBatchLimit)
 

@@ -241,7 +241,7 @@ func (c *Client) GetHeader(ctx context.Context, slot primitives.Slot, parentHash
 		return nil, errors.Wrap(err, "error getting header from builder server")
 	}
 
-	bid, err := c.parseHeaderResponse(data, header)
+	bid, err := c.parseHeaderResponse(data, header, slot)
 	if err != nil {
 		return nil, errors.Wrapf(
 			err,
@@ -254,7 +254,7 @@ func (c *Client) GetHeader(ctx context.Context, slot primitives.Slot, parentHash
 	return bid, nil
 }
 
-func (c *Client) parseHeaderResponse(data []byte, header http.Header) (SignedBid, error) {
+func (c *Client) parseHeaderResponse(data []byte, header http.Header, slot primitives.Slot) (SignedBid, error) {
 	var versionHeader string
 	if c.sszEnabled || header.Get(api.VersionHeader) != "" {
 		versionHeader = header.Get(api.VersionHeader)
@@ -276,7 +276,7 @@ func (c *Client) parseHeaderResponse(data []byte, header http.Header) (SignedBid
 	}
 
 	if ver >= version.Electra {
-		return c.parseHeaderElectra(data)
+		return c.parseHeaderElectra(data, slot)
 	}
 	if ver >= version.Deneb {
 		return c.parseHeaderDeneb(data)
@@ -291,7 +291,7 @@ func (c *Client) parseHeaderResponse(data []byte, header http.Header) (SignedBid
 	return nil, fmt.Errorf("unsupported header version %s", versionHeader)
 }
 
-func (c *Client) parseHeaderElectra(data []byte) (SignedBid, error) {
+func (c *Client) parseHeaderElectra(data []byte, slot primitives.Slot) (SignedBid, error) {
 	if c.sszEnabled {
 		sb := &ethpb.SignedBuilderBidElectra{}
 		if err := sb.UnmarshalSSZ(data); err != nil {
@@ -303,7 +303,7 @@ func (c *Client) parseHeaderElectra(data []byte) (SignedBid, error) {
 	if err := json.Unmarshal(data, hr); err != nil {
 		return nil, errors.Wrap(err, "could not unmarshal ExecHeaderResponseElectra JSON")
 	}
-	p, err := hr.ToProto()
+	p, err := hr.ToProto(slot)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not convert ExecHeaderResponseElectra to proto")
 	}

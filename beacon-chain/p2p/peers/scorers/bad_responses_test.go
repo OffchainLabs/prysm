@@ -1,7 +1,6 @@
 package scorers_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
@@ -50,8 +49,7 @@ import (
 // }
 
 func TestScorers_BadResponses_ParamsThreshold(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	maxBadResponses := 2
 	peerStatuses := peers.NewStatus(ctx, &peers.StatusConfig{
@@ -67,8 +65,7 @@ func TestScorers_BadResponses_ParamsThreshold(t *testing.T) {
 }
 
 func TestScorers_BadResponses_Count(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	peerStatuses := peers.NewStatus(ctx, &peers.StatusConfig{
 		PeerLimit:    30,
@@ -87,8 +84,7 @@ func TestScorers_BadResponses_Count(t *testing.T) {
 }
 
 func TestScorers_BadResponses_Decay(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	maxBadResponses := 2
 	peerStatuses := peers.NewStatus(ctx, &peers.StatusConfig{
