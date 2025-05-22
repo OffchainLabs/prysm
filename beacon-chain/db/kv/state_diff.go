@@ -19,7 +19,7 @@ import (
 
 // SaveStateDiff takes a state and decides between saving a full state snapshot or a diff.
 func (s *Store) SaveStateDiff(ctx context.Context, st state.ReadOnlyBeaconState) error {
-	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveStateDiff")
+	_, span := trace.StartSpan(ctx, "BeaconDB.SaveStateDiff")
 	defer span.End()
 
 	if st == nil {
@@ -71,6 +71,9 @@ func (s *Store) StateDiff(ctx context.Context, slot primitives.Slot) (state.Beac
 	}
 
 	snapshot, diffChain, err := s.getBaseAndDiffChain(offset, slot)
+	if err != nil {
+		return nil, err
+	}
 
 	for _, diff := range diffChain {
 		snapshot, err = hdiff.ApplyDiff(ctx, snapshot, diff)
@@ -130,6 +133,9 @@ func (s *Store) saveFullSnapshot(lvl int, st state.ReadOnlyBeaconState) error {
 	slot := uint64(st.Slot())
 	key := makeKey(lvl, slot)
 	stateBytes, err := st.MarshalSSZ()
+	if err != nil {
+		return err
+	}
 	// add version key to value
 	enc, err := addKey(st.Version(), stateBytes)
 	if err != nil {
