@@ -100,17 +100,15 @@ func (s *Store) saveHdiff(lvl int, anchor, st state.ReadOnlyBeaconState) error {
 		if bucket == nil {
 			return bolt.ErrBucketNotFound
 		}
-		buf := make([]byte, len(key)+len("_s"))
-		copy(buf, key)
-		copy(buf[len(key):], "_s")
+		buf := append(key, "_s"...)
 		if err := bucket.Put(buf, diff.StateDiff); err != nil {
 			return err
 		}
-		copy(buf[len(key):], "_v")
+		buf = append(key, "_v"...)
 		if err := bucket.Put(buf, diff.ValidatorDiffs); err != nil {
 			return err
 		}
-		copy(buf[len(key):], "_b")
+		buf = append(key, "_b"...)
 		if err := bucket.Put(buf, diff.BalancesDiff); err != nil {
 			return err
 		}
@@ -175,19 +173,17 @@ func (s *Store) getDiff(lvl int, slot uint64) (hdiff.HdiffBytes, error) {
 		if bucket == nil {
 			return bolt.ErrBucketNotFound
 		}
-		buf := make([]byte, len(key)+len("_s"))
-		copy(buf, key)
-		copy(buf[len(key):], "_s")
+		buf := append(key, "_s"...)
 		stateDiff = bucket.Get(buf)
 		if stateDiff == nil {
 			return errors.New("state diff not found")
 		}
-		copy(buf[len(key):], "_v")
+		buf = append(key, "_v"...)
 		validatorDiff = bucket.Get(buf)
 		if validatorDiff == nil {
 			return errors.New("validator diff not found")
 		}
-		copy(buf[len(key):], "_b")
+		buf = append(key, "_b"...)
 		balancesDiff = bucket.Get(buf)
 		if balancesDiff == nil {
 			return errors.New("balances diff not found")

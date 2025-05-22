@@ -188,19 +188,17 @@ func TestStateDiff_SaveDiff(t *testing.T) {
 		if bucket == nil {
 			return bbolt.ErrBucketNotFound
 		}
-		buf := make([]byte, len(key)+len("_s"))
-		copy(buf, key)
-		copy(buf[len(key):], "_s")
+		buf := append(key, "_s"...)
 		s := bucket.Get(buf)
 		if s == nil {
 			return bbolt.ErrIncompatibleValue
 		}
-		copy(buf[len(key):], "_v")
+		buf = append(key, "_v"...)
 		v := bucket.Get(buf)
 		if v == nil {
 			return bbolt.ErrIncompatibleValue
 		}
-		copy(buf[len(key):], "_b")
+		buf = append(key, "_b"...)
 		b := bucket.Get(buf)
 		if b == nil {
 			return bbolt.ErrIncompatibleValue
