@@ -22,7 +22,7 @@ def _get_redirected_url(repository_ctx, url, headers):
 
 def _impl(repository_ctx):
     version = repository_ctx.getenv("CONSENSUS_SPEC_TESTS_VERSION") or repository_ctx.attr.version
-    token   = repository_ctx.getenv("GITHUB_TOKEN") or ""
+    token = repository_ctx.getenv("GITHUB_TOKEN") or ""
 
     if version == "nightly":
         print("Downloading nightly tests")
@@ -58,7 +58,6 @@ def _impl(repository_ctx):
             name = artifact["name"]
             if name == "consensustestgen.log":
                 continue
-
             url = artifact["archive_download_url"]
             # Ugh this is the worst, bazel doesn't follow redirects...
             resolved_url = _get_redirected_url(repository_ctx, url, headers)
@@ -66,7 +65,6 @@ def _impl(repository_ctx):
             tar_gz_file = "%s.tar.gz" % name.split(" ")[0].lower()
             repository_ctx.extract(tar_gz_file)
             repository_ctx.delete(tar_gz_file)
-
     else:
         for flavor in repository_ctx.attr.flavors:
             integrity = repository_ctx.attr.flavors[flavor]
