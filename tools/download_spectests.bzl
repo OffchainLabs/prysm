@@ -1,5 +1,5 @@
 # bazel build @consensus_spec_tests//:test_data
-# bazel build @consensus_spec_tests//:test_data --repo_env=SPEC_VERSION=nightly
+# bazel build @consensus_spec_tests//:test_data --repo_env=CONSENSUS_SPEC_TESTS_VERSION=nightly
 
 def _get_redirected_url(repository_ctx, url, headers):
     if not repository_ctx.which("curl"):
@@ -21,7 +21,7 @@ def _get_redirected_url(repository_ctx, url, headers):
     return result.stdout.strip()
 
 def _impl(repository_ctx):
-    version = repository_ctx.getenv("SPEC_VERSION") or repository_ctx.attr.version
+    version = repository_ctx.getenv("CONSENSUS_SPEC_TESTS_VERSION") or repository_ctx.attr.version
     token   = repository_ctx.getenv("GITHUB_TOKEN") or ""
 
     if version == "nightly":
