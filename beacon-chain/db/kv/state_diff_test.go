@@ -2,8 +2,11 @@ package kv
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/math"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
@@ -145,17 +148,10 @@ func TestStateDiff_SaveDiff(t *testing.T) {
 	db := setupDB(t)
 
 	// Create state with slot 2**21
-	st, err := util.NewBeaconStateElectra()
-	require.NoError(t, err)
 	slot := primitives.Slot(math.PowerOf2(21))
-	err = st.SetSlot(slot)
-	require.NoError(t, err)
-	stssz, err := st.MarshalSSZ()
-	require.NoError(t, err)
-	enc, err := addKey(version.Electra, stssz)
-	require.NoError(t, err)
+	st, enc := createState(t, slot, version.Electra)
 
-	err = db.SaveStateDiff(context.Background(), st)
+	err := db.SaveStateDiff(context.Background(), st)
 	require.NoError(t, err)
 
 	err = db.db.View(func(tx *bbolt.Tx) error {
@@ -173,11 +169,8 @@ func TestStateDiff_SaveDiff(t *testing.T) {
 	require.NoError(t, err)
 
 	// create state with slot 2**18 (+2**21)
-	st, err = util.NewBeaconStateElectra()
-	require.NoError(t, err)
 	slot = primitives.Slot(math.PowerOf2(18) + math.PowerOf2(21))
-	err = st.SetSlot(slot)
-	require.NoError(t, err)
+	st, _ = createState(t, slot, version.Electra)
 
 	err = db.SaveStateDiff(context.Background(), st)
 	require.NoError(t, err)
@@ -206,4 +199,131 @@ func TestStateDiff_SaveDiff(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
+}
+
+func TestStateDiff_OffsetCache(t *testing.T) {
+	// test for slot numbers 0 and 1 for every version
+	for slotNum := 0; slotNum < 2; slotNum++ {
+		// test for every version
+		for v := 0; v < 6; v++ {
+			t.Run(fmt.Sprintf("slotNum=%d,%s", slotNum, version.String(v)), func(t *testing.T) {
+				db := setupDB(t)
+
+				_, err := db.stateDiffCache.getOffset()
+				require.ErrorContains(t, "offset is not set", err)
+
+				slot := primitives.Slot(slotNum)
+				st, _ := createState(t, slot, v)
+				err = db.SaveStateDiff(context.Background(), st)
+				require.NoError(t, err)
+
+				offset, err := db.stateDiffCache.getOffset()
+				require.NoError(t, err)
+				require.Equal(t, uint64(slotNum), offset)
+
+				slot2 := primitives.Slot(uint64(slotNum) + math.PowerOf2(params.StateHierarchyExponents()[0]))
+				st2, _ := createState(t, slot2, v)
+				err = db.SaveStateDiff(context.Background(), st2)
+				require.NoError(t, err)
+
+				offset, err = db.stateDiffCache.getOffset()
+				require.NoError(t, err)
+				require.Equal(t, uint64(slot), offset)
+			})
+		}
+	}
+}
+
+func TestStateDiff_AnchorCache(t *testing.T) {
+	// test for every version
+	for v := 1; v < 6; v++ {
+		t.Run(version.String(v), func(t *testing.T) {
+			exponents := params.StateHierarchyExponents()
+			localCache := make([]state.ReadOnlyBeaconState, len(exponents)-1)
+			db := setupDB(t)
+
+			// first the cache should be empty
+			for i := 0; i < len(params.StateHierarchyExponents()); i++ {
+				anchor := db.stateDiffCache.getAnchor(i)
+				require.IsNil(t, anchor)
+			}
+
+			// add state on every level and check cache
+
+			// add level 0 first
+			slot := primitives.Slot(0)
+			st, _ := createState(t, slot, v)
+			err := db.SaveStateDiff(context.Background(), st)
+			require.NoError(t, err)
+			localCache[0] = st
+
+			// anchor cache must match local cache
+			for i := 0; i < len(exponents)-1; i++ {
+				if localCache[i] == nil {
+					require.IsNil(t, db.stateDiffCache.getAnchor(i))
+					continue
+				}
+				localSSZ, err := localCache[i].MarshalSSZ()
+				require.NoError(t, err)
+				anchorSSZ, err := db.stateDiffCache.getAnchor(i).MarshalSSZ()
+				require.NoError(t, err)
+				require.DeepEqual(t, localSSZ, anchorSSZ)
+			}
+
+			// skip last level as it does not get cached
+			for i := len(exponents) - 2; i > 0; i-- {
+				slot = primitives.Slot(math.PowerOf2(exponents[i]))
+				st, _ := createState(t, slot, v)
+				err = db.SaveStateDiff(context.Background(), st)
+				require.NoError(t, err)
+				localCache[i] = st
+
+				// anchor cache must match local cache
+				for i := 0; i < len(exponents)-1; i++ {
+					if localCache[i] == nil {
+						require.IsNil(t, db.stateDiffCache.getAnchor(i))
+						continue
+					}
+					localSSZ, err := localCache[i].MarshalSSZ()
+					require.NoError(t, err)
+					anchorSSZ, err := db.stateDiffCache.getAnchor(i).MarshalSSZ()
+					require.NoError(t, err)
+					require.DeepEqual(t, localSSZ, anchorSSZ)
+				}
+			}
+		})
+	}
+}
+
+func createState(t *testing.T, slot primitives.Slot, v int) (state.ReadOnlyBeaconState, []byte) {
+	var st state.BeaconState
+	var err error
+	switch v {
+	case version.Altair:
+		st, err = util.NewBeaconStateAltair()
+		require.NoError(t, err)
+	case version.Bellatrix:
+		st, err = util.NewBeaconStateBellatrix()
+		require.NoError(t, err)
+	case version.Capella:
+		st, err = util.NewBeaconStateCapella()
+		require.NoError(t, err)
+	case version.Deneb:
+		st, err = util.NewBeaconStateDeneb()
+		require.NoError(t, err)
+	case version.Electra:
+		st, err = util.NewBeaconStateElectra()
+		require.NoError(t, err)
+	default:
+		st, err = util.NewBeaconState()
+		require.NoError(t, err)
+	}
+
+	err = st.SetSlot(slot)
+	require.NoError(t, err)
+	stssz, err := st.MarshalSSZ()
+	require.NoError(t, err)
+	enc, err := addKey(v, stssz)
+	require.NoError(t, err)
+	return st, enc
 }
