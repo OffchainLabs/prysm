@@ -2,16 +2,23 @@
 # bazel build @consensus_spec_tests//:test_data --repo_env=SPEC_VERSION=nightly
 
 def _get_redirected_url(repository_ctx, url, headers):
-    return repository_ctx.execute(
-        [
-            "curl", "-s", "-L", "-o", "/dev/null",
-            "-w", "%{url_effective}",
-            "-H", "Authorization: %s" % headers["Authorization"],
-            "-H", "Accept: %s" % headers["Accept"],
-            url,
-        ],
-        quiet = True,
-    ).stdout
+    if not repository_ctx.which("curl"):
+        fail("curl is required to resolve redirect URLs")
+
+    cmd = [
+        "curl",
+        "-sL",  # silent + follow redirects
+        "-o", "NUL" if repository_ctx.os.name == "windows" else "/dev/null",
+        "-w", "%{url_effective}",
+        "-H", "Authorization: %s" % headers["Authorization"],
+        "-H", "Accept: %s" % headers["Accept"],
+        url,
+    ]
+
+    result = repository_ctx.execute(cmd, quiet = True)
+    if result.return_code != 0:
+        fail("curl failed to resolve redirected URL: %s" % result.stderr)
+    return result.stdout.strip()
 
 def _impl(repository_ctx):
     version = repository_ctx.getenv("SPEC_VERSION") or repository_ctx.attr.version
