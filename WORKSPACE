@@ -256,15 +256,17 @@ filegroup(
 )
 
 consensus_spec_version = "v1.6.0-alpha.0"
+
 load("@prysm//tools:download_spectests.bzl", "consensus_spec_tests")
+
 consensus_spec_tests(
     name = "consensus_spec_tests",
-    version = consensus_spec_version,
     flavors = {
         "general": "sha256-W7oKvoM0nAkyitykRxAw6kmCvjYC01IqiNJy0AmCnMM=",
         "minimal": "sha256-ig7/zxomjv6buBWMom4IxAJh3lFJ9+JnY44E7c8ZNP8=",
         "mainnet": "sha256-mjx+MkXtPhCNv4c4knLYLIkvIdpF7WTjx/ElvGPQzSo=",
     },
+    version = consensus_spec_version,
 )
 
 http_archive(
@@ -284,6 +286,7 @@ filegroup(
 )
 
 bls_test_version = "v0.1.1"
+
 http_archive(
     name = "bls_spec_tests",
     build_file_content = """
