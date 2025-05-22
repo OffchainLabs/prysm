@@ -25,6 +25,7 @@ def _impl(repository_ctx):
     token   = repository_ctx.getenv("GITHUB_TOKEN") or ""
 
     if version == "nightly":
+        print("Downloading nightly tests")
         if not token:
             fail("Error GITHUB_TOKEN is not set")
 
