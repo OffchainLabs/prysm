@@ -13,13 +13,13 @@ const unset = math.MaxUint64
 
 type stateDiffCache struct {
 	mu      sync.RWMutex
-	anchors map[int]state.ReadOnlyBeaconState
+	anchors []state.ReadOnlyBeaconState
 	offset  uint64
 }
 
 func newStateDiffCache() *stateDiffCache {
 	return &stateDiffCache{
-		anchors: make(map[int]state.ReadOnlyBeaconState, len(params.StateHierarchyExponents())),
+		anchors: make([]state.ReadOnlyBeaconState, len(params.StateHierarchyExponents())),
 		offset:  unset,
 	}
 }
@@ -54,5 +54,5 @@ func (c *stateDiffCache) setOffset(offset uint64) {
 func (c *stateDiffCache) clearAnchors() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.anchors = make(map[int]state.ReadOnlyBeaconState, len(params.StateHierarchyExponents()))
+	c.anchors = make([]state.ReadOnlyBeaconState, len(params.StateHierarchyExponents()))
 }
