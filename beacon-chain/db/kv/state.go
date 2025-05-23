@@ -30,6 +30,28 @@ func (s *Store) State(ctx context.Context, blockRoot [32]byte) (state.BeaconStat
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.State")
 	defer span.End()
 	startTime := time.Now()
+
+	if features.Get().EnableStateDiff {
+		// If state diff is enabled, we get the state from the state-diff db.
+		stateSummary, err := s.StateSummary(ctx, blockRoot)
+		if err != nil {
+			return nil, err
+		}
+		if stateSummary == nil {
+			return nil, errors.New("State summary not found")
+		}
+
+		st, err := s.stateByDiff(ctx, stateSummary.Slot)
+		if err != nil {
+			return nil, err
+		}
+		if st == nil || st.IsNil() {
+			return nil, errors.New("State not found")
+		}
+		stateReadingTime.Observe(float64(time.Since(startTime).Milliseconds()))
+		return st, nil
+	}
+
 	enc, err := s.stateBytes(ctx, blockRoot)
 	if err != nil {
 		return nil, err
