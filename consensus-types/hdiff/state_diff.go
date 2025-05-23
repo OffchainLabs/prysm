@@ -706,7 +706,7 @@ func (ret *stateDiff) readPendingConsolidations(data *[]byte) error {
 	return nil
 }
 
-// newStateDiff deserializes a new StateDiff object from the given data.
+// newStateDiff deserializes a new stateByDiff object from the given data.
 func newStateDiff(input []byte) (*stateDiff, error) {
 	data, err := snappy.Decode(nil, input)
 	if err != nil {

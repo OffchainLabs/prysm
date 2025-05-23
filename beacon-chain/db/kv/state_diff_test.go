@@ -121,7 +121,7 @@ func TestStateDiff_SaveFullSnapshot(t *testing.T) {
 			// Create state with slot 0
 			st, enc := createState(t, 0, v)
 
-			err := db.SaveStateDiff(context.Background(), st)
+			err := db.saveStateByDiff(context.Background(), st)
 			require.NoError(t, err)
 
 			err = db.db.View(func(tx *bbolt.Tx) error {
@@ -149,10 +149,10 @@ func TestStateDiff_ReadFullSnapshot(t *testing.T) {
 
 			st, _ := createState(t, 0, v)
 
-			err := db.SaveStateDiff(context.Background(), st)
+			err := db.saveStateByDiff(context.Background(), st)
 			require.NoError(t, err)
 
-			readSt, err := db.StateDiff(context.Background(), 0)
+			readSt, err := db.stateByDiff(context.Background(), 0)
 			require.NoError(t, err)
 			require.NotNil(t, readSt)
 
@@ -175,7 +175,7 @@ func TestStateDiff_SaveDiff(t *testing.T) {
 			slot := primitives.Slot(math.PowerOf2(21))
 			st, enc := createState(t, slot, v)
 
-			err := db.SaveStateDiff(context.Background(), st)
+			err := db.saveStateByDiff(context.Background(), st)
 			require.NoError(t, err)
 
 			err = db.db.View(func(tx *bbolt.Tx) error {
@@ -196,7 +196,7 @@ func TestStateDiff_SaveDiff(t *testing.T) {
 			slot = primitives.Slot(math.PowerOf2(18) + math.PowerOf2(21))
 			st, _ = createState(t, slot, v)
 
-			err = db.SaveStateDiff(context.Background(), st)
+			err = db.saveStateByDiff(context.Background(), st)
 			require.NoError(t, err)
 
 			key := makeKey(1, uint64(slot))
@@ -235,16 +235,16 @@ func TestStateDiff_ReadDiff(t *testing.T) {
 
 			st, _ := createState(t, 0, v)
 
-			err := db.SaveStateDiff(context.Background(), st)
+			err := db.saveStateByDiff(context.Background(), st)
 			require.NoError(t, err)
 
 			slot := primitives.Slot(math.PowerOf2(5))
 			st, _ = createState(t, slot, v)
 
-			err = db.SaveStateDiff(context.Background(), st)
+			err = db.saveStateByDiff(context.Background(), st)
 			require.NoError(t, err)
 
-			readSt, err := db.StateDiff(context.Background(), slot)
+			readSt, err := db.stateByDiff(context.Background(), slot)
 			require.NoError(t, err)
 			require.NotNil(t, readSt)
 
@@ -270,7 +270,7 @@ func TestStateDiff_OffsetCache(t *testing.T) {
 
 				slot := primitives.Slot(slotNum)
 				st, _ := createState(t, slot, v)
-				err = db.SaveStateDiff(context.Background(), st)
+				err = db.saveStateByDiff(context.Background(), st)
 				require.NoError(t, err)
 
 				offset, err := db.stateDiffCache.getOffset()
@@ -279,7 +279,7 @@ func TestStateDiff_OffsetCache(t *testing.T) {
 
 				slot2 := primitives.Slot(uint64(slotNum) + math.PowerOf2(params.StateHierarchyExponents()[0]))
 				st2, _ := createState(t, slot2, v)
-				err = db.SaveStateDiff(context.Background(), st2)
+				err = db.saveStateByDiff(context.Background(), st2)
 				require.NoError(t, err)
 
 				offset, err = db.stateDiffCache.getOffset()
@@ -307,7 +307,7 @@ func TestStateDiff_AnchorCache(t *testing.T) {
 			// add level 0
 			slot := primitives.Slot(0)
 			st, _ := createState(t, slot, v)
-			err := db.SaveStateDiff(context.Background(), st)
+			err := db.saveStateByDiff(context.Background(), st)
 			require.NoError(t, err)
 			localCache[0] = st
 
@@ -323,7 +323,7 @@ func TestStateDiff_AnchorCache(t *testing.T) {
 			for i := len(exponents) - 2; i > 0; i-- {
 				slot = primitives.Slot(math.PowerOf2(exponents[i]))
 				st, _ := createState(t, slot, v)
-				err = db.SaveStateDiff(context.Background(), st)
+				err = db.saveStateByDiff(context.Background(), st)
 				require.NoError(t, err)
 				localCache[i] = st
 
@@ -345,7 +345,7 @@ func TestStateDiff_AnchorCache(t *testing.T) {
 			twoTo21 := math.PowerOf2(21)
 			slot = primitives.Slot(twoTo21)
 			st, _ = createState(t, slot, v)
-			err = db.SaveStateDiff(context.Background(), st)
+			err = db.saveStateByDiff(context.Background(), st)
 			require.NoError(t, err)
 			localCache = make([]state.ReadOnlyBeaconState, len(exponents)-1)
 			localCache[0] = st

@@ -26,6 +26,7 @@ go_library(
         "schema.go",
         "state.go",
         "state_diff.go",
+        "state_diff_cache.go",
         "state_diff_helpers.go",
         "state_summary.go",
         "state_summary_cache.go",

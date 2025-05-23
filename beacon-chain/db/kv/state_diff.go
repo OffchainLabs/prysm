@@ -17,9 +17,9 @@ import (
 	The data at level 0 is saved every 2**exponent[0] slots and always contains a full state snapshot that is used as a base for the delta saved at other levels.
 */
 
-// SaveStateDiff takes a state and decides between saving a full state snapshot or a diff.
-func (s *Store) SaveStateDiff(ctx context.Context, st state.ReadOnlyBeaconState) error {
-	_, span := trace.StartSpan(ctx, "BeaconDB.SaveStateDiff")
+// saveStateByDiff takes a state and decides between saving a full state snapshot or a diff.
+func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconState) error {
+	_, span := trace.StartSpan(ctx, "BeaconDB.saveStateByDiff")
 	defer span.End()
 
 	if st == nil {
@@ -60,8 +60,8 @@ func (s *Store) SaveStateDiff(ctx context.Context, st state.ReadOnlyBeaconState)
 	return nil
 }
 
-// StateDiff retrieves the full state for a given slot.
-func (s *Store) StateDiff(ctx context.Context, slot primitives.Slot) (state.BeaconState, error) {
+// stateByDiff retrieves the full state for a given slot.
+func (s *Store) stateByDiff(ctx context.Context, slot primitives.Slot) (state.BeaconState, error) {
 	offset, err := s.getOffset()
 	if err != nil {
 		return nil, err

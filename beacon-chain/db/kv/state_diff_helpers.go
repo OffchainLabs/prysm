@@ -50,7 +50,7 @@ func (s *Store) getAnchorState(offset uint64, lvl int, slot primitives.Slot) (an
 	}
 
 	// If not, load it from the database.
-	anchor, err = s.StateDiff(context.Background(), anchorSlot)
+	anchor, err = s.stateByDiff(context.Background(), anchorSlot)
 	if err != nil {
 		return nil, err
 	}
