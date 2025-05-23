@@ -228,7 +228,7 @@ func TestFullCommitmentsToCheck(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			resetFlags := flags.Get()
 			gFlags := new(flags.GlobalFlags)
-			gFlags.SubscribeAllDataSubnetsubnets = true
+			gFlags.SubscribeAllDataSubnets = true
 			flags.Init(gFlags)
 			defer flags.Init(resetFlags)
 

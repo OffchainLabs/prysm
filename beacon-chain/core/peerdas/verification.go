@@ -16,6 +16,7 @@ var (
 	ErrCommitmentMismatch      = errors.New("commitment mismatch between data column and block")
 )
 
+// DataColumnsAlignWithBlock checks if the data columns align with the block.
 func DataColumnsAlignWithBlock(block blocks.ROBlock, dataColumns []blocks.RODataColumn) error {
 	// No data columns before Fulu.
 	if block.Version() < version.Fulu {

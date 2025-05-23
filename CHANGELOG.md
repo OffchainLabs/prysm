@@ -4,6 +4,36 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [v6.0.3](https://github.com/prysmaticlabs/prysm/compare/v6.0.2...v6.0.3) - 2025-05-21
+
+This release has important bugfixes for users of the [Beacon API](https://ethereum.github.io/beacon-APIs/). These fixes include:
+- Fixed pending consolidations endpoint to return the correct response.
+- Fixed incorrect field name from pending partial withdrawals response.
+- Fixed attester slashing to return an empty array instead of nil/null. 
+- Fixed validator participation and active set changes endpoints to accept a `{state_id}` parameter. 
+
+Other improvements include:
+- Disabled deposit log processing routine for Electra and beyond.
+
+Operators are encouraged to update at their own convenience.
+
+### Added
+
+- ssz static spec tests for fulu. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15279)
+- finality and merkle proof spec tests for fulu. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15286)
+- sanity and rewards spec tests for fulu. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15285)
+
+### Changed
+
+- Added more tracing spans to various helpers related to GetDuties. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15271)
+- Disable log processing after deposit requests are activated. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15274)
+
+### Fixed
+
+- fixed wrong handler for get pending consolidations endpoint. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15290)
+- Fixed /eth/v2/beacon/pool/attester_slashings no slashings returns empty array instead of nil. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15291)
+- Fix Prysm endpoints `/prysm/v1/validators/{state_id}/participation` and `/prysm/v1/validators/{state_id}/active_set_changes` to properly handle `{state_id}`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15245)
+
 ## [v6.0.2](https://github.com/prysmaticlabs/prysm/compare/v6.0.1...v6.0.2) - 2025-05-12
 
 This is a patch release to fix a few important bugs. Most importantly, we have adjusted the index limit for field tries in the beacon state to better support Pectra states. This should alleviate memory issues that clients are seeing since Pectra mainnet fork.
