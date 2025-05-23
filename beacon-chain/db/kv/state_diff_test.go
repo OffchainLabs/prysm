@@ -235,39 +235,32 @@ func TestStateDiff_OffsetCache(t *testing.T) {
 }
 
 func TestStateDiff_AnchorCache(t *testing.T) {
-	// test for every version
+	// test for every version TODO: add phase0 when bug is fixed
 	for v := 1; v < 6; v++ {
 		t.Run(version.String(v), func(t *testing.T) {
 			exponents := params.StateHierarchyExponents()
 			localCache := make([]state.ReadOnlyBeaconState, len(exponents)-1)
 			db := setupDB(t)
 
-			// first the cache should be empty
+			// at first the cache should be empty
 			for i := 0; i < len(params.StateHierarchyExponents()); i++ {
 				anchor := db.stateDiffCache.getAnchor(i)
 				require.IsNil(t, anchor)
 			}
 
-			// add state on every level and check cache
-
-			// add level 0 first
+			// add level 0
 			slot := primitives.Slot(0)
 			st, _ := createState(t, slot, v)
 			err := db.SaveStateDiff(context.Background(), st)
 			require.NoError(t, err)
 			localCache[0] = st
 
-			// anchor cache must match local cache
-			for i := 0; i < len(exponents)-1; i++ {
-				if localCache[i] == nil {
-					require.IsNil(t, db.stateDiffCache.getAnchor(i))
-					continue
-				}
-				localSSZ, err := localCache[i].MarshalSSZ()
-				require.NoError(t, err)
-				anchorSSZ, err := db.stateDiffCache.getAnchor(i).MarshalSSZ()
-				require.NoError(t, err)
-				require.DeepEqual(t, localSSZ, anchorSSZ)
+			// level 0 should be the same
+			require.DeepEqual(t, localCache[0], db.stateDiffCache.getAnchor(0))
+
+			// rest of the cache should be nil
+			for i := 1; i < len(exponents)-1; i++ {
+				require.IsNil(t, db.stateDiffCache.getAnchor(i))
 			}
 
 			// skip last level as it does not get cached
@@ -277,6 +270,8 @@ func TestStateDiff_AnchorCache(t *testing.T) {
 				err = db.SaveStateDiff(context.Background(), st)
 				require.NoError(t, err)
 				localCache[i] = st
+
+				require.DeepEqual(t, st, db.stateDiffCache.getAnchor(i))
 
 				// anchor cache must match local cache
 				for i := 0; i < len(exponents)-1; i++ {
@@ -290,6 +285,23 @@ func TestStateDiff_AnchorCache(t *testing.T) {
 					require.NoError(t, err)
 					require.DeepEqual(t, localSSZ, anchorSSZ)
 				}
+			}
+
+			// moving to a new tree should invalidate the cache except for level 0
+			twoTo21 := math.PowerOf2(21)
+			slot = primitives.Slot(twoTo21)
+			st, _ = createState(t, slot, v)
+			err = db.SaveStateDiff(context.Background(), st)
+			require.NoError(t, err)
+			localCache = make([]state.ReadOnlyBeaconState, len(exponents)-1)
+			localCache[0] = st
+
+			// level 0 should be the same
+			require.DeepEqual(t, localCache[0], db.stateDiffCache.getAnchor(0))
+
+			// rest of the cache should be nil
+			for i := 1; i < len(exponents)-1; i++ {
+				require.IsNil(t, db.stateDiffCache.getAnchor(i))
 			}
 		})
 	}
