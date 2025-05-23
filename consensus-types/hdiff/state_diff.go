@@ -1283,13 +1283,24 @@ func diffToState(source, target state.ReadOnlyBeaconState) (*stateDiff, error) {
 	ret.eth1DepositIndex = target.Eth1DepositIndex()
 	diffRandaoMixes(ret, source, target)
 	diffSlashings(ret, source, target)
-	ret.previousEpochParticipation, err = target.PreviousEpochParticipation()
-	if err != nil {
-		return nil, err
-	}
-	ret.currentEpochParticipation, err = target.CurrentEpochParticipation()
-	if err != nil {
-		return nil, err
+	if target.Version() < version.Altair {
+		ret.previousEpochAttestations, err = target.PreviousEpochAttestations()
+		if err != nil {
+			return nil, err
+		}
+		ret.currentEpochAttestations, err = target.CurrentEpochAttestations()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		ret.previousEpochParticipation, err = target.PreviousEpochParticipation()
+		if err != nil {
+			return nil, err
+		}
+		ret.currentEpochParticipation, err = target.CurrentEpochParticipation()
+		if err != nil {
+			return nil, err
+		}
 	}
 	ret.justificationBits = diffJustificationBits(target)
 	ret.previousJustifiedCheckpoint = target.PreviousJustifiedCheckpoint()
