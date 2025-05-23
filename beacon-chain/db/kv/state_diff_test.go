@@ -271,8 +271,6 @@ func TestStateDiff_AnchorCache(t *testing.T) {
 				require.NoError(t, err)
 				localCache[i] = st
 
-				require.DeepEqual(t, st, db.stateDiffCache.getAnchor(i))
-
 				// anchor cache must match local cache
 				for i := 0; i < len(exponents)-1; i++ {
 					if localCache[i] == nil {
