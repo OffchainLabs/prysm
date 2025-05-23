@@ -141,7 +141,7 @@ func TestStateDiff_SaveFullSnapshot(t *testing.T) {
 	}
 }
 
-func TestStateDiff_ReadFullSnapshot(t *testing.T) {
+func TestStateDiff_SaveAndReadFullSnapshot(t *testing.T) {
 	// test for every version
 	for v := 0; v < 6; v++ {
 		t.Run(version.String(v), func(t *testing.T) {
@@ -227,7 +227,7 @@ func TestStateDiff_SaveDiff(t *testing.T) {
 	}
 }
 
-func TestStateDiff_ReadDiff(t *testing.T) {
+func TestStateDiff_SaveAndReadDiff(t *testing.T) {
 	// test for every version
 	for v := 0; v < 6; v++ {
 		t.Run(version.String(v), func(t *testing.T) {
@@ -253,6 +253,36 @@ func TestStateDiff_ReadDiff(t *testing.T) {
 			readStSSZ, err := readSt.MarshalSSZ()
 			require.NoError(t, err)
 			require.DeepEqual(t, stSSZ, readStSSZ)
+		})
+	}
+}
+
+func TestStateDiff_SaveAndReadDiffForkTransition(t *testing.T) {
+	// test for every version
+	for v := 0; v < 5; v++ {
+		t.Run(version.String(v), func(t *testing.T) {
+			db := setupDB(t)
+
+			st, _ := createState(t, 0, v)
+
+			err := db.saveStateByDiff(context.Background(), st)
+			require.NoError(t, err)
+
+			slot := primitives.Slot(math.PowerOf2(5))
+			st, _ = createState(t, slot, v+1)
+
+			err = db.saveStateByDiff(context.Background(), st)
+			require.NoError(t, err)
+
+			readSt, err := db.stateByDiff(context.Background(), slot)
+			require.NoError(t, err)
+			require.NotNil(t, readSt)
+
+			stSSZ, err := st.MarshalSSZ()
+			require.NoError(t, err)
+			readStSSZ, err := readSt.MarshalSSZ()
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, stSSZ, readStSSZ)
 		})
 	}
 }
