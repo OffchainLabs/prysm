@@ -9,8 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
@@ -654,4 +656,79 @@ func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
 	if util.WaitTimeout(&wg, 1*time.Second) {
 		t.Error("Failed to receive pubsub within 1s")
 	}
+}
+
+func TestService_BroadcastDataColumn(t *testing.T) {
+	// Load the KZG trust setup.
+	err := kzg.Start()
+	require.NoError(t, err)
+
+	// Create two peers and connect them.
+	p1, p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+	p1.Connect(p2)
+
+	// Test the peers are connected.
+	require.NotEqual(t, 0, len(p1.BHost.Network().Peers()), "No peers")
+
+	p := &Service{
+		host:                  p1.BHost,
+		pubsub:                p1.PubSub(),
+		joinedTopics:          map[string]*pubsub.Topic{},
+		cfg:                   &Config{},
+		genesisTime:           time.Now(),
+		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+		subnetsLock:           make(map[uint64]*sync.RWMutex),
+		subnetsLockLock:       sync.Mutex{},
+		peers:                 peers.NewStatus(context.Background(), &peers.StatusConfig{ScorerParams: &scorers.Config{}}),
+	}
+
+	const (
+		columnIndex = 12
+		topicFormat = DataColumnSubnetTopicFormat
+	)
+
+	digest, err := p.currentForkDigest()
+	require.NoError(t, err)
+
+	subnet := peerdas.ComputeSubnetForDataColumnSidecar(columnIndex)
+	topic := fmt.Sprintf(topicFormat, digest, subnet)
+
+	// External peer subscribes to the topic.
+	topic += p.Encoding().ProtocolSuffix()
+	sub, err := p2.SubscribeToTopic(topic)
+	require.NoError(t, err)
+
+	// Libp2p fails without this delay...
+	time.Sleep(50 * time.Millisecond)
+
+	roSidecars, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, util.DataColumnsParamsByRoot{{}: {{ColumnIndex: columnIndex}}})
+	sidecar := roSidecars[0].DataColumnSidecar
+
+	// Async listen for the pubsub, must be before the broadcast.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func(tt *testing.T) {
+		defer wg.Done()
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+
+		msg, err := sub.Next(ctx)
+		require.NoError(t, err)
+
+		var result ethpb.DataColumnSidecar
+		require.NoError(t, p.Encoding().DecodeGossip(msg.Data, &result))
+		require.DeepEqual(t, &result, sidecar)
+	}(t)
+
+	var emptyRoot [fieldparams.RootLength]byte
+	ctx := context.Background()
+
+	// Attempt to broadcast nil object should fail.
+	err = p.BroadcastDataColumn(ctx, emptyRoot, subnet, nil)
+	require.ErrorContains(t, "attempted to broadcast nil", err)
+
+	// Broadcast to peers and wait.
+	err = p.BroadcastDataColumn(ctx, emptyRoot, subnet, sidecar)
+	require.NoError(t, err)
+	require.Equal(t, false, util.WaitTimeout(&wg, 1*time.Second), "Failed to receive pubsub within 1s")
 }

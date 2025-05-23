@@ -9,6 +9,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/crypto/hash"
@@ -98,7 +99,7 @@ func (s *Service) BroadcastSyncCommitteeMessage(ctx context.Context, subnet uint
 	return nil
 }
 
-func (s *Service) internalBroadcastAttestation(ctx context.Context, subnet uint64, att ethpb.Att, forkDigest [4]byte) {
+func (s *Service) internalBroadcastAttestation(ctx context.Context, subnet uint64, att ethpb.Att, forkDigest [fieldparams.VersionLength]byte) {
 	_, span := trace.StartSpan(ctx, "p2p.internalBroadcastAttestation")
 	defer span.End()
 	ctx = trace.NewContext(context.Background(), span) // clear parent context / deadline.
@@ -154,7 +155,7 @@ func (s *Service) internalBroadcastAttestation(ctx context.Context, subnet uint6
 	}
 }
 
-func (s *Service) broadcastSyncCommittee(ctx context.Context, subnet uint64, sMsg *ethpb.SyncCommitteeMessage, forkDigest [4]byte) {
+func (s *Service) broadcastSyncCommittee(ctx context.Context, subnet uint64, sMsg *ethpb.SyncCommitteeMessage, forkDigest [fieldparams.VersionLength]byte) {
 	_, span := trace.StartSpan(ctx, "p2p.broadcastSyncCommittee")
 	defer span.End()
 	ctx = trace.NewContext(context.Background(), span) // clear parent context / deadline.
@@ -230,7 +231,7 @@ func (s *Service) BroadcastBlob(ctx context.Context, subnet uint64, blob *ethpb.
 	return nil
 }
 
-func (s *Service) internalBroadcastBlob(ctx context.Context, subnet uint64, blobSidecar *ethpb.BlobSidecar, forkDigest [4]byte) {
+func (s *Service) internalBroadcastBlob(ctx context.Context, subnet uint64, blobSidecar *ethpb.BlobSidecar, forkDigest [fieldparams.VersionLength]byte) {
 	_, span := trace.StartSpan(ctx, "p2p.internalBroadcastBlob")
 	defer span.End()
 	ctx = trace.NewContext(context.Background(), span) // clear parent context / deadline.
@@ -245,7 +246,7 @@ func (s *Service) internalBroadcastBlob(ctx context.Context, subnet uint64, blob
 	s.subnetLocker(wrappedSubIdx).RUnlock()
 
 	if !hasPeer {
-		blobSidecarCommitteeBroadcastAttempts.Inc()
+		blobSidecarBroadcastAttempts.Inc()
 		if err := func() error {
 			s.subnetLocker(wrappedSubIdx).Lock()
 			defer s.subnetLocker(wrappedSubIdx).Unlock()
@@ -254,7 +255,7 @@ func (s *Service) internalBroadcastBlob(ctx context.Context, subnet uint64, blob
 				return err
 			}
 			if ok {
-				blobSidecarCommitteeBroadcasts.Inc()
+				blobSidecarBroadcasts.Inc()
 				return nil
 			}
 			return errors.New("failed to find peers for subnet")
@@ -322,6 +323,115 @@ func (s *Service) BroadcastLightClientFinalityUpdate(ctx context.Context, update
 	return nil
 }
 
+// BroadcastDataColumn broadcasts a data column to the p2p network, the message is assumed to be
+// broadcasted to the current fork and to the input column subnet.
+func (s *Service) BroadcastDataColumn(ctx context.Context, root [fieldparams.RootLength]byte, dataColumnSubnet uint64, dataColumnSidecar *ethpb.DataColumnSidecar) error {
+	// Add tracing to the function.
+	ctx, span := trace.StartSpan(ctx, "p2p.BroadcastBlob")
+	defer span.End()
+
+	// Ensure the data column sidecar is not nil.
+	if dataColumnSidecar == nil {
+		return errors.Errorf("attempted to broadcast nil data column sidecar at subnet %d", dataColumnSubnet)
+	}
+
+	// Retrieve the current fork digest.
+	forkDigest, err := s.currentForkDigest()
+	if err != nil {
+		err := errors.Wrap(err, "current fork digest")
+		tracing.AnnotateError(span, err)
+		return err
+	}
+
+	// Non-blocking broadcast, with attempts to discover a column subnet peer if none available.
+	go s.internalBroadcastDataColumn(ctx, root, dataColumnSubnet, dataColumnSidecar, forkDigest)
+
+	return nil
+}
+
+func (s *Service) internalBroadcastDataColumn(
+	ctx context.Context,
+	root [fieldparams.RootLength]byte,
+	columnSubnet uint64,
+	dataColumnSidecar *ethpb.DataColumnSidecar,
+	forkDigest [fieldparams.VersionLength]byte,
+) {
+	// Add tracing to the function.
+	_, span := trace.StartSpan(ctx, "p2p.internalBroadcastDataColumn")
+	defer span.End()
+
+	// Increase the number of broadcast attempts.
+	dataColumnSidecarBroadcastAttempts.Inc()
+
+	// Clear parent context / deadline.
+	ctx = trace.NewContext(context.Background(), span)
+
+	// Define a one-slot length context timeout.
+	secondsPerSlot := params.BeaconConfig().SecondsPerSlot
+	oneSlot := time.Duration(secondsPerSlot) * time.Second
+	ctx, cancel := context.WithTimeout(ctx, oneSlot)
+	defer cancel()
+
+	// Build the topic corresponding to this column subnet and this fork digest.
+	topic := dataColumnSubnetToTopic(columnSubnet, forkDigest)
+
+	// Compute the wrapped subnet index.
+	wrappedSubIdx := columnSubnet + dataColumnSubnetVal
+
+	// Check if we have peers with this subnet.
+	hasPeer := func() bool {
+		s.subnetLocker(wrappedSubIdx).RLock()
+		defer s.subnetLocker(wrappedSubIdx).RUnlock()
+
+		return s.hasPeerWithSubnet(topic)
+	}()
+
+	// If no peers are found, attempt to find peers with this subnet.
+	if !hasPeer {
+		if err := func() error {
+			s.subnetLocker(wrappedSubIdx).Lock()
+			defer s.subnetLocker(wrappedSubIdx).Unlock()
+
+			ok, err := s.FindPeersWithSubnet(ctx, topic, columnSubnet, 1 /*threshold*/)
+			if err != nil {
+				return errors.Wrap(err, "find peers for subnet")
+			}
+			if !ok {
+				return errors.New("failed to find peers for subnet")
+			}
+
+			return nil
+		}(); err != nil {
+			log.WithError(err).Error("Failed to find peers")
+			tracing.AnnotateError(span, err)
+		}
+	}
+
+	// Broadcast the data column sidecar to the network.
+	if err := s.broadcastObject(ctx, dataColumnSidecar, topic); err != nil {
+		log.WithError(err).Error("Failed to broadcast data column sidecar")
+		tracing.AnnotateError(span, err)
+	}
+
+	header := dataColumnSidecar.SignedBlockHeader.GetHeader()
+	slot := header.GetSlot()
+
+	slotStartTime, err := slots.ToTime(uint64(s.genesisTime.Unix()), slot)
+	if err != nil {
+		log.WithError(err).Error("Failed to convert slot to time")
+	}
+
+	log.WithFields(logrus.Fields{
+		"slot":               slot,
+		"timeSinceSlotStart": time.Since(slotStartTime),
+		"root":               fmt.Sprintf("%#x", root),
+		"columnSubnet":       columnSubnet,
+	}).Debug("Broadcasted data column sidecar")
+
+	// Increase the number of successful broadcasts.
+	dataColumnSidecarBroadcasts.Inc()
+}
+
 // method to broadcast messages to other peers in our gossip mesh.
 func (s *Service) broadcastObject(ctx context.Context, obj ssz.Marshaler, topic string) error {
 	ctx, span := trace.StartSpan(ctx, "p2p.broadcastObject")
@@ -351,15 +461,15 @@ func (s *Service) broadcastObject(ctx context.Context, obj ssz.Marshaler, topic 
 	return nil
 }
 
-func attestationToTopic(subnet uint64, forkDigest [4]byte) string {
+func attestationToTopic(subnet uint64, forkDigest [fieldparams.VersionLength]byte) string {
 	return fmt.Sprintf(AttestationSubnetTopicFormat, forkDigest, subnet)
 }
 
-func syncCommitteeToTopic(subnet uint64, forkDigest [4]byte) string {
+func syncCommitteeToTopic(subnet uint64, forkDigest [fieldparams.VersionLength]byte) string {
 	return fmt.Sprintf(SyncCommitteeSubnetTopicFormat, forkDigest, subnet)
 }
 
-func blobSubnetToTopic(subnet uint64, forkDigest [4]byte) string {
+func blobSubnetToTopic(subnet uint64, forkDigest [fieldparams.VersionLength]byte) string {
 	return fmt.Sprintf(BlobSubnetTopicFormat, forkDigest, subnet)
 }
 
@@ -369,4 +479,8 @@ func lcOptimisticToTopic(forkDigest [4]byte) string {
 
 func lcFinalityToTopic(forkDigest [4]byte) string {
 	return fmt.Sprintf(LightClientFinalityUpdateTopicFormat, forkDigest)
+}
+
+func dataColumnSubnetToTopic(subnet uint64, forkDigest [fieldparams.VersionLength]byte) string {
+	return fmt.Sprintf(DataColumnSubnetTopicFormat, forkDigest, subnet)
 }

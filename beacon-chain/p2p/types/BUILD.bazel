@@ -41,6 +41,7 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
+        "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//encoding/bytesutil:go_default_library",
