@@ -390,6 +390,7 @@ func (ret *stateDiff) readPreviousEpochAttestations(data *[]byte) error {
 	}
 	previousEpochAttestationsLength := int(binary.LittleEndian.Uint64((*data)[:8])) // lint:ignore uintcast
 	ret.previousEpochAttestations = make([]*ethpb.PendingAttestation, previousEpochAttestationsLength)
+	(*data) = (*data)[8:]
 	var err error
 	for i := range previousEpochAttestationsLength {
 		ret.previousEpochAttestations[i], err = readPendingAttestation(data)
@@ -406,6 +407,7 @@ func (ret *stateDiff) readCurrentEpochAttestations(data *[]byte) error {
 	}
 	currentEpochAttestationsLength := int(binary.LittleEndian.Uint64((*data)[:8])) // lint:ignore uintcast
 	ret.currentEpochAttestations = make([]*ethpb.PendingAttestation, currentEpochAttestationsLength)
+	(*data) = (*data)[8:]
 	var err error
 	for i := range currentEpochAttestationsLength {
 		ret.currentEpochAttestations[i], err = readPendingAttestation(data)
