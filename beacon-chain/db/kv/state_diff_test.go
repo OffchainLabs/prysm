@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/math"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
@@ -392,26 +393,63 @@ func TestStateDiff_AnchorCache(t *testing.T) {
 }
 
 func createState(t *testing.T, slot primitives.Slot, v int) (state.ReadOnlyBeaconState, []byte) {
+	p := params.BeaconConfig()
 	var st state.BeaconState
 	var err error
 	switch v {
 	case version.Altair:
 		st, err = util.NewBeaconStateAltair()
 		require.NoError(t, err)
+		err = st.SetFork(&ethpb.Fork{
+			PreviousVersion: p.GenesisForkVersion,
+			CurrentVersion:  p.AltairForkVersion,
+			Epoch:           p.AltairForkEpoch,
+		})
+		require.NoError(t, err)
 	case version.Bellatrix:
 		st, err = util.NewBeaconStateBellatrix()
+		require.NoError(t, err)
+		err = st.SetFork(&ethpb.Fork{
+			PreviousVersion: p.AltairForkVersion,
+			CurrentVersion:  p.BellatrixForkVersion,
+			Epoch:           p.BellatrixForkEpoch,
+		})
 		require.NoError(t, err)
 	case version.Capella:
 		st, err = util.NewBeaconStateCapella()
 		require.NoError(t, err)
+		err = st.SetFork(&ethpb.Fork{
+			PreviousVersion: p.BellatrixForkVersion,
+			CurrentVersion:  p.CapellaForkVersion,
+			Epoch:           p.CapellaForkEpoch,
+		})
+		require.NoError(t, err)
 	case version.Deneb:
 		st, err = util.NewBeaconStateDeneb()
+		require.NoError(t, err)
+		err = st.SetFork(&ethpb.Fork{
+			PreviousVersion: p.CapellaForkVersion,
+			CurrentVersion:  p.DenebForkVersion,
+			Epoch:           p.DenebForkEpoch,
+		})
 		require.NoError(t, err)
 	case version.Electra:
 		st, err = util.NewBeaconStateElectra()
 		require.NoError(t, err)
+		err = st.SetFork(&ethpb.Fork{
+			PreviousVersion: p.DenebForkVersion,
+			CurrentVersion:  p.ElectraForkVersion,
+			Epoch:           p.ElectraForkEpoch,
+		})
+		require.NoError(t, err)
 	default:
 		st, err = util.NewBeaconState()
+		require.NoError(t, err)
+		err = st.SetFork(&ethpb.Fork{
+			PreviousVersion: p.GenesisForkVersion,
+			CurrentVersion:  p.GenesisForkVersion,
+			Epoch:           0,
+		})
 		require.NoError(t, err)
 	}
 
