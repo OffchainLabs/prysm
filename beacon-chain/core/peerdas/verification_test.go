@@ -12,12 +12,6 @@ import (
 )
 
 func TestDataColumnsAlignWithBlock(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	config := params.BeaconConfig()
-	config.FuluForkEpoch = 0
-	config.DeprecatedMaxBlobsPerBlockFulu = 2
-	params.OverrideBeaconConfig(config)
-
 	// Start the trusted setup.
 	err := kzg.Start()
 	require.NoError(t, err)
@@ -29,6 +23,11 @@ func TestDataColumnsAlignWithBlock(t *testing.T) {
 	})
 
 	t.Run("too many commitmnets", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		config := params.BeaconConfig()
+		config.BlobSchedule = []params.BlobScheduleEntry{{}}
+		params.OverrideBeaconConfig(config)
+
 		block, _, _ := util.GenerateTestFuluBlockWithSidecars(t, 3)
 		err := peerdas.DataColumnsAlignWithBlock(block, nil)
 		require.ErrorIs(t, err, peerdas.ErrTooManyCommitments)
