@@ -224,7 +224,7 @@ func (s *Store) getBaseAndDiffChain(offset uint64, slot primitives.Slot) (state.
 	baseAnchorSlot := (rel / baseSpan * baseSpan) + offset
 
 	var diffChainIndices []uint64
-	for i := 1; i < lvl; i++ {
+	for i := 1; i <= lvl; i++ {
 		span := math.PowerOf2(exponents[i])
 		diffSlot := rel / span * span
 		if diffSlot == baseAnchorSlot {
@@ -233,12 +233,12 @@ func (s *Store) getBaseAndDiffChain(offset uint64, slot primitives.Slot) (state.
 		diffChainIndices = appendUnique(diffChainIndices, diffSlot+offset)
 	}
 
-	baseSnapshot, err := s.getFullSnapshot(lvl, baseAnchorSlot)
+	baseSnapshot, err := s.getFullSnapshot(0, baseAnchorSlot)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	diffChain := make([]hdiff.HdiffBytes, len(diffChainIndices))
+	diffChain := make([]hdiff.HdiffBytes, 0, len(diffChainIndices))
 	for _, diffSlot := range diffChainIndices {
 		diff, err := s.getDiff(computeLevel(offset, primitives.Slot(diffSlot)), diffSlot)
 		if err != nil {

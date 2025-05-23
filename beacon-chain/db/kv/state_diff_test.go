@@ -113,92 +113,148 @@ func TestStateDiff_ComputeLevel(t *testing.T) {
 }
 
 func TestStateDiff_SaveFullSnapshot(t *testing.T) {
-	db := setupDB(t)
+	// test for every version
+	for v := 0; v < 6; v++ {
+		t.Run(version.String(v), func(t *testing.T) {
+			db := setupDB(t)
 
-	// Create state with slot 0
-	st, err := util.NewBeaconStateElectra()
-	require.NoError(t, err)
-	slot := primitives.Slot(0)
-	err = st.SetSlot(slot)
-	require.NoError(t, err)
-	stssz, err := st.MarshalSSZ()
-	require.NoError(t, err)
-	enc, err := addKey(version.Electra, stssz)
-	require.NoError(t, err)
+			// Create state with slot 0
+			st, enc := createState(t, 0, v)
 
-	err = db.SaveStateDiff(context.Background(), st)
-	require.NoError(t, err)
+			err := db.SaveStateDiff(context.Background(), st)
+			require.NoError(t, err)
 
-	err = db.db.View(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket(stateDiffBucket)
-		if bucket == nil {
-			return bbolt.ErrBucketNotFound
-		}
-		s := bucket.Get(makeKey(0, uint64(slot)))
-		if s == nil {
-			return bbolt.ErrIncompatibleValue
-		}
-		require.DeepSSZEqual(t, enc, s)
-		return nil
-	})
-	require.NoError(t, err)
+			err = db.db.View(func(tx *bbolt.Tx) error {
+				bucket := tx.Bucket(stateDiffBucket)
+				if bucket == nil {
+					return bbolt.ErrBucketNotFound
+				}
+				s := bucket.Get(makeKey(0, uint64(0)))
+				if s == nil {
+					return bbolt.ErrIncompatibleValue
+				}
+				require.DeepSSZEqual(t, enc, s)
+				return nil
+			})
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestStateDiff_ReadFullSnapshot(t *testing.T) {
+	// test for every version
+	for v := 0; v < 6; v++ {
+		t.Run(version.String(v), func(t *testing.T) {
+			db := setupDB(t)
+
+			st, _ := createState(t, 0, v)
+
+			err := db.SaveStateDiff(context.Background(), st)
+			require.NoError(t, err)
+
+			readSt, err := db.StateDiff(context.Background(), 0)
+			require.NoError(t, err)
+			require.NotNil(t, readSt)
+
+			stSSZ, err := st.MarshalSSZ()
+			require.NoError(t, err)
+			readStSSZ, err := readSt.MarshalSSZ()
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, stSSZ, readStSSZ)
+		})
+	}
 }
 
 func TestStateDiff_SaveDiff(t *testing.T) {
-	db := setupDB(t)
+	// test for every version TODO: add phase0 when bug is fixed
+	for v := 1; v < 6; v++ {
+		t.Run(version.String(v), func(t *testing.T) {
+			db := setupDB(t)
 
-	// Create state with slot 2**21
-	slot := primitives.Slot(math.PowerOf2(21))
-	st, enc := createState(t, slot, version.Electra)
+			// Create state with slot 2**21
+			slot := primitives.Slot(math.PowerOf2(21))
+			st, enc := createState(t, slot, v)
 
-	err := db.SaveStateDiff(context.Background(), st)
-	require.NoError(t, err)
+			err := db.SaveStateDiff(context.Background(), st)
+			require.NoError(t, err)
 
-	err = db.db.View(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket(stateDiffBucket)
-		if bucket == nil {
-			return bbolt.ErrBucketNotFound
-		}
-		s := bucket.Get(makeKey(0, uint64(slot)))
-		if s == nil {
-			return bbolt.ErrIncompatibleValue
-		}
-		require.DeepSSZEqual(t, enc, s)
-		return nil
-	})
-	require.NoError(t, err)
+			err = db.db.View(func(tx *bbolt.Tx) error {
+				bucket := tx.Bucket(stateDiffBucket)
+				if bucket == nil {
+					return bbolt.ErrBucketNotFound
+				}
+				s := bucket.Get(makeKey(0, uint64(slot)))
+				if s == nil {
+					return bbolt.ErrIncompatibleValue
+				}
+				require.DeepSSZEqual(t, enc, s)
+				return nil
+			})
+			require.NoError(t, err)
 
-	// create state with slot 2**18 (+2**21)
-	slot = primitives.Slot(math.PowerOf2(18) + math.PowerOf2(21))
-	st, _ = createState(t, slot, version.Electra)
+			// create state with slot 2**18 (+2**21)
+			slot = primitives.Slot(math.PowerOf2(18) + math.PowerOf2(21))
+			st, _ = createState(t, slot, v)
 
-	err = db.SaveStateDiff(context.Background(), st)
-	require.NoError(t, err)
+			err = db.SaveStateDiff(context.Background(), st)
+			require.NoError(t, err)
 
-	key := makeKey(1, uint64(slot))
-	err = db.db.View(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket(stateDiffBucket)
-		if bucket == nil {
-			return bbolt.ErrBucketNotFound
-		}
-		buf := append(key, "_s"...)
-		s := bucket.Get(buf)
-		if s == nil {
-			return bbolt.ErrIncompatibleValue
-		}
-		buf = append(key, "_v"...)
-		v := bucket.Get(buf)
-		if v == nil {
-			return bbolt.ErrIncompatibleValue
-		}
-		buf = append(key, "_b"...)
-		b := bucket.Get(buf)
-		if b == nil {
-			return bbolt.ErrIncompatibleValue
-		}
-		return nil
-	})
-	require.NoError(t, err)
+			key := makeKey(1, uint64(slot))
+			err = db.db.View(func(tx *bbolt.Tx) error {
+				bucket := tx.Bucket(stateDiffBucket)
+				if bucket == nil {
+					return bbolt.ErrBucketNotFound
+				}
+				buf := append(key, "_s"...)
+				s := bucket.Get(buf)
+				if s == nil {
+					return bbolt.ErrIncompatibleValue
+				}
+				buf = append(key, "_v"...)
+				v := bucket.Get(buf)
+				if v == nil {
+					return bbolt.ErrIncompatibleValue
+				}
+				buf = append(key, "_b"...)
+				b := bucket.Get(buf)
+				if b == nil {
+					return bbolt.ErrIncompatibleValue
+				}
+				return nil
+			})
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestStateDiff_ReadDiff(t *testing.T) {
+	// test for every version TODO: add phase0 when bug is fixed
+	for v := 1; v < 6; v++ {
+		t.Run(version.String(v), func(t *testing.T) {
+			db := setupDB(t)
+
+			st, _ := createState(t, 0, v)
+
+			err := db.SaveStateDiff(context.Background(), st)
+			require.NoError(t, err)
+
+			slot := primitives.Slot(math.PowerOf2(5))
+			st, _ = createState(t, slot, v)
+
+			err = db.SaveStateDiff(context.Background(), st)
+			require.NoError(t, err)
+
+			readSt, err := db.StateDiff(context.Background(), slot)
+			require.NoError(t, err)
+			require.NotNil(t, readSt)
+
+			stSSZ, err := st.MarshalSSZ()
+			require.NoError(t, err)
+			readStSSZ, err := readSt.MarshalSSZ()
+			require.NoError(t, err)
+			require.DeepEqual(t, stSSZ, readStSSZ)
+		})
+	}
 }
 
 func TestStateDiff_OffsetCache(t *testing.T) {
@@ -281,7 +337,7 @@ func TestStateDiff_AnchorCache(t *testing.T) {
 					require.NoError(t, err)
 					anchorSSZ, err := db.stateDiffCache.getAnchor(i).MarshalSSZ()
 					require.NoError(t, err)
-					require.DeepEqual(t, localSSZ, anchorSSZ)
+					require.DeepSSZEqual(t, localSSZ, anchorSSZ)
 				}
 			}
 
