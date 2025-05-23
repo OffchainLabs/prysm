@@ -166,8 +166,8 @@ func TestStateDiff_ReadFullSnapshot(t *testing.T) {
 }
 
 func TestStateDiff_SaveDiff(t *testing.T) {
-	// test for every version TODO: add phase0 when bug is fixed
-	for v := 1; v < 6; v++ {
+	// test for every version
+	for v := 0; v < 6; v++ {
 		t.Run(version.String(v), func(t *testing.T) {
 			db := setupDB(t)
 
@@ -228,8 +228,8 @@ func TestStateDiff_SaveDiff(t *testing.T) {
 }
 
 func TestStateDiff_ReadDiff(t *testing.T) {
-	// test for every version TODO: add phase0 when bug is fixed
-	for v := 1; v < 6; v++ {
+	// test for every version
+	for v := 0; v < 6; v++ {
 		t.Run(version.String(v), func(t *testing.T) {
 			db := setupDB(t)
 
@@ -291,8 +291,8 @@ func TestStateDiff_OffsetCache(t *testing.T) {
 }
 
 func TestStateDiff_AnchorCache(t *testing.T) {
-	// test for every version TODO: add phase0 when bug is fixed
-	for v := 1; v < 6; v++ {
+	// test for every version
+	for v := 0; v < 6; v++ {
 		t.Run(version.String(v), func(t *testing.T) {
 			exponents := params.StateHierarchyExponents()
 			localCache := make([]state.ReadOnlyBeaconState, len(exponents)-1)
