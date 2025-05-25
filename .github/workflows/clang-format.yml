@@ -12,7 +12,7 @@ jobs:
   clang-format-checking:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       # Is this step failing for you? 
       # Run: clang-format -i proto/**/*.proto
       # See: https://clang.llvm.org/docs/ClangFormat.html
