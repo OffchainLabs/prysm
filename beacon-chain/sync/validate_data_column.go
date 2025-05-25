@@ -210,17 +210,25 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 
 // Returns true if the column with the same slot, proposer index, and column index has been seen before.
 func (s *Service) hasSeenDataColumnIndex(slot primitives.Slot, proposerIndex primitives.ValidatorIndex, index uint64) bool {
-	b := append(bytesutil.Bytes32(uint64(slot)), bytesutil.Bytes32(uint64(proposerIndex))...)
-	b = append(b, bytesutil.Bytes32(index)...)
-	_, seen := s.seenDataColumnCache.Get(string(b))
+	key := computeCacheKey(slot, proposerIndex, index)
+	_, seen := s.seenDataColumnCache.Get(key)
 	return seen
 }
 
 // Sets the data column with the same slot, proposer index, and data column index as seen.
 func (s *Service) setSeenDataColumnIndex(slot primitives.Slot, proposerIndex primitives.ValidatorIndex, index uint64) {
-	b := append(bytesutil.Bytes32(uint64(slot)), bytesutil.Bytes32(uint64(proposerIndex))...)
-	b = append(b, bytesutil.Bytes32(index)...)
-	s.seenDataColumnCache.Add(string(b), true)
+	key := computeCacheKey(slot, proposerIndex, index)
+	s.seenDataColumnCache.Add(key, true)
+}
+
+func computeCacheKey(slot primitives.Slot, proposerIndex primitives.ValidatorIndex, index uint64) string {
+	key := make([]byte, 0, 96)
+
+	key = append(key, bytesutil.Bytes32(uint64(slot))...)
+	key = append(key, bytesutil.Bytes32(uint64(proposerIndex))...)
+	key = append(key, bytesutil.Bytes32(index)...)
+
+	return string(key)
 }
 
 type dataColumnLogEntry struct {
