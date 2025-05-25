@@ -159,12 +159,6 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		return pubsub.ValidationReject, err
 	}
 
-	// Get the time at slot start.
-	startTime, err := slots.ToTime(uint64(s.cfg.chain.GenesisTime().Unix()), roDataColumn.SignedBlockHeader.Header.Slot)
-	if err != nil {
-		return pubsub.ValidationIgnore, err
-	}
-
 	verifiedRODataColumns, err := verifier.VerifiedRODataColumns()
 	if err != nil {
 		// This should never happen.
@@ -182,6 +176,12 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 
 	msg.ValidatorData = verifiedRODataColumns[0]
 	dataColumnSidecarVerificationSuccessesCounter.Inc()
+
+	// Get the time at slot start.
+	startTime, err := slots.ToTime(uint64(s.cfg.chain.GenesisTime().Unix()), roDataColumn.SignedBlockHeader.Header.Slot)
+	if err != nil {
+		return pubsub.ValidationIgnore, err
+	}
 
 	sinceSlotStartTime := receivedTime.Sub(startTime)
 	validationTime := s.cfg.clock.Now().Sub(receivedTime)
