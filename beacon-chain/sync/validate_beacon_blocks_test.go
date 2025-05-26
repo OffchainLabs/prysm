@@ -1158,7 +1158,11 @@ func TestValidateBeaconBlockPubSub_RejectBlocksFromBadParent(t *testing.T) {
 }
 
 func TestService_setBadBlock_DoesntSetWithContextErr(t *testing.T) {
-	s := Service{}
+	s := Service{
+		cfg: &config{
+			clock: startup.NewClock(time.Unix(0, 0), [32]byte{}),
+		},
+	}
 	s.initCaches()
 
 	root := [32]byte{'b', 'a', 'd'}
