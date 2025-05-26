@@ -327,7 +327,7 @@ func (s *Service) BroadcastLightClientFinalityUpdate(ctx context.Context, update
 // broadcasted to the current fork and to the input column subnet.
 func (s *Service) BroadcastDataColumn(ctx context.Context, root [fieldparams.RootLength]byte, dataColumnSubnet uint64, dataColumnSidecar *ethpb.DataColumnSidecar) error {
 	// Add tracing to the function.
-	ctx, span := trace.StartSpan(ctx, "p2p.BroadcastBlob")
+	ctx, span := trace.StartSpan(ctx, "p2p.BroadcastDataColumn")
 	defer span.End()
 
 	// Ensure the data column sidecar is not nil.
