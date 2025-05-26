@@ -122,7 +122,7 @@ go_test(
         "types_test.go",
     ],
     data = glob(["testdata/**"]) + [
-        "@consensus_spec_tests_mainnet//:test_data",
+        "@consensus_spec_tests//:test_data",
     ],
     embed = [":go_default_library"],
     deps = [

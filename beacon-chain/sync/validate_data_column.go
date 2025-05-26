@@ -41,7 +41,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		return pubsub.ValidationIgnore, nil
 	}
 
-	// Ignore message with a nil topic.
+	// Reject messages with a nil topic.
 	if msg.Topic == nil {
 		return pubsub.ValidationReject, errInvalidTopic
 	}
@@ -53,14 +53,15 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		return pubsub.ValidationReject, err
 	}
 
-	// Ignore messages that are not of the expected type.
-	dspb, ok := m.(*eth.DataColumnSidecar)
+	// Reject messages that are not of the expected type.
+	dcsc, ok := m.(*eth.DataColumnSidecar)
 	if !ok {
 		log.WithField("message", m).Error("Message is not of type *eth.DataColumnSidecar")
 		return pubsub.ValidationReject, errWrongMessage
 	}
 
-	roDataColumn, err := blocks.NewRODataColumn(dspb)
+	// Convert to a read-only data column sidecar.
+	roDataColumn, err := blocks.NewRODataColumn(dcsc)
 	if err != nil {
 		return pubsub.ValidationReject, errors.Wrap(err, "roDataColumn conversion failure")
 	}
@@ -160,7 +161,6 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		return pubsub.ValidationReject, err
 	}
 
-	// TODO: Try to fit this requirement into the verifier.
 	// [IGNORE] The sidecar is the first sidecar for the tuple `(block_header.slot, block_header.proposer_index, sidecar.index)`
 	// with valid header signature, sidecar inclusion proof, and kzg proof.
 	if s.hasSeenDataColumnIndex(roDataColumn.Slot(), roDataColumn.ProposerIndex(), roDataColumn.DataColumnSidecar.Index) {
@@ -172,12 +172,6 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	// -- in such a case do not REJECT, instead IGNORE this message.
 	if err := verifier.SidecarProposerExpected(ctx); err != nil {
 		return pubsub.ValidationReject, err
-	}
-
-	// Get the time at slot start.
-	startTime, err := slots.ToTime(uint64(s.cfg.chain.GenesisTime().Unix()), roDataColumn.SignedBlockHeader.Header.Slot)
-	if err != nil {
-		return pubsub.ValidationIgnore, err
 	}
 
 	verifiedRODataColumns, err := verifier.VerifiedRODataColumns()
@@ -197,6 +191,12 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 
 	msg.ValidatorData = verifiedRODataColumns[0]
 	dataColumnSidecarVerificationSuccessesCounter.Inc()
+
+	// Get the time at slot start.
+	startTime, err := slots.ToTime(uint64(s.cfg.chain.GenesisTime().Unix()), roDataColumn.SignedBlockHeader.Header.Slot)
+	if err != nil {
+		return pubsub.ValidationIgnore, err
+	}
 
 	sinceSlotStartTime := receivedTime.Sub(startTime)
 	validationTime := s.cfg.clock.Now().Sub(receivedTime)

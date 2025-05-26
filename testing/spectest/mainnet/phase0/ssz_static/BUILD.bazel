@@ -5,7 +5,7 @@ go_test(
     size = "small",
     srcs = ["ssz_static_test.go"],
     data = glob(["*.yaml"]) + [
-        "@consensus_spec_tests_mainnet//:test_data",
+        "@consensus_spec_tests//:test_data",
     ],
     tags = ["spectest"],
     deps = ["//testing/spectest/shared/phase0/ssz_static:go_default_library"],

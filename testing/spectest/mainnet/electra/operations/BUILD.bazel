@@ -18,7 +18,7 @@ go_test(
         "withdrawals_test.go",
     ],
     data = glob(["*.yaml"]) + [
-        "@consensus_spec_tests_mainnet//:test_data",
+        "@consensus_spec_tests//:test_data",
     ],
     deps = ["//testing/spectest/shared/electra/operations:go_default_library"],
 )
