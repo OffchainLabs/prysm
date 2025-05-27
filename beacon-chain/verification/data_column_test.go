@@ -198,7 +198,7 @@ func TestNotFromFutureSlot(t *testing.T) {
 			require.Equal(t, true, verifier.results.executed(RequireNotFromFutureSlot))
 
 			if tc.isError {
-				require.ErrorIs(t, err, ErrFromFutureSlot)
+				require.ErrorIs(t, err, errFromFutureSlot)
 				require.NotNil(t, verifier.results.result(RequireNotFromFutureSlot))
 				return
 			}
@@ -267,7 +267,7 @@ func TestColumnSlotAboveFinalized(t *testing.T) {
 			require.Equal(t, true, v.results.executed(RequireSlotAboveFinalized))
 
 			if tc.isErr {
-				require.ErrorIs(t, err, ErrSlotNotAfterFinalized)
+				require.ErrorIs(t, err, errSlotNotAfterFinalized)
 				require.NotNil(t, v.results.result(RequireSlotAboveFinalized))
 				return
 			}
@@ -355,13 +355,13 @@ func TestValidProposerSignature(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			signatureCache := &mockSignatureCache{
-				svcb: func(signatureData SignatureData) (bool, error) {
+				svcb: func(signatureData signatureData) (bool, error) {
 					if signatureData != expectedSignatureData {
 						t.Error("Did not see expected SignatureData")
 					}
 					return tc.svcbReturn, tc.svcbError
 				},
-				vscb: func(signatureData SignatureData, _ ValidatorAtIndexer) (err error) {
+				vscb: func(signatureData signatureData, _ validatorAtIndexer) (err error) {
 					if tc.vscbShouldError {
 						t.Error("VerifySignature should not be called if the result is cached")
 						return nil
@@ -472,7 +472,7 @@ func TestDataColumnsSidecarParentSeen(t *testing.T) {
 			require.Equal(t, true, verifier.results.executed(RequireSidecarParentSeen))
 
 			if tc.isError {
-				require.ErrorIs(t, err, ErrSidecarParentNotSeen)
+				require.ErrorIs(t, err, errSidecarParentNotSeen)
 				require.NotNil(t, verifier.results.result(RequireSidecarParentSeen))
 				return
 			}
@@ -522,7 +522,7 @@ func TestDataColumnsSidecarParentValid(t *testing.T) {
 			require.Equal(t, true, verifier.results.executed(RequireSidecarParentValid))
 
 			if tc.isError {
-				require.ErrorIs(t, err, ErrSidecarParentInvalid)
+				require.ErrorIs(t, err, errSidecarParentInvalid)
 				require.NotNil(t, verifier.results.result(RequireSidecarParentValid))
 				return
 			}
@@ -549,7 +549,7 @@ func TestColumnSidecarParentSlotLower(t *testing.T) {
 		{
 			name:            "Not in forkchoice",
 			forkChoiceError: errors.New("not in forkchoice"),
-			err:             ErrSlotNotAfterParent,
+			err:             errSlotNotAfterParent,
 		},
 		{
 			name:           "In forkchoice, slot lower",
@@ -558,13 +558,13 @@ func TestColumnSidecarParentSlotLower(t *testing.T) {
 		{
 			name:           "In forkchoice, slot equal",
 			forkChoiceSlot: firstColumn.Slot(),
-			err:            ErrSlotNotAfterParent,
+			err:            errSlotNotAfterParent,
 			errCheckValue:  true,
 		},
 		{
 			name:           "In forkchoice, slot higher",
 			forkChoiceSlot: firstColumn.Slot() + 1,
-			err:            ErrSlotNotAfterParent,
+			err:            errSlotNotAfterParent,
 			errCheckValue:  true,
 		},
 	}
@@ -656,7 +656,7 @@ func TestDataColumnsSidecarDescendsFromFinalized(t *testing.T) {
 			require.Equal(t, true, verifier.results.executed(RequireSidecarDescendsFromFinalized))
 
 			if tc.isError {
-				require.ErrorIs(t, err, ErrSidecarNotFinalizedDescendent)
+				require.ErrorIs(t, err, errSidecarNotFinalizedDescendent)
 				require.NotNil(t, verifier.results.result(RequireSidecarDescendsFromFinalized))
 				return
 			}
@@ -810,7 +810,7 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 	testCases := []struct {
 		name          string
 		stateByRooter StateByRooter
-		proposerCache ProposerCache
+		proposerCache proposerCache
 		columns       []blocks.RODataColumn
 		error         string
 	}{
@@ -829,7 +829,7 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 				ProposerCB: pcReturnsIdx(firstColumn.ProposerIndex() + 1),
 			},
 			columns: columns,
-			error:   ErrSidecarUnexpectedProposer.Error(),
+			error:   errSidecarUnexpectedProposer.Error(),
 		},
 		{
 			name:          "Not cached, state lookup failure",
@@ -883,7 +883,7 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 				},
 			},
 			columns: columns,
-			error:   ErrSidecarUnexpectedProposer.Error(),
+			error:   errSidecarUnexpectedProposer.Error(),
 		},
 		{
 			name:          "Not cached, ComputeProposer fails",

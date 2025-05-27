@@ -7,8 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 )
 
-// Blob sidecars
-// -------------
+// MockBlobVerifier is a mock implementation of the BlobVerifier interface.
 type MockBlobVerifier struct {
 	ErrBlobIndexInBounds            error
 	ErrSlotTooEarly                 error

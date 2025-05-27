@@ -37,8 +37,8 @@ type StateByRooter interface {
 type sharedResources struct {
 	clock *startup.Clock
 	fc    Forkchoicer
-	sc    SignatureCache
-	pc    ProposerCache
+	sc    signatureCache
+	pc    proposerCache
 	sr    StateByRooter
 	ic    *inclusionProofCache
 }
@@ -101,7 +101,7 @@ func NewInitializerWaiter(cw startup.ClockWaiter, fc Forkchoicer, sr StateByRoot
 		fc: fc,
 		pc: pc,
 		sr: sr,
-		ic: newInclusionProofCache(DefaultInclusionProofCacheSize),
+		ic: newInclusionProofCache(defaultInclusionProofCacheSize),
 	}
 	iw := &InitializerWaiter{cw: cw, ini: &Initializer{shared: shared}}
 	for _, o := range opts {
@@ -121,9 +121,9 @@ func (w *InitializerWaiter) WaitForInitializer(ctx context.Context) (*Initialize
 	}
 	// We wait until this point to initialize the signature cache because here we have access to the genesis validator root.
 	vr := w.ini.shared.clock.GenesisValidatorsRoot()
-	sc := newSigCache(vr[:], DefaultSignatureCacheSize, w.getFork)
+	sc := newSigCache(vr[:], defaultSignatureCacheSize, w.getFork)
 	w.ini.shared.sc = sc
-	w.ini.shared.ic = newInclusionProofCache(DefaultInclusionProofCacheSize)
+	w.ini.shared.ic = newInclusionProofCache(defaultInclusionProofCacheSize)
 	return w.ini, nil
 }
 
