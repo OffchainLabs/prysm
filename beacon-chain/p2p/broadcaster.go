@@ -378,33 +378,33 @@ func (s *Service) internalBroadcastDataColumn(
 	// Compute the wrapped subnet index.
 	wrappedSubIdx := columnSubnet + dataColumnSubnetVal
 
-	// Check if we have peers with this subnet.
-	hasPeer := func() bool {
-		s.subnetLocker(wrappedSubIdx).RLock()
-		defer s.subnetLocker(wrappedSubIdx).RUnlock()
+	// Find peers if needed.
+	if err := func() error {
+		s.subnetLocker(wrappedSubIdx).Lock()
+		defer s.subnetLocker(wrappedSubIdx).Unlock()
 
-		return s.hasPeerWithSubnet(topic)
-	}()
+		// Sending a data column sidecar to only one peer is not ideal,
+		// but it ensures at least one peer receives it.
+		const peerCount = 1
 
-	// If no peers are found, attempt to find peers with this subnet.
-	if !hasPeer {
-		if err := func() error {
-			s.subnetLocker(wrappedSubIdx).Lock()
-			defer s.subnetLocker(wrappedSubIdx).Unlock()
-
-			ok, err := s.FindPeersWithSubnet(ctx, topic, columnSubnet, 1 /*threshold*/)
-			if err != nil {
-				return errors.Wrap(err, "find peers for subnet")
-			}
-			if !ok {
-				return errors.New("failed to find peers for subnet")
-			}
-
+		if s.hasPeerWithSubnet(topic) {
+			// Exit early if we already have peers with this subnet.
 			return nil
-		}(); err != nil {
-			log.WithError(err).Error("Failed to find peers")
-			tracing.AnnotateError(span, err)
 		}
+
+		// No peers found, attempt to find peers with this subnet.
+		ok, err := s.FindPeersWithSubnet(ctx, topic, columnSubnet, peerCount)
+		if err != nil {
+			return errors.Wrap(err, "find peers with subnet")
+		}
+		if !ok {
+			return errors.Errorf("failed to find peers for data column subnet %d", columnSubnet)
+		}
+
+		return nil
+	}(); err != nil {
+		log.WithError(err).Error("Failed to find peers for data column subnet")
+		tracing.AnnotateError(span, err)
 	}
 
 	// Broadcast the data column sidecar to the network.
