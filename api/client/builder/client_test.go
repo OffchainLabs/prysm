@@ -532,7 +532,7 @@ func TestClient_GetHeader(t *testing.T) {
 				require.Equal(t, expectedPath, r.URL.Path)
 				epr := &ExecHeaderResponseElectra{}
 				require.NoError(t, json.Unmarshal([]byte(testExampleHeaderResponseElectra), epr))
-				pro, err := epr.ToProto()
+				pro, err := epr.ToProto(100)
 				require.NoError(t, err)
 				ssz, err := pro.MarshalSSZ()
 				require.NoError(t, err)

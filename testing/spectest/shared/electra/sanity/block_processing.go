@@ -38,7 +38,7 @@ func RunBlockProcessingTest(t *testing.T, config, folderPath string) {
 		t.Run(folder.Name(), func(t *testing.T) {
 			params.SetupTestConfigCleanup(t)
 			cfg := params.BeaconConfig().Copy()
-			cfg.ElectraForkEpoch = 0
+			cfg.BlobSchedule = []params.BlobScheduleEntry{{MaxBlobsPerBlock: 9}}
 			params.OverrideBeaconConfig(cfg)
 
 			helpers.ClearCache()

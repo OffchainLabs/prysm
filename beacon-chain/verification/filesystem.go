@@ -1,11 +1,14 @@
 package verification
 
 import (
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+
 	"github.com/spf13/afero"
 )
 
+// VerifiedROBlobError creates a verified read-only blob sidecar from an error.
 func VerifiedROBlobFromDisk(fs afero.Fs, root [32]byte, path string) (blocks.VerifiedROBlob, error) {
 	encoded, err := afero.ReadFile(fs, path)
 	if err != nil {
@@ -20,4 +23,34 @@ func VerifiedROBlobFromDisk(fs afero.Fs, root [32]byte, path string) (blocks.Ver
 		return VerifiedROBlobError(err)
 	}
 	return blocks.NewVerifiedROBlob(ro), nil
+}
+
+// VerifiedRODataColumnFromDisk created a verified read-only data column sidecar from disk.
+func VerifiedRODataColumnFromDisk(file afero.File, root [fieldparams.RootLength]byte, sszEncodedDataColumnSidecarSize uint32) (blocks.VerifiedRODataColumn, error) {
+	// Read the ssz encoded data column sidecar from the file
+	sszEncodedDataColumnSidecar := make([]byte, sszEncodedDataColumnSidecarSize)
+	count, err := file.Read(sszEncodedDataColumnSidecar)
+	if err != nil {
+		return VerifiedRODataColumnError(err)
+	}
+	if uint32(count) != sszEncodedDataColumnSidecarSize {
+		return VerifiedRODataColumnError(err)
+	}
+
+	// Unmarshal the SSZ encoded data column sidecar.
+	dataColumnSidecar := &ethpb.DataColumnSidecar{}
+	if err := dataColumnSidecar.UnmarshalSSZ(sszEncodedDataColumnSidecar); err != nil {
+		return VerifiedRODataColumnError(err)
+	}
+
+	// Create a RO data column.
+	roDataColumnSidecar, err := blocks.NewRODataColumnWithRoot(dataColumnSidecar, root)
+	if err != nil {
+		return VerifiedRODataColumnError(err)
+	}
+
+	// Create a verified RO data column.
+	verifiedRODataColumn := blocks.NewVerifiedRODataColumn(roDataColumnSidecar)
+
+	return verifiedRODataColumn, nil
 }

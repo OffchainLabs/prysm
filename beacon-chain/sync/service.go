@@ -140,6 +140,7 @@ type Service struct {
 	seenBlockCache                   *lru.Cache
 	seenBlobLock                     sync.RWMutex
 	seenBlobCache                    *lru.Cache
+	seenDataColumnCache              *lru.Cache
 	seenAggregatedAttestationLock    sync.RWMutex
 	seenAggregatedAttestationCache   *lru.Cache
 	seenUnAggregatedAttestationLock  sync.RWMutex
@@ -163,10 +164,12 @@ type Service struct {
 	initialSyncComplete              chan struct{}
 	verifierWaiter                   *verification.InitializerWaiter
 	newBlobVerifier                  verification.NewBlobVerifier
+	newColumnsVerifier               verification.NewDataColumnsVerifier
 	availableBlocker                 coverage.AvailableBlocker
 	ctxMap                           ContextByteVersions
 	slasherEnabled                   bool
 	lcStore                          *lightClient.Store
+	dataColumnLogCh                  chan dataColumnLogEntry
 }
 
 // NewService initializes new regular sync service.
@@ -181,6 +184,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 		seenPendingBlocks:    make(map[[32]byte]bool),
 		blkRootToPendingAtts: make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
 		signatureChan:        make(chan *signatureVerifier, verifierLimit),
+		dataColumnLogCh:      make(chan dataColumnLogEntry, 1000),
 	}
 
 	for _, opt := range opts {
@@ -223,6 +227,12 @@ func newBlobVerifierFromInitializer(ini *verification.Initializer) verification.
 	}
 }
 
+func newDataColumnsVerifierFromInitializer(ini *verification.Initializer) verification.NewDataColumnsVerifier {
+	return func(roDataColumns []blocks.RODataColumn, reqs []verification.Requirement) verification.DataColumnsVerifier {
+		return ini.NewDataColumnsVerifier(roDataColumns, reqs)
+	}
+}
+
 // Start the regular sync service.
 func (s *Service) Start() {
 	v, err := s.verifierWaiter.WaitForInitializer(s.ctx)
@@ -231,9 +241,11 @@ func (s *Service) Start() {
 		return
 	}
 	s.newBlobVerifier = newBlobVerifierFromInitializer(v)
+	s.newColumnsVerifier = newDataColumnsVerifierFromInitializer(v)
 
 	go s.verifierRoutine()
 	go s.startTasksPostInitialSync()
+	go s.processDataColumnLogs()
 
 	s.cfg.p2p.AddConnectionHandler(s.reValidatePeer, s.sendGoodbye)
 	s.cfg.p2p.AddDisconnectionHandler(func(_ context.Context, _ peer.ID) error {
@@ -285,6 +297,7 @@ func (s *Service) Status() error {
 func (s *Service) initCaches() {
 	s.seenBlockCache = lruwrpr.New(seenBlockSize)
 	s.seenBlobCache = lruwrpr.New(seenBlobSize)
+	s.seenDataColumnCache = lruwrpr.New(seenDataColumnSize)
 	s.seenAggregatedAttestationCache = lruwrpr.New(seenAggregatedAttSize)
 	s.seenUnAggregatedAttestationCache = lruwrpr.New(seenUnaggregatedAttSize)
 	s.seenSyncMessageCache = lruwrpr.New(seenSyncMsgSize)

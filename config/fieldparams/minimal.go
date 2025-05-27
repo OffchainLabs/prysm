@@ -31,6 +31,7 @@ const (
 	BlobLength                            = 131072            // BlobLength defines the byte length of a blob.
 	BlobSize                              = 131072            // defined to match blob.size in bazel ssz codegen
 	BlobSidecarSize                       = 131928            // defined to match blob sidecar size in bazel ssz codegen
+	KzgCommitmentSize                     = 48                // KzgCommitmentSize defines the byte length of a KZG commitment.
 	KzgCommitmentInclusionProofDepth      = 10                // Merkle proof depth for blob_kzg_commitments list item
 	ExecutionBranchDepth                  = 4                 // ExecutionBranchDepth defines the number of leaves in a merkle proof of the execution payload header.
 	SyncCommitteeBranchDepth              = 5                 // SyncCommitteeBranchDepth defines the number of leaves in a merkle proof of a sync committee.
@@ -43,4 +44,8 @@ const (
 	MaxAttesterSlashingsElectra           = 1                 // Maximum number of attester slashings in a block.
 	MaxRandomByte                         = uint64(1<<8 - 1)  // Maximum value for a random value using for proposer and sync committee sampling.
 	MaxRandomValueElectra                 = uint64(1<<16 - 1) // Maximum value for a random value using for proposer and sync committee sampling.
+
+	// Introduced in Fulu network upgrade.
+	NumberOfColumns = 128 // NumberOfColumns refers to the specified number of data columns that can exist in a network.
+	CellsPerBlob    = 64  // CellsPerBlob refers to the number of cells in a (non-extended) blob.
 )

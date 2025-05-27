@@ -161,3 +161,80 @@ func WriteBlobSidecarChunk(stream libp2pcore.Stream, tor blockchain.TemporalOrac
 	_, err = encoding.EncodeWithMaxLength(stream, sidecar)
 	return err
 }
+
+func WriteLightClientBootstrapChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, encoding encoder.NetworkEncoding, bootstrap interfaces.LightClientBootstrap) error {
+	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
+		return err
+	}
+
+	valRoot := tor.GenesisValidatorsRoot()
+	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(bootstrap.Header().Beacon().Slot), valRoot[:])
+	if err != nil {
+		return err
+	}
+
+	obtainedCtx := digest[:]
+	if err = writeContextToStream(obtainedCtx, stream); err != nil {
+		return err
+	}
+
+	_, err = encoding.EncodeWithMaxLength(stream, bootstrap)
+	return err
+}
+
+func WriteLightClientUpdateChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, encoding encoder.NetworkEncoding, update interfaces.LightClientUpdate) error {
+	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
+		return err
+	}
+
+	valRoot := tor.GenesisValidatorsRoot()
+	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(update.AttestedHeader().Beacon().Slot), valRoot[:])
+	if err != nil {
+		return err
+	}
+	obtainedCtx := digest[:]
+
+	if err = writeContextToStream(obtainedCtx, stream); err != nil {
+		return err
+	}
+	_, err = encoding.EncodeWithMaxLength(stream, update)
+	return err
+}
+
+func WriteLightClientOptimisticUpdateChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, encoding encoder.NetworkEncoding, update interfaces.LightClientOptimisticUpdate) error {
+	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
+		return err
+	}
+
+	valRoot := tor.GenesisValidatorsRoot()
+	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(update.AttestedHeader().Beacon().Slot), valRoot[:])
+	if err != nil {
+		return err
+	}
+	obtainedCtx := digest[:]
+
+	if err = writeContextToStream(obtainedCtx, stream); err != nil {
+		return err
+	}
+	_, err = encoding.EncodeWithMaxLength(stream, update)
+	return err
+}
+
+func WriteLightClientFinalityUpdateChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, encoding encoder.NetworkEncoding, update interfaces.LightClientFinalityUpdate) error {
+	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
+		return err
+	}
+
+	valRoot := tor.GenesisValidatorsRoot()
+	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(update.AttestedHeader().Beacon().Slot), valRoot[:])
+	if err != nil {
+		return err
+	}
+	obtainedCtx := digest[:]
+
+	if err = writeContextToStream(obtainedCtx, stream); err != nil {
+		return err
+	}
+	_, err = encoding.EncodeWithMaxLength(stream, update)
+	return err
+}

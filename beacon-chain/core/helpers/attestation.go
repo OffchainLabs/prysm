@@ -187,9 +187,7 @@ func ValidateAttestationTime(attSlot primitives.Slot, genesisTime time.Time, clo
 // VerifyCheckpointEpoch is within current epoch and previous epoch
 // with respect to current time. Returns true if it's within, false if it's not.
 func VerifyCheckpointEpoch(c *ethpb.Checkpoint, genesis time.Time) bool {
-	now := uint64(prysmTime.Now().Unix())
-	genesisTime := uint64(genesis.Unix())
-	currentSlot := primitives.Slot((now - genesisTime) / params.BeaconConfig().SecondsPerSlot)
+	currentSlot := slots.CurrentSlot(uint64(genesis.Unix()))
 	currentEpoch := slots.ToEpoch(currentSlot)
 
 	var prevEpoch primitives.Epoch

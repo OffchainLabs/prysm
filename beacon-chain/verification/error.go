@@ -114,3 +114,12 @@ func VerifiedROBlobError(err error) (blocks.VerifiedROBlob, error) {
 	}
 	return blocks.VerifiedROBlob{}, err
 }
+
+// VerifiedRODataColumnError can be used by methods that have a VerifiedRODataColumn return type but do not have permission to
+// create a value of that type in order to generate an error return value.
+func VerifiedRODataColumnError(err error) (blocks.VerifiedRODataColumn, error) {
+	if err == nil {
+		return blocks.VerifiedRODataColumn{}, errVerificationImplementationFault
+	}
+	return blocks.VerifiedRODataColumn{}, err
+}

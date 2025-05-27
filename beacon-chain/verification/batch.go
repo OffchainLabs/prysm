@@ -32,7 +32,7 @@ type BlobBatchVerifier struct {
 }
 
 // VerifiedROBlobs satisfies the das.BlobBatchVerifier interface, used by das.AvailabilityStore.
-func (batch *BlobBatchVerifier) VerifiedROBlobs(ctx context.Context, blk blocks.ROBlock, scs []blocks.ROBlob) ([]blocks.VerifiedROBlob, error) {
+func (batch *BlobBatchVerifier) VerifiedROBlobs(_ context.Context, blk blocks.ROBlock, scs []blocks.ROBlob) ([]blocks.VerifiedROBlob, error) {
 	if len(scs) == 0 {
 		return nil, nil
 	}

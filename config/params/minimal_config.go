@@ -127,6 +127,11 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.ConfigName = MinimalName
 	minimalConfig.PresetBase = "minimal"
 
+	minimalConfig.BlobSchedule = []BlobScheduleEntry{
+		{Epoch: 18446744073709551615, MaxBlobsPerBlock: 6},
+		{Epoch: 18446744073709551615, MaxBlobsPerBlock: 9},
+	}
+
 	minimalConfig.InitializeForkSchedule()
 	return minimalConfig
 }

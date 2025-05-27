@@ -8,18 +8,30 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
 	GoKZG "github.com/crate-crypto/go-kzg-4844"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
+
+func generateCommitment(blob *kzg.Blob) (*kzg.Commitment, error) {
+	commitment, err := kzg.BlobToKZGCommitment(blob)
+	if err != nil {
+		return nil, errors.Wrap(err, "blob to kzg commitment")
+	}
+
+	return &commitment, nil
+}
 
 func generateCommitmentAndProof(blob *kzg.Blob) (*kzg.Commitment, *kzg.Proof, error) {
 	commitment, err := kzg.BlobToKZGCommitment(blob)
 	if err != nil {
 		return nil, nil, err
 	}
+
 	proof, err := kzg.ComputeBlobKZGProof(blob, commitment)
 	if err != nil {
 		return nil, nil, err
 	}
+
 	return &commitment, &proof, err
 }
 

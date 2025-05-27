@@ -19,7 +19,7 @@ go_test(
         "sync_committee_updates_test.go",
     ],
     data = glob(["*.yaml"]) + [
-        "@consensus_spec_tests_minimal//:test_data",
+        "@consensus_spec_tests//:test_data",
     ],
     eth_network = "minimal",
     deps = ["//testing/spectest/shared/electra/epoch_processing:go_default_library"],

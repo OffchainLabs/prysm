@@ -30,25 +30,25 @@ func TestInfo(t *testing.T) {
 func TestTargetCustodyGroupCount(t *testing.T) {
 	testCases := []struct {
 		name                         string
-		subscribeToAllSubnets        bool
+		subscribeToAllColumns        bool
 		validatorsCustodyRequirement uint64
 		expected                     uint64
 	}{
 		{
-			name:                         "subscribed to all subnets",
-			subscribeToAllSubnets:        true,
+			name:                         "subscribed to all data subnets",
+			subscribeToAllColumns:        true,
 			validatorsCustodyRequirement: 100,
 			expected:                     128,
 		},
 		{
 			name:                         "no validators attached",
-			subscribeToAllSubnets:        false,
+			subscribeToAllColumns:        false,
 			validatorsCustodyRequirement: 0,
 			expected:                     4,
 		},
 		{
 			name:                         "some validators attached",
-			subscribeToAllSubnets:        false,
+			subscribeToAllColumns:        false,
 			validatorsCustodyRequirement: 100,
 			expected:                     100,
 		},
@@ -57,10 +57,10 @@ func TestTargetCustodyGroupCount(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Subscribe to all subnets if needed.
-			if tc.subscribeToAllSubnets {
+			if tc.subscribeToAllColumns {
 				resetFlags := flags.Get()
 				gFlags := new(flags.GlobalFlags)
-				gFlags.SubscribeToAllSubnets = true
+				gFlags.SubscribeAllDataSubnets = true
 				flags.Init(gFlags)
 				defer flags.Init(resetFlags)
 			}
@@ -82,25 +82,25 @@ func TestTargetCustodyGroupCount(t *testing.T) {
 func TestToAdvertiseCustodyGroupCount(t *testing.T) {
 	testCases := []struct {
 		name                         string
-		subscribeToAllSubnets        bool
+		subscribeToAllColumns        bool
 		toAdvertiseCustodyGroupCount uint64
 		expected                     uint64
 	}{
 		{
 			name:                         "subscribed to all subnets",
-			subscribeToAllSubnets:        true,
+			subscribeToAllColumns:        true,
 			toAdvertiseCustodyGroupCount: 100,
 			expected:                     128,
 		},
 		{
 			name:                         "higher than custody requirement",
-			subscribeToAllSubnets:        false,
+			subscribeToAllColumns:        false,
 			toAdvertiseCustodyGroupCount: 100,
 			expected:                     100,
 		},
 		{
 			name:                         "lower than custody requirement",
-			subscribeToAllSubnets:        false,
+			subscribeToAllColumns:        false,
 			toAdvertiseCustodyGroupCount: 1,
 			expected:                     4,
 		},
@@ -109,10 +109,10 @@ func TestToAdvertiseCustodyGroupCount(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Subscribe to all subnets if needed.
-			if tc.subscribeToAllSubnets {
+			if tc.subscribeToAllColumns {
 				resetFlags := flags.Get()
 				gFlags := new(flags.GlobalFlags)
-				gFlags.SubscribeToAllSubnets = true
+				gFlags.SubscribeAllDataSubnets = true
 				flags.Init(gFlags)
 				defer flags.Init(resetFlags)
 			}
