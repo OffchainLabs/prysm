@@ -265,10 +265,9 @@ func TestKeyReload_ActiveKey(t *testing.T) {
 	node := health.NewMockHealthClient(ctrl)
 	tracker := health.NewTracker(node)
 	node.EXPECT().IsHealthy(gomock.Any()).Return(true).AnyTimes()
-	v := &testutil.FakeValidator{Km: km, Tracker: tracker}
-	ac := make(chan [][fieldparams.BLSPubkeyLength]byte)
+	v := &testutil.FakeValidator{Km: km, Tracker: tracker, AccountsChannel: make(chan [][fieldparams.BLSPubkeyLength]byte)}
 	current := [][fieldparams.BLSPubkeyLength]byte{testutil.ActiveKey}
-	onAccountsChanged(ctx, v, current, ac)
+	onAccountsChanged(ctx, v, current)
 	assert.Equal(t, true, v.HandleKeyReloadCalled)
 	// HandleKeyReloadCalled in the FakeValidator returns true if one of the keys is equal to the
 	// ActiveKey. WaitForActivation is only called if none of the keys are active, so it shouldn't be called at all.
@@ -284,10 +283,9 @@ func TestKeyReload_NoActiveKey(t *testing.T) {
 	node := health.NewMockHealthClient(ctrl)
 	tracker := health.NewTracker(node)
 	node.EXPECT().IsHealthy(gomock.Any()).Return(true).AnyTimes()
-	v := &testutil.FakeValidator{Km: km, Tracker: tracker}
-	ac := make(chan [][fieldparams.BLSPubkeyLength]byte)
+	v := &testutil.FakeValidator{Km: km, Tracker: tracker, AccountsChannel: make(chan [][fieldparams.BLSPubkeyLength]byte)}
 	current := [][fieldparams.BLSPubkeyLength]byte{na}
-	onAccountsChanged(ctx, v, current, ac)
+	onAccountsChanged(ctx, v, current)
 	assert.Equal(t, true, v.HandleKeyReloadCalled)
 	// HandleKeyReloadCalled in the FakeValidator returns true if one of the keys is equal to the
 	// ActiveKey. Since we are using a key we know is not active, it should return false, which
