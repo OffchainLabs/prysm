@@ -3,19 +3,20 @@ package historycmd
 import (
 	"encoding/json"
 	"flag"
-	"path/filepath"
-	"testing"
-
 	"github.com/OffchainLabs/prysm/v6/cmd"
 	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
 	"github.com/OffchainLabs/prysm/v6/io/file"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/validator/db/common"
+	"github.com/OffchainLabs/prysm/v6/validator/db/kv"
 	dbTest "github.com/OffchainLabs/prysm/v6/validator/db/testing"
 	"github.com/OffchainLabs/prysm/v6/validator/slashing-protection-history/format"
 	mocks "github.com/OffchainLabs/prysm/v6/validator/testing"
 	"github.com/urfave/cli/v2"
+	"os"
+	"path/filepath"
+	"testing"
 )
 
 func setupCliCtx(
@@ -41,76 +42,101 @@ func setupCliCtx(
 // slashing protection history database will keep only the latest signed block slot / attestations,
 // and thus will not be able to export the same data as the original file.
 func TestImportExportSlashingProtectionCli_RoundTrip(t *testing.T) {
-	numValidators := 10
-	outputPath := filepath.Join(t.TempDir(), "slashing-exports")
-	err := file.MkdirAll(outputPath)
-	require.NoError(t, err)
-	protectionFileName := "slashing_history_import.json"
-
-	// Create some mock slashing protection history. and JSON file
-	pubKeys, err := mocks.CreateRandomPubKeys(numValidators)
-	require.NoError(t, err)
-	attestingHistory, proposalHistory := mocks.MockAttestingAndProposalHistories(pubKeys)
-	require.NoError(t, err)
-	mockJSON, err := mocks.MockSlashingProtectionJSON(pubKeys, attestingHistory, proposalHistory)
-	require.NoError(t, err)
-
-	// We JSON encode the protection file and save it to disk as a JSON file.
-	encoded, err := json.Marshal(mockJSON)
-	require.NoError(t, err)
-
-	protectionFilePath := filepath.Join(outputPath, protectionFileName)
-	err = file.WriteFile(protectionFilePath, encoded)
-	require.NoError(t, err)
-
-	// We create a CLI context with the required values, such as the database datadir and output directory.
-	isSlashingProtectionMinimal := false
-	validatorDB := dbTest.SetupDB(t, pubKeys, isSlashingProtectionMinimal)
-	dbPath := validatorDB.DatabasePath()
-	require.NoError(t, validatorDB.Close())
-	cliCtx := setupCliCtx(t, dbPath, protectionFilePath, outputPath)
-
-	// We import the slashing protection history file via CLI.
-	err = importSlashingProtectionJSON(cliCtx)
-	require.NoError(t, err)
-
-	// We export the slashing protection history file via CLI.
-	err = exportSlashingProtectionJSON(cliCtx)
-	require.NoError(t, err)
-
-	// Attempt to read the exported file from the output directory.
-	enc, err := file.ReadFileAsBytes(filepath.Join(outputPath, jsonExportFileName))
-	require.NoError(t, err)
-
-	receivedJSON := &format.EIPSlashingProtectionFormat{}
-	err = json.Unmarshal(enc, receivedJSON)
-	require.NoError(t, err)
-
-	// We verify the parsed JSON file matches. Given there is no guarantee of order,
-	// we will have to carefully compare and sort values as needed.
-	//
-	// First, we compare basic data such as the MetadataV0 value in the JSON file.
-	require.DeepEqual(t, mockJSON.Metadata, receivedJSON.Metadata)
-	wantedHistoryByPublicKey := make(map[string]*format.ProtectionData)
-	for _, item := range mockJSON.Data {
-		wantedHistoryByPublicKey[item.Pubkey] = item
+	layouts := []struct {
+		name   string
+		mutate func(t *testing.T, dbPath string) string
+	}{
+		{
+			name: "flat",
+			mutate: func(t *testing.T, dbPath string) string {
+				return dbPath
+			},
+		},
+		{
+			name: "nested",
+			mutate: func(t *testing.T, dbPath string) string {
+				nestedDir := filepath.Join(dbPath, "data", "direct")
+				require.NoError(t, file.MkdirAll(nestedDir))
+				newPath := filepath.Join(nestedDir, kv.ProtectionDbFileName)
+				require.NoError(t, os.Rename(dbPath, newPath))
+				return filepath.Dir(filepath.Dir(newPath))
+			},
+		},
 	}
+	for _, tc := range layouts {
+		t.Run(tc.name, func(t *testing.T) {
+			numValidators := 10
+			outputPath := filepath.Join(t.TempDir(), "slashing-exports")
+			err := file.MkdirAll(outputPath)
+			require.NoError(t, err)
+			protectionFileName := "slashing_history_import.json"
 
-	// Next, we compare all the data for each validator public key.
-	for _, item := range receivedJSON.Data {
-		wanted, ok := wantedHistoryByPublicKey[item.Pubkey]
-		require.Equal(t, true, ok)
-		wantedAttsByRoot := make(map[string]*format.SignedAttestation)
-		for _, att := range wanted.SignedAttestations {
-			wantedAttsByRoot[att.SigningRoot] = att
-		}
-		for _, att := range item.SignedAttestations {
-			wantedAtt, ok := wantedAttsByRoot[att.SigningRoot]
-			require.Equal(t, true, ok)
-			require.DeepEqual(t, wantedAtt, att)
-		}
-		require.Equal(t, len(wanted.SignedBlocks), len(item.SignedBlocks))
-		require.DeepEqual(t, wanted.SignedBlocks, item.SignedBlocks)
+			// Create some mock slashing protection history. and JSON file
+			pubKeys, err := mocks.CreateRandomPubKeys(numValidators)
+			require.NoError(t, err)
+			attestingHistory, proposalHistory := mocks.MockAttestingAndProposalHistories(pubKeys)
+			require.NoError(t, err)
+			mockJSON, err := mocks.MockSlashingProtectionJSON(pubKeys, attestingHistory, proposalHistory)
+			require.NoError(t, err)
+
+			// We JSON encode the protection file and save it to disk as a JSON file.
+			encoded, err := json.Marshal(mockJSON)
+			require.NoError(t, err)
+
+			protectionFilePath := filepath.Join(outputPath, protectionFileName)
+			err = file.WriteFile(protectionFilePath, encoded)
+			require.NoError(t, err)
+
+			// We create a CLI context with the required values, such as the database datadir and output directory.
+			isSlashingProtectionMinimal := false
+			validatorDB := dbTest.SetupDB(t, pubKeys, isSlashingProtectionMinimal)
+			dbPath := validatorDB.DatabasePath()
+			require.NoError(t, validatorDB.Close())
+			cliCtx := setupCliCtx(t, dbPath, protectionFilePath, outputPath)
+
+			// We import the slashing protection history file via CLI.
+			err = importSlashingProtectionJSON(cliCtx)
+			require.NoError(t, err)
+
+			// We export the slashing protection history file via CLI.
+			err = exportSlashingProtectionJSON(cliCtx)
+			require.NoError(t, err)
+
+			// Attempt to read the exported file from the output directory.
+			enc, err := file.ReadFileAsBytes(filepath.Join(outputPath, jsonExportFileName))
+			require.NoError(t, err)
+
+			receivedJSON := &format.EIPSlashingProtectionFormat{}
+			err = json.Unmarshal(enc, receivedJSON)
+			require.NoError(t, err)
+
+			// We verify the parsed JSON file matches. Given there is no guarantee of order,
+			// we will have to carefully compare and sort values as needed.
+			//
+			// First, we compare basic data such as the MetadataV0 value in the JSON file.
+			require.DeepEqual(t, mockJSON.Metadata, receivedJSON.Metadata)
+			wantedHistoryByPublicKey := make(map[string]*format.ProtectionData)
+			for _, item := range mockJSON.Data {
+				wantedHistoryByPublicKey[item.Pubkey] = item
+			}
+
+			// Next, we compare all the data for each validator public key.
+			for _, item := range receivedJSON.Data {
+				wanted, ok := wantedHistoryByPublicKey[item.Pubkey]
+				require.Equal(t, true, ok)
+				wantedAttsByRoot := make(map[string]*format.SignedAttestation)
+				for _, att := range wanted.SignedAttestations {
+					wantedAttsByRoot[att.SigningRoot] = att
+				}
+				for _, att := range item.SignedAttestations {
+					wantedAtt, ok := wantedAttsByRoot[att.SigningRoot]
+					require.Equal(t, true, ok)
+					require.DeepEqual(t, wantedAtt, att)
+				}
+				require.Equal(t, len(wanted.SignedBlocks), len(item.SignedBlocks))
+				require.DeepEqual(t, wanted.SignedBlocks, item.SignedBlocks)
+			}
+		})
 	}
 }
 

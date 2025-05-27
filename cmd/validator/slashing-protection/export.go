@@ -80,7 +80,7 @@ func exportSlashingProtectionJSON(cliCtx *cli.Context) error {
 			matchPath = filepath.Dir(matchPath) // strip the file name
 		}
 		dataDir = matchPath
-        log.Infof("Found validator database at path %s", dataDir)
+		log.Infof("Found validator database at path %s", dataDir)
 	}
 
 	// Open the validator database.
