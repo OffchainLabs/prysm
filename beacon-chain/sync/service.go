@@ -55,7 +55,6 @@ var _ runtime.Service = (*Service)(nil)
 const (
 	rangeLimit               uint64 = 1024
 	seenBlockSize                   = 1000
-	seenBlobSize                    = seenBlockSize * 6   // Each block can have max 6 blobs.
 	seenDataColumnSize              = seenBlockSize * 128 // Each block can have max 128 data columns.
 	seenUnaggregatedAttSize         = 20000
 	seenAggregatedAttSize           = 16384
@@ -296,7 +295,7 @@ func (s *Service) Status() error {
 // and prevent DoS.
 func (s *Service) initCaches() {
 	s.seenBlockCache = lruwrpr.New(seenBlockSize)
-	s.seenBlobCache = lruwrpr.New(seenBlobSize)
+	s.seenBlobCache = lruwrpr.New(seenBlockSize * params.BeaconConfig().DeprecatedMaxBlobsPerBlockElectra)
 	s.seenDataColumnCache = lruwrpr.New(seenDataColumnSize)
 	s.seenAggregatedAttestationCache = lruwrpr.New(seenAggregatedAttSize)
 	s.seenUnAggregatedAttestationCache = lruwrpr.New(seenUnaggregatedAttSize)
