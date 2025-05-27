@@ -9,6 +9,7 @@ import (
 // beacon node.
 type GlobalFlags struct {
 	SubscribeToAllSubnets      bool
+	SubscribeAllDataSubnets    bool
 	MinimumSyncPeers           int
 	MinimumPeersPerSubnet      int
 	MaxConcurrentDials         int
@@ -37,10 +38,17 @@ func Init(c *GlobalFlags) {
 // based on the provided cli context.
 func ConfigureGlobalFlags(ctx *cli.Context) {
 	cfg := &GlobalFlags{}
+
 	if ctx.Bool(SubscribeToAllSubnets.Name) {
 		log.Warn("Subscribing to All Attestation Subnets")
 		cfg.SubscribeToAllSubnets = true
 	}
+
+	if ctx.Bool(SubscribeAllDataSubnets.Name) {
+		log.Warning("Subscribing to all data subnets")
+		cfg.SubscribeAllDataSubnets = true
+	}
+
 	cfg.BlockBatchLimit = ctx.Int(BlockBatchLimit.Name)
 	cfg.BlockBatchLimitBurstFactor = ctx.Int(BlockBatchLimitBurstFactor.Name)
 	cfg.BlobBatchLimit = ctx.Int(BlobBatchLimit.Name)

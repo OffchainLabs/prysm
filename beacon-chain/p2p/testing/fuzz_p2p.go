@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/control"
@@ -54,6 +55,11 @@ func (*FakeP2P) PeerID() peer.ID {
 // ENR returns the enr of the local peer.
 func (*FakeP2P) ENR() *enr.Record {
 	return new(enr.Record)
+}
+
+// NodeID returns the node id of the local peer.
+func (*FakeP2P) NodeID() enode.ID {
+	return [32]byte{}
 }
 
 // DiscoveryAddresses -- fake

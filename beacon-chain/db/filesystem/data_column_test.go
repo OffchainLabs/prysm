@@ -352,10 +352,30 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 }
 
 func TestGetDataColumnSidecars(t *testing.T) {
-	t.Run("not found", func(t *testing.T) {
+	t.Run("root not found", func(t *testing.T) {
 		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
 
 		verifiedRODataColumnSidecars, err := dataColumnStorage.Get([fieldparams.RootLength]byte{1}, []uint64{12, 13, 14})
+		require.NoError(t, err)
+		require.Equal(t, 0, len(verifiedRODataColumnSidecars))
+	})
+
+	t.Run("indices not found", func(t *testing.T) {
+		_, savedVerifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
+			t,
+			util.DataColumnsParamsByRoot{
+				{1}: {
+					{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}},
+					{ColumnIndex: 14, DataColumn: []byte{2, 3, 4}},
+				},
+			},
+		)
+
+		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
+		err := dataColumnStorage.Save(savedVerifiedRoDataColumnSidecars)
+		require.NoError(t, err)
+
+		verifiedRODataColumnSidecars, err := dataColumnStorage.Get([fieldparams.RootLength]byte{1}, []uint64{3, 1, 2})
 		require.NoError(t, err)
 		require.Equal(t, 0, len(verifiedRODataColumnSidecars))
 	})

@@ -90,7 +90,14 @@ func TestService_CanSubscribe(t *testing.T) {
 		formatting := []interface{}{digest}
 
 		// Special case for attestation subnets which have a second formatting placeholder.
-		if topic == AttestationSubnetTopicFormat || topic == SyncCommitteeSubnetTopicFormat || topic == BlobSubnetTopicFormat {
+		topics := map[string]bool{
+			AttestationSubnetTopicFormat:   true,
+			SyncCommitteeSubnetTopicFormat: true,
+			BlobSubnetTopicFormat:          true,
+			DataColumnSubnetTopicFormat:    true,
+		}
+
+		if topics[topic] {
 			formatting = append(formatting, 0 /* some subnet ID */)
 		}
 

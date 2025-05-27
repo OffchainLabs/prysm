@@ -5,7 +5,7 @@ go_test(
     size = "small",
     srcs = ["upgrade_to_capella_test.go"],
     data = [
-        "@consensus_spec_tests_mainnet//:test_data",
+        "@consensus_spec_tests//:test_data",
     ],
     shard_count = 1,
     tags = ["spectest"],

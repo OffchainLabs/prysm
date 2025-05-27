@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -116,4 +117,15 @@ func NewEphemeralDataColumnStorageUsingFs(t testing.TB, fs afero.Fs, opts ...Dat
 	}
 
 	return bs
+}
+
+func NewMockDataColumnStorageSummarizer(t *testing.T, set map[[fieldparams.RootLength]byte][]uint64) DataColumnStorageSummarizer {
+	c := newDataColumnStorageSummaryCache()
+	for root, indices := range set {
+		if err := c.set(DataColumnsIdent{Root: root, Epoch: 0, Indices: indices}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	return c
 }

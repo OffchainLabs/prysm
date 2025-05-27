@@ -1284,8 +1284,8 @@ type ExecHeaderResponseElectra struct {
 }
 
 // ToProto creates a SignedBuilderBidElectra Proto from ExecHeaderResponseElectra.
-func (ehr *ExecHeaderResponseElectra) ToProto() (*eth.SignedBuilderBidElectra, error) {
-	bb, err := ehr.Data.Message.ToProto()
+func (ehr *ExecHeaderResponseElectra) ToProto(slot types.Slot) (*eth.SignedBuilderBidElectra, error) {
+	bb, err := ehr.Data.Message.ToProto(slot)
 	if err != nil {
 		return nil, err
 	}
@@ -1296,13 +1296,14 @@ func (ehr *ExecHeaderResponseElectra) ToProto() (*eth.SignedBuilderBidElectra, e
 }
 
 // ToProto creates a BuilderBidElectra Proto from BuilderBidElectra.
-func (bb *BuilderBidElectra) ToProto() (*eth.BuilderBidElectra, error) {
+func (bb *BuilderBidElectra) ToProto(slot types.Slot) (*eth.BuilderBidElectra, error) {
 	header, err := bb.Header.ToProto()
 	if err != nil {
 		return nil, err
 	}
-	if len(bb.BlobKzgCommitments) > params.BeaconConfig().MaxBlobsPerBlockByVersion(version.Electra) {
-		return nil, fmt.Errorf("blob commitment count %d exceeds the maximum %d", len(bb.BlobKzgCommitments), params.BeaconConfig().MaxBlobsPerBlockByVersion(version.Electra))
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(slot)
+	if len(bb.BlobKzgCommitments) > maxBlobsPerBlock {
+		return nil, fmt.Errorf("blob commitment count %d exceeds the maximum %d", len(bb.BlobKzgCommitments), maxBlobsPerBlock)
 	}
 	kzgCommitments := make([][]byte, len(bb.BlobKzgCommitments))
 	for i, commit := range bb.BlobKzgCommitments {
