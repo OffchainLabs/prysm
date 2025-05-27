@@ -11,6 +11,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	types "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/math"
 	v1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
