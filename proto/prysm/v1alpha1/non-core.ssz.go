@@ -2,9 +2,9 @@
 package eth
 
 import (
+	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	v1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	ssz "github.com/prysmaticlabs/fastssz"
-	github_com_prysmaticlabs_prysm_v5_consensus_types_primitives "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	v1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 )
 
 // MarshalSSZ ssz marshals the SignedValidatorRegistrationV1 object
@@ -458,7 +458,7 @@ func (b *BeaconBlocksByRangeRequest) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'StartSlot'
-	b.StartSlot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	b.StartSlot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Field (1) 'Count'
 	b.Count = ssz.UnmarshallUint64(buf[8:16])
@@ -685,8 +685,8 @@ func (m *MetaDataV2) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	}
 	dst = append(dst, m.Syncnets...)
 
-	// Field (3) 'CustodySubnetCount'
-	dst = ssz.MarshalUint64(dst, m.CustodySubnetCount)
+	// Field (3) 'CustodyGroupCount'
+	dst = ssz.MarshalUint64(dst, m.CustodyGroupCount)
 
 	return
 }
@@ -714,8 +714,8 @@ func (m *MetaDataV2) UnmarshalSSZ(buf []byte) error {
 	}
 	m.Syncnets = append(m.Syncnets, buf[16:17]...)
 
-	// Field (3) 'CustodySubnetCount'
-	m.CustodySubnetCount = ssz.UnmarshallUint64(buf[17:25])
+	// Field (3) 'CustodyGroupCount'
+	m.CustodyGroupCount = ssz.UnmarshallUint64(buf[17:25])
 
 	return err
 }
@@ -752,8 +752,8 @@ func (m *MetaDataV2) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	}
 	hh.PutBytes(m.Syncnets)
 
-	// Field (3) 'CustodySubnetCount'
-	hh.PutUint64(m.CustodySubnetCount)
+	// Field (3) 'CustodyGroupCount'
+	hh.PutUint64(m.CustodyGroupCount)
 
 	hh.Merkleize(indx)
 	return
@@ -786,7 +786,7 @@ func (b *BlobSidecarsByRangeRequest) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'StartSlot'
-	b.StartSlot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	b.StartSlot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Field (1) 'Count'
 	b.Count = ssz.UnmarshallUint64(buf[8:16])
@@ -863,7 +863,7 @@ func (d *DataColumnSidecarsByRangeRequest) UnmarshalSSZ(buf []byte) error {
 	var o2 uint64
 
 	// Field (0) 'StartSlot'
-	d.StartSlot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	d.StartSlot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Field (1) 'Count'
 	d.Count = ssz.UnmarshallUint64(buf[8:16])

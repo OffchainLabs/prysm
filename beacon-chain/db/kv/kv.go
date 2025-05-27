@@ -9,16 +9,18 @@ import (
 	"path"
 	"time"
 
-	"github.com/dgraph-io/ristretto"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/iface"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/io/file"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/dgraph-io/ristretto/v2"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	prombolt "github.com/prysmaticlabs/prombbolt"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/iface"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -86,8 +88,8 @@ var blockedBuckets = [][]byte{
 type Store struct {
 	db                  *bolt.DB
 	databasePath        string
-	blockCache          *ristretto.Cache
-	validatorEntryCache *ristretto.Cache
+	blockCache          *ristretto.Cache[string, interfaces.ReadOnlySignedBeaconBlock]
+	validatorEntryCache *ristretto.Cache[[]byte, *ethpb.Validator]
 	stateSummaryCache   *stateSummaryCache
 	ctx                 context.Context
 }
@@ -156,7 +158,7 @@ func NewKVStore(ctx context.Context, dirPath string, opts ...KVStoreOption) (*St
 		return nil, err
 	}
 	boltDB.AllocSize = boltAllocSize
-	blockCache, err := ristretto.NewCache(&ristretto.Config{
+	blockCache, err := ristretto.NewCache(&ristretto.Config[string, interfaces.ReadOnlySignedBeaconBlock]{
 		NumCounters: 1000,           // number of keys to track frequency of (1000).
 		MaxCost:     BlockCacheSize, // maximum cost of cache (1000 Blocks).
 		BufferItems: 64,             // number of keys per Get buffer.
@@ -165,7 +167,7 @@ func NewKVStore(ctx context.Context, dirPath string, opts ...KVStoreOption) (*St
 		return nil, err
 	}
 
-	validatorCache, err := ristretto.NewCache(&ristretto.Config{
+	validatorCache, err := ristretto.NewCache(&ristretto.Config[[]byte, *ethpb.Validator]{
 		NumCounters: NumOfValidatorEntries, // number of entries in cache (2 Million).
 		MaxCost:     ValidatorEntryMaxCost, // maximum size of the cache (64Mb)
 		BufferItems: 64,                    // number of keys per Get buffer.

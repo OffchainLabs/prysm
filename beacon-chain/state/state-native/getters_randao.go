@@ -1,10 +1,10 @@
 package state_native
 
 import (
+	customtypes "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/custom-types"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
 	"github.com/pkg/errors"
-	customtypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native/custom-types"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
 )
 
 // RandaoMixes of block proposers on the beacon chain.

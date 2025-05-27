@@ -18,7 +18,7 @@ proto_library(
 go_proto_library(
     name = "ethereum_testing_go_proto",
     compiler = "//:cast_proto_compiler",
-    importpath = "github.com/prysmaticlabs/prysm/v5/proto/testing",
+    importpath = "github.com/OffchainLabs/prysm/v6/proto/testing",
     proto = ":testing_proto",
     visibility = ["//visibility:public"],
     deps = [
@@ -35,7 +35,7 @@ go_library(
     name = "go_default_library",
     testonly = True,
     embed = [":ethereum_testing_go_proto"],
-    importpath = "github.com/prysmaticlabs/prysm/v5/proto/testing",
+    importpath = "github.com/OffchainLabs/prysm/v6/proto/testing",
     visibility = ["//visibility:public"],
 )
 
@@ -46,8 +46,7 @@ go_test(
         "tags_test.go",
     ],
     data = [
-        "@consensus_spec_tests_mainnet//:test_data",
-        "@consensus_spec_tests_minimal//:test_data",
+        "@consensus_spec_tests//:test_data",
     ],
     embed = [":go_default_library"],
     tags = ["spectest"],

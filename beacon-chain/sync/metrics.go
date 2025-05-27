@@ -5,14 +5,14 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 var (
@@ -182,6 +182,25 @@ var (
 		prometheus.CounterOpts{
 			Name: "blob_existed_in_db_total",
 			Help: "Count the number of times blobs have been found in the database.",
+		},
+	)
+
+	// Data column sidecar validation, beacon metrics specs
+	dataColumnSidecarVerificationRequestsCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "beacon_data_column_sidecar_processing_requests_total",
+		Help: "Count the number of data column sidecars submitted for verification",
+	})
+
+	dataColumnSidecarVerificationSuccessesCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "beacon_data_column_sidecar_processing_successes_total",
+		Help: "Count the number of data column sidecars verified for gossip",
+	})
+
+	dataColumnSidecarVerificationGossipHistogram = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "beacon_data_column_sidecar_gossip_verification_milliseconds",
+			Help:    "Captures the time taken to verify data column sidecars.",
+			Buckets: []float64{100, 250, 500, 750, 1000, 1500, 2000, 4000, 8000, 12000, 16000},
 		},
 	)
 )

@@ -8,20 +8,20 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/rewards"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls/common"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/rewards"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls/common"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -32,110 +32,6 @@ const (
 	full
 	blinded
 )
-
-// DEPRECATED: Please use ProduceBlockV3 instead.
-//
-// ProduceBlockV2 requests the beacon node to produce a valid unsigned beacon block,
-// which can then be signed by a proposer and submitted.
-func (s *Server) ProduceBlockV2(w http.ResponseWriter, r *http.Request) {
-	ctx, span := trace.StartSpan(r.Context(), "validator.ProduceBlockV2")
-	defer span.End()
-
-	if shared.IsSyncing(ctx, w, s.SyncChecker, s.HeadFetcher, s.TimeFetcher, s.OptimisticModeFetcher) {
-		return
-	}
-
-	segments := strings.Split(r.URL.Path, "/")
-	rawSlot := segments[len(segments)-1]
-	rawRandaoReveal := r.URL.Query().Get("randao_reveal")
-	rawGraffiti := r.URL.Query().Get("graffiti")
-	rawSkipRandaoVerification := r.URL.Query().Get("skip_randao_verification")
-
-	slot, valid := shared.ValidateUint(w, "slot", rawSlot)
-	if !valid {
-		return
-	}
-
-	var randaoReveal []byte
-	if rawSkipRandaoVerification == "true" {
-		randaoReveal = common.InfiniteSignature[:]
-	} else {
-		rr, err := bytesutil.DecodeHexWithLength(rawRandaoReveal, fieldparams.BLSSignatureLength)
-		if err != nil {
-			httputil.HandleError(w, errors.Wrap(err, "Unable to decode randao reveal").Error(), http.StatusBadRequest)
-			return
-		}
-		randaoReveal = rr
-	}
-	var graffiti []byte
-	if rawGraffiti != "" {
-		g, err := bytesutil.DecodeHexWithLength(rawGraffiti, 32)
-		if err != nil {
-			httputil.HandleError(w, errors.Wrap(err, "Unable to decode graffiti").Error(), http.StatusBadRequest)
-			return
-		}
-		graffiti = g
-	}
-
-	s.produceBlockV3(ctx, w, r, &eth.BlockRequest{
-		Slot:         primitives.Slot(slot),
-		RandaoReveal: randaoReveal,
-		Graffiti:     graffiti,
-		SkipMevBoost: true,
-	}, full)
-}
-
-// DEPRECATED: Please use ProduceBlockV3 instead.
-//
-// ProduceBlindedBlock requests the beacon node to produce a valid unsigned blinded beacon block,
-// which can then be signed by a proposer and submitted.
-func (s *Server) ProduceBlindedBlock(w http.ResponseWriter, r *http.Request) {
-	ctx, span := trace.StartSpan(r.Context(), "validator.ProduceBlindedBlock")
-	defer span.End()
-
-	if shared.IsSyncing(ctx, w, s.SyncChecker, s.HeadFetcher, s.TimeFetcher, s.OptimisticModeFetcher) {
-		return
-	}
-
-	segments := strings.Split(r.URL.Path, "/")
-	rawSlot := segments[len(segments)-1]
-	rawRandaoReveal := r.URL.Query().Get("randao_reveal")
-	rawGraffiti := r.URL.Query().Get("graffiti")
-	rawSkipRandaoVerification := r.URL.Query().Get("skip_randao_verification")
-
-	slot, valid := shared.ValidateUint(w, "slot", rawSlot)
-	if !valid {
-		return
-	}
-
-	var randaoReveal []byte
-	if rawSkipRandaoVerification == "true" {
-		randaoReveal = common.InfiniteSignature[:]
-	} else {
-		rr, err := bytesutil.DecodeHexWithLength(rawRandaoReveal, fieldparams.BLSSignatureLength)
-		if err != nil {
-			httputil.HandleError(w, errors.Wrap(err, "Unable to decode randao reveal").Error(), http.StatusBadRequest)
-			return
-		}
-		randaoReveal = rr
-	}
-	var graffiti []byte
-	if rawGraffiti != "" {
-		g, err := bytesutil.DecodeHexWithLength(rawGraffiti, 32)
-		if err != nil {
-			httputil.HandleError(w, errors.Wrap(err, "Unable to decode graffiti").Error(), http.StatusBadRequest)
-			return
-		}
-		graffiti = g
-	}
-
-	s.produceBlockV3(ctx, w, r, &eth.BlockRequest{
-		Slot:         primitives.Slot(slot),
-		RandaoReveal: randaoReveal,
-		Graffiti:     graffiti,
-		SkipMevBoost: false,
-	}, blinded)
-}
 
 // ProduceBlockV3 requests a beacon node to produce a valid block, which can then be signed by a validator. The
 // returned block may be blinded or unblinded, depending on the current state of the network as
@@ -355,7 +251,7 @@ func handleProducePhase0V3(
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp, "phase0Block.ssz")
+		httputil.WriteSsz(w, sszResp)
 		return
 	}
 	jsonBytes, err := json.Marshal(structs.BeaconBlockFromConsensus(blk.Phase0))
@@ -385,7 +281,7 @@ func handleProduceAltairV3(
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp, "altairBlock.ssz")
+		httputil.WriteSsz(w, sszResp)
 		return
 	}
 	jsonBytes, err := json.Marshal(structs.BeaconBlockAltairFromConsensus(blk.Altair))
@@ -415,7 +311,7 @@ func handleProduceBellatrixV3(
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp, "bellatrixBlock.ssz")
+		httputil.WriteSsz(w, sszResp)
 		return
 	}
 	block, err := structs.BeaconBlockBellatrixFromConsensus(blk.Bellatrix)
@@ -450,7 +346,7 @@ func handleProduceBlindedBellatrixV3(
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp, "blindedBellatrixBlock.ssz")
+		httputil.WriteSsz(w, sszResp)
 		return
 	}
 	block, err := structs.BlindedBeaconBlockBellatrixFromConsensus(blk.BlindedBellatrix)
@@ -485,7 +381,7 @@ func handleProduceBlindedCapellaV3(
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp, "blindedCapellaBlock.ssz")
+		httputil.WriteSsz(w, sszResp)
 		return
 	}
 	block, err := structs.BlindedBeaconBlockCapellaFromConsensus(blk.BlindedCapella)
@@ -520,7 +416,7 @@ func handleProduceCapellaV3(
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp, "capellaBlock.ssz")
+		httputil.WriteSsz(w, sszResp)
 		return
 	}
 	block, err := structs.BeaconBlockCapellaFromConsensus(blk.Capella)
@@ -555,7 +451,7 @@ func handleProduceBlindedDenebV3(
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp, "blindedDenebBlockContents.ssz")
+		httputil.WriteSsz(w, sszResp)
 		return
 	}
 	blindedBlock, err := structs.BlindedBeaconBlockDenebFromConsensus(blk.BlindedDeneb)
@@ -590,7 +486,7 @@ func handleProduceDenebV3(
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp, "denebBlockContents.ssz")
+		httputil.WriteSsz(w, sszResp)
 		return
 	}
 
@@ -626,7 +522,7 @@ func handleProduceBlindedElectraV3(
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp, "blindedElectraBlockContents.ssz")
+		httputil.WriteSsz(w, sszResp)
 		return
 	}
 	blindedBlock, err := structs.BlindedBeaconBlockElectraFromConsensus(blk.BlindedElectra)
@@ -661,7 +557,7 @@ func handleProduceElectraV3(
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp, "electraBlockContents.ssz")
+		httputil.WriteSsz(w, sszResp)
 		return
 	}
 
@@ -697,7 +593,7 @@ func handleProduceBlindedFuluV3(
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp, "blindedFuluBlockContents.ssz")
+		httputil.WriteSsz(w, sszResp)
 		return
 	}
 	blindedBlock, err := structs.BlindedBeaconBlockFuluFromConsensus(blk.BlindedFulu)
@@ -732,7 +628,7 @@ func handleProduceFuluV3(
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.WriteSsz(w, sszResp, "fuluBlockContents.ssz")
+		httputil.WriteSsz(w, sszResp)
 		return
 	}
 

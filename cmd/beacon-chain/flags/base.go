@@ -5,8 +5,8 @@ package flags
 import (
 	"strings"
 
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/urfave/cli/v2"
 )
 
@@ -320,5 +320,10 @@ var (
 		Name: "pruner-retention-epochs",
 		Usage: "Specifies the retention period for the pruner service in terms of epochs. " +
 			"If this value is less than MIN_EPOCHS_FOR_BLOCK_REQUESTS, it will be ignored.",
+	}
+	// SubscribeAllDataSubnets enables subscription to all data subnets.
+	SubscribeAllDataSubnets = &cli.BoolFlag{
+		Name:  "subscribe-all-data-subnets",
+		Usage: "Enable subscription to all data subnets.",
 	}
 )

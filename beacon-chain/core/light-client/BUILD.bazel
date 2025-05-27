@@ -2,8 +2,11 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["lightclient.go"],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client",
+    srcs = [
+        "lightclient.go",
+        "store.go",
+    ],
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client",
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/execution:go_default_library",
@@ -27,7 +30,10 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["lightclient_test.go"],
+    srcs = [
+        "lightclient_test.go",
+        "store_test.go",
+    ],
     deps = [
         ":go_default_library",
         "//config/fieldparams:go_default_library",
@@ -39,6 +45,7 @@ go_test(
         "//encoding/ssz:go_default_library",
         "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
+        "//runtime/version:go_default_library",
         "//testing/require:go_default_library",
         "//testing/util:go_default_library",
         "@com_github_pkg_errors//:go_default_library",

@@ -3,10 +3,10 @@ package kzg
 import (
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/crypto/random"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	GoKZG "github.com/crate-crypto/go-kzg-4844"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func GenerateCommitmentAndProof(blob GoKZG.Blob) (GoKZG.KZGCommitment, GoKZG.KZGProof, error) {
@@ -37,7 +37,7 @@ func TestBytesToAny(t *testing.T) {
 }
 
 func TestGenerateCommitmentAndProof(t *testing.T) {
-	blob := util.GetRandBlob(123)
+	blob := random.GetRandBlob(123)
 	commitment, proof, err := GenerateCommitmentAndProof(blob)
 	require.NoError(t, err)
 	expectedCommitment := GoKZG.KZGCommitment{180, 218, 156, 194, 59, 20, 10, 189, 186, 254, 132, 93, 7, 127, 104, 172, 238, 240, 237, 70, 83, 89, 1, 152, 99, 0, 165, 65, 143, 62, 20, 215, 230, 14, 205, 95, 28, 245, 54, 25, 160, 16, 178, 31, 232, 207, 38, 85}

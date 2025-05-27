@@ -3,8 +3,8 @@ package types
 import (
 	"fmt"
 
+	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
 	"github.com/pkg/errors"
-	consensus_types "github.com/prysmaticlabs/prysm/v5/consensus-types"
 )
 
 // DataType signifies the data type of the field.

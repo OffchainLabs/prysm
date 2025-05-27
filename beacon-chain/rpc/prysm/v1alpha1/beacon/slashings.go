@@ -3,14 +3,16 @@ package beacon
 import (
 	"context"
 
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/container/slice"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/container/slice"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
+//
 // SubmitProposerSlashing receives a proposer slashing object via
 // RPC and injects it into the beacon node's operations pool.
 // Submission into this pool does not guarantee inclusion into a beacon block.
@@ -36,10 +38,13 @@ func (bs *Server) SubmitProposerSlashing(
 	}, nil
 }
 
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 func (bs *Server) SubmitAttesterSlashing(ctx context.Context, req *ethpb.AttesterSlashing) (*ethpb.SubmitSlashingResponse, error) {
 	return bs.submitAttesterSlashing(ctx, req)
 }
 
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
+//
 // SubmitAttesterSlashingElectra receives an attester slashing object via
 // RPC and injects it into the beacon node's operations pool.
 // Submission into this pool does not guarantee inclusion into a beacon block.

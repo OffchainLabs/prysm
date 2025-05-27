@@ -8,7 +8,7 @@ go_library(
         "mock_protector.go",
         "protection_history.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/validator/testing",
+    importpath = "github.com/OffchainLabs/prysm/v6/validator/testing",
     visibility = [
         "//cmd:__subpackages__",
         "//validator:__subpackages__",

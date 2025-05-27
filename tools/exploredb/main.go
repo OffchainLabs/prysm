@@ -17,13 +17,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/dustin/go-humanize"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/kv"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	log "github.com/sirupsen/logrus"
 	"github.com/status-im/keycard-go/hexutils"
 	bolt "go.etcd.io/bbolt"
@@ -336,13 +336,9 @@ func printStates(stateC <-chan *modifiedState, doneC chan<- bool) {
 		log.Infof("block_roots                   : size = %s, count =  %d", humanize.Bytes(size), count)
 		size, count = sizeAndCountOfByteList(st.StateRoots())
 		log.Infof("state_roots                   : size = %s, count = %d", humanize.Bytes(size), count)
-		roots, err := st.HistoricalRoots()
-		if err != nil {
-			log.WithError(err).Error("could not get historical roots")
-		} else {
-			size, count = sizeAndCountOfByteList(roots)
-			log.Infof("historical_roots              : size = %s, count = %d", humanize.Bytes(size), count)
-		}
+		roots := st.HistoricalRoots()
+		size, count = sizeAndCountOfByteList(roots)
+		log.Infof("historical_roots              : size = %s, count = %d", humanize.Bytes(size), count)
 		log.Infof("eth1_data                     : sizeSSZ = %s", humanize.Bytes(uint64(st.Eth1Data().SizeSSZ())))
 		size, count = sizeAndCountGeneric(st.Eth1DataVotes(), nil)
 		log.Infof("eth1_data_votes               : sizeSSZ = %s, count = %d", humanize.Bytes(size), count)

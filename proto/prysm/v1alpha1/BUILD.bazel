@@ -73,6 +73,7 @@ ssz_phase0_objs = [
     "Status",
     "Status",
     "Validator",
+    "ValidatorIdentity",
     "VoluntaryExit",
 ]
 
@@ -185,10 +186,11 @@ ssz_fulu_objs = [
     "BeaconBlockContentsFulu",
     "BlindedBeaconBlockFulu",
     "DataColumnIdentifier",
+    "DataColumnsByRootIdentifier",
     "DataColumnSidecar",
     "SignedBeaconBlockContentsFulu",
     "SignedBeaconBlockFulu",
-    "SignedBlindedBeaconBlockFulu"
+    "SignedBlindedBeaconBlockFulu",
 ]
 
 ssz_gen_marshal(
@@ -310,7 +312,7 @@ go_proto_library(
     compilers = [
         "@com_github_prysmaticlabs_protoc_gen_go_cast//:go_cast_grpc",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1",
+    importpath = "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1",
     proto = ":proto",
     visibility = ["//visibility:public"],
     deps = [
@@ -337,11 +339,12 @@ go_library(
     srcs = [
         "attestation.go",
         "beacon_block.go",
-        "log.go",
         "cloners.go",
         "eip_7521.go",
+        "log.go",
         "sync_committee_mainnet.go",
         "sync_committee_minimal.go",  # keep
+        "validator.go",
         ":ssz_generated_altair",  # keep
         ":ssz_generated_bellatrix",  # keep
         ":ssz_generated_capella",  # keep
@@ -352,7 +355,7 @@ go_library(
         ":ssz_generated_phase0",  # keep
     ],
     embed = [":go_proto"],
-    importpath = "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1",
+    importpath = "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1",
     visibility = ["//visibility:public"],
     deps = SSZ_DEPS + [
         "//encoding/bytesutil:go_default_library",

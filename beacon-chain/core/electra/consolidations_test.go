@@ -4,16 +4,16 @@ import (
 	"context"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/electra"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/electra"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 )
 
 func TestProcessPendingConsolidations(t *testing.T) {
@@ -413,6 +413,44 @@ func TestProcessConsolidationRequests(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, params.BeaconConfig().FarFutureEpoch, src.ExitEpoch, "source validator exit epoch should not be updated")
 				require.Equal(t, params.BeaconConfig().FarFutureEpoch, src.WithdrawableEpoch, "source validator withdrawable epoch should not be updated")
+			},
+		},
+		{
+			name: "pending consolidations limit reached and compounded consolidation after",
+			state: func() state.BeaconState {
+				st := &eth.BeaconStateElectra{
+					Slot:                  params.BeaconConfig().SlotsPerEpoch.Mul(uint64(params.BeaconConfig().ShardCommitteePeriod)),
+					Validators:            createValidatorsWithTotalActiveBalance(32000000000000000), // 32M ETH
+					PendingConsolidations: make([]*eth.PendingConsolidation, params.BeaconConfig().PendingConsolidationsLimit),
+				}
+				// To allow compounding consolidation requests.
+				st.Validators[3].WithdrawalCredentials[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
+				s, err := state_native.InitializeFromProtoElectra(st)
+				require.NoError(t, err)
+				return s
+			}(),
+			reqs: []*enginev1.ConsolidationRequest{
+				{
+					SourceAddress: append(bytesutil.PadTo(nil, 19), byte(1)),
+					SourcePubkey:  []byte("val_1"),
+					TargetPubkey:  []byte("val_2"),
+				},
+				{
+					SourceAddress: append(bytesutil.PadTo(nil, 19), byte(3)),
+					SourcePubkey:  []byte("val_3"),
+					TargetPubkey:  []byte("val_3"),
+				},
+			},
+			validate: func(t *testing.T, st state.BeaconState) {
+				// Verify a pending consolidation is created.
+				numPC, err := st.NumPendingConsolidations()
+				require.NoError(t, err)
+				require.Equal(t, params.BeaconConfig().PendingConsolidationsLimit, numPC)
+
+				// Verify that the last consolidation was included
+				src, err := st.ValidatorAtIndex(3)
+				require.NoError(t, err)
+				require.Equal(t, params.BeaconConfig().CompoundingWithdrawalPrefixByte, src.WithdrawalCredentials[0], "source validator was not compounded")
 			},
 		},
 	}

@@ -1,25 +1,23 @@
 package scorers_test
 
 import (
-	"context"
 	"fmt"
 	"sort"
 	"strconv"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/crypto/rand"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/time"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/scorers"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/time"
 )
 
 func TestScorers_BlockProvider_Score(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	batchSize := uint64(flags.Get().BlockBatchLimit)
 	tests := []struct {
@@ -136,8 +134,7 @@ func TestScorers_BlockProvider_Score(t *testing.T) {
 }
 
 func TestScorers_BlockProvider_GettersSetters(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	peerStatuses := peers.NewStatus(ctx, &peers.StatusConfig{
 		ScorerParams: &scorers.Config{},
@@ -150,8 +147,7 @@ func TestScorers_BlockProvider_GettersSetters(t *testing.T) {
 }
 
 func TestScorers_BlockProvider_WeightSorted(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	peerStatuses := peers.NewStatus(ctx, &peers.StatusConfig{
 		ScorerParams: &scorers.Config{
 			BlockProviderScorerConfig: &scorers.BlockProviderScorerConfig{
@@ -290,8 +286,7 @@ func TestScorers_BlockProvider_Sorted(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			peerStatuses := peers.NewStatus(ctx, &peers.StatusConfig{
 				ScorerParams: &scorers.Config{
 					BlockProviderScorerConfig: &scorers.BlockProviderScorerConfig{
@@ -307,8 +302,7 @@ func TestScorers_BlockProvider_Sorted(t *testing.T) {
 }
 
 func TestScorers_BlockProvider_MaxScore(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	batchSize := uint64(flags.Get().BlockBatchLimit)
 
 	tests := []struct {
@@ -345,8 +339,7 @@ func TestScorers_BlockProvider_MaxScore(t *testing.T) {
 }
 
 func TestScorers_BlockProvider_FormatScorePretty(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	batchSize := uint64(flags.Get().BlockBatchLimit)
 	format := "[%0.1f%%, raw: %0.2f,  blocks: %d/1280]"
 
@@ -473,8 +466,7 @@ func TestScorers_BlockProvider_FormatScorePretty(t *testing.T) {
 }
 
 func TestScorers_BlockProvider_BadPeerMarking(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	peerStatuses := peers.NewStatus(ctx, &peers.StatusConfig{
 		ScorerParams: &scorers.Config{},

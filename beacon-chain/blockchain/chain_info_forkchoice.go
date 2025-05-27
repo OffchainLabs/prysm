@@ -3,13 +3,13 @@ package blockchain
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	consensus_blocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/forkchoice"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	consensus_blocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/forkchoice"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 )
 
 // CachedHeadRoot returns the corresponding value from Forkchoice
@@ -125,4 +125,11 @@ func (s *Service) hashForGenesisBlock(ctx context.Context, root [32]byte) ([]byt
 		return nil, errors.Wrap(err, "could not get latest execution payload header")
 	}
 	return bytesutil.SafeCopyBytes(header.BlockHash()), nil
+}
+
+// DependentRoot wraps the corresponding method in forkchoice
+func (s *Service) DependentRoot(epoch primitives.Epoch) ([32]byte, error) {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.DependentRoot(epoch)
 }

@@ -8,6 +8,6 @@ go_library(
         "json_mainnet.go",
         "json_minimal.go",  # keep
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/shared/testing",
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared/testing",
     visibility = ["//visibility:public"],
 )

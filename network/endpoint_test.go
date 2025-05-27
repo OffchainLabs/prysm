@@ -3,9 +3,9 @@ package network
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/network/authorization"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/OffchainLabs/prysm/v6/network/authorization"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 

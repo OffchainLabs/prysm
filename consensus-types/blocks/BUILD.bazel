@@ -12,10 +12,11 @@ go_library(
         "proto.go",
         "roblob.go",
         "roblock.go",
+        "rodatacolumn.go",
         "setters.go",
         "types.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks",
+    importpath = "github.com/OffchainLabs/prysm/v6/consensus-types/blocks",
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/state/stateutil:go_default_library",
@@ -51,6 +52,7 @@ go_test(
         "proto_test.go",
         "roblob_test.go",
         "roblock_test.go",
+        "rodatacolumn_test.go",
     ],
     embed = [":go_default_library"],
     deps = [

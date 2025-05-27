@@ -5,15 +5,17 @@ import (
 	"encoding/json"
 	"strconv"
 
+	"github.com/OffchainLabs/prysm/v6/api/client"
+	eventClient "github.com/OffchainLabs/prysm/v6/api/client/event"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/client"
-	eventClient "github.com/prysmaticlabs/prysm/v5/api/client/event"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
@@ -23,8 +25,61 @@ type grpcValidatorClient struct {
 	isEventStreamRunning      bool
 }
 
-func (c *grpcValidatorClient) Duties(ctx context.Context, in *ethpb.DutiesRequest) (*ethpb.DutiesResponse, error) {
-	return c.beaconNodeValidatorClient.GetDuties(ctx, in)
+func (c *grpcValidatorClient) Duties(ctx context.Context, in *ethpb.DutiesRequest) (*ethpb.ValidatorDutiesContainer, error) {
+	dutiesResponse, err := c.beaconNodeValidatorClient.GetDuties(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return toValidatorDutiesContainer(dutiesResponse)
+}
+
+func toValidatorDutiesContainer(dutiesResponse *ethpb.DutiesResponse) (*ethpb.ValidatorDutiesContainer, error) {
+	currentDuties := make([]*ethpb.ValidatorDuty, len(dutiesResponse.CurrentEpochDuties))
+	for i, cd := range dutiesResponse.CurrentEpochDuties {
+		duty, err := toValidatorDuty(cd)
+		if err != nil {
+			return nil, err
+		}
+		currentDuties[i] = duty
+	}
+	nextDuties := make([]*ethpb.ValidatorDuty, len(dutiesResponse.NextEpochDuties))
+	for i, nd := range dutiesResponse.NextEpochDuties {
+		duty, err := toValidatorDuty(nd)
+		if err != nil {
+			return nil, err
+		}
+		nextDuties[i] = duty
+	}
+	return &ethpb.ValidatorDutiesContainer{
+		PrevDependentRoot:  dutiesResponse.PreviousDutyDependentRoot,
+		CurrDependentRoot:  dutiesResponse.CurrentDutyDependentRoot,
+		CurrentEpochDuties: currentDuties,
+		NextEpochDuties:    nextDuties,
+	}, nil
+}
+
+func toValidatorDuty(duty *ethpb.DutiesResponse_Duty) (*ethpb.ValidatorDuty, error) {
+	var valIndexInCommittee uint64
+	// valIndexInCommittee will be 0 in case we don't get a match. This is a potential false positive,
+	// however it's an impossible condition because every validator must be assigned to a committee.
+	for cIndex, vIndex := range duty.Committee {
+		if vIndex == duty.ValidatorIndex {
+			valIndexInCommittee = uint64(cIndex)
+			break
+		}
+	}
+	return &ethpb.ValidatorDuty{
+		CommitteeLength:         uint64(len(duty.Committee)),
+		CommitteeIndex:          duty.CommitteeIndex,
+		CommitteesAtSlot:        duty.CommitteesAtSlot, // GRPC doesn't use this value though
+		ValidatorCommitteeIndex: valIndexInCommittee,
+		AttesterSlot:            duty.AttesterSlot,
+		ProposerSlots:           duty.ProposerSlots,
+		PublicKey:               bytesutil.SafeCopyBytes(duty.PublicKey),
+		Status:                  duty.Status,
+		ValidatorIndex:          duty.ValidatorIndex,
+		IsSyncCommittee:         duty.IsSyncCommittee,
+	}, nil
 }
 
 func (c *grpcValidatorClient) CheckDoppelGanger(ctx context.Context, in *ethpb.DoppelGangerRequest) (*ethpb.DoppelGangerResponse, error) {
@@ -115,7 +170,7 @@ func (c *grpcValidatorClient) SubmitValidatorRegistrations(ctx context.Context, 
 	return c.beaconNodeValidatorClient.SubmitValidatorRegistrations(ctx, in)
 }
 
-func (c *grpcValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.DutiesResponse_Duty) (*empty.Empty, error) {
+func (c *grpcValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*empty.Empty, error) {
 	return c.beaconNodeValidatorClient.SubscribeCommitteeSubnets(ctx, in)
 }
 
@@ -172,7 +227,7 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 		}
 		return
 	}
-	// TODO(13563): ONLY WORKS WITH HEAD TOPIC RIGHT NOW/ONLY PROVIDES THE SLOT
+	// TODO(13563): ONLY WORKS WITH HEAD TOPIC.
 	containsHead := false
 	for i := range topics {
 		if topics[i] == eventClient.EventHead {
@@ -234,7 +289,9 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 				continue
 			}
 			b, err := json.Marshal(structs.HeadEvent{
-				Slot: strconv.FormatUint(uint64(res.Slot), 10),
+				Slot:                      strconv.FormatUint(uint64(res.Slot), 10),
+				PreviousDutyDependentRoot: hexutil.Encode(res.PreviousDutyDependentRoot),
+				CurrentDutyDependentRoot:  hexutil.Encode(res.CurrentDutyDependentRoot),
 			})
 			if err != nil {
 				eventsChannel <- &eventClient.Event{

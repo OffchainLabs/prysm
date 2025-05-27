@@ -5,11 +5,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
 	"compress/gzip"
 	"io"
 	log "github.com/sirupsen/logrus"
-	"github.com/prysmaticlabs/prysm/v5/api"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+
 )
 
 func TestNormalizeQueryValuesHandler(t *testing.T) {

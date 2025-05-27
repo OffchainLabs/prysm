@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"sync"
 
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls/common"
+	"github.com/OffchainLabs/prysm/v6/crypto/rand"
 	"github.com/pkg/errors"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls/common"
-	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
 	blst "github.com/supranational/blst/bindings/go"
 )
 
@@ -74,7 +74,7 @@ func AggregateCompressedSignatures(multiSigs [][]byte) (common.Signature, error)
 // MultipleSignaturesFromBytes creates a group of BLS signatures from a LittleEndian 2d-byte slice.
 func MultipleSignaturesFromBytes(multiSigs [][]byte) ([]common.Signature, error) {
 	if len(multiSigs) == 0 {
-		return nil, fmt.Errorf("0 signatures provided to the method")
+		return nil, errors.New("0 signatures provided to the method")
 	}
 	for _, s := range multiSigs {
 		if len(s) != fieldparams.BLSSignatureLength {

@@ -6,7 +6,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
 )
 
 func Test_endpoints(t *testing.T) {
@@ -24,11 +25,13 @@ func Test_endpoints(t *testing.T) {
 		"/eth/v1/beacon/states/{state_id}/validators":                  {http.MethodGet, http.MethodPost},
 		"/eth/v1/beacon/states/{state_id}/validators/{validator_id}":   {http.MethodGet},
 		"/eth/v1/beacon/states/{state_id}/validator_balances":          {http.MethodGet, http.MethodPost},
+		"/eth/v1/beacon/states/{state_id}/validator_identities":        {http.MethodPost},
 		"/eth/v1/beacon/states/{state_id}/committees":                  {http.MethodGet},
 		"/eth/v1/beacon/states/{state_id}/sync_committees":             {http.MethodGet},
 		"/eth/v1/beacon/states/{state_id}/randao":                      {http.MethodGet},
 		"/eth/v1/beacon/states/{state_id}/pending_deposits":            {http.MethodGet},
 		"/eth/v1/beacon/states/{state_id}/pending_partial_withdrawals": {http.MethodGet},
+		"/eth/v1/beacon/states/{state_id}/pending_consolidations":      {http.MethodGet},
 		"/eth/v1/beacon/headers":                                       {http.MethodGet},
 		"/eth/v1/beacon/headers/{block_id}":                            {http.MethodGet},
 		"/eth/v1/beacon/blinded_blocks":                                {http.MethodPost},
@@ -98,9 +101,7 @@ func Test_endpoints(t *testing.T) {
 		"/eth/v1/validator/duties/attester/{epoch}":        {http.MethodPost},
 		"/eth/v1/validator/duties/proposer/{epoch}":        {http.MethodGet},
 		"/eth/v1/validator/duties/sync/{epoch}":            {http.MethodPost},
-		"/eth/v2/validator/blocks/{slot}":                  {http.MethodGet},
 		"/eth/v3/validator/blocks/{slot}":                  {http.MethodGet},
-		"/eth/v1/validator/blinded_blocks/{slot}":          {http.MethodGet},
 		"/eth/v1/validator/attestation_data":               {http.MethodGet},
 		"/eth/v1/validator/aggregate_attestation":          {http.MethodGet},
 		"/eth/v2/validator/aggregate_attestation":          {http.MethodGet},
@@ -133,26 +134,62 @@ func Test_endpoints(t *testing.T) {
 	}
 
 	prysmValidatorRoutes := map[string][]string{
-		"/prysm/validators/performance":           {http.MethodPost},
-		"/prysm/v1/validators/performance":        {http.MethodPost},
-		"/prysm/v1/validators/participation":      {http.MethodGet},
-		"/prysm/v1/validators/active_set_changes": {http.MethodGet},
+		"/prysm/validators/performance":                      {http.MethodPost},
+		"/prysm/v1/validators/performance":                   {http.MethodPost},
+		"/prysm/v1/validators/{state_id}/participation":      {http.MethodGet},
+		"/prysm/v1/validators/{state_id}/active_set_changes": {http.MethodGet},
 	}
 
-	s := &Service{cfg: &Config{}}
-
-	endpoints := s.endpoints(true, nil, nil, nil, nil, nil, nil)
-	actualRoutes := make(map[string][]string, len(endpoints))
-	for _, e := range endpoints {
-		if _, ok := actualRoutes[e.template]; ok {
-			actualRoutes[e.template] = append(actualRoutes[e.template], e.methods...)
-		} else {
-			actualRoutes[e.template] = e.methods
-		}
+	testCases := []struct {
+		name                     string
+		flag                     *features.Flags
+		additionalExpectedRoutes []map[string][]string
+	}{
+		{
+			name: "no flags",
+		},
+		{
+			name: "light client enabled",
+			flag: &features.Flags{
+				EnableLightClient: true,
+			},
+			additionalExpectedRoutes: []map[string][]string{
+				lightClientRoutes,
+			},
+		},
 	}
-	expectedRoutes := combineMaps(beaconRoutes, builderRoutes, configRoutes, debugRoutes, eventsRoutes, nodeRoutes, validatorRoutes, rewardsRoutes, lightClientRoutes, blobRoutes, prysmValidatorRoutes, prysmNodeRoutes, prysmBeaconRoutes)
 
-	assert.Equal(t, true, maps.EqualFunc(expectedRoutes, actualRoutes, func(actualMethods []string, expectedMethods []string) bool {
-		return slices.Equal(expectedMethods, actualMethods)
-	}))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			resetFn := features.InitWithReset(tc.flag)
+			defer resetFn()
+
+			s := &Service{cfg: &Config{}}
+
+			endpoints := s.endpoints(true, nil, nil, nil, nil, nil, nil)
+			actualRoutes := make(map[string][]string, len(endpoints))
+			for _, e := range endpoints {
+				if _, ok := actualRoutes[e.template]; ok {
+					actualRoutes[e.template] = append(actualRoutes[e.template], e.methods...)
+				} else {
+					actualRoutes[e.template] = e.methods
+				}
+			}
+			expectedRoutes := make(map[string][]string)
+			for _, m := range []map[string][]string{
+				beaconRoutes, builderRoutes, configRoutes, debugRoutes, eventsRoutes,
+				nodeRoutes, validatorRoutes, rewardsRoutes, blobRoutes,
+				prysmValidatorRoutes, prysmNodeRoutes, prysmBeaconRoutes,
+			} {
+				maps.Copy(expectedRoutes, m)
+			}
+			for _, m := range tc.additionalExpectedRoutes {
+				maps.Copy(expectedRoutes, m)
+			}
+
+			assert.Equal(t, true, maps.EqualFunc(expectedRoutes, actualRoutes, func(actualMethods []string, expectedMethods []string) bool {
+				return slices.Equal(expectedMethods, actualMethods)
+			}))
+		})
+	}
 }

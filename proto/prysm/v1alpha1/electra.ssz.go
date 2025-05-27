@@ -2,9 +2,9 @@
 package eth
 
 import (
+	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	v1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	ssz "github.com/prysmaticlabs/fastssz"
-	github_com_prysmaticlabs_prysm_v5_consensus_types_primitives "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	v1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
 )
 
 // MarshalSSZ ssz marshals the SignedAggregateAttestationAndProofElectra object
@@ -163,7 +163,7 @@ func (a *AggregateAttestationAndProofElectra) UnmarshalSSZ(buf []byte) error {
 	var o1 uint64
 
 	// Field (0) 'AggregatorIndex'
-	a.AggregatorIndex = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[0:8]))
+	a.AggregatorIndex = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Offset (1) 'Aggregate'
 	if o1 = ssz.ReadOffset(buf[8:12]); o1 > size {
@@ -505,7 +505,7 @@ func (a *AggregateAttestationAndProofSingle) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'AggregatorIndex'
-	a.AggregatorIndex = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[0:8]))
+	a.AggregatorIndex = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Field (1) 'Aggregate'
 	if a.Aggregate == nil {
@@ -600,10 +600,10 @@ func (s *SingleAttestation) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'CommitteeId'
-	s.CommitteeId = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.CommitteeIndex(ssz.UnmarshallUint64(buf[0:8]))
+	s.CommitteeId = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.CommitteeIndex(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Field (1) 'AttesterIndex'
-	s.AttesterIndex = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
+	s.AttesterIndex = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
 
 	// Field (2) 'Data'
 	if s.Data == nil {
@@ -1580,10 +1580,10 @@ func (b *BeaconBlockElectra) UnmarshalSSZ(buf []byte) error {
 	var o4 uint64
 
 	// Field (0) 'Slot'
-	b.Slot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	b.Slot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Field (1) 'ProposerIndex'
-	b.ProposerIndex = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
+	b.ProposerIndex = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
 
 	// Field (2) 'ParentRoot'
 	if cap(b.ParentRoot) == 0 {
@@ -2482,10 +2482,10 @@ func (b *BlindedBeaconBlockElectra) UnmarshalSSZ(buf []byte) error {
 	var o4 uint64
 
 	// Field (0) 'Slot'
-	b.Slot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	b.Slot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Field (1) 'ProposerIndex'
-	b.ProposerIndex = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
+	b.ProposerIndex = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
 
 	// Field (2) 'ParentRoot'
 	if cap(b.ParentRoot) == 0 {
@@ -3847,7 +3847,7 @@ func (b *BeaconStateElectra) UnmarshalSSZ(buf []byte) error {
 	b.GenesisValidatorsRoot = append(b.GenesisValidatorsRoot, buf[8:40]...)
 
 	// Field (2) 'Slot'
-	b.Slot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[40:48]))
+	b.Slot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[40:48]))
 
 	// Field (3) 'Fork'
 	if b.Fork == nil {
@@ -4003,7 +4003,7 @@ func (b *BeaconStateElectra) UnmarshalSSZ(buf []byte) error {
 	b.NextWithdrawalIndex = ssz.UnmarshallUint64(buf[2736633:2736641])
 
 	// Field (26) 'NextWithdrawalValidatorIndex'
-	b.NextWithdrawalValidatorIndex = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[2736641:2736649]))
+	b.NextWithdrawalValidatorIndex = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[2736641:2736649]))
 
 	// Offset (27) 'HistoricalSummaries'
 	if o27 = ssz.ReadOffset(buf[2736649:2736653]); o27 > size || o24 > o27 {
@@ -4014,19 +4014,19 @@ func (b *BeaconStateElectra) UnmarshalSSZ(buf []byte) error {
 	b.DepositRequestsStartIndex = ssz.UnmarshallUint64(buf[2736653:2736661])
 
 	// Field (29) 'DepositBalanceToConsume'
-	b.DepositBalanceToConsume = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[2736661:2736669]))
+	b.DepositBalanceToConsume = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[2736661:2736669]))
 
 	// Field (30) 'ExitBalanceToConsume'
-	b.ExitBalanceToConsume = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[2736669:2736677]))
+	b.ExitBalanceToConsume = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[2736669:2736677]))
 
 	// Field (31) 'EarliestExitEpoch'
-	b.EarliestExitEpoch = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Epoch(ssz.UnmarshallUint64(buf[2736677:2736685]))
+	b.EarliestExitEpoch = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch(ssz.UnmarshallUint64(buf[2736677:2736685]))
 
 	// Field (32) 'ConsolidationBalanceToConsume'
-	b.ConsolidationBalanceToConsume = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[2736685:2736693]))
+	b.ConsolidationBalanceToConsume = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[2736685:2736693]))
 
 	// Field (33) 'EarliestConsolidationEpoch'
-	b.EarliestConsolidationEpoch = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Epoch(ssz.UnmarshallUint64(buf[2736693:2736701]))
+	b.EarliestConsolidationEpoch = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch(ssz.UnmarshallUint64(buf[2736693:2736701]))
 
 	// Offset (34) 'PendingDeposits'
 	if o34 = ssz.ReadOffset(buf[2736701:2736705]); o34 > size || o27 > o34 {
@@ -4685,7 +4685,7 @@ func (p *PendingDeposit) UnmarshalSSZ(buf []byte) error {
 	p.Signature = append(p.Signature, buf[88:184]...)
 
 	// Field (4) 'Slot'
-	p.Slot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[184:192]))
+	p.Slot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[184:192]))
 
 	return err
 }
@@ -4766,13 +4766,13 @@ func (p *PendingPartialWithdrawal) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'Index'
-	p.Index = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[0:8]))
+	p.Index = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Field (1) 'Amount'
 	p.Amount = ssz.UnmarshallUint64(buf[8:16])
 
 	// Field (2) 'WithdrawableEpoch'
-	p.WithdrawableEpoch = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Epoch(ssz.UnmarshallUint64(buf[16:24]))
+	p.WithdrawableEpoch = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch(ssz.UnmarshallUint64(buf[16:24]))
 
 	return err
 }
@@ -4832,10 +4832,10 @@ func (p *PendingConsolidation) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'SourceIndex'
-	p.SourceIndex = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[0:8]))
+	p.SourceIndex = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Field (1) 'TargetIndex'
-	p.TargetIndex = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
+	p.TargetIndex = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
 
 	return err
 }
@@ -5156,7 +5156,7 @@ func (l *LightClientUpdateElectra) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (6) 'SignatureSlot'
-	l.SignatureSlot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[25208:25216]))
+	l.SignatureSlot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[25208:25216]))
 
 	// Field (0) 'AttestedHeader'
 	{
@@ -5279,7 +5279,7 @@ func (l *LightClientFinalityUpdateElectra) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the LightClientFinalityUpdateElectra object to a target array
 func (l *LightClientFinalityUpdateElectra) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(180)
+	offset := int(400)
 
 	// Offset (0) 'AttestedHeader'
 	dst = ssz.WriteOffset(dst, offset)
@@ -5295,11 +5295,17 @@ func (l *LightClientFinalityUpdateElectra) MarshalSSZTo(buf []byte) (dst []byte,
 	}
 	offset += l.FinalizedHeader.SizeSSZ()
 
-	// Offset (2) 'FinalityBranch'
-	dst = ssz.WriteOffset(dst, offset)
-	for ii := 0; ii < len(l.FinalityBranch); ii++ {
-		offset += 4
-		offset += len(l.FinalityBranch[ii])
+	// Field (2) 'FinalityBranch'
+	if size := len(l.FinalityBranch); size != 7 {
+		err = ssz.ErrVectorLengthFn("--.FinalityBranch", size, 7)
+		return
+	}
+	for ii := 0; ii < 7; ii++ {
+		if size := len(l.FinalityBranch[ii]); size != 32 {
+			err = ssz.ErrBytesLengthFn("--.FinalityBranch[ii]", size, 32)
+			return
+		}
+		dst = append(dst, l.FinalityBranch[ii]...)
 	}
 
 	// Field (3) 'SyncAggregate'
@@ -5323,26 +5329,6 @@ func (l *LightClientFinalityUpdateElectra) MarshalSSZTo(buf []byte) (dst []byte,
 		return
 	}
 
-	// Field (2) 'FinalityBranch'
-	if size := len(l.FinalityBranch); size > 7 {
-		err = ssz.ErrListTooBigFn("--.FinalityBranch", size, 7)
-		return
-	}
-	{
-		offset = 4 * len(l.FinalityBranch)
-		for ii := 0; ii < len(l.FinalityBranch); ii++ {
-			dst = ssz.WriteOffset(dst, offset)
-			offset += len(l.FinalityBranch[ii])
-		}
-	}
-	for ii := 0; ii < len(l.FinalityBranch); ii++ {
-		if size := len(l.FinalityBranch[ii]); size > 32 {
-			err = ssz.ErrBytesLengthFn("--.FinalityBranch[ii]", size, 32)
-			return
-		}
-		dst = append(dst, l.FinalityBranch[ii]...)
-	}
-
 	return
 }
 
@@ -5350,19 +5336,19 @@ func (l *LightClientFinalityUpdateElectra) MarshalSSZTo(buf []byte) (dst []byte,
 func (l *LightClientFinalityUpdateElectra) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 180 {
+	if size < 400 {
 		return ssz.ErrSize
 	}
 
 	tail := buf
-	var o0, o1, o2 uint64
+	var o0, o1 uint64
 
 	// Offset (0) 'AttestedHeader'
 	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
 		return ssz.ErrOffset
 	}
 
-	if o0 != 180 {
+	if o0 != 400 {
 		return ssz.ErrInvalidVariableOffset
 	}
 
@@ -5371,21 +5357,25 @@ func (l *LightClientFinalityUpdateElectra) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrOffset
 	}
 
-	// Offset (2) 'FinalityBranch'
-	if o2 = ssz.ReadOffset(buf[8:12]); o2 > size || o1 > o2 {
-		return ssz.ErrOffset
+	// Field (2) 'FinalityBranch'
+	l.FinalityBranch = make([][]byte, 7)
+	for ii := 0; ii < 7; ii++ {
+		if cap(l.FinalityBranch[ii]) == 0 {
+			l.FinalityBranch[ii] = make([]byte, 0, len(buf[8:232][ii*32:(ii+1)*32]))
+		}
+		l.FinalityBranch[ii] = append(l.FinalityBranch[ii], buf[8:232][ii*32:(ii+1)*32]...)
 	}
 
 	// Field (3) 'SyncAggregate'
 	if l.SyncAggregate == nil {
 		l.SyncAggregate = new(SyncAggregate)
 	}
-	if err = l.SyncAggregate.UnmarshalSSZ(buf[12:172]); err != nil {
+	if err = l.SyncAggregate.UnmarshalSSZ(buf[232:392]); err != nil {
 		return err
 	}
 
 	// Field (4) 'SignatureSlot'
-	l.SignatureSlot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[172:180]))
+	l.SignatureSlot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[392:400]))
 
 	// Field (0) 'AttestedHeader'
 	{
@@ -5400,34 +5390,11 @@ func (l *LightClientFinalityUpdateElectra) UnmarshalSSZ(buf []byte) error {
 
 	// Field (1) 'FinalizedHeader'
 	{
-		buf = tail[o1:o2]
+		buf = tail[o1:]
 		if l.FinalizedHeader == nil {
 			l.FinalizedHeader = new(LightClientHeaderDeneb)
 		}
 		if err = l.FinalizedHeader.UnmarshalSSZ(buf); err != nil {
-			return err
-		}
-	}
-
-	// Field (2) 'FinalityBranch'
-	{
-		buf = tail[o2:]
-		num, err := ssz.DecodeDynamicLength(buf, 7)
-		if err != nil {
-			return err
-		}
-		l.FinalityBranch = make([][]byte, num)
-		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
-			if len(buf) > 32 {
-				return ssz.ErrBytesLength
-			}
-			if cap(l.FinalityBranch[indx]) == 0 {
-				l.FinalityBranch[indx] = make([]byte, 0, len(buf))
-			}
-			l.FinalityBranch[indx] = append(l.FinalityBranch[indx], buf...)
-			return nil
-		})
-		if err != nil {
 			return err
 		}
 	}
@@ -5436,7 +5403,7 @@ func (l *LightClientFinalityUpdateElectra) UnmarshalSSZ(buf []byte) error {
 
 // SizeSSZ returns the ssz encoded size in bytes for the LightClientFinalityUpdateElectra object
 func (l *LightClientFinalityUpdateElectra) SizeSSZ() (size int) {
-	size = 180
+	size = 400
 
 	// Field (0) 'AttestedHeader'
 	if l.AttestedHeader == nil {
@@ -5449,12 +5416,6 @@ func (l *LightClientFinalityUpdateElectra) SizeSSZ() (size int) {
 		l.FinalizedHeader = new(LightClientHeaderDeneb)
 	}
 	size += l.FinalizedHeader.SizeSSZ()
-
-	// Field (2) 'FinalityBranch'
-	for ii := 0; ii < len(l.FinalityBranch); ii++ {
-		size += 4
-		size += len(l.FinalityBranch[ii])
-	}
 
 	return
 }
@@ -5480,25 +5441,19 @@ func (l *LightClientFinalityUpdateElectra) HashTreeRootWith(hh *ssz.Hasher) (err
 
 	// Field (2) 'FinalityBranch'
 	{
-		subIndx := hh.Index()
-		num := uint64(len(l.FinalityBranch))
-		if num > 7 {
-			err = ssz.ErrIncorrectListSize
+		if size := len(l.FinalityBranch); size != 7 {
+			err = ssz.ErrVectorLengthFn("--.FinalityBranch", size, 7)
 			return
 		}
-		for _, elem := range l.FinalityBranch {
-			{
-				elemIndx := hh.Index()
-				byteLen := uint64(len(elem))
-				if byteLen > 32 {
-					err = ssz.ErrIncorrectListSize
-					return
-				}
-				hh.AppendBytes32(elem)
-				hh.MerkleizeWithMixin(elemIndx, byteLen, (32+31)/32)
+		subIndx := hh.Index()
+		for _, i := range l.FinalityBranch {
+			if len(i) != 32 {
+				err = ssz.ErrBytesLength
+				return
 			}
+			hh.Append(i)
 		}
-		hh.MerkleizeWithMixin(subIndx, num, 7)
+		hh.Merkleize(subIndx)
 	}
 
 	// Field (3) 'SyncAggregate'

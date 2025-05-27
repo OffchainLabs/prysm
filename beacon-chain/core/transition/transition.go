@@ -8,26 +8,28 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/capella"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/deneb"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/electra"
+	e "github.com/OffchainLabs/prysm/v6/beacon-chain/core/epoch"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/epoch/precompute"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/execution"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/fulu"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
+	prysmTrace "github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/capella"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/deneb"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/electra"
-	e "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epoch"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/epoch/precompute"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/execution"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/fulu"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	prysmTrace "github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -291,6 +293,8 @@ func ProcessSlotsCore(ctx context.Context, span trace.Span, state state.BeaconSt
 			tracing.AnnotateError(span, err)
 			return nil, errors.Wrap(err, "failed to upgrade state")
 		}
+
+		logBlobLimitIncrease(state.Slot())
 	}
 	return state, nil
 }
@@ -415,11 +419,15 @@ func VerifyOperationLengths(_ context.Context, state state.BeaconState, b interf
 		)
 	}
 
-	if uint64(len(body.Attestations())) > params.BeaconConfig().MaxAttestations {
+	maxAttestations := params.BeaconConfig().MaxAttestations
+	if body.Version() >= version.Electra {
+		maxAttestations = params.BeaconConfig().MaxAttestationsElectra
+	}
+	if uint64(len(body.Attestations())) > maxAttestations {
 		return nil, fmt.Errorf(
 			"number of attestations (%d) in block body exceeds allowed threshold of %d",
 			len(body.Attestations()),
-			params.BeaconConfig().MaxAttestations,
+			maxAttestations,
 		)
 	}
 
@@ -502,4 +510,20 @@ func ProcessEpochPrecompute(ctx context.Context, state state.BeaconState) (state
 		return nil, errors.Wrap(err, "could not process final updates")
 	}
 	return state, nil
+}
+
+func logBlobLimitIncrease(slot primitives.Slot) {
+	if !slots.IsEpochStart(slot) {
+		return
+	}
+
+	epoch := slots.ToEpoch(slot)
+	for _, entry := range params.BeaconConfig().BlobSchedule {
+		if entry.Epoch == epoch {
+			log.WithFields(logrus.Fields{
+				"epoch":     epoch,
+				"blobLimit": entry.MaxBlobsPerBlock,
+			}).Info("Blob limit updated")
+		}
+	}
 }

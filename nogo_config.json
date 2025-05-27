@@ -66,7 +66,8 @@
       "rules_go_work-.*": "Third party code",
       "config/params/config.go": "This config struct needs to be organized for now",
       "shared/featureconfig/config.go": "This config struct needs to be organized for now",
-      "proto/.*": "Excluding protobuf objects for now"
+      "proto/.*": "Excluding protobuf objects for now",
+      ".*_mock.go": "Excluding generated mock files"
     }
   },
   "errcheck": {

@@ -3,16 +3,16 @@ package state_native_test
 import (
 	"testing"
 
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/golang/snappy"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestNextWithdrawalIndex(t *testing.T) {
@@ -415,4 +415,38 @@ func TestExpectedWithdrawals(t *testing.T) {
 		require.DeepEqual(t, withdrawalPartial, expected[0])
 		require.DeepEqual(t, withdrawalFull, expected[1])
 	})
+}
+
+func TestExpectedWithdrawals_underflow_electra(t *testing.T) {
+	s, err := state_native.InitializeFromProtoUnsafeElectra(&ethpb.BeaconStateElectra{})
+	require.NoError(t, err)
+	vals := make([]*ethpb.Validator, 1)
+	balances := make([]uint64, 1)
+	balances[0] = 2015_000_000_000 //Validator A begins leaking ETH due to inactivity, and over time, its balance decreases to 2,015 ETH
+	val := &ethpb.Validator{
+		WithdrawalCredentials: make([]byte, 32),
+		EffectiveBalance:      params.BeaconConfig().MaxEffectiveBalanceElectra,
+		WithdrawableEpoch:     primitives.Epoch(0),
+		ExitEpoch:             params.BeaconConfig().FarFutureEpoch,
+	}
+	val.WithdrawalCredentials[0] = params.BeaconConfig().CompoundingWithdrawalPrefixByte
+	val.WithdrawalCredentials[31] = byte(0)
+	vals[0] = val
+
+	require.NoError(t, s.SetValidators(vals))
+	require.NoError(t, s.SetBalances(balances))
+	require.NoError(t, s.AppendPendingPartialWithdrawal(&ethpb.PendingPartialWithdrawal{
+		Amount:            1008_000_000_000,
+		WithdrawableEpoch: primitives.Epoch(0),
+	}))
+	require.NoError(t, s.AppendPendingPartialWithdrawal(&ethpb.PendingPartialWithdrawal{
+		Amount:            1008_000_000_000,
+		WithdrawableEpoch: primitives.Epoch(0),
+	}))
+	expected, _, err := s.ExpectedWithdrawals()
+	require.NoError(t, err)
+	require.Equal(t, 3, len(expected)) // is a fully withdrawable validator
+	require.Equal(t, uint64(1008_000_000_000), expected[0].Amount)
+	require.Equal(t, uint64(975_000_000_000), expected[1].Amount)
+	require.Equal(t, uint64(32_000_000_000), expected[2].Amount)
 }

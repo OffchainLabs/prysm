@@ -9,15 +9,15 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/network/forks"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/network/forks"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestGetDepositContract(t *testing.T) {
@@ -200,7 +200,7 @@ func TestGetSpec(t *testing.T) {
 	data, ok := resp.Data.(map[string]interface{})
 	require.Equal(t, true, ok)
 
-	assert.Equal(t, 169, len(data))
+	assert.Equal(t, 175, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -545,6 +545,18 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "9", v)
 			case "MAX_REQUEST_BLOB_SIDECARS_ELECTRA":
 				assert.Equal(t, "1152", v)
+			case "NUMBER_OF_CUSTODY_GROUPS":
+				assert.Equal(t, "128", v)
+			case "BALANCE_PER_ADDITIONAL_CUSTODY_GROUP":
+				assert.Equal(t, "32000000000", v)
+			case "CUSTODY_REQUIREMENT":
+				assert.Equal(t, "4", v)
+			case "SAMPLES_PER_SLOT":
+				assert.Equal(t, "8", v)
+			case "VALIDATOR_CUSTODY_REQUIREMENT":
+				assert.Equal(t, "8", v)
+			case "MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS":
+				assert.Equal(t, "4096", v)
 			case "MAX_BLOB_COMMITMENTS_PER_BLOCK":
 				assert.Equal(t, "95", v)
 			case "MAX_BYTES_PER_TRANSACTION":
@@ -559,6 +571,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "100", v)
 			case "KZG_COMMITMENT_INCLUSION_PROOF_DEPTH":
 				assert.Equal(t, "101", v)
+			case "MAX_BLOBS_PER_BLOCK_FULU":
+				assert.Equal(t, "12", v)
 			case "BLOB_SIDECAR_SUBNET_COUNT":
 				assert.Equal(t, "102", v)
 			case "BLOB_SIDECAR_SUBNET_COUNT_ELECTRA":

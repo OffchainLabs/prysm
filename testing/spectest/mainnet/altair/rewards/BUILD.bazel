@@ -5,7 +5,7 @@ go_test(
     size = "small",
     srcs = ["rewards_test.go"],
     data = glob(["*.yaml"]) + [
-        "@consensus_spec_tests_mainnet//:test_data",
+        "@consensus_spec_tests//:test_data",
     ],
     tags = ["spectest"],
     deps = ["//testing/spectest/shared/altair/rewards:go_default_library"],

@@ -1,5 +1,5 @@
 language: go
-go_import_path: github.com/prysmaticlabs/prysm
+go_import_path: github.com/OffchainLabs/prysm
 sudo: false
 matrix:
   include:

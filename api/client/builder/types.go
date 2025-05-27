@@ -7,19 +7,19 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/api/server"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	types "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/math"
+	v1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/server"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	types "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/math"
-	v1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -1284,8 +1284,8 @@ type ExecHeaderResponseElectra struct {
 }
 
 // ToProto creates a SignedBuilderBidElectra Proto from ExecHeaderResponseElectra.
-func (ehr *ExecHeaderResponseElectra) ToProto() (*eth.SignedBuilderBidElectra, error) {
-	bb, err := ehr.Data.Message.ToProto()
+func (ehr *ExecHeaderResponseElectra) ToProto(slot types.Slot) (*eth.SignedBuilderBidElectra, error) {
+	bb, err := ehr.Data.Message.ToProto(slot)
 	if err != nil {
 		return nil, err
 	}
@@ -1296,13 +1296,14 @@ func (ehr *ExecHeaderResponseElectra) ToProto() (*eth.SignedBuilderBidElectra, e
 }
 
 // ToProto creates a BuilderBidElectra Proto from BuilderBidElectra.
-func (bb *BuilderBidElectra) ToProto() (*eth.BuilderBidElectra, error) {
+func (bb *BuilderBidElectra) ToProto(slot types.Slot) (*eth.BuilderBidElectra, error) {
 	header, err := bb.Header.ToProto()
 	if err != nil {
 		return nil, err
 	}
-	if len(bb.BlobKzgCommitments) > params.BeaconConfig().MaxBlobsPerBlockByVersion(version.Electra) {
-		return nil, fmt.Errorf("blob commitment count %d exceeds the maximum %d", len(bb.BlobKzgCommitments), params.BeaconConfig().MaxBlobsPerBlockByVersion(version.Electra))
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(slot)
+	if len(bb.BlobKzgCommitments) > maxBlobsPerBlock {
+		return nil, fmt.Errorf("blob commitment count %d exceeds the maximum %d", len(bb.BlobKzgCommitments), maxBlobsPerBlock)
 	}
 	kzgCommitments := make([][]byte, len(bb.BlobKzgCommitments))
 	for i, commit := range bb.BlobKzgCommitments {

@@ -30,6 +30,13 @@ const (
 	GossipBlsToExecutionChangeMessage = "bls_to_execution_change"
 	// GossipBlobSidecarMessage is the name for the blob sidecar message type.
 	GossipBlobSidecarMessage = "blob_sidecar"
+	// GossipLightClientFinalityUpdateMessage is the name for the light client finality update message type.
+	GossipLightClientFinalityUpdateMessage = "light_client_finality_update"
+	// GossipLightClientOptimisticUpdateMessage is the name for the light client optimistic update message type.
+	GossipLightClientOptimisticUpdateMessage = "light_client_optimistic_update"
+	// GossipDataColumnSidecarMessage is the name for the data column sidecar message type.
+	GossipDataColumnSidecarMessage = "data_column_sidecar"
+
 	// Topic Formats
 	//
 	// AttestationSubnetTopicFormat is the topic format for the attestation subnet.
@@ -52,4 +59,10 @@ const (
 	BlsToExecutionChangeSubnetTopicFormat = GossipProtocolAndDigest + GossipBlsToExecutionChangeMessage
 	// BlobSubnetTopicFormat is the topic format for the blob subnet.
 	BlobSubnetTopicFormat = GossipProtocolAndDigest + GossipBlobSidecarMessage + "_%d"
+	// LightClientFinalityUpdateTopicFormat is the topic format for the light client finality update subnet.
+	LightClientFinalityUpdateTopicFormat = GossipProtocolAndDigest + GossipLightClientFinalityUpdateMessage
+	// LightClientOptimisticUpdateTopicFormat is the topic format for the light client optimistic update subnet.
+	LightClientOptimisticUpdateTopicFormat = GossipProtocolAndDigest + GossipLightClientOptimisticUpdateMessage
+	// DataColumnSubnetTopicFormat is the topic format for the data column subnet.
+	DataColumnSubnetTopicFormat = GossipProtocolAndDigest + GossipDataColumnSidecarMessage + "_%d"
 )

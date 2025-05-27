@@ -6,13 +6,12 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
-	testhelpers "github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/test-helpers"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/validator/client/beacon-api/mock"
+	testhelpers "github.com/OffchainLabs/prysm/v6/validator/client/beacon-api/test-helpers"
 	"go.uber.org/mock/gomock"
 )
 
@@ -26,25 +25,7 @@ func TestProposeBeaconBlock_Phase0(t *testing.T) {
 	genericSignedBlock := &ethpb.GenericSignedBeaconBlock{}
 	genericSignedBlock.Block = phase0Block
 
-	jsonPhase0Block := &structs.SignedBeaconBlock{
-		Signature: hexutil.Encode(phase0Block.Phase0.Signature),
-		Message: &structs.BeaconBlock{
-			ParentRoot:    hexutil.Encode(phase0Block.Phase0.Block.ParentRoot),
-			ProposerIndex: uint64ToString(phase0Block.Phase0.Block.ProposerIndex),
-			Slot:          uint64ToString(phase0Block.Phase0.Block.Slot),
-			StateRoot:     hexutil.Encode(phase0Block.Phase0.Block.StateRoot),
-			Body: &structs.BeaconBlockBody{
-				Attestations:      jsonifyAttestations(phase0Block.Phase0.Block.Body.Attestations),
-				AttesterSlashings: jsonifyAttesterSlashings(phase0Block.Phase0.Block.Body.AttesterSlashings),
-				Deposits:          jsonifyDeposits(phase0Block.Phase0.Block.Body.Deposits),
-				Eth1Data:          jsonifyEth1Data(phase0Block.Phase0.Block.Body.Eth1Data),
-				Graffiti:          hexutil.Encode(phase0Block.Phase0.Block.Body.Graffiti),
-				ProposerSlashings: jsonifyProposerSlashings(phase0Block.Phase0.Block.Body.ProposerSlashings),
-				RandaoReveal:      hexutil.Encode(phase0Block.Phase0.Block.Body.RandaoReveal),
-				VoluntaryExits:    JsonifySignedVoluntaryExits(phase0Block.Phase0.Block.Body.VoluntaryExits),
-			},
-		},
-	}
+	jsonPhase0Block := structs.SignedBeaconBlockPhase0FromConsensus(phase0Block.Phase0)
 
 	marshalledBlock, err := json.Marshal(jsonPhase0Block)
 	require.NoError(t, err)
