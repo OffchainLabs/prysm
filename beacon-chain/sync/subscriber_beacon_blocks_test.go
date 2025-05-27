@@ -3,7 +3,6 @@ package sync
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	chainMock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
@@ -20,7 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
+	"github.com/OffchainLabs/prysm/v6/time"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
 	"google.golang.org/protobuf/proto"
@@ -75,7 +74,6 @@ func TestService_beaconBlockSubscriber(t *testing.T) {
 					attPool:                attestations.NewPool(),
 					blobStorage:            filesystem.NewEphemeralBlobStorage(t),
 					executionReconstructor: &mockExecution.EngineClient{},
-					clock:                  startup.NewClock(time.Unix(0, 0), [32]byte{}),
 				},
 			}
 			s.initCaches()
@@ -149,7 +147,7 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 	require.NoError(t, err)
 
 	chainService := &chainMock.ChainService{
-		Genesis: prysmTime.Now(),
+		Genesis: time.Now(),
 	}
 
 	b := util.NewBeaconBlockDeneb()
@@ -181,7 +179,7 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 				cfg: &config{
 					p2p:         mockp2p.NewTestP2P(t),
 					chain:       chainService,
-					clock:       startup.NewClock(prysmTime.Now(), [32]byte{}),
+					clock:       startup.NewClock(time.Now(), [32]byte{}),
 					blobStorage: filesystem.NewEphemeralBlobStorage(t),
 					executionReconstructor: &mockExecution.EngineClient{
 						BlobSidecars: tt.blobSidecars,

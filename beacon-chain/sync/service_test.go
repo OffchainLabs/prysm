@@ -124,7 +124,6 @@ func TestSyncHandlers_WaitTillSynced(t *testing.T) {
 			chain:         chainService,
 			blockNotifier: chainService.BlockNotifier(),
 			initialSync:   &mockSync.Sync{IsSyncing: false},
-			clock:         startup.NewClock(time.Unix(0, 0), [32]byte{}),
 		},
 		chainStarted:        abool.New(),
 		subHandler:          newSubTopicHandler(),

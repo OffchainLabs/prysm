@@ -484,9 +484,7 @@ func TestService_ignoreHasSeenSyncMsg(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Service{
-				cfg: &config{chain: &mockChain.ChainService{},
-					clock: startup.NewClock(time.Unix(0, 0), [32]byte{}),
-				},
+				cfg: &config{chain: &mockChain.ChainService{}},
 			}
 			s, _ = tt.setupSvc(s, tt.msg, "")
 			f := s.ignoreHasSeenSyncMsg(context.Background(), tt.msg, tt.committee)

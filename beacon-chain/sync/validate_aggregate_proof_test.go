@@ -218,7 +218,6 @@ func TestValidateAggregateAndProof_NoBlock(t *testing.T) {
 			initialSync: &mockSync.Sync{IsSyncing: false},
 			attPool:     attestations.NewPool(),
 			chain:       &mock.ChainService{},
-			clock:       startup.NewClock(time.Unix(0, 0), [32]byte{}),
 		},
 		blkRootToPendingAtts:           make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
 		seenAggregatedAttestationCache: c,
@@ -290,7 +289,6 @@ func TestValidateAggregateAndProof_NotWithinSlotRange(t *testing.T) {
 			},
 			attPool:             attestations.NewPool(),
 			attestationNotifier: (&mock.ChainService{}).OperationNotifier(),
-			clock:               startup.NewClock(time.Unix(0, 0), [32]byte{}),
 		},
 		seenAggregatedAttestationCache: lruwrpr.New(10),
 	}
@@ -372,7 +370,6 @@ func TestValidateAggregateAndProof_ExistedInPool(t *testing.T) {
 			chain: &mock.ChainService{Genesis: time.Now(),
 				State: beaconState},
 			attestationNotifier: (&mock.ChainService{}).OperationNotifier(),
-			clock:               startup.NewClock(time.Unix(0, 0), [32]byte{}),
 		},
 		seenAggregatedAttestationCache: lruwrpr.New(10),
 		blkRootToPendingAtts:           make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
@@ -691,7 +688,6 @@ func TestValidateAggregateAndProof_BadBlock(t *testing.T) {
 				}},
 			attPool:             attestations.NewPool(),
 			attestationNotifier: (&mock.ChainService{}).OperationNotifier(),
-			clock:               startup.NewClock(time.Unix(0, 0), [32]byte{}),
 		},
 		seenAggregatedAttestationCache: lruwrpr.New(10),
 	}
@@ -783,7 +779,6 @@ func TestValidateAggregateAndProof_RejectWhenAttEpochDoesntEqualTargetEpoch(t *t
 				}},
 			attPool:             attestations.NewPool(),
 			attestationNotifier: (&mock.ChainService{}).OperationNotifier(),
-			clock:               startup.NewClock(time.Unix(0, 0), [32]byte{}),
 		},
 		seenAggregatedAttestationCache: lruwrpr.New(10),
 	}
