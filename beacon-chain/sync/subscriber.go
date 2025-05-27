@@ -117,7 +117,8 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 		s.persistentAndAggregatorSubnetIndices,
 		s.attesterSubnetIndices,
 	)
-	// Altair fork version
+
+	// New gossip topic in Altair
 	if params.BeaconConfig().AltairForkEpoch <= epoch {
 		s.subscribe(
 			p2p.SyncContributionAndProofSubnetTopicFormat,
@@ -159,7 +160,7 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 		)
 	}
 
-	// New gossip topic in Deneb, modified in Electra
+	// New gossip topic in Deneb, removed in Electra
 	if params.BeaconConfig().DenebForkEpoch <= epoch && epoch < params.BeaconConfig().ElectraForkEpoch {
 		s.subscribeWithParameters(
 			p2p.BlobSubnetTopicFormat,
@@ -173,8 +174,8 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 		)
 	}
 
-	// Modified gossip topic in Electra
-	if params.BeaconConfig().ElectraForkEpoch <= epoch {
+	// New gossip topic in Electra, removed in Fulu
+	if params.BeaconConfig().ElectraForkEpoch <= epoch && epoch < params.BeaconConfig().FuluForkEpoch {
 		s.subscribeWithParameters(
 			p2p.BlobSubnetTopicFormat,
 			s.validateBlob,
@@ -183,6 +184,18 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 			func(currentSlot primitives.Slot) []uint64 {
 				return sliceFromCount(params.BeaconConfig().BlobsidecarSubnetCountElectra)
 			},
+			func(currentSlot primitives.Slot) []uint64 { return []uint64{} },
+		)
+	}
+
+	// New gossip topic in Fulu
+	if params.BeaconConfig().FuluForkEpoch <= epoch {
+		s.subscribeWithParameters(
+			p2p.DataColumnSubnetTopicFormat,
+			s.validateDataColumn,
+			func(context.Context, proto.Message) error { return nil },
+			digest,
+			func(primitives.Slot) []uint64 { return nil },
 			func(currentSlot primitives.Slot) []uint64 { return []uint64{} },
 		)
 	}
@@ -345,7 +358,7 @@ func (s *Service) wrapAndReportValidation(topic string, v wrappedVal) (string, p
 			if features.Get().EnableFullSSZDataLogging {
 				fields["message"] = hexutil.Encode(msg.Data)
 			}
-			log.WithError(err).WithFields(fields).Debugf("Gossip message was rejected")
+			log.WithError(err).WithFields(fields).Debug("Gossip message was rejected")
 			messageFailedValidationCounter.WithLabelValues(topic).Inc()
 		}
 		if b == pubsub.ValidationIgnore {

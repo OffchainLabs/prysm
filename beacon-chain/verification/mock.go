@@ -3,9 +3,12 @@ package verification
 import (
 	"context"
 
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 )
 
+// Blob sidecars
+// -------------
 type MockBlobVerifier struct {
 	ErrBlobIndexInBounds            error
 	ErrSlotTooEarly                 error
@@ -20,6 +23,8 @@ type MockBlobVerifier struct {
 	ErrSidecarProposerExpected      error
 	CbVerifiedROBlob                func() (blocks.VerifiedROBlob, error)
 }
+
+var _ BlobVerifier = &MockBlobVerifier{}
 
 func (m *MockBlobVerifier) VerifiedROBlob() (blocks.VerifiedROBlob, error) {
 	return m.CbVerifiedROBlob()
@@ -71,4 +76,76 @@ func (m *MockBlobVerifier) SidecarProposerExpected(_ context.Context) (err error
 
 func (*MockBlobVerifier) SatisfyRequirement(_ Requirement) {}
 
-var _ BlobVerifier = &MockBlobVerifier{}
+// Data column sidecars
+// --------------------
+
+type MockDataColumnsVerifier struct {
+	ErrValidFields                  error
+	ErrCorrectSubnet                error
+	ErrNotFromFutureSlot            error
+	ErrSlotAboveFinalized           error
+	ErrSidecarParentSeen            error
+	ErrSidecarParentValid           error
+	ErrValidProposerSignature       error
+	ErrSidecarParentSlotLower       error
+	ErrSidecarDescendsFromFinalized error
+	ErrSidecarInclusionProven       error
+	ErrSidecarKzgProofVerified      error
+	ErrSidecarProposerExpected      error
+}
+
+var _ DataColumnsVerifier = &MockDataColumnsVerifier{}
+
+func (m *MockDataColumnsVerifier) VerifiedRODataColumns() ([]blocks.VerifiedRODataColumn, error) {
+	return []blocks.VerifiedRODataColumn{{}}, nil
+}
+
+func (m *MockDataColumnsVerifier) SatisfyRequirement(_ Requirement) {}
+
+func (m *MockDataColumnsVerifier) ValidFields() error {
+	return m.ErrValidFields
+}
+
+func (m *MockDataColumnsVerifier) CorrectSubnet(_ string, _ []string) error {
+	return m.ErrCorrectSubnet
+}
+
+func (m *MockDataColumnsVerifier) NotFromFutureSlot() error {
+	return m.ErrNotFromFutureSlot
+}
+
+func (m *MockDataColumnsVerifier) SlotAboveFinalized() error {
+	return m.ErrSlotAboveFinalized
+}
+
+func (m *MockDataColumnsVerifier) ValidProposerSignature(_ context.Context) error {
+	return m.ErrValidProposerSignature
+}
+
+func (m *MockDataColumnsVerifier) SidecarParentSeen(_ func([fieldparams.RootLength]byte) bool) error {
+	return m.ErrSidecarParentSeen
+}
+
+func (m *MockDataColumnsVerifier) SidecarParentValid(_ func([fieldparams.RootLength]byte) bool) error {
+	return m.ErrSidecarParentValid
+}
+
+func (m *MockDataColumnsVerifier) SidecarParentSlotLower() error {
+	return m.ErrSidecarParentSlotLower
+}
+
+func (m *MockDataColumnsVerifier) SidecarDescendsFromFinalized() error {
+	return m.ErrSidecarDescendsFromFinalized
+}
+
+func (m *MockDataColumnsVerifier) SidecarInclusionProven() error {
+	return m.ErrSidecarInclusionProven
+}
+
+func (m *MockDataColumnsVerifier) SidecarKzgProofVerified() error {
+	return m.ErrSidecarKzgProofVerified
+}
+
+func (m *MockDataColumnsVerifier) SidecarProposerExpected(_ context.Context) error {
+	return m.ErrSidecarProposerExpected
+}
