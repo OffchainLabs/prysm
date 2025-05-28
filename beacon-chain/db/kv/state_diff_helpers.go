@@ -29,8 +29,8 @@ func makeKey(level int, slot uint64) []byte {
 }
 
 func (s *Store) getAnchorState(offset uint64, lvl int, slot primitives.Slot) (anchor state.ReadOnlyBeaconState, err error) {
-	if lvl == 0 {
-		return nil, errors.New("no anchor for level 0")
+	if lvl <= 0 || lvl >= len(params.StateHierarchyExponents()) {
+		return nil, errors.New("invalid value for level")
 	}
 
 	relSlot := uint64(slot) - offset
