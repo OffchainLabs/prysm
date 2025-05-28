@@ -104,7 +104,7 @@ func TestBatchVerifier(t *testing.T) {
 				blbs[0].SignedBlockHeader.Signature = []byte("wrong")
 				return blk, blbs
 			},
-			err:    ErrBatchSignatureMismatch,
+			err:    errBatchSignatureMismatch,
 			nblobs: 2,
 		},
 		{
@@ -124,7 +124,7 @@ func TestBatchVerifier(t *testing.T) {
 				blbs[0] = wr
 				return blk, blbs
 			},
-			err:    ErrBatchBlockRootMismatch,
+			err:    errBatchBlockRootMismatch,
 			nblobs: 1,
 		},
 		{
