@@ -388,35 +388,7 @@ func (s *Service) internalBroadcastDataColumn(
 	wrappedSubIdx := columnSubnet + dataColumnSubnetVal
 
 	// Find peers if needed.
-	if err := func() error {
-		s.subnetLocker(wrappedSubIdx).Lock()
-		defer s.subnetLocker(wrappedSubIdx).Unlock()
-
-		// Sending a data column sidecar to only one peer is not ideal,
-		// but it ensures at least one peer receives it.
-		const peerCount = 1
-
-		if s.hasPeerWithSubnet(topic) {
-			// Exit early if we already have peers with this subnet.
-			return nil
-		}
-
-		// Used for testing purposes.
-		if peersChecked != nil {
-			peersChecked <- true
-		}
-
-		// No peers found, attempt to find peers with this subnet.
-		ok, err := s.FindPeersWithSubnet(ctx, topic, columnSubnet, peerCount)
-		if err != nil {
-			return errors.Wrap(err, "find peers with subnet")
-		}
-		if !ok {
-			return errors.Errorf("failed to find peers for data column subnet %d", columnSubnet)
-		}
-
-		return nil
-	}(); err != nil {
+	if err := s.findPeersIfNeeded(ctx, wrappedSubIdx, topic, columnSubnet, peersChecked); err != nil {
 		log.WithError(err).Error("Failed to find peers for data column subnet")
 		tracing.AnnotateError(span, err)
 	}
@@ -445,6 +417,42 @@ func (s *Service) internalBroadcastDataColumn(
 
 	// Increase the number of successful broadcasts.
 	dataColumnSidecarBroadcasts.Inc()
+}
+
+func (s *Service) findPeersIfNeeded(
+	ctx context.Context,
+	wrappedSubIdx uint64,
+	topic string,
+	subnet uint64,
+	peersChecked chan<- bool, // Used for testing purposes to signal when peers are checked.
+) error {
+	s.subnetLocker(wrappedSubIdx).Lock()
+	defer s.subnetLocker(wrappedSubIdx).Unlock()
+
+	// Sending a data column sidecar to only one peer is not ideal,
+	// but it ensures at least one peer receives it.
+	const peerCount = 1
+
+	if s.hasPeerWithSubnet(topic) {
+		// Exit early if we already have peers with this subnet.
+		return nil
+	}
+
+	// Used for testing purposes.
+	if peersChecked != nil {
+		peersChecked <- true
+	}
+
+	// No peers found, attempt to find peers with this subnet.
+	ok, err := s.FindPeersWithSubnet(ctx, topic, subnet, peerCount)
+	if err != nil {
+		return errors.Wrap(err, "find peers with subnet")
+	}
+	if !ok {
+		return errors.Errorf("failed to find peers for topic %s with subnet %d", topic, subnet)
+	}
+
+	return nil
 }
 
 // method to broadcast messages to other peers in our gossip mesh.
