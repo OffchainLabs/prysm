@@ -311,20 +311,17 @@ func TopicFromMessage(msg string, epoch primitives.Epoch) (string, error) {
 		return "", errors.Errorf("%s: %s", invalidRPCMessageType, msg)
 	}
 
-	// Base version is version 1.
-	version := SchemaVersionV1
-
-	// Check if the message is to be updated in altair.
-	isAltair := epoch >= params.BeaconConfig().AltairForkEpoch
-	if isAltair && altairMapping[msg] {
-		version = SchemaVersionV2
-	}
+	beaconConfig := params.BeaconConfig()
 
 	// Check if the message is to be updated in fulu.
-	isFulu := epoch >= params.BeaconConfig().FuluForkEpoch
-	if isFulu && fuluMapping[msg] {
-		version = SchemaVersionV3
+	if epoch >= beaconConfig.FuluForkEpoch && fuluMapping[msg] {
+		return protocolPrefix + msg + SchemaVersionV3, nil
 	}
 
-	return protocolPrefix + msg + version, nil
+	// Check if the message is to be updated in altair.
+	if epoch >= beaconConfig.AltairForkEpoch && altairMapping[msg] {
+		return protocolPrefix + msg + SchemaVersionV2, nil
+	}
+
+	return protocolPrefix + msg + SchemaVersionV1, nil
 }
