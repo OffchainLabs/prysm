@@ -9,12 +9,10 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/validator/db/common"
-	"github.com/OffchainLabs/prysm/v6/validator/db/kv"
 	dbTest "github.com/OffchainLabs/prysm/v6/validator/db/testing"
 	"github.com/OffchainLabs/prysm/v6/validator/slashing-protection-history/format"
 	mocks "github.com/OffchainLabs/prysm/v6/validator/testing"
 	"github.com/urfave/cli/v2"
-	"os"
 	"path/filepath"
 	"testing"
 )
@@ -44,22 +42,21 @@ func setupCliCtx(
 func TestImportExportSlashingProtectionCli_RoundTrip(t *testing.T) {
 	layouts := []struct {
 		name   string
-		mutate func(t *testing.T, dbPath string) string
+		mutate func(t *testing.T) (string, string)
 	}{
 		{
 			name: "flat",
-			mutate: func(t *testing.T, dbPath string) string {
-				return dbPath
+			mutate: func(t *testing.T) (string, string) {
+				dbPath := t.TempDir()
+				return dbPath, dbPath
 			},
 		},
 		{
 			name: "nested",
-			mutate: func(t *testing.T, dbPath string) string {
+			mutate: func(t *testing.T) (string, string) {
+				dbPath := t.TempDir()
 				nestedDir := filepath.Join(dbPath, "data", "direct")
-				require.NoError(t, file.MkdirAll(nestedDir))
-				newPath := filepath.Join(nestedDir, kv.ProtectionDbFileName)
-				require.NoError(t, os.Rename(dbPath, newPath))
-				return filepath.Dir(filepath.Dir(newPath))
+				return dbPath, nestedDir
 			},
 		},
 	}
@@ -89,10 +86,10 @@ func TestImportExportSlashingProtectionCli_RoundTrip(t *testing.T) {
 
 			// We create a CLI context with the required values, such as the database datadir and output directory.
 			isSlashingProtectionMinimal := false
-			validatorDB := dbTest.SetupDB(t, pubKeys, isSlashingProtectionMinimal)
-			dbPath := validatorDB.DatabasePath()
+			dataDir, dataPath := tc.mutate(t)
+			validatorDB := dbTest.SetupDB(t, dataPath, pubKeys, isSlashingProtectionMinimal)
 			require.NoError(t, validatorDB.Close())
-			cliCtx := setupCliCtx(t, dbPath, protectionFilePath, outputPath)
+			cliCtx := setupCliCtx(t, dataDir, protectionFilePath, outputPath)
 
 			// We import the slashing protection history file via CLI.
 			err = importSlashingProtectionJSON(cliCtx)
@@ -173,7 +170,7 @@ func TestImportExportSlashingProtectionCli_EmptyData(t *testing.T) {
 
 	// We create a CLI context with the required values, such as the database datadir and output directory.
 	isSlashingProtectionMinimal := false
-	validatorDB := dbTest.SetupDB(t, pubKeys, isSlashingProtectionMinimal)
+	validatorDB := dbTest.SetupDB(t, t.TempDir(), pubKeys, isSlashingProtectionMinimal)
 	dbPath := validatorDB.DatabasePath()
 	require.NoError(t, validatorDB.Close())
 	cliCtx := setupCliCtx(t, dbPath, protectionFilePath, outputPath)
