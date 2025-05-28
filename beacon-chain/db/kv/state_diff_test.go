@@ -270,7 +270,7 @@ func TestStateDiff_SaveAndReadDiff_MultipleLevels(t *testing.T) {
 			err := db.saveStateByDiff(context.Background(), st)
 			require.NoError(t, err)
 
-			slot := primitives.Slot(math.PowerOf2(5))
+			slot := primitives.Slot(math.PowerOf2(11))
 			st, _ = createState(t, slot, v)
 
 			err = db.saveStateByDiff(context.Background(), st)
@@ -284,7 +284,39 @@ func TestStateDiff_SaveAndReadDiff_MultipleLevels(t *testing.T) {
 			require.NoError(t, err)
 			readStSSZ, err := readSt.MarshalSSZ()
 			require.NoError(t, err)
-			require.DeepEqual(t, stSSZ, readStSSZ)
+			require.DeepSSZEqual(t, stSSZ, readStSSZ)
+
+			slot = primitives.Slot(math.PowerOf2(11) + math.PowerOf2(9))
+			st, _ = createState(t, slot, v)
+
+			err = db.saveStateByDiff(context.Background(), st)
+			require.NoError(t, err)
+
+			readSt, err = db.stateByDiff(context.Background(), slot)
+			require.NoError(t, err)
+			require.NotNil(t, readSt)
+
+			stSSZ, err = st.MarshalSSZ()
+			require.NoError(t, err)
+			readStSSZ, err = readSt.MarshalSSZ()
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, stSSZ, readStSSZ)
+
+			slot = primitives.Slot(math.PowerOf2(11) + math.PowerOf2(9) + math.PowerOf2(5))
+			st, _ = createState(t, slot, v)
+
+			err = db.saveStateByDiff(context.Background(), st)
+			require.NoError(t, err)
+
+			readSt, err = db.stateByDiff(context.Background(), slot)
+			require.NoError(t, err)
+			require.NotNil(t, readSt)
+
+			stSSZ, err = st.MarshalSSZ()
+			require.NoError(t, err)
+			readStSSZ, err = readSt.MarshalSSZ()
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, stSSZ, readStSSZ)
 		})
 	}
 }
