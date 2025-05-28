@@ -6,7 +6,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/OffchainLabs/prysm)](https://goreportcard.com/report/github.com/OffchainLabs/prysm)
 [![Consensus_Spec_Version 1.4.0](https://img.shields.io/badge/Consensus%20Spec%20Version-v1.4.0-blue.svg)](https://github.com/ethereum/consensus-specs/tree/v1.4.0)
 [![Execution_API_Version 1.0.0-beta.2](https://img.shields.io/badge/Execution%20API%20Version-v1.0.0.beta.2-blue.svg)](https://github.com/ethereum/execution-apis/tree/v1.0.0-beta.2/src/engine)
-[![Discord](https://user-images.githubusercontent.com/7288322/34471967-1df7808a-efbb-11e7-9088-ed0b04151291.png)](https://discord.gg/OffchainLabs)
+[![Discord](https://user-images.githubusercontent.com/7288322/34471967-1df7808a-efbb-11e7-9088-ed0b04151291.png)](https://discord.gg/prysm)
 [![GitPOAP Badge](https://public-api.gitpoap.io/v1/repo/OffchainLabs/prysm/badge)](https://www.gitpoap.io/gh/OffchainLabs/prysm)
 
 </div>
@@ -25,7 +25,7 @@ See the [Changelog](https://github.com/OffchainLabs/prysm/releases) for details 
 
 A detailed set of installation and usage instructions as well as breakdowns of each individual component are available in the **[official documentation portal](https://docs.prylabs.network)**.
 
-💬 **Need help?** Join our **[Discord Community](https://discord.gg/OffchainLabs)** for support.
+💬 **Need help?** Join our **[Discord Community](https://discord.gg/prysm)** for support.
 
 ---
 
