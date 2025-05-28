@@ -348,14 +348,8 @@ func (s *Service) BroadcastDataColumn(
 		return err
 	}
 
-	// For testing purposes, we can signal when peers are checked.
-	var peersChecked chan<- bool
-	if len(peersCheckedChans) > 0 {
-		peersChecked = peersCheckedChans[0]
-	}
-
 	// Non-blocking broadcast, with attempts to discover a column subnet peer if none available.
-	go s.internalBroadcastDataColumn(ctx, root, dataColumnSubnet, dataColumnSidecar, forkDigest, peersChecked)
+	go s.internalBroadcastDataColumn(ctx, root, dataColumnSubnet, dataColumnSidecar, forkDigest, peersCheckedChans)
 
 	return nil
 }
@@ -366,7 +360,7 @@ func (s *Service) internalBroadcastDataColumn(
 	columnSubnet uint64,
 	dataColumnSidecar *ethpb.DataColumnSidecar,
 	forkDigest [fieldparams.VersionLength]byte,
-	peersChecked chan<- bool, // Used for testing purposes to signal when peers are checked.
+	peersCheckedChans []chan<- bool, // Used for testing purposes to signal when peers are checked.
 ) {
 	// Add tracing to the function.
 	_, span := trace.StartSpan(ctx, "p2p.internalBroadcastDataColumn")
@@ -388,7 +382,7 @@ func (s *Service) internalBroadcastDataColumn(
 	wrappedSubIdx := columnSubnet + dataColumnSubnetVal
 
 	// Find peers if needed.
-	if err := s.findPeersIfNeeded(ctx, wrappedSubIdx, topic, columnSubnet, peersChecked); err != nil {
+	if err := s.findPeersIfNeeded(ctx, wrappedSubIdx, topic, columnSubnet, peersCheckedChans); err != nil {
 		log.WithError(err).Error("Failed to find peers for data column subnet")
 		tracing.AnnotateError(span, err)
 	}
@@ -424,7 +418,7 @@ func (s *Service) findPeersIfNeeded(
 	wrappedSubIdx uint64,
 	topic string,
 	subnet uint64,
-	peersChecked chan<- bool, // Used for testing purposes to signal when peers are checked.
+	peersCheckedChans []chan<- bool, // Used for testing purposes to signal when peers are checked.
 ) error {
 	s.subnetLocker(wrappedSubIdx).Lock()
 	defer s.subnetLocker(wrappedSubIdx).Unlock()
@@ -439,8 +433,8 @@ func (s *Service) findPeersIfNeeded(
 	}
 
 	// Used for testing purposes.
-	if peersChecked != nil {
-		peersChecked <- true
+	if len(peersCheckedChans) > 0 {
+		peersCheckedChans[0] <- true
 	}
 
 	// No peers found, attempt to find peers with this subnet.

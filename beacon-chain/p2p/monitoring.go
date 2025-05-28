@@ -46,7 +46,7 @@ var (
 	})
 	savedAttestationBroadcasts = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "p2p_attestation_subnet_recovered_broadcasts",
-		Help: "The number of attestations message broadcast attemps with no peers on " +
+		Help: "The number of attestations message broadcast attempts with no peers on " +
 			"the subnet. The beacon node increments this counter when the broadcast is blocked " +
 			"until a subnet peer can be found.",
 	})
