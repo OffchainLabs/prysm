@@ -719,24 +719,29 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	time.AfterFunc(50*time.Millisecond, func() {
+	peersChecked := make(chan bool, 0)
+
+	go func(tt *testing.T) {
 		defer wg.Done()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
+		// Wait for the peers to be checked.
+		<-peersChecked
+
 		// External peer subscribes to the topic.
 		topic += p.Encoding().ProtocolSuffix()
 		sub, err := p2.SubscribeToTopic(topic)
-		require.NoError(t, err)
+		require.NoError(tt, err)
 
 		msg, err := sub.Next(ctx)
-		require.NoError(t, err)
+		require.NoError(tt, err)
 
 		var result ethpb.DataColumnSidecar
-		require.NoError(t, p.Encoding().DecodeGossip(msg.Data, &result))
-		require.DeepEqual(t, &result, sidecar)
-	})
+		require.NoError(tt, p.Encoding().DecodeGossip(msg.Data, &result))
+		require.DeepEqual(tt, &result, sidecar)
+	}(t)
 
 	var emptyRoot [fieldparams.RootLength]byte
 
@@ -745,7 +750,7 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	require.ErrorContains(t, "attempted to broadcast nil", err)
 
 	// Broadcast to peers and wait.
-	err = p.BroadcastDataColumn(emptyRoot, subnet, sidecar)
+	err = p.BroadcastDataColumn(emptyRoot, subnet, sidecar, peersChecked)
 	require.NoError(t, err)
 	require.Equal(t, false, util.WaitTimeout(&wg, 1*time.Minute), "Failed to receive pubsub within 1s")
 }

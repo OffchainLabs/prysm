@@ -325,7 +325,12 @@ func (s *Service) BroadcastLightClientFinalityUpdate(ctx context.Context, update
 
 // BroadcastDataColumn broadcasts a data column to the p2p network, the message is assumed to be
 // broadcasted to the current fork and to the input column subnet.
-func (s *Service) BroadcastDataColumn(root [fieldparams.RootLength]byte, dataColumnSubnet uint64, dataColumnSidecar *ethpb.DataColumnSidecar) error {
+func (s *Service) BroadcastDataColumn(
+	root [fieldparams.RootLength]byte,
+	dataColumnSubnet uint64,
+	dataColumnSidecar *ethpb.DataColumnSidecar,
+	peersCheckedChans ...chan<- bool, // Used for testing purposes to signal when peers are checked.
+) error {
 	// Add tracing to the function.
 	ctx, span := trace.StartSpan(s.ctx, "p2p.BroadcastDataColumn")
 	defer span.End()
@@ -343,8 +348,14 @@ func (s *Service) BroadcastDataColumn(root [fieldparams.RootLength]byte, dataCol
 		return err
 	}
 
+	// For testing purposes, we can signal when peers are checked.
+	var peersChecked chan<- bool
+	if len(peersCheckedChans) > 0 {
+		peersChecked = peersCheckedChans[0]
+	}
+
 	// Non-blocking broadcast, with attempts to discover a column subnet peer if none available.
-	go s.internalBroadcastDataColumn(ctx, root, dataColumnSubnet, dataColumnSidecar, forkDigest)
+	go s.internalBroadcastDataColumn(ctx, root, dataColumnSubnet, dataColumnSidecar, forkDigest, peersChecked)
 
 	return nil
 }
@@ -355,6 +366,7 @@ func (s *Service) internalBroadcastDataColumn(
 	columnSubnet uint64,
 	dataColumnSidecar *ethpb.DataColumnSidecar,
 	forkDigest [fieldparams.VersionLength]byte,
+	peersChecked chan<- bool, // Used for testing purposes to signal when peers are checked.
 ) {
 	// Add tracing to the function.
 	_, span := trace.StartSpan(ctx, "p2p.internalBroadcastDataColumn")
@@ -387,6 +399,11 @@ func (s *Service) internalBroadcastDataColumn(
 		if s.hasPeerWithSubnet(topic) {
 			// Exit early if we already have peers with this subnet.
 			return nil
+		}
+
+		// Used for testing purposes.
+		if peersChecked != nil {
+			peersChecked <- true
 		}
 
 		// No peers found, attempt to find peers with this subnet.
