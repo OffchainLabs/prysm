@@ -38,6 +38,7 @@ func (s *Store) getAnchorState(offset uint64, lvl int, slot primitives.Slot) (an
 	span := math.PowerOf2(prevExp)
 	anchorSlot := primitives.Slot((relSlot / span * span) + offset)
 
+	// anchorLvl can be [0, lvl-1]
 	anchorLvl := computeLevel(offset, anchorSlot)
 	if anchorLvl == -1 {
 		return nil, errors.New("could not compute anchor level")
