@@ -3,6 +3,7 @@ package kv
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
@@ -253,6 +254,36 @@ func TestStateDiff_SaveAndReadDiff(t *testing.T) {
 			require.NoError(t, err)
 			readStSSZ, err := readSt.MarshalSSZ()
 			require.NoError(t, err)
+			require.DeepSSZEqual(t, stSSZ, readStSSZ)
+		})
+	}
+}
+
+func TestStateDiff_SaveAndReadDiff_MultipleLevels(t *testing.T) {
+	// test for every version
+	for v := 0; v < 6; v++ {
+		t.Run(version.String(v), func(t *testing.T) {
+			db := setupDB(t)
+
+			st, _ := createState(t, 0, v)
+
+			err := db.saveStateByDiff(context.Background(), st)
+			require.NoError(t, err)
+
+			slot := primitives.Slot(math.PowerOf2(5))
+			st, _ = createState(t, slot, v)
+
+			err = db.saveStateByDiff(context.Background(), st)
+			require.NoError(t, err)
+
+			readSt, err := db.stateByDiff(context.Background(), slot)
+			require.NoError(t, err)
+			require.NotNil(t, readSt)
+
+			stSSZ, err := st.MarshalSSZ()
+			require.NoError(t, err)
+			readStSSZ, err := readSt.MarshalSSZ()
+			require.NoError(t, err)
 			require.DeepEqual(t, stSSZ, readStSSZ)
 		})
 	}
@@ -454,6 +485,10 @@ func createState(t *testing.T, slot primitives.Slot, v int) (state.ReadOnlyBeaco
 	}
 
 	err = st.SetSlot(slot)
+	require.NoError(t, err)
+	slashings := make([]uint64, 8192)
+	slashings[0] = uint64(rand.Intn(10))
+	err = st.SetSlashings(slashings)
 	require.NoError(t, err)
 	stssz, err := st.MarshalSSZ()
 	require.NoError(t, err)
