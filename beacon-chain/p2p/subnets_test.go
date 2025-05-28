@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	ecdsaprysm "github.com/OffchainLabs/prysm/v6/crypto/ecdsa"
@@ -500,6 +501,26 @@ func Test_SyncSubnets(t *testing.T) {
 				t.Errorf("syncSubnets() got = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestDataColumnSubnets(t *testing.T) {
+	const cgc = 3
+
+	var (
+		nodeID enode.ID
+		record enr.Record
+	)
+
+	record.Set(peerdas.Cgc(cgc))
+
+	expected := map[uint64]bool{1: true, 87: true, 102: true}
+	actual, err := dataColumnSubnets(nodeID, &record)
+	assert.NoError(t, err)
+
+	require.Equal(t, len(expected), len(actual))
+	for subnet := range expected {
+		require.Equal(t, true, actual[subnet])
 	}
 }
 

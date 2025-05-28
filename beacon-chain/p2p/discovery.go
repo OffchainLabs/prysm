@@ -257,6 +257,7 @@ func (s *Service) RefreshPersistentSubnets() {
 	// Get the custody group count in our metadata.
 	inMetadataCustodyGroupCount := s.Metadata().CustodyGroupCount()
 
+	// Is our custody group count record up to date?
 	isCustodyGroupCountUpToDate := (custodyGroupCount == inRecordCustodyGroupCount && custodyGroupCount == inMetadataCustodyGroupCount)
 
 	if isBitVUpToDate && isBitSUpToDate && isCustodyGroupCountUpToDate {

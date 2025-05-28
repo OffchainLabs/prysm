@@ -149,7 +149,7 @@ func (s *Service) reconstructAndBroadcastDataColumnSidecars(ctx context.Context,
 
 		sidecar := sidecars[columnIndex]
 
-		if err := s.cfg.p2p.BroadcastDataColumn(ctx, blockRoot, sidecar.Index, sidecar.DataColumnSidecar); err != nil {
+		if err := s.cfg.p2p.BroadcastDataColumn(blockRoot, sidecar.Index, sidecar.DataColumnSidecar); err != nil {
 			log.WithError(err).Error("Failed to broadcast data column")
 		}
 

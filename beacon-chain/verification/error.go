@@ -10,7 +10,7 @@ import (
 // a verification failure that should impact peer scoring.
 var ErrInvalid = errors.New("verification failure")
 
-// AsVerification joins the given error with the base ErrVerificationFailure error
+// AsVerificationFailure joins the given error with the base ErrVerificationFailure error
 // so that it can be tested with errors.Is()
 func AsVerificationFailure(err error) error {
 	return errors.Join(ErrInvalid, err)
@@ -29,26 +29,26 @@ var (
 	// ErrBlobIndexInvalid means RequireBlobIndexInBounds failed.
 	ErrBlobIndexInvalid = errors.Join(ErrBlobInvalid, errors.New("incorrect blob sidecar index"))
 
-	// ErrFromFutureSlot means RequireSlotNotTooEarly failed.
-	ErrFromFutureSlot = errors.Join(ErrBlobInvalid, errors.New("slot is too far in the future"))
+	// errFromFutureSlot means RequireSlotNotTooEarly failed.
+	errFromFutureSlot = errors.Join(ErrBlobInvalid, errors.New("slot is too far in the future"))
 
-	// ErrSlotNotAfterFinalized means RequireSlotAboveFinalized failed.
-	ErrSlotNotAfterFinalized = errors.Join(ErrBlobInvalid, errors.New("slot <= finalized checkpoint"))
+	// errSlotNotAfterFinalized means RequireSlotAboveFinalized failed.
+	errSlotNotAfterFinalized = errors.Join(ErrBlobInvalid, errors.New("slot <= finalized checkpoint"))
 
 	// ErrInvalidProposerSignature means RequireValidProposerSignature failed.
 	ErrInvalidProposerSignature = errors.Join(ErrBlobInvalid, errors.New("proposer signature could not be verified"))
 
-	// ErrSidecarParentNotSeen means RequireSidecarParentSeen failed.
-	ErrSidecarParentNotSeen = errors.Join(ErrBlobInvalid, errors.New("parent root has not been seen"))
+	// errSidecarParentNotSeen means RequireSidecarParentSeen failed.
+	errSidecarParentNotSeen = errors.Join(ErrBlobInvalid, errors.New("parent root has not been seen"))
 
-	// ErrSidecarParentInvalid means RequireSidecarParentValid failed.
-	ErrSidecarParentInvalid = errors.Join(ErrBlobInvalid, errors.New("parent block is not valid"))
+	// errSidecarParentInvalid means RequireSidecarParentValid failed.
+	errSidecarParentInvalid = errors.Join(ErrBlobInvalid, errors.New("parent block is not valid"))
 
-	// ErrSlotNotAfterParent means RequireSidecarParentSlotLower failed.
-	ErrSlotNotAfterParent = errors.Join(ErrBlobInvalid, errors.New("slot <= slot"))
+	// errSlotNotAfterParent means RequireSidecarParentSlotLower failed.
+	errSlotNotAfterParent = errors.Join(ErrBlobInvalid, errors.New("slot <= slot"))
 
-	// ErrSidecarNotFinalizedDescendent means RequireSidecarDescendsFromFinalized failed.
-	ErrSidecarNotFinalizedDescendent = errors.Join(ErrBlobInvalid, errors.New("parent is not descended from the finalized block"))
+	// errSidecarNotFinalizedDescendent means RequireSidecarDescendsFromFinalized failed.
+	errSidecarNotFinalizedDescendent = errors.Join(ErrBlobInvalid, errors.New("parent is not descended from the finalized block"))
 
 	// ErrSidecarInclusionProofInvalid means RequireSidecarInclusionProven failed.
 	ErrSidecarInclusionProofInvalid = errors.Join(ErrBlobInvalid, errors.New("sidecar inclusion proof verification failed"))
@@ -56,23 +56,24 @@ var (
 	// ErrSidecarKzgProofInvalid means RequireSidecarKzgProofVerified failed.
 	ErrSidecarKzgProofInvalid = errors.Join(ErrBlobInvalid, errors.New("sidecar kzg commitment proof verification failed"))
 
-	// ErrSidecarUnexpectedProposer means RequireSidecarProposerExpected failed.
-	ErrSidecarUnexpectedProposer = errors.Join(ErrBlobInvalid, errors.New("sidecar was not proposed by the expected proposer_index"))
+	// errSidecarUnexpectedProposer means RequireSidecarProposerExpected failed.
+	errSidecarUnexpectedProposer = errors.Join(ErrBlobInvalid, errors.New("sidecar was not proposed by the expected proposer_index"))
 
 	// ErrMissingVerification indicates that the given verification function was never performed on the value.
 	ErrMissingVerification = errors.Join(ErrBlobInvalid, errors.New("verification was not performed for requirement"))
 
-	// ErrBatchSignatureMismatch is returned by VerifiedROBlobs when any of the blobs in the batch have a signature
+	// errBatchSignatureMismatch is returned by VerifiedROBlobs when any of the blobs in the batch have a signature
 	// which does not match the signature for the block with a corresponding root.
-	ErrBatchSignatureMismatch = errors.Join(ErrBlobInvalid, errors.New("Sidecar block header signature does not match signed block"))
-	// ErrBatchBlockRootMismatch is returned by VerifiedROBlobs in the scenario where the root of the given signed block
+	errBatchSignatureMismatch = errors.Join(ErrBlobInvalid, errors.New("sidecar block header signature does not match signed block"))
+
+	// errBatchBlockRootMismatch is returned by VerifiedROBlobs in the scenario where the root of the given signed block
 	// does not match the block header in one of the corresponding sidecars.
-	ErrBatchBlockRootMismatch = errors.Join(ErrBlobInvalid, errors.New("Sidecar block header root does not match signed block"))
+	errBatchBlockRootMismatch = errors.Join(ErrBlobInvalid, errors.New("sidecar block header root does not match signed block"))
 )
 
 // errVerificationImplementationFault indicates that a code path yielding VerifiedROBlobs has an implementation
 // error, leading it to call VerifiedROBlobError with a nil error.
-var errVerificationImplementationFault = errors.New("could not verify blob data or create a valid VerifiedROBlob.")
+var errVerificationImplementationFault = errors.New("could not verify blob data or create a valid VerifiedROBlob")
 
 // VerificationMultiError is a custom error that can be used to access individual verification failures.
 type VerificationMultiError struct {

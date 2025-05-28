@@ -69,7 +69,7 @@ func TestSlotNotTooEarly(t *testing.T) {
 	// Set up initializer to use the clock that will set now to a little to far before slot 1
 	ini = Initializer{shared: &sharedResources{clock: dispClock}}
 	v = ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
-	require.ErrorIs(t, v.NotFromFutureSlot(), ErrFromFutureSlot)
+	require.ErrorIs(t, v.NotFromFutureSlot(), errFromFutureSlot)
 	require.Equal(t, true, v.results.executed(RequireNotFromFutureSlot))
 	require.NotNil(t, v.results.result(RequireNotFromFutureSlot))
 }
@@ -93,7 +93,7 @@ func TestSlotAboveFinalized(t *testing.T) {
 		{
 			name:          "finalized epoch > blob epoch",
 			finalizedSlot: 32,
-			err:           ErrSlotNotAfterFinalized,
+			err:           errSlotNotAfterFinalized,
 		},
 		{
 			name:          "finalized slot == blob slot",
@@ -133,13 +133,13 @@ func TestValidProposerSignature_Cached(t *testing.T) {
 	b := blobs[0]
 	expectedSd := blobToSignatureData(b)
 	sc := &mockSignatureCache{
-		svcb: func(sig SignatureData) (bool, error) {
+		svcb: func(sig signatureData) (bool, error) {
 			if sig != expectedSd {
 				t.Error("Did not see expected SignatureData")
 			}
 			return true, nil
 		},
-		vscb: func(sig SignatureData, v ValidatorAtIndexer) (err error) {
+		vscb: func(sig signatureData, v validatorAtIndexer) (err error) {
 			t.Error("VerifySignature should not be called if the result is cached")
 			return nil
 		},
@@ -151,7 +151,7 @@ func TestValidProposerSignature_Cached(t *testing.T) {
 	require.NoError(t, v.results.result(RequireValidProposerSignature))
 
 	// simulate an error in the cache - indicating the previous verification failed
-	sc.svcb = func(sig SignatureData) (bool, error) {
+	sc.svcb = func(sig signatureData) (bool, error) {
 		if sig != expectedSd {
 			t.Error("Did not see expected SignatureData")
 		}
@@ -170,10 +170,10 @@ func TestValidProposerSignature_CacheMiss(t *testing.T) {
 	b := blobs[0]
 	expectedSd := blobToSignatureData(b)
 	sc := &mockSignatureCache{
-		svcb: func(sig SignatureData) (bool, error) {
+		svcb: func(sig signatureData) (bool, error) {
 			return false, nil
 		},
-		vscb: func(sig SignatureData, v ValidatorAtIndexer) (err error) {
+		vscb: func(sig signatureData, v validatorAtIndexer) (err error) {
 			if expectedSd != sig {
 				t.Error("unexpected signature data")
 			}
@@ -197,7 +197,7 @@ func TestValidProposerSignature_CacheMiss(t *testing.T) {
 	sbr := sbrForValOverride(b.ProposerIndex(), &ethpb.Validator{})
 	sc = &mockSignatureCache{
 		svcb: sc.svcb,
-		vscb: func(sig SignatureData, v ValidatorAtIndexer) (err error) {
+		vscb: func(sig signatureData, v validatorAtIndexer) (err error) {
 			if expectedSd != sig {
 				t.Error("unexpected signature data")
 			}
@@ -262,7 +262,7 @@ func TestSidecarParentSeen(t *testing.T) {
 	t.Run("HasNode false, no badParent cb, expected error", func(t *testing.T) {
 		ini := Initializer{shared: &sharedResources{fc: fcLacks}}
 		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
-		require.ErrorIs(t, v.SidecarParentSeen(nil), ErrSidecarParentNotSeen)
+		require.ErrorIs(t, v.SidecarParentSeen(nil), errSidecarParentNotSeen)
 		require.Equal(t, true, v.results.executed(RequireSidecarParentSeen))
 		require.NotNil(t, v.results.result(RequireSidecarParentSeen))
 	})
@@ -277,7 +277,7 @@ func TestSidecarParentSeen(t *testing.T) {
 	t.Run("HasNode false, badParent false", func(t *testing.T) {
 		ini := Initializer{shared: &sharedResources{fc: fcLacks}}
 		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
-		require.ErrorIs(t, v.SidecarParentSeen(badParentCb(t, b.ParentRoot(), false)), ErrSidecarParentNotSeen)
+		require.ErrorIs(t, v.SidecarParentSeen(badParentCb(t, b.ParentRoot(), false)), errSidecarParentNotSeen)
 		require.Equal(t, true, v.results.executed(RequireSidecarParentSeen))
 		require.NotNil(t, v.results.result(RequireSidecarParentSeen))
 	})
@@ -296,7 +296,7 @@ func TestSidecarParentValid(t *testing.T) {
 	t.Run("parent not valid", func(t *testing.T) {
 		ini := Initializer{shared: &sharedResources{}}
 		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
-		require.ErrorIs(t, v.SidecarParentValid(badParentCb(t, b.ParentRoot(), true)), ErrSidecarParentInvalid)
+		require.ErrorIs(t, v.SidecarParentValid(badParentCb(t, b.ParentRoot(), true)), errSidecarParentInvalid)
 		require.Equal(t, true, v.results.executed(RequireSidecarParentValid))
 		require.NotNil(t, v.results.result(RequireSidecarParentValid))
 	})
@@ -314,7 +314,7 @@ func TestSidecarParentSlotLower(t *testing.T) {
 		{
 			name:  "not in fc",
 			fcErr: errors.New("not in forkchoice"),
-			err:   ErrSlotNotAfterParent,
+			err:   errSlotNotAfterParent,
 		},
 		{
 			name:   "in fc, slot lower",
@@ -323,12 +323,12 @@ func TestSidecarParentSlotLower(t *testing.T) {
 		{
 			name:   "in fc, slot equal",
 			fcSlot: b.Slot(),
-			err:    ErrSlotNotAfterParent,
+			err:    errSlotNotAfterParent,
 		},
 		{
 			name:   "in fc, slot higher",
 			fcSlot: b.Slot() + 1,
-			err:    ErrSlotNotAfterParent,
+			err:    errSlotNotAfterParent,
 		},
 	}
 	for _, c := range cases {
@@ -364,7 +364,7 @@ func TestSidecarDescendsFromFinalized(t *testing.T) {
 			return false
 		}}}}
 		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
-		require.ErrorIs(t, v.SidecarDescendsFromFinalized(), ErrSidecarNotFinalizedDescendent)
+		require.ErrorIs(t, v.SidecarDescendsFromFinalized(), errSidecarNotFinalizedDescendent)
 		require.Equal(t, true, v.results.executed(RequireSidecarDescendsFromFinalized))
 		require.NotNil(t, v.results.result(RequireSidecarDescendsFromFinalized))
 	})
@@ -459,14 +459,14 @@ func TestSidecarProposerExpected(t *testing.T) {
 	t.Run("cached, does not match", func(t *testing.T) {
 		ini := Initializer{shared: &sharedResources{pc: &mockProposerCache{ProposerCB: pcReturnsIdx(b.ProposerIndex() + 1)}, fc: &mockForkchoicer{TargetRootForEpochCB: fcReturnsTargetRoot([32]byte{})}}}
 		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
-		require.ErrorIs(t, v.SidecarProposerExpected(ctx), ErrSidecarUnexpectedProposer)
+		require.ErrorIs(t, v.SidecarProposerExpected(ctx), errSidecarUnexpectedProposer)
 		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
 		require.NotNil(t, v.results.result(RequireSidecarProposerExpected))
 	})
 	t.Run("not cached, state lookup failure", func(t *testing.T) {
 		ini := Initializer{shared: &sharedResources{sr: sbrNotFound(t, b.ParentRoot()), pc: &mockProposerCache{ProposerCB: pcReturnsNotFound()}, fc: &mockForkchoicer{TargetRootForEpochCB: fcReturnsTargetRoot([32]byte{})}}}
 		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
-		require.ErrorIs(t, v.SidecarProposerExpected(ctx), ErrSidecarUnexpectedProposer)
+		require.ErrorIs(t, v.SidecarProposerExpected(ctx), errSidecarUnexpectedProposer)
 		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
 		require.NotNil(t, v.results.result(RequireSidecarProposerExpected))
 	})
@@ -497,7 +497,7 @@ func TestSidecarProposerExpected(t *testing.T) {
 		}
 		ini := Initializer{shared: &sharedResources{sr: sbrForValOverride(b.ProposerIndex(), &ethpb.Validator{}), pc: pc, fc: &mockForkchoicer{TargetRootForEpochCB: fcReturnsTargetRoot([32]byte{})}}}
 		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
-		require.ErrorIs(t, v.SidecarProposerExpected(ctx), ErrSidecarUnexpectedProposer)
+		require.ErrorIs(t, v.SidecarProposerExpected(ctx), errSidecarUnexpectedProposer)
 		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
 		require.NotNil(t, v.results.result(RequireSidecarProposerExpected))
 	})
@@ -512,7 +512,7 @@ func TestSidecarProposerExpected(t *testing.T) {
 		}
 		ini := Initializer{shared: &sharedResources{sr: sbrForValOverride(b.ProposerIndex(), &ethpb.Validator{}), pc: pc, fc: &mockForkchoicer{TargetRootForEpochCB: fcReturnsTargetRoot([32]byte{})}}}
 		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
-		require.ErrorIs(t, v.SidecarProposerExpected(ctx), ErrSidecarUnexpectedProposer)
+		require.ErrorIs(t, v.SidecarProposerExpected(ctx), errSidecarUnexpectedProposer)
 		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
 		require.NotNil(t, v.results.result(RequireSidecarProposerExpected))
 	})
@@ -581,31 +581,31 @@ func fcReturnsTargetRoot(root [32]byte) func([32]byte, primitives.Epoch) ([32]by
 }
 
 type mockSignatureCache struct {
-	svCalledForSig map[SignatureData]bool
-	svcb           func(sig SignatureData) (bool, error)
-	vsCalledForSig map[SignatureData]bool
-	vscb           func(sig SignatureData, v ValidatorAtIndexer) (err error)
+	svCalledForSig map[signatureData]bool
+	svcb           func(sig signatureData) (bool, error)
+	vsCalledForSig map[signatureData]bool
+	vscb           func(sig signatureData, v validatorAtIndexer) (err error)
 }
 
-// SignatureVerified implements SignatureCache.
-func (m *mockSignatureCache) SignatureVerified(sig SignatureData) (bool, error) {
+// SignatureVerified implements signatureCache.
+func (m *mockSignatureCache) SignatureVerified(sig signatureData) (bool, error) {
 	if m.svCalledForSig == nil {
-		m.svCalledForSig = make(map[SignatureData]bool)
+		m.svCalledForSig = make(map[signatureData]bool)
 	}
 	m.svCalledForSig[sig] = true
 	return m.svcb(sig)
 }
 
-// VerifySignature implements SignatureCache.
-func (m *mockSignatureCache) VerifySignature(sig SignatureData, v ValidatorAtIndexer) (err error) {
+// VerifySignature implements signatureCache.
+func (m *mockSignatureCache) VerifySignature(sig signatureData, v validatorAtIndexer) (err error) {
 	if m.vsCalledForSig == nil {
-		m.vsCalledForSig = make(map[SignatureData]bool)
+		m.vsCalledForSig = make(map[signatureData]bool)
 	}
 	m.vsCalledForSig[sig] = true
 	return m.vscb(sig, v)
 }
 
-var _ SignatureCache = &mockSignatureCache{}
+var _ signatureCache = &mockSignatureCache{}
 
 type sbrfunc func(context.Context, [32]byte) (state.BeaconState, error)
 
@@ -676,7 +676,7 @@ func (p *mockProposerCache) Proposer(c *forkchoicetypes.Checkpoint, slot primiti
 	return p.ProposerCB(c, slot)
 }
 
-var _ ProposerCache = &mockProposerCache{}
+var _ proposerCache = &mockProposerCache{}
 
 func pcReturnsIdx(idx primitives.ValidatorIndex) func(c *forkchoicetypes.Checkpoint, slot primitives.Slot) (primitives.ValidatorIndex, bool) {
 	return func(c *forkchoicetypes.Checkpoint, slot primitives.Slot) (primitives.ValidatorIndex, bool) {

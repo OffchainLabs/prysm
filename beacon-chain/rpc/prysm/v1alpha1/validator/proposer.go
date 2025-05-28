@@ -500,7 +500,7 @@ func (vs *Server) broadcastAndReceiveDataColumns(
 			// Compute the subnet index based on the column index.
 			subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
 
-			if err := vs.P2P.BroadcastDataColumn(ctx, root, subnet, sidecar); err != nil {
+			if err := vs.P2P.BroadcastDataColumn(root, subnet, sidecar); err != nil {
 				return errors.Wrap(err, "broadcast data column")
 			}
 

@@ -14,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/verify"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -600,7 +599,7 @@ func verifyColumn(
 
 	roDataColumns := []blocks.RODataColumn{roDataColumn}
 
-	if err := verify.DataColumnsAlignWithBlock(roBlock, roDataColumns); err != nil {
+	if err := peerdas.DataColumnsAlignWithBlock(roBlock, roDataColumns); err != nil {
 		return false
 	}
 

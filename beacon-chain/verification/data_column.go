@@ -186,7 +186,7 @@ func (dv *RODataColumnsVerifier) NotFromFutureSlot() (err error) {
 
 		// If the system time is still before earliestStart, we consider the column from a future slot and return an error.
 		if now.Before(earliestStart) {
-			return columnErrBuilder(ErrFromFutureSlot)
+			return columnErrBuilder(errFromFutureSlot)
 		}
 	}
 
@@ -215,7 +215,7 @@ func (dv *RODataColumnsVerifier) SlotAboveFinalized() (err error) {
 
 		// Check if the data column slot is after first slot of the epoch corresponding to the finalized checkpoint.
 		if dataColumnSlot <= startSlot {
-			return columnErrBuilder(ErrSlotNotAfterFinalized)
+			return columnErrBuilder(errSlotNotAfterFinalized)
 		}
 	}
 
@@ -286,7 +286,7 @@ func (dv *RODataColumnsVerifier) SidecarParentSeen(parentSeen func([fieldparams.
 		}
 
 		if !dv.fc.HasNode(parentRoot) {
-			return columnErrBuilder(ErrSidecarParentNotSeen)
+			return columnErrBuilder(errSidecarParentNotSeen)
 		}
 	}
 
@@ -305,7 +305,7 @@ func (dv *RODataColumnsVerifier) SidecarParentValid(badParent func([fieldparams.
 		parentRoot := dataColumn.ParentRoot()
 
 		if badParent != nil && badParent(parentRoot) {
-			return columnErrBuilder(ErrSidecarParentInvalid)
+			return columnErrBuilder(errSidecarParentInvalid)
 		}
 	}
 
@@ -334,7 +334,7 @@ func (dv *RODataColumnsVerifier) SidecarParentSlotLower() (err error) {
 
 		// Check if the data column slot is after the parent slot.
 		if parentSlot >= dataColumnSlot {
-			return ErrSlotNotAfterParent
+			return errSlotNotAfterParent
 		}
 	}
 
@@ -353,7 +353,7 @@ func (dv *RODataColumnsVerifier) SidecarDescendsFromFinalized() (err error) {
 		parentRoot := dataColumn.ParentRoot()
 
 		if !dv.fc.HasNode(parentRoot) {
-			return columnErrBuilder(ErrSidecarNotFinalizedDescendent)
+			return columnErrBuilder(errSidecarNotFinalizedDescendent)
 		}
 	}
 
@@ -489,7 +489,7 @@ func (dv *RODataColumnsVerifier) SidecarProposerExpected(ctx context.Context) (e
 		}
 
 		if idx != dataColumn.ProposerIndex() {
-			return columnErrBuilder(ErrSidecarUnexpectedProposer)
+			return columnErrBuilder(errSidecarUnexpectedProposer)
 		}
 	}
 
@@ -517,8 +517,8 @@ func (dv *RODataColumnsVerifier) parentState(ctx context.Context, dataColumn blo
 	return st, nil
 }
 
-func columnToSignatureData(d blocks.RODataColumn) SignatureData {
-	return SignatureData{
+func columnToSignatureData(d blocks.RODataColumn) signatureData {
+	return signatureData{
 		Root:      d.BlockRoot(),
 		Parent:    d.ParentRoot(),
 		Signature: bytesutil.ToBytes96(d.SignedBlockHeader.Signature),

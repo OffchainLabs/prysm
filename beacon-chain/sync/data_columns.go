@@ -10,7 +10,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/verify"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -96,7 +95,7 @@ func RequestDataColumnSidecarsByRoot(
 			}
 
 			// Check if returned data columns align with the block.
-			if err := verify.DataColumnsAlignWithBlock(block, peerSidecars); err != nil {
+			if err := peerdas.DataColumnsAlignWithBlock(block, peerSidecars); err != nil {
 				// Remove this peer since it failed to respond correctly.
 				delete(dataColumnsByAdmissiblePeer, peer)
 				log.WithError(err).Debug("Align with block failed")
@@ -304,7 +303,7 @@ func RequestMissingDataColumnsByRange(
 			}
 
 			// Check if the data columns align with blocks.
-			if err := verify.DataColumnsAlignWithBlock(block, dataColumns); err != nil {
+			if err := peerdas.DataColumnsAlignWithBlock(block, dataColumns); err != nil {
 				log.WithField("root", root).WithError(err).Debug("Data columns do not align with block")
 				continue
 			}

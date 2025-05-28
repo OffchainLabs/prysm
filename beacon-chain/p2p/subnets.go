@@ -515,7 +515,6 @@ func syncSubnets(record *enr.Record) ([]uint64, error) {
 }
 
 // Retrieve the data columns subnets from a node's ENR and node ID.
-// TODO: Add tests
 func dataColumnSubnets(nodeID enode.ID, record *enr.Record) (map[uint64]bool, error) {
 	// Retrieve the custody count from the ENR.
 	custodyGroupCount, err := peerdas.CustodyGroupCountFromRecord(record)
@@ -559,7 +558,7 @@ func syncBitvector(record *enr.Record) (bitfield.Bitvector4, error) {
 
 // The subnet locker is a map which keeps track of all
 // mutexes stored per subnet. This locker is reused
-// between both the attestation, sync and blob subnets.
+// between both the attestation, sync blob and data column subnets.
 // Sync subnets are stored by (subnet+syncLockerVal).
 // Blob subnets are stored by (subnet+blobSubnetLockerVal).
 // Data column subnets are stored by (subnet+dataColumnSubnetVal).
@@ -568,6 +567,7 @@ func syncBitvector(record *enr.Record) (bitfield.Bitvector4, error) {
 func (s *Service) subnetLocker(i uint64) *sync.RWMutex {
 	s.subnetsLockLock.Lock()
 	defer s.subnetsLockLock.Unlock()
+
 	l, ok := s.subnetsLock[i]
 	if !ok {
 		l = &sync.RWMutex{}

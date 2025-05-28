@@ -31,10 +31,11 @@ func TestWaitActivation_Exiting_OK(t *testing.T) {
 	prysmChainClient := validatormock.NewMockPrysmChainClient(ctrl)
 	kp := randKeypair(t)
 	v := validator{
-		validatorClient:  validatorClient,
-		km:               newMockKeymanager(t, kp),
-		chainClient:      chainClient,
-		prysmChainClient: prysmChainClient,
+		validatorClient:        validatorClient,
+		km:                     newMockKeymanager(t, kp),
+		chainClient:            chainClient,
+		prysmChainClient:       prysmChainClient,
+		accountsChangedChannel: make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
 	}
 	ctx := context.Background()
 	resp := testutil.GenerateMultipleValidatorStatusResponse([][]byte{kp.pub[:]})
@@ -46,7 +47,7 @@ func TestWaitActivation_Exiting_OK(t *testing.T) {
 		},
 	).Return(resp, nil)
 
-	require.NoError(t, v.WaitForActivation(ctx, nil))
+	require.NoError(t, v.WaitForActivation(ctx))
 	require.Equal(t, 1, len(v.pubkeyToStatus))
 }
 
@@ -83,19 +84,20 @@ func TestWaitForActivation_RefetchKeys(t *testing.T) {
 		},
 	).Return(resp, nil)
 
-	accountChan := make(chan [][fieldparams.BLSPubkeyLength]byte)
+	accountChan := make(chan [][fieldparams.BLSPubkeyLength]byte, 1)
 	sub := km.SubscribeAccountChanges(accountChan)
 	defer func() {
 		sub.Unsubscribe()
 		close(accountChan)
 	}()
+	v.accountsChangedChannel = accountChan
 	// update the accounts from 0 to 1 after a delay
 	go func() {
 		time.Sleep(1 * time.Second)
 		require.NoError(t, km.add(kp))
 		km.SimulateAccountChanges([][48]byte{kp.pub})
 	}()
-	assert.NoError(t, v.internalWaitForActivation(context.Background(), accountChan), "Could not wait for activation")
+	assert.NoError(t, v.WaitForActivation(context.Background()), "Could not wait for activation")
 	assert.LogsContain(t, hook, msgNoKeysFetched)
 	assert.LogsContain(t, hook, "Validator activated")
 }
@@ -112,13 +114,21 @@ func TestWaitForActivation_AccountsChanged(t *testing.T) {
 		validatorClient := validatormock.NewMockValidatorClient(ctrl)
 		chainClient := validatormock.NewMockChainClient(ctrl)
 		prysmChainClient := validatormock.NewMockPrysmChainClient(ctrl)
+		ch := make(chan [][fieldparams.BLSPubkeyLength]byte, 1)
 		v := validator{
-			validatorClient:  validatorClient,
-			km:               km,
-			chainClient:      chainClient,
-			prysmChainClient: prysmChainClient,
-			pubkeyToStatus:   make(map[[48]byte]*validatorStatus),
+			validatorClient:        validatorClient,
+			km:                     km,
+			chainClient:            chainClient,
+			prysmChainClient:       prysmChainClient,
+			pubkeyToStatus:         make(map[[48]byte]*validatorStatus),
+			accountsChangedChannel: ch,
+			accountChangedSub:      km.SubscribeAccountChanges(ch),
 		}
+		defer func() {
+			close(v.accountsChangedChannel)
+			v.accountChangedSub.Unsubscribe()
+		}()
+
 		inactiveResp := testutil.GenerateMultipleValidatorStatusResponse([][]byte{inactive.pub[:]})
 		inactiveResp.Statuses[0].Status = ethpb.ValidatorStatus_UNKNOWN_STATUS
 
@@ -149,7 +159,7 @@ func TestWaitForActivation_AccountsChanged(t *testing.T) {
 			&ethpb.ChainHead{HeadEpoch: 0},
 			nil,
 		).AnyTimes()
-		assert.NoError(t, v.WaitForActivation(context.Background(), nil))
+		assert.NoError(t, v.WaitForActivation(context.Background()))
 		assert.LogsContain(t, hook, "Waiting for deposit to be observed by beacon node")
 		assert.LogsContain(t, hook, "Validator activated")
 	})
@@ -199,6 +209,7 @@ func TestWaitForActivation_AccountsChanged(t *testing.T) {
 		activeResp.Statuses[1].Status = ethpb.ValidatorStatus_ACTIVE
 		channel := make(chan [][fieldparams.BLSPubkeyLength]byte, 1)
 		km.SubscribeAccountChanges(channel)
+		v.accountsChangedChannel = channel
 		gomock.InOrder(
 			validatorClient.EXPECT().MultipleValidatorStatus(
 				gomock.Any(),
@@ -227,7 +238,7 @@ func TestWaitForActivation_AccountsChanged(t *testing.T) {
 			&ethpb.ChainHead{HeadEpoch: 0},
 			nil,
 		).AnyTimes()
-		assert.NoError(t, v.internalWaitForActivation(context.Background(), channel))
+		assert.NoError(t, v.WaitForActivation(context.Background()))
 		assert.LogsContain(t, hook, "Waiting for deposit to be observed by beacon node")
 		assert.LogsContain(t, hook, "Validator activated")
 	})
@@ -246,11 +257,12 @@ func TestWaitForActivation_AttemptsReconnectionOnFailure(t *testing.T) {
 	prysmChainClient := validatormock.NewMockPrysmChainClient(ctrl)
 	kp := randKeypair(t)
 	v := validator{
-		validatorClient:  validatorClient,
-		km:               newMockKeymanager(t, kp),
-		chainClient:      chainClient,
-		prysmChainClient: prysmChainClient,
-		pubkeyToStatus:   make(map[[48]byte]*validatorStatus),
+		validatorClient:        validatorClient,
+		km:                     newMockKeymanager(t, kp),
+		chainClient:            chainClient,
+		prysmChainClient:       prysmChainClient,
+		pubkeyToStatus:         make(map[[48]byte]*validatorStatus),
+		accountsChangedChannel: make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
 	}
 	active := randKeypair(t)
 	activeResp := testutil.GenerateMultipleValidatorStatusResponse([][]byte{active.pub[:]})
@@ -271,5 +283,5 @@ func TestWaitForActivation_AttemptsReconnectionOnFailure(t *testing.T) {
 		&ethpb.ChainHead{HeadEpoch: 0},
 		nil,
 	).AnyTimes()
-	assert.NoError(t, v.WaitForActivation(context.Background(), nil))
+	assert.NoError(t, v.WaitForActivation(context.Background()))
 }

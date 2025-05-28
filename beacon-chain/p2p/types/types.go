@@ -190,19 +190,19 @@ var _ sort.Interface = (*BlobSidecarsByRootReq)(nil)
 
 // Less reports whether the element with index i must sort before the element with index j.
 // BlobIdentifier will be sorted in lexicographic order by root, with Blob Index as tiebreaker for a given root.
-func (s *BlobSidecarsByRootReq) Less(i, j int) bool {
-	rootCmp := bytes.Compare((*s)[i].BlockRoot, (*s)[j].BlockRoot)
+func (s BlobSidecarsByRootReq) Less(i, j int) bool {
+	rootCmp := bytes.Compare((s)[i].BlockRoot, (s)[j].BlockRoot)
 	if rootCmp != 0 {
 		// They aren't equal; return true if i < j, false if i > j.
 		return rootCmp < 0
 	}
 	// They are equal; blob index is the tie breaker.
-	return (*s)[i].Index < (*s)[j].Index
+	return (s)[i].Index < (s)[j].Index
 }
 
 // Swap swaps the elements with indexes i and j.
-func (s *BlobSidecarsByRootReq) Swap(i, j int) {
-	(*s)[i], (*s)[j] = (*s)[j], (*s)[i]
+func (s BlobSidecarsByRootReq) Swap(i, j int) {
+	(s)[i], (s)[j] = (s)[j], (s)[i]
 }
 
 // Len is the number of elements in the collection.
@@ -210,9 +210,9 @@ func (s *BlobSidecarsByRootReq) Len() int {
 	return len(*s)
 }
 
-// ===================================
+// ====================================
 // DataColumnsByRootIdentifiers section
-// ===================================
+// ====================================
 var _ ssz.Marshaler = (*DataColumnsByRootIdentifiers)(nil)
 var _ ssz.Unmarshaler = (*DataColumnsByRootIdentifiers)(nil)
 
