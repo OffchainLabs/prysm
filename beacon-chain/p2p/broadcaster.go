@@ -408,6 +408,7 @@ func (s *Service) internalBroadcastDataColumn(
 	if err := s.broadcastObject(ctx, dataColumnSidecar, topic); err != nil {
 		log.WithError(err).Error("Failed to broadcast data column sidecar")
 		tracing.AnnotateError(span, err)
+		return
 	}
 
 	header := dataColumnSidecar.SignedBlockHeader.GetHeader()
