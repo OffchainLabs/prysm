@@ -671,6 +671,7 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	require.NotEqual(t, 0, len(p1.BHost.Network().Peers()), "No peers")
 
 	p := &Service{
+		ctx:                   context.Background(),
 		host:                  p1.BHost,
 		pubsub:                p1.PubSub(),
 		joinedTopics:          map[string]*pubsub.Topic{},
@@ -721,14 +722,13 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	}(t)
 
 	var emptyRoot [fieldparams.RootLength]byte
-	ctx := context.Background()
 
 	// Attempt to broadcast nil object should fail.
-	err = p.BroadcastDataColumn(ctx, emptyRoot, subnet, nil)
+	err = p.BroadcastDataColumn(emptyRoot, subnet, nil)
 	require.ErrorContains(t, "attempted to broadcast nil", err)
 
 	// Broadcast to peers and wait.
-	err = p.BroadcastDataColumn(ctx, emptyRoot, subnet, sidecar)
+	err = p.BroadcastDataColumn(emptyRoot, subnet, sidecar)
 	require.NoError(t, err)
 	require.Equal(t, false, util.WaitTimeout(&wg, 1*time.Second), "Failed to receive pubsub within 1s")
 }

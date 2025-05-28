@@ -325,9 +325,9 @@ func (s *Service) BroadcastLightClientFinalityUpdate(ctx context.Context, update
 
 // BroadcastDataColumn broadcasts a data column to the p2p network, the message is assumed to be
 // broadcasted to the current fork and to the input column subnet.
-func (s *Service) BroadcastDataColumn(ctx context.Context, root [fieldparams.RootLength]byte, dataColumnSubnet uint64, dataColumnSidecar *ethpb.DataColumnSidecar) error {
+func (s *Service) BroadcastDataColumn(root [fieldparams.RootLength]byte, dataColumnSubnet uint64, dataColumnSidecar *ethpb.DataColumnSidecar) error {
 	// Add tracing to the function.
-	ctx, span := trace.StartSpan(ctx, "p2p.BroadcastDataColumn")
+	ctx, span := trace.StartSpan(s.ctx, "p2p.BroadcastDataColumn")
 	defer span.End()
 
 	// Ensure the data column sidecar is not nil.
@@ -362,9 +362,6 @@ func (s *Service) internalBroadcastDataColumn(
 
 	// Increase the number of broadcast attempts.
 	dataColumnSidecarBroadcastAttempts.Inc()
-
-	// Clear parent context / deadline.
-	ctx = trace.NewContext(context.Background(), span)
 
 	// Define a one-slot length context timeout.
 	secondsPerSlot := params.BeaconConfig().SecondsPerSlot

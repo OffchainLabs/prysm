@@ -167,7 +167,7 @@ func (*FakeP2P) BroadcastLightClientFinalityUpdate(_ context.Context, _ interfac
 }
 
 // BroadcastDataColumn -- fake.
-func (*FakeP2P) BroadcastDataColumn(_ context.Context, _ [fieldparams.RootLength]byte, _ uint64, _ *ethpb.DataColumnSidecar) error {
+func (*FakeP2P) BroadcastDataColumn(_ [fieldparams.RootLength]byte, _ uint64, _ *ethpb.DataColumnSidecar) error {
 	return nil
 }
 
