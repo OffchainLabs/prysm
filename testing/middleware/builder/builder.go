@@ -363,7 +363,13 @@ func (p *Builder) handleHeaderRequest(w http.ResponseWriter, req *http.Request) 
 	gEth := big.NewInt(int64(params.BeaconConfig().GweiPerEth))
 	weiEth := gEth.Mul(gEth, gEth)
 	val := builderAPI.Uint256{Int: weiEth}
-	wrappedHdr := &builderAPI.ExecutionPayloadHeader{ExecutionPayloadHeader: hdr}
+
+	wrappedHdr, err := structs.ExecutionPayloadHeaderFromConsensus(hdr)
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not convert wrapped header")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	bid := &builderAPI.BuilderBid{
 		Header: wrappedHdr,
 		Value:  val,
@@ -440,7 +446,12 @@ func (p *Builder) handleHeaderRequestCapella(w http.ResponseWriter) {
 		return
 	}
 	val := builderAPI.Uint256{Int: v}
-	wrappedHdr := &builderAPI.ExecutionPayloadHeaderCapella{ExecutionPayloadHeaderCapella: hdr}
+	wrappedHdr, err := structs.ExecutionPayloadHeaderCapellaFromConsensus(hdr)
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not make execution payload")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	bid := &builderAPI.BuilderBidCapella{
 		Header: wrappedHdr,
 		Value:  val,
@@ -523,7 +534,12 @@ func (p *Builder) handleHeaderRequestDeneb(w http.ResponseWriter) {
 		copiedC := c
 		commitments = append(commitments, copiedC)
 	}
-	wrappedHdr := &builderAPI.ExecutionPayloadHeaderDeneb{ExecutionPayloadHeaderDeneb: hdr}
+	wrappedHdr, err := structs.ExecutionPayloadHeaderDenebFromConsensus(hdr)
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not make execution payload")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	bid := &builderAPI.BuilderBidDeneb{
 		Header:             wrappedHdr,
 		BlobKzgCommitments: commitments,
@@ -609,50 +625,19 @@ func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
 		copiedC := c
 		commitments = append(commitments, copiedC)
 	}
-	wrappedHdr := &builderAPI.ExecutionPayloadHeaderDeneb{ExecutionPayloadHeaderDeneb: hdr}
+	wrappedHdr, err := structs.ExecutionPayloadHeaderDenebFromConsensus(hdr)
+	if err != nil {
+		p.cfg.logger.WithError(err).Error("Could not make execution payload")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	requests, err := b.GetDecodedExecutionRequests()
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not get decoded execution requests")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	rv1 := &builderAPI.ExecutionRequestsV1{
-		Deposits:       make([]*builderAPI.DepositRequestV1, len(requests.Deposits)),
-		Withdrawals:    make([]*builderAPI.WithdrawalRequestV1, len(requests.Withdrawals)),
-		Consolidations: make([]*builderAPI.ConsolidationRequestV1, len(requests.Consolidations)),
-	}
-
-	for i, d := range requests.Deposits {
-		amount := new(big.Int).SetUint64(d.Amount)
-		index := new(big.Int).SetUint64(d.Index)
-		dr := &builderAPI.DepositRequestV1{
-			PubKey:                d.Pubkey,
-			WithdrawalCredentials: d.WithdrawalCredentials,
-			Amount:                builderAPI.Uint256{Int: amount},
-			Signature:             d.Signature,
-			Index:                 builderAPI.Uint256{Int: index},
-		}
-		rv1.Deposits[i] = dr
-	}
-
-	for i, w := range requests.Withdrawals {
-		bi := new(big.Int).SetUint64(w.Amount)
-		wr := &builderAPI.WithdrawalRequestV1{
-			SourceAddress:   w.SourceAddress,
-			ValidatorPubkey: w.ValidatorPubkey,
-			Amount:          builderAPI.Uint256{Int: bi},
-		}
-		rv1.Withdrawals[i] = wr
-	}
-
-	for i, c := range requests.Consolidations {
-		cr := &builderAPI.ConsolidationRequestV1{
-			SourceAddress: c.SourceAddress,
-			SourcePubkey:  c.SourcePubkey,
-			TargetPubkey:  c.TargetPubkey,
-		}
-		rv1.Consolidations[i] = cr
-	}
+	rv1 := structs.ExecutionRequestsFromConsensus(requests)
 
 	bid := &builderAPI.BuilderBidElectra{
 		Header:             wrappedHdr,
@@ -748,21 +733,21 @@ func ExecutionPayloadResponseFromData(v int, ed interfaces.ExecutionData, bundle
 	ver := version.String(v)
 	switch pbStruct := pb.(type) {
 	case *v1.ExecutionPayloadDeneb:
-		payloadStruct, err := builderAPI.FromProtoDeneb(pbStruct)
+		payloadStruct, err := structs.ExecutionPayloadDenebFromConsensus(pbStruct)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to convert a Deneb ExecutionPayload to an API response")
 		}
 		data = &builderAPI.ExecutionPayloadDenebAndBlobsBundle{
-			ExecutionPayload: &payloadStruct,
+			ExecutionPayload: payloadStruct,
 			BlobsBundle:      builderAPI.FromBundleProto(bundle),
 		}
 	case *v1.ExecutionPayloadCapella:
-		data, err = builderAPI.FromProtoCapella(pbStruct)
+		data, err = structs.ExecutionPayloadCapellaFromConsensus(pbStruct)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to convert a Capella ExecutionPayload to an API response")
 		}
 	case *v1.ExecutionPayload:
-		data, err = builderAPI.FromProto(pbStruct)
+		data, err = structs.ExecutionPayloadFromConsensus(pbStruct)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to convert a Bellatrix ExecutionPayload to an API response")
 		}

@@ -265,7 +265,7 @@ func TestBlobs(t *testing.T) {
 		require.Equal(t, false, resp.Finalized)
 	})
 	t.Run("blob index over max", func(t *testing.T) {
-		overLimit := params.BeaconConfig().MaxBlobsPerBlockByVersion(version.Deneb)
+		overLimit := maxBlobsPerBlockByVersion(version.Deneb)
 		u := fmt.Sprintf("http://foo.example/123?indices=%d", overLimit)
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
@@ -412,10 +412,14 @@ func TestBlobs_Electra(t *testing.T) {
 	cfg := params.BeaconConfig().Copy()
 	cfg.DenebForkEpoch = 0
 	cfg.ElectraForkEpoch = 1
+	cfg.BlobSchedule = []params.BlobScheduleEntry{
+		{Epoch: 0, MaxBlobsPerBlock: 6},
+		{Epoch: 1, MaxBlobsPerBlock: 9},
+	}
 	params.OverrideBeaconConfig(cfg)
 
 	db := testDB.SetupDB(t)
-	electraBlock, blobs := util.GenerateTestElectraBlockWithSidecar(t, [32]byte{}, 123, params.BeaconConfig().MaxBlobsPerBlockByVersion(version.Electra))
+	electraBlock, blobs := util.GenerateTestElectraBlockWithSidecar(t, [32]byte{}, 123, maxBlobsPerBlockByVersion(version.Electra))
 	require.NoError(t, db.SaveBlock(context.Background(), electraBlock))
 	bs := filesystem.NewEphemeralBlobStorage(t)
 	testSidecars := verification.FakeVerifySliceForTest(t, blobs)
@@ -451,7 +455,7 @@ func TestBlobs_Electra(t *testing.T) {
 		assert.Equal(t, http.StatusOK, writer.Code)
 		resp := &structs.SidecarsResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-		require.Equal(t, params.BeaconConfig().MaxBlobsPerBlockByVersion(version.Electra), len(resp.Data))
+		require.Equal(t, maxBlobsPerBlockByVersion(version.Electra), len(resp.Data))
 		sidecar := resp.Data[0]
 		require.NotNil(t, sidecar)
 		assert.Equal(t, "0", sidecar.Index)
@@ -464,7 +468,7 @@ func TestBlobs_Electra(t *testing.T) {
 		require.Equal(t, false, resp.Finalized)
 	})
 	t.Run("requested blob index at max", func(t *testing.T) {
-		limit := params.BeaconConfig().MaxBlobsPerBlockByVersion(version.Electra) - 1
+		limit := maxBlobsPerBlockByVersion(version.Electra) - 1
 		u := fmt.Sprintf("http://foo.example/123?indices=%d", limit)
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
@@ -496,7 +500,7 @@ func TestBlobs_Electra(t *testing.T) {
 		require.Equal(t, false, resp.Finalized)
 	})
 	t.Run("blob index over max", func(t *testing.T) {
-		overLimit := params.BeaconConfig().MaxBlobsPerBlockByVersion(version.Electra)
+		overLimit := maxBlobsPerBlockByVersion(version.Electra)
 		u := fmt.Sprintf("http://foo.example/123?indices=%d", overLimit)
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
@@ -553,4 +557,12 @@ func Test_parseIndices(t *testing.T) {
 			}
 		})
 	}
+}
+
+func maxBlobsPerBlockByVersion(v int) int {
+	if v >= version.Electra {
+		return params.BeaconConfig().DeprecatedMaxBlobsPerBlockElectra
+	}
+
+	return params.BeaconConfig().DeprecatedMaxBlobsPerBlock
 }

@@ -104,7 +104,8 @@ func run(ctx context.Context, v iface.Validator) error {
 
 			// Start fetching domain data for the next epoch.
 			if slots.IsEpochEnd(slot) {
-				go v.UpdateDomainDataCaches(slotCtx, slot+1)
+				domainCtx, _ := context.WithDeadline(ctx, deadline)
+				go v.UpdateDomainDataCaches(domainCtx, slot+1)
 			}
 
 			var wg sync.WaitGroup
@@ -116,7 +117,7 @@ func run(ctx context.Context, v iface.Validator) error {
 				cancel()
 				continue
 			}
-			performRoles(slotCtx, allRoles, v, slot, &wg, span)
+			performRoles(rolesCtx, allRoles, v, slot, &wg, span)
 		case isHealthyAgain := <-tracker.HealthUpdates():
 			if isHealthyAgain {
 				if err := v.Init(ctx); err != nil {

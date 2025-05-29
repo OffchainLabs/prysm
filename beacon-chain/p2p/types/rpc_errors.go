@@ -12,7 +12,7 @@ var (
 	ErrRateLimited         = errors.New("rate limited")
 	ErrIODeadline          = errors.New("i/o deadline exceeded")
 	ErrInvalidRequest      = errors.New("invalid range, step or count")
-	ErrBlobLTMinRequest    = errors.New("blob slot < minimum_request_epoch")
+	ErrBlobLTMinRequest    = errors.New("blob epoch < minimum_request_epoch")
 	ErrMaxBlobReqExceeded  = errors.New("requested more than MAX_REQUEST_BLOB_SIDECARS")
 	ErrResourceUnavailable = errors.New("resource requested unavailable")
 )

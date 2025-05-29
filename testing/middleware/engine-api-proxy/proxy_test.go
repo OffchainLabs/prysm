@@ -46,8 +46,7 @@ func TestProxy(t *testing.T) {
 		require.LogsContain(t, hook, "Could not forward request to destination server")
 	})
 	t.Run("properly proxies request/response", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := t.Context()
 
 		wantDestinationResponse := &pb.ForkchoiceState{
 			HeadBlockHash:      []byte("foo"),
@@ -86,8 +85,7 @@ func TestProxy(t *testing.T) {
 
 func TestProxy_CustomInterceptors(t *testing.T) {
 	t.Run("only intercepts engine API methods", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := t.Context()
 
 		type syncingResponse struct {
 			Syncing bool `json:"syncing"`
@@ -138,8 +136,7 @@ func TestProxy_CustomInterceptors(t *testing.T) {
 		require.DeepEqual(t, wantDestinationResponse, proxyResult)
 	})
 	t.Run("only intercepts if trigger function returns true", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := t.Context()
 
 		type engineResponse struct {
 			BlockHash common.Hash `json:"blockHash"`
@@ -206,8 +203,7 @@ func TestProxy_CustomInterceptors(t *testing.T) {
 		require.DeepEqual(t, wantInterceptedResponse(), proxyResult)
 	})
 	t.Run("triggers interceptor response correctly", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := t.Context()
 
 		type engineResponse struct {
 			BlockHash common.Hash `json:"blockHash"`

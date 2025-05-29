@@ -20,10 +20,12 @@ import (
 
 var (
 	// Custom errors
-	ErrCustodyGroupTooLarge           = errors.New("custody group too large")
-	ErrCustodyGroupCountTooLarge      = errors.New("custody group count too large")
-	ErrMismatchSize                   = errors.New("mismatch in the number of blob KZG commitments and cellsAndProofs")
-	errWrongComputedCustodyGroupCount = errors.New("wrong computed custody group count, should never happen")
+	ErrCustodyGroupTooLarge               = errors.New("custody group too large")
+	ErrCustodyGroupCountTooLarge          = errors.New("custody group count too large")
+	ErrSizeMismatch                       = errors.New("mismatch in the number of blob KZG commitments and cellsAndProofs")
+	ErrNotEnoughDataColumnSidecars        = errors.New("not enough columns")
+	ErrDataColumnSidecarsNotSortedByIndex = errors.New("data column sidecars are not sorted by index")
+	errWrongComputedCustodyGroupCount     = errors.New("wrong computed custody group count, should never happen")
 
 	// maxUint256 is the maximum value of an uint256.
 	maxUint256 = &uint256.Int{math.MaxUint64, math.MaxUint64, math.MaxUint64, math.MaxUint64}
@@ -139,7 +141,7 @@ func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, cellsA
 	}
 
 	if len(blobKzgCommitments) != len(cellsAndProofs) {
-		return nil, ErrMismatchSize
+		return nil, ErrSizeMismatch
 	}
 
 	signedBlockHeader, err := signedBlock.Header()
@@ -152,19 +154,72 @@ func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, cellsA
 		return nil, errors.Wrap(err, "merkle proof ZKG commitments")
 	}
 
-	dataColumnSidecars, err := DataColumnsSidecarsFromItems(signedBlockHeader, blobKzgCommitments, kzgCommitmentsInclusionProof, cellsAndProofs)
+	dataColumnSidecars, err := dataColumnsSidecars(signedBlockHeader, blobKzgCommitments, kzgCommitmentsInclusionProof, cellsAndProofs)
 	if err != nil {
-		return nil, errors.Wrap(err, "data column sidecars from items")
+		return nil, errors.Wrap(err, "data column sidecars")
 	}
 
 	return dataColumnSidecars, nil
 }
 
-// DataColumnsSidecarsFromItems computes the data column sidecars from the signed block header, the blob KZG commiments,
+// ComputeCustodyGroupForColumn computes the custody group for a given column.
+// It is the reciprocal function of ComputeColumnsForCustodyGroup.
+func ComputeCustodyGroupForColumn(columnIndex uint64) (uint64, error) {
+	beaconConfig := params.BeaconConfig()
+	numberOfColumns := beaconConfig.NumberOfColumns
+	numberOfCustodyGroups := beaconConfig.NumberOfCustodyGroups
+
+	if columnIndex >= numberOfColumns {
+		return 0, ErrIndexTooLarge
+	}
+
+	return columnIndex % numberOfCustodyGroups, nil
+}
+
+// CustodyGroupSamplingSize returns the number of custody groups the node should sample from.
+// https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/das-core.md#custody-sampling
+func (custodyInfo *CustodyInfo) CustodyGroupSamplingSize(ct CustodyType) uint64 {
+	custodyGroupCount := custodyInfo.TargetGroupCount.Get()
+
+	if ct == Actual {
+		custodyGroupCount = custodyInfo.ActualGroupCount()
+	}
+
+	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
+	return max(samplesPerSlot, custodyGroupCount)
+}
+
+// CustodyColumns computes the custody columns from the custody groups.
+func CustodyColumns(custodyGroups []uint64) (map[uint64]bool, error) {
+	numberOfCustodyGroups := params.BeaconConfig().NumberOfCustodyGroups
+
+	custodyGroupCount := len(custodyGroups)
+
+	// Compute the columns for each custody group.
+	columns := make(map[uint64]bool, custodyGroupCount)
+	for _, group := range custodyGroups {
+		if group >= numberOfCustodyGroups {
+			return nil, ErrCustodyGroupTooLarge
+		}
+
+		groupColumns, err := ComputeColumnsForCustodyGroup(group)
+		if err != nil {
+			return nil, errors.Wrap(err, "compute columns for custody group")
+		}
+
+		for _, column := range groupColumns {
+			columns[column] = true
+		}
+	}
+
+	return columns, nil
+}
+
+// dataColumnsSidecars computes the data column sidecars from the signed block header, the blob KZG commiments,
 // the KZG commitment includion proofs and cells and cell proofs.
 // The returned value contains pointers to function parameters.
 // (If the caller alterates input parameters afterwards, the returned value will be modified as well.)
-func DataColumnsSidecarsFromItems(
+func dataColumnsSidecars(
 	signedBlockHeader *ethpb.SignedBeaconBlockHeader,
 	blobKzgCommitments [][]byte,
 	kzgCommitmentsInclusionProof [][]byte,
@@ -172,7 +227,7 @@ func DataColumnsSidecarsFromItems(
 ) ([]*ethpb.DataColumnSidecar, error) {
 	start := time.Now()
 	if len(blobKzgCommitments) != len(cellsAndProofs) {
-		return nil, ErrMismatchSize
+		return nil, ErrSizeMismatch
 	}
 
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
@@ -218,185 +273,4 @@ func DataColumnsSidecarsFromItems(
 
 	dataColumnComputationTime.Observe(float64(time.Since(start).Milliseconds()))
 	return sidecars, nil
-}
-
-// ComputeCustodyGroupForColumn computes the custody group for a given column.
-// It is the reciprocal function of ComputeColumnsForCustodyGroup.
-func ComputeCustodyGroupForColumn(columnIndex uint64) (uint64, error) {
-	beaconConfig := params.BeaconConfig()
-	numberOfColumns := beaconConfig.NumberOfColumns
-	numberOfCustodyGroups := beaconConfig.NumberOfCustodyGroups
-
-	if columnIndex >= numberOfColumns {
-		return 0, ErrIndexTooLarge
-	}
-
-	return columnIndex % numberOfCustodyGroups, nil
-}
-
-// Blobs extract blobs from `dataColumnsSidecar`.
-// This can be seen as the reciprocal function of DataColumnSidecars.
-// `dataColumnsSidecar` needs to contain the datacolumns corresponding to the non-extended matrix,
-// else an error will be returned.
-// (`dataColumnsSidecar` can contain extra columns, but they will be ignored.)
-func Blobs(indices map[uint64]bool, dataColumnsSidecar []*ethpb.DataColumnSidecar) ([]*blocks.VerifiedROBlob, error) {
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
-
-	// Compute the number of needed columns, including the number of columns is odd case.
-	neededColumnCount := (numberOfColumns + 1) / 2
-
-	// Check if all needed columns are present.
-	sliceIndexFromColumnIndex := make(map[uint64]int, len(dataColumnsSidecar))
-	for i := range dataColumnsSidecar {
-		dataColumnSideCar := dataColumnsSidecar[i]
-		index := dataColumnSideCar.Index
-
-		if index < neededColumnCount {
-			sliceIndexFromColumnIndex[index] = i
-		}
-	}
-
-	actualColumnCount := uint64(len(sliceIndexFromColumnIndex))
-
-	// Get missing columns.
-	if actualColumnCount < neededColumnCount {
-		var missingColumnsSlice []uint64
-
-		for i := range neededColumnCount {
-			if _, ok := sliceIndexFromColumnIndex[i]; !ok {
-				missingColumnsSlice = append(missingColumnsSlice, i)
-			}
-		}
-
-		slices.Sort[[]uint64](missingColumnsSlice)
-		return nil, errors.Errorf("some columns are missing: %v", missingColumnsSlice)
-	}
-
-	// It is safe to retrieve the first column since we already checked that `dataColumnsSidecar` is not empty.
-	firstDataColumnSidecar := dataColumnsSidecar[0]
-
-	blobCount := uint64(len(firstDataColumnSidecar.Column))
-
-	// Check all colums have te same length.
-	for i := range dataColumnsSidecar {
-		if uint64(len(dataColumnsSidecar[i].Column)) != blobCount {
-			return nil, errors.Errorf("mismatch in the length of the data columns, expected %d, got %d", blobCount, len(dataColumnsSidecar[i].Column))
-		}
-	}
-
-	// Reconstruct verified RO blobs from columns.
-	verifiedROBlobs := make([]*blocks.VerifiedROBlob, 0, blobCount)
-
-	// Populate and filter indices.
-	indicesSlice := populateAndFilterIndices(indices, blobCount)
-
-	for _, blobIndex := range indicesSlice {
-		var blob kzg.Blob
-
-		// Compute the content of the blob.
-		for columnIndex := range neededColumnCount {
-			sliceIndex, ok := sliceIndexFromColumnIndex[columnIndex]
-			if !ok {
-				return nil, errors.Errorf("missing column %d, this should never happen", columnIndex)
-			}
-
-			dataColumnSideCar := dataColumnsSidecar[sliceIndex]
-			cell := dataColumnSideCar.Column[blobIndex]
-
-			for i := range cell {
-				blob[columnIndex*kzg.BytesPerCell+uint64(i)] = cell[i]
-			}
-		}
-
-		// Retrieve the blob KZG commitment.
-		blobKZGCommitment := kzg.Commitment(firstDataColumnSidecar.KzgCommitments[blobIndex])
-
-		// Compute the blob KZG proof.
-		blobKzgProof, err := kzg.ComputeBlobKZGProof(&blob, blobKZGCommitment)
-		if err != nil {
-			return nil, errors.Wrap(err, "compute blob KZG proof")
-		}
-
-		blobSidecar := &ethpb.BlobSidecar{
-			Index:                    blobIndex,
-			Blob:                     blob[:],
-			KzgCommitment:            blobKZGCommitment[:],
-			KzgProof:                 blobKzgProof[:],
-			SignedBlockHeader:        firstDataColumnSidecar.SignedBlockHeader,
-			CommitmentInclusionProof: firstDataColumnSidecar.KzgCommitmentsInclusionProof,
-		}
-
-		roBlob, err := blocks.NewROBlob(blobSidecar)
-		if err != nil {
-			return nil, errors.Wrap(err, "new RO blob")
-		}
-
-		verifiedROBlob := blocks.NewVerifiedROBlob(roBlob)
-		verifiedROBlobs = append(verifiedROBlobs, &verifiedROBlob)
-	}
-
-	return verifiedROBlobs, nil
-}
-
-// CustodyGroupSamplingSize returns the number of custody groups the node should sample from.
-// https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/das-core.md#custody-sampling
-func (custodyInfo *CustodyInfo) CustodyGroupSamplingSize(ct CustodyType) uint64 {
-	custodyGroupCount := custodyInfo.TargetGroupCount.Get()
-
-	if ct == Actual {
-		custodyGroupCount = custodyInfo.ActualGroupCount()
-	}
-
-	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
-	return max(samplesPerSlot, custodyGroupCount)
-}
-
-// CustodyColumns computes the custody columns from the custody groups.
-func CustodyColumns(custodyGroups []uint64) (map[uint64]bool, error) {
-	numberOfCustodyGroups := params.BeaconConfig().NumberOfCustodyGroups
-
-	custodyGroupCount := len(custodyGroups)
-
-	// Compute the columns for each custody group.
-	columns := make(map[uint64]bool, custodyGroupCount)
-	for _, group := range custodyGroups {
-		if group >= numberOfCustodyGroups {
-			return nil, ErrCustodyGroupTooLarge
-		}
-
-		groupColumns, err := ComputeColumnsForCustodyGroup(group)
-		if err != nil {
-			return nil, errors.Wrap(err, "compute columns for custody group")
-		}
-
-		for _, column := range groupColumns {
-			columns[column] = true
-		}
-	}
-
-	return columns, nil
-}
-
-// populateAndFilterIndices returns a sorted slices of indices, setting all indices if none are provided,
-// and filtering out indices higher than the blob count.
-func populateAndFilterIndices(indices map[uint64]bool, blobCount uint64) []uint64 {
-	// If no indices are provided, provide all blobs.
-	if len(indices) == 0 {
-		for i := range blobCount {
-			indices[i] = true
-		}
-	}
-
-	// Filter blobs index higher than the blob count.
-	indicesSlice := make([]uint64, 0, len(indices))
-	for i := range indices {
-		if i < blobCount {
-			indicesSlice = append(indicesSlice, i)
-		}
-	}
-
-	// Sort the indices.
-	slices.Sort[[]uint64](indicesSlice)
-
-	return indicesSlice
 }

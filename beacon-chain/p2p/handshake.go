@@ -22,7 +22,9 @@ const (
 )
 
 func peerMultiaddrString(conn network.Conn) string {
-	return fmt.Sprintf("%s/p2p/%s", conn.RemoteMultiaddr().String(), conn.RemotePeer().String())
+	remoteMultiaddr := conn.RemoteMultiaddr().String()
+	remotePeerID := conn.RemotePeer().String()
+	return fmt.Sprintf("%s/p2p/%s", remoteMultiaddr, remotePeerID)
 }
 
 func (s *Service) connectToPeer(conn network.Conn) {

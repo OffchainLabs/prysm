@@ -1,7 +1,6 @@
 package scorers_test
 
 import (
-	"context"
 	"sort"
 	"testing"
 
@@ -17,8 +16,7 @@ import (
 func TestScorers_BadResponses_Score(t *testing.T) {
 	const pid = "peer1"
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	peerStatuses := peers.NewStatus(ctx, &peers.StatusConfig{
 		PeerLimit: 30,
@@ -50,8 +48,7 @@ func TestScorers_BadResponses_Score(t *testing.T) {
 }
 
 func TestScorers_BadResponses_ParamsThreshold(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	maxBadResponses := 2
 	peerStatuses := peers.NewStatus(ctx, &peers.StatusConfig{
@@ -67,8 +64,7 @@ func TestScorers_BadResponses_ParamsThreshold(t *testing.T) {
 }
 
 func TestScorers_BadResponses_Count(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	peerStatuses := peers.NewStatus(ctx, &peers.StatusConfig{
 		PeerLimit:    30,
@@ -87,8 +83,7 @@ func TestScorers_BadResponses_Count(t *testing.T) {
 }
 
 func TestScorers_BadResponses_Decay(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	maxBadResponses := 2
 	peerStatuses := peers.NewStatus(ctx, &peers.StatusConfig{
@@ -143,8 +138,7 @@ func TestScorers_BadResponses_Decay(t *testing.T) {
 }
 
 func TestScorers_BadResponses_IsBadPeer(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	peerStatuses := peers.NewStatus(ctx, &peers.StatusConfig{
 		PeerLimit:    30,
@@ -168,8 +162,7 @@ func TestScorers_BadResponses_IsBadPeer(t *testing.T) {
 }
 
 func TestScorers_BadResponses_BadPeers(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	peerStatuses := peers.NewStatus(ctx, &peers.StatusConfig{
 		PeerLimit:    30,

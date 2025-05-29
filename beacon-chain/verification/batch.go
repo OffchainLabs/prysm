@@ -32,7 +32,7 @@ type BlobBatchVerifier struct {
 }
 
 // VerifiedROBlobs satisfies the das.BlobBatchVerifier interface, used by das.AvailabilityStore.
-func (batch *BlobBatchVerifier) VerifiedROBlobs(ctx context.Context, blk blocks.ROBlock, scs []blocks.ROBlob) ([]blocks.VerifiedROBlob, error) {
+func (batch *BlobBatchVerifier) VerifiedROBlobs(_ context.Context, blk blocks.ROBlock, scs []blocks.ROBlob) ([]blocks.VerifiedROBlob, error) {
 	if len(scs) == 0 {
 		return nil, nil
 	}
@@ -42,12 +42,12 @@ func (batch *BlobBatchVerifier) VerifiedROBlobs(ctx context.Context, blk blocks.
 	for i := range scs {
 		blobSig := bytesutil.ToBytes96(scs[i].SignedBlockHeader.Signature)
 		if blkSig != blobSig {
-			return nil, ErrBatchSignatureMismatch
+			return nil, errBatchSignatureMismatch
 		}
 		// Extra defensive check to make sure the roots match. This should be unnecessary in practice since the root from
 		// the block should be used as the lookup key into the cache of sidecars.
 		if blk.Root() != scs[i].BlockRoot() {
-			return nil, ErrBatchBlockRootMismatch
+			return nil, errBatchBlockRootMismatch
 		}
 	}
 	// Verify commitments for all blobs at once. verifyOneBlob assumes it is only called once this check succeeds.

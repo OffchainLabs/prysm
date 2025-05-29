@@ -5,6 +5,9 @@ go_library(
     srcs = [
         "blob.go",
         "cache.go",
+        "data_column.go",
+        "data_column_cache.go",
+        "doc.go",
         "iteration.go",
         "layout.go",
         "layout_by_epoch.go",
@@ -17,6 +20,8 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem",
     visibility = ["//visibility:public"],
     deps = [
+        "//async:go_default_library",
+        "//async/event:go_default_library",
         "//beacon-chain/db:go_default_library",
         "//beacon-chain/verification:go_default_library",
         "//config/fieldparams:go_default_library",
@@ -41,6 +46,8 @@ go_test(
     srcs = [
         "blob_test.go",
         "cache_test.go",
+        "data_column_cache_test.go",
+        "data_column_test.go",
         "iteration_test.go",
         "layout_test.go",
         "migration_test.go",
@@ -50,6 +57,7 @@ go_test(
     deps = [
         "//beacon-chain/db:go_default_library",
         "//beacon-chain/verification:go_default_library",
+        "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//encoding/bytesutil:go_default_library",

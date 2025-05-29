@@ -108,7 +108,7 @@ func InitializeDataMaps() {
 			return wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}), nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().FuluForkVersion): func() (metadata.Metadata, error) {
-			return wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}), nil
+			return wrapper.WrappedMetadataV2(&ethpb.MetaDataV2{}), nil
 		},
 	}
 

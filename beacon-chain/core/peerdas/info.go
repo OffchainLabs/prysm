@@ -117,7 +117,7 @@ func (custodyInfo *CustodyInfo) ActualGroupCount() uint64 {
 // CustodyGroupCount returns the number of groups we should participate in for custody.
 func (tcgc *targetCustodyGroupCount) Get() uint64 {
 	// If subscribed to all subnets, return the number of custody groups.
-	if flags.Get().SubscribeToAllSubnets {
+	if flags.Get().SubscribeAllDataSubnets {
 		return params.BeaconConfig().NumberOfCustodyGroups
 	}
 
@@ -144,7 +144,7 @@ func (tcgc *targetCustodyGroupCount) SetValidatorsCustodyRequirement(value uint6
 // Get returns the to advertise custody group count.
 func (tacgc *toAdverstiseCustodyGroupCount) Get() uint64 {
 	// If subscribed to all subnets, return the number of custody groups.
-	if flags.Get().SubscribeToAllSubnets {
+	if flags.Get().SubscribeAllDataSubnets {
 		return params.BeaconConfig().NumberOfCustodyGroups
 	}
 
