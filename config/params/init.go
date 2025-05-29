@@ -10,6 +10,7 @@ func init() {
 		HoleskyConfig(),
 		SepoliaConfig(),
 		HoodiConfig(),
+		EphemeryConfig(),
 	}
 	configs = newConfigset(defaults...)
 	// ensure that main net is always present and active by default

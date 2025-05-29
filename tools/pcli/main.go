@@ -221,6 +221,10 @@ var stateTransitionCommand = &cli.Command{
 				if err := params.SetActive(params.HoodiConfig()); err != nil {
 					log.Fatal(err)
 				}
+			case params.EphemeryName:
+				if err := params.SetActive(params.EphemeryConfig()); err != nil {
+					log.Fatal(err)
+				}
 			default:
 				log.Fatalf("Unknown network provided: %s", network)
 			}

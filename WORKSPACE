@@ -385,6 +385,21 @@ filegroup(
 )
 
 http_archive(
+    name = "ephemery_testnet",
+    build_file_content = """
+filegroup(
+    name = "configs",
+    srcs = [
+        "metadata/config.yaml",
+    ],
+    visibility = ["//visibility:public"],
+)
+""",
+    strip_prefix = "",
+    url = "https://github.com/ephemery-testnet/ephemery-genesis/releases/latest/download/network-config.tar.gz",
+)
+
+http_archive(
     name = "com_google_protobuf",
     sha256 = "7c3ebd7aaedd86fa5dc479a0fda803f602caaf78d8aff7ce83b89e1b8ae7442a",
     strip_prefix = "protobuf-28.3",
