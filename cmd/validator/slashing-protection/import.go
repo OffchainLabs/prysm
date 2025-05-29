@@ -3,6 +3,8 @@ package historycmd
 import (
 	"bytes"
 	"fmt"
+	"path/filepath"
+
 	"github.com/OffchainLabs/prysm/v6/cmd"
 	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
 	"github.com/OffchainLabs/prysm/v6/config/features"
@@ -13,7 +15,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/validator/db/kv"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
-	"path/filepath"
 )
 
 // Reads an input slashing protection EIP-3076
