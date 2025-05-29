@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	eventClient "github.com/OffchainLabs/prysm/v6/api/client/event"
 	grpcutil "github.com/OffchainLabs/prysm/v6/api/grpc"
 	"github.com/OffchainLabs/prysm/v6/async/event"
 	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
@@ -223,6 +224,7 @@ func (v *ValidatorService) Start() {
 		distributed:                    v.distributed,
 		disableDutiesPolling:           v.disableDutiesPolling,
 		accountsChangedChannel:         make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
+		eventsChannel:                  make(chan *eventClient.Event, 1),
 	}
 
 	v.validator = valStruct

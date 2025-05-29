@@ -36,6 +36,7 @@ const (
 // Validator interface defines the primary methods of a validator client.
 type Validator interface {
 	Done()
+	EventsChan() <-chan *event.Event
 	AccountsChangedChan() <-chan [][fieldparams.BLSPubkeyLength]byte
 	WaitForChainStart(ctx context.Context) error
 	WaitForSync(ctx context.Context) error
@@ -60,7 +61,7 @@ type Validator interface {
 	CheckDoppelGanger(ctx context.Context) error
 	PushProposerSettings(ctx context.Context, slot primitives.Slot, forceFullPush bool) error
 	SignValidatorRegistrationRequest(ctx context.Context, signer SigningFunc, newValidatorRegistration *ethpb.ValidatorRegistrationV1) (*ethpb.SignedValidatorRegistrationV1, bool /* isCached */, error)
-	StartEventStream(ctx context.Context, topics []string, eventsChan chan<- *event.Event)
+	StartEventStream(ctx context.Context, topics []string)
 	EventStreamIsRunning() bool
 	ProcessEvent(ctx context.Context, event *event.Event)
 	ProposerSettings() *proposer.Settings
