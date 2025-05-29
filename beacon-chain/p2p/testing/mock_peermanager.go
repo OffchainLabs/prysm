@@ -42,7 +42,7 @@ func (m *MockPeerManager) ENR() *enr.Record {
 
 // NodeID .
 func (m MockPeerManager) NodeID() enode.ID {
-	return [32]byte{}
+	return enode.ID{}
 }
 
 // DiscoveryAddresses .

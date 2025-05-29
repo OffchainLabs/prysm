@@ -20,8 +20,10 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/blstoexec"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	p2pTesting "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -45,6 +47,11 @@ func (mbn *mockBeaconNode) StateFeed() event.SubscriberSender {
 
 type mockBroadcaster struct {
 	broadcastCalled bool
+}
+
+type mockAccesser struct {
+	mockBroadcaster
+	p2pTesting.MockPeerManager
 }
 
 func (mb *mockBroadcaster) Broadcast(_ context.Context, _ proto.Message) error {
@@ -73,6 +80,11 @@ func (mb *mockBroadcaster) BroadcastLightClientOptimisticUpdate(_ context.Contex
 }
 
 func (mb *mockBroadcaster) BroadcastLightClientFinalityUpdate(_ context.Context, _ interfaces.LightClientFinalityUpdate) error {
+	mb.broadcastCalled = true
+	return nil
+}
+
+func (mb *mockBroadcaster) BroadcastDataColumn(_ [fieldparams.RootLength]byte, _ uint64, _ *ethpb.DataColumnSidecar, _ ...chan<- bool) error {
 	mb.broadcastCalled = true
 	return nil
 }
@@ -134,6 +146,7 @@ func minimalTestService(t *testing.T, opts ...Option) (*Service, *testServiceReq
 		WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)),
 		WithSyncChecker(mock.MockChecker{}),
 		WithExecutionEngineCaller(&mockExecution.EngineClient{}),
+		WithP2PBroadcaster(&mockAccesser{}),
 		WithLightClientStore(&lightclient.Store{}),
 	}
 	// append the variadic opts so they override the defaults by being processed afterwards

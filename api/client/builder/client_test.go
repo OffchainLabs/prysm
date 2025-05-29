@@ -640,9 +640,9 @@ func TestSubmitBlindedBlock(t *testing.T) {
 				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
 				epr := &ExecutionPayloadResponse{}
 				require.NoError(t, json.Unmarshal([]byte(testExampleExecutionPayload), epr))
-				ep := &ExecutionPayload{}
+				ep := &structs.ExecutionPayload{}
 				require.NoError(t, json.Unmarshal(epr.Data, ep))
-				pro, err := ep.ToProto()
+				pro, err := ep.ToConsensus()
 				require.NoError(t, err)
 				ssz, err := pro.MarshalSSZ()
 				require.NoError(t, err)
@@ -710,9 +710,9 @@ func TestSubmitBlindedBlock(t *testing.T) {
 				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
 				epr := &ExecutionPayloadResponse{}
 				require.NoError(t, json.Unmarshal([]byte(testExampleExecutionPayloadCapella), epr))
-				ep := &ExecutionPayloadCapella{}
+				ep := &structs.ExecutionPayloadCapella{}
 				require.NoError(t, json.Unmarshal(epr.Data, ep))
-				pro, err := ep.ToProto()
+				pro, err := ep.ToConsensus()
 				require.NoError(t, err)
 				ssz, err := pro.MarshalSSZ()
 				require.NoError(t, err)
