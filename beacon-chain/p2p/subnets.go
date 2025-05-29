@@ -9,6 +9,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -29,8 +30,9 @@ var (
 	attestationSubnetCount = params.BeaconConfig().AttestationSubnetCount
 	syncCommsSubnetCount   = params.BeaconConfig().SyncCommitteeSubnetCount
 
-	attSubnetEnrKey       = params.BeaconNetworkConfig().AttSubnetKey
-	syncCommsSubnetEnrKey = params.BeaconNetworkConfig().SyncCommsSubnetKey
+	attSubnetEnrKey         = params.BeaconNetworkConfig().AttSubnetKey
+	syncCommsSubnetEnrKey   = params.BeaconNetworkConfig().SyncCommsSubnetKey
+	custodyGroupCountEnrKey = params.BeaconNetworkConfig().CustodyGroupCountKey
 )
 
 // The value used with the subnet, in order
@@ -47,7 +49,14 @@ const syncLockerVal = 100
 // chosen more than sync and attestation subnet combined.
 const blobSubnetLockerVal = 110
 
-// nodeFilter return a function that filters nodes based on the subnet topic and subnet index.
+// The value used with the data column sidecar subnet, in order
+// to create an appropriate key to retrieve
+// the relevant lock. This is used to differentiate
+// data column subnets from others. This is deliberately
+// chosen more than sync, attestation and blob subnet (6) combined.
+const dataColumnSubnetVal = 150
+
+// nodeFilter returns a function that filters nodes based on the subnet topic and subnet index.
 func (s *Service) nodeFilter(topic string, index uint64) (func(node *enode.Node) bool, error) {
 	switch {
 	case strings.Contains(topic, GossipAttestationMessage):
@@ -56,6 +65,8 @@ func (s *Service) nodeFilter(topic string, index uint64) (func(node *enode.Node)
 		return s.filterPeerForSyncSubnet(index), nil
 	case strings.Contains(topic, GossipBlobSidecarMessage):
 		return s.filterPeerForBlobSubnet(), nil
+	case strings.Contains(topic, GossipDataColumnSidecarMessage):
+		return s.filterPeerForDataColumnsSubnet(index), nil
 	default:
 		return nil, errors.Errorf("no subnet exists for provided topic: %s", topic)
 	}
@@ -276,6 +287,22 @@ func (s *Service) filterPeerForBlobSubnet() func(_ *enode.Node) bool {
 	}
 }
 
+// returns a method with filters peers specifically for a particular data column subnet.
+func (s *Service) filterPeerForDataColumnsSubnet(index uint64) func(node *enode.Node) bool {
+	return func(node *enode.Node) bool {
+		if !s.filterPeer(node) {
+			return false
+		}
+
+		subnets, err := dataColumnSubnets(node.ID(), node.Record())
+		if err != nil {
+			return false
+		}
+
+		return subnets[index]
+	}
+}
+
 // lower threshold to broadcast object compared to searching
 // for a subnet. So that even in the event of poor peer
 // connectivity, we can still broadcast an attestation.
@@ -318,6 +345,35 @@ func (s *Service) updateSubnetRecordWithMetadataV2(bitVAtt bitfield.Bitvector64,
 		SeqNumber: s.metaData.SequenceNumber() + 1,
 		Attnets:   bitVAtt,
 		Syncnets:  bitVSync,
+	})
+}
+
+// updateSubnetRecordWithMetadataV3 updates:
+// - attestation subnet tracked,
+// - sync subnets tracked, and
+// - custody subnet count
+// both in the node's record and in the node's metadata.
+func (s *Service) updateSubnetRecordWithMetadataV3(
+	bitVAtt bitfield.Bitvector64,
+	bitVSync bitfield.Bitvector4,
+	custodyGroupCount uint64,
+) {
+	attSubnetsEntry := enr.WithEntry(attSubnetEnrKey, &bitVAtt)
+	syncSubnetsEntry := enr.WithEntry(syncCommsSubnetEnrKey, &bitVSync)
+	custodyGroupCountEntry := enr.WithEntry(custodyGroupCountEnrKey, custodyGroupCount)
+
+	localNode := s.dv5Listener.LocalNode()
+	localNode.Set(attSubnetsEntry)
+	localNode.Set(syncSubnetsEntry)
+	localNode.Set(custodyGroupCountEntry)
+
+	newSeqNumber := s.metaData.SequenceNumber() + 1
+
+	s.metaData = wrapper.WrappedMetadataV2(&pb.MetaDataV2{
+		SeqNumber:         newSeqNumber,
+		Attnets:           bitVAtt,
+		Syncnets:          bitVSync,
+		CustodyGroupCount: custodyGroupCount,
 	})
 }
 
@@ -458,6 +514,24 @@ func syncSubnets(record *enr.Record) ([]uint64, error) {
 	return committeeIdxs, nil
 }
 
+// Retrieve the data columns subnets from a node's ENR and node ID.
+func dataColumnSubnets(nodeID enode.ID, record *enr.Record) (map[uint64]bool, error) {
+	// Retrieve the custody count from the ENR.
+	custodyGroupCount, err := peerdas.CustodyGroupCountFromRecord(record)
+	if err != nil {
+		return nil, errors.Wrap(err, "custody group count from record")
+	}
+
+	// Retrieve the peer info.
+	peerInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
+	if err != nil {
+		return nil, errors.Wrap(err, "peer info")
+	}
+
+	// Get custody columns subnets from the columns.
+	return peerInfo.DataColumnsSubnets, nil
+}
+
 // Parses the attestation subnets ENR entry in a node and extracts its value
 // as a bitvector for further manipulation.
 func attBitvector(record *enr.Record) (bitfield.Bitvector64, error) {
@@ -484,14 +558,16 @@ func syncBitvector(record *enr.Record) (bitfield.Bitvector4, error) {
 
 // The subnet locker is a map which keeps track of all
 // mutexes stored per subnet. This locker is reused
-// between both the attestation, sync and blob subnets.
+// between both the attestation, sync blob and data column subnets.
 // Sync subnets are stored by (subnet+syncLockerVal).
 // Blob subnets are stored by (subnet+blobSubnetLockerVal).
+// Data column subnets are stored by (subnet+dataColumnSubnetVal).
 // This is to prevent conflicts while allowing subnets
 // to use a single locker.
 func (s *Service) subnetLocker(i uint64) *sync.RWMutex {
 	s.subnetsLockLock.Lock()
 	defer s.subnetsLockLock.Unlock()
+
 	l, ok := s.subnetsLock[i]
 	if !ok {
 		l = &sync.RWMutex{}

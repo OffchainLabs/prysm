@@ -37,10 +37,12 @@ func NewRODataColumn(dc *ethpb.DataColumnSidecar) (RODataColumn, error) {
 	if err := roDataColumnNilCheck(dc); err != nil {
 		return RODataColumn{}, err
 	}
+
 	root, err := dc.SignedBlockHeader.Header.HashTreeRoot()
 	if err != nil {
 		return RODataColumn{}, err
 	}
+
 	return RODataColumn{DataColumnSidecar: dc, root: root}, nil
 }
 

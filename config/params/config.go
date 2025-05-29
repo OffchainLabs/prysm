@@ -3,6 +3,7 @@ package params
 
 import (
 	"math"
+	"slices"
 	"time"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -295,6 +296,7 @@ type BeaconChainConfig struct {
 	NodeIdBits                      uint64          `yaml:"NODE_ID_BITS" spec:"true"`                       // NodeIdBits defines the bit length of a node id.
 
 	// Blobs Values
+	BlobSchedule []BlobScheduleEntry `yaml:"BLOB_SCHEDULE"`
 
 	// Deprecated_MaxBlobsPerBlock defines the max blobs that could exist in a block.
 	// Deprecated: This field is no longer supported. Avoid using it.
@@ -311,6 +313,11 @@ type BeaconChainConfig struct {
 	// DeprecatedMaxBlobsPerBlockFulu defines the max blobs that could exist in a block post Fulu hard fork.
 	// Deprecated: This field is no longer supported. Avoid using it.
 	DeprecatedMaxBlobsPerBlockFulu int `yaml:"MAX_BLOBS_PER_BLOCK_FULU" spec:"true"`
+}
+
+type BlobScheduleEntry struct {
+	Epoch            primitives.Epoch `yaml:"EPOCH"`
+	MaxBlobsPerBlock uint64           `yaml:"MAX_BLOBS_PER_BLOCK"`
 }
 
 // InitializeForkSchedule initializes the schedules forks baked into the config.
@@ -400,45 +407,52 @@ func (b *BeaconChainConfig) TargetBlobsPerBlock(slot primitives.Slot) int {
 	return b.DeprecatedMaxBlobsPerBlock / 2
 }
 
-// MaxBlobsPerBlock returns the maximum number of blobs per block for the given slot.
 func (b *BeaconChainConfig) MaxBlobsPerBlock(slot primitives.Slot) int {
 	epoch := primitives.Epoch(slot.DivSlot(b.SlotsPerEpoch))
 
-	if epoch >= b.FuluForkEpoch {
-		return b.DeprecatedMaxBlobsPerBlockFulu
+	if len(b.BlobSchedule) > 0 {
+		if !slices.IsSortedFunc(b.BlobSchedule, func(a, b BlobScheduleEntry) int {
+			return int(a.Epoch - b.Epoch)
+		}) {
+			slices.SortFunc(b.BlobSchedule, func(a, b BlobScheduleEntry) int {
+				return int(a.Epoch - b.Epoch)
+			})
+		}
+
+		for i := len(b.BlobSchedule) - 1; i >= 0; i-- {
+			if epoch >= b.BlobSchedule[i].Epoch {
+				return int(b.BlobSchedule[i].MaxBlobsPerBlock)
+			}
+		}
 	}
 
 	if epoch >= b.ElectraForkEpoch {
 		return b.DeprecatedMaxBlobsPerBlockElectra
 	}
-
 	return b.DeprecatedMaxBlobsPerBlock
 }
 
-// MaxBlobsPerBlockByVersion returns the maximum number of blobs per block for the given fork version
-func (b *BeaconChainConfig) MaxBlobsPerBlockByVersion(v int) int {
-	if v >= version.Fulu {
-		return b.DeprecatedMaxBlobsPerBlockFulu
-	}
-
-	if v >= version.Electra {
-		return b.DeprecatedMaxBlobsPerBlockElectra
-	}
-
-	return b.DeprecatedMaxBlobsPerBlock
-}
-
-// MaxBlobsPerBlockByEpoch returns the maximum number of blobs per block for the given epoch,
-// adjusting for the Electra fork.
+// MaxBlobsPerBlockAtEpoch returns the maximum number of blobs per block for the given epoch
 func (b *BeaconChainConfig) MaxBlobsPerBlockAtEpoch(epoch primitives.Epoch) int {
-	if epoch >= b.FuluForkEpoch {
-		return b.DeprecatedMaxBlobsPerBlockFulu
+	if len(b.BlobSchedule) > 0 {
+		if !slices.IsSortedFunc(b.BlobSchedule, func(a, b BlobScheduleEntry) int {
+			return int(a.Epoch - b.Epoch)
+		}) {
+			slices.SortFunc(b.BlobSchedule, func(a, b BlobScheduleEntry) int {
+				return int(a.Epoch - b.Epoch)
+			})
+		}
+
+		for i := len(b.BlobSchedule) - 1; i >= 0; i-- {
+			if epoch >= b.BlobSchedule[i].Epoch {
+				return int(b.BlobSchedule[i].MaxBlobsPerBlock)
+			}
+		}
 	}
 
 	if epoch >= b.ElectraForkEpoch {
 		return b.DeprecatedMaxBlobsPerBlockElectra
 	}
-
 	return b.DeprecatedMaxBlobsPerBlock
 }
 

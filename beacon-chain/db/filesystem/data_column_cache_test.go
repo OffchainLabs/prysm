@@ -22,6 +22,16 @@ func TestHasIndex(t *testing.T) {
 	require.Equal(t, true, hasIndex)
 }
 
+func TestHasAtLeastOneIndex(t *testing.T) {
+	summary := NewDataColumnStorageSummary(0, [fieldparams.NumberOfColumns]bool{false, true})
+
+	hasAtLeastOneIndex := summary.HasAtLeastOneIndex([]uint64{3, 1, 2})
+	require.Equal(t, true, hasAtLeastOneIndex)
+
+	hasAtLeastOneIndex = summary.HasAtLeastOneIndex([]uint64{3, 4, 2})
+	require.Equal(t, false, hasAtLeastOneIndex)
+}
+
 func TestCount(t *testing.T) {
 	summary := NewDataColumnStorageSummary(0, [fieldparams.NumberOfColumns]bool{false, true, false, true})
 
@@ -49,6 +59,18 @@ func TestAllAvailableDataColumns(t *testing.T) {
 	indices = map[uint64]bool{1: true, 3: true}
 	allAvailable = summary.AllAvailable(indices)
 	require.Equal(t, true, allAvailable)
+}
+
+func TestStored(t *testing.T) {
+	summary := NewDataColumnStorageSummary(0, [fieldparams.NumberOfColumns]bool{false, true, true, false})
+
+	expected := map[uint64]bool{1: true, 2: true}
+	actual := summary.Stored()
+
+	require.Equal(t, len(expected), len(actual))
+	for k, v := range expected {
+		require.Equal(t, v, actual[k])
+	}
 }
 
 func TestSummary(t *testing.T) {

@@ -162,12 +162,12 @@ func (bb *Builder) Check(t testing.TB, c *Check) {
 	if c.ProposerBoostRoot != nil {
 		want := fmt.Sprintf("%#x", common.FromHex(*c.ProposerBoostRoot))
 		got := fmt.Sprintf("%#x", bb.service.ProposerBoost())
-		require.DeepEqual(t, want, got)
+		require.Equal(t, want, got)
 	}
 	if c.GetProposerHead != nil {
 		want := fmt.Sprintf("%#x", common.FromHex(*c.GetProposerHead))
 		got := fmt.Sprintf("%#x", bb.service.GetProposerHead())
-		require.DeepEqual(t, want, got)
+		require.Equal(t, want, got)
 	}
 	/* TODO: We need to mock the entire proposer system to be able to test this.
 	if c.ShouldOverrideFCU != nil {

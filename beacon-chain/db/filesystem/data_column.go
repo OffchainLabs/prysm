@@ -403,6 +403,11 @@ func (dcs *DataColumnStorage) Get(root [fieldparams.RootLength]byte, indices []u
 		return nil, nil
 	}
 
+	// Exit early if no data column sidecars for this root is stored.
+	if !summary.HasAtLeastOneIndex(indices) {
+		return nil, nil
+	}
+
 	// Compute the file path.
 	filePath := filePath(root, summary.epoch)
 

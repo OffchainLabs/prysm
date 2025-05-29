@@ -1,10 +1,10 @@
 package util
 
 import (
-	"encoding/binary"
 	"math/big"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/network/forks"
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common"
@@ -96,22 +97,38 @@ func GenerateTestElectraBlockWithSidecar(t *testing.T, parent [32]byte, slot pri
 	block.Block.Slot = g.slot
 	block.Block.ParentRoot = g.parent[:]
 	block.Block.ProposerIndex = g.proposer
-	commitments := make([][48]byte, g.nblobs)
-	block.Block.Body.BlobKzgCommitments = make([][]byte, g.nblobs)
-	for i := range commitments {
-		binary.LittleEndian.PutUint16(commitments[i][0:16], uint16(i))
-		binary.LittleEndian.PutUint16(commitments[i][16:32], uint16(g.slot))
-		block.Block.Body.BlobKzgCommitments[i] = commitments[i][:]
+
+	blobs := make([][]byte, 0, g.nblobs)
+	commitments := make([][]byte, 0, g.nblobs)
+	kzgProofs := make([][]byte, 0, g.nblobs)
+
+	for i := range g.nblobs {
+		blob := kzg.Blob{uint8(i)}
+
+		commitment, err := kzg.BlobToKZGCommitment(&blob)
+		require.NoError(t, err)
+
+		kzgProof, err := kzg.ComputeBlobKZGProof(&blob, commitment)
+		require.NoError(t, err)
+
+		blobs = append(blobs, blob[:])
+		commitments = append(commitments, commitment[:])
+		kzgProofs = append(kzgProofs, kzgProof[:])
 	}
+
+	block.Block.Body.BlobKzgCommitments = commitments
 
 	body, err := blocks.NewBeaconBlockBody(block.Block.Body)
 	require.NoError(t, err)
-	inclusion := make([][][]byte, len(commitments))
-	for i := range commitments {
-		proof, err := blocks.MerkleProofKZGCommitment(body, i)
+
+	inclusionProofs := make([][][]byte, 0, g.nblobs)
+	for i := range g.nblobs {
+		inclusionProof, err := blocks.MerkleProofKZGCommitment(body, i)
 		require.NoError(t, err)
-		inclusion[i] = proof
+
+		inclusionProofs = append(inclusionProofs, inclusionProof)
 	}
+
 	if g.sign {
 		epoch := slots.ToEpoch(block.Block.Slot)
 		schedule := forks.NewOrderedSchedule(params.BeaconConfig())
@@ -128,17 +145,30 @@ func GenerateTestElectraBlockWithSidecar(t *testing.T, parent [32]byte, slot pri
 	root, err := block.Block.HashTreeRoot()
 	require.NoError(t, err)
 
-	sidecars := make([]blocks.ROBlob, len(commitments))
 	sbb, err := blocks.NewSignedBeaconBlock(block)
 	require.NoError(t, err)
 
 	sh, err := sbb.Header()
 	require.NoError(t, err)
-	for i, c := range block.Block.Body.BlobKzgCommitments {
-		sidecars[i] = GenerateTestDenebBlobSidecar(t, root, sh, i, c, inclusion[i])
+
+	roSidecars := make([]blocks.ROBlob, 0, g.nblobs)
+	for i := range g.nblobs {
+		pbSidecar := ethpb.BlobSidecar{
+			Index:                    uint64(i),
+			Blob:                     blobs[i],
+			KzgCommitment:            commitments[i],
+			KzgProof:                 kzgProofs[i],
+			SignedBlockHeader:        sh,
+			CommitmentInclusionProof: inclusionProofs[i],
+		}
+
+		roSidecar, err := blocks.NewROBlobWithRoot(&pbSidecar, root)
+		require.NoError(t, err)
+
+		roSidecars = append(roSidecars, roSidecar)
 	}
 
 	rob, err := blocks.NewROBlock(sbb)
 	require.NoError(t, err)
-	return rob, sidecars
+	return rob, roSidecars
 }

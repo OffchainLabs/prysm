@@ -127,7 +127,7 @@ func (s *Service) topicScoreParams(topic string) (*pubsub.TopicScoreParams, erro
 		return defaultAttesterSlashingTopicParams(), nil
 	case strings.Contains(topic, GossipBlsToExecutionChangeMessage):
 		return defaultBlsToExecutionChangeTopicParams(), nil
-	case strings.Contains(topic, GossipBlobSidecarMessage):
+	case strings.Contains(topic, GossipBlobSidecarMessage), strings.Contains(topic, GossipDataColumnSidecarMessage):
 		// TODO(Deneb): Using the default block scoring. But this should be updated.
 		return defaultBlockTopicParams(), nil
 	case strings.Contains(topic, GossipLightClientOptimisticUpdateMessage):

@@ -321,4 +321,9 @@ var (
 		Usage: "Specifies the retention period for the pruner service in terms of epochs. " +
 			"If this value is less than MIN_EPOCHS_FOR_BLOCK_REQUESTS, it will be ignored.",
 	}
+	// SubscribeAllDataSubnets enables subscription to all data subnets.
+	SubscribeAllDataSubnets = &cli.BoolFlag{
+		Name:  "subscribe-all-data-subnets",
+		Usage: "Enable subscription to all data subnets.",
+	}
 )
