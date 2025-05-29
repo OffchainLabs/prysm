@@ -772,10 +772,13 @@ func (s *Store) validatorEntries(ctx context.Context, blockRoot [32]byte) ([]*et
 
 // retrieves and assembles the state information from multiple buckets.
 func (s *Store) stateBytes(ctx context.Context, blockRoot [32]byte) ([]byte, error) {
-	_, span := trace.StartSpan(ctx, "BeaconDB.stateBytes")
+	ctx, span := trace.StartSpan(ctx, "BeaconDB.stateBytes")
 	defer span.End()
 	var dst []byte
 	err := s.db.View(func(tx *bolt.Tx) error {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		bkt := tx.Bucket(stateBucket)
 		stBytes := bkt.Get(blockRoot[:])
 		if len(stBytes) == 0 {

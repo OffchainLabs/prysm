@@ -34,7 +34,7 @@ func NewPool() *Pool {
 func (p *Pool) PendingAttesterSlashings(ctx context.Context, state state.ReadOnlyBeaconState, noLimit bool) []ethpb.AttSlashing {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	_, span := trace.StartSpan(ctx, "operations.PendingAttesterSlashing")
+	ctx, span := trace.StartSpan(ctx, "operations.PendingAttesterSlashing")
 	defer span.End()
 
 	// Update prom metric.
@@ -54,6 +54,9 @@ func (p *Pool) PendingAttesterSlashings(ctx context.Context, state state.ReadOnl
 	}
 	pending := make([]ethpb.AttSlashing, 0, maxSlashings)
 	for i := 0; i < len(p.pendingAttesterSlashing); i++ {
+		if ctx.Err() != nil {
+			break // Stop processing work...
+		}
 		if uint64(len(pending)) >= maxSlashings {
 			break
 		}
@@ -89,7 +92,7 @@ func (p *Pool) PendingAttesterSlashings(ctx context.Context, state state.ReadOnl
 func (p *Pool) PendingProposerSlashings(ctx context.Context, state state.ReadOnlyBeaconState, noLimit bool) []*ethpb.ProposerSlashing {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	_, span := trace.StartSpan(ctx, "operations.PendingProposerSlashing")
+	ctx, span := trace.StartSpan(ctx, "operations.PendingProposerSlashing")
 	defer span.End()
 
 	// Update prom metric.
@@ -102,6 +105,9 @@ func (p *Pool) PendingProposerSlashings(ctx context.Context, state state.ReadOnl
 	}
 	pending := make([]*ethpb.ProposerSlashing, 0, maxSlashings)
 	for i := 0; i < len(p.pendingProposerSlashing); i++ {
+		if ctx.Err() != nil {
+			break // Stop processing work...
+		}
 		if uint64(len(pending)) >= maxSlashings {
 			break
 		}

@@ -64,10 +64,15 @@ func (s *Store) getBlock(ctx context.Context, blockRoot [32]byte, tx *bolt.Tx) (
 // at the time the chain was started, used to initialize the database and chain
 // without syncing from genesis.
 func (s *Store) OriginCheckpointBlockRoot(ctx context.Context) ([32]byte, error) {
-	_, span := trace.StartSpan(ctx, "BeaconDB.OriginCheckpointBlockRoot")
+	ctx, span := trace.StartSpan(ctx, "BeaconDB.OriginCheckpointBlockRoot")
 	defer span.End()
 
 	var root [32]byte
+
+	if ctx.Err() != nil {
+		return root, ctx.Err()
+	}
+
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(blocksBucket)
 		rootSlice := bkt.Get(originCheckpointBlockRootKey)
@@ -868,7 +873,7 @@ type slotRoot struct {
 // slotRootsInRange returns slot and block root pairs of length min(batchSize, end-slot)
 // If batchSize < 0, the limit check will be skipped entirely.
 func (s *Store) slotRootsInRange(ctx context.Context, start, end primitives.Slot, batchSize int) ([]slotRoot, error) {
-	_, span := trace.StartSpan(ctx, "BeaconDB.slotRootsInRange")
+	ctx, span := trace.StartSpan(ctx, "BeaconDB.slotRootsInRange")
 	defer span.End()
 	if end < start {
 		return nil, errInvalidSlotRange
@@ -882,6 +887,9 @@ func (s *Store) slotRootsInRange(ctx context.Context, start, end primitives.Slot
 		bkt := tx.Bucket(blockSlotIndicesBucket)
 		c := bkt.Cursor()
 		for k, v := c.Seek(key); ; /* rely on internal checks to exit */ k, v = c.Prev() {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			if len(k) == 0 && len(v) == 0 {
 				// The `edge`` variable and this `if` deal with 2 edge cases:
 				// - Seeking past the end of the bucket (the `end` param is higher than the highest slot).
@@ -988,7 +996,7 @@ func blockRootsBySlotRange(
 	bkt *bolt.Bucket,
 	startSlotEncoded, endSlotEncoded, startEpochEncoded, endEpochEncoded, slotStepEncoded interface{},
 ) ([][]byte, error) {
-	_, span := trace.StartSpan(ctx, "BeaconDB.blockRootsBySlotRange")
+	ctx, span := trace.StartSpan(ctx, "BeaconDB.blockRootsBySlotRange")
 	defer span.End()
 
 	// Return nothing when all slot parameters are missing
@@ -1035,6 +1043,9 @@ func blockRootsBySlotRange(
 	roots := make([][]byte, 0, rootsRange)
 	c := bkt.Cursor()
 	for k, v := c.Seek(min); conditional(k, max); k, v = c.Next() {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		slot := bytesutil.BytesToSlotBigEndian(k)
 		if step > 1 {
 			if slot.SubSlot(startSlot).Mod(step) != 0 {
@@ -1053,8 +1064,12 @@ func blockRootsBySlotRange(
 
 // blockRootsBySlot retrieves the block roots by slot
 func blockRootsBySlot(ctx context.Context, tx *bolt.Tx, slot primitives.Slot) ([][32]byte, error) {
-	_, span := trace.StartSpan(ctx, "BeaconDB.blockRootsBySlot")
+	ctx, span := trace.StartSpan(ctx, "BeaconDB.blockRootsBySlot")
 	defer span.End()
+
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 
 	bkt := tx.Bucket(blockSlotIndicesBucket)
 	key := bytesutil.SlotToBytesBigEndian(slot)
@@ -1077,10 +1092,13 @@ func blockRootsBySlot(ctx context.Context, tx *bolt.Tx, slot primitives.Slot) ([
 // objects. If a certain filter criterion does not apply to
 // blocks, an appropriate error is returned.
 func createBlockIndicesFromFilters(ctx context.Context, f *filters.QueryFilter) (map[string][]byte, error) {
-	_, span := trace.StartSpan(ctx, "BeaconDB.createBlockIndicesFromFilters")
+	ctx, span := trace.StartSpan(ctx, "BeaconDB.createBlockIndicesFromFilters")
 	defer span.End()
 	indicesByBucket := make(map[string][]byte)
 	for k, v := range f.Filters() {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		switch k {
 		case filters.ParentRoot:
 			parentRoot, ok := v.([]byte)

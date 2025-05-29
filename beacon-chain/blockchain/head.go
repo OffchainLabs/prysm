@@ -285,10 +285,7 @@ func (s *Service) headState(ctx context.Context) state.BeaconState {
 // This returns a read only version of the head state.
 // It does not perform a copy of the head state.
 // This is a lock free version.
-func (s *Service) headStateReadOnly(ctx context.Context) state.ReadOnlyBeaconState {
-	_, span := trace.StartSpan(ctx, "blockChain.headStateReadOnly")
-	defer span.End()
-
+func (s *Service) headStateReadOnly(_ context.Context) state.ReadOnlyBeaconState {
 	return s.head.state
 }
 

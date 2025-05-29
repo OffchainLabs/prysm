@@ -21,7 +21,7 @@ const (
 )
 
 func ComputeBlockBodyFieldRoots(ctx context.Context, blockBody *BeaconBlockBody) ([][]byte, error) {
-	_, span := trace.StartSpan(ctx, "blocks.ComputeBlockBodyFieldRoots")
+	ctx, span := trace.StartSpan(ctx, "blocks.ComputeBlockBodyFieldRoots")
 	defer span.End()
 
 	if blockBody == nil {
@@ -49,6 +49,9 @@ func ComputeBlockBodyFieldRoots(ctx context.Context, blockBody *BeaconBlockBody)
 	}
 
 	for i := range fieldRoots {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		fieldRoots[i] = make([]byte, 32)
 	}
 

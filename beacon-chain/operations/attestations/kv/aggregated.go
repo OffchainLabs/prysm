@@ -196,7 +196,7 @@ func (c *AttCaches) AggregatedAttestationsBySlotIndex(
 	slot primitives.Slot,
 	committeeIndex primitives.CommitteeIndex,
 ) []*ethpb.Attestation {
-	_, span := trace.StartSpan(ctx, "operations.attestations.kv.AggregatedAttestationsBySlotIndex")
+	ctx, span := trace.StartSpan(ctx, "operations.attestations.kv.AggregatedAttestationsBySlotIndex")
 	defer span.End()
 
 	atts := make([]*ethpb.Attestation, 0)
@@ -204,6 +204,9 @@ func (c *AttCaches) AggregatedAttestationsBySlotIndex(
 	c.aggregatedAttLock.RLock()
 	defer c.aggregatedAttLock.RUnlock()
 	for _, as := range c.aggregatedAtt {
+		if ctx.Err() != nil {
+			return atts // Exit early with whatever we have, if the context is done.
+		}
 		if as[0].Version() == version.Phase0 && slot == as[0].GetData().Slot && committeeIndex == as[0].GetData().CommitteeIndex {
 			for _, a := range as {
 				att, ok := a.(*ethpb.Attestation)
@@ -225,7 +228,7 @@ func (c *AttCaches) AggregatedAttestationsBySlotIndexElectra(
 	slot primitives.Slot,
 	committeeIndex primitives.CommitteeIndex,
 ) []*ethpb.AttestationElectra {
-	_, span := trace.StartSpan(ctx, "operations.attestations.kv.AggregatedAttestationsBySlotIndexElectra")
+	ctx, span := trace.StartSpan(ctx, "operations.attestations.kv.AggregatedAttestationsBySlotIndexElectra")
 	defer span.End()
 
 	atts := make([]*ethpb.AttestationElectra, 0)
@@ -233,6 +236,9 @@ func (c *AttCaches) AggregatedAttestationsBySlotIndexElectra(
 	c.aggregatedAttLock.RLock()
 	defer c.aggregatedAttLock.RUnlock()
 	for _, as := range c.aggregatedAtt {
+		if ctx.Err() != nil {
+			return atts // Exit early with whatever we have, if the context is done.
+		}
 		if as[0].Version() >= version.Electra && slot == as[0].GetData().Slot && as[0].CommitteeBitsVal().BitAt(uint64(committeeIndex)) {
 			for _, a := range as {
 				att, ok := a.(*ethpb.AttestationElectra)
