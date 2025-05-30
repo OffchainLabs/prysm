@@ -21,7 +21,7 @@ func TestExportStandardProtectionJSON_EmptyGenesisRoot(t *testing.T) {
 			pubKeys := [][fieldparams.BLSPubkeyLength]byte{
 				{1},
 			}
-			validatorDB := dbtest.SetupDB(t, pubKeys, isSlashingProtectionMinimal)
+			validatorDB := dbtest.SetupDB(t, t.TempDir(), pubKeys, isSlashingProtectionMinimal)
 			_, err := ExportStandardProtectionJSON(ctx, validatorDB)
 			require.ErrorContains(t, "genesis validators root is empty", err)
 			genesisValidatorsRoot := [32]byte{1}
@@ -40,7 +40,7 @@ func Test_getSignedAttestationsByPubKey(t *testing.T) {
 				{1},
 			}
 			ctx := context.Background()
-			validatorDB := dbtest.SetupDB(t, pubKeys, isSlashingProtectionMinimal)
+			validatorDB := dbtest.SetupDB(t, t.TempDir(), pubKeys, isSlashingProtectionMinimal)
 
 			// No attestation history stored should return empty.
 			signedAttestations, err := signedAttestationsByPubKey(ctx, validatorDB, pubKeys[0])
@@ -98,7 +98,7 @@ func Test_getSignedAttestationsByPubKey(t *testing.T) {
 		ctx := context.Background()
 
 		isSlashingProtectionMinimal := false
-		validatorDB := dbtest.SetupDB(t, pubKeys, isSlashingProtectionMinimal)
+		validatorDB := dbtest.SetupDB(t, t.TempDir(), pubKeys, isSlashingProtectionMinimal)
 
 		// No attestation history stored should return empty.
 		signedAttestations, err := signedAttestationsByPubKey(ctx, validatorDB, pubKeys[0])
@@ -145,7 +145,7 @@ func Test_getSignedAttestationsByPubKey(t *testing.T) {
 		ctx := context.Background()
 
 		isSlashingProtectionMinimal := false
-		validatorDB := dbtest.SetupDB(t, pubKeys, isSlashingProtectionMinimal)
+		validatorDB := dbtest.SetupDB(t, t.TempDir(), pubKeys, isSlashingProtectionMinimal)
 
 		// No attestation history stored should return empty.
 		signedAttestations, err := signedAttestationsByPubKey(ctx, validatorDB, pubKeys[0])
@@ -196,7 +196,7 @@ func Test_getSignedBlocksByPubKey(t *testing.T) {
 				{1},
 			}
 			ctx := context.Background()
-			validatorDB := dbtest.SetupDB(t, pubKeys, isSlashingProtectionMinimal)
+			validatorDB := dbtest.SetupDB(t, t.TempDir(), pubKeys, isSlashingProtectionMinimal)
 
 			// No highest and/or lowest signed blocks will return empty.
 			signedBlocks, err := signedBlocksByPubKey(ctx, validatorDB, pubKeys[0])

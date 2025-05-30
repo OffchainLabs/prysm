@@ -13,7 +13,7 @@ import (
 // SetupDB instantiates and returns a DB instance for the validator client.
 // The `minimal` flag indicates whether the DB should be instantiated with minimal, filesystem
 // slashing protection database.
-func SetupDB(t testing.TB, pubkeys [][fieldparams.BLSPubkeyLength]byte, minimal bool) iface.ValidatorDB {
+func SetupDB(t testing.TB, dataPath string, pubkeys [][fieldparams.BLSPubkeyLength]byte, minimal bool) iface.ValidatorDB {
 	var (
 		db  iface.ValidatorDB
 		err error
@@ -22,10 +22,10 @@ func SetupDB(t testing.TB, pubkeys [][fieldparams.BLSPubkeyLength]byte, minimal 
 	// Create a new DB instance.
 	if minimal {
 		config := &filesystem.Config{PubKeys: pubkeys}
-		db, err = filesystem.NewStore(t.TempDir(), config)
+		db, err = filesystem.NewStore(dataPath, config)
 	} else {
 		config := &kv.Config{PubKeys: pubkeys}
-		db, err = kv.NewKVStore(context.Background(), t.TempDir(), config)
+		db, err = kv.NewKVStore(context.Background(), dataPath, config)
 	}
 
 	if err != nil {

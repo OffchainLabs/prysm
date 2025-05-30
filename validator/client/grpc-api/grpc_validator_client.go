@@ -257,7 +257,6 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 		select {
 		case <-ctx.Done():
 			log.Info("Context canceled, stopping event stream")
-			close(eventsChannel)
 			c.isEventStreamRunning = false
 			return
 		default:
