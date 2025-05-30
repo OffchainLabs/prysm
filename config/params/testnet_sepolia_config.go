@@ -51,10 +51,7 @@ func SepoliaConfig() *BeaconChainConfig {
 	cfg.TerminalTotalDifficulty = "17000000000000000"
 	cfg.DepositContractAddress = "0x7f02C3E3c98b133055B8B348B2Ac625669Ed295D"
 	cfg.DefaultBuilderGasLimit = uint64(60000000)
-	cfg.BlobSchedule = []BlobScheduleEntry{
-		{Epoch: 132608, MaxBlobsPerBlock: 6},
-		{Epoch: 222464, MaxBlobsPerBlock: 9},
-	}
+	cfg.BlobSchedule = []BlobScheduleEntry{}
 	cfg.InitializeForkSchedule()
 	return cfg
 }
