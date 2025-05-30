@@ -119,7 +119,7 @@ func AcceptHeaderHandler(serverAcceptedTypes []string) Middleware {
 func AcceptEncodingHeaderHandler() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") || strings.Contains(r.Header.Get("Accept"), "application/octet-stream") {
 				next.ServeHTTP(w, r)
 				return
 			}
