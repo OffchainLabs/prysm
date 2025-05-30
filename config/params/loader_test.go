@@ -154,6 +154,7 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 	assert.Equal(t, expected.DenebForkEpoch, actual.DenebForkEpoch, "%s: DenebForkEpoch", name)
 	assert.Equal(t, expected.ElectraForkEpoch, actual.ElectraForkEpoch, "%s: ElectraForkEpoch", name)
 	assert.Equal(t, expected.FuluForkEpoch, actual.FuluForkEpoch, "%s: FuluForkEpoch", name)
+	assert.Equal(t, expected.Eip7805ForkEpoch, actual.Eip7805ForkEpoch, "%s: Eip7805ForkEpoch", name)
 	assert.Equal(t, expected.SqrRootSlotsPerEpoch, actual.SqrRootSlotsPerEpoch, "%s: SqrRootSlotsPerEpoch", name)
 	assert.DeepEqual(t, expected.GenesisForkVersion, actual.GenesisForkVersion, "%s: GenesisForkVersion", name)
 	assert.DeepEqual(t, expected.AltairForkVersion, actual.AltairForkVersion, "%s: AltairForkVersion", name)
@@ -162,6 +163,7 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 	assert.DeepEqual(t, expected.DenebForkVersion, actual.DenebForkVersion, "%s: DenebForkVersion", name)
 	assert.DeepEqual(t, expected.ElectraForkVersion, actual.ElectraForkVersion, "%s: ElectraForkVersion", name)
 	assert.DeepEqual(t, expected.FuluForkVersion, actual.FuluForkVersion, "%s: FuluForkVersion", name)
+	assert.DeepEqual(t, expected.Eip7805ForkVersion, actual.Eip7805ForkVersion, "%s: Eip7805ForkVersion", name)
 
 	assertYamlFieldsMatch(t, name, fields, expected, actual)
 }

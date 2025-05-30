@@ -144,10 +144,11 @@ func (s *Service) subscriberInclusionList(ctx context.Context, msg proto.Message
 		return errors.New("nil inclusion list")
 	}
 
-	isBeforeFreezeDeadline := s.cfg.clock.CurrentSlot() == il.Message.Slot &&
-		slots.TimeIntoSlot(uint64(s.cfg.clock.GenesisTime().Unix())) < time.Duration(params.BeaconConfig().InclusionListFreezeDeadLine)*time.Second
+	viewFreezeDeadline := params.BeaconConfig().SecondsPerSlot*2/params.BeaconConfig().IntervalsPerSlot + 1
+	isBeforeViewFreezeDeadline := s.cfg.clock.CurrentSlot() == il.Message.Slot &&
+		slots.TimeIntoSlot(uint64(s.cfg.clock.GenesisTime().Unix())) < time.Duration(viewFreezeDeadline)*time.Second
 
-	s.inclusionLists.Add(il.Message.Slot, il.Message.ValidatorIndex, il.Message.Transactions, isBeforeFreezeDeadline)
+	s.inclusionLists.Add(il.Message.Slot, il.Message.ValidatorIndex, il.Message.Transactions, isBeforeViewFreezeDeadline)
 
 	s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
 		Type: opfeed.InclusionListReceived,

@@ -46,7 +46,7 @@ func ValidateNilInclusionList(il *eth.InclusionList) error {
 // GetInclusionListCommittee retrieves the validator indices assigned to the inclusion list committee
 // for a given slot. Returns an error if the state or slot does not meet the required constraints.
 func GetInclusionListCommittee(ctx context.Context, state state.ReadOnlyBeaconState, slot primitives.Slot) ([]primitives.ValidatorIndex, error) {
-	if state.Version() < version.Fulu {
+	if state.Version() < version.Electra {
 		return nil, errIncorrectState
 	}
 	if slots.ToEpoch(slot) < params.BeaconConfig().Eip7805ForkEpoch {

@@ -81,6 +81,8 @@ func TestGetSpec(t *testing.T) {
 	config.ElectraForkEpoch = 107
 	config.FuluForkVersion = []byte("FuluForkVersion")
 	config.FuluForkEpoch = 109
+	config.Eip7805ForkVersion = []byte("Eip7805ForkVersion")
+	config.Eip7805ForkEpoch = 18446744073709551615
 	config.BLSWithdrawalPrefixByte = byte('b')
 	config.ETH1AddressWithdrawalPrefixByte = byte('c')
 	config.GenesisDelay = 24

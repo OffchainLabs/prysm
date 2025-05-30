@@ -85,6 +85,11 @@ func InitializeDataMaps() {
 				&ethpb.SignedBeaconBlockFulu{Block: &ethpb.BeaconBlockElectra{Body: &ethpb.BeaconBlockBodyElectra{ExecutionPayload: &enginev1.ExecutionPayloadDeneb{}}}},
 			)
 		},
+		bytesutil.ToBytes4(params.BeaconConfig().Eip7805ForkVersion): func() (interfaces.ReadOnlySignedBeaconBlock, error) {
+			return blocks.NewSignedBeaconBlock(
+				&ethpb.SignedBeaconBlockElectra{Block: &ethpb.BeaconBlockElectra{Body: &ethpb.BeaconBlockBodyElectra{ExecutionPayload: &enginev1.ExecutionPayloadDeneb{}}}},
+			)
+		},
 	}
 
 	// Reset our metadata map.
@@ -108,6 +113,9 @@ func InitializeDataMaps() {
 			return wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}), nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().FuluForkVersion): func() (metadata.Metadata, error) {
+			return wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}), nil
+		},
+		bytesutil.ToBytes4(params.BeaconConfig().Eip7805ForkVersion): func() (metadata.Metadata, error) {
 			return wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}), nil
 		},
 	}
@@ -135,6 +143,9 @@ func InitializeDataMaps() {
 		bytesutil.ToBytes4(params.BeaconConfig().FuluForkVersion): func() (ethpb.Att, error) {
 			return &ethpb.SingleAttestation{}, nil
 		},
+		bytesutil.ToBytes4(params.BeaconConfig().Eip7805ForkVersion): func() (ethpb.Att, error) {
+			return &ethpb.SingleAttestation{}, nil
+		},
 	}
 
 	// Reset our aggregate attestation map.
@@ -158,6 +169,9 @@ func InitializeDataMaps() {
 			return &ethpb.SignedAggregateAttestationAndProofElectra{}, nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().FuluForkVersion): func() (ethpb.SignedAggregateAttAndProof, error) {
+			return &ethpb.SignedAggregateAttestationAndProofElectra{}, nil
+		},
+		bytesutil.ToBytes4(params.BeaconConfig().Eip7805ForkVersion): func() (ethpb.SignedAggregateAttAndProof, error) {
 			return &ethpb.SignedAggregateAttestationAndProofElectra{}, nil
 		},
 	}

@@ -19,6 +19,7 @@ go_library(
         "//beacon-chain/core/blocks:go_default_library",
         "//beacon-chain/core/capella:go_default_library",
         "//beacon-chain/core/deneb:go_default_library",
+        "//beacon-chain/core/eip7805:go_default_library",
         "//beacon-chain/core/electra:go_default_library",
         "//beacon-chain/core/epoch:go_default_library",
         "//beacon-chain/core/epoch/precompute:go_default_library",
