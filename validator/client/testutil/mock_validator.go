@@ -75,6 +75,10 @@ func (fv *FakeValidator) Done() {
 	fv.DoneCalled = true
 }
 
+func (fv *FakeValidator) EventsChan() <-chan *event.Event {
+	return fv.EventsChannel
+}
+
 func (fv *FakeValidator) AccountsChangedChan() <-chan [][fieldparams.BLSPubkeyLength]byte {
 	return fv.AccountsChannel
 }
@@ -323,7 +327,7 @@ func (fv *FakeValidator) DeleteGraffiti(_ context.Context, _ [fieldparams.BLSPub
 	return nil
 }
 
-func (*FakeValidator) StartEventStream(_ context.Context, _ []string, _ chan<- *event.Event) {
+func (*FakeValidator) StartEventStream(_ context.Context, _ []string) {
 
 }
 
