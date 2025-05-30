@@ -340,10 +340,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	SubnetsPerNode:                  2,
 	NodeIdBits:                      256,
 
-	BlobSchedule: []BlobScheduleEntry{
-		{Epoch: 269568, MaxBlobsPerBlock: 6},
-		{Epoch: 364032, MaxBlobsPerBlock: 9},
-	},
+	BlobSchedule: []BlobScheduleEntry{},
 }
 
 // MainnetTestConfig provides a version of the mainnet config that has a different name
