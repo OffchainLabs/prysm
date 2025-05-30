@@ -48,27 +48,20 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 		return nil, err
 	}
 
-	// Gather validator indices for requested pubkeys
-	requestIndices := make([]primitives.ValidatorIndex, 0, len(req.PublicKeys))
-	for _, pubKey := range req.PublicKeys {
-		if idx, ok := s.ValidatorIndexByPubkey(bytesutil.ToBytes48(pubKey)); ok {
-			requestIndices = append(requestIndices, idx)
-		}
-	}
-
-	// Load committee and proposer metadata
-	meta, err := loadDutiesMetadata(ctx, s, req.Epoch, requestIndices)
-	if err != nil {
-		return nil, err
-	}
-
 	// Build duties for each validator
 	ctx, span := trace.StartSpan(ctx, "dutiesv2.BuildResponse")
 	defer span.End()
 
+	// Load committee and proposer metadata
+	meta, err := loadDutiesMetadata(ctx, s, req.Epoch)
+	if err != nil {
+		return nil, err
+	}
+
 	validatorAssignments := make([]*ethpb.DutiesV2Response_Duty, 0, len(req.PublicKeys))
 	nextValidatorAssignments := make([]*ethpb.DutiesV2Response_Duty, 0, len(req.PublicKeys))
 
+	// start loop for assignments for current and next epochs
 	for _, pubKey := range req.PublicKeys {
 		if ctx.Err() != nil {
 			return nil, status.Errorf(codes.Aborted, "Could not continue fetching assignments: %v", ctx.Err())
@@ -87,6 +80,9 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 			})
 			continue
 		}
+
+		meta.current.liteAssignment = helpers.AssignmentForValidator(meta.current.committeesBySlot, meta.current.startSlot, idx)
+		meta.next.liteAssignment = helpers.AssignmentForValidator(meta.next.committeesBySlot, meta.next.startSlot, idx)
 
 		assignment, nextAssignment, err := vs.buildValidatorDuty(pubKey, idx, s, req.Epoch, meta)
 		if err != nil {
@@ -141,25 +137,44 @@ func (vs *Server) stateForEpoch(ctx context.Context, s state.BeaconState, reqEpo
 // dutiesMetadata bundles together related data needed for duty
 // construction.
 type dutiesMetadata struct {
-	assignments          map[primitives.ValidatorIndex]*helpers.CommitteeAssignment
-	nextEpochAssignments map[primitives.ValidatorIndex]*helpers.CommitteeAssignment
-	committeesAtSlot     uint64
-	nextCommitteesAtSlot uint64
-	proposalSlots        map[primitives.ValidatorIndex][]primitives.Slot
+	current *metadata
+	next    *metadata
 }
 
-func loadDutiesMetadata(ctx context.Context, s state.BeaconState, reqEpoch primitives.Epoch, requestIndices []primitives.ValidatorIndex) (*dutiesMetadata, error) {
-	meta := &dutiesMetadata{}
+type metadata struct {
+	assignments      map[primitives.ValidatorIndex]*helpers.CommitteeAssignment
+	committeesAtSlot uint64
+	proposalSlots    map[primitives.ValidatorIndex][]primitives.Slot
+	startSlot        primitives.Slot
+	committeesBySlot [][][]primitives.ValidatorIndex
+	liteAssignment   *helpers.LiteAssignment
+}
 
+func loadDutiesMetadata(ctx context.Context, s state.BeaconState, reqEpoch primitives.Epoch) (*dutiesMetadata, error) {
+	meta := &dutiesMetadata{}
 	var err error
-	meta.assignments, err = helpers.CommitteeAssignments(ctx, s, reqEpoch, requestIndices)
+	meta.current, err = loadMetadata(ctx, s, reqEpoch)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not compute committee assignments: %v", err)
+		return nil, err
+	}
+	// note: we only set the proposer slots for the current assignment and not the next epoch assignment
+	meta.current.proposalSlots, err = helpers.ProposerAssignments(ctx, s, reqEpoch)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not compute proposer slots: %v", err)
 	}
 
-	meta.nextEpochAssignments, err = helpers.CommitteeAssignments(ctx, s, reqEpoch+1, requestIndices)
+	meta.next, err = loadMetadata(ctx, s, reqEpoch+1)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not compute next committee assignments: %v", err)
+		return nil, err
+	}
+	return meta, nil
+}
+
+func loadMetadata(ctx context.Context, s state.BeaconState, reqEpoch primitives.Epoch) (*metadata, error) {
+	meta := &metadata{}
+
+	if err := helpers.VerifyAssignmentEpoch(reqEpoch, s); err != nil {
+		return nil, err
 	}
 
 	activeValidatorCount, err := helpers.ActiveValidatorCount(ctx, s, reqEpoch)
@@ -168,15 +183,14 @@ func loadDutiesMetadata(ctx context.Context, s state.BeaconState, reqEpoch primi
 	}
 	meta.committeesAtSlot = helpers.SlotCommitteeCount(activeValidatorCount)
 
-	nextActiveValidatorCount, err := helpers.ActiveValidatorCount(ctx, s, reqEpoch+1)
+	meta.startSlot, err = slots.EpochStart(reqEpoch)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not get active validator count: %v", err)
+		return nil, err
 	}
-	meta.nextCommitteesAtSlot = helpers.SlotCommitteeCount(nextActiveValidatorCount)
 
-	meta.proposalSlots, err = helpers.ProposerAssignments(ctx, s, reqEpoch)
+	meta.committeesBySlot, err = helpers.PrecomputeCommittees(ctx, s, meta.startSlot)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not compute proposer slots: %v", err)
+		return nil, err
 	}
 
 	return meta, nil
@@ -195,25 +209,16 @@ func (vs *Server) buildValidatorDuty(
 	nextAssignment := &ethpb.DutiesV2Response_Duty{PublicKey: pubKey}
 
 	statusEnum := assignmentStatus(s, idx)
-
 	assignment.ValidatorIndex = idx
 	assignment.Status = statusEnum
-	// note: we only set the proposer slots for the current assignment and not the next epoch assignment
-	assignment.ProposerSlots = meta.proposalSlots[idx]
-	assignment.CommitteesAtSlot = meta.committeesAtSlot
+	assignment.CommitteesAtSlot = meta.current.committeesAtSlot
+	assignment.ProposerSlots = meta.current.proposalSlots[idx]
+	populateCommitteeFields(assignment, meta.current.liteAssignment)
 
 	nextAssignment.ValidatorIndex = idx
 	nextAssignment.Status = statusEnum
-
-	// Current epoch committee
-	if ca, ok := meta.assignments[idx]; ok {
-		populateCommitteeFields(assignment, ca)
-	}
-	// Next epoch committee
-	if ca, ok := meta.nextEpochAssignments[idx]; ok {
-		populateCommitteeFields(nextAssignment, ca)
-		nextAssignment.CommitteesAtSlot = meta.nextCommitteesAtSlot
-	}
+	nextAssignment.CommitteesAtSlot = meta.next.committeesAtSlot
+	populateCommitteeFields(nextAssignment, meta.next.liteAssignment)
 
 	// Sync committee flags
 	if coreTime.HigherEqualThanAltairVersionAndEpoch(s, reqEpoch) {
@@ -251,16 +256,9 @@ func (vs *Server) buildValidatorDuty(
 	return assignment, nextAssignment, nil
 }
 
-func populateCommitteeFields(duty *ethpb.DutiesV2Response_Duty, ca *helpers.CommitteeAssignment) {
-	var valIndexInCommittee uint64
-	for cIndex, vIndex := range ca.Committee {
-		if vIndex == duty.ValidatorIndex {
-			valIndexInCommittee = uint64(cIndex)
-			break
-		}
-	}
-	duty.CommitteeLength = uint64(len(ca.Committee))
-	duty.CommitteeIndex = ca.CommitteeIndex
-	duty.ValidatorCommitteeIndex = valIndexInCommittee
-	duty.AttesterSlot = ca.AttesterSlot
+func populateCommitteeFields(duty *ethpb.DutiesV2Response_Duty, la *helpers.LiteAssignment) {
+	duty.CommitteeLength = la.CommitteeLength
+	duty.CommitteeIndex = la.CommitteeIndex
+	duty.ValidatorCommitteeIndex = la.ValidatorCommitteeIndex
+	duty.AttesterSlot = la.AttesterSlot
 }
