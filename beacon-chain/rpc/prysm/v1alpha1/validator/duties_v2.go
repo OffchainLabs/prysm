@@ -142,7 +142,6 @@ type dutiesMetadata struct {
 }
 
 type metadata struct {
-	assignments      map[primitives.ValidatorIndex]*helpers.CommitteeAssignment
 	committeesAtSlot uint64
 	proposalSlots    map[primitives.ValidatorIndex][]primitives.Slot
 	startSlot        primitives.Slot
