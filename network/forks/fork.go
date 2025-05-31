@@ -3,6 +3,7 @@ package forks
 
 import (
 	"bytes"
+	"encoding/binary"
 	"math"
 	"sort"
 	"time"
@@ -49,7 +50,11 @@ func ForkDigestFromEpoch(currentEpoch primitives.Epoch, genesisValidatorsRoot []
 	if err != nil {
 		return [4]byte{}, err
 	}
-	return signing.ComputeForkDigest(forkData.CurrentVersion, genesisValidatorsRoot)
+	d, err := signing.ComputeForkDigest(forkData.CurrentVersion, genesisValidatorsRoot)
+	if err != nil {
+		return [4]byte{}, errors.Wrap(err, "failed to compute fork digest")
+	}
+	return ApplyBlobParamMask(currentEpoch, d), nil
 }
 
 // CreateForkDigest creates a fork digest from a genesis time and genesis
@@ -77,7 +82,7 @@ func CreateForkDigest(
 	if err != nil {
 		return [4]byte{}, err
 	}
-	return digest, nil
+	return ApplyBlobParamMask(currentEpoch, digest), nil
 }
 
 // Fork given a target epoch,
@@ -116,6 +121,9 @@ func RetrieveForkDataFromDigest(digest [4]byte, genesisValidatorsRoot []byte) ([
 		rDigest, err := signing.ComputeForkDigest(v[:], genesisValidatorsRoot)
 		if err != nil {
 			return [4]byte{}, 0, err
+		}
+		if e >= params.BeaconConfig().FuluForkEpoch {
+			rDigest = ApplyBlobParamMask(e, rDigest)
 		}
 		if rDigest == digest {
 			return v, e, nil
@@ -199,4 +207,24 @@ func LastForkEpoch() primitives.Epoch {
 		}
 	}
 	return lastValidEpoch
+}
+
+// ApplyBlobParamMask applies the blob parameter mask to the provided digest.
+func ApplyBlobParamMask(e primitives.Epoch, d [4]byte) [4]byte {
+	if e < params.BeaconConfig().FuluForkEpoch {
+		return d
+	}
+	maxBlobs := params.BeaconConfig().MaxBlobsPerBlockAtEpoch(e)
+	if maxBlobs == 0 {
+		return d
+	}
+
+	var mask [4]byte
+	binary.BigEndian.PutUint32(mask[:], uint32(maxBlobs))
+
+	for i := 0; i < 4; i++ {
+		d[i] = d[i] ^ mask[i]
+	}
+
+	return d
 }

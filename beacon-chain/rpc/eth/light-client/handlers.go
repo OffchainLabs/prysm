@@ -126,6 +126,9 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 				httputil.HandleError(w, "Could not compute fork digest: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
+			if updateEpoch >= params.BeaconConfig().FuluForkEpoch {
+				forkDigest = forks.ApplyBlobParamMask(updateEpoch, forkDigest)
+			}
 			updateSSZ, err := update.MarshalSSZ()
 			if err != nil {
 				httputil.HandleError(w, "Could not marshal update to SSZ: "+err.Error(), http.StatusInternalServerError)

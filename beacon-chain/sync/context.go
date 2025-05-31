@@ -6,6 +6,8 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/network/forks"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/pkg/errors"
@@ -92,7 +94,14 @@ func ContextByteVersionsForValRoot(valRoot [32]byte) (ContextByteVersions, error
 		if err != nil {
 			return nil, errors.Wrapf(err, "unable to compute fork digest for fork version %#x", fv)
 		}
-		m[digest] = v
+		if v > version.Fulu {
+			for _, b := range params.BeaconConfig().BlobSchedule {
+				digest = forks.ApplyBlobParamMask(b.Epoch, digest)
+				m[digest] = v
+			}
+		} else {
+			m[digest] = v
+		}
 	}
 	return m, nil
 }

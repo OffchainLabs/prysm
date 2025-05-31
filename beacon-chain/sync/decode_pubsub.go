@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"encoding/binary"
 	"fmt"
 	"reflect"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/network/forks"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
@@ -99,29 +101,50 @@ func extractValidDataTypeFromTopic(topic string, digest []byte, clock *startup.C
 	return nil, nil
 }
 
-func extractDataTypeFromTypeMap[T any](typeMap map[[4]byte]func() (T, error), digest []byte, tor blockchain.TemporalOracle) (T, error) {
+func extractDataTypeFromTypeMap[T any](
+	typeMap map[[4]byte]func() (T, error),
+	digest []byte,
+	tor blockchain.TemporalOracle,
+) (T, error) {
 	var zero T
 
 	if len(digest) == 0 {
-		f, ok := typeMap[bytesutil.ToBytes4(params.BeaconConfig().GenesisForkVersion)]
-		if !ok {
-			return zero, fmt.Errorf("no %T type exists for the genesis fork version", zero)
+		genesisDigest := bytesutil.ToBytes4(params.BeaconConfig().GenesisForkVersion)
+		if f, ok := typeMap[genesisDigest]; ok {
+			return f()
 		}
-		return f()
+		return zero, fmt.Errorf("no %T type exists for the genesis fork version", zero)
 	}
+
 	if len(digest) != forkDigestLength {
-		return zero, errors.Errorf("invalid digest returned, wanted a length of %d but received %d", forkDigestLength, len(digest))
+		return zero, errors.Errorf("invalid digest length: got %d, want %d", len(digest), forkDigestLength)
 	}
+
+	targetDigest := bytesutil.ToBytes4(digest)
 	vRoot := tor.GenesisValidatorsRoot()
-	for k, f := range typeMap {
-		rDigest, err := signing.ComputeForkDigest(k[:], vRoot[:])
+
+	fuluForkVersion := binary.BigEndian.Uint32(params.BeaconConfig().FuluForkVersion)
+
+	for version, factory := range typeMap {
+		computedDigest, err := signing.ComputeForkDigest(version[:], vRoot[:])
 		if err != nil {
 			return zero, err
 		}
-		if rDigest == bytesutil.ToBytes4(digest) {
-			return f()
+
+		versionNum := binary.BigEndian.Uint32(version[:])
+
+		if versionNum >= fuluForkVersion {
+			for _, entry := range params.BeaconConfig().BlobSchedule {
+				masked := forks.ApplyBlobParamMask(entry.Epoch, computedDigest)
+				if masked == targetDigest {
+					return factory()
+				}
+			}
+		} else if computedDigest == targetDigest {
+			return factory()
 		}
 	}
+
 	return zero, errors.Wrapf(
 		ErrNoValidDigest,
 		"could not extract %T data type, saw digest=%#x, genesis=%v, vr=%#x",
