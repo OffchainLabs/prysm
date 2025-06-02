@@ -11,6 +11,7 @@ type Metadata interface {
 	SequenceNumber() uint64
 	AttnetsBitfield() bitfield.Bitvector64
 	SyncnetsBitfield() bitfield.Bitvector4
+	CustodyGroupCount() uint64
 	InnerObject() interface{}
 	IsNil() bool
 	Copy() Metadata
@@ -18,5 +19,6 @@ type Metadata interface {
 	ssz.Unmarshaler
 	MetadataObjV0() *pb.MetaDataV0
 	MetadataObjV1() *pb.MetaDataV1
+	MetadataObjV2() *pb.MetaDataV2
 	Version() int
 }

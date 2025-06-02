@@ -1,7 +1,6 @@
 package scorers_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
@@ -11,8 +10,7 @@ import (
 )
 
 func TestScorers_Gossip_Score(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	tests := []struct {
 		name   string

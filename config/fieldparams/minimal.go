@@ -31,6 +31,7 @@ const (
 	BlobLength                            = 131072            // BlobLength defines the byte length of a blob.
 	BlobSize                              = 131072            // defined to match blob.size in bazel ssz codegen
 	BlobSidecarSize                       = 131928            // defined to match blob sidecar size in bazel ssz codegen
+	KzgCommitmentSize                     = 48                // KzgCommitmentSize defines the byte length of a KZG commitment.
 	KzgCommitmentInclusionProofDepth      = 10                // Merkle proof depth for blob_kzg_commitments list item
 	ExecutionBranchDepth                  = 4                 // ExecutionBranchDepth defines the number of leaves in a merkle proof of the execution payload header.
 	SyncCommitteeBranchDepth              = 5                 // SyncCommitteeBranchDepth defines the number of leaves in a merkle proof of a sync committee.
@@ -40,17 +41,11 @@ const (
 	PendingDepositsLimit                  = 134217728         // Maximum number of pending balance deposits in the beacon state.
 	PendingPartialWithdrawalsLimit        = 64                // Maximum number of pending partial withdrawals in the beacon state.
 	PendingConsolidationsLimit            = 64                // Maximum number of pending consolidations in the beacon state.
-	MaxDepositRequestsPerPayload          = 4                 // Maximum number of deposit requests in an execution payload.
-	MaxWithdrawalRequestsPerPayload       = 2                 // Maximum number of execution layer withdrawal requests in an execution payload.
-	MaxConsolidationRequestsPerPayload    = 1                 // Maximum number of consolidation requests in an execution payload.
-	MaxProposerSlashings                  = 16                // Maximum number of proposer slashings in a block.
-	MaxAttesterSlashings                  = 2                 // Maximum number of attester slashings in a block.
 	MaxAttesterSlashingsElectra           = 1                 // Maximum number of attester slashings in a block.
-	MaxAttestations                       = 128               // Maximum number of attestations in a block.
-	MaxAttestationsElectra                = 8                 // Maximum number of attestations in a block.
-	MaxDeposits                           = 16                // Maximum number of deposits in a block.
-	MaxVoluntaryExits                     = 16                // Maximum number of voluntary exits in a block.
-	MaxBlsToExecutionChanges              = 16                // Maximum number of bls to execution changes in a block.
 	MaxRandomByte                         = uint64(1<<8 - 1)  // Maximum value for a random value using for proposer and sync committee sampling.
 	MaxRandomValueElectra                 = uint64(1<<16 - 1) // Maximum value for a random value using for proposer and sync committee sampling.
+
+	// Introduced in Fulu network upgrade.
+	NumberOfColumns = 128 // NumberOfColumns refers to the specified number of data columns that can exist in a network.
+	CellsPerBlob    = 64  // CellsPerBlob refers to the number of cells in a (non-extended) blob.
 )

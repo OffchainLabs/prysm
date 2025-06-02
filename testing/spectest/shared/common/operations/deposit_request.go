@@ -16,7 +16,7 @@ import (
 
 func RunDepositRequestsTest(t *testing.T, config string, fork string, block blockWithSSZObject, sszToState SSZToState) {
 	require.NoError(t, utils.SetConfig(t, config))
-	testFolders, testsFolderPath := utils.TestFolders(t, config, "electra", "operations/deposit_request/pyspec_tests")
+	testFolders, testsFolderPath := utils.TestFolders(t, config, fork, "operations/deposit_request/pyspec_tests")
 	for _, folder := range testFolders {
 		t.Run(folder.Name(), func(t *testing.T) {
 			folderPath := path.Join(testsFolderPath, folder.Name())

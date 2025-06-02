@@ -119,6 +119,9 @@ func attestationCommittees(
 
 // BeaconCommittees returns the list of all beacon committees for a given state at a given slot.
 func BeaconCommittees(ctx context.Context, state state.ReadOnlyBeaconState, slot primitives.Slot) ([][]primitives.ValidatorIndex, error) {
+	ctx, span := trace.StartSpan(ctx, "helpers.BeaconCommittees")
+	defer span.End()
+
 	epoch := slots.ToEpoch(slot)
 	activeCount, err := ActiveValidatorCount(ctx, state, epoch)
 	if err != nil {
@@ -245,6 +248,9 @@ func BeaconCommittee(
 	slot primitives.Slot,
 	committeeIndex primitives.CommitteeIndex,
 ) ([]primitives.ValidatorIndex, error) {
+	ctx, span := trace.StartSpan(ctx, "helpers.BeaconCommittee")
+	defer span.End()
+
 	committee, err := committeeCache.Committee(ctx, slot, seed, committeeIndex)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not interface with committee cache")
@@ -439,6 +445,9 @@ func CommitteeIndices(committeeBits bitfield.Bitfield) []primitives.CommitteeInd
 // UpdateCommitteeCache gets called at the beginning of every epoch to cache the committee shuffled indices
 // list with committee index and epoch number. It caches the shuffled indices for the input epoch.
 func UpdateCommitteeCache(ctx context.Context, state state.ReadOnlyBeaconState, e primitives.Epoch) error {
+	ctx, span := trace.StartSpan(ctx, "committeeCache.UpdateCommitteeCache")
+	defer span.End()
+
 	seed, err := Seed(state, e, params.BeaconConfig().DomainBeaconAttester)
 	if err != nil {
 		return err

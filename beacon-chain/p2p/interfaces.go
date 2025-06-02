@@ -5,9 +5,11 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/connmgr"
@@ -18,90 +20,106 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// P2P represents the full p2p interface composed of all of the sub-interfaces.
-type P2P interface {
-	Broadcaster
-	SetStreamHandler
-	PubSubProvider
-	PubSubTopicUser
-	SenderEncoder
-	PeerManager
-	ConnectionHandler
-	PeersProvider
-	MetadataProvider
-}
+type (
+	// P2P represents the full p2p interface composed of all of the sub-interfaces.
+	P2P interface {
+		Broadcaster
+		SetStreamHandler
+		PubSubProvider
+		PubSubTopicUser
+		SenderEncoder
+		PeerManager
+		ConnectionHandler
+		PeersProvider
+		MetadataProvider
+		DataColumnsHandler
+	}
 
-// Broadcaster broadcasts messages to peers over the p2p pubsub protocol.
-type Broadcaster interface {
-	Broadcast(context.Context, proto.Message) error
-	BroadcastAttestation(ctx context.Context, subnet uint64, att ethpb.Att) error
-	BroadcastSyncCommitteeMessage(ctx context.Context, subnet uint64, sMsg *ethpb.SyncCommitteeMessage) error
-	BroadcastBlob(ctx context.Context, subnet uint64, blob *ethpb.BlobSidecar) error
-	BroadcastLightClientOptimisticUpdate(ctx context.Context, update interfaces.LightClientOptimisticUpdate) error
-	BroadcastLightClientFinalityUpdate(ctx context.Context, update interfaces.LightClientFinalityUpdate) error
-}
+	// Accessor provides access to the Broadcaster and PeerManager interfaces.
+	Accessor interface {
+		Broadcaster
+		PeerManager
+	}
 
-// SetStreamHandler configures p2p to handle streams of a certain topic ID.
-type SetStreamHandler interface {
-	SetStreamHandler(topic string, handler network.StreamHandler)
-}
+	// Broadcaster broadcasts messages to peers over the p2p pubsub protocol.
+	Broadcaster interface {
+		Broadcast(context.Context, proto.Message) error
+		BroadcastAttestation(ctx context.Context, subnet uint64, att ethpb.Att) error
+		BroadcastSyncCommitteeMessage(ctx context.Context, subnet uint64, sMsg *ethpb.SyncCommitteeMessage) error
+		BroadcastBlob(ctx context.Context, subnet uint64, blob *ethpb.BlobSidecar) error
+		BroadcastLightClientOptimisticUpdate(ctx context.Context, update interfaces.LightClientOptimisticUpdate) error
+		BroadcastLightClientFinalityUpdate(ctx context.Context, update interfaces.LightClientFinalityUpdate) error
+		BroadcastDataColumn(root [fieldparams.RootLength]byte, columnSubnet uint64, dataColumnSidecar *ethpb.DataColumnSidecar, peersChecked ...chan<- bool) error
+	}
 
-// PubSubTopicUser provides way to join, use and leave PubSub topics.
-type PubSubTopicUser interface {
-	JoinTopic(topic string, opts ...pubsub.TopicOpt) (*pubsub.Topic, error)
-	LeaveTopic(topic string) error
-	PublishToTopic(ctx context.Context, topic string, data []byte, opts ...pubsub.PubOpt) error
-	SubscribeToTopic(topic string, opts ...pubsub.SubOpt) (*pubsub.Subscription, error)
-}
+	// SetStreamHandler configures p2p to handle streams of a certain topic ID.
+	SetStreamHandler interface {
+		SetStreamHandler(topic string, handler network.StreamHandler)
+	}
 
-// ConnectionHandler configures p2p to handle connections with a peer.
-type ConnectionHandler interface {
-	AddConnectionHandler(f func(ctx context.Context, id peer.ID) error,
-		j func(ctx context.Context, id peer.ID) error)
-	AddDisconnectionHandler(f func(ctx context.Context, id peer.ID) error)
-	connmgr.ConnectionGater
-}
+	// PubSubTopicUser provides way to join, use and leave PubSub topics.
+	PubSubTopicUser interface {
+		JoinTopic(topic string, opts ...pubsub.TopicOpt) (*pubsub.Topic, error)
+		LeaveTopic(topic string) error
+		PublishToTopic(ctx context.Context, topic string, data []byte, opts ...pubsub.PubOpt) error
+		SubscribeToTopic(topic string, opts ...pubsub.SubOpt) (*pubsub.Subscription, error)
+	}
 
-// SenderEncoder allows sending functionality from libp2p as well as encoding for requests and responses.
-type SenderEncoder interface {
-	EncodingProvider
-	Sender
-}
+	// ConnectionHandler configures p2p to handle connections with a peer.
+	ConnectionHandler interface {
+		AddConnectionHandler(f func(ctx context.Context, id peer.ID) error,
+			j func(ctx context.Context, id peer.ID) error)
+		AddDisconnectionHandler(f func(ctx context.Context, id peer.ID) error)
+		connmgr.ConnectionGater
+	}
 
-// EncodingProvider provides p2p network encoding.
-type EncodingProvider interface {
-	Encoding() encoder.NetworkEncoding
-}
+	// SenderEncoder allows sending functionality from libp2p as well as encoding for requests and responses.
+	SenderEncoder interface {
+		EncodingProvider
+		Sender
+	}
 
-// PubSubProvider provides the p2p pubsub protocol.
-type PubSubProvider interface {
-	PubSub() *pubsub.PubSub
-}
+	// EncodingProvider provides p2p network encoding.
+	EncodingProvider interface {
+		Encoding() encoder.NetworkEncoding
+	}
 
-// PeerManager abstracts some peer management methods from libp2p.
-type PeerManager interface {
-	Disconnect(peer.ID) error
-	PeerID() peer.ID
-	Host() host.Host
-	ENR() *enr.Record
-	DiscoveryAddresses() ([]multiaddr.Multiaddr, error)
-	RefreshPersistentSubnets()
-	FindPeersWithSubnet(ctx context.Context, topic string, subIndex uint64, threshold int) (bool, error)
-	AddPingMethod(reqFunc func(ctx context.Context, id peer.ID) error)
-}
+	// PubSubProvider provides the p2p pubsub protocol.
+	PubSubProvider interface {
+		PubSub() *pubsub.PubSub
+	}
 
-// Sender abstracts the sending functionality from libp2p.
-type Sender interface {
-	Send(context.Context, interface{}, string, peer.ID) (network.Stream, error)
-}
+	// PeerManager abstracts some peer management methods from libp2p.
+	PeerManager interface {
+		Disconnect(peer.ID) error
+		PeerID() peer.ID
+		Host() host.Host
+		ENR() *enr.Record
+		NodeID() enode.ID
+		DiscoveryAddresses() ([]multiaddr.Multiaddr, error)
+		RefreshPersistentSubnets()
+		FindPeersWithSubnet(ctx context.Context, topic string, subIndex uint64, threshold int) (bool, error)
+		AddPingMethod(reqFunc func(ctx context.Context, id peer.ID) error)
+	}
 
-// PeersProvider abstracts obtaining our current list of known peers status.
-type PeersProvider interface {
-	Peers() *peers.Status
-}
+	// Sender abstracts the sending functionality from libp2p.
+	Sender interface {
+		Send(context.Context, interface{}, string, peer.ID) (network.Stream, error)
+	}
 
-// MetadataProvider returns the metadata related information for the local peer.
-type MetadataProvider interface {
-	Metadata() metadata.Metadata
-	MetadataSeq() uint64
-}
+	// PeersProvider abstracts obtaining our current list of known peers status.
+	PeersProvider interface {
+		Peers() *peers.Status
+	}
+
+	// MetadataProvider returns the metadata related information for the local peer.
+	MetadataProvider interface {
+		Metadata() metadata.Metadata
+		MetadataSeq() uint64
+	}
+
+	// DataColumnsHandler abstracts some data columns related methods.
+	DataColumnsHandler interface {
+		CustodyGroupCountFromPeer(peer.ID) uint64
+	}
+)

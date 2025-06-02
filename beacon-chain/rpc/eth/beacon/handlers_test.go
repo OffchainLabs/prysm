@@ -4078,6 +4078,47 @@ func TestGetCommittees(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, true, resp.Finalized)
 	})
+
+	t.Run("Invalid slot for given epoch", func(t *testing.T) {
+		cases := []struct {
+			name      string
+			epoch     string
+			slot      string
+			expectMsg string
+		}{
+			{
+				name:      "Slot after the specified epoch",
+				epoch:     "10",
+				slot:      "400",
+				expectMsg: "Slot 400 does not belong in epoch 10",
+			},
+			{
+				name:      "Slot before the specified epoch",
+				epoch:     "10",
+				slot:      "300",
+				expectMsg: "Slot 300 does not belong in epoch 10",
+			},
+		}
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				query := url + "?epoch=" + tc.epoch + "&slot=" + tc.slot
+				request := httptest.NewRequest(http.MethodGet, query, nil)
+				request.SetPathValue("state_id", "head")
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+				s.GetCommittees(writer, request)
+				assert.Equal(t, http.StatusBadRequest, writer.Code)
+				var resp struct {
+					Message string `json:"message"`
+					Code    int    `json:"code"`
+				}
+				err := json.Unmarshal(writer.Body.Bytes(), &resp)
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectMsg, resp.Message)
+			})
+		}
+	})
 }
 
 func TestGetBlockHeaders(t *testing.T) {

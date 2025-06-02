@@ -16,8 +16,7 @@ import (
 )
 
 func TestScorers_PeerStatus_Score(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	tests := []struct {
 		name   string

@@ -16,6 +16,7 @@ import (
 
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
@@ -140,6 +141,15 @@ func TestStartDiscV5_DiscoverAllPeers(t *testing.T) {
 
 func TestCreateLocalNode(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
+
+	// Set the fulu fork epoch to something other than the far future epoch.
+	initFuluForkEpoch := params.BeaconConfig().FuluForkEpoch
+	params.BeaconConfig().FuluForkEpoch = 42
+
+	defer func() {
+		params.BeaconConfig().FuluForkEpoch = initFuluForkEpoch
+	}()
+
 	testCases := []struct {
 		name          string
 		cfg           *Config
@@ -147,30 +157,31 @@ func TestCreateLocalNode(t *testing.T) {
 	}{
 		{
 			name:          "valid config",
-			cfg:           nil,
+			cfg:           &Config{CustodyInfo: &peerdas.CustodyInfo{}},
 			expectedError: false,
 		},
 		{
 			name:          "invalid host address",
-			cfg:           &Config{HostAddress: "invalid"},
+			cfg:           &Config{HostAddress: "invalid", CustodyInfo: &peerdas.CustodyInfo{}},
 			expectedError: true,
 		},
 		{
 			name:          "valid host address",
-			cfg:           &Config{HostAddress: "192.168.0.1"},
+			cfg:           &Config{HostAddress: "192.168.0.1", CustodyInfo: &peerdas.CustodyInfo{}},
 			expectedError: false,
 		},
 		{
 			name:          "invalid host DNS",
-			cfg:           &Config{HostDNS: "invalid"},
+			cfg:           &Config{HostDNS: "invalid", CustodyInfo: &peerdas.CustodyInfo{}},
 			expectedError: true,
 		},
 		{
 			name:          "valid host DNS",
-			cfg:           &Config{HostDNS: "www.google.com"},
+			cfg:           &Config{HostDNS: "www.google.com", CustodyInfo: &peerdas.CustodyInfo{}},
 			expectedError: false,
 		},
 	}
+
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			// Define ports.
@@ -199,7 +210,7 @@ func TestCreateLocalNode(t *testing.T) {
 			require.NoError(t, err)
 
 			expectedAddress := address
-			if tt.cfg != nil && tt.cfg.HostAddress != "" {
+			if tt.cfg.HostAddress != "" {
 				expectedAddress = net.ParseIP(tt.cfg.HostAddress)
 			}
 
@@ -236,6 +247,11 @@ func TestCreateLocalNode(t *testing.T) {
 			syncSubnets := new([]byte)
 			require.NoError(t, localNode.Node().Record().Load(enr.WithEntry(syncCommsSubnetEnrKey, syncSubnets)))
 			require.DeepSSZEqual(t, []byte{0}, *syncSubnets)
+
+			// Check cgc config.
+			custodyGroupCount := new(uint64)
+			require.NoError(t, localNode.Node().Record().Load(enr.WithEntry(peerdas.CustodyGroupCountEnrKey, custodyGroupCount)))
+			require.Equal(t, params.BeaconConfig().CustodyRequirement, *custodyGroupCount)
 		})
 	}
 }
@@ -535,7 +551,7 @@ type check struct {
 	metadataSequenceNumber uint64
 	attestationSubnets     []uint64
 	syncSubnets            []uint64
-	custodySubnetCount     *uint64
+	custodyGroupCount      *uint64
 }
 
 func checkPingCountCacheMetadataRecord(
@@ -601,6 +617,18 @@ func checkPingCountCacheMetadataRecord(
 		actualBitSMetadata := service.metaData.SyncnetsBitfield()
 		require.DeepSSZEqual(t, expectedBitS, actualBitSMetadata)
 	}
+
+	if expected.custodyGroupCount != nil {
+		// Check custody subnet count in ENR.
+		var actualCustodyGroupCount uint64
+		err := service.dv5Listener.LocalNode().Node().Record().Load(enr.WithEntry(peerdas.CustodyGroupCountEnrKey, &actualCustodyGroupCount))
+		require.NoError(t, err)
+		require.Equal(t, *expected.custodyGroupCount, actualCustodyGroupCount)
+
+		// Check custody subnet count in metadata.
+		actualGroupCountMetadata := service.metaData.CustodyGroupCount()
+		require.Equal(t, *expected.custodyGroupCount, actualGroupCountMetadata)
+	}
 }
 
 func TestRefreshPersistentSubnets(t *testing.T) {
@@ -610,12 +638,18 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 	defer cache.SubnetIDs.EmptyAllCaches()
 	defer cache.SyncSubnetIDs.EmptyAllCaches()
 
-	const altairForkEpoch = 5
+	const (
+		altairForkEpoch = 5
+		fuluForkEpoch   = 10
+	)
+
+	custodyGroupCount := params.BeaconConfig().CustodyRequirement
 
 	// Set up epochs.
 	defaultCfg := params.BeaconConfig()
 	cfg := defaultCfg.Copy()
 	cfg.AltairForkEpoch = altairForkEpoch
+	cfg.FuluForkEpoch = fuluForkEpoch
 	params.OverrideBeaconConfig(cfg)
 
 	// Compute the number of seconds per epoch.
@@ -684,6 +718,39 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:              "Fulu",
+			epochSinceGenesis: fuluForkEpoch,
+			checks: []check{
+				{
+					pingCount:              0,
+					metadataSequenceNumber: 0,
+					attestationSubnets:     []uint64{},
+					syncSubnets:            nil,
+				},
+				{
+					pingCount:              1,
+					metadataSequenceNumber: 1,
+					attestationSubnets:     []uint64{40, 41},
+					syncSubnets:            nil,
+					custodyGroupCount:      &custodyGroupCount,
+				},
+				{
+					pingCount:              2,
+					metadataSequenceNumber: 2,
+					attestationSubnets:     []uint64{40, 41},
+					syncSubnets:            []uint64{1, 2},
+					custodyGroupCount:      &custodyGroupCount,
+				},
+				{
+					pingCount:              2,
+					metadataSequenceNumber: 2,
+					attestationSubnets:     []uint64{40, 41},
+					syncSubnets:            []uint64{1, 2},
+					custodyGroupCount:      &custodyGroupCount,
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -717,7 +784,7 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 					actualPingCount++
 					return nil
 				},
-				cfg:                   &Config{UDPPort: 2000},
+				cfg:                   &Config{UDPPort: 2000, CustodyInfo: &peerdas.CustodyInfo{}},
 				peers:                 p2p.Peers(),
 				genesisTime:           time.Now().Add(-time.Duration(tc.epochSinceGenesis*secondsPerEpoch) * time.Second),
 				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),

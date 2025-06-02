@@ -180,6 +180,19 @@ func TestService_ReceiveBlock(t *testing.T) {
 	}
 	wg.Wait()
 }
+func TestHandleDA(t *testing.T) {
+	signedBeaconBlock, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlock{
+		Block: &ethpb.BeaconBlock{
+			Body: &ethpb.BeaconBlockBody{},
+		},
+	})
+	require.NoError(t, err)
+
+	s, _ := minimalTestService(t)
+	elapsed, err := s.handleDA(context.Background(), signedBeaconBlock, [fieldparams.RootLength]byte{}, nil)
+	require.NoError(t, err)
+	require.Equal(t, true, elapsed > 0, "Elapsed time should be greater than 0")
+}
 
 func TestService_ReceiveBlockUpdateHead(t *testing.T) {
 	s, tr := minimalTestService(t,

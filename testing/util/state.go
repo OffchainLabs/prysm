@@ -71,19 +71,6 @@ func FillRootsNaturalOptCapella(state *ethpb.BeaconStateCapella) error {
 	return nil
 }
 
-// FillRootsNaturalOptDeneb is meant to be used as an option when calling NewBeaconStateDeneb.
-// It fills state and block roots with hex representations of natural numbers starting with 0.
-// Example: 16 becomes 0x00...0f.
-func FillRootsNaturalOptDeneb(state *ethpb.BeaconStateDeneb) error {
-	roots, err := PrepareRoots(int(params.BeaconConfig().SlotsPerHistoricalRoot))
-	if err != nil {
-		return err
-	}
-	state.StateRoots = roots
-	state.BlockRoots = roots
-	return nil
-}
-
 type NewBeaconStateOption func(state *ethpb.BeaconState) error
 
 // NewBeaconState creates a beacon state with minimum marshalable fields.
