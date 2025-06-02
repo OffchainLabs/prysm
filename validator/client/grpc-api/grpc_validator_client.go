@@ -5,16 +5,17 @@ import (
 	"encoding/json"
 	"strconv"
 
+	"github.com/OffchainLabs/prysm/v6/api/client"
+	eventClient "github.com/OffchainLabs/prysm/v6/api/client/event"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/client"
-	eventClient "github.com/prysmaticlabs/prysm/v5/api/client/event"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
@@ -50,6 +51,8 @@ func toValidatorDutiesContainer(dutiesResponse *ethpb.DutiesResponse) (*ethpb.Va
 		nextDuties[i] = duty
 	}
 	return &ethpb.ValidatorDutiesContainer{
+		PrevDependentRoot:  dutiesResponse.PreviousDutyDependentRoot,
+		CurrDependentRoot:  dutiesResponse.CurrentDutyDependentRoot,
 		CurrentEpochDuties: currentDuties,
 		NextEpochDuties:    nextDuties,
 	}, nil
@@ -224,7 +227,7 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 		}
 		return
 	}
-	// TODO(13563): ONLY WORKS WITH HEAD TOPIC RIGHT NOW/ONLY PROVIDES THE SLOT
+	// TODO(13563): ONLY WORKS WITH HEAD TOPIC.
 	containsHead := false
 	for i := range topics {
 		if topics[i] == eventClient.EventHead {
@@ -254,7 +257,6 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 		select {
 		case <-ctx.Done():
 			log.Info("Context canceled, stopping event stream")
-			close(eventsChannel)
 			c.isEventStreamRunning = false
 			return
 		default:
@@ -286,7 +288,9 @@ func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []str
 				continue
 			}
 			b, err := json.Marshal(structs.HeadEvent{
-				Slot: strconv.FormatUint(uint64(res.Slot), 10),
+				Slot:                      strconv.FormatUint(uint64(res.Slot), 10),
+				PreviousDutyDependentRoot: hexutil.Encode(res.PreviousDutyDependentRoot),
+				CurrentDutyDependentRoot:  hexutil.Encode(res.CurrentDutyDependentRoot),
 			})
 			if err != nil {
 				eventsChannel <- &eventClient.Event{

@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/io/file"
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
 )
 
 // params struct defines the parameters needed for running E2E tests to properly handle test sharding.
@@ -125,12 +125,6 @@ var PostElectraDepositCount = uint64(32)
 
 // PregenesisExecCreds is the number of withdrawal credentials of genesis validators which use an execution address.
 var PregenesisExecCreds = uint64(8)
-
-// NumOfExecEngineTxs is the number of transaction sent to the execution engine.
-var NumOfExecEngineTxs = uint64(200)
-
-// ExpectedExecEngineTxsThreshold is the portion of execution engine transactions we expect to find in blocks.
-var ExpectedExecEngineTxsThreshold = 0.5
 
 // Base port values.
 const (

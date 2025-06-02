@@ -8,27 +8,27 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/config/proposer"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	blocktest "github.com/OffchainLabs/prysm/v6/consensus-types/blocks/testing"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	validatormock "github.com/OffchainLabs/prysm/v6/testing/validator-mock"
+	testing2 "github.com/OffchainLabs/prysm/v6/validator/db/testing"
+	"github.com/OffchainLabs/prysm/v6/validator/graffiti"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/config/proposer"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	blocktest "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks/testing"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	validatormock "github.com/prysmaticlabs/prysm/v5/testing/validator-mock"
-	testing2 "github.com/prysmaticlabs/prysm/v5/validator/db/testing"
-	"github.com/prysmaticlabs/prysm/v5/validator/graffiti"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
 )
@@ -81,7 +81,7 @@ func setup(t *testing.T, isSlashingProtectionMinimal bool) (*validator, *mocks, 
 func setupWithKey(t *testing.T, validatorKey bls.SecretKey, isSlashingProtectionMinimal bool) (*validator, *mocks, bls.SecretKey, func()) {
 	var pubKey [fieldparams.BLSPubkeyLength]byte
 	copy(pubKey[:], validatorKey.PublicKey().Marshal())
-	valDB := testing2.SetupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubKey}, isSlashingProtectionMinimal)
+	valDB := testing2.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{pubKey}, isSlashingProtectionMinimal)
 	ctrl := gomock.NewController(t)
 	m := &mocks{
 		validatorClient: validatormock.NewMockValidatorClient(ctrl),
@@ -1105,7 +1105,7 @@ func TestGetGraffitiOrdered_Ok(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
 			pubKey := [fieldparams.BLSPubkeyLength]byte{'a'}
-			valDB := testing2.SetupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubKey}, isSlashingProtectionMinimal)
+			valDB := testing2.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{pubKey}, isSlashingProtectionMinimal)
 			ctrl := gomock.NewController(t)
 			m := &mocks{
 				validatorClient: validatormock.NewMockValidatorClient(ctrl),
@@ -1188,7 +1188,7 @@ func Test_validator_DeleteGraffiti(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			v := &validator{
-				db:               testing2.SetupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubKey}, false),
+				db:               testing2.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{pubKey}, false),
 				proposerSettings: tt.proposerSettings,
 			}
 			err := v.DeleteGraffiti(context.Background(), pubKey)
@@ -1268,7 +1268,7 @@ func Test_validator_SetGraffiti(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			v := &validator{
-				db:               testing2.SetupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubKey}, false),
+				db:               testing2.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{pubKey}, false),
 				proposerSettings: tt.proposerSettings,
 			}
 			err := v.SetGraffiti(context.Background(), pubKey, []byte(tt.graffiti))

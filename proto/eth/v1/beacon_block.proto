@@ -20,7 +20,7 @@ import "proto/eth/ext/options.proto";
 import "proto/eth/v1/attestation.proto";
 
 option csharp_namespace = "Ethereum.Eth.V1";
-option go_package = "github.com/prysmaticlabs/prysm/v5/proto/eth/v1";
+option go_package = "github.com/OffchainLabs/prysm/v6/proto/eth/v1";
 option java_multiple_files = true;
 option java_outer_classname = "BeaconBlockProto";
 option java_package = "org.ethereum.eth.v1";
@@ -32,12 +32,12 @@ message BeaconBlock {
   // Beacon chain slot that this block represents.
   uint64 slot = 1 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
 
   // Validator index of the validator that proposed the block header.
   uint64 proposer_index = 2 [ (ethereum.eth.ext.cast_type) =
-                                  "github.com/prysmaticlabs/prysm/v5/"
+                                  "github.com/OffchainLabs/prysm/v6/"
                                   "consensus-types/primitives.ValidatorIndex" ];
 
   // 32 byte root of the parent block.
@@ -146,13 +146,13 @@ message VoluntaryExit {
   // The epoch on when exit request becomes valid.
   uint64 epoch = 1 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Epoch"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
   ];
 
   // Index of the exiting validator.
   uint64 validator_index = 2
       [ (ethereum.eth.ext.cast_type) =
-            "github.com/prysmaticlabs/prysm/v5/consensus-types/"
+            "github.com/OffchainLabs/prysm/v6/consensus-types/"
             "primitives.ValidatorIndex" ];
 }
 
@@ -188,12 +188,12 @@ message BeaconBlockHeader {
   // Beacon chain slot that this block represents.
   uint64 slot = 1 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/prysm/v5/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
 
   // Validator index of the validator that proposed the block header.
   uint64 proposer_index = 2 [ (ethereum.eth.ext.cast_type) =
-                                  "github.com/prysmaticlabs/prysm/v5/"
+                                  "github.com/OffchainLabs/prysm/v6/"
                                   "consensus-types/primitives.ValidatorIndex" ];
 
   // 32 byte merkle tree root of the parent ssz encoded block.

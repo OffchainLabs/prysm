@@ -11,38 +11,39 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/api/server"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	blockchainmock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	prysmtime "github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/blstoexec"
+	blstoexecmock "github.com/OffchainLabs/prysm/v6/beacon-chain/operations/blstoexec/mock"
+	slashingsmock "github.com/OffchainLabs/prysm/v6/beacon-chain/operations/slashings/mock"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/synccommittee"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/voluntaryexits/mock"
+	p2pMock "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls/common"
+	"github.com/OffchainLabs/prysm/v6/crypto/hash"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	ethpbv1alpha1 "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/api"
-	"github.com/prysmaticlabs/prysm/v5/api/server"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	blockchainmock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	prysmtime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/blstoexec"
-	blstoexecmock "github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/blstoexec/mock"
-	slashingsmock "github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/slashings/mock"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/synccommittee"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/voluntaryexits/mock"
-	p2pMock "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls/common"
-	"github.com/prysmaticlabs/prysm/v5/crypto/hash"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	ethpbv1alpha1 "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 func TestListAttestations(t *testing.T) {
@@ -211,8 +212,8 @@ func TestListAttestations(t *testing.T) {
 		t.Run("Pre-Electra", func(t *testing.T) {
 			bs, err := util.NewBeaconState()
 			require.NoError(t, err)
-
-			chainService := &blockchainmock.ChainService{State: bs}
+			slot := primitives.Slot(0)
+			chainService := &blockchainmock.ChainService{State: bs, Slot: &slot}
 			s := &Server{
 				ChainInfoFetcher: chainService,
 				TimeFetcher:      chainService,
@@ -310,13 +311,16 @@ func TestListAttestations(t *testing.T) {
 			})
 		})
 		t.Run("Post-Electra", func(t *testing.T) {
-			cb := primitives.NewAttestationCommitteeBits()
-			cb.SetBitAt(1, true)
+			cb1 := primitives.NewAttestationCommitteeBits()
+			cb1.SetBitAt(1, true)
+			cb2 := primitives.NewAttestationCommitteeBits()
+			cb2.SetBitAt(2, true)
+
 			attElectra1 := &ethpbv1alpha1.AttestationElectra{
 				AggregationBits: []byte{1, 10},
 				Data: &ethpbv1alpha1.AttestationData{
 					Slot:            1,
-					CommitteeIndex:  1,
+					CommitteeIndex:  0,
 					BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot1"), 32),
 					Source: &ethpbv1alpha1.Checkpoint{
 						Epoch: 1,
@@ -327,14 +331,14 @@ func TestListAttestations(t *testing.T) {
 						Root:  bytesutil.PadTo([]byte("targetroot1"), 32),
 					},
 				},
-				CommitteeBits: cb,
+				CommitteeBits: cb1,
 				Signature:     bytesutil.PadTo([]byte("signature1"), 96),
 			}
 			attElectra2 := &ethpbv1alpha1.AttestationElectra{
 				AggregationBits: []byte{1, 10},
 				Data: &ethpbv1alpha1.AttestationData{
 					Slot:            1,
-					CommitteeIndex:  4,
+					CommitteeIndex:  0,
 					BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot2"), 32),
 					Source: &ethpbv1alpha1.Checkpoint{
 						Epoch: 1,
@@ -345,14 +349,14 @@ func TestListAttestations(t *testing.T) {
 						Root:  bytesutil.PadTo([]byte("targetroot2"), 32),
 					},
 				},
-				CommitteeBits: cb,
+				CommitteeBits: cb2,
 				Signature:     bytesutil.PadTo([]byte("signature2"), 96),
 			}
 			attElectra3 := &ethpbv1alpha1.AttestationElectra{
 				AggregationBits: bitfield.NewBitlist(8),
 				Data: &ethpbv1alpha1.AttestationData{
 					Slot:            2,
-					CommitteeIndex:  2,
+					CommitteeIndex:  0,
 					BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot3"), 32),
 					Source: &ethpbv1alpha1.Checkpoint{
 						Epoch: 1,
@@ -363,14 +367,14 @@ func TestListAttestations(t *testing.T) {
 						Root:  bytesutil.PadTo([]byte("targetroot3"), 32),
 					},
 				},
-				CommitteeBits: cb,
+				CommitteeBits: cb1,
 				Signature:     bytesutil.PadTo([]byte("signature3"), 96),
 			}
 			attElectra4 := &ethpbv1alpha1.AttestationElectra{
 				AggregationBits: bitfield.NewBitlist(8),
 				Data: &ethpbv1alpha1.AttestationData{
 					Slot:            2,
-					CommitteeIndex:  4,
+					CommitteeIndex:  0,
 					BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot4"), 32),
 					Source: &ethpbv1alpha1.Checkpoint{
 						Epoch: 1,
@@ -381,7 +385,7 @@ func TestListAttestations(t *testing.T) {
 						Root:  bytesutil.PadTo([]byte("targetroot4"), 32),
 					},
 				},
-				CommitteeBits: cb,
+				CommitteeBits: cb2,
 				Signature:     bytesutil.PadTo([]byte("signature4"), 96),
 			}
 			bs, err := util.NewBeaconStateElectra()
@@ -442,7 +446,7 @@ func TestListAttestations(t *testing.T) {
 				}
 			})
 			t.Run("index request", func(t *testing.T) {
-				url := "http://example.com?committee_index=4"
+				url := "http://example.com?committee_index=2"
 				request := httptest.NewRequest(http.MethodGet, url, nil)
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
@@ -459,11 +463,11 @@ func TestListAttestations(t *testing.T) {
 				assert.Equal(t, 2, len(atts))
 				assert.Equal(t, "electra", resp.Version)
 				for _, a := range atts {
-					assert.Equal(t, "4", a.Data.CommitteeIndex)
+					assert.Equal(t, "0x0400000000000000", a.CommitteeBits)
 				}
 			})
 			t.Run("both slot + index request", func(t *testing.T) {
-				url := "http://example.com?slot=2&committee_index=4"
+				url := "http://example.com?slot=2&committee_index=2"
 				request := httptest.NewRequest(http.MethodGet, url, nil)
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
@@ -481,7 +485,7 @@ func TestListAttestations(t *testing.T) {
 				assert.Equal(t, "electra", resp.Version)
 				for _, a := range atts {
 					assert.Equal(t, "2", a.Data.Slot)
-					assert.Equal(t, "4", a.Data.CommitteeIndex)
+					assert.Equal(t, "0x0400000000000000", a.CommitteeBits)
 				}
 			})
 		})
@@ -522,11 +526,12 @@ func TestSubmitAttestations(t *testing.T) {
 	require.NoError(t, err)
 	b := bitfield.NewBitlist(1)
 	b.SetBitAt(0, true)
-
-	chainService := &blockchainmock.ChainService{State: bs}
+	slot := primitives.Slot(0)
+	chainService := &blockchainmock.ChainService{State: bs, Slot: &slot}
 	s := &Server{
 		HeadFetcher:             chainService,
 		ChainInfoFetcher:        chainService,
+		TimeFetcher:             chainService,
 		OperationNotifier:       &blockchainmock.MockOperationNotifier{},
 		AttestationStateFetcher: chainService,
 	}
@@ -576,6 +581,26 @@ func TestSubmitAttestations(t *testing.T) {
 			assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
 			assert.Equal(t, 2, broadcaster.NumAttestations())
 			assert.Equal(t, 2, s.AttestationsPool.UnaggregatedAttestationCount())
+		})
+		t.Run("wrong fork", func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			config := params.BeaconConfig()
+			config.ElectraForkEpoch = 0
+			params.OverrideBeaconConfig(config)
+
+			var body bytes.Buffer
+			_, err := body.WriteString(singleAtt)
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.SubmitAttestations(writer, request)
+			assert.Equal(t, http.StatusBadRequest, writer.Code)
+			e := &httputil.DefaultJsonError{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+			assert.Equal(t, http.StatusBadRequest, e.Code)
+			assert.ErrorContains(t, "old attestation format", errors.New(e.Message))
 		})
 		t.Run("no body", func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
@@ -671,6 +696,43 @@ func TestSubmitAttestations(t *testing.T) {
 				assert.Equal(t, 2, broadcaster.NumAttestations())
 				assert.Equal(t, 2, s.AttestationsPool.UnaggregatedAttestationCount())
 			})
+			t.Run("phase0 att post electra", func(t *testing.T) {
+				params.SetupTestConfigCleanup(t)
+				config := params.BeaconConfig()
+				config.ElectraForkEpoch = 0
+				params.OverrideBeaconConfig(config)
+
+				var body bytes.Buffer
+				_, err := body.WriteString(singleAtt)
+				require.NoError(t, err)
+				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+
+				s.SubmitAttestationsV2(writer, request)
+				assert.Equal(t, http.StatusBadRequest, writer.Code)
+				e := &httputil.DefaultJsonError{}
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+				assert.Equal(t, http.StatusBadRequest, e.Code)
+				assert.ErrorContains(t, "old attestation format", errors.New(e.Message))
+			})
+			t.Run("electra att before electra", func(t *testing.T) {
+				var body bytes.Buffer
+				_, err := body.WriteString(singleAttElectra)
+				require.NoError(t, err)
+				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+				request.Header.Set(api.VersionHeader, version.String(version.Electra))
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+
+				s.SubmitAttestationsV2(writer, request)
+				assert.Equal(t, http.StatusBadRequest, writer.Code)
+				e := &httputil.DefaultJsonError{}
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+				assert.Equal(t, http.StatusBadRequest, e.Code)
+				assert.ErrorContains(t, "electra attestations have not been enabled", errors.New(e.Message))
+			})
 			t.Run("no body", func(t *testing.T) {
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
 				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
@@ -719,6 +781,11 @@ func TestSubmitAttestations(t *testing.T) {
 			})
 		})
 		t.Run("post-electra", func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			config := params.BeaconConfig()
+			config.ElectraForkEpoch = 0
+			params.OverrideBeaconConfig(config)
+
 			t.Run("single", func(t *testing.T) {
 				broadcaster := &p2pMock.MockBroadcaster{}
 				s.Broadcaster = broadcaster
@@ -1731,7 +1798,8 @@ func TestGetAttesterSlashings(t *testing.T) {
 		t.Run("pre-electra-ok", func(t *testing.T) {
 			bs, err := util.NewBeaconState()
 			require.NoError(t, err)
-			chainService := &blockchainmock.ChainService{State: bs}
+			slot := primitives.Slot(0)
+			chainService := &blockchainmock.ChainService{State: bs, Slot: &slot}
 
 			s := &Server{
 				ChainInfoFetcher: chainService,
@@ -1790,6 +1858,7 @@ func TestGetAttesterSlashings(t *testing.T) {
 			// Unmarshal resp.Data into a slice of slashings
 			var slashings []*structs.AttesterSlashingElectra
 			require.NoError(t, json.Unmarshal(resp.Data, &slashings))
+			require.NotNil(t, slashings)
 			require.Equal(t, 0, len(slashings))
 		})
 	})

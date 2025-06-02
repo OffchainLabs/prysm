@@ -13,23 +13,23 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
+	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/lookup"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/testutil"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/api"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	mockChain "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
-	testDB "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/lookup"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/testutil"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/verification"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/network/httputil"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestBlobs(t *testing.T) {
@@ -50,6 +50,7 @@ func TestBlobs(t *testing.T) {
 
 	mockChainService := &mockChain.ChainService{
 		FinalizedRoots: map[[32]byte]bool{},
+		Genesis:        time.Now().Add(-time.Duration(uint64(params.BeaconConfig().SlotsPerEpoch)*uint64(params.BeaconConfig().DenebForkEpoch)*params.BeaconConfig().SecondsPerSlot) * time.Second),
 	}
 	s := &Server{
 		OptimisticModeFetcher: mockChainService,
@@ -264,7 +265,7 @@ func TestBlobs(t *testing.T) {
 		require.Equal(t, false, resp.Finalized)
 	})
 	t.Run("blob index over max", func(t *testing.T) {
-		overLimit := params.BeaconConfig().MaxBlobsPerBlockByVersion(version.Deneb)
+		overLimit := maxBlobsPerBlockByVersion(version.Deneb)
 		u := fmt.Sprintf("http://foo.example/123?indices=%d", overLimit)
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
@@ -411,10 +412,14 @@ func TestBlobs_Electra(t *testing.T) {
 	cfg := params.BeaconConfig().Copy()
 	cfg.DenebForkEpoch = 0
 	cfg.ElectraForkEpoch = 1
+	cfg.BlobSchedule = []params.BlobScheduleEntry{
+		{Epoch: 0, MaxBlobsPerBlock: 6},
+		{Epoch: 1, MaxBlobsPerBlock: 9},
+	}
 	params.OverrideBeaconConfig(cfg)
 
 	db := testDB.SetupDB(t)
-	electraBlock, blobs := util.GenerateTestElectraBlockWithSidecar(t, [32]byte{}, 123, params.BeaconConfig().MaxBlobsPerBlockByVersion(version.Electra))
+	electraBlock, blobs := util.GenerateTestElectraBlockWithSidecar(t, [32]byte{}, 123, maxBlobsPerBlockByVersion(version.Electra))
 	require.NoError(t, db.SaveBlock(context.Background(), electraBlock))
 	bs := filesystem.NewEphemeralBlobStorage(t)
 	testSidecars := verification.FakeVerifySliceForTest(t, blobs)
@@ -450,7 +455,7 @@ func TestBlobs_Electra(t *testing.T) {
 		assert.Equal(t, http.StatusOK, writer.Code)
 		resp := &structs.SidecarsResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-		require.Equal(t, params.BeaconConfig().MaxBlobsPerBlockByVersion(version.Electra), len(resp.Data))
+		require.Equal(t, maxBlobsPerBlockByVersion(version.Electra), len(resp.Data))
 		sidecar := resp.Data[0]
 		require.NotNil(t, sidecar)
 		assert.Equal(t, "0", sidecar.Index)
@@ -463,7 +468,7 @@ func TestBlobs_Electra(t *testing.T) {
 		require.Equal(t, false, resp.Finalized)
 	})
 	t.Run("requested blob index at max", func(t *testing.T) {
-		limit := params.BeaconConfig().MaxBlobsPerBlockByVersion(version.Electra) - 1
+		limit := maxBlobsPerBlockByVersion(version.Electra) - 1
 		u := fmt.Sprintf("http://foo.example/123?indices=%d", limit)
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
@@ -495,7 +500,7 @@ func TestBlobs_Electra(t *testing.T) {
 		require.Equal(t, false, resp.Finalized)
 	})
 	t.Run("blob index over max", func(t *testing.T) {
-		overLimit := params.BeaconConfig().MaxBlobsPerBlockByVersion(version.Electra)
+		overLimit := maxBlobsPerBlockByVersion(version.Electra)
 		u := fmt.Sprintf("http://foo.example/123?indices=%d", overLimit)
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
@@ -552,4 +557,12 @@ func Test_parseIndices(t *testing.T) {
 			}
 		})
 	}
+}
+
+func maxBlobsPerBlockByVersion(v int) int {
+	if v >= version.Electra {
+		return params.BeaconConfig().DeprecatedMaxBlobsPerBlockElectra
+	}
+
+	return params.BeaconConfig().DeprecatedMaxBlobsPerBlock
 }

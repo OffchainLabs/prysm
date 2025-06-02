@@ -5,17 +5,17 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/io/file"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts/userprompt"
+	"github.com/OffchainLabs/prysm/v6/validator/db/filesystem"
+	"github.com/OffchainLabs/prysm/v6/validator/db/iface"
+	"github.com/OffchainLabs/prysm/v6/validator/db/kv"
+	slashingprotection "github.com/OffchainLabs/prysm/v6/validator/slashing-protection-history"
+	"github.com/OffchainLabs/prysm/v6/validator/slashing-protection-history/format"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/userprompt"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/filesystem"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/iface"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/kv"
-	slashingprotection "github.com/prysmaticlabs/prysm/v5/validator/slashing-protection-history"
-	"github.com/prysmaticlabs/prysm/v5/validator/slashing-protection-history/format"
 	"github.com/urfave/cli/v2"
 )
 
@@ -58,10 +58,11 @@ func exportSlashingProtectionJSON(cliCtx *cli.Context) error {
 	}
 
 	// Ensure that the database is found under the specified dir or its subdirectories
+	var matchPath string
 	if isDatabaseMinimal {
-		found, _, err = file.RecursiveDirFind(filesystem.DatabaseDirName, dataDir)
+		found, matchPath, err = file.RecursiveDirFind(filesystem.DatabaseDirName, dataDir)
 	} else {
-		found, _, err = file.RecursiveFileFind(kv.ProtectionDbFileName, dataDir)
+		found, matchPath, err = file.RecursiveFileFind(kv.ProtectionDbFileName, dataDir)
 	}
 
 	if err != nil {
@@ -74,6 +75,12 @@ func exportSlashingProtectionJSON(cliCtx *cli.Context) error {
 			databaseFileDir = filesystem.DatabaseDirName
 		}
 		return fmt.Errorf("%s (validator database) was not found at path %s, so nothing to export", databaseFileDir, dataDir)
+	} else {
+		if !isDatabaseMinimal {
+			matchPath = filepath.Dir(matchPath) // strip the file name
+		}
+		dataDir = matchPath
+		log.Infof("Found validator database at path %s", dataDir)
 	}
 
 	// Open the validator database.

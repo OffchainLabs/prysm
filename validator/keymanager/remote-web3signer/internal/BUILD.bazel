@@ -7,7 +7,7 @@ go_library(
         "log.go",
         "metrics.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer/internal",
+    importpath = "github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer/internal",
     visibility = ["//validator/keymanager/remote-web3signer:__subpackages__"],
     deps = [
         "//config/fieldparams:go_default_library",

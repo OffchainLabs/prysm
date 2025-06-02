@@ -12,19 +12,19 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/api/client"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	v1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api"
-	"github.com/prysmaticlabs/prysm/v5/api/client"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	v1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	log "github.com/sirupsen/logrus"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
@@ -241,7 +241,7 @@ func (c *Client) GetHeader(ctx context.Context, slot primitives.Slot, parentHash
 		return nil, errors.Wrap(err, "error getting header from builder server")
 	}
 
-	bid, err := c.parseHeaderResponse(data, header)
+	bid, err := c.parseHeaderResponse(data, header, slot)
 	if err != nil {
 		return nil, errors.Wrapf(
 			err,
@@ -254,7 +254,7 @@ func (c *Client) GetHeader(ctx context.Context, slot primitives.Slot, parentHash
 	return bid, nil
 }
 
-func (c *Client) parseHeaderResponse(data []byte, header http.Header) (SignedBid, error) {
+func (c *Client) parseHeaderResponse(data []byte, header http.Header, slot primitives.Slot) (SignedBid, error) {
 	var versionHeader string
 	if c.sszEnabled || header.Get(api.VersionHeader) != "" {
 		versionHeader = header.Get(api.VersionHeader)
@@ -276,7 +276,7 @@ func (c *Client) parseHeaderResponse(data []byte, header http.Header) (SignedBid
 	}
 
 	if ver >= version.Electra {
-		return c.parseHeaderElectra(data)
+		return c.parseHeaderElectra(data, slot)
 	}
 	if ver >= version.Deneb {
 		return c.parseHeaderDeneb(data)
@@ -291,7 +291,7 @@ func (c *Client) parseHeaderResponse(data []byte, header http.Header) (SignedBid
 	return nil, fmt.Errorf("unsupported header version %s", versionHeader)
 }
 
-func (c *Client) parseHeaderElectra(data []byte) (SignedBid, error) {
+func (c *Client) parseHeaderElectra(data []byte, slot primitives.Slot) (SignedBid, error) {
 	if c.sszEnabled {
 		sb := &ethpb.SignedBuilderBidElectra{}
 		if err := sb.UnmarshalSSZ(data); err != nil {
@@ -303,7 +303,7 @@ func (c *Client) parseHeaderElectra(data []byte) (SignedBid, error) {
 	if err := json.Unmarshal(data, hr); err != nil {
 		return nil, errors.Wrap(err, "could not unmarshal ExecHeaderResponseElectra JSON")
 	}
-	p, err := hr.ToProto()
+	p, err := hr.ToProto(slot)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not convert ExecHeaderResponseElectra to proto")
 	}

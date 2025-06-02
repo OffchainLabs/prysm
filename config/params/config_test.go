@@ -6,11 +6,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/genesis"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/genesis"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 // Test cases can be executed in an arbitrary order. TestOverrideBeaconConfigTestTeardown checks
@@ -108,12 +107,75 @@ func TestConfigGenesisValidatorRoot(t *testing.T) {
 	}
 }
 
-func Test_MaxBlobCount(t *testing.T) {
-	cfg := params.MainnetConfig()
-	cfg.ElectraForkEpoch = 10
-	require.Equal(t, cfg.MaxBlobsPerBlock(primitives.Slot(cfg.ElectraForkEpoch)*cfg.SlotsPerEpoch-1), 6)
-	require.Equal(t, cfg.MaxBlobsPerBlock(primitives.Slot(cfg.ElectraForkEpoch)*cfg.SlotsPerEpoch), 9)
-	cfg.ElectraForkEpoch = math.MaxUint64
+func TestMaxBlobsPerBlock(t *testing.T) {
+	t.Run("Before all forks and no BlobSchedule", func(t *testing.T) {
+		cfg := params.MainnetConfig()
+		cfg.BlobSchedule = nil
+		cfg.ElectraForkEpoch = 100
+		cfg.FuluForkEpoch = 200
+		require.Equal(t, cfg.MaxBlobsPerBlock(0), cfg.DeprecatedMaxBlobsPerBlock)
+	})
+
+	t.Run("Uses latest matching BlobSchedule entry", func(t *testing.T) {
+		cfg := params.MainnetConfig()
+		cfg.BlobSchedule = []params.BlobScheduleEntry{
+			{Epoch: 5, MaxBlobsPerBlock: 7},
+			{Epoch: 10, MaxBlobsPerBlock: 11},
+		}
+		slot := 11 * cfg.SlotsPerEpoch
+		require.Equal(t, cfg.MaxBlobsPerBlock(slot), 11)
+	})
+
+	t.Run("Uses earlier matching BlobSchedule entry", func(t *testing.T) {
+		cfg := params.MainnetConfig()
+		cfg.BlobSchedule = []params.BlobScheduleEntry{
+			{Epoch: 5, MaxBlobsPerBlock: 7},
+			{Epoch: 10, MaxBlobsPerBlock: 11},
+		}
+		slot := 6 * cfg.SlotsPerEpoch
+		require.Equal(t, cfg.MaxBlobsPerBlock(slot), 7)
+	})
+
+	t.Run("Before first BlobSchedule entry falls back to fork logic", func(t *testing.T) {
+		cfg := params.MainnetConfig()
+		cfg.FuluForkEpoch = 1
+		cfg.BlobSchedule = []params.BlobScheduleEntry{
+			{Epoch: 5, MaxBlobsPerBlock: 7},
+		}
+		slot := primitives.Slot(2) // Epoch 0
+		require.Equal(t, cfg.MaxBlobsPerBlock(slot), cfg.DeprecatedMaxBlobsPerBlock)
+	})
+
+	t.Run("Unsorted BlobSchedule still picks latest matching entry", func(t *testing.T) {
+		cfg := params.MainnetConfig()
+		cfg.BlobSchedule = []params.BlobScheduleEntry{
+			{Epoch: 10, MaxBlobsPerBlock: 11},
+			{Epoch: 5, MaxBlobsPerBlock: 7},
+		}
+		slot := 11 * cfg.SlotsPerEpoch
+		require.Equal(t, cfg.MaxBlobsPerBlock(slot), 11)
+	})
+
+	t.Run("Unsorted BlobSchedule picks earlier matching entry correctly", func(t *testing.T) {
+		cfg := params.MainnetConfig()
+		cfg.BlobSchedule = []params.BlobScheduleEntry{
+			{Epoch: 10, MaxBlobsPerBlock: 11},
+			{Epoch: 5, MaxBlobsPerBlock: 7},
+		}
+		slot := 6 * cfg.SlotsPerEpoch
+		require.Equal(t, cfg.MaxBlobsPerBlock(slot), 7)
+	})
+
+	t.Run("Unsorted BlobSchedule falls back to fork logic when epoch is before all entries", func(t *testing.T) {
+		cfg := params.MainnetConfig()
+		cfg.ElectraForkEpoch = 2
+		cfg.BlobSchedule = []params.BlobScheduleEntry{
+			{Epoch: 10, MaxBlobsPerBlock: 11},
+			{Epoch: 5, MaxBlobsPerBlock: 7},
+		}
+		slot := primitives.Slot(1) // Epoch 0
+		require.Equal(t, cfg.MaxBlobsPerBlock(slot), cfg.DeprecatedMaxBlobsPerBlock)
+	})
 }
 
 func Test_TargetBlobCount(t *testing.T) {
@@ -122,37 +184,4 @@ func Test_TargetBlobCount(t *testing.T) {
 	require.Equal(t, cfg.TargetBlobsPerBlock(primitives.Slot(cfg.ElectraForkEpoch)*cfg.SlotsPerEpoch-1), 3)
 	require.Equal(t, cfg.TargetBlobsPerBlock(primitives.Slot(cfg.ElectraForkEpoch)*cfg.SlotsPerEpoch), 6)
 	cfg.ElectraForkEpoch = math.MaxUint64
-}
-
-func TestMaxBlobsPerBlockByVersion(t *testing.T) {
-	tests := []struct {
-		name string
-		v    int
-		want int
-	}{
-		{
-			name: "Version below Electra",
-			v:    version.Electra - 1,
-			want: params.BeaconConfig().DeprecatedMaxBlobsPerBlock,
-		},
-		{
-			name: "Version equal to Electra",
-			v:    version.Electra,
-			want: params.BeaconConfig().DeprecatedMaxBlobsPerBlockElectra,
-		},
-		{
-			name: "Version above Electra",
-			v:    version.Electra + 1,
-			want: params.BeaconConfig().DeprecatedMaxBlobsPerBlockElectra,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := params.BeaconConfig().MaxBlobsPerBlockByVersion(tt.v)
-			if got != tt.want {
-				t.Errorf("MaxBlobsPerBlockByVersion(%d) = %d, want %d", tt.v, got, tt.want)
-			}
-		})
-	}
 }

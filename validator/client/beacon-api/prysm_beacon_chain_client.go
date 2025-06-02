@@ -9,11 +9,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/api/apiutil"
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	validator2 "github.com/OffchainLabs/prysm/v6/consensus-types/validator"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	validator2 "github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
 )
 
 // NewPrysmChainClient returns implementation of iface.PrysmChainClient.
@@ -45,7 +46,7 @@ func (c prysmChainClient) ValidatorCount(ctx context.Context, stateID string, st
 		queryParams.Add("status", status.String())
 	}
 
-	queryUrl := buildURL(fmt.Sprintf("/eth/v1/beacon/states/%s/validator_count", stateID), queryParams)
+	queryUrl := apiutil.BuildURL(fmt.Sprintf("/eth/v1/beacon/states/%s/validator_count", stateID), queryParams)
 
 	var validatorCountResponse structs.GetValidatorCountResponse
 	if err = c.jsonRestHandler.Get(ctx, queryUrl, &validatorCountResponse); err != nil {

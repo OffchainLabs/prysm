@@ -3,9 +3,10 @@ package p2p
 import (
 	"time"
 
-	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
+	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 )
 
 // This is the default queue size used if we have specified an invalid one.
@@ -38,6 +39,7 @@ type Config struct {
 	StateNotifier        statefeed.Notifier
 	DB                   db.ReadOnlyDatabase
 	ClockWaiter          startup.ClockWaiter
+	CustodyInfo          *peerdas.CustodyInfo
 }
 
 // validateConfig validates whether the values provided are accurate and will set

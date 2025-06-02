@@ -7,7 +7,7 @@ go_library(
         "recover.go",
         "wallet.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/cmd/validator/wallet",
+    importpath = "github.com/OffchainLabs/prysm/v6/cmd/validator/wallet",
     visibility = ["//visibility:public"],
     deps = [
         "//cmd:go_default_library",

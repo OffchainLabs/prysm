@@ -6,16 +6,17 @@ import (
 	"errors"
 	"time"
 
-	api "github.com/prysmaticlabs/prysm/v5/api/client"
-	"github.com/prysmaticlabs/prysm/v5/api/client/beacon"
-	"github.com/prysmaticlabs/prysm/v5/api/client/event"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/proposer"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
+	api "github.com/OffchainLabs/prysm/v6/api/client"
+	"github.com/OffchainLabs/prysm/v6/api/client/beacon/health"
+	"github.com/OffchainLabs/prysm/v6/api/client/event"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/config/proposer"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	prysmTime "github.com/OffchainLabs/prysm/v6/time"
+	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -23,51 +24,67 @@ var _ iface.Validator = (*FakeValidator)(nil)
 
 // FakeValidator for mocking.
 type FakeValidator struct {
-	DoneCalled                        bool
-	WaitForWalletInitializationCalled bool
-	SlasherReadyCalled                bool
-	NextSlotCalled                    bool
-	UpdateDutiesCalled                bool
-	UpdateProtectionsCalled           bool
-	RoleAtCalled                      bool
-	AttestToBlockHeadCalled           bool
-	ProposeBlockCalled                bool
+	IsRegularDeadline                 bool
 	LogValidatorGainsAndLossesCalled  bool
 	SaveProtectionsCalled             bool
 	DeleteProtectionCalled            bool
 	SlotDeadlineCalled                bool
 	HandleKeyReloadCalled             bool
-	WaitForChainStartCalled           int
-	WaitForSyncCalled                 int
-	WaitForActivationCalled           int
-	CanonicalHeadSlotCalled           int
-	ReceiveBlocksCalled               int
-	RetryTillSuccess                  int
-	ProposeBlockArg1                  uint64
-	AttestToBlockHeadArg1             uint64
-	RoleAtArg1                        uint64
-	UpdateDutiesArg1                  uint64
-	NextSlotRet                       <-chan primitives.Slot
-	PublicKey                         string
-	UpdateDutiesRet                   error
-	ProposerSettingsErr               error
-	RolesAtRet                        []iface.ValidatorRole
-	Balances                          map[[fieldparams.BLSPubkeyLength]byte]uint64
+	WaitForWalletInitializationCalled bool
+	SlasherReadyCalled                bool
+	NextSlotCalled                    bool
+	AttestToBlockHeadCalled           bool
+	DoneCalled                        bool
+	ProposeBlockCalled                bool
+	UpdateProtectionsCalled           bool
+	UpdateDutiesCalled                bool
+	RoleAtCalled                      bool
 	IndexToPubkeyMap                  map[uint64][fieldparams.BLSPubkeyLength]byte
 	PubkeyToIndexMap                  map[[fieldparams.BLSPubkeyLength]byte]uint64
 	PubkeysToStatusesMap              map[[fieldparams.BLSPubkeyLength]byte]ethpb.ValidatorStatus
-	proposerSettings                  *proposer.Settings
 	ProposerSettingWait               time.Duration
-	Km                                keymanager.IKeymanager
-	graffiti                          string
-	Tracker                           *beacon.NodeHealthTracker
+	NextSlotRet                       <-chan primitives.Slot
+	UpdateDutiesArg1                  uint64
+	RoleAtArg1                        uint64
+	AttestToBlockHeadArg1             uint64
+	ProposeBlockArg1                  uint64
+	RetryTillSuccess                  int
+	Balances                          map[[fieldparams.BLSPubkeyLength]byte]uint64
+	CanonicalHeadSlotCalled           int
+	WaitForActivationCalled           int
+	WaitForSyncCalled                 int
+	WaitForChainStartCalled           int
 	AttSubmitted                      chan interface{}
 	BlockProposed                     chan interface{}
+	AccountsChannel                   chan [][fieldparams.BLSPubkeyLength]byte
+	EventsChannel                     chan *event.Event
+	GenesisT                          uint64
+	ReceiveBlocksCalled               int
+	proposerSettings                  *proposer.Settings
+	UpdateDutiesRet                   error
+	ProposerSettingsErr               error
+	Km                                keymanager.IKeymanager
+	graffiti                          string
+	Tracker                           health.Tracker
+	PublicKey                         string
+	RolesAtRet                        []iface.ValidatorRole
 }
 
 // Done for mocking.
 func (fv *FakeValidator) Done() {
 	fv.DoneCalled = true
+}
+
+func (fv *FakeValidator) EventsChan() <-chan *event.Event {
+	return fv.EventsChannel
+}
+
+func (fv *FakeValidator) AccountsChangedChan() <-chan [][fieldparams.BLSPubkeyLength]byte {
+	return fv.AccountsChannel
+}
+
+func (fv *FakeValidator) GenesisTime() uint64 {
+	return fv.GenesisT
 }
 
 // WaitForKeymanagerInitialization for mocking.
@@ -89,9 +106,9 @@ func (fv *FakeValidator) WaitForChainStart(_ context.Context) error {
 }
 
 // WaitForActivation for mocking.
-func (fv *FakeValidator) WaitForActivation(_ context.Context, accountChan chan [][fieldparams.BLSPubkeyLength]byte) error {
+func (fv *FakeValidator) WaitForActivation(_ context.Context) error {
 	fv.WaitForActivationCalled++
-	if accountChan == nil {
+	if fv.AccountsChannel == nil {
 		return nil
 	}
 	if fv.RetryTillSuccess >= fv.WaitForActivationCalled {
@@ -127,6 +144,9 @@ func (fv *FakeValidator) CanonicalHeadSlot(_ context.Context) (primitives.Slot, 
 // SlotDeadline for mocking.
 func (fv *FakeValidator) SlotDeadline(_ primitives.Slot) time.Time {
 	fv.SlotDeadlineCalled = true
+	if fv.IsRegularDeadline {
+		return prysmTime.Now().Add(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+	}
 	return prysmTime.Now()
 }
 
@@ -137,9 +157,8 @@ func (fv *FakeValidator) NextSlot() <-chan primitives.Slot {
 }
 
 // UpdateDuties for mocking.
-func (fv *FakeValidator) UpdateDuties(_ context.Context, slot primitives.Slot) error {
+func (fv *FakeValidator) UpdateDuties(_ context.Context) error {
 	fv.UpdateDutiesCalled = true
-	fv.UpdateDutiesArg1 = uint64(slot)
 	return fv.UpdateDutiesRet
 }
 
@@ -254,7 +273,7 @@ func (*FakeValidator) HasProposerSettings() bool {
 }
 
 // PushProposerSettings for mocking
-func (fv *FakeValidator) PushProposerSettings(ctx context.Context, _ keymanager.IKeymanager, _ primitives.Slot, _ bool) error {
+func (fv *FakeValidator) PushProposerSettings(ctx context.Context, _ primitives.Slot, _ bool) error {
 	time.Sleep(fv.ProposerSettingWait)
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		log.Error("deadline exceeded")
@@ -308,17 +327,17 @@ func (fv *FakeValidator) DeleteGraffiti(_ context.Context, _ [fieldparams.BLSPub
 	return nil
 }
 
-func (*FakeValidator) StartEventStream(_ context.Context, _ []string, _ chan<- *event.Event) {
+func (*FakeValidator) StartEventStream(_ context.Context, _ []string) {
 
 }
 
-func (*FakeValidator) ProcessEvent(_ *event.Event) {}
+func (*FakeValidator) ProcessEvent(_ context.Context, _ *event.Event) {}
 
 func (*FakeValidator) EventStreamIsRunning() bool {
 	return true
 }
 
-func (fv *FakeValidator) HealthTracker() *beacon.NodeHealthTracker {
+func (fv *FakeValidator) HealthTracker() health.Tracker {
 	return fv.Tracker
 }
 

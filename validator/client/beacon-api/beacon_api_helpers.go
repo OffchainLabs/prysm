@@ -4,15 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
-	neturl "net/url"
-	"regexp"
 	"strconv"
 
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 var beaconAPITogRPCValidatorStatus = map[string]ethpb.ValidatorStatus{
@@ -25,26 +22,6 @@ var beaconAPITogRPCValidatorStatus = map[string]ethpb.ValidatorStatus{
 	"exited_slashed":      ethpb.ValidatorStatus_EXITED,
 	"withdrawal_possible": ethpb.ValidatorStatus_EXITED,
 	"withdrawal_done":     ethpb.ValidatorStatus_EXITED,
-}
-
-func validRoot(root string) bool {
-	matchesRegex, err := regexp.MatchString("^0x[a-fA-F0-9]{64}$", root)
-	if err != nil {
-		return false
-	}
-	return matchesRegex
-}
-
-func uint64ToString[T uint64 | primitives.Slot | primitives.ValidatorIndex | primitives.CommitteeIndex | primitives.Epoch](val T) string {
-	return strconv.FormatUint(uint64(val), 10)
-}
-
-func buildURL(path string, queryParams ...neturl.Values) string {
-	if len(queryParams) == 0 {
-		return path
-	}
-
-	return fmt.Sprintf("%s?%s", path, queryParams[0].Encode())
 }
 
 func (c *beaconApiValidatorClient) fork(ctx context.Context) (*structs.GetStateForkResponse, error) {

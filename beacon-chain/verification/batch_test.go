@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	"github.com/stretchr/testify/require"
 )
 
@@ -104,7 +104,7 @@ func TestBatchVerifier(t *testing.T) {
 				blbs[0].SignedBlockHeader.Signature = []byte("wrong")
 				return blk, blbs
 			},
-			err:    ErrBatchSignatureMismatch,
+			err:    errBatchSignatureMismatch,
 			nblobs: 2,
 		},
 		{
@@ -124,7 +124,7 @@ func TestBatchVerifier(t *testing.T) {
 				blbs[0] = wr
 				return blk, blbs
 			},
-			err:    ErrBatchBlockRootMismatch,
+			err:    errBatchBlockRootMismatch,
 			nblobs: 1,
 		},
 		{

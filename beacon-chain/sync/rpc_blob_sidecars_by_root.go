@@ -6,18 +6,18 @@ import (
 	"sort"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 )
 
@@ -37,8 +37,9 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 
 	blobIdents := *ref
 	cs := s.cfg.clock.CurrentSlot()
+	remotePeer := stream.Conn().RemotePeer()
 	if err := validateBlobByRootRequest(blobIdents, cs); err != nil {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
 		return err
 	}
@@ -75,6 +76,7 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 				log.WithError(err).WithFields(logrus.Fields{
 					"root":  fmt.Sprintf("%#x", root),
 					"index": idx,
+					"peer":  remotePeer.String(),
 				}).Debugf("Peer requested blob sidecar by root not found in db")
 				continue
 			}
@@ -107,14 +109,21 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 }
 
 func validateBlobByRootRequest(blobIdents types.BlobSidecarsByRootReq, slot primitives.Slot) error {
-	if slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch {
-		if uint64(len(blobIdents)) > params.BeaconConfig().MaxRequestBlobSidecarsElectra {
+	beaconConfig := params.BeaconConfig()
+	epoch := slots.ToEpoch(slot)
+	blobIdentCount := uint64(len(blobIdents))
+
+	if epoch >= beaconConfig.ElectraForkEpoch {
+		if blobIdentCount > beaconConfig.MaxRequestBlobSidecarsElectra {
 			return types.ErrMaxBlobReqExceeded
 		}
-	} else {
-		if uint64(len(blobIdents)) > params.BeaconConfig().MaxRequestBlobSidecars {
-			return types.ErrMaxBlobReqExceeded
-		}
+
+		return nil
 	}
+
+	if blobIdentCount > beaconConfig.MaxRequestBlobSidecars {
+		return types.ErrMaxBlobReqExceeded
+	}
+
 	return nil
 }

@@ -7,7 +7,7 @@ go_library(
         "options.go",
         "server.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/api/server/httprest",
+    importpath = "github.com/OffchainLabs/prysm/v6/api/server/httprest",
     visibility = ["//visibility:public"],
     deps = [
         "//api/server/middleware:go_default_library",

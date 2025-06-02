@@ -4,10 +4,10 @@ import (
 	"flag"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/cmd"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	dbtest "github.com/prysmaticlabs/prysm/v5/validator/db/testing"
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	dbtest "github.com/OffchainLabs/prysm/v6/validator/db/testing"
 	"github.com/urfave/cli/v2"
 )
 
@@ -26,7 +26,7 @@ func TestMigrateUp_NoDBFound(t *testing.T) {
 // This, it is tested only for complete slashing protection database.
 func TestMigrateUp_OK(t *testing.T) {
 	isSlashingProtectionMinimal := false
-	validatorDB := dbtest.SetupDB(t, nil, isSlashingProtectionMinimal)
+	validatorDB := dbtest.SetupDB(t, t.TempDir(), nil, isSlashingProtectionMinimal)
 	dbPath := validatorDB.DatabasePath()
 	require.NoError(t, validatorDB.Close())
 	app := cli.App{}
@@ -52,7 +52,7 @@ func TestMigrateDown_NoDBFound(t *testing.T) {
 // This, it is tested only for complete slashing protection database.
 func TestMigrateDown_OK(t *testing.T) {
 	isSlashingProtectionMinimal := false
-	validatorDB := dbtest.SetupDB(t, nil, isSlashingProtectionMinimal)
+	validatorDB := dbtest.SetupDB(t, t.TempDir(), nil, isSlashingProtectionMinimal)
 	dbPath := validatorDB.DatabasePath()
 	require.NoError(t, validatorDB.Close())
 	app := cli.App{}

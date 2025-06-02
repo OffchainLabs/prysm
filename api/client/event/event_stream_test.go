@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -83,8 +83,7 @@ func TestEventStream(t *testing.T) {
 func TestEventStreamRequestError(t *testing.T) {
 	topics := []string{"head"}
 	eventsChannel := make(chan *Event, 1)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	// use valid url that will result in failed request with nil body
 	stream, err := NewEventStream(ctx, http.DefaultClient, "http://badhost:1234", topics)

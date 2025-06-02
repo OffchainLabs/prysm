@@ -7,12 +7,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
+	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers/peerdata"
-	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
 	"github.com/sirupsen/logrus"
 )
 
@@ -22,7 +22,9 @@ const (
 )
 
 func peerMultiaddrString(conn network.Conn) string {
-	return fmt.Sprintf("%s/p2p/%s", conn.RemoteMultiaddr().String(), conn.RemotePeer().String())
+	remoteMultiaddr := conn.RemoteMultiaddr().String()
+	remotePeerID := conn.RemotePeer().String()
+	return fmt.Sprintf("%s/p2p/%s", remoteMultiaddr, remotePeerID)
 }
 
 func (s *Service) connectToPeer(conn network.Conn) {

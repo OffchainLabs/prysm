@@ -4,45 +4,46 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/network/forks"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	lruwrpr "github.com/prysmaticlabs/prysm/v5/cache/lru"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/network/forks"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 )
 
 const (
-	DefaultSignatureCacheSize = 256
+	defaultSignatureCacheSize      = 256
+	defaultInclusionProofCacheSize = 2
 )
 
-// ValidatorAtIndexer defines the method needed to retrieve a validator by its index.
+// validatorAtIndexer defines the method needed to retrieve a validator by its index.
 // This interface is satisfied by state.BeaconState, but can also be satisfied by a cache.
-type ValidatorAtIndexer interface {
+type validatorAtIndexer interface {
 	ValidatorAtIndex(idx primitives.ValidatorIndex) (*ethpb.Validator, error)
 }
 
-// SignatureCache represents a type that can perform signature verification and cache the result so that it
+// signatureCache represents a type that can perform signature verification and cache the result so that it
 // can be used when the same signature is seen in multiple places, like a SignedBeaconBlockHeader
 // found in multiple BlobSidecars.
-type SignatureCache interface {
+type signatureCache interface {
 	// VerifySignature perform signature verification and caches the result.
-	VerifySignature(sig SignatureData, v ValidatorAtIndexer) (err error)
+	VerifySignature(sig signatureData, v validatorAtIndexer) (err error)
 	// SignatureVerified accesses the result of a previous signature verification.
-	SignatureVerified(sig SignatureData) (bool, error)
+	SignatureVerified(sig signatureData) (bool, error)
 }
 
-// SignatureData represents the set of parameters that together uniquely identify a signature observed on
+// signatureData represents the set of parameters that together uniquely identify a signature observed on
 // a beacon block. This is used as the key for the signature cache.
-type SignatureData struct {
+type signatureData struct {
 	Root      [32]byte
 	Parent    [32]byte
 	Signature [96]byte
@@ -50,7 +51,7 @@ type SignatureData struct {
 	Slot      primitives.Slot
 }
 
-func (d SignatureData) logFields() logrus.Fields {
+func (d signatureData) logFields() logrus.Fields {
 	return logrus.Fields{
 		"root":       fmt.Sprintf("%#x", d.Root),
 		"parentRoot": fmt.Sprintf("%#x", d.Parent),
@@ -73,8 +74,16 @@ type sigCache struct {
 	getFork forkLookup
 }
 
-// VerifySignature verifies the given signature data against the key obtained via ValidatorAtIndexer.
-func (c *sigCache) VerifySignature(sig SignatureData, v ValidatorAtIndexer) (err error) {
+type inclusionProofCache struct {
+	*lru.Cache
+}
+
+func newInclusionProofCache(size int) *inclusionProofCache {
+	return &inclusionProofCache{Cache: lruwrpr.New(size)}
+}
+
+// VerifySignature verifies the given signature data against the key obtained via validatorAtIndexer.
+func (c *sigCache) VerifySignature(sig signatureData, v validatorAtIndexer) (err error) {
 	defer func() {
 		if err == nil {
 			c.Add(sig, true)
@@ -118,7 +127,7 @@ func (c *sigCache) VerifySignature(sig SignatureData, v ValidatorAtIndexer) (err
 // SignatureVerified checks the signature cache for the given key, and returns a boolean value of true
 // if it has been seen before, and an error value indicating whether the signature verification succeeded.
 // ie only a result of (true, nil) means a previous signature check passed.
-func (c *sigCache) SignatureVerified(sig SignatureData) (bool, error) {
+func (c *sigCache) SignatureVerified(sig signatureData) (bool, error) {
 	val, seen := c.Get(sig)
 	if !seen {
 		return false, nil
@@ -136,10 +145,10 @@ func (c *sigCache) SignatureVerified(sig SignatureData) (bool, error) {
 	return true, signing.ErrSigFailedToVerify
 }
 
-// ProposerCache represents a type that can compute the proposer for a given slot + parent root,
+// proposerCache represents a type that can compute the proposer for a given slot + parent root,
 // and cache the result so that it can be reused when the same verification needs to be performed
 // across multiple values.
-type ProposerCache interface {
+type proposerCache interface {
 	ComputeProposer(ctx context.Context, root [32]byte, slot primitives.Slot, pst state.BeaconState) (primitives.ValidatorIndex, error)
 	Proposer(c *forkchoicetypes.Checkpoint, slot primitives.Slot) (primitives.ValidatorIndex, bool)
 }

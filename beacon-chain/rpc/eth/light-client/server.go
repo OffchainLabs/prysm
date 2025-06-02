@@ -1,9 +1,10 @@
 package lightclient
 
 import (
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/lookup"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/lookup"
 )
 
 type Server struct {
@@ -12,4 +13,5 @@ type Server struct {
 	HeadFetcher      blockchain.HeadFetcher
 	ChainInfoFetcher blockchain.ChainInfoFetcher
 	BeaconDB         db.HeadAccessDatabase
+	LCStore          *lightClient.Store
 }

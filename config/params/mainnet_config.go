@@ -4,8 +4,8 @@ import (
 	"math"
 	"time"
 
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 )
 
 // MainnetConfig returns the configuration to be used in the main network.
@@ -13,7 +13,7 @@ func MainnetConfig() *BeaconChainConfig {
 	if mainnetBeaconConfig.ForkVersionSchedule == nil {
 		mainnetBeaconConfig.InitializeForkSchedule()
 	}
-	return mainnetBeaconConfig
+	return mainnetBeaconConfig.Copy()
 }
 
 const (
@@ -28,7 +28,7 @@ const (
 	// Deneb Fork Epoch for mainnet config.
 	mainnetDenebForkEpoch = 269568 // March 13, 2024, 13:55:35 UTC
 	// Electra Fork Epoch for mainnet config
-	mainnetElectraForkEpoch = math.MaxUint64 // Far future / to be defined
+	mainnetElectraForkEpoch = 364032 // May 7, 2025, 10:05:11 UTC
 	// Fulu Fork Epoch for mainnet config
 	mainnetFuluForkEpoch = math.MaxUint64 // Far future / to be defined
 )
@@ -37,6 +37,7 @@ var mainnetNetworkConfig = &NetworkConfig{
 	ETH2Key:                    "eth2",
 	AttSubnetKey:               "attnets",
 	SyncCommsSubnetKey:         "syncnets",
+	CustodyGroupCountKey:       "cgc",
 	MinimumPeersInSubnetSearch: 20,
 	ContractDeploymentBlock:    11184524, // Note: contract was deployed in block 11052984 but no transactions were sent until 11184524.
 	BootstrapNodes: []string{
@@ -286,10 +287,9 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	FieldElementsPerBlob:             4096,
 	MaxBlobCommitmentsPerBlock:       4096,
 	KzgCommitmentInclusionProofDepth: 17,
+	DeprecatedMaxBlobsPerBlock:       6,
 
 	// Values related to electra
-	MaxRequestDataColumnSidecars:          16384,
-	DataColumnSidecarSubnetCount:          128,
 	MinPerEpochChurnLimitElectra:          128_000_000_000,
 	MaxPerEpochActivationExitChurnLimit:   256_000_000_000,
 	MaxEffectiveBalanceElectra:            2048_000_000_000,
@@ -306,13 +306,22 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	MaxWithdrawalRequestsPerPayload:       16,
 	MaxDepositRequestsPerPayload:          8192, // 2**13 (= 8192)
 	UnsetDepositRequestsStartIndex:        math.MaxUint64,
+	DeprecatedMaxBlobsPerBlockElectra:     9,
+	DeprecatedTargetBlobsPerBlockElectra:  6,
+	MaxRequestBlobSidecarsElectra:         1152,
 
-	// PeerDAS
+	// Values related to fulu
+	MaxRequestDataColumnSidecars:          16384,
+	DataColumnSidecarSubnetCount:          128,
 	NumberOfColumns:                       128,
-	MaxCellsInExtendedMatrix:              768,
 	SamplesPerSlot:                        8,
+	NumberOfCustodyGroups:                 128,
 	CustodyRequirement:                    4,
 	MinEpochsForDataColumnSidecarsRequest: 4096,
+	MaxCellsInExtendedMatrix:              768,
+	ValidatorCustodyRequirement:           8,
+	BalancePerAdditionalCustodyGroup:      32_000_000_000,
+	DeprecatedMaxBlobsPerBlockFulu:        12,
 
 	// Values related to networking parameters.
 	MaxPayloadSize:                  10 * 1 << 20, // 10 MiB
@@ -331,17 +340,17 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	SubnetsPerNode:                  2,
 	NodeIdBits:                      256,
 
-	DeprecatedMaxBlobsPerBlock:           6,
-	DeprecatedMaxBlobsPerBlockElectra:    9,
-	DeprecatedTargetBlobsPerBlockElectra: 6,
-	MaxRequestBlobSidecarsElectra:        1152,
+	BlobSchedule: []BlobScheduleEntry{
+		{Epoch: 269568, MaxBlobsPerBlock: 6},
+		{Epoch: 364032, MaxBlobsPerBlock: 9},
+	},
 }
 
 // MainnetTestConfig provides a version of the mainnet config that has a different name
 // and a different fork choice schedule. This can be used in cases where we want to use config values
 // that are consistent with mainnet, but won't conflict or cause the hard-coded genesis to be loaded.
 func MainnetTestConfig() *BeaconChainConfig {
-	mn := MainnetConfig().Copy()
+	mn := MainnetConfig()
 	mn.ConfigName = MainnetTestName
 	FillTestVersions(mn, 128)
 	return mn
