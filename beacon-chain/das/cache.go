@@ -10,12 +10,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-var (
-	ErrDuplicateSidecar   = errors.New("duplicate sidecar stashed in AvailabilityStore")
-	errIndexOutOfBounds   = errors.New("sidecar.index > MAX_BLOBS_PER_BLOCK")
-	errCommitmentMismatch = errors.New("KzgCommitment of sidecar in cache did not match block commitment")
-	errMissingSidecar     = errors.New("no sidecar in cache for block commitment")
-)
+var errIndexOutOfBounds = errors.New("sidecar.index > MAX_BLOBS_PER_BLOCK")
 
 // cacheKey includes the slot so that we can easily iterate through the cache and compare
 // slots for eviction purposes. Whether the input is the block or the sidecar, we always have
