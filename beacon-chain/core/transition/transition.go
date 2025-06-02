@@ -377,7 +377,7 @@ func UpgradeState(ctx context.Context, state state.BeaconState) (state.BeaconSta
 	}
 
 	if time.CanUpgradeToFulu(slot) {
-		state, err = fulu.UpgradeToFulu(state)
+		state, err = fulu.UpgradeToFulu(ctx, state)
 		if err != nil {
 			tracing.AnnotateError(span, err)
 			return nil, err

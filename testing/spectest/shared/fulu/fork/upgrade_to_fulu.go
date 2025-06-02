@@ -1,6 +1,7 @@
 package fork
 
 import (
+	"context"
 	"path"
 	"testing"
 
@@ -38,7 +39,7 @@ func RunUpgradeToFulu(t *testing.T, config string) {
 			}
 			preState, err := state_native.InitializeFromProtoElectra(preStateBase)
 			require.NoError(t, err)
-			postState, err := fulu.UpgradeToFulu(preState)
+			postState, err := fulu.UpgradeToFulu(context.Background(), preState)
 			require.NoError(t, err)
 			postStateFromFunction, err := state_native.ProtobufBeaconStateFulu(postState.ToProtoUnsafe())
 			require.NoError(t, err)
