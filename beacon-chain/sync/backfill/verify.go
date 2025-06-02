@@ -62,7 +62,6 @@ func (vr verifier) verify(blks []blocks.ROBlock) (verifiedROBlocks, error) {
 	result := blks // Use the input directly
 	sigSet := bls.NewSet()
 	for i := range result {
-		// Conversion loop removed
 		if i > 0 && result[i-1].Root() != result[i].Block().ParentRoot() {
 			p, b := result[i-1], result[i]
 			return nil, errors.Wrapf(errInvalidBatchChain,
