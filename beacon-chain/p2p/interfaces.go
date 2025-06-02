@@ -118,6 +118,7 @@ type (
 		MetadataSeq() uint64
 	}
 
+	// DataColumnsHandler abstracts some data columns related methods.
 	DataColumnsHandler interface {
 		CustodyGroupCountFromPeer(peer.ID) uint64
 	}
