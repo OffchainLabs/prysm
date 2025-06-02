@@ -52,7 +52,7 @@ jobs:
           id: go
 
       - name: Golangci-lint
-        uses: golangci/golangci-lint-action@v5
+        uses: golangci/golangci-lint-action@v8
         with:
           version: v1.64.5
           args: --config=.golangci.yml --out-${NO_FUTURE}format colored-line-number
