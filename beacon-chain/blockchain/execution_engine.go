@@ -440,7 +440,7 @@ func (s *Service) removeInvalidBlockAndState(ctx context.Context, blkRoots [][32
 			log.WithError(err).Debug("Could not remove blob from blob storage")
 		}
 		if err := s.dataColumnStorage.Remove(root); err != nil {
-			log.WithError(err).Debug("Could not remove data columns from data column storage")
+			log.WithError(err).Errorf("Could not remove data columns from data column storage for root %#x", root)
 		}
 	}
 	return nil

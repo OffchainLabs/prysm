@@ -114,6 +114,7 @@ type validator struct {
 	dutiesLock                         sync.RWMutex
 	disableDutiesPolling               bool
 	accountsChangedChannel             chan [][fieldparams.BLSPubkeyLength]byte
+	eventsChannel                      chan *eventClient.Event
 	accountChangedSub                  event.Subscription
 }
 
@@ -136,6 +137,10 @@ func (v *validator) Done() {
 	if v.ticker != nil {
 		v.ticker.Done()
 	}
+}
+
+func (v *validator) EventsChan() <-chan *eventClient.Event {
+	return v.eventsChannel
 }
 
 func (v *validator) AccountsChangedChan() <-chan [][fieldparams.BLSPubkeyLength]byte {
@@ -1145,9 +1150,9 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 	return nil
 }
 
-func (v *validator) StartEventStream(ctx context.Context, topics []string, eventsChannel chan<- *eventClient.Event) {
+func (v *validator) StartEventStream(ctx context.Context, topics []string) {
 	log.WithField("topics", topics).Info("Starting event stream")
-	v.validatorClient.StartEventStream(ctx, topics, eventsChannel)
+	v.validatorClient.StartEventStream(ctx, topics, v.eventsChannel)
 }
 
 func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadEvent) error {

@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/slasher/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -238,11 +239,11 @@ func (s *Service) validateExecutionAndConsensus(
 func (s *Service) handleDA(
 	ctx context.Context,
 	block interfaces.SignedBeaconBlock,
-	blockRoot [32]byte,
+	blockRoot [fieldparams.RootLength]byte,
 	avs das.AvailabilityStore,
 ) (elapsed time.Duration, err error) {
 	defer func(start time.Time) {
-		elapsed := time.Since(start)
+		elapsed = time.Since(start)
 
 		if err == nil {
 			dataAvailWaitedTime.Observe(float64(elapsed.Milliseconds()))

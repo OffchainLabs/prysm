@@ -58,10 +58,11 @@ func exportSlashingProtectionJSON(cliCtx *cli.Context) error {
 	}
 
 	// Ensure that the database is found under the specified dir or its subdirectories
+	var matchPath string
 	if isDatabaseMinimal {
-		found, _, err = file.RecursiveDirFind(filesystem.DatabaseDirName, dataDir)
+		found, matchPath, err = file.RecursiveDirFind(filesystem.DatabaseDirName, dataDir)
 	} else {
-		found, _, err = file.RecursiveFileFind(kv.ProtectionDbFileName, dataDir)
+		found, matchPath, err = file.RecursiveFileFind(kv.ProtectionDbFileName, dataDir)
 	}
 
 	if err != nil {
@@ -74,6 +75,12 @@ func exportSlashingProtectionJSON(cliCtx *cli.Context) error {
 			databaseFileDir = filesystem.DatabaseDirName
 		}
 		return fmt.Errorf("%s (validator database) was not found at path %s, so nothing to export", databaseFileDir, dataDir)
+	} else {
+		if !isDatabaseMinimal {
+			matchPath = filepath.Dir(matchPath) // strip the file name
+		}
+		dataDir = matchPath
+		log.Infof("Found validator database at path %s", dataDir)
 	}
 
 	// Open the validator database.

@@ -27,7 +27,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations/kv"
 	mockp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -2333,13 +2332,13 @@ func driftGenesisTime(s *Service, slot, delay int64) {
 	s.cfg.ForkChoiceStore.SetGenesisTime(uint64(newTime.Unix()))
 }
 
-func TestMissingIndices(t *testing.T) {
+func TestMissingBlobIndices(t *testing.T) {
 	cases := []struct {
 		name     string
 		expected [][]byte
 		present  []uint64
 		result   map[uint64]struct{}
-		root     [32]byte
+		root     [fieldparams.RootLength]byte
 		err      error
 	}{
 		{
@@ -2397,7 +2396,7 @@ func TestMissingIndices(t *testing.T) {
 		bm, bs := filesystem.NewEphemeralBlobStorageWithMocker(t)
 		t.Run(c.name, func(t *testing.T) {
 			require.NoError(t, bm.CreateFakeIndices(c.root, 0, c.present...))
-			missing, err := missingIndices(bs, c.root, c.expected, 0)
+			missing, err := missingBlobIndices(bs, c.root, c.expected, 0)
 			if c.err != nil {
 				require.ErrorIs(t, err, c.err)
 				return
@@ -2405,9 +2404,70 @@ func TestMissingIndices(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, len(c.result), len(missing))
 			for key := range c.result {
-				m, ok := missing[key]
-				require.Equal(t, true, ok)
-				require.Equal(t, c.result[key], m)
+				require.Equal(t, true, missing[key])
+			}
+		})
+	}
+}
+
+func TestMissingDataColumnIndices(t *testing.T) {
+	countPlusOne := params.BeaconConfig().NumberOfColumns + 1
+	tooManyColumns := make(map[uint64]bool, countPlusOne)
+	for i := range countPlusOne {
+		tooManyColumns[uint64(i)] = true
+	}
+
+	testCases := []struct {
+		name          string
+		storedIndices []uint64
+		input         map[uint64]bool
+		expected      map[uint64]bool
+		err           error
+	}{
+		{
+			name:  "zero len expected",
+			input: map[uint64]bool{},
+		},
+		{
+			name:  "expected exceeds max",
+			input: tooManyColumns,
+			err:   errMaxDataColumnsExceeded,
+		},
+		{
+			name:          "all missing",
+			storedIndices: []uint64{},
+			input:         map[uint64]bool{0: true, 1: true, 2: true},
+			expected:      map[uint64]bool{0: true, 1: true, 2: true},
+		},
+		{
+			name:          "none missing",
+			input:         map[uint64]bool{0: true, 1: true, 2: true},
+			expected:      map[uint64]bool{},
+			storedIndices: []uint64{0, 1, 2, 3, 4}, // Extra columns stored but not expected
+		},
+		{
+			name:          "some missing",
+			storedIndices: []uint64{0, 20},
+			input:         map[uint64]bool{0: true, 10: true, 20: true, 30: true},
+			expected:      map[uint64]bool{10: true, 30: true},
+		},
+	}
+
+	var emptyRoot [fieldparams.RootLength]byte
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			dcm, dcs := filesystem.NewEphemeralDataColumnStorageWithMocker(t)
+			err := dcm.CreateFakeIndices(emptyRoot, 0, tc.storedIndices...)
+			require.NoError(t, err)
+
+			// Test the function
+			actual, err := missingDataColumnIndices(dcs, emptyRoot, tc.input)
+			require.ErrorIs(t, err, tc.err)
+
+			require.Equal(t, len(tc.expected), len(actual))
+			for key := range tc.expected {
+				require.Equal(t, true, actual[key])
 			}
 		})
 	}
@@ -3275,14 +3335,14 @@ func testIsAvailableSetup(t *testing.T, params testIsAvailableParams) (context.C
 	root, err := signedBeaconBlock.Block.HashTreeRoot()
 	require.NoError(t, err)
 
-	dataColumnsParams := make([]verification.DataColumnParams, 0, len(params.columnsToSave))
+	dataColumnsParams := make([]util.DataColumnParams, 0, len(params.columnsToSave))
 	for _, i := range params.columnsToSave {
-		dataColumnParam := verification.DataColumnParams{ColumnIndex: i}
+		dataColumnParam := util.DataColumnParams{ColumnIndex: i}
 		dataColumnsParams = append(dataColumnsParams, dataColumnParam)
 	}
 
-	dataColumnParamsByBlockRoot := verification.DataColumnsParamsByRoot{root: dataColumnsParams}
-	_, verifiedRODataColumns := verification.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
+	dataColumnParamsByBlockRoot := util.DataColumnsParamsByRoot{root: dataColumnsParams}
+	_, verifiedRODataColumns := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
 
 	err = dataColumnStorage.Save(verifiedRODataColumns)
 	require.NoError(t, err)
@@ -3310,9 +3370,9 @@ func TestIsDataAvailable(t *testing.T) {
 	})
 
 	t.Run("Fulu - more than half of the columns in custody", func(t *testing.T) {
-		halfNumberOfColumns := params.BeaconConfig().NumberOfColumns / 2
-		indices := make([]uint64, 0, halfNumberOfColumns)
-		for i := range halfNumberOfColumns {
+		minimumColumnsCountToReconstruct := peerdas.MinimumColumnsCountToReconstruct()
+		indices := make([]uint64, 0, minimumColumnsCountToReconstruct)
+		for i := range minimumColumnsCountToReconstruct {
 			indices = append(indices, i)
 		}
 
@@ -3341,42 +3401,82 @@ func TestIsDataAvailable(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	// t.Run("Fulu - some initially missing data columns (no reconstruction)", func(t *testing.T) {
-	// 	var custodyInfo peerdas.CustodyInfo
-	// 	custodyInfo.TargetGroupCount.SetValidatorsCustodyRequirement(128)
-	// 	custodyInfo.ToAdvertiseGroupCount.Set(128)
+	t.Run("Fulu - some initially missing data columns (no reconstruction)", func(t *testing.T) {
+		testParams := testIsAvailableParams{
+			options:       []Option{WithCustodyInfo(&peerdas.CustodyInfo{})},
+			columnsToSave: []uint64{1, 17, 19, 75, 102, 117, 119}, // 119 is not needed, 42 and 87 are missing
 
-	// 	testParams := testIsAvailableParams{
-	// 		options:                 []Option{WithCustodyInfo(&custodyInfo)},
-	// 		blobKzgCommitmentsCount: 3,
-	// 	}
+			blobKzgCommitmentsCount: 3,
+		}
 
-	// 	ctx, _, service, root, signed := testIsAvailableSetup(t, testParams)
+		ctx, _, service, root, signed := testIsAvailableSetup(t, testParams)
 
-	// 	// If needed, generate a random root that is different from the block root.
-	// 	var randomRoot [fieldparams.RootLength]byte
-	// 	for randomRoot == root {
-	// 		randomRootSlice := make([]byte, fieldparams.RootLength)
-	// 		_, err := rand.Read(randomRootSlice)
-	// 		require.NoError(t, err)
-	// 		copy(randomRoot[:], randomRootSlice)
-	// 	}
+		var wrongRoot [fieldparams.RootLength]byte
+		copy(wrongRoot[:], root[:])
+		wrongRoot[0]++ // change the root to simulate a wrong root
 
-	// 	// TODO: Achieve the same result without using time.AfterFunc.
-	// 	time.AfterFunc(10*time.Millisecond, func() {
-	// 		halfNumberOfColumns := params.BeaconConfig().NumberOfColumns / 2
-	// 		indices := make([]uint64, 0, halfNumberOfColumns)
-	// 		for i := range halfNumberOfColumns {
-	// 			indices = append(indices, i)
-	// 		}
+		_, verifiedSidecarsWrongRoot := util.CreateTestVerifiedRoDataColumnSidecars(t, util.DataColumnsParamsByRoot{wrongRoot: {
+			{ColumnIndex: 42}, // needed
+		}})
 
-	// 		withSomeRequiredColumns := filesystem.DataColumnsIdent{Root: root, Indices: indices}
-	// 		service.dataColumnStorage.DataColumnFeed.Send(withSomeRequiredColumns)
-	// 	})
+		_, verifiedSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, util.DataColumnsParamsByRoot{root: {
+			{ColumnIndex: 87}, // needed
+			{ColumnIndex: 1},  // not needed
+			{ColumnIndex: 42}, // needed
+		}})
 
-	// 	err := service.isDataAvailable(ctx, root, signed)
-	// 	require.NoError(t, err)
-	// })
+		time.AfterFunc(10*time.Millisecond, func() {
+			err := service.dataColumnStorage.Save(verifiedSidecarsWrongRoot)
+			require.NoError(t, err)
+
+			err = service.dataColumnStorage.Save(verifiedSidecars)
+			require.NoError(t, err)
+		})
+
+		err := service.isDataAvailable(ctx, root, signed)
+		require.NoError(t, err)
+	})
+
+	t.Run("Fulu - some initially missing data columns (reconstruction)", func(t *testing.T) {
+		const (
+			missingColumns = uint64(2)
+			cgc            = 128
+		)
+		var custodyInfo peerdas.CustodyInfo
+		custodyInfo.TargetGroupCount.SetValidatorsCustodyRequirement(cgc)
+		custodyInfo.ToAdvertiseGroupCount.Set(cgc)
+
+		minimumColumnsCountToReconstruct := peerdas.MinimumColumnsCountToReconstruct()
+		indices := make([]uint64, 0, minimumColumnsCountToReconstruct-missingColumns)
+
+		for i := range minimumColumnsCountToReconstruct - missingColumns {
+			indices = append(indices, i)
+		}
+
+		testParams := testIsAvailableParams{
+			options:                 []Option{WithCustodyInfo(&custodyInfo)},
+			columnsToSave:           indices,
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, _, service, root, signed := testIsAvailableSetup(t, testParams)
+
+		dataColumnParams := make([]util.DataColumnParams, 0, missingColumns)
+		for i := minimumColumnsCountToReconstruct - missingColumns; i < minimumColumnsCountToReconstruct; i++ {
+			dataColumnParam := util.DataColumnParams{ColumnIndex: i}
+			dataColumnParams = append(dataColumnParams, dataColumnParam)
+		}
+
+		_, verifiedSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, util.DataColumnsParamsByRoot{root: dataColumnParams})
+
+		time.AfterFunc(10*time.Millisecond, func() {
+			err := service.dataColumnStorage.Save(verifiedSidecars)
+			require.NoError(t, err)
+		})
+
+		err := service.isDataAvailable(ctx, root, signed)
+		require.NoError(t, err)
+	})
 
 	t.Run("Fulu - some columns are definitively missing", func(t *testing.T) {
 		params := testIsAvailableParams{
@@ -3386,7 +3486,6 @@ func TestIsDataAvailable(t *testing.T) {
 
 		ctx, cancel, service, root, signed := testIsAvailableSetup(t, params)
 
-		// TODO: Achieve the same result without using time.AfterFunc.
 		time.AfterFunc(10*time.Millisecond, func() {
 			cancel()
 		})
