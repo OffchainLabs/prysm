@@ -57,6 +57,7 @@ func HoodiConfig() *BeaconChainConfig {
 		{Epoch: 0, MaxBlobsPerBlock: 6},
 		{Epoch: 2048, MaxBlobsPerBlock: 9},
 	}
+	cfg.DefaultBuilderGasLimit = uint64(60000000)
 	cfg.InitializeForkSchedule()
 	return cfg
 }

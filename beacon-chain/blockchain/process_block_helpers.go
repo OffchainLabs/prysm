@@ -310,7 +310,7 @@ func (s *Service) processLightClientFinalityUpdate(
 		Data: newUpdate,
 	})
 
-	if err = s.cfg.P2p.BroadcastLightClientFinalityUpdate(ctx, newUpdate); err != nil {
+	if err = s.cfg.P2P.BroadcastLightClientFinalityUpdate(ctx, newUpdate); err != nil {
 		return errors.Wrap(err, "could not broadcast light client finality update")
 	}
 
@@ -363,7 +363,7 @@ func (s *Service) processLightClientOptimisticUpdate(ctx context.Context, signed
 		Data: newUpdate,
 	})
 
-	if err = s.cfg.P2p.BroadcastLightClientOptimisticUpdate(ctx, newUpdate); err != nil {
+	if err = s.cfg.P2P.BroadcastLightClientOptimisticUpdate(ctx, newUpdate); err != nil {
 		return errors.Wrap(err, "could not broadcast light client optimistic update")
 	}
 
