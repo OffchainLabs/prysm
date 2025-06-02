@@ -58,7 +58,6 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 		log.WithError(err).WithFields(b.logFields()).Debug("Batch requesting failed")
 		return b.withRetryableError(err)
 	}
-	// Convert to ROBlock slice before verification
 	roBlocks, err := blocks.NewROBlockSlice(results)
 	if err != nil {
 		log.WithError(err).WithFields(b.logFields()).Error("Failed to convert blocks to ROBlock format")
