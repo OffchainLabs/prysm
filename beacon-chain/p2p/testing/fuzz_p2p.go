@@ -5,6 +5,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
@@ -59,7 +60,7 @@ func (*FakeP2P) ENR() *enr.Record {
 
 // NodeID returns the node id of the local peer.
 func (*FakeP2P) NodeID() enode.ID {
-	return [32]byte{}
+	return enode.ID{}
 }
 
 // DiscoveryAddresses -- fake
@@ -165,6 +166,11 @@ func (*FakeP2P) BroadcastLightClientFinalityUpdate(_ context.Context, _ interfac
 	return nil
 }
 
+// BroadcastDataColumn -- fake.
+func (*FakeP2P) BroadcastDataColumn(_ [fieldparams.RootLength]byte, _ uint64, _ *ethpb.DataColumnSidecar, _ ...chan<- bool) error {
+	return nil
+}
+
 // InterceptPeerDial -- fake.
 func (*FakeP2P) InterceptPeerDial(peer.ID) (allow bool) {
 	return true
@@ -188,4 +194,8 @@ func (*FakeP2P) InterceptSecured(network.Direction, peer.ID, network.ConnMultiad
 // InterceptUpgraded -- fake.
 func (*FakeP2P) InterceptUpgraded(network.Conn) (allow bool, reason control.DisconnectReason) {
 	return true, 0
+}
+
+func (*FakeP2P) CustodyGroupCountFromPeer(peer.ID) uint64 {
+	return 0
 }

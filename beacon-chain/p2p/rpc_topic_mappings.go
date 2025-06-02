@@ -11,11 +11,16 @@ import (
 	"github.com/pkg/errors"
 )
 
-// SchemaVersionV1 specifies the schema version for our rpc protocol ID.
-const SchemaVersionV1 = "/1"
+const (
+	// SchemaVersionV1 specifies the schema version for our rpc protocol ID.
+	SchemaVersionV1 = "/1"
 
-// SchemaVersionV2 specifies the next schema version for our rpc protocol ID.
-const SchemaVersionV2 = "/2"
+	// SchemaVersionV2 specifies the next schema version for our rpc protocol ID.
+	SchemaVersionV2 = "/2"
+
+	// SchemaVersionV3 specifies the next schema version for our rpc protocol ID.
+	SchemaVersionV3 = "/3"
+)
 
 // Specifies the protocol prefix for all our Req/Resp topics.
 const protocolPrefix = "/eth2/beacon_chain/req"
@@ -73,10 +78,10 @@ const (
 
 	// RPCBlobSidecarsByRangeTopicV1 is a topic for requesting blob sidecars
 	// in the slot range [start_slot, start_slot + count), leading up to the current head block as selected by fork choice.
-	// Protocol ID: /eth2/beacon_chain/req/blob_sidecars_by_range/1/ - New in deneb.
+	// /eth2/beacon_chain/req/blob_sidecars_by_range/1/ - New in deneb.
 	RPCBlobSidecarsByRangeTopicV1 = protocolPrefix + BlobSidecarsByRangeName + SchemaVersionV1
-	// RPCBlobSidecarsByRootTopicV1 is a topic for requesting blob sidecars by their block root. New in deneb.
-	// /eth2/beacon_chain/req/blob_sidecars_by_root/1/
+	// RPCBlobSidecarsByRootTopicV1 is a topic for requesting blob sidecars by their block root.
+	// /eth2/beacon_chain/req/blob_sidecars_by_root/1/ - New in deneb.
 	RPCBlobSidecarsByRootTopicV1 = protocolPrefix + BlobSidecarsByRootName + SchemaVersionV1
 
 	// RPCLightClientBootstrapTopicV1 is a topic for requesting a light client bootstrap.
@@ -95,6 +100,10 @@ const (
 	RPCBlocksByRootTopicV2 = protocolPrefix + BeaconBlocksByRootsMessageName + SchemaVersionV2
 	// RPCMetaDataTopicV2 defines the v2 topic for the metadata rpc method.
 	RPCMetaDataTopicV2 = protocolPrefix + MetadataMessageName + SchemaVersionV2
+
+	// V3 RPC Topics
+	// RPCMetaDataTopicV3 defines the v3 topic for the metadata rpc method.
+	RPCMetaDataTopicV3 = protocolPrefix + MetadataMessageName + SchemaVersionV3
 )
 
 // RPC errors for topic parsing.
@@ -119,6 +128,7 @@ var RPCTopicMappings = map[string]interface{}{
 	// RPC Metadata Message
 	RPCMetaDataTopicV1: new(interface{}),
 	RPCMetaDataTopicV2: new(interface{}),
+	RPCMetaDataTopicV3: new(interface{}),
 	// BlobSidecarsByRange v1 Message
 	RPCBlobSidecarsByRangeTopicV1: new(pb.BlobSidecarsByRangeRequest),
 	// BlobSidecarsByRoot v1 Message
@@ -160,9 +170,15 @@ var altairMapping = map[string]bool{
 	MetadataMessageName:            true,
 }
 
+// Maps all the RPC messages which are to updated in fulu.
+var fuluMapping = map[string]bool{
+	MetadataMessageName: true,
+}
+
 var versionMapping = map[string]bool{
 	SchemaVersionV1: true,
 	SchemaVersionV2: true,
+	SchemaVersionV3: true,
 }
 
 // OmitContextBytesV1 keeps track of which RPC methods do not write context bytes in their v1 incarnations.
@@ -290,13 +306,22 @@ func (r RPCTopic) Version() string {
 // TopicFromMessage constructs the rpc topic from the provided message
 // type and epoch.
 func TopicFromMessage(msg string, epoch primitives.Epoch) (string, error) {
+	// Check if the topic is known.
 	if !messageMapping[msg] {
 		return "", errors.Errorf("%s: %s", invalidRPCMessageType, msg)
 	}
-	version := SchemaVersionV1
-	isAltair := epoch >= params.BeaconConfig().AltairForkEpoch
-	if isAltair && altairMapping[msg] {
-		version = SchemaVersionV2
+
+	beaconConfig := params.BeaconConfig()
+
+	// Check if the message is to be updated in fulu.
+	if epoch >= beaconConfig.FuluForkEpoch && fuluMapping[msg] {
+		return protocolPrefix + msg + SchemaVersionV3, nil
 	}
-	return protocolPrefix + msg + version, nil
+
+	// Check if the message is to be updated in altair.
+	if epoch >= beaconConfig.AltairForkEpoch && altairMapping[msg] {
+		return protocolPrefix + msg + SchemaVersionV2, nil
+	}
+
+	return protocolPrefix + msg + SchemaVersionV1, nil
 }

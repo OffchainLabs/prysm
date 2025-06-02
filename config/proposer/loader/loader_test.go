@@ -930,7 +930,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 					set.Bool(flags.EnableBuilderFlag.Name, true, "")
 				}
 				cliCtx := cli.NewContext(&app, set, nil)
-				validatorDB := dbTest.SetupDB(t, [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
+				validatorDB := dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
 				if tt.withdb != nil {
 					err := tt.withdb(validatorDB)
 					require.NoError(t, err)
@@ -978,7 +978,7 @@ func Test_ProposerSettingsLoaderWithOnlyBuilder_DoesNotSaveInDB(t *testing.T) {
 			set := flag.NewFlagSet("test", 0)
 			set.Bool(flags.EnableBuilderFlag.Name, true, "")
 			cliCtx := cli.NewContext(&app, set, nil)
-			validatorDB := dbTest.SetupDB(t, [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
+			validatorDB := dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
 			loader, err := NewProposerSettingsLoader(
 				cliCtx,
 				validatorDB,

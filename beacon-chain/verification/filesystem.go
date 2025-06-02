@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/afero"
 )
 
-// VerifiedROBlobError creates a verified read-only blob sidecar from an error.
+// VerifiedROBlobFromDisk creates a verified read-only blob sidecar from an error.
 func VerifiedROBlobFromDisk(fs afero.Fs, root [32]byte, path string) (blocks.VerifiedROBlob, error) {
 	encoded, err := afero.ReadFile(fs, path)
 	if err != nil {

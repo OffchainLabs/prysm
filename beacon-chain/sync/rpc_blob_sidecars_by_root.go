@@ -37,8 +37,9 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 
 	blobIdents := *ref
 	cs := s.cfg.clock.CurrentSlot()
+	remotePeer := stream.Conn().RemotePeer()
 	if err := validateBlobByRootRequest(blobIdents, cs); err != nil {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
 		return err
 	}
@@ -75,6 +76,7 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 				log.WithError(err).WithFields(logrus.Fields{
 					"root":  fmt.Sprintf("%#x", root),
 					"index": idx,
+					"peer":  remotePeer.String(),
 				}).Debugf("Peer requested blob sidecar by root not found in db")
 				continue
 			}
@@ -107,14 +109,21 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 }
 
 func validateBlobByRootRequest(blobIdents types.BlobSidecarsByRootReq, slot primitives.Slot) error {
-	if slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch {
-		if uint64(len(blobIdents)) > params.BeaconConfig().MaxRequestBlobSidecarsElectra {
+	beaconConfig := params.BeaconConfig()
+	epoch := slots.ToEpoch(slot)
+	blobIdentCount := uint64(len(blobIdents))
+
+	if epoch >= beaconConfig.ElectraForkEpoch {
+		if blobIdentCount > beaconConfig.MaxRequestBlobSidecarsElectra {
 			return types.ErrMaxBlobReqExceeded
 		}
-	} else {
-		if uint64(len(blobIdents)) > params.BeaconConfig().MaxRequestBlobSidecars {
-			return types.ErrMaxBlobReqExceeded
-		}
+
+		return nil
 	}
+
+	if blobIdentCount > beaconConfig.MaxRequestBlobSidecars {
+		return types.ErrMaxBlobReqExceeded
+	}
+
 	return nil
 }

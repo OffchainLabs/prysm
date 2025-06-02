@@ -54,9 +54,8 @@ func run(ctx context.Context, v iface.Validator) {
 		handleAssignmentError(err, headSlot)
 	}
 	startCancel()
-	eventsChan := make(chan *event.Event, 1)
 	healthTracker := v.HealthTracker()
-	runHealthCheckRoutine(ctx, v, eventsChan)
+	runHealthCheckRoutine(ctx, v)
 
 	// check if proposer settings is still nil
 	// Set properties on the beacon node like the fee recipient for validators that are being used & active.
@@ -149,7 +148,7 @@ func run(ctx context.Context, v iface.Validator) {
 				}
 				dutiesCancel()
 			}
-		case e := <-eventsChan:
+		case e := <-v.EventsChan():
 			v.ProcessEvent(ctx, e)
 		case currentKeys := <-v.AccountsChangedChan(): // should be less of a priority than next slot
 			onAccountsChanged(ctx, v, currentKeys)
@@ -312,7 +311,7 @@ func handleAssignmentError(err error, slot primitives.Slot) {
 	}
 }
 
-func runHealthCheckRoutine(ctx context.Context, v iface.Validator, eventsChan chan<- *event.Event) {
+func runHealthCheckRoutine(ctx context.Context, v iface.Validator) {
 	log.Info("Starting health check routine for beacon node apis")
 	healthCheckTicker := time.NewTicker(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
 	tracker := v.HealthTracker()
@@ -343,7 +342,7 @@ func runHealthCheckRoutine(ctx context.Context, v iface.Validator, eventsChan ch
 			// in case of node returning healthy but event stream died
 			if isHealthy && !v.EventStreamIsRunning() {
 				log.Info("Event stream reconnecting...")
-				go v.StartEventStream(ctx, event.DefaultEventTopics, eventsChan)
+				go v.StartEventStream(ctx, event.DefaultEventTopics)
 			}
 		}
 	}()

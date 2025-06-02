@@ -1110,7 +1110,7 @@ func TestServer_SetGasLimit(t *testing.T) {
 				m := &testutil.FakeValidator{}
 				err := m.SetProposerSettings(ctx, tt.proposerSettings)
 				require.NoError(t, err)
-				validatorDB := dbtest.SetupDB(t, [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
+				validatorDB := dbtest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
 				vs, err := client.NewValidatorService(ctx, &client.Config{
 					Validator: m,
 					DB:        validatorDB,
@@ -1299,7 +1299,7 @@ func TestServer_DeleteGasLimit(t *testing.T) {
 				m := &testutil.FakeValidator{}
 				err := m.SetProposerSettings(ctx, tt.proposerSettings)
 				require.NoError(t, err)
-				validatorDB := dbtest.SetupDB(t, [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
+				validatorDB := dbtest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
 				vs, err := client.NewValidatorService(ctx, &client.Config{
 					Validator: m,
 					DB:        validatorDB,
@@ -1777,7 +1777,7 @@ func TestServer_FeeRecipientByPubkey(t *testing.T) {
 				m := &testutil.FakeValidator{}
 				err := m.SetProposerSettings(ctx, tt.proposerSettings)
 				require.NoError(t, err)
-				validatorDB := dbtest.SetupDB(t, [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
+				validatorDB := dbtest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
 
 				// save a default here
 				vs, err := client.NewValidatorService(ctx, &client.Config{
@@ -1889,7 +1889,7 @@ func TestServer_DeleteFeeRecipientByPubkey(t *testing.T) {
 				m := &testutil.FakeValidator{}
 				err := m.SetProposerSettings(ctx, tt.proposerSettings)
 				require.NoError(t, err)
-				validatorDB := dbtest.SetupDB(t, [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
+				validatorDB := dbtest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
 				vs, err := client.NewValidatorService(ctx, &client.Config{
 					Validator: m,
 					DB:        validatorDB,
