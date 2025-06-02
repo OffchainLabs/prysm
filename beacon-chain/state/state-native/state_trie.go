@@ -109,7 +109,10 @@ var (
 		types.PendingConsolidations,
 	)
 
-	fuluFields = electraFields
+	fuluFields = append(
+		electraFields,
+		types.ProposerLookahead,
+	)
 )
 
 const (
@@ -119,14 +122,14 @@ const (
 	capellaSharedFieldRefCount                    = 13
 	denebSharedFieldRefCount                      = 13
 	electraSharedFieldRefCount                    = 16
-	fuluSharedFieldRefCount                       = 16
+	fuluSharedFieldRefCount                       = 17
 	experimentalStatePhase0SharedFieldRefCount    = 5
 	experimentalStateAltairSharedFieldRefCount    = 5
 	experimentalStateBellatrixSharedFieldRefCount = 6
 	experimentalStateCapellaSharedFieldRefCount   = 7
 	experimentalStateDenebSharedFieldRefCount     = 7
 	experimentalStateElectraSharedFieldRefCount   = 10
-	experimentalStateFuluSharedFieldRefCount      = 10
+	experimentalStateFuluSharedFieldRefCount      = 11
 )
 
 // InitializeFromProtoPhase0 the beacon state from a protobuf representation.
@@ -956,6 +959,7 @@ func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateFulu) (state.BeaconState
 	b.sharedFieldReferences[types.PendingDeposits] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.PendingPartialWithdrawals] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.PendingConsolidations] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.ProposerLookahead] = stateutil.NewRef(1) // New in Fulu.
 	if !features.Get().EnableExperimentalState {
 		b.sharedFieldReferences[types.BlockRoots] = stateutil.NewRef(1)
 		b.sharedFieldReferences[types.StateRoots] = stateutil.NewRef(1)
@@ -1021,6 +1025,7 @@ func (b *BeaconState) Copy() state.BeaconState {
 		currentEpochAttestations:  b.currentEpochAttestations,
 		eth1DataVotes:             b.eth1DataVotes,
 		slashings:                 b.slashings,
+		proposerLookahead:         b.proposerLookahead,
 
 		// Large arrays, increases over time.
 		balances:                   b.balances,
