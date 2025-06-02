@@ -20,8 +20,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// P2P represents the full p2p interface composed of all of the sub-interfaces.
 type (
+	// P2P represents the full p2p interface composed of all of the sub-interfaces.
 	P2P interface {
 		Broadcaster
 		SetStreamHandler
@@ -35,7 +35,8 @@ type (
 		DataColumnsHandler
 	}
 
-	Acceser interface {
+	// Accessor provides access to the Broadcaster and PeerManager interfaces.
+	Accessor interface {
 		Broadcaster
 		PeerManager
 	}
