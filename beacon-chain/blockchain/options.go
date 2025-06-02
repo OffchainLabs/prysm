@@ -219,6 +219,7 @@ func WithDataColumnStorage(b *filesystem.DataColumnStorage) Option {
 	}
 }
 
+// WithSyncChecker sets the sync checker for the blockchain service.
 func WithSyncChecker(checker Checker) Option {
 	return func(s *Service) error {
 		s.cfg.SyncChecker = checker
@@ -226,6 +227,7 @@ func WithSyncChecker(checker Checker) Option {
 	}
 }
 
+// WithCustodyInfo sets the custody info for the blockchain service.
 func WithCustodyInfo(custodyInfo *peerdas.CustodyInfo) Option {
 	return func(s *Service) error {
 		s.cfg.CustodyInfo = custodyInfo
@@ -233,6 +235,7 @@ func WithCustodyInfo(custodyInfo *peerdas.CustodyInfo) Option {
 	}
 }
 
+// WithSlasherEnabled sets whether the slasher is enabled or not.
 func WithSlasherEnabled(enabled bool) Option {
 	return func(s *Service) error {
 		s.slasherEnabled = enabled
@@ -240,6 +243,7 @@ func WithSlasherEnabled(enabled bool) Option {
 	}
 }
 
+// WithGenesisTime sets the genesis time for the blockchain service.
 func WithGenesisTime(genesisTime time.Time) Option {
 	return func(s *Service) error {
 		s.genesisTime = genesisTime
@@ -247,6 +251,7 @@ func WithGenesisTime(genesisTime time.Time) Option {
 	}
 }
 
+// WithLightClientStore sets the light client store for the blockchain service.
 func WithLightClientStore(lcs *lightclient.Store) Option {
 	return func(s *Service) error {
 		s.lcStore = lcs
