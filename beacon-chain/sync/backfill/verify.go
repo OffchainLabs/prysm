@@ -59,7 +59,7 @@ type verifier struct {
 
 func (vr verifier) verify(blks []blocks.ROBlock) (verifiedROBlocks, error) {
 	var err error
-	result := blks // Use the input directly
+	result := blks
 	sigSet := bls.NewSet()
 	for i := range result {
 		if i > 0 && result[i-1].Root() != result[i].Block().ParentRoot() {
