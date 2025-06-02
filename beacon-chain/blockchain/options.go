@@ -1,10 +1,13 @@
 package blockchain
 
 import (
+	"time"
+
 	"github.com/OffchainLabs/prysm/v6/async/event"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
 	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
@@ -127,9 +130,9 @@ func WithBLSToExecPool(p blstoexec.PoolManager) Option {
 }
 
 // WithP2PBroadcaster to broadcast messages after appropriate processing.
-func WithP2PBroadcaster(p p2p.Broadcaster) Option {
+func WithP2PBroadcaster(p p2p.Accessor) Option {
 	return func(s *Service) error {
-		s.cfg.P2p = p
+		s.cfg.P2P = p
 		return nil
 	}
 }
@@ -208,6 +211,15 @@ func WithBlobStorage(b *filesystem.BlobStorage) Option {
 	}
 }
 
+// WithDataColumnStorage sets the data column storage backend for the blockchain service.
+func WithDataColumnStorage(b *filesystem.DataColumnStorage) Option {
+	return func(s *Service) error {
+		s.dataColumnStorage = b
+		return nil
+	}
+}
+
+// WithSyncChecker sets the sync checker for the blockchain service.
 func WithSyncChecker(checker Checker) Option {
 	return func(s *Service) error {
 		s.cfg.SyncChecker = checker
@@ -215,6 +227,15 @@ func WithSyncChecker(checker Checker) Option {
 	}
 }
 
+// WithCustodyInfo sets the custody info for the blockchain service.
+func WithCustodyInfo(custodyInfo *peerdas.CustodyInfo) Option {
+	return func(s *Service) error {
+		s.cfg.CustodyInfo = custodyInfo
+		return nil
+	}
+}
+
+// WithSlasherEnabled sets whether the slasher is enabled or not.
 func WithSlasherEnabled(enabled bool) Option {
 	return func(s *Service) error {
 		s.slasherEnabled = enabled
@@ -222,6 +243,15 @@ func WithSlasherEnabled(enabled bool) Option {
 	}
 }
 
+// WithGenesisTime sets the genesis time for the blockchain service.
+func WithGenesisTime(genesisTime time.Time) Option {
+	return func(s *Service) error {
+		s.genesisTime = genesisTime
+		return nil
+	}
+}
+
+// WithLightClientStore sets the light client store for the blockchain service.
 func WithLightClientStore(lcs *lightclient.Store) Option {
 	return func(s *Service) error {
 		s.lcStore = lcs

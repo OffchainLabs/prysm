@@ -49,7 +49,7 @@ type mockBroadcaster struct {
 	broadcastCalled bool
 }
 
-type mockAccesser struct {
+type mockAccessor struct {
 	mockBroadcaster
 	p2pTesting.MockPeerManager
 }
@@ -144,9 +144,10 @@ func minimalTestService(t *testing.T, opts ...Option) (*Service, *testServiceReq
 		WithDepositCache(dc),
 		WithTrackedValidatorsCache(cache.NewTrackedValidatorsCache()),
 		WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)),
+		WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)),
 		WithSyncChecker(mock.MockChecker{}),
 		WithExecutionEngineCaller(&mockExecution.EngineClient{}),
-		WithP2PBroadcaster(&mockAccesser{}),
+		WithP2PBroadcaster(&mockAccessor{}),
 		WithLightClientStore(&lightclient.Store{}),
 	}
 	// append the variadic opts so they override the defaults by being processed afterwards
