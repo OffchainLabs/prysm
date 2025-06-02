@@ -50,6 +50,7 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 
 	// Build duties for each validator
 	ctx, span := trace.StartSpan(ctx, "dutiesv2.BuildResponse")
+	span.SetAttributes(trace.Int64Attribute("num_pubkeys", int64(len(req.PublicKeys))))
 	defer span.End()
 
 	// Load committee and proposer metadata
