@@ -16,6 +16,7 @@ import (
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	coreTime "github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
@@ -64,6 +65,7 @@ type Service struct {
 	blobNotifiers        *blobNotifierMap
 	blockBeingSynced     *currentlySyncingBlock
 	blobStorage          *filesystem.BlobStorage
+	dataColumnStorage    *filesystem.DataColumnStorage
 	slasherEnabled       bool
 	lcStore              *lightClient.Store
 }
@@ -81,7 +83,7 @@ type config struct {
 	ExitPool                voluntaryexits.PoolManager
 	SlashingPool            slashings.PoolManager
 	BLSToExecPool           blstoexec.PoolManager
-	P2p                     p2p.Broadcaster
+	P2P                     p2p.Accessor
 	MaxRoutines             int
 	StateNotifier           statefeed.Notifier
 	ForkChoiceStore         f.ForkChoicer
@@ -93,6 +95,7 @@ type config struct {
 	FinalizedStateAtStartUp state.BeaconState
 	ExecutionEngineCaller   execution.EngineCaller
 	SyncChecker             Checker
+	CustodyInfo             *peerdas.CustodyInfo
 }
 
 // Checker is an interface used to determine if a node is in initial sync
