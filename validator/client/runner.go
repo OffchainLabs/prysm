@@ -123,7 +123,6 @@ func run(ctx context.Context, v iface.Validator) {
 				cancel()
 				continue
 			}
-			cancel()
 			// performRoles calls span.End()
 			rolesCtx, _ := context.WithDeadline(ctx, deadline)
 			performRoles(rolesCtx, allRoles, v, slot, &wg, span)
