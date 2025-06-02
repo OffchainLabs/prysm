@@ -1,6 +1,7 @@
 package fulu_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/fulu"
@@ -25,7 +26,7 @@ func TestUpgradeToFulu(t *testing.T) {
 	require.NoError(t, st.SetBalances(bals))
 
 	preForkState := st.Copy()
-	mSt, err := fulu.UpgradeToFulu(st)
+	mSt, err := fulu.UpgradeToFulu(context.Background(), st)
 	require.NoError(t, err)
 
 	require.Equal(t, preForkState.GenesisTime(), mSt.GenesisTime())

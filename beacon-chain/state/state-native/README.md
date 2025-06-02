@@ -3,7 +3,7 @@
 Note: Whenever only the name of a file is provided, it's assumed to be in the `/beacon-chain/state/state-native` package.
 
 - Add a `BeaconState[Version]FieldCount` configuration item to `/config/params/config.go` and set it in `/config/params/mainnet_config.go`.
-- Add the field to the `BeaconState` struct in `beacon_state_mainnet.go` and `beacon_state_minimal.go`. Update the marshaling code too.
+- Add the field to the `BeaconState` struct in `beacon_state.go`. Update the marshaling structs in the same file too.
 - Add the field's metadata to `/beacon-chain/state/state-native/types/types.go`.
 - Add a getter and a setter for the field, either to existing `getter_XXX.go`/`setter_XXX.go` files or create new ones if the field doesn't fit anywhere.
 Add the new getter and setter to `/beacon-chain/state/interfaces.go`.

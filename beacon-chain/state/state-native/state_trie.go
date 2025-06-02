@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	mvslice "github.com/OffchainLabs/prysm/v6/container/multi-value-slice"
 	"github.com/OffchainLabs/prysm/v6/container/slice"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
@@ -159,8 +160,8 @@ func InitializeFromProtoElectra(st *ethpb.BeaconStateElectra) (state.BeaconState
 }
 
 // InitializeFromProtoFulu the beacon state from a protobuf representation.
-func InitializeFromProtoFulu(st *ethpb.BeaconStateElectra) (state.BeaconState, error) {
-	return InitializeFromProtoUnsafeFulu(proto.Clone(st).(*ethpb.BeaconStateElectra))
+func InitializeFromProtoFulu(st *ethpb.BeaconStateFulu) (state.BeaconState, error) {
+	return InitializeFromProtoUnsafeFulu(proto.Clone(st).(*ethpb.BeaconStateFulu))
 }
 
 // InitializeFromProtoUnsafePhase0 directly uses the beacon state protobuf fields
@@ -842,7 +843,7 @@ func InitializeFromProtoUnsafeElectra(st *ethpb.BeaconStateElectra) (state.Beaco
 
 // InitializeFromProtoUnsafeFulu directly uses the beacon state protobuf fields
 // and sets them as fields of the BeaconState type.
-func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateElectra) (state.BeaconState, error) {
+func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateFulu) (state.BeaconState, error) {
 	if st == nil {
 		return nil, errors.New("received nil state")
 	}
@@ -852,6 +853,10 @@ func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateElectra) (state.BeaconSt
 		hRoots[i] = bytesutil.ToBytes32(r)
 	}
 
+	proposerLookahead := make([]primitives.ValidatorIndex, len(st.ProposerLookahead))
+	for i, v := range st.ProposerLookahead {
+		proposerLookahead[i] = primitives.ValidatorIndex(v)
+	}
 	fieldCount := params.BeaconConfig().BeaconStateFuluFieldCount
 	b := &BeaconState{
 		version:                           version.Fulu,
@@ -886,6 +891,7 @@ func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateElectra) (state.BeaconSt
 		pendingDeposits:                   st.PendingDeposits,
 		pendingPartialWithdrawals:         st.PendingPartialWithdrawals,
 		pendingConsolidations:             st.PendingConsolidations,
+		proposerLookahead:                 proposerLookahead,
 
 		dirtyFields:      make(map[types.FieldIndex]bool, fieldCount),
 		dirtyIndices:     make(map[types.FieldIndex][]uint64, fieldCount),
