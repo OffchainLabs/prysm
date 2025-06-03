@@ -50,6 +50,7 @@ go_test(
         "benchmark_test.go",
         "field_root_test.go",
         "field_root_validator_test.go",
+        "proposer_lookahead_root_test.go",
         "reference_bench_test.go",
         "state_root_test.go",
         "trie_helpers_test.go",
