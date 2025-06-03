@@ -1452,6 +1452,8 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 		return stateutil.PendingPartialWithdrawalsRoot(b.pendingPartialWithdrawals)
 	case types.PendingConsolidations:
 		return stateutil.PendingConsolidationsRoot(b.pendingConsolidations)
+	case types.ProposerLookahead:
+		return stateutil.ProposerLookaheadRoot(b.proposerLookahead)
 	}
 	return [32]byte{}, errors.New("invalid field index provided")
 }

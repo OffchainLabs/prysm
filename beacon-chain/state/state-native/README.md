@@ -19,6 +19,6 @@ between states.
   - Add the following functions: `InitializeFromProto[Version]()`, `InitializeFromProtoUnsafe[Version]()`.
   - Update the following functions: `Copy()`, `initializeMerkleLayers()`, `RecordStateMetrics()` (applies only to multi-value slice fields), `rootSelector()`,
 `finalizerCleanup()` (applies only to multi-value slice fields).
-- If the field is a slice, add it to the field map in `types.go`.
+- If the field is a slice, add it to the field map in `types.go`. This only applies to large slices that need to be rehashed only in part. In particular, this mostly applies for arrays of objects, and not for arrays of basic SSZ types as these are not hashed by taking the root of each element. 
 - If the field is a slice, update the `fieldConverters()` function in `/beacon-chain/state/fieldtrie/field_trie_helpers.go`. The exact implementation will vary
-depending on a few factors (is the field similar to an existing one, is it a multi-value slice etc.)
+depending on a few factors (is the field similar to an existing one, is it a multi-value slice etc). This applies only for the slices as mentioned in the previous comment. 
