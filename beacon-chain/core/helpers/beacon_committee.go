@@ -354,7 +354,7 @@ func ProposerAssignments(ctx context.Context, state state.BeaconState, epoch pri
 type LiteAssignment struct {
 	AttesterSlot            primitives.Slot           // slot in which to attest
 	CommitteeIndex          primitives.CommitteeIndex // position of the committee in the slot
-	CommitteeLength         uint64                    // #members in the committee
+	CommitteeLength         uint64                    // number of members in the committee
 	ValidatorCommitteeIndex uint64                    // validator’s offset inside the committee
 }
 
