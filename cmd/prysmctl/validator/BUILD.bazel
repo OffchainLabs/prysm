@@ -16,6 +16,7 @@ go_library(
         "//api/client/validator:go_default_library",
         "//api/server/structs:go_default_library",
         "//cmd:go_default_library",
+        "//cmd/prysmctl/flags:go_default_library",
         "//cmd/validator/accounts:go_default_library",
         "//cmd/validator/flags:go_default_library",
         "//config/features:go_default_library",

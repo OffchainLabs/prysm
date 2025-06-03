@@ -11,6 +11,7 @@ go_library(
     deps = [
         "//beacon-chain/state:go_default_library",
         "//cmd/flags:go_default_library",
+        "//cmd/prysmctl/flags:go_default_library",
         "//config/params:go_default_library",
         "//container/trie:go_default_library",
         "//io/file:go_default_library",
