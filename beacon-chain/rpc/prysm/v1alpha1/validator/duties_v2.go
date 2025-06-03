@@ -236,7 +236,9 @@ func (vs *Server) buildValidatorDuty(
 			}()
 		}
 
-		// Boundary check: determine if next period differs
+		// Next epoch sync committee duty is assigned with next period sync committee only during
+		// sync period epoch boundary (ie. EPOCHS_PER_SYNC_COMMITTEE_PERIOD - 1). Else wise
+		// next epoch sync committee duty is the same as current epoch.
 		nextEpoch := reqEpoch + 1
 		currentEpoch := coreTime.CurrentEpoch(s)
 		n := slots.SyncCommitteePeriod(nextEpoch)
@@ -249,8 +251,8 @@ func (vs *Server) buildValidatorDuty(
 			nextAssignment.IsSyncCommittee = nextInSync
 			if nextInSync {
 				go func() {
-					if err := core.RegisterSyncSubnetCurrentPeriodProto(s, reqEpoch, pubKey, statusEnum); err != nil {
-						log.WithError(err).Warn("Could not register sync subnet current period")
+					if err := core.RegisterSyncSubnetNextPeriodProto(s, reqEpoch, pubKey, statusEnum); err != nil {
+						log.WithError(err).Warn("Could not register sync subnet next period")
 					}
 				}()
 			}
