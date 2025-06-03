@@ -5,8 +5,9 @@ import (
 	"os"
 
 	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/cmd/prysmctl/flags"
 	"github.com/OffchainLabs/prysm/v6/cmd/validator/accounts"
-	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
+	validatorFlags "github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/runtime/tos"
 	"github.com/logrusorgru/aurora"
@@ -77,6 +78,9 @@ var Commands = []*cli.Command{
 		Name:    "validator",
 		Aliases: []string{"v", "sign"}, // remove sign command should be depreciated but having as backwards compatibility.
 		Usage:   "commands that affect the state of validators such as exiting or withdrawing",
+		Flags: []cli.Flag{
+			flags.ForkFlag,
+		},
 		Subcommands: []*cli.Command{
 			{
 				Name:    "withdraw",
@@ -89,6 +93,7 @@ var Commands = []*cli.Command{
 					VerifyOnlyFlag,
 					cmd.ConfigFileFlag,
 					cmd.AcceptTosFlag,
+					flags.ForkFlag,
 				},
 				Before: func(cliCtx *cli.Context) error {
 					if err := cmd.LoadFlagsFromConfig(cliCtx, cliCtx.Command.Flags); err != nil {
@@ -133,6 +138,7 @@ var Commands = []*cli.Command{
 					TokenFlag,
 					HostFlag,
 					ProposerSettingsOutputFlag,
+					flags.ForkFlag,
 				},
 				Before: func(cliCtx *cli.Context) error {
 					return cmd.LoadFlagsFromConfig(cliCtx, cliCtx.Command.Flags)
@@ -149,28 +155,29 @@ var Commands = []*cli.Command{
 				Aliases: []string{"e", "voluntary-exit"},
 				Usage:   "Performs a voluntary exit on selected accounts",
 				Flags: cmd.WrapFlags([]cli.Flag{
-					flags.WalletDirFlag,
-					flags.WalletPasswordFileFlag,
-					flags.AccountPasswordFileFlag,
-					flags.VoluntaryExitPublicKeysFlag,
-					flags.BeaconRPCProviderFlag,
-					flags.Web3SignerURLFlag,
-					flags.Web3SignerPublicValidatorKeysFlag,
-					flags.InteropNumValidators,
-					flags.InteropStartIndex,
+					validatorFlags.WalletDirFlag,
+					validatorFlags.WalletPasswordFileFlag,
+					validatorFlags.AccountPasswordFileFlag,
+					validatorFlags.VoluntaryExitPublicKeysFlag,
+					validatorFlags.BeaconRPCProviderFlag,
+					validatorFlags.Web3SignerURLFlag,
+					validatorFlags.Web3SignerPublicValidatorKeysFlag,
+					validatorFlags.InteropNumValidators,
+					validatorFlags.InteropStartIndex,
 					cmd.GrpcMaxCallRecvMsgSizeFlag,
-					flags.CertFlag,
-					flags.GRPCHeadersFlag,
-					flags.GRPCRetriesFlag,
-					flags.GRPCRetryDelayFlag,
-					flags.ExitAllFlag,
-					flags.ForceExitFlag,
-					flags.VoluntaryExitJSONOutputPathFlag,
+					validatorFlags.CertFlag,
+					validatorFlags.GRPCHeadersFlag,
+					validatorFlags.GRPCRetriesFlag,
+					validatorFlags.GRPCRetryDelayFlag,
+					validatorFlags.ExitAllFlag,
+					validatorFlags.ForceExitFlag,
+					validatorFlags.VoluntaryExitJSONOutputPathFlag,
 					features.Mainnet,
 					features.SepoliaTestnet,
 					features.HoleskyTestnet,
 					features.HoodiTestnet,
 					cmd.AcceptTosFlag,
+					flags.ForkFlag,
 				}),
 				Before: func(cliCtx *cli.Context) error {
 					if err := cmd.LoadFlagsFromConfig(cliCtx, cliCtx.Command.Flags); err != nil {
