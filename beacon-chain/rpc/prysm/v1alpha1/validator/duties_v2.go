@@ -229,11 +229,9 @@ func (vs *Server) buildValidatorDuty(
 		assignment.IsSyncCommittee = inSync
 		nextAssignment.IsSyncCommittee = inSync
 		if inSync {
-			go func() {
-				if err := core.RegisterSyncSubnetCurrentPeriodProto(s, reqEpoch, pubKey, statusEnum); err != nil {
-					log.WithError(err).Warn("Could not register sync subnet current period")
-				}
-			}()
+			if err := core.RegisterSyncSubnetCurrentPeriodProto(s, reqEpoch, pubKey, statusEnum); err != nil {
+				return nil, nil, status.Errorf(codes.Internal, "Could not register sync subnet current period: %v", err)
+			}
 		}
 
 		// Next epoch sync committee duty is assigned with next period sync committee only during
