@@ -3,12 +3,12 @@ package light_client
 import (
 	"fmt"
 
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	consensustypes "github.com/prysmaticlabs/prysm/v5/consensus-types"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	consensustypes "github.com/OffchainLabs/prysm/v6/consensus-types"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -97,6 +97,16 @@ type finalityUpdateAltair struct {
 	attestedHeader  interfaces.LightClientHeader
 	finalizedHeader interfaces.LightClientHeader
 	finalityBranch  interfaces.LightClientFinalityBranch
+}
+
+// NewEmptyFinalityUpdateAltair normally should never be called and NewFinalityUpdateFromUpdate should be used instead.
+// This function exists only for scenarios where an empty struct is required.
+func NewEmptyFinalityUpdateAltair() interfaces.LightClientFinalityUpdate {
+	return &finalityUpdateAltair{}
+}
+
+func (u *finalityUpdateAltair) IsNil() bool {
+	return u == nil || u.p == nil
 }
 
 var _ interfaces.LightClientFinalityUpdate = &finalityUpdateAltair{}
@@ -201,6 +211,16 @@ type finalityUpdateCapella struct {
 	finalityBranch  interfaces.LightClientFinalityBranch
 }
 
+// NewEmptyFinalityUpdateCapella normally should never be called and NewFinalityUpdateFromUpdate should be used instead.
+// This function exists only for scenarios where an empty struct is required.
+func NewEmptyFinalityUpdateCapella() interfaces.LightClientFinalityUpdate {
+	return &finalityUpdateCapella{}
+}
+
+func (u *finalityUpdateCapella) IsNil() bool {
+	return u == nil || u.p == nil
+}
+
 var _ interfaces.LightClientFinalityUpdate = &finalityUpdateCapella{}
 
 func NewWrappedFinalityUpdateCapella(p *pb.LightClientFinalityUpdateCapella) (interfaces.LightClientFinalityUpdate, error) {
@@ -303,6 +323,16 @@ type finalityUpdateDeneb struct {
 	finalityBranch  interfaces.LightClientFinalityBranch
 }
 
+// NewEmptyFinalityUpdateDeneb normally should never be called and NewFinalityUpdateFromUpdate should be used instead.
+// This function exists only for scenarios where an empty struct is required.
+func NewEmptyFinalityUpdateDeneb() interfaces.LightClientFinalityUpdate {
+	return &finalityUpdateDeneb{}
+}
+
+func (u *finalityUpdateDeneb) IsNil() bool {
+	return u == nil || u.p == nil
+}
+
 var _ interfaces.LightClientFinalityUpdate = &finalityUpdateDeneb{}
 
 func NewWrappedFinalityUpdateDeneb(p *pb.LightClientFinalityUpdateDeneb) (interfaces.LightClientFinalityUpdate, error) {
@@ -403,6 +433,16 @@ type finalityUpdateElectra struct {
 	attestedHeader  interfaces.LightClientHeader
 	finalizedHeader interfaces.LightClientHeader
 	finalityBranch  interfaces.LightClientFinalityBranchElectra
+}
+
+// NewEmptyFinalityUpdateElectra normally should never be called and NewFinalityUpdateFromUpdate should be used instead.
+// This function exists only for scenarios where an empty struct is required.
+func NewEmptyFinalityUpdateElectra() interfaces.LightClientFinalityUpdate {
+	return &finalityUpdateElectra{}
+}
+
+func (u *finalityUpdateElectra) IsNil() bool {
+	return u == nil || u.p == nil
 }
 
 var _ interfaces.LightClientFinalityUpdate = &finalityUpdateElectra{}

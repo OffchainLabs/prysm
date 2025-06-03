@@ -9,7 +9,7 @@ go_library(
         "main.go",
         "usage.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain",
+    importpath = "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain",
     visibility = ["//beacon-chain:__subpackages__"],
     deps = [
         "//beacon-chain/builder:go_default_library",
@@ -73,7 +73,7 @@ prysm_image_upload(
     name = "push_images",
     binary = ":beacon-chain",
     entrypoint = ["/beacon-chain"],
-    repository = "gcr.io/prysmaticlabs/prysm/beacon-chain",
+    repository = "gcr.io/offchainlabs/prysm/beacon-chain",
     symlinks = {
         # Backwards compatibility for images that depended on the old filepath.
         "/app/cmd/beacon-chain/beacon-chain": "/beacon-chain",

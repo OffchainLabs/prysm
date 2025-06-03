@@ -3,13 +3,13 @@ package execution_test
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/execution"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/execution"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 )
 
 func TestUpgradeToBellatrix(t *testing.T) {
@@ -24,10 +24,8 @@ func TestUpgradeToBellatrix(t *testing.T) {
 	require.DeepSSZEqual(t, preForkState.LatestBlockHeader(), mSt.LatestBlockHeader())
 	require.DeepSSZEqual(t, preForkState.BlockRoots(), mSt.BlockRoots())
 	require.DeepSSZEqual(t, preForkState.StateRoots(), mSt.StateRoots())
-	r1, err := preForkState.HistoricalRoots()
-	require.NoError(t, err)
-	r2, err := mSt.HistoricalRoots()
-	require.NoError(t, err)
+	r1 := preForkState.HistoricalRoots()
+	r2 := mSt.HistoricalRoots()
 	require.DeepSSZEqual(t, r1, r2)
 	require.DeepSSZEqual(t, preForkState.Eth1Data(), mSt.Eth1Data())
 	require.DeepSSZEqual(t, preForkState.Eth1DataVotes(), mSt.Eth1DataVotes())

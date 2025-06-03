@@ -1,18 +1,18 @@
 package sync
 
 import (
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/network/forks"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/types"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/network/forks"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 // chunkBlockWriter writes the given message as a chunked response to the given network
@@ -159,5 +159,82 @@ func WriteBlobSidecarChunk(stream libp2pcore.Stream, tor blockchain.TemporalOrac
 		return err
 	}
 	_, err = encoding.EncodeWithMaxLength(stream, sidecar)
+	return err
+}
+
+func WriteLightClientBootstrapChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, encoding encoder.NetworkEncoding, bootstrap interfaces.LightClientBootstrap) error {
+	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
+		return err
+	}
+
+	valRoot := tor.GenesisValidatorsRoot()
+	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(bootstrap.Header().Beacon().Slot), valRoot[:])
+	if err != nil {
+		return err
+	}
+
+	obtainedCtx := digest[:]
+	if err = writeContextToStream(obtainedCtx, stream); err != nil {
+		return err
+	}
+
+	_, err = encoding.EncodeWithMaxLength(stream, bootstrap)
+	return err
+}
+
+func WriteLightClientUpdateChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, encoding encoder.NetworkEncoding, update interfaces.LightClientUpdate) error {
+	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
+		return err
+	}
+
+	valRoot := tor.GenesisValidatorsRoot()
+	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(update.AttestedHeader().Beacon().Slot), valRoot[:])
+	if err != nil {
+		return err
+	}
+	obtainedCtx := digest[:]
+
+	if err = writeContextToStream(obtainedCtx, stream); err != nil {
+		return err
+	}
+	_, err = encoding.EncodeWithMaxLength(stream, update)
+	return err
+}
+
+func WriteLightClientOptimisticUpdateChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, encoding encoder.NetworkEncoding, update interfaces.LightClientOptimisticUpdate) error {
+	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
+		return err
+	}
+
+	valRoot := tor.GenesisValidatorsRoot()
+	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(update.AttestedHeader().Beacon().Slot), valRoot[:])
+	if err != nil {
+		return err
+	}
+	obtainedCtx := digest[:]
+
+	if err = writeContextToStream(obtainedCtx, stream); err != nil {
+		return err
+	}
+	_, err = encoding.EncodeWithMaxLength(stream, update)
+	return err
+}
+
+func WriteLightClientFinalityUpdateChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, encoding encoder.NetworkEncoding, update interfaces.LightClientFinalityUpdate) error {
+	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
+		return err
+	}
+
+	valRoot := tor.GenesisValidatorsRoot()
+	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(update.AttestedHeader().Beacon().Slot), valRoot[:])
+	if err != nil {
+		return err
+	}
+	obtainedCtx := digest[:]
+
+	if err = writeContextToStream(obtainedCtx, stream); err != nil {
+		return err
+	}
+	_, err = encoding.EncodeWithMaxLength(stream, update)
 	return err
 }

@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"math"
 
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts/wallet"
+	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
 	"github.com/pkg/errors"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/iface"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
 )
 
 // List pretty-prints accounts in the wallet.

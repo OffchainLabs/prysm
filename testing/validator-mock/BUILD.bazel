@@ -10,10 +10,10 @@ go_library(
         "prysm_chain_client_mock.go",
         "validator_client_mock.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v5/testing/validator-mock",
+    importpath = "github.com/OffchainLabs/prysm/v6/testing/validator-mock",
     visibility = ["//visibility:public"],
     deps = [
-        "//api/client/beacon:go_default_library",
+        "//api/client/beacon/health:go_default_library",
         "//api/client/event:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//consensus-types/validator:go_default_library",

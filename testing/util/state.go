@@ -5,18 +5,18 @@ import (
 	"fmt"
 	"testing"
 
+	b "github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/iface"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/prysmaticlabs/go-bitfield"
-	b "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/iface"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 // FillRootsNaturalOpt is meant to be used as an option when calling NewBeaconState.
@@ -62,19 +62,6 @@ func FillRootsNaturalOptBellatrix(state *ethpb.BeaconStateBellatrix) error {
 // It fills state and block roots with hex representations of natural numbers starting with 0.
 // Example: 16 becomes 0x00...0f.
 func FillRootsNaturalOptCapella(state *ethpb.BeaconStateCapella) error {
-	roots, err := PrepareRoots(int(params.BeaconConfig().SlotsPerHistoricalRoot))
-	if err != nil {
-		return err
-	}
-	state.StateRoots = roots
-	state.BlockRoots = roots
-	return nil
-}
-
-// FillRootsNaturalOptDeneb is meant to be used as an option when calling NewBeaconStateDeneb.
-// It fills state and block roots with hex representations of natural numbers starting with 0.
-// Example: 16 becomes 0x00...0f.
-func FillRootsNaturalOptDeneb(state *ethpb.BeaconStateDeneb) error {
 	roots, err := PrepareRoots(int(params.BeaconConfig().SlotsPerHistoricalRoot))
 	if err != nil {
 		return err

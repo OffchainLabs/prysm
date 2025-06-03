@@ -3,10 +3,10 @@ package slasher
 import (
 	"testing"
 
-	slashertypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/slasher/types"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	slashertypes "github.com/OffchainLabs/prysm/v6/beacon-chain/slasher/types"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 func Test_attestationsQueue(t *testing.T) {

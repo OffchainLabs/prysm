@@ -6,10 +6,10 @@ import (
 	"path"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/pborman/uuid"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func TestMarshalAndUnmarshal(t *testing.T) {

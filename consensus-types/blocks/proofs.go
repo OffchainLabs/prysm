@@ -6,19 +6,18 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stateutil"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/container/trie"
-	"github.com/prysmaticlabs/prysm/v5/crypto/hash/htr"
-	"github.com/prysmaticlabs/prysm/v5/encoding/ssz"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stateutil"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/container/trie"
+	"github.com/OffchainLabs/prysm/v6/crypto/hash/htr"
+	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 )
 
 const (
 	payloadFieldIndex = 9
-	bodyFieldIndex    = 4
 )
 
 func ComputeBlockBodyFieldRoots(ctx context.Context, blockBody *BeaconBlockBody) ([][]byte, error) {
@@ -193,45 +192,6 @@ func ComputeBlockBodyFieldRoots(ctx context.Context, blockBody *BeaconBlockBody)
 		}
 		copy(fieldRoots[12], root[:])
 	}
-	return fieldRoots, nil
-}
-
-func ComputeBlockFieldRoots(ctx context.Context, block interfaces.ReadOnlyBeaconBlock) ([][]byte, error) {
-	_, span := trace.StartSpan(ctx, "blocks.ComputeBlockFieldRoots")
-	defer span.End()
-
-	if block == nil {
-		return nil, errNilBlock
-	}
-
-	fieldRoots := make([][]byte, 5)
-	for i := range fieldRoots {
-		fieldRoots[i] = make([]byte, 32)
-	}
-
-	// Slot
-	slotRoot := ssz.Uint64Root(uint64(block.Slot()))
-	copy(fieldRoots[0], slotRoot[:])
-
-	// Proposer Index
-	proposerRoot := ssz.Uint64Root(uint64(block.ProposerIndex()))
-	copy(fieldRoots[1], proposerRoot[:])
-
-	// Parent Root
-	parentRoot := block.ParentRoot()
-	copy(fieldRoots[2], parentRoot[:])
-
-	// State Root
-	stateRoot := block.StateRoot()
-	copy(fieldRoots[3], stateRoot[:])
-
-	// block body Root
-	blockBodyRoot, err := block.Body().HashTreeRoot()
-	if err != nil {
-		return nil, err
-	}
-	copy(fieldRoots[4], blockBodyRoot[:])
-
 	return fieldRoots, nil
 }
 

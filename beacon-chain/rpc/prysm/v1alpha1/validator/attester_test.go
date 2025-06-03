@@ -7,24 +7,24 @@ import (
 	"testing"
 	"time"
 
-	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	dbutil "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	doublylinkedtree "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/doubly-linked-tree"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations"
-	mockp2p "github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
-	mockSync "github.com/prysmaticlabs/prysm/v5/beacon-chain/sync/initial-sync/testing"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
+	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	dbutil "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
+	mockp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
+	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -37,6 +37,7 @@ func TestProposeAttestation(t *testing.T) {
 		P2P:                     &mockp2p.MockBroadcaster{},
 		AttPool:                 attestations.NewPool(),
 		OperationNotifier:       (&mock.ChainService{}).OperationNotifier(),
+		TimeFetcher:             chainService,
 		AttestationStateFetcher: chainService,
 	}
 	head := util.NewBeaconBlock()
@@ -76,7 +77,34 @@ func TestProposeAttestation(t *testing.T) {
 		_, err = attesterServer.ProposeAttestation(context.Background(), req)
 		assert.NoError(t, err)
 	})
+	t.Run("Phase 0 post electra", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		config := params.BeaconConfig()
+		config.ElectraForkEpoch = 0
+		params.OverrideBeaconConfig(config)
+
+		state, err := util.NewBeaconState()
+		require.NoError(t, err)
+		require.NoError(t, state.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))
+		require.NoError(t, state.SetValidators(validators))
+
+		req := &ethpb.Attestation{
+			Signature: sig.Marshal(),
+			Data: &ethpb.AttestationData{
+				BeaconBlockRoot: root[:],
+				Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+				Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+			},
+		}
+		_, err = attesterServer.ProposeAttestation(context.Background(), req)
+		assert.ErrorContains(t, "old attestation format", err)
+	})
 	t.Run("Electra", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		config := params.BeaconConfig()
+		config.ElectraForkEpoch = 0
+		params.OverrideBeaconConfig(config)
+
 		state, err := util.NewBeaconStateElectra()
 		require.NoError(t, err)
 		require.NoError(t, state.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))
@@ -93,6 +121,18 @@ func TestProposeAttestation(t *testing.T) {
 		}
 		_, err = attesterServer.ProposeAttestationElectra(context.Background(), req)
 		assert.NoError(t, err)
+	})
+	t.Run("Electra att too early", func(t *testing.T) {
+		req := &ethpb.SingleAttestation{
+			Signature: sig.Marshal(),
+			Data: &ethpb.AttestationData{
+				BeaconBlockRoot: root[:],
+				Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+				Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+			},
+		}
+		_, err = attesterServer.ProposeAttestationElectra(context.Background(), req)
+		assert.ErrorContains(t, "ProposeAttestationElectra not supported yet", err)
 	})
 }
 

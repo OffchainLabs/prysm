@@ -4,11 +4,11 @@ import (
 	"context"
 	"testing"
 
+	statenative "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v6/container/trie"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	statenative "github.com/prysmaticlabs/prysm/v5/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v5/container/trie"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestBeaconStateMerkleProofs_phase0_notsupported(t *testing.T) {

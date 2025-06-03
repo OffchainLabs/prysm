@@ -7,6 +7,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	ecdsaprysm "github.com/OffchainLabs/prysm/v6/crypto/ecdsa"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -15,13 +23,6 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	ecdsaprysm "github.com/prysmaticlabs/prysm/v5/crypto/ecdsa"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"github.com/sirupsen/logrus"
 )
 
@@ -105,7 +106,8 @@ func (l *listenerWrapper) RandomNodes() enode.Iterator {
 func (l *listenerWrapper) Ping(node *enode.Node) error {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
-	return l.listener.Ping(node)
+	_, err := l.listener.Ping(node)
+	return err
 }
 
 func (l *listenerWrapper) RequestENR(node *enode.Node) (*enode.Node, error) {
@@ -186,7 +188,8 @@ func (s *Service) RefreshPersistentSubnets() {
 	// Compare current epoch with Altair fork epoch
 	altairForkEpoch := params.BeaconConfig().AltairForkEpoch
 
-	if currentEpoch < altairForkEpoch {
+	// We add `1` to the current epoch because we want to prepare one epoch before the Altair fork.
+	if currentEpoch+1 < altairForkEpoch {
 		// Phase 0 behaviour.
 		if isBitVUpToDate {
 			// Return early if bitfield hasn't changed.
@@ -222,15 +225,51 @@ func (s *Service) RefreshPersistentSubnets() {
 	// Is our sync bitvector record up to date?
 	isBitSUpToDate := bytes.Equal(bitS, inRecordBitS) && bytes.Equal(bitS, currentBitSInMetadata)
 
-	if metadataVersion == version.Altair && isBitVUpToDate && isBitSUpToDate {
+	// Compare current epoch with the Fulu fork epoch.
+	fuluForkEpoch := params.BeaconConfig().FuluForkEpoch
+
+	// We add `1` to the current epoch because we want to prepare one epoch before the Fulu fork.
+	if currentEpoch+1 < fuluForkEpoch {
+		// Altair behaviour.
+		if metadataVersion == version.Altair && isBitVUpToDate && isBitSUpToDate {
+			// Nothing to do, return early.
+			return
+		}
+
+		// Some data have changed, update our record and metadata.
+		s.updateSubnetRecordWithMetadataV2(bitV, bitS)
+
+		// Ping all peers to inform them of new metadata
+		s.pingPeersAndLogEnr()
+
+		return
+	}
+
+	// Get the current custody group count.
+	custodyGroupCount := s.cfg.CustodyInfo.ActualGroupCount()
+
+	// Get the custody group count we store in our record.
+	inRecordCustodyGroupCount, err := peerdas.CustodyGroupCountFromRecord(record)
+	if err != nil {
+		log.WithError(err).Error("Could not retrieve custody subnet count")
+		return
+	}
+
+	// Get the custody group count in our metadata.
+	inMetadataCustodyGroupCount := s.Metadata().CustodyGroupCount()
+
+	// Is our custody group count record up to date?
+	isCustodyGroupCountUpToDate := (custodyGroupCount == inRecordCustodyGroupCount && custodyGroupCount == inMetadataCustodyGroupCount)
+
+	if isBitVUpToDate && isBitSUpToDate && isCustodyGroupCountUpToDate {
 		// Nothing to do, return early.
 		return
 	}
 
-	// Some data have changed, update our record and metadata.
-	s.updateSubnetRecordWithMetadataV2(bitV, bitS)
+	// Some data changed. Update the record and the metadata.
+	s.updateSubnetRecordWithMetadataV3(bitV, bitS, custodyGroupCount)
 
-	// Ping all peers to inform them of new metadata
+	// Ping all peers.
 	s.pingPeersAndLogEnr()
 }
 
@@ -455,6 +494,11 @@ func (s *Service) createLocalNode(
 	if features.Get().EnableQUIC {
 		quicEntry := quicProtocol(quicPort)
 		localNode.Set(quicEntry)
+	}
+
+	if params.FuluEnabled() {
+		custodyGroupCount := s.cfg.CustodyInfo.ActualGroupCount()
+		localNode.Set(peerdas.Cgc(custodyGroupCount))
 	}
 
 	localNode.SetFallbackIP(ipAddr)

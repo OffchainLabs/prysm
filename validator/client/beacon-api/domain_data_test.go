@@ -5,13 +5,13 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/validator/client/beacon-api/mock"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v5/api/server/structs"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/client/beacon-api/mock"
 	"go.uber.org/mock/gomock"
 )
 
@@ -92,5 +92,5 @@ func TestGetDomainData_InvalidGenesisRoot(t *testing.T) {
 
 	validatorClient := &beaconApiValidatorClient{genesisProvider: genesisProvider}
 	_, err := validatorClient.domainData(ctx, epoch, domainType)
-	assert.ErrorContains(t, "invalid genesis validators root: foo", err)
+	assert.ErrorContains(t, "failed to decode genesis validators root: foo", err)
 }

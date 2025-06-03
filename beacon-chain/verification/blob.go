@@ -2,16 +2,15 @@ package verification
 
 import (
 	"context"
-	goError "errors"
 
+	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/runtime/logging"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
-	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/runtime/logging"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 const (
@@ -26,6 +25,10 @@ const (
 	RequireSidecarInclusionProven
 	RequireSidecarKzgProofVerified
 	RequireSidecarProposerExpected
+
+	// Data columns specific.
+	RequireValidFields
+	RequireCorrectSubnet
 )
 
 var allBlobSidecarRequirements = []Requirement{
@@ -78,12 +81,6 @@ var BackfillBlobSidecarRequirements = requirementList(InitsyncBlobSidecarRequire
 // PendingQueueBlobSidecarRequirements is the same as InitsyncBlobSidecarRequirements, used by the pending blocks queue.
 var PendingQueueBlobSidecarRequirements = requirementList(InitsyncBlobSidecarRequirements).excluding()
 
-var (
-	ErrBlobInvalid = errors.New("blob failed verification")
-	// ErrBlobIndexInvalid means RequireBlobIndexInBounds failed.
-	ErrBlobIndexInvalid = errors.New("incorrect blob sidecar index")
-)
-
 type ROBlobVerifier struct {
 	*sharedResources
 	results              *results
@@ -131,7 +128,7 @@ func (bv *ROBlobVerifier) BlobIndexInBounds() (err error) {
 	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(bv.blob.Slot())
 	if bv.blob.Index >= uint64(maxBlobsPerBlock) {
 		log.WithFields(logging.BlobFields(bv.blob)).Debug("Sidecar index >= MAX_BLOBS_PER_BLOCK")
-		return blobErrBuilder(ErrBlobIndexInvalid)
+		return ErrBlobIndexInvalid
 	}
 	return nil
 }
@@ -150,7 +147,7 @@ func (bv *ROBlobVerifier) NotFromFutureSlot() (err error) {
 	// If the system time is still before earliestStart, we consider the blob from a future slot and return an error.
 	if bv.clock.Now().Before(earliestStart) {
 		log.WithFields(logging.BlobFields(bv.blob)).Debug("sidecar slot is too far in the future")
-		return blobErrBuilder(ErrFromFutureSlot)
+		return errFromFutureSlot
 	}
 	return nil
 }
@@ -163,11 +160,11 @@ func (bv *ROBlobVerifier) SlotAboveFinalized() (err error) {
 	fcp := bv.fc.FinalizedCheckpoint()
 	fSlot, err := slots.EpochStart(fcp.Epoch)
 	if err != nil {
-		return errors.Wrapf(blobErrBuilder(ErrSlotNotAfterFinalized), "error computing epoch start slot for finalized checkpoint (%d) %s", fcp.Epoch, err.Error())
+		return errors.Wrapf(errSlotNotAfterFinalized, "error computing epoch start slot for finalized checkpoint (%d) %s", fcp.Epoch, err.Error())
 	}
 	if bv.blob.Slot() <= fSlot {
 		log.WithFields(logging.BlobFields(bv.blob)).Debug("sidecar slot is not after finalized checkpoint")
-		return blobErrBuilder(ErrSlotNotAfterFinalized)
+		return errSlotNotAfterFinalized
 	}
 	return nil
 }
@@ -185,7 +182,7 @@ func (bv *ROBlobVerifier) ValidProposerSignature(ctx context.Context) (err error
 		if err != nil {
 			log.WithFields(logging.BlobFields(bv.blob)).WithError(err).Debug("reusing failed proposer signature validation from cache")
 			blobVerificationProposerSignatureCache.WithLabelValues("hit-invalid").Inc()
-			return blobErrBuilder(ErrInvalidProposerSignature)
+			return ErrInvalidProposerSignature
 		}
 		return nil
 	}
@@ -195,12 +192,12 @@ func (bv *ROBlobVerifier) ValidProposerSignature(ctx context.Context) (err error
 	parent, err := bv.parentState(ctx)
 	if err != nil {
 		log.WithFields(logging.BlobFields(bv.blob)).WithError(err).Debug("could not replay parent state for blob signature verification")
-		return blobErrBuilder(ErrInvalidProposerSignature)
+		return ErrInvalidProposerSignature
 	}
 	// Full verification, which will subsequently be cached for anything sharing the signature cache.
 	if err = bv.sc.VerifySignature(sd, parent); err != nil {
 		log.WithFields(logging.BlobFields(bv.blob)).WithError(err).Debug("signature verification failed")
-		return blobErrBuilder(ErrInvalidProposerSignature)
+		return ErrInvalidProposerSignature
 	}
 	return nil
 }
@@ -217,7 +214,7 @@ func (bv *ROBlobVerifier) SidecarParentSeen(parentSeen func([32]byte) bool) (err
 		return nil
 	}
 	log.WithFields(logging.BlobFields(bv.blob)).Debug("parent root has not been seen")
-	return blobErrBuilder(ErrSidecarParentNotSeen)
+	return errSidecarParentNotSeen
 }
 
 // SidecarParentValid represents the spec verification:
@@ -226,7 +223,7 @@ func (bv *ROBlobVerifier) SidecarParentValid(badParent func([32]byte) bool) (err
 	defer bv.recordResult(RequireSidecarParentValid, &err)
 	if badParent != nil && badParent(bv.blob.ParentRoot()) {
 		log.WithFields(logging.BlobFields(bv.blob)).Debug("parent root is invalid")
-		return blobErrBuilder(ErrSidecarParentInvalid)
+		return errSidecarParentInvalid
 	}
 	return nil
 }
@@ -237,10 +234,10 @@ func (bv *ROBlobVerifier) SidecarParentSlotLower() (err error) {
 	defer bv.recordResult(RequireSidecarParentSlotLower, &err)
 	parentSlot, err := bv.fc.Slot(bv.blob.ParentRoot())
 	if err != nil {
-		return errors.Wrap(blobErrBuilder(ErrSlotNotAfterParent), "parent root not in forkchoice")
+		return errors.Wrap(errSlotNotAfterParent, "parent root not in forkchoice")
 	}
 	if parentSlot >= bv.blob.Slot() {
-		return blobErrBuilder(ErrSlotNotAfterParent)
+		return errSlotNotAfterParent
 	}
 	return nil
 }
@@ -252,7 +249,7 @@ func (bv *ROBlobVerifier) SidecarDescendsFromFinalized() (err error) {
 	defer bv.recordResult(RequireSidecarDescendsFromFinalized, &err)
 	if !bv.fc.HasNode(bv.blob.ParentRoot()) {
 		log.WithFields(logging.BlobFields(bv.blob)).Debug("parent root not in forkchoice")
-		return blobErrBuilder(ErrSidecarNotFinalizedDescendent)
+		return errSidecarNotFinalizedDescendent
 	}
 	return nil
 }
@@ -263,7 +260,7 @@ func (bv *ROBlobVerifier) SidecarInclusionProven() (err error) {
 	defer bv.recordResult(RequireSidecarInclusionProven, &err)
 	if err = blocks.VerifyKZGInclusionProof(bv.blob); err != nil {
 		log.WithError(err).WithFields(logging.BlobFields(bv.blob)).Debug("sidecar inclusion proof verification failed")
-		return blobErrBuilder(ErrSidecarInclusionProofInvalid)
+		return ErrSidecarInclusionProofInvalid
 	}
 	return nil
 }
@@ -275,7 +272,7 @@ func (bv *ROBlobVerifier) SidecarKzgProofVerified() (err error) {
 	defer bv.recordResult(RequireSidecarKzgProofVerified, &err)
 	if err = bv.verifyBlobCommitment(bv.blob); err != nil {
 		log.WithError(err).WithFields(logging.BlobFields(bv.blob)).Debug("kzg commitment proof verification failed")
-		return blobErrBuilder(ErrSidecarKzgProofInvalid)
+		return ErrSidecarKzgProofInvalid
 	}
 	return nil
 }
@@ -293,7 +290,7 @@ func (bv *ROBlobVerifier) SidecarProposerExpected(ctx context.Context) (err erro
 	}
 	r, err := bv.fc.TargetRootForEpoch(bv.blob.ParentRoot(), e)
 	if err != nil {
-		return blobErrBuilder(ErrSidecarUnexpectedProposer)
+		return errSidecarUnexpectedProposer
 	}
 	c := &forkchoicetypes.Checkpoint{Root: r, Epoch: e}
 	idx, cached := bv.pc.Proposer(c, bv.blob.Slot())
@@ -301,19 +298,19 @@ func (bv *ROBlobVerifier) SidecarProposerExpected(ctx context.Context) (err erro
 		pst, err := bv.parentState(ctx)
 		if err != nil {
 			log.WithError(err).WithFields(logging.BlobFields(bv.blob)).Debug("state replay to parent_root failed")
-			return blobErrBuilder(ErrSidecarUnexpectedProposer)
+			return errSidecarUnexpectedProposer
 		}
 		idx, err = bv.pc.ComputeProposer(ctx, bv.blob.ParentRoot(), bv.blob.Slot(), pst)
 		if err != nil {
 			log.WithError(err).WithFields(logging.BlobFields(bv.blob)).Debug("error computing proposer index from parent state")
-			return blobErrBuilder(ErrSidecarUnexpectedProposer)
+			return errSidecarUnexpectedProposer
 		}
 	}
 	if idx != bv.blob.ProposerIndex() {
-		log.WithError(blobErrBuilder(ErrSidecarUnexpectedProposer)).
+		log.WithError(errSidecarUnexpectedProposer).
 			WithFields(logging.BlobFields(bv.blob)).WithField("expectedProposer", idx).
 			Debug("unexpected blob proposer")
-		return blobErrBuilder(ErrSidecarUnexpectedProposer)
+		return errSidecarUnexpectedProposer
 	}
 	return nil
 }
@@ -330,16 +327,12 @@ func (bv *ROBlobVerifier) parentState(ctx context.Context) (state.BeaconState, e
 	return bv.parent, nil
 }
 
-func blobToSignatureData(b blocks.ROBlob) SignatureData {
-	return SignatureData{
+func blobToSignatureData(b blocks.ROBlob) signatureData {
+	return signatureData{
 		Root:      b.BlockRoot(),
 		Parent:    b.ParentRoot(),
 		Signature: bytesutil.ToBytes96(b.SignedBlockHeader.Signature),
 		Proposer:  b.ProposerIndex(),
 		Slot:      b.Slot(),
 	}
-}
-
-func blobErrBuilder(baseErr error) error {
-	return goError.Join(ErrBlobInvalid, baseErr)
 }

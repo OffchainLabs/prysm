@@ -1,13 +1,19 @@
 package filesystem
 
 import (
+	"context"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/pkg/errors"
 	"github.com/spf13/afero"
 )
+
+// Blobs
+// -----
 
 // NewEphemeralBlobStorage should only be used for tests.
 // The instance of BlobStorage returned is backed by an in-memory virtual filesystem,
@@ -41,19 +47,37 @@ func NewWarmedEphemeralBlobStorageUsingFs(t testing.TB, fs afero.Fs, opts ...Blo
 	return bs
 }
 
-type BlobMocker struct {
-	fs afero.Fs
-	bs *BlobStorage
-}
+type (
+	BlobMocker struct {
+		fs afero.Fs
+		bs *BlobStorage
+	}
+
+	DataColumnMocker struct {
+		fs  afero.Fs
+		dcs *DataColumnStorage
+	}
+)
 
 // CreateFakeIndices creates empty blob sidecar files at the expected path for the given
 // root and indices to influence the result of Indices().
-func (bm *BlobMocker) CreateFakeIndices(root [32]byte, slot primitives.Slot, indices ...uint64) error {
+func (bm *BlobMocker) CreateFakeIndices(root [fieldparams.RootLength]byte, slot primitives.Slot, indices ...uint64) error {
 	for i := range indices {
 		if err := bm.bs.layout.notify(newBlobIdent(root, slots.ToEpoch(slot), indices[i])); err != nil {
 			return err
 		}
 	}
+	return nil
+}
+
+// CreateFakeIndices creates empty blob sidecar files at the expected path for the given
+// root and indices to influence the result of Indices().
+func (bm *DataColumnMocker) CreateFakeIndices(root [fieldparams.RootLength]byte, slot primitives.Slot, indices ...uint64) error {
+	err := bm.dcs.cache.set(DataColumnsIdent{Root: root, Epoch: slots.ToEpoch(slot), Indices: indices})
+	if err != nil {
+		return errors.Wrap(err, "cache set")
+	}
+
 	return nil
 }
 
@@ -73,5 +97,61 @@ func NewMockBlobStorageSummarizer(t *testing.T, set map[[32]byte][]int) BlobStor
 			}
 		}
 	}
+	return c
+}
+
+// Data columns
+// ------------
+
+// NewEphemeralDataColumnStorage should only be used for tests.
+// The instance of DataColumnStorage returned is backed by an in-memory virtual filesystem,
+// improving test performance and simplifying cleanup.
+func NewEphemeralDataColumnStorage(t testing.TB, opts ...DataColumnStorageOption) *DataColumnStorage {
+	return NewWarmedEphemeralDataColumnStorageUsingFs(t, afero.NewMemMapFs(), opts...)
+}
+
+// NewEphemeralDataColumnStorageAndFs can be used by tests that want access to the virtual filesystem
+// in order to interact with it outside the parameters of the DataColumnStorage API.
+func NewEphemeralDataColumnStorageAndFs(t testing.TB, opts ...DataColumnStorageOption) (afero.Fs, *DataColumnStorage) {
+	fs := afero.NewMemMapFs()
+	dcs := NewWarmedEphemeralDataColumnStorageUsingFs(t, fs, opts...)
+	return fs, dcs
+}
+
+func NewWarmedEphemeralDataColumnStorageUsingFs(t testing.TB, fs afero.Fs, opts ...DataColumnStorageOption) *DataColumnStorage {
+	bs := NewEphemeralDataColumnStorageUsingFs(t, fs, opts...)
+	bs.WarmCache()
+	return bs
+}
+
+func NewEphemeralDataColumnStorageUsingFs(t testing.TB, fs afero.Fs, opts ...DataColumnStorageOption) *DataColumnStorage {
+	opts = append(opts,
+		WithDataColumnRetentionEpochs(params.BeaconConfig().MinEpochsForBlobsSidecarsRequest),
+		WithDataColumnFs(fs),
+	)
+
+	bs, err := NewDataColumnStorage(context.Background(), opts...)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return bs
+}
+
+// NewEphemeralDataColumnStorageWithMocker returns a *BlobMocker value in addition to the BlobStorage value.
+// BlockMocker encapsulates things blob path construction to avoid leaking implementation details.
+func NewEphemeralDataColumnStorageWithMocker(t testing.TB) (*DataColumnMocker, *DataColumnStorage) {
+	fs, dcs := NewEphemeralDataColumnStorageAndFs(t)
+	return &DataColumnMocker{fs: fs, dcs: dcs}, dcs
+}
+
+func NewMockDataColumnStorageSummarizer(t *testing.T, set map[[fieldparams.RootLength]byte][]uint64) DataColumnStorageSummarizer {
+	c := newDataColumnStorageSummaryCache()
+	for root, indices := range set {
+		if err := c.set(DataColumnsIdent{Root: root, Epoch: 0, Indices: indices}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	return c
 }

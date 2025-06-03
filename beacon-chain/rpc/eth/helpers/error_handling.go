@@ -3,10 +3,10 @@ package helpers
 import (
 	"errors"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/lookup"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/lookup"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

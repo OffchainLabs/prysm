@@ -3,11 +3,11 @@ package light_client
 import (
 	"fmt"
 
-	consensustypes "github.com/prysmaticlabs/prysm/v5/consensus-types"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	pb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
+	consensustypes "github.com/OffchainLabs/prysm/v6/consensus-types"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -76,6 +76,16 @@ func NewOptimisticUpdateFromUpdate(update interfaces.LightClientUpdate) (interfa
 type optimisticUpdateAltair struct {
 	p              *pb.LightClientOptimisticUpdateAltair
 	attestedHeader interfaces.LightClientHeader
+}
+
+// NewEmptyOptimisticUpdateAltair normally should never be called and NewOptimisticUpdateFromUpdate should be used instead.
+// This function exists only for scenarios where an empty struct is required.
+func NewEmptyOptimisticUpdateAltair() interfaces.LightClientOptimisticUpdate {
+	return &optimisticUpdateAltair{}
+}
+
+func (u *optimisticUpdateAltair) IsNil() bool {
+	return u == nil || u.p == nil
 }
 
 var _ interfaces.LightClientOptimisticUpdate = &optimisticUpdateAltair{}
@@ -152,6 +162,16 @@ type optimisticUpdateCapella struct {
 	attestedHeader interfaces.LightClientHeader
 }
 
+// NewEmptyOptimisticUpdateCapella normally should never be called and NewOptimisticUpdateFromUpdate should be used instead.
+// This function exists only for scenarios where an empty struct is required.
+func NewEmptyOptimisticUpdateCapella() interfaces.LightClientOptimisticUpdate {
+	return &optimisticUpdateCapella{}
+}
+
+func (u *optimisticUpdateCapella) IsNil() bool {
+	return u == nil || u.p == nil
+}
+
 var _ interfaces.LightClientOptimisticUpdate = &optimisticUpdateCapella{}
 
 func NewWrappedOptimisticUpdateCapella(p *pb.LightClientOptimisticUpdateCapella) (interfaces.LightClientOptimisticUpdate, error) {
@@ -224,6 +244,16 @@ func (u *optimisticUpdateCapella) SignatureSlot() primitives.Slot {
 type optimisticUpdateDeneb struct {
 	p              *pb.LightClientOptimisticUpdateDeneb
 	attestedHeader interfaces.LightClientHeader
+}
+
+// NewEmptyOptimisticUpdateDeneb normally should never be called and NewOptimisticUpdateFromUpdate should be used instead.
+// This function exists only for scenarios where an empty struct is required.
+func NewEmptyOptimisticUpdateDeneb() interfaces.LightClientOptimisticUpdate {
+	return &optimisticUpdateDeneb{}
+}
+
+func (u *optimisticUpdateDeneb) IsNil() bool {
+	return u == nil || u.p == nil
 }
 
 var _ interfaces.LightClientOptimisticUpdate = &optimisticUpdateDeneb{}

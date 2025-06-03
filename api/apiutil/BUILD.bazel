@@ -1,0 +1,19 @@
+load("@prysm//tools/go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["common.go"],
+    importpath = "github.com/OffchainLabs/prysm/v6/api/apiutil",
+    visibility = ["//visibility:public"],
+    deps = ["//consensus-types/primitives:go_default_library"],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["common_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "//consensus-types/primitives:go_default_library",
+        "//testing/assert:go_default_library",
+    ],
+)

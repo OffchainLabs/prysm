@@ -4,13 +4,13 @@ import (
 	"math"
 	"math/big"
 
+	clparams "github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
-	clparams "github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 )
 
 // defaultMinerAddress is used to send deposits and test transactions in the e2e test.
@@ -66,16 +66,6 @@ var DefaultDepositContractStorage = map[string]string{
 
 var bigz = big.NewInt(0)
 var minerBalance = big.NewInt(0)
-
-// DefaultCliqueSigner is the testnet miner (clique signer) address encoded in the special way EIP-225 requires.
-// EIP-225 assigns a special meaning to the `extra-data` field in the block header for clique chains.
-// In a clique chain, this field contains one secp256k1 "miner" signature. This allows other nodes to
-// verify that the block was signed by an authorized signer, in place of the typical PoW verification.
-// Clique overloads the meaning of the `miner` and `nonce` fields to implement a voting protocol, whereby additional
-// signatures can be added to the list (for details see `Repurposing header fields for signing and voting` in EIP-225).
-// https://eips.ethereum.org/EIPS/eip-225
-// The following value is for the key used by the e2e test "miner" node.
-const DefaultCliqueSigner = "0x0000000000000000000000000000000000000000000000000000000000000000878705ba3f8bc32fcf7f4caa1a35e72af65cf7660000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 
 // GethShanghaiTime calculates the absolute time of the shanghai (aka capella) fork block
 // by adding the relative time of the capella the fork epoch to the given genesis timestamp.

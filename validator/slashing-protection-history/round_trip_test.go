@@ -7,14 +7,14 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/common"
-	dbtest "github.com/prysmaticlabs/prysm/v5/validator/db/testing"
-	history "github.com/prysmaticlabs/prysm/v5/validator/slashing-protection-history"
-	"github.com/prysmaticlabs/prysm/v5/validator/slashing-protection-history/format"
-	slashtest "github.com/prysmaticlabs/prysm/v5/validator/testing"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/validator/db/common"
+	dbtest "github.com/OffchainLabs/prysm/v6/validator/db/testing"
+	history "github.com/OffchainLabs/prysm/v6/validator/slashing-protection-history"
+	"github.com/OffchainLabs/prysm/v6/validator/slashing-protection-history/format"
+	slashtest "github.com/OffchainLabs/prysm/v6/validator/testing"
 )
 
 // TestImportExport_RoundTrip tests that we can import and export slashing protection data
@@ -29,7 +29,7 @@ func TestImportExport_RoundTrip(t *testing.T) {
 	require.NoError(t, err)
 
 	isSlashingProtectionMinimal := false
-	validatorDB := dbtest.SetupDB(t, publicKeys, isSlashingProtectionMinimal)
+	validatorDB := dbtest.SetupDB(t, t.TempDir(), publicKeys, isSlashingProtectionMinimal)
 
 	// First we setup some mock attesting and proposal histories and create a mock
 	// standard slashing protection format JSON struct.
@@ -98,7 +98,7 @@ func TestImportExport_RoundTrip_SkippedAttestationEpochs(t *testing.T) {
 	require.NoError(t, err)
 
 	isSlashingProtectionMinimal := false
-	validatorDB := dbtest.SetupDB(t, pubKeys, isSlashingProtectionMinimal)
+	validatorDB := dbtest.SetupDB(t, t.TempDir(), pubKeys, isSlashingProtectionMinimal)
 	wanted := &format.EIPSlashingProtectionFormat{
 		Metadata: struct {
 			InterchangeFormatVersion string `json:"interchange_format_version"`
@@ -164,7 +164,7 @@ func TestImportExport_FilterKeys(t *testing.T) {
 	require.NoError(t, err)
 
 	isSlashingProtectionMinimal := false
-	validatorDB := dbtest.SetupDB(t, publicKeys, isSlashingProtectionMinimal)
+	validatorDB := dbtest.SetupDB(t, t.TempDir(), publicKeys, isSlashingProtectionMinimal)
 
 	// First we setup some mock attesting and proposal histories and create a mock
 	// standard slashing protection format JSON struct.
@@ -209,7 +209,7 @@ func TestImportInterchangeData_OK(t *testing.T) {
 	require.NoError(t, err)
 
 	isSlashingProtectionMinimal := false
-	validatorDB := dbtest.SetupDB(t, publicKeys, isSlashingProtectionMinimal)
+	validatorDB := dbtest.SetupDB(t, t.TempDir(), publicKeys, isSlashingProtectionMinimal)
 
 	// First we setup some mock attesting and proposal histories and create a mock
 	// standard slashing protection format JSON struct.
@@ -279,7 +279,7 @@ func TestImportInterchangeData_OK_SavesBlacklistedPublicKeys(t *testing.T) {
 	require.NoError(t, err)
 
 	isSlashingProtectionMinimal := false
-	validatorDB := dbtest.SetupDB(t, publicKeys, isSlashingProtectionMinimal)
+	validatorDB := dbtest.SetupDB(t, t.TempDir(), publicKeys, isSlashingProtectionMinimal)
 
 	// First we setup some mock attesting and proposal histories and create a mock
 	// standard slashing protection format JSON struct.
@@ -374,7 +374,7 @@ func TestStore_ImportInterchangeData_BadFormat_PreventsDBWrites(t *testing.T) {
 	require.NoError(t, err)
 
 	isSlashingProtectionMinimal := false
-	validatorDB := dbtest.SetupDB(t, publicKeys, isSlashingProtectionMinimal)
+	validatorDB := dbtest.SetupDB(t, t.TempDir(), publicKeys, isSlashingProtectionMinimal)
 
 	// First we setup some mock attesting and proposal histories and create a mock
 	// standard slashing protection format JSON struct.

@@ -6,13 +6,13 @@ import (
 	"encoding/json"
 	"testing"
 
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/common"
-	"github.com/prysmaticlabs/prysm/v5/validator/slashing-protection-history/format"
-	valtest "github.com/prysmaticlabs/prysm/v5/validator/testing"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/validator/db/common"
+	"github.com/OffchainLabs/prysm/v6/validator/slashing-protection-history/format"
+	valtest "github.com/OffchainLabs/prysm/v6/validator/testing"
 )
 
 func TestStore_ImportInterchangeData_BadJSON(t *testing.T) {

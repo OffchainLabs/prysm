@@ -5,19 +5,19 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/interop"
+	"github.com/OffchainLabs/prysm/v6/testing/endtoend/components"
+	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
+	"github.com/OffchainLabs/prysm/v6/testing/endtoend/policies"
+	"github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/interop"
-	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/components"
-	e2e "github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
-	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/policies"
-	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/types"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -72,7 +72,11 @@ func feeRecipientIsPresent(_ *types.EvaluationContext, conns ...*grpc.ClientConn
 	if err != nil {
 		return errors.Wrap(err, "failed to get chain head")
 	}
-	req := &ethpb.ListBlocksRequest{QueryFilter: &ethpb.ListBlocksRequest_Epoch{Epoch: chainHead.HeadEpoch.Sub(1)}}
+	epoch := chainHead.HeadEpoch
+	if epoch > 0 {
+		epoch--
+	}
+	req := &ethpb.ListBlocksRequest{QueryFilter: &ethpb.ListBlocksRequest_Epoch{Epoch: epoch}}
 	blks, err := client.ListBeaconBlocks(context.Background(), req)
 	if err != nil {
 		return errors.Wrap(err, "failed to list blocks")

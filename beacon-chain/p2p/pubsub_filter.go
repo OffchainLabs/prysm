@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/network/forks"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/network/forks"
 	"github.com/sirupsen/logrus"
 )
 
@@ -26,10 +26,11 @@ var _ pubsub.SubscriptionFilter = (*Service)(nil)
 // -> SyncContributionAndProof * 2 = 2
 // -> 4 SyncCommitteeSubnets   * 2 = 8
 // -> BlsToExecutionChange     * 2 = 2
-// -> 6 BlobSidecar            * 2 = 12
+// -> 128 DataColumnSidecar    * 2 = 256
 // -------------------------------------
-// TOTAL                           = 162
-const pubsubSubscriptionRequestLimit = 200
+// TOTAL                           = 406
+// (Note: BlobSidecar is not included in this list since it is superseded by DataColumnSidecar)
+const pubsubSubscriptionRequestLimit = 500
 
 // CanSubscribe returns true if the topic is of interest and we could subscribe to it.
 func (s *Service) CanSubscribe(topic string) bool {

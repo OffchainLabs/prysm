@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/testing/endtoend/components"
-	e2eparams "github.com/prysmaticlabs/prysm/v5/testing/endtoend/params"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/testing/endtoend/components"
+	e2eparams "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 func TestWeb3RemoteSigner_StartsAndReturnsPublicKeys(t *testing.T) {

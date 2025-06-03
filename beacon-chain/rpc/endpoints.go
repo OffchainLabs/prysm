@@ -3,27 +3,28 @@ package rpc
 import (
 	"net/http"
 
+	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/api/server/middleware"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/beacon"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/blob"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/builder"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/config"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/debug"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/events"
+	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/light-client"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/node"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/rewards"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/validator"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/lookup"
+	beaconprysm "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/beacon"
+	nodeprysm "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/node"
+	validatorv1alpha1 "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/v1alpha1/validator"
+	validatorprysm "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/validator"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
+	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prysmaticlabs/prysm/v5/api"
-	"github.com/prysmaticlabs/prysm/v5/api/server/middleware"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/core"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/beacon"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/blob"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/builder"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/config"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/debug"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/events"
-	lightclient "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/light-client"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/node"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/rewards"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/eth/validator"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/lookup"
-	beaconprysm "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/prysm/beacon"
-	nodeprysm "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/prysm/node"
-	validatorv1alpha1 "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/prysm/v1alpha1/validator"
-	validatorprysm "github.com/prysmaticlabs/prysm/v5/beacon-chain/rpc/prysm/validator"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
 )
 
 type endpoint struct {
@@ -95,14 +96,19 @@ func (s *Service) endpoints(
 	endpoints = append(endpoints, s.nodeEndpoints()...)
 	endpoints = append(endpoints, s.beaconEndpoints(ch, stater, blocker, validatorServer, coreService)...)
 	endpoints = append(endpoints, s.configEndpoints()...)
-	endpoints = append(endpoints, s.lightClientEndpoints(blocker, stater)...)
 	endpoints = append(endpoints, s.eventsEndpoints()...)
 	endpoints = append(endpoints, s.prysmBeaconEndpoints(ch, stater, coreService)...)
 	endpoints = append(endpoints, s.prysmNodeEndpoints()...)
 	endpoints = append(endpoints, s.prysmValidatorEndpoints(stater, coreService)...)
+
+	if features.Get().EnableLightClient {
+		endpoints = append(endpoints, s.lightClientEndpoints(blocker, stater)...)
+	}
+
 	if enableDebug {
 		endpoints = append(endpoints, s.debugEndpoints(stater)...)
 	}
+
 	return endpoints
 }
 
@@ -371,24 +377,6 @@ func (s *Service) validatorEndpoints(
 			},
 			handler: server.GetLiveness,
 			methods: []string{http.MethodPost},
-		},
-		{
-			template: "/eth/v2/validator/blocks/{slot}",
-			name:     namespace + ".ProduceBlockV2",
-			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
-			},
-			handler: server.ProduceBlockV2,
-			methods: []string{http.MethodGet},
-		},
-		{
-			template: "/eth/v1/validator/blinded_blocks/{slot}",
-			name:     namespace + ".ProduceBlindedBlock",
-			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
-			},
-			handler: server.ProduceBlindedBlock,
-			methods: []string{http.MethodGet},
 		},
 		{
 			template: "/eth/v3/validator/blocks/{slot}",
@@ -913,6 +901,15 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodGet},
 		},
 		{
+			template: "/eth/v1/beacon/states/{state_id}/pending_consolidations",
+			name:     namespace + ".GetPendingConsolidations",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+			},
+			handler: server.GetPendingConsolidations,
+			methods: []string{http.MethodGet},
+		},
+		{
 			template: "/eth/v1/beacon/states/{state_id}/pending_partial_withdrawals",
 			name:     namespace + ".GetPendingPartialWithdrawals",
 			middleware: []middleware.Middleware{
@@ -964,6 +961,7 @@ func (s *Service) lightClientEndpoints(blocker lookup.Blocker, stater lookup.Sta
 		HeadFetcher:      s.cfg.HeadFetcher,
 		ChainInfoFetcher: s.cfg.ChainInfoFetcher,
 		BeaconDB:         s.cfg.BeaconDB,
+		LCStore:          s.cfg.LCStore,
 	}
 
 	const namespace = "lightclient"
@@ -1058,6 +1056,7 @@ func (s *Service) eventsEndpoints() []endpoint {
 		HeadFetcher:            s.cfg.HeadFetcher,
 		ChainInfoFetcher:       s.cfg.ChainInfoFetcher,
 		TrackedValidatorsCache: s.cfg.TrackedValidatorsCache,
+		StateGen:               s.cfg.StateGen,
 	}
 
 	const namespace = "events"
@@ -1260,7 +1259,7 @@ func (s *Service) prysmValidatorEndpoints(stater lookup.Stater, coreService *cor
 			methods: []string{http.MethodPost},
 		},
 		{
-			template: "/prysm/v1/validators/participation",
+			template: "/prysm/v1/validators/{state_id}/participation",
 			name:     namespace + ".GetParticipation",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
@@ -1269,7 +1268,7 @@ func (s *Service) prysmValidatorEndpoints(stater lookup.Stater, coreService *cor
 			methods: []string{http.MethodGet},
 		},
 		{
-			template: "/prysm/v1/validators/active_set_changes",
+			template: "/prysm/v1/validators/{state_id}/active_set_changes",
 			name:     namespace + ".GetActiveSetChanges",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),

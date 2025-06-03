@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
+//
 // GetBeaconConfig retrieves the current configuration parameters of the beacon chain.
 func (_ *Server) GetBeaconConfig(_ context.Context, _ *emptypb.Empty) (*ethpb.BeaconConfig, error) {
 	conf := params.BeaconConfig()

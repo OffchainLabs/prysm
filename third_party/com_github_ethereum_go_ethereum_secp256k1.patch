@@ -1,7 +1,8 @@
-diff --color -ruN a/crypto/secp256k1/BUILD.bazel b/crypto/secp256k1/BUILD.bazel
---- a/crypto/secp256k1/BUILD.bazel	2021-10-14 20:32:30.202922024 -0500
-+++ b/crypto/secp256k1/BUILD.bazel	2021-10-14 20:30:17.921027939 -0500
-@@ -11,10 +11,11 @@
+diff --git a/crypto/secp256k1/BUILD.bazel b/crypto/secp256k1/BUILD.bazel
+index 379c6df1a..24ad195fd 100644
+--- a/crypto/secp256k1/BUILD.bazel
++++ b/crypto/secp256k1/BUILD.bazel
+@@ -10,10 +10,11 @@ go_library(
          "scalar_mult_nocgo.go",
          "secp256.go",
      ],
@@ -15,44 +16,62 @@ diff --color -ruN a/crypto/secp256k1/BUILD.bazel b/crypto/secp256k1/BUILD.bazel
      ],
      importpath = "github.com/ethereum/go-ethereum/crypto/secp256k1",
      visibility = ["//visibility:public"],
-diff --color -ruN a/crypto/secp256k1/libsecp256k1/BUILD.bazel b/crypto/secp256k1/libsecp256k1/BUILD.bazel
---- a/crypto/secp256k1/libsecp256k1/BUILD.bazel	1969-12-31 18:00:00.000000000 -0600
-+++ b/crypto/secp256k1/libsecp256k1/BUILD.bazel	2021-10-14 12:54:27.704265206 -0500
-@@ -0,0 +1,37 @@
+diff --git a/crypto/secp256k1/libsecp256k1/BUILD.bazel b/crypto/secp256k1/libsecp256k1/BUILD.bazel
+new file mode 100644
+index 000000000..1a6a1ea78
+--- /dev/null
++++ b/crypto/secp256k1/libsecp256k1/BUILD.bazel
+@@ -0,0 +1,53 @@
 +cc_library(
-+    name = "hdrs",
-+    hdrs = [
-+        "include/secp256k1.h",
-+        "include/secp256k1_recovery.h",
-+        "src/ecdsa.h",
-+        "src/ecdsa_impl.h",
-+        "src/eckey.h",
-+        "src/eckey_impl.h",
-+        "src/ecmult.h",
-+        "src/ecmult_const.h",
-+        "src/ecmult_const_impl.h",
-+        "src/ecmult_gen.h",
-+        "src/ecmult_gen_impl.h",
-+        "src/ecmult_impl.h",
-+        "src/field.h",
-+        "src/field_5x52.h",
-+        "src/field_5x52_impl.h",
-+        "src/field_5x52_int128_impl.h",
-+        "src/field_impl.h",
-+        "src/group.h",
-+        "src/group_impl.h",
-+        "src/hash.h",
-+        "src/hash_impl.h",
-+        "src/modules/recovery/main_impl.h",
-+        "src/num.h",
-+        "src/num_impl.h",
-+        "src/scalar.h",
-+        "src/scalar_4x64.h",
-+        "src/scalar_4x64_impl.h",
-+        "src/scalar_impl.h",
-+        "src/secp256k1.c",
-+        "src/util.h",
-+    ],
-+    visibility = ["//visibility:public"],
++  name = "hdrs",
++  hdrs = [
++    "include/secp256k1.h",
++    "include/secp256k1_preallocated.h",
++    "include/secp256k1_recovery.h",
++    "src/assumptions.h",
++    "src/checkmem.h",
++    "src/ecdsa.h",
++    "src/ecdsa_impl.h",
++    "src/eckey.h",
++    "src/eckey_impl.h",
++    "src/ecmult.h",
++    "src/ecmult_const.h",
++    "src/ecmult_const_impl.h",
++    "src/ecmult_gen.h",
++    "src/ecmult_gen_impl.h",
++    "src/ecmult_impl.h",
++    "src/field.h",
++    "src/field_5x52.h",
++    "src/field_5x52_impl.h",
++    "src/field_5x52_int128_impl.h",
++    "src/field_impl.h",
++    "src/group.h",
++    "src/group_impl.h",
++    "src/hash.h",
++    "src/hash_impl.h",
++    "src/hsort.h",
++    "src/hsort_impl.h",
++    "src/int128.h",
++    "src/int128_impl.h",
++    "src/int128_native.h",
++    "src/int128_native_impl.h",
++    "src/modinv64.h",
++    "src/modinv64_impl.h",
++    "src/modules/recovery/main_impl.h",
++    "src/precomputed_ecmult.c",
++    "src/precomputed_ecmult.h",
++    "src/precomputed_ecmult_gen.c",
++    "src/precomputed_ecmult_gen.h",
++    "src/scalar.h",
++    "src/scalar_4x64.h",
++    "src/scalar_4x64_impl.h",
++    "src/scalar_impl.h",
++    "src/scratch.h",
++    "src/scratch_impl.h",
++    "src/secp256k1.c",
++    "src/selftest.h",
++    "src/util.h",
++  ],
++  visibility = ["//visibility:public"],
 +)
 +

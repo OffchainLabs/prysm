@@ -5,15 +5,15 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v6/config"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/config/proposer"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/validator"
+	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
+	"github.com/OffchainLabs/prysm/v6/validator/db/iface"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v5/config"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/config/proposer"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/validator"
-	validatorpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/validator-client"
-	"github.com/prysmaticlabs/prysm/v5/validator/db/iface"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
@@ -336,6 +336,17 @@ func reviewGasLimit(gasLimit validator.Uint64) validator.Uint64 {
 	if gasLimit == 0 {
 		return validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
 	}
-	// TODO(10810): add in warning for ranges
+
+	// Warning for ranges that might be problematic
+	defaultGasLimit := params.BeaconConfig().DefaultBuilderGasLimit
+	// If gas limit is very low (below 10% of default), warn about potential issues
+	if gasLimit <= validator.Uint64(defaultGasLimit/10) {
+		log.Warnf("Gas limit %d is very low compared to default %d, which may cause transactions to fail", gasLimit, defaultGasLimit)
+	}
+	// If gas limit is very high (above 150% of default), warn about potential block propagation issues
+	if gasLimit > validator.Uint64(defaultGasLimit*3/2) {
+		log.Warnf("Gas limit %d is very high compared to default %d", gasLimit, defaultGasLimit)
+	}
+
 	return gasLimit
 }

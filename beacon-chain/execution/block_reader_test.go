@@ -6,17 +6,17 @@ import (
 	"testing"
 	"time"
 
+	dbutil "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	mockExecution "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution/types"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	contracts "github.com/OffchainLabs/prysm/v6/contracts/deposit"
+	"github.com/OffchainLabs/prysm/v6/contracts/deposit/mock"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
-	dbutil "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	mockExecution "github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/types"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	contracts "github.com/prysmaticlabs/prysm/v5/contracts/deposit"
-	"github.com/prysmaticlabs/prysm/v5/contracts/deposit/mock"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
 )
 
 func setDefaultMocks(service *Service) *Service {

@@ -4,10 +4,10 @@ import (
 	"context"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/validator/accounts/wallet"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager/derived"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager/derived"
 )
 
 const (

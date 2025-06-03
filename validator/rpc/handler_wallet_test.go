@@ -10,20 +10,20 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/async/event"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/crypto/rand"
+	"github.com/OffchainLabs/prysm/v6/io/file"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts/iface"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts/wallet"
+	"github.com/OffchainLabs/prysm/v6/validator/client"
+	"github.com/OffchainLabs/prysm/v6/validator/client/testutil"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
 	"github.com/google/uuid"
-	"github.com/prysmaticlabs/prysm/v5/async/event"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/crypto/rand"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/iface"
-	mock "github.com/prysmaticlabs/prysm/v5/validator/accounts/testing"
-	"github.com/prysmaticlabs/prysm/v5/validator/accounts/wallet"
-	"github.com/prysmaticlabs/prysm/v5/validator/client"
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
 	"github.com/tyler-smith/go-bip39"
 	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"
 )
@@ -48,7 +48,7 @@ func TestServer_CreateWallet_Local(t *testing.T) {
 	require.NoError(t, err)
 	vs, err := client.NewValidatorService(ctx, &client.Config{
 		Wallet: w,
-		Validator: &mock.Validator{
+		Validator: &testutil.FakeValidator{
 			Km: km,
 		},
 	})
@@ -445,7 +445,7 @@ func TestServer_WalletConfig(t *testing.T) {
 	s.wallet = w
 	vs, err := client.NewValidatorService(ctx, &client.Config{
 		Wallet: w,
-		Validator: &mock.Validator{
+		Validator: &testutil.FakeValidator{
 			Km: km,
 		},
 	})

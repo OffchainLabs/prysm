@@ -4,18 +4,18 @@ import (
 	"context"
 	"testing"
 
+	dbutil "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	dbutil "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
 )
 
 func TestCorrect_ActiveValidatorsCount(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	cfg := params.MainnetConfig().Copy()
+	cfg := params.MainnetConfig()
 	cfg.ConfigName = "test"
 
 	params.OverrideBeaconConfig(cfg)
@@ -75,4 +75,6 @@ func TestLoggingParameters(_ *testing.T) {
 	logGossipParameters("testing", defaultAttesterSlashingTopicParams())
 	logGossipParameters("testing", defaultProposerSlashingTopicParams())
 	logGossipParameters("testing", defaultVoluntaryExitTopicParams())
+	logGossipParameters("testing", defaultLightClientOptimisticUpdateTopicParams())
+	logGossipParameters("testing", defaultLightClientFinalityUpdateTopicParams())
 }

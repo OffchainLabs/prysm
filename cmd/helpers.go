@@ -7,8 +7,8 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/io/file"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/io/file"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )

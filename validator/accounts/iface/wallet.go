@@ -3,8 +3,8 @@ package iface
 import (
 	"context"
 
-	"github.com/prysmaticlabs/prysm/v5/validator/keymanager"
-	remoteweb3signer "github.com/prysmaticlabs/prysm/v5/validator/keymanager/remote-web3signer"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
+	remoteweb3signer "github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer"
 )
 
 // InitKeymanagerConfig defines configuration options for initializing a keymanager.

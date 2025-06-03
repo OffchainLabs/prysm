@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/hash"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/hash"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	prysmTime "github.com/OffchainLabs/prysm/v6/time"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 )
 
 var (
@@ -86,15 +85,7 @@ func IsAggregator(committeeCount uint64, slotSig []byte) (bool, error) {
 //
 //	return uint64((committees_since_epoch_start + committee_index) % ATTESTATION_SUBNET_COUNT)
 func ComputeSubnetForAttestation(activeValCount uint64, att ethpb.Att) uint64 {
-	if att.Version() >= version.Electra {
-		committeeIndex := 0
-		committeeIndices := att.CommitteeBitsVal().BitIndices()
-		if len(committeeIndices) > 0 {
-			committeeIndex = committeeIndices[0]
-		}
-		return ComputeSubnetFromCommitteeAndSlot(activeValCount, primitives.CommitteeIndex(committeeIndex), att.GetData().Slot)
-	}
-	return ComputeSubnetFromCommitteeAndSlot(activeValCount, att.GetData().CommitteeIndex, att.GetData().Slot)
+	return ComputeSubnetFromCommitteeAndSlot(activeValCount, att.GetCommitteeIndex(), att.GetData().Slot)
 }
 
 // ComputeSubnetFromCommitteeAndSlot is a flattened version of ComputeSubnetForAttestation where we only pass in
@@ -196,9 +187,7 @@ func ValidateAttestationTime(attSlot primitives.Slot, genesisTime time.Time, clo
 // VerifyCheckpointEpoch is within current epoch and previous epoch
 // with respect to current time. Returns true if it's within, false if it's not.
 func VerifyCheckpointEpoch(c *ethpb.Checkpoint, genesis time.Time) bool {
-	now := uint64(prysmTime.Now().Unix())
-	genesisTime := uint64(genesis.Unix())
-	currentSlot := primitives.Slot((now - genesisTime) / params.BeaconConfig().SecondsPerSlot)
+	currentSlot := slots.CurrentSlot(uint64(genesis.Unix()))
 	currentEpoch := slots.ToEpoch(currentSlot)
 
 	var prevEpoch primitives.Epoch

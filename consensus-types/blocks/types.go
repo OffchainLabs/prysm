@@ -1,12 +1,12 @@
 package blocks
 
 import (
+	field_params "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
-	field_params "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	eth "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 )
 
 var (
@@ -29,6 +29,7 @@ var (
 	// ErrUnsupportedVersion for beacon block methods.
 	ErrUnsupportedVersion    = errors.New("unsupported beacon block version")
 	errNilBlob               = errors.New("received nil blob sidecar")
+	errNilDataColumn         = errors.New("received nil data column sidecar")
 	errNilBlock              = errors.New("received nil beacon block")
 	errNilBlockBody          = errors.New("received nil beacon block body")
 	errIncorrectBlockVersion = errors.New(incorrectBlockVersion)

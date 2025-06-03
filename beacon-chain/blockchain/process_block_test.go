@@ -9,42 +9,44 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
+	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
+	mockExecution "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations/kv"
+	mockp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	prysmTime "github.com/OffchainLabs/prysm/v6/time"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	gethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	lightClient "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/light-client"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/das"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/db/filesystem"
-	testDB "github.com/prysmaticlabs/prysm/v5/beacon-chain/db/testing"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/execution"
-	mockExecution "github.com/prysmaticlabs/prysm/v5/beacon-chain/execution/testing"
-	doublylinkedtree "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/doubly-linked-tree"
-	forkchoicetypes "github.com/prysmaticlabs/prysm/v5/beacon-chain/forkchoice/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/operations/attestations/kv"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	consensusblocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	enginev1 "github.com/prysmaticlabs/prysm/v5/proto/engine/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	"github.com/prysmaticlabs/prysm/v5/testing/util"
-	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -2330,13 +2332,13 @@ func driftGenesisTime(s *Service, slot, delay int64) {
 	s.cfg.ForkChoiceStore.SetGenesisTime(uint64(newTime.Unix()))
 }
 
-func TestMissingIndices(t *testing.T) {
+func TestMissingBlobIndices(t *testing.T) {
 	cases := []struct {
 		name     string
 		expected [][]byte
 		present  []uint64
 		result   map[uint64]struct{}
-		root     [32]byte
+		root     [fieldparams.RootLength]byte
 		err      error
 	}{
 		{
@@ -2394,7 +2396,7 @@ func TestMissingIndices(t *testing.T) {
 		bm, bs := filesystem.NewEphemeralBlobStorageWithMocker(t)
 		t.Run(c.name, func(t *testing.T) {
 			require.NoError(t, bm.CreateFakeIndices(c.root, 0, c.present...))
-			missing, err := missingIndices(bs, c.root, c.expected, 0)
+			missing, err := missingBlobIndices(bs, c.root, c.expected, 0)
 			if c.err != nil {
 				require.ErrorIs(t, err, c.err)
 				return
@@ -2402,9 +2404,70 @@ func TestMissingIndices(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, len(c.result), len(missing))
 			for key := range c.result {
-				m, ok := missing[key]
-				require.Equal(t, true, ok)
-				require.Equal(t, c.result[key], m)
+				require.Equal(t, true, missing[key])
+			}
+		})
+	}
+}
+
+func TestMissingDataColumnIndices(t *testing.T) {
+	countPlusOne := params.BeaconConfig().NumberOfColumns + 1
+	tooManyColumns := make(map[uint64]bool, countPlusOne)
+	for i := range countPlusOne {
+		tooManyColumns[uint64(i)] = true
+	}
+
+	testCases := []struct {
+		name          string
+		storedIndices []uint64
+		input         map[uint64]bool
+		expected      map[uint64]bool
+		err           error
+	}{
+		{
+			name:  "zero len expected",
+			input: map[uint64]bool{},
+		},
+		{
+			name:  "expected exceeds max",
+			input: tooManyColumns,
+			err:   errMaxDataColumnsExceeded,
+		},
+		{
+			name:          "all missing",
+			storedIndices: []uint64{},
+			input:         map[uint64]bool{0: true, 1: true, 2: true},
+			expected:      map[uint64]bool{0: true, 1: true, 2: true},
+		},
+		{
+			name:          "none missing",
+			input:         map[uint64]bool{0: true, 1: true, 2: true},
+			expected:      map[uint64]bool{},
+			storedIndices: []uint64{0, 1, 2, 3, 4}, // Extra columns stored but not expected
+		},
+		{
+			name:          "some missing",
+			storedIndices: []uint64{0, 20},
+			input:         map[uint64]bool{0: true, 10: true, 20: true, 30: true},
+			expected:      map[uint64]bool{10: true, 30: true},
+		},
+	}
+
+	var emptyRoot [fieldparams.RootLength]byte
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			dcm, dcs := filesystem.NewEphemeralDataColumnStorageWithMocker(t)
+			err := dcm.CreateFakeIndices(emptyRoot, 0, tc.storedIndices...)
+			require.NoError(t, err)
+
+			// Test the function
+			actual, err := missingDataColumnIndices(dcs, emptyRoot, tc.input)
+			require.ErrorIs(t, err, tc.err)
+
+			require.Equal(t, len(tc.expected), len(actual))
+			for key := range tc.expected {
+				require.Equal(t, true, actual[key])
 			}
 		})
 	}
@@ -2653,7 +2716,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 
 	t.Run("Altair", func(t *testing.T) {
 		t.Run("No old update", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestAltair()
+			l := util.NewTestLightClient(t, version.Altair)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -2699,7 +2762,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		})
 
 		t.Run("New update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestAltair()
+			l := util.NewTestLightClient(t, version.Altair)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -2751,7 +2814,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		})
 
 		t.Run("Old update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestAltair()
+			l := util.NewTestLightClient(t, version.Altair)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -2812,7 +2875,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 
 	t.Run("Capella", func(t *testing.T) {
 		t.Run("No old update", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestCapella(false)
+			l := util.NewTestLightClient(t, version.Capella)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -2857,7 +2920,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		})
 
 		t.Run("New update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestCapella(false)
+			l := util.NewTestLightClient(t, version.Capella)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -2909,7 +2972,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		})
 
 		t.Run("Old update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestCapella(false)
+			l := util.NewTestLightClient(t, version.Capella)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -2970,7 +3033,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 
 	t.Run("Deneb", func(t *testing.T) {
 		t.Run("No old update", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestDeneb(false)
+			l := util.NewTestLightClient(t, version.Deneb)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -3015,7 +3078,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		})
 
 		t.Run("New update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestDeneb(false)
+			l := util.NewTestLightClient(t, version.Deneb)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -3067,7 +3130,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 		})
 
 		t.Run("Old update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t).SetupTestDeneb(false)
+			l := util.NewTestLightClient(t, version.Deneb)
 
 			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -3138,7 +3201,7 @@ func TestSaveLightClientBootstrap(t *testing.T) {
 	ctx := tr.ctx
 
 	t.Run("Altair", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestAltair()
+		l := util.NewTestLightClient(t, version.Altair)
 
 		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -3173,7 +3236,7 @@ func TestSaveLightClientBootstrap(t *testing.T) {
 	})
 
 	t.Run("Capella", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestCapella(false)
+		l := util.NewTestLightClient(t, version.Capella)
 
 		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -3208,7 +3271,7 @@ func TestSaveLightClientBootstrap(t *testing.T) {
 	})
 
 	t.Run("Deneb", func(t *testing.T) {
-		l := util.NewTestLightClient(t).SetupTestDeneb(false)
+		l := util.NewTestLightClient(t, version.Deneb)
 
 		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
@@ -3243,4 +3306,528 @@ func TestSaveLightClientBootstrap(t *testing.T) {
 	})
 
 	reset()
+}
+
+type testIsAvailableParams struct {
+	options                 []Option
+	blobKzgCommitmentsCount uint64
+	columnsToSave           []uint64
+}
+
+func testIsAvailableSetup(t *testing.T, params testIsAvailableParams) (context.Context, context.CancelFunc, *Service, [fieldparams.RootLength]byte, interfaces.SignedBeaconBlock) {
+	ctx, cancel := context.WithCancel(context.Background())
+	dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
+
+	options := append(params.options, WithDataColumnStorage(dataColumnStorage))
+	service, _ := minimalTestService(t, options...)
+
+	genesisState, secretKeys := util.DeterministicGenesisStateElectra(t, 32 /*validator count*/)
+
+	err := service.saveGenesisData(ctx, genesisState)
+	require.NoError(t, err)
+
+	conf := util.DefaultBlockGenConfig()
+	conf.NumBlobKzgCommitments = params.blobKzgCommitmentsCount
+
+	signedBeaconBlock, err := util.GenerateFullBlockFulu(genesisState, secretKeys, conf, 10 /*block slot*/)
+	require.NoError(t, err)
+
+	root, err := signedBeaconBlock.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	dataColumnsParams := make([]util.DataColumnParams, 0, len(params.columnsToSave))
+	for _, i := range params.columnsToSave {
+		dataColumnParam := util.DataColumnParams{ColumnIndex: i}
+		dataColumnsParams = append(dataColumnsParams, dataColumnParam)
+	}
+
+	dataColumnParamsByBlockRoot := util.DataColumnsParamsByRoot{root: dataColumnsParams}
+	_, verifiedRODataColumns := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
+
+	err = dataColumnStorage.Save(verifiedRODataColumns)
+	require.NoError(t, err)
+
+	signed, err := consensusblocks.NewSignedBeaconBlock(signedBeaconBlock)
+	require.NoError(t, err)
+
+	return ctx, cancel, service, root, signed
+}
+
+func TestIsDataAvailable(t *testing.T) {
+	t.Run("Fulu - out of retention window", func(t *testing.T) {
+		params := testIsAvailableParams{options: []Option{WithGenesisTime(time.Unix(0, 0))}}
+		ctx, _, service, root, signed := testIsAvailableSetup(t, params)
+
+		err := service.isDataAvailable(ctx, root, signed)
+		require.NoError(t, err)
+	})
+
+	t.Run("Fulu - no commitment in blocks", func(t *testing.T) {
+		ctx, _, service, root, signed := testIsAvailableSetup(t, testIsAvailableParams{})
+
+		err := service.isDataAvailable(ctx, root, signed)
+		require.NoError(t, err)
+	})
+
+	t.Run("Fulu - more than half of the columns in custody", func(t *testing.T) {
+		minimumColumnsCountToReconstruct := peerdas.MinimumColumnsCountToReconstruct()
+		indices := make([]uint64, 0, minimumColumnsCountToReconstruct)
+		for i := range minimumColumnsCountToReconstruct {
+			indices = append(indices, i)
+		}
+
+		params := testIsAvailableParams{
+			options:                 []Option{WithCustodyInfo(&peerdas.CustodyInfo{})},
+			columnsToSave:           indices,
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, _, service, root, signed := testIsAvailableSetup(t, params)
+
+		err := service.isDataAvailable(ctx, root, signed)
+		require.NoError(t, err)
+	})
+
+	t.Run("Fulu - no missing data columns", func(t *testing.T) {
+		params := testIsAvailableParams{
+			options:                 []Option{WithCustodyInfo(&peerdas.CustodyInfo{})},
+			columnsToSave:           []uint64{1, 17, 19, 42, 75, 87, 102, 117, 119}, // 119 is not needed
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, _, service, root, signed := testIsAvailableSetup(t, params)
+
+		err := service.isDataAvailable(ctx, root, signed)
+		require.NoError(t, err)
+	})
+
+	t.Run("Fulu - some initially missing data columns (no reconstruction)", func(t *testing.T) {
+		testParams := testIsAvailableParams{
+			options:       []Option{WithCustodyInfo(&peerdas.CustodyInfo{})},
+			columnsToSave: []uint64{1, 17, 19, 75, 102, 117, 119}, // 119 is not needed, 42 and 87 are missing
+
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, _, service, root, signed := testIsAvailableSetup(t, testParams)
+
+		var wrongRoot [fieldparams.RootLength]byte
+		copy(wrongRoot[:], root[:])
+		wrongRoot[0]++ // change the root to simulate a wrong root
+
+		_, verifiedSidecarsWrongRoot := util.CreateTestVerifiedRoDataColumnSidecars(t, util.DataColumnsParamsByRoot{wrongRoot: {
+			{ColumnIndex: 42}, // needed
+		}})
+
+		_, verifiedSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, util.DataColumnsParamsByRoot{root: {
+			{ColumnIndex: 87}, // needed
+			{ColumnIndex: 1},  // not needed
+			{ColumnIndex: 42}, // needed
+		}})
+
+		time.AfterFunc(10*time.Millisecond, func() {
+			err := service.dataColumnStorage.Save(verifiedSidecarsWrongRoot)
+			require.NoError(t, err)
+
+			err = service.dataColumnStorage.Save(verifiedSidecars)
+			require.NoError(t, err)
+		})
+
+		err := service.isDataAvailable(ctx, root, signed)
+		require.NoError(t, err)
+	})
+
+	t.Run("Fulu - some initially missing data columns (reconstruction)", func(t *testing.T) {
+		const (
+			missingColumns = uint64(2)
+			cgc            = 128
+		)
+		var custodyInfo peerdas.CustodyInfo
+		custodyInfo.TargetGroupCount.SetValidatorsCustodyRequirement(cgc)
+		custodyInfo.ToAdvertiseGroupCount.Set(cgc)
+
+		minimumColumnsCountToReconstruct := peerdas.MinimumColumnsCountToReconstruct()
+		indices := make([]uint64, 0, minimumColumnsCountToReconstruct-missingColumns)
+
+		for i := range minimumColumnsCountToReconstruct - missingColumns {
+			indices = append(indices, i)
+		}
+
+		testParams := testIsAvailableParams{
+			options:                 []Option{WithCustodyInfo(&custodyInfo)},
+			columnsToSave:           indices,
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, _, service, root, signed := testIsAvailableSetup(t, testParams)
+
+		dataColumnParams := make([]util.DataColumnParams, 0, missingColumns)
+		for i := minimumColumnsCountToReconstruct - missingColumns; i < minimumColumnsCountToReconstruct; i++ {
+			dataColumnParam := util.DataColumnParams{ColumnIndex: i}
+			dataColumnParams = append(dataColumnParams, dataColumnParam)
+		}
+
+		_, verifiedSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, util.DataColumnsParamsByRoot{root: dataColumnParams})
+
+		time.AfterFunc(10*time.Millisecond, func() {
+			err := service.dataColumnStorage.Save(verifiedSidecars)
+			require.NoError(t, err)
+		})
+
+		err := service.isDataAvailable(ctx, root, signed)
+		require.NoError(t, err)
+	})
+
+	t.Run("Fulu - some columns are definitively missing", func(t *testing.T) {
+		params := testIsAvailableParams{
+			options:                 []Option{WithCustodyInfo(&peerdas.CustodyInfo{})},
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, cancel, service, root, signed := testIsAvailableSetup(t, params)
+
+		time.AfterFunc(10*time.Millisecond, func() {
+			cancel()
+		})
+
+		err := service.isDataAvailable(ctx, root, signed)
+		require.NotNil(t, err)
+	})
+}
+
+func setupLightClientTestRequirements(ctx context.Context, t *testing.T, s *Service, v int, options ...util.LightClientOption) (*util.TestLightClient, *postBlockProcessConfig) {
+	var l *util.TestLightClient
+	switch v {
+	case version.Altair:
+		l = util.NewTestLightClient(t, version.Altair, options...)
+	case version.Bellatrix:
+		l = util.NewTestLightClient(t, version.Bellatrix, options...)
+	case version.Capella:
+		l = util.NewTestLightClient(t, version.Capella, options...)
+	case version.Deneb:
+		l = util.NewTestLightClient(t, version.Deneb, options...)
+	case version.Electra:
+		l = util.NewTestLightClient(t, version.Electra, options...)
+	default:
+		t.Errorf("Unsupported fork version %s", version.String(v))
+		return nil, nil
+	}
+
+	err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
+	require.NoError(t, err)
+	attestedBlockRoot, err := l.AttestedBlock.Block().HashTreeRoot()
+	require.NoError(t, err)
+	err = s.cfg.BeaconDB.SaveState(ctx, l.AttestedState, attestedBlockRoot)
+	require.NoError(t, err)
+
+	currentBlockRoot, err := l.Block.Block().HashTreeRoot()
+	require.NoError(t, err)
+	roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
+	require.NoError(t, err)
+
+	err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
+	require.NoError(t, err)
+	err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
+	require.NoError(t, err)
+
+	err = s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock)
+	require.NoError(t, err)
+
+	cfg := &postBlockProcessConfig{
+		ctx:            ctx,
+		roblock:        roblock,
+		postState:      l.State,
+		isValidPayload: true,
+	}
+
+	return l, cfg
+}
+
+func TestProcessLightClientOptimisticUpdate(t *testing.T) {
+	featCfg := &features.Flags{}
+	featCfg.EnableLightClient = true
+	reset := features.InitWithReset(featCfg)
+	defer reset()
+
+	params.SetupTestConfigCleanup(t)
+	beaconCfg := params.BeaconConfig()
+	beaconCfg.AltairForkEpoch = 1
+	beaconCfg.BellatrixForkEpoch = 2
+	beaconCfg.CapellaForkEpoch = 3
+	beaconCfg.DenebForkEpoch = 4
+	beaconCfg.ElectraForkEpoch = 5
+	params.OverrideBeaconConfig(beaconCfg)
+
+	s, tr := minimalTestService(t)
+	s.cfg.P2P = &mockp2p.FakeP2P{}
+	ctx := tr.ctx
+
+	testCases := []struct {
+		name          string
+		oldOptions    []util.LightClientOption
+		newOptions    []util.LightClientOption
+		expectReplace bool
+	}{
+		{
+			name:          "No old update",
+			oldOptions:    nil,
+			newOptions:    []util.LightClientOption{},
+			expectReplace: true,
+		},
+		{
+			name:          "Same age",
+			oldOptions:    []util.LightClientOption{},
+			newOptions:    []util.LightClientOption{util.WithSupermajority()}, // supermajority does not matter here and is only added to result in two different updates
+			expectReplace: false,
+		},
+		{
+			name:          "Old update is better - age",
+			oldOptions:    []util.LightClientOption{util.WithIncreasedAttestedSlot(1)},
+			newOptions:    []util.LightClientOption{},
+			expectReplace: false,
+		},
+		{
+			name:          "New update is better - age",
+			oldOptions:    []util.LightClientOption{},
+			newOptions:    []util.LightClientOption{util.WithIncreasedAttestedSlot(1)},
+			expectReplace: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		for testVersion := 1; testVersion < 6; testVersion++ { // test all forks
+			var forkEpoch uint64
+			var expectedVersion int
+
+			switch testVersion {
+			case 1:
+				forkEpoch = uint64(params.BeaconConfig().AltairForkEpoch)
+				expectedVersion = version.Altair
+			case 2:
+				forkEpoch = uint64(params.BeaconConfig().BellatrixForkEpoch)
+				expectedVersion = version.Altair
+			case 3:
+				forkEpoch = uint64(params.BeaconConfig().CapellaForkEpoch)
+				expectedVersion = version.Capella
+			case 4:
+				forkEpoch = uint64(params.BeaconConfig().DenebForkEpoch)
+				expectedVersion = version.Deneb
+			case 5:
+				forkEpoch = uint64(params.BeaconConfig().ElectraForkEpoch)
+				expectedVersion = version.Deneb
+			default:
+				t.Errorf("Unsupported fork version %s", version.String(testVersion))
+			}
+
+			t.Run(version.String(testVersion)+"_"+tc.name, func(t *testing.T) {
+				s.genesisTime = time.Unix(time.Now().Unix()-(int64(forkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
+				s.lcStore = &lightClient.Store{}
+
+				var oldActualUpdate interfaces.LightClientOptimisticUpdate
+				var err error
+				if tc.oldOptions != nil {
+					// config for old update
+					lOld, cfgOld := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.oldOptions...)
+					require.NoError(t, s.processLightClientOptimisticUpdate(cfgOld.ctx, cfgOld.roblock, cfgOld.postState))
+
+					oldActualUpdate, err = lightClient.NewLightClientOptimisticUpdateFromBeaconState(
+						lOld.Ctx,
+						lOld.State.Slot(),
+						lOld.State,
+						lOld.Block,
+						lOld.AttestedState,
+						lOld.AttestedBlock,
+					)
+					require.NoError(t, err)
+
+					// check that the old update is saved
+					oldUpdate := s.lcStore.LastOptimisticUpdate()
+					require.NotNil(t, oldUpdate)
+
+					require.DeepEqual(t, oldUpdate, oldActualUpdate, "old update should be saved")
+				}
+
+				// config for new update
+				lNew, cfgNew := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.newOptions...)
+				require.NoError(t, s.processLightClientOptimisticUpdate(cfgNew.ctx, cfgNew.roblock, cfgNew.postState))
+
+				newActualUpdate, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(
+					lNew.Ctx,
+					lNew.State.Slot(),
+					lNew.State,
+					lNew.Block,
+					lNew.AttestedState,
+					lNew.AttestedBlock,
+				)
+				require.NoError(t, err)
+
+				require.DeepNotEqual(t, newActualUpdate, oldActualUpdate, "new update should not be equal to old update")
+
+				// check that the new update is saved or skipped
+				newUpdate := s.lcStore.LastOptimisticUpdate()
+				require.NotNil(t, newUpdate)
+
+				if tc.expectReplace {
+					require.DeepEqual(t, newActualUpdate, newUpdate)
+					require.Equal(t, expectedVersion, newUpdate.Version())
+				} else {
+					require.DeepEqual(t, oldActualUpdate, newUpdate)
+					require.Equal(t, expectedVersion, newUpdate.Version())
+				}
+			})
+		}
+	}
+}
+
+func TestProcessLightClientFinalityUpdate(t *testing.T) {
+	featCfg := &features.Flags{}
+	featCfg.EnableLightClient = true
+	reset := features.InitWithReset(featCfg)
+	defer reset()
+
+	params.SetupTestConfigCleanup(t)
+	beaconCfg := params.BeaconConfig()
+	beaconCfg.AltairForkEpoch = 1
+	beaconCfg.BellatrixForkEpoch = 2
+	beaconCfg.CapellaForkEpoch = 3
+	beaconCfg.DenebForkEpoch = 4
+	beaconCfg.ElectraForkEpoch = 5
+	params.OverrideBeaconConfig(beaconCfg)
+
+	s, tr := minimalTestService(t)
+	s.cfg.P2P = &mockp2p.FakeP2P{}
+	ctx := tr.ctx
+
+	testCases := []struct {
+		name          string
+		oldOptions    []util.LightClientOption
+		newOptions    []util.LightClientOption
+		expectReplace bool
+	}{
+		{
+			name:          "No old update",
+			oldOptions:    nil,
+			newOptions:    []util.LightClientOption{},
+			expectReplace: true,
+		},
+		{
+			name:          "Old update is better - age - no supermajority",
+			oldOptions:    []util.LightClientOption{util.WithIncreasedFinalizedSlot(1)},
+			newOptions:    []util.LightClientOption{},
+			expectReplace: false,
+		},
+		{
+			name:          "Old update is better - age - both supermajority",
+			oldOptions:    []util.LightClientOption{util.WithIncreasedFinalizedSlot(1), util.WithSupermajority()},
+			newOptions:    []util.LightClientOption{util.WithSupermajority()},
+			expectReplace: false,
+		},
+		{
+			name:          "Old update is better - supermajority",
+			oldOptions:    []util.LightClientOption{util.WithSupermajority()},
+			newOptions:    []util.LightClientOption{},
+			expectReplace: false,
+		},
+		{
+			name:          "New update is better - age - both supermajority",
+			oldOptions:    []util.LightClientOption{util.WithSupermajority()},
+			newOptions:    []util.LightClientOption{util.WithIncreasedFinalizedSlot(1), util.WithSupermajority()},
+			expectReplace: true,
+		},
+		{
+			name:          "New update is better - age - no supermajority",
+			oldOptions:    []util.LightClientOption{},
+			newOptions:    []util.LightClientOption{util.WithIncreasedFinalizedSlot(1)},
+			expectReplace: true,
+		},
+		{
+			name:          "New update is better - supermajority",
+			oldOptions:    []util.LightClientOption{},
+			newOptions:    []util.LightClientOption{util.WithSupermajority()},
+			expectReplace: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		for testVersion := 1; testVersion < 6; testVersion++ { // test all forks
+			var forkEpoch uint64
+			var expectedVersion int
+
+			switch testVersion {
+			case 1:
+				forkEpoch = uint64(params.BeaconConfig().AltairForkEpoch)
+				expectedVersion = version.Altair
+			case 2:
+				forkEpoch = uint64(params.BeaconConfig().BellatrixForkEpoch)
+				expectedVersion = version.Altair
+			case 3:
+				forkEpoch = uint64(params.BeaconConfig().CapellaForkEpoch)
+				expectedVersion = version.Capella
+			case 4:
+				forkEpoch = uint64(params.BeaconConfig().DenebForkEpoch)
+				expectedVersion = version.Deneb
+			case 5:
+				forkEpoch = uint64(params.BeaconConfig().ElectraForkEpoch)
+				expectedVersion = version.Electra
+			default:
+				t.Errorf("Unsupported fork version %s", version.String(testVersion))
+			}
+
+			t.Run(version.String(testVersion)+"_"+tc.name, func(t *testing.T) {
+				s.genesisTime = time.Unix(time.Now().Unix()-(int64(forkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
+				s.lcStore = &lightClient.Store{}
+
+				var actualOldUpdate, actualNewUpdate interfaces.LightClientFinalityUpdate
+				var err error
+
+				if tc.oldOptions != nil {
+					// config for old update
+					lOld, cfgOld := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.oldOptions...)
+					require.NoError(t, s.processLightClientFinalityUpdate(cfgOld.ctx, cfgOld.roblock, cfgOld.postState))
+
+					// check that the old update is saved
+					actualOldUpdate, err = lightClient.NewLightClientFinalityUpdateFromBeaconState(
+						ctx,
+						cfgOld.postState.Slot(),
+						cfgOld.postState,
+						cfgOld.roblock,
+						lOld.AttestedState,
+						lOld.AttestedBlock,
+						lOld.FinalizedBlock,
+					)
+					require.NoError(t, err)
+					oldUpdate := s.lcStore.LastFinalityUpdate()
+					require.DeepEqual(t, actualOldUpdate, oldUpdate)
+				}
+
+				// config for new update
+				lNew, cfgNew := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.newOptions...)
+				require.NoError(t, s.processLightClientFinalityUpdate(cfgNew.ctx, cfgNew.roblock, cfgNew.postState))
+
+				// check that the actual old update and the actual new update are different
+				actualNewUpdate, err = lightClient.NewLightClientFinalityUpdateFromBeaconState(
+					ctx,
+					cfgNew.postState.Slot(),
+					cfgNew.postState,
+					cfgNew.roblock,
+					lNew.AttestedState,
+					lNew.AttestedBlock,
+					lNew.FinalizedBlock,
+				)
+				require.NoError(t, err)
+				require.DeepNotEqual(t, actualOldUpdate, actualNewUpdate)
+
+				// check that the new update is saved or skipped
+				newUpdate := s.lcStore.LastFinalityUpdate()
+
+				if tc.expectReplace {
+					require.DeepEqual(t, actualNewUpdate, newUpdate)
+					require.Equal(t, expectedVersion, newUpdate.Version())
+				} else {
+					require.DeepEqual(t, actualOldUpdate, newUpdate)
+					require.Equal(t, expectedVersion, newUpdate.Version())
+				}
+			})
+		}
+	}
 }

@@ -3,15 +3,17 @@ package validator
 import (
 	"context"
 
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
-	opfeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/operation"
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
+	opfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
+//
 // ProposeExit proposes an exit for a validator.
 func (vs *Server) ProposeExit(ctx context.Context, req *ethpb.SignedVoluntaryExit) (*ethpb.ProposeExitResponse, error) {
 	if req == nil {

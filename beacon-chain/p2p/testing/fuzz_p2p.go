@@ -3,6 +3,13 @@ package testing
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/control"
@@ -10,10 +17,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/peers"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/metadata"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -53,6 +56,11 @@ func (*FakeP2P) PeerID() peer.ID {
 // ENR returns the enr of the local peer.
 func (*FakeP2P) ENR() *enr.Record {
 	return new(enr.Record)
+}
+
+// NodeID returns the node id of the local peer.
+func (*FakeP2P) NodeID() enode.ID {
+	return enode.ID{}
 }
 
 // DiscoveryAddresses -- fake
@@ -148,6 +156,21 @@ func (*FakeP2P) BroadcastBlob(_ context.Context, _ uint64, _ *ethpb.BlobSidecar)
 	return nil
 }
 
+// BroadcastLightClientOptimisticUpdate -- fake.
+func (*FakeP2P) BroadcastLightClientOptimisticUpdate(_ context.Context, _ interfaces.LightClientOptimisticUpdate) error {
+	return nil
+}
+
+// BroadcastLightClientFinalityUpdate -- fake.
+func (*FakeP2P) BroadcastLightClientFinalityUpdate(_ context.Context, _ interfaces.LightClientFinalityUpdate) error {
+	return nil
+}
+
+// BroadcastDataColumn -- fake.
+func (*FakeP2P) BroadcastDataColumn(_ [fieldparams.RootLength]byte, _ uint64, _ *ethpb.DataColumnSidecar, _ ...chan<- bool) error {
+	return nil
+}
+
 // InterceptPeerDial -- fake.
 func (*FakeP2P) InterceptPeerDial(peer.ID) (allow bool) {
 	return true
@@ -171,4 +194,8 @@ func (*FakeP2P) InterceptSecured(network.Direction, peer.ID, network.ConnMultiad
 // InterceptUpgraded -- fake.
 func (*FakeP2P) InterceptUpgraded(network.Conn) (allow bool, reason control.DisconnectReason) {
 	return true, 0
+}
+
+func (*FakeP2P) CustodyGroupCountFromPeer(peer.ID) uint64 {
+	return 0
 }

@@ -1,10 +1,10 @@
 package types
 
 import (
-	fieldparams "github.com/prysmaticlabs/prysm/v5/config/fieldparams"
-	consensus_blocks "github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	consensus_blocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
 // Checkpoint is an array version of ethpb.Checkpoint. It is used internally in

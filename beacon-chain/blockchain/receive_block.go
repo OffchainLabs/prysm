@@ -6,28 +6,29 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/electra"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
+	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	coreTime "github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/slasher/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	ethpbv1 "github.com/OffchainLabs/prysm/v6/proto/eth/v1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/electra"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
-	statefeed "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed/state"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
-	coreTime "github.com/prysmaticlabs/prysm/v5/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/das"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/slasher/types"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v5/config/features"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing"
-	"github.com/prysmaticlabs/prysm/v5/monitoring/tracing/trace"
-	ethpbv1 "github.com/prysmaticlabs/prysm/v5/proto/eth/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation"
-	"github.com/prysmaticlabs/prysm/v5/runtime/version"
-	"github.com/prysmaticlabs/prysm/v5/time/slots"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -52,6 +53,13 @@ type BlobReceiver interface {
 	ReceiveBlob(context.Context, blocks.VerifiedROBlob) error
 }
 
+// DataColumnReceiver interface defines the methods of chain service for receiving new
+// data columns
+type DataColumnReceiver interface {
+	ReceiveDataColumn(blocks.VerifiedRODataColumn) error
+	ReceiveDataColumns([]blocks.VerifiedRODataColumn) error
+}
+
 // SlashingReceiver interface defines the methods of chain service for receiving validated slashing over the wire.
 type SlashingReceiver interface {
 	ReceiveAttesterSlashing(ctx context.Context, slashing ethpb.AttSlashing)
@@ -74,6 +82,7 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 		log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Debug("Ignoring already synced block")
 		return nil
 	}
+
 	receivedTime := time.Now()
 	s.blockBeingSynced.set(blockRoot)
 	defer s.blockBeingSynced.unset(blockRoot)
@@ -82,6 +91,7 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 	if err != nil {
 		return err
 	}
+
 	preState, err := s.getBlockPreState(ctx, blockCopy.Block())
 	if err != nil {
 		return errors.Wrap(err, "could not get block's prestate")
@@ -97,10 +107,12 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 	if err != nil {
 		return err
 	}
+
 	daWaitedTime, err := s.handleDA(ctx, blockCopy, blockRoot, avs)
 	if err != nil {
 		return err
 	}
+
 	// Defragment the state before continuing block processing.
 	s.defragmentState(postState)
 
@@ -227,26 +239,34 @@ func (s *Service) validateExecutionAndConsensus(
 func (s *Service) handleDA(
 	ctx context.Context,
 	block interfaces.SignedBeaconBlock,
-	blockRoot [32]byte,
+	blockRoot [fieldparams.RootLength]byte,
 	avs das.AvailabilityStore,
-) (time.Duration, error) {
-	daStartTime := time.Now()
-	if avs != nil {
-		rob, err := blocks.NewROBlockWithRoot(block, blockRoot)
-		if err != nil {
-			return 0, err
+) (elapsed time.Duration, err error) {
+	defer func(start time.Time) {
+		elapsed = time.Since(start)
+
+		if err == nil {
+			dataAvailWaitedTime.Observe(float64(elapsed.Milliseconds()))
 		}
-		if err := avs.IsDataAvailable(ctx, s.CurrentSlot(), rob); err != nil {
-			return 0, errors.Wrap(err, "could not validate blob data availability (AvailabilityStore.IsDataAvailable)")
+	}(time.Now())
+
+	if avs == nil {
+		if err = s.isDataAvailable(ctx, blockRoot, block); err != nil {
+			return
 		}
-	} else {
-		if err := s.isDataAvailable(ctx, blockRoot, block); err != nil {
-			return 0, errors.Wrap(err, "could not validate blob data availability")
-		}
+
+		return
 	}
-	daWaitedTime := time.Since(daStartTime)
-	dataAvailWaitedTime.Observe(float64(daWaitedTime.Milliseconds()))
-	return daWaitedTime, nil
+
+	var rob blocks.ROBlock
+	rob, err = blocks.NewROBlockWithRoot(block, blockRoot)
+	if err != nil {
+		return
+	}
+
+	err = avs.IsDataAvailable(ctx, s.CurrentSlot(), rob)
+
+	return
 }
 
 func (s *Service) reportPostBlockProcessing(

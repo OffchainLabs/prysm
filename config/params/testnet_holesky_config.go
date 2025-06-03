@@ -22,7 +22,7 @@ func UseHoleskyNetworkConfig() {
 
 // HoleskyConfig defines the config for the Holesky beacon chain testnet.
 func HoleskyConfig() *BeaconChainConfig {
-	cfg := MainnetConfig().Copy()
+	cfg := MainnetConfig()
 	cfg.MinGenesisTime = 1695902100
 	cfg.GenesisDelay = 300
 	cfg.ConfigName = HoleskyName
@@ -46,6 +46,10 @@ func HoleskyConfig() *BeaconChainConfig {
 	cfg.TerminalTotalDifficulty = "0"
 	cfg.DepositContractAddress = "0x4242424242424242424242424242424242424242"
 	cfg.EjectionBalance = 28000000000
+	cfg.BlobSchedule = []BlobScheduleEntry{
+		{Epoch: 29696, MaxBlobsPerBlock: 6},
+		{Epoch: 115968, MaxBlobsPerBlock: 9},
+	}
 	cfg.InitializeForkSchedule()
 	return cfg
 }

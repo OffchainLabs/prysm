@@ -7,16 +7,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/network/forks"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p/encoder"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/startup"
-	"github.com/prysmaticlabs/prysm/v5/config/params"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v5/network/forks"
-	"github.com/prysmaticlabs/prysm/v5/testing/assert"
-	"github.com/prysmaticlabs/prysm/v5/testing/require"
-	prysmTime "github.com/prysmaticlabs/prysm/v5/time"
 )
 
 func TestService_CanSubscribe(t *testing.T) {
@@ -90,7 +90,14 @@ func TestService_CanSubscribe(t *testing.T) {
 		formatting := []interface{}{digest}
 
 		// Special case for attestation subnets which have a second formatting placeholder.
-		if topic == AttestationSubnetTopicFormat || topic == SyncCommitteeSubnetTopicFormat || topic == BlobSubnetTopicFormat {
+		topics := map[string]bool{
+			AttestationSubnetTopicFormat:   true,
+			SyncCommitteeSubnetTopicFormat: true,
+			BlobSubnetTopicFormat:          true,
+			DataColumnSubnetTopicFormat:    true,
+		}
+
+		if topics[topic] {
 			formatting = append(formatting, 0 /* some subnet ID */)
 		}
 

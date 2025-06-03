@@ -3,8 +3,8 @@ package p2p
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/prysmaticlabs/prysm/v5/beacon-chain/p2p"
 )
 
 func (c *client) connectToPeers(ctx context.Context, peerMultiaddrs ...string) error {

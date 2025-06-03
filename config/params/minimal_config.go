@@ -3,7 +3,7 @@ package params
 import (
 	"math"
 
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 )
 
 // MinimalSpecConfig retrieves the minimal config used in spec tests.
@@ -112,8 +112,6 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.MaxPerEpochActivationExitChurnLimit = 128000000000
 	minimalConfig.PendingConsolidationsLimit = 64
 	minimalConfig.MaxPartialWithdrawalsPerPayload = 1
-	minimalConfig.MaxWithdrawalRequestsPerPayload = 2
-	minimalConfig.MaxDepositRequestsPerPayload = 4
 	minimalConfig.PendingPartialWithdrawalsLimit = 64
 	minimalConfig.MaxPendingPartialsPerWithdrawalsSweep = 2
 	minimalConfig.PendingDepositsLimit = 134217728
@@ -128,6 +126,11 @@ func MinimalSpecConfig() *BeaconChainConfig {
 
 	minimalConfig.ConfigName = MinimalName
 	minimalConfig.PresetBase = "minimal"
+
+	minimalConfig.BlobSchedule = []BlobScheduleEntry{
+		{Epoch: 18446744073709551615, MaxBlobsPerBlock: 6},
+		{Epoch: 18446744073709551615, MaxBlobsPerBlock: 9},
+	}
 
 	minimalConfig.InitializeForkSchedule()
 	return minimalConfig
