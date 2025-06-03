@@ -229,9 +229,11 @@ func (vs *Server) buildValidatorDuty(
 		assignment.IsSyncCommittee = inSync
 		nextAssignment.IsSyncCommittee = inSync
 		if inSync {
-			if err := core.RegisterSyncSubnetCurrentPeriodProto(s, reqEpoch, pubKey, statusEnum); err != nil {
-				return nil, nil, err
-			}
+			go func() {
+				if err := core.RegisterSyncSubnetCurrentPeriodProto(s, reqEpoch, pubKey, statusEnum); err != nil {
+					log.WithError(err).Warn("Could not register sync subnet current period")
+				}
+			}()
 		}
 
 		// Boundary check: determine if next period differs
@@ -246,9 +248,11 @@ func (vs *Server) buildValidatorDuty(
 			}
 			nextAssignment.IsSyncCommittee = nextInSync
 			if nextInSync {
-				if err := core.RegisterSyncSubnetNextPeriodProto(s, reqEpoch, pubKey, statusEnum); err != nil {
-					return nil, nil, err
-				}
+				go func() {
+					if err := core.RegisterSyncSubnetCurrentPeriodProto(s, reqEpoch, pubKey, statusEnum); err != nil {
+						log.WithError(err).Warn("Could not register sync subnet current period")
+					}
+				}()
 			}
 		}
 	}
