@@ -9,6 +9,7 @@ import (
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
+	corenet "github.com/libp2p/go-libp2p/core/network"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -78,4 +79,10 @@ func (c *client) statusRPCHandler(ctx context.Context, _ interface{}, stream lib
 	}
 	_, err = c.Encoding().EncodeWithMaxLength(stream, status)
 	return err
+}
+
+func closeStream(stream corenet.Stream) {
+	if err := stream.Close(); err != nil {
+		log.Println(err)
+	}
 }

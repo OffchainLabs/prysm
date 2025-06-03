@@ -9,8 +9,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
 	ecdsaprysm "github.com/OffchainLabs/prysm/v6/crypto/ecdsa"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
@@ -174,55 +172,47 @@ func (c *client) retrievePeerAddressesViaRPC(ctx context.Context, beaconEndpoint
 	return peers, nil
 }
 
-func (c *client) initializeMockChainService(ctx context.Context, forkVersion int) (*mockChain, error) {
+func (c *client) initializeMockChainService(ctx context.Context) (*mockChain, error) {
+	genesisResp, err := c.nodeClient.GetGenesis(ctx, &emptypb.Empty{})
+	if err != nil {
+		return nil, err
+	}
+	currEpoch := slots.ToEpoch(slots.SinceGenesis(genesisResp.GenesisTime.AsTime()))
+	currFork, err := forks.Fork(currEpoch)
+	if err != nil {
+		return nil, err
+	}
+	return &mockChain{
+		genesisTime:     genesisResp.GenesisTime.AsTime(),
+		currentFork:     currFork,
+		genesisValsRoot: bytesutil.ToBytes32(genesisResp.GenesisValidatorsRoot),
+	}, nil
+}
+
+// initializeMockChainServiceWithFork creates a mock chain service with a specific fork override
+func (c *client) initializeMockChainServiceWithFork(ctx context.Context, forkOverride *pb.Fork) (*mockChain, error) {
 	genesisResp, err := c.nodeClient.GetGenesis(ctx, &emptypb.Empty{})
 	if err != nil {
 		return nil, err
 	}
 
-	currEpoch := slots.ToEpoch(slots.SinceGenesis(genesisResp.GenesisTime.AsTime()))
-	var currFork *pb.Fork
-
-	if forkVersion == -1 {
-		currFork, err = forks.Fork(currEpoch)
-		if err != nil {
-			return nil, err
-		}
+	var currentFork *pb.Fork
+	if forkOverride != nil {
+		currentFork = forkOverride
+		log.WithField("fork", currentFork).Info("Using fork override from --fork flag")
 	} else {
-		var forkVersionBytes [fieldparams.VersionLength]byte
-
-		// Map runtime/version constants to beacon config version bytes
-		switch forkVersion {
-		case version.Phase0:
-			forkVersionBytes = bytesutil.ToBytes4(params.BeaconConfig().GenesisForkVersion)
-		case version.Altair:
-			forkVersionBytes = bytesutil.ToBytes4(params.BeaconConfig().AltairForkVersion)
-		case version.Bellatrix:
-			forkVersionBytes = bytesutil.ToBytes4(params.BeaconConfig().BellatrixForkVersion)
-		case version.Capella:
-			forkVersionBytes = bytesutil.ToBytes4(params.BeaconConfig().CapellaForkVersion)
-		case version.Deneb:
-			forkVersionBytes = bytesutil.ToBytes4(params.BeaconConfig().DenebForkVersion)
-		case version.Electra:
-			forkVersionBytes = bytesutil.ToBytes4(params.BeaconConfig().ElectraForkVersion)
-		case version.Fulu:
-			forkVersionBytes = bytesutil.ToBytes4(params.BeaconConfig().FuluForkVersion)
-		default:
-			return nil, errors.Errorf("unsupported fork version %d", forkVersion)
-		}
-
-		// Create fork data from version bytes
-		orderedSchedule := forks.NewOrderedSchedule(params.BeaconConfig())
-		currFork, err = orderedSchedule.ForkFromVersion(forkVersionBytes)
+		// Fallback to dynamic fork detection
+		currEpoch := slots.ToEpoch(slots.SinceGenesis(genesisResp.GenesisTime.AsTime()))
+		currentFork, err = forks.Fork(currEpoch)
 		if err != nil {
 			return nil, err
 		}
-		log.Infof("Using explicit fork version: %s", version.String(forkVersion))
+		log.WithField("fork", currentFork).Info("Using dynamically detected fork")
 	}
 
 	return &mockChain{
 		genesisTime:     genesisResp.GenesisTime.AsTime(),
-		currentFork:     currFork,
+		currentFork:     currentFork,
 		genesisValsRoot: bytesutil.ToBytes32(genesisResp.GenesisValidatorsRoot),
 	}, nil
 }

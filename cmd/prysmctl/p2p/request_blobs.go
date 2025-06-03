@@ -13,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
@@ -23,13 +22,14 @@ import (
 )
 
 var requestBlobsFlags = struct {
+	Network        string
+	Fork           string
 	Peers          string
 	ClientPortTCP  uint
 	ClientPortQUIC uint
 	APIEndpoints   string
 	StartSlot      uint64
 	Count          uint64
-	Fork           string
 }{}
 
 var requestBlobsCmd = &cli.Command{
@@ -44,8 +44,14 @@ var requestBlobsCmd = &cli.Command{
 	Flags: []cli.Flag{
 		cmd.ChainConfigFileFlag,
 		&cli.StringFlag{
+			Name:        "network",
+			Usage:       "network to run on (mainnet, sepolia, holesky, hoodi)",
+			Destination: &requestBlobsFlags.Network,
+			Value:       "mainnet",
+		},
+		&cli.StringFlag{
 			Name:        "fork",
-			Usage:       "fork version to use (phase0, altair, bellatrix, capella, deneb, electra, fulu)",
+			Usage:       "fork version to use (phase0, altair, bellatrix, capella, deneb). If not specified, will auto-detect from chain state",
 			Destination: &requestBlobsFlags.Fork,
 			Value:       "",
 		},
@@ -90,12 +96,45 @@ var requestBlobsCmd = &cli.Command{
 }
 
 func cliActionRequestBlobs(cliCtx *cli.Context) error {
+	// Set network configuration first
+	switch requestBlobsFlags.Network {
+	case params.SepoliaName:
+		if err := params.SetActive(params.SepoliaConfig()); err != nil {
+			log.Fatal(err)
+		}
+	case params.HoleskyName:
+		if err := params.SetActive(params.HoleskyConfig()); err != nil {
+			log.Fatal(err)
+		}
+	case params.HoodiName:
+		if err := params.SetActive(params.HoodiConfig()); err != nil {
+			log.Fatal(err)
+		}
+	case params.MainnetName:
+		// Do nothing - mainnet is default
+	default:
+		log.Fatalf("Unknown network provided: %s", requestBlobsFlags.Network)
+	}
+
+	// Load custom chain config if provided
 	if cliCtx.IsSet(cmd.ChainConfigFileFlag.Name) {
 		chainConfigFileName := cliCtx.String(cmd.ChainConfigFileFlag.Name)
 		if err := params.LoadChainConfigFile(chainConfigFileName, nil); err != nil {
 			return err
 		}
 	}
+
+	// Parse and validate fork flag if provided
+	var forkOverride *pb.Fork
+	if requestBlobsFlags.Fork != "" {
+		var err error
+		forkOverride, err = parseForkFlag(requestBlobsFlags.Fork)
+		if err != nil {
+			return errors.Wrap(err, "invalid fork flag")
+		}
+		log.WithField("fork", requestBlobsFlags.Fork).Info("Using fork override from --fork flag")
+	}
+
 	p2ptypes.InitializeDataMaps()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -127,27 +166,8 @@ func cliActionRequestBlobs(cliCtx *cli.Context) error {
 	}
 	log.WithField("peers", allPeers).Info("List of peers")
 
-	// Process fork flag
-	forkVersion := -1 // -1 means auto-detect based on current epoch
-	if requestBlobsFlags.Fork != "" {
-		forkVersion, err = version.FromString(strings.ToLower(requestBlobsFlags.Fork))
-		if err != nil {
-			availableForks := []string{}
-			for _, id := range version.All() {
-				availableForks = append(availableForks, version.String(id))
-			}
-			return errors.Errorf("invalid fork %q, available options are %s",
-				requestBlobsFlags.Fork, strings.Join(availableForks, ", "))
-		}
-
-		// For blobs, we need at least Deneb fork
-		if forkVersion < version.Deneb {
-			return errors.Errorf("blob sidecars are only available from Deneb fork onwards (requested %s)",
-				version.String(forkVersion))
-		}
-	}
-
-	chain, err := c.initializeMockChainService(ctx, forkVersion)
+	// Initialize chain service with optional fork override
+	chain, err := c.initializeMockChainServiceWithFork(ctx, forkOverride)
 	if err != nil {
 		return err
 	}
@@ -190,6 +210,7 @@ func cliActionRequestBlobs(cliCtx *cli.Context) error {
 			"startSlot": startSlot,
 			"count":     requestBlobsFlags.Count,
 			"peer":      pr.String(),
+			"fork":      chain.currentFork,
 		}
 		if headSlot != nil {
 			fields["headSlot"] = *headSlot
