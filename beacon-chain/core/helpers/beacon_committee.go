@@ -351,6 +351,8 @@ func ProposerAssignments(ctx context.Context, state state.BeaconState, epoch pri
 	return proposerAssignments, nil
 }
 
+// LiteAssignment is a lite version of CommitteeAssignment, and has committee length
+// and validator committee index instead of the full committee list
 type LiteAssignment struct {
 	AttesterSlot            primitives.Slot           // slot in which to attest
 	CommitteeIndex          primitives.CommitteeIndex // position of the committee in the slot
