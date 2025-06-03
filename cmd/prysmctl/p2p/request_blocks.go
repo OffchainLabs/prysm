@@ -170,7 +170,7 @@ func cliActionRequestBlocks(cliCtx *cli.Context) error {
 			for _, id := range version.All() {
 				availableForks = append(availableForks, version.String(id))
 			}
-			return errors.Errorf("invalid fork %q, available options: %s",
+			return errors.Errorf("invalid fork %q, available options are %s",
 				requestBlocksFlags.Fork, strings.Join(availableForks, ", "))
 		}
 	}

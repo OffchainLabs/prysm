@@ -136,13 +136,13 @@ func cliActionRequestBlobs(cliCtx *cli.Context) error {
 			for _, id := range version.All() {
 				availableForks = append(availableForks, version.String(id))
 			}
-			return errors.Errorf("invalid fork %q, available options: %s",
+			return errors.Errorf("invalid fork %q, available options are %s",
 				requestBlobsFlags.Fork, strings.Join(availableForks, ", "))
 		}
 
 		// For blobs, we need at least Deneb fork
 		if forkVersion < version.Deneb {
-			return errors.Errorf("blob sidecars are only available from Deneb fork onwards (requested: %s)",
+			return errors.Errorf("blob sidecars are only available from Deneb fork onwards (requested %s)",
 				version.String(forkVersion))
 		}
 	}

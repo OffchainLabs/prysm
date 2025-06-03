@@ -208,7 +208,7 @@ func (c *client) initializeMockChainService(ctx context.Context, forkVersion int
 		case version.Fulu:
 			forkVersionBytes = bytesutil.ToBytes4(params.BeaconConfig().FuluForkVersion)
 		default:
-			return nil, errors.Errorf("unsupported fork version: %d", forkVersion)
+			return nil, errors.Errorf("unsupported fork version %d", forkVersion)
 		}
 
 		// Create fork data from version bytes
