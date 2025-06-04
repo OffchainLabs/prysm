@@ -414,10 +414,9 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 	logrus.SetLevel(logrus.WarnLevel)
 	logrus.SetOutput(tlogger{t})
 
-	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig()
 	cfg.SecondsPerSlot = 1
-	params.OverrideBeaconConfig(cfg)
+	params.SetActiveTestCleanup(t, cfg)
 
 	timedCtx, cancel := context.WithTimeout(t.Context(), 1*time.Minute)
 	defer cancel()
