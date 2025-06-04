@@ -35,6 +35,7 @@ import (
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/sirupsen/logrus"
+	"github.com/OffchainLabs/prysm/v6/api/server/middleware"
 )
 
 const (
@@ -169,7 +170,7 @@ func (s *Server) GetBlockV2(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if httputil.RespondWithSsz(r) {
+	if httputil.RespondWithSsz(r) || middleware.PreferSSZ(r) {
 		s.getBlockV2Ssz(w, blk)
 	} else {
 		s.getBlockV2Json(ctx, w, blk)
@@ -200,7 +201,7 @@ func (s *Server) GetBlindedBlock(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if httputil.RespondWithSsz(r) {
+	if httputil.RespondWithSsz(r) || middleware.PreferSSZ(r) {
 		s.getBlockV2Ssz(w, blk)
 	} else {
 		s.getBlockV2Json(ctx, w, blk)

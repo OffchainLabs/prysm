@@ -13,6 +13,28 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// HTTPEncoding defines the supported response encoding formats for the beacon node HTTP API.
+type HTTPEncoding int
+
+const (
+	EncodingJSON HTTPEncoding = iota
+	EncodingSSZ
+	EncodingAuto 
+)
+
+// String returns the string representation of the HTTPEncoding value.
+func(e HTTPEncoding) String() string {
+	switch e {
+	case EncodingJSON:
+		return "json"
+	case EncodingSSZ:
+		return "ssz"
+	case EncodingAuto:
+		return "json/ssz"
+	default:
+		return "unkonwn"
+	}
+}
 // BeaconChainConfig contains constant configs for node to participate in beacon chain.
 type BeaconChainConfig struct {
 	// Constants (non-configurable)

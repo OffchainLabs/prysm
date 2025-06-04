@@ -23,6 +23,8 @@ import (
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/types/known/wrapperspb"
+	"github.com/OffchainLabs/prysm/v6/api/server/middleware"
+
 )
 
 type blockType uint8
@@ -100,7 +102,7 @@ func (s *Server) ProduceBlockV3(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) produceBlockV3(ctx context.Context, w http.ResponseWriter, r *http.Request, v1alpha1req *eth.BlockRequest, requiredType blockType) {
-	isSSZ := httputil.RespondWithSsz(r)
+	isSSZ := httputil.RespondWithSsz(r) || middleware.PreferSSZ(r)
 	v1alpha1resp, err := s.V1Alpha1Server.GetBeaconBlock(ctx, v1alpha1req)
 	if err != nil {
 		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
