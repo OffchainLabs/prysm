@@ -192,7 +192,13 @@ func (s *LazilyPersistentStoreColumn) fullCommitmentsToCheck(nodeID enode.ID, bl
 
 	// Create a safe commitments array for the custody columns.
 	commitmentsArray := &safeCommitmentsArray{}
+	commitmentsArraySize := uint64(len(commitmentsArray))
+
 	for column := range peerInfo.CustodyColumns {
+		if column >= commitmentsArraySize {
+			return nil, errors.Errorf("custody column index %d too high (max allowed %d) - should never happen", column, commitmentsArraySize)
+		}
+
 		commitmentsArray[column] = kzgCommitments
 	}
 
