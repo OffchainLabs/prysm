@@ -33,6 +33,11 @@ func (c *grpcValidatorClient) Duties(ctx context.Context, in *ethpb.DutiesReques
 	return toValidatorDutiesContainer(dutiesResponse)
 }
 
+func (c *grpcValidatorClient) DutiesV2(ctx context.Context, in *ethpb.DutiesRequest) (*ethpb.ValidatorDutiesContainer, error) {
+	// TODO: update to v2 get duties in separate PR, used to satisfy interface
+	return nil, errors.New("not implemented")
+}
+
 func toValidatorDutiesContainer(dutiesResponse *ethpb.DutiesResponse) (*ethpb.ValidatorDutiesContainer, error) {
 	currentDuties := make([]*ethpb.ValidatorDuty, len(dutiesResponse.CurrentEpochDuties))
 	for i, cd := range dutiesResponse.CurrentEpochDuties {
