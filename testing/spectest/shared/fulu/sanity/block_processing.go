@@ -40,9 +40,9 @@ func RunBlockProcessingTest(t *testing.T, config, folderPath string) {
 			require.NoError(t, err)
 			preBeaconStateSSZ, err := snappy.Decode(nil /* dst */, preBeaconStateFile)
 			require.NoError(t, err, "Failed to decompress")
-			beaconStateBase := &ethpb.BeaconStateElectra{}
+			beaconStateBase := &ethpb.BeaconStateFulu{}
 			require.NoError(t, beaconStateBase.UnmarshalSSZ(preBeaconStateSSZ), "Failed to unmarshal")
-			beaconState, err := state_native.InitializeFromProtoElectra(beaconStateBase)
+			beaconState, err := state_native.InitializeFromProtoFulu(beaconStateBase)
 			require.NoError(t, err)
 
 			file, err := util.BazelFileBytes(testsFolderPath, folder.Name(), "meta.yaml")
@@ -91,9 +91,9 @@ func RunBlockProcessingTest(t *testing.T, config, folderPath string) {
 				postBeaconStateSSZ, err := snappy.Decode(nil /* dst */, postBeaconStateFile)
 				require.NoError(t, err, "Failed to decompress")
 
-				postBeaconState := &ethpb.BeaconStateElectra{}
+				postBeaconState := &ethpb.BeaconStateFulu{}
 				require.NoError(t, postBeaconState.UnmarshalSSZ(postBeaconStateSSZ), "Failed to unmarshal")
-				pbState, err := state_native.ProtobufBeaconStateElectra(beaconState.ToProtoUnsafe())
+				pbState, err := state_native.ProtobufBeaconStateFulu(beaconState.ToProtoUnsafe())
 				require.NoError(t, err)
 				if !proto.Equal(pbState, postBeaconState) {
 					t.Log(cmp.Diff(postBeaconState, pbState, protocmp.Transform()))
