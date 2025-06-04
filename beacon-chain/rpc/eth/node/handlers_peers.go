@@ -112,7 +112,12 @@ func (s *Server) GetPeers(w http.ResponseWriter, r *http.Request) {
 			}
 			allPeers = append(allPeers, p)
 		}
-		resp := &structs.GetPeersResponse{Data: allPeers}
+		resp := &structs.GetPeersResponse{
+			Data: allPeers,
+			Meta: structs.Meta{
+				Count: len(allPeers),
+			},
+		}
 		httputil.WriteJson(w, resp)
 		return
 	}
@@ -177,7 +182,12 @@ func (s *Server) GetPeers(w http.ResponseWriter, r *http.Request) {
 		filteredPeers = append(filteredPeers, p)
 	}
 
-	resp := &structs.GetPeersResponse{Data: filteredPeers}
+	resp := &structs.GetPeersResponse{
+		Data: filteredPeers,
+		Meta: structs.Meta{
+			Count: len(filteredPeers),
+		},
+	}
 	httputil.WriteJson(w, resp)
 }
 
