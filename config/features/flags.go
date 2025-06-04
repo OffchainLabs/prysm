@@ -190,7 +190,6 @@ var (
 	}
 
 	// EnableDutiesV2 sets the validator client to use the get duties v2 grpc endpoint
-	// TODO: remove this feature after stability testing on testnets
 	EnableDutiesV2 = &cli.BoolFlag{
 		Name:  "enable-duties-v2",
 		Usage: "Forces use of get duties v2 endpoint. Note: this will be removed in the future when tested for stability.",
