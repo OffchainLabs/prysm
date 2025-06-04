@@ -19,7 +19,6 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// toValidatorDutiesContainer is assumed to be available from your package, returning a *v1alpha1.ValidatorDutiesContainer.
 func TestToValidatorDutiesContainer_HappyPath(t *testing.T) {
 	// Create a mock DutiesResponse with current and next duties.
 	dutiesResp := &eth.DutiesResponse{
@@ -52,6 +51,59 @@ func TestToValidatorDutiesContainer_HappyPath(t *testing.T) {
 	}
 
 	gotContainer, err := toValidatorDutiesContainer(dutiesResp)
+	require.NoError(t, err)
+
+	// Validate we have the correct number of duties in current and next epochs.
+	assert.Equal(t, len(gotContainer.CurrentEpochDuties), len(dutiesResp.CurrentEpochDuties))
+	assert.Equal(t, len(gotContainer.NextEpochDuties), len(dutiesResp.NextEpochDuties))
+
+	firstCurrentDuty := gotContainer.CurrentEpochDuties[0]
+	expectedCurrentDuty := dutiesResp.CurrentEpochDuties[0]
+	assert.DeepEqual(t, firstCurrentDuty.PublicKey, expectedCurrentDuty.PublicKey)
+	assert.Equal(t, firstCurrentDuty.ValidatorIndex, expectedCurrentDuty.ValidatorIndex)
+	assert.DeepEqual(t, firstCurrentDuty.ProposerSlots, expectedCurrentDuty.ProposerSlots)
+
+	firstNextDuty := gotContainer.NextEpochDuties[0]
+	expectedNextDuty := dutiesResp.NextEpochDuties[0]
+	assert.DeepEqual(t, firstNextDuty.PublicKey, expectedNextDuty.PublicKey)
+	assert.Equal(t, firstNextDuty.ValidatorIndex, expectedNextDuty.ValidatorIndex)
+	assert.DeepEqual(t, firstNextDuty.ProposerSlots, expectedNextDuty.ProposerSlots)
+}
+
+func TestToValidatorDutiesContainerV2_HappyPath(t *testing.T) {
+	// Create a mock DutiesResponse with current and next duties.
+	dutiesResp := &eth.DutiesV2Response{
+		CurrentEpochDuties: []*eth.DutiesV2Response_Duty{
+			{
+				CommitteeLength:         2,
+				CommitteeIndex:          4,
+				ValidatorCommitteeIndex: 1,
+				AttesterSlot:            200,
+				ProposerSlots:           []primitives.Slot{400},
+				PublicKey:               []byte{0xAA, 0xBB},
+				Status:                  eth.ValidatorStatus_ACTIVE,
+				ValidatorIndex:          101,
+				IsSyncCommittee:         false,
+				CommitteesAtSlot:        2,
+			},
+		},
+		NextEpochDuties: []*eth.DutiesV2Response_Duty{
+			{
+				CommitteeLength:         2,
+				CommitteeIndex:          8,
+				ValidatorCommitteeIndex: 1,
+				AttesterSlot:            600,
+				ProposerSlots:           []primitives.Slot{700, 701},
+				PublicKey:               []byte{0xCC, 0xDD},
+				Status:                  eth.ValidatorStatus_ACTIVE,
+				ValidatorIndex:          301,
+				IsSyncCommittee:         true,
+				CommitteesAtSlot:        3,
+			},
+		},
+	}
+
+	gotContainer, err := toValidatorDutiesContainerV2(dutiesResp)
 	require.NoError(t, err)
 
 	// Validate we have the correct number of duties in current and next epochs.

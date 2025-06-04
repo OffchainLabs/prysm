@@ -50,6 +50,7 @@ type Flags struct {
 	EnableHistoricalSpaceRepresentation bool // EnableHistoricalSpaceRepresentation enables the saving of registry validators in separate buckets to save space
 	EnableBeaconRESTApi                 bool // EnableBeaconRESTApi enables experimental usage of the beacon REST API by the validator when querying a beacon node
 	EnableExperimentalAttestationPool   bool // EnableExperimentalAttestationPool enables an experimental attestation pool design.
+	EnableDutiesV2                      bool // EnableDutiesV2 sets validator client to use the get Duties V2 endpoint
 	// Logging related toggles.
 	DisableGRPCConnectionLogs bool // Disables logging when a new grpc client has connected.
 	EnableFullSSZDataLogging  bool // Enables logging for full ssz data on rejected gossip messages
@@ -333,6 +334,10 @@ func ConfigureValidator(ctx *cli.Context) error {
 	if ctx.Bool(EnableBeaconRESTApi.Name) {
 		logEnabled(EnableBeaconRESTApi)
 		cfg.EnableBeaconRESTApi = true
+	}
+	if ctx.Bool(EnableDutiesV2.Name) {
+		logEnabled(EnableDutiesV2)
+		cfg.EnableDutiesV2 = true
 	}
 	cfg.KeystoreImportDebounceInterval = ctx.Duration(dynamicKeyReloadDebounceInterval.Name)
 	Init(cfg)

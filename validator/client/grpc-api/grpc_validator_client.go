@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/api/client"
 	eventClient "github.com/OffchainLabs/prysm/v6/api/client/event"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
@@ -18,6 +19,8 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type grpcValidatorClient struct {
@@ -26,16 +29,33 @@ type grpcValidatorClient struct {
 }
 
 func (c *grpcValidatorClient) Duties(ctx context.Context, in *ethpb.DutiesRequest) (*ethpb.ValidatorDutiesContainer, error) {
-	dutiesResponse, err := c.beaconNodeValidatorClient.GetDuties(ctx, in)
-	if err != nil {
-		return nil, err
+	if features.Get().EnableDutiesV2 {
+		dutiesResponse, err := c.beaconNodeValidatorClient.GetDutiesV2(ctx, in)
+		if err != nil {
+			if status.Code(err) == codes.Unimplemented {
+				log.Warn("beaconNodeValidatorClient.GetDutiesV2() returned status code unavailable, falling back to GetDuties")
+				return c.getDuties(ctx, in)
+			}
+			return nil, errors.Wrap(
+				client.ErrConnectionIssue,
+				errors.Wrap(err, "getDutiesV2").Error(),
+			)
+		}
+		return toValidatorDutiesContainerV2(dutiesResponse)
 	}
-	return toValidatorDutiesContainer(dutiesResponse)
+	return c.getDuties(ctx, in)
 }
 
-func (c *grpcValidatorClient) DutiesV2(ctx context.Context, in *ethpb.DutiesRequest) (*ethpb.ValidatorDutiesContainer, error) {
-	// TODO: update to v2 get duties in separate PR, used to satisfy interface
-	return nil, errors.New("not implemented")
+// getDuties is calling the v1 of get duties
+func (c *grpcValidatorClient) getDuties(ctx context.Context, in *ethpb.DutiesRequest) (*ethpb.ValidatorDutiesContainer, error) {
+	dutiesResponse, err := c.beaconNodeValidatorClient.GetDuties(ctx, in)
+	if err != nil {
+		return nil, errors.Wrap(
+			client.ErrConnectionIssue,
+			errors.Wrap(err, "getDuties").Error(),
+		)
+	}
+	return toValidatorDutiesContainer(dutiesResponse)
 }
 
 func toValidatorDutiesContainer(dutiesResponse *ethpb.DutiesResponse) (*ethpb.ValidatorDutiesContainer, error) {
@@ -78,6 +98,46 @@ func toValidatorDuty(duty *ethpb.DutiesResponse_Duty) (*ethpb.ValidatorDuty, err
 		CommitteeIndex:          duty.CommitteeIndex,
 		CommitteesAtSlot:        duty.CommitteesAtSlot, // GRPC doesn't use this value though
 		ValidatorCommitteeIndex: valIndexInCommittee,
+		AttesterSlot:            duty.AttesterSlot,
+		ProposerSlots:           duty.ProposerSlots,
+		PublicKey:               bytesutil.SafeCopyBytes(duty.PublicKey),
+		Status:                  duty.Status,
+		ValidatorIndex:          duty.ValidatorIndex,
+		IsSyncCommittee:         duty.IsSyncCommittee,
+	}, nil
+}
+
+func toValidatorDutiesContainerV2(dutiesResponse *ethpb.DutiesV2Response) (*ethpb.ValidatorDutiesContainer, error) {
+	currentDuties := make([]*ethpb.ValidatorDuty, len(dutiesResponse.CurrentEpochDuties))
+	for i, cd := range dutiesResponse.CurrentEpochDuties {
+		duty, err := toValidatorDutyV2(cd)
+		if err != nil {
+			return nil, err
+		}
+		currentDuties[i] = duty
+	}
+	nextDuties := make([]*ethpb.ValidatorDuty, len(dutiesResponse.NextEpochDuties))
+	for i, nd := range dutiesResponse.NextEpochDuties {
+		duty, err := toValidatorDutyV2(nd)
+		if err != nil {
+			return nil, err
+		}
+		nextDuties[i] = duty
+	}
+	return &ethpb.ValidatorDutiesContainer{
+		PrevDependentRoot:  dutiesResponse.PreviousDutyDependentRoot,
+		CurrDependentRoot:  dutiesResponse.CurrentDutyDependentRoot,
+		CurrentEpochDuties: currentDuties,
+		NextEpochDuties:    nextDuties,
+	}, nil
+}
+
+func toValidatorDutyV2(duty *ethpb.DutiesV2Response_Duty) (*ethpb.ValidatorDuty, error) {
+	return &ethpb.ValidatorDuty{
+		CommitteeLength:         duty.CommitteeLength,
+		CommitteeIndex:          duty.CommitteeIndex,
+		CommitteesAtSlot:        duty.CommitteesAtSlot, // GRPC doesn't use this value though
+		ValidatorCommitteeIndex: duty.ValidatorCommitteeIndex,
 		AttesterSlot:            duty.AttesterSlot,
 		ProposerSlots:           duty.ProposerSlots,
 		PublicKey:               bytesutil.SafeCopyBytes(duty.PublicKey),
