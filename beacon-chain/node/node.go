@@ -25,6 +25,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
 	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
@@ -120,6 +121,7 @@ type BeaconNode struct {
 	initialSyncComplete     chan struct{}
 	BlobStorage             *filesystem.BlobStorage
 	BlobStorageOptions      []filesystem.BlobStorageOption
+	custodyInfo             *peerdas.CustodyInfo
 	verifyInitWaiter        *verification.InitializerWaiter
 	syncChecker             *initialsync.SyncChecker
 	slasherEnabled          bool
@@ -161,6 +163,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		serviceFlagOpts:         &serviceFlagOpts{},
 		initialSyncComplete:     make(chan struct{}),
 		syncChecker:             &initialsync.SyncChecker{},
+		custodyInfo:             &peerdas.CustodyInfo{},
 		slasherEnabled:          cliCtx.Bool(flags.SlasherFlag.Name),
 		lcStore:                 &lightclient.Store{},
 	}
@@ -280,6 +283,7 @@ func startBaseServices(cliCtx *cli.Context, beacon *BeaconNode, depositAddress s
 	if err := beacon.startDB(cliCtx, depositAddress); err != nil {
 		return nil, errors.Wrap(err, "could not start DB")
 	}
+
 	beacon.BlobStorage.WarmCache()
 
 	log.Debugln("Starting Slashing DB")
@@ -697,6 +701,7 @@ func (b *BeaconNode) registerP2P(cliCtx *cli.Context) error {
 		StateNotifier:        b,
 		DB:                   b.db,
 		ClockWaiter:          b.clockWaiter,
+		CustodyInfo:          b.custodyInfo,
 	})
 	if err != nil {
 		return err
@@ -778,6 +783,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithTrackedValidatorsCache(b.trackedValidatorsCache),
 		blockchain.WithPayloadIDCache(b.payloadIDCache),
 		blockchain.WithSyncChecker(b.syncChecker),
+		blockchain.WithCustodyInfo(b.custodyInfo),
 		blockchain.WithSlasherEnabled(b.slasherEnabled),
 		blockchain.WithLightClientStore(b.lcStore),
 	)
