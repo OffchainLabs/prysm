@@ -1,7 +1,7 @@
 package das
 
 import (
-	"reflect"
+	"bytes"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -94,7 +94,7 @@ func (e *dataColumnCacheEntry) filter(root [32]byte, commitmentsArray *safeCommi
 			return nil, errors.Wrapf(errMissingSidecar, "root=%#x, index=%#x", root, i)
 		}
 
-		if !reflect.DeepEqual(commitmentsArray[i], e.scs[i].KzgCommitments) {
+		if !sliceBytesEqual(commitmentsArray[i], e.scs[i].KzgCommitments) {
 			return nil, errors.Wrapf(errCommitmentMismatch, "root=%#x, index=%#x, commitment=%#x, block commitment=%#x", root, i, e.scs[i].KzgCommitments, commitmentsArray[i])
 		}
 
@@ -132,4 +132,18 @@ func (s *safeCommitmentsArray) nonEmptyIndices() map[uint64]bool {
 	}
 
 	return columns
+}
+
+func sliceBytesEqual(a, b [][]byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	for i := range a {
+		if !bytes.Equal(a[i], b[i]) {
+			return false
+		}
+	}
+
+	return true
 }

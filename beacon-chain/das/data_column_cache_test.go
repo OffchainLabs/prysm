@@ -122,3 +122,22 @@ func TestNonEmptyIndices(t *testing.T) {
 	actual := s.nonEmptyIndices()
 	require.DeepEqual(t, map[uint64]bool{1: true, 3: true}, actual)
 }
+func TestSliceBytesEqual(t *testing.T) {
+	t.Run("Different lengths", func(t *testing.T) {
+		a := [][]byte{[]byte{1, 2, 3}}
+		b := [][]byte{[]byte{1, 2, 3}, []byte{4, 5, 6}}
+		require.Equal(t, false, sliceBytesEqual(a, b))
+	})
+
+	t.Run("Same length but different content", func(t *testing.T) {
+		a := [][]byte{[]byte{1, 2, 3}, []byte{4, 5, 6}}
+		b := [][]byte{[]byte{1, 2, 3}, []byte{4, 5, 7}}
+		require.Equal(t, false, sliceBytesEqual(a, b))
+	})
+
+	t.Run("Equal slices", func(t *testing.T) {
+		a := [][]byte{[]byte{1, 2, 3}, []byte{4, 5, 6}}
+		b := [][]byte{[]byte{1, 2, 3}, []byte{4, 5, 6}}
+		require.Equal(t, true, sliceBytesEqual(a, b))
+	})
+}
