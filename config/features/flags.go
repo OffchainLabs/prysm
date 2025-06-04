@@ -215,6 +215,7 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	EnableMinimalSlashingProtection,
 	enableDoppelGangerProtection,
 	EnableBeaconRESTApi,
+	EnableDutiesV2,
 }...)
 
 // E2EValidatorFlags contains a list of the validator feature flags to be tested in E2E.
