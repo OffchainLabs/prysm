@@ -64,9 +64,9 @@ func (s *LazilyPersistentStore) Persist(current primitives.Slot, sidecars ...blo
 	}
 
 	if len(blobSidecars) > 1 {
-		first := blobSidecars[0].BlockRoot()
-		for i := 1; i < len(blobSidecars); i++ {
-			if first != blobSidecars[i].BlockRoot() {
+		firstRoot := blobSidecars[0].BlockRoot()
+		for _, sidecar := range blobSidecars[1:] {
+			if sidecar.BlockRoot() != firstRoot {
 				return errMixedRoots
 			}
 		}
