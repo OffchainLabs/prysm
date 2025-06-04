@@ -8,6 +8,8 @@ import (
 	"net/url"
 
 	"github.com/pkg/errors"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/config/features"
 )
 
 const (
@@ -81,6 +83,7 @@ func (c *Client) NodeURL() string {
 func (c *Client) Get(ctx context.Context, path string, opts ...ReqOption) ([]byte, error) {
 	u := c.baseURL.ResolveReference(&url.URL{Path: path})
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), http.NoBody)
+	ApplyEncodingHeader(req)
 	if err != nil {
 		return nil, err
 	}
@@ -102,4 +105,18 @@ func (c *Client) Get(ctx context.Context, path string, opts ...ReqOption) ([]byt
 		return nil, errors.Wrap(err, "error reading http response body")
 	}
 	return b, nil
+}
+
+// ApplyEncodingHeader sets the request’s Accept header to advertise JSON, SSZ, or both, based on the global --http-encoding flag.
+func ApplyEncodingHeader(req *http.Request) {
+switch features.Get().HTTPEncoding {
+case params.EncodingSSZ:
+	req.Header.Set("Accept", "application/octet-stream")
+case params.EncodingJSON:
+	req.Header.Set("Accept", "application/json")
+case params.EncodingAuto:
+	req.Header.Set("Accept", "application/json, application/octet-stream")
+default:	
+	req.Header.Set("Accept", "application/json")
+}
 }

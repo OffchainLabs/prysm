@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/OffchainLabs/prysm/v6/api/server/middleware"
 )
 
 const errMsgStateFromConsensus = "Could not convert consensus state to response"
@@ -29,7 +30,7 @@ func (s *Server) GetBeaconStateV2(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if httputil.RespondWithSsz(r) {
+	if httputil.RespondWithSsz(r) || middleware.PreferSSZ(r) {
 		s.getBeaconStateSSZV2(ctx, w, []byte(stateId))
 	} else {
 		s.getBeaconStateV2(ctx, w, []byte(stateId))

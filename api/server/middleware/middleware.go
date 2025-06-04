@@ -1,14 +1,52 @@
 package middleware
 
 import (
+	"context"   
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/rs/cors"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/config/features"
 )
 
 type Middleware func(http.Handler) http.Handler
+type ctxKey int
+const preferSSZKey ctxKey = iota
+
+// PreferSSZ reports whether a previous middleware decided this request should be served in SSZ.
+func PreferSSZ(r *http.Request) bool {
+	v, ok := r.Context().Value(preferSSZKey).(bool)
+	return ok && v
+}
+
+// Negotiator inspects the global --http-encoding flag + the client’s Accept header;
+// if SSZ is mutually acceptable it tags the request context so handlers can switch encoding.
+func Negotiator(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		flags := features.Get()
+		if flags.HTTPEncoding == params.EncodingJSON {
+			next.ServeHTTP(w, r)
+			return
+		}
+		accept := r.Header.Get("Accept")
+		acceptSSZ := strings.Contains(accept, "application/octet-stream") || strings.Contains(accept, "*/") || strings.Contains(accept, "")
+		switch flags.HTTPEncoding {
+		case params.EncodingSSZ:
+		if acceptSSZ {
+			r = r.WithContext(context.WithValue(r.Context(), preferSSZKey, true))
+					} 
+	case params.EncodingAuto:		
+		if acceptSSZ {
+			r = r.WithContext(context.WithValue(r.Context(), preferSSZKey, true))
+			
+		}
+	
+	}
+	next.ServeHTTP(w, r)
+	})
+}
 
 // NormalizeQueryValuesHandler normalizes an input query of "key=value1,value2,value3" to "key=value1&key=value2&key=value3"
 func NormalizeQueryValuesHandler(next http.Handler) http.Handler {

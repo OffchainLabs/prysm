@@ -90,6 +90,8 @@ type Flags struct {
 	// Feature related flags (alignment forced in the end)
 	ForceHead        string                // ForceHead forces the head block to be a specific block root, the last head block, or the last finalized block.
 	BlacklistedRoots map[[32]byte]struct{} // BlacklistedRoots is a list of roots that are blacklisted from processing.
+
+	HTTPEncoding params.HTTPEncoding // HTTPEncoding determines whether responses should be encoded in JSON, SSZ, or negotiated automatically per request.
 }
 
 var featureConfig *Flags
@@ -284,6 +286,11 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		cfg.BlacklistedRoots = parseBlacklistedRoots(ctx.StringSlice(blacklistRoots.Name))
 	}
 
+
+	cfg.HTTPEncoding = parseHTTPEncoding(ctx.String("http-encoding"))
+
+
+
 	cfg.AggregateIntervals = [3]time.Duration{aggregateFirstInterval.Value, aggregateSecondInterval.Value, aggregateThirdInterval.Value}
 	Init(cfg)
 	return nil
@@ -300,6 +307,19 @@ func parseBlacklistedRoots(blacklistedRoots []string) map[[32]byte]struct{} {
 		roots[[32]byte(r)] = struct{}{}
 	}
 	return roots
+}
+
+func parseHTTPEncoding(raw string) params.HTTPEncoding {
+	switch strings.ToLower(raw) {
+	case "ssz":
+		return params.EncodingSSZ
+	case "json":
+		return params.EncodingJSON
+	case "auto":
+		return params.EncodingAuto
+	default:
+		return params.EncodingJSON
+	}
 }
 
 // ConfigureValidator sets the global config based
@@ -335,6 +355,13 @@ func ConfigureValidator(ctx *cli.Context) error {
 		cfg.EnableBeaconRESTApi = true
 	}
 	cfg.KeystoreImportDebounceInterval = ctx.Duration(dynamicKeyReloadDebounceInterval.Name)
+
+
+		cfg.HTTPEncoding = parseHTTPEncoding(ctx.String("http-encoding"))
+
+
+		
+	
 	Init(cfg)
 	return nil
 }

@@ -24,6 +24,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	"github.com/OffchainLabs/prysm/v6/api/server/middleware"
 )
 
 // GetValidators returns filterable list of validators with their balance, status and index.
@@ -358,7 +359,7 @@ func (s *Server) GetValidatorIdentities(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if httputil.RespondWithSsz(r) {
+	if httputil.RespondWithSsz(r) || middleware.PreferSSZ(r) {
 		s.getValidatorIdentitiesSSZ(w, st, rawIds, ids)
 	} else {
 		s.getValidatorIdentitiesJSON(r.Context(), w, st, stateId, rawIds, ids)

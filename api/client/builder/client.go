@@ -168,6 +168,7 @@ func (c *Client) do(ctx context.Context, method string, path string, body io.Rea
 	if err != nil {
 		return
 	}
+	client.ApplyEncodingHeader(req)
 	req.Header.Add("User-Agent", version.BuildData())
 	for _, o := range opts {
 		o(req)

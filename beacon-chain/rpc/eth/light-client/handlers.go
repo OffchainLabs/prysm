@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/api/server/middleware"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
@@ -45,7 +46,7 @@ func (s *Server) GetLightClientBootstrap(w http.ResponseWriter, req *http.Reques
 
 	w.Header().Set(api.VersionHeader, version.String(bootstrap.Version()))
 
-	if httputil.RespondWithSsz(req) {
+	if httputil.RespondWithSsz(req) || middleware.PreferSSZ(req) {
 		ssz, err := bootstrap.MarshalSSZ()
 		if err != nil {
 			httputil.HandleError(w, "Could not marshal bootstrap to SSZ: "+err.Error(), http.StatusInternalServerError)
@@ -99,7 +100,7 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 		return
 	}
 
-	if httputil.RespondWithSsz(req) {
+	if httputil.RespondWithSsz(req) || middleware.PreferSSZ(req){
 		w.Header().Set("Content-Type", "application/octet-stream")
 
 		for i := startPeriod; i <= endPeriod; i++ {
@@ -186,7 +187,7 @@ func (s *Server) GetLightClientFinalityUpdate(w http.ResponseWriter, req *http.R
 	}
 
 	w.Header().Set(api.VersionHeader, version.String(update.Version()))
-	if httputil.RespondWithSsz(req) {
+	if httputil.RespondWithSsz(req) || middleware.PreferSSZ(req) {
 		data, err := update.MarshalSSZ()
 		if err != nil {
 			httputil.HandleError(w, "Could not marshal finality update to SSZ: "+err.Error(), http.StatusInternalServerError)
@@ -219,7 +220,7 @@ func (s *Server) GetLightClientOptimisticUpdate(w http.ResponseWriter, req *http
 	}
 
 	w.Header().Set(api.VersionHeader, version.String(update.Version()))
-	if httputil.RespondWithSsz(req) {
+	if httputil.RespondWithSsz(req) || middleware.PreferSSZ(req) {
 		data, err := update.MarshalSSZ()
 		if err != nil {
 			httputil.HandleError(w, "Could not marshal optimistic update to SSZ: "+err.Error(), http.StatusInternalServerError)

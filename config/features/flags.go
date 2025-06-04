@@ -188,6 +188,13 @@ var (
 		Name:  "blacklist-roots",
 		Usage: "A comma-separatted list of 0x-prefixed hexstrings. Declares blocks with the given blockroots to be invalid. It downscores peers that send these blocks.",
 	}
+
+	// httpEncodingFlag controls the default encoding format used for HTTP API responses.
+	httpEncodingFlag = &cli.StringFlag{
+		Name:  "http-encoding",
+		Usage: "Sets the HTTP encoding for the beacon node. Supported values are 'json' and 'ssz'.",
+		Value: "json",
+	}
 )
 
 // devModeFlags holds list of flags that are set when development mode is on.
@@ -208,6 +215,7 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	EnableMinimalSlashingProtection,
 	enableDoppelGangerProtection,
 	EnableBeaconRESTApi,
+	httpEncodingFlag,
 }...)
 
 // E2EValidatorFlags contains a list of the validator feature flags to be tested in E2E.
@@ -247,6 +255,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	enableExperimentalAttestationPool,
 	forceHeadFlag,
 	blacklistRoots,
+	httpEncodingFlag,
 }, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
 
 func combinedFlags(flags ...[]cli.Flag) []cli.Flag {

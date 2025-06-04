@@ -19,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	"github.com/OffchainLabs/prysm/v6/api/server/middleware"
 )
 
 // Blobs is an HTTP handler for Beacon API getBlobs.
@@ -63,7 +64,7 @@ func (s *Server) Blobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if httputil.RespondWithSsz(r) {
+	if httputil.RespondWithSsz(r) || middleware.PreferSSZ(r){
 		sszResp, err := buildSidecarsSSZResponse(verifiedBlobs)
 		if err != nil {
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)

@@ -172,6 +172,7 @@ func (s *Service) builderEndpoints(stater lookup.Stater) []endpoint {
 			name:     namespace + ".ExpectedWithdrawals",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.Negotiator,
 			},
 			handler: server.ExpectedWithdrawals,
 			methods: []string{http.MethodGet},
@@ -194,6 +195,7 @@ func (s *Service) blobEndpoints(blocker lookup.Blocker) []endpoint {
 			name:     namespace + ".Blobs",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.Negotiator,
 			},
 			handler: server.Blobs,
 			methods: []string{http.MethodGet},
@@ -383,6 +385,7 @@ func (s *Service) validatorEndpoints(
 			name:     namespace + ".ProduceBlockV3",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.Negotiator,
 			},
 			handler: server.ProduceBlockV3,
 			methods: []string{http.MethodGet},
@@ -620,6 +623,7 @@ func (s *Service) beaconEndpoints(
 			name:     namespace + ".GetBlockV2",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.Negotiator,
 			},
 			handler: server.GetBlockV2,
 			methods: []string{http.MethodGet},
@@ -648,6 +652,7 @@ func (s *Service) beaconEndpoints(
 			name:     namespace + ".GetBlindedBlock",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.Negotiator,
 			},
 			handler: server.GetBlindedBlock,
 			methods: []string{http.MethodGet},
@@ -877,6 +882,7 @@ func (s *Service) beaconEndpoints(
 			middleware: []middleware.Middleware{
 				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.Negotiator,
 			},
 			handler: server.GetValidatorIdentities,
 			methods: []string{http.MethodPost},
@@ -971,6 +977,7 @@ func (s *Service) lightClientEndpoints(blocker lookup.Blocker, stater lookup.Sta
 			name:     namespace + ".GetLightClientBootstrap",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.Negotiator,
 			},
 			handler: server.GetLightClientBootstrap,
 			methods: []string{http.MethodGet},
@@ -980,6 +987,7 @@ func (s *Service) lightClientEndpoints(blocker lookup.Blocker, stater lookup.Sta
 			name:     namespace + ".GetLightClientUpdatesByRange",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.Negotiator,
 			},
 			handler: server.GetLightClientUpdatesByRange,
 			methods: []string{http.MethodGet},
@@ -989,6 +997,7 @@ func (s *Service) lightClientEndpoints(blocker lookup.Blocker, stater lookup.Sta
 			name:     namespace + ".GetLightClientFinalityUpdate",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.Negotiator,
 			},
 			handler: server.GetLightClientFinalityUpdate,
 			methods: []string{http.MethodGet},
@@ -998,6 +1007,7 @@ func (s *Service) lightClientEndpoints(blocker lookup.Blocker, stater lookup.Sta
 			name:     namespace + ".GetLightClientOptimisticUpdate",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.Negotiator,
 			},
 			handler: server.GetLightClientOptimisticUpdate,
 			methods: []string{http.MethodGet},
@@ -1024,6 +1034,7 @@ func (s *Service) debugEndpoints(stater lookup.Stater) []endpoint {
 			name:     namespace + ".GetBeaconStateV2",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.Negotiator,
 			},
 			handler: server.GetBeaconStateV2,
 			methods: []string{http.MethodGet},
