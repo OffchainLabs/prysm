@@ -314,7 +314,7 @@ func (s *Service) validatorEndpoints(
 			template: "/eth/v1/validator/attestation_data",
 			name:     namespace + ".GetAttestationData",
 			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 			},
 			handler: server.GetAttestationData,
 			methods: []string{http.MethodGet},

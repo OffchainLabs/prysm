@@ -1293,6 +1293,79 @@ func TestGetAttestationData(t *testing.T) {
 		assert.DeepEqual(t, expectedResponse, resp)
 	})
 
+	t.Run("ok SSZ", func(t *testing.T) {
+		block := util.NewBeaconBlock()
+		block.Block.Slot = 3*params.BeaconConfig().SlotsPerEpoch + 1
+		targetBlock := util.NewBeaconBlock()
+		targetBlock.Block.Slot = 1 * params.BeaconConfig().SlotsPerEpoch
+		justifiedBlock := util.NewBeaconBlock()
+		justifiedBlock.Block.Slot = 2 * params.BeaconConfig().SlotsPerEpoch
+		blockRoot, err := block.Block.HashTreeRoot()
+		require.NoError(t, err, "Could not hash beacon block")
+		justifiedRoot, err := justifiedBlock.Block.HashTreeRoot()
+		require.NoError(t, err, "Could not get signing root for justified block")
+		slot := 3*params.BeaconConfig().SlotsPerEpoch + 1
+		beaconState, err := util.NewBeaconState()
+		require.NoError(t, err)
+		require.NoError(t, beaconState.SetSlot(slot))
+		justifiedCheckpoint := &ethpbalpha.Checkpoint{
+			Epoch: 2,
+			Root:  justifiedRoot[:],
+		}
+		require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpoint))
+		offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+		chain := &mockChain.ChainService{
+			Optimistic:                 false,
+			Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+			Root:                       blockRoot[:],
+			CurrentJustifiedCheckPoint: justifiedCheckpoint,
+			TargetRoot:                 blockRoot,
+			State:                      beaconState,
+		}
+
+		s := &Server{
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			HeadFetcher:           chain,
+			TimeFetcher:           chain,
+			OptimisticModeFetcher: chain,
+			CoreService: &core.Service{
+				HeadFetcher:           chain,
+				GenesisTimeFetcher:    chain,
+				FinalizedFetcher:      chain,
+				AttestationCache:      cache.NewAttestationDataCache(),
+				OptimisticModeFetcher: chain,
+			},
+		}
+
+		expectedAttData := &ethpbalpha.AttestationData{
+			Slot:            slot,
+			BeaconBlockRoot: blockRoot[:],
+			CommitteeIndex:  0,
+			Source: &ethpbalpha.Checkpoint{
+				Epoch: 2,
+				Root:  justifiedRoot[:],
+			},
+			Target: &ethpbalpha.Checkpoint{
+				Epoch: 3,
+				Root:  blockRoot[:],
+			},
+		}
+
+		expectedAttDataSSZ, err := expectedAttData.MarshalSSZ()
+		require.NoError(t, err, "Could not marshal expected attestation data to SSZ")
+
+		url := fmt.Sprintf("http://example.com?slot=%d&committee_index=%d", slot, 0)
+		request := httptest.NewRequest(http.MethodGet, url, nil)
+		request.Header.Add("Accept", "application/octet-stream")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetAttestationData(writer, request)
+
+		assert.Equal(t, http.StatusOK, writer.Code)
+		assert.DeepSSZEqual(t, expectedAttDataSSZ, writer.Body.Bytes())
+	})
+
 	t.Run("syncing", func(t *testing.T) {
 		beaconState, err := util.NewBeaconState()
 		require.NoError(t, err)
@@ -1536,6 +1609,80 @@ func TestGetAttestationData(t *testing.T) {
 		assert.DeepEqual(t, expectedResponse, resp)
 	})
 
+	t.Run("succeeds in first epoch SSZ", func(t *testing.T) {
+		slot := primitives.Slot(5)
+		block := util.NewBeaconBlock()
+		block.Block.Slot = slot
+		targetBlock := util.NewBeaconBlock()
+		targetBlock.Block.Slot = 0
+		justifiedBlock := util.NewBeaconBlock()
+		justifiedBlock.Block.Slot = 0
+		blockRoot, err := block.Block.HashTreeRoot()
+		require.NoError(t, err, "Could not hash beacon block")
+		justifiedRoot, err := justifiedBlock.Block.HashTreeRoot()
+		require.NoError(t, err, "Could not get signing root for justified block")
+
+		beaconState, err := util.NewBeaconState()
+		require.NoError(t, err)
+		require.NoError(t, beaconState.SetSlot(slot))
+		justifiedCheckpt := &ethpbalpha.Checkpoint{
+			Epoch: 0,
+			Root:  justifiedRoot[:],
+		}
+		require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpt))
+		require.NoError(t, err)
+		offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+		chain := &mockChain.ChainService{
+			Root:                       blockRoot[:],
+			Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+			CurrentJustifiedCheckPoint: justifiedCheckpt,
+			TargetRoot:                 blockRoot,
+			State:                      beaconState,
+		}
+
+		s := &Server{
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			HeadFetcher:           chain,
+			TimeFetcher:           chain,
+			OptimisticModeFetcher: chain,
+			CoreService: &core.Service{
+				AttestationCache:      cache.NewAttestationDataCache(),
+				OptimisticModeFetcher: chain,
+				HeadFetcher:           chain,
+				GenesisTimeFetcher:    chain,
+				FinalizedFetcher:      chain,
+			},
+		}
+
+		expectedAttData := &ethpbalpha.AttestationData{
+			Slot:            slot,
+			BeaconBlockRoot: blockRoot[:],
+			CommitteeIndex:  0,
+			Source: &ethpbalpha.Checkpoint{
+				Epoch: 0,
+				Root:  justifiedRoot[:],
+			},
+			Target: &ethpbalpha.Checkpoint{
+				Epoch: 0,
+				Root:  blockRoot[:],
+			},
+		}
+
+		expectedAttDataSSZ, err := expectedAttData.MarshalSSZ()
+		require.NoError(t, err, "Could not marshal expected attestation data to SSZ")
+
+		url := fmt.Sprintf("http://example.com?slot=%d&committee_index=%d", slot, 0)
+		request := httptest.NewRequest(http.MethodGet, url, nil)
+		request.Header.Add("Accept", "application/octet-stream")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetAttestationData(writer, request)
+
+		assert.Equal(t, http.StatusOK, writer.Code)
+		assert.DeepSSZEqual(t, expectedAttDataSSZ, writer.Body.Bytes())
+	})
+
 	t.Run("handles far away justified epoch", func(t *testing.T) {
 		// Scenario:
 		//
@@ -1628,6 +1775,99 @@ func TestGetAttestationData(t *testing.T) {
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		require.NotNil(t, resp)
 		assert.DeepEqual(t, expectedResponse, resp)
+	})
+
+	t.Run("handles far away justified epoch SSZ", func(t *testing.T) {
+		// Scenario:
+		//
+		// State slot = 10000
+		// Last justified slot = epoch start of 1500
+		// HistoricalRootsLimit = 8192
+		//
+		// More background: https://github.com/prysmaticlabs/prysm/issues/2153
+		// This test breaks if it doesn't use mainnet config
+
+		// Ensure HistoricalRootsLimit matches scenario
+		params.SetupTestConfigCleanup(t)
+		cfg := params.MainnetConfig()
+		cfg.HistoricalRootsLimit = 8192
+		params.OverrideBeaconConfig(cfg)
+
+		block := util.NewBeaconBlock()
+		block.Block.Slot = 10000
+		epochBoundaryBlock := util.NewBeaconBlock()
+		var err error
+		epochBoundaryBlock.Block.Slot, err = slots.EpochStart(slots.ToEpoch(10000))
+		require.NoError(t, err)
+		justifiedBlock := util.NewBeaconBlock()
+		justifiedBlock.Block.Slot, err = slots.EpochStart(slots.ToEpoch(1500))
+		require.NoError(t, err)
+		justifiedBlock.Block.Slot -= 2 // Imagine two skip block
+		blockRoot, err := block.Block.HashTreeRoot()
+		require.NoError(t, err, "Could not hash beacon block")
+		justifiedBlockRoot, err := justifiedBlock.Block.HashTreeRoot()
+		require.NoError(t, err, "Could not hash justified block")
+
+		slot := primitives.Slot(10000)
+		beaconState, err := util.NewBeaconState()
+		require.NoError(t, err)
+		require.NoError(t, beaconState.SetSlot(slot))
+		justifiedCheckpt := &ethpbalpha.Checkpoint{
+			Epoch: slots.ToEpoch(1500),
+			Root:  justifiedBlockRoot[:],
+		}
+		require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpt))
+
+		offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+		chain := &mockChain.ChainService{
+			Root:                       blockRoot[:],
+			Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+			CurrentJustifiedCheckPoint: justifiedCheckpt,
+			TargetRoot:                 blockRoot,
+			State:                      beaconState,
+		}
+
+		s := &Server{
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			HeadFetcher:           chain,
+			TimeFetcher:           chain,
+			OptimisticModeFetcher: chain,
+			CoreService: &core.Service{
+				AttestationCache:      cache.NewAttestationDataCache(),
+				OptimisticModeFetcher: chain,
+				HeadFetcher:           chain,
+				GenesisTimeFetcher:    chain,
+				FinalizedFetcher:      chain,
+			},
+		}
+
+		expectedAttData := &ethpbalpha.AttestationData{
+			Slot:            slot,
+			BeaconBlockRoot: blockRoot[:],
+			CommitteeIndex:  0,
+			Source: &ethpbalpha.Checkpoint{
+				Epoch: slots.ToEpoch(1500),
+				Root:  justifiedBlockRoot[:],
+			},
+			Target: &ethpbalpha.Checkpoint{
+				Epoch: 312,
+				Root:  blockRoot[:],
+			},
+		}
+
+		expectedAttDataSSZ, err := expectedAttData.MarshalSSZ()
+		require.NoError(t, err, "Could not marshal expected attestation data to SSZ")
+
+		url := fmt.Sprintf("http://example.com?slot=%d&committee_index=%d", slot, 0)
+		request := httptest.NewRequest(http.MethodGet, url, nil)
+		request.Header.Add("Accept", "application/octet-stream")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetAttestationData(writer, request)
+
+		assert.Equal(t, http.StatusOK, writer.Code)
+		assert.DeepSSZEqual(t, expectedAttDataSSZ, writer.Body.Bytes())
 	})
 }
 

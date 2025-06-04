@@ -610,6 +610,17 @@ func (s *Server) GetAttestationData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if httputil.RespondWithSsz(r) {
+		data, err := attestationData.MarshalSSZ()
+		if err != nil {
+			httputil.HandleError(w, "Could not marshal attestation data: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/octet-stream")
+		httputil.WriteSsz(w, data)
+		return
+	}
+
 	response := &structs.GetAttestationDataResponse{
 		Data: &structs.AttestationData{
 			Slot:            strconv.FormatUint(uint64(attestationData.Slot), 10),
