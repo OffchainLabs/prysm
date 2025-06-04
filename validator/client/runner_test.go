@@ -411,7 +411,6 @@ func assertValidContext(t testing.TB, parent, ctx context.Context) {
 }
 
 func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
-	logrus.SetLevel(logrus.WarnLevel)
 	logrus.SetOutput(tlogger{t})
 
 	cfg := params.BeaconConfig()
