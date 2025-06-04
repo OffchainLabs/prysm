@@ -126,7 +126,6 @@ func (s *Server) GetAggregateAttestationV2(w http.ResponseWriter, r *http.Reques
 			}
 		}
 
-		w.Header().Set("Content-Type", "application/octet-stream")
 		w.Header().Set(api.VersionHeader, version.String(v))
 		httputil.WriteSsz(w, data)
 		return
@@ -650,7 +649,6 @@ func (s *Server) GetAttestationData(w http.ResponseWriter, r *http.Request) {
 			httputil.HandleError(w, "Could not marshal attestation data: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("Content-Type", "application/octet-stream")
 		httputil.WriteSsz(w, data)
 		return
 	}
