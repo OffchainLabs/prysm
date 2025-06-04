@@ -121,7 +121,7 @@ func (s *LazilyPersistentStoreColumn) IsDataAvailable(ctx context.Context, curre
 	// ignore their response and decrease their peer score.
 	roDataColumns, err := entry.filter(blockRoot, blockCommitments)
 	if err != nil {
-		return errors.Wrap(err, "filter")
+		return errors.Wrap(err, "entry filter")
 	}
 
 	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#datacolumnsidecarsbyrange-v1
