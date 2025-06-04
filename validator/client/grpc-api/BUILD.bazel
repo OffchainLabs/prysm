@@ -17,6 +17,7 @@ go_library(
         "//api/server/structs:go_default_library",
         "//beacon-chain/rpc/eth/helpers:go_default_library",
         "//beacon-chain/state/state-native:go_default_library",
+        "//config/features:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//consensus-types/validator:go_default_library",
         "//encoding/bytesutil:go_default_library",
