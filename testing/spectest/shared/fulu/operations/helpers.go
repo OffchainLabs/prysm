@@ -9,11 +9,11 @@ import (
 )
 
 func sszToState(b []byte) (state.BeaconState, error) {
-	base := &ethpb.BeaconStateElectra{}
+	base := &ethpb.BeaconStateFulu{}
 	if err := base.UnmarshalSSZ(b); err != nil {
 		return nil, err
 	}
-	return state_native.InitializeFromProtoElectra(base)
+	return state_native.InitializeFromProtoFulu(base)
 }
 
 func sszToBlock(b []byte) (interfaces.SignedBeaconBlock, error) {
