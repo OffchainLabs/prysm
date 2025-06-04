@@ -79,8 +79,8 @@ func (s *LazilyPersistentStoreColumn) Persist(current primitives.Slot, sidecars 
 	key := dataColumnCacheKey{slot: firstSidecar.Slot(), root: firstSidecar.BlockRoot()}
 	entry := s.cache.ensure(key)
 
-	for i := range sidecars {
-		if err := entry.stash(&dataColumnSidecars[i]); err != nil {
+	for _, sidecar := range dataColumnSidecars {
+		if err := entry.stash(&sidecar); err != nil {
 			return errors.Wrap(err, "stash DataColumnSidecar")
 		}
 	}
