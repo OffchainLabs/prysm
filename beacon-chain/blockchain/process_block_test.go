@@ -2706,7 +2706,7 @@ func fakeResult(missing []uint64) map[uint64]struct{} {
 	return r
 }
 
-func TestSaveLightClientUpdate(t *testing.T) {
+func TestProcessLightClientUpdate(t *testing.T) {
 	featCfg := &features.Flags{}
 	featCfg.EnableLightClient = true
 	reset := features.InitWithReset(featCfg)
@@ -2747,7 +2747,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 				isValidPayload: true,
 			}
 
-			s.saveLightClientUpdate(cfg)
+			require.NoError(t, s.processLightClientUpdate(cfg))
 
 			// Check that the light client update is saved
 			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
@@ -2802,7 +2802,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
 			require.NoError(t, err)
 
-			s.saveLightClientUpdate(cfg)
+			require.NoError(t, s.processLightClientUpdate(cfg))
 
 			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
 			require.NoError(t, err)
@@ -2863,7 +2863,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
 			require.NoError(t, err)
 
-			s.saveLightClientUpdate(cfg)
+			require.NoError(t, s.processLightClientUpdate(cfg))
 
 			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
 			require.NoError(t, err)
@@ -2906,7 +2906,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 				isValidPayload: true,
 			}
 
-			s.saveLightClientUpdate(cfg)
+			require.NoError(t, s.processLightClientUpdate(cfg))
 
 			// Check that the light client update is saved
 			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
@@ -2960,7 +2960,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
 			require.NoError(t, err)
 
-			s.saveLightClientUpdate(cfg)
+			require.NoError(t, s.processLightClientUpdate(cfg))
 
 			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
 			require.NoError(t, err)
@@ -3021,7 +3021,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
 			require.NoError(t, err)
 
-			s.saveLightClientUpdate(cfg)
+			require.NoError(t, s.processLightClientUpdate(cfg))
 
 			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
 			require.NoError(t, err)
@@ -3064,7 +3064,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 				isValidPayload: true,
 			}
 
-			s.saveLightClientUpdate(cfg)
+			require.NoError(t, s.processLightClientUpdate(cfg))
 
 			// Check that the light client update is saved
 			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
@@ -3118,7 +3118,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
 			require.NoError(t, err)
 
-			s.saveLightClientUpdate(cfg)
+			require.NoError(t, s.processLightClientUpdate(cfg))
 
 			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
 			require.NoError(t, err)
@@ -3179,7 +3179,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
 			require.NoError(t, err)
 
-			s.saveLightClientUpdate(cfg)
+			require.NoError(t, s.processLightClientUpdate(cfg))
 
 			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
 			require.NoError(t, err)
@@ -3192,7 +3192,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 	reset()
 }
 
-func TestSaveLightClientBootstrap(t *testing.T) {
+func TestProcessLightClientBootstrap(t *testing.T) {
 	featCfg := &features.Flags{}
 	featCfg.EnableLightClient = true
 	reset := features.InitWithReset(featCfg)
@@ -3222,7 +3222,7 @@ func TestSaveLightClientBootstrap(t *testing.T) {
 			isValidPayload: true,
 		}
 
-		s.saveLightClientBootstrap(cfg)
+		require.NoError(t, s.processLightClientBootstrap(cfg))
 
 		// Check that the light client bootstrap is saved
 		b, err := s.cfg.BeaconDB.LightClientBootstrap(ctx, currentBlockRoot[:])
@@ -3257,7 +3257,7 @@ func TestSaveLightClientBootstrap(t *testing.T) {
 			isValidPayload: true,
 		}
 
-		s.saveLightClientBootstrap(cfg)
+		require.NoError(t, s.processLightClientBootstrap(cfg))
 
 		// Check that the light client bootstrap is saved
 		b, err := s.cfg.BeaconDB.LightClientBootstrap(ctx, currentBlockRoot[:])
@@ -3292,7 +3292,7 @@ func TestSaveLightClientBootstrap(t *testing.T) {
 			isValidPayload: true,
 		}
 
-		s.saveLightClientBootstrap(cfg)
+		require.NoError(t, s.processLightClientBootstrap(cfg))
 
 		// Check that the light client bootstrap is saved
 		b, err := s.cfg.BeaconDB.LightClientBootstrap(ctx, currentBlockRoot[:])
