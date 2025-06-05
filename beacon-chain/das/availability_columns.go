@@ -76,7 +76,7 @@ func (s *LazilyPersistentStoreColumn) Persist(current primitives.Slot, sidecars 
 		return nil
 	}
 
-	key := dataColumnCacheKey{slot: firstSidecar.Slot(), root: firstSidecar.BlockRoot()}
+	key := cacheKey{slot: firstSidecar.Slot(), root: firstSidecar.BlockRoot()}
 	entry := s.cache.ensure(key)
 
 	for _, sidecar := range dataColumnSidecars {
@@ -105,7 +105,7 @@ func (s *LazilyPersistentStoreColumn) IsDataAvailable(ctx context.Context, curre
 	blockRoot := block.Root()
 
 	// Build the cache key for the block.
-	key := dataColumnCacheKey{slot: block.Block().Slot(), root: blockRoot}
+	key := cacheKey{slot: block.Block().Slot(), root: blockRoot}
 
 	// Retrieve the cache entry for the block, or create an empty one if it doesn't exist.
 	entry := s.cache.ensure(key)

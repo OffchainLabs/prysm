@@ -80,7 +80,7 @@ func TestPersist(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 1, len(lazilyPersistentStoreColumns.cache.entries))
 
-		key := dataColumnCacheKey{slot: 0, root: [32]byte{}}
+		key := cacheKey{slot: 0, root: [32]byte{}}
 		entry := lazilyPersistentStoreColumns.cache.entries[key]
 
 		// A call to Persist does NOT save the sidecars to disk.
@@ -140,7 +140,7 @@ func TestIsDataAvailable(t *testing.T) {
 		dataColumnsParamsByBlockRoot := util.DataColumnsParamsByRoot{root: dataColumnsParams}
 		_, verifiedRoDataColumns := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnsParamsByBlockRoot)
 
-		key := dataColumnCacheKey{root: root}
+		key := cacheKey{root: root}
 		entry := lazilyPersistentStoreColumns.cache.ensure(key)
 		defer lazilyPersistentStoreColumns.cache.delete(key)
 

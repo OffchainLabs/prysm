@@ -20,16 +20,16 @@ var (
 	errMixedRoots = errors.New("BlobSidecars must all be for the same block")
 )
 
-// LazilyPersistentStore is an implementation of AvailabilityStore to be used when batch syncing.
+// LazilyPersistentStoreBlob is an implementation of AvailabilityStore to be used when batch syncing.
 // This implementation will hold any blobs passed to Persist until the IsDataAvailable is called for their
 // block, at which time they will undergo full verification and be saved to the disk.
-type LazilyPersistentStore struct {
+type LazilyPersistentStoreBlob struct {
 	store    *filesystem.BlobStorage
-	cache    *cache
+	cache    *blobCache
 	verifier BlobBatchVerifier
 }
 
-var _ AvailabilityStore = &LazilyPersistentStore{}
+var _ AvailabilityStore = &LazilyPersistentStoreBlob{}
 
 // BlobBatchVerifier enables LazyAvailabilityStore to manage the verification process
 // going from ROBlob->VerifiedROBlob, while avoiding the decision of which individual verifications
@@ -42,10 +42,10 @@ type BlobBatchVerifier interface {
 
 // NewLazilyPersistentStore creates a new LazilyPersistentStore. This constructor should always be used
 // when creating a LazilyPersistentStore because it needs to initialize the cache under the hood.
-func NewLazilyPersistentStore(store *filesystem.BlobStorage, verifier BlobBatchVerifier) *LazilyPersistentStore {
-	return &LazilyPersistentStore{
+func NewLazilyPersistentStore(store *filesystem.BlobStorage, verifier BlobBatchVerifier) *LazilyPersistentStoreBlob {
+	return &LazilyPersistentStoreBlob{
 		store:    store,
-		cache:    newCache(),
+		cache:    newBlobCache(),
 		verifier: verifier,
 	}
 }
@@ -53,7 +53,7 @@ func NewLazilyPersistentStore(store *filesystem.BlobStorage, verifier BlobBatchV
 // Persist adds blobs to the working blob cache. Blobs stored in this cache will be persisted
 // for at least as long as the node is running. Once IsDataAvailable succeeds, all blobs referenced
 // by the given block are guaranteed to be persisted for the remainder of the retention period.
-func (s *LazilyPersistentStore) Persist(current primitives.Slot, sidecars ...blocks.ROSidecar) error {
+func (s *LazilyPersistentStoreBlob) Persist(current primitives.Slot, sidecars ...blocks.ROSidecar) error {
 	if len(sidecars) == 0 {
 		return nil
 	}
@@ -86,7 +86,7 @@ func (s *LazilyPersistentStore) Persist(current primitives.Slot, sidecars ...blo
 
 // IsDataAvailable returns nil if all the commitments in the given block are persisted to the db and have been verified.
 // BlobSidecars already in the db are assumed to have been previously verified against the block.
-func (s *LazilyPersistentStore) IsDataAvailable(ctx context.Context, current primitives.Slot, b blocks.ROBlock) error {
+func (s *LazilyPersistentStoreBlob) IsDataAvailable(ctx context.Context, current primitives.Slot, b blocks.ROBlock) error {
 	blockCommitments, err := commitmentsToCheck(b, current)
 	if err != nil {
 		return errors.Wrapf(err, "could not check data availability for block %#x", b.Root())

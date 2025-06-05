@@ -12,7 +12,7 @@ import (
 
 func TestEnsureDeleteSetDiskSummary(t *testing.T) {
 	c := newDataColumnCache()
-	key := dataColumnCacheKey{}
+	key := cacheKey{}
 	entry := c.ensure(key)
 	require.DeepEqual(t, dataColumnCacheEntry{}, *entry)
 
