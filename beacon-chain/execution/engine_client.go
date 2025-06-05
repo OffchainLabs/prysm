@@ -320,36 +320,36 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ExchangeCapabilities")
 	defer span.End()
 
-	// Only check for electra related engine methods if it has been activated.
 	if params.ElectraEnabled() {
 		supportedEngineEndpoints = append(supportedEngineEndpoints, electraEngineEndpoints...)
 	}
+
 	if params.FuluEnabled() {
 		supportedEngineEndpoints = append(supportedEngineEndpoints, fuluEngineEndpoints...)
 	}
-	var result []string
-	err := s.rpcClient.CallContext(ctx, &result, ExchangeCapabilities, supportedEngineEndpoints)
-	if err != nil {
+
+	elSupportedEndpointsSlice := make([]string, len(supportedEngineEndpoints))
+	if err := s.rpcClient.CallContext(ctx, &elSupportedEndpointsSlice, ExchangeCapabilities, supportedEngineEndpoints); err != nil {
 		return nil, handleRPCError(err)
 	}
 
-	var unsupported []string
-	for _, s1 := range supportedEngineEndpoints {
-		supported := false
-		for _, s2 := range result {
-			if s1 == s2 {
-				supported = true
-				break
-			}
-		}
-		if !supported {
-			unsupported = append(unsupported, s1)
+	elSupportedEndpoints := make(map[string]bool, len(elSupportedEndpointsSlice))
+	for _, method := range elSupportedEndpointsSlice {
+		elSupportedEndpoints[method] = true
+	}
+
+	unsupported := make([]string, 0, len(supportedEngineEndpoints))
+	for _, method := range supportedEngineEndpoints {
+		if !elSupportedEndpoints[method] {
+			unsupported = append(unsupported, method)
 		}
 	}
+
 	if len(unsupported) != 0 {
-		log.Warnf("Please update client, detected the following unsupported engine methods: %s", unsupported)
+		log.WithField("methods", unsupported).Warning("Connected execution client does not support some requested engine methods")
 	}
-	return result, handleRPCError(err)
+
+	return elSupportedEndpointsSlice, nil
 }
 
 // GetTerminalBlockHash returns the valid terminal block hash based on total difficulty.
