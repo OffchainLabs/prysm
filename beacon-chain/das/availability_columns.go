@@ -36,6 +36,8 @@ type DataColumnsVerifier interface {
 	VerifiedRODataColumns(ctx context.Context, blk blocks.ROBlock, scs []blocks.RODataColumn) ([]blocks.VerifiedRODataColumn, error)
 }
 
+// NewLazilyPersistentStoreColumn creates a new LazilyPersistentStoreColumn.
+// WARNING: The resulting LazilyPersistentStoreColumn is NOT thread-safe.
 func NewLazilyPersistentStoreColumn(store *filesystem.DataColumnStorage, nodeID enode.ID, newDataColumnsVerifier verification.NewDataColumnsVerifier, custodyInfo *peerdas.CustodyInfo) *LazilyPersistentStoreColumn {
 	return &LazilyPersistentStoreColumn{
 		store:                  store,
