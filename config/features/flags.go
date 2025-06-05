@@ -188,6 +188,12 @@ var (
 		Name:  "blacklist-roots",
 		Usage: "A comma-separatted list of 0x-prefixed hexstrings. Declares blocks with the given blockroots to be invalid. It downscores peers that send these blocks.",
 	}
+
+	// EnableDutiesV2 sets the validator client to use the get duties v2 grpc endpoint
+	EnableDutiesV2 = &cli.BoolFlag{
+		Name:  "enable-duties-v2",
+		Usage: "Forces use of get duties v2 endpoint.",
+	}
 )
 
 // devModeFlags holds list of flags that are set when development mode is on.
@@ -208,6 +214,7 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	EnableMinimalSlashingProtection,
 	enableDoppelGangerProtection,
 	EnableBeaconRESTApi,
+	EnableDutiesV2,
 }...)
 
 // E2EValidatorFlags contains a list of the validator feature flags to be tested in E2E.

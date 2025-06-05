@@ -117,6 +117,9 @@ func run(ctx context.Context, v iface.Validator) error {
 				cancel()
 				continue
 			}
+
+			// performRoles calls span.End()
+			rolesCtx, _ := context.WithDeadline(ctx, deadline)
 			performRoles(rolesCtx, allRoles, v, slot, &wg, span)
 		case isHealthyAgain := <-tracker.HealthUpdates():
 			if isHealthyAgain {

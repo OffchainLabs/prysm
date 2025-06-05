@@ -1,7 +1,6 @@
 package testing
 
 import (
-	"context"
 	"testing"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -25,7 +24,7 @@ func SetupDB(t testing.TB, dataPath string, pubkeys [][fieldparams.BLSPubkeyLeng
 		db, err = filesystem.NewStore(dataPath, config)
 	} else {
 		config := &kv.Config{PubKeys: pubkeys}
-		db, err = kv.NewKVStore(context.Background(), dataPath, config)
+		db, err = kv.NewKVStore(t.Context(), dataPath, config)
 	}
 
 	if err != nil {
