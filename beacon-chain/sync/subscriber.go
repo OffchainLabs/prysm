@@ -414,21 +414,17 @@ func (s *Service) searchForPeers(
 	getSubnetsToSubscribe func(currentSlot primitives.Slot) []uint64,
 	getSubnetsToFindPeersOnly func(currentSlot primitives.Slot) []uint64,
 ) {
-	// Retrieve the subnets we want to subscribe to.
-	subnetsToSubscribeIndex := getSubnetsToSubscribe(currentSlot)
+	minimumPeersPerSubnet := flags.Get().MinimumPeersPerSubnet
 
-	// Retrieve the subnets we want to find peers for.
-	subnetsToFindPeersOnlyIndex := getSubnetsToFindPeersOnly(currentSlot)
-
-	// Combine the subnets to subscribe and the subnets to find peers for.
-	subnetsToFindPeersIndex := slice.SetUint64(append(subnetsToSubscribeIndex, subnetsToFindPeersOnlyIndex...))
+	// Compute indices of the subnets we want to find peers for.
+	subnetsToFindPeersIndex := computeSubnetsToFindPeersIndex(currentSlot, getSubnetsToSubscribe, getSubnetsToFindPeersOnly)
 
 	// Find new peers for wanted subnets if needed.
 	for _, subnetIndex := range subnetsToFindPeersIndex {
 		topic := fmt.Sprintf(topicFormat, digest, subnetIndex)
 
 		// Check if we have enough peers in the subnet. Skip if we do.
-		if s.enoughPeersAreConnected(topic) {
+		if s.connectedPeersCount(topic) >= minimumPeersPerSubnet {
 			continue
 		}
 
@@ -480,6 +476,7 @@ func (s *Service) subscribeToSubnets(
 			"digest":  fmt.Sprintf("%#x", digest),
 			"subnets": description,
 		}).Debug("Subnets with this digest are no longer valid, unsubscribing from all of them")
+
 		s.pruneSubscriptions(subscriptions, []uint64{}, topicFormat, digest)
 		return false
 	}
@@ -515,6 +512,8 @@ func (s *Service) subscribeWithParameters(
 	getSubnetsToSubscribe func(currentSlot primitives.Slot) []uint64,
 	getSubnetsToFindPeersOnly func(currentSlot primitives.Slot) []uint64,
 ) {
+	minimumPeersPerSubnet := flags.Get().MinimumPeersPerSubnet
+
 	// Initialize the subscriptions map.
 	subscriptions := make(map[uint64]*pubsub.Subscription)
 
@@ -538,38 +537,72 @@ func (s *Service) subscribeWithParameters(
 
 	// Define a ticker ticking every slot.
 	secondsPerSlot := params.BeaconConfig().SecondsPerSlot
-	ticker := slots.NewSlotTicker(genesisTime, secondsPerSlot)
+	secondsPerSlotDuration := time.Duration(secondsPerSlot) * time.Second
 
-	// Retrieve the current slot.
 	currentSlot := s.cfg.clock.CurrentSlot()
-
-	// Subscribe to subnets.
 	s.subscribeToSubnets(topicFormat, digest, genesisValidatorsRoot, genesisTime, subscriptions, currentSlot, validate, handle, getSubnetsToSubscribe)
 
-	// Derive a new context and cancel function.
-	ctx, cancel := context.WithCancel(s.ctx)
+	logCtx, cancel := context.WithCancel(s.ctx)
 
+	// Subscribe to expected subnets and search for peers if needed at every slot.
 	go func() {
-		// Search for peers.
-		s.searchForPeers(ctx, topicFormat, digest, currentSlot, getSubnetsToSubscribe, getSubnetsToFindPeersOnly)
+		var searchForPeers = func(currentSlot primitives.Slot) {
+			ctx, cancel := context.WithTimeout(s.ctx, secondsPerSlotDuration)
+			defer cancel()
+
+			s.searchForPeers(ctx, topicFormat, digest, currentSlot, getSubnetsToSubscribe, getSubnetsToFindPeersOnly)
+		}
+
+		defer cancel()
+
+		slotTicker := slots.NewSlotTicker(genesisTime, secondsPerSlot)
+		defer slotTicker.Done()
+
+		searchForPeers(s.cfg.clock.CurrentSlot())
 
 		for {
 			select {
-			case currentSlot := <-ticker.C():
+			case currentSlot := <-slotTicker.C():
 				isDigestValid := s.subscribeToSubnets(topicFormat, digest, genesisValidatorsRoot, genesisTime, subscriptions, currentSlot, validate, handle, getSubnetsToSubscribe)
 
 				// Stop the ticker if the digest is not valid. Likely to happen after a hard fork.
 				if !isDigestValid {
-					ticker.Done()
 					return
 				}
 
-				// Search for peers.
-				s.searchForPeers(ctx, topicFormat, digest, currentSlot, getSubnetsToSubscribe, getSubnetsToFindPeersOnly)
+				searchForPeers(currentSlot)
 
 			case <-s.ctx.Done():
-				cancel()
-				ticker.Done()
+				return
+			}
+		}
+	}()
+
+	// Warn the user if we are not subscribed to enough peers in the subnets.
+	go func() {
+		logTicker := time.NewTicker(5 * time.Minute)
+		defer logTicker.Stop()
+
+		for {
+			select {
+			case <-logTicker.C:
+				subnetsToFindPeersIndex := computeSubnetsToFindPeersIndex(currentSlot, getSubnetsToSubscribe, getSubnetsToFindPeersOnly)
+
+				// Find new peers for wanted subnets if needed.
+				for _, index := range subnetsToFindPeersIndex {
+					topic := fmt.Sprintf(topicFormat, digest, index)
+
+					// Check if we have enough peers in the subnet. Skip if we do.
+					if count := s.connectedPeersCount(topic); count < minimumPeersPerSubnet {
+						log.WithFields(logrus.Fields{
+							"topic":   topic,
+							"actual":  count,
+							"minimum": minimumPeersPerSubnet,
+						}).Warning("Not enough connected peers")
+					}
+				}
+
+			case <-logCtx.Done():
 				return
 			}
 		}
@@ -591,15 +624,11 @@ func (s *Service) unSubscribeFromTopic(topic string) {
 	}
 }
 
-// enoughPeersAreConnected checks if we have enough peers which are subscribed to the same subnet.
-func (s *Service) enoughPeersAreConnected(subnetTopic string) bool {
+// connectedPeersCount counts how many peer for a given topic are connected to the node.
+func (s *Service) connectedPeersCount(subnetTopic string) int {
 	topic := subnetTopic + s.cfg.p2p.Encoding().ProtocolSuffix()
-	threshold := flags.Get().MinimumPeersPerSubnet
-
 	peersWithSubnet := s.cfg.p2p.PubSub().ListPeers(topic)
-	peersWithSubnetCount := len(peersWithSubnet)
-
-	return peersWithSubnetCount >= threshold
+	return len(peersWithSubnet)
 }
 
 func (s *Service) dataColumnSubnetIndices(_ primitives.Slot) []uint64 {
@@ -714,6 +743,23 @@ func isDigestValid(digest [4]byte, genesis time.Time, genValRoot [32]byte) (bool
 		return true, nil
 	}
 	return retDigest == digest, nil
+}
+
+func computeSubnetsToFindPeersIndex(
+	currentSlot primitives.Slot,
+	getSubnetsToSubscribe func(currentSlot primitives.Slot) []uint64,
+	getSubnetsToFindPeersOnly func(currentSlot primitives.Slot) []uint64,
+) []uint64 {
+	// Retrieve the subnets we want to subscribe to.
+	subnetsToSubscribeIndex := getSubnetsToSubscribe(currentSlot)
+
+	// Retrieve the subnets we want to find peers for.
+	subnetsToFindPeersOnlyIndex := getSubnetsToFindPeersOnly(currentSlot)
+
+	// Combine the subnets to subscribe and the subnets to find peers for.
+	subnetsToFindPeersIndex := slice.SetUint64(append(subnetsToSubscribeIndex, subnetsToFindPeersOnlyIndex...))
+
+	return subnetsToFindPeersIndex
 }
 
 func agentString(pid peer.ID, hst host.Host) string {

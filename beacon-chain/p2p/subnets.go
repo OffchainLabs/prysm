@@ -23,7 +23,6 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -74,8 +73,8 @@ func (s *Service) nodeFilter(topic string, index uint64) (func(node *enode.Node)
 
 // searchForPeers performs a network search for peers subscribed to a particular subnet.
 // It exits as soon as one of these conditions is met:
-// - It looped through `batchSize` nodes.
-// - It found `peersToFindCount“ peers corresponding to the `filter` criteria.
+// - It looped during `batchPeriod` duration, or
+// - It found `peersToFindCount“ peers corresponding to the `filter` criteria, or
 // - Iterator is exhausted.
 func searchForPeers(
 	iterator enode.Iterator,
@@ -147,8 +146,6 @@ func (s *Service) FindPeersWithSubnet(
 	index uint64,
 	threshold int,
 ) (bool, error) {
-	const minLogInterval = 1 * time.Minute
-
 	ctx, span := trace.StartSpan(ctx, "p2p.FindPeersWithSubnet")
 	defer span.End()
 
@@ -168,41 +165,29 @@ func (s *Service) FindPeersWithSubnet(
 		return false, errors.Wrap(err, "node filter")
 	}
 
-	peersSummary := func(topic string, threshold int) (int, int) {
+	peersSummary := func(topic string, threshold int) int {
 		// Retrieve how many peers we have for this topic.
 		peerCountForTopic := len(s.pubsub.ListPeers(topic))
 
 		// Compute how many peers we are missing to reach the threshold.
 		missingPeerCountForTopic := max(0, threshold-peerCountForTopic)
 
-		return peerCountForTopic, missingPeerCountForTopic
+		return missingPeerCountForTopic
 	}
 
 	// Compute how many peers we are missing to reach the threshold.
-	peerCountForTopic, missingPeerCountForTopic := peersSummary(topic, threshold)
+	missingPeerCountForTopic := peersSummary(topic, threshold)
 
 	// Exit early if we have enough peers.
 	if missingPeerCountForTopic == 0 {
 		return true, nil
 	}
 
-	log := log.WithFields(logrus.Fields{
-		"topic":           topic,
-		"targetPeerCount": threshold,
-	})
-
-	log.WithField("currentPeerCount", peerCountForTopic).Debug("Searching for new peers for a subnet - start")
-
-	lastLogTime := time.Now()
-
 	wg := new(sync.WaitGroup)
 	for {
 		// If the context is done, we can exit the loop. This is the unhappy path.
-		if err := ctx.Err(); err != nil {
-			return false, errors.Errorf(
-				"unable to find requisite number of peers for topic %s - only %d out of %d peers available after searching",
-				topic, peerCountForTopic, threshold,
-			)
+		if ctx.Err() != nil {
+			return false, nil
 		}
 
 		// Search for new peers in the network.
@@ -225,20 +210,14 @@ func (s *Service) FindPeersWithSubnet(
 			wg.Wait()
 		}
 
-		peerCountForTopic, missingPeerCountForTopic := peersSummary(topic, threshold)
+		missingPeerCountForTopic := peersSummary(topic, threshold)
 
 		// If we have enough peers, we can exit the loop. This is the happy path.
 		if missingPeerCountForTopic == 0 {
 			break
 		}
-
-		if time.Since(lastLogTime) > minLogInterval {
-			lastLogTime = time.Now()
-			log.WithField("currentPeerCount", peerCountForTopic).Debug("Searching for new peers for a subnet - continue")
-		}
 	}
 
-	log.WithField("currentPeerCount", threshold).Debug("Searching for new peers for a subnet - success")
 	return true, nil
 }
 
