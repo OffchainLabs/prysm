@@ -2,6 +2,7 @@ package das
 
 import (
 	"bytes"
+	"slices"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -126,15 +127,5 @@ func (s *safeCommitmentsArray) nonEmptyIndices() map[uint64]bool {
 }
 
 func sliceBytesEqual(a, b [][]byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-
-	for i := range a {
-		if !bytes.Equal(a[i], b[i]) {
-			return false
-		}
-	}
-
-	return true
+	return slices.EqualFunc(a, b, bytes.Equal)
 }
