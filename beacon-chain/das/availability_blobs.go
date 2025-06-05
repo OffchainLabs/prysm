@@ -76,8 +76,8 @@ func (s *LazilyPersistentStoreBlob) Persist(current primitives.Slot, sidecars ..
 	}
 	key := keyFromSidecar(blobSidecars[0])
 	entry := s.cache.ensure(key)
-	for i := range blobSidecars {
-		if err := entry.stash(&blobSidecars[i]); err != nil {
+	for _, blobSidecar := range blobSidecars {
+		if err := entry.stash(&blobSidecar); err != nil {
 			return err
 		}
 	}
