@@ -6,6 +6,14 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [v6.0.4](https://github.com/prysmaticlabs/prysm/compare/v6.0.3...v6.0.4) - 2025-06-05
 
+This release has more work on PeerDAS, and light client support. Additionally, we have a few bug fixes:
+- Blob cache size now correctly set at startup.
+- A fix for slashing protection history exports where the validator database was in a nested folder.
+- Corrected behavior of the API call for state committees with an invalid request.
+- `/bin/sh` is now symlinked to `/bin/bash` for Prysm docker images.
+
+In the [Hoodi](https://github.com/eth-clients/hoodi) testnet, the default gas limit is raised to 60M gas. 
+
 ### Added
 
 - Add light client mainnet spec test. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15295)
