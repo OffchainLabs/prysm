@@ -80,7 +80,7 @@ func TestPersist(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 1, len(lazilyPersistentStoreColumns.cache.entries))
 
-		key := cacheKey{slot: 0, root: [32]byte{}}
+		key := cacheKey{slot: 0, root: [fieldparams.RootLength]byte{}}
 		entry := lazilyPersistentStoreColumns.cache.entries[key]
 
 		// A call to Persist does NOT save the sidecars to disk.
