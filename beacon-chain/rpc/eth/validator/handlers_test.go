@@ -307,6 +307,23 @@ func TestGetAggregateAttestation(t *testing.T) {
 
 				compareResult(t, attestation, "2", hexutil.Encode(aggSlot2.AggregationBits), root1, sig.Marshal())
 			})
+			t.Run("1 matching aggregated attestation - SSZ", func(t *testing.T) {
+				reqRoot, err := aggSlot2.Data.HashTreeRoot()
+				require.NoError(t, err, "Failed to generate attestation data hash tree root")
+				attDataRoot := hexutil.Encode(reqRoot[:])
+				url := "http://example.com?attestation_data_root=" + attDataRoot + "&slot=2" + "&committee_index=0"
+				request := httptest.NewRequest(http.MethodGet, url, nil)
+				request.Header.Add("Accept", "application/octet-stream")
+				writer := httptest.NewRecorder()
+
+				s.GetAggregateAttestationV2(writer, request)
+				require.Equal(t, http.StatusOK, writer.Code, "Expected HTTP status OK")
+
+				var resp ethpbalpha.Attestation
+				require.NoError(t, resp.UnmarshalSSZ(writer.Body.Bytes()))
+
+				compareResult(t, *structs.AttFromConsensus(&resp), "2", hexutil.Encode(aggSlot2.AggregationBits), root1, sig.Marshal())
+			})
 			t.Run("multiple matching aggregated attestations - return the one with most bits", func(t *testing.T) {
 				reqRoot, err := aggSlot1_Root1_1.Data.HashTreeRoot()
 				require.NoError(t, err, "Failed to generate attestation data hash tree root")
@@ -326,6 +343,23 @@ func TestGetAggregateAttestation(t *testing.T) {
 				require.NoError(t, json.Unmarshal(resp.Data, &attestation), "Failed to unmarshal attestation data")
 
 				compareResult(t, attestation, "1", hexutil.Encode(aggSlot1_Root1_2.AggregationBits), root1, sig.Marshal())
+			})
+			t.Run("multiple matching aggregated attestations - return the one with most bits - SSZ", func(t *testing.T) {
+				reqRoot, err := aggSlot1_Root1_1.Data.HashTreeRoot()
+				require.NoError(t, err, "Failed to generate attestation data hash tree root")
+				attDataRoot := hexutil.Encode(reqRoot[:])
+				url := "http://example.com?attestation_data_root=" + attDataRoot + "&slot=1" + "&committee_index=0"
+				request := httptest.NewRequest(http.MethodGet, url, nil)
+				request.Header.Add("Accept", "application/octet-stream")
+				writer := httptest.NewRecorder()
+
+				s.GetAggregateAttestationV2(writer, request)
+				require.Equal(t, http.StatusOK, writer.Code, "Expected HTTP status OK")
+
+				var resp ethpbalpha.Attestation
+				require.NoError(t, resp.UnmarshalSSZ(writer.Body.Bytes()))
+
+				compareResult(t, *structs.AttFromConsensus(&resp), "1", hexutil.Encode(aggSlot1_Root1_2.AggregationBits), root1, sig.Marshal())
 			})
 		})
 		t.Run("post-electra", func(t *testing.T) {
@@ -421,6 +455,23 @@ func TestGetAggregateAttestation(t *testing.T) {
 
 				compareResult(t, attestation, "2", hexutil.Encode(aggSlot2.AggregationBits), root1, sig.Marshal(), hexutil.Encode(aggSlot2.CommitteeBits))
 			})
+			t.Run("1 matching aggregated attestation - SSZ", func(t *testing.T) {
+				reqRoot, err := aggSlot2.Data.HashTreeRoot()
+				require.NoError(t, err, "Failed to generate attestation data hash tree root")
+				attDataRoot := hexutil.Encode(reqRoot[:])
+				url := "http://example.com?attestation_data_root=" + attDataRoot + "&slot=2" + "&committee_index=0"
+				request := httptest.NewRequest(http.MethodGet, url, nil)
+				request.Header.Add("Accept", "application/octet-stream")
+				writer := httptest.NewRecorder()
+
+				s.GetAggregateAttestationV2(writer, request)
+				require.Equal(t, http.StatusOK, writer.Code, "Expected HTTP status OK")
+
+				var resp ethpbalpha.AttestationElectra
+				require.NoError(t, resp.UnmarshalSSZ(writer.Body.Bytes()))
+
+				compareResult(t, *structs.AttElectraFromConsensus(&resp), "2", hexutil.Encode(aggSlot2.AggregationBits), root1, sig.Marshal(), hexutil.Encode(aggSlot2.CommitteeBits))
+			})
 			t.Run("multiple matching aggregated attestations - return the one with most bits", func(t *testing.T) {
 				reqRoot, err := aggSlot1_Root1_1.Data.HashTreeRoot()
 				require.NoError(t, err, "Failed to generate attestation data hash tree root")
@@ -441,6 +492,23 @@ func TestGetAggregateAttestation(t *testing.T) {
 
 				compareResult(t, attestation, "1", hexutil.Encode(aggSlot1_Root1_2.AggregationBits), root1, sig.Marshal(), hexutil.Encode(aggSlot1_Root1_1.CommitteeBits))
 			})
+			t.Run("multiple matching aggregated attestations - return the one with most bits - SSZ", func(t *testing.T) {
+				reqRoot, err := aggSlot1_Root1_1.Data.HashTreeRoot()
+				require.NoError(t, err, "Failed to generate attestation data hash tree root")
+				attDataRoot := hexutil.Encode(reqRoot[:])
+				url := "http://example.com?attestation_data_root=" + attDataRoot + "&slot=1" + "&committee_index=0"
+				request := httptest.NewRequest(http.MethodGet, url, nil)
+				request.Header.Add("Accept", "application/octet-stream")
+				writer := httptest.NewRecorder()
+
+				s.GetAggregateAttestationV2(writer, request)
+				require.Equal(t, http.StatusOK, writer.Code, "Expected HTTP status OK")
+
+				var resp ethpbalpha.AttestationElectra
+				require.NoError(t, resp.UnmarshalSSZ(writer.Body.Bytes()))
+
+				compareResult(t, *structs.AttElectraFromConsensus(&resp), "1", hexutil.Encode(aggSlot1_Root1_2.AggregationBits), root1, sig.Marshal(), hexutil.Encode(aggSlot1_Root1_1.CommitteeBits))
+			})
 			t.Run("1 matching unaggregated attestation", func(t *testing.T) {
 				reqRoot, err := unaggSlot4.Data.HashTreeRoot()
 				require.NoError(t, err, "Failed to generate attestation data hash tree root")
@@ -459,6 +527,23 @@ func TestGetAggregateAttestation(t *testing.T) {
 				var attestation structs.AttestationElectra
 				require.NoError(t, json.Unmarshal(resp.Data, &attestation), "Failed to unmarshal attestation data")
 				compareResult(t, attestation, "4", hexutil.Encode(unaggSlot4.AggregationBits), root1, sig.Marshal(), hexutil.Encode(unaggSlot4.CommitteeBits))
+			})
+			t.Run("1 matching unaggregated attestation - SSZ", func(t *testing.T) {
+				reqRoot, err := unaggSlot4.Data.HashTreeRoot()
+				require.NoError(t, err, "Failed to generate attestation data hash tree root")
+				attDataRoot := hexutil.Encode(reqRoot[:])
+				url := "http://example.com?attestation_data_root=" + attDataRoot + "&slot=4" + "&committee_index=0"
+				request := httptest.NewRequest(http.MethodGet, url, nil)
+				request.Header.Add("Accept", "application/octet-stream")
+				writer := httptest.NewRecorder()
+
+				s.GetAggregateAttestationV2(writer, request)
+				require.Equal(t, http.StatusOK, writer.Code, "Expected HTTP status OK")
+
+				var resp ethpbalpha.AttestationElectra
+				require.NoError(t, resp.UnmarshalSSZ(writer.Body.Bytes()))
+
+				compareResult(t, *structs.AttElectraFromConsensus(&resp), "4", hexutil.Encode(unaggSlot4.AggregationBits), root1, sig.Marshal(), hexutil.Encode(unaggSlot4.CommitteeBits))
 			})
 			t.Run("multiple matching unaggregated attestations - their aggregate is returned", func(t *testing.T) {
 				reqRoot, err := unaggSlot3_Root1_1.Data.HashTreeRoot()
@@ -484,12 +569,33 @@ func TestGetAggregateAttestation(t *testing.T) {
 				expectedSig := bls.AggregateSignatures([]common.Signature{sig1, sig2})
 				compareResult(t, attestation, "3", hexutil.Encode(bitfield.Bitlist{0b11100}), root1, expectedSig.Marshal(), hexutil.Encode(unaggSlot3_Root1_1.CommitteeBits))
 			})
+			t.Run("multiple matching unaggregated attestations - their aggregate is returned - SSZ", func(t *testing.T) {
+				reqRoot, err := unaggSlot3_Root1_1.Data.HashTreeRoot()
+				require.NoError(t, err, "Failed to generate attestation data hash tree root")
+				attDataRoot := hexutil.Encode(reqRoot[:])
+				url := "http://example.com?attestation_data_root=" + attDataRoot + "&slot=3" + "&committee_index=0"
+				request := httptest.NewRequest(http.MethodGet, url, nil)
+				request.Header.Add("Accept", "application/octet-stream")
+				writer := httptest.NewRecorder()
+
+				s.GetAggregateAttestationV2(writer, request)
+				require.Equal(t, http.StatusOK, writer.Code, "Expected HTTP status OK")
+
+				var resp ethpbalpha.AttestationElectra
+				require.NoError(t, resp.UnmarshalSSZ(writer.Body.Bytes()))
+
+				sig1, err := bls.SignatureFromBytes(unaggSlot3_Root1_1.Signature)
+				require.NoError(t, err)
+				sig2, err := bls.SignatureFromBytes(unaggSlot3_Root1_2.Signature)
+				require.NoError(t, err)
+				expectedSig := bls.AggregateSignatures([]common.Signature{sig1, sig2})
+				compareResult(t, *structs.AttElectraFromConsensus(&resp), "3", hexutil.Encode(bitfield.Bitlist{0b11100}), root1, expectedSig.Marshal(), hexutil.Encode(unaggSlot3_Root1_1.CommitteeBits))
+			})
 			t.Run("pre-electra attestation is ignored", func(t *testing.T) {
 
 			})
 		})
 	})
-
 }
 
 func createAttestationData(slot primitives.Slot, committeeIndex primitives.CommitteeIndex, root []byte) *ethpbalpha.AttestationData {
@@ -1293,6 +1399,81 @@ func TestGetAttestationData(t *testing.T) {
 		assert.DeepEqual(t, expectedResponse, resp)
 	})
 
+	t.Run("ok SSZ", func(t *testing.T) {
+		block := util.NewBeaconBlock()
+		block.Block.Slot = 3*params.BeaconConfig().SlotsPerEpoch + 1
+		targetBlock := util.NewBeaconBlock()
+		targetBlock.Block.Slot = 1 * params.BeaconConfig().SlotsPerEpoch
+		justifiedBlock := util.NewBeaconBlock()
+		justifiedBlock.Block.Slot = 2 * params.BeaconConfig().SlotsPerEpoch
+		blockRoot, err := block.Block.HashTreeRoot()
+		require.NoError(t, err, "Could not hash beacon block")
+		justifiedRoot, err := justifiedBlock.Block.HashTreeRoot()
+		require.NoError(t, err, "Could not get signing root for justified block")
+		slot := 3*params.BeaconConfig().SlotsPerEpoch + 1
+		beaconState, err := util.NewBeaconState()
+		require.NoError(t, err)
+		require.NoError(t, beaconState.SetSlot(slot))
+		justifiedCheckpoint := &ethpbalpha.Checkpoint{
+			Epoch: 2,
+			Root:  justifiedRoot[:],
+		}
+		require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpoint))
+		offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+		chain := &mockChain.ChainService{
+			Optimistic:                 false,
+			Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+			Root:                       blockRoot[:],
+			CurrentJustifiedCheckPoint: justifiedCheckpoint,
+			TargetRoot:                 blockRoot,
+			State:                      beaconState,
+		}
+
+		s := &Server{
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			HeadFetcher:           chain,
+			TimeFetcher:           chain,
+			OptimisticModeFetcher: chain,
+			CoreService: &core.Service{
+				HeadFetcher:           chain,
+				GenesisTimeFetcher:    chain,
+				FinalizedFetcher:      chain,
+				AttestationCache:      cache.NewAttestationDataCache(),
+				OptimisticModeFetcher: chain,
+			},
+		}
+
+		expectedAttData := &ethpbalpha.AttestationData{
+			Slot:            slot,
+			BeaconBlockRoot: blockRoot[:],
+			CommitteeIndex:  0,
+			Source: &ethpbalpha.Checkpoint{
+				Epoch: 2,
+				Root:  justifiedRoot[:],
+			},
+			Target: &ethpbalpha.Checkpoint{
+				Epoch: 3,
+				Root:  blockRoot[:],
+			},
+		}
+
+		expectedAttDataSSZ, err := expectedAttData.MarshalSSZ()
+		require.NoError(t, err, "Could not marshal expected attestation data to SSZ")
+
+		url := fmt.Sprintf("http://example.com?slot=%d&committee_index=%d", slot, 0)
+		request := httptest.NewRequest(http.MethodGet, url, nil)
+		request.Header.Add("Accept", "application/octet-stream")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetAttestationData(writer, request)
+
+		assert.Equal(t, http.StatusOK, writer.Code)
+		assert.DeepSSZEqual(t, expectedAttDataSSZ, writer.Body.Bytes())
+		var att ethpbalpha.AttestationData
+		require.NoError(t, att.UnmarshalSSZ(writer.Body.Bytes()))
+	})
+
 	t.Run("syncing", func(t *testing.T) {
 		beaconState, err := util.NewBeaconState()
 		require.NoError(t, err)
@@ -1536,6 +1717,82 @@ func TestGetAttestationData(t *testing.T) {
 		assert.DeepEqual(t, expectedResponse, resp)
 	})
 
+	t.Run("succeeds in first epoch SSZ", func(t *testing.T) {
+		slot := primitives.Slot(5)
+		block := util.NewBeaconBlock()
+		block.Block.Slot = slot
+		targetBlock := util.NewBeaconBlock()
+		targetBlock.Block.Slot = 0
+		justifiedBlock := util.NewBeaconBlock()
+		justifiedBlock.Block.Slot = 0
+		blockRoot, err := block.Block.HashTreeRoot()
+		require.NoError(t, err, "Could not hash beacon block")
+		justifiedRoot, err := justifiedBlock.Block.HashTreeRoot()
+		require.NoError(t, err, "Could not get signing root for justified block")
+
+		beaconState, err := util.NewBeaconState()
+		require.NoError(t, err)
+		require.NoError(t, beaconState.SetSlot(slot))
+		justifiedCheckpt := &ethpbalpha.Checkpoint{
+			Epoch: 0,
+			Root:  justifiedRoot[:],
+		}
+		require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpt))
+		require.NoError(t, err)
+		offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+		chain := &mockChain.ChainService{
+			Root:                       blockRoot[:],
+			Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+			CurrentJustifiedCheckPoint: justifiedCheckpt,
+			TargetRoot:                 blockRoot,
+			State:                      beaconState,
+		}
+
+		s := &Server{
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			HeadFetcher:           chain,
+			TimeFetcher:           chain,
+			OptimisticModeFetcher: chain,
+			CoreService: &core.Service{
+				AttestationCache:      cache.NewAttestationDataCache(),
+				OptimisticModeFetcher: chain,
+				HeadFetcher:           chain,
+				GenesisTimeFetcher:    chain,
+				FinalizedFetcher:      chain,
+			},
+		}
+
+		expectedAttData := &ethpbalpha.AttestationData{
+			Slot:            slot,
+			BeaconBlockRoot: blockRoot[:],
+			CommitteeIndex:  0,
+			Source: &ethpbalpha.Checkpoint{
+				Epoch: 0,
+				Root:  justifiedRoot[:],
+			},
+			Target: &ethpbalpha.Checkpoint{
+				Epoch: 0,
+				Root:  blockRoot[:],
+			},
+		}
+
+		expectedAttDataSSZ, err := expectedAttData.MarshalSSZ()
+		require.NoError(t, err, "Could not marshal expected attestation data to SSZ")
+
+		url := fmt.Sprintf("http://example.com?slot=%d&committee_index=%d", slot, 0)
+		request := httptest.NewRequest(http.MethodGet, url, nil)
+		request.Header.Add("Accept", "application/octet-stream")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetAttestationData(writer, request)
+
+		assert.Equal(t, http.StatusOK, writer.Code)
+		assert.DeepSSZEqual(t, expectedAttDataSSZ, writer.Body.Bytes())
+		var att ethpbalpha.AttestationData
+		require.NoError(t, att.UnmarshalSSZ(writer.Body.Bytes()))
+	})
+
 	t.Run("handles far away justified epoch", func(t *testing.T) {
 		// Scenario:
 		//
@@ -1628,6 +1885,101 @@ func TestGetAttestationData(t *testing.T) {
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		require.NotNil(t, resp)
 		assert.DeepEqual(t, expectedResponse, resp)
+	})
+
+	t.Run("handles far away justified epoch SSZ", func(t *testing.T) {
+		// Scenario:
+		//
+		// State slot = 10000
+		// Last justified slot = epoch start of 1500
+		// HistoricalRootsLimit = 8192
+		//
+		// More background: https://github.com/prysmaticlabs/prysm/issues/2153
+		// This test breaks if it doesn't use mainnet config
+
+		// Ensure HistoricalRootsLimit matches scenario
+		params.SetupTestConfigCleanup(t)
+		cfg := params.MainnetConfig()
+		cfg.HistoricalRootsLimit = 8192
+		params.OverrideBeaconConfig(cfg)
+
+		block := util.NewBeaconBlock()
+		block.Block.Slot = 10000
+		epochBoundaryBlock := util.NewBeaconBlock()
+		var err error
+		epochBoundaryBlock.Block.Slot, err = slots.EpochStart(slots.ToEpoch(10000))
+		require.NoError(t, err)
+		justifiedBlock := util.NewBeaconBlock()
+		justifiedBlock.Block.Slot, err = slots.EpochStart(slots.ToEpoch(1500))
+		require.NoError(t, err)
+		justifiedBlock.Block.Slot -= 2 // Imagine two skip block
+		blockRoot, err := block.Block.HashTreeRoot()
+		require.NoError(t, err, "Could not hash beacon block")
+		justifiedBlockRoot, err := justifiedBlock.Block.HashTreeRoot()
+		require.NoError(t, err, "Could not hash justified block")
+
+		slot := primitives.Slot(10000)
+		beaconState, err := util.NewBeaconState()
+		require.NoError(t, err)
+		require.NoError(t, beaconState.SetSlot(slot))
+		justifiedCheckpt := &ethpbalpha.Checkpoint{
+			Epoch: slots.ToEpoch(1500),
+			Root:  justifiedBlockRoot[:],
+		}
+		require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpt))
+
+		offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+		chain := &mockChain.ChainService{
+			Root:                       blockRoot[:],
+			Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+			CurrentJustifiedCheckPoint: justifiedCheckpt,
+			TargetRoot:                 blockRoot,
+			State:                      beaconState,
+		}
+
+		s := &Server{
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			HeadFetcher:           chain,
+			TimeFetcher:           chain,
+			OptimisticModeFetcher: chain,
+			CoreService: &core.Service{
+				AttestationCache:      cache.NewAttestationDataCache(),
+				OptimisticModeFetcher: chain,
+				HeadFetcher:           chain,
+				GenesisTimeFetcher:    chain,
+				FinalizedFetcher:      chain,
+			},
+		}
+
+		expectedAttData := &ethpbalpha.AttestationData{
+			Slot:            slot,
+			BeaconBlockRoot: blockRoot[:],
+			CommitteeIndex:  0,
+			Source: &ethpbalpha.Checkpoint{
+				Epoch: slots.ToEpoch(1500),
+				Root:  justifiedBlockRoot[:],
+			},
+			Target: &ethpbalpha.Checkpoint{
+				Epoch: 312,
+				Root:  blockRoot[:],
+			},
+		}
+
+		expectedAttDataSSZ, err := expectedAttData.MarshalSSZ()
+		require.NoError(t, err, "Could not marshal expected attestation data to SSZ")
+
+		url := fmt.Sprintf("http://example.com?slot=%d&committee_index=%d", slot, 0)
+		request := httptest.NewRequest(http.MethodGet, url, nil)
+		request.Header.Add("Accept", "application/octet-stream")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetAttestationData(writer, request)
+
+		assert.Equal(t, http.StatusOK, writer.Code)
+		assert.DeepSSZEqual(t, expectedAttDataSSZ, writer.Body.Bytes())
+		var att ethpbalpha.AttestationData
+		require.NoError(t, att.UnmarshalSSZ(writer.Body.Bytes()))
 	})
 }
 
