@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	mvslice "github.com/OffchainLabs/prysm/v6/container/multi-value-slice"
 	"github.com/OffchainLabs/prysm/v6/container/slice"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
@@ -108,7 +109,10 @@ var (
 		types.PendingConsolidations,
 	)
 
-	fuluFields = electraFields
+	fuluFields = append(
+		electraFields,
+		types.ProposerLookahead,
+	)
 )
 
 const (
@@ -118,14 +122,14 @@ const (
 	capellaSharedFieldRefCount                    = 13
 	denebSharedFieldRefCount                      = 13
 	electraSharedFieldRefCount                    = 16
-	fuluSharedFieldRefCount                       = 16
+	fuluSharedFieldRefCount                       = 17
 	experimentalStatePhase0SharedFieldRefCount    = 5
 	experimentalStateAltairSharedFieldRefCount    = 5
 	experimentalStateBellatrixSharedFieldRefCount = 6
 	experimentalStateCapellaSharedFieldRefCount   = 7
 	experimentalStateDenebSharedFieldRefCount     = 7
 	experimentalStateElectraSharedFieldRefCount   = 10
-	experimentalStateFuluSharedFieldRefCount      = 10
+	experimentalStateFuluSharedFieldRefCount      = 11
 )
 
 // InitializeFromProtoPhase0 the beacon state from a protobuf representation.
@@ -159,8 +163,8 @@ func InitializeFromProtoElectra(st *ethpb.BeaconStateElectra) (state.BeaconState
 }
 
 // InitializeFromProtoFulu the beacon state from a protobuf representation.
-func InitializeFromProtoFulu(st *ethpb.BeaconStateElectra) (state.BeaconState, error) {
-	return InitializeFromProtoUnsafeFulu(proto.Clone(st).(*ethpb.BeaconStateElectra))
+func InitializeFromProtoFulu(st *ethpb.BeaconStateFulu) (state.BeaconState, error) {
+	return InitializeFromProtoUnsafeFulu(proto.Clone(st).(*ethpb.BeaconStateFulu))
 }
 
 // InitializeFromProtoUnsafePhase0 directly uses the beacon state protobuf fields
@@ -842,7 +846,7 @@ func InitializeFromProtoUnsafeElectra(st *ethpb.BeaconStateElectra) (state.Beaco
 
 // InitializeFromProtoUnsafeFulu directly uses the beacon state protobuf fields
 // and sets them as fields of the BeaconState type.
-func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateElectra) (state.BeaconState, error) {
+func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateFulu) (state.BeaconState, error) {
 	if st == nil {
 		return nil, errors.New("received nil state")
 	}
@@ -852,6 +856,10 @@ func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateElectra) (state.BeaconSt
 		hRoots[i] = bytesutil.ToBytes32(r)
 	}
 
+	proposerLookahead := make([]primitives.ValidatorIndex, len(st.ProposerLookahead))
+	for i, v := range st.ProposerLookahead {
+		proposerLookahead[i] = primitives.ValidatorIndex(v)
+	}
 	fieldCount := params.BeaconConfig().BeaconStateFuluFieldCount
 	b := &BeaconState{
 		version:                           version.Fulu,
@@ -886,6 +894,7 @@ func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateElectra) (state.BeaconSt
 		pendingDeposits:                   st.PendingDeposits,
 		pendingPartialWithdrawals:         st.PendingPartialWithdrawals,
 		pendingConsolidations:             st.PendingConsolidations,
+		proposerLookahead:                 proposerLookahead,
 
 		dirtyFields:      make(map[types.FieldIndex]bool, fieldCount),
 		dirtyIndices:     make(map[types.FieldIndex][]uint64, fieldCount),
@@ -950,6 +959,7 @@ func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateElectra) (state.BeaconSt
 	b.sharedFieldReferences[types.PendingDeposits] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.PendingPartialWithdrawals] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.PendingConsolidations] = stateutil.NewRef(1)
+	b.sharedFieldReferences[types.ProposerLookahead] = stateutil.NewRef(1) // New in Fulu.
 	if !features.Get().EnableExperimentalState {
 		b.sharedFieldReferences[types.BlockRoots] = stateutil.NewRef(1)
 		b.sharedFieldReferences[types.StateRoots] = stateutil.NewRef(1)
@@ -1015,6 +1025,7 @@ func (b *BeaconState) Copy() state.BeaconState {
 		currentEpochAttestations:  b.currentEpochAttestations,
 		eth1DataVotes:             b.eth1DataVotes,
 		slashings:                 b.slashings,
+		proposerLookahead:         b.proposerLookahead,
 
 		// Large arrays, increases over time.
 		balances:                   b.balances,
@@ -1441,6 +1452,8 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 		return stateutil.PendingPartialWithdrawalsRoot(b.pendingPartialWithdrawals)
 	case types.PendingConsolidations:
 		return stateutil.PendingConsolidationsRoot(b.pendingConsolidations)
+	case types.ProposerLookahead:
+		return stateutil.ProposerLookaheadRoot(b.proposerLookahead)
 	}
 	return [32]byte{}, errors.New("invalid field index provided")
 }

@@ -3,6 +3,7 @@ package eth
 
 import (
 	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	v1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	ssz "github.com/prysmaticlabs/fastssz"
 )
 
@@ -783,6 +784,1163 @@ func (b *BlindedBeaconBlockFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	// Field (4) 'Body'
 	if err = b.Body.HashTreeRootWith(hh); err != nil {
 		return
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the BeaconStateFulu object
+func (b *BeaconStateFulu) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BeaconStateFulu object to a target array
+func (b *BeaconStateFulu) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(2737225)
+
+	// Field (0) 'GenesisTime'
+	dst = ssz.MarshalUint64(dst, b.GenesisTime)
+
+	// Field (1) 'GenesisValidatorsRoot'
+	if size := len(b.GenesisValidatorsRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.GenesisValidatorsRoot", size, 32)
+		return
+	}
+	dst = append(dst, b.GenesisValidatorsRoot...)
+
+	// Field (2) 'Slot'
+	dst = ssz.MarshalUint64(dst, uint64(b.Slot))
+
+	// Field (3) 'Fork'
+	if b.Fork == nil {
+		b.Fork = new(Fork)
+	}
+	if dst, err = b.Fork.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (4) 'LatestBlockHeader'
+	if b.LatestBlockHeader == nil {
+		b.LatestBlockHeader = new(BeaconBlockHeader)
+	}
+	if dst, err = b.LatestBlockHeader.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (5) 'BlockRoots'
+	if size := len(b.BlockRoots); size != 8192 {
+		err = ssz.ErrVectorLengthFn("--.BlockRoots", size, 8192)
+		return
+	}
+	for ii := 0; ii < 8192; ii++ {
+		if size := len(b.BlockRoots[ii]); size != 32 {
+			err = ssz.ErrBytesLengthFn("--.BlockRoots[ii]", size, 32)
+			return
+		}
+		dst = append(dst, b.BlockRoots[ii]...)
+	}
+
+	// Field (6) 'StateRoots'
+	if size := len(b.StateRoots); size != 8192 {
+		err = ssz.ErrVectorLengthFn("--.StateRoots", size, 8192)
+		return
+	}
+	for ii := 0; ii < 8192; ii++ {
+		if size := len(b.StateRoots[ii]); size != 32 {
+			err = ssz.ErrBytesLengthFn("--.StateRoots[ii]", size, 32)
+			return
+		}
+		dst = append(dst, b.StateRoots[ii]...)
+	}
+
+	// Offset (7) 'HistoricalRoots'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.HistoricalRoots) * 32
+
+	// Field (8) 'Eth1Data'
+	if b.Eth1Data == nil {
+		b.Eth1Data = new(Eth1Data)
+	}
+	if dst, err = b.Eth1Data.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Offset (9) 'Eth1DataVotes'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.Eth1DataVotes) * 72
+
+	// Field (10) 'Eth1DepositIndex'
+	dst = ssz.MarshalUint64(dst, b.Eth1DepositIndex)
+
+	// Offset (11) 'Validators'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.Validators) * 121
+
+	// Offset (12) 'Balances'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.Balances) * 8
+
+	// Field (13) 'RandaoMixes'
+	if size := len(b.RandaoMixes); size != 65536 {
+		err = ssz.ErrVectorLengthFn("--.RandaoMixes", size, 65536)
+		return
+	}
+	for ii := 0; ii < 65536; ii++ {
+		if size := len(b.RandaoMixes[ii]); size != 32 {
+			err = ssz.ErrBytesLengthFn("--.RandaoMixes[ii]", size, 32)
+			return
+		}
+		dst = append(dst, b.RandaoMixes[ii]...)
+	}
+
+	// Field (14) 'Slashings'
+	if size := len(b.Slashings); size != 8192 {
+		err = ssz.ErrVectorLengthFn("--.Slashings", size, 8192)
+		return
+	}
+	for ii := 0; ii < 8192; ii++ {
+		dst = ssz.MarshalUint64(dst, b.Slashings[ii])
+	}
+
+	// Offset (15) 'PreviousEpochParticipation'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.PreviousEpochParticipation)
+
+	// Offset (16) 'CurrentEpochParticipation'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.CurrentEpochParticipation)
+
+	// Field (17) 'JustificationBits'
+	if size := len(b.JustificationBits); size != 1 {
+		err = ssz.ErrBytesLengthFn("--.JustificationBits", size, 1)
+		return
+	}
+	dst = append(dst, b.JustificationBits...)
+
+	// Field (18) 'PreviousJustifiedCheckpoint'
+	if b.PreviousJustifiedCheckpoint == nil {
+		b.PreviousJustifiedCheckpoint = new(Checkpoint)
+	}
+	if dst, err = b.PreviousJustifiedCheckpoint.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (19) 'CurrentJustifiedCheckpoint'
+	if b.CurrentJustifiedCheckpoint == nil {
+		b.CurrentJustifiedCheckpoint = new(Checkpoint)
+	}
+	if dst, err = b.CurrentJustifiedCheckpoint.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (20) 'FinalizedCheckpoint'
+	if b.FinalizedCheckpoint == nil {
+		b.FinalizedCheckpoint = new(Checkpoint)
+	}
+	if dst, err = b.FinalizedCheckpoint.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Offset (21) 'InactivityScores'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.InactivityScores) * 8
+
+	// Field (22) 'CurrentSyncCommittee'
+	if b.CurrentSyncCommittee == nil {
+		b.CurrentSyncCommittee = new(SyncCommittee)
+	}
+	if dst, err = b.CurrentSyncCommittee.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (23) 'NextSyncCommittee'
+	if b.NextSyncCommittee == nil {
+		b.NextSyncCommittee = new(SyncCommittee)
+	}
+	if dst, err = b.NextSyncCommittee.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Offset (24) 'LatestExecutionPayloadHeader'
+	dst = ssz.WriteOffset(dst, offset)
+	if b.LatestExecutionPayloadHeader == nil {
+		b.LatestExecutionPayloadHeader = new(v1.ExecutionPayloadHeaderDeneb)
+	}
+	offset += b.LatestExecutionPayloadHeader.SizeSSZ()
+
+	// Field (25) 'NextWithdrawalIndex'
+	dst = ssz.MarshalUint64(dst, b.NextWithdrawalIndex)
+
+	// Field (26) 'NextWithdrawalValidatorIndex'
+	dst = ssz.MarshalUint64(dst, uint64(b.NextWithdrawalValidatorIndex))
+
+	// Offset (27) 'HistoricalSummaries'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.HistoricalSummaries) * 64
+
+	// Field (28) 'DepositRequestsStartIndex'
+	dst = ssz.MarshalUint64(dst, b.DepositRequestsStartIndex)
+
+	// Field (29) 'DepositBalanceToConsume'
+	dst = ssz.MarshalUint64(dst, uint64(b.DepositBalanceToConsume))
+
+	// Field (30) 'ExitBalanceToConsume'
+	dst = ssz.MarshalUint64(dst, uint64(b.ExitBalanceToConsume))
+
+	// Field (31) 'EarliestExitEpoch'
+	dst = ssz.MarshalUint64(dst, uint64(b.EarliestExitEpoch))
+
+	// Field (32) 'ConsolidationBalanceToConsume'
+	dst = ssz.MarshalUint64(dst, uint64(b.ConsolidationBalanceToConsume))
+
+	// Field (33) 'EarliestConsolidationEpoch'
+	dst = ssz.MarshalUint64(dst, uint64(b.EarliestConsolidationEpoch))
+
+	// Offset (34) 'PendingDeposits'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.PendingDeposits) * 192
+
+	// Offset (35) 'PendingPartialWithdrawals'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.PendingPartialWithdrawals) * 24
+
+	// Offset (36) 'PendingConsolidations'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.PendingConsolidations) * 16
+
+	// Field (37) 'ProposerLookahead'
+	if size := len(b.ProposerLookahead); size != 64 {
+		err = ssz.ErrVectorLengthFn("--.ProposerLookahead", size, 64)
+		return
+	}
+	for ii := 0; ii < 64; ii++ {
+		dst = ssz.MarshalUint64(dst, b.ProposerLookahead[ii])
+	}
+
+	// Field (7) 'HistoricalRoots'
+	if size := len(b.HistoricalRoots); size > 16777216 {
+		err = ssz.ErrListTooBigFn("--.HistoricalRoots", size, 16777216)
+		return
+	}
+	for ii := 0; ii < len(b.HistoricalRoots); ii++ {
+		if size := len(b.HistoricalRoots[ii]); size != 32 {
+			err = ssz.ErrBytesLengthFn("--.HistoricalRoots[ii]", size, 32)
+			return
+		}
+		dst = append(dst, b.HistoricalRoots[ii]...)
+	}
+
+	// Field (9) 'Eth1DataVotes'
+	if size := len(b.Eth1DataVotes); size > 2048 {
+		err = ssz.ErrListTooBigFn("--.Eth1DataVotes", size, 2048)
+		return
+	}
+	for ii := 0; ii < len(b.Eth1DataVotes); ii++ {
+		if dst, err = b.Eth1DataVotes[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (11) 'Validators'
+	if size := len(b.Validators); size > 1099511627776 {
+		err = ssz.ErrListTooBigFn("--.Validators", size, 1099511627776)
+		return
+	}
+	for ii := 0; ii < len(b.Validators); ii++ {
+		if dst, err = b.Validators[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (12) 'Balances'
+	if size := len(b.Balances); size > 1099511627776 {
+		err = ssz.ErrListTooBigFn("--.Balances", size, 1099511627776)
+		return
+	}
+	for ii := 0; ii < len(b.Balances); ii++ {
+		dst = ssz.MarshalUint64(dst, b.Balances[ii])
+	}
+
+	// Field (15) 'PreviousEpochParticipation'
+	if size := len(b.PreviousEpochParticipation); size > 1099511627776 {
+		err = ssz.ErrBytesLengthFn("--.PreviousEpochParticipation", size, 1099511627776)
+		return
+	}
+	dst = append(dst, b.PreviousEpochParticipation...)
+
+	// Field (16) 'CurrentEpochParticipation'
+	if size := len(b.CurrentEpochParticipation); size > 1099511627776 {
+		err = ssz.ErrBytesLengthFn("--.CurrentEpochParticipation", size, 1099511627776)
+		return
+	}
+	dst = append(dst, b.CurrentEpochParticipation...)
+
+	// Field (21) 'InactivityScores'
+	if size := len(b.InactivityScores); size > 1099511627776 {
+		err = ssz.ErrListTooBigFn("--.InactivityScores", size, 1099511627776)
+		return
+	}
+	for ii := 0; ii < len(b.InactivityScores); ii++ {
+		dst = ssz.MarshalUint64(dst, b.InactivityScores[ii])
+	}
+
+	// Field (24) 'LatestExecutionPayloadHeader'
+	if dst, err = b.LatestExecutionPayloadHeader.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (27) 'HistoricalSummaries'
+	if size := len(b.HistoricalSummaries); size > 16777216 {
+		err = ssz.ErrListTooBigFn("--.HistoricalSummaries", size, 16777216)
+		return
+	}
+	for ii := 0; ii < len(b.HistoricalSummaries); ii++ {
+		if dst, err = b.HistoricalSummaries[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (34) 'PendingDeposits'
+	if size := len(b.PendingDeposits); size > 134217728 {
+		err = ssz.ErrListTooBigFn("--.PendingDeposits", size, 134217728)
+		return
+	}
+	for ii := 0; ii < len(b.PendingDeposits); ii++ {
+		if dst, err = b.PendingDeposits[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (35) 'PendingPartialWithdrawals'
+	if size := len(b.PendingPartialWithdrawals); size > 134217728 {
+		err = ssz.ErrListTooBigFn("--.PendingPartialWithdrawals", size, 134217728)
+		return
+	}
+	for ii := 0; ii < len(b.PendingPartialWithdrawals); ii++ {
+		if dst, err = b.PendingPartialWithdrawals[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (36) 'PendingConsolidations'
+	if size := len(b.PendingConsolidations); size > 262144 {
+		err = ssz.ErrListTooBigFn("--.PendingConsolidations", size, 262144)
+		return
+	}
+	for ii := 0; ii < len(b.PendingConsolidations); ii++ {
+		if dst, err = b.PendingConsolidations[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BeaconStateFulu object
+func (b *BeaconStateFulu) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 2737225 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o7, o9, o11, o12, o15, o16, o21, o24, o27, o34, o35, o36 uint64
+
+	// Field (0) 'GenesisTime'
+	b.GenesisTime = ssz.UnmarshallUint64(buf[0:8])
+
+	// Field (1) 'GenesisValidatorsRoot'
+	if cap(b.GenesisValidatorsRoot) == 0 {
+		b.GenesisValidatorsRoot = make([]byte, 0, len(buf[8:40]))
+	}
+	b.GenesisValidatorsRoot = append(b.GenesisValidatorsRoot, buf[8:40]...)
+
+	// Field (2) 'Slot'
+	b.Slot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[40:48]))
+
+	// Field (3) 'Fork'
+	if b.Fork == nil {
+		b.Fork = new(Fork)
+	}
+	if err = b.Fork.UnmarshalSSZ(buf[48:64]); err != nil {
+		return err
+	}
+
+	// Field (4) 'LatestBlockHeader'
+	if b.LatestBlockHeader == nil {
+		b.LatestBlockHeader = new(BeaconBlockHeader)
+	}
+	if err = b.LatestBlockHeader.UnmarshalSSZ(buf[64:176]); err != nil {
+		return err
+	}
+
+	// Field (5) 'BlockRoots'
+	b.BlockRoots = make([][]byte, 8192)
+	for ii := 0; ii < 8192; ii++ {
+		if cap(b.BlockRoots[ii]) == 0 {
+			b.BlockRoots[ii] = make([]byte, 0, len(buf[176:262320][ii*32:(ii+1)*32]))
+		}
+		b.BlockRoots[ii] = append(b.BlockRoots[ii], buf[176:262320][ii*32:(ii+1)*32]...)
+	}
+
+	// Field (6) 'StateRoots'
+	b.StateRoots = make([][]byte, 8192)
+	for ii := 0; ii < 8192; ii++ {
+		if cap(b.StateRoots[ii]) == 0 {
+			b.StateRoots[ii] = make([]byte, 0, len(buf[262320:524464][ii*32:(ii+1)*32]))
+		}
+		b.StateRoots[ii] = append(b.StateRoots[ii], buf[262320:524464][ii*32:(ii+1)*32]...)
+	}
+
+	// Offset (7) 'HistoricalRoots'
+	if o7 = ssz.ReadOffset(buf[524464:524468]); o7 > size {
+		return ssz.ErrOffset
+	}
+
+	if o7 != 2737225 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (8) 'Eth1Data'
+	if b.Eth1Data == nil {
+		b.Eth1Data = new(Eth1Data)
+	}
+	if err = b.Eth1Data.UnmarshalSSZ(buf[524468:524540]); err != nil {
+		return err
+	}
+
+	// Offset (9) 'Eth1DataVotes'
+	if o9 = ssz.ReadOffset(buf[524540:524544]); o9 > size || o7 > o9 {
+		return ssz.ErrOffset
+	}
+
+	// Field (10) 'Eth1DepositIndex'
+	b.Eth1DepositIndex = ssz.UnmarshallUint64(buf[524544:524552])
+
+	// Offset (11) 'Validators'
+	if o11 = ssz.ReadOffset(buf[524552:524556]); o11 > size || o9 > o11 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (12) 'Balances'
+	if o12 = ssz.ReadOffset(buf[524556:524560]); o12 > size || o11 > o12 {
+		return ssz.ErrOffset
+	}
+
+	// Field (13) 'RandaoMixes'
+	b.RandaoMixes = make([][]byte, 65536)
+	for ii := 0; ii < 65536; ii++ {
+		if cap(b.RandaoMixes[ii]) == 0 {
+			b.RandaoMixes[ii] = make([]byte, 0, len(buf[524560:2621712][ii*32:(ii+1)*32]))
+		}
+		b.RandaoMixes[ii] = append(b.RandaoMixes[ii], buf[524560:2621712][ii*32:(ii+1)*32]...)
+	}
+
+	// Field (14) 'Slashings'
+	b.Slashings = ssz.ExtendUint64(b.Slashings, 8192)
+	for ii := 0; ii < 8192; ii++ {
+		b.Slashings[ii] = ssz.UnmarshallUint64(buf[2621712:2687248][ii*8 : (ii+1)*8])
+	}
+
+	// Offset (15) 'PreviousEpochParticipation'
+	if o15 = ssz.ReadOffset(buf[2687248:2687252]); o15 > size || o12 > o15 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (16) 'CurrentEpochParticipation'
+	if o16 = ssz.ReadOffset(buf[2687252:2687256]); o16 > size || o15 > o16 {
+		return ssz.ErrOffset
+	}
+
+	// Field (17) 'JustificationBits'
+	if cap(b.JustificationBits) == 0 {
+		b.JustificationBits = make([]byte, 0, len(buf[2687256:2687257]))
+	}
+	b.JustificationBits = append(b.JustificationBits, buf[2687256:2687257]...)
+
+	// Field (18) 'PreviousJustifiedCheckpoint'
+	if b.PreviousJustifiedCheckpoint == nil {
+		b.PreviousJustifiedCheckpoint = new(Checkpoint)
+	}
+	if err = b.PreviousJustifiedCheckpoint.UnmarshalSSZ(buf[2687257:2687297]); err != nil {
+		return err
+	}
+
+	// Field (19) 'CurrentJustifiedCheckpoint'
+	if b.CurrentJustifiedCheckpoint == nil {
+		b.CurrentJustifiedCheckpoint = new(Checkpoint)
+	}
+	if err = b.CurrentJustifiedCheckpoint.UnmarshalSSZ(buf[2687297:2687337]); err != nil {
+		return err
+	}
+
+	// Field (20) 'FinalizedCheckpoint'
+	if b.FinalizedCheckpoint == nil {
+		b.FinalizedCheckpoint = new(Checkpoint)
+	}
+	if err = b.FinalizedCheckpoint.UnmarshalSSZ(buf[2687337:2687377]); err != nil {
+		return err
+	}
+
+	// Offset (21) 'InactivityScores'
+	if o21 = ssz.ReadOffset(buf[2687377:2687381]); o21 > size || o16 > o21 {
+		return ssz.ErrOffset
+	}
+
+	// Field (22) 'CurrentSyncCommittee'
+	if b.CurrentSyncCommittee == nil {
+		b.CurrentSyncCommittee = new(SyncCommittee)
+	}
+	if err = b.CurrentSyncCommittee.UnmarshalSSZ(buf[2687381:2712005]); err != nil {
+		return err
+	}
+
+	// Field (23) 'NextSyncCommittee'
+	if b.NextSyncCommittee == nil {
+		b.NextSyncCommittee = new(SyncCommittee)
+	}
+	if err = b.NextSyncCommittee.UnmarshalSSZ(buf[2712005:2736629]); err != nil {
+		return err
+	}
+
+	// Offset (24) 'LatestExecutionPayloadHeader'
+	if o24 = ssz.ReadOffset(buf[2736629:2736633]); o24 > size || o21 > o24 {
+		return ssz.ErrOffset
+	}
+
+	// Field (25) 'NextWithdrawalIndex'
+	b.NextWithdrawalIndex = ssz.UnmarshallUint64(buf[2736633:2736641])
+
+	// Field (26) 'NextWithdrawalValidatorIndex'
+	b.NextWithdrawalValidatorIndex = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[2736641:2736649]))
+
+	// Offset (27) 'HistoricalSummaries'
+	if o27 = ssz.ReadOffset(buf[2736649:2736653]); o27 > size || o24 > o27 {
+		return ssz.ErrOffset
+	}
+
+	// Field (28) 'DepositRequestsStartIndex'
+	b.DepositRequestsStartIndex = ssz.UnmarshallUint64(buf[2736653:2736661])
+
+	// Field (29) 'DepositBalanceToConsume'
+	b.DepositBalanceToConsume = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[2736661:2736669]))
+
+	// Field (30) 'ExitBalanceToConsume'
+	b.ExitBalanceToConsume = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[2736669:2736677]))
+
+	// Field (31) 'EarliestExitEpoch'
+	b.EarliestExitEpoch = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch(ssz.UnmarshallUint64(buf[2736677:2736685]))
+
+	// Field (32) 'ConsolidationBalanceToConsume'
+	b.ConsolidationBalanceToConsume = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[2736685:2736693]))
+
+	// Field (33) 'EarliestConsolidationEpoch'
+	b.EarliestConsolidationEpoch = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch(ssz.UnmarshallUint64(buf[2736693:2736701]))
+
+	// Offset (34) 'PendingDeposits'
+	if o34 = ssz.ReadOffset(buf[2736701:2736705]); o34 > size || o27 > o34 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (35) 'PendingPartialWithdrawals'
+	if o35 = ssz.ReadOffset(buf[2736705:2736709]); o35 > size || o34 > o35 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (36) 'PendingConsolidations'
+	if o36 = ssz.ReadOffset(buf[2736709:2736713]); o36 > size || o35 > o36 {
+		return ssz.ErrOffset
+	}
+
+	// Field (37) 'ProposerLookahead'
+	b.ProposerLookahead = ssz.ExtendUint64(b.ProposerLookahead, 64)
+	for ii := 0; ii < 64; ii++ {
+		b.ProposerLookahead[ii] = ssz.UnmarshallUint64(buf[2736713:2737225][ii*8 : (ii+1)*8])
+	}
+
+	// Field (7) 'HistoricalRoots'
+	{
+		buf = tail[o7:o9]
+		num, err := ssz.DivideInt2(len(buf), 32, 16777216)
+		if err != nil {
+			return err
+		}
+		b.HistoricalRoots = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(b.HistoricalRoots[ii]) == 0 {
+				b.HistoricalRoots[ii] = make([]byte, 0, len(buf[ii*32:(ii+1)*32]))
+			}
+			b.HistoricalRoots[ii] = append(b.HistoricalRoots[ii], buf[ii*32:(ii+1)*32]...)
+		}
+	}
+
+	// Field (9) 'Eth1DataVotes'
+	{
+		buf = tail[o9:o11]
+		num, err := ssz.DivideInt2(len(buf), 72, 2048)
+		if err != nil {
+			return err
+		}
+		b.Eth1DataVotes = make([]*Eth1Data, num)
+		for ii := 0; ii < num; ii++ {
+			if b.Eth1DataVotes[ii] == nil {
+				b.Eth1DataVotes[ii] = new(Eth1Data)
+			}
+			if err = b.Eth1DataVotes[ii].UnmarshalSSZ(buf[ii*72 : (ii+1)*72]); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Field (11) 'Validators'
+	{
+		buf = tail[o11:o12]
+		num, err := ssz.DivideInt2(len(buf), 121, 1099511627776)
+		if err != nil {
+			return err
+		}
+		b.Validators = make([]*Validator, num)
+		for ii := 0; ii < num; ii++ {
+			if b.Validators[ii] == nil {
+				b.Validators[ii] = new(Validator)
+			}
+			if err = b.Validators[ii].UnmarshalSSZ(buf[ii*121 : (ii+1)*121]); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Field (12) 'Balances'
+	{
+		buf = tail[o12:o15]
+		num, err := ssz.DivideInt2(len(buf), 8, 1099511627776)
+		if err != nil {
+			return err
+		}
+		b.Balances = ssz.ExtendUint64(b.Balances, num)
+		for ii := 0; ii < num; ii++ {
+			b.Balances[ii] = ssz.UnmarshallUint64(buf[ii*8 : (ii+1)*8])
+		}
+	}
+
+	// Field (15) 'PreviousEpochParticipation'
+	{
+		buf = tail[o15:o16]
+		if len(buf) > 1099511627776 {
+			return ssz.ErrBytesLength
+		}
+		if cap(b.PreviousEpochParticipation) == 0 {
+			b.PreviousEpochParticipation = make([]byte, 0, len(buf))
+		}
+		b.PreviousEpochParticipation = append(b.PreviousEpochParticipation, buf...)
+	}
+
+	// Field (16) 'CurrentEpochParticipation'
+	{
+		buf = tail[o16:o21]
+		if len(buf) > 1099511627776 {
+			return ssz.ErrBytesLength
+		}
+		if cap(b.CurrentEpochParticipation) == 0 {
+			b.CurrentEpochParticipation = make([]byte, 0, len(buf))
+		}
+		b.CurrentEpochParticipation = append(b.CurrentEpochParticipation, buf...)
+	}
+
+	// Field (21) 'InactivityScores'
+	{
+		buf = tail[o21:o24]
+		num, err := ssz.DivideInt2(len(buf), 8, 1099511627776)
+		if err != nil {
+			return err
+		}
+		b.InactivityScores = ssz.ExtendUint64(b.InactivityScores, num)
+		for ii := 0; ii < num; ii++ {
+			b.InactivityScores[ii] = ssz.UnmarshallUint64(buf[ii*8 : (ii+1)*8])
+		}
+	}
+
+	// Field (24) 'LatestExecutionPayloadHeader'
+	{
+		buf = tail[o24:o27]
+		if b.LatestExecutionPayloadHeader == nil {
+			b.LatestExecutionPayloadHeader = new(v1.ExecutionPayloadHeaderDeneb)
+		}
+		if err = b.LatestExecutionPayloadHeader.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+
+	// Field (27) 'HistoricalSummaries'
+	{
+		buf = tail[o27:o34]
+		num, err := ssz.DivideInt2(len(buf), 64, 16777216)
+		if err != nil {
+			return err
+		}
+		b.HistoricalSummaries = make([]*HistoricalSummary, num)
+		for ii := 0; ii < num; ii++ {
+			if b.HistoricalSummaries[ii] == nil {
+				b.HistoricalSummaries[ii] = new(HistoricalSummary)
+			}
+			if err = b.HistoricalSummaries[ii].UnmarshalSSZ(buf[ii*64 : (ii+1)*64]); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Field (34) 'PendingDeposits'
+	{
+		buf = tail[o34:o35]
+		num, err := ssz.DivideInt2(len(buf), 192, 134217728)
+		if err != nil {
+			return err
+		}
+		b.PendingDeposits = make([]*PendingDeposit, num)
+		for ii := 0; ii < num; ii++ {
+			if b.PendingDeposits[ii] == nil {
+				b.PendingDeposits[ii] = new(PendingDeposit)
+			}
+			if err = b.PendingDeposits[ii].UnmarshalSSZ(buf[ii*192 : (ii+1)*192]); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Field (35) 'PendingPartialWithdrawals'
+	{
+		buf = tail[o35:o36]
+		num, err := ssz.DivideInt2(len(buf), 24, 134217728)
+		if err != nil {
+			return err
+		}
+		b.PendingPartialWithdrawals = make([]*PendingPartialWithdrawal, num)
+		for ii := 0; ii < num; ii++ {
+			if b.PendingPartialWithdrawals[ii] == nil {
+				b.PendingPartialWithdrawals[ii] = new(PendingPartialWithdrawal)
+			}
+			if err = b.PendingPartialWithdrawals[ii].UnmarshalSSZ(buf[ii*24 : (ii+1)*24]); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Field (36) 'PendingConsolidations'
+	{
+		buf = tail[o36:]
+		num, err := ssz.DivideInt2(len(buf), 16, 262144)
+		if err != nil {
+			return err
+		}
+		b.PendingConsolidations = make([]*PendingConsolidation, num)
+		for ii := 0; ii < num; ii++ {
+			if b.PendingConsolidations[ii] == nil {
+				b.PendingConsolidations[ii] = new(PendingConsolidation)
+			}
+			if err = b.PendingConsolidations[ii].UnmarshalSSZ(buf[ii*16 : (ii+1)*16]); err != nil {
+				return err
+			}
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BeaconStateFulu object
+func (b *BeaconStateFulu) SizeSSZ() (size int) {
+	size = 2737225
+
+	// Field (7) 'HistoricalRoots'
+	size += len(b.HistoricalRoots) * 32
+
+	// Field (9) 'Eth1DataVotes'
+	size += len(b.Eth1DataVotes) * 72
+
+	// Field (11) 'Validators'
+	size += len(b.Validators) * 121
+
+	// Field (12) 'Balances'
+	size += len(b.Balances) * 8
+
+	// Field (15) 'PreviousEpochParticipation'
+	size += len(b.PreviousEpochParticipation)
+
+	// Field (16) 'CurrentEpochParticipation'
+	size += len(b.CurrentEpochParticipation)
+
+	// Field (21) 'InactivityScores'
+	size += len(b.InactivityScores) * 8
+
+	// Field (24) 'LatestExecutionPayloadHeader'
+	if b.LatestExecutionPayloadHeader == nil {
+		b.LatestExecutionPayloadHeader = new(v1.ExecutionPayloadHeaderDeneb)
+	}
+	size += b.LatestExecutionPayloadHeader.SizeSSZ()
+
+	// Field (27) 'HistoricalSummaries'
+	size += len(b.HistoricalSummaries) * 64
+
+	// Field (34) 'PendingDeposits'
+	size += len(b.PendingDeposits) * 192
+
+	// Field (35) 'PendingPartialWithdrawals'
+	size += len(b.PendingPartialWithdrawals) * 24
+
+	// Field (36) 'PendingConsolidations'
+	size += len(b.PendingConsolidations) * 16
+
+	return
+}
+
+// HashTreeRoot ssz hashes the BeaconStateFulu object
+func (b *BeaconStateFulu) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BeaconStateFulu object with a hasher
+func (b *BeaconStateFulu) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'GenesisTime'
+	hh.PutUint64(b.GenesisTime)
+
+	// Field (1) 'GenesisValidatorsRoot'
+	if size := len(b.GenesisValidatorsRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.GenesisValidatorsRoot", size, 32)
+		return
+	}
+	hh.PutBytes(b.GenesisValidatorsRoot)
+
+	// Field (2) 'Slot'
+	hh.PutUint64(uint64(b.Slot))
+
+	// Field (3) 'Fork'
+	if err = b.Fork.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (4) 'LatestBlockHeader'
+	if err = b.LatestBlockHeader.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (5) 'BlockRoots'
+	{
+		if size := len(b.BlockRoots); size != 8192 {
+			err = ssz.ErrVectorLengthFn("--.BlockRoots", size, 8192)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.BlockRoots {
+			if len(i) != 32 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.Append(i)
+		}
+		hh.Merkleize(subIndx)
+	}
+
+	// Field (6) 'StateRoots'
+	{
+		if size := len(b.StateRoots); size != 8192 {
+			err = ssz.ErrVectorLengthFn("--.StateRoots", size, 8192)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.StateRoots {
+			if len(i) != 32 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.Append(i)
+		}
+		hh.Merkleize(subIndx)
+	}
+
+	// Field (7) 'HistoricalRoots'
+	{
+		if size := len(b.HistoricalRoots); size > 16777216 {
+			err = ssz.ErrListTooBigFn("--.HistoricalRoots", size, 16777216)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.HistoricalRoots {
+			if len(i) != 32 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.Append(i)
+		}
+
+		numItems := uint64(len(b.HistoricalRoots))
+		hh.MerkleizeWithMixin(subIndx, numItems, 16777216)
+	}
+
+	// Field (8) 'Eth1Data'
+	if err = b.Eth1Data.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (9) 'Eth1DataVotes'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.Eth1DataVotes))
+		if num > 2048 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.Eth1DataVotes {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 2048)
+	}
+
+	// Field (10) 'Eth1DepositIndex'
+	hh.PutUint64(b.Eth1DepositIndex)
+
+	// Field (11) 'Validators'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.Validators))
+		if num > 1099511627776 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.Validators {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 1099511627776)
+	}
+
+	// Field (12) 'Balances'
+	{
+		if size := len(b.Balances); size > 1099511627776 {
+			err = ssz.ErrListTooBigFn("--.Balances", size, 1099511627776)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.Balances {
+			hh.AppendUint64(i)
+		}
+		hh.FillUpTo32()
+
+		numItems := uint64(len(b.Balances))
+		hh.MerkleizeWithMixin(subIndx, numItems, ssz.CalculateLimit(1099511627776, numItems, 8))
+	}
+
+	// Field (13) 'RandaoMixes'
+	{
+		if size := len(b.RandaoMixes); size != 65536 {
+			err = ssz.ErrVectorLengthFn("--.RandaoMixes", size, 65536)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.RandaoMixes {
+			if len(i) != 32 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.Append(i)
+		}
+		hh.Merkleize(subIndx)
+	}
+
+	// Field (14) 'Slashings'
+	{
+		if size := len(b.Slashings); size != 8192 {
+			err = ssz.ErrVectorLengthFn("--.Slashings", size, 8192)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.Slashings {
+			hh.AppendUint64(i)
+		}
+		hh.Merkleize(subIndx)
+	}
+
+	// Field (15) 'PreviousEpochParticipation'
+	{
+		elemIndx := hh.Index()
+		byteLen := uint64(len(b.PreviousEpochParticipation))
+		if byteLen > 1099511627776 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		hh.PutBytes(b.PreviousEpochParticipation)
+		hh.MerkleizeWithMixin(elemIndx, byteLen, (1099511627776+31)/32)
+	}
+
+	// Field (16) 'CurrentEpochParticipation'
+	{
+		elemIndx := hh.Index()
+		byteLen := uint64(len(b.CurrentEpochParticipation))
+		if byteLen > 1099511627776 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		hh.PutBytes(b.CurrentEpochParticipation)
+		hh.MerkleizeWithMixin(elemIndx, byteLen, (1099511627776+31)/32)
+	}
+
+	// Field (17) 'JustificationBits'
+	if size := len(b.JustificationBits); size != 1 {
+		err = ssz.ErrBytesLengthFn("--.JustificationBits", size, 1)
+		return
+	}
+	hh.PutBytes(b.JustificationBits)
+
+	// Field (18) 'PreviousJustifiedCheckpoint'
+	if err = b.PreviousJustifiedCheckpoint.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (19) 'CurrentJustifiedCheckpoint'
+	if err = b.CurrentJustifiedCheckpoint.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (20) 'FinalizedCheckpoint'
+	if err = b.FinalizedCheckpoint.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (21) 'InactivityScores'
+	{
+		if size := len(b.InactivityScores); size > 1099511627776 {
+			err = ssz.ErrListTooBigFn("--.InactivityScores", size, 1099511627776)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.InactivityScores {
+			hh.AppendUint64(i)
+		}
+		hh.FillUpTo32()
+
+		numItems := uint64(len(b.InactivityScores))
+		hh.MerkleizeWithMixin(subIndx, numItems, ssz.CalculateLimit(1099511627776, numItems, 8))
+	}
+
+	// Field (22) 'CurrentSyncCommittee'
+	if err = b.CurrentSyncCommittee.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (23) 'NextSyncCommittee'
+	if err = b.NextSyncCommittee.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (24) 'LatestExecutionPayloadHeader'
+	if err = b.LatestExecutionPayloadHeader.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (25) 'NextWithdrawalIndex'
+	hh.PutUint64(b.NextWithdrawalIndex)
+
+	// Field (26) 'NextWithdrawalValidatorIndex'
+	hh.PutUint64(uint64(b.NextWithdrawalValidatorIndex))
+
+	// Field (27) 'HistoricalSummaries'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.HistoricalSummaries))
+		if num > 16777216 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.HistoricalSummaries {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 16777216)
+	}
+
+	// Field (28) 'DepositRequestsStartIndex'
+	hh.PutUint64(b.DepositRequestsStartIndex)
+
+	// Field (29) 'DepositBalanceToConsume'
+	hh.PutUint64(uint64(b.DepositBalanceToConsume))
+
+	// Field (30) 'ExitBalanceToConsume'
+	hh.PutUint64(uint64(b.ExitBalanceToConsume))
+
+	// Field (31) 'EarliestExitEpoch'
+	hh.PutUint64(uint64(b.EarliestExitEpoch))
+
+	// Field (32) 'ConsolidationBalanceToConsume'
+	hh.PutUint64(uint64(b.ConsolidationBalanceToConsume))
+
+	// Field (33) 'EarliestConsolidationEpoch'
+	hh.PutUint64(uint64(b.EarliestConsolidationEpoch))
+
+	// Field (34) 'PendingDeposits'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.PendingDeposits))
+		if num > 134217728 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.PendingDeposits {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 134217728)
+	}
+
+	// Field (35) 'PendingPartialWithdrawals'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.PendingPartialWithdrawals))
+		if num > 134217728 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.PendingPartialWithdrawals {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 134217728)
+	}
+
+	// Field (36) 'PendingConsolidations'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.PendingConsolidations))
+		if num > 262144 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.PendingConsolidations {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 262144)
+	}
+
+	// Field (37) 'ProposerLookahead'
+	{
+		if size := len(b.ProposerLookahead); size != 64 {
+			err = ssz.ErrVectorLengthFn("--.ProposerLookahead", size, 64)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.ProposerLookahead {
+			hh.AppendUint64(i)
+		}
+		hh.Merkleize(subIndx)
 	}
 
 	hh.Merkleize(indx)
