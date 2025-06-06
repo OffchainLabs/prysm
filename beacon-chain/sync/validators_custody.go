@@ -1,13 +1,11 @@
 package sync
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/async"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 )
 
 const validatorCustodyPeriod = 1 * time.Minute
@@ -54,6 +52,7 @@ func (s *Service) setTargetValidatorsCustodyRequirement() {
 
 // updateToAdvertiseCustodyGroupCount updates the custody group count to advertise.
 func (s *Service) updateToAdvertiseCustodyGroupCount() {
+	// TODO: Add something here where correct conditions (all good subscriptions, enough peers?) are met AND valid before FULU
 	// Retrieve the registered topics, and store them in a map for quick lookup.
 	registeredTopicsSlice := s.subHandler.allTopics()
 	registeredTopics := make(map[string]bool, len(registeredTopicsSlice))
@@ -64,7 +63,7 @@ func (s *Service) updateToAdvertiseCustodyGroupCount() {
 	}
 
 	// Get the node ID.
-	nodeID := s.cfg.p2p.NodeID()
+	// nodeID := s.cfg.p2p.NodeID()
 
 	s.cfg.custodyInfo.Mut.Lock()
 	defer s.cfg.custodyInfo.Mut.Unlock()
@@ -73,19 +72,19 @@ func (s *Service) updateToAdvertiseCustodyGroupCount() {
 	targetCustodyGroupCount := s.cfg.custodyInfo.TargetGroupCount.Get()
 
 	// Get the peerDAS info.
-	info, _, err := peerdas.Info(nodeID, targetCustodyGroupCount)
-	if err != nil {
-		log.WithError(err).Error("Failed to get peerDAS info")
-		return
-	}
+	// info, _, err := peerdas.Info(nodeID, targetCustodyGroupCount)
+	// if err != nil {
+	// 	log.WithError(err).Error("Failed to get peerDAS info")
+	// 	return
+	// }
 
-	for column := range info.CustodyColumns {
-		topicMessage := fmt.Sprintf(p2p.GossipDataColumnSidecarMessage+"_%d", column)
-		if !registeredTopics[topicMessage] {
-			// At least one data column subnet we should be subscribed to is not.
-			return
-		}
-	}
+	// for column := range info.CustodyColumns {
+	// 	topicMessage := fmt.Sprintf(p2p.GossipDataColumnSidecarMessage+"_%d", column)
+	// 	if !registeredTopics[topicMessage] {
+	// 		// At least one data column subnet we should be subscribed to is not.
+	// 		return
+	// 	}
+	// }
 
 	// All data column subnets we should be subscribed to are.
 	s.cfg.custodyInfo.ToAdvertiseGroupCount.Set(targetCustodyGroupCount)

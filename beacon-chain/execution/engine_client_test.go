@@ -2441,7 +2441,7 @@ func Test_ExchangeCapabilities(t *testing.T) {
 		for _, item := range results {
 			require.NotNil(t, item)
 		}
-		assert.LogsContain(t, logHook, "Please update client, detected the following unsupported engine methods:")
+		assert.LogsContain(t, logHook, "Connected execution client does not support some requested engine methods")
 	})
 	t.Run("list of items", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
