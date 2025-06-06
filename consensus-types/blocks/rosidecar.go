@@ -11,8 +11,8 @@ type ROSidecar struct {
 }
 
 var (
-	ErrBlobNeeded       = errors.New("blob sidecar needed")
-	ErrDataColumnNeeded = errors.New("data column sidecar needed")
+	errBlobNeeded       = errors.New("blob sidecar needed")
+	errDataColumnNeeded = errors.New("data column sidecar needed")
 )
 
 // NewSidecarFromBlobSidecar creates a new read-only (generic) sidecar from a read-only blob sidecar.
@@ -50,7 +50,7 @@ func NewSidecarsFromDataColumnSidecars(dataColumnSidecars []RODataColumn) []ROSi
 // Blob returns the blob sidecar.
 func (sc *ROSidecar) Blob() (ROBlob, error) {
 	if sc.blob == nil {
-		return ROBlob{}, ErrBlobNeeded
+		return ROBlob{}, errBlobNeeded
 	}
 
 	return *sc.blob, nil
@@ -59,7 +59,7 @@ func (sc *ROSidecar) Blob() (ROBlob, error) {
 // DataColumn returns the data column sidecar.
 func (sc *ROSidecar) DataColumn() (RODataColumn, error) {
 	if sc.dataColumn == nil {
-		return RODataColumn{}, ErrDataColumnNeeded
+		return RODataColumn{}, errDataColumnNeeded
 	}
 
 	return *sc.dataColumn, nil

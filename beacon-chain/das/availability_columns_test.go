@@ -19,27 +19,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
-func roSidecarsFromDataColumnParamsByBlockRoot(t *testing.T, dataColumnParamsByBlockRoot verification.DataColumnsParamsByRoot) ([]blocks.ROSidecar, []blocks.RODataColumn) {
-	roDataColumns, _ := verification.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
-
-	roSidecars := make([]blocks.ROSidecar, 0, len(roDataColumns))
-	for _, roDataColumn := range roDataColumns {
-		roSidecars = append(roSidecars, blocks.NewSidecarFromDataColumnSidecar(roDataColumn))
-	}
-
-	return roSidecars, roDataColumns
-}
-
-func newSignedRoBlock(t *testing.T, signedBeaconBlock interface{}) blocks.ROBlock {
-	sb, err := blocks.NewSignedBeaconBlock(signedBeaconBlock)
-	require.NoError(t, err)
-
-	rb, err := blocks.NewROBlock(sb)
-	require.NoError(t, err)
-
-	return rb
-}
-
 var commitments = [][]byte{
 	bytesutil.PadTo([]byte("a"), 48),
 	bytesutil.PadTo([]byte("b"), 48),
@@ -59,7 +38,7 @@ func TestPersist(t *testing.T) {
 	t.Run("mixed roots", func(t *testing.T) {
 		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
 
-		dataColumnParamsByBlockRoot := map[[fieldparams.RootLength]byte][]verification.DataColumnParams{
+		dataColumnParamsByBlockRoot := map[[fieldparams.RootLength]byte][]util.DataColumnParams{
 			{1}: {{ColumnIndex: 1}},
 			{2}: {{ColumnIndex: 2}},
 		}
@@ -75,7 +54,7 @@ func TestPersist(t *testing.T) {
 	t.Run("outside DA period", func(t *testing.T) {
 		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
 
-		dataColumnParamsByBlockRoot := map[[fieldparams.RootLength]byte][]verification.DataColumnParams{
+		dataColumnParamsByBlockRoot := map[[fieldparams.RootLength]byte][]util.DataColumnParams{
 			{1}: {{ColumnIndex: 1}},
 		}
 
@@ -90,7 +69,7 @@ func TestPersist(t *testing.T) {
 	t.Run("nominal", func(t *testing.T) {
 		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
 
-		dataColumnParamsByBlockRoot := map[[fieldparams.RootLength]byte][]verification.DataColumnParams{
+		dataColumnParamsByBlockRoot := map[[fieldparams.RootLength]byte][]util.DataColumnParams{
 			{}: {{ColumnIndex: 1}, {ColumnIndex: 5}},
 		}
 
@@ -101,7 +80,7 @@ func TestPersist(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 1, len(lazilyPersistentStoreColumns.cache.entries))
 
-		key := dataColumnCacheKey{slot: 0, root: [32]byte{}}
+		key := cacheKey{slot: 0, root: [fieldparams.RootLength]byte{}}
 		entry := lazilyPersistentStoreColumns.cache.entries[key]
 
 		// A call to Persist does NOT save the sidecars to disk.
@@ -148,9 +127,9 @@ func TestIsDataAvailable(t *testing.T) {
 		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, newDataColumnsVerifier, &peerdas.CustodyInfo{})
 
 		indices := [...]uint64{1, 17, 87, 102}
-		dataColumnsParams := make([]verification.DataColumnParams, 0, len(indices))
+		dataColumnsParams := make([]util.DataColumnParams, 0, len(indices))
 		for _, index := range indices {
-			dataColumnParams := verification.DataColumnParams{
+			dataColumnParams := util.DataColumnParams{
 				ColumnIndex:    index,
 				KzgCommitments: commitments,
 			}
@@ -158,10 +137,10 @@ func TestIsDataAvailable(t *testing.T) {
 			dataColumnsParams = append(dataColumnsParams, dataColumnParams)
 		}
 
-		dataColumnsParamsByBlockRoot := verification.DataColumnsParamsByRoot{root: dataColumnsParams}
-		_, verifiedRoDataColumns := verification.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnsParamsByBlockRoot)
+		dataColumnsParamsByBlockRoot := util.DataColumnsParamsByRoot{root: dataColumnsParams}
+		_, verifiedRoDataColumns := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnsParamsByBlockRoot)
 
-		key := dataColumnCacheKey{root: root}
+		key := cacheKey{root: root}
 		entry := lazilyPersistentStoreColumns.cache.ensure(key)
 		defer lazilyPersistentStoreColumns.cache.delete(key)
 
@@ -243,6 +222,27 @@ func TestFullCommitmentsToCheck(t *testing.T) {
 			}
 		})
 	}
+}
+
+func roSidecarsFromDataColumnParamsByBlockRoot(t *testing.T, dataColumnParamsByBlockRoot util.DataColumnsParamsByRoot) ([]blocks.ROSidecar, []blocks.RODataColumn) {
+	roDataColumns, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
+
+	roSidecars := make([]blocks.ROSidecar, 0, len(roDataColumns))
+	for _, roDataColumn := range roDataColumns {
+		roSidecars = append(roSidecars, blocks.NewSidecarFromDataColumnSidecar(roDataColumn))
+	}
+
+	return roSidecars, roDataColumns
+}
+
+func newSignedRoBlock(t *testing.T, signedBeaconBlock interface{}) blocks.ROBlock {
+	sb, err := blocks.NewSignedBeaconBlock(signedBeaconBlock)
+	require.NoError(t, err)
+
+	rb, err := blocks.NewROBlock(sb)
+	require.NoError(t, err)
+
+	return rb
 }
 
 type mockDataColumnsVerifier struct {

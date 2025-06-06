@@ -4,15 +4,15 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 )
 
 func TestEnsureDeleteSetDiskSummary(t *testing.T) {
 	c := newDataColumnCache()
-	key := dataColumnCacheKey{}
+	key := cacheKey{}
 	entry := c.ensure(key)
 	require.DeepEqual(t, dataColumnCacheEntry{}, *entry)
 
@@ -28,8 +28,8 @@ func TestEnsureDeleteSetDiskSummary(t *testing.T) {
 
 func TestStash(t *testing.T) {
 	t.Run("Index too high", func(t *testing.T) {
-		dataColumnParamsByBlockRoot := verification.DataColumnsParamsByRoot{{1}: {{ColumnIndex: 10_000}}}
-		roDataColumns, _ := verification.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
+		dataColumnParamsByBlockRoot := util.DataColumnsParamsByRoot{{1}: {{ColumnIndex: 10_000}}}
+		roDataColumns, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
 
 		var entry dataColumnCacheEntry
 		err := entry.stash(&roDataColumns[0])
@@ -37,8 +37,8 @@ func TestStash(t *testing.T) {
 	})
 
 	t.Run("Nominal and already existing", func(t *testing.T) {
-		dataColumnParamsByBlockRoot := verification.DataColumnsParamsByRoot{{1}: {{ColumnIndex: 1}}}
-		roDataColumns, _ := verification.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
+		dataColumnParamsByBlockRoot := util.DataColumnsParamsByRoot{{1}: {{ColumnIndex: 1}}}
+		roDataColumns, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
 
 		var entry dataColumnCacheEntry
 		err := entry.stash(&roDataColumns[0])
@@ -79,8 +79,8 @@ func TestFilterDataColumns(t *testing.T) {
 		root := [fieldparams.RootLength]byte{}
 		commitmentsArray := safeCommitmentsArray{nil, [][]byte{[]byte{1}}}
 
-		dataColumnParamsByBlockRoot := verification.DataColumnsParamsByRoot{root: {{ColumnIndex: 1}}}
-		roDataColumns, _ := verification.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
+		dataColumnParamsByBlockRoot := util.DataColumnsParamsByRoot{root: {{ColumnIndex: 1}}}
+		roDataColumns, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
 
 		var scs [fieldparams.NumberOfColumns]*blocks.RODataColumn
 		scs[1] = &roDataColumns[0]
@@ -97,8 +97,8 @@ func TestFilterDataColumns(t *testing.T) {
 
 		diskSummary := filesystem.NewDataColumnStorageSummary(42, [fieldparams.NumberOfColumns]bool{false, true})
 
-		dataColumnParamsByBlockRoot := verification.DataColumnsParamsByRoot{root: {{ColumnIndex: 3, KzgCommitments: [][]byte{[]byte{3}}}}}
-		expected, _ := verification.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
+		dataColumnParamsByBlockRoot := util.DataColumnsParamsByRoot{root: {{ColumnIndex: 3, KzgCommitments: [][]byte{[]byte{3}}}}}
+		expected, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
 
 		var scs [fieldparams.NumberOfColumns]*blocks.RODataColumn
 		scs[3] = &expected[0]
@@ -121,4 +121,24 @@ func TestNonEmptyIndices(t *testing.T) {
 	s := safeCommitmentsArray{nil, [][]byte{[]byte{10}}, nil, [][]byte{[]byte{20}}}
 	actual := s.nonEmptyIndices()
 	require.DeepEqual(t, map[uint64]bool{1: true, 3: true}, actual)
+}
+
+func TestSliceBytesEqual(t *testing.T) {
+	t.Run("Different lengths", func(t *testing.T) {
+		a := [][]byte{[]byte{1, 2, 3}}
+		b := [][]byte{[]byte{1, 2, 3}, []byte{4, 5, 6}}
+		require.Equal(t, false, sliceBytesEqual(a, b))
+	})
+
+	t.Run("Same length but different content", func(t *testing.T) {
+		a := [][]byte{[]byte{1, 2, 3}, []byte{4, 5, 6}}
+		b := [][]byte{[]byte{1, 2, 3}, []byte{4, 5, 7}}
+		require.Equal(t, false, sliceBytesEqual(a, b))
+	})
+
+	t.Run("Equal slices", func(t *testing.T) {
+		a := [][]byte{[]byte{1, 2, 3}, []byte{4, 5, 6}}
+		b := [][]byte{[]byte{1, 2, 3}, []byte{4, 5, 6}}
+		require.Equal(t, true, sliceBytesEqual(a, b))
+	})
 }

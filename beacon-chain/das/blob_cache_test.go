@@ -14,7 +14,7 @@ import (
 )
 
 func TestCacheEnsureDelete(t *testing.T) {
-	c := newCache()
+	c := newBlobCache()
 	require.Equal(t, 0, len(c.entries))
 	root := bytesutil.ToBytes32([]byte("root"))
 	slot := primitives.Slot(1234)
@@ -25,18 +25,18 @@ func TestCacheEnsureDelete(t *testing.T) {
 
 	c.delete(k)
 	require.Equal(t, 0, len(c.entries))
-	var nilEntry *cacheEntry
+	var nilEntry *blobCacheEntry
 	require.Equal(t, nilEntry, c.entries[k])
 }
 
-type filterTestCaseSetupFunc func(t *testing.T) (*cacheEntry, [][]byte, []blocks.ROBlob)
+type filterTestCaseSetupFunc func(t *testing.T) (*blobCacheEntry, [][]byte, []blocks.ROBlob)
 
 func filterTestCaseSetup(slot primitives.Slot, nBlobs int, onDisk []int, numExpected int) filterTestCaseSetupFunc {
-	return func(t *testing.T) (*cacheEntry, [][]byte, []blocks.ROBlob) {
+	return func(t *testing.T) (*blobCacheEntry, [][]byte, []blocks.ROBlob) {
 		blk, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, slot, nBlobs)
 		commits, err := commitmentsToCheck(blk, blk.Block().Slot())
 		require.NoError(t, err)
-		entry := &cacheEntry{}
+		entry := &blobCacheEntry{}
 		if len(onDisk) > 0 {
 			od := map[[32]byte][]int{blk.Root(): onDisk}
 			sumz := filesystem.NewMockBlobStorageSummarizer(t, od)
@@ -125,12 +125,12 @@ func TestFilter(t *testing.T) {
 	require.NoError(t, err)
 	cases := []struct {
 		name  string
-		setup func(t *testing.T) (*cacheEntry, [][]byte, []blocks.ROBlob)
+		setup func(t *testing.T) (*blobCacheEntry, [][]byte, []blocks.ROBlob)
 		err   error
 	}{
 		{
 			name: "commitments mismatch - extra sidecar",
-			setup: func(t *testing.T) (*cacheEntry, [][]byte, []blocks.ROBlob) {
+			setup: func(t *testing.T) (*blobCacheEntry, [][]byte, []blocks.ROBlob) {
 				entry, commits, expected := filterTestCaseSetup(denebSlot, 6, []int{0, 1}, 4)(t)
 				commits[5] = nil
 				return entry, commits, expected
@@ -139,7 +139,7 @@ func TestFilter(t *testing.T) {
 		},
 		{
 			name: "sidecar missing",
-			setup: func(t *testing.T) (*cacheEntry, [][]byte, []blocks.ROBlob) {
+			setup: func(t *testing.T) (*blobCacheEntry, [][]byte, []blocks.ROBlob) {
 				entry, commits, expected := filterTestCaseSetup(denebSlot, 6, []int{0, 1}, 4)(t)
 				entry.scs[5] = nil
 				return entry, commits, expected
@@ -148,7 +148,7 @@ func TestFilter(t *testing.T) {
 		},
 		{
 			name: "commitments mismatch - different bytes",
-			setup: func(t *testing.T) (*cacheEntry, [][]byte, []blocks.ROBlob) {
+			setup: func(t *testing.T) (*blobCacheEntry, [][]byte, []blocks.ROBlob) {
 				entry, commits, expected := filterTestCaseSetup(denebSlot, 6, []int{0, 1}, 4)(t)
 				entry.scs[5].KzgCommitment = []byte("nope")
 				return entry, commits, expected
