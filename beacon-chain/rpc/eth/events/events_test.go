@@ -31,7 +31,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/ethereum/go-ethereum/common"
-	sse "github.com/r3labs/sse/v2"
+	"github.com/r3labs/sse/v2"
 	"github.com/sirupsen/logrus"
 )
 
@@ -121,6 +121,7 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 		AttesterSlashingTopic,
 		ProposerSlashingTopic,
 		BlockGossipTopic,
+		DataColumnTopic,
 	})
 	require.NoError(t, err)
 	ro, err := blocks.NewROBlob(util.HydrateBlobSidecar(&eth.BlobSidecar{}))
@@ -299,6 +300,15 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 			Type: operation.BlockGossipReceived,
 			Data: &operation.BlockGossipReceivedData{
 				SignedBlock: signedBlock,
+			},
+		},
+		{
+			Type: operation.DataColumnReceived,
+			Data: &operation.DataColumnReceivedData{
+				Slot:           1,
+				Index:          2,
+				BlockRoot:      [32]byte{'a'},
+				KzgCommitments: [][]byte{{'a'}, {'b'}, {'c'}},
 			},
 		},
 	}
@@ -709,7 +719,7 @@ func TestStuckReaderScenarios(t *testing.T) {
 
 func wedgedWriterTestCase(t *testing.T, queueDepth func([]*feed.Event) int) {
 	topics, events := operationEventsFixtures(t)
-	require.Equal(t, 11, len(events))
+	require.Equal(t, 12, len(events))
 
 	// set eventFeedDepth to a number lower than the events we intend to send to force the server to drop the reader.
 	stn := mockChain.NewEventFeedWrapper()

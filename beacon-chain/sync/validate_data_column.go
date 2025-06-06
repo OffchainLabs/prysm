@@ -6,6 +6,8 @@ import (
 	"math"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -203,6 +205,18 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	}:
 	default:
 		log.WithField("slot", roDataColumn.Slot()).Warn("Failed to send data column log entry")
+	}
+
+	if s.cfg.operationNotifier != nil {
+		s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
+			Type: operation.DataColumnReceived,
+			Data: &operation.DataColumnReceivedData{
+				Slot:           roDataColumn.Slot(),
+				Index:          roDataColumn.Index,
+				BlockRoot:      roDataColumn.BlockRoot(),
+				KzgCommitments: bytesutil.SafeCopy2dBytes(roDataColumn.KzgCommitments),
+			},
+		})
 	}
 
 	return pubsub.ValidationAccept, nil
