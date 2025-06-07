@@ -59,10 +59,7 @@ func ConfigureGlobalFlags(ctx *cli.Context) {
 	cfg.DataColumnBatchLimitBurstFactor = ctx.Int(DataColumnBatchLimitBurstFactor.Name)
 	cfg.MinimumPeersPerSubnet = ctx.Int(MinPeersPerSubnet.Name)
 	cfg.MaxConcurrentDials = ctx.Int(MaxConcurrentDials.Name)
-	if ctx.Bool(SubscribeAllDataSubnets.Name) {
-		log.Warning("Subscribing to all data subnets")
-		cfg.SubscribeAllDataSubnets = true
-	}
+
 	configureMinimumPeers(ctx, cfg)
 
 	Init(cfg)
