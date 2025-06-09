@@ -40,7 +40,7 @@ func TestGet(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	jsonRestHandler := BeaconApiJsonRestHandler{
+	jsonRestHandler := BeaconApiRestHandler{
 		client: http.Client{Timeout: time.Second * 5},
 		host:   server.URL,
 	}
@@ -86,7 +86,7 @@ func TestPost(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	jsonRestHandler := BeaconApiJsonRestHandler{
+	jsonRestHandler := BeaconApiRestHandler{
 		client: http.Client{Timeout: time.Second * 5},
 		host:   server.URL,
 	}
