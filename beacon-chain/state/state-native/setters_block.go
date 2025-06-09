@@ -30,7 +30,11 @@ func (b *BeaconState) SetBlockRoots(val [][]byte) error {
 		if b.blockRootsMultiValue != nil {
 			b.blockRootsMultiValue.Detach(b)
 		}
-		b.blockRootsMultiValue = NewMultiValueBlockRoots(val)
+		var err error
+		b.blockRootsMultiValue, err = NewMultiValueBlockRoots(val)
+		if err != nil {
+			return err
+		}
 	} else {
 		b.sharedFieldReferences[types.BlockRoots].MinusRef()
 		b.sharedFieldReferences[types.BlockRoots] = stateutil.NewRef(1)

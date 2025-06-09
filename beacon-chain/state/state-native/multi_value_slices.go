@@ -1,11 +1,12 @@
 package state_native
 
 import (
+	"fmt"
 	"runtime"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/types"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	multi_value_slice "github.com/OffchainLabs/prysm/v6/container/multi-value-slice"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -38,48 +39,57 @@ var (
 type MultiValueRandaoMixes = multi_value_slice.Slice[[32]byte]
 
 // NewMultiValueRandaoMixes creates a new slice whose shared items will be populated with copies of input values.
-func NewMultiValueRandaoMixes(mixes [][]byte) *MultiValueRandaoMixes {
+func NewMultiValueRandaoMixes(mixes [][]byte) (*MultiValueRandaoMixes, error) {
 	items := make([][32]byte, len(mixes))
 	for i, v := range mixes {
-		items[i] = [32]byte(bytesutil.PadTo(v, 32))
+		if len(v) != fieldparams.RootLength {
+			return nil, fmt.Errorf("item has length %d instead of required %d", len(v), fieldparams.RootLength)
+		}
+		items[i] = [32]byte(v)
 	}
 	mv := &MultiValueRandaoMixes{}
 	mv.Init(items)
 	multiValueCountGauge.WithLabelValues(types.RandaoMixes.String()).Inc()
 	runtime.SetFinalizer(mv, randaoMixesFinalizer)
-	return mv
+	return mv, nil
 }
 
 // MultiValueBlockRoots is a multi-value slice of block roots.
 type MultiValueBlockRoots = multi_value_slice.Slice[[32]byte]
 
 // NewMultiValueBlockRoots creates a new slice whose shared items will be populated with copies of input values.
-func NewMultiValueBlockRoots(roots [][]byte) *MultiValueBlockRoots {
+func NewMultiValueBlockRoots(roots [][]byte) (*MultiValueBlockRoots, error) {
 	items := make([][32]byte, len(roots))
 	for i, v := range roots {
-		items[i] = [32]byte(bytesutil.PadTo(v, 32))
+		if len(v) != fieldparams.RootLength {
+			return nil, fmt.Errorf("item has length %d instead of required %d", len(v), fieldparams.RootLength)
+		}
+		items[i] = [32]byte(v)
 	}
 	mv := &MultiValueBlockRoots{}
 	mv.Init(items)
 	multiValueCountGauge.WithLabelValues(types.BlockRoots.String()).Inc()
 	runtime.SetFinalizer(mv, blockRootsFinalizer)
-	return mv
+	return mv, nil
 }
 
 // MultiValueStateRoots is a multi-value slice of state roots.
 type MultiValueStateRoots = multi_value_slice.Slice[[32]byte]
 
 // NewMultiValueStateRoots creates a new slice whose shared items will be populated with copies of input values.
-func NewMultiValueStateRoots(roots [][]byte) *MultiValueStateRoots {
+func NewMultiValueStateRoots(roots [][]byte) (*MultiValueStateRoots, error) {
 	items := make([][32]byte, len(roots))
 	for i, v := range roots {
-		items[i] = [32]byte(bytesutil.PadTo(v, 32))
+		if len(v) != fieldparams.RootLength {
+			return nil, fmt.Errorf("item has length %d instead of required %d", len(v), fieldparams.RootLength)
+		}
+		items[i] = [32]byte(v)
 	}
 	mv := &MultiValueStateRoots{}
 	mv.Init(items)
 	multiValueCountGauge.WithLabelValues(types.StateRoots.String()).Inc()
 	runtime.SetFinalizer(mv, stateRootsFinalizer)
-	return mv
+	return mv, nil
 }
 
 // MultiValueBalances is a multi-value slice of balances.

@@ -19,7 +19,11 @@ func (b *BeaconState) SetStateRoots(val [][]byte) error {
 		if b.stateRootsMultiValue != nil {
 			b.stateRootsMultiValue.Detach(b)
 		}
-		b.stateRootsMultiValue = NewMultiValueStateRoots(val)
+		var err error
+		b.stateRootsMultiValue, err = NewMultiValueStateRoots(val)
+		if err != nil {
+			return err
+		}
 	} else {
 		b.sharedFieldReferences[types.StateRoots].MinusRef()
 		b.sharedFieldReferences[types.StateRoots] = stateutil.NewRef(1)

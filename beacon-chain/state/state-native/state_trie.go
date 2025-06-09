@@ -205,9 +205,19 @@ func InitializeFromProtoUnsafePhase0(st *ethpb.BeaconState) (state.BeaconState, 
 	}
 
 	if features.Get().EnableExperimentalState {
-		b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
-		b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
-		b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
+		var err error
+		b.blockRootsMultiValue, err = NewMultiValueBlockRoots(st.BlockRoots)
+		if err != nil {
+			return nil, err
+		}
+		b.stateRootsMultiValue, err = NewMultiValueStateRoots(st.StateRoots)
+		if err != nil {
+			return nil, err
+		}
+		b.randaoMixesMultiValue, err = NewMultiValueRandaoMixes(st.RandaoMixes)
+		if err != nil {
+			return nil, err
+		}
 		b.balancesMultiValue = NewMultiValueBalances(st.Balances)
 		b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
 		b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStatePhase0SharedFieldRefCount)
@@ -311,9 +321,19 @@ func InitializeFromProtoUnsafeAltair(st *ethpb.BeaconStateAltair) (state.BeaconS
 	}
 
 	if features.Get().EnableExperimentalState {
-		b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
-		b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
-		b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
+		var err error
+		b.blockRootsMultiValue, err = NewMultiValueBlockRoots(st.BlockRoots)
+		if err != nil {
+			return nil, err
+		}
+		b.stateRootsMultiValue, err = NewMultiValueStateRoots(st.StateRoots)
+		if err != nil {
+			return nil, err
+		}
+		b.randaoMixesMultiValue, err = NewMultiValueRandaoMixes(st.RandaoMixes)
+		if err != nil {
+			return nil, err
+		}
 		b.balancesMultiValue = NewMultiValueBalances(st.Balances)
 		b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
 		b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
@@ -421,9 +441,19 @@ func InitializeFromProtoUnsafeBellatrix(st *ethpb.BeaconStateBellatrix) (state.B
 	}
 
 	if features.Get().EnableExperimentalState {
-		b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
-		b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
-		b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
+		var err error
+		b.blockRootsMultiValue, err = NewMultiValueBlockRoots(st.BlockRoots)
+		if err != nil {
+			return nil, err
+		}
+		b.stateRootsMultiValue, err = NewMultiValueStateRoots(st.StateRoots)
+		if err != nil {
+			return nil, err
+		}
+		b.randaoMixesMultiValue, err = NewMultiValueRandaoMixes(st.RandaoMixes)
+		if err != nil {
+			return nil, err
+		}
 		b.balancesMultiValue = NewMultiValueBalances(st.Balances)
 		b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
 		b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
@@ -535,9 +565,19 @@ func InitializeFromProtoUnsafeCapella(st *ethpb.BeaconStateCapella) (state.Beaco
 	}
 
 	if features.Get().EnableExperimentalState {
-		b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
-		b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
-		b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
+		var err error
+		b.blockRootsMultiValue, err = NewMultiValueBlockRoots(st.BlockRoots)
+		if err != nil {
+			return nil, err
+		}
+		b.stateRootsMultiValue, err = NewMultiValueStateRoots(st.StateRoots)
+		if err != nil {
+			return nil, err
+		}
+		b.randaoMixesMultiValue, err = NewMultiValueRandaoMixes(st.RandaoMixes)
+		if err != nil {
+			return nil, err
+		}
 		b.balancesMultiValue = NewMultiValueBalances(st.Balances)
 		b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
 		b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
@@ -648,9 +688,19 @@ func InitializeFromProtoUnsafeDeneb(st *ethpb.BeaconStateDeneb) (state.BeaconSta
 	}
 
 	if features.Get().EnableExperimentalState {
-		b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
-		b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
-		b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
+		var err error
+		b.blockRootsMultiValue, err = NewMultiValueBlockRoots(st.BlockRoots)
+		if err != nil {
+			return nil, err
+		}
+		b.stateRootsMultiValue, err = NewMultiValueStateRoots(st.StateRoots)
+		if err != nil {
+			return nil, err
+		}
+		b.randaoMixesMultiValue, err = NewMultiValueRandaoMixes(st.RandaoMixes)
+		if err != nil {
+			return nil, err
+		}
 		b.balancesMultiValue = NewMultiValueBalances(st.Balances)
 		b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
 		b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
@@ -770,9 +820,19 @@ func InitializeFromProtoUnsafeElectra(st *ethpb.BeaconStateElectra) (state.Beaco
 	}
 
 	if features.Get().EnableExperimentalState {
-		b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
-		b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
-		b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
+		var err error
+		b.blockRootsMultiValue, err = NewMultiValueBlockRoots(st.BlockRoots)
+		if err != nil {
+			return nil, err
+		}
+		b.stateRootsMultiValue, err = NewMultiValueStateRoots(st.StateRoots)
+		if err != nil {
+			return nil, err
+		}
+		b.randaoMixesMultiValue, err = NewMultiValueRandaoMixes(st.RandaoMixes)
+		if err != nil {
+			return nil, err
+		}
 		b.balancesMultiValue = NewMultiValueBalances(st.Balances)
 		b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
 		b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
@@ -895,9 +955,19 @@ func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateElectra) (state.BeaconSt
 	}
 
 	if features.Get().EnableExperimentalState {
-		b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
-		b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
-		b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
+		var err error
+		b.blockRootsMultiValue, err = NewMultiValueBlockRoots(st.BlockRoots)
+		if err != nil {
+			return nil, err
+		}
+		b.stateRootsMultiValue, err = NewMultiValueStateRoots(st.StateRoots)
+		if err != nil {
+			return nil, err
+		}
+		b.randaoMixesMultiValue, err = NewMultiValueRandaoMixes(st.RandaoMixes)
+		if err != nil {
+			return nil, err
+		}
 		b.balancesMultiValue = NewMultiValueBalances(st.Balances)
 		b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
 		b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)

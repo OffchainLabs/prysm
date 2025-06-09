@@ -19,7 +19,11 @@ func (b *BeaconState) SetRandaoMixes(val [][]byte) error {
 		if b.randaoMixesMultiValue != nil {
 			b.randaoMixesMultiValue.Detach(b)
 		}
-		b.randaoMixesMultiValue = NewMultiValueRandaoMixes(val)
+		var err error
+		b.randaoMixesMultiValue, err = NewMultiValueRandaoMixes(val)
+		if err != nil {
+			return err
+		}
 	} else {
 		b.sharedFieldReferences[types.RandaoMixes].MinusRef()
 		b.sharedFieldReferences[types.RandaoMixes] = stateutil.NewRef(1)
