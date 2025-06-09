@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/network/forks"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
@@ -237,4 +238,31 @@ func WriteLightClientFinalityUpdateChunk(stream libp2pcore.Stream, tor blockchai
 	}
 	_, err = encoding.EncodeWithMaxLength(stream, update)
 	return err
+}
+
+// WriteDataColumnSidecarChunk writes data column chunk object to stream.
+// response_chunk  ::= <result> | <context-bytes> | <encoding-dependent-header> | <encoded-payload>
+func WriteDataColumnSidecarChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, encoding encoder.NetworkEncoding, sidecar *ethpb.DataColumnSidecar) error {
+	// Success response code.
+	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
+		return errors.Wrap(err, "stream write")
+	}
+
+	// Fork digest.
+	genesisValidatorsRoot := tor.GenesisValidatorsRoot()
+	ctxBytes, err := forks.ForkDigestFromEpoch(slots.ToEpoch(sidecar.SignedBlockHeader.Header.Slot), genesisValidatorsRoot[:])
+	if err != nil {
+		return errors.Wrap(err, "fork digest from epoch")
+	}
+
+	if err := writeContextToStream(ctxBytes[:], stream); err != nil {
+		return errors.Wrap(err, "write context to stream")
+	}
+
+	// Sidecar.
+	if _, err = encoding.EncodeWithMaxLength(stream, sidecar); err != nil {
+		return errors.Wrap(err, "encode with max length")
+	}
+
+	return nil
 }

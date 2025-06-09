@@ -39,6 +39,7 @@ var (
 	errBlobResponseOutOfBounds        = errors.Wrap(verification.ErrBlobInvalid, "received BlobSidecar with slot outside BlobSidecarsByRangeRequest bounds")
 	errChunkResponseBlockMismatch     = errors.Wrap(verification.ErrBlobInvalid, "blob block details do not match")
 	errChunkResponseParentMismatch    = errors.Wrap(verification.ErrBlobInvalid, "parent root for response element doesn't match previous element root")
+	errDataColumnChunkedReadFailure   = errors.New("failed to read stream of chunk-encoded data columns")
 )
 
 // BeaconBlockProcessor defines a block processing function, which allows to start utilizing
@@ -382,4 +383,54 @@ func readChunkedBlobSidecar(stream network.Stream, encoding encoder.NetworkEncod
 	}
 
 	return rob, nil
+}
+
+func readChunkedDataColumnSideCar(
+	stream network.Stream,
+	p2pApi p2p.P2P,
+	ctxMap ContextByteVersions,
+) (*blocks.RODataColumn, error) {
+	// Read the status code from the stream.
+	statusCode, errMessage, err := ReadStatusCode(stream, p2pApi.Encoding())
+	if err != nil {
+		return nil, errors.Wrap(err, "read status code")
+	}
+
+	if statusCode != 0 {
+		return nil, errors.Wrap(errDataColumnChunkedReadFailure, errMessage)
+	}
+
+	// Retrieve the fork digest.
+	ctxBytes, err := readContextFromStream(stream)
+	if err != nil {
+		return nil, errors.Wrap(err, "read context from stream")
+	}
+
+	// Check if the fork digest is recognized.
+	msgVersion, ok := ctxMap[bytesutil.ToBytes4(ctxBytes)]
+	if !ok {
+		return nil, errors.Errorf("unrecognized fork digest %#x", ctxBytes)
+	}
+
+	// Check if we are on Fulu.
+	if msgVersion < version.Fulu {
+		return nil, errors.Errorf(
+			"unexpected context bytes for DataColumnSidecar, ctx=%#x, msgVersion=%v, minimalSupportedVersion=%v",
+			ctxBytes, version.String(msgVersion), version.String(version.Fulu),
+		)
+	}
+
+	// Decode the data column sidecar from the stream.
+	dataColumnSidecar := new(ethpb.DataColumnSidecar)
+	if err := p2pApi.Encoding().DecodeWithMaxLength(stream, dataColumnSidecar); err != nil {
+		return nil, errors.Wrap(err, "failed to decode the protobuf-encoded BlobSidecar message from RPC chunk stream")
+	}
+
+	// Create a read-only data column from the data column sidecar.
+	roDataColumn, err := blocks.NewRODataColumn(dataColumnSidecar)
+	if err != nil {
+		return nil, errors.Wrap(err, "new read only data column")
+	}
+
+	return &roDataColumn, nil
 }

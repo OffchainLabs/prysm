@@ -61,6 +61,12 @@ const LightClientFinalityUpdateName = "/light_client_finality_update"
 // LightClientOptimisticUpdateName is the name for the LightClientOptimisticUpdate topic.
 const LightClientOptimisticUpdateName = "/light_client_optimistic_update"
 
+// DataColumnSidecarsByRootName is the name for the DataColumnSidecarsByRoot v1 message topic.
+const DataColumnSidecarsByRootName = "/data_column_sidecars_by_root"
+
+// DataColumnSidecarsByRangeName is the name for the DataColumnSidecarsByRange v1 message topic.
+const DataColumnSidecarsByRangeName = "/data_column_sidecars_by_range"
+
 const (
 	// V1 RPC Topics
 	// RPCStatusTopicV1 defines the v1 topic for the status rpc method.
@@ -92,6 +98,9 @@ const (
 	RPCLightClientFinalityUpdateTopicV1 = protocolPrefix + LightClientFinalityUpdateName + SchemaVersionV1
 	// RPCLightClientOptimisticUpdateTopicV1 is a topic for requesting a light client Optimistic update.
 	RPCLightClientOptimisticUpdateTopicV1 = protocolPrefix + LightClientOptimisticUpdateName + SchemaVersionV1
+	// RPCDataColumnSidecarsByRootTopicV1 is a topic for requesting data column sidecars by their block root.
+	// /eth2/beacon_chain/req/data_column_sidecars_by_root/1 - New in Fulu.
+	RPCDataColumnSidecarsByRootTopicV1 = protocolPrefix + DataColumnSidecarsByRootName + SchemaVersionV1
 
 	// V2 RPC Topics
 	// RPCBlocksByRangeTopicV2 defines v2 the topic for the blocks by range rpc method.
@@ -139,6 +148,9 @@ var RPCTopicMappings = map[string]interface{}{
 	RPCLightClientUpdatesByRangeTopicV1:   new(pb.LightClientUpdatesByRangeRequest),
 	RPCLightClientFinalityUpdateTopicV1:   new(interface{}),
 	RPCLightClientOptimisticUpdateTopicV1: new(interface{}),
+
+	// DataColumnSidecarsByRoot v1 Message
+	RPCDataColumnSidecarsByRootTopicV1: new(p2ptypes.DataColumnsByRootIdentifiers),
 }
 
 // Maps all registered protocol prefixes.
@@ -161,6 +173,7 @@ var messageMapping = map[string]bool{
 	LightClientUpdatesByRangeName:   true,
 	LightClientFinalityUpdateName:   true,
 	LightClientOptimisticUpdateName: true,
+	DataColumnSidecarsByRootName:    true,
 }
 
 // Maps all the RPC messages which are to updated in altair.

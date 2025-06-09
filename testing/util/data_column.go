@@ -58,7 +58,7 @@ func CreateTestVerifiedRoDataColumnSidecars(t *testing.T, params []DataColumnPar
 		}
 
 		for i, proof := range param.KzgCommitmentsInclusionProof {
-			kzgCommitmentsInclusionProof[i] = proof
+			copy(kzgCommitmentsInclusionProof[i], proof)
 		}
 
 		dataColumnSidecar := &ethpb.DataColumnSidecar{
