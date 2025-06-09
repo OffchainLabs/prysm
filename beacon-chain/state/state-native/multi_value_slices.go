@@ -4,7 +4,6 @@ import (
 	"runtime"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/types"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	multi_value_slice "github.com/OffchainLabs/prysm/v6/container/multi-value-slice"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -40,7 +39,7 @@ type MultiValueRandaoMixes = multi_value_slice.Slice[[32]byte]
 
 // NewMultiValueRandaoMixes creates a new slice whose shared items will be populated with copies of input values.
 func NewMultiValueRandaoMixes(mixes [][]byte) *MultiValueRandaoMixes {
-	items := make([][32]byte, fieldparams.RandaoMixesLength)
+	items := make([][32]byte, len(mixes))
 	for i, v := range mixes {
 		items[i] = [32]byte(bytesutil.PadTo(v, 32))
 	}
@@ -56,7 +55,7 @@ type MultiValueBlockRoots = multi_value_slice.Slice[[32]byte]
 
 // NewMultiValueBlockRoots creates a new slice whose shared items will be populated with copies of input values.
 func NewMultiValueBlockRoots(roots [][]byte) *MultiValueBlockRoots {
-	items := make([][32]byte, fieldparams.BlockRootsLength)
+	items := make([][32]byte, len(roots))
 	for i, v := range roots {
 		items[i] = [32]byte(bytesutil.PadTo(v, 32))
 	}
@@ -72,7 +71,7 @@ type MultiValueStateRoots = multi_value_slice.Slice[[32]byte]
 
 // NewMultiValueStateRoots creates a new slice whose shared items will be populated with copies of input values.
 func NewMultiValueStateRoots(roots [][]byte) *MultiValueStateRoots {
-	items := make([][32]byte, fieldparams.StateRootsLength)
+	items := make([][32]byte, len(roots))
 	for i, v := range roots {
 		items[i] = [32]byte(bytesutil.PadTo(v, 32))
 	}
