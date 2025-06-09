@@ -70,7 +70,7 @@ func (m *MockJsonRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]by
 // GetSSZ indicates an expected call of GetSSZ.
 func (mr *MockJsonRestHandlerMockRecorder) GetSSZ(ctx, endpoint any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSSZ", reflect.TypeOf((*MockJsonRestHandler)(nil).Get), ctx, endpoint)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSSZ", reflect.TypeOf((*MockJsonRestHandler)(nil).GetSSZ), ctx, endpoint)
 }
 
 // Host mocks base method.

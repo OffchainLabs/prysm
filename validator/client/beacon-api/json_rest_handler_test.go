@@ -49,6 +49,55 @@ func TestGet(t *testing.T) {
 	assert.DeepEqual(t, genesisJson, resp)
 }
 
+func TestGetSSZ(t *testing.T) {
+	ctx := context.Background()
+	const endpoint = "/example/rest/api/ssz"
+
+	t.Run("Successful SSZ response", func(t *testing.T) {
+		expectedBody := []byte{10, 20, 30, 40}
+
+		mux := http.NewServeMux()
+		mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+			w.Header().Set("Content-Type", api.OctetStreamMediaType)
+			_, err := w.Write(expectedBody)
+			require.NoError(t, err)
+		})
+		server := httptest.NewServer(mux)
+		defer server.Close()
+
+		jsonRestHandler := BeaconApiRestHandler{
+			client: http.Client{Timeout: time.Second * 5},
+			host:   server.URL,
+		}
+
+		body, header, err := jsonRestHandler.GetSSZ(ctx, endpoint)
+		require.NoError(t, err)
+		assert.DeepEqual(t, expectedBody, body)
+		require.Equal(t, api.OctetStreamMediaType, header.Get("Content-Type"))
+	})
+
+	t.Run("Invalid Content-Type response", func(t *testing.T) {
+		mux := http.NewServeMux()
+		mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+			w.Header().Set("Content-Type", api.JsonMediaType) // Invalid content type
+			_, err := w.Write([]byte(`{"code": 400, "message": "bad request"}`))
+			require.NoError(t, err)
+		})
+		server := httptest.NewServer(mux)
+		defer server.Close()
+
+		jsonRestHandler := BeaconApiRestHandler{
+			client: http.Client{Timeout: time.Second * 5},
+			host:   server.URL,
+		}
+
+		_, _, err := jsonRestHandler.GetSSZ(ctx, endpoint)
+		assert.ErrorContains(t, "invalid Content-Type application/json", err)
+	})
+}
+
 func TestPost(t *testing.T) {
 	ctx := context.Background()
 	const endpoint = "/example/rest/api/endpoint"
