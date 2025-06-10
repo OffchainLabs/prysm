@@ -36,6 +36,8 @@ type DataColumnsVerifier interface {
 	VerifiedRODataColumns(ctx context.Context, blk blocks.ROBlock, scs []blocks.RODataColumn) ([]blocks.VerifiedRODataColumn, error)
 }
 
+// NewLazilyPersistentStoreColumn creates a new LazilyPersistentStoreColumn.
+// WARNING: The resulting LazilyPersistentStoreColumn is NOT thread-safe.
 func NewLazilyPersistentStoreColumn(store *filesystem.DataColumnStorage, nodeID enode.ID, newDataColumnsVerifier verification.NewDataColumnsVerifier, custodyInfo *peerdas.CustodyInfo) *LazilyPersistentStoreColumn {
 	return &LazilyPersistentStoreColumn{
 		store:                  store,
@@ -76,11 +78,11 @@ func (s *LazilyPersistentStoreColumn) Persist(current primitives.Slot, sidecars 
 		return nil
 	}
 
-	key := dataColumnCacheKey{slot: firstSidecar.Slot(), root: firstSidecar.BlockRoot()}
+	key := cacheKey{slot: firstSidecar.Slot(), root: firstSidecar.BlockRoot()}
 	entry := s.cache.ensure(key)
 
-	for i := range sidecars {
-		if err := entry.stash(&dataColumnSidecars[i]); err != nil {
+	for _, sidecar := range dataColumnSidecars {
+		if err := entry.stash(&sidecar); err != nil {
 			return errors.Wrap(err, "stash DataColumnSidecar")
 		}
 	}
@@ -105,7 +107,7 @@ func (s *LazilyPersistentStoreColumn) IsDataAvailable(ctx context.Context, curre
 	blockRoot := block.Root()
 
 	// Build the cache key for the block.
-	key := dataColumnCacheKey{slot: block.Block().Slot(), root: blockRoot}
+	key := cacheKey{slot: block.Block().Slot(), root: blockRoot}
 
 	// Retrieve the cache entry for the block, or create an empty one if it doesn't exist.
 	entry := s.cache.ensure(key)
@@ -121,13 +123,13 @@ func (s *LazilyPersistentStoreColumn) IsDataAvailable(ctx context.Context, curre
 	// ignore their response and decrease their peer score.
 	roDataColumns, err := entry.filter(blockRoot, blockCommitments)
 	if err != nil {
-		return errors.Wrap(err, "filter")
+		return errors.Wrap(err, "entry filter")
 	}
 
 	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#datacolumnsidecarsbyrange-v1
 	verifier := s.newDataColumnsVerifier(roDataColumns, verification.ByRangeRequestDataColumnSidecarRequirements)
 
-	if err := verifier.Valid(); err != nil {
+	if err := verifier.ValidFields(); err != nil {
 		return errors.Wrap(err, "valid")
 	}
 
@@ -192,7 +194,13 @@ func (s *LazilyPersistentStoreColumn) fullCommitmentsToCheck(nodeID enode.ID, bl
 
 	// Create a safe commitments array for the custody columns.
 	commitmentsArray := &safeCommitmentsArray{}
+	commitmentsArraySize := uint64(len(commitmentsArray))
+
 	for column := range peerInfo.CustodyColumns {
+		if column >= commitmentsArraySize {
+			return nil, errors.Errorf("custody column index %d too high (max allowed %d) - should never happen", column, commitmentsArraySize)
+		}
+
 		commitmentsArray[column] = kzgCommitments
 	}
 

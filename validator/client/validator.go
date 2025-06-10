@@ -113,6 +113,9 @@ type validator struct {
 	attSelectionLock                   sync.Mutex
 	dutiesLock                         sync.RWMutex
 	disableDutiesPolling               bool
+	accountsChangedChannel             chan [][fieldparams.BLSPubkeyLength]byte
+	eventsChannel                      chan *eventClient.Event
+	accountChangedSub                  event.Subscription
 }
 
 type validatorStatus struct {
@@ -128,7 +131,20 @@ type attSelectionKey struct {
 
 // Done cleans up the validator.
 func (v *validator) Done() {
-	v.ticker.Done()
+	if v.accountChangedSub != nil {
+		v.accountChangedSub.Unsubscribe()
+	}
+	if v.ticker != nil {
+		v.ticker.Done()
+	}
+}
+
+func (v *validator) EventsChan() <-chan *eventClient.Event {
+	return v.eventsChannel
+}
+
+func (v *validator) AccountsChangedChan() <-chan [][fieldparams.BLSPubkeyLength]byte {
+	return v.accountsChangedChannel
 }
 
 // WaitForKeymanagerInitialization checks if the validator needs to wait for keymanager initialization.
@@ -170,6 +186,7 @@ func (v *validator) WaitForKeymanagerInitialization(ctx context.Context) error {
 		return errors.New("key manager not set")
 	}
 	recheckKeys(ctx, v.db, v.km)
+	v.accountChangedSub = v.km.SubscribeAccountChanges(v.accountsChangedChannel)
 	return nil
 }
 
@@ -1079,12 +1096,13 @@ func (v *validator) SetProposerSettings(ctx context.Context, settings *proposer.
 }
 
 // PushProposerSettings calls the prepareBeaconProposer RPC to set the fee recipient and also the register validator API if using a custom builder.
-func (v *validator) PushProposerSettings(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, forceFullPush bool) error {
+func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Slot, forceFullPush bool) error {
 	ctx, span := trace.StartSpan(ctx, "validator.PushProposerSettings")
 	defer span.End()
 
-	if km == nil {
-		return errors.New("keymanager is nil when calling PrepareBeaconProposer")
+	km, err := v.Keymanager()
+	if err != nil {
+		return err
 	}
 
 	pubkeys, err := km.FetchValidatingPublicKeys(ctx)
@@ -1132,9 +1150,9 @@ func (v *validator) PushProposerSettings(ctx context.Context, km keymanager.IKey
 	return nil
 }
 
-func (v *validator) StartEventStream(ctx context.Context, topics []string, eventsChannel chan<- *eventClient.Event) {
+func (v *validator) StartEventStream(ctx context.Context, topics []string) {
 	log.WithField("topics", topics).Info("Starting event stream")
-	v.validatorClient.StartEventStream(ctx, topics, eventsChannel)
+	v.validatorClient.StartEventStream(ctx, topics, v.eventsChannel)
 }
 
 func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadEvent) error {

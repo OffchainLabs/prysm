@@ -4,6 +4,7 @@ import (
 	"reflect"
 
 	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -48,6 +49,18 @@ const BlobSidecarsByRangeName = "/blob_sidecars_by_range"
 // BlobSidecarsByRootName is the name for the BlobSidecarsByRoot v1 message topic.
 const BlobSidecarsByRootName = "/blob_sidecars_by_root"
 
+// LightClientBootstrapName is the name for the LightClientBootstrap message topic,
+const LightClientBootstrapName = "/light_client_bootstrap"
+
+// LightClientUpdatesByRangeName is the name for the LightClientUpdatesByRange topic.
+const LightClientUpdatesByRangeName = "/light_client_updates_by_range"
+
+// LightClientFinalityUpdateName is the name for the LightClientFinalityUpdate topic.
+const LightClientFinalityUpdateName = "/light_client_finality_update"
+
+// LightClientOptimisticUpdateName is the name for the LightClientOptimisticUpdate topic.
+const LightClientOptimisticUpdateName = "/light_client_optimistic_update"
+
 // DataColumnSidecarsByRootName is the name for the DataColumnSidecarsByRoot v1 message topic.
 const DataColumnSidecarsByRootName = "/data_column_sidecars_by_root"
 
@@ -76,6 +89,15 @@ const (
 	// RPCBlobSidecarsByRootTopicV1 is a topic for requesting blob sidecars by their block root.
 	// /eth2/beacon_chain/req/blob_sidecars_by_root/1/ - New in deneb.
 	RPCBlobSidecarsByRootTopicV1 = protocolPrefix + BlobSidecarsByRootName + SchemaVersionV1
+
+	// RPCLightClientBootstrapTopicV1 is a topic for requesting a light client bootstrap.
+	RPCLightClientBootstrapTopicV1 = protocolPrefix + LightClientBootstrapName + SchemaVersionV1
+	// RPCLightClientUpdatesByRangeTopicV1 is a topic for requesting light client updates by range.
+	RPCLightClientUpdatesByRangeTopicV1 = protocolPrefix + LightClientUpdatesByRangeName + SchemaVersionV1
+	// RPCLightClientFinalityUpdateTopicV1 is a topic for requesting a light client finality update.
+	RPCLightClientFinalityUpdateTopicV1 = protocolPrefix + LightClientFinalityUpdateName + SchemaVersionV1
+	// RPCLightClientOptimisticUpdateTopicV1 is a topic for requesting a light client Optimistic update.
+	RPCLightClientOptimisticUpdateTopicV1 = protocolPrefix + LightClientOptimisticUpdateName + SchemaVersionV1
 	// RPCDataColumnSidecarsByRootTopicV1 is a topic for requesting data column sidecars by their block root.
 	// /eth2/beacon_chain/req/data_column_sidecars_by_root/1 - New in Fulu.
 	RPCDataColumnSidecarsByRootTopicV1 = protocolPrefix + DataColumnSidecarsByRootName + SchemaVersionV1
@@ -123,6 +145,13 @@ var RPCTopicMappings = map[string]interface{}{
 	RPCBlobSidecarsByRangeTopicV1: new(pb.BlobSidecarsByRangeRequest),
 	// BlobSidecarsByRoot v1 Message
 	RPCBlobSidecarsByRootTopicV1: new(p2ptypes.BlobSidecarsByRootReq),
+
+	// Light client
+	RPCLightClientBootstrapTopicV1:        new([fieldparams.RootLength]byte),
+	RPCLightClientUpdatesByRangeTopicV1:   new(pb.LightClientUpdatesByRangeRequest),
+	RPCLightClientFinalityUpdateTopicV1:   new(interface{}),
+	RPCLightClientOptimisticUpdateTopicV1: new(interface{}),
+
 	// DataColumnSidecarsByRange v1 Message
 	RPCDataColumnSidecarsByRangeTopicV1: new(pb.DataColumnSidecarsByRangeRequest),
 	// DataColumnSidecarsByRoot v1 Message
@@ -137,16 +166,20 @@ var protocolMapping = map[string]bool{
 // Maps all the protocol message names for the different rpc
 // topics.
 var messageMapping = map[string]bool{
-	StatusMessageName:              true,
-	GoodbyeMessageName:             true,
-	BeaconBlocksByRangeMessageName: true,
-	BeaconBlocksByRootsMessageName: true,
-	PingMessageName:                true,
-	MetadataMessageName:            true,
-	BlobSidecarsByRangeName:        true,
-	BlobSidecarsByRootName:         true,
-	DataColumnSidecarsByRootName:   true,
-	DataColumnSidecarsByRangeName:  true,
+	StatusMessageName:               true,
+	GoodbyeMessageName:              true,
+	BeaconBlocksByRangeMessageName:  true,
+	BeaconBlocksByRootsMessageName:  true,
+	PingMessageName:                 true,
+	MetadataMessageName:             true,
+	BlobSidecarsByRangeName:         true,
+	BlobSidecarsByRootName:          true,
+	LightClientBootstrapName:        true,
+	LightClientUpdatesByRangeName:   true,
+	LightClientFinalityUpdateName:   true,
+	LightClientOptimisticUpdateName: true,
+	DataColumnSidecarsByRootName:    true,
+	DataColumnSidecarsByRangeName:   true,
 }
 
 // Maps all the RPC messages which are to updated in altair.
@@ -297,20 +330,17 @@ func TopicFromMessage(msg string, epoch primitives.Epoch) (string, error) {
 		return "", errors.Errorf("%s: %s", invalidRPCMessageType, msg)
 	}
 
-	// Base version is version 1.
-	version := SchemaVersionV1
-
-	// Check if the message is to be updated in altair.
-	isAltair := epoch >= params.BeaconConfig().AltairForkEpoch
-	if isAltair && altairMapping[msg] {
-		version = SchemaVersionV2
-	}
+	beaconConfig := params.BeaconConfig()
 
 	// Check if the message is to be updated in fulu.
-	isFulu := epoch >= params.BeaconConfig().FuluForkEpoch
-	if isFulu && fuluMapping[msg] {
-		version = SchemaVersionV3
+	if epoch >= beaconConfig.FuluForkEpoch && fuluMapping[msg] {
+		return protocolPrefix + msg + SchemaVersionV3, nil
 	}
 
-	return protocolPrefix + msg + version, nil
+	// Check if the message is to be updated in altair.
+	if epoch >= beaconConfig.AltairForkEpoch && altairMapping[msg] {
+		return protocolPrefix + msg + SchemaVersionV2, nil
+	}
+
+	return protocolPrefix + msg + SchemaVersionV1, nil
 }

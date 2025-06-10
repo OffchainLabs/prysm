@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
@@ -105,7 +104,10 @@ const (
 	defaultEngineTimeout = 2 * time.Second
 )
 
-var errInvalidPayloadBodyResponse = errors.New("engine api payload body response is invalid")
+var (
+	errInvalidPayloadBodyResponse  = errors.New("engine api payload body response is invalid")
+	errMissingBlobsAndProofsFromEL = errors.New("engine api payload body response is missing blobs and proofs")
+)
 
 // ForkchoiceUpdatedResponse is the response kind received by the
 // engine_forkchoiceUpdatedV1 endpoint.
@@ -318,36 +320,36 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ExchangeCapabilities")
 	defer span.End()
 
-	// Only check for electra related engine methods if it has been activated.
 	if params.ElectraEnabled() {
 		supportedEngineEndpoints = append(supportedEngineEndpoints, electraEngineEndpoints...)
 	}
+
 	if params.FuluEnabled() {
 		supportedEngineEndpoints = append(supportedEngineEndpoints, fuluEngineEndpoints...)
 	}
-	var result []string
-	err := s.rpcClient.CallContext(ctx, &result, ExchangeCapabilities, supportedEngineEndpoints)
-	if err != nil {
+
+	elSupportedEndpointsSlice := make([]string, len(supportedEngineEndpoints))
+	if err := s.rpcClient.CallContext(ctx, &elSupportedEndpointsSlice, ExchangeCapabilities, supportedEngineEndpoints); err != nil {
 		return nil, handleRPCError(err)
 	}
 
-	var unsupported []string
-	for _, s1 := range supportedEngineEndpoints {
-		supported := false
-		for _, s2 := range result {
-			if s1 == s2 {
-				supported = true
-				break
-			}
-		}
-		if !supported {
-			unsupported = append(unsupported, s1)
+	elSupportedEndpoints := make(map[string]bool, len(elSupportedEndpointsSlice))
+	for _, method := range elSupportedEndpointsSlice {
+		elSupportedEndpoints[method] = true
+	}
+
+	unsupported := make([]string, 0, len(supportedEngineEndpoints))
+	for _, method := range supportedEngineEndpoints {
+		if !elSupportedEndpoints[method] {
+			unsupported = append(unsupported, method)
 		}
 	}
+
 	if len(unsupported) != 0 {
-		log.Warnf("Please update client, detected the following unsupported engine methods: %s", unsupported)
+		log.WithField("methods", unsupported).Warning("Connected execution client does not support some requested engine methods")
 	}
-	return result, handleRPCError(err)
+
+	return elSupportedEndpointsSlice, nil
 }
 
 // GetTerminalBlockHash returns the valid terminal block hash based on total difficulty.
@@ -657,15 +659,13 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 // and constructs the corresponding verified read-only data column sidecars.
 func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, signedROBlock interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte) ([]blocks.VerifiedRODataColumn, error) {
 	block := signedROBlock.Block()
-	blockBody := block.Body()
-	blockSlot := block.Slot()
 
 	log := log.WithFields(logrus.Fields{
 		"root": fmt.Sprintf("%#x", blockRoot),
-		"slot": blockSlot,
+		"slot": block.Slot(),
 	})
 
-	kzgCommitments, err := blockBody.BlobKzgCommitments()
+	kzgCommitments, err := block.Body().BlobKzgCommitments()
 	if err != nil {
 		return nil, wrapWithBlockRoot(err, blockRoot, "blob KZG commitments")
 	}
@@ -688,61 +688,32 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, signedROBlo
 		return nil, nil
 	}
 
-	// Compute all cells and proofs.
-	// Reminder: `engine_getBlobsV2` returns the (non extended) blob (64 cells),
-	// and the proofs corresponding to the extended blob (128 proofs, one per extended cell).
-	// We need to reconstruct the cells corresponding to the blob extension.
-	// https://github.com/ethereum/execution-apis/blob/main/src/engine/osaka.md#engine_getblobsv2
-	maxBlobCount := params.BeaconConfig().MaxBlobsPerBlock(blockSlot)
-	cellsAndProofs := make([]kzg.CellsAndProofs, 0, maxBlobCount)
-	for _, blobAndProof := range blobAndProofV2s {
-		if blobAndProof == nil {
-			return nil, errors.Errorf("unable to reconstruct data column sidecars, did not get all blobs from EL for block %#x", blockRoot)
+	// Extract the blobs and proofs from the blobAndProofV2s.
+	blobs := make([][]byte, 0, len(blobAndProofV2s))
+	cellProofs := make([][]byte, 0, len(blobAndProofV2s))
+	for _, blobsAndProofs := range blobAndProofV2s {
+		if blobsAndProofs == nil {
+			return nil, wrapWithBlockRoot(errMissingBlobsAndProofsFromEL, blockRoot, "")
 		}
-
-		var blob kzg.Blob
-		copy(blob[:], blobAndProof.Blob)
-
-		cells, err := kzg.ComputeCells(&blob)
-		if err != nil {
-			return nil, wrapWithBlockRoot(err, blockRoot, "compute cells")
-		}
-
-		proofs := make([]kzg.Proof, 0, len(blobAndProof.KzgProofs))
-		for _, proof := range blobAndProof.KzgProofs {
-			proofs = append(proofs, kzg.Proof(proof))
-		}
-
-		cellsAndProofs = append(cellsAndProofs, kzg.CellsAndProofs{
-			Cells:  cells,
-			Proofs: proofs,
-		})
+		blobs = append(blobs, blobsAndProofs.Blob)
+		cellProofs = append(cellProofs, blobsAndProofs.KzgProofs...)
 	}
 
-	header, err := signedROBlock.Header()
+	dataColumnSidecars, err := peerdas.ConstructDataColumnSidecars(signedROBlock, blobs, cellProofs)
 	if err != nil {
-		return nil, wrapWithBlockRoot(err, blockRoot, "could not get header")
+		return nil, wrapWithBlockRoot(err, blockRoot, "construct data column sidecars")
 	}
 
-	kzgCommitmentsInclusionProof, err := blocks.MerkleProofKZGCommitments(blockBody)
-	if err != nil {
-		return nil, wrapWithBlockRoot(err, blockRoot, "could not get Merkle proof for KZG commitments")
-	}
-
-	dataColumnSidecars, err := peerdas.DataColumnsSidecarsFromItems(header, kzgCommitments, kzgCommitmentsInclusionProof, cellsAndProofs)
-	if err != nil {
-		return nil, wrapWithBlockRoot(err, blockRoot, "could not reconstruct data column sidecars")
-	}
-
-	verifiedRODataColumns := make([]blocks.VerifiedRODataColumn, len(dataColumnSidecars))
-	for i, dataColumnSidecar := range dataColumnSidecars {
+	verifiedRODataColumns := make([]blocks.VerifiedRODataColumn, 0, len(dataColumnSidecars))
+	for _, dataColumnSidecar := range dataColumnSidecars {
 		roDataColumn, err := blocks.NewRODataColumnWithRoot(dataColumnSidecar, blockRoot)
 		if err != nil {
 			return nil, wrapWithBlockRoot(err, blockRoot, "new read-only data column with root")
 		}
 
 		// We trust the execution layer we are connected to, so we can upgrade the read only data column sidecar into a verified one.
-		verifiedRODataColumns[i] = blocks.NewVerifiedRODataColumn(roDataColumn)
+		verifiedRODataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
+		verifiedRODataColumns = append(verifiedRODataColumns, verifiedRODataColumn)
 	}
 
 	log.Debug("Data columns successfully reconstructed from EL")

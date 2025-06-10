@@ -25,7 +25,6 @@ go_library(
         "//testing/spectest:__subpackages__",
     ],
     deps = [
-        "//beacon-chain/blockchain/kzg:go_default_library",
         "//beacon-chain/cache:go_default_library",
         "//beacon-chain/cache/depositsnapshot:go_default_library",
         "//beacon-chain/core/altair:go_default_library",

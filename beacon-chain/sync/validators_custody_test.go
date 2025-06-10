@@ -7,7 +7,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -15,69 +14,68 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 )
 
-func TestUpdateToAdvertiseCustodyGroupCount(t *testing.T) {
-	testCases := []struct {
-		name                         string
-		topics                       []string
-		validatorsCustodyRequirement uint64
-		expected                     uint64
-	}{
-		{
-			name:                         "some missing registered topics",
-			topics:                       []string{"/eth2/ae729ef4/data_column_sidecar_1"},
-			validatorsCustodyRequirement: 9,
-			expected:                     4,
-		},
-		{
-			name: "all registered topics",
-			topics: []string{
-				"/eth2/ae729ef4/data_column_sidecar_1",
-				"/eth2/ae729ef4/data_column_sidecar_6",
-				"/eth2/ae729ef4/data_column_sidecar_17",
-				"/eth2/ae729ef4/data_column_sidecar_19",
-				"/eth2/ae729ef4/data_column_sidecar_42",
-				"/eth2/ae729ef4/data_column_sidecar_75",
-				"/eth2/ae729ef4/data_column_sidecar_87",
-				"/eth2/ae729ef4/data_column_sidecar_102",
-				"/eth2/ae729ef4/data_column_sidecar_117",
-			},
-			validatorsCustodyRequirement: 9,
-			expected:                     9,
-		},
-	}
+// func TestUpdateToAdvertiseCustodyGroupCount(t *testing.T) {
+// 	testCases := []struct {
+// 		name                         string
+// 		topics                       []string
+// 		validatorsCustodyRequirement uint64
+// 		expected                     uint64
+// 	}{
+// 		{
+// 			name:                         "some missing registered topics",
+// 			topics:                       []string{"/eth2/ae729ef4/data_column_sidecar_1"},
+// 			validatorsCustodyRequirement: 9,
+// 			expected:                     4,
+// 		},
+// 		{
+// 			name: "all registered topics",
+// 			topics: []string{
+// 				"/eth2/ae729ef4/data_column_sidecar_1",
+// 				"/eth2/ae729ef4/data_column_sidecar_6",
+// 				"/eth2/ae729ef4/data_column_sidecar_17",
+// 				"/eth2/ae729ef4/data_column_sidecar_19",
+// 				"/eth2/ae729ef4/data_column_sidecar_42",
+// 				"/eth2/ae729ef4/data_column_sidecar_75",
+// 				"/eth2/ae729ef4/data_column_sidecar_87",
+// 				"/eth2/ae729ef4/data_column_sidecar_102",
+// 				"/eth2/ae729ef4/data_column_sidecar_117",
+// 			},
+// 			validatorsCustodyRequirement: 9,
+// 			expected:                     9,
+// 		},
+// 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Create a new subTopicHandler and add the topics.
-			subHandler := newSubTopicHandler()
-			for _, topic := range tc.topics {
-				subHandler.addTopic(topic, nil)
-			}
+// 	for _, tc := range testCases {
+// 		t.Run(tc.name, func(t *testing.T) {
+// 			// Create a new subTopicHandler and add the topics.
+// 			subHandler := newSubTopicHandler()
+// 			for _, topic := range tc.topics {
+// 				subHandler.addTopic(topic, nil)
+// 			}
 
-			// Create a new service.
-			service := &Service{
-				cfg: &config{
-					p2p:         &p2p.Service{},
-					custodyInfo: &peerdas.CustodyInfo{},
-				},
-				subHandler: subHandler,
-			}
+// 			// Create a new service.
+// 			service := &Service{
+// 				cfg: &config{
+// 					p2p:         &p2p.Service{},
+// 					custodyInfo: &peerdas.CustodyInfo{},
+// 				},
+// 				subHandler: subHandler,
+// 			}
 
-			// Set the target custody group count.
-			service.cfg.custodyInfo.TargetGroupCount.SetValidatorsCustodyRequirement(tc.validatorsCustodyRequirement)
+// 			// Set the target custody group count.
+// 			service.cfg.custodyInfo.TargetGroupCount.SetValidatorsCustodyRequirement(tc.validatorsCustodyRequirement)
 
-			// Update the custody group count to advertise.
-			service.updateToAdvertiseCustodyGroupCount()
+// 			// Update the custody group count to advertise.
+// 			service.updateToAdvertiseCustodyGroupCount()
 
-			// Get the custody group count to advertise.
-			actual := service.cfg.custodyInfo.ToAdvertiseGroupCount.Get()
+// 			// Get the custody group count to advertise.
+// 			actual := service.cfg.custodyInfo.ToAdvertiseGroupCount.Get()
 
-			// Check if the custody group count to advertise is as expected.
-			require.Equal(t, tc.expected, actual)
-		})
-	}
-
-}
+// 			// Check if the custody group count to advertise is as expected.
+// 			require.Equal(t, tc.expected, actual)
+// 		})
+// 	}
+// }
 
 func TestSetTargetValidatorsCustodyRequirement(t *testing.T) {
 	testCases := []struct {

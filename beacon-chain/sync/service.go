@@ -56,7 +56,6 @@ var _ runtime.Service = (*Service)(nil)
 const (
 	rangeLimit               uint64 = 1024
 	seenBlockSize                   = 1000
-	seenBlobSize                    = seenBlockSize * 6   // Each block can have max 6 blobs.
 	seenDataColumnSize              = seenBlockSize * 128 // Each block can have max 128 data columns.
 	seenUnaggregatedAttSize         = 20000
 	seenAggregatedAttSize           = 16384
@@ -175,6 +174,7 @@ type Service struct {
 	ctxMap                           ContextByteVersions
 	slasherEnabled                   bool
 	lcStore                          *lightClient.Store
+	dataColumnLogCh                  chan dataColumnLogEntry
 }
 
 // NewService initializes new regular sync service.
@@ -189,6 +189,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 		seenPendingBlocks:    make(map[[32]byte]bool),
 		blkRootToPendingAtts: make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
 		signatureChan:        make(chan *signatureVerifier, verifierLimit),
+		dataColumnLogCh:      make(chan dataColumnLogEntry, 1000),
 	}
 
 	for _, opt := range opts {
@@ -249,6 +250,7 @@ func (s *Service) Start() {
 
 	go s.verifierRoutine()
 	go s.startTasksPostInitialSync()
+	go s.processDataColumnLogs()
 
 	s.cfg.p2p.AddConnectionHandler(s.reValidatePeer, s.sendGoodbye)
 	s.cfg.p2p.AddDisconnectionHandler(func(_ context.Context, _ peer.ID) error {
@@ -300,7 +302,7 @@ func (s *Service) Status() error {
 // and prevent DoS.
 func (s *Service) initCaches() {
 	s.seenBlockCache = lruwrpr.New(seenBlockSize)
-	s.seenBlobCache = lruwrpr.New(seenBlobSize)
+	s.seenBlobCache = lruwrpr.New(seenBlockSize * params.BeaconConfig().DeprecatedMaxBlobsPerBlockElectra)
 	s.seenDataColumnCache = lruwrpr.New(seenDataColumnSize)
 	s.seenAggregatedAttestationCache = lruwrpr.New(seenAggregatedAttSize)
 	s.seenUnAggregatedAttestationCache = lruwrpr.New(seenUnaggregatedAttSize)

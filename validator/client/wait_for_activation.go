@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/math"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
@@ -19,26 +18,7 @@ import (
 // from the gRPC server.
 //
 // If the channel parameter is nil, WaitForActivation creates and manages its own channel.
-func (v *validator) WaitForActivation(ctx context.Context, accountsChangedChan chan [][fieldparams.BLSPubkeyLength]byte) error {
-	// Monitor the key manager for updates.
-	if accountsChangedChan == nil {
-		accountsChangedChan = make(chan [][fieldparams.BLSPubkeyLength]byte, 1)
-		km, err := v.Keymanager()
-		if err != nil {
-			return err
-		}
-		// subscribe to the channel if it's the first time
-		sub := km.SubscribeAccountChanges(accountsChangedChan)
-		defer func() {
-			sub.Unsubscribe()
-			close(accountsChangedChan)
-		}()
-	}
-	return v.internalWaitForActivation(ctx, accountsChangedChan)
-}
-
-// internalWaitForActivation recursively waits for at least one active validator key
-func (v *validator) internalWaitForActivation(ctx context.Context, accountsChangedChan <-chan [][fieldparams.BLSPubkeyLength]byte) error {
+func (v *validator) WaitForActivation(ctx context.Context) error {
 	ctx, span := trace.StartSpan(ctx, "validator.WaitForActivation")
 	defer span.End()
 
@@ -51,12 +31,12 @@ func (v *validator) internalWaitForActivation(ctx context.Context, accountsChang
 	// Step 2: If no keys, wait for accounts change or context cancellation.
 	if len(validatingKeys) == 0 {
 		log.Warn(msgNoKeysFetched)
-		return v.waitForAccountsChange(ctx, accountsChangedChan)
+		return v.waitForAccountsChange(ctx)
 	}
 
 	// Step 3: update validator statuses in cache.
 	if err := v.updateValidatorStatusCache(ctx, validatingKeys); err != nil {
-		return v.retryWaitForActivation(ctx, span, err, "Connection broken while waiting for activation. Reconnecting...", accountsChangedChan)
+		return v.retryWaitForActivation(ctx, span, err, "Connection broken while waiting for activation. Reconnecting...")
 	}
 
 	// Step 4: Check and log validator statuses.
@@ -67,42 +47,42 @@ func (v *validator) internalWaitForActivation(ctx context.Context, accountsChang
 		case <-ctx.Done():
 			log.Debug("Context closed, exiting WaitForActivation")
 			return ctx.Err()
-		case <-accountsChangedChan:
+		case <-v.accountsChangedChannel:
 			// Accounts (keys) changed, restart the process.
-			return v.internalWaitForActivation(ctx, accountsChangedChan)
+			return v.WaitForActivation(ctx)
 		default:
-			if err := v.waitForNextEpoch(ctx, v.genesisTime, accountsChangedChan); err != nil {
-				return v.retryWaitForActivation(ctx, span, err, "Failed to wait for next epoch. Reconnecting...", accountsChangedChan)
+			if err := v.waitForNextEpoch(ctx, v.genesisTime); err != nil {
+				return v.retryWaitForActivation(ctx, span, err, "Failed to wait for next epoch. Reconnecting...")
 			}
-			return v.internalWaitForActivation(incrementRetries(ctx), accountsChangedChan)
+			return v.WaitForActivation(incrementRetries(ctx))
 		}
 	}
 	return nil
 }
 
-func (v *validator) retryWaitForActivation(ctx context.Context, span octrace.Span, err error, message string, accountsChangedChan <-chan [][fieldparams.BLSPubkeyLength]byte) error {
+func (v *validator) retryWaitForActivation(ctx context.Context, span octrace.Span, err error, message string) error {
 	tracing.AnnotateError(span, err)
 	attempts := activationAttempts(ctx)
 	log.WithError(err).WithField("attempts", attempts).Error(message)
 	// Reconnection attempt backoff, up to 60s.
 	time.Sleep(time.Second * time.Duration(math.Min(uint64(attempts), 60)))
 	// TODO: refactor this to use the health tracker instead for reattempt
-	return v.internalWaitForActivation(incrementRetries(ctx), accountsChangedChan)
+	return v.WaitForActivation(incrementRetries(ctx))
 }
 
-func (v *validator) waitForAccountsChange(ctx context.Context, accountsChangedChan <-chan [][fieldparams.BLSPubkeyLength]byte) error {
+func (v *validator) waitForAccountsChange(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		log.Debug("Context closed, exiting waitForAccountsChange")
 		return ctx.Err()
-	case <-accountsChangedChan:
+	case <-v.accountsChangedChannel:
 		// If the accounts changed, try again.
-		return v.internalWaitForActivation(ctx, accountsChangedChan)
+		return v.WaitForActivation(ctx)
 	}
 }
 
 // waitForNextEpoch creates a blocking function to wait until the next epoch start given the current slot
-func (v *validator) waitForNextEpoch(ctx context.Context, genesisTimeSec uint64, accountsChangedChan <-chan [][fieldparams.BLSPubkeyLength]byte) error {
+func (v *validator) waitForNextEpoch(ctx context.Context, genesisTimeSec uint64) error {
 	waitTime, err := slots.SecondsUntilNextEpochStart(genesisTimeSec)
 	if err != nil {
 		return err
@@ -112,9 +92,9 @@ func (v *validator) waitForNextEpoch(ctx context.Context, genesisTimeSec uint64,
 	case <-ctx.Done():
 		log.Debug("Context closed, exiting waitForNextEpoch")
 		return ctx.Err()
-	case <-accountsChangedChan:
+	case <-v.accountsChangedChannel:
 		// Accounts (keys) changed, restart the process.
-		return v.internalWaitForActivation(ctx, accountsChangedChan)
+		return v.WaitForActivation(ctx)
 	case <-time.After(time.Duration(waitTime) * time.Second):
 		log.Debug("Done waiting for epoch start")
 		// The ticker has ticked, indicating we've reached the next epoch

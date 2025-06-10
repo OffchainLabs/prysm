@@ -41,9 +41,9 @@ var (
 	// errBlacklistedBlock is returned when a block is blacklisted as invalid.
 	errBlacklistedRoot = verification.AsVerificationFailure(errors.New("block root is blacklisted"))
 	// errMaxBlobsExceeded is returned when the number of blobs in a block exceeds the maximum allowed.
-	errMaxBlobsExceeded = verification.AsVerificationFailure(errors.New("Expected commitments in block exceeds MAX_BLOBS_PER_BLOCK"))
+	errMaxBlobsExceeded = verification.AsVerificationFailure(errors.New("expected commitments in block exceeds MAX_BLOBS_PER_BLOCK"))
 	// errMaxDataColumnsExceeded is returned when the number of data columns exceeds the maximum allowed.
-	errMaxDataColumnsExceeded = verification.AsVerificationFailure(errors.New("Expected data columns for node exceeds NUMBER_OF_COLUMNS"))
+	errMaxDataColumnsExceeded = verification.AsVerificationFailure(errors.New("expected data columns for node exceeds NUMBER_OF_COLUMNS"))
 )
 
 // An invalid block is the block that fails state transition based on the core protocol rules.

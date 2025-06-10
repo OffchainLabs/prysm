@@ -27,7 +27,9 @@ import (
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
 	prysmTrace "github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -291,6 +293,8 @@ func ProcessSlotsCore(ctx context.Context, span trace.Span, state state.BeaconSt
 			tracing.AnnotateError(span, err)
 			return nil, errors.Wrap(err, "failed to upgrade state")
 		}
+
+		logBlobLimitIncrease(state.Slot())
 	}
 	return state, nil
 }
@@ -506,4 +510,20 @@ func ProcessEpochPrecompute(ctx context.Context, state state.BeaconState) (state
 		return nil, errors.Wrap(err, "could not process final updates")
 	}
 	return state, nil
+}
+
+func logBlobLimitIncrease(slot primitives.Slot) {
+	if !slots.IsEpochStart(slot) {
+		return
+	}
+
+	epoch := slots.ToEpoch(slot)
+	for _, entry := range params.BeaconConfig().BlobSchedule {
+		if entry.Epoch == epoch {
+			log.WithFields(logrus.Fields{
+				"epoch":     epoch,
+				"blobLimit": entry.MaxBlobsPerBlock,
+			}).Info("Blob limit updated")
+		}
+	}
 }

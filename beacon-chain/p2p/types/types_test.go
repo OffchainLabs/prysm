@@ -205,9 +205,9 @@ func hexDecodeOrDie(t *testing.T, str string) []byte {
 	return decoded
 }
 
-// =====================================
+// ====================================
 // DataColumnsByRootIdentifiers section
-// =====================================
+// ====================================
 func generateDataColumnIdentifiers(n int) []*eth.DataColumnsByRootIdentifier {
 	r := make([]*eth.DataColumnsByRootIdentifier, n)
 	for i := 0; i < n; i++ {
@@ -221,6 +221,10 @@ func generateDataColumnIdentifiers(n int) []*eth.DataColumnsByRootIdentifier {
 
 func TestDataColumnSidecarsByRootReq_Marshal(t *testing.T) {
 	/*
+		SSZ encoding of DataColumnsByRootIdentifiers is tested in spectests.
+		However, encoding a list of DataColumnsByRootIdentifier is not.
+		We are testing it here.
+
 		Python code to generate the expected value
 
 		# pip install eth2spec

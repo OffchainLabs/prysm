@@ -6,11 +6,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/spf13/afero"
 )
 
@@ -39,9 +39,9 @@ func TestWarmCache(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, verifiedRoDataColumnSidecars := verification.CreateTestVerifiedRoDataColumnSidecars(
+	_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 		t,
-		verification.DataColumnsParamsByRoot{
+		util.DataColumnsParamsByRoot{
 			{0}: {
 				{Slot: 33, ColumnIndex: 2, DataColumn: []byte{1, 2, 3}}, // Period 0 - Epoch 1
 				{Slot: 33, ColumnIndex: 4, DataColumn: []byte{2, 3, 4}}, // Period 0 - Epoch 1
@@ -111,9 +111,9 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 		params.OverrideBeaconConfig(cfg)
 		params.SetupTestConfigCleanup(t)
 
-		_, verifiedRoDataColumnSidecars := verification.CreateTestVerifiedRoDataColumnSidecars(
+		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			verification.DataColumnsParamsByRoot{
+			util.DataColumnsParamsByRoot{
 				{}: {{ColumnIndex: 12}, {ColumnIndex: 1_000_000}, {ColumnIndex: 48}},
 			},
 		)
@@ -124,9 +124,9 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 	})
 
 	t.Run("one of the column index is too large", func(t *testing.T) {
-		_, verifiedRoDataColumnSidecars := verification.CreateTestVerifiedRoDataColumnSidecars(
+		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			verification.DataColumnsParamsByRoot{{}: {{ColumnIndex: 12}, {ColumnIndex: 1_000_000}, {ColumnIndex: 48}}},
+			util.DataColumnsParamsByRoot{{}: {{ColumnIndex: 12}, {ColumnIndex: 1_000_000}, {ColumnIndex: 48}}},
 		)
 
 		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
@@ -135,9 +135,9 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 	})
 
 	t.Run("different slots", func(t *testing.T) {
-		_, verifiedRoDataColumnSidecars := verification.CreateTestVerifiedRoDataColumnSidecars(
+		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			verification.DataColumnsParamsByRoot{
+			util.DataColumnsParamsByRoot{
 				{}: {
 					{Slot: 1, ColumnIndex: 12, DataColumn: []byte{1, 2, 3}},
 					{Slot: 2, ColumnIndex: 12, DataColumn: []byte{1, 2, 3}},
@@ -151,9 +151,9 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 	})
 
 	t.Run("new file - no data columns to save", func(t *testing.T) {
-		_, verifiedRoDataColumnSidecars := verification.CreateTestVerifiedRoDataColumnSidecars(
+		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			verification.DataColumnsParamsByRoot{{}: {}},
+			util.DataColumnsParamsByRoot{{}: {}},
 		)
 
 		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
@@ -162,9 +162,9 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 	})
 
 	t.Run("new file - different data column size", func(t *testing.T) {
-		_, verifiedRoDataColumnSidecars := verification.CreateTestVerifiedRoDataColumnSidecars(
+		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			verification.DataColumnsParamsByRoot{
+			util.DataColumnsParamsByRoot{
 				{}: {
 					{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}},
 					{ColumnIndex: 11, DataColumn: []byte{1, 2, 3, 4}},
@@ -178,9 +178,9 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 	})
 
 	t.Run("existing file - wrong incoming SSZ encoded size", func(t *testing.T) {
-		_, verifiedRoDataColumnSidecars := verification.CreateTestVerifiedRoDataColumnSidecars(
+		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			verification.DataColumnsParamsByRoot{{1}: {{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}}}},
+			util.DataColumnsParamsByRoot{{1}: {{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}}}},
 		)
 
 		// Save data columns into a file.
@@ -190,9 +190,9 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 
 		// Build a data column sidecar for the same block but with a different
 		// column index and an different SSZ encoded size.
-		_, verifiedRoDataColumnSidecars = verification.CreateTestVerifiedRoDataColumnSidecars(
+		_, verifiedRoDataColumnSidecars = util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			verification.DataColumnsParamsByRoot{{1}: {{ColumnIndex: 13, DataColumn: []byte{1, 2, 3, 4}}}},
+			util.DataColumnsParamsByRoot{{1}: {{ColumnIndex: 13, DataColumn: []byte{1, 2, 3, 4}}}},
 		)
 
 		// Try to rewrite the file.
@@ -201,9 +201,9 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 	})
 
 	t.Run("nominal", func(t *testing.T) {
-		_, inputVerifiedRoDataColumnSidecars := verification.CreateTestVerifiedRoDataColumnSidecars(
+		_, inputVerifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			verification.DataColumnsParamsByRoot{
+			util.DataColumnsParamsByRoot{
 				{1}: {
 					{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}},
 					{ColumnIndex: 11, DataColumn: []byte{3, 4, 5}},
@@ -221,9 +221,9 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 		err := dataColumnStorage.Save(inputVerifiedRoDataColumnSidecars)
 		require.NoError(t, err)
 
-		_, inputVerifiedRoDataColumnSidecars = verification.CreateTestVerifiedRoDataColumnSidecars(
+		_, inputVerifiedRoDataColumnSidecars = util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			verification.DataColumnsParamsByRoot{
+			util.DataColumnsParamsByRoot{
 				{1}: {
 					{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}}, // OK if duplicate
 					{ColumnIndex: 15, DataColumn: []byte{2, 3, 4}},
@@ -243,7 +243,7 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 			fileName         string
 			blockRoot        [fieldparams.RootLength]byte
 			expectedIndices  [mandatoryNumberOfColumns]byte
-			dataColumnParams []verification.DataColumnParams
+			dataColumnParams []util.DataColumnParams
 		}
 
 		fixtures := []fixture{
@@ -255,7 +255,7 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 					0, 0, 0, nonZeroOffset + 1, nonZeroOffset, nonZeroOffset + 2, 0, nonZeroOffset + 3,
 					// The rest is filled with zeroes.
 				},
-				dataColumnParams: []verification.DataColumnParams{
+				dataColumnParams: []util.DataColumnParams{
 					{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}},
 					{ColumnIndex: 11, DataColumn: []byte{3, 4, 5}},
 					{ColumnIndex: 13, DataColumn: []byte{6, 7, 8}},
@@ -271,7 +271,7 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 					0, 0, 0, 0, nonZeroOffset, nonZeroOffset + 1, 0, 0,
 					// The rest is filled with zeroes.
 				},
-				dataColumnParams: []verification.DataColumnParams{
+				dataColumnParams: []util.DataColumnParams{
 					{ColumnIndex: 12, DataColumn: []byte{3, 4, 5}},
 					{ColumnIndex: 13, DataColumn: []byte{6, 7, 8}},
 				},
@@ -283,7 +283,7 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 					0, 0, nonZeroOffset + 1, 0, 0, 0, nonZeroOffset, 0,
 					// The rest is filled with zeroes.
 				},
-				dataColumnParams: []verification.DataColumnParams{
+				dataColumnParams: []util.DataColumnParams{
 					{ColumnIndex: 6, DataColumn: []byte{3, 4, 5}},
 					{ColumnIndex: 2, DataColumn: []byte{6, 7, 8}},
 				},
@@ -292,9 +292,9 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 
 		for _, fixture := range fixtures {
 			// Build expected data column sidecars.
-			_, expectedDataColumnSidecars := verification.CreateTestVerifiedRoDataColumnSidecars(
+			_, expectedDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 				t,
-				verification.DataColumnsParamsByRoot{fixture.blockRoot: fixture.dataColumnParams},
+				util.DataColumnsParamsByRoot{fixture.blockRoot: fixture.dataColumnParams},
 			)
 
 			// Build expected bytes.
@@ -312,7 +312,7 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 				sszEncodedDataColumnSidecars = append(sszEncodedDataColumnSidecars, sszEncodedDataColumnSidecar...)
 			}
 
-			var encodedSszEncodedDataColumnSidecarSize [encodedSszEncodedDataColumnSidecarSizeSize]byte
+			var encodedSszEncodedDataColumnSidecarSize [sidecarByteLenSize]byte
 			binary.BigEndian.PutUint32(encodedSszEncodedDataColumnSidecarSize[:], uint32(sszEncodedDataColumnSidecarSize))
 
 			expectedBytes := make([]byte, 0, headerSize+dataColumnSidecarsCount*sszEncodedDataColumnSidecarSize)
@@ -352,7 +352,7 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 }
 
 func TestGetDataColumnSidecars(t *testing.T) {
-	t.Run("not found", func(t *testing.T) {
+	t.Run("root not found", func(t *testing.T) {
 		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
 
 		verifiedRODataColumnSidecars, err := dataColumnStorage.Get([fieldparams.RootLength]byte{1}, []uint64{12, 13, 14})
@@ -360,10 +360,30 @@ func TestGetDataColumnSidecars(t *testing.T) {
 		require.Equal(t, 0, len(verifiedRODataColumnSidecars))
 	})
 
-	t.Run("nominal", func(t *testing.T) {
-		_, expectedVerifiedRoDataColumnSidecars := verification.CreateTestVerifiedRoDataColumnSidecars(
+	t.Run("indices not found", func(t *testing.T) {
+		_, savedVerifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			verification.DataColumnsParamsByRoot{
+			util.DataColumnsParamsByRoot{
+				{1}: {
+					{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}},
+					{ColumnIndex: 14, DataColumn: []byte{2, 3, 4}},
+				},
+			},
+		)
+
+		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
+		err := dataColumnStorage.Save(savedVerifiedRoDataColumnSidecars)
+		require.NoError(t, err)
+
+		verifiedRODataColumnSidecars, err := dataColumnStorage.Get([fieldparams.RootLength]byte{1}, []uint64{3, 1, 2})
+		require.NoError(t, err)
+		require.Equal(t, 0, len(verifiedRODataColumnSidecars))
+	})
+
+	t.Run("nominal", func(t *testing.T) {
+		_, expectedVerifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
+			t,
+			util.DataColumnsParamsByRoot{
 				{1}: {
 					{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}},
 					{ColumnIndex: 14, DataColumn: []byte{2, 3, 4}},
@@ -393,9 +413,9 @@ func TestRemove(t *testing.T) {
 	})
 
 	t.Run("nominal", func(t *testing.T) {
-		_, inputVerifiedRoDataColumnSidecars := verification.CreateTestVerifiedRoDataColumnSidecars(
+		_, inputVerifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			verification.DataColumnsParamsByRoot{
+			util.DataColumnsParamsByRoot{
 				{1}: {
 					{Slot: 32, ColumnIndex: 10, DataColumn: []byte{1, 2, 3}},
 					{Slot: 32, ColumnIndex: 11, DataColumn: []byte{2, 3, 4}},
@@ -433,9 +453,9 @@ func TestRemove(t *testing.T) {
 }
 
 func TestClear(t *testing.T) {
-	_, inputVerifiedRoDataColumnSidecars := verification.CreateTestVerifiedRoDataColumnSidecars(
+	_, inputVerifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 		t,
-		verification.DataColumnsParamsByRoot{
+		util.DataColumnsParamsByRoot{
 			{1}: {{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}}},
 			{2}: {{ColumnIndex: 13, DataColumn: []byte{6, 7, 8}}},
 		},
@@ -471,9 +491,9 @@ func TestClear(t *testing.T) {
 
 func TestMetadata(t *testing.T) {
 	t.Run("wrong version", func(t *testing.T) {
-		_, verifiedRoDataColumnSidecars := verification.CreateTestVerifiedRoDataColumnSidecars(
+		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			verification.DataColumnsParamsByRoot{
+			util.DataColumnsParamsByRoot{
 				{1}: {{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}}},
 			},
 		)
@@ -622,9 +642,9 @@ func TestPrune(t *testing.T) {
 
 			return true
 		}
-		_, verifiedRoDataColumnSidecars := verification.CreateTestVerifiedRoDataColumnSidecars(
+		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			verification.DataColumnsParamsByRoot{
+			util.DataColumnsParamsByRoot{
 				{0}: {
 					{Slot: 33, ColumnIndex: 2, DataColumn: []byte{1, 2, 3}}, // Period 0 - Epoch 1
 					{Slot: 33, ColumnIndex: 4, DataColumn: []byte{2, 3, 4}}, // Period 0 - Epoch 1
@@ -698,9 +718,9 @@ func TestPrune(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, true, compareSlices([]string{"0x0500000000000000000000000000000000000000000000000000000000000000.sszs"}, dirs))
 
-		_, verifiedRoDataColumnSidecars = verification.CreateTestVerifiedRoDataColumnSidecars(
+		_, verifiedRoDataColumnSidecars = util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			verification.DataColumnsParamsByRoot{
+			util.DataColumnsParamsByRoot{
 				{6}: {{Slot: 451_141, ColumnIndex: 2, DataColumn: []byte{1, 2, 3}}}, // Period 3 - Epoch 14_098
 			},
 		)

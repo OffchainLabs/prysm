@@ -22,6 +22,7 @@ import (
 	validatorv1alpha1 "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/v1alpha1/validator"
 	validatorprysm "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/validator"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
+	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -95,14 +96,19 @@ func (s *Service) endpoints(
 	endpoints = append(endpoints, s.nodeEndpoints()...)
 	endpoints = append(endpoints, s.beaconEndpoints(ch, stater, blocker, validatorServer, coreService)...)
 	endpoints = append(endpoints, s.configEndpoints()...)
-	endpoints = append(endpoints, s.lightClientEndpoints(blocker, stater)...)
 	endpoints = append(endpoints, s.eventsEndpoints()...)
 	endpoints = append(endpoints, s.prysmBeaconEndpoints(ch, stater, coreService)...)
 	endpoints = append(endpoints, s.prysmNodeEndpoints()...)
 	endpoints = append(endpoints, s.prysmValidatorEndpoints(stater, coreService)...)
+
+	if features.Get().EnableLightClient {
+		endpoints = append(endpoints, s.lightClientEndpoints(blocker, stater)...)
+	}
+
 	if enableDebug {
 		endpoints = append(endpoints, s.debugEndpoints(stater)...)
 	}
+
 	return endpoints
 }
 
@@ -239,7 +245,7 @@ func (s *Service) validatorEndpoints(
 			template: "/eth/v2/validator/aggregate_attestation",
 			name:     namespace + ".GetAggregateAttestationV2",
 			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 			},
 			handler: server.GetAggregateAttestationV2,
 			methods: []string{http.MethodGet},
@@ -308,7 +314,7 @@ func (s *Service) validatorEndpoints(
 			template: "/eth/v1/validator/attestation_data",
 			name:     namespace + ".GetAttestationData",
 			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 			},
 			handler: server.GetAttestationData,
 			methods: []string{http.MethodGet},
@@ -900,7 +906,7 @@ func (s *Service) beaconEndpoints(
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
 			},
-			handler: server.GetPendingDeposits,
+			handler: server.GetPendingConsolidations,
 			methods: []string{http.MethodGet},
 		},
 		{
@@ -1253,7 +1259,7 @@ func (s *Service) prysmValidatorEndpoints(stater lookup.Stater, coreService *cor
 			methods: []string{http.MethodPost},
 		},
 		{
-			template: "/prysm/v1/validators/participation",
+			template: "/prysm/v1/validators/{state_id}/participation",
 			name:     namespace + ".GetParticipation",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
@@ -1262,7 +1268,7 @@ func (s *Service) prysmValidatorEndpoints(stater lookup.Stater, coreService *cor
 			methods: []string{http.MethodGet},
 		},
 		{
-			template: "/prysm/v1/validators/active_set_changes",
+			template: "/prysm/v1/validators/{state_id}/active_set_changes",
 			name:     namespace + ".GetActiveSetChanges",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),

@@ -26,7 +26,7 @@ func TestMigrateUp_NoDBFound(t *testing.T) {
 // This, it is tested only for complete slashing protection database.
 func TestMigrateUp_OK(t *testing.T) {
 	isSlashingProtectionMinimal := false
-	validatorDB := dbtest.SetupDB(t, nil, isSlashingProtectionMinimal)
+	validatorDB := dbtest.SetupDB(t, t.TempDir(), nil, isSlashingProtectionMinimal)
 	dbPath := validatorDB.DatabasePath()
 	require.NoError(t, validatorDB.Close())
 	app := cli.App{}
@@ -52,7 +52,7 @@ func TestMigrateDown_NoDBFound(t *testing.T) {
 // This, it is tested only for complete slashing protection database.
 func TestMigrateDown_OK(t *testing.T) {
 	isSlashingProtectionMinimal := false
-	validatorDB := dbtest.SetupDB(t, nil, isSlashingProtectionMinimal)
+	validatorDB := dbtest.SetupDB(t, t.TempDir(), nil, isSlashingProtectionMinimal)
 	dbPath := validatorDB.DatabasePath()
 	require.NoError(t, validatorDB.Close())
 	app := cli.App{}

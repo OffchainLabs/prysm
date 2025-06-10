@@ -9,6 +9,7 @@ import (
 	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/network/forks"
@@ -36,8 +37,8 @@ type StateByRooter interface {
 type sharedResources struct {
 	clock *startup.Clock
 	fc    Forkchoicer
-	sc    SignatureCache
-	pc    ProposerCache
+	sc    signatureCache
+	pc    proposerCache
 	sr    StateByRooter
 	ic    *inclusionProofCache
 }
@@ -60,12 +61,14 @@ func (ini *Initializer) NewBlobVerifier(b blocks.ROBlob, reqs []Requirement) *RO
 }
 
 // NewDataColumnsVerifier creates a DataColumnVerifier for a slice of data columns, with the given set of requirements.
+// WARNING: The returned verifier is not thread-safe, and should not be used concurrently.
 func (ini *Initializer) NewDataColumnsVerifier(roDataColumns []blocks.RODataColumn, reqs []Requirement) *RODataColumnsVerifier {
 	return &RODataColumnsVerifier{
 		sharedResources:             ini.shared,
 		dataColumns:                 roDataColumns,
 		results:                     newResults(reqs...),
 		verifyDataColumnsCommitment: peerdas.VerifyDataColumnsSidecarKZGProofs,
+		stateByRoot:                 make(map[[fieldparams.RootLength]byte]state.BeaconState),
 	}
 }
 
@@ -98,7 +101,7 @@ func NewInitializerWaiter(cw startup.ClockWaiter, fc Forkchoicer, sr StateByRoot
 		fc: fc,
 		pc: pc,
 		sr: sr,
-		ic: newInclusionProofCache(DefaultInclusionProofCacheSize),
+		ic: newInclusionProofCache(defaultInclusionProofCacheSize),
 	}
 	iw := &InitializerWaiter{cw: cw, ini: &Initializer{shared: shared}}
 	for _, o := range opts {
@@ -118,9 +121,9 @@ func (w *InitializerWaiter) WaitForInitializer(ctx context.Context) (*Initialize
 	}
 	// We wait until this point to initialize the signature cache because here we have access to the genesis validator root.
 	vr := w.ini.shared.clock.GenesisValidatorsRoot()
-	sc := newSigCache(vr[:], DefaultSignatureCacheSize, w.getFork)
+	sc := newSigCache(vr[:], defaultSignatureCacheSize, w.getFork)
 	w.ini.shared.sc = sc
-	w.ini.shared.ic = newInclusionProofCache(DefaultInclusionProofCacheSize)
+	w.ini.shared.ic = newInclusionProofCache(defaultInclusionProofCacheSize)
 	return w.ini, nil
 }
 

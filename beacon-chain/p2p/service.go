@@ -363,12 +363,12 @@ func (s *Service) ENR() *enr.Record {
 	return s.dv5Listener.Self().Record()
 }
 
-// NodeID returns the local node's node ID
-// for discovery.
+// NodeID returns the local node's node ID for discovery.
 func (s *Service) NodeID() enode.ID {
 	if s.dv5Listener == nil {
-		return [32]byte{}
+		return enode.ID{}
 	}
+
 	return s.dv5Listener.Self().ID()
 }
 

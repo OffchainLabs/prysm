@@ -23,12 +23,7 @@ import (
 // GenerateFullBlockFulu generates a fully valid Fulu block with the requested parameters.
 // Use BlockGenConfig to declare the conditions you would like the block generated under.
 // This function modifies the passed state as follows:
-func GenerateFullBlockFulu(
-	bState state.BeaconState,
-	privs []bls.SecretKey,
-	conf *BlockGenConfig,
-	slot primitives.Slot,
-) (*ethpb.SignedBeaconBlockFulu, error) {
+func GenerateFullBlockFulu(bState state.BeaconState, privs []bls.SecretKey, conf *BlockGenConfig, slot primitives.Slot) (*ethpb.SignedBeaconBlockFulu, error) {
 	ctx := context.Background()
 	currentSlot := bState.Slot()
 	if currentSlot > slot {

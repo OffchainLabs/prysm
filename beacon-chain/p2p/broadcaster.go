@@ -99,12 +99,7 @@ func (s *Service) BroadcastSyncCommitteeMessage(ctx context.Context, subnet uint
 	return nil
 }
 
-func (s *Service) internalBroadcastAttestation(
-	ctx context.Context,
-	subnet uint64,
-	att ethpb.Att,
-	forkDigest [fieldparams.VersionLength]byte,
-) {
+func (s *Service) internalBroadcastAttestation(ctx context.Context, subnet uint64, att ethpb.Att, forkDigest [fieldparams.VersionLength]byte) {
 	_, span := trace.StartSpan(ctx, "p2p.internalBroadcastAttestation")
 	defer span.End()
 	ctx = trace.NewContext(context.Background(), span) // clear parent context / deadline.
@@ -236,12 +231,7 @@ func (s *Service) BroadcastBlob(ctx context.Context, subnet uint64, blob *ethpb.
 	return nil
 }
 
-func (s *Service) internalBroadcastBlob(
-	ctx context.Context,
-	subnet uint64,
-	blobSidecar *ethpb.BlobSidecar,
-	forkDigest [fieldparams.VersionLength]byte,
-) {
+func (s *Service) internalBroadcastBlob(ctx context.Context, subnet uint64, blobSidecar *ethpb.BlobSidecar, forkDigest [fieldparams.VersionLength]byte) {
 	_, span := trace.StartSpan(ctx, "p2p.internalBroadcastBlob")
 	defer span.End()
 	ctx = trace.NewContext(context.Background(), span) // clear parent context / deadline.
@@ -335,20 +325,19 @@ func (s *Service) BroadcastLightClientFinalityUpdate(ctx context.Context, update
 
 // BroadcastDataColumn broadcasts a data column to the p2p network, the message is assumed to be
 // broadcasted to the current fork and to the input column subnet.
-// TODO: Add tests
 func (s *Service) BroadcastDataColumn(
-	ctx context.Context,
 	root [fieldparams.RootLength]byte,
-	columnSubnet uint64,
+	dataColumnSubnet uint64,
 	dataColumnSidecar *ethpb.DataColumnSidecar,
+	peersCheckedChans ...chan<- bool, // Used for testing purposes to signal when peers are checked.
 ) error {
 	// Add tracing to the function.
-	ctx, span := trace.StartSpan(ctx, "p2p.BroadcastBlob")
+	ctx, span := trace.StartSpan(s.ctx, "p2p.BroadcastDataColumn")
 	defer span.End()
 
 	// Ensure the data column sidecar is not nil.
 	if dataColumnSidecar == nil {
-		return errors.Errorf("attempted to broadcast nil data column sidecar at subnet %d", columnSubnet)
+		return errors.Errorf("attempted to broadcast nil data column sidecar at subnet %d", dataColumnSubnet)
 	}
 
 	// Retrieve the current fork digest.
@@ -360,7 +349,7 @@ func (s *Service) BroadcastDataColumn(
 	}
 
 	// Non-blocking broadcast, with attempts to discover a column subnet peer if none available.
-	go s.internalBroadcastDataColumn(ctx, root, columnSubnet, dataColumnSidecar, forkDigest)
+	go s.internalBroadcastDataColumn(ctx, root, dataColumnSubnet, dataColumnSidecar, forkDigest, peersCheckedChans)
 
 	return nil
 }
@@ -371,6 +360,7 @@ func (s *Service) internalBroadcastDataColumn(
 	columnSubnet uint64,
 	dataColumnSidecar *ethpb.DataColumnSidecar,
 	forkDigest [fieldparams.VersionLength]byte,
+	peersCheckedChans []chan<- bool, // Used for testing purposes to signal when peers are checked.
 ) {
 	// Add tracing to the function.
 	_, span := trace.StartSpan(ctx, "p2p.internalBroadcastDataColumn")
@@ -379,11 +369,9 @@ func (s *Service) internalBroadcastDataColumn(
 	// Increase the number of broadcast attempts.
 	dataColumnSidecarBroadcastAttempts.Inc()
 
-	// Clear parent context / deadline.
-	ctx = trace.NewContext(context.Background(), span)
-
 	// Define a one-slot length context timeout.
-	oneSlot := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+	secondsPerSlot := params.BeaconConfig().SecondsPerSlot
+	oneSlot := time.Duration(secondsPerSlot) * time.Second
 	ctx, cancel := context.WithTimeout(ctx, oneSlot)
 	defer cancel()
 
@@ -393,39 +381,17 @@ func (s *Service) internalBroadcastDataColumn(
 	// Compute the wrapped subnet index.
 	wrappedSubIdx := columnSubnet + dataColumnSubnetVal
 
-	// Check if we have peers with this subnet.
-	hasPeer := func() bool {
-		s.subnetLocker(wrappedSubIdx).RLock()
-		defer s.subnetLocker(wrappedSubIdx).RUnlock()
-
-		return s.hasPeerWithSubnet(topic)
-	}()
-
-	// If no peers are found, attempt to find peers with this subnet.
-	if !hasPeer {
-		if err := func() error {
-			s.subnetLocker(wrappedSubIdx).Lock()
-			defer s.subnetLocker(wrappedSubIdx).Unlock()
-
-			ok, err := s.FindPeersWithSubnet(ctx, topic, columnSubnet, 1 /*threshold*/)
-			if err != nil {
-				return errors.Wrap(err, "find peers for subnet")
-			}
-
-			if ok {
-				return nil
-			}
-			return errors.New("failed to find peers for subnet")
-		}(); err != nil {
-			log.WithError(err).Error("Failed to find peers")
-			tracing.AnnotateError(span, err)
-		}
+	// Find peers if needed.
+	if err := s.findPeersIfNeeded(ctx, wrappedSubIdx, topic, columnSubnet, peersCheckedChans); err != nil {
+		log.WithError(err).Error("Failed to find peers for data column subnet")
+		tracing.AnnotateError(span, err)
 	}
 
 	// Broadcast the data column sidecar to the network.
 	if err := s.broadcastObject(ctx, dataColumnSidecar, topic); err != nil {
 		log.WithError(err).Error("Failed to broadcast data column sidecar")
 		tracing.AnnotateError(span, err)
+		return
 	}
 
 	header := dataColumnSidecar.SignedBlockHeader.GetHeader()
@@ -445,6 +411,42 @@ func (s *Service) internalBroadcastDataColumn(
 
 	// Increase the number of successful broadcasts.
 	dataColumnSidecarBroadcasts.Inc()
+}
+
+func (s *Service) findPeersIfNeeded(
+	ctx context.Context,
+	wrappedSubIdx uint64,
+	topic string,
+	subnet uint64,
+	peersCheckedChans []chan<- bool, // Used for testing purposes to signal when peers are checked.
+) error {
+	s.subnetLocker(wrappedSubIdx).Lock()
+	defer s.subnetLocker(wrappedSubIdx).Unlock()
+
+	// Sending a data column sidecar to only one peer is not ideal,
+	// but it ensures at least one peer receives it.
+	const peerCount = 1
+
+	if s.hasPeerWithSubnet(topic) {
+		// Exit early if we already have peers with this subnet.
+		return nil
+	}
+
+	// Used for testing purposes.
+	if len(peersCheckedChans) > 0 {
+		peersCheckedChans[0] <- true
+	}
+
+	// No peers found, attempt to find peers with this subnet.
+	ok, err := s.FindPeersWithSubnet(ctx, topic, subnet, peerCount)
+	if err != nil {
+		return errors.Wrap(err, "find peers with subnet")
+	}
+	if !ok {
+		return errors.Errorf("failed to find peers for topic %s with subnet %d", topic, subnet)
+	}
+
+	return nil
 }
 
 // method to broadcast messages to other peers in our gossip mesh.

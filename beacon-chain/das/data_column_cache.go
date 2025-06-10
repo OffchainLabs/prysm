@@ -1,12 +1,12 @@
 package das
 
 import (
-	"reflect"
+	"bytes"
+	"slices"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/pkg/errors"
 )
 
@@ -17,24 +17,16 @@ var (
 	errMissingSidecar     = errors.New("no sidecar in cache for block commitment")
 )
 
-// dataColumnCacheKey includes the slot so that we can easily iterate through the cache and compare
-// slots for eviction purposes. Whether the input is the block or the sidecar, we always have
-// the root+slot when interacting with the cache, so it isn't an inconvenience to use both.
-type dataColumnCacheKey struct {
-	slot primitives.Slot
-	root [32]byte
-}
-
 type dataColumnCache struct {
-	entries map[dataColumnCacheKey]*dataColumnCacheEntry
+	entries map[cacheKey]*dataColumnCacheEntry
 }
 
 func newDataColumnCache() *dataColumnCache {
-	return &dataColumnCache{entries: make(map[dataColumnCacheKey]*dataColumnCacheEntry)}
+	return &dataColumnCache{entries: make(map[cacheKey]*dataColumnCacheEntry)}
 }
 
 // ensure returns the entry for the given key, creating it if it isn't already present.
-func (c *dataColumnCache) ensure(key dataColumnCacheKey) *dataColumnCacheEntry {
+func (c *dataColumnCache) ensure(key cacheKey) *dataColumnCacheEntry {
 	entry, ok := c.entries[key]
 	if !ok {
 		entry = &dataColumnCacheEntry{}
@@ -45,7 +37,7 @@ func (c *dataColumnCache) ensure(key dataColumnCacheKey) *dataColumnCacheEntry {
 }
 
 // delete removes the cache entry from the cache.
-func (c *dataColumnCache) delete(key dataColumnCacheKey) {
+func (c *dataColumnCache) delete(key cacheKey) {
 	delete(c.entries, key)
 }
 
@@ -94,7 +86,7 @@ func (e *dataColumnCacheEntry) filter(root [32]byte, commitmentsArray *safeCommi
 			return nil, errors.Wrapf(errMissingSidecar, "root=%#x, index=%#x", root, i)
 		}
 
-		if !reflect.DeepEqual(commitmentsArray[i], e.scs[i].KzgCommitments) {
+		if !sliceBytesEqual(commitmentsArray[i], e.scs[i].KzgCommitments) {
 			return nil, errors.Wrapf(errCommitmentMismatch, "root=%#x, index=%#x, commitment=%#x, block commitment=%#x", root, i, e.scs[i].KzgCommitments, commitmentsArray[i])
 		}
 
@@ -132,4 +124,8 @@ func (s *safeCommitmentsArray) nonEmptyIndices() map[uint64]bool {
 	}
 
 	return columns
+}
+
+func sliceBytesEqual(a, b [][]byte) bool {
+	return slices.EqualFunc(a, b, bytes.Equal)
 }

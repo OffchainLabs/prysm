@@ -10,7 +10,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/verify"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -68,7 +67,7 @@ func RequestDataColumnSidecarsByRoot(
 	blockRoot := block.Root()
 
 	for len(dataColumnsByAdmissiblePeer) > 0 {
-		peersToFetchFrom, err := SelectPeersToFetchDataColumnsFrom(uint64MapToSortedSlice(remainingMissingColumns), dataColumnsByAdmissiblePeer)
+		peersToFetchFrom, err := SelectPeersToFetchDataColumnsFrom(sliceFromMap(remainingMissingColumns, true /*sorted*/), dataColumnsByAdmissiblePeer)
 		if err != nil {
 			return nil, errors.Wrap(err, "select peers to fetch data columns from")
 		}
@@ -96,7 +95,7 @@ func RequestDataColumnSidecarsByRoot(
 			}
 
 			// Check if returned data columns align with the block.
-			if err := verify.DataColumnsAlignWithBlock(block, peerSidecars); err != nil {
+			if err := peerdas.DataColumnsAlignWithBlock(block, peerSidecars); err != nil {
 				// Remove this peer since it failed to respond correctly.
 				delete(dataColumnsByAdmissiblePeer, peer)
 				log.WithError(err).Debug("Align with block failed")
@@ -106,7 +105,7 @@ func RequestDataColumnSidecarsByRoot(
 			// Verify the received sidecars.
 			verifier := newColumnsVerifier(peerSidecars, verification.ByRootRequestDataColumnSidecarRequirements)
 
-			if err := verifier.Valid(); err != nil {
+			if err := verifier.ValidFields(); err != nil {
 				// Remove this peer if the verification failed.
 				delete(dataColumnsByAdmissiblePeer, peer)
 				log.WithError(err).Debug("Valid verification failed")
@@ -150,7 +149,7 @@ func RequestDataColumnSidecarsByRoot(
 			if len(peerMissingColumns) > 0 {
 				// Remove this peer if some requested columns were not correctly returned.
 				delete(dataColumnsByAdmissiblePeer, peer)
-				log.WithField("missingColumns", uint64MapToSortedSlice(peerMissingColumns)).Debug("Peer did not provide all requested data columns")
+				log.WithField("missingColumns", sliceFromMap(peerMissingColumns, true /*sorted*/)).Debug("Peer did not provide all requested data columns")
 			}
 
 			verifiedSidecars = append(verifiedSidecars, verifiedPeerSidecars...)
@@ -170,7 +169,7 @@ func RequestDataColumnSidecarsByRoot(
 	}
 
 	// If we still have remaining columns after all retries, return error
-	return nil, errors.Errorf("failed to retrieve all requested data columns after retries for block root=%#x, missing columns=%v", blockRoot, uint64MapToSortedSlice(remainingMissingColumns))
+	return nil, errors.Errorf("failed to retrieve all requested data columns after retries for block root=%#x, missing columns=%v", blockRoot, sliceFromMap(remainingMissingColumns, true /*sorted*/))
 }
 
 // RequestMissingDataColumnsByRange is an opinionated, high level function which, for each block in `blks`:
@@ -304,7 +303,7 @@ func RequestMissingDataColumnsByRange(
 			}
 
 			// Check if the data columns align with blocks.
-			if err := verify.DataColumnsAlignWithBlock(block, dataColumns); err != nil {
+			if err := peerdas.DataColumnsAlignWithBlock(block, dataColumns); err != nil {
 				log.WithField("root", root).WithError(err).Debug("Data columns do not align with block")
 				continue
 			}
@@ -434,7 +433,7 @@ func SelectPeersToFetchDataColumnsFrom(neededDataColumns []uint64, dataColumnsBy
 	for len(remainingDataColumns) > 0 {
 		// Check if at least one peer remains. If not, it means that we don't have enough peers to fetch all needed data columns.
 		if len(neededDataColumnsByPeer) == 0 {
-			missingDataColumnsSortedSlice := uint64MapToSortedSlice(remainingDataColumns)
+			missingDataColumnsSortedSlice := sliceFromMap(remainingDataColumns, true /*sorted*/)
 			return dataColumnsFromSelectedPeers, errors.Errorf("no peer to fetch the following data columns: %v", missingDataColumnsSortedSlice)
 		}
 
@@ -446,7 +445,7 @@ func SelectPeersToFetchDataColumnsFrom(neededDataColumns []uint64, dataColumnsBy
 			}
 		}
 
-		dataColumnsSortedSlice := uint64MapToSortedSlice(neededDataColumnsByPeer[bestPeer])
+		dataColumnsSortedSlice := sliceFromMap(neededDataColumnsByPeer[bestPeer], true /*sorted*/)
 		if uint64(len(dataColumnsSortedSlice)) > maxRequestDataColumnSidecars {
 			dataColumnsSortedSlice = dataColumnsSortedSlice[:maxRequestDataColumnSidecars]
 		}
@@ -497,7 +496,7 @@ func AdmissiblePeersForDataColumns(
 	descriptions := make([]string, 0, peerCount)
 
 	// Compute custody columns for each peer.
-	dataColumnsByPeer, err := custodyColumnsFromPeers(peers, p2p)
+	dataColumnsByPeer, err := custodyColumnsFromPeers(p2p, peers)
 	if err != nil {
 		return nil, nil, nil, errors.Wrap(err, "custody columns from peers")
 	}
@@ -519,11 +518,11 @@ func AdmissiblePeersForDataColumns(
 	return dataColumnsByAdmissiblePeer, admissiblePeersByDataColumn, descriptions, nil
 }
 
-// custodyGroupsFromPeer computes all the custody groups indexed by peer.
-func custodyGroupsFromPeers(peers []peer.ID, p2pIface p2p.P2P) (map[peer.ID]map[uint64]bool, error) {
+// custodyColumnsFromPeers computes all the custody columns indexed by peer.
+func custodyColumnsFromPeers(p2pIface p2p.P2P, peers []peer.ID) (map[peer.ID]map[uint64]bool, error) {
 	peerCount := len(peers)
 
-	custodyGroupsByPeer := make(map[peer.ID]map[uint64]bool, peerCount)
+	custodyColumnsByPeer := make(map[peer.ID]map[uint64]bool, peerCount)
 	for _, peer := range peers {
 		// Get the node ID from the peer ID.
 		nodeID, err := p2p.ConvertPeerIDToNodeID(peer)
@@ -534,43 +533,16 @@ func custodyGroupsFromPeers(peers []peer.ID, p2pIface p2p.P2P) (map[peer.ID]map[
 		// Get the custody group count of the peer.
 		custodyGroupCount := p2pIface.CustodyGroupCountFromPeer(peer)
 
-		// Get the custody groups of the peer.
+		// Get peerdas info of the peer.
 		dasInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
 		if err != nil {
-			return nil, errors.Wrap(err, "custody groups")
+			return nil, errors.Wrap(err, "peerdas info")
 		}
 
-		custodyGroupsByPeer[peer] = dasInfo.CustodyGroups
+		custodyColumnsByPeer[peer] = dasInfo.CustodyColumns
 	}
 
-	return custodyGroupsByPeer, nil
-}
-
-// custodyColumnsFromPeers computes all the custody columns indexed by peer.
-func custodyColumnsFromPeers(peers []peer.ID, p2p p2p.P2P) (map[peer.ID]map[uint64]bool, error) {
-	// Get the custody groups of the peers.
-	custodyGroupsByPeer, err := custodyGroupsFromPeers(peers, p2p)
-	if err != nil {
-		return nil, errors.Wrap(err, "custody groups from peer")
-	}
-
-	// Compute the custody columns of the peers.
-	dataColumnsByPeer := make(map[peer.ID]map[uint64]bool, len(custodyGroupsByPeer))
-	for peer, custodyGroups := range custodyGroupsByPeer {
-		custodyGroupsSlice := make([]uint64, 0, len(custodyGroups))
-		for group := range custodyGroups {
-			custodyGroupsSlice = append(custodyGroupsSlice, group)
-		}
-
-		custodyColumns, err := peerdas.CustodyColumns(custodyGroupsSlice)
-		if err != nil {
-			return nil, errors.Wrap(err, "custody columns")
-		}
-
-		dataColumnsByPeer[peer] = custodyColumns
-	}
-
-	return dataColumnsByPeer, nil
+	return custodyColumnsByPeer, nil
 }
 
 // `filterPeerWhichCustodyAtLeastOneDataColumn` filters peers which custody at least one data column
@@ -596,7 +568,7 @@ outerLoop:
 		var peerCustodyColumnsLog interface{} = "all"
 
 		if peerCustodyColumnsCount < numberOfColumns {
-			peerCustodyColumnsLog = uint64MapToSortedSlice(peerCustodyDataColumns)
+			peerCustodyColumnsLog = sliceFromMap(peerCustodyDataColumns, true /*sorted*/)
 		}
 
 		description := fmt.Sprintf("peer %s: does not custody any needed column, custody columns: %v", peer, peerCustodyColumnsLog)
@@ -679,7 +651,7 @@ func buildDataColumnByRangeRequests(roBlocks []blocks.ROBlock, missingColumnsByR
 			request := &eth.DataColumnSidecarsByRangeRequest{
 				StartSlot: previousStartBlockSlot,
 				Count:     uint64(blockSlot - previousStartBlockSlot),
-				Columns:   sortedSliceFromMap(previousMissingDataColumns),
+				Columns:   sliceFromMap(previousMissingDataColumns, true /*sorted*/),
 			}
 
 			result = append(result, request)
@@ -693,7 +665,7 @@ func buildDataColumnByRangeRequests(roBlocks []blocks.ROBlock, missingColumnsByR
 	lastRequest := &eth.DataColumnSidecarsByRangeRequest{
 		StartSlot: previousStartBlockSlot,
 		Count:     uint64(lastBlockSlot - previousStartBlockSlot + 1),
-		Columns:   sortedSliceFromMap(previousMissingDataColumns),
+		Columns:   sliceFromMap(previousMissingDataColumns, true /*sorted*/),
 	}
 
 	result = append(result, lastRequest)
@@ -797,7 +769,7 @@ func waitForPeersForDataColumns(p2p p2p.P2P, rateLimiter *leakybucket.Collector,
 		var dataColumnsWithoutPeersLog interface{} = "all"
 		dataColumnsWithoutPeersCount := uint64(len(dataColumnsWithoutPeers))
 		if dataColumnsWithoutPeersCount < numberOfColumns {
-			dataColumnsWithoutPeersLog = uint64MapToSortedSlice(dataColumnsWithoutPeers)
+			dataColumnsWithoutPeersLog = sliceFromMap(dataColumnsWithoutPeers, true /*sorted*/)
 		}
 
 		log.WithField("columnsWithoutPeer", dataColumnsWithoutPeersLog).Warning("Fetch data columns from peers - no available peers, retrying later")
@@ -809,7 +781,7 @@ func waitForPeersForDataColumns(p2p p2p.P2P, rateLimiter *leakybucket.Collector,
 			var peerDataColumnsLog interface{} = "all"
 			peerDataColumnsCount := uint64(len(peerDataColumns))
 			if peerDataColumnsCount < numberOfColumns {
-				peerDataColumnsLog = uint64MapToSortedSlice(peerDataColumns)
+				peerDataColumnsLog = sliceFromMap(peerDataColumns, true /*sorted*/)
 			}
 
 			log.WithFields(logrus.Fields{

@@ -14,13 +14,11 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/testutil"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
@@ -280,122 +278,6 @@ func generateRandomBlocSignedBeaconBlockkAndVerifiedRoBlobs(t *testing.T, blobCo
 	return signedBeaconBlock, verifiedROBlobs
 }
 
-func TestBlobsFromStoredDataColumns(t *testing.T) {
-	const blobCount = 5
-
-	blobsIndex := make(map[uint64]bool, blobCount)
-	for i := range blobCount {
-		blobsIndex[uint64(i)] = true
-	}
-
-	var (
-		nilError            *core.RpcError
-		noDataColumnsIndice []int
-	)
-	allDataColumnsIndice := make([]int, 0, fieldparams.NumberOfColumns)
-	for i := range fieldparams.NumberOfColumns {
-		allDataColumnsIndice = append(allDataColumnsIndice, i)
-	}
-
-	originalColumnsIndice := allDataColumnsIndice[:fieldparams.NumberOfColumns/2]
-	extendedColumnsIndice := allDataColumnsIndice[fieldparams.NumberOfColumns/2:]
-
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig()
-	cfg.FuluForkEpoch = 0
-	params.OverrideBeaconConfig(cfg)
-
-	testCases := []struct {
-		errorReason         core.ErrorReason
-		isError             bool
-		storedColumnsIndice []int
-		name                string
-	}{
-
-		{
-			name:                "Cannot reconstruct",
-			storedColumnsIndice: noDataColumnsIndice,
-			isError:             true,
-			errorReason:         core.NotFound,
-		},
-		{
-			name:                "No need to reconstruct",
-			storedColumnsIndice: originalColumnsIndice,
-			isError:             false,
-		},
-		{
-			name:                "Reconstruction needed",
-			storedColumnsIndice: extendedColumnsIndice,
-			isError:             false,
-		},
-	}
-
-	// Load the trusted setup.
-	err := kzg.Start()
-	require.NoError(t, err)
-
-	// Create a dummy signed beacon blocks and dummy verified RO blobs.
-	signedBeaconBlock, verifiedRoBlobs := generateRandomBlocSignedBeaconBlockkAndVerifiedRoBlobs(t, blobCount)
-
-	// Extract the root from the signed beacon block.
-	blockRoot, err := signedBeaconBlock.Block().HashTreeRoot()
-	require.NoError(t, err)
-
-	// Extract blobs from verified RO blobs.
-	blobs := make([]kzg.Blob, 0, blobCount)
-	for _, verifiedRoBlob := range verifiedRoBlobs {
-		blob := verifiedRoBlob.BlobSidecar.Blob
-		blobs = append(blobs, kzg.Blob(blob))
-	}
-
-	// Convert blobs to data columns.
-	cellsAndProofs := util.GenerateCellsAndProofs(t, blobs)
-	dataColumnSidecars, err := peerdas.DataColumnSidecars(signedBeaconBlock, cellsAndProofs)
-	require.NoError(t, err)
-
-	// Create verified RO data columns.
-	verifiedRoDataColumns := make([]blocks.VerifiedRODataColumn, 0, fieldparams.NumberOfColumns)
-	for _, dataColumnSidecar := range dataColumnSidecars {
-		roDataColumn, err := blocks.NewRODataColumn(dataColumnSidecar)
-		require.NoError(t, err)
-
-		verifiedRoDataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
-		verifiedRoDataColumns = append(verifiedRoDataColumns, verifiedRoDataColumn)
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Define a blob storage.
-			dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
-
-			// Save the data columns in the store.
-			verifiedRoDataColumnsToSave := make([]blocks.VerifiedRODataColumn, 0, len(tc.storedColumnsIndice))
-			for _, columnIndex := range tc.storedColumnsIndice {
-				verifiedRoDataColumn := verifiedRoDataColumns[columnIndex]
-				verifiedRoDataColumnsToSave = append(verifiedRoDataColumnsToSave, verifiedRoDataColumn)
-			}
-
-			err := dataColumnStorage.Save(verifiedRoDataColumnsToSave)
-			require.NoError(t, err)
-
-			// Define the blocker.
-			blocker := &BeaconDbBlocker{
-				DataColumnStorage: dataColumnStorage,
-			}
-
-			// Get the blobs from the data columns.
-			actual, rpcErr := blocker.blobsFromStoredDataColumns(blobsIndex, blockRoot[:])
-			if tc.isError {
-				require.Equal(t, tc.errorReason, rpcErr.Reason)
-			} else {
-				require.Equal(t, nilError, rpcErr)
-				expected := verifiedRoBlobs
-				require.DeepSSZEqual(t, expected, actual)
-			}
-		})
-	}
-}
-
 func TestGetBlob(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -515,7 +397,7 @@ func TestGetBlob(t *testing.T) {
 			BeaconDB:    db,
 			BlobStorage: bs,
 		}
-		verifiedBlobs, rpcErr := blocker.Blobs(ctx, "123", map[uint64]bool{2: true})
+		verifiedBlobs, rpcErr := blocker.Blobs(ctx, "123", []int{2})
 		assert.Equal(t, rpcErr == nil, true)
 		require.Equal(t, 1, len(verifiedBlobs))
 		sidecar := verifiedBlobs[0].BlobSidecar
@@ -547,8 +429,8 @@ func TestGetBlob(t *testing.T) {
 			BeaconDB:    db,
 			BlobStorage: bs,
 		}
-		noBlobIndex := uint64(len(blobs)) + 1
-		_, rpcErr := blocker.Blobs(ctx, "123", map[uint64]bool{0: true, noBlobIndex: true})
+		noBlobIndex := len(blobs) + 1
+		_, rpcErr := blocker.Blobs(ctx, "123", []int{0, noBlobIndex})
 		require.NotNil(t, rpcErr)
 		assert.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 	})
@@ -561,7 +443,7 @@ func TestGetBlob(t *testing.T) {
 			BeaconDB:    db,
 			BlobStorage: bs,
 		}
-		_, rpcErr := blocker.Blobs(ctx, "123", map[uint64]bool{0: true, math.MaxUint: true})
+		_, rpcErr := blocker.Blobs(ctx, "123", []int{0, math.MaxInt})
 		require.NotNil(t, rpcErr)
 		assert.Equal(t, core.ErrorReason(core.BadRequest), rpcErr.Reason)
 	})

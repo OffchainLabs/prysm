@@ -31,6 +31,7 @@ const (
 	BlobLength                            = 131072            // BlobLength defines the byte length of a blob.
 	BlobSize                              = 131072            // defined to match blob.size in bazel ssz codegen
 	BlobSidecarSize                       = 131928            // defined to match blob sidecar size in bazel ssz codegen
+	KzgCommitmentSize                     = 48                // KzgCommitmentSize defines the byte length of a KZG commitment.
 	KzgCommitmentInclusionProofDepth      = 17                // Merkle proof depth for blob_kzg_commitments list item
 	ExecutionBranchDepth                  = 4                 // ExecutionBranchDepth defines the number of leaves in a merkle proof of the execution payload header.
 	SyncCommitteeBranchDepth              = 5                 // SyncCommitteeBranchDepth defines the number of leaves in a merkle proof of a sync committee.
@@ -40,23 +41,14 @@ const (
 	PendingDepositsLimit                  = 134217728         // Maximum number of pending balance deposits in the beacon state.
 	PendingPartialWithdrawalsLimit        = 134217728         // Maximum number of pending partial withdrawals in the beacon state.
 	PendingConsolidationsLimit            = 262144            // Maximum number of pending consolidations in the beacon state.
-	MaxDepositRequestsPerPayload          = 8192              // Maximum number of deposit requests in an execution payload.
-	MaxWithdrawalRequestsPerPayload       = 16                // Maximum number of execution layer withdrawal requests in an execution payload.
-	MaxConsolidationRequestsPerPayload    = 1                 // Maximum number of consolidation requests in an execution payload.
-	MaxProposerSlashings                  = 16                // Maximum number of proposer slashings in a block.
-	MaxAttesterSlashings                  = 2                 // Maximum number of attester slashings in a block.
 	MaxAttesterSlashingsElectra           = 1                 // Maximum number of attester slashings in a block.
-	MaxAttestations                       = 128               // Maximum number of attestations in a block.
-	MaxAttestationsElectra                = 8                 // Maximum number of attestations in a block.
-	MaxDeposits                           = 16                // Maximum number of deposits in a block.
-	MaxVoluntaryExits                     = 16                // Maximum number of voluntary exits in a block.
-	MaxBlsToExecutionChanges              = 16                // Maximum number of bls to execution changes in a block.
 	MaxRandomByte                         = uint64(1<<8 - 1)  // MaxRandomByte defines max for a random byte using for proposer and sync committee sampling.
 	MaxRandomValueElectra                 = uint64(1<<16 - 1) // MaxRandomValueElectra defines max for a random value using for proposer and sync committee sampling.
-	NumberOfColumns                       = 128               // NumberOfColumns refers to the specified number of data columns that can exist in a network.
 
 	// Introduced in Fulu network upgrade.
-	FieldElementsPerCell              = 64   // FieldElementsPerCell refers to the specified number of field elements that can exist in a cell.
-	FieldElementsPerExtBlob           = 8192 // FieldElementsPerExtBlob refers to the specified number of field elements that can exist in an extended blob.
-	KZGCommitmentsInclusionProofDepth = 4    // KZGCommitmentsInclusionProofDepth refers to the specified depth of the KZG commitments inclusion proof.
+	CellsPerBlob         = 64                                          // CellsPerBlob refers to the number of cells in a (non-extended) blob.
+	FieldElementsPerCell = 64                                          // FieldElementsPerCell refers to the number of field elements in a cell.
+	BytesPerFieldElement = 32                                          // BytesPerFieldElement refers to the number of bytes in a field element.
+	BytesPerCells        = FieldElementsPerCell * BytesPerFieldElement // BytesPerCells refers to the number of bytes in a cell.
+	NumberOfColumns      = 128                                         // NumberOfColumns refers to the specified number of data columns that can exist in a network.
 )

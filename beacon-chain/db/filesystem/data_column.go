@@ -28,19 +28,17 @@ import (
 )
 
 const (
-	version                                      = 0x01
-	versionOffset                                = 0           // bytes
-	versionSize                                  = 1           // bytes
-	maxSszEncodedDataColumnSidecarSize           = 536_870_912 // 2**(4*8) / 8 bytes
-	encodedSszEncodedDataColumnSidecarSizeOffset = versionOffset + versionSize
-	encodedSszEncodedDataColumnSidecarSizeSize   = 4   // bytes (size of the encoded size of the SSZ encoded data column sidecar)
-	mandatoryNumberOfColumns                     = 128 // 2**7
-	indicesOffset                                = encodedSszEncodedDataColumnSidecarSizeOffset + encodedSszEncodedDataColumnSidecarSizeSize
-	indicesSize                                  = mandatoryNumberOfColumns
-	nonZeroOffset                                = mandatoryNumberOfColumns
-	headerSize                                   = versionSize + encodedSszEncodedDataColumnSidecarSizeSize + mandatoryNumberOfColumns
-	dataColumnsFileExtension                     = "sszs"
-	prunePeriod                                  = 1 * time.Minute
+	version                  = 0x01
+	versionOffset            = 0                           // bytes
+	versionSize              = 1                           // bytes
+	sidecarByteLenOffset     = versionOffset + versionSize // (Offset of the encoded size of the SSZ encoded data column sidecar)
+	sidecarByteLenSize       = 4                           // bytes (Size of the encoded size of the SSZ encoded data column sidecar)
+	mandatoryNumberOfColumns = 128                         // 2**7
+	indicesOffset            = sidecarByteLenOffset + sidecarByteLenSize
+	nonZeroOffset            = mandatoryNumberOfColumns
+	headerSize               = versionSize + sidecarByteLenSize + mandatoryNumberOfColumns
+	dataColumnsFileExtension = "sszs"
+	prunePeriod              = 1 * time.Minute
 )
 
 var (
@@ -61,16 +59,17 @@ type (
 		retentionEpochs primitives.Epoch
 		fs              afero.Fs
 		cache           *dataColumnStorageSummaryCache
-		DataColumnFeed  *event.Feed
-		muChans         map[[fieldparams.RootLength]byte]*muChan
-		mu              sync.Mutex // protect muChans
+		dataColumnFeed  *event.Feed
 		pruneMu         sync.RWMutex
+
+		mu      sync.Mutex // protects muChans
+		muChans map[[fieldparams.RootLength]byte]*muChan
 	}
 
 	// DataColumnStorageOption is a functional option for configuring a DataColumnStorage.
 	DataColumnStorageOption func(*DataColumnStorage) error
 
-	// DataColumnIdent is the unique identifier for a data column sidecar.
+	// DataColumnsIdent is a collection of unique identifiers for data column sidecars.
 	DataColumnsIdent struct {
 		Root    [fieldparams.RootLength]byte
 		Epoch   primitives.Epoch
@@ -130,7 +129,7 @@ func WithDataColumnFs(fs afero.Fs) DataColumnStorageOption {
 // initialized once per beacon node.
 func NewDataColumnStorage(ctx context.Context, opts ...DataColumnStorageOption) (*DataColumnStorage, error) {
 	storage := &DataColumnStorage{
-		DataColumnFeed: new(event.Feed),
+		dataColumnFeed: new(event.Feed),
 		muChans:        make(map[[fieldparams.RootLength]byte]*muChan),
 	}
 
@@ -195,7 +194,7 @@ func (dcs *DataColumnStorage) WarmCache() {
 		}
 
 		// Open the data column filesystem file.
-		file, err := dcs.fs.Open(path)
+		f, err := dcs.fs.Open(path)
 		if err != nil {
 			log.WithError(err).Error("Error encountered while opening data column filesystem file")
 			return nil
@@ -204,14 +203,14 @@ func (dcs *DataColumnStorage) WarmCache() {
 		// Close the file.
 		defer func() {
 			// Overwrite the existing error only if it is nil, since the close error is less important.
-			closeErr := file.Close()
+			closeErr := f.Close()
 			if closeErr != nil && err == nil {
 				err = closeErr
 			}
 		}()
 
 		// Read the metadata of the file.
-		metadata, err := dcs.metadata(file)
+		metadata, err := dcs.metadata(f)
 		if err != nil {
 			log.WithError(err).Error("Error encountered while reading metadata from data column filesystem file")
 			return nil
@@ -314,12 +313,29 @@ func (dcs *DataColumnStorage) Save(dataColumnSidecars []blocks.VerifiedRODataCol
 		}
 
 		// Notify the data column feed.
-		dcs.DataColumnFeed.Send(dataColumnsIdent)
+		dcs.dataColumnFeed.Send(dataColumnsIdent)
 	}
 
 	dataColumnSaveLatency.Observe(float64(time.Since(startTime).Milliseconds()))
 
 	return nil
+}
+
+// Subscribe subscribes to the data column feed.
+// It returns the subscription and a 1-size buffer channel to receive data column sidecars.
+// It is the responsibility of the caller to:
+// - call `subscription.Unsubscribe` when done, and to
+// - read from the channel as fast as possible until the channel is closed.
+// A call to `Save` will buffer a new value to the channel.
+// If a call to `Save` is done while a value is already in the buffer of the channel:
+// - the call to `Save` will block until the new value can be bufferized in the channel, and
+// - all other subscribers won't be notified until the new value can be bufferized in the channel.
+func (dcs *DataColumnStorage) Subscribe() (event.Subscription, <-chan DataColumnsIdent) {
+	// Subscribe to newly data columns stored in the database.
+	identsChan := make(chan DataColumnsIdent, 1)
+	subscription := dcs.dataColumnFeed.Subscribe(identsChan)
+
+	return subscription, identsChan
 }
 
 // saveFilesystem saves data column sidecars into the database.
@@ -331,7 +347,7 @@ func (dcs *DataColumnStorage) saveFilesystem(root [fieldparams.RootLength]byte, 
 	dcs.pruneMu.RLock()
 	defer dcs.pruneMu.RUnlock()
 
-	fileMu, toStore := dcs.fileMutex(root)
+	fileMu, toStore := dcs.fileMutexChan(root)
 	toStore <- dataColumnSidecars
 
 	fileMu.Lock()
@@ -367,7 +383,7 @@ func (dcs *DataColumnStorage) Get(root [fieldparams.RootLength]byte, indices []u
 	dcs.pruneMu.RLock()
 	defer dcs.pruneMu.RUnlock()
 
-	fileMu, _ := dcs.fileMutex(root)
+	fileMu, _ := dcs.fileMutexChan(root)
 	fileMu.RLock()
 	defer fileMu.RUnlock()
 
@@ -384,6 +400,11 @@ func (dcs *DataColumnStorage) Get(root [fieldparams.RootLength]byte, indices []u
 	summary, ok := dcs.cache.get(root)
 	if !ok {
 		// Nothing found in db. Exit early.
+		return nil, nil
+	}
+
+	// Exit early if no data column sidecars for this root is stored.
+	if !summary.HasAtLeastOneIndex(indices) {
 		return nil, nil
 	}
 
@@ -444,7 +465,7 @@ func (dcs *DataColumnStorage) Remove(blockRoot [fieldparams.RootLength]byte) err
 	dcs.pruneMu.RLock()
 	defer dcs.pruneMu.RUnlock()
 
-	fileMu, _ := dcs.fileMutex(blockRoot)
+	fileMu, _ := dcs.fileMutexChan(blockRoot)
 	fileMu.Lock()
 	defer fileMu.Unlock()
 
@@ -489,9 +510,6 @@ func (dcs *DataColumnStorage) Clear() error {
 
 // prune clean the cache, the filesystem and mutexes.
 func (dcs *DataColumnStorage) prune() {
-	dcs.mu.Lock()
-	defer dcs.mu.Unlock()
-
 	highestStoredEpoch := dcs.cache.HighestEpoch()
 
 	// Check if we need to prune.
@@ -568,6 +586,8 @@ func (dcs *DataColumnStorage) prune() {
 		}
 	}
 
+	dcs.mu.Lock()
+	defer dcs.mu.Unlock()
 	clear(dcs.muChans)
 }
 
@@ -650,7 +670,7 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsExistingFile(filePath string
 
 	// Save indices to the file.
 	indices := metadata.indices.raw()
-	count, err := file.WriteAt(indices[:], int64(versionSize+encodedSszEncodedDataColumnSidecarSizeSize))
+	count, err := file.WriteAt(indices[:], int64(versionSize+sidecarByteLenSize))
 	if err != nil {
 		return errors.Wrap(err, "write indices")
 	}
@@ -761,7 +781,7 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsNewFile(filePath string, inp
 	}()
 
 	// Encode the SSZ encoded data column sidecar size.
-	var encodedSszEncodedDataColumnSidecarSize [encodedSszEncodedDataColumnSidecarSizeSize]byte
+	var encodedSszEncodedDataColumnSidecarSize [sidecarByteLenSize]byte
 	binary.BigEndian.PutUint32(encodedSszEncodedDataColumnSidecarSize[:], uint32(sszEncodedDataColumnSidecarRefSize))
 
 	// Get the raw indices.
@@ -814,7 +834,7 @@ func (dcs *DataColumnStorage) metadata(file afero.File) (*metadata, error) {
 	}
 
 	// DataColumnSidecar is a variable sized ssz object, but all data columns for a block will be the same size.
-	encodedSszEncodedDataColumnSidecarSize := header[encodedSszEncodedDataColumnSidecarSizeOffset : encodedSszEncodedDataColumnSidecarSizeOffset+encodedSszEncodedDataColumnSidecarSizeSize]
+	encodedSszEncodedDataColumnSidecarSize := header[sidecarByteLenOffset : sidecarByteLenOffset+sidecarByteLenSize]
 
 	// Convert the SSZ encoded data column sidecar size to an int.
 	sszEncodedDataColumnSidecarSize := binary.BigEndian.Uint32(encodedSszEncodedDataColumnSidecarSize)
@@ -841,7 +861,7 @@ func (dcs *DataColumnStorage) metadata(file afero.File) (*metadata, error) {
 	return metadata, nil
 }
 
-func (dcs *DataColumnStorage) fileMutex(root [fieldparams.RootLength]byte) (*sync.RWMutex, chan []blocks.VerifiedRODataColumn) {
+func (dcs *DataColumnStorage) fileMutexChan(root [fieldparams.RootLength]byte) (*sync.RWMutex, chan []blocks.VerifiedRODataColumn) {
 	dcs.mu.Lock()
 	defer dcs.mu.Unlock()
 

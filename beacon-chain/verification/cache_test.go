@@ -90,12 +90,12 @@ type mockValidatorAtIndexer struct {
 	cb func(idx primitives.ValidatorIndex) (*eth.Validator, error)
 }
 
-// ValidatorAtIndex implements ValidatorAtIndexer.
+// ValidatorAtIndex implements validatorAtIndexer.
 func (m *mockValidatorAtIndexer) ValidatorAtIndex(idx primitives.ValidatorIndex) (*eth.Validator, error) {
 	return m.cb(idx)
 }
 
-var _ ValidatorAtIndexer = &mockValidatorAtIndexer{}
+var _ validatorAtIndexer = &mockValidatorAtIndexer{}
 
 func TestProposerCache(t *testing.T) {
 	ctx := context.Background()

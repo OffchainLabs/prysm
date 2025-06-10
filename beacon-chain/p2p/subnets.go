@@ -23,7 +23,6 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -74,8 +73,8 @@ func (s *Service) nodeFilter(topic string, index uint64) (func(node *enode.Node)
 
 // searchForPeers performs a network search for peers subscribed to a particular subnet.
 // It exits as soon as one of these conditions is met:
-// - It looped through `batchSize` nodes.
-// - It found `peersToFindCount“ peers corresponding to the `filter` criteria.
+// - It looped during `batchPeriod` duration, or
+// - It found `peersToFindCount“ peers corresponding to the `filter` criteria, or
 // - Iterator is exhausted.
 func searchForPeers(
 	iterator enode.Iterator,
@@ -147,8 +146,6 @@ func (s *Service) FindPeersWithSubnet(
 	index uint64,
 	threshold int,
 ) (bool, error) {
-	const minLogInterval = 1 * time.Minute
-
 	ctx, span := trace.StartSpan(ctx, "p2p.FindPeersWithSubnet")
 	defer span.End()
 
@@ -168,41 +165,29 @@ func (s *Service) FindPeersWithSubnet(
 		return false, errors.Wrap(err, "node filter")
 	}
 
-	peersSummary := func(topic string, threshold int) (int, int) {
+	peersSummary := func(topic string, threshold int) int {
 		// Retrieve how many peers we have for this topic.
 		peerCountForTopic := len(s.pubsub.ListPeers(topic))
 
 		// Compute how many peers we are missing to reach the threshold.
 		missingPeerCountForTopic := max(0, threshold-peerCountForTopic)
 
-		return peerCountForTopic, missingPeerCountForTopic
+		return missingPeerCountForTopic
 	}
 
 	// Compute how many peers we are missing to reach the threshold.
-	peerCountForTopic, missingPeerCountForTopic := peersSummary(topic, threshold)
+	missingPeerCountForTopic := peersSummary(topic, threshold)
 
 	// Exit early if we have enough peers.
 	if missingPeerCountForTopic == 0 {
 		return true, nil
 	}
 
-	log := log.WithFields(logrus.Fields{
-		"topic":           topic,
-		"targetPeerCount": threshold,
-	})
-
-	log.WithField("currentPeerCount", peerCountForTopic).Debug("Searching for new peers for a subnet - start")
-
-	lastLogTime := time.Now()
-
 	wg := new(sync.WaitGroup)
 	for {
 		// If the context is done, we can exit the loop. This is the unhappy path.
-		if err := ctx.Err(); err != nil {
-			return false, errors.Errorf(
-				"unable to find requisite number of peers for topic %s - only %d out of %d peers available after searching",
-				topic, peerCountForTopic, threshold,
-			)
+		if ctx.Err() != nil {
+			return false, nil
 		}
 
 		// Search for new peers in the network.
@@ -225,20 +210,14 @@ func (s *Service) FindPeersWithSubnet(
 			wg.Wait()
 		}
 
-		peerCountForTopic, missingPeerCountForTopic := peersSummary(topic, threshold)
+		missingPeerCountForTopic := peersSummary(topic, threshold)
 
 		// If we have enough peers, we can exit the loop. This is the happy path.
 		if missingPeerCountForTopic == 0 {
 			break
 		}
-
-		if time.Since(lastLogTime) > minLogInterval {
-			lastLogTime = time.Now()
-			log.WithField("currentPeerCount", peerCountForTopic).Debug("Searching for new peers for a subnet - continue")
-		}
 	}
 
-	log.WithField("currentPeerCount", threshold).Debug("Searching for new peers for a subnet - success")
 	return true, nil
 }
 
@@ -515,7 +494,6 @@ func syncSubnets(record *enr.Record) ([]uint64, error) {
 }
 
 // Retrieve the data columns subnets from a node's ENR and node ID.
-// TODO: Add tests
 func dataColumnSubnets(nodeID enode.ID, record *enr.Record) (map[uint64]bool, error) {
 	// Retrieve the custody count from the ENR.
 	custodyGroupCount, err := peerdas.CustodyGroupCountFromRecord(record)
@@ -559,7 +537,7 @@ func syncBitvector(record *enr.Record) (bitfield.Bitvector4, error) {
 
 // The subnet locker is a map which keeps track of all
 // mutexes stored per subnet. This locker is reused
-// between both the attestation, sync and blob subnets.
+// between both the attestation, sync blob and data column subnets.
 // Sync subnets are stored by (subnet+syncLockerVal).
 // Blob subnets are stored by (subnet+blobSubnetLockerVal).
 // Data column subnets are stored by (subnet+dataColumnSubnetVal).
@@ -568,6 +546,7 @@ func syncBitvector(record *enr.Record) (bitfield.Bitvector4, error) {
 func (s *Service) subnetLocker(i uint64) *sync.RWMutex {
 	s.subnetsLockLock.Lock()
 	defer s.subnetsLockLock.Unlock()
+
 	l, ok := s.subnetsLock[i]
 	if !ok {
 		l = &sync.RWMutex{}

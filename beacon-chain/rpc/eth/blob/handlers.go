@@ -97,23 +97,28 @@ func (s *Server) Blobs(w http.ResponseWriter, r *http.Request) {
 }
 
 // parseIndices filters out invalid and duplicate blob indices
-func parseIndices(url *url.URL, s primitives.Slot) (map[uint64]bool, error) {
+func parseIndices(url *url.URL, s primitives.Slot) ([]int, error) {
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(s)
 	rawIndices := url.Query()["indices"]
-	indices := make(map[uint64]bool, params.BeaconConfig().MaxBlobsPerBlock(s))
+	indices := make([]int, 0, maxBlobsPerBlock)
 	invalidIndices := make([]string, 0)
-
+loop:
 	for _, raw := range rawIndices {
-		ix, err := strconv.ParseUint(raw, 10, 64)
+		ix, err := strconv.Atoi(raw)
 		if err != nil {
 			invalidIndices = append(invalidIndices, raw)
 			continue
 		}
-		if ix >= uint64(params.BeaconConfig().MaxBlobsPerBlock(s)) {
+		if !(0 <= ix && ix < maxBlobsPerBlock) {
 			invalidIndices = append(invalidIndices, raw)
 			continue
 		}
-
-		indices[ix] = true
+		for i := range indices {
+			if ix == indices[i] {
+				continue loop
+			}
+		}
+		indices = append(indices, ix)
 	}
 
 	if len(invalidIndices) > 0 {

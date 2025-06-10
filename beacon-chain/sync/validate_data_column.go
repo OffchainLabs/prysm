@@ -3,6 +3,8 @@ package sync
 import (
 	"context"
 	"fmt"
+	"math"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v6/config/features"
@@ -24,6 +26,8 @@ import (
 
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#the-gossip-domain-gossipsub
 func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
+	const dataColumnSidecarSubTopic = "/data_column_sidecar_%d/"
+
 	dataColumnSidecarVerificationRequestsCounter.Inc()
 	receivedTime := prysmTime.Now()
 
@@ -37,7 +41,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		return pubsub.ValidationIgnore, nil
 	}
 
-	// Ignore message with a nil topic.
+	// Reject messages with a nil topic.
 	if msg.Topic == nil {
 		return pubsub.ValidationReject, errInvalidTopic
 	}
@@ -49,14 +53,15 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		return pubsub.ValidationReject, err
 	}
 
-	// Ignore messages that are not of the expected type.
-	dspb, ok := m.(*eth.DataColumnSidecar)
+	// Reject messages that are not of the expected type.
+	dcsc, ok := m.(*eth.DataColumnSidecar)
 	if !ok {
 		log.WithField("message", m).Error("Message is not of type *eth.DataColumnSidecar")
 		return pubsub.ValidationReject, errWrongMessage
 	}
 
-	roDataColumn, err := blocks.NewRODataColumn(dspb)
+	// Convert to a read-only data column sidecar.
+	roDataColumn, err := blocks.NewRODataColumn(dcsc)
 	if err != nil {
 		return pubsub.ValidationReject, errors.Wrap(err, "roDataColumn conversion failure")
 	}
@@ -85,12 +90,12 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#the-gossip-domain-gossipsub
 
 	// [REJECT] The sidecar is valid as verified by `verify_data_column_sidecar(sidecar)`.
-	if err := verifier.Valid(); err != nil {
+	if err := verifier.ValidFields(); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
 	// [REJECT] The sidecar is for the correct subnet -- i.e. `compute_subnet_for_data_column_sidecar(sidecar.index) == subnet_id`.
-	if err := verifier.CorrectSubnet([]string{*msg.Topic}); err != nil {
+	if err := verifier.CorrectSubnet(dataColumnSidecarSubTopic, []string{*msg.Topic}); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
@@ -156,7 +161,6 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		return pubsub.ValidationReject, err
 	}
 
-	// TODO: Try to fit this requirement into the verifier.
 	// [IGNORE] The sidecar is the first sidecar for the tuple `(block_header.slot, block_header.proposer_index, sidecar.index)`
 	// with valid header signature, sidecar inclusion proof, and kzg proof.
 	if s.hasSeenDataColumnIndex(roDataColumn.Slot(), roDataColumn.ProposerIndex(), roDataColumn.DataColumnSidecar.Index) {
@@ -168,12 +172,6 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	// -- in such a case do not REJECT, instead IGNORE this message.
 	if err := verifier.SidecarProposerExpected(ctx); err != nil {
 		return pubsub.ValidationReject, err
-	}
-
-	// Get the time at slot start.
-	startTime, err := slots.ToTime(uint64(s.cfg.chain.GenesisTime().Unix()), roDataColumn.SignedBlockHeader.Header.Slot)
-	if err != nil {
-		return pubsub.ValidationIgnore, err
 	}
 
 	verifiedRODataColumns, err := verifier.VerifiedRODataColumns()
@@ -194,24 +192,33 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	msg.ValidatorData = verifiedRODataColumns[0]
 	dataColumnSidecarVerificationSuccessesCounter.Inc()
 
+	// Get the time at slot start.
+	startTime, err := slots.ToTime(uint64(s.cfg.chain.GenesisTime().Unix()), roDataColumn.SignedBlockHeader.Header.Slot)
+	if err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+
 	sinceSlotStartTime := receivedTime.Sub(startTime)
 	validationTime := s.cfg.clock.Now().Sub(receivedTime)
-
 	dataColumnSidecarVerificationGossipHistogram.Observe(float64(validationTime.Milliseconds()))
 
 	peerGossipScore := s.cfg.p2p.Peers().Scorers().GossipScorer().Score(pid)
 
-	pidString := pid.String()
-
-	log.
-		WithFields(logging.DataColumnFields(roDataColumn)).
-		WithFields(logrus.Fields{
-			"sinceSlotStartTime": sinceSlotStartTime,
-			"validationTime":     validationTime,
-			"peer":               pidString[len(pidString)-6:],
-			"peerGossipScore":    peerGossipScore,
-		}).
-		Debug("Accepted data column sidecar gossip")
+	select {
+	case s.dataColumnLogCh <- dataColumnLogEntry{
+		Slot:            roDataColumn.Slot(),
+		ColIdx:          roDataColumn.Index,
+		PropIdx:         roDataColumn.ProposerIndex(),
+		BlockRoot:       roDataColumn.BlockRoot(),
+		ParentRoot:      roDataColumn.ParentRoot(),
+		PeerSuffix:      pid.String()[len(pid.String())-6:],
+		PeerGossipScore: peerGossipScore,
+		validationTime:  validationTime,
+		sinceStartTime:  sinceSlotStartTime,
+	}:
+	default:
+		log.WithField("slot", roDataColumn.Slot()).Warn("Failed to send data column log entry")
+	}
 
 	return pubsub.ValidationAccept, nil
 }
@@ -229,4 +236,71 @@ func (s *Service) setSeenDataColumnIndex(slot primitives.Slot, proposerIndex pri
 	b := append(bytesutil.Bytes32(uint64(slot)), bytesutil.Bytes32(uint64(proposerIndex))...)
 	b = append(b, bytesutil.Bytes32(index)...)
 	s.seenDataColumnCache.Add(string(b), true)
+}
+
+type dataColumnLogEntry struct {
+	Slot            primitives.Slot
+	ColIdx          uint64
+	PropIdx         primitives.ValidatorIndex
+	BlockRoot       [32]byte
+	ParentRoot      [32]byte
+	PeerSuffix      string
+	PeerGossipScore float64
+	validationTime  time.Duration
+	sinceStartTime  time.Duration
+}
+
+func (s *Service) processDataColumnLogs() {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	slotStats := make(map[primitives.Slot][fieldparams.NumberOfColumns]dataColumnLogEntry)
+
+	for {
+		select {
+		case entry := <-s.dataColumnLogCh:
+			cols := slotStats[entry.Slot]
+			cols[entry.ColIdx] = entry
+			slotStats[entry.Slot] = cols
+		case <-ticker.C:
+			for slot, columns := range slotStats {
+				var (
+					colIndices      = make([]uint64, 0, fieldparams.NumberOfColumns)
+					peers           = make([]string, 0, fieldparams.NumberOfColumns)
+					gossipScores    = make([]float64, 0, fieldparams.NumberOfColumns)
+					validationTimes = make([]string, 0, fieldparams.NumberOfColumns)
+					sinceStartTimes = make([]string, 0, fieldparams.NumberOfColumns)
+				)
+
+				totalReceived := 0
+				for _, entry := range columns {
+					if entry.PeerSuffix == "" {
+						continue
+					}
+					colIndices = append(colIndices, entry.ColIdx)
+					peers = append(peers, entry.PeerSuffix)
+					gossipScores = append(gossipScores, roundFloat(entry.PeerGossipScore, 2))
+					validationTimes = append(validationTimes, fmt.Sprintf("%.2fms", float64(entry.validationTime.Milliseconds())))
+					sinceStartTimes = append(sinceStartTimes, fmt.Sprintf("%.2fms", float64(entry.sinceStartTime.Milliseconds())))
+					totalReceived++
+				}
+
+				log.WithFields(logrus.Fields{
+					"slot":            slot,
+					"receivedCount":   totalReceived,
+					"columnIndices":   colIndices,
+					"peers":           peers,
+					"gossipScores":    gossipScores,
+					"validationTimes": validationTimes,
+					"sinceStartTimes": sinceStartTimes,
+				}).Debug("Accepted data column sidecars summary")
+			}
+			slotStats = make(map[primitives.Slot][fieldparams.NumberOfColumns]dataColumnLogEntry)
+		}
+	}
+}
+
+func roundFloat(f float64, decimals int) float64 {
+	mult := math.Pow(10, float64(decimals))
+	return math.Round(f*mult) / mult
 }

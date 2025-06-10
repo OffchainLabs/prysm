@@ -81,7 +81,7 @@ func setup(t *testing.T, isSlashingProtectionMinimal bool) (*validator, *mocks, 
 func setupWithKey(t *testing.T, validatorKey bls.SecretKey, isSlashingProtectionMinimal bool) (*validator, *mocks, bls.SecretKey, func()) {
 	var pubKey [fieldparams.BLSPubkeyLength]byte
 	copy(pubKey[:], validatorKey.PublicKey().Marshal())
-	valDB := testing2.SetupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubKey}, isSlashingProtectionMinimal)
+	valDB := testing2.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{pubKey}, isSlashingProtectionMinimal)
 	ctrl := gomock.NewController(t)
 	m := &mocks{
 		validatorClient: validatormock.NewMockValidatorClient(ctrl),
@@ -1105,7 +1105,7 @@ func TestGetGraffitiOrdered_Ok(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
 			pubKey := [fieldparams.BLSPubkeyLength]byte{'a'}
-			valDB := testing2.SetupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubKey}, isSlashingProtectionMinimal)
+			valDB := testing2.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{pubKey}, isSlashingProtectionMinimal)
 			ctrl := gomock.NewController(t)
 			m := &mocks{
 				validatorClient: validatormock.NewMockValidatorClient(ctrl),
@@ -1188,7 +1188,7 @@ func Test_validator_DeleteGraffiti(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			v := &validator{
-				db:               testing2.SetupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubKey}, false),
+				db:               testing2.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{pubKey}, false),
 				proposerSettings: tt.proposerSettings,
 			}
 			err := v.DeleteGraffiti(context.Background(), pubKey)
@@ -1268,7 +1268,7 @@ func Test_validator_SetGraffiti(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			v := &validator{
-				db:               testing2.SetupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubKey}, false),
+				db:               testing2.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{pubKey}, false),
 				proposerSettings: tt.proposerSettings,
 			}
 			err := v.SetGraffiti(context.Background(), pubKey, []byte(tt.graffiti))
