@@ -19,9 +19,10 @@ import (
 	"github.com/OffchainLabs/prysm/v6/math"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
+	"github.com/OffchainLabs/prysm/v6/testing/fuzz"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
-	fuzz "github.com/google/gofuzz"
+	gofuzz "github.com/google/gofuzz"
 	"github.com/prysmaticlabs/go-bitfield"
 )
 
@@ -458,7 +459,7 @@ func TestValidatorFlag_Add_ExceedsLength(t *testing.T) {
 }
 
 func TestFuzzProcessAttestationsNoVerify_10000(t *testing.T) {
-	fuzzer := fuzz.NewWithSeed(0)
+	fuzzer := gofuzz.NewWithSeed(0)
 	st := &ethpb.BeaconStateAltair{}
 	b := &ethpb.SignedBeaconBlockAltair{Block: &ethpb.BeaconBlockAltair{}}
 	for i := 0; i < 10000; i++ {
@@ -478,6 +479,7 @@ func TestFuzzProcessAttestationsNoVerify_10000(t *testing.T) {
 		if err != nil && r != nil {
 			t.Fatalf("return value should be nil on err. found: %v on error: %v for state: %v and block: %v", r, err, s, b)
 		}
+		fuzz.FreeMemory(i)
 	}
 }
 
