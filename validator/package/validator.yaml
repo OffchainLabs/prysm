@@ -10,7 +10,7 @@ wallet-dir: /var/lib/prysm/validator
 # wallet-password-file: /var/lib/prysm/validator/password.txt
 
 # Optional tuning parameters
-# For full list, see https://docs.prylabs.network/docs/prysm-usage/parameters
+# For full list, see https://www.offchainlabs.com/prysm/docs/configure-prysm/parameters
 
 # beacon-rpc-provider: Beacon node RPC provider endpoint. Default: localhost:4000
 # rpc-host: Specify the RPC host exposed by the validator. Default: localhost
@@ -18,4 +18,4 @@ wallet-dir: /var/lib/prysm/validator
 # http-host: Specify the HTTP host exposed by the validator. Default: localhost
 # http-port: Specify the HTTP port exposed by the validator. Default: 7500
 # graffiti: A string to include in proposed block.
-# graffiti-file: Path to Yaml file containing advanced graffiti settings. See https://docs.prylabs.network/docs/prysm-usage/graffiti-file
+# graffiti-file: Path to Yaml file containing advanced graffiti settings. See https://www.offchainlabs.com/prysm/docs/manage-validator/graffiti-file

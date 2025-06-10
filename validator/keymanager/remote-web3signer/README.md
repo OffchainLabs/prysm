@@ -12,7 +12,7 @@ API interface: https://github.com/ethereum/remote-signing-api
 
 ### CLI
 
-detailed info found on https://docs.prylabs.network/docs/wallet/web3signer
+detailed info found on https://www.offchainlabs.com/prysm/docs/manage-wallet/web3signer
 
 Flags used on validator client
 - `--validators-external-signer-url=http://localhost:9000`
