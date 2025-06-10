@@ -2,6 +2,7 @@ package light_client
 
 import (
 	"fmt"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	consensustypes "github.com/OffchainLabs/prysm/v6/consensus-types"
@@ -83,7 +84,7 @@ func (h *bootstrapAltair) SizeSSZ() int {
 }
 
 func (h *bootstrapAltair) Version() int {
-	return version.Altair
+	return slots.ToForkVersion(h.header.Beacon().Slot)
 }
 
 func (h *bootstrapAltair) Proto() proto.Message {
@@ -188,7 +189,7 @@ func (h *bootstrapCapella) SizeSSZ() int {
 }
 
 func (h *bootstrapCapella) Version() int {
-	return version.Capella
+	return slots.ToForkVersion(h.header.Beacon().Slot)
 }
 
 func (h *bootstrapCapella) Proto() proto.Message {
@@ -293,7 +294,7 @@ func (h *bootstrapDeneb) SizeSSZ() int {
 }
 
 func (h *bootstrapDeneb) Version() int {
-	return version.Deneb
+	return slots.ToForkVersion(h.header.Beacon().Slot)
 }
 
 func (h *bootstrapDeneb) Proto() proto.Message {
@@ -398,7 +399,7 @@ func (h *bootstrapElectra) SizeSSZ() int {
 }
 
 func (h *bootstrapElectra) Version() int {
-	return version.Electra
+	return slots.ToForkVersion(h.header.Beacon().Slot)
 }
 
 func (h *bootstrapElectra) Proto() proto.Message {

@@ -2,6 +2,7 @@ package light_client
 
 import (
 	"fmt"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	consensustypes "github.com/OffchainLabs/prysm/v6/consensus-types"
@@ -105,7 +106,7 @@ func (u *updateAltair) Proto() proto.Message {
 }
 
 func (u *updateAltair) Version() int {
-	return version.Altair
+	return slots.ToForkVersion(u.attestedHeader.Beacon().Slot)
 }
 
 func (u *updateAltair) AttestedHeader() interfaces.LightClientHeader {
@@ -272,7 +273,7 @@ func (u *updateCapella) Proto() proto.Message {
 }
 
 func (u *updateCapella) Version() int {
-	return version.Capella
+	return slots.ToForkVersion(u.attestedHeader.Beacon().Slot)
 }
 
 func (u *updateCapella) AttestedHeader() interfaces.LightClientHeader {
@@ -439,7 +440,7 @@ func (u *updateDeneb) Proto() proto.Message {
 }
 
 func (u *updateDeneb) Version() int {
-	return version.Deneb
+	return slots.ToForkVersion(u.attestedHeader.Beacon().Slot)
 }
 
 func (u *updateDeneb) AttestedHeader() interfaces.LightClientHeader {
@@ -607,7 +608,7 @@ func (u *updateElectra) Proto() proto.Message {
 }
 
 func (u *updateElectra) Version() int {
-	return version.Electra
+	return slots.ToForkVersion(u.attestedHeader.Beacon().Slot)
 }
 
 func (u *updateElectra) AttestedHeader() interfaces.LightClientHeader {
