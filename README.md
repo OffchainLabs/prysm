@@ -23,7 +23,7 @@ See the [Changelog](https://github.com/OffchainLabs/prysm/releases) for details 
 
 ## 🚀 Getting Started
 
-A detailed set of installation and usage instructions as well as breakdowns of each individual component are available in the **[official documentation portal](https://docs.prylabs.network)**.
+A detailed set of installation and usage instructions as well as breakdowns of each individual component are available in the **[official documentation portal](https://www.offchainlabs.com/prysm/docs)**.
 
 💬 **Need help?** Join our **[Discord Community](https://discord.gg/prysm)** for support.
 
@@ -51,7 +51,7 @@ Prysm maintains two permanent branches:
 
 ### 🛠 Contribution Guide
 
-Want to get involved? Check out our **[Contribution Guide](https://docs.prylabs.network/docs/contribute/contribution-guidelines/)** to learn more!
+Want to get involved? Check out our **[Contribution Guide](https://www.offchainlabs.com/prysm/docs/contribute/contribution-guidelines)** to learn more!
 
 ---
 
