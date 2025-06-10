@@ -100,7 +100,7 @@ var Commands = []*cli.Command{
 						fmt.Println(au.Red("Please read the following carefully"))
 						fmt.Print("This action will allow the partial withdrawal of amounts over the 32 staked ETH in your active validator balance. \n" +
 							"You will also be entitled to the full withdrawal of the entire validator balance if your validator has exited. \n" +
-							"Please navigate to our website (https://docs.prylabs.network/) and make sure you understand the full implications of setting your withdrawal address. \n")
+							"Please navigate to our website (https://www.offchainlabs.com/prysm/docs) and make sure you understand the full implications of setting your withdrawal address. \n")
 						fmt.Println(au.Red("THIS ACTION WILL NOT BE REVERSIBLE ONCE INCLUDED. "))
 						fmt.Println(au.Red("You will NOT be able to change the address again once changed. "))
 						return fmt.Errorf("both the `--%s` and `--%s` flags are required to run this command. \n"+

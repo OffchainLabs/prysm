@@ -72,7 +72,7 @@ func parseExecutionChainEndpoint(c *cli.Context) (string, error) {
 			"you need to specify %s to provide a connection endpoint to an Ethereum execution client "+
 				"for your Prysm beacon node. This is a requirement for running a node. You can read more about "+
 				"how to configure this execution client connection in our docs here "+
-				"https://docs.prylabs.network/docs/install/install-with-script",
+				"https://www.offchainlabs.com/prysm/docs/install-prysm/install-with-script",
 			flags.ExecutionEngineEndpoint.Name,
 		)
 	}
