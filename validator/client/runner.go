@@ -310,41 +310,34 @@ func handleAssignmentError(err error, slot primitives.Slot) {
 	}
 }
 
-func runHealthCheckRoutine(ctx context.Context, v iface.Validator) <-chan bool {
+func runHealthCheckRoutine(ctx context.Context, v iface.Validator) {
 	log.Info("Starting health check routine for beacon node apis")
+	// just check one a slot
 	interval := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
 	ticker := time.NewTicker(interval)
 	tracker := v.HealthTracker()
-	healthyChan := make(chan bool, 1)
-	
+
 	go func() {
 		defer ticker.Stop()
-		defer close(healthyChan)
-		
-		// Perform initial health check immediately
+
+		// Perform health check and handle host switching/event stream
 		performHealthCheck := func() {
 			isHealthy := tracker.CheckHealth(ctx)
 			if !isHealthy && features.Get().EnableBeaconRESTApi {
 				v.ChangeHost()
-				isHealthy = tracker.CheckHealth(ctx)
+				tracker.CheckHealth(ctx) // Re-check after host change
 			}
-			
+
 			// Reconnect event stream if needed
-			if isHealthy && !v.EventStreamIsRunning() {
+			if tracker.IsHealthy(ctx) && !v.EventStreamIsRunning() {
 				log.Info("Event stream reconnecting...")
 				go v.StartEventStream(ctx, event.DefaultEventTopics)
 			}
-			
-			// Send health status to channel (non-blocking)
-			select {
-			case healthyChan <- isHealthy:
-			default:
-			}
 		}
-		
-		// Initial check
+
+		// Initial check immediately
 		performHealthCheck()
-		
+
 		// Continue periodic checks
 		for {
 			select {
@@ -355,6 +348,4 @@ func runHealthCheckRoutine(ctx context.Context, v iface.Validator) <-chan bool {
 			}
 		}
 	}()
-	
-	return healthyChan
 }

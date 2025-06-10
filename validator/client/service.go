@@ -65,7 +65,7 @@ type ValidatorService struct {
 	logValidatorPerformance bool
 	distributed             bool
 	disableDutiesPolling    bool
-	onRunnerExit            func()
+	onRunnerExit            func() // validator client stop function is used here
 }
 
 // Config for the validator service.
@@ -274,7 +274,10 @@ func (v *ValidatorService) Start() {
 			runnerCancel()
 		}
 	}
-
+	if runnerRestartAttempts > maxRunnerRestartAttempts {
+		log.WithField("attempts", runnerRestartAttempts).Error("Validator service timed out waiting for healthy beacon node.")
+	}
+	v.onRunnerExit()
 }
 
 // Stop the validator service.
