@@ -2,6 +2,7 @@ package light_client
 
 import (
 	"fmt"
+
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 
 	consensustypes "github.com/OffchainLabs/prysm/v6/consensus-types"

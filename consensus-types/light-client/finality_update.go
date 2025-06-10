@@ -2,6 +2,7 @@ package light_client
 
 import (
 	"fmt"
+
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
