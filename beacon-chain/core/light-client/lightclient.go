@@ -290,6 +290,7 @@ func CreateDefaultLightClientUpdate(currentSlot primitives.Slot, attestedState s
 		m = &pb.LightClientUpdateAltair{
 			AttestedHeader: &pb.LightClientHeaderAltair{
 				Beacon: &pb.BeaconBlockHeader{
+					Slot:       currentSlot,
 					ParentRoot: make([]byte, 32),
 					StateRoot:  make([]byte, 32),
 					BodyRoot:   make([]byte, 32),
@@ -314,6 +315,7 @@ func CreateDefaultLightClientUpdate(currentSlot primitives.Slot, attestedState s
 		m = &pb.LightClientUpdateCapella{
 			AttestedHeader: &pb.LightClientHeaderCapella{
 				Beacon: &pb.BeaconBlockHeader{
+					Slot:       currentSlot,
 					ParentRoot: make([]byte, 32),
 					StateRoot:  make([]byte, 32),
 					BodyRoot:   make([]byte, 32),
@@ -366,6 +368,7 @@ func CreateDefaultLightClientUpdate(currentSlot primitives.Slot, attestedState s
 		m = &pb.LightClientUpdateDeneb{
 			AttestedHeader: &pb.LightClientHeaderDeneb{
 				Beacon: &pb.BeaconBlockHeader{
+					Slot:       currentSlot,
 					ParentRoot: make([]byte, 32),
 					StateRoot:  make([]byte, 32),
 					BodyRoot:   make([]byte, 32),
@@ -423,6 +426,7 @@ func CreateDefaultLightClientUpdate(currentSlot primitives.Slot, attestedState s
 			m = &pb.LightClientUpdateElectra{
 				AttestedHeader: &pb.LightClientHeaderDeneb{
 					Beacon: &pb.BeaconBlockHeader{
+						Slot:       currentSlot,
 						ParentRoot: make([]byte, 32),
 						StateRoot:  make([]byte, 32),
 						BodyRoot:   make([]byte, 32),
@@ -479,6 +483,7 @@ func CreateDefaultLightClientUpdate(currentSlot primitives.Slot, attestedState s
 			m = &pb.LightClientUpdateDeneb{
 				AttestedHeader: &pb.LightClientHeaderDeneb{
 					Beacon: &pb.BeaconBlockHeader{
+						Slot:       currentSlot,
 						ParentRoot: make([]byte, 32),
 						StateRoot:  make([]byte, 32),
 						BodyRoot:   make([]byte, 32),
