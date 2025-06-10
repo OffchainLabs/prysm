@@ -40,6 +40,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const (
+	maxRunnerRestartAttempts = 5
+)
+
 // ValidatorService represents a service to manage the validator client
 // routine.
 type ValidatorService struct {
@@ -61,6 +65,7 @@ type ValidatorService struct {
 	logValidatorPerformance bool
 	distributed             bool
 	disableDutiesPolling    bool
+	onRunnerExit            func()
 }
 
 // Config for the validator service.
@@ -88,6 +93,7 @@ type Config struct {
 	EmitAccountMetrics      bool
 	Distributed             bool
 	DisableDutiesPolling    bool
+	OnRunnerExit            func()
 }
 
 // NewValidatorService creates a new validator service for the service
@@ -112,6 +118,7 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 		logValidatorPerformance: cfg.LogValidatorPerformance,
 		distributed:             cfg.Distributed,
 		disableDutiesPolling:    cfg.DisableDutiesPolling,
+		onRunnerExit:            cfg.OnRunnerExit,
 	}
 
 	dialOpts := ConstructDialOptions(
@@ -186,7 +193,7 @@ func (v *ValidatorService) Start() {
 
 	validatorClient := validatorclientfactory.NewValidatorClient(v.conn, restHandler)
 
-	valStruct := &validator{
+	v.validator = &validator{
 		slotFeed:                       new(event.Feed),
 		startBalances:                  make(map[[fieldparams.BLSPubkeyLength]byte]uint64),
 		prevEpochBalances:              make(map[[fieldparams.BLSPubkeyLength]byte]uint64),
@@ -227,8 +234,47 @@ func (v *ValidatorService) Start() {
 		eventsChannel:                  make(chan *eventClient.Event, 1),
 	}
 
-	v.validator = valStruct
-	go run(v.ctx, v.validator)
+	healthTracker := v.validator.HealthTracker()
+	// Start the health check routine
+	go runHealthCheckRoutine(v.ctx, v.validator)
+
+	runnerRestartAttempts := 0
+	for runnerRestartAttempts <= maxRunnerRestartAttempts {
+		log.WithField("attempt", runnerRestartAttempts).Info("Runner Starting")
+		select {
+		case <-v.ctx.Done():
+			log.Info("Validator service context canceled, stopping")
+			v.onRunnerExit()
+			return
+		case isHealthy := <-healthTracker.HealthUpdates():
+			if !isHealthy {
+				runnerRestartAttempts++
+				// wait until the next health tracker update
+				log.WithField("attempt", runnerRestartAttempts).Warn("Validator service health check failed, waiting for healthy beacon node")
+				continue
+			}
+			// Attempt to create and run the runner
+			log.Info("Attempting to start validator runner")
+			runnerCtx, runnerCancel := context.WithCancel(v.ctx)
+
+			// Initialize keymanager and wait for chain start/sync within the runner setup
+			// This ensures these steps are retried if the runner restarts
+			runner, err := newRunner(runnerCtx, v.validator)
+			if err != nil {
+				log.WithError(err).Error("Could not create validator runner")
+				runnerCancel() // Ensure context is cancelled
+				v.onRunnerExit()
+				return
+			}
+
+			// Run the runner in a goroutine
+			if err := runner.run(runnerCtx); err != nil {
+				log.WithError(err).Error("Error running validator")
+			}
+			runnerCancel()
+		}
+	}
+
 }
 
 // Stop the validator service.

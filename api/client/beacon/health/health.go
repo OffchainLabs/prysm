@@ -6,9 +6,10 @@ import (
 )
 
 type NodeHealthTracker struct {
-	isHealthy  *bool
-	healthChan chan bool
-	node       Node
+	isHealthy    bool
+	initialized  bool
+	healthChan   chan bool
+	node         Node
 	sync.RWMutex
 }
 
@@ -16,6 +17,8 @@ func NewTracker(node Node) Tracker {
 	return &NodeHealthTracker{
 		node:       node,
 		healthChan: make(chan bool, 1),
+		isHealthy:  false,
+		initialized: false,
 	}
 }
 
@@ -27,10 +30,7 @@ func (n *NodeHealthTracker) HealthUpdates() <-chan bool {
 func (n *NodeHealthTracker) IsHealthy(_ context.Context) bool {
 	n.RLock()
 	defer n.RUnlock()
-	if n.isHealthy == nil {
-		return false
-	}
-	return *n.isHealthy
+	return n.isHealthy
 }
 
 func (n *NodeHealthTracker) CheckHealth(ctx context.Context) bool {
@@ -38,21 +38,21 @@ func (n *NodeHealthTracker) CheckHealth(ctx context.Context) bool {
 	defer n.Unlock()
 
 	newStatus := n.node.IsHealthy(ctx)
-	if n.isHealthy == nil {
-		n.isHealthy = &newStatus
-	}
-
-	isStatusChanged := newStatus != *n.isHealthy
-	if isStatusChanged {
-		// Update the health status
-		n.isHealthy = &newStatus
-		// Send the new status to the health channel, potentially overwriting the existing value
+	
+	// Send update if this is first check or status changed
+	if !n.initialized || newStatus != n.isHealthy {
+		n.isHealthy = newStatus
+		n.initialized = true
+		
+		// Non-blocking send to channel
 		select {
-		case <-n.healthChan:
-			n.healthChan <- newStatus
+		case n.healthChan <- newStatus:
 		default:
+			// Channel full, drain and send
+			<-n.healthChan
 			n.healthChan <- newStatus
 		}
 	}
+	
 	return newStatus
 }

@@ -25,24 +25,25 @@ import (
 // Time to wait before trying to reconnect with beacon node.
 var backOffPeriod = 10 * time.Second
 
-// Run the main validator routine. This routine exits if the context is
-// canceled.
+// runner encapsulates the main validator routine.
+type runner struct {
+	validator iface.Validator
+}
+
+// newRunner creates a new runner instance and performs all necessary initialization.
+// This function can return an error if initialization fails.
 //
 // Order of operations:
 // 1 - Initialize validator data
 // 2 - Wait for validator activation
-// 3 - Wait for the next slot start
-// 4 - Update assignments
-// 5 - Determine role at current slot
-// 6 - Perform assigned role, if any
-func run(ctx context.Context, v iface.Validator) {
-	cleanup := v.Done
-	defer cleanup()
-
+func newRunner(ctx context.Context, v iface.Validator) (*runner, error) {
+	// Initialize validator and get head slot
 	headSlot, err := initializeValidatorAndGetHeadSlot(ctx, v)
 	if err != nil {
-		return // Exit if context is canceled.
+		v.Done()
+		return nil, err
 	}
+	// Prepare initial duties update
 	ss, err := slots.EpochStart(slots.ToEpoch(headSlot + 1))
 	if err != nil {
 		log.WithError(err).Error("Failed to get epoch start")
@@ -52,10 +53,9 @@ func run(ctx context.Context, v iface.Validator) {
 	startCtx, startCancel := context.WithDeadline(ctx, startDeadline)
 	if err := v.UpdateDuties(startCtx); err != nil {
 		handleAssignmentError(err, headSlot)
+		// Don't return error here, just log it
 	}
 	startCancel()
-	healthTracker := v.HealthTracker()
-	runHealthCheckRoutine(ctx, v)
 
 	// check if proposer settings is still nil
 	// Set properties on the beacon node like the fee recipient for validators that are being used & active.
@@ -64,16 +64,37 @@ func run(ctx context.Context, v iface.Validator) {
 			" and will continue to use settings provided in the beacon node.")
 	}
 	if err := v.PushProposerSettings(ctx, headSlot, true); err != nil {
-		log.WithError(err).Fatal("Failed to update proposer settings")
+		v.Done()
+		return nil, errors.Wrap(err, "failed to update proposer settings")
 	}
+
+	return &runner{
+		validator: v,
+	}, nil
+}
+
+// run executes the main validator routine. This routine exits if the context is
+// canceled. It returns a channel that will be closed when the routine exits.
+//
+// Order of operations:
+// 1 - Wait for the next slot start
+// 2 - Update assignments if needed
+// 3 - Determine role at current slot
+// 4 - Perform assigned role, if any
+func (r *runner) run(ctx context.Context) error {
+	v := r.validator
+	cleanup := v.Done
+	defer cleanup()
+
+	healthTracker := v.HealthTracker()
 	for {
 		select {
 		case <-ctx.Done():
 			log.Info("Context canceled, stopping validator")
-			return // Exit if context is canceled.
+			return nil // Exit if context is canceled.
 		case slot := <-v.NextSlot():
 			if !healthTracker.IsHealthy(ctx) {
-				continue
+				return errors.New("beacon node is not healthy, stopping validator")
 			}
 
 			deadline := v.SlotDeadline(slot)
@@ -126,27 +147,6 @@ func run(ctx context.Context, v iface.Validator) {
 			// performRoles calls span.End()
 			rolesCtx, _ := context.WithDeadline(ctx, deadline)
 			performRoles(rolesCtx, allRoles, v, slot, &wg, span)
-		case isHealthyAgain := <-healthTracker.HealthUpdates():
-			if isHealthyAgain {
-				headSlot, err = initializeValidatorAndGetHeadSlot(ctx, v)
-				if err != nil {
-					log.WithError(err).Error("Failed to re initialize validator and get head slot")
-					continue
-				}
-				ss, err := slots.EpochStart(slots.ToEpoch(headSlot + 1))
-				if err != nil {
-					log.WithError(err).Error("Failed to get epoch start")
-					continue
-				}
-				deadline := v.SlotDeadline(ss + params.BeaconConfig().SlotsPerEpoch - 1)
-				dutiesCtx, dutiesCancel := context.WithDeadline(ctx, deadline)
-				if err := v.UpdateDuties(dutiesCtx); err != nil {
-					handleAssignmentError(err, headSlot)
-					dutiesCancel()
-					continue
-				}
-				dutiesCancel()
-			}
 		case e := <-v.EventsChan():
 			v.ProcessEvent(ctx, e)
 		case currentKeys := <-v.AccountsChangedChan(): // should be less of a priority than next slot
@@ -310,39 +310,51 @@ func handleAssignmentError(err error, slot primitives.Slot) {
 	}
 }
 
-func runHealthCheckRoutine(ctx context.Context, v iface.Validator) {
+func runHealthCheckRoutine(ctx context.Context, v iface.Validator) <-chan bool {
 	log.Info("Starting health check routine for beacon node apis")
-	healthCheckTicker := time.NewTicker(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+	interval := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+	ticker := time.NewTicker(interval)
 	tracker := v.HealthTracker()
+	healthyChan := make(chan bool, 1)
+	
 	go func() {
-		// trigger the healthcheck immediately the first time
-		for ; true; <-healthCheckTicker.C {
-			if ctx.Err() != nil {
-				log.WithError(ctx.Err()).Error("Context cancelled")
-				return
-			}
+		defer ticker.Stop()
+		defer close(healthyChan)
+		
+		// Perform initial health check immediately
+		performHealthCheck := func() {
 			isHealthy := tracker.CheckHealth(ctx)
 			if !isHealthy && features.Get().EnableBeaconRESTApi {
 				v.ChangeHost()
-				if !tracker.CheckHealth(ctx) {
-					continue // Skip to the next ticker
-				}
-
-				slot, err := v.CanonicalHeadSlot(ctx)
-				if err != nil {
-					log.WithError(err).Error("Could not get canonical head slot")
-					return
-				}
-				if err := v.PushProposerSettings(ctx, slot, true); err != nil {
-					log.WithError(err).Warn("Failed to update proposer settings")
-				}
+				isHealthy = tracker.CheckHealth(ctx)
 			}
-
-			// in case of node returning healthy but event stream died
+			
+			// Reconnect event stream if needed
 			if isHealthy && !v.EventStreamIsRunning() {
 				log.Info("Event stream reconnecting...")
 				go v.StartEventStream(ctx, event.DefaultEventTopics)
 			}
+			
+			// Send health status to channel (non-blocking)
+			select {
+			case healthyChan <- isHealthy:
+			default:
+			}
+		}
+		
+		// Initial check
+		performHealthCheck()
+		
+		// Continue periodic checks
+		for {
+			select {
+			case <-ticker.C:
+				performHealthCheck()
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
+	
+	return healthyChan
 }
