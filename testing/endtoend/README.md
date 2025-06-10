@@ -5,4 +5,4 @@ It also performs a test on a syncing node, and supports feature flags to allow e
 
 ## How it works
 
-Please see our docs page, https://docs.prylabs.network/docs/devtools/end-to-end, to read more about the feature.
+Please see our docs page, https://www.offchainlabs.com/prysm/docs/learn/dev-concepts/end-to-end, to read more about the feature.

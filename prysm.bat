@@ -131,7 +131,7 @@ if "%~1"=="client-stats" (
 )
 
 if "%~1"=="slasher" (
-    echo [31mThe slasher binary is no longer available. Please use the --slasher flag with your beacon node. See: https://docs.prylabs.network/docs/prysm-usage/slasher/[0m
+    echo [31mThe slasher binary is no longer available. Please use the --slasher flag with your beacon node. See: https://www.offchainlabs.com/prysm/docs/configure-prysm/slasher[0m
     exit /b 1
 )
 
