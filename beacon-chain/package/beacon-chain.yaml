@@ -8,7 +8,7 @@ http-web3provider: http://localhost:8545
 
 
 # Optional tuning parameters
-# For full list, see https://docs.prylabs.network/docs/prysm-usage/parameters
+# For full list, see https://www.offchainlabs.com/prysm/docs/configure-prysm/parameters
 
 # p2p-max-peers: The max number of p2p peers to maintain. Default: 45
 # block-batch-limit: The amount of blocks the local peer is bounded to request and respond to in a batch. Default: 64

@@ -280,7 +280,7 @@ func (s *Store) setupBlockStorageType(ctx context.Context) error {
 		return fmt.Errorf(
 			"cannot use the %s flag with this existing database, as it has already been initialized to only store "+
 				"execution payload headers (aka blinded beacon blocks). If you want to use this flag, you must re-sync your node with a fresh "+
-				"database. We recommend using checkpoint sync https://docs.prylabs.network/docs/prysm-usage/checkpoint-sync/",
+				"database. We recommend using checkpoint sync https://www.offchainlabs.com/prysm/docs/configure-prysm/checkpoint-sync",
 			features.SaveFullExecutionPayloads.Name,
 		)
 	}
