@@ -7,7 +7,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/crypto/hash"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/math"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 )
 
@@ -39,7 +38,7 @@ func MsgID(genesisValidatorsRoot []byte, pmsg *pubsubpb.Message) string {
 		copy(msg, "invalid")
 		return bytesutil.UnsafeCastToString(msg)
 	}
-	_, fEpoch, err := forks.RetrieveForkDataFromDigest(digest, genesisValidatorsRoot)
+	_, fEpoch, err := params.ForkDataFromDigest(digest)
 	if err != nil {
 		// Impossible condition that should
 		// never be hit.

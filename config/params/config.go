@@ -2,16 +2,25 @@
 package params
 
 import (
+	"encoding/binary"
+	"fmt"
 	"math"
 	"slices"
+	"sort"
+	"strings"
 	"time"
+
+	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/hash"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/pkg/errors"
 )
 
 // BeaconChainConfig contains constant configs for node to participate in beacon chain.
@@ -314,6 +323,9 @@ type BeaconChainConfig struct {
 	// DeprecatedMaxBlobsPerBlockFulu defines the max blobs that could exist in a block post Fulu hard fork.
 	// Deprecated: This field is no longer supported. Avoid using it.
 	DeprecatedMaxBlobsPerBlockFulu int `yaml:"MAX_BLOBS_PER_BLOCK_FULU" spec:"true"`
+	forkSchedule                   *NetworkSchedule
+	bpoSchedule                    *NetworkSchedule
+	networkSchedule                *NetworkSchedule
 }
 
 func (b *BeaconChainConfig) ExecutionRequestLimits() enginev1.ExecutionRequestLimits {
@@ -324,16 +336,287 @@ func (b *BeaconChainConfig) ExecutionRequestLimits() enginev1.ExecutionRequestLi
 	}
 }
 
-type BlobScheduleEntry struct {
-	Epoch            primitives.Epoch `yaml:"EPOCH"`
+type NetworkScheduleEntry struct {
+	ForkVersion      [fieldparams.VersionLength]byte
+	ForkDigest       [4]byte
 	MaxBlobsPerBlock uint64           `yaml:"MAX_BLOBS_PER_BLOCK"`
+	Epoch            primitives.Epoch `yaml:"EPOCH"`
+	BPOEpoch         primitives.Epoch
+	VersionEnum      int
+	isFork           bool
 }
 
+func (e NetworkScheduleEntry) LogFields() logrus.Fields {
+	gvr := BeaconConfig().GenesisValidatorsRoot
+	root, err := computeForkDataRoot(e.ForkVersion, gvr)
+	if err != nil {
+		panic(err) // lint:nopanic
+	}
+	fields := logrus.Fields{
+		"fork_version":        fmt.Sprintf("%#x", e.ForkVersion),
+		"fork_digest":         fmt.Sprintf("%#x", e.ForkDigest),
+		"max_blobs_per_block": e.MaxBlobsPerBlock,
+		"epoch":               e.Epoch,
+		"is_fork":             e.isFork,
+		"fork_enum":           version.String(e.VersionEnum),
+		"sanity":              fmt.Sprintf("%#x", root),
+		"gvr":                 fmt.Sprintf("%#x", gvr),
+	}
+	return fields
+}
+
+func (ns NetworkScheduleEntry) Copy() NetworkScheduleEntry {
+	return NetworkScheduleEntry{
+		ForkVersion:      ns.ForkVersion,
+		ForkDigest:       ns.ForkDigest,
+		VersionEnum:      ns.VersionEnum,
+		MaxBlobsPerBlock: ns.MaxBlobsPerBlock,
+		Epoch:            ns.Epoch,
+		isFork:           ns.isFork,
+	}
+}
+
+type BlobScheduleEntry NetworkScheduleEntry
+
+func (b *BeaconChainConfig) ApplyOptions(opts ...Option) {
+	for _, opt := range opts {
+		opt(b)
+	}
+}
+
+// TODO: this needs to be able to return an error
 // InitializeForkSchedule initializes the schedules forks baked into the config.
 func (b *BeaconChainConfig) InitializeForkSchedule() {
 	// Reset Fork Version Schedule.
 	b.ForkVersionSchedule = configForkSchedule(b)
 	b.ForkVersionNames = configForkNames(b)
+	b.forkSchedule = initForkSchedule(b)
+	b.bpoSchedule = initBPOSchedule(b)
+	combined := b.forkSchedule.merge(b.bpoSchedule)
+	if err := combined.prepare(b); err != nil {
+		log.WithError(err).Error("failed to prepare network schedule", "error", err)
+	}
+	b.networkSchedule = combined
+}
+
+func LogDigests(b *BeaconChainConfig) {
+	gvr := BeaconConfig().GenesisValidatorsRoot
+	schedule := b.networkSchedule
+	for _, e := range schedule.entries {
+		root, err := computeForkDataRoot(e.ForkVersion, gvr)
+		if err != nil {
+			panic(err) // lint:nopanic
+		}
+		fields := logrus.Fields{
+			"fork_version":        fmt.Sprintf("%#x", e.ForkVersion),
+			"fork_digest":         fmt.Sprintf("%#x", e.ForkDigest),
+			"max_blobs_per_block": e.MaxBlobsPerBlock,
+			"epoch":               e.Epoch,
+			"bpo_epoch":           e.BPOEpoch,
+			"is_fork":             e.isFork,
+			"fork_enum":           version.String(e.VersionEnum),
+			"sanity":              fmt.Sprintf("%#x", root),
+			"gvr":                 fmt.Sprintf("%#x", gvr),
+		}
+		log.WithFields(fields).Debug("network schedule entry initialized")
+		digests := make([]string, 0, len(schedule.byDigest))
+		for k := range schedule.byDigest {
+			digests = append(digests, fmt.Sprintf("%#x", k))
+		}
+		log.WithField("digest_keys", strings.Join(digests, ", ")).Debug("digests seen")
+	}
+}
+
+type NetworkSchedule struct {
+	entries   []NetworkScheduleEntry
+	byEpoch   map[primitives.Epoch]*NetworkScheduleEntry
+	byVersion map[[4]byte]*NetworkScheduleEntry
+	byDigest  map[[4]byte]*NetworkScheduleEntry
+}
+
+func newNetworkSchedule(entries []NetworkScheduleEntry) *NetworkSchedule {
+	return &NetworkSchedule{
+		entries:   entries,
+		byEpoch:   make(map[primitives.Epoch]*NetworkScheduleEntry),
+		byVersion: make(map[[4]byte]*NetworkScheduleEntry),
+		byDigest:  make(map[[4]byte]*NetworkScheduleEntry),
+	}
+}
+
+func (ns *NetworkSchedule) epochIdx(epoch primitives.Epoch) int {
+	for i := len(ns.entries) - 1; i >= 0; i-- {
+		if ns.entries[i].Epoch <= epoch {
+			return i
+		}
+	}
+	return -1
+}
+
+func (ns *NetworkSchedule) Next(epoch primitives.Epoch) NetworkScheduleEntry {
+	lastIdx := len(ns.entries) - 1
+	idx := ns.epochIdx(epoch)
+	if idx < 0 {
+		return ns.entries[0]
+	}
+	if idx > lastIdx-1 {
+		return ns.entries[lastIdx]
+	}
+	return ns.entries[idx+1]
+}
+
+func (ns *NetworkSchedule) LastEntry() NetworkScheduleEntry {
+	for i := len(ns.entries) - 1; i >= 0; i-- {
+		if ns.entries[i].Epoch != BeaconConfig().FarFutureEpoch {
+			return ns.entries[i]
+		}
+	}
+	return ns.entries[0]
+}
+
+// LastFork is the last full fork (this is used by e2e testing)
+func (ns *NetworkSchedule) LastFork() NetworkScheduleEntry {
+	for i := len(ns.entries) - 1; i >= 0; i-- {
+		if ns.entries[i].isFork && ns.entries[i].Epoch != BeaconConfig().FarFutureEpoch {
+			return ns.entries[i]
+		}
+	}
+	return ns.entries[0]
+}
+
+func (ns *NetworkSchedule) ForEpoch(epoch primitives.Epoch) NetworkScheduleEntry {
+	idx := ns.epochIdx(epoch)
+	if idx < 0 {
+		return ns.entries[0]
+	}
+	if idx >= len(ns.entries)-1 {
+		return ns.entries[len(ns.entries)-1]
+	}
+	return ns.entries[idx]
+}
+
+func (ns *NetworkSchedule) activatedAt(epoch primitives.Epoch) (*NetworkScheduleEntry, bool) {
+	entry, ok := ns.byEpoch[epoch]
+	return entry, ok
+}
+
+func (ns *NetworkSchedule) merge(other *NetworkSchedule) *NetworkSchedule {
+	merged := make([]NetworkScheduleEntry, 0, len(ns.entries)+len(other.entries))
+	merged = append(merged, ns.entries...)
+	merged = append(merged, other.entries...)
+	sort.Slice(merged, func(i, j int) bool {
+		if merged[i].Epoch == merged[j].Epoch {
+			if merged[i].VersionEnum == merged[j].VersionEnum {
+				return merged[i].isFork
+			}
+			return merged[i].VersionEnum < merged[j].VersionEnum
+		}
+		return merged[i].Epoch < merged[j].Epoch
+	})
+	return newNetworkSchedule(merged)
+}
+
+func (ns *NetworkSchedule) index(e NetworkScheduleEntry) {
+	if _, ok := ns.byDigest[e.ForkDigest]; !ok {
+		ns.byDigest[e.ForkDigest] = &e
+	}
+	if _, ok := ns.byVersion[e.ForkVersion]; !ok {
+		ns.byVersion[e.ForkVersion] = &e
+	}
+	if _, ok := ns.byEpoch[e.Epoch]; !ok {
+		ns.byEpoch[e.Epoch] = &e
+	}
+}
+
+func (ns *NetworkSchedule) prepare(b *BeaconChainConfig) error {
+	if len(ns.entries) == 0 {
+		return errors.New("cannot compute digests for an empty network schedule")
+	}
+	if !ns.entries[0].isFork {
+		return errors.New("cannot compute digests for a network schedule without a fork entry")
+	}
+	lastFork, err := entryWithForkDigest(ns.entries[0], b)
+	if err != nil {
+		return err
+	}
+	// TODO: I don't think I need this copy thing but I'm paranoid and tired, remove it later
+	ns.entries[0] = lastFork.Copy()
+	ns.index(ns.entries[0])
+	var lastBlobs *NetworkScheduleEntry
+	for i := 1; i < len(ns.entries); i++ {
+		entry := ns.entries[i]
+
+		if entry.isFork {
+			lastFork = entry
+		} else {
+			entry.ForkVersion = lastFork.ForkVersion
+			entry.VersionEnum = lastFork.VersionEnum
+		}
+
+		if entry.MaxBlobsPerBlock > 0 || !entry.isFork {
+			entry.BPOEpoch = entry.Epoch
+			lastBlobs = &entry
+		} else if lastBlobs != nil {
+			entry.MaxBlobsPerBlock = lastBlobs.MaxBlobsPerBlock
+			entry.BPOEpoch = lastBlobs.BPOEpoch
+		}
+
+		entry, err = entryWithForkDigest(entry, b)
+		if err != nil {
+			return err
+		}
+		ns.entries[i] = entry
+		ns.index(entry)
+	}
+	return nil
+}
+
+func entryWithForkDigest(entry NetworkScheduleEntry, b *BeaconChainConfig) (NetworkScheduleEntry, error) {
+	root, err := computeForkDataRoot(entry.ForkVersion, b.GenesisValidatorsRoot)
+	if err != nil {
+		return entry, err
+	}
+	entry.ForkDigest = bytesutil.ToBytes4(root[:])
+	if entry.Epoch < b.FuluForkEpoch {
+		return entry, nil
+	}
+	if entry.MaxBlobsPerBlock > math.MaxUint32 {
+		return entry, fmt.Errorf("max blobs per block exceeds maximum uint32 value")
+	}
+	hb := make([]byte, 16)
+	binary.LittleEndian.PutUint64(hb[0:8], uint64(entry.BPOEpoch))
+	binary.LittleEndian.PutUint64(hb[8:], uint64(entry.MaxBlobsPerBlock))
+	bpoHash := hash.Hash(hb)
+	entry.ForkDigest[0] = entry.ForkDigest[0] ^ bpoHash[0]
+	entry.ForkDigest[1] = entry.ForkDigest[1] ^ bpoHash[1]
+	entry.ForkDigest[2] = entry.ForkDigest[2] ^ bpoHash[2]
+	entry.ForkDigest[3] = entry.ForkDigest[3] ^ bpoHash[3]
+	return entry, nil
+}
+
+var to4 = bytesutil.ToBytes4
+
+func initForkSchedule(b *BeaconChainConfig) *NetworkSchedule {
+	return newNetworkSchedule([]NetworkScheduleEntry{
+		{Epoch: b.GenesisEpoch, isFork: true, ForkVersion: to4(b.GenesisForkVersion), VersionEnum: version.Phase0},
+		{Epoch: b.AltairForkEpoch, isFork: true, ForkVersion: to4(b.AltairForkVersion), VersionEnum: version.Altair},
+		{Epoch: b.BellatrixForkEpoch, isFork: true, ForkVersion: to4(b.BellatrixForkVersion), VersionEnum: version.Bellatrix},
+		{Epoch: b.CapellaForkEpoch, isFork: true, ForkVersion: to4(b.CapellaForkVersion), VersionEnum: version.Capella},
+		{Epoch: b.DenebForkEpoch, isFork: true, ForkVersion: to4(b.DenebForkVersion), MaxBlobsPerBlock: uint64(b.DeprecatedMaxBlobsPerBlock), VersionEnum: version.Deneb},
+		{Epoch: b.ElectraForkEpoch, isFork: true, ForkVersion: to4(b.ElectraForkVersion), MaxBlobsPerBlock: uint64(b.DeprecatedMaxBlobsPerBlockElectra), VersionEnum: version.Electra},
+		{Epoch: b.FuluForkEpoch, isFork: true, ForkVersion: to4(b.FuluForkVersion), VersionEnum: version.Fulu},
+	})
+}
+
+func initBPOSchedule(b *BeaconChainConfig) *NetworkSchedule {
+	sort.Slice(b.BlobSchedule, func(i, j int) bool {
+		return b.BlobSchedule[i].Epoch < b.BlobSchedule[j].Epoch
+	})
+	entries := make([]NetworkScheduleEntry, len(b.BlobSchedule))
+	for i := range b.BlobSchedule {
+		entries[i] = NetworkScheduleEntry(b.BlobSchedule[i])
+		entries[i].BPOEpoch = entries[i].Epoch
+	}
+	return newNetworkSchedule(entries)
 }
 
 func configForkSchedule(b *BeaconChainConfig) map[[fieldparams.VersionLength]byte]primitives.Epoch {

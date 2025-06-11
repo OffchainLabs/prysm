@@ -21,7 +21,6 @@ import (
 	types "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -156,11 +155,7 @@ func (r *expectedBlobChunk) requireExpected(t *testing.T, s *Service, stream net
 
 	c, err := readContextFromStream(stream)
 	require.NoError(t, err)
-
-	valRoot := s.cfg.chain.GenesisValidatorsRoot()
-	ctxBytes, err := forks.ForkDigestFromEpoch(slots.ToEpoch(r.sidecar.Slot()), valRoot[:])
-	require.NoError(t, err)
-	require.Equal(t, ctxBytes, bytesutil.ToBytes4(c))
+	require.Equal(t, params.ForkDigest(slots.ToEpoch(r.sidecar.Slot())), bytesutil.ToBytes4(c))
 
 	sc := &ethpb.BlobSidecar{}
 	require.NoError(t, encoding.DecodeWithMaxLength(stream, sc))
@@ -280,7 +275,7 @@ func repositionFutureEpochs(cfg *params.BeaconChainConfig) {
 
 func defaultMockChain(t *testing.T, currentSlot uint64) (*mock.ChainService, *startup.Clock) {
 	de := params.BeaconConfig().DenebForkEpoch
-	df, err := forks.Fork(de)
+	df, err := params.Fork(de)
 	require.NoError(t, err)
 	denebBuffer := params.BeaconConfig().MinEpochsForBlobsSidecarsRequest + 1000
 	ce := de + denebBuffer

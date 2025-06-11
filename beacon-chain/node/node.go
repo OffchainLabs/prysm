@@ -128,6 +128,7 @@ type BeaconNode struct {
 	syncChecker              *initialsync.SyncChecker
 	slasherEnabled           bool
 	lcStore                  *lightclient.Store
+	ConfigOptions            []params.Option
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -137,17 +138,13 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		return nil, errors.Wrap(err, "could not set beacon configuration options")
 	}
 
-	// Initializes any forks here.
-	params.BeaconConfig().InitializeForkSchedule()
-
-	registry := runtime.NewServiceRegistry()
 	ctx := cliCtx.Context
 
 	beacon := &BeaconNode{
 		cliCtx:                  cliCtx,
 		ctx:                     ctx,
 		cancel:                  cancel,
-		services:                registry,
+		services:                runtime.NewServiceRegistry(),
 		stop:                    make(chan struct{}),
 		stateFeed:               new(event.Feed),
 		blockFeed:               new(event.Feed),
@@ -175,6 +172,11 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 			return nil, err
 		}
 	}
+
+	// Initializes any forks here.
+	params.BeaconConfig().ApplyOptions(beacon.ConfigOptions...)
+	params.BeaconConfig().InitializeForkSchedule()
+	params.LogDigests(params.BeaconConfig())
 
 	synchronizer := startup.NewClockSynchronizer()
 	beacon.clockWaiter = synchronizer

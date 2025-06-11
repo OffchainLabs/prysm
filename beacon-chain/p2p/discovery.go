@@ -9,6 +9,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -503,8 +504,10 @@ func (s *Service) createLocalNode(
 	localNode.SetFallbackIP(ipAddr)
 	localNode.SetFallbackUDP(udpPort)
 
-	localNode, err = addForkEntry(localNode, s.genesisTime, s.genesisValidatorsRoot)
-	if err != nil {
+	clock := startup.NewClock(s.genesisTime, [32]byte(s.genesisValidatorsRoot))
+	currentEntry := params.GetNetworkScheduleEntry(clock.CurrentEpoch())
+	nextEntry := params.GetNetworkScheduleEntry(currentEntry.Epoch)
+	if err := updateENR(localNode, currentEntry, nextEntry); err != nil {
 		return nil, errors.Wrap(err, "could not add eth2 fork version entry to enr")
 	}
 

@@ -16,6 +16,7 @@ go_library(
         "//beacon-chain/node:go_default_library",
         "//cmd:go_default_library",
         "//cmd/beacon-chain/blockchain:go_default_library",
+        "//cmd/beacon-chain/config:go_default_library",
         "//cmd/beacon-chain/db:go_default_library",
         "//cmd/beacon-chain/execution:go_default_library",
         "//cmd/beacon-chain/flags:go_default_library",

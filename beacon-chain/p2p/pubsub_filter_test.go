@@ -11,8 +11,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
@@ -23,10 +21,8 @@ func TestService_CanSubscribe(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	currentFork := [4]byte{0x01, 0x02, 0x03, 0x04}
 	validProtocolSuffix := "/" + encoder.ProtocolSuffixSSZSnappy
-	genesisTime := time.Now()
-	var valRoot [32]byte
-	digest, err := forks.CreateForkDigest(genesisTime, valRoot[:])
-	assert.NoError(t, err)
+	clock := startup.NewClock(time.Now(), [32]byte{})
+	digest := params.ForkDigest(clock.CurrentEpoch())
 	type test struct {
 		name  string
 		topic string
@@ -108,11 +104,12 @@ func TestService_CanSubscribe(t *testing.T) {
 		}
 		tests = append(tests, tt)
 	}
+	valRoot := clock.GenesisValidatorsRoot()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Service{
 				genesisValidatorsRoot: valRoot[:],
-				genesisTime:           genesisTime,
+				genesisTime:           clock.GenesisTime(),
 			}
 			if got := s.CanSubscribe(tt.topic); got != tt.want {
 				t.Errorf("CanSubscribe(%s) = %v, want %v", tt.topic, got, tt.want)
@@ -220,10 +217,8 @@ func TestGossipTopicMapping_scanfcheck_GossipTopicFormattingSanityCheck(t *testi
 func TestService_FilterIncomingSubscriptions(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	validProtocolSuffix := "/" + encoder.ProtocolSuffixSSZSnappy
-	genesisTime := time.Now()
-	var valRoot [32]byte
-	digest, err := forks.CreateForkDigest(genesisTime, valRoot[:])
-	assert.NoError(t, err)
+	clock := startup.NewClock(time.Now(), [32]byte{})
+	digest := params.ForkDigest(clock.CurrentEpoch())
 	type args struct {
 		id   peer.ID
 		subs []*pubsubpb.RPC_SubOpts
@@ -320,11 +315,12 @@ func TestService_FilterIncomingSubscriptions(t *testing.T) {
 			},
 		},
 	}
+	valRoot := clock.GenesisValidatorsRoot()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Service{
 				genesisValidatorsRoot: valRoot[:],
-				genesisTime:           genesisTime,
+				genesisTime:           clock.GenesisTime(),
 			}
 			got, err := s.FilterIncomingSubscriptions(tt.args.id, tt.args.subs)
 			if (err != nil) != tt.wantErr {

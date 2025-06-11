@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/node"
 	"github.com/OffchainLabs/prysm/v6/cmd"
 	blockchaincmd "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/config"
 	dbcommands "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
@@ -152,6 +153,7 @@ var appFlags = []cli.Flag{
 	bflags.BackfillBatchSize,
 	bflags.BackfillWorkerCount,
 	bflags.BackfillOldestSlot,
+	config.GenesisValidatorsRootFlag,
 }
 
 func init() {
@@ -317,6 +319,7 @@ func startNode(ctx *cli.Context, cancel context.CancelFunc) error {
 		checkpoint.BeaconNodeOptions,
 		storage.BeaconNodeOptions,
 		backfill.BeaconNodeOptions,
+		config.BeaconNodeOptions,
 	}
 	for _, of := range optFuncs {
 		ofo, err := of(ctx)

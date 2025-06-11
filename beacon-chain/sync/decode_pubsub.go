@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
@@ -112,22 +111,14 @@ func extractDataTypeFromTypeMap[T any](typeMap map[[4]byte]func() (T, error), di
 	if len(digest) != forkDigestLength {
 		return zero, errors.Errorf("invalid digest returned, wanted a length of %d but received %d", forkDigestLength, len(digest))
 	}
-	vRoot := tor.GenesisValidatorsRoot()
-	for k, f := range typeMap {
-		rDigest, err := signing.ComputeForkDigest(k[:], vRoot[:])
-		if err != nil {
-			return zero, err
-		}
-		if rDigest == bytesutil.ToBytes4(digest) {
-			return f()
-		}
+	forkVersion, _, err := params.ForkDataFromDigest([4]byte(digest))
+	if err != nil {
+		return zero, errors.Wrapf(ErrNoValidDigest, "could not extract %T data type, saw digest=%#x", zero, digest)
 	}
-	return zero, errors.Wrapf(
-		ErrNoValidDigest,
-		"could not extract %T data type, saw digest=%#x, genesis=%v, vr=%#x",
-		zero,
-		digest,
-		tor.GenesisTime(),
-		tor.GenesisValidatorsRoot(),
-	)
+
+	f, ok := typeMap[forkVersion]
+	if ok {
+		return f()
+	}
+	return zero, errors.Wrapf(ErrNoValidDigest, "could not extract %T data type, saw digest=%#x", zero, digest)
 }

@@ -16,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -62,17 +61,11 @@ func TestRPC_LightClientBootstrap(t *testing.T) {
 	topic := string(pcl)
 	r.rateLimiter.limiterMap[topic] = leakybucket.NewCollector(10000, 10000, time.Second, false)
 
-	altairDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().AltairForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	bellatrixDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().BellatrixForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	capellaDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().CapellaForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	denebDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().DenebForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	electraDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().ElectraForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-
+	altairDigest := params.ForkDigest(params.BeaconConfig().AltairForkEpoch)
+	bellatrixDigest := params.ForkDigest(params.BeaconConfig().BellatrixForkEpoch)
+	capellaDigest := params.ForkDigest(params.BeaconConfig().CapellaForkEpoch)
+	denebDigest := params.ForkDigest(params.BeaconConfig().DenebForkEpoch)
+	electraDigest := params.ForkDigest(params.BeaconConfig().ElectraForkEpoch)
 	for i := 1; i <= 5; i++ {
 		t.Run(version.String(i), func(t *testing.T) {
 			l := util.NewTestLightClient(t, i)
@@ -184,16 +177,11 @@ func TestRPC_LightClientOptimisticUpdate(t *testing.T) {
 	topic := string(pcl)
 	r.rateLimiter.limiterMap[topic] = leakybucket.NewCollector(10000, 10000, time.Second, false)
 
-	altairDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().AltairForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	bellatrixDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().BellatrixForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	capellaDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().CapellaForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	denebDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().DenebForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	electraDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().ElectraForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
+	altairDigest := params.ForkDigest(params.BeaconConfig().AltairForkEpoch)
+	bellatrixDigest := params.ForkDigest(params.BeaconConfig().BellatrixForkEpoch)
+	capellaDigest := params.ForkDigest(params.BeaconConfig().CapellaForkEpoch)
+	denebDigest := params.ForkDigest(params.BeaconConfig().DenebForkEpoch)
+	electraDigest := params.ForkDigest(params.BeaconConfig().ElectraForkEpoch)
 
 	for i := 1; i <= 5; i++ {
 		t.Run(version.String(i), func(t *testing.T) {
@@ -304,16 +292,11 @@ func TestRPC_LightClientFinalityUpdate(t *testing.T) {
 	topic := string(pcl)
 	r.rateLimiter.limiterMap[topic] = leakybucket.NewCollector(10000, 10000, time.Second, false)
 
-	altairDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().AltairForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	bellatrixDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().BellatrixForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	capellaDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().CapellaForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	denebDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().DenebForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	electraDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().ElectraForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
+	altairDigest := params.ForkDigest(params.BeaconConfig().AltairForkEpoch)
+	bellatrixDigest := params.ForkDigest(params.BeaconConfig().BellatrixForkEpoch)
+	capellaDigest := params.ForkDigest(params.BeaconConfig().CapellaForkEpoch)
+	denebDigest := params.ForkDigest(params.BeaconConfig().DenebForkEpoch)
+	electraDigest := params.ForkDigest(params.BeaconConfig().ElectraForkEpoch)
 
 	for i := 1; i <= 5; i++ {
 		t.Run(version.String(i), func(t *testing.T) {
@@ -424,16 +407,11 @@ func TestRPC_LightClientUpdatesByRange(t *testing.T) {
 	topic := string(pcl)
 	r.rateLimiter.limiterMap[topic] = leakybucket.NewCollector(10000, 10000, time.Second, false)
 
-	altairDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().AltairForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	bellatrixDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().BellatrixForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	capellaDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().CapellaForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	denebDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().DenebForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	electraDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().ElectraForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
+	altairDigest := params.ForkDigest(params.BeaconConfig().AltairForkEpoch)
+	bellatrixDigest := params.ForkDigest(params.BeaconConfig().BellatrixForkEpoch)
+	capellaDigest := params.ForkDigest(params.BeaconConfig().CapellaForkEpoch)
+	denebDigest := params.ForkDigest(params.BeaconConfig().DenebForkEpoch)
+	electraDigest := params.ForkDigest(params.BeaconConfig().ElectraForkEpoch)
 
 	for i := 1; i <= 5; i++ {
 		t.Run(version.String(i), func(t *testing.T) {
