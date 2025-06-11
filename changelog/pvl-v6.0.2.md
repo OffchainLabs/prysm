@@ -1,3 +1,0 @@
-### Ignored
-
-- Release notes

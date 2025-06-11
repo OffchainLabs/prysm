@@ -58,6 +58,30 @@ service BeaconNodeValidator {
     };
   }
 
+  // GetDutiesV2 Retrieves validator duties for the requested validators.
+  //
+  // The duties consist of:
+  //   Proposer - the validator that creates a beacon chain block.
+  //   Attester — a validator that is part of a committee that needs to sign off
+  //   on a beacon chain
+  //   Sync Committee - a special group of validators that ensure lightclients and effectively sync with Ethereum
+  //   and continues in this role for 256 epochs if selected
+  // The server returns a list of duties which are the actions should be
+  // performed by validators for a given epoch. Validator duties should be
+  // polled every epoch, but due to chain reorg of >MIN_SEED_LOOKAHEAD could
+  // occur, the validator duties could chain. For complete safety, it is
+  // recommended to poll at every slot to ensure validator is fully aware of any
+  // sudden chain reorg.
+  //
+  // GetDutiesV2 differs from GetDuties through the removal of the full committee list in favor of adding
+  // committee_length and validator_committee_index fields which significantly saves on marshalling
+  rpc GetDutiesV2(DutiesRequest) returns (DutiesV2Response) {
+    option deprecated = true;
+    option (google.api.http) = {
+      get : "/eth/v1alpha1/validator/dutiesV2"
+    };
+  }
+
   // DomainData fetches the current BLS signature domain version information
   // from the running beacon node's state. This information is used when
   // validators sign blocks and attestations appropriately based on their duty.
@@ -738,6 +762,63 @@ message DutiesResponse {
 
     // The number of committees in the duty's slot.
     uint64 committees_at_slot = 9;
+  }
+}
+
+message DutiesV2Response {
+  option deprecated = true;
+
+  repeated Duty current_epoch_duties = 1;
+
+  repeated Duty next_epoch_duties = 2;
+
+  bytes previous_duty_dependent_root = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes current_duty_dependent_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+
+  message Duty {
+    // The length of the committee
+    uint64 committee_length = 1;
+
+    // The index of the committee which the given validator has an assignment
+    uint64 committee_index = 2
+    [ (ethereum.eth.ext.cast_type) =
+    "github.com/OffchainLabs/prysm/v6/consensus-types/"
+        "primitives.CommitteeIndex" ];
+
+    // The number of committees in the duty's slot.
+    uint64 committees_at_slot = 3;
+
+    // The validator's index in the given committee
+    uint64 validator_committee_index = 4;
+
+    // Slot at which a validator must attest.
+    uint64 attester_slot = 5 [
+      (ethereum.eth.ext.cast_type) =
+          "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
+    ];
+
+    // Slots at which a validator must propose a beacon chain block.
+    repeated uint64 proposer_slots = 6 [
+      (ethereum.eth.ext.cast_type) =
+          "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
+    ];
+
+    // 48 byte BLS public key for the validator who's assigned to perform a
+    // duty.
+    bytes public_key = 7 [ (ethereum.eth.ext.ssz_size) = "48" ];
+
+    // The current status of the validator assigned to perform the duty.
+    ValidatorStatus status = 8;
+
+    // The index of the validator in the beacon state.
+    uint64 validator_index = 9
+    [ (ethereum.eth.ext.cast_type) =
+    "github.com/OffchainLabs/prysm/v6/consensus-types/"
+        "primitives.ValidatorIndex" ];
+
+    // Whether the validator belongs in the sync committee and has to perform
+    // sync committee duty.
+    bool is_sync_committee = 10;
   }
 }
 

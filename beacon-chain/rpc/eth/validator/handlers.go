@@ -98,6 +98,39 @@ func (s *Server) GetAggregateAttestationV2(w http.ResponseWriter, r *http.Reques
 	if agg == nil {
 		return
 	}
+
+	if httputil.RespondWithSsz(r) {
+		var data []byte
+		var err error
+		if v >= version.Electra {
+			typedAgg, ok := agg.(*ethpbalpha.AttestationElectra)
+			if !ok {
+				httputil.HandleError(w, fmt.Sprintf("Attestation is not of type %T", &ethpbalpha.AttestationElectra{}), http.StatusInternalServerError)
+				return
+			}
+			data, err = typedAgg.MarshalSSZ()
+			if err != nil {
+				httputil.HandleError(w, "Could not marshal attestation: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		} else {
+			typedAgg, ok := agg.(*ethpbalpha.Attestation)
+			if !ok {
+				httputil.HandleError(w, fmt.Sprintf("Attestation is not of type %T", &ethpbalpha.Attestation{}), http.StatusInternalServerError)
+				return
+			}
+			data, err = typedAgg.MarshalSSZ()
+			if err != nil {
+				httputil.HandleError(w, "Could not marshal attestation: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+
+		w.Header().Set(api.VersionHeader, version.String(v))
+		httputil.WriteSsz(w, data)
+		return
+	}
+
 	resp := &structs.AggregateAttestationResponse{
 		Version: version.String(v),
 	}
@@ -607,6 +640,16 @@ func (s *Server) GetAttestationData(w http.ResponseWriter, r *http.Request) {
 
 	if rpcError != nil {
 		httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
+		return
+	}
+
+	if httputil.RespondWithSsz(r) {
+		data, err := attestationData.MarshalSSZ()
+		if err != nil {
+			httputil.HandleError(w, "Could not marshal attestation data: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		httputil.WriteSsz(w, data)
 		return
 	}
 
