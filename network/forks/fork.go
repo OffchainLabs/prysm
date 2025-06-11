@@ -16,29 +16,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// IsForkNextEpoch checks if an allotted fork is in the following epoch.
-func IsForkNextEpoch(genesisTime time.Time, genesisValidatorsRoot []byte) (bool, error) {
-	if genesisTime.IsZero() {
-		return false, errors.New("genesis time is not set")
-	}
-	if len(genesisValidatorsRoot) == 0 {
-		return false, errors.New("genesis validators root is not set")
-	}
-	currentSlot := slots.Since(genesisTime)
-	currentEpoch := slots.ToEpoch(currentSlot)
-	fSchedule := params.BeaconConfig().ForkVersionSchedule
-	scheduledForks := SortedForkVersions(fSchedule)
-	isForkEpoch := false
-	for _, forkVersion := range scheduledForks {
-		epoch := fSchedule[forkVersion]
-		if currentEpoch+1 == epoch {
-			isForkEpoch = true
-			break
-		}
-	}
-	return isForkEpoch, nil
-}
-
 // ForkDigestFromEpoch retrieves the fork digest from the current schedule determined
 // by the provided epoch.
 func ForkDigestFromEpoch(currentEpoch primitives.Epoch, genesisValidatorsRoot []byte) ([4]byte, error) {

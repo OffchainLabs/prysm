@@ -12,18 +12,9 @@ import (
 )
 
 // IsForkNextEpoch checks if an allotted fork is in the following epoch.
-func IsForkNextEpoch(currentEpoch primitives.Epoch) (bool, error) {
-	fSchedule := BeaconConfig().ForkVersionSchedule
-	scheduledForks := SortedForkVersions(fSchedule)
-	isForkEpoch := false
-	for _, forkVersion := range scheduledForks {
-		epoch := fSchedule[forkVersion]
-		if currentEpoch+1 == epoch {
-			isForkEpoch = true
-			break
-		}
-	}
-	return isForkEpoch, nil
+func IsForkNextEpoch(currentEpoch primitives.Epoch) bool {
+	entry, ok := BeaconConfig().networkSchedule.forEpoch(currentEpoch + 1)
+	return ok && entry.isFork
 }
 
 // ForkDigestFromEpoch retrieves the fork digest from the current schedule determined
@@ -34,7 +25,11 @@ func ForkDigestFromEpoch(epoch primitives.Epoch) ([4]byte, error) {
 		return [4]byte{}, err
 	}
 	version := bytesutil.ToBytes4(forkData.CurrentVersion)
-	return computeForkDataRoot(version, BeaconConfig().GenesisValidatorsRoot)
+	root, err := computeForkDataRoot(version, BeaconConfig().GenesisValidatorsRoot)
+	if err != nil {
+		return [4]byte{}, err
+	}
+	return bytesutil.ToBytes4(root[:]), nil
 }
 
 // CreateForkDigest creates a fork digest from a genesis time and genesis
@@ -42,22 +37,22 @@ func ForkDigestFromEpoch(epoch primitives.Epoch) ([4]byte, error) {
 // the active fork version in the node.
 func CreateForkDigest(epoch primitives.Epoch) ([4]byte, error) {
 	var version [4]byte
-	digest, err := computeForkDataRoot(version, BeaconConfig().GenesisValidatorsRoot)
+	root, err := computeForkDataRoot(version, BeaconConfig().GenesisValidatorsRoot)
 	if err != nil {
 		return [4]byte{}, err
 	}
-	return digest, nil
+	return bytesutil.ToBytes4(root[:]), nil
 }
 
-func computeForkDataRoot(version [4]byte, root [32]byte) ([4]byte, error) {
+func computeForkDataRoot(version [4]byte, root [32]byte) ([32]byte, error) {
 	r, err := (&ethpb.ForkData{
 		CurrentVersion:        version[:],
 		GenesisValidatorsRoot: root[:],
 	}).HashTreeRoot()
 	if err != nil {
-		return [4]byte{}, nil
+		return [32]byte{}, nil
 	}
-	return bytesutil.ToBytes4(r[:]), nil
+	return r, nil
 }
 
 // Fork given a target epoch,
@@ -68,7 +63,7 @@ func Fork(
 	currentForkVersion := bytesutil.ToBytes4(BeaconConfig().GenesisForkVersion)
 	previousForkVersion := bytesutil.ToBytes4(BeaconConfig().GenesisForkVersion)
 	fSchedule := BeaconConfig().ForkVersionSchedule
-	sortedForkVersions := SortedForkVersions(fSchedule)
+	sortedForkVersions := SortedForkVersions()
 	forkEpoch := primitives.Epoch(0)
 	for _, forkVersion := range sortedForkVersions {
 		epoch, ok := fSchedule[forkVersion]
@@ -94,10 +89,11 @@ func RetrieveForkDataFromDigest(digest [4]byte, genesisValidatorsRoot []byte) ([
 	fSchedule := BeaconConfig().ForkVersionSchedule
 	gvr := BeaconConfig().GenesisValidatorsRoot
 	for v, e := range fSchedule {
-		rDigest, err := computeForkDataRoot(v, gvr)
+		root, err := computeForkDataRoot(v, gvr)
 		if err != nil {
 			return [4]byte{}, 0, err
 		}
+		rDigest := bytesutil.ToBytes4(root[:])
 		if rDigest == digest {
 			return v, e, nil
 		}
@@ -109,7 +105,7 @@ func RetrieveForkDataFromDigest(digest [4]byte, genesisValidatorsRoot []byte) ([
 // provided current epoch.
 func NextForkData(currEpoch primitives.Epoch) ([4]byte, primitives.Epoch, error) {
 	fSchedule := BeaconConfig().ForkVersionSchedule
-	sortedForkVersions := SortedForkVersions(fSchedule)
+	sortedForkVersions := SortedForkVersions()
 	nextForkEpoch := primitives.Epoch(math.MaxUint64)
 	var nextForkVersion [4]byte
 	for _, forkVersion := range sortedForkVersions {
@@ -139,7 +135,8 @@ func NextForkData(currEpoch primitives.Epoch) ([4]byte, primitives.Epoch, error)
 
 // SortedForkVersions sorts the provided fork schedule in ascending order
 // by epoch.
-func SortedForkVersions(forkSchedule map[[4]byte]primitives.Epoch) [][4]byte {
+func SortedForkVersions() [][4]byte {
+	forkSchedule := BeaconConfig().ForkVersionSchedule
 	sortedVersions := make([][4]byte, len(forkSchedule))
 	i := 0
 	for k := range forkSchedule {
@@ -168,7 +165,7 @@ func SortedForkVersions(forkSchedule map[[4]byte]primitives.Epoch) [][4]byte {
 // fork schedule.
 func LastForkEpoch() primitives.Epoch {
 	fSchedule := BeaconConfig().ForkVersionSchedule
-	sortedForkVersions := SortedForkVersions(fSchedule)
+	sortedForkVersions := SortedForkVersions()
 	lastValidEpoch := primitives.Epoch(0)
 	numOfVersions := len(sortedForkVersions)
 	for i := numOfVersions - 1; i >= 0; i-- {

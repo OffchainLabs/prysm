@@ -610,17 +610,18 @@ func TestSubscribeWithSyncSubnets_DynamicSwitchFork(t *testing.T) {
 }
 
 func TestIsDigestValid(t *testing.T) {
+	clock := startup.NewClock(time.Now().Add(-100*time.Second), [32]byte{'A'})
 	genRoot := [32]byte{'A'}
 	digest, err := signing.ComputeForkDigest(params.BeaconConfig().GenesisForkVersion, genRoot[:])
 	assert.NoError(t, err)
-	valid, err := isDigestValid(digest, time.Now().Add(-100*time.Second), genRoot)
+	valid, err := isDigestValid(digest, clock)
 	assert.NoError(t, err)
 	assert.Equal(t, true, valid)
 
 	// Compute future fork digest that will be invalid currently.
 	digest, err = signing.ComputeForkDigest(params.BeaconConfig().AltairForkVersion, genRoot[:])
 	assert.NoError(t, err)
-	valid, err = isDigestValid(digest, time.Now().Add(-100*time.Second), genRoot)
+	valid, err = isDigestValid(digest, clock)
 	assert.NoError(t, err)
 	assert.Equal(t, false, valid)
 }

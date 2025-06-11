@@ -8,6 +8,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -188,18 +189,18 @@ func TestRetrieveForkDataFromDigest(t *testing.T) {
 	cfg.InitializeForkSchedule()
 	params.OverrideBeaconConfig(cfg)
 	genValRoot := params.BeaconConfig().GenesisValidatorsRoot
-	digest, err := params.ComputeForkDataRoot([4]byte{'A', 'B', 'C', 'F'}, genValRoot)
+	root, err := params.ComputeForkDataRoot([4]byte{'A', 'B', 'C', 'F'}, genValRoot)
 	assert.NoError(t, err)
 
-	version, epoch, err := params.RetrieveForkDataFromDigest(digest, genValRoot[:])
+	version, epoch, err := params.RetrieveForkDataFromDigest(bytesutil.ToBytes4(root[:]), genValRoot[:])
 	assert.NoError(t, err)
 	assert.Equal(t, [4]byte{'A', 'B', 'C', 'F'}, version)
 	assert.Equal(t, epoch, primitives.Epoch(10))
 
-	digest, err = params.ComputeForkDataRoot([4]byte{'A', 'B', 'C', 'Z'}, genValRoot)
+	root, err = params.ComputeForkDataRoot([4]byte{'A', 'B', 'C', 'Z'}, genValRoot)
 	assert.NoError(t, err)
 
-	version, epoch, err = params.RetrieveForkDataFromDigest(digest, genValRoot[:])
+	version, epoch, err = params.RetrieveForkDataFromDigest(bytesutil.ToBytes4(root[:]), genValRoot[:])
 	assert.NoError(t, err)
 	assert.Equal(t, [4]byte{'A', 'B', 'C', 'Z'}, version)
 	assert.Equal(t, epoch, primitives.Epoch(100))
@@ -222,32 +223,28 @@ func TestIsForkNextEpoch(t *testing.T) {
 	genesisTime := genTimeCreator(10)
 	current := slots.ToEpoch(slots.CurrentSlot(uint64(genesisTime.Unix())))
 
-	isFork, err := params.IsForkNextEpoch(current)
-	assert.NoError(t, err)
+	isFork := params.IsForkNextEpoch(current)
 	assert.Equal(t, false, isFork)
 
 	// Is right before fork epoch
 	genesisTime = genTimeCreator(9)
 	current = slots.ToEpoch(slots.CurrentSlot(uint64(genesisTime.Unix())))
 
-	isFork, err = params.IsForkNextEpoch(current)
-	assert.NoError(t, err)
+	isFork = params.IsForkNextEpoch(current)
 	assert.Equal(t, true, isFork)
 
 	// Is at fork epoch
 	genesisTime = genTimeCreator(100)
 	current = slots.ToEpoch(slots.CurrentSlot(uint64(genesisTime.Unix())))
 
-	isFork, err = params.IsForkNextEpoch(current)
-	assert.NoError(t, err)
+	isFork = params.IsForkNextEpoch(current)
 	assert.Equal(t, false, isFork)
 
 	genesisTime = genTimeCreator(99)
 	current = slots.ToEpoch(slots.CurrentSlot(uint64(genesisTime.Unix())))
 
 	// Is right before fork epoch.
-	isFork, err = params.IsForkNextEpoch(current)
-	assert.NoError(t, err)
+	isFork = params.IsForkNextEpoch(current)
 	assert.Equal(t, true, isFork)
 }
 

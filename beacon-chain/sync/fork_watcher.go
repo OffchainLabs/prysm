@@ -46,10 +46,7 @@ func (s *Service) registerForUpcomingFork(currentEpoch primitives.Epoch) error {
 	genesisValidatorsRoot := s.cfg.clock.GenesisValidatorsRoot()
 
 	// Check if there is a fork in the next epoch.
-	isForkNextEpoch, err := forks.IsForkNextEpoch(s.cfg.clock.GenesisTime(), genesisValidatorsRoot[:])
-	if err != nil {
-		return errors.Wrap(err, "Could not retrieve next fork epoch")
-	}
+	isForkNextEpoch := params.IsForkNextEpoch(currentEpoch)
 
 	// Exit early if there is no fork in the next epoch.
 	if !isForkNextEpoch {
