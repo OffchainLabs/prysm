@@ -263,7 +263,7 @@ const (
 	PendingDeposits               // Electra: EIP-7251
 	PendingPartialWithdrawals     // Electra: EIP-7251
 	PendingConsolidations         // Electra: EIP-7251
-	ProposerLookahead             // Fulu: EIP 7917
+	ProposerLookahead             // Fulu: EIP-7917
 )
 
 // Enumerator keeps track of the number of states created since the node's start.
