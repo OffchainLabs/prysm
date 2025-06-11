@@ -9,6 +9,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -296,7 +297,7 @@ type BeaconChainConfig struct {
 	NodeIdBits                      uint64          `yaml:"NODE_ID_BITS" spec:"true"`                       // NodeIdBits defines the bit length of a node id.
 
 	// Blobs Values
-	BlobSchedule       []BlobScheduleEntry `yaml:"BLOB_SCHEDULE"`
+	BlobSchedule []BlobScheduleEntry `yaml:"BLOB_SCHEDULE"`
 
 	// Deprecated_MaxBlobsPerBlock defines the max blobs that could exist in a block.
 	// Deprecated: This field is no longer supported. Avoid using it.
@@ -313,6 +314,14 @@ type BeaconChainConfig struct {
 	// DeprecatedMaxBlobsPerBlockFulu defines the max blobs that could exist in a block post Fulu hard fork.
 	// Deprecated: This field is no longer supported. Avoid using it.
 	DeprecatedMaxBlobsPerBlockFulu int `yaml:"MAX_BLOBS_PER_BLOCK_FULU" spec:"true"`
+}
+
+func (b *BeaconChainConfig) ExecutionRequestLimits() enginev1.ExecutionRequestLimits {
+	return enginev1.ExecutionRequestLimits{
+		Deposits:       b.MaxDepositRequestsPerPayload,
+		Withdrawals:    b.MaxWithdrawalsPerPayload,
+		Consolidations: b.MaxConsolidationsRequestsPerPayload,
+	}
 }
 
 type BlobScheduleEntry struct {
@@ -481,4 +490,3 @@ func FuluEnabled() bool {
 func WithinDAPeriod(block, current primitives.Epoch) bool {
 	return block+BeaconConfig().MinEpochsForBlobsSidecarsRequest >= current
 }
-
