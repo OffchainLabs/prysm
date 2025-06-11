@@ -325,7 +325,6 @@ func (b *BeaconChainConfig) ExecutionRequestLimits() enginev1.ExecutionRequestLi
 }
 
 type BlobScheduleEntry struct {
-	forkEpoch        bool
 	Epoch            primitives.Epoch `yaml:"EPOCH"`
 	MaxBlobsPerBlock uint64           `yaml:"MAX_BLOBS_PER_BLOCK"`
 }
