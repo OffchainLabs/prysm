@@ -13,6 +13,7 @@ import (
 var depositRequestsSSZHex = "0x706b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000077630000000000000000000000000000000000000000000000000000000000007b00000000000000736967000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c801000000000000706b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000776300000000000000000000000000000000000000000000000000000000000090010000000000007369670000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002000000000000000"
 
 func TestGetDecodedExecutionRequests(t *testing.T) {
+	cfg := params.BeaconConfig()
 	t.Run("All requests decode successfully", func(t *testing.T) {
 		depositRequestBytes, err := hexutil.Decode("0x610000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" +
 			"620000000000000000000000000000000000000000000000000000000000000000" +
@@ -31,7 +32,7 @@ func TestGetDecodedExecutionRequests(t *testing.T) {
 				append([]byte{uint8(enginev1.WithdrawalRequestType)}, withdrawalRequestBytes...),
 				append([]byte{uint8(enginev1.ConsolidationRequestType)}, consolidationRequestBytes...)},
 		}
-		requests, err := ebe.GetDecodedExecutionRequests()
+		requests, err := ebe.GetDecodedExecutionRequests(cfg.ExecutionRequestLimits())
 		require.NoError(t, err)
 		require.Equal(t, len(requests.Deposits), 1)
 		require.Equal(t, len(requests.Withdrawals), 1)
@@ -50,7 +51,7 @@ func TestGetDecodedExecutionRequests(t *testing.T) {
 		ebe := &enginev1.ExecutionBundleElectra{
 			ExecutionRequests: [][]byte{append([]byte{uint8(enginev1.DepositRequestType)}, depositRequestBytes...), append([]byte{uint8(enginev1.ConsolidationRequestType)}, consolidationRequestBytes...)},
 		}
-		requests, err := ebe.GetDecodedExecutionRequests()
+		requests, err := ebe.GetDecodedExecutionRequests(cfg.ExecutionRequestLimits())
 		require.NoError(t, err)
 		require.Equal(t, len(requests.Deposits), 1)
 		require.Equal(t, len(requests.Withdrawals), 0)
@@ -69,7 +70,7 @@ func TestGetDecodedExecutionRequests(t *testing.T) {
 		ebe := &enginev1.ExecutionBundleElectra{
 			ExecutionRequests: [][]byte{append([]byte{uint8(enginev1.ConsolidationRequestType)}, consolidationRequestBytes...), append([]byte{uint8(enginev1.DepositRequestType)}, depositRequestBytes...)},
 		}
-		_, err = ebe.GetDecodedExecutionRequests()
+		_, err = ebe.GetDecodedExecutionRequests(cfg.ExecutionRequestLimits())
 		require.ErrorContains(t, "invalid execution request type order", err)
 	})
 	t.Run("Requests should error if the request type is shorter than 1 byte", func(t *testing.T) {
@@ -80,7 +81,7 @@ func TestGetDecodedExecutionRequests(t *testing.T) {
 		ebe := &enginev1.ExecutionBundleElectra{
 			ExecutionRequests: [][]byte{append([]byte{}, []byte{}...), append([]byte{uint8(enginev1.ConsolidationRequestType)}, consolidationRequestBytes...)},
 		}
-		_, err = ebe.GetDecodedExecutionRequests()
+		_, err = ebe.GetDecodedExecutionRequests(cfg.ExecutionRequestLimits())
 		require.ErrorContains(t, "invalid execution request, length less than 1", err)
 	})
 	t.Run("a duplicate request should fail", func(t *testing.T) {
@@ -93,7 +94,7 @@ func TestGetDecodedExecutionRequests(t *testing.T) {
 		ebe := &enginev1.ExecutionBundleElectra{
 			ExecutionRequests: [][]byte{append([]byte{uint8(enginev1.WithdrawalRequestType)}, withdrawalRequestBytes...), append([]byte{uint8(enginev1.WithdrawalRequestType)}, withdrawalRequestBytes2...)},
 		}
-		_, err = ebe.GetDecodedExecutionRequests()
+		_, err = ebe.GetDecodedExecutionRequests(cfg.ExecutionRequestLimits())
 		require.ErrorContains(t, "requests should be in sorted order and unique", err)
 	})
 	t.Run("a duplicate withdrawals ( non 0 request type )request should fail", func(t *testing.T) {
@@ -110,7 +111,7 @@ func TestGetDecodedExecutionRequests(t *testing.T) {
 		ebe := &enginev1.ExecutionBundleElectra{
 			ExecutionRequests: [][]byte{append([]byte{uint8(enginev1.DepositRequestType)}, depositRequestBytes...), append([]byte{uint8(enginev1.DepositRequestType)}, depositRequestBytes2...)},
 		}
-		_, err = ebe.GetDecodedExecutionRequests()
+		_, err = ebe.GetDecodedExecutionRequests(cfg.ExecutionRequestLimits())
 		require.ErrorContains(t, "requests should be in sorted order and unique", err)
 	})
 	t.Run("If a request type is provided, but the request list is shorter than the ssz of 1 request we error", func(t *testing.T) {
@@ -121,11 +122,11 @@ func TestGetDecodedExecutionRequests(t *testing.T) {
 		ebe := &enginev1.ExecutionBundleElectra{
 			ExecutionRequests: [][]byte{append([]byte{uint8(enginev1.DepositRequestType)}, []byte{}...), append([]byte{uint8(enginev1.ConsolidationRequestType)}, consolidationRequestBytes...)},
 		}
-		_, err = ebe.GetDecodedExecutionRequests()
+		_, err = ebe.GetDecodedExecutionRequests(cfg.ExecutionRequestLimits())
 		require.ErrorContains(t, "invalid deposit requests SSZ size", err)
 	})
 	t.Run("If deposit requests are over the max allowed per payload then we should error", func(t *testing.T) {
-		requests := make([]*enginev1.DepositRequest, params.BeaconConfig().MaxDepositRequestsPerPayload+1)
+		requests := make([]*enginev1.DepositRequest, cfg.MaxDepositRequestsPerPayload+1)
 		for i := range requests {
 			requests[i] = &enginev1.DepositRequest{
 				Pubkey:                bytesutil.PadTo([]byte("pk"), 48),
@@ -142,11 +143,11 @@ func TestGetDecodedExecutionRequests(t *testing.T) {
 				append([]byte{uint8(enginev1.DepositRequestType)}, by...),
 			},
 		}
-		_, err = ebe.GetDecodedExecutionRequests()
+		_, err = ebe.GetDecodedExecutionRequests(cfg.ExecutionRequestLimits())
 		require.ErrorContains(t, "invalid deposit requests SSZ size, requests should not be more than the max per payload", err)
 	})
 	t.Run("If withdrawal requests are over the max allowed per payload then we should error", func(t *testing.T) {
-		requests := make([]*enginev1.WithdrawalRequest, params.BeaconConfig().MaxWithdrawalRequestsPerPayload+1)
+		requests := make([]*enginev1.WithdrawalRequest, cfg.MaxWithdrawalRequestsPerPayload+1)
 		for i := range requests {
 			requests[i] = &enginev1.WithdrawalRequest{
 				SourceAddress:   bytesutil.PadTo([]byte("sa"), 20),
@@ -161,11 +162,11 @@ func TestGetDecodedExecutionRequests(t *testing.T) {
 				append([]byte{uint8(enginev1.WithdrawalRequestType)}, by...),
 			},
 		}
-		_, err = ebe.GetDecodedExecutionRequests()
+		_, err = ebe.GetDecodedExecutionRequests(cfg.ExecutionRequestLimits())
 		require.ErrorContains(t, "invalid withdrawal requests SSZ size, requests should not be more than the max per payload", err)
 	})
 	t.Run("If consolidation requests are over the max allowed per payload then we should error", func(t *testing.T) {
-		requests := make([]*enginev1.ConsolidationRequest, params.BeaconConfig().MaxConsolidationsRequestsPerPayload+1)
+		requests := make([]*enginev1.ConsolidationRequest, cfg.MaxConsolidationsRequestsPerPayload+1)
 		for i := range requests {
 			requests[i] = &enginev1.ConsolidationRequest{
 				SourceAddress: bytesutil.PadTo([]byte("sa"), 20),
@@ -180,7 +181,7 @@ func TestGetDecodedExecutionRequests(t *testing.T) {
 				append([]byte{uint8(enginev1.ConsolidationRequestType)}, by...),
 			},
 		}
-		_, err = ebe.GetDecodedExecutionRequests()
+		_, err = ebe.GetDecodedExecutionRequests(cfg.ExecutionRequestLimits())
 		require.ErrorContains(t, "invalid consolidation requests SSZ size, requests should not be more than the max per payload", err)
 	})
 }

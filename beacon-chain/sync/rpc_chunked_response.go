@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
@@ -172,6 +173,6 @@ func WriteDataColumnSidecarChunk(stream libp2pcore.Stream, tor blockchain.Tempor
 	if err := writeContextToStream(ctxBytes[:], stream); err != nil {
 		return err
 	}
-	_, err = encoding.EncodeWithMaxLength(stream, sidecar)
+	_, err := encoding.EncodeWithMaxLength(stream, sidecar)
 	return err
 }

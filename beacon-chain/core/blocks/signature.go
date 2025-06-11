@@ -97,7 +97,7 @@ func VerifyBlockHeaderSignature(beaconState state.BeaconState, header *ethpb.Sig
 
 func VerifyBlockHeaderSignatureUsingCurrentFork(beaconState state.BeaconState, header *ethpb.SignedBeaconBlockHeader) error {
 	currentEpoch := slots.ToEpoch(header.Header.Slot)
-	fork, err := forks.Fork(currentEpoch)
+	fork, err := params.Fork(currentEpoch)
 	if err != nil {
 		return err
 	}
@@ -217,7 +217,7 @@ func createAttestationSignatureBatch(
 		if err != nil {
 			return nil, err
 		}
-		if err := attestation.IsValidAttestationIndices(ctx, ia); err != nil {
+		if err := attestation.IsValidAttestationIndices(ctx, ia, params.BeaconConfig().MaxValidatorsPerCommittee, params.BeaconConfig().MaxCommitteesPerSlot); err != nil {
 			return nil, err
 		}
 		indices := ia.GetAttestingIndices()

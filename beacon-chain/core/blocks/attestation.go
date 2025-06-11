@@ -178,7 +178,7 @@ func VerifyAttestationNoVerifySignature(
 		}
 	}
 
-	return attestation.IsValidAttestationIndices(ctx, indexedAtt)
+	return attestation.IsValidAttestationIndices(ctx, indexedAtt, params.BeaconConfig().MaxValidatorsPerCommittee, params.BeaconConfig().MaxCommitteesPerSlot)
 }
 
 // ProcessAttestationNoVerifySignature processes the attestation without verifying the attestation signature. This
@@ -243,7 +243,7 @@ func VerifyIndexedAttestation(ctx context.Context, beaconState state.ReadOnlyBea
 	ctx, span := trace.StartSpan(ctx, "core.VerifyIndexedAttestation")
 	defer span.End()
 
-	if err := attestation.IsValidAttestationIndices(ctx, indexedAtt); err != nil {
+	if err := attestation.IsValidAttestationIndices(ctx, indexedAtt, params.BeaconConfig().MaxValidatorsPerCommittee, params.BeaconConfig().MaxCommitteesPerSlot); err != nil {
 		return err
 	}
 	domain, err := signing.Domain(
