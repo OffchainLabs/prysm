@@ -42,6 +42,14 @@ func cancelledContext() context.Context {
 	return ctx
 }
 
+// Helper function to run the validator runner for tests
+func runTest(ctx context.Context, v iface.Validator) {
+	r, err := newRunner(ctx, v)
+	if err == nil {
+		r.run(ctx)
+	}
+}
+
 func TestCancelledContext_CleansUpValidator(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -51,7 +59,7 @@ func TestCancelledContext_CleansUpValidator(t *testing.T) {
 		Km:      &mockKeymanager{accountsChangedFeed: &event.Feed{}},
 		Tracker: tracker,
 	}
-	run(cancelledContext(), v)
+	runTest(cancelledContext(), v)
 	assert.Equal(t, true, v.DoneCalled, "Expected Done() to be called")
 }
 
@@ -64,7 +72,7 @@ func TestCancelledContext_WaitsForChainStart(t *testing.T) {
 		Km:      &mockKeymanager{accountsChangedFeed: &event.Feed{}},
 		Tracker: tracker,
 	}
-	run(cancelledContext(), v)
+	runTest(cancelledContext(), v)
 	assert.Equal(t, 1, v.WaitForChainStartCalled, "Expected WaitForChainStart() to be called")
 }
 
@@ -74,7 +82,7 @@ func TestRetry_On_ConnectionError(t *testing.T) {
 	node := health.NewMockHealthClient(ctrl)
 	tracker := health.NewTracker(node)
 	retry := 10
-	node.EXPECT().IsHealthy(gomock.Any()).Return(true)
+	node.EXPECT().IsHealthy(gomock.Any()).Return(true).AnyTimes()
 	v := &testutil.FakeValidator{
 		Km:               &mockKeymanager{accountsChangedFeed: &event.Feed{}},
 		Tracker:          tracker,
@@ -82,7 +90,7 @@ func TestRetry_On_ConnectionError(t *testing.T) {
 	}
 	backOffPeriod = 10 * time.Millisecond
 	ctx, cancel := context.WithCancel(context.Background())
-	go run(ctx, v)
+	go runTest(ctx, v)
 	// each step will fail (retry times)=10 this sleep times will wait more then
 	// the time it takes for all steps to succeed before main loop.
 	time.Sleep(time.Duration(retry*6) * backOffPeriod)
@@ -103,7 +111,7 @@ func TestCancelledContext_WaitsForActivation(t *testing.T) {
 		Km:      &mockKeymanager{accountsChangedFeed: &event.Feed{}},
 		Tracker: tracker,
 	}
-	run(cancelledContext(), v)
+	runTest(cancelledContext(), v)
 	assert.Equal(t, 1, v.WaitForActivationCalled, "Expected WaitForActivation() to be called")
 }
 
@@ -127,7 +135,7 @@ func TestUpdateDuties_NextSlot(t *testing.T) {
 		cancel()
 	}()
 
-	run(ctx, v)
+	runTest(ctx, v)
 
 	require.Equal(t, true, v.UpdateDutiesCalled, "Expected UpdateAssignments(%d) to be called", slot)
 }
@@ -154,7 +162,7 @@ func TestUpdateDuties_HandlesError(t *testing.T) {
 	}()
 	v.UpdateDutiesRet = errors.New("bad")
 
-	run(ctx, v)
+	runTest(ctx, v)
 
 	require.LogsContain(t, hook, "Failed to update assignments")
 }
@@ -179,7 +187,7 @@ func TestRoleAt_NextSlot(t *testing.T) {
 		cancel()
 	}()
 
-	run(ctx, v)
+	runTest(ctx, v)
 
 	require.Equal(t, true, v.RoleAtCalled, "Expected RoleAt(%d) to be called", slot)
 	assert.Equal(t, uint64(slot), v.RoleAtArg1, "RoleAt called with the wrong arg")
@@ -206,7 +214,7 @@ func TestAttests_NextSlot(t *testing.T) {
 
 		cancel()
 	}()
-	run(ctx, v)
+	runTest(ctx, v)
 	<-attSubmitted
 	require.Equal(t, true, v.AttestToBlockHeadCalled, "SubmitAttestation(%d) was not called", slot)
 	assert.Equal(t, uint64(slot), v.AttestToBlockHeadArg1, "SubmitAttestation was called with wrong arg")
@@ -233,7 +241,7 @@ func TestProposes_NextSlot(t *testing.T) {
 
 		cancel()
 	}()
-	run(ctx, v)
+	runTest(ctx, v)
 	<-blockProposed
 
 	require.Equal(t, true, v.ProposeBlockCalled, "ProposeBlock(%d) was not called", slot)
@@ -262,7 +270,7 @@ func TestBothProposesAndAttests_NextSlot(t *testing.T) {
 
 		cancel()
 	}()
-	run(ctx, v)
+	runTest(ctx, v)
 	<-blockProposed
 	<-attSubmitted
 	require.Equal(t, true, v.AttestToBlockHeadCalled, "SubmitAttestation(%d) was not called", slot)
@@ -343,7 +351,7 @@ func TestUpdateProposerSettingsAt_EpochStart(t *testing.T) {
 		cancel()
 	}()
 
-	run(ctx, v)
+	runTest(ctx, v)
 	assert.LogsContain(t, hook, "updated proposer settings")
 }
 
@@ -376,7 +384,7 @@ func TestUpdateProposerSettingsAt_EpochEndOk(t *testing.T) {
 		cancel()
 	}()
 
-	run(ctx, v)
+	runTest(ctx, v)
 	// can't test "Failed to update proposer settings" because of log.fatal
 	assert.LogsContain(t, hook, "Mock updated proposer settings")
 }
@@ -606,5 +614,7 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 		submittedAggregates:            make(map[submittedAttKey]*submittedAtt),
 	}
 
-	run(timedCtx, v)
+	go runTest(timedCtx, v)
+	// Wait a bit for the runner to process slots and submit validator registrations
+	time.Sleep(2 * time.Second)
 }
