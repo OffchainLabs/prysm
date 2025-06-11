@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -73,7 +74,8 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to create request for endpoint %s", url)
 	}
-	req.Header.Set("Accept", api.OctetStreamMediaType)
+	acceptHeaderString := fmt.Sprintf("%s;q=%s,%s;q=%s", api.OctetStreamMediaType, "0.95", api.JsonMediaType, "0.9")
+	req.Header.Set("Accept", acceptHeaderString)
 	httpResp, err := c.client.Do(req)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to perform request for endpoint %s", url)
@@ -96,10 +98,6 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 			return nil, nil, errors.Wrapf(err, "failed to decode response body into error json for %s", httpResp.Request.URL)
 		}
 		return nil, nil, errorJson
-	}
-
-	if !strings.Contains(httpResp.Header.Get("Content-Type"), api.OctetStreamMediaType) {
-		return nil, nil, errors.Errorf("invalid Content-Type %s", httpResp.Header.Get("Content-Type"))
 	}
 
 	return body, httpResp.Header, nil

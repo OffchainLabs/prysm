@@ -7,11 +7,11 @@ import (
 	"fmt"
 	neturl "net/url"
 	"strconv"
+	"strings"
 
 	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/apiutil"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
@@ -26,11 +26,12 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 		queryParams.Add("graffiti", hexutil.Encode(graffiti))
 	}
 	queryUrl := apiutil.BuildURL(fmt.Sprintf("/eth/v3/validator/blocks/%d", slot), queryParams)
-	if features.Get().EnableSSZ {
-		data, header, err := c.jsonRestHandler.GetSSZ(ctx, queryUrl)
-		if err != nil {
-			return nil, err
-		}
+	data, header, err := c.jsonRestHandler.GetSSZ(ctx, queryUrl)
+	if err != nil {
+		return nil, err
+	}
+	if strings.Contains(header.Get("Content-Type"), api.OctetStreamMediaType) {
+		log.Info("beacon block received IN SSZ!!!!!!!!!!!!!!")
 		ver, err := version.FromString(header.Get(api.VersionHeader))
 		if err != nil {
 			return nil, errors.Wrap(err, fmt.Sprintf("unsupported header version %s", header.Get(api.VersionHeader)))
@@ -41,9 +42,19 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 			return nil, err
 		}
 		return processBlockSSZResponse(ver, data, isBlinded)
+	} else {
+		log.Info("beacon block received IN JSON!!!!!!!!!!!!!!")
+		decoder := json.NewDecoder(bytes.NewBuffer(data))
+		produceBlockV3ResponseJson := structs.ProduceBlockV3Response{}
+		if err = decoder.Decode(&produceBlockV3ResponseJson); err != nil {
+			return nil, errors.Wrapf(err, "failed to decode response body into json for %s", queryUrl)
+		}
+		return processBlockResponse(
+			produceBlockV3ResponseJson.Version,
+			produceBlockV3ResponseJson.ExecutionPayloadBlinded,
+			json.NewDecoder(bytes.NewReader(produceBlockV3ResponseJson.Data)),
+		)
 	}
-
-	return c.getBeaconBlockJSON(ctx, queryUrl)
 }
 
 func (c *beaconApiValidatorClient) getBeaconBlockJSON(ctx context.Context, queryUrl string) (*ethpb.GenericBeaconBlock, error) {

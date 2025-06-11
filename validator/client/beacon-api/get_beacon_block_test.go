@@ -195,7 +195,7 @@ func TestGetBeaconBlock_SSZ_BellatrixValid(t *testing.T) {
 	defer ctrl.Finish()
 
 	resetFn := features.InitWithReset(&features.Flags{
-		EnableSSZ: true,
+		UseSSZ: true,
 	})
 	defer resetFn()
 
@@ -242,7 +242,7 @@ func TestGetBeaconBlock_SSZ_BlindedBellatrixValid(t *testing.T) {
 	defer ctrl.Finish()
 
 	resetFn := features.InitWithReset(&features.Flags{
-		EnableSSZ: true,
+		UseSSZ: true,
 	})
 	defer resetFn()
 
@@ -289,7 +289,7 @@ func TestGetBeaconBlock_SSZ_CapellaValid(t *testing.T) {
 	defer ctrl.Finish()
 
 	resetFn := features.InitWithReset(&features.Flags{
-		EnableSSZ: true,
+		UseSSZ: true,
 	})
 	defer resetFn()
 
@@ -336,7 +336,7 @@ func TestGetBeaconBlock_SSZ_BlindedCapellaValid(t *testing.T) {
 	defer ctrl.Finish()
 
 	resetFn := features.InitWithReset(&features.Flags{
-		EnableSSZ: true,
+		UseSSZ: true,
 	})
 	defer resetFn()
 
@@ -383,7 +383,7 @@ func TestGetBeaconBlock_SSZ_DenebValid(t *testing.T) {
 	defer ctrl.Finish()
 
 	resetFn := features.InitWithReset(&features.Flags{
-		EnableSSZ: true,
+		UseSSZ: true,
 	})
 	defer resetFn()
 
@@ -430,7 +430,7 @@ func TestGetBeaconBlock_SSZ_BlindedDenebValid(t *testing.T) {
 	defer ctrl.Finish()
 
 	resetFn := features.InitWithReset(&features.Flags{
-		EnableSSZ: true,
+		UseSSZ: true,
 	})
 	defer resetFn()
 
@@ -477,7 +477,7 @@ func TestGetBeaconBlock_SSZ_ElectraValid(t *testing.T) {
 	defer ctrl.Finish()
 
 	resetFn := features.InitWithReset(&features.Flags{
-		EnableSSZ: true,
+		UseSSZ: true,
 	})
 	defer resetFn()
 
@@ -524,7 +524,7 @@ func TestGetBeaconBlock_SSZ_BlindedElectraValid(t *testing.T) {
 	defer ctrl.Finish()
 
 	resetFn := features.InitWithReset(&features.Flags{
-		EnableSSZ: true,
+		UseSSZ: true,
 	})
 	defer resetFn()
 
@@ -571,7 +571,7 @@ func TestGetBeaconBlock_SSZ_UnsupportedVersion(t *testing.T) {
 	defer ctrl.Finish()
 
 	resetFn := features.InitWithReset(&features.Flags{
-		EnableSSZ: true,
+		UseSSZ: true,
 	})
 	defer resetFn()
 
@@ -605,7 +605,7 @@ func TestGetBeaconBlock_SSZ_InvalidBlindedHeader(t *testing.T) {
 	defer ctrl.Finish()
 
 	resetFn := features.InitWithReset(&features.Flags{
-		EnableSSZ: true,
+		UseSSZ: true,
 	})
 	defer resetFn()
 
@@ -643,7 +643,7 @@ func TestGetBeaconBlock_SSZ_InvalidVersionHeader(t *testing.T) {
 	defer ctrl.Finish()
 
 	resetFn := features.InitWithReset(&features.Flags{
-		EnableSSZ: true,
+		UseSSZ: true,
 	})
 	defer resetFn()
 
@@ -681,7 +681,7 @@ func TestGetBeaconBlock_SSZ_GetSSZError(t *testing.T) {
 	defer ctrl.Finish()
 
 	resetFn := features.InitWithReset(&features.Flags{
-		EnableSSZ: true,
+		UseSSZ: true,
 	})
 	defer resetFn()
 
@@ -711,7 +711,7 @@ func TestGetBeaconBlock_SSZ_Phase0Valid(t *testing.T) {
 	defer ctrl.Finish()
 
 	resetFn := features.InitWithReset(&features.Flags{
-		EnableSSZ: true,
+		UseSSZ: true,
 	})
 	defer resetFn()
 
@@ -758,7 +758,7 @@ func TestGetBeaconBlock_SSZ_AltairValid(t *testing.T) {
 	defer ctrl.Finish()
 
 	resetFn := features.InitWithReset(&features.Flags{
-		EnableSSZ: true,
+		UseSSZ: true,
 	})
 	defer resetFn()
 

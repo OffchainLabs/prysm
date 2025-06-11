@@ -202,10 +202,10 @@ var (
 		Value: false,
 	}
 
-	// EnableSSZ enables api calls to use rest between the validator client and the beacon node
-	EnableSSZ = &cli.BoolFlag{
-		Name:  "enable-ssz",
-		Usage: "(Experimental): Enables the validator client to use SSZ encoding for REST API calls.",
+	// UseSSZ enables api calls to use rest between the validator client and the beacon node
+	UseSSZ = &cli.BoolFlag{
+		Name:  "use-ssz",
+		Usage: "(debug): the validator client to uses SSZ encoding for REST API calls without fallback to json.",
 	}
 )
 
@@ -229,7 +229,7 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	EnableBeaconRESTApi,
 	EnableDutiesV2,
 	EnableWebFlag,
-	EnableSSZ,
+	UseSSZ,
 }...)
 
 // E2EValidatorFlags contains a list of the validator feature flags to be tested in E2E.
