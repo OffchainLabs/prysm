@@ -43,11 +43,10 @@ func cancelledContext() context.Context {
 }
 
 // Helper function to run the validator runner for tests
-func runTest(ctx context.Context, v iface.Validator) {
+func runTest(t *testing.T, ctx context.Context, v iface.Validator) {
 	r, err := newRunner(ctx, v)
-	if err == nil {
-		r.run(ctx)
-	}
+	require.NoError(t, err)
+	require.NoError(t, r.run(ctx))
 }
 
 func TestCancelledContext_CleansUpValidator(t *testing.T) {
@@ -59,7 +58,7 @@ func TestCancelledContext_CleansUpValidator(t *testing.T) {
 		Km:      &mockKeymanager{accountsChangedFeed: &event.Feed{}},
 		Tracker: tracker,
 	}
-	runTest(cancelledContext(), v)
+	runTest(t, cancelledContext(), v)
 	assert.Equal(t, true, v.DoneCalled, "Expected Done() to be called")
 }
 
@@ -72,7 +71,7 @@ func TestCancelledContext_WaitsForChainStart(t *testing.T) {
 		Km:      &mockKeymanager{accountsChangedFeed: &event.Feed{}},
 		Tracker: tracker,
 	}
-	runTest(cancelledContext(), v)
+	runTest(t, cancelledContext(), v)
 	assert.Equal(t, 1, v.WaitForChainStartCalled, "Expected WaitForChainStart() to be called")
 }
 
@@ -90,7 +89,7 @@ func TestRetry_On_ConnectionError(t *testing.T) {
 	}
 	backOffPeriod = 10 * time.Millisecond
 	ctx, cancel := context.WithCancel(context.Background())
-	go runTest(ctx, v)
+	go runTest(t, ctx, v)
 	// each step will fail (retry times)=10 this sleep times will wait more then
 	// the time it takes for all steps to succeed before main loop.
 	time.Sleep(time.Duration(retry*6) * backOffPeriod)
@@ -111,7 +110,7 @@ func TestCancelledContext_WaitsForActivation(t *testing.T) {
 		Km:      &mockKeymanager{accountsChangedFeed: &event.Feed{}},
 		Tracker: tracker,
 	}
-	runTest(cancelledContext(), v)
+	runTest(t, cancelledContext(), v)
 	assert.Equal(t, 1, v.WaitForActivationCalled, "Expected WaitForActivation() to be called")
 }
 
@@ -135,7 +134,7 @@ func TestUpdateDuties_NextSlot(t *testing.T) {
 		cancel()
 	}()
 
-	runTest(ctx, v)
+	runTest(t, ctx, v)
 
 	require.Equal(t, true, v.UpdateDutiesCalled, "Expected UpdateAssignments(%d) to be called", slot)
 }
@@ -162,7 +161,7 @@ func TestUpdateDuties_HandlesError(t *testing.T) {
 	}()
 	v.UpdateDutiesRet = errors.New("bad")
 
-	runTest(ctx, v)
+	runTest(t, ctx, v)
 
 	require.LogsContain(t, hook, "Failed to update assignments")
 }
@@ -187,7 +186,7 @@ func TestRoleAt_NextSlot(t *testing.T) {
 		cancel()
 	}()
 
-	runTest(ctx, v)
+	runTest(t, ctx, v)
 
 	require.Equal(t, true, v.RoleAtCalled, "Expected RoleAt(%d) to be called", slot)
 	assert.Equal(t, uint64(slot), v.RoleAtArg1, "RoleAt called with the wrong arg")
@@ -214,7 +213,7 @@ func TestAttests_NextSlot(t *testing.T) {
 
 		cancel()
 	}()
-	runTest(ctx, v)
+	runTest(t, ctx, v)
 	<-attSubmitted
 	require.Equal(t, true, v.AttestToBlockHeadCalled, "SubmitAttestation(%d) was not called", slot)
 	assert.Equal(t, uint64(slot), v.AttestToBlockHeadArg1, "SubmitAttestation was called with wrong arg")
@@ -241,7 +240,7 @@ func TestProposes_NextSlot(t *testing.T) {
 
 		cancel()
 	}()
-	runTest(ctx, v)
+	runTest(t, ctx, v)
 	<-blockProposed
 
 	require.Equal(t, true, v.ProposeBlockCalled, "ProposeBlock(%d) was not called", slot)
@@ -270,7 +269,7 @@ func TestBothProposesAndAttests_NextSlot(t *testing.T) {
 
 		cancel()
 	}()
-	runTest(ctx, v)
+	runTest(t, ctx, v)
 	<-blockProposed
 	<-attSubmitted
 	require.Equal(t, true, v.AttestToBlockHeadCalled, "SubmitAttestation(%d) was not called", slot)
@@ -331,6 +330,7 @@ func TestUpdateProposerSettingsAt_EpochStart(t *testing.T) {
 	node := health.NewMockHealthClient(ctrl)
 	tracker := health.NewTracker(node)
 	node.EXPECT().IsHealthy(gomock.Any()).Return(true).AnyTimes()
+	require.Equal(t, true, tracker.CheckHealth(context.Background()))
 	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, Tracker: tracker}
 	err := v.SetProposerSettings(context.Background(), &proposer.Settings{
 		DefaultConfig: &proposer.Option{
@@ -351,7 +351,7 @@ func TestUpdateProposerSettingsAt_EpochStart(t *testing.T) {
 		cancel()
 	}()
 
-	runTest(ctx, v)
+	runTest(t, ctx, v)
 	assert.LogsContain(t, hook, "updated proposer settings")
 }
 
@@ -361,6 +361,7 @@ func TestUpdateProposerSettingsAt_EpochEndOk(t *testing.T) {
 	node := health.NewMockHealthClient(ctrl)
 	tracker := health.NewTracker(node)
 	node.EXPECT().IsHealthy(gomock.Any()).Return(true).AnyTimes()
+	require.Equal(t, true, tracker.CheckHealth(context.Background()))
 	v := &testutil.FakeValidator{
 		Km:                  &mockKeymanager{accountsChangedFeed: &event.Feed{}},
 		ProposerSettingWait: time.Duration(params.BeaconConfig().SecondsPerSlot-1) * time.Second,
@@ -384,7 +385,7 @@ func TestUpdateProposerSettingsAt_EpochEndOk(t *testing.T) {
 		cancel()
 	}()
 
-	runTest(ctx, v)
+	runTest(t, ctx, v)
 	// can't test "Failed to update proposer settings" because of log.fatal
 	assert.LogsContain(t, hook, "Mock updated proposer settings")
 }
@@ -578,7 +579,9 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 	hcm.EXPECT().IsHealthy(liveCtx).Return(true).AnyTimes().Do(func(_ any) { delay(t) })
 	ncm := validatormock.NewMockNodeClient(ctrl)
 	ncm.EXPECT().SyncStatus(liveCtx, gomock.Any()).Return(&ethpb.SyncStatus{Syncing: false}, nil)
-	ncm.EXPECT().HealthTracker().Return(health.NewTracker(hcm)).AnyTimes()
+	tracker := health.NewTracker(hcm)
+	require.Equal(t, true, tracker.CheckHealth(context.Background()))
+	ncm.EXPECT().HealthTracker().Return(tracker).AnyTimes()
 	ccm := validatormock.NewMockChainClient(ctrl)
 	ccm.EXPECT().ChainHead(liveCtx, gomock.Any()).Return(&ethpb.ChainHead{}, nil).Do(func(_, _ any) { delay(t) })
 
@@ -614,7 +617,7 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 		submittedAggregates:            make(map[submittedAttKey]*submittedAtt),
 	}
 
-	go runTest(timedCtx, v)
+	go runTest(t, timedCtx, v)
 	// Wait a bit for the runner to process slots and submit validator registrations
 	time.Sleep(2 * time.Second)
 }
