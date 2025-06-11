@@ -87,7 +87,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.34.0
 	go.opentelemetry.io/otel/trace v1.35.0
 	go.uber.org/automaxprocs v1.5.2
-	go.uber.org/mock v0.4.0
+	go.uber.org/mock v0.5.2
 	golang.org/x/crypto v0.36.0
 	golang.org/x/exp v0.0.0-20240808152545-0cdaa3abc0fa
 	golang.org/x/sync v0.12.0

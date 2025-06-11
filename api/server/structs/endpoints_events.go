@@ -25,6 +25,13 @@ type BlockGossipEvent struct {
 	Block string `json:"block"`
 }
 
+type DataColumnGossipEvent struct {
+	Slot           string   `json:"slot"`
+	Index          string   `json:"index"`
+	BlockRoot      string   `json:"block_root"`
+	KzgCommitments []string `json:"kzg_commitments"`
+}
+
 type AggregatedAttEventSource struct {
 	Aggregate *Attestation `json:"aggregate"`
 }

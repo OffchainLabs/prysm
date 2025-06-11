@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/io/file"
 	"github.com/fsnotify/fsnotify"
@@ -32,7 +33,7 @@ func CreateAuthToken(authPath, validatorWebAddr string) error {
 	if err := saveAuthToken(authPath, token); err != nil {
 		return err
 	}
-	logValidatorWebAuth(true, validatorWebAddr, token, authPath)
+	logValidatorWebAuth(validatorWebAddr, token, authPath)
 	return nil
 }
 
@@ -105,7 +106,7 @@ func (s *Server) refreshAuthTokenFromFileChanges(ctx context.Context, authTokenP
 				continue
 			}
 			validatorWebAddr := fmt.Sprintf("%s:%d", s.httpHost, s.httpPort)
-			logValidatorWebAuth(s.serveWebUI, validatorWebAddr, s.authToken, authTokenPath)
+			logValidatorWebAuth(validatorWebAddr, s.authToken, authTokenPath)
 		case err := <-watcher.Errors:
 			log.WithError(err).Errorf("Could not watch for file changes for: %s", authTokenPath)
 		case <-ctx.Done():
@@ -114,8 +115,8 @@ func (s *Server) refreshAuthTokenFromFileChanges(ctx context.Context, authTokenP
 	}
 }
 
-func logValidatorWebAuth(useWeb bool, validatorWebAddr, token, tokenPath string) {
-	if useWeb {
+func logValidatorWebAuth(validatorWebAddr, token, tokenPath string) {
+	if features.Get().EnableWeb {
 		webAuthURLTemplate := "http://%s/initialize?token=%s"
 		webAuthURL := fmt.Sprintf(
 			webAuthURLTemplate,

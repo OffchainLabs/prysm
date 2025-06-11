@@ -331,16 +331,17 @@ func (s *Service) fetchOriginBlobs(pids []peer.ID) error {
 	}
 	shufflePeers(pids)
 	for i := range pids {
-		sidecars, err := sync.SendBlobSidecarByRoot(s.ctx, s.clock, s.cfg.P2P, pids[i], s.ctxMap, &req, rob.Block().Slot())
+		blobSidecars, err := sync.SendBlobSidecarByRoot(s.ctx, s.clock, s.cfg.P2P, pids[i], s.ctxMap, &req, rob.Block().Slot())
 		if err != nil {
 			continue
 		}
-		if len(sidecars) != len(req) {
+		if len(blobSidecars) != len(req) {
 			continue
 		}
 		bv := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.InitsyncBlobSidecarRequirements)
 		avs := das.NewLazilyPersistentStore(s.cfg.BlobStorage, bv)
 		current := s.clock.CurrentSlot()
+		sidecars := blocks.NewSidecarsFromBlobSidecars(blobSidecars)
 		if err := avs.Persist(current, sidecars...); err != nil {
 			return err
 		}
@@ -348,7 +349,7 @@ func (s *Service) fetchOriginBlobs(pids []peer.ID) error {
 			log.WithField("root", fmt.Sprintf("%#x", r)).WithField("peerID", pids[i]).Warn("Blobs from peer for origin block were unusable")
 			continue
 		}
-		log.WithField("nBlobs", len(sidecars)).WithField("root", fmt.Sprintf("%#x", r)).Info("Successfully downloaded blobs for checkpoint sync block")
+		log.WithField("nBlobs", len(blobSidecars)).WithField("root", fmt.Sprintf("%#x", r)).Info("Successfully downloaded blobs for checkpoint sync block")
 		return nil
 	}
 	return fmt.Errorf("no connected peer able to provide blobs for checkpoint sync block %#x", r)

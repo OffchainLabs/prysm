@@ -4,6 +4,49 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [v6.0.4](https://github.com/prysmaticlabs/prysm/compare/v6.0.3...v6.0.4) - 2025-06-05
+
+This release has more work on PeerDAS, and light client support. Additionally, we have a few bug fixes:
+- Blob cache size now correctly set at startup.
+- A fix for slashing protection history exports where the validator database was in a nested folder.
+- Corrected behavior of the API call for state committees with an invalid request.
+- `/bin/sh` is now symlinked to `/bin/bash` for Prysm docker images.
+
+In the [Hoodi](https://github.com/eth-clients/hoodi) testnet, the default gas limit is raised to 60M gas. 
+
+### Added
+
+- Add light client mainnet spec test. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15295)
+- Add support for light client req/resp domain. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15281)
+- Added /bin/sh simlink to docker images. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15294)
+- Added Prysm build data to otel tracing spans. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15302)
+- Add light client minimal spec test support for `update_ranking` tests. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15297)
+- Add fulu operation and epoch processing spec tests. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15284)
+- Updated e2e Beacon API evaluator to support more endpoints, including the ones introduced in Electra. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15304)
+- Data column sidecars verification methods. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15232)
+- Implement data column sidecars filesystem. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15257)
+- Add blob schedule support from https://github.com/ethereum/consensus-specs/pull/4277. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15272)
+-  random forkchoice spec tests for fulu. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15287)
+- Add ability to download nightly test vectors. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15312)
+- PeerDAS: Validation pipeline for data column sidecars received via gossip. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15310)
+- PeerDAS: Implement P2P. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15347)
+- PeerDAS: Implement the blockchain package. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15350)
+
+### Changed
+
+- Update spec tests to v1.6.0-alpha.0. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15306)
+- PeerDAS: Refactor the reconstruction pipeline. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15309)
+- PeerDAS: `DataColumnStorage.Get` - Exit early no columns are available. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15309)
+- Default hoodi testnet builder gas limit to 60M. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15361)
+
+### Fixed
+
+- Fix cyclical dependencies issue when using testing/util package. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15248)
+- Set seen blob cache size correctly based on current slot time at start up. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15348)
+- Fix `slashing-protection-history export` failing when `validator.db` is in a nested folder like `data/direct/`. (#14954). [[PR]](https://github.com/prysmaticlabs/prysm/pull/15351)
+- Made `/eth/v1/beacon/states/{state_id}/committees` endpoint return `400` when slot does not belong to the specified epoch, aligning with the Beacon API spec (#15355). [[PR]](https://github.com/prysmaticlabs/prysm/pull/15356)
+- Removed eager validator context cancellation that was causing validator builder registrations to fail occasionally. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15369)
+
 ## [v6.0.3](https://github.com/prysmaticlabs/prysm/compare/v6.0.2...v6.0.3) - 2025-05-21
 
 This release has important bugfixes for users of the [Beacon API](https://ethereum.github.io/beacon-APIs/). These fixes include:
