@@ -34,7 +34,7 @@ type shouldOverrideBuilderGetter interface {
 }
 
 type executionRequestsGetter interface {
-	GetDecodedExecutionRequests(maxDeposits, maxWithdrawals, maxConsolidations uint64) (*pb.ExecutionRequests, error)
+	GetDecodedExecutionRequests(pb.ExecutionRequestLimits) (*pb.ExecutionRequests, error)
 }
 
 func NewGetPayloadResponse(msg proto.Message) (*GetPayloadResponse, error) {
@@ -64,7 +64,7 @@ func NewGetPayloadResponse(msg proto.Message) (*GetPayloadResponse, error) {
 	}
 	r.ExecutionData = ed
 	if hasExecutionRequests {
-		requests, err := executionRequestsGetter.GetDecodedExecutionRequests(params.BeaconConfig().MaxDepositRequestsPerPayload, params.BeaconConfig().MaxWithdrawalRequestsPerPayload, params.BeaconConfig().MaxConsolidationsRequestsPerPayload)
+		requests, err := executionRequestsGetter.GetDecodedExecutionRequests(params.BeaconConfig().ExecutionRequestLimits())
 		if err != nil {
 			return nil, err
 		}
