@@ -55,20 +55,6 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 	}
 }
 
-func (c *beaconApiValidatorClient) getBeaconBlockJSON(ctx context.Context, queryUrl string) (*ethpb.GenericBeaconBlock, error) {
-	produceBlockV3ResponseJson := structs.ProduceBlockV3Response{}
-	err := c.jsonRestHandler.Get(ctx, queryUrl, &produceBlockV3ResponseJson)
-	if err != nil {
-		return nil, err
-	}
-
-	return processBlockResponse(
-		produceBlockV3ResponseJson.Version,
-		produceBlockV3ResponseJson.ExecutionPayloadBlinded,
-		json.NewDecoder(bytes.NewReader(produceBlockV3ResponseJson.Data)),
-	)
-}
-
 func processBlockSSZResponse(ver int, data []byte, isBlinded bool) (*ethpb.GenericBeaconBlock, error) {
 	if ver >= version.Fulu {
 		return processBlockSSZResponseFulu(data, isBlinded)
