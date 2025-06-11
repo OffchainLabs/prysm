@@ -712,7 +712,7 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	subnet := peerdas.ComputeSubnetForDataColumnSidecar(columnIndex)
 	topic := fmt.Sprintf(topicFormat, digest, subnet)
 
-	roSidecars, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, util.DataColumnsParamsByRoot{{}: {{ColumnIndex: columnIndex}}})
+	roSidecars, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, []util.DataColumnParam{{Index: columnIndex}})
 	sidecar := roSidecars[0].DataColumnSidecar
 
 	// Async listen for the pubsub, must be before the broadcast.

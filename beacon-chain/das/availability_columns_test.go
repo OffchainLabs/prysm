@@ -38,9 +38,9 @@ func TestPersist(t *testing.T) {
 	t.Run("mixed roots", func(t *testing.T) {
 		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
 
-		dataColumnParamsByBlockRoot := map[[fieldparams.RootLength]byte][]util.DataColumnParams{
-			{1}: {{ColumnIndex: 1}},
-			{2}: {{ColumnIndex: 2}},
+		dataColumnParamsByBlockRoot := []util.DataColumnParam{
+			{Slot: 1, Index: 1},
+			{Slot: 2, Index: 2},
 		}
 
 		roSidecars, _ := roSidecarsFromDataColumnParamsByBlockRoot(t, dataColumnParamsByBlockRoot)
@@ -54,8 +54,8 @@ func TestPersist(t *testing.T) {
 	t.Run("outside DA period", func(t *testing.T) {
 		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
 
-		dataColumnParamsByBlockRoot := map[[fieldparams.RootLength]byte][]util.DataColumnParams{
-			{1}: {{ColumnIndex: 1}},
+		dataColumnParamsByBlockRoot := []util.DataColumnParam{
+			{Slot: 1, Index: 1},
 		}
 
 		roSidecars, _ := roSidecarsFromDataColumnParamsByBlockRoot(t, dataColumnParamsByBlockRoot)
@@ -67,21 +67,24 @@ func TestPersist(t *testing.T) {
 	})
 
 	t.Run("nominal", func(t *testing.T) {
+		const slot = 42
 		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
 
-		dataColumnParamsByBlockRoot := map[[fieldparams.RootLength]byte][]util.DataColumnParams{
-			{}: {{ColumnIndex: 1}, {ColumnIndex: 5}},
+		dataColumnParamsByBlockRoot := []util.DataColumnParam{
+			{Slot: slot, Index: 1},
+			{Slot: slot, Index: 5},
 		}
 
 		roSidecars, roDataColumns := roSidecarsFromDataColumnParamsByBlockRoot(t, dataColumnParamsByBlockRoot)
 		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, nil, &peerdas.CustodyInfo{})
 
-		err := lazilyPersistentStoreColumns.Persist(0, roSidecars...)
+		err := lazilyPersistentStoreColumns.Persist(slot, roSidecars...)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(lazilyPersistentStoreColumns.cache.entries))
 
-		key := cacheKey{slot: 0, root: [fieldparams.RootLength]byte{}}
-		entry := lazilyPersistentStoreColumns.cache.entries[key]
+		key := cacheKey{slot: slot, root: roDataColumns[0].BlockRoot()}
+		entry, ok := lazilyPersistentStoreColumns.cache.entries[key]
+		require.Equal(t, true, ok)
 
 		// A call to Persist does NOT save the sidecars to disk.
 		require.Equal(t, uint64(0), entry.diskSummary.Count())
@@ -121,24 +124,37 @@ func TestIsDataAvailable(t *testing.T) {
 		signedBeaconBlockFulu := util.NewBeaconBlockFulu()
 		signedBeaconBlockFulu.Block.Body.BlobKzgCommitments = commitments
 		signedRoBlock := newSignedRoBlock(t, signedBeaconBlockFulu)
+		block := signedRoBlock.Block()
+		slot := block.Slot()
+		proposerIndex := block.ProposerIndex()
+		parentRoot := block.ParentRoot()
+		stateRoot := block.StateRoot()
+		bodyRoot, err := block.Body().HashTreeRoot()
+		require.NoError(t, err)
+
 		root := signedRoBlock.Root()
 
 		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
 		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, newDataColumnsVerifier, &peerdas.CustodyInfo{})
 
 		indices := [...]uint64{1, 17, 87, 102}
-		dataColumnsParams := make([]util.DataColumnParams, 0, len(indices))
+		dataColumnsParams := make([]util.DataColumnParam, 0, len(indices))
 		for _, index := range indices {
-			dataColumnParams := util.DataColumnParams{
-				ColumnIndex:    index,
+			dataColumnParams := util.DataColumnParam{
+				Index:          index,
 				KzgCommitments: commitments,
+
+				Slot:          slot,
+				ProposerIndex: proposerIndex,
+				ParentRoot:    parentRoot[:],
+				StateRoot:     stateRoot[:],
+				BodyRoot:      bodyRoot[:],
 			}
 
 			dataColumnsParams = append(dataColumnsParams, dataColumnParams)
 		}
 
-		dataColumnsParamsByBlockRoot := util.DataColumnsParamsByRoot{root: dataColumnsParams}
-		_, verifiedRoDataColumns := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnsParamsByBlockRoot)
+		_, verifiedRoDataColumns := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnsParams)
 
 		key := cacheKey{root: root}
 		entry := lazilyPersistentStoreColumns.cache.ensure(key)
@@ -149,7 +165,7 @@ func TestIsDataAvailable(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		err := lazilyPersistentStoreColumns.IsDataAvailable(ctx, 0 /*current slot*/, signedRoBlock)
+		err = lazilyPersistentStoreColumns.IsDataAvailable(ctx, slot, signedRoBlock)
 		require.NoError(t, err)
 
 		actual, err := dataColumnStorage.Get(root, indices[:])
@@ -224,8 +240,8 @@ func TestFullCommitmentsToCheck(t *testing.T) {
 	}
 }
 
-func roSidecarsFromDataColumnParamsByBlockRoot(t *testing.T, dataColumnParamsByBlockRoot util.DataColumnsParamsByRoot) ([]blocks.ROSidecar, []blocks.RODataColumn) {
-	roDataColumns, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
+func roSidecarsFromDataColumnParamsByBlockRoot(t *testing.T, parameters []util.DataColumnParam) ([]blocks.ROSidecar, []blocks.RODataColumn) {
+	roDataColumns, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, parameters)
 
 	roSidecars := make([]blocks.ROSidecar, 0, len(roDataColumns))
 	for _, roDataColumn := range roDataColumns {
