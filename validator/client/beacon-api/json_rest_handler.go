@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 type JsonRestHandler interface {
@@ -74,7 +75,9 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to create request for endpoint %s", url)
 	}
-	acceptHeaderString := fmt.Sprintf("%s;q=%s,%s;q=%s", api.OctetStreamMediaType, "0.95", api.JsonMediaType, "0.9")
+	primaryAcceptType := fmt.Sprintf("%s;q=%s", api.OctetStreamMediaType, "0.95")
+	secondaryAcceptType := fmt.Sprintf("%s;q=%s", api.JsonMediaType, "0.9")
+	acceptHeaderString := fmt.Sprintf("%s,%s", primaryAcceptType, secondaryAcceptType)
 	req.Header.Set("Accept", acceptHeaderString)
 	httpResp, err := c.client.Do(req)
 	if err != nil {
@@ -88,6 +91,13 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to read response body for %s", httpResp.Request.URL)
+	}
+	if !strings.Contains(primaryAcceptType, httpResp.Header.Get("Content-Type")) {
+		log.WithFields(logrus.Fields{
+			"primaryAcceptType":   primaryAcceptType,
+			"secondaryAcceptType": secondaryAcceptType,
+			"receivedAcceptType":  httpResp.Header.Get("Content-Type"),
+		}).Warn("Server responded with non primary accept type")
 	}
 
 	// non-2XX codes are a failure

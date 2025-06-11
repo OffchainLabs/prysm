@@ -31,7 +31,6 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 		return nil, err
 	}
 	if strings.Contains(header.Get("Content-Type"), api.OctetStreamMediaType) {
-		log.Info("beacon block received IN SSZ!!!!!!!!!!!!!!")
 		ver, err := version.FromString(header.Get(api.VersionHeader))
 		if err != nil {
 			return nil, errors.Wrap(err, fmt.Sprintf("unsupported header version %s", header.Get(api.VersionHeader)))
@@ -43,7 +42,6 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 		}
 		return processBlockSSZResponse(ver, data, isBlinded)
 	} else {
-		log.Info("beacon block received IN JSON!!!!!!!!!!!!!!")
 		decoder := json.NewDecoder(bytes.NewBuffer(data))
 		produceBlockV3ResponseJson := structs.ProduceBlockV3Response{}
 		if err = decoder.Decode(&produceBlockV3ResponseJson); err != nil {
