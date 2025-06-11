@@ -41,6 +41,7 @@ func (e BlockIdParseError) Error() string {
 type Blocker interface {
 	Block(ctx context.Context, id []byte) (interfaces.ReadOnlySignedBeaconBlock, error)
 	Blobs(ctx context.Context, id string, indices []int) ([]*blocks.VerifiedROBlob, *core.RpcError)
+	DataColumnSidecars(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError)
 }
 
 // BeaconDbBlocker is an implementation of Blocker. It retrieves blocks from the beacon chain database.
@@ -49,6 +50,7 @@ type BeaconDbBlocker struct {
 	ChainInfoFetcher   blockchain.ChainInfoFetcher
 	GenesisTimeFetcher blockchain.TimeFetcher
 	BlobStorage        *filesystem.BlobStorage
+	DataColumnStorage  *filesystem.DataColumnStorage
 }
 
 // Block returns the beacon block for a given identifier. The identifier can be one of:
@@ -272,4 +274,104 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices []int) (
 	}
 
 	return blobs, nil
+}
+
+// DataColumnSidecars returns the verified data columns for a given block id identifier and indices. The identifier can be one of:
+//   - "head" (canonical head in node's view)
+//   - "genesis"
+//   - "finalized"
+//   - "justified"
+//   - <slot>
+//   - <hex encoded block root with '0x' prefix>
+//   - <block root>
+//
+// cases:
+//   - no block, 404
+//   - block exists, no commitment, 200 w/ empty list
+//   - block exists, has commitments, inside retention period (greater of protocol- or user-specified) serve then w/ 200 unless we hit an error reading them.
+//     we are technically not supposed to import a block to forkchoice unless we have the blobs, so the nuance here is if we can't find the file and we are inside the protocol-defined retention period, then it's actually a 500.
+//   - block exists, has commitments, outside retention period (greater of protocol- or user-specified) - ie just like block exists, no commitment
+func (p *BeaconDbBlocker) DataColumnSidecars(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
+	var rootSlice []byte
+
+	switch id {
+	case "genesis":
+		return nil, &core.RpcError{Err: errors.New("data columns not supported at genesis"), Reason: core.BadRequest}
+	case "head":
+		var err error
+		rootSlice, err = p.ChainInfoFetcher.HeadRoot(ctx)
+		if err != nil {
+			return nil, &core.RpcError{Err: errors.Wrap(err, "could not retrieve head root"), Reason: core.Internal}
+		}
+	case "finalized":
+		fcp := p.ChainInfoFetcher.FinalizedCheckpt()
+		if fcp == nil {
+			return nil, &core.RpcError{Err: errors.New("received nil finalized checkpoint"), Reason: core.Internal}
+		}
+		rootSlice = fcp.Root
+	case "justified":
+		jcp := p.ChainInfoFetcher.CurrentJustifiedCheckpt()
+		if jcp == nil {
+			return nil, &core.RpcError{Err: errors.New("received nil justified checkpoint"), Reason: core.Internal}
+		}
+		rootSlice = jcp.Root
+	default:
+		if bytesutil.IsHex([]byte(id)) {
+			var err error
+			rootSlice, err = bytesutil.DecodeHexWithLength(id, fieldparams.RootLength)
+			if err != nil {
+				return nil, &core.RpcError{Err: NewBlockIdParseError(err), Reason: core.BadRequest}
+			}
+		} else {
+			slot, err := strconv.ParseUint(id, 10, 64)
+			if err != nil {
+				return nil, &core.RpcError{Err: NewBlockIdParseError(err), Reason: core.BadRequest}
+			}
+
+			ok, roots, err := p.BeaconDB.BlockRootsBySlot(ctx, primitives.Slot(slot))
+			if !ok {
+				return nil, &core.RpcError{Err: fmt.Errorf("no block roots at slot %d", slot), Reason: core.NotFound}
+			}
+			if err != nil {
+				return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to get block roots for slot %d", slot), Reason: core.Internal}
+			}
+			rootSlice = roots[0][:]
+			if len(roots) > 1 {
+				for _, blockRoot := range roots {
+					canonical, err := p.ChainInfoFetcher.IsCanonical(ctx, blockRoot)
+					if err != nil {
+						return nil, &core.RpcError{Err: errors.Wrapf(err, "could not determine if block %#x is canonical", blockRoot), Reason: core.Internal}
+					}
+					if canonical {
+						rootSlice = blockRoot[:]
+						break
+					}
+				}
+			}
+		}
+	}
+
+	root := bytesutil.ToBytes32(rootSlice)
+
+	block, err := p.BeaconDB.Block(ctx, root)
+	if err != nil {
+		return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to retrieve block %#x from db", rootSlice), Reason: core.Internal}
+	}
+	if block == nil {
+		return nil, &core.RpcError{Err: fmt.Errorf("block %#x not found in db", rootSlice), Reason: core.NotFound}
+	}
+
+	uintIndices := make([]uint64, len(indices))
+	for i, v := range indices {
+		uintIndices[i] = uint64(v)
+	}
+	columns, err := p.DataColumnStorage.Get(root, uintIndices)
+	if err != nil {
+		return nil, &core.RpcError{
+			Err:    fmt.Errorf("could not retrieve data column for block root %#x", rootSlice),
+			Reason: core.Internal,
+		}
+	}
+
+	return columns, nil
 }

@@ -14,6 +14,7 @@ go_library(
         "endpoints_beacon.go",
         "endpoints_blob.go",
         "endpoints_builder.go",
+        "endpoints_column_sidecar.go",
         "endpoints_config.go",
         "endpoints_debug.go",
         "endpoints_events.go",

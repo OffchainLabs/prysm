@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/beacon"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/blob"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/builder"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/column"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/config"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/debug"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/events"
@@ -100,6 +101,7 @@ func (s *Service) endpoints(
 	endpoints = append(endpoints, s.prysmBeaconEndpoints(ch, stater, coreService)...)
 	endpoints = append(endpoints, s.prysmNodeEndpoints()...)
 	endpoints = append(endpoints, s.prysmValidatorEndpoints(stater, coreService)...)
+	endpoints = append(endpoints, s.dataColumnSideCarEndPoints(blocker)...)
 
 	if features.Get().EnableLightClient {
 		endpoints = append(endpoints, s.lightClientEndpoints(blocker, stater)...)
@@ -196,6 +198,28 @@ func (s *Service) blobEndpoints(blocker lookup.Blocker) []endpoint {
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 			},
 			handler: server.Blobs,
+			methods: []string{http.MethodGet},
+		},
+	}
+}
+
+func (s *Service) dataColumnSideCarEndPoints(blocker lookup.Blocker) []endpoint {
+	server := &column.Server{
+		Blocker:               blocker,
+		OptimisticModeFetcher: s.cfg.OptimisticModeFetcher,
+		FinalizationFetcher:   s.cfg.FinalizationFetcher,
+		TimeFetcher:           s.cfg.GenesisTimeFetcher,
+	}
+
+	const namespace = "debug"
+	return []endpoint{
+		{
+			template: "/eth/v1/debug/beacon/data_column_sidecars/{block_id}",
+			name:     namespace + ".DataColumnSidecars",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+			},
+			handler: server.DataColumnSidecars,
 			methods: []string{http.MethodGet},
 		},
 	}

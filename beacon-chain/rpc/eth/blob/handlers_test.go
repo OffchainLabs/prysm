@@ -546,7 +546,7 @@ func Test_parseIndices(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseIndices(&url.URL{RawQuery: tt.query}, 0)
+			got, err := ParseIndices(&url.URL{RawQuery: tt.query}, 0)
 			if err != nil && tt.wantErr != "" {
 				require.StringContains(t, tt.wantErr, err.Error())
 				return

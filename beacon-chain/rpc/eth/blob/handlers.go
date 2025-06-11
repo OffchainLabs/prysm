@@ -26,7 +26,7 @@ func (s *Server) Blobs(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.Blobs")
 	defer span.End()
 
-	indices, err := parseIndices(r.URL, s.TimeFetcher.CurrentSlot())
+	indices, err := ParseIndices(r.URL, s.TimeFetcher.CurrentSlot())
 	if err != nil {
 		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
@@ -96,8 +96,8 @@ func (s *Server) Blobs(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJson(w, resp)
 }
 
-// parseIndices filters out invalid and duplicate blob indices
-func parseIndices(url *url.URL, s primitives.Slot) ([]int, error) {
+// ParseIndices filters out invalid and duplicate blob indices
+func ParseIndices(url *url.URL, s primitives.Slot) ([]int, error) {
 	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(s)
 	rawIndices := url.Query()["indices"]
 	indices := make([]int, 0, maxBlobsPerBlock)

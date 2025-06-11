@@ -39,3 +39,8 @@ func (m *MockBlocker) Block(_ context.Context, b []byte) (interfaces.ReadOnlySig
 func (*MockBlocker) Blobs(_ context.Context, _ string, _ []int) ([]*blocks.VerifiedROBlob, *core.RpcError) {
 	return nil, &core.RpcError{}
 }
+
+// DataColumnSidecars mocks the DataColumnSidecars method of the Blocker interface.
+func (*MockBlocker) DataColumnSidecars(_ context.Context, _ string, _ []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
+	return nil, &core.RpcError{}
+}
