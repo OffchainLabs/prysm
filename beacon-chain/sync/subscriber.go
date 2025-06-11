@@ -15,15 +15,14 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v6/config/features"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/container/slice"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/messagehandler"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -206,8 +205,7 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 // subscribe to a given topic with a given validator and subscription handler.
 // The base protobuf message is used to initialize new messages for decoding.
 func (s *Service) subscribe(topic string, validator wrappedVal, handle subHandler, digest [4]byte) *pubsub.Subscription {
-	genRoot := s.cfg.clock.GenesisValidatorsRoot()
-	_, e, err := forks.RetrieveForkDataFromDigest(digest, genRoot[:])
+	_, e, err := params.ForkDataFromDigest(digest)
 	if err != nil {
 		// Impossible condition as it would mean digest does not exist.
 		panic(err) // lint:nopanic -- Impossible condition.
@@ -441,10 +439,8 @@ func (s *Service) searchForPeers(
 func (s *Service) subscribeToSubnets(
 	topicFormat string,
 	digest [4]byte,
-	genesisValidatorsRoot [fieldparams.RootLength]byte,
-	genesisTime time.Time,
+	clock *startup.Clock,
 	subscriptions map[uint64]*pubsub.Subscription,
-	currentSlot primitives.Slot,
 	validate wrappedVal,
 	handle subHandler,
 	getSubnetsToSubscribe func(currentSlot primitives.Slot) []uint64,
@@ -455,7 +451,7 @@ func (s *Service) subscribeToSubnets(
 	}
 
 	// Check the validity of the digest.
-	valid, err := isDigestValid(digest, genesisTime, genesisValidatorsRoot)
+	valid, err := isDigestValid(digest, clock)
 	if err != nil {
 		log.Error(err)
 		return true
@@ -482,7 +478,7 @@ func (s *Service) subscribeToSubnets(
 	}
 
 	// Retrieve the subnets we want to subscribe to.
-	subnetsToSubscribeIndex := getSubnetsToSubscribe(currentSlot)
+	subnetsToSubscribeIndex := getSubnetsToSubscribe(clock.CurrentSlot())
 
 	// Remove subscriptions that are no longer wanted.
 	s.pruneSubscriptions(subscriptions, subnetsToSubscribeIndex, topicFormat, digest)
@@ -517,11 +513,8 @@ func (s *Service) subscribeWithParameters(
 	// Initialize the subscriptions map.
 	subscriptions := make(map[uint64]*pubsub.Subscription)
 
-	// Retrieve the genesis validators root.
-	genesisValidatorsRoot := s.cfg.clock.GenesisValidatorsRoot()
-
 	// Retrieve the epoch of the fork corresponding to the digest.
-	_, epoch, err := forks.RetrieveForkDataFromDigest(digest, genesisValidatorsRoot[:])
+	_, epoch, err := params.ForkDataFromDigest(digest)
 	if err != nil {
 		panic(err) // lint:nopanic -- Impossible condition.
 	}
@@ -540,7 +533,9 @@ func (s *Service) subscribeWithParameters(
 	secondsPerSlotDuration := time.Duration(secondsPerSlot) * time.Second
 
 	currentSlot := s.cfg.clock.CurrentSlot()
-	s.subscribeToSubnets(topicFormat, digest, genesisValidatorsRoot, genesisTime, subscriptions, currentSlot, validate, handle, getSubnetsToSubscribe)
+
+	// Subscribe to subnets.
+	s.subscribeToSubnets(topicFormat, digest, s.cfg.clock, subscriptions, validate, handle, getSubnetsToSubscribe)
 
 	logCtx, cancel := context.WithCancel(s.ctx)
 
@@ -563,7 +558,7 @@ func (s *Service) subscribeWithParameters(
 		for {
 			select {
 			case currentSlot := <-slotTicker.C():
-				isDigestValid := s.subscribeToSubnets(topicFormat, digest, genesisValidatorsRoot, genesisTime, subscriptions, currentSlot, validate, handle, getSubnetsToSubscribe)
+				isDigestValid := s.subscribeToSubnets(topicFormat, digest, s.cfg.clock, subscriptions, validate, handle, getSubnetsToSubscribe)
 
 				// Stop the ticker if the digest is not valid. Likely to happen after a hard fork.
 				if !isDigestValid {
@@ -722,27 +717,19 @@ func (*Service) addDigestAndIndexToTopic(topic string, digest [4]byte, idx uint6
 }
 
 func (s *Service) currentForkDigest() ([4]byte, error) {
-	genRoot := s.cfg.clock.GenesisValidatorsRoot()
-	return forks.CreateForkDigest(s.cfg.clock.GenesisTime(), genRoot[:])
+	return params.ForkDigest(s.cfg.clock.CurrentEpoch()), nil
 }
 
 // Checks if the provided digest matches up with the current supposed digest.
-func isDigestValid(digest [4]byte, genesis time.Time, genValRoot [32]byte) (bool, error) {
-	retDigest, err := forks.CreateForkDigest(genesis, genValRoot[:])
-	if err != nil {
-		return false, err
-	}
-	isNextEpoch, err := forks.IsForkNextEpoch(genesis, genValRoot[:])
-	if err != nil {
-		return false, err
-	}
+func isDigestValid(digest [4]byte, clock *startup.Clock) (bool, error) {
+	currentEpoch := clock.CurrentEpoch()
 	// In the event there is a fork the next epoch,
 	// we skip the check, as we subscribe subnets an
 	// epoch in advance.
-	if isNextEpoch {
+	if params.IsForkNextEpoch(currentEpoch) {
 		return true, nil
 	}
-	return retDigest == digest, nil
+	return params.ForkDigest(currentEpoch) == digest, nil
 }
 
 func computeSubnetsToFindPeersIndex(

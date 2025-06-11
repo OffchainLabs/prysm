@@ -6,7 +6,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -53,36 +52,12 @@ func (s *Service) CanSubscribe(topic string) bool {
 		log.WithError(err).Error("Could not determine fork digest")
 		return false
 	}
-	altairForkDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().AltairForkEpoch, s.genesisValidatorsRoot)
-	if err != nil {
-		log.WithError(err).Error("Could not determine altair fork digest")
-		return false
-	}
-	bellatrixForkDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().BellatrixForkEpoch, s.genesisValidatorsRoot)
-	if err != nil {
-		log.WithError(err).Error("Could not determine Bellatrix fork digest")
-		return false
-	}
-	capellaForkDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().CapellaForkEpoch, s.genesisValidatorsRoot)
-	if err != nil {
-		log.WithError(err).Error("Could not determine Capella fork digest")
-		return false
-	}
-	denebForkDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().DenebForkEpoch, s.genesisValidatorsRoot)
-	if err != nil {
-		log.WithError(err).Error("Could not determine Deneb fork digest")
-		return false
-	}
-	electraForkDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().ElectraForkEpoch, s.genesisValidatorsRoot)
-	if err != nil {
-		log.WithError(err).Error("Could not determine Electra fork digest")
-		return false
-	}
-	fuluForkDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().FuluForkEpoch, s.genesisValidatorsRoot)
-	if err != nil {
-		log.WithError(err).Error("Could not determine Fulu fork digest")
-		return false
-	}
+	altairForkDigest := params.ForkDigest(params.BeaconConfig().AltairForkEpoch)
+	bellatrixForkDigest := params.ForkDigest(params.BeaconConfig().BellatrixForkEpoch)
+	capellaForkDigest := params.ForkDigest(params.BeaconConfig().CapellaForkEpoch)
+	denebForkDigest := params.ForkDigest(params.BeaconConfig().DenebForkEpoch)
+	electraForkDigest := params.ForkDigest(params.BeaconConfig().ElectraForkEpoch)
+	fuluForkDigest := params.ForkDigest(params.BeaconConfig().FuluForkEpoch)
 	switch parts[2] {
 	case fmt.Sprintf("%x", phase0ForkDigest):
 	case fmt.Sprintf("%x", altairForkDigest):

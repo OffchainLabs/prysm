@@ -18,10 +18,10 @@ import (
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	testpb "github.com/OffchainLabs/prysm/v6/proto/testing"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
@@ -550,9 +550,7 @@ func TestService_BroadcastLightClientOptimisticUpdate(t *testing.T) {
 	require.NoError(t, err)
 
 	GossipTypeMapping[reflect.TypeOf(msg)] = LightClientOptimisticUpdateTopicFormat
-	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(msg.AttestedHeader().Beacon().Slot), p.genesisValidatorsRoot)
-	require.NoError(t, err)
-	topic := fmt.Sprintf(LightClientOptimisticUpdateTopicFormat, digest)
+	topic := fmt.Sprintf(LightClientOptimisticUpdateTopicFormat, params.ForkDigest(slots.ToEpoch(msg.AttestedHeader().Beacon().Slot)))
 
 	// External peer subscribes to the topic.
 	topic += p.Encoding().ProtocolSuffix()
@@ -617,9 +615,7 @@ func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
 	require.NoError(t, err)
 
 	GossipTypeMapping[reflect.TypeOf(msg)] = LightClientFinalityUpdateTopicFormat
-	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(msg.AttestedHeader().Beacon().Slot), p.genesisValidatorsRoot)
-	require.NoError(t, err)
-	topic := fmt.Sprintf(LightClientFinalityUpdateTopicFormat, digest)
+	topic := fmt.Sprintf(LightClientFinalityUpdateTopicFormat, params.ForkDigest(slots.ToEpoch(msg.AttestedHeader().Beacon().Slot)))
 
 	// External peer subscribes to the topic.
 	topic += p.Encoding().ProtocolSuffix()
