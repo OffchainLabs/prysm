@@ -4,7 +4,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (ebe *ExecutionBundleFulu) GetDecodedExecutionRequests() (*ExecutionRequests, error) {
+func (ebe *ExecutionBundleFulu) GetDecodedExecutionRequests(maxDeposits, maxWithdrawals, maxConsolidations uint64) (*ExecutionRequests, error) {
 	requests := &ExecutionRequests{}
 	var prevTypeNum *uint8
 	for i := range ebe.ExecutionRequests {
@@ -18,19 +18,19 @@ func (ebe *ExecutionBundleFulu) GetDecodedExecutionRequests() (*ExecutionRequest
 		prevTypeNum = &requestType
 		switch requestType {
 		case DepositRequestType:
-			drs, err := unmarshalDeposits(requestListInSSZBytes)
+			drs, err := unmarshalDeposits(requestListInSSZBytes, maxDeposits)
 			if err != nil {
 				return nil, err
 			}
 			requests.Deposits = drs
 		case WithdrawalRequestType:
-			wrs, err := unmarshalWithdrawals(requestListInSSZBytes)
+			wrs, err := unmarshalWithdrawals(requestListInSSZBytes, maxWithdrawals)
 			if err != nil {
 				return nil, err
 			}
 			requests.Withdrawals = wrs
 		case ConsolidationRequestType:
-			crs, err := unmarshalConsolidations(requestListInSSZBytes)
+			crs, err := unmarshalConsolidations(requestListInSSZBytes, maxConsolidations)
 			if err != nil {
 				return nil, err
 			}

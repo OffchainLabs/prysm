@@ -296,7 +296,7 @@ type BeaconChainConfig struct {
 	NodeIdBits                      uint64          `yaml:"NODE_ID_BITS" spec:"true"`                       // NodeIdBits defines the bit length of a node id.
 
 	// Blobs Values
-	BlobSchedule []BlobScheduleEntry `yaml:"BLOB_SCHEDULE"`
+	BlobSchedule       []BlobScheduleEntry `yaml:"BLOB_SCHEDULE"`
 
 	// Deprecated_MaxBlobsPerBlock defines the max blobs that could exist in a block.
 	// Deprecated: This field is no longer supported. Avoid using it.
@@ -316,6 +316,7 @@ type BeaconChainConfig struct {
 }
 
 type BlobScheduleEntry struct {
+	forkEpoch        bool
 	Epoch            primitives.Epoch `yaml:"EPOCH"`
 	MaxBlobsPerBlock uint64           `yaml:"MAX_BLOBS_PER_BLOCK"`
 }
@@ -480,3 +481,4 @@ func FuluEnabled() bool {
 func WithinDAPeriod(block, current primitives.Epoch) bool {
 	return block+BeaconConfig().MinEpochsForBlobsSidecarsRequest >= current
 }
+
