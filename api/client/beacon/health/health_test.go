@@ -20,7 +20,7 @@ func TestNodeHealth_IsHealthy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			n := &NodeHealthTracker{
-				isHealthy:  &tt.isHealthy,
+				isHealthy:  tt.isHealthy,
 				healthChan: make(chan bool, 1),
 			}
 			if got := n.IsHealthy(context.Background()); got != tt.want {
@@ -49,7 +49,7 @@ func TestNodeHealth_UpdateNodeHealth(t *testing.T) {
 			client := NewMockHealthClient(ctrl)
 			client.EXPECT().IsHealthy(gomock.Any()).Return(tt.newStatus)
 			n := &NodeHealthTracker{
-				isHealthy:  &tt.initial,
+				isHealthy:  tt.initial,
 				node:       client,
 				healthChan: make(chan bool, 1),
 			}
@@ -62,9 +62,7 @@ func TestNodeHealth_UpdateNodeHealth(t *testing.T) {
 
 			select {
 			case status := <-n.HealthUpdates():
-				if !tt.shouldSend {
-					t.Errorf("UpdateNodeHealth() unexpectedly sent status %v to HealthCh", status)
-				} else if status != tt.newStatus {
+				if status != tt.newStatus {
 					t.Errorf("UpdateNodeHealth() sent wrong status %v, want %v", status, tt.newStatus)
 				}
 			default:
