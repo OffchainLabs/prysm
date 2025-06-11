@@ -19,6 +19,8 @@ import (
 const broadCastMissingDataColumnsTimeIntoSlot = 3 * time.Second
 
 func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColumn blocks.VerifiedRODataColumn) error {
+	startTime := time.Now()
+
 	blockRoot := verifiedRODataColumn.BlockRoot()
 	proposerIndex := verifiedRODataColumn.ProposerIndex()
 	slot := verifiedRODataColumn.Slot()
@@ -88,6 +90,10 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 	if err := s.cfg.dataColumnStorage.Save(toSaveSidecars); err != nil {
 		return errors.Wrap(err, "save data column sidecars")
 	}
+
+	// Update reconstruction metrics
+	dataColumnReconstructionHistogram.Observe(float64(time.Since(startTime).Milliseconds()))
+	dataColumnReconstructionCounter.Add(float64(len(verifiedRODataColumns)-len(dataColumnSideCars)))
 
 	// Schedule the broadcast.
 	if err := s.scheduleReconstructedDataColumnsBroadcast(ctx, blockRoot, proposerIndex, slot); err != nil {
