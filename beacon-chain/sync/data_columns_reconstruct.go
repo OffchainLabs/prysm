@@ -93,7 +93,7 @@ func (s *Service) reconstructDataColumns(ctx context.Context, verifiedRODataColu
 
 	// Update reconstruction metrics
 	dataColumnReconstructionHistogram.Observe(float64(time.Since(startTime).Milliseconds()))
-	dataColumnReconstructionCounter.Add(float64(len(verifiedRODataColumns)-len(dataColumnSideCars)))
+	dataColumnReconstructionCounter.Add(float64(len(reconstructedSidecars) - len(verifiedSidecars)))
 
 	// Schedule the broadcast.
 	if err := s.scheduleReconstructedDataColumnsBroadcast(ctx, blockRoot, proposerIndex, slot); err != nil {
