@@ -20,7 +20,6 @@ go_library(
         "//config/params:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//monitoring/tracing/trace:go_default_library",
-        "//network/forks:go_default_library",
         "//network/httputil:go_default_library",
         "//runtime/version:go_default_library",
         "//time/slots:go_default_library",

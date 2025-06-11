@@ -19,7 +19,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -220,14 +219,9 @@ func (vs *Server) getPayloadHeaderFromBuilder(
 	if signedBid == nil || signedBid.IsNil() {
 		return nil, errors.New("builder returned nil bid")
 	}
-	fork, err := forks.Fork(slots.ToEpoch(slot))
-	if err != nil {
-		return nil, errors.Wrap(err, "unable to get fork information")
-	}
-	forkName, ok := params.BeaconConfig().ForkVersionNames[bytesutil.ToBytes4(fork.CurrentVersion)]
-	if !ok {
-		return nil, errors.New("unable to find current fork in schedule")
-	}
+	epoch := slots.ToEpoch(slot)
+	entry := params.GetNetworkScheduleEntry(epoch)
+	forkName := version.String(entry.VersionEnum)
 	if !strings.EqualFold(version.String(signedBid.Version()), forkName) {
 		return nil, fmt.Errorf("builder bid response version: %d is different from head block version: %d for epoch %d", signedBid.Version(), b.Version(), slots.ToEpoch(slot))
 	}

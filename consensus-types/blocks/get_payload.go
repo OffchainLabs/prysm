@@ -1,6 +1,7 @@
 package blocks
 
 import (
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	pb "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
@@ -38,7 +39,7 @@ type shouldOverrideBuilderGetter interface {
 }
 
 type executionRequestsGetter interface {
-	GetDecodedExecutionRequests() (*pb.ExecutionRequests, error)
+	GetDecodedExecutionRequests(pb.ExecutionRequestLimits) (*pb.ExecutionRequests, error)
 }
 
 func NewGetPayloadResponse(msg proto.Message) (*GetPayloadResponse, error) {
@@ -73,7 +74,7 @@ func NewGetPayloadResponse(msg proto.Message) (*GetPayloadResponse, error) {
 
 	executionRequestsGetter, hasExecutionRequests := msg.(executionRequestsGetter)
 	if hasExecutionRequests {
-		requests, err := executionRequestsGetter.GetDecodedExecutionRequests()
+		requests, err := executionRequestsGetter.GetDecodedExecutionRequests(params.BeaconConfig().ExecutionRequestLimits())
 		if err != nil {
 			return nil, errors.Wrap(err, "get decoded execution requests")
 		}

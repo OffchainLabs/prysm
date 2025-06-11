@@ -35,7 +35,6 @@ go_library(
         "//consensus-types/primitives:go_default_library",
         "//crypto/bls:go_default_library",
         "//encoding/bytesutil:go_default_library",
-        "//network/forks:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//runtime/logging:go_default_library",
         "//time/slots:go_default_library",

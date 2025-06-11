@@ -22,6 +22,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/mock"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -313,23 +314,16 @@ func TestWaitForChainStart_NotStartedThenLogFired(t *testing.T) {
 }
 
 func TestServer_DomainData_Exits(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.ForkVersionSchedule = map[[4]byte]primitives.Epoch{
-		[4]byte(cfg.GenesisForkVersion):   primitives.Epoch(0),
-		[4]byte(cfg.AltairForkVersion):    primitives.Epoch(5),
-		[4]byte(cfg.BellatrixForkVersion): primitives.Epoch(10),
-		[4]byte(cfg.CapellaForkVersion):   primitives.Epoch(15),
-		[4]byte(cfg.DenebForkVersion):     primitives.Epoch(20),
-	}
-	params.OverrideBeaconConfig(cfg)
-	beaconState := &ethpb.BeaconStateBellatrix{
-		Slot: 4000,
+	params.SetActiveTestCleanup(t, params.MainnetConfig())
+	cfg := params.BeaconConfig()
+	beaconState := &ethpb.BeaconStateDeneb{
+		Slot:                  1 + primitives.Slot(cfg.DenebForkEpoch)*cfg.SlotsPerEpoch,
+		GenesisValidatorsRoot: cfg.GenesisValidatorsRoot[:],
 	}
 	block := util.NewBeaconBlock()
 	genesisRoot, err := block.Block.HashTreeRoot()
 	require.NoError(t, err, "Could not get signing root")
-	s, err := state_native.InitializeFromProtoUnsafeBellatrix(beaconState)
+	s, err := state_native.InitializeFromProtoUnsafeDeneb(beaconState)
 	require.NoError(t, err)
 	vs := &Server{
 		Ctx:               context.Background(),
@@ -337,14 +331,19 @@ func TestServer_DomainData_Exits(t *testing.T) {
 		HeadFetcher:       &mockChain.ChainService{State: s, Root: genesisRoot[:]},
 	}
 
+	epoch := cfg.DenebForkEpoch
 	reqDomain, err := vs.DomainData(context.Background(), &ethpb.DomainRequest{
-		Epoch:  100,
-		Domain: params.BeaconConfig().DomainDeposit[:],
+		Epoch:  epoch,
+		Domain: cfg.DomainDeposit[:],
 	})
+	entry := params.GetNetworkScheduleEntry(epoch)
+	require.Equal(t, entry.ForkVersion, [4]byte(cfg.DenebForkVersion))
+
 	assert.NoError(t, err)
-	wantedDomain, err := signing.ComputeDomain(params.BeaconConfig().DomainDeposit, params.BeaconConfig().DenebForkVersion, make([]byte, 32))
+	gvr := cfg.GenesisValidatorsRoot
+	wantedDomain, err := signing.ComputeDomain(cfg.DomainDeposit, entry.ForkVersion[:], gvr[:])
 	assert.NoError(t, err)
-	assert.DeepEqual(t, reqDomain.SignatureDomain, wantedDomain)
+	assert.Equal(t, true, hexutil.Encode(reqDomain.SignatureDomain), hexutil.Encode(wantedDomain))
 
 	beaconStateNew := &ethpb.BeaconStateDeneb{
 		Slot: 4000,
@@ -355,11 +354,11 @@ func TestServer_DomainData_Exits(t *testing.T) {
 
 	reqDomain, err = vs.DomainData(context.Background(), &ethpb.DomainRequest{
 		Epoch:  100,
-		Domain: params.BeaconConfig().DomainVoluntaryExit[:],
+		Domain: cfg.DomainVoluntaryExit[:],
 	})
 	require.NoError(t, err)
 
-	wantedDomain, err = signing.ComputeDomain(params.BeaconConfig().DomainVoluntaryExit, params.BeaconConfig().CapellaForkVersion, make([]byte, 32))
+	wantedDomain, err = signing.ComputeDomain(cfg.DomainVoluntaryExit, cfg.CapellaForkVersion, make([]byte, 32))
 	require.NoError(t, err)
 
 	assert.DeepEqual(t, reqDomain.SignatureDomain, wantedDomain)
