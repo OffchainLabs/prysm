@@ -40,10 +40,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const (
-	maxRunnerRestartAttempts = 1000
-)
-
 // ValidatorService represents a service to manage the validator client
 // routine.
 type ValidatorService struct {
