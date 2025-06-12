@@ -33,7 +33,7 @@ import (
 
 // CurrentSlot returns the current slot based on time.
 func (s *Service) CurrentSlot() primitives.Slot {
-	return slots.CurrentSlot(uint64(s.genesisTime.Unix()))
+	return slots.CurrentSlot(s.genesisTime)
 }
 
 // getFCUArgs returns the arguments to call forkchoice update
@@ -45,7 +45,7 @@ func (s *Service) getFCUArgs(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) er
 		return nil
 	}
 	slot := cfg.roblock.Block().Slot()
-	if slots.WithinVotingWindow(uint64(s.genesisTime.Unix()), slot) {
+	if slots.WithinVotingWindow(s.genesisTime, slot) {
 		return nil
 	}
 	return s.computePayloadAttributes(cfg, fcuArgs)
@@ -432,7 +432,7 @@ func (s *Service) getBlockPreState(ctx context.Context, b interfaces.ReadOnlyBea
 	}
 
 	// Verify block slot time is not from the future.
-	if err := slots.VerifyTime(uint64(s.genesisTime.Unix()), b.Slot(), params.BeaconConfig().MaximumGossipClockDisparityDuration()); err != nil {
+	if err := slots.VerifyTime(s.genesisTime, b.Slot(), params.BeaconConfig().MaximumGossipClockDisparityDuration()); err != nil {
 		return nil, err
 	}
 

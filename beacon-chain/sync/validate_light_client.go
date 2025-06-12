@@ -51,7 +51,7 @@ func (s *Service) validateLightClientOptimisticUpdate(ctx context.Context, pid p
 	// to propagate through the network -- i.e. validate that one-third of optimistic_update.signature_slot
 	// has transpired (SECONDS_PER_SLOT / INTERVALS_PER_SLOT seconds after the start of the slot,
 	// with a MAXIMUM_GOSSIP_CLOCK_DISPARITY allowance)
-	earliestValidTime := slots.StartTime(uint64(s.cfg.clock.GenesisTime().Unix()), newUpdate.SignatureSlot()).
+	earliestValidTime := slots.StartTime(s.cfg.clock.GenesisTime(), newUpdate.SignatureSlot()).
 		Add(time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot/params.BeaconConfig().IntervalsPerSlot)).
 		Add(-params.BeaconConfig().MaximumGossipClockDisparityDuration())
 	if s.cfg.clock.Now().Before(earliestValidTime) {
@@ -116,7 +116,7 @@ func (s *Service) validateLightClientFinalityUpdate(ctx context.Context, pid pee
 	// to propagate through the network -- i.e. validate that one-third of optimistic_update.signature_slot
 	// has transpired (SECONDS_PER_SLOT / INTERVALS_PER_SLOT seconds after the start of the slot,
 	// with a MAXIMUM_GOSSIP_CLOCK_DISPARITY allowance)
-	earliestValidTime := slots.StartTime(uint64(s.cfg.clock.GenesisTime().Unix()), newUpdate.SignatureSlot()).
+	earliestValidTime := slots.StartTime(s.cfg.clock.GenesisTime(), newUpdate.SignatureSlot()).
 		Add(time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot/params.BeaconConfig().IntervalsPerSlot)).
 		Add(-params.BeaconConfig().MaximumGossipClockDisparityDuration())
 	if s.cfg.clock.Now().Before(earliestValidTime) {

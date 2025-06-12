@@ -83,7 +83,7 @@ func (s *Service) reconstructSaveBroadcastDataColumnSidecars(
 		return errors.Wrap(err, "save data column sidecars")
 	}
 
-	slotStartTime := slots.StartTime(uint64(s.cfg.clock.GenesisTime().Unix()), slot)
+	slotStartTime := slots.StartTime(s.cfg.clock.GenesisTime(), slot)
 	log.WithFields(logrus.Fields{
 		"root":                          fmt.Sprintf("%#x", root),
 		"slot":                          slot,
@@ -118,7 +118,7 @@ func (s *Service) scheduleMissingDataColumnSidecarsBroadcast(
 	})
 
 	// Get the time corresponding to the start of the slot.
-	genesisTime := uint64(s.cfg.chain.GenesisTime().Unix())
+	genesisTime := s.cfg.chain.GenesisTime()
 	slotStartTime, err := slots.ToTime(genesisTime, slot)
 	if err != nil {
 		return errors.Wrap(err, "to time")

@@ -360,7 +360,7 @@ func (s *Service) startTasksPostInitialSync() {
 	select {
 	case <-s.initialSyncComplete:
 		// Compute the current epoch.
-		currentSlot := slots.CurrentSlot(uint64(s.cfg.clock.GenesisTime().Unix()))
+		currentSlot := slots.CurrentSlot(s.cfg.clock.GenesisTime())
 		currentEpoch := slots.ToEpoch(currentSlot)
 
 		// Compute the current fork forkDigest.

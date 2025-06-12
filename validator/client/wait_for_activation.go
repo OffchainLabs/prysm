@@ -82,8 +82,8 @@ func (v *validator) waitForAccountsChange(ctx context.Context) error {
 }
 
 // waitForNextEpoch creates a blocking function to wait until the next epoch start given the current slot
-func (v *validator) waitForNextEpoch(ctx context.Context, genesisTimeSec uint64) error {
-	waitTime, err := slots.SecondsUntilNextEpochStart(genesisTimeSec)
+func (v *validator) waitForNextEpoch(ctx context.Context, genesis time.Time) error {
+	waitTime, err := slots.SecondsUntilNextEpochStart(genesis)
 	if err != nil {
 		return err
 	}

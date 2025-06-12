@@ -176,14 +176,14 @@ func TestWaitForChainStart_SetsGenesisInfo(t *testing.T) {
 			require.NoError(t, err)
 			assert.DeepEqual(t, []byte(nil), savedGenValRoot, "Unexpected saved genesis validators root")
 
-			genesis := uint64(time.Unix(1, 0).Unix())
+			genesis := time.Unix(1, 0)
 			genesisValidatorsRoot := bytesutil.ToBytes32([]byte("validators"))
 			client.EXPECT().WaitForChainStart(
 				gomock.Any(),
 				&emptypb.Empty{},
 			).Return(&ethpb.ChainStartResponse{
 				Started:               true,
-				GenesisTime:           genesis,
+				GenesisTime:           uint64(genesis.Unix()),
 				GenesisValidatorsRoot: genesisValidatorsRoot[:],
 			}, nil)
 			require.NoError(t, v.WaitForChainStart(t.Context()))
@@ -199,7 +199,7 @@ func TestWaitForChainStart_SetsGenesisInfo(t *testing.T) {
 				&emptypb.Empty{},
 			).Return(&ethpb.ChainStartResponse{
 				Started:               true,
-				GenesisTime:           genesis,
+				GenesisTime:           uint64(genesis.Unix()),
 				GenesisValidatorsRoot: genesisValidatorsRoot[:],
 			}, nil)
 			require.NoError(t, v.WaitForChainStart(t.Context()))
@@ -219,14 +219,14 @@ func TestWaitForChainStart_SetsGenesisInfo_IncorrectSecondTry(t *testing.T) {
 				validatorClient: client,
 				db:              db,
 			}
-			genesis := uint64(time.Unix(1, 0).Unix())
+			genesis := time.Unix(1, 0)
 			genesisValidatorsRoot := bytesutil.ToBytes32([]byte("validators"))
 			client.EXPECT().WaitForChainStart(
 				gomock.Any(),
 				&emptypb.Empty{},
 			).Return(&ethpb.ChainStartResponse{
 				Started:               true,
-				GenesisTime:           genesis,
+				GenesisTime:           uint64(genesis.Unix()),
 				GenesisValidatorsRoot: genesisValidatorsRoot[:],
 			}, nil)
 			require.NoError(t, v.WaitForChainStart(t.Context()))
@@ -244,7 +244,7 @@ func TestWaitForChainStart_SetsGenesisInfo_IncorrectSecondTry(t *testing.T) {
 				&emptypb.Empty{},
 			).Return(&ethpb.ChainStartResponse{
 				Started:               true,
-				GenesisTime:           genesis,
+				GenesisTime:           uint64(genesis.Unix()),
 				GenesisValidatorsRoot: genesisValidatorsRoot[:],
 			}, nil)
 			err = v.WaitForChainStart(t.Context())
@@ -294,6 +294,37 @@ func TestWaitForChainStart_ReceiveErrorFromStream(t *testing.T) {
 	assert.ErrorContains(t, want, err)
 }
 
+func TestCanonicalHeadSlot_FailedRPC(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := validatormock.NewMockChainClient(ctrl)
+	v := validator{
+		chainClient: client,
+		genesisTime: time.Unix(1, 0),
+	}
+	client.EXPECT().ChainHead(
+		gomock.Any(),
+		gomock.Any(),
+	).Return(nil, errors.New("failed"))
+	_, err := v.CanonicalHeadSlot(t.Context())
+	assert.ErrorContains(t, "failed", err)
+}
+
+func TestCanonicalHeadSlot_OK(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := validatormock.NewMockChainClient(ctrl)
+	v := validator{
+		chainClient: client,
+	}
+	client.EXPECT().ChainHead(
+		gomock.Any(),
+		gomock.Any(),
+	).Return(&ethpb.ChainHead{HeadSlot: 0}, nil)
+	headSlot, err := v.CanonicalHeadSlot(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, primitives.Slot(0), headSlot, "Mismatch slots")
+}
 func TestWaitSync_ContextCanceled(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -1682,7 +1713,7 @@ func TestValidator_PushSettings(t *testing.T) {
 							NumValidatorKeys: 1,
 							Offset:           1,
 						},
-						genesisTime: 0,
+						genesisTime: time.Time{},
 					}
 					// set bellatrix as current epoch
 					params.BeaconConfig().BellatrixForkEpoch = 0
@@ -2738,7 +2769,7 @@ func TestValidator_buildSignedRegReqs_TimestampBeforeGenesis(t *testing.T) {
 	v := validator{
 		signedValidatorRegistrations: map[[48]byte]*ethpb.SignedValidatorRegistrationV1{},
 		validatorClient:              client,
-		genesisTime:                  uint64(time.Now().UTC().Unix() + 1000),
+		genesisTime:                  time.Now().Add(1000 * time.Second),
 		proposerSettings: &proposer.Settings{
 			DefaultConfig: &proposer.Option{
 				FeeRecipientConfig: &proposer.FeeRecipientConfig{
