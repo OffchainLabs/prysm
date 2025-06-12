@@ -25,6 +25,10 @@ import (
 // Time to wait before trying to reconnect with beacon node.
 var backOffPeriod = 10 * time.Second
 
+const (
+	maxHealthChecks = 1000 // 1000 slots
+)
+
 // runner encapsulates the main validator routine.
 type runner struct {
 	validator iface.Validator
@@ -94,7 +98,7 @@ func (r *runner) run(ctx context.Context) error {
 			return nil // Exit if context is canceled.
 		case slot := <-v.NextSlot():
 			if !healthTracker.IsHealthy(ctx) {
-				return errors.New("beacon node is not healthy, stopping validator")
+				return nil
 			}
 
 			deadline := v.SlotDeadline(slot)
@@ -316,7 +320,6 @@ func runHealthCheckRoutine(ctx context.Context, cancel context.CancelFunc, v ifa
 	interval := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
 	ticker := time.NewTicker(interval)
 	tracker := v.HealthTracker()
-	maxHealthChecks := 10
 	go func() {
 		defer ticker.Stop()
 

@@ -239,7 +239,6 @@ func (v *ValidatorService) Start() {
 	go runHealthCheckRoutine(v.ctx, v.cancel, v.validator)
 
 	for {
-		log.Info("Runner Starting")
 		select {
 		case <-v.ctx.Done():
 			log.Info("Validator service context canceled, stopping")
@@ -252,7 +251,7 @@ func (v *ValidatorService) Start() {
 				continue
 			}
 			// Attempt to create and run the runner
-			log.Info("Attempting to start validator runner")
+			log.Info("Starting validator runner")
 			runnerCtx, runnerCancel := context.WithCancel(v.ctx)
 
 			// Initialize keymanager and wait for chain start/sync within the runner setup
@@ -268,8 +267,12 @@ func (v *ValidatorService) Start() {
 			// Run the runner in a goroutine
 			if err := runner.run(runnerCtx); err != nil {
 				log.WithError(err).Error("Error running validator")
+				runnerCancel()
+				v.onRunnerExit()
+				return
 			}
 			runnerCancel()
+			log.Info("Validator runner stopped")
 		}
 	}
 }
