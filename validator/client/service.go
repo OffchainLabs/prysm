@@ -41,7 +41,7 @@ import (
 )
 
 const (
-	maxRunnerRestartAttempts = 5
+	maxRunnerRestartAttempts = 1000
 )
 
 // ValidatorService represents a service to manage the validator client
@@ -236,11 +236,10 @@ func (v *ValidatorService) Start() {
 
 	healthTracker := v.validator.HealthTracker()
 	// Start the health check routine
-	go runHealthCheckRoutine(v.ctx, v.validator)
+	go runHealthCheckRoutine(v.ctx, v.cancel, v.validator)
 
-	runnerRestartAttempts := 0
-	for runnerRestartAttempts <= maxRunnerRestartAttempts {
-		log.WithField("attempt", runnerRestartAttempts).Info("Runner Starting")
+	for {
+		log.Info("Runner Starting")
 		select {
 		case <-v.ctx.Done():
 			log.Info("Validator service context canceled, stopping")
@@ -248,9 +247,8 @@ func (v *ValidatorService) Start() {
 			return
 		case isHealthy := <-healthTracker.HealthUpdates():
 			if !isHealthy {
-				runnerRestartAttempts++
 				// wait until the next health tracker update
-				log.WithField("attempt", runnerRestartAttempts).Warn("Validator service health check failed, waiting for healthy beacon node")
+				log.Warn("Validator service health check failed, waiting for healthy beacon node...")
 				continue
 			}
 			// Attempt to create and run the runner
@@ -274,10 +272,6 @@ func (v *ValidatorService) Start() {
 			runnerCancel()
 		}
 	}
-	if runnerRestartAttempts > maxRunnerRestartAttempts {
-		log.WithField("attempts", runnerRestartAttempts).Error("Validator service timed out waiting for healthy beacon node.")
-	}
-	v.onRunnerExit()
 }
 
 // Stop the validator service.

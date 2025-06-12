@@ -36,7 +36,6 @@ func (n *NodeHealthTracker) IsHealthy(_ context.Context) bool {
 func (n *NodeHealthTracker) CheckHealth(ctx context.Context) bool {
 	n.Lock()
 	defer n.Unlock()
-
 	newStatus := n.node.IsHealthy(ctx)
 
 	// Send update if this is first check or status changed

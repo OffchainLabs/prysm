@@ -310,42 +310,55 @@ func handleAssignmentError(err error, slot primitives.Slot) {
 	}
 }
 
-func runHealthCheckRoutine(ctx context.Context, v iface.Validator) {
+func runHealthCheckRoutine(ctx context.Context, cancel context.CancelFunc, v iface.Validator) {
 	log.Info("Starting health check routine for beacon node apis")
 	// just check one a slot
 	interval := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
 	ticker := time.NewTicker(interval)
 	tracker := v.HealthTracker()
-
+	maxHealthChecks := 10
 	go func() {
 		defer ticker.Stop()
 
 		// Perform health check and handle host switching/event stream
-		performHealthCheck := func() {
+		performHealthCheck := func() bool {
 			isHealthy := tracker.CheckHealth(ctx)
 			if !isHealthy && features.Get().EnableBeaconRESTApi {
 				v.ChangeHost()
-				tracker.CheckHealth(ctx) // Re-check after host change
+				isHealthy = tracker.CheckHealth(ctx) // Re-check after host change
 			}
 
 			// Reconnect event stream if needed
-			if tracker.IsHealthy(ctx) && !v.EventStreamIsRunning() {
+			if isHealthy && !v.EventStreamIsRunning() {
 				log.Info("Event stream reconnecting...")
 				go v.StartEventStream(ctx, event.DefaultEventTopics)
 			}
+			return isHealthy
 		}
 
 		// Initial check immediately
 		performHealthCheck()
 
+		healthCheckCounter := 0
 		// Continue periodic checks
 		for {
 			select {
 			case <-ticker.C:
-				performHealthCheck()
+
+				ishealthy := performHealthCheck()
+				if ishealthy {
+					healthCheckCounter = 0
+				} else {
+					healthCheckCounter++
+				}
+				if healthCheckCounter >= maxHealthChecks {
+					log.Info("Health check timed out")
+					cancel()
+				}
 			case <-ctx.Done():
 				return
 			}
 		}
+
 	}()
 }
