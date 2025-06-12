@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus/hooks/test"
 )
 
 func TestGet(t *testing.T) {
@@ -58,7 +59,7 @@ func TestGetSSZ(t *testing.T) {
 
 		mux := http.NewServeMux()
 		mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+			assert.StringContains(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
 			w.Header().Set("Content-Type", api.OctetStreamMediaType)
 			_, err := w.Write(expectedBody)
 			require.NoError(t, err)
@@ -74,13 +75,14 @@ func TestGetSSZ(t *testing.T) {
 		body, header, err := jsonRestHandler.GetSSZ(ctx, endpoint)
 		require.NoError(t, err)
 		assert.DeepEqual(t, expectedBody, body)
-		require.Equal(t, api.OctetStreamMediaType, header.Get("Content-Type"))
+		require.StringContains(t, api.OctetStreamMediaType, header.Get("Content-Type"))
 	})
 
 	t.Run("Invalid Content-Type response", func(t *testing.T) {
+		logHook := test.NewGlobal()
 		mux := http.NewServeMux()
 		mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+			assert.StringContains(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
 			w.Header().Set("Content-Type", api.JsonMediaType) // Invalid content type
 			_, err := w.Write([]byte(`{"code": 400, "message": "bad request"}`))
 			require.NoError(t, err)
@@ -94,7 +96,8 @@ func TestGetSSZ(t *testing.T) {
 		}
 
 		_, _, err := jsonRestHandler.GetSSZ(ctx, endpoint)
-		assert.ErrorContains(t, "invalid Content-Type application/json", err)
+		require.NoError(t, err)
+		assert.LogsContain(t, logHook, "Server responded with non primary accept type")
 	})
 }
 
