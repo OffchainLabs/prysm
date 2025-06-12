@@ -339,6 +339,7 @@ type NetworkScheduleEntry struct {
 	ForkDigest       [4]byte
 	MaxBlobsPerBlock uint64           `yaml:"MAX_BLOBS_PER_BLOCK"`
 	Epoch            primitives.Epoch `yaml:"EPOCH"`
+	VersionEnum      int
 	isFork           bool
 }
 
@@ -477,6 +478,7 @@ func (ns *NetworkSchedule) prepare(b *BeaconChainConfig) error {
 			lastFork = entry
 		} else {
 			entry.ForkVersion = lastFork.ForkVersion
+			entry.VersionEnum = lastFork.VersionEnum
 		}
 		if entry.MaxBlobsPerBlock > 0 {
 			lastBlobs = entry.MaxBlobsPerBlock
@@ -518,13 +520,13 @@ func entryWithForkDigest(entry NetworkScheduleEntry, b *BeaconChainConfig) (Netw
 
 func initForkSchedule(b *BeaconChainConfig) *NetworkSchedule {
 	return newNetworkSchedule([]NetworkScheduleEntry{
-		{Epoch: b.GenesisEpoch, isFork: true, ForkVersion: [4]byte(b.GenesisForkVersion)},
-		{Epoch: b.AltairForkEpoch, isFork: true, ForkVersion: [4]byte(b.AltairForkVersion)},
-		{Epoch: b.BellatrixForkEpoch, isFork: true, ForkVersion: [4]byte(b.BellatrixForkVersion)},
-		{Epoch: b.CapellaForkEpoch, isFork: true, ForkVersion: [4]byte(b.CapellaForkVersion)},
-		{Epoch: b.DenebForkEpoch, isFork: true, ForkVersion: [4]byte(b.DenebForkVersion), MaxBlobsPerBlock: uint64(b.DeprecatedMaxBlobsPerBlock)},
-		{Epoch: b.ElectraForkEpoch, isFork: true, ForkVersion: [4]byte(b.ElectraForkVersion), MaxBlobsPerBlock: uint64(b.DeprecatedMaxBlobsPerBlockElectra)},
-		{Epoch: b.FuluForkEpoch, isFork: true, ForkVersion: [4]byte(b.FuluForkVersion)},
+		{Epoch: b.GenesisEpoch, isFork: true, ForkVersion: [4]byte(b.GenesisForkVersion), VersionEnum: version.Phase0},
+		{Epoch: b.AltairForkEpoch, isFork: true, ForkVersion: [4]byte(b.AltairForkVersion), VersionEnum: version.Altair},
+		{Epoch: b.BellatrixForkEpoch, isFork: true, ForkVersion: [4]byte(b.BellatrixForkVersion), VersionEnum: version.Bellatrix},
+		{Epoch: b.CapellaForkEpoch, isFork: true, ForkVersion: [4]byte(b.CapellaForkVersion), VersionEnum: version.Capella},
+		{Epoch: b.DenebForkEpoch, isFork: true, ForkVersion: [4]byte(b.DenebForkVersion), MaxBlobsPerBlock: uint64(b.DeprecatedMaxBlobsPerBlock), VersionEnum: version.Deneb},
+		{Epoch: b.ElectraForkEpoch, isFork: true, ForkVersion: [4]byte(b.ElectraForkVersion), MaxBlobsPerBlock: uint64(b.DeprecatedMaxBlobsPerBlockElectra), VersionEnum: version.Electra},
+		{Epoch: b.FuluForkEpoch, isFork: true, ForkVersion: [4]byte(b.FuluForkVersion), VersionEnum: version.Fulu},
 	})
 }
 
