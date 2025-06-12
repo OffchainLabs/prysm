@@ -91,44 +91,6 @@ func TestVersionForEpoch(t *testing.T) {
 	}
 }
 
-func TestVersionForName(t *testing.T) {
-	bc := testForkVersionBCC()
-	ofs := NewOrderedSchedule(bc)
-	testCases := []struct {
-		testName    string
-		version     [4]byte
-		versionName string
-		err         error
-	}{
-		{
-			testName:    "found",
-			version:     [4]byte{2, 1, 2, 3},
-			versionName: "third",
-		},
-		{
-			testName:    "found lowercase",
-			version:     [4]byte{4, 1, 2, 3},
-			versionName: "FiFtH",
-		},
-		{
-			testName:    "not found",
-			versionName: "nonexistent",
-			err:         ErrVersionNotFound,
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.testName, func(t *testing.T) {
-			v, err := ofs.VersionForName(tc.versionName)
-			if tc.err == nil {
-				require.NoError(t, err)
-			} else {
-				require.ErrorIs(t, err, tc.err)
-			}
-			require.Equal(t, tc.version, v)
-		})
-	}
-}
-
 func testForkVersionBCC() *params.BeaconChainConfig {
 	return &params.BeaconChainConfig{
 		ForkVersionSchedule: map[[4]byte]primitives.Epoch{

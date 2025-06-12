@@ -3,7 +3,6 @@ package forks
 import (
 	"bytes"
 	"sort"
-	"strings"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -45,17 +44,6 @@ func (o OrderedSchedule) VersionForEpoch(epoch primitives.Epoch) ([fieldparams.V
 		}
 	}
 	return [fieldparams.VersionLength]byte{}, errors.Wrapf(ErrVersionNotFound, "no epoch in list <= %d", epoch)
-}
-
-// VersionForName finds the Version corresponding to the lowercase version of the provided name.
-func (o OrderedSchedule) VersionForName(name string) ([fieldparams.VersionLength]byte, error) {
-	lower := strings.ToLower(name)
-	for _, e := range o {
-		if e.Name == lower {
-			return e.Version, nil
-		}
-	}
-	return [4]byte{}, errors.Wrapf(ErrVersionNotFound, "no version with name %s", lower)
 }
 
 func (o OrderedSchedule) ForkFromVersion(version [fieldparams.VersionLength]byte) (*ethpb.Fork, error) {
