@@ -79,7 +79,6 @@ go_test(
         "//consensus-types/primitives:go_default_library",
         "//crypto/bls:go_default_library",
         "//encoding/bytesutil:go_default_library",
-        "//network/forks:go_default_library",
         "//proto/dbval:go_default_library",
         "//runtime/interop:go_default_library",
         "//testing/require:go_default_library",
