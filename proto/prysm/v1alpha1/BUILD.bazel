@@ -188,6 +188,7 @@ ssz_fulu_objs = [
     "DataColumnIdentifier",
     "DataColumnsByRootIdentifier",
     "DataColumnSidecar",
+    "StatusV2",
     "SignedBeaconBlockContentsFulu",
     "SignedBeaconBlockFulu",
     "SignedBlindedBeaconBlockFulu",
