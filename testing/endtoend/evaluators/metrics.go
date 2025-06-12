@@ -11,9 +11,10 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
 	"github.com/OffchainLabs/prysm/v6/testing/endtoend/policies"
