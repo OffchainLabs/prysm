@@ -28,11 +28,12 @@ func TestGetBeaconBlock_RequestFailed(t *testing.T) {
 	ctx := context.Background()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Get(
-		gomock.Any(),
+	jsonRestHandler.EXPECT().GetSSZ(
 		gomock.Any(),
 		gomock.Any(),
 	).Return(
+		nil,
+		nil,
 		errors.New("foo error"),
 	).Times(1)
 
@@ -48,67 +49,86 @@ func TestGetBeaconBlock_Error(t *testing.T) {
 		expectedErrorMessage string
 		consensusVersion     string
 		blinded              bool
-		data                 json.RawMessage
 	}{
 		{
 			name:                 "phase0 block decoding failed",
-			expectedErrorMessage: "failed to decode phase0 block response json",
+			expectedErrorMessage: "failed to get phase0 block: could not decode ",
 			consensusVersion:     "phase0",
-			data:                 []byte{},
 		},
 		{
 			name:                 "altair block decoding failed",
-			expectedErrorMessage: "failed to decode altair block response json",
+			expectedErrorMessage: "failed to get altair block: could not decode ",
 			consensusVersion:     "altair",
-			data:                 []byte{},
 		},
 		{
 			name:                 "bellatrix block decoding failed",
-			expectedErrorMessage: "failed to decode bellatrix block response json",
+			expectedErrorMessage: "failed to get bellatrix block: could not decode ",
 			beaconBlock:          "foo",
 			consensusVersion:     "bellatrix",
 			blinded:              false,
-			data:                 []byte{},
 		},
 		{
 			name:                 "blinded bellatrix block decoding failed",
-			expectedErrorMessage: "failed to decode bellatrix block response json",
+			expectedErrorMessage: "failed to get bellatrix block: could not decode ",
 			beaconBlock:          "foo",
 			consensusVersion:     "bellatrix",
 			blinded:              true,
-			data:                 []byte{},
 		},
 		{
 			name:                 "capella block decoding failed",
-			expectedErrorMessage: "failed to decode capella block response json",
+			expectedErrorMessage: "failed to get capella block: could not decode ",
 			beaconBlock:          "foo",
 			consensusVersion:     "capella",
 			blinded:              false,
-			data:                 []byte{},
 		},
 		{
 			name:                 "blinded capella block decoding failed",
-			expectedErrorMessage: "failed to decode capella block response json",
+			expectedErrorMessage: "failed to get capella block: could not decode ",
 			beaconBlock:          "foo",
 			consensusVersion:     "capella",
 			blinded:              true,
-			data:                 []byte{},
 		},
 		{
 			name:                 "deneb block decoding failed",
-			expectedErrorMessage: "failed to decode deneb block response json",
+			expectedErrorMessage: "failed to get deneb block: could not decode ",
 			beaconBlock:          "foo",
 			consensusVersion:     "deneb",
 			blinded:              false,
-			data:                 []byte{},
 		},
 		{
 			name:                 "blinded deneb block decoding failed",
-			expectedErrorMessage: "failed to decode deneb block response json",
+			expectedErrorMessage: "failed to get deneb block: could not decode ",
 			beaconBlock:          "foo",
 			consensusVersion:     "deneb",
 			blinded:              true,
-			data:                 []byte{},
+		},
+		{
+			name:                 "electra block decoding failed",
+			expectedErrorMessage: "failed to get electra block: could not decode ",
+			beaconBlock:          "foo",
+			consensusVersion:     "electra",
+			blinded:              false,
+		},
+		{
+			name:                 "blinded electra block decoding failed",
+			expectedErrorMessage: "failed to get electra block: could not decode ",
+			beaconBlock:          "foo",
+			consensusVersion:     "electra",
+			blinded:              true,
+		},
+		{
+			name:                 "fulu block decoding failed",
+			expectedErrorMessage: "failed to get fulu block: could not decode ",
+			beaconBlock:          "foo",
+			consensusVersion:     "fulu",
+			blinded:              false,
+		},
+		{
+			name:                 "blinded fulu block decoding failed",
+			expectedErrorMessage: "failed to get fulu block: could not decode ",
+			beaconBlock:          "foo",
+			consensusVersion:     "fulu",
+			blinded:              true,
 		},
 		{
 			name:                 "unsupported consensus version",
@@ -124,23 +144,25 @@ func TestGetBeaconBlock_Error(t *testing.T) {
 
 			ctx := context.Background()
 
+			resp := structs.ProduceBlockV3Response{
+				Version: testCase.consensusVersion,
+				Data:    json.RawMessage(`{}`), // ← valid JSON object
+			}
+
+			b, err := json.Marshal(resp)
+			require.NoError(t, err)
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-			jsonRestHandler.EXPECT().Get(
+			jsonRestHandler.EXPECT().GetSSZ(
 				gomock.Any(),
 				gomock.Any(),
-				&structs.ProduceBlockV3Response{},
-			).SetArg(
-				2,
-				structs.ProduceBlockV3Response{
-					Version: testCase.consensusVersion,
-					Data:    testCase.data,
-				},
 			).Return(
+				b,
+				http.Header{"Content-Type": []string{"application/json"}},
 				nil,
 			).Times(1)
 
 			validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
-			_, err := validatorClient.beaconBlock(ctx, 1, []byte{1}, []byte{2})
+			_, err = validatorClient.beaconBlock(ctx, 1, []byte{1}, []byte{2})
 			assert.ErrorContains(t, testCase.expectedErrorMessage, err)
 		})
 	}
@@ -160,18 +182,18 @@ func TestGetBeaconBlock_Phase0Valid(t *testing.T) {
 	graffiti := []byte{3}
 	ctx := context.Background()
 
+	b, err := json.Marshal(structs.ProduceBlockV3Response{
+		Version: "phase0",
+		Data:    bytes,
+	})
+	require.NoError(t, err)
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Get(
+	jsonRestHandler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
-		&structs.ProduceBlockV3Response{},
-	).SetArg(
-		2,
-		structs.ProduceBlockV3Response{
-			Version: "phase0",
-			Data:    bytes,
-		},
 	).Return(
+		b,
+		http.Header{"Content-Type": []string{"application/json"}},
 		nil,
 	).Times(1)
 
@@ -815,18 +837,18 @@ func TestGetBeaconBlock_AltairValid(t *testing.T) {
 
 	ctx := context.Background()
 
+	b, err := json.Marshal(structs.ProduceBlockV3Response{
+		Version: "altair",
+		Data:    bytes,
+	})
+	require.NoError(t, err)
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Get(
+	jsonRestHandler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
-		&structs.ProduceBlockV3Response{},
-	).SetArg(
-		2,
-		structs.ProduceBlockV3Response{
-			Version: "altair",
-			Data:    bytes,
-		},
 	).Return(
+		b,
+		http.Header{"Content-Type": []string{"application/json"}},
 		nil,
 	).Times(1)
 
@@ -858,19 +880,19 @@ func TestGetBeaconBlock_BellatrixValid(t *testing.T) {
 
 	ctx := context.Background()
 
+	b, err := json.Marshal(structs.ProduceBlockV3Response{
+		Version:                 "bellatrix",
+		ExecutionPayloadBlinded: false,
+		Data:                    bytes,
+	})
+	require.NoError(t, err)
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Get(
+	jsonRestHandler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
-		&structs.ProduceBlockV3Response{},
-	).SetArg(
-		2,
-		structs.ProduceBlockV3Response{
-			Version:                 "bellatrix",
-			ExecutionPayloadBlinded: false,
-			Data:                    bytes,
-		},
 	).Return(
+		b,
+		http.Header{"Content-Type": []string{"application/json"}},
 		nil,
 	).Times(1)
 
@@ -903,19 +925,19 @@ func TestGetBeaconBlock_BlindedBellatrixValid(t *testing.T) {
 
 	ctx := context.Background()
 
+	b, err := json.Marshal(structs.ProduceBlockV3Response{
+		Version:                 "bellatrix",
+		ExecutionPayloadBlinded: true,
+		Data:                    bytes,
+	})
+	require.NoError(t, err)
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Get(
+	jsonRestHandler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
-		&structs.ProduceBlockV3Response{},
-	).SetArg(
-		2,
-		structs.ProduceBlockV3Response{
-			Version:                 "bellatrix",
-			ExecutionPayloadBlinded: true,
-			Data:                    bytes,
-		},
 	).Return(
+		b,
+		http.Header{"Content-Type": []string{"application/json"}},
 		nil,
 	).Times(1)
 
@@ -948,19 +970,19 @@ func TestGetBeaconBlock_CapellaValid(t *testing.T) {
 
 	ctx := context.Background()
 
+	b, err := json.Marshal(structs.ProduceBlockV3Response{
+		Version:                 "capella",
+		ExecutionPayloadBlinded: false,
+		Data:                    bytes,
+	})
+	require.NoError(t, err)
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Get(
+	jsonRestHandler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
-		&structs.ProduceBlockV3Response{},
-	).SetArg(
-		2,
-		structs.ProduceBlockV3Response{
-			Version:                 "capella",
-			ExecutionPayloadBlinded: false,
-			Data:                    bytes,
-		},
 	).Return(
+		b,
+		http.Header{"Content-Type": []string{"application/json"}},
 		nil,
 	).Times(1)
 
@@ -993,19 +1015,19 @@ func TestGetBeaconBlock_BlindedCapellaValid(t *testing.T) {
 
 	ctx := context.Background()
 
+	b, err := json.Marshal(structs.ProduceBlockV3Response{
+		Version:                 "capella",
+		ExecutionPayloadBlinded: true,
+		Data:                    bytes,
+	})
+	require.NoError(t, err)
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Get(
+	jsonRestHandler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
-		&structs.ProduceBlockV3Response{},
-	).SetArg(
-		2,
-		structs.ProduceBlockV3Response{
-			Version:                 "capella",
-			ExecutionPayloadBlinded: true,
-			Data:                    bytes,
-		},
 	).Return(
+		b,
+		http.Header{"Content-Type": []string{"application/json"}},
 		nil,
 	).Times(1)
 
@@ -1038,19 +1060,19 @@ func TestGetBeaconBlock_DenebValid(t *testing.T) {
 
 	ctx := context.Background()
 
+	b, err := json.Marshal(structs.ProduceBlockV3Response{
+		Version:                 "deneb",
+		ExecutionPayloadBlinded: false,
+		Data:                    bytes,
+	})
+	require.NoError(t, err)
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Get(
+	jsonRestHandler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
-		&structs.ProduceBlockV3Response{},
-	).SetArg(
-		2,
-		structs.ProduceBlockV3Response{
-			Version:                 "deneb",
-			ExecutionPayloadBlinded: false,
-			Data:                    bytes,
-		},
 	).Return(
+		b,
+		http.Header{"Content-Type": []string{"application/json"}},
 		nil,
 	).Times(1)
 
@@ -1083,19 +1105,19 @@ func TestGetBeaconBlock_BlindedDenebValid(t *testing.T) {
 
 	ctx := context.Background()
 
+	b, err := json.Marshal(structs.ProduceBlockV3Response{
+		Version:                 "deneb",
+		ExecutionPayloadBlinded: true,
+		Data:                    bytes,
+	})
+	require.NoError(t, err)
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Get(
+	jsonRestHandler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
-		&structs.ProduceBlockV3Response{},
-	).SetArg(
-		2,
-		structs.ProduceBlockV3Response{
-			Version:                 "deneb",
-			ExecutionPayloadBlinded: true,
-			Data:                    bytes,
-		},
 	).Return(
+		b,
+		http.Header{"Content-Type": []string{"application/json"}},
 		nil,
 	).Times(1)
 
@@ -1128,19 +1150,19 @@ func TestGetBeaconBlock_ElectraValid(t *testing.T) {
 
 	ctx := context.Background()
 
+	b, err := json.Marshal(structs.ProduceBlockV3Response{
+		Version:                 "electra",
+		ExecutionPayloadBlinded: false,
+		Data:                    bytes,
+	})
+	require.NoError(t, err)
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Get(
+	jsonRestHandler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
-		&structs.ProduceBlockV3Response{},
-	).SetArg(
-		2,
-		structs.ProduceBlockV3Response{
-			Version:                 "electra",
-			ExecutionPayloadBlinded: false,
-			Data:                    bytes,
-		},
 	).Return(
+		b,
+		http.Header{"Content-Type": []string{"application/json"}},
 		nil,
 	).Times(1)
 
@@ -1173,19 +1195,19 @@ func TestGetBeaconBlock_BlindedElectraValid(t *testing.T) {
 
 	ctx := context.Background()
 
+	b, err := json.Marshal(structs.ProduceBlockV3Response{
+		Version:                 "electra",
+		ExecutionPayloadBlinded: true,
+		Data:                    bytes,
+	})
+	require.NoError(t, err)
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Get(
+	jsonRestHandler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
-		&structs.ProduceBlockV3Response{},
-	).SetArg(
-		2,
-		structs.ProduceBlockV3Response{
-			Version:                 "electra",
-			ExecutionPayloadBlinded: true,
-			Data:                    bytes,
-		},
 	).Return(
+		b,
+		http.Header{"Content-Type": []string{"application/json"}},
 		nil,
 	).Times(1)
 
