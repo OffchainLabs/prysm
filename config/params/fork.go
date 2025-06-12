@@ -100,6 +100,17 @@ func SortedForkVersions() [][4]byte {
 	return sortedVersions
 }
 
+func SortedForkSchedule() []NetworkScheduleEntry {
+	entries := BeaconConfig().networkSchedule.entries
+	schedule := make([]NetworkScheduleEntry, 0, len(entries))
+	for _, entry := range entries {
+		if entry.isFork {
+			schedule = append(schedule, entry)
+		}
+	}
+	return schedule
+}
+
 // LastForkEpoch returns the last valid fork epoch that exists in our
 // fork schedule.
 func LastForkEpoch() primitives.Epoch {
