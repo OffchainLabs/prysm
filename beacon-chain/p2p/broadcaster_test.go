@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -61,6 +62,7 @@ func TestService_Broadcast(t *testing.T) {
 	topic := "/eth2/%x/testing"
 	// Set a test gossip mapping for testpb.TestSimpleMessage.
 	GossipTypeMapping[reflect.TypeOf(msg)] = topic
+	p.clock = startup.NewClock(p.genesisTime, bytesutil.ToBytes32(p.genesisValidatorsRoot))
 	digest, err := p.currentForkDigest()
 	require.NoError(t, err)
 	topic = fmt.Sprintf(topic, digest)
