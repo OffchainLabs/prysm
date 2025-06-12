@@ -5,16 +5,16 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 )
 
 func (c *beaconApiValidatorClient) domainData(ctx context.Context, epoch primitives.Epoch, domainType [4]byte) (*ethpb.DomainResponse, error) {
 	// Get the fork version from the given epoch
-	fork, err := forks.Fork(epoch)
+	fork, err := params.Fork(epoch)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get fork version for epoch %d", epoch)
 	}

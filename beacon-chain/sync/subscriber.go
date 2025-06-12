@@ -17,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v6/config/features"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/container/slice"
@@ -442,7 +441,6 @@ func (s *Service) searchForPeers(
 func (s *Service) subscribeToSubnets(
 	topicFormat string,
 	digest [4]byte,
-	genesisValidatorsRoot [fieldparams.RootLength]byte,
 	clock *startup.Clock,
 	subscriptions map[uint64]*pubsub.Subscription,
 	validate wrappedVal,
@@ -537,7 +535,7 @@ func (s *Service) subscribeWithParameters(
 	currentSlot := s.cfg.clock.CurrentSlot()
 
 	// Subscribe to subnets.
-	s.subscribeToSubnets(topicFormat, digest, genesisValidatorsRoot, s.cfg.clock, subscriptions, validate, handle, getSubnetsToSubscribe)
+	s.subscribeToSubnets(topicFormat, digest, s.cfg.clock, subscriptions, validate, handle, getSubnetsToSubscribe)
 
 	// Derive a new context and cancel function.
 	ctx, cancel := context.WithCancel(s.ctx)
@@ -549,7 +547,7 @@ func (s *Service) subscribeWithParameters(
 		for {
 			select {
 			case currentSlot := <-ticker.C():
-				isDigestValid := s.subscribeToSubnets(topicFormat, digest, genesisValidatorsRoot, s.cfg.clock, subscriptions, validate, handle, getSubnetsToSubscribe)
+				isDigestValid := s.subscribeToSubnets(topicFormat, digest, s.cfg.clock, subscriptions, validate, handle, getSubnetsToSubscribe)
 
 				// Stop the ticker if the digest is not valid. Likely to happen after a hard fork.
 				if !isDigestValid {

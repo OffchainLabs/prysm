@@ -13,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	blocktest "github.com/OffchainLabs/prysm/v6/consensus-types/blocks/testing"
 	"github.com/OffchainLabs/prysm/v6/encoding/ssz/detect"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -31,7 +30,7 @@ func TestDownloadFinalizedData(t *testing.T) {
 	require.NoError(t, err)
 	st, err := util.NewBeaconState()
 	require.NoError(t, err)
-	fork, err := forks.ForkForEpochFromConfig(cfg, epoch)
+	fork, err := params.ForkFromConfig(cfg, epoch)
 	require.NoError(t, err)
 	require.NoError(t, st.SetFork(fork))
 	require.NoError(t, st.SetSlot(slot))

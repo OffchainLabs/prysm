@@ -42,6 +42,10 @@ func computeForkDataRoot(version [4]byte, root [32]byte) ([32]byte, error) {
 // Fork returns the fork version for the given epoch.
 func Fork(epoch primitives.Epoch) (*ethpb.Fork, error) {
 	cfg := BeaconConfig()
+	return ForkFromConfig(cfg, epoch), nil
+}
+
+func ForkFromConfig(cfg *BeaconChainConfig, epoch primitives.Epoch) *ethpb.Fork {
 	current := cfg.networkSchedule.ForEpoch(epoch)
 	previous := current
 	if current.Epoch > 0 {
@@ -51,7 +55,7 @@ func Fork(epoch primitives.Epoch) (*ethpb.Fork, error) {
 		PreviousVersion: previous.ForkVersion[:],
 		CurrentVersion:  current.ForkVersion[:],
 		Epoch:           current.Epoch,
-	}, nil
+	}
 }
 
 // RetrieveForkDataFromDigest performs the inverse, where it tries to determine the fork version

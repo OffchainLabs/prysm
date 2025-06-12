@@ -11,7 +11,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -115,7 +114,7 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 
 			updateSlot := update.AttestedHeader().Beacon().Slot
 			updateEpoch := slots.ToEpoch(updateSlot)
-			updateFork, err := forks.Fork(updateEpoch)
+			updateFork, err := params.Fork(updateEpoch)
 			if err != nil {
 				httputil.HandleError(w, "Could not get fork Version: "+err.Error(), http.StatusInternalServerError)
 				return

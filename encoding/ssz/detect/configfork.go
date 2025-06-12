@@ -55,14 +55,12 @@ func FromBlock(marshaled []byte) (*VersionedUnmarshaler, error) {
 	if err != nil {
 		return nil, err
 	}
-	copiedCfg := params.BeaconConfig().Copy()
 	epoch := slots.ToEpoch(slot)
-	fs := forks.NewOrderedSchedule(copiedCfg)
-	ver, err := fs.VersionForEpoch(epoch)
+	fs, err := params.Fork(epoch)
 	if err != nil {
 		return nil, err
 	}
-	return FromForkVersion(ver)
+	return FromForkVersion([4]byte(fs.CurrentVersion))
 }
 
 var ErrForkNotFound = errors.New("version found in fork schedule but can't be matched to a named fork")

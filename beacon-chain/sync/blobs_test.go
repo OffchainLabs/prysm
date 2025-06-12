@@ -22,7 +22,6 @@ import (
 	types "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -277,7 +276,7 @@ func repositionFutureEpochs(cfg *params.BeaconChainConfig) {
 
 func defaultMockChain(t *testing.T) (*mock.ChainService, *startup.Clock) {
 	de := params.BeaconConfig().DenebForkEpoch
-	df, err := forks.Fork(de)
+	df, err := params.Fork(de)
 	require.NoError(t, err)
 	denebBuffer := params.BeaconConfig().MinEpochsForBlobsSidecarsRequest + 1000
 	ce := de + denebBuffer

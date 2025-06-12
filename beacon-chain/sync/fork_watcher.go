@@ -4,7 +4,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/pkg/errors"
@@ -86,7 +85,7 @@ func (s *Service) registerForUpcomingFork(currentEpoch primitives.Epoch) error {
 // deregisterFromPastFork deregisters appropriate gossip and RPC topic if there is a fork in the current epoch.
 func (s *Service) deregisterFromPastFork(currentEpoch primitives.Epoch) error {
 	// Get the fork.
-	currentFork, err := forks.Fork(currentEpoch)
+	currentFork, err := params.Fork(currentEpoch)
 	if err != nil {
 		return errors.Wrap(err, "genesis validators root")
 	}

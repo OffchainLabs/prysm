@@ -13,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/common"
@@ -633,7 +632,7 @@ func TestForkSchedule_Ok(t *testing.T) {
 		require.Equal(t, http.StatusOK, writer.Code)
 		resp := &structs.GetForkScheduleResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-		os := forks.NewOrderedSchedule(params.BeaconConfig())
-		assert.Equal(t, os.Len(), len(resp.Data))
+		os := params.SortedForkSchedule()
+		assert.Equal(t, len(os), len(resp.Data))
 	})
 }

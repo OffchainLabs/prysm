@@ -9,7 +9,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
@@ -107,8 +106,7 @@ func (vr verifier) blockSignatureBatch(b blocks.ROBlock) (*bls.SignatureBatch, e
 }
 
 func newBackfillVerifier(vr []byte, keys [][fieldparams.BLSPubkeyLength]byte) (*verifier, error) {
-	dc, err := newDomainCache(vr, params.BeaconConfig().DomainBeaconProposer,
-		forks.NewOrderedSchedule(params.BeaconConfig()))
+	dc, err := newDomainCache(vr, params.BeaconConfig().DomainBeaconProposer)
 	if err != nil {
 		return nil, err
 	}
@@ -122,33 +120,31 @@ func newBackfillVerifier(vr []byte, keys [][fieldparams.BLSPubkeyLength]byte) (*
 
 // domainCache provides a fast signing domain lookup by epoch.
 type domainCache struct {
-	fsched      forks.OrderedSchedule
 	forkDomains map[[4]byte][]byte
 	dType       [bls.DomainByteLength]byte
 }
 
-func newDomainCache(vRoot []byte, dType [bls.DomainByteLength]byte, fsched forks.OrderedSchedule) (*domainCache, error) {
+func newDomainCache(vRoot []byte, dType [bls.DomainByteLength]byte) (*domainCache, error) {
 	dc := &domainCache{
-		fsched:      fsched,
 		forkDomains: make(map[[4]byte][]byte),
 		dType:       dType,
 	}
-	for _, entry := range fsched {
-		d, err := signing.ComputeDomain(dc.dType, entry.Version[:], vRoot)
+	for _, entry := range params.SortedForkSchedule() {
+		d, err := signing.ComputeDomain(dc.dType, entry.ForkVersion[:], vRoot)
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to pre-compute signing domain for fork version=%#x", entry.Version)
+			return nil, errors.Wrapf(err, "failed to pre-compute signing domain for fork version=%#x", entry.ForkVersion)
 		}
-		dc.forkDomains[entry.Version] = d
+		dc.forkDomains[entry.ForkVersion] = d
 	}
 	return dc, nil
 }
 
 func (dc *domainCache) forEpoch(e primitives.Epoch) ([]byte, error) {
-	fork, err := dc.fsched.VersionForEpoch(e)
+	fork, err := params.Fork(e)
 	if err != nil {
 		return nil, err
 	}
-	d, ok := dc.forkDomains[fork]
+	d, ok := dc.forkDomains[[4]byte(fork.CurrentVersion)]
 	if !ok {
 		return nil, errors.Wrapf(errUnknownDomain, "fork version=%#x, epoch=%d", fork, e)
 	}
