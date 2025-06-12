@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"net"
 	"sync"
@@ -503,7 +504,11 @@ func (s *Service) createLocalNode(
 	localNode.SetFallbackIP(ipAddr)
 	localNode.SetFallbackUDP(udpPort)
 
-	localNode, err = addForkEntry(localNode, s.clock.CurrentEpoch())
+	clock, err := s.cfg.ClockWaiter.WaitForClock(context.Background())
+	if err != nil {
+		return nil, errors.Wrap(err, "timeout waiting for startup clock")
+	}
+	localNode, err = addForkEntry(localNode, clock.CurrentEpoch())
 	if err != nil {
 		return nil, errors.Wrap(err, "could not add eth2 fork version entry to enr")
 	}

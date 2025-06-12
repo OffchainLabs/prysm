@@ -19,9 +19,10 @@ var eth2ENRKey = params.BeaconNetworkConfig().ETH2Key
 // ForkDigest returns the current fork digest of
 // the node according to the local clock.
 func (s *Service) currentForkDigest() ([4]byte, error) {
-	if !s.isInitialized() {
+	if !s.isInitialized() || s.clock == nil {
 		return [4]byte{}, errors.New("state is not initialized")
 	}
+
 	return params.ForkDigest(s.clock.CurrentEpoch()), nil
 }
 

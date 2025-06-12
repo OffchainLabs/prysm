@@ -25,6 +25,9 @@ func (s *Service) forkWatcher() {
 				// this over the epoch, which might be slightly wasteful
 				// but is fine nonetheless.
 				if s.dv5Listener != nil { // make sure it's not a local network
+					if s.clock == nil {
+						continue
+					}
 					_, err := addForkEntry(s.dv5Listener.LocalNode(), s.clock.CurrentEpoch())
 					if err != nil {
 						log.WithError(err).Error("Could not add fork entry")
