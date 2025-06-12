@@ -25,7 +25,7 @@ func TestUpgradeToFulu(t *testing.T) {
 	require.NoError(t, st.SetBalances(bals))
 
 	preForkState := st.Copy()
-	mSt, err := fulu.UpgradeToFulu(st)
+	mSt, err := fulu.UpgradeToFulu(t.Context(), st)
 	require.NoError(t, err)
 
 	require.Equal(t, preForkState.GenesisTime(), mSt.GenesisTime())

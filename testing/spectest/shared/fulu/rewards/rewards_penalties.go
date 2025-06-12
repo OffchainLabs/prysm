@@ -63,9 +63,9 @@ func runPrecomputeRewardsAndPenaltiesTest(t *testing.T, testFolderPath string) {
 	require.NoError(t, err)
 	preBeaconStateSSZ, err := snappy.Decode(nil /* dst */, preBeaconStateFile)
 	require.NoError(t, err, "Failed to decompress")
-	preBeaconStateBase := &ethpb.BeaconStateElectra{}
+	preBeaconStateBase := &ethpb.BeaconStateFulu{}
 	require.NoError(t, preBeaconStateBase.UnmarshalSSZ(preBeaconStateSSZ), "Failed to unmarshal")
-	preBeaconState, err := state_native.InitializeFromProtoElectra(preBeaconStateBase)
+	preBeaconState, err := state_native.InitializeFromProtoFulu(preBeaconStateBase)
 	require.NoError(t, err)
 
 	vp, bp, err := electra.InitializePrecomputeValidators(ctx, preBeaconState)

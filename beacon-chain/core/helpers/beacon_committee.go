@@ -555,21 +555,31 @@ func UpdateProposerIndicesInCache(ctx context.Context, state state.ReadOnlyBeaco
 	if err != nil {
 		return err
 	}
-	// Skip cache update if the key already exists
-	_, ok := proposerIndicesCache.ProposerIndices(epoch, [32]byte(root))
-	if ok {
-		return nil
-	}
-	indices, err := ActiveValidatorIndices(ctx, state, epoch)
-	if err != nil {
-		return err
-	}
-	proposerIndices, err := PrecomputeProposerIndices(state, indices, epoch)
-	if err != nil {
-		return err
-	}
-	if len(proposerIndices) != int(params.BeaconConfig().SlotsPerEpoch) {
-		return errors.New("invalid proposer length returned from state")
+	var proposerIndices []primitives.ValidatorIndex
+	// use the state if post fulu (EIP-7917)
+	if state.Version() >= version.Fulu {
+		lookAhead, err := state.ProposerLookahead()
+		if err != nil {
+			return errors.Wrap(err, "could not get proposer lookahead")
+		}
+		proposerIndices = lookAhead[:params.BeaconConfig().SlotsPerEpoch]
+	} else {
+		// Skip cache update if the key already exists
+		_, ok := proposerIndicesCache.ProposerIndices(epoch, [32]byte(root))
+		if ok {
+			return nil
+		}
+		indices, err := ActiveValidatorIndices(ctx, state, epoch)
+		if err != nil {
+			return err
+		}
+		proposerIndices, err = PrecomputeProposerIndices(state, indices, epoch)
+		if err != nil {
+			return err
+		}
+		if len(proposerIndices) != int(params.BeaconConfig().SlotsPerEpoch) {
+			return errors.New("invalid proposer length returned from state")
+		}
 	}
 	// This is here to deal with tests only
 	var indicesArray [fieldparams.SlotsPerEpoch]primitives.ValidatorIndex
@@ -654,6 +664,25 @@ func ComputeCommittee(
 	}
 
 	return shuffledList[start:end], nil
+}
+
+// InitializeProposerLookahead computes the list of the proposer indices for the next MIN_SEED_LOOKAHEAD + 1 epochs.
+func InitializeProposerLookahead(ctx context.Context, state state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]uint64, error) {
+	lookAhead := make([]uint64, 0, uint64(params.BeaconConfig().MinSeedLookahead+1)*uint64(params.BeaconConfig().SlotsPerEpoch))
+	indices, err := ActiveValidatorIndices(ctx, state, epoch)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get active indices")
+	}
+	for i := range params.BeaconConfig().MinSeedLookahead + 1 {
+		proposerIndices, err := PrecomputeProposerIndices(state, indices, epoch+i)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not compute proposer indices")
+		}
+		for _, proposerIndex := range proposerIndices {
+			lookAhead = append(lookAhead, uint64(proposerIndex))
+		}
+	}
+	return lookAhead, nil
 }
 
 // PrecomputeProposerIndices computes proposer indices of the current epoch and returns a list of proposer indices,
