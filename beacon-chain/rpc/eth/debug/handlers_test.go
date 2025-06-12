@@ -15,6 +15,7 @@ import (
 	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/testutil"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
@@ -219,9 +220,10 @@ func TestGetBeaconStateV2(t *testing.T) {
 		resp := &structs.GetBeaconStateV2Response{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		assert.Equal(t, version.String(version.Fulu), resp.Version)
-		st := &structs.BeaconStateElectra{}
+		st := &structs.BeaconStateFulu{}
 		require.NoError(t, json.Unmarshal(resp.Data, st))
 		assert.Equal(t, "123", st.Slot)
+		assert.Equal(t, int(params.BeaconConfig().MinSeedLookahead+1)*int(params.BeaconConfig().SlotsPerEpoch), len(st.ProposerLookahead))
 	})
 	t.Run("execution optimistic", func(t *testing.T) {
 		parentRoot := [32]byte{'a'}

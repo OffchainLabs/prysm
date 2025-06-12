@@ -1171,3 +1171,29 @@ func TestValidatorMaxEffectiveBalance(t *testing.T) {
 	// Sanity check that MinActivationBalance equals (pre-electra) MaxEffectiveBalance
 	assert.Equal(t, params.BeaconConfig().MinActivationBalance, params.BeaconConfig().MaxEffectiveBalance)
 }
+
+func TestBeaconProposerIndexAtSlotFulu(t *testing.T) {
+	lookahead := make([]uint64, 64)
+	lookahead[0] = 15
+	lookahead[1] = 16
+	lookahead[34] = 42
+	pbState := ethpb.BeaconStateFulu{
+		Slot:              100,
+		ProposerLookahead: lookahead,
+	}
+	st, err := state_native.InitializeFromProtoFulu(&pbState)
+	require.NoError(t, err)
+	idx, err := helpers.BeaconProposerIndexAtSlot(t.Context(), st, 96)
+	require.NoError(t, err)
+	require.Equal(t, primitives.ValidatorIndex(15), idx)
+	idx, err = helpers.BeaconProposerIndexAtSlot(t.Context(), st, 97)
+	require.NoError(t, err)
+	require.Equal(t, primitives.ValidatorIndex(16), idx)
+	idx, err = helpers.BeaconProposerIndexAtSlot(t.Context(), st, 130)
+	require.NoError(t, err)
+	require.Equal(t, primitives.ValidatorIndex(42), idx)
+	_, err = helpers.BeaconProposerIndexAtSlot(t.Context(), st, 95)
+	require.ErrorContains(t, "slot 95 is not in the current epoch 3 or the next epoch", err)
+	_, err = helpers.BeaconProposerIndexAtSlot(t.Context(), st, 160)
+	require.ErrorContains(t, "slot 160 is not in the current epoch 3 or the next epoch", err)
+}

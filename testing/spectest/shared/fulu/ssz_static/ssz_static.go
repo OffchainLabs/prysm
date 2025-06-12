@@ -19,13 +19,13 @@ func RunSSZStaticTests(t *testing.T, config string) {
 }
 
 func customHtr(t *testing.T, htrs []common.HTR, object interface{}) []common.HTR {
-	_, ok := object.(*ethpb.BeaconStateElectra)
+	_, ok := object.(*ethpb.BeaconStateFulu)
 	if !ok {
 		return htrs
 	}
 
 	htrs = append(htrs, func(s interface{}) ([32]byte, error) {
-		beaconState, err := state_native.InitializeFromProtoElectra(s.(*ethpb.BeaconStateElectra))
+		beaconState, err := state_native.InitializeFromProtoFulu(s.(*ethpb.BeaconStateFulu))
 		require.NoError(t, err)
 		return beaconState.HashTreeRoot(context.Background())
 	})
@@ -55,7 +55,7 @@ func UnmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (i
 	case "BeaconBlockHeader":
 		obj = &ethpb.BeaconBlockHeader{}
 	case "BeaconState":
-		obj = &ethpb.BeaconStateElectra{}
+		obj = &ethpb.BeaconStateFulu{}
 	case "Checkpoint":
 		obj = &ethpb.Checkpoint{}
 	case "Deposit":

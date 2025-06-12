@@ -923,7 +923,14 @@ func BeaconStateFuluFromConsensus(st beaconState.BeaconState) (*BeaconStateFulu,
 	if err != nil {
 		return nil, err
 	}
-
+	srcLookahead, err := st.ProposerLookahead()
+	if err != nil {
+		return nil, err
+	}
+	lookahead := make([]string, len(srcLookahead))
+	for i, v := range srcLookahead {
+		lookahead[i] = fmt.Sprintf("%d", uint64(v))
+	}
 	return &BeaconStateFulu{
 		GenesisTime:                   fmt.Sprintf("%d", st.GenesisTime()),
 		GenesisValidatorsRoot:         hexutil.Encode(st.GenesisValidatorsRoot()),
@@ -962,5 +969,6 @@ func BeaconStateFuluFromConsensus(st beaconState.BeaconState) (*BeaconStateFulu,
 		PendingDeposits:               PendingDepositsFromConsensus(pbd),
 		PendingPartialWithdrawals:     PendingPartialWithdrawalsFromConsensus(ppw),
 		PendingConsolidations:         PendingConsolidationsFromConsensus(pc),
+		ProposerLookahead:             lookahead,
 	}, nil
 }
