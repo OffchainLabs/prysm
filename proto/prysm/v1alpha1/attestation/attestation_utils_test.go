@@ -204,7 +204,7 @@ func TestIsValidAttestationIndices(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := attestation.IsValidAttestationIndices(context.Background(), tt.att)
+			err := attestation.IsValidAttestationIndices(context.Background(), tt.att, params.BeaconConfig().MaxValidatorsPerCommittee, params.BeaconConfig().MaxCommitteesPerSlot)
 			if tt.wantedErr != "" {
 				assert.ErrorContains(t, tt.wantedErr, err)
 			} else {
@@ -240,7 +240,7 @@ func BenchmarkIsValidAttestationIndices(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if err := attestation.IsValidAttestationIndices(context.Background(), att); err != nil {
+		if err := attestation.IsValidAttestationIndices(context.Background(), att, params.BeaconConfig().MaxValidatorsPerCommittee, params.BeaconConfig().MaxCommitteesPerSlot); err != nil {
 			require.NoError(b, err)
 		}
 	}
