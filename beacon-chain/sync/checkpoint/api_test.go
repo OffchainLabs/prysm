@@ -30,7 +30,7 @@ func TestDownloadFinalizedData(t *testing.T) {
 	require.NoError(t, err)
 	st, err := util.NewBeaconState()
 	require.NoError(t, err)
-	fork, err := params.ForkFromConfig(cfg, epoch)
+	fork := params.ForkFromConfig(cfg, epoch)
 	require.NoError(t, err)
 	require.NoError(t, st.SetFork(fork))
 	require.NoError(t, st.SetSlot(slot))
