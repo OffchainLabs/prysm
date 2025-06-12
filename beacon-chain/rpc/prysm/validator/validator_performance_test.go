@@ -57,13 +57,15 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 		headState = setHeadState(t, headState, publicKeys)
 		require.NoError(t, headState.SetBalances([]uint64{100, 101, 102}))
 
-		offset := int64(headState.Slot().Mul(params.BeaconConfig().SecondsPerSlot))
+		sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(headState.Slot())
+		require.NoError(t, err)
+		gt := time.Now().Add(-1 * sg)
 		vs := &Server{
 			CoreService: &core.Service{
 				HeadFetcher: &mock.ChainService{
 					State: headState,
 				},
-				GenesisTimeFetcher: &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
+				GenesisTimeFetcher: &mock.ChainService{Genesis: gt},
 				SyncChecker:        &mockSync.Sync{IsSyncing: false},
 			},
 		}
@@ -113,7 +115,9 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 		require.NoError(t, err)
 		headState = setHeadState(t, headState, publicKeys)
 
-		offset := int64(headState.Slot().Mul(params.BeaconConfig().SecondsPerSlot))
+		sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(headState.Slot())
+		require.NoError(t, err)
+		gt := time.Now().Add(-1 * sg)
 		vs := &Server{
 			CoreService: &core.Service{
 				HeadFetcher: &mock.ChainService{
@@ -121,7 +125,7 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 					State: headState,
 				},
 				SyncChecker:        &mockSync.Sync{IsSyncing: false},
-				GenesisTimeFetcher: &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
+				GenesisTimeFetcher: &mock.ChainService{Genesis: gt},
 			},
 		}
 		c := headState.Copy()
@@ -178,7 +182,9 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 		require.NoError(t, err)
 		headState = setHeadState(t, headState, publicKeys)
 
-		offset := int64(headState.Slot().Mul(params.BeaconConfig().SecondsPerSlot))
+		sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(headState.Slot())
+		require.NoError(t, err)
+		gt := time.Now().Add(-1 * sg)
 		vs := &Server{
 			CoreService: &core.Service{
 				HeadFetcher: &mock.ChainService{
@@ -186,7 +192,7 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 					State: headState,
 				},
 				SyncChecker:        &mockSync.Sync{IsSyncing: false},
-				GenesisTimeFetcher: &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
+				GenesisTimeFetcher: &mock.ChainService{Genesis: gt},
 			},
 		}
 		c := headState.Copy()
@@ -249,13 +255,15 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 
 		require.NoError(t, headState.SetInactivityScores([]uint64{0, 0, 0}))
 		require.NoError(t, headState.SetBalances([]uint64{100, 101, 102}))
-		offset := int64(headState.Slot().Mul(params.BeaconConfig().SecondsPerSlot))
+		sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(headState.Slot())
+		require.NoError(t, err)
+		gt := time.Now().Add(-1 * sg)
 		vs := &Server{
 			CoreService: &core.Service{
 				HeadFetcher: &mock.ChainService{
 					State: headState,
 				},
-				GenesisTimeFetcher: &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
+				GenesisTimeFetcher: &mock.ChainService{Genesis: gt},
 				SyncChecker:        &mockSync.Sync{IsSyncing: false},
 			},
 		}
@@ -274,7 +282,7 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 			PublicKeys: [][]byte{publicKeys[0][:], publicKeys[2][:], publicKeys[1][:]},
 		}
 		var buf bytes.Buffer
-		err := json.NewEncoder(&buf).Encode(request)
+		err = json.NewEncoder(&buf).Encode(request)
 		require.NoError(t, err)
 
 		srv := httptest.NewServer(http.HandlerFunc(vs.GetPerformance))
@@ -311,13 +319,15 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 
 		require.NoError(t, headState.SetInactivityScores([]uint64{0, 0, 0}))
 		require.NoError(t, headState.SetBalances([]uint64{100, 101, 102}))
-		offset := int64(headState.Slot().Mul(params.BeaconConfig().SecondsPerSlot))
+		sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(headState.Slot())
+		require.NoError(t, err)
+		gt := time.Now().Add(-1 * sg)
 		vs := &Server{
 			CoreService: &core.Service{
 				HeadFetcher: &mock.ChainService{
 					State: headState,
 				},
-				GenesisTimeFetcher: &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
+				GenesisTimeFetcher: &mock.ChainService{Genesis: gt},
 				SyncChecker:        &mockSync.Sync{IsSyncing: false},
 			},
 		}
@@ -336,7 +346,7 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 			PublicKeys: [][]byte{publicKeys[0][:], publicKeys[2][:], publicKeys[1][:]},
 		}
 		var buf bytes.Buffer
-		err := json.NewEncoder(&buf).Encode(request)
+		err = json.NewEncoder(&buf).Encode(request)
 		require.NoError(t, err)
 
 		srv := httptest.NewServer(http.HandlerFunc(vs.GetPerformance))
@@ -373,13 +383,15 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 
 		require.NoError(t, headState.SetInactivityScores([]uint64{0, 0, 0}))
 		require.NoError(t, headState.SetBalances([]uint64{100, 101, 102}))
-		offset := int64(headState.Slot().Mul(params.BeaconConfig().SecondsPerSlot))
+		sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(headState.Slot())
+		require.NoError(t, err)
+		gt := time.Now().Add(-1 * sg)
 		vs := &Server{
 			CoreService: &core.Service{
 				HeadFetcher: &mock.ChainService{
 					State: headState,
 				},
-				GenesisTimeFetcher: &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
+				GenesisTimeFetcher: &mock.ChainService{Genesis: gt},
 				SyncChecker:        &mockSync.Sync{IsSyncing: false},
 			},
 		}
@@ -398,7 +410,7 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 			PublicKeys: [][]byte{publicKeys[0][:], publicKeys[2][:], publicKeys[1][:]},
 		}
 		var buf bytes.Buffer
-		err := json.NewEncoder(&buf).Encode(request)
+		err = json.NewEncoder(&buf).Encode(request)
 		require.NoError(t, err)
 
 		srv := httptest.NewServer(http.HandlerFunc(vs.GetPerformance))

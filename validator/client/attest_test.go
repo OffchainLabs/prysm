@@ -602,17 +602,23 @@ func TestSignAttestation(t *testing.T) {
 }
 
 func TestServer_WaitToSlotOneThird_CanWait(t *testing.T) {
+	cfg := params.BeaconConfig()
+	cfg.SlotSchedule = &params.SlotSchedule{{Epoch: 0, SlotDuration: 12 * time.Second}}
+	params.SetActiveTestCleanup(t, cfg)
+
 	currentTime := time.Now()
 	currentSlot := primitives.Slot(4)
-	genesisTime := currentTime.Add(-1 * time.Duration(currentSlot.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second)
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(currentSlot)
+	require.NoError(t, err)
+	genesisTime := currentTime.Add(-1 * sg)
 
 	v := &validator{
 		genesisTime: genesisTime,
 		slotFeed:    new(event.Feed),
 	}
 
-	timeToSleep := params.BeaconConfig().SecondsPerSlot / 3
-	oneThird := currentTime.Add(time.Duration(timeToSleep) * time.Second)
+	timeToSleep := params.BeaconConfig().SlotSchedule.SlotDuration(0) / 3
+	oneThird := currentTime.Add(timeToSleep)
 	v.waitOneThirdOrValidBlock(t.Context(), currentSlot)
 
 	if oneThird.Sub(time.Now()) > 10*time.Millisecond { // Allow for small diff due to execution time.
@@ -623,7 +629,9 @@ func TestServer_WaitToSlotOneThird_CanWait(t *testing.T) {
 func TestServer_WaitToSlotOneThird_SameReqSlot(t *testing.T) {
 	currentTime := time.Now()
 	currentSlot := primitives.Slot(4)
-	genesisTime := currentTime.Add(-1 * time.Duration(currentSlot.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second)
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(currentSlot)
+	require.NoError(t, err)
+	genesisTime := currentTime.Add(-1 * sg)
 
 	v := &validator{
 		genesisTime:      genesisTime,
@@ -644,7 +652,9 @@ func TestServer_WaitToSlotOneThird_ReceiveBlockSlot(t *testing.T) {
 
 	currentTime := time.Now()
 	currentSlot := primitives.Slot(4)
-	genesisTime := currentTime.Add(-1 * time.Duration(currentSlot.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second)
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(currentSlot)
+	require.NoError(t, err)
+	genesisTime := currentTime.Add(-1 * sg)
 
 	v := &validator{
 		genesisTime: genesisTime,

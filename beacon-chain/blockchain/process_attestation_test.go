@@ -128,7 +128,10 @@ func TestStore_OnAttestation_ErrorConditions(t *testing.T) {
 
 func TestStore_OnAttestation_Ok_DoublyLinkedTree(t *testing.T) {
 	eval := func(ctx context.Context, service *Service, genesisState state.BeaconState, pks []bls.SecretKey) {
-		service.SetGenesisTime(time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0))
+		sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(1)
+		require.NoError(t, err)
+		genesis := time.Now().Add(-sg)
+		service.SetGenesisTime(genesis)
 		require.NoError(t, service.saveGenesisData(ctx, genesisState))
 		att, err := util.GenerateAttestations(genesisState, pks, 1, 0, false)
 		require.NoError(t, err)
@@ -355,22 +358,28 @@ func TestStore_UpdateCheckpointState(t *testing.T) {
 func TestAttEpoch_MatchPrevEpoch(t *testing.T) {
 	ctx := t.Context()
 
-	nowTime := time.Unix(int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot), 0)
-	require.NoError(t, verifyAttTargetEpoch(ctx, time.Unix(0, 0), nowTime, &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)}))
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slots.UnsafeEpochStart(1))
+	require.NoError(t, err)
+	genesis := time.Now().Add(-sg)
+	require.NoError(t, verifyAttTargetEpoch(ctx, genesis, time.Now(), &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)}))
 }
 
 func TestAttEpoch_MatchCurrentEpoch(t *testing.T) {
 	ctx := t.Context()
 
-	nowTime := time.Unix(int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot), 0)
-	require.NoError(t, verifyAttTargetEpoch(ctx, time.Unix(0, 0), nowTime, &ethpb.Checkpoint{Epoch: 1}))
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slots.UnsafeEpochStart(1))
+	require.NoError(t, err)
+	genesis := time.Now().Add(-sg)
+	require.NoError(t, verifyAttTargetEpoch(ctx, genesis, time.Now(), &ethpb.Checkpoint{Epoch: 1}))
 }
 
 func TestAttEpoch_NotMatch(t *testing.T) {
 	ctx := t.Context()
 
-	nowTime := time.Unix(2*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot), 0)
-	err := verifyAttTargetEpoch(ctx, time.Unix(0, 0), nowTime, &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)})
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slots.UnsafeEpochStart(2))
+	require.NoError(t, err)
+	genesis := time.Now().Add(-sg)
+	err = verifyAttTargetEpoch(ctx, genesis, time.Now(), &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)})
 	assert.ErrorContains(t, "target epoch 0 does not match current epoch 2 or prev epoch 1", err)
 }
 

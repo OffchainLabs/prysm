@@ -44,7 +44,7 @@ type ServiceConfig struct {
 
 // Parameters for a slasher simulator.
 type Parameters struct {
-	SecondsPerSlot         uint64
+	SlotTimeSchedule       *params.SlotSchedule
 	SlotsPerEpoch          primitives.Slot
 	AggregationPercent     float64
 	ProposerSlashingProbab float64
@@ -71,7 +71,7 @@ type Simulator struct {
 // DefaultParams for launching a slasher simulator.
 func DefaultParams() *Parameters {
 	return &Parameters{
-		SecondsPerSlot:         params.BeaconConfig().SecondsPerSlot,
+		SlotTimeSchedule:       params.BeaconConfig().SlotSchedule,
 		SlotsPerEpoch:          4,
 		AggregationPercent:     1.0,
 		ProposerSlashingProbab: 0.3,
@@ -122,14 +122,14 @@ func (s *Simulator) Start() {
 	log.WithFields(logrus.Fields{
 		"numValidators":          s.srvConfig.Params.NumValidators,
 		"numEpochs":              s.srvConfig.Params.NumEpochs,
-		"secondsPerSlot":         s.srvConfig.Params.SecondsPerSlot,
+		"slotTimeSchedule":       s.srvConfig.Params.SlotTimeSchedule,
 		"proposerSlashingProbab": s.srvConfig.Params.ProposerSlashingProbab,
 		"attesterSlashingProbab": s.srvConfig.Params.AttesterSlashingProbab,
 	}).Info("Starting slasher simulator")
 
 	// Override global configuration for simulation purposes.
 	config := params.BeaconConfig().Copy()
-	config.SecondsPerSlot = s.srvConfig.Params.SecondsPerSlot
+	config.SlotSchedule = s.srvConfig.Params.SlotTimeSchedule
 	config.SlotsPerEpoch = s.srvConfig.Params.SlotsPerEpoch
 	undo, err := params.SetActiveWithUndo(config)
 	if err != nil {
@@ -168,7 +168,7 @@ func (s *Simulator) Stop() error {
 
 func (s *Simulator) simulateBlocksAndAttestations(ctx context.Context) {
 	// Add a small offset to producing blocks and attestations a little bit after a slot starts.
-	ticker := slots.NewSlotTicker(s.genesisTime.Add(time.Millisecond*500), params.BeaconConfig().SecondsPerSlot)
+	ticker := slots.NewSlotTicker(s.genesisTime.Add(time.Millisecond*500), params.BeaconConfig().SlotSchedule)
 	defer ticker.Done()
 	for {
 		select {

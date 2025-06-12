@@ -55,11 +55,11 @@ func TestValidateDataColumn(t *testing.T) {
 	})
 
 	serviceAndMessage := func(t *testing.T, newDataColumnsVerifier verification.NewDataColumnsVerifier, msg ssz.Marshaler) (*Service, *pubsub.Message) {
-		const genesisNSec = 0
-
 		p := p2ptest.NewTestP2P(t)
-		genesisSec := time.Now().Unix() - int64(params.BeaconConfig().SecondsPerSlot)
-		chainService := &mock.ChainService{Genesis: time.Unix(genesisSec, genesisNSec)}
+		sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(1)
+		require.NoError(t, err)
+		genesis := time.Now().Add(-sg)
+		chainService := &mock.ChainService{Genesis: genesis}
 
 		clock := startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)
 		service := &Service{
@@ -70,7 +70,7 @@ func TestValidateDataColumn(t *testing.T) {
 
 		// Encode a `beaconBlock` message instead of expected.
 		buf := new(bytes.Buffer)
-		_, err := p.Encoding().EncodeGossip(buf, msg)
+		_, err = p.Encoding().EncodeGossip(buf, msg)
 		require.NoError(t, err)
 
 		topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]

@@ -3,6 +3,7 @@ package doublylinkedtree
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -134,7 +135,10 @@ func (n *Node) setNodeAndParentValidated(ctx context.Context) error {
 // slot will have secs = 3 below.
 func (n *Node) arrivedEarly(genesis time.Time) (bool, error) {
 	sss, err := slots.SinceSlotStart(n.slot, genesis, n.timestamp.Truncate(time.Second)) // Truncate such that 3.9999 seconds will have a value of 3.
-	votingWindow := time.Duration(params.BeaconConfig().SecondsPerSlot/params.BeaconConfig().IntervalsPerSlot) * time.Second
+	if err != nil {
+		return true, fmt.Errorf("invalid timestamp: %v", err)
+	}
+	votingWindow := params.BeaconConfig().SlotSchedule.SlotDuration(n.slot) / time.Duration(params.BeaconConfig().IntervalsPerSlot)
 	return sss < votingWindow, err
 }
 
@@ -145,6 +149,9 @@ func (n *Node) arrivedEarly(genesis time.Time) (bool, error) {
 // slot will have secs = 10 below.
 func (n *Node) arrivedAfterOrphanCheck(genesis time.Time) (bool, error) {
 	secs, err := slots.SinceSlotStart(n.slot, genesis, n.timestamp.Truncate(time.Second)) // Truncate such that 10.00001 seconds will have a value of 10.
+	if err != nil {
+		return false, fmt.Errorf("invalid timestamp: %v", err)
+	}
 	return secs >= ProcessAttestationsThreshold, err
 }
 

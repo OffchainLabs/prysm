@@ -23,7 +23,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -172,15 +171,17 @@ func TestGetAttestationData_OK(t *testing.T) {
 		Root:  justifiedRoot[:],
 	}
 	require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpoint))
-	offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slot)
+	require.NoError(t, err)
+	genesis := time.Now().Add(-1 * sg)
 	attesterServer := &Server{
 		SyncChecker:           &mockSync.Sync{IsSyncing: false},
 		OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
-		TimeFetcher:           &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
+		TimeFetcher:           &mock.ChainService{Genesis: genesis},
 		CoreService: &core.Service{
 			HeadFetcher: &mock.ChainService{TargetRoot: targetRoot, Root: blockRoot[:], State: beaconState},
 			GenesisTimeFetcher: &mock.ChainService{
-				Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second),
+				Genesis: genesis,
 			},
 			FinalizedFetcher:      &mock.ChainService{CurrentJustifiedCheckPoint: justifiedCheckpoint},
 			AttestationCache:      cache.NewAttestationDataCache(),
@@ -232,16 +233,18 @@ func BenchmarkGetAttestationDataConcurrent(b *testing.B) {
 		Epoch: 2,
 		Root:  justifiedRoot[:],
 	}
-	offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slot)
+	require.NoError(b, err)
+	genesis := time.Now().Add(-1 * sg)
 	attesterServer := &Server{
 		SyncChecker:           &mockSync.Sync{IsSyncing: false},
 		OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
-		TimeFetcher:           &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
+		TimeFetcher:           &mock.ChainService{Genesis: genesis},
 		CoreService: &core.Service{
 			AttestationCache: cache.NewAttestationDataCache(),
 			HeadFetcher:      &mock.ChainService{TargetRoot: targetRoot, Root: blockRoot[:]},
 			GenesisTimeFetcher: &mock.ChainService{
-				Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second),
+				Genesis: genesis,
 			},
 			OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
 			FinalizedFetcher:      &mock.ChainService{CurrentJustifiedCheckPoint: justifiedCheckpoint},
@@ -324,13 +327,15 @@ func TestServer_GetAttestationData_InvalidRequestSlot(t *testing.T) {
 	ctx := t.Context()
 
 	slot := 3*params.BeaconConfig().SlotsPerEpoch + 1
-	offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slot)
+	require.NoError(t, err)
+	genesis := time.Now().Add(-1 * sg)
 	attesterServer := &Server{
 		SyncChecker:           &mockSync.Sync{IsSyncing: false},
 		OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
-		TimeFetcher:           &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
+		TimeFetcher:           &mock.ChainService{Genesis: genesis},
 		CoreService: &core.Service{
-			GenesisTimeFetcher:    &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
+			GenesisTimeFetcher:    &mock.ChainService{Genesis: genesis},
 			OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
 		},
 	}
@@ -338,7 +343,7 @@ func TestServer_GetAttestationData_InvalidRequestSlot(t *testing.T) {
 	req := &ethpb.AttestationDataRequest{
 		Slot: 1000000000000,
 	}
-	_, err := attesterServer.GetAttestationData(ctx, req)
+	_, err = attesterServer.GetAttestationData(ctx, req)
 	assert.ErrorContains(t, "invalid request", err)
 }
 
@@ -366,14 +371,16 @@ func TestServer_GetAttestationData_RequestSlotIsDifferentThanCurrentSlot(t *test
 		Epoch: 2,
 		Root:  justifiedRoot[:],
 	}
-	offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slot)
+	require.NoError(t, err)
+	genesis := time.Now().Add(-1 * sg)
 	attesterServer := &Server{
 		SyncChecker:           &mockSync.Sync{IsSyncing: false},
 		OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
-		TimeFetcher:           &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
+		TimeFetcher:           &mock.ChainService{Genesis: genesis},
 		CoreService: &core.Service{
 			HeadFetcher:           &mock.ChainService{TargetRoot: blockRoot2, Root: blockRoot[:]},
-			GenesisTimeFetcher:    &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
+			GenesisTimeFetcher:    &mock.ChainService{Genesis: genesis},
 			StateGen:              stategen.New(db, doublylinkedtree.New()),
 			FinalizedFetcher:      &mock.ChainService{CurrentJustifiedCheckPoint: justifiedCheckpoint},
 			OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
@@ -413,17 +420,19 @@ func TestGetAttestationData_SucceedsInFirstEpoch(t *testing.T) {
 	}
 	require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpoint))
 
-	offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slot)
+	require.NoError(t, err)
+	genesis := time.Now().Add(-1 * sg)
 	attesterServer := &Server{
 		SyncChecker:           &mockSync.Sync{IsSyncing: false},
 		OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
-		TimeFetcher:           &mock.ChainService{Genesis: prysmTime.Now().Add(time.Duration(-1*offset) * time.Second)},
+		TimeFetcher:           &mock.ChainService{Genesis: genesis},
 		CoreService: &core.Service{
 			AttestationCache: cache.NewAttestationDataCache(),
 			HeadFetcher: &mock.ChainService{
 				TargetRoot: targetRoot, Root: blockRoot[:], State: beaconState,
 			},
-			GenesisTimeFetcher:    &mock.ChainService{Genesis: prysmTime.Now().Add(time.Duration(-1*offset) * time.Second)},
+			GenesisTimeFetcher:    &mock.ChainService{Genesis: genesis},
 			FinalizedFetcher:      &mock.ChainService{CurrentJustifiedCheckPoint: justifiedCheckpoint},
 			OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
 		},
@@ -482,15 +491,17 @@ func TestGetAttestationData_CommitteeIndexIsZeroPostElectra(t *testing.T) {
 		Root:  justifiedRoot[:],
 	}
 	require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpoint))
-	offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slot)
+	require.NoError(t, err)
+	genesis := time.Now().Add(-1 * sg)
 	attesterServer := &Server{
 		SyncChecker:           &mockSync.Sync{IsSyncing: false},
 		OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
-		TimeFetcher:           &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
+		TimeFetcher:           &mock.ChainService{Genesis: genesis},
 		CoreService: &core.Service{
 			HeadFetcher: &mock.ChainService{TargetRoot: targetRoot, Root: blockRoot[:], State: beaconState},
 			GenesisTimeFetcher: &mock.ChainService{
-				Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second),
+				Genesis: genesis,
 			},
 			FinalizedFetcher:      &mock.ChainService{CurrentJustifiedCheckPoint: justifiedCheckpoint},
 			AttestationCache:      cache.NewAttestationDataCache(),

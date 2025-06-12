@@ -55,7 +55,14 @@ FULU_FORK_EPOCH: 18446744073709551615
 # Time parameters
 # ---------------------------------------------------------------
 # [customized] Faster for testing purposes
-SECONDS_PER_SLOT: 10 # Override for e2e tests
+SLOT_SCHEDULE:
+  - EPOCH: 0
+    SECONDS_PER_SLOT: 10
+  - EPOCH: 16
+    SECONDS_PER_SLOT: 6
+  - EPOCH: 18
+    SECONDS_PER_SLOT: 4
+
 # 14 (estimate from Eth1 mainnet)
 SECONDS_PER_ETH1_BLOCK: 2 # Override for e2e tests
 # [customized] faster time for withdrawals

@@ -124,7 +124,7 @@ func main() {
 	}
 
 	// Update metrics once per slot.
-	slotDuration := time.Duration(params.BeaconConfig().SecondsPerSlot)
+	slotDuration := time.Duration(params.BeaconConfig().SlotSchedule.SlotDuration(0)) // TODO: Is there a better way? Maybe RunEvery with a callback?
 	async.RunEvery(context.Background(), slotDuration*time.Second, func() {
 		updateMetrics(listener)
 	})

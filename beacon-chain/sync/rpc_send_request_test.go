@@ -704,8 +704,9 @@ func TestSendBlobsByRangeRequest(t *testing.T) {
 
 	t.Run("single blob - Deneb", func(t *testing.T) {
 		// Setup genesis such that we are currently in deneb.
-		s := uint64(slots.UnsafeEpochStart(params.BeaconConfig().DenebForkEpoch)) * params.BeaconConfig().SecondsPerSlot
-		clock := startup.NewClock(time.Now().Add(-time.Second*time.Duration(s)), [32]byte{})
+		sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slots.UnsafeEpochStart(params.BeaconConfig().DenebForkEpoch))
+		require.NoError(t, err)
+		clock := startup.NewClock(time.Now().Add(-1*sg), [32]byte{})
 		ctxByte, err := ContextByteVersionsForValRoot(clock.GenesisValidatorsRoot())
 		require.NoError(t, err)
 		// Setup peers
@@ -757,8 +758,9 @@ func TestSendBlobsByRangeRequest(t *testing.T) {
 			require.NoError(t, undo())
 		}()
 		// Setup genesis such that we are currently in deneb.
-		s := uint64(slots.UnsafeEpochStart(params.BeaconConfig().DenebForkEpoch)) * params.BeaconConfig().SecondsPerSlot
-		clock := startup.NewClock(time.Now().Add(-time.Second*time.Duration(s)), [32]byte{})
+		sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slots.UnsafeEpochStart(params.BeaconConfig().DenebForkEpoch))
+		require.NoError(t, err)
+		clock := startup.NewClock(time.Now().Add(-1*sg), [32]byte{})
 		ctxByte, err := ContextByteVersionsForValRoot(clock.GenesisValidatorsRoot())
 		require.NoError(t, err)
 		// Setup peers
@@ -825,8 +827,9 @@ func TestSendBlobsByRangeRequest(t *testing.T) {
 			require.NoError(t, undo())
 		}()
 
-		s := uint64(slots.UnsafeEpochStart(params.BeaconConfig().ElectraForkEpoch)) * params.BeaconConfig().SecondsPerSlot
-		clock := startup.NewClock(time.Now().Add(-time.Second*time.Duration(s)), [32]byte{})
+		sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slots.UnsafeEpochStart(params.BeaconConfig().DenebForkEpoch))
+		require.NoError(t, err)
+		clock := startup.NewClock(time.Now().Add(-1*sg), [32]byte{})
 		ctxByte, err := ContextByteVersionsForValRoot(clock.GenesisValidatorsRoot())
 		require.NoError(t, err)
 		// Setup peers

@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
@@ -117,8 +118,14 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 						// A 1-second buffer has proven insufficient during parallel spec test runs, as the likelihood of missing the proposer boost increases significantly,
 						// often extending to 4 seconds. Starting 2 seconds into the slot ensures close to a 100% pass rate.
 						if slices.Contains(proposerBoostTests3s, folder.Name()) {
-							deadline := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
-							if uint64(tick)%params.BeaconConfig().SecondsPerSlot == deadline-1 {
+							// Calculate the genesis time based on tick
+							gt := time.Unix(time.Now().Unix()-tick, 0)
+							// Get the current slot at this time
+							currentSlot := params.BeaconConfig().SlotSchedule.SlotAt(gt, time.Now())
+							// Get the slot duration for the current slot
+							sd := params.BeaconConfig().SlotSchedule.SlotDuration(currentSlot)
+							deadline := uint64(sd/time.Second) / params.BeaconConfig().IntervalsPerSlot
+							if uint64(tick)%uint64(sd/time.Second) == deadline-1 {
 								tick--
 							}
 						}

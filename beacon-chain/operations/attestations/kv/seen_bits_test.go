@@ -51,7 +51,7 @@ func TestAttCaches_insertSeenBitDuplicates(t *testing.T) {
 	// Make sure that duplicates are not inserted, but expiration time gets updated.
 	require.NoError(t, c.insertSeenBit(att1))
 	require.Equal(t, 1, c.seenAtt.ItemCount())
-	_, expirationprysmTime, ok := c.seenAtt.GetWithExpiration(id.String())
+	_, expiration, ok := c.seenAtt.GetWithExpiration(id.String())
 	require.Equal(t, true, ok)
-	require.Equal(t, true, expirationprysmTime.After(expirationTime1), "Expiration time is not updated")
+	require.Equal(t, true, expiration.After(expirationTime1), "Expiration time is not updated")
 }

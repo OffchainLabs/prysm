@@ -777,9 +777,9 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	// Compute the number of seconds per epoch.
-	secondsPerSlot := params.BeaconConfig().SecondsPerSlot
+	secondsPerSlot := params.BeaconConfig().SlotSchedule.SlotDuration(0)
 	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
-	secondsPerEpoch := secondsPerSlot * uint64(slotsPerEpoch)
+	secondsPerEpoch := secondsPerSlot * time.Duration(slotsPerEpoch)
 
 	testCases := []struct {
 		name              string
@@ -910,7 +910,7 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 				},
 				cfg:                   &Config{UDPPort: 2000, DB: testDB.SetupDB(t)},
 				peers:                 p2p.Peers(),
-				genesisTime:           time.Now().Add(-time.Duration(tc.epochSinceGenesis*secondsPerEpoch) * time.Second),
+				genesisTime:           time.Now().Add(-time.Duration(tc.epochSinceGenesis) * secondsPerEpoch),
 				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 				custodyInfo:           &custodyInfo{groupCount: custodyGroupCount},
 			}

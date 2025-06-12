@@ -37,8 +37,9 @@ type IntervalTicker interface {
 // multiple of the slot duration.
 // In addition, the channel returns the new slot number.
 type SlotTicker struct {
-	c    chan primitives.Slot
-	done chan struct{}
+	c        chan primitives.Slot
+	done     chan struct{}
+	schedule *params.SlotSchedule
 }
 
 // SlotIntervalTicker is similar to a slot ticker but it returns also
@@ -77,15 +78,16 @@ func (s *SlotIntervalTicker) Done() {
 // NewSlotTicker starts and returns a new SlotTicker instance.
 // This method panics if genesis time is zero.
 // lint:nopanic -- Communicated panic in godoc commentary.
-func NewSlotTicker(genesisTime time.Time, secondsPerSlot uint64) *SlotTicker {
+func NewSlotTicker(genesisTime time.Time, schedule *params.SlotSchedule) *SlotTicker {
 	if genesisTime.IsZero() {
 		panic("zero genesis time")
 	}
 	ticker := &SlotTicker{
-		c:    make(chan primitives.Slot),
-		done: make(chan struct{}),
+		c:        make(chan primitives.Slot),
+		done:     make(chan struct{}),
+		schedule: schedule,
 	}
-	ticker.start(genesisTime, secondsPerSlot, prysmTime.Since, prysmTime.Until, time.After)
+	ticker.start(genesisTime, prysmTime.Since, prysmTime.Until, time.After)
 	return ticker
 }
 
@@ -93,41 +95,41 @@ func NewSlotTicker(genesisTime time.Time, secondsPerSlot uint64) *SlotTicker {
 // entering a offset greater than secondsPerSlot is not allowed.
 // This method will panic if genesis time is zero or the offset is less than seconds per slot.
 // lint:nopanic -- Communicated panic in godoc commentary.
-func NewSlotTickerWithOffset(genesisTime time.Time, offset time.Duration, secondsPerSlot uint64) *SlotTicker {
+func NewSlotTickerWithOffset(genesisTime time.Time, offset time.Duration, schedule *params.SlotSchedule) *SlotTicker {
 	if genesisTime.Unix() == 0 {
 		panic("zero genesis time")
 	}
-	if offset > time.Duration(secondsPerSlot)*time.Second {
+	if offset > schedule.CurrentSlotDuration(genesisTime) { // TODO: Handle schedule validation. It should check that all durations are greater than this value.
 		panic("invalid ticker offset")
 	}
 	ticker := &SlotTicker{
-		c:    make(chan primitives.Slot),
-		done: make(chan struct{}),
+		c:        make(chan primitives.Slot),
+		done:     make(chan struct{}),
+		schedule: schedule,
 	}
-	ticker.start(genesisTime.Add(offset), secondsPerSlot, prysmTime.Since, prysmTime.Until, time.After)
+	ticker.start(genesisTime.Add(offset), prysmTime.Since, prysmTime.Until, time.After)
 	return ticker
 }
 
 func (s *SlotTicker) start(
 	genesisTime time.Time,
-	secondsPerSlot uint64,
 	since, until func(time.Time) time.Duration,
 	after func(time.Duration) <-chan time.Time) {
-	d := time.Duration(secondsPerSlot) * time.Second
 
 	go func() {
 		sinceGenesis := since(genesisTime)
 
 		var nextTickTime time.Time
 		var slot primitives.Slot
-		if sinceGenesis < d {
+		if sinceGenesis < s.schedule.SlotDuration(0) {
 			// Handle when the current time is before the genesis time.
 			nextTickTime = genesisTime
 			slot = 0
 		} else {
+			d := s.schedule.SlotDuration(s.schedule.CurrentSlot(genesisTime))
 			nextTick := sinceGenesis.Truncate(d) + d
 			nextTickTime = genesisTime.Add(nextTick)
-			slot = primitives.Slot(nextTick / d)
+			slot = s.schedule.SlotAt(genesisTime, nextTickTime)
 		}
 
 		for {
@@ -136,7 +138,8 @@ func (s *SlotTicker) start(
 			case <-after(waitTime):
 				s.c <- slot
 				slot++
-				nextTickTime = nextTickTime.Add(d)
+				nextSlotDuration := s.schedule.SlotDuration(slot)
+				nextTickTime = nextTickTime.Add(nextSlotDuration)
 			case <-s.done:
 				return
 			}
@@ -147,6 +150,8 @@ func (s *SlotTicker) start(
 // startWithIntervals starts a ticker that emits a tick every slot at the
 // prescribed intervals. The caller is responsible to make these intervals increasing and
 // less than secondsPerSlot
+// DEPRECATED: Does not support slot time schedule.
+// TODO(preston): Update for slot time schedule.
 func (s *SlotIntervalTicker) startWithIntervals(
 	genesisTime time.Time,
 	until func(time.Time) time.Duration,
@@ -156,7 +161,12 @@ func (s *SlotIntervalTicker) startWithIntervals(
 		slot := CurrentSlot(genesisTime)
 		slot++
 		interval := 0
-		nextTickTime := UnsafeStartTime(genesisTime, slot).Add(intervals[0])
+		st, err := StartTime(genesisTime, slot)
+		if err != nil {
+			// TODO(preston): Handle.
+			panic(err) // lint:nopanic -- DEBUG
+		}
+		nextTickTime := st.Add(intervals[0])
 
 		for {
 			waitTime := until(nextTickTime)
@@ -168,7 +178,12 @@ func (s *SlotIntervalTicker) startWithIntervals(
 					interval = 0
 					slot++
 				}
-				nextTickTime = UnsafeStartTime(genesisTime, slot).Add(intervals[interval])
+				st, err := StartTime(genesisTime, slot)
+				if err != nil {
+					// TODO(preston): Handle.
+					panic(err) // lint:nopanic -- DEBUG
+				}
+				nextTickTime = st.Add(intervals[0])
 			case <-s.done:
 				return
 			}
@@ -189,7 +204,15 @@ func NewSlotTickerWithIntervals(genesisTime time.Time, intervals []time.Duration
 	if len(intervals) == 0 {
 		panic("at least one interval has to be entered")
 	}
-	slotDuration := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+	// TODO(preston): The one or more of the callers of this function expect 12 second slot times. This method will need to be reworked
+	// properly account for the use cases where the caller wants an event at some fraction of a slot. I.e. half way, two thirds, etc.
+
+	// For validation purposes, use the slot duration from slot 0
+	// The ticker is primarily designed for the first slot duration
+	schedule := params.BeaconConfig().SlotSchedule
+	slotDuration := schedule.SlotDuration(0)
+
+	// Validate intervals are increasing and not too large before adjustment
 	lastOffset := time.Duration(0)
 	for _, offset := range intervals {
 		if offset < lastOffset {
@@ -200,6 +223,8 @@ func NewSlotTickerWithIntervals(genesisTime time.Time, intervals []time.Duration
 		}
 		lastOffset = offset
 	}
+
+	// All intervals are already validated to be within bounds
 	ticker := &SlotIntervalTicker{
 		c:    make(chan SlotInterval),
 		done: make(chan struct{}),

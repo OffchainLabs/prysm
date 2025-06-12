@@ -329,7 +329,7 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	var b [32]byte
 
 	// Make sure it doesn't underflow
-	f.SetGenesisTime(time.Now().Add(time.Duration(-1*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
+	f.SetGenesisTime(time.Now().Add(-1 * params.BeaconConfig().SlotSchedule.SlotDuration(0)))
 	ctx := t.Context()
 	_, blk, err := prepareForkchoiceState(ctx, 1, [32]byte{'a'}, b, b, 1, 1)
 	require.NoError(t, err)
@@ -345,9 +345,14 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	// Received block last epoch is 1
 	_, blk, err = prepareForkchoiceState(ctx, 64, [32]byte{'A'}, b, b, 1, 1)
 	require.NoError(t, err)
+	insertTime := time.Now()
 	_, err = s.insert(ctx, blk, 1, 1)
 	require.NoError(t, err)
-	f.SetGenesisTime(time.Now().Add(time.Duration((-64*int64(params.BeaconConfig().SecondsPerSlot))-1) * time.Second))
+	// Set genesis time so that slot 64 starts exactly at insertTime
+	schedule := params.BeaconConfig().SlotSchedule
+	slot64StartTime, err := schedule.SinceGenesis(64)
+	require.NoError(t, err)
+	f.SetGenesisTime(insertTime.Add(-slot64StartTime))
 	count, err = f.ReceivedBlocksLastEpoch()
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), count)
@@ -358,9 +363,14 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	// Received block last epoch is 2
 	_, blk, err = prepareForkchoiceState(ctx, 65, [32]byte{'B'}, b, b, 1, 1)
 	require.NoError(t, err)
+	insertTime = time.Now()
 	_, err = s.insert(ctx, blk, 1, 1)
 	require.NoError(t, err)
-	f.SetGenesisTime(time.Now().Add(time.Duration(-66*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
+	// Set genesis time so that slot 65 starts 1 slot duration before insertTime
+	slot65StartTime, err := schedule.SinceGenesis(65)
+	require.NoError(t, err)
+	slotDuration := schedule.SlotDuration(65)
+	f.SetGenesisTime(insertTime.Add(-slot65StartTime - slotDuration))
 	count, err = f.ReceivedBlocksLastEpoch()
 	require.NoError(t, err)
 	require.Equal(t, uint64(2), count)
@@ -371,9 +381,13 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	// Received block last epoch is 3
 	_, blk, err = prepareForkchoiceState(ctx, 66, [32]byte{'C'}, b, b, 1, 1)
 	require.NoError(t, err)
+	insertTime = time.Now()
 	_, err = s.insert(ctx, blk, 1, 1)
 	require.NoError(t, err)
-	f.SetGenesisTime(time.Now().Add(time.Duration(-66*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
+	// Set genesis time so that slot 66 starts exactly at insertTime
+	slot66StartTime, err := schedule.SinceGenesis(66)
+	require.NoError(t, err)
+	f.SetGenesisTime(insertTime.Add(-slot66StartTime))
 	count, err = f.ReceivedBlocksLastEpoch()
 	require.NoError(t, err)
 	require.Equal(t, uint64(3), count)
@@ -384,9 +398,13 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	// Received block last epoch is 1
 	_, blk, err = prepareForkchoiceState(ctx, 98, [32]byte{'D'}, b, b, 1, 1)
 	require.NoError(t, err)
+	insertTime = time.Now()
 	_, err = s.insert(ctx, blk, 1, 1)
 	require.NoError(t, err)
-	f.SetGenesisTime(time.Now().Add(time.Duration(-98*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
+	// Set genesis time so that slot 98 starts exactly at insertTime
+	slot98StartTime, err := schedule.SinceGenesis(98)
+	require.NoError(t, err)
+	f.SetGenesisTime(insertTime.Add(-slot98StartTime))
 	count, err = f.ReceivedBlocksLastEpoch()
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), count)
@@ -398,9 +416,13 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	// Received block last epoch is 1
 	_, blk, err = prepareForkchoiceState(ctx, 132, [32]byte{'E'}, b, b, 1, 1)
 	require.NoError(t, err)
+	insertTime = time.Now()
 	_, err = s.insert(ctx, blk, 1, 1)
 	require.NoError(t, err)
-	f.SetGenesisTime(time.Now().Add(time.Duration(-132*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
+	// Set genesis time so that slot 132 starts exactly at insertTime
+	slot132StartTime, err := schedule.SinceGenesis(132)
+	require.NoError(t, err)
+	f.SetGenesisTime(insertTime.Add(-slot132StartTime))
 	count, err = f.ReceivedBlocksLastEpoch()
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), count)
@@ -415,7 +437,8 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	require.NoError(t, err)
 	_, err = s.insert(ctx, blk, 1, 1)
 	require.NoError(t, err)
-	f.SetGenesisTime(time.Now().Add(time.Duration(-132*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
+	// Set genesis time so that current slot is 132
+	f.SetGenesisTime(time.Now().Add(-slot132StartTime))
 	count, err = f.ReceivedBlocksLastEpoch()
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), count)
@@ -430,7 +453,8 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	require.NoError(t, err)
 	_, err = s.insert(ctx, blk, 1, 1)
 	require.NoError(t, err)
-	f.SetGenesisTime(time.Now().Add(time.Duration(-132*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
+	// Set genesis time so that current slot is 132
+	f.SetGenesisTime(time.Now().Add(-slot132StartTime))
 	count, err = f.ReceivedBlocksLastEpoch()
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), count)
@@ -445,17 +469,18 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	require.NoError(t, err)
 	_, err = s.insert(ctx, blk, 1, 1)
 	require.NoError(t, err)
-	f.SetGenesisTime(time.Now().Add(time.Duration(-132*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
+	// Set genesis time so that current slot is 132
+	f.SetGenesisTime(time.Now().Add(-slot132StartTime))
 	count, err = f.ReceivedBlocksLastEpoch()
 	require.NoError(t, err)
 	require.Equal(t, uint64(2), count)
 	require.Equal(t, primitives.Slot(132), f.HighestReceivedBlockSlot())
 
-	f.SetGenesisTime(time.Now().Add(time.Duration(-134*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
+	f.SetGenesisTime(time.Now().Add(-134 * params.BeaconConfig().SlotSchedule.SlotDuration(0)))
 	count, err = f.ReceivedBlocksLastEpoch()
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), count)
-	f.SetGenesisTime(time.Now().Add(time.Duration(-165*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
+	f.SetGenesisTime(time.Now().Add(-165 * params.BeaconConfig().SlotSchedule.SlotDuration(0)))
 	count, err = f.ReceivedBlocksLastEpoch()
 	require.NoError(t, err)
 	require.Equal(t, uint64(0), count)
@@ -623,7 +648,7 @@ func TestStore_HighestReceivedBlockDelay(t *testing.T) {
 			genesisTime: time.Unix(0, 0),
 			highestReceivedNode: &Node{
 				slot:      10,
-				timestamp: time.Unix(int64(((10 + 12) * params.BeaconConfig().SecondsPerSlot)), 0), // 12 slots late
+				timestamp: time.Unix(0, 0).Add((10 + 12) * params.BeaconConfig().SlotSchedule.SlotDuration(0)), // 12 slots late
 			},
 		},
 	}

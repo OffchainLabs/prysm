@@ -129,7 +129,7 @@ func (r *testRunner) scenarioRunner() {
 }
 
 func (r *testRunner) waitExtra(ctx context.Context, e primitives.Epoch, conn *grpc.ClientConn, extra primitives.Epoch) error {
-	spe := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
+	spe := uint64(params.BeaconConfig().SlotsPerEpoch) * uint64(params.BeaconConfig().SlotSchedule.SlotDuration(0).Seconds())
 	dl := time.Now().Add(time.Second * time.Duration(uint64(extra)*spe))
 
 	beaconClient := eth.NewBeaconChainClient(conn)
@@ -191,7 +191,7 @@ func (r *testRunner) postStartConfigure() {
 // runEvaluators executes assigned evaluators.
 func (r *testRunner) runEvaluators(ec *e2etypes.EvaluationContext, conns []*grpc.ClientConn, tickingStartTime time.Time) error {
 	t, config := r.t, r.config
-	secondsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
+	secondsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch) * uint64(params.BeaconConfig().SlotSchedule.SlotDuration(0).Seconds())
 	ticker := helpers.NewEpochTicker(tickingStartTime, secondsPerEpoch)
 	for currentEpoch := range ticker.C() {
 		if config.EvalInterceptor(ec, currentEpoch, conns) {
@@ -383,7 +383,7 @@ func (r *testRunner) testBeaconChainSync(ctx context.Context, g *errgroup.Group,
 	conns = append(conns, syncConn)
 
 	// Sleep a second for every 4 blocks that need to be synced for the newly started node.
-	secondsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
+	secondsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch) * uint64(params.BeaconConfig().SlotSchedule.SlotDuration(0).Seconds())
 	extraSecondsToSync := (config.EpochsToRun)*secondsPerEpoch + uint64(params.BeaconConfig().SlotsPerEpoch.Div(4).Mul(config.EpochsToRun))
 	waitForSync := tickingStartTime.Add(time.Duration(extraSecondsToSync) * time.Second)
 	time.Sleep(time.Until(waitForSync))
@@ -399,7 +399,7 @@ func (r *testRunner) testBeaconChainSync(ctx context.Context, g *errgroup.Group,
 	}
 
 	// Sleep a slot to make sure the synced state is made.
-	time.Sleep(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+	time.Sleep(params.BeaconConfig().SlotSchedule.SlotDuration(0))
 	syncEvaluators := []e2etypes.Evaluator{ev.FinishedSyncing, ev.AllNodesHaveSameHead}
 	// Only execute in the middle of an epoch to prevent race conditions around slot 0.
 	ticker := helpers.NewEpochTicker(tickingStartTime, secondsPerEpoch)
@@ -522,15 +522,20 @@ func (r *testRunner) defaultEndToEndRun() error {
 	}
 	// Test execution request processing in electra.
 	if r.config.TestDeposits && params.ElectraEnabled() {
-		if err := r.comHandler.txGen.Pause(); err != nil {
-			r.t.Error(err)
+		// Only pause/resume txGen if it was initialized
+		if r.comHandler.txGen != nil {
+			if err := r.comHandler.txGen.Pause(); err != nil {
+				r.t.Error(err)
+			}
 		}
 		err = r.depositor.SendAndMineByBatch(ctx, int(params.BeaconConfig().MinGenesisActiveValidatorCount)+int(e2e.DepositCount), int(e2e.PostElectraDepositCount), int(params.BeaconConfig().MaxDepositRequestsPerPayload), e2etypes.PostElectraDepositBatch, false)
 		if err != nil {
 			r.t.Error(err)
 		}
-		if err := r.comHandler.txGen.Resume(); err != nil {
-			r.t.Error(err)
+		if r.comHandler.txGen != nil {
+			if err := r.comHandler.txGen.Resume(); err != nil {
+				r.t.Error(err)
+			}
 		}
 	}
 

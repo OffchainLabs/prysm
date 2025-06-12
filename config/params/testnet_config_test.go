@@ -25,7 +25,7 @@ func TestE2EConfigParity(t *testing.T) {
 	// compareConfigs makes it easier to figure out exactly what changed
 	compareConfigs(t, params.BeaconConfig(), testCfg)
 	// failsafe in case compareConfigs is not updated when new fields are added
-	require.DeepEqual(t, params.BeaconConfig(), testCfg)
+	require.DeepEqual(t, testCfg, params.BeaconConfig())
 }
 
 func compareConfigs(t *testing.T, expected, actual *params.BeaconChainConfig) {
@@ -57,7 +57,6 @@ func compareConfigs(t *testing.T, expected, actual *params.BeaconChainConfig) {
 	require.DeepEqual(t, expected.ZeroHash, actual.ZeroHash)
 	require.DeepEqual(t, expected.GenesisDelay, actual.GenesisDelay)
 	require.DeepEqual(t, expected.MinAttestationInclusionDelay, actual.MinAttestationInclusionDelay)
-	require.DeepEqual(t, expected.SecondsPerSlot, actual.SecondsPerSlot)
 	require.DeepEqual(t, expected.SlotsPerEpoch, actual.SlotsPerEpoch)
 	require.DeepEqual(t, expected.SqrRootSlotsPerEpoch, actual.SqrRootSlotsPerEpoch)
 	require.DeepEqual(t, expected.MinSeedLookahead, actual.MinSeedLookahead)
@@ -156,4 +155,5 @@ func compareConfigs(t *testing.T, expected, actual *params.BeaconChainConfig) {
 	require.DeepEqual(t, expected.TerminalBlockHashActivationEpoch, actual.TerminalBlockHashActivationEpoch)
 	require.DeepEqual(t, expected.TerminalTotalDifficulty, actual.TerminalTotalDifficulty)
 	require.DeepEqual(t, expected.DefaultFeeRecipient, actual.DefaultFeeRecipient)
+	require.DeepEqualSlice(t, *expected.SlotSchedule, *actual.SlotSchedule)
 }

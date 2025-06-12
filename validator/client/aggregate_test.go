@@ -256,13 +256,18 @@ func TestWaitForSlotTwoThird_WaitCorrectly(t *testing.T) {
 			defer finish()
 			currentTime := time.Now()
 			numOfSlots := primitives.Slot(4)
-			validator.genesisTime = currentTime.Add(-1 * time.Duration(numOfSlots.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second)
-			oneThird := slots.DivideSlotBy(3 /* one third of slot duration */)
+
+			sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(numOfSlots)
+			require.NoError(t, err)
+			gt := currentTime.Add(-1 * sg)
+			validator.genesisTime = gt
+			oneThird := slots.DivideSlotBy(numOfSlots, 3 /* one third of slot duration */)
 			timeToSleep := oneThird + oneThird
 
 			twoThirdTime := currentTime.Add(timeToSleep)
 			validator.waitToSlotTwoThirds(t.Context(), numOfSlots)
 			currentTime = time.Now()
+			t.Log(twoThirdTime.Unix() - currentTime.Unix())
 			assert.Equal(t, twoThirdTime.Unix(), currentTime.Unix())
 		})
 	}
@@ -275,7 +280,10 @@ func TestWaitForSlotTwoThird_DoneContext_ReturnsImmediately(t *testing.T) {
 			defer finish()
 			currentTime := time.Now()
 			numOfSlots := primitives.Slot(4)
-			validator.genesisTime = currentTime.Add(-1 * time.Duration(numOfSlots.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second)
+			sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(numOfSlots)
+			require.NoError(t, err)
+			gt := currentTime.Add(-1 * sg)
+			validator.genesisTime = gt
 
 			expectedTime := time.Now()
 			ctx, cancel := context.WithCancel(t.Context())

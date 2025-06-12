@@ -3,8 +3,10 @@ package types
 import (
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 )
 
@@ -45,7 +47,13 @@ func InitForkCfg(start, end int, c *params.BeaconChainConfig) *params.BeaconChai
 	}
 	// Time TTD to line up roughly with the bellatrix fork epoch.
 	// E2E sets EL block production rate equal to SecondsPerETH1Block to keep the math simple.
-	ttd := uint64(c.BellatrixForkEpoch) * uint64(c.SlotsPerEpoch) * c.SecondsPerSlot
+	// Calculate the time from genesis to the start of the Bellatrix fork epoch.
+	bellatrixSlot := primitives.Slot(c.BellatrixForkEpoch) * c.SlotsPerEpoch
+	timeSinceGenesis, err := c.SlotSchedule.SinceGenesis(bellatrixSlot)
+	if err != nil {
+		panic(err) // lint:nopanic -- test configuration should have valid slot schedule
+	}
+	ttd := uint64(timeSinceGenesis / time.Second)
 	c.TerminalTotalDifficulty = fmt.Sprintf("%d", ttd)
 	return c
 }

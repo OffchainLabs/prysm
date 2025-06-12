@@ -28,6 +28,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -47,9 +48,13 @@ func TestBlobs(t *testing.T) {
 	}
 	blockRoot := blobs[0].BlockRoot()
 
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slots.UnsafeEpochStart(params.BeaconConfig().DenebForkEpoch))
+	require.NoError(t, err)
+	gt := time.Now().Add(-1 * sg)
+
 	mockChainService := &mockChain.ChainService{
 		FinalizedRoots: map[[32]byte]bool{},
-		Genesis:        time.Now().Add(-time.Duration(uint64(params.BeaconConfig().SlotsPerEpoch)*uint64(params.BeaconConfig().DenebForkEpoch)*params.BeaconConfig().SecondsPerSlot) * time.Second),
+		Genesis:        gt,
 	}
 	s := &Server{
 		OptimisticModeFetcher: mockChainService,

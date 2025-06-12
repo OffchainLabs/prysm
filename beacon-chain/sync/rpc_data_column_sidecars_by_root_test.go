@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"context"
 	"io"
 	"math"
 	"sync"
@@ -34,7 +33,7 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 	params.BeaconConfig().InitializeForkSchedule()
 	ctxMap, err := ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
 	require.NoError(t, err)
-	ctx := context.Background()
+	ctx := t.Context()
 	t.Run("wrong message type", func(t *testing.T) {
 		service := &Service{}
 		err := service.dataColumnSidecarByRootRPCHandler(t.Context(), nil, nil)
@@ -104,7 +103,7 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 		clock := startup.NewClock(time.Now(), [fieldparams.RootLength]byte{})
 
 		params := []util.DataColumnParam{
-			{Slot: 10, Index: 1}, {Slot: 10, Index: 2}, {Slot: 10, Index: 3},
+			{Slot: 10, Index: 1}, {Slot: 10, Index: 2}, {Slot: 10, Index: 3}, // Older than minimum slot (32).
 			{Slot: 40, Index: 4}, {Slot: 40, Index: 6},
 			{Slot: 45, Index: 7}, {Slot: 45, Index: 8}, {Slot: 45, Index: 9},
 		}
@@ -158,6 +157,7 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 			require.Equal(t, root5, sidecars[3].BlockRoot())
 			require.Equal(t, root5, sidecars[4].BlockRoot())
 
+			// Check indices first, it's easier for a human to grok inequality of uint64 than [32]byte.
 			require.Equal(t, uint64(4), sidecars[0].Index)
 			require.Equal(t, uint64(6), sidecars[1].Index)
 			require.Equal(t, uint64(7), sidecars[2].Index)

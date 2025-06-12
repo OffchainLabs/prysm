@@ -21,7 +21,9 @@ type syncSubnetIDs struct {
 var SyncSubnetIDs = newSyncSubnetIDs()
 
 func newSyncSubnetIDs() *syncSubnetIDs {
-	epochDuration := time.Duration(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
+	// TODO: Handle persistant cache subscription lengths to change.
+	// Wait... since the this is a default cache TTL, can we set it at runtime and always provide the current TTL when putting things in the cache?
+	epochDuration := time.Duration(params.BeaconConfig().SlotsPerEpoch.Mul(uint64(params.BeaconConfig().SlotSchedule.SlotDuration(0))))
 	// Set the default duration of a sync subnet index as the whole sync committee period.
 	subLength := epochDuration * time.Duration(params.BeaconConfig().EpochsPerSyncCommitteePeriod)
 	persistentCache := cache.New(subLength*time.Second, epochDuration*time.Second)

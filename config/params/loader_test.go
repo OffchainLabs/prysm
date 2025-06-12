@@ -124,7 +124,7 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 
 	// Time parameters.
 	assert.Equal(t, expected.GenesisDelay, actual.GenesisDelay, "%s: GenesisDelay", name)
-	assert.Equal(t, expected.SecondsPerSlot, actual.SecondsPerSlot, "%s: SecondsPerSlot", name)
+	assert.Equal(t, expected.DeprecatedSecondsPerSlot, actual.DeprecatedSecondsPerSlot, "%s: DeprecatedSecondsPerSlot", name)
 	assert.Equal(t, expected.MinAttestationInclusionDelay, actual.MinAttestationInclusionDelay, "%s: MinAttestationInclusionDelay", name)
 	assert.Equal(t, expected.SlotsPerEpoch, actual.SlotsPerEpoch, "%s: SlotsPerEpoch", name)
 	assert.Equal(t, expected.MinSeedLookahead, actual.MinSeedLookahead, "%s: MinSeedLookahead", name)
@@ -362,7 +362,10 @@ func TestConfigParityYaml(t *testing.T) {
 	assert.NoError(t, file.WriteFile(yamlDir, yamlObj))
 
 	require.NoError(t, params.LoadChainConfigFile(yamlDir, params.E2ETestConfig().Copy()))
-	assert.DeepEqual(t, params.BeaconConfig(), testCfg)
+
+	compareConfigs(t, params.BeaconConfig(), testCfg)
+	// Use DeepEqual to compare the entire config as a failsafe
+	assert.DeepEqual(t, testCfg, params.BeaconConfig())
 }
 
 // configFilePath sets the proper config and returns the relevant
@@ -430,8 +433,26 @@ func assertYamlFieldsMatch(t *testing.T, name string, fields []string, c1, c2 *p
 				found = true
 				v1 := reflect.ValueOf(*c1).Field(i).Interface()
 				v2 := reflect.ValueOf(*c2).Field(i).Interface()
-				if reflect.ValueOf(v1).Kind() == reflect.Slice {
+				rv1 := reflect.ValueOf(v1)
+				if rv1.Kind() == reflect.Slice {
 					assert.DeepEqual(t, v1, v2, "%s: %s", name, field)
+				} else if rv1.Kind() == reflect.Ptr && rv1.Type().Elem().Kind() == reflect.Slice {
+					// For pointer to slice, dereference the pointers before comparison
+					if rv1.IsNil() && reflect.ValueOf(v2).IsNil() {
+						// Both are nil, they're equal
+						assert.Equal(t, v1, v2, "%s: %s", name, field)
+					} else if rv1.IsNil() || reflect.ValueOf(v2).IsNil() {
+						// One is nil, they're not equal
+						assert.DeepEqual(t, v1, v2, "%s: %s", name, field)
+					} else {
+						// Both are non-nil, dereference and manually compare slices to avoid go-cmp issues
+						slice1 := rv1.Elem()
+						slice2 := reflect.ValueOf(v2).Elem()
+						assert.Equal(t, slice1.Len(), slice2.Len(), "%s: %s length mismatch", name, field)
+						for i := 0; i < slice1.Len(); i++ {
+							assert.Equal(t, slice1.Index(i).Interface(), slice2.Index(i).Interface(), "%s: %s[%d]", name, field, i)
+						}
+					}
 				} else {
 					assert.Equal(t, v1, v2, "%s: %s", name, field)
 				}

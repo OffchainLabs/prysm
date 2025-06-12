@@ -20,7 +20,7 @@ import (
 // every prepareForkChoiceAttsPeriod.
 func (s *Service) prepareForkChoiceAtts() {
 	intervals := features.Get().AggregateIntervals
-	slotDuration := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+	slotDuration := params.BeaconConfig().SlotSchedule.CurrentSlotDuration(s.genesisTime)
 	// Adjust intervals for networks with a lower slot duration (Hive, e2e, etc)
 	for {
 		if intervals[len(intervals)-1] >= slotDuration {

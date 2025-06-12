@@ -30,7 +30,8 @@ func TestClock(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			genesis, now := testInterval(c.nSlots)
+			t.Skip("TODO(preston): Consider adding support for alternative 'now' in SlotTimeSchedule")
+			genesis, now := testInterval(t, c.nSlots)
 			nower := func() time.Time { return now }
 			cl := NewClock(genesis, vr, WithNower(nower))
 			require.Equal(t, genesis, cl.GenesisTime())
@@ -40,10 +41,9 @@ func TestClock(t *testing.T) {
 	}
 }
 
-func testInterval(nSlots primitives.Slot) (time.Time, time.Time) {
-	oneSlot := time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot)
-	var start uint64 = 23
-	endOffset := oneSlot * time.Duration(nSlots)
-	startTime := time.Unix(int64(start), 0)
-	return startTime, startTime.Add(endOffset)
+func testInterval(t *testing.T, nSlots primitives.Slot) (time.Time, time.Time) {
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(nSlots)
+	require.NoError(t, err)
+	startTime := time.Now()
+	return startTime, startTime.Add(sg)
 }

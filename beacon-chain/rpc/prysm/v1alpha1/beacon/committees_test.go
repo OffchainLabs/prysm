@@ -21,7 +21,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/d4l3k/messagediff.v1"
@@ -35,9 +34,11 @@ func TestServer_ListBeaconCommittees_CurrentEpoch(t *testing.T) {
 	ctx := t.Context()
 	headState := setupActiveValidators(t, numValidators)
 
-	offset := int64(headState.Slot().Mul(params.BeaconConfig().SecondsPerSlot))
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(headState.Slot())
+	require.NoError(t, err)
+	gt := time.Now().Add(-1 * sg)
 	m := &mock.ChainService{
-		Genesis: prysmTime.Now().Add(time.Duration(-1*offset) * time.Second),
+		Genesis: gt,
 	}
 	bs := &Server{
 		HeadFetcher:        m,
@@ -110,10 +111,12 @@ func TestServer_ListBeaconCommittees_PreviousEpoch(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.SaveState(ctx, headState, gRoot))
 
-	offset := int64(headState.Slot().Mul(params.BeaconConfig().SecondsPerSlot))
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(headState.Slot())
+	require.NoError(t, err)
+	gt := time.Now().Add(-1 * sg)
 	m := &mock.ChainService{
 		State:   headState,
-		Genesis: prysmTime.Now().Add(time.Duration(-1*offset) * time.Second),
+		Genesis: gt,
 	}
 	bs := &Server{
 		HeadFetcher:        m,
@@ -166,9 +169,11 @@ func TestRetrieveCommitteesForRoot(t *testing.T) {
 	numValidators := 128
 	headState := setupActiveValidators(t, numValidators)
 
-	offset := int64(headState.Slot().Mul(params.BeaconConfig().SecondsPerSlot))
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(headState.Slot())
+	require.NoError(t, err)
+	gt := time.Now().Add(-1 * sg)
 	m := &mock.ChainService{
-		Genesis: prysmTime.Now().Add(time.Duration(-1*offset) * time.Second),
+		Genesis: gt,
 	}
 	bs := &Server{
 		HeadFetcher:        m,

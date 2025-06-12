@@ -35,7 +35,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/prysmaticlabs/go-bitfield"
 	"google.golang.org/protobuf/proto"
@@ -452,12 +451,14 @@ func TestServer_ListValidators_CannotRequestFutureEpoch(t *testing.T) {
 
 func TestServer_ListValidators_reqStateIsNil(t *testing.T) {
 	beaconDB := dbTest.SetupDB(t)
-	secondsPerEpoch := params.BeaconConfig().SecondsPerSlot * uint64(params.BeaconConfig().SlotsPerEpoch)
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(params.BeaconConfig().SlotsPerEpoch)
+	require.NoError(t, err)
+	gt := time.Now().Add(-1 * sg)
 	bs := &Server{
 		BeaconDB: beaconDB,
 		GenesisTimeFetcher: &mock.ChainService{
 			// We are in epoch 1.
-			Genesis: time.Now().Add(time.Duration(-1*int64(secondsPerEpoch)) * time.Second),
+			Genesis: gt,
 		},
 		HeadFetcher: &mock.ChainService{
 			State: nil,
@@ -471,7 +472,7 @@ func TestServer_ListValidators_reqStateIsNil(t *testing.T) {
 	// request uses HeadFetcher to get reqState.
 	req1 := &ethpb.ListValidatorsRequest{PageToken: strconv.Itoa(1), PageSize: 100}
 	wanted := "Requested state is nil"
-	_, err := bs.ListValidators(t.Context(), req1)
+	_, err = bs.ListValidators(t.Context(), req1)
 	assert.ErrorContains(t, wanted, err)
 
 	// request uses StateGen to get reqState.
@@ -1048,13 +1049,15 @@ func TestServer_ListValidators_FromOldEpoch(t *testing.T) {
 	require.NoError(t, beaconDB.SaveState(ctx, st, r))
 	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, r))
 
-	secondsPerEpoch := params.BeaconConfig().SecondsPerSlot * uint64(params.BeaconConfig().SlotsPerEpoch)
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slots.UnsafeEpochStart(epochs))
+	require.NoError(t, err)
+	gt := time.Now().Add(-1 * sg)
 	bs := &Server{
 		HeadFetcher: &mock.ChainService{
 			State: st,
 		},
 		GenesisTimeFetcher: &mock.ChainService{
-			Genesis: time.Now().Add(time.Duration(-1*int64(uint64(epochs)*secondsPerEpoch)) * time.Second),
+			Genesis: gt,
 		},
 	}
 	addDefaultReplayerBuilder(bs, beaconDB)
@@ -1127,13 +1130,15 @@ func TestServer_ListValidators_ProcessHeadStateSlots(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, beaconDB.SaveState(ctx, st, gRoot))
 	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, gRoot))
-	secondsPerEpoch := params.BeaconConfig().SecondsPerSlot * uint64(params.BeaconConfig().SlotsPerEpoch)
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(params.BeaconConfig().SlotsPerEpoch)
+	require.NoError(t, err)
+	gt := time.Now().Add(-1 * sg)
 	bs := &Server{
 		HeadFetcher: &mock.ChainService{
 			State: st,
 		},
 		GenesisTimeFetcher: &mock.ChainService{
-			Genesis: time.Now().Add(time.Duration(-1*int64(secondsPerEpoch)) * time.Second),
+			Genesis: gt,
 		},
 		StateGen: stategen.New(beaconDB, doublylinkedtree.New()),
 	}
@@ -1548,14 +1553,16 @@ func TestServer_GetValidatorParticipation_CurrentAndPrevEpoch(t *testing.T) {
 	require.NoError(t, beaconDB.SaveState(ctx, headState, params.BeaconConfig().ZeroHash))
 
 	m := &mock.ChainService{State: headState}
-	offset := int64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slots.UnsafeEpochStart(1))
+	require.NoError(t, err)
+	gt := time.Now().Add(-1 * sg)
 	bs := &Server{
 		BeaconDB: beaconDB,
 		StateGen: stategen.New(beaconDB, doublylinkedtree.New()),
 		CoreService: &core.Service{
 			HeadFetcher: m,
 			GenesisTimeFetcher: &mock.ChainService{
-				Genesis: prysmTime.Now().Add(time.Duration(-1*offset) * time.Second),
+				Genesis: gt,
 			},
 			FinalizedFetcher: &mock.ChainService{FinalizedCheckPoint: &ethpb.Checkpoint{Epoch: 100}},
 		},
@@ -1629,14 +1636,16 @@ func TestServer_GetValidatorParticipation_OrphanedUntilGenesis(t *testing.T) {
 	require.NoError(t, beaconDB.SaveState(ctx, headState, params.BeaconConfig().ZeroHash))
 
 	m := &mock.ChainService{State: headState}
-	offset := int64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slots.UnsafeEpochStart(1))
+	require.NoError(t, err)
+	gt := time.Now().Add(-1 * sg)
 	bs := &Server{
 		BeaconDB: beaconDB,
 		StateGen: stategen.New(beaconDB, doublylinkedtree.New()),
 		CoreService: &core.Service{
 			HeadFetcher: m,
 			GenesisTimeFetcher: &mock.ChainService{
-				Genesis: prysmTime.Now().Add(time.Duration(-1*offset) * time.Second),
+				Genesis: gt,
 			},
 			FinalizedFetcher: &mock.ChainService{FinalizedCheckPoint: &ethpb.Checkpoint{Epoch: 100}},
 		},
@@ -1747,12 +1756,14 @@ func runGetValidatorParticipationCurrentAndPrevEpoch(t *testing.T, genState stat
 	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, gRoot))
 
 	m := &mock.ChainService{State: genState}
-	offset := int64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slots.UnsafeEpochStart(1))
+	require.NoError(t, err)
+	gt := time.Now().Add(-1 * sg)
 	bs := &Server{
 		BeaconDB: beaconDB,
 		CoreService: &core.Service{
 			GenesisTimeFetcher: &mock.ChainService{
-				Genesis: prysmTime.Now().Add(time.Duration(-1*offset) * time.Second),
+				Genesis: gt,
 			},
 			FinalizedFetcher: &mock.ChainService{FinalizedCheckPoint: &ethpb.Checkpoint{Epoch: 100}},
 		},
@@ -1862,13 +1873,15 @@ func TestGetValidatorPerformance_OK(t *testing.T) {
 	}
 	require.NoError(t, headState.SetValidators(validators))
 	require.NoError(t, headState.SetBalances([]uint64{100, 101, 102}))
-	offset := int64(headState.Slot().Mul(params.BeaconConfig().SecondsPerSlot))
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(headState.Slot())
+	require.NoError(t, err)
+	gt := time.Now().Add(-1 * sg)
 	bs := &Server{
 		CoreService: &core.Service{
 			HeadFetcher: &mock.ChainService{
 				State: headState,
 			},
-			GenesisTimeFetcher: &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
+			GenesisTimeFetcher: &mock.ChainService{Genesis: gt},
 			SyncChecker:        &mockSync.Sync{IsSyncing: false},
 		},
 	}
@@ -1925,7 +1938,9 @@ func TestGetValidatorPerformance_Indices(t *testing.T) {
 		},
 	}
 	require.NoError(t, headState.SetValidators(validators))
-	offset := int64(headState.Slot().Mul(params.BeaconConfig().SecondsPerSlot))
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(headState.Slot())
+	require.NoError(t, err)
+	gt := time.Now().Add(-1 * sg)
 	bs := &Server{
 		CoreService: &core.Service{
 			HeadFetcher: &mock.ChainService{
@@ -1933,7 +1948,7 @@ func TestGetValidatorPerformance_Indices(t *testing.T) {
 				State: headState,
 			},
 			SyncChecker:        &mockSync.Sync{IsSyncing: false},
-			GenesisTimeFetcher: &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
+			GenesisTimeFetcher: &mock.ChainService{Genesis: gt},
 		},
 	}
 	c := headState.Copy()
@@ -1997,7 +2012,9 @@ func TestGetValidatorPerformance_IndicesPubkeys(t *testing.T) {
 	}
 	require.NoError(t, headState.SetValidators(validators))
 
-	offset := int64(headState.Slot().Mul(params.BeaconConfig().SecondsPerSlot))
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(headState.Slot())
+	require.NoError(t, err)
+	gt := time.Now().Add(-1 * sg)
 	bs := &Server{
 		CoreService: &core.Service{
 			HeadFetcher: &mock.ChainService{
@@ -2005,7 +2022,7 @@ func TestGetValidatorPerformance_IndicesPubkeys(t *testing.T) {
 				State: headState,
 			},
 			SyncChecker:        &mockSync.Sync{IsSyncing: false},
-			GenesisTimeFetcher: &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
+			GenesisTimeFetcher: &mock.ChainService{Genesis: gt},
 		},
 	}
 	c := headState.Copy()
@@ -2075,13 +2092,15 @@ func TestGetValidatorPerformanceAltair_OK(t *testing.T) {
 	require.NoError(t, headState.SetValidators(validators))
 	require.NoError(t, headState.SetInactivityScores([]uint64{0, 0, 0}))
 	require.NoError(t, headState.SetBalances([]uint64{100, 101, 102}))
-	offset := int64(headState.Slot().Mul(params.BeaconConfig().SecondsPerSlot))
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(headState.Slot())
+	require.NoError(t, err)
+	gt := time.Now().Add(-1 * sg)
 	bs := &Server{
 		CoreService: &core.Service{
 			HeadFetcher: &mock.ChainService{
 				State: headState,
 			},
-			GenesisTimeFetcher: &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
+			GenesisTimeFetcher: &mock.ChainService{Genesis: gt},
 			SyncChecker:        &mockSync.Sync{IsSyncing: false},
 		},
 	}
@@ -2145,13 +2164,15 @@ func TestGetValidatorPerformanceBellatrix_OK(t *testing.T) {
 	require.NoError(t, headState.SetValidators(validators))
 	require.NoError(t, headState.SetInactivityScores([]uint64{0, 0, 0}))
 	require.NoError(t, headState.SetBalances([]uint64{100, 101, 102}))
-	offset := int64(headState.Slot().Mul(params.BeaconConfig().SecondsPerSlot))
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(headState.Slot())
+	require.NoError(t, err)
+	gt := time.Now().Add(-1 * sg)
 	bs := &Server{
 		CoreService: &core.Service{
 			HeadFetcher: &mock.ChainService{
 				State: headState,
 			},
-			GenesisTimeFetcher: &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
+			GenesisTimeFetcher: &mock.ChainService{Genesis: gt},
 			SyncChecker:        &mockSync.Sync{IsSyncing: false},
 		},
 	}
@@ -2215,13 +2236,15 @@ func TestGetValidatorPerformanceCapella_OK(t *testing.T) {
 	require.NoError(t, headState.SetValidators(validators))
 	require.NoError(t, headState.SetInactivityScores([]uint64{0, 0, 0}))
 	require.NoError(t, headState.SetBalances([]uint64{100, 101, 102}))
-	offset := int64(headState.Slot().Mul(params.BeaconConfig().SecondsPerSlot))
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(headState.Slot())
+	require.NoError(t, err)
+	gt := time.Now().Add(-1 * sg)
 	bs := &Server{
 		CoreService: &core.Service{
 			HeadFetcher: &mock.ChainService{
 				State: headState,
 			},
-			GenesisTimeFetcher: &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
+			GenesisTimeFetcher: &mock.ChainService{Genesis: gt},
 			SyncChecker:        &mockSync.Sync{IsSyncing: false},
 		},
 	}

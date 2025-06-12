@@ -96,7 +96,13 @@ func (s *Service) expired(providedSlot primitives.Slot) bool {
 // Handles expiration of attestations before deneb.
 func (s *Service) expiredPreDeneb(slot primitives.Slot) bool {
 	expirationSlot := slot + params.BeaconConfig().SlotsPerEpoch
-	expirationTime := s.genesisTime.Add(time.Duration(expirationSlot.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second)
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(expirationSlot)
+	if err != nil {
+		// SinceGenesis failed, likely due to slot overflow. Attestations with impossible
+		// future slots are invalid and should be pruned to prevent cache bloat.
+		return true
+	}
+	expirationTime := s.genesisTime.Add(sg)
 	return expirationTime.Before(time.Now())
 }
 

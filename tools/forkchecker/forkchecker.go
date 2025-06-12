@@ -54,7 +54,11 @@ func main() {
 		clients[endpt] = pb.NewBeaconChainClient(conn)
 	}
 
-	ticker := time.NewTicker(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+	// Use a simple ticker with slot 0 duration for periodic checks.
+	// This tool doesn't need perfect slot alignment - it just needs to check
+	// heads at regular intervals. Using NewSlotTicker would require fetching
+	// genesis time from nodes, which adds unnecessary complexity for this use case.
+	ticker := time.NewTicker(params.BeaconConfig().SlotSchedule.SlotDuration(0))
 	go func() {
 		for range ticker.C {
 			if *compare {

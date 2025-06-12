@@ -14,7 +14,6 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
@@ -68,9 +67,12 @@ func TestProcessAttestations_Ok(t *testing.T) {
 	hook := logTest.NewGlobal()
 	ctx := tr.ctx
 
-	service.genesisTime = prysmTime.Now().Add(-1 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(1)
+	require.NoError(t, err)
+	gt := time.Now().Add(-sg)
+	service.genesisTime = gt
 	genesisState, pks := util.DeterministicGenesisState(t, 64)
-	require.NoError(t, genesisState.SetGenesisTime(time.Now().Add(-1*time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second)))
+	require.NoError(t, genesisState.SetGenesisTime(gt))
 	require.NoError(t, service.saveGenesisData(ctx, genesisState))
 	atts, err := util.GenerateAttestations(genesisState, pks, 1, 0, false)
 	require.NoError(t, err)
@@ -96,7 +98,9 @@ func TestService_ProcessAttestationsAndUpdateHead(t *testing.T) {
 	service, tr := minimalTestService(t)
 	ctx, fcs := tr.ctx, tr.fcs
 
-	service.genesisTime = prysmTime.Now().Add(-2 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(2)
+	require.NoError(t, err)
+	service.genesisTime = time.Now().Add(-sg)
 	genesisState, pks := util.DeterministicGenesisState(t, 64)
 	require.NoError(t, service.saveGenesisData(ctx, genesisState))
 	ojc := &ethpb.Checkpoint{Epoch: 0, Root: service.originBlockRoot[:]}
@@ -157,7 +161,9 @@ func TestService_UpdateHead_NoAtts(t *testing.T) {
 	service, tr := minimalTestService(t)
 	ctx, fcs := tr.ctx, tr.fcs
 
-	service.genesisTime = prysmTime.Now().Add(-2 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(2)
+	require.NoError(t, err)
+	service.genesisTime = time.Now().Add(-sg)
 	genesisState, pks := util.DeterministicGenesisState(t, 64)
 	require.NoError(t, service.saveGenesisData(ctx, genesisState))
 	require.NoError(t, fcs.UpdateJustifiedCheckpoint(ctx, &forkchoicetypes.Checkpoint{Epoch: 0, Root: service.originBlockRoot}))

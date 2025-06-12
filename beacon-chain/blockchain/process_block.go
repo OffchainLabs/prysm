@@ -591,13 +591,44 @@ func (s *Service) runLateBlockTasks() {
 		return
 	}
 
-	attThreshold := params.BeaconConfig().SecondsPerSlot / 3
-	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, time.Duration(attThreshold)*time.Second, params.BeaconConfig().SecondsPerSlot)
+	// Create a dynamic slot ticker that ticks at 1/3 of each slot's duration
+	// This replaces the fixed offset approach to handle variable slot durations
+	schedule := params.BeaconConfig().SlotSchedule
+
+	// Start from the current slot to avoid replaying old slots
+	currentSlot := schedule.CurrentSlot(s.genesisTime)
+
 	for {
+		// Calculate the attestation threshold for the current slot
+		slotDuration := schedule.SlotDuration(currentSlot)
+		attThreshold := slotDuration / 3
+
+		// Calculate when to trigger the late block tasks for this slot
+		slotStartTime, err := slots.StartTime(s.genesisTime, currentSlot)
+		if err != nil {
+			log.WithError(err).Error("Failed to calculate slot start time")
+			currentSlot++
+			continue
+		}
+
+		thresholdTime := slotStartTime.Add(attThreshold)
+		timeUntilThreshold := time.Until(thresholdTime)
+
+		// If threshold time has already passed, skip to next slot
+		if timeUntilThreshold <= 0 {
+			currentSlot++
+			continue
+		}
+
+		// Wait until the threshold time for this slot
+		timer := time.NewTimer(timeUntilThreshold)
+
 		select {
-		case <-ticker.C():
+		case <-timer.C:
 			s.lateBlockTasks(s.ctx)
+			currentSlot++
 		case <-s.ctx.Done():
+			timer.Stop()
 			log.Debug("Context closed, exiting routine")
 			return
 		}

@@ -474,6 +474,12 @@ func (s *Service) subscribeToSubnets(p subscribeToSubnetsParameters) error {
 
 // subscribeWithParameters subscribes to a list of subnets.
 func (s *Service) subscribeWithParameters(p subscribeParameters) {
+	minimumPeersPerSubnet := flags.Get().MinimumPeersPerSubnet
+	subscriptionBySubnet := make(map[uint64]*pubsub.Subscription)
+	genesisTime := s.cfg.clock.GenesisTime()
+	currentSlot := s.cfg.clock.CurrentSlot()
+	secondsPerSlotDuration := params.BeaconConfig().SlotSchedule.SlotDuration(currentSlot)
+
 	shortTopicFormat := p.topicFormat
 	shortTopicFormatLen := len(shortTopicFormat)
 	if shortTopicFormatLen >= 3 && shortTopicFormat[shortTopicFormatLen-3:] == "_%d" {
@@ -482,7 +488,7 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 	shortTopic := fmt.Sprintf(shortTopicFormat, p.digest)
 
 	parameters := subscribeToSubnetsParameters{
-		subscriptionBySubnet: make(map[uint64]*pubsub.Subscription),
+		subscriptionBySubnet: subscriptionBySubnet,
 		topicFormat:          p.topicFormat,
 		digest:               p.digest,
 		validate:             p.validate,
@@ -494,14 +500,12 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 		log.WithError(err).Error("Could not subscribe to subnets")
 	}
 
-	slotDuration := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
-	minimumPeersPerSubnet := flags.Get().MinimumPeersPerSubnet
 	// Subscribe to expected subnets and search for peers if needed at every slot.
 	go func() {
 		currentSlot := s.cfg.clock.CurrentSlot()
 		neededSubnets := computeAllNeededSubnets(currentSlot, p.getSubnetsToJoin, p.getSubnetsRequiringPeers)
 		func() {
-			ctx, cancel := context.WithTimeout(s.ctx, slotDuration)
+			ctx, cancel := context.WithTimeout(s.ctx, secondsPerSlotDuration)
 			defer cancel()
 
 			if err := s.cfg.p2p.FindAndDialPeersWithSubnets(ctx, p.topicFormat, p.digest, minimumPeersPerSubnet, neededSubnets); err != nil && !errors.Is(err, context.DeadlineExceeded) {
@@ -509,7 +513,7 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 			}
 		}()
 
-		slotTicker := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
+		slotTicker := slots.NewSlotTicker(genesisTime, params.BeaconConfig().SlotSchedule)
 		defer slotTicker.Done()
 
 		for {
@@ -527,6 +531,8 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 					continue
 				}
 
+				slotDuration := params.BeaconConfig().SlotSchedule.SlotDuration(currentSlot)
+				
 				func() {
 					ctx, cancel := context.WithTimeout(s.ctx, slotDuration)
 					defer cancel()

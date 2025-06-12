@@ -41,7 +41,9 @@ func TestBlobIndexInBounds(t *testing.T) {
 func TestSlotNotTooEarly(t *testing.T) {
 	now := time.Now()
 	// make genesis 1 slot in the past
-	genesis := now.Add(-1 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(1)
+	require.NoError(t, err)
+	genesis := now.Add(-sg)
 
 	_, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 1)
 	b := blobs[0]
@@ -49,7 +51,7 @@ func TestSlotNotTooEarly(t *testing.T) {
 	b.SignedBlockHeader.Header.Slot = 1
 
 	// This clock will give a current slot of 1 on the nose
-	happyClock := startup.NewClock(genesis, [32]byte{}, startup.WithNower(func() time.Time { return now }))
+	happyClock := startup.NewClock(genesis, [32]byte{})
 	ini := Initializer{shared: &sharedResources{clock: happyClock}}
 	v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 	require.NoError(t, v.NotFromFutureSlot())
@@ -58,14 +60,15 @@ func TestSlotNotTooEarly(t *testing.T) {
 
 	// Since we have an early return for slots that are directly equal, give a time that is less than max disparity
 	// but still in the previous slot.
-	closeClock := startup.NewClock(genesis, [32]byte{}, startup.WithNower(func() time.Time { return now.Add(-1 * params.BeaconConfig().MaximumGossipClockDisparityDuration() / 2) }))
+	genesis = time.Now().Add(-sg).Add(-params.BeaconConfig().MaximumGossipClockDisparityDuration() / 2)
+	closeClock := startup.NewClock(genesis, [32]byte{})
 	ini = Initializer{shared: &sharedResources{clock: closeClock}}
 	v = ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 	require.NoError(t, v.NotFromFutureSlot())
 
 	// This clock will give a current slot of 0, with now coming more than max clock disparity before slot 1
-	disparate := now.Add(-2 * params.BeaconConfig().MaximumGossipClockDisparityDuration())
-	dispClock := startup.NewClock(genesis, [32]byte{}, startup.WithNower(func() time.Time { return disparate }))
+	genesis = now.Add(-2 * params.BeaconConfig().MaximumGossipClockDisparityDuration())
+	dispClock := startup.NewClock(genesis, [32]byte{})
 	// Set up initializer to use the clock that will set now to a little to far before slot 1
 	ini = Initializer{shared: &sharedResources{clock: dispClock}}
 	v = ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)

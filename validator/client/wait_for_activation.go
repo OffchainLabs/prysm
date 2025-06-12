@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/math"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
@@ -83,11 +84,14 @@ func (v *validator) waitForAccountsChange(ctx context.Context) error {
 
 // waitForNextEpoch creates a blocking function to wait until the next epoch start given the current slot
 func (v *validator) waitForNextEpoch(ctx context.Context, genesis time.Time) error {
-	waitTime, err := slots.SecondsUntilNextEpochStart(genesis)
+	cs := params.BeaconConfig().SlotSchedule.CurrentSlot(genesis)
+	nextEpoch := slots.ToEpoch(cs) + 1
+	nextEpochSinceGenesisTime, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slots.UnsafeEpochStart(nextEpoch))
 	if err != nil {
 		return err
 	}
-	log.WithField("seconds_until_next_epoch", waitTime).Warn("No active validator keys provided. Waiting until next epoch to check again...")
+	waitTime := time.Until(genesis.Add(nextEpochSinceGenesisTime))
+	log.WithField("nextEpochIn", waitTime).Warn("No active validator keys provided. Waiting until next epoch to check again...")
 	select {
 	case <-ctx.Done():
 		log.Debug("Context closed, exiting waitForNextEpoch")
@@ -95,7 +99,7 @@ func (v *validator) waitForNextEpoch(ctx context.Context, genesis time.Time) err
 	case <-v.accountsChangedChannel:
 		// Accounts (keys) changed, restart the process.
 		return v.WaitForActivation(ctx)
-	case <-time.After(time.Duration(waitTime) * time.Second):
+	case <-time.After(waitTime):
 		log.Debug("Done waiting for epoch start")
 		// The ticker has ticked, indicating we've reached the next epoch
 		return nil

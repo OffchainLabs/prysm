@@ -711,8 +711,11 @@ func TestService_ProcessPendingBlockOnCorrectSlot(t *testing.T) {
 
 	p1 := p2ptest.NewTestP2P(t)
 	fcs := doublylinkedtree.New()
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(1)
+	require.NoError(t, err)
+	genesis := time.Now().Add(-sg)
 	mockChain := mock.ChainService{
-		Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
+		Genesis: genesis,
 		FinalizedCheckPoint: &ethpb.Checkpoint{
 			Epoch: 0,
 		}}
@@ -791,7 +794,12 @@ func TestService_ProcessBadPendingBlocks(t *testing.T) {
 	db := dbtest.SetupDB(t)
 
 	p1 := p2ptest.NewTestP2P(t)
-	mockChain := mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
+
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(1)
+	require.NoError(t, err)
+	genesis := time.Now().Add(-sg)
+	mockChain := mock.ChainService{
+		Genesis: genesis,
 		FinalizedCheckPoint: &ethpb.Checkpoint{
 			Epoch: 0,
 		}}

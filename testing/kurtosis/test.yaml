@@ -1,0 +1,10 @@
+participants:
+  - el_type: geth
+    cl_type: prysm
+    cl_image: gcr.io/offchainlabs/prysm/beacon-chain:dynamic_slots
+    vc_image: gcr.io/offchainlabs/prysm/validator:dynamic_slots
+      #    cl_image: gcr.io/offchainlabs/prysm/beacon-chain:latest
+      #    vc_image: gcr.io/offchainlabs/prysm/validator:latest
+    count: 3
+additional_services:
+  - dora

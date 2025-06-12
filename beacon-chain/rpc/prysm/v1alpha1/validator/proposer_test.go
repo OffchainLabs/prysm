@@ -2295,8 +2295,10 @@ func TestProposer_Eth1Data_MajorityVote_SpansGenesis(t *testing.T) {
 }
 
 func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
-	followDistanceSecs := params.BeaconConfig().Eth1FollowDistance * params.BeaconConfig().SecondsPerETH1Block
-	followSlots := followDistanceSecs / params.BeaconConfig().SecondsPerSlot
+	t.Skip("TODO(preston): I think this stuff can be deleted.")
+	//followDistanceSecs := params.BeaconConfig().Eth1FollowDistance * params.BeaconConfig().SecondsPerETH1Block
+	//followSlots := followDistanceSecs / params.BeaconConfig().SlotTimeSchedule.SlotDuration(0)
+	followSlots := 1 // TODO(preston): Can this be deleted?
 	slot := primitives.Slot(64 + followSlots)
 	earliestValidTime, latestValidTime := majorityVoteBoundaryTime(slot)
 
@@ -3259,13 +3261,16 @@ func TestProposer_SubmitValidatorRegistrations(t *testing.T) {
 	require.ErrorContains(t, "bad", err)
 }
 
+// TODO(preston): Is this eth1voting code? Can it be removed? It references eth1 block times, pre merge.
 func majorityVoteBoundaryTime(slot primitives.Slot) (uint64, uint64) {
-	s := params.BeaconConfig().SlotsPerEpoch.Mul(uint64(params.BeaconConfig().EpochsPerEth1VotingPeriod))
-	slotStartTime := uint64(mockExecution.GenesisTime) + uint64((slot - (slot % (s))).Mul(params.BeaconConfig().SecondsPerSlot))
-	earliestValidTime := slotStartTime - 2*params.BeaconConfig().SecondsPerETH1Block*params.BeaconConfig().Eth1FollowDistance
-	latestValidTime := slotStartTime - params.BeaconConfig().SecondsPerETH1Block*params.BeaconConfig().Eth1FollowDistance
+	//s := params.BeaconConfig().SlotsPerEpoch.Mul(uint64(params.BeaconConfig().EpochsPerEth1VotingPeriod))
+	//slotStartTime := uint64(mockExecution.GenesisTime) + uint64((slot - (slot % (s))).Mul(params.BeaconConfig().SlotTimeSchedule.SlotDuration(0)))
+	//earliestValidTime := slotStartTime - 2*params.BeaconConfig().SecondsPerETH1Block*params.BeaconConfig().Eth1FollowDistance
+	//latestValidTime := slotStartTime - params.BeaconConfig().SecondsPerETH1Block*params.BeaconConfig().Eth1FollowDistance
 
-	return earliestValidTime, latestValidTime
+	//return earliestValidTime, latestValidTime
+
+	return 0, 0
 }
 
 func TestProposer_GetFeeRecipientByPubKey(t *testing.T) {

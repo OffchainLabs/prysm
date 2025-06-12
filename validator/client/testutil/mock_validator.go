@@ -134,7 +134,7 @@ func (fv *FakeValidator) SlasherReady(_ context.Context) error {
 func (fv *FakeValidator) SlotDeadline(_ primitives.Slot) time.Time {
 	fv.SlotDeadlineCalled = true
 	if fv.IsRegularDeadline {
-		return prysmTime.Now().Add(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+		return prysmTime.Now().Add(params.BeaconConfig().SlotSchedule.SlotDuration(0))
 	}
 	return prysmTime.Now()
 }

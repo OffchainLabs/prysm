@@ -50,8 +50,6 @@ const (
 )
 
 var (
-	// Refresh rate of ENR set at twice per slot.
-	refreshRate = slots.DivideSlotBy(2)
 
 	// maxDialTimeout is the timeout for a single peer dial.
 	maxDialTimeout = params.BeaconConfig().RespTimeoutDuration()
@@ -258,7 +256,12 @@ func (s *Service) Start() {
 	})
 	async.RunEvery(s.ctx, 30*time.Minute, s.Peers().Prune)
 	async.RunEvery(s.ctx, time.Duration(params.BeaconConfig().RespTimeout)*time.Second, s.updateMetrics)
-	async.RunEvery(s.ctx, refreshRate, s.RefreshPersistentSubnets)
+	// Refresh persistent subnets at dynamic intervals based on current slot duration
+	async.RunEveryDynamic(s.ctx, func() time.Duration {
+		// Run twice per slot using the current slot duration
+		currentSlot := params.BeaconConfig().SlotSchedule.CurrentSlot(s.genesisTime)
+		return slots.DivideSlotBy(currentSlot, 2)
+	}, s.RefreshPersistentSubnets)
 	async.RunEvery(s.ctx, 1*time.Minute, func() {
 		inboundQUICCount := len(s.peers.InboundConnectedWithProtocol(peers.QUIC))
 		inboundTCPCount := len(s.peers.InboundConnectedWithProtocol(peers.TCP))

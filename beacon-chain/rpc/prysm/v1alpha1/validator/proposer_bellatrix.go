@@ -293,13 +293,20 @@ func (vs *Server) getPayloadHeaderFromBuilder(
 		}
 		executionRequests = eBid.ExecutionRequests()
 	}
+
+	// Recalculate slot start time to account for variable slot durations
+	currentSlotStartTime, timeErr := slots.StartTime(vs.TimeFetcher.GenesisTime(), slot)
+	if timeErr != nil {
+		currentSlotStartTime = t // fallback to original calculation
+	}
+
 	l := log.WithFields(logrus.Fields{
 		"gweiValue":          primitives.WeiToGwei(v),
 		"builderPubKey":      fmt.Sprintf("%#x", bid.Pubkey()),
 		"blockHash":          fmt.Sprintf("%#x", header.BlockHash()),
 		"slot":               slot,
 		"validator":          idx,
-		"sinceSlotStartTime": time.Since(t),
+		"sinceSlotStartTime": time.Since(currentSlotStartTime),
 	})
 	if len(kzgCommitments) > 0 {
 		l = l.WithField("kzgCommitmentCount", len(kzgCommitments))

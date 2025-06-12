@@ -292,8 +292,6 @@ func PIDsFromMultiComponentRunner(runner e2etypes.MultipleComponentRunners) []in
 }
 
 func appendDebugEndpoints(cfg *e2etypes.E2EConfig) {
-	debug := []string{
-		"--enable-debug-rpc-endpoints",
-	}
-	cfg.BeaconFlags = append(cfg.BeaconFlags, debug...)
+	// Note: enable-debug-rpc-endpoints flag is deprecated and has been removed
+	// No additional debug endpoints needed for checkpoint sync tests
 }

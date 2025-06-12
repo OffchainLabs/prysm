@@ -707,7 +707,10 @@ func TestSubmitContributionAndProofs(t *testing.T) {
 
 func TestSubmitAggregateAndProofs(t *testing.T) {
 	slot := primitives.Slot(0)
-	mock := &mockChain.ChainService{Slot: &slot, Genesis: time.Now().Add(-1 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)}
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(1)
+	require.NoError(t, err)
+	genesis := time.Now().Add(-sg)
+	mock := &mockChain.ChainService{Slot: &slot, Genesis: genesis}
 	s := &Server{
 		CoreService: &core.Service{GenesisTimeFetcher: mock},
 		TimeFetcher: mock,
@@ -1030,10 +1033,12 @@ func TestSubmitSyncCommitteeSubscription(t *testing.T) {
 	chainSlot := primitives.Slot(0)
 	chain := &mockChain.ChainService{
 		State: bs, Root: genesisRoot[:], Slot: &chainSlot,
+		Genesis: bs.GenesisTime(),
 	}
 	s := &Server{
-		HeadFetcher: chain,
-		SyncChecker: &mockSync.Sync{IsSyncing: false},
+		HeadFetcher:      chain,
+		SyncChecker:      &mockSync.Sync{IsSyncing: false},
+		ChainInfoFetcher: chain,
 	}
 
 	t.Run("single", func(t *testing.T) {
@@ -1344,10 +1349,12 @@ func TestGetAttestationData(t *testing.T) {
 			Root:  justifiedRoot[:],
 		}
 		require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpoint))
-		offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+		sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slot)
+		require.NoError(t, err)
+		gt := time.Now().Add(-1 * sg)
 		chain := &mockChain.ChainService{
 			Optimistic:                 false,
-			Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+			Genesis:                    gt,
 			Root:                       blockRoot[:],
 			CurrentJustifiedCheckPoint: justifiedCheckpoint,
 			TargetRoot:                 blockRoot,
@@ -1418,10 +1425,12 @@ func TestGetAttestationData(t *testing.T) {
 			Root:  justifiedRoot[:],
 		}
 		require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpoint))
-		offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+		sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slot)
+		require.NoError(t, err)
+		gt := time.Now().Add(-1 * sg)
 		chain := &mockChain.ChainService{
 			Optimistic:                 false,
-			Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+			Genesis:                    gt,
 			Root:                       blockRoot[:],
 			CurrentJustifiedCheckPoint: justifiedCheckpoint,
 			TargetRoot:                 blockRoot,
@@ -1552,10 +1561,12 @@ func TestGetAttestationData(t *testing.T) {
 
 	t.Run("invalid slot", func(t *testing.T) {
 		slot := 3*params.BeaconConfig().SlotsPerEpoch + 1
-		offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+		sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slot)
+		require.NoError(t, err)
+		gt := time.Now().Add(-1 * sg)
 		chain := &mockChain.ChainService{
 			Optimistic:                 false,
-			Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+			Genesis:                    gt,
 			CurrentJustifiedCheckPoint: &ethpbalpha.Checkpoint{},
 		}
 
@@ -1610,10 +1621,12 @@ func TestGetAttestationData(t *testing.T) {
 			Root:  justifiedRoot[:],
 		}
 
-		offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+		sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slot)
+		require.NoError(t, err)
+		gt := time.Now().Add(-1 * sg)
 		chain := &mockChain.ChainService{
 			Root:                       blockRoot[:],
-			Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+			Genesis:                    gt,
 			CurrentJustifiedCheckPoint: justifiedCheckpoint,
 			TargetRoot:                 blockRoot2,
 		}
@@ -1663,10 +1676,12 @@ func TestGetAttestationData(t *testing.T) {
 		}
 		require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpt))
 		require.NoError(t, err)
-		offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+		sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slot)
+		require.NoError(t, err)
+		gt := time.Now().Add(-1 * sg)
 		chain := &mockChain.ChainService{
 			Root:                       blockRoot[:],
-			Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+			Genesis:                    gt,
 			CurrentJustifiedCheckPoint: justifiedCheckpt,
 			TargetRoot:                 blockRoot,
 			State:                      beaconState,
@@ -1738,10 +1753,12 @@ func TestGetAttestationData(t *testing.T) {
 		}
 		require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpt))
 		require.NoError(t, err)
-		offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+		sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slot)
+		require.NoError(t, err)
+		gt := time.Now().Add(-1 * sg)
 		chain := &mockChain.ChainService{
 			Root:                       blockRoot[:],
-			Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+			Genesis:                    gt,
 			CurrentJustifiedCheckPoint: justifiedCheckpt,
 			TargetRoot:                 blockRoot,
 			State:                      beaconState,
@@ -1833,10 +1850,12 @@ func TestGetAttestationData(t *testing.T) {
 		}
 		require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpt))
 
-		offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+		sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slot)
+		require.NoError(t, err)
+		gt := time.Now().Add(-1 * sg)
 		chain := &mockChain.ChainService{
 			Root:                       blockRoot[:],
-			Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+			Genesis:                    gt,
 			CurrentJustifiedCheckPoint: justifiedCheckpt,
 			TargetRoot:                 blockRoot,
 			State:                      beaconState,
@@ -1927,10 +1946,12 @@ func TestGetAttestationData(t *testing.T) {
 		}
 		require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpt))
 
-		offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+		sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slot)
+		require.NoError(t, err)
+		gt := time.Now().Add(-1 * sg)
 		chain := &mockChain.ChainService{
 			Root:                       blockRoot[:],
-			Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+			Genesis:                    gt,
 			CurrentJustifiedCheckPoint: justifiedCheckpt,
 			TargetRoot:                 blockRoot,
 			State:                      beaconState,

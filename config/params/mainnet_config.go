@@ -96,8 +96,8 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	ZeroHash:                        [32]byte{},
 
 	// Time parameter constants.
-	MinAttestationInclusionDelay:     1,
-	SecondsPerSlot:                   12,
+	MinAttestationInclusionDelay: 1,
+	//SecondsPerSlot:                   12, // TODO: Delete
 	SlotsPerEpoch:                    32,
 	SqrRootSlotsPerEpoch:             5,
 	MinSeedLookahead:                 1,
@@ -340,6 +340,12 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	NodeIdBits:                      256,
 
 	BlobSchedule: []BlobScheduleEntry{},
+
+	SlotSchedule: &SlotSchedule{
+		{Epoch: 0, SlotDuration: time.Second * 12},
+	},
+
+	DeprecatedSecondsPerSlot: 12, // Derived from SlotTimeSchedule for YAML compatibility
 }
 
 // MainnetTestConfig provides a version of the mainnet config that has a different name

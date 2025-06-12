@@ -344,11 +344,12 @@ func ComponentsStarted(ctx context.Context, comps []e2etypes.ComponentRunner) er
 
 // EpochTickerStartTime calculates the best time to start epoch ticker for a given genesis.
 func EpochTickerStartTime(genesis *eth.Genesis) time.Time {
-	epochSeconds := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
-	epochSecondsHalf := time.Duration(int64(epochSeconds*1000)/2) * time.Millisecond
+	epochTime := time.Duration(params.BeaconConfig().SlotsPerEpoch) * params.BeaconConfig().SlotSchedule.CurrentSlotDuration(genesis.GenesisTime.AsTime()) // Note: Uses current slot duration at genesis - dynamic updates handled by caller's ticker management
+	epochSecondsHalf := epochTime / 2
 	// Adding a half slot here to ensure the requests are in the middle of an epoch.
-	middleOfEpoch := epochSecondsHalf + slots.DivideSlotBy(2 /* half a slot */)
-	genesisTime := time.Unix(genesis.GenesisTime.Seconds, 0)
+	// Use genesis slot (0) for the slot calculation since we're starting from genesis time
+	middleOfEpoch := epochSecondsHalf + slots.DivideSlotBy(params.BeaconConfig().SlotSchedule.CurrentSlot(genesis.GenesisTime.AsTime()), 2 /* half a slot */)
+	genesisTime := genesis.GenesisTime.AsTime()
 	// Offsetting the ticker from genesis so it ticks in the middle of an epoch, in order to keep results consistent.
 	return genesisTime.Add(middleOfEpoch)
 }

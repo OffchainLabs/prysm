@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"sync"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/async"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
@@ -24,15 +25,20 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// This defines how often a node cleans up and processes pending attestations in the queue.
-var processPendingAttsPeriod = slots.DivideSlotBy(2 /* twice per slot */)
+// processPendingAttsPeriod calculates the period for processing pending attestations
+// based on the current slot duration (1/2 of slot duration)
+func (s *Service) processPendingAttsPeriod() time.Duration {
+	currentSlot := s.cfg.chain.CurrentSlot()
+	return slots.DivideSlotBy(currentSlot, 2 /* twice per slot */)
+}
+
 var pendingAttsLimit = 10000
 
 // This processes pending attestation queues on every processPendingAttsPeriod.
 func (s *Service) runPendingAttsQueue() {
 	// Prevents multiple queue processing goroutines (invoked by RunEvery) from contending for data.
 	mutex := new(sync.Mutex)
-	async.RunEvery(s.ctx, processPendingAttsPeriod, func() {
+	async.RunEvery(s.ctx, s.processPendingAttsPeriod(), func() {
 		mutex.Lock()
 		if err := s.processPendingAtts(s.ctx); err != nil {
 			log.WithError(err).Debug("Could not process pending attestation")

@@ -126,7 +126,7 @@ func TestSubscribe_UnsubscribeTopic(t *testing.T) {
 func TestSubscribe_ReceivesAttesterSlashing(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.MainnetConfig()
-	cfg.SecondsPerSlot = 1
+	cfg.SlotSchedule = &params.SlotSchedule{{Epoch: 0, SlotDuration: time.Second}}
 	params.OverrideBeaconConfig(cfg)
 
 	p2pService := p2ptest.NewTestP2P(t)
@@ -431,7 +431,7 @@ func Test_wrapAndReportValidation(t *testing.T) {
 func TestFilterSubnetPeers(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.MainnetConfig()
-	cfg.SecondsPerSlot = 1
+	cfg.SlotSchedule = &params.SlotSchedule{{Epoch: 0, SlotDuration: time.Second}}
 	params.OverrideBeaconConfig(cfg)
 
 	gFlags := new(flags.GlobalFlags)
@@ -444,10 +444,9 @@ func TestFilterSubnetPeers(t *testing.T) {
 	defer cancel()
 	currSlot := primitives.Slot(100)
 
-	gt := time.Now()
-	genPlus100 := func() time.Time {
-		return gt.Add(time.Second * time.Duration(uint64(currSlot)*params.BeaconConfig().SecondsPerSlot))
-	}
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(currSlot)
+	require.NoError(t, err)
+	gt := time.Now().Add(-sg)
 	chain := &mockChain.ChainService{
 		Genesis:        gt,
 		ValidatorsRoot: [32]byte{'A'},
@@ -455,7 +454,7 @@ func TestFilterSubnetPeers(t *testing.T) {
 			{}: true,
 		},
 	}
-	clock := startup.NewClock(chain.Genesis, chain.ValidatorsRoot, startup.WithNower(genPlus100))
+	clock := startup.NewClock(chain.Genesis, chain.ValidatorsRoot)
 	require.Equal(t, currSlot, clock.CurrentSlot())
 	r := Service{
 		ctx: ctx,
@@ -512,7 +511,7 @@ func TestFilterSubnetPeers(t *testing.T) {
 func TestSubscribeWithSyncSubnets_DynamicOK(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.MainnetConfig()
-	cfg.SecondsPerSlot = 1
+	cfg.SlotSchedule = &params.SlotSchedule{{Epoch: 0, SlotDuration: time.Second}}
 	params.OverrideBeaconConfig(cfg)
 
 	p := p2ptest.NewTestP2P(t)
@@ -562,13 +561,35 @@ func TestSubscribeWithSyncSubnets_DynamicSwitchFork(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.BeaconConfig().InitializeForkSchedule()
 	p := p2ptest.NewTestP2P(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GenesisForkVersion = []byte{0, 0, 0, 0}
+	cfg.AltairForkVersion = []byte{1, 0, 0, 0}
+	cfg.AltairForkEpoch = 1
+	cfg.BellatrixForkVersion = []byte{2, 0, 0, 0}
+	cfg.BellatrixForkEpoch = 2
+	cfg.CapellaForkVersion = []byte{3, 0, 0, 0}
+	cfg.CapellaForkEpoch = 3
+	cfg.DenebForkVersion = []byte{4, 0, 0, 0}
+	cfg.DenebForkEpoch = 4
+	cfg.ElectraForkVersion = []byte{5, 0, 0, 0}
+	cfg.ElectraForkEpoch = 5
+	cfg.SlotSchedule = &params.SlotSchedule{{Epoch: 0, SlotDuration: time.Second}}
+	cfg.SlotsPerEpoch = 4
+	params.OverrideBeaconConfig(cfg)
+	params.BeaconConfig().InitializeForkSchedule()
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	vr := params.BeaconConfig().GenesisValidatorsRoot
-	mockNow := &startup.MockNower{}
-	clock := startup.NewClock(time.Now(), vr, startup.WithNower(mockNow.Now))
 	denebSlot, err := slots.EpochStart(params.BeaconConfig().DenebForkEpoch)
 	require.NoError(t, err)
+	
+	// Calculate genesis time based on deneb slot
+	timeSinceDeneb, err := params.BeaconConfig().SlotSchedule.SinceGenesis(denebSlot)
+	require.NoError(t, err)
+	genesisTime := time.Now().Add(-timeSinceDeneb)
+	
+	mockNow := &startup.MockNower{}
+	clock := startup.NewClock(genesisTime, vr, startup.WithNower(mockNow.Now))
 	mockNow.SetSlot(t, clock, denebSlot)
 	r := Service{
 		ctx: ctx,
@@ -673,14 +694,14 @@ func TestSubscribe_ReceivesLCOptimisticUpdate(t *testing.T) {
 	cfg.ForkVersionSchedule[[4]byte{1, 0, 0, 0}] = 1
 	params.OverrideBeaconConfig(cfg)
 
-	secondsPerSlot := int(params.BeaconConfig().SecondsPerSlot)
 	slotIntervals := int(params.BeaconConfig().IntervalsPerSlot)
-	slotsPerEpoch := int(params.BeaconConfig().SlotsPerEpoch)
 
-	genesisDrift := slotsPerEpoch*secondsPerSlot + 2*secondsPerSlot + secondsPerSlot/slotIntervals
+	genesisDrift, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slots.UnsafeEpochStart(1) + 2)
+	require.NoError(t, err)
+	genesisDrift += params.BeaconConfig().SlotSchedule.SlotDuration(0) / time.Duration(slotIntervals)
 	chainService := &mockChain.ChainService{
 		ValidatorsRoot: [32]byte{'A'},
-		Genesis:        time.Unix(time.Now().Unix()-int64(genesisDrift), 0),
+		Genesis:        time.Now().Add(-genesisDrift),
 	}
 	d := db.SetupDB(t)
 	r := Service{
@@ -701,7 +722,6 @@ func TestSubscribe_ReceivesLCOptimisticUpdate(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	var err error
 	p2pService.Digest, err = r.currentForkDigest()
 	require.NoError(t, err)
 	r.subscribe(topic, r.validateLightClientOptimisticUpdate, func(ctx context.Context, msg proto.Message) error {
@@ -740,14 +760,14 @@ func TestSubscribe_ReceivesLCFinalityUpdate(t *testing.T) {
 	cfg.ForkVersionSchedule[[4]byte{1, 0, 0, 0}] = 1
 	params.OverrideBeaconConfig(cfg)
 
-	secondsPerSlot := int(params.BeaconConfig().SecondsPerSlot)
 	slotIntervals := int(params.BeaconConfig().IntervalsPerSlot)
-	slotsPerEpoch := int(params.BeaconConfig().SlotsPerEpoch)
 
-	genesisDrift := slotsPerEpoch*secondsPerSlot + 2*secondsPerSlot + secondsPerSlot/slotIntervals
+	genesisDrift, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slots.UnsafeEpochStart(1) + 2)
+	require.NoError(t, err)
+	genesisDrift += params.BeaconConfig().SlotSchedule.SlotDuration(0) / time.Duration(slotIntervals)
 	chainService := &mockChain.ChainService{
 		ValidatorsRoot: [32]byte{'A'},
-		Genesis:        time.Unix(time.Now().Unix()-int64(genesisDrift), 0),
+		Genesis:        time.Now().Add(-genesisDrift),
 	}
 	d := db.SetupDB(t)
 	r := Service{
@@ -768,7 +788,6 @@ func TestSubscribe_ReceivesLCFinalityUpdate(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	var err error
 	p2pService.Digest, err = r.currentForkDigest()
 	require.NoError(t, err)
 	r.subscribe(topic, r.validateLightClientFinalityUpdate, func(ctx context.Context, msg proto.Message) error {

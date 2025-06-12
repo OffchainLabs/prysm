@@ -14,9 +14,11 @@ import (
 	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
 )
@@ -55,13 +57,12 @@ func TestValidateLightClientOptimisticUpdate(t *testing.T) {
 	cfg.ForkVersionSchedule[[4]byte{5, 0, 0, 0}] = 5
 	params.OverrideBeaconConfig(cfg)
 
-	secondsPerSlot := int(params.BeaconConfig().SecondsPerSlot)
+	slotDuration := params.BeaconConfig().SlotSchedule.SlotDuration(0)
 	slotIntervals := int(params.BeaconConfig().IntervalsPerSlot)
-	slotsPerEpoch := int(params.BeaconConfig().SlotsPerEpoch)
 
 	tests := []struct {
 		name             string
-		genesisDrift     int
+		genesisDrift     time.Duration
 		oldUpdateOptions []util.LightClientOption
 		newUpdateOptions []util.LightClientOption
 		expectedResult   pubsub.ValidationResult
@@ -75,7 +76,7 @@ func TestValidateLightClientOptimisticUpdate(t *testing.T) {
 		},
 		{
 			name:             "not enough time passed",
-			genesisDrift:     -secondsPerSlot / slotIntervals,
+			genesisDrift:     -slotDuration / time.Duration(slotIntervals),
 			oldUpdateOptions: nil,
 			newUpdateOptions: []util.LightClientOption{},
 			expectedResult:   pubsub.ValidationIgnore,
@@ -88,7 +89,7 @@ func TestValidateLightClientOptimisticUpdate(t *testing.T) {
 		},
 		{
 			name:             "new update is better - younger",
-			genesisDrift:     secondsPerSlot,
+			genesisDrift:     slotDuration,
 			oldUpdateOptions: []util.LightClientOption{},
 			newUpdateOptions: []util.LightClientOption{util.WithIncreasedAttestedSlot(1)},
 			expectedResult:   pubsub.ValidationAccept,
@@ -101,12 +102,14 @@ func TestValidateLightClientOptimisticUpdate(t *testing.T) {
 				ctx := t.Context()
 				p := p2ptest.NewTestP2P(t)
 				// drift back appropriate number of epochs based on fork + 2 slots for signature slot + time for gossip propagation + any extra drift
-				genesisDrift := v*slotsPerEpoch*secondsPerSlot + 2*secondsPerSlot + secondsPerSlot/slotIntervals + test.genesisDrift
-				chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(genesisDrift), 0)}
+				genesisDrift, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slots.UnsafeEpochStart(primitives.Epoch(v)) + 2)
+				require.NoError(t, err)
+				genesisDrift += slotDuration / time.Duration(slotIntervals) // time for gossip propagation
+				genesisDrift += test.genesisDrift                           // Extra drift
+				chainService := &mock.ChainService{Genesis: time.Now().Add(-genesisDrift)}
 				s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}, lcStore: lightClient.NewLightClientStore(nil, &p2ptest.FakeP2P{}, new(event.Feed))}
 
 				var oldUpdate interfaces.LightClientOptimisticUpdate
-				var err error
 				if test.oldUpdateOptions != nil {
 					l := util.NewTestLightClient(t, v, test.oldUpdateOptions...)
 					oldUpdate, err = lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock)
@@ -177,13 +180,12 @@ func TestValidateLightClientFinalityUpdate(t *testing.T) {
 	cfg.ForkVersionSchedule[[4]byte{5, 0, 0, 0}] = 5
 	params.OverrideBeaconConfig(cfg)
 
-	secondsPerSlot := int(params.BeaconConfig().SecondsPerSlot)
+	slotDuration := params.BeaconConfig().SlotSchedule.SlotDuration(0)
 	slotIntervals := int(params.BeaconConfig().IntervalsPerSlot)
-	slotsPerEpoch := int(params.BeaconConfig().SlotsPerEpoch)
 
 	tests := []struct {
 		name             string
-		genesisDrift     int
+		genesisDrift     time.Duration
 		oldUpdateOptions []util.LightClientOption
 		newUpdateOptions []util.LightClientOption
 		expectedResult   pubsub.ValidationResult
@@ -197,7 +199,7 @@ func TestValidateLightClientFinalityUpdate(t *testing.T) {
 		},
 		{
 			name:             "not enough time passed",
-			genesisDrift:     -secondsPerSlot / slotIntervals,
+			genesisDrift:     -slotDuration / time.Duration(slotIntervals),
 			oldUpdateOptions: nil,
 			newUpdateOptions: []util.LightClientOption{},
 			expectedResult:   pubsub.ValidationIgnore,
@@ -210,7 +212,7 @@ func TestValidateLightClientFinalityUpdate(t *testing.T) {
 		},
 		{
 			name:             "new update is better - age",
-			genesisDrift:     secondsPerSlot,
+			genesisDrift:     slotDuration,
 			oldUpdateOptions: []util.LightClientOption{},
 			newUpdateOptions: []util.LightClientOption{util.WithIncreasedFinalizedSlot(1)},
 			expectedResult:   pubsub.ValidationAccept,
@@ -241,12 +243,14 @@ func TestValidateLightClientFinalityUpdate(t *testing.T) {
 				ctx := t.Context()
 				p := p2ptest.NewTestP2P(t)
 				// drift back appropriate number of epochs based on fork + 2 slots for signature slot + time for gossip propagation + any extra drift
-				genesisDrift := v*slotsPerEpoch*secondsPerSlot + 2*secondsPerSlot + secondsPerSlot/slotIntervals + test.genesisDrift
-				chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(genesisDrift), 0)}
+				genesisDrift, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slots.UnsafeEpochStart(primitives.Epoch(v)) + 2)
+				require.NoError(t, err)
+				genesisDrift += slotDuration / time.Duration(slotIntervals) // time for gossip propagation
+				genesisDrift += test.genesisDrift                           // Extra drift
+				chainService := &mock.ChainService{Genesis: time.Now().Add(-genesisDrift)}
 				s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}, lcStore: lightClient.NewLightClientStore(nil, &p2ptest.FakeP2P{}, new(event.Feed))}
 
 				var oldUpdate interfaces.LightClientFinalityUpdate
-				var err error
 				if test.oldUpdateOptions != nil {
 					l := util.NewTestLightClient(t, v, test.oldUpdateOptions...)
 					oldUpdate, err = lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)

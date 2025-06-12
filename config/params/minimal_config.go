@@ -2,6 +2,7 @@ package params
 
 import (
 	"math"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 )
@@ -33,7 +34,7 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.ETH1AddressWithdrawalPrefixByte = byte(1)
 
 	// Time parameters
-	minimalConfig.SecondsPerSlot = 6
+	//minimalConfig.SecondsPerSlot = 6 // TODO: Delete
 	minimalConfig.MinAttestationInclusionDelay = 1
 	minimalConfig.SlotsPerEpoch = 8
 	minimalConfig.SqrRootSlotsPerEpoch = 2
@@ -128,6 +129,12 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.PresetBase = "minimal"
 
 	minimalConfig.BlobSchedule = make([]BlobScheduleEntry, 0)
+
+	minimalConfig.SlotSchedule = &SlotSchedule{
+		{Epoch: 0, SlotDuration: time.Second * 6},
+	}
+
+	minimalConfig.DeprecatedSecondsPerSlot = 6 // Derived from SlotTimeSchedule for YAML compatibility
 
 	minimalConfig.InitializeForkSchedule()
 	return minimalConfig

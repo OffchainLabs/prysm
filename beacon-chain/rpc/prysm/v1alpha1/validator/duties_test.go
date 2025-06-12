@@ -135,9 +135,12 @@ func TestGetAltairDuties_SyncCommitteeOK(t *testing.T) {
 		pubkeysAs48ByteType[i] = bytesutil.ToBytes48(pk)
 	}
 
-	slot := uint64(params.BeaconConfig().SlotsPerEpoch) * uint64(params.BeaconConfig().EpochsPerSyncCommitteePeriod) * params.BeaconConfig().SecondsPerSlot
+	slot := primitives.Slot(params.BeaconConfig().SlotsPerEpoch) * primitives.Slot(params.BeaconConfig().EpochsPerSyncCommitteePeriod)
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slot)
+	require.NoError(t, err)
+	gt := time.Now().Add(-1 * sg)
 	chain := &mockChain.ChainService{
-		State: bs, Root: genesisRoot[:], Genesis: time.Now().Add(time.Duration(-1*int64(slot-1)) * time.Second),
+		State: bs, Root: genesisRoot[:], Genesis: gt,
 	}
 	vs := &Server{
 		HeadFetcher:       chain,
@@ -242,9 +245,12 @@ func TestGetBellatrixDuties_SyncCommitteeOK(t *testing.T) {
 		pubkeysAs48ByteType[i] = bytesutil.ToBytes48(pk)
 	}
 
-	slot := uint64(params.BeaconConfig().SlotsPerEpoch) * uint64(params.BeaconConfig().EpochsPerSyncCommitteePeriod) * params.BeaconConfig().SecondsPerSlot
+	slot := primitives.Slot(params.BeaconConfig().SlotsPerEpoch) * primitives.Slot(params.BeaconConfig().EpochsPerSyncCommitteePeriod)
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slot)
+	require.NoError(t, err)
+	gt := time.Now().Add(-1 * sg)
 	chain := &mockChain.ChainService{
-		State: bs, Root: genesisRoot[:], Genesis: time.Now().Add(time.Duration(-1*int64(slot-1)) * time.Second),
+		State: bs, Root: genesisRoot[:], Genesis: gt,
 	}
 	vs := &Server{
 		HeadFetcher:       chain,
@@ -332,9 +338,12 @@ func TestGetAltairDuties_UnknownPubkey(t *testing.T) {
 	require.NoError(t, bs.SetSlot(params.BeaconConfig().SlotsPerEpoch*primitives.Slot(params.BeaconConfig().EpochsPerSyncCommitteePeriod)-1))
 	require.NoError(t, helpers.UpdateSyncCommitteeCache(bs))
 
-	slot := uint64(params.BeaconConfig().SlotsPerEpoch) * uint64(params.BeaconConfig().EpochsPerSyncCommitteePeriod) * params.BeaconConfig().SecondsPerSlot
+	slot := primitives.Slot(params.BeaconConfig().SlotsPerEpoch) * primitives.Slot(params.BeaconConfig().EpochsPerSyncCommitteePeriod)
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slot)
+	require.NoError(t, err)
+	gt := time.Now().Add(-1 * sg)
 	chain := &mockChain.ChainService{
-		State: bs, Root: genesisRoot[:], Genesis: time.Now().Add(time.Duration(-1*int64(slot-1)) * time.Second),
+		State: bs, Root: genesisRoot[:], Genesis: gt,
 	}
 	depositCache, err := depositsnapshot.New()
 	require.NoError(t, err)

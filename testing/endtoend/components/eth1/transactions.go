@@ -93,7 +93,7 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 	}
 	f := filler.NewFiller(rnd)
 	// Broadcast Transactions every slot
-	txPeriod := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+	txPeriod := params.BeaconConfig().SlotSchedule.SlotDuration(0) // TODO(preston): Need genesis time here and dynamic updates.
 	ticker := time.NewTicker(txPeriod)
 	gasPrice := big.NewInt(1e11)
 	for {

@@ -177,15 +177,13 @@ func TestNotFromFutureSlot(t *testing.T) {
 			const blobCount = 1
 
 			now := time.Now()
-			secondsPerSlot := time.Duration(params.BeaconConfig().SecondsPerSlot)
-			genesis := now.Add(-time.Duration(tc.currentSlot) * secondsPerSlot * time.Second)
+			sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(tc.currentSlot)
+			require.NoError(t, err)
+			genesis := now.Add(-1 * sg).Add(tc.timeBeforeCurrentSlot)
 
 			clock := startup.NewClock(
 				genesis,
 				[fieldparams.RootLength]byte{},
-				startup.WithNower(func() time.Time {
-					return now.Add(-tc.timeBeforeCurrentSlot)
-				}),
 			)
 
 			parentRoot := [fieldparams.RootLength]byte{}
@@ -194,11 +192,11 @@ func TestNotFromFutureSlot(t *testing.T) {
 			columns := GenerateTestDataColumns(t, parentRoot, tc.columnSlot, blobCount)
 			verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
 
-			err := verifier.NotFromFutureSlot()
+			err = verifier.NotFromFutureSlot()
 			require.Equal(t, true, verifier.results.executed(RequireNotFromFutureSlot))
 
 			if tc.isError {
-				require.ErrorIs(t, err, errFromFutureSlot)
+				require.ErrorIs(t, err, errFromFutureSlot, "did not get expected error")
 				require.NotNil(t, verifier.results.result(RequireNotFromFutureSlot))
 				return
 			}

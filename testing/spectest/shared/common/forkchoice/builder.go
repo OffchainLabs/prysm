@@ -51,17 +51,20 @@ func NewBuilder(t testing.TB, initialState state.BeaconState, initialBlock inter
 
 // Tick resets the genesis time to now()-tick and adjusts the slot to the appropriate value.
 func (bb *Builder) Tick(t testing.TB, tick int64) {
-	bb.service.SetGenesisTime(time.Unix(time.Now().Unix()-tick, 0))
-	lastSlot := uint64(bb.lastTick) / params.BeaconConfig().SecondsPerSlot
-	currentSlot := uint64(tick) / params.BeaconConfig().SecondsPerSlot
+	gt := time.Unix(time.Now().Unix()-tick, 0)
+	bb.service.SetGenesisTime(gt)
+
+	// Use consistent genesis time for fork choice
+	bb.service.SetForkChoiceGenesisTime(gt)
+
+	lastTickGT := time.Unix(time.Now().Unix()-bb.lastTick, 0)
+	lastSlot := params.BeaconConfig().SlotSchedule.CurrentSlot(lastTickGT)
+	currentSlot := params.BeaconConfig().SlotSchedule.CurrentSlot(gt)
 	for lastSlot < currentSlot {
 		lastSlot++
-		bb.service.SetForkChoiceGenesisTime(time.Now().Add(-1 * time.Duration(params.BeaconConfig().SecondsPerSlot*lastSlot) * time.Second))
 		require.NoError(t, bb.service.NewSlot(t.Context(), primitives.Slot(lastSlot)))
 	}
-	if tick > int64(params.BeaconConfig().SecondsPerSlot*lastSlot) {
-		bb.service.SetForkChoiceGenesisTime(time.Now().Add(-1 * time.Duration(tick) * time.Second))
-	}
+
 	bb.lastTick = tick
 }
 

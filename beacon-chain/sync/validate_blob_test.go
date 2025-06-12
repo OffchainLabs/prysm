@@ -58,13 +58,16 @@ func TestValidateBlob_InvalidTopic(t *testing.T) {
 func TestValidateBlob_InvalidMessageType(t *testing.T) {
 	ctx := t.Context()
 	p := p2ptest.NewTestP2P(t)
-	chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0)}
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(1)
+	require.NoError(t, err)
+	genesis := time.Now().Add(-sg)
+	chainService := &mock.ChainService{Genesis: genesis}
 	s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}}
 	s.newBlobVerifier = testNewBlobVerifier()
 
 	msg := util.NewBeaconBlock()
 	buf := new(bytes.Buffer)
-	_, err := p.Encoding().EncodeGossip(buf, msg)
+	_, err = p.Encoding().EncodeGossip(buf, msg)
 	require.NoError(t, err)
 
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
@@ -146,14 +149,17 @@ func TestValidateBlob_InvalidTopicIndex(t *testing.T) {
 	params.BeaconConfig().InitializeForkSchedule()
 	ctx := t.Context()
 	p := p2ptest.NewTestP2P(t)
-	chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0)}
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(1)
+	require.NoError(t, err)
+	genesis := time.Now().Add(-sg)
+	chainService := &mock.ChainService{Genesis: genesis}
 	s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, params.BeaconConfig().GenesisValidatorsRoot)}}
 	s.newBlobVerifier = testNewBlobVerifier()
 
 	_, scs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, chainService.CurrentSlot()+1, 1)
 	msg := scs[0].BlobSidecar
 	buf := new(bytes.Buffer)
-	_, err := p.Encoding().EncodeGossip(buf, msg)
+	_, err = p.Encoding().EncodeGossip(buf, msg)
 	require.NoError(t, err)
 
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
@@ -258,7 +264,7 @@ func TestValidateBlob_ErrorPathsWithMock(t *testing.T) {
 		t.Run(tt.error.Error(), func(t *testing.T) {
 			ctx := t.Context()
 			p := p2ptest.NewTestP2P(t)
-			chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0)}
+			chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SlotSchedule.SlotDuration(0)), 0)}
 			s := &Service{
 				seenBlobCache:     lruwrpr.New(10),
 				seenPendingBlocks: make(map[[32]byte]bool),

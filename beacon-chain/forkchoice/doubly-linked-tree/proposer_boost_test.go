@@ -14,7 +14,10 @@ import (
 // boost. It alters the genesisTime tracked by the store.
 func driftGenesisTime(f *ForkChoice, slot primitives.Slot, delay time.Duration) {
 	genesis := time.Now()
-	s := time.Duration(slot*primitives.Slot(params.BeaconConfig().SecondsPerSlot)) * time.Second
+	s, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slot)
+	if err != nil {
+		panic(err) // lint:nopanic -- this is a test so it's ok.
+	}
 	genesis = genesis.Add(-1 * s)
 	genesis = genesis.Add(-1 * delay.Abs())
 	f.SetGenesisTime(genesis)
@@ -449,7 +452,7 @@ func TestForkChoice_BoostProposerRoot(t *testing.T) {
 		f := setup(0, 0)
 		slot := primitives.Slot(1)
 		currentSlot := primitives.Slot(1)
-		driftGenesisTime(f, currentSlot, time.Duration(params.BeaconConfig().SecondsPerSlot-1)*time.Second)
+		driftGenesisTime(f, currentSlot, params.BeaconConfig().SlotSchedule.SlotDuration(0)-1*time.Second)
 		state, blkRoot, err := prepareForkchoiceState(ctx, slot, root, zeroHash, zeroHash, 0, 0)
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, state, blkRoot))

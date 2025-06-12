@@ -159,8 +159,11 @@ func TestShouldOverrideFCU(t *testing.T) {
 	service, tr := minimalTestService(t)
 	ctx, fcs := tr.ctx, tr.fcs
 
-	service.SetGenesisTime(time.Now().Add(-time.Duration(2*params.BeaconConfig().SecondsPerSlot) * time.Second))
-	fcs.SetGenesisTime(time.Now().Add(-time.Duration(2*params.BeaconConfig().SecondsPerSlot) * time.Second))
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(2)
+	require.NoError(t, err)
+	genesis := time.Now().Add(-sg)
+	service.SetGenesisTime(genesis)
+	fcs.SetGenesisTime(genesis)
 	headRoot := [32]byte{'b'}
 	parentRoot := [32]byte{'a'}
 	ojc := &ethpb.Checkpoint{}
@@ -173,9 +176,9 @@ func TestShouldOverrideFCU(t *testing.T) {
 
 	require.Equal(t, primitives.Slot(2), service.CurrentSlot())
 	require.Equal(t, true, service.shouldOverrideFCU(headRoot, 2))
-	require.LogsDoNotContain(t, hook, "12 seconds")
+	require.LogsDoNotContain(t, hook, "Attempted late block reorg aborted due to attestations at 12s")
 	require.Equal(t, false, service.shouldOverrideFCU(parentRoot, 2))
-	require.LogsContain(t, hook, "12 seconds")
+	require.LogsContain(t, hook, "Attempted late block reorg aborted due to attestations at 12s")
 
 	head, err := fcs.Head(ctx)
 	require.NoError(t, err)
@@ -186,7 +189,9 @@ func TestShouldOverrideFCU(t *testing.T) {
 	require.Equal(t, true, service.shouldOverrideFCU(parentRoot, 3))
 	require.LogsDoNotContain(t, hook, wantLog)
 	fcs.SetGenesisTime(time.Now().Add(-24 * time.Second))
-	service.SetGenesisTime(time.Now().Add(-time.Duration(2*params.BeaconConfig().SecondsPerSlot+10) * time.Second))
+	sg, err = params.BeaconConfig().SlotSchedule.SinceGenesis(2)
+	require.NoError(t, err)
+	service.SetGenesisTime(time.Now().Add(-sg).Add(-10 * time.Second)) // 2 slots and 10s ago.
 	require.Equal(t, false, service.shouldOverrideFCU(parentRoot, 3))
 	require.LogsContain(t, hook, wantLog)
 }

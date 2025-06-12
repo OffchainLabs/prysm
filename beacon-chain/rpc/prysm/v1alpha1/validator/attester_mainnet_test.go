@@ -58,15 +58,17 @@ func TestAttestationDataAtSlot_HandlesFarAwayJustifiedEpoch(t *testing.T) {
 	}
 	require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpoint))
 
-	offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slot)
+	require.NoError(t, err)
+	genesisTime := time.Now().Add(-1 * sg)
 	attesterServer := &Server{
 		SyncChecker:           &mockSync.Sync{IsSyncing: false},
 		OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
-		TimeFetcher:           &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
+		TimeFetcher:           &mock.ChainService{Genesis: genesisTime},
 		CoreService: &core.Service{
 			AttestationCache:      cache.NewAttestationDataCache(),
 			HeadFetcher:           &mock.ChainService{TargetRoot: blockRoot, Root: blockRoot[:], State: beaconState},
-			GenesisTimeFetcher:    &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
+			GenesisTimeFetcher:    &mock.ChainService{Genesis: genesisTime},
 			FinalizedFetcher:      &mock.ChainService{CurrentJustifiedCheckPoint: justifiedCheckpoint},
 			OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
 		},

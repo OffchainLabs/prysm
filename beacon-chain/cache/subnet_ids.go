@@ -32,7 +32,20 @@ func newSubnetIDs() *subnetIDs {
 	cacheSize := int(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().MaxCommitteesPerSlot * 2)) // lint:ignore uintcast -- constant values that would panic on startup if negative.
 	attesterCache := lruwrpr.New(cacheSize)
 	aggregatorCache := lruwrpr.New(cacheSize)
-	epochDuration := time.Duration(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
+	// TODO: Handle persistant cache subscription lengths to change.
+	// Wait... since the this is a default cache TTL, can we set it at runtime and always provide the current TTL when putting things in the cache?
+
+	// Calculate epoch duration considering variable slot durations
+	// Use current time to determine appropriate epoch duration
+	schedule := params.BeaconConfig().SlotSchedule
+	currentSlot := schedule.CurrentSlot(time.Unix(0, 0)) // Using zero genesis for now
+	slotsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch)
+
+	epochDuration := time.Duration(0)
+	for i := uint64(0); i < slotsPerEpoch; i++ {
+		epochDuration += schedule.SlotDuration(currentSlot + primitives.Slot(i))
+	}
+
 	subLength := epochDuration * time.Duration(params.BeaconConfig().EpochsPerRandomSubnetSubscription)
 	persistentCache := cache.New(subLength*time.Second, epochDuration*time.Second)
 	return &subnetIDs{attester: attesterCache, aggregator: aggregatorCache, persistentSubnets: persistentCache}

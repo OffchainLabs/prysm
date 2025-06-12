@@ -89,7 +89,13 @@ func (s *Service) spawnProcessAttestationsRoutine() {
 			return
 		}
 
-		reorgInterval := time.Second*time.Duration(params.BeaconConfig().SecondsPerSlot) - reorgLateBlockCountAttestations
+		currentSlotDuration := params.BeaconConfig().SlotSchedule.CurrentSlotDuration(s.genesisTime)
+		reorgInterval := currentSlotDuration - reorgLateBlockCountAttestations
+		// Ensure reorg interval is positive and reasonable
+		if reorgInterval <= 0 || reorgInterval >= currentSlotDuration {
+			// Fall back to 50% of current slot duration if the calculated interval is invalid
+			reorgInterval = currentSlotDuration / 2
+		}
 		ticker := slots.NewSlotTickerWithIntervals(s.genesisTime, []time.Duration{0, reorgInterval})
 		for {
 			select {

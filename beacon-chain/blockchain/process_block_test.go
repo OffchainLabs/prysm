@@ -2406,8 +2406,11 @@ func TestFillMissingBlockPayloadId_PrepareAllPayloads(t *testing.T) {
 // boost. It alters the genesisTime tracked by the store.
 func driftGenesisTime(s *Service, slot primitives.Slot, delay time.Duration) {
 	now := time.Now()
-	slotDuration := time.Duration(slot) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
-	genesis := now.Add(-slotDuration - delay)
+	timeSinceGenesis, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slot)
+	if err != nil {
+		panic(err) // This is a test helper function
+	}
+	genesis := now.Add(-timeSinceGenesis - delay)
 	s.SetGenesisTime(genesis)
 	s.cfg.ForkChoiceStore.SetGenesisTime(genesis)
 }
@@ -2799,9 +2802,11 @@ func TestProcessLightClientUpdate(t *testing.T) {
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			l := util.NewTestLightClient(t, testVersion)
 
-			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().VersionToForkEpochMap()[testVersion])*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
+			sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slots.UnsafeEpochStart(params.BeaconConfig().VersionToForkEpochMap()[testVersion]))
+			require.NoError(t, err)
+			s.SetGenesisTime(time.Now().Add(-sg))
 
-			err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
+			err = s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
 			require.NoError(t, err)
 			attestedBlockRoot, err := l.AttestedBlock.Block().HashTreeRoot()
 			require.NoError(t, err)
@@ -3248,7 +3253,7 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 			}
 
 			t.Run(version.String(testVersion)+"_"+tc.name, func(t *testing.T) {
-				s.genesisTime = time.Unix(time.Now().Unix()-(int64(forkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
+				s.genesisTime = time.Unix(time.Now().Unix()-(int64(forkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SlotSchedule.SlotDuration(0))), 0)
 				s.lcStore = lightClient.NewLightClientStore(s.cfg.BeaconDB, s.cfg.P2P, s.cfg.StateNotifier.StateFeed())
 
 				var oldActualUpdate interfaces.LightClientOptimisticUpdate
@@ -3388,7 +3393,7 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 			}
 
 			t.Run(version.String(testVersion)+"_"+tc.name, func(t *testing.T) {
-				s.genesisTime = time.Unix(time.Now().Unix()-(int64(forkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
+				s.genesisTime = time.Unix(time.Now().Unix()-(int64(forkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SlotSchedule.SlotDuration(0))), 0)
 				s.lcStore = lightClient.NewLightClientStore(s.cfg.BeaconDB, s.cfg.P2P, s.cfg.StateNotifier.StateFeed())
 
 				var actualOldUpdate, actualNewUpdate interfaces.LightClientFinalityUpdate

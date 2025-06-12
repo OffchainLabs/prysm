@@ -60,5 +60,6 @@ go_test(
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
         "//testing/util:go_default_library",
+        "//time/slots:go_default_library",
     ],
 )

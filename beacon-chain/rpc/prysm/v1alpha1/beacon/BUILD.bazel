@@ -106,7 +106,6 @@ go_test(
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
         "//testing/util:go_default_library",
-        "//time:go_default_library",
         "//time/slots:go_default_library",
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
         "@in_gopkg_d4l3k_messagediff_v1//:go_default_library",

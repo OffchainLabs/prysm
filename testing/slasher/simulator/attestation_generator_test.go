@@ -12,7 +12,7 @@ import (
 func TestGenerateAttestationsForSlot_Slashing(t *testing.T) {
 	ctx := t.Context()
 	simParams := &Parameters{
-		SecondsPerSlot:         params.BeaconConfig().SecondsPerSlot,
+		SlotTimeSchedule:       params.BeaconConfig().SlotSchedule,
 		SlotsPerEpoch:          params.BeaconConfig().SlotsPerEpoch,
 		AggregationPercent:     1,
 		NumValidators:          64,
@@ -38,7 +38,7 @@ func TestGenerateAttestationsForSlot_Slashing(t *testing.T) {
 func TestGenerateAttestationsForSlot_CorrectIndices(t *testing.T) {
 	ctx := t.Context()
 	simParams := &Parameters{
-		SecondsPerSlot:         params.BeaconConfig().SecondsPerSlot,
+		SlotTimeSchedule:       params.BeaconConfig().SlotSchedule,
 		SlotsPerEpoch:          params.BeaconConfig().SlotsPerEpoch,
 		AggregationPercent:     1,
 		NumValidators:          16384,

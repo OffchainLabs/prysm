@@ -1,6 +1,9 @@
 package params
 
-import "math"
+import (
+	"math"
+	"time"
+)
 
 const (
 	AltairE2EForkEpoch    = 6
@@ -26,7 +29,7 @@ func E2ETestConfig() *BeaconChainConfig {
 	e2eConfig.MaxValidatorsPerWithdrawalsSweep = 128
 
 	// Time parameters.
-	e2eConfig.SecondsPerSlot = 10
+	//e2eConfig.SecondsPerSlot = 10 // TODO: Delete
 	e2eConfig.SlotsPerEpoch = 6
 	e2eConfig.SqrRootSlotsPerEpoch = 2
 	e2eConfig.SecondsPerETH1Block = 2
@@ -65,6 +68,12 @@ func E2ETestConfig() *BeaconChainConfig {
 		{Epoch: 14, MaxBlobsPerBlock: 9},
 	}
 
+	e2eConfig.SlotSchedule = &SlotSchedule{
+		{Epoch: 0, SlotDuration: time.Second * 10},
+		{Epoch: ElectraE2EForkEpoch + 2, SlotDuration: time.Second * 6}, // After Electra fork completes
+		{Epoch: ElectraE2EForkEpoch + 4, SlotDuration: time.Second * 4}, // Test multiple transitions
+	}
+
 	e2eConfig.InitializeForkSchedule()
 	return e2eConfig
 }
@@ -80,7 +89,7 @@ func E2EMainnetTestConfig() *BeaconChainConfig {
 	e2eConfig.ChurnLimitQuotient = 65536
 
 	// Time parameters.
-	e2eConfig.SecondsPerSlot = 6
+	// e2eConfig.SecondsPerSlot = 6 // TODO: Delete
 	e2eConfig.SqrRootSlotsPerEpoch = 5
 	e2eConfig.SecondsPerETH1Block = 2
 	e2eConfig.ShardCommitteePeriod = 4
@@ -117,6 +126,12 @@ func E2EMainnetTestConfig() *BeaconChainConfig {
 	e2eConfig.BlobSchedule = []BlobScheduleEntry{
 		{Epoch: 12, MaxBlobsPerBlock: 6},
 		{Epoch: 14, MaxBlobsPerBlock: 9},
+	}
+
+	e2eConfig.SlotSchedule = &SlotSchedule{
+		{Epoch: 0, SlotDuration: time.Second * 10},
+		{Epoch: ElectraE2EForkEpoch + 2, SlotDuration: time.Second * 4}, // After Electra fork completes
+		{Epoch: ElectraE2EForkEpoch + 4, SlotDuration: time.Second * 2}, // Test multiple transitions
 	}
 
 	e2eConfig.InitializeForkSchedule()

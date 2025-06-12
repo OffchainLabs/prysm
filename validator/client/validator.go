@@ -349,7 +349,7 @@ func (v *validator) SetTicker() {
 	}
 	// Once the ChainStart log is received, we update the genesis time of the validator client
 	// and begin a slot ticker used to track the current slot the beacon node is in.
-	v.ticker = slots.NewSlotTicker(v.genesisTime, params.BeaconConfig().SecondsPerSlot)
+	v.ticker = slots.NewSlotTicker(v.genesisTime, params.BeaconConfig().SlotSchedule)
 	log.WithField("genesisTime", v.genesisTime).Info("Beacon chain started")
 }
 
@@ -369,7 +369,7 @@ func (v *validator) WaitForSync(ctx context.Context) error {
 	for {
 		select {
 		// Poll every half slot.
-		case <-time.After(slots.DivideSlotBy(2 /* twice per slot */)):
+		case <-time.After(slots.DivideSlotBy(slots.CurrentSlot(v.genesisTime), 2 /* twice per slot */)):
 			s, err := v.nodeClient.SyncStatus(ctx, &emptypb.Empty{})
 			if err != nil {
 				return errors.Wrap(client.ErrConnectionIssue, errors.Wrap(err, "could not get sync status").Error())
@@ -432,8 +432,15 @@ func (v *validator) NextSlot() <-chan primitives.Slot {
 
 // SlotDeadline is the start time of the next slot.
 func (v *validator) SlotDeadline(slot primitives.Slot) time.Time {
-	secs := time.Duration((slot + 1).Mul(params.BeaconConfig().SecondsPerSlot))
-	return v.genesisTime.Add(secs * time.Second)
+	sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(slot + 1)
+	if err != nil {
+		log.WithError(err).WithField("slot", slot+1).Error("Failed to calculate time since genesis for slot deadline, using fallback calculation")
+		// Fallback: calculate using current slot duration as approximation
+		// This provides graceful degradation rather than crashing the validator
+		currentDuration := params.BeaconConfig().SlotSchedule.CurrentSlotDuration(v.genesisTime)
+		sg = time.Duration(slot+1) * currentDuration
+	}
+	return v.genesisTime.Add(sg)
 }
 
 // CheckDoppelGanger checks if the current actively provided keys have

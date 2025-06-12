@@ -137,7 +137,7 @@ func (s *Store) insert(ctx context.Context,
 		if err != nil {
 			return nil, fmt.Errorf("could not determine time since current slot started: %w", err)
 		}
-		boostThreshold := time.Duration(params.BeaconConfig().SecondsPerSlot/params.BeaconConfig().IntervalsPerSlot) * time.Second
+		boostThreshold := params.BeaconConfig().SlotSchedule.SlotDuration(currentSlot) / time.Duration(params.BeaconConfig().IntervalsPerSlot)
 		isFirstBlock := s.proposerBoostRoot == [32]byte{}
 		if currentSlot == slot && sss < boostThreshold && isFirstBlock {
 			s.proposerBoostRoot = root
@@ -282,7 +282,32 @@ func (f *ForkChoice) HighestReceivedBlockDelay() primitives.Slot {
 	if err != nil {
 		return 0
 	}
-	return primitives.Slot(uint64(sss/time.Second) / params.BeaconConfig().SecondsPerSlot)
+
+	// For variable slot durations, we calculate how many slots the delay represents
+	// by iterating forward from the block's slot time. This accounts for different
+	// slot durations that may exist across slot schedule boundaries.
+	schedule := params.BeaconConfig().SlotSchedule
+	delaySlots := primitives.Slot(0)
+	remainingTime := sss
+
+	// Start from the block's slot and count forward
+	currentSlot := n.slot
+	for remainingTime > 0 {
+		slotDuration := schedule.SlotDuration(currentSlot)
+		if remainingTime >= slotDuration {
+			delaySlots++
+			remainingTime -= slotDuration
+			currentSlot++
+		} else {
+			// Partial slot - round up if more than half a slot duration remains
+			if remainingTime >= slotDuration/2 {
+				delaySlots++
+			}
+			break
+		}
+	}
+
+	return delaySlots
 }
 
 // ReceivedBlocksLastEpoch returns the number of blocks received in the last epoch

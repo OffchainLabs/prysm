@@ -520,7 +520,7 @@ func (s *Server) SubmitSyncCommitteeSubscription(w http.ResponseWriter, r *http.
 		if err != nil {
 			epochsToWatch = 0
 		}
-		epochDuration := time.Duration(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second
+		epochDuration := time.Duration(params.BeaconConfig().SlotsPerEpoch) * params.BeaconConfig().SlotSchedule.CurrentSlotDuration(s.ChainInfoFetcher.GenesisTime())
 		totalDuration := epochDuration * time.Duration(epochsToWatch)
 
 		cache.SyncSubnetIDs.AddSyncCommitteeSubnets(pubkey48[:], startEpoch, sub.SyncCommitteeIndices, totalDuration)

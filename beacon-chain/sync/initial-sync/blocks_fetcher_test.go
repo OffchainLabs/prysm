@@ -1324,9 +1324,9 @@ func TestFetchSidecars(t *testing.T) {
 
 		// Define "now" to be one epoch after genesis time + retention period.
 		genesisTime := time.Date(2025, time.August, 10, 0, 0, 0, 0, time.UTC)
-		secondsPerSlot := beaconConfig.SecondsPerSlot
+		secondsPerSlot := beaconConfig.SlotSchedule.SlotDuration(0)
 		slotsPerEpoch := beaconConfig.SlotsPerEpoch
-		secondsPerEpoch := uint64(slotsPerEpoch.Mul(secondsPerSlot))
+		secondsPerEpoch := uint64(slotsPerEpoch.Mul(uint64(secondsPerSlot.Seconds())))
 		retentionEpochs := beaconConfig.MinEpochsForDataColumnSidecarsRequest
 		nowWrtGenesisSecs := retentionEpochs.Add(1).Mul(secondsPerEpoch)
 		now := genesisTime.Add(time.Duration(nowWrtGenesisSecs) * time.Second)

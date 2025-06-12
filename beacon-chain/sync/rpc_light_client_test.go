@@ -40,7 +40,7 @@ func TestRPC_LightClientBootstrap(t *testing.T) {
 
 	chainService := &mockChain.ChainService{
 		ValidatorsRoot: [32]byte{'A'},
-		Genesis:        time.Unix(time.Now().Unix(), 0),
+		Genesis:        time.Now(),
 	}
 	d := db.SetupDB(t)
 	r := Service{
@@ -156,7 +156,7 @@ func TestRPC_LightClientOptimisticUpdate(t *testing.T) {
 
 	chainService := &mockChain.ChainService{
 		ValidatorsRoot: [32]byte{'A'},
-		Genesis:        time.Unix(time.Now().Unix(), 0),
+		Genesis:        time.Now(),
 	}
 	d := db.SetupDB(t)
 	r := Service{
@@ -271,7 +271,7 @@ func TestRPC_LightClientFinalityUpdate(t *testing.T) {
 
 	chainService := &mockChain.ChainService{
 		ValidatorsRoot: [32]byte{'A'},
-		Genesis:        time.Unix(time.Now().Unix(), 0),
+		Genesis:        time.Now(),
 	}
 	d := db.SetupDB(t)
 	r := Service{
@@ -386,7 +386,7 @@ func TestRPC_LightClientUpdatesByRange(t *testing.T) {
 
 	chainService := &mockChain.ChainService{
 		ValidatorsRoot: [32]byte{'A'},
-		Genesis:        time.Unix(time.Now().Unix(), 0),
+		Genesis:        time.Now(),
 	}
 	d := db.SetupDB(t)
 	r := Service{

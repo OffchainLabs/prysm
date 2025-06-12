@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	coreTime "github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
@@ -558,11 +559,25 @@ func defaultLightClientFinalityUpdateTopicParams() *pubsub.TopicScoreParams {
 }
 
 func oneSlotDuration() time.Duration {
-	return time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+	// TODO(preston): This has to be made aware of the genesis time.
+	// For now, use the current slot duration as a reasonable approximation
+	// This is still not ideal but better than always using slot 0 duration
+	currentSlot := params.BeaconConfig().SlotSchedule.CurrentSlot(time.Unix(0, 0)) // Using zero genesis for now
+	return params.BeaconConfig().SlotSchedule.SlotDuration(currentSlot)
 }
 
 func oneEpochDuration() time.Duration {
-	return time.Duration(params.BeaconConfig().SlotsPerEpoch) * oneSlotDuration()
+	// Calculate epoch duration considering variable slot durations
+	// Use average slot duration for the epoch as approximation
+	currentSlot := params.BeaconConfig().SlotSchedule.CurrentSlot(time.Unix(0, 0))
+	slotsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch)
+
+	totalDuration := time.Duration(0)
+	for i := uint64(0); i < slotsPerEpoch; i++ {
+		totalDuration += params.BeaconConfig().SlotSchedule.SlotDuration(currentSlot + primitives.Slot(i))
+	}
+
+	return totalDuration
 }
 
 // determines the decay rate from the provided time period till

@@ -6,12 +6,13 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/math"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 func isMinimal(lines []string) bool {
@@ -53,7 +54,7 @@ func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConf
 		}
 	}
 	yamlFile = []byte(strings.Join(lines, "\n"))
-	if err := yaml.UnmarshalStrict(yamlFile, conf); err != nil {
+	if err := yaml.Unmarshal(yamlFile, conf); err != nil {
 		var typeError *yaml.TypeError
 		if !errors.As(err, &typeError) {
 			return nil, errors.Wrap(err, "Failed to parse chain config yaml file.")
@@ -66,6 +67,10 @@ func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConf
 	}
 	// recompute SqrRootSlotsPerEpoch constant to handle non-standard values of SlotsPerEpoch
 	conf.SqrRootSlotsPerEpoch = primitives.Slot(math.IntegerSquareRoot(uint64(conf.SlotsPerEpoch)))
+	// Populate DeprecatedSecondsPerSlot from SlotTimeSchedule for YAML compatibility if not explicitly set
+	if conf.DeprecatedSecondsPerSlot == 0 && conf.SlotSchedule != nil && len(*conf.SlotSchedule) > 0 {
+		conf.DeprecatedSecondsPerSlot = uint64((*conf.SlotSchedule)[0].SlotDuration.Seconds())
+	}
 	// Recompute the fork schedule
 	conf.InitializeForkSchedule()
 	log.Debugf("Config file values: %+v", conf)
@@ -186,7 +191,6 @@ func ConfigToYaml(cfg *BeaconChainConfig) []byte {
 		fmt.Sprintf("MIN_GENESIS_TIME: %d", cfg.MinGenesisTime),
 		fmt.Sprintf("GENESIS_FORK_VERSION: %#x", cfg.GenesisForkVersion),
 		fmt.Sprintf("CHURN_LIMIT_QUOTIENT: %d", cfg.ChurnLimitQuotient),
-		fmt.Sprintf("SECONDS_PER_SLOT: %d", cfg.SecondsPerSlot),
 		fmt.Sprintf("SLOTS_PER_EPOCH: %d", cfg.SlotsPerEpoch),
 		fmt.Sprintf("SECONDS_PER_ETH1_BLOCK: %d", cfg.SecondsPerETH1Block),
 		fmt.Sprintf("ETH1_FOLLOW_DISTANCE: %d", cfg.Eth1FollowDistance),
@@ -251,6 +255,17 @@ func ConfigToYaml(cfg *BeaconChainConfig) []byte {
 			lines = append(lines,
 				"  - EPOCH: "+strconv.FormatUint(uint64(entry.Epoch), 10),
 				"    MAX_BLOBS_PER_BLOCK: "+strconv.FormatUint(entry.MaxBlobsPerBlock, 10),
+			)
+		}
+	}
+
+	if cfg.SlotSchedule != nil && cfg.SlotSchedule.Length() > 0 {
+		lines = append(lines, "SLOT_SCHEDULE:")
+		for _, entry := range *cfg.SlotSchedule {
+			seconds := float64(entry.SlotDuration) / float64(time.Second)
+			lines = append(lines,
+				"  - EPOCH: "+strconv.FormatUint(uint64(entry.Epoch), 10),
+				"    SECONDS_PER_SLOT: "+strconv.FormatFloat(seconds, 'g', -1, 64),
 			)
 		}
 	}

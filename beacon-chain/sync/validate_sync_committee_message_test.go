@@ -179,7 +179,7 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 				incorrectRoot := [32]byte{0xBB}
 				msg.BlockRoot = incorrectRoot[:]
 
-				gt := time.Now().Add(-time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(10))
+				gt := time.Now().Add(-params.BeaconConfig().SlotSchedule.SlotDuration(0) * 10)
 				return s, topic, startup.NewClock(gt, [32]byte{'A'})
 			},
 			args: args{
@@ -220,7 +220,7 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 				msg.ValidatorIndex = primitives.ValidatorIndex(chosenVal)
 				msg.Slot = slots.PrevSlot(hState.Slot())
 
-				gt := time.Now().Add(-time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(slots.PrevSlot(hState.Slot())))
+				gt := time.Now().Add(-params.BeaconConfig().SlotSchedule.SlotDuration(0) * time.Duration(slots.PrevSlot(hState.Slot())))
 				vr := [32]byte{'A'}
 				clock := startup.NewClock(gt, vr)
 				digest := params.ForkDigest(slots.ToEpoch(clock.CurrentSlot()))
@@ -266,7 +266,7 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 				msg.ValidatorIndex = primitives.ValidatorIndex(chosenVal)
 				msg.Slot = slots.PrevSlot(hState.Slot())
 
-				gt := time.Now().Add(-time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(slots.PrevSlot(hState.Slot())))
+				gt := time.Now().Add(-params.BeaconConfig().SlotSchedule.SlotDuration(0) * time.Duration(slots.PrevSlot(hState.Slot())))
 				vr := [32]byte{'A'}
 				clock := startup.NewClock(gt, vr)
 				digest := params.ForkDigest(clock.CurrentEpoch())
@@ -320,7 +320,7 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 				}
 
 				// Set Topic and Subnet
-				gt := time.Now().Add(-time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(slots.PrevSlot(hState.Slot())))
+				gt := time.Now().Add(-params.BeaconConfig().SlotSchedule.SlotDuration(0) * time.Duration(slots.PrevSlot(hState.Slot())))
 				vr := [32]byte{'A'}
 				clock := startup.NewClock(gt, vr)
 				digest := params.ForkDigest(slots.ToEpoch(clock.CurrentSlot()))
@@ -378,7 +378,7 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 				msg.Slot = slots.PrevSlot(hState.Slot())
 
 				// Set Topic and Subnet
-				gt := time.Now().Add(-time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(slots.PrevSlot(hState.Slot())))
+				gt := time.Now().Add(-params.BeaconConfig().SlotSchedule.SlotDuration(0) * time.Duration(slots.PrevSlot(hState.Slot())))
 				vr := [32]byte{'A'}
 				clock := startup.NewClock(gt, vr)
 				digest := params.ForkDigest(slots.ToEpoch(clock.CurrentSlot()))

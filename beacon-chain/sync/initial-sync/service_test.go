@@ -508,8 +508,8 @@ func TestOriginOutsideRetention(t *testing.T) {
 	ctx := t.Context()
 	bdb := dbtest.SetupDB(t)
 	genesis := time.Unix(0, 0)
-	secsPerEpoch := params.BeaconConfig().SecondsPerSlot * uint64(params.BeaconConfig().SlotsPerEpoch)
-	retentionPeriod := time.Second * time.Duration(uint64(params.BeaconConfig().MinEpochsForBlobsSidecarsRequest+1)*secsPerEpoch)
+	secsPerEpoch := params.BeaconConfig().SlotSchedule.SlotDuration(0) * time.Duration(params.BeaconConfig().SlotsPerEpoch)
+	retentionPeriod := time.Duration(params.BeaconConfig().MinEpochsForBlobsSidecarsRequest+1) * secsPerEpoch
 	outsideRetention := genesis.Add(retentionPeriod)
 	now := func() time.Time {
 		return outsideRetention
@@ -531,9 +531,9 @@ func TestFetchOriginSidecars(t *testing.T) {
 
 	beaconConfig := params.BeaconConfig()
 	genesisTime := time.Date(2025, time.August, 10, 0, 0, 0, 0, time.UTC)
-	secondsPerSlot := beaconConfig.SecondsPerSlot
+	secondsPerSlot := beaconConfig.SlotSchedule.SlotDuration(0)
 	slotsPerEpoch := beaconConfig.SlotsPerEpoch
-	secondsPerEpoch := uint64(slotsPerEpoch.Mul(secondsPerSlot))
+	secondsPerEpoch := uint64(slotsPerEpoch.Mul(uint64(secondsPerSlot.Seconds())))
 	retentionEpochs := beaconConfig.MinEpochsForDataColumnSidecarsRequest
 
 	genesisValidatorRoot := [fieldparams.RootLength]byte{}

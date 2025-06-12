@@ -28,7 +28,7 @@ func TestForkChoice_ShouldOverrideFCU(t *testing.T) {
 	}
 	f.ProcessAttestation(ctx, attesters, blk.Root(), 0)
 
-	orphanLateBlockFirstThreshold := time.Duration(params.BeaconConfig().SecondsPerSlot/params.BeaconConfig().IntervalsPerSlot) * time.Second
+	orphanLateBlockFirstThreshold := params.BeaconConfig().SlotSchedule.SlotDuration(0) / time.Duration(params.BeaconConfig().IntervalsPerSlot)
 	driftGenesisTime(f, 2, orphanLateBlockFirstThreshold+time.Second)
 	st, blk, err = prepareForkchoiceState(ctx, 2, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 0, 0)
 	require.NoError(t, err)
@@ -134,8 +134,9 @@ func TestForkChoice_GetProposerHead(t *testing.T) {
 	headRoot, err := f.Head(ctx)
 	require.NoError(t, err)
 	require.Equal(t, blk.Root(), headRoot)
-	orphanLateBlockFirstThreshold := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
-	f.store.headNode.timestamp.Add(-1 * time.Duration(params.BeaconConfig().SecondsPerSlot-orphanLateBlockFirstThreshold) * time.Second)
+	// TODO(preston): replace with attestation deadline?
+	orphanLateBlockFirstThreshold := params.BeaconConfig().SlotSchedule.SlotDuration(0) / time.Duration(params.BeaconConfig().IntervalsPerSlot)
+	f.store.headNode.timestamp.Add(-1 * time.Duration(params.BeaconConfig().SlotSchedule.SlotDuration(0)-orphanLateBlockFirstThreshold))
 	t.Run("head is weak", func(t *testing.T) {
 		require.Equal(t, parentRoot, f.GetProposerHead())
 	})
@@ -160,7 +161,9 @@ func TestForkChoice_GetProposerHead(t *testing.T) {
 	})
 	t.Run("head is early", func(t *testing.T) {
 		saved := f.store.headNode.timestamp
-		headTimeStamp := f.store.genesisTime.Add(time.Duration(uint64(f.store.headNode.slot)*params.BeaconConfig().SecondsPerSlot+1) * time.Second)
+		sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(f.store.headNode.slot)
+		require.NoError(t, err)
+		headTimeStamp := f.store.genesisTime.Add(sg + time.Second)
 		f.store.headNode.timestamp = headTimeStamp
 		require.Equal(t, childRoot, f.GetProposerHead())
 		f.store.headNode.timestamp = saved

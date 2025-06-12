@@ -147,7 +147,7 @@ func (s *Service) run() {
 	s.wg.Add(1)
 	go s.receiveBlocks(s.ctx, beaconBlockHeadersChan)
 
-	secondsPerSlot := params.BeaconConfig().SecondsPerSlot
+	secondsPerSlot := params.BeaconConfig().SlotSchedule // TODO: Rename this variable.
 	s.attsSlotTicker = slots.NewSlotTicker(s.genesisTime, secondsPerSlot)
 	s.blocksSlotTicker = slots.NewSlotTicker(s.genesisTime, secondsPerSlot)
 	s.pruningSlotTicker = slots.NewSlotTicker(s.genesisTime, secondsPerSlot)
@@ -213,7 +213,7 @@ func (s *Service) waitForSync(genesisTime time.Time) {
 	if slots.CurrentSlot(genesisTime) < params.BeaconConfig().SlotsPerEpoch || !s.serviceCfg.SyncChecker.Syncing() {
 		return
 	}
-	slotTicker := slots.NewSlotTicker(s.genesisTime, params.BeaconConfig().SecondsPerSlot)
+	slotTicker := slots.NewSlotTicker(s.genesisTime, params.BeaconConfig().SlotSchedule)
 	defer slotTicker.Done()
 	for {
 		select {

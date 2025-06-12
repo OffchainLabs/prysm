@@ -23,6 +23,13 @@ func DeepEqual(tb assertions.AssertionTestingTB, expected, actual interface{}, m
 	assertions.DeepEqual(tb.Fatalf, expected, actual, msg...)
 }
 
+func DeepEqualSlice[K comparable](tb assertions.AssertionTestingTB, expected, actual []K, msg ...interface{}) {
+	assertions.Equal(tb.Fatalf, len(expected), len(actual)) // TODO: Message
+	for i := range expected {
+		DeepEqual(tb, expected[i], actual[i])
+	}
+}
+
 // DeepNotEqual compares values using DeepEqual.
 // NOTE: this function does not work for checking arrays/slices or maps of protobuf messages.
 // For arrays/slices, please use DeepNotSSZEqual.

@@ -13,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 )
 
@@ -127,98 +126,137 @@ func Test_ValidateAttestationTime(t *testing.T) {
 		{
 			name: "attestation.slot == current_slot",
 			args: args{
-				attSlot:     15,
-				genesisTime: prysmTime.Now().Add(-15 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+				attSlot: 15,
+				genesisTime: func() time.Time {
+					sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(15)
+					require.NoError(t, err)
+					return time.Now().Add(-1 * sg)
+				}(),
 			},
 		},
 		{
 			name: "attestation.slot == current_slot, received in middle of slot",
 			args: args{
 				attSlot: 15,
-				genesisTime: prysmTime.Now().Add(
-					-15 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second,
-				).Add(-(time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second)),
+				genesisTime: func() time.Time {
+					sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(15)
+					require.NoError(t, err)
+					dur := params.BeaconConfig().SlotSchedule.SlotDuration(15)
+					return time.Now().Add(-1 * sg).Add(-1 * dur / 2)
+				}(),
 			},
 		},
 		{
 			name: "attestation.slot == current_slot, received 200ms early",
 			args: args{
 				attSlot: 16,
-				genesisTime: prysmTime.Now().Add(
-					-16 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second,
-				).Add(-200 * time.Millisecond),
+				genesisTime: func() time.Time {
+					sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(16)
+					require.NoError(t, err)
+					return time.Now().Add(-1 * sg).Add(-200 * time.Millisecond)
+				}(),
 			},
 		},
 		{
 			name: "attestation.slot > current_slot",
 			args: args{
-				attSlot:     16,
-				genesisTime: prysmTime.Now().Add(-15 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+				attSlot: 16,
+				genesisTime: func() time.Time {
+					sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(15)
+					require.NoError(t, err)
+					return time.Now().Add(-1 * sg)
+				}(),
 			},
 			wantedErr: "not within attestation propagation range",
 		},
 		{
 			name: "attestation.slot < current_slot-ATTESTATION_PROPAGATION_SLOT_RANGE",
 			args: args{
-				attSlot:     100 - params.BeaconConfig().AttestationPropagationSlotRange - 1,
-				genesisTime: prysmTime.Now().Add(-100 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+				attSlot: 100 - params.BeaconConfig().AttestationPropagationSlotRange - 1,
+				genesisTime: func() time.Time {
+					sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(100)
+					require.NoError(t, err)
+					return time.Now().Add(-1 * sg)
+				}(),
 			},
 			wantedErr: "not within attestation propagation range",
 		},
 		{
 			name: "attestation.slot = current_slot-ATTESTATION_PROPAGATION_SLOT_RANGE",
 			args: args{
-				attSlot:     100 - params.BeaconConfig().AttestationPropagationSlotRange,
-				genesisTime: prysmTime.Now().Add(-100 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+				attSlot: 100 - params.BeaconConfig().AttestationPropagationSlotRange,
+				genesisTime: func() time.Time {
+					sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(100)
+					require.NoError(t, err)
+					return time.Now().Add(-1 * sg)
+				}(),
 			},
 		},
 		{
 			name: "attestation.slot = current_slot-ATTESTATION_PROPAGATION_SLOT_RANGE, received 200ms late",
 			args: args{
 				attSlot: 100 - params.BeaconConfig().AttestationPropagationSlotRange,
-				genesisTime: prysmTime.Now().Add(
-					-100 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second,
-				).Add(200 * time.Millisecond),
+				genesisTime: func() time.Time {
+					sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(100)
+					require.NoError(t, err)
+					return time.Now().Add(-1 * sg).Add(200 * time.Millisecond)
+				}(),
 			},
 		},
 		{
 			name: "attestation.slot < current_slot-ATTESTATION_PROPAGATION_SLOT_RANGE in deneb",
 			args: args{
-				attSlot:     300 - params.BeaconConfig().AttestationPropagationSlotRange - 1,
-				genesisTime: prysmTime.Now().Add(-300 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+				attSlot: 300 - params.BeaconConfig().AttestationPropagationSlotRange - 1,
+				genesisTime: func() time.Time {
+					sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(300)
+					require.NoError(t, err)
+					return time.Now().Add(-1 * sg)
+				}(),
 			},
 		},
 		{
 			name: "attestation.slot = current_slot-ATTESTATION_PROPAGATION_SLOT_RANGE in deneb",
 			args: args{
-				attSlot:     300 - params.BeaconConfig().AttestationPropagationSlotRange,
-				genesisTime: prysmTime.Now().Add(-300 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+				attSlot: 300 - params.BeaconConfig().AttestationPropagationSlotRange,
+				genesisTime: func() time.Time {
+					sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(300)
+					require.NoError(t, err)
+					return time.Now().Add(-1 * sg)
+				}(),
 			},
 		},
 		{
 			name: "attestation.slot = current_slot-ATTESTATION_PROPAGATION_SLOT_RANGE, received 200ms late in deneb",
 			args: args{
 				attSlot: 300 - params.BeaconConfig().AttestationPropagationSlotRange,
-				genesisTime: prysmTime.Now().Add(
-					-300 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second,
-				).Add(200 * time.Millisecond),
+				genesisTime: func() time.Time {
+					sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(300)
+					require.NoError(t, err)
+					return time.Now().Add(-1 * sg).Add(200 * time.Millisecond)
+				}(),
 			},
 		},
 		{
 			name: "attestation.slot != current epoch or previous epoch in deneb",
 			args: args{
 				attSlot: 300 - params.BeaconConfig().AttestationPropagationSlotRange,
-				genesisTime: prysmTime.Now().Add(
-					-500 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second,
-				).Add(200 * time.Millisecond),
+				genesisTime: func() time.Time {
+					sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(500)
+					require.NoError(t, err)
+					return time.Now().Add(-1 * sg).Add(200 * time.Millisecond)
+				}(),
 			},
 			wantedErr: "attestation epoch 8 not within current epoch 15 or previous epoch",
 		},
 		{
 			name: "attestation.slot is well beyond current slot",
 			args: args{
-				attSlot:     1024,
-				genesisTime: time.Now().Add(-15 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+				attSlot: 1024,
+				genesisTime: func() time.Time {
+					sg, err := params.BeaconConfig().SlotSchedule.SinceGenesis(15)
+					require.NoError(t, err)
+					return time.Now().Add(-1 * sg)
+				}(),
 			},
 			wantedErr: "attestation slot 1024 not within attestation propagation range of 0 to 15 (current slot)",
 		},
@@ -242,8 +280,9 @@ func TestVerifyCheckpointEpoch_Ok(t *testing.T) {
 	helpers.ClearCache()
 
 	// Genesis was 6 epochs ago exactly.
-	offset := params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot * 6)
-	genesis := time.Now().Add(-1 * time.Second * time.Duration(offset))
+	offset, err := params.BeaconConfig().SlotSchedule.SinceGenesis(params.BeaconConfig().SlotsPerEpoch.Mul(6))
+	require.NoError(t, err)
+	genesis := time.Now().Add(-1 * offset)
 	assert.Equal(t, true, helpers.VerifyCheckpointEpoch(&ethpb.Checkpoint{Epoch: 6}, genesis))
 	assert.Equal(t, true, helpers.VerifyCheckpointEpoch(&ethpb.Checkpoint{Epoch: 5}, genesis))
 	assert.Equal(t, false, helpers.VerifyCheckpointEpoch(&ethpb.Checkpoint{Epoch: 4}, genesis))

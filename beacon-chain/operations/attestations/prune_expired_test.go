@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/prysmaticlabs/go-bitfield"
 )
 
@@ -47,7 +48,7 @@ func TestPruneExpired_Ticker(t *testing.T) {
 	}
 
 	// Rewind back one epoch worth of time.
-	s.genesisTime = time.Now().Add(-1 * time.Duration(params.BeaconConfig().SlotsPerEpoch) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+	s.SetGenesisTime(time.Now().Add(-1 * time.Duration(params.BeaconConfig().SlotsPerEpoch) * params.BeaconConfig().SlotSchedule.SlotDuration(0)))
 
 	go s.pruneExpired()
 
@@ -100,7 +101,7 @@ func TestPruneExpired_PruneExpiredAtts(t *testing.T) {
 	}
 
 	// Rewind back one epoch worth of time.
-	s.genesisTime = time.Now().Add(-1 * time.Duration(params.BeaconConfig().SlotsPerEpoch) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+	s.SetGenesisTime(time.Now().Add(-1 * time.Duration(params.BeaconConfig().SlotsPerEpoch) * params.BeaconConfig().SlotSchedule.SlotDuration(0)))
 
 	s.pruneExpiredAtts()
 	// All the attestations on slot 0 should be pruned.
@@ -121,7 +122,10 @@ func TestPruneExpired_Expired(t *testing.T) {
 	require.NoError(t, err)
 
 	// Rewind back one epoch worth of time.
-	s.genesisTime = time.Now().Add(-1 * time.Duration(params.BeaconConfig().SlotsPerEpoch) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+	oneEpochSlots := params.BeaconConfig().SlotsPerEpoch
+	timeSinceGenesis, err := params.BeaconConfig().SlotSchedule.SinceGenesis(primitives.Slot(oneEpochSlots))
+	require.NoError(t, err)
+	s.SetGenesisTime(time.Now().Add(-timeSinceGenesis))
 	assert.Equal(t, true, s.expired(0), "Should be expired")
 	assert.Equal(t, false, s.expired(1), "Should not be expired")
 }
@@ -136,9 +140,12 @@ func TestPruneExpired_ExpiredDeneb(t *testing.T) {
 	require.NoError(t, err)
 
 	// Rewind back 4 epochs + 10 slots worth of time.
-	s.genesisTime = time.Now().Add(-4*time.Duration(params.BeaconConfig().SlotsPerEpoch*primitives.Slot(params.BeaconConfig().SecondsPerSlot))*time.Second - 10*time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second)
-	secondEpochStart := primitives.Slot(2 * uint64(params.BeaconConfig().SlotsPerEpoch))
-	thirdEpochStart := primitives.Slot(3 * uint64(params.BeaconConfig().SlotsPerEpoch))
+	totalSlots := 4*params.BeaconConfig().SlotsPerEpoch + 10
+	timeSinceGenesis, err := params.BeaconConfig().SlotSchedule.SinceGenesis(primitives.Slot(totalSlots))
+	require.NoError(t, err)
+	s.SetGenesisTime(time.Now().Add(-timeSinceGenesis))
+	secondEpochStart := slots.UnsafeEpochStart(2)
+	thirdEpochStart := slots.UnsafeEpochStart(3)
 
 	assert.Equal(t, true, s.expired(secondEpochStart), "Should be expired")
 	assert.Equal(t, false, s.expired(thirdEpochStart), "Should not be expired")

@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/iface"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -146,7 +147,10 @@ func TestEnsureEmbeddedGenesis(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	// Embedded Genesis works with Mainnet config
 	cfg := params.MainnetConfig()
-	cfg.SecondsPerSlot = 1
+	cfg.SlotSchedule = &params.SlotSchedule{{
+		Epoch:        0,
+		SlotDuration: 1 * time.Second,
+	}}
 	undo, err := params.SetActiveWithUndo(cfg)
 	require.NoError(t, err)
 	defer func() {

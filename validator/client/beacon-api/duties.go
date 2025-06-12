@@ -255,7 +255,7 @@ func (c *beaconApiValidatorClient) validatorsForDuties(ctx context.Context, pubk
 		stringPubkey := validatorContainer.Validator.Pubkey
 		pubkey, ok := stringPubkeysToPubkeys[stringPubkey]
 		if !ok {
-			return nil, errors.Wrapf(err, "returned public key %s not requested", stringPubkey)
+			return nil, errors.Errorf("returned public key %s not requested", stringPubkey)
 		}
 		val.pubkey = pubkey
 

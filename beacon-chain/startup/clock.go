@@ -3,6 +3,7 @@ package startup
 import (
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	types "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 )
@@ -37,8 +38,8 @@ func (g *Clock) GenesisValidatorsRoot() [32]byte {
 
 // CurrentSlot returns the current slot relative to the time.Time value that Clock embeds.
 func (g *Clock) CurrentSlot() types.Slot {
-	now := g.now()
-	return slots.Duration(g.t, now)
+	// where test setup is responsible for setting the genesis time correctly. It's usually not a big deal.
+	return params.BeaconConfig().SlotSchedule.SlotAt(g.t, g.now())
 }
 
 // CurrentEpoch returns the current epoch relative to the time.Time value that Clock embeds.
