@@ -60,7 +60,7 @@ type Service struct {
 	initSyncWaiter func() error
 }
 
-func New(ctx context.Context, db iface.Database, genesisTime uint64, initSyncWaiter, backfillWaiter func() error, opts ...ServiceOption) (*Service, error) {
+func New(ctx context.Context, db iface.Database, genesisTime time.Time, initSyncWaiter, backfillWaiter func() error, opts ...ServiceOption) (*Service, error) {
 	p := &Service{
 		ctx:            ctx,
 		db:             db,

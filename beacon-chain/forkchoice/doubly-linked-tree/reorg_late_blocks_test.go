@@ -2,6 +2,7 @@ package doublylinkedtree
 
 import (
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -27,7 +28,7 @@ func TestForkChoice_ShouldOverrideFCU(t *testing.T) {
 	}
 	f.ProcessAttestation(ctx, attesters, blk.Root(), 0)
 
-	orphanLateBlockFirstThreshold := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
+	orphanLateBlockFirstThreshold := time.Duration(params.BeaconConfig().SecondsPerSlot/params.BeaconConfig().IntervalsPerSlot) * time.Second
 	driftGenesisTime(f, 2, orphanLateBlockFirstThreshold+1)
 	st, blk, err = prepareForkchoiceState(ctx, 2, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 0, 0)
 	require.NoError(t, err)
@@ -60,7 +61,7 @@ func TestForkChoice_ShouldOverrideFCU(t *testing.T) {
 	})
 	t.Run("head is early", func(t *testing.T) {
 		saved := f.store.headNode.timestamp
-		f.store.headNode.timestamp = saved - 2
+		f.store.headNode.timestamp = saved.Add(-2 * time.Second)
 		require.Equal(t, false, f.ShouldOverrideFCU())
 		f.store.headNode.timestamp = saved
 	})
@@ -134,7 +135,7 @@ func TestForkChoice_GetProposerHead(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, blk.Root(), headRoot)
 	orphanLateBlockFirstThreshold := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
-	f.store.headNode.timestamp -= params.BeaconConfig().SecondsPerSlot - orphanLateBlockFirstThreshold
+	f.store.headNode.timestamp.Add(-1 * time.Duration(params.BeaconConfig().SecondsPerSlot-orphanLateBlockFirstThreshold) * time.Second)
 	t.Run("head is weak", func(t *testing.T) {
 		require.Equal(t, parentRoot, f.GetProposerHead())
 
@@ -160,7 +161,7 @@ func TestForkChoice_GetProposerHead(t *testing.T) {
 	})
 	t.Run("head is early", func(t *testing.T) {
 		saved := f.store.headNode.timestamp
-		f.store.headNode.timestamp = saved - 2
+		f.store.headNode.timestamp = saved.Add(-2 * time.Second)
 		require.Equal(t, childRoot, f.GetProposerHead())
 		f.store.headNode.timestamp = saved
 	})

@@ -25,7 +25,7 @@ func TestSortBatchDesc(t *testing.T) {
 
 func TestWaitUntilReady(t *testing.T) {
 	b := batch{}.withState(batchErrRetryable)
-	require.Equal(t, time.Time{}, b.retryAfter)
+	require.Equal(t, time.Unix(), b.retryAfter)
 	var got time.Duration
 	wur := batchBlockUntil
 	var errDerp = errors.New("derp")

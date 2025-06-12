@@ -43,7 +43,7 @@ func (s *Service) AttestationTargetState(ctx context.Context, target *ethpb.Chec
 	if err != nil {
 		return nil, err
 	}
-	if err := slots.ValidateClock(ss, uint64(s.genesisTime.Unix())); err != nil {
+	if err := slots.ValidateClock(ss, s.genesisTime); err != nil {
 		return nil, err
 	}
 	// We acquire the lock here instead than on gettAttPreState because that function gets called from UpdateHead that holds a write lock
@@ -179,7 +179,7 @@ func (s *Service) processAttestations(ctx context.Context, disparity time.Durati
 		// This delays consideration in the fork choice until their slot is in the past.
 		// https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/fork-choice.md#validate_on_attestation
 		nextSlot := a.GetData().Slot + 1
-		if err := slots.VerifyTime(uint64(s.genesisTime.Unix()), nextSlot, disparity); err != nil {
+		if err := slots.VerifyTime(s.genesisTime, nextSlot, disparity); err != nil {
 			continue
 		}
 

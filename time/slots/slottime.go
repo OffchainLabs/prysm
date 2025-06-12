@@ -26,18 +26,15 @@ func startFromTime(genesis time.Time, slot primitives.Slot) time.Time {
 
 // StartTime returns the start time in terms of its unix epoch
 // value.
-func StartTime(genesis uint64, slot primitives.Slot) time.Time {
-	genesisTime := time.Unix(int64(genesis), 0) // lint:ignore uintcast -- Genesis timestamp will not exceed int64 in your lifetime.
-	return startFromTime(genesisTime, slot)
+func StartTime(genesis time.Time, slot primitives.Slot) time.Time {
+	return startFromTime(genesis, slot)
 }
 
 // SinceGenesis returns the number of slots since
 // the provided genesis time.
 func SinceGenesis(genesis time.Time) primitives.Slot {
-	if genesis.After(prysmTime.Now()) { // Genesis has not occurred yet.
-		return 0
-	}
-	return primitives.Slot(uint64(prysmTime.Since(genesis).Seconds()) / params.BeaconConfig().SecondsPerSlot)
+	// TODO(preston): Remove this.
+	return CurrentSlot(genesis)
 }
 
 // EpochsSinceGenesis returns the number of epochs since
@@ -162,15 +159,12 @@ func SinceEpochStarts(slot primitives.Slot) primitives.Slot {
 }
 
 // VerifyTime validates the input slot is not from the future.
-func VerifyTime(genesisTime uint64, slot primitives.Slot, timeTolerance time.Duration) error {
-	slotTime, err := ToTime(genesisTime, slot)
-	if err != nil {
-		return err
-	}
+func VerifyTime(genesis time.Time, slot primitives.Slot, timeTolerance time.Duration) error {
+	slotTime := BeginsAt(slot, genesis)
 
 	// Defensive check to ensure unreasonable slots are rejected
 	// straight away.
-	if err := ValidateClock(slot, genesisTime); err != nil {
+	if err := ValidateClock(slot, genesis); err != nil {
 		return err
 	}
 
@@ -184,37 +178,36 @@ func VerifyTime(genesisTime uint64, slot primitives.Slot, timeTolerance time.Dur
 }
 
 // ToTime takes the given slot and genesis time to determine the start time of the slot.
-func ToTime(genesisTimeSec uint64, slot primitives.Slot) (time.Time, error) {
-	timeSinceGenesis, err := slot.SafeMul(params.BeaconConfig().SecondsPerSlot)
+func ToTime(genesis time.Time, slot primitives.Slot) (time.Time, error) {
+	// TODO(Preston): How important is this overflow check?
+	_, err := slot.SafeMul(params.BeaconConfig().SecondsPerSlot)
 	if err != nil {
 		return time.Unix(0, 0), fmt.Errorf("slot (%d) is in the far distant future: %w", slot, err)
 	}
-	sTime, err := timeSinceGenesis.SafeAdd(genesisTimeSec)
-	if err != nil {
-		return time.Unix(0, 0), fmt.Errorf("slot (%d) is in the far distant future: %w", slot, err)
-	}
-	return time.Unix(int64(sTime), 0), nil // lint:ignore uintcast -- A timestamp will not exceed int64 in your lifetime.
+	return BeginsAt(slot, genesis), nil
 }
 
 // BeginsAt computes the timestamp where the given slot begins, relative to the genesis timestamp.
+// TODO(preston): WTF is this? Looks like a copy of ToTime, but no validation.
 func BeginsAt(slot primitives.Slot, genesis time.Time) time.Time {
 	sd := time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(slot)
 	return genesis.Add(sd)
 }
 
 // Since computes the number of time slots that have occurred since the given timestamp.
+// TODO(Preston): Delete this method?
 func Since(time time.Time) primitives.Slot {
-	return CurrentSlot(uint64(time.Unix()))
+	return CurrentSlot(time)
 }
 
 // CurrentSlot returns the current slot as determined by the local clock and
 // provided genesis time.
-func CurrentSlot(genesisTimeSec uint64) primitives.Slot {
-	now := uint64(prysmTime.Now().Unix())
-	if now < genesisTimeSec {
+func CurrentSlot(genesis time.Time) primitives.Slot {
+	now := time.Now()
+	if now.Before(genesis) {
 		return 0
 	}
-	return primitives.Slot((now - genesisTimeSec) / params.BeaconConfig().SecondsPerSlot)
+	return primitives.Slot(now.Sub(genesis) / time.Second / time.Duration(params.BeaconConfig().SecondsPerSlot))
 }
 
 // Duration computes the span of time between two instants, represented as Slots.
@@ -228,8 +221,8 @@ func Duration(start, end time.Time) primitives.Slot {
 // ValidateClock validates a provided slot against the local
 // clock to ensure slots that are unreasonable are returned with
 // an error.
-func ValidateClock(slot primitives.Slot, genesisTimeSec uint64) error {
-	maxPossibleSlot := CurrentSlot(genesisTimeSec).Add(MaxSlotBuffer)
+func ValidateClock(slot primitives.Slot, genesis time.Time) error {
+	maxPossibleSlot := CurrentSlot(genesis).Add(MaxSlotBuffer)
 	// Defensive check to ensure that we only process slots up to a hard limit
 	// from our local clock.
 	if slot > maxPossibleSlot {
@@ -283,27 +276,28 @@ func SyncCommitteePeriodStartEpoch(e primitives.Epoch) (primitives.Epoch, error)
 	return primitives.Epoch(startEpoch), nil
 }
 
-// SecondsSinceSlotStart returns the number of seconds elapsed since the
-// given slot start time
-func SecondsSinceSlotStart(s primitives.Slot, genesisTime, timeStamp uint64) (uint64, error) {
-	limit := genesisTime + uint64(s)*params.BeaconConfig().SecondsPerSlot
-	if timeStamp < limit {
-		return 0, fmt.Errorf("could not compute seconds since slot %d start: invalid timestamp, got %d < want %d", s, timeStamp, limit)
+// SinceSlotStart returns the amount of time elapsed since the
+// given slot start time. This method returns an error if the timestamp happens
+// before the given slot start time.
+func SinceSlotStart(s primitives.Slot, genesis time.Time, timestamp time.Time) (time.Duration, error) {
+	limit := genesis.Add(time.Duration(uint64(s)*params.BeaconConfig().SecondsPerSlot) * time.Second)
+	if timestamp.Before(limit) {
+		return 0, fmt.Errorf("could not compute seconds since slot %d start: invalid timestamp, got %s < want %s", s, timestamp, limit)
 	}
-	return timeStamp - genesisTime - uint64(s)*params.BeaconConfig().SecondsPerSlot, nil
+	return timestamp.Sub(limit), nil
 }
 
 // TimeIntoSlot returns the time duration elapsed between the current time and
 // the start of the current slot
-func TimeIntoSlot(genesisTime uint64) time.Duration {
-	return time.Since(StartTime(genesisTime, CurrentSlot(genesisTime)))
+func TimeIntoSlot(genesis time.Time) time.Duration {
+	return time.Since(BeginsAt(CurrentSlot(genesis), genesis))
 }
 
 // WithinVotingWindow returns whether the current time is within the voting window
 // (eg. 4 seconds on mainnet) of the current slot.
-func WithinVotingWindow(genesisTime uint64, slot primitives.Slot) bool {
+func WithinVotingWindow(genesis time.Time, slot primitives.Slot) bool {
 	votingWindow := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
-	return time.Since(StartTime(genesisTime, slot)) < time.Duration(votingWindow)*time.Second
+	return time.Since(StartTime(genesis, slot)) < time.Duration(votingWindow)*time.Second
 }
 
 // MaxSafeEpoch gives the largest epoch value that can be safely converted to a slot.
@@ -312,13 +306,13 @@ func MaxSafeEpoch() primitives.Epoch {
 }
 
 // SecondsUntilNextEpochStart returns how many seconds until the next Epoch start from the current time and slot
-func SecondsUntilNextEpochStart(genesisTimeSec uint64) (uint64, error) {
-	currentSlot := CurrentSlot(genesisTimeSec)
+func SecondsUntilNextEpochStart(genesis time.Time) (uint64, error) {
+	currentSlot := CurrentSlot(genesis)
 	firstSlotOfNextEpoch, err := EpochStart(ToEpoch(currentSlot) + 1)
 	if err != nil {
 		return 0, err
 	}
-	nextEpochStartTime, err := ToTime(genesisTimeSec, firstSlotOfNextEpoch)
+	nextEpochStartTime, err := ToTime(genesis, firstSlotOfNextEpoch)
 	if err != nil {
 		return 0, err
 	}

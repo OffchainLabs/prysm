@@ -67,7 +67,7 @@ var (
 type validator struct {
 	duties                             *ethpb.ValidatorDutiesContainer
 	ticker                             slots.Ticker
-	genesisTime                        uint64
+	genesisTime                        time.Time
 	highestValidSlot                   primitives.Slot
 	slotFeed                           *event.Feed
 	startBalances                      map[[fieldparams.BLSPubkeyLength]byte]uint64
@@ -295,7 +295,7 @@ func (v *validator) WaitForChainStart(ctx context.Context) error {
 		)
 	}
 
-	v.genesisTime = chainStartRes.GenesisTime
+	v.genesisTime = time.Unix(int64(chainStartRes.GenesisTime), 0)
 
 	curGenValRoot, err := v.db.GenesisValidatorsRoot(ctx)
 	if err != nil {
@@ -332,8 +332,8 @@ func (v *validator) WaitForChainStart(ctx context.Context) error {
 func (v *validator) setTicker() {
 	// Once the ChainStart log is received, we update the genesis time of the validator client
 	// and begin a slot ticker used to track the current slot the beacon node is in.
-	v.ticker = slots.NewSlotTicker(time.Unix(int64(v.genesisTime), 0), params.BeaconConfig().SecondsPerSlot)
-	log.WithField("genesisTime", time.Unix(int64(v.genesisTime), 0)).Info("Beacon chain started")
+	v.ticker = slots.NewSlotTicker(v.genesisTime, params.BeaconConfig().SecondsPerSlot)
+	log.WithField("genesisTime", v.genesisTime).Info("Beacon chain started")
 }
 
 // WaitForSync checks whether the beacon node has sync to the latest head.
@@ -428,7 +428,7 @@ func (v *validator) NextSlot() <-chan primitives.Slot {
 // SlotDeadline is the start time of the next slot.
 func (v *validator) SlotDeadline(slot primitives.Slot) time.Time {
 	secs := time.Duration((slot + 1).Mul(params.BeaconConfig().SecondsPerSlot))
-	return time.Unix(int64(v.genesisTime), 0 /*ns*/).Add(secs * time.Second)
+	return v.genesisTime.Add(secs * time.Second)
 }
 
 // CheckDoppelGanger checks if the current actively provided keys have
@@ -1383,7 +1383,7 @@ func (v *validator) buildSignedRegReqs(
 		return signedValRegRequests
 	}
 	// if the timestamp is pre-genesis, don't create registrations
-	if v.genesisTime > uint64(time.Now().UTC().Unix()) {
+	if time.Now().Before(v.genesisTime) {
 		return signedValRegRequests
 	}
 

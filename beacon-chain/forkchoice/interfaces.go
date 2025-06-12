@@ -2,6 +2,7 @@ package forkchoice
 
 import (
 	"context"
+	"time"
 
 	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
@@ -92,7 +93,7 @@ type Setter interface {
 	SetOptimisticToInvalid(context.Context, [fieldparams.RootLength]byte, [fieldparams.RootLength]byte, [fieldparams.RootLength]byte) ([][32]byte, error)
 	UpdateJustifiedCheckpoint(context.Context, *forkchoicetypes.Checkpoint) error
 	UpdateFinalizedCheckpoint(*forkchoicetypes.Checkpoint) error
-	SetGenesisTime(uint64)
+	SetGenesisTime(time.Time)
 	SetOriginRoot([32]byte)
 	NewSlot(context.Context, primitives.Slot) error
 	SetBalancesByRooter(BalancesByRooter)

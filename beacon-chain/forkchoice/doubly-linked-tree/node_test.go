@@ -2,6 +2,7 @@ package doublylinkedtree
 
 import (
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/forkchoice"
@@ -278,7 +279,7 @@ func TestNode_TimeStampsChecks(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, false, late)
 
-	orphanLateBlockFirstThreshold := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
+	orphanLateBlockFirstThreshold := time.Duration(params.BeaconConfig().SecondsPerSlot/params.BeaconConfig().IntervalsPerSlot) * time.Second
 	// late block
 	driftGenesisTime(f, 2, orphanLateBlockFirstThreshold+1)
 	root = [32]byte{'b'}

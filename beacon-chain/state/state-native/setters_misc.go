@@ -1,6 +1,8 @@
 package state_native
 
 import (
+	"time"
+
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stateutil"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -43,11 +45,11 @@ const (
 )
 
 // SetGenesisTime for the beacon state.
-func (b *BeaconState) SetGenesisTime(val uint64) error {
+func (b *BeaconState) SetGenesisTime(val time.Time) error {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	b.genesisTime = val
+	b.genesisTime = uint64(val.Unix())
 	b.markFieldAsDirty(types.GenesisTime)
 	return nil
 }

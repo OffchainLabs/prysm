@@ -641,7 +641,7 @@ func (s *ChainService) GetProposerHead() [32]byte {
 }
 
 // SetForkChoiceGenesisTime mocks the same method in the chain service
-func (s *ChainService) SetForkChoiceGenesisTime(timestamp uint64) {
+func (s *ChainService) SetForkChoiceGenesisTime(timestamp time.Time) {
 	if s.ForkChoiceStore != nil {
 		s.ForkChoiceStore.SetGenesisTime(timestamp)
 	}

@@ -242,7 +242,7 @@ func TestService_waitForStateInitialization(t *testing.T) {
 
 		st, err := util.NewBeaconState()
 		require.NoError(t, err)
-		gt := time.Unix(int64(st.GenesisTime()), 0)
+		gt := st.GenesisTime()
 		s, gs := newService(ctx, &mock.ChainService{State: st, Genesis: gt, ValidatorsRoot: [32]byte{}})
 
 		expectedGenesisTime := gt
@@ -356,7 +356,7 @@ func TestService_Resync(t *testing.T) {
 				st, err := util.NewBeaconState()
 				require.NoError(t, err)
 				futureSlot := primitives.Slot(160)
-				require.NoError(t, st.SetGenesisTime(uint64(makeGenesisTime(futureSlot).Unix())))
+				require.NoError(t, st.SetGenesisTime(makeGenesisTime(futureSlot)))
 				return &mock.ChainService{
 					State: st,
 					Root:  genesisRoot[:],
