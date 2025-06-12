@@ -42,9 +42,6 @@ func (s *Service) forkWatcher() {
 
 // registerForUpcomingFork registers appropriate gossip and RPC topic if there is a fork in the next epoch.
 func (s *Service) registerForUpcomingFork(currentEpoch primitives.Epoch) error {
-	// Get the genesis validators root.
-	genesisValidatorsRoot := s.cfg.clock.GenesisValidatorsRoot()
-
 	// Check if there is a fork in the next epoch.
 	isForkNextEpoch := params.IsForkNextEpoch(currentEpoch)
 
@@ -53,40 +50,33 @@ func (s *Service) registerForUpcomingFork(currentEpoch primitives.Epoch) error {
 		return nil
 	}
 
-	beforeForkEpoch := currentEpoch
-	forkEpoch := beforeForkEpoch + 1
-
-	// Get the fork afterForkDigest for the next epoch.
-	afterForkDigest, err := forks.ForkDigestFromEpoch(forkEpoch, genesisValidatorsRoot[:])
-	if err != nil {
-		return errors.Wrap(err, "could not retrieve fork digest")
-	}
-
+	nextForkEpoch := currentEpoch + 1
+	nextForkDigest := params.ForkDigest(nextForkEpoch)
 	// Exit early if the topics for the next epoch are already registered.
 	// It likely to be the case for all slots of the epoch that are not the first one.
-	if s.subHandler.digestExists(afterForkDigest) {
+	if s.subHandler.digestExists(nextForkDigest) {
 		return nil
 	}
 
 	// Register the subscribers (gossipsub) for the next epoch.
-	s.registerSubscribers(forkEpoch, afterForkDigest)
+	s.registerSubscribers(nextForkEpoch, nextForkDigest)
 
 	// Get the handlers for the current and next fork.
-	beforeForkHandlerByTopic, err := s.rpcHandlerByTopicFromEpoch(beforeForkEpoch)
+	currentHandler, err := s.rpcHandlerByTopicFromEpoch(currentEpoch)
 	if err != nil {
 		return errors.Wrap(err, "RPC handler by topic from before fork epoch")
 	}
 
-	forkHandlerByTopic, err := s.rpcHandlerByTopicFromEpoch(forkEpoch)
+	nextHandler, err := s.rpcHandlerByTopicFromEpoch(nextForkEpoch)
 	if err != nil {
 		return errors.Wrap(err, "RPC handler by topic from fork epoch")
 	}
 
 	// Compute newly added topics.
-	newRPCHandlerByTopic := addedRPCHandlerByTopic(beforeForkHandlerByTopic, forkHandlerByTopic)
+	newHandlersByTopic := addedRPCHandlerByTopic(currentHandler, nextHandler)
 
 	// Register the new RPC handlers.
-	for topic, handler := range newRPCHandlerByTopic {
+	for topic, handler := range newHandlersByTopic {
 		s.registerRPC(topic, handler)
 	}
 
@@ -95,9 +85,6 @@ func (s *Service) registerForUpcomingFork(currentEpoch primitives.Epoch) error {
 
 // deregisterFromPastFork deregisters appropriate gossip and RPC topic if there is a fork in the current epoch.
 func (s *Service) deregisterFromPastFork(currentEpoch primitives.Epoch) error {
-	// Extract the genesis validators root.
-	genesisValidatorsRoot := s.cfg.clock.GenesisValidatorsRoot()
-
 	// Get the fork.
 	currentFork, err := forks.Fork(currentEpoch)
 	if err != nil {
@@ -120,10 +107,7 @@ func (s *Service) deregisterFromPastFork(currentEpoch primitives.Epoch) error {
 	// Look at the previous fork's digest.
 	beforeForkEpoch := currentFork.Epoch - 1
 
-	beforeForkDigest, err := forks.ForkDigestFromEpoch(beforeForkEpoch, genesisValidatorsRoot[:])
-	if err != nil {
-		return errors.Wrap(err, "fork digest from epoch")
-	}
+	beforeForkDigest := params.ForkDigest(beforeForkEpoch)
 
 	// Exit early if there are no topics with that particular digest.
 	if !s.subHandler.digestExists(beforeForkDigest) {

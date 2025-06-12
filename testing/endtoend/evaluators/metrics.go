@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
 	"github.com/OffchainLabs/prysm/v6/testing/endtoend/policies"
@@ -90,7 +90,7 @@ func metricsTest(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
 	if err != nil {
 		return err
 	}
-	forkDigest, err := forks.CreateForkDigest(time.Unix(genesis.GenesisTime.Seconds, 0), genesis.GenesisValidatorsRoot)
+	forkDigest, err := params.CreateForkDigest(time.Unix(genesis.GenesisTime.Seconds, 0), genesis.GenesisValidatorsRoot)
 	if err != nil {
 		return err
 	}

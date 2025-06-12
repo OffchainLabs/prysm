@@ -678,24 +678,19 @@ func (*Service) addDigestAndIndexToTopic(topic string, digest [4]byte, idx uint6
 }
 
 func (s *Service) currentForkDigest() ([4]byte, error) {
-	genRoot := s.cfg.clock.GenesisValidatorsRoot()
-	return forks.CreateForkDigest(s.cfg.clock.GenesisTime(), genRoot[:])
+	return params.ForkDigest(s.cfg.clock.CurrentEpoch()), nil
 }
 
 // Checks if the provided digest matches up with the current supposed digest.
 func isDigestValid(digest [4]byte, clock *startup.Clock) (bool, error) {
-	gvr := clock.GenesisValidatorsRoot()
-	retDigest, err := forks.CreateForkDigest(clock.GenesisTime(), gvr[:])
-	if err != nil {
-		return false, err
-	}
+	currentEpoch := clock.CurrentEpoch()
 	// In the event there is a fork the next epoch,
 	// we skip the check, as we subscribe subnets an
 	// epoch in advance.
-	if params.IsForkNextEpoch(primitives.Epoch(clock.CurrentSlot())) {
+	if params.IsForkNextEpoch(currentEpoch) {
 		return true, nil
 	}
-	return retDigest == digest, nil
+	return params.ForkDigest(currentEpoch) == digest, nil
 }
 
 func agentString(pid peer.ID, hst host.Host) string {

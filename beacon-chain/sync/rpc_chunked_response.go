@@ -8,8 +8,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
@@ -29,57 +27,9 @@ func WriteBlockChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, en
 	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
 		return err
 	}
-	var obtainedCtx []byte
 
-	valRoot := tor.GenesisValidatorsRoot()
-	switch blk.Version() {
-	case version.Phase0:
-		digest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().GenesisEpoch, valRoot[:])
-		if err != nil {
-			return err
-		}
-		obtainedCtx = digest[:]
-	case version.Altair:
-		digest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().AltairForkEpoch, valRoot[:])
-		if err != nil {
-			return err
-		}
-		obtainedCtx = digest[:]
-	case version.Bellatrix:
-		digest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().BellatrixForkEpoch, valRoot[:])
-		if err != nil {
-			return err
-		}
-		obtainedCtx = digest[:]
-	case version.Capella:
-		digest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().CapellaForkEpoch, valRoot[:])
-		if err != nil {
-			return err
-		}
-		obtainedCtx = digest[:]
-	case version.Deneb:
-		digest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().DenebForkEpoch, valRoot[:])
-		if err != nil {
-			return err
-		}
-		obtainedCtx = digest[:]
-	case version.Electra:
-		digest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().ElectraForkEpoch, valRoot[:])
-		if err != nil {
-			return err
-		}
-		obtainedCtx = digest[:]
-	case version.Fulu:
-		digest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().FuluForkEpoch, valRoot[:])
-		if err != nil {
-			return err
-		}
-		obtainedCtx = digest[:]
-	default:
-		return errors.Wrapf(ErrUnrecognizedVersion, "block version %d is not recognized", blk.Version())
-	}
-
-	if err := writeContextToStream(obtainedCtx, stream); err != nil {
+	digest := params.ForkDigest(slots.ToEpoch(blk.Block().Slot()))
+	if err := writeContextToStream(digest[:], stream); err != nil {
 		return err
 	}
 	_, err := encoding.EncodeWithMaxLength(stream, blk)
@@ -149,16 +99,11 @@ func WriteBlobSidecarChunk(stream libp2pcore.Stream, tor blockchain.TemporalOrac
 	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
 		return err
 	}
-	valRoot := tor.GenesisValidatorsRoot()
-	ctxBytes, err := forks.ForkDigestFromEpoch(slots.ToEpoch(sidecar.Slot()), valRoot[:])
-	if err != nil {
-		return err
-	}
-
+	ctxBytes := params.ForkDigest(slots.ToEpoch(sidecar.Slot()))
 	if err := writeContextToStream(ctxBytes[:], stream); err != nil {
 		return err
 	}
-	_, err = encoding.EncodeWithMaxLength(stream, sidecar)
+	_, err := encoding.EncodeWithMaxLength(stream, sidecar)
 	return err
 }
 
@@ -167,18 +112,12 @@ func WriteLightClientBootstrapChunk(stream libp2pcore.Stream, tor blockchain.Tem
 		return err
 	}
 
-	valRoot := tor.GenesisValidatorsRoot()
-	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(bootstrap.Header().Beacon().Slot), valRoot[:])
-	if err != nil {
+	digest := params.ForkDigest(slots.ToEpoch(bootstrap.Header().Beacon().Slot))
+	if err := writeContextToStream(digest[:], stream); err != nil {
 		return err
 	}
 
-	obtainedCtx := digest[:]
-	if err = writeContextToStream(obtainedCtx, stream); err != nil {
-		return err
-	}
-
-	_, err = encoding.EncodeWithMaxLength(stream, bootstrap)
+	_, err := encoding.EncodeWithMaxLength(stream, bootstrap)
 	return err
 }
 
@@ -187,17 +126,11 @@ func WriteLightClientUpdateChunk(stream libp2pcore.Stream, tor blockchain.Tempor
 		return err
 	}
 
-	valRoot := tor.GenesisValidatorsRoot()
-	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(update.AttestedHeader().Beacon().Slot), valRoot[:])
-	if err != nil {
+	digest := params.ForkDigest(slots.ToEpoch(update.AttestedHeader().Beacon().Slot))
+	if err := writeContextToStream(digest[:], stream); err != nil {
 		return err
 	}
-	obtainedCtx := digest[:]
-
-	if err = writeContextToStream(obtainedCtx, stream); err != nil {
-		return err
-	}
-	_, err = encoding.EncodeWithMaxLength(stream, update)
+	_, err := encoding.EncodeWithMaxLength(stream, update)
 	return err
 }
 
@@ -206,17 +139,12 @@ func WriteLightClientOptimisticUpdateChunk(stream libp2pcore.Stream, tor blockch
 		return err
 	}
 
-	valRoot := tor.GenesisValidatorsRoot()
-	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(update.AttestedHeader().Beacon().Slot), valRoot[:])
-	if err != nil {
-		return err
-	}
-	obtainedCtx := digest[:]
+	digest := params.ForkDigest(slots.ToEpoch(update.AttestedHeader().Beacon().Slot))
 
-	if err = writeContextToStream(obtainedCtx, stream); err != nil {
+	if err := writeContextToStream(digest[:], stream); err != nil {
 		return err
 	}
-	_, err = encoding.EncodeWithMaxLength(stream, update)
+	_, err := encoding.EncodeWithMaxLength(stream, update)
 	return err
 }
 
@@ -225,16 +153,11 @@ func WriteLightClientFinalityUpdateChunk(stream libp2pcore.Stream, tor blockchai
 		return err
 	}
 
-	valRoot := tor.GenesisValidatorsRoot()
-	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(update.AttestedHeader().Beacon().Slot), valRoot[:])
-	if err != nil {
-		return err
-	}
-	obtainedCtx := digest[:]
+	digest := params.ForkDigest(slots.ToEpoch(update.AttestedHeader().Beacon().Slot))
 
-	if err = writeContextToStream(obtainedCtx, stream); err != nil {
+	if err := writeContextToStream(digest[:], stream); err != nil {
 		return err
 	}
-	_, err = encoding.EncodeWithMaxLength(stream, update)
+	_, err := encoding.EncodeWithMaxLength(stream, update)
 	return err
 }

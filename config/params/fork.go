@@ -13,35 +13,21 @@ import (
 
 // IsForkNextEpoch checks if an allotted fork is in the following epoch.
 func IsForkNextEpoch(currentEpoch primitives.Epoch) bool {
-	entry, ok := BeaconConfig().networkSchedule.forEpoch(currentEpoch + 1)
+	entry, ok := BeaconConfig().networkSchedule.activatedAt(currentEpoch + 1)
 	return ok && entry.isFork
 }
 
 // ForkDigestFromEpoch retrieves the fork digest from the current schedule determined
 // by the provided epoch.
-func ForkDigestFromEpoch(epoch primitives.Epoch) ([4]byte, error) {
-	forkData, err := Fork(epoch)
-	if err != nil {
-		return [4]byte{}, err
-	}
-	version := bytesutil.ToBytes4(forkData.CurrentVersion)
-	root, err := computeForkDataRoot(version, BeaconConfig().GenesisValidatorsRoot)
-	if err != nil {
-		return [4]byte{}, err
-	}
-	return bytesutil.ToBytes4(root[:]), nil
+func ForkDigestFromEpoch(epoch primitives.Epoch) [4]byte {
+	return BeaconConfig().networkSchedule.ForEpoch(epoch).ForkDigest
 }
 
 // CreateForkDigest creates a fork digest from a genesis time and genesis
 // validators root, utilizing the current slot to determine
 // the active fork version in the node.
-func CreateForkDigest(epoch primitives.Epoch) ([4]byte, error) {
-	var version [4]byte
-	root, err := computeForkDataRoot(version, BeaconConfig().GenesisValidatorsRoot)
-	if err != nil {
-		return [4]byte{}, err
-	}
-	return bytesutil.ToBytes4(root[:]), nil
+func ForkDigest(epoch primitives.Epoch) [4]byte {
+	return BeaconConfig().networkSchedule.ForEpoch(epoch).ForkDigest
 }
 
 func computeForkDataRoot(version [4]byte, root [32]byte) ([32]byte, error) {
@@ -55,31 +41,17 @@ func computeForkDataRoot(version [4]byte, root [32]byte) ([32]byte, error) {
 	return r, nil
 }
 
-// Fork given a target epoch,
-// returns the active fork version during this epoch.
-func Fork(
-	targetEpoch primitives.Epoch,
-) (*ethpb.Fork, error) {
-	currentForkVersion := bytesutil.ToBytes4(BeaconConfig().GenesisForkVersion)
-	previousForkVersion := bytesutil.ToBytes4(BeaconConfig().GenesisForkVersion)
-	fSchedule := BeaconConfig().ForkVersionSchedule
-	sortedForkVersions := SortedForkVersions()
-	forkEpoch := primitives.Epoch(0)
-	for _, forkVersion := range sortedForkVersions {
-		epoch, ok := fSchedule[forkVersion]
-		if !ok {
-			return nil, errors.Errorf("fork version %x doesn't exist in schedule", forkVersion)
-		}
-		if targetEpoch >= epoch {
-			previousForkVersion = currentForkVersion
-			currentForkVersion = forkVersion
-			forkEpoch = epoch
-		}
+// Fork returns the fork version for the given epoch.
+func Fork(epoch primitives.Epoch) (*ethpb.Fork, error) {
+	current := BeaconConfig().networkSchedule.ForEpoch(epoch)
+	previous := current
+	if current.Epoch > 0 {
+		previous = BeaconConfig().networkSchedule.ForEpoch(epoch - 1)
 	}
 	return &ethpb.Fork{
-		PreviousVersion: previousForkVersion[:],
-		CurrentVersion:  currentForkVersion[:],
-		Epoch:           forkEpoch,
+		PreviousVersion: previous.ForkVersion[:],
+		CurrentVersion:  current.ForkVersion[:],
+		Epoch:           current.Epoch,
 	}, nil
 }
 

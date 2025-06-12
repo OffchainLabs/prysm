@@ -157,11 +157,7 @@ func (r *expectedBlobChunk) requireExpected(t *testing.T, s *Service, stream net
 
 	c, err := readContextFromStream(stream)
 	require.NoError(t, err)
-
-	valRoot := s.cfg.chain.GenesisValidatorsRoot()
-	ctxBytes, err := forks.ForkDigestFromEpoch(slots.ToEpoch(r.sidecar.Slot()), valRoot[:])
-	require.NoError(t, err)
-	require.Equal(t, ctxBytes, bytesutil.ToBytes4(c))
+	require.Equal(t, params.ForkDigest(slots.ToEpoch(r.sidecar.Slot())), bytesutil.ToBytes4(c))
 
 	sc := &ethpb.BlobSidecar{}
 	require.NoError(t, encoding.DecodeWithMaxLength(stream, sc))

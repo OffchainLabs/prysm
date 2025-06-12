@@ -4,7 +4,10 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/network/forks"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -50,10 +53,8 @@ func (c *client) statusRPCHandler(ctx context.Context, _ interface{}, stream lib
 	if err != nil {
 		return err
 	}
-	digest, err := forks.CreateForkDigest(resp.GenesisTime.AsTime(), resp.GenesisValidatorsRoot)
-	if err != nil {
-		return err
-	}
+	clock := startup.NewClock(resp.GenesisTime.AsTime(), bytesutil.ToBytes32(resp.GenesisValidatorsRoot))
+	digest := params.ForkDigest(slots.ToEpoch(clock.CurrentSlot()))
 	kindOfFork, err := forks.Fork(slots.ToEpoch(chainHead.HeadSlot))
 	if err != nil {
 		return err

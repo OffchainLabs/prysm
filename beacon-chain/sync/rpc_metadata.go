@@ -148,14 +148,9 @@ func (s *Service) sendMetaDataRequest(ctx context.Context, peerID peer.ID) (meta
 		return nil, errors.New(errMsg)
 	}
 
-	// Get the fork digest from the current epoch and the genesis validators root.
-	rpcCtx, err := params.ForkDigestFromEpoch(currentEpoch)
-	if err != nil {
-		return nil, errors.Wrap(err, "fork digest from epoch")
-	}
-
+	digest := params.ForkDigestFromEpoch(currentEpoch)
 	// Instantiate zero value of the metadata.
-	msg, err := extractDataTypeFromTypeMap(types.MetaDataMap, rpcCtx[:], s.cfg.clock)
+	msg, err := extractDataTypeFromTypeMap(types.MetaDataMap, digest[:], s.cfg.clock)
 	if err != nil {
 		return nil, errors.Wrap(err, "extract data type from type map")
 	}

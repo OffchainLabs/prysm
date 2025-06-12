@@ -376,7 +376,21 @@ type NetworkSchedule struct {
 	byDigest  map[[4]byte]*NetworkScheduleEntry
 }
 
-func (ns *NetworkSchedule) forEpoch(epoch primitives.Epoch) (*NetworkScheduleEntry, bool) {
+func (ns *NetworkSchedule) nextEpochIdx(epoch primitives.Epoch) int {
+	return sort.Search(len(ns.entries), func(i int) bool {
+		return ns.entries[i].Epoch > epoch
+	})
+}
+
+func (ns *NetworkSchedule) ForEpoch(epoch primitives.Epoch) NetworkScheduleEntry {
+	nextIdx := ns.nextEpochIdx(epoch)
+	if nextIdx > 0 {
+		return ns.entries[nextIdx-1]
+	}
+	return ns.entries[0]
+}
+
+func (ns *NetworkSchedule) activatedAt(epoch primitives.Epoch) (*NetworkScheduleEntry, bool) {
 	entry, ok := ns.byEpoch[epoch]
 	return entry, ok
 }

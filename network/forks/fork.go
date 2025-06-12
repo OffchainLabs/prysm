@@ -5,57 +5,14 @@ import (
 	"bytes"
 	"math"
 	"sort"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
 )
-
-// ForkDigestFromEpoch retrieves the fork digest from the current schedule determined
-// by the provided epoch.
-func ForkDigestFromEpoch(currentEpoch primitives.Epoch, genesisValidatorsRoot []byte) ([4]byte, error) {
-	if len(genesisValidatorsRoot) == 0 {
-		return [4]byte{}, errors.New("genesis validators root is not set")
-	}
-	forkData, err := Fork(currentEpoch)
-	if err != nil {
-		return [4]byte{}, err
-	}
-	return signing.ComputeForkDigest(forkData.CurrentVersion, genesisValidatorsRoot)
-}
-
-// CreateForkDigest creates a fork digest from a genesis time and genesis
-// validators root, utilizing the current slot to determine
-// the active fork version in the node.
-func CreateForkDigest(
-	genesisTime time.Time,
-	genesisValidatorsRoot []byte,
-) ([4]byte, error) {
-	if genesisTime.IsZero() {
-		return [4]byte{}, errors.New("genesis time is not set")
-	}
-	if len(genesisValidatorsRoot) == 0 {
-		return [4]byte{}, errors.New("genesis validators root is not set")
-	}
-	currentSlot := slots.Since(genesisTime)
-	currentEpoch := slots.ToEpoch(currentSlot)
-
-	forkData, err := Fork(currentEpoch)
-	if err != nil {
-		return [4]byte{}, err
-	}
-
-	digest, err := signing.ComputeForkDigest(forkData.CurrentVersion, genesisValidatorsRoot)
-	if err != nil {
-		return [4]byte{}, err
-	}
-	return digest, nil
-}
 
 // Fork given a target epoch,
 // returns the active fork version during this epoch.

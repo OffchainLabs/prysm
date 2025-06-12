@@ -11,11 +11,11 @@ import (
 
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -231,10 +231,8 @@ func TestDiscv5_AddRetrieveForkEntryENR(t *testing.T) {
 	nextForkVersion := []byte{0, 0, 0, 1}
 	params.OverrideBeaconConfig(c)
 
-	genesisTime := time.Now()
-	genesisValidatorsRoot := make([]byte, 32)
-	digest, err := forks.CreateForkDigest(genesisTime, make([]byte, 32))
-	require.NoError(t, err)
+	clock := startup.NewClock(time.Now(), [32]byte{})
+	digest := params.ForkDigest(clock.CurrentEpoch())
 	enrForkID := &pb.ENRForkID{
 		CurrentForkDigest: digest[:],
 		NextForkVersion:   nextForkVersion,
@@ -256,7 +254,7 @@ func TestDiscv5_AddRetrieveForkEntryENR(t *testing.T) {
 	localNode := enode.NewLocalNode(db, pkey)
 	localNode.Set(entry)
 
-	want, err := signing.ComputeForkDigest([]byte{0, 0, 0, 0}, genesisValidatorsRoot)
+	want, err := signing.ComputeForkDigest([]byte{0, 0, 0, 0}, clock.GenesisValidatorsRootSlice())
 	require.NoError(t, err)
 
 	resp, err := forkEntry(localNode.Node().Record())
@@ -283,7 +281,8 @@ func TestAddForkEntry_Genesis(t *testing.T) {
 	params.OverrideBeaconConfig(bCfg)
 
 	localNode := enode.NewLocalNode(db, pkey)
-	localNode, err = addForkEntry(localNode, time.Now().Add(10*time.Second), bytesutil.PadTo([]byte{'A', 'B', 'C', 'D'}, 32))
+	clock := startup.NewClock(time.Now(), bCfg.GenesisValidatorsRoot)
+	localNode, err = addForkEntry(localNode, clock.CurrentEpoch())
 	require.NoError(t, err)
 	forkEntry, err := forkEntry(localNode.Node().Record())
 	require.NoError(t, err)

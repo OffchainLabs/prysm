@@ -168,7 +168,6 @@ go_test(
         "//crypto/hash:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//network:go_default_library",
-        "//network/forks:go_default_library",
         "//proto/eth/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//proto/prysm/v1alpha1/metadata:go_default_library",

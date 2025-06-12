@@ -504,7 +504,7 @@ func (s *Service) createLocalNode(
 	localNode.SetFallbackIP(ipAddr)
 	localNode.SetFallbackUDP(udpPort)
 
-	localNode, err = addForkEntry(localNode, s.genesisTime, s.genesisValidatorsRoot)
+	localNode, err = addForkEntry(localNode, s.clock.CurrentEpoch())
 	if err != nil {
 		return nil, errors.Wrap(err, "could not add eth2 fork version entry to enr")
 	}
