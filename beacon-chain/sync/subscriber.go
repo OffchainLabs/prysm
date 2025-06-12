@@ -23,7 +23,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/container/slice"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/messagehandler"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -205,8 +204,7 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 // subscribe to a given topic with a given validator and subscription handler.
 // The base protobuf message is used to initialize new messages for decoding.
 func (s *Service) subscribe(topic string, validator wrappedVal, handle subHandler, digest [4]byte) *pubsub.Subscription {
-	genRoot := s.cfg.clock.GenesisValidatorsRoot()
-	_, e, err := forks.RetrieveForkDataFromDigest(digest, genRoot[:])
+	_, e, err := params.ForkDataFromDigest(digest)
 	if err != nil {
 		// Impossible condition as it would mean digest does not exist.
 		panic(err) // lint:nopanic -- Impossible condition.
@@ -516,11 +514,8 @@ func (s *Service) subscribeWithParameters(
 	// Initialize the subscriptions map.
 	subscriptions := make(map[uint64]*pubsub.Subscription)
 
-	// Retrieve the genesis validators root.
-	genesisValidatorsRoot := s.cfg.clock.GenesisValidatorsRoot()
-
 	// Retrieve the epoch of the fork corresponding to the digest.
-	_, epoch, err := forks.RetrieveForkDataFromDigest(digest, genesisValidatorsRoot[:])
+	_, epoch, err := params.ForkDataFromDigest(digest)
 	if err != nil {
 		panic(err) // lint:nopanic -- Impossible condition.
 	}

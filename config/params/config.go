@@ -376,10 +376,46 @@ type NetworkSchedule struct {
 	byDigest  map[[4]byte]*NetworkScheduleEntry
 }
 
+func newNetworkSchedule(entries []NetworkScheduleEntry) *NetworkSchedule {
+	return &NetworkSchedule{
+		entries:   entries,
+		byEpoch:   make(map[primitives.Epoch]*NetworkScheduleEntry),
+		byVersion: make(map[[4]byte]*NetworkScheduleEntry),
+		byDigest:  make(map[[4]byte]*NetworkScheduleEntry),
+	}
+}
+
 func (ns *NetworkSchedule) nextEpochIdx(epoch primitives.Epoch) int {
 	return sort.Search(len(ns.entries), func(i int) bool {
 		return ns.entries[i].Epoch > epoch
 	})
+}
+
+func (ns *NetworkSchedule) Next(epoch primitives.Epoch) NetworkScheduleEntry {
+	nextIdx := ns.nextEpochIdx(epoch)
+	if nextIdx < len(ns.entries) && ns.entries[nextIdx].Epoch != BeaconConfig().FarFutureEpoch {
+		return ns.entries[nextIdx]
+	}
+	return ns.LastEntry()
+}
+
+func (ns *NetworkSchedule) LastEntry() NetworkScheduleEntry {
+	for i := len(ns.entries) - 1; i >= 0; i-- {
+		if ns.entries[i].Epoch != BeaconConfig().FarFutureEpoch {
+			return ns.entries[i]
+		}
+	}
+	return ns.entries[0]
+}
+
+// LastFork is the last full fork (this is used by e2e testing)
+func (ns *NetworkSchedule) LastFork() NetworkScheduleEntry {
+	for i := len(ns.entries) - 1; i >= 0; i-- {
+		if ns.entries[i].isFork && ns.entries[i].Epoch != BeaconConfig().FarFutureEpoch {
+			return ns.entries[i]
+		}
+	}
+	return ns.entries[0]
 }
 
 func (ns *NetworkSchedule) ForEpoch(epoch primitives.Epoch) NetworkScheduleEntry {
@@ -400,15 +436,24 @@ func (ns *NetworkSchedule) merge(other *NetworkSchedule) *NetworkSchedule {
 	merged = append(merged, ns.entries...)
 	merged = append(merged, other.entries...)
 	sort.Slice(merged, func(i, j int) bool {
+		if merged[i].Epoch == merged[j].Epoch {
+			return merged[i].isFork
+		}
 		return merged[i].Epoch < merged[j].Epoch
 	})
-	return &NetworkSchedule{entries: merged}
+	return newNetworkSchedule(merged)
 }
 
 func (ns *NetworkSchedule) index(e NetworkScheduleEntry) {
-	ns.byDigest[e.ForkDigest] = &e
-	ns.byVersion[e.ForkVersion] = &e
-	ns.byEpoch[e.Epoch] = &e
+	if _, ok := ns.byEpoch[e.Epoch]; !ok {
+		ns.byDigest[e.ForkDigest] = &e
+	}
+	if _, ok := ns.byVersion[e.ForkVersion]; !ok {
+		ns.byVersion[e.ForkVersion] = &e
+	}
+	if _, ok := ns.byEpoch[e.Epoch]; !ok {
+		ns.byEpoch[e.Epoch] = &e
+	}
 }
 
 func (ns *NetworkSchedule) prepare(b *BeaconChainConfig) error {
@@ -443,6 +488,7 @@ func (ns *NetworkSchedule) prepare(b *BeaconChainConfig) error {
 			return err
 		}
 		ns.entries[i] = entry
+		ns.index(entry)
 	}
 	return nil
 }
@@ -471,29 +517,26 @@ func entryWithForkDigest(entry NetworkScheduleEntry, b *BeaconChainConfig) (Netw
 }
 
 func initForkSchedule(b *BeaconChainConfig) *NetworkSchedule {
-	return &NetworkSchedule{
-		entries: []NetworkScheduleEntry{
-			{Epoch: b.GenesisEpoch, isFork: true},
-			{Epoch: b.AltairForkEpoch, isFork: true},
-			{Epoch: b.BellatrixForkEpoch, isFork: true},
-			{Epoch: b.CapellaForkEpoch, isFork: true},
-			{Epoch: b.DenebForkEpoch, isFork: true, MaxBlobsPerBlock: uint64(b.DeprecatedMaxBlobsPerBlock)},
-			{Epoch: b.ElectraForkEpoch, isFork: true, MaxBlobsPerBlock: uint64(b.DeprecatedMaxBlobsPerBlockElectra)},
-			{Epoch: b.FuluForkEpoch, isFork: true},
-		}}
+	return newNetworkSchedule([]NetworkScheduleEntry{
+		{Epoch: b.GenesisEpoch, isFork: true, ForkVersion: [4]byte(b.GenesisForkVersion)},
+		{Epoch: b.AltairForkEpoch, isFork: true, ForkVersion: [4]byte(b.AltairForkVersion)},
+		{Epoch: b.BellatrixForkEpoch, isFork: true, ForkVersion: [4]byte(b.BellatrixForkVersion)},
+		{Epoch: b.CapellaForkEpoch, isFork: true, ForkVersion: [4]byte(b.CapellaForkVersion)},
+		{Epoch: b.DenebForkEpoch, isFork: true, ForkVersion: [4]byte(b.DenebForkVersion), MaxBlobsPerBlock: uint64(b.DeprecatedMaxBlobsPerBlock)},
+		{Epoch: b.ElectraForkEpoch, isFork: true, ForkVersion: [4]byte(b.ElectraForkVersion), MaxBlobsPerBlock: uint64(b.DeprecatedMaxBlobsPerBlockElectra)},
+		{Epoch: b.FuluForkEpoch, isFork: true, ForkVersion: [4]byte(b.FuluForkVersion)},
+	})
 }
 
 func initBPOSchedule(b *BeaconChainConfig) *NetworkSchedule {
 	sort.Slice(b.BlobSchedule, func(i, j int) bool {
 		return b.BlobSchedule[i].Epoch < b.BlobSchedule[j].Epoch
 	})
-	bs := &NetworkSchedule{
-		entries: make([]NetworkScheduleEntry, len(b.BlobSchedule)),
-	}
+	entries := make([]NetworkScheduleEntry, len(b.BlobSchedule))
 	for i := range b.BlobSchedule {
-		bs.entries[i] = NetworkScheduleEntry(b.BlobSchedule[i])
+		entries[i] = NetworkScheduleEntry(b.BlobSchedule[i])
 	}
-	return bs
+	return newNetworkSchedule(entries)
 }
 
 func configForkSchedule(b *BeaconChainConfig) map[[fieldparams.VersionLength]byte]primitives.Epoch {

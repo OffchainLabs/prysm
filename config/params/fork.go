@@ -2,11 +2,9 @@ package params
 
 import (
 	"bytes"
-	"math"
 	"sort"
 
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 )
@@ -43,10 +41,11 @@ func computeForkDataRoot(version [4]byte, root [32]byte) ([32]byte, error) {
 
 // Fork returns the fork version for the given epoch.
 func Fork(epoch primitives.Epoch) (*ethpb.Fork, error) {
-	current := BeaconConfig().networkSchedule.ForEpoch(epoch)
+	cfg := BeaconConfig()
+	current := cfg.networkSchedule.ForEpoch(epoch)
 	previous := current
 	if current.Epoch > 0 {
-		previous = BeaconConfig().networkSchedule.ForEpoch(epoch - 1)
+		previous = BeaconConfig().networkSchedule.ForEpoch(current.Epoch - 1)
 	}
 	return &ethpb.Fork{
 		PreviousVersion: previous.ForkVersion[:],
@@ -57,52 +56,20 @@ func Fork(epoch primitives.Epoch) (*ethpb.Fork, error) {
 
 // RetrieveForkDataFromDigest performs the inverse, where it tries to determine the fork version
 // and epoch from a provided digest by looping through our current fork schedule.
-func RetrieveForkDataFromDigest(digest [4]byte, genesisValidatorsRoot []byte) ([4]byte, primitives.Epoch, error) {
-	fSchedule := BeaconConfig().ForkVersionSchedule
-	gvr := BeaconConfig().GenesisValidatorsRoot
-	for v, e := range fSchedule {
-		root, err := computeForkDataRoot(v, gvr)
-		if err != nil {
-			return [4]byte{}, 0, err
-		}
-		rDigest := bytesutil.ToBytes4(root[:])
-		if rDigest == digest {
-			return v, e, nil
-		}
+func ForkDataFromDigest(digest [4]byte) ([4]byte, primitives.Epoch, error) {
+	cfg := BeaconConfig()
+	entry, ok := cfg.networkSchedule.byDigest[digest]
+	if !ok {
+		return [4]byte{}, 0, errors.Errorf("no fork exists for a digest of %#x", digest)
 	}
-	return [4]byte{}, 0, errors.Errorf("no fork exists for a digest of %#x", digest)
+	return entry.ForkVersion, entry.Epoch, nil
 }
 
 // NextForkData retrieves the next fork data according to the
 // provided current epoch.
-func NextForkData(currEpoch primitives.Epoch) ([4]byte, primitives.Epoch, error) {
-	fSchedule := BeaconConfig().ForkVersionSchedule
-	sortedForkVersions := SortedForkVersions()
-	nextForkEpoch := primitives.Epoch(math.MaxUint64)
-	var nextForkVersion [4]byte
-	for _, forkVersion := range sortedForkVersions {
-		epoch, ok := fSchedule[forkVersion]
-		if !ok {
-			return [4]byte{}, 0, errors.Errorf("fork version %x doesn't exist in schedule", forkVersion)
-		}
-		// If we get an epoch larger than out current epoch
-		// we set this as our next fork epoch and exit the
-		// loop.
-		if epoch > currEpoch {
-			nextForkEpoch = epoch
-			nextForkVersion = forkVersion
-			break
-		}
-		// In the event the retrieved epoch is less than
-		// our current epoch, we mark the previous
-		// fork's version as the next fork version.
-		if epoch <= currEpoch {
-			// The next fork version is updated to
-			// always include the most current fork version.
-			nextForkVersion = forkVersion
-		}
-	}
-	return nextForkVersion, nextForkEpoch, nil
+func NextForkData(epoch primitives.Epoch) ([4]byte, primitives.Epoch) {
+	entry := BeaconConfig().networkSchedule.Next(epoch)
+	return entry.ForkVersion, entry.Epoch
 }
 
 // SortedForkVersions sorts the provided fork schedule in ascending order
@@ -136,17 +103,5 @@ func SortedForkVersions() [][4]byte {
 // LastForkEpoch returns the last valid fork epoch that exists in our
 // fork schedule.
 func LastForkEpoch() primitives.Epoch {
-	fSchedule := BeaconConfig().ForkVersionSchedule
-	sortedForkVersions := SortedForkVersions()
-	lastValidEpoch := primitives.Epoch(0)
-	numOfVersions := len(sortedForkVersions)
-	for i := numOfVersions - 1; i >= 0; i-- {
-		v := sortedForkVersions[i]
-		fEpoch := fSchedule[v]
-		if fEpoch != math.MaxUint64 {
-			lastValidEpoch = fEpoch
-			break
-		}
-	}
-	return lastValidEpoch
+	return BeaconConfig().networkSchedule.LastFork().Epoch
 }

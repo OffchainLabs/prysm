@@ -6,7 +6,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -79,10 +78,7 @@ func (s *Service) compareForkENR(record *enr.Record) error {
 // and the next fork epoch.
 func addForkEntry(node *enode.LocalNode, current primitives.Epoch) (*enode.LocalNode, error) {
 	digest := params.ForkDigest(current)
-	nextForkVersion, nextForkEpoch, err := forks.NextForkData(current)
-	if err != nil {
-		return nil, err
-	}
+	nextForkVersion, nextForkEpoch := params.NextForkData(current)
 	enrForkID := &pb.ENRForkID{
 		CurrentForkDigest: digest[:],
 		NextForkVersion:   nextForkVersion[:],
