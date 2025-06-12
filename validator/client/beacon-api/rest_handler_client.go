@@ -10,12 +10,13 @@ import (
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
-type JsonRestHandler interface {
+type RestHandler interface {
 	Get(ctx context.Context, endpoint string, resp interface{}) error
 	GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Header, error)
 	Post(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer, resp interface{}) error
@@ -30,7 +31,7 @@ type BeaconApiRestHandler struct {
 }
 
 // NewBeaconApiRestHandler returns a RestHandler
-func NewBeaconApiRestHandler(client http.Client, host string) JsonRestHandler {
+func NewBeaconApiRestHandler(client http.Client, host string) RestHandler {
 	return &BeaconApiRestHandler{
 		client: client,
 		host:   host,
@@ -78,6 +79,9 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 	primaryAcceptType := fmt.Sprintf("%s;q=%s", api.OctetStreamMediaType, "0.95")
 	secondaryAcceptType := fmt.Sprintf("%s;q=%s", api.JsonMediaType, "0.9")
 	acceptHeaderString := fmt.Sprintf("%s,%s", primaryAcceptType, secondaryAcceptType)
+	if features.Get().UseSSZ {
+		acceptHeaderString = api.OctetStreamMediaType
+	}
 	req.Header.Set("Accept", acceptHeaderString)
 	httpResp, err := c.client.Do(req)
 	if err != nil {
@@ -98,6 +102,9 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 			"secondaryAcceptType": secondaryAcceptType,
 			"receivedAcceptType":  httpResp.Header.Get("Content-Type"),
 		}).Warn("Server responded with non primary accept type")
+	}
+	if features.Get().UseSSZ && httpResp.Header.Get("Content-Type") != api.OctetStreamMediaType {
+		return nil, nil, errors.Errorf("server responded with non primary accept type %s", httpResp.Header.Get("Content-Type"))
 	}
 
 	// non-2XX codes are a failure
