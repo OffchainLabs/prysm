@@ -399,6 +399,7 @@ func TestHandshakeHandlers_Roundtrip(t *testing.T) {
 	if util.WaitTimeout(&wg, 1*time.Second) {
 		t.Fatal("Did not receive stream within 1 sec")
 	}
+
 	if util.WaitTimeout(&wg2, 1*time.Second) {
 		t.Fatal("Did not receive stream within 1 sec")
 	}

@@ -1464,7 +1464,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 				peersID = append(peersID, peerID)
 			}
 
-			status := &pb.Status{HeadSlot: peersHeadSlot}
+			status := &pb.StatusV2{HeadSlot: peersHeadSlot}
 
 			for _, peerID := range peersID {
 				p2pSvc.Peers().SetChainState(peerID, status)

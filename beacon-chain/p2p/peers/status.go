@@ -205,14 +205,14 @@ func (p *Status) ENR(pid peer.ID) (*enr.Record, error) {
 }
 
 // SetChainState sets the chain state of the given remote peer.
-func (p *Status) SetChainState(pid peer.ID, chainState *pb.Status) {
+func (p *Status) SetChainState(pid peer.ID, chainState *pb.StatusV2) {
 	p.scorers.PeerStatusScorer().SetPeerStatus(pid, chainState, nil)
 }
 
 // ChainState gets the chain state of the given remote peer.
 // This will error if the peer does not exist.
 // This will error if there is no known chain state for the peer.
-func (p *Status) ChainState(pid peer.ID) (*pb.Status, error) {
+func (p *Status) ChainState(pid peer.ID) (*pb.StatusV2, error) {
 	return p.scorers.PeerStatusScorer().PeerStatus(pid)
 }
 
