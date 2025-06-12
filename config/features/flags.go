@@ -194,6 +194,13 @@ var (
 		Name:  "enable-duties-v2",
 		Usage: "Forces use of get duties v2 endpoint.",
 	}
+
+	// EnableWebFlag enables controlling the validator client via the Prysm web ui. This is a work in progress.
+	EnableWebFlag = &cli.BoolFlag{
+		Name:  "web",
+		Usage: "(Work in progress): Enables the web portal for the validator client.",
+		Value: false,
+	}
 )
 
 // devModeFlags holds list of flags that are set when development mode is on.
@@ -215,6 +222,7 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	enableDoppelGangerProtection,
 	EnableBeaconRESTApi,
 	EnableDutiesV2,
+	EnableWebFlag,
 }...)
 
 // E2EValidatorFlags contains a list of the validator feature flags to be tested in E2E.

@@ -51,6 +51,7 @@ type Flags struct {
 	EnableBeaconRESTApi                 bool // EnableBeaconRESTApi enables experimental usage of the beacon REST API by the validator when querying a beacon node
 	EnableExperimentalAttestationPool   bool // EnableExperimentalAttestationPool enables an experimental attestation pool design.
 	EnableDutiesV2                      bool // EnableDutiesV2 sets validator client to use the get Duties V2 endpoint
+	EnableWeb                           bool // EnableWeb enables the webui on the validator client
 	// Logging related toggles.
 	DisableGRPCConnectionLogs bool // Disables logging when a new grpc client has connected.
 	EnableFullSSZDataLogging  bool // Enables logging for full ssz data on rejected gossip messages
@@ -338,6 +339,10 @@ func ConfigureValidator(ctx *cli.Context) error {
 	if ctx.Bool(EnableDutiesV2.Name) {
 		logEnabled(EnableDutiesV2)
 		cfg.EnableDutiesV2 = true
+	}
+	if ctx.Bool(EnableWebFlag.Name) {
+		logEnabled(EnableWebFlag)
+		cfg.EnableWeb = true
 	}
 	cfg.KeystoreImportDebounceInterval = ctx.Duration(dynamicKeyReloadDebounceInterval.Name)
 	Init(cfg)

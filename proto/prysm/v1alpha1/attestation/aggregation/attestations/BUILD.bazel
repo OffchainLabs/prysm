@@ -23,6 +23,7 @@ go_test(
     name = "go_default_test",
     srcs = [
         "attestations_test.go",
+        "export_test.go",
         "maxcover_test.go",
     ],
     embed = [":go_default_library"],

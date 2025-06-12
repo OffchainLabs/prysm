@@ -18,7 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpbalpha "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
@@ -51,7 +51,7 @@ func TestGetBlock(t *testing.T) {
 	b4.Block.ParentRoot = bytesutil.PadTo([]byte{8}, 32)
 	util.SaveBlock(t, ctx, beaconDB, b4)
 
-	wsb, err := blocks.NewSignedBeaconBlock(headBlock.Block.(*ethpbalpha.BeaconBlockContainer_Phase0Block).Phase0Block)
+	wsb, err := blocks.NewSignedBeaconBlock(headBlock.Block.(*ethpb.BeaconBlockContainer_Phase0Block).Phase0Block)
 	require.NoError(t, err)
 
 	fetcher := &BeaconDbBlocker{
@@ -60,7 +60,7 @@ func TestGetBlock(t *testing.T) {
 			DB:                  beaconDB,
 			Block:               wsb,
 			Root:                headBlock.BlockRoot,
-			FinalizedCheckPoint: &ethpbalpha.Checkpoint{Root: blkContainers[64].BlockRoot},
+			FinalizedCheckPoint: &ethpb.Checkpoint{Root: blkContainers[64].BlockRoot},
 			CanonicalRoots:      canonicalRoots,
 		},
 	}
@@ -71,13 +71,13 @@ func TestGetBlock(t *testing.T) {
 	tests := []struct {
 		name    string
 		blockID []byte
-		want    *ethpbalpha.SignedBeaconBlock
+		want    *ethpb.SignedBeaconBlock
 		wantErr bool
 	}{
 		{
 			name:    "slot",
 			blockID: []byte("30"),
-			want:    blkContainers[30].Block.(*ethpbalpha.BeaconBlockContainer_Phase0Block).Phase0Block,
+			want:    blkContainers[30].Block.(*ethpb.BeaconBlockContainer_Phase0Block).Phase0Block,
 		},
 		{
 			name:    "bad formatting",
@@ -87,7 +87,7 @@ func TestGetBlock(t *testing.T) {
 		{
 			name:    "canonical",
 			blockID: []byte("30"),
-			want:    blkContainers[30].Block.(*ethpbalpha.BeaconBlockContainer_Phase0Block).Phase0Block,
+			want:    blkContainers[30].Block.(*ethpb.BeaconBlockContainer_Phase0Block).Phase0Block,
 		},
 		{
 			name:    "non canonical",
@@ -97,12 +97,12 @@ func TestGetBlock(t *testing.T) {
 		{
 			name:    "head",
 			blockID: []byte("head"),
-			want:    headBlock.Block.(*ethpbalpha.BeaconBlockContainer_Phase0Block).Phase0Block,
+			want:    headBlock.Block.(*ethpb.BeaconBlockContainer_Phase0Block).Phase0Block,
 		},
 		{
 			name:    "finalized",
 			blockID: []byte("finalized"),
-			want:    blkContainers[64].Block.(*ethpbalpha.BeaconBlockContainer_Phase0Block).Phase0Block,
+			want:    blkContainers[64].Block.(*ethpb.BeaconBlockContainer_Phase0Block).Phase0Block,
 		},
 		{
 			name:    "genesis",
@@ -117,7 +117,7 @@ func TestGetBlock(t *testing.T) {
 		{
 			name:    "root",
 			blockID: blkContainers[20].BlockRoot,
-			want:    blkContainers[20].Block.(*ethpbalpha.BeaconBlockContainer_Phase0Block).Phase0Block,
+			want:    blkContainers[20].Block.(*ethpb.BeaconBlockContainer_Phase0Block).Phase0Block,
 		},
 		{
 			name:    "non-existent root",
@@ -127,7 +127,7 @@ func TestGetBlock(t *testing.T) {
 		{
 			name:    "hex",
 			blockID: []byte(hexutil.Encode(blkContainers[20].BlockRoot)),
-			want:    blkContainers[20].Block.(*ethpbalpha.BeaconBlockContainer_Phase0Block).Phase0Block,
+			want:    blkContainers[20].Block.(*ethpb.BeaconBlockContainer_Phase0Block).Phase0Block,
 		},
 		{
 			name:    "no block",
@@ -149,7 +149,7 @@ func TestGetBlock(t *testing.T) {
 			require.NoError(t, err)
 			pb, err := result.Proto()
 			require.NoError(t, err)
-			pbBlock, ok := pb.(*ethpbalpha.SignedBeaconBlock)
+			pbBlock, ok := pb.(*ethpb.SignedBeaconBlock)
 			require.Equal(t, true, ok)
 			if !reflect.DeepEqual(pbBlock, tt.want) {
 				t.Error("Expected blocks to equal")
@@ -218,7 +218,7 @@ func TestGetBlob(t *testing.T) {
 	})
 	t.Run("finalized", func(t *testing.T) {
 		blocker := &BeaconDbBlocker{
-			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &ethpbalpha.Checkpoint{Root: blockRoot[:]}},
+			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &ethpb.Checkpoint{Root: blockRoot[:]}},
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: time.Now(),
 			},
@@ -232,7 +232,7 @@ func TestGetBlob(t *testing.T) {
 	})
 	t.Run("justified", func(t *testing.T) {
 		blocker := &BeaconDbBlocker{
-			ChainInfoFetcher: &mockChain.ChainService{CurrentJustifiedCheckPoint: &ethpbalpha.Checkpoint{Root: blockRoot[:]}},
+			ChainInfoFetcher: &mockChain.ChainService{CurrentJustifiedCheckPoint: &ethpb.Checkpoint{Root: blockRoot[:]}},
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: time.Now(),
 			},
@@ -270,14 +270,14 @@ func TestGetBlob(t *testing.T) {
 	})
 	t.Run("one blob only", func(t *testing.T) {
 		blocker := &BeaconDbBlocker{
-			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &ethpbalpha.Checkpoint{Root: blockRoot[:]}},
+			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &ethpb.Checkpoint{Root: blockRoot[:]}},
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: time.Now(),
 			},
 			BeaconDB:    db,
 			BlobStorage: bs,
 		}
-		verifiedBlobs, rpcErr := blocker.Blobs(ctx, "123", []uint64{2})
+		verifiedBlobs, rpcErr := blocker.Blobs(ctx, "123", []int{2})
 		assert.Equal(t, rpcErr == nil, true)
 		require.Equal(t, 1, len(verifiedBlobs))
 		sidecar := verifiedBlobs[0].BlobSidecar
@@ -289,7 +289,7 @@ func TestGetBlob(t *testing.T) {
 	})
 	t.Run("no blobs returns an empty array", func(t *testing.T) {
 		blocker := &BeaconDbBlocker{
-			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &ethpbalpha.Checkpoint{Root: blockRoot[:]}},
+			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &ethpb.Checkpoint{Root: blockRoot[:]}},
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: time.Now(),
 			},
@@ -302,28 +302,28 @@ func TestGetBlob(t *testing.T) {
 	})
 	t.Run("no blob at index", func(t *testing.T) {
 		blocker := &BeaconDbBlocker{
-			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &ethpbalpha.Checkpoint{Root: blockRoot[:]}},
+			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &ethpb.Checkpoint{Root: blockRoot[:]}},
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: time.Now(),
 			},
 			BeaconDB:    db,
 			BlobStorage: bs,
 		}
-		noBlobIndex := uint64(len(blobs)) + 1
-		_, rpcErr := blocker.Blobs(ctx, "123", []uint64{0, noBlobIndex})
+		noBlobIndex := len(blobs) + 1
+		_, rpcErr := blocker.Blobs(ctx, "123", []int{0, noBlobIndex})
 		require.NotNil(t, rpcErr)
 		assert.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 	})
 	t.Run("index too big", func(t *testing.T) {
 		blocker := &BeaconDbBlocker{
-			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &ethpbalpha.Checkpoint{Root: blockRoot[:]}},
+			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &ethpb.Checkpoint{Root: blockRoot[:]}},
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: time.Now(),
 			},
 			BeaconDB:    db,
 			BlobStorage: bs,
 		}
-		_, rpcErr := blocker.Blobs(ctx, "123", []uint64{0, math.MaxUint})
+		_, rpcErr := blocker.Blobs(ctx, "123", []int{0, math.MaxInt})
 		require.NotNil(t, rpcErr)
 		assert.Equal(t, core.ErrorReason(core.BadRequest), rpcErr.Reason)
 	})

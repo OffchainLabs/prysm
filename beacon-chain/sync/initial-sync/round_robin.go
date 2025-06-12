@@ -166,7 +166,8 @@ func (s *Service) processFetchedDataRegSync(ctx context.Context, data *blocksQue
 		"firstUnprocessed": bwb[0].Block.Block().Slot(),
 	}
 	for i, b := range bwb {
-		if err := avs.Persist(s.clock.CurrentSlot(), b.Blobs...); err != nil {
+		sidecars := blocks.NewSidecarsFromBlobSidecars(b.Blobs)
+		if err := avs.Persist(s.clock.CurrentSlot(), sidecars...); err != nil {
 			log.WithError(err).WithFields(batchFields).WithFields(syncFields(b.Block)).Warn("Batch failure due to BlobSidecar issues")
 			return uint64(i), err
 		}
@@ -324,7 +325,10 @@ func (s *Service) processBatchedBlocks(ctx context.Context, bwb []blocks.BlockWi
 		if len(bb.Blobs) == 0 {
 			continue
 		}
-		if err := avs.Persist(s.clock.CurrentSlot(), bb.Blobs...); err != nil {
+
+		sidecars := blocks.NewSidecarsFromBlobSidecars(bb.Blobs)
+
+		if err := avs.Persist(s.clock.CurrentSlot(), sidecars...); err != nil {
 			return 0, err
 		}
 	}

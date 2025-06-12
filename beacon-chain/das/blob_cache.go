@@ -4,33 +4,29 @@ import (
 	"bytes"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/pkg/errors"
 )
 
-var (
-	ErrDuplicateSidecar   = errors.New("duplicate sidecar stashed in AvailabilityStore")
-	errIndexOutOfBounds   = errors.New("sidecar.index > MAX_BLOBS_PER_BLOCK")
-	errCommitmentMismatch = errors.New("KzgCommitment of sidecar in cache did not match block commitment")
-	errMissingSidecar     = errors.New("no sidecar in cache for block commitment")
-)
+var errIndexOutOfBounds = errors.New("sidecar.index > MAX_BLOBS_PER_BLOCK")
 
 // cacheKey includes the slot so that we can easily iterate through the cache and compare
 // slots for eviction purposes. Whether the input is the block or the sidecar, we always have
 // the root+slot when interacting with the cache, so it isn't an inconvenience to use both.
 type cacheKey struct {
 	slot primitives.Slot
-	root [32]byte
+	root [fieldparams.RootLength]byte
 }
 
-type cache struct {
-	entries map[cacheKey]*cacheEntry
+type blobCache struct {
+	entries map[cacheKey]*blobCacheEntry
 }
 
-func newCache() *cache {
-	return &cache{entries: make(map[cacheKey]*cacheEntry)}
+func newBlobCache() *blobCache {
+	return &blobCache{entries: make(map[cacheKey]*blobCacheEntry)}
 }
 
 // keyFromSidecar is a convenience method for constructing a cacheKey from a BlobSidecar value.
@@ -44,34 +40,34 @@ func keyFromBlock(b blocks.ROBlock) cacheKey {
 }
 
 // ensure returns the entry for the given key, creating it if it isn't already present.
-func (c *cache) ensure(key cacheKey) *cacheEntry {
+func (c *blobCache) ensure(key cacheKey) *blobCacheEntry {
 	e, ok := c.entries[key]
 	if !ok {
-		e = &cacheEntry{}
+		e = &blobCacheEntry{}
 		c.entries[key] = e
 	}
 	return e
 }
 
 // delete removes the cache entry from the cache.
-func (c *cache) delete(key cacheKey) {
+func (c *blobCache) delete(key cacheKey) {
 	delete(c.entries, key)
 }
 
-// cacheEntry holds a fixed-length cache of BlobSidecars.
-type cacheEntry struct {
+// blobCacheEntry holds a fixed-length cache of BlobSidecars.
+type blobCacheEntry struct {
 	scs         []*blocks.ROBlob
 	diskSummary filesystem.BlobStorageSummary
 }
 
-func (e *cacheEntry) setDiskSummary(sum filesystem.BlobStorageSummary) {
+func (e *blobCacheEntry) setDiskSummary(sum filesystem.BlobStorageSummary) {
 	e.diskSummary = sum
 }
 
 // stash adds an item to the in-memory cache of BlobSidecars.
 // Only the first BlobSidecar of a given Index will be kept in the cache.
 // stash will return an error if the given blob is already in the cache, or if the Index is out of bounds.
-func (e *cacheEntry) stash(sc *blocks.ROBlob) error {
+func (e *blobCacheEntry) stash(sc *blocks.ROBlob) error {
 	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(sc.Slot())
 	if sc.Index >= uint64(maxBlobsPerBlock) {
 		return errors.Wrapf(errIndexOutOfBounds, "index=%d", sc.Index)
@@ -92,7 +88,7 @@ func (e *cacheEntry) stash(sc *blocks.ROBlob) error {
 // commitments were found in the cache and the sidecar slice return value can be used
 // to perform a DA check against the cached sidecars.
 // filter only returns blobs that need to be checked. Blobs already available on disk will be excluded.
-func (e *cacheEntry) filter(root [32]byte, kc [][]byte, slot primitives.Slot) ([]blocks.ROBlob, error) {
+func (e *blobCacheEntry) filter(root [32]byte, kc [][]byte, slot primitives.Slot) ([]blocks.ROBlob, error) {
 	count := len(kc)
 	if e.diskSummary.AllAvailable(count) {
 		return nil, nil
