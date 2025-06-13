@@ -98,8 +98,8 @@ var (
 		Usage:  deprecatedUsage,
 		Hidden: true,
 	}
-	deprecatedAttestTimeFlag = &cli.BoolFlag{
-		Name:   "attest-time",
+	deprecatedAttestTimely = &cli.BoolFlag{
+		Name:   "attest-timely",
 		Usage:  deprecatedUsage,
 		Hidden: true,
 	}
@@ -123,7 +123,7 @@ var deprecatedFlags = []cli.Flag{
 	deprecatedEnableCommitteeAwarePacking,
 	deprecatedInteropGenesisTimeFlag,
 	deprecatedEnableQuic,
-	deprecatedAttestTimeFlag,
+	deprecatedAttestTimely,
 }
 
 var upcomingDeprecation = []cli.Flag{
