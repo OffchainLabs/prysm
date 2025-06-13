@@ -139,6 +139,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 
 	// Initializes any forks here.
 	params.BeaconConfig().InitializeForkSchedule()
+	params.LogDigests(params.BeaconConfig())
 
 	registry := runtime.NewServiceRegistry()
 	ctx := cliCtx.Context

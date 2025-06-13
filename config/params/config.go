@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -344,6 +345,18 @@ type NetworkScheduleEntry struct {
 	isFork           bool
 }
 
+func (e NetworkScheduleEntry) LogFields() logrus.Fields {
+	fields := logrus.Fields{
+		"fork_version":        fmt.Sprintf("%#x", e.ForkVersion),
+		"fork_digest":         fmt.Sprintf("%#x", e.ForkDigest),
+		"max_blobs_per_block": e.MaxBlobsPerBlock,
+		"epoch":               e.Epoch,
+		"is_fork":             e.isFork,
+		"fork_enum":           version.String(e.VersionEnum),
+	}
+	return fields
+}
+
 func (ns NetworkScheduleEntry) Copy() NetworkScheduleEntry {
 	return NetworkScheduleEntry{
 		ForkVersion:      ns.ForkVersion,
@@ -370,22 +383,22 @@ func (b *BeaconChainConfig) InitializeForkSchedule() {
 		log.WithError(err).Error("failed to prepare network schedule", "error", err)
 	}
 	b.networkSchedule = combined
-	logDigests(b.networkSchedule)
 }
 
-func logDigests(schedule *NetworkSchedule) {
+func LogDigests(b *BeaconChainConfig) {
+	schedule := b.networkSchedule
 	for _, entry := range schedule.entries {
 		log.
 			WithField("digest", fmt.Sprintf("%#x", entry.ForkDigest)).
 			WithField("fork_version", fmt.Sprintf("%#x", entry.ForkVersion)).
 			WithField("epoch", fmt.Sprintf("%d", entry.Epoch)).
-			Warn("network schedule entry initialized")
+			Debug("network schedule entry initialized")
 	}
 	digests := make([]string, 0, len(schedule.byDigest))
 	for k := range schedule.byDigest {
 		digests = append(digests, fmt.Sprintf("%#x", k))
 	}
-	log.WithField("digest_keys", strings.Join(digests, ", ")).Warn("digests seen")
+	log.WithField("digest_keys", strings.Join(digests, ", ")).Debug("digests seen")
 }
 
 type NetworkSchedule struct {
@@ -404,18 +417,29 @@ func newNetworkSchedule(entries []NetworkScheduleEntry) *NetworkSchedule {
 	}
 }
 
-func (ns *NetworkSchedule) nextEpochIdx(epoch primitives.Epoch) int {
-	return sort.Search(len(ns.entries), func(i int) bool {
-		return ns.entries[i].Epoch > epoch
-	})
+func (ns *NetworkSchedule) epochIdx(epoch primitives.Epoch) int {
+	/*
+		return sort.Search(len(ns.entries), func(i int) bool {
+			return ns.entries[i].Epoch > epoch
+		})
+	*/
+	for i := len(ns.entries) - 1; i >= 0; i-- {
+		if ns.entries[i].Epoch <= epoch {
+			return i
+		}
+	}
+	return -1
 }
 
 func (ns *NetworkSchedule) Next(epoch primitives.Epoch) NetworkScheduleEntry {
-	nextIdx := ns.nextEpochIdx(epoch)
-	if nextIdx < len(ns.entries) && ns.entries[nextIdx].Epoch != BeaconConfig().FarFutureEpoch {
-		return ns.entries[nextIdx]
+	idx := ns.epochIdx(epoch)
+	if idx >= len(ns.entries)-1 {
+		return ns.entries[len(ns.entries)-1]
 	}
-	return ns.LastEntry()
+	if idx < 0 {
+		return ns.entries[0]
+	}
+	return ns.entries[idx]
 }
 
 func (ns *NetworkSchedule) LastEntry() NetworkScheduleEntry {
@@ -438,11 +462,14 @@ func (ns *NetworkSchedule) LastFork() NetworkScheduleEntry {
 }
 
 func (ns *NetworkSchedule) ForEpoch(epoch primitives.Epoch) NetworkScheduleEntry {
-	nextIdx := ns.nextEpochIdx(epoch)
-	if nextIdx > 0 {
-		return ns.entries[nextIdx-1]
+	idx := ns.epochIdx(epoch)
+	if idx < 0 {
+		return ns.entries[0]
 	}
-	return ns.entries[0]
+	if idx >= len(ns.entries) {
+		return ns.entries[len(ns.entries)-1]
+	}
+	return ns.entries[idx]
 }
 
 func (ns *NetworkSchedule) activatedAt(epoch primitives.Epoch) (*NetworkScheduleEntry, bool) {
@@ -456,7 +483,10 @@ func (ns *NetworkSchedule) merge(other *NetworkSchedule) *NetworkSchedule {
 	merged = append(merged, other.entries...)
 	sort.Slice(merged, func(i, j int) bool {
 		if merged[i].Epoch == merged[j].Epoch {
-			return merged[i].isFork
+			if merged[i].VersionEnum == merged[j].VersionEnum {
+				return merged[i].isFork
+			}
+			return merged[i].VersionEnum < merged[j].VersionEnum
 		}
 		return merged[i].Epoch < merged[j].Epoch
 	})

@@ -4,12 +4,10 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 // IsForkNextEpoch checks if an allotted fork is in the following epoch.
 func IsForkNextEpoch(currentEpoch primitives.Epoch) bool {
-	log.WithField("epoch", currentEpoch).Info("IsForkNextEpoch")
 	entry, ok := BeaconConfig().networkSchedule.activatedAt(currentEpoch + 1)
 	return ok && entry.isFork
 }
@@ -17,14 +15,16 @@ func IsForkNextEpoch(currentEpoch primitives.Epoch) bool {
 // ForkDigestFromEpoch retrieves the fork digest from the current schedule determined
 // by the provided epoch.
 func ForkDigestFromEpoch(epoch primitives.Epoch) [4]byte {
-	return BeaconConfig().networkSchedule.ForEpoch(epoch).ForkDigest
+	entry := BeaconConfig().networkSchedule.ForEpoch(epoch)
+	return entry.ForkDigest
 }
 
 // CreateForkDigest creates a fork digest from a genesis time and genesis
 // validators root, utilizing the current slot to determine
 // the active fork version in the node.
 func ForkDigest(epoch primitives.Epoch) [4]byte {
-	return BeaconConfig().networkSchedule.ForEpoch(epoch).ForkDigest
+	entry := BeaconConfig().networkSchedule.ForEpoch(epoch)
+	return entry.ForkDigest
 }
 
 func computeForkDataRoot(version [4]byte, root [32]byte) ([32]byte, error) {
@@ -97,5 +97,6 @@ func LastForkEpoch() primitives.Epoch {
 }
 
 func GetNetworkScheduleEntry(epoch primitives.Epoch) NetworkScheduleEntry {
-	return BeaconConfig().networkSchedule.ForEpoch(epoch)
+	entry := BeaconConfig().networkSchedule.ForEpoch(epoch)
+	return entry
 }
