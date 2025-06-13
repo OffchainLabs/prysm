@@ -25,10 +25,6 @@ import (
 // Time to wait before trying to reconnect with beacon node.
 var backOffPeriod = 10 * time.Second
 
-const (
-	maxHealthChecks = 1000 // 1000 slots
-)
-
 // runner encapsulates the main validator routine.
 type runner struct {
 	validator iface.Validator
@@ -314,7 +310,7 @@ func handleAssignmentError(err error, slot primitives.Slot) {
 	}
 }
 
-func runHealthCheckRoutine(ctx context.Context, cancel context.CancelFunc, v iface.Validator) {
+func runHealthCheckRoutine(ctx context.Context, cancel context.CancelFunc, v iface.Validator, maxHealthChecks int) {
 	log.Info("Starting health check routine for beacon node apis")
 	// just check one a slot
 	interval := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
@@ -354,7 +350,7 @@ func runHealthCheckRoutine(ctx context.Context, cancel context.CancelFunc, v ifa
 				} else {
 					healthCheckCounter++
 				}
-				if healthCheckCounter >= maxHealthChecks {
+				if maxHealthChecks != -1 && healthCheckCounter >= maxHealthChecks {
 					log.Info("Health check timed out")
 					cancel()
 				}

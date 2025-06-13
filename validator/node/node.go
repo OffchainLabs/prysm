@@ -442,6 +442,7 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 		EmitAccountMetrics:      !cliCtx.Bool(flags.DisableAccountMetricsFlag.Name),
 		Distributed:             cliCtx.Bool(flags.EnableDistributed.Name),
 		OnRunnerExit:            c.Close,
+		MaxHealthChecks:         cliCtx.Int(flags.MaxHealthChecksFlag.Name),
 	})
 	if err != nil {
 		return errors.Wrap(err, "could not initialize validator service")

@@ -55,6 +55,7 @@ type ValidatorService struct {
 	interopKeysConfig       *local.InteropKeymanagerConfig
 	web3SignerConfig        *remoteweb3signer.SetupConfig
 	proposerSettings        *proposer.Settings
+	MaxHealthChecks         int
 	validatorsRegBatchSize  int
 	enableAPI               bool
 	emitAccountMetrics      bool
@@ -70,6 +71,7 @@ type Config struct {
 	DB                      db.Database
 	Wallet                  *wallet.Wallet
 	WalletInitializedFeed   *event.Feed
+	MaxHealthChecks         int
 	GRPCMaxCallRecvMsgSize  int
 	GRPCRetries             uint
 	GRPCRetryDelay          time.Duration
@@ -115,6 +117,7 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 		distributed:             cfg.Distributed,
 		disableDutiesPolling:    cfg.DisableDutiesPolling,
 		onRunnerExit:            cfg.OnRunnerExit,
+		MaxHealthChecks:         cfg.MaxHealthChecks,
 	}
 
 	dialOpts := ConstructDialOptions(
@@ -232,7 +235,7 @@ func (v *ValidatorService) Start() {
 
 	healthTracker := v.validator.HealthTracker()
 	// Start the health check routine
-	go runHealthCheckRoutine(v.ctx, v.cancel, v.validator)
+	go runHealthCheckRoutine(v.ctx, v.cancel, v.validator, v.MaxHealthChecks)
 
 	for {
 		select {
