@@ -2015,7 +2015,7 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 		return nil, fmt.Errorf("unsupported version %s", version.String(v))
 	}
 
-	update, err := lightclient.CreateDefaultLightClientUpdate(slot, st)
+	update, err := lightclient.CreateDefaultLightClientUpdate(st)
 	require.NoError(t, err)
 	update.SetSignatureSlot(slot - 1)
 	syncCommitteeBits := make([]byte, 64)
