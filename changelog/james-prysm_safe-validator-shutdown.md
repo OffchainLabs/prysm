@@ -4,7 +4,7 @@
 
 ## Fixed
 
-- Validator client shutsdown cleanly on error instead of fatal error. 
+- Validator client shuts down cleanly on error instead of fatal error. 
 
 ## Changed
 
