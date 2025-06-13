@@ -320,5 +320,13 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 		fieldRoots[types.PendingConsolidations.RealPosition()] = pcRoot[:]
 	}
 
+	if state.version >= version.Fulu {
+		// Proposer lookahead root.
+		proposerLookaheadRoot, err := stateutil.ProposerLookaheadRoot(state.proposerLookahead)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not compute proposer lookahead merkleization")
+		}
+		fieldRoots[types.ProposerLookahead.RealPosition()] = proposerLookaheadRoot[:]
+	}
 	return fieldRoots, nil
 }
