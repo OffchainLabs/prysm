@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	lightclienttypes "github.com/OffchainLabs/prysm/v6/consensus-types/light-client"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -20,6 +21,21 @@ import (
 // RunLightClientUpdateRankingTests executes "light_client/update_ranking/pyspec_tests/update_ranking" tests.
 func RunLightClientUpdateRankingTests(t *testing.T, config string, v int) {
 	require.NoError(t, utils.SetConfig(t, config))
+	if v >= 1 {
+		params.BeaconConfig().AltairForkEpoch = 0
+	}
+	if v >= 2 {
+		params.BeaconConfig().BellatrixForkEpoch = 0
+	}
+	if v >= 3 {
+		params.BeaconConfig().CapellaForkEpoch = 0
+	}
+	if v >= 4 {
+		params.BeaconConfig().DenebForkEpoch = 0
+	}
+	if v >= 5 {
+		params.BeaconConfig().ElectraForkEpoch = 0
+	}
 
 	_, testsFolderPath := utils.TestFolders(t, config, version.String(v), "light_client/update_ranking/pyspec_tests/")
 	testTypes, err := util.BazelListDirectories(testsFolderPath)

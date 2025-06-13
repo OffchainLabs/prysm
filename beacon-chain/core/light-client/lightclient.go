@@ -764,6 +764,11 @@ func emptyPayloadProof() [][]byte {
 }
 
 func HasRelevantSyncCommittee(update interfaces.LightClientUpdate) (bool, error) {
+	fmt.Println(update.Version())
+	fmt.Println(update.AttestedHeader().Beacon().Slot)
+	fmt.Println(update.SignatureSlot())
+	fmt.Println(update.FinalizedHeader().Beacon().Slot)
+
 	if update.Version() >= version.Electra {
 		branch, err := update.NextSyncCommitteeBranchElectra()
 		if err != nil {
