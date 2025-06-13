@@ -79,7 +79,7 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 	primaryAcceptType := fmt.Sprintf("%s;q=%s", api.OctetStreamMediaType, "0.95")
 	secondaryAcceptType := fmt.Sprintf("%s;q=%s", api.JsonMediaType, "0.9")
 	acceptHeaderString := fmt.Sprintf("%s,%s", primaryAcceptType, secondaryAcceptType)
-	if features.Get().UseSSZ {
+	if features.Get().SSZOnly {
 		acceptHeaderString = api.OctetStreamMediaType
 	}
 	req.Header.Set("Accept", acceptHeaderString)
@@ -103,7 +103,7 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 			"receivedAcceptType":  httpResp.Header.Get("Content-Type"),
 		}).Warn("Server responded with non primary accept type")
 	}
-	if features.Get().UseSSZ && httpResp.Header.Get("Content-Type") != api.OctetStreamMediaType {
+	if features.Get().SSZOnly && httpResp.Header.Get("Content-Type") != api.OctetStreamMediaType {
 		return nil, nil, errors.Errorf("server responded with non primary accept type %s", httpResp.Header.Get("Content-Type"))
 	}
 
