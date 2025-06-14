@@ -7,7 +7,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	light_client "github.com/OffchainLabs/prysm/v6/consensus-types/light-client"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 
 	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
@@ -547,7 +546,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 
 		header, err := lightClient.BlockToLightClientHeader(
 			l.Ctx,
-			primitives.Slot(params.BeaconConfig().AltairForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+			version.Altair,
 			l.Block,
 		)
 		require.NoError(t, err)
@@ -570,7 +569,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 
 		header, err := lightClient.BlockToLightClientHeader(
 			l.Ctx,
-			primitives.Slot(params.BeaconConfig().BellatrixForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+			version.Bellatrix,
 			l.Block,
 		)
 		require.NoError(t, err)
@@ -594,7 +593,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 
 			header, err := lightClient.BlockToLightClientHeader(
 				l.Ctx,
-				primitives.Slot(params.BeaconConfig().CapellaForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+				version.Capella,
 				l.Block,
 			)
 			require.NoError(t, err)
@@ -655,7 +654,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 
 			header, err := lightClient.BlockToLightClientHeader(
 				l.Ctx,
-				primitives.Slot(params.BeaconConfig().CapellaForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+				version.Capella,
 				l.Block,
 			)
 			require.NoError(t, err)
@@ -718,7 +717,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 
 			header, err := lightClient.BlockToLightClientHeader(
 				l.Ctx,
-				primitives.Slot(params.BeaconConfig().DenebForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+				version.Deneb,
 				l.Block,
 			)
 			require.NoError(t, err)
@@ -787,7 +786,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 
 			header, err := lightClient.BlockToLightClientHeader(
 				l.Ctx,
-				primitives.Slot(params.BeaconConfig().DenebForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+				version.Deneb,
 				l.Block,
 			)
 			require.NoError(t, err)
@@ -856,7 +855,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 		t.Run("Non-Blinded Beacon Block", func(t *testing.T) {
 			l := util.NewTestLightClient(t, version.Electra)
 
-			header, err := lightClient.BlockToLightClientHeader(l.Ctx, l.State.Slot(), l.Block)
+			header, err := lightClient.BlockToLightClientHeader(l.Ctx, version.Electra, l.Block)
 			require.NoError(t, err)
 			require.NotNil(t, header, "header is nil")
 
@@ -921,7 +920,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 		t.Run("Blinded Beacon Block", func(t *testing.T) {
 			l := util.NewTestLightClient(t, version.Electra, util.WithBlinded())
 
-			header, err := lightClient.BlockToLightClientHeader(l.Ctx, l.State.Slot(), l.Block)
+			header, err := lightClient.BlockToLightClientHeader(l.Ctx, version.Electra, l.Block)
 			require.NoError(t, err)
 			require.NotNil(t, header, "header is nil")
 
@@ -989,7 +988,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 
 		header, err := lightClient.BlockToLightClientHeader(
 			l.Ctx,
-			primitives.Slot(params.BeaconConfig().CapellaForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+			version.Capella,
 			l.Block)
 		require.NoError(t, err)
 		require.NotNil(t, header, "header is nil")
@@ -1011,7 +1010,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 
 		header, err := lightClient.BlockToLightClientHeader(
 			l.Ctx,
-			primitives.Slot(params.BeaconConfig().DenebForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+			version.Deneb,
 			l.Block)
 		require.NoError(t, err)
 		require.NotNil(t, header, "header is nil")
@@ -1034,7 +1033,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 
 			header, err := lightClient.BlockToLightClientHeader(
 				l.Ctx,
-				primitives.Slot(params.BeaconConfig().DenebForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+				version.Deneb,
 				l.Block)
 			require.NoError(t, err)
 			require.NotNil(t, header, "header is nil")
@@ -1094,7 +1093,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 
 			header, err := lightClient.BlockToLightClientHeader(
 				l.Ctx,
-				primitives.Slot(params.BeaconConfig().DenebForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+				version.Deneb,
 				l.Block)
 			require.NoError(t, err)
 			require.NotNil(t, header, "header is nil")
