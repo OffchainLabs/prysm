@@ -1,6 +1,6 @@
 ## Added
 
-- Added `max-health-checks` flag that sets the maximum times the validator tries to check the health of the beacon node before timing out. -1 is indefinite.
+- Added `max-health-checks` flag that sets the maximum times the validator tries to check the health of the beacon node before timing out. 0 or a negative number is indefinite.
 
 ## Fixed
 
@@ -8,4 +8,4 @@
 
 ## Changed
 
-- If beacon node disconnects we can retry before failing. 
+- If beacon node disconnects can now time out on retries 

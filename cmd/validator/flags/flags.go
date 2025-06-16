@@ -400,7 +400,7 @@ var (
 	// MaxHealthChecksFlag sets a maximum amount of times to check for beacon node health before validator client times out and shuts down
 	MaxHealthChecksFlag = &cli.IntFlag{
 		Name:  "max-health-checks",
-		Usage: "Maximum number of health checks to perform before exiting if not healthy. Set to -1 for indefinite checks.",
+		Usage: "Maximum number of health checks to perform before exiting if not healthy. Set to 0 or a negative number for indefinite checks.",
 		Value: currentDefaultMaxHealthChecks, // Default to current behavior
 	}
 )

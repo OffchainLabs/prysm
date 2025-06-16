@@ -249,12 +249,9 @@ func (v *ValidatorService) Start() {
 				log.Warn("Validator service health check failed, waiting for healthy beacon node...")
 				continue
 			}
-			// Attempt to create and run the runner
 			log.Info("Starting validator runner")
 			runnerCtx, runnerCancel := context.WithCancel(v.ctx)
 
-			// Initialize keymanager and wait for chain start/sync within the runner setup
-			// This ensures these steps are retried if the runner restarts
 			runner, err := newRunner(runnerCtx, v.validator)
 			if err != nil {
 				log.WithError(err).Error("Could not create validator runner")
@@ -263,15 +260,9 @@ func (v *ValidatorService) Start() {
 				return
 			}
 
-			// Run the runner in a goroutine
-			if err := runner.run(runnerCtx); err != nil {
-				log.WithError(err).Error("Error running validator")
-				runnerCancel()
-				v.onRunnerExit()
-				return
-			}
+			runner.run(runnerCtx)
+			// run is finished if we get to this point
 			runnerCancel()
-			log.Info("Validator runner stopped")
 		}
 	}
 }

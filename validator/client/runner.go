@@ -52,8 +52,8 @@ func newRunner(ctx context.Context, v iface.Validator) (*runner, error) {
 	startDeadline := v.SlotDeadline(ss + params.BeaconConfig().SlotsPerEpoch - 1)
 	startCtx, startCancel := context.WithDeadline(ctx, startDeadline)
 	if err := v.UpdateDuties(startCtx); err != nil {
-		handleAssignmentError(err, headSlot)
 		// Don't return error here, just log it
+		handleAssignmentError(err, headSlot)
 	}
 	startCancel()
 
@@ -81,7 +81,7 @@ func newRunner(ctx context.Context, v iface.Validator) (*runner, error) {
 // 2 - Update assignments if needed
 // 3 - Determine role at current slot
 // 4 - Perform assigned role, if any
-func (r *runner) run(ctx context.Context) error {
+func (r *runner) run(ctx context.Context) {
 	v := r.validator
 	cleanup := v.Done
 	defer cleanup()
@@ -91,10 +91,11 @@ func (r *runner) run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			log.Info("Context canceled, stopping validator")
-			return nil // Exit if context is canceled.
+			return // Exit if context is canceled.
 		case slot := <-v.NextSlot():
 			if !healthTracker.IsHealthy(ctx) {
-				return nil
+				log.Warn("Beacon node unhealthy, stopping runner")
+				return
 			}
 
 			deadline := v.SlotDeadline(slot)
@@ -343,17 +344,19 @@ func runHealthCheckRoutine(ctx context.Context, cancel context.CancelFunc, v ifa
 		for {
 			select {
 			case <-ticker.C:
+
 				ishealthy := performHealthCheck()
 				if ishealthy {
 					healthCheckCounter = 0
 				} else {
 					healthCheckCounter++
 				}
-				if maxHealthChecks != -1 && healthCheckCounter > maxHealthChecks {
+				if maxHealthChecks <= 0 && healthCheckCounter >= maxHealthChecks {
 					log.Infof("Maximum health checks of %d reached. Stopping health check routine", maxHealthChecks)
 					cancel()
 				}
 			case <-ctx.Done():
+				log.Info("Context canceled, stopping health checking")
 				return
 			}
 		}
