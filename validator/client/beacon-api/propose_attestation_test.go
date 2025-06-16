@@ -116,7 +116,7 @@ func TestProposeAttestation(t *testing.T) {
 				marshalledAttestations = b
 			}
 
-			ctx := context.Background()
+			ctx := t.Context()
 
 			headers := map[string]string{"Eth-Consensus-Version": version.String(test.attestation.Version())}
 			jsonRestHandler.EXPECT().Post(
@@ -177,7 +177,7 @@ func TestProposeAttestationFallBack(t *testing.T) {
 		marshalledAttestations = b
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	headers := map[string]string{"Eth-Consensus-Version": version.String(attestation.Version())}
 	jsonRestHandler.EXPECT().Post(
 		gomock.Any(),
@@ -304,7 +304,7 @@ func TestProposeAttestationElectra(t *testing.T) {
 				marshalledAttestations = b
 			}
 
-			ctx := context.Background()
+			ctx := t.Context()
 			headers := map[string]string{"Eth-Consensus-Version": version.String(test.attestation.Version())}
 			jsonRestHandler.EXPECT().Post(
 				gomock.Any(),

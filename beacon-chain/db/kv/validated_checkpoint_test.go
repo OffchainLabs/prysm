@@ -15,7 +15,7 @@ import (
 
 func TestStore_LastValidatedCheckpoint_CanSaveRetrieve(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	root := bytesutil.ToBytes32([]byte{'A'})
 	cp := &ethpb.Checkpoint{
 		Epoch: 10,
@@ -34,7 +34,7 @@ func TestStore_LastValidatedCheckpoint_CanSaveRetrieve(t *testing.T) {
 
 func TestStore_LastValidatedCheckpoint_Recover(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	blk := util.HydrateSignedBeaconBlock(&ethpb.SignedBeaconBlock{})
 	r, err := blk.Block.HashTreeRoot()
 	require.NoError(t, err)
@@ -53,7 +53,7 @@ func TestStore_LastValidatedCheckpoint_Recover(t *testing.T) {
 
 func BenchmarkStore_SaveLastValidatedCheckpoint(b *testing.B) {
 	db := setupDB(b)
-	ctx := context.Background()
+	ctx := t.Context()
 	root := bytesutil.ToBytes32([]byte{'A'})
 	cp := &ethpb.Checkpoint{
 		Epoch: 10,
@@ -73,7 +73,7 @@ func BenchmarkStore_SaveLastValidatedCheckpoint(b *testing.B) {
 
 func TestStore_LastValidatedCheckpoint_DefaultIsFinalized(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	genesis := bytesutil.ToBytes32([]byte{'G', 'E', 'N', 'E', 'S', 'I', 'S'})
 	require.NoError(t, db.SaveGenesisBlockRoot(ctx, genesis))

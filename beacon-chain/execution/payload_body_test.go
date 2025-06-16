@@ -125,7 +125,7 @@ func TestPayloadBodiesViaUnblinder(t *testing.T) {
 			}
 			mockWriteResult(t, w, msg, executionPayloadBodies)
 		})
-		ctx := context.Background()
+		ctx := t.Context()
 
 		toUnblind := []interfaces.ReadOnlySignedBeaconBlock{
 			fx.denebBlock.blinded.block,
@@ -255,7 +255,7 @@ func TestComputeRanges(t *testing.T) {
 
 func TestReconstructBlindedBlockBatchFallbackToRange(t *testing.T) {
 	defer util.HackForksMaxuint(t, []int{version.Electra, version.Fulu})()
-	ctx := context.Background()
+	ctx := t.Context()
 	t.Run("fallback fails", func(t *testing.T) {
 		cli, srv := newMockEngine(t)
 		fx := testBlindedBlockFixtures(t)
@@ -353,7 +353,7 @@ func TestReconstructBlindedBlockBatchDenebAndBeyond(t *testing.T) {
 			fx.electra.blinded.block,
 			fx.fulu.blinded.block,
 		}
-		unblinded, err := reconstructBlindedBlockBatch(context.Background(), cli, blinded)
+		unblinded, err := reconstructBlindedBlockBatch(t.Context(), cli, blinded)
 		require.NoError(t, err)
 		require.Equal(t, len(blinded), len(unblinded))
 		for i := range unblinded {

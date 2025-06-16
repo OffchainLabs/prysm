@@ -34,7 +34,7 @@ import (
 func FuzzValidateBeaconBlockPubSub_Phase0(f *testing.F) {
 	db := dbtest.SetupDB(f)
 	p := p2ptest.NewFuzzTestP2P()
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconState, privKeys := util.DeterministicGenesisState(f, 100)
 	parentBlock := util.NewBeaconBlock()
 	util.SaveBlock(f, ctx, db, parentBlock)
@@ -117,7 +117,7 @@ func FuzzValidateBeaconBlockPubSub_Phase0(f *testing.F) {
 func FuzzValidateBeaconBlockPubSub_Altair(f *testing.F) {
 	db := dbtest.SetupDB(f)
 	p := p2ptest.NewFuzzTestP2P()
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconState, privKeys := util.DeterministicGenesisStateAltair(f, 100)
 	parentBlock := util.NewBeaconBlockAltair()
 	util.SaveBlock(f, ctx, db, parentBlock)
@@ -201,7 +201,7 @@ func FuzzValidateBeaconBlockPubSub_Altair(f *testing.F) {
 func FuzzValidateBeaconBlockPubSub_Bellatrix(f *testing.F) {
 	db := dbtest.SetupDB(f)
 	p := p2ptest.NewFuzzTestP2P()
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconState, privKeys := util.DeterministicGenesisStateBellatrix(f, 100)
 	parentBlock := util.NewBeaconBlockBellatrix()
 	util.SaveBlock(f, ctx, db, parentBlock)

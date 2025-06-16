@@ -142,7 +142,7 @@ func TestNewKeymanager(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			logHook := logTest.NewGlobal()
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			if tt.args.KeyFilePath != "" && len(tt.fileContents) != 0 {
 				bytesBuf := new(bytes.Buffer)
@@ -187,7 +187,7 @@ func TestNewKeyManager_fileMissing(t *testing.T) {
 }
 
 func TestNewKeyManager_ChangingFileCreated(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
@@ -242,7 +242,7 @@ func TestNewKeyManager_ChangingFileCreated(t *testing.T) {
 }
 
 func TestNewKeyManager_FileAndFlagsWithDifferentKeys(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	logHook := logTest.NewGlobal()
 	keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
@@ -288,7 +288,7 @@ func TestNewKeyManager_FileAndFlagsWithDifferentKeys(t *testing.T) {
 }
 
 func TestRefreshRemoteKeysFromFileChangesWithRetry(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	logHook := logTest.NewGlobal()
 	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
 	require.NoError(t, err)
@@ -338,7 +338,7 @@ func TestReadKeyFile_PathMissing(t *testing.T) {
 }
 
 func TestRefreshRemoteKeysFromFileChangesWithRetry_maxRetryReached(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
 	require.NoError(t, err)
 	keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
@@ -359,7 +359,7 @@ func TestKeymanager_Sign(t *testing.T) {
 	client := &MockClient{
 		Signature: "0xb3baa751d0a9132cfe93e4e3d5ff9075111100e3789dca219ade5a24d27e19d16b3353149da1833e9b691bb38634e8dc04469be7032132906c927d7e1a49b414730612877bc6b2810c8f202daf793d1ab0d6b5cb21d52f9e52e883859887a5d9",
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
 	if err != nil {
 		fmt.Printf("error: %v", err)
@@ -502,7 +502,7 @@ func TestKeymanager_Sign(t *testing.T) {
 }
 
 func TestKeymanager_FetchValidatingPublicKeys_HappyPath_WithKeyList(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	decodedKey, err := hexutil.Decode("0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820")
 	require.NoError(t, err)
 	keys := [][48]byte{
@@ -529,7 +529,7 @@ func TestKeymanager_FetchValidatingPublicKeys_HappyPath_WithKeyList(t *testing.T
 }
 
 func TestKeymanager_FetchValidatingPublicKeys_HappyPath_WithExternalURL(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	decodedKey, err := hexutil.Decode("0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820")
 	if err != nil {
 		fmt.Printf("error: %v", err)
@@ -564,7 +564,7 @@ func TestKeymanager_FetchValidatingPublicKeys_HappyPath_WithExternalURL(t *testi
 }
 
 func TestKeymanager_FetchValidatingPublicKeys_WithExternalURL_ThrowsError(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -587,7 +587,7 @@ func TestKeymanager_FetchValidatingPublicKeys_WithExternalURL_ThrowsError(t *tes
 }
 
 func TestKeymanager_AddPublicKeys(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
 	if err != nil {
 		fmt.Printf("error: %v", err)
@@ -614,7 +614,7 @@ func TestKeymanager_AddPublicKeys(t *testing.T) {
 }
 
 func TestKeymanager_AddPublicKeys_WithFile(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	dir := t.TempDir()
 	stdOutFile, err := os.Create(filepath.Clean(path.Join(dir, "keyfile.txt")))
@@ -652,7 +652,7 @@ func TestKeymanager_AddPublicKeys_WithFile(t *testing.T) {
 }
 
 func TestKeymanager_DeletePublicKeys(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
 	if err != nil {
 		fmt.Printf("error: %v", err)
@@ -686,7 +686,7 @@ func TestKeymanager_DeletePublicKeys(t *testing.T) {
 }
 
 func TestKeymanager_DeletePublicKeys_WithFile(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	dir := t.TempDir()
 	stdOutFile, err := os.Create(filepath.Clean(path.Join(dir, "keyfile.txt")))

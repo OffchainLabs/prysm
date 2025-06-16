@@ -79,7 +79,7 @@ func TestValidateVoluntaryExit_ValidExit(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	exit, s := setupValidExit(t)
 
@@ -140,7 +140,7 @@ func TestValidateVoluntaryExit_ValidExit(t *testing.T) {
 
 func TestValidateVoluntaryExit_InvalidExitSlot(t *testing.T) {
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	exit, s := setupValidExit(t)
 	// Set state slot to 1 to cause exit object fail to verify.
@@ -174,7 +174,7 @@ func TestValidateVoluntaryExit_InvalidExitSlot(t *testing.T) {
 
 func TestValidateVoluntaryExit_ValidExit_Syncing(t *testing.T) {
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	exit, s := setupValidExit(t)
 

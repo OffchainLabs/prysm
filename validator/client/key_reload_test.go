@@ -47,7 +47,7 @@ func TestValidator_HandleKeyReload(t *testing.T) {
 			},
 		).Return(resp, nil)
 
-		anyActive, err := v.HandleKeyReload(context.Background(), [][fieldparams.BLSPubkeyLength]byte{inactive.pub, active.pub})
+		anyActive, err := v.HandleKeyReload(t.Context(), [][fieldparams.BLSPubkeyLength]byte{inactive.pub, active.pub})
 		require.NoError(t, err)
 		assert.Equal(t, true, anyActive)
 		assert.LogsContain(t, hook, "Waiting for deposit to be observed by beacon node")
@@ -79,7 +79,7 @@ func TestValidator_HandleKeyReload(t *testing.T) {
 			},
 		).Return(resp, nil)
 
-		anyActive, err := v.HandleKeyReload(context.Background(), [][fieldparams.BLSPubkeyLength]byte{kp.pub})
+		anyActive, err := v.HandleKeyReload(t.Context(), [][fieldparams.BLSPubkeyLength]byte{kp.pub})
 		require.NoError(t, err)
 		assert.Equal(t, false, anyActive)
 		assert.LogsContain(t, hook, "Waiting for deposit to be observed by beacon node")
@@ -103,7 +103,7 @@ func TestValidator_HandleKeyReload(t *testing.T) {
 			},
 		).Return(nil, errors.New("error"))
 
-		_, err := v.HandleKeyReload(context.Background(), [][fieldparams.BLSPubkeyLength]byte{kp.pub})
+		_, err := v.HandleKeyReload(t.Context(), [][fieldparams.BLSPubkeyLength]byte{kp.pub})
 		assert.ErrorContains(t, "error", err)
 	})
 }

@@ -177,7 +177,7 @@ func TestProcessEth1Data_SetsCorrectly(t *testing.T) {
 
 	period := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(uint64(params.BeaconConfig().EpochsPerEth1VotingPeriod)))
 	for i := uint64(0); i < period; i++ {
-		processedState, err := blocks.ProcessEth1DataInBlock(context.Background(), beaconState, b.Block.Body.Eth1Data)
+		processedState, err := blocks.ProcessEth1DataInBlock(t.Context(), beaconState, b.Block.Body.Eth1Data)
 		require.NoError(t, err)
 		require.Equal(t, true, processedState.Version() == version.Phase0)
 	}

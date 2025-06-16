@@ -33,7 +33,7 @@ func TestInitialize(t *testing.T) {
 	}
 	acc, err := accounts.NewCLIManager(opts...)
 	require.NoError(t, err)
-	_, err = acc.WalletCreate(context.Background())
+	_, err = acc.WalletCreate(t.Context())
 	require.NoError(t, err)
 	server := &Server{walletDir: localWalletDir, authTokenPath: authTokenPath}
 

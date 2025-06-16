@@ -96,7 +96,7 @@ func Test_migrateOptimalAttesterProtectionUp(t *testing.T) {
 		{
 			name: "partial data saved for both types still completes the migration successfully",
 			setup: func(t *testing.T, validatorDB *Store) {
-				ctx := context.Background()
+				ctx := t.Context()
 				pubKey := [fieldparams.BLSPubkeyLength]byte{1}
 				history := newDeprecatedAttestingHistory(0)
 				// Attest all epochs from genesis to 50.
@@ -184,7 +184,7 @@ func Test_migrateOptimalAttesterProtectionUp(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			validatorDB := setupDB(t, nil)
 			tt.setup(t, validatorDB)
-			require.NoError(t, validatorDB.migrateOptimalAttesterProtectionUp(context.Background()))
+			require.NoError(t, validatorDB.migrateOptimalAttesterProtectionUp(t.Context()))
 			tt.eval(t, validatorDB)
 		})
 	}
@@ -293,7 +293,7 @@ func Test_migrateOptimalAttesterProtectionDown(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			validatorDB := setupDB(t, nil)
 			tt.setup(t, validatorDB)
-			require.NoError(t, validatorDB.migrateOptimalAttesterProtectionDown(context.Background()))
+			require.NoError(t, validatorDB.migrateOptimalAttesterProtectionDown(t.Context()))
 			tt.eval(t, validatorDB)
 		})
 	}

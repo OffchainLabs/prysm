@@ -14,7 +14,7 @@ import (
 )
 
 func TestSkipSlotCache_RoundTrip(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	c := cache.NewSkipSlotCache()
 
 	r := [32]byte{'a'}
@@ -38,7 +38,7 @@ func TestSkipSlotCache_RoundTrip(t *testing.T) {
 }
 
 func TestSkipSlotCache_DisabledAndEnabled(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	c := cache.NewSkipSlotCache()
 
 	r := [32]byte{'a'}

@@ -30,7 +30,7 @@ func TestProposeBeaconBlock_Altair(t *testing.T) {
 	marshalledBlock, err := json.Marshal(jsonAltairBlock)
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Make sure that what we send in the POST body is the marshalled version of the protobuf block
 	headers := map[string]string{"Eth-Consensus-Version": "altair"}

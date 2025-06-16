@@ -13,9 +13,9 @@ import (
 )
 
 func TestStore_Backup(t *testing.T) {
-	db, err := NewKVStore(context.Background(), t.TempDir())
+	db, err := NewKVStore(t.Context(), t.TempDir())
 	require.NoError(t, err, "Failed to instantiate DB")
-	ctx := context.Background()
+	ctx := t.Context()
 
 	head := util.NewBeaconBlock()
 	head.Block.Slot = 5000
@@ -53,9 +53,9 @@ func TestStore_Backup(t *testing.T) {
 }
 
 func TestStore_BackupMultipleBuckets(t *testing.T) {
-	db, err := NewKVStore(context.Background(), t.TempDir())
+	db, err := NewKVStore(t.Context(), t.TempDir())
 	require.NoError(t, err, "Failed to instantiate DB")
-	ctx := context.Background()
+	ctx := t.Context()
 
 	startSlot := primitives.Slot(5000)
 

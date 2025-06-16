@@ -239,7 +239,7 @@ func TestUnrealizedCheckpoints(t *testing.T) {
 			state, err := state_native.InitializeFromProtoAltair(base)
 			require.NoError(t, err)
 
-			_, _, err = altair.InitializePrecomputeValidators(context.Background(), state)
+			_, _, err = altair.InitializePrecomputeValidators(t.Context(), state)
 			require.NoError(t, err)
 
 			jc, fc, err := precompute.UnrealizedCheckpoints(state)

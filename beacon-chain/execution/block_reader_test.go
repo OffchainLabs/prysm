@@ -35,7 +35,7 @@ func TestLatestMainchainInfo_OK(t *testing.T) {
 	t.Cleanup(func() {
 		server.Stop()
 	})
-	web3Service, err := NewService(context.Background(),
+	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDepositContractAddress(testAcc.ContractAddr),
 		WithDatabase(beaconDB),
@@ -77,7 +77,7 @@ func TestBlockHashByHeight_ReturnsHash(t *testing.T) {
 	t.Cleanup(func() {
 		server.Stop()
 	})
-	web3Service, err := NewService(context.Background(),
+	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDatabase(beaconDB),
 	)
@@ -85,7 +85,7 @@ func TestBlockHashByHeight_ReturnsHash(t *testing.T) {
 
 	web3Service = setDefaultMocks(web3Service)
 	web3Service.rpcClient = &mockExecution.RPCClient{}
-	ctx := context.Background()
+	ctx := t.Context()
 
 	header := &gethTypes.Header{
 		Number: big.NewInt(15),
@@ -110,7 +110,7 @@ func TestBlockHashByHeight_ReturnsError_WhenNoEth1Client(t *testing.T) {
 	t.Cleanup(func() {
 		server.Stop()
 	})
-	web3Service, err := NewService(context.Background(),
+	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDatabase(beaconDB),
 	)
@@ -118,7 +118,7 @@ func TestBlockHashByHeight_ReturnsError_WhenNoEth1Client(t *testing.T) {
 
 	web3Service = setDefaultMocks(web3Service)
 	web3Service.rpcClient = nil
-	ctx := context.Background()
+	ctx := t.Context()
 
 	_, err = web3Service.BlockHashByHeight(ctx, big.NewInt(0))
 	require.ErrorContains(t, "nil rpc client", err)
@@ -133,7 +133,7 @@ func TestBlockExists_ValidHash(t *testing.T) {
 	t.Cleanup(func() {
 		server.Stop()
 	})
-	web3Service, err := NewService(context.Background(),
+	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDatabase(beaconDB),
 	)
@@ -142,10 +142,10 @@ func TestBlockExists_ValidHash(t *testing.T) {
 	web3Service = setDefaultMocks(web3Service)
 	web3Service.rpcClient = &mockExecution.RPCClient{Backend: testAcc.Backend}
 	testAcc.Backend.Commit()
-	block, err := testAcc.Backend.Client().BlockByNumber(context.Background(), big.NewInt(0))
+	block, err := testAcc.Backend.Client().BlockByNumber(t.Context(), big.NewInt(0))
 	assert.NoError(t, err)
 
-	exists, height, err := web3Service.BlockExists(context.Background(), block.Hash())
+	exists, height, err := web3Service.BlockExists(t.Context(), block.Hash())
 	require.NoError(t, err, "Could not get block hash with given height")
 	require.Equal(t, true, exists)
 	require.Equal(t, 0, height.Cmp(block.Number()))
@@ -163,7 +163,7 @@ func TestBlockExists_InvalidHash(t *testing.T) {
 	t.Cleanup(func() {
 		server.Stop()
 	})
-	web3Service, err := NewService(context.Background(),
+	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDatabase(beaconDB),
 	)
@@ -171,7 +171,7 @@ func TestBlockExists_InvalidHash(t *testing.T) {
 
 	web3Service = setDefaultMocks(web3Service)
 
-	_, _, err = web3Service.BlockExists(context.Background(), common.BytesToHash([]byte{0}))
+	_, _, err = web3Service.BlockExists(t.Context(), common.BytesToHash([]byte{0}))
 	require.NotNil(t, err, "Expected BlockExists to error with invalid hash")
 }
 
@@ -182,7 +182,7 @@ func TestBlockExists_UsesCachedBlockInfo(t *testing.T) {
 	t.Cleanup(func() {
 		server.Stop()
 	})
-	web3Service, err := NewService(context.Background(),
+	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDatabase(beaconDB),
 	)
@@ -195,14 +195,14 @@ func TestBlockExists_UsesCachedBlockInfo(t *testing.T) {
 	err = web3Service.headerCache.AddHeader(header)
 	require.NoError(t, err)
 
-	exists, height, err := web3Service.BlockExists(context.Background(), header.Hash)
+	exists, height, err := web3Service.BlockExists(t.Context(), header.Hash)
 	require.NoError(t, err, "Could not get block hash with given height")
 	require.Equal(t, true, exists)
 	require.Equal(t, 0, height.Cmp(header.Number))
 }
 
 func TestService_BlockNumberByTimestamp(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := dbutil.SetupDB(t)
 	testAcc, err := mock.Setup()
 
@@ -212,7 +212,7 @@ func TestService_BlockNumberByTimestamp(t *testing.T) {
 	t.Cleanup(func() {
 		server.Stop()
 	})
-	web3Service, err := NewService(context.Background(),
+	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDatabase(beaconDB),
 	)
@@ -250,7 +250,7 @@ func TestService_BlockNumberByTimestampLessTargetTime(t *testing.T) {
 	t.Cleanup(func() {
 		server.Stop()
 	})
-	web3Service, err := NewService(context.Background(),
+	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDatabase(beaconDB),
 	)
@@ -261,7 +261,7 @@ func TestService_BlockNumberByTimestampLessTargetTime(t *testing.T) {
 	for i := 0; i < 200; i++ {
 		testAcc.Backend.Commit()
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	hd, err := testAcc.Backend.Client().HeaderByNumber(ctx, nil)
 	require.NoError(t, err)
 	web3Service.latestEth1Data.BlockTime = hd.Time
@@ -274,7 +274,7 @@ func TestService_BlockNumberByTimestampLessTargetTime(t *testing.T) {
 	require.ErrorContains(t, context.DeadlineExceeded.Error(), err)
 
 	// Provide an attainable target time
-	blk, err := web3Service.findMaxTargetEth1Block(context.Background(), hd.Number, hd.Time-5)
+	blk, err := web3Service.findMaxTargetEth1Block(t.Context(), hd.Number, hd.Time-5)
 	require.NoError(t, err)
 	require.NotEqual(t, hd.Number.Uint64(), blk.Number.Uint64(), "retrieved block is not less than the head")
 }
@@ -288,7 +288,7 @@ func TestService_BlockNumberByTimestampMoreTargetTime(t *testing.T) {
 	t.Cleanup(func() {
 		server.Stop()
 	})
-	web3Service, err := NewService(context.Background(),
+	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDatabase(beaconDB),
 	)
@@ -299,7 +299,7 @@ func TestService_BlockNumberByTimestampMoreTargetTime(t *testing.T) {
 	for i := 0; i < 200; i++ {
 		testAcc.Backend.Commit()
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	hd, err := testAcc.Backend.Client().HeaderByNumber(ctx, nil)
 	require.NoError(t, err)
 	web3Service.latestEth1Data.BlockTime = hd.Time
@@ -312,7 +312,7 @@ func TestService_BlockNumberByTimestampMoreTargetTime(t *testing.T) {
 	require.ErrorContains(t, context.DeadlineExceeded.Error(), err)
 
 	// Provide an attainable target time with respect to head
-	blk, err := web3Service.findMinTargetEth1Block(context.Background(), big.NewInt(0).Sub(hd.Number, big.NewInt(5)), hd.Time)
+	blk, err := web3Service.findMinTargetEth1Block(t.Context(), big.NewInt(0).Sub(hd.Number, big.NewInt(5)), hd.Time)
 	require.NoError(t, err)
 	require.Equal(t, hd.Number.Uint64(), blk.Number.Uint64(), "retrieved block is not equal to the head")
 }
@@ -324,7 +324,7 @@ func TestService_BlockTimeByHeight_ReturnsError_WhenNoEth1Client(t *testing.T) {
 	t.Cleanup(func() {
 		server.Stop()
 	})
-	web3Service, err := NewService(context.Background(),
+	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDatabase(beaconDB),
 	)
@@ -332,7 +332,7 @@ func TestService_BlockTimeByHeight_ReturnsError_WhenNoEth1Client(t *testing.T) {
 
 	web3Service = setDefaultMocks(web3Service)
 	web3Service.rpcClient = nil
-	ctx := context.Background()
+	ctx := t.Context()
 
 	_, err = web3Service.BlockTimeByHeight(ctx, big.NewInt(0))
 	require.ErrorContains(t, "nil rpc client", err)

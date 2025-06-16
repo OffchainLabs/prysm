@@ -23,7 +23,7 @@ func TestUnmarshalFromURL_Success(t *testing.T) {
 	defer server.Close()
 
 	var result map[string]string
-	err := UnmarshalFromURL(context.Background(), server.URL, &result)
+	err := UnmarshalFromURL(t.Context(), server.URL, &result)
 	if err != nil {
 		t.Errorf("UnmarshalFromURL failed: %v", err)
 	}

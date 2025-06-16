@@ -60,7 +60,7 @@ func BenchmarkHashTreeRoot_Generic_300000(b *testing.B) {
 }
 
 func setupGenesisState(tb testing.TB, count uint64) *ethpb.BeaconState {
-	genesisState, _, err := interop.GenerateGenesisState(context.Background(), 0, 1)
+	genesisState, _, err := interop.GenerateGenesisState(t.Context(), 0, 1)
 	require.NoError(tb, err, "Could not generate genesis beacon state")
 	for i := uint64(1); i < count; i++ {
 		var someRoot [32]byte

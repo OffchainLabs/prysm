@@ -80,7 +80,7 @@ func TestStore_PeerDataGetOrCreate(t *testing.T) {
 }
 
 func TestStore_TrustedPeers(t *testing.T) {
-	store := peerdata.NewStore(context.Background(), &peerdata.StoreConfig{
+	store := peerdata.NewStore(t.Context(), &peerdata.StoreConfig{
 		MaxPeers: 12,
 	})
 

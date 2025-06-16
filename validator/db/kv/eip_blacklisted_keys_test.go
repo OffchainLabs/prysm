@@ -11,7 +11,7 @@ import (
 )
 
 func TestStore_EIPBlacklistedPublicKeys(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	numValidators := 100
 	publicKeys := make([][fieldparams.BLSPubkeyLength]byte, numValidators)
 	for i := 0; i < numValidators; i++ {

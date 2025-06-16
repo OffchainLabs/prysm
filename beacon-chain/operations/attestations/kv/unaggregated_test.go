@@ -291,7 +291,7 @@ func TestKV_Unaggregated_UnaggregatedAttestationsBySlotIndex(t *testing.T) {
 	for _, att := range atts {
 		require.NoError(t, cache.SaveUnaggregatedAttestation(att))
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	returned := cache.UnaggregatedAttestationsBySlotIndex(ctx, 1, 1)
 	assert.DeepEqual(t, []*ethpb.Attestation{att1}, returned)
 	returned = cache.UnaggregatedAttestationsBySlotIndex(ctx, 1, 2)
@@ -317,7 +317,7 @@ func TestKV_Unaggregated_UnaggregatedAttestationsBySlotIndexElectra(t *testing.T
 	for _, att := range atts {
 		require.NoError(t, cache.SaveUnaggregatedAttestation(att))
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	returned := cache.UnaggregatedAttestationsBySlotIndexElectra(ctx, 1, 1)
 	assert.DeepEqual(t, []*ethpb.AttestationElectra{att1}, returned)
 	returned = cache.UnaggregatedAttestationsBySlotIndexElectra(ctx, 1, 2)

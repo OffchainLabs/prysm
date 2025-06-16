@@ -135,7 +135,7 @@ func TestScorers_PeerStatus_Score(t *testing.T) {
 }
 
 func TestScorers_PeerStatus_IsBadPeer(t *testing.T) {
-	peerStatuses := peers.NewStatus(context.Background(), &peers.StatusConfig{
+	peerStatuses := peers.NewStatus(t.Context(), &peers.StatusConfig{
 		ScorerParams: &scorers.Config{},
 	})
 	pid := peer.ID("peer1")
@@ -148,7 +148,7 @@ func TestScorers_PeerStatus_IsBadPeer(t *testing.T) {
 }
 
 func TestScorers_PeerStatus_BadPeers(t *testing.T) {
-	peerStatuses := peers.NewStatus(context.Background(), &peers.StatusConfig{
+	peerStatuses := peers.NewStatus(t.Context(), &peers.StatusConfig{
 		ScorerParams: &scorers.Config{},
 	})
 	pid1 := peer.ID("peer1")
@@ -175,7 +175,7 @@ func TestScorers_PeerStatus_BadPeers(t *testing.T) {
 }
 
 func TestScorers_PeerStatus_PeerStatus(t *testing.T) {
-	peerStatuses := peers.NewStatus(context.Background(), &peers.StatusConfig{
+	peerStatuses := peers.NewStatus(t.Context(), &peers.StatusConfig{
 		ScorerParams: &scorers.Config{},
 	})
 	status, err := peerStatuses.Scorers().PeerStatusScorer().PeerStatus("peer1")

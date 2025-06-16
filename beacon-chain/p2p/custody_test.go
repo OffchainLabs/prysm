@@ -83,7 +83,7 @@ func TestCustodyGroupCountFromPeer(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create peers status.
-			peers := peers.NewStatus(context.Background(), &peers.StatusConfig{
+			peers := peers.NewStatus(t.Context(), &peers.StatusConfig{
 				ScorerParams: &scorers.Config{},
 			})
 

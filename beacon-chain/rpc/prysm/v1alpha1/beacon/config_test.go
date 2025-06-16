@@ -13,7 +13,7 @@ import (
 )
 
 func TestServer_GetBeaconConfig(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	bs := &Server{}
 	res, err := bs.GetBeaconConfig(ctx, &emptypb.Empty{})
 	require.NoError(t, err)

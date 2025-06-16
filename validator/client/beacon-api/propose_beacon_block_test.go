@@ -104,7 +104,7 @@ func TestProposeBeaconBlock_Error(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				defer ctrl.Finish()
 
-				ctx := context.Background()
+				ctx := t.Context()
 				jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
 				headers := map[string]string{"Eth-Consensus-Version": testCase.consensusVersion}
@@ -128,6 +128,6 @@ func TestProposeBeaconBlock_Error(t *testing.T) {
 
 func TestProposeBeaconBlock_UnsupportedBlockType(t *testing.T) {
 	validatorClient := &beaconApiValidatorClient{}
-	_, err := validatorClient.proposeBeaconBlock(context.Background(), &ethpb.GenericSignedBeaconBlock{})
+	_, err := validatorClient.proposeBeaconBlock(t.Context(), &ethpb.GenericSignedBeaconBlock{})
 	assert.ErrorContains(t, "unsupported block type", err)
 }

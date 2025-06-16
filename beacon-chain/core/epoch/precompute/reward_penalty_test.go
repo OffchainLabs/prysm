@@ -40,9 +40,9 @@ func TestProcessRewardsAndPenaltiesPrecompute(t *testing.T) {
 	beaconState, err := state_native.InitializeFromProtoPhase0(base)
 	require.NoError(t, err)
 
-	vp, bp, err := New(context.Background(), beaconState)
+	vp, bp, err := New(t.Context(), beaconState)
 	require.NoError(t, err)
-	vp, bp, err = ProcessAttestations(context.Background(), beaconState, vp, bp)
+	vp, bp, err = ProcessAttestations(t.Context(), beaconState, vp, bp)
 	require.NoError(t, err)
 
 	processedState, err := ProcessRewardsAndPenaltiesPrecompute(beaconState, bp, vp, AttestationsDelta, ProposersDelta)
@@ -83,9 +83,9 @@ func TestAttestationDeltas_ZeroEpoch(t *testing.T) {
 	beaconState, err := state_native.InitializeFromProtoPhase0(base)
 	require.NoError(t, err)
 
-	pVals, pBal, err := New(context.Background(), beaconState)
+	pVals, pBal, err := New(t.Context(), beaconState)
 	assert.NoError(t, err)
-	pVals, pBal, err = ProcessAttestations(context.Background(), beaconState, pVals, pBal)
+	pVals, pBal, err = ProcessAttestations(t.Context(), beaconState, pVals, pBal)
 	require.NoError(t, err)
 
 	pBal.ActiveCurrentEpoch = 0 // Could cause a divide by zero panic.
@@ -121,9 +121,9 @@ func TestAttestationDeltas_ZeroInclusionDelay(t *testing.T) {
 	beaconState, err := state_native.InitializeFromProtoPhase0(base)
 	require.NoError(t, err)
 
-	pVals, pBal, err := New(context.Background(), beaconState)
+	pVals, pBal, err := New(t.Context(), beaconState)
 	require.NoError(t, err)
-	_, _, err = ProcessAttestations(context.Background(), beaconState, pVals, pBal)
+	_, _, err = ProcessAttestations(t.Context(), beaconState, pVals, pBal)
 	require.ErrorContains(t, "attestation with inclusion delay of 0", err)
 }
 
@@ -155,9 +155,9 @@ func TestProcessRewardsAndPenaltiesPrecompute_SlashedInactivePenalty(t *testing.
 		require.NoError(t, beaconState.SetValidators(vs))
 	}
 
-	vp, bp, err := New(context.Background(), beaconState)
+	vp, bp, err := New(t.Context(), beaconState)
 	require.NoError(t, err)
-	vp, bp, err = ProcessAttestations(context.Background(), beaconState, vp, bp)
+	vp, bp, err = ProcessAttestations(t.Context(), beaconState, vp, bp)
 	require.NoError(t, err)
 	rewards, penalties, err := AttestationsDelta(beaconState, bp, vp)
 	require.NoError(t, err)

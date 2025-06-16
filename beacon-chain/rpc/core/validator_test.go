@@ -107,7 +107,7 @@ func TestService_SubmitSignedAggregateSelectionProof(t *testing.T) {
 			},
 			Signature: fakeSig,
 		}
-		rpcError := s.SubmitSignedAggregateSelectionProof(context.Background(), agg)
+		rpcError := s.SubmitSignedAggregateSelectionProof(t.Context(), agg)
 		assert.Equal(t, true, rpcError == nil)
 	})
 
@@ -122,7 +122,7 @@ func TestService_SubmitSignedAggregateSelectionProof(t *testing.T) {
 			},
 			Signature: make([]byte, 96),
 		}
-		rpcError := s.SubmitSignedAggregateSelectionProof(context.Background(), agg)
+		rpcError := s.SubmitSignedAggregateSelectionProof(t.Context(), agg)
 		assert.ErrorContains(t, "old aggregate and proof", rpcError.Err)
 	})
 
@@ -136,7 +136,7 @@ func TestService_SubmitSignedAggregateSelectionProof(t *testing.T) {
 			},
 			Signature: make([]byte, 96),
 		}
-		rpcError := s.SubmitSignedAggregateSelectionProof(context.Background(), agg)
+		rpcError := s.SubmitSignedAggregateSelectionProof(t.Context(), agg)
 		assert.ErrorContains(t, "electra aggregate and proof not supported yet", rpcError.Err)
 	})
 }

@@ -27,7 +27,7 @@ func TestLocalKeymanager_DeleteKeystores(t *testing.T) {
 		accountsStore: &accountStore{},
 	}
 	numAccounts := 5
-	ctx := context.Background()
+	ctx := t.Context()
 	keystores := make([]*keymanager.Keystore, numAccounts)
 	passwords := make([]string, numAccounts)
 	for i := 0; i < numAccounts; i++ {

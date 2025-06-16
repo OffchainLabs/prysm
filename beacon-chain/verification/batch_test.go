@@ -12,7 +12,7 @@ import (
 )
 
 func TestBatchVerifier(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	mockCV := func(err error) roblobCommitmentVerifier {
 		return func(...blocks.ROBlob) error {
 			return err

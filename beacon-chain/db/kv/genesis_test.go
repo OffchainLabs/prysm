@@ -16,7 +16,7 @@ import (
 )
 
 func TestStore_SaveGenesisData(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupDB(t)
 
 	gs, err := util.NewBeaconState()
@@ -28,7 +28,7 @@ func TestStore_SaveGenesisData(t *testing.T) {
 }
 
 func testGenesisDataSaved(t *testing.T, db iface.Database) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	gb, err := db.GenesisBlock(ctx)
 	require.NoError(t, err)
@@ -77,7 +77,7 @@ func TestLoadCapellaFromFile(t *testing.T) {
 	require.NoError(t, err)
 
 	db := setupDB(t)
-	require.NoError(t, db.LoadGenesis(context.Background(), sb))
+	require.NoError(t, db.LoadGenesis(t.Context(), sb))
 	testGenesisDataSaved(t, db)
 }
 
@@ -119,12 +119,12 @@ func TestLoadGenesisFromFile(t *testing.T) {
 	require.NoError(t, err)
 
 	db := setupDB(t)
-	require.NoError(t, db.LoadGenesis(context.Background(), sb))
+	require.NoError(t, db.LoadGenesis(t.Context(), sb))
 	testGenesisDataSaved(t, db)
 
 	// Loading the same genesis again should not throw an error
 	require.NoError(t, err)
-	require.NoError(t, db.LoadGenesis(context.Background(), sb))
+	require.NoError(t, db.LoadGenesis(t.Context(), sb))
 	testGenesisDataSaved(t, db)
 }
 
@@ -139,7 +139,7 @@ func TestLoadGenesisFromFile_mismatchedForkVersion(t *testing.T) {
 
 	// Loading a genesis with the wrong fork version as beacon config should throw an error.
 	db := setupDB(t)
-	assert.ErrorContains(t, "not found in any known fork choice schedule", db.LoadGenesis(context.Background(), sb))
+	assert.ErrorContains(t, "not found in any known fork choice schedule", db.LoadGenesis(t.Context(), sb))
 }
 
 func TestEnsureEmbeddedGenesis(t *testing.T) {
@@ -153,7 +153,7 @@ func TestEnsureEmbeddedGenesis(t *testing.T) {
 		require.NoError(t, undo())
 	}()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupDB(t)
 
 	gb, err := db.GenesisBlock(ctx)

@@ -37,7 +37,7 @@ var (
 )
 
 func TestServer_ListAccounts(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	localWalletDir := setupWalletDir(t)
 	defaultWalletPath = localWalletDir
 	// We attempt to create the wallet.
@@ -142,7 +142,7 @@ func TestServer_ListAccounts(t *testing.T) {
 }
 
 func TestServer_BackupAccounts(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	localWalletDir := setupWalletDir(t)
 	defaultWalletPath = localWalletDir
 	// We attempt to create the wallet.
@@ -235,7 +235,7 @@ func TestServer_BackupAccounts(t *testing.T) {
 func TestServer_VoluntaryExit(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	ctx := context.Background()
+	ctx := t.Context()
 	mockValidatorClient := validatormock.NewMockValidatorClient(ctrl)
 	mockNodeClient := validatormock.NewMockNodeClient(ctrl)
 

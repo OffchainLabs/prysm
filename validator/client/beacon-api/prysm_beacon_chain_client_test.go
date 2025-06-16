@@ -116,7 +116,7 @@ func TestGetValidatorCount(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			ctx := context.Background()
+			ctx := t.Context()
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
 			// Expect node version endpoint call.
@@ -170,7 +170,7 @@ func Test_beaconApiBeaconChainClient_GetValidatorPerformance(t *testing.T) {
 		bytesutil.ToBytes48([]byte{3}),
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 

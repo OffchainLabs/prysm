@@ -16,7 +16,7 @@ func TestFuzzProcessDeposits_10000(t *testing.T) {
 	fuzzer := gofuzz.NewWithSeed(0)
 	state := &ethpb.BeaconStateElectra{}
 	deposits := make([]*ethpb.Deposit, 100)
-	ctx := context.Background()
+	ctx := t.Context()
 	for i := 0; i < 10000; i++ {
 		fuzzer.Fuzz(state)
 		for i := range deposits {

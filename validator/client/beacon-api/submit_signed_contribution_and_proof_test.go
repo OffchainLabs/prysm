@@ -42,7 +42,7 @@ func TestSubmitSignedContributionAndProof_Valid(t *testing.T) {
 	marshalledContributionAndProofs, err := json.Marshal(jsonContributionAndProofs)
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
@@ -116,7 +116,7 @@ func TestSubmitSignedContributionAndProof_Error(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			ctx := context.Background()
+			ctx := t.Context()
 
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 			if testCase.httpRequestExpected {

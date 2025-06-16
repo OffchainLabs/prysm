@@ -22,7 +22,7 @@ func TestGetBeaconBlock_RequestFailed(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
@@ -119,7 +119,7 @@ func TestGetBeaconBlock_Error(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			ctx := context.Background()
+			ctx := t.Context()
 
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 			jsonRestHandler.EXPECT().Get(
@@ -155,7 +155,7 @@ func TestGetBeaconBlock_Phase0Valid(t *testing.T) {
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
 	graffiti := []byte{3}
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
@@ -198,7 +198,7 @@ func TestGetBeaconBlock_AltairValid(t *testing.T) {
 	randaoReveal := []byte{2}
 	graffiti := []byte{3}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
@@ -241,7 +241,7 @@ func TestGetBeaconBlock_BellatrixValid(t *testing.T) {
 	randaoReveal := []byte{2}
 	graffiti := []byte{3}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
@@ -286,7 +286,7 @@ func TestGetBeaconBlock_BlindedBellatrixValid(t *testing.T) {
 	randaoReveal := []byte{2}
 	graffiti := []byte{3}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
@@ -331,7 +331,7 @@ func TestGetBeaconBlock_CapellaValid(t *testing.T) {
 	randaoReveal := []byte{2}
 	graffiti := []byte{3}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
@@ -376,7 +376,7 @@ func TestGetBeaconBlock_BlindedCapellaValid(t *testing.T) {
 	randaoReveal := []byte{2}
 	graffiti := []byte{3}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
@@ -421,7 +421,7 @@ func TestGetBeaconBlock_DenebValid(t *testing.T) {
 	randaoReveal := []byte{2}
 	graffiti := []byte{3}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
@@ -466,7 +466,7 @@ func TestGetBeaconBlock_BlindedDenebValid(t *testing.T) {
 	randaoReveal := []byte{2}
 	graffiti := []byte{3}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
@@ -511,7 +511,7 @@ func TestGetBeaconBlock_ElectraValid(t *testing.T) {
 	randaoReveal := []byte{2}
 	graffiti := []byte{3}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
@@ -556,7 +556,7 @@ func TestGetBeaconBlock_BlindedElectraValid(t *testing.T) {
 	randaoReveal := []byte{2}
 	graffiti := []byte{3}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(

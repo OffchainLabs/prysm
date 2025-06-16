@@ -131,7 +131,7 @@ func TestRegistration_Valid(t *testing.T) {
 	}
 
 	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
-	res, err := validatorClient.SubmitValidatorRegistrations(context.Background(), &protoRegistrations)
+	res, err := validatorClient.SubmitValidatorRegistrations(t.Context(), &protoRegistrations)
 
 	assert.DeepEqual(t, new(empty.Empty), res)
 	require.NoError(t, err)
@@ -153,6 +153,6 @@ func TestRegistration_BadRequest(t *testing.T) {
 	).Times(1)
 
 	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
-	_, err := validatorClient.SubmitValidatorRegistrations(context.Background(), &ethpb.SignedValidatorRegistrationsV1{})
+	_, err := validatorClient.SubmitValidatorRegistrations(t.Context(), &ethpb.SignedValidatorRegistrationsV1{})
 	assert.ErrorContains(t, "foo error", err)
 }

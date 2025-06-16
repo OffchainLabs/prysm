@@ -24,7 +24,7 @@ func TestStore_ImportInterchangeData_BadJSON(t *testing.T) {
 	require.NoError(t, err, "NewStore should not return an error")
 
 	buf := bytes.NewBuffer([]byte("helloworld"))
-	err = s.ImportStandardProtectionJSON(context.Background(), buf)
+	err = s.ImportStandardProtectionJSON(t.Context(), buf)
 	require.ErrorContains(t, "could not unmarshal slashing protection JSON file", err)
 }
 
@@ -41,12 +41,12 @@ func TestStore_ImportInterchangeData_NilData_FailsSilently(t *testing.T) {
 	require.NoError(t, err)
 
 	buf := bytes.NewBuffer(encoded)
-	err = s.ImportStandardProtectionJSON(context.Background(), buf)
+	err = s.ImportStandardProtectionJSON(t.Context(), buf)
 	require.NoError(t, err)
 }
 
 func TestStore_ImportInterchangeData_BadFormat_PreventsDBWrites(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	numValidators := 10
 	publicKeys, err := valtest.CreateRandomPubKeys(numValidators)
 	require.NoError(t, err)
@@ -94,7 +94,7 @@ func TestStore_ImportInterchangeData_BadFormat_PreventsDBWrites(t *testing.T) {
 }
 
 func TestStore_ImportInterchangeData_OK(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	numValidators := 10
 	publicKeys, err := valtest.CreateRandomPubKeys(numValidators)
 	require.NoError(t, err)

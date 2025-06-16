@@ -31,7 +31,7 @@ func TestGetFork_Nominal(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler.EXPECT().Get(
 		gomock.Any(),
@@ -59,7 +59,7 @@ func TestGetFork_Invalid(t *testing.T) {
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler.EXPECT().Get(
 		gomock.Any(),
@@ -98,7 +98,7 @@ func TestGetHeaders_Nominal(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler.EXPECT().Get(
 		gomock.Any(),
@@ -126,7 +126,7 @@ func TestGetHeaders_Invalid(t *testing.T) {
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler.EXPECT().Get(
 		gomock.Any(),
@@ -169,7 +169,7 @@ func TestGetLiveness_Nominal(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
@@ -196,7 +196,7 @@ func TestGetLiveness_Invalid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
@@ -246,7 +246,7 @@ func TestGetIsSyncing_Nominal(t *testing.T) {
 				},
 			}
 
-			ctx := context.Background()
+			ctx := t.Context()
 
 			jsonRestHandler.EXPECT().Get(
 				gomock.Any(),
@@ -277,7 +277,7 @@ func TestGetIsSyncing_Invalid(t *testing.T) {
 	syncingResponseJson := structs.SyncStatusResponse{}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler.EXPECT().Get(
 		gomock.Any(),

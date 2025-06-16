@@ -42,7 +42,7 @@ func TestProcessDeposits_SameValidatorMultipleDepositsSameBlock(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	newState, err := altair.ProcessDeposits(context.Background(), beaconState, []*ethpb.Deposit{dep[0], dep[1], dep[2]})
+	newState, err := altair.ProcessDeposits(t.Context(), beaconState, []*ethpb.Deposit{dep[0], dep[1], dep[2]})
 	require.NoError(t, err, "Expected block deposits to process correctly")
 	require.Equal(t, 2, len(newState.Validators()), "Incorrect validator count")
 }
@@ -70,7 +70,7 @@ func TestProcessDeposits_AddsNewValidatorDeposit(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	newState, err := altair.ProcessDeposits(context.Background(), beaconState, []*ethpb.Deposit{dep[0]})
+	newState, err := altair.ProcessDeposits(t.Context(), beaconState, []*ethpb.Deposit{dep[0]})
 	require.NoError(t, err, "Expected block deposits to process correctly")
 	if newState.Balances()[1] != dep[0].Data.Amount {
 		t.Errorf(
@@ -127,7 +127,7 @@ func TestProcessDeposits_RepeatedDeposit_IncreasesValidatorBalance(t *testing.T)
 		},
 	})
 	require.NoError(t, err)
-	newState, err := altair.ProcessDeposits(context.Background(), beaconState, []*ethpb.Deposit{deposit})
+	newState, err := altair.ProcessDeposits(t.Context(), beaconState, []*ethpb.Deposit{deposit})
 	require.NoError(t, err, "Process deposit failed")
 	require.Equal(t, uint64(1000+50), newState.Balances()[1], "Expected balance at index 1 to be 1050")
 }
@@ -256,7 +256,7 @@ func TestPreGenesisDeposits_SkipInvalidDeposit(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	newState, err := altair.ProcessPreGenesisDeposits(context.Background(), beaconState, dep)
+	newState, err := altair.ProcessPreGenesisDeposits(t.Context(), beaconState, dep)
 	require.NoError(t, err, "Expected invalid block deposit to be ignored without error")
 
 	_, ok := newState.ValidatorIndexByPubkey(bytesutil.ToBytes48(dep[0].Data.PublicKey))
@@ -370,6 +370,6 @@ func TestProcessDeposits_MerkleBranchFailsVerification(t *testing.T) {
 	})
 	require.NoError(t, err)
 	want := "deposit root did not verify"
-	_, err = altair.ProcessDeposits(context.Background(), beaconState, b.Block.Body.Deposits)
+	_, err = altair.ProcessDeposits(t.Context(), beaconState, b.Block.Body.Deposits)
 	assert.ErrorContains(t, want, err)
 }

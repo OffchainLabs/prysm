@@ -58,7 +58,7 @@ func TestGetAttesterDuties_Valid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	validatorIndices := []primitives.ValidatorIndex{2, 9}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
@@ -87,7 +87,7 @@ func TestGetAttesterDuties_HttpError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
@@ -111,7 +111,7 @@ func TestGetAttesterDuties_NilAttesterDuty(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
@@ -155,7 +155,7 @@ func TestGetProposerDuties_Valid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
@@ -181,7 +181,7 @@ func TestGetProposerDuties_HttpError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
@@ -203,7 +203,7 @@ func TestGetProposerDuties_NilData(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
@@ -230,7 +230,7 @@ func TestGetProposerDuties_NilProposerDuty(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
@@ -282,7 +282,7 @@ func TestGetSyncDuties_Valid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	validatorIndices := []primitives.ValidatorIndex{2, 6}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
@@ -311,7 +311,7 @@ func TestGetSyncDuties_HttpError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
@@ -335,7 +335,7 @@ func TestGetSyncDuties_NilData(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
@@ -364,7 +364,7 @@ func TestGetSyncDuties_NilSyncDuty(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
@@ -414,7 +414,7 @@ func TestGetCommittees_Valid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
@@ -440,7 +440,7 @@ func TestGetCommittees_HttpError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
@@ -462,7 +462,7 @@ func TestGetCommittees_NilData(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
@@ -489,7 +489,7 @@ func TestGetCommittees_NilCommittee(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
@@ -604,7 +604,7 @@ func TestGetDutiesForEpoch_Error(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			ctx := context.Background()
+			ctx := t.Context()
 
 			var attesterDuties []*structs.AttesterDuty
 			if testCase.generateAttesterDuties == nil {
@@ -705,7 +705,7 @@ func TestGetDutiesForEpoch_Valid(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			ctx := context.Background()
+			ctx := t.Context()
 
 			dutiesProvider := mock.NewMockdutiesProvider(ctrl)
 
@@ -951,7 +951,7 @@ func TestGetDuties_Valid(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			ctx := context.Background()
+			ctx := t.Context()
 
 			dutiesProvider := mock.NewMockdutiesProvider(ctrl)
 
@@ -1183,7 +1183,7 @@ func TestGetDuties_GetStateValidatorsFailed(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
 	stateValidatorsProvider.EXPECT().StateValidators(
@@ -1212,7 +1212,7 @@ func TestGetDuties_GetDutiesForEpochFailed(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	pubkey := []byte{1, 2, 3}
 
 	stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)

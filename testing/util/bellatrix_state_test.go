@@ -15,7 +15,7 @@ func TestDeterministicGenesisStateBellatrix(t *testing.T) {
 }
 
 func TestGenesisBeaconStateBellatrix(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	deposits, _, err := DeterministicDepositsAndKeys(params.BeaconConfig().MaxCommitteesPerSlot)
 	require.NoError(t, err)
 	eth1Data, err := DeterministicEth1Data(len(deposits))

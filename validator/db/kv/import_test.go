@@ -20,7 +20,7 @@ import (
 )
 
 func TestStore_ImportInterchangeData_BadJSON(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	validatorDB := setupDB(t, nil)
 
 	buf := bytes.NewBuffer([]byte("helloworld"))
@@ -30,7 +30,7 @@ func TestStore_ImportInterchangeData_BadJSON(t *testing.T) {
 
 func TestStore_ImportInterchangeData_NilData_FailsSilently(t *testing.T) {
 	hook := logTest.NewGlobal()
-	ctx := context.Background()
+	ctx := t.Context()
 	validatorDB := setupDB(t, nil)
 
 	interchangeJSON := &format.EIPSlashingProtectionFormat{}
@@ -44,7 +44,7 @@ func TestStore_ImportInterchangeData_NilData_FailsSilently(t *testing.T) {
 }
 
 func TestStore_ImportInterchangeData_BadFormat_PreventsDBWrites(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	numValidators := 10
 	publicKeys, err := valtest.CreateRandomPubKeys(numValidators)
 	require.NoError(t, err)
@@ -104,7 +104,7 @@ func TestStore_ImportInterchangeData_BadFormat_PreventsDBWrites(t *testing.T) {
 }
 
 func TestStore_ImportInterchangeData_OK(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	numValidators := 10
 	publicKeys, err := valtest.CreateRandomPubKeys(numValidators)
 	require.NoError(t, err)
@@ -775,14 +775,14 @@ func Test_filterSlashablePubKeysFromBlocks(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			historyByPubKey := make(map[[fieldparams.BLSPubkeyLength]byte]common.ProposalHistoryForPubkey)
 			for pubKey, signedBlocks := range tt.given {
 				proposalHistory, err := transformSignedBlocks(ctx, signedBlocks)
 				require.NoError(t, err)
 				historyByPubKey[pubKey] = *proposalHistory
 			}
-			slashablePubKeys := filterSlashablePubKeysFromBlocks(context.Background(), historyByPubKey)
+			slashablePubKeys := filterSlashablePubKeysFromBlocks(t.Context(), historyByPubKey)
 			wantedPubKeys := make(map[[fieldparams.BLSPubkeyLength]byte]bool)
 			for _, pk := range tt.expected {
 				wantedPubKeys[pk] = true
@@ -798,7 +798,7 @@ func Test_filterSlashablePubKeysFromBlocks(t *testing.T) {
 
 func Test_filterSlashablePubKeysFromAttestations(t *testing.T) {
 	// filterSlashablePubKeysFromAttestations is used only for complete slashing protection.
-	ctx := context.Background()
+	ctx := t.Context()
 	tests := []struct {
 		name                 string
 		previousAttsByPubKey map[[fieldparams.BLSPubkeyLength]byte][]*format.SignedAttestation

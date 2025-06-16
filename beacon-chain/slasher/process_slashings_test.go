@@ -21,7 +21,7 @@ import (
 )
 
 func TestService_processAttesterSlashings(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	slasherDB := dbtest.SetupSlasherDB(t)
 	beaconDB := dbtest.SetupDB(t)
 
@@ -143,7 +143,7 @@ func TestService_processAttesterSlashings(t *testing.T) {
 }
 
 func TestService_processProposerSlashings(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	slasherDB := dbtest.SetupSlasherDB(t)
 	beaconDB := dbtest.SetupDB(t)
 

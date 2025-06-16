@@ -318,7 +318,7 @@ func TestGetValidatorCount(t *testing.T) {
 				require.Equal(t, true, ok)
 				statuses = append(statuses, valStatus)
 			}
-			vcCountResp, err := prysmBeaconChainClient.ValidatorCount(context.Background(), "", statuses)
+			vcCountResp, err := prysmBeaconChainClient.ValidatorCount(t.Context(), "", statuses)
 			require.NoError(t, err)
 			require.DeepEqual(t, test.expectedResponse, vcCountResp)
 		})

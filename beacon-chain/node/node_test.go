@@ -31,7 +31,7 @@ import (
 var _ statefeed.Notifier = (*BeaconNode)(nil)
 
 func newCliContextWithCancel(app *cli.App, set *flag.FlagSet) (*cli.Context, context.CancelFunc) {
-	context, cancel := context.WithCancel(context.Background())
+	context, cancel := context.WithCancel(t.Context())
 	parent := &cli.Context{Context: context}
 	return cli.NewContext(app, set, parent), cancel
 }
@@ -143,7 +143,7 @@ func TestMonitor_RegisteredCorrectly(t *testing.T) {
 	require.NoError(t, cmd.ValidatorMonitorIndicesFlag.Apply(set))
 	cliCtx := cli.NewContext(&app, set, nil)
 	require.NoError(t, cliCtx.Set(cmd.ValidatorMonitorIndicesFlag.Name, "1,2"))
-	n := &BeaconNode{ctx: context.Background(), cliCtx: cliCtx, services: runtime.NewServiceRegistry()}
+	n := &BeaconNode{ctx: t.Context(), cliCtx: cliCtx, services: runtime.NewServiceRegistry()}
 	require.NoError(t, n.services.RegisterService(&blockchain.Service{}))
 	require.NoError(t, n.registerValidatorMonitorService(make(chan struct{})))
 

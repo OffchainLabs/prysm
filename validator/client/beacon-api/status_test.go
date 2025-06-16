@@ -26,7 +26,7 @@ func TestValidatorStatus_Nominal(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
 
@@ -91,7 +91,7 @@ func TestValidatorStatus_Error(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
 
@@ -123,7 +123,7 @@ func TestMultipleValidatorStatus_Nominal(t *testing.T) {
 		"0x8000a6c975761b488bdb0dfba4ed37c0d97d6e6b968562ef5c84aa9a5dfb92d8e309195004e97709077723739bf04463", // existing
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	validatorsPubKey := make([][]byte, len(stringValidatorsPubKey))
 
 	for i, stringValidatorPubKey := range stringValidatorsPubKey {
@@ -219,7 +219,7 @@ func TestMultipleValidatorStatus_No_Keys(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
 
 	validatorClient := beaconApiValidatorClient{stateValidatorsProvider: stateValidatorsProvider}
@@ -238,7 +238,7 @@ func TestGetValidatorsStatusResponse_Nominal_SomeActiveValidators(t *testing.T) 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	stringValidatorsPubKey := []string{
 		"0x8000091c2ae64ee414a54c1cc1fc67dec663408bc636cb86756e0200e41a75c8f86603f104f02c856983d2783116be13", // existing
 		"0x8000a6c975761b488bdb0dfba4ed37c0d97d6e6b968562ef5c84aa9a5dfb92d8e309195004e97709077723739bf04463", // existing
@@ -442,7 +442,7 @@ func TestGetValidatorsStatusResponse_Nominal_NoActiveValidators(t *testing.T) {
 	validatorPubKey, err := hexutil.Decode(stringValidatorPubKey)
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
 
 	stateValidatorsProvider.EXPECT().StateValidators(
@@ -693,7 +693,7 @@ func TestValidatorStatusResponse_InvalidData(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				defer ctrl.Finish()
 
-				ctx := context.Background()
+				ctx := t.Context()
 				stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
 				stateValidatorsProvider.EXPECT().StateValidators(
 					gomock.Any(),

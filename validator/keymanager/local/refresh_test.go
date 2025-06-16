@@ -68,7 +68,7 @@ func TestLocalKeymanager_reloadAccountsFromKeystore(t *testing.T) {
 		pubKeys[i] = privKey.PublicKey().Marshal()
 	}
 
-	accountsStore, err := dr.CreateAccountsKeystore(context.Background(), privKeys, pubKeys)
+	accountsStore, err := dr.CreateAccountsKeystore(t.Context(), privKeys, pubKeys)
 	require.NoError(t, err)
 	require.NoError(t, dr.reloadAccountsFromKeystore(accountsStore))
 

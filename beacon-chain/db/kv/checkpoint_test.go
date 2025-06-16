@@ -16,7 +16,7 @@ import (
 
 func TestStore_JustifiedCheckpoint_CanSaveRetrieve(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	root := bytesutil.ToBytes32([]byte{'A'})
 	cp := &ethpb.Checkpoint{
 		Epoch: 10,
@@ -35,7 +35,7 @@ func TestStore_JustifiedCheckpoint_CanSaveRetrieve(t *testing.T) {
 
 func TestStore_JustifiedCheckpoint_Recover(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	blk := util.HydrateSignedBeaconBlock(&ethpb.SignedBeaconBlock{})
 	r, err := blk.Block.HashTreeRoot()
 	require.NoError(t, err)
@@ -54,7 +54,7 @@ func TestStore_JustifiedCheckpoint_Recover(t *testing.T) {
 
 func TestStore_FinalizedCheckpoint_CanSaveRetrieve(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	genesis := bytesutil.ToBytes32([]byte{'G', 'E', 'N', 'E', 'S', 'I', 'S'})
 	require.NoError(t, db.SaveGenesisBlockRoot(ctx, genesis))
@@ -90,7 +90,7 @@ func TestStore_FinalizedCheckpoint_CanSaveRetrieve(t *testing.T) {
 
 func TestStore_FinalizedCheckpoint_Recover(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	blk := util.HydrateSignedBeaconBlock(&ethpb.SignedBeaconBlock{})
 	r, err := blk.Block.HashTreeRoot()
 	require.NoError(t, err)
@@ -110,7 +110,7 @@ func TestStore_FinalizedCheckpoint_Recover(t *testing.T) {
 
 func TestStore_JustifiedCheckpoint_DefaultIsZeroHash(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	cp := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
 	retrieved, err := db.JustifiedCheckpoint(ctx)
@@ -120,7 +120,7 @@ func TestStore_JustifiedCheckpoint_DefaultIsZeroHash(t *testing.T) {
 
 func TestStore_FinalizedCheckpoint_DefaultIsZeroHash(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	cp := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
 	retrieved, err := db.FinalizedCheckpoint(ctx)
@@ -130,7 +130,7 @@ func TestStore_FinalizedCheckpoint_DefaultIsZeroHash(t *testing.T) {
 
 func TestStore_FinalizedCheckpoint_StateMustExist(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	cp := &ethpb.Checkpoint{
 		Epoch: 5,
 		Root:  []byte{'B'},

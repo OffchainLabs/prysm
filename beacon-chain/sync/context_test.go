@@ -27,7 +27,7 @@ func TestContextWrite_NoWrites(t *testing.T) {
 		wg.Done()
 		// no-op
 	})
-	strm, err := p1.BHost.NewStream(context.Background(), nPeer.PeerID(), p2p.RPCPingTopicV1)
+	strm, err := p1.BHost.NewStream(t.Context(), nPeer.PeerID(), p2p.RPCPingTopicV1)
 	assert.NoError(t, err)
 
 	// Nothing will be written to the stream
@@ -61,7 +61,7 @@ func TestContextRead_NoReads(t *testing.T) {
 
 		wg.Done()
 	})
-	strm, err := p1.BHost.NewStream(context.Background(), nPeer.PeerID(), p2p.RPCPingTopicV1)
+	strm, err := p1.BHost.NewStream(t.Context(), nPeer.PeerID(), p2p.RPCPingTopicV1)
 	assert.NoError(t, err)
 
 	n, err := strm.Write(wantedData)

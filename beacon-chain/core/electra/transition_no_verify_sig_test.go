@@ -54,7 +54,7 @@ func TestProcessOperationsWithNilRequests(t *testing.T) {
 
 			require.NoError(t, st.SetSlot(1))
 
-			_, err = electra.ProcessOperations(context.Background(), st, b.Block())
+			_, err = electra.ProcessOperations(t.Context(), st, b.Block())
 			require.ErrorContains(t, tc.errMsg, err)
 		})
 	}

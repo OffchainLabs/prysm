@@ -27,7 +27,7 @@ func TestLocalKeymanager_FetchValidatingPublicKeys(t *testing.T) {
 		accountsStore: &accountStore{},
 	}
 	// First, generate accounts and their keystore.json files.
-	ctx := context.Background()
+	ctx := t.Context()
 	numAccounts := 10
 	wantedPubKeys := make([][fieldparams.BLSPubkeyLength]byte, 0)
 	for i := 0; i < numAccounts; i++ {
@@ -59,7 +59,7 @@ func TestLocalKeymanager_FetchValidatingPrivateKeys(t *testing.T) {
 		accountsStore: &accountStore{},
 	}
 	// First, generate accounts and their keystore.json files.
-	ctx := context.Background()
+	ctx := t.Context()
 	numAccounts := 10
 	wantedPrivateKeys := make([][32]byte, numAccounts)
 	for i := 0; i < numAccounts; i++ {
@@ -94,7 +94,7 @@ func TestLocalKeymanager_Sign(t *testing.T) {
 	}
 
 	// First, generate accounts and their keystore.json files.
-	ctx := context.Background()
+	ctx := t.Context()
 	numAccounts := 10
 	keystores := make([]*keymanager.Keystore, numAccounts)
 	passwords := make([]string, numAccounts)
@@ -155,7 +155,7 @@ func TestLocalKeymanager_Sign_NoPublicKeySpecified(t *testing.T) {
 		PublicKey: nil,
 	}
 	dr := &Keymanager{}
-	_, err := dr.Sign(context.Background(), req)
+	_, err := dr.Sign(t.Context(), req)
 	assert.ErrorContains(t, "nil public key", err)
 }
 
@@ -165,6 +165,6 @@ func TestLocalKeymanager_Sign_NoPublicKeyInCache(t *testing.T) {
 	}
 	secretKeysCache = make(map[[fieldparams.BLSPubkeyLength]byte]bls.SecretKey)
 	dr := &Keymanager{}
-	_, err := dr.Sign(context.Background(), req)
+	_, err := dr.Sign(t.Context(), req)
 	assert.ErrorContains(t, "no signing key found in keys cache", err)
 }

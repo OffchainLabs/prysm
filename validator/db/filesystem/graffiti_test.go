@@ -29,7 +29,7 @@ func TestStore_SaveGraffitiOrderedIndex(t *testing.T) {
 			require.NoError(t, err)
 
 			// Save graffiti ordered index.
-			err = store.SaveGraffitiOrderedIndex(context.Background(), graffitiOrderedIndex)
+			err = store.SaveGraffitiOrderedIndex(t.Context(), graffitiOrderedIndex)
 			require.NoError(t, err)
 		})
 	}
@@ -87,7 +87,7 @@ func TestStore_GraffitiOrderedIndex(t *testing.T) {
 			require.NoError(t, err)
 
 			// Get graffiti ordered index.
-			actualGraffitiOrderedIndex, err := store.GraffitiOrderedIndex(context.Background(), tt.fileHash)
+			actualGraffitiOrderedIndex, err := store.GraffitiOrderedIndex(t.Context(), tt.fileHash)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedGraffitiOrderedIndex, actualGraffitiOrderedIndex)
 		})

@@ -18,7 +18,7 @@ import (
 
 func TestRestore(t *testing.T) {
 	logHook := logTest.NewGlobal()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	backupDb, err := kv.NewKVStore(ctx, t.TempDir(), &kv.Config{})
 	defer func() {

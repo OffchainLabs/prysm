@@ -25,7 +25,7 @@ import (
 )
 
 func TestGetBeaconStateV2(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := dbtest.SetupDB(t)
 
 	t.Run("phase0", func(t *testing.T) {

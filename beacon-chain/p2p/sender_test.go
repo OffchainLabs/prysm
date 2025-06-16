@@ -50,7 +50,7 @@ func TestService_Send(t *testing.T) {
 		wg.Done()
 	})
 
-	stream, err := svc.Send(context.Background(), msg, "/testing/1", p2.BHost.ID())
+	stream, err := svc.Send(t.Context(), msg, "/testing/1", p2.BHost.ID())
 	require.NoError(t, err)
 
 	util.WaitTimeout(&wg, 1*time.Second)

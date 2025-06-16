@@ -46,7 +46,7 @@ func TestImportAccounts_NoPassword(t *testing.T) {
 	require.NoError(t, err)
 	importer, ok := km.(keymanager.Importer)
 	require.Equal(t, true, ok)
-	resp, err := ImportAccounts(context.Background(), &ImportAccountsConfig{
+	resp, err := ImportAccounts(t.Context(), &ImportAccountsConfig{
 		Keystores:       []*keymanager.Keystore{{}},
 		Importer:        importer,
 		AccountPassword: "",

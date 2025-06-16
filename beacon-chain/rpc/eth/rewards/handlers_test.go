@@ -100,7 +100,7 @@ func BlockRewardTestSetup(t *testing.T, ver int) (state.BeaconState, interfaces.
 	require.NoError(t, st.SetValidators(validators))
 	require.NoError(t, st.SetBalances(balances))
 	require.NoError(t, st.SetCurrentParticipationBits(make([]byte, valCount)))
-	syncCommittee, err := altair.NextSyncCommittee(context.Background(), st)
+	syncCommittee, err := altair.NextSyncCommittee(t.Context(), st)
 	require.NoError(t, err)
 	require.NoError(t, st.SetCurrentSyncCommittee(syncCommittee))
 	slot0bRoot := bytesutil.PadTo([]byte("slot0root"), 32)

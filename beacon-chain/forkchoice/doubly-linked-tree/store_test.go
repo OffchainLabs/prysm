@@ -26,19 +26,19 @@ func TestStore_FinalizedEpoch(t *testing.T) {
 
 func TestStore_NodeCount(t *testing.T) {
 	f := setup(0, 0)
-	state, blk, err := prepareForkchoiceState(context.Background(), 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
+	state, blk, err := prepareForkchoiceState(t.Context(), 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(context.Background(), state, blk))
+	require.NoError(t, f.InsertNode(t.Context(), state, blk))
 	require.Equal(t, 2, f.NodeCount())
 }
 
 func TestStore_NodeByRoot(t *testing.T) {
 	f := setup(0, 0)
-	ctx := context.Background()
-	state, blkRoot, err := prepareForkchoiceState(context.Background(), 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
+	ctx := t.Context()
+	state, blkRoot, err := prepareForkchoiceState(t.Context(), 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-	state, blkRoot, err = prepareForkchoiceState(context.Background(), 2, indexToHash(2), indexToHash(1), params.BeaconConfig().ZeroHash, 0, 0)
+	state, blkRoot, err = prepareForkchoiceState(t.Context(), 2, indexToHash(2), indexToHash(1), params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
 	node0 := f.store.treeRootNode
@@ -61,8 +61,8 @@ func TestStore_NodeByRoot(t *testing.T) {
 
 func TestForkChoice_HasNode(t *testing.T) {
 	f := setup(0, 0)
-	ctx := context.Background()
-	state, blkRoot, err := prepareForkchoiceState(context.Background(), 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
+	ctx := t.Context()
+	state, blkRoot, err := prepareForkchoiceState(t.Context(), 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
 	require.Equal(t, true, f.HasNode(indexToHash(1)))
@@ -72,47 +72,47 @@ func TestStore_Head_UnknownJustifiedRoot(t *testing.T) {
 	f := setup(0, 0)
 
 	f.store.justifiedCheckpoint = &forkchoicetypes.Checkpoint{Epoch: 1, Root: [32]byte{'a'}}
-	_, err := f.store.head(context.Background())
+	_, err := f.store.head(t.Context())
 	assert.ErrorContains(t, errUnknownJustifiedRoot.Error(), err)
 }
 
 func TestStore_Head_Itself(t *testing.T) {
 	f := setup(0, 0)
-	state, blkRoot, err := prepareForkchoiceState(context.Background(), 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
+	state, blkRoot, err := prepareForkchoiceState(t.Context(), 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(context.Background(), state, blkRoot))
+	require.NoError(t, f.InsertNode(t.Context(), state, blkRoot))
 
 	// Since the justified node does not have a best descendant, the best node
 	// is itself.
 	f.store.justifiedCheckpoint = &forkchoicetypes.Checkpoint{Epoch: 0, Root: indexToHash(1)}
-	h, err := f.store.head(context.Background())
+	h, err := f.store.head(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, indexToHash(1), h)
 }
 
 func TestStore_Head_BestDescendant(t *testing.T) {
 	f := setup(0, 0)
-	ctx := context.Background()
-	state, blkRoot, err := prepareForkchoiceState(context.Background(), 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
+	ctx := t.Context()
+	state, blkRoot, err := prepareForkchoiceState(t.Context(), 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-	state, blkRoot, err = prepareForkchoiceState(context.Background(), 2, indexToHash(2), indexToHash(1), params.BeaconConfig().ZeroHash, 0, 0)
+	state, blkRoot, err = prepareForkchoiceState(t.Context(), 2, indexToHash(2), indexToHash(1), params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-	state, blkRoot, err = prepareForkchoiceState(context.Background(), 3, indexToHash(3), indexToHash(1), params.BeaconConfig().ZeroHash, 0, 0)
+	state, blkRoot, err = prepareForkchoiceState(t.Context(), 3, indexToHash(3), indexToHash(1), params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-	state, blkRoot, err = prepareForkchoiceState(context.Background(), 4, indexToHash(4), indexToHash(2), params.BeaconConfig().ZeroHash, 0, 0)
+	state, blkRoot, err = prepareForkchoiceState(t.Context(), 4, indexToHash(4), indexToHash(2), params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
 	f.store.justifiedCheckpoint = &forkchoicetypes.Checkpoint{Epoch: 0, Root: indexToHash(1)}
-	h, err := f.store.head(context.Background())
+	h, err := f.store.head(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, h, indexToHash(4))
 }
 
 func TestStore_UpdateBestDescendant_ContextCancelled(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	f := setup(0, 0)
 	state, blkRoot, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
@@ -133,7 +133,7 @@ func TestStore_Insert(t *testing.T) {
 	fc := &forkchoicetypes.Checkpoint{Epoch: 0}
 	s := &Store{nodeByRoot: nodeByRoot, treeRootNode: treeRootNode, nodeByPayload: nodeByPayload, justifiedCheckpoint: jc, finalizedCheckpoint: fc, highestReceivedNode: &Node{}}
 	payloadHash := [32]byte{'a'}
-	ctx := context.Background()
+	ctx := t.Context()
 	_, blk, err := prepareForkchoiceState(ctx, 100, indexToHash(100), indexToHash(0), payloadHash, 1, 1)
 	require.NoError(t, err)
 	_, err = s.insert(ctx, blk, 1, 1)
@@ -152,7 +152,7 @@ func TestStore_Prune_MoreThanThreshold(t *testing.T) {
 	// Define 100 nodes in store.
 	numOfNodes := uint64(100)
 	f := setup(0, 0)
-	ctx := context.Background()
+	ctx := t.Context()
 	state, blkRoot, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
@@ -166,7 +166,7 @@ func TestStore_Prune_MoreThanThreshold(t *testing.T) {
 
 	// Finalized root is at index 99 so everything before 99 should be pruned.
 	s.finalizedCheckpoint.Root = indexToHash(99)
-	require.NoError(t, s.prune(context.Background()))
+	require.NoError(t, s.prune(t.Context()))
 	assert.Equal(t, 1, len(s.nodeByRoot), "Incorrect nodes count")
 }
 
@@ -174,7 +174,7 @@ func TestStore_Prune_MoreThanOnce(t *testing.T) {
 	// Define 100 nodes in store.
 	numOfNodes := uint64(100)
 	f := setup(0, 0)
-	ctx := context.Background()
+	ctx := t.Context()
 	state, blkRoot, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
@@ -188,12 +188,12 @@ func TestStore_Prune_MoreThanOnce(t *testing.T) {
 
 	// Finalized root is at index 11 so everything before 11 should be pruned.
 	s.finalizedCheckpoint.Root = indexToHash(10)
-	require.NoError(t, s.prune(context.Background()))
+	require.NoError(t, s.prune(t.Context()))
 	assert.Equal(t, 90, len(s.nodeByRoot), "Incorrect nodes count")
 
 	// One more time.
 	s.finalizedCheckpoint.Root = indexToHash(20)
-	require.NoError(t, s.prune(context.Background()))
+	require.NoError(t, s.prune(t.Context()))
 	assert.Equal(t, 80, len(s.nodeByRoot), "Incorrect nodes count")
 }
 
@@ -201,7 +201,7 @@ func TestStore_Prune_ReturnEarly(t *testing.T) {
 	// Define 100 nodes in store.
 	numOfNodes := uint64(100)
 	f := setup(0, 0)
-	ctx := context.Background()
+	ctx := t.Context()
 	state, blkRoot, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
@@ -226,7 +226,7 @@ func TestStore_Prune_ReturnEarly(t *testing.T) {
 // And we finalize 1. As a result only 1 should survive
 func TestStore_Prune_NoDanglingBranch(t *testing.T) {
 	f := setup(0, 0)
-	ctx := context.Background()
+	ctx := t.Context()
 	state, blkRoot, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, [32]byte{'1'}, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
@@ -236,7 +236,7 @@ func TestStore_Prune_NoDanglingBranch(t *testing.T) {
 
 	s := f.store
 	s.finalizedCheckpoint.Root = indexToHash(1)
-	require.NoError(t, s.prune(context.Background()))
+	require.NoError(t, s.prune(t.Context()))
 	require.Equal(t, len(s.nodeByRoot), 1)
 	require.Equal(t, len(s.nodeByPayload), 1)
 }
@@ -252,7 +252,7 @@ func TestStore_Prune_NoDanglingBranch(t *testing.T) {
 //	      \        \
 //	       J        -- K -- L
 func TestStore_tips(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := setup(1, 1)
 
 	state, blkRoot, err := prepareForkchoiceState(ctx, 100, [32]byte{'a'}, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
@@ -307,7 +307,7 @@ func TestStore_tips(t *testing.T) {
 
 func TestStore_PruneMapsNodes(t *testing.T) {
 	f := setup(0, 0)
-	ctx := context.Background()
+	ctx := t.Context()
 	state, blkRoot, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, [32]byte{'1'}, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
@@ -317,7 +317,7 @@ func TestStore_PruneMapsNodes(t *testing.T) {
 
 	s := f.store
 	s.finalizedCheckpoint.Root = indexToHash(1)
-	require.NoError(t, s.prune(context.Background()))
+	require.NoError(t, s.prune(t.Context()))
 	require.Equal(t, len(s.nodeByRoot), 1)
 	require.Equal(t, len(s.nodeByPayload), 1)
 
@@ -330,7 +330,7 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 
 	// Make sure it doesn't underflow
 	s.genesisTime = uint64(time.Now().Add(time.Duration(-1*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second).Unix())
-	ctx := context.Background()
+	ctx := t.Context()
 	_, blk, err := prepareForkchoiceState(ctx, 1, [32]byte{'a'}, b, b, 1, 1)
 	require.NoError(t, err)
 	_, err = s.insert(ctx, blk, 1, 1)
@@ -462,7 +462,7 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 }
 
 func TestStore_TargetRootForEpoch(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := setup(1, 1)
 
 	state, blk, err := prepareForkchoiceState(ctx, params.BeaconConfig().SlotsPerEpoch, [32]byte{'a'}, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
@@ -610,7 +610,7 @@ func TestStore_TargetRootForEpoch(t *testing.T) {
 
 func TestStore_CleanupInserting(t *testing.T) {
 	f := setup(0, 0)
-	ctx := context.Background()
+	ctx := t.Context()
 	st, blk, err := prepareForkchoiceState(ctx, 1, indexToHash(1), indexToHash(2), params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
 	require.NotNil(t, f.InsertNode(ctx, st, blk))

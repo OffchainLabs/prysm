@@ -20,7 +20,7 @@ func TestDebugServer_GetPeer(t *testing.T) {
 	}
 	firstPeer := peersProvider.Peers().All()[0]
 
-	res, err := ds.GetPeer(context.Background(), &ethpb.PeerRequest{PeerId: firstPeer.String()})
+	res, err := ds.GetPeer(t.Context(), &ethpb.PeerRequest{PeerId: firstPeer.String()})
 	require.NoError(t, err)
 	require.Equal(t, firstPeer.String(), res.PeerId, "Unexpected peer ID")
 
@@ -36,7 +36,7 @@ func TestDebugServer_ListPeers(t *testing.T) {
 		PeerManager:  &mockP2p.MockPeerManager{BHost: mP2P.BHost},
 	}
 
-	res, err := ds.ListPeers(context.Background(), &empty.Empty{})
+	res, err := ds.ListPeers(t.Context(), &empty.Empty{})
 	require.NoError(t, err)
 	assert.Equal(t, 2, len(res.Responses))
 

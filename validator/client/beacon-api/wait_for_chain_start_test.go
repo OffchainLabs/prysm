@@ -20,7 +20,7 @@ func TestWaitForChainStart_ValidGenesis(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	genesisResponseJson := structs.GetGenesisResponse{}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
@@ -87,7 +87,7 @@ func TestWaitForChainStart_BadGenesis(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			ctx := context.Background()
+			ctx := t.Context()
 			genesisResponseJson := structs.GetGenesisResponse{}
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 			jsonRestHandler.EXPECT().Get(
@@ -115,7 +115,7 @@ func TestWaitForChainStart_JsonResponseError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	genesisResponseJson := structs.GetGenesisResponse{}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
@@ -138,7 +138,7 @@ func TestWaitForChainStart_JsonResponseError404(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	genesisResponseJson := structs.GetGenesisResponse{}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 

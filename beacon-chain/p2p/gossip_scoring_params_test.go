@@ -22,7 +22,7 @@ func TestCorrect_ActiveValidatorsCount(t *testing.T) {
 
 	db := dbutil.SetupDB(t)
 	s := &Service{
-		ctx: context.Background(),
+		ctx: t.Context(),
 		cfg: &Config{DB: db},
 	}
 	bState, err := util.NewBeaconState(func(state *ethpb.BeaconState) error {

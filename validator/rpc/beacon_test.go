@@ -11,7 +11,7 @@ import (
 
 func TestGrpcHeaders(t *testing.T) {
 	s := &Server{
-		ctx:         context.Background(),
+		ctx:         t.Context(),
 		grpcHeaders: []string{"first=value1", "second=value2"},
 	}
 	err := s.registerBeaconClient()

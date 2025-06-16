@@ -11,7 +11,7 @@ import (
 
 func TestStore_DepositContract(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	contractAddress := common.Address{1, 2, 3}
 	retrieved, err := db.DepositContractAddress(ctx)
 	require.NoError(t, err)

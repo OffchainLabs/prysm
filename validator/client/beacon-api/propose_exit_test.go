@@ -35,7 +35,7 @@ func TestProposeExit_Valid(t *testing.T) {
 	marshalledVoluntaryExit, err := json.Marshal(jsonSignedVoluntaryExit)
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
@@ -70,13 +70,13 @@ func TestProposeExit_Valid(t *testing.T) {
 
 func TestProposeExit_NilSignedVoluntaryExit(t *testing.T) {
 	validatorClient := &beaconApiValidatorClient{}
-	_, err := validatorClient.proposeExit(context.Background(), nil)
+	_, err := validatorClient.proposeExit(t.Context(), nil)
 	assert.ErrorContains(t, "signed voluntary exit is nil", err)
 }
 
 func TestProposeExit_NilExit(t *testing.T) {
 	validatorClient := &beaconApiValidatorClient{}
-	_, err := validatorClient.proposeExit(context.Background(), &ethpb.SignedVoluntaryExit{})
+	_, err := validatorClient.proposeExit(t.Context(), &ethpb.SignedVoluntaryExit{})
 	assert.ErrorContains(t, "exit is nil", err)
 }
 
@@ -84,7 +84,7 @@ func TestProposeExit_BadRequest(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(

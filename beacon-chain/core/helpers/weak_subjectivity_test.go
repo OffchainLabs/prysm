@@ -49,7 +49,7 @@ func TestWeakSubjectivity_ComputeWeakSubjectivityPeriod(t *testing.T) {
 			// Reset committee cache - as we need to recalculate active validator set for each test.
 			helpers.ClearCache()
 
-			got, err := helpers.ComputeWeakSubjectivityPeriod(context.Background(), genState(t, tt.valCount, tt.avgBalance), params.BeaconConfig())
+			got, err := helpers.ComputeWeakSubjectivityPeriod(t.Context(), genState(t, tt.valCount, tt.avgBalance), params.BeaconConfig())
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, got, "valCount: %v, avgBalance: %v", tt.valCount, tt.avgBalance)
 		})
@@ -181,7 +181,7 @@ func TestWeakSubjectivity_IsWithinWeakSubjectivityPeriod(t *testing.T) {
 			helpers.ClearCache()
 
 			sr, _, e := tt.genWsCheckpoint()
-			got, err := helpers.IsWithinWeakSubjectivityPeriod(context.Background(), tt.epoch, tt.genWsState(), sr, e, params.BeaconConfig())
+			got, err := helpers.IsWithinWeakSubjectivityPeriod(t.Context(), tt.epoch, tt.genWsState(), sr, e, params.BeaconConfig())
 			if tt.wantedErr != "" {
 				assert.Equal(t, false, got)
 				assert.ErrorContains(t, tt.wantedErr, err)

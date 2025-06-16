@@ -33,7 +33,7 @@ func TestGetDomainData_ValidDomainData(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Make sure that Genesis() is called exactly once
 	genesisProvider := mock.NewMockGenesisProvider(ctrl)
@@ -62,7 +62,7 @@ func TestGetDomainData_GenesisError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Make sure that Genesis() is called exactly once
 	genesisProvider := mock.NewMockGenesisProvider(ctrl)
@@ -81,7 +81,7 @@ func TestGetDomainData_InvalidGenesisRoot(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Make sure that Genesis() is called exactly once
 	genesisProvider := mock.NewMockGenesisProvider(ctrl)

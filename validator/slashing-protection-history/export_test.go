@@ -17,7 +17,7 @@ import (
 func TestExportStandardProtectionJSON_EmptyGenesisRoot(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		t.Run(fmt.Sprintf("isSlashingProtectionMinimal=%v", isSlashingProtectionMinimal), func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			pubKeys := [][fieldparams.BLSPubkeyLength]byte{
 				{1},
 			}
@@ -39,7 +39,7 @@ func Test_getSignedAttestationsByPubKey(t *testing.T) {
 			pubKeys := [][fieldparams.BLSPubkeyLength]byte{
 				{1},
 			}
-			ctx := context.Background()
+			ctx := t.Context()
 			validatorDB := dbtest.SetupDB(t, t.TempDir(), pubKeys, isSlashingProtectionMinimal)
 
 			// No attestation history stored should return empty.
@@ -95,7 +95,7 @@ func Test_getSignedAttestationsByPubKey(t *testing.T) {
 		pubKeys := [][fieldparams.BLSPubkeyLength]byte{
 			{1},
 		}
-		ctx := context.Background()
+		ctx := t.Context()
 
 		isSlashingProtectionMinimal := false
 		validatorDB := dbtest.SetupDB(t, t.TempDir(), pubKeys, isSlashingProtectionMinimal)
@@ -142,7 +142,7 @@ func Test_getSignedAttestationsByPubKey(t *testing.T) {
 		pubKeys := [][fieldparams.BLSPubkeyLength]byte{
 			{1},
 		}
-		ctx := context.Background()
+		ctx := t.Context()
 
 		isSlashingProtectionMinimal := false
 		validatorDB := dbtest.SetupDB(t, t.TempDir(), pubKeys, isSlashingProtectionMinimal)
@@ -195,7 +195,7 @@ func Test_getSignedBlocksByPubKey(t *testing.T) {
 			pubKeys := [][fieldparams.BLSPubkeyLength]byte{
 				{1},
 			}
-			ctx := context.Background()
+			ctx := t.Context()
 			validatorDB := dbtest.SetupDB(t, t.TempDir(), pubKeys, isSlashingProtectionMinimal)
 
 			// No highest and/or lowest signed blocks will return empty.

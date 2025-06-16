@@ -14,7 +14,7 @@ import (
 )
 
 func TestResume(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
 	service := New(beaconDB, doublylinkedtree.New())

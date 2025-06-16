@@ -22,7 +22,7 @@ func TestLocalKeymanager_ExtractKeystores(t *testing.T) {
 		validatingKeys[i] = secretKey
 		secretKeysCache[bytesutil.ToBytes48(secretKey.PublicKey().Marshal())] = secretKey
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	password := "password"
 
 	// Extracting 0 public keys should return 0 keystores.

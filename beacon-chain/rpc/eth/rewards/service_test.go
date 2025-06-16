@@ -13,7 +13,7 @@ import (
 )
 
 func TestGetStateForRewards_NextSlotCacheHit(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := dbutil.SetupDB(t)
 
 	st, err := util.NewBeaconStateDeneb()

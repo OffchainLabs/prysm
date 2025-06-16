@@ -23,7 +23,7 @@ import (
 func TestImportSlashingProtection_Preconditions(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range []bool{false, true} {
 		t.Run(fmt.Sprintf("slashing protection minimal: %v", isSlashingProtectionMinimal), func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			localWalletDir := setupWalletDir(t)
 			defaultWalletPath = localWalletDir
 
@@ -119,7 +119,7 @@ func TestImportSlashingProtection_Preconditions(t *testing.T) {
 func TestExportSlashingProtection_Preconditions(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range []bool{false, true} {
 		t.Run(fmt.Sprintf("slashing protection minimal: %v", isSlashingProtectionMinimal), func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			localWalletDir := setupWalletDir(t)
 			defaultWalletPath = localWalletDir
 
@@ -146,7 +146,7 @@ func TestExportSlashingProtection_Preconditions(t *testing.T) {
 					PubKeys: pubKeys,
 				})
 			} else {
-				validatorDB, err = kv.NewKVStore(context.Background(), t.TempDir(), &kv.Config{
+				validatorDB, err = kv.NewKVStore(t.Context(), t.TempDir(), &kv.Config{
 					PubKeys: pubKeys,
 				})
 			}
@@ -171,7 +171,7 @@ func TestExportSlashingProtection_Preconditions(t *testing.T) {
 func TestImportExportSlashingProtection_RoundTrip(t *testing.T) {
 	// Round trip is only suitable with complete slashing protection, since
 	// minimal slashing protections only keep latest attestation and proposal.
-	ctx := context.Background()
+	ctx := t.Context()
 	localWalletDir := setupWalletDir(t)
 	defaultWalletPath = localWalletDir
 

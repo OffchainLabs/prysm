@@ -13,7 +13,7 @@ func TestStore_RunUpMigrations(t *testing.T) {
 	require.NoError(t, err, "NewStore should not return an error")
 
 	// Just check `RunUpMigrations` does not return an error.
-	err = store.RunUpMigrations(context.Background())
+	err = store.RunUpMigrations(t.Context())
 	require.NoError(t, err, "RunUpMigrations should not return an error")
 }
 
@@ -23,6 +23,6 @@ func TestStore_RunDownMigrations(t *testing.T) {
 	require.NoError(t, err, "NewStore should not return an error")
 
 	// Just check `RunDownMigrations` does not return an error.
-	err = store.RunDownMigrations(context.Background())
+	err = store.RunDownMigrations(t.Context())
 	require.NoError(t, err, "RunUpMigrations should not return an error")
 }

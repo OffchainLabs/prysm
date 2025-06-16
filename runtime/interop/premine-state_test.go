@@ -21,6 +21,6 @@ func TestPremineGenesis_Electra(t *testing.T) {
 		ExcessBlobGas: &one,
 		BlobGasUsed:   &one,
 	})
-	_, err := NewPreminedGenesis(context.Background(), genesis.Time(), 10, 10, version.Electra, genesis)
+	_, err := NewPreminedGenesis(t.Context(), genesis.Time(), 10, 10, version.Electra, genesis)
 	require.NoError(t, err)
 }

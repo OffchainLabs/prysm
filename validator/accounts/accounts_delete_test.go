@@ -16,7 +16,7 @@ import (
 
 func TestDelete(t *testing.T) {
 	hook := logTest.NewGlobal()
-	ctx := context.Background()
+	ctx := t.Context()
 	// import keys
 	numAccounts := 5
 	keystores := make([]*keymanager.Keystore, numAccounts)

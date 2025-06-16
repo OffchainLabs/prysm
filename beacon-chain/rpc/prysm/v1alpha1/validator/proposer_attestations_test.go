@@ -448,7 +448,7 @@ func TestProposer_ProposerAtts_dedup(t *testing.T) {
 }
 
 func Test_packAttestations(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	phase0Att := &ethpb.Attestation{
 		AggregationBits: bitfield.Bitlist{0b11111},
 		Data: &ethpb.AttestationData{
@@ -530,7 +530,7 @@ func Test_packAttestations(t *testing.T) {
 }
 
 func TestPackAttestations_ElectraOnChainAggregates(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -684,7 +684,7 @@ func sliceCast(atts []*ethpb.AttestationElectra) []ethpb.Att {
 }
 
 func Benchmark_packAttestations_Electra(b *testing.B) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	params.SetupTestConfigCleanup(b)
 	cfg := params.MainnetConfig()
@@ -801,7 +801,7 @@ func Test_filterBatchSignature(t *testing.T) {
 	aBad := util.NewAttestation()
 	pa := proposerAtts(aGood)
 	pa = append(pa, aBad)
-	aFiltered := pa.filterBatchSignature(context.Background(), st)
+	aFiltered := pa.filterBatchSignature(t.Context(), st)
 	assert.Equal(t, 1, len(aFiltered))
 	assert.DeepEqual(t, aGood[0], aFiltered[0])
 }
@@ -922,7 +922,7 @@ func Test_filterCurrentEpochAttestationByForkchoice(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	got, err := s.filterCurrentEpochAttestationByForkchoice(ctx, a, epoch)
 	require.NoError(t, err)
 	require.Equal(t, false, got)

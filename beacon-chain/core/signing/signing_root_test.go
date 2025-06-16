@@ -83,7 +83,7 @@ func TestSigningRoot_ComputeDomainAndSign(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			beaconState, privKeys := tt.genState(t)
-			idx, err := helpers.BeaconProposerIndex(context.Background(), beaconState)
+			idx, err := helpers.BeaconProposerIndex(t.Context(), beaconState)
 			require.NoError(t, err)
 			block := tt.genBlock(t, beaconState, privKeys)
 			got, err := signing.ComputeDomainAndSign(

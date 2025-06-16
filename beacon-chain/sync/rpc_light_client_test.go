@@ -32,7 +32,7 @@ func TestRPC_LightClientBootstrap(t *testing.T) {
 	})
 	defer resetFn()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	p2pService := p2ptest.NewTestP2P(t)
 	p1 := p2ptest.NewTestP2P(t)
 	p2 := p2ptest.NewTestP2P(t)
@@ -135,7 +135,7 @@ func TestRPC_LightClientBootstrap(t *testing.T) {
 				require.DeepSSZEqual(t, resSSZ, bootstrapSSZ)
 			})
 
-			stream1, err := p1.BHost.NewStream(context.Background(), p2.BHost.ID(), pcl)
+			stream1, err := p1.BHost.NewStream(t.Context(), p2.BHost.ID(), pcl)
 			require.NoError(t, err)
 			err = r.lightClientBootstrapRPCHandler(ctx, &blockRoot, stream1)
 			require.NoError(t, err)
@@ -154,7 +154,7 @@ func TestRPC_LightClientOptimisticUpdate(t *testing.T) {
 	})
 	defer resetFn()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	p2pService := p2ptest.NewTestP2P(t)
 	p1 := p2ptest.NewTestP2P(t)
 	p2 := p2ptest.NewTestP2P(t)
@@ -256,7 +256,7 @@ func TestRPC_LightClientOptimisticUpdate(t *testing.T) {
 				require.DeepSSZEqual(t, resSSZ, updateSSZ)
 			})
 
-			stream1, err := p1.BHost.NewStream(context.Background(), p2.BHost.ID(), pcl)
+			stream1, err := p1.BHost.NewStream(t.Context(), p2.BHost.ID(), pcl)
 			require.NoError(t, err)
 			err = r.lightClientOptimisticUpdateRPCHandler(ctx, nil, stream1)
 			require.NoError(t, err)
@@ -274,7 +274,7 @@ func TestRPC_LightClientFinalityUpdate(t *testing.T) {
 	})
 	defer resetFn()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	p2pService := p2ptest.NewTestP2P(t)
 	p1 := p2ptest.NewTestP2P(t)
 	p2 := p2ptest.NewTestP2P(t)
@@ -376,7 +376,7 @@ func TestRPC_LightClientFinalityUpdate(t *testing.T) {
 				require.DeepSSZEqual(t, resSSZ, updateSSZ)
 			})
 
-			stream1, err := p1.BHost.NewStream(context.Background(), p2.BHost.ID(), pcl)
+			stream1, err := p1.BHost.NewStream(t.Context(), p2.BHost.ID(), pcl)
 			require.NoError(t, err)
 			err = r.lightClientFinalityUpdateRPCHandler(ctx, nil, stream1)
 			require.NoError(t, err)
@@ -394,7 +394,7 @@ func TestRPC_LightClientUpdatesByRange(t *testing.T) {
 	})
 	defer resetFn()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	p2pService := p2ptest.NewTestP2P(t)
 	p1 := p2ptest.NewTestP2P(t)
 	p2 := p2ptest.NewTestP2P(t)
@@ -502,7 +502,7 @@ func TestRPC_LightClientUpdatesByRange(t *testing.T) {
 				responseCounter++
 			})
 
-			stream1, err := p1.BHost.NewStream(context.Background(), p2.BHost.ID(), pcl)
+			stream1, err := p1.BHost.NewStream(t.Context(), p2.BHost.ID(), pcl)
 			require.NoError(t, err)
 
 			msg := pb.LightClientUpdatesByRangeRequest{

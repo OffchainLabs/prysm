@@ -378,7 +378,7 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 			}
 
 			doppelGangerActualOutput, err := validatorClient.CheckDoppelGanger(
-				context.Background(),
+				t.Context(),
 				testCase.doppelGangerInput,
 			)
 
@@ -812,7 +812,7 @@ func TestCheckDoppelGanger_Errors(t *testing.T) {
 			}
 
 			_, err := validatorClient.CheckDoppelGanger(
-				context.Background(),
+				t.Context(),
 				&ethpb.DoppelGangerRequest{
 					ValidatorRequests: testCase.inputValidatorRequests,
 				},

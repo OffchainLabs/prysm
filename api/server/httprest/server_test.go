@@ -34,7 +34,7 @@ func TestServer_StartStop(t *testing.T) {
 		WithRouter(handler),
 	}
 
-	g, err := New(context.Background(), opts...)
+	g, err := New(t.Context(), opts...)
 	require.NoError(t, err)
 
 	g.Start()
@@ -62,7 +62,7 @@ func TestServer_NilHandler_NotFoundHandlerRegistered(t *testing.T) {
 		WithRouter(handler),
 	}
 
-	g, err := New(context.Background(), opts...)
+	g, err := New(t.Context(), opts...)
 	require.NoError(t, err)
 
 	writer := httptest.NewRecorder()

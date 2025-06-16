@@ -17,7 +17,7 @@ import (
 )
 
 func TestMigrateToCold_CanSaveFinalizedInfo(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 	service := New(beaconDB, doublylinkedtree.New())
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
@@ -41,7 +41,7 @@ func TestMigrateToCold_CanSaveFinalizedInfo(t *testing.T) {
 
 func TestMigrateToCold_HappyPath(t *testing.T) {
 	hook := logTest.NewGlobal()
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
 	service := New(beaconDB, doublylinkedtree.New())
@@ -71,7 +71,7 @@ func TestMigrateToCold_HappyPath(t *testing.T) {
 
 func TestMigrateToCold_RegeneratePath(t *testing.T) {
 	hook := logTest.NewGlobal()
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
 	service := New(beaconDB, doublylinkedtree.New())
@@ -121,7 +121,7 @@ func TestMigrateToCold_RegeneratePath(t *testing.T) {
 
 func TestMigrateToCold_StateExistsInDB(t *testing.T) {
 	hook := logTest.NewGlobal()
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
 	service := New(beaconDB, doublylinkedtree.New())
@@ -145,7 +145,7 @@ func TestMigrateToCold_StateExistsInDB(t *testing.T) {
 
 func TestMigrateToCold_ParallelCalls(t *testing.T) {
 	hook := logTest.NewGlobal()
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
 	service := New(beaconDB, doublylinkedtree.New())

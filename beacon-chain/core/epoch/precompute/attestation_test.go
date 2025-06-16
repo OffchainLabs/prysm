@@ -206,10 +206,10 @@ func TestProcessAttestations(t *testing.T) {
 	for i := 0; i < len(pVals); i++ {
 		pVals[i] = &precompute.Validator{CurrentEpochEffectiveBalance: 100}
 	}
-	pVals, _, err = precompute.ProcessAttestations(context.Background(), beaconState, pVals, &precompute.Balance{})
+	pVals, _, err = precompute.ProcessAttestations(t.Context(), beaconState, pVals, &precompute.Balance{})
 	require.NoError(t, err)
 
-	committee, err := helpers.BeaconCommitteeFromState(context.Background(), beaconState, att1.Data.Slot, att1.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, att1.Data.Slot, att1.Data.CommitteeIndex)
 	require.NoError(t, err)
 	indices, err := attestation.AttestingIndices(att1, committee)
 	require.NoError(t, err)
@@ -218,7 +218,7 @@ func TestProcessAttestations(t *testing.T) {
 			t.Error("Not a prev epoch attester")
 		}
 	}
-	committee, err = helpers.BeaconCommitteeFromState(context.Background(), beaconState, att2.Data.Slot, att2.Data.CommitteeIndex)
+	committee, err = helpers.BeaconCommitteeFromState(t.Context(), beaconState, att2.Data.Slot, att2.Data.CommitteeIndex)
 	require.NoError(t, err)
 	indices, err = attestation.AttestingIndices(att2, committee)
 	require.NoError(t, err)

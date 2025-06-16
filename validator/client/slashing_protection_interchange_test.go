@@ -98,7 +98,7 @@ func TestEIP3076SpecTests(t *testing.T) {
 				for _, step := range tt.Steps {
 					if tt.GenesisValidatorsRoot != "" {
 						r, err := helpers.RootFromHex(tt.GenesisValidatorsRoot)
-						require.NoError(t, validator.db.SaveGenesisValidatorsRoot(context.Background(), r[:]))
+						require.NoError(t, validator.db.SaveGenesisValidatorsRoot(t.Context(), r[:]))
 						require.NoError(t, err)
 					}
 
@@ -109,7 +109,7 @@ func TestEIP3076SpecTests(t *testing.T) {
 						t.Fatal(err)
 					}
 					b := bytes.NewBuffer(interchangeBytes)
-					if err := validator.db.ImportStandardProtectionJSON(context.Background(), b); err != nil {
+					if err := validator.db.ImportStandardProtectionJSON(t.Context(), b); err != nil {
 						if step.ShouldSucceed {
 							t.Fatal(err)
 						}
@@ -140,7 +140,7 @@ func TestEIP3076SpecTests(t *testing.T) {
 
 						wsb, err := blocks.NewSignedBeaconBlock(b)
 						require.NoError(t, err)
-						err = validator.db.SlashableProposalCheck(context.Background(), pk, wsb, signingRoot, validator.emitAccountMetrics, ValidatorProposeFailVec)
+						err = validator.db.SlashableProposalCheck(t.Context(), pk, wsb, signingRoot, validator.emitAccountMetrics, ValidatorProposeFailVec)
 						if shouldSucceed {
 							require.NoError(t, err)
 						} else {
@@ -177,7 +177,7 @@ func TestEIP3076SpecTests(t *testing.T) {
 							copy(signingRoot[:], signingRootBytes)
 						}
 
-						err = validator.db.SlashableAttestationCheck(context.Background(), ia, pk, signingRoot, false, nil)
+						err = validator.db.SlashableAttestationCheck(t.Context(), ia, pk, signingRoot, false, nil)
 						if shouldSucceed {
 							require.NoError(t, err)
 						} else {

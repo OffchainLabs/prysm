@@ -64,7 +64,7 @@ func TestSubmitSyncMessage_Valid(t *testing.T) {
 	}
 
 	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
-	res, err := validatorClient.SubmitSyncMessage(context.Background(), &protoSyncCommitteeMessage)
+	res, err := validatorClient.SubmitSyncMessage(t.Context(), &protoSyncCommitteeMessage)
 
 	assert.DeepEqual(t, new(empty.Empty), res)
 	require.NoError(t, err)
@@ -86,7 +86,7 @@ func TestSubmitSyncMessage_BadRequest(t *testing.T) {
 	).Times(1)
 
 	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
-	_, err := validatorClient.SubmitSyncMessage(context.Background(), &ethpb.SyncCommitteeMessage{})
+	_, err := validatorClient.SubmitSyncMessage(t.Context(), &ethpb.SyncCommitteeMessage{})
 	assert.ErrorContains(t, "foo error", err)
 }
 
@@ -137,7 +137,7 @@ func TestGetSyncMessageBlockRoot(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 			jsonRestHandler.EXPECT().Get(
 				gomock.Any(),
@@ -207,7 +207,7 @@ func TestGetSyncCommitteeContribution(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 			jsonRestHandler.EXPECT().Get(
 				gomock.Any(),
@@ -308,7 +308,7 @@ func TestGetSyncSubCommitteeIndex(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			valsReq := &structs.GetValidatorsRequest{
 				Ids:      []string{pubkeyStr},
 				Statuses: []string{},

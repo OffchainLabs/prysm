@@ -9,7 +9,7 @@ import (
 )
 
 func TestGenerateBlockHeadersForSlot_Slashing(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	simParams := &Parameters{
 		AggregationPercent:     1,
 		NumValidators:          64,
