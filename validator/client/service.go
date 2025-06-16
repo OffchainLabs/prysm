@@ -235,7 +235,7 @@ func (v *ValidatorService) Start() {
 
 	healthTracker := v.validator.HealthTracker()
 	// Start the health check routine
-	go runHealthCheckRoutine(v.ctx, v.cancel, v.validator, v.MaxHealthChecks)
+	runHealthCheckRoutine(v.ctx, v.cancel, v.validator, v.MaxHealthChecks)
 
 	for {
 		select {
