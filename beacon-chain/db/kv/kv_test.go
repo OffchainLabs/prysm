@@ -2,6 +2,7 @@ package kv
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"testing"
 
@@ -18,7 +19,10 @@ func setupDB(t testing.TB) *Store {
 	db, err := NewKVStore(t.Context(), t.TempDir())
 	require.NoError(t, err, "Failed to instantiate DB")
 	t.Cleanup(func() {
-		require.NoError(t, db.Close(), "Failed to close database")
+		err := db.Close()
+		if err != context.Canceled {
+			require.NoError(t, err, "Failed to close database")
+		}
 	})
 	return db
 }

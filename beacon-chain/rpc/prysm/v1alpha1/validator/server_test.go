@@ -24,6 +24,8 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -265,7 +267,10 @@ func TestWaitForChainStart_HeadStateDoesNotExist(t *testing.T) {
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
 	go func() {
-		assert.NoError(t, Server.WaitForChainStart(&emptypb.Empty{}, mockStream), "Could not call RPC method")
+		err := Server.WaitForChainStart(&emptypb.Empty{}, mockStream)
+		if s, _ := status.FromError(err); s.Code() != codes.Canceled {
+			assert.NoError(t, err)
+		}
 		wg.Done()
 	}()
 

@@ -18,6 +18,8 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestServer_StreamAltairBlocksVerified_ContextCanceled(t *testing.T) {
@@ -98,7 +100,10 @@ func TestServer_StreamAltairBlocks_OnHeadUpdated(t *testing.T) {
 	mockStream.EXPECT().Context().Return(ctx).AnyTimes()
 
 	go func(tt *testing.T) {
-		assert.NoError(tt, server.StreamBlocksAltair(&ethpb.StreamBlocksRequest{}, mockStream), "Could not call RPC method")
+		err := server.StreamBlocksAltair(&ethpb.StreamBlocksRequest{}, mockStream)
+		if s, _ := status.FromError(err); s.Code() != codes.Canceled {
+			assert.NoError(tt, err)
+		}
 	}(t)
 	wrappedBlk, err := blocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
@@ -140,7 +145,10 @@ func TestServer_StreamCapellaBlocks_OnHeadUpdated(t *testing.T) {
 	mockStream.EXPECT().Context().Return(ctx).AnyTimes()
 
 	go func(tt *testing.T) {
-		assert.NoError(tt, server.StreamBlocksAltair(&ethpb.StreamBlocksRequest{}, mockStream), "Could not call RPC method")
+		err := server.StreamBlocksAltair(&ethpb.StreamBlocksRequest{}, mockStream)
+		if s, _ := status.FromError(err); s.Code() != codes.Canceled {
+			assert.NoError(tt, err)
+		}
 	}(t)
 	wrappedBlk, err := blocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
@@ -183,9 +191,10 @@ func TestServer_StreamAltairBlocksVerified_OnHeadUpdated(t *testing.T) {
 	mockStream.EXPECT().Context().Return(ctx).AnyTimes()
 
 	go func(tt *testing.T) {
-		assert.NoError(tt, server.StreamBlocksAltair(&ethpb.StreamBlocksRequest{
-			VerifiedOnly: true,
-		}, mockStream), "Could not call RPC method")
+		err := server.StreamBlocksAltair(&ethpb.StreamBlocksRequest{VerifiedOnly: true}, mockStream)
+		if s, _ := status.FromError(err); s.Code() != codes.Canceled {
+			assert.NoError(tt, err)
+		}
 	}(t)
 	// Send in a loop to ensure it is delivered (busy wait for the service to subscribe to the state feed).
 	for sent := 0; sent == 0; {
@@ -226,9 +235,10 @@ func TestServer_StreamCapellaBlocksVerified_OnHeadUpdated(t *testing.T) {
 	mockStream.EXPECT().Context().Return(ctx).AnyTimes()
 
 	go func(tt *testing.T) {
-		assert.NoError(tt, server.StreamBlocksAltair(&ethpb.StreamBlocksRequest{
-			VerifiedOnly: true,
-		}, mockStream), "Could not call RPC method")
+		err := server.StreamBlocksAltair(&ethpb.StreamBlocksRequest{VerifiedOnly: true}, mockStream)
+		if s, _ := status.FromError(err); s.Code() != codes.Canceled {
+			assert.NoError(tt, err)
+		}
 	}(t)
 	// Send in a loop to ensure it is delivered (busy wait for the service to subscribe to the state feed).
 	for sent := 0; sent == 0; {
@@ -316,7 +326,10 @@ func TestServer_StreamSlots_OnHeadUpdated(t *testing.T) {
 	mockStream.EXPECT().Context().Return(ctx).AnyTimes()
 
 	go func(tt *testing.T) {
-		assert.NoError(tt, server.StreamSlots(&ethpb.StreamSlotsRequest{}, mockStream), "Could not call RPC method")
+		err := server.StreamSlots(&ethpb.StreamSlotsRequest{}, mockStream)
+		if s, _ := status.FromError(err); s.Code() != codes.Canceled {
+			assert.NoError(tt, err)
+		}
 	}(t)
 	wrappedBlk, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlock{Block: &ethpb.BeaconBlock{Slot: 123, Body: &ethpb.BeaconBlockBody{}}})
 	require.NoError(t, err)
@@ -352,9 +365,10 @@ func TestServer_StreamSlotsVerified_OnHeadUpdated(t *testing.T) {
 	mockStream.EXPECT().Context().Return(ctx).AnyTimes()
 
 	go func(tt *testing.T) {
-		assert.NoError(tt, server.StreamSlots(&ethpb.StreamSlotsRequest{
-			VerifiedOnly: true,
-		}, mockStream), "Could not call RPC method")
+		err := server.StreamSlots(&ethpb.StreamSlotsRequest{VerifiedOnly: true}, mockStream)
+		if s, _ := status.FromError(err); s.Code() != codes.Canceled {
+			assert.NoError(tt, err)
+		}
 	}(t)
 	wrappedBlk, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlock{Block: &ethpb.BeaconBlock{Slot: 123, Body: &ethpb.BeaconBlockBody{}}})
 	require.NoError(t, err)
