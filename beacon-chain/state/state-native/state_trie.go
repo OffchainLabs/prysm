@@ -115,20 +115,13 @@ var (
 )
 
 const (
-	phase0SharedFieldRefCount                     = 10
-	altairSharedFieldRefCount                     = 11
-	bellatrixSharedFieldRefCount                  = 12
-	capellaSharedFieldRefCount                    = 13
-	denebSharedFieldRefCount                      = 13
-	electraSharedFieldRefCount                    = 16
-	fuluSharedFieldRefCount                       = 17
-	experimentalStatePhase0SharedFieldRefCount    = 5
-	experimentalStateAltairSharedFieldRefCount    = 5
-	experimentalStateBellatrixSharedFieldRefCount = 6
-	experimentalStateCapellaSharedFieldRefCount   = 7
-	experimentalStateDenebSharedFieldRefCount     = 7
-	experimentalStateElectraSharedFieldRefCount   = 10
-	experimentalStateFuluSharedFieldRefCount      = 11
+	phase0SharedFieldRefCount    = 5
+	altairSharedFieldRefCount    = 5
+	bellatrixSharedFieldRefCount = 6
+	capellaSharedFieldRefCount   = 7
+	denebSharedFieldRefCount     = 7
+	electraSharedFieldRefCount   = 10
+	fuluSharedFieldRefCount      = 11
 )
 
 // InitializeFromProtoPhase0 the beacon state from a protobuf representation.
@@ -212,7 +205,7 @@ func InitializeFromProtoUnsafePhase0(st *ethpb.BeaconState) (state.BeaconState, 
 	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
 	b.balancesMultiValue = NewMultiValueBalances(st.Balances)
 	b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
-	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStatePhase0SharedFieldRefCount)
+	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, phase0SharedFieldRefCount)
 
 	for _, f := range phase0Fields {
 		b.dirtyFields[f] = true
@@ -287,7 +280,7 @@ func InitializeFromProtoUnsafeAltair(st *ethpb.BeaconStateAltair) (state.BeaconS
 	b.balancesMultiValue = NewMultiValueBalances(st.Balances)
 	b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
 	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
-	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStateAltairSharedFieldRefCount)
+	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, altairSharedFieldRefCount)
 
 	for _, f := range altairFields {
 		b.dirtyFields[f] = true
@@ -363,7 +356,7 @@ func InitializeFromProtoUnsafeBellatrix(st *ethpb.BeaconStateBellatrix) (state.B
 	b.balancesMultiValue = NewMultiValueBalances(st.Balances)
 	b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
 	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
-	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStateBellatrixSharedFieldRefCount)
+	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, bellatrixSharedFieldRefCount)
 
 	for _, f := range bellatrixFields {
 		b.dirtyFields[f] = true
@@ -443,7 +436,7 @@ func InitializeFromProtoUnsafeCapella(st *ethpb.BeaconStateCapella) (state.Beaco
 	b.balancesMultiValue = NewMultiValueBalances(st.Balances)
 	b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
 	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
-	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStateCapellaSharedFieldRefCount)
+	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, capellaSharedFieldRefCount)
 
 	for _, f := range capellaFields {
 		b.dirtyFields[f] = true
@@ -522,7 +515,7 @@ func InitializeFromProtoUnsafeDeneb(st *ethpb.BeaconStateDeneb) (state.BeaconSta
 	b.balancesMultiValue = NewMultiValueBalances(st.Balances)
 	b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
 	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
-	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStateDenebSharedFieldRefCount)
+	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, denebSharedFieldRefCount)
 
 	for _, f := range denebFields {
 		b.dirtyFields[f] = true
@@ -610,7 +603,7 @@ func InitializeFromProtoUnsafeElectra(st *ethpb.BeaconStateElectra) (state.Beaco
 	b.balancesMultiValue = NewMultiValueBalances(st.Balances)
 	b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
 	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
-	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStateElectraSharedFieldRefCount)
+	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, electraSharedFieldRefCount)
 
 	for _, f := range electraFields {
 		b.dirtyFields[f] = true
@@ -706,7 +699,7 @@ func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateFulu) (state.BeaconState
 	b.balancesMultiValue = NewMultiValueBalances(st.Balances)
 	b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
 	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
-	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStateFuluSharedFieldRefCount)
+	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, fuluSharedFieldRefCount)
 
 	for _, f := range fuluFields {
 		b.dirtyFields[f] = true
@@ -836,19 +829,19 @@ func (b *BeaconState) Copy() state.BeaconState {
 
 	switch b.version {
 	case version.Phase0:
-		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStatePhase0SharedFieldRefCount)
+		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, phase0SharedFieldRefCount)
 	case version.Altair:
-		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStateAltairSharedFieldRefCount)
+		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, altairSharedFieldRefCount)
 	case version.Bellatrix:
-		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStateBellatrixSharedFieldRefCount)
+		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, bellatrixSharedFieldRefCount)
 	case version.Capella:
-		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStateCapellaSharedFieldRefCount)
+		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, capellaSharedFieldRefCount)
 	case version.Deneb:
-		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStateDenebSharedFieldRefCount)
+		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, denebSharedFieldRefCount)
 	case version.Electra:
-		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStateElectraSharedFieldRefCount)
+		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, electraSharedFieldRefCount)
 	case version.Fulu:
-		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStateFuluSharedFieldRefCount)
+		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, fuluSharedFieldRefCount)
 	}
 
 	for field, ref := range b.sharedFieldReferences {

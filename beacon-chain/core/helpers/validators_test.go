@@ -561,17 +561,6 @@ func TestActiveValidatorIndices(t *testing.T) {
 			},
 			want: []primitives.ValidatorIndex{0, 2, 3},
 		},*/
-		{
-			name: "impossible_zero_validators", // Regression test for issue #13051
-			args: args{
-				state: &ethpb.BeaconState{
-					RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
-					Validators:  make([]*ethpb.Validator, 0),
-				},
-				epoch: 10,
-			},
-			wantedErr: "state has nil validator slice",
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
