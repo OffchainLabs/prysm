@@ -1,7 +1,6 @@
 package beacon_api
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -26,7 +25,7 @@ func TestListValidators(t *testing.T) {
 	t.Run("invalid token", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		ctx := context.Background()
+		ctx := t.Context()
 
 		beaconChainClient := beaconApiChainClient{}
 		_, err := beaconChainClient.Validators(ctx, &ethpb.ListValidatorsRequest{
@@ -38,7 +37,7 @@ func TestListValidators(t *testing.T) {
 	t.Run("query filter epoch overflow", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		ctx := context.Background()
+		ctx := t.Context()
 
 		beaconChainClient := beaconApiChainClient{}
 		_, err := beaconChainClient.Validators(ctx, &ethpb.ListValidatorsRequest{
@@ -52,7 +51,7 @@ func TestListValidators(t *testing.T) {
 	t.Run("fails to get validators for epoch filter", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		ctx := context.Background()
+		ctx := t.Context()
 
 		stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
 		stateValidatorsProvider.EXPECT().StateValidatorsForSlot(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(
@@ -72,7 +71,7 @@ func TestListValidators(t *testing.T) {
 	t.Run("fails to get validators for genesis filter", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		ctx := context.Background()
+		ctx := t.Context()
 
 		stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
 		stateValidatorsProvider.EXPECT().StateValidatorsForSlot(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(
@@ -90,7 +89,7 @@ func TestListValidators(t *testing.T) {
 	t.Run("fails to get validators for nil filter", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		ctx := context.Background()
+		ctx := t.Context()
 
 		stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
 		stateValidatorsProvider.EXPECT().StateValidatorsForHead(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(
@@ -108,7 +107,7 @@ func TestListValidators(t *testing.T) {
 	t.Run("fails to get latest block header for nil filter", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		ctx := context.Background()
+		ctx := t.Context()
 
 		stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
 		stateValidatorsProvider.EXPECT().StateValidatorsForHead(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(
@@ -181,7 +180,7 @@ func TestListValidators(t *testing.T) {
 			t.Run(testCase.name, func(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				defer ctrl.Finish()
-				ctx := context.Background()
+				ctx := t.Context()
 
 				stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
 				stateValidatorsProvider.EXPECT().StateValidatorsForHead(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(
@@ -322,7 +321,7 @@ func TestListValidators(t *testing.T) {
 			t.Run(testCase.name, func(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				defer ctrl.Finish()
-				ctx := context.Background()
+				ctx := t.Context()
 
 				stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
 				stateValidatorsProvider.EXPECT().StateValidatorsForSlot(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(
@@ -550,7 +549,7 @@ func TestListValidators(t *testing.T) {
 			t.Run(testCase.name, func(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				defer ctrl.Finish()
-				ctx := context.Background()
+				ctx := t.Context()
 
 				stateValidatorsProvider := mock.NewMockStateValidatorsProvider(ctrl)
 				stateValidatorsProvider.EXPECT().StateValidatorsForSlot(gomock.Any(), primitives.Slot(0), make([]string, 0), []primitives.ValidatorIndex{}, nil).Return(
@@ -738,7 +737,7 @@ func TestGetChainHead(t *testing.T) {
 			t.Run(testCase.name, func(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				defer ctrl.Finish()
-				ctx := context.Background()
+				ctx := t.Context()
 
 				finalityCheckpointsResponse := structs.GetFinalityCheckpointsResponse{}
 				jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
@@ -836,7 +835,7 @@ func TestGetChainHead(t *testing.T) {
 			t.Run(testCase.name, func(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				defer ctrl.Finish()
-				ctx := context.Background()
+				ctx := t.Context()
 
 				jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
@@ -866,7 +865,7 @@ func TestGetChainHead(t *testing.T) {
 	t.Run("returns a valid chain head", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		ctx := context.Background()
+		ctx := t.Context()
 
 		jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 

@@ -184,6 +184,7 @@ ssz_electra_objs = [
 
 ssz_fulu_objs = [
     "BeaconBlockContentsFulu",
+    "BeaconStateFulu",
     "BlindedBeaconBlockFulu",
     "DataColumnIdentifier",
     "DataColumnsByRootIdentifier",

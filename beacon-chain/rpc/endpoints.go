@@ -251,7 +251,7 @@ func (s *Service) validatorEndpoints(
 			template: "/eth/v2/validator/aggregate_attestation",
 			name:     namespace + ".GetAggregateAttestationV2",
 			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.GetAggregateAttestationV2,
@@ -327,7 +327,7 @@ func (s *Service) validatorEndpoints(
 			template: "/eth/v1/validator/attestation_data",
 			name:     namespace + ".GetAttestationData",
 			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.GetAttestationData,

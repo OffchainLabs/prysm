@@ -48,6 +48,7 @@ go_test(
         "//consensus-types/primitives:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//testing/assert:go_default_library",
+        "//testing/fuzz:go_default_library",
         "//testing/require:go_default_library",
         "//testing/util:go_default_library",
         "@com_github_google_go_cmp//cmp:go_default_library",

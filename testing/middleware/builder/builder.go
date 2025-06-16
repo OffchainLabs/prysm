@@ -631,7 +631,7 @@ func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	requests, err := b.GetDecodedExecutionRequests()
+	requests, err := b.GetDecodedExecutionRequests(params.BeaconConfig().ExecutionRequestLimits())
 	if err != nil {
 		p.cfg.logger.WithError(err).Error("Could not get decoded execution requests")
 		http.Error(w, err.Error(), http.StatusInternalServerError)

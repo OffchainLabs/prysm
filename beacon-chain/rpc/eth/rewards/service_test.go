@@ -1,7 +1,6 @@
 package rewards
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
@@ -13,7 +12,7 @@ import (
 )
 
 func TestGetStateForRewards_NextSlotCacheHit(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := dbutil.SetupDB(t)
 
 	st, err := util.NewBeaconStateDeneb()

@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"context"
 	"math/big"
 	"sync"
 	"testing"
@@ -51,7 +50,7 @@ func TestRecentBeaconBlocksRPCHandler_ReturnsBlocks(t *testing.T) {
 		blk.Block.Slot = i
 		root, err := blk.Block.HashTreeRoot()
 		require.NoError(t, err)
-		util.SaveBlock(t, context.Background(), d, blk)
+		util.SaveBlock(t, t.Context(), d, blk)
 		blkRoots = append(blkRoots, root)
 	}
 
@@ -75,9 +74,9 @@ func TestRecentBeaconBlocksRPCHandler_ReturnsBlocks(t *testing.T) {
 		}
 	})
 
-	stream1, err := p1.BHost.NewStream(context.Background(), p2.BHost.ID(), pcl)
+	stream1, err := p1.BHost.NewStream(t.Context(), p2.BHost.ID(), pcl)
 	require.NoError(t, err)
-	err = r.beaconBlocksRootRPCHandler(context.Background(), &blkRoots, stream1)
+	err = r.beaconBlocksRootRPCHandler(t.Context(), &blkRoots, stream1)
 	assert.NoError(t, err)
 
 	if util.WaitTimeout(&wg, 1*time.Second) {
@@ -140,7 +139,7 @@ func TestRecentBeaconBlocksRPCHandler_ReturnsBlocks_ReconstructsPayload(t *testi
 		require.NoError(t, err)
 		wsb, err := blocks.NewSignedBeaconBlock(blk)
 		require.NoError(t, err)
-		require.NoError(t, d.SaveBlock(context.Background(), wsb))
+		require.NoError(t, d.SaveBlock(t.Context(), wsb))
 		blkRoots = append(blkRoots, root)
 	}
 
@@ -175,9 +174,9 @@ func TestRecentBeaconBlocksRPCHandler_ReturnsBlocks_ReconstructsPayload(t *testi
 		require.Equal(t, uint64(10), mockEngine.NumReconstructedPayloads)
 	})
 
-	stream1, err := p1.BHost.NewStream(context.Background(), p2.BHost.ID(), pcl)
+	stream1, err := p1.BHost.NewStream(t.Context(), p2.BHost.ID(), pcl)
 	require.NoError(t, err)
-	err = r.beaconBlocksRootRPCHandler(context.Background(), &blkRoots, stream1)
+	err = r.beaconBlocksRootRPCHandler(t.Context(), &blkRoots, stream1)
 	assert.NoError(t, err)
 
 	if util.WaitTimeout(&wg, 1*time.Second) {
@@ -199,7 +198,7 @@ func TestRecentBeaconBlocks_RPCRequestSent(t *testing.T) {
 	require.NoError(t, err)
 	blockBRoot, err := blockB.Block.HashTreeRoot()
 	require.NoError(t, err)
-	genesisState, err := transition.GenesisBeaconState(context.Background(), nil, 0, &ethpb.Eth1Data{})
+	genesisState, err := transition.GenesisBeaconState(t.Context(), nil, 0, &ethpb.Eth1Data{})
 	require.NoError(t, err)
 	require.NoError(t, genesisState.SetSlot(111))
 	require.NoError(t, genesisState.UpdateBlockRootAtIndex(111%uint64(params.BeaconConfig().SlotsPerHistoricalRoot), blockARoot))
@@ -225,7 +224,7 @@ func TestRecentBeaconBlocks_RPCRequestSent(t *testing.T) {
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
 		seenPendingBlocks:   make(map[[32]byte]bool),
-		ctx:                 context.Background(),
+		ctx:                 t.Context(),
 		rateLimiter:         newRateLimiter(p1),
 	}
 
@@ -252,7 +251,7 @@ func TestRecentBeaconBlocks_RPCRequestSent(t *testing.T) {
 	})
 
 	p1.Connect(p2)
-	require.NoError(t, r.sendBeaconBlocksRequest(context.Background(), &expectedRoots, p2.PeerID()))
+	require.NoError(t, r.sendBeaconBlocksRequest(t.Context(), &expectedRoots, p2.PeerID()))
 
 	if util.WaitTimeout(&wg, 1*time.Second) {
 		t.Fatal("Did not receive stream within 1 sec")
@@ -273,7 +272,7 @@ func TestRecentBeaconBlocks_RPCRequestSent_IncorrectRoot(t *testing.T) {
 	require.NoError(t, err)
 	blockBRoot, err := blockB.Block.HashTreeRoot()
 	require.NoError(t, err)
-	genesisState, err := transition.GenesisBeaconState(context.Background(), nil, 0, &ethpb.Eth1Data{})
+	genesisState, err := transition.GenesisBeaconState(t.Context(), nil, 0, &ethpb.Eth1Data{})
 	require.NoError(t, err)
 	require.NoError(t, genesisState.SetSlot(111))
 	require.NoError(t, genesisState.UpdateBlockRootAtIndex(111%uint64(params.BeaconConfig().SlotsPerHistoricalRoot), blockARoot))
@@ -299,7 +298,7 @@ func TestRecentBeaconBlocks_RPCRequestSent_IncorrectRoot(t *testing.T) {
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
 		seenPendingBlocks:   make(map[[32]byte]bool),
-		ctx:                 context.Background(),
+		ctx:                 t.Context(),
 		rateLimiter:         newRateLimiter(p1),
 	}
 
@@ -327,7 +326,7 @@ func TestRecentBeaconBlocks_RPCRequestSent_IncorrectRoot(t *testing.T) {
 	})
 
 	p1.Connect(p2)
-	require.ErrorContains(t, "received unexpected block with root", r.sendBeaconBlocksRequest(context.Background(), &expectedRoots, p2.PeerID()))
+	require.ErrorContains(t, "received unexpected block with root", r.sendBeaconBlocksRequest(t.Context(), &expectedRoots, p2.PeerID()))
 }
 
 func TestRecentBeaconBlocksRPCHandler_HandleZeroBlocks(t *testing.T) {
@@ -349,9 +348,9 @@ func TestRecentBeaconBlocksRPCHandler_HandleZeroBlocks(t *testing.T) {
 		expectFailure(t, 1, "no block roots provided in request", stream)
 	})
 
-	stream1, err := p1.BHost.NewStream(context.Background(), p2.BHost.ID(), pcl)
+	stream1, err := p1.BHost.NewStream(t.Context(), p2.BHost.ID(), pcl)
 	require.NoError(t, err)
-	err = r.beaconBlocksRootRPCHandler(context.Background(), &p2pTypes.BeaconBlockByRootsReq{}, stream1)
+	err = r.beaconBlocksRootRPCHandler(t.Context(), &p2pTypes.BeaconBlockByRootsReq{}, stream1)
 	assert.ErrorContains(t, "no block roots provided", err)
 	if util.WaitTimeout(&wg, 1*time.Second) {
 		t.Fatal("Did not receive stream within 1 sec")
@@ -371,14 +370,14 @@ func TestRequestPendingBlobs(t *testing.T) {
 		require.NoError(t, err)
 		request, err := s.pendingBlobsRequestForBlock([32]byte{}, b)
 		require.NoError(t, err)
-		require.NoError(t, s.sendAndSaveBlobSidecars(context.Background(), request, "test", b))
+		require.NoError(t, s.sendAndSaveBlobSidecars(t.Context(), request, "test", b))
 	})
 	t.Run("empty commitment block should not fail", func(t *testing.T) {
 		b, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlock())
 		require.NoError(t, err)
 		request, err := s.pendingBlobsRequestForBlock([32]byte{}, b)
 		require.NoError(t, err)
-		require.NoError(t, s.sendAndSaveBlobSidecars(context.Background(), request, "test", b))
+		require.NoError(t, s.sendAndSaveBlobSidecars(t.Context(), request, "test", b))
 	})
 	t.Run("unsupported protocol", func(t *testing.T) {
 		p1 := p2ptest.NewTestP2P(t)
@@ -411,7 +410,7 @@ func TestRequestPendingBlobs(t *testing.T) {
 		require.NoError(t, err)
 		request, err := s.pendingBlobsRequestForBlock([32]byte{}, b1)
 		require.NoError(t, err)
-		require.ErrorContains(t, "protocols not supported", s.sendAndSaveBlobSidecars(context.Background(), request, p2.PeerID(), b1))
+		require.ErrorContains(t, "protocols not supported", s.sendAndSaveBlobSidecars(t.Context(), request, p2.PeerID(), b1))
 	})
 }
 

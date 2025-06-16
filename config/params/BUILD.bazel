@@ -29,6 +29,7 @@ go_library(
         "//consensus-types/primitives:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//math:go_default_library",
+        "//proto/engine/v1:go_default_library",
         "//runtime/version:go_default_library",
         "@com_github_ethereum_go_ethereum//common:go_default_library",
         "@com_github_ethereum_go_ethereum//params:go_default_library",

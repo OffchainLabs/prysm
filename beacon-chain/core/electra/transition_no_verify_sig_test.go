@@ -1,7 +1,6 @@
 package electra_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/electra"
@@ -54,7 +53,7 @@ func TestProcessOperationsWithNilRequests(t *testing.T) {
 
 			require.NoError(t, st.SetSlot(1))
 
-			_, err = electra.ProcessOperations(context.Background(), st, b.Block())
+			_, err = electra.ProcessOperations(t.Context(), st, b.Block())
 			require.ErrorContains(t, tc.errMsg, err)
 		})
 	}

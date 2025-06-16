@@ -229,13 +229,16 @@ func verifyBlobCommitmentCount(slot primitives.Slot, body interfaces.ReadOnlyBea
 	if body.Version() < version.Deneb {
 		return nil
 	}
+
 	kzgs, err := body.BlobKzgCommitments()
 	if err != nil {
 		return err
 	}
-	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(slot)
-	if len(kzgs) > maxBlobsPerBlock {
-		return fmt.Errorf("too many kzg commitments in block: %d", len(kzgs))
+
+	commitmentCount, maxBlobsPerBlock := len(kzgs), params.BeaconConfig().MaxBlobsPerBlock(slot)
+	if commitmentCount > maxBlobsPerBlock {
+		return fmt.Errorf("too many kzg commitments in block: actual count %d - max allowed %d", commitmentCount, maxBlobsPerBlock)
 	}
+
 	return nil
 }

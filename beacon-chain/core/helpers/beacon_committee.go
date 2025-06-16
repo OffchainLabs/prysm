@@ -277,10 +277,10 @@ type CommitteeAssignment struct {
 	CommitteeIndex primitives.CommitteeIndex
 }
 
-// verifyAssignmentEpoch verifies if the given epoch is valid for assignment based on the provided state.
+// VerifyAssignmentEpoch verifies if the given epoch is valid for assignment based on the provided state.
 // It checks if the epoch is not greater than the next epoch, and if the start slot of the epoch is greater
 // than or equal to the minimum valid start slot calculated based on the state's current slot and historical roots.
-func verifyAssignmentEpoch(epoch primitives.Epoch, state state.BeaconState) error {
+func VerifyAssignmentEpoch(epoch primitives.Epoch, state state.BeaconState) error {
 	nextEpoch := time.NextEpoch(state)
 	if epoch > nextEpoch {
 		return fmt.Errorf("epoch %d can't be greater than next epoch %d", epoch, nextEpoch)
@@ -308,7 +308,7 @@ func ProposerAssignments(ctx context.Context, state state.BeaconState, epoch pri
 	defer span.End()
 
 	// Verify if the epoch is valid for assignment based on the provided state.
-	if err := verifyAssignmentEpoch(epoch, state); err != nil {
+	if err := VerifyAssignmentEpoch(epoch, state); err != nil {
 		return nil, err
 	}
 	startSlot, err := slots.EpochStart(epoch)
@@ -351,6 +351,61 @@ func ProposerAssignments(ctx context.Context, state state.BeaconState, epoch pri
 	return proposerAssignments, nil
 }
 
+// LiteAssignment is a lite version of CommitteeAssignment, and has committee length
+// and validator committee index instead of the full committee list
+type LiteAssignment struct {
+	AttesterSlot            primitives.Slot           // slot in which to attest
+	CommitteeIndex          primitives.CommitteeIndex // position of the committee in the slot
+	CommitteeLength         uint64                    // number of members in the committee
+	ValidatorCommitteeIndex uint64                    // validator’s offset inside the committee
+}
+
+// PrecomputeCommittees returns an array indexed by (slot-startSlot)
+// whose elements are the beacon committees of that slot.
+func PrecomputeCommittees(
+	ctx context.Context,
+	st state.BeaconState,
+	startSlot primitives.Slot,
+) ([][][]primitives.ValidatorIndex, error) {
+	cfg := params.BeaconConfig()
+	out := make([][][]primitives.ValidatorIndex, cfg.SlotsPerEpoch)
+
+	for relativeSlot := primitives.Slot(0); relativeSlot < cfg.SlotsPerEpoch; relativeSlot++ {
+		slot := startSlot + relativeSlot
+
+		comms, err := BeaconCommittees(ctx, st, slot)
+		if err != nil {
+			return nil, errors.Wrapf(err, "BeaconCommittees failed at slot %d", slot)
+		}
+		out[relativeSlot] = comms
+	}
+	return out, nil
+}
+
+// AssignmentForValidator scans the cached committees once
+// and returns the duty for a single validator.
+func AssignmentForValidator(
+	bySlot [][][]primitives.ValidatorIndex,
+	startSlot primitives.Slot,
+	vIdx primitives.ValidatorIndex,
+) *LiteAssignment {
+	for relativeSlot, committees := range bySlot {
+		for cIdx, committee := range committees {
+			for pos, member := range committee {
+				if member == vIdx {
+					return &LiteAssignment{
+						AttesterSlot:            startSlot + primitives.Slot(relativeSlot),
+						CommitteeIndex:          primitives.CommitteeIndex(cIdx),
+						CommitteeLength:         uint64(len(committee)),
+						ValidatorCommitteeIndex: uint64(pos),
+					}
+				}
+			}
+		}
+	}
+	return nil // validator is not scheduled this epoch
+}
+
 // CommitteeAssignments calculates committee assignments for each validator during the specified epoch.
 // It retrieves active validator indices, determines the number of committees per slot, and computes
 // assignments for each validator based on their presence in the provided validators slice.
@@ -359,7 +414,7 @@ func CommitteeAssignments(ctx context.Context, state state.BeaconState, epoch pr
 	defer span.End()
 
 	// Verify if the epoch is valid for assignment based on the provided state.
-	if err := verifyAssignmentEpoch(epoch, state); err != nil {
+	if err := VerifyAssignmentEpoch(epoch, state); err != nil {
 		return nil, err
 	}
 	startSlot, err := slots.EpochStart(epoch)
@@ -500,21 +555,31 @@ func UpdateProposerIndicesInCache(ctx context.Context, state state.ReadOnlyBeaco
 	if err != nil {
 		return err
 	}
-	// Skip cache update if the key already exists
-	_, ok := proposerIndicesCache.ProposerIndices(epoch, [32]byte(root))
-	if ok {
-		return nil
-	}
-	indices, err := ActiveValidatorIndices(ctx, state, epoch)
-	if err != nil {
-		return err
-	}
-	proposerIndices, err := PrecomputeProposerIndices(state, indices, epoch)
-	if err != nil {
-		return err
-	}
-	if len(proposerIndices) != int(params.BeaconConfig().SlotsPerEpoch) {
-		return errors.New("invalid proposer length returned from state")
+	var proposerIndices []primitives.ValidatorIndex
+	// use the state if post fulu (EIP-7917)
+	if state.Version() >= version.Fulu {
+		lookAhead, err := state.ProposerLookahead()
+		if err != nil {
+			return errors.Wrap(err, "could not get proposer lookahead")
+		}
+		proposerIndices = lookAhead[:params.BeaconConfig().SlotsPerEpoch]
+	} else {
+		// Skip cache update if the key already exists
+		_, ok := proposerIndicesCache.ProposerIndices(epoch, [32]byte(root))
+		if ok {
+			return nil
+		}
+		indices, err := ActiveValidatorIndices(ctx, state, epoch)
+		if err != nil {
+			return err
+		}
+		proposerIndices, err = PrecomputeProposerIndices(state, indices, epoch)
+		if err != nil {
+			return err
+		}
+		if len(proposerIndices) != int(params.BeaconConfig().SlotsPerEpoch) {
+			return errors.New("invalid proposer length returned from state")
+		}
 	}
 	// This is here to deal with tests only
 	var indicesArray [fieldparams.SlotsPerEpoch]primitives.ValidatorIndex
@@ -599,6 +664,25 @@ func ComputeCommittee(
 	}
 
 	return shuffledList[start:end], nil
+}
+
+// InitializeProposerLookahead computes the list of the proposer indices for the next MIN_SEED_LOOKAHEAD + 1 epochs.
+func InitializeProposerLookahead(ctx context.Context, state state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]uint64, error) {
+	lookAhead := make([]uint64, 0, uint64(params.BeaconConfig().MinSeedLookahead+1)*uint64(params.BeaconConfig().SlotsPerEpoch))
+	indices, err := ActiveValidatorIndices(ctx, state, epoch)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get active indices")
+	}
+	for i := range params.BeaconConfig().MinSeedLookahead + 1 {
+		proposerIndices, err := PrecomputeProposerIndices(state, indices, epoch+i)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not compute proposer indices")
+		}
+		for _, proposerIndex := range proposerIndices {
+			lookAhead = append(lookAhead, uint64(proposerIndex))
+		}
+	}
+	return lookAhead, nil
 }
 
 // PrecomputeProposerIndices computes proposer indices of the current epoch and returns a list of proposer indices,

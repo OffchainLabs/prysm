@@ -201,6 +201,11 @@ func ConvertPeerIDToNodeID(pid peer.ID) (enode.ID, error) {
 		return [32]byte{}, errors.Wrap(err, "parse public key")
 	}
 
-	newPubkey := &ecdsa.PublicKey{Curve: gCrypto.S256(), X: pubKeyObjSecp256k1.X(), Y: pubKeyObjSecp256k1.Y()}
+	newPubkey := &ecdsa.PublicKey{
+		Curve: gCrypto.S256(),
+		X:     pubKeyObjSecp256k1.X(),
+		Y:     pubKeyObjSecp256k1.Y(),
+	}
+
 	return enode.PubkeyToIDV4(newPubkey), nil
 }

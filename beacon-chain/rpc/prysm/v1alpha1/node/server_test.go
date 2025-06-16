@@ -1,7 +1,6 @@
 package node
 
 import (
-	"context"
 	"errors"
 	"testing"
 	"time"
@@ -32,18 +31,18 @@ func TestNodeServer_GetSyncStatus(t *testing.T) {
 	ns := &Server{
 		SyncChecker: mSync,
 	}
-	res, err := ns.GetSyncStatus(context.Background(), &emptypb.Empty{})
+	res, err := ns.GetSyncStatus(t.Context(), &emptypb.Empty{})
 	require.NoError(t, err)
 	assert.Equal(t, false, res.Syncing)
 	ns.SyncChecker = &mockSync.Sync{IsSyncing: true}
-	res, err = ns.GetSyncStatus(context.Background(), &emptypb.Empty{})
+	res, err = ns.GetSyncStatus(t.Context(), &emptypb.Empty{})
 	require.NoError(t, err)
 	assert.Equal(t, true, res.Syncing)
 }
 
 func TestNodeServer_GetGenesis(t *testing.T) {
 	db := dbutil.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	addr := common.Address{1, 2, 3}
 	require.NoError(t, db.SaveDepositContractAddress(ctx, addr))
 	st, err := util.NewBeaconState()
@@ -57,7 +56,7 @@ func TestNodeServer_GetGenesis(t *testing.T) {
 			ValidatorsRoot: genValRoot,
 		},
 	}
-	res, err := ns.GetGenesis(context.Background(), &emptypb.Empty{})
+	res, err := ns.GetGenesis(t.Context(), &emptypb.Empty{})
 	require.NoError(t, err)
 	assert.DeepEqual(t, addr.Bytes(), res.DepositContractAddress)
 	pUnix := timestamppb.New(time.Unix(0, 0))
@@ -65,7 +64,7 @@ func TestNodeServer_GetGenesis(t *testing.T) {
 	assert.DeepEqual(t, genValRoot[:], res.GenesisValidatorsRoot)
 
 	ns.GenesisTimeFetcher = &mock.ChainService{Genesis: time.Unix(10, 0)}
-	res, err = ns.GetGenesis(context.Background(), &emptypb.Empty{})
+	res, err = ns.GetGenesis(t.Context(), &emptypb.Empty{})
 	require.NoError(t, err)
 	pUnix = timestamppb.New(time.Unix(10, 0))
 	assert.Equal(t, res.GenesisTime.Seconds, pUnix.Seconds)
@@ -74,7 +73,7 @@ func TestNodeServer_GetGenesis(t *testing.T) {
 func TestNodeServer_GetVersion(t *testing.T) {
 	v := version.Version()
 	ns := &Server{}
-	res, err := ns.GetVersion(context.Background(), &emptypb.Empty{})
+	res, err := ns.GetVersion(t.Context(), &emptypb.Empty{})
 	require.NoError(t, err)
 	assert.Equal(t, v, res.Version)
 }
@@ -87,7 +86,7 @@ func TestNodeServer_GetImplementedServices(t *testing.T) {
 	ethpb.RegisterNodeServer(server, ns)
 	reflection.Register(server)
 
-	res, err := ns.ListImplementedServices(context.Background(), &emptypb.Empty{})
+	res, err := ns.ListImplementedServices(t.Context(), &emptypb.Empty{})
 	require.NoError(t, err)
 	// Expecting node service and Server reflect. As of grpc, v1.65.0, there are two version of server reflection
 	// Services: [ethereum.eth.v1alpha1.Node grpc.reflection.v1.ServerReflection grpc.reflection.v1alpha.ServerReflection]
@@ -112,7 +111,7 @@ func TestNodeServer_GetHost(t *testing.T) {
 	}
 	ethpb.RegisterNodeServer(server, ns)
 	reflection.Register(server)
-	h, err := ns.GetHost(context.Background(), &emptypb.Empty{})
+	h, err := ns.GetHost(t.Context(), &emptypb.Empty{})
 	require.NoError(t, err)
 	assert.Equal(t, mP2P.PeerID().String(), h.PeerId)
 	assert.Equal(t, stringENR, h.Enr)
@@ -127,7 +126,7 @@ func TestNodeServer_GetPeer(t *testing.T) {
 	ethpb.RegisterNodeServer(server, ns)
 	reflection.Register(server)
 
-	res, err := ns.GetPeer(context.Background(), &ethpb.PeerRequest{PeerId: mockP2p.MockRawPeerId0})
+	res, err := ns.GetPeer(t.Context(), &ethpb.PeerRequest{PeerId: mockP2p.MockRawPeerId0})
 	require.NoError(t, err)
 	assert.Equal(t, "16Uiu2HAkyWZ4Ni1TpvDS8dPxsozmHY85KaiFjodQuV6Tz5tkHVeR" /* first peer's raw id */, res.PeerId, "Unexpected peer ID")
 	assert.Equal(t, int(ethpb.PeerDirection_INBOUND), int(res.Direction), "Expected 1st peer to be an inbound connection")
@@ -143,7 +142,7 @@ func TestNodeServer_ListPeers(t *testing.T) {
 	ethpb.RegisterNodeServer(server, ns)
 	reflection.Register(server)
 
-	res, err := ns.ListPeers(context.Background(), &emptypb.Empty{})
+	res, err := ns.ListPeers(t.Context(), &emptypb.Empty{})
 	require.NoError(t, err)
 	assert.Equal(t, 2, len(res.Peers))
 
@@ -182,7 +181,7 @@ func TestNodeServer_GetETH1ConnectionStatus(t *testing.T) {
 	ethpb.RegisterNodeServer(server, ns)
 	reflection.Register(server)
 
-	res, err := ns.GetETH1ConnectionStatus(context.Background(), &emptypb.Empty{})
+	res, err := ns.GetETH1ConnectionStatus(t.Context(), &emptypb.Empty{})
 	require.NoError(t, err)
 	assert.Equal(t, ep, res.CurrentAddress)
 	assert.Equal(t, errStr, res.CurrentConnectionError)
@@ -213,7 +212,7 @@ func TestNodeServer_GetHealth(t *testing.T) {
 			}
 			ethpb.RegisterNodeServer(server, ns)
 			reflection.Register(server)
-			_, err := ns.GetHealth(context.Background(), &ethpb.HealthRequest{SyncingStatus: tt.customStatus})
+			_, err := ns.GetHealth(t.Context(), &ethpb.HealthRequest{SyncingStatus: tt.customStatus})
 			if tt.wantedErr == "" {
 				require.NoError(t, err)
 				return

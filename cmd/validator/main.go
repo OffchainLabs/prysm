@@ -72,7 +72,6 @@ var appFlags = []cli.Flag{
 	flags.SlasherCertFlag,
 	flags.WalletPasswordFileFlag,
 	flags.WalletDirFlag,
-	flags.EnableWebFlag,
 	flags.GraffitiFileFlag,
 	flags.EnableDistributed,
 	flags.AuthTokenPathFlag,

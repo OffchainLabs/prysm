@@ -325,12 +325,7 @@ var (
 		Usage: "Skips the y/n confirmation userprompt for sending a deposit to the deposit contract.",
 		Value: false,
 	}
-	// EnableWebFlag enables controlling the validator client via the Prysm web ui. This is a work in progress.
-	EnableWebFlag = &cli.BoolFlag{
-		Name:  "web",
-		Usage: "(Work in progress): Enables the web portal for the validator client.",
-		Value: false,
-	}
+
 	// SlashingProtectionExportDirFlag allows specifying the output directory
 	// for a validator's slashing protection history.
 	SlashingProtectionExportDirFlag = &cli.StringFlag{

@@ -2,7 +2,6 @@ package validator
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -104,7 +103,7 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 		require.DeepEqual(t, want, response)
 	})
 	t.Run("Indices", func(t *testing.T) {
-		ctx := context.Background()
+		ctx := t.Context()
 		publicKeys := [][48]byte{
 			bytesutil.ToBytes48([]byte{1}),
 			bytesutil.ToBytes48([]byte{2}),
@@ -169,7 +168,7 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 		require.DeepEqual(t, want, response)
 	})
 	t.Run("Indices Pubkeys", func(t *testing.T) {
-		ctx := context.Background()
+		ctx := t.Context()
 		publicKeys := [][48]byte{
 			bytesutil.ToBytes48([]byte{1}),
 			bytesutil.ToBytes48([]byte{2}),

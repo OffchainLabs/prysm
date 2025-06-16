@@ -1,18 +1,22 @@
 package fulu
 
 import (
+	"context"
+
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
 )
 
 // UpgradeToFulu updates inputs a generic state to return the version Fulu state.
 // https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/fork.md#upgrading-the-state
-func UpgradeToFulu(beaconState state.BeaconState) (state.BeaconState, error) {
+func UpgradeToFulu(ctx context.Context, beaconState state.BeaconState) (state.BeaconState, error) {
 	currentSyncCommittee, err := beaconState.CurrentSyncCommittee()
 	if err != nil {
 		return nil, err
@@ -101,8 +105,12 @@ func UpgradeToFulu(beaconState state.BeaconState) (state.BeaconState, error) {
 	if err != nil {
 		return nil, err
 	}
+	proposerLookahead, err := helpers.InitializeProposerLookahead(ctx, beaconState, slots.ToEpoch(beaconState.Slot()))
+	if err != nil {
+		return nil, err
+	}
 
-	s := &ethpb.BeaconStateElectra{
+	s := &ethpb.BeaconStateFulu{
 		GenesisTime:           beaconState.GenesisTime(),
 		GenesisValidatorsRoot: beaconState.GenesisValidatorsRoot(),
 		Slot:                  beaconState.Slot(),
@@ -163,6 +171,7 @@ func UpgradeToFulu(beaconState state.BeaconState) (state.BeaconState, error) {
 		PendingDeposits:               pendingDeposits,
 		PendingPartialWithdrawals:     pendingPartialWithdrawals,
 		PendingConsolidations:         pendingConsolidations,
+		ProposerLookahead:             proposerLookahead,
 	}
 
 	// Need to cast the beaconState to use in helper functions

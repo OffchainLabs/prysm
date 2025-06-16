@@ -221,7 +221,6 @@ func generateDataColumnIdentifiers(n int) []*eth.DataColumnsByRootIdentifier {
 
 func TestDataColumnSidecarsByRootReq_Marshal(t *testing.T) {
 	/*
-
 		SSZ encoding of DataColumnsByRootIdentifiers is tested in spectests.
 		However, encoding a list of DataColumnsByRootIdentifier is not.
 		We are testing it here.

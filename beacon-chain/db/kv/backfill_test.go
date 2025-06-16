@@ -1,7 +1,6 @@
 package kv
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
@@ -24,7 +23,7 @@ func TestBackfillRoundtrip(t *testing.T) {
 	require.DeepEqual(t, b.LowRoot, ub.LowRoot)
 	require.DeepEqual(t, b.LowParentRoot, ub.LowParentRoot)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	require.NoError(t, db.SaveBackfillStatus(ctx, b))
 	dbub, err := db.BackfillStatus(ctx)
 	require.NoError(t, err)

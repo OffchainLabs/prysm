@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -21,7 +20,7 @@ func TestProxy(t *testing.T) {
 	t.Run("fails to proxy if destination is down", func(t *testing.T) {
 		logger := logrus.New()
 		hook := logTest.NewLocal(logger)
-		ctx := context.Background()
+		ctx := t.Context()
 		r := rand.NewGenerator()
 		proxy, err := New(
 			WithPort(r.Intn(50000)),

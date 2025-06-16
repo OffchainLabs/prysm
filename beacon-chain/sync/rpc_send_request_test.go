@@ -28,7 +28,7 @@ import (
 )
 
 func TestSendRequest_SendBeaconBlocksByRangeRequest(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	pcl := fmt.Sprintf("%s/ssz_snappy", p2p.RPCBlocksByRangeTopicV1)
 
@@ -300,7 +300,7 @@ func TestSendRequest_SendBeaconBlocksByRangeRequest(t *testing.T) {
 }
 
 func TestSendRequest_SendBeaconBlocksByRootRequest(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	pcl := fmt.Sprintf("%s/ssz_snappy", p2p.RPCBlocksByRootTopicV1)
 
@@ -696,7 +696,7 @@ func TestSeqBlobValid(t *testing.T) {
 
 func TestSendBlobsByRangeRequest(t *testing.T) {
 	topic := fmt.Sprintf("%s/ssz_snappy", p2p.RPCBlobSidecarsByRangeTopicV1)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("single blob - Deneb", func(t *testing.T) {
 		// Setup genesis such that we are currently in deneb.

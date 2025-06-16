@@ -437,7 +437,7 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 		Web3SignerConfig:        web3signerConfig,
 		ProposerSettings:        ps,
 		ValidatorsRegBatchSize:  cliCtx.Int(flags.ValidatorsRegistrationBatchSizeFlag.Name),
-		EnableAPI:               cliCtx.Bool(flags.EnableWebFlag.Name) || cliCtx.Bool(flags.EnableRPCFlag.Name),
+		EnableAPI:               features.Get().EnableWeb || cliCtx.Bool(flags.EnableRPCFlag.Name),
 		LogValidatorPerformance: !cliCtx.Bool(flags.DisablePenaltyRewardLogFlag.Name),
 		EmitAccountMetrics:      !cliCtx.Bool(flags.DisableAccountMetricsFlag.Name),
 		Distributed:             cliCtx.Bool(flags.EnableDistributed.Name),
@@ -501,7 +501,7 @@ func proposerSettings(cliCtx *cli.Context, db iface.ValidatorDB) (*proposer.Sett
 }
 
 func (c *ValidatorClient) registerRPCService(cliCtx *cli.Context) error {
-	serveWebUI := cliCtx.IsSet(flags.EnableWebFlag.Name)
+	serveWebUI := features.Get().EnableWeb
 	if !cliCtx.IsSet(flags.EnableRPCFlag.Name) && !serveWebUI {
 		return nil
 	}
@@ -557,7 +557,6 @@ func (c *ValidatorClient) registerRPCService(cliCtx *cli.Context) error {
 		AuthTokenPath:          authTokenPath,
 		Middlewares:            middlewares,
 		Router:                 http.NewServeMux(),
-		ServeWebUI:             serveWebUI,
 	})
 	return c.services.RegisterService(s)
 }

@@ -2,7 +2,6 @@ package verification
 
 import (
 	"bytes"
-	"context"
 	"testing"
 	"time"
 
@@ -12,7 +11,7 @@ import (
 )
 
 func TestInitializerWaiter(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vr := bytesutil.ToBytes32([]byte{0, 1, 1, 2, 3, 5})
 	gen := time.Now()
 	c := startup.NewClock(gen, vr)
