@@ -349,7 +349,7 @@ func runHealthCheckRoutine(ctx context.Context, cancel context.CancelFunc, v ifa
 				} else {
 					healthCheckCounter++
 				}
-				if maxHealthChecks != -1 && healthCheckCounter >= maxHealthChecks {
+				if maxHealthChecks != -1 && healthCheckCounter > maxHealthChecks {
 					log.Infof("Maximum health checks of %d reached. Stopping health check routine", maxHealthChecks)
 					cancel()
 				}
