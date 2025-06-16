@@ -202,7 +202,7 @@ var (
 		Value: false,
 	}
 
-	// SSZOnly enables api calls to use rest between the validator client and the beacon node
+	// SSZOnly forces the validator client to use SSZ for communication with the beacon node when REST mode is enabled
 	SSZOnly = &cli.BoolFlag{
 		Name:  "ssz-only",
 		Usage: "(debug): Forces the validator client to use SSZ for communication with the beacon node when REST mode is enabled",
