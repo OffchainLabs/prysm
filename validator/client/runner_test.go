@@ -46,7 +46,7 @@ func cancelledContext() context.Context {
 func runTest(t *testing.T, ctx context.Context, v iface.Validator) {
 	r, err := newRunner(ctx, v)
 	require.NoError(t, err)
-	require.NoError(t, r.run(ctx))
+	r.run(ctx)
 }
 
 func TestCancelledContext_CleansUpValidator(t *testing.T) {

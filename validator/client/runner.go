@@ -344,7 +344,6 @@ func runHealthCheckRoutine(ctx context.Context, cancel context.CancelFunc, v ifa
 		for {
 			select {
 			case <-ticker.C:
-
 				ishealthy := performHealthCheck()
 				if ishealthy {
 					healthCheckCounter = 0

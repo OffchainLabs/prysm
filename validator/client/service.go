@@ -62,7 +62,7 @@ type ValidatorService struct {
 	logValidatorPerformance bool
 	distributed             bool
 	disableDutiesPolling    bool
-	onRunnerExit            func() // validator client stop function is used here
+	closeClientFunc         func() // validator client stop function is used here
 }
 
 // Config for the validator service.
@@ -91,7 +91,7 @@ type Config struct {
 	EmitAccountMetrics      bool
 	Distributed             bool
 	DisableDutiesPolling    bool
-	OnRunnerExit            func()
+	CloseClientFunc         func()
 }
 
 // NewValidatorService creates a new validator service for the service
@@ -116,7 +116,7 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 		logValidatorPerformance: cfg.LogValidatorPerformance,
 		distributed:             cfg.Distributed,
 		disableDutiesPolling:    cfg.DisableDutiesPolling,
-		onRunnerExit:            cfg.OnRunnerExit,
+		closeClientFunc:         cfg.CloseClientFunc,
 		MaxHealthChecks:         cfg.MaxHealthChecks,
 	}
 
@@ -241,7 +241,7 @@ func (v *ValidatorService) Start() {
 		select {
 		case <-v.ctx.Done():
 			log.Info("Validator service context canceled, stopping")
-			v.onRunnerExit()
+			v.closeClientFunc()
 			return
 		case isHealthy := <-healthTracker.HealthUpdates():
 			if !isHealthy {
@@ -256,7 +256,7 @@ func (v *ValidatorService) Start() {
 			if err != nil {
 				log.WithError(err).Error("Could not create validator runner")
 				runnerCancel() // Ensure context is cancelled
-				v.onRunnerExit()
+				v.closeClientFunc()
 				return
 			}
 
