@@ -350,7 +350,7 @@ func runHealthCheckRoutine(ctx context.Context, cancel context.CancelFunc, v ifa
 					healthCheckCounter++
 				}
 				if maxHealthChecks != -1 && healthCheckCounter >= maxHealthChecks {
-					log.Info("Health check timed out")
+					log.Infof("Maximum health checks of %d reached. Stopping health check routine", maxHealthChecks)
 					cancel()
 				}
 			case <-ctx.Done():
