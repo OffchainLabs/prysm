@@ -26,9 +26,9 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
-	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	validator2 "github.com/OffchainLabs/prysm/v6/consensus-types/validator"
+	mvslice "github.com/OffchainLabs/prysm/v6/container/multi-value-slice"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
@@ -570,7 +570,7 @@ func (s *Server) SubmitBeaconCommitteeSubscription(w http.ResponseWriter, r *htt
 		subscriptions[i] = consensusItem
 		val, err := st.ValidatorAtIndexReadOnly(consensusItem.ValidatorIndex)
 		if err != nil {
-			if errors.Is(err, consensus_types.ErrOutOfBounds) {
+			if errors.Is(err, mvslice.ErrOutOfBounds) {
 				httputil.HandleError(w, "Could not get validator: "+err.Error(), http.StatusBadRequest)
 				return
 			}
