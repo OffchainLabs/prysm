@@ -2,7 +2,6 @@ package beacon_api
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"net/http"
 	"testing"
@@ -27,7 +26,7 @@ func TestSubmitSignedAggregateSelectionProof_Valid(t *testing.T) {
 	marshalledSignedAggregateSignedAndProof, err := json.Marshal([]*structs.SignedAggregateAttestationAndProof{jsonifySignedAggregateAndProof(signedAggregateAndProof)})
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	headers := map[string]string{"Eth-Consensus-Version": version.String(signedAggregateAndProof.Message.Version())}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
@@ -59,7 +58,7 @@ func TestSubmitSignedAggregateSelectionProof_BadRequest(t *testing.T) {
 	marshalledSignedAggregateSignedAndProof, err := json.Marshal([]*structs.SignedAggregateAttestationAndProof{jsonifySignedAggregateAndProof(signedAggregateAndProof)})
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	headers := map[string]string{"Eth-Consensus-Version": version.String(signedAggregateAndProof.Message.Version())}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
@@ -87,7 +86,7 @@ func TestSubmitSignedAggregateSelectionProof_Fallback(t *testing.T) {
 	marshalledSignedAggregateSignedAndProof, err := json.Marshal([]*structs.SignedAggregateAttestationAndProof{jsonifySignedAggregateAndProof(signedAggregateAndProof)})
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	headers := map[string]string{"Eth-Consensus-Version": version.String(signedAggregateAndProof.Message.Version())}
@@ -131,7 +130,7 @@ func TestSubmitSignedAggregateSelectionProofElectra_Valid(t *testing.T) {
 	marshalledSignedAggregateSignedAndProofElectra, err := json.Marshal([]*structs.SignedAggregateAttestationAndProofElectra{jsonifySignedAggregateAndProofElectra(signedAggregateAndProofElectra)})
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	headers := map[string]string{"Eth-Consensus-Version": version.String(signedAggregateAndProofElectra.Message.Version())}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
@@ -163,7 +162,7 @@ func TestSubmitSignedAggregateSelectionProofElectra_BadRequest(t *testing.T) {
 	marshalledSignedAggregateSignedAndProofElectra, err := json.Marshal([]*structs.SignedAggregateAttestationAndProofElectra{jsonifySignedAggregateAndProofElectra(signedAggregateAndProofElectra)})
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	headers := map[string]string{"Eth-Consensus-Version": version.String(signedAggregateAndProofElectra.Message.Version())}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(

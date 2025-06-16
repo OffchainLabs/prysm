@@ -21,7 +21,7 @@ import (
 )
 
 func TestServer_StreamAltairBlocksVerified_ContextCanceled(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	chainService := &chainMock.ChainService{}
 	ctx, cancel := context.WithCancel(ctx)
@@ -47,7 +47,7 @@ func TestServer_StreamAltairBlocksVerified_ContextCanceled(t *testing.T) {
 }
 
 func TestServer_StreamAltairBlocks_ContextCanceled(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	chainService := &chainMock.ChainService{}
 	ctx, cancel := context.WithCancel(ctx)
@@ -73,7 +73,7 @@ func TestServer_StreamAltairBlocks_ContextCanceled(t *testing.T) {
 func TestServer_StreamAltairBlocks_OnHeadUpdated(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.BeaconConfig())
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconState, privs := util.DeterministicGenesisStateAltair(t, 64)
 	c, err := altair.NextSyncCommittee(ctx, beaconState)
 	require.NoError(t, err)
@@ -115,7 +115,7 @@ func TestServer_StreamAltairBlocks_OnHeadUpdated(t *testing.T) {
 func TestServer_StreamCapellaBlocks_OnHeadUpdated(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.BeaconConfig())
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconState, privs := util.DeterministicGenesisStateCapella(t, 64)
 	c, err := altair.NextSyncCommittee(ctx, beaconState)
 	require.NoError(t, err)
@@ -156,7 +156,7 @@ func TestServer_StreamCapellaBlocks_OnHeadUpdated(t *testing.T) {
 
 func TestServer_StreamAltairBlocksVerified_OnHeadUpdated(t *testing.T) {
 	db := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconState, privs := util.DeterministicGenesisStateAltair(t, 32)
 	c, err := altair.NextSyncCommittee(ctx, beaconState)
 	require.NoError(t, err)
@@ -199,7 +199,7 @@ func TestServer_StreamAltairBlocksVerified_OnHeadUpdated(t *testing.T) {
 
 func TestServer_StreamCapellaBlocksVerified_OnHeadUpdated(t *testing.T) {
 	db := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconState, privs := util.DeterministicGenesisStateCapella(t, 32)
 	c, err := altair.NextSyncCommittee(ctx, beaconState)
 	require.NoError(t, err)
@@ -241,7 +241,7 @@ func TestServer_StreamCapellaBlocksVerified_OnHeadUpdated(t *testing.T) {
 }
 
 func TestServer_StreamSlotsVerified_ContextCanceled(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	chainService := &chainMock.ChainService{}
 	ctx, cancel := context.WithCancel(ctx)
@@ -267,7 +267,7 @@ func TestServer_StreamSlotsVerified_ContextCanceled(t *testing.T) {
 }
 
 func TestServer_StreamSlots_ContextCanceled(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	chainService := &chainMock.ChainService{}
 	ctx, cancel := context.WithCancel(ctx)
@@ -293,7 +293,7 @@ func TestServer_StreamSlots_ContextCanceled(t *testing.T) {
 func TestServer_StreamSlots_OnHeadUpdated(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.BeaconConfig())
-	ctx := context.Background()
+	ctx := t.Context()
 
 	chainService := &chainMock.ChainService{}
 	server := &Server{
@@ -331,7 +331,7 @@ func TestServer_StreamSlots_OnHeadUpdated(t *testing.T) {
 }
 
 func TestServer_StreamSlotsVerified_OnHeadUpdated(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	chainService := &chainMock.ChainService{}
 	server := &Server{
 		Ctx:               ctx,

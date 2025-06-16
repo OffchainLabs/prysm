@@ -2,7 +2,6 @@ package kv
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"testing"
 
@@ -16,7 +15,7 @@ import (
 
 // setupDB instantiates and returns a Store instance.
 func setupDB(t testing.TB) *Store {
-	db, err := NewKVStore(context.Background(), t.TempDir())
+	db, err := NewKVStore(t.Context(), t.TempDir())
 	require.NoError(t, err, "Failed to instantiate DB")
 	t.Cleanup(func() {
 		require.NoError(t, db.Close(), "Failed to close database")
@@ -25,7 +24,7 @@ func setupDB(t testing.TB) *Store {
 }
 
 func Test_setupBlockStorageType(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	t.Run("fresh database with feature enabled to store full blocks should store full blocks", func(t *testing.T) {
 		resetFn := features.InitWithReset(&features.Flags{
 			SaveFullExecutionPayloads: true,

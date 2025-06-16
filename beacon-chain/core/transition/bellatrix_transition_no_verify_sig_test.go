@@ -1,7 +1,6 @@
 package transition_test
 
 import (
-	"context"
 	"math"
 	"testing"
 
@@ -29,7 +28,7 @@ import (
 func TestExecuteBellatrixStateTransitionNoVerify_FullProcess(t *testing.T) {
 	beaconState, privKeys := util.DeterministicGenesisStateBellatrix(t, 100)
 
-	syncCommittee, err := altair.NextSyncCommittee(context.Background(), beaconState)
+	syncCommittee, err := altair.NextSyncCommittee(t.Context(), beaconState)
 	require.NoError(t, err)
 	require.NoError(t, beaconState.SetCurrentSyncCommittee(syncCommittee))
 
@@ -53,11 +52,11 @@ func TestExecuteBellatrixStateTransitionNoVerify_FullProcess(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, beaconState.SetSlot(slots.PrevSlot(beaconState.Slot())))
 
-	nextSlotState, err := transition.ProcessSlots(context.Background(), beaconState.Copy(), beaconState.Slot()+1)
+	nextSlotState, err := transition.ProcessSlots(t.Context(), beaconState.Copy(), beaconState.Slot()+1)
 	require.NoError(t, err)
 	parentRoot, err := nextSlotState.LatestBlockHeader().HashTreeRoot()
 	require.NoError(t, err)
-	proposerIdx, err := helpers.BeaconProposerIndex(context.Background(), nextSlotState)
+	proposerIdx, err := helpers.BeaconProposerIndex(t.Context(), nextSlotState)
 	require.NoError(t, err)
 	block := util.NewBeaconBlockBellatrix()
 	block.Block.ProposerIndex = proposerIdx
@@ -70,10 +69,10 @@ func TestExecuteBellatrixStateTransitionNoVerify_FullProcess(t *testing.T) {
 	for i := range syncBits {
 		syncBits[i] = 0xff
 	}
-	indices, err := altair.NextSyncCommitteeIndices(context.Background(), beaconState)
+	indices, err := altair.NextSyncCommitteeIndices(t.Context(), beaconState)
 	require.NoError(t, err)
 	h := beaconState.LatestBlockHeader().Copy()
-	prevStateRoot, err := beaconState.HashTreeRoot(context.Background())
+	prevStateRoot, err := beaconState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 	h.StateRoot = prevStateRoot[:]
 	pbr, err := h.HashTreeRoot()
@@ -95,7 +94,7 @@ func TestExecuteBellatrixStateTransitionNoVerify_FullProcess(t *testing.T) {
 	block.Block.Body.SyncAggregate = syncAggregate
 	wsb, err := blocks.NewSignedBeaconBlock(block)
 	require.NoError(t, err)
-	stateRoot, err := transition.CalculateStateRoot(context.Background(), beaconState, wsb)
+	stateRoot, err := transition.CalculateStateRoot(t.Context(), beaconState, wsb)
 	require.NoError(t, err)
 	block.Block.StateRoot = stateRoot[:]
 
@@ -106,7 +105,7 @@ func TestExecuteBellatrixStateTransitionNoVerify_FullProcess(t *testing.T) {
 
 	wsb, err = blocks.NewSignedBeaconBlock(block)
 	require.NoError(t, err)
-	set, _, err := transition.ExecuteStateTransitionNoVerifyAnySig(context.Background(), beaconState, wsb)
+	set, _, err := transition.ExecuteStateTransitionNoVerifyAnySig(t.Context(), beaconState, wsb)
 	require.NoError(t, err)
 	verified, err := set.Verify()
 	require.NoError(t, err)
@@ -116,7 +115,7 @@ func TestExecuteBellatrixStateTransitionNoVerify_FullProcess(t *testing.T) {
 func TestExecuteBellatrixStateTransitionNoVerifySignature_CouldNotVerifyStateRoot(t *testing.T) {
 	beaconState, privKeys := util.DeterministicGenesisStateBellatrix(t, 100)
 
-	syncCommittee, err := altair.NextSyncCommittee(context.Background(), beaconState)
+	syncCommittee, err := altair.NextSyncCommittee(t.Context(), beaconState)
 	require.NoError(t, err)
 	require.NoError(t, beaconState.SetCurrentSyncCommittee(syncCommittee))
 
@@ -140,11 +139,11 @@ func TestExecuteBellatrixStateTransitionNoVerifySignature_CouldNotVerifyStateRoo
 	require.NoError(t, err)
 	require.NoError(t, beaconState.SetSlot(slots.PrevSlot(beaconState.Slot())))
 
-	nextSlotState, err := transition.ProcessSlots(context.Background(), beaconState.Copy(), beaconState.Slot()+1)
+	nextSlotState, err := transition.ProcessSlots(t.Context(), beaconState.Copy(), beaconState.Slot()+1)
 	require.NoError(t, err)
 	parentRoot, err := nextSlotState.LatestBlockHeader().HashTreeRoot()
 	require.NoError(t, err)
-	proposerIdx, err := helpers.BeaconProposerIndex(context.Background(), nextSlotState)
+	proposerIdx, err := helpers.BeaconProposerIndex(t.Context(), nextSlotState)
 	require.NoError(t, err)
 	block := util.NewBeaconBlockBellatrix()
 	block.Block.ProposerIndex = proposerIdx
@@ -157,10 +156,10 @@ func TestExecuteBellatrixStateTransitionNoVerifySignature_CouldNotVerifyStateRoo
 	for i := range syncBits {
 		syncBits[i] = 0xff
 	}
-	indices, err := altair.NextSyncCommitteeIndices(context.Background(), beaconState)
+	indices, err := altair.NextSyncCommitteeIndices(t.Context(), beaconState)
 	require.NoError(t, err)
 	h := beaconState.LatestBlockHeader().Copy()
-	prevStateRoot, err := beaconState.HashTreeRoot(context.Background())
+	prevStateRoot, err := beaconState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 	h.StateRoot = prevStateRoot[:]
 	pbr, err := h.HashTreeRoot()
@@ -183,7 +182,7 @@ func TestExecuteBellatrixStateTransitionNoVerifySignature_CouldNotVerifyStateRoo
 
 	wsb, err := blocks.NewSignedBeaconBlock(block)
 	require.NoError(t, err)
-	stateRoot, err := transition.CalculateStateRoot(context.Background(), beaconState, wsb)
+	stateRoot, err := transition.CalculateStateRoot(t.Context(), beaconState, wsb)
 	require.NoError(t, err)
 	block.Block.StateRoot = stateRoot[:]
 
@@ -195,7 +194,7 @@ func TestExecuteBellatrixStateTransitionNoVerifySignature_CouldNotVerifyStateRoo
 	block.Block.StateRoot = bytesutil.PadTo([]byte{'a'}, 32)
 	wsb, err = blocks.NewSignedBeaconBlock(block)
 	require.NoError(t, err)
-	_, _, err = transition.ExecuteStateTransitionNoVerifyAnySig(context.Background(), beaconState, wsb)
+	_, _, err = transition.ExecuteStateTransitionNoVerifyAnySig(t.Context(), beaconState, wsb)
 	require.ErrorContains(t, "could not validate state root", err)
 }
 
@@ -216,7 +215,7 @@ func TestProcessEpoch_BadBalanceBellatrix(t *testing.T) {
 	epochParticipation[0] = participation
 	assert.NoError(t, s.SetCurrentParticipationBits(epochParticipation))
 	assert.NoError(t, s.SetPreviousParticipationBits(epochParticipation))
-	err = altair.ProcessEpoch(context.Background(), s)
+	err = altair.ProcessEpoch(t.Context(), s)
 	assert.ErrorContains(t, "addition overflows", err)
 }
 

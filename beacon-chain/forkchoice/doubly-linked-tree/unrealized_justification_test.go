@@ -1,7 +1,6 @@
 package doublylinkedtree
 
 import (
-	"context"
 	"testing"
 
 	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
@@ -13,7 +12,7 @@ import (
 
 func TestStore_SetUnrealizedEpochs(t *testing.T) {
 	f := setup(1, 1)
-	ctx := context.Background()
+	ctx := t.Context()
 	state, blkRoot, err := prepareForkchoiceState(ctx, 100, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
@@ -36,7 +35,7 @@ func TestStore_SetUnrealizedEpochs(t *testing.T) {
 
 func TestStore_UpdateUnrealizedCheckpoints(t *testing.T) {
 	f := setup(1, 1)
-	ctx := context.Background()
+	ctx := t.Context()
 	state, blkRoot, err := prepareForkchoiceState(ctx, 100, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
@@ -63,7 +62,7 @@ func TestStore_UpdateUnrealizedCheckpoints(t *testing.T) {
 // B is the first block that justifies A.
 func TestStore_LongFork(t *testing.T) {
 	f := setup(1, 1)
-	ctx := context.Background()
+	ctx := t.Context()
 	state, blkRoot, err := prepareForkchoiceState(ctx, 75, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
@@ -116,7 +115,7 @@ func TestStore_LongFork(t *testing.T) {
 // E justifies A. G justifies E.
 func TestStore_NoDeadLock(t *testing.T) {
 	f := setup(0, 0)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Epoch 1 blocks
 	state, blkRoot, err := prepareForkchoiceState(ctx, 100, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 0, 0)
@@ -198,7 +197,7 @@ func TestStore_NoDeadLock(t *testing.T) {
 // D justifies and comes late.
 func TestStore_ForkNextEpoch(t *testing.T) {
 	f := setup(1, 0)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Epoch 1 blocks (D does not arrive)
 	state, blkRoot, err := prepareForkchoiceState(ctx, 92, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 0)
@@ -258,7 +257,7 @@ func TestStore_ForkNextEpoch(t *testing.T) {
 }
 
 func TestStore_PullTips_Heuristics(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	t.Run("Current epoch is justified", func(tt *testing.T) {
 		f := setup(1, 1)
 		st, root, err := prepareForkchoiceState(ctx, 65, [32]byte{'p'}, [32]byte{}, [32]byte{}, 1, 1)

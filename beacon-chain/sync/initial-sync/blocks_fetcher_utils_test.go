@@ -51,7 +51,7 @@ func TestBlocksFetcher_nonSkippedSlotAfter(t *testing.T) {
 	}
 
 	mc, p2p, _ := initializeTestServices(t, []primitives.Slot{}, chainConfig.peers)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	fetcher := newBlocksFetcher(
@@ -165,7 +165,7 @@ func TestBlocksFetcher_findFork(t *testing.T) {
 	finalizedEpoch := slots.ToEpoch(finalizedSlot)
 
 	genesisBlock := chain1[0]
-	util.SaveBlock(t, context.Background(), beaconDB, genesisBlock)
+	util.SaveBlock(t, t.Context(), beaconDB, genesisBlock)
 	genesisRoot, err := genesisBlock.Block.HashTreeRoot()
 	require.NoError(t, err)
 
@@ -183,7 +183,7 @@ func TestBlocksFetcher_findFork(t *testing.T) {
 		ValidatorsRoot: [32]byte{},
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	fetcher := newBlocksFetcher(
 		ctx,
@@ -337,7 +337,7 @@ func TestBlocksFetcher_findForkWithPeer(t *testing.T) {
 
 	knownBlocks := extendBlockSequence(t, []*ethpb.SignedBeaconBlock{}, 128)
 	genesisBlock := knownBlocks[0]
-	util.SaveBlock(t, context.Background(), beaconDB, genesisBlock)
+	util.SaveBlock(t, t.Context(), beaconDB, genesisBlock)
 	genesisRoot, err := genesisBlock.Block.HashTreeRoot()
 	require.NoError(t, err)
 
@@ -351,7 +351,7 @@ func TestBlocksFetcher_findForkWithPeer(t *testing.T) {
 		ValidatorsRoot: [32]byte{},
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	fetcher := newBlocksFetcher(
 		ctx,
@@ -475,7 +475,7 @@ func TestBlocksFetcher_findAncestor(t *testing.T) {
 	finalizedEpoch := slots.ToEpoch(finalizedSlot)
 
 	genesisBlock := knownBlocks[0]
-	util.SaveBlock(t, context.Background(), beaconDB, genesisBlock)
+	util.SaveBlock(t, t.Context(), beaconDB, genesisBlock)
 	genesisRoot, err := genesisBlock.Block.HashTreeRoot()
 	require.NoError(t, err)
 
@@ -493,7 +493,7 @@ func TestBlocksFetcher_findAncestor(t *testing.T) {
 		ValidatorsRoot: [32]byte{},
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	fetcher := newBlocksFetcher(
 		ctx,
@@ -612,7 +612,7 @@ func TestBlocksFetcher_currentHeadAndTargetEpochs(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mc, p2p, _ := initializeTestServices(t, []primitives.Slot{}, tt.peers)
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			fetcher := newBlocksFetcher(
 				ctx,

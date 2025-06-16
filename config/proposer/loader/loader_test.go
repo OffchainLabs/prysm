@@ -1,7 +1,6 @@
 package loader
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"net/http"
@@ -83,7 +82,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 						},
 					},
 				}
-				return db.SaveProposerSettings(context.Background(), settings)
+				return db.SaveProposerSettings(t.Context(), settings)
 			},
 		},
 		{
@@ -164,7 +163,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 						},
 					},
 				}
-				return db.SaveProposerSettings(context.Background(), settings)
+				return db.SaveProposerSettings(t.Context(), settings)
 			},
 		},
 		{
@@ -218,7 +217,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 						},
 					},
 				}
-				return db.SaveProposerSettings(context.Background(), settings)
+				return db.SaveProposerSettings(t.Context(), settings)
 			},
 			validatorRegistrationEnabled: true,
 		},
@@ -731,7 +730,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 						},
 					},
 				}
-				return db.SaveProposerSettings(context.Background(), settings)
+				return db.SaveProposerSettings(t.Context(), settings)
 			},
 		},
 		{
@@ -786,7 +785,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 						},
 					},
 				}
-				return db.SaveProposerSettings(context.Background(), settings)
+				return db.SaveProposerSettings(t.Context(), settings)
 			},
 			validatorRegistrationEnabled: true,
 		},
@@ -834,7 +833,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 						},
 					},
 				}
-				return db.SaveProposerSettings(context.Background(), settings)
+				return db.SaveProposerSettings(t.Context(), settings)
 			},
 		},
 		{

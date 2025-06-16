@@ -13,7 +13,7 @@ import (
 func TestSafelyHandleMessage(t *testing.T) {
 	hook := logTest.NewGlobal()
 
-	messagehandler.SafelyHandleMessage(context.Background(), func(_ context.Context, _ *pubsub.Message) error {
+	messagehandler.SafelyHandleMessage(t.Context(), func(_ context.Context, _ *pubsub.Message) error {
 		panic("bad!")
 		return nil
 	}, &pubsub.Message{})
@@ -24,7 +24,7 @@ func TestSafelyHandleMessage(t *testing.T) {
 func TestSafelyHandleMessage_NoData(t *testing.T) {
 	hook := logTest.NewGlobal()
 
-	messagehandler.SafelyHandleMessage(context.Background(), func(_ context.Context, _ *pubsub.Message) error {
+	messagehandler.SafelyHandleMessage(t.Context(), func(_ context.Context, _ *pubsub.Message) error {
 		panic("bad!")
 		return nil
 	}, nil)

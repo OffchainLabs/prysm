@@ -1,7 +1,6 @@
 package validator
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -24,7 +23,7 @@ import (
 )
 
 func TestProposeExit_Notification(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	deposits, keys, err := util.DeterministicDepositsAndKeys(params.BeaconConfig().MinGenesisActiveValidatorCount)
 	require.NoError(t, err)
@@ -66,7 +65,7 @@ func TestProposeExit_Notification(t *testing.T) {
 	req.Signature, err = signing.ComputeDomainAndSign(beaconState, epoch, req.Exit, params.BeaconConfig().DomainVoluntaryExit, keys[0])
 	require.NoError(t, err)
 
-	resp, err := server.ProposeExit(context.Background(), req)
+	resp, err := server.ProposeExit(t.Context(), req)
 	require.NoError(t, err)
 	expectedRoot, err := req.Exit.HashTreeRoot()
 	require.NoError(t, err)
@@ -91,7 +90,7 @@ func TestProposeExit_Notification(t *testing.T) {
 }
 
 func TestProposeExit_NoPanic(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	deposits, keys, err := util.DeterministicDepositsAndKeys(params.BeaconConfig().MinGenesisActiveValidatorCount)
 	require.NoError(t, err)
@@ -123,7 +122,7 @@ func TestProposeExit_NoPanic(t *testing.T) {
 	defer opSub.Unsubscribe()
 
 	req := &ethpb.SignedVoluntaryExit{}
-	_, err = server.ProposeExit(context.Background(), req)
+	_, err = server.ProposeExit(t.Context(), req)
 	require.ErrorContains(t, "voluntary exit does not exist", err, "Expected error for no exit existing")
 
 	// Send the request, expect a result on the state feed.
@@ -135,15 +134,15 @@ func TestProposeExit_NoPanic(t *testing.T) {
 		},
 	}
 
-	_, err = server.ProposeExit(context.Background(), req)
+	_, err = server.ProposeExit(t.Context(), req)
 	require.ErrorContains(t, "invalid signature provided", err, "Expected error for no signature exists")
 	req.Signature = bytesutil.FromBytes48([fieldparams.BLSPubkeyLength]byte{})
 
-	_, err = server.ProposeExit(context.Background(), req)
+	_, err = server.ProposeExit(t.Context(), req)
 	require.ErrorContains(t, "invalid signature provided", err, "Expected error for invalid signature length")
 	req.Signature, err = signing.ComputeDomainAndSign(beaconState, epoch, req.Exit, params.BeaconConfig().DomainVoluntaryExit, keys[0])
 	require.NoError(t, err)
-	resp, err := server.ProposeExit(context.Background(), req)
+	resp, err := server.ProposeExit(t.Context(), req)
 	require.NoError(t, err)
 	expectedRoot, err := req.Exit.HashTreeRoot()
 	require.NoError(t, err)

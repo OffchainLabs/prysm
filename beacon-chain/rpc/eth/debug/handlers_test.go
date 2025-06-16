@@ -2,7 +2,6 @@ package debug
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -25,7 +24,7 @@ import (
 )
 
 func TestGetBeaconStateV2(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := dbtest.SetupDB(t)
 
 	t.Run("phase0", func(t *testing.T) {

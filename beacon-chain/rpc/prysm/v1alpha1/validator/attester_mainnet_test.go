@@ -1,7 +1,6 @@
 package validator
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -77,7 +76,7 @@ func TestAttestationDataAtSlot_HandlesFarAwayJustifiedEpoch(t *testing.T) {
 		CommitteeIndex: 0,
 		Slot:           10000,
 	}
-	res, err := attesterServer.GetAttestationData(context.Background(), req)
+	res, err := attesterServer.GetAttestationData(t.Context(), req)
 	require.NoError(t, err, "Could not get attestation info at slot")
 
 	expectedInfo := &ethpb.AttestationData{

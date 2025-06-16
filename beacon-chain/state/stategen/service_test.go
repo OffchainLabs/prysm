@@ -1,7 +1,6 @@
 package stategen
 
 import (
-	"context"
 	"testing"
 
 	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
@@ -14,7 +13,7 @@ import (
 )
 
 func TestResume(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
 	service := New(beaconDB, doublylinkedtree.New())

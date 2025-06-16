@@ -1,7 +1,6 @@
 package event
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -30,7 +29,7 @@ func TestNewEventStream(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewEventStream(context.Background(), &http.Client{}, tt.host, tt.topics)
+			_, err := NewEventStream(t.Context(), &http.Client{}, tt.host, tt.topics)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewEventStream() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -56,7 +55,7 @@ func TestEventStream(t *testing.T) {
 
 	topics := []string{"head"}
 	eventsChannel := make(chan *Event, 1)
-	stream, err := NewEventStream(context.Background(), http.DefaultClient, server.URL, topics)
+	stream, err := NewEventStream(t.Context(), http.DefaultClient, server.URL, topics)
 	require.NoError(t, err)
 	go stream.Subscribe(eventsChannel)
 

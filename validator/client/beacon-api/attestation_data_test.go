@@ -1,7 +1,6 @@
 package beacon_api
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -17,7 +16,7 @@ import (
 )
 
 func TestGetAttestationData_ValidAttestation(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	expectedSlot := uint64(5)
 	expectedCommitteeIndex := uint64(6)
 	expectedBeaconBlockRoot := "0x0636045df9bdda3ab96592cf5389032c8ec3977f911e2b53509b348dfe164d4d"
@@ -76,7 +75,7 @@ func TestGetAttestationData_ValidAttestation(t *testing.T) {
 }
 
 func TestGetAttestationData_InvalidData(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	testCases := []struct {
 		name                 string
@@ -204,7 +203,7 @@ func TestGetAttestationData_JsonResponseError(t *testing.T) {
 	const slot = primitives.Slot(1)
 	const committeeIndex = primitives.CommitteeIndex(2)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

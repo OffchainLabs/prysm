@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"context"
 	"testing"
 
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
@@ -33,7 +32,7 @@ func TestBeaconAggregateProofSubscriber_CanSaveAggregatedAttestation(t *testing.
 		},
 		Signature: make([]byte, fieldparams.BLSSignatureLength),
 	}
-	require.NoError(t, r.beaconAggregateProofSubscriber(context.Background(), a))
+	require.NoError(t, r.beaconAggregateProofSubscriber(t.Context(), a))
 	assert.DeepSSZEqual(t, []ethpb.Att{a.Message.Aggregate}, r.cfg.attPool.AggregatedAttestations(), "Did not save aggregated attestation")
 }
 
@@ -55,7 +54,7 @@ func TestBeaconAggregateProofSubscriber_CanSaveUnaggregatedAttestation(t *testin
 			AggregatorIndex: 100,
 		},
 	}
-	require.NoError(t, r.beaconAggregateProofSubscriber(context.Background(), a))
+	require.NoError(t, r.beaconAggregateProofSubscriber(t.Context(), a))
 
 	atts := r.cfg.attPool.UnaggregatedAttestations()
 	assert.DeepEqual(t, []ethpb.Att{a.Message.Aggregate}, atts, "Did not save unaggregated attestation")

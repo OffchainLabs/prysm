@@ -108,7 +108,7 @@ type testServiceRequirements struct {
 }
 
 func minimalTestService(t *testing.T, opts ...Option) (*Service, *testServiceRequirements) {
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 	fcs := doublylinkedtree.New()
 	sg := stategen.New(beaconDB, fcs)

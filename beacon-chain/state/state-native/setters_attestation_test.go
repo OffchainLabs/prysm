@@ -1,7 +1,6 @@
 package state_native
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/types"
@@ -53,14 +52,14 @@ func TestAppendBeyondIndicesLimit(t *testing.T) {
 		RandaoMixes:               mockrandaoMixes,
 	})
 	require.NoError(t, err)
-	_, err = st.HashTreeRoot(context.Background())
+	_, err = st.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 	s, ok := st.(*BeaconState)
 	require.Equal(t, true, ok)
 	for i := types.FieldIndex(0); i < types.FieldIndex(params.BeaconConfig().BeaconStateFieldCount); i++ {
 		s.dirtyFields[i] = true
 	}
-	_, err = st.HashTreeRoot(context.Background())
+	_, err = st.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 	for i := 0; i < 10; i++ {
 		assert.NoError(t, st.AppendValidator(&ethpb.Validator{}))

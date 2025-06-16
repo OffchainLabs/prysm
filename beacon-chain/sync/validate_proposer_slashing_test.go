@@ -110,7 +110,7 @@ func setupValidProposerSlashing(t *testing.T) (*ethpb.ProposerSlashing, state.Be
 
 func TestValidateProposerSlashing_ValidSlashing(t *testing.T) {
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	slashing, s := setupValidProposerSlashing(t)
 
@@ -149,7 +149,7 @@ func TestValidateProposerSlashing_ValidSlashing(t *testing.T) {
 
 func TestValidateProposerSlashing_ValidOldSlashing(t *testing.T) {
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	slashing, s := setupValidProposerSlashing(t)
 	val, err := s.ValidatorAtIndex(slashing.Header_2.Header.ProposerIndex)
@@ -198,7 +198,7 @@ func TestValidateProposerSlashing_ContextTimeout(t *testing.T) {
 	require.NoError(t, err)
 	err = st.SetPreviousJustifiedCheckpoint(&ethpb.Checkpoint{Epoch: 0, Root: []byte{}})
 	require.NoError(t, err)
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 
 	r := &Service{
@@ -228,7 +228,7 @@ func TestValidateProposerSlashing_ContextTimeout(t *testing.T) {
 
 func TestValidateProposerSlashing_Syncing(t *testing.T) {
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	slashing, s := setupValidProposerSlashing(t)
 

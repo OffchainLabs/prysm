@@ -43,7 +43,7 @@ func TestValidatorIndex_OK(t *testing.T) {
 	req := &ethpb.ValidatorIndexRequest{
 		PublicKey: pubKey,
 	}
-	_, err = Server.ValidatorIndex(context.Background(), req)
+	_, err = Server.ValidatorIndex(t.Context(), req)
 	assert.NoError(t, err, "Could not get validator index")
 }
 
@@ -55,7 +55,7 @@ func TestValidatorIndex_StateEmpty(t *testing.T) {
 	req := &ethpb.ValidatorIndexRequest{
 		PublicKey: pubKey,
 	}
-	_, err := Server.ValidatorIndex(context.Background(), req)
+	_, err := Server.ValidatorIndex(t.Context(), req)
 	assert.ErrorContains(t, "head state is empty", err)
 }
 
@@ -69,7 +69,7 @@ func TestWaitForActivation_ContextClosed(t *testing.T) {
 	genesisRoot, err := block.Block.HashTreeRoot()
 	require.NoError(t, err, "Could not get signing root")
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	depositCache, err := depositsnapshot.New()
 	require.NoError(t, err)
 
@@ -88,9 +88,9 @@ func TestWaitForActivation_ContextClosed(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockChainStream := mock.NewMockBeaconNodeValidator_WaitForActivationServer(ctrl)
-	mockChainStream.EXPECT().Context().Return(context.Background())
+	mockChainStream.EXPECT().Context().Return(t.Context())
 	mockChainStream.EXPECT().Send(gomock.Any()).Return(nil)
-	mockChainStream.EXPECT().Context().Return(context.Background())
+	mockChainStream.EXPECT().Context().Return(t.Context())
 	exitRoutine := make(chan bool)
 	go func(tt *testing.T) {
 		want := "context canceled"
@@ -141,7 +141,7 @@ func TestWaitForActivation_MultipleStatuses(t *testing.T) {
 	s, err := state_native.InitializeFromProtoUnsafePhase0(beaconState)
 	require.NoError(t, err)
 	vs := &Server{
-		Ctx:               context.Background(),
+		Ctx:               t.Context(),
 		ChainStartFetcher: &mockExecution.Chain{},
 		HeadFetcher:       &mockChain.ChainService{State: s, Root: genesisRoot[:]},
 	}
@@ -152,7 +152,7 @@ func TestWaitForActivation_MultipleStatuses(t *testing.T) {
 
 	defer ctrl.Finish()
 	mockChainStream := mock.NewMockBeaconNodeValidator_WaitForActivationServer(ctrl)
-	mockChainStream.EXPECT().Context().Return(context.Background())
+	mockChainStream.EXPECT().Context().Return(t.Context())
 	mockChainStream.EXPECT().Send(
 		&ethpb.ValidatorActivationResponse{
 			Statuses: []*ethpb.ValidatorActivationResponse_Status{
@@ -188,7 +188,7 @@ func TestWaitForActivation_MultipleStatuses(t *testing.T) {
 }
 
 func TestWaitForChainStart_ContextClosed(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	chainService := &mockChain.ChainService{}
 	server := &Server{
 		Ctx: ctx,
@@ -223,7 +223,7 @@ func TestWaitForChainStart_AlreadyStarted(t *testing.T) {
 
 	chainService := &mockChain.ChainService{State: st, ValidatorsRoot: genesisValidatorsRoot}
 	Server := &Server{
-		Ctx: context.Background(),
+		Ctx: t.Context(),
 		ChainStartFetcher: &mockExecution.Chain{
 			ChainFeed: new(event.Feed),
 		},
@@ -240,7 +240,7 @@ func TestWaitForChainStart_AlreadyStarted(t *testing.T) {
 			GenesisValidatorsRoot: genesisValidatorsRoot[:],
 		},
 	).Return(nil)
-	mockStream.EXPECT().Context().Return(context.Background())
+	mockStream.EXPECT().Context().Return(t.Context())
 	assert.NoError(t, Server.WaitForChainStart(&emptypb.Empty{}, mockStream), "Could not call RPC method")
 }
 
@@ -249,7 +249,7 @@ func TestWaitForChainStart_HeadStateDoesNotExist(t *testing.T) {
 	chainService := &mockChain.ChainService{State: nil}
 	gs := startup.NewClockSynchronizer()
 	Server := &Server{
-		Ctx: context.Background(),
+		Ctx: t.Context(),
 		ChainStartFetcher: &mockExecution.Chain{
 			ChainFeed: new(event.Feed),
 		},
@@ -260,7 +260,7 @@ func TestWaitForChainStart_HeadStateDoesNotExist(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockStream := mock.NewMockBeaconNodeValidator_WaitForChainStartServer(ctrl)
-	mockStream.EXPECT().Context().Return(context.Background())
+	mockStream.EXPECT().Context().Return(t.Context())
 
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
@@ -280,7 +280,7 @@ func TestWaitForChainStart_NotStartedThenLogFired(t *testing.T) {
 	gs := startup.NewClockSynchronizer()
 
 	Server := &Server{
-		Ctx: context.Background(),
+		Ctx: t.Context(),
 		ChainStartFetcher: &mockExecution.FaultyExecutionChain{
 			ChainFeed: new(event.Feed),
 		},
@@ -299,7 +299,7 @@ func TestWaitForChainStart_NotStartedThenLogFired(t *testing.T) {
 			GenesisValidatorsRoot: genesisValidatorsRoot[:],
 		},
 	).Return(nil)
-	mockStream.EXPECT().Context().Return(context.Background())
+	mockStream.EXPECT().Context().Return(t.Context())
 	go func(tt *testing.T) {
 		assert.NoError(tt, Server.WaitForChainStart(&emptypb.Empty{}, mockStream))
 		<-exitRoutine
@@ -332,12 +332,12 @@ func TestServer_DomainData_Exits(t *testing.T) {
 	s, err := state_native.InitializeFromProtoUnsafeBellatrix(beaconState)
 	require.NoError(t, err)
 	vs := &Server{
-		Ctx:               context.Background(),
+		Ctx:               t.Context(),
 		ChainStartFetcher: &mockExecution.Chain{},
 		HeadFetcher:       &mockChain.ChainService{State: s, Root: genesisRoot[:]},
 	}
 
-	reqDomain, err := vs.DomainData(context.Background(), &ethpb.DomainRequest{
+	reqDomain, err := vs.DomainData(t.Context(), &ethpb.DomainRequest{
 		Epoch:  100,
 		Domain: params.BeaconConfig().DomainDeposit[:],
 	})
@@ -353,7 +353,7 @@ func TestServer_DomainData_Exits(t *testing.T) {
 	require.NoError(t, err)
 	vs.HeadFetcher = &mockChain.ChainService{State: s, Root: genesisRoot[:]}
 
-	reqDomain, err = vs.DomainData(context.Background(), &ethpb.DomainRequest{
+	reqDomain, err = vs.DomainData(t.Context(), &ethpb.DomainRequest{
 		Epoch:  100,
 		Domain: params.BeaconConfig().DomainVoluntaryExit[:],
 	})

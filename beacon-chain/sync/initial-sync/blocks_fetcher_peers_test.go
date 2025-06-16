@@ -23,7 +23,7 @@ func TestBlocksFetcher_selectFailOverPeer(t *testing.T) {
 		excludedPID peer.ID
 		peers       []peer.ID
 	}
-	fetcher := newBlocksFetcher(context.Background(), &blocksFetcherConfig{})
+	fetcher := newBlocksFetcher(t.Context(), &blocksFetcherConfig{})
 	tests := []struct {
 		name    string
 		args    args
@@ -231,7 +231,7 @@ func TestBlocksFetcher_filterPeers(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mc, p2p, _ := initializeTestServices(t, []primitives.Slot{}, []*peerData{})
-			fetcher := newBlocksFetcher(context.Background(), &blocksFetcherConfig{
+			fetcher := newBlocksFetcher(t.Context(), &blocksFetcherConfig{
 				chain:                    mc,
 				p2p:                      p2p,
 				peerFilterCapacityWeight: tt.args.capacityWeight,
@@ -253,7 +253,7 @@ func TestBlocksFetcher_filterPeers(t *testing.T) {
 			var filteredPIDs []peer.ID
 			var err error
 			for i := 0; i < 1000; i++ {
-				filteredPIDs = fetcher.filterPeers(context.Background(), peerIDs, tt.args.peersPercentage)
+				filteredPIDs = fetcher.filterPeers(t.Context(), peerIDs, tt.args.peersPercentage)
 				if len(filteredPIDs) <= 1 {
 					break
 				}
@@ -399,7 +399,7 @@ func TestBlocksFetcher_removeStalePeerLocks(t *testing.T) {
 		},
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{})
 

@@ -1,7 +1,6 @@
 package p2p
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -23,12 +22,12 @@ func TestMakePeer_OK(t *testing.T) {
 }
 
 func TestDialRelayNode_InvalidPeerString(t *testing.T) {
-	err := dialRelayNode(context.Background(), nil, "/ip4")
+	err := dialRelayNode(t.Context(), nil, "/ip4")
 	assert.ErrorContains(t, "failed to parse multiaddr \"/ip4\"", err, "Expected to fail with invalid peer string")
 }
 
 func TestDialRelayNode_OK(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	relay, err := libp2p.New(libp2p.ResourceManager(&network.NullResourceManager{}))
 	require.NoError(t, err)
 	host, err := libp2p.New(libp2p.ResourceManager(&network.NullResourceManager{}))

@@ -60,7 +60,7 @@ func TestProcessPendingAtts_NoBlockRequestBlock(t *testing.T) {
 
 	a := &ethpb.AggregateAttestationAndProof{Aggregate: &ethpb.Attestation{Data: &ethpb.AttestationData{Target: &ethpb.Checkpoint{Root: make([]byte, 32)}}}}
 	r.blkRootToPendingAtts[[32]byte{'A'}] = []ethpb.SignedAggregateAttAndProof{&ethpb.SignedAggregateAttestationAndProof{Message: a}}
-	require.NoError(t, r.processPendingAtts(context.Background()))
+	require.NoError(t, r.processPendingAtts(t.Context()))
 	require.LogsContain(t, hook, "Requesting block by root")
 }
 
@@ -73,7 +73,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAtt(t *testing.T) {
 	beaconState, privKeys := util.DeterministicGenesisState(t, validators)
 
 	sb := util.NewBeaconBlock()
-	util.SaveBlock(t, context.Background(), db, sb)
+	util.SaveBlock(t, t.Context(), db, sb)
 	root, err := sb.Block.HashTreeRoot()
 	require.NoError(t, err)
 
@@ -88,7 +88,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAtt(t *testing.T) {
 		AggregationBits: aggBits,
 	}
 
-	committee, err := helpers.BeaconCommitteeFromState(context.Background(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
 	assert.NoError(t, err)
 	attestingIndices, err := attestation.AttestingIndices(att, committee)
 	require.NoError(t, err)
@@ -119,7 +119,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAtt(t *testing.T) {
 	opn := mock.NewEventFeedWrapper()
 	sub := opn.Subscribe(done)
 	defer sub.Unsubscribe()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	r := &Service{
 		ctx: ctx,
 		cfg: &config{
@@ -138,10 +138,10 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAtt(t *testing.T) {
 
 	s, err := util.NewBeaconState()
 	require.NoError(t, err)
-	require.NoError(t, r.cfg.beaconDB.SaveState(context.Background(), s, root))
+	require.NoError(t, r.cfg.beaconDB.SaveState(t.Context(), s, root))
 
 	r.blkRootToPendingAtts[root] = []ethpb.SignedAggregateAttAndProof{&ethpb.SignedAggregateAttestationAndProof{Message: aggregateAndProof}}
-	require.NoError(t, r.processPendingAtts(context.Background()))
+	require.NoError(t, r.processPendingAtts(t.Context()))
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -176,7 +176,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra(t *testing.T) {
 	beaconState, privKeys := util.DeterministicGenesisStateElectra(t, validators)
 
 	sb := util.NewBeaconBlockElectra()
-	util.SaveBlock(t, context.Background(), db, sb)
+	util.SaveBlock(t, t.Context(), db, sb)
 	root, err := sb.Block.HashTreeRoot()
 	require.NoError(t, err)
 
@@ -191,7 +191,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra(t *testing.T) {
 		Aggregate: att,
 	}
 
-	committee, err := helpers.BeaconCommitteeFromState(context.Background(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
 	assert.NoError(t, err)
 	att.AttesterIndex = committee[0]
 	attesterDomain, err := signing.Domain(beaconState.Fork(), 0, params.BeaconConfig().DomainBeaconAttester, beaconState.GenesisValidatorsRoot())
@@ -214,7 +214,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra(t *testing.T) {
 	opn := mock.NewEventFeedWrapper()
 	sub := opn.Subscribe(done)
 	defer sub.Unsubscribe()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	r := &Service{
 		ctx: ctx,
 		cfg: &config{
@@ -233,10 +233,10 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra(t *testing.T) {
 
 	s, err := util.NewBeaconStateElectra()
 	require.NoError(t, err)
-	require.NoError(t, r.cfg.beaconDB.SaveState(context.Background(), s, root))
+	require.NoError(t, r.cfg.beaconDB.SaveState(t.Context(), s, root))
 
 	r.blkRootToPendingAtts[root] = []ethpb.SignedAggregateAttAndProof{&ethpb.SignedAggregateAttestationAndProofSingle{Message: aggregateAndProof}}
-	require.NoError(t, r.processPendingAtts(context.Background()))
+	require.NoError(t, r.processPendingAtts(t.Context()))
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -289,7 +289,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra_VerifyAlreadySeen
 
 	// Create and save a new Beacon block.
 	sb := util.NewBeaconBlockElectra()
-	util.SaveBlock(t, context.Background(), db, sb)
+	util.SaveBlock(t, t.Context(), db, sb)
 
 	// Save state with block root.
 	root, err := sb.Block.HashTreeRoot()
@@ -311,7 +311,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra_VerifyAlreadySeen
 	}
 
 	// Retrieve the beacon committee and set the attester index.
-	committee, err := helpers.BeaconCommitteeFromState(context.Background(), beaconState, att.Data.Slot, att.CommitteeId)
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, att.Data.Slot, att.CommitteeId)
 	assert.NoError(t, err)
 	att.AttesterIndex = committee[0]
 
@@ -343,7 +343,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra_VerifyAlreadySeen
 	defer sub.Unsubscribe()
 
 	// Create context and service configuration.
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	r := &Service{
 		ctx: ctx,
@@ -365,13 +365,13 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra_VerifyAlreadySeen
 	// Save a new beacon state and link it with the block root.
 	s, err := util.NewBeaconStateElectra()
 	require.NoError(t, err)
-	require.NoError(t, r.cfg.beaconDB.SaveState(context.Background(), s, root))
+	require.NoError(t, r.cfg.beaconDB.SaveState(t.Context(), s, root))
 
 	// Add the pending attestation.
 	r.blkRootToPendingAtts[root] = []ethpb.SignedAggregateAttAndProof{
 		&ethpb.SignedAggregateAttestationAndProofSingle{Message: aggregateAndProof},
 	}
-	require.NoError(t, r.processPendingAtts(context.Background()))
+	require.NoError(t, r.processPendingAtts(t.Context()))
 
 	// Verify that the event feed receives the expected attestation.
 	var wg sync.WaitGroup
@@ -456,11 +456,11 @@ func TestProcessPendingAtts_NoBroadcastWithBadSignature(t *testing.T) {
 	b := util.NewBeaconBlock()
 	r32, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
-	util.SaveBlock(t, context.Background(), r.cfg.beaconDB, b)
-	require.NoError(t, r.cfg.beaconDB.SaveState(context.Background(), s, r32))
+	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b)
+	require.NoError(t, r.cfg.beaconDB.SaveState(t.Context(), s, r32))
 
 	r.blkRootToPendingAtts[r32] = []ethpb.SignedAggregateAttAndProof{&ethpb.SignedAggregateAttestationAndProof{Message: a, Signature: make([]byte, fieldparams.BLSSignatureLength)}}
-	require.NoError(t, r.processPendingAtts(context.Background()))
+	require.NoError(t, r.processPendingAtts(t.Context()))
 
 	assert.Equal(t, false, p1.BroadcastCalled.Load(), "Broadcasted bad aggregate")
 	// Clear pool.
@@ -480,7 +480,7 @@ func TestProcessPendingAtts_NoBroadcastWithBadSignature(t *testing.T) {
 		},
 		AggregationBits: aggBits,
 	}
-	committee, err := helpers.BeaconCommitteeFromState(context.Background(), s, att.Data.Slot, att.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), s, att.Data.Slot, att.Data.CommitteeIndex)
 	assert.NoError(t, err)
 	attestingIndices, err := attestation.AttestingIndices(att, committee)
 	require.NoError(t, err)
@@ -506,7 +506,7 @@ func TestProcessPendingAtts_NoBroadcastWithBadSignature(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, s.SetGenesisTime(uint64(time.Now().Unix())))
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	chain2 := &mock.ChainService{Genesis: time.Now(),
 		State: s,
 		FinalizedCheckPoint: &ethpb.Checkpoint{
@@ -530,7 +530,7 @@ func TestProcessPendingAtts_NoBroadcastWithBadSignature(t *testing.T) {
 	go r.verifierRoutine()
 
 	r.blkRootToPendingAtts[r32] = []ethpb.SignedAggregateAttAndProof{&ethpb.SignedAggregateAttestationAndProof{Message: aggregateAndProof, Signature: aggreSig}}
-	require.NoError(t, r.processPendingAtts(context.Background()))
+	require.NoError(t, r.processPendingAtts(t.Context()))
 
 	assert.Equal(t, true, p1.BroadcastCalled.Load(), "Could not broadcast the good aggregate")
 	cancel()
@@ -545,7 +545,7 @@ func TestProcessPendingAtts_HasBlockSaveAggregatedAtt(t *testing.T) {
 	beaconState, privKeys := util.DeterministicGenesisState(t, validators)
 
 	sb := util.NewBeaconBlock()
-	util.SaveBlock(t, context.Background(), db, sb)
+	util.SaveBlock(t, t.Context(), db, sb)
 	root, err := sb.Block.HashTreeRoot()
 	require.NoError(t, err)
 
@@ -561,7 +561,7 @@ func TestProcessPendingAtts_HasBlockSaveAggregatedAtt(t *testing.T) {
 		AggregationBits: aggBits,
 	}
 
-	committee, err := helpers.BeaconCommitteeFromState(context.Background(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
 	assert.NoError(t, err)
 	attestingIndices, err := attestation.AttestingIndices(att, committee)
 	require.NoError(t, err)
@@ -598,7 +598,7 @@ func TestProcessPendingAtts_HasBlockSaveAggregatedAtt(t *testing.T) {
 			Root:  aggregateAndProof.Aggregate.Data.BeaconBlockRoot,
 			Epoch: 0,
 		}}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	r := &Service{
 		ctx: ctx,
 		cfg: &config{
@@ -615,10 +615,10 @@ func TestProcessPendingAtts_HasBlockSaveAggregatedAtt(t *testing.T) {
 	go r.verifierRoutine()
 	s, err := util.NewBeaconState()
 	require.NoError(t, err)
-	require.NoError(t, r.cfg.beaconDB.SaveState(context.Background(), s, root))
+	require.NoError(t, r.cfg.beaconDB.SaveState(t.Context(), s, root))
 
 	r.blkRootToPendingAtts[root] = []ethpb.SignedAggregateAttAndProof{&ethpb.SignedAggregateAttestationAndProof{Message: aggregateAndProof, Signature: aggreSig}}
-	require.NoError(t, r.processPendingAtts(context.Background()))
+	require.NoError(t, r.processPendingAtts(t.Context()))
 
 	assert.Equal(t, 1, len(r.cfg.attPool.AggregatedAttestations()), "Did not save aggregated att")
 	assert.DeepEqual(t, att, r.cfg.attPool.AggregatedAttestations()[0], "Incorrect saved att")
@@ -661,13 +661,13 @@ func TestValidatePendingAtts_CanPruneOldAtts(t *testing.T) {
 	assert.Equal(t, 100, len(s.blkRootToPendingAtts[r3]), "Did not save pending atts")
 
 	// Set current slot to 50, it should prune 19 attestations. (50 - 31)
-	s.validatePendingAtts(context.Background(), 50)
+	s.validatePendingAtts(t.Context(), 50)
 	assert.Equal(t, 81, len(s.blkRootToPendingAtts[r1]), "Did not delete pending atts")
 	assert.Equal(t, 81, len(s.blkRootToPendingAtts[r2]), "Did not delete pending atts")
 	assert.Equal(t, 81, len(s.blkRootToPendingAtts[r3]), "Did not delete pending atts")
 
 	// Set current slot to 100 + slot_duration, it should prune all the attestations.
-	s.validatePendingAtts(context.Background(), 100+params.BeaconConfig().SlotsPerEpoch)
+	s.validatePendingAtts(t.Context(), 100+params.BeaconConfig().SlotsPerEpoch)
 	assert.Equal(t, 0, len(s.blkRootToPendingAtts[r1]), "Did not delete pending atts")
 	assert.Equal(t, 0, len(s.blkRootToPendingAtts[r2]), "Did not delete pending atts")
 	assert.Equal(t, 0, len(s.blkRootToPendingAtts[r3]), "Did not delete pending atts")

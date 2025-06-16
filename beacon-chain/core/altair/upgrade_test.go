@@ -1,7 +1,6 @@
 package altair_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
@@ -17,7 +16,7 @@ import (
 )
 
 func TestTranslateParticipation(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	s, _ := util.DeterministicGenesisStateAltair(t, 64)
 	require.NoError(t, s.SetSlot(s.Slot()+params.BeaconConfig().MinAttestationInclusionDelay))
 
@@ -73,7 +72,7 @@ func TestTranslateParticipation(t *testing.T) {
 func TestUpgradeToAltair(t *testing.T) {
 	st, _ := util.DeterministicGenesisState(t, params.BeaconConfig().MaxValidatorsPerCommittee)
 	preForkState := st.Copy()
-	aState, err := altair.UpgradeToAltair(context.Background(), st)
+	aState, err := altair.UpgradeToAltair(t.Context(), st)
 	require.NoError(t, err)
 
 	require.Equal(t, preForkState.GenesisTime(), aState.GenesisTime())

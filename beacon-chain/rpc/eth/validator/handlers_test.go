@@ -2,7 +2,6 @@ package validator
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -1015,7 +1014,7 @@ func TestSubmitSyncCommitteeSubscription(t *testing.T) {
 	require.NoError(t, err)
 	eth1Data, err := util.DeterministicEth1Data(len(deposits))
 	require.NoError(t, err)
-	bs, err := util.GenesisBeaconState(context.Background(), deposits, 0, eth1Data)
+	bs, err := util.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
 	require.NoError(t, err, "Could not set up genesis state")
 	genesisRoot, err := genesis.Block.HashTreeRoot()
 	require.NoError(t, err, "Could not get signing root")
@@ -1186,7 +1185,7 @@ func TestSubmitBeaconCommitteeSubscription(t *testing.T) {
 	require.NoError(t, err)
 	eth1Data, err := util.DeterministicEth1Data(len(deposits))
 	require.NoError(t, err)
-	bs, err := transition.GenesisBeaconState(context.Background(), deposits, 0, eth1Data)
+	bs, err := transition.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
 	require.NoError(t, err, "Could not set up genesis state")
 	// Set state to non-epoch start slot.
 	require.NoError(t, bs.SetSlot(5))
@@ -1587,7 +1586,7 @@ func TestGetAttestationData(t *testing.T) {
 	})
 
 	t.Run("request slot is not current slot", func(t *testing.T) {
-		ctx := context.Background()
+		ctx := t.Context()
 		db := dbutil.SetupDB(t)
 
 		slot := 3*params.BeaconConfig().SlotsPerEpoch + 1
@@ -2181,7 +2180,7 @@ func TestGetAttesterDuties(t *testing.T) {
 	require.NoError(t, err)
 	eth1Data, err := util.DeterministicEth1Data(len(deposits))
 	require.NoError(t, err)
-	bs, err := transition.GenesisBeaconState(context.Background(), deposits, 0, eth1Data)
+	bs, err := transition.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
 	require.NoError(t, err, "Could not set up genesis state")
 	// Set state to non-epoch start slot.
 	require.NoError(t, bs.SetSlot(5))
@@ -2211,7 +2210,7 @@ func TestGetAttesterDuties(t *testing.T) {
 		State: bs, Root: genesisRoot[:], Slot: &chainSlot,
 	}
 	db := dbutil.SetupDB(t)
-	require.NoError(t, db.SaveGenesisBlockRoot(context.Background(), genesisRoot))
+	require.NoError(t, db.SaveGenesisBlockRoot(t.Context(), genesisRoot))
 
 	s := &Server{
 		Stater: &testutil.MockStater{
@@ -2382,7 +2381,7 @@ func TestGetAttesterDuties(t *testing.T) {
 		require.Equal(t, 0, len(resp.Data))
 	})
 	t.Run("execution optimistic", func(t *testing.T) {
-		ctx := context.Background()
+		ctx := t.Context()
 
 		parentRoot := [32]byte{'a'}
 		blk := util.NewBeaconBlock()
@@ -2465,10 +2464,10 @@ func TestGetProposerDuties(t *testing.T) {
 	}
 
 	db := dbutil.SetupDB(t)
-	require.NoError(t, db.SaveGenesisBlockRoot(context.Background(), genesisRoot))
+	require.NoError(t, db.SaveGenesisBlockRoot(t.Context(), genesisRoot))
 
 	t.Run("ok", func(t *testing.T) {
-		bs, err := transition.GenesisBeaconState(context.Background(), deposits, 0, eth1Data)
+		bs, err := transition.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
 		require.NoError(t, err, "Could not set up genesis state")
 		require.NoError(t, bs.SetSlot(params.BeaconConfig().SlotsPerEpoch))
 		require.NoError(t, bs.SetBlockRoots(roots))
@@ -2510,7 +2509,7 @@ func TestGetProposerDuties(t *testing.T) {
 		assert.Equal(t, hexutil.Encode(pubKeys[12289]), expectedDuty.Pubkey)
 	})
 	t.Run("next epoch", func(t *testing.T) {
-		bs, err := transition.GenesisBeaconState(context.Background(), deposits, 0, eth1Data)
+		bs, err := transition.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
 		require.NoError(t, err, "Could not set up genesis state")
 		require.NoError(t, bs.SetSlot(params.BeaconConfig().SlotsPerEpoch))
 		require.NoError(t, bs.SetBlockRoots(roots))
@@ -2552,7 +2551,7 @@ func TestGetProposerDuties(t *testing.T) {
 		assert.Equal(t, hexutil.Encode(pubKeys[1360]), expectedDuty.Pubkey)
 	})
 	t.Run("epoch out of bounds", func(t *testing.T) {
-		bs, err := transition.GenesisBeaconState(context.Background(), deposits, 0, eth1Data)
+		bs, err := transition.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
 		require.NoError(t, err, "Could not set up genesis state")
 		// Set state to non-epoch start slot.
 		require.NoError(t, bs.SetSlot(5))
@@ -2586,7 +2585,7 @@ func TestGetProposerDuties(t *testing.T) {
 		assert.StringContains(t, fmt.Sprintf("Request epoch %d can not be greater than next epoch %d", currentEpoch+2, currentEpoch+1), e.Message)
 	})
 	t.Run("execution optimistic", func(t *testing.T) {
-		bs, err := transition.GenesisBeaconState(context.Background(), deposits, 0, eth1Data)
+		bs, err := transition.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
 		require.NoError(t, err, "Could not set up genesis state")
 		// Set state to non-epoch start slot.
 		require.NoError(t, bs.SetSlot(5))
@@ -2930,7 +2929,7 @@ func TestGetSyncCommitteeDuties(t *testing.T) {
 		assert.StringContains(t, "Epoch is too far in the future", e.Message)
 	})
 	t.Run("execution optimistic", func(t *testing.T) {
-		ctx := context.Background()
+		ctx := t.Context()
 		db := dbutil.SetupDB(t)
 		require.NoError(t, db.SaveStateSummary(ctx, &ethpbalpha.StateSummary{Slot: 0, Root: []byte("root")}))
 		require.NoError(t, db.SaveLastValidatedCheckpoint(ctx, &ethpbalpha.Checkpoint{Epoch: 0, Root: []byte("root")}))
