@@ -20,7 +20,7 @@ const (
 	// DefaultHTTPServerHost for the validator client.
 	DefaultHTTPServerHost = "127.0.0.1"
 
-	currentDefaultMaxHealthChecks = 60
+	DefaultMaxHealthChecks = 60
 )
 
 var (
@@ -401,7 +401,7 @@ var (
 	MaxHealthChecksFlag = &cli.IntFlag{
 		Name:  "max-health-checks",
 		Usage: "Maximum number of health checks to perform before exiting if not healthy. Set to 0 or a negative number for indefinite checks.",
-		Value: currentDefaultMaxHealthChecks, // Default to current behavior
+		Value: DefaultMaxHealthChecks, // Default to current behavior
 	}
 )
 
