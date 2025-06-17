@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -79,6 +80,8 @@ func TestGetSSZ(t *testing.T) {
 	})
 
 	t.Run("Invalid Content-Type response", func(t *testing.T) {
+		logrus.SetLevel(logrus.DebugLevel)
+		defer logrus.SetLevel(logrus.InfoLevel) // reset it afterwards
 		logHook := test.NewGlobal()
 		mux := http.NewServeMux()
 		mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
