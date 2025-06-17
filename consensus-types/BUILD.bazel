@@ -2,9 +2,7 @@ load("@prysm//tools/go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
-    srcs = [
-        "types.go",
-    ],
+    srcs = ["types.go"],
     importpath = "github.com/OffchainLabs/prysm/v6/consensus-types",
     visibility = ["//visibility:public"],
     deps = [
