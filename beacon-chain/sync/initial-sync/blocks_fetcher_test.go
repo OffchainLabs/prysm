@@ -39,7 +39,7 @@ import (
 func TestBlocksFetcher_InitStartStop(t *testing.T) {
 	mc, p2p, _ := initializeTestServices(t, []primitives.Slot{}, []*peerData{})
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	fetcher := newBlocksFetcher(
 		ctx,
@@ -66,7 +66,7 @@ func TestBlocksFetcher_InitStartStop(t *testing.T) {
 
 	t.Run("multiple stopping attempts", func(t *testing.T) {
 		fetcher := newBlocksFetcher(
-			context.Background(),
+			t.Context(),
 			&blocksFetcherConfig{
 				chain: mc,
 				p2p:   p2p,
@@ -77,7 +77,7 @@ func TestBlocksFetcher_InitStartStop(t *testing.T) {
 	})
 
 	t.Run("cancellation", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		fetcher := newBlocksFetcher(
 			ctx,
 			&blocksFetcherConfig{
@@ -90,7 +90,7 @@ func TestBlocksFetcher_InitStartStop(t *testing.T) {
 	})
 
 	t.Run("peer filter capacity weight", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		fetcher := newBlocksFetcher(
 			ctx,
@@ -272,7 +272,7 @@ func TestBlocksFetcher_RoundRobin(t *testing.T) {
 			genesisRoot := cache.rootCache[0]
 			cache.RUnlock()
 
-			util.SaveBlock(t, context.Background(), beaconDB, util.NewBeaconBlock())
+			util.SaveBlock(t, t.Context(), beaconDB, util.NewBeaconBlock())
 
 			st, err := util.NewBeaconState()
 			require.NoError(t, err)
@@ -291,7 +291,7 @@ func TestBlocksFetcher_RoundRobin(t *testing.T) {
 				ValidatorsRoot: [32]byte{},
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(t.Context())
 			fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
 				chain: mc,
 				p2p:   p,
@@ -340,7 +340,7 @@ func TestBlocksFetcher_RoundRobin(t *testing.T) {
 
 			maxExpectedBlocks := uint64(0)
 			for _, requestParams := range tt.requests {
-				err = fetcher.scheduleRequest(context.Background(), requestParams.start, requestParams.count)
+				err = fetcher.scheduleRequest(t.Context(), requestParams.start, requestParams.count)
 				assert.NoError(t, err)
 				maxExpectedBlocks += requestParams.count
 			}
@@ -378,16 +378,16 @@ func TestBlocksFetcher_RoundRobin(t *testing.T) {
 func TestBlocksFetcher_scheduleRequest(t *testing.T) {
 	blockBatchLimit := uint64(flags.Get().BlockBatchLimit)
 	t.Run("context cancellation", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{})
 		cancel()
 		assert.ErrorContains(t, "context canceled", fetcher.scheduleRequest(ctx, 1, blockBatchLimit))
 	})
 
 	t.Run("unblock on context cancellation", func(t *testing.T) {
-		fetcher := newBlocksFetcher(context.Background(), &blocksFetcherConfig{})
+		fetcher := newBlocksFetcher(t.Context(), &blocksFetcherConfig{})
 		for i := 0; i < maxPendingRequests; i++ {
-			assert.NoError(t, fetcher.scheduleRequest(context.Background(), 1, blockBatchLimit))
+			assert.NoError(t, fetcher.scheduleRequest(t.Context(), 1, blockBatchLimit))
 		}
 
 		// Will block on next request (and wait until requests are either processed or context is closed).
@@ -395,7 +395,7 @@ func TestBlocksFetcher_scheduleRequest(t *testing.T) {
 			fetcher.cancel()
 		}()
 		assert.ErrorContains(t, errFetcherCtxIsDone.Error(),
-			fetcher.scheduleRequest(context.Background(), 1, blockBatchLimit))
+			fetcher.scheduleRequest(t.Context(), 1, blockBatchLimit))
 	})
 }
 func TestBlocksFetcher_handleRequest(t *testing.T) {
@@ -424,7 +424,7 @@ func TestBlocksFetcher_handleRequest(t *testing.T) {
 	mc.Genesis = time.Now()
 
 	t.Run("context cancellation", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
 			chain: mc,
 			p2p:   p2p,
@@ -437,7 +437,7 @@ func TestBlocksFetcher_handleRequest(t *testing.T) {
 	})
 
 	t.Run("receive blocks", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
 			chain: mc,
@@ -445,7 +445,7 @@ func TestBlocksFetcher_handleRequest(t *testing.T) {
 			clock: startup.NewClock(mc.Genesis, mc.ValidatorsRoot),
 		})
 
-		requestCtx, reqCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		requestCtx, reqCancel := context.WithTimeout(t.Context(), 2*time.Second)
 		defer reqCancel()
 		go func() {
 			response := fetcher.handleRequest(requestCtx, 1 /* start */, uint64(blockBatchLimit) /* count */)
@@ -503,7 +503,7 @@ func TestBlocksFetcher_requestBeaconBlocksByRange(t *testing.T) {
 	}
 
 	mc, p2p, _ := initializeTestServices(t, chainConfig.expectedBlockSlots, chainConfig.peers)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	fetcher := newBlocksFetcher(
@@ -524,7 +524,7 @@ func TestBlocksFetcher_requestBeaconBlocksByRange(t *testing.T) {
 	assert.Equal(t, uint64(blockBatchLimit), uint64(len(blocks)), "Incorrect number of blocks returned")
 
 	// Test context cancellation.
-	ctx, cancel = context.WithCancel(context.Background())
+	ctx, cancel = context.WithCancel(t.Context())
 	cancel()
 	_, err = fetcher.requestBlocks(ctx, req, peerIDs[0])
 	assert.ErrorContains(t, "context canceled", err)
@@ -553,7 +553,7 @@ func TestBlocksFetcher_RequestBlocksRateLimitingLocks(t *testing.T) {
 
 	burstFactor := uint64(flags.Get().BlockBatchLimitBurstFactor)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{p2p: p1})
 	fetcher.rateLimiter = leakybucket.NewCollector(float64(req.Count), int64(req.Count*burstFactor), 1*time.Second, false)
@@ -619,7 +619,7 @@ func TestBlocksFetcher_WaitForBandwidth(t *testing.T) {
 
 	burstFactor := uint64(flags.Get().BlockBatchLimitBurstFactor)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{p2p: p1})
 	fetcher.rateLimiter = leakybucket.NewCollector(float64(req.Count), int64(req.Count*burstFactor), 5*time.Second, false)
@@ -886,7 +886,7 @@ func TestBlocksFetcher_requestBlocksFromPeerReturningInvalidBlocks(t *testing.T)
 	topic := p2pm.RPCBlocksByRangeTopicV1
 	protocol := libp2pcore.ProtocolID(topic + p1.Encoding().ProtocolSuffix())
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{p2p: p1, chain: &mock.ChainService{Genesis: time.Now(), ValidatorsRoot: [32]byte{}}})
 	fetcher.rateLimiter = leakybucket.NewCollector(0.000001, 640, 1*time.Second, false)
@@ -1285,7 +1285,7 @@ func TestBatchLimit(t *testing.T) {
 }
 
 func TestBlockFetcher_HasSufficientBandwidth(t *testing.T) {
-	bf := newBlocksFetcher(context.Background(), &blocksFetcherConfig{})
+	bf := newBlocksFetcher(t.Context(), &blocksFetcherConfig{})
 	currCap := bf.rateLimiter.Capacity()
 	wantedAmt := currCap - 100
 	bf.rateLimiter.Add(peer.ID("a").String(), wantedAmt)

@@ -10,7 +10,7 @@ import (
 )
 
 func TestStop_OK(t *testing.T) {
-	s, err := NewService(context.Background(), &Config{})
+	s, err := NewService(t.Context(), &Config{})
 	require.NoError(t, err)
 	require.NoError(t, s.Stop(), "Unable to stop attestation pool service")
 	assert.ErrorContains(t, context.Canceled.Error(), s.ctx.Err(), "Context was not canceled")

@@ -33,7 +33,7 @@ import (
 )
 
 func TestVerifyIndexInCommittee_CanVerify(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.MinimalSpecConfig())
 
@@ -46,7 +46,7 @@ func TestVerifyIndexInCommittee_CanVerify(t *testing.T) {
 	bf.SetBitAt(0, true)
 	att := &ethpb.Attestation{Data: &ethpb.AttestationData{}, AggregationBits: bf}
 
-	committee, err := helpers.BeaconCommitteeFromState(context.Background(), s, att.Data.Slot, att.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), s, att.Data.Slot, att.Data.CommitteeIndex)
 	assert.NoError(t, err)
 	indices, err := attestation.AttestingIndices(att, committee)
 	require.NoError(t, err)
@@ -62,7 +62,7 @@ func TestVerifyIndexInCommittee_CanVerify(t *testing.T) {
 }
 
 func TestVerifyIndexInCommittee_ExistsInBeaconCommittee(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.MinimalSpecConfig())
 
@@ -72,7 +72,7 @@ func TestVerifyIndexInCommittee_ExistsInBeaconCommittee(t *testing.T) {
 
 	att := &ethpb.Attestation{Data: &ethpb.AttestationData{}}
 
-	committee, err := helpers.BeaconCommitteeFromState(context.Background(), s, att.Data.Slot, att.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), s, att.Data.Slot, att.Data.CommitteeIndex)
 	require.NoError(t, err)
 
 	bl := bitfield.NewBitlist(uint64(len(committee)))
@@ -101,7 +101,7 @@ func TestVerifyIndexInCommittee_ExistsInBeaconCommittee(t *testing.T) {
 }
 
 func TestVerifyIndexInCommittee_ExistsInBeaconCommittee_Electra(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.MinimalSpecConfig())
 
@@ -111,7 +111,7 @@ func TestVerifyIndexInCommittee_ExistsInBeaconCommittee_Electra(t *testing.T) {
 
 	att := &ethpb.AttestationElectra{Data: &ethpb.AttestationData{}}
 
-	committee, err := helpers.BeaconCommitteeFromState(context.Background(), s, att.Data.Slot, att.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), s, att.Data.Slot, att.Data.CommitteeIndex)
 	require.NoError(t, err)
 
 	bl := bitfield.NewBitlist(uint64(len(committee)))
@@ -159,13 +159,13 @@ func TestVerifyIndexInCommittee_ExistsInBeaconCommittee_Electra(t *testing.T) {
 }
 
 func TestVerifyIndexInCommittee_Electra(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	s, _ := util.DeterministicGenesisStateElectra(t, 64)
 	service := &Service{}
 	cb := primitives.NewAttestationCommitteeBits()
 	cb.SetBitAt(0, true)
 	att := &ethpb.AttestationElectra{Data: &ethpb.AttestationData{}, CommitteeBits: cb}
-	committee, err := helpers.BeaconCommitteeFromState(context.Background(), s, att.Data.Slot, att.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), s, att.Data.Slot, att.Data.CommitteeIndex)
 	require.NoError(t, err)
 	bl := bitfield.NewBitlist(uint64(len(committee)))
 	bl.SetBitAt(0, true)
@@ -177,7 +177,7 @@ func TestVerifyIndexInCommittee_Electra(t *testing.T) {
 }
 
 func TestVerifySelection_NotAnAggregator(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.MinimalSpecConfig())
 	validators := uint64(2048)
@@ -236,7 +236,7 @@ func TestValidateAggregateAndProof_NoBlock(t *testing.T) {
 		},
 	}
 
-	if res, err := r.validateAggregateAndProof(context.Background(), "", msg); res == pubsub.ValidationAccept {
+	if res, err := r.validateAggregateAndProof(t.Context(), "", msg); res == pubsub.ValidationAccept {
 		_ = err
 		t.Error("Expected validate to fail")
 	}
@@ -250,12 +250,12 @@ func TestValidateAggregateAndProof_NotWithinSlotRange(t *testing.T) {
 	beaconState, _ := util.DeterministicGenesisState(t, validators)
 
 	b := util.NewBeaconBlock()
-	util.SaveBlock(t, context.Background(), db, b)
+	util.SaveBlock(t, t.Context(), db, b)
 	root, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
 	s, err := util.NewBeaconState()
 	require.NoError(t, err)
-	require.NoError(t, db.SaveState(context.Background(), s, root))
+	require.NoError(t, db.SaveState(t.Context(), s, root))
 
 	aggBits := bitfield.NewBitlist(3)
 	aggBits.SetBitAt(0, true)
@@ -306,7 +306,7 @@ func TestValidateAggregateAndProof_NotWithinSlotRange(t *testing.T) {
 		},
 	}
 
-	if res, err := r.validateAggregateAndProof(context.Background(), "", msg); res == pubsub.ValidationAccept {
+	if res, err := r.validateAggregateAndProof(t.Context(), "", msg); res == pubsub.ValidationAccept {
 		_ = err
 		t.Error("Expected validate to fail")
 	}
@@ -323,7 +323,7 @@ func TestValidateAggregateAndProof_NotWithinSlotRange(t *testing.T) {
 			Topic: &topic,
 		},
 	}
-	if res, err := r.validateAggregateAndProof(context.Background(), "", msg); res == pubsub.ValidationAccept {
+	if res, err := r.validateAggregateAndProof(t.Context(), "", msg); res == pubsub.ValidationAccept {
 		_ = err
 		t.Error("Expected validate to fail")
 	}
@@ -337,7 +337,7 @@ func TestValidateAggregateAndProof_ExistedInPool(t *testing.T) {
 	beaconState, _ := util.DeterministicGenesisState(t, validators)
 
 	b := util.NewBeaconBlock()
-	util.SaveBlock(t, context.Background(), db, b)
+	util.SaveBlock(t, t.Context(), db, b)
 	root, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
 
@@ -389,7 +389,7 @@ func TestValidateAggregateAndProof_ExistedInPool(t *testing.T) {
 	}
 
 	require.NoError(t, r.cfg.attPool.SaveBlockAttestation(att))
-	if res, err := r.validateAggregateAndProof(context.Background(), "", msg); res == pubsub.ValidationAccept {
+	if res, err := r.validateAggregateAndProof(t.Context(), "", msg); res == pubsub.ValidationAccept {
 		_ = err
 		t.Error("Expected validate to fail")
 	}
@@ -403,12 +403,12 @@ func TestValidateAggregateAndProof_CanValidate(t *testing.T) {
 	beaconState, privKeys := util.DeterministicGenesisState(t, validators)
 
 	b := util.NewBeaconBlock()
-	util.SaveBlock(t, context.Background(), db, b)
+	util.SaveBlock(t, t.Context(), db, b)
 	root, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
 	s, err := util.NewBeaconState()
 	require.NoError(t, err)
-	require.NoError(t, db.SaveState(context.Background(), s, root))
+	require.NoError(t, db.SaveState(t.Context(), s, root))
 
 	aggBits := bitfield.NewBitlist(validators / uint64(params.BeaconConfig().SlotsPerEpoch))
 	aggBits.SetBitAt(0, true)
@@ -422,7 +422,7 @@ func TestValidateAggregateAndProof_CanValidate(t *testing.T) {
 		AggregationBits: aggBits,
 	}
 
-	committee, err := helpers.BeaconCommitteeFromState(context.Background(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
 	assert.NoError(t, err)
 	attestingIndices, err := attestation.AttestingIndices(att, committee)
 	require.NoError(t, err)
@@ -451,7 +451,7 @@ func TestValidateAggregateAndProof_CanValidate(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, beaconState.SetGenesisTime(uint64(time.Now().Unix())))
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	chain := &mock.ChainService{Genesis: time.Now().Add(-oneEpoch()),
 		Optimistic:       true,
@@ -493,7 +493,7 @@ func TestValidateAggregateAndProof_CanValidate(t *testing.T) {
 			Topic: &topic,
 		},
 	}
-	res, err := r.validateAggregateAndProof(context.Background(), "", msg)
+	res, err := r.validateAggregateAndProof(t.Context(), "", msg)
 	assert.NoError(t, err)
 	assert.Equal(t, pubsub.ValidationAccept, res, "Validated status is false")
 	assert.NotNil(t, msg.ValidatorData, "Did not set validator data")
@@ -507,12 +507,12 @@ func TestVerifyIndexInCommittee_SeenAggregatorEpoch(t *testing.T) {
 	beaconState, privKeys := util.DeterministicGenesisState(t, validators)
 
 	b := util.NewBeaconBlock()
-	util.SaveBlock(t, context.Background(), db, b)
+	util.SaveBlock(t, t.Context(), db, b)
 	root, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
 	s, err := util.NewBeaconState()
 	require.NoError(t, err)
-	require.NoError(t, db.SaveState(context.Background(), s, root))
+	require.NoError(t, db.SaveState(t.Context(), s, root))
 
 	aggBits := bitfield.NewBitlist(validators / uint64(params.BeaconConfig().SlotsPerEpoch))
 	aggBits.SetBitAt(0, true)
@@ -526,7 +526,7 @@ func TestVerifyIndexInCommittee_SeenAggregatorEpoch(t *testing.T) {
 		AggregationBits: aggBits,
 	}
 
-	committee, err := helpers.BeaconCommitteeFromState(context.Background(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
 	require.NoError(t, err)
 	attestingIndices, err := attestation.AttestingIndices(att, committee)
 	require.NoError(t, err)
@@ -554,7 +554,7 @@ func TestVerifyIndexInCommittee_SeenAggregatorEpoch(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, beaconState.SetGenesisTime(uint64(time.Now().Unix())))
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	chain := &mock.ChainService{Genesis: time.Now().Add(-oneEpoch()),
 		DB:               db,
@@ -596,7 +596,7 @@ func TestVerifyIndexInCommittee_SeenAggregatorEpoch(t *testing.T) {
 			Topic: &topic,
 		},
 	}
-	res, err := r.validateAggregateAndProof(context.Background(), "", msg)
+	res, err := r.validateAggregateAndProof(t.Context(), "", msg)
 	assert.NoError(t, err)
 	require.Equal(t, pubsub.ValidationAccept, res, "Validated status is false")
 
@@ -613,7 +613,7 @@ func TestVerifyIndexInCommittee_SeenAggregatorEpoch(t *testing.T) {
 	}
 
 	time.Sleep(10 * time.Millisecond) // Wait for cached value to pass through buffers.
-	if res, err := r.validateAggregateAndProof(context.Background(), "", msg); res == pubsub.ValidationAccept {
+	if res, err := r.validateAggregateAndProof(t.Context(), "", msg); res == pubsub.ValidationAccept {
 		_ = err
 		t.Fatal("Validated status is true")
 	}
@@ -632,7 +632,7 @@ func TestValidateAggregateAndProof_BadBlock(t *testing.T) {
 	require.NoError(t, err)
 	s, err := util.NewBeaconState()
 	require.NoError(t, err)
-	require.NoError(t, db.SaveState(context.Background(), s, root))
+	require.NoError(t, db.SaveState(t.Context(), s, root))
 
 	aggBits := bitfield.NewBitlist(validators / uint64(params.BeaconConfig().SlotsPerEpoch))
 	aggBits.SetBitAt(0, true)
@@ -645,7 +645,7 @@ func TestValidateAggregateAndProof_BadBlock(t *testing.T) {
 		AggregationBits: aggBits,
 	}
 
-	committee, err := helpers.BeaconCommitteeFromState(context.Background(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
 	assert.NoError(t, err)
 	attestingIndices, err := attestation.AttestingIndices(att, committee)
 	require.NoError(t, err)
@@ -693,7 +693,7 @@ func TestValidateAggregateAndProof_BadBlock(t *testing.T) {
 	}
 	r.initCaches()
 	// Set beacon block as bad.
-	r.setBadBlock(context.Background(), root)
+	r.setBadBlock(t.Context(), root)
 	buf := new(bytes.Buffer)
 	_, err = p.Encoding().EncodeGossip(buf, signedAggregateAndProof)
 	require.NoError(t, err)
@@ -705,7 +705,7 @@ func TestValidateAggregateAndProof_BadBlock(t *testing.T) {
 			Topic: &topic,
 		},
 	}
-	res, err := r.validateAggregateAndProof(context.Background(), "", msg)
+	res, err := r.validateAggregateAndProof(t.Context(), "", msg)
 	assert.NotNil(t, err)
 	assert.Equal(t, pubsub.ValidationReject, res, "Validated status is true")
 }
@@ -718,12 +718,12 @@ func TestValidateAggregateAndProof_RejectWhenAttEpochDoesntEqualTargetEpoch(t *t
 	beaconState, privKeys := util.DeterministicGenesisState(t, validators)
 
 	b := util.NewBeaconBlock()
-	util.SaveBlock(t, context.Background(), db, b)
+	util.SaveBlock(t, t.Context(), db, b)
 	root, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
 	s, err := util.NewBeaconState()
 	require.NoError(t, err)
-	require.NoError(t, db.SaveState(context.Background(), s, root))
+	require.NoError(t, db.SaveState(t.Context(), s, root))
 
 	aggBits := bitfield.NewBitlist(validators / uint64(params.BeaconConfig().SlotsPerEpoch))
 	aggBits.SetBitAt(0, true)
@@ -736,7 +736,7 @@ func TestValidateAggregateAndProof_RejectWhenAttEpochDoesntEqualTargetEpoch(t *t
 		AggregationBits: aggBits,
 	}
 
-	committee, err := helpers.BeaconCommitteeFromState(context.Background(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
 	assert.NoError(t, err)
 	attestingIndices, err := attestation.AttestingIndices(att, committee)
 	require.NoError(t, err)
@@ -795,7 +795,7 @@ func TestValidateAggregateAndProof_RejectWhenAttEpochDoesntEqualTargetEpoch(t *t
 			Topic: &topic,
 		},
 	}
-	res, err := r.validateAggregateAndProof(context.Background(), "", msg)
+	res, err := r.validateAggregateAndProof(t.Context(), "", msg)
 	assert.NotNil(t, err)
 	assert.Equal(t, pubsub.ValidationReject, res)
 }

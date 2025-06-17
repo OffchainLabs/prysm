@@ -45,7 +45,7 @@ func TestSubscribe_ReceivesValidMessage(t *testing.T) {
 	gt := time.Now()
 	vr := [32]byte{'A'}
 	r := Service{
-		ctx: context.Background(),
+		ctx: t.Context(),
 		cfg: &config{
 			p2p:         p2pService,
 			initialSync: &mockSync.Sync{IsSyncing: false},
@@ -88,7 +88,7 @@ func TestSubscribe_UnsubscribeTopic(t *testing.T) {
 	gt := time.Now()
 	vr := [32]byte{'A'}
 	r := Service{
-		ctx: context.Background(),
+		ctx: t.Context(),
 		cfg: &config{
 			p2p:         p2pService,
 			initialSync: &mockSync.Sync{IsSyncing: false},
@@ -130,7 +130,7 @@ func TestSubscribe_ReceivesAttesterSlashing(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	p2pService := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	d := db.SetupDB(t)
 	gt := time.Now()
 	vr := [32]byte{'A'}
@@ -185,7 +185,7 @@ func TestSubscribe_ReceivesAttesterSlashing(t *testing.T) {
 
 func TestSubscribe_ReceivesProposerSlashing(t *testing.T) {
 	p2pService := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	chainService := &mockChain.ChainService{
 		ValidatorsRoot: [32]byte{'A'},
 		Genesis:        time.Now(),
@@ -244,7 +244,7 @@ func TestSubscribe_HandlesPanic(t *testing.T) {
 		ValidatorsRoot: [32]byte{'A'},
 	}
 	r := Service{
-		ctx: context.Background(),
+		ctx: t.Context(),
 		cfg: &config{
 			chain: chain,
 			clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
@@ -281,7 +281,7 @@ func TestRevalidateSubscription_CorrectlyFormatsTopic(t *testing.T) {
 		ValidatorsRoot: [32]byte{'A'},
 	}
 	r := Service{
-		ctx: context.Background(),
+		ctx: t.Context(),
 		cfg: &config{
 			chain: chain,
 			clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
@@ -420,7 +420,7 @@ func Test_wrapAndReportValidation(t *testing.T) {
 				subHandler: newSubTopicHandler(),
 			}
 			_, v := s.wrapAndReportValidation(tt.args.topic, tt.args.v)
-			got := v(context.Background(), tt.args.pid, tt.args.msg)
+			got := v(t.Context(), tt.args.pid, tt.args.msg)
 			if got != tt.want {
 				t.Errorf("wrapAndReportValidation() got = %v, want %v", got, tt.want)
 			}
@@ -440,7 +440,7 @@ func TestFilterSubnetPeers(t *testing.T) {
 	// Reset config.
 	defer flags.Init(new(flags.GlobalFlags))
 	p := p2ptest.NewTestP2P(t)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	currSlot := primitives.Slot(100)
 
@@ -517,7 +517,7 @@ func TestSubscribeWithSyncSubnets_DynamicOK(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	p := p2ptest.NewTestP2P(t)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	gt := time.Now()
 	vr := [32]byte{'A'}
 	r := Service{
@@ -564,7 +564,7 @@ func TestSubscribeWithSyncSubnets_DynamicSwitchFork(t *testing.T) {
 	cfg.SlotsPerEpoch = 4
 	params.OverrideBeaconConfig(cfg)
 	params.BeaconConfig().InitializeForkSchedule()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	currSlot := primitives.Slot(100)
 	gt := time.Now().Add(-time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
 	vr := [32]byte{'A'}
@@ -650,7 +650,7 @@ func TestSubscribe_ReceivesLCOptimisticUpdate(t *testing.T) {
 
 	params.SetupTestConfigCleanup(t)
 	p2pService := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	cfg := params.BeaconConfig().Copy()
 	cfg.AltairForkEpoch = 1
 	cfg.ForkVersionSchedule[[4]byte{1, 0, 0, 0}] = 1
@@ -717,7 +717,7 @@ func TestSubscribe_ReceivesLCFinalityUpdate(t *testing.T) {
 
 	params.SetupTestConfigCleanup(t)
 	p2pService := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	cfg := params.BeaconConfig().Copy()
 	cfg.AltairForkEpoch = 1
 	cfg.ForkVersionSchedule[[4]byte{1, 0, 0, 0}] = 1

@@ -21,7 +21,7 @@ type rpcHandlerTest struct {
 }
 
 func (rt *rpcHandlerTest) testHandler(nh network.StreamHandler, rh rpcHandler, rhi interface{}) {
-	ctx, cancel := context.WithTimeout(context.Background(), rt.timeout)
+	ctx, cancel := context.WithTimeout(rt.t.Context(), rt.timeout)
 	defer func() {
 		cancel()
 	}()

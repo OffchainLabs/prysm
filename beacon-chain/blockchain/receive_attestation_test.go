@@ -1,7 +1,6 @@
 package blockchain
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -32,7 +31,7 @@ func TestAttestationCheckPtState_FarFutureSlot(t *testing.T) {
 	service.genesisTime = time.Now()
 
 	e := primitives.Epoch(slots.MaxSlotBuffer/uint64(params.BeaconConfig().SlotsPerEpoch) + 1)
-	_, err := service.AttestationTargetState(context.Background(), &ethpb.Checkpoint{Epoch: e})
+	_, err := service.AttestationTargetState(t.Context(), &ethpb.Checkpoint{Epoch: e})
 	require.ErrorContains(t, "exceeds max allowed value relative to the local clock", err)
 }
 
@@ -56,11 +55,11 @@ func TestVerifyLMDFFGConsistent(t *testing.T) {
 	a.Data.Target.Root = []byte{'c'}
 	r33Root := r33.Root()
 	a.Data.BeaconBlockRoot = r33Root[:]
-	require.ErrorContains(t, wanted, service.VerifyLmdFfgConsistency(context.Background(), a))
+	require.ErrorContains(t, wanted, service.VerifyLmdFfgConsistency(t.Context(), a))
 
 	r32Root := r32.Root()
 	a.Data.Target.Root = r32Root[:]
-	err = service.VerifyLmdFfgConsistency(context.Background(), a)
+	err = service.VerifyLmdFfgConsistency(t.Context(), a)
 	require.NoError(t, err, "Could not verify LMD and FFG votes to be consistent")
 }
 

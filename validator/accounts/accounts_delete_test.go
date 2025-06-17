@@ -2,7 +2,6 @@ package accounts
 
 import (
 	"bytes"
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
@@ -16,7 +15,7 @@ import (
 
 func TestDelete(t *testing.T) {
 	hook := logTest.NewGlobal()
-	ctx := context.Background()
+	ctx := t.Context()
 	// import keys
 	numAccounts := 5
 	keystores := make([]*keymanager.Keystore, numAccounts)

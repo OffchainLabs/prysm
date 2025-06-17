@@ -96,7 +96,7 @@ func setupService(t *testing.T) *Service {
 			InitialSyncComplete: make(chan struct{}),
 		},
 
-		ctx:                         context.Background(),
+		ctx:                         t.Context(),
 		TrackedValidators:           trackedVals,
 		latestPerformance:           latestPerformance,
 		aggregatedPerformance:       aggregatedPerformance,
@@ -133,7 +133,7 @@ func TestUpdateSyncCommitteeTrackedVals(t *testing.T) {
 func TestNewService(t *testing.T) {
 	config := &ValidatorMonitorConfig{}
 	var tracked []primitives.ValidatorIndex
-	ctx := context.Background()
+	ctx := t.Context()
 	_, err := NewService(ctx, config, tracked)
 	require.NoError(t, err)
 }
@@ -156,7 +156,7 @@ func TestStart(t *testing.T) {
 
 func TestInitializePerformanceStructures(t *testing.T) {
 	hook := logTest.NewGlobal()
-	ctx := context.Background()
+	ctx := t.Context()
 	s := setupService(t)
 	state, err := s.config.HeadFetcher.HeadState(ctx)
 	require.NoError(t, err)
@@ -197,7 +197,7 @@ func TestInitializePerformanceStructures(t *testing.T) {
 }
 
 func TestMonitorRoutine(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	hook := logTest.NewGlobal()
 	s := setupService(t)
 	stateChannel := make(chan *feed.Event, 1)
@@ -243,7 +243,7 @@ func TestMonitorRoutine(t *testing.T) {
 }
 
 func TestWaitForSync(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	s := &Service{ctx: ctx}
 	syncChan := make(chan struct{})
 
@@ -260,7 +260,7 @@ func TestWaitForSync(t *testing.T) {
 }
 
 func TestWaitForSyncCanceled(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	s := &Service{ctx: ctx}
 	syncChan := make(chan struct{})
 

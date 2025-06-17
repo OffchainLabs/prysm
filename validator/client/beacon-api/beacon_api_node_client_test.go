@@ -1,7 +1,6 @@
 package beacon_api
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -109,7 +108,7 @@ func TestGetGenesis(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-			ctx := context.Background()
+			ctx := t.Context()
 
 			genesisProvider := mock.NewMockGenesisProvider(ctrl)
 			genesisProvider.EXPECT().Genesis(
@@ -198,7 +197,7 @@ func TestGetSyncStatus(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-			ctx := context.Background()
+			ctx := t.Context()
 
 			syncingResponse := structs.SyncStatusResponse{}
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
@@ -262,7 +261,7 @@ func TestGetVersion(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-			ctx := context.Background()
+			ctx := t.Context()
 
 			var versionResponse structs.GetVersionResponse
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)

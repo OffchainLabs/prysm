@@ -2,7 +2,6 @@ package beacon_api
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -20,7 +19,7 @@ import (
 )
 
 func TestGet(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	const endpoint = "/example/rest/api/endpoint"
 	genesisJson := &structs.GetGenesisResponse{
 		Data: &structs.Genesis{
@@ -102,7 +101,7 @@ func TestGetSSZ(t *testing.T) {
 }
 
 func TestPost(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	const endpoint = "/example/rest/api/endpoint"
 	dataBytes := []byte{1, 2, 3, 4, 5}
 	headers := map[string]string{"foo": "bar"}

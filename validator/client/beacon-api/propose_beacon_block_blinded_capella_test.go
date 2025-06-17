@@ -2,7 +2,6 @@ package beacon_api
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"testing"
 
@@ -32,7 +31,7 @@ func TestProposeBeaconBlock_BlindedCapella(t *testing.T) {
 	marshalledBlock, err := json.Marshal(jsonBlindedCapellaBlock)
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Make sure that what we send in the POST body is the marshalled version of the protobuf block
 	headers := map[string]string{"Eth-Consensus-Version": "capella"}

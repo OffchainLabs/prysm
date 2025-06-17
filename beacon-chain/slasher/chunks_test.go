@@ -1,7 +1,6 @@
 package slasher
 
 import (
-	"context"
 	"math"
 	"reflect"
 	"testing"
@@ -83,7 +82,7 @@ func TestMaxSpanChunksSlice_MaxChunkSpanFrom(t *testing.T) {
 }
 
 func TestMinSpanChunksSlice_CheckSlashable(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, v := range []int{version.Phase0, version.Electra} {
 		t.Run(version.String(v), func(t *testing.T) {
@@ -176,7 +175,7 @@ func TestMinSpanChunksSlice_CheckSlashable(t *testing.T) {
 }
 
 func TestMinSpanChunksSlice_CheckSlashable_DifferentVersions(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	slasherDB := dbtest.SetupSlasherDB(t)
 	params := &Parameters{
 		chunkSize:          3,
@@ -221,7 +220,7 @@ func TestMinSpanChunksSlice_CheckSlashable_DifferentVersions(t *testing.T) {
 }
 
 func TestMaxSpanChunksSlice_CheckSlashable(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, v := range []int{version.Phase0, version.Electra} {
 		t.Run(version.String(v), func(t *testing.T) {
@@ -317,7 +316,7 @@ func TestMaxSpanChunksSlice_CheckSlashable(t *testing.T) {
 }
 
 func TestMaxSpanChunksSlice_CheckSlashable_DifferentVersions(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	slasherDB := dbtest.SetupSlasherDB(t)
 	params := &Parameters{
 		chunkSize:          4,

@@ -64,7 +64,7 @@ func TestValidateWithBatchVerifier(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(t.Context())
 			svc := &Service{
 				ctx:           ctx,
 				cancel:        cancel,
@@ -74,7 +74,7 @@ func TestValidateWithBatchVerifier(t *testing.T) {
 			for _, st := range tt.preFilledSets {
 				svc.signatureChan <- &signatureVerifier{set: st, resChan: make(chan error, 10)}
 			}
-			got, err := svc.validateWithBatchVerifier(context.Background(), tt.message, tt.set)
+			got, err := svc.validateWithBatchVerifier(t.Context(), tt.message, tt.set)
 			if got != tt.want {
 				t.Errorf("validateWithBatchVerifier() = %v, want %v", got, tt.want)
 			}

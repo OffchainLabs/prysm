@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -33,7 +32,7 @@ func TestBroadcastBLSChanges(t *testing.T) {
 		Genesis:        time.Now(),
 		ValidatorsRoot: [32]byte{'A'},
 	}
-	s := NewService(context.Background(),
+	s := NewService(t.Context(),
 		WithP2P(mockp2p.NewTestP2P(t)),
 		WithInitialSync(&mockSync.Sync{IsSyncing: false}),
 		WithChainService(chainService),
@@ -66,7 +65,7 @@ func TestRateBLSChanges(t *testing.T) {
 		ValidatorsRoot: [32]byte{'A'},
 	}
 	p1 := mockp2p.NewTestP2P(t)
-	s := NewService(context.Background(),
+	s := NewService(t.Context(),
 		WithP2P(p1),
 		WithInitialSync(&mockSync.Sync{IsSyncing: false}),
 		WithChainService(chainService),
@@ -135,7 +134,7 @@ func TestBroadcastBLSBatch_changes_slice(t *testing.T) {
 		Genesis:        time.Now(),
 		ValidatorsRoot: [32]byte{'A'},
 	}
-	s := NewService(context.Background(),
+	s := NewService(t.Context(),
 		WithP2P(p1),
 		WithInitialSync(&mockSync.Sync{IsSyncing: false}),
 		WithChainService(chainService),

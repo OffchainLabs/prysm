@@ -238,10 +238,16 @@ func (s *Service) updateMetrics() {
 		}
 	}
 
+	for i := 0; i < params.BeaconConfig().MaxBlobsPerBlock(s.cfg.clock.CurrentSlot()); i++ {
+		s.collectMetricForSubnet(p2p.BlobSubnetTopicFormat, digest, uint64(i))
+	}
+
 	// We update all other gossip topics.
 	for _, topic := range p2p.AllTopics() {
 		// We already updated attestation subnet topics.
-		if strings.Contains(topic, p2p.GossipAttestationMessage) || strings.Contains(topic, p2p.GossipSyncCommitteeMessage) {
+		if strings.Contains(topic, p2p.GossipAttestationMessage) ||
+			strings.Contains(topic, p2p.GossipSyncCommitteeMessage) ||
+			strings.Contains(topic, p2p.GossipBlobSidecarMessage) {
 			continue
 		}
 		topic += s.cfg.p2p.Encoding().ProtocolSuffix()

@@ -2,7 +2,6 @@ package sync
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"reflect"
 	"testing"
@@ -27,7 +26,7 @@ import (
 )
 
 func TestValidateDataColumn(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("from self", func(t *testing.T) {
 		p := p2ptest.NewTestP2P(t)

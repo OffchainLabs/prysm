@@ -1,7 +1,6 @@
 package depositsnapshot
 
 import (
-	"context"
 	"math/big"
 	"testing"
 
@@ -13,14 +12,14 @@ var _ PendingDepositsFetcher = (*Cache)(nil)
 
 func TestInsertPendingDeposit_OK(t *testing.T) {
 	dc := Cache{}
-	dc.InsertPendingDeposit(context.Background(), &ethpb.Deposit{}, 111, 100, [32]byte{})
+	dc.InsertPendingDeposit(t.Context(), &ethpb.Deposit{}, 111, 100, [32]byte{})
 
 	assert.Equal(t, 1, len(dc.pendingDeposits), "deposit not inserted")
 }
 
 func TestInsertPendingDeposit_ignoresNilDeposit(t *testing.T) {
 	dc := Cache{}
-	dc.InsertPendingDeposit(context.Background(), nil /*deposit*/, 0 /*blockNum*/, 0, [32]byte{})
+	dc.InsertPendingDeposit(t.Context(), nil /*deposit*/, 0 /*blockNum*/, 0, [32]byte{})
 
 	assert.Equal(t, 0, len(dc.pendingDeposits))
 }
@@ -34,13 +33,13 @@ func TestPendingDeposits_OK(t *testing.T) {
 		{Eth1BlockHeight: 6, Deposit: &ethpb.Deposit{Proof: [][]byte{[]byte("c")}}},
 	}
 
-	deposits := dc.PendingDeposits(context.Background(), big.NewInt(4))
+	deposits := dc.PendingDeposits(t.Context(), big.NewInt(4))
 	expected := []*ethpb.Deposit{
 		{Proof: [][]byte{[]byte("A")}},
 		{Proof: [][]byte{[]byte("B")}},
 	}
 	assert.DeepSSZEqual(t, expected, deposits)
 
-	all := dc.PendingDeposits(context.Background(), nil)
+	all := dc.PendingDeposits(t.Context(), nil)
 	assert.Equal(t, len(dc.pendingDeposits), len(all), "PendingDeposits(ctx, nil) did not return all deposits")
 }
