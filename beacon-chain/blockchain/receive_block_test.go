@@ -1,7 +1,6 @@
 package blockchain
 
 import (
-	"context"
 	"sync"
 	"testing"
 	"time"
@@ -28,7 +27,7 @@ import (
 )
 
 func TestService_ReceiveBlock(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	genesis, keys := util.DeterministicGenesisState(t, 64)
 	copiedGen := genesis.Copy()
@@ -189,7 +188,7 @@ func TestHandleDA(t *testing.T) {
 	require.NoError(t, err)
 
 	s, _ := minimalTestService(t)
-	elapsed, err := s.handleDA(context.Background(), signedBeaconBlock, [fieldparams.RootLength]byte{}, nil)
+	elapsed, err := s.handleDA(t.Context(), signedBeaconBlock, [fieldparams.RootLength]byte{}, nil)
 	require.NoError(t, err)
 	require.Equal(t, true, elapsed > 0, "Elapsed time should be greater than 0")
 }
@@ -228,7 +227,7 @@ func TestService_ReceiveBlockUpdateHead(t *testing.T) {
 }
 
 func TestService_ReceiveBlockBatch(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	genesis, keys := util.DeterministicGenesisState(t, 64)
 	genFullBlock := func(t *testing.T, conf *util.BlockGenConfig, slot primitives.Slot) *ethpb.SignedBeaconBlock {
@@ -293,23 +292,23 @@ func TestService_ReceiveBlockBatch(t *testing.T) {
 func TestService_HasBlock(t *testing.T) {
 	s, _ := minimalTestService(t)
 	r := [32]byte{'a'}
-	if s.HasBlock(context.Background(), r) {
+	if s.HasBlock(t.Context(), r) {
 		t.Error("Should not have block")
 	}
 	wsb, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlock())
 	require.NoError(t, err)
-	require.NoError(t, s.saveInitSyncBlock(context.Background(), r, wsb))
-	if !s.HasBlock(context.Background(), r) {
+	require.NoError(t, s.saveInitSyncBlock(t.Context(), r, wsb))
+	if !s.HasBlock(t.Context(), r) {
 		t.Error("Should have block")
 	}
 	b := util.NewBeaconBlock()
 	b.Block.Slot = 1
-	util.SaveBlock(t, context.Background(), s.cfg.BeaconDB, b)
+	util.SaveBlock(t, t.Context(), s.cfg.BeaconDB, b)
 	r, err = b.Block.HashTreeRoot()
 	require.NoError(t, err)
-	require.Equal(t, true, s.HasBlock(context.Background(), r))
+	require.Equal(t, true, s.HasBlock(t.Context(), r))
 	s.blockBeingSynced.set(r)
-	require.Equal(t, false, s.HasBlock(context.Background(), r))
+	require.Equal(t, false, s.HasBlock(t.Context(), r))
 }
 
 func TestCheckSaveHotStateDB_Enabling(t *testing.T) {
@@ -318,7 +317,7 @@ func TestCheckSaveHotStateDB_Enabling(t *testing.T) {
 	st := params.BeaconConfig().SlotsPerEpoch.Mul(uint64(epochsSinceFinalitySaveHotStateDB))
 	s.genesisTime = time.Now().Add(time.Duration(-1*int64(st)*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second)
 
-	require.NoError(t, s.checkSaveHotStateDB(context.Background()))
+	require.NoError(t, s.checkSaveHotStateDB(t.Context()))
 	assert.LogsContain(t, hook, "Entering mode to save hot states in DB")
 }
 
@@ -329,10 +328,10 @@ func TestCheckSaveHotStateDB_Disabling(t *testing.T) {
 
 	st := params.BeaconConfig().SlotsPerEpoch.Mul(uint64(epochsSinceFinalitySaveHotStateDB))
 	s.genesisTime = time.Now().Add(time.Duration(-1*int64(st)*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second)
-	require.NoError(t, s.checkSaveHotStateDB(context.Background()))
+	require.NoError(t, s.checkSaveHotStateDB(t.Context()))
 	s.genesisTime = time.Now()
 
-	require.NoError(t, s.checkSaveHotStateDB(context.Background()))
+	require.NoError(t, s.checkSaveHotStateDB(t.Context()))
 	assert.LogsContain(t, hook, "Exiting mode to save hot states in DB")
 }
 
@@ -341,7 +340,7 @@ func TestCheckSaveHotStateDB_Overflow(t *testing.T) {
 	s, _ := minimalTestService(t)
 	s.genesisTime = time.Now()
 
-	require.NoError(t, s.checkSaveHotStateDB(context.Background()))
+	require.NoError(t, s.checkSaveHotStateDB(t.Context()))
 	assert.LogsDoNotContain(t, hook, "Entering mode to save hot states in DB")
 }
 
@@ -456,7 +455,7 @@ func Test_executePostFinalizationTasks(t *testing.T) {
 
 	headState, err := util.NewBeaconStateElectra()
 	require.NoError(t, err)
-	finalizedStRoot, err := headState.HashTreeRoot(context.Background())
+	finalizedStRoot, err := headState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 
 	genesis := util.NewBeaconBlock()

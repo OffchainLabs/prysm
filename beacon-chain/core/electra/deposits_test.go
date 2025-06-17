@@ -319,7 +319,7 @@ func TestBatchProcessNewPendingDeposits(t *testing.T) {
 		validDep := stateTesting.GeneratePendingDeposit(t, sk, params.BeaconConfig().MinActivationBalance, bytesutil.ToBytes32(wc), 0)
 		invalidDep := &eth.PendingDeposit{PublicKey: make([]byte, 48)}
 		deps := []*eth.PendingDeposit{validDep, invalidDep}
-		require.NoError(t, electra.BatchProcessNewPendingDeposits(context.Background(), st, deps))
+		require.NoError(t, electra.BatchProcessNewPendingDeposits(t.Context(), st, deps))
 		require.Equal(t, 1, len(st.Validators()))
 		require.Equal(t, 1, len(st.Balances()))
 	})
@@ -335,7 +335,7 @@ func TestBatchProcessNewPendingDeposits(t *testing.T) {
 		wc[31] = byte(0)
 		validDep := stateTesting.GeneratePendingDeposit(t, sk, params.BeaconConfig().MinActivationBalance, bytesutil.ToBytes32(wc), 0)
 		deps := []*eth.PendingDeposit{validDep, validDep}
-		require.NoError(t, electra.BatchProcessNewPendingDeposits(context.Background(), st, deps))
+		require.NoError(t, electra.BatchProcessNewPendingDeposits(t.Context(), st, deps))
 		require.Equal(t, 1, len(st.Validators()))
 		require.Equal(t, 1, len(st.Balances()))
 		require.Equal(t, params.BeaconConfig().MinActivationBalance*2, st.Balances()[0])
@@ -354,7 +354,7 @@ func TestBatchProcessNewPendingDeposits(t *testing.T) {
 		invalidSigDep := stateTesting.GeneratePendingDeposit(t, sk, params.BeaconConfig().MinActivationBalance, bytesutil.ToBytes32(wc), 0)
 		invalidSigDep.Signature = make([]byte, 96)
 		deps := []*eth.PendingDeposit{validDep, invalidSigDep}
-		require.NoError(t, electra.BatchProcessNewPendingDeposits(context.Background(), st, deps))
+		require.NoError(t, electra.BatchProcessNewPendingDeposits(t.Context(), st, deps))
 		require.Equal(t, 1, len(st.Validators()))
 		require.Equal(t, 1, len(st.Balances()))
 		require.Equal(t, 2*params.BeaconConfig().MinActivationBalance, st.Balances()[0])
@@ -368,12 +368,12 @@ func TestProcessDepositRequests(t *testing.T) {
 	require.NoError(t, st.SetDepositRequestsStartIndex(1))
 
 	t.Run("empty requests continues", func(t *testing.T) {
-		newSt, err := electra.ProcessDepositRequests(context.Background(), st, []*enginev1.DepositRequest{})
+		newSt, err := electra.ProcessDepositRequests(t.Context(), st, []*enginev1.DepositRequest{})
 		require.NoError(t, err)
 		require.DeepEqual(t, newSt, st)
 	})
 	t.Run("nil request errors", func(t *testing.T) {
-		_, err = electra.ProcessDepositRequests(context.Background(), st, []*enginev1.DepositRequest{nil})
+		_, err = electra.ProcessDepositRequests(t.Context(), st, []*enginev1.DepositRequest{nil})
 		require.ErrorContains(t, "nil deposit request", err)
 	})
 
@@ -406,7 +406,7 @@ func TestProcessDepositRequests(t *testing.T) {
 			Signature:             sig.Marshal(),
 		},
 	}
-	st, err = electra.ProcessDepositRequests(context.Background(), st, requests)
+	st, err = electra.ProcessDepositRequests(t.Context(), st, requests)
 	require.NoError(t, err)
 
 	pbd, err := st.PendingDeposits()
@@ -437,7 +437,7 @@ func TestProcessDeposit_Electra_Simple(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	pdSt, err := electra.ProcessDeposits(context.Background(), st, deps)
+	pdSt, err := electra.ProcessDeposits(t.Context(), st, deps)
 	require.NoError(t, err)
 	pbd, err := pdSt.PendingDeposits()
 	require.NoError(t, err)
@@ -592,7 +592,7 @@ func TestApplyPendingDeposit_TopUp(t *testing.T) {
 	dep := stateTesting.GeneratePendingDeposit(t, sk, excessBalance, bytesutil.ToBytes32(wc), 0)
 	require.NoError(t, st.SetValidators(validators))
 
-	require.NoError(t, electra.ApplyPendingDeposit(context.Background(), st, dep))
+	require.NoError(t, electra.ApplyPendingDeposit(t.Context(), st, dep))
 
 	b, err := st.BalanceAtIndex(0)
 	require.NoError(t, err)
@@ -608,7 +608,7 @@ func TestApplyPendingDeposit_UnknownKey(t *testing.T) {
 	wc[31] = byte(0)
 	dep := stateTesting.GeneratePendingDeposit(t, sk, params.BeaconConfig().MinActivationBalance, bytesutil.ToBytes32(wc), 0)
 	require.Equal(t, 0, len(st.Validators()))
-	require.NoError(t, electra.ApplyPendingDeposit(context.Background(), st, dep))
+	require.NoError(t, electra.ApplyPendingDeposit(t.Context(), st, dep))
 	// activates new validator
 	require.Equal(t, 1, len(st.Validators()))
 	b, err := st.BalanceAtIndex(0)
@@ -630,7 +630,7 @@ func TestApplyPendingDeposit_InvalidSignature(t *testing.T) {
 		Amount:                100,
 	}
 	require.Equal(t, 0, len(st.Validators()))
-	require.NoError(t, electra.ApplyPendingDeposit(context.Background(), st, dep))
+	require.NoError(t, electra.ApplyPendingDeposit(t.Context(), st, dep))
 	// no validator added
 	require.Equal(t, 0, len(st.Validators()))
 	// no topup either

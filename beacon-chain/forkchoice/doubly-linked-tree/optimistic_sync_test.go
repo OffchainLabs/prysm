@@ -1,7 +1,6 @@
 package doublylinkedtree
 
 import (
-	"context"
 	"sort"
 	"testing"
 
@@ -172,7 +171,7 @@ func TestPruneInvalid(t *testing.T) {
 		},
 	}
 	for _, tc := range tests {
-		ctx := context.Background()
+		ctx := t.Context()
 		f := setup(1, 1)
 
 		state, blkRoot, err := prepareForkchoiceState(ctx, 100, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
@@ -212,7 +211,7 @@ func TestPruneInvalid(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, state, blkRoot))
 
-		roots, err := f.store.setOptimisticToInvalid(context.Background(), tc.root, tc.parentRoot, tc.payload)
+		roots, err := f.store.setOptimisticToInvalid(t.Context(), tc.root, tc.parentRoot, tc.payload)
 		if tc.wantedErr == nil {
 			require.NoError(t, err)
 			require.DeepEqual(t, tc.wantedRoots, roots)
@@ -225,7 +224,7 @@ func TestPruneInvalid(t *testing.T) {
 
 // This is a regression test (10445)
 func TestSetOptimisticToInvalid_ProposerBoost(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := setup(1, 1)
 
 	state, blkRoot, err := prepareForkchoiceState(ctx, 100, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
@@ -257,7 +256,7 @@ func TestSetOptimisticToInvalid_ProposerBoost(t *testing.T) {
 // D is invalid
 
 func TestSetOptimisticToInvalid_CorrectChildren(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := setup(1, 1)
 
 	state, blkRoot, err := prepareForkchoiceState(ctx, 100, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
@@ -288,7 +287,7 @@ func TestSetOptimisticToInvalid_CorrectChildren(t *testing.T) {
 //
 // B is INVALID
 func TestSetOptimisticToInvalid_ForkAtMerge(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := setup(1, 1)
 
 	st, root, err := prepareForkchoiceState(ctx, 100, [32]byte{'r'}, [32]byte{}, [32]byte{}, 1, 1)
@@ -341,7 +340,7 @@ func TestSetOptimisticToInvalid_ForkAtMerge(t *testing.T) {
 //
 // B is INVALID
 func TestSetOptimisticToInvalid_ForkAtMerge_bis(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := setup(1, 1)
 
 	st, root, err := prepareForkchoiceState(ctx, 100, [32]byte{'r'}, [32]byte{}, [32]byte{}, 1, 1)
@@ -390,7 +389,7 @@ func TestSetOptimisticToValid(t *testing.T) {
 	op, err := f.IsOptimistic([32]byte{})
 	require.NoError(t, err)
 	require.Equal(t, true, op)
-	require.NoError(t, f.SetOptimisticToValid(context.Background(), [32]byte{}))
+	require.NoError(t, f.SetOptimisticToValid(t.Context(), [32]byte{}))
 	op, err = f.IsOptimistic([32]byte{})
 	require.NoError(t, err)
 	require.Equal(t, false, op)

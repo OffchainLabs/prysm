@@ -1,7 +1,6 @@
 package slasher
 
 import (
-	"context"
 	"testing"
 
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
@@ -21,7 +20,7 @@ import (
 )
 
 func TestService_processAttesterSlashings(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	slasherDB := dbtest.SetupSlasherDB(t)
 	beaconDB := dbtest.SetupDB(t)
 
@@ -143,7 +142,7 @@ func TestService_processAttesterSlashings(t *testing.T) {
 }
 
 func TestService_processProposerSlashings(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	slasherDB := dbtest.SetupSlasherDB(t)
 	beaconDB := dbtest.SetupDB(t)
 

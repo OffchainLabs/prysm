@@ -59,7 +59,7 @@ import (
 
 func TestServer_GetBeaconBlock_Phase0(t *testing.T) {
 	db := dbutil.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	beaconState, privKeys := util.DeterministicGenesisState(t, 64)
 	stateRoot, err := beaconState.HashTreeRoot(ctx)
@@ -119,7 +119,7 @@ func TestServer_GetBeaconBlock_Phase0(t *testing.T) {
 
 func TestServer_GetBeaconBlock_Altair(t *testing.T) {
 	db := dbutil.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -193,7 +193,7 @@ func TestServer_GetBeaconBlock_Altair(t *testing.T) {
 
 func TestServer_GetBeaconBlock_Bellatrix(t *testing.T) {
 	db := dbutil.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	terminalBlockHash := bytesutil.PadTo([]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 		0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, 32)
@@ -320,7 +320,7 @@ func TestServer_GetBeaconBlock_Bellatrix(t *testing.T) {
 
 func TestServer_GetBeaconBlock_Capella(t *testing.T) {
 	db := dbutil.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	transition.SkipSlotCache.Disable()
 
 	params.SetupTestConfigCleanup(t)
@@ -435,7 +435,7 @@ func TestServer_GetBeaconBlock_Capella(t *testing.T) {
 
 func TestServer_GetBeaconBlock_Deneb(t *testing.T) {
 	db := dbutil.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	transition.SkipSlotCache.Disable()
 
 	params.SetupTestConfigCleanup(t)
@@ -558,7 +558,7 @@ func TestServer_GetBeaconBlock_Deneb(t *testing.T) {
 
 func TestServer_GetBeaconBlock_Electra(t *testing.T) {
 	db := dbutil.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	transition.SkipSlotCache.Disable()
 
 	params.SetupTestConfigCleanup(t)
@@ -686,7 +686,7 @@ func TestServer_GetBeaconBlock_Electra(t *testing.T) {
 
 func TestServer_GetBeaconBlock_Fulu(t *testing.T) {
 	db := dbutil.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	transition.SkipSlotCache.Disable()
 
 	params.SetupTestConfigCleanup(t)
@@ -833,7 +833,7 @@ func TestServer_GetBeaconBlock_Optimistic(t *testing.T) {
 	req := &ethpb.BlockRequest{
 		Slot: bellatrixSlot + 1,
 	}
-	_, err = proposerServer.GetBeaconBlock(context.Background(), req)
+	_, err = proposerServer.GetBeaconBlock(t.Context(), req)
 	s, ok := status.FromError(err)
 	require.Equal(t, true, ok)
 	require.DeepEqual(t, codes.Unavailable, s.Code())
@@ -876,7 +876,7 @@ func injectSlashings(t *testing.T, st state.BeaconState, keys []bls.SecretKey, s
 		proposerSlashing, err := util.GenerateProposerSlashingForValidator(st, keys[i], i /* validator index */)
 		require.NoError(t, err)
 		proposerSlashings[i] = proposerSlashing
-		err = server.SlashingsPool.InsertProposerSlashing(context.Background(), st, proposerSlashing)
+		err = server.SlashingsPool.InsertProposerSlashing(t.Context(), st, proposerSlashing)
 		require.NoError(t, err)
 	}
 
@@ -887,7 +887,7 @@ func injectSlashings(t *testing.T, st state.BeaconState, keys []bls.SecretKey, s
 		attesterSlashing, ok := generatedAttesterSlashing.(*ethpb.AttesterSlashing)
 		require.Equal(t, true, ok, "Attester slashing has the wrong type (expected %T, got %T)", &ethpb.AttesterSlashing{}, generatedAttesterSlashing)
 		attSlashings[i] = attesterSlashing
-		err = server.SlashingsPool.InsertAttesterSlashing(context.Background(), st, generatedAttesterSlashing.(*ethpb.AttesterSlashing))
+		err = server.SlashingsPool.InsertAttesterSlashing(t.Context(), st, generatedAttesterSlashing.(*ethpb.AttesterSlashing))
 		require.NoError(t, err)
 	}
 	return proposerSlashings, attSlashings
@@ -1102,7 +1102,7 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 
 			numDeposits := uint64(64)
 			beaconState, _ := util.DeterministicGenesisState(t, numDeposits)
@@ -1122,7 +1122,7 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 				OperationNotifier: c.OperationNotifier(),
 			}
 			blockToPropose := tt.block(bsRoot)
-			res, err := proposerServer.ProposeBeaconBlock(context.Background(), blockToPropose)
+			res, err := proposerServer.ProposeBeaconBlock(t.Context(), blockToPropose)
 			if tt.err != "" { // Expecting an error
 				require.ErrorContains(t, tt.err, err)
 			} else {
@@ -1137,7 +1137,7 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 
 func TestProposer_ComputeStateRoot_OK(t *testing.T) {
 	db := dbutil.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	beaconState, parentRoot, privKeys := util.DeterministicGenesisStateWithGenesisBlock(t, ctx, db, 100)
 
@@ -1164,12 +1164,12 @@ func TestProposer_ComputeStateRoot_OK(t *testing.T) {
 
 	wsb, err := blocks.NewSignedBeaconBlock(req)
 	require.NoError(t, err)
-	_, err = proposerServer.computeStateRoot(context.Background(), wsb)
+	_, err = proposerServer.computeStateRoot(t.Context(), wsb)
 	require.NoError(t, err)
 }
 
 func TestProposer_PendingDeposits_Eth1DataVoteOK(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	height := big.NewInt(int64(params.BeaconConfig().Eth1FollowDistance))
 	newHeight := big.NewInt(height.Int64() + 11000)
@@ -1249,7 +1249,7 @@ func TestProposer_PendingDeposits_Eth1DataVoteOK(t *testing.T) {
 }
 
 func TestProposer_PendingDeposits_OutsideEth1FollowWindow(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	height := big.NewInt(int64(params.BeaconConfig().Eth1FollowDistance))
 	p := &mockExecution.Chain{
@@ -1367,7 +1367,7 @@ func TestProposer_PendingDeposits_OutsideEth1FollowWindow(t *testing.T) {
 }
 
 func TestProposer_PendingDeposits_FollowsCorrectEth1Block(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	height := big.NewInt(int64(params.BeaconConfig().Eth1FollowDistance))
 	newHeight := big.NewInt(height.Int64() + 11000)
@@ -1501,7 +1501,7 @@ func TestProposer_PendingDeposits_FollowsCorrectEth1Block(t *testing.T) {
 }
 
 func TestProposer_PendingDeposits_CantReturnBelowStateEth1DepositIndex(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	height := big.NewInt(int64(params.BeaconConfig().Eth1FollowDistance))
 	p := &mockExecution.Chain{
 		LatestBlockNumber: height,
@@ -1600,7 +1600,7 @@ func TestProposer_PendingDeposits_CantReturnBelowStateEth1DepositIndex(t *testin
 }
 
 func TestProposer_PendingDeposits_CantReturnMoreThanMax(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	height := big.NewInt(int64(params.BeaconConfig().Eth1FollowDistance))
 	p := &mockExecution.Chain{
@@ -1698,7 +1698,7 @@ func TestProposer_PendingDeposits_CantReturnMoreThanMax(t *testing.T) {
 }
 
 func TestProposer_PendingDeposits_CantReturnMoreThanDepositCount(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	height := big.NewInt(int64(params.BeaconConfig().Eth1FollowDistance))
 	p := &mockExecution.Chain{
@@ -1796,7 +1796,7 @@ func TestProposer_PendingDeposits_CantReturnMoreThanDepositCount(t *testing.T) {
 }
 
 func TestProposer_DepositTrie_UtilizesCachedFinalizedDeposits(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	height := big.NewInt(int64(params.BeaconConfig().Eth1FollowDistance))
 	p := &mockExecution.Chain{
@@ -1912,7 +1912,7 @@ func TestProposer_DepositTrie_UtilizesCachedFinalizedDeposits(t *testing.T) {
 }
 
 func TestProposer_DepositTrie_RebuildTrie(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	height := big.NewInt(int64(params.BeaconConfig().Eth1FollowDistance))
 	p := &mockExecution.Chain{
@@ -2116,7 +2116,7 @@ func TestProposer_ValidateDepositTrie(t *testing.T) {
 }
 
 func TestProposer_Eth1Data_MajorityVote_SpansGenesis(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	// Voting period will span genesis, causing the special case for pre-mined genesis to kick in.
 	// In other words some part of the valid time range is before genesis, so querying the block cache would fail
 	// without the special case added to allow this for testnets.
@@ -2173,7 +2173,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 	require.NoError(t, err)
 	root, err := depositTrie.HashTreeRoot()
 	require.NoError(t, err)
-	assert.NoError(t, depositCache.InsertDeposit(context.Background(), dc.Deposit, dc.Eth1BlockHeight, dc.Index, root))
+	assert.NoError(t, depositCache.InsertDeposit(t.Context(), dc.Deposit, dc.Eth1BlockHeight, dc.Index, root))
 
 	t.Run("choose highest count", func(t *testing.T) {
 		t.Skip()
@@ -2202,7 +2202,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{DepositCount: 1}},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2238,7 +2238,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{DepositCount: 1}},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2274,7 +2274,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{DepositCount: 1}},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2311,7 +2311,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{DepositCount: 1}},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2348,7 +2348,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{DepositCount: 1}},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2385,7 +2385,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{DepositCount: 1}},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2415,7 +2415,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: currentEth1Data},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2450,7 +2450,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{DepositCount: 1}},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2480,7 +2480,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{DepositCount: 1}},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2512,7 +2512,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: currentEth1Data},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2548,7 +2548,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{DepositCount: 1}},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2585,7 +2585,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{DepositCount: 1}},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2616,7 +2616,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{DepositCount: 1}},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2650,7 +2650,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{DepositCount: 1}},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2689,7 +2689,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{DepositCount: 0}},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2724,7 +2724,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			DepositFetcher:    depositCache,
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2789,7 +2789,7 @@ func TestProposer_FilterAttestation(t *testing.T) {
 						},
 						AggregationBits: bitfield.Bitlist{0b00010010},
 					})
-					committee, err := helpers.BeaconCommitteeFromState(context.Background(), st, atts[i].GetData().Slot, atts[i].GetData().CommitteeIndex)
+					committee, err := helpers.BeaconCommitteeFromState(t.Context(), st, atts[i].GetData().Slot, atts[i].GetData().CommitteeIndex)
 					assert.NoError(t, err)
 					attestingIndices, err := attestation.AttestingIndices(atts[i], committee)
 					require.NoError(t, err)
@@ -2823,14 +2823,14 @@ func TestProposer_FilterAttestation(t *testing.T) {
 				HeadFetcher: &mock.ChainService{State: st, Root: genesisRoot[:]},
 			}
 			atts := tt.inputAtts()
-			received := proposerServer.validateAndDeleteAttsInPool(context.Background(), st, atts)
+			received := proposerServer.validateAndDeleteAttsInPool(t.Context(), st, atts)
 			assert.DeepEqual(t, tt.expectedAtts(atts), received)
 		})
 	}
 }
 
 func TestProposer_Deposits_ReturnsEmptyList_IfLatestEth1DataEqGenesisEth1Block(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	height := big.NewInt(int64(params.BeaconConfig().Eth1FollowDistance))
 	p := &mockExecution.Chain{
@@ -2947,7 +2947,7 @@ func TestProposer_DeleteAttsInPool_Aggregated(t *testing.T) {
 
 	aa, err := attaggregation.Aggregate(aggregatedAtts)
 	require.NoError(t, err)
-	require.NoError(t, s.deleteAttsInPool(context.Background(), append(aa, unaggregatedAtts...)))
+	require.NoError(t, s.deleteAttsInPool(t.Context(), append(aa, unaggregatedAtts...)))
 	assert.Equal(t, 0, len(s.AttPool.AggregatedAttestations()), "Did not delete aggregated attestation")
 	atts := s.AttPool.UnaggregatedAttestations()
 	assert.Equal(t, 0, len(atts), "Did not delete unaggregated attestation")
@@ -2983,15 +2983,15 @@ func TestProposer_GetSyncAggregate_OK(t *testing.T) {
 		require.NoError(t, proposerServer.SyncCommitteePool.SaveSyncCommitteeContribution(cont))
 	}
 
-	aggregate, err := proposerServer.getSyncAggregate(context.Background(), 1, bytesutil.ToBytes32(conts[0].BlockRoot))
+	aggregate, err := proposerServer.getSyncAggregate(t.Context(), 1, bytesutil.ToBytes32(conts[0].BlockRoot))
 	require.NoError(t, err)
 	require.DeepEqual(t, bitfield.Bitvector32{0xf, 0xf, 0xf, 0xf}, aggregate.SyncCommitteeBits)
 
-	aggregate, err = proposerServer.getSyncAggregate(context.Background(), 2, bytesutil.ToBytes32(conts[0].BlockRoot))
+	aggregate, err = proposerServer.getSyncAggregate(t.Context(), 2, bytesutil.ToBytes32(conts[0].BlockRoot))
 	require.NoError(t, err)
 	require.DeepEqual(t, bitfield.Bitvector32{0xaa, 0xaa, 0xaa, 0xaa}, aggregate.SyncCommitteeBits)
 
-	aggregate, err = proposerServer.getSyncAggregate(context.Background(), 3, bytesutil.ToBytes32(conts[0].BlockRoot))
+	aggregate, err = proposerServer.getSyncAggregate(t.Context(), 3, bytesutil.ToBytes32(conts[0].BlockRoot))
 	require.NoError(t, err)
 	require.DeepEqual(t, bitfield.NewBitvector32(), aggregate.SyncCommitteeBits)
 }
@@ -3037,7 +3037,7 @@ func TestProposer_PrepareBeaconProposer(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := dbutil.SetupDB(t)
-			ctx := context.Background()
+			ctx := t.Context()
 			proposerServer := &Server{
 				BeaconDB:               db,
 				TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
@@ -3062,7 +3062,7 @@ func TestProposer_PrepareBeaconProposer(t *testing.T) {
 func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 	hook := logTest.NewGlobal()
 	db := dbutil.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	proposerServer := &Server{
 		BeaconDB:               db,
 		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
@@ -3119,7 +3119,7 @@ func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 
 func BenchmarkServer_PrepareBeaconProposer(b *testing.B) {
 	db := dbutil.SetupDB(b)
-	ctx := context.Background()
+	ctx := b.Context()
 	proposerServer := &Server{
 		BeaconDB:               db,
 		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
@@ -3143,7 +3143,7 @@ func BenchmarkServer_PrepareBeaconProposer(b *testing.B) {
 }
 
 func TestProposer_SubmitValidatorRegistrations(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	proposerServer := &Server{}
 	reg := &ethpb.SignedValidatorRegistrationsV1{}
 	_, err := proposerServer.SubmitValidatorRegistrations(ctx, reg)
@@ -3170,7 +3170,7 @@ func majorityVoteBoundaryTime(slot primitives.Slot) (uint64, uint64) {
 
 func TestProposer_GetFeeRecipientByPubKey(t *testing.T) {
 	db := dbutil.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	numDeposits := uint64(64)
 	beaconState, _ := util.DeterministicGenesisState(t, numDeposits)
 	bsRoot, err := beaconState.HashTreeRoot(ctx)
@@ -3210,7 +3210,7 @@ func TestProposer_GetFeeRecipientByPubKey(t *testing.T) {
 
 func TestProposer_GetParentHeadState(t *testing.T) {
 	db := dbutil.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	parentState, parentRoot, _ := util.DeterministicGenesisStateWithGenesisBlock(t, ctx, db, 100)
 	headState, headRoot, _ := util.DeterministicGenesisStateWithGenesisBlock(t, ctx, db, 50)

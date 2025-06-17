@@ -1,7 +1,6 @@
 package db
 
 import (
-	"context"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -36,7 +35,7 @@ func getFeeRecipientFromString(t *testing.T, feeRecipientString string) [fieldpa
 }
 
 func TestDB_ConvertDatabase(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	pubKeyString1 := "0x80000060606fa05c7339dd7bcd0d3e4d8b573fa30dea2fdb4997031a703e3300326e3c054be682f92d9c367cd647bbea"
 	pubKeyString2 := "0x81000060606fa05c7339dd7bcd0d3e4d8b573fa30dea2fdb4997031a703e3300326e3c054be682f92d9c367cd647bbea"

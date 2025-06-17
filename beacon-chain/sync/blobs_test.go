@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"context"
 	"encoding/binary"
 	"math"
 	"math/big"
@@ -208,7 +207,7 @@ func (c *blobsTestCase) setup(t *testing.T) (*Service, []blocks.ROBlob, func()) 
 		root, err := block.Block.HashTreeRoot()
 		require.NoError(t, err)
 		sidecars = append(sidecars, bsc...)
-		util.SaveBlock(t, context.Background(), d, block)
+		util.SaveBlock(t, t.Context(), d, block)
 		parentRoot = root
 	}
 
@@ -301,7 +300,7 @@ func defaultMockChain(t *testing.T) (*mock.ChainService, *startup.Clock) {
 }
 
 func TestTestcaseSetup_BlocksAndBlobs(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	nblocks := 10
 	c := &blobsTestCase{nblocks: nblocks}
 	c.oldestSlot = c.defaultOldestSlotByRoot

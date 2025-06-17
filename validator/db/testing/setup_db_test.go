@@ -1,7 +1,6 @@
 package testing
 
 import (
-	"context"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -27,7 +26,7 @@ func TestClearDB(t *testing.T) {
 					PubKeys: nil,
 				})
 			} else {
-				testDB, err = kv.NewKVStore(context.Background(), t.TempDir(), &kv.Config{
+				testDB, err = kv.NewKVStore(t.Context(), t.TempDir(), &kv.Config{
 					PubKeys: nil,
 				})
 			}

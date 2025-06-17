@@ -1,7 +1,6 @@
 package validator
 
 import (
-	"context"
 	"math/rand"
 	"sync"
 	"testing"
@@ -74,7 +73,7 @@ func TestProposeAttestation(t *testing.T) {
 				Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
 			},
 		}
-		_, err = attesterServer.ProposeAttestation(context.Background(), req)
+		_, err = attesterServer.ProposeAttestation(t.Context(), req)
 		assert.NoError(t, err)
 	})
 	t.Run("Phase 0 post electra", func(t *testing.T) {
@@ -96,7 +95,7 @@ func TestProposeAttestation(t *testing.T) {
 				Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
 			},
 		}
-		_, err = attesterServer.ProposeAttestation(context.Background(), req)
+		_, err = attesterServer.ProposeAttestation(t.Context(), req)
 		assert.ErrorContains(t, "old attestation format", err)
 	})
 	t.Run("Electra", func(t *testing.T) {
@@ -119,7 +118,7 @@ func TestProposeAttestation(t *testing.T) {
 				Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
 			},
 		}
-		_, err = attesterServer.ProposeAttestationElectra(context.Background(), req)
+		_, err = attesterServer.ProposeAttestationElectra(t.Context(), req)
 		assert.NoError(t, err)
 	})
 	t.Run("Electra att too early", func(t *testing.T) {
@@ -131,7 +130,7 @@ func TestProposeAttestation(t *testing.T) {
 				Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
 			},
 		}
-		_, err = attesterServer.ProposeAttestationElectra(context.Background(), req)
+		_, err = attesterServer.ProposeAttestationElectra(t.Context(), req)
 		assert.ErrorContains(t, "ProposeAttestationElectra not supported yet", err)
 	})
 }
@@ -146,7 +145,7 @@ func TestProposeAttestation_IncorrectSignature(t *testing.T) {
 
 	req := util.HydrateAttestation(&ethpb.Attestation{})
 	wanted := "Incorrect attestation signature"
-	_, err := attesterServer.ProposeAttestation(context.Background(), req)
+	_, err := attesterServer.ProposeAttestation(t.Context(), req)
 	assert.ErrorContains(t, wanted, err)
 }
 
@@ -193,7 +192,7 @@ func TestGetAttestationData_OK(t *testing.T) {
 		CommitteeIndex: 0,
 		Slot:           3*params.BeaconConfig().SlotsPerEpoch + 1,
 	}
-	res, err := attesterServer.GetAttestationData(context.Background(), req)
+	res, err := attesterServer.GetAttestationData(t.Context(), req)
 	require.NoError(t, err, "Could not get attestation info at slot")
 
 	expectedInfo := &ethpb.AttestationData{
@@ -262,7 +261,7 @@ func BenchmarkGetAttestationDataConcurrent(b *testing.B) {
 		for j := 0; j < 5000; j++ {
 			go func() {
 				defer wg.Done()
-				_, err := attesterServer.GetAttestationData(context.Background(), req)
+				_, err := attesterServer.GetAttestationData(b.Context(), req)
 				require.NoError(b, err, "Could not get attestation info at slot")
 			}()
 		}
@@ -276,7 +275,7 @@ func TestGetAttestationData_SyncNotReady(t *testing.T) {
 	as := Server{
 		SyncChecker: &mockSync.Sync{IsSyncing: true},
 	}
-	_, err := as.GetAttestationData(context.Background(), &ethpb.AttestationDataRequest{})
+	_, err := as.GetAttestationData(t.Context(), &ethpb.AttestationDataRequest{})
 	assert.ErrorContains(t, "Syncing to latest head", err)
 }
 
@@ -297,7 +296,7 @@ func TestGetAttestationData_Optimistic(t *testing.T) {
 			OptimisticModeFetcher: &mock.ChainService{Optimistic: true},
 		},
 	}
-	_, err := as.GetAttestationData(context.Background(), &ethpb.AttestationDataRequest{})
+	_, err := as.GetAttestationData(t.Context(), &ethpb.AttestationDataRequest{})
 	s, ok := status.FromError(err)
 	require.Equal(t, true, ok)
 	require.DeepEqual(t, codes.Unavailable, s.Code())
@@ -317,12 +316,12 @@ func TestGetAttestationData_Optimistic(t *testing.T) {
 			OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
 		},
 	}
-	_, err = as.GetAttestationData(context.Background(), &ethpb.AttestationDataRequest{})
+	_, err = as.GetAttestationData(t.Context(), &ethpb.AttestationDataRequest{})
 	require.NoError(t, err)
 }
 
 func TestServer_GetAttestationData_InvalidRequestSlot(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	slot := 3*params.BeaconConfig().SlotsPerEpoch + 1
 	offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
@@ -344,7 +343,7 @@ func TestServer_GetAttestationData_InvalidRequestSlot(t *testing.T) {
 }
 
 func TestServer_GetAttestationData_RequestSlotIsDifferentThanCurrentSlot(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := dbutil.SetupDB(t)
 
 	slot := 3*params.BeaconConfig().SlotsPerEpoch + 1
@@ -434,7 +433,7 @@ func TestGetAttestationData_SucceedsInFirstEpoch(t *testing.T) {
 		CommitteeIndex: 0,
 		Slot:           5,
 	}
-	res, err := attesterServer.GetAttestationData(context.Background(), req)
+	res, err := attesterServer.GetAttestationData(t.Context(), req)
 	require.NoError(t, err, "Could not get attestation info at slot")
 
 	expectedInfo := &ethpb.AttestationData{
@@ -503,7 +502,7 @@ func TestGetAttestationData_CommitteeIndexIsZeroPostElectra(t *testing.T) {
 		CommitteeIndex: 123, // set non-zero committee index
 		Slot:           3*params.BeaconConfig().SlotsPerEpoch + 1,
 	}
-	res, err := attesterServer.GetAttestationData(context.Background(), req)
+	res, err := attesterServer.GetAttestationData(t.Context(), req)
 	require.NoError(t, err)
 
 	expected := &ethpb.AttestationData{
@@ -531,7 +530,7 @@ func TestServer_SubscribeCommitteeSubnets_NoSlots(t *testing.T) {
 		OperationNotifier: (&mock.ChainService{}).OperationNotifier(),
 	}
 
-	_, err := attesterServer.SubscribeCommitteeSubnets(context.Background(), &ethpb.CommitteeSubnetsSubscribeRequest{
+	_, err := attesterServer.SubscribeCommitteeSubnets(t.Context(), &ethpb.CommitteeSubnetsSubscribeRequest{
 		Slots:        nil,
 		CommitteeIds: nil,
 		IsAggregator: nil,
@@ -564,7 +563,7 @@ func TestServer_SubscribeCommitteeSubnets_DifferentLengthSlots(t *testing.T) {
 
 	ss = append(ss, 321)
 
-	_, err := attesterServer.SubscribeCommitteeSubnets(context.Background(), &ethpb.CommitteeSubnetsSubscribeRequest{
+	_, err := attesterServer.SubscribeCommitteeSubnets(t.Context(), &ethpb.CommitteeSubnetsSubscribeRequest{
 		Slots:        ss,
 		CommitteeIds: comIdxs,
 		IsAggregator: isAggregator,
@@ -607,7 +606,7 @@ func TestServer_SubscribeCommitteeSubnets_MultipleSlots(t *testing.T) {
 		isAggregator = append(isAggregator, boolVal)
 	}
 
-	_, err = attesterServer.SubscribeCommitteeSubnets(context.Background(), &ethpb.CommitteeSubnetsSubscribeRequest{
+	_, err = attesterServer.SubscribeCommitteeSubnets(t.Context(), &ethpb.CommitteeSubnetsSubscribeRequest{
 		Slots:        ss,
 		CommitteeIds: comIdxs,
 		IsAggregator: isAggregator,

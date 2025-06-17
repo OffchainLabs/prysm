@@ -1,7 +1,6 @@
 package doublylinkedtree
 
 import (
-	"context"
 	"testing"
 
 	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
@@ -11,7 +10,7 @@ import (
 )
 
 func TestStore_NewSlot(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	bj := [32]byte{'z'}
 
 	type args struct {

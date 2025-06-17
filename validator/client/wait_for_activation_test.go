@@ -1,7 +1,6 @@
 package client
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -37,7 +36,7 @@ func TestWaitActivation_Exiting_OK(t *testing.T) {
 		prysmChainClient:       prysmChainClient,
 		accountsChangedChannel: make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	resp := testutil.GenerateMultipleValidatorStatusResponse([][]byte{kp.pub[:]})
 	resp.Statuses[0].Status = ethpb.ValidatorStatus_EXITING
 	validatorClient.EXPECT().MultipleValidatorStatus(
@@ -97,7 +96,7 @@ func TestWaitForActivation_RefetchKeys(t *testing.T) {
 		require.NoError(t, km.add(kp))
 		km.SimulateAccountChanges([][48]byte{kp.pub})
 	}()
-	assert.NoError(t, v.WaitForActivation(context.Background()), "Could not wait for activation")
+	assert.NoError(t, v.WaitForActivation(t.Context()), "Could not wait for activation")
 	assert.LogsContain(t, hook, msgNoKeysFetched)
 	assert.LogsContain(t, hook, "Validator activated")
 }
@@ -159,7 +158,7 @@ func TestWaitForActivation_AccountsChanged(t *testing.T) {
 			&ethpb.ChainHead{HeadEpoch: 0},
 			nil,
 		).AnyTimes()
-		assert.NoError(t, v.WaitForActivation(context.Background()))
+		assert.NoError(t, v.WaitForActivation(t.Context()))
 		assert.LogsContain(t, hook, "Waiting for deposit to be observed by beacon node")
 		assert.LogsContain(t, hook, "Validator activated")
 	})
@@ -181,7 +180,7 @@ func TestWaitForActivation_AccountsChanged(t *testing.T) {
 			AccountPasswords: make(map[string]string),
 			WalletPassword:   "secretPassw0rd$1999",
 		}
-		ctx := context.Background()
+		ctx := t.Context()
 		km, err := derived.NewKeymanager(ctx, &derived.SetupConfig{
 			Wallet:           wallet,
 			ListenForChanges: true,
@@ -238,7 +237,7 @@ func TestWaitForActivation_AccountsChanged(t *testing.T) {
 			&ethpb.ChainHead{HeadEpoch: 0},
 			nil,
 		).AnyTimes()
-		assert.NoError(t, v.WaitForActivation(context.Background()))
+		assert.NoError(t, v.WaitForActivation(t.Context()))
 		assert.LogsContain(t, hook, "Waiting for deposit to be observed by beacon node")
 		assert.LogsContain(t, hook, "Validator activated")
 	})
@@ -283,5 +282,5 @@ func TestWaitForActivation_AttemptsReconnectionOnFailure(t *testing.T) {
 		&ethpb.ChainHead{HeadEpoch: 0},
 		nil,
 	).AnyTimes()
-	assert.NoError(t, v.WaitForActivation(context.Background()))
+	assert.NoError(t, v.WaitForActivation(t.Context()))
 }

@@ -1,7 +1,6 @@
 package doublylinkedtree
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -13,7 +12,7 @@ import (
 
 func TestNode_ApplyWeightChanges_PositiveChange(t *testing.T) {
 	f := setup(0, 0)
-	ctx := context.Background()
+	ctx := t.Context()
 	state, blk, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blk))
@@ -40,7 +39,7 @@ func TestNode_ApplyWeightChanges_PositiveChange(t *testing.T) {
 
 func TestNode_ApplyWeightChanges_NegativeChange(t *testing.T) {
 	f := setup(0, 0)
-	ctx := context.Background()
+	ctx := t.Context()
 	state, blk, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blk))
@@ -70,7 +69,7 @@ func TestNode_ApplyWeightChanges_NegativeChange(t *testing.T) {
 
 func TestNode_UpdateBestDescendant_NonViableChild(t *testing.T) {
 	f := setup(1, 1)
-	ctx := context.Background()
+	ctx := t.Context()
 	// Input child is not viable.
 	state, blk, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 2, 3)
 	require.NoError(t, err)
@@ -85,7 +84,7 @@ func TestNode_UpdateBestDescendant_NonViableChild(t *testing.T) {
 
 func TestNode_UpdateBestDescendant_ViableChild(t *testing.T) {
 	f := setup(1, 1)
-	ctx := context.Background()
+	ctx := t.Context()
 	// Input child is the best descendant
 	state, blk, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
@@ -98,7 +97,7 @@ func TestNode_UpdateBestDescendant_ViableChild(t *testing.T) {
 
 func TestNode_UpdateBestDescendant_HigherWeightChild(t *testing.T) {
 	f := setup(1, 1)
-	ctx := context.Background()
+	ctx := t.Context()
 	// Input child is the best descendant
 	state, blk, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
@@ -118,7 +117,7 @@ func TestNode_UpdateBestDescendant_HigherWeightChild(t *testing.T) {
 
 func TestNode_UpdateBestDescendant_LowerWeightChild(t *testing.T) {
 	f := setup(1, 1)
-	ctx := context.Background()
+	ctx := t.Context()
 	// Input child is the best descendant
 	state, blk, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
@@ -158,7 +157,7 @@ func TestNode_ViableForHead(t *testing.T) {
 
 func TestNode_LeadsToViableHead(t *testing.T) {
 	f := setup(4, 3)
-	ctx := context.Background()
+	ctx := t.Context()
 	state, blk, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blk))
@@ -183,7 +182,7 @@ func TestNode_LeadsToViableHead(t *testing.T) {
 
 func TestNode_SetFullyValidated(t *testing.T) {
 	f := setup(1, 1)
-	ctx := context.Background()
+	ctx := t.Context()
 	storeNodes := make([]*Node, 6)
 	storeNodes[0] = f.store.treeRootNode
 	// insert blocks in the fork pattern (optimistic status in parenthesis)
@@ -260,7 +259,7 @@ func TestNode_SetFullyValidated(t *testing.T) {
 
 func TestNode_TimeStampsChecks(t *testing.T) {
 	f := setup(0, 0)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// early block
 	driftGenesisTime(f, 1, 1)

@@ -1,7 +1,6 @@
 package kv
 
 import (
-	"context"
 	"testing"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -21,7 +20,7 @@ func TestNewProposalHistoryForSlot_ReturnsNilIfNoHistory(t *testing.T) {
 	valPubkey := [fieldparams.BLSPubkeyLength]byte{1, 2, 3}
 	db := setupDB(t, [][fieldparams.BLSPubkeyLength]byte{})
 
-	_, proposalExists, signingRootExists, err := db.ProposalHistoryForSlot(context.Background(), valPubkey, 0)
+	_, proposalExists, signingRootExists, err := db.ProposalHistoryForSlot(t.Context(), valPubkey, 0)
 	require.NoError(t, err)
 	assert.Equal(t, false, proposalExists)
 	assert.Equal(t, false, signingRootExists)
@@ -32,7 +31,7 @@ func TestProposalHistoryForSlot_InitializesNewPubKeys(t *testing.T) {
 	db := setupDB(t, pubkeys)
 
 	for _, pub := range pubkeys {
-		_, proposalExists, signingRootExists, err := db.ProposalHistoryForSlot(context.Background(), pub, 0)
+		_, proposalExists, signingRootExists, err := db.ProposalHistoryForSlot(t.Context(), pub, 0)
 		require.NoError(t, err)
 		assert.Equal(t, false, proposalExists)
 		assert.Equal(t, false, signingRootExists)
@@ -45,10 +44,10 @@ func TestNewProposalHistoryForSlot_SigningRootNil(t *testing.T) {
 
 	db := setupDB(t, [][fieldparams.BLSPubkeyLength]byte{})
 
-	err := db.SaveProposalHistoryForSlot(context.Background(), pubkey, slot, nil)
+	err := db.SaveProposalHistoryForSlot(t.Context(), pubkey, slot, nil)
 	require.NoError(t, err, "Saving proposal history failed: %v")
 
-	_, proposalExists, signingRootExists, err := db.ProposalHistoryForSlot(context.Background(), pubkey, slot)
+	_, proposalExists, signingRootExists, err := db.ProposalHistoryForSlot(t.Context(), pubkey, slot)
 	require.NoError(t, err)
 	assert.Equal(t, true, proposalExists)
 	assert.Equal(t, false, signingRootExists)
@@ -60,9 +59,9 @@ func TestSaveProposalHistoryForSlot_OK(t *testing.T) {
 
 	slot := primitives.Slot(2)
 
-	err := db.SaveProposalHistoryForSlot(context.Background(), pubkey, slot, []byte{1})
+	err := db.SaveProposalHistoryForSlot(t.Context(), pubkey, slot, []byte{1})
 	require.NoError(t, err, "Saving proposal history failed: %v")
-	signingRoot, proposalExists, signingRootExists, err := db.ProposalHistoryForSlot(context.Background(), pubkey, slot)
+	signingRoot, proposalExists, signingRootExists, err := db.ProposalHistoryForSlot(t.Context(), pubkey, slot)
 	require.NoError(t, err, "Failed to get proposal history")
 	assert.Equal(t, true, proposalExists)
 	assert.Equal(t, true, signingRootExists)
@@ -75,7 +74,7 @@ func TestNewProposalHistoryForPubKey_ReturnsEmptyIfNoHistory(t *testing.T) {
 	valPubkey := [fieldparams.BLSPubkeyLength]byte{1, 2, 3}
 	db := setupDB(t, [][fieldparams.BLSPubkeyLength]byte{})
 
-	proposalHistory, err := db.ProposalHistoryForPubKey(context.Background(), valPubkey)
+	proposalHistory, err := db.ProposalHistoryForPubKey(t.Context(), valPubkey)
 	require.NoError(t, err)
 	assert.DeepEqual(t, make([]*common.Proposal, 0), proposalHistory)
 }
@@ -87,9 +86,9 @@ func TestSaveProposalHistoryForPubKey_OK(t *testing.T) {
 	slot := primitives.Slot(2)
 
 	root := [32]byte{1}
-	err := db.SaveProposalHistoryForSlot(context.Background(), pubkey, slot, root[:])
+	err := db.SaveProposalHistoryForSlot(t.Context(), pubkey, slot, root[:])
 	require.NoError(t, err, "Saving proposal history failed: %v")
-	proposalHistory, err := db.ProposalHistoryForPubKey(context.Background(), pubkey)
+	proposalHistory, err := db.ProposalHistoryForPubKey(t.Context(), pubkey)
 	require.NoError(t, err, "Failed to get proposal history")
 
 	require.NotNil(t, proposalHistory)
@@ -120,9 +119,9 @@ func TestSaveProposalHistoryForSlot_Overwrites(t *testing.T) {
 
 	for _, tt := range tests {
 		db := setupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubkey})
-		err := db.SaveProposalHistoryForSlot(context.Background(), pubkey, 0, tt.signingRoot)
+		err := db.SaveProposalHistoryForSlot(t.Context(), pubkey, 0, tt.signingRoot)
 		require.NoError(t, err, "Saving proposal history failed")
-		proposalHistory, err := db.ProposalHistoryForPubKey(context.Background(), pubkey)
+		proposalHistory, err := db.ProposalHistoryForPubKey(t.Context(), pubkey)
 		require.NoError(t, err, "Failed to get proposal history")
 
 		require.NotNil(t, proposalHistory)
@@ -176,12 +175,12 @@ func TestPruneProposalHistoryBySlot_OK(t *testing.T) {
 	for _, tt := range tests {
 		db := setupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubKey})
 		for _, slot := range tt.slots {
-			err := db.SaveProposalHistoryForSlot(context.Background(), pubKey, slot, signedRoot)
+			err := db.SaveProposalHistoryForSlot(t.Context(), pubKey, slot, signedRoot)
 			require.NoError(t, err, "Saving proposal history failed")
 		}
 
 		signingRootsBySlot := make(map[primitives.Slot][]byte)
-		proposalHistory, err := db.ProposalHistoryForPubKey(context.Background(), pubKey)
+		proposalHistory, err := db.ProposalHistoryForPubKey(t.Context(), pubKey)
 		require.NoError(t, err)
 
 		for _, hist := range proposalHistory {
@@ -202,7 +201,7 @@ func TestPruneProposalHistoryBySlot_OK(t *testing.T) {
 }
 
 func TestStore_ProposedPublicKeys(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	validatorDB, err := NewKVStore(ctx, t.TempDir(), &Config{})
 	require.NoError(t, err, "Failed to instantiate DB")
 	t.Cleanup(func() {
@@ -225,7 +224,7 @@ func TestStore_ProposedPublicKeys(t *testing.T) {
 }
 
 func TestStore_LowestSignedProposal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	pubkey := [fieldparams.BLSPubkeyLength]byte{3}
 	var dummySigningRoot [32]byte
 	validatorDB := setupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubkey})
@@ -266,7 +265,7 @@ func TestStore_LowestSignedProposal(t *testing.T) {
 }
 
 func TestStore_HighestSignedProposal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	pubkey := [fieldparams.BLSPubkeyLength]byte{3}
 	var dummySigningRoot [32]byte
 	validatorDB := setupDB(t, [][fieldparams.BLSPubkeyLength]byte{pubkey})
@@ -307,7 +306,7 @@ func TestStore_HighestSignedProposal(t *testing.T) {
 }
 
 func Test_slashableProposalCheck_PreventsLowerThanMinProposal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	lowestSignedSlot := primitives.Slot(10)
 
 	var pubkey [fieldparams.BLSPubkeyLength]byte
@@ -334,7 +333,7 @@ func Test_slashableProposalCheck_PreventsLowerThanMinProposal(t *testing.T) {
 	}
 	wsb, err := blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
-	err = db.SlashableProposalCheck(context.Background(), pubkey, wsb, [32]byte{4}, false, nil)
+	err = db.SlashableProposalCheck(t.Context(), pubkey, wsb, [32]byte{4}, false, nil)
 	require.ErrorContains(t, "could not sign block with slot < lowest signed", err)
 
 	// We expect the same block with a slot equal to the lowest
@@ -377,7 +376,7 @@ func Test_slashableProposalCheck_PreventsLowerThanMinProposal(t *testing.T) {
 }
 
 func Test_slashableProposalCheck(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	var pubkey [fieldparams.BLSPubkeyLength]byte
 	pubkeyBytes, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
@@ -450,6 +449,6 @@ func Test_slashableProposalCheck_RemoteProtection(t *testing.T) {
 	sBlock, err := blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
 
-	err = db.SlashableProposalCheck(context.Background(), pubkey, sBlock, [32]byte{2}, false, nil)
+	err = db.SlashableProposalCheck(t.Context(), pubkey, sBlock, [32]byte{2}, false, nil)
 	require.NoError(t, err, "Expected allowed block not to throw error")
 }

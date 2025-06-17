@@ -1,7 +1,6 @@
 package helpers_test
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"testing"
@@ -50,7 +49,7 @@ func TestComputeCommittee_WithoutCache(t *testing.T) {
 	require.NoError(t, err)
 
 	epoch := time.CurrentEpoch(state)
-	indices, err := helpers.ActiveValidatorIndices(context.Background(), state, epoch)
+	indices, err := helpers.ActiveValidatorIndices(t.Context(), state, epoch)
 	require.NoError(t, err)
 	seed, err := helpers.Seed(state, epoch, params.BeaconConfig().DomainBeaconAttester)
 	require.NoError(t, err)
@@ -112,10 +111,10 @@ func TestCommitteeAssignments_CannotRetrieveFutureEpoch(t *testing.T) {
 		Slot: 0, // Epoch 0.
 	})
 	require.NoError(t, err)
-	_, err = helpers.CommitteeAssignments(context.Background(), state, epoch+1, nil)
+	_, err = helpers.CommitteeAssignments(t.Context(), state, epoch+1, nil)
 	assert.ErrorContains(t, "can't be greater than next epoch", err)
 
-	_, err = helpers.ProposerAssignments(context.Background(), state, epoch+1)
+	_, err = helpers.ProposerAssignments(t.Context(), state, epoch+1)
 	assert.ErrorContains(t, "can't be greater than next epoch", err)
 }
 
@@ -139,7 +138,7 @@ func TestCommitteeAssignments_NoProposerForSlot0(t *testing.T) {
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 	})
 	require.NoError(t, err)
-	assignments, err := helpers.ProposerAssignments(context.Background(), state, 0)
+	assignments, err := helpers.ProposerAssignments(t.Context(), state, 0)
 	require.NoError(t, err, "Failed to determine Assignments")
 	for _, slots := range assignments {
 		for _, s := range slots {
@@ -214,12 +213,12 @@ func TestCommitteeAssignments_CanRetrieve(t *testing.T) {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			helpers.ClearCache()
 
-			assignments, err := helpers.CommitteeAssignments(context.Background(), state, slots.ToEpoch(tt.slot), validatorIndices)
+			assignments, err := helpers.CommitteeAssignments(t.Context(), state, slots.ToEpoch(tt.slot), validatorIndices)
 			require.NoError(t, err, "Failed to determine Assignments")
 			cac := assignments[tt.index]
 			assert.Equal(t, tt.committeeIndex, cac.CommitteeIndex, "Unexpected committeeIndex for validator index %d", tt.index)
 			assert.Equal(t, tt.slot, cac.AttesterSlot, "Unexpected slot for validator index %d", tt.index)
-			proposerAssignments, err := helpers.ProposerAssignments(context.Background(), state, slots.ToEpoch(tt.slot))
+			proposerAssignments, err := helpers.ProposerAssignments(t.Context(), state, slots.ToEpoch(tt.slot))
 			require.NoError(t, err)
 			if len(proposerAssignments[tt.index]) > 0 && proposerAssignments[tt.index][0] != tt.proposerSlot {
 				t.Errorf("wanted proposer slot %d, got proposer slot %d for validator index %d",
@@ -253,11 +252,11 @@ func TestCommitteeAssignments_CannotRetrieveFuture(t *testing.T) {
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 	})
 	require.NoError(t, err)
-	assignments, err := helpers.ProposerAssignments(context.Background(), state, time.CurrentEpoch(state))
+	assignments, err := helpers.ProposerAssignments(t.Context(), state, time.CurrentEpoch(state))
 	require.NoError(t, err)
 	require.NotEqual(t, 0, len(assignments), "wanted non-zero proposer index set")
 
-	assignments, err = helpers.ProposerAssignments(context.Background(), state, time.CurrentEpoch(state)+1)
+	assignments, err = helpers.ProposerAssignments(t.Context(), state, time.CurrentEpoch(state)+1)
 	require.NoError(t, err)
 	require.NotEqual(t, 0, len(assignments), "wanted non-zero proposer index set")
 }
@@ -279,7 +278,7 @@ func TestCommitteeAssignments_CannotRetrieveOlderThanSlotsPerHistoricalRoot(t *t
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 	})
 	require.NoError(t, err)
-	_, err = helpers.CommitteeAssignments(context.Background(), state, 0, nil)
+	_, err = helpers.CommitteeAssignments(t.Context(), state, 0, nil)
 	require.ErrorContains(t, "start slot 0 is smaller than the minimum valid start slot 1", err)
 }
 
@@ -301,7 +300,7 @@ func TestCommitteeAssignments_EverySlotHasMin1Proposer(t *testing.T) {
 	})
 	require.NoError(t, err)
 	epoch := primitives.Epoch(1)
-	assignments, err := helpers.ProposerAssignments(context.Background(), state, epoch)
+	assignments, err := helpers.ProposerAssignments(t.Context(), state, epoch)
 	require.NoError(t, err, "Failed to determine Assignments")
 
 	slotsWithProposers := make(map[primitives.Slot]bool)
@@ -412,7 +411,7 @@ func TestVerifyAttestationBitfieldLengths_OK(t *testing.T) {
 		require.NoError(t, state.SetSlot(tt.stateSlot))
 		att := tt.attestation
 		// Verify attesting indices are correct.
-		committee, err := helpers.BeaconCommitteeFromState(context.Background(), state, att.GetData().Slot, att.GetData().CommitteeIndex)
+		committee, err := helpers.BeaconCommitteeFromState(t.Context(), state, att.GetData().Slot, att.GetData().CommitteeIndex)
 		require.NoError(t, err)
 		require.NotNil(t, committee)
 		err = helpers.VerifyBitfieldLength(att.GetAggregationBits(), uint64(len(committee)))
@@ -442,14 +441,14 @@ func TestUpdateCommitteeCache_CanUpdate(t *testing.T) {
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 	})
 	require.NoError(t, err)
-	require.NoError(t, helpers.UpdateCommitteeCache(context.Background(), state, time.CurrentEpoch(state)))
+	require.NoError(t, helpers.UpdateCommitteeCache(t.Context(), state, time.CurrentEpoch(state)))
 
 	epoch := primitives.Epoch(0)
 	idx := primitives.CommitteeIndex(1)
 	seed, err := helpers.Seed(state, epoch, params.BeaconConfig().DomainBeaconAttester)
 	require.NoError(t, err)
 
-	indices, err = helpers.CommitteeCache().Committee(context.Background(), params.BeaconConfig().SlotsPerEpoch.Mul(uint64(epoch)), seed, idx)
+	indices, err = helpers.CommitteeCache().Committee(t.Context(), params.BeaconConfig().SlotsPerEpoch.Mul(uint64(epoch)), seed, idx)
 	require.NoError(t, err)
 	assert.Equal(t, params.BeaconConfig().TargetCommitteeSize, uint64(len(indices)), "Did not save correct indices lengths")
 }
@@ -473,7 +472,7 @@ func TestUpdateCommitteeCache_CanUpdateAcrossEpochs(t *testing.T) {
 	})
 	require.NoError(t, err)
 	e := time.CurrentEpoch(state)
-	require.NoError(t, helpers.UpdateCommitteeCache(context.Background(), state, e))
+	require.NoError(t, helpers.UpdateCommitteeCache(t.Context(), state, e))
 
 	seed, err := helpers.Seed(state, e, params.BeaconConfig().DomainBeaconAttester)
 	require.NoError(t, err)
@@ -483,7 +482,7 @@ func TestUpdateCommitteeCache_CanUpdateAcrossEpochs(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, false, helpers.CommitteeCache().HasEntry(string(nextSeed[:])))
 
-	require.NoError(t, helpers.UpdateCommitteeCache(context.Background(), state, e+1))
+	require.NoError(t, helpers.UpdateCommitteeCache(t.Context(), state, e+1))
 
 	require.Equal(t, true, helpers.CommitteeCache().HasEntry(string(nextSeed[:])))
 }
@@ -502,7 +501,7 @@ func BenchmarkComputeCommittee300000_WithPreCache(b *testing.B) {
 	require.NoError(b, err)
 
 	epoch := time.CurrentEpoch(state)
-	indices, err := helpers.ActiveValidatorIndices(context.Background(), state, epoch)
+	indices, err := helpers.ActiveValidatorIndices(b.Context(), state, epoch)
 	require.NoError(b, err)
 	seed, err := helpers.Seed(state, epoch, params.BeaconConfig().DomainBeaconAttester)
 	require.NoError(b, err)
@@ -536,7 +535,7 @@ func BenchmarkComputeCommittee3000000_WithPreCache(b *testing.B) {
 	require.NoError(b, err)
 
 	epoch := time.CurrentEpoch(state)
-	indices, err := helpers.ActiveValidatorIndices(context.Background(), state, epoch)
+	indices, err := helpers.ActiveValidatorIndices(b.Context(), state, epoch)
 	require.NoError(b, err)
 	seed, err := helpers.Seed(state, epoch, params.BeaconConfig().DomainBeaconAttester)
 	require.NoError(b, err)
@@ -570,7 +569,7 @@ func BenchmarkComputeCommittee128000_WithOutPreCache(b *testing.B) {
 	require.NoError(b, err)
 
 	epoch := time.CurrentEpoch(state)
-	indices, err := helpers.ActiveValidatorIndices(context.Background(), state, epoch)
+	indices, err := helpers.ActiveValidatorIndices(b.Context(), state, epoch)
 	require.NoError(b, err)
 	seed, err := helpers.Seed(state, epoch, params.BeaconConfig().DomainBeaconAttester)
 	require.NoError(b, err)
@@ -605,7 +604,7 @@ func BenchmarkComputeCommittee1000000_WithOutCache(b *testing.B) {
 	require.NoError(b, err)
 
 	epoch := time.CurrentEpoch(state)
-	indices, err := helpers.ActiveValidatorIndices(context.Background(), state, epoch)
+	indices, err := helpers.ActiveValidatorIndices(b.Context(), state, epoch)
 	require.NoError(b, err)
 	seed, err := helpers.Seed(state, epoch, params.BeaconConfig().DomainBeaconAttester)
 	require.NoError(b, err)
@@ -640,7 +639,7 @@ func BenchmarkComputeCommittee4000000_WithOutCache(b *testing.B) {
 	require.NoError(b, err)
 
 	epoch := time.CurrentEpoch(state)
-	indices, err := helpers.ActiveValidatorIndices(context.Background(), state, epoch)
+	indices, err := helpers.ActiveValidatorIndices(b.Context(), state, epoch)
 	require.NoError(b, err)
 	seed, err := helpers.Seed(state, epoch, params.BeaconConfig().DomainBeaconAttester)
 	require.NoError(b, err)
@@ -676,13 +675,13 @@ func TestBeaconCommitteeFromState_UpdateCacheForPreviousEpoch(t *testing.T) {
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 	})
 	require.NoError(t, err)
-	_, err = helpers.BeaconCommitteeFromState(context.Background(), state, 1 /* previous epoch */, 0)
+	_, err = helpers.BeaconCommitteeFromState(t.Context(), state, 1 /* previous epoch */, 0)
 	require.NoError(t, err)
 
 	// Verify previous epoch is cached
 	seed, err := helpers.Seed(state, 0, params.BeaconConfig().DomainBeaconAttester)
 	require.NoError(t, err)
-	activeIndices, err := helpers.CommitteeCache().ActiveIndices(context.Background(), seed)
+	activeIndices, err := helpers.CommitteeCache().ActiveIndices(t.Context(), seed)
 	require.NoError(t, err)
 	assert.NotNil(t, activeIndices, "Did not cache active indices")
 }
@@ -701,7 +700,7 @@ func TestPrecomputeProposerIndices_Ok(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	indices, err := helpers.ActiveValidatorIndices(context.Background(), state, 0)
+	indices, err := helpers.ActiveValidatorIndices(t.Context(), state, 0)
 	require.NoError(t, err)
 
 	proposerIndices, err := helpers.PrecomputeProposerIndices(state, indices, time.CurrentEpoch(state))
@@ -730,7 +729,7 @@ func TestCommitteeIndices(t *testing.T) {
 }
 
 func TestAttestationCommitteesFromState(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	validators := make([]*ethpb.Validator, params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().TargetCommitteeSize))
 	for i := 0; i < len(validators); i++ {
@@ -766,7 +765,7 @@ func TestAttestationCommitteesFromState(t *testing.T) {
 }
 
 func TestAttestationCommitteesFromCache(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	validators := make([]*ethpb.Validator, params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().TargetCommitteeSize))
 	for i := 0; i < len(validators); i++ {
@@ -814,7 +813,7 @@ func TestAttestationCommitteesFromCache(t *testing.T) {
 }
 
 func TestBeaconCommitteesFromState(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	params.SetupTestConfigCleanup(t)
 	c := params.BeaconConfig().Copy()
@@ -839,7 +838,7 @@ func TestBeaconCommitteesFromState(t *testing.T) {
 }
 
 func TestBeaconCommitteesFromCache(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	params.SetupTestConfigCleanup(t)
 	c := params.BeaconConfig().Copy()
@@ -875,7 +874,7 @@ func TestBeaconCommitteesFromCache(t *testing.T) {
 func TestPrecomputeCommittees_HappyPath(t *testing.T) {
 	cfg := params.BeaconConfig()
 	start := primitives.Slot(100)
-	ctx := context.Background()
+	ctx := t.Context()
 	st, _ := util.DeterministicGenesisState(t, 256)
 
 	got, err := helpers.PrecomputeCommittees(ctx, st, start)

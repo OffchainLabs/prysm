@@ -2,7 +2,6 @@ package history_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -23,7 +22,7 @@ import (
 // it does not keep track of attestation and proposal histories, and thus cannot
 // export the same data it imported.
 func TestImportExport_RoundTrip(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	numValidators := 10
 	publicKeys, err := slashtest.CreateRandomPubKeys(numValidators)
 	require.NoError(t, err)
@@ -92,7 +91,7 @@ func TestImportExport_RoundTrip(t *testing.T) {
 // it does not keep track of attestation and proposal histories, and thus cannot
 // export the same data it imported.
 func TestImportExport_RoundTrip_SkippedAttestationEpochs(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	numValidators := 1
 	pubKeys, err := slashtest.CreateRandomPubKeys(numValidators)
 	require.NoError(t, err)
@@ -158,7 +157,7 @@ func TestImportExport_RoundTrip_SkippedAttestationEpochs(t *testing.T) {
 // it does not keep track of attestation and proposal histories, and thus cannot
 // export the same data it imported.
 func TestImportExport_FilterKeys(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	numValidators := 10
 	publicKeys, err := slashtest.CreateRandomPubKeys(numValidators)
 	require.NoError(t, err)
@@ -203,7 +202,7 @@ func TestImportExport_FilterKeys(t *testing.T) {
 // it does not keep track of attestation and proposal histories, and thus cannot
 // export the same data it imported.
 func TestImportInterchangeData_OK(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	numValidators := 10
 	publicKeys, err := slashtest.CreateRandomPubKeys(numValidators)
 	require.NoError(t, err)
@@ -273,7 +272,7 @@ func TestImportInterchangeData_OK(t *testing.T) {
 // it does not keep track of attestation and proposal histories, and thus cannot
 // export the same data it imported.
 func TestImportInterchangeData_OK_SavesBlacklistedPublicKeys(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	numValidators := 3
 	publicKeys, err := slashtest.CreateRandomPubKeys(numValidators)
 	require.NoError(t, err)
@@ -368,7 +367,7 @@ func TestImportInterchangeData_OK_SavesBlacklistedPublicKeys(t *testing.T) {
 // it does not keep track of attestation and proposal histories, and thus cannot
 // export the same data it imported.
 func TestStore_ImportInterchangeData_BadFormat_PreventsDBWrites(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	numValidators := 5
 	publicKeys, err := slashtest.CreateRandomPubKeys(numValidators)
 	require.NoError(t, err)

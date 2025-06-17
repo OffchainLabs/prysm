@@ -33,7 +33,7 @@ func TestBlocksQueue_InitStartStop(t *testing.T) {
 	blockBatchLimit := flags.Get().BlockBatchLimit
 	mc, p2p, _ := initializeTestServices(t, []primitives.Slot{}, []*peerData{})
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
 		chain: mc,
@@ -123,7 +123,7 @@ func TestBlocksQueue_InitStartStop(t *testing.T) {
 	})
 
 	t.Run("cancellation", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		queue := newBlocksQueue(ctx, &blocksQueueConfig{
 			blocksFetcher:       fetcher,
 			chain:               mc,
@@ -249,7 +249,7 @@ func TestBlocksQueue_Loop(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mc, p2p, beaconDB := initializeTestServices(t, tt.expectedBlockSlots, tt.peers)
 
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 
 			fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
@@ -308,7 +308,7 @@ func TestBlocksQueue_onScheduleEvent(t *testing.T) {
 	blockBatchLimit := flags.Get().BlockBatchLimit
 	mc, p2p, _ := initializeTestServices(t, []primitives.Slot{}, []*peerData{})
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
 		chain: mc,
@@ -374,7 +374,7 @@ func TestBlocksQueue_onScheduleEvent(t *testing.T) {
 			highestExpectedSlot: primitives.Slot(blockBatchLimit),
 		})
 		// Cancel to make fetcher spit error when trying to schedule next FSM.
-		requestCtx, requestCtxCancel := context.WithCancel(context.Background())
+		requestCtx, requestCtxCancel := context.WithCancel(t.Context())
 		requestCtxCancel()
 		handlerFn := queue.onScheduleEvent(requestCtx)
 		updatedState, err := handlerFn(&stateMachine{
@@ -403,7 +403,7 @@ func TestBlocksQueue_onDataReceivedEvent(t *testing.T) {
 	blockBatchLimit := flags.Get().BlockBatchLimit
 	mc, p2p, _ := initializeTestServices(t, []primitives.Slot{}, []*peerData{})
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
 		chain: mc,
@@ -562,7 +562,7 @@ func TestBlocksQueue_onReadyToSendEvent(t *testing.T) {
 	blockBatchLimit := flags.Get().BlockBatchLimit
 	mc, p2p, _ := initializeTestServices(t, []primitives.Slot{}, []*peerData{})
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
 		chain: mc,
@@ -720,7 +720,7 @@ func TestBlocksQueue_onProcessSkippedEvent(t *testing.T) {
 	blockBatchLimit := flags.Get().BlockBatchLimit
 	mc, p2p, _ := initializeTestServices(t, []primitives.Slot{}, []*peerData{})
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
 		chain: mc,
@@ -973,7 +973,7 @@ func TestBlocksQueue_onProcessSkippedEvent(t *testing.T) {
 }
 
 func TestBlocksQueue_onCheckStaleEvent(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	t.Run("expired context", func(t *testing.T) {
@@ -1037,7 +1037,7 @@ func TestBlocksQueue_stuckInUnfavourableFork(t *testing.T) {
 	finalizedEpoch := slots.ToEpoch(finalizedSlot)
 
 	genesisBlock := chain1[0]
-	util.SaveBlock(t, context.Background(), beaconDB, genesisBlock)
+	util.SaveBlock(t, t.Context(), beaconDB, genesisBlock)
 	genesisRoot, err := genesisBlock.Block.HashTreeRoot()
 	require.NoError(t, err)
 
@@ -1055,7 +1055,7 @@ func TestBlocksQueue_stuckInUnfavourableFork(t *testing.T) {
 		ValidatorsRoot: [32]byte{},
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	fetcher := newBlocksFetcher(
 		ctx,
@@ -1229,7 +1229,7 @@ func TestBlocksQueue_stuckInUnfavourableFork(t *testing.T) {
 }
 
 func TestBlocksQueue_stuckWhenHeadIsSetToOrphanedBlock(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	beaconDB := dbtest.SetupDB(t)
@@ -1240,7 +1240,7 @@ func TestBlocksQueue_stuckWhenHeadIsSetToOrphanedBlock(t *testing.T) {
 	finalizedEpoch := slots.ToEpoch(finalizedSlot)
 
 	genesisBlock := chain[0]
-	util.SaveBlock(t, context.Background(), beaconDB, genesisBlock)
+	util.SaveBlock(t, t.Context(), beaconDB, genesisBlock)
 	genesisRoot, err := genesisBlock.Block.HashTreeRoot()
 	require.NoError(t, err)
 

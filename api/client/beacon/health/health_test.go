@@ -1,7 +1,6 @@
 package health
 
 import (
-	"context"
 	"sync"
 	"testing"
 
@@ -23,7 +22,7 @@ func TestNodeHealth_IsHealthy(t *testing.T) {
 				isHealthy:  &tt.isHealthy,
 				healthChan: make(chan bool, 1),
 			}
-			if got := n.IsHealthy(context.Background()); got != tt.want {
+			if got := n.IsHealthy(t.Context()); got != tt.want {
 				t.Errorf("IsHealthy() = %v, want %v", got, tt.want)
 			}
 		})
@@ -54,7 +53,7 @@ func TestNodeHealth_UpdateNodeHealth(t *testing.T) {
 				healthChan: make(chan bool, 1),
 			}
 
-			s := n.CheckHealth(context.Background())
+			s := n.CheckHealth(t.Context())
 			// Check if health status was updated
 			if s != tt.newStatus {
 				t.Errorf("UpdateNodeHealth() failed to update isHealthy from %v to %v", tt.initial, tt.newStatus)
@@ -93,9 +92,9 @@ func TestNodeHealth_Concurrency(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			client.EXPECT().IsHealthy(gomock.Any()).Return(false).Times(1)
-			n.CheckHealth(context.Background())
+			n.CheckHealth(t.Context())
 			client.EXPECT().IsHealthy(gomock.Any()).Return(true).Times(1)
-			n.CheckHealth(context.Background())
+			n.CheckHealth(t.Context())
 		}()
 	}
 
@@ -103,7 +102,7 @@ func TestNodeHealth_Concurrency(t *testing.T) {
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
 			defer wg.Done()
-			_ = n.IsHealthy(context.Background()) // Just read the value
+			_ = n.IsHealthy(t.Context()) // Just read the value
 		}()
 	}
 

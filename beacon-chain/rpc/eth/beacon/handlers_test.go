@@ -3490,7 +3490,7 @@ func TestPublishBlindedBlockV2SSZ(t *testing.T) {
 }
 
 func TestValidateConsensus(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	parentState, privs := util.DeterministicGenesisState(t, params.MinimalSpecConfig().MinGenesisActiveValidatorCount)
 	parentBlock, err := util.GenerateFullBlock(parentState, privs, util.DefaultBlockGenConfig(), parentState.Slot())
@@ -3525,7 +3525,7 @@ func TestValidateEquivocation(t *testing.T) {
 		roblock, err := blocks.NewROBlockWithRoot(blk, bytesutil.ToBytes32([]byte("root")))
 		require.NoError(t, err)
 		fc := doublylinkedtree.New()
-		require.NoError(t, fc.InsertNode(context.Background(), st, roblock))
+		require.NoError(t, fc.InsertNode(t.Context(), st, roblock))
 		server := &Server{
 			ForkchoiceFetcher: &chainMock.ChainService{ForkChoiceStore: fc},
 		}
@@ -3544,7 +3544,7 @@ func TestValidateEquivocation(t *testing.T) {
 		require.NoError(t, err)
 
 		fc := doublylinkedtree.New()
-		require.NoError(t, fc.InsertNode(context.Background(), st, roblock))
+		require.NoError(t, fc.InsertNode(t.Context(), st, roblock))
 		server := &Server{
 			ForkchoiceFetcher: &chainMock.ChainService{ForkChoiceStore: fc},
 		}
@@ -3556,7 +3556,7 @@ func TestValidateEquivocation(t *testing.T) {
 
 func TestServer_GetBlockRoot(t *testing.T) {
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	url := "http://example.com/eth/v1/beacon/blocks/{block_id}/root"
 	genBlk, blkContainers := fillDBTestBlocks(ctx, t, beaconDB)
@@ -3767,7 +3767,7 @@ func TestServer_GetBlockRoot(t *testing.T) {
 }
 
 func TestGetStateFork(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/beacon/states/{state_id}/fork", nil)
 	request.SetPathValue("state_id", "head")
 	request.Header.Set("Accept", "application/octet-stream")
@@ -3877,7 +3877,7 @@ func TestGetStateFork(t *testing.T) {
 
 func TestGetCommittees(t *testing.T) {
 	db := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	url := "http://example.com/eth/v1/beacon/states/{state_id}/committees"
 
 	var st state.BeaconState
@@ -4123,7 +4123,7 @@ func TestGetCommittees(t *testing.T) {
 
 func TestGetBlockHeaders(t *testing.T) {
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	_, blkContainers := fillDBTestBlocks(ctx, t, beaconDB)
 	headBlock := blkContainers[len(blkContainers)-1]
@@ -4715,7 +4715,7 @@ func TestGetDepositSnapshot(t *testing.T) {
 	chainData := &eth.ETH1ChainData{
 		DepositSnapshot: snapshot.ToProto(),
 	}
-	err = beaconDB.SaveExecutionChainData(context.Background(), chainData)
+	err = beaconDB.SaveExecutionChainData(t.Context(), chainData)
 	require.NoError(t, err)
 	s := Server{
 		BeaconDB: beaconDB,
@@ -4767,11 +4767,11 @@ func TestServer_broadcastBlobSidecars(t *testing.T) {
 
 	blk, err := blocks.NewSignedBeaconBlock(b.Block)
 	require.NoError(t, err)
-	require.NoError(t, server.broadcastSeenBlockSidecars(context.Background(), blk, b.GetDeneb().Blobs, b.GetDeneb().KzgProofs))
+	require.NoError(t, server.broadcastSeenBlockSidecars(t.Context(), blk, b.GetDeneb().Blobs, b.GetDeneb().KzgProofs))
 	require.LogsDoNotContain(t, hook, "Broadcasted blob sidecar for already seen block")
 
 	server.FinalizationFetcher = &chainMock.ChainService{NotFinalized: false}
-	require.NoError(t, server.broadcastSeenBlockSidecars(context.Background(), blk, b.GetDeneb().Blobs, b.GetDeneb().KzgProofs))
+	require.NoError(t, server.broadcastSeenBlockSidecars(t.Context(), blk, b.GetDeneb().Blobs, b.GetDeneb().KzgProofs))
 	require.LogsContain(t, hook, "Broadcasted blob sidecar for already seen block")
 }
 

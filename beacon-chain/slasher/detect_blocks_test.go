@@ -71,7 +71,7 @@ func Test_processQueuedBlocks_DetectsDoubleProposals(t *testing.T) {
 			hook := logTest.NewGlobal()
 			beaconDB := dbtest.SetupDB(t)
 			slasherDB := dbtest.SetupSlasherDB(t)
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(t.Context())
 
 			beaconState, err := util.NewBeaconState()
 			require.NoError(t, err)
@@ -160,7 +160,7 @@ func Test_processQueuedBlocks_DetectsDoubleProposals(t *testing.T) {
 func Test_processQueuedBlocks_NotSlashable(t *testing.T) {
 	hook := logTest.NewGlobal()
 	slasherDB := dbtest.SetupSlasherDB(t)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	beaconState, err := util.NewBeaconState()
 	require.NoError(t, err)

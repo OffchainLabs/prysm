@@ -51,7 +51,7 @@ import (
 )
 
 func Test_pruneAttsFromPool_Electra(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	logHook := logTest.NewGlobal()
 
 	params.SetupTestConfigCleanup(t)
@@ -241,7 +241,7 @@ func TestFillForkChoiceMissingBlocks_CanSave(t *testing.T) {
 	fcp2 := &forkchoicetypes.Checkpoint{Epoch: 0, Root: r0}
 	require.NoError(t, service.cfg.ForkChoiceStore.UpdateFinalizedCheckpoint(fcp2))
 	err = service.fillInForkChoiceMissingBlocks(
-		context.Background(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
+		t.Context(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
 	require.NoError(t, err)
 
 	// 5 nodes from the block tree 1. B0 - B3 - B4 - B6 - B8
@@ -284,7 +284,7 @@ func TestFillForkChoiceMissingBlocks_RootsMatch(t *testing.T) {
 	require.NoError(t, service.cfg.ForkChoiceStore.UpdateFinalizedCheckpoint(fcp2))
 
 	err = service.fillInForkChoiceMissingBlocks(
-		context.Background(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
+		t.Context(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
 	require.NoError(t, err)
 
 	// 5 nodes from the block tree 1. B0 - B3 - B4 - B6 - B8
@@ -294,7 +294,7 @@ func TestFillForkChoiceMissingBlocks_RootsMatch(t *testing.T) {
 	wantedRoots := [][]byte{roots[0], roots[3], roots[4], roots[6], roots[8]}
 	for i, rt := range wantedRoots {
 		assert.Equal(t, true, service.cfg.ForkChoiceStore.HasNode(bytesutil.ToBytes32(rt)), fmt.Sprintf("Didn't save node: %d", i))
-		assert.Equal(t, true, service.cfg.BeaconDB.HasBlock(context.Background(), bytesutil.ToBytes32(rt)))
+		assert.Equal(t, true, service.cfg.BeaconDB.HasBlock(t.Context(), bytesutil.ToBytes32(rt)))
 	}
 }
 
@@ -340,7 +340,7 @@ func TestFillForkChoiceMissingBlocks_FilterFinalized(t *testing.T) {
 	// Set finalized epoch to 2.
 	require.NoError(t, service.cfg.ForkChoiceStore.UpdateFinalizedCheckpoint(&forkchoicetypes.Checkpoint{Epoch: 2, Root: r64}))
 	err = service.fillInForkChoiceMissingBlocks(
-		context.Background(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
+		t.Context(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
 	require.NoError(t, err)
 
 	// There should be 1 node: block 65
@@ -373,7 +373,7 @@ func TestFillForkChoiceMissingBlocks_FinalizedSibling(t *testing.T) {
 	require.NoError(t, err)
 
 	err = service.fillInForkChoiceMissingBlocks(
-		context.Background(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
+		t.Context(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
 	require.Equal(t, ErrNotDescendantOfFinalized.Error(), err.Error())
 }
 
@@ -451,20 +451,20 @@ func blockTree1(t *testing.T, beaconDB db.Database, genesisRoot []byte) ([][]byt
 		beaconBlock.Block.ParentRoot = bytesutil.PadTo(b.Block.ParentRoot, 32)
 		wsb, err := consensusblocks.NewSignedBeaconBlock(beaconBlock)
 		require.NoError(t, err)
-		if err := beaconDB.SaveBlock(context.Background(), wsb); err != nil {
+		if err := beaconDB.SaveBlock(t.Context(), wsb); err != nil {
 			return nil, err
 		}
-		if err := beaconDB.SaveState(context.Background(), st.Copy(), bytesutil.ToBytes32(beaconBlock.Block.ParentRoot)); err != nil {
+		if err := beaconDB.SaveState(t.Context(), st.Copy(), bytesutil.ToBytes32(beaconBlock.Block.ParentRoot)); err != nil {
 			return nil, errors.Wrap(err, "could not save state")
 		}
 	}
-	if err := beaconDB.SaveState(context.Background(), st.Copy(), r1); err != nil {
+	if err := beaconDB.SaveState(t.Context(), st.Copy(), r1); err != nil {
 		return nil, err
 	}
-	if err := beaconDB.SaveState(context.Background(), st.Copy(), r7); err != nil {
+	if err := beaconDB.SaveState(t.Context(), st.Copy(), r7); err != nil {
 		return nil, err
 	}
-	if err := beaconDB.SaveState(context.Background(), st.Copy(), r8); err != nil {
+	if err := beaconDB.SaveState(t.Context(), st.Copy(), r8); err != nil {
 		return nil, err
 	}
 	return [][]byte{r0[:], r1[:], nil, r3[:], r4[:], r5[:], r6[:], r7[:], r8[:]}, nil
@@ -477,7 +477,7 @@ func TestCurrentSlot_HandlesOverflow(t *testing.T) {
 	require.Equal(t, primitives.Slot(0), slot, "Unexpected slot")
 }
 func TestAncestorByDB_CtxErr(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	opts := testServiceOptsWithDB(t)
 	service, err := NewService(ctx, opts...)
 	require.NoError(t, err)
@@ -510,18 +510,18 @@ func TestAncestor_HandleSkipSlot(t *testing.T) {
 		beaconBlock := util.NewBeaconBlock()
 		beaconBlock.Block.Slot = b.Block.Slot
 		beaconBlock.Block.ParentRoot = bytesutil.PadTo(b.Block.ParentRoot, 32)
-		util.SaveBlock(t, context.Background(), beaconDB, beaconBlock)
+		util.SaveBlock(t, t.Context(), beaconDB, beaconBlock)
 	}
 
 	// Slots 100 to 200 are skip slots. Requesting root at 150 will yield root at 100. The last physical block.
-	r, err := service.Ancestor(context.Background(), r200[:], 150)
+	r, err := service.Ancestor(t.Context(), r200[:], 150)
 	require.NoError(t, err)
 	if bytesutil.ToBytes32(r) != r100 {
 		t.Error("Did not get correct root")
 	}
 
 	// Slots 1 to 100 are skip slots. Requesting root at 50 will yield root at 1. The last physical block.
-	r, err = service.Ancestor(context.Background(), r200[:], 50)
+	r, err = service.Ancestor(t.Context(), r200[:], 50)
 	require.NoError(t, err)
 	if bytesutil.ToBytes32(r) != r1 {
 		t.Error("Did not get correct root")
@@ -529,7 +529,7 @@ func TestAncestor_HandleSkipSlot(t *testing.T) {
 }
 
 func TestAncestor_CanUseForkchoice(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	opts := testServiceOptsWithDB(t)
 	service, err := NewService(ctx, opts...)
 	require.NoError(t, err)
@@ -557,12 +557,12 @@ func TestAncestor_CanUseForkchoice(t *testing.T) {
 		beaconBlock.Block.ParentRoot = bytesutil.PadTo(b.Block.ParentRoot, 32)
 		r, err := b.Block.HashTreeRoot()
 		require.NoError(t, err)
-		st, blkRoot, err := prepareForkchoiceState(context.Background(), b.Block.Slot, r, bytesutil.ToBytes32(b.Block.ParentRoot), params.BeaconConfig().ZeroHash, ojc, ofc)
+		st, blkRoot, err := prepareForkchoiceState(t.Context(), b.Block.Slot, r, bytesutil.ToBytes32(b.Block.ParentRoot), params.BeaconConfig().ZeroHash, ojc, ofc)
 		require.NoError(t, err)
 		require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blkRoot))
 	}
 
-	r, err := service.Ancestor(context.Background(), r200[:], 150)
+	r, err := service.Ancestor(t.Context(), r200[:], 150)
 	require.NoError(t, err)
 	if bytesutil.ToBytes32(r) != r100 {
 		t.Error("Did not get correct root")
@@ -594,14 +594,14 @@ func TestAncestor_CanUseDB(t *testing.T) {
 		beaconBlock := util.NewBeaconBlock()
 		beaconBlock.Block.Slot = b.Block.Slot
 		beaconBlock.Block.ParentRoot = bytesutil.PadTo(b.Block.ParentRoot, 32)
-		util.SaveBlock(t, context.Background(), beaconDB, beaconBlock)
+		util.SaveBlock(t, t.Context(), beaconDB, beaconBlock)
 	}
 
-	st, blkRoot, err := prepareForkchoiceState(context.Background(), 200, r200, r200, params.BeaconConfig().ZeroHash, ojc, ofc)
+	st, blkRoot, err := prepareForkchoiceState(t.Context(), 200, r200, r200, params.BeaconConfig().ZeroHash, ojc, ofc)
 	require.NoError(t, err)
 	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blkRoot))
 
-	r, err := service.Ancestor(context.Background(), r200[:], 150)
+	r, err := service.Ancestor(t.Context(), r200[:], 150)
 	require.NoError(t, err)
 	if bytesutil.ToBytes32(r) != r100 {
 		t.Error("Did not get correct root")
@@ -609,7 +609,7 @@ func TestAncestor_CanUseDB(t *testing.T) {
 }
 
 func TestEnsureRootNotZeroHashes(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	opts := testServiceOptsNoDB()
 	service, err := NewService(ctx, opts...)
 	require.NoError(t, err)
@@ -623,7 +623,7 @@ func TestEnsureRootNotZeroHashes(t *testing.T) {
 }
 
 func TestHandleEpochBoundary_UpdateFirstSlot(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	opts := testServiceOptsNoDB()
 	service, err := NewService(ctx, opts...)
 	require.NoError(t, err)
@@ -922,7 +922,7 @@ func TestRemoveBlockAttestationsInPool(t *testing.T) {
 	r, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 	service := setupBeaconChain(t, beaconDB)
 	require.NoError(t, service.cfg.BeaconDB.SaveStateSummary(ctx, &ethpb.StateSummary{Root: r[:]}))
@@ -935,7 +935,7 @@ func TestRemoveBlockAttestationsInPool(t *testing.T) {
 	require.NoError(t, service.cfg.AttPool.SaveAggregatedAttestations(atts))
 	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
-	service.pruneAttsFromPool(context.Background(), nil /* state not needed pre-Electra */, wsb)
+	service.pruneAttsFromPool(t.Context(), nil /* state not needed pre-Electra */, wsb)
 	require.LogsDoNotContain(t, logHook, "Could not prune attestations")
 	require.Equal(t, 0, service.cfg.AttPool.AggregatedAttestationCount())
 }
@@ -2667,7 +2667,7 @@ func TestRollbackBlock_ContextDeadline(t *testing.T) {
 	require.Equal(t, true, hasState)
 
 	// Set deadlined context when processing the block
-	cancCtx, canc := context.WithCancel(context.Background())
+	cancCtx, canc := context.WithCancel(t.Context())
 	canc()
 	roblock, err = consensusblocks.NewROBlockWithRoot(wsb, root)
 	require.NoError(t, err)
@@ -3315,7 +3315,7 @@ type testIsAvailableParams struct {
 }
 
 func testIsAvailableSetup(t *testing.T, params testIsAvailableParams) (context.Context, context.CancelFunc, *Service, [fieldparams.RootLength]byte, interfaces.SignedBeaconBlock) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
 
 	options := append(params.options, WithDataColumnStorage(dataColumnStorage))
