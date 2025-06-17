@@ -88,13 +88,10 @@ func TestRetry_On_ConnectionError(t *testing.T) {
 		RetryTillSuccess: retry,
 	}
 	backOffPeriod = 10 * time.Millisecond
-<<<<<<< safe-validator-shutdown
-	ctx, cancel := context.WithCancel(context.Background())
-	go runTest(t, ctx, v)
-=======
+
 	ctx, cancel := context.WithCancel(t.Context())
-	go run(ctx, v)
->>>>>>> develop
+	go runTest(t, ctx, v)
+
 	// each step will fail (retry times)=10 this sleep times will wait more then
 	// the time it takes for all steps to succeed before main loop.
 	time.Sleep(time.Duration(retry*6) * backOffPeriod)
