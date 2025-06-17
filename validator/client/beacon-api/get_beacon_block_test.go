@@ -1,7 +1,6 @@
 package beacon_api
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -229,7 +228,7 @@ func TestGetBeaconBlock_SSZ_BellatrixValid(t *testing.T) {
 	randaoReveal := []byte{2}
 	graffiti := []byte{3}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().GetSSZ(
@@ -276,7 +275,7 @@ func TestGetBeaconBlock_SSZ_BlindedBellatrixValid(t *testing.T) {
 	randaoReveal := []byte{2}
 	graffiti := []byte{3}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().GetSSZ(
@@ -323,7 +322,7 @@ func TestGetBeaconBlock_SSZ_CapellaValid(t *testing.T) {
 	randaoReveal := []byte{2}
 	graffiti := []byte{3}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().GetSSZ(
@@ -370,7 +369,7 @@ func TestGetBeaconBlock_SSZ_BlindedCapellaValid(t *testing.T) {
 	randaoReveal := []byte{2}
 	graffiti := []byte{3}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().GetSSZ(
@@ -417,7 +416,7 @@ func TestGetBeaconBlock_SSZ_DenebValid(t *testing.T) {
 	randaoReveal := []byte{2}
 	graffiti := []byte{3}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().GetSSZ(
@@ -464,7 +463,7 @@ func TestGetBeaconBlock_SSZ_BlindedDenebValid(t *testing.T) {
 	randaoReveal := []byte{2}
 	graffiti := []byte{3}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().GetSSZ(
@@ -511,7 +510,7 @@ func TestGetBeaconBlock_SSZ_ElectraValid(t *testing.T) {
 	randaoReveal := []byte{2}
 	graffiti := []byte{3}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().GetSSZ(
@@ -558,7 +557,7 @@ func TestGetBeaconBlock_SSZ_BlindedElectraValid(t *testing.T) {
 	randaoReveal := []byte{2}
 	graffiti := []byte{3}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().GetSSZ(
@@ -601,7 +600,7 @@ func TestGetBeaconBlock_SSZ_UnsupportedVersion(t *testing.T) {
 	randaoReveal := []byte{2}
 	graffiti := []byte{3}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().GetSSZ(
@@ -639,7 +638,7 @@ func TestGetBeaconBlock_SSZ_InvalidBlindedHeader(t *testing.T) {
 	randaoReveal := []byte{2}
 	graffiti := []byte{3}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().GetSSZ(
@@ -677,7 +676,7 @@ func TestGetBeaconBlock_SSZ_InvalidVersionHeader(t *testing.T) {
 	randaoReveal := []byte{2}
 	graffiti := []byte{3}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().GetSSZ(
@@ -711,7 +710,7 @@ func TestGetBeaconBlock_SSZ_GetSSZError(t *testing.T) {
 	randaoReveal := []byte{2}
 	graffiti := []byte{3}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().GetSSZ(
@@ -745,7 +744,7 @@ func TestGetBeaconBlock_SSZ_Phase0Valid(t *testing.T) {
 	randaoReveal := []byte{2}
 	graffiti := []byte{3}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().GetSSZ(
@@ -792,7 +791,7 @@ func TestGetBeaconBlock_SSZ_AltairValid(t *testing.T) {
 	randaoReveal := []byte{2}
 	graffiti := []byte{3}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().GetSSZ(
