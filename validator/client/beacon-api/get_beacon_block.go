@@ -187,7 +187,7 @@ func processBlockResponse(ver string, isBlinded bool, decoder *json.Decoder) (*e
 
 	switch ver {
 	case version.String(version.Phase0):
-		return processAndConvert(decoder, &structs.BeaconBlock{}, "phase0", false)
+		return processAndConvert(decoder, &structs.BeaconBlock{}, version.String(version.Phase0), false)
 
 	case version.String(version.Altair):
 		return processAndConvert(decoder, &structs.BeaconBlockAltair{}, "altair", false)
