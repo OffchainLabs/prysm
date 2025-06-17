@@ -175,7 +175,7 @@ func processAndConvert(decoder *json.Decoder, dest ethpb.GenericConverter, versi
 
 	genericBlock, err := dest.ToGeneric()
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to get %s block", typeName)
+		return nil, errors.Wrapf(err, "failed to convert %s block", typeName)
 	}
 	return genericBlock, nil
 }
