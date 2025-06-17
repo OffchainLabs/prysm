@@ -3412,8 +3412,10 @@ func TestIsDataAvailable(t *testing.T) {
 	})
 
 	t.Run("Fulu - some initially missing data columns (no reconstruction)", func(t *testing.T) {
+		startWaiting := make(chan bool)
+
 		testParams := testIsAvailableParams{
-			options:       []Option{WithCustodyInfo(&peerdas.CustodyInfo{})},
+			options:       []Option{WithCustodyInfo(&peerdas.CustodyInfo{}), WithStartWaitingDataColumnSidecars(startWaiting)},
 			columnsToSave: []uint64{1, 17, 19, 75, 102, 117, 119}, // 119 is not needed, 42 and 87 are missing
 
 			blobKzgCommitmentsCount: 3,
@@ -3440,8 +3442,6 @@ func TestIsDataAvailable(t *testing.T) {
 			{Index: 42, Slot: slot, ProposerIndex: proposerIndex, ParentRoot: parentRoot[:], StateRoot: stateRoot[:], BodyRoot: bodyRoot[:]}, // Needed index
 		})
 
-		startWaiting := make(chan bool)
-
 		go func() {
 			<-startWaiting
 
@@ -3452,7 +3452,7 @@ func TestIsDataAvailable(t *testing.T) {
 			require.NoError(t, err)
 		}()
 
-		err = service.isDataAvailable(ctx, root, signed, startWaiting)
+		err = service.isDataAvailable(ctx, root, signed)
 		require.NoError(t, err)
 	})
 
@@ -3461,6 +3461,9 @@ func TestIsDataAvailable(t *testing.T) {
 			missingColumns = uint64(2)
 			cgc            = 128
 		)
+
+		startWaiting := make(chan bool)
+
 		var custodyInfo peerdas.CustodyInfo
 		custodyInfo.TargetGroupCount.SetValidatorsCustodyRequirement(cgc)
 		custodyInfo.ToAdvertiseGroupCount.Set(cgc)
@@ -3473,7 +3476,7 @@ func TestIsDataAvailable(t *testing.T) {
 		}
 
 		testParams := testIsAvailableParams{
-			options:                 []Option{WithCustodyInfo(&custodyInfo)},
+			options:                 []Option{WithCustodyInfo(&custodyInfo), WithStartWaitingDataColumnSidecars(startWaiting)},
 			columnsToSave:           indices,
 			blobKzgCommitmentsCount: 3,
 		}
@@ -3503,8 +3506,6 @@ func TestIsDataAvailable(t *testing.T) {
 
 		_, verifiedSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParams)
 
-		startWaiting := make(chan bool)
-
 		go func() {
 			<-startWaiting
 
@@ -3512,25 +3513,26 @@ func TestIsDataAvailable(t *testing.T) {
 			require.NoError(t, err)
 		}()
 
-		err = service.isDataAvailable(ctx, root, signed, startWaiting)
+		err = service.isDataAvailable(ctx, root, signed)
 		require.NoError(t, err)
 	})
 
 	t.Run("Fulu - some columns are definitively missing", func(t *testing.T) {
+		startWaiting := make(chan bool)
+
 		params := testIsAvailableParams{
-			options:                 []Option{WithCustodyInfo(&peerdas.CustodyInfo{})},
+			options:                 []Option{WithCustodyInfo(&peerdas.CustodyInfo{}), WithStartWaitingDataColumnSidecars(startWaiting)},
 			blobKzgCommitmentsCount: 3,
 		}
 
 		ctx, cancel, service, root, signed := testIsAvailableSetup(t, params)
 
-		startWaiting := make(chan bool)
 		go func() {
 			<-startWaiting
 			cancel()
 		}()
 
-		err := service.isDataAvailable(ctx, root, signed, startWaiting)
+		err := service.isDataAvailable(ctx, root, signed)
 		require.NotNil(t, err)
 	})
 }
