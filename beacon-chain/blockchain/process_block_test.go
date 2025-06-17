@@ -3440,10 +3440,10 @@ func TestIsDataAvailable(t *testing.T) {
 			{Index: 42, Slot: slot, ProposerIndex: proposerIndex, ParentRoot: parentRoot[:], StateRoot: stateRoot[:], BodyRoot: bodyRoot[:]}, // Needed index
 		})
 
-		startWaiting := make(chan bool)
+		service.startWaitingChan = make(chan bool)
 
 		go func() {
-			<-startWaiting
+			<-service.startWaitingChan
 
 			err := service.dataColumnStorage.Save(verifiedSidecarsWrongRoot)
 			require.NoError(t, err)
@@ -3452,7 +3452,7 @@ func TestIsDataAvailable(t *testing.T) {
 			require.NoError(t, err)
 		}()
 
-		err = service.isDataAvailable(ctx, root, signed, startWaiting)
+		err = service.isDataAvailable(ctx, root, signed)
 		require.NoError(t, err)
 	})
 
@@ -3503,16 +3503,16 @@ func TestIsDataAvailable(t *testing.T) {
 
 		_, verifiedSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParams)
 
-		startWaiting := make(chan bool)
+		service.startWaitingChan = make(chan bool)
 
 		go func() {
-			<-startWaiting
+			<-service.startWaitingChan
 
 			err := service.dataColumnStorage.Save(verifiedSidecars)
 			require.NoError(t, err)
 		}()
 
-		err = service.isDataAvailable(ctx, root, signed, startWaiting)
+		err = service.isDataAvailable(ctx, root, signed)
 		require.NoError(t, err)
 	})
 
@@ -3524,13 +3524,13 @@ func TestIsDataAvailable(t *testing.T) {
 
 		ctx, cancel, service, root, signed := testIsAvailableSetup(t, params)
 
-		startWaiting := make(chan bool)
+		service.startWaitingChan = make(chan bool)
 		go func() {
-			<-startWaiting
+			<-service.startWaitingChan
 			cancel()
 		}()
 
-		err := service.isDataAvailable(ctx, root, signed, startWaiting)
+		err := service.isDataAvailable(ctx, root, signed)
 		require.NotNil(t, err)
 	})
 }

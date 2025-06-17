@@ -68,6 +68,7 @@ type Service struct {
 	dataColumnStorage    *filesystem.DataColumnStorage
 	slasherEnabled       bool
 	lcStore              *lightClient.Store
+	startWaitingChan     chan bool // mostly for testing, only instantiated in tests
 }
 
 // config options for the service.
