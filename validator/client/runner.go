@@ -318,8 +318,6 @@ func runHealthCheckRoutine(ctx context.Context, cancel context.CancelFunc, v ifa
 	ticker := time.NewTicker(interval)
 	tracker := v.HealthTracker()
 	go func() {
-		defer ticker.Stop()
-
 		// Perform health check and handle host switching/event stream
 		performHealthCheck := func() bool {
 			isHealthy := tracker.CheckHealth(ctx)
