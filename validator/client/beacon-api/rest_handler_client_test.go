@@ -54,6 +54,13 @@ func TestGet(t *testing.T) {
 func TestGetSSZ(t *testing.T) {
 	ctx := context.Background()
 	const endpoint = "/example/rest/api/ssz"
+	genesisJson := &structs.GetGenesisResponse{
+		Data: &structs.Genesis{
+			GenesisTime:           "123",
+			GenesisValidatorsRoot: "0x456",
+			GenesisForkVersion:    "0x789",
+		},
+	}
 
 	t.Run("Successful SSZ response", func(t *testing.T) {
 		expectedBody := []byte{10, 20, 30, 40}
@@ -79,7 +86,7 @@ func TestGetSSZ(t *testing.T) {
 		require.StringContains(t, api.OctetStreamMediaType, header.Get("Content-Type"))
 	})
 
-	t.Run("Invalid Content-Type response", func(t *testing.T) {
+	t.Run("Json Content-Type response", func(t *testing.T) {
 		logrus.SetLevel(logrus.DebugLevel)
 		defer logrus.SetLevel(logrus.InfoLevel) // reset it afterwards
 		logHook := test.NewGlobal()
@@ -87,7 +94,11 @@ func TestGetSSZ(t *testing.T) {
 		mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
 			assert.StringContains(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
 			w.Header().Set("Content-Type", api.JsonMediaType) // Invalid content type
-			_, err := w.Write([]byte(`{"code": 400, "message": "bad request"}`))
+
+			marshalledJson, err := json.Marshal(genesisJson)
+			require.NoError(t, err)
+
+			_, err = w.Write(marshalledJson)
 			require.NoError(t, err)
 		})
 		server := httptest.NewServer(mux)
@@ -98,9 +109,13 @@ func TestGetSSZ(t *testing.T) {
 			host:   server.URL,
 		}
 
-		_, _, err := jsonRestHandler.GetSSZ(ctx, endpoint)
+		body, header, err := jsonRestHandler.GetSSZ(ctx, endpoint)
 		require.NoError(t, err)
 		assert.LogsContain(t, logHook, "Server responded with non primary accept type")
+		require.Equal(t, api.JsonMediaType, header.Get("Content-Type"))
+		resp := &structs.GetGenesisResponse{}
+		require.NoError(t, json.Unmarshal(body, resp))
+		require.Equal(t, "123", resp.Data.GenesisTime)
 	})
 }
 

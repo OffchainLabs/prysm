@@ -103,9 +103,6 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 			"receivedAcceptType":  httpResp.Header.Get("Content-Type"),
 		}).Debug("Server responded with non primary accept type")
 	}
-	if features.Get().SSZOnly && httpResp.Header.Get("Content-Type") != api.OctetStreamMediaType {
-		return nil, nil, errors.Errorf("server responded with non primary accept type %s", httpResp.Header.Get("Content-Type"))
-	}
 
 	// non-2XX codes are a failure
 	if !strings.HasPrefix(httpResp.Status, "2") {
@@ -115,6 +112,10 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 			return nil, nil, errors.Wrapf(err, "failed to decode response body into error json for %s", httpResp.Request.URL)
 		}
 		return nil, nil, errorJson
+	}
+
+	if features.Get().SSZOnly && httpResp.Header.Get("Content-Type") != api.OctetStreamMediaType {
+		return nil, nil, errors.Errorf("server responded with non primary accept type %s", httpResp.Header.Get("Content-Type"))
 	}
 
 	return body, httpResp.Header, nil
