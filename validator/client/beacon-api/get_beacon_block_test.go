@@ -1,6 +1,7 @@
 package beacon_api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
