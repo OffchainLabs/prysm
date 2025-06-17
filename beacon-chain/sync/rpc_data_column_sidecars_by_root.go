@@ -20,7 +20,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var notDataColumnsByRootIdentifiersError = errors.New("not data columns by root identifiers")
+var (
+	notDataColumnsByRootIdentifiersError = errors.New("not data columns by root identifiers")
+	tickerDelay                          = time.Second
+)
 
 // dataColumnSidecarByRootRPCHandler handles the data column sidecars by root RPC request.
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#datacolumnsidecarsbyroot-v1
@@ -89,7 +92,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 
 	var ticker *time.Ticker
 	if len(requestedColumnIdents) > batchSize {
-		ticker = time.NewTicker(time.Second)
+		ticker = time.NewTicker(tickerDelay)
 	}
 
 	log.Debug("Serving data column sidecar by root request")
@@ -104,18 +107,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		// Throttle request processing to no more than batchSize/sec.
 		for range columns {
 			if ticker != nil && count != 0 && count%batchSize == 0 {
-				for {
-					select {
-					case <-ticker.C:
-						log.WithFields(logrus.Fields{
-							"batchSize": batchSize,
-							"count":     count,
-						}).Debug("Throttling data column sidecar request")
-					case <-ctx.Done():
-						log.Debug("Context closed, exiting routine")
-						return nil
-					}
-				}
+				<-ticker.C
 			}
 
 			count++

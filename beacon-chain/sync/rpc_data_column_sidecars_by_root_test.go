@@ -77,9 +77,17 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 	t.Run("nominal", func(t *testing.T) {
 		resetFlags := flags.Get()
 		gFlags := new(flags.GlobalFlags)
-		gFlags.DataColumnBatchLimit = 5
+		gFlags.DataColumnBatchLimit = 2
 		flags.Init(gFlags)
 		defer flags.Init(resetFlags)
+
+		// Setting the ticker to 0 will cause the ticker to panic.
+		// Setting it to the minimum value instead.
+		refTickerDelay := tickerDelay
+		tickerDelay = time.Nanosecond
+		defer func() {
+			tickerDelay = refTickerDelay
+		}()
 
 		params.SetupTestConfigCleanup(t)
 		beaconConfig := params.BeaconConfig()
