@@ -83,7 +83,7 @@ func (v *validator) SubmitSyncCommitteeMessage(ctx context.Context, slot primiti
 	}
 
 	msgSlot := msg.Slot
-	slotTime := v.genesisTime.Add(time.Duration(msgSlot) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+	slotTime := slots.BeginsAt(msgSlot, v.genesisTime)
 	log.WithFields(logrus.Fields{
 		"slot":               msg.Slot,
 		"slotStartTime":      slotTime,
@@ -176,7 +176,7 @@ func (v *validator) SubmitSignedContributionAndProof(ctx context.Context, slot p
 		}
 
 		contributionSlot := contributionAndProof.Contribution.Slot
-		slotTime := v.genesisTime.Add(time.Duration(contributionSlot) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+		slotTime := slots.BeginsAt(contributionSlot, v.genesisTime)
 		log.WithFields(logrus.Fields{
 			"slot":               contributionAndProof.Contribution.Slot,
 			"slotStartTime":      slotTime,

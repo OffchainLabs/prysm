@@ -96,5 +96,5 @@ func (s *Service) Status() error {
 
 // SetGenesisTime sets genesis time for operation service to use.
 func (s *Service) SetGenesisTime(t time.Time) {
-	s.genesisTime = t
+	s.genesisTime = t.Truncate(time.Second) // Genesis time has a precision of 1 second.
 }

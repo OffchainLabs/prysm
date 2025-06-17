@@ -178,6 +178,7 @@ func VerifyTime(genesis time.Time, slot primitives.Slot, timeTolerance time.Dura
 }
 
 // ToTime takes the given slot and genesis time to determine the start time of the slot.
+// DEPRECATED: Use BeginsAt.
 func ToTime(genesis time.Time, slot primitives.Slot) (time.Time, error) {
 	// TODO(Preston): How important is this overflow check?
 	_, err := slot.SafeMul(params.BeaconConfig().SecondsPerSlot)
@@ -203,11 +204,15 @@ func Since(time time.Time) primitives.Slot {
 // CurrentSlot returns the current slot as determined by the local clock and
 // provided genesis time.
 func CurrentSlot(genesis time.Time) primitives.Slot {
-	now := time.Now()
-	if now.Before(genesis) {
+	return SlotAt(genesis, time.Now())
+}
+
+// SlotAt returns the slot at the given time.
+func SlotAt(genesis, tm time.Time) primitives.Slot {
+	if tm.Before(genesis) {
 		return 0
 	}
-	return primitives.Slot(now.Sub(genesis) / time.Second / time.Duration(params.BeaconConfig().SecondsPerSlot))
+	return primitives.Slot(tm.Sub(genesis) / time.Second / time.Duration(params.BeaconConfig().SecondsPerSlot))
 }
 
 // Duration computes the span of time between two instants, represented as Slots.

@@ -1713,7 +1713,7 @@ func TestValidator_PushSettings(t *testing.T) {
 							NumValidatorKeys: 1,
 							Offset:           1,
 						},
-						genesisTime: time.Time{},
+						genesisTime: time.Unix(0, 0),
 					}
 					// set bellatrix as current epoch
 					params.BeaconConfig().BellatrixForkEpoch = 0

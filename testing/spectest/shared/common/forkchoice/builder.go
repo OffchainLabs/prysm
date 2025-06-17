@@ -135,7 +135,7 @@ func (bb *Builder) Check(t testing.TB, c *Check) {
 	if c == nil {
 		return
 	}
-	ctx := context.TODO()
+	ctx := t.Context()
 	require.NoError(t, bb.service.UpdateAndSaveHeadWithBalances(ctx))
 	if c.Head != nil {
 		r, err := bb.service.HeadRoot(ctx)

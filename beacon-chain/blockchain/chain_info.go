@@ -514,7 +514,7 @@ func (s *Service) Ancestor(ctx context.Context, root []byte, slot primitives.Slo
 
 // SetGenesisTime sets the genesis time of beacon chain.
 func (s *Service) SetGenesisTime(t time.Time) {
-	s.genesisTime = t
+	s.genesisTime = t.Truncate(time.Second) // Genesis time has a precision of 1 second.
 }
 
 func (s *Service) recoverStateSummary(ctx context.Context, blockRoot [32]byte) (*ethpb.StateSummary, error) {
