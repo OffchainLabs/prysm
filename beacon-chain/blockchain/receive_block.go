@@ -476,8 +476,6 @@ func (s *Service) handleCaches() error {
 	if sinceFinality >= epochsSinceFinalityExpandCache {
 		helpers.ExpandCommitteeCache()
 		return nil
-	} else {
-		log.WithField("since", sinceFinality).WithField("expand", epochsSinceFinalityExpandCache).Error("It didn't work again!") // TODO(preston): Delete (debug)
 	}
 
 	helpers.CompressCommitteeCache()
