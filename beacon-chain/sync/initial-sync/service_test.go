@@ -356,7 +356,8 @@ func TestService_Resync(t *testing.T) {
 				st, err := util.NewBeaconState()
 				require.NoError(t, err)
 				futureSlot := primitives.Slot(160)
-				require.NoError(t, st.SetGenesisTime(makeGenesisTime(futureSlot)))
+				genesis := makeGenesisTime(futureSlot)
+				require.NoError(t, st.SetGenesisTime(genesis))
 				return &mock.ChainService{
 					State: st,
 					Root:  genesisRoot[:],
@@ -364,7 +365,7 @@ func TestService_Resync(t *testing.T) {
 					FinalizedCheckPoint: &eth.Checkpoint{
 						Epoch: slots.ToEpoch(futureSlot),
 					},
-					Genesis:        time.Now(),
+					Genesis:        genesis,
 					ValidatorsRoot: [32]byte{},
 				}
 			},
@@ -392,6 +393,7 @@ func TestService_Resync(t *testing.T) {
 				BlobStorage:   filesystem.NewEphemeralBlobStorage(t),
 			})
 			assert.NotNil(t, s)
+			s.genesisTime = mc.Genesis
 			assert.Equal(t, primitives.Slot(0), s.cfg.Chain.HeadSlot())
 			err := s.Resync()
 			if tt.wantedErr != "" {

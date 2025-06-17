@@ -132,11 +132,14 @@ func (s *Store) insert(ctx context.Context,
 		if now.Before(s.genesisTime) {
 			return n, nil
 		}
-		secondsIntoSlot := uint64(now.Sub(s.genesisTime)/time.Second) % params.BeaconConfig().SecondsPerSlot
 		currentSlot := slots.CurrentSlot(s.genesisTime)
-		boostThreshold := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
+		sss, err := slots.SinceSlotStart(currentSlot, s.genesisTime, now)
+		if err != nil {
+			return nil, fmt.Errorf("could not determine time since current slot started: %w", err)
+		}
+		boostThreshold := time.Duration(params.BeaconConfig().SecondsPerSlot/params.BeaconConfig().IntervalsPerSlot) * time.Second
 		isFirstBlock := s.proposerBoostRoot == [32]byte{}
-		if currentSlot == slot && secondsIntoSlot < boostThreshold && isFirstBlock {
+		if currentSlot == slot && sss < boostThreshold && isFirstBlock {
 			s.proposerBoostRoot = root
 		}
 
@@ -268,7 +271,8 @@ func (f *ForkChoice) HighestReceivedBlockSlot() primitives.Slot {
 }
 
 // HighestReceivedBlockDelay returns the number of slots that the highest
-// received block was late when receiving it
+// received block was late when receiving it. For example, a block was late by 12 slots,
+// then this method is expected to return 12.
 func (f *ForkChoice) HighestReceivedBlockDelay() primitives.Slot {
 	n := f.store.highestReceivedNode
 	if n == nil {

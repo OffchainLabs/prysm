@@ -894,7 +894,7 @@ func uint64MapToSortedSlice(input map[uint64]bool) []uint64 {
 // it also updates the next slot cache and the proposer index cache to deal with skipped slots.
 func (s *Service) lateBlockTasks(ctx context.Context) {
 	currentSlot := s.CurrentSlot()
-	if s.CurrentSlot() == s.HeadSlot() {
+	if currentSlot == s.HeadSlot() {
 		return
 	}
 	s.cfg.ForkChoiceStore.RLock()

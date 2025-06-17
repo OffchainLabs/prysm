@@ -487,7 +487,7 @@ func (f *ForkChoice) InsertChain(ctx context.Context, chain []*forkchoicetypes.B
 
 // SetGenesisTime sets the genesisTime tracked by forkchoice
 func (f *ForkChoice) SetGenesisTime(genesis time.Time) {
-	f.store.genesisTime = genesis
+	f.store.genesisTime = genesis.Truncate(time.Second) // Genesis time has a precision of 1 second.
 }
 
 // SetOriginRoot sets the genesis block root

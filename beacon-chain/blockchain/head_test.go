@@ -162,6 +162,7 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 			},
 			originBlockRoot: [32]byte{1},
 		}
+		srv.SetGenesisTime(time.Now())
 		st, blk, err := prepareForkchoiceState(t.Context(), 0, [32]byte{}, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
 		require.NoError(t, err)
 		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
@@ -194,6 +195,7 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 			},
 			originBlockRoot: genesisRoot,
 		}
+		srv.SetGenesisTime(time.Now())
 		st, blk, err := prepareForkchoiceState(t.Context(), 0, [32]byte{}, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
 		require.NoError(t, err)
 		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
@@ -407,7 +409,7 @@ func TestSaveOrphanedOps(t *testing.T) {
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 	service := setupBeaconChain(t, beaconDB)
-	service.genesisTime = time.Now().Add(time.Duration(-10*int64(1)*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second)
+	service.SetGenesisTime(time.Now().Add(time.Duration(-10*int64(1)*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
 
 	// Chain setup
 	// 0 -- 1 -- 2 -- 3

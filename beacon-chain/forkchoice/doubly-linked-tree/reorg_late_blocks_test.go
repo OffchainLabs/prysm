@@ -138,7 +138,6 @@ func TestForkChoice_GetProposerHead(t *testing.T) {
 	f.store.headNode.timestamp.Add(-1 * time.Duration(params.BeaconConfig().SecondsPerSlot-orphanLateBlockFirstThreshold) * time.Second)
 	t.Run("head is weak", func(t *testing.T) {
 		require.Equal(t, parentRoot, f.GetProposerHead())
-
 	})
 	t.Run("head is nil", func(t *testing.T) {
 		saved := f.store.headNode

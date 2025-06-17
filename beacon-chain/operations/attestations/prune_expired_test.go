@@ -47,7 +47,7 @@ func TestPruneExpired_Ticker(t *testing.T) {
 	}
 
 	// Rewind back one epoch worth of time.
-	s.genesisTime = time.Now().Add(-1 * time.Duration(params.BeaconConfig().SlotsPerEpoch) * time.Second)
+	s.genesisTime = time.Now().Add(-1 * time.Duration(params.BeaconConfig().SlotsPerEpoch) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
 
 	go s.pruneExpired()
 

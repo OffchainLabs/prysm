@@ -153,12 +153,12 @@ func (f *ForkChoice) GetProposerHead() [32]byte {
 	}
 
 	// Only reorg if we are proposing early
-	secs, err := slots.SinceSlotStart(head.slot+1, f.store.genesisTime, time.Now())
+	sss, err := slots.SinceSlotStart(head.slot+1, f.store.genesisTime, time.Now())
 	if err != nil {
 		log.WithError(err).Error("could not check if proposing early")
 		return head.root
 	}
-	if secs >= orphanLateBlockProposingEarly {
+	if sss >= orphanLateBlockProposingEarly {
 		return head.root
 	}
 	return parent.root
