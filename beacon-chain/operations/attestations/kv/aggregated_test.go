@@ -1,7 +1,6 @@
 package kv
 
 import (
-	"context"
 	"sort"
 	"testing"
 
@@ -33,10 +32,10 @@ func TestKV_Aggregated_AggregateUnaggregatedAttestations(t *testing.T) {
 	att8 := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 2}, AggregationBits: bitfield.Bitlist{0b1001}, Signature: sig2.Marshal()})
 	atts := []ethpb.Att{att1, att2, att3, att4, att5, att6, att7, att8}
 	require.NoError(t, cache.SaveUnaggregatedAttestations(atts))
-	require.NoError(t, cache.AggregateUnaggregatedAttestations(context.Background()))
+	require.NoError(t, cache.AggregateUnaggregatedAttestations(t.Context()))
 
-	require.Equal(t, 1, len(cache.AggregatedAttestationsBySlotIndex(context.Background(), 1, 0)), "Did not aggregate correctly")
-	require.Equal(t, 1, len(cache.AggregatedAttestationsBySlotIndex(context.Background(), 2, 0)), "Did not aggregate correctly")
+	require.Equal(t, 1, len(cache.AggregatedAttestationsBySlotIndex(t.Context(), 1, 0)), "Did not aggregate correctly")
+	require.Equal(t, 1, len(cache.AggregatedAttestationsBySlotIndex(t.Context(), 2, 0)), "Did not aggregate correctly")
 }
 
 func TestKV_Aggregated_SaveAggregatedAttestation(t *testing.T) {
@@ -511,7 +510,7 @@ func TestKV_Aggregated_AggregatedAttestationsBySlotIndex(t *testing.T) {
 	for _, att := range atts {
 		require.NoError(t, cache.SaveAggregatedAttestation(att))
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	returned := cache.AggregatedAttestationsBySlotIndex(ctx, 1, 1)
 	assert.DeepEqual(t, []*ethpb.Attestation{att1}, returned)
 	returned = cache.AggregatedAttestationsBySlotIndex(ctx, 1, 2)
@@ -537,7 +536,7 @@ func TestKV_Aggregated_AggregatedAttestationsBySlotIndexElectra(t *testing.T) {
 	for _, att := range atts {
 		require.NoError(t, cache.SaveAggregatedAttestation(att))
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	returned := cache.AggregatedAttestationsBySlotIndexElectra(ctx, 1, 1)
 	assert.DeepEqual(t, []*ethpb.AttestationElectra{att1}, returned)
 	returned = cache.AggregatedAttestationsBySlotIndexElectra(ctx, 1, 2)

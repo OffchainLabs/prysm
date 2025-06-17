@@ -2,7 +2,6 @@ package beacon_api
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"net/url"
 	"testing"
@@ -39,7 +38,7 @@ func TestIndex_Nominal(t *testing.T) {
 	defer ctrl.Finish()
 
 	pubKey, reqBuffer := getPubKeyAndReqBuffer(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	stateValidatorsResponseJson := structs.GetValidatorsResponse{}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
@@ -89,7 +88,7 @@ func TestIndex_UnexistingValidator(t *testing.T) {
 	defer ctrl.Finish()
 
 	pubKey, reqBuffer := getPubKeyAndReqBuffer(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	stateValidatorsResponseJson := structs.GetValidatorsResponse{}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
@@ -131,7 +130,7 @@ func TestIndex_BadIndexError(t *testing.T) {
 	defer ctrl.Finish()
 
 	pubKey, reqBuffer := getPubKeyAndReqBuffer(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	stateValidatorsResponseJson := structs.GetValidatorsResponse{}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
@@ -180,7 +179,7 @@ func TestIndex_JsonResponseError(t *testing.T) {
 	defer ctrl.Finish()
 
 	pubKey, reqBuffer := getPubKeyAndReqBuffer(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	stateValidatorsResponseJson := structs.GetValidatorsResponse{}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)

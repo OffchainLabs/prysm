@@ -2,7 +2,6 @@ package kv
 
 import (
 	"bytes"
-	"context"
 	"crypto/rand"
 	"testing"
 
@@ -121,7 +120,7 @@ func Test_deleteValueForIndices(t *testing.T) {
 					bkt := tx.Bucket([]byte(k))
 					require.NoError(t, bkt.Put(idx, tt.inputIndices[k]))
 				}
-				err := deleteValueForIndices(context.Background(), tt.inputIndices, tt.root, tx)
+				err := deleteValueForIndices(t.Context(), tt.inputIndices, tt.root, tx)
 				if tt.wantedErr != "" {
 					assert.ErrorContains(t, tt.wantedErr, err)
 					return nil

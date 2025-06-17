@@ -1,7 +1,6 @@
 package beacon_api
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
@@ -16,7 +15,7 @@ func TestGetGenesis_ValidGenesis(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	genesisResponseJson := structs.GetGenesisResponse{}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
@@ -48,7 +47,7 @@ func TestGetGenesis_NilData(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	genesisResponseJson := structs.GetGenesisResponse{}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
@@ -72,7 +71,7 @@ func TestGetGenesis_EndpointCalledOnlyOnce(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	genesisResponseJson := structs.GetGenesisResponse{}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
@@ -106,7 +105,7 @@ func TestGetGenesis_EndpointCanBeCalledAgainAfterError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	genesisResponseJson := structs.GetGenesisResponse{}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)

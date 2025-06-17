@@ -39,7 +39,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 		DB:               db,
 		Optimistic:       true,
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	s := &Service{
 		ctx: ctx,
@@ -78,7 +78,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 	validators := uint64(64)
 	savedState, keys := util.DeterministicGenesisState(t, validators)
 	require.NoError(t, savedState.SetSlot(1))
-	require.NoError(t, db.SaveState(context.Background(), savedState, validBlockRoot))
+	require.NoError(t, db.SaveState(t.Context(), savedState, validBlockRoot))
 	chain.State = savedState
 
 	tests := []struct {
@@ -264,7 +264,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 			helpers.ClearCache()
 			chain.ValidAttestation = tt.validAttestationSignature
 			if tt.validAttestationSignature {
-				com, err := helpers.BeaconCommitteeFromState(context.Background(), savedState, tt.msg.GetData().Slot, tt.msg.GetData().CommitteeIndex)
+				com, err := helpers.BeaconCommitteeFromState(t.Context(), savedState, tt.msg.GetData().Slot, tt.msg.GetData().CommitteeIndex)
 				require.NoError(t, err)
 				domain, err := signing.Domain(savedState.Fork(), tt.msg.GetData().Target.Epoch, params.BeaconConfig().DomainBeaconAttester, savedState.GenesisValidatorsRoot())
 				require.NoError(t, err)
@@ -331,7 +331,7 @@ func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {
 		DB:               db,
 		Optimistic:       true,
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	s := &Service{
 		ctx: ctx,
@@ -367,7 +367,7 @@ func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {
 	validators := uint64(64)
 	savedState, keys := util.DeterministicGenesisState(t, validators)
 	require.NoError(t, savedState.SetSlot(1))
-	require.NoError(t, db.SaveState(context.Background(), savedState, validBlockRoot))
+	require.NoError(t, db.SaveState(t.Context(), savedState, validBlockRoot))
 	chain.State = savedState
 	committee, err := helpers.BeaconCommitteeFromState(ctx, savedState, 1, 0)
 	require.NoError(t, err)
@@ -433,7 +433,7 @@ func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			helpers.ClearCache()
-			com, err := helpers.BeaconCommitteeFromState(context.Background(), savedState, tt.msg.GetData().Slot, tt.msg.GetData().CommitteeIndex)
+			com, err := helpers.BeaconCommitteeFromState(t.Context(), savedState, tt.msg.GetData().Slot, tt.msg.GetData().CommitteeIndex)
 			require.NoError(t, err)
 			domain, err := signing.Domain(savedState.Fork(), tt.msg.GetData().Target.Epoch, params.BeaconConfig().DomainBeaconAttester, savedState.GenesisValidatorsRoot())
 			require.NoError(t, err)
@@ -467,7 +467,7 @@ func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {
 }
 
 func TestService_setSeenUnaggregatedAtt(t *testing.T) {
-	s := NewService(context.Background(), WithP2P(p2ptest.NewTestP2P(t)))
+	s := NewService(t.Context(), WithP2P(p2ptest.NewTestP2P(t)))
 
 	t.Run("phase0", func(t *testing.T) {
 		s.initCaches()

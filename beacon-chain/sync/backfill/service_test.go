@@ -34,7 +34,7 @@ func (*mockInitalizerWaiter) WaitForInitializer(_ context.Context) (*verificatio
 }
 
 func TestServiceInit(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*300)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*300)
 	defer cancel()
 	db := &mockBackfillDB{}
 	su, err := NewUpdater(ctx, db)

@@ -1,7 +1,6 @@
 package blocks
 
 import (
-	"context"
 	"testing"
 
 	v "github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
@@ -18,7 +17,7 @@ import (
 
 func TestFuzzProcessAttestationNoVerify_10000(t *testing.T) {
 	fuzzer := gofuzz.NewWithSeed(0)
-	ctx := context.Background()
+	ctx := t.Context()
 	state := &ethpb.BeaconState{}
 	att := &ethpb.Attestation{}
 
@@ -49,7 +48,7 @@ func TestFuzzProcessBlockHeader_10000(t *testing.T) {
 		}
 		wsb, err := blocks.NewSignedBeaconBlock(block)
 		require.NoError(t, err)
-		_, err = ProcessBlockHeader(context.Background(), s, wsb)
+		_, err = ProcessBlockHeader(t.Context(), s, wsb)
 		_ = err
 		fuzz.FreeMemory(i)
 	}
@@ -87,7 +86,7 @@ func TestFuzzProcessEth1DataInBlock_10000(t *testing.T) {
 	for i := 0; i < 10000; i++ {
 		fuzzer.Fuzz(state)
 		fuzzer.Fuzz(e)
-		s, err := ProcessEth1DataInBlock(context.Background(), state, e)
+		s, err := ProcessEth1DataInBlock(t.Context(), state, e)
 		if err != nil && s != nil {
 			t.Fatalf("state should be nil on err. found: %v on error: %v for state: %v and eth1data: %v", s, err, state, e)
 		}
@@ -134,7 +133,7 @@ func TestFuzzProcessBlockHeaderNoVerify_10000(t *testing.T) {
 		fuzzer.Fuzz(block)
 		s, err := state_native.InitializeFromProtoUnsafePhase0(state)
 		require.NoError(t, err)
-		_, err = ProcessBlockHeaderNoVerify(context.Background(), s, block.Slot, block.ProposerIndex, block.ParentRoot, []byte{})
+		_, err = ProcessBlockHeaderNoVerify(t.Context(), s, block.Slot, block.ProposerIndex, block.ParentRoot, []byte{})
 		_ = err
 		fuzz.FreeMemory(i)
 	}
@@ -155,7 +154,7 @@ func TestFuzzProcessRandao_10000(t *testing.T) {
 		}
 		wsb, err := blocks.NewSignedBeaconBlock(b)
 		require.NoError(t, err)
-		r, err := ProcessRandao(context.Background(), s, wsb)
+		r, err := ProcessRandao(t.Context(), s, wsb)
 		if err != nil && r != nil {
 			t.Fatalf("return value should be nil on err. found: %v on error: %v for state: %v and block: %v", r, err, state, b)
 		}
@@ -185,7 +184,7 @@ func TestFuzzProcessProposerSlashings_10000(t *testing.T) {
 	fuzzer := gofuzz.NewWithSeed(0)
 	state := &ethpb.BeaconState{}
 	p := &ethpb.ProposerSlashing{}
-	ctx := context.Background()
+	ctx := t.Context()
 	for i := 0; i < 10000; i++ {
 		fuzzer.Fuzz(state)
 		fuzzer.Fuzz(p)
@@ -218,7 +217,7 @@ func TestFuzzProcessAttesterSlashings_10000(t *testing.T) {
 	fuzzer := gofuzz.NewWithSeed(0)
 	state := &ethpb.BeaconState{}
 	a := &ethpb.AttesterSlashing{}
-	ctx := context.Background()
+	ctx := t.Context()
 	for i := 0; i < 10000; i++ {
 		fuzzer.Fuzz(state)
 		fuzzer.Fuzz(a)
@@ -236,7 +235,7 @@ func TestFuzzVerifyAttesterSlashing_10000(t *testing.T) {
 	fuzzer := gofuzz.NewWithSeed(0)
 	state := &ethpb.BeaconState{}
 	attesterSlashing := &ethpb.AttesterSlashing{}
-	ctx := context.Background()
+	ctx := t.Context()
 	for i := 0; i < 10000; i++ {
 		fuzzer.Fuzz(state)
 		fuzzer.Fuzz(attesterSlashing)
@@ -274,7 +273,7 @@ func TestFuzzProcessAttestationsNoVerify_10000(t *testing.T) {
 	fuzzer := gofuzz.NewWithSeed(0)
 	state := &ethpb.BeaconState{}
 	b := &ethpb.SignedBeaconBlock{}
-	ctx := context.Background()
+	ctx := t.Context()
 	for i := 0; i < 10000; i++ {
 		fuzzer.Fuzz(state)
 		fuzzer.Fuzz(b)
@@ -297,7 +296,7 @@ func TestFuzzVerifyIndexedAttestationn_10000(t *testing.T) {
 	fuzzer := gofuzz.NewWithSeed(0)
 	state := &ethpb.BeaconState{}
 	idxAttestation := &ethpb.IndexedAttestation{}
-	ctx := context.Background()
+	ctx := t.Context()
 	for i := 0; i < 10000; i++ {
 		fuzzer.Fuzz(state)
 		fuzzer.Fuzz(idxAttestation)
@@ -327,7 +326,7 @@ func TestFuzzProcessVoluntaryExits_10000(t *testing.T) {
 	fuzzer := gofuzz.NewWithSeed(0)
 	state := &ethpb.BeaconState{}
 	e := &ethpb.SignedVoluntaryExit{}
-	ctx := context.Background()
+	ctx := t.Context()
 	for i := 0; i < 10000; i++ {
 		fuzzer.Fuzz(state)
 		fuzzer.Fuzz(e)
@@ -350,7 +349,7 @@ func TestFuzzProcessVoluntaryExitsNoVerify_10000(t *testing.T) {
 		fuzzer.Fuzz(e)
 		s, err := state_native.InitializeFromProtoUnsafePhase0(state)
 		require.NoError(t, err)
-		r, err := ProcessVoluntaryExits(context.Background(), s, []*ethpb.SignedVoluntaryExit{e})
+		r, err := ProcessVoluntaryExits(t.Context(), s, []*ethpb.SignedVoluntaryExit{e})
 		if err != nil && r != nil {
 			t.Fatalf("return value should be nil on err. found: %v on error: %v for state: %v and block: %v", r, err, state, e)
 		}

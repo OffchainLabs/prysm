@@ -1,7 +1,6 @@
 package helpers_test
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -228,7 +227,7 @@ func TestBeaconProposerIndex_OK(t *testing.T) {
 		helpers.ClearCache()
 
 		require.NoError(t, state.SetSlot(tt.slot))
-		result, err := helpers.BeaconProposerIndex(context.Background(), state)
+		result, err := helpers.BeaconProposerIndex(t.Context(), state)
 		require.NoError(t, err, "Failed to get shard and committees at slot")
 		assert.Equal(t, tt.index, result, "Result index was an unexpected value")
 	}
@@ -263,7 +262,7 @@ func TestBeaconProposerIndex_BadState(t *testing.T) {
 	// Set a very high slot, so that retrieved block root will be
 	// non existent for the proposer cache.
 	require.NoError(t, state.SetSlot(100))
-	_, err = helpers.BeaconProposerIndex(context.Background(), state)
+	_, err = helpers.BeaconProposerIndex(t.Context(), state)
 	require.NoError(t, err)
 }
 
@@ -283,7 +282,7 @@ func TestComputeProposerIndex_Compatibility(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	indices, err := helpers.ActiveValidatorIndices(context.Background(), state, 0)
+	indices, err := helpers.ActiveValidatorIndices(t.Context(), state, 0)
 	require.NoError(t, err)
 
 	var proposerIndices []primitives.ValidatorIndex
@@ -338,8 +337,8 @@ func TestActiveValidatorCount_Genesis(t *testing.T) {
 	// Preset cache to a bad count.
 	seed, err := helpers.Seed(beaconState, 0, params.BeaconConfig().DomainBeaconAttester)
 	require.NoError(t, err)
-	require.NoError(t, helpers.CommitteeCache().AddCommitteeShuffledList(context.Background(), &cache.Committees{Seed: seed, ShuffledIndices: []primitives.ValidatorIndex{1, 2, 3}}))
-	validatorCount, err := helpers.ActiveValidatorCount(context.Background(), beaconState, time.CurrentEpoch(beaconState))
+	require.NoError(t, helpers.CommitteeCache().AddCommitteeShuffledList(t.Context(), &cache.Committees{Seed: seed, ShuffledIndices: []primitives.ValidatorIndex{1, 2, 3}}))
+	validatorCount, err := helpers.ActiveValidatorCount(t.Context(), beaconState, time.CurrentEpoch(beaconState))
 	require.NoError(t, err)
 	assert.Equal(t, uint64(c), validatorCount, "Did not get the correct validator count")
 }
@@ -370,7 +369,7 @@ func TestChurnLimit_OK(t *testing.T) {
 			RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 		})
 		require.NoError(t, err)
-		validatorCount, err := helpers.ActiveValidatorCount(context.Background(), beaconState, time.CurrentEpoch(beaconState))
+		validatorCount, err := helpers.ActiveValidatorCount(t.Context(), beaconState, time.CurrentEpoch(beaconState))
 		require.NoError(t, err)
 		resultChurn := helpers.ValidatorActivationChurnLimit(validatorCount)
 		assert.Equal(t, test.wantedChurn, resultChurn, "ValidatorActivationChurnLimit(%d)", test.validatorCount)
@@ -407,7 +406,7 @@ func TestChurnLimitDeneb_OK(t *testing.T) {
 		require.NoError(t, err)
 
 		// Get active validator count
-		validatorCount, err := helpers.ActiveValidatorCount(context.Background(), beaconState, time.CurrentEpoch(beaconState))
+		validatorCount, err := helpers.ActiveValidatorCount(t.Context(), beaconState, time.CurrentEpoch(beaconState))
 		require.NoError(t, err)
 
 		// Test churn limit calculation
@@ -580,7 +579,7 @@ func TestActiveValidatorIndices(t *testing.T) {
 
 			s, err := state_native.InitializeFromProtoPhase0(tt.args.state)
 			require.NoError(t, err)
-			got, err := helpers.ActiveValidatorIndices(context.Background(), s, tt.args.epoch)
+			got, err := helpers.ActiveValidatorIndices(t.Context(), s, tt.args.epoch)
 			if tt.wantedErr != "" {
 				assert.ErrorContains(t, tt.wantedErr, err)
 				return
@@ -885,7 +884,7 @@ func TestLastActivatedValidatorIndex_OK(t *testing.T) {
 	require.NoError(t, beaconState.SetValidators(validators))
 	require.NoError(t, beaconState.SetBalances(balances))
 
-	index, err := helpers.LastActivatedValidatorIndex(context.Background(), beaconState)
+	index, err := helpers.LastActivatedValidatorIndex(t.Context(), beaconState)
 	require.NoError(t, err)
 	require.Equal(t, index, primitives.ValidatorIndex(3))
 }

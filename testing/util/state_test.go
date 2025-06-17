@@ -1,7 +1,6 @@
 package util
 
 import (
-	"context"
 	"testing"
 
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -72,26 +71,26 @@ func TestNewBeaconStateElectra(t *testing.T) {
 func TestNewBeaconState_HashTreeRoot(t *testing.T) {
 	st, err := NewBeaconState()
 	require.NoError(t, err)
-	_, err = st.HashTreeRoot(context.Background())
+	_, err = st.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 	st, err = NewBeaconStateAltair()
 	require.NoError(t, err)
-	_, err = st.HashTreeRoot(context.Background())
+	_, err = st.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 	st, err = NewBeaconStateBellatrix()
 	require.NoError(t, err)
-	_, err = st.HashTreeRoot(context.Background())
+	_, err = st.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 	st, err = NewBeaconStateCapella()
 	require.NoError(t, err)
-	_, err = st.HashTreeRoot(context.Background())
+	_, err = st.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 	st, err = NewBeaconStateDeneb()
 	require.NoError(t, err)
-	_, err = st.HashTreeRoot(context.Background())
+	_, err = st.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 	st, err = NewBeaconStateElectra()
 	require.NoError(t, err)
-	_, err = st.HashTreeRoot(context.Background())
+	_, err = st.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 }

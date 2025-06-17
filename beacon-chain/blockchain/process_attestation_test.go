@@ -161,7 +161,7 @@ func TestStore_OnAttestation_Ok_DoublyLinkedTree(t *testing.T) {
 
 func TestService_GetRecentPreState(t *testing.T) {
 	service, _ := minimalTestService(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	s, err := util.NewBeaconState()
 	require.NoError(t, err)
@@ -183,7 +183,7 @@ func TestService_GetRecentPreState(t *testing.T) {
 
 func TestService_GetAttPreState_Concurrency(t *testing.T) {
 	service, _ := minimalTestService(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	s, err := util.NewBeaconState()
 	require.NoError(t, err)
@@ -353,21 +353,21 @@ func TestStore_UpdateCheckpointState(t *testing.T) {
 }
 
 func TestAttEpoch_MatchPrevEpoch(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	nowTime := uint64(params.BeaconConfig().SlotsPerEpoch) * params.BeaconConfig().SecondsPerSlot
 	require.NoError(t, verifyAttTargetEpoch(ctx, 0, nowTime, &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)}))
 }
 
 func TestAttEpoch_MatchCurrentEpoch(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	nowTime := uint64(params.BeaconConfig().SlotsPerEpoch) * params.BeaconConfig().SecondsPerSlot
 	require.NoError(t, verifyAttTargetEpoch(ctx, 0, nowTime, &ethpb.Checkpoint{Epoch: 1}))
 }
 
 func TestAttEpoch_NotMatch(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	nowTime := 2 * uint64(params.BeaconConfig().SlotsPerEpoch) * params.BeaconConfig().SecondsPerSlot
 	err := verifyAttTargetEpoch(ctx, 0, nowTime, &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)})
@@ -375,7 +375,7 @@ func TestAttEpoch_NotMatch(t *testing.T) {
 }
 
 func TestVerifyBeaconBlock_NoBlock(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	opts := testServiceOptsWithDB(t)
 	service, err := NewService(ctx, opts...)
 	require.NoError(t, err)
@@ -385,7 +385,7 @@ func TestVerifyBeaconBlock_NoBlock(t *testing.T) {
 }
 
 func TestVerifyBeaconBlock_futureBlock(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	opts := testServiceOptsWithDB(t)
 	service, err := NewService(ctx, opts...)
@@ -402,7 +402,7 @@ func TestVerifyBeaconBlock_futureBlock(t *testing.T) {
 }
 
 func TestVerifyBeaconBlock_OK(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	opts := testServiceOptsWithDB(t)
 	service, err := NewService(ctx, opts...)

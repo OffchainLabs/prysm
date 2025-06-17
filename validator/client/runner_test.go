@@ -88,8 +88,13 @@ func TestRetry_On_ConnectionError(t *testing.T) {
 		RetryTillSuccess: retry,
 	}
 	backOffPeriod = 10 * time.Millisecond
+<<<<<<< safe-validator-shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	go runTest(t, ctx, v)
+=======
+	ctx, cancel := context.WithCancel(t.Context())
+	go run(ctx, v)
+>>>>>>> develop
 	// each step will fail (retry times)=10 this sleep times will wait more then
 	// the time it takes for all steps to succeed before main loop.
 	time.Sleep(time.Duration(retry*6) * backOffPeriod)
@@ -121,9 +126,9 @@ func TestUpdateDuties_NextSlot(t *testing.T) {
 	tracker := health.NewTracker(node)
 	node.EXPECT().IsHealthy(gomock.Any()).Return(true).AnyTimes()
 	// avoid race condition between the cancellation of the context in the go stream from slot and the setting of IsHealthy
-	_ = tracker.CheckHealth(context.Background())
+	_ = tracker.CheckHealth(t.Context())
 	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, Tracker: tracker}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	slot := primitives.Slot(55)
 	ticker := make(chan primitives.Slot)
@@ -147,9 +152,9 @@ func TestUpdateDuties_HandlesError(t *testing.T) {
 	tracker := health.NewTracker(node)
 	node.EXPECT().IsHealthy(gomock.Any()).Return(true).AnyTimes()
 	// avoid race condition between the cancellation of the context in the go stream from slot and the setting of IsHealthy
-	_ = tracker.CheckHealth(context.Background())
+	_ = tracker.CheckHealth(t.Context())
 	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, Tracker: tracker}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	slot := primitives.Slot(55)
 	ticker := make(chan primitives.Slot)
@@ -173,9 +178,9 @@ func TestRoleAt_NextSlot(t *testing.T) {
 	tracker := health.NewTracker(node)
 	node.EXPECT().IsHealthy(gomock.Any()).Return(true).AnyTimes()
 	// avoid race condition between the cancellation of the context in the go stream from slot and the setting of IsHealthy
-	_ = tracker.CheckHealth(context.Background())
+	_ = tracker.CheckHealth(t.Context())
 	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, Tracker: tracker}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	slot := primitives.Slot(55)
 	ticker := make(chan primitives.Slot)
@@ -199,10 +204,10 @@ func TestAttests_NextSlot(t *testing.T) {
 	tracker := health.NewTracker(node)
 	node.EXPECT().IsHealthy(gomock.Any()).Return(true).AnyTimes()
 	// avoid race condition between the cancellation of the context in the go stream from slot and the setting of IsHealthy
-	_ = tracker.CheckHealth(context.Background())
+	_ = tracker.CheckHealth(t.Context())
 	attSubmitted := make(chan interface{})
 	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, Tracker: tracker, AttSubmitted: attSubmitted}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	slot := primitives.Slot(55)
 	ticker := make(chan primitives.Slot)
@@ -226,10 +231,10 @@ func TestProposes_NextSlot(t *testing.T) {
 	tracker := health.NewTracker(node)
 	node.EXPECT().IsHealthy(gomock.Any()).Return(true).AnyTimes()
 	// avoid race condition between the cancellation of the context in the go stream from slot and the setting of IsHealthy
-	_ = tracker.CheckHealth(context.Background())
+	_ = tracker.CheckHealth(t.Context())
 	blockProposed := make(chan interface{})
 	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, Tracker: tracker, BlockProposed: blockProposed}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	slot := primitives.Slot(55)
 	ticker := make(chan primitives.Slot)
@@ -254,11 +259,11 @@ func TestBothProposesAndAttests_NextSlot(t *testing.T) {
 	tracker := health.NewTracker(node)
 	node.EXPECT().IsHealthy(gomock.Any()).Return(true).AnyTimes()
 	// avoid race condition between the cancellation of the context in the go stream from slot and the setting of IsHealthy
-	_ = tracker.CheckHealth(context.Background())
+	_ = tracker.CheckHealth(t.Context())
 	blockProposed := make(chan interface{})
 	attSubmitted := make(chan interface{})
 	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, Tracker: tracker, BlockProposed: blockProposed, AttSubmitted: attSubmitted}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	slot := primitives.Slot(55)
 	ticker := make(chan primitives.Slot)
@@ -279,7 +284,7 @@ func TestBothProposesAndAttests_NextSlot(t *testing.T) {
 }
 
 func TestKeyReload_ActiveKey(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	km := &mockKeymanager{}
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -297,7 +302,7 @@ func TestKeyReload_ActiveKey(t *testing.T) {
 
 func TestKeyReload_NoActiveKey(t *testing.T) {
 	na := notActive(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	km := &mockKeymanager{}
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -332,7 +337,7 @@ func TestUpdateProposerSettingsAt_EpochStart(t *testing.T) {
 	node.EXPECT().IsHealthy(gomock.Any()).Return(true).AnyTimes()
 	require.Equal(t, true, tracker.CheckHealth(context.Background()))
 	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, Tracker: tracker}
-	err := v.SetProposerSettings(context.Background(), &proposer.Settings{
+	err := v.SetProposerSettings(t.Context(), &proposer.Settings{
 		DefaultConfig: &proposer.Option{
 			FeeRecipientConfig: &proposer.FeeRecipientConfig{
 				FeeRecipient: common.HexToAddress("0x046Fb65722E7b2455012BFEBf6177F1D2e9738D9"),
@@ -340,7 +345,7 @@ func TestUpdateProposerSettingsAt_EpochStart(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	hook := logTest.NewGlobal()
 	slot := params.BeaconConfig().SlotsPerEpoch
 	ticker := make(chan primitives.Slot)
@@ -367,7 +372,7 @@ func TestUpdateProposerSettingsAt_EpochEndOk(t *testing.T) {
 		ProposerSettingWait: time.Duration(params.BeaconConfig().SecondsPerSlot-1) * time.Second,
 		Tracker:             tracker,
 	}
-	err := v.SetProposerSettings(context.Background(), &proposer.Settings{
+	err := v.SetProposerSettings(t.Context(), &proposer.Settings{
 		DefaultConfig: &proposer.Option{
 			FeeRecipientConfig: &proposer.FeeRecipientConfig{
 				FeeRecipient: common.HexToAddress("0x046Fb65722E7b2455012BFEBf6177F1D2e9738D9"),
@@ -375,7 +380,7 @@ func TestUpdateProposerSettingsAt_EpochEndOk(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	hook := logTest.NewGlobal()
 	slot := params.BeaconConfig().SlotsPerEpoch - 1 //have it set close to the end of epoch
 	ticker := make(chan primitives.Slot)

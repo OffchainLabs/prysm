@@ -1,7 +1,6 @@
 package altair_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
@@ -16,7 +15,7 @@ func TestFuzzProcessDeposits_10000(t *testing.T) {
 	fuzzer := gofuzz.NewWithSeed(0)
 	state := &ethpb.BeaconStateAltair{}
 	deposits := make([]*ethpb.Deposit, 100)
-	ctx := context.Background()
+	ctx := t.Context()
 	for i := 0; i < 10000; i++ {
 		fuzzer.Fuzz(state)
 		for i := range deposits {
@@ -36,7 +35,7 @@ func TestFuzzProcessPreGenesisDeposit_10000(t *testing.T) {
 	fuzzer := gofuzz.NewWithSeed(0)
 	state := &ethpb.BeaconStateAltair{}
 	deposit := &ethpb.Deposit{}
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for i := 0; i < 10000; i++ {
 		fuzzer.Fuzz(state)
@@ -55,7 +54,7 @@ func TestFuzzProcessPreGenesisDeposit_Phase0_10000(t *testing.T) {
 	fuzzer := gofuzz.NewWithSeed(0)
 	state := &ethpb.BeaconState{}
 	deposit := &ethpb.Deposit{}
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for i := 0; i < 10000; i++ {
 		fuzzer.Fuzz(state)

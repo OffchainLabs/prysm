@@ -1,7 +1,6 @@
 package blockchain
 
 import (
-	"context"
 	"testing"
 
 	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
@@ -25,7 +24,7 @@ func TestHeadSlot_DataRace(t *testing.T) {
 	wait := make(chan struct{})
 	go func() {
 		defer close(wait)
-		require.NoError(t, s.saveHead(context.Background(), [32]byte{}, b, st))
+		require.NoError(t, s.saveHead(t.Context(), [32]byte{}, b, st))
 	}()
 	s.HeadSlot()
 	<-wait
@@ -43,10 +42,10 @@ func TestHeadRoot_DataRace(t *testing.T) {
 	st, _ := util.DeterministicGenesisState(t, 1)
 	go func() {
 		defer close(wait)
-		require.NoError(t, s.saveHead(context.Background(), [32]byte{}, b, st))
+		require.NoError(t, s.saveHead(t.Context(), [32]byte{}, b, st))
 
 	}()
-	_, err = s.HeadRoot(context.Background())
+	_, err = s.HeadRoot(t.Context())
 	require.NoError(t, err)
 	<-wait
 }
@@ -65,10 +64,10 @@ func TestHeadBlock_DataRace(t *testing.T) {
 	st, _ := util.DeterministicGenesisState(t, 1)
 	go func() {
 		defer close(wait)
-		require.NoError(t, s.saveHead(context.Background(), [32]byte{}, b, st))
+		require.NoError(t, s.saveHead(t.Context(), [32]byte{}, b, st))
 
 	}()
-	_, err = s.HeadBlock(context.Background())
+	_, err = s.HeadBlock(t.Context())
 	require.NoError(t, err)
 	<-wait
 }
@@ -83,14 +82,14 @@ func TestHeadState_DataRace(t *testing.T) {
 	wait := make(chan struct{})
 	st, _ := util.DeterministicGenesisState(t, 1)
 	root := bytesutil.ToBytes32(bytesutil.PadTo([]byte{'s'}, 32))
-	require.NoError(t, beaconDB.SaveGenesisBlockRoot(context.Background(), root))
-	require.NoError(t, beaconDB.SaveState(context.Background(), st, root))
+	require.NoError(t, beaconDB.SaveGenesisBlockRoot(t.Context(), root))
+	require.NoError(t, beaconDB.SaveState(t.Context(), st, root))
 	go func() {
 		defer close(wait)
-		require.NoError(t, s.saveHead(context.Background(), [32]byte{}, b, st))
+		require.NoError(t, s.saveHead(t.Context(), [32]byte{}, b, st))
 
 	}()
-	_, err = s.HeadState(context.Background())
+	_, err = s.HeadState(t.Context())
 	require.NoError(t, err)
 	<-wait
 }

@@ -1,7 +1,6 @@
 package fulu_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/fulu"
@@ -13,11 +12,11 @@ import (
 func TestProcessEpoch_CanProcessFulu(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateElectra(t, params.BeaconConfig().MaxValidatorsPerCommittee)
 	require.NoError(t, st.SetSlot(10*params.BeaconConfig().SlotsPerEpoch))
-	st, err := fulu.UpgradeToFulu(context.Background(), st)
+	st, err := fulu.UpgradeToFulu(t.Context(), st)
 	require.NoError(t, err)
 	preLookahead, err := st.ProposerLookahead()
 	require.NoError(t, err)
-	err = fulu.ProcessEpoch(context.Background(), st)
+	err = fulu.ProcessEpoch(t.Context(), st)
 	require.NoError(t, err)
 	postLookahead, err := st.ProposerLookahead()
 	require.NoError(t, err)

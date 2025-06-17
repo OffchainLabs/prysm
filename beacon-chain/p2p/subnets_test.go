@@ -42,7 +42,7 @@ func TestStartDiscV5_FindPeersWithSubnet(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create a context.
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Use shorter period for testing.
 	currentPeriod := pollingPeriod

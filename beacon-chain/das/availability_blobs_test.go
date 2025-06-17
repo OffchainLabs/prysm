@@ -113,7 +113,7 @@ func Test_commitmentsToCheck(t *testing.T) {
 }
 
 func TestLazilyPersistent_Missing(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	store := filesystem.NewEphemeralBlobStorage(t)
 
 	blk, blobSidecars := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 1, 3)
@@ -140,7 +140,7 @@ func TestLazilyPersistent_Missing(t *testing.T) {
 }
 
 func TestLazilyPersistent_Mismatch(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	store := filesystem.NewEphemeralBlobStorage(t)
 
 	blk, blobSidecars := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 1, 3)

@@ -1,7 +1,6 @@
 package beacon_api
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -26,7 +25,7 @@ func TestBeaconApiValidatorClient_GetAttestationDataValid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	produceAttestationDataResponseJson := structs.GetAttestationDataResponse{}
@@ -45,7 +44,7 @@ func TestBeaconApiValidatorClient_GetAttestationDataValid(t *testing.T) {
 	expectedResp, expectedErr := validatorClient.attestationData(ctx, slot, committeeIndex)
 
 	resp, err := validatorClient.AttestationData(
-		context.Background(),
+		t.Context(),
 		&ethpb.AttestationDataRequest{Slot: slot, CommitteeIndex: committeeIndex},
 	)
 
@@ -60,7 +59,7 @@ func TestBeaconApiValidatorClient_GetAttestationDataError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	produceAttestationDataResponseJson := structs.GetAttestationDataResponse{}
@@ -79,7 +78,7 @@ func TestBeaconApiValidatorClient_GetAttestationDataError(t *testing.T) {
 	expectedResp, expectedErr := validatorClient.attestationData(ctx, slot, committeeIndex)
 
 	resp, err := validatorClient.AttestationData(
-		context.Background(),
+		t.Context(),
 		&ethpb.AttestationDataRequest{Slot: slot, CommitteeIndex: committeeIndex},
 	)
 
@@ -88,7 +87,7 @@ func TestBeaconApiValidatorClient_GetAttestationDataError(t *testing.T) {
 }
 
 func TestBeaconApiValidatorClient_GetFeeRecipientByPubKey(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	validatorClient := beaconApiValidatorClient{}
 	var expected *ethpb.FeeRecipientByPubKeyResponse = nil
 
@@ -105,7 +104,7 @@ func TestBeaconApiValidatorClient_DomainDataValid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	genesisProvider := mock.NewMockGenesisProvider(ctrl)
 	genesisProvider.EXPECT().Genesis(gomock.Any()).Return(
@@ -114,7 +113,7 @@ func TestBeaconApiValidatorClient_DomainDataValid(t *testing.T) {
 	).Times(2)
 
 	validatorClient := beaconApiValidatorClient{genesisProvider: genesisProvider}
-	resp, err := validatorClient.DomainData(context.Background(), &ethpb.DomainRequest{Epoch: epoch, Domain: domainType})
+	resp, err := validatorClient.DomainData(t.Context(), &ethpb.DomainRequest{Epoch: epoch, Domain: domainType})
 
 	domainTypeArray := bytesutil.ToBytes4(domainType)
 	expectedResp, expectedErr := validatorClient.domainData(ctx, epoch, domainTypeArray)
@@ -126,7 +125,7 @@ func TestBeaconApiValidatorClient_DomainDataError(t *testing.T) {
 	epoch := params.BeaconConfig().AltairForkEpoch
 	domainType := make([]byte, 3)
 	validatorClient := beaconApiValidatorClient{}
-	_, err := validatorClient.DomainData(context.Background(), &ethpb.DomainRequest{Epoch: epoch, Domain: domainType})
+	_, err := validatorClient.DomainData(t.Context(), &ethpb.DomainRequest{Epoch: epoch, Domain: domainType})
 	assert.ErrorContains(t, fmt.Sprintf("invalid domain type: %s", hexutil.Encode(domainType)), err)
 }
 
@@ -134,7 +133,7 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockValid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
@@ -170,7 +169,7 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(

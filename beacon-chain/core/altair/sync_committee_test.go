@@ -1,7 +1,6 @@
 package altair_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -97,7 +96,7 @@ func TestSyncCommitteeIndices_CanGet(t *testing.T) {
 				t.Run(version.String(v), func(t *testing.T) {
 					helpers.ClearCache()
 					st := getState(t, tt.args.validatorCount, v)
-					got, err := altair.NextSyncCommitteeIndices(context.Background(), st)
+					got, err := altair.NextSyncCommitteeIndices(t.Context(), st)
 					if tt.wantErr {
 						require.ErrorContains(t, tt.errString, err)
 					} else {
@@ -129,18 +128,18 @@ func TestSyncCommitteeIndices_DifferentPeriods(t *testing.T) {
 	}
 
 	st := getState(t, params.BeaconConfig().MaxValidatorsPerCommittee)
-	got1, err := altair.NextSyncCommitteeIndices(context.Background(), st)
+	got1, err := altair.NextSyncCommitteeIndices(t.Context(), st)
 	require.NoError(t, err)
 	require.NoError(t, st.SetSlot(params.BeaconConfig().SlotsPerEpoch))
-	got2, err := altair.NextSyncCommitteeIndices(context.Background(), st)
+	got2, err := altair.NextSyncCommitteeIndices(t.Context(), st)
 	require.NoError(t, err)
 	require.DeepNotEqual(t, got1, got2)
 	require.NoError(t, st.SetSlot(params.BeaconConfig().SlotsPerEpoch*primitives.Slot(params.BeaconConfig().EpochsPerSyncCommitteePeriod)))
-	got2, err = altair.NextSyncCommitteeIndices(context.Background(), st)
+	got2, err = altair.NextSyncCommitteeIndices(t.Context(), st)
 	require.NoError(t, err)
 	require.DeepNotEqual(t, got1, got2)
 	require.NoError(t, st.SetSlot(params.BeaconConfig().SlotsPerEpoch*primitives.Slot(2*params.BeaconConfig().EpochsPerSyncCommitteePeriod)))
-	got2, err = altair.NextSyncCommitteeIndices(context.Background(), st)
+	got2, err = altair.NextSyncCommitteeIndices(t.Context(), st)
 	require.NoError(t, err)
 	require.DeepNotEqual(t, got1, got2)
 }
@@ -206,7 +205,7 @@ func TestSyncCommittee_CanGet(t *testing.T) {
 			if !tt.wantErr {
 				require.NoError(t, tt.args.state.SetSlot(primitives.Slot(tt.args.epoch)*params.BeaconConfig().SlotsPerEpoch))
 			}
-			got, err := altair.NextSyncCommittee(context.Background(), tt.args.state)
+			got, err := altair.NextSyncCommittee(t.Context(), tt.args.state)
 			if tt.wantErr {
 				require.ErrorContains(t, tt.errString, err)
 			} else {
@@ -270,7 +269,7 @@ func TestValidateNilSyncContribution(t *testing.T) {
 func TestSyncSubCommitteePubkeys_CanGet(t *testing.T) {
 	helpers.ClearCache()
 	st := getState(t, params.BeaconConfig().MaxValidatorsPerCommittee)
-	com, err := altair.NextSyncCommittee(context.Background(), st)
+	com, err := altair.NextSyncCommittee(t.Context(), st)
 	require.NoError(t, err)
 	sub, err := altair.SyncSubCommitteePubkeys(com, 0)
 	require.NoError(t, err)

@@ -1,7 +1,6 @@
 package state_native
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"sync"
@@ -305,7 +304,7 @@ func TestBeaconState_AppendBalanceWithTrie(t *testing.T) {
 	newState := generateState(t)
 	st, ok := newState.(*BeaconState)
 	require.Equal(t, true, ok)
-	_, err := st.HashTreeRoot(context.Background())
+	_, err := st.HashTreeRoot(t.Context())
 	assert.NoError(t, err)
 
 	for i := 0; i < 100; i++ {
@@ -316,7 +315,7 @@ func TestBeaconState_AppendBalanceWithTrie(t *testing.T) {
 			assert.NoError(t, st.AppendBalance(1000))
 		}
 	}
-	_, err = st.HashTreeRoot(context.Background())
+	_, err = st.HashTreeRoot(t.Context())
 	assert.NoError(t, err)
 	newRt := bytesutil.ToBytes32(st.merkleLayers[0][types.Balances])
 	wantedRt, err := stateutil.Uint64ListRootWithRegistryLimit(st.Balances())
@@ -342,13 +341,13 @@ func TestBeaconState_ModifyCurrentParticipationBits(t *testing.T) {
 
 func TestCopyAllTries(t *testing.T) {
 	newState := generateState(t)
-	_, err := newState.HashTreeRoot(context.Background())
+	_, err := newState.HashTreeRoot(t.Context())
 	assert.NoError(t, err)
 
 	assert.NoError(t, newState.UpdateBalancesAtIndex(0, 10000))
 	assert.NoError(t, newState.UpdateBlockRootAtIndex(0, [32]byte{'a'}))
 
-	_, err = newState.HashTreeRoot(context.Background())
+	_, err = newState.HashTreeRoot(t.Context())
 	assert.NoError(t, err)
 
 	st, ok := newState.(*BeaconState)
@@ -377,7 +376,7 @@ func TestCopyAllTries(t *testing.T) {
 
 	assert.NoError(t, nState.UpdateBalancesAtIndex(20, 10000))
 
-	_, err = nState.HashTreeRoot(context.Background())
+	_, err = nState.HashTreeRoot(t.Context())
 	assert.NoError(t, err)
 
 	rt, err := st.stateFieldLeaves[types.Balances].TrieRoot()

@@ -1,7 +1,6 @@
 package doublylinkedtree
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -17,7 +16,7 @@ func TestForkChoice_ShouldOverrideFCU(t *testing.T) {
 		f.store.committeeWeight += uint64(10)
 	}
 	f.store.committeeWeight /= uint64(params.BeaconConfig().SlotsPerEpoch)
-	ctx := context.Background()
+	ctx := t.Context()
 	driftGenesisTime(f, 1, 0)
 	st, blk, err := prepareForkchoiceState(ctx, 1, [32]byte{'a'}, [32]byte{}, [32]byte{'A'}, 0, 0)
 	require.NoError(t, err)
@@ -114,7 +113,7 @@ func TestForkChoice_GetProposerHead(t *testing.T) {
 		f.store.committeeWeight += uint64(10)
 	}
 	f.store.committeeWeight /= uint64(params.BeaconConfig().SlotsPerEpoch)
-	ctx := context.Background()
+	ctx := t.Context()
 	driftGenesisTime(f, 1, 0)
 	parentRoot := [32]byte{'a'}
 	st, blk, err := prepareForkchoiceState(ctx, 1, parentRoot, [32]byte{}, [32]byte{'A'}, 0, 0)

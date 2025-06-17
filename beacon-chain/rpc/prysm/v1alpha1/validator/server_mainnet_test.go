@@ -1,7 +1,6 @@
 package validator
 
 import (
-	"context"
 	"testing"
 
 	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
@@ -25,7 +24,7 @@ func TestWaitForActivation_ValidatorOriginallyExists(t *testing.T) {
 	// This test breaks if it doesn't use mainnet config
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.MainnetConfig())
-	ctx := context.Background()
+	ctx := t.Context()
 
 	priv1, err := bls.RandKey()
 	require.NoError(t, err)
@@ -74,7 +73,7 @@ func TestWaitForActivation_ValidatorOriginallyExists(t *testing.T) {
 	s, err := state_native.InitializeFromProtoUnsafePhase0(beaconState)
 	require.NoError(t, err)
 	vs := &Server{
-		Ctx:               context.Background(),
+		Ctx:               t.Context(),
 		ChainStartFetcher: &mockExecution.Chain{},
 		BlockFetcher:      &mockExecution.Chain{},
 		Eth1InfoFetcher:   &mockExecution.Chain{},
@@ -88,7 +87,7 @@ func TestWaitForActivation_ValidatorOriginallyExists(t *testing.T) {
 
 	defer ctrl.Finish()
 	mockChainStream := mock.NewMockBeaconNodeValidator_WaitForActivationServer(ctrl)
-	mockChainStream.EXPECT().Context().Return(context.Background())
+	mockChainStream.EXPECT().Context().Return(t.Context())
 	mockChainStream.EXPECT().Send(
 		&ethpb.ValidatorActivationResponse{
 			Statuses: []*ethpb.ValidatorActivationResponse_Status{

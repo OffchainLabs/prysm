@@ -42,7 +42,7 @@ func TestServer_getExecutionPayload(t *testing.T) {
 	b1pb := util.NewBeaconBlock()
 	b1r, err := b1pb.Block.HashTreeRoot()
 	require.NoError(t, err)
-	util.SaveBlock(t, context.Background(), beaconDB, b1pb)
+	util.SaveBlock(t, t.Context(), beaconDB, b1pb)
 	require.NoError(t, nonTransitionSt.SetFinalizedCheckpoint(&ethpb.Checkpoint{
 		Root: b1r[:],
 	}))
@@ -54,7 +54,7 @@ func TestServer_getExecutionPayload(t *testing.T) {
 	b2pb := util.NewBeaconBlockBellatrix()
 	b2r, err := b2pb.Block.HashTreeRoot()
 	require.NoError(t, err)
-	util.SaveBlock(t, context.Background(), beaconDB, b2pb)
+	util.SaveBlock(t, t.Context(), beaconDB, b2pb)
 	require.NoError(t, transitionSt.SetFinalizedCheckpoint(&ethpb.Checkpoint{
 		Root: b2r[:],
 	}))
@@ -66,7 +66,7 @@ func TestServer_getExecutionPayload(t *testing.T) {
 	b2pbCapella := util.NewBeaconBlockCapella()
 	b2rCapella, err := b2pbCapella.Block.HashTreeRoot()
 	require.NoError(t, err)
-	util.SaveBlock(t, context.Background(), beaconDB, b2pbCapella)
+	util.SaveBlock(t, t.Context(), beaconDB, b2pbCapella)
 	require.NoError(t, capellaTransitionState.SetFinalizedCheckpoint(&ethpb.Checkpoint{
 		Root: b2rCapella[:],
 	}))
@@ -165,7 +165,7 @@ func TestServer_getExecutionPayload(t *testing.T) {
 			blk.Block.ParentRoot = bytesutil.PadTo([]byte{'a'}, 32)
 			b, err := blocks.NewSignedBeaconBlock(blk)
 			require.NoError(t, err)
-			res, err := vs.getLocalPayload(context.Background(), b.Block(), tt.st)
+			res, err := vs.getLocalPayload(t.Context(), b.Block(), tt.st)
 			if tt.errString != "" {
 				require.ErrorContains(t, tt.errString, err)
 			} else {
@@ -182,12 +182,12 @@ func TestServer_getExecutionPayloadContextTimeout(t *testing.T) {
 	b1pb := util.NewBeaconBlock()
 	b1r, err := b1pb.Block.HashTreeRoot()
 	require.NoError(t, err)
-	util.SaveBlock(t, context.Background(), beaconDB, b1pb)
+	util.SaveBlock(t, t.Context(), beaconDB, b1pb)
 	require.NoError(t, nonTransitionSt.SetFinalizedCheckpoint(&ethpb.Checkpoint{
 		Root: b1r[:],
 	}))
 
-	require.NoError(t, beaconDB.SaveFeeRecipientsByValidatorIDs(context.Background(), []primitives.ValidatorIndex{0}, []common.Address{{}}))
+	require.NoError(t, beaconDB.SaveFeeRecipientsByValidatorIDs(t.Context(), []primitives.ValidatorIndex{0}, []common.Address{{}}))
 
 	cfg := params.BeaconConfig().Copy()
 	cfg.TerminalBlockHash = common.Hash{'a'}
@@ -211,7 +211,7 @@ func TestServer_getExecutionPayloadContextTimeout(t *testing.T) {
 	blk.Block.ParentRoot = bytesutil.PadTo([]byte{'a'}, 32)
 	b, err := blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
-	_, err = vs.getLocalPayload(context.Background(), b.Block(), nonTransitionSt)
+	_, err = vs.getLocalPayload(t.Context(), b.Block(), nonTransitionSt)
 	require.NoError(t, err)
 }
 
@@ -222,7 +222,7 @@ func TestServer_getExecutionPayload_UnexpectedFeeRecipient(t *testing.T) {
 	b1pb := util.NewBeaconBlock()
 	b1r, err := b1pb.Block.HashTreeRoot()
 	require.NoError(t, err)
-	util.SaveBlock(t, context.Background(), beaconDB, b1pb)
+	util.SaveBlock(t, t.Context(), beaconDB, b1pb)
 	require.NoError(t, nonTransitionSt.SetFinalizedCheckpoint(&ethpb.Checkpoint{
 		Root: b1r[:],
 	}))
@@ -234,7 +234,7 @@ func TestServer_getExecutionPayload_UnexpectedFeeRecipient(t *testing.T) {
 	b2pb := util.NewBeaconBlockBellatrix()
 	b2r, err := b2pb.Block.HashTreeRoot()
 	require.NoError(t, err)
-	util.SaveBlock(t, context.Background(), beaconDB, b2pb)
+	util.SaveBlock(t, t.Context(), beaconDB, b2pb)
 	require.NoError(t, transitionSt.SetFinalizedCheckpoint(&ethpb.Checkpoint{
 		Root: b2r[:],
 	}))
@@ -268,7 +268,7 @@ func TestServer_getExecutionPayload_UnexpectedFeeRecipient(t *testing.T) {
 	blk.Block.ParentRoot = bytesutil.PadTo([]byte{}, 32)
 	b, err := blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
-	res, err := vs.getLocalPayload(context.Background(), b.Block(), transitionSt)
+	res, err := vs.getLocalPayload(t.Context(), b.Block(), transitionSt)
 	require.NoError(t, err)
 	require.NotNil(t, res)
 	require.Equal(t, common.Address(res.ExecutionData.FeeRecipient()), feeRecipient)
@@ -281,7 +281,7 @@ func TestServer_getExecutionPayload_UnexpectedFeeRecipient(t *testing.T) {
 	payload.FeeRecipient = evilRecipientAddress[:]
 	vs.PayloadIDCache = cache.NewPayloadIDCache()
 
-	res, err = vs.getLocalPayload(context.Background(), b.Block(), transitionSt)
+	res, err = vs.getLocalPayload(t.Context(), b.Block(), transitionSt)
 	require.NoError(t, err)
 	require.NotNil(t, res)
 
@@ -375,7 +375,7 @@ func TestServer_getTerminalBlockHashIfExists(t *testing.T) {
 					BlockByHashMap: m,
 				},
 			}
-			b, e, err := vs.getTerminalBlockHashIfExists(context.Background(), 1)
+			b, e, err := vs.getTerminalBlockHashIfExists(t.Context(), 1)
 			if tt.errString != "" {
 				require.ErrorContains(t, tt.errString, err)
 				require.DeepEqual(t, tt.wantExists, e)

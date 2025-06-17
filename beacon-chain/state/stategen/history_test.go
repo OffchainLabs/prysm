@@ -18,7 +18,7 @@ func TestBlockForSlotFuture(t *testing.T) {
 	ch := &CanonicalHistory{
 		cs: &mockCurrentSlotter{Slot: 0},
 	}
-	_, err := ch.BlockRootForSlot(context.Background(), 1)
+	_, err := ch.BlockRootForSlot(t.Context(), 1)
 	require.ErrorIs(t, err, ErrFutureSlotRequested)
 }
 
@@ -26,7 +26,7 @@ func TestChainForSlotFuture(t *testing.T) {
 	ch := &CanonicalHistory{
 		cs: &mockCurrentSlotter{Slot: 0},
 	}
-	_, _, err := ch.chainForSlot(context.Background(), 1)
+	_, _, err := ch.chainForSlot(t.Context(), 1)
 	require.ErrorIs(t, err, ErrFutureSlotRequested)
 }
 
@@ -88,7 +88,7 @@ func TestBestForSlot(t *testing.T) {
 				chk = c.cc
 			}
 			ch := &CanonicalHistory{cc: chk}
-			r, err := ch.bestForSlot(context.Background(), c.roots)
+			r, err := ch.bestForSlot(t.Context(), c.roots)
 			if c.err == nil {
 				require.NoError(t, err)
 				require.Equal(t, c.root, r)
@@ -101,7 +101,7 @@ func TestBestForSlot(t *testing.T) {
 
 // happy path tests
 func TestCanonicalBlockForSlotHappy(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	var begin, middle, end primitives.Slot = 100, 150, 155
 	specs := []mockHistorySpec{
 		{slot: begin},
@@ -142,7 +142,7 @@ func TestCanonicalBlockForSlotHappy(t *testing.T) {
 }
 
 func TestCanonicalBlockForSlotNonHappy(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	var begin, middle, end primitives.Slot = 100, 150, 155
 	specs := []mockHistorySpec{
 		{slot: begin},
@@ -271,7 +271,7 @@ func (c *mockCurrentSlotter) CurrentSlot() primitives.Slot {
 var _ CurrentSlotter = &mockCurrentSlotter{}
 
 func TestAncestorChainCache(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	var begin, middle, end primitives.Slot = 100, 150, 155
 	specs := []mockHistorySpec{
 		{slot: begin, canonicalBlock: true},
@@ -344,7 +344,7 @@ func TestAncestorChainCache(t *testing.T) {
 }
 
 func TestAncestorChainOK(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	var begin, middle, end primitives.Slot = 100, 150, 155
 	specs := []mockHistorySpec{
 		{slot: begin},
@@ -377,7 +377,7 @@ func TestAncestorChainOK(t *testing.T) {
 }
 
 func TestChainForSlot(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	var zero, one, two, three primitives.Slot = 50, 51, 150, 151
 	specs := []mockHistorySpec{
 		{slot: zero, canonicalBlock: true, savedState: true},
@@ -446,7 +446,7 @@ func TestChainForSlot(t *testing.T) {
 }
 
 func TestAncestorChainOrdering(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	var zero, one, two, three, four, five primitives.Slot = 50, 51, 150, 151, 152, 200
 	specs := []mockHistorySpec{
 		{slot: zero},
