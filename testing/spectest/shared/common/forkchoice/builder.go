@@ -57,7 +57,7 @@ func (bb *Builder) Tick(t testing.TB, tick int64) {
 	for lastSlot < currentSlot {
 		lastSlot++
 		bb.service.SetForkChoiceGenesisTime(time.Now().Add(-1 * time.Duration(params.BeaconConfig().SecondsPerSlot*lastSlot) * time.Second))
-		require.NoError(t, bb.service.NewSlot(context.TODO(), primitives.Slot(lastSlot)))
+		require.NoError(t, bb.service.NewSlot(t.Context(), primitives.Slot(lastSlot)))
 	}
 	if tick > int64(params.BeaconConfig().SecondsPerSlot*lastSlot) {
 		bb.service.SetForkChoiceGenesisTime(time.Now().Add(-1 * time.Duration(tick) * time.Second))
