@@ -101,7 +101,7 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 			"primaryAcceptType":   primaryAcceptType,
 			"secondaryAcceptType": secondaryAcceptType,
 			"receivedAcceptType":  httpResp.Header.Get("Content-Type"),
-		}).Warn("Server responded with non primary accept type")
+		}).Debug("Server responded with non primary accept type")
 	}
 	if features.Get().SSZOnly && httpResp.Header.Get("Content-Type") != api.OctetStreamMediaType {
 		return nil, nil, errors.Errorf("server responded with non primary accept type %s", httpResp.Header.Get("Content-Type"))

@@ -47,7 +47,7 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 		if err = decoder.Decode(&produceBlockV3ResponseJson); err != nil {
 			return nil, errors.Wrapf(err, "failed to decode response body into json for %s", queryUrl)
 		}
-		return processBlockResponse(
+		return processBlockJSONResponse(
 			produceBlockV3ResponseJson.Version,
 			produceBlockV3ResponseJson.ExecutionPayloadBlinded,
 			json.NewDecoder(bytes.NewReader(produceBlockV3ResponseJson.Data)),
@@ -163,7 +163,7 @@ func processBlockSSZResponseBellatrix(data []byte, isBlinded bool) (*ethpb.Gener
 	return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Bellatrix{Bellatrix: block}}, nil
 }
 
-func processAndConvert(decoder *json.Decoder, dest ethpb.GenericConverter, version string, isBlinded bool) (*ethpb.GenericBeaconBlock, error) {
+func convertBlockToGeneric(decoder *json.Decoder, dest ethpb.GenericConverter, version string, isBlinded bool) (*ethpb.GenericBeaconBlock, error) {
 	typeName := version
 	if isBlinded {
 		typeName = "blinded " + typeName
@@ -180,17 +180,17 @@ func processAndConvert(decoder *json.Decoder, dest ethpb.GenericConverter, versi
 	return genericBlock, nil
 }
 
-func processBlockResponse(ver string, isBlinded bool, decoder *json.Decoder) (*ethpb.GenericBeaconBlock, error) {
+func processBlockJSONResponse(ver string, isBlinded bool, decoder *json.Decoder) (*ethpb.GenericBeaconBlock, error) {
 	if decoder == nil {
 		return nil, errors.New("no produce block json decoder found")
 	}
 
 	switch ver {
 	case version.String(version.Phase0):
-		return processAndConvert(decoder, &structs.BeaconBlock{}, version.String(version.Phase0), false)
+		return convertBlockToGeneric(decoder, &structs.BeaconBlock{}, version.String(version.Phase0), false)
 
 	case version.String(version.Altair):
-		return processAndConvert(decoder, &structs.BeaconBlockAltair{}, "altair", false)
+		return convertBlockToGeneric(decoder, &structs.BeaconBlockAltair{}, "altair", false)
 
 	case version.String(version.Bellatrix):
 		return processBellatrixBlock(decoder, isBlinded)
@@ -214,35 +214,35 @@ func processBlockResponse(ver string, isBlinded bool, decoder *json.Decoder) (*e
 
 func processBellatrixBlock(decoder *json.Decoder, isBlinded bool) (*ethpb.GenericBeaconBlock, error) {
 	if isBlinded {
-		return processAndConvert(decoder, &structs.BlindedBeaconBlockBellatrix{}, "bellatrix", true)
+		return convertBlockToGeneric(decoder, &structs.BlindedBeaconBlockBellatrix{}, "bellatrix", true)
 	}
-	return processAndConvert(decoder, &structs.BeaconBlockBellatrix{}, "bellatrix", false)
+	return convertBlockToGeneric(decoder, &structs.BeaconBlockBellatrix{}, "bellatrix", false)
 }
 
 func processCapellaBlock(decoder *json.Decoder, isBlinded bool) (*ethpb.GenericBeaconBlock, error) {
 	if isBlinded {
-		return processAndConvert(decoder, &structs.BlindedBeaconBlockCapella{}, "capella", true)
+		return convertBlockToGeneric(decoder, &structs.BlindedBeaconBlockCapella{}, "capella", true)
 	}
-	return processAndConvert(decoder, &structs.BeaconBlockCapella{}, "capella", false)
+	return convertBlockToGeneric(decoder, &structs.BeaconBlockCapella{}, "capella", false)
 }
 
 func processDenebBlock(decoder *json.Decoder, isBlinded bool) (*ethpb.GenericBeaconBlock, error) {
 	if isBlinded {
-		return processAndConvert(decoder, &structs.BlindedBeaconBlockDeneb{}, "deneb", true)
+		return convertBlockToGeneric(decoder, &structs.BlindedBeaconBlockDeneb{}, "deneb", true)
 	}
-	return processAndConvert(decoder, &structs.BeaconBlockContentsDeneb{}, "deneb", false)
+	return convertBlockToGeneric(decoder, &structs.BeaconBlockContentsDeneb{}, "deneb", false)
 }
 
 func processElectraBlock(decoder *json.Decoder, isBlinded bool) (*ethpb.GenericBeaconBlock, error) {
 	if isBlinded {
-		return processAndConvert(decoder, &structs.BlindedBeaconBlockElectra{}, "electra", true)
+		return convertBlockToGeneric(decoder, &structs.BlindedBeaconBlockElectra{}, "electra", true)
 	}
-	return processAndConvert(decoder, &structs.BeaconBlockContentsElectra{}, "electra", false)
+	return convertBlockToGeneric(decoder, &structs.BeaconBlockContentsElectra{}, "electra", false)
 }
 
 func processFuluBlock(decoder *json.Decoder, isBlinded bool) (*ethpb.GenericBeaconBlock, error) {
 	if isBlinded {
-		return processAndConvert(decoder, &structs.BlindedBeaconBlockFulu{}, "fulu", true)
+		return convertBlockToGeneric(decoder, &structs.BlindedBeaconBlockFulu{}, "fulu", true)
 	}
-	return processAndConvert(decoder, &structs.BeaconBlockContentsFulu{}, "fulu", false)
+	return convertBlockToGeneric(decoder, &structs.BeaconBlockContentsFulu{}, "fulu", false)
 }

@@ -30,7 +30,7 @@ func TestEndToEnd_MinimalConfig_ValidatorRESTApi(t *testing.T) {
 }
 
 func TestEndToEnd_MinimalConfig_ValidatorRESTApi_SSZ(t *testing.T) {
-	e2eMinimal(t, types.InitForkCfg(version.Bellatrix, version.Electra, params.E2ETestConfig()), types.WithCheckpointSync(), types.WithValidatorRESTApi(), types.WithSSZ()).run()
+	e2eMinimal(t, types.InitForkCfg(version.Bellatrix, version.Electra, params.E2ETestConfig()), types.WithCheckpointSync(), types.WithValidatorRESTApi(), types.WithSSZOnly()).run()
 }
 
 func TestEndToEnd_ScenarioRun_EEOffline(t *testing.T) {

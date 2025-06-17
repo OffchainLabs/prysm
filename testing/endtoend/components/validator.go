@@ -248,7 +248,7 @@ func (v *ValidatorNode) Start(ctx context.Context) error {
 		args = append(args,
 			fmt.Sprintf("--%s=http://localhost:%d", flags.BeaconRESTApiProviderFlag.Name, beaconRestApiPort),
 			fmt.Sprintf("--%s", features.EnableBeaconRESTApi.Name))
-		if v.config.UseSSZ {
+		if v.config.UseSSZOnly {
 			args = append(args, fmt.Sprintf("--%s", features.SSZOnly.Name))
 		}
 	}
