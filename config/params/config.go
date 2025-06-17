@@ -418,11 +418,6 @@ func newNetworkSchedule(entries []NetworkScheduleEntry) *NetworkSchedule {
 }
 
 func (ns *NetworkSchedule) epochIdx(epoch primitives.Epoch) int {
-	/*
-		return sort.Search(len(ns.entries), func(i int) bool {
-			return ns.entries[i].Epoch > epoch
-		})
-	*/
 	for i := len(ns.entries) - 1; i >= 0; i-- {
 		if ns.entries[i].Epoch <= epoch {
 			return i
@@ -432,14 +427,15 @@ func (ns *NetworkSchedule) epochIdx(epoch primitives.Epoch) int {
 }
 
 func (ns *NetworkSchedule) Next(epoch primitives.Epoch) NetworkScheduleEntry {
+	lastIdx := len(ns.entries) - 1
 	idx := ns.epochIdx(epoch)
-	if idx >= len(ns.entries)-1 {
-		return ns.entries[len(ns.entries)-1]
-	}
 	if idx < 0 {
 		return ns.entries[0]
 	}
-	return ns.entries[idx]
+	if idx > lastIdx-1 {
+		return ns.entries[lastIdx]
+	}
+	return ns.entries[idx+1]
 }
 
 func (ns *NetworkSchedule) LastEntry() NetworkScheduleEntry {
@@ -466,7 +462,7 @@ func (ns *NetworkSchedule) ForEpoch(epoch primitives.Epoch) NetworkScheduleEntry
 	if idx < 0 {
 		return ns.entries[0]
 	}
-	if idx >= len(ns.entries) {
+	if idx >= len(ns.entries)-1 {
 		return ns.entries[len(ns.entries)-1]
 	}
 	return ns.entries[idx]

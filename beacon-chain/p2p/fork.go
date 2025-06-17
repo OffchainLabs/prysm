@@ -87,6 +87,11 @@ func addForkEntry(node *enode.LocalNode, current primitives.Epoch) (*enode.Local
 		NextForkVersion:   nextForkVersion[:],
 		NextForkEpoch:     nextForkEpoch,
 	}
+	log.
+		WithField("CurrentForkDigest", fmt.Sprintf("%#x", digest[:])).
+		WithField("NextForkVersion", fmt.Sprintf("%#x", nextForkVersion[:])).
+		WithField("NextForkEpoch", fmt.Sprintf("%d", nextForkEpoch)).
+		Info("updating ENR Fork ID")
 	enc, err := enrForkID.MarshalSSZ()
 	if err != nil {
 		return nil, err
@@ -94,6 +99,26 @@ func addForkEntry(node *enode.LocalNode, current primitives.Epoch) (*enode.Local
 	forkEntry := enr.WithEntry(eth2ENRKey, enc)
 	node.Set(forkEntry)
 	return node, nil
+}
+
+func updateENR(node *enode.LocalNode, entry, next params.NetworkScheduleEntry) error {
+	enrForkID := &pb.ENRForkID{
+		CurrentForkDigest: entry.ForkDigest[:],
+		NextForkVersion:   next.ForkVersion[:],
+		NextForkEpoch:     entry.Epoch,
+	}
+	log.
+		WithField("CurrentForkDigest", fmt.Sprintf("%#x", enrForkID.CurrentForkDigest)).
+		WithField("NextForkVersion", fmt.Sprintf("%#x", enrForkID.NextForkVersion)).
+		WithField("NextForkEpoch", fmt.Sprintf("%d", enrForkID.NextForkEpoch)).
+		Info("updating ENR Fork ID")
+	enc, err := enrForkID.MarshalSSZ()
+	if err != nil {
+		return err
+	}
+	forkEntry := enr.WithEntry(eth2ENRKey, enc)
+	node.Set(forkEntry)
+	return nil
 }
 
 // Retrieves an enrForkID from an ENR record by key lookup

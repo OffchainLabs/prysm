@@ -6,10 +6,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-// IsForkNextEpoch checks if an allotted fork is in the following epoch.
-func IsForkNextEpoch(currentEpoch primitives.Epoch) bool {
-	entry, ok := BeaconConfig().networkSchedule.activatedAt(currentEpoch + 1)
-	return ok && entry.isFork
+// DigestChangesAtEpoch checks if an allotted fork is in the following epoch.
+func DigestChangesAtEpoch(currentEpoch primitives.Epoch) bool {
+	_, ok := BeaconConfig().networkSchedule.activatedAt(currentEpoch + 1)
+	return ok
 }
 
 // ForkDigestFromEpoch retrieves the fork digest from the current schedule determined
@@ -73,6 +73,11 @@ func ForkDataFromDigest(digest [4]byte) ([4]byte, primitives.Epoch, error) {
 func NextForkData(epoch primitives.Epoch) ([4]byte, primitives.Epoch) {
 	entry := BeaconConfig().networkSchedule.Next(epoch)
 	return entry.ForkVersion, entry.Epoch
+}
+
+func NextNetworkScheduleEntry(epoch primitives.Epoch) NetworkScheduleEntry {
+	entry := BeaconConfig().networkSchedule.Next(epoch)
+	return entry
 }
 
 func SortedNetworkScheduleEntries() []NetworkScheduleEntry {

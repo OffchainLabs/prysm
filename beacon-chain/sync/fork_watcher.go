@@ -41,24 +41,18 @@ func (s *Service) forkWatcher() {
 
 // registerForUpcomingFork registers appropriate gossip and RPC topic if there is a fork in the next epoch.
 func (s *Service) registerForUpcomingFork(currentEpoch primitives.Epoch) error {
+	nextEntry := params.GetNetworkScheduleEntry(currentEpoch + 1)
 	// Check if there is a fork in the next epoch.
-	isForkNextEpoch := params.IsForkNextEpoch(currentEpoch)
-
-	// Exit early if there is no fork in the next epoch.
-	if !isForkNextEpoch {
+	if nextEntry.ForkDigest == s.registeredNetworkEntry.ForkDigest {
 		return nil
 	}
 
-	nextForkEpoch := currentEpoch + 1
-	nextForkDigest := params.ForkDigest(nextForkEpoch)
-	// Exit early if the topics for the next epoch are already registered.
-	// It likely to be the case for all slots of the epoch that are not the first one.
-	if s.subHandler.digestExists(nextForkDigest) {
+	if s.subHandler.digestExists(nextEntry.ForkDigest) {
 		return nil
 	}
 
 	// Register the subscribers (gossipsub) for the next epoch.
-	s.registerSubscribers(nextForkEpoch, nextForkDigest)
+	s.registerSubscribers(nextEntry.Epoch, nextEntry.ForkDigest)
 
 	// Get the handlers for the current and next fork.
 	currentHandler, err := s.rpcHandlerByTopicFromEpoch(currentEpoch)
@@ -66,7 +60,7 @@ func (s *Service) registerForUpcomingFork(currentEpoch primitives.Epoch) error {
 		return errors.Wrap(err, "RPC handler by topic from before fork epoch")
 	}
 
-	nextHandler, err := s.rpcHandlerByTopicFromEpoch(nextForkEpoch)
+	nextHandler, err := s.rpcHandlerByTopicFromEpoch(nextEntry.Epoch)
 	if err != nil {
 		return errors.Wrap(err, "RPC handler by topic from fork epoch")
 	}
@@ -79,6 +73,7 @@ func (s *Service) registerForUpcomingFork(currentEpoch primitives.Epoch) error {
 		s.registerRPC(topic, handler)
 	}
 
+	s.registeredNetworkEntry = nextEntry
 	return nil
 }
 

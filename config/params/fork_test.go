@@ -95,11 +95,11 @@ func TestRetrieveForkDataFromDigest(t *testing.T) {
 
 func TestIsForkNextEpoch(t *testing.T) {
 	// at
-	assert.Equal(t, false, params.IsForkNextEpoch(params.BeaconConfig().ElectraForkEpoch))
+	assert.Equal(t, false, params.DigestChangesAtEpoch(params.BeaconConfig().ElectraForkEpoch))
 	// just before
-	assert.Equal(t, true, params.IsForkNextEpoch(params.BeaconConfig().ElectraForkEpoch-1))
+	assert.Equal(t, true, params.DigestChangesAtEpoch(params.BeaconConfig().ElectraForkEpoch-1))
 	// just after
-	assert.Equal(t, false, params.IsForkNextEpoch(params.BeaconConfig().ElectraForkEpoch+1))
+	assert.Equal(t, false, params.DigestChangesAtEpoch(params.BeaconConfig().ElectraForkEpoch+1))
 }
 
 func TestNextForkData(t *testing.T) {

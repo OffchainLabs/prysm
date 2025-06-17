@@ -84,6 +84,7 @@ type Service struct {
 	genesisValidatorsRoot []byte
 	activeValidatorCount  uint64
 	clock                 *startup.Clock
+	allForkDigests        map[[4]byte]struct{}
 }
 
 // NewService initializes a new p2p service compatible with shared.Service interface. No
@@ -433,10 +434,11 @@ func (s *Service) awaitStateInitialized() {
 	if err != nil {
 		log.WithError(err).Fatal("failed to receive initial genesis data")
 	}
+	s.setAllForkDigests()
 	s.genesisTime = clock.GenesisTime()
 	gvr := clock.GenesisValidatorsRoot()
 	s.genesisValidatorsRoot = gvr[:]
-	_, err = s.currentForkDigest() // initialize fork digest cache
+	_, err = s.currentForkDigest()
 	if err != nil {
 		log.WithError(err).Error("Could not initialize fork digest")
 	}
