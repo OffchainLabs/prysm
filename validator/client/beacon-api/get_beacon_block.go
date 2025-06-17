@@ -85,7 +85,7 @@ func processBlockSSZResponse(ver int, data []byte, isBlinded bool) (*ethpb.Gener
 		}
 		return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Phase0{Phase0: block}}, nil
 	}
-	return nil, fmt.Errorf("unsupported block version %d", ver)
+	return nil, fmt.Errorf("unsupported block version %s", version.String(ver))
 }
 
 func processBlockSSZResponseFulu(data []byte, isBlinded bool) (*ethpb.GenericBeaconBlock, error) {
