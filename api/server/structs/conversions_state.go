@@ -568,7 +568,7 @@ func BeaconStateDenebFromConsensus(st beaconState.BeaconState) (*BeaconStateDene
 	}
 
 	return &BeaconStateDeneb{
-		GenesisTime:                  fmt.Sprintf("%s", st.GenesisTime()),
+		GenesisTime:                  fmt.Sprintf("%d", st.GenesisTime().Unix()),
 		GenesisValidatorsRoot:        hexutil.Encode(st.GenesisValidatorsRoot()),
 		Slot:                         fmt.Sprintf("%d", st.Slot()),
 		Fork:                         ForkFromConsensus(st.Fork()),
