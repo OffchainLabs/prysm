@@ -92,16 +92,21 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 			return
 		}
 	}()
+	contentType := httpResp.Header.Get("Content-Type")
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to read response body for %s", httpResp.Request.URL)
 	}
-	if !strings.Contains(primaryAcceptType, httpResp.Header.Get("Content-Type")) {
+	if !strings.Contains(primaryAcceptType, contentType) {
 		log.WithFields(logrus.Fields{
 			"primaryAcceptType":   primaryAcceptType,
 			"secondaryAcceptType": secondaryAcceptType,
-			"receivedAcceptType":  httpResp.Header.Get("Content-Type"),
+			"receivedAcceptType":  contentType,
 		}).Debug("Server responded with non primary accept type")
+	}
+
+	if !strings.Contains(primaryAcceptType, contentType) && !strings.Contains(secondaryAcceptType, contentType) {
+		return nil, nil, errors.Errorf("server returned an unsupported Content-Type header %s, status code %d", contentType, httpResp.StatusCode)
 	}
 
 	// non-2XX codes are a failure
@@ -114,8 +119,8 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 		return nil, nil, errorJson
 	}
 
-	if features.Get().SSZOnly && httpResp.Header.Get("Content-Type") != api.OctetStreamMediaType {
-		return nil, nil, errors.Errorf("server responded with non primary accept type %s", httpResp.Header.Get("Content-Type"))
+	if features.Get().SSZOnly && contentType != api.OctetStreamMediaType {
+		return nil, nil, errors.Errorf("server responded with non primary accept type %s", contentType)
 	}
 
 	return body, httpResp.Header, nil

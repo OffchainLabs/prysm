@@ -117,6 +117,26 @@ func TestGetSSZ(t *testing.T) {
 		require.NoError(t, json.Unmarshal(body, resp))
 		require.Equal(t, "123", resp.Data.GenesisTime)
 	})
+
+	t.Run("Wrong Content-Type response", func(t *testing.T) {
+		mux := http.NewServeMux()
+		mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
+			assert.StringContains(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+			w.Header().Set("Content-Type", "text/plain") // Invalid content type
+			_, err := w.Write([]byte("some text"))
+			require.NoError(t, err)
+		})
+		server := httptest.NewServer(mux)
+		defer server.Close()
+
+		jsonRestHandler := BeaconApiRestHandler{
+			client: http.Client{Timeout: time.Second * 5},
+			host:   server.URL,
+		}
+
+		_, _, err := jsonRestHandler.GetSSZ(ctx, endpoint)
+		require.ErrorContains(t, "server returned an unsupported Content-Type header", err)
+	})
 }
 
 func TestPost(t *testing.T) {
