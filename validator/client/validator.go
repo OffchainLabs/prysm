@@ -1250,15 +1250,35 @@ func (v *validator) Host() string {
 	return v.validatorClient.Host()
 }
 
-func (v *validator) ChangeHost() {
+func (v *validator) ChangeHost() bool {
 	if len(v.beaconNodeHosts) == 1 {
 		log.Infof("Beacon node at %s is not responding, no backup node configured", v.Host())
-		return
+		return false
 	}
 	next := (v.currentHostIndex + 1) % uint64(len(v.beaconNodeHosts))
 	log.Infof("Beacon node at %s is not responding, switching to %s...", v.beaconNodeHosts[v.currentHostIndex], v.beaconNodeHosts[next])
 	v.validatorClient.SetHost(v.beaconNodeHosts[next])
 	v.currentHostIndex = next
+	return true
+}
+
+func (v *validator) FindHealthyHost(ctx context.Context) bool {
+	// Tail-recursive closure keeps retry count private.
+	var check func(remaining int) bool
+	check = func(remaining int) bool {
+		if v.HealthTracker().CheckHealth(ctx) { // healthy → done
+			return true
+		}
+		if remaining == 0 || !features.Get().EnableBeaconRESTApi {
+			return false // exhausted or REST disabled
+		}
+		if !v.ChangeHost() { // no switch possible
+			return false
+		}
+		return check(remaining - 1) // recurse
+	}
+
+	return check(len(v.beaconNodeHosts))
 }
 
 func (v *validator) filterAndCacheActiveKeys(ctx context.Context, pubkeys [][fieldparams.BLSPubkeyLength]byte, slot primitives.Slot) ([][fieldparams.BLSPubkeyLength]byte, error) {

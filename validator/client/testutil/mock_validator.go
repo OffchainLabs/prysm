@@ -68,6 +68,7 @@ type FakeValidator struct {
 	Tracker                           health.Tracker
 	PublicKey                         string
 	RolesAtRet                        []iface.ValidatorRole
+	CanChangeHost                     bool
 }
 
 // Done for mocking.
@@ -345,6 +346,10 @@ func (*FakeValidator) Host() string {
 	return "127.0.0.1:0"
 }
 
-func (fv *FakeValidator) ChangeHost() {
-	fv.Host()
+func (fv *FakeValidator) ChangeHost() bool {
+	return fv.CanChangeHost
+}
+
+func (fv *FakeValidator) FindHealthyHost(ctx context.Context) bool {
+	return fv.CanChangeHost
 }

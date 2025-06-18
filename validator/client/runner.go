@@ -8,7 +8,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/api/client"
 	"github.com/OffchainLabs/prysm/v6/api/client/event"
-	"github.com/OffchainLabs/prysm/v6/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -316,15 +315,10 @@ func runHealthCheckRoutine(ctx context.Context, cancel context.CancelFunc, v ifa
 	// just check one a slot
 	interval := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
 	ticker := time.NewTicker(interval)
-	tracker := v.HealthTracker()
 	go func() {
 		// Perform health check and handle host switching/event stream
 		performHealthCheck := func() bool {
-			isHealthy := tracker.CheckHealth(ctx)
-			if !isHealthy && features.Get().EnableBeaconRESTApi {
-				v.ChangeHost()
-				isHealthy = tracker.CheckHealth(ctx) // Re-check after host change
-			}
+			isHealthy := v.FindHealthyHost(ctx)
 
 			// Reconnect event stream if needed
 			if isHealthy && !v.EventStreamIsRunning() {
