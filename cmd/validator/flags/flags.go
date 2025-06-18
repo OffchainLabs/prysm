@@ -401,7 +401,7 @@ var (
 	MaxHealthChecksFlag = &cli.IntFlag{
 		Name:  "max-health-checks",
 		Usage: "Maximum number of health checks to perform before exiting if not healthy. Set to 0 or a negative number for indefinite checks.",
-		Value: DefaultMaxHealthChecks, // Default to current behavior
+		Value: DefaultMaxHealthChecks,
 	}
 )
 
