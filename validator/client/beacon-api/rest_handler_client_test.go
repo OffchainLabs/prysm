@@ -93,7 +93,7 @@ func TestGetSSZ(t *testing.T) {
 		mux := http.NewServeMux()
 		mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
 			assert.StringContains(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
-			w.Header().Set("Content-Type", api.JsonMediaType) // Invalid content type
+			w.Header().Set("Content-Type", api.JsonMediaType)
 
 			marshalledJson, err := json.Marshal(genesisJson)
 			require.NoError(t, err)
@@ -118,7 +118,10 @@ func TestGetSSZ(t *testing.T) {
 		require.Equal(t, "123", resp.Data.GenesisTime)
 	})
 
-	t.Run("Wrong Content-Type response", func(t *testing.T) {
+	t.Run("Wrong Content-Type response, doesn't error out and instead handled downstream", func(t *testing.T) {
+		logrus.SetLevel(logrus.DebugLevel)
+		defer logrus.SetLevel(logrus.InfoLevel) // reset it afterwards
+		logHook := test.NewGlobal()
 		mux := http.NewServeMux()
 		mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
 			assert.StringContains(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
@@ -135,7 +138,8 @@ func TestGetSSZ(t *testing.T) {
 		}
 
 		_, _, err := jsonRestHandler.GetSSZ(ctx, endpoint)
-		require.ErrorContains(t, "server returned an unsupported Content-Type header", err)
+		require.NoError(t, err)
+		assert.LogsContain(t, logHook, "Server responded with non primary accept type")
 	})
 }
 

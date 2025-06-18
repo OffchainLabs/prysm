@@ -105,10 +105,6 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 		}).Debug("Server responded with non primary accept type")
 	}
 
-	if !strings.Contains(primaryAcceptType, contentType) && !strings.Contains(secondaryAcceptType, contentType) {
-		return nil, nil, errors.Errorf("server returned an unsupported Content-Type header %s, status code %d", contentType, httpResp.StatusCode)
-	}
-
 	// non-2XX codes are a failure
 	if !strings.HasPrefix(httpResp.Status, "2") {
 		decoder := json.NewDecoder(bytes.NewBuffer(body))
