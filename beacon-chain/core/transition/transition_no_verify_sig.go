@@ -378,11 +378,11 @@ func altairOperations(ctx context.Context, st state.BeaconState, beaconBlock int
 	var err error
 
 	exitInfo := v.ExitInformation(st)
-	st, exitInfo, err = b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), v.SlashValidator, exitInfo)
+	st, err = b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), v.SlashValidator, exitInfo)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process altair proposer slashing")
 	}
-	st, exitInfo, err = b.ProcessAttesterSlashings(ctx, st, beaconBlock.Body().AttesterSlashings(), v.SlashValidator, exitInfo)
+	st, err = b.ProcessAttesterSlashings(ctx, st, beaconBlock.Body().AttesterSlashings(), v.SlashValidator, exitInfo)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process altair attester slashing")
 	}
@@ -393,7 +393,7 @@ func altairOperations(ctx context.Context, st state.BeaconState, beaconBlock int
 	if _, err := altair.ProcessDeposits(ctx, st, beaconBlock.Body().Deposits()); err != nil {
 		return nil, errors.Wrap(err, "could not process altair deposit")
 	}
-	st, _, err = b.ProcessVoluntaryExits(ctx, st, beaconBlock.Body().VoluntaryExits(), exitInfo)
+	st, err = b.ProcessVoluntaryExits(ctx, st, beaconBlock.Body().VoluntaryExits(), exitInfo)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process voluntary exits")
 	}
@@ -405,11 +405,11 @@ func phase0Operations(ctx context.Context, st state.BeaconState, beaconBlock int
 	var err error
 
 	exitInfo := v.ExitInformation(st)
-	st, exitInfo, err = b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), v.SlashValidator, exitInfo)
+	st, err = b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), v.SlashValidator, exitInfo)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process block proposer slashings")
 	}
-	st, exitInfo, err = b.ProcessAttesterSlashings(ctx, st, beaconBlock.Body().AttesterSlashings(), v.SlashValidator, exitInfo)
+	st, err = b.ProcessAttesterSlashings(ctx, st, beaconBlock.Body().AttesterSlashings(), v.SlashValidator, exitInfo)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process block attester slashings")
 	}
@@ -420,7 +420,7 @@ func phase0Operations(ctx context.Context, st state.BeaconState, beaconBlock int
 	if _, err := altair.ProcessDeposits(ctx, st, beaconBlock.Body().Deposits()); err != nil {
 		return nil, errors.Wrap(err, "could not process deposits")
 	}
-	st, _, err = b.ProcessVoluntaryExits(ctx, st, beaconBlock.Body().VoluntaryExits(), exitInfo)
+	st, err = b.ProcessVoluntaryExits(ctx, st, beaconBlock.Body().VoluntaryExits(), exitInfo)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process voluntary exits")
 	}

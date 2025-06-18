@@ -31,8 +31,7 @@ func RunVoluntaryExitTest(t *testing.T, config string, fork string, block blockW
 			blk, err := block(exitSSZ)
 			require.NoError(t, err)
 			RunBlockOperationTest(t, folderPath, blk, sszToState, func(ctx context.Context, s state.BeaconState, b interfaces.ReadOnlySignedBeaconBlock) (state.BeaconState, error) {
-				st, _, err := blocks.ProcessVoluntaryExits(ctx, s, b.Block().Body().VoluntaryExits(), validators.ExitInformation(s))
-				return st, err
+				return blocks.ProcessVoluntaryExits(ctx, s, b.Block().Body().VoluntaryExits(), validators.ExitInformation(s))
 			})
 		})
 	}

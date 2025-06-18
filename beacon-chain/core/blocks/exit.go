@@ -50,28 +50,28 @@ func ProcessVoluntaryExits(
 	beaconState state.BeaconState,
 	exits []*ethpb.SignedVoluntaryExit,
 	exitInfo *v.ExitInfo,
-) (state.BeaconState, *v.ExitInfo, error) {
+) (state.BeaconState, error) {
 	// Avoid calculating the epoch churn if no exits exist.
 	if len(exits) == 0 {
-		return beaconState, exitInfo, nil
+		return beaconState, nil
 	}
 	for idx, exit := range exits {
 		if exit == nil || exit.Exit == nil {
-			return nil, nil, errors.New("nil voluntary exit in block body")
+			return nil, errors.New("nil voluntary exit in block body")
 		}
 		val, err := beaconState.ValidatorAtIndexReadOnly(exit.Exit.ValidatorIndex)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		if err := VerifyExitAndSignature(val, beaconState, exit); err != nil {
-			return nil, nil, errors.Wrapf(err, "could not verify exit %d", idx)
+			return nil, errors.Wrapf(err, "could not verify exit %d", idx)
 		}
-		beaconState, exitInfo, err = v.InitiateValidatorExit(ctx, beaconState, exit.Exit.ValidatorIndex, exitInfo)
+		beaconState, err = v.InitiateValidatorExit(ctx, beaconState, exit.Exit.ValidatorIndex, exitInfo)
 		if err != nil && !errors.Is(err, v.ErrValidatorAlreadyExited) {
-			return nil, nil, err
+			return nil, err
 		}
 	}
-	return beaconState, exitInfo, nil
+	return beaconState, nil
 }
 
 // VerifyExitAndSignature implements the spec defined validation for voluntary exits.

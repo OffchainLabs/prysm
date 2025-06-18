@@ -53,11 +53,11 @@ func ProcessOperations(ctx context.Context, st state.BeaconState, block interfac
 	bb := block.Body()
 	// Electra extends the altair operations.
 	exitInfo := v.ExitInformation(st)
-	st, exitInfo, err = ProcessProposerSlashings(ctx, st, bb.ProposerSlashings(), v.SlashValidator, exitInfo)
+	st, err = ProcessProposerSlashings(ctx, st, bb.ProposerSlashings(), v.SlashValidator, exitInfo)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process altair proposer slashing")
 	}
-	st, exitInfo, err = ProcessAttesterSlashings(ctx, st, bb.AttesterSlashings(), v.SlashValidator, exitInfo)
+	st, err = ProcessAttesterSlashings(ctx, st, bb.AttesterSlashings(), v.SlashValidator, exitInfo)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process altair attester slashing")
 	}
@@ -68,7 +68,7 @@ func ProcessOperations(ctx context.Context, st state.BeaconState, block interfac
 	if _, err := ProcessDeposits(ctx, st, bb.Deposits()); err != nil { // new in electra
 		return nil, errors.Wrap(err, "could not process altair deposit")
 	}
-	st, _, err = ProcessVoluntaryExits(ctx, st, bb.VoluntaryExits(), exitInfo)
+	st, err = ProcessVoluntaryExits(ctx, st, bb.VoluntaryExits(), exitInfo)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process voluntary exits")
 	}

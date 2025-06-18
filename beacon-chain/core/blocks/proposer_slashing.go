@@ -25,7 +25,7 @@ type slashValidatorFunc func(
 	st state.BeaconState,
 	vid primitives.ValidatorIndex,
 	exitInfo *validators.ExitInfo,
-) (state.BeaconState, *validators.ExitInfo, error)
+) (state.BeaconState, error)
 
 // ProcessProposerSlashings is one of the operations performed
 // on each processed beacon block to slash proposers based on
@@ -59,15 +59,15 @@ func ProcessProposerSlashings(
 	slashings []*ethpb.ProposerSlashing,
 	slashFunc slashValidatorFunc,
 	exitInfo *validators.ExitInfo,
-) (state.BeaconState, *validators.ExitInfo, error) {
+) (state.BeaconState, error) {
 	var err error
 	for _, slashing := range slashings {
-		beaconState, exitInfo, err = ProcessProposerSlashing(ctx, beaconState, slashing, slashFunc, exitInfo)
+		beaconState, err = ProcessProposerSlashing(ctx, beaconState, slashing, slashFunc, exitInfo)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
-	return beaconState, exitInfo, nil
+	return beaconState, nil
 }
 
 // ProcessProposerSlashing processes individual proposer slashing.
@@ -77,19 +77,19 @@ func ProcessProposerSlashing(
 	slashing *ethpb.ProposerSlashing,
 	slashFunc slashValidatorFunc,
 	exitInfo *validators.ExitInfo,
-) (state.BeaconState, *validators.ExitInfo, error) {
+) (state.BeaconState, error) {
 	var err error
 	if slashing == nil {
-		return nil, nil, errors.New("nil proposer slashings in block body")
+		return nil, errors.New("nil proposer slashings in block body")
 	}
 	if err = VerifyProposerSlashing(beaconState, slashing); err != nil {
-		return nil, nil, errors.Wrap(err, "could not verify proposer slashing")
+		return nil, errors.Wrap(err, "could not verify proposer slashing")
 	}
-	beaconState, exitInfo, err = slashFunc(ctx, beaconState, slashing.Header_1.Header.ProposerIndex, exitInfo)
+	beaconState, err = slashFunc(ctx, beaconState, slashing.Header_1.Header.ProposerIndex, exitInfo)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "could not slash proposer index %d", slashing.Header_1.Header.ProposerIndex)
+		return nil, errors.Wrapf(err, "could not slash proposer index %d", slashing.Header_1.Header.ProposerIndex)
 	}
-	return beaconState, exitInfo, nil
+	return beaconState, nil
 }
 
 // VerifyProposerSlashing verifies that the data provided from slashing is valid.

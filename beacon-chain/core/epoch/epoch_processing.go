@@ -99,7 +99,7 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) (state.Be
 	for _, idx := range eligibleForEjection {
 		// Here is fine to do a quadratic loop since this should
 		// barely happen
-		st, _, err = validators.InitiateValidatorExit(ctx, st, idx, validators.ExitInformation(st))
+		st, err = validators.InitiateValidatorExit(ctx, st, idx, validators.ExitInformation(st))
 		if err != nil && !errors.Is(err, validators.ErrValidatorAlreadyExited) {
 			return nil, errors.Wrapf(err, "could not initiate exit for validator %d", idx)
 		}

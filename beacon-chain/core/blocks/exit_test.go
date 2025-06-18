@@ -47,7 +47,7 @@ func TestProcessVoluntaryExits_NotActiveLongEnoughToExit(t *testing.T) {
 	}
 
 	want := "validator has not been active long enough to exit"
-	_, _, err = blocks.ProcessVoluntaryExits(t.Context(), state, b.Block.Body.VoluntaryExits, validators.ExitInformation(state))
+	_, err = blocks.ProcessVoluntaryExits(t.Context(), state, b.Block.Body.VoluntaryExits, validators.ExitInformation(state))
 	assert.ErrorContains(t, want, err)
 }
 
@@ -77,7 +77,7 @@ func TestProcessVoluntaryExits_ExitAlreadySubmitted(t *testing.T) {
 	}
 
 	want := "validator with index 0 has already submitted an exit, which will take place at epoch: 10"
-	_, _, err = blocks.ProcessVoluntaryExits(t.Context(), state, b.Block.Body.VoluntaryExits, validators.ExitInformation(state))
+	_, err = blocks.ProcessVoluntaryExits(t.Context(), state, b.Block.Body.VoluntaryExits, validators.ExitInformation(state))
 	assert.ErrorContains(t, want, err)
 }
 
@@ -125,7 +125,7 @@ func TestProcessVoluntaryExits_AppliesCorrectStatus(t *testing.T) {
 		},
 	}
 
-	newState, _, err := blocks.ProcessVoluntaryExits(t.Context(), state, b.Block.Body.VoluntaryExits, validators.ExitInformation(state))
+	newState, err := blocks.ProcessVoluntaryExits(t.Context(), state, b.Block.Body.VoluntaryExits, validators.ExitInformation(state))
 	require.NoError(t, err, "Could not process exits")
 	newRegistry := newState.Validators()
 	if newRegistry[0].ExitEpoch != helpers.ActivationExitEpoch(primitives.Epoch(state.Slot()/params.BeaconConfig().SlotsPerEpoch)) {

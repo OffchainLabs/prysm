@@ -16,7 +16,7 @@ func (vs *Server) getSlashings(ctx context.Context, head state.BeaconState) ([]*
 	proposerSlashings := vs.SlashingsPool.PendingProposerSlashings(ctx, head, false /*noLimit*/)
 	validProposerSlashings := make([]*ethpb.ProposerSlashing, 0, len(proposerSlashings))
 	for _, slashing := range proposerSlashings {
-		_, exitInfo, err = blocks.ProcessProposerSlashing(ctx, head, slashing, v.SlashValidator, exitInfo)
+		_, err = blocks.ProcessProposerSlashing(ctx, head, slashing, v.SlashValidator, exitInfo)
 		if err != nil {
 			log.WithError(err).Warn("Could not validate proposer slashing for block inclusion")
 			continue
@@ -26,7 +26,7 @@ func (vs *Server) getSlashings(ctx context.Context, head state.BeaconState) ([]*
 	attSlashings := vs.SlashingsPool.PendingAttesterSlashings(ctx, head, false /*noLimit*/)
 	validAttSlashings := make([]ethpb.AttSlashing, 0, len(attSlashings))
 	for _, slashing := range attSlashings {
-		_, exitInfo, err = blocks.ProcessAttesterSlashing(ctx, head, slashing, v.SlashValidator, exitInfo)
+		_, err = blocks.ProcessAttesterSlashing(ctx, head, slashing, v.SlashValidator, exitInfo)
 		if err != nil {
 			log.WithError(err).Warn("Could not validate attester slashing for block inclusion")
 			continue
