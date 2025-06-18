@@ -217,7 +217,6 @@ func Test_ValidateAttestationTime(t *testing.T) {
 		{
 			name: "attestation.slot is well beyond current slot",
 			args: args{
-				//attSlot:     1 << 32, // TODO(preston): Was this an overflow?
 				attSlot:     1024,
 				genesisTime: time.Now().Add(-15 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
 			},

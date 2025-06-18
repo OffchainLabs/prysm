@@ -14,39 +14,6 @@ import (
 	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 )
 
-func TestSlotsSinceGenesis(t *testing.T) {
-	type args struct {
-		genesis time.Time
-	}
-	tests := []struct {
-		name string
-		args args
-		want primitives.Slot
-	}{
-		{
-			name: "pre-genesis",
-			args: args{
-				genesis: prysmTime.Now().Add(1 * time.Hour), // 1 hour in the future
-			},
-			want: 0,
-		},
-		{
-			name: "post-genesis",
-			args: args{
-				genesis: prysmTime.Now().Add(-5 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
-			},
-			want: 5,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := SinceGenesis(tt.args.genesis); got != tt.want {
-				t.Errorf("SinceGenesis() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestAbsoluteValueSlotDifference(t *testing.T) {
 	type args struct {
 		x primitives.Slot
@@ -599,6 +566,38 @@ func TestSecondsUntilNextEpochStart(t *testing.T) {
 }
 
 func TestCurrentSlot(t *testing.T) {
+	type args struct {
+		genesis time.Time
+	}
+	tests := []struct {
+		name string
+		args args
+		want primitives.Slot
+	}{
+		{
+			name: "pre-genesis",
+			args: args{
+				genesis: prysmTime.Now().Add(1 * time.Hour), // 1 hour in the future
+			},
+			want: 0,
+		},
+		{
+			name: "post-genesis",
+			args: args{
+				genesis: prysmTime.Now().Add(-5 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+			},
+			want: 5,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := CurrentSlot(tt.args.genesis); got != tt.want {
+				t.Errorf("CurrentSlot() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+func TestCurrentSlot_iterative(t *testing.T) {
 	for i := primitives.Slot(0); i < 1<<20; i++ {
 		testCurrentSlot(t, i)
 	}

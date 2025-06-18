@@ -30,17 +30,10 @@ func StartTime(genesis time.Time, slot primitives.Slot) time.Time {
 	return startFromTime(genesis, slot)
 }
 
-// SinceGenesis returns the number of slots since
-// the provided genesis time.
-func SinceGenesis(genesis time.Time) primitives.Slot {
-	// TODO(preston): Remove this.
-	return CurrentSlot(genesis)
-}
-
 // EpochsSinceGenesis returns the number of epochs since
 // the provided genesis time.
 func EpochsSinceGenesis(genesis time.Time) primitives.Epoch {
-	return primitives.Epoch(SinceGenesis(genesis) / params.BeaconConfig().SlotsPerEpoch)
+	return primitives.Epoch(CurrentSlot(genesis) / params.BeaconConfig().SlotsPerEpoch)
 }
 
 // DivideSlotBy divides the SECONDS_PER_SLOT configuration
