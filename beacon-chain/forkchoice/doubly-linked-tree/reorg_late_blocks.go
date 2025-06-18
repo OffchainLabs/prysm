@@ -110,9 +110,9 @@ func (f *ForkChoice) GetProposerHead() [32]byte {
 	if head == nil {
 		return [32]byte{}
 	}
-
 	// Only reorg blocks from the previous slot.
-	if head.slot+1 != slots.CurrentSlot(f.store.genesisTime) {
+	currentSlot := slots.CurrentSlot(f.store.genesisTime)
+	if head.slot+1 != currentSlot {
 		return head.root
 	}
 	// Do not reorg on epoch boundaries
@@ -153,12 +153,12 @@ func (f *ForkChoice) GetProposerHead() [32]byte {
 	}
 
 	// Only reorg if we are proposing early
-	sss, err := slots.SinceSlotStart(head.slot+1, f.store.genesisTime, time.Now())
+	sss, err := slots.SinceSlotStart(currentSlot, f.store.genesisTime, time.Now())
 	if err != nil {
 		log.WithError(err).Error("could not check if proposing early")
 		return head.root
 	}
-	if sss >= orphanLateBlockProposingEarly {
+	if sss >= orphanLateBlockProposingEarly*time.Second {
 		return head.root
 	}
 	return parent.root
