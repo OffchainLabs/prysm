@@ -118,7 +118,7 @@ func TestServer_setExecutionData(t *testing.T) {
 				Timestamp:    uint64(time.Now().Unix()),
 				GasLimit:     gasLimit,
 				Pubkey:       make([]byte, fieldparams.BLSPubkeyLength)}}))
-		ti, err := slots.ToTime(time.Now(), 0)
+		ti, err := slots.SlotTime(time.Now(), 0)
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
 		require.NoError(t, err)
@@ -187,7 +187,7 @@ func TestServer_setExecutionData(t *testing.T) {
 				Timestamp:    uint64(time.Now().Unix()),
 				GasLimit:     gasLimit,
 				Pubkey:       make([]byte, fieldparams.BLSPubkeyLength)}}))
-		ti, err := slots.ToTime(time.Now(), 0)
+		ti, err := slots.SlotTime(time.Now(), 0)
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
 		require.NoError(t, err)
@@ -259,7 +259,7 @@ func TestServer_setExecutionData(t *testing.T) {
 				Timestamp:    uint64(time.Now().Unix()),
 				GasLimit:     gasLimit,
 				Pubkey:       make([]byte, fieldparams.BLSPubkeyLength)}}))
-		ti, err := slots.ToTime(time.Now(), 0)
+		ti, err := slots.SlotTime(time.Now(), 0)
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
 		require.NoError(t, err)
@@ -330,7 +330,7 @@ func TestServer_setExecutionData(t *testing.T) {
 				Timestamp:    uint64(time.Now().Unix()),
 				GasLimit:     gasLimit,
 				Pubkey:       make([]byte, fieldparams.BLSPubkeyLength)}}))
-		ti, err := slots.ToTime(time.Now(), 0)
+		ti, err := slots.SlotTime(time.Now(), 0)
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
 		require.NoError(t, err)
@@ -537,7 +537,7 @@ func TestServer_setExecutionData(t *testing.T) {
 
 		blk, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockDeneb())
 		require.NoError(t, err)
-		ti, err := slots.ToTime(time.Now(), 0)
+		ti, err := slots.SlotTime(time.Now(), 0)
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
 		require.NoError(t, err)
@@ -635,7 +635,7 @@ func TestServer_setExecutionData(t *testing.T) {
 
 		blk, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockElectra())
 		require.NoError(t, err)
-		ti, err := slots.ToTime(time.Now(), 0)
+		ti, err := slots.SlotTime(time.Now(), 0)
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
 		require.NoError(t, err)
@@ -772,7 +772,7 @@ func TestServer_getPayloadHeader(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 	emptyRoot, err := ssz.TransactionsRoot([][]byte{})
 	require.NoError(t, err)
-	ti, err := slots.ToTime(time.Now(), 0)
+	ti, err := slots.SlotTime(time.Now(), 0)
 	require.NoError(t, err)
 
 	sk, err := bls.RandKey()
@@ -814,7 +814,7 @@ func TestServer_getPayloadHeader(t *testing.T) {
 	wr, err := ssz.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
 	require.NoError(t, err)
 
-	tiCapella, err := slots.ToTime(genesis, primitives.Slot(fakeCapellaEpoch)*params.BeaconConfig().SlotsPerEpoch)
+	tiCapella, err := slots.SlotTime(genesis, primitives.Slot(fakeCapellaEpoch)*params.BeaconConfig().SlotsPerEpoch)
 	require.NoError(t, err)
 	bidCapella := &ethpb.BuilderBidCapella{
 		Header: &v1.ExecutionPayloadHeaderCapella{

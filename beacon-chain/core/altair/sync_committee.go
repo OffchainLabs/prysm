@@ -220,12 +220,12 @@ func ValidateSyncMessageTime(slot primitives.Slot, genesisTime time.Time, clockD
 	if err := slots.ValidateClock(slot, genesisTime); err != nil {
 		return err
 	}
-	messageTime, err := slots.ToTime(genesisTime, slot)
+	messageTime, err := slots.SlotTime(genesisTime, slot)
 	if err != nil {
 		return err
 	}
-	currentSlot := slots.Since(genesisTime)
-	slotStartTime, err := slots.ToTime(genesisTime, currentSlot)
+	currentSlot := slots.CurrentSlot(genesisTime)
+	slotStartTime, err := slots.SlotTime(genesisTime, currentSlot)
 	if err != nil {
 		return err
 	}

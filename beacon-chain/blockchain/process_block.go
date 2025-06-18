@@ -737,7 +737,10 @@ func (s *Service) areDataColumnsAvailable(
 	}
 
 	// Log for DA checks that cross over into the next slot; helpful for debugging.
-	nextSlot := slots.BeginsAt(block.Slot()+1, s.genesisTime)
+	nextSlot, err := slots.SlotTime(s.genesisTime, block.Slot()+1)
+	if err != nil {
+		return fmt.Errorf("unable to determine slot start time: %w", err)
+	}
 
 	// Avoid logging if DA check is called after next slot start.
 	if nextSlot.After(time.Now()) {
@@ -855,7 +858,10 @@ func (s *Service) areBlobsAvailable(ctx context.Context, root [fieldparams.RootL
 	nc := s.blobNotifiers.forRoot(root, block.Slot())
 
 	// Log for DA checks that cross over into the next slot; helpful for debugging.
-	nextSlot := slots.BeginsAt(block.Slot()+1, s.genesisTime)
+	nextSlot, err := slots.SlotTime(s.genesisTime, block.Slot()+1)
+	if err != nil {
+		log.WithError(err).Error("unable to determine slot start time")
+	}
 	// Avoid logging if DA check is called after next slot start.
 	if nextSlot.After(time.Now()) {
 		nst := time.AfterFunc(time.Until(nextSlot), func() {

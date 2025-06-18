@@ -354,7 +354,7 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 	}
 
 	// Get timestamp.
-	t, err := slots.ToTime(s.genesisTime, slot)
+	t, err := slots.SlotTime(s.genesisTime, slot)
 	if err != nil {
 		log.WithError(err).Error("Could not get timestamp to get payload attribute")
 		return emptyAttri

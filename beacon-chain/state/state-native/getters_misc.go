@@ -18,7 +18,7 @@ func (b *BeaconState) GenesisTime() time.Time {
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
-	return time.Unix(int64(b.genesisTime), 0) // TODO(preston): Can this just be a time.Time?
+	return time.Unix(int64(b.genesisTime), 0)
 }
 
 // GenesisValidatorsRoot of the beacon state.

@@ -155,37 +155,6 @@ func TestEpochStartSlot_OK(t *testing.T) {
 	}
 }
 
-func TestBeginsAtOK(t *testing.T) {
-	cases := []struct {
-		name     string
-		genesis  int64
-		slot     primitives.Slot
-		slotTime time.Time
-	}{
-		{
-			name:     "genesis",
-			slotTime: time.Unix(0, 0),
-		},
-		{
-			name:     "slot 1",
-			slot:     1,
-			slotTime: time.Unix(int64(params.BeaconConfig().SecondsPerSlot), 0),
-		},
-		{
-			name:     "slot 1",
-			slot:     32,
-			slotTime: time.Unix(int64(params.BeaconConfig().SecondsPerSlot)*32, 0),
-		},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			genesis := time.Unix(c.genesis, 0)
-			st := BeginsAt(c.slot, genesis)
-			require.Equal(t, c.slotTime, st)
-		})
-	}
-}
-
 func TestEpochEndSlot_OK(t *testing.T) {
 	tests := []struct {
 		epoch     primitives.Epoch
@@ -342,7 +311,7 @@ func TestSlotToTime(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ToTime(tt.args.genesis, tt.args.slot)
+			got, err := SlotTime(tt.args.genesis, tt.args.slot)
 			if tt.wantedErr != "" {
 				assert.ErrorContains(t, tt.wantedErr, err)
 			} else {
@@ -376,7 +345,7 @@ func TestVerifySlotTime(t *testing.T) {
 			args: args{
 				genesisTime:   prysmTime.Now().Add(-1 * 5 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second).Add(20 * time.Millisecond),
 				slot:          5,
-				timeTolerance: 20 * time.Millisecond, // TODO(preston): I think this test was somewhat broken. There were checks that took longer than 20ms, which allowed the test to pass!
+				timeTolerance: 20 * time.Millisecond,
 			},
 		},
 		{
@@ -411,7 +380,7 @@ func TestVerifySlotTime(t *testing.T) {
 				// Lower than max signed int. And chosen specifically to wrap to a valid slot 24
 				slot: primitives.Slot((^uint64(0))/params.BeaconConfig().SecondsPerSlot) + 24,
 			},
-			wantedErr: "exceeds max allowed value relative to the local clock",
+			wantedErr: "is in the far distant future",
 		},
 	}
 	for _, tt := range tests {
@@ -504,7 +473,6 @@ func TestSyncCommitteePeriodStartEpoch(t *testing.T) {
 }
 
 func TestSecondsSinceSlotStart(t *testing.T) {
-	t.Skip("TODO(Preston): This test is so bogus")
 	now := time.Now()
 	tests := []struct {
 		slot      primitives.Slot
@@ -513,7 +481,7 @@ func TestSecondsSinceSlotStart(t *testing.T) {
 		wantedErr bool
 	}{
 		{slot: 1, timeStamp: now.Add(-1 * time.Hour), wantedErr: true},
-		{slot: 1, timeStamp: now.Add(-2 * time.Second).Add(time.Duration(params.BeaconConfig().SecondsPerSlot)), wanted: 2 * time.Second},
+		{slot: 1, timeStamp: now.Add(2 * time.Second).Add(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second), wanted: 2 * time.Second},
 	}
 	for i, test := range tests {
 		t.Logf("testing scenario %d", i)
@@ -597,12 +565,6 @@ func TestDuration(t *testing.T) {
 			require.Equal(t, c.expected, a)
 		})
 	}
-}
-
-func TestTimeIntoSlot(t *testing.T) {
-	genesisTime := time.Now().Add(-37 * time.Second)
-	require.Equal(t, true, TimeIntoSlot(genesisTime) > 900*time.Millisecond)
-	require.Equal(t, true, TimeIntoSlot(genesisTime) < 3000*time.Millisecond)
 }
 
 func TestWithinVotingWindow(t *testing.T) {

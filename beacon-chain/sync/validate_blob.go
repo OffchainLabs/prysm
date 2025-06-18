@@ -68,7 +68,7 @@ func (s *Service) validateBlob(ctx context.Context, pid peer.ID, msg *pubsub.Mes
 		return pubsub.ValidationIgnore, err
 	}
 
-	startTime, err := slots.ToTime(s.cfg.chain.GenesisTime(), blob.Slot())
+	startTime, err := slots.SlotTime(s.cfg.chain.GenesisTime(), blob.Slot())
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}

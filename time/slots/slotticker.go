@@ -153,7 +153,7 @@ func (s *SlotIntervalTicker) startWithIntervals(
 	after func(time.Duration) <-chan time.Time,
 	intervals []time.Duration) {
 	go func() {
-		slot := Since(genesisTime)
+		slot := CurrentSlot(genesisTime)
 		slot++
 		interval := 0
 		nextTickTime := startFromTime(genesisTime, slot).Add(intervals[0])

@@ -641,7 +641,6 @@ func TestOnBlock_CanFinalize_WithOnTick(t *testing.T) {
 	require.NoError(t, fcs.UpdateFinalizedCheckpoint(&forkchoicetypes.Checkpoint{Root: service.originBlockRoot}))
 
 	testState := gs.Copy()
-	// TODO(Preston): This test is really slow, is it because genesis is epoch 0?
 	for i := primitives.Slot(1); i <= 4*params.BeaconConfig().SlotsPerEpoch; i++ {
 		blk, err := util.GenerateFullBlock(testState, keys, util.DefaultBlockGenConfig(), i)
 		require.NoError(t, err)
@@ -2312,7 +2311,6 @@ func TestFillMissingBlockPayloadId_DiffSlotExitEarly(t *testing.T) {
 	require.LogsDoNotContain(t, logHook, "could not perform late block tasks")
 }
 
-// TODO(Preston): This test does nothing at all. It simply returns when the current slot == head slot.
 func TestFillMissingBlockPayloadId_PrepareAllPayloads(t *testing.T) {
 	logHook := logTest.NewGlobal()
 	resetCfg := features.InitWithReset(&features.Flags{
@@ -2331,7 +2329,11 @@ func TestFillMissingBlockPayloadId_PrepareAllPayloads(t *testing.T) {
 // boost. It alters the genesisTime tracked by the store.
 func driftGenesisTime(s *Service, slot primitives.Slot, delay time.Duration) {
 	now := time.Now()
-	offset := now.Sub(slots.BeginsAt(slot, now)).Abs() + delay
+	slotStart, err := slots.SlotTime(now, slot)
+	if err != nil {
+		panic(err) // lint:nopanic -- This is test code and should never overflow.
+	}
+	offset := now.Sub(slotStart).Abs() + delay
 	genesis := now.Add(-offset)
 	s.SetGenesisTime(genesis)
 	s.cfg.ForkChoiceStore.SetGenesisTime(genesis)

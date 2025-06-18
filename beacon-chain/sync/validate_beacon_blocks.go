@@ -232,7 +232,7 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 
 	// Log the arrival time of the accepted block
 	graffiti := blk.Block().Body().Graffiti()
-	startTime, err := slots.ToTime(genesisTime, blk.Block().Slot())
+	startTime, err := slots.SlotTime(genesisTime, blk.Block().Slot())
 	logFields := logrus.Fields{
 		"blockSlot":     blk.Block().Slot(),
 		"proposerIndex": blk.Block().ProposerIndex(),
@@ -360,7 +360,7 @@ func (s *Service) validateBellatrixBeaconBlock(ctx context.Context, parentState 
 		return nil
 	}
 
-	t, err := slots.ToTime(parentState.GenesisTime(), blk.Slot())
+	t, err := slots.SlotTime(parentState.GenesisTime(), blk.Slot())
 	if err != nil {
 		return err
 	}
@@ -444,7 +444,7 @@ func (s *Service) setBadBlock(ctx context.Context, root [32]byte) {
 
 // This captures metrics for block arrival time by subtracts slot start time.
 func captureArrivalTimeMetric(genesis time.Time, currentSlot primitives.Slot) error {
-	startTime, err := slots.ToTime(genesis, currentSlot)
+	startTime, err := slots.SlotTime(genesis, currentSlot)
 	if err != nil {
 		return err
 	}
@@ -460,7 +460,7 @@ func captureArrivalTimeMetric(genesis time.Time, currentSlot primitives.Slot) er
 // returns true if the corresponding block should be queued and false if
 // the block should be processed immediately.
 func isBlockQueueable(genesisTime time.Time, slot primitives.Slot, receivedTime time.Time) bool {
-	slotTime, err := slots.ToTime(genesisTime, slot)
+	slotTime, err := slots.SlotTime(genesisTime, slot)
 	if err != nil {
 		return false
 	}

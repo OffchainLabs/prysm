@@ -102,7 +102,10 @@ func initializeTestServices(t *testing.T, slots []primitives.Slot, peers []*peer
 // makeGenesisTime where now is the current slot.
 func makeGenesisTime(currentSlot primitives.Slot) time.Time {
 	now := time.Now()
-	s := slots.BeginsAt(currentSlot, now)
+	s, err := slots.SlotTime(now, currentSlot)
+	if err != nil {
+		panic(err) // lint:nopanic -- This is test code and should never overflow.
+	}
 	return now.Add(now.Sub(s))
 }
 
@@ -110,7 +113,7 @@ func makeGenesisTime(currentSlot primitives.Slot) time.Time {
 func TestMakeGenesisTime(t *testing.T) {
 	currentSlot := primitives.Slot(64)
 	gt := makeGenesisTime(currentSlot)
-	require.Equal(t, currentSlot, slots.Since(gt))
+	require.Equal(t, currentSlot, slots.CurrentSlot(gt))
 }
 
 // helper function for sequences of block slots

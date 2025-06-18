@@ -88,7 +88,7 @@ func addForkEntry(
 	if err != nil {
 		return nil, err
 	}
-	currentSlot := slots.Since(genesisTime)
+	currentSlot := slots.CurrentSlot(genesisTime)
 	currentEpoch := slots.ToEpoch(currentSlot)
 	if prysmTime.Now().Before(genesisTime) {
 		currentEpoch = 0

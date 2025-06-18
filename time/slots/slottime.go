@@ -160,7 +160,10 @@ func SinceEpochStarts(slot primitives.Slot) primitives.Slot {
 
 // VerifyTime validates the input slot is not from the future.
 func VerifyTime(genesis time.Time, slot primitives.Slot, timeTolerance time.Duration) error {
-	slotTime := BeginsAt(slot, genesis)
+	slotTime, err := SlotTime(genesis, slot)
+	if err != nil {
+		return err
+	}
 
 	// Defensive check to ensure unreasonable slots are rejected
 	// straight away.
@@ -177,28 +180,14 @@ func VerifyTime(genesis time.Time, slot primitives.Slot, timeTolerance time.Dura
 	return nil
 }
 
-// ToTime takes the given slot and genesis time to determine the start time of the slot.
-// DEPRECATED: Use BeginsAt.
-func ToTime(genesis time.Time, slot primitives.Slot) (time.Time, error) {
-	// TODO(Preston): How important is this overflow check?
+// SlotTime takes the given slot and genesis time to determine the start time of the slot.
+func SlotTime(genesis time.Time, slot primitives.Slot) (time.Time, error) {
 	_, err := slot.SafeMul(params.BeaconConfig().SecondsPerSlot)
 	if err != nil {
 		return time.Unix(0, 0), fmt.Errorf("slot (%d) is in the far distant future: %w", slot, err)
 	}
-	return BeginsAt(slot, genesis), nil
-}
-
-// BeginsAt computes the timestamp where the given slot begins, relative to the genesis timestamp.
-// TODO(preston): WTF is this? Looks like a copy of ToTime, but no validation.
-func BeginsAt(slot primitives.Slot, genesis time.Time) time.Time {
 	sd := time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(slot)
-	return genesis.Add(sd)
-}
-
-// Since computes the number of time slots that have occurred since the given timestamp.
-// TODO(Preston): Delete this method?
-func Since(time time.Time) primitives.Slot {
-	return CurrentSlot(time)
+	return genesis.Add(sd), nil
 }
 
 // CurrentSlot returns the current slot as determined by the local clock and
@@ -292,12 +281,6 @@ func SinceSlotStart(s primitives.Slot, genesis time.Time, timestamp time.Time) (
 	return timestamp.Sub(limit), nil
 }
 
-// TimeIntoSlot returns the time duration elapsed between the current time and
-// the start of the current slot
-func TimeIntoSlot(genesis time.Time) time.Duration {
-	return time.Since(BeginsAt(CurrentSlot(genesis), genesis))
-}
-
 // WithinVotingWindow returns whether the current time is within the voting window
 // (eg. 4 seconds on mainnet) of the current slot.
 func WithinVotingWindow(genesis time.Time, slot primitives.Slot) bool {
@@ -317,7 +300,7 @@ func SecondsUntilNextEpochStart(genesis time.Time) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	nextEpochStartTime, err := ToTime(genesis, firstSlotOfNextEpoch)
+	nextEpochStartTime, err := SlotTime(genesis, firstSlotOfNextEpoch)
 	if err != nil {
 		return 0, err
 	}
