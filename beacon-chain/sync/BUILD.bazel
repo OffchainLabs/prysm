@@ -25,6 +25,7 @@ go_library(
         "rpc_blob_sidecars_by_range.go",
         "rpc_blob_sidecars_by_root.go",
         "rpc_chunked_response.go",
+        "rpc_data_column_sidecars_by_range.go",
         "rpc_data_column_sidecars_by_root.go",
         "rpc_goodbye.go",
         "rpc_light_client.go",
@@ -171,6 +172,7 @@ go_test(
         "rpc_beacon_blocks_by_root_test.go",
         "rpc_blob_sidecars_by_range_test.go",
         "rpc_blob_sidecars_by_root_test.go",
+        "rpc_data_column_sidecars_by_range_test.go",
         "rpc_data_column_sidecars_by_root_test.go",
         "rpc_goodbye_test.go",
         "rpc_handler_test.go",
@@ -282,6 +284,7 @@ go_test(
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
         "@com_github_sirupsen_logrus//:go_default_library",
         "@com_github_sirupsen_logrus//hooks/test:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
         "@org_golang_google_protobuf//proto:go_default_library",
     ],
 )

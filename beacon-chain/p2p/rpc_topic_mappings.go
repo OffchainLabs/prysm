@@ -101,6 +101,9 @@ const (
 	// RPCDataColumnSidecarsByRootTopicV1 is a topic for requesting data column sidecars by their block root.
 	// /eth2/beacon_chain/req/data_column_sidecars_by_root/1 - New in Fulu.
 	RPCDataColumnSidecarsByRootTopicV1 = protocolPrefix + DataColumnSidecarsByRootName + SchemaVersionV1
+	// RPCDataColumnSidecarsByRangeTopicV1 is a topic for requesting data column sidecars by their slot.
+	// /eth2/beacon_chain/req/data_column_sidecars_by_range/1 - New in Fulu.
+	RPCDataColumnSidecarsByRangeTopicV1 = protocolPrefix + DataColumnSidecarsByRangeName + SchemaVersionV1
 
 	// V2 RPC Topics
 	// RPCBlocksByRangeTopicV2 defines v2 the topic for the blocks by range rpc method.
@@ -149,6 +152,8 @@ var RPCTopicMappings = map[string]interface{}{
 	RPCLightClientFinalityUpdateTopicV1:   new(interface{}),
 	RPCLightClientOptimisticUpdateTopicV1: new(interface{}),
 
+	// DataColumnSidecarsByRange v1 Message
+	RPCDataColumnSidecarsByRangeTopicV1: new(pb.DataColumnSidecarsByRangeRequest),
 	// DataColumnSidecarsByRoot v1 Message
 	RPCDataColumnSidecarsByRootTopicV1: new(p2ptypes.DataColumnsByRootIdentifiers),
 }
@@ -174,6 +179,7 @@ var messageMapping = map[string]bool{
 	LightClientFinalityUpdateName:   true,
 	LightClientOptimisticUpdateName: true,
 	DataColumnSidecarsByRootName:    true,
+	DataColumnSidecarsByRangeName:   true,
 }
 
 // Maps all the RPC messages which are to updated in altair.
