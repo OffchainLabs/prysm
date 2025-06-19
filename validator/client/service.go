@@ -249,7 +249,7 @@ func (v *ValidatorService) Start() {
 				continue
 			}
 			// Reconnect event stream if needed
-			if v.validator.EventStreamIsRunning() {
+			if !v.validator.EventStreamIsRunning() {
 				go v.validator.StartEventStream(v.ctx, eventClient.DefaultEventTopics)
 			}
 
