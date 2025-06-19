@@ -1,7 +1,6 @@
 package filesystem
 
 import (
-	"context"
 	"encoding/binary"
 	"os"
 	"testing"
@@ -16,7 +15,7 @@ import (
 )
 
 func TestNewDataColumnStorage(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("No base path", func(t *testing.T) {
 		_, err := NewDataColumnStorage(ctx)
@@ -34,7 +33,7 @@ func TestNewDataColumnStorage(t *testing.T) {
 
 func TestWarmCache(t *testing.T) {
 	storage, err := NewDataColumnStorage(
-		context.Background(),
+		t.Context(),
 		WithDataColumnBasePath(t.TempDir()),
 		WithDataColumnRetentionEpochs(10_000),
 	)
@@ -596,7 +595,7 @@ func TestStorageIndicesSet(t *testing.T) {
 func TestPrune(t *testing.T) {
 	t.Run(("nothing to prune"), func(t *testing.T) {
 		dir := t.TempDir()
-		dataColumnStorage, err := NewDataColumnStorage(context.Background(), WithDataColumnBasePath(dir))
+		dataColumnStorage, err := NewDataColumnStorage(t.Context(), WithDataColumnBasePath(dir))
 		require.NoError(t, err)
 
 		dataColumnStorage.prune()
@@ -639,7 +638,7 @@ func TestPrune(t *testing.T) {
 		)
 
 		dir := t.TempDir()
-		dataColumnStorage, err := NewDataColumnStorage(context.Background(), WithDataColumnBasePath(dir), WithDataColumnRetentionEpochs(10_000))
+		dataColumnStorage, err := NewDataColumnStorage(t.Context(), WithDataColumnBasePath(dir), WithDataColumnRetentionEpochs(10_000))
 		require.NoError(t, err)
 
 		err = dataColumnStorage.Save(verifiedRoDataColumnSidecars)

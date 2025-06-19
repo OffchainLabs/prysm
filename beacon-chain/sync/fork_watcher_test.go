@@ -38,7 +38,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 					Genesis:        gt,
 					ValidatorsRoot: vr,
 				}
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				r := &Service{
 					ctx:    ctx,
 					cancel: cancel,
@@ -74,7 +74,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 				bCfg.AltairForkEpoch = 5
 				params.OverrideBeaconConfig(bCfg)
 				params.BeaconConfig().InitializeForkSchedule()
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				r := &Service{
 					ctx:    ctx,
 					cancel: cancel,
@@ -119,7 +119,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 				bCfg.BellatrixForkEpoch = 5
 				params.OverrideBeaconConfig(bCfg)
 				params.BeaconConfig().InitializeForkSchedule()
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				r := &Service{
 					ctx:    ctx,
 					cancel: cancel,
@@ -162,7 +162,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 				bCfg.DenebForkEpoch = 5
 				params.OverrideBeaconConfig(bCfg)
 				params.BeaconConfig().InitializeForkSchedule()
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				r := &Service{
 					ctx:    ctx,
 					cancel: cancel,
@@ -207,7 +207,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 				bCfg.ElectraForkEpoch = 5
 				params.OverrideBeaconConfig(bCfg)
 				params.BeaconConfig().InitializeForkSchedule()
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				r := &Service{
 					ctx:    ctx,
 					cancel: cancel,
@@ -252,7 +252,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 				bCfg.FuluForkEpoch = 5
 				params.OverrideBeaconConfig(bCfg)
 				params.BeaconConfig().InitializeForkSchedule()
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				r := &Service{
 					ctx:    ctx,
 					cancel: cancel,
@@ -314,7 +314,7 @@ func TestService_CheckForPreviousEpochFork(t *testing.T) {
 					ValidatorsRoot: [32]byte{'A'},
 				}
 				clock := startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				r := &Service{
 					ctx:    ctx,
 					cancel: cancel,
@@ -360,7 +360,7 @@ func TestService_CheckForPreviousEpochFork(t *testing.T) {
 				bCfg.AltairForkEpoch = 3
 				params.OverrideBeaconConfig(bCfg)
 				params.BeaconConfig().InitializeForkSchedule()
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				r := &Service{
 					ctx:    ctx,
 					cancel: cancel,
@@ -447,7 +447,7 @@ func TestService_CheckForPreviousEpochFork(t *testing.T) {
 				bCfg.BellatrixForkEpoch = 3
 				params.OverrideBeaconConfig(bCfg)
 				params.BeaconConfig().InitializeForkSchedule()
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				r := &Service{
 					ctx:    ctx,
 					cancel: cancel,

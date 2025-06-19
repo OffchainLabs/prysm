@@ -130,7 +130,7 @@ func TestSlotCovered(t *testing.T) {
 }
 
 func TestStatusUpdater_FillBack(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	mdb := &mockBackfillDB{}
 	b, err := setupTestBlock(90)
 	require.NoError(t, err)
@@ -159,7 +159,7 @@ func setupTestBlock(slot primitives.Slot) (interfaces.ReadOnlySignedBeaconBlock,
 }
 
 func TestNewUpdater(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	originSlot := primitives.Slot(100)
 	var originRoot [32]byte

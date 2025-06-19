@@ -1,7 +1,6 @@
 package kv
 
 import (
-	"context"
 	"testing"
 
 	v2 "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -27,7 +26,7 @@ func TestStore_SavePowchainData(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store := setupDB(t)
-			if err := store.SaveExecutionChainData(context.Background(), tt.args.data); (err != nil) != tt.wantErr {
+			if err := store.SaveExecutionChainData(t.Context(), tt.args.data); (err != nil) != tt.wantErr {
 				t.Errorf("SaveExecutionChainData() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

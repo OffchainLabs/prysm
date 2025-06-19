@@ -1,7 +1,6 @@
 package kv
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/genesis"
@@ -16,7 +15,7 @@ func TestSaveOrigin(t *testing.T) {
 	// Embedded Genesis works with Mainnet config
 	params.OverrideBeaconConfig(params.MainnetConfig())
 
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupDB(t)
 
 	st, err := genesis.State(params.MainnetName)

@@ -72,8 +72,6 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	}
 	if features.Get().EnableLightClient && slots.ToEpoch(s.CurrentSlot()) >= params.BeaconConfig().AltairForkEpoch {
 		defer s.processLightClientUpdates(cfg)
-		defer s.saveLightClientUpdate(cfg)
-		defer s.saveLightClientBootstrap(cfg)
 	}
 	defer s.sendStateFeedOnBlock(cfg)
 	defer reportProcessingTime(startTime)

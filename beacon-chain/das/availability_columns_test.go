@@ -107,7 +107,7 @@ func TestIsDataAvailable(t *testing.T) {
 		return &mockDataColumnsVerifier{t: t, dataColumnSidecars: dataColumnSidecars}
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("without commitments", func(t *testing.T) {
 		signedBeaconBlockFulu := util.NewBeaconBlockFulu()

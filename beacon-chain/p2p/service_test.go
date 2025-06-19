@@ -82,7 +82,7 @@ func createHost(t *testing.T, port int) (host.Host, *ecdsa.PrivateKey, net.IP) {
 
 func TestService_Stop_SetsStartedToFalse(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	s, err := NewService(context.Background(), &Config{StateNotifier: &mock.MockStateNotifier{}})
+	s, err := NewService(t.Context(), &Config{StateNotifier: &mock.MockStateNotifier{}})
 	require.NoError(t, err)
 	s.started = true
 	s.dv5Listener = &mockListener{}
@@ -92,7 +92,7 @@ func TestService_Stop_SetsStartedToFalse(t *testing.T) {
 
 func TestService_Stop_DontPanicIfDv5ListenerIsNotInited(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	s, err := NewService(context.Background(), &Config{StateNotifier: &mock.MockStateNotifier{}})
+	s, err := NewService(t.Context(), &Config{StateNotifier: &mock.MockStateNotifier{}})
 	require.NoError(t, err)
 	assert.NoError(t, s.Stop())
 }
@@ -108,7 +108,7 @@ func TestService_Start_OnlyStartsOnce(t *testing.T) {
 		QUICPort:    3000,
 		ClockWaiter: cs,
 	}
-	s, err := NewService(context.Background(), cfg)
+	s, err := NewService(t.Context(), cfg)
 	require.NoError(t, err)
 	s.dv5Listener = &mockListener{}
 	exitRoutine := make(chan bool)
@@ -156,7 +156,7 @@ func TestService_Start_NoDiscoverFlag(t *testing.T) {
 		NoDiscovery:   true, // <-- no s.dv5Listener is created
 		ClockWaiter:   cs,
 	}
-	s, err := NewService(context.Background(), cfg)
+	s, err := NewService(t.Context(), cfg)
 	require.NoError(t, err)
 
 	// required params to addForkEntry in s.forkWatcher
@@ -259,7 +259,7 @@ func TestListenForNewNodes(t *testing.T) {
 	cfg.UDPPort = 14000
 	cfg.TCPPort = 14001
 
-	s, err = NewService(context.Background(), cfg)
+	s, err = NewService(t.Context(), cfg)
 	require.NoError(t, err)
 	exitRoutine := make(chan bool)
 	go func() {
@@ -300,7 +300,7 @@ func TestPeer_Disconnect(t *testing.T) {
 	require.NoError(t, err)
 	addrInfo, err := peer.AddrInfoFromP2pAddr(h2Addr)
 	require.NoError(t, err)
-	require.NoError(t, s.host.Connect(context.Background(), *addrInfo))
+	require.NoError(t, s.host.Connect(t.Context(), *addrInfo))
 	assert.Equal(t, 1, len(s.host.Network().Peers()), "Invalid number of peers")
 	assert.Equal(t, 1, len(s.host.Network().Conns()), "Invalid number of connections")
 	require.NoError(t, s.Disconnect(h2.ID()))
@@ -309,7 +309,7 @@ func TestPeer_Disconnect(t *testing.T) {
 
 func TestService_JoinLeaveTopic(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 	gs := startup.NewClockSynchronizer()
 	s, err := NewService(ctx, &Config{StateNotifier: &mock.MockStateNotifier{}, ClockWaiter: gs})

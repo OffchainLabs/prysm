@@ -1,7 +1,6 @@
 package stategen
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
@@ -30,7 +29,7 @@ func headerFromBlock(b interfaces.ReadOnlySignedBeaconBlock) (*ethpb.BeaconBlock
 
 func TestReplayBlocks_ZeroDiff(t *testing.T) {
 	logHook := logTest.NewGlobal()
-	ctx := context.Background()
+	ctx := t.Context()
 	specs := []mockHistorySpec{{slot: 0}}
 	hist := newMockHistory(t, specs, 0)
 	ch := NewCanonicalHistory(hist, hist, hist)
@@ -40,7 +39,7 @@ func TestReplayBlocks_ZeroDiff(t *testing.T) {
 }
 
 func TestReplayBlocks(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	var zero, one, two, three, four, five primitives.Slot = 50, 51, 150, 151, 152, 200
 	specs := []mockHistorySpec{
 		{slot: zero},
@@ -89,7 +88,7 @@ func TestReplayBlocks(t *testing.T) {
 }
 
 func TestReplayToSlot(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	var zero, one, two, three, four, five primitives.Slot = 50, 51, 150, 151, 152, 200
 	specs := []mockHistorySpec{
 		{slot: zero},

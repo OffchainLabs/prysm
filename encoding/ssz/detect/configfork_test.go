@@ -1,7 +1,6 @@
 package detect
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -151,7 +150,7 @@ func stateForVersion(v int) (state.BeaconState, error) {
 }
 
 func TestUnmarshalState(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	defer util.HackForksMaxuint(t, []int{version.Electra, version.Fulu})()
 
 	bc := params.BeaconConfig()

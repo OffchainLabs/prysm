@@ -44,7 +44,7 @@ func TestPruner_PruningConditions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			logrus.SetLevel(logrus.DebugLevel)
 			hook := logTest.NewGlobal()
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(t.Context())
 			beaconDB := dbtest.SetupDB(t)
 
 			slotTicker := &slottest.MockTicker{Channel: make(chan primitives.Slot)}
@@ -79,7 +79,7 @@ func TestPruner_PruningConditions(t *testing.T) {
 }
 
 func TestPruner_PruneSuccess(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := dbtest.SetupDB(t)
 
 	// Create and save some blocks at different slots

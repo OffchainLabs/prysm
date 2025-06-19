@@ -52,7 +52,7 @@ func TestEndToEnd_SlasherSimulator(t *testing.T) {
 	params.OverrideBeaconConfig(params.E2ETestConfig().Copy())
 
 	hook := logTest.NewGlobal()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Run for 10 epochs if not in long-running to confirm long-running has no issues.
 	simulatorParams := slashersimulator.DefaultParams()

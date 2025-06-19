@@ -2,7 +2,6 @@ package beacon
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -1931,7 +1930,7 @@ func TestGetProposerSlashings(t *testing.T) {
 }
 
 func TestSubmitAttesterSlashings(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	transition.SkipSlotCache.Disable()
 	defer transition.SkipSlotCache.Enable()

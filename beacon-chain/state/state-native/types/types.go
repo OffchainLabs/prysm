@@ -112,6 +112,8 @@ func (f FieldIndex) String() string {
 		return "pendingPartialWithdrawals"
 	case PendingConsolidations:
 		return "pendingConsolidations"
+	case ProposerLookahead:
+		return "proposerLookahead"
 	default:
 		return fmt.Sprintf("unknown field index number: %d", f)
 	}
@@ -195,6 +197,8 @@ func (f FieldIndex) RealPosition() int {
 		return 35
 	case PendingConsolidations:
 		return 36
+	case ProposerLookahead:
+		return 37
 	default:
 		return -1
 	}
@@ -259,6 +263,7 @@ const (
 	PendingDeposits               // Electra: EIP-7251
 	PendingPartialWithdrawals     // Electra: EIP-7251
 	PendingConsolidations         // Electra: EIP-7251
+	ProposerLookahead             // Fulu: EIP-7917
 )
 
 // Enumerator keeps track of the number of states created since the node's start.

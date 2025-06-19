@@ -340,7 +340,7 @@ func TestService_FilterIncomingSubscriptions(t *testing.T) {
 
 func TestService_MonitorsStateForkUpdates(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 	cs := startup.NewClockSynchronizer()
 	s, err := NewService(ctx, &Config{ClockWaiter: cs})

@@ -78,7 +78,7 @@ func TestScorers_Service_Init(t *testing.T) {
 }
 
 func TestScorers_Service_Score(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 
 	batchSize := uint64(flags.Get().BlockBatchLimit)

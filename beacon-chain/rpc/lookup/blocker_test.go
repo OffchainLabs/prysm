@@ -2,7 +2,6 @@ package lookup
 
 import (
 	"bytes"
-	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
@@ -35,7 +34,7 @@ import (
 
 func TestGetBlock(t *testing.T) {
 	beaconDB := testDB.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	genBlk, blkContainers := testutil.FillDBWithBlocks(ctx, t, beaconDB)
 	canonicalRoots := make(map[[32]byte]bool)
@@ -283,10 +282,10 @@ func TestGetBlob(t *testing.T) {
 	cfg := params.BeaconConfig().Copy()
 	cfg.DenebForkEpoch = 1
 	params.OverrideBeaconConfig(cfg)
-	ctx := context.Background()
+	ctx := t.Context()
 	db := testDB.SetupDB(t)
 	denebBlock, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 123, 4)
-	require.NoError(t, db.SaveBlock(context.Background(), denebBlock))
+	require.NoError(t, db.SaveBlock(t.Context(), denebBlock))
 	_, bs := filesystem.NewEphemeralBlobStorageAndFs(t)
 	testSidecars := verification.FakeVerifySliceForTest(t, blobs)
 	for i := range testSidecars {

@@ -383,7 +383,7 @@ func TestValidProposerSignature(t *testing.T) {
 			}
 
 			verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
-			err := verifier.ValidProposerSignature(context.Background())
+			err := verifier.ValidProposerSignature(t.Context())
 			require.Equal(t, true, verifier.results.executed(RequireValidProposerSignature))
 
 			if tc.isError {
@@ -395,7 +395,7 @@ func TestValidProposerSignature(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, verifier.results.result(RequireValidProposerSignature))
 
-			err = verifier.ValidProposerSignature(context.Background())
+			err = verifier.ValidProposerSignature(t.Context())
 			require.NoError(t, err)
 		})
 	}
@@ -914,7 +914,7 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 			}
 
 			verifier := initializer.NewDataColumnsVerifier(tc.columns, GossipDataColumnSidecarRequirements)
-			err := verifier.SidecarProposerExpected(context.Background())
+			err := verifier.SidecarProposerExpected(t.Context())
 
 			require.Equal(t, true, verifier.results.executed(RequireSidecarProposerExpected))
 
@@ -927,7 +927,7 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, verifier.results.result(RequireSidecarProposerExpected))
 
-			err = verifier.SidecarProposerExpected(context.Background())
+			err = verifier.SidecarProposerExpected(t.Context())
 			require.NoError(t, err)
 		})
 	}

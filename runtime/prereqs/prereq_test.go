@@ -13,16 +13,16 @@ func TestMeetsMinPlatformReqs(t *testing.T) {
 	// Linux
 	runtimeOS = "linux"
 	runtimeArch = "amd64"
-	meetsReqs, err := meetsMinPlatformReqs(context.Background())
+	meetsReqs, err := meetsMinPlatformReqs(t.Context())
 	require.Equal(t, true, meetsReqs)
 	require.NoError(t, err)
 	runtimeArch = "arm64"
-	meetsReqs, err = meetsMinPlatformReqs(context.Background())
+	meetsReqs, err = meetsMinPlatformReqs(t.Context())
 	require.Equal(t, true, meetsReqs)
 	require.NoError(t, err)
 	// mips64 is not supported
 	runtimeArch = "mips64"
-	meetsReqs, err = meetsMinPlatformReqs(context.Background())
+	meetsReqs, err = meetsMinPlatformReqs(t.Context())
 	require.Equal(t, false, meetsReqs)
 	require.NoError(t, err)
 
@@ -33,7 +33,7 @@ func TestMeetsMinPlatformReqs(t *testing.T) {
 	}
 	runtimeOS = "darwin"
 	runtimeArch = "amd64"
-	meetsReqs, err = meetsMinPlatformReqs(context.Background())
+	meetsReqs, err = meetsMinPlatformReqs(t.Context())
 	require.Equal(t, false, meetsReqs)
 	require.ErrorContains(t, "error obtaining MacOS version", err)
 
@@ -41,7 +41,7 @@ func TestMeetsMinPlatformReqs(t *testing.T) {
 	execShellOutput = func(ctx context.Context, command string, args ...string) (string, error) {
 		return "10.4", nil
 	}
-	meetsReqs, err = meetsMinPlatformReqs(context.Background())
+	meetsReqs, err = meetsMinPlatformReqs(t.Context())
 	require.Equal(t, false, meetsReqs)
 	require.NoError(t, err)
 
@@ -49,7 +49,7 @@ func TestMeetsMinPlatformReqs(t *testing.T) {
 	execShellOutput = func(ctx context.Context, command string, args ...string) (string, error) {
 		return "10.14", nil
 	}
-	meetsReqs, err = meetsMinPlatformReqs(context.Background())
+	meetsReqs, err = meetsMinPlatformReqs(t.Context())
 	require.Equal(t, true, meetsReqs)
 	require.NoError(t, err)
 
@@ -57,7 +57,7 @@ func TestMeetsMinPlatformReqs(t *testing.T) {
 	execShellOutput = func(ctx context.Context, command string, args ...string) (string, error) {
 		return "10.15.7", nil
 	}
-	meetsReqs, err = meetsMinPlatformReqs(context.Background())
+	meetsReqs, err = meetsMinPlatformReqs(t.Context())
 	require.Equal(t, true, meetsReqs)
 	require.NoError(t, err)
 
@@ -65,18 +65,18 @@ func TestMeetsMinPlatformReqs(t *testing.T) {
 	execShellOutput = func(ctx context.Context, command string, args ...string) (string, error) {
 		return "tiger.lion", nil
 	}
-	meetsReqs, err = meetsMinPlatformReqs(context.Background())
+	meetsReqs, err = meetsMinPlatformReqs(t.Context())
 	require.Equal(t, false, meetsReqs)
 	require.ErrorContains(t, "error parsing version", err)
 
 	// Windows
 	runtimeOS = "windows"
 	runtimeArch = "amd64"
-	meetsReqs, err = meetsMinPlatformReqs(context.Background())
+	meetsReqs, err = meetsMinPlatformReqs(t.Context())
 	require.Equal(t, true, meetsReqs)
 	require.NoError(t, err)
 	runtimeArch = "arm64"
-	meetsReqs, err = meetsMinPlatformReqs(context.Background())
+	meetsReqs, err = meetsMinPlatformReqs(t.Context())
 	require.Equal(t, false, meetsReqs)
 	require.NoError(t, err)
 }
@@ -106,7 +106,7 @@ func TestWarnIfNotSupported(t *testing.T) {
 	runtimeOS = "linux"
 	runtimeArch = "amd64"
 	hook := logTest.NewGlobal()
-	WarnIfPlatformNotSupported(context.Background())
+	WarnIfPlatformNotSupported(t.Context())
 	require.LogsDoNotContain(t, hook, "Failed to detect host platform")
 	require.LogsDoNotContain(t, hook, "platform is not supported")
 
@@ -116,13 +116,13 @@ func TestWarnIfNotSupported(t *testing.T) {
 	runtimeOS = "darwin"
 	runtimeArch = "amd64"
 	hook = logTest.NewGlobal()
-	WarnIfPlatformNotSupported(context.Background())
+	WarnIfPlatformNotSupported(t.Context())
 	require.LogsContain(t, hook, "Failed to detect host platform")
 	require.LogsContain(t, hook, "error parsing version")
 
 	runtimeOS = "falseOs"
 	runtimeArch = "falseArch"
 	hook = logTest.NewGlobal()
-	WarnIfPlatformNotSupported(context.Background())
+	WarnIfPlatformNotSupported(t.Context())
 	require.LogsContain(t, hook, "platform is not supported")
 }

@@ -2,7 +2,6 @@ package util
 
 import (
 	"bytes"
-	"context"
 	"encoding/binary"
 	"testing"
 
@@ -23,7 +22,7 @@ func TestBlockSignature(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, beaconState.SetSlot(beaconState.Slot()+1))
-	proposerIdx, err := helpers.BeaconProposerIndex(context.Background(), beaconState)
+	proposerIdx, err := helpers.BeaconProposerIndex(t.Context(), beaconState)
 	assert.NoError(t, err)
 
 	assert.NoError(t, beaconState.SetSlot(slots.PrevSlot(beaconState.Slot())))
@@ -46,7 +45,7 @@ func TestRandaoReveal(t *testing.T) {
 	randaoReveal, err := RandaoReveal(beaconState, epoch, privKeys)
 	assert.NoError(t, err)
 
-	proposerIdx, err := helpers.BeaconProposerIndex(context.Background(), beaconState)
+	proposerIdx, err := helpers.BeaconProposerIndex(t.Context(), beaconState)
 	assert.NoError(t, err)
 	buf := make([]byte, fieldparams.RootLength)
 	binary.LittleEndian.PutUint64(buf, uint64(epoch))

@@ -1,7 +1,6 @@
 package electra_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/electra"
@@ -78,7 +77,7 @@ func TestProcessEpoch_CanProcessElectra(t *testing.T) {
 			TargetIndex: 1,
 		},
 	}))
-	err := electra.ProcessEpoch(context.Background(), st)
+	err := electra.ProcessEpoch(t.Context(), st)
 	require.NoError(t, err)
 	require.Equal(t, uint64(0), st.Slashings()[2], "Unexpected slashed balance")
 

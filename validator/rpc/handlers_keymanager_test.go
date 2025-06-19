@@ -2,7 +2,6 @@ package rpc
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -49,7 +48,7 @@ import (
 )
 
 func TestServer_ListKeystores(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	t.Run("wallet not ready", func(t *testing.T) {
 		m := &testutil.FakeValidator{}
 		vs, err := client.NewValidatorService(ctx, &client.Config{
@@ -132,7 +131,7 @@ func TestServer_ListKeystores(t *testing.T) {
 }
 
 func TestServer_ImportKeystores(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	localWalletDir := setupWalletDir(t)
 	defaultWalletPath = localWalletDir
 	opts := []accounts.Option{
@@ -353,7 +352,7 @@ func TestServer_ImportKeystores(t *testing.T) {
 }
 
 func TestServer_ImportKeystores_WrongKeymanagerKind(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	app := cli.App{}
 	set := flag.NewFlagSet("test", 0)
 	newDir := filepath.Join(t.TempDir(), "new")
@@ -404,7 +403,7 @@ func TestServer_ImportKeystores_WrongKeymanagerKind(t *testing.T) {
 
 func TestServer_DeleteKeystores(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range []bool{false, true} {
-		ctx := context.Background()
+		ctx := t.Context()
 		srv := setupServerWithWallet(t)
 
 		// We recover 3 accounts from a test mnemonic.
@@ -577,7 +576,7 @@ func TestServer_DeleteKeystores(t *testing.T) {
 func TestServer_DeleteKeystores_FailedSlashingProtectionExport(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range []bool{false, true} {
 		t.Run(fmt.Sprintf("minimalSlashingProtection:%v", isSlashingProtectionMinimal), func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			srv := setupServerWithWallet(t)
 
 			// We recover 3 accounts from a test mnemonic.
@@ -636,7 +635,7 @@ func TestServer_DeleteKeystores_FailedSlashingProtectionExport(t *testing.T) {
 }
 
 func TestServer_DeleteKeystores_WrongKeymanagerKind(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	app := cli.App{}
 	set := flag.NewFlagSet("test", 0)
 	newDir := filepath.Join(t.TempDir(), "new")
@@ -680,7 +679,7 @@ func TestServer_DeleteKeystores_WrongKeymanagerKind(t *testing.T) {
 }
 
 func setupServerWithWallet(t testing.TB) *Server {
-	ctx := context.Background()
+	ctx := t.Context()
 	localWalletDir := setupWalletDir(t)
 	defaultWalletPath = localWalletDir
 	opts := []accounts.Option{
@@ -714,7 +713,7 @@ func TestServer_SetVoluntaryExit(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	defaultWalletPath = setupWalletDir(t)
 	opts := []accounts.Option{
 		accounts.WithWalletDir(defaultWalletPath),
@@ -898,7 +897,7 @@ func TestServer_SetVoluntaryExit(t *testing.T) {
 }
 
 func TestServer_GetGasLimit(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	byteval, err := hexutil.Decode("0xaf2e7ba294e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2c06bd3713cb442072ae591493")
 	byteval2, err2 := hexutil.Decode("0x1234567878903438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2c06bd3713cb442072ae591493")
 	require.NoError(t, err)
@@ -977,7 +976,7 @@ func TestServer_SetGasLimit(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	beaconClient := validatormock.NewMockValidatorClient(ctrl)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	pubkey1, err := hexutil.Decode("0xaf2e7ba294e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2c06bd3713cb442072ae591493")
 	pubkey2, err2 := hexutil.Decode("0xbedefeaa94e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2cdddddddddddddddddddddddd")
@@ -1185,7 +1184,7 @@ func TestServer_SetGasLimit_InvalidPubKey(t *testing.T) {
 }
 
 func TestServer_DeleteGasLimit(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	pubkey1, err := hexutil.Decode("0xaf2e7ba294e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2c06bd3713cb442072ae591493")
 	pubkey2, err2 := hexutil.Decode("0xbedefeaa94e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2cdddddddddddddddddddddddd")
 	require.NoError(t, err)
@@ -1333,7 +1332,7 @@ func TestServer_DeleteGasLimit(t *testing.T) {
 }
 
 func TestServer_ListRemoteKeys(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	app := cli.App{}
 	set := flag.NewFlagSet("test", 0)
 	newDir := filepath.Join(t.TempDir(), "new")
@@ -1389,7 +1388,7 @@ func TestServer_ListRemoteKeys(t *testing.T) {
 }
 
 func TestServer_ImportRemoteKeys(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	app := cli.App{}
 	set := flag.NewFlagSet("test", 0)
 	newDir := filepath.Join(t.TempDir(), "new")
@@ -1450,7 +1449,7 @@ func TestServer_ImportRemoteKeys(t *testing.T) {
 }
 
 func TestServer_DeleteRemoteKeys(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	app := cli.App{}
 	set := flag.NewFlagSet("test", 0)
 	newDir := filepath.Join(t.TempDir(), "new")
@@ -1511,7 +1510,7 @@ func TestServer_DeleteRemoteKeys(t *testing.T) {
 }
 
 func TestServer_ListFeeRecipientByPubkey(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	pubkey := "0xaf2e7ba294e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2c06bd3713cb442072ae591493"
 	byteval, err := hexutil.Decode(pubkey)
 	require.NoError(t, err)
@@ -1589,7 +1588,7 @@ func TestServer_ListFeeRecipientByPubkey(t *testing.T) {
 }
 
 func TestServer_ListFeeRecipientByPubKey_NoFeeRecipientSet(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	vs, err := client.NewValidatorService(ctx, &client.Config{
 		Validator: &testutil.FakeValidator{},
@@ -1638,7 +1637,7 @@ func TestServer_FeeRecipientByPubkey(t *testing.T) {
 	defer ctrl.Finish()
 
 	beaconClient := validatormock.NewMockValidatorClient(ctrl)
-	ctx := context.Background()
+	ctx := t.Context()
 	pubkey := "0xaf2e7ba294e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2c06bd3713cb442072ae591493"
 	byteval, err := hexutil.Decode(pubkey)
 	require.NoError(t, err)
@@ -1848,7 +1847,7 @@ func TestServer_SetFeeRecipientByPubkey_InvalidFeeRecipient(t *testing.T) {
 }
 
 func TestServer_DeleteFeeRecipientByPubkey(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	pubkey := "0xaf2e7ba294e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2c06bd3713cb442072ae591493"
 	byteval, err := hexutil.Decode(pubkey)
 	require.NoError(t, err)
@@ -1940,7 +1939,7 @@ func TestServer_DeleteFeeRecipientByPubkey_InvalidPubKey(t *testing.T) {
 func TestServer_Graffiti(t *testing.T) {
 	graffiti := "graffiti"
 	m := &testutil.FakeValidator{}
-	vs, err := client.NewValidatorService(context.Background(), &client.Config{
+	vs, err := client.NewValidatorService(t.Context(), &client.Config{
 		Validator: m,
 	})
 	require.NoError(t, err)

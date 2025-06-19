@@ -67,7 +67,7 @@ func TestClient_IPC(t *testing.T) {
 	defer rpcClient.Close()
 	srv := &Service{}
 	srv.rpcClient = rpcClient
-	ctx := context.Background()
+	ctx := t.Context()
 	fix := fixtures()
 
 	params.SetupTestConfigCleanup(t)
@@ -160,7 +160,7 @@ func TestClient_IPC(t *testing.T) {
 }
 
 func TestClient_HTTP(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	fix := fixtures()
 
 	params.SetupTestConfigCleanup(t)
@@ -1001,7 +1001,7 @@ func TestClient_HTTP(t *testing.T) {
 }
 
 func TestReconstructFullBellatrixBlock(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	t.Run("nil block", func(t *testing.T) {
 		service := &Service{}
 
@@ -1093,7 +1093,7 @@ func TestReconstructFullBellatrixBlock(t *testing.T) {
 }
 
 func TestReconstructFullBellatrixBlockBatch(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	t.Run("nil block", func(t *testing.T) {
 		service := &Service{}
 
@@ -1421,7 +1421,7 @@ func TestServer_getPowBlockHashAtTerminalTotalDifficulty(t *testing.T) {
 				ExecutionBlock:     tt.currentPowBlock,
 				BlockByHashMap:     m,
 			}
-			b, e, err := client.GetTerminalBlockHash(context.Background(), 1)
+			b, e, err := client.GetTerminalBlockHash(t.Context(), 1)
 			if tt.errString != "" {
 				require.ErrorContains(t, tt.errString, err)
 			} else {
@@ -1988,7 +1988,7 @@ func TestHeaderByHash_NotFound(t *testing.T) {
 	srv := &Service{}
 	srv.rpcClient = RPCClientBad{}
 
-	_, err := srv.HeaderByHash(context.Background(), [32]byte{})
+	_, err := srv.HeaderByHash(t.Context(), [32]byte{})
 	assert.Equal(t, ethereum.NotFound, err)
 }
 
@@ -1996,7 +1996,7 @@ func TestHeaderByNumber_NotFound(t *testing.T) {
 	srv := &Service{}
 	srv.rpcClient = RPCClientBad{}
 
-	_, err := srv.HeaderByNumber(context.Background(), big.NewInt(100))
+	_, err := srv.HeaderByNumber(t.Context(), big.NewInt(100))
 	assert.Equal(t, ethereum.NotFound, err)
 }
 
@@ -2380,7 +2380,7 @@ func newPayloadV4Setup(t *testing.T, status *pb.PayloadStatus, payload *pb.Execu
 
 func TestReconstructBlindedBlockBatch(t *testing.T) {
 	t.Run("empty response works", func(t *testing.T) {
-		ctx := context.Background()
+		ctx := t.Context()
 		cli, srv := newMockEngine(t)
 		srv.registerDefault(func(*jsonrpcMessage, http.ResponseWriter, *http.Request) {
 
@@ -2391,7 +2391,7 @@ func TestReconstructBlindedBlockBatch(t *testing.T) {
 		require.Equal(t, 0, len(results))
 	})
 	t.Run("expected error for nil response", func(t *testing.T) {
-		ctx := context.Background()
+		ctx := t.Context()
 		slot, err := slots.EpochStart(params.BeaconConfig().DenebForkEpoch)
 		require.NoError(t, err)
 		blk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, slot, 0)
@@ -2425,7 +2425,7 @@ func Test_ExchangeCapabilities(t *testing.T) {
 			err := json.NewEncoder(w).Encode(resp)
 			require.NoError(t, err)
 		}))
-		ctx := context.Background()
+		ctx := t.Context()
 		logHook := logTest.NewGlobal()
 
 		rpcClient, err := rpc.DialHTTP(srv.URL)
@@ -2458,7 +2458,7 @@ func Test_ExchangeCapabilities(t *testing.T) {
 			err := json.NewEncoder(w).Encode(resp)
 			require.NoError(t, err)
 		}))
-		ctx := context.Background()
+		ctx := t.Context()
 
 		rpcClient, err := rpc.DialHTTP(srv.URL)
 		require.NoError(t, err)
@@ -2493,7 +2493,7 @@ func TestReconstructBlobSidecars(t *testing.T) {
 	sb, err := blocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	t.Run("all seen", func(t *testing.T) {
 		hi := mockSummary(t, []bool{true, true, true, true, true, true})
 		verifiedBlobs, err := client.ReconstructBlobSidecars(ctx, sb, r, hi)

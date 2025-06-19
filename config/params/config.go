@@ -9,6 +9,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -313,6 +314,14 @@ type BeaconChainConfig struct {
 	// DeprecatedMaxBlobsPerBlockFulu defines the max blobs that could exist in a block post Fulu hard fork.
 	// Deprecated: This field is no longer supported. Avoid using it.
 	DeprecatedMaxBlobsPerBlockFulu int `yaml:"MAX_BLOBS_PER_BLOCK_FULU" spec:"true"`
+}
+
+func (b *BeaconChainConfig) ExecutionRequestLimits() enginev1.ExecutionRequestLimits {
+	return enginev1.ExecutionRequestLimits{
+		Deposits:       b.MaxDepositRequestsPerPayload,
+		Withdrawals:    b.MaxWithdrawalsPerPayload,
+		Consolidations: b.MaxConsolidationsRequestsPerPayload,
+	}
 }
 
 type BlobScheduleEntry struct {

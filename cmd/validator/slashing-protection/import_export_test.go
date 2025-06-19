@@ -3,6 +3,9 @@ package historycmd
 import (
 	"encoding/json"
 	"flag"
+	"path/filepath"
+	"testing"
+
 	"github.com/OffchainLabs/prysm/v6/cmd"
 	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
 	"github.com/OffchainLabs/prysm/v6/io/file"
@@ -13,8 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/validator/slashing-protection-history/format"
 	mocks "github.com/OffchainLabs/prysm/v6/validator/testing"
 	"github.com/urfave/cli/v2"
-	"path/filepath"
-	"testing"
 )
 
 func setupCliCtx(
