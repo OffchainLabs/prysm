@@ -2246,77 +2246,6 @@ func (d *DataColumnSidecar) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	return
 }
 
-// MarshalSSZ ssz marshals the DataColumnIdentifier object
-func (d *DataColumnIdentifier) MarshalSSZ() ([]byte, error) {
-	return ssz.MarshalSSZ(d)
-}
-
-// MarshalSSZTo ssz marshals the DataColumnIdentifier object to a target array
-func (d *DataColumnIdentifier) MarshalSSZTo(buf []byte) (dst []byte, err error) {
-	dst = buf
-
-	// Field (0) 'BlockRoot'
-	if size := len(d.BlockRoot); size != 32 {
-		err = ssz.ErrBytesLengthFn("--.BlockRoot", size, 32)
-		return
-	}
-	dst = append(dst, d.BlockRoot...)
-
-	// Field (1) 'Index'
-	dst = ssz.MarshalUint64(dst, d.Index)
-
-	return
-}
-
-// UnmarshalSSZ ssz unmarshals the DataColumnIdentifier object
-func (d *DataColumnIdentifier) UnmarshalSSZ(buf []byte) error {
-	var err error
-	size := uint64(len(buf))
-	if size != 40 {
-		return ssz.ErrSize
-	}
-
-	// Field (0) 'BlockRoot'
-	if cap(d.BlockRoot) == 0 {
-		d.BlockRoot = make([]byte, 0, len(buf[0:32]))
-	}
-	d.BlockRoot = append(d.BlockRoot, buf[0:32]...)
-
-	// Field (1) 'Index'
-	d.Index = ssz.UnmarshallUint64(buf[32:40])
-
-	return err
-}
-
-// SizeSSZ returns the ssz encoded size in bytes for the DataColumnIdentifier object
-func (d *DataColumnIdentifier) SizeSSZ() (size int) {
-	size = 40
-	return
-}
-
-// HashTreeRoot ssz hashes the DataColumnIdentifier object
-func (d *DataColumnIdentifier) HashTreeRoot() ([32]byte, error) {
-	return ssz.HashWithDefaultHasher(d)
-}
-
-// HashTreeRootWith ssz hashes the DataColumnIdentifier object with a hasher
-func (d *DataColumnIdentifier) HashTreeRootWith(hh *ssz.Hasher) (err error) {
-	indx := hh.Index()
-
-	// Field (0) 'BlockRoot'
-	if size := len(d.BlockRoot); size != 32 {
-		err = ssz.ErrBytesLengthFn("--.BlockRoot", size, 32)
-		return
-	}
-	hh.PutBytes(d.BlockRoot)
-
-	// Field (1) 'Index'
-	hh.PutUint64(d.Index)
-
-	hh.Merkleize(indx)
-	return
-}
-
 // MarshalSSZ ssz marshals the DataColumnsByRootIdentifier object
 func (d *DataColumnsByRootIdentifier) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(d)
@@ -2432,6 +2361,135 @@ func (d *DataColumnsByRootIdentifier) HashTreeRootWith(hh *ssz.Hasher) (err erro
 		numItems := uint64(len(d.Columns))
 		hh.MerkleizeWithMixin(subIndx, numItems, ssz.CalculateLimit(128, numItems, 8))
 	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the StatusV2 object
+func (s *StatusV2) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(s)
+}
+
+// MarshalSSZTo ssz marshals the StatusV2 object to a target array
+func (s *StatusV2) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'ForkDigest'
+	if size := len(s.ForkDigest); size != 4 {
+		err = ssz.ErrBytesLengthFn("--.ForkDigest", size, 4)
+		return
+	}
+	dst = append(dst, s.ForkDigest...)
+
+	// Field (1) 'FinalizedRoot'
+	if size := len(s.FinalizedRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.FinalizedRoot", size, 32)
+		return
+	}
+	dst = append(dst, s.FinalizedRoot...)
+
+	// Field (2) 'FinalizedEpoch'
+	dst = ssz.MarshalUint64(dst, uint64(s.FinalizedEpoch))
+
+	// Field (3) 'HeadRoot'
+	if size := len(s.HeadRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.HeadRoot", size, 32)
+		return
+	}
+	dst = append(dst, s.HeadRoot...)
+
+	// Field (4) 'HeadSlot'
+	dst = ssz.MarshalUint64(dst, uint64(s.HeadSlot))
+
+	// Field (5) 'EarliestAvailableSlot'
+	dst = ssz.MarshalUint64(dst, uint64(s.EarliestAvailableSlot))
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the StatusV2 object
+func (s *StatusV2) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 92 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'ForkDigest'
+	if cap(s.ForkDigest) == 0 {
+		s.ForkDigest = make([]byte, 0, len(buf[0:4]))
+	}
+	s.ForkDigest = append(s.ForkDigest, buf[0:4]...)
+
+	// Field (1) 'FinalizedRoot'
+	if cap(s.FinalizedRoot) == 0 {
+		s.FinalizedRoot = make([]byte, 0, len(buf[4:36]))
+	}
+	s.FinalizedRoot = append(s.FinalizedRoot, buf[4:36]...)
+
+	// Field (2) 'FinalizedEpoch'
+	s.FinalizedEpoch = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch(ssz.UnmarshallUint64(buf[36:44]))
+
+	// Field (3) 'HeadRoot'
+	if cap(s.HeadRoot) == 0 {
+		s.HeadRoot = make([]byte, 0, len(buf[44:76]))
+	}
+	s.HeadRoot = append(s.HeadRoot, buf[44:76]...)
+
+	// Field (4) 'HeadSlot'
+	s.HeadSlot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[76:84]))
+
+	// Field (5) 'EarliestAvailableSlot'
+	s.EarliestAvailableSlot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[84:92]))
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the StatusV2 object
+func (s *StatusV2) SizeSSZ() (size int) {
+	size = 92
+	return
+}
+
+// HashTreeRoot ssz hashes the StatusV2 object
+func (s *StatusV2) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(s)
+}
+
+// HashTreeRootWith ssz hashes the StatusV2 object with a hasher
+func (s *StatusV2) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'ForkDigest'
+	if size := len(s.ForkDigest); size != 4 {
+		err = ssz.ErrBytesLengthFn("--.ForkDigest", size, 4)
+		return
+	}
+	hh.PutBytes(s.ForkDigest)
+
+	// Field (1) 'FinalizedRoot'
+	if size := len(s.FinalizedRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.FinalizedRoot", size, 32)
+		return
+	}
+	hh.PutBytes(s.FinalizedRoot)
+
+	// Field (2) 'FinalizedEpoch'
+	hh.PutUint64(uint64(s.FinalizedEpoch))
+
+	// Field (3) 'HeadRoot'
+	if size := len(s.HeadRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.HeadRoot", size, 32)
+		return
+	}
+	hh.PutBytes(s.HeadRoot)
+
+	// Field (4) 'HeadSlot'
+	hh.PutUint64(uint64(s.HeadSlot))
+
+	// Field (5) 'EarliestAvailableSlot'
+	hh.PutUint64(uint64(s.EarliestAvailableSlot))
 
 	hh.Merkleize(indx)
 	return
