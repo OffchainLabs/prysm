@@ -414,10 +414,9 @@ func (s *Server) handleAttestations(ctx context.Context, r *http.Request) (attFa
 					Index:   i,
 					Message: "Incorrect attestation signature: " + err.Error(),
 				})
-				i++
-				continue
+			} else {
+				validAttestations = append(validAttestations, &sourceAtt)
 			}
-			validAttestations = append(validAttestations, &sourceAtt)
 			i++
 		}
 
