@@ -49,12 +49,12 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 		requestedColumnsLog = requestedColumns
 	}
 
-	log.WithFields(logrus.Fields{
+	log := log.WithFields(logrus.Fields{
 		"remotePeer":       remotePeer,
 		"requestedColumns": requestedColumnsLog,
 		"startSlot":        request.StartSlot,
 		"count":            request.Count,
-	}).Debug("Serving data columns by range request")
+	})
 
 	// Validate the request regarding rate limiting.
 	if err := s.rateLimiter.validateRequest(stream, rateLimitingAmount); err != nil {
@@ -70,8 +70,11 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 		return errors.Wrap(err, "validate data columns by range")
 	}
 	if rangeParameters == nil {
+		log.Debug("No data columns by range to serve")
 		return nil
 	}
+
+	log.Debug("Serving data columns by range request")
 
 	// Ticker to stagger out large requests.
 	ticker := time.NewTicker(time.Second)
