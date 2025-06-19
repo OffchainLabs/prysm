@@ -271,17 +271,17 @@ func (s *Server) handleAttestationsElectra(
 		sszLen := (&eth.SingleAttestation{}).SizeSSZ()
 		body, err := readRequestBody(r)
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "Could not read request body")
+			return nil, nil, errors.Wrap(err, "could not read request body")
 		}
 		if len(body) < sszLen {
-			return nil, nil, errors.New("No data submitted")
+			return nil, nil, errors.New("no data submitted")
 		}
 
 		i := 0
 		for len(body) >= sszLen {
 			var sourceAtt eth.SingleAttestation
 			if err := sourceAtt.UnmarshalSSZ(body[:sszLen]); err != nil {
-				return nil, nil, errors.Wrap(err, "Could not unmarshal ssz attestation")
+				return nil, nil, errors.Wrap(err, "could not unmarshal ssz attestation")
 			}
 			body = body[sszLen:]
 
@@ -298,7 +298,7 @@ func (s *Server) handleAttestationsElectra(
 		}
 
 		if len(body) > 0 {
-			return nil, nil, errors.New("Could not decode request body, extra bytes found")
+			return nil, nil, errors.New("could not decode request body, extra bytes found")
 		}
 	} else {
 		var sourceAttestations []*structs.SingleAttestation
@@ -306,9 +306,9 @@ func (s *Server) handleAttestationsElectra(
 		err = json.NewDecoder(r.Body).Decode(&req.Data)
 		switch {
 		case errors.Is(err, io.EOF):
-			return nil, nil, errors.New("No data submitted")
+			return nil, nil, errors.New("no data submitted")
 		case err != nil:
-			return nil, nil, errors.Wrap(err, "Could not decode request body")
+			return nil, nil, errors.Wrap(err, "could not decode request body")
 		}
 
 		if err = json.Unmarshal(req.Data, &sourceAttestations); err != nil {
@@ -394,10 +394,10 @@ func (s *Server) handleAttestations(ctx context.Context, r *http.Request) (attFa
 	if httputil.IsRequestSsz(r) {
 		body, err := readRequestBody(r)
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "Could not read request body")
+			return nil, nil, errors.Wrap(err, "could not read request body")
 		}
 		if len(body) == 0 {
-			return nil, nil, errors.New("No data submitted")
+			return nil, nil, errors.New("no data submitted")
 		}
 
 		i := 0
@@ -405,7 +405,7 @@ func (s *Server) handleAttestations(ctx context.Context, r *http.Request) (attFa
 			sszLen := 1 + int(body[0])
 			var sourceAtt eth.Attestation
 			if err := sourceAtt.UnmarshalSSZ(body[:sszLen]); err != nil {
-				return nil, nil, errors.Wrap(err, "Could not unmarshal ssz attestation")
+				return nil, nil, errors.Wrap(err, "could not unmarshal ssz attestation")
 			}
 			body = body[sszLen:]
 
@@ -422,7 +422,7 @@ func (s *Server) handleAttestations(ctx context.Context, r *http.Request) (attFa
 		}
 
 		if len(body) > 0 {
-			return nil, nil, errors.New("Could not decode request body, extra bytes found")
+			return nil, nil, errors.New("could not decode request body, extra bytes found")
 		}
 	} else {
 		var sourceAttestations []*structs.Attestation
@@ -430,7 +430,7 @@ func (s *Server) handleAttestations(ctx context.Context, r *http.Request) (attFa
 		err = json.NewDecoder(r.Body).Decode(&req.Data)
 		switch {
 		case errors.Is(err, io.EOF):
-			return nil, nil, errors.New("No data submitted")
+			return nil, nil, errors.New("no data submitted")
 		case err != nil:
 			return nil, nil, errors.Wrap(err, "Could not decode request body")
 		}

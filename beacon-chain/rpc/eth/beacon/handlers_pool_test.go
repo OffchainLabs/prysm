@@ -611,7 +611,7 @@ func TestSubmitAttestations(t *testing.T) {
 			e := &httputil.DefaultJsonError{}
 			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 			assert.Equal(t, http.StatusBadRequest, e.Code)
-			assert.Equal(t, true, strings.Contains(e.Message, "No data submitted"))
+			assert.Equal(t, true, strings.Contains(e.Message, "no data submitted"))
 		})
 		t.Run("empty", func(t *testing.T) {
 			var body bytes.Buffer
@@ -813,7 +813,7 @@ func TestSubmitAttestations(t *testing.T) {
 				e := &httputil.DefaultJsonError{}
 				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 				assert.Equal(t, http.StatusBadRequest, e.Code)
-				assert.Equal(t, true, strings.Contains(e.Message, "No data submitted"))
+				assert.Equal(t, true, strings.Contains(e.Message, "no data submitted"))
 			})
 			t.Run("no body SSZ", func(t *testing.T) {
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
@@ -827,7 +827,7 @@ func TestSubmitAttestations(t *testing.T) {
 				e := &httputil.DefaultJsonError{}
 				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 				assert.Equal(t, http.StatusBadRequest, e.Code)
-				assert.Equal(t, true, strings.Contains(e.Message, "No data submitted"))
+				assert.Equal(t, true, strings.Contains(e.Message, "no data submitted"))
 			})
 			t.Run("empty", func(t *testing.T) {
 				var body bytes.Buffer
@@ -1025,7 +1025,7 @@ func TestSubmitAttestations(t *testing.T) {
 				e := &httputil.DefaultJsonError{}
 				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 				assert.Equal(t, http.StatusBadRequest, e.Code)
-				assert.Equal(t, true, strings.Contains(e.Message, "No data submitted"))
+				assert.Equal(t, true, strings.Contains(e.Message, "no data submitted"))
 			})
 			t.Run("no body SSZ", func(t *testing.T) {
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
@@ -1039,7 +1039,7 @@ func TestSubmitAttestations(t *testing.T) {
 				e := &httputil.DefaultJsonError{}
 				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 				assert.Equal(t, http.StatusBadRequest, e.Code)
-				assert.Equal(t, true, strings.Contains(e.Message, "No data submitted"))
+				assert.Equal(t, true, strings.Contains(e.Message, "no data submitted"))
 			})
 			t.Run("empty", func(t *testing.T) {
 				var body bytes.Buffer
