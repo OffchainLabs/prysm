@@ -193,15 +193,15 @@ var (
 	}
 
 	// Maps all the RPC messages which are to updated in altair.
-	altairMapping = map[string]bool{
-		BeaconBlocksByRangeMessageName: true,
-		BeaconBlocksByRootsMessageName: true,
-		MetadataMessageName:            true,
+	altairMapping = map[string]string{
+		BeaconBlocksByRangeMessageName: SchemaVersionV2,
+		BeaconBlocksByRootsMessageName: SchemaVersionV2,
+		MetadataMessageName:            SchemaVersionV2,
 	}
 
 	// Maps all the RPC messages which are to updated in fulu.
-	fuluMapping = map[string]bool{
-		MetadataMessageName: true,
+	fuluMapping = map[string]string{
+		MetadataMessageName: SchemaVersionV3,
 	}
 
 	versionMapping = map[string]bool{
@@ -344,13 +344,17 @@ func TopicFromMessage(msg string, epoch primitives.Epoch) (string, error) {
 	beaconConfig := params.BeaconConfig()
 
 	// Check if the message is to be updated in fulu.
-	if epoch >= beaconConfig.FuluForkEpoch && fuluMapping[msg] {
-		return protocolPrefix + msg + SchemaVersionV3, nil
+	if epoch >= beaconConfig.FuluForkEpoch {
+		if version, ok := fuluMapping[msg]; ok {
+			return protocolPrefix + msg + version, nil
+		}
 	}
 
 	// Check if the message is to be updated in altair.
-	if epoch >= beaconConfig.AltairForkEpoch && altairMapping[msg] {
-		return protocolPrefix + msg + SchemaVersionV2, nil
+	if epoch >= beaconConfig.AltairForkEpoch {
+		if version, ok := altairMapping[msg]; ok {
+			return protocolPrefix + msg + version, nil
+		}
 	}
 
 	return protocolPrefix + msg + SchemaVersionV1, nil
