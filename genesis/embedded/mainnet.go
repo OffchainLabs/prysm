@@ -1,7 +1,7 @@
 //go:build !noMainnetGenesis
 // +build !noMainnetGenesis
 
-package genesis
+package embedded
 
 import (
 	_ "embed"

@@ -350,3 +350,7 @@ type WriteOnlyDeposits interface {
 type WriteOnlyProposerLookahead interface {
 	SetProposerLookahead([]primitives.ValidatorIndex) error
 }
+
+func IsNil(s BeaconState) bool {
+	return s == nil || s.IsNil()
+}
