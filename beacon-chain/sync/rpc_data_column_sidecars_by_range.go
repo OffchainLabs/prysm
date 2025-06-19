@@ -154,7 +154,7 @@ func (s *Service) streamDataColumnBatch(ctx context.Context, batch blockBatch, q
 				return quota, errors.Wrap(err, "write data column sidecar chunk")
 			}
 
-			s.rateLimiter.add(stream, 1)
+			s.rateLimiter.add(stream, rateLimitingAmount)
 			quota -= 1
 
 			// Stop streaming results once the quota of writes for the request is consumed.
