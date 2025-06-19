@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
+	"github.com/sirupsen/logrus"
 )
 
 type healthMonitor struct {
@@ -57,18 +58,23 @@ func (m *healthMonitor) performHealthCheck() {
 	defer m.Unlock()
 
 	ishealthy := m.v.FindHealthyHost(m.ctx)
-	if ishealthy == m.isHealthy {
-		// if status didn't change then skip
-		return
-	}
 	if ishealthy {
 		m.fails = 0
 	} else {
+		log.WithFields(logrus.Fields{
+			"fails":    m.fails,
+			"maxFails": m.maxFails,
+		}).Errorf("Failed health check, beacon node is unresponsive")
 		m.fails++
 	}
 	if m.maxFails > 0 && m.fails >= m.maxFails {
 		log.Infof("Maximum health checks of %d reached. Stopping health check routine", m.maxFails)
 		m.cancel()
+		return
+	}
+	if ishealthy == m.isHealthy {
+		// is not a new status so skip update
+		return
 	}
 	m.isHealthy = ishealthy
 	// Non-blocking send to channel
