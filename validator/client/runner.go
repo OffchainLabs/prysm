@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/api/client"
-	"github.com/OffchainLabs/prysm/v6/api/client/event"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -26,7 +25,8 @@ var backOffPeriod = 10 * time.Second
 
 // runner encapsulates the main validator routine.
 type runner struct {
-	validator iface.Validator
+	validator     iface.Validator
+	healthMonitor *healthMonitor
 }
 
 // newRunner creates a new runner instance and performs all necessary initialization.
@@ -35,7 +35,7 @@ type runner struct {
 // Order of operations:
 // 1 - Initialize validator data
 // 2 - Wait for validator activation
-func newRunner(ctx context.Context, v iface.Validator) (*runner, error) {
+func newRunner(ctx context.Context, v iface.Validator, monitor *healthMonitor) (*runner, error) {
 	// Initialize validator and get head slot
 	headSlot, err := initializeValidatorAndGetHeadSlot(ctx, v)
 	if err != nil {
@@ -68,7 +68,8 @@ func newRunner(ctx context.Context, v iface.Validator) (*runner, error) {
 	}
 
 	return &runner{
-		validator: v,
+		validator:     v,
+		healthMonitor: monitor,
 	}, nil
 }
 
@@ -85,14 +86,13 @@ func (r *runner) run(ctx context.Context) {
 	cleanup := v.Done
 	defer cleanup()
 
-	healthTracker := v.HealthTracker()
 	for {
 		select {
 		case <-ctx.Done():
 			log.Info("Context canceled, stopping validator")
 			return // Exit if context is canceled.
 		case slot := <-v.NextSlot():
-			if !healthTracker.IsHealthy(ctx) {
+			if !r.healthMonitor.IsHealthy() {
 				log.Warn("Beacon node unhealthy, stopping runner")
 				return
 			}
@@ -310,46 +310,46 @@ func handleAssignmentError(err error, slot primitives.Slot) {
 	}
 }
 
-func runHealthCheckRoutine(ctx context.Context, cancel context.CancelFunc, v iface.Validator, maxHealthChecks int) {
-	log.Info("Starting health check routine for beacon node apis")
-	// just check one a slot
-	interval := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
-	ticker := time.NewTicker(interval)
-	go func() {
-		// Perform health check and handle host switching/event stream
-		performHealthCheck := func() bool {
-			isHealthy := v.FindHealthyHost(ctx)
-
-			// Reconnect event stream if needed
-			if isHealthy && !v.EventStreamIsRunning() {
-				log.Info("Event stream reconnecting...")
-				go v.StartEventStream(ctx, event.DefaultEventTopics)
-			}
-			return isHealthy
-		}
-
-		// Initial check immediately
-		performHealthCheck()
-
-		healthCheckCounter := 0
-		// Continue periodic checks
-		for {
-			select {
-			case <-ticker.C:
-				ishealthy := performHealthCheck()
-				if ishealthy {
-					healthCheckCounter = 0
-				} else {
-					healthCheckCounter++
-				}
-				if maxHealthChecks > 0 && healthCheckCounter >= maxHealthChecks {
-					log.Infof("Maximum health checks of %d reached. Stopping health check routine", maxHealthChecks)
-					cancel()
-				}
-			case <-ctx.Done():
-				log.Info("Context canceled, stopping health checking")
-				return
-			}
-		}
-	}()
-}
+//func runHealthCheckRoutine(ctx context.Context, cancel context.CancelFunc, v iface.Validator, maxHealthChecks int) {
+//	log.Info("Starting health check routine for beacon node apis")
+//	// just check one a slot
+//	interval := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+//	ticker := time.NewTicker(interval)
+//	go func() {
+//		// Perform health check and handle host switching/event stream
+//		performHealthCheck := func() bool {
+//			isHealthy := v.FindHealthyHost(ctx)
+//
+//			// Reconnect event stream if needed
+//			if isHealthy && !v.EventStreamIsRunning() {
+//				log.Info("Event stream reconnecting...")
+//				go v.StartEventStream(ctx, event.DefaultEventTopics)
+//			}
+//			return isHealthy
+//		}
+//
+//		// Initial check immediately
+//		performHealthCheck()
+//
+//		healthCheckCounter := 0
+//		// Continue periodic checks
+//		for {
+//			select {
+//			case <-ticker.C:
+//				ishealthy := performHealthCheck()
+//				if ishealthy {
+//					healthCheckCounter = 0
+//				} else {
+//					healthCheckCounter++
+//				}
+//				if maxHealthChecks > 0 && healthCheckCounter >= maxHealthChecks {
+//					log.Infof("Maximum health checks of %d reached. Stopping health check routine", maxHealthChecks)
+//					cancel()
+//				}
+//			case <-ctx.Done():
+//				log.Info("Context canceled, stopping health checking")
+//				return
+//			}
+//		}
+//	}()
+//}

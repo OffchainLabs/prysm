@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/api/client"
-	"github.com/OffchainLabs/prysm/v6/api/client/beacon/health"
 	eventClient "github.com/OffchainLabs/prysm/v6/api/client/event"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/async/event"
@@ -1242,10 +1241,6 @@ func (v *validator) EventStreamIsRunning() bool {
 	return v.validatorClient.EventStreamIsRunning()
 }
 
-func (v *validator) HealthTracker() health.Tracker {
-	return v.nodeClient.HealthTracker()
-}
-
 func (v *validator) Host() string {
 	return v.validatorClient.Host()
 }
@@ -1266,7 +1261,7 @@ func (v *validator) FindHealthyHost(ctx context.Context) bool {
 	// Tail-recursive closure keeps retry count private.
 	var check func(remaining int) bool
 	check = func(remaining int) bool {
-		if v.HealthTracker().CheckHealth(ctx) { // healthy → done
+		if v.nodeClient.IsHealthy(ctx) { // healthy → done
 			return true
 		}
 		if remaining == 0 || !features.Get().EnableBeaconRESTApi {

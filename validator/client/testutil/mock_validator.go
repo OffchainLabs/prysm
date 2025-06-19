@@ -7,7 +7,6 @@ import (
 	"time"
 
 	api "github.com/OffchainLabs/prysm/v6/api/client"
-	"github.com/OffchainLabs/prysm/v6/api/client/beacon/health"
 	"github.com/OffchainLabs/prysm/v6/api/client/event"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -65,7 +64,6 @@ type FakeValidator struct {
 	ProposerSettingsErr               error
 	Km                                keymanager.IKeymanager
 	graffiti                          string
-	Tracker                           health.Tracker
 	PublicKey                         string
 	RolesAtRet                        []iface.ValidatorRole
 	CanChangeHost                     bool
@@ -336,10 +334,6 @@ func (*FakeValidator) ProcessEvent(_ context.Context, _ *event.Event) {}
 
 func (*FakeValidator) EventStreamIsRunning() bool {
 	return true
-}
-
-func (fv *FakeValidator) HealthTracker() health.Tracker {
-	return fv.Tracker
 }
 
 func (*FakeValidator) Host() string {

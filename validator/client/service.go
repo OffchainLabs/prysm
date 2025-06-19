@@ -233,9 +233,8 @@ func (v *ValidatorService) Start() {
 		eventsChannel:                  make(chan *eventClient.Event, 1),
 	}
 
-	healthTracker := v.validator.HealthTracker()
-	// Start the health check routine
-	runHealthCheckRoutine(v.ctx, v.cancel, v.validator, v.MaxHealthChecks)
+	hm := newHealthMonitor(v.ctx, v.cancel, v.MaxHealthChecks, v.validator)
+	hm.Start()
 
 	for {
 		select {
@@ -243,16 +242,21 @@ func (v *ValidatorService) Start() {
 			log.Info("Validator service context canceled, stopping")
 			v.closeClientFunc()
 			return
-		case isHealthy := <-healthTracker.HealthUpdates():
+		case isHealthy := <-hm.HealthyChan():
 			if !isHealthy {
 				// wait until the next health tracker update
 				log.Warn("Validator service health check failed, waiting for healthy beacon node...")
 				continue
 			}
+			// Reconnect event stream if needed
+			if v.validator.EventStreamIsRunning() {
+				go v.validator.StartEventStream(v.ctx, eventClient.DefaultEventTopics)
+			}
+
 			log.Info("Starting validator runner")
 			runnerCtx, runnerCancel := context.WithCancel(v.ctx)
 
-			runner, err := newRunner(runnerCtx, v.validator)
+			runner, err := newRunner(runnerCtx, v.validator, hm)
 			if err != nil {
 				log.WithError(err).Error("Could not create validator runner")
 				runnerCancel() // Ensure context is cancelled
