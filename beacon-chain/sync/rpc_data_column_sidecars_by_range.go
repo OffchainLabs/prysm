@@ -17,13 +17,13 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// We count a single request as a single rate limiting amount, regardless of the number of columns requested.
+const rateLimitingAmount = 1
+
 var notDataColumnsByRangeIdentifiersError = errors.New("not data columns by range identifiers")
 
 // dataColumnSidecarsByRangeRPCHandler looks up the request data columns from the database from a given start slot index
 func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg interface{}, stream libp2pcore.Stream) error {
-	// We count a single request as a single rate limiting amount, regardless of the number of columns requested.
-	const rateLimitingAmount = 1
-
 	ctx, span := trace.StartSpan(ctx, "sync.DataColumnSidecarsByRangeHandler")
 	defer span.End()
 
