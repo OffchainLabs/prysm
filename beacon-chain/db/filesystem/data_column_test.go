@@ -19,7 +19,7 @@ func TestNewDataColumnStorage(t *testing.T) {
 
 	t.Run("No base path", func(t *testing.T) {
 		_, err := NewDataColumnStorage(ctx)
-		require.ErrorIs(t, err, errNoBasePath)
+		require.ErrorIs(t, err, errNoDataColumnBasePath)
 	})
 
 	t.Run("Nominal", func(t *testing.T) {

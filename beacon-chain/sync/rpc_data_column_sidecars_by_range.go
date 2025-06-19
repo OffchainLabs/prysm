@@ -204,7 +204,7 @@ func validateDataColumnsByRange(r *pb.DataColumnSidecarsByRangeRequest, currentS
 	// [max(current_epoch - MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS, DENEB_FORK_EPOCH), current_epoch]
 	// where current_epoch is defined by the current wall-clock time,
 	// and clients MUST support serving requests of data columns on this range.
-	minStartSlot, err := DataColumnsRPCMinValidSlot(currentSlot)
+	minStartSlot, err := dataColumnsRPCMinValidSlot(currentSlot)
 	if err != nil {
 		return rangeParams{}, errors.Wrap(p2ptypes.ErrInvalidRequest, "DataColumnsRPCMinValidSlot error")
 	}

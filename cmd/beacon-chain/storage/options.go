@@ -57,21 +57,23 @@ func validateLayoutFlag(_ *cli.Context, v string) error {
 // create a cancellable context. If we switch to using App.RunContext, we can set up this cancellation in the cmd
 // package instead, and allow the functional options to tap into context cancellation.
 func BeaconNodeOptions(c *cli.Context) ([]node.Option, error) {
-	e, err := blobRetentionEpoch(c)
+	blobRetentionEpoch, err := blobRetentionEpoch(c)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "blob retention epoch")
 	}
-	opts := []node.Option{
-		node.WithBlobStorageOptions(
-			filesystem.WithBlobRetentionEpochs(e),
-			filesystem.WithBasePath(blobStoragePath(c)),
-			filesystem.WithLayout(c.String(BlobStorageLayout.Name)), // This is validated in the Action func for BlobStorageLayout.
-		),
-		node.WithDataColumnStorageOptions(
-			filesystem.WithDataColumnRetentionEpochs(e),
-			filesystem.WithDataColumnBasePath(dataColumnStoragePath(c)),
-		),
-	}
+
+	blobStorageOptions := node.WithBlobStorageOptions(
+		filesystem.WithBlobRetentionEpochs(blobRetentionEpoch),
+		filesystem.WithBasePath(blobStoragePath(c)),
+		filesystem.WithLayout(c.String(BlobStorageLayout.Name)), // This is validated in the Action func for BlobStorageLayout.
+	)
+
+	dataColumnStorageOption := node.WithDataColumnStorageOptions(
+		filesystem.WithDataColumnRetentionEpochs(blobRetentionEpoch),
+		filesystem.WithDataColumnBasePath(dataColumnStoragePath(c)),
+	)
+
+	opts := []node.Option{blobStorageOptions, dataColumnStorageOption}
 	return opts, nil
 }
 
@@ -90,6 +92,7 @@ func dataColumnStoragePath(c *cli.Context) string {
 		// append a "data-columns" subdir to the end of the data dir path
 		dataColumnsPath = path.Join(c.String(cmd.DataDirFlag.Name), "data-columns")
 	}
+
 	return dataColumnsPath
 }
 

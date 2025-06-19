@@ -433,63 +433,6 @@ func SendDataColumnSidecarsByRangeRequest(
 	return roDataColumns, nil
 }
 
-func readChunkedDataColumnSideCar(
-	stream network.Stream,
-	p2pApi p2p.P2P,
-	ctxMap ContextByteVersions,
-	validation []DataColumnResponseValidation,
-) (*blocks.RODataColumn, error) {
-	// Read the status code from the stream.
-	statusCode, errMessage, err := ReadStatusCode(stream, p2pApi.Encoding())
-	if err != nil {
-		return nil, errors.Wrap(err, "read status code")
-	}
-
-	if statusCode != 0 {
-		return nil, errors.Wrap(errDataColumnChunkedReadFailure, errMessage)
-	}
-	// Retrieve the fork digest.
-	ctxBytes, err := readContextFromStream(stream)
-	if err != nil {
-		return nil, errors.Wrap(err, "read context from stream")
-	}
-
-	// Check if the fork digest is recognized.
-	msgVersion, ok := ctxMap[bytesutil.ToBytes4(ctxBytes)]
-	if !ok {
-		return nil, errors.Errorf("unrecognized fork digest %#x", ctxBytes)
-	}
-
-	// Check if we are on Fulu.
-	// Only deneb is supported at this time, because we lack a fork-spanning interface/union type for blobs.
-	if msgVersion < version.Fulu {
-		return nil, errors.Errorf(
-			"unexpected context bytes for DataColumnSidecar, ctx=%#x, msgVersion=%v, minimalSupportedVersion=%v",
-			ctxBytes, version.String(msgVersion), version.String(version.Fulu),
-		)
-	}
-
-	// Decode the data column sidecar from the stream.
-	dataColumnSidecar := new(ethpb.DataColumnSidecar)
-	if err := p2pApi.Encoding().DecodeWithMaxLength(stream, dataColumnSidecar); err != nil {
-		return nil, errors.Wrap(err, "failed to decode the protobuf-encoded BlobSidecar message from RPC chunk stream")
-	}
-
-	// Create a read-only data column from the data column sidecar.
-	roDataColumn, err := blocks.NewRODataColumn(dataColumnSidecar)
-	if err != nil {
-		return nil, errors.Wrap(err, "new read only data column")
-	}
-
-	// Run validation functions.
-	for _, val := range validation {
-		if !val(roDataColumn) {
-			return nil, nil
-		}
-	}
-	return &roDataColumn, nil
-}
-
 // BlobResponseValidation represents a function that can validate aspects of a single unmarshaled blob
 // that was received from a peer in response to an rpc request.
 type BlobResponseValidation func(blocks.ROBlob) error
@@ -706,4 +649,62 @@ func readChunkedBlobSidecar(stream network.Stream, encoding encoder.NetworkEncod
 	}
 
 	return rob, nil
+}
+
+func readChunkedDataColumnSideCar(
+	stream network.Stream,
+	p2pApi p2p.P2P,
+	ctxMap ContextByteVersions,
+	validationFunctions []DataColumnResponseValidation,
+) (*blocks.RODataColumn, error) {
+	// Read the status code from the stream.
+	statusCode, errMessage, err := ReadStatusCode(stream, p2pApi.Encoding())
+	if err != nil {
+		return nil, errors.Wrap(err, "read status code")
+	}
+
+	if statusCode != 0 {
+		return nil, errors.Wrap(errDataColumnChunkedReadFailure, errMessage)
+	}
+
+	// Retrieve the fork digest.
+	ctxBytes, err := readContextFromStream(stream)
+	if err != nil {
+		return nil, errors.Wrap(err, "read context from stream")
+	}
+
+	// Check if the fork digest is recognized.
+	msgVersion, ok := ctxMap[bytesutil.ToBytes4(ctxBytes)]
+	if !ok {
+		return nil, errors.Errorf("unrecognized fork digest %#x", ctxBytes)
+	}
+
+	// Check if we are on Fulu.
+	if msgVersion < version.Fulu {
+		return nil, errors.Errorf(
+			"unexpected context bytes for DataColumnSidecar, ctx=%#x, msgVersion=%v, minimalSupportedVersion=%v",
+			ctxBytes, version.String(msgVersion), version.String(version.Fulu),
+		)
+	}
+
+	// Decode the data column sidecar from the stream.
+	dataColumnSidecar := new(ethpb.DataColumnSidecar)
+	if err := p2pApi.Encoding().DecodeWithMaxLength(stream, dataColumnSidecar); err != nil {
+		return nil, errors.Wrap(err, "failed to decode the protobuf-encoded BlobSidecar message from RPC chunk stream")
+	}
+
+	// Create a read-only data column from the data column sidecar.
+	roDataColumn, err := blocks.NewRODataColumn(dataColumnSidecar)
+	if err != nil {
+		return nil, errors.Wrap(err, "new read only data column")
+	}
+
+	// Run validation functions.
+	for _, validationFunction := range validationFunctions {
+		if !validationFunction(roDataColumn) {
+			return nil, nil
+		}
+	}
+
+	return &roDataColumn, nil
 }

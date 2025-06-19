@@ -212,7 +212,7 @@ func RequestMissingDataColumnsByRange(
 	currentSlot := clock.CurrentSlot()
 
 	// Compute the minimum slot for which we should serve data columns.
-	minimumSlot, err := DataColumnsRPCMinValidSlot(currentSlot)
+	minimumSlot, err := dataColumnsRPCMinValidSlot(currentSlot)
 	if err != nil {
 		return nil, errors.Wrap(err, "data columns RPC min valid slot")
 	}

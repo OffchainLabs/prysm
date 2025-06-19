@@ -641,7 +641,6 @@ func (s *Service) isDataAvailable(
 	ctx context.Context,
 	root [fieldparams.RootLength]byte,
 	signedBlock interfaces.ReadOnlySignedBeaconBlock,
-	startWaiting ...chan<- bool, // For tests purposes only
 ) error {
 	block := signedBlock.Block()
 	if block == nil {
@@ -650,7 +649,7 @@ func (s *Service) isDataAvailable(
 
 	blockVersion := block.Version()
 	if blockVersion >= version.Fulu {
-		return s.areDataColumnsAvailable(ctx, root, block, startWaiting...)
+		return s.areDataColumnsAvailable(ctx, root, block)
 	}
 
 	if blockVersion >= version.Deneb {
@@ -666,7 +665,6 @@ func (s *Service) areDataColumnsAvailable(
 	ctx context.Context,
 	root [fieldparams.RootLength]byte,
 	block interfaces.ReadOnlyBeaconBlock,
-	startWaiting ...chan<- bool, // For tests purposes only
 ) error {
 	// We are only required to check within MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS
 	blockSlot, currentSlot := block.Slot(), s.CurrentSlot()
@@ -734,9 +732,8 @@ func (s *Service) areDataColumnsAvailable(
 		return nil
 	}
 
-	// Notify the caller that we are waiting for data columns.
-	if len(startWaiting) > 0 && startWaiting[0] != nil {
-		startWaiting[0] <- true
+	if s.startWaitingDataColumnSidecars != nil {
+		s.startWaitingDataColumnSidecars <- true
 	}
 
 	// Log for DA checks that cross over into the next slot; helpful for debugging.
