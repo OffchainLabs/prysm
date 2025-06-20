@@ -265,7 +265,7 @@ func SendDataColumnSidecarsByRootRequest(
 	roDataColumns := make([]blocks.RODataColumn, 0, reqCount)
 
 	for i := uint64(0); ; /* no stop condition */ i++ {
-		roDataColumn, err := readChunkedDataColumnSideCar(stream, p2pApi, ctxMap, []DataColumnResponseValidation{dataColumnValidatorFromRootReq(req)})
+		roDataColumn, err := readChunkedDataColumnSideCar(stream, p2pApi, ctxMap, dataColumnValidatorFromRootReq(req))
 		if errors.Is(err, io.EOF) {
 			// End of stream.
 			break
@@ -395,16 +395,15 @@ func SendDataColumnSidecarsByRangeRequest(
 		max = req.Count * fieldparams.NumberOfColumns
 	}
 
-	vfuncs := []DataColumnResponseValidation{
-		dataColumnValidatorFromRangeReq(req),
-		dataColumnIndexValidatorFromRangeReq(req),
-	}
-
 	// Read the data column sidecars from the stream.
 	roDataColumns := make([]blocks.RODataColumn, 0, max)
 
 	for i := uint64(0); ; /* no stop condition */ i++ {
-		roDataColumn, err := readChunkedDataColumnSideCar(stream, p2pApi, ctxMap, vfuncs)
+		roDataColumn, err := readChunkedDataColumnSideCar(
+			stream, p2pApi, ctxMap,
+			dataColumnValidatorFromRangeReq(req),
+			dataColumnIndexValidatorFromRangeReq(req),
+		)
 		if errors.Is(err, io.EOF) {
 			// End of stream.
 			break
@@ -655,7 +654,7 @@ func readChunkedDataColumnSideCar(
 	stream network.Stream,
 	p2pApi p2p.P2P,
 	ctxMap ContextByteVersions,
-	validationFunctions []DataColumnResponseValidation,
+	validationFunctions ...DataColumnResponseValidation,
 ) (*blocks.RODataColumn, error) {
 	// Read the status code from the stream.
 	statusCode, errMessage, err := ReadStatusCode(stream, p2pApi.Encoding())

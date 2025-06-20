@@ -2,7 +2,6 @@ package sync
 
 import (
 	"context"
-	"math"
 	"slices"
 	"time"
 
@@ -12,138 +11,104 @@ import (
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
 
 	"github.com/sirupsen/logrus"
 )
 
-func (s *Service) streamDataColumnBatch(ctx context.Context, batch blockBatch, wQuota uint64, wantedDataColumnIndices []uint64, stream libp2pcore.Stream) (uint64, error) {
-	_, span := trace.StartSpan(ctx, "sync.streamDataColumnBatch")
-	defer span.End()
+// We count a single request as a single rate limiting amount, regardless of the number of columns requested.
+const rateLimitingAmount = 1
 
-	// Defensive check to guard against underflow.
-	if wQuota == 0 {
-		return 0, nil
-	}
-
-	for _, block := range batch.canonical() {
-		// Get the block blockRoot.
-		blockRoot := block.Root()
-
-		verifiedRODataColumns, err := s.cfg.dataColumnStorage.Get(blockRoot, wantedDataColumnIndices)
-		if err != nil {
-			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
-			return wQuota, errors.Wrapf(err, "get data column sidecars: block root %#x", blockRoot)
-		}
-
-		for _, verifiedRODataColumn := range verifiedRODataColumns {
-			SetStreamWriteDeadline(stream, defaultWriteDuration)
-			if chunkErr := WriteDataColumnSidecarChunk(stream, s.cfg.chain, s.cfg.p2p.Encoding(), verifiedRODataColumn.DataColumnSidecar); chunkErr != nil {
-				log.WithError(chunkErr).Debug("Could not send a chunked response")
-				s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
-				tracing.AnnotateError(span, chunkErr)
-				return wQuota, chunkErr
-			}
-
-			s.rateLimiter.add(stream, 1)
-			wQuota -= 1
-
-			// Stop streaming results once the quota of writes for the request is consumed.
-			if wQuota == 0 {
-				return 0, nil
-			}
-		}
-	}
-
-	return wQuota, nil
-}
+var notDataColumnsByRangeIdentifiersError = errors.New("not data columns by range identifiers")
 
 // dataColumnSidecarsByRangeRPCHandler looks up the request data columns from the database from a given start slot index
 func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg interface{}, stream libp2pcore.Stream) error {
 	ctx, span := trace.StartSpan(ctx, "sync.DataColumnSidecarsByRangeHandler")
 	defer span.End()
 
+	// Check if the message type is the one expected.
+	request, ok := msg.(*pb.DataColumnSidecarsByRangeRequest)
+	if !ok {
+		return notDataColumnsByRangeIdentifiersError
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, respTimeout)
 	defer cancel()
 
 	SetRPCStreamDeadlines(stream)
+	beaconConfig := params.BeaconConfig()
+	maxRequestDataColumnSidecars := beaconConfig.MaxRequestDataColumnSidecars
+	remotePeer := stream.Conn().RemotePeer()
 
-	r, ok := msg.(*pb.DataColumnSidecarsByRangeRequest)
-	if !ok {
-		return errors.New("message is not type *pb.DataColumnSidecarsByRangeRequest")
-	}
-
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
-
-	// Compute requested columns.
-	requestedColumns := r.Columns
-	requestedColumnsCount := uint64(len(requestedColumns))
+	requestedColumns := request.Columns
 
 	// Format log fields.
 	var requestedColumnsLog interface{} = "all"
-
-	if requestedColumnsCount != numberOfColumns {
+	if uint64(len(requestedColumns)) != beaconConfig.NumberOfColumns {
 		requestedColumnsLog = requestedColumns
 	}
 
-	// Get the remote peer.
-	remotePeer := stream.Conn().RemotePeer()
-
-	log.WithFields(logrus.Fields{
+	log := log.WithFields(logrus.Fields{
 		"remotePeer":       remotePeer,
 		"requestedColumns": requestedColumnsLog,
-		"startSlot":        r.StartSlot,
-		"count":            r.Count,
-	}).Debug("Serving data columns by range request")
+		"startSlot":        request.StartSlot,
+		"count":            request.Count,
+	})
 
-	// TODO: Uncomment out of devnet.
-	// if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
-	// 	return err
-	// }
+	// Validate the request regarding rate limiting.
+	if err := s.rateLimiter.validateRequest(stream, rateLimitingAmount); err != nil {
+		return errors.Wrap(err, "rate limiter validate request")
+	}
 
-	rp, err := validateDataColumnsByRange(r, s.cfg.chain.CurrentSlot())
+	// Validate the request regarding its parameters.
+	rangeParameters, err := validateDataColumnsByRange(request, s.cfg.chain.CurrentSlot())
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
 		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
 		tracing.AnnotateError(span, err)
-		return err
+		return errors.Wrap(err, "validate data columns by range")
 	}
+	if rangeParameters == nil {
+		log.Debug("No data columns by range to serve")
+		return nil
+	}
+
+	log.Debug("Serving data columns by range request")
 
 	// Ticker to stagger out large requests.
 	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
 
-	batcher, err := newBlockRangeBatcher(rp, s.cfg.beaconDB, s.rateLimiter, s.cfg.chain.IsCanonical, ticker)
+	batcher, err := newBlockRangeBatcher(*rangeParameters, s.cfg.beaconDB, s.rateLimiter, s.cfg.chain.IsCanonical, ticker)
 	if err != nil {
-		log.WithError(err).Info("Error in DataColumnSidecarsByRange batch")
 		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
 		tracing.AnnotateError(span, err)
-		return err
+		return errors.Wrap(err, "new block range batcher")
 	}
 
 	// Derive the wanted columns for the request.
-	wantedColumns := make([]uint64, len(r.Columns))
-	copy(wantedColumns, r.Columns)
+	wantedColumns := make([]uint64, len(request.Columns))
+	copy(wantedColumns, request.Columns)
 
 	// Sort the wanted columns.
-	slices.Sort[[]uint64](wantedColumns)
+	slices.Sort(wantedColumns)
 
 	var batch blockBatch
-	wQuota := params.BeaconConfig().MaxRequestDataColumnSidecars
 	for batch, ok = batcher.next(ctx, stream); ok; batch, ok = batcher.next(ctx, stream) {
 		batchStart := time.Now()
-		wQuota, err = s.streamDataColumnBatch(ctx, batch, wQuota, wantedColumns, stream)
+		maxRequestDataColumnSidecars, err = s.streamDataColumnBatch(ctx, batch, maxRequestDataColumnSidecars, wantedColumns, stream)
 		rpcDataColumnsByRangeResponseLatency.Observe(float64(time.Since(batchStart).Milliseconds()))
 		if err != nil {
 			return err
 		}
-		// once the quota is reached, we're done serving the request
-		if wQuota == 0 {
+
+		// Once the quota is reached, we're done serving the request.
+		if maxRequestDataColumnSidecars == 0 {
+			log.WithField("initialQuota", beaconConfig.MaxRequestDataColumnSidecars).Debug("Reached quota for data column sidecars by range request")
 			break
 		}
 	}
+
 	if err := batch.error(); err != nil {
 		log.WithError(err).Debug("error in DataColumnSidecarsByRange batch")
 
@@ -160,79 +125,94 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 	return nil
 }
 
-// Set the count limit to the number of data columns in a batch.
-func columnBatchLimit() uint64 {
-	// TODO: Do something correct
-	return math.MaxUint64
+func (s *Service) streamDataColumnBatch(ctx context.Context, batch blockBatch, quota uint64, wantedDataColumnIndices []uint64, stream libp2pcore.Stream) (uint64, error) {
+	_, span := trace.StartSpan(ctx, "sync.streamDataColumnBatch")
+	defer span.End()
+
+	// Defensive check to guard against underflow.
+	if quota == 0 {
+		return 0, nil
+	}
+
+	// Loop over the blocks in the batch.
+	for _, block := range batch.canonical() {
+		// Get the block blockRoot.
+		blockRoot := block.Root()
+
+		// Retrieve the data column sidecars from the store.
+		verifiedRODataColumns, err := s.cfg.dataColumnStorage.Get(blockRoot, wantedDataColumnIndices)
+		if err != nil {
+			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
+			return quota, errors.Wrapf(err, "get data column sidecars: block root %#x", blockRoot)
+		}
+
+		// Write the retrieved sidecars to the stream.
+		for _, verifiedRODataColumn := range verifiedRODataColumns {
+			sidecar := verifiedRODataColumn.DataColumnSidecar
+			SetStreamWriteDeadline(stream, defaultWriteDuration)
+
+			if err := WriteDataColumnSidecarChunk(stream, s.cfg.chain, s.cfg.p2p.Encoding(), sidecar); err != nil {
+				s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
+				tracing.AnnotateError(span, err)
+				return quota, errors.Wrap(err, "write data column sidecar chunk")
+			}
+
+			s.rateLimiter.add(stream, rateLimitingAmount)
+			quota -= 1
+
+			// Stop streaming results once the quota of writes for the request is consumed.
+			if quota == 0 {
+				return 0, nil
+			}
+		}
+	}
+
+	return quota, nil
 }
 
-// TODO: Generalize between data columns and blobs, while the validation parameters used are different they
-// are the same value in the config. Can this be safely abstracted ?
-func validateDataColumnsByRange(r *pb.DataColumnSidecarsByRangeRequest, currentSlot primitives.Slot) (rangeParams, error) {
-	if r.Count == 0 {
-		return rangeParams{}, errors.Wrap(p2ptypes.ErrInvalidRequest, "invalid request Count parameter")
+func validateDataColumnsByRange(request *pb.DataColumnSidecarsByRangeRequest, currentSlot primitives.Slot) (*rangeParams, error) {
+	startSlot, count := request.StartSlot, request.Count
+
+	if count == 0 {
+		return nil, errors.Wrap(p2ptypes.ErrInvalidRequest, "invalid request count parameter")
 	}
 
-	rp := rangeParams{
-		start: r.StartSlot,
-		size:  r.Count,
-	}
-	// Peers may overshoot the current slot when in initial sync, so we don't want to penalize them by treating the
-	// request as an error. So instead we return a set of params that acts as a noop.
-	if rp.start > currentSlot {
-		return rangeParams{start: currentSlot, end: currentSlot, size: 0}, nil
-	}
-
-	var err error
-	rp.end, err = rp.start.SafeAdd(rp.size - 1)
+	endSlot, err := request.StartSlot.SafeAdd(count - 1)
 	if err != nil {
-		return rangeParams{}, errors.Wrap(p2ptypes.ErrInvalidRequest, "overflow start + count -1")
+		return nil, errors.Wrap(p2ptypes.ErrInvalidRequest, "overflow start + count -1")
 	}
 
-	// Get current epoch from current slot.
-	currentEpoch := slots.ToEpoch(currentSlot)
-
-	maxRequest := params.MaxRequestBlock(currentEpoch)
-	// Allow some wiggle room, up to double the MaxRequestBlocks past the current slot,
-	// to give nodes syncing close to the head of the chain some margin for error.
-	maxStart, err := currentSlot.SafeAdd(maxRequest * 2)
-	if err != nil {
-		return rangeParams{}, errors.Wrap(p2ptypes.ErrInvalidRequest, "current + maxRequest * 2 > max uint")
+	// Peers may overshoot the current slot when in initial sync,
+	// so we don't want to penalize them by treating the request as an error.
+	if startSlot > currentSlot {
+		return nil, nil
 	}
 
-	// Clients MUST keep a record of signed data column sidecars seen on the epoch range
-	// [max(current_epoch - MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS, DENEB_FORK_EPOCH), current_epoch]
-	// where current_epoch is defined by the current wall-clock time,
-	// and clients MUST support serving requests of data columns on this range.
+	// Compute the oldest slot we'll allow a peer to request, based on the current slot.
 	minStartSlot, err := dataColumnsRPCMinValidSlot(currentSlot)
 	if err != nil {
-		return rangeParams{}, errors.Wrap(p2ptypes.ErrInvalidRequest, "DataColumnsRPCMinValidSlot error")
+		return nil, errors.Wrap(p2ptypes.ErrInvalidRequest, "data columns RPC min valid slot")
 	}
 
-	if rp.start > maxStart {
-		return rangeParams{}, errors.Wrap(p2ptypes.ErrInvalidRequest, "start > maxStart")
+	// Return early if there is nothing to serve.
+	if endSlot < minStartSlot {
+		return nil, nil
 	}
 
-	if rp.start < minStartSlot {
-		rp.start = minStartSlot
+	// Do not serve sidecars for slots before the minimum valid slot or after the current slot.
+	startSlot = max(startSlot, minStartSlot)
+	endSlot = min(endSlot, currentSlot)
+
+	sizeMinusOne, err := endSlot.SafeSub(uint64(startSlot))
+	if err != nil {
+		return nil, errors.Errorf("overflow end - start: %d - %d - should never happen", endSlot, startSlot)
 	}
 
-	if rp.end > currentSlot {
-		rp.end = currentSlot
+	size, err := sizeMinusOne.SafeAdd(1)
+	if err != nil {
+		return nil, errors.Wrap(p2ptypes.ErrInvalidRequest, "overflow end - start + 1")
 	}
 
-	if rp.end < rp.start {
-		rp.end = rp.start
-	}
-
-	limit := columnBatchLimit()
-	if limit > maxRequest {
-		limit = maxRequest
-	}
-
-	if rp.size > limit {
-		rp.size = limit
-	}
-
-	return rp, nil
+	rangeParameters := &rangeParams{start: startSlot, end: endSlot, size: uint64(size)}
+	return rangeParameters, nil
 }

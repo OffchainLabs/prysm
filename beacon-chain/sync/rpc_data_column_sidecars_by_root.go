@@ -170,5 +170,10 @@ func dataColumnsRPCMinValidSlot(currentSlot primitives.Slot) (primitives.Slot, e
 		minStartEpoch = currEpoch - minReqEpochs
 	}
 
-	return slots.EpochStart(minStartEpoch)
+	epochStart, err := slots.EpochStart(minStartEpoch)
+	if err != nil {
+		return 0, errors.Wrapf(err, "epoch start for epoch %d", minStartEpoch)
+	}
+
+	return epochStart, nil
 }
