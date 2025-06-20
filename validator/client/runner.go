@@ -203,13 +203,11 @@ func initializeValidatorAndGetHeadSlot(ctx context.Context, v iface.Validator) (
 				continue
 			}
 
-			log.WithError(err).Fatal("Could not determine if beacon chain started")
+			return 0, errors.Wrap(err, "Could not determine if beacon chain started")
 		}
 
 		if err := v.WaitForKeymanagerInitialization(ctx); err != nil {
-			// log.Fatal will prevent defer from being called
-			v.Done()
-			log.WithError(err).Fatal("Wallet is not ready")
+			return 0, errors.Wrap(err, "Wallet is not ready")
 		}
 
 		if err := v.WaitForSync(ctx); err != nil {
@@ -218,11 +216,11 @@ func initializeValidatorAndGetHeadSlot(ctx context.Context, v iface.Validator) (
 				continue
 			}
 
-			log.WithError(err).Fatal("Could not determine if beacon node synced")
+			return 0, errors.Wrap(err, "Could not determine if beacon node synced")
 		}
 
 		if err := v.WaitForActivation(ctx); err != nil {
-			log.WithError(err).Fatal("Could not wait for validator activation")
+			return 0, errors.Wrap(err, "Could not wait for validator activation")
 		}
 
 		headSlot, err = v.CanonicalHeadSlot(ctx)
@@ -241,7 +239,7 @@ func initializeValidatorAndGetHeadSlot(ctx context.Context, v iface.Validator) (
 				continue
 			}
 
-			log.WithError(err).Fatal("Could not succeed with doppelganger check")
+			return 0, errors.Wrap(err, "Could not succeed with doppelganger check")
 		}
 		break
 	}
