@@ -3332,17 +3332,27 @@ func testIsAvailableSetup(t *testing.T, params testIsAvailableParams) (context.C
 	signedBeaconBlock, err := util.GenerateFullBlockFulu(genesisState, secretKeys, conf, 10 /*block slot*/)
 	require.NoError(t, err)
 
-	root, err := signedBeaconBlock.Block.HashTreeRoot()
+	block := signedBeaconBlock.Block
+	bodyRoot, err := block.Body.HashTreeRoot()
 	require.NoError(t, err)
 
-	dataColumnsParams := make([]util.DataColumnParams, 0, len(params.columnsToSave))
+	root, err := block.HashTreeRoot()
+	require.NoError(t, err)
+
+	dataColumnsParams := make([]util.DataColumnParam, 0, len(params.columnsToSave))
 	for _, i := range params.columnsToSave {
-		dataColumnParam := util.DataColumnParams{ColumnIndex: i}
+		dataColumnParam := util.DataColumnParam{
+			Index:         i,
+			Slot:          block.Slot,
+			ProposerIndex: block.ProposerIndex,
+			ParentRoot:    block.ParentRoot,
+			StateRoot:     block.StateRoot,
+			BodyRoot:      bodyRoot[:],
+		}
 		dataColumnsParams = append(dataColumnsParams, dataColumnParam)
 	}
 
-	dataColumnParamsByBlockRoot := util.DataColumnsParamsByRoot{root: dataColumnsParams}
-	_, verifiedRODataColumns := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
+	_, verifiedRODataColumns := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnsParams)
 
 	err = dataColumnStorage.Save(verifiedRODataColumns)
 	require.NoError(t, err)
@@ -3402,38 +3412,47 @@ func TestIsDataAvailable(t *testing.T) {
 	})
 
 	t.Run("Fulu - some initially missing data columns (no reconstruction)", func(t *testing.T) {
+		startWaiting := make(chan bool)
+
 		testParams := testIsAvailableParams{
-			options:       []Option{WithCustodyInfo(&peerdas.CustodyInfo{})},
+			options:       []Option{WithCustodyInfo(&peerdas.CustodyInfo{}), WithStartWaitingDataColumnSidecars(startWaiting)},
 			columnsToSave: []uint64{1, 17, 19, 75, 102, 117, 119}, // 119 is not needed, 42 and 87 are missing
 
 			blobKzgCommitmentsCount: 3,
 		}
 
 		ctx, _, service, root, signed := testIsAvailableSetup(t, testParams)
+		block := signed.Block()
+		slot := block.Slot()
+		proposerIndex := block.ProposerIndex()
+		parentRoot := block.ParentRoot()
+		stateRoot := block.StateRoot()
+		bodyRoot, err := block.Body().HashTreeRoot()
+		require.NoError(t, err)
 
-		var wrongRoot [fieldparams.RootLength]byte
-		copy(wrongRoot[:], root[:])
-		wrongRoot[0]++ // change the root to simulate a wrong root
+		_, verifiedSidecarsWrongRoot := util.CreateTestVerifiedRoDataColumnSidecars(
+			t,
+			[]util.DataColumnParam{
+				{Index: 42, Slot: slot + 1}, // Needed index, but not for this slot.
+			})
 
-		_, verifiedSidecarsWrongRoot := util.CreateTestVerifiedRoDataColumnSidecars(t, util.DataColumnsParamsByRoot{wrongRoot: {
-			{ColumnIndex: 42}, // needed
-		}})
+		_, verifiedSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, []util.DataColumnParam{
+			{Index: 87, Slot: slot, ProposerIndex: proposerIndex, ParentRoot: parentRoot[:], StateRoot: stateRoot[:], BodyRoot: bodyRoot[:]}, // Needed index
+			{Index: 1, Slot: slot, ProposerIndex: proposerIndex, ParentRoot: parentRoot[:], StateRoot: stateRoot[:], BodyRoot: bodyRoot[:]},  // Not needed index
+			{Index: 42, Slot: slot, ProposerIndex: proposerIndex, ParentRoot: parentRoot[:], StateRoot: stateRoot[:], BodyRoot: bodyRoot[:]}, // Needed index
+		})
 
-		_, verifiedSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, util.DataColumnsParamsByRoot{root: {
-			{ColumnIndex: 87}, // needed
-			{ColumnIndex: 1},  // not needed
-			{ColumnIndex: 42}, // needed
-		}})
+		go func() {
+			<-startWaiting
 
-		time.AfterFunc(10*time.Millisecond, func() {
 			err := service.dataColumnStorage.Save(verifiedSidecarsWrongRoot)
 			require.NoError(t, err)
 
 			err = service.dataColumnStorage.Save(verifiedSidecars)
 			require.NoError(t, err)
-		})
+		}()
 
-		err := service.isDataAvailable(ctx, root, signed)
+		err = service.isDataAvailable(ctx, root, signed)
 		require.NoError(t, err)
 	})
 
@@ -3442,6 +3461,9 @@ func TestIsDataAvailable(t *testing.T) {
 			missingColumns = uint64(2)
 			cgc            = 128
 		)
+
+		startWaiting := make(chan bool)
+
 		var custodyInfo peerdas.CustodyInfo
 		custodyInfo.TargetGroupCount.SetValidatorsCustodyRequirement(cgc)
 		custodyInfo.ToAdvertiseGroupCount.Set(cgc)
@@ -3454,41 +3476,61 @@ func TestIsDataAvailable(t *testing.T) {
 		}
 
 		testParams := testIsAvailableParams{
-			options:                 []Option{WithCustodyInfo(&custodyInfo)},
+			options:                 []Option{WithCustodyInfo(&custodyInfo), WithStartWaitingDataColumnSidecars(startWaiting)},
 			columnsToSave:           indices,
 			blobKzgCommitmentsCount: 3,
 		}
 
 		ctx, _, service, root, signed := testIsAvailableSetup(t, testParams)
+		block := signed.Block()
+		slot := block.Slot()
+		proposerIndex := block.ProposerIndex()
+		parentRoot := block.ParentRoot()
+		stateRoot := block.StateRoot()
+		bodyRoot, err := block.Body().HashTreeRoot()
+		require.NoError(t, err)
 
-		dataColumnParams := make([]util.DataColumnParams, 0, missingColumns)
+		dataColumnParams := make([]util.DataColumnParam, 0, missingColumns)
 		for i := minimumColumnsCountToReconstruct - missingColumns; i < minimumColumnsCountToReconstruct; i++ {
-			dataColumnParam := util.DataColumnParams{ColumnIndex: i}
+			dataColumnParam := util.DataColumnParam{
+				Index:         i,
+				Slot:          slot,
+				ProposerIndex: proposerIndex,
+				ParentRoot:    parentRoot[:],
+				StateRoot:     stateRoot[:],
+				BodyRoot:      bodyRoot[:],
+			}
+
 			dataColumnParams = append(dataColumnParams, dataColumnParam)
 		}
 
-		_, verifiedSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, util.DataColumnsParamsByRoot{root: dataColumnParams})
+		_, verifiedSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParams)
 
-		time.AfterFunc(10*time.Millisecond, func() {
+		go func() {
+			<-startWaiting
+
 			err := service.dataColumnStorage.Save(verifiedSidecars)
 			require.NoError(t, err)
-		})
+		}()
 
-		err := service.isDataAvailable(ctx, root, signed)
+		err = service.isDataAvailable(ctx, root, signed)
 		require.NoError(t, err)
 	})
 
 	t.Run("Fulu - some columns are definitively missing", func(t *testing.T) {
+		startWaiting := make(chan bool)
+
 		params := testIsAvailableParams{
-			options:                 []Option{WithCustodyInfo(&peerdas.CustodyInfo{})},
+			options:                 []Option{WithCustodyInfo(&peerdas.CustodyInfo{}), WithStartWaitingDataColumnSidecars(startWaiting)},
 			blobKzgCommitmentsCount: 3,
 		}
 
 		ctx, cancel, service, root, signed := testIsAvailableSetup(t, params)
 
-		time.AfterFunc(10*time.Millisecond, func() {
+		go func() {
+			<-startWaiting
 			cancel()
-		})
+		}()
 
 		err := service.isDataAvailable(ctx, root, signed)
 		require.NotNil(t, err)

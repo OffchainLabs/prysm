@@ -14,7 +14,6 @@ import (
 )
 
 var (
-	// BlobStoragePathFlag defines a flag to start the beacon chain from a give genesis state file.
 	BlobStoragePathFlag = &cli.PathFlag{
 		Name:  "blob-path",
 		Usage: "Location for blob storage. Default location will be a 'blobs' directory next to the beacon db.",
@@ -29,6 +28,10 @@ var (
 		Name:  "blob-storage-layout",
 		Usage: layoutFlagUsage(),
 		Value: filesystem.LayoutNameFlat,
+	}
+	DataColumnStoragePathFlag = &cli.PathFlag{
+		Name:  "data-column-path",
+		Usage: "Location for data column storage. Default location will be a 'data-columns' directory next to the beacon db.",
 	}
 )
 
@@ -54,15 +57,23 @@ func validateLayoutFlag(_ *cli.Context, v string) error {
 // create a cancellable context. If we switch to using App.RunContext, we can set up this cancellation in the cmd
 // package instead, and allow the functional options to tap into context cancellation.
 func BeaconNodeOptions(c *cli.Context) ([]node.Option, error) {
-	e, err := blobRetentionEpoch(c)
+	blobRetentionEpoch, err := blobRetentionEpoch(c)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "blob retention epoch")
 	}
-	opts := []node.Option{node.WithBlobStorageOptions(
-		filesystem.WithBlobRetentionEpochs(e),
+
+	blobStorageOptions := node.WithBlobStorageOptions(
+		filesystem.WithBlobRetentionEpochs(blobRetentionEpoch),
 		filesystem.WithBasePath(blobStoragePath(c)),
 		filesystem.WithLayout(c.String(BlobStorageLayout.Name)), // This is validated in the Action func for BlobStorageLayout.
-	)}
+	)
+
+	dataColumnStorageOption := node.WithDataColumnStorageOptions(
+		filesystem.WithDataColumnRetentionEpochs(blobRetentionEpoch),
+		filesystem.WithDataColumnBasePath(dataColumnStoragePath(c)),
+	)
+
+	opts := []node.Option{blobStorageOptions, dataColumnStorageOption}
 	return opts, nil
 }
 
@@ -73,6 +84,16 @@ func blobStoragePath(c *cli.Context) string {
 		blobsPath = path.Join(c.String(cmd.DataDirFlag.Name), "blobs")
 	}
 	return blobsPath
+}
+
+func dataColumnStoragePath(c *cli.Context) string {
+	dataColumnsPath := c.Path(DataColumnStoragePathFlag.Name)
+	if dataColumnsPath == "" {
+		// append a "data-columns" subdir to the end of the data dir path
+		dataColumnsPath = path.Join(c.String(cmd.DataDirFlag.Name), "data-columns")
+	}
+
+	return dataColumnsPath
 }
 
 var errInvalidBlobRetentionEpochs = errors.New("value is smaller than spec minimum")

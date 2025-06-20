@@ -7,6 +7,7 @@ import (
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
@@ -18,7 +19,7 @@ func TestNewDataColumnStorage(t *testing.T) {
 
 	t.Run("No base path", func(t *testing.T) {
 		_, err := NewDataColumnStorage(ctx)
-		require.ErrorIs(t, err, errNoBasePath)
+		require.ErrorIs(t, err, errNoDataColumnBasePath)
 	})
 
 	t.Run("Nominal", func(t *testing.T) {
@@ -40,32 +41,18 @@ func TestWarmCache(t *testing.T) {
 
 	_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 		t,
-		util.DataColumnsParamsByRoot{
-			{0}: {
-				{Slot: 33, ColumnIndex: 2, DataColumn: []byte{1, 2, 3}}, // Period 0 - Epoch 1
-				{Slot: 33, ColumnIndex: 4, DataColumn: []byte{2, 3, 4}}, // Period 0 - Epoch 1
-			},
-			{1}: {
-				{Slot: 128_002, ColumnIndex: 2, DataColumn: []byte{1, 2, 3}}, // Period 0 - Epoch 4000
-				{Slot: 128_002, ColumnIndex: 4, DataColumn: []byte{2, 3, 4}}, // Period 0 - Epoch 4000
-			},
-			{2}: {
-				{Slot: 128_003, ColumnIndex: 1, DataColumn: []byte{1, 2, 3}}, // Period 0 - Epoch 4000
-				{Slot: 128_003, ColumnIndex: 3, DataColumn: []byte{2, 3, 4}}, // Period 0 - Epoch 4000
-			},
-			{3}: {
-				{Slot: 128_034, ColumnIndex: 2, DataColumn: []byte{1, 2, 3}}, // Period 0 - Epoch 4001
-				{Slot: 128_034, ColumnIndex: 4, DataColumn: []byte{2, 3, 4}}, // Period 0 - Epoch 4001
-			},
-			{4}: {
-				{Slot: 131_138, ColumnIndex: 2, DataColumn: []byte{1, 2, 3}}, // Period 1 - Epoch 4098
-			},
-			{5}: {
-				{Slot: 131_138, ColumnIndex: 1, DataColumn: []byte{1, 2, 3}}, // Period 1 - Epoch 4098
-			},
-			{6}: {
-				{Slot: 131_168, ColumnIndex: 0, DataColumn: []byte{1, 2, 3}}, // Period 1 - Epoch 4099
-			},
+		[]util.DataColumnParam{
+			{Slot: 33, Index: 2, Column: [][]byte{{1}, {2}, {3}}},      // Period 0 - Epoch 1
+			{Slot: 33, Index: 4, Column: [][]byte{{2}, {3}, {4}}},      // Period 0 - Epoch 1
+			{Slot: 128_002, Index: 2, Column: [][]byte{{1}, {2}, {3}}}, // Period 0 - Epoch 4000
+			{Slot: 128_002, Index: 4, Column: [][]byte{{2}, {3}, {4}}}, // Period 0 - Epoch 4000
+			{Slot: 128_003, Index: 1, Column: [][]byte{{1}, {2}, {3}}}, // Period 0 - Epoch 4000
+			{Slot: 128_003, Index: 3, Column: [][]byte{{2}, {3}, {4}}}, // Period 0 - Epoch 4000
+			{Slot: 128_034, Index: 2, Column: [][]byte{{1}, {2}, {3}}}, // Period 0 - Epoch 4001
+			{Slot: 128_034, Index: 4, Column: [][]byte{{2}, {3}, {4}}}, // Period 0 - Epoch 4001
+			{Slot: 131_138, Index: 2, Column: [][]byte{{1}, {2}, {3}}}, // Period 1 - Epoch 4098
+			{Slot: 131_138, Index: 1, Column: [][]byte{{1}, {2}, {3}}}, // Period 1 - Epoch 4098
+			{Slot: 131_168, Index: 0, Column: [][]byte{{1}, {2}, {3}}}, // Period 1 - Epoch 4099
 		},
 	)
 
@@ -76,29 +63,25 @@ func TestWarmCache(t *testing.T) {
 
 	storage.WarmCache()
 	require.Equal(t, primitives.Epoch(4_000), storage.cache.lowestCachedEpoch)
-	require.Equal(t, 6, len(storage.cache.cache))
+	require.Equal(t, 5, len(storage.cache.cache))
 
-	summary, ok := storage.cache.get([fieldparams.RootLength]byte{1})
+	summary, ok := storage.cache.get(verifiedRoDataColumnSidecars[2].BlockRoot())
 	require.Equal(t, true, ok)
 	require.DeepEqual(t, DataColumnStorageSummary{epoch: 4_000, mask: [fieldparams.NumberOfColumns]bool{false, false, true, false, true}}, summary)
 
-	summary, ok = storage.cache.get([fieldparams.RootLength]byte{2})
+	summary, ok = storage.cache.get(verifiedRoDataColumnSidecars[4].BlockRoot())
 	require.Equal(t, true, ok)
 	require.DeepEqual(t, DataColumnStorageSummary{epoch: 4_000, mask: [fieldparams.NumberOfColumns]bool{false, true, false, true}}, summary)
 
-	summary, ok = storage.cache.get([fieldparams.RootLength]byte{3})
+	summary, ok = storage.cache.get(verifiedRoDataColumnSidecars[6].BlockRoot())
 	require.Equal(t, true, ok)
 	require.DeepEqual(t, DataColumnStorageSummary{epoch: 4_001, mask: [fieldparams.NumberOfColumns]bool{false, false, true, false, true}}, summary)
 
-	summary, ok = storage.cache.get([fieldparams.RootLength]byte{4})
+	summary, ok = storage.cache.get(verifiedRoDataColumnSidecars[8].BlockRoot())
 	require.Equal(t, true, ok)
-	require.DeepEqual(t, DataColumnStorageSummary{epoch: 4_098, mask: [fieldparams.NumberOfColumns]bool{false, false, true}}, summary)
+	require.DeepEqual(t, DataColumnStorageSummary{epoch: 4_098, mask: [fieldparams.NumberOfColumns]bool{false, true, true}}, summary)
 
-	summary, ok = storage.cache.get([fieldparams.RootLength]byte{5})
-	require.Equal(t, true, ok)
-	require.DeepEqual(t, DataColumnStorageSummary{epoch: 4_098, mask: [fieldparams.NumberOfColumns]bool{false, true}}, summary)
-
-	summary, ok = storage.cache.get([fieldparams.RootLength]byte{6})
+	summary, ok = storage.cache.get(verifiedRoDataColumnSidecars[10].BlockRoot())
 	require.Equal(t, true, ok)
 	require.DeepEqual(t, DataColumnStorageSummary{epoch: 4_099, mask: [fieldparams.NumberOfColumns]bool{true}}, summary)
 }
@@ -112,9 +95,7 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 
 		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			util.DataColumnsParamsByRoot{
-				{}: {{ColumnIndex: 12}, {ColumnIndex: 1_000_000}, {ColumnIndex: 48}},
-			},
+			[]util.DataColumnParam{{Index: 12}, {Index: 1_000_000}, {Index: 48}},
 		)
 
 		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
@@ -125,7 +106,7 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 	t.Run("one of the column index is too large", func(t *testing.T) {
 		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			util.DataColumnsParamsByRoot{{}: {{ColumnIndex: 12}, {ColumnIndex: 1_000_000}, {ColumnIndex: 48}}},
+			[]util.DataColumnParam{{Index: 12}, {Index: 1_000_000}, {Index: 48}},
 		)
 
 		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
@@ -136,23 +117,34 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 	t.Run("different slots", func(t *testing.T) {
 		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			util.DataColumnsParamsByRoot{
-				{}: {
-					{Slot: 1, ColumnIndex: 12, DataColumn: []byte{1, 2, 3}},
-					{Slot: 2, ColumnIndex: 12, DataColumn: []byte{1, 2, 3}},
-				},
+			[]util.DataColumnParam{
+				{Slot: 1, Index: 12, Column: [][]byte{{1}, {2}, {3}}},
+				{Slot: 2, Index: 12, Column: [][]byte{{1}, {2}, {3}}},
 			},
 		)
 
+		// Create a sidecar with a different slot but the same root.
+		alteredVerifiedRoDataColumnSidecars := make([]blocks.VerifiedRODataColumn, 0, 2)
+		alteredVerifiedRoDataColumnSidecars = append(alteredVerifiedRoDataColumnSidecars, verifiedRoDataColumnSidecars[0])
+
+		altered, err := blocks.NewRODataColumnWithRoot(
+			verifiedRoDataColumnSidecars[1].RODataColumn.DataColumnSidecar,
+			verifiedRoDataColumnSidecars[0].BlockRoot(),
+		)
+		require.NoError(t, err)
+
+		verifiedAltered := blocks.NewVerifiedRODataColumn(altered)
+		alteredVerifiedRoDataColumnSidecars = append(alteredVerifiedRoDataColumnSidecars, verifiedAltered)
+
 		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
-		err := dataColumnStorage.Save(verifiedRoDataColumnSidecars)
+		err = dataColumnStorage.Save(alteredVerifiedRoDataColumnSidecars)
 		require.ErrorIs(t, err, errDataColumnSidecarsFromDifferentSlots)
 	})
 
 	t.Run("new file - no data columns to save", func(t *testing.T) {
 		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			util.DataColumnsParamsByRoot{{}: {}},
+			[]util.DataColumnParam{},
 		)
 
 		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
@@ -163,11 +155,9 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 	t.Run("new file - different data column size", func(t *testing.T) {
 		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			util.DataColumnsParamsByRoot{
-				{}: {
-					{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}},
-					{ColumnIndex: 11, DataColumn: []byte{1, 2, 3, 4}},
-				},
+			[]util.DataColumnParam{
+				{Slot: 1, Index: 12, Column: [][]byte{{1}, {2}, {3}}},
+				{Slot: 1, Index: 13, Column: [][]byte{{1}, {2}, {3}, {4}}},
 			},
 		)
 
@@ -179,7 +169,9 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 	t.Run("existing file - wrong incoming SSZ encoded size", func(t *testing.T) {
 		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			util.DataColumnsParamsByRoot{{1}: {{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}}}},
+			[]util.DataColumnParam{
+				{Slot: 1, Index: 12, Column: [][]byte{{1}, {2}, {3}}},
+			},
 		)
 
 		// Save data columns into a file.
@@ -191,7 +183,9 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 		// column index and an different SSZ encoded size.
 		_, verifiedRoDataColumnSidecars = util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			util.DataColumnsParamsByRoot{{1}: {{ColumnIndex: 13, DataColumn: []byte{1, 2, 3, 4}}}},
+			[]util.DataColumnParam{
+				{Slot: 1, Index: 13, Column: [][]byte{{1}, {2}, {3}, {4}}},
+			},
 		)
 
 		// Try to rewrite the file.
@@ -202,17 +196,13 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 	t.Run("nominal", func(t *testing.T) {
 		_, inputVerifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			util.DataColumnsParamsByRoot{
-				{1}: {
-					{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}},
-					{ColumnIndex: 11, DataColumn: []byte{3, 4, 5}},
-					{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}}, // OK if duplicate
-					{ColumnIndex: 13, DataColumn: []byte{6, 7, 8}},
-				},
-				{2}: {
-					{ColumnIndex: 12, DataColumn: []byte{3, 4, 5}},
-					{ColumnIndex: 13, DataColumn: []byte{6, 7, 8}},
-				},
+			[]util.DataColumnParam{
+				{Slot: 1, Index: 12, Column: [][]byte{{1}, {2}, {3}}},
+				{Slot: 1, Index: 11, Column: [][]byte{{3}, {4}, {5}}},
+				{Slot: 1, Index: 12, Column: [][]byte{{1}, {2}, {3}}}, // OK if duplicate
+				{Slot: 1, Index: 13, Column: [][]byte{{6}, {7}, {8}}},
+				{Slot: 2, Index: 12, Column: [][]byte{{3}, {4}, {5}}},
+				{Slot: 2, Index: 13, Column: [][]byte{{6}, {7}, {8}}},
 			},
 		)
 
@@ -222,16 +212,12 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 
 		_, inputVerifiedRoDataColumnSidecars = util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			util.DataColumnsParamsByRoot{
-				{1}: {
-					{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}}, // OK if duplicate
-					{ColumnIndex: 15, DataColumn: []byte{2, 3, 4}},
-					{ColumnIndex: 1, DataColumn: []byte{2, 3, 4}},
-				},
-				{3}: {
-					{ColumnIndex: 6, DataColumn: []byte{3, 4, 5}},
-					{ColumnIndex: 2, DataColumn: []byte{6, 7, 8}},
-				},
+			[]util.DataColumnParam{
+				{Slot: 1, Index: 12, Column: [][]byte{{1}, {2}, {3}}}, // OK if duplicate
+				{Slot: 1, Index: 15, Column: [][]byte{{2}, {3}, {4}}},
+				{Slot: 1, Index: 1, Column: [][]byte{{2}, {3}, {4}}},
+				{Slot: 3, Index: 6, Column: [][]byte{{3}, {4}, {5}}},
+				{Slot: 3, Index: 2, Column: [][]byte{{6}, {7}, {8}}},
 			},
 		)
 
@@ -240,51 +226,47 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 
 		type fixture struct {
 			fileName         string
-			blockRoot        [fieldparams.RootLength]byte
 			expectedIndices  [mandatoryNumberOfColumns]byte
-			dataColumnParams []util.DataColumnParams
+			dataColumnParams []util.DataColumnParam
 		}
 
 		fixtures := []fixture{
 			{
-				fileName:  "0/0/0x0100000000000000000000000000000000000000000000000000000000000000.sszs",
-				blockRoot: [fieldparams.RootLength]byte{1},
+				fileName: "0/0/0x8bb2f09de48c102635622dc27e6de03ae2b22639df7c33edbc8222b2ec423746.sszs",
 				expectedIndices: [mandatoryNumberOfColumns]byte{
 					0, nonZeroOffset + 4, 0, 0, 0, 0, 0, 0,
 					0, 0, 0, nonZeroOffset + 1, nonZeroOffset, nonZeroOffset + 2, 0, nonZeroOffset + 3,
 					// The rest is filled with zeroes.
 				},
-				dataColumnParams: []util.DataColumnParams{
-					{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}},
-					{ColumnIndex: 11, DataColumn: []byte{3, 4, 5}},
-					{ColumnIndex: 13, DataColumn: []byte{6, 7, 8}},
-					{ColumnIndex: 15, DataColumn: []byte{2, 3, 4}},
-					{ColumnIndex: 1, DataColumn: []byte{2, 3, 4}},
+				dataColumnParams: []util.DataColumnParam{
+					{Slot: 1, Index: 12, Column: [][]byte{{1}, {2}, {3}}},
+					{Slot: 1, Index: 11, Column: [][]byte{{3}, {4}, {5}}},
+					{Slot: 1, Index: 13, Column: [][]byte{{6}, {7}, {8}}},
+					{Slot: 1, Index: 15, Column: [][]byte{{2}, {3}, {4}}},
+					{Slot: 1, Index: 1, Column: [][]byte{{2}, {3}, {4}}},
 				},
 			},
 			{
-				fileName:  "0/0/0x0200000000000000000000000000000000000000000000000000000000000000.sszs",
-				blockRoot: [fieldparams.RootLength]byte{2},
+				fileName: "0/0/0x221f88cae2219050d4e9d8c2d0d83cb4c8ce4c84ab1bb3e0b89f3dec36077c4f.sszs",
 				expectedIndices: [mandatoryNumberOfColumns]byte{
 					0, 0, 0, 0, 0, 0, 0, 0,
 					0, 0, 0, 0, nonZeroOffset, nonZeroOffset + 1, 0, 0,
 					// The rest is filled with zeroes.
 				},
-				dataColumnParams: []util.DataColumnParams{
-					{ColumnIndex: 12, DataColumn: []byte{3, 4, 5}},
-					{ColumnIndex: 13, DataColumn: []byte{6, 7, 8}},
+				dataColumnParams: []util.DataColumnParam{
+					{Slot: 2, Index: 12, Column: [][]byte{{3}, {4}, {5}}},
+					{Slot: 2, Index: 13, Column: [][]byte{{6}, {7}, {8}}},
 				},
 			},
 			{
-				fileName:  "0/0/0x0300000000000000000000000000000000000000000000000000000000000000.sszs",
-				blockRoot: [fieldparams.RootLength]byte{3},
+				fileName: "0/0/0x7b163bd57e1c4c8b5048c5389698098f4c957d62d7ce86f4ffa9bdc75c16a18b.sszs",
 				expectedIndices: [mandatoryNumberOfColumns]byte{
 					0, 0, nonZeroOffset + 1, 0, 0, 0, nonZeroOffset, 0,
 					// The rest is filled with zeroes.
 				},
-				dataColumnParams: []util.DataColumnParams{
-					{ColumnIndex: 6, DataColumn: []byte{3, 4, 5}},
-					{ColumnIndex: 2, DataColumn: []byte{6, 7, 8}},
+				dataColumnParams: []util.DataColumnParam{
+					{Slot: 3, Index: 6, Column: [][]byte{{3}, {4}, {5}}},
+					{Slot: 3, Index: 2, Column: [][]byte{{6}, {7}, {8}}},
 				},
 			},
 		}
@@ -293,7 +275,7 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 			// Build expected data column sidecars.
 			_, expectedDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 				t,
-				util.DataColumnsParamsByRoot{fixture.blockRoot: fixture.dataColumnParams},
+				fixture.dataColumnParams,
 			)
 
 			// Build expected bytes.
@@ -320,6 +302,8 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 			expectedBytes = append(expectedBytes, fixture.expectedIndices[:]...)
 			expectedBytes = append(expectedBytes, sszEncodedDataColumnSidecars...)
 
+			blockRoot := expectedDataColumnSidecars[0].BlockRoot()
+
 			// Check the actual content of the file.
 			actualBytes, err := afero.ReadFile(dataColumnStorage.fs, fixture.fileName)
 			require.NoError(t, err)
@@ -328,18 +312,18 @@ func TestSaveDataColumnsSidecars(t *testing.T) {
 			// Check the summary.
 			indices := map[uint64]bool{}
 			for _, dataColumnParam := range fixture.dataColumnParams {
-				indices[dataColumnParam.ColumnIndex] = true
+				indices[dataColumnParam.Index] = true
 			}
 
-			summary := dataColumnStorage.Summary(fixture.blockRoot)
+			summary := dataColumnStorage.Summary(blockRoot)
 			for index := range uint64(mandatoryNumberOfColumns) {
 				require.Equal(t, indices[index], summary.HasIndex(index))
 			}
 
-			err = dataColumnStorage.Remove(fixture.blockRoot)
+			err = dataColumnStorage.Remove(blockRoot)
 			require.NoError(t, err)
 
-			summary = dataColumnStorage.Summary(fixture.blockRoot)
+			summary = dataColumnStorage.Summary(blockRoot)
 			for index := range uint64(mandatoryNumberOfColumns) {
 				require.Equal(t, false, summary.HasIndex(index))
 			}
@@ -362,11 +346,9 @@ func TestGetDataColumnSidecars(t *testing.T) {
 	t.Run("indices not found", func(t *testing.T) {
 		_, savedVerifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			util.DataColumnsParamsByRoot{
-				{1}: {
-					{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}},
-					{ColumnIndex: 14, DataColumn: []byte{2, 3, 4}},
-				},
+			[]util.DataColumnParam{
+				{Index: 12, Column: [][]byte{{1}, {2}, {3}}},
+				{Index: 14, Column: [][]byte{{2}, {3}, {4}}},
 			},
 		)
 
@@ -374,7 +356,7 @@ func TestGetDataColumnSidecars(t *testing.T) {
 		err := dataColumnStorage.Save(savedVerifiedRoDataColumnSidecars)
 		require.NoError(t, err)
 
-		verifiedRODataColumnSidecars, err := dataColumnStorage.Get([fieldparams.RootLength]byte{1}, []uint64{3, 1, 2})
+		verifiedRODataColumnSidecars, err := dataColumnStorage.Get(savedVerifiedRoDataColumnSidecars[0].BlockRoot(), []uint64{3, 1, 2})
 		require.NoError(t, err)
 		require.Equal(t, 0, len(verifiedRODataColumnSidecars))
 	})
@@ -382,11 +364,9 @@ func TestGetDataColumnSidecars(t *testing.T) {
 	t.Run("nominal", func(t *testing.T) {
 		_, expectedVerifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			util.DataColumnsParamsByRoot{
-				{1}: {
-					{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}},
-					{ColumnIndex: 14, DataColumn: []byte{2, 3, 4}},
-				},
+			[]util.DataColumnParam{
+				{Index: 12, Column: [][]byte{{1}, {2}, {3}}},
+				{Index: 14, Column: [][]byte{{2}, {3}, {4}}},
 			},
 		)
 
@@ -394,11 +374,13 @@ func TestGetDataColumnSidecars(t *testing.T) {
 		err := dataColumnStorage.Save(expectedVerifiedRoDataColumnSidecars)
 		require.NoError(t, err)
 
-		verifiedRODataColumnSidecars, err := dataColumnStorage.Get([fieldparams.RootLength]byte{1}, nil)
+		root := expectedVerifiedRoDataColumnSidecars[0].BlockRoot()
+
+		verifiedRODataColumnSidecars, err := dataColumnStorage.Get(root, nil)
 		require.NoError(t, err)
 		require.DeepSSZEqual(t, expectedVerifiedRoDataColumnSidecars, verifiedRODataColumnSidecars)
 
-		verifiedRODataColumnSidecars, err = dataColumnStorage.Get([fieldparams.RootLength]byte{1}, []uint64{12, 13, 14})
+		verifiedRODataColumnSidecars, err = dataColumnStorage.Get(root, []uint64{12, 13, 14})
 		require.NoError(t, err)
 		require.DeepSSZEqual(t, expectedVerifiedRoDataColumnSidecars, verifiedRODataColumnSidecars)
 	})
@@ -414,15 +396,11 @@ func TestRemove(t *testing.T) {
 	t.Run("nominal", func(t *testing.T) {
 		_, inputVerifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			util.DataColumnsParamsByRoot{
-				{1}: {
-					{Slot: 32, ColumnIndex: 10, DataColumn: []byte{1, 2, 3}},
-					{Slot: 32, ColumnIndex: 11, DataColumn: []byte{2, 3, 4}},
-				},
-				{2}: {
-					{Slot: 33, ColumnIndex: 10, DataColumn: []byte{1, 2, 3}},
-					{Slot: 33, ColumnIndex: 11, DataColumn: []byte{2, 3, 4}},
-				},
+			[]util.DataColumnParam{
+				{Slot: 32, Index: 10, Column: [][]byte{{1}, {2}, {3}}},
+				{Slot: 32, Index: 11, Column: [][]byte{{2}, {3}, {4}}},
+				{Slot: 33, Index: 10, Column: [][]byte{{1}, {2}, {3}}},
+				{Slot: 33, Index: 11, Column: [][]byte{{2}, {3}, {4}}},
 			},
 		)
 
@@ -430,22 +408,22 @@ func TestRemove(t *testing.T) {
 		err := dataColumnStorage.Save(inputVerifiedRoDataColumnSidecars)
 		require.NoError(t, err)
 
-		err = dataColumnStorage.Remove([fieldparams.RootLength]byte{1})
+		err = dataColumnStorage.Remove(inputVerifiedRoDataColumnSidecars[0].BlockRoot())
 		require.NoError(t, err)
 
-		summary := dataColumnStorage.Summary([fieldparams.RootLength]byte{1})
+		summary := dataColumnStorage.Summary(inputVerifiedRoDataColumnSidecars[0].BlockRoot())
 		require.Equal(t, primitives.Epoch(0), summary.epoch)
 		require.Equal(t, uint64(0), summary.Count())
 
-		summary = dataColumnStorage.Summary([fieldparams.RootLength]byte{2})
+		summary = dataColumnStorage.Summary(inputVerifiedRoDataColumnSidecars[3].BlockRoot())
 		require.Equal(t, primitives.Epoch(1), summary.epoch)
 		require.Equal(t, uint64(2), summary.Count())
 
-		actual, err := dataColumnStorage.Get([fieldparams.RootLength]byte{1}, nil)
+		actual, err := dataColumnStorage.Get(inputVerifiedRoDataColumnSidecars[0].BlockRoot(), nil)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(actual))
 
-		actual, err = dataColumnStorage.Get([fieldparams.RootLength]byte{2}, nil)
+		actual, err = dataColumnStorage.Get(inputVerifiedRoDataColumnSidecars[3].BlockRoot(), nil)
 		require.NoError(t, err)
 		require.Equal(t, 2, len(actual))
 	})
@@ -454,9 +432,9 @@ func TestRemove(t *testing.T) {
 func TestClear(t *testing.T) {
 	_, inputVerifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 		t,
-		util.DataColumnsParamsByRoot{
-			{1}: {{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}}},
-			{2}: {{ColumnIndex: 13, DataColumn: []byte{6, 7, 8}}},
+		[]util.DataColumnParam{
+			{Slot: 1, Index: 12, Column: [][]byte{{1}, {2}, {3}}},
+			{Slot: 2, Index: 13, Column: [][]byte{{6}, {7}, {8}}},
 		},
 	)
 
@@ -465,8 +443,8 @@ func TestClear(t *testing.T) {
 	require.NoError(t, err)
 
 	filePaths := []string{
-		"0/0/0x0100000000000000000000000000000000000000000000000000000000000000.sszs",
-		"0/0/0x0200000000000000000000000000000000000000000000000000000000000000.sszs",
+		"0/0/0x8bb2f09de48c102635622dc27e6de03ae2b22639df7c33edbc8222b2ec423746.sszs",
+		"0/0/0x221f88cae2219050d4e9d8c2d0d83cb4c8ce4c84ab1bb3e0b89f3dec36077c4f.sszs",
 	}
 
 	for _, filePath := range filePaths {
@@ -492,8 +470,8 @@ func TestMetadata(t *testing.T) {
 	t.Run("wrong version", func(t *testing.T) {
 		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			util.DataColumnsParamsByRoot{
-				{1}: {{ColumnIndex: 12, DataColumn: []byte{1, 2, 3}}},
+			[]util.DataColumnParam{
+				{Slot: 1, Index: 12, Column: [][]byte{{1}, {2}, {3}}},
 			},
 		)
 
@@ -503,7 +481,7 @@ func TestMetadata(t *testing.T) {
 		require.NoError(t, err)
 
 		// Alter the version.
-		const filePath = "0/0/0x0100000000000000000000000000000000000000000000000000000000000000.sszs"
+		const filePath = "0/0/0x8bb2f09de48c102635622dc27e6de03ae2b22639df7c33edbc8222b2ec423746.sszs"
 		file, err := dataColumnStorage.fs.OpenFile(filePath, os.O_WRONLY, os.FileMode(0600))
 		require.NoError(t, err)
 
@@ -643,31 +621,19 @@ func TestPrune(t *testing.T) {
 		}
 		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			util.DataColumnsParamsByRoot{
-				{0}: {
-					{Slot: 33, ColumnIndex: 2, DataColumn: []byte{1, 2, 3}}, // Period 0 - Epoch 1
-					{Slot: 33, ColumnIndex: 4, DataColumn: []byte{2, 3, 4}}, // Period 0 - Epoch 1
-				},
-				{1}: {
-					{Slot: 128_002, ColumnIndex: 2, DataColumn: []byte{1, 2, 3}}, // Period 0 - Epoch 4000
-					{Slot: 128_002, ColumnIndex: 4, DataColumn: []byte{2, 3, 4}}, // Period 0 - Epoch 4000
-				},
-				{2}: {
-					{Slot: 128_003, ColumnIndex: 1, DataColumn: []byte{1, 2, 3}}, // Period 0 - Epoch 4000
-					{Slot: 128_003, ColumnIndex: 3, DataColumn: []byte{2, 3, 4}}, // Period 0 - Epoch 4000
-				},
-				{3}: {
-					{Slot: 131_138, ColumnIndex: 2, DataColumn: []byte{1, 2, 3}}, // Period 1 - Epoch 4098
-					{Slot: 131_138, ColumnIndex: 3, DataColumn: []byte{1, 2, 3}}, // Period 1 - Epoch 4098
-				},
-				{4}: {
-					{Slot: 131_169, ColumnIndex: 2, DataColumn: []byte{1, 2, 3}}, // Period 1 - Epoch 4099
-					{Slot: 131_169, ColumnIndex: 3, DataColumn: []byte{1, 2, 3}}, // Period 1 - Epoch 4099
-				},
-				{5}: {
-					{Slot: 262_144, ColumnIndex: 2, DataColumn: []byte{1, 2, 3}}, // Period 2 - Epoch 8192
-					{Slot: 262_144, ColumnIndex: 3, DataColumn: []byte{1, 2, 3}}, // Period 2 - Epoch 8292
-				},
+			[]util.DataColumnParam{
+				{Slot: 33, Index: 2, Column: [][]byte{{1}, {2}, {3}}},      // Period 0 - Epoch 1
+				{Slot: 33, Index: 4, Column: [][]byte{{2}, {3}, {4}}},      // Period 0 - Epoch 1
+				{Slot: 128_002, Index: 2, Column: [][]byte{{1}, {2}, {3}}}, // Period 0 - Epoch 4000
+				{Slot: 128_002, Index: 4, Column: [][]byte{{2}, {3}, {4}}}, // Period 0 - Epoch 4000
+				{Slot: 128_003, Index: 1, Column: [][]byte{{1}, {2}, {3}}}, // Period 0 - Epoch 4000
+				{Slot: 128_003, Index: 3, Column: [][]byte{{2}, {3}, {4}}}, // Period 0 - Epoch 4000
+				{Slot: 131_138, Index: 2, Column: [][]byte{{1}, {2}, {3}}}, // Period 1 - Epoch 4098
+				{Slot: 131_138, Index: 3, Column: [][]byte{{1}, {2}, {3}}}, // Period 1 - Epoch 4098
+				{Slot: 131_169, Index: 2, Column: [][]byte{{1}, {2}, {3}}}, // Period 1 - Epoch 4099
+				{Slot: 131_169, Index: 3, Column: [][]byte{{1}, {2}, {3}}}, // Period 1 - Epoch 4099
+				{Slot: 262_144, Index: 2, Column: [][]byte{{1}, {2}, {3}}}, // Period 2 - Epoch 8192
+				{Slot: 262_144, Index: 3, Column: [][]byte{{1}, {2}, {3}}}, // Period 2 - Epoch 8292
 			},
 		)
 
@@ -696,31 +662,31 @@ func TestPrune(t *testing.T) {
 
 		dirs, err = listDir(dataColumnStorage.fs, "0/1")
 		require.NoError(t, err)
-		require.Equal(t, true, compareSlices([]string{"0x0000000000000000000000000000000000000000000000000000000000000000.sszs"}, dirs))
+		require.Equal(t, true, compareSlices([]string{"0x775283f428813c949b7e8af07f01fef9790137f021b3597ad2d0d81e8be8f0f0.sszs"}, dirs))
 
 		dirs, err = listDir(dataColumnStorage.fs, "0/4000")
 		require.NoError(t, err)
 		require.Equal(t, true, compareSlices([]string{
-			"0x0200000000000000000000000000000000000000000000000000000000000000.sszs",
-			"0x0100000000000000000000000000000000000000000000000000000000000000.sszs",
+			"0x9977031132157ebb9c81bce952003ce07a4f54e921ca63b7693d1562483fdf9f.sszs",
+			"0xb2b14d9d858fa99b70f0405e4e39f38e51e36dd9a70343c109e24eeb5f77e369.sszs",
 		}, dirs))
 
 		dirs, err = listDir(dataColumnStorage.fs, "1/4098")
 		require.NoError(t, err)
-		require.Equal(t, true, compareSlices([]string{"0x0300000000000000000000000000000000000000000000000000000000000000.sszs"}, dirs))
+		require.Equal(t, true, compareSlices([]string{"0x5106745cdd6b1aa3602ef4d000ef373af672019264c167fa4bd641a1094aa5c5.sszs"}, dirs))
 
 		dirs, err = listDir(dataColumnStorage.fs, "1/4099")
 		require.NoError(t, err)
-		require.Equal(t, true, compareSlices([]string{"0x0400000000000000000000000000000000000000000000000000000000000000.sszs"}, dirs))
+		require.Equal(t, true, compareSlices([]string{"0x4e5f2bd5bb84bf0422af8edd1cc5a52cc6cea85baf3d66d172fe41831ac1239c.sszs"}, dirs))
 
 		dirs, err = listDir(dataColumnStorage.fs, "2/8192")
 		require.NoError(t, err)
-		require.Equal(t, true, compareSlices([]string{"0x0500000000000000000000000000000000000000000000000000000000000000.sszs"}, dirs))
+		require.Equal(t, true, compareSlices([]string{"0xa8adba7446eb56a01a9dd6d55e9c3990b10c91d43afb77847b4a21ac4ee62527.sszs"}, dirs))
 
 		_, verifiedRoDataColumnSidecars = util.CreateTestVerifiedRoDataColumnSidecars(
 			t,
-			util.DataColumnsParamsByRoot{
-				{6}: {{Slot: 451_141, ColumnIndex: 2, DataColumn: []byte{1, 2, 3}}}, // Period 3 - Epoch 14_098
+			[]util.DataColumnParam{
+				{Slot: 451_141, Index: 2, Column: [][]byte{{1}, {2}, {3}}}, // Period 3 - Epoch 14_098
 			},
 		)
 
@@ -748,14 +714,14 @@ func TestPrune(t *testing.T) {
 
 		dirs, err = listDir(dataColumnStorage.fs, "1/4099")
 		require.NoError(t, err)
-		require.Equal(t, true, compareSlices([]string{"0x0400000000000000000000000000000000000000000000000000000000000000.sszs"}, dirs))
+		require.Equal(t, true, compareSlices([]string{"0x4e5f2bd5bb84bf0422af8edd1cc5a52cc6cea85baf3d66d172fe41831ac1239c.sszs"}, dirs))
 
 		dirs, err = listDir(dataColumnStorage.fs, "2/8192")
 		require.NoError(t, err)
-		require.Equal(t, true, compareSlices([]string{"0x0500000000000000000000000000000000000000000000000000000000000000.sszs"}, dirs))
+		require.Equal(t, true, compareSlices([]string{"0xa8adba7446eb56a01a9dd6d55e9c3990b10c91d43afb77847b4a21ac4ee62527.sszs"}, dirs))
 
 		dirs, err = listDir(dataColumnStorage.fs, "3/14098")
 		require.NoError(t, err)
-		require.Equal(t, true, compareSlices([]string{"0x0600000000000000000000000000000000000000000000000000000000000000.sszs"}, dirs))
+		require.Equal(t, true, compareSlices([]string{"0x0de28a18cae63cbc6f0b20dc1afb0b1df38da40824a5f09f92d485ade04de97f.sszs"}, dirs))
 	})
 }
