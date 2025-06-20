@@ -141,15 +141,15 @@ func TestHealthMonitor_PerformHealthCheck(t *testing.T) {
 	mockValidator := validatormock.NewMockValidator(ctrl)
 
 	tests := []struct {
-		name                   string
-		initialIsHealthy       bool
-		initialFails           int
-		maxFails               int
-		findHealthyHostReturns bool
-		expectedIsHealthy      bool
-		expectedFails          int
-		expectCancelCalled     bool
 		expectStatusUpdate     bool // true if healthyCh should receive a new, different status
+		expectCancelCalled     bool
+		expectedIsHealthy      bool
+		findHealthyHostReturns bool
+		initialIsHealthy       bool
+		expectedFails          int
+		maxFails               int
+		initialFails           int
+		name                   string
 	}{
 		{
 			name:                   "Becomes Unhealthy",
@@ -247,21 +247,23 @@ func TestHealthMonitor_PerformHealthCheck(t *testing.T) {
 			assert.Equal(t, tt.expectCancelCalled, actualCancelFuncCalled, "cancelCalled mismatch")
 
 			if tt.expectStatusUpdate {
-				select {
-				case newStatus := <-monitor.HealthyChan():
-					assert.Equal(t, tt.expectedIsHealthy, newStatus, "HealthyChan received unexpected status")
-				case <-time.After(100 * time.Millisecond):
-					t.Fatal("Expected status update on HealthyChan, but timed out")
-				}
+				assert.Eventually(t, func() bool {
+					select {
+					case s := <-monitor.HealthyChan():
+						return s == tt.expectedIsHealthy
+					default:
+						return false
+					}
+				}, 100*time.Millisecond, 10*time.Millisecond) // wait, poll
 			} else {
-				select {
-				case status := <-monitor.HealthyChan():
-					// If status didn't change, but was re-sent due to channel drain logic (not applicable here as we test single performHealthCheck)
-					// For this test, if expectStatusUpdate is false, nothing should be sent.
-					t.Fatalf("Did not expect status update on HealthyChan, but got %v", status)
-				default:
-					// Expected: no update if status didn't change
-				}
+				assert.Never(t, func() bool {
+					select {
+					case <-monitor.HealthyChan():
+						return true // received something: fail
+					default:
+						return false
+					}
+				}, 100*time.Millisecond, 10*time.Millisecond)
 			}
 			if !actualCancelFuncCalled {
 				monitorCancelFunc() // Clean up context if not cancelled by test logic
