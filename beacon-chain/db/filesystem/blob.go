@@ -25,7 +25,7 @@ func directoryPermissions() os.FileMode {
 var (
 	errIndexOutOfBounds    = errors.New("blob index in file name >= MAX_BLOBS_PER_BLOCK")
 	errSidecarEmptySSZData = errors.New("sidecar marshalled to an empty ssz byte slice")
-	errNoBasePath          = errors.New("BlobStorage base path not specified in init")
+	errNoBlobBasePath      = errors.New("BlobStorage base path not specified in init")
 )
 
 // BlobStorageOption is a functional option for configuring a BlobStorage.
@@ -85,7 +85,7 @@ func NewBlobStorage(opts ...BlobStorageOption) (*BlobStorage, error) {
 	// Allow tests to set up a different fs using WithFs.
 	if b.fs == nil {
 		if b.base == "" {
-			return nil, errNoBasePath
+			return nil, errNoBlobBasePath
 		}
 		b.base = path.Clean(b.base)
 		if err := file.MkdirAll(b.base); err != nil {

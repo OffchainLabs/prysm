@@ -2,6 +2,7 @@ package beacon_api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -15,6 +16,8 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus/hooks/test"
 )
 
 func TestGet(t *testing.T) {
@@ -39,13 +42,105 @@ func TestGet(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	jsonRestHandler := BeaconApiJsonRestHandler{
+	jsonRestHandler := BeaconApiRestHandler{
 		client: http.Client{Timeout: time.Second * 5},
 		host:   server.URL,
 	}
 	resp := &structs.GetGenesisResponse{}
 	require.NoError(t, jsonRestHandler.Get(ctx, endpoint+"?arg1=abc&arg2=def", resp))
 	assert.DeepEqual(t, genesisJson, resp)
+}
+
+func TestGetSSZ(t *testing.T) {
+	ctx := context.Background()
+	const endpoint = "/example/rest/api/ssz"
+	genesisJson := &structs.GetGenesisResponse{
+		Data: &structs.Genesis{
+			GenesisTime:           "123",
+			GenesisValidatorsRoot: "0x456",
+			GenesisForkVersion:    "0x789",
+		},
+	}
+
+	t.Run("Successful SSZ response", func(t *testing.T) {
+		expectedBody := []byte{10, 20, 30, 40}
+
+		mux := http.NewServeMux()
+		mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
+			assert.StringContains(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+			w.Header().Set("Content-Type", api.OctetStreamMediaType)
+			_, err := w.Write(expectedBody)
+			require.NoError(t, err)
+		})
+		server := httptest.NewServer(mux)
+		defer server.Close()
+
+		jsonRestHandler := BeaconApiRestHandler{
+			client: http.Client{Timeout: time.Second * 5},
+			host:   server.URL,
+		}
+
+		body, header, err := jsonRestHandler.GetSSZ(ctx, endpoint)
+		require.NoError(t, err)
+		assert.DeepEqual(t, expectedBody, body)
+		require.StringContains(t, api.OctetStreamMediaType, header.Get("Content-Type"))
+	})
+
+	t.Run("Json Content-Type response", func(t *testing.T) {
+		logrus.SetLevel(logrus.DebugLevel)
+		defer logrus.SetLevel(logrus.InfoLevel) // reset it afterwards
+		logHook := test.NewGlobal()
+		mux := http.NewServeMux()
+		mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
+			assert.StringContains(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+			w.Header().Set("Content-Type", api.JsonMediaType)
+
+			marshalledJson, err := json.Marshal(genesisJson)
+			require.NoError(t, err)
+
+			_, err = w.Write(marshalledJson)
+			require.NoError(t, err)
+		})
+		server := httptest.NewServer(mux)
+		defer server.Close()
+
+		jsonRestHandler := BeaconApiRestHandler{
+			client: http.Client{Timeout: time.Second * 5},
+			host:   server.URL,
+		}
+
+		body, header, err := jsonRestHandler.GetSSZ(ctx, endpoint)
+		require.NoError(t, err)
+		assert.LogsContain(t, logHook, "Server responded with non primary accept type")
+		require.Equal(t, api.JsonMediaType, header.Get("Content-Type"))
+		resp := &structs.GetGenesisResponse{}
+		require.NoError(t, json.Unmarshal(body, resp))
+		require.Equal(t, "123", resp.Data.GenesisTime)
+	})
+
+	t.Run("Wrong Content-Type response, doesn't error out and instead handled downstream", func(t *testing.T) {
+		logrus.SetLevel(logrus.DebugLevel)
+		defer logrus.SetLevel(logrus.InfoLevel) // reset it afterwards
+		logHook := test.NewGlobal()
+		mux := http.NewServeMux()
+		mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
+			assert.StringContains(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+			w.Header().Set("Content-Type", "text/plain") // Invalid content type
+			_, err := w.Write([]byte("some text"))
+			require.NoError(t, err)
+		})
+		server := httptest.NewServer(mux)
+		defer server.Close()
+
+		jsonRestHandler := BeaconApiRestHandler{
+			client: http.Client{Timeout: time.Second * 5},
+			host:   server.URL,
+		}
+
+		_, _, err := jsonRestHandler.GetSSZ(ctx, endpoint)
+		require.NoError(t, err)
+		assert.LogsContain(t, logHook, "Server responded with non primary accept type")
+	})
 }
 
 func TestPost(t *testing.T) {
@@ -85,7 +180,7 @@ func TestPost(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	jsonRestHandler := BeaconApiJsonRestHandler{
+	jsonRestHandler := BeaconApiRestHandler{
 		client: http.Client{Timeout: time.Second * 5},
 		host:   server.URL,
 	}

@@ -89,6 +89,13 @@ var (
 			Buckets: []float64{5, 10, 50, 100, 150, 250, 500, 1000, 2000},
 		},
 	)
+	rpcDataColumnsByRangeResponseLatency = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "rpc_data_columns_by_range_response_latency_milliseconds",
+			Help:    "Captures total time to respond to rpc DataColumnsByRange requests in a milliseconds distribution",
+			Buckets: []float64{5, 10, 50, 100, 150, 250, 500, 1000, 2000},
+		},
+	)
 	arrivalBlockPropagationHistogram = promauto.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "block_arrival_latency_milliseconds",

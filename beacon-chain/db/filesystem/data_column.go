@@ -50,6 +50,7 @@ var (
 	errTooManyDataColumns                   = errors.New("too many data columns")
 	errWrongSszEncodedDataColumnSidecarSize = errors.New("wrong SSZ encoded data column sidecar size")
 	errDataColumnSidecarsFromDifferentSlots = errors.New("data column sidecars from different slots")
+	errNoDataColumnBasePath                 = errors.New("DataColumnStorage base path not specified in init")
 )
 
 type (
@@ -142,7 +143,7 @@ func NewDataColumnStorage(ctx context.Context, opts ...DataColumnStorageOption) 
 	// Allow tests to set up a different fs using WithFs.
 	if storage.fs == nil {
 		if storage.base == "" {
-			return nil, errNoBasePath
+			return nil, errNoDataColumnBasePath
 		}
 
 		storage.base = path.Clean(storage.base)

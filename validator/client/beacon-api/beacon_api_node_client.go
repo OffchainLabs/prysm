@@ -19,7 +19,7 @@ var (
 
 type beaconApiNodeClient struct {
 	fallbackClient  iface.NodeClient
-	jsonRestHandler JsonRestHandler
+	jsonRestHandler RestHandler
 	genesisProvider GenesisProvider
 }
 
@@ -105,7 +105,7 @@ func (c *beaconApiNodeClient) IsHealthy(ctx context.Context) bool {
 	return c.jsonRestHandler.Get(ctx, "/eth/v1/node/health", nil) == nil
 }
 
-func NewNodeClientWithFallback(jsonRestHandler JsonRestHandler, fallbackClient iface.NodeClient) iface.NodeClient {
+func NewNodeClientWithFallback(jsonRestHandler RestHandler, fallbackClient iface.NodeClient) iface.NodeClient {
 	b := &beaconApiNodeClient{
 		jsonRestHandler: jsonRestHandler,
 		fallbackClient:  fallbackClient,

@@ -8,7 +8,7 @@ import (
 	validatorHelpers "github.com/OffchainLabs/prysm/v6/validator/helpers"
 )
 
-func NewNodeClient(validatorConn validatorHelpers.NodeConnection, jsonRestHandler beaconApi.JsonRestHandler) iface.NodeClient {
+func NewNodeClient(validatorConn validatorHelpers.NodeConnection, jsonRestHandler beaconApi.RestHandler) iface.NodeClient {
 	grpcClient := grpcApi.NewNodeClient(validatorConn.GetGrpcClientConn())
 	if features.Get().EnableBeaconRESTApi {
 		return beaconApi.NewNodeClientWithFallback(jsonRestHandler, grpcClient)
