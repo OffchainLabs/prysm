@@ -396,10 +396,16 @@ func readChunkedBlobSidecar(stream network.Stream, encoding encoder.NetworkEncod
 // --------------------
 // Data column sidecars
 // --------------------
+
+// DataColumnResponseValidation represents a function that can validate aspects of a single unmarshaled data column sidecar
+// that was received from a peer in response to an rpc request.
+type DataColumnResponseValidation func(column blocks.RODataColumn) error
+
 func readChunkedDataColumnSidecar(
 	stream network.Stream,
 	p2pApi p2p.P2P,
 	ctxMap ContextByteVersions,
+	validationFunctions ...DataColumnResponseValidation,
 ) (*blocks.RODataColumn, error) {
 	// Read the status code from the stream.
 	statusCode, errMessage, err := ReadStatusCode(stream, p2pApi.Encoding())
@@ -441,6 +447,13 @@ func readChunkedDataColumnSidecar(
 	roDataColumn, err := blocks.NewRODataColumn(dataColumnSidecar)
 	if err != nil {
 		return nil, errors.Wrap(err, "new read only data column")
+	}
+
+	// Run validation functions.
+	for _, validationFunction := range validationFunctions {
+		if err := validationFunction(roDataColumn); err != nil {
+			return nil, errors.Wrap(err, "validation function")
+		}
 	}
 
 	return &roDataColumn, nil
