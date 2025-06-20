@@ -385,7 +385,7 @@ func readChunkedBlobSidecar(stream network.Stream, encoding encoder.NetworkEncod
 	return rob, nil
 }
 
-func readChunkedDataColumnSideCar(
+func readChunkedDataColumnSidecar(
 	stream network.Stream,
 	p2pApi p2p.P2P,
 	ctxMap ContextByteVersions,
