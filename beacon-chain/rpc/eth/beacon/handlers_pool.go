@@ -431,7 +431,7 @@ func (s *Server) handleAttestations(ctx context.Context, r *http.Request) (attFa
 		case errors.Is(err, io.EOF):
 			return nil, nil, errors.New("no data submitted")
 		case err != nil:
-			return nil, nil, errors.Wrap(err, "Could not decode request body")
+			return nil, nil, errors.Wrap(err, "could not decode request body")
 		}
 
 		if err = json.Unmarshal(req.Data, &sourceAttestations); err != nil {
