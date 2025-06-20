@@ -230,7 +230,7 @@ func initializeValidatorAndGetHeadSlot(ctx context.Context, v iface.Validator) (
 		}
 
 		if err != nil {
-			log.WithError(err).Fatal("Could not get current canonical head slot")
+			return 0, errors.Wrap(err, "Could not get current canonical head slot")
 		}
 
 		if err := v.CheckDoppelGanger(ctx); err != nil {
