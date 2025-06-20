@@ -42,6 +42,10 @@ var (
 	errDataColumnChunkedReadFailure   = errors.New("failed to read stream of chunk-encoded data columns")
 )
 
+// ------
+// Blocks
+// ------
+
 // BeaconBlockProcessor defines a block processing function, which allows to start utilizing
 // blocks even before all blocks are ready.
 type BeaconBlockProcessor func(block interfaces.ReadOnlySignedBeaconBlock) error
@@ -155,6 +159,14 @@ func SendBeaconBlocksByRootRequest(
 	return blocks, nil
 }
 
+// -------------
+// Blob sidecars
+// -------------
+
+// BlobResponseValidation represents a function that can validate aspects of a single unmarshaled blob sidecar
+// that was received from a peer in response to an rpc request.
+type BlobResponseValidation func(blocks.ROBlob) error
+
 func SendBlobsByRangeRequest(ctx context.Context, tor blockchain.TemporalOracle, p2pApi p2p.SenderEncoder, pid peer.ID, ctxMap ContextByteVersions, req *ethpb.BlobSidecarsByRangeRequest, bvs ...BlobResponseValidation) ([]blocks.ROBlob, error) {
 	topic, err := p2p.TopicFromMessage(p2p.BlobSidecarsByRangeName, slots.ToEpoch(tor.CurrentSlot()))
 	if err != nil {
@@ -215,10 +227,6 @@ func SendBlobSidecarByRoot(
 	}
 	return readChunkEncodedBlobs(stream, p2pApi.Encoding(), ctxMap, blobValidatorFromRootReq(req), max)
 }
-
-// BlobResponseValidation represents a function that can validate aspects of a single unmarshaled blob
-// that was received from a peer in response to an rpc request.
-type BlobResponseValidation func(blocks.ROBlob) error
 
 func composeBlobValidations(vf ...BlobResponseValidation) BlobResponseValidation {
 	return func(blob blocks.ROBlob) error {
@@ -385,6 +393,9 @@ func readChunkedBlobSidecar(stream network.Stream, encoding encoder.NetworkEncod
 	return rob, nil
 }
 
+// --------------------
+// Data column sidecars
+// --------------------
 func readChunkedDataColumnSidecar(
 	stream network.Stream,
 	p2pApi p2p.P2P,
