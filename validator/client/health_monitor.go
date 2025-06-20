@@ -69,6 +69,7 @@ func (m *healthMonitor) performHealthCheck() {
 	}
 	if m.maxFails > 0 && m.fails >= m.maxFails {
 		log.Infof("Maximum health checks of %d reached. Stopping health check routine", m.maxFails)
+		m.isHealthy = ishealthy
 		m.cancel()
 		return
 	}
