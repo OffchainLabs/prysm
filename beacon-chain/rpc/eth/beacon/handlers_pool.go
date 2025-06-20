@@ -402,6 +402,7 @@ func (s *Server) handleAttestations(ctx context.Context, r *http.Request) (attFa
 
 		i := 0
 		for len(body) > 0 {
+			// Since AggregationBits in Attestation is variable length, the length of the Attestation object will be added as the first byte, per SSZ spec.
 			sszLen := 1 + int(body[0])
 			var sourceAtt eth.Attestation
 			if err := sourceAtt.UnmarshalSSZ(body[:sszLen]); err != nil {
