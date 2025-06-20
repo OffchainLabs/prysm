@@ -173,6 +173,14 @@ func WithBlobStorage(b *filesystem.BlobStorage) Option {
 	}
 }
 
+// WithDataColumnStorage gives the sync package direct access to DataColumnStorage.
+func WithDataColumnStorage(b *filesystem.DataColumnStorage) Option {
+	return func(s *Service) error {
+		s.cfg.dataColumnStorage = b
+		return nil
+	}
+}
+
 // WithVerifierWaiter gives the sync package direct access to the verifier waiter.
 func WithVerifierWaiter(v *verification.InitializerWaiter) Option {
 	return func(s *Service) error {

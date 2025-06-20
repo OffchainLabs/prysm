@@ -258,3 +258,12 @@ func WithLightClientStore(lcs *lightclient.Store) Option {
 		return nil
 	}
 }
+
+// WithStartWaitingDataColumnSidecars sets a channel that the `areDataColumnsAvailable` function will fill
+// in when starting to wait for additional data columns.
+func WithStartWaitingDataColumnSidecars(c chan bool) Option {
+	return func(s *Service) error {
+		s.startWaitingDataColumnSidecars = c
+		return nil
+	}
+}
