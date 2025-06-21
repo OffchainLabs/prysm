@@ -186,6 +186,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		return nil, errors.Wrap(err, "could not initialize genesis state")
 	}
 
+	beacon.ConfigOptions = append([]params.Option{params.WithGenesisValidatorsRoot(genesis.ValidatorsRoot())}, beacon.ConfigOptions...)
 	params.BeaconConfig().ApplyOptions(beacon.ConfigOptions...)
 	params.BeaconConfig().InitializeForkSchedule()
 	params.LogDigests(params.BeaconConfig())
