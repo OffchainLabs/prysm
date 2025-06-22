@@ -3,6 +3,7 @@ package hash_test
 import (
 	"encoding/hex"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/OffchainLabs/prysm/v6/crypto/hash"
@@ -102,5 +103,110 @@ func BenchmarkHashProto(b *testing.B) {
 		if _, err := hash.Proto(att); err != nil {
 			b.Log(err)
 		}
+	}
+}
+
+// TestNewReusableSHA256Hasher tests the NewReusableSHA256Hasher function.
+func TestNewReusableSHA256Hasher(t *testing.T) {
+	hasher, cleanup := hash.NewReusableSHA256Hasher()
+	defer cleanup()
+
+	// Test multiple hashes with the same hasher
+	h1 := hasher([]byte("test1"))
+	h2 := hasher([]byte("test2"))
+
+	// Verify results are different
+	if h1 == h2 {
+		t.Error("Expected different hashes for different inputs")
+	}
+
+	// Compare with standard Hash function
+	stdH1 := hash.Hash([]byte("test1"))
+	stdH2 := hash.Hash([]byte("test2"))
+
+	if h1 != stdH1 {
+		t.Errorf("Reusable hasher produced different result than standard Hash function: %x != %x", h1, stdH1)
+	}
+
+	if h2 != stdH2 {
+		t.Errorf("Reusable hasher produced different result than standard Hash function: %x != %x", h2, stdH2)
+	}
+}
+
+// TestCustomSHA256HasherPerformance tests the performance of CustomSHA256Hasher compared to Hash.
+func TestCustomSHA256HasherPerformance(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping performance test in short mode")
+	}
+
+	data := []byte("performance test data")
+	iterations := 100000
+
+	// Test standard Hash function
+	start := time.Now()
+	for i := 0; i < iterations; i++ {
+		_ = hash.Hash(data)
+	}
+	standardDuration := time.Since(start)
+
+	// Test CustomSHA256Hasher
+	start = time.Now()
+	hasher := hash.CustomSHA256Hasher()
+	for i := 0; i < iterations; i++ {
+		_ = hasher(data)
+	}
+	customDuration := time.Since(start)
+
+	// Test NewReusableSHA256Hasher
+	start = time.Now()
+	reusableHasher, cleanup := hash.NewReusableSHA256Hasher()
+	for i := 0; i < iterations; i++ {
+		_ = reusableHasher(data)
+	}
+	cleanup()
+	reusableDuration := time.Since(start)
+
+	t.Logf("Standard Hash: %v for %d iterations", standardDuration, iterations)
+	t.Logf("CustomSHA256Hasher: %v for %d iterations", customDuration, iterations)
+	t.Logf("NewReusableSHA256Hasher: %v for %d iterations", reusableDuration, iterations)
+	
+	// The custom hasher should be faster than the standard Hash function
+	if customDuration >= standardDuration {
+		t.Logf("Warning: CustomSHA256Hasher was not faster than standard Hash function")
+	}
+	
+	// The reusable hasher should be similar in performance to the custom hasher
+	if float64(reusableDuration) > float64(customDuration)*1.1 { // Allow 10% overhead
+		t.Logf("Warning: NewReusableSHA256Hasher was significantly slower than CustomSHA256Hasher")
+	}
+}
+
+// BenchmarkHashWithLargerData benchmarks the Hash function with larger data.
+func BenchmarkHashWithLargerData(b *testing.B) {
+	data := []byte("benchmark test data")
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = hash.Hash(data)
+	}
+}
+
+// BenchmarkCustomSHA256Hasher benchmarks the CustomSHA256Hasher function.
+func BenchmarkCustomSHA256Hasher(b *testing.B) {
+	data := []byte("benchmark test data")
+	hasher := hash.CustomSHA256Hasher()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = hasher(data)
+	}
+}
+
+// BenchmarkNewReusableSHA256Hasher benchmarks the NewReusableSHA256Hasher function.
+func BenchmarkNewReusableSHA256Hasher(b *testing.B) {
+	data := []byte("benchmark test data")
+	hasher, cleanup := hash.NewReusableSHA256Hasher()
+	defer cleanup()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = hasher(data)
 	}
 }

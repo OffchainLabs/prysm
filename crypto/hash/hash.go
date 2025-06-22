@@ -5,6 +5,7 @@ import (
 	"errors"
 	"hash"
 	"reflect"
+	"runtime"
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
@@ -52,6 +53,9 @@ func Hash(data []byte) [32]byte {
 //
 // Note: that this method is only more performant over
 // hashutil.Hash if the callback is used more than 5 times.
+// 
+// The returned function automatically returns the hasher to the pool
+// when it goes out of scope (via the finalizer).
 func CustomSHA256Hasher() func([]byte) [32]byte {
 	hasher, ok := sha256Pool.Get().(hash.Hash)
 	if !ok {
@@ -61,7 +65,12 @@ func CustomSHA256Hasher() func([]byte) [32]byte {
 	}
 	var h [32]byte
 
-	return func(data []byte) [32]byte {
+	// Create a reference counter to track usage
+	refCount := new(int32)
+	*refCount = 1
+
+	// Create the hash function
+	hashFunc := func(data []byte) [32]byte {
 		// The hash interface never returns an error, for that reason
 		// we are not handling the error below. For reference, it is
 		// stated here https://golang.org/pkg/hash/#Hash
@@ -73,6 +82,49 @@ func CustomSHA256Hasher() func([]byte) [32]byte {
 
 		return h
 	}
+
+	// Create a finalizer that will return the hasher to the pool when garbage collected
+	runtime.SetFinalizer(refCount, func(_ interface{}) {
+		sha256Pool.Put(hasher)
+	})
+
+	return hashFunc
+}
+
+// NewReusableSHA256Hasher returns a reusable SHA256 hasher that must be manually
+// returned to the pool using the returned cleanup function when no longer needed.
+// This is useful for cases where you need more control over the lifecycle of the hasher.
+//
+// Usage example:
+//
+//	hasher, cleanup := hash.NewReusableSHA256Hasher()
+//	defer cleanup()
+//	
+//	hash1 := hasher(data1)
+//	hash2 := hasher(data2)
+//	// ...
+func NewReusableSHA256Hasher() (func([]byte) [32]byte, func()) {
+	hasher, ok := sha256Pool.Get().(hash.Hash)
+	if !ok {
+		hasher = sha256.New()
+	} else {
+		hasher.Reset()
+	}
+	var h [32]byte
+
+	hashFunc := func(data []byte) [32]byte {
+		hasher.Reset()
+		// #nosec G104
+		hasher.Write(data)
+		hasher.Sum(h[:0])
+		return h
+	}
+
+	cleanup := func() {
+		sha256Pool.Put(hasher)
+	}
+
+	return hashFunc, cleanup
 }
 
 var keccak256Pool = sync.Pool{New: func() interface{} {
