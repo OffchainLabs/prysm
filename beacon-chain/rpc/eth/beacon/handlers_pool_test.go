@@ -24,6 +24,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/synccommittee"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/voluntaryexits/mock"
 	p2pMock "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
 	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -684,9 +685,14 @@ func TestSubmitAttestations(t *testing.T) {
 				var jsonSingleAtt []structs.Attestation
 				err = json.NewDecoder(strings.NewReader(singleAtt)).Decode(&jsonSingleAtt)
 				require.NoError(t, err)
+
 				singleAttConsensus, err := jsonSingleAtt[0].ToConsensus()
 				require.NoError(t, err)
-				sszPayload, err := singleAttConsensus.MarshalSSZ()
+
+				var attList types.Attestations
+				attList = append(attList, singleAttConsensus)
+
+				sszPayload, err := attList.MarshalSSZ()
 				require.NoError(t, err)
 
 				var body bytes.Buffer
@@ -741,17 +747,19 @@ func TestSubmitAttestations(t *testing.T) {
 				var jsonAttList []structs.Attestation
 				err = json.NewDecoder(strings.NewReader(multipleAtts)).Decode(&jsonAttList)
 				require.NoError(t, err)
-				var sszPayload []byte
+
+				var attList types.Attestations
+
 				for _, att := range jsonAttList {
 					attConsensus, err := att.ToConsensus()
 					require.NoError(t, err)
-					attSSZ, err := attConsensus.MarshalSSZ()
-					require.NoError(t, err)
-					sszPayload = append(sszPayload, attSSZ...)
+					attList = append(attList, attConsensus)
 				}
+				sszPayload, err := attList.MarshalSSZ()
+				require.NoError(t, err)
 
 				var body bytes.Buffer
-				_, err := body.Write(sszPayload)
+				_, err = body.Write(sszPayload)
 				require.NoError(t, err)
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
 				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
@@ -868,7 +876,9 @@ func TestSubmitAttestations(t *testing.T) {
 				require.NoError(t, err)
 				singleAttConsensus, err := jsonSingleAtt[0].ToConsensus()
 				require.NoError(t, err)
-				sszPayload, err := singleAttConsensus.MarshalSSZ()
+				var attList types.Attestations
+				attList = append(attList, singleAttConsensus)
+				sszPayload, err := attList.MarshalSSZ()
 				require.NoError(t, err)
 
 				var body bytes.Buffer
@@ -934,7 +944,11 @@ func TestSubmitAttestations(t *testing.T) {
 				require.NoError(t, err)
 				singleAttElectraConsensus, err := jsonSingleAttElectra[0].ToConsensus()
 				require.NoError(t, err)
-				sszPayload, err := singleAttElectraConsensus.MarshalSSZ()
+
+				var attList types.SingleAttestations
+				attList = append(attList, singleAttElectraConsensus)
+
+				sszPayload, err := attList.MarshalSSZ()
 				require.NoError(t, err)
 
 				var body bytes.Buffer
@@ -990,14 +1004,14 @@ func TestSubmitAttestations(t *testing.T) {
 				err = json.NewDecoder(strings.NewReader(multipleAttsElectra)).Decode(&jsonAttsList)
 				require.NoError(t, err)
 
-				var sszPayload []byte
+				var attList types.SingleAttestations
 				for _, att := range jsonAttsList {
 					singleAttElectraConsensus, err := att.ToConsensus()
 					require.NoError(t, err)
-					sszPayloadPart, err := singleAttElectraConsensus.MarshalSSZ()
-					require.NoError(t, err)
-					sszPayload = append(sszPayload, sszPayloadPart...)
+					attList = append(attList, singleAttElectraConsensus)
 				}
+				sszPayload, err := attList.MarshalSSZ()
+				require.NoError(t, err)
 
 				var body bytes.Buffer
 				_, err = body.Write(sszPayload)
@@ -1080,7 +1094,9 @@ func TestSubmitAttestations(t *testing.T) {
 				require.NoError(t, err)
 				invalidAttElectraConsensus, err := jsonInvalidAttElectra[0].ToConsensus()
 				require.NoError(t, err)
-				sszPayload, err := invalidAttElectraConsensus.MarshalSSZ()
+				var attList types.SingleAttestations
+				attList = append(attList, invalidAttElectraConsensus)
+				sszPayload, err := attList.MarshalSSZ()
 				require.NoError(t, err)
 
 				var body bytes.Buffer

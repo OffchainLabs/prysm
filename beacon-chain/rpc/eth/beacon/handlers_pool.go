@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
 	corehelpers "github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v6/config/features"
@@ -277,28 +278,20 @@ func (s *Server) handleAttestationsElectra(
 			return nil, nil, errors.New("no data submitted")
 		}
 
-		i := 0
-		for len(body) >= sszLen {
-			var sourceAtt eth.SingleAttestation
-			if err := sourceAtt.UnmarshalSSZ(body[:sszLen]); err != nil {
-				return nil, nil, errors.Wrap(err, "could not unmarshal ssz attestation")
-			}
-			body = body[sszLen:]
+		atts := make(types.SingleAttestations, 0)
+		if err := atts.UnmarshalSSZ(body); err != nil {
+			return nil, nil, errors.Wrap(err, "could not unmarshal ssz single attestations")
+		}
 
-			if _, err = bls.SignatureFromBytes(sourceAtt.Signature); err != nil {
+		for i, att := range atts {
+			if _, err = bls.SignatureFromBytes(att.Signature); err != nil {
 				attFailures = append(attFailures, &server.IndexedVerificationFailure{
 					Index:   i,
 					Message: "Incorrect attestation signature: " + err.Error(),
 				})
-				i++
-				continue
+			} else {
+				validAttestations = append(validAttestations, att)
 			}
-			validAttestations = append(validAttestations, &sourceAtt)
-			i++
-		}
-
-		if len(body) > 0 {
-			return nil, nil, errors.New("could not decode request body, extra bytes found")
 		}
 	} else {
 		var sourceAttestations []*structs.SingleAttestation
@@ -400,29 +393,19 @@ func (s *Server) handleAttestations(ctx context.Context, r *http.Request) (attFa
 			return nil, nil, errors.New("no data submitted")
 		}
 
-		i := 0
-		for len(body) > 0 {
-			// Since AggregationBits in Attestation is variable length, the length of the Attestation object will be added as the first byte, per SSZ spec.
-			sszLen := 1 + int(body[0])
-			var sourceAtt eth.Attestation
-			if err := sourceAtt.UnmarshalSSZ(body[:sszLen]); err != nil {
-				return nil, nil, errors.Wrap(err, "could not unmarshal ssz attestation")
-			}
-			body = body[sszLen:]
-
-			if _, err = bls.SignatureFromBytes(sourceAtt.Signature); err != nil {
+		atts := make(types.Attestations, 0)
+		if err := atts.UnmarshalSSZ(body); err != nil {
+			return nil, nil, errors.Wrap(err, "could not unmarshal ssz attestations")
+		}
+		for i, att := range atts {
+			if _, err = bls.SignatureFromBytes(att.Signature); err != nil {
 				attFailures = append(attFailures, &server.IndexedVerificationFailure{
 					Index:   i,
 					Message: "Incorrect attestation signature: " + err.Error(),
 				})
 			} else {
-				validAttestations = append(validAttestations, &sourceAtt)
+				validAttestations = append(validAttestations, att)
 			}
-			i++
-		}
-
-		if len(body) > 0 {
-			return nil, nil, errors.New("could not decode request body, extra bytes found")
 		}
 	} else {
 		var sourceAttestations []*structs.Attestation
