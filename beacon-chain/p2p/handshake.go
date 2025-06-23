@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
 	prysmTime "github.com/OffchainLabs/prysm/v6/time"
+	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
@@ -25,6 +26,22 @@ func peerMultiaddrString(conn network.Conn) string {
 	remoteMultiaddr := conn.RemoteMultiaddr().String()
 	remotePeerID := conn.RemotePeer().String()
 	return fmt.Sprintf("%s/p2p/%s", remoteMultiaddr, remotePeerID)
+}
+
+func peerAgentString(pid peer.ID, host host.Host) string {
+	const unknownAgent = "unknown"
+
+	rawAgent, err := host.Peerstore().Get(pid, "AgentVersion")
+	if err != nil {
+		return unknownAgent
+	}
+
+	agent, ok := rawAgent.(string)
+	if !ok {
+		return unknownAgent
+	}
+
+	return agent
 }
 
 func (s *Service) connectToPeer(conn network.Conn) {
@@ -59,6 +76,7 @@ func (s *Service) disconnectFromPeerOnError(
 		WithError(badPeerErr).
 		WithFields(logrus.Fields{
 			"multiaddr":            peerMultiaddrString(conn),
+			"agent":                peerAgentString(remotePeerID, s.host),
 			"direction":            conn.Stat().Direction.String(),
 			"remainingActivePeers": len(s.peers.Active()),
 		}).
