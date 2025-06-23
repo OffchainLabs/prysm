@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 	"testing"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
@@ -881,4 +883,208 @@ func TestSendBlobsByRangeRequest(t *testing.T) {
 
 func TestErrInvalidFetchedDataDistinction(t *testing.T) {
 	require.Equal(t, false, errors.Is(ErrInvalidFetchedData, verification.ErrBlobInvalid))
+}
+
+func TestReadChunkedDataColumnSidecar(t *testing.T) {
+	t.Run("non nil status code", func(t *testing.T) {
+		const reason = "a dummy reason"
+
+		p1, p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		p2.SetStreamHandler(p2p.RPCDataColumnSidecarsByRootTopicV1, func(stream network.Stream) {
+			defer wg.Done()
+
+			_, err := readChunkedDataColumnSidecar(stream, p2, nil)
+			require.ErrorContains(t, reason, err)
+		})
+
+		p1.Connect(p2)
+
+		stream, err := p1.BHost.NewStream(t.Context(), p2.PeerID(), p2p.RPCDataColumnSidecarsByRootTopicV1)
+		require.NoError(t, err)
+
+		writeErrorResponseToStream(responseCodeInvalidRequest, reason, stream, p1)
+
+		if util.WaitTimeout(&wg, time.Second) {
+			t.Fatal("Did not receive stream within 1 sec")
+		}
+	})
+
+	t.Run("unrecognized fork digest", func(t *testing.T) {
+		p1, p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		p2.SetStreamHandler(p2p.RPCDataColumnSidecarsByRootTopicV1, func(stream network.Stream) {
+			defer wg.Done()
+
+			_, err := readChunkedDataColumnSidecar(stream, p2, ContextByteVersions{})
+			require.ErrorContains(t, "unrecognized fork digest", err)
+		})
+
+		p1.Connect(p2)
+
+		stream, err := p1.BHost.NewStream(t.Context(), p2.PeerID(), p2p.RPCDataColumnSidecarsByRootTopicV1)
+		require.NoError(t, err)
+
+		_, err = stream.Write([]byte{responseCodeSuccess})
+		require.NoError(t, err)
+
+		err = writeContextToStream([]byte{42, 42, 42, 42}, stream)
+		require.NoError(t, err)
+
+		if util.WaitTimeout(&wg, time.Second) {
+			t.Fatal("Did not receive stream within 1 sec")
+		}
+	})
+
+	t.Run("before fulu", func(t *testing.T) {
+		p1, p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		p2.SetStreamHandler(p2p.RPCDataColumnSidecarsByRootTopicV1, func(stream network.Stream) {
+			defer wg.Done()
+
+			_, err := readChunkedDataColumnSidecar(stream, p2, ContextByteVersions{[4]byte{1, 2, 3, 4}: version.Phase0})
+			require.ErrorContains(t, "unexpected context bytes", err)
+		})
+
+		p1.Connect(p2)
+
+		stream, err := p1.BHost.NewStream(t.Context(), p2.PeerID(), p2p.RPCDataColumnSidecarsByRootTopicV1)
+		require.NoError(t, err)
+
+		_, err = stream.Write([]byte{responseCodeSuccess})
+		require.NoError(t, err)
+
+		err = writeContextToStream([]byte{1, 2, 3, 4}, stream)
+		require.NoError(t, err)
+
+		if util.WaitTimeout(&wg, time.Second) {
+			t.Fatal("Did not receive stream within 1 sec")
+		}
+	})
+
+	t.Run("one validation failed", func(t *testing.T) {
+		const reason = "a dummy reason"
+
+		p1, p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		p2.SetStreamHandler(p2p.RPCDataColumnSidecarsByRootTopicV1, func(stream network.Stream) {
+			defer wg.Done()
+
+			validationOne := func(column blocks.RODataColumn) error {
+				return nil
+			}
+
+			validationTwo := func(column blocks.RODataColumn) error {
+				return errors.New(reason)
+			}
+
+			_, err := readChunkedDataColumnSidecar(
+				stream,
+				p2,
+				ContextByteVersions{[4]byte{1, 2, 3, 4}: version.Fulu},
+				validationOne, // OK
+				validationTwo, // Fail
+			)
+
+			require.ErrorContains(t, reason, err)
+		})
+
+		p1.Connect(p2)
+
+		stream, err := p1.BHost.NewStream(t.Context(), p2.PeerID(), p2p.RPCDataColumnSidecarsByRootTopicV1)
+		require.NoError(t, err)
+
+		const count = 4
+		kzgCommitmentsInclusionProof := make([][]byte, 0, count)
+		for range count {
+			kzgCommitmentsInclusionProof = append(kzgCommitmentsInclusionProof, make([]byte, 32))
+		}
+
+		// Success response code.
+		_, err = stream.Write([]byte{responseCodeSuccess})
+		require.NoError(t, err)
+
+		// Fork digest.
+		err = writeContextToStream([]byte{1, 2, 3, 4}, stream)
+		require.NoError(t, err)
+
+		// Sidecar.
+		_, err = p1.Encoding().EncodeWithMaxLength(stream, &ethpb.DataColumnSidecar{
+			SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
+				Header: &ethpb.BeaconBlockHeader{
+					ParentRoot: make([]byte, fieldparams.RootLength),
+					StateRoot:  make([]byte, fieldparams.RootLength),
+					BodyRoot:   make([]byte, fieldparams.RootLength),
+				},
+				Signature: make([]byte, fieldparams.BLSSignatureLength),
+			},
+			KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
+		})
+		require.NoError(t, err)
+
+		if util.WaitTimeout(&wg, time.Minute) {
+			t.Fatal("Did not receive stream within 1 sec")
+		}
+	})
+
+	t.Run("nominal", func(t *testing.T) {
+		p1, p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+
+		const count = 4
+		kzgCommitmentsInclusionProof := make([][]byte, 0, count)
+		for range count {
+			kzgCommitmentsInclusionProof = append(kzgCommitmentsInclusionProof, make([]byte, 32))
+		}
+
+		expected := &ethpb.DataColumnSidecar{
+			SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
+				Header: &ethpb.BeaconBlockHeader{
+					ParentRoot: make([]byte, fieldparams.RootLength),
+					StateRoot:  make([]byte, fieldparams.RootLength),
+					BodyRoot:   make([]byte, fieldparams.RootLength),
+				},
+				Signature: make([]byte, fieldparams.BLSSignatureLength),
+			},
+			KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
+		}
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		p2.SetStreamHandler(p2p.RPCDataColumnSidecarsByRootTopicV1, func(stream network.Stream) {
+			defer wg.Done()
+
+			actual, err := readChunkedDataColumnSidecar(stream, p2, ContextByteVersions{[4]byte{1, 2, 3, 4}: version.Fulu})
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, expected, actual.DataColumnSidecar)
+		})
+
+		p1.Connect(p2)
+
+		stream, err := p1.BHost.NewStream(t.Context(), p2.PeerID(), p2p.RPCDataColumnSidecarsByRootTopicV1)
+		require.NoError(t, err)
+
+		// Success response code.
+		_, err = stream.Write([]byte{responseCodeSuccess})
+		require.NoError(t, err)
+
+		// Fork digest.
+		err = writeContextToStream([]byte{1, 2, 3, 4}, stream)
+		require.NoError(t, err)
+
+		// Sidecar.
+		_, err = p1.Encoding().EncodeWithMaxLength(stream, expected)
+		require.NoError(t, err)
+
+		if util.WaitTimeout(&wg, time.Minute) {
+			t.Fatal("Did not receive stream within 1 sec")
+		}
+	})
 }

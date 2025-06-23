@@ -45,11 +45,6 @@ message DataColumnSidecar {
             "kzg_commitments_inclusion_proof_depth.size,32" ];
 }
 
-message DataColumnIdentifier {
-  bytes block_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
-  uint64 index = 2;
-}
-
 message DataColumnsByRootIdentifier {
   bytes block_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
   repeated uint64 columns = 2  [ (ethereum.eth.ext.ssz_max) = "128" ];

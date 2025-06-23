@@ -611,7 +611,7 @@ func TestSubmitAttestations(t *testing.T) {
 			e := &httputil.DefaultJsonError{}
 			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 			assert.Equal(t, http.StatusBadRequest, e.Code)
-			assert.Equal(t, true, strings.Contains(e.Message, "no data submitted"))
+			assert.Equal(t, true, strings.Contains(e.Message, "No data submitted"))
 		})
 		t.Run("empty", func(t *testing.T) {
 			var body bytes.Buffer
@@ -676,44 +676,6 @@ func TestSubmitAttestations(t *testing.T) {
 				assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Target.Epoch)
 				assert.Equal(t, 1, s.AttestationsPool.UnaggregatedAttestationCount())
 			})
-			t.Run("single SSZ", func(t *testing.T) {
-				broadcaster := &p2pMock.MockBroadcaster{}
-				s.Broadcaster = broadcaster
-				s.AttestationsPool = attestations.NewPool()
-
-				var jsonSingleAtt []structs.Attestation
-				err = json.NewDecoder(strings.NewReader(singleAtt)).Decode(&jsonSingleAtt)
-				require.NoError(t, err)
-				singleAttConsensus, err := jsonSingleAtt[0].ToConsensus()
-				require.NoError(t, err)
-				sszPayload, err := singleAttConsensus.MarshalSSZ()
-				require.NoError(t, err)
-
-				var body bytes.Buffer
-				_, err = body.Write(sszPayload)
-				require.NoError(t, err)
-				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
-				request.Header.Set("Content-Type", api.OctetStreamMediaType)
-				writer := httptest.NewRecorder()
-				writer.Body = &bytes.Buffer{}
-
-				s.SubmitAttestationsV2(writer, request)
-
-				assert.Equal(t, http.StatusOK, writer.Code)
-				assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
-				assert.Equal(t, 1, broadcaster.NumAttestations())
-				assert.Equal(t, "0x03", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetAggregationBits()))
-				assert.Equal(t, "0x8146f4397bfd8fd057ebbcd6a67327bdc7ed5fb650533edcb6377b650dea0b6da64c14ecd60846d5c0a0cd43893d6972092500f82c9d8a955e2b58c5ed3cbe885d84008ace6bd86ba9e23652f58e2ec207cec494c916063257abf285b9b15b15", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetSignature()))
-				assert.Equal(t, primitives.Slot(0), broadcaster.BroadcastAttestations[0].GetData().Slot)
-				assert.Equal(t, primitives.CommitteeIndex(0), broadcaster.BroadcastAttestations[0].GetData().CommitteeIndex)
-				assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().BeaconBlockRoot))
-				assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().Source.Root))
-				assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Source.Epoch)
-				assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().Target.Root))
-				assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Target.Epoch)
-				assert.Equal(t, 1, s.AttestationsPool.UnaggregatedAttestationCount())
-			})
 			t.Run("multiple", func(t *testing.T) {
 				broadcaster := &p2pMock.MockBroadcaster{}
 				s.Broadcaster = broadcaster
@@ -724,38 +686,6 @@ func TestSubmitAttestations(t *testing.T) {
 				require.NoError(t, err)
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
 				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
-				writer := httptest.NewRecorder()
-				writer.Body = &bytes.Buffer{}
-
-				s.SubmitAttestationsV2(writer, request)
-				assert.Equal(t, http.StatusOK, writer.Code)
-				assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
-				assert.Equal(t, 2, broadcaster.NumAttestations())
-				assert.Equal(t, 2, s.AttestationsPool.UnaggregatedAttestationCount())
-			})
-			t.Run("multiple SSZ", func(t *testing.T) {
-				broadcaster := &p2pMock.MockBroadcaster{}
-				s.Broadcaster = broadcaster
-				s.AttestationsPool = attestations.NewPool()
-
-				var jsonAttList []structs.Attestation
-				err = json.NewDecoder(strings.NewReader(multipleAtts)).Decode(&jsonAttList)
-				require.NoError(t, err)
-				var sszPayload []byte
-				for _, att := range jsonAttList {
-					attConsensus, err := att.ToConsensus()
-					require.NoError(t, err)
-					attSSZ, err := attConsensus.MarshalSSZ()
-					require.NoError(t, err)
-					sszPayload = append(sszPayload, attSSZ...)
-				}
-
-				var body bytes.Buffer
-				_, err := body.Write(sszPayload)
-				require.NoError(t, err)
-				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
-				request.Header.Set("Content-Type", api.OctetStreamMediaType)
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
 
@@ -813,21 +743,7 @@ func TestSubmitAttestations(t *testing.T) {
 				e := &httputil.DefaultJsonError{}
 				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 				assert.Equal(t, http.StatusBadRequest, e.Code)
-				assert.Equal(t, true, strings.Contains(e.Message, "no data submitted"))
-			})
-			t.Run("no body SSZ", func(t *testing.T) {
-				request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
-				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
-				request.Header.Set("Content-Type", api.OctetStreamMediaType)
-				writer := httptest.NewRecorder()
-				writer.Body = &bytes.Buffer{}
-
-				s.SubmitAttestationsV2(writer, request)
-				assert.Equal(t, http.StatusBadRequest, writer.Code)
-				e := &httputil.DefaultJsonError{}
-				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
-				assert.Equal(t, http.StatusBadRequest, e.Code)
-				assert.Equal(t, true, strings.Contains(e.Message, "no data submitted"))
+				assert.Equal(t, true, strings.Contains(e.Message, "No data submitted"))
 			})
 			t.Run("empty", func(t *testing.T) {
 				var body bytes.Buffer
@@ -851,32 +767,6 @@ func TestSubmitAttestations(t *testing.T) {
 				require.NoError(t, err)
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
 				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
-				writer := httptest.NewRecorder()
-				writer.Body = &bytes.Buffer{}
-
-				s.SubmitAttestationsV2(writer, request)
-				assert.Equal(t, http.StatusBadRequest, writer.Code)
-				e := &server.IndexedVerificationFailureError{}
-				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
-				assert.Equal(t, http.StatusBadRequest, e.Code)
-				require.Equal(t, 1, len(e.Failures))
-				assert.Equal(t, true, strings.Contains(e.Failures[0].Message, "Incorrect attestation signature"))
-			})
-			t.Run("invalid SSZ", func(t *testing.T) {
-				var jsonSingleAtt []structs.Attestation
-				err = json.NewDecoder(strings.NewReader(invalidAtt)).Decode(&jsonSingleAtt)
-				require.NoError(t, err)
-				singleAttConsensus, err := jsonSingleAtt[0].ToConsensus()
-				require.NoError(t, err)
-				sszPayload, err := singleAttConsensus.MarshalSSZ()
-				require.NoError(t, err)
-
-				var body bytes.Buffer
-				_, err = body.Write(sszPayload)
-				require.NoError(t, err)
-				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
-				request.Header.Set("Content-Type", api.OctetStreamMediaType)
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
 
@@ -924,44 +814,6 @@ func TestSubmitAttestations(t *testing.T) {
 				assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Target.Epoch)
 				assert.Equal(t, 1, s.AttestationsPool.UnaggregatedAttestationCount())
 			})
-			t.Run("single SSZ", func(t *testing.T) {
-				broadcaster := &p2pMock.MockBroadcaster{}
-				s.Broadcaster = broadcaster
-				s.AttestationsPool = attestations.NewPool()
-
-				var jsonSingleAttElectra []structs.SingleAttestation
-				err = json.NewDecoder(strings.NewReader(singleAttElectra)).Decode(&jsonSingleAttElectra)
-				require.NoError(t, err)
-				singleAttElectraConsensus, err := jsonSingleAttElectra[0].ToConsensus()
-				require.NoError(t, err)
-				sszPayload, err := singleAttElectraConsensus.MarshalSSZ()
-				require.NoError(t, err)
-
-				var body bytes.Buffer
-				_, err = body.Write(sszPayload)
-				require.NoError(t, err)
-				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-				request.Header.Set(api.VersionHeader, version.String(version.Electra))
-				request.Header.Set("Content-Type", api.OctetStreamMediaType)
-				writer := httptest.NewRecorder()
-				writer.Body = &bytes.Buffer{}
-
-				s.SubmitAttestationsV2(writer, request)
-
-				assert.Equal(t, http.StatusOK, writer.Code)
-				assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
-				assert.Equal(t, 1, broadcaster.NumAttestations())
-				assert.Equal(t, primitives.ValidatorIndex(1), broadcaster.BroadcastAttestations[0].GetAttestingIndex())
-				assert.Equal(t, "0x8146f4397bfd8fd057ebbcd6a67327bdc7ed5fb650533edcb6377b650dea0b6da64c14ecd60846d5c0a0cd43893d6972092500f82c9d8a955e2b58c5ed3cbe885d84008ace6bd86ba9e23652f58e2ec207cec494c916063257abf285b9b15b15", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetSignature()))
-				assert.Equal(t, primitives.Slot(0), broadcaster.BroadcastAttestations[0].GetData().Slot)
-				assert.Equal(t, primitives.CommitteeIndex(0), broadcaster.BroadcastAttestations[0].GetData().CommitteeIndex)
-				assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().BeaconBlockRoot))
-				assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().Source.Root))
-				assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Source.Epoch)
-				assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().Target.Root))
-				assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Target.Epoch)
-				assert.Equal(t, 1, s.AttestationsPool.UnaggregatedAttestationCount())
-			})
 			t.Run("multiple", func(t *testing.T) {
 				broadcaster := &p2pMock.MockBroadcaster{}
 				s.Broadcaster = broadcaster
@@ -972,39 +824,6 @@ func TestSubmitAttestations(t *testing.T) {
 				require.NoError(t, err)
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
 				request.Header.Set(api.VersionHeader, version.String(version.Electra))
-				writer := httptest.NewRecorder()
-				writer.Body = &bytes.Buffer{}
-
-				s.SubmitAttestationsV2(writer, request)
-				assert.Equal(t, http.StatusOK, writer.Code)
-				assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
-				assert.Equal(t, 2, broadcaster.NumAttestations())
-				assert.Equal(t, 2, s.AttestationsPool.UnaggregatedAttestationCount())
-			})
-			t.Run("multiple SSZ", func(t *testing.T) {
-				broadcaster := &p2pMock.MockBroadcaster{}
-				s.Broadcaster = broadcaster
-				s.AttestationsPool = attestations.NewPool()
-
-				var jsonAttsList []structs.SingleAttestation
-				err = json.NewDecoder(strings.NewReader(multipleAttsElectra)).Decode(&jsonAttsList)
-				require.NoError(t, err)
-
-				var sszPayload []byte
-				for _, att := range jsonAttsList {
-					singleAttElectraConsensus, err := att.ToConsensus()
-					require.NoError(t, err)
-					sszPayloadPart, err := singleAttElectraConsensus.MarshalSSZ()
-					require.NoError(t, err)
-					sszPayload = append(sszPayload, sszPayloadPart...)
-				}
-
-				var body bytes.Buffer
-				_, err = body.Write(sszPayload)
-				require.NoError(t, err)
-				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-				request.Header.Set(api.VersionHeader, version.String(version.Electra))
-				request.Header.Set("Content-Type", api.OctetStreamMediaType)
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
 
@@ -1025,21 +844,7 @@ func TestSubmitAttestations(t *testing.T) {
 				e := &httputil.DefaultJsonError{}
 				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 				assert.Equal(t, http.StatusBadRequest, e.Code)
-				assert.Equal(t, true, strings.Contains(e.Message, "no data submitted"))
-			})
-			t.Run("no body SSZ", func(t *testing.T) {
-				request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
-				request.Header.Set(api.VersionHeader, version.String(version.Electra))
-				request.Header.Set("Content-Type", api.OctetStreamMediaType)
-				writer := httptest.NewRecorder()
-				writer.Body = &bytes.Buffer{}
-
-				s.SubmitAttestationsV2(writer, request)
-				assert.Equal(t, http.StatusBadRequest, writer.Code)
-				e := &httputil.DefaultJsonError{}
-				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
-				assert.Equal(t, http.StatusBadRequest, e.Code)
-				assert.Equal(t, true, strings.Contains(e.Message, "no data submitted"))
+				assert.Equal(t, true, strings.Contains(e.Message, "No data submitted"))
 			})
 			t.Run("empty", func(t *testing.T) {
 				var body bytes.Buffer
@@ -1063,32 +868,6 @@ func TestSubmitAttestations(t *testing.T) {
 				require.NoError(t, err)
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
 				request.Header.Set(api.VersionHeader, version.String(version.Electra))
-				writer := httptest.NewRecorder()
-				writer.Body = &bytes.Buffer{}
-
-				s.SubmitAttestationsV2(writer, request)
-				assert.Equal(t, http.StatusBadRequest, writer.Code)
-				e := &server.IndexedVerificationFailureError{}
-				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
-				assert.Equal(t, http.StatusBadRequest, e.Code)
-				require.Equal(t, 1, len(e.Failures))
-				assert.Equal(t, true, strings.Contains(e.Failures[0].Message, "Incorrect attestation signature"))
-			})
-			t.Run("invalid SSZ", func(t *testing.T) {
-				var jsonInvalidAttElectra []structs.SingleAttestation
-				err = json.NewDecoder(strings.NewReader(invalidAttElectra)).Decode(&jsonInvalidAttElectra)
-				require.NoError(t, err)
-				invalidAttElectraConsensus, err := jsonInvalidAttElectra[0].ToConsensus()
-				require.NoError(t, err)
-				sszPayload, err := invalidAttElectraConsensus.MarshalSSZ()
-				require.NoError(t, err)
-
-				var body bytes.Buffer
-				_, err = body.Write(sszPayload)
-				require.NoError(t, err)
-				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-				request.Header.Set(api.VersionHeader, version.String(version.Electra))
-				request.Header.Set("Content-Type", api.OctetStreamMediaType)
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
 

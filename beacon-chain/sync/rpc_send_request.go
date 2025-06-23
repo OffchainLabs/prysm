@@ -42,6 +42,10 @@ var (
 	errDataColumnChunkedReadFailure   = errors.New("failed to read stream of chunk-encoded data columns")
 )
 
+// ------
+// Blocks
+// ------
+
 // BeaconBlockProcessor defines a block processing function, which allows to start utilizing
 // blocks even before all blocks are ready.
 type BeaconBlockProcessor func(block interfaces.ReadOnlySignedBeaconBlock) error
@@ -155,6 +159,14 @@ func SendBeaconBlocksByRootRequest(
 	return blocks, nil
 }
 
+// -------------
+// Blob sidecars
+// -------------
+
+// BlobResponseValidation represents a function that can validate aspects of a single unmarshaled blob sidecar
+// that was received from a peer in response to an rpc request.
+type BlobResponseValidation func(blocks.ROBlob) error
+
 func SendBlobsByRangeRequest(ctx context.Context, tor blockchain.TemporalOracle, p2pApi p2p.SenderEncoder, pid peer.ID, ctxMap ContextByteVersions, req *ethpb.BlobSidecarsByRangeRequest, bvs ...BlobResponseValidation) ([]blocks.ROBlob, error) {
 	topic, err := p2p.TopicFromMessage(p2p.BlobSidecarsByRangeName, slots.ToEpoch(tor.CurrentSlot()))
 	if err != nil {
@@ -215,10 +227,6 @@ func SendBlobSidecarByRoot(
 	}
 	return readChunkEncodedBlobs(stream, p2pApi.Encoding(), ctxMap, blobValidatorFromRootReq(req), max)
 }
-
-// BlobResponseValidation represents a function that can validate aspects of a single unmarshaled blob
-// that was received from a peer in response to an rpc request.
-type BlobResponseValidation func(blocks.ROBlob) error
 
 func composeBlobValidations(vf ...BlobResponseValidation) BlobResponseValidation {
 	return func(blob blocks.ROBlob) error {
@@ -385,10 +393,19 @@ func readChunkedBlobSidecar(stream network.Stream, encoding encoder.NetworkEncod
 	return rob, nil
 }
 
-func readChunkedDataColumnSideCar(
+// --------------------
+// Data column sidecars
+// --------------------
+
+// DataColumnResponseValidation represents a function that can validate aspects of a single unmarshaled data column sidecar
+// that was received from a peer in response to an rpc request.
+type DataColumnResponseValidation func(column blocks.RODataColumn) error
+
+func readChunkedDataColumnSidecar(
 	stream network.Stream,
 	p2pApi p2p.P2P,
 	ctxMap ContextByteVersions,
+	validationFunctions ...DataColumnResponseValidation,
 ) (*blocks.RODataColumn, error) {
 	// Read the status code from the stream.
 	statusCode, errMessage, err := ReadStatusCode(stream, p2pApi.Encoding())
@@ -430,6 +447,13 @@ func readChunkedDataColumnSideCar(
 	roDataColumn, err := blocks.NewRODataColumn(dataColumnSidecar)
 	if err != nil {
 		return nil, errors.Wrap(err, "new read only data column")
+	}
+
+	// Run validation functions.
+	for _, validationFunction := range validationFunctions {
+		if err := validationFunction(roDataColumn); err != nil {
+			return nil, errors.Wrap(err, "validation function")
+		}
 	}
 
 	return &roDataColumn, nil

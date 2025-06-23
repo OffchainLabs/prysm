@@ -22,50 +22,52 @@ const (
 	SchemaVersionV3 = "/3"
 )
 
-// Specifies the protocol prefix for all our Req/Resp topics.
-const protocolPrefix = "/eth2/beacon_chain/req"
+const (
+	// Specifies the protocol prefix for all our Req/Resp topics.
+	protocolPrefix = "/eth2/beacon_chain/req"
 
-// StatusMessageName specifies the name for the status message topic.
-const StatusMessageName = "/status"
+	// StatusMessageName specifies the name for the status message topic.
+	StatusMessageName = "/status"
 
-// GoodbyeMessageName specifies the name for the goodbye message topic.
-const GoodbyeMessageName = "/goodbye"
+	// GoodbyeMessageName specifies the name for the goodbye message topic.
+	GoodbyeMessageName = "/goodbye"
 
-// BeaconBlocksByRangeMessageName specifies the name for the beacon blocks by range message topic.
-const BeaconBlocksByRangeMessageName = "/beacon_blocks_by_range"
+	// BeaconBlocksByRangeMessageName specifies the name for the beacon blocks by range message topic.
+	BeaconBlocksByRangeMessageName = "/beacon_blocks_by_range"
 
-// BeaconBlocksByRootsMessageName specifies the name for the beacon blocks by root message topic.
-const BeaconBlocksByRootsMessageName = "/beacon_blocks_by_root"
+	// BeaconBlocksByRootsMessageName specifies the name for the beacon blocks by root message topic.
+	BeaconBlocksByRootsMessageName = "/beacon_blocks_by_root"
 
-// PingMessageName Specifies the name for the ping message topic.
-const PingMessageName = "/ping"
+	// PingMessageName Specifies the name for the ping message topic.
+	PingMessageName = "/ping"
 
-// MetadataMessageName specifies the name for the metadata message topic.
-const MetadataMessageName = "/metadata"
+	// MetadataMessageName specifies the name for the metadata message topic.
+	MetadataMessageName = "/metadata"
 
-// BlobSidecarsByRangeName is the name for the BlobSidecarsByRange v1 message topic.
-const BlobSidecarsByRangeName = "/blob_sidecars_by_range"
+	// BlobSidecarsByRangeName is the name for the BlobSidecarsByRange v1 message topic.
+	BlobSidecarsByRangeName = "/blob_sidecars_by_range"
 
-// BlobSidecarsByRootName is the name for the BlobSidecarsByRoot v1 message topic.
-const BlobSidecarsByRootName = "/blob_sidecars_by_root"
+	// BlobSidecarsByRootName is the name for the BlobSidecarsByRoot v1 message topic.
+	BlobSidecarsByRootName = "/blob_sidecars_by_root"
 
-// LightClientBootstrapName is the name for the LightClientBootstrap message topic,
-const LightClientBootstrapName = "/light_client_bootstrap"
+	// LightClientBootstrapName is the name for the LightClientBootstrap message topic,
+	LightClientBootstrapName = "/light_client_bootstrap"
 
-// LightClientUpdatesByRangeName is the name for the LightClientUpdatesByRange topic.
-const LightClientUpdatesByRangeName = "/light_client_updates_by_range"
+	// LightClientUpdatesByRangeName is the name for the LightClientUpdatesByRange topic.
+	LightClientUpdatesByRangeName = "/light_client_updates_by_range"
 
-// LightClientFinalityUpdateName is the name for the LightClientFinalityUpdate topic.
-const LightClientFinalityUpdateName = "/light_client_finality_update"
+	// LightClientFinalityUpdateName is the name for the LightClientFinalityUpdate topic.
+	LightClientFinalityUpdateName = "/light_client_finality_update"
 
-// LightClientOptimisticUpdateName is the name for the LightClientOptimisticUpdate topic.
-const LightClientOptimisticUpdateName = "/light_client_optimistic_update"
+	// LightClientOptimisticUpdateName is the name for the LightClientOptimisticUpdate topic.
+	LightClientOptimisticUpdateName = "/light_client_optimistic_update"
 
-// DataColumnSidecarsByRootName is the name for the DataColumnSidecarsByRoot v1 message topic.
-const DataColumnSidecarsByRootName = "/data_column_sidecars_by_root"
+	// DataColumnSidecarsByRootName is the name for the DataColumnSidecarsByRoot v1 message topic.
+	DataColumnSidecarsByRootName = "/data_column_sidecars_by_root"
 
-// DataColumnSidecarsByRangeName is the name for the DataColumnSidecarsByRange v1 message topic.
-const DataColumnSidecarsByRangeName = "/data_column_sidecars_by_range"
+	// DataColumnSidecarsByRangeName is the name for the DataColumnSidecarsByRange v1 message topic.
+	DataColumnSidecarsByRangeName = "/data_column_sidecars_by_range"
+)
 
 const (
 	// V1 RPC Topics
@@ -124,94 +126,103 @@ const (
 )
 
 // RPCTopicMappings map the base message type to the rpc request.
-var RPCTopicMappings = map[string]interface{}{
-	// RPC Status Message
-	RPCStatusTopicV1: new(pb.Status),
-	// RPC Goodbye Message
-	RPCGoodByeTopicV1: new(primitives.SSZUint64),
-	// RPC Block By Range Message
-	RPCBlocksByRangeTopicV1: new(pb.BeaconBlocksByRangeRequest),
-	RPCBlocksByRangeTopicV2: new(pb.BeaconBlocksByRangeRequest),
-	// RPC Block By Root Message
-	RPCBlocksByRootTopicV1: new(p2ptypes.BeaconBlockByRootsReq),
-	RPCBlocksByRootTopicV2: new(p2ptypes.BeaconBlockByRootsReq),
-	// RPC Ping Message
-	RPCPingTopicV1: new(primitives.SSZUint64),
-	// RPC Metadata Message
-	RPCMetaDataTopicV1: new(interface{}),
-	RPCMetaDataTopicV2: new(interface{}),
-	RPCMetaDataTopicV3: new(interface{}),
-	// BlobSidecarsByRange v1 Message
-	RPCBlobSidecarsByRangeTopicV1: new(pb.BlobSidecarsByRangeRequest),
-	// BlobSidecarsByRoot v1 Message
-	RPCBlobSidecarsByRootTopicV1: new(p2ptypes.BlobSidecarsByRootReq),
+var (
+	RPCTopicMappings = map[string]interface{}{
+		// RPC Status Message
+		RPCStatusTopicV1: new(pb.Status),
 
-	// Light client
-	RPCLightClientBootstrapTopicV1:        new([fieldparams.RootLength]byte),
-	RPCLightClientUpdatesByRangeTopicV1:   new(pb.LightClientUpdatesByRangeRequest),
-	RPCLightClientFinalityUpdateTopicV1:   new(interface{}),
-	RPCLightClientOptimisticUpdateTopicV1: new(interface{}),
+		// RPC Goodbye Message
+		RPCGoodByeTopicV1: new(primitives.SSZUint64),
 
-	// DataColumnSidecarsByRange v1 Message
-	RPCDataColumnSidecarsByRangeTopicV1: new(pb.DataColumnSidecarsByRangeRequest),
-	// DataColumnSidecarsByRoot v1 Message
-	RPCDataColumnSidecarsByRootTopicV1: new(p2ptypes.DataColumnsByRootIdentifiers),
-}
+		// RPC Block By Range Message
+		RPCBlocksByRangeTopicV1: new(pb.BeaconBlocksByRangeRequest),
+		RPCBlocksByRangeTopicV2: new(pb.BeaconBlocksByRangeRequest),
 
-// Maps all registered protocol prefixes.
-var protocolMapping = map[string]bool{
-	protocolPrefix: true,
-}
+		// RPC Block By Root Message
+		RPCBlocksByRootTopicV1: new(p2ptypes.BeaconBlockByRootsReq),
+		RPCBlocksByRootTopicV2: new(p2ptypes.BeaconBlockByRootsReq),
 
-// Maps all the protocol message names for the different rpc
-// topics.
-var messageMapping = map[string]bool{
-	StatusMessageName:               true,
-	GoodbyeMessageName:              true,
-	BeaconBlocksByRangeMessageName:  true,
-	BeaconBlocksByRootsMessageName:  true,
-	PingMessageName:                 true,
-	MetadataMessageName:             true,
-	BlobSidecarsByRangeName:         true,
-	BlobSidecarsByRootName:          true,
-	LightClientBootstrapName:        true,
-	LightClientUpdatesByRangeName:   true,
-	LightClientFinalityUpdateName:   true,
-	LightClientOptimisticUpdateName: true,
-	DataColumnSidecarsByRootName:    true,
-	DataColumnSidecarsByRangeName:   true,
-}
+		// RPC Ping Message
+		RPCPingTopicV1: new(primitives.SSZUint64),
 
-// Maps all the RPC messages which are to updated in altair.
-var altairMapping = map[string]bool{
-	BeaconBlocksByRangeMessageName: true,
-	BeaconBlocksByRootsMessageName: true,
-	MetadataMessageName:            true,
-}
+		// RPC Metadata Message
+		RPCMetaDataTopicV1: new(interface{}),
+		RPCMetaDataTopicV2: new(interface{}),
+		RPCMetaDataTopicV3: new(interface{}),
 
-// Maps all the RPC messages which are to updated in fulu.
-var fuluMapping = map[string]bool{
-	MetadataMessageName: true,
-}
+		// BlobSidecarsByRange v1 Message
+		RPCBlobSidecarsByRangeTopicV1: new(pb.BlobSidecarsByRangeRequest),
 
-var versionMapping = map[string]bool{
-	SchemaVersionV1: true,
-	SchemaVersionV2: true,
-	SchemaVersionV3: true,
-}
+		// BlobSidecarsByRoot v1 Message
+		RPCBlobSidecarsByRootTopicV1: new(p2ptypes.BlobSidecarsByRootReq),
 
-// OmitContextBytesV1 keeps track of which RPC methods do not write context bytes in their v1 incarnations.
-// Phase0 did not have the notion of context bytes, which prefix wire-encoded values with a [4]byte identifier
-// to convey the schema for the receiver to use. These RPCs had a version bump to V2 when the context byte encoding
-// was introduced. For other RPC methods, context bytes are always required.
-var OmitContextBytesV1 = map[string]bool{
-	StatusMessageName:              true,
-	GoodbyeMessageName:             true,
-	BeaconBlocksByRangeMessageName: true,
-	BeaconBlocksByRootsMessageName: true,
-	PingMessageName:                true,
-	MetadataMessageName:            true,
-}
+		// Light client
+		RPCLightClientBootstrapTopicV1:        new([fieldparams.RootLength]byte),
+		RPCLightClientUpdatesByRangeTopicV1:   new(pb.LightClientUpdatesByRangeRequest),
+		RPCLightClientFinalityUpdateTopicV1:   new(interface{}),
+		RPCLightClientOptimisticUpdateTopicV1: new(interface{}),
+
+		// DataColumnSidecarsByRange v1 Message
+		RPCDataColumnSidecarsByRangeTopicV1: new(pb.DataColumnSidecarsByRangeRequest),
+
+		// DataColumnSidecarsByRoot v1 Message
+		RPCDataColumnSidecarsByRootTopicV1: new(p2ptypes.DataColumnsByRootIdentifiers),
+	}
+
+	// Maps all registered protocol prefixes.
+	protocolMapping = map[string]bool{
+		protocolPrefix: true,
+	}
+
+	// Maps all the protocol message names for the different rpc topics.
+	messageMapping = map[string]bool{
+		StatusMessageName:               true,
+		GoodbyeMessageName:              true,
+		BeaconBlocksByRangeMessageName:  true,
+		BeaconBlocksByRootsMessageName:  true,
+		PingMessageName:                 true,
+		MetadataMessageName:             true,
+		BlobSidecarsByRangeName:         true,
+		BlobSidecarsByRootName:          true,
+		LightClientBootstrapName:        true,
+		LightClientUpdatesByRangeName:   true,
+		LightClientFinalityUpdateName:   true,
+		LightClientOptimisticUpdateName: true,
+		DataColumnSidecarsByRootName:    true,
+		DataColumnSidecarsByRangeName:   true,
+	}
+
+	// Maps all the RPC messages which are to updated in altair.
+	altairMapping = map[string]string{
+		BeaconBlocksByRangeMessageName: SchemaVersionV2,
+		BeaconBlocksByRootsMessageName: SchemaVersionV2,
+		MetadataMessageName:            SchemaVersionV2,
+	}
+
+	// Maps all the RPC messages which are to updated in fulu.
+	fuluMapping = map[string]string{
+		MetadataMessageName: SchemaVersionV3,
+	}
+
+	versionMapping = map[string]bool{
+		SchemaVersionV1: true,
+		SchemaVersionV2: true,
+		SchemaVersionV3: true,
+	}
+
+	// OmitContextBytesV1 keeps track of which RPC methods do not write context bytes in their v1 incarnations.
+	// Phase0 did not have the notion of context bytes, which prefix wire-encoded values with a [4]byte identifier
+	// to convey the schema for the receiver to use. These RPCs had a version bump to V2 when the context byte encoding
+	// was introduced. For other RPC methods, context bytes are always required.
+	OmitContextBytesV1 = map[string]bool{
+		StatusMessageName:              true,
+		GoodbyeMessageName:             true,
+		BeaconBlocksByRangeMessageName: true,
+		BeaconBlocksByRootsMessageName: true,
+		PingMessageName:                true,
+		MetadataMessageName:            true,
+	}
+)
 
 // VerifyTopicMapping verifies that the topic and its accompanying
 // message type is correct.
@@ -333,13 +344,17 @@ func TopicFromMessage(msg string, epoch primitives.Epoch) (string, error) {
 	beaconConfig := params.BeaconConfig()
 
 	// Check if the message is to be updated in fulu.
-	if epoch >= beaconConfig.FuluForkEpoch && fuluMapping[msg] {
-		return protocolPrefix + msg + SchemaVersionV3, nil
+	if epoch >= beaconConfig.FuluForkEpoch {
+		if version, ok := fuluMapping[msg]; ok {
+			return protocolPrefix + msg + version, nil
+		}
 	}
 
 	// Check if the message is to be updated in altair.
-	if epoch >= beaconConfig.AltairForkEpoch && altairMapping[msg] {
-		return protocolPrefix + msg + SchemaVersionV2, nil
+	if epoch >= beaconConfig.AltairForkEpoch {
+		if version, ok := altairMapping[msg]; ok {
+			return protocolPrefix + msg + version, nil
+		}
 	}
 
 	return protocolPrefix + msg + SchemaVersionV1, nil

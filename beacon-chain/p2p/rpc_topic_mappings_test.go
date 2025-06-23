@@ -119,50 +119,31 @@ func TestTopicFromMessage_CorrectType(t *testing.T) {
 	})
 
 	t.Run("after altair fork but before fulu fork", func(t *testing.T) {
-		for m := range messageMapping {
-			topic, err := TopicFromMessage(m, altairForkEpoch)
-			require.NoError(t, err)
+		// Not modified in altair fork.
+		topic, err := TopicFromMessage(GoodbyeMessageName, altairForkEpoch)
+		require.NoError(t, err)
+		require.Equal(t, "/eth2/beacon_chain/req/goodbye/1", topic)
 
-			if altairMapping[m] {
-				require.Equal(t, true, strings.Contains(topic, SchemaVersionV2))
-				_, _, version, err := TopicDeconstructor(topic)
-				require.NoError(t, err)
-				require.Equal(t, SchemaVersionV2, version)
-				continue
-			}
-
-			require.Equal(t, true, strings.Contains(topic, SchemaVersionV1))
-			_, _, version, err := TopicDeconstructor(topic)
-			require.NoError(t, err)
-			require.Equal(t, SchemaVersionV1, version)
-		}
+		// Modified in altair fork.
+		topic, err = TopicFromMessage(MetadataMessageName, altairForkEpoch)
+		require.NoError(t, err)
+		require.Equal(t, "/eth2/beacon_chain/req/metadata/2", topic)
 	})
 
 	t.Run("after fulu fork", func(t *testing.T) {
-		for m := range messageMapping {
-			topic, err := TopicFromMessage(m, fuluForkEpoch)
-			require.NoError(t, err)
+		// Not modified in any fork.
+		topic, err := TopicFromMessage(GoodbyeMessageName, fuluForkEpoch)
+		require.NoError(t, err)
+		require.Equal(t, "/eth2/beacon_chain/req/goodbye/1", topic)
 
-			if fuluMapping[m] {
-				require.Equal(t, true, strings.Contains(topic, SchemaVersionV3))
-				_, _, version, err := TopicDeconstructor(topic)
-				require.NoError(t, err)
-				require.Equal(t, SchemaVersionV3, version)
-				continue
-			}
+		// Modified in altair fork.
+		topic, err = TopicFromMessage(BeaconBlocksByRangeMessageName, fuluForkEpoch)
+		require.NoError(t, err)
+		require.Equal(t, "/eth2/beacon_chain/req/beacon_blocks_by_range/2", topic)
 
-			if altairMapping[m] {
-				require.Equal(t, true, strings.Contains(topic, SchemaVersionV2))
-				_, _, version, err := TopicDeconstructor(topic)
-				require.NoError(t, err)
-				require.Equal(t, SchemaVersionV2, version)
-				continue
-			}
-
-			require.Equal(t, true, strings.Contains(topic, SchemaVersionV1))
-			_, _, version, err := TopicDeconstructor(topic)
-			require.NoError(t, err)
-			require.Equal(t, SchemaVersionV1, version)
-		}
+		// Modified both in altair and fulu fork.
+		topic, err = TopicFromMessage(MetadataMessageName, fuluForkEpoch)
+		require.NoError(t, err)
+		require.Equal(t, "/eth2/beacon_chain/req/metadata/3", topic)
 	})
 }
