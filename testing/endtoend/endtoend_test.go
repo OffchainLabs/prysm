@@ -425,10 +425,7 @@ func (r *testRunner) testDoppelGangerProtection(ctx context.Context) error {
 	if r.t.Failed() {
 		return errors.New("doppelganger was unable to be found")
 	}
-	// Expect an abrupt exit for the validator client.
-	if err := g.Wait(); err == nil || !strings.Contains(err.Error(), errGeneralCode) {
-		return fmt.Errorf("wanted an error of %s but received %v", errGeneralCode, err)
-	}
+	require.NoError(r.t, g.Wait())
 	return nil
 }
 
