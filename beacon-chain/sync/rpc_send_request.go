@@ -462,6 +462,11 @@ func SendDataColumnSidecarsByRangeRequest(
 	// Read the data column sidecars from the stream.
 	roDataColumns := make([]blocks.RODataColumn, 0, totalCount)
 	for range totalCount {
+		// Avoid reading extra chunks if the context is done.
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
 		roDataColumn, err := readChunkedDataColumnSidecar(
 			stream, p2pApi, ctxMap,
 			isSidecarSlotWithinBounds(request),
