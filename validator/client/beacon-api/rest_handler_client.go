@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v6/api"
-	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -79,9 +78,6 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 	primaryAcceptType := fmt.Sprintf("%s;q=%s", api.OctetStreamMediaType, "0.95")
 	secondaryAcceptType := fmt.Sprintf("%s;q=%s", api.JsonMediaType, "0.9")
 	acceptHeaderString := fmt.Sprintf("%s,%s", primaryAcceptType, secondaryAcceptType)
-	if features.Get().SSZOnly {
-		acceptHeaderString = api.OctetStreamMediaType
-	}
 	req.Header.Set("Accept", acceptHeaderString)
 	httpResp, err := c.client.Do(req)
 	if err != nil {
@@ -113,10 +109,6 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 			return nil, nil, errors.Wrapf(err, "failed to decode response body into error json for %s", httpResp.Request.URL)
 		}
 		return nil, nil, errorJson
-	}
-
-	if features.Get().SSZOnly && contentType != api.OctetStreamMediaType {
-		return nil, nil, errors.Errorf("server responded with non primary accept type %s", contentType)
 	}
 
 	return body, httpResp.Header, nil
