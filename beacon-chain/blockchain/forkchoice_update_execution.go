@@ -138,9 +138,9 @@ func (s *Service) shouldOverrideFCU(newHeadRoot [32]byte, proposingSlot primitiv
 		}
 		if sss >= doublylinkedtree.ProcessAttestationsThreshold {
 			log.WithFields(logrus.Fields{
-				"root":             fmt.Sprintf("%#x", newHeadRoot),
-				"weight":           headWeight,
-				"since slot start": sss,
+				"root":           fmt.Sprintf("%#x", newHeadRoot),
+				"weight":         headWeight,
+				"sinceSlotStart": sss,
 			}).Infof("Attempted late block reorg aborted due to attestations after %s",
 				doublylinkedtree.ProcessAttestationsThreshold)
 			lateBlockFailedAttemptFirstThreshold.Inc()
