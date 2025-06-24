@@ -171,6 +171,7 @@
   },
   "uintcast": {
     "exclude_files": {
+      "genesis/storage.go": "lint tag seems to not work",
       "external/.*": "Third party code",
       "rules_go_work-.*": "Third party code",
       ".*_test\\.go": "Tests are ok"
