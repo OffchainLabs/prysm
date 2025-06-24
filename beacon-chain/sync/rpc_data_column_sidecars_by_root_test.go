@@ -139,7 +139,7 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 			sidecars := make([]*blocks.RODataColumn, 0, 5)
 
 			for i := uint64(0); ; /* no stop condition */ i++ {
-				sidecar, err := readChunkedDataColumnSideCar(stream, remoteP2P, ctxMap)
+				sidecar, err := readChunkedDataColumnSidecar(stream, remoteP2P, ctxMap)
 				if errors.Is(err, io.EOF) {
 					// End of stream.
 					break

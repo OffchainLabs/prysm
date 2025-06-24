@@ -177,8 +177,7 @@ var (
 		protocolPrefix: true,
 	}
 
-	// Maps all the protocol message names for the different rpc
-	// topics.
+	// Maps all the protocol message names for the different rpc topics.
 	messageMapping = map[string]bool{
 		StatusMessageName:               true,
 		GoodbyeMessageName:              true,
