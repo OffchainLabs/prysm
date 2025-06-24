@@ -10,10 +10,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-const (
-	CustodyGroupCountEnrKey = "cgc"
-	kzgPosition             = 11 // The index of the KZG commitment list in the Body
-)
+const kzgPosition = 11 // The index of the KZG commitment list in the Body
 
 var (
 	ErrIndexTooLarge               = errors.New("column index is larger than the specified columns count")
@@ -30,7 +27,7 @@ var (
 // https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/p2p-interface.md#custody-group-count
 type Cgc uint64
 
-func (Cgc) ENRKey() string { return CustodyGroupCountEnrKey }
+func (Cgc) ENRKey() string { return params.BeaconNetworkConfig().CustodyGroupCountKey }
 
 // VerifyDataColumnSidecar verifies if the data column sidecar is valid.
 // https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/p2p-interface.md#verify_data_column_sidecar

@@ -228,23 +228,6 @@ func (s *Service) RefreshPersistentSubnets() {
 	// Compare current epoch with the Fulu fork epoch.
 	fuluForkEpoch := params.BeaconConfig().FuluForkEpoch
 
-	// We add `1` to the current epoch because we want to prepare one epoch before the Fulu fork.
-	if currentEpoch+1 < fuluForkEpoch {
-		// Altair behaviour.
-		if metadataVersion == version.Altair && isBitVUpToDate && isBitSUpToDate {
-			// Nothing to do, return early.
-			return
-		}
-
-		// Some data have changed, update our record and metadata.
-		s.updateSubnetRecordWithMetadataV2(bitV, bitS)
-
-		// Ping all peers to inform them of new metadata
-		s.pingPeersAndLogEnr()
-
-		return
-	}
-
 	// Get the current custody group count.
 	custodyGroupCount := s.cfg.CustodyInfo.ActualGroupCount()
 
@@ -252,6 +235,26 @@ func (s *Service) RefreshPersistentSubnets() {
 	inRecordCustodyGroupCount, err := peerdas.CustodyGroupCountFromRecord(record)
 	if err != nil {
 		log.WithError(err).Error("Could not retrieve custody subnet count")
+		return
+	}
+
+	// We add `1` to the current epoch because we want to prepare one epoch before the Fulu fork.
+	if currentEpoch+1 < fuluForkEpoch {
+		// Is our custody group count record up to date?
+		isCustodyGroupCountUpToDate := custodyGroupCount == inRecordCustodyGroupCount
+
+		// Altair behaviour.
+		if metadataVersion == version.Altair && isBitVUpToDate && isBitSUpToDate && (!params.FuluEnabled() || isCustodyGroupCountUpToDate) {
+			// Nothing to do, return early.
+			return
+		}
+
+		// Some data have changed, update our record and metadata.
+		s.updateSubnetRecordWithMetadataV2(bitV, bitS, custodyGroupCount)
+
+		// Ping all peers to inform them of new metadata
+		s.pingPeersAndLogEnr()
+
 		return
 	}
 
