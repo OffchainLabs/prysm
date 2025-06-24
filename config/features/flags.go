@@ -207,6 +207,12 @@ var (
 		Name:  "ssz-only",
 		Usage: "(debug): Forces the validator client to use SSZ for communication with the beacon node when REST mode is enabled",
 	}
+
+	// JSONOnly forces the validator client to use JSON for communication with the beacon node when REST mode is enabled
+	JSONOnly = &cli.BoolFlag{
+		Name:  "json-only",
+		Usage: "(debug): Forces the validator client to use JSON for communication with the beacon node when REST mode is enabled",
+	}
 )
 
 // devModeFlags holds list of flags that are set when development mode is on.

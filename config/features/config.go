@@ -53,6 +53,7 @@ type Flags struct {
 	EnableDutiesV2                      bool // EnableDutiesV2 sets validator client to use the get Duties V2 endpoint
 	EnableWeb                           bool // EnableWeb enables the webui on the validator client
 	SSZOnly                             bool // SSZOnly forces the validator client to use SSZ for communication with the beacon node when REST mode is enabled (useful for debugging)
+	JSONOnly                            bool // JSONOnly forces the validator client to use JSON for communication with the beacon node when REST mode is enabled (useful for debugging)
 	// Logging related toggles.
 	DisableGRPCConnectionLogs bool // Disables logging when a new grpc client has connected.
 	EnableFullSSZDataLogging  bool // Enables logging for full ssz data on rejected gossip messages
@@ -348,6 +349,10 @@ func ConfigureValidator(ctx *cli.Context) error {
 	if ctx.Bool(SSZOnly.Name) {
 		logEnabled(SSZOnly)
 		cfg.SSZOnly = true
+	}
+	if ctx.Bool(JSONOnly.Name) {
+		logEnabled(JSONOnly)
+		cfg.JSONOnly = true
 	}
 
 	cfg.KeystoreImportDebounceInterval = ctx.Duration(dynamicKeyReloadDebounceInterval.Name)
