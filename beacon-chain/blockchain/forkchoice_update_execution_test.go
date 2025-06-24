@@ -181,7 +181,7 @@ func TestShouldOverrideFCU(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, headRoot, head)
 
-	wantLog := "aborted due to attestations after 10s"
+	wantLog := "aborted due to attestations after threshold"
 	fcs.SetGenesisTime(time.Now().Add(-29 * time.Second))
 	require.Equal(t, true, service.shouldOverrideFCU(parentRoot, 3))
 	require.LogsDoNotContain(t, hook, wantLog)
