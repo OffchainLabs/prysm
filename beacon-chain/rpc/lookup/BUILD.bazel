@@ -45,6 +45,7 @@ go_test(
         "//beacon-chain/state/stategen:go_default_library",
         "//beacon-chain/state/stategen/mock:go_default_library",
         "//beacon-chain/verification:go_default_library",
+        "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/primitives:go_default_library",
