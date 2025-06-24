@@ -142,13 +142,5 @@ func ensureWritable(dir string) (err error) {
 }
 
 func uint64ToTime(ts uint64) time.Time {
-	return time.Unix(int64(ts), 0) // lint:uintcast -- genesis timestamp won't exceed int64 range
+	return time.Unix(int64(ts), 0) // lint:ignore uintcast -- genesis timestamp won't exceed int64 range
 }
-
-// User specifies either genesis data file or beacon api
-// User specifies data directory (use main db directory)
-// Add new initializer for db type, which node.go sets if the other two are unset
-// All initializers write to the state file, except embedded
-// node.go makes sure the needful is in the db
-// db code needs to work before db startup has happened
-// All initializers should short circuit if a genesis file is found
