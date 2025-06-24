@@ -128,7 +128,6 @@ go_test(
         "//api/server/structs:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/rpc/eth/shared/testing:go_default_library",
-        "//config/features:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//consensus-types/validator:go_default_library",
