@@ -60,7 +60,7 @@ func (m *healthMonitor) performHealthCheck() {
 	ishealthy := m.v.FindHealthyHost(m.ctx)
 	if ishealthy {
 		m.fails = 0
-	} else {
+	} else if m.maxFails > 0 {
 		log.WithFields(logrus.Fields{
 			"fails":    m.fails,
 			"maxFails": m.maxFails,
