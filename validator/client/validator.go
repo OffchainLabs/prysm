@@ -1245,16 +1245,14 @@ func (v *validator) Host() string {
 	return v.validatorClient.Host()
 }
 
-func (v *validator) ChangeHost() bool {
-	if len(v.beaconNodeHosts) == 1 {
-		log.Infof("Beacon node at %s is not responding, no backup node configured", v.Host())
-		return false
-	}
+func (v *validator) ChangeHost() {
 	next := (v.currentHostIndex + 1) % uint64(len(v.beaconNodeHosts))
-	log.Infof("Beacon node at %s is not responding, switching to %s...", v.beaconNodeHosts[v.currentHostIndex], v.beaconNodeHosts[next])
+	log.WithFields(logrus.Fields{
+		"current_host": v.beaconNodeHosts[v.currentHostIndex],
+		"next_host":    v.beaconNodeHosts[next],
+	}).Warn("Beacon node is not responding, switching to host")
 	v.validatorClient.SetHost(v.beaconNodeHosts[next])
 	v.currentHostIndex = next
-	return true
 }
 
 func (v *validator) FindHealthyHost(ctx context.Context) bool {
@@ -1264,12 +1262,14 @@ func (v *validator) FindHealthyHost(ctx context.Context) bool {
 		if v.nodeClient.IsHealthy(ctx) { // healthy → done
 			return true
 		}
+		if len(v.beaconNodeHosts) == 1 {
+			log.WithField("host", v.Host()).Debug("Beacon node is not responding, no backup node configured")
+			return false
+		}
 		if remaining == 0 || !features.Get().EnableBeaconRESTApi {
 			return false // exhausted or REST disabled
 		}
-		if !v.ChangeHost() { // no switch possible
-			return false
-		}
+		v.ChangeHost()
 		return check(remaining - 1) // recurse
 	}
 

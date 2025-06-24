@@ -69,7 +69,7 @@ type Validator interface {
 	SetGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, graffiti []byte) error
 	DeleteGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) error
 	Host() string
-	ChangeHost() bool
+	ChangeHost()
 	FindHealthyHost(ctx context.Context) bool
 }
 

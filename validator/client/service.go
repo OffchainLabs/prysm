@@ -55,7 +55,7 @@ type ValidatorService struct {
 	interopKeysConfig       *local.InteropKeymanagerConfig
 	web3SignerConfig        *remoteweb3signer.SetupConfig
 	proposerSettings        *proposer.Settings
-	MaxHealthChecks         int
+	maxHealthChecks         int
 	validatorsRegBatchSize  int
 	enableAPI               bool
 	emitAccountMetrics      bool
@@ -117,7 +117,7 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 		distributed:             cfg.Distributed,
 		disableDutiesPolling:    cfg.DisableDutiesPolling,
 		closeClientFunc:         cfg.CloseClientFunc,
-		MaxHealthChecks:         cfg.MaxHealthChecks,
+		maxHealthChecks:         cfg.MaxHealthChecks,
 	}
 
 	dialOpts := ConstructDialOptions(
@@ -233,7 +233,7 @@ func (v *ValidatorService) Start() {
 		eventsChannel:                  make(chan *eventClient.Event, 1),
 	}
 
-	hm := newHealthMonitor(v.ctx, v.cancel, v.MaxHealthChecks, v.validator)
+	hm := newHealthMonitor(v.ctx, v.cancel, v.maxHealthChecks, v.validator)
 	hm.Start()
 
 	for {

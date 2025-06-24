@@ -76,11 +76,9 @@ func (mr *MockValidatorMockRecorder) CanonicalHeadSlot(arg0 any) *gomock.Call {
 }
 
 // ChangeHost mocks base method.
-func (m *MockValidator) ChangeHost() bool {
+func (m *MockValidator) ChangeHost() {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ChangeHost")
-	ret0, _ := ret[0].(bool)
-	return ret0
+	m.ctrl.Call(m, "ChangeHost")
 }
 
 // ChangeHost indicates an expected call of ChangeHost.

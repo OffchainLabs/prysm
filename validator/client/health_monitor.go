@@ -60,15 +60,14 @@ func (m *healthMonitor) performHealthCheck() {
 	ishealthy := m.v.FindHealthyHost(m.ctx)
 	if ishealthy {
 		m.fails = 0
-	} else if m.maxFails > 0 {
+	} else if m.maxFails > 0 && m.fails < m.maxFails {
 		log.WithFields(logrus.Fields{
 			"fails":    m.fails,
 			"maxFails": m.maxFails,
-		}).Errorf("Failed health check, beacon node is unresponsive")
+		}).Debug("Failed health check, beacon node is unresponsive")
 		m.fails++
-	}
-	if m.maxFails > 0 && m.fails >= m.maxFails {
-		log.Infof("Maximum health checks of %d reached. Stopping health check routine", m.maxFails)
+	} else if m.maxFails > 0 && m.fails >= m.maxFails {
+		log.WithField("max_fails", m.maxFails).Debug("Maximum health checksreached. Stopping health check routine")
 		m.isHealthy = ishealthy
 		m.cancel()
 		return
@@ -103,7 +102,7 @@ func (m *healthMonitor) loop() {
 		case <-ticker.C:
 			m.performHealthCheck()
 		case <-m.ctx.Done():
-			log.Info("Context canceled, stopping health checking")
+			log.Debug("Context canceled, stopping health checking")
 			return
 		}
 	}

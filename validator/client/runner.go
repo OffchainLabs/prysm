@@ -203,7 +203,7 @@ func initializeValidatorAndGetHeadSlot(ctx context.Context, v iface.Validator) (
 				continue
 			}
 
-			return 0, errors.Wrap(err, "Could not determine if beacon chain started")
+			return 0, errors.Wrap(err, "could not determine if beacon chain started")
 		}
 
 		if err := v.WaitForKeymanagerInitialization(ctx); err != nil {
@@ -216,21 +216,21 @@ func initializeValidatorAndGetHeadSlot(ctx context.Context, v iface.Validator) (
 				continue
 			}
 
-			return 0, errors.Wrap(err, "Could not determine if beacon node synced")
+			return 0, errors.Wrap(err, "could not determine if beacon node synced")
 		}
 
 		if err := v.WaitForActivation(ctx); err != nil {
-			return 0, errors.Wrap(err, "Could not wait for validator activation")
+			return 0, errors.Wrap(err, "could not wait for validator activation")
 		}
 
 		headSlot, err = v.CanonicalHeadSlot(ctx)
 		if isConnectionError(err) {
-			log.WithError(err).Warn("Could not get current canonical head slot")
+			log.WithError(err).Warn("could not get current canonical head slot")
 			continue
 		}
 
 		if err != nil {
-			return 0, errors.Wrap(err, "Could not get current canonical head slot")
+			return 0, errors.Wrap(err, "could not get current canonical head slot")
 		}
 
 		if err := v.CheckDoppelGanger(ctx); err != nil {
@@ -239,7 +239,7 @@ func initializeValidatorAndGetHeadSlot(ctx context.Context, v iface.Validator) (
 				continue
 			}
 
-			return 0, errors.Wrap(err, "Could not succeed with doppelganger check")
+			return 0, errors.Wrap(err, "could not succeed with doppelganger check")
 		}
 		break
 	}
