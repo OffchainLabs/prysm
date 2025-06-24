@@ -213,7 +213,7 @@ func (s BlobSidecarsByRootReq) Len() int {
 // ====================================
 // DataColumnsByRootIdentifiers section
 // ====================================
-var _ ssz.Marshaler = (*DataColumnsByRootIdentifiers)(nil)
+var _ ssz.Marshaler = DataColumnsByRootIdentifiers{}
 var _ ssz.Unmarshaler = (*DataColumnsByRootIdentifiers)(nil)
 
 // DataColumnsByRootIdentifiers is used to specify a list of data column targets (root+index) in a DataColumnSidecarsByRoot RPC request.
@@ -321,11 +321,11 @@ func (d DataColumnsByRootIdentifiers) MarshalSSZTo(dst []byte) ([]byte, error) {
 }
 
 // SizeSSZ implements ssz.Marshaler. It returns the size of the serialized representation.
-func (d *DataColumnsByRootIdentifiers) SizeSSZ() int {
+func (d DataColumnsByRootIdentifiers) SizeSSZ() int {
 	size := 0
-	for i := 0; i < len(*d); i++ {
+	for i := 0; i < len(d); i++ {
 		size += 4
-		size += (*d)[i].SizeSSZ()
+		size += (d)[i].SizeSSZ()
 	}
 	return size
 }
