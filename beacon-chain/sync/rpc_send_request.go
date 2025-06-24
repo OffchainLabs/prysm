@@ -467,9 +467,14 @@ func SendDataColumnSidecarsByRangeRequest(
 			return nil, err
 		}
 
+		validatorSlotWithinBounds, err := isSidecarSlotWithinBounds(request)
+		if err != nil {
+			return nil, errors.Wrap(err, "is sidecar slot within bounds")
+		}
+
 		roDataColumn, err := readChunkedDataColumnSidecar(
 			stream, p2pApi, ctxMap,
-			isSidecarSlotWithinBounds(request),
+			validatorSlotWithinBounds,
 			isSidecarIndexRequested(request),
 		)
 		if errors.Is(err, io.EOF) {
@@ -495,11 +500,14 @@ func SendDataColumnSidecarsByRangeRequest(
 }
 
 // isSidecarSlotWithinBounds verifies that the slot of the data column sidecar is within the bounds of the request.
-func isSidecarSlotWithinBounds(request *ethpb.DataColumnSidecarsByRangeRequest) DataColumnResponseValidation {
+func isSidecarSlotWithinBounds(request *ethpb.DataColumnSidecarsByRangeRequest) (DataColumnResponseValidation, error) {
 	// endSlot is exclusive (while request.StartSlot is inclusive).
-	endSlot := request.StartSlot + primitives.Slot(request.Count)
+	endSlot, err := request.StartSlot.SafeAdd(request.Count)
+	if err != nil {
+		return nil, errors.Wrap(err, "calculate end slot")
+	}
 
-	return func(sidecar blocks.RODataColumn) error {
+	validator := func(sidecar blocks.RODataColumn) error {
 		slot := sidecar.Slot()
 
 		if !(request.StartSlot <= slot && slot < endSlot) {
@@ -508,6 +516,8 @@ func isSidecarSlotWithinBounds(request *ethpb.DataColumnSidecarsByRangeRequest) 
 
 		return nil
 	}
+
+	return validator, nil
 }
 
 // isSidecarIndexRequested verifies that the index of the data column sidecar is found in the requested indices.
