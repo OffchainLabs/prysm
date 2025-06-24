@@ -6,7 +6,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -74,36 +73,6 @@ func (s *Service) compareForkENR(record *enr.Record) error {
 	return nil
 }
 
-// Adds a fork entry as an ENR record under the Ethereum consensus EnrKey for
-// the local node. The fork entry is an ssz-encoded enrForkID type
-// which takes into account the current fork version from the current
-// epoch to create a fork digest, the next fork version,
-// and the next fork epoch.
-func addForkEntry(node *enode.LocalNode, current primitives.Epoch) (*enode.LocalNode, error) {
-	digest := params.ForkDigest(current)
-	next := params.NextNetworkScheduleEntry(current)
-	if params.BeaconConfig().FuluForkEpoch != params.BeaconConfig().FarFutureEpoch {
-		node.Set(enr.WithEntry(nfdEnrKey, next.ForkDigest[:]))
-	}
-	enrForkID := &pb.ENRForkID{
-		CurrentForkDigest: digest[:],
-		NextForkVersion:   next.ForkVersion[:],
-		NextForkEpoch:     next.Epoch,
-	}
-	log.
-		WithField("CurrentForkDigest", fmt.Sprintf("%#x", digest[:])).
-		WithField("NextForkVersion", fmt.Sprintf("%#x", next.ForkVersion[:])).
-		WithField("NextForkEpoch", fmt.Sprintf("%d", next.Epoch)).
-		Info("updating ENR Fork ID")
-	enc, err := enrForkID.MarshalSSZ()
-	if err != nil {
-		return nil, err
-	}
-	forkEntry := enr.WithEntry(eth2ENRKey, enc)
-	node.Set(forkEntry)
-	return node, nil
-}
-
 func updateENR(node *enode.LocalNode, entry, next params.NetworkScheduleEntry) error {
 	enrForkID := &pb.ENRForkID{
 		CurrentForkDigest: entry.ForkDigest[:],
@@ -121,6 +90,9 @@ func updateENR(node *enode.LocalNode, entry, next params.NetworkScheduleEntry) e
 	}
 	forkEntry := enr.WithEntry(eth2ENRKey, enc)
 	node.Set(forkEntry)
+	if params.BeaconConfig().FuluForkEpoch != params.BeaconConfig().FarFutureEpoch {
+		node.Set(enr.WithEntry(nfdEnrKey, next.ForkDigest[:]))
+	}
 	return nil
 }
 

@@ -281,7 +281,10 @@ func TestAddForkEntry_Genesis(t *testing.T) {
 
 	localNode := enode.NewLocalNode(db, pkey)
 	clock := startup.NewClock(time.Now(), bCfg.GenesisValidatorsRoot)
-	localNode, err = addForkEntry(localNode, clock.CurrentEpoch())
+	current := clock.CurrentEpoch()
+	entry := params.GetNetworkScheduleEntry(current)
+	next := params.GetNetworkScheduleEntry(entry.Epoch)
+	require.NoError(t, updateENR(localNode, entry, next))
 	require.NoError(t, err)
 	forkEntry, err := forkEntry(localNode.Node().Record())
 	require.NoError(t, err)
