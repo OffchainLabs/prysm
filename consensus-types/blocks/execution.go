@@ -40,6 +40,12 @@ func NewWrappedExecutionData(v proto.Message) (interfaces.ExecutionData, error) 
 	case *enginev1.ExecutionBundleElectra:
 		// note: no payload changes in electra so using deneb
 		return WrappedExecutionPayloadDeneb(pbStruct.Payload)
+	case *enginev1.ExecutionPayloadHeader:
+		return WrappedExecutionPayloadHeader(pbStruct)
+	case *enginev1.ExecutionPayloadHeaderCapella:
+		return WrappedExecutionPayloadHeaderCapella(pbStruct)
+	case *enginev1.ExecutionPayloadHeaderDeneb:
+		return WrappedExecutionPayloadHeaderDeneb(pbStruct)
 	default:
 		return nil, ErrUnsupportedVersion
 	}
