@@ -81,16 +81,19 @@ func (s *Service) compareForkENR(record *enr.Record) error {
 // and the next fork epoch.
 func addForkEntry(node *enode.LocalNode, current primitives.Epoch) (*enode.LocalNode, error) {
 	digest := params.ForkDigest(current)
-	nextForkVersion, nextForkEpoch := params.NextForkData(current)
+	next := params.NextNetworkScheduleEntry(current)
+	if params.BeaconConfig().FuluForkEpoch != params.BeaconConfig().FarFutureEpoch {
+		node.Set(enr.WithEntry(nfdEnrKey, next.ForkDigest[:]))
+	}
 	enrForkID := &pb.ENRForkID{
 		CurrentForkDigest: digest[:],
-		NextForkVersion:   nextForkVersion[:],
-		NextForkEpoch:     nextForkEpoch,
+		NextForkVersion:   next.ForkVersion[:],
+		NextForkEpoch:     next.Epoch,
 	}
 	log.
 		WithField("CurrentForkDigest", fmt.Sprintf("%#x", digest[:])).
-		WithField("NextForkVersion", fmt.Sprintf("%#x", nextForkVersion[:])).
-		WithField("NextForkEpoch", fmt.Sprintf("%d", nextForkEpoch)).
+		WithField("NextForkVersion", fmt.Sprintf("%#x", next.ForkVersion[:])).
+		WithField("NextForkEpoch", fmt.Sprintf("%d", next.Epoch)).
 		Info("updating ENR Fork ID")
 	enc, err := enrForkID.MarshalSSZ()
 	if err != nil {

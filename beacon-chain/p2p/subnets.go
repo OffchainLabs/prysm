@@ -34,6 +34,8 @@ var (
 	custodyGroupCountEnrKey = params.BeaconNetworkConfig().CustodyGroupCountKey
 )
 
+const nfdEnrKey = "nfd" // The ENR record key for "nfd" (Next Fork Digest).
+
 // The value used with the subnet, in order
 // to create an appropriate key to retrieve
 // the relevant lock. This is used to differentiate
