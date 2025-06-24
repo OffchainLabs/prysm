@@ -43,7 +43,7 @@ func (s *Server) GetLightClientBootstrap(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	w.Header().Set(api.VersionHeader, version.String(bootstrap.Version()))
+	w.Header().Set(api.VersionHeader, version.String(slots.ToForkVersion(bootstrap.Header().Beacon().Slot)))
 
 	if httputil.RespondWithSsz(req) {
 		ssz, err := bootstrap.MarshalSSZ()
@@ -164,7 +164,7 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 				return
 			}
 			updateResponse := &structs.LightClientUpdateResponse{
-				Version: version.String(update.Version()),
+				Version: version.String(slots.ToForkVersion(update.AttestedHeader().Beacon().Slot)),
 				Data:    updateJson,
 			}
 			updates = append(updates, updateResponse)
@@ -185,7 +185,7 @@ func (s *Server) GetLightClientFinalityUpdate(w http.ResponseWriter, req *http.R
 		return
 	}
 
-	w.Header().Set(api.VersionHeader, version.String(update.Version()))
+	w.Header().Set(api.VersionHeader, version.String(slots.ToForkVersion(update.AttestedHeader().Beacon().Slot)))
 	if httputil.RespondWithSsz(req) {
 		data, err := update.MarshalSSZ()
 		if err != nil {
@@ -200,7 +200,7 @@ func (s *Server) GetLightClientFinalityUpdate(w http.ResponseWriter, req *http.R
 			return
 		}
 		response := &structs.LightClientFinalityUpdateResponse{
-			Version: version.String(update.Version()),
+			Version: version.String(slots.ToForkVersion(update.AttestedHeader().Beacon().Slot)),
 			Data:    data,
 		}
 		httputil.WriteJson(w, response)
@@ -218,7 +218,7 @@ func (s *Server) GetLightClientOptimisticUpdate(w http.ResponseWriter, req *http
 		return
 	}
 
-	w.Header().Set(api.VersionHeader, version.String(update.Version()))
+	w.Header().Set(api.VersionHeader, version.String(slots.ToForkVersion(update.AttestedHeader().Beacon().Slot)))
 	if httputil.RespondWithSsz(req) {
 		data, err := update.MarshalSSZ()
 		if err != nil {
@@ -233,7 +233,7 @@ func (s *Server) GetLightClientOptimisticUpdate(w http.ResponseWriter, req *http
 			return
 		}
 		response := &structs.LightClientOptimisticUpdateResponse{
-			Version: version.String(update.Version()),
+			Version: version.String(slots.ToForkVersion(update.AttestedHeader().Beacon().Slot)),
 			Data:    data,
 		}
 		httputil.WriteJson(w, response)
