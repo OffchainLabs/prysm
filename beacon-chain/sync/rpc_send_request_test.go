@@ -1060,7 +1060,8 @@ func TestIsSidecarSlotWithinBounds(t *testing.T) {
 		Count:     10,
 	}
 
-	validator := isSidecarSlotWithinBounds(request)
+	validator, err := isSidecarSlotWithinBounds(request)
+	require.NoError(t, err)
 
 	testCases := []struct {
 		name            string
@@ -1182,7 +1183,7 @@ func TestIsSidecarIndexRequested(t *testing.T) {
 func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
 	nilTestCases := []struct {
 		name    string
-		request *p2ptypes.DataColumnsByRootIdentifiers
+		request p2ptypes.DataColumnsByRootIdentifiers
 	}{
 		{
 			name:    "nil request",
@@ -1190,7 +1191,7 @@ func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
 		},
 		{
 			name:    "count is 0",
-			request: &p2ptypes.DataColumnsByRootIdentifiers{{}, {}},
+			request: p2ptypes.DataColumnsByRootIdentifiers{{}, {}},
 		},
 	}
 
@@ -1208,7 +1209,7 @@ func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
 		beaconConfig.MaxRequestDataColumnSidecars = 4
 		params.OverrideBeaconConfig(beaconConfig)
 
-		request := &p2ptypes.DataColumnsByRootIdentifiers{
+		request := p2ptypes.DataColumnsByRootIdentifiers{
 			{Columns: []uint64{1, 2, 3}},
 			{Columns: []uint64{4, 5, 6}},
 		}
@@ -1305,7 +1306,7 @@ func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
 
 			blockRoot1, blockRoot2 := expected[0].BlockRoot(), expected[3].BlockRoot()
 
-			sentRequest := &p2ptypes.DataColumnsByRootIdentifiers{
+			sentRequest := p2ptypes.DataColumnsByRootIdentifiers{
 				{BlockRoot: blockRoot1[:], Columns: []uint64{1, 2, 3}},
 				{BlockRoot: blockRoot2[:], Columns: []uint64{1, 2, 3}},
 			}
@@ -1320,9 +1321,9 @@ func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
 				err := p2.Encoding().DecodeWithMaxLength(stream, requestReceived)
 				assert.NoError(t, err)
 
-				require.Equal(t, len(*sentRequest), len(*requestReceived))
-				for i := range *sentRequest {
-					require.DeepSSZEqual(t, (*sentRequest)[i], (*requestReceived)[i])
+				require.Equal(t, len(sentRequest), len(*requestReceived))
+				for i := range sentRequest {
+					require.DeepSSZEqual(t, (sentRequest)[i], (*requestReceived)[i])
 				}
 
 				for _, sidecar := range expected {
@@ -1381,7 +1382,7 @@ func TestIsSidecarIndexRootRequested(t *testing.T) {
 		},
 	}
 
-	request := &types.DataColumnsByRootIdentifiers{
+	request := types.DataColumnsByRootIdentifiers{
 		{BlockRoot: []byte{1}, Columns: []uint64{1, 2}},
 	}
 

@@ -462,9 +462,19 @@ func SendDataColumnSidecarsByRangeRequest(
 	// Read the data column sidecars from the stream.
 	roDataColumns := make([]blocks.RODataColumn, 0, totalCount)
 	for range totalCount {
+		// Avoid reading extra chunks if the context is done.
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
+		validatorSlotWithinBounds, err := isSidecarSlotWithinBounds(request)
+		if err != nil {
+			return nil, errors.Wrap(err, "is sidecar slot within bounds")
+		}
+
 		roDataColumn, err := readChunkedDataColumnSidecar(
 			stream, p2pApi, ctxMap,
-			isSidecarSlotWithinBounds(request),
+			validatorSlotWithinBounds,
 			isSidecarIndexRequested(request),
 		)
 		if errors.Is(err, io.EOF) {
@@ -490,11 +500,14 @@ func SendDataColumnSidecarsByRangeRequest(
 }
 
 // isSidecarSlotWithinBounds verifies that the slot of the data column sidecar is within the bounds of the request.
-func isSidecarSlotWithinBounds(request *ethpb.DataColumnSidecarsByRangeRequest) DataColumnResponseValidation {
+func isSidecarSlotWithinBounds(request *ethpb.DataColumnSidecarsByRangeRequest) (DataColumnResponseValidation, error) {
 	// endSlot is exclusive (while request.StartSlot is inclusive).
-	endSlot := request.StartSlot + primitives.Slot(request.Count)
+	endSlot, err := request.StartSlot.SafeAdd(request.Count)
+	if err != nil {
+		return nil, errors.Wrap(err, "calculate end slot")
+	}
 
-	return func(sidecar blocks.RODataColumn) error {
+	validator := func(sidecar blocks.RODataColumn) error {
 		slot := sidecar.Slot()
 
 		if !(request.StartSlot <= slot && slot < endSlot) {
@@ -503,6 +516,8 @@ func isSidecarSlotWithinBounds(request *ethpb.DataColumnSidecarsByRangeRequest) 
 
 		return nil
 	}
+
+	return validator, nil
 }
 
 // isSidecarIndexRequested verifies that the index of the data column sidecar is found in the requested indices.
@@ -530,7 +545,7 @@ func SendDataColumnSidecarsByRootRequest(
 	p2pApi p2p.P2P,
 	pid peer.ID,
 	ctxMap ContextByteVersions,
-	request *p2ptypes.DataColumnsByRootIdentifiers,
+	request p2ptypes.DataColumnsByRootIdentifiers,
 ) ([]blocks.RODataColumn, error) {
 	// Return early if the request is nil.
 	if request == nil {
@@ -539,7 +554,7 @@ func SendDataColumnSidecarsByRootRequest(
 
 	// Compute how many sidecars are requested.
 	count := uint64(0)
-	for _, identifier := range *request {
+	for _, identifier := range request {
 		count += uint64(len(identifier.Columns))
 	}
 
@@ -595,10 +610,10 @@ func SendDataColumnSidecarsByRootRequest(
 	return roDataColumns, nil
 }
 
-func isSidecarIndexRootRequested(request *p2ptypes.DataColumnsByRootIdentifiers) DataColumnResponseValidation {
+func isSidecarIndexRootRequested(request p2ptypes.DataColumnsByRootIdentifiers) DataColumnResponseValidation {
 	columnsIndexFromRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool)
 
-	for _, sidecar := range *request {
+	for _, sidecar := range request {
 		blockRoot := bytesutil.ToBytes32(sidecar.BlockRoot)
 		if columnsIndexFromRoot[blockRoot] == nil {
 			columnsIndexFromRoot[blockRoot] = make(map[uint64]bool)

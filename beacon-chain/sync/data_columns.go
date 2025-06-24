@@ -81,7 +81,7 @@ func RequestDataColumnSidecarsByRoot(
 			byRootRequest := &eth.DataColumnsByRootIdentifier{BlockRoot: blockRoot[:], Columns: peerRequestedColumns}
 
 			// Send the requests to the peer.
-			peerSidecars, err := SendDataColumnSidecarsByRootRequest(ctx, clock, p2p, peer, ctxMap, &types.DataColumnsByRootIdentifiers{byRootRequest})
+			peerSidecars, err := SendDataColumnSidecarsByRootRequest(ctx, clock, p2p, peer, ctxMap, types.DataColumnsByRootIdentifiers{byRootRequest})
 			if err != nil {
 				// Remove this peer since it failed to respond correctly.
 				delete(dataColumnsByAdmissiblePeer, peer)
