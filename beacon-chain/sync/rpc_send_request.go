@@ -545,7 +545,7 @@ func SendDataColumnSidecarsByRootRequest(
 	p2pApi p2p.P2P,
 	pid peer.ID,
 	ctxMap ContextByteVersions,
-	request *p2ptypes.DataColumnsByRootIdentifiers,
+	request p2ptypes.DataColumnsByRootIdentifiers,
 ) ([]blocks.RODataColumn, error) {
 	// Return early if the request is nil.
 	if request == nil {
@@ -554,7 +554,7 @@ func SendDataColumnSidecarsByRootRequest(
 
 	// Compute how many sidecars are requested.
 	count := uint64(0)
-	for _, identifier := range *request {
+	for _, identifier := range request {
 		count += uint64(len(identifier.Columns))
 	}
 
@@ -610,10 +610,10 @@ func SendDataColumnSidecarsByRootRequest(
 	return roDataColumns, nil
 }
 
-func isSidecarIndexRootRequested(request *p2ptypes.DataColumnsByRootIdentifiers) DataColumnResponseValidation {
+func isSidecarIndexRootRequested(request p2ptypes.DataColumnsByRootIdentifiers) DataColumnResponseValidation {
 	columnsIndexFromRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool)
 
-	for _, sidecar := range *request {
+	for _, sidecar := range request {
 		blockRoot := bytesutil.ToBytes32(sidecar.BlockRoot)
 		if columnsIndexFromRoot[blockRoot] == nil {
 			columnsIndexFromRoot[blockRoot] = make(map[uint64]bool)

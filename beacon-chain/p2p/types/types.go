@@ -275,33 +275,33 @@ func (d *DataColumnsByRootIdentifiers) UnmarshalSSZ(buf []byte) error {
 	return nil
 }
 
-func (d *DataColumnsByRootIdentifiers) MarshalSSZ() ([]byte, error) {
+func (d DataColumnsByRootIdentifiers) MarshalSSZ() ([]byte, error) {
 	var err error
-	count := len(*d)
+	count := len(d)
 	maxSize := params.BeaconConfig().MaxRequestBlocksDeneb
 	if uint64(count) > maxSize {
 		return nil, errors.Errorf("data column identifiers list exceeds max size: %d > %d", count, maxSize)
 	}
 
-	if len(*d) == 0 {
+	if len(d) == 0 {
 		return []byte{}, nil
 	}
 	sizes := make([]uint32, count)
 	valTotal := uint32(0)
-	for i, elem := range *d {
+	for i, elem := range d {
 		if elem == nil {
 			return nil, errors.New("nil item in DataColumnsByRootIdentifiers list")
 		}
 		sizes[i] = uint32(elem.SizeSSZ())
 		valTotal += sizes[i]
 	}
-	offSize := uint32(4 * len(*d))
+	offSize := uint32(4 * len(d))
 	out := make([]byte, offSize, offSize+valTotal)
 	for i := range sizes {
 		binary.LittleEndian.PutUint32(out[i*4:i*4+4], offSize)
 		offSize += sizes[i]
 	}
-	for _, elem := range *d {
+	for _, elem := range d {
 		out, err = elem.MarshalSSZTo(out)
 		if err != nil {
 			return nil, err
@@ -312,7 +312,7 @@ func (d *DataColumnsByRootIdentifiers) MarshalSSZ() ([]byte, error) {
 }
 
 // MarshalSSZTo implements ssz.Marshaler. It appends the serialized DataColumnSidecarsByRootReq value to the provided byte slice.
-func (d *DataColumnsByRootIdentifiers) MarshalSSZTo(dst []byte) ([]byte, error) {
+func (d DataColumnsByRootIdentifiers) MarshalSSZTo(dst []byte) ([]byte, error) {
 	obj, err := d.MarshalSSZ()
 	if err != nil {
 		return nil, err
