@@ -22,14 +22,12 @@ func TestStateDiff_LoadOrInitOffset(t *testing.T) {
 
 	err := db.setOffset(10)
 	require.NoError(t, err)
-	offset, err := db.getOffset()
-	require.NoError(t, err)
+	offset := db.getOffset()
 	require.Equal(t, uint64(10), offset)
 
 	err = db.setOffset(10)
 	require.ErrorContains(t, "offset already set", err)
-	offset, err = db.getOffset()
-	require.NoError(t, err)
+	offset = db.getOffset()
 	require.Equal(t, uint64(10), offset)
 }
 
@@ -39,8 +37,7 @@ func TestStateDiff_ComputeLevel(t *testing.T) {
 	err := db.setOffset(0)
 	require.NoError(t, err)
 
-	offset, err := db.getOffset()
-	require.NoError(t, err)
+	offset := db.getOffset()
 
 	// 2 ** 21
 	lvl := computeLevel(offset, primitives.Slot(math.PowerOf2(21)))
@@ -379,18 +376,14 @@ func TestStateDiff_OffsetCache(t *testing.T) {
 			t.Run(fmt.Sprintf("slotNum=%d,%s", slotNum, version.String(v)), func(t *testing.T) {
 				db := setupDB(t)
 
-				_, err := db.stateDiffCache.getOffset()
-				require.ErrorContains(t, "offset is not set", err)
-
 				slot := primitives.Slot(slotNum)
-				err = db.setOffset(slot)
+				err := db.setOffset(slot)
 				require.NoError(t, err)
 				st, _ := createState(t, slot, v)
 				err = db.saveStateByDiff(context.Background(), st)
 				require.NoError(t, err)
 
-				offset, err := db.stateDiffCache.getOffset()
-				require.NoError(t, err)
+				offset := db.stateDiffCache.getOffset()
 				require.Equal(t, uint64(slotNum), offset)
 
 				slot2 := primitives.Slot(uint64(slotNum) + math.PowerOf2(params.StateHierarchyExponents()[0]))
@@ -398,8 +391,7 @@ func TestStateDiff_OffsetCache(t *testing.T) {
 				err = db.saveStateByDiff(context.Background(), st2)
 				require.NoError(t, err)
 
-				offset, err = db.stateDiffCache.getOffset()
-				require.NoError(t, err)
+				offset = db.stateDiffCache.getOffset()
 				require.Equal(t, uint64(slot), offset)
 			})
 		}

@@ -27,10 +27,7 @@ func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconStat
 	}
 
 	slot := st.Slot()
-	offset, err := s.getOffset()
-	if err != nil {
-		return err
-	}
+	offset := s.getOffset()
 	if uint64(slot) < offset {
 		return ErrSlotBeforeOffset
 	}
@@ -62,10 +59,7 @@ func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconStat
 
 // stateByDiff retrieves the full state for a given slot.
 func (s *Store) stateByDiff(ctx context.Context, slot primitives.Slot) (state.BeaconState, error) {
-	offset, err := s.getOffset()
-	if err != nil {
-		return nil, err
-	}
+	offset := s.getOffset()
 	if uint64(slot) < offset {
 		return nil, ErrSlotBeforeOffset
 	}
@@ -120,7 +114,10 @@ func (s *Store) saveHdiff(lvl int, anchor, st state.ReadOnlyBeaconState) error {
 
 	// Save the full state to the cache (if not the last level).
 	if lvl != len(params.StateHierarchyExponents())-1 {
-		s.stateDiffCache.setAnchor(lvl, st)
+		err = s.stateDiffCache.setAnchor(lvl, st)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -157,7 +154,10 @@ func (s *Store) saveFullSnapshot(lvl int, st state.ReadOnlyBeaconState) error {
 	}
 	// Save the full state to the cache, and invalidate other levels.
 	s.stateDiffCache.clearAnchors()
-	s.stateDiffCache.setAnchor(lvl, st)
+	err = s.stateDiffCache.setAnchor(lvl, st)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

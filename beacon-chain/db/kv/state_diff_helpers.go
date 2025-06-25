@@ -58,7 +58,10 @@ func (s *Store) getAnchorState(offset uint64, lvl int, slot primitives.Slot) (an
 	}
 
 	// Save it in the cache.
-	s.stateDiffCache.setAnchor(anchorLvl, anchor)
+	err = s.stateDiffCache.setAnchor(anchorLvl, anchor)
+	if err != nil {
+		return nil, err
+	}
 	return anchor, nil
 }
 
@@ -103,7 +106,7 @@ func (s *Store) setOffset(slot primitives.Slot) error {
 	return nil
 }
 
-func (s *Store) getOffset() (offset uint64, err error) {
+func (s *Store) getOffset() uint64 {
 	return s.stateDiffCache.getOffset()
 }
 
