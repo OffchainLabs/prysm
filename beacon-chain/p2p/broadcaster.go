@@ -397,7 +397,7 @@ func (s *Service) internalBroadcastDataColumn(
 	header := dataColumnSidecar.SignedBlockHeader.GetHeader()
 	slot := header.GetSlot()
 
-	slotStartTime, err := slots.SlotTime(s.genesisTime, slot)
+	slotStartTime, err := slots.StartTime(s.genesisTime, slot)
 	if err != nil {
 		log.WithError(err).Error("Failed to convert slot to time")
 	}

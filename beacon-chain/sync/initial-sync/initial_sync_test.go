@@ -102,7 +102,7 @@ func initializeTestServices(t *testing.T, slots []primitives.Slot, peers []*peer
 // makeGenesisTime where now is the current slot.
 func makeGenesisTime(currentSlot primitives.Slot) time.Time {
 	now := time.Now()
-	s, err := slots.SlotTime(now, currentSlot)
+	s, err := slots.StartTime(now, currentSlot)
 	if err != nil {
 		panic(err) // lint:nopanic -- This is test code and should never overflow.
 	}

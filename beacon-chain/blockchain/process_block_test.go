@@ -2329,7 +2329,7 @@ func TestFillMissingBlockPayloadId_PrepareAllPayloads(t *testing.T) {
 // boost. It alters the genesisTime tracked by the store.
 func driftGenesisTime(s *Service, slot primitives.Slot, delay time.Duration) {
 	now := time.Now()
-	slotStart, err := slots.SlotTime(now, slot)
+	slotStart, err := slots.StartTime(now, slot)
 	if err != nil {
 		panic(err) // lint:nopanic -- This is test code and should never overflow.
 	}

@@ -278,7 +278,7 @@ func TestSlotToTime(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := SlotTime(tt.args.genesis, tt.args.slot)
+			got, err := StartTime(tt.args.genesis, tt.args.slot)
 			if tt.wantedErr != "" {
 				assert.ErrorContains(t, tt.wantedErr, err)
 			} else {
@@ -439,7 +439,7 @@ func TestSyncCommitteePeriodStartEpoch(t *testing.T) {
 	}
 }
 
-func TestSecondsSinceSlotStart(t *testing.T) {
+func TestSinceSlotStart(t *testing.T) {
 	now := time.Now()
 	tests := []struct {
 		slot      primitives.Slot

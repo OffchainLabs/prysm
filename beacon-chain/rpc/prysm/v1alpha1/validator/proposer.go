@@ -54,7 +54,7 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	defer span.End()
 	span.SetAttributes(trace.Int64Attribute("slot", int64(req.Slot)))
 
-	t, err := slots.SlotTime(vs.TimeFetcher.GenesisTime(), req.Slot)
+	t, err := slots.StartTime(vs.TimeFetcher.GenesisTime(), req.Slot)
 	if err != nil {
 		log.WithError(err).Error("Could not convert slot to time")
 	}

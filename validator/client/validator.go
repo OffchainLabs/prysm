@@ -1062,7 +1062,11 @@ func (v *validator) logDuties(slot primitives.Slot, currentEpochDuties []*ethpb.
 		"attesterCount": totalAttestingKeys,
 	}).Infof("Schedule for epoch %d", slots.ToEpoch(slot))
 	for i := primitives.Slot(0); i < params.BeaconConfig().SlotsPerEpoch; i++ {
-		startTime := slots.StartTime(v.genesisTime, epochStartSlot+i)
+		startTime, err := slots.StartTime(v.genesisTime, epochStartSlot+i)
+		if err != nil {
+			log.WithError(err).WithField("slot", slot).Error("Slot overflows, unable to log duties!")
+			return
+		}
 		durationTillDuty := (time.Until(startTime) + time.Second).Truncate(time.Second) // Round up to next second.
 
 		slotLog := log.WithFields(logrus.Fields{})

@@ -125,7 +125,7 @@ func ComputeSubnetFromCommitteeAndSlot(activeValCount uint64, comIdx primitives.
 //
 // In the attestation must be within the range of 95 to 102 in the example above.
 func ValidateAttestationTime(attSlot primitives.Slot, genesis time.Time, clockDisparity time.Duration) error {
-	attTime, err := slots.SlotTime(genesis, attSlot)
+	attTime, err := slots.StartTime(genesis, attSlot)
 	if err != nil {
 		return err
 	}
@@ -143,7 +143,7 @@ func ValidateAttestationTime(attSlot primitives.Slot, genesis time.Time, clockDi
 	if currentSlot > params.BeaconConfig().AttestationPropagationSlotRange {
 		lowerBoundsSlot = currentSlot - params.BeaconConfig().AttestationPropagationSlotRange
 	}
-	lowerTime, err := slots.SlotTime(genesis, lowerBoundsSlot)
+	lowerTime, err := slots.StartTime(genesis, lowerBoundsSlot)
 	if err != nil {
 		return err
 	}

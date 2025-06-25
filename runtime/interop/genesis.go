@@ -75,7 +75,7 @@ func GethShanghaiTime(genesisTime time.Time, cfg *clparams.BeaconChainConfig) *u
 	if cfg.CapellaForkEpoch != math.MaxUint64 {
 		startSlot, err := slots.EpochStart(cfg.CapellaForkEpoch)
 		if err == nil {
-			startTime := slots.StartTime(genesisTime, startSlot)
+			startTime := slots.UnsafeStartTime(genesisTime, startSlot)
 			newTime := uint64(startTime.Unix())
 			shanghaiTime = &newTime
 		}
@@ -90,7 +90,7 @@ func GethCancunTime(genesisTime time.Time, cfg *clparams.BeaconChainConfig) *uin
 	if cfg.DenebForkEpoch != math.MaxUint64 {
 		startSlot, err := slots.EpochStart(cfg.DenebForkEpoch)
 		if err == nil {
-			startTime := slots.StartTime(genesisTime, startSlot)
+			startTime := slots.UnsafeStartTime(genesisTime, startSlot)
 			newTime := uint64(startTime.Unix())
 			cancunTime = &newTime
 		}
@@ -105,7 +105,7 @@ func GethPragueTime(genesisTime time.Time, cfg *clparams.BeaconChainConfig) *uin
 	if cfg.ElectraForkEpoch != math.MaxUint64 {
 		startSlot, err := slots.EpochStart(cfg.ElectraForkEpoch)
 		if err == nil {
-			startTime := slots.StartTime(genesisTime, startSlot)
+			startTime := slots.UnsafeStartTime(genesisTime, startSlot)
 			newTime := uint64(startTime.Unix())
 			pragueTime = &newTime
 		}

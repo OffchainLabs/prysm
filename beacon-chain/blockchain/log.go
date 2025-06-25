@@ -87,7 +87,7 @@ func logStateTransitionData(b interfaces.ReadOnlyBeaconBlock) error {
 }
 
 func logBlockSyncStatus(block interfaces.ReadOnlyBeaconBlock, blockRoot [32]byte, justified, finalized *ethpb.Checkpoint, receivedTime time.Time, genesis time.Time, daWaitedTime time.Duration) error {
-	startTime, err := slots.SlotTime(genesis, block.Slot())
+	startTime, err := slots.StartTime(genesis, block.Slot())
 	if err != nil {
 		return err
 	}

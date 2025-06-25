@@ -67,7 +67,7 @@ func (s *Service) reconstructAndBroadcastBlobs(ctx context.Context, block interf
 		return
 	}
 
-	startTime, err := slots.SlotTime(s.cfg.chain.GenesisTime(), block.Block().Slot())
+	startTime, err := slots.StartTime(s.cfg.chain.GenesisTime(), block.Block().Slot())
 	if err != nil {
 		log.WithError(err).Error("Failed to convert slot to time")
 	}

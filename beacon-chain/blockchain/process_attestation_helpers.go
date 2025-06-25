@@ -140,7 +140,7 @@ func (s *Service) getAttPreState(ctx context.Context, c *ethpb.Checkpoint) (stat
 
 // verifyAttTargetEpoch validates attestation is from the current or previous epoch.
 func verifyAttTargetEpoch(_ context.Context, genesis, now time.Time, c *ethpb.Checkpoint) error {
-	currentSlot := slots.SlotAt(genesis, now)
+	currentSlot := slots.At(genesis, now)
 	currentEpoch := slots.ToEpoch(currentSlot)
 	var prevEpoch primitives.Epoch
 	// Prevents previous epoch under flow

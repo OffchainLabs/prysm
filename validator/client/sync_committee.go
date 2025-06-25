@@ -83,7 +83,7 @@ func (v *validator) SubmitSyncCommitteeMessage(ctx context.Context, slot primiti
 	}
 
 	msgSlot := msg.Slot
-	slotTime, err := slots.SlotTime(v.genesisTime, msgSlot)
+	slotTime, err := slots.StartTime(v.genesisTime, msgSlot)
 	if err != nil {
 		log.WithError(err).Error("Failed to determine slot start time")
 	}
@@ -179,7 +179,7 @@ func (v *validator) SubmitSignedContributionAndProof(ctx context.Context, slot p
 		}
 
 		contributionSlot := contributionAndProof.Contribution.Slot
-		slotTime, err := slots.SlotTime(v.genesisTime, contributionSlot)
+		slotTime, err := slots.StartTime(v.genesisTime, contributionSlot)
 		if err != nil {
 			log.WithError(err).Error("Failed to determine slot start time")
 		}

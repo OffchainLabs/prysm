@@ -43,7 +43,7 @@ func (g *Clock) CurrentSlot() types.Slot {
 
 // SlotStart computes the time the given slot begins.
 func (g *Clock) SlotStart(slot types.Slot) (time.Time, error) {
-	return slots.SlotTime(g.t, slot)
+	return slots.StartTime(g.t, slot)
 }
 
 // Now provides a value for time.Now() that can be overridden in tests.

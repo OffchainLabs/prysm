@@ -28,7 +28,7 @@ func DeterministicGenesisStateBellatrix(t testing.TB, numValidators uint64) (sta
 	if err != nil {
 		t.Fatal(errors.Wrapf(err, "failed to get eth1data for %d deposits", numValidators))
 	}
-	beaconState, err := genesisBeaconStateBellatrix(context.Background(), deposits, time.Unix(0, 0), eth1Data)
+	beaconState, err := genesisBeaconStateBellatrix(t.Context(), deposits, time.Unix(0, 0), eth1Data)
 	if err != nil {
 		t.Fatal(errors.Wrapf(err, "failed to get genesis beacon state of %d validators", numValidators))
 	}
