@@ -1,15 +1,14 @@
 package kv
 
 import (
-	"math"
+	"encoding/binary"
+	"errors"
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/pkg/errors"
+	"go.etcd.io/bbolt"
 )
-
-const unset = math.MaxUint64
 
 type stateDiffCache struct {
 	sync.RWMutex
@@ -17,11 +16,30 @@ type stateDiffCache struct {
 	offset  uint64
 }
 
-func newStateDiffCache() *stateDiffCache {
+func newStateDiffCache(s *Store) (*stateDiffCache, error) {
+	var offset uint64
+
+	err := s.db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if bucket == nil {
+			return bbolt.ErrBucketNotFound
+		}
+
+		offsetBytes := bucket.Get([]byte("offset"))
+		if offsetBytes == nil {
+			return errors.New("state diff cache: offset not found")
+		}
+		offset = binary.LittleEndian.Uint64(offsetBytes)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	return &stateDiffCache{
 		anchors: make([]state.ReadOnlyBeaconState, len(params.StateHierarchyExponents())),
-		offset:  unset,
-	}
+		offset:  offset,
+	}, nil
 }
 
 func (c *stateDiffCache) getAnchor(level int) state.ReadOnlyBeaconState {
@@ -30,19 +48,20 @@ func (c *stateDiffCache) getAnchor(level int) state.ReadOnlyBeaconState {
 	return c.anchors[level]
 }
 
-func (c *stateDiffCache) setAnchor(level int, anchor state.ReadOnlyBeaconState) {
+func (c *stateDiffCache) setAnchor(level int, anchor state.ReadOnlyBeaconState) error {
 	c.Lock()
 	defer c.Unlock()
+	if level >= len(c.anchors) || level < 0 {
+		return errors.New("state diff cache: anchor level out of range")
+	}
 	c.anchors[level] = anchor
+	return nil
 }
 
-func (c *stateDiffCache) getOffset() (uint64, error) {
+func (c *stateDiffCache) getOffset() uint64 {
 	c.RLock()
 	defer c.RUnlock()
-	if c.offset == unset {
-		return 0, errors.New("offset is not set")
-	}
-	return c.offset, nil
+	return c.offset
 }
 
 func (c *stateDiffCache) setOffset(offset uint64) {

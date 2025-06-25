@@ -278,8 +278,8 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(enableExperimentalAttestationPool)
 		cfg.EnableExperimentalAttestationPool = true
 	}
-	if ctx.IsSet(EnableStateDiff.Name) {
-		logEnabled(EnableStateDiff)
+	if ctx.IsSet(enableStateDiff.Name) {
+		logEnabled(enableStateDiff)
 		cfg.EnableStateDiff = true
 	}
 	if ctx.IsSet(forceHeadFlag.Name) {

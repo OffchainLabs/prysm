@@ -184,7 +184,7 @@ func NewKVStore(ctx context.Context, dirPath string, opts ...KVStoreOption) (*St
 		blockCache:          blockCache,
 		validatorEntryCache: validatorCache,
 		stateSummaryCache:   newStateSummaryCache(),
-		stateDiffCache:      newStateDiffCache(),
+		stateDiffCache:      nil,
 		ctx:                 ctx,
 	}
 	for _, o := range opts {
@@ -201,6 +201,14 @@ func NewKVStore(ctx context.Context, dirPath string, opts ...KVStoreOption) (*St
 	// Setup the type of block storage used depending on whether or not this is a fresh database.
 	if err := kv.setupBlockStorageType(ctx); err != nil {
 		return nil, err
+	}
+
+	if features.Get().EnableStateDiff {
+		sdCache, err := newStateDiffCache(kv)
+		if err != nil {
+			return nil, err
+		}
+		kv.stateDiffCache = sdCache
 	}
 
 	return kv, nil
