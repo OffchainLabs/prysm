@@ -8,6 +8,7 @@ import (
 	blockchainTesting "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/voluntaryexits"
 	"github.com/OffchainLabs/prysm/v6/config/features"
@@ -350,6 +351,7 @@ func TestHandleCaches_EnablingLargeSize(t *testing.T) {
 	st := params.BeaconConfig().SlotsPerEpoch.Mul(uint64(epochsSinceFinalitySaveHotStateDB))
 	s.SetGenesisTime(time.Now().Add(time.Duration(-1*int64(st)*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
 
+	helpers.ClearCache()
 	require.NoError(t, s.handleCaches())
 	assert.LogsContain(t, hook, "Expanding committee cache size")
 }
