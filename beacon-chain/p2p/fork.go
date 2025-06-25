@@ -85,8 +85,12 @@ func updateENR(node *enode.LocalNode, entry, next params.NetworkScheduleEntry) e
 		"NextForkEpoch":     fmt.Sprintf("%d", enrForkID.NextForkEpoch),
 	}
 	if params.BeaconConfig().FuluForkEpoch != params.BeaconConfig().FarFutureEpoch {
+		if entry.ForkDigest == next.ForkDigest {
+			node.Set(enr.WithEntry(nfdEnrKey, make([]byte, len(next.ForkDigest))))
+		} else {
+			node.Set(enr.WithEntry(nfdEnrKey, next.ForkDigest[:]))
+		}
 		logFields[nfdEnrKey] = fmt.Sprintf("%#x", next.ForkDigest)
-		node.Set(enr.WithEntry(nfdEnrKey, next.ForkDigest[:]))
 	}
 	log.WithFields(logFields).Info("updating ENR Fork ID")
 	enc, err := enrForkID.MarshalSSZ()
