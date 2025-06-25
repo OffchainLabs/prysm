@@ -258,16 +258,16 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices []int) (
 			return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to create roBlock with root %#x", root), Reason: core.Internal}
 		}
 
-		return p.blobsFromStoredDataColumns(roBlock, indices, rootSlice)
+		return p.blobsFromStoredDataColumns(roBlock, indices)
 	}
 
-	return p.blobsFromStoredBlobs(indices, rootSlice, commitments)
+	return p.blobsFromStoredBlobs(commitments, root, indices)
 }
 
 // blobsFromStoredBlobs retrieves blob sidercars corresponding to `indices` and `root` from the store.
 // This function expects blob sidecars to be stored (aka. no data column sidecars).
-func (p *BeaconDbBlocker) blobsFromStoredBlobs(indices []int, rootBytes []byte, commitments [][]byte) ([]*blocks.VerifiedROBlob, *core.RpcError) {
-	summary := p.BlobStorage.Summary(bytesutil.ToBytes32(rootBytes))
+func (p *BeaconDbBlocker) blobsFromStoredBlobs(commitments [][]byte, root [fieldparams.RootLength]byte, indices []int) ([]*blocks.VerifiedROBlob, *core.RpcError) {
+	summary := p.BlobStorage.Summary(root)
 	maxBlobCount := summary.MaxBlobsForEpoch()
 
 	for _, index := range indices {
@@ -296,7 +296,6 @@ func (p *BeaconDbBlocker) blobsFromStoredBlobs(indices []int, rootBytes []byte, 
 	}
 
 	// Retrieve blob sidecars from the store.
-	root := bytesutil.ToBytes32(rootBytes)
 	blobs := make([]*blocks.VerifiedROBlob, 0, len(indices))
 	for _, index := range indices {
 		blobSidecar, err := p.BlobStorage.Get(root, uint64(index))
@@ -319,8 +318,8 @@ func (p *BeaconDbBlocker) blobsFromStoredBlobs(indices []int, rootBytes []byte, 
 // This function expects data column sidecars to be stored (aka. no blob sidecars).
 // If not enough data column sidecars are available to extract blobs from them
 // (either directly or after reconstruction), an error is returned.
-func (p *BeaconDbBlocker) blobsFromStoredDataColumns(block blocks.ROBlock, indices []int, rootBytes []byte) ([]*blocks.VerifiedROBlob, *core.RpcError) {
-	root := bytesutil.ToBytes32(rootBytes)
+func (p *BeaconDbBlocker) blobsFromStoredDataColumns(block blocks.ROBlock, indices []int) ([]*blocks.VerifiedROBlob, *core.RpcError) {
+	root := block.Root()
 
 	// Use all indices if none are provided.
 	if len(indices) == 0 {
