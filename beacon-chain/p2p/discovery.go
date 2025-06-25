@@ -509,7 +509,7 @@ func (s *Service) createLocalNode(
 
 	clock := startup.NewClock(s.genesisTime, [32]byte(s.genesisValidatorsRoot))
 	currentEntry := params.GetNetworkScheduleEntry(clock.CurrentEpoch())
-	nextEntry := params.GetNetworkScheduleEntry(currentEntry.Epoch)
+	nextEntry := params.NextNetworkScheduleEntry(clock.CurrentEpoch())
 	if err := updateENR(localNode, currentEntry, nextEntry); err != nil {
 		return nil, errors.Wrap(err, "could not add eth2 fork version entry to enr")
 	}

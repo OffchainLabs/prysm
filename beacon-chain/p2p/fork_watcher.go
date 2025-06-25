@@ -14,9 +14,10 @@ func (s *Service) forkWatcher() {
 	for {
 		select {
 		case currSlot := <-slotTicker.C():
-			newEntry := params.GetNetworkScheduleEntry(slots.ToEpoch(currSlot))
+			currEpoch := slots.ToEpoch(currSlot)
+			newEntry := params.GetNetworkScheduleEntry(currEpoch)
 			if newEntry.ForkDigest != scheduleEntry.ForkDigest {
-				nextEntry := params.GetNetworkScheduleEntry(newEntry.Epoch)
+				nextEntry := params.NextNetworkScheduleEntry(currEpoch)
 				if err := updateENR(s.dv5Listener.LocalNode(), newEntry, nextEntry); err != nil {
 					log.WithFields(newEntry.LogFields()).WithError(err).Error("Could not add fork entry")
 					continue // don't replace scheduleEntry until this succeeds
