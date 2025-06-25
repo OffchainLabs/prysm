@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/types"
+"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/container/trie"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
@@ -39,47 +40,22 @@ func (b *BeaconState) NextSyncCommitteeGeneralizedIndex() (uint64, error) {
 
 // CurrentSyncCommitteeProof from the state's Merkle trie representation.
 func (b *BeaconState) CurrentSyncCommitteeProof(ctx context.Context) ([][]byte, error) {
-	b.lock.Lock()
-	defer b.lock.Unlock()
-
-	if b.version == version.Phase0 {
-		return nil, errNotSupported("CurrentSyncCommitteeProof", b.version)
-	}
-
-	// In case the Merkle layers of the trie are not populated, we need
-	// to perform some initialization.
-	if err := b.initializeMerkleLayers(ctx); err != nil {
-		return nil, err
-	}
-	// Our beacon state uses a "dirty" fields pattern which requires us to
-	// recompute branches of the Merkle layers that are marked as dirty.
-	if err := b.recomputeDirtyFields(ctx); err != nil {
-		return nil, err
-	}
-	return trie.ProofFromMerkleLayers(b.merkleLayers, types.CurrentSyncCommittee.RealPosition()), nil
+	return b.ProofByFieldIndex(ctx, types.CurrentSyncCommittee)
 }
 
 // NextSyncCommitteeProof from the state's Merkle trie representation.
 func (b *BeaconState) NextSyncCommitteeProof(ctx context.Context) ([][]byte, error) {
-	b.lock.Lock()
-	defer b.lock.Unlock()
-
-	if b.version == version.Phase0 {
-		return nil, errNotSupported("NextSyncCommitteeProof", b.version)
-	}
-
-	if err := b.initializeMerkleLayers(ctx); err != nil {
-		return nil, err
-	}
-	if err := b.recomputeDirtyFields(ctx); err != nil {
-		return nil, err
-	}
-	return trie.ProofFromMerkleLayers(b.merkleLayers, types.NextSyncCommittee.RealPosition()), nil
+	return b.ProofByFieldIndex(ctx, types.NextSyncCommittee)
 }
 
 // FinalizedRootProof crafts a Merkle proof for the finalized root
 // contained within the finalized checkpoint of a beacon state.
 func (b *BeaconState) FinalizedRootProof(ctx context.Context) ([][]byte, error) {
+	branchProof, err := b.ProofByFieldIndex(ctx, types.FinalizedCheckpoint)
+	if err != nil {
+		return nil, err
+	}
+
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
@@ -105,4 +81,57 @@ func (b *BeaconState) FinalizedRootProof(ctx context.Context) ([][]byte, error) 
 	branch := trie.ProofFromMerkleLayers(b.merkleLayers, types.FinalizedCheckpoint.RealPosition())
 	proof = append(proof, branch...)
 	return proof, nil
+}
+
+func (b *BeaconState) ProofByFieldIndex(ctx context.Context, f types.FieldIndex) ([][]byte, error) {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	err := b.validateFieldIndex(f)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := b.initializeMerkleLayers(ctx); err != nil {
+		return nil, err
+	}
+	if err := b.recomputeDirtyFields(ctx); err != nil {
+		return nil, err
+	}
+	return trie.ProofFromMerkleLayers(b.merkleLayers, f.RealPosition()), nil
+}
+
+func (b *BeaconState) validateFieldIndex(f types.FieldIndex) error {
+	switch b.version {
+	case version.Phase0:
+		if f.RealPosition() > params.BeaconConfig().BeaconStateFieldCount-1 {
+			return errNotSupported(f.String(), b.version)
+		}
+	case version.Altair:
+		if f.RealPosition() > params.BeaconConfig().BeaconStateAltairFieldCount-1 {
+			return errNotSupported(f.String(), b.version)
+		}
+	case version.Bellatrix:
+		if f.RealPosition() > params.BeaconConfig().BeaconStateBellatrixFieldCount-1 {
+			return errNotSupported(f.String(), b.version)
+		}
+	case version.Capella:
+		if f.RealPosition() > params.BeaconConfig().BeaconStateCapellaFieldCount-1 {
+			return errNotSupported(f.String(), b.version)
+		}
+	case version.Deneb:
+		if f.RealPosition() > params.BeaconConfig().BeaconStateDenebFieldCount-1 {
+			return errNotSupported(f.String(), b.version)
+		}
+	case version.Electra:
+		if f.RealPosition() > params.BeaconConfig().BeaconStateElectraFieldCount-1 {
+			return errNotSupported(f.String(), b.version)
+		}
+	case version.Fulu:
+		if f.RealPosition() > params.BeaconConfig().BeaconStateFuluFieldCount-1 {
+			return errNotSupported(f.String(), b.version)
+		}
+	}
+
+	return nil
 }
