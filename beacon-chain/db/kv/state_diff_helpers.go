@@ -75,41 +75,6 @@ func computeLevel(offset uint64, slot primitives.Slot) int {
 	return -1
 }
 
-func (s *Store) loadOrInitOffset(slot primitives.Slot) (offset uint64, err error) {
-	offset, err = s.stateDiffCache.getOffset()
-	if err == nil {
-		return offset, nil
-	}
-
-	err = s.db.Update(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket(stateDiffBucket)
-		if bucket == nil {
-			return bbolt.ErrBucketNotFound
-		}
-
-		offsetBytes := bucket.Get(offsetKey)
-		if offsetBytes != nil {
-			offset = binary.LittleEndian.Uint64(offsetBytes)
-			return nil
-		}
-
-		offset = uint64(slot)
-		offsetBytes = make([]byte, 8)
-		binary.LittleEndian.PutUint64(offsetBytes, offset)
-		if err := bucket.Put(offsetKey, offsetBytes); err != nil {
-			return err
-		}
-		return nil
-	})
-	if err != nil {
-		return 0, err
-	}
-
-	// Save the offset in the cache.
-	s.stateDiffCache.setOffset(offset)
-	return offset, nil
-}
-
 func (s *Store) setOffset(slot primitives.Slot) error {
 	err := s.db.Update(func(tx *bbolt.Tx) error {
 		bucket := tx.Bucket(stateDiffBucket)
@@ -119,7 +84,7 @@ func (s *Store) setOffset(slot primitives.Slot) error {
 
 		offsetBytes := bucket.Get(offsetKey)
 		if offsetBytes != nil {
-			return errors.New(fmt.Sprintf("offset already set to %d", binary.LittleEndian.Uint64(offsetBytes)))
+			return fmt.Errorf("offset already set to %d", binary.LittleEndian.Uint64(offsetBytes))
 		}
 
 		offsetBytes = make([]byte, 8)
