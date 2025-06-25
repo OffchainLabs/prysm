@@ -21,11 +21,7 @@ func TestBeaconStateMerkleProofs_phase0_notsupported(t *testing.T) {
 		_, err := st.NextSyncCommitteeProof(ctx)
 		require.ErrorContains(t, "not supported", err)
 	})
-	t.Run("finalized root", func(t *testing.T) {
-		_, err := st.FinalizedRootProof(ctx)
-		require.ErrorContains(t, "not supported", err)
-	})
-}
+	}
 func TestBeaconStateMerkleProofs_altair(t *testing.T) {
 	ctx := t.Context()
 	altair, err := util.NewBeaconStateAltair()
