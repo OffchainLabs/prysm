@@ -313,7 +313,7 @@ func (p *BeaconDbBlocker) blobsFromStoredBlobs(commitments [][]byte, root [field
 }
 
 // blobsFromStoredDataColumns retrieves data column sidecars from the store,
-// reconstruct the whole matrix if needed, convert the matrix to blobs,
+// reconstructs the whole matrix if needed, converts the matrix to blobs,
 // and then returns blobs corresponding to `indices` and `root` from the store.
 // This function expects data column sidecars to be stored (aka. no blob sidecars).
 // If not enough data column sidecars are available to extract blobs from them
