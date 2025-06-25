@@ -25,6 +25,7 @@ go_library(
         "migration_state_validators.go",
         "schema.go",
         "state.go",
+        "state_diff_cache.go",
         "state_summary.go",
         "state_summary_cache.go",
         "utils.go",
