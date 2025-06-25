@@ -390,6 +390,7 @@ func (s *Service) listenForNewNodes() {
 				s.Peers().RandomizeBackOff(peerInfo.ID)
 				wg.Add(1)
 				go func(info *peer.AddrInfo) {
+					log.WithField("enr", node.String()).WithField("peerInfo", info.String()).Debug("attempting to connect with peer")
 					if err := s.connectWithPeer(s.ctx, *info); err != nil {
 						log.WithError(err).Tracef("Could not connect with peer %s", info.String())
 					}
