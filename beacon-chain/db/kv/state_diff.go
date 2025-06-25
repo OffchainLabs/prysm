@@ -27,7 +27,7 @@ func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconStat
 	}
 
 	slot := st.Slot()
-	offset, err := s.loadOrInitOffset(slot)
+	offset, err := s.getOffset()
 	if err != nil {
 		return err
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
@@ -109,13 +110,8 @@ func (s *Store) loadOrInitOffset(slot primitives.Slot) (offset uint64, err error
 	return offset, nil
 }
 
-func (s *Store) getOffset() (offset uint64, err error) {
-	offset, err = s.stateDiffCache.getOffset()
-	if err == nil {
-		return offset, nil
-	}
-
-	err = s.db.View(func(tx *bbolt.Tx) error {
+func (s *Store) setOffset(slot primitives.Slot) error {
+	err := s.db.Update(func(tx *bbolt.Tx) error {
 		bucket := tx.Bucket(stateDiffBucket)
 		if bucket == nil {
 			return bbolt.ErrBucketNotFound
@@ -123,18 +119,27 @@ func (s *Store) getOffset() (offset uint64, err error) {
 
 		offsetBytes := bucket.Get(offsetKey)
 		if offsetBytes != nil {
-			offset = binary.BigEndian.Uint64(offsetBytes)
-			return nil
+			return errors.New(fmt.Sprintf("offset already set to %d", binary.LittleEndian.Uint64(offsetBytes)))
 		}
-		return bbolt.ErrIncompatibleValue
+
+		offsetBytes = make([]byte, 8)
+		binary.LittleEndian.PutUint64(offsetBytes, uint64(slot))
+		if err := bucket.Put(offsetKey, offsetBytes); err != nil {
+			return err
+		}
+		return nil
 	})
 	if err != nil {
-		return 0, err
+		return err
 	}
 
 	// Save the offset in the cache.
-	s.stateDiffCache.setOffset(offset)
-	return offset, nil
+	s.stateDiffCache.setOffset(uint64(slot))
+	return nil
+}
+
+func (s *Store) getOffset() (offset uint64, err error) {
+	return s.stateDiffCache.getOffset()
 }
 
 func keyForSnapshot(v int) []byte {
