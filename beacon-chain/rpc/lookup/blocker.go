@@ -314,9 +314,9 @@ func (p *BeaconDbBlocker) blobsFromStoredBlobs(commitments [][]byte, root [field
 
 // blobsFromStoredDataColumns retrieves data column sidecars from the store,
 // reconstructs the whole matrix if needed, converts the matrix to blobs,
-// and then returns blobs corresponding to `indices` and `root` from the store.
+// and then returns converted blobs corresponding to `indices` and `root`.
 // This function expects data column sidecars to be stored (aka. no blob sidecars).
-// If not enough data column sidecars are available to extract blobs from them
+// If not enough data column sidecars are available to convert blobs from them
 // (either directly or after reconstruction), an error is returned.
 func (p *BeaconDbBlocker) blobsFromStoredDataColumns(block blocks.ROBlock, indices []int) ([]*blocks.VerifiedROBlob, *core.RpcError) {
 	root := block.Root()
