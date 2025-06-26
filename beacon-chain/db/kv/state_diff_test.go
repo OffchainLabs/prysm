@@ -2,6 +2,7 @@ package kv
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -19,8 +20,7 @@ import (
 
 func TestStateDiff_LoadOrInitOffset(t *testing.T) {
 	db := setupDB(t)
-
-	err := db.setOffset(10)
+	err := setOffsetInDB(db, 10)
 	require.NoError(t, err)
 	offset := db.getOffset()
 	require.Equal(t, uint64(10), offset)
@@ -34,7 +34,7 @@ func TestStateDiff_LoadOrInitOffset(t *testing.T) {
 func TestStateDiff_ComputeLevel(t *testing.T) {
 	db := setupDB(t)
 
-	err := db.setOffset(0)
+	err := setOffsetInDB(db, 0)
 	require.NoError(t, err)
 
 	offset := db.getOffset()
@@ -122,7 +122,7 @@ func TestStateDiff_SaveFullSnapshot(t *testing.T) {
 			// Create state with slot 0
 			st, enc := createState(t, 0, v)
 
-			err := db.setOffset(0)
+			err := setOffsetInDB(db, 0)
 			require.NoError(t, err)
 
 			err = db.saveStateByDiff(context.Background(), st)
@@ -153,7 +153,7 @@ func TestStateDiff_SaveAndReadFullSnapshot(t *testing.T) {
 
 			st, _ := createState(t, 0, v)
 
-			err := db.setOffset(0)
+			err := setOffsetInDB(db, 0)
 			require.NoError(t, err)
 
 			err = db.saveStateByDiff(context.Background(), st)
@@ -182,7 +182,7 @@ func TestStateDiff_SaveDiff(t *testing.T) {
 			slot := primitives.Slot(math.PowerOf2(21))
 			st, enc := createState(t, slot, v)
 
-			err := db.setOffset(slot)
+			err := setOffsetInDB(db, uint64(slot))
 			require.NoError(t, err)
 
 			err = db.saveStateByDiff(context.Background(), st)
@@ -245,7 +245,7 @@ func TestStateDiff_SaveAndReadDiff(t *testing.T) {
 
 			st, _ := createState(t, 0, v)
 
-			err := db.setOffset(0)
+			err := setOffsetInDB(db, 0)
 			require.NoError(t, err)
 
 			err = db.saveStateByDiff(context.Background(), st)
@@ -278,7 +278,7 @@ func TestStateDiff_SaveAndReadDiff_MultipleLevels(t *testing.T) {
 
 			st, _ := createState(t, 0, v)
 
-			err := db.setOffset(0)
+			err := setOffsetInDB(db, 0)
 			require.NoError(t, err)
 
 			err = db.saveStateByDiff(context.Background(), st)
@@ -343,7 +343,7 @@ func TestStateDiff_SaveAndReadDiffForkTransition(t *testing.T) {
 
 			st, _ := createState(t, 0, v)
 
-			err := db.setOffset(0)
+			err := setOffsetInDB(db, 0)
 			require.NoError(t, err)
 
 			err = db.saveStateByDiff(context.Background(), st)
@@ -377,7 +377,7 @@ func TestStateDiff_OffsetCache(t *testing.T) {
 				db := setupDB(t)
 
 				slot := primitives.Slot(slotNum)
-				err := db.setOffset(slot)
+				err := setOffsetInDB(db, uint64(slot))
 				require.NoError(t, err)
 				st, _ := createState(t, slot, v)
 				err = db.saveStateByDiff(context.Background(), st)
@@ -405,6 +405,8 @@ func TestStateDiff_AnchorCache(t *testing.T) {
 			exponents := params.StateHierarchyExponents()
 			localCache := make([]state.ReadOnlyBeaconState, len(exponents)-1)
 			db := setupDB(t)
+			err := setOffsetInDB(db, 0) // lvl 0
+			require.NoError(t, err)
 
 			// at first the cache should be empty
 			for i := 0; i < len(params.StateHierarchyExponents()); i++ {
@@ -413,9 +415,7 @@ func TestStateDiff_AnchorCache(t *testing.T) {
 			}
 
 			// add level 0
-			slot := primitives.Slot(0)
-			err := db.setOffset(slot)
-			require.NoError(t, err)
+			slot := primitives.Slot(0) // offset 0 is already set
 			st, _ := createState(t, slot, v)
 			err = db.saveStateByDiff(context.Background(), st)
 			require.NoError(t, err)
@@ -543,4 +543,35 @@ func createState(t *testing.T, slot primitives.Slot, v int) (state.ReadOnlyBeaco
 	enc, err := addKey(v, stssz)
 	require.NoError(t, err)
 	return st, enc
+}
+
+func setOffsetInDB(s *Store, offset uint64) error {
+	err := s.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if bucket == nil {
+			return bbolt.ErrBucketNotFound
+		}
+
+		offsetBytes := bucket.Get(offsetKey)
+		if offsetBytes != nil {
+			return fmt.Errorf("offset already set to %d", binary.LittleEndian.Uint64(offsetBytes))
+		}
+
+		offsetBytes = make([]byte, 8)
+		binary.LittleEndian.PutUint64(offsetBytes, offset)
+		if err := bucket.Put(offsetKey, offsetBytes); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	sdCache, err := newStateDiffCache(s)
+	if err != nil {
+		return err
+	}
+	s.stateDiffCache = sdCache
+	return nil
 }
