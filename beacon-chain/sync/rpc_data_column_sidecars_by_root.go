@@ -12,6 +12,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -98,11 +99,14 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 	log.Debug("Serving data column sidecar by root request")
 
 	count := 0
-	for root, columns := range requestedColumnsByRoot {
+	for _, ident := range requestedColumnIdents {
 		if err := ctx.Err(); err != nil {
 			closeStream(stream, log)
 			return errors.Wrap(err, "context error")
 		}
+
+		root := bytesutil.ToBytes32(ident.BlockRoot)
+		columns := ident.Columns
 
 		// Throttle request processing to no more than batchSize/sec.
 		for range columns {
