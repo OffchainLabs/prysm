@@ -85,6 +85,7 @@ func (m *healthMonitor) loop() {
 	for ; true; <-ticker.C { // check immediately
 		if m.ctx.Err() != nil {
 			log.Debug("Context canceled, stopping health checking")
+			close(m.healthyCh)
 			return
 		}
 		m.performHealthCheck()

@@ -248,4 +248,6 @@ func TestHealthMonitor_HealthyChan_ReceivesUpdates(t *testing.T) {
 
 	// 4. Stop the monitor
 	monitor.Stop() // This calls monitorCancelFunc
+	_, ok := <-ch
+	require.False(t, ok, "HealthyChan should be closed after Stop()")
 }
