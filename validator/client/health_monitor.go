@@ -45,6 +45,7 @@ func (m *healthMonitor) IsHealthy() bool {
 
 func (m *healthMonitor) performHealthCheck() {
 	m.Lock()
+	defer m.Unlock()
 	ishealthy := m.v.FindHealthyHost(m.ctx)
 	if ishealthy {
 		m.fails = 0
@@ -57,7 +58,6 @@ func (m *healthMonitor) performHealthCheck() {
 	} else if m.maxFails > 0 && m.fails >= m.maxFails {
 		log.WithField("maxFails", m.maxFails).Debug("Maximum health checks reached. Stopping health check routine")
 		m.isHealthy = ishealthy
-		m.Unlock()
 		m.cancel()
 		return
 	}
@@ -66,7 +66,7 @@ func (m *healthMonitor) performHealthCheck() {
 		return
 	}
 	m.isHealthy = ishealthy
-	m.Unlock()
+
 	// Non-blocking send to channel
 	select {
 	case m.healthyCh <- ishealthy:
@@ -85,7 +85,6 @@ func (m *healthMonitor) loop() {
 	for ; true; <-ticker.C { // check immediately
 		if m.ctx.Err() != nil {
 			log.Debug("Context canceled, stopping health checking")
-			close(m.healthyCh)
 			return
 		}
 		m.performHealthCheck()
