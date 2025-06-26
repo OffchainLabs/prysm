@@ -483,9 +483,6 @@ func (s *Service) GetAttestationData(
 	ctx, span := trace.StartSpan(ctx, "coreService.GetAttestationData")
 	defer span.End()
 
-	if req.Slot != s.GenesisTimeFetcher.CurrentSlot() {
-		return nil, &RpcError{Reason: BadRequest, Err: errors.Errorf("invalid request: slot %d is not the current slot %d", req.Slot, s.GenesisTimeFetcher.CurrentSlot())}
-	}
 	if err := helpers.ValidateAttestationTime(
 		req.Slot,
 		s.GenesisTimeFetcher.GenesisTime(),
