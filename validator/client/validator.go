@@ -1150,6 +1150,10 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 }
 
 func (v *validator) StartEventStream(ctx context.Context, topics []string) {
+	if v.EventStreamIsRunning() {
+		log.Debug("EventStream is already running")
+		return
+	}
 	log.WithField("topics", topics).Info("Starting event stream")
 	v.validatorClient.StartEventStream(ctx, topics, v.eventsChannel)
 }
@@ -1245,7 +1249,7 @@ func (v *validator) Host() string {
 	return v.validatorClient.Host()
 }
 
-func (v *validator) ChangeHost() {
+func (v *validator) changeHost() {
 	next := (v.currentHostIndex + 1) % uint64(len(v.beaconNodeHosts))
 	log.WithFields(logrus.Fields{
 		"currentHost": v.beaconNodeHosts[v.currentHostIndex],
@@ -1269,7 +1273,7 @@ func (v *validator) FindHealthyHost(ctx context.Context) bool {
 		if remaining == 0 || !features.Get().EnableBeaconRESTApi {
 			return false // exhausted or REST disabled
 		}
-		v.ChangeHost()
+		v.changeHost()
 		return check(remaining - 1) // recurse
 	}
 

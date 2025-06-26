@@ -340,9 +340,6 @@ func (*FakeValidator) Host() string {
 	return "127.0.0.1:0"
 }
 
-func (fv *FakeValidator) ChangeHost() {
-}
-
 func (fv *FakeValidator) FindHealthyHost(_ context.Context) bool {
 	return fv.CanChangeHost
 }

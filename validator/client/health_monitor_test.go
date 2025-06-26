@@ -14,77 +14,6 @@ import (
 	validatormock "github.com/OffchainLabs/prysm/v6/testing/validator-mock"
 )
 
-// TestNewHealthMonitor verifies the initialization logic of the health monitor.
-func TestNewHealthMonitor(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockValidator := validatormock.NewMockValidator(ctrl)
-	_, parentCancelFunc := context.WithCancel(context.Background())
-	defer parentCancelFunc() // Ensure cleanup for this top-level context
-
-	tests := []struct {
-		name              string
-		maxFails          int
-		findHealthyHost   bool
-		expectedIsHealthy bool
-		expectedFails     int
-	}{
-		{
-			name:              "Initially Healthy",
-			maxFails:          3,
-			findHealthyHost:   true,
-			expectedIsHealthy: true,
-			expectedFails:     0,
-		},
-		{
-			name:              "Initially Unhealthy",
-			maxFails:          3,
-			findHealthyHost:   false,
-			expectedIsHealthy: false,
-			expectedFails:     1,
-		},
-		{
-			name:              "MaxFails 0, Initially Healthy",
-			maxFails:          0, // infinite retries
-			findHealthyHost:   true,
-			expectedIsHealthy: true,
-			expectedFails:     0,
-		},
-		{
-			name:              "MaxFails 0, Initially Unhealthy",
-			maxFails:          0, // infinite retries
-			findHealthyHost:   false,
-			expectedIsHealthy: false,
-			expectedFails:     1,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mockValidator.EXPECT().FindHealthyHost(gomock.Any()).Return(tt.findHealthyHost)
-
-			monitorTestCtx, monitorTestCancelFunc := context.WithCancel(context.Background())
-			defer monitorTestCancelFunc()
-
-			monitor := newHealthMonitor(monitorTestCtx, monitorTestCancelFunc, tt.maxFails, mockValidator)
-			require.NotNil(t, monitor)
-
-			assert.Equal(t, tt.expectedIsHealthy, monitor.IsHealthy())
-			// Accessing fails directly for test validation of internal state.
-			assert.Equal(t, tt.expectedFails, monitor.fails)
-
-			// Check channel for initial prime value
-			select {
-			case healthyStatus := <-monitor.HealthyChan():
-				assert.Equal(t, tt.expectedIsHealthy, healthyStatus)
-			case <-time.After(100 * time.Millisecond):
-				t.Fatal("Expected initial status on HealthyChan, but timed out")
-			}
-		})
-	}
-}
-
 // TestHealthMonitor_IsHealthy_Concurrency tests thread-safety of IsHealthy.
 func TestHealthMonitor_IsHealthy_Concurrency(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -99,15 +28,11 @@ func TestHealthMonitor_IsHealthy_Concurrency(t *testing.T) {
 
 	monitor := newHealthMonitor(parentCtx, parentCancel, 3, mockValidator)
 	require.NotNil(t, monitor)
-	<-monitor.HealthyChan() // Drain initial value from newHealthMonitor
+	monitor.Start()
+	time.Sleep(100 * time.Millisecond)
 
 	var wg sync.WaitGroup
 	numGoroutines := 10
-
-	// Test when isHealthy is true
-	monitor.Lock()
-	monitor.isHealthy = true
-	monitor.Unlock()
 
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
@@ -199,10 +124,10 @@ func TestHealthMonitor_PerformHealthCheck(t *testing.T) {
 			name:                   "Max Fails Reached - Stays Unhealthy and Cancels",
 			initialIsHealthy:       false,
 			initialFails:           2, // One fail away from maxFails
-			maxFails:               3,
+			maxFails:               2,
 			findHealthyHostReturns: false,
 			expectedIsHealthy:      false,
-			expectedFails:          3,
+			expectedFails:          2,
 			expectCancelCalled:     true,
 			expectStatusUpdate:     false, // Status was already false, no new update sent before cancel
 		},
@@ -213,7 +138,7 @@ func TestHealthMonitor_PerformHealthCheck(t *testing.T) {
 			maxFails:               0,   // Infinite
 			findHealthyHostReturns: false,
 			expectedIsHealthy:      false,
-			expectedFails:          101,
+			expectedFails:          100,
 			expectCancelCalled:     false,
 			expectStatusUpdate:     false,
 		},
@@ -287,13 +212,23 @@ func TestHealthMonitor_HealthyChan_ReceivesUpdates(t *testing.T) {
 		monitorCancelFunc() // Ensure monitor context is cleaned up
 	}()
 
-	// 1. For newHealthMonitor: Initial status is true
-	mockValidator.EXPECT().FindHealthyHost(gomock.Any()).Return(true).Times(1)
 	monitor := newHealthMonitor(monitorCtx, monitorCancelFunc, 3, mockValidator)
 	require.NotNil(t, monitor)
 
 	ch := monitor.HealthyChan()
 	require.NotNil(t, ch)
+
+	first := mockValidator.EXPECT().
+		FindHealthyHost(gomock.Any()).
+		Return(true).Times(1)
+
+	mockValidator.EXPECT().
+		FindHealthyHost(gomock.Any()).
+		Return(false).
+		AnyTimes().
+		After(first)
+
+	monitor.Start()
 
 	// Consume initial prime value (true)
 	select {
@@ -302,10 +237,6 @@ func TestHealthMonitor_HealthyChan_ReceivesUpdates(t *testing.T) {
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("Timeout waiting for initial status")
 	}
-
-	mockValidator.EXPECT().FindHealthyHost(gomock.Any()).Return(false).AnyTimes()
-
-	monitor.Start()
 
 	// Expect 'false' from the first check in Start's loop
 	select {

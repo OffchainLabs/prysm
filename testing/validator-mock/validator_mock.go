@@ -75,18 +75,6 @@ func (mr *MockValidatorMockRecorder) CanonicalHeadSlot(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CanonicalHeadSlot", reflect.TypeOf((*MockValidator)(nil).CanonicalHeadSlot), arg0)
 }
 
-// ChangeHost mocks base method.
-func (m *MockValidator) ChangeHost() {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "ChangeHost")
-}
-
-// ChangeHost indicates an expected call of ChangeHost.
-func (mr *MockValidatorMockRecorder) ChangeHost() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChangeHost", reflect.TypeOf((*MockValidator)(nil).ChangeHost))
-}
-
 // CheckDoppelGanger mocks base method.
 func (m *MockValidator) CheckDoppelGanger(arg0 context.Context) error {
 	m.ctrl.T.Helper()

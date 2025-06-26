@@ -28,23 +28,13 @@ func newHealthMonitor(
 	maxFails int,
 	v iface.Validator,
 ) *healthMonitor {
-	m := &healthMonitor{
+	return &healthMonitor{
 		ctx:       parentCtx,
 		cancel:    parentCancel,
 		maxFails:  maxFails,
 		v:         v,
 		healthyCh: make(chan bool, 1),
 	}
-
-	// Prime channel with the current status so consumers have an initial value.
-	isHealthy := v.FindHealthyHost(parentCtx)
-	m.isHealthy = isHealthy
-	m.healthyCh <- isHealthy
-	if !isHealthy {
-		m.fails = 1
-	}
-
-	return m
 }
 
 func (m *healthMonitor) IsHealthy() bool {
@@ -89,22 +79,15 @@ func (m *healthMonitor) performHealthCheck() {
 
 func (m *healthMonitor) loop() {
 	log.Debug("Starting health check routine for beacon node apis")
-	// just check once a slot
 	interval := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
 	ticker := time.NewTicker(interval)
 
-	// Initial check immediately
-	m.performHealthCheck()
-
-	// Continue periodic checks
-	for {
-		select {
-		case <-ticker.C:
-			m.performHealthCheck()
-		case <-m.ctx.Done():
+	for ; true; <-ticker.C { // check immediately
+		if m.ctx.Err() != nil {
 			log.Debug("Context canceled, stopping health checking")
 			return
 		}
+		m.performHealthCheck()
 	}
 }
 
