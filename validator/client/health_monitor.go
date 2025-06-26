@@ -67,7 +67,7 @@ func (m *healthMonitor) performHealthCheck() {
 		}).Debug("Failed health check, beacon node is unresponsive")
 		m.fails++
 	} else if m.maxFails > 0 && m.fails >= m.maxFails {
-		log.WithField("max_fails", m.maxFails).Debug("Maximum health checksreached. Stopping health check routine")
+		log.WithField("maxFails", m.maxFails).Debug("Maximum health checks reached. Stopping health check routine")
 		m.isHealthy = ishealthy
 		m.cancel()
 		return
