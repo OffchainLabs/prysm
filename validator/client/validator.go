@@ -1250,7 +1250,7 @@ func (v *validator) ChangeHost() {
 	log.WithFields(logrus.Fields{
 		"current_host": v.beaconNodeHosts[v.currentHostIndex],
 		"next_host":    v.beaconNodeHosts[next],
-	}).Warn("Beacon node is not responding, switching to host")
+	}).Warn("Beacon node is not responding, switching host")
 	v.validatorClient.SetHost(v.beaconNodeHosts[next])
 	v.currentHostIndex = next
 }
