@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/types"
-"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/container/trie"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
