@@ -77,7 +77,10 @@ func updateENR(node *enode.LocalNode, entry, next params.NetworkScheduleEntry) e
 	enrForkID := &pb.ENRForkID{
 		CurrentForkDigest: entry.ForkDigest[:],
 		NextForkVersion:   next.ForkVersion[:],
-		NextForkEpoch:     entry.Epoch,
+		NextForkEpoch:     next.Epoch,
+	}
+	if entry.Epoch == next.Epoch {
+		enrForkID.NextForkEpoch = params.BeaconConfig().FarFutureEpoch
 	}
 	logFields := logrus.Fields{
 		"CurrentForkDigest": fmt.Sprintf("%#x", enrForkID.CurrentForkDigest),
