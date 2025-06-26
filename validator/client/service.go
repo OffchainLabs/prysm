@@ -242,11 +242,7 @@ func (v *ValidatorService) Start() {
 		case <-v.ctx.Done():
 			log.Info("Validator service context canceled, stopping")
 			return
-		case isHealthy, ok := <-hm.HealthyChan():
-			if !ok {
-				// channel closed – monitor stopped
-				return
-			}
+		case isHealthy := <-hm.HealthyChan():
 			if !isHealthy {
 				// wait until the next health tracker update
 				log.Warn("Validator service health check failed, waiting for healthy beacon node...")
