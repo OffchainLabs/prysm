@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 
 	"github.com/pkg/errors"
 )
@@ -14,14 +15,17 @@ const (
 	MaxBodySize      int64 = 1 << 23 // 8MB default, WithMaxBodySize can override
 	MaxBodySizeState int64 = 1 << 29 // 512MB
 	MaxErrBodySize   int64 = 1 << 17 // 128KB
+
+	envNameOverrideAccept = "PRYSM_API_OVERRIDE_ACCEPT"
 )
 
 // Client is a wrapper object around the HTTP client.
 type Client struct {
-	hc          *http.Client
-	baseURL     *url.URL
-	token       string
-	maxBodySize int64
+	hc           *http.Client
+	baseURL      *url.URL
+	token        string
+	maxBodySize  int64
+	reqOverrides []ReqOption
 }
 
 // NewClient constructs a new client with the provided options (ex WithTimeout).
@@ -40,7 +44,19 @@ func NewClient(host string, opts ...ClientOpt) (*Client, error) {
 	for _, o := range opts {
 		o(c)
 	}
+	c.appendAcceptOverride()
 	return c, nil
+}
+
+// appendAcceptOverride enables the Accept header to be customized at runtime via an environment variable.
+// This is specified as an env var because it is a niche option that prysm may use for performance testing or debugging
+// bug which users are unlikely to need. Using an env var keeps the set of user-facing flags cleaner.
+func (c *Client) appendAcceptOverride() {
+	if accept := os.Getenv(envNameOverrideAccept); accept != "" {
+		c.reqOverrides = append(c.reqOverrides, func(req *http.Request) {
+			req.Header.Set("Accept", accept)
+		})
+	}
 }
 
 // Token returns the bearer token used for jwt authentication
@@ -55,6 +71,9 @@ func (c *Client) BaseURL() *url.URL {
 
 // Do execute the request against the http client
 func (c *Client) Do(req *http.Request) (*http.Response, error) {
+	for _, o := range c.reqOverrides {
+		o(req)
+	}
 	return c.hc.Do(req)
 }
 
@@ -87,7 +106,7 @@ func (c *Client) Get(ctx context.Context, path string, opts ...ReqOption) ([]byt
 	for _, o := range opts {
 		o(req)
 	}
-	r, err := c.hc.Do(req)
+	r, err := c.Do(req)
 	if err != nil {
 		return nil, err
 	}

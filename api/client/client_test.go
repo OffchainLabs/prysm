@@ -1,7 +1,10 @@
 package client
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"os"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -45,4 +48,24 @@ func TestBaseURL(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "www.offchainlabs.com", cl.BaseURL().Hostname())
 	require.Equal(t, "3500", cl.BaseURL().Port())
+}
+
+func TestAcceptOverride(t *testing.T) {
+	name := "TestAcceptOverride"
+	orig := os.Getenv(envNameOverrideAccept)
+	defer func() {
+		os.Setenv(envNameOverrideAccept, orig)
+	}()
+	os.Setenv(envNameOverrideAccept, name)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, name, r.Header.Get("Accept"))
+		w.WriteHeader(200)
+		w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+	c, err := NewClient(srv.URL)
+	require.NoError(t, err)
+	b, err := c.Get(t.Context(), "/test")
+	require.NoError(t, err)
+	require.Equal(t, "ok", string(b))
 }
