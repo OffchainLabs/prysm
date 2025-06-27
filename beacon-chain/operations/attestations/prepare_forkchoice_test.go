@@ -1,7 +1,6 @@
 package attestations
 
 import (
-	"context"
 	"fmt"
 	"sort"
 	"testing"
@@ -17,7 +16,7 @@ import (
 )
 
 func TestBatchAttestations_Multiple(t *testing.T) {
-	s, err := NewService(context.Background(), &Config{Pool: NewPool()})
+	s, err := NewService(t.Context(), &Config{Pool: NewPool()})
 	require.NoError(t, err)
 
 	priv, err := bls.RandKey()
@@ -91,7 +90,7 @@ func TestBatchAttestations_Multiple(t *testing.T) {
 	for _, att := range blockAtts {
 		require.NoError(t, s.cfg.Pool.SaveBlockAttestation(att))
 	}
-	require.NoError(t, s.batchForkChoiceAtts(context.Background()))
+	require.NoError(t, s.batchForkChoiceAtts(t.Context()))
 
 	wanted, err := attaggregation.Aggregate([]ethpb.Att{aggregatedAtts[0], blockAtts[0]})
 	require.NoError(t, err)
@@ -102,7 +101,7 @@ func TestBatchAttestations_Multiple(t *testing.T) {
 	require.NoError(t, err)
 
 	wanted = append(wanted, aggregated...)
-	require.NoError(t, s.cfg.Pool.AggregateUnaggregatedAttestations(context.Background()))
+	require.NoError(t, s.cfg.Pool.AggregateUnaggregatedAttestations(t.Context()))
 	received := s.cfg.Pool.ForkchoiceAttestations()
 
 	sort.Slice(received, func(i, j int) bool {
@@ -116,7 +115,7 @@ func TestBatchAttestations_Multiple(t *testing.T) {
 }
 
 func TestBatchAttestations_Single(t *testing.T) {
-	s, err := NewService(context.Background(), &Config{Pool: NewPool()})
+	s, err := NewService(t.Context(), &Config{Pool: NewPool()})
 	require.NoError(t, err)
 
 	priv, err := bls.RandKey()
@@ -148,7 +147,7 @@ func TestBatchAttestations_Single(t *testing.T) {
 	for _, att := range blockAtts {
 		require.NoError(t, s.cfg.Pool.SaveBlockAttestation(att))
 	}
-	require.NoError(t, s.batchForkChoiceAtts(context.Background()))
+	require.NoError(t, s.batchForkChoiceAtts(t.Context()))
 
 	wanted, err := attaggregation.Aggregate(append(aggregatedAtts, unaggregatedAtts...))
 	require.NoError(t, err)
@@ -161,7 +160,7 @@ func TestBatchAttestations_Single(t *testing.T) {
 }
 
 func TestAggregateAndSaveForkChoiceAtts_Single(t *testing.T) {
-	s, err := NewService(context.Background(), &Config{Pool: NewPool()})
+	s, err := NewService(t.Context(), &Config{Pool: NewPool()})
 	require.NoError(t, err)
 
 	priv, err := bls.RandKey()
@@ -185,7 +184,7 @@ func TestAggregateAndSaveForkChoiceAtts_Single(t *testing.T) {
 }
 
 func TestAggregateAndSaveForkChoiceAtts_Multiple(t *testing.T) {
-	s, err := NewService(context.Background(), &Config{Pool: NewPool()})
+	s, err := NewService(t.Context(), &Config{Pool: NewPool()})
 	require.NoError(t, err)
 
 	priv, err := bls.RandKey()
@@ -238,7 +237,7 @@ func TestAggregateAndSaveForkChoiceAtts_Multiple(t *testing.T) {
 }
 
 func TestSeenAttestations_PresentInCache(t *testing.T) {
-	s, err := NewService(context.Background(), &Config{Pool: NewPool()})
+	s, err := NewService(t.Context(), &Config{Pool: NewPool()})
 	require.NoError(t, err)
 
 	ad1 := util.HydrateAttestationData(&ethpb.AttestationData{})
@@ -312,7 +311,7 @@ func TestService_seen(t *testing.T) {
 		},
 	}
 
-	s, err := NewService(context.Background(), &Config{Pool: NewPool()})
+	s, err := NewService(t.Context(), &Config{Pool: NewPool()})
 	require.NoError(t, err)
 
 	for i, tt := range tests {

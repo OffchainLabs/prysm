@@ -1,7 +1,6 @@
 package filesystem
 
 import (
-	"context"
 	"sync"
 	"testing"
 
@@ -19,7 +18,7 @@ func TestStore_EIPImportBlacklistedPublicKeys(t *testing.T) {
 	require.NoError(t, err, "could not create store")
 
 	var expected = [][fieldparams.BLSPubkeyLength]byte{}
-	actual, err := store.EIPImportBlacklistedPublicKeys(context.Background())
+	actual, err := store.EIPImportBlacklistedPublicKeys(t.Context())
 	require.NoError(t, err, "could not get blacklisted public keys")
 	require.DeepSSZEqual(t, expected, actual, "blacklisted public keys do not match")
 }
@@ -30,7 +29,7 @@ func TestStore_SaveEIPImportBlacklistedPublicKeys(t *testing.T) {
 	require.NoError(t, err, "could not create store")
 
 	// Save blacklisted public keys.
-	err = store.SaveEIPImportBlacklistedPublicKeys(context.Background(), [][fieldparams.BLSPubkeyLength]byte{})
+	err = store.SaveEIPImportBlacklistedPublicKeys(t.Context(), [][fieldparams.BLSPubkeyLength]byte{})
 	require.NoError(t, err, "could not save blacklisted public keys")
 }
 
@@ -46,7 +45,7 @@ func TestStore_LowestSignedTargetEpoch(t *testing.T) {
 	require.NoError(t, err, "could not create store")
 
 	// Get the lowest signed target epoch.
-	_, exists, err := store.LowestSignedTargetEpoch(context.Background(), [fieldparams.BLSPubkeyLength]byte{})
+	_, exists, err := store.LowestSignedTargetEpoch(t.Context(), [fieldparams.BLSPubkeyLength]byte{})
 	require.NoError(t, err, "could not get lowest signed target epoch")
 	require.Equal(t, false, exists, "lowest signed target epoch should not exist")
 
@@ -59,12 +58,12 @@ func TestStore_LowestSignedTargetEpoch(t *testing.T) {
 	}
 
 	// Save the attestation.
-	err = store.SaveAttestationForPubKey(context.Background(), pubkey, [32]byte{}, attestation)
+	err = store.SaveAttestationForPubKey(t.Context(), pubkey, [32]byte{}, attestation)
 	require.NoError(t, err, "SaveAttestationForPubKey should not return an error")
 
 	// Get the lowest signed target epoch.
 	expected := primitives.Epoch(savedTargetEpoch)
-	actual, exists, err := store.LowestSignedTargetEpoch(context.Background(), pubkey)
+	actual, exists, err := store.LowestSignedTargetEpoch(t.Context(), pubkey)
 	require.NoError(t, err, "could not get lowest signed target epoch")
 	require.Equal(t, true, exists, "lowest signed target epoch should not exist")
 	require.Equal(t, expected, actual, "lowest signed target epoch should match")
@@ -79,7 +78,7 @@ func TestStore_LowestSignedSourceEpoch(t *testing.T) {
 	require.NoError(t, err, "could not create store")
 
 	// Get the lowest signed target epoch.
-	_, exists, err := store.LowestSignedSourceEpoch(context.Background(), [fieldparams.BLSPubkeyLength]byte{})
+	_, exists, err := store.LowestSignedSourceEpoch(t.Context(), [fieldparams.BLSPubkeyLength]byte{})
 	require.NoError(t, err, "could not get lowest signed source epoch")
 	require.Equal(t, false, exists, "lowest signed source epoch should not exist")
 
@@ -93,12 +92,12 @@ func TestStore_LowestSignedSourceEpoch(t *testing.T) {
 	}
 
 	// Save the attestation.
-	err = store.SaveAttestationForPubKey(context.Background(), pubkey, [32]byte{}, attestation)
+	err = store.SaveAttestationForPubKey(t.Context(), pubkey, [32]byte{}, attestation)
 	require.NoError(t, err, "SaveAttestationForPubKey should not return an error")
 
 	// Get the lowest signed target epoch.
 	expected := primitives.Epoch(savedSourceEpoch)
-	actual, exists, err := store.LowestSignedSourceEpoch(context.Background(), pubkey)
+	actual, exists, err := store.LowestSignedSourceEpoch(t.Context(), pubkey)
 	require.NoError(t, err, "could not get lowest signed target epoch")
 	require.Equal(t, true, exists, "lowest signed target epoch should exist")
 	require.Equal(t, expected, actual, "lowest signed target epoch should match")
@@ -118,7 +117,7 @@ func TestStore_AttestedPublicKeys(t *testing.T) {
 	// Attest for some pubkeys.
 	attestedPubkeys := pubkeys[1:3]
 	for _, pubkey := range attestedPubkeys {
-		err = s.SaveAttestationForPubKey(context.Background(), pubkey, [32]byte{}, &ethpb.IndexedAttestation{
+		err = s.SaveAttestationForPubKey(t.Context(), pubkey, [32]byte{}, &ethpb.IndexedAttestation{
 			Data: &ethpb.AttestationData{
 				Source: &ethpb.Checkpoint{Epoch: 42},
 				Target: &ethpb.Checkpoint{Epoch: 43},
@@ -128,7 +127,7 @@ func TestStore_AttestedPublicKeys(t *testing.T) {
 	}
 
 	// Check the public keys.
-	actual, err := s.AttestedPublicKeys(context.Background())
+	actual, err := s.AttestedPublicKeys(t.Context())
 	require.NoError(t, err, "publicKeys should not return an error")
 
 	// We cannot compare the slices directly because the order is not guaranteed,
@@ -276,13 +275,13 @@ func TestStore_SaveAttestationForPubKey(t *testing.T) {
 
 			if tt.existingAttInDB != nil {
 				// Simulate an already existing slashing protection.
-				err = store.SaveAttestationForPubKey(context.Background(), pubkey, [32]byte{}, tt.existingAttInDB)
+				err = store.SaveAttestationForPubKey(t.Context(), pubkey, [32]byte{}, tt.existingAttInDB)
 				require.NoError(t, err, "failed to save attestation when simulating an already existing slashing protection")
 			}
 
 			if tt.incomingAtt != nil {
 				// Attempt to save a new attestation.
-				err = store.SaveAttestationForPubKey(context.Background(), pubkey, [32]byte{}, tt.incomingAtt)
+				err = store.SaveAttestationForPubKey(t.Context(), pubkey, [32]byte{}, tt.incomingAtt)
 				if len(tt.expectedErr) > 0 {
 					require.ErrorContains(t, tt.expectedErr, err)
 				} else {
@@ -299,7 +298,7 @@ func pointerFromInt(i uint64) *uint64 {
 
 func TestStore_SaveAttestationsForPubKey2(t *testing.T) {
 	// Get the context.
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Create a public key.
 	pubkey := getPubKeys(t, 1)[0]
@@ -430,7 +429,7 @@ func TestStore_AttestationHistoryForPubKey(t *testing.T) {
 	require.NoError(t, err, "NewStore should not return an error")
 
 	// Get the attestation history.
-	actual, err := store.AttestationHistoryForPubKey(context.Background(), pubkey)
+	actual, err := store.AttestationHistoryForPubKey(t.Context(), pubkey)
 	require.NoError(t, err, "AttestationHistoryForPubKey should not return an error")
 	require.DeepEqual(t, []*common.AttestationRecord{}, actual)
 
@@ -444,7 +443,7 @@ func TestStore_AttestationHistoryForPubKey(t *testing.T) {
 	}
 
 	// Save the attestation.
-	err = store.SaveAttestationForPubKey(context.Background(), pubkey, [32]byte{}, attestation)
+	err = store.SaveAttestationForPubKey(t.Context(), pubkey, [32]byte{}, attestation)
 	require.NoError(t, err, "SaveAttestationForPubKey should not return an error")
 
 	// Get the attestation history.
@@ -456,14 +455,14 @@ func TestStore_AttestationHistoryForPubKey(t *testing.T) {
 		},
 	}
 
-	actual, err = store.AttestationHistoryForPubKey(context.Background(), pubkey)
+	actual, err = store.AttestationHistoryForPubKey(t.Context(), pubkey)
 	require.NoError(t, err, "AttestationHistoryForPubKey should not return an error")
 	require.DeepEqual(t, expected, actual)
 }
 
 func BenchmarkStore_SaveAttestationForPubKey(b *testing.B) {
 	var wg sync.WaitGroup
-	ctx := context.Background()
+	ctx := b.Context()
 
 	// Create pubkeys
 	pubkeys := make([][fieldparams.BLSPubkeyLength]byte, 2000)

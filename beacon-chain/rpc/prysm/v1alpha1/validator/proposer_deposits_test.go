@@ -1,7 +1,6 @@
 package validator
 
 import (
-	"context"
 	"math/big"
 	"testing"
 
@@ -73,7 +72,7 @@ func TestShouldFallback(t *testing.T) {
 
 func TestProposer_PendingDeposits_Electra(t *testing.T) {
 	// Electra continues to pack deposits while the state eth1deposit index is less than the eth1depositIndexLimit
-	ctx := context.Background()
+	ctx := t.Context()
 
 	height := big.NewInt(int64(params.BeaconConfig().Eth1FollowDistance))
 	newHeight := big.NewInt(height.Int64() + 11000)

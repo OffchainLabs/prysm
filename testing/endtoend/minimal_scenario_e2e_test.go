@@ -29,6 +29,10 @@ func TestEndToEnd_MinimalConfig_ValidatorRESTApi(t *testing.T) {
 	e2eMinimal(t, types.InitForkCfg(version.Bellatrix, version.Electra, params.E2ETestConfig()), types.WithCheckpointSync(), types.WithValidatorRESTApi()).run()
 }
 
+func TestEndToEnd_MinimalConfig_ValidatorRESTApi_SSZ(t *testing.T) {
+	e2eMinimal(t, types.InitForkCfg(version.Bellatrix, version.Electra, params.E2ETestConfig()), types.WithCheckpointSync(), types.WithValidatorRESTApi(), types.WithSSZOnly()).run()
+}
+
 func TestEndToEnd_ScenarioRun_EEOffline(t *testing.T) {
 	t.Skip("TODO(#10242) Prysm is current unable to handle an offline e2e")
 	cfg := types.InitForkCfg(version.Bellatrix, version.Deneb, params.E2ETestConfig())

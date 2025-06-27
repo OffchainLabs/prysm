@@ -351,7 +351,7 @@ func TestStaticPeering_PeersAreAdded(t *testing.T) {
 	cfg.StaticPeers = staticPeers
 	cfg.StateNotifier = &mock.MockStateNotifier{}
 	cfg.NoDiscovery = true
-	s, err := NewService(context.Background(), cfg)
+	s, err := NewService(t.Context(), cfg)
 	require.NoError(t, err)
 
 	exitRoutine := make(chan bool)
@@ -395,7 +395,7 @@ func TestInboundPeerLimit(t *testing.T) {
 	s := &Service{
 		cfg:       &Config{MaxPeers: 30},
 		ipLimiter: leakybucket.NewCollector(ipLimit, ipBurst, 1*time.Second, false),
-		peers: peers.NewStatus(context.Background(), &peers.StatusConfig{
+		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
 			PeerLimit:    30,
 			ScorerParams: &scorers.Config{},
 		}),
@@ -421,7 +421,7 @@ func TestOutboundPeerThreshold(t *testing.T) {
 	s := &Service{
 		cfg:       &Config{MaxPeers: 30},
 		ipLimiter: leakybucket.NewCollector(ipLimit, ipBurst, 1*time.Second, false),
-		peers: peers.NewStatus(context.Background(), &peers.StatusConfig{
+		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
 			PeerLimit:    30,
 			ScorerParams: &scorers.Config{},
 		}),

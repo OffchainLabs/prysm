@@ -2,7 +2,6 @@ package depositsnapshot
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"math/big"
 	"testing"
@@ -55,7 +54,7 @@ func TestAllDeposits_ReturnsAllDeposits(t *testing.T) {
 	}
 	dc.deposits = deposits
 
-	d := dc.AllDeposits(context.Background(), nil)
+	d := dc.AllDeposits(t.Context(), nil)
 	assert.Equal(t, len(deposits), len(d))
 }
 
@@ -95,7 +94,7 @@ func TestAllDeposits_FiltersDepositUpToAndIncludingBlockNumber(t *testing.T) {
 	}
 	dc.deposits = deposits
 
-	d := dc.AllDeposits(context.Background(), big.NewInt(11))
+	d := dc.AllDeposits(t.Context(), big.NewInt(11))
 	assert.Equal(t, 5, len(d))
 }
 
@@ -127,7 +126,7 @@ func TestDepositsNumberAndRootAtHeight(t *testing.T) {
 				DepositRoot:     wantedRoot,
 			},
 		}
-		n, root := dc.DepositsNumberAndRootAtHeight(context.Background(), big.NewInt(13))
+		n, root := dc.DepositsNumberAndRootAtHeight(t.Context(), big.NewInt(13))
 		assert.Equal(t, 4, int(n))
 		require.DeepEqual(t, wantedRoot, root[:])
 	})
@@ -143,7 +142,7 @@ func TestDepositsNumberAndRootAtHeight(t *testing.T) {
 				DepositRoot:     wantedRoot,
 			},
 		}
-		n, root := dc.DepositsNumberAndRootAtHeight(context.Background(), big.NewInt(10))
+		n, root := dc.DepositsNumberAndRootAtHeight(t.Context(), big.NewInt(10))
 		assert.Equal(t, 1, int(n))
 		require.DeepEqual(t, wantedRoot, root[:])
 	})
@@ -169,7 +168,7 @@ func TestDepositsNumberAndRootAtHeight(t *testing.T) {
 				Deposit:         &ethpb.Deposit{},
 			},
 		}
-		n, root := dc.DepositsNumberAndRootAtHeight(context.Background(), big.NewInt(10))
+		n, root := dc.DepositsNumberAndRootAtHeight(t.Context(), big.NewInt(10))
 		assert.Equal(t, 2, int(n))
 		require.DeepEqual(t, wantedRoot, root[:])
 	})
@@ -185,7 +184,7 @@ func TestDepositsNumberAndRootAtHeight(t *testing.T) {
 				DepositRoot:     wantedRoot,
 			},
 		}
-		n, root := dc.DepositsNumberAndRootAtHeight(context.Background(), big.NewInt(7))
+		n, root := dc.DepositsNumberAndRootAtHeight(t.Context(), big.NewInt(7))
 		assert.Equal(t, 0, int(n))
 		require.DeepEqual(t, params.BeaconConfig().ZeroHash, root)
 	})
@@ -201,7 +200,7 @@ func TestDepositsNumberAndRootAtHeight(t *testing.T) {
 				DepositRoot:     wantedRoot,
 			},
 		}
-		n, root := dc.DepositsNumberAndRootAtHeight(context.Background(), big.NewInt(10))
+		n, root := dc.DepositsNumberAndRootAtHeight(t.Context(), big.NewInt(10))
 		assert.Equal(t, 1, int(n))
 		require.DeepEqual(t, wantedRoot, root[:])
 	})
@@ -237,7 +236,7 @@ func TestDepositsNumberAndRootAtHeight(t *testing.T) {
 				Deposit:         &ethpb.Deposit{},
 			},
 		}
-		n, root := dc.DepositsNumberAndRootAtHeight(context.Background(), big.NewInt(9))
+		n, root := dc.DepositsNumberAndRootAtHeight(t.Context(), big.NewInt(9))
 		assert.Equal(t, 3, int(n))
 		require.DeepEqual(t, wantedRoot, root[:])
 	})
@@ -288,10 +287,10 @@ func TestDepositByPubkey_ReturnsFirstMatchingDeposit(t *testing.T) {
 			},
 		},
 	}
-	dc.InsertDepositContainers(context.Background(), ctrs)
+	dc.InsertDepositContainers(t.Context(), ctrs)
 
 	pk1 := bytesutil.PadTo([]byte("pk1"), 48)
-	dep, blkNum := dc.DepositByPubkey(context.Background(), pk1)
+	dep, blkNum := dc.DepositByPubkey(t.Context(), pk1)
 
 	if dep == nil || !bytes.Equal(dep.Data.PublicKey, pk1) {
 		t.Error("Returned wrong deposit")
@@ -303,7 +302,7 @@ func TestDepositByPubkey_ReturnsFirstMatchingDeposit(t *testing.T) {
 func TestInsertDepositContainers_NotNil(t *testing.T) {
 	dc, err := New()
 	require.NoError(t, err)
-	dc.InsertDepositContainers(context.Background(), nil)
+	dc.InsertDepositContainers(t.Context(), nil)
 	assert.DeepEqual(t, []*ethpb.DepositContainer{}, dc.deposits)
 }
 
@@ -359,10 +358,10 @@ func TestFinalizedDeposits_DepositsCachedCorrectly(t *testing.T) {
 		err = dc.finalizedDeposits.depositTree.pushLeaf(root)
 		require.NoError(t, err)
 	}
-	err = dc.InsertFinalizedDeposits(context.Background(), 2, [32]byte{}, 0)
+	err = dc.InsertFinalizedDeposits(t.Context(), 2, [32]byte{}, 0)
 	require.NoError(t, err)
 
-	cachedDeposits, err := dc.FinalizedDeposits(context.Background())
+	cachedDeposits, err := dc.FinalizedDeposits(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, cachedDeposits, "Deposits not cached")
 	assert.Equal(t, int64(2), cachedDeposits.MerkleTrieIndex())
@@ -425,15 +424,15 @@ func TestFinalizedDeposits_UtilizesPreviouslyCachedDeposits(t *testing.T) {
 		err = dc.finalizedDeposits.Deposits().Insert(root[:], 0)
 		require.NoError(t, err)
 	}
-	err = dc.InsertFinalizedDeposits(context.Background(), 1, [32]byte{}, 0)
+	err = dc.InsertFinalizedDeposits(t.Context(), 1, [32]byte{}, 0)
 	require.NoError(t, err)
 
-	err = dc.InsertFinalizedDeposits(context.Background(), 2, [32]byte{}, 0)
+	err = dc.InsertFinalizedDeposits(t.Context(), 2, [32]byte{}, 0)
 	require.NoError(t, err)
 
 	dc.deposits = append(dc.deposits, []*ethpb.DepositContainer{newFinalizedDeposit}...)
 
-	cachedDeposits, err := dc.FinalizedDeposits(context.Background())
+	cachedDeposits, err := dc.FinalizedDeposits(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, cachedDeposits, "Deposits not cached")
 	require.Equal(t, int64(1), cachedDeposits.MerkleTrieIndex())
@@ -459,10 +458,10 @@ func TestFinalizedDeposits_HandleZeroDeposits(t *testing.T) {
 	dc, err := New()
 	require.NoError(t, err)
 
-	err = dc.InsertFinalizedDeposits(context.Background(), 2, [32]byte{}, 0)
+	err = dc.InsertFinalizedDeposits(t.Context(), 2, [32]byte{}, 0)
 	require.NoError(t, err)
 
-	cachedDeposits, err := dc.FinalizedDeposits(context.Background())
+	cachedDeposits, err := dc.FinalizedDeposits(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, cachedDeposits, "Deposits not cached")
 	assert.Equal(t, int64(-1), cachedDeposits.MerkleTrieIndex())
@@ -509,10 +508,10 @@ func TestFinalizedDeposits_HandleSmallerThanExpectedDeposits(t *testing.T) {
 	}
 	dc.deposits = finalizedDeposits
 
-	err = dc.InsertFinalizedDeposits(context.Background(), 5, [32]byte{}, 0)
+	err = dc.InsertFinalizedDeposits(t.Context(), 5, [32]byte{}, 0)
 	require.NoError(t, err)
 
-	cachedDeposits, err := dc.FinalizedDeposits(context.Background())
+	cachedDeposits, err := dc.FinalizedDeposits(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, cachedDeposits, "Deposits not cached")
 	assert.Equal(t, int64(2), cachedDeposits.MerkleTrieIndex())
@@ -592,14 +591,14 @@ func TestFinalizedDeposits_HandleLowerEth1DepositIndex(t *testing.T) {
 	}
 	dc.deposits = finalizedDeposits
 
-	err = dc.InsertFinalizedDeposits(context.Background(), 5, [32]byte{}, 0)
+	err = dc.InsertFinalizedDeposits(t.Context(), 5, [32]byte{}, 0)
 	require.NoError(t, err)
 
 	// Reinsert finalized deposits with a lower index.
-	err = dc.InsertFinalizedDeposits(context.Background(), 2, [32]byte{}, 0)
+	err = dc.InsertFinalizedDeposits(t.Context(), 2, [32]byte{}, 0)
 	require.NoError(t, err)
 
-	cachedDeposits, err := dc.FinalizedDeposits(context.Background())
+	cachedDeposits, err := dc.FinalizedDeposits(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, cachedDeposits, "Deposits not cached")
 	assert.Equal(t, int64(5), cachedDeposits.MerkleTrieIndex())
@@ -670,10 +669,10 @@ func TestNonFinalizedDeposits_ReturnsAllNonFinalizedDeposits(t *testing.T) {
 			Index:       3,
 			DepositRoot: rootCreator('D'),
 		})
-	err = dc.InsertFinalizedDeposits(context.Background(), 1, [32]byte{}, 0)
+	err = dc.InsertFinalizedDeposits(t.Context(), 1, [32]byte{}, 0)
 	require.NoError(t, err)
 
-	deps := dc.NonFinalizedDeposits(context.Background(), 1, nil)
+	deps := dc.NonFinalizedDeposits(t.Context(), 1, nil)
 	assert.Equal(t, 2, len(deps))
 }
 
@@ -681,7 +680,7 @@ func TestNonFinalizedDeposits_ReturnsAllNonFinalizedDeposits_Nil(t *testing.T) {
 	dc, err := New()
 	require.NoError(t, err)
 
-	deps := dc.NonFinalizedDeposits(context.Background(), 0, nil)
+	deps := dc.NonFinalizedDeposits(t.Context(), 0, nil)
 	assert.Equal(t, 0, len(deps))
 }
 
@@ -740,10 +739,10 @@ func TestNonFinalizedDeposits_ReturnsNonFinalizedDepositsUpToBlockNumber(t *test
 			Index:       3,
 			DepositRoot: rootCreator('D'),
 		})
-	err = dc.InsertFinalizedDeposits(context.Background(), 1, [32]byte{}, 0)
+	err = dc.InsertFinalizedDeposits(t.Context(), 1, [32]byte{}, 0)
 	require.NoError(t, err)
 
-	deps := dc.NonFinalizedDeposits(context.Background(), 1, big.NewInt(10))
+	deps := dc.NonFinalizedDeposits(t.Context(), 1, big.NewInt(10))
 	assert.Equal(t, 1, len(deps))
 }
 
@@ -785,21 +784,21 @@ func TestFinalizedDeposits_ReturnsTrieCorrectly(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Perform this in a nonsensical ordering
-	err = dc.InsertFinalizedDeposits(context.Background(), 1, [32]byte{}, 0)
+	err = dc.InsertFinalizedDeposits(t.Context(), 1, [32]byte{}, 0)
 	require.NoError(t, err)
-	err = dc.InsertFinalizedDeposits(context.Background(), 2, [32]byte{}, 0)
+	err = dc.InsertFinalizedDeposits(t.Context(), 2, [32]byte{}, 0)
 	require.NoError(t, err)
-	err = dc.InsertFinalizedDeposits(context.Background(), 3, [32]byte{}, 0)
+	err = dc.InsertFinalizedDeposits(t.Context(), 3, [32]byte{}, 0)
 	require.NoError(t, err)
-	err = dc.InsertFinalizedDeposits(context.Background(), 4, [32]byte{}, 0)
+	err = dc.InsertFinalizedDeposits(t.Context(), 4, [32]byte{}, 0)
 	require.NoError(t, err)
-	err = dc.InsertFinalizedDeposits(context.Background(), 4, [32]byte{}, 0)
+	err = dc.InsertFinalizedDeposits(t.Context(), 4, [32]byte{}, 0)
 	require.NoError(t, err)
 
 	// Mimic finalized deposit trie fetch.
-	fd, err := dc.FinalizedDeposits(context.Background())
+	fd, err := dc.FinalizedDeposits(t.Context())
 	require.NoError(t, err)
-	deps := dc.NonFinalizedDeposits(context.Background(), fd.MerkleTrieIndex(), nil)
+	deps := dc.NonFinalizedDeposits(t.Context(), fd.MerkleTrieIndex(), nil)
 	insertIndex := fd.MerkleTrieIndex() + 1
 
 	for _, dep := range deps {
@@ -810,24 +809,24 @@ func TestFinalizedDeposits_ReturnsTrieCorrectly(t *testing.T) {
 		}
 		insertIndex++
 	}
-	err = dc.InsertFinalizedDeposits(context.Background(), 5, [32]byte{}, 0)
+	err = dc.InsertFinalizedDeposits(t.Context(), 5, [32]byte{}, 0)
 	require.NoError(t, err)
-	err = dc.InsertFinalizedDeposits(context.Background(), 6, [32]byte{}, 0)
+	err = dc.InsertFinalizedDeposits(t.Context(), 6, [32]byte{}, 0)
 	require.NoError(t, err)
-	err = dc.InsertFinalizedDeposits(context.Background(), 9, [32]byte{}, 0)
+	err = dc.InsertFinalizedDeposits(t.Context(), 9, [32]byte{}, 0)
 	require.NoError(t, err)
-	err = dc.InsertFinalizedDeposits(context.Background(), 12, [32]byte{}, 0)
+	err = dc.InsertFinalizedDeposits(t.Context(), 12, [32]byte{}, 0)
 	require.NoError(t, err)
-	err = dc.InsertFinalizedDeposits(context.Background(), 15, [32]byte{}, 0)
+	err = dc.InsertFinalizedDeposits(t.Context(), 15, [32]byte{}, 0)
 	require.NoError(t, err)
-	err = dc.InsertFinalizedDeposits(context.Background(), 15, [32]byte{}, 0)
+	err = dc.InsertFinalizedDeposits(t.Context(), 15, [32]byte{}, 0)
 	require.NoError(t, err)
-	err = dc.InsertFinalizedDeposits(context.Background(), 14, [32]byte{}, 0)
+	err = dc.InsertFinalizedDeposits(t.Context(), 14, [32]byte{}, 0)
 	require.NoError(t, err)
 
-	fd, err = dc.FinalizedDeposits(context.Background())
+	fd, err = dc.FinalizedDeposits(t.Context())
 	require.NoError(t, err)
-	deps = dc.NonFinalizedDeposits(context.Background(), fd.MerkleTrieIndex(), nil)
+	deps = dc.NonFinalizedDeposits(t.Context(), fd.MerkleTrieIndex(), nil)
 	insertIndex = fd.MerkleTrieIndex() + 1
 
 	for _, dep := range dc.deposits {
@@ -888,9 +887,9 @@ func TestMin(t *testing.T) {
 	}
 	dc.deposits = finalizedDeposits
 
-	fd, err := dc.FinalizedDeposits(context.Background())
+	fd, err := dc.FinalizedDeposits(t.Context())
 	require.NoError(t, err)
-	deps := dc.NonFinalizedDeposits(context.Background(), fd.MerkleTrieIndex(), big.NewInt(16))
+	deps := dc.NonFinalizedDeposits(t.Context(), fd.MerkleTrieIndex(), big.NewInt(16))
 	insertIndex := fd.MerkleTrieIndex() + 1
 	for _, dep := range deps {
 		depHash, err := dep.Data.HashTreeRoot()
@@ -908,28 +907,28 @@ func TestDepositMap_WorksCorrectly(t *testing.T) {
 	require.NoError(t, err)
 
 	pk0 := bytesutil.PadTo([]byte("pk0"), 48)
-	dep, _ := dc.DepositByPubkey(context.Background(), pk0)
+	dep, _ := dc.DepositByPubkey(t.Context(), pk0)
 	var nilDep *ethpb.Deposit
 	assert.DeepEqual(t, nilDep, dep)
 
 	dep = &ethpb.Deposit{Proof: makeDepositProof(), Data: &ethpb.Deposit_Data{PublicKey: pk0, Amount: 1000}}
-	assert.NoError(t, dc.InsertDeposit(context.Background(), dep, 1000, 0, [32]byte{}))
+	assert.NoError(t, dc.InsertDeposit(t.Context(), dep, 1000, 0, [32]byte{}))
 
-	dep, _ = dc.DepositByPubkey(context.Background(), pk0)
+	dep, _ = dc.DepositByPubkey(t.Context(), pk0)
 	assert.NotEqual(t, nilDep, dep)
 	assert.Equal(t, uint64(1000), dep.Data.Amount)
 
 	dep = &ethpb.Deposit{Proof: makeDepositProof(), Data: &ethpb.Deposit_Data{PublicKey: pk0, Amount: 10000}}
-	assert.NoError(t, dc.InsertDeposit(context.Background(), dep, 1000, 1, [32]byte{}))
+	assert.NoError(t, dc.InsertDeposit(t.Context(), dep, 1000, 1, [32]byte{}))
 
 	// Make sure we have the same deposit returned over here.
-	dep, _ = dc.DepositByPubkey(context.Background(), pk0)
+	dep, _ = dc.DepositByPubkey(t.Context(), pk0)
 	assert.NotEqual(t, nilDep, dep)
 	assert.Equal(t, uint64(1000), dep.Data.Amount)
 
 	// Make sure another key doesn't work.
 	pk1 := bytesutil.PadTo([]byte("pk1"), 48)
-	dep, _ = dc.DepositByPubkey(context.Background(), pk1)
+	dep, _ = dc.DepositByPubkey(t.Context(), pk1)
 	assert.DeepEqual(t, nilDep, dep)
 }
 

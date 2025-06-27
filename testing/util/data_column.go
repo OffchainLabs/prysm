@@ -3,80 +3,91 @@ package util
 import (
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	ckzg4844 "github.com/ethereum/c-kzg-4844/v2/bindings/go"
 )
 
 type (
-	DataColumnParams struct {
-		Slot           primitives.Slot
-		ColumnIndex    uint64
-		KzgCommitments [][]byte
-		DataColumn     []byte // A whole data cell will be filled with the content of one item of this slice.
-	}
+	// DataColumnParam is a struct that holds parameters for creating test RODataColumn and VerifiedRODataColumn sidecars.
+	DataColumnParam struct {
+		Index                        uint64
+		Column                       [][]byte
+		KzgCommitments               [][]byte
+		KzgProofs                    [][]byte
+		KzgCommitmentsInclusionProof [][]byte
 
-	DataColumnsParamsByRoot map[[fieldparams.RootLength]byte][]DataColumnParams
+		// Part of the beacon block header.
+		Slot          primitives.Slot
+		ProposerIndex primitives.ValidatorIndex
+		ParentRoot    []byte
+		StateRoot     []byte
+		BodyRoot      []byte
+	}
 )
 
-func CreateTestVerifiedRoDataColumnSidecars(t *testing.T, dataColumnParamsByBlockRoot DataColumnsParamsByRoot) ([]blocks.RODataColumn, []blocks.VerifiedRODataColumn) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.FuluForkEpoch = 0
-	params.OverrideBeaconConfig(cfg)
+// CreateTestVerifiedRoDataColumnSidecars creates test RODataColumn and VerifiedRODataColumn sidecars for testing purposes.
+func CreateTestVerifiedRoDataColumnSidecars(t *testing.T, params []DataColumnParam) ([]blocks.RODataColumn, []blocks.VerifiedRODataColumn) {
+	const (
+		kzgCommitmentsInclusionProofSize = 4
+		proofSize                        = 32
+	)
 
-	count := 0
-	for _, indices := range dataColumnParamsByBlockRoot {
-		count += len(indices)
-	}
-
+	count := len(params)
 	verifiedRoDataColumnSidecars := make([]blocks.VerifiedRODataColumn, 0, count)
 	rodataColumnSidecars := make([]blocks.RODataColumn, 0, count)
-	for blockRoot, params := range dataColumnParamsByBlockRoot {
-		for _, param := range params {
-			dataColumn := make([][]byte, 0, len(param.DataColumn))
-			for _, value := range param.DataColumn {
-				cell := make([]byte, ckzg4844.BytesPerCell)
-				for i := range ckzg4844.BytesPerCell {
-					cell[i] = value
-				}
-				dataColumn = append(dataColumn, cell)
-			}
 
-			kzgCommitmentsInclusionProof := make([][]byte, 4)
-			for i := range kzgCommitmentsInclusionProof {
-				kzgCommitmentsInclusionProof[i] = make([]byte, 32)
-			}
+	for _, param := range params {
+		var parentRoot, stateRoot, bodyRoot [fieldparams.RootLength]byte
+		copy(parentRoot[:], param.ParentRoot)
+		copy(stateRoot[:], param.StateRoot)
+		copy(bodyRoot[:], param.BodyRoot)
 
-			dataColumnSidecar := &ethpb.DataColumnSidecar{
-				Index:                        param.ColumnIndex,
-				KzgCommitments:               param.KzgCommitments,
-				Column:                       dataColumn,
-				KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
-				SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
-					Header: &ethpb.BeaconBlockHeader{
-						Slot:       param.Slot,
-						ParentRoot: make([]byte, fieldparams.RootLength),
-						StateRoot:  make([]byte, fieldparams.RootLength),
-						BodyRoot:   make([]byte, fieldparams.RootLength),
-					},
-					Signature: make([]byte, fieldparams.BLSSignatureLength),
-				},
-			}
-
-			roDataColumnSidecar, err := blocks.NewRODataColumnWithRoot(dataColumnSidecar, blockRoot)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			rodataColumnSidecars = append(rodataColumnSidecars, roDataColumnSidecar)
-
-			verifiedRoDataColumnSidecar := blocks.NewVerifiedRODataColumn(roDataColumnSidecar)
-			verifiedRoDataColumnSidecars = append(verifiedRoDataColumnSidecars, verifiedRoDataColumnSidecar)
+		column := make([][]byte, 0, len(param.Column))
+		for _, cell := range param.Column {
+			var completeCell [kzg.BytesPerCell]byte
+			copy(completeCell[:], cell)
+			column = append(column, completeCell[:])
 		}
+
+		kzgCommitmentsInclusionProof := make([][]byte, 0, kzgCommitmentsInclusionProofSize)
+		for range kzgCommitmentsInclusionProofSize {
+			kzgCommitmentsInclusionProof = append(kzgCommitmentsInclusionProof, make([]byte, proofSize))
+		}
+
+		for i, proof := range param.KzgCommitmentsInclusionProof {
+			copy(kzgCommitmentsInclusionProof[i], proof)
+		}
+
+		dataColumnSidecar := &ethpb.DataColumnSidecar{
+			Index:          param.Index,
+			Column:         column,
+			KzgCommitments: param.KzgCommitments,
+			KzgProofs:      param.KzgProofs,
+			SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
+				Header: &ethpb.BeaconBlockHeader{
+					Slot:          param.Slot,
+					ProposerIndex: param.ProposerIndex,
+					ParentRoot:    parentRoot[:],
+					StateRoot:     stateRoot[:],
+					BodyRoot:      bodyRoot[:],
+				},
+				Signature: make([]byte, fieldparams.BLSSignatureLength),
+			},
+			KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
+		}
+
+		roDataColumnSidecar, err := blocks.NewRODataColumn(dataColumnSidecar)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rodataColumnSidecars = append(rodataColumnSidecars, roDataColumnSidecar)
+
+		verifiedRoDataColumnSidecar := blocks.NewVerifiedRODataColumn(roDataColumnSidecar)
+		verifiedRoDataColumnSidecars = append(verifiedRoDataColumnSidecars, verifiedRoDataColumnSidecar)
 	}
 
 	return rodataColumnSidecars, verifiedRoDataColumnSidecars

@@ -1,7 +1,6 @@
 package transition
 
 import (
-	"context"
 	"testing"
 
 	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
@@ -22,7 +21,7 @@ func TestGenesisBeaconState_1000(t *testing.T) {
 		fuzzer.Fuzz(&deposits)
 		fuzzer.Fuzz(&genesisTime)
 		fuzzer.Fuzz(eth1Data)
-		gs, err := GenesisBeaconState(context.Background(), deposits, genesisTime, eth1Data)
+		gs, err := GenesisBeaconState(t.Context(), deposits, genesisTime, eth1Data)
 		if err != nil {
 			if gs != nil {
 				t.Fatalf("Genesis state should be nil on err. found: %v on error: %v for inputs deposit: %v "+

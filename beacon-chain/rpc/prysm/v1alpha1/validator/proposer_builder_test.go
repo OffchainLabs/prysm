@@ -1,7 +1,6 @@
 package validator
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -41,7 +40,7 @@ func TestServer_circuitBreakBuilder(t *testing.T) {
 
 	ojc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
 	ofc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
-	ctx := context.Background()
+	ctx := t.Context()
 	st, blkRoot, err := createState(1, [32]byte{'a'}, [32]byte{}, params.BeaconConfig().ZeroHash, ojc, ofc)
 	require.NoError(t, err)
 	require.NoError(t, s.ForkchoiceFetcher.InsertNode(ctx, st, blkRoot))
@@ -73,18 +72,18 @@ func TestServer_circuitBreakBuilder(t *testing.T) {
 }
 
 func TestServer_validatorRegistered(t *testing.T) {
-	b, err := builder.NewService(context.Background())
+	b, err := builder.NewService(t.Context())
 	require.NoError(t, err)
 	proposerServer := &Server{
 		BlockBuilder: b,
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 
 	reg, err := proposerServer.validatorRegistered(ctx, 0)
 	require.ErrorContains(t, "nil beacon db", err)
 	require.Equal(t, false, reg)
 	db := dbTest.SetupDB(t)
-	realBuilder, err := builder.NewService(context.Background(), builder.WithDatabase(db))
+	realBuilder, err := builder.NewService(t.Context(), builder.WithDatabase(db))
 	require.NoError(t, err)
 	proposerServer.BlockBuilder = realBuilder
 	reg, err = proposerServer.validatorRegistered(ctx, 0)
@@ -111,11 +110,11 @@ func TestServer_canUseBuilder(t *testing.T) {
 			HasConfigured: false,
 		},
 	}
-	reg, err := proposerServer.canUseBuilder(context.Background(), 0, 0)
+	reg, err := proposerServer.canUseBuilder(t.Context(), 0, 0)
 	require.NoError(t, err)
 	require.Equal(t, false, reg)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	proposerServer.ForkchoiceFetcher = &blockchainTest.ChainService{ForkChoiceStore: doublylinkedtree.New()}
 	proposerServer.ForkchoiceFetcher.SetForkChoiceGenesisTime(uint64(time.Now().Unix()))

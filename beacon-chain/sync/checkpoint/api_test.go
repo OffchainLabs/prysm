@@ -2,7 +2,6 @@ package checkpoint
 
 import (
 	"bytes"
-	"context"
 	"io"
 	"net/http"
 	"testing"
@@ -21,7 +20,7 @@ import (
 )
 
 func TestDownloadFinalizedData(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	cfg := params.MainnetConfig()
 
 	// avoid the altair zone because genesis tests are easier to set up

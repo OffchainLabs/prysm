@@ -72,7 +72,7 @@ func TestStreamBeaconLogs(t *testing.T) {
 
 	// Setting up the mock in the server struct
 	s := Server{
-		ctx:          context.Background(),
+		ctx:          t.Context(),
 		healthClient: mockClient,
 	}
 
@@ -107,7 +107,7 @@ func TestStreamBeaconLogs(t *testing.T) {
 }
 
 func TestStreamValidatorLogs(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	mockLogs := [][]byte{
 		[]byte("[2023-10-31 10:00:00] INFO: Starting server..."),
 		[]byte("[2023-10-31 10:01:23] DEBUG: Database connection established."),
@@ -166,7 +166,7 @@ func TestStreamValidatorLogs(t *testing.T) {
 func TestServer_GetVersion(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	ctx := context.Background()
+	ctx := t.Context()
 	mockNodeClient := validatormock.NewMockNodeClient(ctrl)
 	s := Server{
 		ctx:        ctx,

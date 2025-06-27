@@ -10,7 +10,7 @@ import (
 )
 
 func TestEveryRuns(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	i := int32(0)
 	async.RunEvery(ctx, 100*time.Millisecond, func() {

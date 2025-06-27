@@ -28,7 +28,7 @@ import (
 )
 
 func TestGetStateRoot(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	fakeState, err := util.NewBeaconState()
 	require.NoError(t, err)
 	stateRoot, err := fakeState.HashTreeRoot(ctx)
@@ -128,7 +128,7 @@ func TestGetRandao(t *testing.T) {
 	epochCurrent := primitives.Epoch(100000)
 	epochOld := 100000 - params.BeaconConfig().EpochsPerHistoricalVector + 1
 
-	ctx := context.Background()
+	ctx := t.Context()
 	st, err := util.NewBeaconState()
 	require.NoError(t, err)
 	// Set slot to epoch 100000
@@ -420,7 +420,7 @@ func Test_extractSyncSubcommittees(t *testing.T) {
 }
 
 func TestGetSyncCommittees(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	st, _ := util.DeterministicGenesisStateAltair(t, params.BeaconConfig().SyncCommitteeSize)
 	syncCommittee := make([][]byte, params.BeaconConfig().SyncCommitteeSize)
 	vals := st.Validators()

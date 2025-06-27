@@ -15,13 +15,17 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var ErrNoValidDigest = errors.New("no valid digest matched")
-var ErrUnrecognizedVersion = errors.New("cannot determine context bytes for unrecognized object")
+var (
+	ErrNoValidDigest       = errors.New("no valid digest matched")
+	ErrUnrecognizedVersion = errors.New("cannot determine context bytes for unrecognized object")
+)
 
-var responseCodeSuccess = byte(0x00)
-var responseCodeInvalidRequest = byte(0x01)
-var responseCodeServerError = byte(0x02)
-var responseCodeResourceUnavailable = byte(0x03)
+var (
+	responseCodeSuccess             = byte(0x00)
+	responseCodeInvalidRequest      = byte(0x01)
+	responseCodeServerError         = byte(0x02)
+	responseCodeResourceUnavailable = byte(0x03)
+)
 
 func (s *Service) generateErrorResponse(code byte, reason string) ([]byte, error) {
 	return createErrorResponse(code, reason, s.cfg.p2p)

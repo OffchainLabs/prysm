@@ -2,7 +2,6 @@ package lightclient
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -449,7 +448,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 
 func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 	helpers.ClearCache()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	params.SetupTestConfigCleanup(t)
 	config := params.BeaconConfig()
@@ -1705,7 +1704,7 @@ func TestLightClientHandler_GetLightClientFinalityUpdate(t *testing.T) {
 
 	for testVersion := 1; testVersion < 6; testVersion++ {
 		t.Run(version.String(testVersion), func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 
 			l := util.NewTestLightClient(t, testVersion)
 			update, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
@@ -1730,7 +1729,7 @@ func TestLightClientHandler_GetLightClientFinalityUpdate(t *testing.T) {
 		})
 
 		t.Run(version.String(testVersion)+" SSZ", func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 
 			l := util.NewTestLightClient(t, testVersion)
 			update, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
@@ -1786,7 +1785,7 @@ func TestLightClientHandler_GetLightClientOptimisticUpdate(t *testing.T) {
 
 	for testVersion := 1; testVersion < 6; testVersion++ {
 		t.Run(version.String(testVersion), func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			l := util.NewTestLightClient(t, testVersion)
 			update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
 			require.NoError(t, err)
@@ -1810,7 +1809,7 @@ func TestLightClientHandler_GetLightClientOptimisticUpdate(t *testing.T) {
 		})
 
 		t.Run(version.String(testVersion)+" SSZ", func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			l := util.NewTestLightClient(t, testVersion)
 			update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
 			require.NoError(t, err)

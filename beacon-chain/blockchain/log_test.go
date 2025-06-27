@@ -53,7 +53,7 @@ func Test_logStateTransitionData(t *testing.T) {
 				require.NoError(t, err)
 				return wb
 			},
-			want: "\"Finished applying state transition\" attestations=1 deposits=1 prefix=blockchain slot=0",
+			want: "\"Finished applying state transition\" attestations=1 prefix=blockchain slot=0",
 		},
 		{name: "has attester slashing",
 			b: func() interfaces.ReadOnlyBeaconBlock {
@@ -93,7 +93,7 @@ func Test_logStateTransitionData(t *testing.T) {
 				require.NoError(t, err)
 				return wb
 			},
-			want: "\"Finished applying state transition\" attestations=1 attesterSlashings=1 deposits=1 prefix=blockchain proposerSlashings=1 slot=0 voluntaryExits=1",
+			want: "\"Finished applying state transition\" attestations=1 attesterSlashings=1 prefix=blockchain proposerSlashings=1 slot=0 voluntaryExits=1",
 		},
 		{name: "has payload",
 			b:    func() interfaces.ReadOnlyBeaconBlock { return wrappedPayloadBlk },

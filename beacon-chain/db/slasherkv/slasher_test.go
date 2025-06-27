@@ -1,7 +1,6 @@
 package slasherkv
 
 import (
-	"context"
 	"encoding/binary"
 	"math/rand"
 	"reflect"
@@ -20,7 +19,7 @@ import (
 
 func TestStore_AttestationRecordForValidator_SaveRetrieve(t *testing.T) {
 	const attestationsCount = 11_000
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := setupDB(t)
 	phase0ValidatorIndex := primitives.ValidatorIndex(1)
 	electraValidatorIndex := primitives.ValidatorIndex(2)
@@ -101,7 +100,7 @@ func TestStore_AttestationRecordForValidator_SaveRetrieve(t *testing.T) {
 }
 
 func TestStore_LastEpochWrittenForValidators(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := setupDB(t)
 
 	validatorsCount := 11000
@@ -141,7 +140,7 @@ func TestStore_LastEpochWrittenForValidators(t *testing.T) {
 }
 
 func TestStore_CheckAttesterDoubleVotes(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, ver := range []int{version.Phase0, version.Electra} {
 		t.Run(version.String(ver), func(t *testing.T) {
@@ -207,7 +206,7 @@ func TestStore_SlasherChunk_SaveRetrieve(t *testing.T) {
 	)
 
 	// Create context.
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Create database.
 	beaconDB := setupDB(t)
@@ -311,7 +310,7 @@ func TestStore_SlasherChunk_SaveRetrieve(t *testing.T) {
 }
 
 func TestStore_SlasherChunk_PreventsSavingWrongLength(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := setupDB(t)
 	totalChunks := 64
 	chunkKeys := make([][]byte, totalChunks)
@@ -326,7 +325,7 @@ func TestStore_SlasherChunk_PreventsSavingWrongLength(t *testing.T) {
 }
 
 func TestStore_ExistingBlockProposals(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := setupDB(t)
 	proposals := []*slashertypes.SignedBlockHeaderWrapper{
 		createProposalWrapper(t, 1, 1, []byte{1}),
@@ -469,7 +468,7 @@ func Test_encodeDecodeAttestationRecord(t *testing.T) {
 }
 
 func TestStore_HighestAttestations(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tests := []struct {
 		name             string
 		attestationsInDB []*slashertypes.IndexedAttestationWrapper
@@ -583,7 +582,7 @@ func BenchmarkHighestAttestations(b *testing.B) {
 		atts[i] = createAttestationWrapper(version.Phase0, primitives.Epoch(i), primitives.Epoch(i+2), indicesPerAtt[i], []byte{})
 	}
 
-	ctx := context.Background()
+	ctx := b.Context()
 	beaconDB := setupDB(b)
 	require.NoError(b, beaconDB.SaveAttestationRecordsForValidators(ctx, atts))
 
@@ -620,7 +619,7 @@ func BenchmarkStore_CheckDoubleBlockProposals(b *testing.B) {
 		atts[i] = createAttestationWrapper(version.Phase0, primitives.Epoch(i), primitives.Epoch(i+2), indicesPerAtt[i], []byte{})
 	}
 
-	ctx := context.Background()
+	ctx := b.Context()
 	beaconDB := setupDB(b)
 	require.NoError(b, beaconDB.SaveAttestationRecordsForValidators(ctx, atts))
 

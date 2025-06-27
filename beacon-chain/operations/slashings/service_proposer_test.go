@@ -1,7 +1,6 @@
 package slashings
 
 import (
-	"context"
 	"testing"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -163,7 +162,7 @@ func TestPool_InsertProposerSlashing(t *testing.T) {
 			}
 			var err error
 			for i := 0; i < len(tt.args.slashings); i++ {
-				err = p.InsertProposerSlashing(context.Background(), beaconState, tt.args.slashings[i])
+				err = p.InsertProposerSlashing(t.Context(), beaconState, tt.args.slashings[i])
 			}
 			if tt.fields.wantedErr != "" {
 				require.ErrorContains(t, tt.fields.wantedErr, err)
@@ -199,8 +198,8 @@ func TestPool_InsertProposerSlashing_SigFailsVerify_ClearPool(t *testing.T) {
 		pendingProposerSlashing: make([]*ethpb.ProposerSlashing, 0),
 	}
 	// We only want a single slashing to remain.
-	require.NoError(t, p.InsertProposerSlashing(context.Background(), beaconState, slashings[0]))
-	err := p.InsertProposerSlashing(context.Background(), beaconState, slashings[1])
+	require.NoError(t, p.InsertProposerSlashing(t.Context(), beaconState, slashings[0]))
+	err := p.InsertProposerSlashing(t.Context(), beaconState, slashings[1])
 	require.ErrorContains(t, "could not verify proposer slashing", err, "Expected slashing with bad signature to fail")
 	assert.Equal(t, 1, len(p.pendingProposerSlashing))
 }
@@ -374,7 +373,7 @@ func TestPool_PendingProposerSlashings(t *testing.T) {
 			p := &Pool{
 				pendingProposerSlashing: tt.fields.pending,
 			}
-			assert.DeepEqual(t, tt.want, p.PendingProposerSlashings(context.Background(), beaconState, tt.fields.noLimit))
+			assert.DeepEqual(t, tt.want, p.PendingProposerSlashings(t.Context(), beaconState, tt.fields.noLimit))
 		})
 	}
 }
@@ -430,7 +429,7 @@ func TestPool_PendingProposerSlashings_Slashed(t *testing.T) {
 			p := &Pool{
 				pendingProposerSlashing: tt.fields.pending,
 			}
-			result := p.PendingProposerSlashings(context.Background(), beaconState, tt.fields.all /*noLimit*/)
+			result := p.PendingProposerSlashings(t.Context(), beaconState, tt.fields.all /*noLimit*/)
 			t.Log(tt.want[0].Header_1.Header.ProposerIndex)
 			t.Log(result[0].Header_1.Header.ProposerIndex)
 			assert.DeepEqual(t, tt.want, result)

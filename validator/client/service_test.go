@@ -16,7 +16,7 @@ import (
 var _ runtime.Service = (*ValidatorService)(nil)
 
 func TestStop_CancelsContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	vs := &ValidatorService{
 		ctx:    ctx,
 		cancel: cancel,
@@ -33,7 +33,7 @@ func TestStop_CancelsContext(t *testing.T) {
 
 func TestNew_Insecure(t *testing.T) {
 	hook := logTest.NewGlobal()
-	_, err := NewValidatorService(context.Background(), &Config{})
+	_, err := NewValidatorService(t.Context(), &Config{})
 	require.NoError(t, err)
 	require.LogsContain(t, hook, "You are using an insecure gRPC connection")
 }
@@ -45,7 +45,7 @@ func TestStatus_NoConnectionError(t *testing.T) {
 
 func TestStart_GrpcHeaders(t *testing.T) {
 	hook := logTest.NewGlobal()
-	ctx := context.Background()
+	ctx := t.Context()
 	for input, output := range map[string][]string{
 		"should-break": {},
 		"key=value":    {"key", "value"},

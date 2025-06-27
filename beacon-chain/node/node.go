@@ -87,45 +87,47 @@ type serviceFlagOpts struct {
 // full PoS node. It handles the lifecycle of the entire system and registers
 // services to a service registry.
 type BeaconNode struct {
-	cliCtx                  *cli.Context
-	ctx                     context.Context
-	cancel                  context.CancelFunc
-	services                *runtime.ServiceRegistry
-	lock                    sync.RWMutex
-	stop                    chan struct{} // Channel to wait for termination notifications.
-	db                      db.Database
-	slasherDB               db.SlasherDatabase
-	attestationCache        *cache.AttestationCache
-	attestationPool         attestations.Pool
-	exitPool                voluntaryexits.PoolManager
-	slashingsPool           slashings.PoolManager
-	syncCommitteePool       synccommittee.Pool
-	blsToExecPool           blstoexec.PoolManager
-	depositCache            cache.DepositCache
-	trackedValidatorsCache  *cache.TrackedValidatorsCache
-	payloadIDCache          *cache.PayloadIDCache
-	stateFeed               *event.Feed
-	blockFeed               *event.Feed
-	opFeed                  *event.Feed
-	stateGen                *stategen.State
-	collector               *bcnodeCollector
-	slasherBlockHeadersFeed *event.Feed
-	slasherAttestationsFeed *event.Feed
-	finalizedStateAtStartUp state.BeaconState
-	serviceFlagOpts         *serviceFlagOpts
-	GenesisInitializer      genesis.Initializer
-	CheckpointInitializer   checkpoint.Initializer
-	forkChoicer             forkchoice.ForkChoicer
-	clockWaiter             startup.ClockWaiter
-	BackfillOpts            []backfill.ServiceOption
-	initialSyncComplete     chan struct{}
-	BlobStorage             *filesystem.BlobStorage
-	BlobStorageOptions      []filesystem.BlobStorageOption
-	custodyInfo             *peerdas.CustodyInfo
-	verifyInitWaiter        *verification.InitializerWaiter
-	syncChecker             *initialsync.SyncChecker
-	slasherEnabled          bool
-	lcStore                 *lightclient.Store
+	cliCtx                   *cli.Context
+	ctx                      context.Context
+	cancel                   context.CancelFunc
+	services                 *runtime.ServiceRegistry
+	lock                     sync.RWMutex
+	stop                     chan struct{} // Channel to wait for termination notifications.
+	db                       db.Database
+	slasherDB                db.SlasherDatabase
+	attestationCache         *cache.AttestationCache
+	attestationPool          attestations.Pool
+	exitPool                 voluntaryexits.PoolManager
+	slashingsPool            slashings.PoolManager
+	syncCommitteePool        synccommittee.Pool
+	blsToExecPool            blstoexec.PoolManager
+	depositCache             cache.DepositCache
+	trackedValidatorsCache   *cache.TrackedValidatorsCache
+	payloadIDCache           *cache.PayloadIDCache
+	stateFeed                *event.Feed
+	blockFeed                *event.Feed
+	opFeed                   *event.Feed
+	stateGen                 *stategen.State
+	collector                *bcnodeCollector
+	slasherBlockHeadersFeed  *event.Feed
+	slasherAttestationsFeed  *event.Feed
+	finalizedStateAtStartUp  state.BeaconState
+	serviceFlagOpts          *serviceFlagOpts
+	GenesisInitializer       genesis.Initializer
+	CheckpointInitializer    checkpoint.Initializer
+	forkChoicer              forkchoice.ForkChoicer
+	clockWaiter              startup.ClockWaiter
+	BackfillOpts             []backfill.ServiceOption
+	initialSyncComplete      chan struct{}
+	BlobStorage              *filesystem.BlobStorage
+	BlobStorageOptions       []filesystem.BlobStorageOption
+	DataColumnStorage        *filesystem.DataColumnStorage
+	DataColumnStorageOptions []filesystem.DataColumnStorageOption
+	custodyInfo              *peerdas.CustodyInfo
+	verifyInitWaiter         *verification.InitializerWaiter
+	syncChecker              *initialsync.SyncChecker
+	slasherEnabled           bool
+	lcStore                  *lightclient.Store
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -191,6 +193,15 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 			return nil, err
 		}
 		beacon.BlobStorage = blobs
+	}
+
+	if beacon.DataColumnStorage == nil {
+		dataColumnStorage, err := filesystem.NewDataColumnStorage(cliCtx.Context, beacon.DataColumnStorageOptions...)
+		if err != nil {
+			return nil, errors.Wrap(err, "new data column storage")
+		}
+
+		beacon.DataColumnStorage = dataColumnStorage
 	}
 
 	bfs, err := startBaseServices(cliCtx, beacon, depositAddress)
@@ -780,6 +791,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithClockSynchronizer(gs),
 		blockchain.WithSyncComplete(syncComplete),
 		blockchain.WithBlobStorage(b.BlobStorage),
+		blockchain.WithDataColumnStorage(b.DataColumnStorage),
 		blockchain.WithTrackedValidatorsCache(b.trackedValidatorsCache),
 		blockchain.WithPayloadIDCache(b.payloadIDCache),
 		blockchain.WithSyncChecker(b.syncChecker),
@@ -868,6 +880,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithInitialSyncComplete(initialSyncComplete),
 		regularsync.WithStateNotifier(b),
 		regularsync.WithBlobStorage(b.BlobStorage),
+		regularsync.WithDataColumnStorage(b.DataColumnStorage),
 		regularsync.WithVerifierWaiter(b.verifyInitWaiter),
 		regularsync.WithAvailableBlocker(bFillStore),
 		regularsync.WithSlasherEnabled(b.slasherEnabled),

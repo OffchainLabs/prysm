@@ -493,7 +493,7 @@ func (r *testRunner) defaultEndToEndRun() error {
 
 	// Calculate genesis time.
 	nodeClient := eth.NewNodeClient(conns[0])
-	genesis, err := nodeClient.GetGenesis(context.Background(), &emptypb.Empty{})
+	genesis, err := nodeClient.GetGenesis(t.Context(), &emptypb.Empty{})
 	require.NoError(t, err)
 	tickingStartTime := helpers.EpochTickerStartTime(genesis)
 
@@ -592,7 +592,7 @@ func (r *testRunner) scenarioRun() error {
 
 	// Calculate genesis time.
 	nodeClient := eth.NewNodeClient(conns[0])
-	genesis, err := nodeClient.GetGenesis(context.Background(), &emptypb.Empty{})
+	genesis, err := nodeClient.GetGenesis(t.Context(), &emptypb.Empty{})
 	require.NoError(t, err)
 	tickingStartTime := helpers.EpochTickerStartTime(genesis)
 

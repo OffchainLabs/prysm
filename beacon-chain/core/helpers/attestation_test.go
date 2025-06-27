@@ -1,7 +1,6 @@
 package helpers_test
 
 import (
-	"context"
 	"strconv"
 	"testing"
 	"time"
@@ -23,7 +22,7 @@ func TestAttestation_IsAggregator(t *testing.T) {
 		helpers.ClearCache()
 
 		beaconState, privKeys := util.DeterministicGenesisState(t, 100)
-		committee, err := helpers.BeaconCommitteeFromState(context.Background(), beaconState, 0, 0)
+		committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, 0, 0)
 		require.NoError(t, err)
 		sig := privKeys[0].Sign([]byte{'A'})
 		agg, err := helpers.IsAggregator(uint64(len(committee)), sig.Marshal())
@@ -38,7 +37,7 @@ func TestAttestation_IsAggregator(t *testing.T) {
 		params.OverrideBeaconConfig(params.MinimalSpecConfig())
 		beaconState, privKeys := util.DeterministicGenesisState(t, 2048)
 
-		committee, err := helpers.BeaconCommitteeFromState(context.Background(), beaconState, 0, 0)
+		committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, 0, 0)
 		require.NoError(t, err)
 		sig := privKeys[0].Sign([]byte{'A'})
 		agg, err := helpers.IsAggregator(uint64(len(committee)), sig.Marshal())
@@ -73,7 +72,7 @@ func TestAttestation_ComputeSubnetForAttestation(t *testing.T) {
 		RandaoMixes: make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
 	})
 	require.NoError(t, err)
-	valCount, err := helpers.ActiveValidatorCount(context.Background(), state, slots.ToEpoch(34))
+	valCount, err := helpers.ActiveValidatorCount(t.Context(), state, slots.ToEpoch(34))
 	require.NoError(t, err)
 
 	t.Run("Phase 0", func(t *testing.T) {

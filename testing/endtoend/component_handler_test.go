@@ -39,7 +39,7 @@ type componentHandler struct {
 }
 
 func NewComponentHandler(cfg *e2etypes.E2EConfig, t *testing.T) *componentHandler {
-	ctx, done := context.WithCancel(context.Background())
+	ctx, done := context.WithCancel(t.Context())
 	g, ctx := errgroup.WithContext(ctx)
 
 	return &componentHandler{

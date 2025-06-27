@@ -18,7 +18,7 @@ import (
 )
 
 func TestPruneExpired_Ticker(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 
 	s, err := NewService(ctx, &Config{
@@ -83,7 +83,7 @@ func TestPruneExpired_Ticker(t *testing.T) {
 }
 
 func TestPruneExpired_PruneExpiredAtts(t *testing.T) {
-	s, err := NewService(context.Background(), &Config{Pool: NewPool()})
+	s, err := NewService(t.Context(), &Config{Pool: NewPool()})
 	require.NoError(t, err)
 
 	ad1 := util.HydrateAttestationData(&ethpb.AttestationData{})
@@ -118,7 +118,7 @@ func TestPruneExpired_PruneExpiredAtts(t *testing.T) {
 }
 
 func TestPruneExpired_Expired(t *testing.T) {
-	s, err := NewService(context.Background(), &Config{Pool: NewPool()})
+	s, err := NewService(t.Context(), &Config{Pool: NewPool()})
 	require.NoError(t, err)
 
 	// Rewind back one epoch worth of time.
@@ -133,7 +133,7 @@ func TestPruneExpired_ExpiredDeneb(t *testing.T) {
 	cfg.DenebForkEpoch = 3
 	params.OverrideBeaconConfig(cfg)
 
-	s, err := NewService(context.Background(), &Config{Pool: NewPool()})
+	s, err := NewService(t.Context(), &Config{Pool: NewPool()})
 	require.NoError(t, err)
 
 	// Rewind back 4 epochs + 10 slots worth of time.

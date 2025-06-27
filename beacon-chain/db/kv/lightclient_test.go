@@ -1,7 +1,6 @@
 package kv
 
 import (
-	"context"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -215,7 +214,7 @@ func TestStore_LightClientUpdate_CanSaveRetrieve(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("Altair", func(t *testing.T) {
 		update, err := createUpdate(t, version.Altair)
@@ -278,7 +277,7 @@ func TestStore_LightClientUpdate_CanSaveRetrieve(t *testing.T) {
 
 func TestStore_LightClientUpdates_canRetrieveRange(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	updates := make([]interfaces.LightClientUpdate, 0, 3)
 	for i := 1; i <= 3; i++ {
 		update, err := createUpdate(t, version.Altair)
@@ -303,7 +302,7 @@ func TestStore_LightClientUpdates_canRetrieveRange(t *testing.T) {
 
 func TestStore_LightClientUpdate_EndPeriodSmallerThanStartPeriod(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	updates := make([]interfaces.LightClientUpdate, 0, 3)
 	for i := 1; i <= 3; i++ {
 		update, err := createUpdate(t, version.Altair)
@@ -326,7 +325,7 @@ func TestStore_LightClientUpdate_EndPeriodSmallerThanStartPeriod(t *testing.T) {
 
 func TestStore_LightClientUpdate_EndPeriodEqualToStartPeriod(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	updates := make([]interfaces.LightClientUpdate, 0, 3)
 	for i := 1; i <= 3; i++ {
 		update, err := createUpdate(t, version.Altair)
@@ -348,7 +347,7 @@ func TestStore_LightClientUpdate_EndPeriodEqualToStartPeriod(t *testing.T) {
 
 func TestStore_LightClientUpdate_StartPeriodBeforeFirstUpdate(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	updates := make([]interfaces.LightClientUpdate, 0, 3)
 	for i := 1; i <= 3; i++ {
 		update, err := createUpdate(t, version.Altair)
@@ -372,7 +371,7 @@ func TestStore_LightClientUpdate_StartPeriodBeforeFirstUpdate(t *testing.T) {
 
 func TestStore_LightClientUpdate_EndPeriodAfterLastUpdate(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	updates := make([]interfaces.LightClientUpdate, 0, 3)
 	for i := 1; i <= 3; i++ {
 		update, err := createUpdate(t, version.Altair)
@@ -396,7 +395,7 @@ func TestStore_LightClientUpdate_EndPeriodAfterLastUpdate(t *testing.T) {
 
 func TestStore_LightClientUpdate_PartialUpdates(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	updates := make([]interfaces.LightClientUpdate, 0, 3)
 	for i := 1; i <= 3; i++ {
 		update, err := createUpdate(t, version.Altair)
@@ -420,7 +419,7 @@ func TestStore_LightClientUpdate_PartialUpdates(t *testing.T) {
 
 func TestStore_LightClientUpdate_MissingPeriods_SimpleData(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	updates := make([]interfaces.LightClientUpdate, 0, 4)
 	for i := 1; i <= 4; i++ {
 		update, err := createUpdate(t, version.Altair)
@@ -465,7 +464,7 @@ func TestStore_LightClientUpdate_MissingPeriods_SimpleData(t *testing.T) {
 
 func TestStore_LightClientUpdate_EmptyDB(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Retrieve the updates
 	retrievedUpdates, err := db.LightClientUpdates(ctx, 1, 3)
@@ -475,7 +474,7 @@ func TestStore_LightClientUpdate_EmptyDB(t *testing.T) {
 
 func TestStore_LightClientUpdate_RetrieveMissingPeriodDistributed(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	updates := make([]interfaces.LightClientUpdate, 0, 5)
 	for i := 1; i <= 5; i++ {
 		update, err := createUpdate(t, version.Altair)
@@ -609,7 +608,7 @@ func TestStore_LightClientBootstrap_CanSaveRetrieve(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("Nil", func(t *testing.T) {
 		retrievedBootstrap, err := db.LightClientBootstrap(ctx, []byte("NilBlockRoot"))
@@ -713,7 +712,7 @@ func TestStore_LightClientBootstrap_MultipleBootstrapsWithSameSyncCommittee(t *t
 	params.OverrideBeaconConfig(cfg)
 
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	bootstrap1, err := createDefaultLightClientBootstrap(primitives.Slot(uint64(params.BeaconConfig().AltairForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)))
 	require.NoError(t, err)
@@ -775,7 +774,7 @@ func TestStore_LightClientBootstrap_MultipleBootstrapsWithDifferentSyncCommittee
 	params.OverrideBeaconConfig(cfg)
 
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	bootstrap1, err := createDefaultLightClientBootstrap(primitives.Slot(uint64(params.BeaconConfig().AltairForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)))
 	require.NoError(t, err)
