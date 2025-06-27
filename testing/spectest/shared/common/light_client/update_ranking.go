@@ -21,19 +21,19 @@ import (
 // RunLightClientUpdateRankingTests executes "light_client/update_ranking/pyspec_tests/update_ranking" tests.
 func RunLightClientUpdateRankingTests(t *testing.T, config string, v int) {
 	require.NoError(t, utils.SetConfig(t, config))
-	if v >= 1 {
+	if v >= version.Altair {
 		params.BeaconConfig().AltairForkEpoch = 0
 	}
-	if v >= 2 {
+	if v >= version.Bellatrix {
 		params.BeaconConfig().BellatrixForkEpoch = 0
 	}
-	if v >= 3 {
+	if v >= version.Capella {
 		params.BeaconConfig().CapellaForkEpoch = 0
 	}
-	if v >= 4 {
+	if v >= version.Deneb {
 		params.BeaconConfig().DenebForkEpoch = 0
 	}
-	if v >= 5 {
+	if v >= version.Electra {
 		params.BeaconConfig().ElectraForkEpoch = 0
 	}
 
