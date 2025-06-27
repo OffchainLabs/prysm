@@ -49,7 +49,7 @@ func MarshalListFixedElement[T Marshalable](elems []T) ([]byte, error) {
 // MarshalListVariableElement marshals a list of variable-sized elements.
 // A list of variable-sized elements is marshaled by first writing the offsets of each element to the
 // beginning of the byte sequence (the fixed size section of the variable sized list container), followed
-// byt the encoded values of each element at the indicated offset relative to the beginning of the byte sequence.
+// by the encoded values of each element at the indicated offset relative to the beginning of the byte sequence.
 //
 // MarshalListFixedElement should be used for fixed-size elements.
 // SSZ Lists have different encoding rules depending whether their elements are fixed- or variable-sized,
