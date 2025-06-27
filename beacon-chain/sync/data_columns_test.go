@@ -1,8 +1,11 @@
 package sync
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"math"
 	"sort"
@@ -30,6 +33,8 @@ import (
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
+	GoKZG "github.com/crate-crypto/go-kzg-4844"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p"
@@ -1602,4 +1607,33 @@ func genFixedCustodyPeer(t *testing.T) crypto.PrivKey {
 	pkey, err := crypto.UnmarshalSecp256k1PrivateKey(rawObj)
 	require.NoError(t, err)
 	return pkey
+}
+
+func deterministicRandomness(t *testing.T, seed int64) [32]byte {
+	// Converts an int64 to a byte slice
+	buf := new(bytes.Buffer)
+	err := binary.Write(buf, binary.BigEndian, seed)
+	require.NoError(t, err)
+	bytes := buf.Bytes()
+
+	return sha256.Sum256(bytes)
+}
+
+// Returns a serialized random field element in big-endian
+func getRandFieldElement(t *testing.T, seed int64) [32]byte {
+	bytes := deterministicRandomness(t, seed)
+	var r fr.Element
+	r.SetBytes(bytes[:])
+
+	return GoKZG.SerializeScalar(r)
+}
+
+// Returns a random blob using the passed seed as entropy
+func getRandBlob(t *testing.T, seed int64) kzg.Blob {
+	var blob kzg.Blob
+	for i := 0; i < len(blob); i += 32 {
+		fieldElementBytes := getRandFieldElement(t, seed+int64(i))
+		copy(blob[i:i+32], fieldElementBytes[:])
+	}
+	return blob
 }

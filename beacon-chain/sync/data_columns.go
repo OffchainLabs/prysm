@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
@@ -921,4 +922,18 @@ func uint64MapDiffer(left, right map[uint64]bool) bool {
 	}
 
 	return false
+}
+
+// sliceFromMap returns a sorted list of keys from a map.
+func sliceFromMap(m map[uint64]bool, sorted ...bool) []uint64 {
+	result := make([]uint64, 0, len(m))
+	for k := range m {
+		result = append(result, k)
+	}
+
+	if len(sorted) > 0 && sorted[0] {
+		slices.Sort(result)
+	}
+
+	return result
 }
