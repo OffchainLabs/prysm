@@ -8,10 +8,10 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
 	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
-	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 func generateBlobIdentifiers(n int) []*eth.BlobIdentifier {
@@ -51,7 +51,7 @@ func TestBlobSidecarsByRootReq_MarshalSSZ(t *testing.T) {
 		{
 			name:         "beyond max list",
 			ids:          generateBlobIdentifiers(int(params.BeaconConfig().MaxRequestBlobSidecarsElectra) + 1),
-			unmarshalErr: ssz.ErrIncorrectListSize,
+			unmarshalErr: ErrMaxBlobReqExceeded,
 		},
 		{
 			name: "wonky unmarshal size",
@@ -60,7 +60,7 @@ func TestBlobSidecarsByRootReq_MarshalSSZ(t *testing.T) {
 				in = append(in, byte(0))
 				return in
 			},
-			unmarshalErr: ssz.ErrIncorrectByteSize,
+			unmarshalErr: ssz.ErrInvalidFixedEncodingLen,
 		},
 	}
 
@@ -305,7 +305,8 @@ func TestDataColumnSidecarsByRootReq_MarshalUnmarshal(t *testing.T) {
 			name: "size too big",
 			ids:  generateDataColumnIdentifiers(1),
 			unmarshalMod: func(in []byte) []byte {
-				maxLen := params.BeaconConfig().MaxRequestDataColumnSidecars * uint64(dataColumnIdSize)
+				sizer := &eth.DataColumnSidecarsByRangeRequest{}
+				maxLen := params.BeaconConfig().MaxRequestDataColumnSidecars * uint64(sizer.SizeSSZ())
 				add := make([]byte, maxLen)
 				in = append(in, add...)
 				return in

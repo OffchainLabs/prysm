@@ -5,19 +5,18 @@ package types
 
 import (
 	"bytes"
-	"encoding/binary"
 	"sort"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
 	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
-	ssz "github.com/prysmaticlabs/fastssz"
+	fastssz "github.com/prysmaticlabs/fastssz"
 )
 
 const (
-	maxErrorLength       = 256
-	bytesPerLengthOffset = 4
+	maxErrorLength = 256
 )
 
 // SSZBytes is a bytes slice that satisfies the fast-ssz interface.
@@ -25,11 +24,11 @@ type SSZBytes []byte
 
 // HashTreeRoot hashes the uint64 object following the SSZ standard.
 func (b *SSZBytes) HashTreeRoot() ([32]byte, error) {
-	return ssz.HashWithDefaultHasher(b)
+	return fastssz.HashWithDefaultHasher(b)
 }
 
 // HashTreeRootWith hashes the uint64 object with the given hasher.
-func (b *SSZBytes) HashTreeRootWith(hh *ssz.Hasher) error {
+func (b *SSZBytes) HashTreeRootWith(hh *fastssz.Hasher) error {
 	indx := hh.Index()
 	hh.PutBytes(*b)
 	hh.Merkleize(indx)
@@ -74,7 +73,7 @@ func (r *BeaconBlockByRootsReq) UnmarshalSSZ(buf []byte) error {
 		return errors.Errorf("expected buffer with length of up to %d but received length %d", maxLength, bufLen)
 	}
 	if bufLen%fieldparams.RootLength != 0 {
-		return ssz.ErrIncorrectByteSize
+		return fastssz.ErrIncorrectByteSize
 	}
 	numOfRoots := bufLen / fieldparams.RootLength
 	roots := make([][fieldparams.RootLength]byte, 0, numOfRoots)
@@ -128,16 +127,12 @@ func (m *ErrorMessage) UnmarshalSSZ(buf []byte) error {
 	return nil
 }
 
+var BlobSidecarsByRootReqSerdes = ssz.NewListFixedElementSerdes[*eth.BlobIdentifier](func() *eth.BlobIdentifier {
+	return &eth.BlobIdentifier{}
+})
+
 // BlobSidecarsByRootReq is used to specify a list of blob targets (root+index) in a BlobSidecarsByRoot RPC request.
 type BlobSidecarsByRootReq []*eth.BlobIdentifier
-
-// BlobIdentifier is a fixed size value, so we can compute its fixed size at start time (see init below)
-var blobIdSize int
-
-// SizeSSZ returns the size of the serialized representation.
-func (b *BlobSidecarsByRootReq) SizeSSZ() int {
-	return len(*b) * blobIdSize
-}
 
 // MarshalSSZTo appends the serialized BlobSidecarsByRootReq value to the provided byte slice.
 func (b *BlobSidecarsByRootReq) MarshalSSZTo(dst []byte) ([]byte, error) {
@@ -151,38 +146,20 @@ func (b *BlobSidecarsByRootReq) MarshalSSZTo(dst []byte) ([]byte, error) {
 
 // MarshalSSZ serializes the BlobSidecarsByRootReq value to a byte slice.
 func (b *BlobSidecarsByRootReq) MarshalSSZ() ([]byte, error) {
-	buf := make([]byte, len(*b)*blobIdSize)
-	for i, id := range *b {
-		by, err := id.MarshalSSZ()
-		if err != nil {
-			return nil, err
-		}
-		copy(buf[i*blobIdSize:(i+1)*blobIdSize], by)
-	}
-	return buf, nil
+	return BlobSidecarsByRootReqSerdes.Marshal(*b)
 }
 
 // UnmarshalSSZ unmarshals the provided bytes buffer into the
 // BlobSidecarsByRootReq value.
 func (b *BlobSidecarsByRootReq) UnmarshalSSZ(buf []byte) error {
-	bufLen := len(buf)
-	maxLength := int(params.BeaconConfig().MaxRequestBlobSidecarsElectra) * blobIdSize
-	if bufLen > maxLength {
-		return errors.Wrapf(ssz.ErrIncorrectListSize, "expected buffer with length of up to %d but received length %d", maxLength, bufLen)
+	v, err := BlobSidecarsByRootReqSerdes.Unmarshal(buf)
+	if err != nil {
+		return errors.Wrapf(err, "failed to unmarshal BlobSidecarsByRootReq")
 	}
-	if bufLen%blobIdSize != 0 {
-		return errors.Wrapf(ssz.ErrIncorrectByteSize, "size=%d", bufLen)
+	if len(v) > int(params.BeaconConfig().MaxRequestBlobSidecarsElectra) {
+		return ErrMaxBlobReqExceeded
 	}
-	count := bufLen / blobIdSize
-	*b = make([]*eth.BlobIdentifier, count)
-	for i := 0; i < count; i++ {
-		id := &eth.BlobIdentifier{}
-		err := id.UnmarshalSSZ(buf[i*blobIdSize : (i+1)*blobIdSize])
-		if err != nil {
-			return err
-		}
-		(*b)[i] = id
-	}
+	*b = v
 	return nil
 }
 
@@ -213,102 +190,28 @@ func (s BlobSidecarsByRootReq) Len() int {
 // ====================================
 // DataColumnsByRootIdentifiers section
 // ====================================
-var _ ssz.Marshaler = DataColumnsByRootIdentifiers{}
-var _ ssz.Unmarshaler = (*DataColumnsByRootIdentifiers)(nil)
+var _ fastssz.Marshaler = DataColumnsByRootIdentifiers{}
+var _ fastssz.Unmarshaler = &DataColumnsByRootIdentifiers{}
 
 // DataColumnsByRootIdentifiers is used to specify a list of data column targets (root+index) in a DataColumnSidecarsByRoot RPC request.
 type DataColumnsByRootIdentifiers []*eth.DataColumnsByRootIdentifier
 
-// DataColumnIdentifier is a fixed size value, so we can compute its fixed size at start time (see init below)
-var dataColumnIdSize int
+var DataColumnsByRootIdentifiersSerdes = ssz.NewListVariableElementSerdes[*eth.DataColumnsByRootIdentifier](func() *eth.DataColumnsByRootIdentifier {
+	return &eth.DataColumnsByRootIdentifier{}
+})
 
-// UnmarshalSSZ implements ssz.Unmarshaler. It unmarshals the provided bytes buffer into the DataColumnSidecarsByRootReq value.
 func (d *DataColumnsByRootIdentifiers) UnmarshalSSZ(buf []byte) error {
-	// Exit early if the buffer is too small.
-	if len(buf) < bytesPerLengthOffset {
-		return nil
+	//v, err := DataColumnsByRootIdentifiersSerdes.Unmarshal(buf)
+	v, err := DataColumnsByRootIdentifiersSerdes.Unmarshal(buf)
+	if err != nil {
+		return errors.Wrapf(err, "failed to unmarshal DataColumnsByRootIdentifiers")
 	}
-
-	// Get the size of the offsets.
-	offsetEnd := binary.LittleEndian.Uint32(buf[:bytesPerLengthOffset])
-	if offsetEnd%bytesPerLengthOffset != 0 {
-		return errors.Errorf("expected offsets size to be a multiple of %d but got %d", bytesPerLengthOffset, offsetEnd)
-	}
-
-	count := offsetEnd / bytesPerLengthOffset
-	if count < 1 {
-		return nil
-	}
-
-	maxSize := params.BeaconConfig().MaxRequestBlocksDeneb
-	if uint64(count) > maxSize {
-		return errors.Errorf("data column identifiers list exceeds max size: %d > %d", count, maxSize)
-	}
-
-	if offsetEnd > uint32(len(buf)) {
-		return errors.Errorf("offsets value %d larger than buffer %d", offsetEnd, len(buf))
-	}
-	valueStart := offsetEnd
-
-	// Decode the identifers.
-	*d = make([]*eth.DataColumnsByRootIdentifier, count)
-	var start uint32
-	end := uint32(len(buf))
-	for i := count; i > 0; i-- {
-		offsetEnd -= bytesPerLengthOffset
-		start = binary.LittleEndian.Uint32(buf[offsetEnd : offsetEnd+bytesPerLengthOffset])
-		if start > end {
-			return errors.Errorf("expected offset[%d] %d to be less than %d", i-1, start, end)
-		}
-		if start < valueStart {
-			return errors.Errorf("offset[%d] %d indexes before value section %d", i-1, start, valueStart)
-		}
-		// Decode the identifier.
-		ident := &eth.DataColumnsByRootIdentifier{}
-		if err := ident.UnmarshalSSZ(buf[start:end]); err != nil {
-			return err
-		}
-		(*d)[i-1] = ident
-		end = start
-	}
-
+	*d = v
 	return nil
 }
 
 func (d DataColumnsByRootIdentifiers) MarshalSSZ() ([]byte, error) {
-	var err error
-	count := len(d)
-	maxSize := params.BeaconConfig().MaxRequestBlocksDeneb
-	if uint64(count) > maxSize {
-		return nil, errors.Errorf("data column identifiers list exceeds max size: %d > %d", count, maxSize)
-	}
-
-	if len(d) == 0 {
-		return []byte{}, nil
-	}
-	sizes := make([]uint32, count)
-	valTotal := uint32(0)
-	for i, elem := range d {
-		if elem == nil {
-			return nil, errors.New("nil item in DataColumnsByRootIdentifiers list")
-		}
-		sizes[i] = uint32(elem.SizeSSZ())
-		valTotal += sizes[i]
-	}
-	offSize := uint32(4 * len(d))
-	out := make([]byte, offSize, offSize+valTotal)
-	for i := range sizes {
-		binary.LittleEndian.PutUint32(out[i*4:i*4+4], offSize)
-		offSize += sizes[i]
-	}
-	for _, elem := range d {
-		out, err = elem.MarshalSSZTo(out)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return out, nil
+	return DataColumnsByRootIdentifiersSerdes.Marshal(d)
 }
 
 // MarshalSSZTo implements ssz.Marshaler. It appends the serialized DataColumnSidecarsByRootReq value to the provided byte slice.
@@ -328,12 +231,4 @@ func (d DataColumnsByRootIdentifiers) SizeSSZ() int {
 		size += (d)[i].SizeSSZ()
 	}
 	return size
-}
-
-func init() {
-	blobSizer := &eth.BlobIdentifier{}
-	blobIdSize = blobSizer.SizeSSZ()
-
-	dataColumnSizer := &eth.DataColumnSidecarsByRangeRequest{}
-	dataColumnIdSize = dataColumnSizer.SizeSSZ()
 }
