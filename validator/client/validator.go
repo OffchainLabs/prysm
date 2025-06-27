@@ -369,7 +369,9 @@ func (v *validator) WaitForSync(ctx context.Context) error {
 
 func (v *validator) checkAndLogValidatorStatus() bool {
 	nonexistentIndex := primitives.ValidatorIndex(^uint64(0))
-	var someAreActive bool
+	log.WithField("count", len(v.pubkeyToStatus)).Info("Loaded validator keys")
+
+	someAreActive := false
 	for _, s := range v.pubkeyToStatus {
 		fields := logrus.Fields{
 			"pubkey": fmt.Sprintf("%#x", bytesutil.Trunc(s.publicKey)),
