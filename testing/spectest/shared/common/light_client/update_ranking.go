@@ -36,6 +36,9 @@ func RunLightClientUpdateRankingTests(t *testing.T, config string, v int) {
 	if v >= version.Electra {
 		params.BeaconConfig().ElectraForkEpoch = 0
 	}
+	if v >= version.Fulu {
+		params.BeaconConfig().FuluForkEpoch = 0
+	}
 
 	_, testsFolderPath := utils.TestFolders(t, config, version.String(v), "light_client/update_ranking/pyspec_tests/")
 	testTypes, err := util.BazelListDirectories(testsFolderPath)
