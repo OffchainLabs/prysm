@@ -174,7 +174,7 @@ func (client *ApiClient) doRequest(ctx context.Context, httpMethod, fullPath str
 			"status":   resp.StatusCode,
 			"request":  string(requestDump),
 			"response": string(responseDump),
-		}).Error("web3signer request failed")
+		}).Error("Web3signer request failed")
 	}
 	if resp.StatusCode == http.StatusInternalServerError {
 		err = fmt.Errorf("internal Web3Signer server error, Signing Request URL: %v Status: %v", fullPath, resp.StatusCode)
@@ -217,6 +217,6 @@ func unmarshalSignatureResponse(responseBody io.ReadCloser) (bls.Signature, erro
 // closeBody a utility method to wrap an error for closing
 func closeBody(body io.Closer) {
 	if err := body.Close(); err != nil {
-		log.WithError(err).Error("could not close response body")
+		log.WithError(err).Error("Could not close response body")
 	}
 }

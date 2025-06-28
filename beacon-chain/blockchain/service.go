@@ -371,7 +371,7 @@ func (s *Service) startFromExecutionChain() error {
 				if e.Type == statefeed.ChainStarted {
 					data, ok := e.Data.(*statefeed.ChainStartedData)
 					if !ok {
-						log.Error("event data is not type *statefeed.ChainStartedData")
+						log.Error("Event data is not type *statefeed.ChainStartedData")
 						return
 					}
 					log.WithField("startTime", data.StartTime).Debug("Received chain start event")
@@ -408,7 +408,7 @@ func (s *Service) onExecutionChainStart(ctx context.Context, genesisTime time.Ti
 
 	vr := bytesutil.ToBytes32(initializedState.GenesisValidatorsRoot())
 	if err := s.clockSetter.SetClock(startup.NewClock(genesisTime, vr)); err != nil {
-		log.WithError(err).Fatal("failed to initialize blockchain service from execution start event")
+		log.WithError(err).Fatal("Failed to initialize blockchain service from execution start event")
 	}
 }
 

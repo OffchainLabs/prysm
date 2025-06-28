@@ -565,7 +565,7 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 		v.dutiesLock.Lock()
 		v.duties = nil // Clear assignments so we know to retry the request.
 		v.dutiesLock.Unlock()
-		log.WithError(err).Error("error getting validator duties")
+		log.WithError(err).Error("Error getting validator duties")
 		return err
 	}
 
@@ -1141,7 +1141,7 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 	if len(signedRegReqs) > 0 {
 		go func() {
 			if err := SubmitValidatorRegistrations(ctx, v.validatorClient, signedRegReqs, v.validatorsRegBatchSize); err != nil {
-				log.WithError(errors.Wrap(ErrBuilderValidatorRegistration, err.Error())).Warn("failed to register validator on builder")
+				log.WithError(errors.Wrap(ErrBuilderValidatorRegistration, err.Error())).Warn("Failed to register validator on builder")
 			}
 		}()
 	}

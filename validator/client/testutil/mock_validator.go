@@ -275,7 +275,7 @@ func (*FakeValidator) HasProposerSettings() bool {
 func (fv *FakeValidator) PushProposerSettings(ctx context.Context, _ primitives.Slot, _ bool) error {
 	time.Sleep(fv.ProposerSettingWait)
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		log.Error("deadline exceeded")
+		log.Error("Deadline exceeded")
 		// can't return error as it will trigger a log.fatal
 		return nil
 	}

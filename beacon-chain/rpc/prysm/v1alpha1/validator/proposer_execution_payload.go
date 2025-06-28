@@ -80,7 +80,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 
 	val, tracked := vs.TrackedValidatorsCache.Validator(proposerId)
 	if !tracked {
-		logrus.WithFields(logFields).Warn("could not find tracked proposer index")
+		logrus.WithFields(logFields).Warn("Could not find tracked proposer index")
 	}
 	setFeeRecipientIfBurnAddress(&val)
 

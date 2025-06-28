@@ -233,7 +233,7 @@ func generateGenesis(ctx context.Context) (state.BeaconState, error) {
 		if err != nil {
 			return nil, err
 		}
-		log.Printf("reading deposits from JSON at %s", expanded)
+		log.Printf("Reading deposits from JSON at %s", expanded)
 		b, err := os.ReadFile(expanded) // #nosec G304
 		if err != nil {
 			return nil, err
