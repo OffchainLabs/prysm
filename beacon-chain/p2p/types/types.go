@@ -16,8 +16,7 @@ import (
 )
 
 const (
-	maxErrorLength       = 256
-	bytesPerLengthOffset = 4
+	maxErrorLength = 256
 )
 
 // SSZBytes is a bytes slice that satisfies the fast-ssz interface.
