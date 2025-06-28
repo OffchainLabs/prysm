@@ -11,6 +11,12 @@ import (
 	"github.com/pkg/errors"
 )
 
+type Transaction []byte
+
+func (t Transaction) HashTreeRoot() ([32]byte, error) {
+	return ByteSliceRoot(t, fieldparams.MaxBytesPerTxLength)
+}
+
 // Uint64Root computes the HashTreeRoot Merkleization of
 // a simple uint64 value according to the Ethereum
 // Simple Serialize specification.
@@ -72,29 +78,8 @@ func SlashingsRoot(slashings []uint64) ([32]byte, error) {
 }
 
 // TransactionsRoot computes the HTR for the Transactions' property of the ExecutionPayload
-// The code was largely copy/pasted from the code generated to compute the HTR of the entire
-// ExecutionPayload.
-func TransactionsRoot(txs [][]byte) ([32]byte, error) {
-	txRoots := make([][32]byte, 0)
-	for i := 0; i < len(txs); i++ {
-		rt, err := ByteSliceRoot(txs[i], fieldparams.MaxBytesPerTxLength) // getting the transaction root here
-		if err != nil {
-			return [32]byte{}, err
-		}
-		txRoots = append(txRoots, rt)
-	}
-
-	bytesRoot, err := BitwiseMerkleize(txRoots, uint64(len(txRoots)), fieldparams.MaxTxsPerPayloadLength)
-	if err != nil {
-		return [32]byte{}, errors.Wrap(err, "could not compute  merkleization")
-	}
-	bytesRootBuf := new(bytes.Buffer)
-	if err := binary.Write(bytesRootBuf, binary.LittleEndian, uint64(len(txs))); err != nil {
-		return [32]byte{}, errors.Wrap(err, "could not marshal length")
-	}
-	bytesRootBufRoot := make([]byte, 32)
-	copy(bytesRootBufRoot, bytesRootBuf.Bytes())
-	return MixInLength(bytesRoot, bytesRootBufRoot), nil
+func TransactionsRoot(txs []Transaction) ([32]byte, error) {
+	return SliceRoot(txs, fieldparams.MaxTxsPerPayloadLength)
 }
 
 // WithdrawalSliceRoot computes the HTR of a slice of withdrawals.
@@ -139,8 +124,8 @@ func ByteSliceRoot(slice []byte, maxLength uint64) ([32]byte, error) {
 
 func withdrawalRoot(w *enginev1.Withdrawal) ([32]byte, error) {
 	if w == nil {
-	fieldRoots := make([][32]byte, 4)
-	return BitwiseMerkleize(fieldRoots, uint64(len(fieldRoots)), uint64(len(fieldRoots)))
+		fieldRoots := make([][32]byte, 4)
+		return BitwiseMerkleize(fieldRoots, uint64(len(fieldRoots)), uint64(len(fieldRoots)))
 	}
 	return w.HashTreeRoot()
 }

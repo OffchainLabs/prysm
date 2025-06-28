@@ -67,7 +67,7 @@ func TestSlashingsRoot(t *testing.T) {
 func TestTransactionsRoot(t *testing.T) {
 	tests := []struct {
 		name    string
-		txs     [][]byte
+		txs     []ssz.Transaction
 		want    [32]byte
 		wantErr bool
 	}{
@@ -78,20 +78,20 @@ func TestTransactionsRoot(t *testing.T) {
 		},
 		{
 			name: "empty",
-			txs:  [][]byte{},
+			txs:  []ssz.Transaction{},
 			want: [32]byte{127, 254, 36, 30, 166, 1, 135, 253, 176, 24, 123, 250, 34, 222, 53, 209, 249, 190, 215, 171, 6, 29, 148, 1, 253, 71, 227, 74, 84, 251, 237, 225},
 		},
 		{
 			name: "one tx",
-			txs:  [][]byte{{1, 2, 3}},
+			txs:  []ssz.Transaction{{1, 2, 3}},
 			want: [32]byte{102, 209, 140, 87, 217, 28, 68, 12, 133, 42, 77, 136, 191, 18, 234, 105, 166, 228, 216, 235, 230, 95, 200, 73, 85, 33, 134, 254, 219, 97, 82, 209},
 		},
 		{
 			name: "max txs",
-			txs: func() [][]byte {
-				var txs [][]byte
+			txs: func() []ssz.Transaction {
+				var txs []ssz.Transaction
 				for i := 0; i < fieldparams.MaxTxsPerPayloadLength; i++ {
-					txs = append(txs, []byte{})
+					txs = append(txs, ssz.Transaction{})
 				}
 				return txs
 			}(),
@@ -99,10 +99,10 @@ func TestTransactionsRoot(t *testing.T) {
 		},
 		{
 			name: "exceed max txs",
-			txs: func() [][]byte {
-				var txs [][]byte
+			txs: func() []ssz.Transaction {
+				var txs []ssz.Transaction
 				for i := 0; i < fieldparams.MaxTxsPerPayloadLength+1; i++ {
-					txs = append(txs, []byte{})
+					txs = append(txs, ssz.Transaction{})
 				}
 				return txs
 			}(),
