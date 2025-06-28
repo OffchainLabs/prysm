@@ -23,8 +23,8 @@ func TestUint64Root(t *testing.T) {
 
 func TestForkRoot(t *testing.T) {
 	testFork := ethpb.Fork{
-		PreviousVersion: []byte{123},
-		CurrentVersion:  []byte{124},
+		PreviousVersion: []byte{123, 0, 0, 0},
+		CurrentVersion:  []byte{124, 0, 0, 0},
 		Epoch:           1234567890,
 	}
 	expected := [32]byte{19, 46, 77, 103, 92, 175, 247, 33, 100, 64, 17, 111, 199, 145, 69, 38, 217, 112, 6, 16, 149, 201, 225, 144, 192, 228, 197, 172, 157, 78, 114, 140}
@@ -37,7 +37,7 @@ func TestForkRoot(t *testing.T) {
 func TestCheckPointRoot(t *testing.T) {
 	testCheckpoint := ethpb.Checkpoint{
 		Epoch: 1234567890,
-		Root:  []byte{222},
+		Root:  []byte{222, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	}
 	expected := [32]byte{228, 65, 39, 109, 183, 249, 167, 232, 125, 239, 25, 155, 207, 4, 84, 174, 176, 229, 175, 224, 62, 33, 215, 254, 170, 220, 132, 65, 246, 128, 68, 194}
 
@@ -219,7 +219,7 @@ func TestWithdrawalRoot(t *testing.T) {
 	}{
 		{
 			name:  "nil",
-			input: &enginev1.Withdrawal{},
+			input: nil,
 			want:  [32]byte{0xdb, 0x56, 0x11, 0x4e, 0x0, 0xfd, 0xd4, 0xc1, 0xf8, 0x5c, 0x89, 0x2b, 0xf3, 0x5a, 0xc9, 0xa8, 0x92, 0x89, 0xaa, 0xec, 0xb1, 0xeb, 0xd0, 0xa9, 0x6c, 0xde, 0x60, 0x6a, 0x74, 0x8b, 0x5d, 0x71},
 		},
 		{
