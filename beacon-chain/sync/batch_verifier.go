@@ -13,7 +13,7 @@ import (
 
 const signatureVerificationInterval = 50 * time.Millisecond
 
-const verifierLimit = 50
+const verifierLimit = 1000
 
 type signatureVerifier struct {
 	set     *bls.SignatureBatch
