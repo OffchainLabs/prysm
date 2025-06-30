@@ -520,9 +520,9 @@ func ComputeWithdrawalsRoot(payload interfaces.ExecutionData) ([]byte, error) {
 
 func BlockToLightClientHeader(
 	ctx context.Context,
-	attestedBlockVersion int,                   // this is the version that the light client header should be in, based on the attested block.
+	attestedBlockVersion int, // this is the version that the light client header should be in, based on the attested block.
 	block interfaces.ReadOnlySignedBeaconBlock, // this block is either the attested block, or the finalized block.
-// in case of the latter, we might need to upgrade it to the attested block's version.
+	// in case of the latter, we might need to upgrade it to the attested block's version.
 ) (interfaces.LightClientHeader, error) {
 	if block.Version() > attestedBlockVersion {
 		return nil, errors.Errorf("block version %s is greater than attested block version %s", version.String(block.Version()), version.String(attestedBlockVersion))
