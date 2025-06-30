@@ -15,9 +15,9 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	dbtesting "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	light_client "github.com/OffchainLabs/prysm/v6/consensus-types/light-client"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -1853,7 +1853,7 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 	config := params.BeaconConfig()
 	var slot primitives.Slot
 	var header interfaces.LightClientHeader
-	var st state.BeaconState
+	var blk interfaces.ReadOnlySignedBeaconBlock
 	var err error
 
 	sampleRoot := make([]byte, 32)
@@ -1882,7 +1882,7 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 			},
 		})
 		require.NoError(t, err)
-		st, err = util.NewBeaconStateAltair()
+		blk, err = blocks.NewSignedBeaconBlock(util.NewBeaconBlockAltair())
 		require.NoError(t, err)
 	case version.Bellatrix:
 		slot = primitives.Slot(config.BellatrixForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
@@ -1896,7 +1896,7 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 			},
 		})
 		require.NoError(t, err)
-		st, err = util.NewBeaconStateBellatrix()
+		blk, err = blocks.NewSignedBeaconBlock(util.NewBeaconBlockBellatrix())
 		require.NoError(t, err)
 	case version.Capella:
 		slot = primitives.Slot(config.CapellaForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
@@ -1924,7 +1924,7 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 			ExecutionBranch: sampleExecutionBranch,
 		})
 		require.NoError(t, err)
-		st, err = util.NewBeaconStateCapella()
+		blk, err = blocks.NewSignedBeaconBlock(util.NewBeaconBlockCapella())
 		require.NoError(t, err)
 	case version.Deneb:
 		slot = primitives.Slot(config.DenebForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
@@ -1952,7 +1952,7 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 			ExecutionBranch: sampleExecutionBranch,
 		})
 		require.NoError(t, err)
-		st, err = util.NewBeaconStateDeneb()
+		blk, err = blocks.NewSignedBeaconBlock(util.NewBeaconBlockDeneb())
 		require.NoError(t, err)
 	case version.Electra:
 		slot = primitives.Slot(config.ElectraForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
@@ -1980,7 +1980,7 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 			ExecutionBranch: sampleExecutionBranch,
 		})
 		require.NoError(t, err)
-		st, err = util.NewBeaconStateElectra()
+		blk, err = blocks.NewSignedBeaconBlock(util.NewBeaconBlockElectra())
 		require.NoError(t, err)
 	case version.Fulu:
 		slot = primitives.Slot(config.FuluForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
@@ -2008,13 +2008,13 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 			ExecutionBranch: sampleExecutionBranch,
 		})
 		require.NoError(t, err)
-		st, err = util.NewBeaconStateFulu()
+		blk, err = blocks.NewSignedBeaconBlock(util.NewBeaconBlockFulu())
 		require.NoError(t, err)
 	default:
 		return nil, fmt.Errorf("unsupported version %s", version.String(v))
 	}
 
-	update, err := lightclient.CreateDefaultLightClientUpdate(st)
+	update, err := lightclient.CreateDefaultLightClientUpdate(blk)
 	require.NoError(t, err)
 	update.SetSignatureSlot(slot - 1)
 	syncCommitteeBits := make([]byte, 64)

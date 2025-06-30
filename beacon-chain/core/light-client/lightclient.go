@@ -161,7 +161,7 @@ func NewLightClientUpdateFromBeaconState(
 	updateAttestedPeriod := slots.SyncCommitteePeriod(slots.ToEpoch(attestedBlock.Block().Slot()))
 
 	// update = LightClientUpdate()
-	result, err := CreateDefaultLightClientUpdate(attestedState)
+	result, err := CreateDefaultLightClientUpdate(attestedBlock)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create default light client update")
 	}
@@ -245,7 +245,7 @@ func NewLightClientUpdateFromBeaconState(
 	return result, nil
 }
 
-func CreateDefaultLightClientUpdate(attestedState state.BeaconState) (interfaces.LightClientUpdate, error) {
+func CreateDefaultLightClientUpdate(attestedBlock interfaces.ReadOnlySignedBeaconBlock) (interfaces.LightClientUpdate, error) {
 	syncCommitteeSize := params.BeaconConfig().SyncCommitteeSize
 	pubKeys := make([][]byte, syncCommitteeSize)
 	for i := uint64(0); i < syncCommitteeSize; i++ {
@@ -257,7 +257,7 @@ func CreateDefaultLightClientUpdate(attestedState state.BeaconState) (interfaces
 	}
 
 	var nextSyncCommitteeBranch [][]byte
-	if attestedState.Version() >= version.Electra {
+	if attestedBlock.Version() >= version.Electra {
 		nextSyncCommitteeBranch = make([][]byte, fieldparams.SyncCommitteeBranchDepthElectra)
 	} else {
 		nextSyncCommitteeBranch = make([][]byte, fieldparams.SyncCommitteeBranchDepth)
@@ -272,7 +272,7 @@ func CreateDefaultLightClientUpdate(attestedState state.BeaconState) (interfaces
 	}
 
 	var finalityBranch [][]byte
-	if attestedState.Version() >= version.Electra {
+	if attestedBlock.Version() >= version.Electra {
 		finalityBranch = make([][]byte, fieldparams.FinalityBranchDepthElectra)
 	} else {
 		finalityBranch = make([][]byte, fieldparams.FinalityBranchDepth)
@@ -282,12 +282,12 @@ func CreateDefaultLightClientUpdate(attestedState state.BeaconState) (interfaces
 	}
 
 	var m proto.Message
-	switch attestedState.Version() {
+	switch attestedBlock.Version() {
 	case version.Altair, version.Bellatrix:
 		m = &pb.LightClientUpdateAltair{
 			AttestedHeader: &pb.LightClientHeaderAltair{
 				Beacon: &pb.BeaconBlockHeader{
-					Slot:       attestedState.Slot(),
+					Slot:       attestedBlock.Block().Slot(),
 					ParentRoot: make([]byte, 32),
 					StateRoot:  make([]byte, 32),
 					BodyRoot:   make([]byte, 32),
@@ -312,7 +312,7 @@ func CreateDefaultLightClientUpdate(attestedState state.BeaconState) (interfaces
 		m = &pb.LightClientUpdateCapella{
 			AttestedHeader: &pb.LightClientHeaderCapella{
 				Beacon: &pb.BeaconBlockHeader{
-					Slot:       attestedState.Slot(),
+					Slot:       attestedBlock.Block().Slot(),
 					ParentRoot: make([]byte, 32),
 					StateRoot:  make([]byte, 32),
 					BodyRoot:   make([]byte, 32),
@@ -365,7 +365,7 @@ func CreateDefaultLightClientUpdate(attestedState state.BeaconState) (interfaces
 		m = &pb.LightClientUpdateDeneb{
 			AttestedHeader: &pb.LightClientHeaderDeneb{
 				Beacon: &pb.BeaconBlockHeader{
-					Slot:       attestedState.Slot(),
+					Slot:       attestedBlock.Block().Slot(),
 					ParentRoot: make([]byte, 32),
 					StateRoot:  make([]byte, 32),
 					BodyRoot:   make([]byte, 32),
@@ -422,7 +422,7 @@ func CreateDefaultLightClientUpdate(attestedState state.BeaconState) (interfaces
 		m = &pb.LightClientUpdateElectra{
 			AttestedHeader: &pb.LightClientHeaderDeneb{
 				Beacon: &pb.BeaconBlockHeader{
-					Slot:       attestedState.Slot(),
+					Slot:       attestedBlock.Block().Slot(),
 					ParentRoot: make([]byte, 32),
 					StateRoot:  make([]byte, 32),
 					BodyRoot:   make([]byte, 32),
@@ -476,7 +476,7 @@ func CreateDefaultLightClientUpdate(attestedState state.BeaconState) (interfaces
 			},
 		}
 	default:
-		return nil, errors.Errorf("unsupported beacon chain version %s", version.String(attestedState.Version()))
+		return nil, errors.Errorf("unsupported beacon chain version %s", version.String(attestedBlock.Version()))
 	}
 
 	return light_client.NewWrappedUpdate(m)
@@ -520,11 +520,12 @@ func ComputeWithdrawalsRoot(payload interfaces.ExecutionData) ([]byte, error) {
 
 func BlockToLightClientHeader(
 	ctx context.Context,
-	v int,
-	block interfaces.ReadOnlySignedBeaconBlock,
+	attestedBlockVersion int, // this is the version that the light client header should be in. based on the attested block.
+	block interfaces.ReadOnlySignedBeaconBlock, // this block is either the attested block, or the finalized block.
+	// in case of the latter, we might need to upgrade it to the attested block's version.
 ) (interfaces.LightClientHeader, error) {
-	if block.Version() > v {
-		return nil, errors.Errorf("invalid block version %s for %s header", version.String(block.Version()), version.String(v))
+	if block.Version() > attestedBlockVersion {
+		return nil, errors.Errorf("invalid block version %s for %s header", version.String(block.Version()), version.String(attestedBlockVersion))
 	}
 
 	beacon, err := makeBeaconBlockHeader(block)
@@ -533,7 +534,7 @@ func BlockToLightClientHeader(
 	}
 
 	var m proto.Message
-	switch v {
+	switch attestedBlockVersion {
 	case version.Altair, version.Bellatrix:
 		m = &pb.LightClientHeaderAltair{
 			Beacon: beacon,
@@ -559,7 +560,7 @@ func BlockToLightClientHeader(
 			ExecutionBranch: payloadProof,
 		}
 	default:
-		return nil, fmt.Errorf("unsupported light client header version %s", version.String(v))
+		return nil, fmt.Errorf("unsupported light client header version %s", version.String(attestedBlockVersion))
 	}
 
 	return light_client.NewWrappedHeader(m)

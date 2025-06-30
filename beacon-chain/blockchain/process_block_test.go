@@ -2796,7 +2796,7 @@ func TestProcessLightClientUpdate(t *testing.T) {
 			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
 
 			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedState)
+			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedBlock)
 			require.NoError(t, err)
 
 			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
@@ -2848,7 +2848,7 @@ func TestProcessLightClientUpdate(t *testing.T) {
 			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
 
 			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedState)
+			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedBlock)
 			require.NoError(t, err)
 
 			scb := make([]byte, 64)
@@ -2954,7 +2954,7 @@ func TestProcessLightClientUpdate(t *testing.T) {
 			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
 
 			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedState)
+			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedBlock)
 			require.NoError(t, err)
 
 			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
@@ -3006,7 +3006,7 @@ func TestProcessLightClientUpdate(t *testing.T) {
 			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
 
 			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedState)
+			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedBlock)
 			require.NoError(t, err)
 
 			scb := make([]byte, 64)
@@ -3112,7 +3112,7 @@ func TestProcessLightClientUpdate(t *testing.T) {
 			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
 
 			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedState)
+			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedBlock)
 			require.NoError(t, err)
 
 			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
@@ -3164,7 +3164,7 @@ func TestProcessLightClientUpdate(t *testing.T) {
 			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
 
 			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedState)
+			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedBlock)
 			require.NoError(t, err)
 
 			scb := make([]byte, 64)
