@@ -1266,8 +1266,8 @@ func (v *validator) FindHealthyHost(ctx context.Context) bool {
 		if v.nodeClient.IsHealthy(ctx) { // healthy → done
 			return true
 		}
-		if len(v.beaconNodeHosts) == 1 {
-			log.WithField("host", v.Host()).Info("Beacon node is not responding, no backup node configured")
+		if len(v.beaconNodeHosts) == 1 && features.Get().EnableBeaconRESTApi {
+			log.WithField("host", v.Host()).Warn("Beacon node is not responding, no backup node configured")
 			return false
 		}
 		if remaining == 0 || !features.Get().EnableBeaconRESTApi {

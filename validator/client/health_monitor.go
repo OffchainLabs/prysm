@@ -53,10 +53,10 @@ func (m *healthMonitor) performHealthCheck() {
 		log.WithFields(logrus.Fields{
 			"fails":    m.fails,
 			"maxFails": m.maxFails,
-		}).Debug("Failed health check, beacon node is unresponsive")
+		}).Warn("Failed health check, beacon node is unresponsive")
 		m.fails++
 	} else if m.maxFails > 0 && m.fails >= m.maxFails {
-		log.WithField("maxFails", m.maxFails).Debug("Maximum health checks reached. Stopping health check routine")
+		log.WithField("maxFails", m.maxFails).Warn("Maximum health checks reached. Stopping health check routine")
 		m.isHealthy = ishealthy
 		m.cancel()
 		return

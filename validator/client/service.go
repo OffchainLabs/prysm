@@ -272,9 +272,6 @@ func (v *ValidatorService) Start() {
 func (v *ValidatorService) Stop() error {
 	v.cancel()
 	log.Info("Stopping service")
-	if v.conn != nil {
-		return v.conn.GetGrpcClientConn().Close()
-	}
 	return nil
 }
 
