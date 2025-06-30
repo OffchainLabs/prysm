@@ -250,7 +250,7 @@ func (d *DataColumnsByRootIdentifiers) UnmarshalSSZ(buf []byte) error {
 	}
 	valueStart := offsetEnd
 
-	// Decode the identifers.
+	// Decode the identifiers.
 	*d = make([]*eth.DataColumnsByRootIdentifier, count)
 	var start uint32
 	end := uint32(len(buf))
