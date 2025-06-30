@@ -520,12 +520,12 @@ func ComputeWithdrawalsRoot(payload interfaces.ExecutionData) ([]byte, error) {
 
 func BlockToLightClientHeader(
 	ctx context.Context,
-	attestedBlockVersion int, // this is the version that the light client header should be in. based on the attested block.
+	attestedBlockVersion int,                   // this is the version that the light client header should be in. based on the attested block.
 	block interfaces.ReadOnlySignedBeaconBlock, // this block is either the attested block, or the finalized block.
-	// in case of the latter, we might need to upgrade it to the attested block's version.
+// in case of the latter, we might need to upgrade it to the attested block's version.
 ) (interfaces.LightClientHeader, error) {
 	if block.Version() > attestedBlockVersion {
-		return nil, errors.Errorf("invalid block version %s for %s header", version.String(block.Version()), version.String(attestedBlockVersion))
+		return nil, errors.Errorf("block version %s is greater than attested block version %s", version.String(block.Version()), version.String(attestedBlockVersion))
 	}
 
 	beacon, err := makeBeaconBlockHeader(block)
@@ -540,9 +540,9 @@ func BlockToLightClientHeader(
 			Beacon: beacon,
 		}
 	case version.Capella:
-		payloadHeader, payloadProof, err := makeExecutionAndBranchCapella(ctx, block)
+		payloadHeader, payloadProof, err := makeExecutionAndProofCapella(ctx, block)
 		if err != nil {
-			return nil, errors.Wrap(err, "could not make execution payload header and branch")
+			return nil, errors.Wrap(err, "could not make execution payload header and proof")
 		}
 		m = &pb.LightClientHeaderCapella{
 			Beacon:          beacon,
@@ -550,9 +550,9 @@ func BlockToLightClientHeader(
 			ExecutionBranch: payloadProof,
 		}
 	case version.Deneb, version.Electra, version.Fulu:
-		payloadHeader, payloadProof, err := makeExecutionAndBranchDeneb(ctx, block)
+		payloadHeader, payloadProof, err := makeExecutionAndProofDeneb(ctx, block)
 		if err != nil {
-			return nil, errors.Wrap(err, "could not make execution payload header and branch")
+			return nil, errors.Wrap(err, "could not make execution payload header and proof")
 		}
 		m = &pb.LightClientHeaderDeneb{
 			Beacon:          beacon,
@@ -560,18 +560,13 @@ func BlockToLightClientHeader(
 			ExecutionBranch: payloadProof,
 		}
 	default:
-		return nil, fmt.Errorf("unsupported light client header version %s", version.String(attestedBlockVersion))
+		return nil, fmt.Errorf("unsupported attested block version %s", version.String(attestedBlockVersion))
 	}
 
 	return light_client.NewWrappedHeader(m)
 }
 
 func HasRelevantSyncCommittee(update interfaces.LightClientUpdate) (bool, error) {
-	fmt.Println(update.Version())
-	fmt.Println(update.AttestedHeader().Beacon().Slot)
-	fmt.Println(update.SignatureSlot())
-	fmt.Println(update.FinalizedHeader().Beacon().Slot)
-
 	if update.Version() >= version.Electra {
 		branch, err := update.NextSyncCommitteeBranchElectra()
 		if err != nil {

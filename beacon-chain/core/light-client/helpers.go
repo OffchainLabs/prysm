@@ -90,7 +90,7 @@ func createDefaultLightClientBootstrap(currentSlot primitives.Slot) (interfaces.
 	return light_client.NewWrappedBootstrap(m)
 }
 
-func makeExecutionAndBranchDeneb(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) (*enginev1.ExecutionPayloadHeaderDeneb, [][]byte, error) {
+func makeExecutionAndProofDeneb(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) (*enginev1.ExecutionPayloadHeaderDeneb, [][]byte, error) {
 	if blk.Version() < version.Capella {
 		p, err := execution.EmptyExecutionPayloadHeader(version.Deneb)
 		if err != nil {
@@ -160,7 +160,7 @@ func makeExecutionAndBranchDeneb(ctx context.Context, blk interfaces.ReadOnlySig
 	return payloadHeader, payloadProof, nil
 }
 
-func makeExecutionAndBranchCapella(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) (*enginev1.ExecutionPayloadHeaderCapella, [][]byte, error) {
+func makeExecutionAndProofCapella(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) (*enginev1.ExecutionPayloadHeaderCapella, [][]byte, error) {
 	if blk.Version() > version.Capella {
 		return nil, nil, fmt.Errorf("unsupported block version %s for capella execution payload", version.String(blk.Version()))
 	}
