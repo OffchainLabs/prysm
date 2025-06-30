@@ -43,7 +43,7 @@ func (s *Store) getBlock(ctx context.Context, blockRoot [32]byte, tx *bolt.Tx) (
 		return v, nil
 	}
 	// This method allows the caller to pass in its tx if one is already open.
-	// Or if a nil value is used, a transaction will be managed intenally.
+	// Or if a nil value is used, a transaction will be managed internally.
 	if tx == nil {
 		var err error
 		tx, err = s.db.Begin(false)
