@@ -167,7 +167,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		syncChecker:             &initialsync.SyncChecker{},
 		custodyInfo:             &peerdas.CustodyInfo{},
 		slasherEnabled:          cliCtx.Bool(flags.SlasherFlag.Name),
-		lcStore:                 &lightclient.Store{},
+		lcStore:                 nil,
 	}
 
 	for _, opt := range opts {
@@ -234,6 +234,10 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 	// Do not store the finalized state as it has been provided to the respective services during
 	// their initialization.
 	beacon.finalizedStateAtStartUp = nil
+
+	if features.Get().EnableLightClient {
+		beacon.lcStore = lightclient.NewLightClientStore(beacon.db)
+	}
 
 	return beacon, nil
 }

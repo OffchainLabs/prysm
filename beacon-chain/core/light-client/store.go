@@ -3,6 +3,7 @@ package light_client
 import (
 	"sync"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 )
 
@@ -11,6 +12,13 @@ type Store struct {
 
 	lastFinalityUpdate   interfaces.LightClientFinalityUpdate
 	lastOptimisticUpdate interfaces.LightClientOptimisticUpdate
+	beaconDB             db.HeadAccessDatabase
+}
+
+func NewLightClientStore(beaconDB db.HeadAccessDatabase) *Store {
+	return &Store{
+		beaconDB: beaconDB,
+	}
 }
 
 func (s *Store) SetLastFinalityUpdate(update interfaces.LightClientFinalityUpdate) {
