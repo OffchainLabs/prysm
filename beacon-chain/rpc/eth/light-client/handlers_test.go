@@ -53,13 +53,14 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NoError(t, err)
 
 		db := dbtesting.SetupDB(t)
+		lcStore := lightclient.NewLightClientStore(db)
+		s := &Server{
+			LCStore: lcStore,
+		}
 
-		err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[:], bootstrap)
+		err = lcStore.SaveLightClientBootstrap(l.Ctx, blockRoot, bootstrap)
 		require.NoError(t, err)
 
-		s := &Server{
-			BeaconDB: db,
-		}
 		request := httptest.NewRequest("GET", "http://foo.com/", nil)
 		request.SetPathValue("block_root", hexutil.Encode(blockRoot[:]))
 		writer := httptest.NewRecorder()
@@ -95,12 +96,14 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NoError(t, err)
 
 		db := dbtesting.SetupDB(t)
+		lcStore := lightclient.NewLightClientStore(db)
 
 		err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[:], bootstrap)
 		require.NoError(t, err)
 
 		s := &Server{
 			BeaconDB: db,
+			LCStore:  lcStore,
 		}
 		request := httptest.NewRequest("GET", "http://foo.com/", nil)
 		request.SetPathValue("block_root", hexutil.Encode(blockRoot[:]))
@@ -129,12 +132,14 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NoError(t, err)
 
 		db := dbtesting.SetupDB(t)
+		lcStore := lightclient.NewLightClientStore(db)
 
 		err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[1:], bootstrap)
 		require.NoError(t, err)
 
 		s := &Server{
 			BeaconDB: db,
+			LCStore:  lcStore,
 		}
 		request := httptest.NewRequest("GET", "http://foo.com/", nil)
 		request.SetPathValue("block_root", hexutil.Encode(blockRoot[:]))
@@ -155,12 +160,14 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NoError(t, err)
 
 		db := dbtesting.SetupDB(t)
+		lcStore := lightclient.NewLightClientStore(db)
 
 		err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[:], bootstrap)
 		require.NoError(t, err)
 
 		s := &Server{
 			BeaconDB: db,
+			LCStore:  lcStore,
 		}
 		request := httptest.NewRequest("GET", "http://foo.com/", nil)
 		request.SetPathValue("block_root", hexutil.Encode(blockRoot[:]))
@@ -196,12 +203,14 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NoError(t, err)
 
 		db := dbtesting.SetupDB(t)
+		lcStore := lightclient.NewLightClientStore(db)
 
 		err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[:], bootstrap)
 		require.NoError(t, err)
 
 		s := &Server{
 			BeaconDB: db,
+			LCStore:  lcStore,
 		}
 		request := httptest.NewRequest("GET", "http://foo.com/", nil)
 		request.SetPathValue("block_root", hexutil.Encode(blockRoot[:]))
@@ -230,12 +239,14 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NoError(t, err)
 
 		db := dbtesting.SetupDB(t)
+		lcStore := lightclient.NewLightClientStore(db)
 
 		err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[:], bootstrap)
 		require.NoError(t, err)
 
 		s := &Server{
 			BeaconDB: db,
+			LCStore:  lcStore,
 		}
 		request := httptest.NewRequest("GET", "http://foo.com/", nil)
 		request.SetPathValue("block_root", hexutil.Encode(blockRoot[:]))
@@ -271,12 +282,14 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NoError(t, err)
 
 		db := dbtesting.SetupDB(t)
+		lcStore := lightclient.NewLightClientStore(db)
 
 		err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[:], bootstrap)
 		require.NoError(t, err)
 
 		s := &Server{
 			BeaconDB: db,
+			LCStore:  lcStore,
 		}
 		request := httptest.NewRequest("GET", "http://foo.com/", nil)
 		request.SetPathValue("block_root", hexutil.Encode(blockRoot[:]))
@@ -305,12 +318,14 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NoError(t, err)
 
 		db := dbtesting.SetupDB(t)
+		lcStore := lightclient.NewLightClientStore(db)
 
 		err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[:], bootstrap)
 		require.NoError(t, err)
 
 		s := &Server{
 			BeaconDB: db,
+			LCStore:  lcStore,
 		}
 		request := httptest.NewRequest("GET", "http://foo.com/", nil)
 		request.SetPathValue("block_root", hexutil.Encode(blockRoot[:]))
@@ -346,12 +361,14 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NoError(t, err)
 
 		db := dbtesting.SetupDB(t)
+		lcStore := lightclient.NewLightClientStore(db)
 
 		err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[:], bootstrap)
 		require.NoError(t, err)
 
 		s := &Server{
 			BeaconDB: db,
+			LCStore:  lcStore,
 		}
 		request := httptest.NewRequest("GET", "http://foo.com/", nil)
 		request.SetPathValue("block_root", hexutil.Encode(blockRoot[:]))
@@ -380,12 +397,14 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NoError(t, err)
 
 		db := dbtesting.SetupDB(t)
+		lcStore := lightclient.NewLightClientStore(db)
 
 		err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[:], bootstrap)
 		require.NoError(t, err)
 
 		s := &Server{
 			BeaconDB: db,
+			LCStore:  lcStore,
 		}
 		request := httptest.NewRequest("GET", "http://foo.com/", nil)
 		request.SetPathValue("block_root", hexutil.Encode(blockRoot[:]))
@@ -421,12 +440,14 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		require.NoError(t, err)
 
 		db := dbtesting.SetupDB(t)
+		lcStore := lightclient.NewLightClientStore(db)
 
 		err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[:], bootstrap)
 		require.NoError(t, err)
 
 		s := &Server{
 			BeaconDB: db,
+			LCStore:  lcStore,
 		}
 		request := httptest.NewRequest("GET", "http://foo.com/", nil)
 		request.SetPathValue("block_root", hexutil.Encode(blockRoot[:]))
