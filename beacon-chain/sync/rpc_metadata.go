@@ -17,7 +17,7 @@ import (
 	"github.com/prysmaticlabs/go-bitfield"
 )
 
-// metaDataHandler reads the incoming metadata rpc request from the peer.
+// metaDataHandler reads the incoming metadata RPC request from the peer.
 func (s *Service) metaDataHandler(_ context.Context, _ interface{}, stream libp2pcore.Stream) error {
 	SetRPCStreamDeadlines(stream)
 
@@ -70,7 +70,9 @@ func (s *Service) metaDataHandler(_ context.Context, _ interface{}, stream libp2
 	switch streamVersion {
 	case p2p.SchemaVersionV1:
 		switch metadataVersion {
-		case version.Altair, version.Deneb:
+		case version.Altair, version.Fulu:
+			// If the stream version corresponds to Phase 0 but our metadata
+			// corresponds to Altair or Fulu, convert our metadata to the Phase 0 one.
 			metadata = wrapper.WrappedMetadataV0(
 				&pb.MetaDataV0{
 					Attnets:   metadata.AttnetsBitfield(),
@@ -81,18 +83,49 @@ func (s *Service) metaDataHandler(_ context.Context, _ interface{}, stream libp2
 	case p2p.SchemaVersionV2:
 		switch metadataVersion {
 		case version.Phase0:
+			// If the stream version corresponds to Altair but our metadata
+			// corresponds to Phase 0, convert our metadata to the Altair one,
+			// and use a zeroed syncnets bitfield.
 			metadata = wrapper.WrappedMetadataV1(
 				&pb.MetaDataV1{
 					Attnets:   metadata.AttnetsBitfield(),
 					SeqNumber: metadata.SequenceNumber(),
 					Syncnets:  bitfield.Bitvector4{byte(0x00)},
 				})
-		case version.Deneb:
+		case version.Fulu:
+			// If the stream version corresponds to Altair but our metadata
+			// corresponds to Fulu, convert our metadata to the Altair one.
 			metadata = wrapper.WrappedMetadataV1(
 				&pb.MetaDataV1{
 					Attnets:   metadata.AttnetsBitfield(),
 					SeqNumber: metadata.SequenceNumber(),
 					Syncnets:  metadata.SyncnetsBitfield(),
+				})
+		}
+
+	case p2p.SchemaVersionV3:
+		switch metadataVersion {
+		case version.Phase0:
+			// If the stream version corresponds to Fulu but our metadata
+			// corresponds to Phase 0, convert our metadata to the Fulu one,
+			// and use a zeroed syncnets bitfield and custody group count.
+			metadata = wrapper.WrappedMetadataV2(
+				&pb.MetaDataV2{
+					Attnets:           metadata.AttnetsBitfield(),
+					SeqNumber:         metadata.SequenceNumber(),
+					Syncnets:          bitfield.Bitvector4{byte(0x00)},
+					CustodyGroupCount: 0,
+				})
+		case version.Altair:
+			// If the stream version corresponds to Fulu but our metadata
+			// corresponds to Altair, convert our metadata to the Fulu one and
+			// use a zeroed custody group count.
+			metadata = wrapper.WrappedMetadataV2(
+				&pb.MetaDataV2{
+					Attnets:           metadata.AttnetsBitfield(),
+					SeqNumber:         metadata.SequenceNumber(),
+					Syncnets:          metadata.SyncnetsBitfield(),
+					CustodyGroupCount: 0,
 				})
 		}
 	}
@@ -164,12 +197,14 @@ func (s *Service) sendMetaDataRequest(ctx context.Context, peerID peer.ID) (meta
 	}
 
 	// Defensive check to ensure valid objects are being sent.
-	topicVersion := ""
+	var topicVersion string
 	switch msg.Version() {
 	case version.Phase0:
 		topicVersion = p2p.SchemaVersionV1
 	case version.Altair:
 		topicVersion = p2p.SchemaVersionV2
+	case version.Fulu:
+		topicVersion = p2p.SchemaVersionV3
 	}
 
 	// Validate the version of the topic.
