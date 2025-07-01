@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -26,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	gethRPC "github.com/ethereum/go-ethereum/rpc"
 	"github.com/holiman/uint256"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
@@ -158,7 +158,7 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 		} else {
 			flattenedRequests, err := pb.EncodeExecutionRequests(executionRequests)
 			if err != nil {
-				return nil, errors.Wrap(err, "failed to encode execution requests")
+				return nil, fmt.Errorf("failed to encode execution requests: %w", err)
 			}
 			err = s.rpcClient.CallContext(ctx, result, NewPayloadMethodV4, payloadPb, versionedHashes, parentBlockRoot, flattenedRequests)
 			if err != nil {
@@ -346,14 +346,14 @@ func (s *Service) GetTerminalBlockHash(ctx context.Context, transitionTime uint6
 	ttd.SetString(params.BeaconConfig().TerminalTotalDifficulty, 10)
 	terminalTotalDifficulty, overflows := uint256.FromBig(ttd)
 	if overflows {
-		return nil, false, errors.New("could not convert terminal total difficulty to uint256")
+		return nil, false, fmt.Errorf("could not convert terminal total difficulty to uint256")
 	}
 	blk, err := s.LatestExecutionBlock(ctx)
 	if err != nil {
-		return nil, false, errors.Wrap(err, "could not get latest execution block")
+		return nil, false, fmt.Errorf("could not get latest execution block: %w", err)
 	}
 	if blk == nil {
-		return nil, false, errors.New("latest execution block is nil")
+		return nil, false, fmt.Errorf("latest execution block is nil")
 	}
 
 	for {
@@ -362,7 +362,7 @@ func (s *Service) GetTerminalBlockHash(ctx context.Context, transitionTime uint6
 		}
 		currentTotalDifficulty, err := tDStringToUint256(blk.TotalDifficulty)
 		if err != nil {
-			return nil, false, errors.Wrap(err, "could not convert total difficulty to uint256")
+			return nil, false, fmt.Errorf("could not convert total difficulty to uint256: %w", err)
 		}
 		blockReachedTTD := currentTotalDifficulty.Cmp(terminalTotalDifficulty) >= 0
 
@@ -372,16 +372,16 @@ func (s *Service) GetTerminalBlockHash(ctx context.Context, transitionTime uint6
 		}
 		parentBlk, err := s.ExecutionBlockByHash(ctx, parentHash, false /* no txs */)
 		if err != nil {
-			return nil, false, errors.Wrap(err, "could not get parent execution block")
+			return nil, false, fmt.Errorf("could not get parent execution block: %w", err)
 		}
 		if parentBlk == nil {
-			return nil, false, errors.New("parent execution block is nil")
+			return nil, false, fmt.Errorf("parent execution block is nil")
 		}
 
 		if blockReachedTTD {
 			parentTotalDifficulty, err := tDStringToUint256(parentBlk.TotalDifficulty)
 			if err != nil {
-				return nil, false, errors.Wrap(err, "could not convert total difficulty to uint256")
+				return nil, false, fmt.Errorf("could not convert total difficulty to uint256: %w", err)
 			}
 
 			// If terminal block has time same timestamp or greater than transition time,
@@ -515,7 +515,7 @@ func (s *Service) ReconstructFullBlock(
 		return nil, err
 	}
 	if len(reconstructed) != 1 {
-		return nil, errors.Errorf("could not retrieve the correct number of payload bodies: wanted 1 but got %d", len(reconstructed))
+		return nil, fmt.Errorf("could not retrieve the correct number of payload bodies: wanted 1 but got %d", len(reconstructed))
 	}
 	return reconstructed[0], nil
 }
@@ -544,7 +544,7 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 	blockBody := block.Block().Body()
 	kzgCommitments, err := blockBody.BlobKzgCommitments()
 	if err != nil {
-		return nil, errors.Wrap(err, "could not get blob KZG commitments")
+		return nil, fmt.Errorf("could not get blob KZG commitments: %w", err)
 	}
 
 	// Collect KZG hashes for non-existing blobs
@@ -563,7 +563,7 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 	// Fetch blobs from EL
 	blobs, err := s.GetBlobs(ctx, kzgHashes)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not get blobs")
+		return nil, fmt.Errorf("could not get blobs: %w", err)
 	}
 	if len(blobs) == 0 {
 		return nil, nil
@@ -571,7 +571,7 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 
 	header, err := block.Header()
 	if err != nil {
-		return nil, errors.Wrap(err, "could not get header")
+		return nil, fmt.Errorf("could not get header: %w", err)
 	}
 
 	// Reconstruct verified blob sidecars
@@ -619,17 +619,17 @@ func fullPayloadFromPayloadBody(
 	header interfaces.ExecutionData, body *pb.ExecutionPayloadBody, bVersion int,
 ) (interfaces.ExecutionData, error) {
 	if header == nil || header.IsNil() || body == nil {
-		return nil, errors.New("execution block and header cannot be nil")
+		return nil, fmt.Errorf("execution block and header cannot be nil")
 	}
 
 	if bVersion >= version.Deneb {
 		ebg, err := header.ExcessBlobGas()
 		if err != nil {
-			return nil, errors.Wrap(err, "unable to extract ExcessBlobGas attribute from execution payload header")
+			return nil, fmt.Errorf("unable to extract ExcessBlobGas attribute from execution payload header: %w", err)
 		}
 		bgu, err := header.BlobGasUsed()
 		if err != nil {
-			return nil, errors.Wrap(err, "unable to extract BlobGasUsed attribute from execution payload header")
+			return nil, fmt.Errorf("unable to extract BlobGasUsed attribute from execution payload header: %w", err)
 		}
 		return blocks.WrappedExecutionPayloadDeneb(
 			&pb.ExecutionPayloadDeneb{
@@ -713,45 +713,45 @@ func handleRPCError(err error) error {
 				"here https://docs.prylabs.network/docs/execution-node/authentication")
 			return fmt.Errorf("could not authenticate connection to execution client: %w", err)
 		}
-		return errors.Wrapf(err, "got an unexpected error in JSON-RPC response")
+		return fmt.Errorf("got an unexpected error in JSON-RPC response: %w", err)
 	}
 	switch e.ErrorCode() {
 	case -32700:
 		errParseCount.Inc()
-		return ErrParse
+		return errors.Join(errors.New(e.Error()), ErrParse)
 	case -32600:
 		errInvalidRequestCount.Inc()
-		return ErrInvalidRequest
+		return errors.Join(errors.New(e.Error()), ErrInvalidRequest)
 	case -32601:
 		errMethodNotFoundCount.Inc()
-		return ErrMethodNotFound
+		return errors.Join(errors.New(e.Error()), ErrMethodNotFound)
 	case -32602:
 		errInvalidParamsCount.Inc()
-		return ErrInvalidParams
+		return errors.Join(errors.New(e.Error()), ErrInvalidParams)
 	case -32603:
 		errInternalCount.Inc()
-		return ErrInternal
+		return errors.Join(errors.New(e.Error()), ErrInternal)
 	case -38001:
 		errUnknownPayloadCount.Inc()
-		return ErrUnknownPayload
+		return errors.Join(errors.New(e.Error()), ErrUnknownPayload)
 	case -38002:
 		errInvalidForkchoiceStateCount.Inc()
-		return ErrInvalidForkchoiceState
+		return errors.Join(errors.New(e.Error()), ErrInvalidForkchoiceState)
 	case -38003:
 		errInvalidPayloadAttributesCount.Inc()
-		return ErrInvalidPayloadAttributes
+		return errors.Join(errors.New(e.Error()), ErrInvalidPayloadAttributes)
 	case -38004:
 		errRequestTooLargeCount.Inc()
-		return ErrRequestTooLarge
+		return errors.Join(errors.New(e.Error()), ErrRequestTooLarge)
 	case -32000:
 		errServerErrorCount.Inc()
 		// Only -32000 status codes are data errors in the RPC specification.
 		var errWithData gethRPC.DataError
 		ok := errors.As(err, &errWithData)
 		if !ok {
-			return errors.Wrapf(err, "got an unexpected error in JSON-RPC response")
+			return fmt.Errorf("got an unexpected error in JSON-RPC response: %w", err)
 		}
-		return errors.Wrapf(ErrServer, "%v", errWithData.Error())
+		return fmt.Errorf("%v: %w", errWithData.Error(), ErrServer)
 	default:
 		return err
 	}
@@ -778,7 +778,7 @@ func tDStringToUint256(td string) (*uint256.Int, error) {
 	}
 	i, overflows := uint256.FromBig(b)
 	if overflows {
-		return nil, errors.New("total difficulty overflowed")
+		return nil, fmt.Errorf("total difficulty overflowed")
 	}
 	return i, nil
 }
@@ -831,7 +831,7 @@ func EmptyExecutionPayload(v int) (proto.Message, error) {
 		}, nil
 	}
 
-	return nil, errors.Wrapf(ErrUnsupportedVersion, "version=%s", version.String(v))
+	return nil, fmt.Errorf("version=%s: %w", version.String(v), ErrUnsupportedVersion)
 }
 
 func EmptyExecutionPayloadHeader(v int) (proto.Message, error) {
@@ -881,7 +881,7 @@ func EmptyExecutionPayloadHeader(v int) (proto.Message, error) {
 		}, nil
 	}
 
-	return nil, errors.Wrapf(ErrUnsupportedVersion, "version=%s", version.String(v))
+	return nil, fmt.Errorf("version=%s: %w", version.String(v), ErrUnsupportedVersion)
 }
 
 func toBlockNumArg(number *big.Int) string {
