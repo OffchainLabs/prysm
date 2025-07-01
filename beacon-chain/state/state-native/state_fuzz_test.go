@@ -1,7 +1,6 @@
 package state_native_test
 
 import (
-	"context"
 	"testing"
 
 	coreState "github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
@@ -45,11 +44,11 @@ func FuzzPhase0StateHashTreeRoot(f *testing.F) {
 		stateObj, err := native.InitializeFromProtoUnsafePhase0(pbState)
 		assert.NoError(t, err)
 		for stateObj.Slot() < primitives.Slot(slotsToTransition) {
-			stateObj, err = coreState.ProcessSlots(context.Background(), stateObj, stateObj.Slot()+1)
+			stateObj, err = coreState.ProcessSlots(t.Context(), stateObj, stateObj.Slot()+1)
 			assert.NoError(t, err)
 			stateObj.Copy()
 
-			nativeState, err = coreState.ProcessSlots(context.Background(), nativeState, nativeState.Slot()+1)
+			nativeState, err = coreState.ProcessSlots(t.Context(), nativeState, nativeState.Slot()+1)
 			assert.NoError(t, err)
 			nativeState.Copy()
 		}
@@ -60,9 +59,9 @@ func FuzzPhase0StateHashTreeRoot(f *testing.F) {
 		newState, err := native.InitializeFromProtoUnsafePhase0(innerState)
 		assert.NoError(t, err)
 
-		newRt, newErr := newState.HashTreeRoot(context.Background())
-		rt, err := stateObj.HashTreeRoot(context.Background())
-		nativeRt, nativeErr := nativeState.HashTreeRoot(context.Background())
+		newRt, newErr := newState.HashTreeRoot(t.Context())
+		rt, err := stateObj.HashTreeRoot(t.Context())
+		nativeRt, nativeErr := nativeState.HashTreeRoot(t.Context())
 
 		assert.Equal(t, newErr != nil, err != nil)
 		assert.Equal(t, newErr != nil, nativeErr != nil)
@@ -116,11 +115,11 @@ func FuzzAltairStateHashTreeRoot(f *testing.F) {
 		stateObj, err := native.InitializeFromProtoUnsafeAltair(pbState)
 		assert.NoError(t, err)
 		for stateObj.Slot() < primitives.Slot(slotsToTransition) {
-			stateObj, err = coreState.ProcessSlots(context.Background(), stateObj, stateObj.Slot()+1)
+			stateObj, err = coreState.ProcessSlots(t.Context(), stateObj, stateObj.Slot()+1)
 			assert.NoError(t, err)
 			stateObj.Copy()
 
-			nativeState, err = coreState.ProcessSlots(context.Background(), nativeState, nativeState.Slot()+1)
+			nativeState, err = coreState.ProcessSlots(t.Context(), nativeState, nativeState.Slot()+1)
 			assert.NoError(t, err)
 			nativeState.Copy()
 		}
@@ -131,9 +130,9 @@ func FuzzAltairStateHashTreeRoot(f *testing.F) {
 		newState, err := native.InitializeFromProtoUnsafeAltair(innerState)
 		assert.NoError(t, err)
 
-		newRt, newErr := newState.HashTreeRoot(context.Background())
-		rt, err := stateObj.HashTreeRoot(context.Background())
-		nativeRt, nativeErr := nativeState.HashTreeRoot(context.Background())
+		newRt, newErr := newState.HashTreeRoot(t.Context())
+		rt, err := stateObj.HashTreeRoot(t.Context())
+		nativeRt, nativeErr := nativeState.HashTreeRoot(t.Context())
 		assert.Equal(t, newErr != nil, err != nil)
 		assert.Equal(t, newErr != nil, nativeErr != nil)
 		if err == nil {
@@ -186,11 +185,11 @@ func FuzzBellatrixStateHashTreeRoot(f *testing.F) {
 		stateObj, err := native.InitializeFromProtoUnsafeBellatrix(pbState)
 		assert.NoError(t, err)
 		for stateObj.Slot() < primitives.Slot(slotsToTransition) {
-			stateObj, err = coreState.ProcessSlots(context.Background(), stateObj, stateObj.Slot()+1)
+			stateObj, err = coreState.ProcessSlots(t.Context(), stateObj, stateObj.Slot()+1)
 			assert.NoError(t, err)
 			stateObj.Copy()
 
-			nativeState, err = coreState.ProcessSlots(context.Background(), nativeState, nativeState.Slot()+1)
+			nativeState, err = coreState.ProcessSlots(t.Context(), nativeState, nativeState.Slot()+1)
 			assert.NoError(t, err)
 			nativeState.Copy()
 		}
@@ -201,9 +200,9 @@ func FuzzBellatrixStateHashTreeRoot(f *testing.F) {
 		newState, err := native.InitializeFromProtoUnsafeBellatrix(innerState)
 		assert.NoError(t, err)
 
-		newRt, newErr := newState.HashTreeRoot(context.Background())
-		rt, err := stateObj.HashTreeRoot(context.Background())
-		nativeRt, nativeErr := nativeState.HashTreeRoot(context.Background())
+		newRt, newErr := newState.HashTreeRoot(t.Context())
+		rt, err := stateObj.HashTreeRoot(t.Context())
+		nativeRt, nativeErr := nativeState.HashTreeRoot(t.Context())
 		assert.Equal(t, newErr != nil, err != nil)
 		assert.Equal(t, newErr != nil, nativeErr != nil)
 		if err == nil {
@@ -256,11 +255,11 @@ func FuzzCapellaStateHashTreeRoot(f *testing.F) {
 		stateObj, err := native.InitializeFromProtoUnsafeCapella(pbState)
 		assert.NoError(t, err)
 		for stateObj.Slot() < primitives.Slot(slotsToTransition) {
-			stateObj, err = coreState.ProcessSlots(context.Background(), stateObj, stateObj.Slot()+1)
+			stateObj, err = coreState.ProcessSlots(t.Context(), stateObj, stateObj.Slot()+1)
 			assert.NoError(t, err)
 			stateObj.Copy()
 
-			nativeState, err = coreState.ProcessSlots(context.Background(), nativeState, nativeState.Slot()+1)
+			nativeState, err = coreState.ProcessSlots(t.Context(), nativeState, nativeState.Slot()+1)
 			assert.NoError(t, err)
 			nativeState.Copy()
 		}
@@ -271,9 +270,9 @@ func FuzzCapellaStateHashTreeRoot(f *testing.F) {
 		newState, err := native.InitializeFromProtoUnsafeCapella(innerState)
 		assert.NoError(t, err)
 
-		newRt, newErr := newState.HashTreeRoot(context.Background())
-		rt, err := stateObj.HashTreeRoot(context.Background())
-		nativeRt, nativeErr := nativeState.HashTreeRoot(context.Background())
+		newRt, newErr := newState.HashTreeRoot(t.Context())
+		rt, err := stateObj.HashTreeRoot(t.Context())
+		nativeRt, nativeErr := nativeState.HashTreeRoot(t.Context())
 		assert.Equal(t, newErr != nil, err != nil)
 		assert.Equal(t, newErr != nil, nativeErr != nil)
 		if err == nil {
@@ -326,11 +325,11 @@ func FuzzDenebStateHashTreeRoot(f *testing.F) {
 		stateObj, err := native.InitializeFromProtoUnsafeDeneb(pbState)
 		assert.NoError(t, err)
 		for stateObj.Slot() < primitives.Slot(slotsToTransition) {
-			stateObj, err = coreState.ProcessSlots(context.Background(), stateObj, stateObj.Slot()+1)
+			stateObj, err = coreState.ProcessSlots(t.Context(), stateObj, stateObj.Slot()+1)
 			assert.NoError(t, err)
 			stateObj.Copy()
 
-			nativeState, err = coreState.ProcessSlots(context.Background(), nativeState, nativeState.Slot()+1)
+			nativeState, err = coreState.ProcessSlots(t.Context(), nativeState, nativeState.Slot()+1)
 			assert.NoError(t, err)
 			nativeState.Copy()
 		}
@@ -341,9 +340,9 @@ func FuzzDenebStateHashTreeRoot(f *testing.F) {
 		newState, err := native.InitializeFromProtoUnsafeDeneb(innerState)
 		assert.NoError(t, err)
 
-		newRt, newErr := newState.HashTreeRoot(context.Background())
-		rt, err := stateObj.HashTreeRoot(context.Background())
-		nativeRt, nativeErr := nativeState.HashTreeRoot(context.Background())
+		newRt, newErr := newState.HashTreeRoot(t.Context())
+		rt, err := stateObj.HashTreeRoot(t.Context())
+		nativeRt, nativeErr := nativeState.HashTreeRoot(t.Context())
 		assert.Equal(t, newErr != nil, err != nil)
 		assert.Equal(t, newErr != nil, nativeErr != nil)
 		if err == nil {

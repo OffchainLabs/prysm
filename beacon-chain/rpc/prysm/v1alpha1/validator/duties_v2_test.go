@@ -1,7 +1,6 @@
 package validator
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -33,7 +32,7 @@ func TestGetDutiesV2_OK(t *testing.T) {
 	require.NoError(t, err)
 	eth1Data, err := util.DeterministicEth1Data(len(deposits))
 	require.NoError(t, err)
-	bs, err := transition.GenesisBeaconState(context.Background(), deposits, 0, eth1Data)
+	bs, err := transition.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
 	require.NoError(t, err, "Could not setup genesis bs")
 	genesisRoot, err := genesis.Block.HashTreeRoot()
 	require.NoError(t, err, "Could not get signing root")
@@ -60,7 +59,7 @@ func TestGetDutiesV2_OK(t *testing.T) {
 	req := &ethpb.DutiesRequest{
 		PublicKeys: [][]byte{deposits[0].Data.PublicKey},
 	}
-	res, err := vs.GetDutiesV2(context.Background(), req)
+	res, err := vs.GetDutiesV2(t.Context(), req)
 	require.NoError(t, err, "Could not call epoch committee assignment")
 	if res.CurrentEpochDuties[0].AttesterSlot > bs.Slot()+params.BeaconConfig().SlotsPerEpoch {
 		t.Errorf("Assigned slot %d can't be higher than %d",
@@ -72,7 +71,7 @@ func TestGetDutiesV2_OK(t *testing.T) {
 	req = &ethpb.DutiesRequest{
 		PublicKeys: [][]byte{deposits[lastValidatorIndex].Data.PublicKey},
 	}
-	res, err = vs.GetDutiesV2(context.Background(), req)
+	res, err = vs.GetDutiesV2(t.Context(), req)
 	require.NoError(t, err, "Could not call epoch committee assignment")
 	if res.CurrentEpochDuties[0].AttesterSlot > bs.Slot()+params.BeaconConfig().SlotsPerEpoch {
 		t.Errorf("Assigned slot %d can't be higher than %d",
@@ -84,7 +83,7 @@ func TestGetDutiesV2_OK(t *testing.T) {
 		PublicKeys: pubKeys,
 		Epoch:      0,
 	}
-	res, err = vs.GetDutiesV2(context.Background(), req)
+	res, err = vs.GetDutiesV2(t.Context(), req)
 	require.NoError(t, err, "Could not call epoch committee assignment")
 	for i := 0; i < len(res.CurrentEpochDuties); i++ {
 		assert.Equal(t, primitives.ValidatorIndex(i), res.CurrentEpochDuties[i].ValidatorIndex)
@@ -102,7 +101,7 @@ func TestGetAltairDutiesV2_SyncCommitteeOK(t *testing.T) {
 	require.NoError(t, err)
 	eth1Data, err := util.DeterministicEth1Data(len(deposits))
 	require.NoError(t, err)
-	bs, err := util.GenesisBeaconState(context.Background(), deposits, 0, eth1Data)
+	bs, err := util.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
 	require.NoError(t, err, "Could not setup genesis bs")
 	h := &ethpb.BeaconBlockHeader{
 		StateRoot:  bytesutil.PadTo([]byte{'a'}, fieldparams.RootLength),
@@ -113,7 +112,7 @@ func TestGetAltairDutiesV2_SyncCommitteeOK(t *testing.T) {
 	genesisRoot, err := genesis.Block.HashTreeRoot()
 	require.NoError(t, err, "Could not get signing root")
 
-	syncCommittee, err := altair.NextSyncCommittee(context.Background(), bs)
+	syncCommittee, err := altair.NextSyncCommittee(t.Context(), bs)
 	require.NoError(t, err)
 	require.NoError(t, bs.SetCurrentSyncCommittee(syncCommittee))
 	pubKeys := make([][]byte, len(deposits))
@@ -147,7 +146,7 @@ func TestGetAltairDutiesV2_SyncCommitteeOK(t *testing.T) {
 	req := &ethpb.DutiesRequest{
 		PublicKeys: [][]byte{deposits[0].Data.PublicKey},
 	}
-	res, err := vs.GetDutiesV2(context.Background(), req)
+	res, err := vs.GetDutiesV2(t.Context(), req)
 	require.NoError(t, err, "Could not call epoch committee assignment")
 	if res.CurrentEpochDuties[0].AttesterSlot > bs.Slot()+params.BeaconConfig().SlotsPerEpoch {
 		t.Errorf("Assigned slot %d can't be higher than %d",
@@ -159,7 +158,7 @@ func TestGetAltairDutiesV2_SyncCommitteeOK(t *testing.T) {
 	req = &ethpb.DutiesRequest{
 		PublicKeys: [][]byte{deposits[lastValidatorIndex].Data.PublicKey},
 	}
-	res, err = vs.GetDutiesV2(context.Background(), req)
+	res, err = vs.GetDutiesV2(t.Context(), req)
 	require.NoError(t, err, "Could not call epoch committee assignment")
 	if res.CurrentEpochDuties[0].AttesterSlot > bs.Slot()+params.BeaconConfig().SlotsPerEpoch {
 		t.Errorf("Assigned slot %d can't be higher than %d",
@@ -171,7 +170,7 @@ func TestGetAltairDutiesV2_SyncCommitteeOK(t *testing.T) {
 		PublicKeys: pubKeys,
 		Epoch:      0,
 	}
-	res, err = vs.GetDutiesV2(context.Background(), req)
+	res, err = vs.GetDutiesV2(t.Context(), req)
 	require.NoError(t, err, "Could not call epoch committee assignment")
 	for i := 0; i < len(res.CurrentEpochDuties); i++ {
 		require.Equal(t, primitives.ValidatorIndex(i), res.CurrentEpochDuties[i].ValidatorIndex)
@@ -187,7 +186,7 @@ func TestGetAltairDutiesV2_SyncCommitteeOK(t *testing.T) {
 		PublicKeys: pubKeys,
 		Epoch:      params.BeaconConfig().EpochsPerSyncCommitteePeriod - 1,
 	}
-	res, err = vs.GetDutiesV2(context.Background(), req)
+	res, err = vs.GetDutiesV2(t.Context(), req)
 	require.NoError(t, err, "Could not call epoch committee assignment")
 	for i := 0; i < len(res.CurrentEpochDuties); i++ {
 		require.NotEqual(t, res.CurrentEpochDuties[i].IsSyncCommittee, res.NextEpochDuties[i].IsSyncCommittee)
@@ -206,7 +205,7 @@ func TestGetBellatrixDutiesV2_SyncCommitteeOK(t *testing.T) {
 	require.NoError(t, err)
 	eth1Data, err := util.DeterministicEth1Data(len(deposits))
 	require.NoError(t, err)
-	bs, err := util.GenesisBeaconState(context.Background(), deposits, 0, eth1Data)
+	bs, err := util.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
 	h := &ethpb.BeaconBlockHeader{
 		StateRoot:  bytesutil.PadTo([]byte{'a'}, fieldparams.RootLength),
 		ParentRoot: bytesutil.PadTo([]byte{'b'}, fieldparams.RootLength),
@@ -217,7 +216,7 @@ func TestGetBellatrixDutiesV2_SyncCommitteeOK(t *testing.T) {
 	genesisRoot, err := genesis.Block.HashTreeRoot()
 	require.NoError(t, err, "Could not get signing root")
 
-	syncCommittee, err := altair.NextSyncCommittee(context.Background(), bs)
+	syncCommittee, err := altair.NextSyncCommittee(t.Context(), bs)
 	require.NoError(t, err)
 	require.NoError(t, bs.SetCurrentSyncCommittee(syncCommittee))
 	pubKeys := make([][]byte, len(deposits))
@@ -254,7 +253,7 @@ func TestGetBellatrixDutiesV2_SyncCommitteeOK(t *testing.T) {
 	req := &ethpb.DutiesRequest{
 		PublicKeys: [][]byte{deposits[0].Data.PublicKey},
 	}
-	res, err := vs.GetDutiesV2(context.Background(), req)
+	res, err := vs.GetDutiesV2(t.Context(), req)
 	require.NoError(t, err, "Could not call epoch committee assignment")
 	if res.CurrentEpochDuties[0].AttesterSlot > bs.Slot()+params.BeaconConfig().SlotsPerEpoch {
 		t.Errorf("Assigned slot %d can't be higher than %d",
@@ -266,7 +265,7 @@ func TestGetBellatrixDutiesV2_SyncCommitteeOK(t *testing.T) {
 	req = &ethpb.DutiesRequest{
 		PublicKeys: [][]byte{deposits[lastValidatorIndex].Data.PublicKey},
 	}
-	res, err = vs.GetDutiesV2(context.Background(), req)
+	res, err = vs.GetDutiesV2(t.Context(), req)
 	require.NoError(t, err, "Could not call epoch committee assignment")
 	if res.CurrentEpochDuties[0].AttesterSlot > bs.Slot()+params.BeaconConfig().SlotsPerEpoch {
 		t.Errorf("Assigned slot %d can't be higher than %d",
@@ -278,7 +277,7 @@ func TestGetBellatrixDutiesV2_SyncCommitteeOK(t *testing.T) {
 		PublicKeys: pubKeys,
 		Epoch:      0,
 	}
-	res, err = vs.GetDutiesV2(context.Background(), req)
+	res, err = vs.GetDutiesV2(t.Context(), req)
 	require.NoError(t, err, "Could not call epoch committee assignment")
 	for i := 0; i < len(res.CurrentEpochDuties); i++ {
 		assert.Equal(t, primitives.ValidatorIndex(i), res.CurrentEpochDuties[i].ValidatorIndex)
@@ -294,7 +293,7 @@ func TestGetBellatrixDutiesV2_SyncCommitteeOK(t *testing.T) {
 		PublicKeys: pubKeys,
 		Epoch:      params.BeaconConfig().EpochsPerSyncCommitteePeriod - 1,
 	}
-	res, err = vs.GetDutiesV2(context.Background(), req)
+	res, err = vs.GetDutiesV2(t.Context(), req)
 	require.NoError(t, err, "Could not call epoch committee assignment")
 	for i := 0; i < len(res.CurrentEpochDuties); i++ {
 		require.NotEqual(t, res.CurrentEpochDuties[i].IsSyncCommittee, res.NextEpochDuties[i].IsSyncCommittee)
@@ -312,7 +311,7 @@ func TestGetAltairDutiesV2_UnknownPubkey(t *testing.T) {
 	require.NoError(t, err)
 	eth1Data, err := util.DeterministicEth1Data(len(deposits))
 	require.NoError(t, err)
-	bs, err := util.GenesisBeaconState(context.Background(), deposits, 0, eth1Data)
+	bs, err := util.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
 	require.NoError(t, err)
 	h := &ethpb.BeaconBlockHeader{
 		StateRoot:  bytesutil.PadTo([]byte{'a'}, fieldparams.RootLength),
@@ -349,7 +348,7 @@ func TestGetAltairDutiesV2_UnknownPubkey(t *testing.T) {
 	req := &ethpb.DutiesRequest{
 		PublicKeys: [][]byte{unknownPubkey},
 	}
-	res, err := vs.GetDutiesV2(context.Background(), req)
+	res, err := vs.GetDutiesV2(t.Context(), req)
 	require.NoError(t, err)
 	assert.Equal(t, false, res.CurrentEpochDuties[0].IsSyncCommittee)
 	assert.Equal(t, false, res.NextEpochDuties[0].IsSyncCommittee)
@@ -391,7 +390,7 @@ func TestGetDutiesV2_StateAdvancement(t *testing.T) {
 	}
 
 	// Verify state processing occurs
-	res, err := vs.GetDutiesV2(context.Background(), req)
+	res, err := vs.GetDutiesV2(t.Context(), req)
 	require.NoError(t, err)
 	require.NotNil(t, res)
 }
@@ -408,7 +407,7 @@ func TestGetDutiesV2_SlotOutOfUpperBound(t *testing.T) {
 	req := &ethpb.DutiesRequest{
 		Epoch: primitives.Epoch(chain.CurrentSlot()/params.BeaconConfig().SlotsPerEpoch + 2),
 	}
-	_, err := vs.GetDutiesV2(context.Background(), req)
+	_, err := vs.GetDutiesV2(t.Context(), req)
 	require.ErrorContains(t, "can not be greater than next epoch", err)
 }
 
@@ -419,7 +418,7 @@ func TestGetDutiesV2_CurrentEpoch_ShouldNotFail(t *testing.T) {
 	require.NoError(t, err)
 	eth1Data, err := util.DeterministicEth1Data(len(deposits))
 	require.NoError(t, err)
-	bState, err := transition.GenesisBeaconState(context.Background(), deposits, 0, eth1Data)
+	bState, err := transition.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
 	require.NoError(t, err, "Could not setup genesis state")
 	// Set state to non-epoch start slot.
 	require.NoError(t, bState.SetSlot(5))
@@ -449,7 +448,7 @@ func TestGetDutiesV2_CurrentEpoch_ShouldNotFail(t *testing.T) {
 	req := &ethpb.DutiesRequest{
 		PublicKeys: [][]byte{deposits[0].Data.PublicKey},
 	}
-	res, err := vs.GetDutiesV2(context.Background(), req)
+	res, err := vs.GetDutiesV2(t.Context(), req)
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(res.CurrentEpochDuties), "Expected 1 assignment")
 }
@@ -462,7 +461,7 @@ func TestGetDutiesV2_MultipleKeys_OK(t *testing.T) {
 	require.NoError(t, err)
 	eth1Data, err := util.DeterministicEth1Data(len(deposits))
 	require.NoError(t, err)
-	bs, err := transition.GenesisBeaconState(context.Background(), deposits, 0, eth1Data)
+	bs, err := transition.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
 	require.NoError(t, err, "Could not setup genesis bs")
 	genesisRoot, err := genesis.Block.HashTreeRoot()
 	require.NoError(t, err, "Could not get signing root")
@@ -492,7 +491,7 @@ func TestGetDutiesV2_MultipleKeys_OK(t *testing.T) {
 	req := &ethpb.DutiesRequest{
 		PublicKeys: [][]byte{pubkey0, pubkey1},
 	}
-	res, err := vs.GetDutiesV2(context.Background(), req)
+	res, err := vs.GetDutiesV2(t.Context(), req)
 	require.NoError(t, err, "Could not call epoch committee assignment")
 	assert.Equal(t, 2, len(res.CurrentEpochDuties))
 	assert.Equal(t, primitives.Slot(4), res.CurrentEpochDuties[0].AttesterSlot)
@@ -515,10 +514,10 @@ func TestGetDutiesV2_NextSyncCommitteePeriod(t *testing.T) {
 	require.NoError(t, err)
 	eth1Data, err := util.DeterministicEth1Data(len(deposits))
 	require.NoError(t, err)
-	st, err := util.GenesisBeaconState(context.Background(), deposits, 0, eth1Data)
+	st, err := util.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
 	require.NoError(t, err)
 
-	syncCommittee, err := altair.NextSyncCommittee(context.Background(), st)
+	syncCommittee, err := altair.NextSyncCommittee(t.Context(), st)
 	require.NoError(t, err)
 	require.NoError(t, st.SetCurrentSyncCommittee(syncCommittee))
 	require.NoError(t, st.SetSlot(params.BeaconConfig().SlotsPerEpoch*primitives.Slot(boundaryEpoch)))
@@ -543,7 +542,7 @@ func TestGetDutiesV2_NextSyncCommitteePeriod(t *testing.T) {
 		SyncChecker:       &mockSync.Sync{IsSyncing: false},
 	}
 
-	res, err := vs.GetDutiesV2(context.Background(), req)
+	res, err := vs.GetDutiesV2(t.Context(), req)
 	require.NoError(t, err)
 
 	//Verify next epoch duties have updated sync committee status
@@ -557,6 +556,6 @@ func TestGetDutiesV2_SyncNotReady(t *testing.T) {
 	vs := &Server{
 		SyncChecker: &mockSync.Sync{IsSyncing: true},
 	}
-	_, err := vs.GetDutiesV2(context.Background(), &ethpb.DutiesRequest{})
+	_, err := vs.GetDutiesV2(t.Context(), &ethpb.DutiesRequest{})
 	assert.ErrorContains(t, "Syncing to latest head", err)
 }

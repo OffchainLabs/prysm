@@ -1,0 +1,2 @@
+### Added 
+- Implement `dataColumnSidecarByRootRPCHandler`.

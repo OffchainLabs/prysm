@@ -215,7 +215,7 @@ func Test_validateMetadata(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := ValidateMetadata(context.Background(), NewValidatorDBMock(), tt.interchangeJSON); (err != nil) != tt.wantErr {
+			if err := ValidateMetadata(t.Context(), NewValidatorDBMock(), tt.interchangeJSON); (err != nil) != tt.wantErr {
 				t.Errorf("validateMetadata() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -267,7 +267,7 @@ func Test_validateMetadataGenesisValidatorsRoot(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			validatorDB := NewValidatorDBMock()
 			require.NoError(t, validatorDB.SaveGenesisValidatorsRoot(ctx, tt.dbGenesisValidatorsRoot))
 			err := ValidateMetadata(ctx, validatorDB, tt.interchangeJSON)

@@ -1,7 +1,6 @@
 package debug
 
 import (
-	"context"
 	"math"
 	"testing"
 
@@ -25,7 +24,7 @@ func addDefaultReplayerBuilder(s *Server, h stategen.HistoryAccessor) {
 
 func TestServer_GetBeaconState(t *testing.T) {
 	db := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	st, err := util.NewBeaconState()
 	require.NoError(t, err)
 	slot := primitives.Slot(100)
@@ -103,6 +102,6 @@ func TestServer_GetBeaconState_RequestFutureSlot(t *testing.T) {
 		},
 	}
 	wanted := "Cannot retrieve information about a slot in the future"
-	_, err := ds.GetBeaconState(context.Background(), req)
+	_, err := ds.GetBeaconState(t.Context(), req)
 	assert.ErrorContains(t, wanted, err)
 }

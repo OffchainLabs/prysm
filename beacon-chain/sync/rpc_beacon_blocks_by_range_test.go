@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"context"
 	"io"
 	"math/big"
 	"sync"
@@ -60,7 +59,7 @@ func TestRPCBeaconBlocksByRange_RPCHandlerReturnsBlocks(t *testing.T) {
 		copy(blk.Block.ParentRoot, prevRoot[:])
 		prevRoot, err = blk.Block.HashTreeRoot()
 		require.NoError(t, err)
-		util.SaveBlock(t, context.Background(), d, blk)
+		util.SaveBlock(t, t.Context(), d, blk)
 	}
 
 	clock := startup.NewClock(time.Unix(0, 0), [32]byte{})
@@ -83,10 +82,10 @@ func TestRPCBeaconBlocksByRange_RPCHandlerReturnsBlocks(t *testing.T) {
 		}
 	})
 
-	stream1, err := p1.BHost.NewStream(context.Background(), p2.BHost.ID(), pcl)
+	stream1, err := p1.BHost.NewStream(t.Context(), p2.BHost.ID(), pcl)
 	require.NoError(t, err)
 
-	err = r.beaconBlocksByRangeRPCHandler(context.Background(), req, stream1)
+	err = r.beaconBlocksByRangeRPCHandler(t.Context(), req, stream1)
 	require.NoError(t, err)
 
 	// Make sure that rate limiter doesn't limit capacity exceedingly.
@@ -122,9 +121,9 @@ func TestRPCBeaconBlocksByRange_ReturnCorrectNumberBack(t *testing.T) {
 			require.NoError(t, err)
 			genRoot = rt
 		}
-		util.SaveBlock(t, context.Background(), d, blk)
+		util.SaveBlock(t, t.Context(), d, blk)
 	}
-	require.NoError(t, d.SaveGenesisBlockRoot(context.Background(), genRoot))
+	require.NoError(t, d.SaveGenesisBlockRoot(t.Context(), genRoot))
 
 	clock := startup.NewClock(time.Unix(0, 0), [32]byte{})
 	// Start service with 160 as allowed blocks capacity (and almost zero capacity recovery).
@@ -154,10 +153,10 @@ func TestRPCBeaconBlocksByRange_ReturnCorrectNumberBack(t *testing.T) {
 		}
 	})
 
-	stream1, err := p1.BHost.NewStream(context.Background(), p2.BHost.ID(), pcl)
+	stream1, err := p1.BHost.NewStream(t.Context(), p2.BHost.ID(), pcl)
 	require.NoError(t, err)
 
-	err = r.beaconBlocksByRangeRPCHandler(context.Background(), newReq, stream1)
+	err = r.beaconBlocksByRangeRPCHandler(t.Context(), newReq, stream1)
 	require.NoError(t, err)
 
 	if util.WaitTimeout(&wg, 1*time.Second) {
@@ -231,9 +230,9 @@ func TestRPCBeaconBlocksByRange_ReconstructsPayloads(t *testing.T) {
 			require.NoError(t, err)
 			genRoot = rt
 		}
-		util.SaveBlock(t, context.Background(), d, blk)
+		util.SaveBlock(t, t.Context(), d, blk)
 	}
-	require.NoError(t, d.SaveGenesisBlockRoot(context.Background(), genRoot))
+	require.NoError(t, d.SaveGenesisBlockRoot(t.Context(), genRoot))
 
 	clock := startup.NewClock(time.Unix(0, 0), [32]byte{})
 	// Start service with 160 as allowed blocks capacity (and almost zero capacity recovery).
@@ -274,10 +273,10 @@ func TestRPCBeaconBlocksByRange_ReconstructsPayloads(t *testing.T) {
 		require.Equal(t, uint64(1), mockEngine.NumReconstructedPayloads)
 	})
 
-	stream1, err := p1.BHost.NewStream(context.Background(), p2.BHost.ID(), pcl)
+	stream1, err := p1.BHost.NewStream(t.Context(), p2.BHost.ID(), pcl)
 	require.NoError(t, err)
 
-	err = r.beaconBlocksByRangeRPCHandler(context.Background(), newReq, stream1)
+	err = r.beaconBlocksByRangeRPCHandler(t.Context(), newReq, stream1)
 	require.NoError(t, err)
 
 	if util.WaitTimeout(&wg, 1*time.Second) {
@@ -310,7 +309,7 @@ func TestRPCBeaconBlocksByRange_RPCHandlerReturnsSortedBlocks(t *testing.T) {
 		require.NoError(t, err)
 		expectedRoots[j] = rt
 		prevRoot = rt
-		util.SaveBlock(t, context.Background(), d, blk)
+		util.SaveBlock(t, t.Context(), d, blk)
 		j++
 	}
 
@@ -342,9 +341,9 @@ func TestRPCBeaconBlocksByRange_RPCHandlerReturnsSortedBlocks(t *testing.T) {
 		}
 	})
 
-	stream1, err := p1.BHost.NewStream(context.Background(), p2.BHost.ID(), pcl)
+	stream1, err := p1.BHost.NewStream(t.Context(), p2.BHost.ID(), pcl)
 	require.NoError(t, err)
-	require.NoError(t, r.beaconBlocksByRangeRPCHandler(context.Background(), req, stream1))
+	require.NoError(t, r.beaconBlocksByRangeRPCHandler(t.Context(), req, stream1))
 
 	if util.WaitTimeout(&wg, 1*time.Second) {
 		t.Fatal("Did not receive stream within 1 sec")
@@ -375,9 +374,9 @@ func TestRPCBeaconBlocksByRange_ReturnsGenesisBlock(t *testing.T) {
 
 		// Save genesis block
 		if i == 0 {
-			require.NoError(t, d.SaveGenesisBlockRoot(context.Background(), rt))
+			require.NoError(t, d.SaveGenesisBlockRoot(t.Context(), rt))
 		}
-		util.SaveBlock(t, context.Background(), d, blk)
+		util.SaveBlock(t, t.Context(), d, blk)
 		prevRoot = rt
 	}
 
@@ -403,9 +402,9 @@ func TestRPCBeaconBlocksByRange_ReturnsGenesisBlock(t *testing.T) {
 		}
 	})
 
-	stream1, err := p1.BHost.NewStream(context.Background(), p2.BHost.ID(), pcl)
+	stream1, err := p1.BHost.NewStream(t.Context(), p2.BHost.ID(), pcl)
 	require.NoError(t, err)
-	require.NoError(t, r.beaconBlocksByRangeRPCHandler(context.Background(), req, stream1))
+	require.NoError(t, r.beaconBlocksByRangeRPCHandler(t.Context(), req, stream1))
 
 	if util.WaitTimeout(&wg, 1*time.Second) {
 		t.Fatal("Did not receive stream within 1 sec")
@@ -425,7 +424,7 @@ func TestRPCBeaconBlocksByRange_RPCHandlerRateLimitOverflow(t *testing.T) {
 			if req.Step == 1 {
 				block.Block.ParentRoot = parentRoot[:]
 			}
-			util.SaveBlock(t, context.Background(), d, block)
+			util.SaveBlock(t, t.Context(), d, block)
 			rt, err := block.Block.HashTreeRoot()
 			require.NoError(t, err)
 			parentRoot = rt
@@ -454,9 +453,9 @@ func TestRPCBeaconBlocksByRange_RPCHandlerRateLimitOverflow(t *testing.T) {
 				}
 			}
 		})
-		stream, err := p1.BHost.NewStream(context.Background(), p2.BHost.ID(), pcl)
+		stream, err := p1.BHost.NewStream(t.Context(), p2.BHost.ID(), pcl)
 		require.NoError(t, err)
-		if err := r.beaconBlocksByRangeRPCHandler(context.Background(), req, stream); err != nil {
+		if err := r.beaconBlocksByRangeRPCHandler(t.Context(), req, stream); err != nil {
 			return err
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -678,7 +677,7 @@ func TestRPCBeaconBlocksByRange_EnforceResponseInvariants(t *testing.T) {
 			block := util.NewBeaconBlock()
 			block.Block.Slot = i
 			block.Block.ParentRoot = parentRoot[:]
-			util.SaveBlock(t, context.Background(), d, block)
+			util.SaveBlock(t, t.Context(), d, block)
 			rt, err := block.Block.HashTreeRoot()
 			require.NoError(t, err)
 			parentRoot = rt
@@ -703,9 +702,9 @@ func TestRPCBeaconBlocksByRange_EnforceResponseInvariants(t *testing.T) {
 			}
 			processBlocks(blocks)
 		})
-		stream, err := p1.BHost.NewStream(context.Background(), p2.BHost.ID(), pcl)
+		stream, err := p1.BHost.NewStream(t.Context(), p2.BHost.ID(), pcl)
 		require.NoError(t, err)
-		if err := r.beaconBlocksByRangeRPCHandler(context.Background(), req, stream); err != nil {
+		if err := r.beaconBlocksByRangeRPCHandler(t.Context(), req, stream); err != nil {
 			return err
 		}
 		if util.WaitTimeout(&wg, 1*time.Second) {
@@ -754,8 +753,8 @@ func TestRPCBeaconBlocksByRange_FilterBlocks(t *testing.T) {
 		previousRoot, err := blk.Block.HashTreeRoot()
 		require.NoError(t, err)
 
-		util.SaveBlock(t, context.Background(), d, blk)
-		require.NoError(t, d.SaveGenesisBlockRoot(context.Background(), previousRoot))
+		util.SaveBlock(t, t.Context(), d, blk)
+		require.NoError(t, d.SaveGenesisBlockRoot(t.Context(), previousRoot))
 		blks := make([]*ethpb.SignedBeaconBlock, req.Count)
 		// Populate the database with blocks that would match the request.
 		for i, j := req.StartSlot, 0; i < req.StartSlot.Add(req.Step*req.Count); i += primitives.Slot(req.Step) {
@@ -769,7 +768,7 @@ func TestRPCBeaconBlocksByRange_FilterBlocks(t *testing.T) {
 			require.NoError(t, err)
 			previousRoot, err = blks[j].Block.HashTreeRoot()
 			require.NoError(t, err)
-			util.SaveBlock(t, context.Background(), d, blks[j])
+			util.SaveBlock(t, t.Context(), d, blks[j])
 			j++
 		}
 		stateSummaries := make([]*ethpb.StateSummary, len(blks))
@@ -787,8 +786,8 @@ func TestRPCBeaconBlocksByRange_FilterBlocks(t *testing.T) {
 				}
 				chain.CanonicalRoots[bRoot] = true
 			}
-			require.NoError(t, d.SaveStateSummaries(context.Background(), stateSummaries))
-			require.NoError(t, d.SaveFinalizedCheckpoint(context.Background(), &ethpb.Checkpoint{
+			require.NoError(t, d.SaveStateSummaries(t.Context(), stateSummaries))
+			require.NoError(t, d.SaveFinalizedCheckpoint(t.Context(), &ethpb.Checkpoint{
 				Epoch: slots.ToEpoch(stateSummaries[len(stateSummaries)-1].Slot),
 				Root:  stateSummaries[len(stateSummaries)-1].Root,
 			}))
@@ -802,8 +801,8 @@ func TestRPCBeaconBlocksByRange_FilterBlocks(t *testing.T) {
 		require.NoError(t, err)
 		genRoot := previousRoot
 
-		util.SaveBlock(t, context.Background(), d, blk)
-		require.NoError(t, d.SaveGenesisBlockRoot(context.Background(), previousRoot))
+		util.SaveBlock(t, t.Context(), d, blk)
+		require.NoError(t, d.SaveGenesisBlockRoot(t.Context(), previousRoot))
 		blks := make([]*ethpb.SignedBeaconBlock, req.Count)
 		// Populate the database with blocks with non linear roots.
 		for i, j := req.StartSlot, 0; i < req.StartSlot.Add(req.Step*req.Count); i += primitives.Slot(req.Step) {
@@ -821,7 +820,7 @@ func TestRPCBeaconBlocksByRange_FilterBlocks(t *testing.T) {
 			require.NoError(t, err)
 			previousRoot, err = blks[j].Block.HashTreeRoot()
 			require.NoError(t, err)
-			util.SaveBlock(t, context.Background(), d, blks[j])
+			util.SaveBlock(t, t.Context(), d, blks[j])
 			j++
 		}
 		stateSummaries := make([]*ethpb.StateSummary, len(blks))
@@ -838,8 +837,8 @@ func TestRPCBeaconBlocksByRange_FilterBlocks(t *testing.T) {
 				}
 				chain.CanonicalRoots[bRoot] = true
 			}
-			require.NoError(t, d.SaveStateSummaries(context.Background(), stateSummaries))
-			require.NoError(t, d.SaveFinalizedCheckpoint(context.Background(), &ethpb.Checkpoint{
+			require.NoError(t, d.SaveStateSummaries(t.Context(), stateSummaries))
+			require.NoError(t, d.SaveFinalizedCheckpoint(t.Context(), &ethpb.Checkpoint{
 				Epoch: slots.ToEpoch(stateSummaries[len(stateSummaries)-1].Slot),
 				Root:  stateSummaries[len(stateSummaries)-1].Root,
 			}))
@@ -870,9 +869,9 @@ func TestRPCBeaconBlocksByRange_FilterBlocks(t *testing.T) {
 			}
 			processBlocks(blocks)
 		})
-		stream, err := p1.BHost.NewStream(context.Background(), p2.BHost.ID(), pcl)
+		stream, err := p1.BHost.NewStream(t.Context(), p2.BHost.ID(), pcl)
 		require.NoError(t, err)
-		if err := r.beaconBlocksByRangeRPCHandler(context.Background(), req, stream); err != nil {
+		if err := r.beaconBlocksByRangeRPCHandler(t.Context(), req, stream); err != nil {
 			return err
 		}
 		if util.WaitTimeout(&wg, 1*time.Second) {
@@ -1096,7 +1095,7 @@ func TestRPCBeaconBlocksByRange_FilterBlocks_PreviousRoot(t *testing.T) {
 
 	chain := &chainMock.ChainService{}
 	cf := canonicalFilter{canonical: chain.IsCanonical}
-	seq, nseq, err := cf.filter(context.Background(), blks)
+	seq, nseq, err := cf.filter(t.Context(), blks)
 	require.NoError(t, err)
 	require.Equal(t, len(blks), len(seq))
 	require.Equal(t, 0, len(nseq))

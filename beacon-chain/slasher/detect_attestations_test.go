@@ -623,7 +623,7 @@ func Test_processAttestations(t *testing.T) {
 			name := version.String(tt.ver) + ": " + tt.name
 			t.Run(name, func(t *testing.T) {
 				// Create context.
-				ctx := context.Background()
+				ctx := t.Context()
 
 				// Configure logging.
 				hook := logTest.NewGlobal()
@@ -651,7 +651,7 @@ func Test_processAttestations(t *testing.T) {
 				}
 
 				// Create the slasher service.
-				slasherService, err := New(context.Background(), serviceConfig)
+				slasherService, err := New(t.Context(), serviceConfig)
 				require.NoError(t, err)
 
 				// Initialize validators in the state.
@@ -791,7 +791,7 @@ func Test_processQueuedAttestations_MultipleChunkIndices(t *testing.T) {
 	defer hook.Reset()
 
 	slasherDB := dbtest.SetupSlasherDB(t)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	slasherParams := DefaultParams()
 
 	// We process submit attestations from chunk index 0 to chunk index 1.
@@ -812,7 +812,7 @@ func Test_processQueuedAttestations_MultipleChunkIndices(t *testing.T) {
 		State: beaconState,
 	}
 
-	s, err := New(context.Background(),
+	s, err := New(t.Context(),
 		&ServiceConfig{
 			Database:                slasherDB,
 			StateNotifier:           &mock.MockStateNotifier{},
@@ -861,7 +861,7 @@ func Test_processQueuedAttestations_OverlappingChunkIndices(t *testing.T) {
 	defer hook.Reset()
 
 	slasherDB := dbtest.SetupSlasherDB(t)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	slasherParams := DefaultParams()
 
 	startEpoch := primitives.Epoch(slasherParams.chunkSize)
@@ -877,7 +877,7 @@ func Test_processQueuedAttestations_OverlappingChunkIndices(t *testing.T) {
 		State: beaconState,
 	}
 
-	s, err := New(context.Background(),
+	s, err := New(t.Context(),
 		&ServiceConfig{
 			Database:                slasherDB,
 			StateNotifier:           &mock.MockStateNotifier{},
@@ -1136,7 +1136,7 @@ func Test_updatedChunkByChunkIndex(t *testing.T) {
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create context.
-			ctx := context.Background()
+			ctx := t.Context()
 
 			// Initialize the slasher database.
 			slasherDB := dbtest.SetupSlasherDB(t)
@@ -1215,9 +1215,9 @@ func Test_updatedChunkByChunkIndex(t *testing.T) {
 }
 
 func Test_applyAttestationForValidator_MinSpanChunk(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	slasherDB := dbtest.SetupSlasherDB(t)
-	srv, err := New(context.Background(),
+	srv, err := New(t.Context(),
 		&ServiceConfig{
 			Database:      slasherDB,
 			StateNotifier: &mock.MockStateNotifier{},
@@ -1272,9 +1272,9 @@ func Test_applyAttestationForValidator_MinSpanChunk(t *testing.T) {
 }
 
 func Test_applyAttestationForValidator_MaxSpanChunk(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	slasherDB := dbtest.SetupSlasherDB(t)
-	srv, err := New(context.Background(),
+	srv, err := New(t.Context(),
 		&ServiceConfig{
 			Database:      slasherDB,
 			StateNotifier: &mock.MockStateNotifier{},
@@ -1338,10 +1338,10 @@ func Test_loadChunks_MaxSpans(t *testing.T) {
 
 func testLoadChunks(t *testing.T, kind slashertypes.ChunkKind) {
 	slasherDB := dbtest.SetupSlasherDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Check if the chunk at chunk index already exists in-memory.
-	s, err := New(context.Background(),
+	s, err := New(t.Context(),
 		&ServiceConfig{
 			Database:      slasherDB,
 			StateNotifier: &mock.MockStateNotifier{},
@@ -1419,7 +1419,7 @@ func TestService_processQueuedAttestations(t *testing.T) {
 		Slot:  &slot,
 	}
 
-	s, err := New(context.Background(),
+	s, err := New(t.Context(),
 		&ServiceConfig{
 			Database:         slasherDB,
 			StateNotifier:    &mock.MockStateNotifier{},
@@ -1431,7 +1431,7 @@ func TestService_processQueuedAttestations(t *testing.T) {
 	s.attsQueue.extend([]*slashertypes.IndexedAttestationWrapper{
 		createAttestationWrapperEmptySig(t, version.Phase0, 0, 1, []uint64{0, 1} /* indices */, nil /* signingRoot */),
 	})
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	tickerChan := make(chan primitives.Slot)
 	s.wg.Add(1)
 	go func() {
@@ -1458,7 +1458,7 @@ func Benchmark_saveChunksToDisk(b *testing.B) {
 	params := DefaultParams()
 
 	// Get a context.
-	ctx := context.Background()
+	ctx := b.Context()
 
 	chunkByChunkIndexByValidatorChunkIndex := make(map[uint64]map[uint64]Chunker, validatorsChunksCount)
 
@@ -1503,7 +1503,7 @@ func BenchmarkCheckSlashableAttestations(b *testing.B) {
 		Slot:  &slot,
 	}
 
-	s, err := New(context.Background(), &ServiceConfig{
+	s, err := New(b.Context(), &ServiceConfig{
 		Database:         slasherDB,
 		StateNotifier:    &mock.MockStateNotifier{},
 		HeadStateFetcher: mockChain,
@@ -1578,7 +1578,7 @@ func runAttestationsBenchmark(b *testing.B, s *Service, numAtts, numValidators u
 		s.genesisTime = genesisTime
 
 		epoch := slots.EpochsSinceGenesis(genesisTime)
-		_, err := s.checkSlashableAttestations(context.Background(), epoch, atts)
+		_, err := s.checkSlashableAttestations(b.Context(), epoch, atts)
 		require.NoError(b, err)
 	}
 }
@@ -1595,7 +1595,7 @@ func Benchmark_checkSurroundVotes(b *testing.B) {
 		currentEpoch = 43
 	)
 	// Create a context.
-	ctx := context.Background()
+	ctx := b.Context()
 
 	// Initialize the slasher database.
 	slasherDB := dbtest.SetupSlasherDB(b)

@@ -48,7 +48,7 @@ func TestServer_AuthenticateUsingExistingToken(t *testing.T) {
 	ctxMD := map[string][]string{
 		"authorization": {"Bearer " + srv.authToken},
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	ctx = metadata.NewIncomingContext(ctx, ctxMD)
 	_, err = srv.AuthTokenInterceptor()(ctx, "xyz", unaryInfo, unaryHandler)
 	require.NoError(t, err)
@@ -77,7 +77,7 @@ func TestServer_RefreshAuthTokenOnFileChange(t *testing.T) {
 	require.NoError(t, err)
 	currentToken := srv.authToken
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	go srv.refreshAuthTokenFromFileChanges(ctx, srv.authTokenPath)
 

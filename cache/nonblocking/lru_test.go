@@ -16,7 +16,7 @@ func TestLRU_Concurrency(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*2)
 	defer cancel()
 	for i := 0; i < 100; i++ {
 		go func(j int) {

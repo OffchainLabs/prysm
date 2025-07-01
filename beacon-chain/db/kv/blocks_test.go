@@ -1,7 +1,6 @@
 package kv
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -156,7 +155,7 @@ var blockTests = []struct {
 func TestStore_SaveBlock_NoDuplicates(t *testing.T) {
 	BlockCacheSize = 1
 	slot := primitives.Slot(20)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range blockTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -187,7 +186,7 @@ func TestStore_SaveBlock_NoDuplicates(t *testing.T) {
 }
 
 func TestStore_BlocksCRUD(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range blockTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -252,7 +251,7 @@ func TestStore_BlocksHandleZeroCase(t *testing.T) {
 	for _, tt := range blockTests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := setupDB(t)
-			ctx := context.Background()
+			ctx := t.Context()
 			numBlocks := 10
 			totalBlocks := make([]interfaces.ReadOnlySignedBeaconBlock, numBlocks)
 			for i := 0; i < len(totalBlocks); i++ {
@@ -275,7 +274,7 @@ func TestStore_BlocksHandleInvalidEndSlot(t *testing.T) {
 	for _, tt := range blockTests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := setupDB(t)
-			ctx := context.Background()
+			ctx := t.Context()
 			numBlocks := 10
 			totalBlocks := make([]interfaces.ReadOnlySignedBeaconBlock, numBlocks)
 			// Save blocks from slot 1 onwards.
@@ -302,7 +301,7 @@ func TestStore_BlocksHandleInvalidEndSlot(t *testing.T) {
 func TestStore_DeleteBlock(t *testing.T) {
 	slotsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch)
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	require.NoError(t, db.SaveGenesisBlockRoot(ctx, genesisBlockRoot))
 	blks := makeBlocks(t, 0, slotsPerEpoch*4, genesisBlockRoot)
@@ -349,7 +348,7 @@ func TestStore_DeleteBlock(t *testing.T) {
 
 func TestStore_DeleteJustifiedBlock(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	b := util.NewBeaconBlock()
 	b.Block.Slot = 1
 	root, err := b.Block.HashTreeRoot()
@@ -369,7 +368,7 @@ func TestStore_DeleteJustifiedBlock(t *testing.T) {
 
 func TestStore_DeleteFinalizedBlock(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	b := util.NewBeaconBlock()
 	root, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
@@ -389,7 +388,7 @@ func TestStore_DeleteFinalizedBlock(t *testing.T) {
 
 func TestStore_HistoricalDataBeforeSlot(t *testing.T) {
 	slotsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	tests := []struct {
 		name             string
@@ -608,7 +607,7 @@ func TestStore_HistoricalDataBeforeSlot(t *testing.T) {
 
 func TestStore_GenesisBlock(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	genesisBlock := util.NewBeaconBlock()
 	genesisBlock.Block.ParentRoot = bytesutil.PadTo([]byte{1, 2, 3}, 32)
 	blockRoot, err := genesisBlock.Block.HashTreeRoot()
@@ -628,7 +627,7 @@ func TestStore_BlocksCRUD_NoCache(t *testing.T) {
 	for _, tt := range blockTests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := setupDB(t)
-			ctx := context.Background()
+			ctx := t.Context()
 			blk, err := tt.newBlock(primitives.Slot(20), bytesutil.PadTo([]byte{1, 2, 3}, 32))
 			require.NoError(t, err)
 			blockRoot, err := blk.Block().HashTreeRoot()
@@ -677,7 +676,7 @@ func TestStore_Blocks_FiltersCorrectly(t *testing.T) {
 				b7,
 				b8,
 			}
-			ctx := context.Background()
+			ctx := t.Context()
 			require.NoError(t, db.SaveBlocks(ctx, blocks))
 
 			tests := []struct {
@@ -775,7 +774,7 @@ func testSlotSlice(start, end primitives.Slot) []primitives.Slot {
 func TestCleanupMissingBlockIndices(t *testing.T) {
 	for _, tt := range blockTests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			db := setupDB(t)
 			chain := testBlockChain(t, tt.newBlock, testSlotSlice(1, 10), nil)
 			require.NoError(t, db.SaveBlocks(ctx, chain))
@@ -805,7 +804,7 @@ func TestCleanupMissingBlockIndices(t *testing.T) {
 func TestCleanupMissingForkedBlockIndices(t *testing.T) {
 	for _, tt := range blockTests[0:1] {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			db := setupDB(t)
 
 			chain := testBlockChain(t, tt.newBlock, testSlotSlice(1, 10), nil)
@@ -861,7 +860,7 @@ func TestCleanupMissingForkedBlockIndices(t *testing.T) {
 func TestStore_Blocks_VerifyBlockRoots(t *testing.T) {
 	for _, tt := range blockTests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			db := setupDB(t)
 			b1, err := tt.newBlock(primitives.Slot(1), nil)
 			require.NoError(t, err)
@@ -894,7 +893,7 @@ func TestStore_Blocks_Retrieve_SlotRange(t *testing.T) {
 				require.NoError(t, err)
 				totalBlocks[i] = b
 			}
-			ctx := context.Background()
+			ctx := t.Context()
 			require.NoError(t, db.SaveBlocks(ctx, totalBlocks))
 			retrieved, _, err := db.Blocks(ctx, filters.NewFilter().SetStartSlot(100).SetEndSlot(399))
 			require.NoError(t, err)
@@ -914,7 +913,7 @@ func TestStore_Blocks_Retrieve_Epoch(t *testing.T) {
 				require.NoError(t, err)
 				totalBlocks[i] = b
 			}
-			ctx := context.Background()
+			ctx := t.Context()
 			require.NoError(t, db.SaveBlocks(ctx, totalBlocks))
 			retrieved, _, err := db.Blocks(ctx, filters.NewFilter().SetStartEpoch(5).SetEndEpoch(6))
 			require.NoError(t, err)
@@ -939,7 +938,7 @@ func TestStore_Blocks_Retrieve_SlotRangeWithStep(t *testing.T) {
 				totalBlocks[i] = b
 			}
 			const step = 2
-			ctx := context.Background()
+			ctx := t.Context()
 			require.NoError(t, db.SaveBlocks(ctx, totalBlocks))
 			retrieved, _, err := db.Blocks(ctx, filters.NewFilter().SetStartSlot(100).SetEndSlot(399).SetSlotStep(step))
 			require.NoError(t, err)
@@ -955,7 +954,7 @@ func TestStore_SaveBlock_CanGetHighestAt(t *testing.T) {
 	for _, tt := range blockTests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := setupDB(t)
-			ctx := context.Background()
+			ctx := t.Context()
 
 			block1, err := tt.newBlock(primitives.Slot(1), nil)
 			require.NoError(t, err)
@@ -1029,7 +1028,7 @@ func TestStore_GenesisBlock_CanGetHighestAt(t *testing.T) {
 	for _, tt := range blockTests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := setupDB(t)
-			ctx := context.Background()
+			ctx := t.Context()
 
 			genesisBlock, err := tt.newBlock(primitives.Slot(0), nil)
 			require.NoError(t, err)
@@ -1099,7 +1098,7 @@ func TestStore_SaveBlocks_HasCachedBlocks(t *testing.T) {
 	for _, tt := range blockTests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := setupDB(t)
-			ctx := context.Background()
+			ctx := t.Context()
 
 			b := make([]interfaces.ReadOnlySignedBeaconBlock, 500)
 			for i := 0; i < 500; i++ {
@@ -1123,7 +1122,7 @@ func TestStore_SaveBlocks_HasRootsMatched(t *testing.T) {
 	for _, tt := range blockTests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := setupDB(t)
-			ctx := context.Background()
+			ctx := t.Context()
 
 			b := make([]interfaces.ReadOnlySignedBeaconBlock, 500)
 			for i := 0; i < 500; i++ {
@@ -1152,7 +1151,7 @@ func TestStore_BlocksBySlot_BlockRootsBySlot(t *testing.T) {
 	for _, tt := range blockTests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := setupDB(t)
-			ctx := context.Background()
+			ctx := t.Context()
 
 			b1, err := tt.newBlock(primitives.Slot(20), nil)
 			require.NoError(t, err)
@@ -1233,7 +1232,7 @@ func TestStore_BlocksBySlot_BlockRootsBySlot(t *testing.T) {
 
 func TestStore_FeeRecipientByValidatorID(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	ids := []primitives.ValidatorIndex{0, 0, 0}
 	feeRecipients := []common.Address{{}, {}, {}, {}}
 	require.ErrorContains(t, "validatorIDs and feeRecipients must be the same length", db.SaveFeeRecipientsByValidatorIDs(ctx, ids, feeRecipients))
@@ -1273,7 +1272,7 @@ func TestStore_FeeRecipientByValidatorID(t *testing.T) {
 
 func TestStore_RegistrationsByValidatorID(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	ids := []primitives.ValidatorIndex{0, 0, 0}
 	regs := []*ethpb.ValidatorRegistrationV1{{}, {}, {}, {}}
 	require.ErrorContains(t, "ids and registrations must be the same length", db.SaveRegistrationsByValidatorIDs(ctx, ids, regs))

@@ -1,7 +1,6 @@
 package initialsync
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -152,7 +151,7 @@ func TestOnDataReceivedDownscore(t *testing.T) {
 			if c.downPeer == testDownscoreBlob {
 				require.Equal(t, true, verification.IsBlobValidationFailure(c.err))
 			}
-			ctx := context.Background()
+			ctx := t.Context()
 			p2p := p2pt.NewTestP2P(t)
 			mc := &mock.ChainService{Genesis: time.Now(), ValidatorsRoot: [32]byte{}}
 			fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
@@ -167,7 +166,7 @@ func TestOnDataReceivedDownscore(t *testing.T) {
 				chain:               mc})
 			sm := q.smm.addStateMachine(0)
 			sm.state = stateScheduled
-			handle := q.onDataReceivedEvent(context.Background())
+			handle := q.onDataReceivedEvent(t.Context())
 			endState, err := handle(sm, data)
 			if c.err != nil {
 				require.ErrorIs(t, err, c.err)

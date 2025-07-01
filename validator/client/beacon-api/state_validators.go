@@ -21,7 +21,7 @@ type StateValidatorsProvider interface {
 }
 
 type beaconApiStateValidatorsProvider struct {
-	jsonRestHandler JsonRestHandler
+	jsonRestHandler RestHandler
 }
 
 func (c beaconApiStateValidatorsProvider) StateValidators(

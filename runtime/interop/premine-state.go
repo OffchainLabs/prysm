@@ -160,7 +160,7 @@ func (s *PremineGenesisConfig) empty() (state.BeaconState, error) {
 			return nil, err
 		}
 	case version.Fulu:
-		e, err = state_native.InitializeFromProtoFulu(&ethpb.BeaconStateElectra{})
+		e, err = state_native.InitializeFromProtoFulu(&ethpb.BeaconStateFulu{})
 		if err != nil {
 			return nil, err
 		}

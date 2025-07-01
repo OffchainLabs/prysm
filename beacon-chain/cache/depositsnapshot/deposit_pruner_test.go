@@ -1,7 +1,6 @@
 package depositsnapshot
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
@@ -22,7 +21,7 @@ func TestPrunePendingDeposits_ZeroMerkleIndex(t *testing.T) {
 		{Eth1BlockHeight: 12, Index: 12},
 	}
 
-	dc.PrunePendingDeposits(context.Background(), 0)
+	dc.PrunePendingDeposits(t.Context(), 0)
 	expected := []*ethpb.DepositContainer{
 		{Eth1BlockHeight: 2, Index: 2},
 		{Eth1BlockHeight: 4, Index: 4},
@@ -46,7 +45,7 @@ func TestPrunePendingDeposits_OK(t *testing.T) {
 		{Eth1BlockHeight: 12, Index: 12},
 	}
 
-	dc.PrunePendingDeposits(context.Background(), 6)
+	dc.PrunePendingDeposits(t.Context(), 6)
 	expected := []*ethpb.DepositContainer{
 		{Eth1BlockHeight: 6, Index: 6},
 		{Eth1BlockHeight: 8, Index: 8},
@@ -65,7 +64,7 @@ func TestPrunePendingDeposits_OK(t *testing.T) {
 		{Eth1BlockHeight: 12, Index: 12},
 	}
 
-	dc.PrunePendingDeposits(context.Background(), 10)
+	dc.PrunePendingDeposits(t.Context(), 10)
 	expected = []*ethpb.DepositContainer{
 		{Eth1BlockHeight: 10, Index: 10},
 		{Eth1BlockHeight: 12, Index: 12},
@@ -86,7 +85,7 @@ func TestPruneAllPendingDeposits(t *testing.T) {
 		{Eth1BlockHeight: 12, Index: 12},
 	}
 
-	dc.PruneAllPendingDeposits(context.Background())
+	dc.PruneAllPendingDeposits(t.Context())
 	expected := []*ethpb.DepositContainer{}
 
 	assert.DeepEqual(t, expected, dc.pendingDeposits)
@@ -128,10 +127,10 @@ func TestPruneProofs_Ok(t *testing.T) {
 	}
 
 	for _, ins := range deposits {
-		assert.NoError(t, dc.InsertDeposit(context.Background(), ins.deposit, ins.blkNum, ins.index, [32]byte{}))
+		assert.NoError(t, dc.InsertDeposit(t.Context(), ins.deposit, ins.blkNum, ins.index, [32]byte{}))
 	}
 
-	require.NoError(t, dc.PruneProofs(context.Background(), 1))
+	require.NoError(t, dc.PruneProofs(t.Context(), 1))
 
 	assert.DeepEqual(t, [][]byte(nil), dc.deposits[0].Deposit.Proof)
 	assert.DeepEqual(t, [][]byte(nil), dc.deposits[1].Deposit.Proof)
@@ -173,10 +172,10 @@ func TestPruneProofs_SomeAlreadyPruned(t *testing.T) {
 	}
 
 	for _, ins := range deposits {
-		assert.NoError(t, dc.InsertDeposit(context.Background(), ins.deposit, ins.blkNum, ins.index, [32]byte{}))
+		assert.NoError(t, dc.InsertDeposit(t.Context(), ins.deposit, ins.blkNum, ins.index, [32]byte{}))
 	}
 
-	require.NoError(t, dc.PruneProofs(context.Background(), 2))
+	require.NoError(t, dc.PruneProofs(t.Context(), 2))
 
 	assert.DeepEqual(t, [][]byte(nil), dc.deposits[2].Deposit.Proof)
 }
@@ -217,10 +216,10 @@ func TestPruneProofs_PruneAllWhenDepositIndexTooBig(t *testing.T) {
 	}
 
 	for _, ins := range deposits {
-		assert.NoError(t, dc.InsertDeposit(context.Background(), ins.deposit, ins.blkNum, ins.index, [32]byte{}))
+		assert.NoError(t, dc.InsertDeposit(t.Context(), ins.deposit, ins.blkNum, ins.index, [32]byte{}))
 	}
 
-	require.NoError(t, dc.PruneProofs(context.Background(), 99))
+	require.NoError(t, dc.PruneProofs(t.Context(), 99))
 
 	assert.DeepEqual(t, [][]byte(nil), dc.deposits[0].Deposit.Proof)
 	assert.DeepEqual(t, [][]byte(nil), dc.deposits[1].Deposit.Proof)
@@ -264,10 +263,10 @@ func TestPruneProofs_CorrectlyHandleLastIndex(t *testing.T) {
 	}
 
 	for _, ins := range deposits {
-		assert.NoError(t, dc.InsertDeposit(context.Background(), ins.deposit, ins.blkNum, ins.index, [32]byte{}))
+		assert.NoError(t, dc.InsertDeposit(t.Context(), ins.deposit, ins.blkNum, ins.index, [32]byte{}))
 	}
 
-	require.NoError(t, dc.PruneProofs(context.Background(), 4))
+	require.NoError(t, dc.PruneProofs(t.Context(), 4))
 
 	assert.DeepEqual(t, [][]byte(nil), dc.deposits[0].Deposit.Proof)
 	assert.DeepEqual(t, [][]byte(nil), dc.deposits[1].Deposit.Proof)
@@ -311,10 +310,10 @@ func TestPruneAllProofs(t *testing.T) {
 	}
 
 	for _, ins := range deposits {
-		assert.NoError(t, dc.InsertDeposit(context.Background(), ins.deposit, ins.blkNum, ins.index, [32]byte{}))
+		assert.NoError(t, dc.InsertDeposit(t.Context(), ins.deposit, ins.blkNum, ins.index, [32]byte{}))
 	}
 
-	dc.PruneAllProofs(context.Background())
+	dc.PruneAllProofs(t.Context())
 
 	assert.DeepEqual(t, [][]byte(nil), dc.deposits[0].Deposit.Proof)
 	assert.DeepEqual(t, [][]byte(nil), dc.deposits[1].Deposit.Proof)

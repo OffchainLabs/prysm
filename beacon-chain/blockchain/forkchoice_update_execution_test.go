@@ -1,7 +1,6 @@
 package blockchain
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -36,29 +35,29 @@ func TestService_isNewHead(t *testing.T) {
 func TestService_getHeadStateAndBlock(t *testing.T) {
 	beaconDB := testDB.SetupDB(t)
 	service := setupBeaconChain(t, beaconDB)
-	_, _, err := service.getStateAndBlock(context.Background(), [32]byte{})
+	_, _, err := service.getStateAndBlock(t.Context(), [32]byte{})
 	require.ErrorContains(t, "block does not exist", err)
 
 	blk, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlock(&ethpb.SignedBeaconBlock{Signature: []byte{1}}))
 	require.NoError(t, err)
-	require.NoError(t, service.cfg.BeaconDB.SaveBlock(context.Background(), blk))
+	require.NoError(t, service.cfg.BeaconDB.SaveBlock(t.Context(), blk))
 
 	st, _ := util.DeterministicGenesisState(t, 1)
 	r, err := blk.Block().HashTreeRoot()
 	require.NoError(t, err)
-	require.NoError(t, service.cfg.BeaconDB.SaveState(context.Background(), st, r))
+	require.NoError(t, service.cfg.BeaconDB.SaveState(t.Context(), st, r))
 
-	gotState, err := service.cfg.BeaconDB.State(context.Background(), r)
+	gotState, err := service.cfg.BeaconDB.State(t.Context(), r)
 	require.NoError(t, err)
 	require.DeepEqual(t, st.ToProto(), gotState.ToProto())
 
-	gotBlk, err := service.cfg.BeaconDB.Block(context.Background(), r)
+	gotBlk, err := service.cfg.BeaconDB.Block(t.Context(), r)
 	require.NoError(t, err)
 	require.DeepEqual(t, blk, gotBlk)
 }
 
 func TestService_forkchoiceUpdateWithExecution_exceptionalCases(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	opts := testServiceOptsWithDB(t)
 
 	service, err := NewService(ctx, opts...)

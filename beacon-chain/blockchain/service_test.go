@@ -42,7 +42,7 @@ import (
 )
 
 func setupBeaconChain(t *testing.T, beaconDB db.Database) *Service {
-	ctx := context.Background()
+	ctx := t.Context()
 	var web3Service *execution.Service
 	var err error
 	srv, endpoint, err := mockExecution.SetupRPCServer()
@@ -115,7 +115,7 @@ func setupBeaconChain(t *testing.T, beaconDB db.Database) *Service {
 
 func TestChainStartStop_Initialized(t *testing.T) {
 	hook := logTest.NewGlobal()
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
 	chainService := setupBeaconChain(t, beaconDB)
@@ -152,7 +152,7 @@ func TestChainStartStop_Initialized(t *testing.T) {
 
 func TestChainStartStop_GenesisZeroHashes(t *testing.T) {
 	hook := logTest.NewGlobal()
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
 	chainService := setupBeaconChain(t, beaconDB)
@@ -184,7 +184,7 @@ func TestChainStartStop_GenesisZeroHashes(t *testing.T) {
 func TestChainService_InitializeBeaconChain(t *testing.T) {
 	helpers.ClearCache()
 	beaconDB := testDB.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	bc := setupBeaconChain(t, beaconDB)
 	var err error
@@ -226,7 +226,7 @@ func TestChainService_InitializeBeaconChain(t *testing.T) {
 }
 
 func TestChainService_CorrectGenesisRoots(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
 	chainService := setupBeaconChain(t, beaconDB)
@@ -295,7 +295,7 @@ func TestChainService_InitializeChainInfo(t *testing.T) {
 	require.NoError(t, err)
 	assert.DeepSSZEqual(t, headState.ToProtoUnsafe(), s.ToProtoUnsafe(), "Head state incorrect")
 	assert.Equal(t, c.HeadSlot(), headBlock.Block.Slot, "Head slot incorrect")
-	r, err := c.HeadRoot(context.Background())
+	r, err := c.HeadRoot(t.Context())
 	require.NoError(t, err)
 	if !bytes.Equal(headRoot[:], r) {
 		t.Error("head slot incorrect")
@@ -346,7 +346,7 @@ func TestChainService_InitializeChainInfo_SetHeadAtGenesis(t *testing.T) {
 
 func TestChainService_SaveHeadNoDB(t *testing.T) {
 	beaconDB := testDB.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	fc := doublylinkedtree.New()
 	s := &Service{
 		cfg: &config{BeaconDB: beaconDB, StateGen: stategen.New(beaconDB, fc), ForkChoiceStore: fc},
@@ -370,7 +370,7 @@ func TestChainService_SaveHeadNoDB(t *testing.T) {
 }
 
 func TestHasBlock_ForkChoiceAndDB_DoublyLinkedTree(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 	s := &Service{
 		cfg: &config{ForkChoiceStore: doublylinkedtree.New(), BeaconDB: beaconDB},
@@ -391,7 +391,7 @@ func TestHasBlock_ForkChoiceAndDB_DoublyLinkedTree(t *testing.T) {
 }
 
 func TestServiceStop_SaveCachedBlocks(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	beaconDB := testDB.SetupDB(t)
 	s := &Service{
 		cfg:            &config{BeaconDB: beaconDB, StateGen: stategen.New(beaconDB, doublylinkedtree.New())},
@@ -410,13 +410,13 @@ func TestServiceStop_SaveCachedBlocks(t *testing.T) {
 }
 
 func TestProcessChainStartTime_ReceivedFeed(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 	service := setupBeaconChain(t, beaconDB)
 	mgs := &MockClockSetter{}
 	service.clockSetter = mgs
 	gt := time.Now()
-	service.onExecutionChainStart(context.Background(), gt)
+	service.onExecutionChainStart(t.Context(), gt)
 	gs, err := beaconDB.GenesisState(ctx)
 	require.NoError(t, err)
 	require.NotEqual(t, nil, gs)
@@ -429,7 +429,7 @@ func TestProcessChainStartTime_ReceivedFeed(t *testing.T) {
 
 func BenchmarkHasBlockDB(b *testing.B) {
 	beaconDB := testDB.SetupDB(b)
-	ctx := context.Background()
+	ctx := b.Context()
 	s := &Service{
 		cfg: &config{BeaconDB: beaconDB},
 	}
@@ -447,7 +447,7 @@ func BenchmarkHasBlockDB(b *testing.B) {
 }
 
 func BenchmarkHasBlockForkChoiceStore_DoublyLinkedTree(b *testing.B) {
-	ctx := context.Background()
+	ctx := b.Context()
 	beaconDB := testDB.SetupDB(b)
 	s := &Service{
 		cfg: &config{ForkChoiceStore: doublylinkedtree.New(), BeaconDB: beaconDB},

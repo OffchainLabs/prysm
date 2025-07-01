@@ -28,8 +28,7 @@ func TestEnsureDeleteSetDiskSummary(t *testing.T) {
 
 func TestStash(t *testing.T) {
 	t.Run("Index too high", func(t *testing.T) {
-		dataColumnParamsByBlockRoot := util.DataColumnsParamsByRoot{{1}: {{ColumnIndex: 10_000}}}
-		roDataColumns, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
+		roDataColumns, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, []util.DataColumnParam{{Index: 10_000}})
 
 		var entry dataColumnCacheEntry
 		err := entry.stash(&roDataColumns[0])
@@ -37,8 +36,7 @@ func TestStash(t *testing.T) {
 	})
 
 	t.Run("Nominal and already existing", func(t *testing.T) {
-		dataColumnParamsByBlockRoot := util.DataColumnsParamsByRoot{{1}: {{ColumnIndex: 1}}}
-		roDataColumns, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
+		roDataColumns, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, []util.DataColumnParam{{Index: 1}})
 
 		var entry dataColumnCacheEntry
 		err := entry.stash(&roDataColumns[0])
@@ -76,36 +74,30 @@ func TestFilterDataColumns(t *testing.T) {
 	})
 
 	t.Run("Commitments not equal", func(t *testing.T) {
-		root := [fieldparams.RootLength]byte{}
 		commitmentsArray := safeCommitmentsArray{nil, [][]byte{[]byte{1}}}
 
-		dataColumnParamsByBlockRoot := util.DataColumnsParamsByRoot{root: {{ColumnIndex: 1}}}
-		roDataColumns, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
+		roDataColumns, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, []util.DataColumnParam{{Index: 1}})
 
 		var scs [fieldparams.NumberOfColumns]*blocks.RODataColumn
 		scs[1] = &roDataColumns[0]
 
 		dataColumnCacheEntry := dataColumnCacheEntry{scs: scs}
 
-		_, err := dataColumnCacheEntry.filter(root, &commitmentsArray)
+		_, err := dataColumnCacheEntry.filter(roDataColumns[0].BlockRoot(), &commitmentsArray)
 		require.NotNil(t, err)
 	})
 
 	t.Run("Nominal", func(t *testing.T) {
-		root := [fieldparams.RootLength]byte{}
 		commitmentsArray := safeCommitmentsArray{nil, [][]byte{[]byte{1}}, nil, [][]byte{[]byte{3}}}
-
 		diskSummary := filesystem.NewDataColumnStorageSummary(42, [fieldparams.NumberOfColumns]bool{false, true})
-
-		dataColumnParamsByBlockRoot := util.DataColumnsParamsByRoot{root: {{ColumnIndex: 3, KzgCommitments: [][]byte{[]byte{3}}}}}
-		expected, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
+		expected, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, []util.DataColumnParam{{Index: 3, KzgCommitments: [][]byte{[]byte{3}}}})
 
 		var scs [fieldparams.NumberOfColumns]*blocks.RODataColumn
 		scs[3] = &expected[0]
 
 		dataColumnCacheEntry := dataColumnCacheEntry{scs: scs, diskSummary: diskSummary}
 
-		actual, err := dataColumnCacheEntry.filter(root, &commitmentsArray)
+		actual, err := dataColumnCacheEntry.filter(expected[0].BlockRoot(), &commitmentsArray)
 		require.NoError(t, err)
 
 		require.DeepEqual(t, expected, actual)

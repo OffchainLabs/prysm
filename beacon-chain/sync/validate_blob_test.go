@@ -2,7 +2,6 @@ package sync
 
 import (
 	"bytes"
-	"context"
 	"reflect"
 	"testing"
 	"time"
@@ -28,7 +27,7 @@ import (
 )
 
 func TestValidateBlob_FromSelf(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	p := p2ptest.NewTestP2P(t)
 	s := &Service{cfg: &config{p2p: p}}
 	result, err := s.validateBlob(ctx, s.cfg.p2p.PeerID(), nil)
@@ -37,7 +36,7 @@ func TestValidateBlob_FromSelf(t *testing.T) {
 }
 
 func TestValidateBlob_InitSync(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	p := p2ptest.NewTestP2P(t)
 	s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{IsSyncing: true}}}
 	result, err := s.validateBlob(ctx, "", nil)
@@ -46,7 +45,7 @@ func TestValidateBlob_InitSync(t *testing.T) {
 }
 
 func TestValidateBlob_InvalidTopic(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	p := p2ptest.NewTestP2P(t)
 	s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}}}
 	result, err := s.validateBlob(ctx, "", &pubsub.Message{
@@ -57,7 +56,7 @@ func TestValidateBlob_InvalidTopic(t *testing.T) {
 }
 
 func TestValidateBlob_InvalidMessageType(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	p := p2ptest.NewTestP2P(t)
 	chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0)}
 	s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}}
@@ -83,7 +82,7 @@ func TestValidateBlob_InvalidMessageType(t *testing.T) {
 
 func TestValidateBlob_AlreadySeenInCache(t *testing.T) {
 	db := dbtest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	p := p2ptest.NewTestP2P(t)
 	chainService := &mock.ChainService{Genesis: time.Now(), FinalizedCheckPoint: &eth.Checkpoint{}, DB: db}
 	stateGen := stategen.New(db, doublylinkedtree.New())
@@ -143,7 +142,7 @@ func TestValidateBlob_AlreadySeenInCache(t *testing.T) {
 }
 
 func TestValidateBlob_InvalidTopicIndex(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	p := p2ptest.NewTestP2P(t)
 	chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0)}
 	s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}}
@@ -255,7 +254,7 @@ func TestValidateBlob_ErrorPathsWithMock(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.error.Error(), func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			p := p2ptest.NewTestP2P(t)
 			chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0)}
 			s := &Service{

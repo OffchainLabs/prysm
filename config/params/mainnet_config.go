@@ -197,7 +197,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	BeaconStateCapellaFieldCount:   28,
 	BeaconStateDenebFieldCount:     28,
 	BeaconStateElectraFieldCount:   37,
-	BeaconStateFuluFieldCount:      37,
+	BeaconStateFuluFieldCount:      38,
 
 	// Slasher related values.
 	WeakSubjectivityPeriod:          54000,
@@ -340,10 +340,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	SubnetsPerNode:                  2,
 	NodeIdBits:                      256,
 
-	BlobSchedule: []BlobScheduleEntry{
-		{Epoch: 269568, MaxBlobsPerBlock: 6},
-		{Epoch: 364032, MaxBlobsPerBlock: 9},
-	},
+	BlobSchedule: []BlobScheduleEntry{},
 }
 
 // MainnetTestConfig provides a version of the mainnet config that has a different name

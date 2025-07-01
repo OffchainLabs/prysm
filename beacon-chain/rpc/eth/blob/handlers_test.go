@@ -2,7 +2,6 @@ package blob
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -40,7 +39,7 @@ func TestBlobs(t *testing.T) {
 
 	db := testDB.SetupDB(t)
 	denebBlock, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 123, 4)
-	require.NoError(t, db.SaveBlock(context.Background(), denebBlock))
+	require.NoError(t, db.SaveBlock(t.Context(), denebBlock))
 	bs := filesystem.NewEphemeralBlobStorage(t)
 	testSidecars := verification.FakeVerifySliceForTest(t, blobs)
 	for i := range testSidecars {
@@ -308,7 +307,7 @@ func TestBlobs(t *testing.T) {
 		commitments, err := denebBlock.Block().Body().BlobKzgCommitments()
 		require.NoError(t, err)
 		require.Equal(t, len(commitments), 0)
-		require.NoError(t, db.SaveBlock(context.Background(), denebBlock))
+		require.NoError(t, db.SaveBlock(t.Context(), denebBlock))
 
 		u := "http://foo.example/333"
 		request := httptest.NewRequest("GET", u, nil)
@@ -420,7 +419,7 @@ func TestBlobs_Electra(t *testing.T) {
 
 	db := testDB.SetupDB(t)
 	electraBlock, blobs := util.GenerateTestElectraBlockWithSidecar(t, [32]byte{}, 123, maxBlobsPerBlockByVersion(version.Electra))
-	require.NoError(t, db.SaveBlock(context.Background(), electraBlock))
+	require.NoError(t, db.SaveBlock(t.Context(), electraBlock))
 	bs := filesystem.NewEphemeralBlobStorage(t)
 	testSidecars := verification.FakeVerifySliceForTest(t, blobs)
 	for i := range testSidecars {

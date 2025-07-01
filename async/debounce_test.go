@@ -15,7 +15,7 @@ import (
 
 func TestDebounce_NoEvents(t *testing.T) {
 	eventsChan := make(chan interface{}, 100)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	interval := time.Second
 	timesHandled := int32(0)
 	wg := &sync.WaitGroup{}
@@ -39,7 +39,7 @@ func TestDebounce_NoEvents(t *testing.T) {
 
 func TestDebounce_CtxClosing(t *testing.T) {
 	eventsChan := make(chan interface{}, 100)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	interval := time.Second
 	timesHandled := int32(0)
 	wg := &sync.WaitGroup{}
@@ -75,7 +75,7 @@ func TestDebounce_CtxClosing(t *testing.T) {
 
 func TestDebounce_SingleHandlerInvocation(t *testing.T) {
 	eventsChan := make(chan interface{}, 100)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	interval := time.Second
 	timesHandled := int32(0)
 	go async.Debounce(ctx, interval, eventsChan, func(event interface{}) {
@@ -93,7 +93,7 @@ func TestDebounce_SingleHandlerInvocation(t *testing.T) {
 
 func TestDebounce_MultipleHandlerInvocation(t *testing.T) {
 	eventsChan := make(chan interface{}, 100)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	interval := time.Second
 	timesHandled := int32(0)
 	go async.Debounce(ctx, interval, eventsChan, func(event interface{}) {

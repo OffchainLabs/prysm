@@ -637,7 +637,11 @@ func missingDataColumnIndices(bs *filesystem.DataColumnStorage, root [fieldparam
 // The function will first check the database to see if all sidecars have been persisted. If any
 // sidecars are missing, it will then read from the sidecar notifier channel for the given root until the channel is
 // closed, the context hits cancellation/timeout, or notifications have been received for all the missing sidecars.
-func (s *Service) isDataAvailable(ctx context.Context, root [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) error {
+func (s *Service) isDataAvailable(
+	ctx context.Context,
+	root [fieldparams.RootLength]byte,
+	signedBlock interfaces.ReadOnlySignedBeaconBlock,
+) error {
 	block := signedBlock.Block()
 	if block == nil {
 		return errors.New("invalid nil beacon block")
@@ -657,7 +661,11 @@ func (s *Service) isDataAvailable(ctx context.Context, root [32]byte, signedBloc
 
 // areDataColumnsAvailable blocks until all data columns committed to in the block are available,
 // or an error or context cancellation occurs. A nil result means that the data availability check is successful.
-func (s *Service) areDataColumnsAvailable(ctx context.Context, root [fieldparams.RootLength]byte, block interfaces.ReadOnlyBeaconBlock) error {
+func (s *Service) areDataColumnsAvailable(
+	ctx context.Context,
+	root [fieldparams.RootLength]byte,
+	block interfaces.ReadOnlyBeaconBlock,
+) error {
 	// We are only required to check within MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS
 	blockSlot, currentSlot := block.Slot(), s.CurrentSlot()
 	blockEpoch, currentEpoch := slots.ToEpoch(blockSlot), slots.ToEpoch(currentSlot)
@@ -722,6 +730,10 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [fieldparams
 	// This is the happy path.
 	if len(missingMap) == 0 {
 		return nil
+	}
+
+	if s.startWaitingDataColumnSidecars != nil {
+		s.startWaitingDataColumnSidecars <- true
 	}
 
 	// Log for DA checks that cross over into the next slot; helpful for debugging.

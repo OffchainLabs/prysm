@@ -1,7 +1,6 @@
 package precompute_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
@@ -239,7 +238,7 @@ func TestUnrealizedCheckpoints(t *testing.T) {
 			state, err := state_native.InitializeFromProtoAltair(base)
 			require.NoError(t, err)
 
-			_, _, err = altair.InitializePrecomputeValidators(context.Background(), state)
+			_, _, err = altair.InitializePrecomputeValidators(t.Context(), state)
 			require.NoError(t, err)
 
 			jc, fc, err := precompute.UnrealizedCheckpoints(state)

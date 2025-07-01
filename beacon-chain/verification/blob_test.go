@@ -128,7 +128,7 @@ func TestSlotAboveFinalized(t *testing.T) {
 }
 
 func TestValidProposerSignature_Cached(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	_, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 1)
 	b := blobs[0]
 	expectedSd := blobToSignatureData(b)
@@ -165,7 +165,7 @@ func TestValidProposerSignature_Cached(t *testing.T) {
 }
 
 func TestValidProposerSignature_CacheMiss(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	_, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 1)
 	b := blobs[0]
 	expectedSd := blobToSignatureData(b)
@@ -446,7 +446,7 @@ func TestSidecarKzgProofVerified(t *testing.T) {
 }
 
 func TestSidecarProposerExpected(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	_, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 1, 1)
 	b := blobs[0]
 	t.Run("cached, matches", func(t *testing.T) {

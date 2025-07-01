@@ -179,7 +179,7 @@ func (v *ValidatorService) Start() {
 		return
 	}
 
-	restHandler := beaconApi.NewBeaconApiJsonRestHandler(
+	restHandler := beaconApi.NewBeaconApiRestHandler(
 		http.Client{Timeout: v.conn.GetBeaconApiTimeout(), Transport: otelhttp.NewTransport(http.DefaultTransport)},
 		hosts[0],
 	)

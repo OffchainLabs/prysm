@@ -1,7 +1,6 @@
 package beacon
 
 import (
-	"context"
 	"testing"
 
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
@@ -17,7 +16,7 @@ import (
 )
 
 func TestServer_SubmitProposerSlashing(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	st, privs := util.DeterministicGenesisState(t, 64)
 	slashedVal, err := st.ValidatorAtIndex(5)
@@ -46,7 +45,7 @@ func TestServer_SubmitProposerSlashing(t *testing.T) {
 }
 
 func TestServer_SubmitAttesterSlashing(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	// We mark the validators at index 5, 6 as already slashed.
 	st, privs := util.DeterministicGenesisState(t, 64)
 	slashedVal, err := st.ValidatorAtIndex(5)
@@ -79,7 +78,7 @@ func TestServer_SubmitAttesterSlashing(t *testing.T) {
 func TestServer_SubmitProposerSlashing_DontBroadcast(t *testing.T) {
 	resetCfg := features.InitWithReset(&features.Flags{DisableBroadcastSlashings: true})
 	defer resetCfg()
-	ctx := context.Background()
+	ctx := t.Context()
 	st, privs := util.DeterministicGenesisState(t, 64)
 	slashedVal, err := st.ValidatorAtIndex(5)
 	require.NoError(t, err)
@@ -124,7 +123,7 @@ func TestServer_SubmitProposerSlashing_DontBroadcast(t *testing.T) {
 func TestServer_SubmitAttesterSlashing_DontBroadcast(t *testing.T) {
 	resetCfg := features.InitWithReset(&features.Flags{DisableBroadcastSlashings: true})
 	defer resetCfg()
-	ctx := context.Background()
+	ctx := t.Context()
 	// We mark the validators at index 5, 6 as already slashed.
 	st, privs := util.DeterministicGenesisState(t, 64)
 	slashedVal, err := st.ValidatorAtIndex(5)
@@ -168,7 +167,7 @@ func TestServer_SubmitAttesterSlashing_DontBroadcast(t *testing.T) {
 }
 
 func TestServer_SubmitAttesterSlashingElectra(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	st, privs := util.DeterministicGenesisStateElectra(t, 64)
 	slashedVal, err := st.ValidatorAtIndex(5)
 	require.NoError(t, err)

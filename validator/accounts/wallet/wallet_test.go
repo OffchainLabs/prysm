@@ -1,7 +1,6 @@
 package wallet_test
 
 import (
-	"context"
 	"flag"
 	"io"
 	"os"
@@ -66,7 +65,7 @@ func TestWallet_InitializeKeymanager_web3Signer_HappyPath(t *testing.T) {
 	newDir := filepath.Join(t.TempDir(), "new")
 	set.String(flags.WalletDirFlag.Name, newDir, "")
 	w := wallet.NewWalletForWeb3Signer(cli.NewContext(&app, set, nil))
-	ctx := context.Background()
+	ctx := t.Context()
 	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
 	require.NoError(t, err)
 	config := iface.InitKeymanagerConfig{
@@ -87,7 +86,7 @@ func TestWallet_InitializeKeymanager_web3Signer_nilConfig(t *testing.T) {
 	newDir := filepath.Join(t.TempDir(), "new")
 	set.String(flags.WalletDirFlag.Name, newDir, "")
 	w := wallet.NewWalletForWeb3Signer(cli.NewContext(&app, set, nil))
-	ctx := context.Background()
+	ctx := t.Context()
 	config := iface.InitKeymanagerConfig{
 		ListenForChanges: false,
 		Web3SignerConfig: nil,

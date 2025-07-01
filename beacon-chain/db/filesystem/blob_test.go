@@ -160,7 +160,7 @@ func writeFakeSSZ(t *testing.T, fs afero.Fs, root [32]byte, slot primitives.Slot
 
 func TestNewBlobStorage(t *testing.T) {
 	_, err := NewBlobStorage()
-	require.ErrorIs(t, err, errNoBasePath)
+	require.ErrorIs(t, err, errNoBlobBasePath)
 	_, err = NewBlobStorage(WithBasePath(path.Join(t.TempDir(), "good")))
 	require.NoError(t, err)
 }

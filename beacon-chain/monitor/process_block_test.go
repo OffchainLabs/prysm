@@ -1,7 +1,6 @@
 package monitor
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -186,7 +185,7 @@ func TestProcessProposedBlock(t *testing.T) {
 
 func TestProcessBlock_AllEventsTrackedVals(t *testing.T) {
 	hook := logTest.NewGlobal()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	genesis, keys := util.DeterministicGenesisStateAltair(t, 64)
 	c, err := altair.NextSyncCommittee(ctx, genesis)

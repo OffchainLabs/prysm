@@ -290,7 +290,7 @@ func TestService_roundRobinSync(t *testing.T) {
 			genesisRoot := cache.rootCache[0]
 			cache.RUnlock()
 
-			util.SaveBlock(t, context.Background(), beaconDB, util.NewBeaconBlock())
+			util.SaveBlock(t, t.Context(), beaconDB, util.NewBeaconBlock())
 
 			st, err := util.NewBeaconState()
 			require.NoError(t, err)
@@ -308,7 +308,7 @@ func TestService_roundRobinSync(t *testing.T) {
 			} // no-op mock
 			clock := startup.NewClock(gt, vr)
 			s := &Service{
-				ctx:          context.Background(),
+				ctx:          t.Context(),
 				cfg:          &Config{Chain: mc, P2P: p, DB: beaconDB},
 				synced:       abool.New(),
 				chainStarted: abool.NewBool(true),
@@ -337,10 +337,10 @@ func TestService_processBlock(t *testing.T) {
 	genesisBlk := util.NewBeaconBlock()
 	genesisBlkRoot, err := genesisBlk.Block.HashTreeRoot()
 	require.NoError(t, err)
-	util.SaveBlock(t, context.Background(), beaconDB, genesisBlk)
+	util.SaveBlock(t, t.Context(), beaconDB, genesisBlk)
 	st, err := util.NewBeaconState()
 	require.NoError(t, err)
-	s := NewService(context.Background(), &Config{
+	s := NewService(t.Context(), &Config{
 		P2P: p2pt.NewTestP2P(t),
 		DB:  beaconDB,
 		Chain: &mock.ChainService{
@@ -355,7 +355,7 @@ func TestService_processBlock(t *testing.T) {
 		},
 		StateNotifier: &mock.MockStateNotifier{},
 	})
-	ctx := context.Background()
+	ctx := t.Context()
 	genesis := makeGenesisTime(32)
 
 	t.Run("process duplicate block", func(t *testing.T) {
@@ -411,10 +411,10 @@ func TestService_processBlockBatch(t *testing.T) {
 	genesisBlk := util.NewBeaconBlock()
 	genesisBlkRoot, err := genesisBlk.Block.HashTreeRoot()
 	require.NoError(t, err)
-	util.SaveBlock(t, context.Background(), beaconDB, genesisBlk)
+	util.SaveBlock(t, t.Context(), beaconDB, genesisBlk)
 	st, err := util.NewBeaconState()
 	require.NoError(t, err)
-	s := NewService(context.Background(), &Config{
+	s := NewService(t.Context(), &Config{
 		P2P: p2pt.NewTestP2P(t),
 		DB:  beaconDB,
 		Chain: &mock.ChainService{
@@ -427,7 +427,7 @@ func TestService_processBlockBatch(t *testing.T) {
 		},
 		StateNotifier: &mock.MockStateNotifier{},
 	})
-	ctx := context.Background()
+	ctx := t.Context()
 	genesis := makeGenesisTime(32)
 	s.genesisTime = genesis
 
@@ -441,7 +441,7 @@ func TestService_processBlockBatch(t *testing.T) {
 			blk1.Block.ParentRoot = parentRoot[:]
 			blk1Root, err := blk1.Block.HashTreeRoot()
 			require.NoError(t, err)
-			util.SaveBlock(t, context.Background(), beaconDB, blk1)
+			util.SaveBlock(t, t.Context(), beaconDB, blk1)
 			wsb, err := blocks.NewSignedBeaconBlock(blk1)
 			require.NoError(t, err)
 			rowsb, err := blocks.NewROBlock(wsb)
@@ -458,7 +458,7 @@ func TestService_processBlockBatch(t *testing.T) {
 			blk1.Block.ParentRoot = parentRoot[:]
 			blk1Root, err := blk1.Block.HashTreeRoot()
 			require.NoError(t, err)
-			util.SaveBlock(t, context.Background(), beaconDB, blk1)
+			util.SaveBlock(t, t.Context(), beaconDB, blk1)
 			wsb, err := blocks.NewSignedBeaconBlock(blk1)
 			require.NoError(t, err)
 			rowsb, err := blocks.NewROBlock(wsb)
@@ -548,7 +548,7 @@ func TestService_blockProviderScoring(t *testing.T) {
 	genesisRoot := cache.rootCache[0]
 	cache.RUnlock()
 
-	util.SaveBlock(t, context.Background(), beaconDB, util.NewBeaconBlock())
+	util.SaveBlock(t, t.Context(), beaconDB, util.NewBeaconBlock())
 
 	st, err := util.NewBeaconState()
 	require.NoError(t, err)
@@ -568,7 +568,7 @@ func TestService_blockProviderScoring(t *testing.T) {
 	} // no-op mock
 	clock := startup.NewClock(gt, vr)
 	s := &Service{
-		ctx:          context.Background(),
+		ctx:          t.Context(),
 		cfg:          &Config{Chain: mc, P2P: p, DB: beaconDB},
 		synced:       abool.New(),
 		chainStarted: abool.NewBool(true),
@@ -618,7 +618,7 @@ func TestService_syncToFinalizedEpoch(t *testing.T) {
 	genesisRoot := cache.rootCache[0]
 	cache.RUnlock()
 
-	util.SaveBlock(t, context.Background(), beaconDB, util.NewBeaconBlock())
+	util.SaveBlock(t, t.Context(), beaconDB, util.NewBeaconBlock())
 
 	st, err := util.NewBeaconState()
 	require.NoError(t, err)
@@ -637,7 +637,7 @@ func TestService_syncToFinalizedEpoch(t *testing.T) {
 		ValidatorsRoot: vr,
 	}
 	s := &Service{
-		ctx:          context.Background(),
+		ctx:          t.Context(),
 		cfg:          &Config{Chain: mc, P2P: p, DB: beaconDB},
 		synced:       abool.New(),
 		chainStarted: abool.NewBool(true),
@@ -656,7 +656,7 @@ func TestService_syncToFinalizedEpoch(t *testing.T) {
 	}, p.Peers())
 	genesis := makeGenesisTime(currentSlot)
 	s.genesisTime = genesis
-	assert.NoError(t, s.syncToFinalizedEpoch(context.Background()))
+	assert.NoError(t, s.syncToFinalizedEpoch(t.Context()))
 	if s.cfg.Chain.HeadSlot() < currentSlot {
 		t.Errorf("Head slot (%d) is less than expected currentSlot (%d)", s.cfg.Chain.HeadSlot(), currentSlot)
 	}
@@ -674,7 +674,7 @@ func TestService_syncToFinalizedEpoch(t *testing.T) {
 	// Try to re-sync, should be exited immediately (node is already synced to finalized epoch).
 	hook.Reset()
 	s.genesisTime = genesis
-	assert.NoError(t, s.syncToFinalizedEpoch(context.Background()))
+	assert.NoError(t, s.syncToFinalizedEpoch(t.Context()))
 	assert.LogsContain(t, hook, "Already synced to finalized epoch")
 }
 
@@ -683,7 +683,7 @@ func TestService_ValidUnprocessed(t *testing.T) {
 	genesisBlk := util.NewBeaconBlock()
 	genesisBlkRoot, err := genesisBlk.Block.HashTreeRoot()
 	require.NoError(t, err)
-	util.SaveBlock(t, context.Background(), beaconDB, genesisBlk)
+	util.SaveBlock(t, t.Context(), beaconDB, genesisBlk)
 
 	var batch []blocks.BlockWithROBlobs
 	currBlockRoot := genesisBlkRoot
@@ -694,7 +694,7 @@ func TestService_ValidUnprocessed(t *testing.T) {
 		blk1.Block.ParentRoot = parentRoot[:]
 		blk1Root, err := blk1.Block.HashTreeRoot()
 		require.NoError(t, err)
-		util.SaveBlock(t, context.Background(), beaconDB, blk1)
+		util.SaveBlock(t, t.Context(), beaconDB, blk1)
 		wsb, err := blocks.NewSignedBeaconBlock(blk1)
 		require.NoError(t, err)
 		rowsb, err := blocks.NewROBlock(wsb)
@@ -703,7 +703,7 @@ func TestService_ValidUnprocessed(t *testing.T) {
 		currBlockRoot = blk1Root
 	}
 
-	retBlocks, err := validUnprocessed(context.Background(), batch, 2, func(ctx context.Context, block blocks.ROBlock) bool {
+	retBlocks, err := validUnprocessed(t.Context(), batch, 2, func(ctx context.Context, block blocks.ROBlock) bool {
 		// Ignore first 2 blocks in the batch.
 		return block.Block().Slot() <= 2
 	})

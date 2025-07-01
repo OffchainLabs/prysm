@@ -10,7 +10,6 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/core/signing:go_default_library",
-        "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//crypto/bls:go_default_library",
         "//crypto/hash:go_default_library",

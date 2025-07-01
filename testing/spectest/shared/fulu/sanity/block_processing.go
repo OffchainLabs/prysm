@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/config/params"
+
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
@@ -35,14 +37,19 @@ func RunBlockProcessingTest(t *testing.T, config, folderPath string) {
 	testFolders, testsFolderPath := utils.TestFolders(t, config, "fulu", folderPath)
 	for _, folder := range testFolders {
 		t.Run(folder.Name(), func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			cfg := params.BeaconConfig().Copy()
+			cfg.BlobSchedule = []params.BlobScheduleEntry{{MaxBlobsPerBlock: 9}}
+			params.OverrideBeaconConfig(cfg)
+
 			helpers.ClearCache()
 			preBeaconStateFile, err := util.BazelFileBytes(testsFolderPath, folder.Name(), "pre.ssz_snappy")
 			require.NoError(t, err)
 			preBeaconStateSSZ, err := snappy.Decode(nil /* dst */, preBeaconStateFile)
 			require.NoError(t, err, "Failed to decompress")
-			beaconStateBase := &ethpb.BeaconStateElectra{}
+			beaconStateBase := &ethpb.BeaconStateFulu{}
 			require.NoError(t, beaconStateBase.UnmarshalSSZ(preBeaconStateSSZ), "Failed to unmarshal")
-			beaconState, err := state_native.InitializeFromProtoElectra(beaconStateBase)
+			beaconState, err := state_native.InitializeFromProtoFulu(beaconStateBase)
 			require.NoError(t, err)
 
 			file, err := util.BazelFileBytes(testsFolderPath, folder.Name(), "meta.yaml")
@@ -60,7 +67,7 @@ func RunBlockProcessingTest(t *testing.T, config, folderPath string) {
 				require.NoError(t, err)
 				blockSSZ, err := snappy.Decode(nil /* dst */, blockFile)
 				require.NoError(t, err, "Failed to decompress")
-				block := &ethpb.SignedBeaconBlockElectra{}
+				block := &ethpb.SignedBeaconBlockFulu{}
 				require.NoError(t, block.UnmarshalSSZ(blockSSZ), "Failed to unmarshal")
 				wsb, err := blocks.NewSignedBeaconBlock(block)
 				require.NoError(t, err)
@@ -91,9 +98,9 @@ func RunBlockProcessingTest(t *testing.T, config, folderPath string) {
 				postBeaconStateSSZ, err := snappy.Decode(nil /* dst */, postBeaconStateFile)
 				require.NoError(t, err, "Failed to decompress")
 
-				postBeaconState := &ethpb.BeaconStateElectra{}
+				postBeaconState := &ethpb.BeaconStateFulu{}
 				require.NoError(t, postBeaconState.UnmarshalSSZ(postBeaconStateSSZ), "Failed to unmarshal")
-				pbState, err := state_native.ProtobufBeaconStateElectra(beaconState.ToProtoUnsafe())
+				pbState, err := state_native.ProtobufBeaconStateFulu(beaconState.ToProtoUnsafe())
 				require.NoError(t, err)
 				if !proto.Equal(pbState, postBeaconState) {
 					t.Log(cmp.Diff(postBeaconState, pbState, protocmp.Transform()))

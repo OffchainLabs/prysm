@@ -2,7 +2,6 @@ package checkpoint
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -75,7 +74,7 @@ func TestFname(t *testing.T) {
 }
 
 func TestDownloadWeakSubjectivityCheckpoint(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	cfg := params.MainnetConfig()
 
 	epoch := cfg.AltairForkEpoch - 1
@@ -171,7 +170,7 @@ func TestDownloadWeakSubjectivityCheckpoint(t *testing.T) {
 // runs computeBackwardsCompatible directly
 // and via ComputeWeakSubjectivityCheckpoint with a round tripper that triggers the backwards compatible code path
 func TestDownloadBackwardsCompatibleCombined(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	cfg := params.MainnetConfig()
 
 	st, expectedEpoch := defaultTestHeadState(t, cfg)
@@ -275,7 +274,7 @@ func TestGetWeakSubjectivityEpochFromHead(t *testing.T) {
 	}}
 	c, err := beacon.NewClient("http://localhost:3500", client.WithRoundTripper(trans))
 	require.NoError(t, err)
-	actualEpoch, err := getWeakSubjectivityEpochFromHead(context.Background(), c)
+	actualEpoch, err := getWeakSubjectivityEpochFromHead(t.Context(), c)
 	require.NoError(t, err)
 	require.Equal(t, expectedEpoch, actualEpoch)
 }

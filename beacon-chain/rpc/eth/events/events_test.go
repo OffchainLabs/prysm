@@ -40,7 +40,7 @@ var testEventWriteTimeout = 100 * time.Millisecond
 func requireAllEventsReceived(t *testing.T, stn, opn *mockChain.EventFeedWrapper, events []*feed.Event, req *topicRequest, s *Server, w *StreamingResponseWriterRecorder, logs chan *logrus.Entry) {
 	// maxBufferSize param copied from sse lib client code
 	sseR := sse.NewEventStreamReader(w.Body(), 1<<24)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
 
 	expected := make(map[string]bool)
@@ -48,7 +48,7 @@ func requireAllEventsReceived(t *testing.T, stn, opn *mockChain.EventFeedWrapper
 		ev := events[i]
 		// serialize the event the same way the server will so that we can compare expectation to results.
 		top := topicForEvent(ev)
-		eb, err := s.lazyReaderForEvent(context.Background(), ev, req)
+		eb, err := s.lazyReaderForEvent(t.Context(), ev, req)
 		require.NoError(t, err)
 		exb, err := io.ReadAll(eb())
 		require.NoError(t, err)
@@ -341,7 +341,7 @@ func newStreamTestSync(t *testing.T) *streamTestSync {
 	logChan := make(chan *logrus.Entry, 100)
 	cew := util.NewChannelEntryWriter(logChan)
 	undo := util.RegisterHookWithUndo(logger, cew)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	return &streamTestSync{
 		t:      t,
 		ctx:    ctx,
@@ -590,7 +590,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 }
 
 func TestFillEventData(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	t.Run("AlreadyFilledData_ShouldShortCircuitWithoutError", func(t *testing.T) {
 		b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockBellatrix(&eth.SignedBeaconBlockBellatrix{}))
 		require.NoError(t, err)
@@ -731,7 +731,7 @@ func wedgedWriterTestCase(t *testing.T, queueDepth func([]*feed.Event) int) {
 		EventFeedDepth:    queueDepth(events),
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	eventsWritten := make(chan struct{})
 	go func() {

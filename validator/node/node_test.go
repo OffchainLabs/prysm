@@ -1,7 +1,6 @@
 package node
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -201,7 +200,7 @@ func TestClearDB(t *testing.T) {
 		t.Run(fmt.Sprintf("isMinimalDatabase=%v", isMinimalDatabase), func(t *testing.T) {
 			hook := logtest.NewGlobal()
 			tmp := filepath.Join(t.TempDir(), "datadirtest")
-			require.NoError(t, clearDB(context.Background(), tmp, true, isMinimalDatabase))
+			require.NoError(t, clearDB(t.Context(), tmp, true, isMinimalDatabase))
 			require.LogsContain(t, hook, "Removing database")
 		})
 	}
