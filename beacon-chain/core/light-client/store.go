@@ -7,32 +7,32 @@ import (
 )
 
 type Store struct {
-	mu sync.RWMutex
+	sync.RWMutex
 
 	lastFinalityUpdate   interfaces.LightClientFinalityUpdate
 	lastOptimisticUpdate interfaces.LightClientOptimisticUpdate
 }
 
 func (s *Store) SetLastFinalityUpdate(update interfaces.LightClientFinalityUpdate) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.Lock()
+	defer s.Unlock()
 	s.lastFinalityUpdate = update
 }
 
 func (s *Store) LastFinalityUpdate() interfaces.LightClientFinalityUpdate {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.RLock()
+	defer s.RUnlock()
 	return s.lastFinalityUpdate
 }
 
 func (s *Store) SetLastOptimisticUpdate(update interfaces.LightClientOptimisticUpdate) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.Lock()
+	defer s.Unlock()
 	s.lastOptimisticUpdate = update
 }
 
 func (s *Store) LastOptimisticUpdate() interfaces.LightClientOptimisticUpdate {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.RLock()
+	defer s.RUnlock()
 	return s.lastOptimisticUpdate
 }
