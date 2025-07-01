@@ -106,6 +106,7 @@ type config struct {
 	blobStorage             *filesystem.BlobStorage
 	dataColumnStorage       *filesystem.DataColumnStorage
 	custodyInfo             *peerdas.CustodyInfo
+	batchVerifierLimit      int
 }
 
 // This defines the interface for interacting with block chain service
@@ -189,7 +190,6 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 		slotToPendingBlocks:   gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
 		seenPendingBlocks:     make(map[[32]byte]bool),
 		blkRootToPendingAtts:  make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
-		signatureChan:         make(chan *signatureVerifier, verifierLimit),
 		dataColumnLogCh:       make(chan dataColumnLogEntry, 1000),
 		reconstructionRandGen: rand.NewGenerator(),
 	}
@@ -199,6 +199,8 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 			return nil
 		}
 	}
+	// Initialize signature channel with configured limit
+	r.signatureChan = make(chan *signatureVerifier, r.cfg.batchVerifierLimit)
 	// Correctly remove it from our seen pending block map.
 	// The eviction method always assumes that the mutex is held.
 	r.slotToPendingBlocks.OnEvicted(func(s string, i interface{}) {
