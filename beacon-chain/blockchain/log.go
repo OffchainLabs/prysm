@@ -26,9 +26,6 @@ func logStateTransitionData(b interfaces.ReadOnlyBeaconBlock) error {
 	if len(b.Body().Attestations()) > 0 {
 		log = log.WithField("attestations", len(b.Body().Attestations()))
 	}
-	if len(b.Body().Deposits()) > 0 {
-		log = log.WithField("deposits", len(b.Body().Deposits()))
-	}
 	if len(b.Body().AttesterSlashings()) > 0 {
 		log = log.WithField("attesterSlashings", len(b.Body().AttesterSlashings()))
 	}
@@ -111,7 +108,6 @@ func logBlockSyncStatus(block interfaces.ReadOnlyBeaconBlock, blockRoot [32]byte
 			"sinceSlotStartTime":         prysmTime.Now().Sub(startTime),
 			"chainServiceProcessedTime":  prysmTime.Now().Sub(receivedTime) - daWaitedTime,
 			"dataAvailabilityWaitedTime": daWaitedTime,
-			"deposits":                   len(block.Body().Deposits()),
 		}
 		log.WithFields(lf).Debug("Synced new block")
 	} else {
@@ -159,7 +155,9 @@ func logPayload(block interfaces.ReadOnlyBeaconBlock) error {
 		if err != nil {
 			return errors.Wrap(err, "could not get BLSToExecutionChanges")
 		}
-		fields["blsToExecutionChanges"] = len(changes)
+		if len(changes) > 0 {
+			fields["blsToExecutionChanges"] = len(changes)
+		}
 	}
 	log.WithFields(fields).Debug("Synced new payload")
 	return nil

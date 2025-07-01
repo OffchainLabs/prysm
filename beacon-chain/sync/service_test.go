@@ -51,7 +51,7 @@ func TestSyncHandlers_WaitToSync(t *testing.T) {
 	}
 	gs := startup.NewClockSynchronizer()
 	r := Service{
-		ctx: context.Background(),
+		ctx: t.Context(),
 		cfg: &config{
 			p2p:         p2p,
 			chain:       chainService,
@@ -89,7 +89,7 @@ func TestSyncHandlers_WaitForChainStart(t *testing.T) {
 	}
 	gs := startup.NewClockSynchronizer()
 	r := Service{
-		ctx: context.Background(),
+		ctx: t.Context(),
 		cfg: &config{
 			p2p:         p2p,
 			chain:       chainService,
@@ -113,7 +113,7 @@ func TestSyncHandlers_WaitTillSynced(t *testing.T) {
 		Genesis:        time.Now(),
 		ValidatorsRoot: [32]byte{'A'},
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	gs := startup.NewClockSynchronizer()
 	r := Service{
@@ -184,7 +184,7 @@ func TestSyncService_StopCleanly(t *testing.T) {
 		Genesis:        time.Now(),
 		ValidatorsRoot: [32]byte{'A'},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	gs := startup.NewClockSynchronizer()
 	r := Service{
 		ctx:    ctx,

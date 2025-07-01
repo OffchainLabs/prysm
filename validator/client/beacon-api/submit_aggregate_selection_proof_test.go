@@ -1,7 +1,6 @@
 package beacon_api
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -96,7 +95,7 @@ func TestSubmitAggregateSelectionProof(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
 			// Call node syncing endpoint to check if head is optimistic.
@@ -216,7 +215,7 @@ func TestSubmitAggregateSelectionProofFallBack(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	ctx := context.Background()
+	ctx := t.Context()
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
 	// Call node syncing endpoint to check if head is optimistic.
@@ -388,7 +387,7 @@ func TestSubmitAggregateSelectionProofElectra(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
 			// Call node syncing endpoint to check if head is optimistic.

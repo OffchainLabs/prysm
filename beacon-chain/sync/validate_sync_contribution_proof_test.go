@@ -43,7 +43,7 @@ import (
 
 func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 	database := testingdb.SetupDB(t)
-	headRoot, keys := fillUpBlocksAndState(context.Background(), t, database)
+	headRoot, keys := fillUpBlocksAndState(t.Context(), t, database)
 	defaultTopic := p2p.SyncContributionAndProofSubnetTopicFormat
 	defaultTopic = fmt.Sprintf(defaultTopic, []byte{0xAB, 0x00, 0xCC, 0x9E})
 	defaultTopic = defaultTopic + "/" + encoder.ProtocolSuffixSSZSnappy
@@ -306,7 +306,7 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 					Genesis: time.Now(),
 				}
 				msg.Message.Contribution.BlockRoot = headRoot[:]
-				hState, err := database.State(context.Background(), headRoot)
+				hState, err := database.State(t.Context(), headRoot)
 				assert.NoError(t, err)
 				sc, err := hState.CurrentSyncCommittee()
 				assert.NoError(t, err)
@@ -362,7 +362,7 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 				s.cfg.stateGen = stategen.New(database, doublylinkedtree.New())
 				s.cfg.beaconDB = database
 				msg.Message.Contribution.BlockRoot = headRoot[:]
-				hState, err := database.State(context.Background(), headRoot)
+				hState, err := database.State(t.Context(), headRoot)
 				assert.NoError(t, err)
 				sc, err := hState.CurrentSyncCommittee()
 				assert.NoError(t, err)
@@ -426,7 +426,7 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 				s.cfg.beaconDB = database
 				s.cfg.chain = chainService
 				msg.Message.Contribution.BlockRoot = headRoot[:]
-				hState, err := database.State(context.Background(), headRoot)
+				hState, err := database.State(t.Context(), headRoot)
 				assert.NoError(t, err)
 				sc, err := hState.CurrentSyncCommittee()
 				assert.NoError(t, err)
@@ -503,7 +503,7 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 				s.cfg.stateGen = stategen.New(database, doublylinkedtree.New())
 				s.cfg.beaconDB = database
 				msg.Message.Contribution.BlockRoot = headRoot[:]
-				hState, err := database.State(context.Background(), headRoot)
+				hState, err := database.State(t.Context(), headRoot)
 				assert.NoError(t, err)
 				sc, err := hState.CurrentSyncCommittee()
 				assert.NoError(t, err)
@@ -583,7 +583,7 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 				s.cfg.stateGen = stategen.New(database, doublylinkedtree.New())
 				msg.Message.Contribution.BlockRoot = headRoot[:]
 				s.cfg.beaconDB = database
-				hState, err := database.State(context.Background(), headRoot)
+				hState, err := database.State(t.Context(), headRoot)
 				assert.NoError(t, err)
 				sc, err := hState.CurrentSyncCommittee()
 				assert.NoError(t, err)
@@ -665,7 +665,7 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 				s.cfg.stateGen = stategen.New(database, doublylinkedtree.New())
 				msg.Message.Contribution.BlockRoot = headRoot[:]
 				s.cfg.beaconDB = database
-				hState, err := database.State(context.Background(), headRoot)
+				hState, err := database.State(t.Context(), headRoot)
 				assert.NoError(t, err)
 				sc, err := hState.CurrentSyncCommittee()
 				assert.NoError(t, err)
@@ -759,7 +759,7 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 				s.cfg.stateGen = stategen.New(database, doublylinkedtree.New())
 				msg.Message.Contribution.BlockRoot = headRoot[:]
 				s.cfg.beaconDB = database
-				hState, err := database.State(context.Background(), headRoot)
+				hState, err := database.State(t.Context(), headRoot)
 				assert.NoError(t, err)
 				sc, err := hState.CurrentSyncCommittee()
 				assert.NoError(t, err)
@@ -847,7 +847,7 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
 			cw := startup.NewClockSynchronizer()
@@ -887,7 +887,7 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 }
 
 func TestValidateSyncContributionAndProof(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	database := testingdb.SetupDB(t)
 	headRoot, keys := fillUpBlocksAndState(ctx, t, database)
 	defaultTopic := p2p.SyncContributionAndProofSubnetTopicFormat
@@ -913,7 +913,7 @@ func TestValidateSyncContributionAndProof(t *testing.T) {
 		Genesis:        time.Now(),
 		ValidatorsRoot: [32]byte{'A'},
 	}
-	s := NewService(context.Background(),
+	s := NewService(t.Context(),
 		WithP2P(mockp2p.NewTestP2P(t)),
 		WithInitialSync(&mockSync.Sync{IsSyncing: false}),
 		WithChainService(chainService),
@@ -924,7 +924,7 @@ func TestValidateSyncContributionAndProof(t *testing.T) {
 	s.cfg.stateGen = stategen.New(database, doublylinkedtree.New())
 	msg.Message.Contribution.BlockRoot = headRoot[:]
 	s.cfg.beaconDB = database
-	hState, err := database.State(context.Background(), headRoot)
+	hState, err := database.State(t.Context(), headRoot)
 	assert.NoError(t, err)
 	sc, err := hState.CurrentSyncCommittee()
 	assert.NoError(t, err)
@@ -1029,7 +1029,7 @@ func fillUpBlocksAndState(ctx context.Context, t *testing.T, beaconDB db.Databas
 	sCom, err := altair.NextSyncCommittee(ctx, gs)
 	assert.NoError(t, err)
 	assert.NoError(t, gs.SetCurrentSyncCommittee(sCom))
-	assert.NoError(t, beaconDB.SaveGenesisData(context.Background(), gs))
+	assert.NoError(t, beaconDB.SaveGenesisData(t.Context(), gs))
 
 	testState := gs.Copy()
 	var hRoot [32]byte
@@ -1061,7 +1061,7 @@ func syncSelectionProofSigningRoot(st state.BeaconState, slot primitives.Slot, c
 }
 
 func TestService_setSyncContributionIndexSlotSeen(t *testing.T) {
-	s := NewService(context.Background(), WithP2P(mockp2p.NewTestP2P(t)))
+	s := NewService(t.Context(), WithP2P(mockp2p.NewTestP2P(t)))
 	s.initCaches()
 
 	// Empty cache

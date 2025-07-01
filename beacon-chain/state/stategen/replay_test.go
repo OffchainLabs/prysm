@@ -1,7 +1,6 @@
 package stategen
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
@@ -49,7 +48,7 @@ func TestReplayBlocks_AllSkipSlots(t *testing.T) {
 
 	service := New(beaconDB, doublylinkedtree.New())
 	targetSlot := params.BeaconConfig().SlotsPerEpoch - 1
-	newState, err := service.replayBlocks(context.Background(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
+	newState, err := service.replayBlocks(t.Context(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
 	require.NoError(t, err)
 	assert.Equal(t, targetSlot, newState.Slot(), "Did not advance slots")
 }
@@ -78,7 +77,7 @@ func TestReplayBlocks_SameSlot(t *testing.T) {
 
 	service := New(beaconDB, doublylinkedtree.New())
 	targetSlot := beaconState.Slot()
-	newState, err := service.replayBlocks(context.Background(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
+	newState, err := service.replayBlocks(t.Context(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
 	require.NoError(t, err)
 	assert.Equal(t, targetSlot, newState.Slot(), "Did not advance slots")
 }
@@ -112,7 +111,7 @@ func TestReplayBlocks_LowerSlotBlock(t *testing.T) {
 	b.Block.Slot = beaconState.Slot() - 1
 	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
-	newState, err := service.replayBlocks(context.Background(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{wsb}, targetSlot)
+	newState, err := service.replayBlocks(t.Context(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{wsb}, targetSlot)
 	require.NoError(t, err)
 	assert.Equal(t, targetSlot, newState.Slot(), "Did not advance slots")
 }
@@ -138,7 +137,7 @@ func TestReplayBlocks_ThroughForkBoundary(t *testing.T) {
 
 	service := New(testDB.SetupDB(t), doublylinkedtree.New())
 	targetSlot := params.BeaconConfig().SlotsPerEpoch
-	newState, err := service.replayBlocks(context.Background(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
+	newState, err := service.replayBlocks(t.Context(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
 	require.NoError(t, err)
 
 	// Verify state is version Altair.
@@ -176,28 +175,28 @@ func TestReplayBlocks_ThroughFutureForkBoundaries(t *testing.T) {
 
 	service := New(testDB.SetupDB(t), doublylinkedtree.New())
 	targetSlot := params.BeaconConfig().SlotsPerEpoch * 2
-	newState, err := service.replayBlocks(context.Background(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
+	newState, err := service.replayBlocks(t.Context(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
 	require.NoError(t, err)
 
 	// Verify state is version Bellatrix.
 	assert.Equal(t, version.Bellatrix, newState.Version())
 
 	targetSlot = params.BeaconConfig().SlotsPerEpoch * 3
-	newState, err = service.replayBlocks(context.Background(), newState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
+	newState, err = service.replayBlocks(t.Context(), newState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
 	require.NoError(t, err)
 
 	// Verify state is version Capella.
 	assert.Equal(t, version.Capella, newState.Version())
 
 	targetSlot = params.BeaconConfig().SlotsPerEpoch * 4
-	newState, err = service.replayBlocks(context.Background(), newState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
+	newState, err = service.replayBlocks(t.Context(), newState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
 	require.NoError(t, err)
 
 	// Verify state is version Deneb.
 	assert.Equal(t, version.Deneb, newState.Version())
 
 	targetSlot = params.BeaconConfig().SlotsPerEpoch * 5
-	newState, err = service.replayBlocks(context.Background(), newState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
+	newState, err = service.replayBlocks(t.Context(), newState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
 	require.NoError(t, err)
 
 	// Verify state is version Electra.
@@ -251,7 +250,7 @@ func TestReplayBlocks_ProcessEpoch_Electra(t *testing.T) {
 	require.Equal(t, params.BeaconConfig().MinActivationBalance, beaconState.Balances()[0])
 	service := New(testDB.SetupDB(t), doublylinkedtree.New())
 	targetSlot := (params.BeaconConfig().SlotsPerEpoch * 2) - 1
-	newState, err := service.replayBlocks(context.Background(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
+	newState, err := service.replayBlocks(t.Context(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
 	require.NoError(t, err)
 
 	require.Equal(t, version.Electra, newState.Version())
@@ -268,7 +267,7 @@ func TestReplayBlocks_ProcessEpoch_Electra(t *testing.T) {
 
 func TestLoadBlocks_FirstBranch(t *testing.T) {
 	beaconDB := testDB.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	s := &State{
 		beaconDB: beaconDB,
 	}
@@ -300,7 +299,7 @@ func TestLoadBlocks_FirstBranch(t *testing.T) {
 
 func TestLoadBlocks_SecondBranch(t *testing.T) {
 	beaconDB := testDB.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	s := &State{
 		beaconDB: beaconDB,
 	}
@@ -329,7 +328,7 @@ func TestLoadBlocks_SecondBranch(t *testing.T) {
 
 func TestLoadBlocks_ThirdBranch(t *testing.T) {
 	beaconDB := testDB.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	s := &State{
 		beaconDB: beaconDB,
 	}
@@ -362,7 +361,7 @@ func TestLoadBlocks_ThirdBranch(t *testing.T) {
 
 func TestLoadBlocks_SameSlots(t *testing.T) {
 	beaconDB := testDB.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	s := &State{
 		beaconDB: beaconDB,
 	}
@@ -392,7 +391,7 @@ func TestLoadBlocks_SameSlots(t *testing.T) {
 
 func TestLoadBlocks_SameEndSlots(t *testing.T) {
 	beaconDB := testDB.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	s := &State{
 		beaconDB: beaconDB,
 	}
@@ -421,7 +420,7 @@ func TestLoadBlocks_SameEndSlots(t *testing.T) {
 
 func TestLoadBlocks_SameEndSlotsWith2blocks(t *testing.T) {
 	beaconDB := testDB.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	s := &State{
 		beaconDB: beaconDB,
 	}
@@ -526,10 +525,10 @@ func tree1(t *testing.T, beaconDB db.Database, genesisRoot []byte) ([][32]byte, 
 		beaconBlock.Block.ParentRoot = bytesutil.PadTo(b.Block.ParentRoot, 32)
 		wsb, err := consensusblocks.NewSignedBeaconBlock(beaconBlock)
 		require.NoError(t, err)
-		if err := beaconDB.SaveBlock(context.Background(), wsb); err != nil {
+		if err := beaconDB.SaveBlock(t.Context(), wsb); err != nil {
 			return nil, nil, err
 		}
-		if err := beaconDB.SaveState(context.Background(), st.Copy(), bytesutil.ToBytes32(beaconBlock.Block.ParentRoot)); err != nil {
+		if err := beaconDB.SaveState(t.Context(), st.Copy(), bytesutil.ToBytes32(beaconBlock.Block.ParentRoot)); err != nil {
 			return nil, nil, err
 		}
 		returnedBlocks = append(returnedBlocks, beaconBlock)
@@ -609,10 +608,10 @@ func tree2(t *testing.T, beaconDB db.Database, genesisRoot []byte) ([][32]byte, 
 		beaconBlock.Block.StateRoot = bytesutil.PadTo(b.Block.StateRoot, 32)
 		wsb, err := consensusblocks.NewSignedBeaconBlock(beaconBlock)
 		require.NoError(t, err)
-		if err := beaconDB.SaveBlock(context.Background(), wsb); err != nil {
+		if err := beaconDB.SaveBlock(t.Context(), wsb); err != nil {
 			return nil, nil, err
 		}
-		if err := beaconDB.SaveState(context.Background(), st.Copy(), bytesutil.ToBytes32(beaconBlock.Block.ParentRoot)); err != nil {
+		if err := beaconDB.SaveState(t.Context(), st.Copy(), bytesutil.ToBytes32(beaconBlock.Block.ParentRoot)); err != nil {
 			return nil, nil, err
 		}
 		returnedBlocks = append(returnedBlocks, beaconBlock)
@@ -685,10 +684,10 @@ func tree3(t *testing.T, beaconDB db.Database, genesisRoot []byte) ([][32]byte, 
 		beaconBlock.Block.StateRoot = bytesutil.PadTo(b.Block.StateRoot, 32)
 		wsb, err := consensusblocks.NewSignedBeaconBlock(beaconBlock)
 		require.NoError(t, err)
-		if err := beaconDB.SaveBlock(context.Background(), wsb); err != nil {
+		if err := beaconDB.SaveBlock(t.Context(), wsb); err != nil {
 			return nil, nil, err
 		}
-		if err := beaconDB.SaveState(context.Background(), st.Copy(), bytesutil.ToBytes32(beaconBlock.Block.ParentRoot)); err != nil {
+		if err := beaconDB.SaveState(t.Context(), st.Copy(), bytesutil.ToBytes32(beaconBlock.Block.ParentRoot)); err != nil {
 			return nil, nil, err
 		}
 		returnedBlocks = append(returnedBlocks, beaconBlock)
@@ -755,10 +754,10 @@ func tree4(t *testing.T, beaconDB db.Database, genesisRoot []byte) ([][32]byte, 
 		beaconBlock.Block.StateRoot = bytesutil.PadTo(b.Block.StateRoot, 32)
 		wsb, err := consensusblocks.NewSignedBeaconBlock(beaconBlock)
 		require.NoError(t, err)
-		if err := beaconDB.SaveBlock(context.Background(), wsb); err != nil {
+		if err := beaconDB.SaveBlock(t.Context(), wsb); err != nil {
 			return nil, nil, err
 		}
-		if err := beaconDB.SaveState(context.Background(), st.Copy(), bytesutil.ToBytes32(beaconBlock.Block.ParentRoot)); err != nil {
+		if err := beaconDB.SaveState(t.Context(), st.Copy(), bytesutil.ToBytes32(beaconBlock.Block.ParentRoot)); err != nil {
 			return nil, nil, err
 		}
 		returnedBlocks = append(returnedBlocks, beaconBlock)
@@ -769,7 +768,7 @@ func tree4(t *testing.T, beaconDB db.Database, genesisRoot []byte) ([][32]byte, 
 
 func TestLoadFinalizedBlocks(t *testing.T) {
 	beaconDB := testDB.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	s := &State{
 		beaconDB: beaconDB,
 	}

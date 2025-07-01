@@ -30,7 +30,7 @@ func TestServer_AuthTokenInterceptor_Verify(t *testing.T) {
 	ctxMD := map[string][]string{
 		"authorization": {"Bearer " + token},
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	ctx = metadata.NewIncomingContext(ctx, ctxMD)
 	_, err := interceptor(ctx, "xyz", unaryInfo, unaryHandler)
 	require.NoError(t, err)
@@ -52,7 +52,7 @@ func TestServer_AuthTokenInterceptor_BadToken(t *testing.T) {
 	ctxMD := map[string][]string{
 		"authorization": {"Bearer bad-token"},
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	ctx = metadata.NewIncomingContext(ctx, ctxMD)
 	_, err := interceptor(ctx, "xyz", unaryInfo, unaryHandler)
 	require.ErrorContains(t, "token value is invalid", err)

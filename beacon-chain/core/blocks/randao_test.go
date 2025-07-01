@@ -1,7 +1,6 @@
 package blocks_test
 
 import (
-	"context"
 	"encoding/binary"
 	"testing"
 
@@ -21,7 +20,7 @@ import (
 func TestProcessRandao_IncorrectProposerFailsVerification(t *testing.T) {
 	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
 	// We fetch the proposer's index as that is whom the RANDAO will be verified against.
-	proposerIdx, err := helpers.BeaconProposerIndex(context.Background(), beaconState)
+	proposerIdx, err := helpers.BeaconProposerIndex(t.Context(), beaconState)
 	require.NoError(t, err)
 	epoch := primitives.Epoch(0)
 	buf := make([]byte, 32)
@@ -42,7 +41,7 @@ func TestProcessRandao_IncorrectProposerFailsVerification(t *testing.T) {
 	want := "block randao: signature did not verify"
 	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
-	_, err = blocks.ProcessRandao(context.Background(), beaconState, wsb)
+	_, err = blocks.ProcessRandao(t.Context(), beaconState, wsb)
 	assert.ErrorContains(t, want, err)
 }
 
@@ -62,7 +61,7 @@ func TestProcessRandao_SignatureVerifiesAndUpdatesLatestStateMixes(t *testing.T)
 	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
 	newState, err := blocks.ProcessRandao(
-		context.Background(),
+		t.Context(),
 		beaconState,
 		wsb,
 	)
@@ -85,7 +84,7 @@ func TestRandaoSignatureSet_OK(t *testing.T) {
 		},
 	}
 
-	set, err := blocks.RandaoSignatureBatch(context.Background(), beaconState, block.Body.RandaoReveal)
+	set, err := blocks.RandaoSignatureBatch(t.Context(), beaconState, block.Body.RandaoReveal)
 	require.NoError(t, err)
 	verified, err := set.Verify()
 	require.NoError(t, err)

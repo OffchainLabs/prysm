@@ -1,14 +1,13 @@
 package filesystem
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 func TestStore_GenesisValidatorsRoot(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	genesisValidatorRootString := "0x0100"
 	genesisValidatorRootBytes := []byte{1, 0}
@@ -52,7 +51,7 @@ func TestStore_GenesisValidatorsRoot(t *testing.T) {
 }
 
 func TestStore_SaveGenesisValidatorsRoot(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	genesisValidatorRootString := "0x0100"
 
 	for _, tt := range []struct {

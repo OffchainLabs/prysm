@@ -1,7 +1,6 @@
 package validator
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/slashings"
@@ -24,7 +23,7 @@ func TestServer_getSlashings(t *testing.T) {
 		proposerSlashing, err := util.GenerateProposerSlashingForValidator(beaconState, privKeys[i], i)
 		require.NoError(t, err)
 		proposerSlashings[i] = proposerSlashing
-		err = proposerServer.SlashingsPool.InsertProposerSlashing(context.Background(), beaconState, proposerSlashing)
+		err = proposerServer.SlashingsPool.InsertProposerSlashing(t.Context(), beaconState, proposerSlashing)
 		require.NoError(t, err)
 	}
 
@@ -37,11 +36,11 @@ func TestServer_getSlashings(t *testing.T) {
 		)
 		require.NoError(t, err)
 		attSlashings[i] = attesterSlashing
-		err = proposerServer.SlashingsPool.InsertAttesterSlashing(context.Background(), beaconState, attesterSlashing)
+		err = proposerServer.SlashingsPool.InsertAttesterSlashing(t.Context(), beaconState, attesterSlashing)
 		require.NoError(t, err)
 	}
 
-	p, a := proposerServer.getSlashings(context.Background(), beaconState)
+	p, a := proposerServer.getSlashings(t.Context(), beaconState)
 	require.Equal(t, len(p), int(params.BeaconConfig().MaxProposerSlashings))
 	require.Equal(t, len(a), int(params.BeaconConfig().MaxAttesterSlashings))
 	require.DeepEqual(t, p, proposerSlashings)

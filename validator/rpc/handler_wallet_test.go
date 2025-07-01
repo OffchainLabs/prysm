@@ -2,7 +2,6 @@ package rpc
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -31,7 +30,7 @@ import (
 const strongPass = "29384283xasjasd32%%&*@*#*"
 
 func TestServer_CreateWallet_Local(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	localWalletDir := setupWalletDir(t)
 	defaultWalletPath = localWalletDir
 	opts := []accounts.Option{
@@ -424,7 +423,7 @@ func TestServer_WalletConfig_NoWalletFound(t *testing.T) {
 func TestServer_WalletConfig(t *testing.T) {
 	localWalletDir := setupWalletDir(t)
 	defaultWalletPath = localWalletDir
-	ctx := context.Background()
+	ctx := t.Context()
 	s := &Server{
 		walletInitializedFeed: new(event.Feed),
 		walletDir:             defaultWalletPath,

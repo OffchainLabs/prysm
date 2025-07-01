@@ -27,7 +27,7 @@ type dutiesProvider interface {
 }
 
 type beaconApiDutiesProvider struct {
-	jsonRestHandler JsonRestHandler
+	jsonRestHandler RestHandler
 }
 
 type attesterDuty struct {

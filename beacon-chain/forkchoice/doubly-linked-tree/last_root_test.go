@@ -1,7 +1,6 @@
 package doublylinkedtree
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -10,7 +9,7 @@ import (
 
 func TestLastRoot(t *testing.T) {
 	f := setup(0, 0)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	st, root, err := prepareForkchoiceState(ctx, 1, [32]byte{'1'}, params.BeaconConfig().ZeroHash, [32]byte{'1'}, 0, 0)
 	require.NoError(t, err)

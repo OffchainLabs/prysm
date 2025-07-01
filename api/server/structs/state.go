@@ -219,4 +219,5 @@ type BeaconStateFulu struct {
 	PendingDeposits               []*PendingDeposit            `json:"pending_deposits"`
 	PendingPartialWithdrawals     []*PendingPartialWithdrawal  `json:"pending_partial_withdrawals"`
 	PendingConsolidations         []*PendingConsolidation      `json:"pending_consolidations"`
+	ProposerLookahead             []string                     `json:"proposer_lookahead"`
 }

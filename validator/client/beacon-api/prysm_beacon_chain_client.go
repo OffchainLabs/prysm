@@ -18,7 +18,7 @@ import (
 )
 
 // NewPrysmChainClient returns implementation of iface.PrysmChainClient.
-func NewPrysmChainClient(jsonRestHandler JsonRestHandler, nodeClient iface.NodeClient) iface.PrysmChainClient {
+func NewPrysmChainClient(jsonRestHandler RestHandler, nodeClient iface.NodeClient) iface.PrysmChainClient {
 	return prysmChainClient{
 		jsonRestHandler: jsonRestHandler,
 		nodeClient:      nodeClient,
@@ -26,7 +26,7 @@ func NewPrysmChainClient(jsonRestHandler JsonRestHandler, nodeClient iface.NodeC
 }
 
 type prysmChainClient struct {
-	jsonRestHandler JsonRestHandler
+	jsonRestHandler RestHandler
 	nodeClient      iface.NodeClient
 }
 

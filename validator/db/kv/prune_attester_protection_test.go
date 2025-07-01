@@ -1,7 +1,6 @@
 package kv
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -24,7 +23,7 @@ func TestPruneAttestations_NoPruning(t *testing.T) {
 	require.NoError(t, err)
 
 	// Next, attempt to prune and realize that we still have all epochs intact
-	err = validatorDB.PruneAttestations(context.Background())
+	err = validatorDB.PruneAttestations(t.Context())
 	require.NoError(t, err)
 
 	startEpoch := primitives.Epoch(0)
@@ -54,7 +53,7 @@ func TestPruneAttestations_OK(t *testing.T) {
 		require.NoError(t, setupAttestationsForEveryEpoch(validatorDB, pk, numEpochs))
 	}
 
-	require.NoError(t, validatorDB.PruneAttestations(context.Background()))
+	require.NoError(t, validatorDB.PruneAttestations(t.Context()))
 
 	// Next, verify that we pruned every epoch
 	// from genesis to SLASHING_PROTECTION_PRUNING_EPOCHS - 1.
@@ -108,7 +107,7 @@ func BenchmarkPruneAttestations(b *testing.B) {
 		}
 		b.StartTimer()
 
-		require.NoError(b, validatorDB.PruneAttestations(context.Background()))
+		require.NoError(b, validatorDB.PruneAttestations(b.Context()))
 	}
 }
 

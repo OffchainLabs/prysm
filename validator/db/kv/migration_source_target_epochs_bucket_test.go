@@ -1,7 +1,6 @@
 package kv
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -109,7 +108,7 @@ func TestStore_migrateSourceTargetEpochsBucketUp(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			validatorDB := setupDB(t, pubKeys)
 			tt.setup(t, validatorDB)
-			require.NoError(t, validatorDB.migrateSourceTargetEpochsBucketUp(context.Background()))
+			require.NoError(t, validatorDB.migrateSourceTargetEpochsBucketUp(t.Context()))
 			tt.eval(t, validatorDB)
 		})
 	}
@@ -204,7 +203,7 @@ func TestStore_migrateSourceTargetEpochsBucketDown(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			validatorDB := setupDB(t, nil)
 			tt.setup(t, validatorDB)
-			require.NoError(t, validatorDB.migrateSourceTargetEpochsBucketDown(context.Background()))
+			require.NoError(t, validatorDB.migrateSourceTargetEpochsBucketDown(t.Context()))
 			tt.eval(t, validatorDB)
 		})
 	}

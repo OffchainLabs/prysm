@@ -299,9 +299,29 @@ func ProposerIndexAtSlotFromCheckpoint(c *forkchoicetypes.Checkpoint, slot primi
 	return proposerIndices[slot%params.BeaconConfig().SlotsPerEpoch], nil
 }
 
+func beaconProposerIndexAtSlotFulu(state state.ReadOnlyBeaconState, slot primitives.Slot) (primitives.ValidatorIndex, error) {
+	e := slots.ToEpoch(slot)
+	stateEpoch := slots.ToEpoch(state.Slot())
+	if e < stateEpoch || e > stateEpoch+1 {
+		return 0, errors.Errorf("slot %d is not in the current epoch %d or the next epoch", slot, stateEpoch)
+	}
+	lookAhead, err := state.ProposerLookahead()
+	if err != nil {
+		return 0, errors.Wrap(err, "could not get proposer lookahead")
+	}
+	if e == stateEpoch {
+		return lookAhead[slot%params.BeaconConfig().SlotsPerEpoch], nil
+	}
+	// The caller is requesting the proposer for the next epoch
+	return lookAhead[slot%params.BeaconConfig().SlotsPerEpoch+params.BeaconConfig().SlotsPerEpoch], nil
+}
+
 // BeaconProposerIndexAtSlot returns proposer index at the given slot from the
 // point of view of the given state as head state
 func BeaconProposerIndexAtSlot(ctx context.Context, state state.ReadOnlyBeaconState, slot primitives.Slot) (primitives.ValidatorIndex, error) {
+	if state.Version() >= version.Fulu {
+		return beaconProposerIndexAtSlotFulu(state, slot)
+	}
 	e := slots.ToEpoch(slot)
 	// The cache uses the state root of the previous epoch - minimum_seed_lookahead last slot as key. (e.g. Starting epoch 1, slot 32, the key would be block root at slot 31)
 	// For simplicity, the node will skip caching of genesis epoch.

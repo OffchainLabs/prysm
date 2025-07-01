@@ -38,7 +38,7 @@ func RunUpgradeToFulu(t *testing.T, config string) {
 			}
 			preState, err := state_native.InitializeFromProtoElectra(preStateBase)
 			require.NoError(t, err)
-			postState, err := fulu.UpgradeToFulu(preState)
+			postState, err := fulu.UpgradeToFulu(t.Context(), preState)
 			require.NoError(t, err)
 			postStateFromFunction, err := state_native.ProtobufBeaconStateFulu(postState.ToProtoUnsafe())
 			require.NoError(t, err)
@@ -47,7 +47,7 @@ func RunUpgradeToFulu(t *testing.T, config string) {
 			require.NoError(t, err)
 			postStateSSZ, err := snappy.Decode(nil /* dst */, postStateFile)
 			require.NoError(t, err, "Failed to decompress")
-			postStateFromFile := &ethpb.BeaconStateElectra{}
+			postStateFromFile := &ethpb.BeaconStateFulu{}
 			if err := postStateFromFile.UnmarshalSSZ(postStateSSZ); err != nil {
 				t.Fatalf("Failed to unmarshal: %v", err)
 			}

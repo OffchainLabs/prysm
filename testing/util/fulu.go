@@ -1,7 +1,6 @@
 package util
 
 import (
-	"encoding/binary"
 	"math/big"
 	"testing"
 
@@ -110,13 +109,20 @@ func GenerateTestFuluBlockWithSidecars(t *testing.T, blobCount int, options ...F
 	block.Block.ParentRoot = generator.parent[:]
 	block.Block.ProposerIndex = generator.proposer
 
-	block.Block.Body.BlobKzgCommitments = make([][]byte, blobCount)
-	for i := range blobCount {
-		var commitment [fieldparams.KzgCommitmentSize]byte
-		binary.LittleEndian.PutUint16(commitment[:16], uint16(i))
-		binary.LittleEndian.PutUint16(commitment[16:32], uint16(generator.slot))
-		block.Block.Body.BlobKzgCommitments[i] = commitment[:]
+	blobs := make([]kzg.Blob, 0, generator.blobCount)
+	commitments := make([][]byte, 0, generator.blobCount)
+
+	for i := range generator.blobCount {
+		blob := kzg.Blob{uint8(i)}
+
+		commitment, err := kzg.BlobToKZGCommitment(&blob)
+		require.NoError(t, err)
+
+		blobs = append(blobs, blob)
+		commitments = append(commitments, commitment[:])
 	}
+
+	block.Block.Body.BlobKzgCommitments = commitments
 
 	body, err := blocks.NewBeaconBlockBody(block.Block.Body)
 	require.NoError(t, err)
@@ -149,39 +155,30 @@ func GenerateTestFuluBlockWithSidecars(t *testing.T, blobCount int, options ...F
 	root, err := block.Block.HashTreeRoot()
 	require.NoError(t, err)
 
-	sbb, err := blocks.NewSignedBeaconBlock(block)
+	signedBeaconBlock, err := blocks.NewSignedBeaconBlock(block)
 	require.NoError(t, err)
-
-	sh, err := sbb.Header()
-	require.NoError(t, err)
-
-	blobs := make([]kzg.Blob, blobCount)
-	for i, commitment := range block.Block.Body.BlobKzgCommitments {
-		roSidecars := GenerateTestDenebBlobSidecar(t, root, sh, i, commitment, inclusion[i])
-		blobs[i] = kzg.Blob(roSidecars.Blob)
-	}
 
 	cellsAndProofs := GenerateCellsAndProofs(t, blobs)
 
-	dataColumns, err := peerdas.DataColumnSidecars(sbb, cellsAndProofs)
+	sidecars, err := peerdas.DataColumnSidecars(signedBeaconBlock, cellsAndProofs)
 	require.NoError(t, err)
 
-	roSidecars := make([]blocks.RODataColumn, 0, len(dataColumns))
-	roVerifiedSidecars := make([]blocks.VerifiedRODataColumn, 0, len(dataColumns))
-	for _, dataColumn := range dataColumns {
-		roSidecar, err := blocks.NewRODataColumnWithRoot(dataColumn, root)
+	roSidecars := make([]blocks.RODataColumn, 0, len(sidecars))
+	verifiedRoSidecars := make([]blocks.VerifiedRODataColumn, 0, len(sidecars))
+	for _, sidecar := range sidecars {
+		roSidecar, err := blocks.NewRODataColumnWithRoot(sidecar, root)
 		require.NoError(t, err)
 
 		roVerifiedSidecar := blocks.NewVerifiedRODataColumn(roSidecar)
 
 		roSidecars = append(roSidecars, roSidecar)
-		roVerifiedSidecars = append(roVerifiedSidecars, roVerifiedSidecar)
+		verifiedRoSidecars = append(verifiedRoSidecars, roVerifiedSidecar)
 	}
 
-	rob, err := blocks.NewROBlockWithRoot(sbb, root)
+	roBlock, err := blocks.NewROBlockWithRoot(signedBeaconBlock, root)
 	require.NoError(t, err)
 
-	return rob, roSidecars, roVerifiedSidecars
+	return roBlock, roSidecars, verifiedRoSidecars
 }
 
 func GenerateCellsAndProofs(t testing.TB, blobs []kzg.Blob) []kzg.CellsAndProofs {
