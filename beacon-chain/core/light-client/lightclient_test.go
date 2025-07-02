@@ -7,7 +7,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	light_client "github.com/OffchainLabs/prysm/v6/consensus-types/light-client"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 
 	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
@@ -547,7 +546,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 
 		header, err := lightClient.BlockToLightClientHeader(
 			l.Ctx,
-			primitives.Slot(params.BeaconConfig().AltairForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+			version.Altair,
 			l.Block,
 		)
 		require.NoError(t, err)
@@ -570,7 +569,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 
 		header, err := lightClient.BlockToLightClientHeader(
 			l.Ctx,
-			primitives.Slot(params.BeaconConfig().BellatrixForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+			version.Bellatrix,
 			l.Block,
 		)
 		require.NoError(t, err)
@@ -594,7 +593,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 
 			header, err := lightClient.BlockToLightClientHeader(
 				l.Ctx,
-				primitives.Slot(params.BeaconConfig().CapellaForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+				version.Capella,
 				l.Block,
 			)
 			require.NoError(t, err)
@@ -655,7 +654,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 
 			header, err := lightClient.BlockToLightClientHeader(
 				l.Ctx,
-				primitives.Slot(params.BeaconConfig().CapellaForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+				version.Capella,
 				l.Block,
 			)
 			require.NoError(t, err)
@@ -718,7 +717,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 
 			header, err := lightClient.BlockToLightClientHeader(
 				l.Ctx,
-				primitives.Slot(params.BeaconConfig().DenebForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+				version.Deneb,
 				l.Block,
 			)
 			require.NoError(t, err)
@@ -787,7 +786,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 
 			header, err := lightClient.BlockToLightClientHeader(
 				l.Ctx,
-				primitives.Slot(params.BeaconConfig().DenebForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+				version.Deneb,
 				l.Block,
 			)
 			require.NoError(t, err)
@@ -856,7 +855,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 		t.Run("Non-Blinded Beacon Block", func(t *testing.T) {
 			l := util.NewTestLightClient(t, version.Electra)
 
-			header, err := lightClient.BlockToLightClientHeader(l.Ctx, l.State.Slot(), l.Block)
+			header, err := lightClient.BlockToLightClientHeader(l.Ctx, version.Electra, l.Block)
 			require.NoError(t, err)
 			require.NotNil(t, header, "header is nil")
 
@@ -921,7 +920,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 		t.Run("Blinded Beacon Block", func(t *testing.T) {
 			l := util.NewTestLightClient(t, version.Electra, util.WithBlinded())
 
-			header, err := lightClient.BlockToLightClientHeader(l.Ctx, l.State.Slot(), l.Block)
+			header, err := lightClient.BlockToLightClientHeader(l.Ctx, version.Electra, l.Block)
 			require.NoError(t, err)
 			require.NotNil(t, header, "header is nil")
 
@@ -989,7 +988,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 
 		header, err := lightClient.BlockToLightClientHeader(
 			l.Ctx,
-			primitives.Slot(params.BeaconConfig().CapellaForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+			version.Capella,
 			l.Block)
 		require.NoError(t, err)
 		require.NotNil(t, header, "header is nil")
@@ -1011,7 +1010,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 
 		header, err := lightClient.BlockToLightClientHeader(
 			l.Ctx,
-			primitives.Slot(params.BeaconConfig().DenebForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+			version.Deneb,
 			l.Block)
 		require.NoError(t, err)
 		require.NotNil(t, header, "header is nil")
@@ -1034,7 +1033,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 
 			header, err := lightClient.BlockToLightClientHeader(
 				l.Ctx,
-				primitives.Slot(params.BeaconConfig().DenebForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+				version.Deneb,
 				l.Block)
 			require.NoError(t, err)
 			require.NotNil(t, header, "header is nil")
@@ -1094,7 +1093,7 @@ func TestLightClient_BlockToLightClientHeader(t *testing.T) {
 
 			header, err := lightClient.BlockToLightClientHeader(
 				l.Ctx,
-				primitives.Slot(params.BeaconConfig().DenebForkEpoch)*params.BeaconConfig().SlotsPerEpoch,
+				version.Deneb,
 				l.Block)
 			require.NoError(t, err)
 			require.NotNil(t, header, "header is nil")
@@ -1180,14 +1179,13 @@ func createNonEmptyFinalityBranch() [][]byte {
 }
 
 func TestIsBetterUpdate(t *testing.T) {
-	config := params.BeaconConfig()
-	st, err := util.NewBeaconStateAltair()
+	blk, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockAltair())
 	require.NoError(t, err)
 
 	t.Run("new has supermajority but old doesn't", func(t *testing.T) {
-		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(1), st)
+		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
-		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(2), st)
+		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
 
 		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
@@ -1203,9 +1201,9 @@ func TestIsBetterUpdate(t *testing.T) {
 	})
 
 	t.Run("old has supermajority but new doesn't", func(t *testing.T) {
-		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(1), st)
+		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
-		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(2), st)
+		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
 
 		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
@@ -1221,9 +1219,9 @@ func TestIsBetterUpdate(t *testing.T) {
 	})
 
 	t.Run("new doesn't have supermajority and newNumActiveParticipants is greater than oldNumActiveParticipants", func(t *testing.T) {
-		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(1), st)
+		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
-		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(2), st)
+		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
 
 		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
@@ -1239,9 +1237,9 @@ func TestIsBetterUpdate(t *testing.T) {
 	})
 
 	t.Run("new doesn't have supermajority and newNumActiveParticipants is lesser than oldNumActiveParticipants", func(t *testing.T) {
-		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(1), st)
+		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
-		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(2), st)
+		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
 
 		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
@@ -1257,9 +1255,9 @@ func TestIsBetterUpdate(t *testing.T) {
 	})
 
 	t.Run("new has relevant sync committee but old doesn't", func(t *testing.T) {
-		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(1), st)
+		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
-		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(2), st)
+		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
 
 		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
@@ -1296,9 +1294,9 @@ func TestIsBetterUpdate(t *testing.T) {
 	})
 
 	t.Run("old has relevant sync committee but new doesn't", func(t *testing.T) {
-		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(1), st)
+		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
-		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(2), st)
+		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
 
 		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
@@ -1335,9 +1333,9 @@ func TestIsBetterUpdate(t *testing.T) {
 	})
 
 	t.Run("new has finality but old doesn't", func(t *testing.T) {
-		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(1), st)
+		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
-		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(2), st)
+		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
 
 		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
@@ -1378,9 +1376,9 @@ func TestIsBetterUpdate(t *testing.T) {
 	})
 
 	t.Run("old has finality but new doesn't", func(t *testing.T) {
-		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(1), st)
+		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
-		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(2), st)
+		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
 
 		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
@@ -1421,9 +1419,9 @@ func TestIsBetterUpdate(t *testing.T) {
 	})
 
 	t.Run("new has finality and sync committee finality both but old doesn't have sync committee finality", func(t *testing.T) {
-		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(1), st)
+		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
-		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(2), st)
+		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
 
 		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
@@ -1482,9 +1480,9 @@ func TestIsBetterUpdate(t *testing.T) {
 	})
 
 	t.Run("new has finality but doesn't have sync committee finality and old has sync committee finality", func(t *testing.T) {
-		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(1), st)
+		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
-		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(2), st)
+		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
 
 		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
@@ -1543,9 +1541,9 @@ func TestIsBetterUpdate(t *testing.T) {
 	})
 
 	t.Run("new has more active participants than old", func(t *testing.T) {
-		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(1), st)
+		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
-		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(2), st)
+		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
 
 		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
@@ -1561,9 +1559,9 @@ func TestIsBetterUpdate(t *testing.T) {
 	})
 
 	t.Run("new has less active participants than old", func(t *testing.T) {
-		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(1), st)
+		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
-		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(2), st)
+		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
 
 		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
@@ -1579,9 +1577,9 @@ func TestIsBetterUpdate(t *testing.T) {
 	})
 
 	t.Run("new's attested header's slot is lesser than old's attested header's slot", func(t *testing.T) {
-		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(1), st)
+		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
-		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(2), st)
+		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
 
 		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
@@ -1640,9 +1638,9 @@ func TestIsBetterUpdate(t *testing.T) {
 	})
 
 	t.Run("new's attested header's slot is greater than old's attested header's slot", func(t *testing.T) {
-		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(1), st)
+		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
-		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(2), st)
+		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
 
 		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
@@ -1701,9 +1699,9 @@ func TestIsBetterUpdate(t *testing.T) {
 	})
 
 	t.Run("none of the above conditions are met and new signature's slot is less than old signature's slot", func(t *testing.T) {
-		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(1), st)
+		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
-		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(2), st)
+		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
 
 		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
@@ -1762,9 +1760,9 @@ func TestIsBetterUpdate(t *testing.T) {
 	})
 
 	t.Run("none of the above conditions are met and new signature's slot is greater than old signature's slot", func(t *testing.T) {
-		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(1), st)
+		oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
-		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(primitives.Slot(config.AltairForkEpoch*primitives.Epoch(config.SlotsPerEpoch)).Add(2), st)
+		newUpdate, err := lightClient.CreateDefaultLightClientUpdate(blk)
 		require.NoError(t, err)
 
 		oldUpdate.SetSyncAggregate(&pb.SyncAggregate{
