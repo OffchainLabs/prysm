@@ -46,7 +46,21 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 		slot = primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
 		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
 			Beacon: &pb.BeaconBlockHeader{
-				Slot:          1,
+				Slot:          slot,
+				ProposerIndex: primitives.ValidatorIndex(rand.Int()),
+				ParentRoot:    sampleRoot,
+				StateRoot:     sampleRoot,
+				BodyRoot:      sampleRoot,
+			},
+		})
+		require.NoError(t, err)
+		st, err = util.NewBeaconState()
+		require.NoError(t, err)
+	case version.Bellatrix:
+		slot = primitives.Slot(config.BellatrixForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
+		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderAltair{
+			Beacon: &pb.BeaconBlockHeader{
+				Slot:          slot,
 				ProposerIndex: primitives.ValidatorIndex(rand.Int()),
 				ParentRoot:    sampleRoot,
 				StateRoot:     sampleRoot,
@@ -60,7 +74,7 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 		slot = primitives.Slot(config.CapellaForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
 		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderCapella{
 			Beacon: &pb.BeaconBlockHeader{
-				Slot:          1,
+				Slot:          slot,
 				ProposerIndex: primitives.ValidatorIndex(rand.Int()),
 				ParentRoot:    sampleRoot,
 				StateRoot:     sampleRoot,
@@ -88,7 +102,7 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 		slot = primitives.Slot(config.DenebForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
 		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderDeneb{
 			Beacon: &pb.BeaconBlockHeader{
-				Slot:          1,
+				Slot:          slot,
 				ProposerIndex: primitives.ValidatorIndex(rand.Int()),
 				ParentRoot:    sampleRoot,
 				StateRoot:     sampleRoot,
@@ -116,7 +130,7 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 		slot = primitives.Slot(config.ElectraForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
 		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderDeneb{
 			Beacon: &pb.BeaconBlockHeader{
-				Slot:          1,
+				Slot:          slot,
 				ProposerIndex: primitives.ValidatorIndex(rand.Int()),
 				ParentRoot:    sampleRoot,
 				StateRoot:     sampleRoot,
@@ -144,7 +158,7 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 		slot = primitives.Slot(config.FuluForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
 		header, err = light_client.NewWrappedHeader(&pb.LightClientHeaderDeneb{
 			Beacon: &pb.BeaconBlockHeader{
-				Slot:          1,
+				Slot:          slot,
 				ProposerIndex: primitives.ValidatorIndex(rand.Int()),
 				ParentRoot:    sampleRoot,
 				StateRoot:     sampleRoot,
@@ -192,10 +206,11 @@ func TestStore_LightClientUpdate_CanSaveRetrieve(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig()
 	cfg.AltairForkEpoch = 0
-	cfg.CapellaForkEpoch = 1
-	cfg.DenebForkEpoch = 2
-	cfg.ElectraForkEpoch = 3
-	cfg.FuluForkEpoch = 3
+	cfg.BellatrixForkEpoch = 1
+	cfg.CapellaForkEpoch = 2
+	cfg.DenebForkEpoch = 3
+	cfg.ElectraForkEpoch = 4
+	cfg.FuluForkEpoch = 5
 	params.OverrideBeaconConfig(cfg)
 
 	db := setupDB(t)
@@ -203,6 +218,18 @@ func TestStore_LightClientUpdate_CanSaveRetrieve(t *testing.T) {
 
 	t.Run("Altair", func(t *testing.T) {
 		update, err := createUpdate(t, version.Altair)
+		require.NoError(t, err)
+		period := uint64(1)
+
+		err = db.SaveLightClientUpdate(ctx, period, update)
+		require.NoError(t, err)
+
+		retrievedUpdate, err := db.LightClientUpdate(ctx, period)
+		require.NoError(t, err)
+		require.DeepEqual(t, update, retrievedUpdate, "retrieved update does not match saved update")
+	})
+	t.Run("Bellatrix", func(t *testing.T) {
+		update, err := createUpdate(t, version.Bellatrix)
 		require.NoError(t, err)
 		period := uint64(1)
 
@@ -237,17 +264,6 @@ func TestStore_LightClientUpdate_CanSaveRetrieve(t *testing.T) {
 	})
 	t.Run("Electra", func(t *testing.T) {
 		update, err := createUpdate(t, version.Electra)
-		require.NoError(t, err)
-		period := uint64(1)
-		err = db.SaveLightClientUpdate(ctx, period, update)
-		require.NoError(t, err)
-
-		retrievedUpdate, err := db.LightClientUpdate(ctx, period)
-		require.NoError(t, err)
-		require.DeepEqual(t, update, retrievedUpdate, "retrieved update does not match saved update")
-	})
-	t.Run("Fulu", func(t *testing.T) {
-		update, err := createUpdate(t, version.Fulu)
 		require.NoError(t, err)
 		period := uint64(1)
 		err = db.SaveLightClientUpdate(ctx, period, update)
@@ -584,9 +600,10 @@ func TestStore_LightClientBootstrap_CanSaveRetrieve(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig()
 	cfg.AltairForkEpoch = 0
-	cfg.CapellaForkEpoch = 1
-	cfg.DenebForkEpoch = 2
-	cfg.ElectraForkEpoch = 3
+	cfg.BellatrixForkEpoch = 1
+	cfg.CapellaForkEpoch = 2
+	cfg.DenebForkEpoch = 3
+	cfg.ElectraForkEpoch = 4
 	cfg.EpochsPerSyncCommitteePeriod = 1
 	params.OverrideBeaconConfig(cfg)
 
@@ -839,6 +856,7 @@ func createDefaultLightClientBootstrap(currentSlot primitives.Slot) (interfaces.
 		m = &pb.LightClientBootstrapAltair{
 			Header: &pb.LightClientHeaderAltair{
 				Beacon: &pb.BeaconBlockHeader{
+					Slot:       currentSlot,
 					ParentRoot: make([]byte, 32),
 					StateRoot:  make([]byte, 32),
 					BodyRoot:   make([]byte, 32),
@@ -851,6 +869,7 @@ func createDefaultLightClientBootstrap(currentSlot primitives.Slot) (interfaces.
 		m = &pb.LightClientBootstrapCapella{
 			Header: &pb.LightClientHeaderCapella{
 				Beacon: &pb.BeaconBlockHeader{
+					Slot:       currentSlot,
 					ParentRoot: make([]byte, 32),
 					StateRoot:  make([]byte, 32),
 					BodyRoot:   make([]byte, 32),
@@ -877,6 +896,7 @@ func createDefaultLightClientBootstrap(currentSlot primitives.Slot) (interfaces.
 		m = &pb.LightClientBootstrapDeneb{
 			Header: &pb.LightClientHeaderDeneb{
 				Beacon: &pb.BeaconBlockHeader{
+					Slot:       currentSlot,
 					ParentRoot: make([]byte, 32),
 					StateRoot:  make([]byte, 32),
 					BodyRoot:   make([]byte, 32),
@@ -905,6 +925,7 @@ func createDefaultLightClientBootstrap(currentSlot primitives.Slot) (interfaces.
 		m = &pb.LightClientBootstrapElectra{
 			Header: &pb.LightClientHeaderDeneb{
 				Beacon: &pb.BeaconBlockHeader{
+					Slot:       currentSlot,
 					ParentRoot: make([]byte, 32),
 					StateRoot:  make([]byte, 32),
 					BodyRoot:   make([]byte, 32),
