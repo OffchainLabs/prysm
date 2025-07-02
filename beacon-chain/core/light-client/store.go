@@ -15,7 +15,6 @@ type Store struct {
 
 func NewLightClientStore() *Store {
 	return &Store{}
-
 }
 
 func (s *Store) SetLastFinalityUpdate(update interfaces.LightClientFinalityUpdate) {
