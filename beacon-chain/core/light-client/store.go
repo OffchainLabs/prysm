@@ -13,6 +13,10 @@ type Store struct {
 	lastOptimisticUpdate interfaces.LightClientOptimisticUpdate
 }
 
+func NewLightClientStore() *Store {
+	return &Store{}
+}
+
 func (s *Store) SetLastFinalityUpdate(update interfaces.LightClientFinalityUpdate) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
