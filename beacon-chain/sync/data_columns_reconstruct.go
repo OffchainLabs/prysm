@@ -23,8 +23,8 @@ const (
 
 // reconstructSaveBroadcastDataColumnSidecars reconstructs if possible and
 // needed all data column sidecars. Then, it saves into the store missing
-// sidecars. After a delay, it broadcasts not seen via gossip (but reconstructed)
-// sidecars.
+// sidecars. After a delay, it broadcasts in the background not seen via gossip
+// (but reconstructed) sidecars.
 func (s *Service) reconstructSaveBroadcastDataColumnSidecars(
 	ctx context.Context,
 	slot primitives.Slot,
