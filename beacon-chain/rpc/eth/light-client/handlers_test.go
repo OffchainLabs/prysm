@@ -50,7 +50,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		version.Electra:   params.BeaconConfig().ElectraForkEpoch,
 	}
 
-	for testVersion := 1; testVersion <= 5; testVersion++ {
+	for testVersion := version.Altair; testVersion <= version.Electra; testVersion++ {
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			l := util.NewTestLightClient(t, testVersion)
 
