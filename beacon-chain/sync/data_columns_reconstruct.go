@@ -192,15 +192,17 @@ func (s *Service) broadcastMissingDataColumnSidecars(
 		s.setSeenDataColumnIndex(slot, proposerIndex, verifiedRODataColumn.Index)
 	}
 
-	// Sort for nice logging.
-	slices.Sort(broadcastedColumns)
-	slices.Sort(missingColumns)
+	if logrus.GetLevel() >= logrus.DebugLevel {
+		// Sort for nice logging.
+		slices.Sort(broadcastedColumns)
+		slices.Sort(missingColumns)
 
-	log.WithFields(logrus.Fields{
-		"timeIntoSlot":   timeIntoSlot,
-		"missingColumns": missingColumns,
-		"broadcasted":    broadcastedColumns,
-	}).Debug("Start broadcasting not seen via gossip but reconstructed data columns")
+		log.WithFields(logrus.Fields{
+			"timeIntoSlot":   timeIntoSlot,
+			"missingColumns": missingColumns,
+			"broadcasted":    broadcastedColumns,
+		}).Debug("Start broadcasting not seen via gossip but reconstructed data columns")
+	}
 
 	return nil
 }
