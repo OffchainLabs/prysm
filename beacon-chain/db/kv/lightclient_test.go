@@ -581,7 +581,7 @@ func TestStore_LightClientBootstrap_CanSaveRetrieve(t *testing.T) {
 		require.IsNil(t, retrievedBootstrap)
 	})
 
-	for testVersion := version.Altair; testVersion <= version.Electra; testVersion++ { // Altair to Electra
+	for testVersion := version.Altair; testVersion <= version.Electra; testVersion++ {
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			bootstrap, err := createDefaultLightClientBootstrap(primitives.Slot(uint64(versionToForkEpoch[testVersion]) * uint64(params.BeaconConfig().SlotsPerEpoch)))
 			require.NoError(t, err)
