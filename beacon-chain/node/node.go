@@ -167,7 +167,6 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		syncChecker:             &initialsync.SyncChecker{},
 		custodyInfo:             &peerdas.CustodyInfo{},
 		slasherEnabled:          cliCtx.Bool(flags.SlasherFlag.Name),
-		lcStore:                 nil,
 	}
 
 	for _, opt := range opts {
