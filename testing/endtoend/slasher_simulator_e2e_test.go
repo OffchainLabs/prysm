@@ -50,6 +50,7 @@ func (mockSyncChecker) IsSynced(_ context.Context) (bool, error) {
 func TestEndToEnd_SlasherSimulator(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.E2ETestConfig().Copy())
+	params.BeaconConfig().InitializeForkSchedule()
 
 	hook := logTest.NewGlobal()
 	ctx := t.Context()
