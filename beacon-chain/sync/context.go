@@ -3,7 +3,6 @@ package sync
 import (
 	"io"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -87,12 +86,8 @@ type ContextByteVersions map[[4]byte]int
 // and the runtime/version identifier for the corresponding fork.
 func ContextByteVersionsForValRoot(valRoot [32]byte) (ContextByteVersions, error) {
 	m := make(ContextByteVersions)
-	for fv, v := range params.ConfigForkVersions(params.BeaconConfig()) {
-		digest, err := signing.ComputeForkDigest(fv[:], valRoot[:])
-		if err != nil {
-			return nil, errors.Wrapf(err, "unable to compute fork digest for fork version %#x", fv)
-		}
-		m[digest] = v
+	for _, entry := range params.SortedNetworkScheduleEntries() {
+		m[entry.ForkDigest] = entry.VersionEnum
 	}
 	return m, nil
 }

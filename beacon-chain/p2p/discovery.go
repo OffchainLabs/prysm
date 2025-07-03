@@ -11,6 +11,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -568,8 +569,10 @@ func (s *Service) createLocalNode(
 	localNode.SetFallbackIP(ipAddr)
 	localNode.SetFallbackUDP(udpPort)
 
-	localNode, err = addForkEntry(localNode, s.genesisTime, s.genesisValidatorsRoot)
-	if err != nil {
+	clock := startup.NewClock(s.genesisTime, [32]byte(s.genesisValidatorsRoot))
+	current := params.GetNetworkScheduleEntry(clock.CurrentEpoch())
+	next := params.NextNetworkScheduleEntry(clock.CurrentEpoch())
+	if err := updateENR(localNode, current, next); err != nil {
 		return nil, errors.Wrap(err, "could not add eth2 fork version entry to enr")
 	}
 
@@ -677,7 +680,7 @@ func (s *Service) filterPeer(node *enode.Node) bool {
 	// Ignore nodes that don't match our fork digest.
 	nodeENR := node.Record()
 	if s.genesisValidatorsRoot != nil {
-		if err := s.compareForkENR(nodeENR); err != nil {
+		if err := compareForkENR(s.dv5Listener.LocalNode().Node().Record(), nodeENR); err != nil {
 			log.WithError(err).Trace("Fork ENR mismatches between peer and local node")
 			return false
 		}

@@ -13,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -137,13 +136,7 @@ func GenerateTestFuluBlockWithSidecars(t *testing.T, blobCount int, options ...F
 
 	if generator.sign {
 		epoch := slots.ToEpoch(block.Block.Slot)
-		schedule := forks.NewOrderedSchedule(params.BeaconConfig())
-
-		version, err := schedule.VersionForEpoch(epoch)
-		require.NoError(t, err)
-
-		fork, err := schedule.ForkFromVersion(version)
-		require.NoError(t, err)
+		fork := params.ForkFromConfig(params.BeaconConfig(), epoch)
 
 		domain := params.BeaconConfig().DomainBeaconProposer
 		sig, err := signing.ComputeDomainAndSignWithoutState(fork, epoch, domain, generator.valRoot, block.Block, generator.sk)
