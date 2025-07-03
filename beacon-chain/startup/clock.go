@@ -35,10 +35,19 @@ func (g *Clock) GenesisValidatorsRoot() [32]byte {
 	return g.vr
 }
 
+// GenesisValidatorsRoot returns the genesis state validator root as a slice for convenience.
+func (g *Clock) GenesisValidatorsRootSlice() []byte {
+	return g.vr[:]
+}
+
 // CurrentSlot returns the current slot relative to the time.Time value that Clock embeds.
 func (g *Clock) CurrentSlot() types.Slot {
 	now := g.now()
 	return slots.Duration(g.t, now)
+}
+
+func (g *Clock) CurrentEpoch() types.Epoch {
+	return slots.ToEpoch(g.CurrentSlot())
 }
 
 // SlotStart computes the time the given slot begins.

@@ -25,11 +25,16 @@ import (
 	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 )
 
 func TestDataColumnSidecarsByRangeRPCHandler(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	beaconConfig := params.BeaconConfig()
+	//beaconConfig.FuluForkEpoch = beaconConfig.ElectraForkEpoch + 100
+	beaconConfig.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(beaconConfig)
+	params.BeaconConfig().InitializeForkSchedule()
 	ctx := context.Background()
 	t.Run("wrong message type", func(t *testing.T) {
 		service := &Service{}
@@ -37,6 +42,8 @@ func TestDataColumnSidecarsByRangeRPCHandler(t *testing.T) {
 		require.ErrorIs(t, err, notDataColumnsByRangeIdentifiersError)
 	})
 
+	ctxMap, err := ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
+	require.NoError(t, err)
 	t.Run("invalid request", func(t *testing.T) {
 		slot := primitives.Slot(400)
 
@@ -83,11 +90,6 @@ func TestDataColumnSidecarsByRangeRPCHandler(t *testing.T) {
 	})
 
 	t.Run("nominal", func(t *testing.T) {
-		params.SetupTestConfigCleanup(t)
-		beaconConfig := params.BeaconConfig()
-		beaconConfig.FuluForkEpoch = 0
-		params.OverrideBeaconConfig(beaconConfig)
-
 		slot := primitives.Slot(400)
 
 		params := []util.DataColumnParam{
@@ -99,7 +101,7 @@ func TestDataColumnSidecarsByRangeRPCHandler(t *testing.T) {
 		_, verifiedRODataColumns := util.CreateTestVerifiedRoDataColumnSidecars(t, params)
 
 		storage := filesystem.NewEphemeralDataColumnStorage(t)
-		err := storage.Save(verifiedRODataColumns)
+		err = storage.Save(verifiedRODataColumns)
 		require.NoError(t, err)
 
 		localP2P, remoteP2P := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
@@ -150,10 +152,6 @@ func TestDataColumnSidecarsByRangeRPCHandler(t *testing.T) {
 				dataColumnStorage: storage,
 			},
 			rateLimiter: newRateLimiter(localP2P),
-		}
-
-		ctxMap := ContextByteVersions{
-			[4]byte{245, 165, 253, 66}: version.Fulu,
 		}
 
 		root0 := verifiedRODataColumns[0].BlockRoot()

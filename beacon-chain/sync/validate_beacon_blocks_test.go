@@ -779,6 +779,8 @@ func TestValidateBeaconBlockPubSub_SeenProposerSlot(t *testing.T) {
 }
 
 func TestValidateBeaconBlockPubSub_FilterByFinalizedEpoch(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	params.BeaconConfig().InitializeForkSchedule()
 	hook := logTest.NewGlobal()
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
@@ -791,7 +793,7 @@ func TestValidateBeaconBlockPubSub_FilterByFinalizedEpoch(t *testing.T) {
 		FinalizedCheckPoint: &ethpb.Checkpoint{
 			Epoch: 1,
 		},
-		ValidatorsRoot: [32]byte{},
+		ValidatorsRoot: params.BeaconConfig().GenesisValidatorsRoot,
 	}
 
 	r := &Service{
@@ -814,7 +816,7 @@ func TestValidateBeaconBlockPubSub_FilterByFinalizedEpoch(t *testing.T) {
 	buf := new(bytes.Buffer)
 	_, err = p.Encoding().EncodeGossip(buf, b)
 	require.NoError(t, err)
-	digest, err := signing.ComputeForkDigest(params.BeaconConfig().GenesisForkVersion, make([]byte, 32))
+	digest, err := signing.ComputeForkDigest(params.BeaconConfig().GenesisForkVersion, params.BeaconConfig().GenesisValidatorsRoot[:])
 	assert.NoError(t, err)
 	topic := fmt.Sprintf(p2p.GossipTypeMapping[reflect.TypeOf(b)], digest)
 	m := &pubsub.Message{
@@ -1187,6 +1189,8 @@ func TestService_isBlockQueueable(t *testing.T) {
 }
 
 func TestValidateBeaconBlockPubSub_ValidExecutionPayload(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	params.BeaconConfig().InitializeForkSchedule()
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
 	ctx := t.Context()
@@ -1219,7 +1223,8 @@ func TestValidateBeaconBlockPubSub_ValidExecutionPayload(t *testing.T) {
 
 	stateGen := stategen.New(db, doublylinkedtree.New())
 	chainService := &mock.ChainService{Genesis: now.Add(-1 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
-		DB: db,
+		ValidatorsRoot: params.BeaconConfig().GenesisValidatorsRoot,
+		DB:             db,
 		FinalizedCheckPoint: &ethpb.Checkpoint{
 			Epoch: 0,
 			Root:  make([]byte, 32),
@@ -1419,6 +1424,8 @@ func Test_validateBellatrixBeaconBlockParentValidation(t *testing.T) {
 }
 
 func Test_validateBeaconBlockProcessingWhenParentIsOptimistic(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	params.BeaconConfig().InitializeForkSchedule()
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
 	ctx := t.Context()
@@ -1450,8 +1457,9 @@ func Test_validateBeaconBlockProcessingWhenParentIsOptimistic(t *testing.T) {
 	require.NoError(t, err)
 
 	chainService := &mock.ChainService{Genesis: beaconState.GenesisTime(),
-		DB:         db,
-		Optimistic: true,
+		ValidatorsRoot: params.BeaconConfig().GenesisValidatorsRoot,
+		DB:             db,
+		Optimistic:     true,
 		FinalizedCheckPoint: &ethpb.Checkpoint{
 			Epoch: 0,
 			Root:  make([]byte, 32),

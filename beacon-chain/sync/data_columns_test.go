@@ -400,6 +400,7 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 	cfg := params.BeaconConfig().Copy()
 	cfg.FuluForkEpoch = 0
 	params.OverrideBeaconConfig(cfg)
+	params.BeaconConfig().InitializeForkSchedule()
 
 	chainService, clock := defaultMockChain(t, 0)
 
@@ -588,7 +589,8 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 				peerIDs = append(peerIDs, peerP2P.PeerID())
 			}
 
-			ctxMap := map[[4]byte]int{{245, 165, 253, 66}: version.Fulu}
+			ctxMap, err := ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
+			require.NoError(t, err)
 			verifier := func(cols []blocks.RODataColumn, reqs []verification.Requirement) verification.DataColumnsVerifier {
 				clockSync := startup.NewClockSynchronizer()
 				require.NoError(t, clockSync.SetClock(clock))

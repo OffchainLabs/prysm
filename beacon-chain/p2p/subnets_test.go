@@ -3,7 +3,6 @@ package p2p
 import (
 	"context"
 	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"reflect"
 	"testing"
@@ -36,14 +35,6 @@ func TestStartDiscV5_FindPeersWithSubnet(t *testing.T) {
 	// find and connect to a node already subscribed to a specific subnet.
 	// In our case: The node i is subscribed to subnet i, with i = 1, 2, 3
 
-	// Define the genesis validators root, to ensure everybody is on the same network.
-	const genesisValidatorRootStr = "0xdeadbeefcafecafedeadbeefcafecafedeadbeefcafecafedeadbeefcafecafe"
-	genesisValidatorsRoot, err := hex.DecodeString(genesisValidatorRootStr[2:])
-	require.NoError(t, err)
-
-	// Create a context.
-	ctx := t.Context()
-
 	// Use shorter period for testing.
 	currentPeriod := pollingPeriod
 	pollingPeriod = 1 * time.Second
@@ -53,6 +44,7 @@ func TestStartDiscV5_FindPeersWithSubnet(t *testing.T) {
 
 	// Create flags.
 	params.SetupTestConfigCleanup(t)
+	params.BeaconConfig().InitializeForkSchedule()
 	gFlags := new(flags.GlobalFlags)
 	gFlags.MinimumPeersPerSubnet = 1
 	flags.Init(gFlags)
@@ -69,7 +61,7 @@ func TestStartDiscV5_FindPeersWithSubnet(t *testing.T) {
 	bootNodeService := &Service{
 		cfg:                   &Config{UDPPort: 2000, TCPPort: 3000, QUICPort: 3000, DisableLivenessCheck: true, PingInterval: testPingInterval},
 		genesisTime:           genesisTime,
-		genesisValidatorsRoot: genesisValidatorsRoot,
+		genesisValidatorsRoot: params.BeaconConfig().GenesisValidatorsRoot[:],
 	}
 
 	bootNodeForkDigest, err := bootNodeService.currentForkDigest()
@@ -91,7 +83,7 @@ func TestStartDiscV5_FindPeersWithSubnet(t *testing.T) {
 
 	for i := 1; i <= 3; i++ {
 		subnet := uint64(i)
-		service, err := NewService(ctx, &Config{
+		service, err := NewService(t.Context(), &Config{
 			Discv5BootStrapAddrs: []string{bootNodeENR},
 			MaxPeers:             30,
 			UDPPort:              uint(2000 + i),
@@ -104,7 +96,7 @@ func TestStartDiscV5_FindPeersWithSubnet(t *testing.T) {
 		require.NoError(t, err)
 
 		service.genesisTime = genesisTime
-		service.genesisValidatorsRoot = genesisValidatorsRoot
+		service.genesisValidatorsRoot = params.BeaconConfig().GenesisValidatorsRoot[:]
 
 		nodeForkDigest, err := service.currentForkDigest()
 		require.NoError(t, err)
@@ -148,11 +140,11 @@ func TestStartDiscV5_FindPeersWithSubnet(t *testing.T) {
 		QUICPort:             3010,
 	}
 
-	service, err := NewService(ctx, cfg)
+	service, err := NewService(t.Context(), cfg)
 	require.NoError(t, err)
 
 	service.genesisTime = genesisTime
-	service.genesisValidatorsRoot = genesisValidatorsRoot
+	service.genesisValidatorsRoot = params.BeaconConfig().GenesisValidatorsRoot[:]
 
 	service.Start()
 	defer func() {
@@ -171,7 +163,7 @@ func TestStartDiscV5_FindPeersWithSubnet(t *testing.T) {
 		// This for loop is used to ensure we don't get stuck in `FindPeersWithSubnet`.
 		// Read the documentation of `FindPeersWithSubnet` for more details.
 		for j := 0; j < 3; j++ {
-			ctxWithTimeOut, cancel := context.WithTimeout(ctx, 5*time.Second)
+			ctxWithTimeOut, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
 
 			exist, err = service.FindPeersWithSubnet(ctxWithTimeOut, topic, subnet, 1)
