@@ -668,13 +668,14 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, signedROBlo
 	}
 
 	// Collect KZG hashes for all blobs.
-	var kzgHashes []common.Hash
+	versionedHashes := make([]common.Hash, 0, len(kzgCommitments))
 	for _, commitment := range kzgCommitments {
-		kzgHashes = append(kzgHashes, primitives.ConvertKzgCommitmentToVersionedHash(commitment))
+		versionedHash := primitives.ConvertKzgCommitmentToVersionedHash(commitment)
+		versionedHashes = append(versionedHashes, versionedHash)
 	}
 
 	// Fetch all blobsAndCellsProofs from the execution client.
-	blobAndProofV2s, err := s.GetBlobsV2(ctx, kzgHashes)
+	blobAndProofV2s, err := s.GetBlobsV2(ctx, versionedHashes)
 	if err != nil {
 		return nil, wrapWithBlockRoot(err, blockRoot, "get blobs V2")
 	}
