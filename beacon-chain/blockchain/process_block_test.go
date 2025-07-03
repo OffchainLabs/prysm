@@ -2796,7 +2796,7 @@ func TestProcessLightClientUpdate(t *testing.T) {
 			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
 
 			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(s.CurrentSlot(), l.AttestedState)
+			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedBlock)
 			require.NoError(t, err)
 
 			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
@@ -2848,7 +2848,7 @@ func TestProcessLightClientUpdate(t *testing.T) {
 			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
 
 			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(s.CurrentSlot(), l.AttestedState)
+			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedBlock)
 			require.NoError(t, err)
 
 			scb := make([]byte, 64)
@@ -2954,7 +2954,7 @@ func TestProcessLightClientUpdate(t *testing.T) {
 			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
 
 			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(s.CurrentSlot(), l.AttestedState)
+			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedBlock)
 			require.NoError(t, err)
 
 			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
@@ -3006,7 +3006,7 @@ func TestProcessLightClientUpdate(t *testing.T) {
 			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
 
 			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(s.CurrentSlot(), l.AttestedState)
+			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedBlock)
 			require.NoError(t, err)
 
 			scb := make([]byte, 64)
@@ -3112,7 +3112,7 @@ func TestProcessLightClientUpdate(t *testing.T) {
 			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
 
 			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(s.CurrentSlot(), l.AttestedState)
+			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedBlock)
 			require.NoError(t, err)
 
 			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
@@ -3164,7 +3164,7 @@ func TestProcessLightClientUpdate(t *testing.T) {
 			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
 
 			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(s.CurrentSlot(), l.AttestedState)
+			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedBlock)
 			require.NoError(t, err)
 
 			scb := make([]byte, 64)
@@ -3647,7 +3647,7 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 				expectedVersion = version.Altair
 			case 2:
 				forkEpoch = uint64(params.BeaconConfig().BellatrixForkEpoch)
-				expectedVersion = version.Altair
+				expectedVersion = version.Bellatrix
 			case 3:
 				forkEpoch = uint64(params.BeaconConfig().CapellaForkEpoch)
 				expectedVersion = version.Capella
@@ -3656,7 +3656,7 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 				expectedVersion = version.Deneb
 			case 5:
 				forkEpoch = uint64(params.BeaconConfig().ElectraForkEpoch)
-				expectedVersion = version.Deneb
+				expectedVersion = version.Electra
 			default:
 				t.Errorf("Unsupported fork version %s", version.String(testVersion))
 			}
@@ -3801,7 +3801,7 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 				expectedVersion = version.Altair
 			case 2:
 				forkEpoch = uint64(params.BeaconConfig().BellatrixForkEpoch)
-				expectedVersion = version.Altair
+				expectedVersion = version.Bellatrix
 			case 3:
 				forkEpoch = uint64(params.BeaconConfig().CapellaForkEpoch)
 				expectedVersion = version.Capella

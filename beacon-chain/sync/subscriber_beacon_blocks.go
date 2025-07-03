@@ -153,7 +153,7 @@ func (s *Service) reconstructAndBroadcastDataColumnSidecars(ctx context.Context,
 			log.WithError(err).Error("Failed to broadcast data column")
 		}
 
-		if err := s.receiveDataColumn(ctx, sidecar); err != nil {
+		if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
 			log.WithError(err).Error("Failed to receive data column")
 		}
 	}

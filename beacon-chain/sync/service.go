@@ -9,15 +9,6 @@ import (
 	"sync"
 	"time"
 
-	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
-	lru "github.com/hashicorp/golang-lru"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	libp2pcore "github.com/libp2p/go-libp2p/core"
-	"github.com/libp2p/go-libp2p/core/peer"
-	gcache "github.com/patrickmn/go-cache"
-	"github.com/pkg/errors"
-	"github.com/trailofbits/go-mutexasserts"
-
 	"github.com/OffchainLabs/prysm/v6/async"
 	"github.com/OffchainLabs/prysm/v6/async/abool"
 	"github.com/OffchainLabs/prysm/v6/async/event"
@@ -26,6 +17,7 @@ import (
 	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
@@ -45,10 +37,18 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
+	"github.com/OffchainLabs/prysm/v6/crypto/rand"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime"
 	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
+	lru "github.com/hashicorp/golang-lru"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	libp2pcore "github.com/libp2p/go-libp2p/core"
+	"github.com/libp2p/go-libp2p/core/peer"
+	gcache "github.com/patrickmn/go-cache"
+	"github.com/pkg/errors"
+	"github.com/trailofbits/go-mutexasserts"
 )
 
 var _ runtime.Service = (*Service)(nil)
@@ -169,8 +169,9 @@ type Service struct {
 	newBlobVerifier                  verification.NewBlobVerifier
 	newColumnsVerifier               verification.NewDataColumnsVerifier
 	availableBlocker                 coverage.AvailableBlocker
+	reconstructionLock               sync.Mutex
+	reconstructionRandGen            *rand.Rand
 	trackedValidatorsCache           *cache.TrackedValidatorsCache
-	dataColumsnReconstructionLock    sync.Mutex
 	ctxMap                           ContextByteVersions
 	slasherEnabled                   bool
 	lcStore                          *lightClient.Store
@@ -181,15 +182,16 @@ type Service struct {
 func NewService(ctx context.Context, opts ...Option) *Service {
 	ctx, cancel := context.WithCancel(ctx)
 	r := &Service{
-		ctx:                  ctx,
-		cancel:               cancel,
-		chainStarted:         abool.New(),
-		cfg:                  &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
-		slotToPendingBlocks:  gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
-		seenPendingBlocks:    make(map[[32]byte]bool),
-		blkRootToPendingAtts: make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
-		signatureChan:        make(chan *signatureVerifier, verifierLimit),
-		dataColumnLogCh:      make(chan dataColumnLogEntry, 1000),
+		ctx:                   ctx,
+		cancel:                cancel,
+		chainStarted:          abool.New(),
+		cfg:                   &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
+		slotToPendingBlocks:   gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
+		seenPendingBlocks:     make(map[[32]byte]bool),
+		blkRootToPendingAtts:  make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
+		signatureChan:         make(chan *signatureVerifier, verifierLimit),
+		dataColumnLogCh:       make(chan dataColumnLogEntry, 1000),
+		reconstructionRandGen: rand.NewGenerator(),
 	}
 
 	for _, opt := range opts {

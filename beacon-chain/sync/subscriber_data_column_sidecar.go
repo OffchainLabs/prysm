@@ -12,38 +12,41 @@ import (
 )
 
 func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) error {
-	dc, ok := msg.(blocks.VerifiedRODataColumn)
+	sidecar, ok := msg.(blocks.VerifiedRODataColumn)
 	if !ok {
 		return fmt.Errorf("message was not type blocks.VerifiedRODataColumn, type=%T", msg)
 	}
 
-	if err := s.receiveDataColumn(ctx, dc); err != nil {
+	if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
 		return errors.Wrap(err, "receive data column")
 	}
 
-	// Reconstruct the data columns if needed.
-	if err := s.reconstructDataColumns(ctx, dc); err != nil {
+	slot := sidecar.Slot()
+	proposerIndex := sidecar.ProposerIndex()
+	root := sidecar.BlockRoot()
+
+	if err := s.reconstructSaveBroadcastDataColumnSidecars(ctx, slot, proposerIndex, root); err != nil {
 		return errors.Wrap(err, "reconstruct data columns")
 	}
 
 	return nil
 }
 
-func (s *Service) receiveDataColumn(ctx context.Context, dc blocks.VerifiedRODataColumn) error {
-	slot := dc.SignedBlockHeader.Header.Slot
-	proposerIndex := dc.SignedBlockHeader.Header.ProposerIndex
-	columnIndex := dc.Index
+func (s *Service) receiveDataColumnSidecar(ctx context.Context, sidecar blocks.VerifiedRODataColumn) error {
+	slot := sidecar.SignedBlockHeader.Header.Slot
+	proposerIndex := sidecar.SignedBlockHeader.Header.ProposerIndex
+	columnIndex := sidecar.Index
 
 	s.setSeenDataColumnIndex(slot, proposerIndex, columnIndex)
 
-	if err := s.cfg.chain.ReceiveDataColumn(dc); err != nil {
+	if err := s.cfg.chain.ReceiveDataColumn(sidecar); err != nil {
 		return errors.Wrap(err, "receive data column")
 	}
 
 	s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
 		Type: opfeed.DataColumnSidecarReceived,
 		Data: &opfeed.DataColumnSidecarReceivedData{
-			DataColumn: &dc,
+			DataColumn: &sidecar,
 		},
 	})
 

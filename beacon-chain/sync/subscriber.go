@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"time"
 
@@ -189,7 +190,7 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 		)
 	}
 
-	// New gossip topic in Fulu
+	// New gossip topic in Fulu.
 	if params.BeaconConfig().FuluForkEpoch <= epoch {
 		s.subscribeWithParameters(
 			p2p.DataColumnSubnetTopicFormat,
@@ -787,4 +788,18 @@ func errorIsIgnored(err error) bool {
 		return true
 	}
 	return false
+}
+
+// sliceFromMap returns a sorted list of keys from a map.
+func sliceFromMap(m map[uint64]bool, sorted ...bool) []uint64 {
+	result := make([]uint64, 0, len(m))
+	for k := range m {
+		result = append(result, k)
+	}
+
+	if len(sorted) > 0 && sorted[0] {
+		slices.Sort(result)
+	}
+
+	return result
 }

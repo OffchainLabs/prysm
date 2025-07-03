@@ -7,6 +7,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/spectest/shared/common/light_client"
 )
 
-func TestMainnet_Electra_LightClient_UpdateRanking(t *testing.T) {
+func TestMinimal_Electra_LightClient_UpdateRanking(t *testing.T) {
 	light_client.RunLightClientUpdateRankingTests(t, "minimal", version.Electra)
 }
