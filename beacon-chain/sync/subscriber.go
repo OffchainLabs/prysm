@@ -2,11 +2,9 @@ package sync
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"reflect"
 	"runtime/debug"
-	"slices"
 	"strings"
 	"time"
 
@@ -31,17 +29,34 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
 
 const pubsubMessageTimeout = 30 * time.Second
 
-// wrappedVal represents a gossip validator which also returns an error along with the result.
-type wrappedVal func(context.Context, peer.ID, *pubsub.Message) (pubsub.ValidationResult, error)
+type (
+	// wrappedVal represents a gossip validator which also returns an error along with the result.
+	wrappedVal func(context.Context, peer.ID, *pubsub.Message) (pubsub.ValidationResult, error)
 
-// subHandler represents handler for a given subscription.
-type subHandler func(context.Context, proto.Message) error
+	// subHandler represents handler for a given subscription.
+	subHandler func(context.Context, proto.Message) error
+
+	subscribeParameters struct {
+		topicFormat string
+		validate    wrappedVal
+		handle      subHandler
+		digest      [4]byte
+
+		// getSubnetsToJoin is a function that returns all subnets the node should join.
+		getSubnetsToJoin func(currentSlot primitives.Slot) map[uint64]bool
+
+		// getSubnetsRequiringPeers is a function that returns all subnets that require peers to be found
+		// but for which no subscriptions are needed.
+		getSubnetsRequiringPeers func(currentSlot primitives.Slot) map[uint64]bool
+	}
+)
 
 // noopValidator is a no-op that only decodes the message, but does not check its contents.
 func (s *Service) noopValidator(_ context.Context, _ peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
@@ -118,14 +133,14 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 		s.attesterSlashingSubscriber,
 		digest,
 	)
-	s.subscribeWithParameters(
-		p2p.AttestationSubnetTopicFormat,
-		s.validateCommitteeIndexBeaconAttestation,
-		s.committeeIndexBeaconAttestationSubscriber,
-		digest,
-		s.persistentAndAggregatorSubnetIndices,
-		s.attesterSubnetIndices,
-	)
+	s.subscribeWithParameters(subscribeParameters{
+		topicFormat:              p2p.AttestationSubnetTopicFormat,
+		validate:                 s.validateCommitteeIndexBeaconAttestation,
+		handle:                   s.committeeIndexBeaconAttestationSubscriber,
+		digest:                   digest,
+		getSubnetsToJoin:         s.persistentAndAggregatorSubnetIndices,
+		getSubnetsRequiringPeers: s.attesterSubnetIndices,
+	})
 
 	// New gossip topic in Altair
 	if params.BeaconConfig().AltairForkEpoch <= epoch {
@@ -135,14 +150,15 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 			s.syncContributionAndProofSubscriber,
 			digest,
 		)
-		s.subscribeWithParameters(
-			p2p.SyncCommitteeSubnetTopicFormat,
-			s.validateSyncCommitteeMessage,
-			s.syncCommitteeMessageSubscriber,
-			digest,
-			s.activeSyncSubnetIndices,
-			func(currentSlot primitives.Slot) map[uint64]bool { return nil },
-		)
+
+		s.subscribeWithParameters(subscribeParameters{
+			topicFormat:      p2p.SyncCommitteeSubnetTopicFormat,
+			validate:         s.validateSyncCommitteeMessage,
+			handle:           s.syncCommitteeMessageSubscriber,
+			digest:           digest,
+			getSubnetsToJoin: s.activeSyncSubnetIndices,
+		})
+
 		if features.Get().EnableLightClient {
 			s.subscribe(
 				p2p.LightClientOptimisticUpdateTopicFormat,
@@ -171,42 +187,39 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 
 	// New gossip topic in Deneb, removed in Electra
 	if params.BeaconConfig().DenebForkEpoch <= epoch && epoch < params.BeaconConfig().ElectraForkEpoch {
-		s.subscribeWithParameters(
-			p2p.BlobSubnetTopicFormat,
-			s.validateBlob,
-			s.blobSubscriber,
-			digest,
-			func(_ primitives.Slot) map[uint64]bool {
+		s.subscribeWithParameters(subscribeParameters{
+			topicFormat: p2p.BlobSubnetTopicFormat,
+			validate:    s.validateBlob,
+			handle:      s.blobSubscriber,
+			digest:      digest,
+			getSubnetsToJoin: func(primitives.Slot) map[uint64]bool {
 				return mapFromCount(params.BeaconConfig().BlobsidecarSubnetCount)
 			},
-			func(currentSlot primitives.Slot) map[uint64]bool { return nil },
-		)
+		})
 	}
 
 	// New gossip topic in Electra, removed in Fulu
 	if params.BeaconConfig().ElectraForkEpoch <= epoch && epoch < params.BeaconConfig().FuluForkEpoch {
-		s.subscribeWithParameters(
-			p2p.BlobSubnetTopicFormat,
-			s.validateBlob,
-			s.blobSubscriber,
-			digest,
-			func(currentSlot primitives.Slot) map[uint64]bool {
+		s.subscribeWithParameters(subscribeParameters{
+			topicFormat: p2p.BlobSubnetTopicFormat,
+			validate:    s.validateBlob,
+			handle:      s.blobSubscriber,
+			digest:      digest,
+			getSubnetsToJoin: func(currentSlot primitives.Slot) map[uint64]bool {
 				return mapFromCount(params.BeaconConfig().BlobsidecarSubnetCountElectra)
 			},
-			func(currentSlot primitives.Slot) map[uint64]bool { return nil },
-		)
+		})
 	}
 
 	// New gossip topic in Fulu.
 	if params.BeaconConfig().FuluForkEpoch <= epoch {
-		s.subscribeWithParameters(
-			p2p.DataColumnSubnetTopicFormat,
-			s.validateDataColumn,
-			s.dataColumnSubscriber,
-			digest,
-			s.dataColumnSubnetIndices,
-			func(currentSlot primitives.Slot) map[uint64]bool { return nil },
-		)
+		s.subscribeWithParameters(subscribeParameters{
+			topicFormat:      p2p.DataColumnSubnetTopicFormat,
+			validate:         s.validateDataColumn,
+			handle:           s.dataColumnSubscriber,
+			digest:           digest,
+			getSubnetsToJoin: s.dataColumnSubnetIndices,
+		})
 	}
 }
 
@@ -423,7 +436,7 @@ func (s *Service) searchForPeers(
 	currentSlot primitives.Slot,
 	subnetsToJoin func(currentSlot primitives.Slot) map[uint64]bool,
 	getSubnetsRequiringPeers func(currentSlot primitives.Slot) map[uint64]bool,
-) {
+) error {
 	minimumPeersPerSubnet := flags.Get().MinimumPeersPerSubnet
 	subnetsWithNeededPeers := computeAllNeededSubnets(currentSlot, subnetsToJoin, getSubnetsRequiringPeers)
 
@@ -439,9 +452,11 @@ func (s *Service) searchForPeers(
 		// Not enough peers in the subnet, we need to search for more.
 		_, err := s.cfg.p2p.FindPeersWithSubnet(ctx, topic, subnet, flags.Get().MinimumPeersPerSubnet)
 		if err != nil {
-			log.WithError(err).Debug("Could not search for peers")
+			return errors.Wrap(err, "find peers with subnet")
 		}
 	}
+
+	return nil
 }
 
 // subscribeToSubnets subscribes to needed subnets and unsubscribe from unneeded ones.
@@ -515,14 +530,7 @@ func (s *Service) subscribeToSubnets(
 }
 
 // subscribeWithParameters subscribes to a list of subnets.
-func (s *Service) subscribeWithParameters(
-	topicFormat string,
-	validate wrappedVal,
-	handle subHandler,
-	digest [4]byte,
-	getSubnetsToJoin func(currentSlot primitives.Slot) map[uint64]bool,
-	getSubnetsRequiringPeers func(currentSlot primitives.Slot) map[uint64]bool,
-) {
+func (s *Service) subscribeWithParameters(p subscribeParameters) {
 	minimumPeersPerSubnet := flags.Get().MinimumPeersPerSubnet
 	subscriptionBySubnet := make(map[uint64]*pubsub.Subscription)
 	genesisValidatorsRoot := s.cfg.clock.GenesisValidatorsRoot()
@@ -531,17 +539,17 @@ func (s *Service) subscribeWithParameters(
 	secondsPerSlotDuration := time.Duration(secondsPerSlot) * time.Second
 	currentSlot := s.cfg.clock.CurrentSlot()
 
-	_, epoch, err := forks.RetrieveForkDataFromDigest(digest, genesisValidatorsRoot[:])
+	_, epoch, err := forks.RetrieveForkDataFromDigest(p.digest, genesisValidatorsRoot[:])
 	if err != nil {
 		panic(err) // lint:nopanic -- Impossible condition.
 	}
 
-	base := p2p.GossipTopicMappings(topicFormat, epoch)
+	base := p2p.GossipTopicMappings(p.topicFormat, epoch)
 	if base == nil {
-		panic(fmt.Sprintf("%s is not mapped to any message in GossipTopicMappings", topicFormat)) // lint:nopanic -- Impossible condition.
+		panic(fmt.Sprintf("%s is not mapped to any message in GossipTopicMappings", p.topicFormat)) // lint:nopanic -- Impossible condition.
 	}
 
-	s.subscribeToSubnets(subscriptionBySubnet, topicFormat, digest, genesisValidatorsRoot, genesisTime, currentSlot, validate, handle, getSubnetsToJoin)
+	s.subscribeToSubnets(subscriptionBySubnet, p.topicFormat, p.digest, genesisValidatorsRoot, genesisTime, currentSlot, p.validate, p.handle, p.getSubnetsToJoin)
 	logCtx, cancel := context.WithCancel(s.ctx)
 
 	// Subscribe to expected subnets and search for peers if needed at every slot.
@@ -550,20 +558,23 @@ func (s *Service) subscribeWithParameters(
 			ctx, cancel := context.WithTimeout(s.ctx, secondsPerSlotDuration)
 			defer cancel()
 
-			s.searchForPeers(ctx, topicFormat, digest, currentSlot, getSubnetsToJoin, getSubnetsRequiringPeers)
+			err := s.searchForPeers(ctx, p.topicFormat, p.digest, currentSlot, p.getSubnetsToJoin, p.getSubnetsRequiringPeers)
+			if err != nil {
+				log.WithError(err).Debug("Could not search for peers")
+			}
 		}
 
 		defer cancel()
 
+		searchForPeers(s.cfg.clock.CurrentSlot())
+
 		slotTicker := slots.NewSlotTicker(genesisTime, secondsPerSlot)
 		defer slotTicker.Done()
-
-		searchForPeers(s.cfg.clock.CurrentSlot())
 
 		for {
 			select {
 			case currentSlot := <-slotTicker.C():
-				isDigestValid := s.subscribeToSubnets(subscriptionBySubnet, topicFormat, digest, genesisValidatorsRoot, genesisTime, currentSlot, validate, handle, getSubnetsToJoin)
+				isDigestValid := s.subscribeToSubnets(subscriptionBySubnet, p.topicFormat, p.digest, genesisValidatorsRoot, genesisTime, currentSlot, p.validate, p.handle, p.getSubnetsToJoin)
 
 				// Stop the ticker if the digest is not valid. Likely to happen after a hard fork.
 				if !isDigestValid {
@@ -580,26 +591,37 @@ func (s *Service) subscribeWithParameters(
 
 	// Warn the user if we are not subscribed to enough peers in the subnets.
 	go func() {
+		log := log.WithField("minimum", minimumPeersPerSubnet)
 		logTicker := time.NewTicker(5 * time.Minute)
 		defer logTicker.Stop()
 
 		for {
 			select {
 			case <-logTicker.C:
-				subnetsToFindPeersIndex := computeAllNeededSubnets(currentSlot, getSubnetsToJoin, getSubnetsRequiringPeers)
+				subnetsToFindPeersIndex := computeAllNeededSubnets(currentSlot, p.getSubnetsToJoin, p.getSubnetsRequiringPeers)
 
+				isSubnetWithMissingPeers := false
 				// Find new peers for wanted subnets if needed.
-				for _, index := range subnetsToFindPeersIndex {
-					topic := fmt.Sprintf(topicFormat, digest, index)
+				for index := range subnetsToFindPeersIndex {
+					topic := fmt.Sprintf(p.topicFormat, p.digest, index)
 
 					// Check if we have enough peers in the subnet. Skip if we do.
 					if count := s.connectedPeersCount(topic); count < minimumPeersPerSubnet {
+						isSubnetWithMissingPeers = true
 						log.WithFields(logrus.Fields{
-							"topic":   topic,
-							"actual":  count,
-							"minimum": minimumPeersPerSubnet,
+							"topic":  topic,
+							"actual": count,
 						}).Warning("Not enough connected peers")
 					}
+				}
+
+				if log.Logger.GetLevel() >= logrus.DebugLevel && !isSubnetWithMissingPeers {
+					topicFormat := p.topicFormat
+					topicFormatLen := len(topicFormat)
+					if topicFormatLen >= 3 && topicFormat[topicFormatLen-3:] == "_%d" {
+						topicFormat = topicFormat[:topicFormatLen-3]
+					}
+					log.WithField("topic", fmt.Sprintf(topicFormat, p.digest)).Debug("All subnets have enough connected peers")
 				}
 
 			case <-logCtx.Done():
@@ -631,7 +653,7 @@ func (s *Service) connectedPeersCount(subnetTopic string) int {
 	return len(peersWithSubnet)
 }
 
-func (s *Service) dataColumnSubnetIndices(_ primitives.Slot) map[uint64]bool {
+func (s *Service) dataColumnSubnetIndices(primitives.Slot) map[uint64]bool {
 	nodeID := s.cfg.p2p.NodeID()
 	custodyGroupCount := s.cfg.custodyInfo.CustodyGroupSamplingSize(peerdas.Target)
 
@@ -766,14 +788,17 @@ func computeAllNeededSubnets(
 	subnetsToSubscribe := getSubnetsToJoin(currentSlot)
 
 	// Retrieve the subnets we want to find peers into.
-	subnetsToFindPeersOnly := getSubnetsRequiringPeers(currentSlot)
+	subnetsRequiringPeers := make(map[uint64]bool)
+	if getSubnetsRequiringPeers != nil {
+		subnetsRequiringPeers = getSubnetsRequiringPeers(currentSlot)
+	}
 
 	// Combine the two maps to get all needed subnets.
-	neededSubnets := make(map[uint64]bool, len(subnetsToSubscribe)+len(subnetsToFindPeersOnly))
+	neededSubnets := make(map[uint64]bool, len(subnetsToSubscribe)+len(subnetsRequiringPeers))
 	for subnet := range subnetsToSubscribe {
 		neededSubnets[subnet] = true
 	}
-	for subnet := range subnetsToFindPeersOnly {
+	for subnet := range subnetsRequiringPeers {
 		neededSubnets[subnet] = true
 	}
 
@@ -805,18 +830,4 @@ func errorIsIgnored(err error) bool {
 		return true
 	}
 	return false
-}
-
-// sliceFromMap returns a sorted list of keys from a map.
-func sliceFromMap(m map[uint64]bool, sorted ...bool) []uint64 {
-	result := make([]uint64, 0, len(m))
-	for k := range m {
-		result = append(result, k)
-	}
-
-	if len(sorted) > 0 && sorted[0] {
-		slices.Sort(result)
-	}
-
-	return result
 }

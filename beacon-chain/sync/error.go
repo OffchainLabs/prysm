@@ -109,7 +109,12 @@ func isValidStreamError(err error) bool {
 
 func closeStream(stream network.Stream, log *logrus.Entry) {
 	if err := stream.Close(); isValidStreamError(err) {
-		log.WithError(err).Debugf("Could not reset stream with protocol %s", stream.Protocol())
+		log.WithError(err).
+			WithFields(logrus.Fields{
+				"protocol": stream.Protocol(),
+				"peer":     stream.Conn().RemotePeer(),
+			}).
+			Debug("Could not close stream")
 	}
 }
 
@@ -118,7 +123,12 @@ func closeStreamAndWait(stream network.Stream, log *logrus.Entry) {
 		_err := stream.Reset()
 		_ = _err
 		if isValidStreamError(err) {
-			log.WithError(err).Debugf("Could not reset stream with protocol %s", stream.Protocol())
+			log.WithError(err).
+				WithFields(logrus.Fields{
+					"protocol": stream.Protocol(),
+					"peer":     stream.Conn().RemotePeer(),
+				}).
+				Debug("Could not reset stream")
 		}
 		return
 	}

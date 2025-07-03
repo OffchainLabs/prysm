@@ -147,8 +147,6 @@ func (s *Service) FindPeersWithSubnet(
 	index uint64,
 	threshold int,
 ) (bool, error) {
-	const minLogInterval = 1 * time.Minute
-
 	ctx, span := trace.StartSpan(ctx, "p2p.FindPeersWithSubnet")
 	defer span.End()
 
@@ -193,8 +191,6 @@ func (s *Service) FindPeersWithSubnet(
 
 	log.WithField("currentPeerCount", peerCountForTopic).Debug("Searching for new peers for a subnet - start")
 
-	lastLogTime := time.Now()
-
 	wg := new(sync.WaitGroup)
 	for {
 		// If the context is done, we can exit the loop. This is the unhappy path.
@@ -225,16 +221,11 @@ func (s *Service) FindPeersWithSubnet(
 			wg.Wait()
 		}
 
-		peerCountForTopic, missingPeerCountForTopic := peersSummary(topic, threshold)
+		_, missingPeerCountForTopic := peersSummary(topic, threshold)
 
 		// If we have enough peers, we can exit the loop. This is the happy path.
 		if missingPeerCountForTopic == 0 {
 			break
-		}
-
-		if time.Since(lastLogTime) > minLogInterval {
-			lastLogTime = time.Now()
-			log.WithField("currentPeerCount", peerCountForTopic).Debug("Searching for new peers for a subnet - continue")
 		}
 	}
 

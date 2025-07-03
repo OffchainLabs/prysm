@@ -68,7 +68,7 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 			log.WithError(err).Error("Failed to check builder status")
 		} else {
 			log.WithField("endpoint", s.c.NodeURL()).Info("Builder has been configured")
-			log.Warn("Outsourcing block construction to external builders adds non-trivial delay to block propagation time.  " +
+			log.Warn("Outsourcing block construction to external builders adds non-trivial delay to block propagation time. " +
 				"Builder-constructed blocks or fallback blocks may get orphaned. Use at your own risk!")
 		}
 	}
