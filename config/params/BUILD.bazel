@@ -14,6 +14,7 @@ go_library(
         "mainnet_config.go",
         "minimal_config.go",
         "network_config.go",
+        "opts.go",
         "testnet_custom_network_config.go",
         "testnet_e2e_config.go",
         "testnet_holesky_config.go",
@@ -70,9 +71,9 @@ go_test(
     gotags = ["develop"],
     tags = ["CI_race_detection"],
     deps = [
-        "//beacon-chain/state/genesis:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//encoding/bytesutil:go_default_library",
+        "//genesis:go_default_library",
         "//io/file:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",

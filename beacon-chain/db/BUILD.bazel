@@ -13,6 +13,7 @@ go_library(
     visibility = [
         "//beacon-chain:__subpackages__",
         "//cmd/beacon-chain:__subpackages__",
+        "//genesis:__subpackages__",
         "//testing/slasher/simulator:__pkg__",
         "//tools:__subpackages__",
     ],
