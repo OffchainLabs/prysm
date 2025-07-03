@@ -1,9 +1,6 @@
 package lookup
 
 import (
-	"bytes"
-	"crypto/sha256"
-	"encoding/binary"
 	"fmt"
 	"math"
 	"net/http"
@@ -22,16 +19,12 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
-	GoKZG "github.com/crate-crypto/go-kzg-4844"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/sirupsen/logrus"
 )
 
 func TestGetBlock(t *testing.T) {
@@ -165,118 +158,6 @@ func TestGetBlock(t *testing.T) {
 			}
 		})
 	}
-}
-
-func deterministicRandomness(seed int64) [32]byte {
-	// Converts an int64 to a byte slice
-	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, seed)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to write int64 to bytes buffer")
-		return [32]byte{}
-	}
-	bytes := buf.Bytes()
-
-	return sha256.Sum256(bytes)
-}
-
-// Returns a serialized random field element in big-endian
-func getRandFieldElement(seed int64) [32]byte {
-	bytes := deterministicRandomness(seed)
-	var r fr.Element
-	r.SetBytes(bytes[:])
-
-	return GoKZG.SerializeScalar(r)
-}
-
-// Returns a random blob using the passed seed as entropy
-func getRandBlob(seed int64) kzg.Blob {
-	var blob kzg.Blob
-	for i := 0; i < len(blob); i += 32 {
-		fieldElementBytes := getRandFieldElement(seed + int64(i))
-		copy(blob[i:i+32], fieldElementBytes[:])
-	}
-	return blob
-}
-
-func generateCommitmentAndProof(blob *kzg.Blob) (*kzg.Commitment, *kzg.Proof, error) {
-	commitment, err := kzg.BlobToKZGCommitment(blob)
-	if err != nil {
-		return nil, nil, err
-	}
-	proof, err := kzg.ComputeBlobKZGProof(blob, commitment)
-	if err != nil {
-		return nil, nil, err
-	}
-	return &commitment, &proof, err
-}
-
-func generateRandomBlocSignedBeaconBlockkAndVerifiedRoBlobs(t *testing.T, blobCount int) (interfaces.SignedBeaconBlock, []*blocks.VerifiedROBlob) {
-	// Create a protobuf signed beacon block.
-	signedBeaconBlockPb := util.NewBeaconBlockDeneb()
-
-	// Generate random blobs and their corresponding commitments and proofs.
-	blobs := make([]kzg.Blob, 0, blobCount)
-	blobKzgCommitments := make([]*kzg.Commitment, 0, blobCount)
-	blobKzgProofs := make([]*kzg.Proof, 0, blobCount)
-
-	for blobIndex := range blobCount {
-		// Create a random blob.
-		blob := getRandBlob(int64(blobIndex))
-		blobs = append(blobs, blob)
-
-		// Generate a blobKZGCommitment for the blob.
-		blobKZGCommitment, proof, err := generateCommitmentAndProof(&blob)
-		require.NoError(t, err)
-
-		blobKzgCommitments = append(blobKzgCommitments, blobKZGCommitment)
-		blobKzgProofs = append(blobKzgProofs, proof)
-	}
-
-	// Set the commitments into the block.
-	blobZkgCommitmentsBytes := make([][]byte, 0, blobCount)
-	for _, blobKZGCommitment := range blobKzgCommitments {
-		blobZkgCommitmentsBytes = append(blobZkgCommitmentsBytes, blobKZGCommitment[:])
-	}
-
-	signedBeaconBlockPb.Block.Body.BlobKzgCommitments = blobZkgCommitmentsBytes
-
-	// Generate verified RO blobs.
-	verifiedROBlobs := make([]*blocks.VerifiedROBlob, 0, blobCount)
-
-	// Create a signed beacon block from the protobuf.
-	signedBeaconBlock, err := blocks.NewSignedBeaconBlock(signedBeaconBlockPb)
-	require.NoError(t, err)
-
-	commitmentInclusionProof, err := blocks.MerkleProofKZGCommitments(signedBeaconBlock.Block().Body())
-	require.NoError(t, err)
-
-	for blobIndex := range blobCount {
-		blob := blobs[blobIndex]
-		blobKZGCommitment := blobKzgCommitments[blobIndex]
-		blobKzgProof := blobKzgProofs[blobIndex]
-
-		// Get the signed beacon block header.
-		signedBeaconBlockHeader, err := signedBeaconBlock.Header()
-		require.NoError(t, err)
-
-		blobSidecar := &ethpb.BlobSidecar{
-			Index:                    uint64(blobIndex),
-			Blob:                     blob[:],
-			KzgCommitment:            blobKZGCommitment[:],
-			KzgProof:                 blobKzgProof[:],
-			SignedBlockHeader:        signedBeaconBlockHeader,
-			CommitmentInclusionProof: commitmentInclusionProof,
-		}
-
-		roBlob, err := blocks.NewROBlob(blobSidecar)
-		require.NoError(t, err)
-
-		verifiedROBlob := blocks.NewVerifiedROBlob(roBlob)
-		verifiedROBlobs = append(verifiedROBlobs, &verifiedROBlob)
-	}
-
-	return signedBeaconBlock, verifiedROBlobs
 }
 
 func TestGetBlob(t *testing.T) {
