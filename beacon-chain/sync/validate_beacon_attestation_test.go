@@ -309,24 +309,15 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 
 func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig()
-	fvs := map[[fieldparams.VersionLength]byte]primitives.Epoch{}
-	fvs[bytesutil.ToBytes4(cfg.GenesisForkVersion)] = 1
-	fvs[bytesutil.ToBytes4(cfg.AltairForkVersion)] = 2
-	fvs[bytesutil.ToBytes4(cfg.BellatrixForkVersion)] = 3
-	fvs[bytesutil.ToBytes4(cfg.CapellaForkVersion)] = 4
-	fvs[bytesutil.ToBytes4(cfg.DenebForkVersion)] = 5
-	fvs[bytesutil.ToBytes4(cfg.FuluForkVersion)] = 6
-	fvs[bytesutil.ToBytes4(cfg.ElectraForkVersion)] = 0
-	cfg.ForkVersionSchedule = fvs
-	params.OverrideBeaconConfig(cfg)
+	params.BeaconConfig().InitializeForkSchedule()
 
 	p := p2ptest.NewTestP2P(t)
 	db := dbtest.SetupDB(t)
+	currentSlot := 1 + (primitives.Slot(params.BeaconConfig().ElectraForkEpoch) * params.BeaconConfig().SlotsPerEpoch)
+	genesisOffset := time.Duration(currentSlot) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
 	chain := &mockChain.ChainService{
-		// 1 slot ago.
-		Genesis:          time.Now().Add(time.Duration(-1*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second),
-		ValidatorsRoot:   [32]byte{'A'},
+		Genesis:          time.Now().Add(-1 * genesisOffset),
+		ValidatorsRoot:   params.BeaconConfig().GenesisValidatorsRoot,
 		ValidAttestation: true,
 		DB:               db,
 		Optimistic:       true,
@@ -347,6 +338,7 @@ func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {
 		seenUnAggregatedAttestationCache: lruwrpr.New(10),
 		signatureChan:                    make(chan *signatureVerifier, verifierLimit),
 	}
+	require.Equal(t, currentSlot, s.cfg.clock.CurrentSlot())
 	s.initCaches()
 	go s.verifierRoutine()
 
@@ -354,7 +346,7 @@ func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {
 	require.NoError(t, err)
 
 	blk := util.NewBeaconBlock()
-	blk.Block.Slot = 1
+	blk.Block.Slot = s.cfg.clock.CurrentSlot()
 	util.SaveBlock(t, ctx, db, blk)
 
 	validBlockRoot, err := blk.Block.HashTreeRoot()
@@ -366,10 +358,10 @@ func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {
 
 	validators := uint64(64)
 	savedState, keys := util.DeterministicGenesisState(t, validators)
-	require.NoError(t, savedState.SetSlot(1))
+	require.NoError(t, savedState.SetSlot(s.cfg.clock.CurrentSlot()))
 	require.NoError(t, db.SaveState(t.Context(), savedState, validBlockRoot))
 	chain.State = savedState
-	committee, err := helpers.BeaconCommitteeFromState(ctx, savedState, 1, 0)
+	committee, err := helpers.BeaconCommitteeFromState(ctx, savedState, s.cfg.clock.CurrentSlot(), 0)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -383,9 +375,9 @@ func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {
 				Data: &ethpb.AttestationData{
 					BeaconBlockRoot: validBlockRoot[:],
 					CommitteeIndex:  0,
-					Slot:            1,
+					Slot:            s.cfg.clock.CurrentSlot(),
 					Target: &ethpb.Checkpoint{
-						Epoch: 0,
+						Epoch: s.cfg.clock.CurrentEpoch(),
 						Root:  validBlockRoot[:],
 					},
 					Source: &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
@@ -400,9 +392,9 @@ func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {
 				Data: &ethpb.AttestationData{
 					BeaconBlockRoot: validBlockRoot[:],
 					CommitteeIndex:  1,
-					Slot:            1,
+					Slot:            s.cfg.clock.CurrentSlot(),
 					Target: &ethpb.Checkpoint{
-						Epoch: 0,
+						Epoch: s.cfg.clock.CurrentEpoch(),
 						Root:  validBlockRoot[:],
 					},
 					Source: &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
@@ -417,9 +409,9 @@ func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {
 				Data: &ethpb.AttestationData{
 					BeaconBlockRoot: validBlockRoot[:],
 					CommitteeIndex:  1,
-					Slot:            1,
+					Slot:            s.cfg.clock.CurrentSlot(),
 					Target: &ethpb.Checkpoint{
-						Epoch: 0,
+						Epoch: s.cfg.clock.CurrentEpoch(),
 						Root:  validBlockRoot[:],
 					},
 					Source: &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},

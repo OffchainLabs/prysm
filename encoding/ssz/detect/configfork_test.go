@@ -112,11 +112,9 @@ func TestByState(t *testing.T) {
 	for _, c := range cases {
 		st, err := stateForVersion(c.version)
 		require.NoError(t, err)
-		require.NoError(t, st.SetFork(&ethpb.Fork{
-			PreviousVersion: make([]byte, 4),
-			CurrentVersion:  c.forkversion[:],
-			Epoch:           0,
-		}))
+		fork, err := params.Fork(slots.ToEpoch(c.slot))
+		require.NoError(t, err)
+		require.NoError(t, st.SetFork(fork))
 		require.NoError(t, st.SetSlot(c.slot))
 		m, err := st.MarshalSSZ()
 		require.NoError(t, err)

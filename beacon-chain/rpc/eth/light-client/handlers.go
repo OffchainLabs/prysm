@@ -7,12 +7,10 @@ import (
 	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -111,17 +109,7 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 
 			updateSlot := update.AttestedHeader().Beacon().Slot
 			updateEpoch := slots.ToEpoch(updateSlot)
-			updateFork, err := forks.Fork(updateEpoch)
-			if err != nil {
-				httputil.HandleError(w, "Could not get fork Version: "+err.Error(), http.StatusInternalServerError)
-				return
-			}
-
-			forkDigest, err := signing.ComputeForkDigest(updateFork.CurrentVersion, params.BeaconConfig().GenesisValidatorsRoot[:])
-			if err != nil {
-				httputil.HandleError(w, "Could not compute fork digest: "+err.Error(), http.StatusInternalServerError)
-				return
-			}
+			updateEntry := params.GetNetworkScheduleEntry(updateEpoch)
 			updateSSZ, err := update.MarshalSSZ()
 			if err != nil {
 				httputil.HandleError(w, "Could not marshal update to SSZ: "+err.Error(), http.StatusInternalServerError)
@@ -133,7 +121,7 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 			if _, err := w.Write(chunkLength); err != nil {
 				httputil.HandleError(w, "Could not write chunk length: "+err.Error(), http.StatusInternalServerError)
 			}
-			if _, err := w.Write(forkDigest[:]); err != nil {
+			if _, err := w.Write(updateEntry.ForkDigest[:]); err != nil {
 				httputil.HandleError(w, "Could not write fork digest: "+err.Error(), http.StatusInternalServerError)
 			}
 			if _, err := w.Write(updateSSZ); err != nil {
