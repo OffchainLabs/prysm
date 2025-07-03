@@ -62,7 +62,9 @@ const (
 
 const (
 	// CollocationLimit restricts how many peer identities we can see from a single ip or ipv6 subnet.
-	CollocationLimit = 5
+	// TODO: Revert this when out of devnet.
+	// CollocationLimit = 5
+	CollocationLimit = 9999
 
 	// Additional buffer beyond current peer limit, from which we can store the relevant peer statuses.
 	maxLimitBuffer = 150
@@ -710,8 +712,7 @@ func (p *Status) deprecatedPrune() {
 // This method may not return the absolute highest finalized epoch, but the finalized epoch in which
 // most peers can serve blocks (plurality voting). Ideally, all peers would be reporting the same
 // finalized epoch but some may be behind due to their own latency, or because of their finalized
-// epoch at the time we queried them. Returns epoch number and list of peers that are at or beyond
-// that epoch.
+// epoch at the time we queried them.
 func (p *Status) BestFinalized(maxPeers int, ourFinalizedEpoch primitives.Epoch) (primitives.Epoch, []peer.ID) {
 	// Retrieve all connected peers.
 	connected := p.Connected()
@@ -783,8 +784,6 @@ func (p *Status) BestFinalized(maxPeers int, ourFinalizedEpoch primitives.Epoch)
 func (p *Status) BestNonFinalized(minPeers int, ourHeadEpoch primitives.Epoch) (primitives.Epoch, []peer.ID) {
 	// Retrieve all connected peers.
 	connected := p.Connected()
-
-	// Calculate our head slot.
 	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
 	ourHeadSlot := slotsPerEpoch.Mul(uint64(ourHeadEpoch))
 
@@ -798,7 +797,6 @@ func (p *Status) BestNonFinalized(minPeers int, ourHeadEpoch primitives.Epoch) (
 	pidHead := make(map[peer.ID]primitives.Slot, len(connected))
 
 	potentialPIDs := make([]peer.ID, 0, len(connected))
-
 	for _, pid := range connected {
 		peerChainState, err := p.ChainState(pid)
 		// Skip if the peer's head epoch is not defined, or if the peer's head slot is
@@ -808,7 +806,6 @@ func (p *Status) BestNonFinalized(minPeers int, ourHeadEpoch primitives.Epoch) (
 		}
 
 		epoch := slots.ToEpoch(peerChainState.HeadSlot)
-
 		epochVotes[epoch]++
 		pidEpoch[pid] = epoch
 		pidHead[pid] = peerChainState.HeadSlot
@@ -1045,23 +1042,19 @@ func (p *Status) isfromBadIP(pid peer.ID) error {
 		return nil
 	}
 
-	// ip, err := manet.ToIP(peerData.Address)
-	// if err != nil {
-	// 	return errors.Wrap(err, "to ip")
-	// }
+	ip, err := manet.ToIP(peerData.Address)
+	if err != nil {
+		return errors.Wrap(err, "to ip")
+	}
 
-	// if val, ok := p.ipTracker[ip.String()]; ok {
-	// if val > CollocationLimit {
-	// TODO: Remove this out of denvet.
-	// return errors.Errorf("colocation limit exceeded: got %d - limit %d", val, CollocationLimit)
-	// log.WithFields(logrus.Fields{
-	// 	"pid":             pid,
-	// 	"ip":              ip.String(),
-	// 	"colocationCount": val,
-	// 	"colocationLimit": CollocationLimit,
-	// }).Debug("Colocation limit exceeded. Peer should be banned.")
-	// }
-	// }
+	if val, ok := p.ipTracker[ip.String()]; ok {
+		if val > CollocationLimit {
+			return errors.Errorf(
+				"colocation limit exceeded: got %d - limit %d for peer %v with IP %v",
+				val, CollocationLimit, pid, ip.String(),
+			)
+		}
+	}
 
 	return nil
 }

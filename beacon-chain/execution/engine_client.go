@@ -47,10 +47,12 @@ var (
 		GetPayloadBodiesByRangeV1,
 		GetBlobsV1,
 	}
+
 	electraEngineEndpoints = []string{
 		NewPayloadMethodV4,
 		GetPayloadMethodV4,
 	}
+
 	fuluEngineEndpoints = []string{
 		GetPayloadMethodV5,
 		GetBlobsV2,
@@ -125,8 +127,8 @@ type Reconstructor interface {
 	ReconstructFullBellatrixBlockBatch(
 		ctx context.Context, blindedBlocks []interfaces.ReadOnlySignedBeaconBlock,
 	) ([]interfaces.SignedBeaconBlock, error)
-	ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, hi func(uint64) bool) ([]blocks.VerifiedROBlob, error)
-	ReconstructDataColumnSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte) ([]blocks.VerifiedRODataColumn, error)
+	ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte, hi func(uint64) bool) ([]blocks.VerifiedROBlob, error)
+	ReconstructDataColumnSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte) ([]blocks.VerifiedRODataColumn, error)
 }
 
 // EngineCaller defines a client that can interact with an Ethereum
@@ -275,17 +277,17 @@ func (s *Service) ForkchoiceUpdated(
 }
 
 func getPayloadMethodAndMessage(slot primitives.Slot) (string, proto.Message) {
-	pe := slots.ToEpoch(slot)
-	if pe >= params.BeaconConfig().FuluForkEpoch {
+	epoch := slots.ToEpoch(slot)
+	if epoch >= params.BeaconConfig().FuluForkEpoch {
 		return GetPayloadMethodV5, &pb.ExecutionBundleFulu{}
 	}
-	if pe >= params.BeaconConfig().ElectraForkEpoch {
+	if epoch >= params.BeaconConfig().ElectraForkEpoch {
 		return GetPayloadMethodV4, &pb.ExecutionBundleElectra{}
 	}
-	if pe >= params.BeaconConfig().DenebForkEpoch {
+	if epoch >= params.BeaconConfig().DenebForkEpoch {
 		return GetPayloadMethodV3, &pb.ExecutionPayloadDenebWithValueAndBlobsBundle{}
 	}
-	if pe >= params.BeaconConfig().CapellaForkEpoch {
+	if epoch >= params.BeaconConfig().CapellaForkEpoch {
 		return GetPayloadMethodV2, &pb.ExecutionPayloadCapellaWithValue{}
 	}
 	return GetPayloadMethod, &pb.ExecutionPayload{}
@@ -338,7 +340,7 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 		elSupportedEndpoints[method] = true
 	}
 
-	unsupported := make([]string, 0, len(supportedEngineEndpoints))
+	unsupported := make([]string, 0)
 	for _, method := range supportedEngineEndpoints {
 		if !elSupportedEndpoints[method] {
 			unsupported = append(unsupported, method)
@@ -670,14 +672,15 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, signedROBlo
 		return nil, wrapWithBlockRoot(err, blockRoot, "blob KZG commitments")
 	}
 
-	// Collect KZG hashes for all blobs
-	var kzgHashes []common.Hash
+	// Collect KZG hashes for all blobs.
+	versionedHashes := make([]common.Hash, 0, len(kzgCommitments))
 	for _, commitment := range kzgCommitments {
-		kzgHashes = append(kzgHashes, primitives.ConvertKzgCommitmentToVersionedHash(commitment))
+		versionedHash := primitives.ConvertKzgCommitmentToVersionedHash(commitment)
+		versionedHashes = append(versionedHashes, versionedHash)
 	}
 
-	// Fetch all blobsAndCellsProofs from EL
-	blobAndProofV2s, err := s.GetBlobsV2(ctx, kzgHashes)
+	// Fetch all blobsAndCellsProofs from the execution client.
+	blobAndProofV2s, err := s.GetBlobsV2(ctx, versionedHashes)
 	if err != nil {
 		return nil, wrapWithBlockRoot(err, blockRoot, "get blobs V2")
 	}
@@ -689,21 +692,23 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, signedROBlo
 	}
 
 	// Extract the blobs and proofs from the blobAndProofV2s.
-	blobs := make([][]byte, 0, len(blobAndProofV2s))
-	cellProofs := make([][]byte, 0, len(blobAndProofV2s))
+	blobs, cellProofs := make([][]byte, 0, len(blobAndProofV2s)), make([][]byte, 0, len(blobAndProofV2s))
 	for _, blobsAndProofs := range blobAndProofV2s {
 		if blobsAndProofs == nil {
 			return nil, wrapWithBlockRoot(errMissingBlobsAndProofsFromEL, blockRoot, "")
 		}
-		blobs = append(blobs, blobsAndProofs.Blob)
-		cellProofs = append(cellProofs, blobsAndProofs.KzgProofs...)
+
+		blobs, cellProofs = append(blobs, blobsAndProofs.Blob), append(cellProofs, blobsAndProofs.KzgProofs...)
 	}
 
+	// Construct the data column sidcars from the blobs and cell proofs provided by the execution client.
 	dataColumnSidecars, err := peerdas.ConstructDataColumnSidecars(signedROBlock, blobs, cellProofs)
 	if err != nil {
 		return nil, wrapWithBlockRoot(err, blockRoot, "construct data column sidecars")
 	}
 
+	// Finally, construct verified RO data column sidecars.
+	// We trust the execution layer we are connected to, so we can upgrade the read only data column sidecar into a verified one.
 	verifiedRODataColumns := make([]blocks.VerifiedRODataColumn, 0, len(dataColumnSidecars))
 	for _, dataColumnSidecar := range dataColumnSidecars {
 		roDataColumn, err := blocks.NewRODataColumnWithRoot(dataColumnSidecar, blockRoot)
@@ -711,12 +716,11 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, signedROBlo
 			return nil, wrapWithBlockRoot(err, blockRoot, "new read-only data column with root")
 		}
 
-		// We trust the execution layer we are connected to, so we can upgrade the read only data column sidecar into a verified one.
 		verifiedRODataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
 		verifiedRODataColumns = append(verifiedRODataColumns, verifiedRODataColumn)
 	}
 
-	log.Debug("Data columns successfully reconstructed from EL")
+	log.Debug("Data columns successfully reconstructed from the execution client.")
 
 	return verifiedRODataColumns, nil
 }

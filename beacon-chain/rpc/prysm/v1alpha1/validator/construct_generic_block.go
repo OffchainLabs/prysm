@@ -39,13 +39,16 @@ func (vs *Server) constructGenericBeaconBlock(
 		return vs.constructBellatrixBlock(blockProto, isBlinded, bidStr), nil
 	case version.Capella:
 		return vs.constructCapellaBlock(blockProto, isBlinded, bidStr), nil
-	case version.Deneb, version.Electra:
+	case version.Deneb:
 		bundle, ok := blobsBundler.(*enginev1.BlobsBundle)
 		if blobsBundler != nil && !ok {
 			return nil, fmt.Errorf("expected *BlobsBundler, got %T", blobsBundler)
 		}
-		if sBlk.Version() == version.Deneb {
-			return vs.constructDenebBlock(blockProto, isBlinded, bidStr, bundle), nil
+		return vs.constructDenebBlock(blockProto, isBlinded, bidStr, bundle), nil
+	case version.Electra:
+		bundle, ok := blobsBundler.(*enginev1.BlobsBundle)
+		if blobsBundler != nil && !ok {
+			return nil, fmt.Errorf("expected *BlobsBundler, got %T", blobsBundler)
 		}
 		return vs.constructElectraBlock(blockProto, isBlinded, bidStr, bundle), nil
 	case version.Fulu:
