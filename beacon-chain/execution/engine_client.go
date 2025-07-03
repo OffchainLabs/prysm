@@ -335,7 +335,7 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 		elSupportedEndpoints[method] = true
 	}
 
-	unsupported := make([]string, 0, len(supportedEngineEndpoints))
+	unsupported := make([]string, 0)
 	for _, method := range supportedEngineEndpoints {
 		if !elSupportedEndpoints[method] {
 			unsupported = append(unsupported, method)
