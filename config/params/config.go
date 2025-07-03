@@ -346,6 +346,12 @@ func (b *BeaconChainConfig) ApplyOptions(opts ...Option) {
 	}
 }
 
+func (b *BeaconChainConfig) ApplyOptions(opts ...Option) {
+	for _, opt := range opts {
+		opt(b)
+	}
+}
+
 // InitializeForkSchedule initializes the schedules forks baked into the config.
 func (b *BeaconChainConfig) InitializeForkSchedule() {
 	// Reset Fork Version Schedule.
