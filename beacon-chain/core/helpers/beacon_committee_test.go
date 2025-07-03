@@ -912,6 +912,7 @@ func TestAssignmentForValidator(t *testing.T) {
 			{{4, 5, 6}},
 		}
 		got = helpers.AssignmentForValidator(bySlot, start, primitives.ValidatorIndex(99))
-		require.IsNil(t, got)
+		// should be empty to be safe
+		require.DeepEqual(t, &helpers.LiteAssignment{}, got)
 	})
 }
