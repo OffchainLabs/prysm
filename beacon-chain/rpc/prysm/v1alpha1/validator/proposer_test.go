@@ -529,7 +529,7 @@ func TestServer_GetBeaconBlock_Deneb(t *testing.T) {
 		PayloadIDBytes: &enginev1.PayloadIDBytes{1},
 		GetPayloadResponse: &blocks.GetPayloadResponse{
 			ExecutionData: ed,
-			BlobsBundle:   bundle,
+			BlobsBundler:  bundle,
 		},
 	}
 

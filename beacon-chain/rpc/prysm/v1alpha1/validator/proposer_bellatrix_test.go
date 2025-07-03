@@ -519,7 +519,7 @@ func TestServer_setExecutionData(t *testing.T) {
 			PayloadIDBytes: id,
 			GetPayloadResponse: &blocks.GetPayloadResponse{
 				ExecutionData: ed,
-				BlobsBundle:   blobsBundle,
+				BlobsBundler:  blobsBundle,
 				Bid:           primitives.ZeroWei(),
 			},
 		}
@@ -527,7 +527,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		res, err := vs.getLocalPayload(ctx, blk.Block(), capellaTransitionState)
 		require.NoError(t, err)
 		require.Equal(t, uint64(4), res.ExecutionData.BlockNumber())
-		require.DeepEqual(t, res.BlobsBundle, blobsBundle)
+		require.DeepEqual(t, res.BlobsBundler, blobsBundle)
 	})
 	t.Run("Can get builder payload and blobs in Deneb", func(t *testing.T) {
 		cfg := params.BeaconConfig().Copy()
