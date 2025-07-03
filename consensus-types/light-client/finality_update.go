@@ -8,7 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -174,7 +174,7 @@ func (u *finalityUpdateAltair) Proto() proto.Message {
 }
 
 func (u *finalityUpdateAltair) Version() int {
-	return version.Altair
+	return slots.ToForkVersion(u.attestedHeader.Beacon().Slot)
 }
 
 func (u *finalityUpdateAltair) AttestedHeader() interfaces.LightClientHeader {
@@ -286,7 +286,7 @@ func (u *finalityUpdateCapella) Proto() proto.Message {
 }
 
 func (u *finalityUpdateCapella) Version() int {
-	return version.Capella
+	return slots.ToForkVersion(u.attestedHeader.Beacon().Slot)
 }
 
 func (u *finalityUpdateCapella) AttestedHeader() interfaces.LightClientHeader {
@@ -398,7 +398,7 @@ func (u *finalityUpdateDeneb) Proto() proto.Message {
 }
 
 func (u *finalityUpdateDeneb) Version() int {
-	return version.Deneb
+	return slots.ToForkVersion(u.attestedHeader.Beacon().Slot)
 }
 
 func (u *finalityUpdateDeneb) AttestedHeader() interfaces.LightClientHeader {
@@ -511,7 +511,7 @@ func (u *finalityUpdateElectra) Proto() proto.Message {
 }
 
 func (u *finalityUpdateElectra) Version() int {
-	return version.Electra
+	return slots.ToForkVersion(u.attestedHeader.Beacon().Slot)
 }
 
 func (u *finalityUpdateElectra) AttestedHeader() interfaces.LightClientHeader {

@@ -6,12 +6,10 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	light_client "github.com/OffchainLabs/prysm/v6/consensus-types/light-client"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -163,13 +161,13 @@ func NewLightClientUpdateFromBeaconState(
 	updateAttestedPeriod := slots.SyncCommitteePeriod(slots.ToEpoch(attestedBlock.Block().Slot()))
 
 	// update = LightClientUpdate()
-	result, err := CreateDefaultLightClientUpdate(currentSlot, attestedState)
+	result, err := CreateDefaultLightClientUpdate(attestedBlock)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create default light client update")
 	}
 
 	// update.attested_header = block_to_light_client_header(attested_block)
-	attestedLightClientHeader, err := BlockToLightClientHeader(ctx, currentSlot, attestedBlock)
+	attestedLightClientHeader, err := BlockToLightClientHeader(ctx, attestedBlock.Version(), attestedBlock)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get attested light client header")
 	}
@@ -210,7 +208,7 @@ func NewLightClientUpdateFromBeaconState(
 		// if finalized_block.message.slot != GENESIS_SLOT
 		if finalizedBlock.Block().Slot() != 0 {
 			// update.finalized_header = block_to_light_client_header(finalized_block)
-			finalizedLightClientHeader, err := BlockToLightClientHeader(ctx, currentSlot, finalizedBlock)
+			finalizedLightClientHeader, err := BlockToLightClientHeader(ctx, attestedBlock.Version(), finalizedBlock)
 			if err != nil {
 				return nil, errors.Wrap(err, "could not get finalized light client header")
 			}
@@ -247,9 +245,7 @@ func NewLightClientUpdateFromBeaconState(
 	return result, nil
 }
 
-func CreateDefaultLightClientUpdate(currentSlot primitives.Slot, attestedState state.BeaconState) (interfaces.LightClientUpdate, error) {
-	currentEpoch := slots.ToEpoch(currentSlot)
-
+func CreateDefaultLightClientUpdate(attestedBlock interfaces.ReadOnlySignedBeaconBlock) (interfaces.LightClientUpdate, error) {
 	syncCommitteeSize := params.BeaconConfig().SyncCommitteeSize
 	pubKeys := make([][]byte, syncCommitteeSize)
 	for i := uint64(0); i < syncCommitteeSize; i++ {
@@ -261,7 +257,7 @@ func CreateDefaultLightClientUpdate(currentSlot primitives.Slot, attestedState s
 	}
 
 	var nextSyncCommitteeBranch [][]byte
-	if attestedState.Version() >= version.Electra {
+	if attestedBlock.Version() >= version.Electra {
 		nextSyncCommitteeBranch = make([][]byte, fieldparams.SyncCommitteeBranchDepthElectra)
 	} else {
 		nextSyncCommitteeBranch = make([][]byte, fieldparams.SyncCommitteeBranchDepth)
@@ -276,7 +272,7 @@ func CreateDefaultLightClientUpdate(currentSlot primitives.Slot, attestedState s
 	}
 
 	var finalityBranch [][]byte
-	if attestedState.Version() >= version.Electra {
+	if attestedBlock.Version() >= version.Electra {
 		finalityBranch = make([][]byte, fieldparams.FinalityBranchDepthElectra)
 	} else {
 		finalityBranch = make([][]byte, fieldparams.FinalityBranchDepth)
@@ -286,10 +282,12 @@ func CreateDefaultLightClientUpdate(currentSlot primitives.Slot, attestedState s
 	}
 
 	var m proto.Message
-	if currentEpoch < params.BeaconConfig().CapellaForkEpoch {
+	switch attestedBlock.Version() {
+	case version.Altair, version.Bellatrix:
 		m = &pb.LightClientUpdateAltair{
 			AttestedHeader: &pb.LightClientHeaderAltair{
 				Beacon: &pb.BeaconBlockHeader{
+					Slot:       attestedBlock.Block().Slot(),
 					ParentRoot: make([]byte, 32),
 					StateRoot:  make([]byte, 32),
 					BodyRoot:   make([]byte, 32),
@@ -310,10 +308,11 @@ func CreateDefaultLightClientUpdate(currentSlot primitives.Slot, attestedState s
 				SyncCommitteeSignature: make([]byte, 96),
 			},
 		}
-	} else if currentEpoch < params.BeaconConfig().DenebForkEpoch {
+	case version.Capella:
 		m = &pb.LightClientUpdateCapella{
 			AttestedHeader: &pb.LightClientHeaderCapella{
 				Beacon: &pb.BeaconBlockHeader{
+					Slot:       attestedBlock.Block().Slot(),
 					ParentRoot: make([]byte, 32),
 					StateRoot:  make([]byte, 32),
 					BodyRoot:   make([]byte, 32),
@@ -362,10 +361,11 @@ func CreateDefaultLightClientUpdate(currentSlot primitives.Slot, attestedState s
 				SyncCommitteeSignature: make([]byte, 96),
 			},
 		}
-	} else if currentEpoch < params.BeaconConfig().ElectraForkEpoch {
+	case version.Deneb:
 		m = &pb.LightClientUpdateDeneb{
 			AttestedHeader: &pb.LightClientHeaderDeneb{
 				Beacon: &pb.BeaconBlockHeader{
+					Slot:       attestedBlock.Block().Slot(),
 					ParentRoot: make([]byte, 32),
 					StateRoot:  make([]byte, 32),
 					BodyRoot:   make([]byte, 32),
@@ -418,120 +418,65 @@ func CreateDefaultLightClientUpdate(currentSlot primitives.Slot, attestedState s
 				SyncCommitteeSignature: make([]byte, 96),
 			},
 		}
-	} else {
-		if attestedState.Version() >= version.Electra {
-			m = &pb.LightClientUpdateElectra{
-				AttestedHeader: &pb.LightClientHeaderDeneb{
-					Beacon: &pb.BeaconBlockHeader{
-						ParentRoot: make([]byte, 32),
-						StateRoot:  make([]byte, 32),
-						BodyRoot:   make([]byte, 32),
-					},
-					Execution: &enginev1.ExecutionPayloadHeaderDeneb{
-						ParentHash:       make([]byte, fieldparams.RootLength),
-						FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
-						StateRoot:        make([]byte, fieldparams.RootLength),
-						ReceiptsRoot:     make([]byte, fieldparams.RootLength),
-						LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
-						PrevRandao:       make([]byte, fieldparams.RootLength),
-						ExtraData:        make([]byte, 0),
-						BaseFeePerGas:    make([]byte, fieldparams.RootLength),
-						BlockHash:        make([]byte, fieldparams.RootLength),
-						TransactionsRoot: make([]byte, fieldparams.RootLength),
-						WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
-						GasLimit:         0,
-						GasUsed:          0,
-					},
-					ExecutionBranch: executionBranch,
+	case version.Electra, version.Fulu:
+		m = &pb.LightClientUpdateElectra{
+			AttestedHeader: &pb.LightClientHeaderDeneb{
+				Beacon: &pb.BeaconBlockHeader{
+					Slot:       attestedBlock.Block().Slot(),
+					ParentRoot: make([]byte, 32),
+					StateRoot:  make([]byte, 32),
+					BodyRoot:   make([]byte, 32),
 				},
-				NextSyncCommittee:       nextSyncCommittee,
-				NextSyncCommitteeBranch: nextSyncCommitteeBranch,
-				FinalityBranch:          finalityBranch,
-				FinalizedHeader: &pb.LightClientHeaderDeneb{
-					Beacon: &pb.BeaconBlockHeader{
-						ParentRoot: make([]byte, 32),
-						StateRoot:  make([]byte, 32),
-						BodyRoot:   make([]byte, 32),
-					},
-					Execution: &enginev1.ExecutionPayloadHeaderDeneb{
-						ParentHash:       make([]byte, fieldparams.RootLength),
-						FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
-						StateRoot:        make([]byte, fieldparams.RootLength),
-						ReceiptsRoot:     make([]byte, fieldparams.RootLength),
-						LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
-						PrevRandao:       make([]byte, fieldparams.RootLength),
-						ExtraData:        make([]byte, 0),
-						BaseFeePerGas:    make([]byte, fieldparams.RootLength),
-						BlockHash:        make([]byte, fieldparams.RootLength),
-						TransactionsRoot: make([]byte, fieldparams.RootLength),
-						WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
-						GasLimit:         0,
-						GasUsed:          0,
-					},
-					ExecutionBranch: executionBranch,
+				Execution: &enginev1.ExecutionPayloadHeaderDeneb{
+					ParentHash:       make([]byte, fieldparams.RootLength),
+					FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+					StateRoot:        make([]byte, fieldparams.RootLength),
+					ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+					LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+					PrevRandao:       make([]byte, fieldparams.RootLength),
+					ExtraData:        make([]byte, 0),
+					BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+					BlockHash:        make([]byte, fieldparams.RootLength),
+					TransactionsRoot: make([]byte, fieldparams.RootLength),
+					WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+					GasLimit:         0,
+					GasUsed:          0,
 				},
-				SyncAggregate: &pb.SyncAggregate{
-					SyncCommitteeBits:      make([]byte, 64),
-					SyncCommitteeSignature: make([]byte, 96),
+				ExecutionBranch: executionBranch,
+			},
+			NextSyncCommittee:       nextSyncCommittee,
+			NextSyncCommitteeBranch: nextSyncCommitteeBranch,
+			FinalityBranch:          finalityBranch,
+			FinalizedHeader: &pb.LightClientHeaderDeneb{
+				Beacon: &pb.BeaconBlockHeader{
+					ParentRoot: make([]byte, 32),
+					StateRoot:  make([]byte, 32),
+					BodyRoot:   make([]byte, 32),
 				},
-			}
-		} else {
-			m = &pb.LightClientUpdateDeneb{
-				AttestedHeader: &pb.LightClientHeaderDeneb{
-					Beacon: &pb.BeaconBlockHeader{
-						ParentRoot: make([]byte, 32),
-						StateRoot:  make([]byte, 32),
-						BodyRoot:   make([]byte, 32),
-					},
-					Execution: &enginev1.ExecutionPayloadHeaderDeneb{
-						ParentHash:       make([]byte, fieldparams.RootLength),
-						FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
-						StateRoot:        make([]byte, fieldparams.RootLength),
-						ReceiptsRoot:     make([]byte, fieldparams.RootLength),
-						LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
-						PrevRandao:       make([]byte, fieldparams.RootLength),
-						ExtraData:        make([]byte, 0),
-						BaseFeePerGas:    make([]byte, fieldparams.RootLength),
-						BlockHash:        make([]byte, fieldparams.RootLength),
-						TransactionsRoot: make([]byte, fieldparams.RootLength),
-						WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
-						GasLimit:         0,
-						GasUsed:          0,
-					},
-					ExecutionBranch: executionBranch,
+				Execution: &enginev1.ExecutionPayloadHeaderDeneb{
+					ParentHash:       make([]byte, fieldparams.RootLength),
+					FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+					StateRoot:        make([]byte, fieldparams.RootLength),
+					ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+					LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+					PrevRandao:       make([]byte, fieldparams.RootLength),
+					ExtraData:        make([]byte, 0),
+					BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+					BlockHash:        make([]byte, fieldparams.RootLength),
+					TransactionsRoot: make([]byte, fieldparams.RootLength),
+					WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+					GasLimit:         0,
+					GasUsed:          0,
 				},
-				NextSyncCommittee:       nextSyncCommittee,
-				NextSyncCommitteeBranch: nextSyncCommitteeBranch,
-				FinalityBranch:          finalityBranch,
-				FinalizedHeader: &pb.LightClientHeaderDeneb{
-					Beacon: &pb.BeaconBlockHeader{
-						ParentRoot: make([]byte, 32),
-						StateRoot:  make([]byte, 32),
-						BodyRoot:   make([]byte, 32),
-					},
-					Execution: &enginev1.ExecutionPayloadHeaderDeneb{
-						ParentHash:       make([]byte, fieldparams.RootLength),
-						FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
-						StateRoot:        make([]byte, fieldparams.RootLength),
-						ReceiptsRoot:     make([]byte, fieldparams.RootLength),
-						LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
-						PrevRandao:       make([]byte, fieldparams.RootLength),
-						ExtraData:        make([]byte, 0),
-						BaseFeePerGas:    make([]byte, fieldparams.RootLength),
-						BlockHash:        make([]byte, fieldparams.RootLength),
-						TransactionsRoot: make([]byte, fieldparams.RootLength),
-						WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
-						GasLimit:         0,
-						GasUsed:          0,
-					},
-					ExecutionBranch: executionBranch,
-				},
-				SyncAggregate: &pb.SyncAggregate{
-					SyncCommitteeBits:      make([]byte, 64),
-					SyncCommitteeSignature: make([]byte, 96),
-				},
-			}
+				ExecutionBranch: executionBranch,
+			},
+			SyncAggregate: &pb.SyncAggregate{
+				SyncCommitteeBits:      make([]byte, 64),
+				SyncCommitteeSignature: make([]byte, 96),
+			},
 		}
+	default:
+		return nil, errors.Errorf("unsupported beacon chain version %s", version.String(attestedBlock.Version()))
 	}
 
 	return light_client.NewWrappedUpdate(m)
@@ -575,187 +520,50 @@ func ComputeWithdrawalsRoot(payload interfaces.ExecutionData) ([]byte, error) {
 
 func BlockToLightClientHeader(
 	ctx context.Context,
-	currentSlot primitives.Slot,
-	block interfaces.ReadOnlySignedBeaconBlock,
+	attestedBlockVersion int, // this is the version that the light client header should be in, based on the attested block.
+	block interfaces.ReadOnlySignedBeaconBlock, // this block is either the attested block, or the finalized block.
+	// in case of the latter, we might need to upgrade it to the attested block's version.
 ) (interfaces.LightClientHeader, error) {
-	var m proto.Message
-	currentEpoch := slots.ToEpoch(currentSlot)
-	blockEpoch := slots.ToEpoch(block.Block().Slot())
-	parentRoot := block.Block().ParentRoot()
-	stateRoot := block.Block().StateRoot()
-	bodyRoot, err := block.Block().Body().HashTreeRoot()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get body root")
+	if block.Version() > attestedBlockVersion {
+		return nil, errors.Errorf("block version %s is greater than attested block version %s", version.String(block.Version()), version.String(attestedBlockVersion))
 	}
 
-	if currentEpoch < params.BeaconConfig().CapellaForkEpoch {
+	beacon, err := makeBeaconBlockHeader(block)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not make beacon block header")
+	}
+
+	var m proto.Message
+	switch attestedBlockVersion {
+	case version.Altair, version.Bellatrix:
 		m = &pb.LightClientHeaderAltair{
-			Beacon: &pb.BeaconBlockHeader{
-				Slot:          block.Block().Slot(),
-				ProposerIndex: block.Block().ProposerIndex(),
-				ParentRoot:    parentRoot[:],
-				StateRoot:     stateRoot[:],
-				BodyRoot:      bodyRoot[:],
-			},
+			Beacon: beacon,
 		}
-	} else if currentEpoch < params.BeaconConfig().DenebForkEpoch {
-		var payloadHeader *enginev1.ExecutionPayloadHeaderCapella
-		var payloadProof [][]byte
-
-		if blockEpoch < params.BeaconConfig().CapellaForkEpoch {
-			var ok bool
-
-			p, err := execution.EmptyExecutionPayloadHeader(version.Capella)
-			if err != nil {
-				return nil, errors.Wrap(err, "could not get payload header")
-			}
-			payloadHeader, ok = p.(*enginev1.ExecutionPayloadHeaderCapella)
-			if !ok {
-				return nil, fmt.Errorf("payload header type %T is not %T", p, &enginev1.ExecutionPayloadHeaderCapella{})
-			}
-			payloadProof = emptyPayloadProof()
-		} else {
-			payload, err := block.Block().Body().Execution()
-			if err != nil {
-				return nil, errors.Wrap(err, "could not get execution payload")
-			}
-			transactionsRoot, err := ComputeTransactionsRoot(payload)
-			if err != nil {
-				return nil, errors.Wrap(err, "could not get transactions root")
-			}
-			withdrawalsRoot, err := ComputeWithdrawalsRoot(payload)
-			if err != nil {
-				return nil, errors.Wrap(err, "could not get withdrawals root")
-			}
-
-			payloadHeader = &enginev1.ExecutionPayloadHeaderCapella{
-				ParentHash:       payload.ParentHash(),
-				FeeRecipient:     payload.FeeRecipient(),
-				StateRoot:        payload.StateRoot(),
-				ReceiptsRoot:     payload.ReceiptsRoot(),
-				LogsBloom:        payload.LogsBloom(),
-				PrevRandao:       payload.PrevRandao(),
-				BlockNumber:      payload.BlockNumber(),
-				GasLimit:         payload.GasLimit(),
-				GasUsed:          payload.GasUsed(),
-				Timestamp:        payload.Timestamp(),
-				ExtraData:        payload.ExtraData(),
-				BaseFeePerGas:    payload.BaseFeePerGas(),
-				BlockHash:        payload.BlockHash(),
-				TransactionsRoot: transactionsRoot,
-				WithdrawalsRoot:  withdrawalsRoot,
-			}
-
-			payloadProof, err = blocks.PayloadProof(ctx, block.Block())
-			if err != nil {
-				return nil, errors.Wrap(err, "could not get execution payload proof")
-			}
+	case version.Capella:
+		payloadHeader, payloadProof, err := makeExecutionAndProofCapella(ctx, block)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not make execution payload header and proof")
 		}
-
 		m = &pb.LightClientHeaderCapella{
-			Beacon: &pb.BeaconBlockHeader{
-				Slot:          block.Block().Slot(),
-				ProposerIndex: block.Block().ProposerIndex(),
-				ParentRoot:    parentRoot[:],
-				StateRoot:     stateRoot[:],
-				BodyRoot:      bodyRoot[:],
-			},
+			Beacon:          beacon,
 			Execution:       payloadHeader,
 			ExecutionBranch: payloadProof,
 		}
-	} else {
-		var payloadHeader *enginev1.ExecutionPayloadHeaderDeneb
-		var payloadProof [][]byte
-
-		if blockEpoch < params.BeaconConfig().CapellaForkEpoch {
-			var ok bool
-
-			p, err := execution.EmptyExecutionPayloadHeader(version.Deneb)
-			if err != nil {
-				return nil, errors.Wrap(err, "could not get payload header")
-			}
-			payloadHeader, ok = p.(*enginev1.ExecutionPayloadHeaderDeneb)
-			if !ok {
-				return nil, fmt.Errorf("payload header type %T is not %T", p, &enginev1.ExecutionPayloadHeaderDeneb{})
-			}
-			payloadProof = emptyPayloadProof()
-		} else {
-			payload, err := block.Block().Body().Execution()
-			if err != nil {
-				return nil, errors.Wrap(err, "could not get execution payload")
-			}
-			transactionsRoot, err := ComputeTransactionsRoot(payload)
-			if err != nil {
-				return nil, errors.Wrap(err, "could not get transactions root")
-			}
-			withdrawalsRoot, err := ComputeWithdrawalsRoot(payload)
-			if err != nil {
-				return nil, errors.Wrap(err, "could not get withdrawals root")
-			}
-
-			var blobGasUsed uint64
-			var excessBlobGas uint64
-
-			if blockEpoch >= params.BeaconConfig().DenebForkEpoch {
-				blobGasUsed, err = payload.BlobGasUsed()
-				if err != nil {
-					return nil, errors.Wrap(err, "could not get blob gas used")
-				}
-				excessBlobGas, err = payload.ExcessBlobGas()
-				if err != nil {
-					return nil, errors.Wrap(err, "could not get excess blob gas")
-				}
-			}
-
-			payloadHeader = &enginev1.ExecutionPayloadHeaderDeneb{
-				ParentHash:       payload.ParentHash(),
-				FeeRecipient:     payload.FeeRecipient(),
-				StateRoot:        payload.StateRoot(),
-				ReceiptsRoot:     payload.ReceiptsRoot(),
-				LogsBloom:        payload.LogsBloom(),
-				PrevRandao:       payload.PrevRandao(),
-				BlockNumber:      payload.BlockNumber(),
-				GasLimit:         payload.GasLimit(),
-				GasUsed:          payload.GasUsed(),
-				Timestamp:        payload.Timestamp(),
-				ExtraData:        payload.ExtraData(),
-				BaseFeePerGas:    payload.BaseFeePerGas(),
-				BlockHash:        payload.BlockHash(),
-				TransactionsRoot: transactionsRoot,
-				WithdrawalsRoot:  withdrawalsRoot,
-				BlobGasUsed:      blobGasUsed,
-				ExcessBlobGas:    excessBlobGas,
-			}
-
-			payloadProof, err = blocks.PayloadProof(ctx, block.Block())
-			if err != nil {
-				return nil, errors.Wrap(err, "could not get execution payload proof")
-			}
+	case version.Deneb, version.Electra, version.Fulu:
+		payloadHeader, payloadProof, err := makeExecutionAndProofDeneb(ctx, block)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not make execution payload header and proof")
 		}
-
 		m = &pb.LightClientHeaderDeneb{
-			Beacon: &pb.BeaconBlockHeader{
-				Slot:          block.Block().Slot(),
-				ProposerIndex: block.Block().ProposerIndex(),
-				ParentRoot:    parentRoot[:],
-				StateRoot:     stateRoot[:],
-				BodyRoot:      bodyRoot[:],
-			},
+			Beacon:          beacon,
 			Execution:       payloadHeader,
 			ExecutionBranch: payloadProof,
 		}
+	default:
+		return nil, fmt.Errorf("unsupported attested block version %s", version.String(attestedBlockVersion))
 	}
 
 	return light_client.NewWrappedHeader(m)
-}
-
-func emptyPayloadProof() [][]byte {
-	branch := interfaces.LightClientExecutionBranch{}
-	proof := make([][]byte, len(branch))
-	for i, b := range branch {
-		proof[i] = b[:]
-	}
-	return proof
 }
 
 func HasRelevantSyncCommittee(update interfaces.LightClientUpdate) (bool, error) {
@@ -909,7 +717,7 @@ func NewLightClientBootstrapFromBeaconState(
 		return nil, errors.Wrap(err, "could not create default light client bootstrap")
 	}
 
-	lightClientHeader, err := BlockToLightClientHeader(ctx, currentSlot, block)
+	lightClientHeader, err := BlockToLightClientHeader(ctx, state.Version(), block)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not convert block to light client header")
 	}
@@ -940,78 +748,6 @@ func NewLightClientBootstrapFromBeaconState(
 	}
 
 	return bootstrap, nil
-}
-
-func createDefaultLightClientBootstrap(currentSlot primitives.Slot) (interfaces.LightClientBootstrap, error) {
-	currentEpoch := slots.ToEpoch(currentSlot)
-	syncCommitteeSize := params.BeaconConfig().SyncCommitteeSize
-	pubKeys := make([][]byte, syncCommitteeSize)
-	for i := uint64(0); i < syncCommitteeSize; i++ {
-		pubKeys[i] = make([]byte, fieldparams.BLSPubkeyLength)
-	}
-	currentSyncCommittee := &pb.SyncCommittee{
-		Pubkeys:         pubKeys,
-		AggregatePubkey: make([]byte, fieldparams.BLSPubkeyLength),
-	}
-
-	var currentSyncCommitteeBranch [][]byte
-	if currentEpoch >= params.BeaconConfig().ElectraForkEpoch {
-		currentSyncCommitteeBranch = make([][]byte, fieldparams.SyncCommitteeBranchDepthElectra)
-	} else {
-		currentSyncCommitteeBranch = make([][]byte, fieldparams.SyncCommitteeBranchDepth)
-	}
-	for i := 0; i < len(currentSyncCommitteeBranch); i++ {
-		currentSyncCommitteeBranch[i] = make([]byte, fieldparams.RootLength)
-	}
-
-	executionBranch := make([][]byte, fieldparams.ExecutionBranchDepth)
-	for i := 0; i < fieldparams.ExecutionBranchDepth; i++ {
-		executionBranch[i] = make([]byte, 32)
-	}
-
-	// TODO: can this be based on the current epoch?
-	var m proto.Message
-	if currentEpoch < params.BeaconConfig().CapellaForkEpoch {
-		m = &pb.LightClientBootstrapAltair{
-			Header: &pb.LightClientHeaderAltair{
-				Beacon: &pb.BeaconBlockHeader{},
-			},
-			CurrentSyncCommittee:       currentSyncCommittee,
-			CurrentSyncCommitteeBranch: currentSyncCommitteeBranch,
-		}
-	} else if currentEpoch < params.BeaconConfig().DenebForkEpoch {
-		m = &pb.LightClientBootstrapCapella{
-			Header: &pb.LightClientHeaderCapella{
-				Beacon:          &pb.BeaconBlockHeader{},
-				Execution:       &enginev1.ExecutionPayloadHeaderCapella{},
-				ExecutionBranch: executionBranch,
-			},
-			CurrentSyncCommittee:       currentSyncCommittee,
-			CurrentSyncCommitteeBranch: currentSyncCommitteeBranch,
-		}
-	} else if currentEpoch < params.BeaconConfig().ElectraForkEpoch {
-		m = &pb.LightClientBootstrapDeneb{
-			Header: &pb.LightClientHeaderDeneb{
-				Beacon:          &pb.BeaconBlockHeader{},
-				Execution:       &enginev1.ExecutionPayloadHeaderDeneb{},
-				ExecutionBranch: executionBranch,
-			},
-			CurrentSyncCommittee:       currentSyncCommittee,
-			CurrentSyncCommitteeBranch: currentSyncCommitteeBranch,
-		}
-	} else {
-		m = &pb.LightClientBootstrapElectra{
-			Header: &pb.LightClientHeaderDeneb{
-				Beacon:          &pb.BeaconBlockHeader{},
-				Execution:       &enginev1.ExecutionPayloadHeaderDeneb{},
-				ExecutionBranch: executionBranch,
-			},
-			CurrentSyncCommittee:       currentSyncCommittee,
-			CurrentSyncCommitteeBranch: currentSyncCommitteeBranch,
-		}
-	}
-
-	return light_client.NewWrappedBootstrap(m)
 }
 
 func UpdateHasSupermajority(syncAggregate *pb.SyncAggregate) bool {

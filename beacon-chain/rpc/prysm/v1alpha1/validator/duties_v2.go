@@ -261,6 +261,10 @@ func (vs *Server) buildValidatorDuty(
 }
 
 func populateCommitteeFields(duty *ethpb.DutiesV2Response_Duty, la *helpers.LiteAssignment) {
+	if duty == nil || la == nil {
+		// should never be the case as previous functions should set
+		return
+	}
 	duty.CommitteeLength = la.CommitteeLength
 	duty.CommitteeIndex = la.CommitteeIndex
 	duty.ValidatorCommitteeIndex = la.ValidatorCommitteeIndex
