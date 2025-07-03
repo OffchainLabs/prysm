@@ -11,7 +11,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -55,14 +54,12 @@ func FromBlock(marshaled []byte) (*VersionedUnmarshaler, error) {
 	if err != nil {
 		return nil, err
 	}
-	copiedCfg := params.BeaconConfig().Copy()
 	epoch := slots.ToEpoch(slot)
-	fs := forks.NewOrderedSchedule(copiedCfg)
-	ver, err := fs.VersionForEpoch(epoch)
+	fs, err := params.Fork(epoch)
 	if err != nil {
 		return nil, err
 	}
-	return FromForkVersion(ver)
+	return FromForkVersion([4]byte(fs.CurrentVersion))
 }
 
 var ErrForkNotFound = errors.New("version found in fork schedule but can't be matched to a named fork")
@@ -282,13 +279,13 @@ func (cf *VersionedUnmarshaler) UnmarshalBlindedBeaconBlock(marshaled []byte) (i
 // VersionedUnmarshaler.
 func (cf *VersionedUnmarshaler) validateVersion(slot primitives.Slot) error {
 	epoch := slots.ToEpoch(slot)
-	fs := forks.NewOrderedSchedule(cf.Config)
-	ver, err := fs.VersionForEpoch(epoch)
+	fork, err := params.Fork(epoch)
 	if err != nil {
 		return err
 	}
+	ver := [4]byte(fork.CurrentVersion)
 	if ver != cf.Version {
-		return errors.Wrapf(errBlockForkMismatch, "slot=%d, epoch=%d, version=%#x", slot, epoch, ver)
+		return errors.Wrapf(errBlockForkMismatch, "slot=%d, epoch=%d, version=%#x", slot, epoch, fork.CurrentVersion)
 	}
 	return nil
 }

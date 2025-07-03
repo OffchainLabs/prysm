@@ -40,7 +40,7 @@ const (
 	rSubD = 8 // random gossip target
 )
 
-var errInvalidTopic = errors.New("invalid topic format")
+var ErrInvalidTopic = errors.New("invalid topic format")
 
 // Specifies the fixed size context length.
 const digestLength = 4
@@ -219,12 +219,12 @@ func convertTopicScores(topicMap map[string]*pubsub.TopicScoreSnapshot) map[stri
 func ExtractGossipDigest(topic string) ([4]byte, error) {
 	// Ensure the topic prefix is correct.
 	if len(topic) < len(gossipTopicPrefix)+1 || topic[:len(gossipTopicPrefix)] != gossipTopicPrefix {
-		return [4]byte{}, errInvalidTopic
+		return [4]byte{}, ErrInvalidTopic
 	}
 	start := len(gossipTopicPrefix)
 	end := strings.Index(topic[start:], "/")
 	if end == -1 { // Ensure a topic suffix exists.
-		return [4]byte{}, errInvalidTopic
+		return [4]byte{}, ErrInvalidTopic
 	}
 	end += start
 	strDigest := topic[start:end]

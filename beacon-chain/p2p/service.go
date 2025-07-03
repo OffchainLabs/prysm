@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -63,42 +64,42 @@ var (
 )
 
 // Service for managing peer to peer (p2p) networking.
-type (
-	Service struct {
-		started               bool
-		isPreGenesis          bool
-		pingMethod            func(ctx context.Context, id peer.ID) error
-		pingMethodLock        sync.RWMutex
-		cancel                context.CancelFunc
-		cfg                   *Config
-		peers                 *peers.Status
-		addrFilter            *multiaddr.Filters
-		ipLimiter             *leakybucket.Collector
-		privKey               *ecdsa.PrivateKey
-		metaData              metadata.Metadata
-		pubsub                *pubsub.PubSub
-		joinedTopics          map[string]*pubsub.Topic
-		joinedTopicsLock      sync.RWMutex
-		subnetsLock           map[uint64]*sync.RWMutex
-		subnetsLockLock       sync.Mutex // Lock access to subnetsLock
-		initializationLock    sync.Mutex
-		dv5Listener           ListenerRebooter
-		startupErr            error
-		ctx                   context.Context
-		host                  host.Host
-		genesisTime           time.Time
-		genesisValidatorsRoot []byte
-		activeValidatorCount  uint64
-		peerDisconnectionTime *cache.Cache
-		custodyInfo           *custodyInfo
-		custodyInfoLock       sync.RWMutex // Lock access to custodyInfo
-	}
+type Service struct {
+	started               bool
+	isPreGenesis          bool
+	pingMethod            func(ctx context.Context, id peer.ID) error
+	pingMethodLock        sync.RWMutex
+	cancel                context.CancelFunc
+	cfg                   *Config
+	peers                 *peers.Status
+	addrFilter            *multiaddr.Filters
+	ipLimiter             *leakybucket.Collector
+	privKey               *ecdsa.PrivateKey
+	metaData              metadata.Metadata
+	pubsub                *pubsub.PubSub
+	joinedTopics          map[string]*pubsub.Topic
+	joinedTopicsLock      sync.RWMutex
+	subnetsLock           map[uint64]*sync.RWMutex
+	subnetsLockLock       sync.Mutex // Lock access to subnetsLock
+	initializationLock    sync.Mutex
+	dv5Listener           ListenerRebooter
+	startupErr            error
+	ctx                   context.Context
+	host                  host.Host
+	genesisTime           time.Time
+	genesisValidatorsRoot []byte
+	activeValidatorCount  uint64
+	peerDisconnectionTime *cache.Cache
+	custodyInfo           *custodyInfo
+	custodyInfoLock       sync.RWMutex // Lock access to custodyInfo
+	clock                 *startup.Clock
+	allForkDigests        map[[4]byte]struct{}
+}
 
-	custodyInfo struct {
-		earliestAvailableSlot primitives.Slot
-		groupCount            uint64
-	}
-)
+type custodyInfo struct {
+	earliestAvailableSlot primitives.Slot
+	groupCount            uint64
+}
 
 // NewService initializes a new p2p service compatible with shared.Service interface. No
 // connections are made until the Start function is called during the service registry startup.
@@ -202,6 +203,7 @@ func (s *Service) Start() {
 	// Waits until the state is initialized via an event feed.
 	// Used for fork-related data when connecting peers.
 	s.awaitStateInitialized()
+	s.setAllForkDigests()
 	s.isPreGenesis = false
 
 	var relayNodes []string
@@ -455,7 +457,7 @@ func (s *Service) awaitStateInitialized() {
 	s.genesisTime = clock.GenesisTime()
 	gvr := clock.GenesisValidatorsRoot()
 	s.genesisValidatorsRoot = gvr[:]
-	_, err = s.currentForkDigest() // initialize fork digest cache
+	_, err = s.currentForkDigest()
 	if err != nil {
 		log.WithError(err).Error("Could not initialize fork digest")
 	}

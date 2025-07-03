@@ -19,7 +19,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -28,10 +27,17 @@ import (
 )
 
 func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	beaconConfig := params.BeaconConfig()
+	beaconConfig.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(beaconConfig)
+	params.BeaconConfig().InitializeForkSchedule()
+	ctxMap, err := ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
+	require.NoError(t, err)
 	ctx := context.Background()
 	t.Run("wrong message type", func(t *testing.T) {
 		service := &Service{}
-		err := service.dataColumnSidecarByRootRPCHandler(ctx, nil, nil)
+		err := service.dataColumnSidecarByRootRPCHandler(t.Context(), nil, nil)
 		require.ErrorIs(t, err, notDataColumnsByRootIdentifiersError)
 	})
 
@@ -59,13 +65,13 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 		})
 
 		localP2P.Connect(remoteP2P)
-		stream, err := localP2P.BHost.NewStream(ctx, remoteP2P.BHost.ID(), protocolID)
+		stream, err := localP2P.BHost.NewStream(t.Context(), remoteP2P.BHost.ID(), protocolID)
 		require.NoError(t, err)
 
 		msg := &types.DataColumnsByRootIdentifiers{{Columns: []uint64{1, 2, 3}}}
 		require.Equal(t, true, localP2P.Peers().Scorers().BadResponsesScorer().Score(remoteP2P.PeerID()) >= 0)
 
-		err = service.dataColumnSidecarByRootRPCHandler(ctx, msg, stream)
+		err = service.dataColumnSidecarByRootRPCHandler(t.Context(), msg, stream)
 		require.NotNil(t, err)
 		require.Equal(t, true, localP2P.Peers().Scorers().BadResponsesScorer().Score(remoteP2P.PeerID()) < 0)
 
@@ -124,10 +130,6 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 
 		var wg sync.WaitGroup
 		wg.Add(1)
-
-		ctxMap := ContextByteVersions{
-			[4]byte{245, 165, 253, 66}: version.Fulu,
-		}
 
 		root0 := verifiedRODataColumns[0].BlockRoot()
 		root3 := verifiedRODataColumns[3].BlockRoot()

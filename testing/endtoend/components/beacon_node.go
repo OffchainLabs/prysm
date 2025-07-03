@@ -172,7 +172,7 @@ func NewBeaconNode(config *e2etypes.E2EConfig, index int, enr string) *BeaconNod
 
 func (node *BeaconNode) saveGenesis(ctx context.Context) (string, error) {
 	// The deposit contract starts with an empty trie, we use the BeaconState to "pre-mine" the validator registry,
-	g, err := generateGenesis(ctx)
+	g, err := GenerateGenesis(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -351,7 +351,7 @@ func (node *BeaconNode) UnderlyingProcess() *os.Process {
 	return node.cmd.Process
 }
 
-func generateGenesis(ctx context.Context) (state.BeaconState, error) {
+func GenerateGenesis(ctx context.Context) (state.BeaconState, error) {
 	if e2e.TestParams.Eth1GenesisBlock == nil {
 		return nil, errors.New("Cannot construct bellatrix block, e2e.TestParams.Eth1GenesisBlock == nil")
 	}

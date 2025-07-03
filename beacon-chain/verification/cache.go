@@ -13,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	lru "github.com/hashicorp/golang-lru"
@@ -63,7 +62,7 @@ func (d signatureData) logFields() logrus.Fields {
 
 func newSigCache(vr []byte, size int, gf forkLookup) *sigCache {
 	if gf == nil {
-		gf = forks.Fork
+		gf = params.Fork
 	}
 	return &sigCache{Cache: lruwrpr.New(size), valRoot: vr, getFork: gf}
 }
