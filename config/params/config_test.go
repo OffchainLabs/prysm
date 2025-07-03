@@ -2,6 +2,7 @@ package params_test
 
 import (
 	"bytes"
+	"fmt"
 	"math"
 	"sync"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/genesis"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 // Test cases can be executed in an arbitrary order. TestOverrideBeaconConfigTestTeardown checks
@@ -184,4 +186,83 @@ func Test_TargetBlobCount(t *testing.T) {
 	require.Equal(t, cfg.TargetBlobsPerBlock(primitives.Slot(cfg.ElectraForkEpoch)*cfg.SlotsPerEpoch-1), 3)
 	require.Equal(t, cfg.TargetBlobsPerBlock(primitives.Slot(cfg.ElectraForkEpoch)*cfg.SlotsPerEpoch), 6)
 	cfg.ElectraForkEpoch = math.MaxUint64
+}
+
+func fillGVR(value byte) [32]byte {
+	var gvr [32]byte
+	for i := 0; i < len(gvr); i++ {
+		gvr[i] = value
+	}
+	return gvr
+}
+
+func TestEntryWithForkDigest(t *testing.T) {
+	var zero [32]byte
+	one := fillGVR(byte(1))
+	two := fillGVR(byte(2))
+	three := fillGVR(byte(3))
+	configs := map[[32]byte]*params.BeaconChainConfig{
+		zero:  testConfigForSchedule(zero),
+		one:   testConfigForSchedule(one),
+		two:   testConfigForSchedule(two),
+		three: testConfigForSchedule(three),
+	}
+	for _, cfg := range configs {
+		cfg.InitializeForkSchedule()
+	}
+	cases := []struct {
+		epoch    primitives.Epoch
+		gvr      [32]byte
+		expected string
+	}{
+		{epoch: 9, expected: "0x97b2c268"},
+		{epoch: 10, expected: "0x97b2c268"},
+		{epoch: 11, expected: "0x97b2c268"},
+		{epoch: 99, expected: "0x97b2c268"},
+		{epoch: 100, expected: "0x44a571e8"},
+		{epoch: 101, expected: "0x44a571e8"},
+		{epoch: 150, expected: "0x1171afca"},
+		{epoch: 199, expected: "0x1171afca"},
+		{epoch: 200, expected: "0x427a30ab"},
+		{epoch: 201, expected: "0x427a30ab"},
+		{epoch: 250, expected: "0xd5310ef1"},
+		{epoch: 299, expected: "0xd5310ef1"},
+		{epoch: 300, expected: "0x51d229f7"},
+		{epoch: 301, expected: "0x51d229f7"},
+		{epoch: 9, gvr: fillGVR(byte(1)), expected: "0x4a5c3011"},
+		{epoch: 9, gvr: fillGVR(byte(2)), expected: "0xe8332b52"},
+		{epoch: 9, gvr: fillGVR(byte(3)), expected: "0x0e38e75e"},
+		{epoch: 100, gvr: fillGVR(byte(1)), expected: "0xbfe98545"},
+		{epoch: 100, gvr: fillGVR(byte(2)), expected: "0x9b7e4788"},
+		{epoch: 100, gvr: fillGVR(byte(3)), expected: "0x8b5ce4af"},
+	}
+	for _, c := range cases {
+		t.Run(fmt.Sprintf("%d_%s", c.epoch, c.expected), func(t *testing.T) {
+			var expected [4]byte
+			err := hexutil.UnmarshalFixedText("ForkDigest", []byte(c.expected), expected[:])
+			require.NoError(t, err)
+			cfg := configs[c.gvr]
+			digest := params.ForkDigestUsingConfig(c.epoch, cfg)
+			require.Equal(t, expected, digest)
+		})
+	}
+}
+
+func testConfigForSchedule(gvr [32]byte) *params.BeaconChainConfig {
+	cfg := params.MinimalSpecConfig().Copy()
+	cfg.AltairForkEpoch = 0
+	cfg.BellatrixForkEpoch = 0
+	cfg.CapellaForkEpoch = 0
+	cfg.DenebForkEpoch = 0
+	cfg.ElectraForkEpoch = 9
+	cfg.FuluForkEpoch = 100
+	cfg.GenesisValidatorsRoot = gvr
+	cfg.BlobSchedule = []params.BlobScheduleEntry{
+		{Epoch: 100, MaxBlobsPerBlock: 100},
+		{Epoch: 150, MaxBlobsPerBlock: 175},
+		{Epoch: 200, MaxBlobsPerBlock: 200},
+		{Epoch: 250, MaxBlobsPerBlock: 275},
+		{Epoch: 300, MaxBlobsPerBlock: 300},
+	}
+	return cfg
 }

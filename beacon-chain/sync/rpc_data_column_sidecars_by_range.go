@@ -62,7 +62,7 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 	}
 
 	// Validate the request regarding its parameters.
-	rangeParameters, err := validateDataColumnsByRange(request, s.cfg.chain.CurrentSlot())
+	rangeParameters, err := validateDataColumnsByRange(request, s.cfg.clock.CurrentSlot())
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
 		s.downscorePeer(remotePeer, "dataColumnSidecarsByRangeRpcHandlerValidationError")
@@ -151,7 +151,7 @@ func (s *Service) streamDataColumnBatch(ctx context.Context, batch blockBatch, q
 			sidecar := verifiedRODataColumn.DataColumnSidecar
 			SetStreamWriteDeadline(stream, defaultWriteDuration)
 
-			if err := WriteDataColumnSidecarChunk(stream, s.cfg.chain, s.cfg.p2p.Encoding(), sidecar); err != nil {
+			if err := WriteDataColumnSidecarChunk(stream, s.cfg.clock, s.cfg.p2p.Encoding(), sidecar); err != nil {
 				s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
 				tracing.AnnotateError(span, err)
 				return quota, errors.Wrap(err, "write data column sidecar chunk")
