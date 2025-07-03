@@ -340,6 +340,12 @@ type BlobScheduleEntry struct {
 	MaxBlobsPerBlock uint64           `yaml:"MAX_BLOBS_PER_BLOCK" json:"MAX_BLOBS_PER_BLOCK"`
 }
 
+func (b *BeaconChainConfig) ApplyOptions(opts ...Option) {
+	for _, opt := range opts {
+		opt(b)
+	}
+}
+
 // InitializeForkSchedule initializes the schedules forks baked into the config.
 func (b *BeaconChainConfig) InitializeForkSchedule() {
 	// Reset Fork Version Schedule.

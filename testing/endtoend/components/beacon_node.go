@@ -15,7 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	cmdshared "github.com/OffchainLabs/prysm/v6/cmd"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/genesis"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/genesis"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/io/file"
