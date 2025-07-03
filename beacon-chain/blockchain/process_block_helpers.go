@@ -226,7 +226,7 @@ func (s *Service) processLightClientBootstrap(cfg *postBlockProcessConfig) error
 	if err != nil {
 		return errors.Wrapf(err, "could not create light client bootstrap")
 	}
-	if err := s.cfg.BeaconDB.SaveLightClientBootstrap(cfg.ctx, blockRoot[:], bootstrap); err != nil {
+	if err := s.lcStore.SaveLightClientBootstrap(cfg.ctx, blockRoot, bootstrap); err != nil {
 		return errors.Wrapf(err, "could not save light client bootstrap")
 	}
 	return nil

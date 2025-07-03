@@ -53,13 +53,13 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 			bootstrap, err := lightclient.NewLightClientBootstrapFromBeaconState(l.Ctx, slot, l.State, l.Block)
 			require.NoError(t, err)
 
-			db := dbtesting.SetupDB(t)
+			lcStore := lightclient.NewLightClientStore(dbtesting.SetupDB(t))
 
-			err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[:], bootstrap)
+			err = lcStore.SaveLightClientBootstrap(l.Ctx, blockRoot, bootstrap)
 			require.NoError(t, err)
 
 			s := &Server{
-				BeaconDB: db,
+				LCStore: lcStore,
 			}
 			request := httptest.NewRequest("GET", "http://foo.com/", nil)
 			request.SetPathValue("block_root", hexutil.Encode(blockRoot[:]))
@@ -85,6 +85,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 			require.NotNil(t, resp.Data.CurrentSyncCommittee)
 			require.NotNil(t, resp.Data.CurrentSyncCommitteeBranch)
 		})
+
 		t.Run(version.String(testVersion)+"SSZ", func(t *testing.T) {
 			l := util.NewTestLightClient(t, testVersion)
 
@@ -95,13 +96,13 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 			bootstrap, err := lightclient.NewLightClientBootstrapFromBeaconState(l.Ctx, slot, l.State, l.Block)
 			require.NoError(t, err)
 
-			db := dbtesting.SetupDB(t)
+			lcStore := lightclient.NewLightClientStore(dbtesting.SetupDB(t))
 
-			err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[:], bootstrap)
+			err = lcStore.SaveLightClientBootstrap(l.Ctx, blockRoot, bootstrap)
 			require.NoError(t, err)
 
 			s := &Server{
-				BeaconDB: db,
+				LCStore: lcStore,
 			}
 			request := httptest.NewRequest("GET", "http://foo.com/", nil)
 			request.SetPathValue("block_root", hexutil.Encode(blockRoot[:]))
@@ -138,10 +139,8 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 	}
 
 	t.Run("no bootstrap found", func(t *testing.T) {
-		db := dbtesting.SetupDB(t)
-
 		s := &Server{
-			BeaconDB: db,
+			LCStore: lightclient.NewLightClientStore(dbtesting.SetupDB(t)),
 		}
 		request := httptest.NewRequest("GET", "http://foo.com/", nil)
 		request.SetPathValue("block_root", hexutil.Encode([]byte{0x00, 0x01, 0x02}))
