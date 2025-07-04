@@ -124,6 +124,7 @@ type Config struct {
 	DataColumnStorage         *filesystem.DataColumnStorage
 	TrackedValidatorsCache    *cache.TrackedValidatorsCache
 	PayloadIDCache            *cache.PayloadIDCache
+	PredictionIDCache         *cache.PredictionIDCache
 	LCStore                   *lightClient.Store
 }
 
@@ -255,6 +256,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		CoreService:             coreService,
 		TrackedValidatorsCache:  s.cfg.TrackedValidatorsCache,
 		PayloadIDCache:          s.cfg.PayloadIDCache,
+		PredictionIDCache:       s.cfg.PredictionIDCache,
 		AttestationStateFetcher: s.cfg.AttestationReceiver,
 	}
 	s.validatorServer = validatorServer

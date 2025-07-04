@@ -174,6 +174,56 @@ func ConstructDataColumnSidecars(block interfaces.ReadOnlySignedBeaconBlock, blo
 	return dataColumnSidecars, nil
 }
 
+// cellProofs are flattened here too
+// cellProof structure = [
+//
+//	[proof for blob0, column0],
+//	[proof for blob0, column1],
+//	...
+//	[proof for blob1, column0],
+//	...
+//	[proof for blobN, columnC],
+//
+// ] (here N = 0)
+func ConstructCellSidecars(txHash []byte, blobIdx uint32, kzgComm []byte, blob []byte, cellProofs [][]byte) ([]*ethpb.CellSidecar, error) {
+	// Check if the cells count is equal to the cell proofs count.
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
+	if uint64(len(cellProofs)) != numberOfColumns {
+		return nil, ErrBlobsCellsProofsMismatch
+	}
+
+	var kzgBlob kzg.Blob
+	if copy(kzgBlob[:], blob) != len(kzgBlob) {
+		return nil, errors.New("wrong blob size - should never happen")
+	}
+
+	// Compute the extended cells from the (non-extended) blob.
+	cells, err := kzg.ComputeCells(&kzgBlob)
+	if err != nil {
+		return nil, errors.Wrap(err, "compute cells")
+	}
+
+	var sidecars []*ethpb.CellSidecar
+	for idx := uint64(0); idx < numberOfColumns; idx++ {
+		// var kzgProof kzg.Proof
+		// if copy(kzgProof[:], cellProofs[idx]) != len(kzgProof) {
+		// 	return nil, errors.New("wrong KZG proof size - should never happen")
+		// }
+
+		cellSidecar := &ethpb.CellSidecar{
+			TxHash:        txHash,
+			Cell:          cells[idx][:],
+			BlobIndex:     blobIdx,
+			ColumnIndex:   idx,
+			KzgCommitment: kzgComm,
+			KzgCellProof:  cellProofs[idx],
+		}
+
+		sidecars = append(sidecars, cellSidecar)
+	}
+	return sidecars, nil
+}
+
 // ReconstructBlobs constructs verified read only blobs sidecars from verified read only blob sidecars.
 // The following constraints must be satisfied:
 //   - All `dataColumnSidecars` has to be committed to the same block, and

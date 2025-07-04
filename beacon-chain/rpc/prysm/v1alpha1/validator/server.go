@@ -44,6 +44,7 @@ import (
 type Server struct {
 	Ctx                     context.Context
 	PayloadIDCache          *cache.PayloadIDCache
+	PredictionIDCache       *cache.PredictionIDCache
 	TrackedValidatorsCache  *cache.TrackedValidatorsCache
 	HeadFetcher             blockchain.HeadFetcher
 	ForkFetcher             blockchain.ForkFetcher

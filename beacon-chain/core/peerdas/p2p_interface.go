@@ -160,3 +160,38 @@ func CustodyGroupCountFromRecord(record *enr.Record) (uint64, error) {
 
 	return uint64(cgc), nil
 }
+
+func VerifyCellSidecarKZGProofs(sidecars []blocks.ROCell) error {
+	// Here, total count of cell == len(sidescars)
+	count := len(sidecars)
+
+	commitments := make([]kzg.Bytes48, 0, count)
+	indices := make([]uint64, 0, count)
+	cells := make([]kzg.Cell, 0, count)
+	proofs := make([]kzg.Bytes48, 0, count)
+
+	for _, sidecar := range sidecars {
+		commitments = append(commitments, kzg.Bytes48(sidecar.KzgCommitment))
+		indices = append(indices, sidecar.ColumnIndex)
+		cells = append(cells, kzg.Cell(sidecar.Cell))
+		proofs = append(proofs, kzg.Bytes48(sidecar.KzgCellProof))
+	}
+
+	// Batch verify that the cells match the corresponding commitments and proofs.
+	verified, err := kzg.VerifyCellKZGProofBatch(commitments, indices, cells, proofs)
+	if err != nil {
+		return errors.Wrap(err, "verify cell KZG proof batch")
+	}
+
+	if !verified {
+		return ErrInvalidKZGProof
+	}
+
+	return nil
+}
+
+// ComputeSubnetForCellSidecar computes the subnet for a cell sidecar.
+func ComputeSubnetForCellSidecar(columnIndex uint64) uint64 {
+	cellSidecarSubnetCount := params.BeaconConfig().CellSidecarSubnetCount
+	return columnIndex % cellSidecarSubnetCount
+}

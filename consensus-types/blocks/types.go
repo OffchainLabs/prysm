@@ -32,6 +32,8 @@ var (
 	errNilDataColumn         = errors.New("received nil data column sidecar")
 	errNilBlock              = errors.New("received nil beacon block")
 	errNilBlockBody          = errors.New("received nil beacon block body")
+	errNilCell               = errors.New("received nil cell sidecar")
+	errNilTxHash             = errors.New("received nil tx hash")
 	errIncorrectBlockVersion = errors.New(incorrectBlockVersion)
 	errIncorrectBodyVersion  = errors.New(incorrectBodyVersion)
 	errNilBlockHeader        = errors.New("received nil beacon block header")

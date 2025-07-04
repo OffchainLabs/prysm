@@ -12,6 +12,7 @@ go_library(
         "proto.go",
         "roblob.go",
         "roblock.go",
+        "rocell.go",
         "rodatacolumn.go",
         "rosidecar.go",
         "setters.go",

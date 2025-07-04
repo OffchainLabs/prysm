@@ -263,6 +263,7 @@ func generateGenesis(ctx context.Context) (state.BeaconState, error) {
 		gen.Config.ShanghaiTime = interop.GethShanghaiTime(f.GenesisTime, params.BeaconConfig())
 		gen.Config.CancunTime = interop.GethCancunTime(f.GenesisTime, params.BeaconConfig())
 		gen.Config.PragueTime = interop.GethPragueTime(f.GenesisTime, params.BeaconConfig())
+		gen.Config.OsakaTime = interop.GethPragueTime(f.GenesisTime, params.BeaconConfig())
 
 		fields := logrus.Fields{}
 		if gen.Config.ShanghaiTime != nil {
@@ -273,6 +274,9 @@ func generateGenesis(ctx context.Context) (state.BeaconState, error) {
 		}
 		if gen.Config.PragueTime != nil {
 			fields["prague"] = fmt.Sprintf("%d", *gen.Config.PragueTime)
+		}
+		if gen.Config.OsakaTime != nil {
+			fields["osaka"] = fmt.Sprintf("%d", *gen.Config.OsakaTime)
 		}
 		log.WithFields(fields).Info("Setting fork geth times")
 		if v > version.Altair {

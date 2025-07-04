@@ -291,3 +291,13 @@ message BlobAndProofV2 {
     (ethereum.eth.ext.ssz_max) = "max_cell_proofs_length.size"
   ];
 }
+message BlobPredictionToStage {
+  bytes tx_hash = 1  [ (ethereum.eth.ext.ssz_size) = "32" ];             
+  uint32 blob_index = 2;            
+  bytes blob = 3 [ (ethereum.eth.ext.ssz_size) = "blob.size" ];      
+  bytes kzg_commitment = 4 [ (ethereum.eth.ext.ssz_size) = "48"];
+  repeated bytes cell_proofs = 5 [ 
+    (ethereum.eth.ext.ssz_size) = "48",
+    (ethereum.eth.ext.ssz_max) = "max_cell_proofs_length.size"
+  ];
+}

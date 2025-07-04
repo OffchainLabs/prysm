@@ -68,6 +68,15 @@ func (b PayloadIDBytes) MarshalJSON() ([]byte, error) {
 	return json.Marshal(hexutil.Bytes(b[:]))
 }
 
+// PredictionIDBytes defines a custom type for Payload IDs used by the engine API
+// client with proper JSON Marshal and Unmarshal methods to hex.
+type PredictionIDBytes [8]byte
+
+// MarshalJSON --
+func (b PredictionIDBytes) MarshalJSON() ([]byte, error) {
+	return json.Marshal(hexutil.Bytes(b[:]))
+}
+
 // ExecutionBlock is the response kind received by the eth_getBlockByHash and
 // eth_getBlockByNumber endpoints via JSON-RPC.
 type ExecutionBlock struct {
@@ -185,6 +194,16 @@ func (e *ExecutionBlock) UnmarshalJSON(enc []byte) error {
 
 // UnmarshalJSON --
 func (b *PayloadIDBytes) UnmarshalJSON(enc []byte) error {
+	var res [8]byte
+	if err := hexutil.UnmarshalFixedJSON(reflect.TypeOf(b), enc, res[:]); err != nil {
+		return err
+	}
+	*b = res
+	return nil
+}
+
+// UnmarshalJSON --
+func (b *PredictionIDBytes) UnmarshalJSON(enc []byte) error {
 	var res [8]byte
 	if err := hexutil.UnmarshalFixedJSON(reflect.TypeOf(b), enc, res[:]); err != nil {
 		return err
@@ -1457,6 +1476,40 @@ func (b *BlobAndProofV2) UnmarshalJSON(enc []byte) error {
 		proofs[i] = bytesutil.PadTo(p[:], fieldparams.BLSPubkeyLength)
 	}
 	b.KzgProofs = proofs
+
+	return nil
+}
+
+type BlobPredictionToStageJson struct {
+	TxHash        common.Hash     `json:"txHash"`        //32
+	BlobIndex     uint            `json:"blobIndex"`     //4
+	Blob          hexutil.Bytes   `json:"blob"`          //
+	KzgCommitment hexutil.Bytes   `json:"kzgCommitment"` //48
+	CellProofs    []hexutil.Bytes `json:"cellProofs"`
+}
+
+func (b *BlobPredictionToStage) UnmarshalJSON(enc []byte) error {
+	var dec *BlobPredictionToStageJson
+	if err := json.Unmarshal(enc, &dec); err != nil {
+		return err
+	}
+	b.TxHash = dec.TxHash.Bytes()
+	b.BlobIndex = uint32(dec.BlobIndex)
+
+	blob := make([]byte, fieldparams.BlobLength)
+	copy(blob, dec.Blob)
+	b.Blob = blob
+
+	commitment := make([]byte, fieldparams.BLSPubkeyLength)
+	copy(commitment, dec.KzgCommitment)
+	b.KzgCommitment = commitment
+
+	proofs := make([][]byte, len(dec.CellProofs))
+	for i, proof := range dec.CellProofs {
+		p := proof
+		proofs[i] = bytesutil.PadTo(p[:], fieldparams.BLSPubkeyLength)
+	}
+	b.CellProofs = proofs
 
 	return nil
 }

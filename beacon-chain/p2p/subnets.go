@@ -55,6 +55,13 @@ const blobSubnetLockerVal = 110
 // chosen more than sync, attestation and blob subnet (6) combined.
 const dataColumnSubnetVal = 150
 
+// The value used with the data column sidecar subnet, in order
+// to create an appropriate key to retrieve
+// the relevant lock. This is used to differentiate
+// cell subnets from others. This is deliberately
+// chosen more than sync, attestation, blob and dataColumn subnet (128) combined.
+const cellLockVal = 300
+
 // nodeFilter returns a function that filters nodes based on the subnet topic and subnet index.
 func (s *Service) nodeFilter(topic string, index uint64) (func(node *enode.Node) bool, error) {
 	switch {

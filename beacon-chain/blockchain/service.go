@@ -67,6 +67,7 @@ type Service struct {
 	blockBeingSynced     *currentlySyncingBlock
 	blobStorage          *filesystem.BlobStorage
 	dataColumnStorage    *filesystem.DataColumnStorage
+	StagedCellCache      *cache.CellCache
 	slasherEnabled       bool
 	lcStore              *lightClient.Store
 }
@@ -78,6 +79,7 @@ type config struct {
 	BeaconDB                db.HeadAccessDatabase
 	DepositCache            cache.DepositCache
 	PayloadIDCache          *cache.PayloadIDCache
+	PredictionIDCache       *cache.PredictionIDCache
 	TrackedValidatorsCache  *cache.TrackedValidatorsCache
 	AttestationCache        *cache.AttestationCache
 	AttPool                 attestations.Pool
@@ -231,6 +233,7 @@ func (s *Service) Start() {
 	}
 	s.spawnProcessAttestationsRoutine()
 	go s.runLateBlockTasks()
+	go s.runStagingTasks()
 }
 
 // Stop the blockchain service's main event loop and associated goroutines.

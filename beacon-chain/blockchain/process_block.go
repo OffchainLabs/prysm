@@ -3,9 +3,11 @@ package blockchain
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"slices"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
@@ -58,6 +60,7 @@ type postBlockProcessConfig struct {
 // saving the new head information to the blockchain package and
 // handling attestations, slashings and similar included in the block.
 func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
+	log.Info("postBlockProcess")
 	ctx, span := trace.StartSpan(cfg.ctx, "blockChain.onBlock")
 	defer span.End()
 	cfg.ctx = ctx
@@ -78,6 +81,7 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	defer s.sendStateFeedOnBlock(cfg)
 	defer reportProcessingTime(startTime)
 	defer reportAttestationInclusion(cfg.roblock.Block())
+	defer s.notifyPrediction(ctx)
 
 	err := s.cfg.ForkChoiceStore.InsertNode(ctx, cfg.postState, cfg.roblock)
 	if err != nil {
@@ -560,6 +564,85 @@ func (s *Service) validateMergeTransitionBlock(ctx context.Context, stateVersion
 	return s.validateMergeBlock(ctx, blk)
 }
 
+// todo(healthykim) move position
+func (s *Service) runStagingTasks() {
+	if err := s.waitForSync(); err != nil {
+		log.WithError(err).Error("failed to wait for initial sync")
+		return
+	}
+
+	stagingStartTime := 2 * params.BeaconConfig().SecondsPerSlot / 3
+	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, time.Duration(stagingStartTime)*time.Second, params.BeaconConfig().SecondsPerSlot)
+	// slotTicker := slots.NewSlotTicker(s.genesisTime, params.BeaconConfig().SecondsPerSlot)
+
+	for {
+		select {
+		// case <-slotTicker.C():
+		// 	s.notifyPrediction(s.ctx)
+		case <-ticker.C():
+			s.stageCells(s.ctx)
+		case <-s.ctx.Done():
+			log.Debug("Context closed, exiting routine")
+			return
+		}
+	}
+}
+
+func (s *Service) notifyPrediction(ctx context.Context) {
+	headRoot := s.headRoot()
+	nextSlot := s.CurrentSlot().Add(1)
+	predictionID, err := s.cfg.ExecutionEngineCaller.NotifyPrediction(ctx, headRoot)
+	if err != nil {
+		log.WithError(err).Debug("could not notify prediction")
+		return
+	}
+
+	s.cfg.PredictionIDCache.Set(nextSlot, headRoot, primitives.PredictionID(*predictionID))
+	log.Debugf("Set predictionID, id: %#x, slot: %d, headRoot: %#x", predictionID, nextSlot, headRoot)
+}
+
+func (s *Service) stageCells(ctx context.Context) {
+	nextSlot := s.CurrentSlot().Add(1)
+	headRoot := s.headRoot()
+
+	predictionId, has := s.cfg.PredictionIDCache.PredictionID(nextSlot, headRoot)
+
+	if has {
+		res, err := s.cfg.ExecutionEngineCaller.GetBlobsToStage(ctx, predictionId)
+		if err != nil {
+			log.WithError(err).Debug("could not get blobs to stage")
+			return
+		}
+		log.Debugf("Result for slot %d, root %#x", nextSlot, headRoot)
+		for _, r := range res {
+			log.Debugf("hash: %#x", r.TxHash)
+			log.Debug("blobId: ", r.BlobIndex)
+			log.Debug("blob: ", len(r.Blob))
+			log.Debug("comm: ", len(r.KzgCommitment))
+			log.Debug("cellproof", len(r.CellProofs))
+		}
+
+		for _, cell := range res {
+			cellSidecars, err := peerdas.ConstructCellSidecars(cell.TxHash, cell.BlobIndex, cell.KzgCommitment, cell.Blob, cell.CellProofs)
+			if err != nil {
+				log.WithError(err).Debug("Error for ConstructCellSidecars")
+				return
+			}
+			for cellIdx, cellSidecar := range cellSidecars {
+				cellSubnet := peerdas.ComputeSubnetForCellSidecar(uint64(cellIdx))
+				err := s.cfg.P2P.BroadcastCell(headRoot, cellSubnet, cellSidecar)
+				if err != nil {
+					log.WithError(err).Debug("Error for BroadcastCell")
+					return
+				}
+			}
+		}
+
+	} else {
+		log.Debugf("No predictionId - id %d, currSlot %d, headRoot %#x", predictionId, nextSlot, headRoot)
+	}
+}
+
 // This routine checks if there is a cached proposer payload ID available for the next slot proposer.
 // If there is not, it will call forkchoice updated with the correct payload attribute then cache the payload ID.
 func (s *Service) runLateBlockTasks() {
@@ -609,10 +692,11 @@ func missingBlobIndices(bs *filesystem.BlobStorage, root [fieldparams.RootLength
 // It returns a map where each key represents a missing DataColumnSidecar index.
 // An empty map means we have all indices; a non-empty map can be used to compare incoming
 // DataColumns against the set of known missing sidecars.
-func missingDataColumnIndices(bs *filesystem.DataColumnStorage, root [fieldparams.RootLength]byte, expected map[uint64]bool) (map[uint64]bool, error) {
+func missingDataColumnIndices(bs *filesystem.DataColumnStorage, root [fieldparams.RootLength]byte, sc *cache.CellCache, signedBlock interfaces.ReadOnlySignedBeaconBlock, expected map[uint64]bool) (map[uint64]bool, error) {
 	if len(expected) == 0 {
 		return nil, nil
 	}
+	block := signedBlock.Block()
 
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
@@ -622,16 +706,77 @@ func missingDataColumnIndices(bs *filesystem.DataColumnStorage, root [fieldparam
 
 	// Get a summary of the data columns stored in the database.
 	summary := bs.Summary(root)
+	kzgCommitments, err := block.Body().BlobKzgCommitments()
+	if err != nil {
+		return nil, err
+	}
 
 	// Check all expected data columns against the summary.
 	missing := make(map[uint64]bool)
 	for column := range expected {
 		if !summary.HasIndex(column) {
 			missing[column] = true
+		} else if cells := sc.IsCellAvailable(kzgCommitments, column); cells != nil {
+			missing[column] = true
+			go func() {
+				_ = saveCellAsDataColumn(bs, cells, signedBlock)
+			}()
+			log.Infof("Cell constructed at data column %d", column)
 		}
 	}
 
 	return missing, nil
+}
+
+func saveCellAsDataColumn(bs *filesystem.DataColumnStorage, cells []consensusblocks.VerifiedROCell, signedBlock interfaces.ReadOnlySignedBeaconBlock) error {
+	block := signedBlock.Block()
+
+	column := make([][]byte, 0)
+	kzgCommitments := make([][]byte, 0)
+	kzgProofs := make([][]byte, 0)
+	for _, cell := range cells {
+		column = append(column, cell.Cell)
+		kzgCommitments = append(kzgCommitments, cell.KzgCommitment)
+		kzgProofs = append(kzgProofs, cell.KzgCellProof)
+	}
+
+	expectedKzgCommitments, err := block.Body().BlobKzgCommitments()
+	if err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(kzgCommitments, expectedKzgCommitments) {
+		return errCellKzgCommitment
+	}
+
+	blockBody := block.Body()
+
+	kzgCommitmentsInclusionProof, err := consensusblocks.MerkleProofKZGCommitments(blockBody)
+	if err != nil {
+		return err
+	}
+
+	blockHeader, err := signedBlock.Header()
+	if err != nil {
+		return err
+	}
+
+	dc := &ethpb.DataColumnSidecar{
+		Index:                        cells[0].ColumnIndex,
+		Column:                       column,
+		KzgCommitments:               kzgCommitments,
+		KzgProofs:                    kzgProofs,
+		SignedBlockHeader:            blockHeader,
+		KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
+	}
+	roDataColumn, err := consensusblocks.NewRODataColumn(dc)
+	if err != nil {
+		return err
+	}
+	dataColumn := consensusblocks.NewVerifiedRODataColumn(roDataColumn)
+	if err := bs.Save([]consensusblocks.VerifiedRODataColumn{dataColumn}); err != nil {
+		return err
+	}
+	return nil
 }
 
 // isDataAvailable blocks until all sidecars committed to in the block are available,
@@ -647,7 +792,7 @@ func (s *Service) isDataAvailable(ctx context.Context, root [32]byte, signedBloc
 
 	blockVersion := block.Version()
 	if blockVersion >= version.Fulu {
-		return s.areDataColumnsAvailable(ctx, root, block)
+		return s.areDataColumnsAvailable(ctx, root, signedBlock)
 	}
 
 	if blockVersion >= version.Deneb {
@@ -659,7 +804,8 @@ func (s *Service) isDataAvailable(ctx context.Context, root [32]byte, signedBloc
 
 // areDataColumnsAvailable blocks until all data columns committed to in the block are available,
 // or an error or context cancellation occurs. A nil result means that the data availability check is successful.
-func (s *Service) areDataColumnsAvailable(ctx context.Context, root [fieldparams.RootLength]byte, block interfaces.ReadOnlyBeaconBlock) error {
+func (s *Service) areDataColumnsAvailable(ctx context.Context, root [fieldparams.RootLength]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) error {
+	block := signedBlock.Block()
 	// We are only required to check within MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS
 	blockSlot, currentSlot := block.Slot(), s.CurrentSlot()
 	blockEpoch, currentEpoch := slots.ToEpoch(blockSlot), slots.ToEpoch(currentSlot)
@@ -714,8 +860,9 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [fieldparams
 		return nil
 	}
 
+	// 부족한 column들 계산, 그 뒤는 예외처리 후 for문에서 기다리기
 	// Get a map of data column indices that are not currently available.
-	missingMap, err := missingDataColumnIndices(s.dataColumnStorage, root, peerInfo.CustodyColumns)
+	missingMap, err := missingDataColumnIndices(s.dataColumnStorage, root, s.StagedCellCache, signedBlock, peerInfo.CustodyColumns)
 	if err != nil {
 		return errors.Wrap(err, "missing data columns")
 	}
@@ -764,6 +911,7 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [fieldparams
 		defer timer.Stop()
 	}
 
+	// 받지 못한 열들 기다리는 함수
 	for {
 		select {
 		case idents := <-identsChan:
@@ -802,7 +950,7 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [fieldparams
 				missingIndices = uint64MapToSortedSlice(missingMap)
 			}
 
-			return errors.Wrapf(ctx.Err(), "data column sidecars slot: %d, BlockRoot: %#x, missing %v", block.Slot(), root, missingIndices)
+			return errors.Wrapf(ctx.Err(), "data column sidecars slot: %d, BlockRoot: %#x, missing %v, minimun %d", block.Slot(), root, missingIndices, minimumColumnCountToReconstruct)
 		}
 	}
 }

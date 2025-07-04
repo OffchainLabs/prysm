@@ -449,6 +449,67 @@ func (s *Service) findPeersIfNeeded(
 	return nil
 }
 
+func (s *Service) BroadcastCell(
+	root [fieldparams.RootLength]byte,
+	cellSubnet uint64,
+	cellSidecar *ethpb.CellSidecar,
+) error {
+	ctx, span := trace.StartSpan(s.ctx, "p2p.BroadcastCell")
+	defer span.End()
+
+	// Ensure the cell is not nil.
+	if cellSidecar == nil {
+		return errors.Errorf("attempted to broadcast nil cell sidecar at subnet %d", cellSubnet)
+	}
+
+	forkDigest, err := s.currentForkDigest()
+	if err != nil {
+		err := errors.Wrap(err, "current fork digest")
+		tracing.AnnotateError(span, err)
+		return err
+	}
+
+	// Non-blocking broadcast, with attempts to discover a cell subnet peer if none available.
+	go s.internalBroadcastCell(ctx, root, cellSubnet, cellSidecar, forkDigest)
+
+	return nil
+}
+
+func (s *Service) internalBroadcastCell(
+	ctx context.Context,
+	root [fieldparams.RootLength]byte,
+	cellSubnet uint64,
+	cellSidecar *ethpb.CellSidecar,
+	forkDigest [fieldparams.VersionLength]byte,
+) {
+	_, span := trace.StartSpan(ctx, "p2p.internalBroadcastCell")
+	defer span.End()
+
+	// Define a one-slot length context timeout.
+	oneSlot := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+	ctx, cancel := context.WithTimeout(ctx, oneSlot)
+	defer cancel()
+
+	// Build the topic corresponding to this cell subnet and this fork digest.
+	topic := cellSubnetToTopic(cellSubnet, forkDigest)
+
+	// Compute the wrapped subnet index.
+	wrappedSubIdx := cellSubnet + cellLockVal
+
+	// Find peers if needed.
+	if err := s.findPeersIfNeeded(ctx, wrappedSubIdx, topic, cellSubnet, nil); err != nil {
+		log.WithError(err).Error("Failed to find peers for cell subnet")
+		tracing.AnnotateError(span, err)
+	}
+
+	// Broadcast the cell sidecar to the network.
+	if err := s.broadcastObject(ctx, cellSidecar, topic); err != nil {
+		log.WithError(err).Error("Failed to broadcast cell sidecar")
+		tracing.AnnotateError(span, err)
+		return
+	}
+}
+
 // method to broadcast messages to other peers in our gossip mesh.
 func (s *Service) broadcastObject(ctx context.Context, obj ssz.Marshaler, topic string) error {
 	ctx, span := trace.StartSpan(ctx, "p2p.broadcastObject")
@@ -500,4 +561,8 @@ func lcFinalityToTopic(forkDigest [4]byte) string {
 
 func dataColumnSubnetToTopic(subnet uint64, forkDigest [fieldparams.VersionLength]byte) string {
 	return fmt.Sprintf(DataColumnSubnetTopicFormat, forkDigest, subnet)
+}
+
+func cellSubnetToTopic(subnet uint64, forkDigest [fieldparams.VersionLength]byte) string {
+	return fmt.Sprintf(CellSubnetTopicFormat, forkDigest, subnet)
 }

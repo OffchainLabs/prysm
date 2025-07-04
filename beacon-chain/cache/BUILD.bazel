@@ -17,11 +17,13 @@ go_library(
         "error.go",
         "interfaces.go",
         "payload_id.go",
+        "prediction_id.go",
         "proposer_indices.go",
         "proposer_indices_disabled.go",  # keep
         "proposer_indices_type.go",
         "registration.go",
         "skip_slot_cache.go",
+        "staged_cells.go",
         "subnet_ids.go",
         "sync_committee.go",
         "sync_committee_disabled.go",  # keep
@@ -42,6 +44,7 @@ go_library(
         "//cache/lru:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
+        "//consensus-types/blocks:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//container/slice:go_default_library",
         "//crypto/bls:go_default_library",

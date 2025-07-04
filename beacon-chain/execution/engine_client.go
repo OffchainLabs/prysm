@@ -46,6 +46,8 @@ var (
 		GetPayloadBodiesByHashV1,
 		GetPayloadBodiesByRangeV1,
 		GetBlobsV1,
+		GetBlobsToStage,
+		NotifyPrediction,
 	}
 	electraEngineEndpoints = []string{
 		NewPayloadMethodV4,
@@ -95,6 +97,10 @@ const (
 	GetBlobsV1 = "engine_getBlobsV1"
 	// GetBlobsV2 request string for JSON-RPC.
 	GetBlobsV2 = "engine_getBlobsV2"
+	// GetBlobsToStage request string for JSON_RPC
+	GetBlobsToStage = "engine_getBlobsToStage"
+	// NotifyPrediction request string for JSON_RPC
+	NotifyPrediction = "engine_notifyPrediction"
 	// Defines the seconds before timing out engine endpoints with non-block execution semantics.
 	// TODO: Remove temporarily needed hack since geth takes an input blobs txs with blobs proofs, and
 	// does the heavy lifting of building cells proofs, while normally this is done by the tx sender.
@@ -137,6 +143,8 @@ type EngineCaller interface {
 		ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer,
 	) (*pb.PayloadIDBytes, []byte, error)
 	GetPayload(ctx context.Context, payloadId [8]byte, slot primitives.Slot) (*blocks.GetPayloadResponse, error)
+	NotifyPrediction(ctx context.Context, headBlockRoot common.Hash) (*pb.PredictionIDBytes, error)
+	GetBlobsToStage(ctx context.Context, predictionId [8]byte) ([]*pb.BlobPredictionToStage, error)
 	ExecutionBlockByHash(ctx context.Context, hash common.Hash, withTxs bool) (*pb.ExecutionBlock, error)
 	GetTerminalBlockHash(ctx context.Context, transitionTime uint64) ([]byte, bool, error)
 }
@@ -542,6 +550,38 @@ func (s *Service) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash)
 	result := make([]*pb.BlobAndProofV2, len(versionedHashes))
 	err := s.rpcClient.CallContext(ctx, &result, GetBlobsV2, versionedHashes)
 	return result, handleRPCError(err)
+}
+
+func (s *Service) GetBlobsToStage(ctx context.Context, predictionId [8]byte) ([]*pb.BlobPredictionToStage, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobsToStage")
+	defer span.End()
+
+	if !s.capabilityCache.has(GetBlobsToStage) {
+		return nil, errors.New(fmt.Sprintf("%s is not supported", GetBlobsToStage))
+	}
+
+	// todo(healthykim): should we set the length as a beacon parameter
+	result := make([]*pb.BlobPredictionToStage, 10)
+	err := s.rpcClient.CallContext(ctx, &result, GetBlobsToStage, pb.PredictionIDBytes(predictionId))
+	return result, handleRPCError(err)
+}
+
+type PredictionResponse struct {
+	PredictionID *pb.PredictionIDBytes `json:"predictionId"`
+}
+
+func (s *Service) NotifyPrediction(ctx context.Context, headBlockRoot common.Hash) (*pb.PredictionIDBytes, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.NotifyPrediction")
+	defer span.End()
+
+	if !s.capabilityCache.has(NotifyPrediction) {
+		return nil, errors.New(fmt.Sprintf("%s is not supported", NotifyPrediction))
+	}
+
+	// todo(healthykim): should we set the length as a beacon parameter
+	result := &PredictionResponse{}
+	err := s.rpcClient.CallContext(ctx, result, NotifyPrediction, headBlockRoot)
+	return result.PredictionID, handleRPCError(err)
 }
 
 // ReconstructFullBlock takes in a blinded beacon block and reconstructs

@@ -57,6 +57,7 @@ const (
 	rangeLimit               uint64 = 1024
 	seenBlockSize                   = 1000
 	seenDataColumnSize              = seenBlockSize * 128 // Each block can have max 128 data columns.
+	seenCellSize                    = 1000                // todo(healthykim): parameter tuning
 	seenUnaggregatedAttSize         = 20000
 	seenAggregatedAttSize           = 16384
 	seenSyncMsgSize                 = 1000 // Maximum of 512 sync committee members, 1000 is a safe amount.
@@ -104,6 +105,7 @@ type config struct {
 	stateNotifier           statefeed.Notifier
 	blobStorage             *filesystem.BlobStorage
 	dataColumnStorage       *filesystem.DataColumnStorage
+	stagedCellCache         *cache.CellCache
 	custodyInfo             *peerdas.CustodyInfo
 }
 
@@ -144,6 +146,7 @@ type Service struct {
 	seenBlobLock                     sync.RWMutex
 	seenBlobCache                    *lru.Cache
 	seenDataColumnCache              *lru.Cache
+	seenCellCache                    *lru.Cache // key: tx_hash, blob_index, column_index
 	seenAggregatedAttestationLock    sync.RWMutex
 	seenAggregatedAttestationCache   *lru.Cache
 	seenUnAggregatedAttestationLock  sync.RWMutex
@@ -304,6 +307,7 @@ func (s *Service) initCaches() {
 	s.seenBlockCache = lruwrpr.New(seenBlockSize)
 	s.seenBlobCache = lruwrpr.New(seenBlockSize * params.BeaconConfig().DeprecatedMaxBlobsPerBlockElectra)
 	s.seenDataColumnCache = lruwrpr.New(seenDataColumnSize)
+	s.seenCellCache = lruwrpr.New(seenCellSize)
 	s.seenAggregatedAttestationCache = lruwrpr.New(seenAggregatedAttSize)
 	s.seenUnAggregatedAttestationCache = lruwrpr.New(seenUnaggregatedAttSize)
 	s.seenSyncMessageCache = lruwrpr.New(seenSyncMsgSize)

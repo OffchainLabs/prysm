@@ -200,7 +200,18 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 			// TODO: Should we find peers always? When validators are managed? When validators are managed AND when we are going to propose a block?
 			func(currentSlot primitives.Slot) []uint64 { return []uint64{} },
 		)
+
+		// For cell staging
+		s.subscribeWithParameters(
+			p2p.CellSubnetTopicFormat,
+			s.validateCell,
+			s.cellSubscriber,
+			digest,
+			s.dataColumnSubnetIndices,
+			func(currentSlot primitives.Slot) []uint64 { return []uint64{} },
+		)
 	}
+
 }
 
 // subscribe to a given topic with a given validator and subscription handler.
@@ -503,6 +514,7 @@ func (s *Service) subscribeToSubnets(
 	return true
 }
 
+// 서브넷 구독 관리
 // subscribeWithParameters subscribes to a list of subnets.
 func (s *Service) subscribeWithParameters(
 	topicFormat string,

@@ -135,6 +135,7 @@ func (s *Service) reconstructAndBroadcastDataColumnSidecars(ctx context.Context,
 	proposerIndex := block.ProposerIndex()
 
 	// Broadcast and save data columns sidecars to custody but not yet received.
+	// todo(healthykim) cell reconstruction here?
 	sidecarCount := uint64(len(sidecars))
 	for columnIndex := range info.CustodyColumns {
 		log := log.WithField("columnIndex", columnIndex)

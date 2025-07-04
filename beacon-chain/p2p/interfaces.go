@@ -50,6 +50,7 @@ type (
 		BroadcastLightClientOptimisticUpdate(ctx context.Context, update interfaces.LightClientOptimisticUpdate) error
 		BroadcastLightClientFinalityUpdate(ctx context.Context, update interfaces.LightClientFinalityUpdate) error
 		BroadcastDataColumn(root [fieldparams.RootLength]byte, columnSubnet uint64, dataColumnSidecar *ethpb.DataColumnSidecar, peersChecked ...chan<- bool) error
+		BroadcastCell(root [fieldparams.RootLength]byte, cellSubnet uint64, cellSidecar *ethpb.CellSidecar) error
 	}
 
 	// SetStreamHandler configures p2p to handle streams of a certain topic ID.

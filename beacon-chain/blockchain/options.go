@@ -81,6 +81,13 @@ func WithPayloadIDCache(c *cache.PayloadIDCache) Option {
 	}
 }
 
+func WithPredictionIDCache(c *cache.PredictionIDCache) Option {
+	return func(s *Service) error {
+		s.cfg.PredictionIDCache = c
+		return nil
+	}
+}
+
 // WithTrackedValidatorsCache for tracked validators cache.
 func WithTrackedValidatorsCache(c *cache.TrackedValidatorsCache) Option {
 	return func(s *Service) error {
@@ -215,6 +222,13 @@ func WithBlobStorage(b *filesystem.BlobStorage) Option {
 func WithDataColumnStorage(b *filesystem.DataColumnStorage) Option {
 	return func(s *Service) error {
 		s.dataColumnStorage = b
+		return nil
+	}
+}
+
+func WithStagedCellCache(b *cache.CellCache) Option {
+	return func(s *Service) error {
+		s.StagedCellCache = b
 		return nil
 	}
 }
