@@ -7,7 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition/interop"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
-	"github.com/OffchainLabs/prysm/v6/config/features"
+
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 )
 
@@ -19,8 +19,7 @@ var (
 )
 
 func main() {
-	resetCfg := features.InitWithReset(&features.Flags{WriteSSZStateTransitions: true})
-	defer resetCfg()
+
 	flag.Parse()
 	fmt.Println("Starting process...")
 	d, err := kv.NewKVStore(context.Background(), *datadir)

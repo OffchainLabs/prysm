@@ -182,6 +182,7 @@ This release is **mandatory** for all operators before May 7.
 
 - deprecates and removes usage of the `--trace` flag and`--cpuprofile` flag in favor of just using `--pprof`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15083)
 
+
 ### Removed
 
 - Remove /eth/v1/beacon/states/head/committees call when getting duties. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15039)

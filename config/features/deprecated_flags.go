@@ -98,6 +98,12 @@ var (
 		Usage:  deprecatedUsage,
 		Hidden: true,
 	}
+
+	deprecatedWriteSSZStateTransitionsFlag = &cli.BoolFlag{
+		Name:   "interop-write-ssz-state-transitions",
+		Usage:  deprecatedUsage,
+		Hidden: true,
+	}
 )
 
 // Deprecated flags for both the beacon node and validator client.
@@ -118,6 +124,7 @@ var deprecatedFlags = []cli.Flag{
 	deprecatedEnableCommitteeAwarePacking,
 	deprecatedInteropGenesisTimeFlag,
 	deprecatedEnableQuic,
+	deprecatedWriteSSZStateTransitionsFlag,
 }
 
 var upcomingDeprecation = []cli.Flag{

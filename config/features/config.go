@@ -41,7 +41,6 @@ const disabledFeatureFlag = "Disabled feature flag"
 type Flags struct {
 	// Feature related flags.
 	EnableExperimentalState             bool // EnableExperimentalState turns on the latest and greatest (but potentially unstable) changes to the beacon state.
-	WriteSSZStateTransitions            bool // WriteSSZStateTransitions to tmp directory.
 	EnablePeerScorer                    bool // EnablePeerScorer enables experimental peer scoring in p2p.
 	EnableLightClient                   bool // EnableLightClient enables light client APIs.
 	EnableQUIC                          bool // EnableQUIC specifies whether to enable QUIC transport for libp2p.
@@ -193,11 +192,6 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	if ctx.Bool(disableExperimentalState.Name) {
 		logEnabled(disableExperimentalState)
 		cfg.EnableExperimentalState = false
-	}
-
-	if ctx.Bool(writeSSZStateTransitionsFlag.Name) {
-		logEnabled(writeSSZStateTransitionsFlag)
-		cfg.WriteSSZStateTransitions = true
 	}
 
 	if ctx.Bool(saveInvalidBlockTempFlag.Name) {
