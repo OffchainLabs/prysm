@@ -561,7 +561,7 @@ func (s *Service) GetBlobsToStage(ctx context.Context, predictionId [8]byte) ([]
 	}
 
 	// todo(healthykim): should we set the length as a beacon parameter
-	result := make([]*pb.BlobPredictionToStage, 10)
+	result := make([]*pb.BlobPredictionToStage, params.BeaconConfig().MaxPredictionSize)
 	err := s.rpcClient.CallContext(ctx, &result, GetBlobsToStage, pb.PredictionIDBytes(predictionId))
 	return result, handleRPCError(err)
 }
@@ -578,9 +578,8 @@ func (s *Service) NotifyPrediction(ctx context.Context, headBlockRoot common.Has
 		return nil, errors.New(fmt.Sprintf("%s is not supported", NotifyPrediction))
 	}
 
-	// todo(healthykim): should we set the length as a beacon parameter
 	result := &PredictionResponse{}
-	err := s.rpcClient.CallContext(ctx, result, NotifyPrediction, headBlockRoot)
+	err := s.rpcClient.CallContext(ctx, result, NotifyPrediction, headBlockRoot, params.BeaconConfig().MaxPredictionSize)
 	return result.PredictionID, handleRPCError(err)
 }
 

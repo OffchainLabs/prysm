@@ -60,7 +60,6 @@ type postBlockProcessConfig struct {
 // saving the new head information to the blockchain package and
 // handling attestations, slashings and similar included in the block.
 func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
-	log.Info("postBlockProcess")
 	ctx, span := trace.StartSpan(cfg.ctx, "blockChain.onBlock")
 	defer span.End()
 	cfg.ctx = ctx
@@ -721,7 +720,7 @@ func missingDataColumnIndices(bs *filesystem.DataColumnStorage, root [fieldparam
 			go func() {
 				_ = saveCellAsDataColumn(bs, cells, signedBlock)
 			}()
-			log.Infof("Cell constructed at data column %d", column)
+			log.Debugf("Cell constructed at data column %d", column)
 		}
 	}
 
