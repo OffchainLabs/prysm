@@ -12,16 +12,12 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
-	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	payloadattribute "github.com/OffchainLabs/prysm/v6/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -36,152 +32,7 @@ var defaultLatestValidHash = bytesutil.PadTo([]byte{0xff}, 32)
 // 1. Re-organizes the execution payload chain and corresponding state to make head_block_hash the head.
 // 2. Applies finality to the execution state: it irreversibly persists the chain of all execution payloads and corresponding state, up to and including finalized_block_hash.
 func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*enginev1.PayloadIDBytes, error) {
-	ctx, span := trace.StartSpan(ctx, "blockChain.notifyForkchoiceUpdate")
-	defer span.End()
-
-	if arg.headBlock == nil || arg.headBlock.IsNil() {
-		log.Error("Head block is nil")
-		return nil, nil
-	}
-	headBlk := arg.headBlock.Block()
-	if headBlk == nil || headBlk.IsNil() || headBlk.Body().IsNil() {
-		log.Error("Head block is nil")
-		return nil, nil
-	}
-	// Must not call fork choice updated until the transition conditions are met on the Pow network.
-	isExecutionBlk, err := blocks.IsExecutionBlock(headBlk.Body())
-	if err != nil {
-		log.WithError(err).Error("Could not determine if head block is execution block")
-		return nil, nil
-	}
-	if !isExecutionBlk {
-		return nil, nil
-	}
-	headPayload, err := headBlk.Body().Execution()
-	if err != nil {
-		log.WithError(err).Error("Could not get execution payload for head block")
-		return nil, nil
-	}
-	finalizedHash := s.cfg.ForkChoiceStore.FinalizedPayloadBlockHash()
-	justifiedHash := s.cfg.ForkChoiceStore.UnrealizedJustifiedPayloadBlockHash()
-	fcs := &enginev1.ForkchoiceState{
-		HeadBlockHash:      headPayload.BlockHash(),
-		SafeBlockHash:      justifiedHash[:],
-		FinalizedBlockHash: finalizedHash[:],
-	}
-	if len(fcs.HeadBlockHash) != 32 || [32]byte(fcs.HeadBlockHash) == [32]byte{} {
-		// check if we are sending FCU at genesis
-		hash, err := s.hashForGenesisBlock(ctx, arg.headRoot)
-		if errors.Is(err, errNotGenesisRoot) {
-			log.Error("Sending nil head block hash to execution engine")
-			return nil, nil
-		}
-		if err != nil {
-			return nil, errors.Wrap(err, "could not get head block hash")
-		}
-		fcs.HeadBlockHash = hash
-	}
-	if arg.attributes == nil {
-		arg.attributes = payloadattribute.EmptyWithVersion(headBlk.Version())
-	}
-	payloadID, lastValidHash, err := s.cfg.ExecutionEngineCaller.ForkchoiceUpdated(ctx, fcs, arg.attributes)
-	if err != nil {
-		switch {
-		case errors.Is(err, execution.ErrAcceptedSyncingPayloadStatus):
-			forkchoiceUpdatedOptimisticNodeCount.Inc()
-			log.WithFields(logrus.Fields{
-				"headSlot":                  headBlk.Slot(),
-				"headPayloadBlockHash":      fmt.Sprintf("%#x", bytesutil.Trunc(headPayload.BlockHash())),
-				"finalizedPayloadBlockHash": fmt.Sprintf("%#x", bytesutil.Trunc(finalizedHash[:])),
-			}).Info("Called fork choice updated with optimistic block")
-			return payloadID, nil
-		case errors.Is(err, execution.ErrInvalidPayloadStatus):
-			forkchoiceUpdatedInvalidNodeCount.Inc()
-			headRoot := arg.headRoot
-			if len(lastValidHash) == 0 {
-				lastValidHash = defaultLatestValidHash
-			}
-			invalidRoots, err := s.cfg.ForkChoiceStore.SetOptimisticToInvalid(ctx, headRoot, headBlk.ParentRoot(), bytesutil.ToBytes32(lastValidHash))
-			if err != nil {
-				log.WithError(err).Error("Could not set head root to invalid")
-				return nil, nil
-			}
-			if err := s.removeInvalidBlockAndState(ctx, invalidRoots); err != nil {
-				log.WithError(err).Error("Could not remove invalid block and state")
-				return nil, nil
-			}
-
-			r, err := s.cfg.ForkChoiceStore.Head(ctx)
-			if err != nil {
-				log.WithFields(logrus.Fields{
-					"slot":                 headBlk.Slot(),
-					"blockRoot":            fmt.Sprintf("%#x", bytesutil.Trunc(headRoot[:])),
-					"invalidChildrenCount": len(invalidRoots),
-				}).Warn("Pruned invalid blocks, could not update head root")
-				return nil, invalidBlock{error: ErrInvalidPayload, root: arg.headRoot, invalidAncestorRoots: invalidRoots}
-			}
-			b, err := s.getBlock(ctx, r)
-			if err != nil {
-				log.WithError(err).Error("Could not get head block")
-				return nil, nil
-			}
-			st, err := s.cfg.StateGen.StateByRoot(ctx, r)
-			if err != nil {
-				log.WithError(err).Error("Could not get head state")
-				return nil, nil
-			}
-			pid, err := s.notifyForkchoiceUpdate(ctx, &fcuConfig{
-				headState:  st,
-				headRoot:   r,
-				headBlock:  b,
-				attributes: arg.attributes,
-			})
-			if err != nil {
-				return nil, err // Returning err because it's recursive here.
-			}
-
-			if err := s.saveHead(ctx, r, b, st); err != nil {
-				log.WithError(err).Error("could not save head after pruning invalid blocks")
-			}
-
-			log.WithFields(logrus.Fields{
-				"slot":                 headBlk.Slot(),
-				"blockRoot":            fmt.Sprintf("%#x", bytesutil.Trunc(headRoot[:])),
-				"invalidChildrenCount": len(invalidRoots),
-				"newHeadRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(r[:])),
-			}).Warn("Pruned invalid blocks")
-			return pid, invalidBlock{error: ErrInvalidPayload, root: arg.headRoot, invalidAncestorRoots: invalidRoots}
-		default:
-			log.WithError(err).Error(ErrUndefinedExecutionEngineError)
-			return nil, nil
-		}
-	}
-	forkchoiceUpdatedValidNodeCount.Inc()
-	if err := s.cfg.ForkChoiceStore.SetOptimisticToValid(ctx, arg.headRoot); err != nil {
-		log.WithError(err).Error("Could not set head root to valid")
-		return nil, nil
-	}
-	// If the forkchoice update call has an attribute, update the payload ID cache.
-	hasAttr := arg.attributes != nil && !arg.attributes.IsEmpty()
-	nextSlot := s.CurrentSlot() + 1
-	if hasAttr && payloadID != nil {
-		var pId [8]byte
-		copy(pId[:], payloadID[:])
-		log.WithFields(logrus.Fields{
-			"blockRoot": fmt.Sprintf("%#x", bytesutil.Trunc(arg.headRoot[:])),
-			"headSlot":  headBlk.Slot(),
-			"nextSlot":  nextSlot,
-			"payloadID": fmt.Sprintf("%#x", bytesutil.Trunc(payloadID[:])),
-		}).Info("Forkchoice updated with payload attributes for proposal")
-		s.cfg.PayloadIDCache.Set(nextSlot, arg.headRoot, pId)
-	} else if hasAttr && payloadID == nil && !features.Get().PrepareAllPayloads {
-		log.WithFields(logrus.Fields{
-			"blockHash": fmt.Sprintf("%#x", headPayload.BlockHash()),
-			"slot":      headBlk.Slot(),
-			"nextSlot":  nextSlot,
-		}).Error("Received nil payload ID on VALID engine response")
-	}
-	return payloadID, nil
+	return nil, nil
 }
 
 func (s *Service) firePayloadAttributesEvent(f event.SubscriberSender, block interfaces.ReadOnlySignedBeaconBlock, root [32]byte, nextSlot primitives.Slot) {
@@ -219,76 +70,7 @@ func (s *Service) getPayloadHash(ctx context.Context, root []byte) ([32]byte, er
 // It returns true if the EL has returned VALID for the block
 func (s *Service) notifyNewPayload(ctx context.Context, preStateVersion int,
 	preStateHeader interfaces.ExecutionData, blk interfaces.ReadOnlySignedBeaconBlock) (bool, error) {
-	ctx, span := trace.StartSpan(ctx, "blockChain.notifyNewPayload")
-	defer span.End()
-
-	// Execution payload is only supported in Bellatrix and beyond. Pre
-	// merge blocks are never optimistic
-	if blk == nil {
-		return false, errors.New("signed beacon block can't be nil")
-	}
-	if preStateVersion < version.Bellatrix {
-		return true, nil
-	}
-	if err := consensusblocks.BeaconBlockIsNil(blk); err != nil {
-		return false, err
-	}
-	body := blk.Block().Body()
-	enabled, err := blocks.IsExecutionEnabledUsingHeader(preStateHeader, body)
-	if err != nil {
-		return false, errors.Wrap(invalidBlock{error: err}, "could not determine if execution is enabled")
-	}
-	if !enabled {
-		return true, nil
-	}
-	payload, err := body.Execution()
-	if err != nil {
-		return false, errors.Wrap(invalidBlock{error: err}, "could not get execution payload")
-	}
-
-	var lastValidHash []byte
-	var parentRoot *common.Hash
-	var versionedHashes []common.Hash
-	var requests *enginev1.ExecutionRequests
-	if blk.Version() >= version.Deneb {
-		versionedHashes, err = kzgCommitmentsToVersionedHashes(blk.Block().Body())
-		if err != nil {
-			return false, errors.Wrap(err, "could not get versioned hashes to feed the engine")
-		}
-		prh := common.Hash(blk.Block().ParentRoot())
-		parentRoot = &prh
-	}
-	if blk.Version() >= version.Electra {
-		requests, err = blk.Block().Body().ExecutionRequests()
-		if err != nil {
-			return false, errors.Wrap(err, "could not get execution requests")
-		}
-		if requests == nil {
-			return false, errors.New("nil execution requests")
-		}
-	}
-	lastValidHash, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, parentRoot, requests)
-
-	switch {
-	case err == nil:
-		newPayloadValidNodeCount.Inc()
-		return true, nil
-	case errors.Is(err, execution.ErrAcceptedSyncingPayloadStatus):
-		newPayloadOptimisticNodeCount.Inc()
-		log.WithFields(logrus.Fields{
-			"slot":             blk.Block().Slot(),
-			"payloadBlockHash": fmt.Sprintf("%#x", bytesutil.Trunc(payload.BlockHash())),
-		}).Info("Called new payload with optimistic block")
-		return false, nil
-	case errors.Is(err, execution.ErrInvalidPayloadStatus):
-		lvh := bytesutil.ToBytes32(lastValidHash)
-		return false, invalidBlock{
-			error:         ErrInvalidPayload,
-			lastValidHash: lvh,
-		}
-	default:
-		return false, errors.WithMessage(ErrUndefinedExecutionEngineError, err.Error())
-	}
+	return true, nil
 }
 
 // reportInvalidBlock deals with the event that an invalid block was detected by the execution layer
