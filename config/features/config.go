@@ -318,9 +318,10 @@ func ConfigureValidator(ctx *cli.Context) error {
 		logEnabled(writeWalletPasswordOnWebOnboarding)
 		cfg.WriteWalletPasswordOnWebOnboarding = true
 	}
-	if ctx.Bool(attestTimely.Name) {
-		logEnabled(attestTimely)
-		cfg.AttestTimely = true
+	cfg.AttestTimely = true
+	if ctx.Bool(disableAttestTimely.Name) {
+		logEnabled(disableAttestTimely)
+		cfg.AttestTimely = false
 	}
 	if ctx.Bool(enableSlashingProtectionPruning.Name) {
 		logEnabled(enableSlashingProtectionPruning)

@@ -91,9 +91,9 @@ var (
 		Name:  "disable-broadcast-slashings",
 		Usage: "Disables broadcasting slashings submitted to the beacon node.",
 	}
-	attestTimely = &cli.BoolFlag{
-		Name:  "attest-timely",
-		Usage: "Fixes validator can attest timely after current block processes. See #8185 for more details.",
+	disableAttestTimely = &cli.BoolFlag{
+		Name:  "disable-attest-timely",
+		Usage: "Disable validator attesting timely after current block processes. See #8185 for more details.",
 	}
 	enableSlashingProtectionPruning = &cli.BoolFlag{
 		Name:  "enable-slashing-protection-history-pruning",
@@ -222,7 +222,7 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	HoodiTestnet,
 	Mainnet,
 	dynamicKeyReloadDebounceInterval,
-	attestTimely,
+	disableAttestTimely,
 	enableSlashingProtectionPruning,
 	EnableMinimalSlashingProtection,
 	enableDoppelGangerProtection,

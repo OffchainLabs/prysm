@@ -67,6 +67,7 @@ func TestValidateWithBatchVerifier(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			svc := &Service{
 				ctx:           ctx,
+				cfg:           &config{batchVerifierLimit: verifierLimit},
 				cancel:        cancel,
 				signatureChan: make(chan *signatureVerifier, verifierLimit),
 			}
