@@ -514,7 +514,6 @@ func (s *Service) subscribeToSubnets(
 	return true
 }
 
-// 서브넷 구독 관리
 // subscribeWithParameters subscribes to a list of subnets.
 func (s *Service) subscribeWithParameters(
 	topicFormat string,

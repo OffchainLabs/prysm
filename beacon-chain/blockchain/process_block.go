@@ -859,7 +859,6 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [fieldparams
 		return nil
 	}
 
-	// 부족한 column들 계산, 그 뒤는 예외처리 후 for문에서 기다리기
 	// Get a map of data column indices that are not currently available.
 	missingMap, err := missingDataColumnIndices(s.dataColumnStorage, root, s.StagedCellCache, signedBlock, peerInfo.CustodyColumns)
 	if err != nil {
@@ -910,7 +909,6 @@ func (s *Service) areDataColumnsAvailable(ctx context.Context, root [fieldparams
 		defer timer.Stop()
 	}
 
-	// 받지 못한 열들 기다리는 함수
 	for {
 		select {
 		case idents := <-identsChan:

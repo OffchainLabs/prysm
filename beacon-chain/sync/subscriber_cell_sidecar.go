@@ -30,7 +30,6 @@ func (s *Service) receiveCell(ctx context.Context, vrc blocks.VerifiedROCell) {
 
 	s.setSeenCellIndex(txHash, blobIndex, columnIndex)
 
-	// 스토리지 저장
 	s.cfg.stagedCellCache.Set(vrc)
 
 	// Removed event notifier
