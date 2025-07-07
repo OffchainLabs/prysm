@@ -3,10 +3,10 @@ package middleware
 import (
 	"compress/gzip"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/rs/cors"
 	log "github.com/sirupsen/logrus"
 )
@@ -119,33 +119,40 @@ func AcceptHeaderHandler(serverAcceptedTypes []string) Middleware {
 func AcceptEncodingHeaderHandler() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") || strings.Contains(r.Header.Get("Accept"), "application/octet-stream") {
+			if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			w.Header().Set("Content-Encoding", "gzip")
-
 			gz := gzip.NewWriter(w)
+			gzipRW := &gzipResponseWriter{gz: gz, ResponseWriter: w}
 			defer func() {
+				if !gzipRW.zipped {
+					return
+				}
 				if err := gz.Close(); err != nil {
 					log.WithError(err).Error("Failed to close gzip writer")
 				}
 			}()
 
-			gzipRW := gzipResponseWriter{Writer: gz, ResponseWriter: w}
 			next.ServeHTTP(gzipRW, r)
 		})
 	}
 }
 
 type gzipResponseWriter struct {
-	io.Writer
+	gz *gzip.Writer
 	http.ResponseWriter
+	zipped bool
 }
 
-func (g gzipResponseWriter) Write(b []byte) (int, error) {
-	return g.Writer.Write(b)
+func (g *gzipResponseWriter) Write(b []byte) (int, error) {
+	if strings.Contains(g.Header().Get("Content-Type"), api.JsonMediaType) {
+		g.zipped = true
+		g.Header().Set("Content-Encoding", "gzip")
+		return g.gz.Write(b)
+	}
+	return g.ResponseWriter.Write(b)
 }
 
 func MiddlewareChain(h http.Handler, mw []Middleware) http.Handler {
