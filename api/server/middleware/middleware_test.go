@@ -2,16 +2,15 @@ package middleware
 
 import (
 	"bytes"
+	"compress/gzip"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"compress/gzip"
-	"io"
-	log "github.com/sirupsen/logrus"
 	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
-
+	log "github.com/sirupsen/logrus"
 )
 
 func TestNormalizeQueryValuesHandler(t *testing.T) {
@@ -130,9 +129,9 @@ func TestContentTypeHandler(t *testing.T) {
 }
 
 func TestAcceptEncodingHeaderHandler(t *testing.T) {
-
 	dummyContent := "Test gzip middleware content"
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", r.Header.Get("Accept"))
 		_, err := w.Write([]byte(dummyContent))
 		require.NoError(t, err)
 	})
@@ -141,27 +140,38 @@ func TestAcceptEncodingHeaderHandler(t *testing.T) {
 
 	tests := []struct {
 		name             string
+		accept           string
 		acceptEncoding   string
 		expectCompressed bool
 	}{
 		{
 			name:             "Gzip supported",
+			accept:           api.JsonMediaType,
 			acceptEncoding:   "gzip",
 			expectCompressed: true,
 		},
 		{
 			name:             "Multiple encodings supported",
+			accept:           api.JsonMediaType,
 			acceptEncoding:   "deflate, gzip",
 			expectCompressed: true,
 		},
 		{
 			name:             "Gzip not supported",
+			accept:           api.JsonMediaType,
 			acceptEncoding:   "deflate",
 			expectCompressed: false,
 		},
 		{
 			name:             "No accept encoding header",
+			accept:           api.JsonMediaType,
 			acceptEncoding:   "",
+			expectCompressed: false,
+		},
+		{
+			name:             "SSZ",
+			accept:           api.OctetStreamMediaType,
+			acceptEncoding:   "gzip",
 			expectCompressed: false,
 		},
 	}
@@ -169,6 +179,7 @@ func TestAcceptEncodingHeaderHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest("GET", "/", nil)
+			req.Header.Set("Accept", tt.accept)
 			if tt.acceptEncoding != "" {
 				req.Header.Set("Accept-Encoding", tt.acceptEncoding)
 			}
