@@ -222,3 +222,11 @@ func WithLightClientStore(lcs *lightClient.Store) Option {
 		return nil
 	}
 }
+
+// WithBatchVerifierLimit sets the maximum number of signatures to batch verify at once.
+func WithBatchVerifierLimit(limit int) Option {
+	return func(s *Service) error {
+		s.cfg.batchVerifierLimit = limit
+		return nil
+	}
+}

@@ -13,8 +13,6 @@ import (
 
 const signatureVerificationInterval = 50 * time.Millisecond
 
-const verifierLimit = 50
-
 type signatureVerifier struct {
 	set     *bls.SignatureBatch
 	resChan chan error
@@ -36,7 +34,7 @@ func (s *Service) verifierRoutine() {
 			return
 		case sig := <-s.signatureChan:
 			verifierBatch = append(verifierBatch, sig)
-			if len(verifierBatch) >= verifierLimit {
+			if len(verifierBatch) >= s.cfg.batchVerifierLimit {
 				verifyBatch(verifierBatch)
 				verifierBatch = []*signatureVerifier{}
 			}
