@@ -42,15 +42,15 @@ func (s *Service) rpcHandlerByTopicFromFork(forkIndex int) (map[string]rpcHandle
 	// Fulu: https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#messages
 	if forkIndex >= version.Fulu {
 		return map[string]rpcHandler{
-			p2p.RPCStatusTopicV1:                   s.statusRPCHandler,
-			p2p.RPCGoodByeTopicV1:                  s.goodbyeRPCHandler,
-			p2p.RPCBlocksByRangeTopicV2:            s.beaconBlocksByRangeRPCHandler,
-			p2p.RPCBlocksByRootTopicV2:             s.beaconBlocksRootRPCHandler,
-			p2p.RPCPingTopicV1:                     s.pingHandler,
-			p2p.RPCMetaDataTopicV3:                 s.metaDataHandler, // Modified in Fulu
-			p2p.RPCBlobSidecarsByRootTopicV1:       s.blobSidecarByRootRPCHandler,
-			p2p.RPCBlobSidecarsByRangeTopicV1:      s.blobSidecarsByRangeRPCHandler,
-			p2p.RPCDataColumnSidecarsByRootTopicV1: s.dataColumnSidecarByRootRPCHandler, // Added in Fulu
+			p2p.RPCGoodByeTopicV1:                   s.goodbyeRPCHandler,
+			p2p.RPCBlocksByRangeTopicV2:             s.beaconBlocksByRangeRPCHandler,
+			p2p.RPCBlocksByRootTopicV2:              s.beaconBlocksRootRPCHandler,
+			p2p.RPCPingTopicV1:                      s.pingHandler,
+			p2p.RPCMetaDataTopicV3:                  s.metaDataHandler, // Modified in Fulu
+			p2p.RPCBlobSidecarsByRootTopicV1:        s.blobSidecarByRootRPCHandler,
+			p2p.RPCBlobSidecarsByRangeTopicV1:       s.blobSidecarsByRangeRPCHandler,
+			p2p.RPCDataColumnSidecarsByRootTopicV1:  s.dataColumnSidecarByRootRPCHandler,   // Added in Fulu
+			p2p.RPCDataColumnSidecarsByRangeTopicV1: s.dataColumnSidecarsByRangeRPCHandler, // Added in Fulu
 		}, nil
 	}
 

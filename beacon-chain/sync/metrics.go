@@ -89,6 +89,13 @@ var (
 			Buckets: []float64{5, 10, 50, 100, 150, 250, 500, 1000, 2000},
 		},
 	)
+	rpcDataColumnsByRangeResponseLatency = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "rpc_data_columns_by_range_response_latency_milliseconds",
+			Help:    "Captures total time to respond to rpc DataColumnsByRange requests in a milliseconds distribution",
+			Buckets: []float64{5, 10, 50, 100, 150, 250, 500, 1000, 2000},
+		},
+	)
 	arrivalBlockPropagationHistogram = promauto.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "block_arrival_latency_milliseconds",
@@ -200,6 +207,19 @@ var (
 		prometheus.HistogramOpts{
 			Name:    "beacon_data_column_sidecar_gossip_verification_milliseconds",
 			Help:    "Captures the time taken to verify data column sidecars.",
+			Buckets: []float64{100, 250, 500, 750, 1000, 1500, 2000, 4000, 8000, 12000, 16000},
+		},
+	)
+
+	dataColumnReconstructionCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "beacon_data_availability_reconstructed_columns_total",
+		Help: "Count the number of reconstructed data columns.",
+	})
+
+	dataColumnReconstructionHistogram = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "beacon_data_availability_reconstruction_time_milliseconds",
+			Help:    "Captures the time taken to reconstruct data columns.",
 			Buckets: []float64{100, 250, 500, 750, 1000, 1500, 2000, 4000, 8000, 12000, 16000},
 		},
 	)

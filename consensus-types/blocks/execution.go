@@ -2,7 +2,6 @@ package blocks
 
 import (
 	"bytes"
-	"errors"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
@@ -10,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	"github.com/pkg/errors"
 	fastssz "github.com/prysmaticlabs/fastssz"
 	"google.golang.org/protobuf/proto"
 )
@@ -40,8 +40,10 @@ func NewWrappedExecutionData(v proto.Message) (interfaces.ExecutionData, error) 
 	case *enginev1.ExecutionBundleElectra:
 		// note: no payload changes in electra so using deneb
 		return WrappedExecutionPayloadDeneb(pbStruct.Payload)
+	case *enginev1.ExecutionBundleFulu:
+		return WrappedExecutionPayloadDeneb(pbStruct.Payload)
 	default:
-		return nil, ErrUnsupportedVersion
+		return nil, errors.Wrapf(ErrUnsupportedVersion, "type %T", pbStruct)
 	}
 }
 

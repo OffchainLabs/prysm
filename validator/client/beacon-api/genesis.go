@@ -20,7 +20,7 @@ type GenesisProvider interface {
 }
 
 type beaconApiGenesisProvider struct {
-	jsonRestHandler JsonRestHandler
+	jsonRestHandler RestHandler
 	genesis         *structs.Genesis
 	once            sync.Once
 }

@@ -40,6 +40,8 @@ import (
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
+var verifierLimit = 1000
+
 func TestProcessPendingAtts_NoBlockRequestBlock(t *testing.T) {
 	hook := logTest.NewGlobal()
 	db := dbtest.SetupDB(t)

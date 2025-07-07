@@ -403,7 +403,7 @@ func AssignmentForValidator(
 			}
 		}
 	}
-	return nil // validator is not scheduled this epoch
+	return &LiteAssignment{} // validator is not scheduled this epoch
 }
 
 // CommitteeAssignments calculates committee assignments for each validator during the specified epoch.

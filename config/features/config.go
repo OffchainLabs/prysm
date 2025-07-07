@@ -52,6 +52,7 @@ type Flags struct {
 	EnableExperimentalAttestationPool   bool // EnableExperimentalAttestationPool enables an experimental attestation pool design.
 	EnableDutiesV2                      bool // EnableDutiesV2 sets validator client to use the get Duties V2 endpoint
 	EnableWeb                           bool // EnableWeb enables the webui on the validator client
+	SSZOnly                             bool // SSZOnly forces the validator client to use SSZ for communication with the beacon node when REST mode is enabled (useful for debugging)
 	// Logging related toggles.
 	DisableGRPCConnectionLogs bool // Disables logging when a new grpc client has connected.
 	EnableFullSSZDataLogging  bool // Enables logging for full ssz data on rejected gossip messages
@@ -155,7 +156,8 @@ func configureTestnet(ctx *cli.Context) error {
 		params.UseHoodiNetworkConfig()
 	} else {
 		if ctx.IsSet(cmd.ChainConfigFileFlag.Name) {
-			log.Warn("Running on custom Ethereum network specified in a chain configuration yaml file")
+			log.Warning("Running on custom Ethereum network specified in a chain configuration YAML file")
+			params.UseCustomNetworkConfig()
 		} else {
 			log.Info("Running on Ethereum Mainnet")
 		}
@@ -167,11 +169,11 @@ func configureTestnet(ctx *cli.Context) error {
 }
 
 // Insert feature flags within the function to be enabled for Sepolia testnet.
-func applySepoliaFeatureFlags(ctx *cli.Context) {
+func applySepoliaFeatureFlags(_ *cli.Context) {
 }
 
 // Insert feature flags within the function to be enabled for Holesky testnet.
-func applyHoleskyFeatureFlags(ctx *cli.Context) {
+func applyHoleskyFeatureFlags(_ *cli.Context) {
 }
 
 // ConfigureBeaconChain sets the global config based
@@ -316,9 +318,10 @@ func ConfigureValidator(ctx *cli.Context) error {
 		logEnabled(writeWalletPasswordOnWebOnboarding)
 		cfg.WriteWalletPasswordOnWebOnboarding = true
 	}
-	if ctx.Bool(attestTimely.Name) {
-		logEnabled(attestTimely)
-		cfg.AttestTimely = true
+	cfg.AttestTimely = true
+	if ctx.Bool(disableAttestTimely.Name) {
+		logEnabled(disableAttestTimely)
+		cfg.AttestTimely = false
 	}
 	if ctx.Bool(enableSlashingProtectionPruning.Name) {
 		logEnabled(enableSlashingProtectionPruning)
@@ -344,6 +347,11 @@ func ConfigureValidator(ctx *cli.Context) error {
 		logEnabled(EnableWebFlag)
 		cfg.EnableWeb = true
 	}
+	if ctx.Bool(SSZOnly.Name) {
+		logEnabled(SSZOnly)
+		cfg.SSZOnly = true
+	}
+
 	cfg.KeystoreImportDebounceInterval = ctx.Duration(dynamicKeyReloadDebounceInterval.Name)
 	Init(cfg)
 	return nil
