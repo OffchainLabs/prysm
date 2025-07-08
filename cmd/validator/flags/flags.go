@@ -20,7 +20,7 @@ const (
 	// DefaultHTTPServerHost for the validator client.
 	DefaultHTTPServerHost = "127.0.0.1"
 
-	DefaultMaxHealthChecks = 60
+	DefaultMaxHealthChecks = 0
 )
 
 var (
