@@ -393,7 +393,7 @@ func (p *Status) SetNextValidTime(pid peer.ID, nextTime time.Time) {
 	peerData.NextValidTime = nextTime
 }
 
-// RandomizeBackOff adds extra backoff period during which peer will not be dialed.
+// RandomizeBackOff adds extra backoff period during which peer won't be dialed.
 func (p *Status) RandomizeBackOff(pid peer.ID) {
 	p.store.Lock()
 	defer p.store.Unlock()

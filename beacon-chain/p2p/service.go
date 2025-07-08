@@ -37,24 +37,28 @@ import (
 
 var _ runtime.Service = (*Service)(nil)
 
-// In the event that we are at our peer limit, we
-// stop looking for new peers and instead poll
-// for the current peer limit status for the time period
-// defined below.
-var pollingPeriod = 6 * time.Second
+const (
+	// When looking for new nodes, if not enough nodes are found,
+	// we stop after this spent time.
+	batchPeriod = 2 * time.Second
 
-// When looking for new nodes, if not enough nodes are found,
-// we stop after this spent time.
-var batchPeriod = 2 * time.Second
+	// maxBadResponses is the maximum number of bad responses from a peer before we stop talking to it.
+	maxBadResponses = 5
+)
 
-// Refresh rate of ENR set at twice per slot.
-var refreshRate = slots.DivideSlotBy(2)
+var (
+	// Refresh rate of ENR set at twice per slot.
+	refreshRate = slots.DivideSlotBy(2)
 
-// maxBadResponses is the maximum number of bad responses from a peer before we stop talking to it.
-const maxBadResponses = 5
+	// maxDialTimeout is the timeout for a single peer dial.
+	maxDialTimeout = params.BeaconConfig().RespTimeoutDuration()
 
-// maxDialTimeout is the timeout for a single peer dial.
-var maxDialTimeout = params.BeaconConfig().RespTimeoutDuration()
+	// In the event that we are at our peer limit, we
+	// stop looking for new peers and instead poll
+	// for the current peer limit status for the time period
+	// defined below.
+	pollingPeriod = 6 * time.Second
+)
 
 // Service for managing peer to peer (p2p) networking.
 type Service struct {
@@ -251,6 +255,7 @@ func (s *Service) Start() {
 			"inboundTCP":  inboundTCPCount,
 			"outboundTCP": outboundTCPCount,
 			"total":       total,
+			"target":      s.cfg.MaxPeers,
 		}
 
 		if features.Get().EnableQUIC {

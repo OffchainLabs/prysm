@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -57,8 +58,8 @@ func (m *MockPeerManager) DiscoveryAddresses() ([]multiaddr.Multiaddr, error) {
 func (*MockPeerManager) RefreshPersistentSubnets() {}
 
 // FindPeersWithSubnet .
-func (*MockPeerManager) FindPeersWithSubnet(_ context.Context, _ string, _ uint64, _ int) (bool, error) {
-	return true, nil
+func (*MockPeerManager) FindPeersWithSubnets(ctx context.Context, topicFormat string, digest [fieldparams.VersionLength]byte, minimumPeersPerSubnet int, subnets map[uint64]bool) error {
+	return nil
 }
 
 // AddPingMethod .

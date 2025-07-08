@@ -416,6 +416,7 @@ func (b *BeaconChainConfig) TargetBlobsPerBlock(slot primitives.Slot) int {
 	return b.DeprecatedMaxBlobsPerBlock / 2
 }
 
+// MaxBlobsPerBlock returns the maximum number of blobs per block for the given slot.
 func (b *BeaconChainConfig) MaxBlobsPerBlock(slot primitives.Slot) int {
 	epoch := primitives.Epoch(slot.DivSlot(b.SlotsPerEpoch))
 
@@ -438,7 +439,22 @@ func (b *BeaconChainConfig) MaxBlobsPerBlock(slot primitives.Slot) int {
 	if epoch >= b.ElectraForkEpoch {
 		return b.DeprecatedMaxBlobsPerBlockElectra
 	}
+
 	return b.DeprecatedMaxBlobsPerBlock
+}
+
+// AbsoluteMaxBlobsPerBlock returns the absolute maximum number of blobs per block.
+func (b *BeaconChainConfig) AbsoluteMaxBlobsPerBlock() int {
+	if len(b.BlobSchedule) > 0 {
+		result := 0
+		for _, item := range b.BlobSchedule {
+			result = max(result, int(item.MaxBlobsPerBlock))
+		}
+
+		return result
+	}
+
+	return max(b.DeprecatedMaxBlobsPerBlock, b.DeprecatedMaxBlobsPerBlockElectra, b.DeprecatedMaxBlobsPerBlockFulu)
 }
 
 // MaxBlobsPerBlockAtEpoch returns the maximum number of blobs per block for the given epoch
