@@ -89,7 +89,7 @@ func (m *Miner) initAttempt(ctx context.Context, attempt int) (*os.File, error) 
 
 	gethJsonPath := path.Join(path.Dir(binaryPath), "genesis.json")
 	gen := interop.GethTestnetGenesis(e2e.TestParams.Eth1GenesisTime, params.BeaconConfig())
-	log.WithField("timestamp", e2e.TestParams.Eth1GenesisTime).Info("eth1 miner genesis")
+	log.WithField("timestamp", e2e.TestParams.Eth1GenesisTime).Info("Eth1 miner genesis")
 	b, err := json.Marshal(gen)
 	if err != nil {
 		return nil, err
