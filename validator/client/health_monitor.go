@@ -5,19 +5,21 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/async/event"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
 	"github.com/sirupsen/logrus"
 )
 
 type healthMonitor struct {
-	ctx       context.Context
-	cancel    context.CancelFunc
-	v         iface.Validator
-	maxFails  int
-	healthyCh chan bool // emits true → healthy, false → unhealthy
-	fails     int
-	isHealthy bool
+	ctx             context.Context
+	cancel          context.CancelFunc
+	v               iface.Validator
+	maxFails        int
+	healthyCh       chan bool // emits true → healthy, false → unhealthy
+	healthEventFeed *event.Feed
+	fails           int
+	isHealthy       bool
 	sync.RWMutex
 }
 
@@ -28,13 +30,16 @@ func newHealthMonitor(
 	maxFails int,
 	v iface.Validator,
 ) *healthMonitor {
-	return &healthMonitor{
-		ctx:       parentCtx,
-		cancel:    parentCancel,
-		maxFails:  maxFails,
-		v:         v,
-		healthyCh: make(chan bool, 1),
+	m := &healthMonitor{
+		ctx:             parentCtx,
+		cancel:          parentCancel,
+		maxFails:        maxFails,
+		v:               v,
+		healthyCh:       make(chan bool),
+		healthEventFeed: new(event.Feed),
 	}
+	m.healthEventFeed.Subscribe(m.healthyCh)
+	return m
 }
 
 func (m *healthMonitor) IsHealthy() bool {
@@ -44,9 +49,9 @@ func (m *healthMonitor) IsHealthy() bool {
 }
 
 func (m *healthMonitor) performHealthCheck() {
+	ishealthy := m.v.FindHealthyHost(m.ctx)
 	m.Lock()
 	defer m.Unlock()
-	ishealthy := m.v.FindHealthyHost(m.ctx)
 	if ishealthy {
 		m.fails = 0
 	} else if m.maxFails > 0 && m.fails < m.maxFails {
@@ -63,18 +68,15 @@ func (m *healthMonitor) performHealthCheck() {
 	}
 	if ishealthy == m.isHealthy {
 		// is not a new status so skip update
+		log.WithField("isHealthy", m.isHealthy).Debug("Health status did not change")
 		return
 	}
+	log.WithFields(logrus.Fields{
+		"current": m.isHealthy,
+		"new":     ishealthy,
+	}).Info("Health status changed")
 	m.isHealthy = ishealthy
-
-	// Non-blocking send to channel
-	select {
-	case m.healthyCh <- ishealthy:
-	default:
-		// Channel full, drain and send
-		<-m.healthyCh
-		m.healthyCh <- ishealthy
-	}
+	go m.healthEventFeed.Send(ishealthy) // non blocking send
 }
 
 func (m *healthMonitor) loop() {

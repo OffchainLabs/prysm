@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/async/event"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -20,8 +21,9 @@ func TestHealthMonitor_IsHealthy_Concurrency(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockValidator := validatormock.NewMockValidator(ctrl)
-	parentCtx, parentCancel := context.WithCancel(context.Background())
-	defer parentCancel()
+	// inside the test
+	parentCtx, parentCancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	t.Cleanup(parentCancel)
 
 	// Expectation for newHealthMonitor's FindHealthyHost call
 	mockValidator.EXPECT().FindHealthyHost(gomock.Any()).Return(true).Times(1)
@@ -154,14 +156,16 @@ func TestHealthMonitor_PerformHealthCheck(t *testing.T) {
 			}
 
 			monitor := &healthMonitor{
-				ctx:       monitorCtx,         // Context for the monitor's operations
-				cancel:    testCancelCallback, // This is m.cancel()
-				v:         mockValidator,
-				maxFails:  tt.maxFails,
-				healthyCh: make(chan bool, 1),
-				fails:     tt.initialFails,
-				isHealthy: tt.initialIsHealthy,
+				ctx:             monitorCtx,         // Context for the monitor's operations
+				cancel:          testCancelCallback, // This is m.cancel()
+				v:               mockValidator,
+				maxFails:        tt.maxFails,
+				healthyCh:       make(chan bool, 1),
+				fails:           tt.initialFails,
+				isHealthy:       tt.initialIsHealthy,
+				healthEventFeed: new(event.Feed),
 			}
+			monitor.healthEventFeed.Subscribe(monitor.healthyCh)
 
 			mockValidator.EXPECT().FindHealthyHost(gomock.Any()).Return(tt.findHealthyHostReturns)
 
