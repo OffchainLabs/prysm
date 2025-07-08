@@ -85,11 +85,11 @@ func (s *Service) reconstructSaveBroadcastDataColumnSidecars(
 
 	slotStartTime := slots.StartTime(uint64(s.cfg.clock.GenesisTime().Unix()), slot)
 	log.WithFields(logrus.Fields{
-		"root":               fmt.Sprintf("%#x", root),
-		"slot":               slot,
-		"fromColumnsCount":   storedColumnsCount,
-		"sinceSlotStartTime": time.Since(slotStartTime),
-		"reconstructionTime": time.Since(startTime),
+		"root":                   fmt.Sprintf("%#x", root),
+		"slot":                   slot,
+		"fromColumnsCount":       storedColumnsCount,
+		"sinceSlotStartTime":     time.Since(slotStartTime),
+		"reconstructionDuration": time.Since(startTime),
 	}).Debug("Data columns reconstructed and saved")
 
 	// Update reconstruction metrics
