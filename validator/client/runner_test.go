@@ -564,7 +564,5 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 		submittedAggregates:            make(map[submittedAttKey]*submittedAtt),
 	}
 
-	go runTest(t, timedCtx, v)
-	// Wait a bit for the runner to process slots and submit validator registrations
-	time.Sleep(2 * time.Second)
+	runTest(t, timedCtx, v)
 }
