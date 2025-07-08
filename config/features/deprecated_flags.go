@@ -102,6 +102,7 @@ var (
 		Name:   "attest-timely",
 		Usage:  deprecatedUsage,
 		Hidden: true,
+	}
 	deprecatedDisableExperimentalState = &cli.BoolFlag{
 		Name:   "disable-experimental-state",
 		Usage:  deprecatedUsage,
