@@ -31,7 +31,7 @@ func Test_BaseReward(t *testing.T) {
 			valIdx:    2,
 			st:        genState(1),
 			want:      0,
-			errString: "validator index 2 does not exist",
+			errString: "index 2 out of bounds",
 		},
 		{
 			name:      "active balance is 32eth",
@@ -89,7 +89,7 @@ func Test_BaseRewardWithTotalBalance(t *testing.T) {
 			valIdx:        2,
 			activeBalance: 1,
 			want:          0,
-			errString:     "validator index 2 does not exist",
+			errString:     "index 2 out of bounds",
 		},
 		{
 			name:          "active balance is 1",

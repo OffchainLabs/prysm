@@ -529,6 +529,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 				st := tc.getState()
 				v := &eth.Validator{ExitEpoch: math.MaxUint64, EffectiveBalance: params.BeaconConfig().MinActivationBalance, WithdrawalCredentials: make([]byte, 32)}
 				require.NoError(t, st.SetValidators([]*eth.Validator{v}))
+				require.NoError(t, st.SetBalances([]uint64{0}))
 				currentSlot := primitives.Slot(0)
 				// to avoid slot processing
 				require.NoError(t, st.SetSlot(currentSlot+1))
