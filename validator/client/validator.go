@@ -306,7 +306,6 @@ func (v *validator) WaitForChainStart(ctx context.Context) error {
 			return errors.Wrap(err, "could not save genesis validators root")
 		}
 
-		v.setTicker()
 		return nil
 	}
 
@@ -324,11 +323,15 @@ func (v *validator) WaitForChainStart(ctx context.Context) error {
 		)
 	}
 
-	v.setTicker()
 	return nil
 }
 
-func (v *validator) setTicker() {
+func (v *validator) SetTicker() {
+	// If a ticker already exists, stop it before creating a new one
+	// to prevent resource leaks.
+	if v.ticker != nil {
+		v.ticker.Done()
+	}
 	// Once the ChainStart log is received, we update the genesis time of the validator client
 	// and begin a slot ticker used to track the current slot the beacon node is in.
 	v.ticker = slots.NewSlotTicker(time.Unix(int64(v.genesisTime), 0), params.BeaconConfig().SecondsPerSlot)

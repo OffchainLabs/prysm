@@ -70,6 +70,7 @@ type Validator interface {
 	DeleteGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) error
 	Host() string
 	FindHealthyHost(ctx context.Context) bool
+	SetTicker()
 }
 
 // SigningFunc interface defines a type for the function that signs a message
