@@ -59,11 +59,8 @@ func Test_pruneAttsFromPool_Electra(t *testing.T) {
 	cfg.TargetCommitteeSize = 8
 	params.OverrideBeaconConfig(cfg)
 
-	s := Service{
-		cfg: &config{
-			AttPool: kv.NewAttCaches(),
-		},
-	}
+	s := testServiceNoDB(t)
+	s.cfg.AttPool = kv.NewAttCaches()
 
 	data := &ethpb.AttestationData{
 		BeaconBlockRoot: make([]byte, 32),
@@ -471,7 +468,8 @@ func blockTree1(t *testing.T, beaconDB db.Database, genesisRoot []byte) ([][]byt
 }
 
 func TestCurrentSlot_HandlesOverflow(t *testing.T) {
-	svc := Service{genesisTime: prysmTime.Now().Add(1 * time.Hour)}
+	svc := testServiceNoDB(t)
+	svc.genesisTime = prysmTime.Now().Add(1 * time.Hour)
 
 	slot := svc.CurrentSlot()
 	require.Equal(t, primitives.Slot(0), slot, "Unexpected slot")
