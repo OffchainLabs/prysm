@@ -121,13 +121,14 @@ func TestService_HeadSyncSelectionProofDomain(t *testing.T) {
 }
 
 func TestSyncCommitteeHeadStateCache_RoundTrip(t *testing.T) {
+	s := testServiceNoDB(t)
 	beaconState, _ := util.DeterministicGenesisStateAltair(t, 100)
 	require.NoError(t, beaconState.SetSlot(100))
-	cachedState, err := syncCommitteeHeadStateCache.Get(101)
+	cachedState, err := s.syncCommitteeHeadState.Get(101)
 	require.ErrorContains(t, cache.ErrNotFound.Error(), err)
 	require.Equal(t, nil, cachedState)
-	require.NoError(t, syncCommitteeHeadStateCache.Put(101, beaconState))
-	cachedState, err = syncCommitteeHeadStateCache.Get(101)
+	require.NoError(t, s.syncCommitteeHeadState.Put(101, beaconState))
+	cachedState, err = s.syncCommitteeHeadState.Get(101)
 	require.NoError(t, err)
 	require.DeepEqual(t, beaconState, cachedState)
 }

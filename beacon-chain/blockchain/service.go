@@ -69,6 +69,7 @@ type Service struct {
 	slasherEnabled                 bool
 	lcStore                        *lightClient.Store
 	startWaitingDataColumnSidecars chan bool // for testing purposes only
+	syncCommitteeHeadState         *cache.SyncCommitteeHeadStateCache
 }
 
 // config options for the service.
@@ -180,14 +181,15 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 		seenIndex: make(map[[32]byte][]bool),
 	}
 	srv := &Service{
-		ctx:                  ctx,
-		cancel:               cancel,
-		boundaryRoots:        [][32]byte{},
-		checkpointStateCache: cache.NewCheckpointStateCache(),
-		initSyncBlocks:       make(map[[32]byte]interfaces.ReadOnlySignedBeaconBlock),
-		blobNotifiers:        bn,
-		cfg:                  &config{},
-		blockBeingSynced:     &currentlySyncingBlock{roots: make(map[[32]byte]struct{})},
+		ctx:                    ctx,
+		cancel:                 cancel,
+		boundaryRoots:          [][32]byte{},
+		checkpointStateCache:   cache.NewCheckpointStateCache(),
+		initSyncBlocks:         make(map[[32]byte]interfaces.ReadOnlySignedBeaconBlock),
+		blobNotifiers:          bn,
+		cfg:                    &config{},
+		blockBeingSynced:       &currentlySyncingBlock{roots: make(map[[32]byte]struct{})},
+		syncCommitteeHeadState: cache.NewSyncCommitteeHeadState(),
 	}
 	for _, opt := range opts {
 		if err := opt(srv); err != nil {
