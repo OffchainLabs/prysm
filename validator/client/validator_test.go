@@ -296,38 +296,6 @@ func TestWaitForChainStart_ReceiveErrorFromStream(t *testing.T) {
 	assert.ErrorContains(t, want, err)
 }
 
-func TestCanonicalHeadSlot_FailedRPC(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	client := validatormock.NewMockChainClient(ctrl)
-	v := validator{
-		chainClient: client,
-		genesisTime: 1,
-	}
-	client.EXPECT().ChainHead(
-		gomock.Any(),
-		gomock.Any(),
-	).Return(nil, errors.New("failed"))
-	_, err := v.CanonicalHeadSlot(t.Context())
-	assert.ErrorContains(t, "failed", err)
-}
-
-func TestCanonicalHeadSlot_OK(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	client := validatormock.NewMockChainClient(ctrl)
-	v := validator{
-		chainClient: client,
-	}
-	client.EXPECT().ChainHead(
-		gomock.Any(),
-		gomock.Any(),
-	).Return(&ethpb.ChainHead{HeadSlot: 0}, nil)
-	headSlot, err := v.CanonicalHeadSlot(t.Context())
-	require.NoError(t, err)
-	assert.Equal(t, primitives.Slot(0), headSlot, "Mismatch slots")
-}
-
 func TestWaitSync_ContextCanceled(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
