@@ -72,8 +72,8 @@ func (m *healthMonitor) performHealthCheck() {
 		return
 	}
 	log.WithFields(logrus.Fields{
-		"current": m.isHealthy,
-		"new":     ishealthy,
+		"healthy":    ishealthy,
+		"previously": m.isHealthy,
 	}).Info("Health status changed")
 	m.isHealthy = ishealthy
 	go m.healthEventFeed.Send(ishealthy) // non blocking send
