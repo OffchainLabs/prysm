@@ -232,7 +232,7 @@ func (s *Service) hasSeenDataColumnIndex(slot primitives.Slot, proposerIndex pri
 // Sets the data column with the same slot, proposer index, and data column index as seen.
 func (s *Service) setSeenDataColumnIndex(slot primitives.Slot, proposerIndex primitives.ValidatorIndex, index uint64) {
 	key := computeCacheKey(slot, proposerIndex, index)
-	s.seenDataColumnCache.Add(key, true)
+	s.seenDataColumnCache.Add(slot, key, true)
 }
 
 func computeCacheKey(slot primitives.Slot, proposerIndex primitives.ValidatorIndex, index uint64) string {

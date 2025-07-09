@@ -50,6 +50,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/runtime"
 	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/sirupsen/logrus"
 )
 
 var _ runtime.Service = (*Service)(nil)
@@ -145,7 +146,7 @@ type Service struct {
 	seenBlockCache                   *lru.Cache
 	seenBlobLock                     sync.RWMutex
 	seenBlobCache                    *lru.Cache
-	seenDataColumnCache              *lru.Cache
+	seenDataColumnCache              *slotAwareCache
 	seenAggregatedAttestationLock    sync.RWMutex
 	seenAggregatedAttestationCache   *lru.Cache
 	seenUnAggregatedAttestationLock  sync.RWMutex
@@ -269,6 +270,9 @@ func (s *Service) Start() {
 
 	// Update sync metrics.
 	async.RunEvery(s.ctx, syncMetricsInterval, s.updateMetrics)
+
+	// Prune data column cache periodically on finalization.
+	async.RunEvery(s.ctx, 30*time.Second, s.pruneDataColumnCache)
 }
 
 // Stop the regular sync service.
@@ -306,7 +310,7 @@ func (s *Service) Status() error {
 func (s *Service) initCaches() {
 	s.seenBlockCache = lruwrpr.New(seenBlockSize)
 	s.seenBlobCache = lruwrpr.New(seenBlockSize * params.BeaconConfig().DeprecatedMaxBlobsPerBlockElectra)
-	s.seenDataColumnCache = lruwrpr.New(seenDataColumnSize)
+	s.seenDataColumnCache = newSlotAwareCache(seenDataColumnSize)
 	s.seenAggregatedAttestationCache = lruwrpr.New(seenAggregatedAttSize)
 	s.seenUnAggregatedAttestationCache = lruwrpr.New(seenUnaggregatedAttSize)
 	s.seenSyncMessageCache = lruwrpr.New(seenSyncMsgSize)
@@ -392,6 +396,24 @@ func (s *Service) setRateCollector(topic string, c *leakybucket.Collector) {
 // marks the chain as having started.
 func (s *Service) markForChainStart() {
 	s.chainStarted.Set()
+}
+
+// pruneDataColumnCache removes entries from the data column cache that are older than the finalized slot.
+func (s *Service) pruneDataColumnCache() {
+	finalizedCheckpoint := s.cfg.chain.FinalizedCheckpt()
+	finalizedSlot, err := slots.EpochStart(finalizedCheckpoint.Epoch)
+	if err != nil {
+		log.WithError(err).Error("Could not calculate finalized slot for cache pruning")
+		return
+	}
+
+	pruned := s.seenDataColumnCache.pruneSlotsBefore(finalizedSlot)
+	if pruned > 0 {
+		log.WithFields(logrus.Fields{
+			"finalizedSlot": finalizedSlot,
+			"prunedEntries": pruned,
+		}).Debug("Pruned data column cache entries before finalized slot")
+	}
 }
 
 func (s *Service) chainIsStarted() bool {

@@ -133,7 +133,7 @@ func TestBroadcastMissingDataColumnSidecars(t *testing.T) {
 
 		for _, index := range [...]uint64{1, 17, 19, 42, 75, 87, 102, 117} {
 			key := computeCacheKey(slot, proposerIndex, index)
-			service.seenDataColumnCache.Add(key, true)
+			service.seenDataColumnCache.Add(slot, key, true)
 		}
 
 		err := service.broadcastMissingDataColumnSidecars(slot, proposerIndex, root, timeIntoSlot)
@@ -164,7 +164,7 @@ func TestBroadcastMissingDataColumnSidecars(t *testing.T) {
 
 		for _, index := range [...]uint64{1, 17, 19, 102, 117} { // 42, 75 and 87 are missing
 			key := computeCacheKey(slot, proposerIndex, index)
-			service.seenDataColumnCache.Add(key, true)
+			service.seenDataColumnCache.Add(slot, key, true)
 		}
 
 		for _, index := range [...]uint64{42, 75, 87} {
