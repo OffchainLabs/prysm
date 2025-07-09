@@ -131,15 +131,6 @@ func (fv *FakeValidator) SlasherReady(_ context.Context) error {
 	return nil
 }
 
-// CanonicalHeadSlot for mocking.
-func (fv *FakeValidator) CanonicalHeadSlot(_ context.Context) (primitives.Slot, error) {
-	fv.CanonicalHeadSlotCalled++
-	if fv.RetryTillSuccess > fv.CanonicalHeadSlotCalled {
-		return 0, api.ErrConnectionIssue
-	}
-	return 0, nil
-}
-
 // SlotDeadline for mocking.
 func (fv *FakeValidator) SlotDeadline(_ primitives.Slot) time.Time {
 	fv.SlotDeadlineCalled = true

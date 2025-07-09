@@ -138,6 +138,10 @@ func (v *validator) Done() {
 	}
 }
 
+func (v *validator) GenesisTime() uint64 {
+	return v.genesisTime
+}
+
 func (v *validator) EventsChan() <-chan *eventClient.Event {
 	return v.eventsChannel
 }
@@ -405,18 +409,6 @@ func (v *validator) checkAndLogValidatorStatus() bool {
 		}
 	}
 	return someAreActive
-}
-
-// CanonicalHeadSlot returns the slot of canonical block currently found in the
-// beacon chain via RPC.
-func (v *validator) CanonicalHeadSlot(ctx context.Context) (primitives.Slot, error) {
-	ctx, span := trace.StartSpan(ctx, "validator.CanonicalHeadSlot")
-	defer span.End()
-	head, err := v.chainClient.ChainHead(ctx, &emptypb.Empty{})
-	if err != nil {
-		return 0, errors.Wrap(client.ErrConnectionIssue, err.Error())
-	}
-	return head.HeadSlot, nil
 }
 
 // NextSlot emits the next slot number at the start time of that slot.

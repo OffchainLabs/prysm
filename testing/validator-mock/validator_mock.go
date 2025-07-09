@@ -60,21 +60,6 @@ func (mr *MockValidatorMockRecorder) AccountsChangedChan() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AccountsChangedChan", reflect.TypeOf((*MockValidator)(nil).AccountsChangedChan))
 }
 
-// CanonicalHeadSlot mocks base method.
-func (m *MockValidator) CanonicalHeadSlot(arg0 context.Context) (primitives.Slot, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CanonicalHeadSlot", arg0)
-	ret0, _ := ret[0].(primitives.Slot)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// CanonicalHeadSlot indicates an expected call of CanonicalHeadSlot.
-func (mr *MockValidatorMockRecorder) CanonicalHeadSlot(arg0 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CanonicalHeadSlot", reflect.TypeOf((*MockValidator)(nil).CanonicalHeadSlot), arg0)
-}
-
 // CheckDoppelGanger mocks base method.
 func (m *MockValidator) CheckDoppelGanger(arg0 context.Context) error {
 	m.ctrl.T.Helper()
@@ -155,6 +140,20 @@ func (m *MockValidator) FindHealthyHost(arg0 context.Context) bool {
 func (mr *MockValidatorMockRecorder) FindHealthyHost(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindHealthyHost", reflect.TypeOf((*MockValidator)(nil).FindHealthyHost), arg0)
+}
+
+// GenesisTime mocks base method.
+func (m *MockValidator) GenesisTime() uint64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GenesisTime")
+	ret0, _ := ret[0].(uint64)
+	return ret0
+}
+
+// GenesisTime indicates an expected call of GenesisTime.
+func (mr *MockValidatorMockRecorder) GenesisTime() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenesisTime", reflect.TypeOf((*MockValidator)(nil).GenesisTime))
 }
 
 // Graffiti mocks base method.
