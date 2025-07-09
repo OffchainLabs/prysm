@@ -42,19 +42,11 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 	cfg.FuluForkEpoch = 5
 	params.OverrideBeaconConfig(cfg)
 
-	versionToForkEpoch := map[int]primitives.Epoch{
-		version.Altair:    params.BeaconConfig().AltairForkEpoch,
-		version.Bellatrix: params.BeaconConfig().BellatrixForkEpoch,
-		version.Capella:   params.BeaconConfig().CapellaForkEpoch,
-		version.Deneb:     params.BeaconConfig().DenebForkEpoch,
-		version.Electra:   params.BeaconConfig().ElectraForkEpoch,
-	}
-
 	for testVersion := version.Altair; testVersion <= version.Electra; testVersion++ {
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			l := util.NewTestLightClient(t, testVersion)
 
-			slot := primitives.Slot(versionToForkEpoch[testVersion] * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+			slot := primitives.Slot(params.BeaconConfig().VersionToForkEpochMap()[testVersion] * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 			blockRoot, err := l.Block.Block().HashTreeRoot()
 			require.NoError(t, err)
 
@@ -96,7 +88,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 		t.Run(version.String(testVersion)+"SSZ", func(t *testing.T) {
 			l := util.NewTestLightClient(t, testVersion)
 
-			slot := primitives.Slot(versionToForkEpoch[testVersion] * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
+			slot := primitives.Slot(params.BeaconConfig().VersionToForkEpochMap()[testVersion] * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)).Add(1)
 			blockRoot, err := l.Block.Block().HashTreeRoot()
 			require.NoError(t, err)
 

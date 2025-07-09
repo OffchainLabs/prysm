@@ -564,14 +564,6 @@ func TestStore_LightClientBootstrap_CanSaveRetrieve(t *testing.T) {
 	cfg.EpochsPerSyncCommitteePeriod = 1
 	params.OverrideBeaconConfig(cfg)
 
-	versionToForkEpoch := map[int]primitives.Epoch{
-		version.Altair:    params.BeaconConfig().AltairForkEpoch,
-		version.Bellatrix: params.BeaconConfig().BellatrixForkEpoch,
-		version.Capella:   params.BeaconConfig().CapellaForkEpoch,
-		version.Deneb:     params.BeaconConfig().DenebForkEpoch,
-		version.Electra:   params.BeaconConfig().ElectraForkEpoch,
-	}
-
 	db := setupDB(t)
 	ctx := t.Context()
 
@@ -583,7 +575,7 @@ func TestStore_LightClientBootstrap_CanSaveRetrieve(t *testing.T) {
 
 	for testVersion := version.Altair; testVersion <= version.Electra; testVersion++ {
 		t.Run(version.String(testVersion), func(t *testing.T) {
-			bootstrap, err := createDefaultLightClientBootstrap(primitives.Slot(uint64(versionToForkEpoch[testVersion]) * uint64(params.BeaconConfig().SlotsPerEpoch)))
+			bootstrap, err := createDefaultLightClientBootstrap(primitives.Slot(uint64(params.BeaconConfig().VersionToForkEpochMap()[testVersion]) * uint64(params.BeaconConfig().SlotsPerEpoch)))
 			require.NoError(t, err)
 
 			err = bootstrap.SetCurrentSyncCommittee(createRandomSyncCommittee())
