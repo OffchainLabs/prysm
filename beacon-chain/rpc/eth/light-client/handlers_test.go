@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	dbtesting "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
@@ -163,1085 +162,278 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 	config.BellatrixForkEpoch = 1
 	config.CapellaForkEpoch = 2
 	config.DenebForkEpoch = 3
+	config.ElectraForkEpoch = 4
 	params.OverrideBeaconConfig(config)
 
-	t.Run("altair", func(t *testing.T) {
-		slot := primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-
-		st, err := util.NewBeaconStateAltair()
-		require.NoError(t, err)
-		err = st.SetSlot(slot)
-		require.NoError(t, err)
-
-		db := dbtesting.SetupDB(t)
-
-		updatePeriod := uint64(slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch)))
-
-		update, err := createUpdate(t, version.Altair)
-		require.NoError(t, err)
-		err = db.SaveLightClientUpdate(ctx, updatePeriod, update)
-		require.NoError(t, err)
-
-		mockChainService := &mock.ChainService{State: st}
-		s := &Server{
-			HeadFetcher: mockChainService,
-			BeaconDB:    db,
-		}
-		startPeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-		url := fmt.Sprintf("http://foo.com/?count=1&start_period=%d", startPeriod)
-		request := httptest.NewRequest("GET", url, nil)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.GetLightClientUpdatesByRange(writer, request)
-
-		require.Equal(t, http.StatusOK, writer.Code)
-		var resp structs.LightClientUpdatesByRangeResponse
-		err = json.Unmarshal(writer.Body.Bytes(), &resp.Updates)
-		require.NoError(t, err)
-		require.Equal(t, 1, len(resp.Updates))
-		require.Equal(t, "altair", resp.Updates[0].Version)
-		updateJson, err := structs.LightClientUpdateFromConsensus(update)
-		require.NoError(t, err)
-		require.DeepEqual(t, updateJson, resp.Updates[0].Data)
-	})
-
-	t.Run("altair ssz", func(t *testing.T) {
-		slot := primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-
-		st, err := util.NewBeaconStateAltair()
-		require.NoError(t, err)
-		err = st.SetSlot(slot)
-		require.NoError(t, err)
-
-		db := dbtesting.SetupDB(t)
-
-		updatePeriod := uint64(slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch)))
-
-		update, err := createUpdate(t, version.Altair)
-		require.NoError(t, err)
-		err = db.SaveLightClientUpdate(ctx, updatePeriod, update)
-		require.NoError(t, err)
-
-		mockChainService := &mock.ChainService{State: st}
-		s := &Server{
-			HeadFetcher: mockChainService,
-			BeaconDB:    db,
-		}
-		startPeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-		url := fmt.Sprintf("http://foo.com/?count=1&start_period=%d", startPeriod)
-		request := httptest.NewRequest("GET", url, nil)
-		request.Header.Add("Accept", "application/octet-stream")
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.GetLightClientUpdatesByRange(writer, request)
-
-		require.Equal(t, http.StatusOK, writer.Code)
-		var resp pb.LightClientUpdateAltair
-		err = resp.UnmarshalSSZ(writer.Body.Bytes()[12:]) // skip the length and fork digest prefixes
-		require.NoError(t, err)
-		require.DeepEqual(t, resp.AttestedHeader, update.AttestedHeader().Proto())
-	})
-
-	t.Run("bellatrix", func(t *testing.T) {
-		slot := primitives.Slot(config.BellatrixForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-
-		st, err := util.NewBeaconStateBellatrix()
-		require.NoError(t, err)
-		err = st.SetSlot(slot)
-		require.NoError(t, err)
-
-		db := dbtesting.SetupDB(t)
-
-		updatePeriod := uint64(slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch)))
-
-		update, err := createUpdate(t, version.Bellatrix)
-		require.NoError(t, err)
-		err = db.SaveLightClientUpdate(ctx, updatePeriod, update)
-		require.NoError(t, err)
-
-		mockChainService := &mock.ChainService{State: st}
-		s := &Server{
-			HeadFetcher: mockChainService,
-			BeaconDB:    db,
-		}
-		startPeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-		url := fmt.Sprintf("http://foo.com/?count=1&start_period=%d", startPeriod)
-		request := httptest.NewRequest("GET", url, nil)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.GetLightClientUpdatesByRange(writer, request)
-
-		require.Equal(t, http.StatusOK, writer.Code)
-		var resp structs.LightClientUpdatesByRangeResponse
-		err = json.Unmarshal(writer.Body.Bytes(), &resp.Updates)
-		require.NoError(t, err)
-		require.Equal(t, 1, len(resp.Updates))
-		require.Equal(t, "bellatrix", resp.Updates[0].Version)
-		updateJson, err := structs.LightClientUpdateFromConsensus(update)
-		require.NoError(t, err)
-		require.DeepEqual(t, updateJson, resp.Updates[0].Data)
-	})
-
-	t.Run("bellatrix ssz", func(t *testing.T) {
-		slot := primitives.Slot(config.BellatrixForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-
-		st, err := util.NewBeaconStateBellatrix()
-		require.NoError(t, err)
-		err = st.SetSlot(slot)
-		require.NoError(t, err)
-
-		db := dbtesting.SetupDB(t)
-
-		updatePeriod := uint64(slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch)))
-
-		update, err := createUpdate(t, version.Bellatrix)
-		require.NoError(t, err)
-		err = db.SaveLightClientUpdate(ctx, updatePeriod, update)
-		require.NoError(t, err)
-
-		mockChainService := &mock.ChainService{State: st}
-		s := &Server{
-			HeadFetcher: mockChainService,
-			BeaconDB:    db,
-		}
-		startPeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-		url := fmt.Sprintf("http://foo.com/?count=1&start_period=%d", startPeriod)
-		request := httptest.NewRequest("GET", url, nil)
-		request.Header.Add("Accept", "application/octet-stream")
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.GetLightClientUpdatesByRange(writer, request)
-
-		require.Equal(t, http.StatusOK, writer.Code)
-		var resp pb.LightClientUpdateAltair
-		err = resp.UnmarshalSSZ(writer.Body.Bytes()[12:]) // skip the length and fork digest prefixes
-		require.NoError(t, err)
-		require.DeepEqual(t, resp.AttestedHeader, update.AttestedHeader().Proto())
-	})
-
-	t.Run("bellatrix", func(t *testing.T) {
-		slot := primitives.Slot(config.BellatrixForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-
-		st, err := util.NewBeaconStateBellatrix()
-		require.NoError(t, err)
-		err = st.SetSlot(slot)
-		require.NoError(t, err)
-
-		db := dbtesting.SetupDB(t)
-
-		updatePeriod := uint64(slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch)))
-
-		update, err := createUpdate(t, version.Bellatrix)
-		require.NoError(t, err)
-		err = db.SaveLightClientUpdate(ctx, updatePeriod, update)
-		require.NoError(t, err)
-
-		mockChainService := &mock.ChainService{State: st}
-		s := &Server{
-			HeadFetcher: mockChainService,
-			BeaconDB:    db,
-		}
-		startPeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-		url := fmt.Sprintf("http://foo.com/?count=1&start_period=%d", startPeriod)
-		request := httptest.NewRequest("GET", url, nil)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.GetLightClientUpdatesByRange(writer, request)
-
-		require.Equal(t, http.StatusOK, writer.Code)
-		var resp structs.LightClientUpdatesByRangeResponse
-		err = json.Unmarshal(writer.Body.Bytes(), &resp.Updates)
-		require.NoError(t, err)
-		require.Equal(t, 1, len(resp.Updates))
-		require.Equal(t, "bellatrix", resp.Updates[0].Version)
-		updateJson, err := structs.LightClientUpdateFromConsensus(update)
-		require.NoError(t, err)
-		require.DeepEqual(t, updateJson, resp.Updates[0].Data)
-	})
-
-	t.Run("bellatrix ssz", func(t *testing.T) {
-		slot := primitives.Slot(config.BellatrixForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-
-		st, err := util.NewBeaconStateBellatrix()
-		require.NoError(t, err)
-		err = st.SetSlot(slot)
-		require.NoError(t, err)
-
-		db := dbtesting.SetupDB(t)
-
-		updatePeriod := uint64(slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch)))
-
-		update, err := createUpdate(t, version.Bellatrix)
-		require.NoError(t, err)
-		err = db.SaveLightClientUpdate(ctx, updatePeriod, update)
-		require.NoError(t, err)
-
-		mockChainService := &mock.ChainService{State: st}
-		s := &Server{
-			HeadFetcher: mockChainService,
-			BeaconDB:    db,
-		}
-		startPeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-		url := fmt.Sprintf("http://foo.com/?count=1&start_period=%d", startPeriod)
-		request := httptest.NewRequest("GET", url, nil)
-		request.Header.Add("Accept", "application/octet-stream")
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.GetLightClientUpdatesByRange(writer, request)
-
-		require.Equal(t, http.StatusOK, writer.Code)
-		var resp pb.LightClientUpdateAltair
-		err = resp.UnmarshalSSZ(writer.Body.Bytes()[12:]) // skip the length and fork digest prefixes
-		require.NoError(t, err)
-		require.DeepEqual(t, resp.AttestedHeader, update.AttestedHeader().Proto())
-	})
-
-	t.Run("capella", func(t *testing.T) {
-		slot := primitives.Slot(config.CapellaForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-
-		st, err := util.NewBeaconStateCapella()
-		require.NoError(t, err)
-		err = st.SetSlot(slot)
-		require.NoError(t, err)
-
-		db := dbtesting.SetupDB(t)
-
-		updatePeriod := uint64(slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch)))
-
-		update, err := createUpdate(t, version.Capella)
-		require.NoError(t, err)
-
-		err = db.SaveLightClientUpdate(ctx, updatePeriod, update)
-		require.NoError(t, err)
-
-		mockChainService := &mock.ChainService{State: st}
-		s := &Server{
-			HeadFetcher: mockChainService,
-			BeaconDB:    db,
-		}
-		startPeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-		url := fmt.Sprintf("http://foo.com/?count=1&start_period=%d", startPeriod)
-		request := httptest.NewRequest("GET", url, nil)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.GetLightClientUpdatesByRange(writer, request)
-
-		require.Equal(t, http.StatusOK, writer.Code)
-		var resp structs.LightClientUpdatesByRangeResponse
-		err = json.Unmarshal(writer.Body.Bytes(), &resp.Updates)
-		require.NoError(t, err)
-		require.Equal(t, 1, len(resp.Updates))
-		require.Equal(t, "capella", resp.Updates[0].Version)
-		updateJson, err := structs.LightClientUpdateFromConsensus(update)
-		require.NoError(t, err)
-		require.DeepEqual(t, updateJson, resp.Updates[0].Data)
-	})
-
-	t.Run("capella ssz", func(t *testing.T) {
-		slot := primitives.Slot(config.CapellaForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-
-		st, err := util.NewBeaconStateCapella()
-		require.NoError(t, err)
-		err = st.SetSlot(slot)
-		require.NoError(t, err)
-
-		db := dbtesting.SetupDB(t)
-
-		updatePeriod := uint64(slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch)))
-
-		update, err := createUpdate(t, version.Capella)
-		require.NoError(t, err)
-
-		err = db.SaveLightClientUpdate(ctx, updatePeriod, update)
-		require.NoError(t, err)
-
-		mockChainService := &mock.ChainService{State: st}
-		s := &Server{
-			HeadFetcher: mockChainService,
-			BeaconDB:    db,
-		}
-		startPeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-		url := fmt.Sprintf("http://foo.com/?count=1&start_period=%d", startPeriod)
-		request := httptest.NewRequest("GET", url, nil)
-		request.Header.Add("Accept", "application/octet-stream")
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.GetLightClientUpdatesByRange(writer, request)
-
-		require.Equal(t, http.StatusOK, writer.Code)
-		var resp pb.LightClientUpdateCapella
-		err = resp.UnmarshalSSZ(writer.Body.Bytes()[12:]) // skip the length and fork digest prefixes
-		require.NoError(t, err)
-		require.DeepEqual(t, resp.AttestedHeader, update.AttestedHeader().Proto())
-	})
-
-	t.Run("deneb", func(t *testing.T) {
-		slot := primitives.Slot(config.DenebForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-
-		st, err := util.NewBeaconStateDeneb()
-		require.NoError(t, err)
-		err = st.SetSlot(slot)
-		require.NoError(t, err)
-
-		db := dbtesting.SetupDB(t)
-
-		updatePeriod := uint64(slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch)))
-
-		update, err := createUpdate(t, version.Deneb)
-		require.NoError(t, err)
-		err = db.SaveLightClientUpdate(ctx, updatePeriod, update)
-		require.NoError(t, err)
-
-		mockChainService := &mock.ChainService{State: st}
-		s := &Server{
-			HeadFetcher: mockChainService,
-			BeaconDB:    db,
-		}
-		startPeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-		url := fmt.Sprintf("http://foo.com/?count=1&start_period=%d", startPeriod)
-		request := httptest.NewRequest("GET", url, nil)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.GetLightClientUpdatesByRange(writer, request)
-
-		require.Equal(t, http.StatusOK, writer.Code)
-		var resp structs.LightClientUpdatesByRangeResponse
-		err = json.Unmarshal(writer.Body.Bytes(), &resp.Updates)
-		require.NoError(t, err)
-		require.Equal(t, 1, len(resp.Updates))
-		require.Equal(t, "deneb", resp.Updates[0].Version)
-		updateJson, err := structs.LightClientUpdateFromConsensus(update)
-		require.NoError(t, err)
-		require.DeepEqual(t, updateJson, resp.Updates[0].Data)
-	})
-
-	t.Run("deneb ssz", func(t *testing.T) {
-		slot := primitives.Slot(config.DenebForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-
-		st, err := util.NewBeaconStateDeneb()
-		require.NoError(t, err)
-		err = st.SetSlot(slot)
-		require.NoError(t, err)
-
-		db := dbtesting.SetupDB(t)
-
-		updatePeriod := uint64(slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch)))
-
-		update, err := createUpdate(t, version.Deneb)
-		require.NoError(t, err)
-		err = db.SaveLightClientUpdate(ctx, updatePeriod, update)
-		require.NoError(t, err)
-
-		mockChainService := &mock.ChainService{State: st}
-		s := &Server{
-			HeadFetcher: mockChainService,
-			BeaconDB:    db,
-		}
-		startPeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-		url := fmt.Sprintf("http://foo.com/?count=1&start_period=%d", startPeriod)
-		request := httptest.NewRequest("GET", url, nil)
-		request.Header.Add("Accept", "application/octet-stream")
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.GetLightClientUpdatesByRange(writer, request)
-
-		require.Equal(t, http.StatusOK, writer.Code)
-		var resp pb.LightClientUpdateDeneb
-		err = resp.UnmarshalSSZ(writer.Body.Bytes()[12:]) // skip the length and fork digest prefixes
-		require.NoError(t, err)
-		require.DeepEqual(t, resp.AttestedHeader, update.AttestedHeader().Proto())
-	})
-
-	t.Run("altair Multiple", func(t *testing.T) {
-		slot := primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-
-		st, err := util.NewBeaconStateAltair()
-		require.NoError(t, err)
-		headSlot := slot.Add(2 * uint64(config.SlotsPerEpoch) * uint64(config.EpochsPerSyncCommitteePeriod)) // 2 periods
-		err = st.SetSlot(headSlot)
-		require.NoError(t, err)
-
-		db := dbtesting.SetupDB(t)
-
-		updatePeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-
-		updates := make([]interfaces.LightClientUpdate, 0)
-		for i := 1; i <= 2; i++ {
-			update, err := createUpdate(t, version.Altair)
-			require.NoError(t, err)
-			updates = append(updates, update)
-		}
-
-		for _, update := range updates {
-			err := db.SaveLightClientUpdate(ctx, uint64(updatePeriod), update)
-			require.NoError(t, err)
-			updatePeriod++
-		}
-
-		mockChainService := &mock.ChainService{State: st}
-		s := &Server{
-			HeadFetcher: mockChainService,
-			BeaconDB:    db,
-		}
-		startPeriod := slot.Sub(1).Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-		url := fmt.Sprintf("http://foo.com/?count=100&start_period=%d", startPeriod)
-		request := httptest.NewRequest("GET", url, nil)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.GetLightClientUpdatesByRange(writer, request)
-
-		require.Equal(t, http.StatusOK, writer.Code)
-		var resp structs.LightClientUpdatesByRangeResponse
-		err = json.Unmarshal(writer.Body.Bytes(), &resp.Updates)
-		require.NoError(t, err)
-		require.Equal(t, 2, len(resp.Updates))
-		for i, update := range updates {
-			require.Equal(t, "altair", resp.Updates[i].Version)
-			updateJson, err := structs.LightClientUpdateFromConsensus(update)
-			require.NoError(t, err)
-			require.DeepEqual(t, updateJson, resp.Updates[i].Data)
+	t.Run("can save retrieve", func(t *testing.T) {
+		for testVersion := version.Altair; testVersion <= version.Electra; testVersion++ {
+			t.Run(version.String(testVersion), func(t *testing.T) {
+
+				slot := primitives.Slot(params.BeaconConfig().VersionToForkEpochMap()[testVersion] * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
+				startPeriod := uint64(slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch)))
+
+				db := dbtesting.SetupDB(t)
+
+				updates := make([]interfaces.LightClientUpdate, 0)
+				for i := 1; i <= 2; i++ {
+					update, err := createUpdate(t, testVersion)
+					require.NoError(t, err)
+					updates = append(updates, update)
+				}
+
+				s := &Server{
+					LCStore: lightclient.NewLightClientStore(db),
+				}
+
+				updatePeriod := startPeriod
+				for _, update := range updates {
+					err := s.LCStore.SaveLightClientUpdate(ctx, updatePeriod, update)
+					require.NoError(t, err)
+					updatePeriod++
+				}
+
+				t.Run("single update", func(t *testing.T) {
+					url := fmt.Sprintf("http://foo.com/?count=1&start_period=%d", startPeriod)
+					request := httptest.NewRequest("GET", url, nil)
+					writer := httptest.NewRecorder()
+					writer.Body = &bytes.Buffer{}
+
+					s.GetLightClientUpdatesByRange(writer, request)
+
+					require.Equal(t, http.StatusOK, writer.Code)
+					var resp structs.LightClientUpdatesByRangeResponse
+					err := json.Unmarshal(writer.Body.Bytes(), &resp.Updates)
+					require.NoError(t, err)
+					require.Equal(t, 1, len(resp.Updates))
+					require.Equal(t, version.String(testVersion), resp.Updates[0].Version)
+					updateJson, err := structs.LightClientUpdateFromConsensus(updates[0])
+					require.NoError(t, err)
+					require.DeepEqual(t, updateJson, resp.Updates[0].Data)
+				})
+
+				t.Run("single update ssz", func(t *testing.T) {
+					url := fmt.Sprintf("http://foo.com/?count=1&start_period=%d", startPeriod)
+					request := httptest.NewRequest("GET", url, nil)
+					request.Header.Add("Accept", "application/octet-stream")
+					writer := httptest.NewRecorder()
+					writer.Body = &bytes.Buffer{}
+
+					s.GetLightClientUpdatesByRange(writer, request)
+
+					require.Equal(t, http.StatusOK, writer.Code)
+					var resp proto.Message
+					switch testVersion {
+					case version.Altair:
+						resp = &pb.LightClientUpdateAltair{}
+					case version.Bellatrix:
+						resp = &pb.LightClientUpdateAltair{}
+					case version.Capella:
+						resp = &pb.LightClientUpdateCapella{}
+					case version.Deneb:
+						resp = &pb.LightClientUpdateDeneb{}
+					case version.Electra:
+						resp = &pb.LightClientUpdateElectra{}
+					default:
+						t.Fatalf("Unsupported version %s", version.String(testVersion))
+					}
+					obj := resp.(ssz.Unmarshaler)
+					err := obj.UnmarshalSSZ(writer.Body.Bytes()[12:]) // skip the length and fork digest prefixes
+					require.NoError(t, err)
+
+					ussz, err := updates[0].MarshalSSZ()
+					require.NoError(t, err)
+					require.DeepSSZEqual(t, ussz, writer.Body.Bytes()[12:])
+				})
+
+				t.Run("multiple updates", func(t *testing.T) {
+					url := fmt.Sprintf("http://foo.com/?count=100&start_period=%d", startPeriod)
+					request := httptest.NewRequest("GET", url, nil)
+					writer := httptest.NewRecorder()
+					writer.Body = &bytes.Buffer{}
+
+					s.GetLightClientUpdatesByRange(writer, request)
+
+					require.Equal(t, http.StatusOK, writer.Code)
+					var resp structs.LightClientUpdatesByRangeResponse
+					err := json.Unmarshal(writer.Body.Bytes(), &resp.Updates)
+					require.NoError(t, err)
+					require.Equal(t, 2, len(resp.Updates))
+					for i, update := range updates {
+						require.Equal(t, version.String(testVersion), resp.Updates[i].Version)
+						updateJson, err := structs.LightClientUpdateFromConsensus(update)
+						require.NoError(t, err)
+						require.DeepEqual(t, updateJson, resp.Updates[i].Data)
+					}
+				})
+
+				t.Run("multiple updates ssz", func(t *testing.T) {
+					url := fmt.Sprintf("http://foo.com/?count=100&start_period=%d", startPeriod)
+					request := httptest.NewRequest("GET", url, nil)
+					request.Header.Add("Accept", "application/octet-stream")
+					writer := httptest.NewRecorder()
+					writer.Body = &bytes.Buffer{}
+
+					s.GetLightClientUpdatesByRange(writer, request)
+
+					require.Equal(t, http.StatusOK, writer.Code)
+
+					offset := 0
+					for i := 0; offset < writer.Body.Len(); i++ {
+						updateLen := int(ssz.UnmarshallUint64(writer.Body.Bytes()[offset:offset+8]) - 4)
+						offset += 12
+
+						var resp proto.Message
+						switch testVersion {
+						case version.Altair:
+							resp = &pb.LightClientUpdateAltair{}
+						case version.Bellatrix:
+							resp = &pb.LightClientUpdateAltair{}
+						case version.Capella:
+							resp = &pb.LightClientUpdateCapella{}
+						case version.Deneb:
+							resp = &pb.LightClientUpdateDeneb{}
+						case version.Electra:
+							resp = &pb.LightClientUpdateElectra{}
+						default:
+							t.Fatalf("Unsupported version %s", version.String(testVersion))
+						}
+						obj := resp.(ssz.Unmarshaler)
+
+						updateBytes := writer.Body.Bytes()[offset : offset+updateLen]
+
+						err := obj.UnmarshalSSZ(updateBytes)
+						require.NoError(t, err)
+
+						ussz, err := updates[i].MarshalSSZ()
+						require.NoError(t, err)
+						require.DeepSSZEqual(t, ussz, updateBytes)
+
+						offset += updateLen
+					}
+				})
+			})
 		}
 	})
 
-	t.Run("altair Multiple ssz", func(t *testing.T) {
-		slot := primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
+	t.Run("updates from multiple forks", func(t *testing.T) {
+		for testVersion := version.Altair; testVersion < version.Electra; testVersion++ { // 1-2, 2-3, 3-4, 4-5
+			t.Run(version.String(testVersion)+"-"+version.String(testVersion+1), func(t *testing.T) {
+				firstForkSlot := primitives.Slot(params.BeaconConfig().VersionToForkEpochMap()[testVersion] * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
+				secondForkSlot := primitives.Slot(params.BeaconConfig().VersionToForkEpochMap()[testVersion+1] * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
 
-		st, err := util.NewBeaconStateAltair()
-		require.NoError(t, err)
-		headSlot := slot.Add(2 * uint64(config.SlotsPerEpoch) * uint64(config.EpochsPerSyncCommitteePeriod)) // 2 periods
-		err = st.SetSlot(headSlot)
-		require.NoError(t, err)
+				db := dbtesting.SetupDB(t)
+				s := &Server{
+					LCStore: lightclient.NewLightClientStore(db),
+				}
 
-		db := dbtesting.SetupDB(t)
+				updates := make([]interfaces.LightClientUpdate, 2)
 
-		updatePeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
+				updatePeriod := firstForkSlot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
+				startPeriod := updatePeriod
 
-		updates := make([]interfaces.LightClientUpdate, 0)
-		for i := 1; i <= 2; i++ {
-			update, err := createUpdate(t, version.Altair)
-			require.NoError(t, err)
-			updates = append(updates, update)
+				var err error
+				updates[0], err = createUpdate(t, testVersion)
+				require.NoError(t, err)
+
+				err = s.LCStore.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[0])
+				require.NoError(t, err)
+
+				updatePeriod = secondForkSlot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
+
+				updates[1], err = createUpdate(t, testVersion+1)
+				require.NoError(t, err)
+
+				err = s.LCStore.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[1])
+				require.NoError(t, err)
+
+				t.Run("json", func(t *testing.T) {
+					url := fmt.Sprintf("http://foo.com/?count=100&start_period=%d", startPeriod)
+					request := httptest.NewRequest("GET", url, nil)
+					writer := httptest.NewRecorder()
+					writer.Body = &bytes.Buffer{}
+
+					s.GetLightClientUpdatesByRange(writer, request)
+
+					require.Equal(t, http.StatusOK, writer.Code)
+					var resp structs.LightClientUpdatesByRangeResponse
+					err = json.Unmarshal(writer.Body.Bytes(), &resp.Updates)
+					require.NoError(t, err)
+					require.Equal(t, 2, len(resp.Updates))
+					for i, update := range updates {
+						if i < 1 {
+							require.Equal(t, version.String(testVersion), resp.Updates[i].Version)
+						} else {
+							require.Equal(t, version.String(testVersion+1), resp.Updates[i].Version)
+						}
+						updateJson, err := structs.LightClientUpdateFromConsensus(update)
+						require.NoError(t, err)
+						require.DeepEqual(t, updateJson, resp.Updates[i].Data)
+					}
+				})
+
+				t.Run("ssz", func(t *testing.T) {
+					url := fmt.Sprintf("http://foo.com/?count=100&start_period=%d", startPeriod)
+					request := httptest.NewRequest("GET", url, nil)
+					request.Header.Add("Accept", "application/octet-stream")
+					writer := httptest.NewRecorder()
+					writer.Body = &bytes.Buffer{}
+
+					s.GetLightClientUpdatesByRange(writer, request)
+
+					require.Equal(t, http.StatusOK, writer.Code)
+
+					offset := 0
+					updateLen := int(ssz.UnmarshallUint64(writer.Body.Bytes()[offset:offset+8]) - 4)
+					offset += 12
+					var resp proto.Message
+					switch testVersion {
+					case version.Altair:
+						resp = &pb.LightClientUpdateAltair{}
+					case version.Bellatrix:
+						resp = &pb.LightClientUpdateAltair{}
+					case version.Capella:
+						resp = &pb.LightClientUpdateCapella{}
+					case version.Deneb:
+						resp = &pb.LightClientUpdateDeneb{}
+					case version.Electra:
+						resp = &pb.LightClientUpdateElectra{}
+					default:
+						t.Fatalf("Unsupported version %s", version.String(testVersion))
+					}
+					obj := resp.(ssz.Unmarshaler)
+					err = obj.UnmarshalSSZ(writer.Body.Bytes()[offset : offset+updateLen])
+					require.NoError(t, err)
+					u0ssz, err := updates[0].MarshalSSZ()
+					require.NoError(t, err)
+					require.DeepSSZEqual(t, u0ssz, writer.Body.Bytes()[offset:offset+updateLen])
+
+					offset += updateLen
+					updateLen = int(ssz.UnmarshallUint64(writer.Body.Bytes()[offset:offset+8]) - 4)
+					offset += 12
+					var resp1 proto.Message
+					switch testVersion + 1 {
+					case version.Altair:
+						resp1 = &pb.LightClientUpdateAltair{}
+					case version.Bellatrix:
+						resp1 = &pb.LightClientUpdateAltair{}
+					case version.Capella:
+						resp1 = &pb.LightClientUpdateCapella{}
+					case version.Deneb:
+						resp1 = &pb.LightClientUpdateDeneb{}
+					case version.Electra:
+						resp1 = &pb.LightClientUpdateElectra{}
+					default:
+						t.Fatalf("Unsupported version %s", version.String(testVersion+1))
+					}
+					obj1 := resp1.(ssz.Unmarshaler)
+					err = obj1.UnmarshalSSZ(writer.Body.Bytes()[offset : offset+updateLen])
+					require.NoError(t, err)
+					u1ssz, err := updates[1].MarshalSSZ()
+					require.NoError(t, err)
+					require.DeepSSZEqual(t, u1ssz, writer.Body.Bytes()[offset:offset+updateLen])
+				})
+			})
 		}
-
-		for _, update := range updates {
-			err := db.SaveLightClientUpdate(ctx, uint64(updatePeriod), update)
-			require.NoError(t, err)
-			updatePeriod++
-		}
-
-		mockChainService := &mock.ChainService{State: st}
-		s := &Server{
-			HeadFetcher: mockChainService,
-			BeaconDB:    db,
-		}
-		startPeriod := slot.Sub(1).Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-		url := fmt.Sprintf("http://foo.com/?count=100&start_period=%d", startPeriod)
-		request := httptest.NewRequest("GET", url, nil)
-		request.Header.Add("Accept", "application/octet-stream")
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.GetLightClientUpdatesByRange(writer, request)
-
-		require.Equal(t, http.StatusOK, writer.Code)
-
-		offset := 0
-		for i := 0; offset < writer.Body.Len(); i++ {
-			updateLen := int(ssz.UnmarshallUint64(writer.Body.Bytes()[offset:offset+8]) - 4)
-			offset += 12
-			var resp pb.LightClientUpdateAltair
-			err = resp.UnmarshalSSZ(writer.Body.Bytes()[offset : offset+updateLen])
-			require.NoError(t, err)
-			require.DeepEqual(t, resp.AttestedHeader, updates[i].AttestedHeader().Proto())
-			offset += updateLen
-		}
-	})
-
-	t.Run("capella Multiple", func(t *testing.T) {
-		slot := primitives.Slot(config.CapellaForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-
-		st, err := util.NewBeaconStateAltair()
-		require.NoError(t, err)
-		headSlot := slot.Add(2 * uint64(config.SlotsPerEpoch) * uint64(config.EpochsPerSyncCommitteePeriod)) // 2 periods
-		err = st.SetSlot(headSlot)
-		require.NoError(t, err)
-
-		db := dbtesting.SetupDB(t)
-
-		updatePeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-
-		updates := make([]interfaces.LightClientUpdate, 0)
-		for i := 0; i < 2; i++ {
-			update, err := createUpdate(t, version.Capella)
-			require.NoError(t, err)
-			updates = append(updates, update)
-		}
-
-		for _, update := range updates {
-			err := db.SaveLightClientUpdate(ctx, uint64(updatePeriod), update)
-			require.NoError(t, err)
-			updatePeriod++
-		}
-
-		mockChainService := &mock.ChainService{State: st}
-		s := &Server{
-			HeadFetcher: mockChainService,
-			BeaconDB:    db,
-		}
-		startPeriod := slot.Sub(1).Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-		url := fmt.Sprintf("http://foo.com/?count=100&start_period=%d", startPeriod)
-		request := httptest.NewRequest("GET", url, nil)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.GetLightClientUpdatesByRange(writer, request)
-
-		require.Equal(t, http.StatusOK, writer.Code)
-		var resp structs.LightClientUpdatesByRangeResponse
-		err = json.Unmarshal(writer.Body.Bytes(), &resp.Updates)
-		require.NoError(t, err)
-		require.Equal(t, 2, len(resp.Updates))
-		for i, update := range updates {
-			require.Equal(t, "capella", resp.Updates[i].Version)
-			updateJson, err := structs.LightClientUpdateFromConsensus(update)
-			require.NoError(t, err)
-			require.DeepEqual(t, updateJson, resp.Updates[i].Data)
-		}
-	})
-
-	t.Run("capella Multiple ssz", func(t *testing.T) {
-		slot := primitives.Slot(config.CapellaForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-
-		st, err := util.NewBeaconStateAltair()
-		require.NoError(t, err)
-		headSlot := slot.Add(2 * uint64(config.SlotsPerEpoch) * uint64(config.EpochsPerSyncCommitteePeriod)) // 2 periods
-		err = st.SetSlot(headSlot)
-		require.NoError(t, err)
-
-		db := dbtesting.SetupDB(t)
-
-		updatePeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-
-		updates := make([]interfaces.LightClientUpdate, 0)
-		for i := 0; i < 2; i++ {
-			update, err := createUpdate(t, version.Capella)
-			require.NoError(t, err)
-			updates = append(updates, update)
-		}
-
-		for _, update := range updates {
-			err := db.SaveLightClientUpdate(ctx, uint64(updatePeriod), update)
-			require.NoError(t, err)
-			updatePeriod++
-		}
-
-		mockChainService := &mock.ChainService{State: st}
-		s := &Server{
-			HeadFetcher: mockChainService,
-			BeaconDB:    db,
-		}
-		startPeriod := slot.Sub(1).Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-		url := fmt.Sprintf("http://foo.com/?count=100&start_period=%d", startPeriod)
-		request := httptest.NewRequest("GET", url, nil)
-		request.Header.Add("Accept", "application/octet-stream")
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.GetLightClientUpdatesByRange(writer, request)
-
-		require.Equal(t, http.StatusOK, writer.Code)
-
-		offset := 0
-		for i := 0; offset < writer.Body.Len(); i++ {
-			updateLen := int(ssz.UnmarshallUint64(writer.Body.Bytes()[offset:offset+8]) - 4)
-			offset += 12
-			var resp pb.LightClientUpdateCapella
-			err = resp.UnmarshalSSZ(writer.Body.Bytes()[offset : offset+updateLen])
-			require.NoError(t, err)
-			require.DeepEqual(t, resp.AttestedHeader, updates[i].AttestedHeader().Proto())
-			offset += updateLen
-		}
-	})
-
-	t.Run("deneb Multiple", func(t *testing.T) {
-		slot := primitives.Slot(config.DenebForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-
-		st, err := util.NewBeaconStateAltair()
-		require.NoError(t, err)
-		headSlot := slot.Add(2 * uint64(config.SlotsPerEpoch) * uint64(config.EpochsPerSyncCommitteePeriod))
-		err = st.SetSlot(headSlot)
-		require.NoError(t, err)
-
-		db := dbtesting.SetupDB(t)
-
-		updatePeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-
-		updates := make([]interfaces.LightClientUpdate, 0)
-		for i := 0; i < 2; i++ {
-			update, err := createUpdate(t, version.Deneb)
-			require.NoError(t, err)
-			updates = append(updates, update)
-		}
-
-		for _, update := range updates {
-			err := db.SaveLightClientUpdate(ctx, uint64(updatePeriod), update)
-			require.NoError(t, err)
-			updatePeriod++
-		}
-		mockChainService := &mock.ChainService{State: st}
-		s := &Server{
-			HeadFetcher: mockChainService,
-			BeaconDB:    db,
-		}
-		startPeriod := slot.Sub(1).Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-		url := fmt.Sprintf("http://foo.com/?count=100&start_period=%d", startPeriod)
-		request := httptest.NewRequest("GET", url, nil)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.GetLightClientUpdatesByRange(writer, request)
-
-		require.Equal(t, http.StatusOK, writer.Code)
-		var resp structs.LightClientUpdatesByRangeResponse
-		err = json.Unmarshal(writer.Body.Bytes(), &resp.Updates)
-		require.NoError(t, err)
-		require.Equal(t, 2, len(resp.Updates))
-		for i, update := range updates {
-			require.Equal(t, "deneb", resp.Updates[i].Version)
-			updateJson, err := structs.LightClientUpdateFromConsensus(update)
-			require.NoError(t, err)
-			require.DeepEqual(t, updateJson, resp.Updates[i].Data)
-		}
-	})
-
-	t.Run("deneb Multiple", func(t *testing.T) {
-		slot := primitives.Slot(config.DenebForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-
-		st, err := util.NewBeaconStateAltair()
-		require.NoError(t, err)
-		headSlot := slot.Add(2 * uint64(config.SlotsPerEpoch) * uint64(config.EpochsPerSyncCommitteePeriod))
-		err = st.SetSlot(headSlot)
-		require.NoError(t, err)
-
-		db := dbtesting.SetupDB(t)
-
-		updatePeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-
-		updates := make([]interfaces.LightClientUpdate, 0)
-		for i := 0; i < 2; i++ {
-			update, err := createUpdate(t, version.Deneb)
-			require.NoError(t, err)
-			updates = append(updates, update)
-		}
-
-		for _, update := range updates {
-			err := db.SaveLightClientUpdate(ctx, uint64(updatePeriod), update)
-			require.NoError(t, err)
-			updatePeriod++
-		}
-		mockChainService := &mock.ChainService{State: st}
-		s := &Server{
-			HeadFetcher: mockChainService,
-			BeaconDB:    db,
-		}
-		startPeriod := slot.Sub(1).Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-		url := fmt.Sprintf("http://foo.com/?count=100&start_period=%d", startPeriod)
-		request := httptest.NewRequest("GET", url, nil)
-		request.Header.Add("Accept", "application/octet-stream")
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.GetLightClientUpdatesByRange(writer, request)
-
-		require.Equal(t, http.StatusOK, writer.Code)
-
-		offset := 0
-		for i := 0; offset < writer.Body.Len(); i++ {
-			updateLen := int(ssz.UnmarshallUint64(writer.Body.Bytes()[offset:offset+8]) - 4)
-			offset += 12
-			var resp pb.LightClientUpdateDeneb
-			err = resp.UnmarshalSSZ(writer.Body.Bytes()[offset : offset+updateLen])
-			require.NoError(t, err)
-			require.DeepEqual(t, resp.AttestedHeader, updates[i].AttestedHeader().Proto())
-			offset += updateLen
-		}
-	})
-
-	t.Run("multiple forks - altair, bellatrix", func(t *testing.T) {
-		slotBellatrix := primitives.Slot(config.BellatrixForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-		slotAltair := primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-
-		st, err := util.NewBeaconStateBellatrix()
-		require.NoError(t, err)
-		headSlot := slotBellatrix.Add(1)
-		err = st.SetSlot(headSlot)
-		require.NoError(t, err)
-
-		db := dbtesting.SetupDB(t)
-
-		updates := make([]interfaces.LightClientUpdate, 2)
-
-		updatePeriod := slotAltair.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-
-		updates[0], err = createUpdate(t, version.Altair)
-		require.NoError(t, err)
-
-		err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[0])
-		require.NoError(t, err)
-
-		updatePeriod = slotBellatrix.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-
-		updates[1], err = createUpdate(t, version.Bellatrix)
-		require.NoError(t, err)
-
-		err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[1])
-		require.NoError(t, err)
-
-		mockChainService := &mock.ChainService{State: st}
-		s := &Server{
-			HeadFetcher: mockChainService,
-			BeaconDB:    db,
-		}
-		startPeriod := 0
-		url := fmt.Sprintf("http://foo.com/?count=100&start_period=%d", startPeriod)
-		request := httptest.NewRequest("GET", url, nil)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.GetLightClientUpdatesByRange(writer, request)
-
-		require.Equal(t, http.StatusOK, writer.Code)
-		var resp structs.LightClientUpdatesByRangeResponse
-		err = json.Unmarshal(writer.Body.Bytes(), &resp.Updates)
-		require.NoError(t, err)
-		require.Equal(t, 2, len(resp.Updates))
-		for i, update := range updates {
-			if i < 1 {
-				require.Equal(t, "altair", resp.Updates[i].Version)
-			} else {
-				require.Equal(t, "bellatrix", resp.Updates[i].Version)
-			}
-			updateJson, err := structs.LightClientUpdateFromConsensus(update)
-			require.NoError(t, err)
-			require.DeepEqual(t, updateJson, resp.Updates[i].Data)
-		}
-	})
-
-	t.Run("multiple forks - altair, bellatrix - ssz", func(t *testing.T) {
-		slotBellatrix := primitives.Slot(config.BellatrixForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-		slotAltair := primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-
-		st, err := util.NewBeaconStateBellatrix()
-		require.NoError(t, err)
-		headSlot := slotBellatrix.Add(1)
-		err = st.SetSlot(headSlot)
-		require.NoError(t, err)
-
-		db := dbtesting.SetupDB(t)
-
-		updates := make([]interfaces.LightClientUpdate, 2)
-
-		updatePeriod := slotAltair.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-
-		updates[0], err = createUpdate(t, version.Altair)
-		require.NoError(t, err)
-
-		err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[0])
-		require.NoError(t, err)
-
-		updatePeriod = slotBellatrix.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-
-		updates[1], err = createUpdate(t, version.Bellatrix)
-		require.NoError(t, err)
-
-		err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[1])
-		require.NoError(t, err)
-
-		mockChainService := &mock.ChainService{State: st}
-		s := &Server{
-			HeadFetcher: mockChainService,
-			BeaconDB:    db,
-		}
-		startPeriod := 0
-		url := fmt.Sprintf("http://foo.com/?count=100&start_period=%d", startPeriod)
-		request := httptest.NewRequest("GET", url, nil)
-		request.Header.Add("Accept", "application/octet-stream")
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.GetLightClientUpdatesByRange(writer, request)
-
-		require.Equal(t, http.StatusOK, writer.Code)
-
-		offset := 0
-		updateLen := int(ssz.UnmarshallUint64(writer.Body.Bytes()[offset:offset+8]) - 4)
-		offset += 12
-		var resp pb.LightClientUpdateAltair
-		err = resp.UnmarshalSSZ(writer.Body.Bytes()[offset : offset+updateLen])
-		require.NoError(t, err)
-		require.DeepEqual(t, resp.AttestedHeader, updates[0].AttestedHeader().Proto())
-		offset += updateLen
-		updateLen = int(ssz.UnmarshallUint64(writer.Body.Bytes()[offset:offset+8]) - 4)
-		offset += 12
-		var resp1 pb.LightClientUpdateAltair
-		err = resp1.UnmarshalSSZ(writer.Body.Bytes()[offset : offset+updateLen])
-		require.NoError(t, err)
-		require.DeepEqual(t, resp1.AttestedHeader, updates[1].AttestedHeader().Proto())
-	})
-
-	t.Run("multiple forks - bellatrix, capella", func(t *testing.T) {
-		slotCapella := primitives.Slot(config.CapellaForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-		slotBellatrix := primitives.Slot(config.BellatrixForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-
-		st, err := util.NewBeaconStateCapella()
-		require.NoError(t, err)
-		headSlot := slotCapella.Add(1)
-		err = st.SetSlot(headSlot)
-		require.NoError(t, err)
-
-		db := dbtesting.SetupDB(t)
-
-		updates := make([]interfaces.LightClientUpdate, 2)
-
-		updatePeriod := slotBellatrix.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-
-		updates[0], err = createUpdate(t, version.Bellatrix)
-		require.NoError(t, err)
-
-		err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[0])
-		require.NoError(t, err)
-
-		updatePeriod = slotCapella.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-
-		updates[1], err = createUpdate(t, version.Capella)
-		require.NoError(t, err)
-
-		err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[1])
-		require.NoError(t, err)
-
-		mockChainService := &mock.ChainService{State: st}
-		s := &Server{
-			HeadFetcher: mockChainService,
-			BeaconDB:    db,
-		}
-		startPeriod := slotBellatrix.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-		url := fmt.Sprintf("http://foo.com/?count=100&start_period=%d", startPeriod)
-		request := httptest.NewRequest("GET", url, nil)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.GetLightClientUpdatesByRange(writer, request)
-
-		require.Equal(t, http.StatusOK, writer.Code)
-		var resp structs.LightClientUpdatesByRangeResponse
-		err = json.Unmarshal(writer.Body.Bytes(), &resp.Updates)
-		require.NoError(t, err)
-		require.Equal(t, 2, len(resp.Updates))
-		for i, update := range updates {
-			if i < 1 {
-				require.Equal(t, "bellatrix", resp.Updates[i].Version)
-			} else {
-				require.Equal(t, "capella", resp.Updates[i].Version)
-			}
-			updateJson, err := structs.LightClientUpdateFromConsensus(update)
-			require.NoError(t, err)
-			require.DeepEqual(t, updateJson, resp.Updates[i].Data)
-		}
-	})
-
-	t.Run("multiple forks - bellatrix, capella - ssz", func(t *testing.T) {
-		slotCapella := primitives.Slot(config.CapellaForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-		slotBellatrix := primitives.Slot(config.BellatrixForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-
-		st, err := util.NewBeaconStateCapella()
-		require.NoError(t, err)
-		headSlot := slotCapella.Add(1)
-		err = st.SetSlot(headSlot)
-		require.NoError(t, err)
-
-		db := dbtesting.SetupDB(t)
-
-		updates := make([]interfaces.LightClientUpdate, 2)
-
-		updatePeriod := slotBellatrix.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-
-		updates[0], err = createUpdate(t, version.Bellatrix)
-		require.NoError(t, err)
-
-		err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[0])
-		require.NoError(t, err)
-
-		updatePeriod = slotCapella.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-
-		updates[1], err = createUpdate(t, version.Capella)
-		require.NoError(t, err)
-
-		err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[1])
-		require.NoError(t, err)
-
-		mockChainService := &mock.ChainService{State: st}
-		s := &Server{
-			HeadFetcher: mockChainService,
-			BeaconDB:    db,
-		}
-		startPeriod := slotBellatrix.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-		url := fmt.Sprintf("http://foo.com/?count=100&start_period=%d", startPeriod)
-		request := httptest.NewRequest("GET", url, nil)
-		request.Header.Add("Accept", "application/octet-stream")
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.GetLightClientUpdatesByRange(writer, request)
-
-		require.Equal(t, http.StatusOK, writer.Code)
-
-		offset := 0
-		updateLen := int(ssz.UnmarshallUint64(writer.Body.Bytes()[offset:offset+8]) - 4)
-		offset += 12
-		var resp pb.LightClientUpdateAltair
-		err = resp.UnmarshalSSZ(writer.Body.Bytes()[offset : offset+updateLen])
-		require.NoError(t, err)
-		require.DeepEqual(t, resp.AttestedHeader, updates[0].AttestedHeader().Proto())
-		offset += updateLen
-		updateLen = int(ssz.UnmarshallUint64(writer.Body.Bytes()[offset:offset+8]) - 4)
-		offset += 12
-		var resp1 pb.LightClientUpdateCapella
-		err = resp1.UnmarshalSSZ(writer.Body.Bytes()[offset : offset+updateLen])
-		require.NoError(t, err)
-		require.DeepEqual(t, resp1.AttestedHeader, updates[1].AttestedHeader().Proto())
-	})
-
-	t.Run("multiple forks - capella, deneb", func(t *testing.T) {
-		slotDeneb := primitives.Slot(config.DenebForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-		slotCapella := primitives.Slot(config.CapellaForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-
-		st, err := util.NewBeaconStateAltair()
-		require.NoError(t, err)
-		headSlot := slotDeneb.Add(1)
-		err = st.SetSlot(headSlot)
-		require.NoError(t, err)
-
-		db := dbtesting.SetupDB(t)
-
-		updates := make([]interfaces.LightClientUpdate, 2)
-
-		updatePeriod := slotCapella.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-
-		updates[0], err = createUpdate(t, version.Capella)
-		require.NoError(t, err)
-
-		err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[0])
-		require.NoError(t, err)
-
-		updatePeriod = slotDeneb.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-
-		updates[1], err = createUpdate(t, version.Deneb)
-		require.NoError(t, err)
-
-		err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[1])
-		require.NoError(t, err)
-
-		mockChainService := &mock.ChainService{State: st}
-		s := &Server{
-			HeadFetcher: mockChainService,
-			BeaconDB:    db,
-		}
-		startPeriod := slotCapella.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-		url := fmt.Sprintf("http://foo.com/?count=100&start_period=%d", startPeriod)
-		request := httptest.NewRequest("GET", url, nil)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.GetLightClientUpdatesByRange(writer, request)
-
-		require.Equal(t, http.StatusOK, writer.Code)
-		var resp structs.LightClientUpdatesByRangeResponse
-		err = json.Unmarshal(writer.Body.Bytes(), &resp.Updates)
-		require.NoError(t, err)
-		require.Equal(t, 2, len(resp.Updates))
-		for i, update := range updates {
-			if i < 1 {
-				require.Equal(t, "capella", resp.Updates[i].Version)
-			} else {
-				require.Equal(t, "deneb", resp.Updates[i].Version)
-			}
-			updateJson, err := structs.LightClientUpdateFromConsensus(update)
-			require.NoError(t, err)
-			require.DeepEqual(t, updateJson, resp.Updates[i].Data)
-		}
-	})
-
-	t.Run("multiple forks - capella, deneb - ssz", func(t *testing.T) {
-		slotDeneb := primitives.Slot(config.DenebForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-		slotCapella := primitives.Slot(config.CapellaForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
-
-		st, err := util.NewBeaconStateAltair()
-		require.NoError(t, err)
-		headSlot := slotDeneb.Add(1)
-		err = st.SetSlot(headSlot)
-		require.NoError(t, err)
-
-		db := dbtesting.SetupDB(t)
-
-		updates := make([]interfaces.LightClientUpdate, 2)
-
-		updatePeriod := slotCapella.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-
-		updates[0], err = createUpdate(t, version.Capella)
-		require.NoError(t, err)
-
-		err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[0])
-		require.NoError(t, err)
-
-		updatePeriod = slotDeneb.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-
-		updates[1], err = createUpdate(t, version.Deneb)
-		require.NoError(t, err)
-
-		err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[1])
-		require.NoError(t, err)
-
-		mockChainService := &mock.ChainService{State: st}
-		s := &Server{
-			HeadFetcher: mockChainService,
-			BeaconDB:    db,
-		}
-		startPeriod := slotCapella.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-		url := fmt.Sprintf("http://foo.com/?count=100&start_period=%d", startPeriod)
-		request := httptest.NewRequest("GET", url, nil)
-		request.Header.Add("Accept", "application/octet-stream")
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-
-		s.GetLightClientUpdatesByRange(writer, request)
-
-		require.Equal(t, http.StatusOK, writer.Code)
-
-		offset := 0
-		updateLen := int(ssz.UnmarshallUint64(writer.Body.Bytes()[offset:offset+8]) - 4)
-		offset += 12
-		var resp pb.LightClientUpdateCapella
-		err = resp.UnmarshalSSZ(writer.Body.Bytes()[offset : offset+updateLen])
-		require.NoError(t, err)
-		require.DeepEqual(t, resp.AttestedHeader, updates[0].AttestedHeader().Proto())
-		offset += updateLen
-		updateLen = int(ssz.UnmarshallUint64(writer.Body.Bytes()[offset:offset+8]) - 4)
-		offset += 12
-		var resp1 pb.LightClientUpdateDeneb
-		err = resp1.UnmarshalSSZ(writer.Body.Bytes()[offset : offset+updateLen])
-		require.NoError(t, err)
-		require.DeepEqual(t, resp1.AttestedHeader, updates[1].AttestedHeader().Proto())
 	})
 
 	t.Run("count bigger than limit", func(t *testing.T) {
@@ -1249,34 +441,25 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 		params.OverrideBeaconConfig(config)
 		slot := primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
 
-		st, err := util.NewBeaconStateAltair()
-		require.NoError(t, err)
-		headSlot := slot.Add(4 * uint64(config.SlotsPerEpoch) * uint64(config.EpochsPerSyncCommitteePeriod)) // 4 periods
-		err = st.SetSlot(headSlot)
-		require.NoError(t, err)
-
 		db := dbtesting.SetupDB(t)
+		s := &Server{
+			LCStore: lightclient.NewLightClientStore(db),
+		}
 
 		updates := make([]interfaces.LightClientUpdate, 3)
 
 		updatePeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-
+		var err error
 		for i := 0; i < 3; i++ {
-
 			updates[i], err = createUpdate(t, version.Altair)
 			require.NoError(t, err)
 
-			err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[i])
+			err = s.LCStore.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[i])
 			require.NoError(t, err)
 
 			updatePeriod++
 		}
 
-		mockChainService := &mock.ChainService{State: st}
-		s := &Server{
-			HeadFetcher: mockChainService,
-			BeaconDB:    db,
-		}
 		startPeriod := 0
 		url := fmt.Sprintf("http://foo.com/?count=4&start_period=%d", startPeriod)
 		request := httptest.NewRequest("GET", url, nil)
@@ -1305,33 +488,26 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 		params.OverrideBeaconConfig(config)
 		slot := primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
 
-		st, err := util.NewBeaconStateAltair()
-		require.NoError(t, err)
-		headSlot := slot.Add(4 * uint64(config.SlotsPerEpoch) * uint64(config.EpochsPerSyncCommitteePeriod)) // 4 periods
-		err = st.SetSlot(headSlot)
-		require.NoError(t, err)
-
 		db := dbtesting.SetupDB(t)
+		s := &Server{
+			LCStore: lightclient.NewLightClientStore(db),
+		}
 
 		updates := make([]interfaces.LightClientUpdate, 3)
 
 		updatePeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
 
+		var err error
 		for i := 0; i < 3; i++ {
 			updates[i], err = createUpdate(t, version.Altair)
 			require.NoError(t, err)
 
-			err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[i])
+			err = s.LCStore.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[i])
 			require.NoError(t, err)
 
 			updatePeriod++
 		}
 
-		mockChainService := &mock.ChainService{State: st}
-		s := &Server{
-			HeadFetcher: mockChainService,
-			BeaconDB:    db,
-		}
 		startPeriod := 0
 		url := fmt.Sprintf("http://foo.com/?count=10&start_period=%d", startPeriod)
 		request := httptest.NewRequest("GET", url, nil)
@@ -1357,9 +533,8 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 
 	t.Run("start period before altair", func(t *testing.T) {
 		db := dbtesting.SetupDB(t)
-
 		s := &Server{
-			BeaconDB: db,
+			LCStore: lightclient.NewLightClientStore(db),
 		}
 		startPeriod := 0
 		url := fmt.Sprintf("http://foo.com/?count=128&start_period=%d", startPeriod)
@@ -1379,39 +554,31 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 	t.Run("missing updates", func(t *testing.T) {
 		slot := primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
 
-		st, err := util.NewBeaconStateAltair()
-		require.NoError(t, err)
-		headSlot := slot.Add(4 * uint64(config.SlotsPerEpoch) * uint64(config.EpochsPerSyncCommitteePeriod)) // 4 periods
-		err = st.SetSlot(headSlot)
-		require.NoError(t, err)
-
 		t.Run("missing update in the middle", func(t *testing.T) {
 			db := dbtesting.SetupDB(t)
+			s := &Server{
+				LCStore: lightclient.NewLightClientStore(db),
+			}
 
 			updates := make([]interfaces.LightClientUpdate, 3)
 
 			updatePeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
 
+			var err error
 			for i := 0; i < 3; i++ {
 				if i == 1 { // skip this update
 					updatePeriod++
 					continue
 				}
-
 				updates[i], err = createUpdate(t, version.Altair)
 				require.NoError(t, err)
 
-				err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[i])
+				err = s.LCStore.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[i])
 				require.NoError(t, err)
 
 				updatePeriod++
 			}
 
-			mockChainService := &mock.ChainService{State: st}
-			s := &Server{
-				HeadFetcher: mockChainService,
-				BeaconDB:    db,
-			}
 			startPeriod := 0
 			url := fmt.Sprintf("http://foo.com/?count=10&start_period=%d", startPeriod)
 			request := httptest.NewRequest("GET", url, nil)
@@ -1433,11 +600,15 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 
 		t.Run("missing update at the beginning", func(t *testing.T) {
 			db := dbtesting.SetupDB(t)
+			s := &Server{
+				LCStore: lightclient.NewLightClientStore(db),
+			}
 
 			updates := make([]interfaces.LightClientUpdate, 3)
 
 			updatePeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
 
+			var err error
 			for i := 0; i < 3; i++ {
 				if i == 0 { // skip this update
 					updatePeriod++
@@ -1447,17 +618,12 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 				updates[i], err = createUpdate(t, version.Altair)
 				require.NoError(t, err)
 
-				err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[i])
+				err = s.LCStore.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[i])
 				require.NoError(t, err)
 
 				updatePeriod++
 			}
 
-			mockChainService := &mock.ChainService{State: st}
-			s := &Server{
-				HeadFetcher: mockChainService,
-				BeaconDB:    db,
-			}
 			startPeriod := 0
 			url := fmt.Sprintf("http://foo.com/?count=10&start_period=%d", startPeriod)
 			request := httptest.NewRequest("GET", url, nil)

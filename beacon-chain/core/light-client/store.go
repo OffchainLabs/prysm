@@ -52,6 +52,50 @@ func (s *Store) SaveLightClientBootstrap(ctx context.Context, blockRoot [32]byte
 	return nil
 }
 
+func (s *Store) LightClientUpdates(ctx context.Context, startPeriod, endPeriod uint64) ([]interfaces.LightClientUpdate, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Fetch the light client updatesMap from the database
+	updatesMap, err := s.beaconDB.LightClientUpdates(ctx, startPeriod, endPeriod)
+	if err != nil {
+		return nil, err
+	}
+
+	var updates []interfaces.LightClientUpdate
+	for i := startPeriod; i <= endPeriod; i++ {
+		update, ok := updatesMap[i]
+		if !ok {
+			// Only return the first contiguous range of updates
+			break
+		}
+		updates = append(updates, update)
+	}
+
+	return updates, nil
+}
+
+func (s *Store) LightClientUpdate(ctx context.Context, period uint64) (interfaces.LightClientUpdate, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Fetch the light client update for the given period from the database
+	update, err := s.beaconDB.LightClientUpdate(ctx, period)
+	if err != nil {
+		return nil, err
+	}
+
+	return update, nil
+}
+
+func (s *Store) SaveLightClientUpdate(ctx context.Context, period uint64, update interfaces.LightClientUpdate) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Save the light client update to the database
+	return s.beaconDB.SaveLightClientUpdate(ctx, period, update)
+}
+
 func (s *Store) SetLastFinalityUpdate(update interfaces.LightClientFinalityUpdate) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
