@@ -189,13 +189,13 @@ func (s *Service) processLightClientUpdate(cfg *postBlockProcessConfig) error {
 
 	period := slots.SyncCommitteePeriod(slots.ToEpoch(attestedState.Slot()))
 
-	oldUpdate, err := s.cfg.BeaconDB.LightClientUpdate(cfg.ctx, period)
+	oldUpdate, err := s.lcStore.LightClientUpdate(cfg.ctx, period)
 	if err != nil {
 		return errors.Wrapf(err, "could not get current light client update")
 	}
 
 	if oldUpdate == nil {
-		if err := s.cfg.BeaconDB.SaveLightClientUpdate(cfg.ctx, period, update); err != nil {
+		if err := s.lcStore.SaveLightClientUpdate(cfg.ctx, period, update); err != nil {
 			return errors.Wrapf(err, "could not save light client update")
 		}
 		log.WithField("period", period).Debug("Saved new light client update")
@@ -208,7 +208,7 @@ func (s *Service) processLightClientUpdate(cfg *postBlockProcessConfig) error {
 	}
 
 	if isNewUpdateBetter {
-		if err := s.cfg.BeaconDB.SaveLightClientUpdate(cfg.ctx, period, update); err != nil {
+		if err := s.lcStore.SaveLightClientUpdate(cfg.ctx, period, update); err != nil {
 			return errors.Wrapf(err, "could not save light client update")
 		}
 		log.WithField("period", period).Debug("Saved new light client update")
