@@ -1,7 +1,6 @@
 package kv
 
 import (
-	"context"
 	"testing"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -10,7 +9,7 @@ import (
 )
 
 func TestStore_GraffitiOrderedIndex_ReadAndWrite(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupDB(t, [][fieldparams.BLSPubkeyLength]byte{})
 	tests := []struct {
 		name     string
@@ -60,7 +59,7 @@ func TestStore_GraffitiOrderedIndex_ReadAndWrite(t *testing.T) {
 }
 
 func TestStore_GraffitiFileHash(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Creates database
 	db := setupDB(t, [][fieldparams.BLSPubkeyLength]byte{})

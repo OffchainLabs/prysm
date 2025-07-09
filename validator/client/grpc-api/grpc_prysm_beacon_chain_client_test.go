@@ -1,7 +1,6 @@
 package grpc_api
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -318,7 +317,7 @@ func TestGetValidatorCount(t *testing.T) {
 				require.Equal(t, true, ok)
 				statuses = append(statuses, valStatus)
 			}
-			vcCountResp, err := prysmBeaconChainClient.ValidatorCount(context.Background(), "", statuses)
+			vcCountResp, err := prysmBeaconChainClient.ValidatorCount(t.Context(), "", statuses)
 			require.NoError(t, err)
 			require.DeepEqual(t, test.expectedResponse, vcCountResp)
 		})

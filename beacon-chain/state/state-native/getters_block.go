@@ -2,10 +2,7 @@ package state_native
 
 import (
 	customtypes "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/custom-types"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/pkg/errors"
 )
 
 // LatestBlockHeader stored within the beacon state.
@@ -58,13 +55,10 @@ func (b *BeaconState) BlockRoots() [][]byte {
 }
 
 func (b *BeaconState) blockRootsVal() customtypes.BlockRoots {
-	if features.Get().EnableExperimentalState {
-		if b.blockRootsMultiValue == nil {
-			return nil
-		}
-		return b.blockRootsMultiValue.Value(b)
+	if b.blockRootsMultiValue == nil {
+		return nil
 	}
-	return b.blockRoots
+	return b.blockRootsMultiValue.Value(b)
 }
 
 // BlockRootAtIndex retrieves a specific block root based on an
@@ -73,33 +67,12 @@ func (b *BeaconState) BlockRootAtIndex(idx uint64) ([]byte, error) {
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
-	if features.Get().EnableExperimentalState {
-		if b.blockRootsMultiValue == nil {
-			return []byte{}, nil
-		}
-		r, err := b.blockRootsMultiValue.At(b, idx)
-		if err != nil {
-			return nil, err
-		}
-		return r[:], nil
-	}
-
-	if b.blockRoots == nil {
+	if b.blockRootsMultiValue == nil {
 		return []byte{}, nil
 	}
-	r, err := b.blockRootAtIndex(idx)
+	r, err := b.blockRootsMultiValue.At(b, idx)
 	if err != nil {
 		return nil, err
 	}
 	return r[:], nil
-}
-
-// blockRootAtIndex retrieves a specific block root based on an
-// input index value.
-// This assumes that a lock is already held on BeaconState.
-func (b *BeaconState) blockRootAtIndex(idx uint64) ([32]byte, error) {
-	if uint64(len(b.blockRoots)) <= idx {
-		return [32]byte{}, errors.Wrapf(consensus_types.ErrOutOfBounds, "block root index %d does not exist", idx)
-	}
-	return b.blockRoots[idx], nil
 }

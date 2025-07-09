@@ -2,10 +2,6 @@ package state_native
 
 import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stateutil"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 )
@@ -26,21 +22,10 @@ func (b *BeaconState) SetBlockRoots(val [][]byte) error {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	if features.Get().EnableExperimentalState {
-		if b.blockRootsMultiValue != nil {
-			b.blockRootsMultiValue.Detach(b)
-		}
-		b.blockRootsMultiValue = NewMultiValueBlockRoots(val)
-	} else {
-		b.sharedFieldReferences[types.BlockRoots].MinusRef()
-		b.sharedFieldReferences[types.BlockRoots] = stateutil.NewRef(1)
-
-		rootsArr := make([][32]byte, fieldparams.BlockRootsLength)
-		for i := 0; i < len(rootsArr); i++ {
-			copy(rootsArr[i][:], val[i])
-		}
-		b.blockRoots = rootsArr
+	if b.blockRootsMultiValue != nil {
+		b.blockRootsMultiValue.Detach(b)
 	}
+	b.blockRootsMultiValue = NewMultiValueBlockRoots(val)
 
 	b.markFieldAsDirty(types.BlockRoots)
 	b.rebuildTrie[types.BlockRoots] = true
@@ -53,25 +38,8 @@ func (b *BeaconState) UpdateBlockRootAtIndex(idx uint64, blockRoot [32]byte) err
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	if features.Get().EnableExperimentalState {
-		if err := b.blockRootsMultiValue.UpdateAt(b, idx, blockRoot); err != nil {
-			return errors.Wrap(err, "could not update block roots")
-		}
-	} else {
-		if uint64(len(b.blockRoots)) <= idx {
-			return errors.Wrapf(consensus_types.ErrOutOfBounds, "block root index %d does not exist", idx)
-		}
-
-		r := b.blockRoots
-		if ref := b.sharedFieldReferences[types.BlockRoots]; ref.Refs() > 1 {
-			// Copy elements in underlying array by reference.
-			r = make([][32]byte, len(b.blockRoots))
-			copy(r, b.blockRoots)
-			ref.MinusRef()
-			b.sharedFieldReferences[types.BlockRoots] = stateutil.NewRef(1)
-		}
-		r[idx] = blockRoot
-		b.blockRoots = r
+	if err := b.blockRootsMultiValue.UpdateAt(b, idx, blockRoot); err != nil {
+		return errors.Wrap(err, "could not update block roots")
 	}
 
 	b.markFieldAsDirty(types.BlockRoots)

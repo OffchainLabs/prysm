@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/api/server/httprest"
 	"github.com/OffchainLabs/prysm/v6/api/server/middleware"
 	"github.com/OffchainLabs/prysm/v6/async/event"
+	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/io/logs"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/validator/accounts/wallet"
@@ -43,12 +44,10 @@ type Config struct {
 	AuthTokenPath          string
 	Middlewares            []middleware.Middleware
 	Router                 *http.ServeMux
-	ServeWebUI             bool
 }
 
 // Server defining a HTTP server for the remote signer API and registering clients
 type Server struct {
-	serveWebUI                bool
 	walletInitialized         bool
 	logStreamerBufferSize     int
 	grpcMaxCallRecvMsgSize    int
@@ -106,7 +105,6 @@ func NewServer(ctx context.Context, cfg *Config) *Server {
 		beaconApiEndpoint:      cfg.BeaconApiEndpoint,
 		beaconNodeEndpoint:     cfg.BeaconNodeGRPCEndpoint,
 		router:                 cfg.Router,
-		serveWebUI:             cfg.ServeWebUI,
 	}
 
 	if server.authTokenPath == "" && server.walletDir != "" {
@@ -119,7 +117,7 @@ func NewServer(ctx context.Context, cfg *Config) *Server {
 			log.WithError(err).Error("Could not initialize web auth token")
 		}
 		validatorWebAddr := fmt.Sprintf("%s:%d", server.httpHost, server.httpPort)
-		logValidatorWebAuth(server.serveWebUI, validatorWebAddr, server.authToken, server.authTokenPath)
+		logValidatorWebAuth(validatorWebAddr, server.authToken, server.authTokenPath)
 		go server.refreshAuthTokenFromFileChanges(server.ctx, server.authTokenPath)
 	}
 
@@ -166,7 +164,7 @@ func (s *Server) InitializeRoutesWithWebHandler() error {
 			s.router.ServeHTTP(w, r)
 			return
 		}
-		if s.serveWebUI {
+		if features.Get().EnableWeb {
 			web.Handler(w, r)
 		}
 	})

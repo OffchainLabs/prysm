@@ -9,6 +9,9 @@ import (
 	"sync"
 	"time"
 
+	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v6/crypto/rand"
 	lru "github.com/hashicorp/golang-lru"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
@@ -54,7 +57,6 @@ var _ runtime.Service = (*Service)(nil)
 const (
 	rangeLimit               uint64 = 1024
 	seenBlockSize                   = 1000
-	seenBlobSize                    = seenBlockSize * 6   // Each block can have max 6 blobs.
 	seenDataColumnSize              = seenBlockSize * 128 // Each block can have max 128 data columns.
 	seenUnaggregatedAttSize         = 20000
 	seenAggregatedAttSize           = 16384
@@ -102,12 +104,16 @@ type config struct {
 	clock                   *startup.Clock
 	stateNotifier           statefeed.Notifier
 	blobStorage             *filesystem.BlobStorage
+	dataColumnStorage       *filesystem.DataColumnStorage
+	custodyInfo             *peerdas.CustodyInfo
+	batchVerifierLimit      int
 }
 
 // This defines the interface for interacting with block chain service
 type blockchainService interface {
 	blockchain.BlockReceiver
 	blockchain.BlobReceiver
+	blockchain.DataColumnReceiver
 	blockchain.HeadFetcher
 	blockchain.FinalizationFetcher
 	blockchain.ForkFetcher
@@ -139,6 +145,7 @@ type Service struct {
 	seenBlockCache                   *lru.Cache
 	seenBlobLock                     sync.RWMutex
 	seenBlobCache                    *lru.Cache
+	seenDataColumnCache              *lru.Cache
 	seenAggregatedAttestationLock    sync.RWMutex
 	seenAggregatedAttestationCache   *lru.Cache
 	seenUnAggregatedAttestationLock  sync.RWMutex
@@ -162,23 +169,29 @@ type Service struct {
 	initialSyncComplete              chan struct{}
 	verifierWaiter                   *verification.InitializerWaiter
 	newBlobVerifier                  verification.NewBlobVerifier
+	newColumnsVerifier               verification.NewDataColumnsVerifier
 	availableBlocker                 coverage.AvailableBlocker
+	reconstructionLock               sync.Mutex
+	reconstructionRandGen            *rand.Rand
 	ctxMap                           ContextByteVersions
 	slasherEnabled                   bool
+	lcStore                          *lightClient.Store
+	dataColumnLogCh                  chan dataColumnLogEntry
 }
 
 // NewService initializes new regular sync service.
 func NewService(ctx context.Context, opts ...Option) *Service {
 	ctx, cancel := context.WithCancel(ctx)
 	r := &Service{
-		ctx:                  ctx,
-		cancel:               cancel,
-		chainStarted:         abool.New(),
-		cfg:                  &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
-		slotToPendingBlocks:  gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
-		seenPendingBlocks:    make(map[[32]byte]bool),
-		blkRootToPendingAtts: make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
-		signatureChan:        make(chan *signatureVerifier, verifierLimit),
+		ctx:                   ctx,
+		cancel:                cancel,
+		chainStarted:          abool.New(),
+		cfg:                   &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
+		slotToPendingBlocks:   gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
+		seenPendingBlocks:     make(map[[32]byte]bool),
+		blkRootToPendingAtts:  make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
+		dataColumnLogCh:       make(chan dataColumnLogEntry, 1000),
+		reconstructionRandGen: rand.NewGenerator(),
 	}
 
 	for _, opt := range opts {
@@ -186,6 +199,8 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 			return nil
 		}
 	}
+	// Initialize signature channel with configured limit
+	r.signatureChan = make(chan *signatureVerifier, r.cfg.batchVerifierLimit)
 	// Correctly remove it from our seen pending block map.
 	// The eviction method always assumes that the mutex is held.
 	r.slotToPendingBlocks.OnEvicted(func(s string, i interface{}) {
@@ -221,6 +236,12 @@ func newBlobVerifierFromInitializer(ini *verification.Initializer) verification.
 	}
 }
 
+func newDataColumnsVerifierFromInitializer(ini *verification.Initializer) verification.NewDataColumnsVerifier {
+	return func(roDataColumns []blocks.RODataColumn, reqs []verification.Requirement) verification.DataColumnsVerifier {
+		return ini.NewDataColumnsVerifier(roDataColumns, reqs)
+	}
+}
+
 // Start the regular sync service.
 func (s *Service) Start() {
 	v, err := s.verifierWaiter.WaitForInitializer(s.ctx)
@@ -229,9 +250,11 @@ func (s *Service) Start() {
 		return
 	}
 	s.newBlobVerifier = newBlobVerifierFromInitializer(v)
+	s.newColumnsVerifier = newDataColumnsVerifierFromInitializer(v)
 
 	go s.verifierRoutine()
 	go s.startTasksPostInitialSync()
+	go s.processDataColumnLogs()
 
 	s.cfg.p2p.AddConnectionHandler(s.reValidatePeer, s.sendGoodbye)
 	s.cfg.p2p.AddDisconnectionHandler(func(_ context.Context, _ peer.ID) error {
@@ -282,7 +305,8 @@ func (s *Service) Status() error {
 // and prevent DoS.
 func (s *Service) initCaches() {
 	s.seenBlockCache = lruwrpr.New(seenBlockSize)
-	s.seenBlobCache = lruwrpr.New(seenBlobSize)
+	s.seenBlobCache = lruwrpr.New(seenBlockSize * params.BeaconConfig().DeprecatedMaxBlobsPerBlockElectra)
+	s.seenDataColumnCache = lruwrpr.New(seenDataColumnSize)
 	s.seenAggregatedAttestationCache = lruwrpr.New(seenAggregatedAttSize)
 	s.seenUnAggregatedAttestationCache = lruwrpr.New(seenUnaggregatedAttSize)
 	s.seenSyncMessageCache = lruwrpr.New(seenSyncMsgSize)

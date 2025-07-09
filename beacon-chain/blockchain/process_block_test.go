@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
@@ -24,6 +25,7 @@ import (
 	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations/kv"
+	mockp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -49,7 +51,7 @@ import (
 )
 
 func Test_pruneAttsFromPool_Electra(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	logHook := logTest.NewGlobal()
 
 	params.SetupTestConfigCleanup(t)
@@ -239,7 +241,7 @@ func TestFillForkChoiceMissingBlocks_CanSave(t *testing.T) {
 	fcp2 := &forkchoicetypes.Checkpoint{Epoch: 0, Root: r0}
 	require.NoError(t, service.cfg.ForkChoiceStore.UpdateFinalizedCheckpoint(fcp2))
 	err = service.fillInForkChoiceMissingBlocks(
-		context.Background(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
+		t.Context(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
 	require.NoError(t, err)
 
 	// 5 nodes from the block tree 1. B0 - B3 - B4 - B6 - B8
@@ -282,7 +284,7 @@ func TestFillForkChoiceMissingBlocks_RootsMatch(t *testing.T) {
 	require.NoError(t, service.cfg.ForkChoiceStore.UpdateFinalizedCheckpoint(fcp2))
 
 	err = service.fillInForkChoiceMissingBlocks(
-		context.Background(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
+		t.Context(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
 	require.NoError(t, err)
 
 	// 5 nodes from the block tree 1. B0 - B3 - B4 - B6 - B8
@@ -292,7 +294,7 @@ func TestFillForkChoiceMissingBlocks_RootsMatch(t *testing.T) {
 	wantedRoots := [][]byte{roots[0], roots[3], roots[4], roots[6], roots[8]}
 	for i, rt := range wantedRoots {
 		assert.Equal(t, true, service.cfg.ForkChoiceStore.HasNode(bytesutil.ToBytes32(rt)), fmt.Sprintf("Didn't save node: %d", i))
-		assert.Equal(t, true, service.cfg.BeaconDB.HasBlock(context.Background(), bytesutil.ToBytes32(rt)))
+		assert.Equal(t, true, service.cfg.BeaconDB.HasBlock(t.Context(), bytesutil.ToBytes32(rt)))
 	}
 }
 
@@ -338,7 +340,7 @@ func TestFillForkChoiceMissingBlocks_FilterFinalized(t *testing.T) {
 	// Set finalized epoch to 2.
 	require.NoError(t, service.cfg.ForkChoiceStore.UpdateFinalizedCheckpoint(&forkchoicetypes.Checkpoint{Epoch: 2, Root: r64}))
 	err = service.fillInForkChoiceMissingBlocks(
-		context.Background(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
+		t.Context(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
 	require.NoError(t, err)
 
 	// There should be 1 node: block 65
@@ -371,7 +373,7 @@ func TestFillForkChoiceMissingBlocks_FinalizedSibling(t *testing.T) {
 	require.NoError(t, err)
 
 	err = service.fillInForkChoiceMissingBlocks(
-		context.Background(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
+		t.Context(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
 	require.Equal(t, ErrNotDescendantOfFinalized.Error(), err.Error())
 }
 
@@ -449,20 +451,20 @@ func blockTree1(t *testing.T, beaconDB db.Database, genesisRoot []byte) ([][]byt
 		beaconBlock.Block.ParentRoot = bytesutil.PadTo(b.Block.ParentRoot, 32)
 		wsb, err := consensusblocks.NewSignedBeaconBlock(beaconBlock)
 		require.NoError(t, err)
-		if err := beaconDB.SaveBlock(context.Background(), wsb); err != nil {
+		if err := beaconDB.SaveBlock(t.Context(), wsb); err != nil {
 			return nil, err
 		}
-		if err := beaconDB.SaveState(context.Background(), st.Copy(), bytesutil.ToBytes32(beaconBlock.Block.ParentRoot)); err != nil {
+		if err := beaconDB.SaveState(t.Context(), st.Copy(), bytesutil.ToBytes32(beaconBlock.Block.ParentRoot)); err != nil {
 			return nil, errors.Wrap(err, "could not save state")
 		}
 	}
-	if err := beaconDB.SaveState(context.Background(), st.Copy(), r1); err != nil {
+	if err := beaconDB.SaveState(t.Context(), st.Copy(), r1); err != nil {
 		return nil, err
 	}
-	if err := beaconDB.SaveState(context.Background(), st.Copy(), r7); err != nil {
+	if err := beaconDB.SaveState(t.Context(), st.Copy(), r7); err != nil {
 		return nil, err
 	}
-	if err := beaconDB.SaveState(context.Background(), st.Copy(), r8); err != nil {
+	if err := beaconDB.SaveState(t.Context(), st.Copy(), r8); err != nil {
 		return nil, err
 	}
 	return [][]byte{r0[:], r1[:], nil, r3[:], r4[:], r5[:], r6[:], r7[:], r8[:]}, nil
@@ -475,7 +477,7 @@ func TestCurrentSlot_HandlesOverflow(t *testing.T) {
 	require.Equal(t, primitives.Slot(0), slot, "Unexpected slot")
 }
 func TestAncestorByDB_CtxErr(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	opts := testServiceOptsWithDB(t)
 	service, err := NewService(ctx, opts...)
 	require.NoError(t, err)
@@ -508,18 +510,18 @@ func TestAncestor_HandleSkipSlot(t *testing.T) {
 		beaconBlock := util.NewBeaconBlock()
 		beaconBlock.Block.Slot = b.Block.Slot
 		beaconBlock.Block.ParentRoot = bytesutil.PadTo(b.Block.ParentRoot, 32)
-		util.SaveBlock(t, context.Background(), beaconDB, beaconBlock)
+		util.SaveBlock(t, t.Context(), beaconDB, beaconBlock)
 	}
 
 	// Slots 100 to 200 are skip slots. Requesting root at 150 will yield root at 100. The last physical block.
-	r, err := service.Ancestor(context.Background(), r200[:], 150)
+	r, err := service.Ancestor(t.Context(), r200[:], 150)
 	require.NoError(t, err)
 	if bytesutil.ToBytes32(r) != r100 {
 		t.Error("Did not get correct root")
 	}
 
 	// Slots 1 to 100 are skip slots. Requesting root at 50 will yield root at 1. The last physical block.
-	r, err = service.Ancestor(context.Background(), r200[:], 50)
+	r, err = service.Ancestor(t.Context(), r200[:], 50)
 	require.NoError(t, err)
 	if bytesutil.ToBytes32(r) != r1 {
 		t.Error("Did not get correct root")
@@ -527,7 +529,7 @@ func TestAncestor_HandleSkipSlot(t *testing.T) {
 }
 
 func TestAncestor_CanUseForkchoice(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	opts := testServiceOptsWithDB(t)
 	service, err := NewService(ctx, opts...)
 	require.NoError(t, err)
@@ -555,12 +557,12 @@ func TestAncestor_CanUseForkchoice(t *testing.T) {
 		beaconBlock.Block.ParentRoot = bytesutil.PadTo(b.Block.ParentRoot, 32)
 		r, err := b.Block.HashTreeRoot()
 		require.NoError(t, err)
-		st, blkRoot, err := prepareForkchoiceState(context.Background(), b.Block.Slot, r, bytesutil.ToBytes32(b.Block.ParentRoot), params.BeaconConfig().ZeroHash, ojc, ofc)
+		st, blkRoot, err := prepareForkchoiceState(t.Context(), b.Block.Slot, r, bytesutil.ToBytes32(b.Block.ParentRoot), params.BeaconConfig().ZeroHash, ojc, ofc)
 		require.NoError(t, err)
 		require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blkRoot))
 	}
 
-	r, err := service.Ancestor(context.Background(), r200[:], 150)
+	r, err := service.Ancestor(t.Context(), r200[:], 150)
 	require.NoError(t, err)
 	if bytesutil.ToBytes32(r) != r100 {
 		t.Error("Did not get correct root")
@@ -592,14 +594,14 @@ func TestAncestor_CanUseDB(t *testing.T) {
 		beaconBlock := util.NewBeaconBlock()
 		beaconBlock.Block.Slot = b.Block.Slot
 		beaconBlock.Block.ParentRoot = bytesutil.PadTo(b.Block.ParentRoot, 32)
-		util.SaveBlock(t, context.Background(), beaconDB, beaconBlock)
+		util.SaveBlock(t, t.Context(), beaconDB, beaconBlock)
 	}
 
-	st, blkRoot, err := prepareForkchoiceState(context.Background(), 200, r200, r200, params.BeaconConfig().ZeroHash, ojc, ofc)
+	st, blkRoot, err := prepareForkchoiceState(t.Context(), 200, r200, r200, params.BeaconConfig().ZeroHash, ojc, ofc)
 	require.NoError(t, err)
 	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blkRoot))
 
-	r, err := service.Ancestor(context.Background(), r200[:], 150)
+	r, err := service.Ancestor(t.Context(), r200[:], 150)
 	require.NoError(t, err)
 	if bytesutil.ToBytes32(r) != r100 {
 		t.Error("Did not get correct root")
@@ -607,7 +609,7 @@ func TestAncestor_CanUseDB(t *testing.T) {
 }
 
 func TestEnsureRootNotZeroHashes(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	opts := testServiceOptsNoDB()
 	service, err := NewService(ctx, opts...)
 	require.NoError(t, err)
@@ -621,7 +623,7 @@ func TestEnsureRootNotZeroHashes(t *testing.T) {
 }
 
 func TestHandleEpochBoundary_UpdateFirstSlot(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	opts := testServiceOptsNoDB()
 	service, err := NewService(ctx, opts...)
 	require.NoError(t, err)
@@ -920,7 +922,7 @@ func TestRemoveBlockAttestationsInPool(t *testing.T) {
 	r, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 	service := setupBeaconChain(t, beaconDB)
 	require.NoError(t, service.cfg.BeaconDB.SaveStateSummary(ctx, &ethpb.StateSummary{Root: r[:]}))
@@ -933,7 +935,7 @@ func TestRemoveBlockAttestationsInPool(t *testing.T) {
 	require.NoError(t, service.cfg.AttPool.SaveAggregatedAttestations(atts))
 	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
-	service.pruneAttsFromPool(context.Background(), nil /* state not needed pre-Electra */, wsb)
+	service.pruneAttsFromPool(t.Context(), nil /* state not needed pre-Electra */, wsb)
 	require.LogsDoNotContain(t, logHook, "Could not prune attestations")
 	require.Equal(t, 0, service.cfg.AttPool.AggregatedAttestationCount())
 }
@@ -2330,13 +2332,13 @@ func driftGenesisTime(s *Service, slot, delay int64) {
 	s.cfg.ForkChoiceStore.SetGenesisTime(uint64(newTime.Unix()))
 }
 
-func TestMissingIndices(t *testing.T) {
+func TestMissingBlobIndices(t *testing.T) {
 	cases := []struct {
 		name     string
 		expected [][]byte
 		present  []uint64
 		result   map[uint64]struct{}
-		root     [32]byte
+		root     [fieldparams.RootLength]byte
 		err      error
 	}{
 		{
@@ -2394,7 +2396,7 @@ func TestMissingIndices(t *testing.T) {
 		bm, bs := filesystem.NewEphemeralBlobStorageWithMocker(t)
 		t.Run(c.name, func(t *testing.T) {
 			require.NoError(t, bm.CreateFakeIndices(c.root, 0, c.present...))
-			missing, err := missingIndices(bs, c.root, c.expected, 0)
+			missing, err := missingBlobIndices(bs, c.root, c.expected, 0)
 			if c.err != nil {
 				require.ErrorIs(t, err, c.err)
 				return
@@ -2402,9 +2404,70 @@ func TestMissingIndices(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, len(c.result), len(missing))
 			for key := range c.result {
-				m, ok := missing[key]
-				require.Equal(t, true, ok)
-				require.Equal(t, c.result[key], m)
+				require.Equal(t, true, missing[key])
+			}
+		})
+	}
+}
+
+func TestMissingDataColumnIndices(t *testing.T) {
+	countPlusOne := params.BeaconConfig().NumberOfColumns + 1
+	tooManyColumns := make(map[uint64]bool, countPlusOne)
+	for i := range countPlusOne {
+		tooManyColumns[uint64(i)] = true
+	}
+
+	testCases := []struct {
+		name          string
+		storedIndices []uint64
+		input         map[uint64]bool
+		expected      map[uint64]bool
+		err           error
+	}{
+		{
+			name:  "zero len expected",
+			input: map[uint64]bool{},
+		},
+		{
+			name:  "expected exceeds max",
+			input: tooManyColumns,
+			err:   errMaxDataColumnsExceeded,
+		},
+		{
+			name:          "all missing",
+			storedIndices: []uint64{},
+			input:         map[uint64]bool{0: true, 1: true, 2: true},
+			expected:      map[uint64]bool{0: true, 1: true, 2: true},
+		},
+		{
+			name:          "none missing",
+			input:         map[uint64]bool{0: true, 1: true, 2: true},
+			expected:      map[uint64]bool{},
+			storedIndices: []uint64{0, 1, 2, 3, 4}, // Extra columns stored but not expected
+		},
+		{
+			name:          "some missing",
+			storedIndices: []uint64{0, 20},
+			input:         map[uint64]bool{0: true, 10: true, 20: true, 30: true},
+			expected:      map[uint64]bool{10: true, 30: true},
+		},
+	}
+
+	var emptyRoot [fieldparams.RootLength]byte
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			dcm, dcs := filesystem.NewEphemeralDataColumnStorageWithMocker(t)
+			err := dcm.CreateFakeIndices(emptyRoot, 0, tc.storedIndices...)
+			require.NoError(t, err)
+
+			// Test the function
+			actual, err := missingDataColumnIndices(dcs, emptyRoot, tc.input)
+			require.ErrorIs(t, err, tc.err)
+
+			require.Equal(t, len(tc.expected), len(actual))
+			for key := range tc.expected {
+				require.Equal(t, true, actual[key])
 			}
 		})
 	}
@@ -2604,7 +2667,7 @@ func TestRollbackBlock_ContextDeadline(t *testing.T) {
 	require.Equal(t, true, hasState)
 
 	// Set deadlined context when processing the block
-	cancCtx, canc := context.WithCancel(context.Background())
+	cancCtx, canc := context.WithCancel(t.Context())
 	canc()
 	roblock, err = consensusblocks.NewROBlockWithRoot(wsb, root)
 	require.NoError(t, err)
@@ -2643,7 +2706,7 @@ func fakeResult(missing []uint64) map[uint64]struct{} {
 	return r
 }
 
-func TestSaveLightClientUpdate(t *testing.T) {
+func TestProcessLightClientUpdate(t *testing.T) {
 	featCfg := &features.Flags{}
 	featCfg.EnableLightClient = true
 	reset := features.InitWithReset(featCfg)
@@ -2684,7 +2747,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 				isValidPayload: true,
 			}
 
-			s.saveLightClientUpdate(cfg)
+			require.NoError(t, s.processLightClientUpdate(cfg))
 
 			// Check that the light client update is saved
 			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
@@ -2733,13 +2796,13 @@ func TestSaveLightClientUpdate(t *testing.T) {
 			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
 
 			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(s.CurrentSlot(), l.AttestedState)
+			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedBlock)
 			require.NoError(t, err)
 
 			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
 			require.NoError(t, err)
 
-			s.saveLightClientUpdate(cfg)
+			require.NoError(t, s.processLightClientUpdate(cfg))
 
 			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
 			require.NoError(t, err)
@@ -2785,7 +2848,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
 
 			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(s.CurrentSlot(), l.AttestedState)
+			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedBlock)
 			require.NoError(t, err)
 
 			scb := make([]byte, 64)
@@ -2800,7 +2863,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
 			require.NoError(t, err)
 
-			s.saveLightClientUpdate(cfg)
+			require.NoError(t, s.processLightClientUpdate(cfg))
 
 			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
 			require.NoError(t, err)
@@ -2843,7 +2906,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 				isValidPayload: true,
 			}
 
-			s.saveLightClientUpdate(cfg)
+			require.NoError(t, s.processLightClientUpdate(cfg))
 
 			// Check that the light client update is saved
 			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
@@ -2891,13 +2954,13 @@ func TestSaveLightClientUpdate(t *testing.T) {
 			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
 
 			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(s.CurrentSlot(), l.AttestedState)
+			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedBlock)
 			require.NoError(t, err)
 
 			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
 			require.NoError(t, err)
 
-			s.saveLightClientUpdate(cfg)
+			require.NoError(t, s.processLightClientUpdate(cfg))
 
 			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
 			require.NoError(t, err)
@@ -2943,7 +3006,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
 
 			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(s.CurrentSlot(), l.AttestedState)
+			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedBlock)
 			require.NoError(t, err)
 
 			scb := make([]byte, 64)
@@ -2958,7 +3021,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
 			require.NoError(t, err)
 
-			s.saveLightClientUpdate(cfg)
+			require.NoError(t, s.processLightClientUpdate(cfg))
 
 			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
 			require.NoError(t, err)
@@ -3001,7 +3064,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 				isValidPayload: true,
 			}
 
-			s.saveLightClientUpdate(cfg)
+			require.NoError(t, s.processLightClientUpdate(cfg))
 
 			// Check that the light client update is saved
 			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
@@ -3049,13 +3112,13 @@ func TestSaveLightClientUpdate(t *testing.T) {
 			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
 
 			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(s.CurrentSlot(), l.AttestedState)
+			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedBlock)
 			require.NoError(t, err)
 
 			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
 			require.NoError(t, err)
 
-			s.saveLightClientUpdate(cfg)
+			require.NoError(t, s.processLightClientUpdate(cfg))
 
 			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
 			require.NoError(t, err)
@@ -3101,7 +3164,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
 
 			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(s.CurrentSlot(), l.AttestedState)
+			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedBlock)
 			require.NoError(t, err)
 
 			scb := make([]byte, 64)
@@ -3116,7 +3179,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
 			require.NoError(t, err)
 
-			s.saveLightClientUpdate(cfg)
+			require.NoError(t, s.processLightClientUpdate(cfg))
 
 			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
 			require.NoError(t, err)
@@ -3129,7 +3192,7 @@ func TestSaveLightClientUpdate(t *testing.T) {
 	reset()
 }
 
-func TestSaveLightClientBootstrap(t *testing.T) {
+func TestProcessLightClientBootstrap(t *testing.T) {
 	featCfg := &features.Flags{}
 	featCfg.EnableLightClient = true
 	reset := features.InitWithReset(featCfg)
@@ -3159,7 +3222,7 @@ func TestSaveLightClientBootstrap(t *testing.T) {
 			isValidPayload: true,
 		}
 
-		s.saveLightClientBootstrap(cfg)
+		require.NoError(t, s.processLightClientBootstrap(cfg))
 
 		// Check that the light client bootstrap is saved
 		b, err := s.cfg.BeaconDB.LightClientBootstrap(ctx, currentBlockRoot[:])
@@ -3194,7 +3257,7 @@ func TestSaveLightClientBootstrap(t *testing.T) {
 			isValidPayload: true,
 		}
 
-		s.saveLightClientBootstrap(cfg)
+		require.NoError(t, s.processLightClientBootstrap(cfg))
 
 		// Check that the light client bootstrap is saved
 		b, err := s.cfg.BeaconDB.LightClientBootstrap(ctx, currentBlockRoot[:])
@@ -3229,7 +3292,7 @@ func TestSaveLightClientBootstrap(t *testing.T) {
 			isValidPayload: true,
 		}
 
-		s.saveLightClientBootstrap(cfg)
+		require.NoError(t, s.processLightClientBootstrap(cfg))
 
 		// Check that the light client bootstrap is saved
 		b, err := s.cfg.BeaconDB.LightClientBootstrap(ctx, currentBlockRoot[:])
@@ -3243,6 +3306,235 @@ func TestSaveLightClientBootstrap(t *testing.T) {
 	})
 
 	reset()
+}
+
+type testIsAvailableParams struct {
+	options                 []Option
+	blobKzgCommitmentsCount uint64
+	columnsToSave           []uint64
+}
+
+func testIsAvailableSetup(t *testing.T, params testIsAvailableParams) (context.Context, context.CancelFunc, *Service, [fieldparams.RootLength]byte, interfaces.SignedBeaconBlock) {
+	ctx, cancel := context.WithCancel(t.Context())
+	dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
+
+	options := append(params.options, WithDataColumnStorage(dataColumnStorage))
+	service, _ := minimalTestService(t, options...)
+
+	genesisState, secretKeys := util.DeterministicGenesisStateElectra(t, 32 /*validator count*/)
+
+	err := service.saveGenesisData(ctx, genesisState)
+	require.NoError(t, err)
+
+	conf := util.DefaultBlockGenConfig()
+	conf.NumBlobKzgCommitments = params.blobKzgCommitmentsCount
+
+	signedBeaconBlock, err := util.GenerateFullBlockFulu(genesisState, secretKeys, conf, 10 /*block slot*/)
+	require.NoError(t, err)
+
+	block := signedBeaconBlock.Block
+	bodyRoot, err := block.Body.HashTreeRoot()
+	require.NoError(t, err)
+
+	root, err := block.HashTreeRoot()
+	require.NoError(t, err)
+
+	dataColumnsParams := make([]util.DataColumnParam, 0, len(params.columnsToSave))
+	for _, i := range params.columnsToSave {
+		dataColumnParam := util.DataColumnParam{
+			Index:         i,
+			Slot:          block.Slot,
+			ProposerIndex: block.ProposerIndex,
+			ParentRoot:    block.ParentRoot,
+			StateRoot:     block.StateRoot,
+			BodyRoot:      bodyRoot[:],
+		}
+		dataColumnsParams = append(dataColumnsParams, dataColumnParam)
+	}
+
+	_, verifiedRODataColumns := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnsParams)
+
+	err = dataColumnStorage.Save(verifiedRODataColumns)
+	require.NoError(t, err)
+
+	signed, err := consensusblocks.NewSignedBeaconBlock(signedBeaconBlock)
+	require.NoError(t, err)
+
+	return ctx, cancel, service, root, signed
+}
+
+func TestIsDataAvailable(t *testing.T) {
+	t.Run("Fulu - out of retention window", func(t *testing.T) {
+		params := testIsAvailableParams{options: []Option{WithGenesisTime(time.Unix(0, 0))}}
+		ctx, _, service, root, signed := testIsAvailableSetup(t, params)
+
+		err := service.isDataAvailable(ctx, root, signed)
+		require.NoError(t, err)
+	})
+
+	t.Run("Fulu - no commitment in blocks", func(t *testing.T) {
+		ctx, _, service, root, signed := testIsAvailableSetup(t, testIsAvailableParams{})
+
+		err := service.isDataAvailable(ctx, root, signed)
+		require.NoError(t, err)
+	})
+
+	t.Run("Fulu - more than half of the columns in custody", func(t *testing.T) {
+		minimumColumnsCountToReconstruct := peerdas.MinimumColumnsCountToReconstruct()
+		indices := make([]uint64, 0, minimumColumnsCountToReconstruct)
+		for i := range minimumColumnsCountToReconstruct {
+			indices = append(indices, i)
+		}
+
+		params := testIsAvailableParams{
+			options:                 []Option{WithCustodyInfo(&peerdas.CustodyInfo{})},
+			columnsToSave:           indices,
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, _, service, root, signed := testIsAvailableSetup(t, params)
+
+		err := service.isDataAvailable(ctx, root, signed)
+		require.NoError(t, err)
+	})
+
+	t.Run("Fulu - no missing data columns", func(t *testing.T) {
+		params := testIsAvailableParams{
+			options:                 []Option{WithCustodyInfo(&peerdas.CustodyInfo{})},
+			columnsToSave:           []uint64{1, 17, 19, 42, 75, 87, 102, 117, 119}, // 119 is not needed
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, _, service, root, signed := testIsAvailableSetup(t, params)
+
+		err := service.isDataAvailable(ctx, root, signed)
+		require.NoError(t, err)
+	})
+
+	t.Run("Fulu - some initially missing data columns (no reconstruction)", func(t *testing.T) {
+		startWaiting := make(chan bool)
+
+		testParams := testIsAvailableParams{
+			options:       []Option{WithCustodyInfo(&peerdas.CustodyInfo{}), WithStartWaitingDataColumnSidecars(startWaiting)},
+			columnsToSave: []uint64{1, 17, 19, 75, 102, 117, 119}, // 119 is not needed, 42 and 87 are missing
+
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, _, service, root, signed := testIsAvailableSetup(t, testParams)
+		block := signed.Block()
+		slot := block.Slot()
+		proposerIndex := block.ProposerIndex()
+		parentRoot := block.ParentRoot()
+		stateRoot := block.StateRoot()
+		bodyRoot, err := block.Body().HashTreeRoot()
+		require.NoError(t, err)
+
+		_, verifiedSidecarsWrongRoot := util.CreateTestVerifiedRoDataColumnSidecars(
+			t,
+			[]util.DataColumnParam{
+				{Index: 42, Slot: slot + 1}, // Needed index, but not for this slot.
+			})
+
+		_, verifiedSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, []util.DataColumnParam{
+			{Index: 87, Slot: slot, ProposerIndex: proposerIndex, ParentRoot: parentRoot[:], StateRoot: stateRoot[:], BodyRoot: bodyRoot[:]}, // Needed index
+			{Index: 1, Slot: slot, ProposerIndex: proposerIndex, ParentRoot: parentRoot[:], StateRoot: stateRoot[:], BodyRoot: bodyRoot[:]},  // Not needed index
+			{Index: 42, Slot: slot, ProposerIndex: proposerIndex, ParentRoot: parentRoot[:], StateRoot: stateRoot[:], BodyRoot: bodyRoot[:]}, // Needed index
+		})
+
+		go func() {
+			<-startWaiting
+
+			err := service.dataColumnStorage.Save(verifiedSidecarsWrongRoot)
+			require.NoError(t, err)
+
+			err = service.dataColumnStorage.Save(verifiedSidecars)
+			require.NoError(t, err)
+		}()
+
+		err = service.isDataAvailable(ctx, root, signed)
+		require.NoError(t, err)
+	})
+
+	t.Run("Fulu - some initially missing data columns (reconstruction)", func(t *testing.T) {
+		const (
+			missingColumns = uint64(2)
+			cgc            = 128
+		)
+
+		startWaiting := make(chan bool)
+
+		var custodyInfo peerdas.CustodyInfo
+		custodyInfo.TargetGroupCount.SetValidatorsCustodyRequirement(cgc)
+		custodyInfo.ToAdvertiseGroupCount.Set(cgc)
+
+		minimumColumnsCountToReconstruct := peerdas.MinimumColumnsCountToReconstruct()
+		indices := make([]uint64, 0, minimumColumnsCountToReconstruct-missingColumns)
+
+		for i := range minimumColumnsCountToReconstruct - missingColumns {
+			indices = append(indices, i)
+		}
+
+		testParams := testIsAvailableParams{
+			options:                 []Option{WithCustodyInfo(&custodyInfo), WithStartWaitingDataColumnSidecars(startWaiting)},
+			columnsToSave:           indices,
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, _, service, root, signed := testIsAvailableSetup(t, testParams)
+		block := signed.Block()
+		slot := block.Slot()
+		proposerIndex := block.ProposerIndex()
+		parentRoot := block.ParentRoot()
+		stateRoot := block.StateRoot()
+		bodyRoot, err := block.Body().HashTreeRoot()
+		require.NoError(t, err)
+
+		dataColumnParams := make([]util.DataColumnParam, 0, missingColumns)
+		for i := minimumColumnsCountToReconstruct - missingColumns; i < minimumColumnsCountToReconstruct; i++ {
+			dataColumnParam := util.DataColumnParam{
+				Index:         i,
+				Slot:          slot,
+				ProposerIndex: proposerIndex,
+				ParentRoot:    parentRoot[:],
+				StateRoot:     stateRoot[:],
+				BodyRoot:      bodyRoot[:],
+			}
+
+			dataColumnParams = append(dataColumnParams, dataColumnParam)
+		}
+
+		_, verifiedSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParams)
+
+		go func() {
+			<-startWaiting
+
+			err := service.dataColumnStorage.Save(verifiedSidecars)
+			require.NoError(t, err)
+		}()
+
+		err = service.isDataAvailable(ctx, root, signed)
+		require.NoError(t, err)
+	})
+
+	t.Run("Fulu - some columns are definitively missing", func(t *testing.T) {
+		startWaiting := make(chan bool)
+
+		params := testIsAvailableParams{
+			options:                 []Option{WithCustodyInfo(&peerdas.CustodyInfo{}), WithStartWaitingDataColumnSidecars(startWaiting)},
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, cancel, service, root, signed := testIsAvailableSetup(t, params)
+
+		go func() {
+			<-startWaiting
+			cancel()
+		}()
+
+		err := service.isDataAvailable(ctx, root, signed)
+		require.NotNil(t, err)
+	})
 }
 
 func setupLightClientTestRequirements(ctx context.Context, t *testing.T, s *Service, v int, options ...util.LightClientOption) (*util.TestLightClient, *postBlockProcessConfig) {
@@ -3309,6 +3601,7 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 	params.OverrideBeaconConfig(beaconCfg)
 
 	s, tr := minimalTestService(t)
+	s.cfg.P2P = &mockp2p.FakeP2P{}
 	ctx := tr.ctx
 
 	testCases := []struct {
@@ -3354,7 +3647,7 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 				expectedVersion = version.Altair
 			case 2:
 				forkEpoch = uint64(params.BeaconConfig().BellatrixForkEpoch)
-				expectedVersion = version.Altair
+				expectedVersion = version.Bellatrix
 			case 3:
 				forkEpoch = uint64(params.BeaconConfig().CapellaForkEpoch)
 				expectedVersion = version.Capella
@@ -3363,7 +3656,7 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 				expectedVersion = version.Deneb
 			case 5:
 				forkEpoch = uint64(params.BeaconConfig().ElectraForkEpoch)
-				expectedVersion = version.Deneb
+				expectedVersion = version.Electra
 			default:
 				t.Errorf("Unsupported fork version %s", version.String(testVersion))
 			}
@@ -3444,6 +3737,7 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 	params.OverrideBeaconConfig(beaconCfg)
 
 	s, tr := minimalTestService(t)
+	s.cfg.P2P = &mockp2p.FakeP2P{}
 	ctx := tr.ctx
 
 	testCases := []struct {
@@ -3507,7 +3801,7 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 				expectedVersion = version.Altair
 			case 2:
 				forkEpoch = uint64(params.BeaconConfig().BellatrixForkEpoch)
-				expectedVersion = version.Altair
+				expectedVersion = version.Bellatrix
 			case 3:
 				forkEpoch = uint64(params.BeaconConfig().CapellaForkEpoch)
 				expectedVersion = version.Capella

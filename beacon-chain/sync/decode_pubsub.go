@@ -45,6 +45,8 @@ func (s *Service) decodePubsubMessage(msg *pubsub.Message) (ssz.Unmarshaler, err
 		topic = p2p.GossipTypeMapping[reflect.TypeOf(&ethpb.SyncCommitteeMessage{})]
 	case strings.Contains(topic, p2p.GossipBlobSidecarMessage):
 		topic = p2p.GossipTypeMapping[reflect.TypeOf(&ethpb.BlobSidecar{})]
+	case strings.Contains(topic, p2p.GossipDataColumnSidecarMessage):
+		topic = p2p.GossipTypeMapping[reflect.TypeOf(&ethpb.DataColumnSidecar{})]
 	}
 
 	base := p2p.GossipTopicMappings(topic, 0)
@@ -89,6 +91,10 @@ func extractValidDataTypeFromTopic(topic string, digest []byte, clock *startup.C
 		return extractDataTypeFromTypeMap(types.AggregateAttestationMap, digest, clock)
 	case p2p.AttesterSlashingSubnetTopicFormat:
 		return extractDataTypeFromTypeMap(types.AttesterSlashingMap, digest, clock)
+	case p2p.LightClientOptimisticUpdateTopicFormat:
+		return extractDataTypeFromTypeMap(types.LightClientOptimisticUpdateMap, digest, clock)
+	case p2p.LightClientFinalityUpdateTopicFormat:
+		return extractDataTypeFromTypeMap(types.LightClientFinalityUpdateMap, digest, clock)
 	}
 	return nil, nil
 }

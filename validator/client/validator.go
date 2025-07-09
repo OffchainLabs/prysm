@@ -41,7 +41,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
 	"github.com/OffchainLabs/prysm/v6/validator/keymanager/local"
 	remoteweb3signer "github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer"
-	"github.com/dgraph-io/ristretto"
+	"github.com/dgraph-io/ristretto/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	lru "github.com/hashicorp/golang-lru"
@@ -95,7 +95,7 @@ type validator struct {
 	interopKeysConfig                  *local.InteropKeymanagerConfig
 	attSelections                      map[attSelectionKey]iface.BeaconCommitteeSelection
 	aggregatedSlotCommitteeIDCache     *lru.Cache
-	domainDataCache                    *ristretto.Cache
+	domainDataCache                    *ristretto.Cache[string, proto.Message]
 	voteStats                          voteStats
 	syncCommitteeStats                 syncCommitteeStats
 	submittedAtts                      map[submittedAttKey]*submittedAtt
@@ -113,6 +113,9 @@ type validator struct {
 	attSelectionLock                   sync.Mutex
 	dutiesLock                         sync.RWMutex
 	disableDutiesPolling               bool
+	accountsChangedChannel             chan [][fieldparams.BLSPubkeyLength]byte
+	eventsChannel                      chan *eventClient.Event
+	accountChangedSub                  event.Subscription
 }
 
 type validatorStatus struct {
@@ -128,7 +131,20 @@ type attSelectionKey struct {
 
 // Done cleans up the validator.
 func (v *validator) Done() {
-	v.ticker.Done()
+	if v.accountChangedSub != nil {
+		v.accountChangedSub.Unsubscribe()
+	}
+	if v.ticker != nil {
+		v.ticker.Done()
+	}
+}
+
+func (v *validator) EventsChan() <-chan *eventClient.Event {
+	return v.eventsChannel
+}
+
+func (v *validator) AccountsChangedChan() <-chan [][fieldparams.BLSPubkeyLength]byte {
+	return v.accountsChangedChannel
 }
 
 // WaitForKeymanagerInitialization checks if the validator needs to wait for keymanager initialization.
@@ -170,6 +186,7 @@ func (v *validator) WaitForKeymanagerInitialization(ctx context.Context) error {
 		return errors.New("key manager not set")
 	}
 	recheckKeys(ctx, v.db, v.km)
+	v.accountChangedSub = v.km.SubscribeAccountChanges(v.accountsChangedChannel)
 	return nil
 }
 
@@ -514,18 +531,7 @@ func retrieveLatestRecord(recs []*dbCommon.AttestationRecord) *dbCommon.Attestat
 // UpdateDuties checks the slot number to determine if the validator's
 // list of upcoming assignments needs to be updated. For example, at the
 // beginning of a new epoch.
-func (v *validator) UpdateDuties(ctx context.Context, slot primitives.Slot) error {
-	if !slots.IsEpochStart(slot) && v.duties != nil {
-		// Do nothing if not epoch start AND assignments already exist.
-		return nil
-	}
-	// Set deadline to end of epoch.
-	ss, err := slots.EpochStart(primitives.Epoch(slots.CurrentSlot(v.genesisTime) + 1))
-	if err != nil {
-		return err
-	}
-	ctx, cancel := context.WithDeadline(ctx, v.SlotDeadline(ss))
-	defer cancel()
+func (v *validator) UpdateDuties(ctx context.Context) error {
 	ctx, span := trace.StartSpan(ctx, "validator.UpdateDuties")
 	defer span.End()
 
@@ -548,15 +554,15 @@ func (v *validator) UpdateDuties(ctx context.Context, slot primitives.Slot) erro
 		}
 	}
 	v.blacklistedPubkeysLock.RUnlock()
-
+	epoch := slots.ToEpoch(slots.CurrentSlot(v.genesisTime) + 1)
 	req := &ethpb.DutiesRequest{
-		Epoch:      primitives.Epoch(slot / params.BeaconConfig().SlotsPerEpoch),
+		Epoch:      epoch,
 		PublicKeys: bytesutil.FromBytes48Array(filteredKeys),
 	}
 
 	// If duties is nil it means we have had no prior duties and just started up.
 	resp, err := v.validatorClient.Duties(ctx, req)
-	if err != nil {
+	if err != nil || resp == nil {
 		v.dutiesLock.Lock()
 		v.duties = nil // Clear assignments so we know to retry the request.
 		v.dutiesLock.Unlock()
@@ -564,9 +570,13 @@ func (v *validator) UpdateDuties(ctx context.Context, slot primitives.Slot) erro
 		return err
 	}
 
+	ss, err := slots.EpochStart(epoch)
+	if err != nil {
+		return err
+	}
 	v.dutiesLock.Lock()
 	v.duties = resp
-	v.logDuties(slot, v.duties.CurrentEpochDuties, v.duties.NextEpochDuties)
+	v.logDuties(ss, v.duties.CurrentEpochDuties, v.duties.NextEpochDuties)
 	v.dutiesLock.Unlock()
 
 	allExitedCounter := 0
@@ -688,6 +698,10 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 
 	v.dutiesLock.RLock()
 	defer v.dutiesLock.RUnlock()
+
+	if v.duties == nil {
+		return nil, errors.New("validator duties are not initialized")
+	}
 
 	var (
 		rolesAt = make(map[[fieldparams.BLSPubkeyLength]byte][]iface.ValidatorRole)
@@ -934,7 +948,7 @@ func (v *validator) domainData(ctx context.Context, epoch primitives.Epoch, doma
 
 	if val, ok := v.domainDataCache.Get(key); ok {
 		v.domainDataLock.RUnlock()
-		return proto.Clone(val.(proto.Message)).(*ethpb.DomainResponse), nil
+		return proto.Clone(val).(*ethpb.DomainResponse), nil
 	}
 	v.domainDataLock.RUnlock()
 
@@ -946,7 +960,7 @@ func (v *validator) domainData(ctx context.Context, epoch primitives.Epoch, doma
 	// the same domain data, the cache might have been filled while we were waiting
 	// to acquire the lock.
 	if val, ok := v.domainDataCache.Get(key); ok {
-		return proto.Clone(val.(proto.Message)).(*ethpb.DomainResponse), nil
+		return proto.Clone(val).(*ethpb.DomainResponse), nil
 	}
 
 	res, err := v.validatorClient.DomainData(ctx, req)
@@ -1083,12 +1097,13 @@ func (v *validator) SetProposerSettings(ctx context.Context, settings *proposer.
 }
 
 // PushProposerSettings calls the prepareBeaconProposer RPC to set the fee recipient and also the register validator API if using a custom builder.
-func (v *validator) PushProposerSettings(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, forceFullPush bool) error {
+func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Slot, forceFullPush bool) error {
 	ctx, span := trace.StartSpan(ctx, "validator.PushProposerSettings")
 	defer span.End()
 
-	if km == nil {
-		return errors.New("keymanager is nil when calling PrepareBeaconProposer")
+	km, err := v.Keymanager()
+	if err != nil {
+		return err
 	}
 
 	pubkeys, err := km.FetchValidatingPublicKeys(ctx)
@@ -1136,34 +1151,37 @@ func (v *validator) PushProposerSettings(ctx context.Context, km keymanager.IKey
 	return nil
 }
 
-func (v *validator) StartEventStream(ctx context.Context, topics []string, eventsChannel chan<- *eventClient.Event) {
+func (v *validator) StartEventStream(ctx context.Context, topics []string) {
 	log.WithField("topics", topics).Info("Starting event stream")
-	v.validatorClient.StartEventStream(ctx, topics, eventsChannel)
+	v.validatorClient.StartEventStream(ctx, topics, v.eventsChannel)
 }
 
 func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadEvent) error {
 	if head == nil {
 		return errors.New("received empty head event")
 	}
-	prevDepedentRoot, err := bytesutil.DecodeHexWithLength(head.PreviousDutyDependentRoot, fieldparams.RootLength)
+	prevDependentRoot, err := bytesutil.DecodeHexWithLength(head.PreviousDutyDependentRoot, fieldparams.RootLength)
 	if err != nil {
 		return errors.Wrap(err, "failed to decode previous duty dependent root")
 	}
-	if bytes.Equal(prevDepedentRoot, params.BeaconConfig().ZeroHash[:]) {
+	if bytes.Equal(prevDependentRoot, params.BeaconConfig().ZeroHash[:]) {
 		return nil
 	}
-	uintSlot, err := strconv.ParseUint(head.Slot, 10, 64)
+	epoch := slots.ToEpoch(slots.CurrentSlot(v.genesisTime) + 1)
+	ss, err := slots.EpochStart(epoch + 1)
 	if err != nil {
-		return errors.Wrap(err, "Failed to parse slot")
+		return errors.Wrap(err, "failed to get epoch start")
 	}
-
-	slot := primitives.Slot(uintSlot)
-	currEpochStart, err := slots.EpochStart(slots.ToEpoch(slot))
-	if err != nil {
-		return err
-	}
-	if !bytes.Equal(prevDepedentRoot, v.duties.PrevDependentRoot) {
-		if err := v.UpdateDuties(ctx, currEpochStart); err != nil {
+	deadline := v.SlotDeadline(ss - 1)
+	dutiesCtx, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
+	v.dutiesLock.RLock()
+	needsPrevDependentRootUpdate := v.duties == nil || !bytes.Equal(prevDependentRoot, v.duties.PrevDependentRoot)
+	v.dutiesLock.RUnlock()
+	if needsPrevDependentRootUpdate {
+		// There's an edge case when the initial duties are not set yet
+		// This routine will lock and recompute them right after the initial duties finishes.
+		if err := v.UpdateDuties(dutiesCtx); err != nil {
 			return errors.Wrap(err, "failed to update duties")
 		}
 		log.Info("Updated duties due to previous dependent root change")
@@ -1176,13 +1194,16 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 	if bytes.Equal(currDepedentRoot, params.BeaconConfig().ZeroHash[:]) {
 		return nil
 	}
-	if !bytes.Equal(currDepedentRoot, v.duties.CurrDependentRoot) {
-		if err := v.UpdateDuties(ctx, currEpochStart); err != nil {
-			return errors.Wrap(err, "failed to update duties")
-		}
-		log.Info("Updated duties due to current dependent root change")
+	v.dutiesLock.RLock()
+	needsCurrDependentRootUpdate := v.duties == nil || !bytes.Equal(currDepedentRoot, v.duties.CurrDependentRoot)
+	v.dutiesLock.RUnlock()
+	if !needsCurrDependentRootUpdate {
 		return nil
 	}
+	if err := v.UpdateDuties(dutiesCtx); err != nil {
+		return errors.Wrap(err, "failed to update duties")
+	}
+	log.Info("Updated duties due to current dependent root change")
 	return nil
 }
 

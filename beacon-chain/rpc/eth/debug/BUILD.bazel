@@ -35,6 +35,7 @@ go_test(
         "//beacon-chain/forkchoice/doubly-linked-tree:go_default_library",
         "//beacon-chain/forkchoice/types:go_default_library",
         "//beacon-chain/rpc/testutil:go_default_library",
+        "//config/params:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//runtime/version:go_default_library",
         "//testing/assert:go_default_library",

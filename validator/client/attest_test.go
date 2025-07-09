@@ -39,7 +39,7 @@ func TestRequestAttestation_ValidatorDutiesRequestFailure(t *testing.T) {
 
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.SubmitAttestation(context.Background(), 30, pubKey)
+			validator.SubmitAttestation(t.Context(), 30, pubKey)
 			require.LogsContain(t, hook, "Could not fetch validator assignment")
 		})
 	}
@@ -60,7 +60,7 @@ func TestAttestToBlockHead_SubmitAttestation_EmptyCommittee(t *testing.T) {
 					CommitteeIndex: 0,
 					ValidatorIndex: 0,
 				}}}
-			validator.SubmitAttestation(context.Background(), 0, pubKey)
+			validator.SubmitAttestation(t.Context(), 0, pubKey)
 			require.LogsContain(t, hook, "Empty committee")
 		})
 	}
@@ -99,7 +99,7 @@ func TestAttestToBlockHead_SubmitAttestation_RequestFailure(t *testing.T) {
 
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.SubmitAttestation(context.Background(), 30, pubKey)
+			validator.SubmitAttestation(t.Context(), 30, pubKey)
 			require.LogsContain(t, hook, "Could not submit attestation to beacon node")
 		})
 	}
@@ -150,7 +150,7 @@ func TestAttestToBlockHead_AttestsCorrectly(t *testing.T) {
 				generatedAttestation = att
 			}).Return(&ethpb.AttestResponse{}, nil /* error */)
 
-			validator.SubmitAttestation(context.Background(), 30, pubKey)
+			validator.SubmitAttestation(t.Context(), 30, pubKey)
 
 			aggregationBitfield := bitfield.NewBitlist(uint64(len(committee)))
 			aggregationBitfield.SetBitAt(4, true)
@@ -167,7 +167,7 @@ func TestAttestToBlockHead_AttestsCorrectly(t *testing.T) {
 			root, err := signing.ComputeSigningRoot(expectedAttestation.Data, make([]byte, 32))
 			require.NoError(t, err)
 
-			sig, err := validator.km.Sign(context.Background(), &validatorpb.SignRequest{
+			sig, err := validator.km.Sign(t.Context(), &validatorpb.SignRequest{
 				PublicKey:   validatorKey.PublicKey().Marshal(),
 				SigningRoot: root[:],
 			})
@@ -230,7 +230,7 @@ func TestAttestToBlockHead_AttestsCorrectly(t *testing.T) {
 				generatedAttestation = att
 			}).Return(&ethpb.AttestResponse{}, nil /* error */)
 
-			validator.SubmitAttestation(context.Background(), params.BeaconConfig().SlotsPerEpoch.Mul(electraForkEpoch), pubKey)
+			validator.SubmitAttestation(t.Context(), params.BeaconConfig().SlotsPerEpoch.Mul(electraForkEpoch), pubKey)
 
 			aggregationBitfield := bitfield.NewBitlist(uint64(len(committee)))
 			aggregationBitfield.SetBitAt(4, true)
@@ -250,7 +250,7 @@ func TestAttestToBlockHead_AttestsCorrectly(t *testing.T) {
 			root, err := signing.ComputeSigningRoot(expectedAttestation.Data, make([]byte, 32))
 			require.NoError(t, err)
 
-			sig, err := validator.km.Sign(context.Background(), &validatorpb.SignRequest{
+			sig, err := validator.km.Sign(t.Context(), &validatorpb.SignRequest{
 				PublicKey:   validatorKey.PublicKey().Marshal(),
 				SigningRoot: root[:],
 			})
@@ -315,8 +315,8 @@ func TestAttestToBlockHead_BlocksDoubleAtt(t *testing.T) {
 				gomock.AssignableToTypeOf(&ethpb.Attestation{}),
 			).Return(&ethpb.AttestResponse{AttestationDataRoot: make([]byte, 32)}, nil /* error */)
 
-			validator.SubmitAttestation(context.Background(), 30, pubKey)
-			validator.SubmitAttestation(context.Background(), 30, pubKey)
+			validator.SubmitAttestation(t.Context(), 30, pubKey)
+			validator.SubmitAttestation(t.Context(), 30, pubKey)
 			require.LogsContain(t, hook, "Failed attestation slashing protection")
 		})
 	}
@@ -371,8 +371,8 @@ func TestAttestToBlockHead_BlocksSurroundAtt(t *testing.T) {
 				gomock.AssignableToTypeOf(&ethpb.Attestation{}),
 			).Return(&ethpb.AttestResponse{}, nil /* error */)
 
-			validator.SubmitAttestation(context.Background(), 30, pubKey)
-			validator.SubmitAttestation(context.Background(), 30, pubKey)
+			validator.SubmitAttestation(t.Context(), 30, pubKey)
+			validator.SubmitAttestation(t.Context(), 30, pubKey)
 			require.LogsContain(t, hook, "Failed attestation slashing protection")
 		})
 	}
@@ -419,7 +419,7 @@ func TestAttestToBlockHead_BlocksSurroundedAtt(t *testing.T) {
 				gomock.AssignableToTypeOf(&ethpb.Attestation{}),
 			).Return(&ethpb.AttestResponse{}, nil /* error */)
 
-			validator.SubmitAttestation(context.Background(), 30, pubKey)
+			validator.SubmitAttestation(t.Context(), 30, pubKey)
 			require.LogsDoNotContain(t, hook, failedAttLocalProtectionErr)
 
 			m.validatorClient.EXPECT().AttestationData(
@@ -431,7 +431,7 @@ func TestAttestToBlockHead_BlocksSurroundedAtt(t *testing.T) {
 				Source:          &ethpb.Checkpoint{Root: bytesutil.PadTo([]byte("C"), 32), Epoch: 1},
 			}, nil)
 
-			validator.SubmitAttestation(context.Background(), 30, pubKey)
+			validator.SubmitAttestation(t.Context(), 30, pubKey)
 			require.LogsContain(t, hook, "Failed attestation slashing protection")
 		})
 	}
@@ -462,7 +462,7 @@ func TestAttestToBlockHead_DoesNotAttestBeforeDelay(t *testing.T) {
 			).Return(&ethpb.AttestResponse{}, nil /* error */).Times(0)
 
 			timer := time.NewTimer(1 * time.Second)
-			go validator.SubmitAttestation(context.Background(), 0, pubKey)
+			go validator.SubmitAttestation(t.Context(), 0, pubKey)
 			<-timer.C
 		})
 	}
@@ -512,7 +512,7 @@ func TestAttestToBlockHead_DoesAttestAfterDelay(t *testing.T) {
 				gomock.Any(),
 			).Return(&ethpb.AttestResponse{}, nil).Times(1)
 
-			validator.SubmitAttestation(context.Background(), 0, pubKey)
+			validator.SubmitAttestation(t.Context(), 0, pubKey)
 		})
 	}
 }
@@ -555,7 +555,7 @@ func TestAttestToBlockHead_CorrectBitfieldLength(t *testing.T) {
 				generatedAttestation = att
 			}).Return(&ethpb.AttestResponse{}, nil /* error */)
 
-			validator.SubmitAttestation(context.Background(), 30, pubKey)
+			validator.SubmitAttestation(t.Context(), 30, pubKey)
 
 			assert.Equal(t, 2, len(generatedAttestation.AggregationBits))
 		})
@@ -579,7 +579,7 @@ func TestSignAttestation(t *testing.T) {
 			m.validatorClient.EXPECT().
 				DomainData(gomock.Any(), gomock.Any()).
 				Return(&ethpb.DomainResponse{SignatureDomain: attesterDomain}, nil)
-			ctx := context.Background()
+			ctx := t.Context()
 			att := util.NewAttestation()
 			att.Data.Source.Epoch = 100
 			att.Data.Target.Epoch = 200
@@ -614,7 +614,7 @@ func TestServer_WaitToSlotOneThird_CanWait(t *testing.T) {
 
 	timeToSleep := params.BeaconConfig().SecondsPerSlot / 3
 	oneThird := currentTime + timeToSleep
-	v.waitOneThirdOrValidBlock(context.Background(), currentSlot)
+	v.waitOneThirdOrValidBlock(t.Context(), currentSlot)
 
 	if oneThird != uint64(time.Now().Unix()) {
 		t.Errorf("Wanted %d time for slot one third but got %d", oneThird, currentTime)
@@ -632,7 +632,7 @@ func TestServer_WaitToSlotOneThird_SameReqSlot(t *testing.T) {
 		highestValidSlot: currentSlot,
 	}
 
-	v.waitOneThirdOrValidBlock(context.Background(), currentSlot)
+	v.waitOneThirdOrValidBlock(t.Context(), currentSlot)
 
 	if currentTime != uint64(time.Now().Unix()) {
 		t.Errorf("Wanted %d time for slot one third but got %d", uint64(time.Now().Unix()), currentTime)
@@ -660,7 +660,7 @@ func TestServer_WaitToSlotOneThird_ReceiveBlockSlot(t *testing.T) {
 		wg.Done()
 	}()
 
-	v.waitOneThirdOrValidBlock(context.Background(), currentSlot)
+	v.waitOneThirdOrValidBlock(t.Context(), currentSlot)
 
 	if currentTime != uint64(time.Now().Unix()) {
 		t.Errorf("Wanted %d time for slot one third but got %d", uint64(time.Now().Unix()), currentTime)
@@ -691,7 +691,7 @@ func Test_slashableAttestationCheck(t *testing.T) {
 				},
 			}
 
-			err := validator.db.SlashableAttestationCheck(context.Background(), att, pubKey, [32]byte{1}, false, nil)
+			err := validator.db.SlashableAttestationCheck(t.Context(), att, pubKey, [32]byte{1}, false, nil)
 			require.NoError(t, err, "Expected allowed attestation not to throw error")
 		})
 	}
@@ -702,7 +702,7 @@ func Test_slashableAttestationCheck_UpdatesLowestSignedEpochs(t *testing.T) {
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
 			validator, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
 			defer finish()
-			ctx := context.Background()
+			ctx := t.Context()
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
 			att := &ethpb.IndexedAttestation{
@@ -729,18 +729,18 @@ func Test_slashableAttestationCheck_UpdatesLowestSignedEpochs(t *testing.T) {
 			_, sr, err := validator.domainAndSigningRoot(ctx, att.Data)
 			require.NoError(t, err)
 
-			err = validator.db.SlashableAttestationCheck(context.Background(), att, pubKey, sr, false, nil)
+			err = validator.db.SlashableAttestationCheck(t.Context(), att, pubKey, sr, false, nil)
 			require.NoError(t, err)
 			differentSigningRoot := [32]byte{2}
 
-			err = validator.db.SlashableAttestationCheck(context.Background(), att, pubKey, differentSigningRoot, false, nil)
+			err = validator.db.SlashableAttestationCheck(t.Context(), att, pubKey, differentSigningRoot, false, nil)
 			require.ErrorContains(t, "could not sign attestation", err)
 
-			e, exists, err := validator.db.LowestSignedSourceEpoch(context.Background(), pubKey)
+			e, exists, err := validator.db.LowestSignedSourceEpoch(t.Context(), pubKey)
 			require.NoError(t, err)
 			require.Equal(t, true, exists)
 			require.Equal(t, primitives.Epoch(4), e)
-			e, exists, err = validator.db.LowestSignedTargetEpoch(context.Background(), pubKey)
+			e, exists, err = validator.db.LowestSignedTargetEpoch(t.Context(), pubKey)
 			require.NoError(t, err)
 			require.Equal(t, true, exists)
 			require.Equal(t, primitives.Epoch(10), e)
@@ -751,7 +751,7 @@ func Test_slashableAttestationCheck_UpdatesLowestSignedEpochs(t *testing.T) {
 func Test_slashableAttestationCheck_OK(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			validator, _, _, finish := setup(t, isSlashingProtectionMinimal)
 			defer finish()
 			att := &ethpb.IndexedAttestation{
@@ -782,7 +782,7 @@ func Test_slashableAttestationCheck_OK(t *testing.T) {
 func Test_slashableAttestationCheck_GenesisEpoch(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			validator, _, _, finish := setup(t, isSlashingProtectionMinimal)
 			defer finish()
 			att := &ethpb.IndexedAttestation{
@@ -805,11 +805,11 @@ func Test_slashableAttestationCheck_GenesisEpoch(t *testing.T) {
 			fakePubkey := bytesutil.ToBytes48([]byte("test"))
 			err := validator.db.SlashableAttestationCheck(ctx, att, fakePubkey, [32]byte{}, false, nil)
 			require.NoError(t, err, "Expected allowed attestation not to throw error")
-			e, exists, err := validator.db.LowestSignedSourceEpoch(context.Background(), fakePubkey)
+			e, exists, err := validator.db.LowestSignedSourceEpoch(t.Context(), fakePubkey)
 			require.NoError(t, err)
 			require.Equal(t, true, exists)
 			require.Equal(t, primitives.Epoch(0), e)
-			e, exists, err = validator.db.LowestSignedTargetEpoch(context.Background(), fakePubkey)
+			e, exists, err = validator.db.LowestSignedTargetEpoch(t.Context(), fakePubkey)
 			require.NoError(t, err)
 			require.Equal(t, true, exists)
 			require.Equal(t, primitives.Epoch(0), e)

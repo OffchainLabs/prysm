@@ -3,6 +3,7 @@ package historycmd
 import (
 	"bytes"
 	"fmt"
+	"path/filepath"
 
 	"github.com/OffchainLabs/prysm/v6/cmd"
 	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
@@ -45,16 +46,29 @@ func importSlashingProtectionJSON(cliCtx *cli.Context) error {
 	}
 
 	// Ensure that the database is found under the specified directory or its subdirectories
+	var matchPath string
 	if isDatabaseMinimal {
-		found, _, err = file.RecursiveDirFind(filesystem.DatabaseDirName, dataDir)
+		found, matchPath, err = file.RecursiveDirFind(filesystem.DatabaseDirName, dataDir)
 	} else {
-		found, _, err = file.RecursiveFileFind(kv.ProtectionDbFileName, dataDir)
+		found, matchPath, err = file.RecursiveFileFind(kv.ProtectionDbFileName, dataDir)
 	}
 
 	if err != nil {
 		return errors.Wrapf(err, "error finding validator database at path %s", dataDir)
 	}
-
+	if !found {
+		databaseFileDir := kv.ProtectionDbFileName
+		if isDatabaseMinimal {
+			databaseFileDir = filesystem.DatabaseDirName
+		}
+		return fmt.Errorf("%s (validator database) was not found at path %s, so nothing to export", databaseFileDir, dataDir)
+	} else {
+		if !isDatabaseMinimal {
+			matchPath = filepath.Dir(matchPath) // strip the file name
+		}
+		dataDir = matchPath
+		log.Infof("Found validator database at path %s", dataDir)
+	}
 	message := "Found existing database inside of %s"
 	if !found {
 		message = "Did not find existing database inside of %s, creating a new one"

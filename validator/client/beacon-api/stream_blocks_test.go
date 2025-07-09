@@ -1,7 +1,6 @@
 package beacon_api
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -23,7 +22,7 @@ func TestStreamBlocks_UnsupportedConsensusVersion(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Get(
@@ -145,7 +144,7 @@ func TestStreamBlocks_Error(t *testing.T) {
 					ctrl := gomock.NewController(t)
 					defer ctrl.Finish()
 
-					ctx := context.Background()
+					ctx := t.Context()
 
 					jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 					jsonRestHandler.EXPECT().Get(
@@ -195,7 +194,7 @@ func TestStreamBlocks_Phase0Valid(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			ctx := context.Background()
+			ctx := t.Context()
 
 			signedBlockResponseJson := abstractSignedBlockResponseJson{}
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
@@ -356,7 +355,7 @@ func TestStreamBlocks_AltairValid(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			ctx := context.Background()
+			ctx := t.Context()
 
 			signedBlockResponseJson := abstractSignedBlockResponseJson{}
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
@@ -517,7 +516,7 @@ func TestStreamBlocks_BellatrixValid(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			ctx := context.Background()
+			ctx := t.Context()
 
 			signedBlockResponseJson := abstractSignedBlockResponseJson{}
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
@@ -678,7 +677,7 @@ func TestStreamBlocks_CapellaValid(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			ctx := context.Background()
+			ctx := t.Context()
 
 			signedBlockResponseJson := abstractSignedBlockResponseJson{}
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
@@ -839,7 +838,7 @@ func TestStreamBlocks_DenebValid(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			ctx := context.Background()
+			ctx := t.Context()
 
 			signedBlockResponseJson := abstractSignedBlockResponseJson{}
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)

@@ -25,6 +25,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
 	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
@@ -86,44 +87,47 @@ type serviceFlagOpts struct {
 // full PoS node. It handles the lifecycle of the entire system and registers
 // services to a service registry.
 type BeaconNode struct {
-	cliCtx                  *cli.Context
-	ctx                     context.Context
-	cancel                  context.CancelFunc
-	services                *runtime.ServiceRegistry
-	lock                    sync.RWMutex
-	stop                    chan struct{} // Channel to wait for termination notifications.
-	db                      db.Database
-	slasherDB               db.SlasherDatabase
-	attestationCache        *cache.AttestationCache
-	attestationPool         attestations.Pool
-	exitPool                voluntaryexits.PoolManager
-	slashingsPool           slashings.PoolManager
-	syncCommitteePool       synccommittee.Pool
-	blsToExecPool           blstoexec.PoolManager
-	depositCache            cache.DepositCache
-	trackedValidatorsCache  *cache.TrackedValidatorsCache
-	payloadIDCache          *cache.PayloadIDCache
-	stateFeed               *event.Feed
-	blockFeed               *event.Feed
-	opFeed                  *event.Feed
-	stateGen                *stategen.State
-	collector               *bcnodeCollector
-	slasherBlockHeadersFeed *event.Feed
-	slasherAttestationsFeed *event.Feed
-	finalizedStateAtStartUp state.BeaconState
-	serviceFlagOpts         *serviceFlagOpts
-	GenesisInitializer      genesis.Initializer
-	CheckpointInitializer   checkpoint.Initializer
-	forkChoicer             forkchoice.ForkChoicer
-	clockWaiter             startup.ClockWaiter
-	BackfillOpts            []backfill.ServiceOption
-	initialSyncComplete     chan struct{}
-	BlobStorage             *filesystem.BlobStorage
-	BlobStorageOptions      []filesystem.BlobStorageOption
-	verifyInitWaiter        *verification.InitializerWaiter
-	syncChecker             *initialsync.SyncChecker
-	slasherEnabled          bool
-	lcStore                 *lightclient.Store
+	cliCtx                   *cli.Context
+	ctx                      context.Context
+	cancel                   context.CancelFunc
+	services                 *runtime.ServiceRegistry
+	lock                     sync.RWMutex
+	stop                     chan struct{} // Channel to wait for termination notifications.
+	db                       db.Database
+	slasherDB                db.SlasherDatabase
+	attestationCache         *cache.AttestationCache
+	attestationPool          attestations.Pool
+	exitPool                 voluntaryexits.PoolManager
+	slashingsPool            slashings.PoolManager
+	syncCommitteePool        synccommittee.Pool
+	blsToExecPool            blstoexec.PoolManager
+	depositCache             cache.DepositCache
+	trackedValidatorsCache   *cache.TrackedValidatorsCache
+	payloadIDCache           *cache.PayloadIDCache
+	stateFeed                *event.Feed
+	blockFeed                *event.Feed
+	opFeed                   *event.Feed
+	stateGen                 *stategen.State
+	collector                *bcnodeCollector
+	slasherBlockHeadersFeed  *event.Feed
+	slasherAttestationsFeed  *event.Feed
+	finalizedStateAtStartUp  state.BeaconState
+	serviceFlagOpts          *serviceFlagOpts
+	GenesisInitializer       genesis.Initializer
+	CheckpointInitializer    checkpoint.Initializer
+	forkChoicer              forkchoice.ForkChoicer
+	clockWaiter              startup.ClockWaiter
+	BackfillOpts             []backfill.ServiceOption
+	initialSyncComplete      chan struct{}
+	BlobStorage              *filesystem.BlobStorage
+	BlobStorageOptions       []filesystem.BlobStorageOption
+	DataColumnStorage        *filesystem.DataColumnStorage
+	DataColumnStorageOptions []filesystem.DataColumnStorageOption
+	custodyInfo              *peerdas.CustodyInfo
+	verifyInitWaiter         *verification.InitializerWaiter
+	syncChecker              *initialsync.SyncChecker
+	slasherEnabled           bool
+	lcStore                  *lightclient.Store
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -161,8 +165,8 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		serviceFlagOpts:         &serviceFlagOpts{},
 		initialSyncComplete:     make(chan struct{}),
 		syncChecker:             &initialsync.SyncChecker{},
+		custodyInfo:             &peerdas.CustodyInfo{},
 		slasherEnabled:          cliCtx.Bool(flags.SlasherFlag.Name),
-		lcStore:                 &lightclient.Store{},
 	}
 
 	for _, opt := range opts {
@@ -188,6 +192,15 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 			return nil, err
 		}
 		beacon.BlobStorage = blobs
+	}
+
+	if beacon.DataColumnStorage == nil {
+		dataColumnStorage, err := filesystem.NewDataColumnStorage(cliCtx.Context, beacon.DataColumnStorageOptions...)
+		if err != nil {
+			return nil, errors.Wrap(err, "new data column storage")
+		}
+
+		beacon.DataColumnStorage = dataColumnStorage
 	}
 
 	bfs, err := startBaseServices(cliCtx, beacon, depositAddress)
@@ -220,6 +233,10 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 	// Do not store the finalized state as it has been provided to the respective services during
 	// their initialization.
 	beacon.finalizedStateAtStartUp = nil
+
+	if features.Get().EnableLightClient {
+		beacon.lcStore = lightclient.NewLightClientStore()
+	}
 
 	return beacon, nil
 }
@@ -280,6 +297,7 @@ func startBaseServices(cliCtx *cli.Context, beacon *BeaconNode, depositAddress s
 	if err := beacon.startDB(cliCtx, depositAddress); err != nil {
 		return nil, errors.Wrap(err, "could not start DB")
 	}
+
 	beacon.BlobStorage.WarmCache()
 
 	log.Debugln("Starting Slashing DB")
@@ -697,6 +715,7 @@ func (b *BeaconNode) registerP2P(cliCtx *cli.Context) error {
 		StateNotifier:        b,
 		DB:                   b.db,
 		ClockWaiter:          b.clockWaiter,
+		CustodyInfo:          b.custodyInfo,
 	})
 	if err != nil {
 		return err
@@ -775,9 +794,11 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithClockSynchronizer(gs),
 		blockchain.WithSyncComplete(syncComplete),
 		blockchain.WithBlobStorage(b.BlobStorage),
+		blockchain.WithDataColumnStorage(b.DataColumnStorage),
 		blockchain.WithTrackedValidatorsCache(b.trackedValidatorsCache),
 		blockchain.WithPayloadIDCache(b.payloadIDCache),
 		blockchain.WithSyncChecker(b.syncChecker),
+		blockchain.WithCustodyInfo(b.custodyInfo),
 		blockchain.WithSlasherEnabled(b.slasherEnabled),
 		blockchain.WithLightClientStore(b.lcStore),
 	)
@@ -862,9 +883,13 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithInitialSyncComplete(initialSyncComplete),
 		regularsync.WithStateNotifier(b),
 		regularsync.WithBlobStorage(b.BlobStorage),
+		regularsync.WithDataColumnStorage(b.DataColumnStorage),
 		regularsync.WithVerifierWaiter(b.verifyInitWaiter),
 		regularsync.WithAvailableBlocker(bFillStore),
+		regularsync.WithCustodyInfo(b.custodyInfo),
 		regularsync.WithSlasherEnabled(b.slasherEnabled),
+		regularsync.WithLightClientStore(b.lcStore),
+		regularsync.WithBatchVerifierLimit(b.cliCtx.Int(flags.BatchVerifierLimit.Name)),
 	)
 	return b.services.RegisterService(rs)
 }
@@ -1031,6 +1056,7 @@ func (b *BeaconNode) registerPrometheusService(_ *cli.Context) error {
 	}
 
 	service := prometheus.NewService(
+		b.cliCtx.Context,
 		fmt.Sprintf("%s:%d", b.cliCtx.String(cmd.MonitoringHostFlag.Name), b.cliCtx.Int(flags.MonitoringPortFlag.Name)),
 		b.services,
 		additionalHandlers...,

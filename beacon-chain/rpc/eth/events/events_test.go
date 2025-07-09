@@ -31,7 +31,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/ethereum/go-ethereum/common"
-	sse "github.com/r3labs/sse/v2"
+	"github.com/r3labs/sse/v2"
 	"github.com/sirupsen/logrus"
 )
 
@@ -40,7 +40,7 @@ var testEventWriteTimeout = 100 * time.Millisecond
 func requireAllEventsReceived(t *testing.T, stn, opn *mockChain.EventFeedWrapper, events []*feed.Event, req *topicRequest, s *Server, w *StreamingResponseWriterRecorder, logs chan *logrus.Entry) {
 	// maxBufferSize param copied from sse lib client code
 	sseR := sse.NewEventStreamReader(w.Body(), 1<<24)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
 
 	expected := make(map[string]bool)
@@ -48,7 +48,7 @@ func requireAllEventsReceived(t *testing.T, stn, opn *mockChain.EventFeedWrapper
 		ev := events[i]
 		// serialize the event the same way the server will so that we can compare expectation to results.
 		top := topicForEvent(ev)
-		eb, err := s.lazyReaderForEvent(context.Background(), ev, req)
+		eb, err := s.lazyReaderForEvent(t.Context(), ev, req)
 		require.NoError(t, err)
 		exb, err := io.ReadAll(eb())
 		require.NoError(t, err)
@@ -121,6 +121,7 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 		AttesterSlashingTopic,
 		ProposerSlashingTopic,
 		BlockGossipTopic,
+		DataColumnTopic,
 	})
 	require.NoError(t, err)
 	ro, err := blocks.NewROBlob(util.HydrateBlobSidecar(&eth.BlobSidecar{}))
@@ -301,6 +302,15 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 				SignedBlock: signedBlock,
 			},
 		},
+		{
+			Type: operation.DataColumnReceived,
+			Data: &operation.DataColumnReceivedData{
+				Slot:           1,
+				Index:          2,
+				BlockRoot:      [32]byte{'a'},
+				KzgCommitments: [][]byte{{'a'}, {'b'}, {'c'}},
+			},
+		},
 	}
 }
 
@@ -331,7 +341,7 @@ func newStreamTestSync(t *testing.T) *streamTestSync {
 	logChan := make(chan *logrus.Entry, 100)
 	cew := util.NewChannelEntryWriter(logChan)
 	undo := util.RegisterHookWithUndo(logger, cew)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	return &streamTestSync{
 		t:      t,
 		ctx:    ctx,
@@ -519,6 +529,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 				st := tc.getState()
 				v := &eth.Validator{ExitEpoch: math.MaxUint64, EffectiveBalance: params.BeaconConfig().MinActivationBalance, WithdrawalCredentials: make([]byte, 32)}
 				require.NoError(t, st.SetValidators([]*eth.Validator{v}))
+				require.NoError(t, st.SetBalances([]uint64{0}))
 				currentSlot := primitives.Slot(0)
 				// to avoid slot processing
 				require.NoError(t, st.SetSlot(currentSlot+1))
@@ -580,7 +591,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 }
 
 func TestFillEventData(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	t.Run("AlreadyFilledData_ShouldShortCircuitWithoutError", func(t *testing.T) {
 		b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockBellatrix(&eth.SignedBeaconBlockBellatrix{}))
 		require.NoError(t, err)
@@ -709,7 +720,7 @@ func TestStuckReaderScenarios(t *testing.T) {
 
 func wedgedWriterTestCase(t *testing.T, queueDepth func([]*feed.Event) int) {
 	topics, events := operationEventsFixtures(t)
-	require.Equal(t, 11, len(events))
+	require.Equal(t, 12, len(events))
 
 	// set eventFeedDepth to a number lower than the events we intend to send to force the server to drop the reader.
 	stn := mockChain.NewEventFeedWrapper()
@@ -721,7 +732,7 @@ func wedgedWriterTestCase(t *testing.T, queueDepth func([]*feed.Event) int) {
 		EventFeedDepth:    queueDepth(events),
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	eventsWritten := make(chan struct{})
 	go func() {

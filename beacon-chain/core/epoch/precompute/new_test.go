@@ -1,7 +1,6 @@
 package precompute_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/epoch/precompute"
@@ -29,7 +28,7 @@ func TestNew(t *testing.T) {
 	})
 	require.NoError(t, err)
 	e := params.BeaconConfig().FarFutureSlot
-	v, b, err := precompute.New(context.Background(), s)
+	v, b, err := precompute.New(t.Context(), s)
 	require.NoError(t, err)
 	assert.DeepEqual(t, &precompute.Validator{
 		IsSlashed:                    true,

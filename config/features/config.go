@@ -40,7 +40,6 @@ const disabledFeatureFlag = "Disabled feature flag"
 // Flags is a struct to represent which features the client will perform on runtime.
 type Flags struct {
 	// Feature related flags.
-	EnableExperimentalState             bool // EnableExperimentalState turns on the latest and greatest (but potentially unstable) changes to the beacon state.
 	WriteSSZStateTransitions            bool // WriteSSZStateTransitions to tmp directory.
 	EnablePeerScorer                    bool // EnablePeerScorer enables experimental peer scoring in p2p.
 	EnableLightClient                   bool // EnableLightClient enables light client APIs.
@@ -50,6 +49,9 @@ type Flags struct {
 	EnableHistoricalSpaceRepresentation bool // EnableHistoricalSpaceRepresentation enables the saving of registry validators in separate buckets to save space
 	EnableBeaconRESTApi                 bool // EnableBeaconRESTApi enables experimental usage of the beacon REST API by the validator when querying a beacon node
 	EnableExperimentalAttestationPool   bool // EnableExperimentalAttestationPool enables an experimental attestation pool design.
+	EnableDutiesV2                      bool // EnableDutiesV2 sets validator client to use the get Duties V2 endpoint
+	EnableWeb                           bool // EnableWeb enables the webui on the validator client
+	SSZOnly                             bool // SSZOnly forces the validator client to use SSZ for communication with the beacon node when REST mode is enabled (useful for debugging)
 	// Logging related toggles.
 	DisableGRPCConnectionLogs bool // Disables logging when a new grpc client has connected.
 	EnableFullSSZDataLogging  bool // Enables logging for full ssz data on rejected gossip messages
@@ -153,7 +155,8 @@ func configureTestnet(ctx *cli.Context) error {
 		params.UseHoodiNetworkConfig()
 	} else {
 		if ctx.IsSet(cmd.ChainConfigFileFlag.Name) {
-			log.Warn("Running on custom Ethereum network specified in a chain configuration yaml file")
+			log.Warning("Running on custom Ethereum network specified in a chain configuration YAML file")
+			params.UseCustomNetworkConfig()
 		} else {
 			log.Info("Running on Ethereum Mainnet")
 		}
@@ -165,11 +168,11 @@ func configureTestnet(ctx *cli.Context) error {
 }
 
 // Insert feature flags within the function to be enabled for Sepolia testnet.
-func applySepoliaFeatureFlags(ctx *cli.Context) {
+func applySepoliaFeatureFlags(_ *cli.Context) {
 }
 
 // Insert feature flags within the function to be enabled for Holesky testnet.
-func applyHoleskyFeatureFlags(ctx *cli.Context) {
+func applyHoleskyFeatureFlags(_ *cli.Context) {
 }
 
 // ConfigureBeaconChain sets the global config based
@@ -183,12 +186,6 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	}
 	if err := configureTestnet(ctx); err != nil {
 		return err
-	}
-
-	cfg.EnableExperimentalState = true
-	if ctx.Bool(disableExperimentalState.Name) {
-		logEnabled(disableExperimentalState)
-		cfg.EnableExperimentalState = false
 	}
 
 	if ctx.Bool(writeSSZStateTransitionsFlag.Name) {
@@ -314,9 +311,10 @@ func ConfigureValidator(ctx *cli.Context) error {
 		logEnabled(writeWalletPasswordOnWebOnboarding)
 		cfg.WriteWalletPasswordOnWebOnboarding = true
 	}
-	if ctx.Bool(attestTimely.Name) {
-		logEnabled(attestTimely)
-		cfg.AttestTimely = true
+	cfg.AttestTimely = true
+	if ctx.Bool(disableAttestTimely.Name) {
+		logEnabled(disableAttestTimely)
+		cfg.AttestTimely = false
 	}
 	if ctx.Bool(enableSlashingProtectionPruning.Name) {
 		logEnabled(enableSlashingProtectionPruning)
@@ -334,6 +332,19 @@ func ConfigureValidator(ctx *cli.Context) error {
 		logEnabled(EnableBeaconRESTApi)
 		cfg.EnableBeaconRESTApi = true
 	}
+	if ctx.Bool(EnableDutiesV2.Name) {
+		logEnabled(EnableDutiesV2)
+		cfg.EnableDutiesV2 = true
+	}
+	if ctx.Bool(EnableWebFlag.Name) {
+		logEnabled(EnableWebFlag)
+		cfg.EnableWeb = true
+	}
+	if ctx.Bool(SSZOnly.Name) {
+		logEnabled(SSZOnly)
+		cfg.SSZOnly = true
+	}
+
 	cfg.KeystoreImportDebounceInterval = ctx.Duration(dynamicKeyReloadDebounceInterval.Name)
 	Init(cfg)
 	return nil

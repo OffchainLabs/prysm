@@ -23,7 +23,7 @@ var genesisBlockRoot = bytesutil.ToBytes32([]byte{'G', 'E', 'N', 'E', 'S', 'I', 
 func TestStore_IsFinalizedBlock(t *testing.T) {
 	slotsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch)
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	require.NoError(t, db.SaveGenesisBlockRoot(ctx, genesisBlockRoot))
 
@@ -59,7 +59,7 @@ func TestStore_IsFinalizedBlock(t *testing.T) {
 
 func TestStore_IsFinalizedBlockGenesis(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	blk := util.NewBeaconBlock()
 	blk.Block.Slot = 0
@@ -94,7 +94,7 @@ func TestStore_IsFinalized_ForkEdgeCase(t *testing.T) {
 	blocks2 := makeBlocks(t, slotsPerEpoch*2, slotsPerEpoch, bytesutil.ToBytes32(sszRootOrDie(t, blocks1[len(blocks1)-1])))
 
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	require.NoError(t, db.SaveGenesisBlockRoot(ctx, genesisBlockRoot))
 	require.NoError(t, db.SaveBlocks(ctx, blocks0))
@@ -142,7 +142,7 @@ func TestStore_IsFinalized_ForkEdgeCase(t *testing.T) {
 
 func TestStore_IsFinalizedChildBlock(t *testing.T) {
 	slotsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	eval := func(t testing.TB, ctx context.Context, db *Store, blks []interfaces.ReadOnlySignedBeaconBlock) {
 		require.NoError(t, db.SaveBlocks(ctx, blks))
@@ -239,7 +239,7 @@ func makeBlocksAltair(t *testing.T, startIdx, num uint64, previousRoot [32]byte)
 
 func TestStore_BackfillFinalizedIndexSingle(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	// we're making 4 blocks so we can test an element without a valid child at the end
 	blks, err := consensusblocks.NewROBlockSlice(makeBlocks(t, 0, 4, [32]byte{}))
 	require.NoError(t, err)
@@ -283,7 +283,7 @@ func TestStore_BackfillFinalizedIndexSingle(t *testing.T) {
 
 func TestStore_BackfillFinalizedIndex(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	require.ErrorIs(t, db.BackfillFinalizedIndex(ctx, []consensusblocks.ROBlock{}, [32]byte{}), errEmptyBlockSlice)
 	blks, err := consensusblocks.NewROBlockSlice(makeBlocks(t, 0, 66, [32]byte{}))
 	require.NoError(t, err)

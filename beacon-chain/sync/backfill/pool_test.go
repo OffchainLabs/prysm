@@ -40,7 +40,7 @@ func mockNewBlobVerifier(_ blocks.ROBlob, _ []verification.Requirement) verifica
 func TestPoolDetectAllEnded(t *testing.T) {
 	nw := 5
 	p2p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	ma := &mockAssigner{}
 	pool := newP2PBatchWorkerPool(p2p, nw)
 	st, err := util.NewBeaconState()

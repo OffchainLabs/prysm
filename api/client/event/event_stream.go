@@ -14,22 +14,10 @@ import (
 )
 
 const (
-	EventHead                        = "head"
-	EventBlock                       = "block"
-	EventAttestation                 = "attestation"
-	EventVoluntaryExit               = "voluntary_exit"
-	EventBlsToExecutionChange        = "bls_to_execution_change"
-	EventProposerSlashing            = "proposer_slashing"
-	EventAttesterSlashing            = "attester_slashing"
-	EventFinalizedCheckpoint         = "finalized_checkpoint"
-	EventChainReorg                  = "chain_reorg"
-	EventContributionAndProof        = "contribution_and_proof"
-	EventLightClientFinalityUpdate   = "light_client_finality_update"
-	EventLightClientOptimisticUpdate = "light_client_optimistic_update"
-	EventPayloadAttributes           = "payload_attributes"
-	EventBlobSidecar                 = "blob_sidecar"
-	EventError                       = "error"
-	EventConnectionError             = "connection_error"
+	EventHead = "head"
+
+	EventError           = "error"
+	EventConnectionError = "connection_error"
 )
 
 var (

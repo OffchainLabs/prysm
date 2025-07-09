@@ -16,6 +16,7 @@ import (
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	coreTime "github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
@@ -46,26 +47,28 @@ import (
 // Service represents a service that handles the internal
 // logic of managing the full PoS beacon chain.
 type Service struct {
-	cfg                  *config
-	ctx                  context.Context
-	cancel               context.CancelFunc
-	genesisTime          time.Time
-	head                 *head
-	headLock             sync.RWMutex
-	originBlockRoot      [32]byte // genesis root, or weak subjectivity checkpoint root, depending on how the node is initialized
-	boundaryRoots        [][32]byte
-	checkpointStateCache *cache.CheckpointStateCache
-	initSyncBlocks       map[[32]byte]interfaces.ReadOnlySignedBeaconBlock
-	initSyncBlocksLock   sync.RWMutex
-	wsVerifier           *WeakSubjectivityVerifier
-	clockSetter          startup.ClockSetter
-	clockWaiter          startup.ClockWaiter
-	syncComplete         chan struct{}
-	blobNotifiers        *blobNotifierMap
-	blockBeingSynced     *currentlySyncingBlock
-	blobStorage          *filesystem.BlobStorage
-	slasherEnabled       bool
-	lcStore              *lightClient.Store
+	cfg                            *config
+	ctx                            context.Context
+	cancel                         context.CancelFunc
+	genesisTime                    time.Time
+	head                           *head
+	headLock                       sync.RWMutex
+	originBlockRoot                [32]byte // genesis root, or weak subjectivity checkpoint root, depending on how the node is initialized
+	boundaryRoots                  [][32]byte
+	checkpointStateCache           *cache.CheckpointStateCache
+	initSyncBlocks                 map[[32]byte]interfaces.ReadOnlySignedBeaconBlock
+	initSyncBlocksLock             sync.RWMutex
+	wsVerifier                     *WeakSubjectivityVerifier
+	clockSetter                    startup.ClockSetter
+	clockWaiter                    startup.ClockWaiter
+	syncComplete                   chan struct{}
+	blobNotifiers                  *blobNotifierMap
+	blockBeingSynced               *currentlySyncingBlock
+	blobStorage                    *filesystem.BlobStorage
+	dataColumnStorage              *filesystem.DataColumnStorage
+	slasherEnabled                 bool
+	lcStore                        *lightClient.Store
+	startWaitingDataColumnSidecars chan bool // for testing purposes only
 }
 
 // config options for the service.
@@ -81,7 +84,7 @@ type config struct {
 	ExitPool                voluntaryexits.PoolManager
 	SlashingPool            slashings.PoolManager
 	BLSToExecPool           blstoexec.PoolManager
-	P2p                     p2p.Broadcaster
+	P2P                     p2p.Accessor
 	MaxRoutines             int
 	StateNotifier           statefeed.Notifier
 	ForkChoiceStore         f.ForkChoicer
@@ -93,6 +96,7 @@ type config struct {
 	FinalizedStateAtStartUp state.BeaconState
 	ExecutionEngineCaller   execution.EngineCaller
 	SyncChecker             Checker
+	CustodyInfo             *peerdas.CustodyInfo
 }
 
 // Checker is an interface used to determine if a node is in initial sync

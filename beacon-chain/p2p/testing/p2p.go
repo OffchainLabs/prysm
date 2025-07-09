@@ -10,9 +10,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -203,6 +207,24 @@ func (p *TestP2P) BroadcastSyncCommitteeMessage(_ context.Context, _ uint64, _ *
 
 // BroadcastBlob broadcasts a blob for mock.
 func (p *TestP2P) BroadcastBlob(context.Context, uint64, *ethpb.BlobSidecar) error {
+	p.BroadcastCalled.Store(true)
+	return nil
+}
+
+// BroadcastLightClientOptimisticUpdate broadcasts an optimistic update for mock.
+func (p *TestP2P) BroadcastLightClientOptimisticUpdate(_ context.Context, _ interfaces.LightClientOptimisticUpdate) error {
+	p.BroadcastCalled.Store(true)
+	return nil
+}
+
+// BroadcastLightClientFinalityUpdate broadcasts a finality update for mock.
+func (p *TestP2P) BroadcastLightClientFinalityUpdate(_ context.Context, _ interfaces.LightClientFinalityUpdate) error {
+	p.BroadcastCalled.Store(true)
+	return nil
+}
+
+// BroadcastDataColumn broadcasts a data column for mock.
+func (p *TestP2P) BroadcastDataColumn([fieldparams.RootLength]byte, uint64, *ethpb.DataColumnSidecar, ...chan<- bool) error {
 	p.BroadcastCalled.Store(true)
 	return nil
 }
@@ -437,4 +459,23 @@ func (*TestP2P) InterceptSecured(network.Direction, peer.ID, network.ConnMultiad
 // InterceptUpgraded .
 func (*TestP2P) InterceptUpgraded(network.Conn) (allow bool, reason control.DisconnectReason) {
 	return true, 0
+}
+
+func (s *TestP2P) CustodyGroupCountFromPeer(pid peer.ID) uint64 {
+	// By default, we assume the peer custodies the minimum number of groups.
+	custodyRequirement := params.BeaconConfig().CustodyRequirement
+
+	// Retrieve the ENR of the peer.
+	record, err := s.peers.ENR(pid)
+	if err != nil {
+		return custodyRequirement
+	}
+
+	// Retrieve the custody subnets count from the ENR.
+	custodyGroupCount, err := peerdas.CustodyGroupCountFromRecord(record)
+	if err != nil {
+		return custodyRequirement
+	}
+
+	return custodyGroupCount
 }

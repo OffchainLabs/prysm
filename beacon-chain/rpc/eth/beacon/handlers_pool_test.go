@@ -2,7 +2,6 @@ package beacon
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -1858,6 +1857,7 @@ func TestGetAttesterSlashings(t *testing.T) {
 			// Unmarshal resp.Data into a slice of slashings
 			var slashings []*structs.AttesterSlashingElectra
 			require.NoError(t, json.Unmarshal(resp.Data, &slashings))
+			require.NotNil(t, slashings)
 			require.Equal(t, 0, len(slashings))
 		})
 	})
@@ -1930,7 +1930,7 @@ func TestGetProposerSlashings(t *testing.T) {
 }
 
 func TestSubmitAttesterSlashings(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	transition.SkipSlotCache.Disable()
 	defer transition.SkipSlotCache.Enable()

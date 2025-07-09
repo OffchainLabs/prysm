@@ -101,7 +101,7 @@ func (bb *Builder) block(t testing.TB, b interfaces.ReadOnlySignedBeaconBlock) [
 // InvalidBlock receives the invalid block and notifies forkchoice.
 func (bb *Builder) InvalidBlock(t testing.TB, b interfaces.ReadOnlySignedBeaconBlock) {
 	r := bb.block(t, b)
-	ctx, cancel := context.WithTimeout(context.TODO(), time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 	require.Equal(t, true, bb.service.ReceiveBlock(ctx, b, r, nil) != nil)
 }
@@ -109,7 +109,7 @@ func (bb *Builder) InvalidBlock(t testing.TB, b interfaces.ReadOnlySignedBeaconB
 // ValidBlock receives the valid block and notifies forkchoice.
 func (bb *Builder) ValidBlock(t testing.TB, b interfaces.ReadOnlySignedBeaconBlock) {
 	r := bb.block(t, b)
-	ctx, cancel := context.WithTimeout(context.TODO(), time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 	require.NoError(t, bb.service.ReceiveBlock(ctx, b, r, nil))
 }
@@ -162,12 +162,12 @@ func (bb *Builder) Check(t testing.TB, c *Check) {
 	if c.ProposerBoostRoot != nil {
 		want := fmt.Sprintf("%#x", common.FromHex(*c.ProposerBoostRoot))
 		got := fmt.Sprintf("%#x", bb.service.ProposerBoost())
-		require.DeepEqual(t, want, got)
+		require.Equal(t, want, got)
 	}
 	if c.GetProposerHead != nil {
 		want := fmt.Sprintf("%#x", common.FromHex(*c.GetProposerHead))
 		got := fmt.Sprintf("%#x", bb.service.GetProposerHead())
-		require.DeepEqual(t, want, got)
+		require.Equal(t, want, got)
 	}
 	/* TODO: We need to mock the entire proposer system to be able to test this.
 	if c.ShouldOverrideFCU != nil {

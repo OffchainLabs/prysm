@@ -420,7 +420,7 @@ func TestService_ValidateBlsToExecutionChange(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
 

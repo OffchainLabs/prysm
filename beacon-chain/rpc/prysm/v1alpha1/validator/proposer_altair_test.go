@@ -1,7 +1,6 @@
 package validator
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -15,7 +14,7 @@ func TestServer_SetSyncAggregate_EmptyCase(t *testing.T) {
 	b, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockAltair())
 	require.NoError(t, err)
 	s := &Server{} // Sever is not initialized with sync committee pool.
-	s.setSyncAggregate(context.Background(), b)
+	s.setSyncAggregate(t.Context(), b)
 	agg, err := b.Block().Body().SyncAggregate()
 	require.NoError(t, err)
 

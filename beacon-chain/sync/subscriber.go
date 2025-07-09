@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"reflect"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
@@ -117,7 +119,8 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 		s.persistentAndAggregatorSubnetIndices,
 		s.attesterSubnetIndices,
 	)
-	// Altair fork version
+
+	// New gossip topic in Altair
 	if params.BeaconConfig().AltairForkEpoch <= epoch {
 		s.subscribe(
 			p2p.SyncContributionAndProofSubnetTopicFormat,
@@ -133,6 +136,20 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 			s.activeSyncSubnetIndices,
 			func(currentSlot primitives.Slot) []uint64 { return []uint64{} },
 		)
+		if features.Get().EnableLightClient {
+			s.subscribe(
+				p2p.LightClientOptimisticUpdateTopicFormat,
+				s.validateLightClientOptimisticUpdate,
+				s.lightClientOptimisticUpdateSubscriber,
+				digest,
+			)
+			s.subscribe(
+				p2p.LightClientFinalityUpdateTopicFormat,
+				s.validateLightClientFinalityUpdate,
+				s.lightClientFinalityUpdateSubscriber,
+				digest,
+			)
+		}
 	}
 
 	// New gossip topic in Capella
@@ -145,7 +162,7 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 		)
 	}
 
-	// New gossip topic in Deneb, modified in Electra
+	// New gossip topic in Deneb, removed in Electra
 	if params.BeaconConfig().DenebForkEpoch <= epoch && epoch < params.BeaconConfig().ElectraForkEpoch {
 		s.subscribeWithParameters(
 			p2p.BlobSubnetTopicFormat,
@@ -159,8 +176,8 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 		)
 	}
 
-	// Modified gossip topic in Electra
-	if params.BeaconConfig().ElectraForkEpoch <= epoch {
+	// New gossip topic in Electra, removed in Fulu
+	if params.BeaconConfig().ElectraForkEpoch <= epoch && epoch < params.BeaconConfig().FuluForkEpoch {
 		s.subscribeWithParameters(
 			p2p.BlobSubnetTopicFormat,
 			s.validateBlob,
@@ -169,6 +186,18 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 			func(currentSlot primitives.Slot) []uint64 {
 				return sliceFromCount(params.BeaconConfig().BlobsidecarSubnetCountElectra)
 			},
+			func(currentSlot primitives.Slot) []uint64 { return []uint64{} },
+		)
+	}
+
+	// New gossip topic in Fulu.
+	if params.BeaconConfig().FuluForkEpoch <= epoch {
+		s.subscribeWithParameters(
+			p2p.DataColumnSubnetTopicFormat,
+			s.validateDataColumn,
+			s.dataColumnSubscriber,
+			digest,
+			s.dataColumnSubnetIndices,
 			func(currentSlot primitives.Slot) []uint64 { return []uint64{} },
 		)
 	}
@@ -331,7 +360,7 @@ func (s *Service) wrapAndReportValidation(topic string, v wrappedVal) (string, p
 			if features.Get().EnableFullSSZDataLogging {
 				fields["message"] = hexutil.Encode(msg.Data)
 			}
-			log.WithError(err).WithFields(fields).Debugf("Gossip message was rejected")
+			log.WithError(err).WithFields(fields).Debug("Gossip message was rejected")
 			messageFailedValidationCounter.WithLabelValues(topic).Inc()
 		}
 		if b == pubsub.ValidationIgnore {
@@ -573,6 +602,19 @@ func (s *Service) enoughPeersAreConnected(subnetTopic string) bool {
 	return peersWithSubnetCount >= threshold
 }
 
+func (s *Service) dataColumnSubnetIndices(_ primitives.Slot) []uint64 {
+	nodeID := s.cfg.p2p.NodeID()
+	custodyGroupCount := s.cfg.custodyInfo.CustodyGroupSamplingSize(peerdas.Target)
+
+	nodeInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
+	if err != nil {
+		log.WithError(err).Error("Could not retrieve peer info")
+		return []uint64{}
+	}
+
+	return sliceFromMap(nodeInfo.DataColumnsSubnets, true /*sorted*/)
+}
+
 func (s *Service) persistentAndAggregatorSubnetIndices(currentSlot primitives.Slot) []uint64 {
 	if flags.Get().SubscribeToAllSubnets {
 		return sliceFromCount(params.BeaconConfig().AttestationSubnetCount)
@@ -699,4 +741,18 @@ func errorIsIgnored(err error) bool {
 		return true
 	}
 	return false
+}
+
+// sliceFromMap returns a sorted list of keys from a map.
+func sliceFromMap(m map[uint64]bool, sorted ...bool) []uint64 {
+	result := make([]uint64, 0, len(m))
+	for k := range m {
+		result = append(result, k)
+	}
+
+	if len(sorted) > 0 && sorted[0] {
+		slices.Sort(result)
+	}
+
+	return result
 }

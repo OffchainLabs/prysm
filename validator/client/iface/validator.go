@@ -36,14 +36,16 @@ const (
 // Validator interface defines the primary methods of a validator client.
 type Validator interface {
 	Done()
+	EventsChan() <-chan *event.Event
+	AccountsChangedChan() <-chan [][fieldparams.BLSPubkeyLength]byte
 	WaitForChainStart(ctx context.Context) error
 	WaitForSync(ctx context.Context) error
-	WaitForActivation(ctx context.Context, accountsChangedChan chan [][fieldparams.BLSPubkeyLength]byte) error
+	WaitForActivation(ctx context.Context) error
 	CanonicalHeadSlot(ctx context.Context) (primitives.Slot, error)
 	NextSlot() <-chan primitives.Slot
 	SlotDeadline(slot primitives.Slot) time.Time
 	LogValidatorGainsAndLosses(ctx context.Context, slot primitives.Slot) error
-	UpdateDuties(ctx context.Context, slot primitives.Slot) error
+	UpdateDuties(ctx context.Context) error
 	RolesAt(ctx context.Context, slot primitives.Slot) (map[[fieldparams.BLSPubkeyLength]byte][]ValidatorRole, error) // validator pubKey -> roles
 	SubmitAttestation(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte)
 	ProposeBlock(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte)
@@ -57,9 +59,9 @@ type Validator interface {
 	Keymanager() (keymanager.IKeymanager, error)
 	HandleKeyReload(ctx context.Context, currentKeys [][fieldparams.BLSPubkeyLength]byte) (bool, error)
 	CheckDoppelGanger(ctx context.Context) error
-	PushProposerSettings(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, forceFullPush bool) error
+	PushProposerSettings(ctx context.Context, slot primitives.Slot, forceFullPush bool) error
 	SignValidatorRegistrationRequest(ctx context.Context, signer SigningFunc, newValidatorRegistration *ethpb.ValidatorRegistrationV1) (*ethpb.SignedValidatorRegistrationV1, bool /* isCached */, error)
-	StartEventStream(ctx context.Context, topics []string, eventsChan chan<- *event.Event)
+	StartEventStream(ctx context.Context, topics []string)
 	EventStreamIsRunning() bool
 	ProcessEvent(ctx context.Context, event *event.Event)
 	ProposerSettings() *proposer.Settings

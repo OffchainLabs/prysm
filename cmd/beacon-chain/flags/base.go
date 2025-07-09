@@ -212,6 +212,18 @@ var (
 		Usage: "The factor by which blob batch limit may increase on burst.",
 		Value: 3,
 	}
+	// DataColumnBatchLimit specifies the requested data column batch size.
+	DataColumnBatchLimit = &cli.IntFlag{
+		Name:  "data-column-batch-limit",
+		Usage: "The amount of data columns the local peer is bounded to request and respond to in a batch.",
+		Value: 4096,
+	}
+	// DataColumnBatchLimitBurstFactor specifies the factor by which data column batch size may increase.
+	DataColumnBatchLimitBurstFactor = &cli.IntFlag{
+		Name:  "data-column-batch-limit-burst-factor",
+		Usage: "The factor by which data column batch limit may increase on burst.",
+		Value: 2,
+	}
 	// DisableDebugRPCEndpoints disables the debug Beacon API namespace.
 	DisableDebugRPCEndpoints = &cli.BoolFlag{
 		Name:  "disable-debug-rpc-endpoints",
@@ -320,5 +332,16 @@ var (
 		Name: "pruner-retention-epochs",
 		Usage: "Specifies the retention period for the pruner service in terms of epochs. " +
 			"If this value is less than MIN_EPOCHS_FOR_BLOCK_REQUESTS, it will be ignored.",
+	}
+	// SubscribeAllDataSubnets enables subscription to all data subnets.
+	SubscribeAllDataSubnets = &cli.BoolFlag{
+		Name:  "subscribe-all-data-subnets",
+		Usage: "Enable subscription to all data subnets.",
+	}
+	// BatchVerifierLimit sets the maximum number of signatures to batch verify at once.
+	BatchVerifierLimit = &cli.IntFlag{
+		Name:  "batch-verifier-limit",
+		Usage: "Maximum number of signatures to batch verify at once for beacon attestation p2p gossip.",
+		Value: 1000,
 	}
 )

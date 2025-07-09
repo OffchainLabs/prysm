@@ -8,7 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -99,6 +99,12 @@ type finalityUpdateAltair struct {
 	finalityBranch  interfaces.LightClientFinalityBranch
 }
 
+// NewEmptyFinalityUpdateAltair normally should never be called and NewFinalityUpdateFromUpdate should be used instead.
+// This function exists only for scenarios where an empty struct is required.
+func NewEmptyFinalityUpdateAltair() interfaces.LightClientFinalityUpdate {
+	return &finalityUpdateAltair{}
+}
+
 func (u *finalityUpdateAltair) IsNil() bool {
 	return u == nil || u.p == nil
 }
@@ -168,7 +174,7 @@ func (u *finalityUpdateAltair) Proto() proto.Message {
 }
 
 func (u *finalityUpdateAltair) Version() int {
-	return version.Altair
+	return slots.ToForkVersion(u.attestedHeader.Beacon().Slot)
 }
 
 func (u *finalityUpdateAltair) AttestedHeader() interfaces.LightClientHeader {
@@ -203,6 +209,12 @@ type finalityUpdateCapella struct {
 	attestedHeader  interfaces.LightClientHeader
 	finalizedHeader interfaces.LightClientHeader
 	finalityBranch  interfaces.LightClientFinalityBranch
+}
+
+// NewEmptyFinalityUpdateCapella normally should never be called and NewFinalityUpdateFromUpdate should be used instead.
+// This function exists only for scenarios where an empty struct is required.
+func NewEmptyFinalityUpdateCapella() interfaces.LightClientFinalityUpdate {
+	return &finalityUpdateCapella{}
 }
 
 func (u *finalityUpdateCapella) IsNil() bool {
@@ -274,7 +286,7 @@ func (u *finalityUpdateCapella) Proto() proto.Message {
 }
 
 func (u *finalityUpdateCapella) Version() int {
-	return version.Capella
+	return slots.ToForkVersion(u.attestedHeader.Beacon().Slot)
 }
 
 func (u *finalityUpdateCapella) AttestedHeader() interfaces.LightClientHeader {
@@ -309,6 +321,12 @@ type finalityUpdateDeneb struct {
 	attestedHeader  interfaces.LightClientHeader
 	finalizedHeader interfaces.LightClientHeader
 	finalityBranch  interfaces.LightClientFinalityBranch
+}
+
+// NewEmptyFinalityUpdateDeneb normally should never be called and NewFinalityUpdateFromUpdate should be used instead.
+// This function exists only for scenarios where an empty struct is required.
+func NewEmptyFinalityUpdateDeneb() interfaces.LightClientFinalityUpdate {
+	return &finalityUpdateDeneb{}
 }
 
 func (u *finalityUpdateDeneb) IsNil() bool {
@@ -380,7 +398,7 @@ func (u *finalityUpdateDeneb) Proto() proto.Message {
 }
 
 func (u *finalityUpdateDeneb) Version() int {
-	return version.Deneb
+	return slots.ToForkVersion(u.attestedHeader.Beacon().Slot)
 }
 
 func (u *finalityUpdateDeneb) AttestedHeader() interfaces.LightClientHeader {
@@ -415,6 +433,12 @@ type finalityUpdateElectra struct {
 	attestedHeader  interfaces.LightClientHeader
 	finalizedHeader interfaces.LightClientHeader
 	finalityBranch  interfaces.LightClientFinalityBranchElectra
+}
+
+// NewEmptyFinalityUpdateElectra normally should never be called and NewFinalityUpdateFromUpdate should be used instead.
+// This function exists only for scenarios where an empty struct is required.
+func NewEmptyFinalityUpdateElectra() interfaces.LightClientFinalityUpdate {
+	return &finalityUpdateElectra{}
 }
 
 func (u *finalityUpdateElectra) IsNil() bool {
@@ -487,7 +511,7 @@ func (u *finalityUpdateElectra) Proto() proto.Message {
 }
 
 func (u *finalityUpdateElectra) Version() int {
-	return version.Electra
+	return slots.ToForkVersion(u.attestedHeader.Beacon().Slot)
 }
 
 func (u *finalityUpdateElectra) AttestedHeader() interfaces.LightClientHeader {

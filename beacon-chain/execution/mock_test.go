@@ -1,7 +1,6 @@
 package execution
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -117,7 +116,7 @@ func mockWriteResult(t *testing.T, w http.ResponseWriter, req *jsonrpcMessage, r
 }
 
 func TestParseRequest(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	cases := []struct {
 		method   string
 		hexArgs  []string // uint64 as hex
@@ -197,7 +196,7 @@ func TestCallCount(t *testing.T) {
 				mockWriteResult(t, w, msg, nil)
 			})
 			for i := 0; i < c.count; i++ {
-				require.NoError(t, cli.CallContext(context.Background(), nil, c.method))
+				require.NoError(t, cli.CallContext(t.Context(), nil, c.method))
 			}
 			for _, m := range methods {
 				if m == c.method {

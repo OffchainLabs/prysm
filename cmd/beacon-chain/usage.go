@@ -72,6 +72,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.NetworkID,
 			flags.RPCHost,
 			flags.RPCPort,
+			flags.BatchVerifierLimit,
 		},
 	},
 	{

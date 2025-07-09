@@ -1,7 +1,6 @@
 package blockchain
 
 import (
-	"context"
 	"testing"
 
 	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
@@ -22,7 +21,7 @@ func TestService_VerifyWeakSubjectivityRoot(t *testing.T) {
 
 	b := util.NewBeaconBlock()
 	b.Block.Slot = 1792480
-	util.SaveBlock(t, context.Background(), beaconDB, b)
+	util.SaveBlock(t, t.Context(), beaconDB, b)
 	r, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
 
@@ -79,7 +78,7 @@ func TestService_VerifyWeakSubjectivityRoot(t *testing.T) {
 			}
 			require.NoError(t, fcs.UpdateFinalizedCheckpoint(&forkchoicetypes.Checkpoint{Epoch: tt.finalizedEpoch}))
 			cp := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
-			err = s.wsVerifier.VerifyWeakSubjectivity(context.Background(), cp.Epoch)
+			err = s.wsVerifier.VerifyWeakSubjectivity(t.Context(), cp.Epoch)
 			if tt.wantErr == nil {
 				require.NoError(t, err)
 			} else {

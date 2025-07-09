@@ -42,6 +42,7 @@ mainnet = {
     "bytes_per_cell.size": "2048",  # FIELD_ELEMENTS_PER_CELL * BYTES_PER_FIELD_ELEMENT
     "cells_per_blob.size": "128",
     "kzg_commitments_inclusion_proof_depth.size": "4",
+    "proposer_lookahead_size": "64",  # (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH
 }
 
 minimal = {
@@ -65,8 +66,8 @@ minimal = {
     "max_blob_commitments.size": "32",
     "max_cell_proofs_length.size": "524288",  # CELLS_PER_EXT_BLOB * MAX_BLOB_COMMITMENTS_PER_BLOCK
     "kzg_commitment_inclusion_proof_depth.size": "10",
-    "max_withdrawal_requests_per_payload.size": "2",
-    "max_deposit_requests_per_payload.size": "4",
+    "max_withdrawal_requests_per_payload.size": "16",
+    "max_deposit_requests_per_payload.size": "8192",
     "max_attesting_indices.size": "8192",
     "max_committees_per_slot.size": "4",
     "committee_bits.size": "1",
@@ -80,6 +81,7 @@ minimal = {
     "bytes_per_cell.size": "2048",  # FIELD_ELEMENTS_PER_CELL * BYTES_PER_FIELD_ELEMENT
     "cells_per_blob.size": "128",
     "kzg_commitments_inclusion_proof_depth.size": "4",
+    "proposer_lookahead_size": "16",  # (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH
 }
 
 ###### Rules definitions #######

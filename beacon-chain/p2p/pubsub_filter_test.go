@@ -90,7 +90,14 @@ func TestService_CanSubscribe(t *testing.T) {
 		formatting := []interface{}{digest}
 
 		// Special case for attestation subnets which have a second formatting placeholder.
-		if topic == AttestationSubnetTopicFormat || topic == SyncCommitteeSubnetTopicFormat || topic == BlobSubnetTopicFormat {
+		topics := map[string]bool{
+			AttestationSubnetTopicFormat:   true,
+			SyncCommitteeSubnetTopicFormat: true,
+			BlobSubnetTopicFormat:          true,
+			DataColumnSubnetTopicFormat:    true,
+		}
+
+		if topics[topic] {
 			formatting = append(formatting, 0 /* some subnet ID */)
 		}
 
@@ -333,7 +340,7 @@ func TestService_FilterIncomingSubscriptions(t *testing.T) {
 
 func TestService_MonitorsStateForkUpdates(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 	cs := startup.NewClockSynchronizer()
 	s, err := NewService(ctx, &Config{ClockWaiter: cs})

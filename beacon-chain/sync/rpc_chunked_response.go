@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/network/forks"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
@@ -160,4 +161,108 @@ func WriteBlobSidecarChunk(stream libp2pcore.Stream, tor blockchain.TemporalOrac
 	}
 	_, err = encoding.EncodeWithMaxLength(stream, sidecar)
 	return err
+}
+
+func WriteLightClientBootstrapChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, encoding encoder.NetworkEncoding, bootstrap interfaces.LightClientBootstrap) error {
+	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
+		return err
+	}
+
+	valRoot := tor.GenesisValidatorsRoot()
+	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(bootstrap.Header().Beacon().Slot), valRoot[:])
+	if err != nil {
+		return err
+	}
+
+	obtainedCtx := digest[:]
+	if err = writeContextToStream(obtainedCtx, stream); err != nil {
+		return err
+	}
+
+	_, err = encoding.EncodeWithMaxLength(stream, bootstrap)
+	return err
+}
+
+func WriteLightClientUpdateChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, encoding encoder.NetworkEncoding, update interfaces.LightClientUpdate) error {
+	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
+		return err
+	}
+
+	valRoot := tor.GenesisValidatorsRoot()
+	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(update.AttestedHeader().Beacon().Slot), valRoot[:])
+	if err != nil {
+		return err
+	}
+	obtainedCtx := digest[:]
+
+	if err = writeContextToStream(obtainedCtx, stream); err != nil {
+		return err
+	}
+	_, err = encoding.EncodeWithMaxLength(stream, update)
+	return err
+}
+
+func WriteLightClientOptimisticUpdateChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, encoding encoder.NetworkEncoding, update interfaces.LightClientOptimisticUpdate) error {
+	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
+		return err
+	}
+
+	valRoot := tor.GenesisValidatorsRoot()
+	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(update.AttestedHeader().Beacon().Slot), valRoot[:])
+	if err != nil {
+		return err
+	}
+	obtainedCtx := digest[:]
+
+	if err = writeContextToStream(obtainedCtx, stream); err != nil {
+		return err
+	}
+	_, err = encoding.EncodeWithMaxLength(stream, update)
+	return err
+}
+
+func WriteLightClientFinalityUpdateChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, encoding encoder.NetworkEncoding, update interfaces.LightClientFinalityUpdate) error {
+	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
+		return err
+	}
+
+	valRoot := tor.GenesisValidatorsRoot()
+	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(update.AttestedHeader().Beacon().Slot), valRoot[:])
+	if err != nil {
+		return err
+	}
+	obtainedCtx := digest[:]
+
+	if err = writeContextToStream(obtainedCtx, stream); err != nil {
+		return err
+	}
+	_, err = encoding.EncodeWithMaxLength(stream, update)
+	return err
+}
+
+// WriteDataColumnSidecarChunk writes data column chunk object to stream.
+// response_chunk  ::= <result> | <context-bytes> | <encoding-dependent-header> | <encoded-payload>
+func WriteDataColumnSidecarChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, encoding encoder.NetworkEncoding, sidecar *ethpb.DataColumnSidecar) error {
+	// Success response code.
+	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
+		return errors.Wrap(err, "stream write")
+	}
+
+	// Fork digest.
+	genesisValidatorsRoot := tor.GenesisValidatorsRoot()
+	ctxBytes, err := forks.ForkDigestFromEpoch(slots.ToEpoch(sidecar.SignedBlockHeader.Header.Slot), genesisValidatorsRoot[:])
+	if err != nil {
+		return errors.Wrap(err, "fork digest from epoch")
+	}
+
+	if err := writeContextToStream(ctxBytes[:], stream); err != nil {
+		return errors.Wrap(err, "write context to stream")
+	}
+
+	// Sidecar.
+	if _, err = encoding.EncodeWithMaxLength(stream, sidecar); err != nil {
+		return errors.Wrap(err, "encode with max length")
+	}
+
+	return nil
 }

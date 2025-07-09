@@ -51,6 +51,12 @@ func WithValidatorRESTApi() E2EConfigOpt {
 	}
 }
 
+func WithSSZOnly() E2EConfigOpt {
+	return func(cfg *E2EConfig) {
+		cfg.UseSSZOnly = true
+	}
+}
+
 func WithBuilder() E2EConfigOpt {
 	return func(cfg *E2EConfig) {
 		cfg.UseBuilder = true
@@ -70,6 +76,7 @@ type E2EConfig struct {
 	UseFixedPeerIDs         bool
 	UseValidatorCrossClient bool
 	UseBeaconRestApi        bool
+	UseSSZOnly              bool
 	UseBuilder              bool
 	EpochsToRun             uint64
 	Seed                    int64

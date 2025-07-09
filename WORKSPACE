@@ -1,7 +1,7 @@
 workspace(name = "prysm")
 
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 http_archive(
     name = "rules_pkg",
@@ -15,8 +15,6 @@ http_archive(
 load("@rules_pkg//:deps.bzl", "rules_pkg_dependencies")
 
 rules_pkg_dependencies()
-
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 http_archive(
     name = "toolchains_protoc",
@@ -255,56 +253,18 @@ filegroup(
     url = "https://github.com/ethereum/EIPs/archive/5480440fe51742ed23342b68cf106cefd427e39d.tar.gz",
 )
 
-consensus_spec_version = "v1.5.0-beta.5"
+consensus_spec_version = "v1.6.0-alpha.1"
 
-bls_test_version = "v0.1.1"
+load("@prysm//tools:download_spectests.bzl", "consensus_spec_tests")
 
-http_archive(
-    name = "consensus_spec_tests_general",
-    build_file_content = """
-filegroup(
-    name = "test_data",
-    srcs = glob([
-        "**/*.ssz_snappy",
-        "**/*.yaml",
-    ]),
-    visibility = ["//visibility:public"],
-)
-    """,
-    integrity = "sha256-H+Pt4z+HCVDnEBAv814yvsjR7f5l1IpumjFoTj2XnLE=",
-    url = "https://github.com/ethereum/consensus-spec-tests/releases/download/%s/general.tar.gz" % consensus_spec_version,
-)
-
-http_archive(
-    name = "consensus_spec_tests_minimal",
-    build_file_content = """
-filegroup(
-    name = "test_data",
-    srcs = glob([
-        "**/*.ssz_snappy",
-        "**/*.yaml",
-    ]),
-    visibility = ["//visibility:public"],
-)
-    """,
-    integrity = "sha256-Dqiwf5BG7yYyURGf+i87AIdArAyztvcgjoi2kSxrGvo=",
-    url = "https://github.com/ethereum/consensus-spec-tests/releases/download/%s/minimal.tar.gz" % consensus_spec_version,
-)
-
-http_archive(
-    name = "consensus_spec_tests_mainnet",
-    build_file_content = """
-filegroup(
-    name = "test_data",
-    srcs = glob([
-        "**/*.ssz_snappy",
-        "**/*.yaml",
-    ]),
-    visibility = ["//visibility:public"],
-)
-    """,
-    integrity = "sha256-xrmsFF243pzXHAjh1EQYKS9gtcwmtHK3wRZDSLlVVRk=",
-    url = "https://github.com/ethereum/consensus-spec-tests/releases/download/%s/mainnet.tar.gz" % consensus_spec_version,
+consensus_spec_tests(
+    name = "consensus_spec_tests",
+    flavors = {
+        "general": "sha256-o4t9p3R+fQHF4KOykGmwlG3zDw5wUdVWprkzId8aIsk=",
+        "minimal": "sha256-sU7ToI8t3MR8x0vVjC8ERmAHZDWpEmnAC9FWIpHi5x4=",
+        "mainnet": "sha256-YKS4wngg0LgI9Upp4MYJ77aG+8+e/G4YeqEIlp06LZw=",
+    },
+    version = consensus_spec_version,
 )
 
 http_archive(
@@ -318,10 +278,12 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-c+gGapqifCvFtmtxfhOwieBDO2Syxp13GECWEpWM/Ho=",
+    integrity = "sha256-Nv4TEuEJPQIM4E6T9J0FOITsmappmXZjGtlhe1HEXnU=",
     strip_prefix = "consensus-specs-" + consensus_spec_version[1:],
     url = "https://github.com/ethereum/consensus-specs/archive/refs/tags/%s.tar.gz" % consensus_spec_version,
 )
+
+bls_test_version = "v0.1.1"
 
 http_archive(
     name = "bls_spec_tests",

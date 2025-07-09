@@ -1,7 +1,6 @@
 package altair_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
@@ -17,7 +16,7 @@ import (
 )
 
 func TestTranslateParticipation(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	s, _ := util.DeterministicGenesisStateAltair(t, 64)
 	require.NoError(t, s.SetSlot(s.Slot()+params.BeaconConfig().MinAttestationInclusionDelay))
 
@@ -73,7 +72,7 @@ func TestTranslateParticipation(t *testing.T) {
 func TestUpgradeToAltair(t *testing.T) {
 	st, _ := util.DeterministicGenesisState(t, params.BeaconConfig().MaxValidatorsPerCommittee)
 	preForkState := st.Copy()
-	aState, err := altair.UpgradeToAltair(context.Background(), st)
+	aState, err := altair.UpgradeToAltair(t.Context(), st)
 	require.NoError(t, err)
 
 	require.Equal(t, preForkState.GenesisTime(), aState.GenesisTime())
@@ -82,10 +81,8 @@ func TestUpgradeToAltair(t *testing.T) {
 	require.DeepSSZEqual(t, preForkState.LatestBlockHeader(), aState.LatestBlockHeader())
 	require.DeepSSZEqual(t, preForkState.BlockRoots(), aState.BlockRoots())
 	require.DeepSSZEqual(t, preForkState.StateRoots(), aState.StateRoots())
-	r1, err := preForkState.HistoricalRoots()
-	require.NoError(t, err)
-	r2, err := aState.HistoricalRoots()
-	require.NoError(t, err)
+	r1 := preForkState.HistoricalRoots()
+	r2 := aState.HistoricalRoots()
 	require.DeepSSZEqual(t, r1, r2)
 	require.DeepSSZEqual(t, preForkState.Eth1Data(), aState.Eth1Data())
 	require.DeepSSZEqual(t, preForkState.Eth1DataVotes(), aState.Eth1DataVotes())

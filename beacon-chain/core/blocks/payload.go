@@ -12,7 +12,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
@@ -230,26 +229,16 @@ func verifyBlobCommitmentCount(slot primitives.Slot, body interfaces.ReadOnlyBea
 	if body.Version() < version.Deneb {
 		return nil
 	}
+
 	kzgs, err := body.BlobKzgCommitments()
 	if err != nil {
 		return err
 	}
-	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(slot)
-	if len(kzgs) > maxBlobsPerBlock {
-		return fmt.Errorf("too many kzg commitments in block: %d", len(kzgs))
-	}
-	return nil
-}
 
-// GetBlockPayloadHash returns the hash of the execution payload of the block
-func GetBlockPayloadHash(blk interfaces.ReadOnlyBeaconBlock) ([32]byte, error) {
-	var payloadHash [32]byte
-	if IsPreBellatrixVersion(blk.Version()) {
-		return payloadHash, nil
+	commitmentCount, maxBlobsPerBlock := len(kzgs), params.BeaconConfig().MaxBlobsPerBlock(slot)
+	if commitmentCount > maxBlobsPerBlock {
+		return fmt.Errorf("too many kzg commitments in block: actual count %d - max allowed %d", commitmentCount, maxBlobsPerBlock)
 	}
-	payload, err := blk.Body().Execution()
-	if err != nil {
-		return payloadHash, err
-	}
-	return bytesutil.ToBytes32(payload.BlockHash()), nil
+
+	return nil
 }

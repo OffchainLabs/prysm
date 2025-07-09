@@ -47,13 +47,18 @@ func newRateLimiter(p2pProvider p2p.P2P) *limiter {
 	allowedBlobsPerSecond := float64(flags.Get().BlobBatchLimit)
 	allowedBlobsBurst := int64(flags.Get().BlobBatchLimitBurstFactor * flags.Get().BlobBatchLimit)
 
+	// Initialize data column limits.
+	allowedDataColumnsPerSecond := float64(flags.Get().DataColumnBatchLimit)
+	allowedDataColumnsBurst := int64(flags.Get().DataColumnBatchLimitBurstFactor * flags.Get().DataColumnBatchLimit)
+
 	// Set topic map for all rpc topics.
 	topicMap := make(map[string]*leakybucket.Collector, len(p2p.RPCTopicMappings))
 	// Goodbye Message
 	topicMap[addEncoding(p2p.RPCGoodByeTopicV1)] = leakybucket.NewCollector(1, 1, leakyBucketPeriod, false /* deleteEmptyBuckets */)
-	// MetadataV0 Message
+	// Metadata Message
 	topicMap[addEncoding(p2p.RPCMetaDataTopicV1)] = leakybucket.NewCollector(1, defaultBurstLimit, leakyBucketPeriod, false /* deleteEmptyBuckets */)
 	topicMap[addEncoding(p2p.RPCMetaDataTopicV2)] = leakybucket.NewCollector(1, defaultBurstLimit, leakyBucketPeriod, false /* deleteEmptyBuckets */)
+	topicMap[addEncoding(p2p.RPCMetaDataTopicV3)] = leakybucket.NewCollector(1, defaultBurstLimit, leakyBucketPeriod, false /* deleteEmptyBuckets */)
 	// Ping Message
 	topicMap[addEncoding(p2p.RPCPingTopicV1)] = leakybucket.NewCollector(1, defaultBurstLimit, leakyBucketPeriod, false /* deleteEmptyBuckets */)
 	// Status Message
@@ -67,6 +72,9 @@ func newRateLimiter(p2pProvider p2p.P2P) *limiter {
 	// for BlobSidecarsByRoot and BlobSidecarsByRange
 	blobCollector := leakybucket.NewCollector(allowedBlobsPerSecond, allowedBlobsBurst, blockBucketPeriod, false)
 
+	// for DataColumnSidecarsByRoot and DataColumnSidecarsByRange
+	dataColumnSidecars := leakybucket.NewCollector(allowedDataColumnsPerSecond, allowedDataColumnsBurst, blockBucketPeriod, false)
+
 	// BlocksByRoots requests
 	topicMap[addEncoding(p2p.RPCBlocksByRootTopicV1)] = blockCollector
 	topicMap[addEncoding(p2p.RPCBlocksByRootTopicV2)] = blockCollectorV2
@@ -79,6 +87,17 @@ func newRateLimiter(p2pProvider p2p.P2P) *limiter {
 	topicMap[addEncoding(p2p.RPCBlobSidecarsByRootTopicV1)] = blobCollector
 	// BlobSidecarsByRangeV1
 	topicMap[addEncoding(p2p.RPCBlobSidecarsByRangeTopicV1)] = blobCollector
+
+	// Light client requests
+	topicMap[addEncoding(p2p.RPCLightClientBootstrapTopicV1)] = leakybucket.NewCollector(1, defaultBurstLimit, leakyBucketPeriod, false /* deleteEmptyBuckets */)
+	topicMap[addEncoding(p2p.RPCLightClientUpdatesByRangeTopicV1)] = leakybucket.NewCollector(1, defaultBurstLimit, leakyBucketPeriod, false /* deleteEmptyBuckets */)
+	topicMap[addEncoding(p2p.RPCLightClientOptimisticUpdateTopicV1)] = leakybucket.NewCollector(1, defaultBurstLimit, leakyBucketPeriod, false /* deleteEmptyBuckets */)
+	topicMap[addEncoding(p2p.RPCLightClientFinalityUpdateTopicV1)] = leakybucket.NewCollector(1, defaultBurstLimit, leakyBucketPeriod, false /* deleteEmptyBuckets */)
+
+	// DataColumnSidecarsByRootV1
+	topicMap[addEncoding(p2p.RPCDataColumnSidecarsByRootTopicV1)] = dataColumnSidecars
+	// DataColumnSidecarsByRangeV1
+	topicMap[addEncoding(p2p.RPCDataColumnSidecarsByRangeTopicV1)] = dataColumnSidecars
 
 	// General topic for all rpc requests.
 	topicMap[rpcLimiterTopic] = leakybucket.NewCollector(5, defaultBurstLimit*2, leakyBucketPeriod, false /* deleteEmptyBuckets */)

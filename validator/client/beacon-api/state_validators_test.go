@@ -2,7 +2,6 @@ package beacon_api
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"net/url"
 	"testing"
@@ -68,7 +67,7 @@ func TestGetStateValidators_Nominal_POST(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler.EXPECT().Post(
 		gomock.Any(),
@@ -154,7 +153,7 @@ func TestGetStateValidators_Nominal_GET(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// First return an error from POST call.
 	jsonRestHandler.EXPECT().Post(
@@ -223,7 +222,7 @@ func TestGetStateValidators_GetRestJsonResponseOnError(t *testing.T) {
 	stateValidatorsResponseJson := structs.GetValidatorsResponse{}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// First call POST.
 	jsonRestHandler.EXPECT().Post(
@@ -276,7 +275,7 @@ func TestGetStateValidators_DataIsNil_POST(t *testing.T) {
 	reqBytes, err := json.Marshal(req)
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	stateValidatorsResponseJson := structs.GetValidatorsResponse{}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
@@ -315,7 +314,7 @@ func TestGetStateValidators_DataIsNil_GET(t *testing.T) {
 	reqBytes, err := json.Marshal(req)
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	stateValidatorsResponseJson := structs.GetValidatorsResponse{}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 

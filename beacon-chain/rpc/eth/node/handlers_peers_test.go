@@ -145,6 +145,7 @@ func TestGetPeers(t *testing.T) {
 		resp := &structs.GetPeersResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		require.Equal(t, 1, len(resp.Data))
+		assert.Equal(t, 1, resp.Meta.Count)
 		returnedPeer := resp.Data[0]
 		assert.Equal(t, expectedId.String(), returnedPeer.PeerId)
 		expectedEnr, err := peerStatus.ENR(expectedId)
@@ -229,6 +230,7 @@ func TestGetPeers(t *testing.T) {
 			resp := &structs.GetPeersResponse{}
 			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 			assert.Equal(t, len(tt.wantIds), len(resp.Data), "Wrong number of peers returned")
+			assert.Equal(t, len(tt.wantIds), resp.Meta.Count, "meta.count does not match number of returned peers")
 			for _, id := range tt.wantIds {
 				expectedId := id.String()
 				found := false
