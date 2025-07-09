@@ -860,7 +860,7 @@ func (s *Service) areBlobsAvailable(ctx context.Context, root [fieldparams.RootL
 	// Log for DA checks that cross over into the next slot; helpful for debugging.
 	nextSlot, err := slots.StartTime(s.genesisTime, block.Slot()+1)
 	if err != nil {
-		log.WithError(err).Error("Unable to determine slot start time")
+		return fmt.Errorf("unable to determine slot start time: %w", err)
 	}
 	// Avoid logging if DA check is called after next slot start.
 	if nextSlot.After(time.Now()) {
