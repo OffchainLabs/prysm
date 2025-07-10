@@ -37,7 +37,7 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		return err
 	}
 
-	go s.reconstructAndBroadcastSidecars(ctx, signed)
+	go s.processSidecarsFromExecution(ctx, signed)
 
 	if err := s.cfg.chain.ReceiveBlock(ctx, signed, root, nil); err != nil {
 		if blockchain.IsInvalidBlock(err) {
@@ -61,22 +61,23 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 	return err
 }
 
-// reconstructAndBroadcastSidecars processes and broadcasts sidecars for a given beacon block.
-func (s *Service) reconstructAndBroadcastSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) {
+// processSidecarsFromExecution retrieves (if available) sidecars data from the execution client,
+// builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
+func (s *Service) processSidecarsFromExecution(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) {
 	if block.Version() >= version.Fulu {
-		s.reconstructAndBroadcastDataColumnSidecars(ctx, block)
+		s.processDataColumnSidecarsFromExecution(ctx, block)
 		return
 	}
 
 	if block.Version() >= version.Deneb {
-		s.reconstructAndBroadcastFullBlobs(ctx, block)
+		s.processBlobSidecarsFromExecution(ctx, block)
 		return
 	}
 }
 
-// reconstructAndBroadcastDataColumnSidecars reconstructs and broadcasts data column sidecars for a given beacon block.
-// It also saves data column sidecars into the storage.
-func (s *Service) reconstructAndBroadcastDataColumnSidecars(ctx context.Context, roSignedBlock interfaces.ReadOnlySignedBeaconBlock) {
+// processDataColumnSidecarsFromExecution retrieves (if available) data column sidecars data from the execution client,
+// builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
+func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, roSignedBlock interfaces.ReadOnlySignedBeaconBlock) {
 	block := roSignedBlock.Block()
 
 	log := log.WithFields(logrus.Fields{
@@ -159,9 +160,9 @@ func (s *Service) reconstructAndBroadcastDataColumnSidecars(ctx context.Context,
 	}
 }
 
-// reconstructAndBroadcastFullBlobs reconstructs the blob sidecars from the EL using the block's KZG commitments,
-// broadcasts the reconstructed blobs over P2P, and saves them into the blob storage.
-func (s *Service) reconstructAndBroadcastFullBlobs(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) {
+// processBlobSidecarsFromExecution retrieves (if available) blob sidecars data from the execution client,
+// builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
+func (s *Service) processBlobSidecarsFromExecution(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) {
 	startTime, err := slots.ToTime(uint64(s.cfg.chain.GenesisTime().Unix()), block.Block().Slot())
 	if err != nil {
 		log.WithError(err).Error("Failed to convert slot to time")

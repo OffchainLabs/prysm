@@ -193,7 +193,7 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 					},
 					seenBlobCache: lruwrpr.New(1),
 				}
-				s.reconstructAndBroadcastSidecars(context.Background(), sb)
+				s.processSidecarsFromExecution(context.Background(), sb)
 				require.Equal(t, tt.expectedBlobCount, len(chainService.Blobs))
 			})
 		}
@@ -285,7 +285,7 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 				sb, err := blocks.NewSignedBeaconBlock(b)
 				require.NoError(t, err)
 
-				s.reconstructAndBroadcastSidecars(context.Background(), sb)
+				s.processSidecarsFromExecution(context.Background(), sb)
 				require.Equal(t, tt.expectedDataColumnCount, len(chainService.DataColumns))
 			})
 		}
