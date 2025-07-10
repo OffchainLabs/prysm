@@ -40,7 +40,6 @@ type FakeValidator struct {
 	WaitForWalletInitializationCalled bool
 	NextSlotCalled                    bool
 	WaitForActivationCalled           int
-	CanonicalHeadSlotCalled           int
 	WaitForSyncCalled                 int
 	RetryTillSuccess                  int
 	ProposeBlockArg1                  uint64
