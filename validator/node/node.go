@@ -225,7 +225,7 @@ func (c *ValidatorClient) getLegacyDatabaseLocation(
 
 func getWallet(cliCtx *cli.Context) (*wallet.Wallet, error) {
 	if cliCtx.IsSet(flags.InteropNumValidators.Name) {
-		log.Info("no wallet required for interop validation")
+		log.Info("No wallet required for interop validation")
 		return nil, nil
 	}
 	if cliCtx.IsSet(flags.Web3SignerURLFlag.Name) {

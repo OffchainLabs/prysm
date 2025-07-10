@@ -89,7 +89,7 @@ func (vs *Server) deposits(
 	}
 
 	if !vs.Eth1InfoFetcher.ExecutionClientConnected() {
-		log.Warn("not connected to eth1 node, skip pending deposit insertion")
+		log.Warn("Not connected to eth1 node, skip pending deposit insertion")
 		return []*ethpb.Deposit{}, nil
 	}
 
@@ -113,7 +113,7 @@ func (vs *Server) deposits(
 	// If there are no pending deposits, exit early.
 	allPendingContainers := vs.PendingDepositsFetcher.PendingContainers(ctx, canonicalEth1DataHeight)
 	if len(allPendingContainers) == 0 {
-		log.Debug("no pending deposits for inclusion in block")
+		log.Debug("No pending deposits for inclusion in block")
 		return []*ethpb.Deposit{}, nil
 	}
 

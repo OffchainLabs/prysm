@@ -44,7 +44,7 @@ func WriteSsz(w http.ResponseWriter, respSsz []byte) {
 	w.Header().Set("Content-Length", strconv.Itoa(len(respSsz)))
 	w.Header().Set("Content-Type", api.OctetStreamMediaType)
 	if _, err := io.Copy(w, io.NopCloser(bytes.NewReader(respSsz))); err != nil {
-		log.WithError(err).Error("could not write response message")
+		log.WithError(err).Error("Could not write response message")
 	}
 }
 

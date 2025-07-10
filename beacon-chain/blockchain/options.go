@@ -33,6 +33,14 @@ func WithMaxGoroutines(x int) Option {
 	}
 }
 
+// WithLCStore for light client store access.
+func WithLCStore() Option {
+	return func(s *Service) error {
+		s.lcStore = lightclient.NewLightClientStore(s.cfg.BeaconDB)
+		return nil
+	}
+}
+
 // WithWeakSubjectivityCheckpoint for checkpoint sync.
 func WithWeakSubjectivityCheckpoint(c *ethpb.Checkpoint) Option {
 	return func(s *Service) error {

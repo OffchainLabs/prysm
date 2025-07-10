@@ -231,7 +231,7 @@ func TestService_waitForStateInitialization(t *testing.T) {
 			t.Fatalf("Test should have exited by now, timed out")
 		}
 		assert.LogsContain(t, hook, "Waiting for state to be initialized")
-		assert.LogsContain(t, hook, "initial-sync failed to receive startup event")
+		assert.LogsContain(t, hook, "Initial-sync failed to receive startup event")
 		assert.LogsDoNotContain(t, hook, "Subscription to state notifier failed")
 	})
 
