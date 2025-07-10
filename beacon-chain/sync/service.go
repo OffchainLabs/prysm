@@ -325,7 +325,7 @@ func (s *Service) initCaches() {
 func (s *Service) waitForChainStart() {
 	clock, err := s.clockWaiter.WaitForClock(s.ctx)
 	if err != nil {
-		log.WithError(err).Error("sync service failed to receive genesis data")
+		log.WithError(err).Error("Sync service failed to receive genesis data")
 		return
 	}
 	s.cfg.clock = clock
@@ -337,7 +337,7 @@ func (s *Service) waitForChainStart() {
 		log.
 			WithError(err).
 			WithField("genesisValidatorRoot", clock.GenesisValidatorsRoot()).
-			Error("sync service failed to initialize context version map")
+			Error("Sync service failed to initialize context version map")
 		return
 	}
 	s.ctxMap = ctxMap
