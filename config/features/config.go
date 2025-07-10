@@ -49,7 +49,7 @@ type Flags struct {
 	EnableHistoricalSpaceRepresentation bool // EnableHistoricalSpaceRepresentation enables the saving of registry validators in separate buckets to save space
 	EnableBeaconRESTApi                 bool // EnableBeaconRESTApi enables experimental usage of the beacon REST API by the validator when querying a beacon node
 	EnableExperimentalAttestationPool   bool // EnableExperimentalAttestationPool enables an experimental attestation pool design.
-	EnableDutiesV2                      bool // EnableDutiesV2 sets validator client to use the get Duties V2 endpoint
+	DisableDutiesV2                     bool // DisableDutiesV2 sets validator client to use the get Duties endpoint
 	EnableWeb                           bool // EnableWeb enables the webui on the validator client
 	SSZOnly                             bool // SSZOnly forces the validator client to use SSZ for communication with the beacon node when REST mode is enabled (useful for debugging)
 	// Logging related toggles.
@@ -332,9 +332,9 @@ func ConfigureValidator(ctx *cli.Context) error {
 		logEnabled(EnableBeaconRESTApi)
 		cfg.EnableBeaconRESTApi = true
 	}
-	if ctx.Bool(EnableDutiesV2.Name) {
-		logEnabled(EnableDutiesV2)
-		cfg.EnableDutiesV2 = true
+	if ctx.Bool(DisableDutiesV2.Name) {
+		logEnabled(DisableDutiesV2)
+		cfg.DisableDutiesV2 = true
 	}
 	if ctx.Bool(EnableWebFlag.Name) {
 		logEnabled(EnableWebFlag)

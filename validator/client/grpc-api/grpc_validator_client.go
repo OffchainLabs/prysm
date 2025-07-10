@@ -29,21 +29,21 @@ type grpcValidatorClient struct {
 }
 
 func (c *grpcValidatorClient) Duties(ctx context.Context, in *ethpb.DutiesRequest) (*ethpb.ValidatorDutiesContainer, error) {
-	if features.Get().EnableDutiesV2 {
-		dutiesResponse, err := c.beaconNodeValidatorClient.GetDutiesV2(ctx, in)
-		if err != nil {
-			if status.Code(err) == codes.Unimplemented {
-				log.Warn("GetDutiesV2 returned status code unavailable, falling back to GetDuties")
-				return c.getDuties(ctx, in)
-			}
-			return nil, errors.Wrap(
-				client.ErrConnectionIssue,
-				errors.Wrap(err, "getDutiesV2").Error(),
-			)
-		}
-		return toValidatorDutiesContainerV2(dutiesResponse)
+	if features.Get().DisableDutiesV2 {
+		return c.getDuties(ctx, in)
 	}
-	return c.getDuties(ctx, in)
+	dutiesResponse, err := c.beaconNodeValidatorClient.GetDutiesV2(ctx, in)
+	if err != nil {
+		if status.Code(err) == codes.Unimplemented {
+			log.Warn("GetDutiesV2 returned status code unavailable, falling back to GetDuties")
+			return c.getDuties(ctx, in)
+		}
+		return nil, errors.Wrap(
+			client.ErrConnectionIssue,
+			errors.Wrap(err, "getDutiesV2").Error(),
+		)
+	}
+	return toValidatorDutiesContainerV2(dutiesResponse)
 }
 
 // getDuties is calling the v1 of get duties
