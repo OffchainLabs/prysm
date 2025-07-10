@@ -105,8 +105,11 @@ func prepareConfigSpec() (map[string]interface{}, error) {
 			// Handle byte slices with hexutil.Encode
 			if vField.Type().Elem().Kind() == reflect.Uint8 {
 				data[tagValue] = hexutil.Encode(vField.Bytes())
+			} else if vField.Type().Elem().Kind() == reflect.Struct {
+				// Handle struct slices - convert numeric fields to strings for consistent JSON output
+				data[tagValue] = convertStructSliceForJSON(vField)
 			} else {
-				// Handle struct slices - return as interface{} for JSON serialization
+				// Handle other slice types - return as interface{} for JSON serialization
 				data[tagValue] = vField.Interface()
 			}
 		case reflect.Array:
@@ -121,4 +124,46 @@ func prepareConfigSpec() (map[string]interface{}, error) {
 	}
 
 	return data, nil
+}
+
+// convertStructSliceForJSON converts struct slices to ensure numeric fields are strings
+func convertStructSliceForJSON(sliceValue reflect.Value) []map[string]interface{} {
+	length := sliceValue.Len()
+	result := make([]map[string]interface{}, length)
+
+	for i := 0; i < length; i++ {
+		elem := sliceValue.Index(i)
+		elemType := elem.Type()
+		elemMap := make(map[string]interface{})
+
+		for j := 0; j < elem.NumField(); j++ {
+			field := elem.Field(j)
+			fieldType := elemType.Field(j)
+
+			// Skip unexported fields
+			if !field.CanInterface() {
+				continue
+			}
+
+			// Get JSON tag name (fallback to field name if no JSON tag)
+			jsonTag := fieldType.Tag.Get("json")
+			if jsonTag == "" || jsonTag == "-" {
+				jsonTag = fieldType.Name
+			}
+
+			// Convert numeric types to strings for consistent JSON output
+			switch field.Kind() {
+			case reflect.Uint64, reflect.Uint, reflect.Uint32, reflect.Uint16, reflect.Uint8:
+				elemMap[jsonTag] = strconv.FormatUint(field.Uint(), 10)
+			case reflect.Int64, reflect.Int, reflect.Int32, reflect.Int16, reflect.Int8:
+				elemMap[jsonTag] = strconv.FormatInt(field.Int(), 10)
+			default:
+				elemMap[jsonTag] = field.Interface()
+			}
+		}
+
+		result[i] = elemMap
+	}
+
+	return result
 }

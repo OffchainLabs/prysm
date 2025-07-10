@@ -679,7 +679,7 @@ func TestGetSpec_BlobSchedule(t *testing.T) {
 	// The JSON unmarshaling converts it to []interface{} with map[string]interface{} entries
 	blobScheduleSlice, ok := blobScheduleValue.([]interface{})
 	require.Equal(t, true, ok)
-	
+
 	// Convert to generic interface for easier testing
 	var blobSchedule []map[string]interface{}
 	for _, entry := range blobScheduleSlice {
@@ -691,11 +691,11 @@ func TestGetSpec_BlobSchedule(t *testing.T) {
 	// Verify the blob schedule content
 	require.Equal(t, 2, len(blobSchedule))
 
-	// Check first entry
-	assert.Equal(t, float64(100), blobSchedule[0]["EPOCH"])
-	assert.Equal(t, float64(6), blobSchedule[0]["MAX_BLOBS_PER_BLOCK"])
+	// Check first entry - values should be strings for consistent API output
+	assert.Equal(t, "100", blobSchedule[0]["EPOCH"])
+	assert.Equal(t, "6", blobSchedule[0]["MAX_BLOBS_PER_BLOCK"])
 
-	// Check second entry
-	assert.Equal(t, float64(200), blobSchedule[1]["EPOCH"])
-	assert.Equal(t, float64(9), blobSchedule[1]["MAX_BLOBS_PER_BLOCK"])
+	// Check second entry - values should be strings for consistent API output
+	assert.Equal(t, "200", blobSchedule[1]["EPOCH"])
+	assert.Equal(t, "9", blobSchedule[1]["MAX_BLOBS_PER_BLOCK"])
 }
