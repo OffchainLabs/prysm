@@ -141,7 +141,7 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 			}
 
 			if err := s.saveHead(ctx, r, b, st); err != nil {
-				log.WithError(err).Error("could not save head after pruning invalid blocks")
+				log.WithError(err).Error("Could not save head after pruning invalid blocks")
 			}
 
 			log.WithFields(logrus.Fields{

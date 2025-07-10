@@ -33,10 +33,6 @@ var (
 		Name:  "dev",
 		Usage: "Enables experimental features still in development. These features may not be stable.",
 	}
-	disableExperimentalState = &cli.BoolFlag{
-		Name:  "disable-experimental-state",
-		Usage: "Turns off the latest and greatest changes to the beacon state. Disabling this is safe to do after the feature has been enabled.",
-	}
 	writeSSZStateTransitionsFlag = &cli.BoolFlag{
 		Name:  "interop-write-ssz-state-transitions",
 		Usage: "Writes SSZ states to disk after attempted state transitio.",
@@ -240,7 +236,6 @@ var E2EValidatorFlags = []string{
 // BeaconChainFlags contains a list of all the feature flags that apply to the beacon-chain client.
 var BeaconChainFlags = combinedFlags([]cli.Flag{
 	devModeFlag,
-	disableExperimentalState,
 	writeSSZStateTransitionsFlag,
 	saveInvalidBlockTempFlag,
 	saveInvalidBlobTempFlag,

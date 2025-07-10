@@ -243,7 +243,7 @@ func TestLocalKeymanager_ImportKeystores(t *testing.T) {
 			fmt.Sprintf("incorrect password for key 0x%s", keystores[1].Pubkey),
 			statuses[1].Message,
 		)
-		require.LogsContain(t, hook, "no keys were imported")
+		require.LogsContain(t, hook, "No keys were imported")
 	})
 	t.Run("file write fails during import", func(t *testing.T) {
 		wallet.HasWriteFileError = true

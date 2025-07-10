@@ -8,16 +8,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 )
 
-func TestReportEpochMetrics_BadHeadState(t *testing.T) {
-	s, err := util.NewBeaconState()
-	require.NoError(t, err)
-	h, err := util.NewBeaconState()
-	require.NoError(t, err)
-	require.NoError(t, h.SetValidators(nil))
-	err = reportEpochMetrics(t.Context(), s, h)
-	require.ErrorContains(t, "failed to initialize precompute: state has nil validator slice", err)
-}
-
 func TestReportEpochMetrics_BadAttestation(t *testing.T) {
 	s, err := util.NewBeaconState()
 	require.NoError(t, err)

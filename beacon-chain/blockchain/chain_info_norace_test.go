@@ -3,9 +3,6 @@ package blockchain
 import (
 	"testing"
 
-	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -14,10 +11,7 @@ import (
 )
 
 func TestHeadSlot_DataRace(t *testing.T) {
-	beaconDB := testDB.SetupDB(t)
-	s := &Service{
-		cfg: &config{BeaconDB: beaconDB},
-	}
+	s := testServiceWithDB(t)
 	b, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlock())
 	require.NoError(t, err)
 	st, _ := util.DeterministicGenesisState(t, 1)
@@ -31,11 +25,8 @@ func TestHeadSlot_DataRace(t *testing.T) {
 }
 
 func TestHeadRoot_DataRace(t *testing.T) {
-	beaconDB := testDB.SetupDB(t)
-	s := &Service{
-		cfg:  &config{BeaconDB: beaconDB, StateGen: stategen.New(beaconDB, doublylinkedtree.New())},
-		head: &head{root: [32]byte{'A'}},
-	}
+	s := testServiceWithDB(t)
+	s.head = &head{root: [32]byte{'A'}}
 	b, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlock())
 	require.NoError(t, err)
 	wait := make(chan struct{})
@@ -51,13 +42,10 @@ func TestHeadRoot_DataRace(t *testing.T) {
 }
 
 func TestHeadBlock_DataRace(t *testing.T) {
-	beaconDB := testDB.SetupDB(t)
 	wsb, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlock{Block: &ethpb.BeaconBlock{Body: &ethpb.BeaconBlockBody{}}})
 	require.NoError(t, err)
-	s := &Service{
-		cfg:  &config{BeaconDB: beaconDB, StateGen: stategen.New(beaconDB, doublylinkedtree.New())},
-		head: &head{block: wsb},
-	}
+	s := testServiceWithDB(t)
+	s.head = &head{block: wsb}
 	b, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlock())
 	require.NoError(t, err)
 	wait := make(chan struct{})
@@ -73,10 +61,8 @@ func TestHeadBlock_DataRace(t *testing.T) {
 }
 
 func TestHeadState_DataRace(t *testing.T) {
-	beaconDB := testDB.SetupDB(t)
-	s := &Service{
-		cfg: &config{BeaconDB: beaconDB, StateGen: stategen.New(beaconDB, doublylinkedtree.New())},
-	}
+	s := testServiceWithDB(t)
+	beaconDB := s.cfg.BeaconDB
 	b, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlock())
 	require.NoError(t, err)
 	wait := make(chan struct{})

@@ -210,6 +210,6 @@ func doSSZPOSTRequest(template, requestPath string, beaconNodeIdx int, postObj i
 
 func closeBody(body io.Closer) {
 	if err := body.Close(); err != nil {
-		log.WithError(err).Error("could not close response body")
+		log.WithError(err).Error("Could not close response body")
 	}
 }

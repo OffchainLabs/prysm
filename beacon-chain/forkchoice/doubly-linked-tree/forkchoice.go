@@ -127,7 +127,7 @@ func (f *ForkChoice) InsertNode(ctx context.Context, state state.BeaconState, ro
 	if err := f.updateCheckpoints(ctx, jc, fc); err != nil {
 		_, remErr := f.store.removeNode(ctx, node)
 		if remErr != nil {
-			log.WithError(remErr).Error("could not remove node")
+			log.WithError(remErr).Error("Could not remove node")
 		}
 		return errors.Wrap(err, "could not update checkpoints")
 	}

@@ -620,7 +620,7 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 		blobIndex := kzgIndexes[i]
 		proof, err := blocks.MerkleProofKZGCommitment(blockBody, blobIndex)
 		if err != nil {
-			log.WithError(err).WithField("index", blobIndex).Error("failed to get Merkle proof for KZG commitment")
+			log.WithError(err).WithField("index", blobIndex).Error("Failed to get Merkle proof for KZG commitment")
 			continue
 		}
 		sidecar := &ethpb.BlobSidecar{
@@ -634,14 +634,14 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 
 		roBlob, err := blocks.NewROBlobWithRoot(sidecar, blockRoot)
 		if err != nil {
-			log.WithError(err).WithField("index", blobIndex).Error("failed to create RO blob with root")
+			log.WithError(err).WithField("index", blobIndex).Error("Failed to create RO blob with root")
 			continue
 		}
 
 		v := s.blobVerifier(roBlob, verification.ELMemPoolRequirements)
 		verifiedBlob, err := v.VerifiedROBlob()
 		if err != nil {
-			log.WithError(err).WithField("index", blobIndex).Error("failed to verify RO blob")
+			log.WithError(err).WithField("index", blobIndex).Error("Failed to verify RO blob")
 			continue
 		}
 

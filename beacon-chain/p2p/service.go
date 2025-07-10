@@ -222,7 +222,7 @@ func (s *Service) Start() {
 	if len(s.cfg.StaticPeers) > 0 {
 		addrs, err := PeersFromStringAddrs(s.cfg.StaticPeers)
 		if err != nil {
-			log.WithError(err).Error("could not convert ENR to multiaddr")
+			log.WithError(err).Error("Could not convert ENR to multiaddr")
 		}
 		// Set trusted peers for those that are provided as static addresses.
 		pids := peerIdsFromMultiAddrs(addrs)
@@ -429,7 +429,7 @@ func (s *Service) awaitStateInitialized() {
 	}
 	clock, err := s.cfg.ClockWaiter.WaitForClock(s.ctx)
 	if err != nil {
-		log.WithError(err).Fatal("failed to receive initial genesis data")
+		log.WithError(err).Fatal("Failed to receive initial genesis data")
 	}
 	s.genesisTime = clock.GenesisTime()
 	gvr := clock.GenesisValidatorsRoot()

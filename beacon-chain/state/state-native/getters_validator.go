@@ -2,16 +2,12 @@ package state_native
 
 import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/pkg/errors"
 )
 
 // Validators participating in consensus on the beacon chain.
@@ -32,17 +28,10 @@ func (b *BeaconState) ValidatorsReadOnly() []state.ReadOnlyValidator {
 
 func (b *BeaconState) validatorsVal() []*ethpb.Validator {
 	var v []*ethpb.Validator
-	if features.Get().EnableExperimentalState {
-		if b.validatorsMultiValue == nil {
-			return nil
-		}
-		v = b.validatorsMultiValue.Value(b)
-	} else {
-		if b.validators == nil {
-			return nil
-		}
-		v = b.validators
+	if b.validatorsMultiValue == nil {
+		return nil
 	}
+	v = b.validatorsMultiValue.Value(b)
 
 	res := make([]*ethpb.Validator, len(v))
 	for i := 0; i < len(res); i++ {
@@ -56,18 +45,10 @@ func (b *BeaconState) validatorsVal() []*ethpb.Validator {
 }
 
 func (b *BeaconState) validatorsReadOnlyVal() []state.ReadOnlyValidator {
-	var v []*ethpb.Validator
-	if features.Get().EnableExperimentalState {
-		if b.validatorsMultiValue == nil {
-			return nil
-		}
-		v = b.validatorsMultiValue.Value(b)
-	} else {
-		if b.validators == nil {
-			return nil
-		}
-		v = b.validators
+	if b.validatorsMultiValue == nil {
+		return nil
 	}
+	v := b.validatorsMultiValue.Value(b)
 
 	res := make([]state.ReadOnlyValidator, len(v))
 	var err error
@@ -84,34 +65,11 @@ func (b *BeaconState) validatorsReadOnlyVal() []state.ReadOnlyValidator {
 	return res
 }
 
-// references of validators participating in consensus on the beacon chain.
-// This assumes that a lock is already held on BeaconState. This does not
-// copy fully and instead just copies the reference.
-func (b *BeaconState) validatorsReferences() []*ethpb.Validator {
-	if b.validators == nil {
-		return nil
-	}
-
-	res := make([]*ethpb.Validator, len(b.validators), len(b.validators)+int(params.BeaconConfig().MaxDeposits))
-	for i := 0; i < len(res); i++ {
-		validator := b.validators[i]
-		if validator == nil {
-			continue
-		}
-		// copy validator reference instead.
-		res[i] = validator
-	}
-	return res
-}
-
 func (b *BeaconState) validatorsLen() int {
-	if features.Get().EnableExperimentalState {
-		if b.validatorsMultiValue == nil {
-			return 0
-		}
-		return b.validatorsMultiValue.Len(b)
+	if b.validatorsMultiValue == nil {
+		return 0
 	}
-	return len(b.validators)
+	return b.validatorsMultiValue.Len(b)
 }
 
 // ValidatorAtIndex is the validator at the provided index.
@@ -123,25 +81,14 @@ func (b *BeaconState) ValidatorAtIndex(idx primitives.ValidatorIndex) (*ethpb.Va
 }
 
 func (b *BeaconState) validatorAtIndex(idx primitives.ValidatorIndex) (*ethpb.Validator, error) {
-	if features.Get().EnableExperimentalState {
-		if b.validatorsMultiValue == nil {
-			return &ethpb.Validator{}, nil
-		}
-		v, err := b.validatorsMultiValue.At(b, uint64(idx))
-		if err != nil {
-			return nil, err
-		}
-		return ethpb.CopyValidator(v), nil
-	}
-
-	if b.validators == nil {
+	if b.validatorsMultiValue == nil {
 		return &ethpb.Validator{}, nil
 	}
-	if uint64(len(b.validators)) <= uint64(idx) {
-		return nil, errors.Wrapf(consensus_types.ErrOutOfBounds, "validator index %d does not exist", idx)
+	v, err := b.validatorsMultiValue.At(b, uint64(idx))
+	if err != nil {
+		return nil, err
 	}
-	val := b.validators[idx]
-	return ethpb.CopyValidator(val), nil
+	return ethpb.CopyValidator(v), nil
 }
 
 // ValidatorAtIndexReadOnly is the validator at the provided index. This method
@@ -154,25 +101,14 @@ func (b *BeaconState) ValidatorAtIndexReadOnly(idx primitives.ValidatorIndex) (s
 }
 
 func (b *BeaconState) validatorAtIndexReadOnly(idx primitives.ValidatorIndex) (state.ReadOnlyValidator, error) {
-	if features.Get().EnableExperimentalState {
-		if b.validatorsMultiValue == nil {
-			return nil, state.ErrNilValidatorsInState
-		}
-		v, err := b.validatorsMultiValue.At(b, uint64(idx))
-		if err != nil {
-			return nil, err
-		}
-		return NewValidator(v)
-	}
-
-	if b.validators == nil {
+	if b.validatorsMultiValue == nil {
 		return nil, state.ErrNilValidatorsInState
 	}
-	if uint64(len(b.validators)) <= uint64(idx) {
-		return nil, errors.Wrapf(consensus_types.ErrOutOfBounds, "validator index %d does not exist", idx)
+	v, err := b.validatorsMultiValue.At(b, uint64(idx))
+	if err != nil {
+		return nil, err
 	}
-	val := b.validators[idx]
-	return NewValidator(val)
+	return NewValidator(v)
 }
 
 // ValidatorIndexByPubkey returns a given validator by its 48-byte public key.
@@ -183,12 +119,7 @@ func (b *BeaconState) ValidatorIndexByPubkey(key [fieldparams.BLSPubkeyLength]by
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
-	var numOfVals int
-	if features.Get().EnableExperimentalState {
-		numOfVals = b.validatorsMultiValue.Len(b)
-	} else {
-		numOfVals = len(b.validators)
-	}
+	numOfVals := b.validatorsMultiValue.Len(b)
 
 	idx, ok := b.valMapHandler.Get(key)
 	if ok && primitives.ValidatorIndex(numOfVals) <= idx {
@@ -203,18 +134,9 @@ func (b *BeaconState) PubkeyAtIndex(idx primitives.ValidatorIndex) [fieldparams.
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
-	var v *ethpb.Validator
-	if features.Get().EnableExperimentalState {
-		var err error
-		v, err = b.validatorsMultiValue.At(b, uint64(idx))
-		if err != nil {
-			return [fieldparams.BLSPubkeyLength]byte{}
-		}
-	} else {
-		if uint64(idx) >= uint64(len(b.validators)) {
-			return [fieldparams.BLSPubkeyLength]byte{}
-		}
-		v = b.validators[idx]
+	v, err := b.validatorsMultiValue.At(b, uint64(idx))
+	if err != nil {
+		return [fieldparams.BLSPubkeyLength]byte{}
 	}
 
 	if v == nil {
@@ -231,20 +153,10 @@ func (b *BeaconState) AggregateKeyFromIndices(idxs []uint64) (bls.PublicKey, err
 
 	pubKeys := make([][]byte, len(idxs))
 	for i, idx := range idxs {
-		var v *ethpb.Validator
-		if features.Get().EnableExperimentalState {
-			var err error
-			v, err = b.validatorsMultiValue.At(b, idx)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			if idx >= uint64(len(b.validators)) {
-				return nil, consensus_types.ErrOutOfBounds
-			}
-			v = b.validators[idx]
+		v, err := b.validatorsMultiValue.At(b, idx)
+		if err != nil {
+			return nil, err
 		}
-
 		if v == nil {
 			return nil, ErrNilWrappedValidator
 		}
@@ -261,15 +173,11 @@ func (b *BeaconState) PublicKeys() ([][fieldparams.BLSPubkeyLength]byte, error) 
 	l := b.validatorsLen()
 	res := make([][fieldparams.BLSPubkeyLength]byte, l)
 	for i := 0; i < l; i++ {
-		if features.Get().EnableExperimentalState {
-			val, err := b.validatorsMultiValue.At(b, uint64(i))
-			if err != nil {
-				return nil, err
-			}
-			copy(res[i][:], val.PublicKey)
-		} else {
-			copy(res[i][:], b.validators[i].PublicKey)
+		val, err := b.validatorsMultiValue.At(b, uint64(i))
+		if err != nil {
+			return nil, err
 		}
+		copy(res[i][:], val.PublicKey)
 	}
 	return res, nil
 }
@@ -289,30 +197,6 @@ func (b *BeaconState) ReadFromEveryValidator(f func(idx int, val state.ReadOnlyV
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
-	if features.Get().EnableExperimentalState {
-		return b.readFromEveryValidatorMVSlice(f)
-	}
-
-	if b.validators == nil {
-		return state.ErrNilValidatorsInState
-	}
-
-	validators := b.validators
-
-	for i, v := range validators {
-		v, err := NewValidator(v)
-		if err != nil {
-			return err
-		}
-		if err = f(i, v); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// WARNING: This function works only for the multi-value slice feature.
-func (b *BeaconState) readFromEveryValidatorMVSlice(f func(idx int, val state.ReadOnlyValidator) error) error {
 	if b.validatorsMultiValue == nil {
 		return state.ErrNilValidatorsInState
 	}
@@ -342,18 +226,10 @@ func (b *BeaconState) Balances() []uint64 {
 }
 
 func (b *BeaconState) balancesVal() []uint64 {
-	if features.Get().EnableExperimentalState {
-		if b.balancesMultiValue == nil {
-			return nil
-		}
-		return b.balancesMultiValue.Value(b)
-	}
-	if b.balances == nil {
+	if b.balancesMultiValue == nil {
 		return nil
 	}
-	res := make([]uint64, len(b.balances))
-	copy(res, b.balances)
-	return res
+	return b.balancesMultiValue.Value(b)
 }
 
 // BalanceAtIndex of validator with the provided index.
@@ -365,19 +241,10 @@ func (b *BeaconState) BalanceAtIndex(idx primitives.ValidatorIndex) (uint64, err
 }
 
 func (b *BeaconState) balanceAtIndex(idx primitives.ValidatorIndex) (uint64, error) {
-	if features.Get().EnableExperimentalState {
-		if b.balancesMultiValue == nil {
-			return 0, nil
-		}
-		return b.balancesMultiValue.At(b, uint64(idx))
-	}
-	if b.balances == nil {
+	if b.balancesMultiValue == nil {
 		return 0, nil
 	}
-	if uint64(len(b.balances)) <= uint64(idx) {
-		return 0, errors.Wrapf(consensus_types.ErrOutOfBounds, "balance index %d does not exist", idx)
-	}
-	return b.balances[idx], nil
+	return b.balancesMultiValue.At(b, uint64(idx))
 }
 
 // BalancesLength returns the length of the balances slice.
@@ -385,13 +252,10 @@ func (b *BeaconState) BalancesLength() int {
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
-	if features.Get().EnableExperimentalState {
-		if b.balancesMultiValue == nil {
-			return 0
-		}
-		return b.balancesMultiValue.Len(b)
+	if b.balancesMultiValue == nil {
+		return 0
 	}
-	return len(b.balances)
+	return b.balancesMultiValue.Len(b)
 }
 
 // Slashings of validators on the beacon chain.
@@ -431,18 +295,10 @@ func (b *BeaconState) InactivityScores() ([]uint64, error) {
 }
 
 func (b *BeaconState) inactivityScoresVal() []uint64 {
-	if features.Get().EnableExperimentalState {
-		if b.inactivityScoresMultiValue == nil {
-			return nil
-		}
-		return b.inactivityScoresMultiValue.Value(b)
-	}
-	if b.inactivityScores == nil {
+	if b.inactivityScoresMultiValue == nil {
 		return nil
 	}
-	res := make([]uint64, len(b.inactivityScores))
-	copy(res, b.inactivityScores)
-	return res
+	return b.inactivityScoresMultiValue.Value(b)
 }
 
 // PendingBalanceToWithdraw returns the sum of all pending withdrawals for the given validator.
