@@ -306,7 +306,7 @@ type BeaconChainConfig struct {
 	NodeIdBits                      uint64          `yaml:"NODE_ID_BITS" spec:"true"`                       // NodeIdBits defines the bit length of a node id.
 
 	// Blobs Values
-	BlobSchedule []BlobScheduleEntry `yaml:"BLOB_SCHEDULE"`
+	BlobSchedule []BlobScheduleEntry `yaml:"BLOB_SCHEDULE" spec:"true"`
 
 	// Deprecated_MaxBlobsPerBlock defines the max blobs that could exist in a block.
 	// Deprecated: This field is no longer supported. Avoid using it.
@@ -339,8 +339,8 @@ func (b *BeaconChainConfig) ExecutionRequestLimits() enginev1.ExecutionRequestLi
 type NetworkScheduleEntry struct {
 	ForkVersion      [fieldparams.VersionLength]byte
 	ForkDigest       [4]byte
-	MaxBlobsPerBlock uint64           `yaml:"MAX_BLOBS_PER_BLOCK"`
-	Epoch            primitives.Epoch `yaml:"EPOCH"`
+	Epoch            primitives.Epoch `yaml:"EPOCH" json:"EPOCH"`
+	MaxBlobsPerBlock uint64           `yaml:"MAX_BLOBS_PER_BLOCK" json:"MAX_BLOBS_PER_BLOCK"`
 	BPOEpoch         primitives.Epoch
 	VersionEnum      int
 	isFork           bool

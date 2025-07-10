@@ -70,8 +70,8 @@ func GetSpec(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJson(w, &structs.GetSpecResponse{Data: data})
 }
 
-func prepareConfigSpec() (map[string]string, error) {
-	data := make(map[string]string)
+func prepareConfigSpec() (map[string]interface{}, error) {
+	data := make(map[string]interface{})
 	config := *params.BeaconConfig()
 	t := reflect.TypeOf(config)
 	v := reflect.ValueOf(config)
@@ -92,7 +92,13 @@ func prepareConfigSpec() (map[string]string, error) {
 		case reflect.Uint64:
 			data[tagValue] = strconv.FormatUint(vField.Uint(), 10)
 		case reflect.Slice:
-			data[tagValue] = hexutil.Encode(vField.Bytes())
+			// Handle byte slices with hexutil.Encode
+			if vField.Type().Elem().Kind() == reflect.Uint8 {
+				data[tagValue] = hexutil.Encode(vField.Bytes())
+			} else {
+				// Handle struct slices - return as interface{} for JSON serialization
+				data[tagValue] = vField.Interface()
+			}
 		case reflect.Array:
 			data[tagValue] = hexutil.Encode(reflect.ValueOf(&config).Elem().Field(i).Slice(0, vField.Len()).Bytes())
 		case reflect.String:
