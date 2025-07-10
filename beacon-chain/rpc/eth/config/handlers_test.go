@@ -11,6 +11,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/common"
@@ -679,11 +680,11 @@ func TestGetSpec_BlobSchedule(t *testing.T) {
 	// Verify the blob schedule content
 	require.Equal(t, 2, len(blobSchedule))
 
-	// Check first entry
-	assert.Equal(t, float64(100), blobSchedule[0]["EPOCH"])
-	assert.Equal(t, float64(6), blobSchedule[0]["MAX_BLOBS_PER_BLOCK"])
+	// Check first entry - values should be strings for consistent API output
+	assert.Equal(t, "100", blobSchedule[0]["EPOCH"])
+	assert.Equal(t, "6", blobSchedule[0]["MAX_BLOBS_PER_BLOCK"])
 
-	// Check second entry
-	assert.Equal(t, float64(200), blobSchedule[1]["EPOCH"])
-	assert.Equal(t, float64(9), blobSchedule[1]["MAX_BLOBS_PER_BLOCK"])
+	// Check second entry - values should be strings for consistent API output
+	assert.Equal(t, "200", blobSchedule[1]["EPOCH"])
+	assert.Equal(t, "9", blobSchedule[1]["MAX_BLOBS_PER_BLOCK"])
 }
