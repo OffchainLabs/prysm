@@ -3,7 +3,6 @@ package grpc_api
 import (
 	"context"
 
-	"github.com/OffchainLabs/prysm/v6/api/client/beacon/health"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
 	"github.com/golang/protobuf/ptypes/empty"
@@ -16,8 +15,7 @@ var (
 )
 
 type grpcNodeClient struct {
-	nodeClient    ethpb.NodeClient
-	healthTracker health.Tracker
+	nodeClient ethpb.NodeClient
 }
 
 func (c *grpcNodeClient) SyncStatus(ctx context.Context, in *empty.Empty) (*ethpb.SyncStatus, error) {
@@ -39,18 +37,13 @@ func (c *grpcNodeClient) Peers(ctx context.Context, in *empty.Empty) (*ethpb.Pee
 func (c *grpcNodeClient) IsHealthy(ctx context.Context) bool {
 	_, err := c.nodeClient.GetHealth(ctx, &ethpb.HealthRequest{})
 	if err != nil {
-		log.WithError(err).Debug("failed to get health of node")
+		log.WithError(err).Error("failed to get health of node")
 		return false
 	}
 	return true
 }
 
-func (c *grpcNodeClient) HealthTracker() health.Tracker {
-	return c.healthTracker
-}
-
 func NewNodeClient(cc grpc.ClientConnInterface) iface.NodeClient {
 	g := &grpcNodeClient{nodeClient: ethpb.NewNodeClient(cc)}
-	g.healthTracker = health.NewTracker(g)
 	return g
 }

@@ -58,6 +58,7 @@ type ValidatorClient struct {
 	wallet                *wallet.Wallet
 	walletInitializedFeed *event.Feed
 	stop                  chan struct{} // Channel to wait for termination notifications.
+	once                  sync.Once
 }
 
 // NewValidatorClient creates a new instance of the Prysm validator client.
@@ -161,13 +162,15 @@ func (c *ValidatorClient) Start() {
 
 // Close handles graceful shutdown of the system.
 func (c *ValidatorClient) Close() {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+	c.once.Do(func() { // runs exactly one time
+		c.lock.Lock()
+		defer c.lock.Unlock()
 
-	c.services.StopAll()
-	log.Info("Stopping Prysm validator")
-	c.cancel()
-	close(c.stop)
+		c.services.StopAll()
+		log.Info("Stopping Prysm validator")
+		c.cancel()
+		close(c.stop)
+	})
 }
 
 // checkLegacyDatabaseLocation checks is a database exists in the specified location.
@@ -441,6 +444,8 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 		LogValidatorPerformance: !cliCtx.Bool(flags.DisablePenaltyRewardLogFlag.Name),
 		EmitAccountMetrics:      !cliCtx.Bool(flags.DisableAccountMetricsFlag.Name),
 		Distributed:             cliCtx.Bool(flags.EnableDistributed.Name),
+		CloseClientFunc:         c.Close,
+		MaxHealthChecks:         cliCtx.Int(flags.MaxHealthChecksFlag.Name),
 	})
 	if err != nil {
 		return errors.Wrap(err, "could not initialize validator service")

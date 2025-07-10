@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/api/client"
-	"github.com/OffchainLabs/prysm/v6/api/client/beacon/health"
 	eventClient "github.com/OffchainLabs/prysm/v6/api/client/event"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/async/event"
@@ -1152,6 +1151,10 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 }
 
 func (v *validator) StartEventStream(ctx context.Context, topics []string) {
+	if v.EventStreamIsRunning() {
+		log.Debug("EventStream is already running")
+		return
+	}
 	log.WithField("topics", topics).Info("Starting event stream")
 	v.validatorClient.StartEventStream(ctx, topics, v.eventsChannel)
 }
@@ -1243,23 +1246,39 @@ func (v *validator) EventStreamIsRunning() bool {
 	return v.validatorClient.EventStreamIsRunning()
 }
 
-func (v *validator) HealthTracker() health.Tracker {
-	return v.nodeClient.HealthTracker()
-}
-
 func (v *validator) Host() string {
 	return v.validatorClient.Host()
 }
 
-func (v *validator) ChangeHost() {
-	if len(v.beaconNodeHosts) == 1 {
-		log.Infof("Beacon node at %s is not responding, no backup node configured", v.Host())
-		return
-	}
+func (v *validator) changeHost() {
 	next := (v.currentHostIndex + 1) % uint64(len(v.beaconNodeHosts))
-	log.Infof("Beacon node at %s is not responding, switching to %s...", v.beaconNodeHosts[v.currentHostIndex], v.beaconNodeHosts[next])
+	log.WithFields(logrus.Fields{
+		"currentHost": v.beaconNodeHosts[v.currentHostIndex],
+		"nextHost":    v.beaconNodeHosts[next],
+	}).Warn("Beacon node is not responding, switching host")
 	v.validatorClient.SetHost(v.beaconNodeHosts[next])
 	v.currentHostIndex = next
+}
+
+func (v *validator) FindHealthyHost(ctx context.Context) bool {
+	// Tail-recursive closure keeps retry count private.
+	var check func(remaining int) bool
+	check = func(remaining int) bool {
+		if v.nodeClient.IsHealthy(ctx) { // healthy → done
+			return true
+		}
+		if len(v.beaconNodeHosts) == 1 && features.Get().EnableBeaconRESTApi {
+			log.WithField("host", v.Host()).Warn("Beacon node is not responding, no backup node configured")
+			return false
+		}
+		if remaining == 0 || !features.Get().EnableBeaconRESTApi {
+			return false // exhausted or REST disabled
+		}
+		v.changeHost()
+		return check(remaining - 1) // recurse
+	}
+
+	return check(len(v.beaconNodeHosts))
 }
 
 func (v *validator) filterAndCacheActiveKeys(ctx context.Context, pubkeys [][fieldparams.BLSPubkeyLength]byte, slot primitives.Slot) ([][fieldparams.BLSPubkeyLength]byte, error) {

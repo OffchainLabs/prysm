@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/api/client/beacon/health"
 	"github.com/OffchainLabs/prysm/v6/api/client/event"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/proposer"
@@ -69,9 +68,8 @@ type Validator interface {
 	Graffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) ([]byte, error)
 	SetGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, graffiti []byte) error
 	DeleteGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) error
-	HealthTracker() health.Tracker
 	Host() string
-	ChangeHost()
+	FindHealthyHost(ctx context.Context) bool
 }
 
 // SigningFunc interface defines a type for the function that signs a message

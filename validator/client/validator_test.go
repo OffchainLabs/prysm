@@ -2838,9 +2838,9 @@ func TestValidator_ChangeHost(t *testing.T) {
 
 	client.EXPECT().SetHost(v.beaconNodeHosts[1])
 	client.EXPECT().SetHost(v.beaconNodeHosts[0])
-	v.ChangeHost()
+	v.changeHost()
 	assert.Equal(t, uint64(1), v.currentHostIndex)
-	v.ChangeHost()
+	v.changeHost()
 	assert.Equal(t, uint64(0), v.currentHostIndex)
 }
 
