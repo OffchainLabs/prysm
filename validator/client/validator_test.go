@@ -629,7 +629,7 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 	).Return(
 		&ethpb.DomainResponse{SignatureDomain: sigDomain},
 		nil, /*err*/
-	).Times(2)
+	)
 
 	client.EXPECT().AggregatedSelections(
 		gomock.Any(),
