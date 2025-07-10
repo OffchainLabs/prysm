@@ -136,7 +136,7 @@ func logFailedReorgAttempt(slot primitives.Slot, oldHeadRoot, headRoot [32]byte)
 		"slot":        slot,
 		"oldHeadRoot": fmt.Sprintf("%#x", oldHeadRoot),
 		"headRoot":    fmt.Sprintf("%#x", headRoot),
-	}).Warn("late block attempted reorg failed")
+	}).Warn("Late block attempted reorg failed")
 }
 
 func (vs *Server) getHeadNoReorg(ctx context.Context, slot primitives.Slot, parentRoot [32]byte) (state.BeaconState, error) {
@@ -430,7 +430,7 @@ func (vs *Server) PrepareBeaconProposer(
 		if feeRecipient == primitives.ExecutionAddress([20]byte{}) {
 			feeRecipient = primitives.ExecutionAddress(params.BeaconConfig().DefaultFeeRecipient)
 			if feeRecipient == primitives.ExecutionAddress([20]byte{}) {
-				log.WithField("validatorIndex", r.ValidatorIndex).Warn("fee recipient is the burn address")
+				log.WithField("validatorIndex", r.ValidatorIndex).Warn("Fee recipient is the burn address")
 			}
 		}
 		val := cache.TrackedValidator{

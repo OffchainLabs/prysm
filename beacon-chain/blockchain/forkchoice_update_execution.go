@@ -76,14 +76,14 @@ func (s *Service) sendFCUWithAttributes(cfg *postBlockProcessConfig, fcuArgs *fc
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
 	if err := s.computePayloadAttributes(cfg, fcuArgs); err != nil {
-		log.WithError(err).Error("could not compute payload attributes")
+		log.WithError(err).Error("Could not compute payload attributes")
 		return
 	}
 	if fcuArgs.attributes.IsEmpty() {
 		return
 	}
 	if _, err := s.notifyForkchoiceUpdate(cfg.ctx, fcuArgs); err != nil {
-		log.WithError(err).Error("could not update forkchoice with payload attributes for proposal")
+		log.WithError(err).Error("Could not update forkchoice with payload attributes for proposal")
 	}
 }
 
@@ -99,7 +99,7 @@ func (s *Service) forkchoiceUpdateWithExecution(ctx context.Context, args *fcuCo
 	}
 
 	if err := s.saveHead(ctx, args.headRoot, args.headBlock, args.headState); err != nil {
-		log.WithError(err).Error("could not save head")
+		log.WithError(err).Error("Could not save head")
 	}
 
 	go s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), args.headBlock, args.headRoot, s.CurrentSlot()+1)
@@ -114,7 +114,7 @@ func (s *Service) forkchoiceUpdateWithExecution(ctx context.Context, args *fcuCo
 func (s *Service) shouldOverrideFCU(newHeadRoot [32]byte, proposingSlot primitives.Slot) bool {
 	headWeight, err := s.cfg.ForkChoiceStore.Weight(newHeadRoot)
 	if err != nil {
-		log.WithError(err).WithField("root", fmt.Sprintf("%#x", newHeadRoot)).Warn("could not determine node weight")
+		log.WithError(err).WithField("root", fmt.Sprintf("%#x", newHeadRoot)).Warn("Could not determine node weight")
 	}
 	currentSlot := s.CurrentSlot()
 	if proposingSlot == currentSlot {
@@ -135,7 +135,7 @@ func (s *Service) shouldOverrideFCU(newHeadRoot [32]byte, proposingSlot primitiv
 		secs, err := slots.SecondsSinceSlotStart(currentSlot,
 			uint64(s.genesisTime.Unix()), uint64(time.Now().Unix()))
 		if err != nil {
-			log.WithError(err).Error("could not compute seconds since slot start")
+			log.WithError(err).Error("Could not compute seconds since slot start")
 		}
 		if secs >= doublylinkedtree.ProcessAttestationsThreshold {
 			log.WithFields(logrus.Fields{

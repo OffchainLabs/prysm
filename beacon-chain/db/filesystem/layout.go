@@ -255,7 +255,7 @@ func pruneBefore(before primitives.Epoch, l fsLayout) (map[primitives.Epoch]*pru
 				}
 				continue
 			}
-			log.WithError(err).Error("encountered unhandled error during pruning")
+			log.WithError(err).Error("Encountered unhandled error during pruning")
 			return nil, errors.Wrap(errPruneFailed, err.Error())
 		}
 		if ident.epoch >= before {

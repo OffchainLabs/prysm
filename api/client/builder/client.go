@@ -72,7 +72,7 @@ func (*requestLogger) observe(r *http.Request) (e error) {
 		log.WithFields(log.Fields{
 			"bodyBase64": "(nil value)",
 			"url":        r.URL.String(),
-		}).Info("builder http request")
+		}).Info("Builder http request")
 		return nil
 	}
 	t := io.TeeReader(r.Body, b)
@@ -89,7 +89,7 @@ func (*requestLogger) observe(r *http.Request) (e error) {
 	log.WithFields(log.Fields{
 		"bodyBase64": string(body),
 		"url":        r.URL.String(),
-	}).Info("builder http request")
+	}).Info("Builder http request")
 
 	return nil
 }

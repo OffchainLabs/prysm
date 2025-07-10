@@ -555,11 +555,11 @@ func (s *ChainService) UpdateHead(ctx context.Context, slot primitives.Slot) {
 	ojc := &ethpb.Checkpoint{}
 	st, root, err := prepareForkchoiceState(ctx, slot, bytesutil.ToBytes32(s.Root), [32]byte{}, [32]byte{}, ojc, ojc)
 	if err != nil {
-		logrus.WithError(err).Error("could not update head")
+		logrus.WithError(err).Error("Could not update head")
 	}
 	err = s.ForkChoiceStore.InsertNode(ctx, st, root)
 	if err != nil {
-		logrus.WithError(err).Error("could not insert node to forkchoice")
+		logrus.WithError(err).Error("Could not insert node to forkchoice")
 	}
 }
 

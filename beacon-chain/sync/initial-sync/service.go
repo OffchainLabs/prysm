@@ -130,7 +130,7 @@ func (s *Service) Start() {
 	log.Info("Waiting for state to be initialized")
 	clock, err := s.cfg.ClockWaiter.WaitForClock(s.ctx)
 	if err != nil {
-		log.WithError(err).Error("initial-sync failed to receive startup event")
+		log.WithError(err).Error("Initial-sync failed to receive startup event")
 		return
 	}
 	s.clock = clock
@@ -138,7 +138,7 @@ func (s *Service) Start() {
 	ctxMap, err := sync.ContextByteVersionsForValRoot(clock.GenesisValidatorsRoot())
 	if err != nil {
 		log.WithField("genesisValidatorRoot", clock.GenesisValidatorsRoot()).
-			WithError(err).Error("unable to initialize context version map using genesis validator")
+			WithError(err).Error("Unable to initialize context version map using genesis validator")
 		return
 	}
 	s.ctxMap = ctxMap

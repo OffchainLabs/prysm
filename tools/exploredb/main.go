@@ -87,7 +87,7 @@ func main() {
 	// check if the database file is present.
 	dbNameWithPath := filepath.Join(*datadir, *dbName)
 	if _, err := os.Stat(dbNameWithPath); os.IsNotExist(err) {
-		log.WithError(err).WithField("path", dbNameWithPath).Fatal("could not locate database file")
+		log.WithError(err).WithField("path", dbNameWithPath).Fatal("Could not locate database file")
 	}
 
 	switch *command {
@@ -104,7 +104,7 @@ func main() {
 	case "migration-check":
 		destDbNameWithPath := filepath.Join(*destDatadir, *dbName)
 		if _, err := os.Stat(destDbNameWithPath); os.IsNotExist(err) {
-			log.WithError(err).WithField("path", destDbNameWithPath).Fatal("could not locate database file")
+			log.WithError(err).WithField("path", destDbNameWithPath).Fatal("Could not locate database file")
 		}
 		switch *migrationName {
 		case "validator-entries":
@@ -133,14 +133,14 @@ func printBucketContents(dbNameWithPath string, rowLimit uint64, bucketName stri
 	dbDirectory := filepath.Dir(dbNameWithPath)
 	db, openErr := kv.NewKVStore(context.Background(), dbDirectory)
 	if openErr != nil {
-		log.WithError(openErr).Fatal("could not open db")
+		log.WithError(openErr).Fatal("Could not open db")
 	}
 
 	// don't forget to close it when ejecting out of this function.
 	defer func() {
 		closeErr := db.Close()
 		if closeErr != nil {
-			log.WithError(closeErr).Fatal("could not close db")
+			log.WithError(closeErr).Fatal("Could not close db")
 		}
 	}()
 
@@ -166,14 +166,14 @@ func readBucketStat(dbNameWithPath string, statsC chan<- *bucketStat) {
 	// open the raw database file. If the file is busy, then exit.
 	db, openErr := bolt.Open(dbNameWithPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if openErr != nil {
-		log.WithError(openErr).Fatal("could not open db to show bucket stats")
+		log.WithError(openErr).Fatal("Could not open db to show bucket stats")
 	}
 
 	// make sure we close the database before ejecting out of this function.
 	defer func() {
 		closeErr := db.Close()
 		if closeErr != nil {
-			log.WithError(closeErr).Fatalf("could not close db after showing bucket stats")
+			log.WithError(closeErr).Fatalf("Could not close db after showing bucket stats")
 		}
 	}()
 
@@ -188,7 +188,7 @@ func readBucketStat(dbNameWithPath string, statsC chan<- *bucketStat) {
 			return nil
 		})
 	}); viewErr1 != nil {
-		log.WithError(viewErr1).Fatal("could not read buckets from db while getting list of buckets")
+		log.WithError(viewErr1).Fatal("Could not read buckets from db while getting list of buckets")
 	}
 
 	// for every bucket, calculate the stats and send it for printing.
@@ -258,7 +258,7 @@ func readStates(ctx context.Context, db *kv.Store, stateC chan<- *modifiedState,
 	for rowCount, key := range keys {
 		st, stateErr := db.State(ctx, bytesutil.ToBytes32(key))
 		if stateErr != nil {
-			log.WithError(stateErr).Errorf("could not get state for key : %s", hexutils.BytesToHex(key))
+			log.WithError(stateErr).Errorf("Could not get state for key : %s", hexutils.BytesToHex(key))
 			continue
 		}
 		mst := &modifiedState{
@@ -282,7 +282,7 @@ func readStateSummary(ctx context.Context, db *kv.Store, stateSummaryC chan<- *m
 	for rowCount, key := range keys {
 		ss, ssErr := db.StateSummary(ctx, bytesutil.ToBytes32(key))
 		if ssErr != nil {
-			log.WithError(ssErr).Errorf("could not get state summary for key : %s", hexutils.BytesToHex(key))
+			log.WithError(ssErr).Errorf("Could not get state summary for key : %s", hexutils.BytesToHex(key))
 			continue
 		}
 		mst := &modifiedStateSummary{
@@ -377,14 +377,14 @@ func checkValidatorMigration(dbNameWithPath, destDbNameWithPath string) {
 	destStateKeys, _ := keysOfBucket(destDbNameWithPath, []byte("state"), MaxUint64)
 
 	if len(destStateKeys) < len(sourceStateKeys) {
-		log.Fatalf("destination keys are lesser then source keys (%d/%d)", len(sourceStateKeys), len(destStateKeys))
+		log.Fatalf("Destination keys are lesser then source keys (%d/%d)", len(sourceStateKeys), len(destStateKeys))
 	}
 
 	// create the source and destination KV stores.
 	sourceDbDirectory := filepath.Dir(dbNameWithPath)
 	sourceDB, openErr := kv.NewKVStore(context.Background(), sourceDbDirectory)
 	if openErr != nil {
-		log.WithError(openErr).Fatal("could not open sourceDB")
+		log.WithError(openErr).Fatal("Could not open sourceDB")
 	}
 
 	destinationDbDirectory := filepath.Dir(destDbNameWithPath)
@@ -394,7 +394,7 @@ func checkValidatorMigration(dbNameWithPath, destDbNameWithPath string) {
 		// if you want to avoid this then we should pass the metric name when opening the DB which touches
 		// too many places.
 		if openErr.Error() != "duplicate metrics collector registration attempted" {
-			log.WithError(openErr).Fatalf("could not open sourceDB")
+			log.WithError(openErr).Fatalf("Could not open sourceDB")
 		}
 	}
 
@@ -402,13 +402,13 @@ func checkValidatorMigration(dbNameWithPath, destDbNameWithPath string) {
 	defer func() {
 		closeErr := sourceDB.Close()
 		if closeErr != nil {
-			log.WithError(closeErr).Fatal("could not close sourceDB")
+			log.WithError(closeErr).Fatal("Could not close sourceDB")
 		}
 	}()
 	defer func() {
 		closeErr := destDB.Close()
 		if closeErr != nil {
-			log.WithError(closeErr).Fatal("could not close sourceDB")
+			log.WithError(closeErr).Fatal("Could not close sourceDB")
 		}
 	}()
 
@@ -417,11 +417,11 @@ func checkValidatorMigration(dbNameWithPath, destDbNameWithPath string) {
 	for rowCount, key := range sourceStateKeys[910:] {
 		sourceState, stateErr := sourceDB.State(ctx, bytesutil.ToBytes32(key))
 		if stateErr != nil {
-			log.WithError(stateErr).WithField("key", hexutils.BytesToHex(key)).Fatalf("could not get from source db, the state for key")
+			log.WithError(stateErr).WithField("key", hexutils.BytesToHex(key)).Fatalf("Could not get from source db, the state for key")
 		}
 		destinationState, stateErr := destDB.State(ctx, bytesutil.ToBytes32(key))
 		if stateErr != nil {
-			log.WithError(stateErr).WithField("key", hexutils.BytesToHex(key)).Fatalf("could not get from destination db, the state for key")
+			log.WithError(stateErr).WithField("key", hexutils.BytesToHex(key)).Fatalf("Could not get from destination db, the state for key")
 		}
 		if destinationState == nil {
 			log.Infof("could not find state in migrated DB: index = %d, slot = %d, epoch = %d,  numOfValidators = %d, key = %s",
@@ -435,11 +435,11 @@ func checkValidatorMigration(dbNameWithPath, destDbNameWithPath string) {
 		}
 		sourceStateHash, err := sourceState.HashTreeRoot(ctx)
 		if err != nil {
-			log.WithError(err).Fatal("could not find hash of source state")
+			log.WithError(err).Fatal("Could not find hash of source state")
 		}
 		destinationStateHash, err := destinationState.HashTreeRoot(ctx)
 		if err != nil {
-			log.WithError(err).Fatal("could not find hash of destination state")
+			log.WithError(err).Fatal("Could not find hash of destination state")
 		}
 		if !bytes.Equal(sourceStateHash[:], destinationStateHash[:]) {
 			log.Fatalf("state mismatch : key = %s", hexutils.BytesToHex(key))
@@ -452,14 +452,14 @@ func keysOfBucket(dbNameWithPath string, bucketName []byte, rowLimit uint64) ([]
 	// open the raw database file. If the file is busy, then exit.
 	db, openErr := bolt.Open(dbNameWithPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if openErr != nil {
-		log.WithError(openErr).Fatal("could not open db while getting keys of a bucket")
+		log.WithError(openErr).Fatal("Could not open db while getting keys of a bucket")
 	}
 
 	// make sure we close the database before ejecting out of this function.
 	defer func() {
 		closeErr := db.Close()
 		if closeErr != nil {
-			log.WithError(closeErr).Fatal("could not close db while getting keys of a bucket")
+			log.WithError(closeErr).Fatal("Could not close db while getting keys of a bucket")
 		}
 	}()
 
@@ -484,7 +484,7 @@ func keysOfBucket(dbNameWithPath string, bucketName []byte, rowLimit uint64) ([]
 		}
 		return nil
 	}); viewErr != nil {
-		log.WithError(viewErr).Fatal("could not read keys of bucket from db")
+		log.WithError(viewErr).Fatal("Could not read keys of bucket from db")
 	}
 	return keys, sizes
 }

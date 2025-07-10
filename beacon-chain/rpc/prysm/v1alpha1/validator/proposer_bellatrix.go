@@ -132,7 +132,7 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 			if bid.Version() >= version.Deneb {
 				bidDeneb, ok := bid.(builder.BidDeneb)
 				if !ok {
-					log.Warnf("bid type %T does not implement builder.BidDeneb", bid)
+					log.Warnf("Bid type %T does not implement builder.BidDeneb", bid)
 					return local.Bid, local.BlobsBundler, setLocalExecution(blk, local)
 				} else {
 					builderKzgCommitments = bidDeneb.BlobKzgCommitments()
@@ -143,7 +143,7 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 			if bid.Version() >= version.Electra {
 				bidElectra, ok := bid.(builder.BidElectra)
 				if !ok {
-					log.Warnf("bid type %T does not implement builder.BidElectra", bid)
+					log.Warnf("Bid type %T does not implement builder.BidElectra", bid)
 					return local.Bid, local.BlobsBundler, setLocalExecution(blk, local)
 				} else {
 					executionRequests = bidElectra.ExecutionRequests()

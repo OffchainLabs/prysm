@@ -69,7 +69,7 @@ func (s *Service) spawnProcessAttestationsRoutine() {
 	go func() {
 		_, err := s.clockWaiter.WaitForClock(s.ctx)
 		if err != nil {
-			log.WithError(err).Error("spawnProcessAttestationsRoutine failed to receive genesis data")
+			log.WithError(err).Error("Failed to receive genesis data")
 			return
 		}
 		if s.genesisTime.IsZero() {
@@ -103,7 +103,7 @@ func (s *Service) spawnProcessAttestationsRoutine() {
 				} else {
 					s.cfg.ForkChoiceStore.Lock()
 					if err := s.cfg.ForkChoiceStore.NewSlot(s.ctx, slotInterval.Slot); err != nil {
-						log.WithError(err).Error("could not process new slot")
+						log.WithError(err).Error("Could not process new slot")
 					}
 					s.cfg.ForkChoiceStore.Unlock()
 
@@ -144,7 +144,7 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 	log.WithField("newHeadRoot", fmt.Sprintf("%#x", newHeadRoot)).Debug("Head changed due to attestations")
 	headState, headBlock, err := s.getStateAndBlock(ctx, newHeadRoot)
 	if err != nil {
-		log.WithError(err).Error("could not get head block")
+		log.WithError(err).Error("Could not get head block")
 		return
 	}
 	newAttHeadElapsedTime.Observe(float64(time.Since(start).Milliseconds()))
@@ -161,7 +161,7 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 		return
 	}
 	if err := s.forkchoiceUpdateWithExecution(s.ctx, fcuArgs); err != nil {
-		log.WithError(err).Error("could not update forkchoice")
+		log.WithError(err).Error("Could not update forkchoice")
 	}
 }
 

@@ -819,7 +819,7 @@ func (s *Server) PrepareBeaconProposer(w http.ResponseWriter, r *http.Request) {
 		if feeRecipient == primitives.ExecutionAddress([20]byte{}) {
 			feeRecipient = primitives.ExecutionAddress(params.BeaconConfig().DefaultFeeRecipient)
 			if feeRecipient == primitives.ExecutionAddress([20]byte{}) {
-				log.WithField("validatorIndex", validatorIndex).Warn("fee recipient is the burn address")
+				log.WithField("validatorIndex", validatorIndex).Warn("Fee recipient is the burn address")
 			}
 		}
 		val := cache.TrackedValidator{
