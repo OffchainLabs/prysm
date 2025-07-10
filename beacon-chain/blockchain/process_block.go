@@ -930,7 +930,7 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 		log.WithError(err).Debug("Could not update next slot state cache")
 	}
 	if err := s.handleEpochBoundary(ctx, currentSlot, headState, headRoot[:]); err != nil {
-		log.WithError(err).Error("LateBlockTasks: could not update epoch boundary caches")
+		log.WithError(err).Error("Could not update epoch boundary caches")
 	}
 	// return early if we already started building a block for the current
 	// head root

@@ -69,7 +69,7 @@ func (s *Service) spawnProcessAttestationsRoutine() {
 	go func() {
 		_, err := s.clockWaiter.WaitForClock(s.ctx)
 		if err != nil {
-			log.WithError(err).Error("SpawnProcessAttestationsRoutine failed to receive genesis data")
+			log.WithError(err).Error("Failed to receive genesis data")
 			return
 		}
 		if s.genesisTime.IsZero() {

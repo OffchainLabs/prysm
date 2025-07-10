@@ -305,7 +305,7 @@ func defaultAggregateSubnetTopicParams(activeValidators uint64) *pubsub.TopicSco
 	// Determine the amount of validators expected in a subnet in a single slot.
 	numPerSlot := time.Duration(subnetWeight / uint64(params.BeaconConfig().SlotsPerEpoch))
 	if numPerSlot == 0 {
-		log.Warn("NumPerSlot is 0, skipping initializing topic scoring")
+		log.Warn("Number per slot is 0, skipping initializing topic scoring")
 		return nil
 	}
 	comsPerSlot := committeeCountPerSlot(activeValidators)
@@ -318,7 +318,7 @@ func defaultAggregateSubnetTopicParams(activeValidators uint64) *pubsub.TopicSco
 	}
 	rate := numPerSlot * 2 / gossipSubD
 	if rate == 0 {
-		log.Warn("Rate is 0, skipping initializing topic scoring")
+		log.Warn("Skipping initializing topic scoring because rate is 0")
 		return nil
 	}
 	// Determine expected first deliveries based on the message rate.
@@ -381,7 +381,7 @@ func defaultSyncSubnetTopicParams(activeValidators uint64) *pubsub.TopicScorePar
 
 	rate := subnetWeight * 2 / gossipSubD
 	if rate == 0 {
-		log.Warn("Rate is 0, skipping initializing topic scoring")
+		log.Warn("Skipping initializing topic scoring because rate is 0")
 		return nil
 	}
 	// Determine expected first deliveries based on the message rate.
