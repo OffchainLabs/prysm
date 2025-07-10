@@ -1,7 +1,7 @@
 package sync
 
 import (
-	"sort"
+	"slices"
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -45,10 +45,7 @@ func (c *slotAwareCache) Add(slot primitives.Slot, key string, value interface{}
 	// Track slot association
 	c.slotToKeys[slot] = append(c.slotToKeys[slot], key)
 
-	// If we exceed maxSlots, prune the oldest slots
-	if len(c.slotToKeys) > maxSlots {
-		c.pruneOldestSlots()
-	}
+	c.pruneOldestSlots()
 }
 
 // pruneSlotsBefore removes all entries with slots less than the given slot.
@@ -83,13 +80,11 @@ func (c *slotAwareCache) pruneOldestSlots() {
 	for slot := range c.slotToKeys {
 		slots = append(slots, slot)
 	}
-	sort.Slice(slots, func(i, j int) bool {
-		return slots[i] < slots[j]
-	})
+	slices.Sort(slots)
 
 	// Remove oldest slots until we're back under the limit
 	slotsToRemove := len(c.slotToKeys) - maxSlots
-	for i := 0; i < slotsToRemove; i++ {
+	for i := range slotsToRemove {
 		slot := slots[i]
 		delete(c.slotToKeys, slot)
 	}
