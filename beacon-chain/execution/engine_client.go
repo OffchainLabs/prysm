@@ -682,7 +682,7 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, signedROBlo
 
 	// Return early if nothing is returned from the EL.
 	if len(blobAndProofV2s) == 0 {
-		log.Debug("No blobs returned from EL")
+		log.Debug("No blobs returned from execution client")
 		return nil, nil
 	}
 
@@ -715,7 +715,7 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, signedROBlo
 		verifiedRODataColumns = append(verifiedRODataColumns, verifiedRODataColumn)
 	}
 
-	log.Debug("Data columns successfully reconstructed from the execution client.")
+	log.Debug("Data columns successfully reconstructed from the execution client")
 
 	return verifiedRODataColumns, nil
 }
