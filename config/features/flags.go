@@ -176,10 +176,6 @@ var (
 		Name:  "enable-experimental-attestation-pool",
 		Usage: "Enables an experimental attestation pool design.",
 	}
-	EnablePeerDAS = &cli.BoolFlag{
-		Name:  "peer-das",
-		Usage: "Enables Prysm to run with the experimental peer data availability sampling scheme.",
-	}
 	// DataColumnsWithholdCount is a flag for withholding data columns when proposing a block.
 	DataColumnsWithholdCount = &cli.Uint64Flag{
 		Name:   "data-columns-withhold-count",
