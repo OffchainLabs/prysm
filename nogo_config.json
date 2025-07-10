@@ -223,5 +223,13 @@
       ".*/main\\.go": "main methods are OK",
       "external/.*": "Third party code"
     }
+  },
+  "logcapitalization": {
+    "exclude_files": {
+      "external/.*": "Third party code",
+      "rules_go_work-.*": "Third party code",
+      ".*/.*_test\\.go": "Test logs can be less formal",
+      "tools/analyzers/logcapitalization/testdata/.*": "Analyzer testdata has to break rules"
+    }
   }
 }

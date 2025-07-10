@@ -153,7 +153,7 @@ func (s *Service) processFetchedData(ctx context.Context, data *blocksQueueFetch
 func (s *Service) processFetchedDataRegSync(ctx context.Context, data *blocksQueueFetchedData) (uint64, error) {
 	bwb, err := validUnprocessed(ctx, data.bwb, s.cfg.Chain.HeadSlot(), s.isProcessedBlock)
 	if err != nil {
-		log.WithError(err).Debug("batch did not contain a valid sequence of unprocessed blocks")
+		log.WithError(err).Debug("Batch did not contain a valid sequence of unprocessed blocks")
 		return 0, err
 	}
 	if len(bwb) == 0 {

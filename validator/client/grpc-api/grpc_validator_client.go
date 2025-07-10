@@ -33,7 +33,7 @@ func (c *grpcValidatorClient) Duties(ctx context.Context, in *ethpb.DutiesReques
 		dutiesResponse, err := c.beaconNodeValidatorClient.GetDutiesV2(ctx, in)
 		if err != nil {
 			if status.Code(err) == codes.Unimplemented {
-				log.Warn("beaconNodeValidatorClient.GetDutiesV2() returned status code unavailable, falling back to GetDuties")
+				log.Warn("GetDutiesV2 returned status code unavailable, falling back to GetDuties")
 				return c.getDuties(ctx, in)
 			}
 			return nil, errors.Wrap(

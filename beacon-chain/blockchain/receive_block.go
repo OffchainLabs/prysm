@@ -183,7 +183,7 @@ func (s *Service) updateCheckpoints(
 			return errors.Wrap(err, "could not get head state")
 		}
 		if err := reportEpochMetrics(ctx, postState, headSt); err != nil {
-			log.WithError(err).Error("could not report epoch metrics")
+			log.WithError(err).Error("Could not report epoch metrics")
 		}
 	}
 	if err := s.updateJustificationOnBlock(ctx, preState, postState, cp.j); err != nil {

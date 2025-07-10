@@ -3271,7 +3271,7 @@ func TestProposer_GetParentHeadState(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, [32]byte(str), [32]byte(headStr))
 		require.NotEqual(t, [32]byte(str), [32]byte(genesisStr))
-		require.LogsContain(t, hook, "late block attempted reorg failed")
+		require.LogsContain(t, hook, "Late block attempted reorg failed")
 	})
 }
 

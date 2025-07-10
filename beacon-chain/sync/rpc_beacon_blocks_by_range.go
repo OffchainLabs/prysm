@@ -54,7 +54,7 @@ func (s *Service) beaconBlocksByRangeRPCHandler(ctx context.Context, msg interfa
 			"endSlot":   rp.end,
 			"size":      rp.size,
 			"current":   s.cfg.clock.CurrentSlot(),
-		}).Debug("error in validating range availability")
+		}).Debug("Error in validating range availability")
 		s.writeErrorResponseToStream(responseCodeResourceUnavailable, p2ptypes.ErrResourceUnavailable.Error(), stream)
 		tracing.AnnotateError(span, err)
 		return nil
@@ -78,7 +78,7 @@ func (s *Service) beaconBlocksByRangeRPCHandler(ctx context.Context, msg interfa
 	defer ticker.Stop()
 	batcher, err := newBlockRangeBatcher(rp, s.cfg.beaconDB, s.rateLimiter, s.cfg.chain.IsCanonical, ticker)
 	if err != nil {
-		log.WithError(err).Info("error in BlocksByRange batch")
+		log.WithError(err).Info("Error in BlocksByRange batch")
 		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
 		tracing.AnnotateError(span, err)
 		return err
