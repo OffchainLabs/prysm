@@ -102,6 +102,7 @@ type BuilderClient interface {
 	GetHeader(ctx context.Context, slot primitives.Slot, parentHash [32]byte, pubkey [48]byte) (SignedBid, error)
 	RegisterValidator(ctx context.Context, svr []*ethpb.SignedValidatorRegistrationV1) error
 	SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, v1.BlobsBundler, error)
+	SubmitBlindedBlockPostFulu(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) error
 	Status(ctx context.Context) error
 }
 
@@ -499,6 +500,24 @@ func (c *Client) SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlyS
 	}
 
 	return ed, blobs, nil
+}
+
+// SubmitBlindedBlockPostFulu calls the builder API endpoint post-Fulu where relays only return status codes.
+// This method is used after the Fulu fork when MEV-boost relays no longer return execution payloads.
+func (c *Client) SubmitBlindedBlockPostFulu(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) error {
+	body, postOpts, err := c.buildBlindedBlockRequest(sb)
+	if err != nil {
+		return err
+	}
+
+	// Post the blinded block - the response should only contain a status code (no payload)
+	_, _, err = c.do(ctx, http.MethodPost, postBlindedBeaconBlockPath, bytes.NewBuffer(body), postOpts)
+	if err != nil {
+		return errors.Wrap(err, "error posting the blinded block to the builder api post-Fulu")
+	}
+
+	// Success is indicated by no error (status 200)
+	return nil
 }
 
 func (c *Client) checkBlockVersion(respBytes []byte, header http.Header) (int, error) {

@@ -24,21 +24,22 @@ type Config struct {
 
 // MockBuilderService to mock builder.
 type MockBuilderService struct {
-	HasConfigured         bool
-	Payload               *v1.ExecutionPayload
-	PayloadCapella        *v1.ExecutionPayloadCapella
-	PayloadDeneb          *v1.ExecutionPayloadDeneb
-	BlobBundle            *v1.BlobsBundle
-	BlobBundleV2          *v1.BlobsBundleV2
-	ErrSubmitBlindedBlock error
-	Bid                   *ethpb.SignedBuilderBid
-	BidCapella            *ethpb.SignedBuilderBidCapella
-	BidDeneb              *ethpb.SignedBuilderBidDeneb
-	BidElectra            *ethpb.SignedBuilderBidElectra
-	RegistrationCache     *cache.RegistrationCache
-	ErrGetHeader          error
-	ErrRegisterValidator  error
-	Cfg                   *Config
+	HasConfigured                 bool
+	Payload                       *v1.ExecutionPayload
+	PayloadCapella                *v1.ExecutionPayloadCapella
+	PayloadDeneb                  *v1.ExecutionPayloadDeneb
+	BlobBundle                    *v1.BlobsBundle
+	BlobBundleV2                  *v1.BlobsBundleV2
+	ErrSubmitBlindedBlock         error
+	ErrSubmitBlindedBlockPostFulu error
+	Bid                           *ethpb.SignedBuilderBid
+	BidCapella                    *ethpb.SignedBuilderBidCapella
+	BidDeneb                      *ethpb.SignedBuilderBidDeneb
+	BidElectra                    *ethpb.SignedBuilderBidElectra
+	RegistrationCache             *cache.RegistrationCache
+	ErrGetHeader                  error
+	ErrRegisterValidator          error
+	Cfg                           *Config
 }
 
 // Configured for mocking.
@@ -114,4 +115,9 @@ func (s *MockBuilderService) RegistrationByValidatorID(ctx context.Context, id p
 // RegisterValidator for mocking.
 func (s *MockBuilderService) RegisterValidator(context.Context, []*ethpb.SignedValidatorRegistrationV1) error {
 	return s.ErrRegisterValidator
+}
+
+// SubmitBlindedBlockPostFulu for mocking.
+func (s *MockBuilderService) SubmitBlindedBlockPostFulu(_ context.Context, _ interfaces.ReadOnlySignedBeaconBlock) error {
+	return s.ErrSubmitBlindedBlockPostFulu
 }
