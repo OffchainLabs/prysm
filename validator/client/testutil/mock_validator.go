@@ -40,7 +40,6 @@ type FakeValidator struct {
 	WaitForWalletInitializationCalled bool
 	NextSlotCalled                    bool
 	WaitForActivationCalled           int
-	CanonicalHeadSlotCalled           int
 	WaitForSyncCalled                 int
 	RetryTillSuccess                  int
 	ProposeBlockArg1                  uint64
@@ -129,15 +128,6 @@ func (fv *FakeValidator) WaitForSync(_ context.Context) error {
 func (fv *FakeValidator) SlasherReady(_ context.Context) error {
 	fv.SlasherReadyCalled = true
 	return nil
-}
-
-// CanonicalHeadSlot for mocking.
-func (fv *FakeValidator) CanonicalHeadSlot(_ context.Context) (primitives.Slot, error) {
-	fv.CanonicalHeadSlotCalled++
-	if fv.RetryTillSuccess > fv.CanonicalHeadSlotCalled {
-		return 0, api.ErrConnectionIssue
-	}
-	return 0, nil
 }
 
 // SlotDeadline for mocking.
