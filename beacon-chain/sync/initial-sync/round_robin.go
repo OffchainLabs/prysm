@@ -345,12 +345,13 @@ func isPunishableError(err error) bool {
 func (s *Service) updatePeerScorerStats(data *blocksQueueFetchedData, count uint64, err error) {
 	if isPunishableError(err) {
 		if verification.IsBlobValidationFailure(err) {
-			log.WithError(err).WithField("peer_id", data.blobsFrom).Warn("Downscoring peer for invalid blobs")
-			s.cfg.P2P.Peers().Scorers().BadResponsesScorer().Increment(data.blobsFrom)
+			newScore := s.cfg.P2P.Peers().Scorers().BadResponsesScorer().Increment(data.blobsFrom)
+			log.WithError(err).WithFields(logrus.Fields{"peerID": data.blobsFrom, "reason": "invalidBlobs", "newScore": newScore}).Debug("Downscore peer")
 		} else {
-			log.WithError(err).WithField("peer_id", data.blocksFrom).Warn("Downscoring peer for invalid blocks")
-			s.cfg.P2P.Peers().Scorers().BadResponsesScorer().Increment(data.blocksFrom)
+			newScore := s.cfg.P2P.Peers().Scorers().BadResponsesScorer().Increment(data.blocksFrom)
+			log.WithError(err).WithFields(logrus.Fields{"peerID": data.blocksFrom, "reason": "invalidBlocks", "newScore": newScore}).Debug("Downscore peer")
 		}
+
 		// If the error is punishable, exit here so that we don't give them credit for providing bad blocks.
 		return
 	}

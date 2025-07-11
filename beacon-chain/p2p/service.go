@@ -486,14 +486,19 @@ func (s *Service) connectWithPeer(ctx context.Context, info peer.AddrInfo) error
 	if info.ID == s.host.ID() {
 		return nil
 	}
+
 	if err := s.Peers().IsBad(info.ID); err != nil {
-		return errors.Wrap(err, "refused to connect to bad peer")
+		return errors.Wrap(err, "bad peer")
 	}
+
 	ctx, cancel := context.WithTimeout(ctx, maxDialTimeout)
 	defer cancel()
+
 	if err := s.host.Connect(ctx, info); err != nil {
-		s.Peers().Scorers().BadResponsesScorer().Increment(info.ID)
-		return err
+		newScore := s.Peers().Scorers().BadResponsesScorer().Increment(info.ID)
+		log.WithFields(logrus.Fields{"peerID": info.ID, "reason": "connectionError", "newScore": newScore}).Debug("Downscore peer")
+
+		return errors.Wrap(err, "peer connect")
 	}
 	return nil
 }

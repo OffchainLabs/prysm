@@ -337,14 +337,15 @@ func (q *blocksQueue) onDataReceivedEvent(ctx context.Context) eventHandlerFn {
 					}
 				}
 			}
+
 			if errors.Is(response.err, beaconsync.ErrInvalidFetchedData) {
-				// Peer returned invalid data, penalize.
-				q.blocksFetcher.p2p.Peers().Scorers().BadResponsesScorer().Increment(response.blocksFrom)
-				log.WithField("pid", response.blocksFrom).Debug("Peer is penalized for invalid blocks")
+				newScore := q.blocksFetcher.p2p.Peers().Scorers().BadResponsesScorer().Increment(response.blocksFrom)
+				log.WithError(response.err).WithFields(logrus.Fields{"peerID": response.blocksFrom, "reason": "invalidBlocks", "newScore": newScore}).Debug("Downscore peer")
 			} else if errors.Is(response.err, verification.ErrBlobInvalid) {
-				q.blocksFetcher.p2p.Peers().Scorers().BadResponsesScorer().Increment(response.blobsFrom)
-				log.WithField("pid", response.blobsFrom).Debug("Peer is penalized for invalid blob response")
+				newScore := q.blocksFetcher.p2p.Peers().Scorers().BadResponsesScorer().Increment(response.blobsFrom)
+				log.WithError(response.err).WithFields(logrus.Fields{"peerID": response.blobsFrom, "reason": "invalidBlobs", "newScore": newScore}).Debug("Downscore peer")
 			}
+
 			return m.state, response.err
 		}
 		m.fetched = *response

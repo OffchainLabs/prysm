@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
+	"github.com/sirupsen/logrus"
 )
 
 // lightClientBootstrapRPCHandler handles the /eth2/beacon_chain/req/light_client_bootstrap/1/ RPC request.
@@ -26,7 +27,7 @@ func (s *Service) lightClientBootstrapRPCHandler(ctx context.Context, msg interf
 
 	SetRPCStreamDeadlines(stream)
 	if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
-		logger.WithError(err).Error("s.rateLimiter.validateRequest")
+		logger.WithError(err).Error("Canno validate request")
 		return err
 	}
 	s.rateLimiter.add(stream, 1)
@@ -42,7 +43,7 @@ func (s *Service) lightClientBootstrapRPCHandler(ctx context.Context, msg interf
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
 		tracing.AnnotateError(span, err)
-		logger.WithError(err).Error("s.cfg.beaconDB.LightClientBootstrap")
+		logger.WithError(err).Error("Cannot bootstrap light client")
 		return err
 	}
 	if bootstrap == nil {
@@ -74,10 +75,11 @@ func (s *Service) lightClientUpdatesByRangeRPCHandler(ctx context.Context, msg i
 	defer cancel()
 
 	logger := log.WithField("handler", p2p.LightClientUpdatesByRangeName[1:])
+	remotePeer := stream.Conn().RemotePeer()
 
 	SetRPCStreamDeadlines(stream)
 	if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
-		logger.WithError(err).Error("s.rateLimiter.validateRequest")
+		logger.WithError(err).Error("Cannot validate request")
 		return err
 	}
 	s.rateLimiter.add(stream, 1)
@@ -90,7 +92,10 @@ func (s *Service) lightClientUpdatesByRangeRPCHandler(ctx context.Context, msg i
 
 	if r.Count == 0 {
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, "count is 0", stream)
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+
+		newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
+		log.WithFields(logrus.Fields{"peerID": remotePeer.String(), "reason": "lightClientUpdatesByRangeRPCHandlerCount0", "newScore": newScore}).Debug("Downscore peer")
+
 		logger.Error("Count is 0")
 		return nil
 	}
@@ -102,7 +107,10 @@ func (s *Service) lightClientUpdatesByRangeRPCHandler(ctx context.Context, msg i
 	endPeriod, err := math.Add64(r.StartPeriod, r.Count-1)
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+
+		newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
+		log.WithFields(logrus.Fields{"peerID": remotePeer.String(), "reason": "lightClientUpdatesByRangeRPCHandlerEndPeriodOverflow", "newScore": newScore}).Debug("Downscore peer")
+
 		tracing.AnnotateError(span, err)
 		logger.WithError(err).Error("End period overflows")
 		return err
@@ -114,7 +122,7 @@ func (s *Service) lightClientUpdatesByRangeRPCHandler(ctx context.Context, msg i
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
 		tracing.AnnotateError(span, err)
-		logger.WithError(err).Error("s.cfg.beaconDB.LightClientUpdates")
+		logger.WithError(err).Error("Cannot retrieve light client updates")
 		return err
 	}
 
@@ -153,7 +161,7 @@ func (s *Service) lightClientFinalityUpdateRPCHandler(ctx context.Context, _ int
 
 	SetRPCStreamDeadlines(stream)
 	if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
-		logger.WithError(err).Error("s.rateLimiter.validateRequest")
+		logger.WithError(err).Error("Cannot validate request")
 		return err
 	}
 	s.rateLimiter.add(stream, 1)
@@ -191,7 +199,7 @@ func (s *Service) lightClientOptimisticUpdateRPCHandler(ctx context.Context, _ i
 
 	SetRPCStreamDeadlines(stream)
 	if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
-		logger.WithError(err).Error("s.rateLimiter.validateRequest")
+		logger.WithError(err).Error("Cannot validate request")
 		return err
 	}
 	s.rateLimiter.add(stream, 1)

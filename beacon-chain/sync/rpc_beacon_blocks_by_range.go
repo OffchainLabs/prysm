@@ -43,7 +43,10 @@ func (s *Service) beaconBlocksByRangeRPCHandler(ctx context.Context, msg interfa
 	rp, err := validateRangeRequest(m, s.cfg.clock.CurrentSlot())
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
+
+		newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
+		log.WithFields(logrus.Fields{"peerID": remotePeer.String(), "reason": "beaconBlocksByRangeRPCHandlerValidationError", "newScore": newScore}).Debug("Downscore peer")
+
 		tracing.AnnotateError(span, err)
 		return err
 	}

@@ -13,6 +13,7 @@ import (
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 // pingHandler reads the incoming ping rpc message from the peer.
@@ -41,10 +42,10 @@ func (s *Service) pingHandler(_ context.Context, msg interface{}, stream libp2pc
 	// Check if the peer sequence number is higher than the one we have in our store.
 	valid, err := s.validateSequenceNum(*m, peerID)
 	if err != nil {
-		// Descore peer for giving us a bad sequence number.
+		// Downscore peer for giving us a bad sequence number.
 		if errors.Is(err, p2ptypes.ErrInvalidSequenceNum) {
-			s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
-			s.writeErrorResponseToStream(responseCodeInvalidRequest, p2ptypes.ErrInvalidSequenceNum.Error(), stream)
+			newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+			log.WithFields(logrus.Fields{"peerID": peerID.String(), "reason": "pingInvalidSequenceNumber", "newScore": newScore}).Debug("Downscore peer")
 		}
 
 		return errors.Wrap(err, "validate sequence number")
@@ -141,7 +142,9 @@ func (s *Service) sendPingRequest(ctx context.Context, peerID peer.ID) error {
 
 	// If the peer responded with an error, increment the bad responses scorer.
 	if code != 0 {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+		newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+		log.WithFields(logrus.Fields{"peerID": peerID.String(), "reason": "NotNullPingReadStatusCode", "newScore": newScore}).Debug("Downscore peer")
+
 		return errors.Errorf("code: %d - %s", code, errMsg)
 	}
 
@@ -156,7 +159,8 @@ func (s *Service) sendPingRequest(ctx context.Context, peerID peer.ID) error {
 	if err != nil {
 		// Descore peer for giving us a bad sequence number.
 		if errors.Is(err, p2ptypes.ErrInvalidSequenceNum) {
-			s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+			newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+			log.WithFields(logrus.Fields{"peerID": peerID.String(), "reason": "pingInvalidSequenceNumber", "newScore": newScore}).Debug("Downscore peer")
 		}
 
 		return errors.Wrap(err, "validate sequence number")
