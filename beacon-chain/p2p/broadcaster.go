@@ -24,6 +24,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const minimumPeersPerSubnetForBroadcast = 1
+
 // ErrMessageNotMapped occurs on a Broadcast attempt when a message has not been defined in the
 // GossipTypeMapping.
 var ErrMessageNotMapped = errors.New("message type is not mapped to a PubSub topic")
@@ -100,8 +102,6 @@ func (s *Service) BroadcastSyncCommitteeMessage(ctx context.Context, subnet uint
 }
 
 func (s *Service) internalBroadcastAttestation(ctx context.Context, subnet uint64, att ethpb.Att, forkDigest [fieldparams.VersionLength]byte) {
-	const minimumPeersPerSubnet = 1
-
 	_, span := trace.StartSpan(ctx, "p2p.internalBroadcastAttestation")
 	defer span.End()
 	ctx = trace.NewContext(context.Background(), span) // clear parent context / deadline.
@@ -127,7 +127,7 @@ func (s *Service) internalBroadcastAttestation(ctx context.Context, subnet uint6
 			s.subnetLocker(subnet).Lock()
 			defer s.subnetLocker(subnet).Unlock()
 
-			if err := s.FindPeersWithSubnets(ctx, AttestationSubnetTopicFormat, forkDigest, minimumPeersPerSubnet, map[uint64]bool{subnet: true}); err != nil {
+			if err := s.FindPeersWithSubnets(ctx, AttestationSubnetTopicFormat, forkDigest, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
 				return errors.Wrap(err, "find peers with subnets")
 			}
 
@@ -156,8 +156,6 @@ func (s *Service) internalBroadcastAttestation(ctx context.Context, subnet uint6
 }
 
 func (s *Service) broadcastSyncCommittee(ctx context.Context, subnet uint64, sMsg *ethpb.SyncCommitteeMessage, forkDigest [fieldparams.VersionLength]byte) {
-	const minimumPeersPerSubnet = 1
-
 	_, span := trace.StartSpan(ctx, "p2p.broadcastSyncCommittee")
 	defer span.End()
 	ctx = trace.NewContext(context.Background(), span) // clear parent context / deadline.
@@ -185,7 +183,7 @@ func (s *Service) broadcastSyncCommittee(ctx context.Context, subnet uint64, sMs
 		if err := func() error {
 			s.subnetLocker(wrappedSubIdx).Lock()
 			defer s.subnetLocker(wrappedSubIdx).Unlock()
-			if err := s.FindPeersWithSubnets(ctx, SyncCommitteeSubnetTopicFormat, forkDigest, minimumPeersPerSubnet, map[uint64]bool{subnet: true}); err != nil {
+			if err := s.FindPeersWithSubnets(ctx, SyncCommitteeSubnetTopicFormat, forkDigest, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
 				return errors.Wrap(err, "find peers with subnets")
 			}
 
@@ -231,8 +229,6 @@ func (s *Service) BroadcastBlob(ctx context.Context, subnet uint64, blob *ethpb.
 }
 
 func (s *Service) internalBroadcastBlob(ctx context.Context, subnet uint64, blobSidecar *ethpb.BlobSidecar, forkDigest [fieldparams.VersionLength]byte) {
-	const minimumPeersPerSubnet = 1
-
 	_, span := trace.StartSpan(ctx, "p2p.internalBroadcastBlob")
 	defer span.End()
 	ctx = trace.NewContext(context.Background(), span) // clear parent context / deadline.
@@ -252,7 +248,7 @@ func (s *Service) internalBroadcastBlob(ctx context.Context, subnet uint64, blob
 			s.subnetLocker(wrappedSubIdx).Lock()
 			defer s.subnetLocker(wrappedSubIdx).Unlock()
 
-			if err := s.FindPeersWithSubnets(ctx, BlobSubnetTopicFormat, forkDigest, minimumPeersPerSubnet, map[uint64]bool{subnet: true}); err != nil {
+			if err := s.FindPeersWithSubnets(ctx, BlobSubnetTopicFormat, forkDigest, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
 				return errors.Wrap(err, "find peers with subnets")
 			}
 
@@ -419,13 +415,11 @@ func (s *Service) findPeersIfNeeded(
 ) error {
 	// Sending a data column sidecar to only one peer is not ideal,
 	// but it ensures at least one peer receives it.
-	const minimumPeersPerSubnet = 1
-
 	s.subnetLocker(wrappedSubIdx).Lock()
 	defer s.subnetLocker(wrappedSubIdx).Unlock()
 
 	// No peers found, attempt to find peers with this subnet.
-	if err := s.FindPeersWithSubnets(ctx, topicFormat, forkDigest, minimumPeersPerSubnet, map[uint64]bool{subnet: true}); err != nil {
+	if err := s.FindPeersWithSubnets(ctx, topicFormat, forkDigest, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
 		return errors.Wrap(err, "find peers with subnet")
 	}
 
