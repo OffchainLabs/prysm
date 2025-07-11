@@ -162,21 +162,7 @@ func prepareConfigSpec() (map[string]interface{}, error) {
 
 		tag := strings.ToUpper(tField.Tag.Get("yaml"))
 		val := v.Field(i)
-
-		// byte slices / byte arrays still need hex encoding, handled inside helper
-		switch {
-		case val.Kind() == reflect.Slice && val.Type().Elem().Kind() == reflect.Uint8:
-			data[tag] = hexutil.Encode(val.Bytes())
-
-		case val.Kind() == reflect.Array && val.Type().Elem().Kind() == reflect.Uint8:
-			tmp := make([]byte, val.Len())
-			reflect.Copy(reflect.ValueOf(tmp), val)
-			data[tag] = hexutil.Encode(tmp)
-
-		default:
-			// recursive conversion for everything else
-			data[tag] = convertValueForJSON(val)
-		}
+		data[tag] = convertValueForJSON(val)
 	}
 
 	return data, nil
