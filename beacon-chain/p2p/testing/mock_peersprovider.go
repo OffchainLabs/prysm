@@ -88,7 +88,7 @@ func createENR() *enr.Record {
 	}
 	db, err := enode.OpenDB("")
 	if err != nil {
-		log.Error("could not open node's peer database")
+		log.Error("Could not open node's peer database")
 	}
 	lNode := enode.NewLocalNode(db, key)
 	return lNode.Node().Record()

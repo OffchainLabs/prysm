@@ -6,7 +6,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	statenative "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -805,10 +804,6 @@ func TestBeaconState_ValidatorMutation_Bellatrix(t *testing.T) {
 }
 
 func TestBeaconState_InitializeInactivityScoresCorrectly_Deneb(t *testing.T) {
-	resetCfg := features.InitWithReset(&features.Flags{
-		EnableExperimentalState: true,
-	})
-	defer resetCfg()
 	st, _ := util.DeterministicGenesisStateDeneb(t, 200)
 	_, err := st.HashTreeRoot(t.Context())
 	require.NoError(t, err)

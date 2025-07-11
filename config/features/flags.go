@@ -33,10 +33,6 @@ var (
 		Name:  "dev",
 		Usage: "Enables experimental features still in development. These features may not be stable.",
 	}
-	disableExperimentalState = &cli.BoolFlag{
-		Name:  "disable-experimental-state",
-		Usage: "Turns off the latest and greatest changes to the beacon state. Disabling this is safe to do after the feature has been enabled.",
-	}
 	writeSSZStateTransitionsFlag = &cli.BoolFlag{
 		Name:  "interop-write-ssz-state-transitions",
 		Usage: "Writes SSZ states to disk after attempted state transitio.",
@@ -91,9 +87,9 @@ var (
 		Name:  "disable-broadcast-slashings",
 		Usage: "Disables broadcasting slashings submitted to the beacon node.",
 	}
-	attestTimely = &cli.BoolFlag{
-		Name:  "attest-timely",
-		Usage: "Fixes validator can attest timely after current block processes. See #8185 for more details.",
+	disableAttestTimely = &cli.BoolFlag{
+		Name:  "disable-attest-timely",
+		Usage: "Disable validator attesting timely after current block processes. See #8185 for more details.",
 	}
 	enableSlashingProtectionPruning = &cli.BoolFlag{
 		Name:  "enable-slashing-protection-history-pruning",
@@ -203,10 +199,10 @@ var (
 		Usage: "A comma-separatted list of 0x-prefixed hexstrings. Declares blocks with the given blockroots to be invalid. It downscores peers that send these blocks.",
 	}
 
-	// EnableDutiesV2 sets the validator client to use the get duties v2 grpc endpoint
-	EnableDutiesV2 = &cli.BoolFlag{
-		Name:  "enable-duties-v2",
-		Usage: "Forces use of get duties v2 endpoint.",
+	// DisableDutiesV2 sets the validator client to use the get duties grpc endpoint
+	DisableDutiesV2 = &cli.BoolFlag{
+		Name:  "disable-duties-v2",
+		Usage: "Forces use of get duties endpoint instead of v2.",
 	}
 
 	// EnableWebFlag enables controlling the validator client via the Prysm web ui. This is a work in progress.
@@ -236,12 +232,12 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	HoodiTestnet,
 	Mainnet,
 	dynamicKeyReloadDebounceInterval,
-	attestTimely,
+	disableAttestTimely,
 	enableSlashingProtectionPruning,
 	EnableMinimalSlashingProtection,
 	enableDoppelGangerProtection,
 	EnableBeaconRESTApi,
-	EnableDutiesV2,
+	DisableDutiesV2,
 	EnableWebFlag,
 	SSZOnly,
 }...)
@@ -254,7 +250,6 @@ var E2EValidatorFlags = []string{
 // BeaconChainFlags contains a list of all the feature flags that apply to the beacon-chain client.
 var BeaconChainFlags = combinedFlags([]cli.Flag{
 	devModeFlag,
-	disableExperimentalState,
 	writeSSZStateTransitionsFlag,
 	saveInvalidBlockTempFlag,
 	saveInvalidBlobTempFlag,

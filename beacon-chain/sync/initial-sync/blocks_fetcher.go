@@ -443,7 +443,7 @@ func (f *blocksFetcher) fetchBlocksFromPeer(
 		f.p2p.Peers().Scorers().BlockProviderScorer().Touch(peer)
 		robs, err := sortedBlockWithVerifiedBlobSlice(blocks)
 		if err != nil {
-			log.WithField("peer", peer).WithError(err).Debug("invalid BeaconBlocksByRange response")
+			log.WithField("peer", peer).WithError(err).Debug("Invalid BeaconBlocksByRange response")
 			continue
 		}
 		if len(features.Get().BlacklistedRoots) > 0 {

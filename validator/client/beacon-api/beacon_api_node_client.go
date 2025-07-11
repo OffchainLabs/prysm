@@ -4,7 +4,6 @@ import (
 	"context"
 	"strconv"
 
-	"github.com/OffchainLabs/prysm/v6/api/client/beacon/health"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
@@ -22,7 +21,6 @@ type beaconApiNodeClient struct {
 	fallbackClient  iface.NodeClient
 	jsonRestHandler RestHandler
 	genesisProvider GenesisProvider
-	healthTracker   health.Tracker
 }
 
 func (c *beaconApiNodeClient) SyncStatus(ctx context.Context, _ *empty.Empty) (*ethpb.SyncStatus, error) {
@@ -104,11 +102,11 @@ func (c *beaconApiNodeClient) Peers(ctx context.Context, in *empty.Empty) (*ethp
 }
 
 func (c *beaconApiNodeClient) IsHealthy(ctx context.Context) bool {
-	return c.jsonRestHandler.Get(ctx, "/eth/v1/node/health", nil) == nil
-}
-
-func (c *beaconApiNodeClient) HealthTracker() health.Tracker {
-	return c.healthTracker
+	if err := c.jsonRestHandler.Get(ctx, "/eth/v1/node/health", nil); err != nil {
+		log.WithError(err).Error("failed to get health of node")
+		return false
+	}
+	return true
 }
 
 func NewNodeClientWithFallback(jsonRestHandler RestHandler, fallbackClient iface.NodeClient) iface.NodeClient {
@@ -117,6 +115,5 @@ func NewNodeClientWithFallback(jsonRestHandler RestHandler, fallbackClient iface
 		fallbackClient:  fallbackClient,
 		genesisProvider: &beaconApiGenesisProvider{jsonRestHandler: jsonRestHandler},
 	}
-	b.healthTracker = health.NewTracker(b)
 	return b
 }

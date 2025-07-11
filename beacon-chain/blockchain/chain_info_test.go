@@ -6,7 +6,6 @@ import (
 	"time"
 
 	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
@@ -138,7 +137,7 @@ func TestFinalizedBlockHash(t *testing.T) {
 
 func TestUnrealizedJustifiedBlockHash(t *testing.T) {
 	ctx := t.Context()
-	service := &Service{cfg: &config{ForkChoiceStore: doublylinkedtree.New()}}
+	service := testServiceWithDB(t)
 	ojc := &ethpb.Checkpoint{Root: []byte{'j'}}
 	ofc := &ethpb.Checkpoint{Root: []byte{'f'}}
 	st, roblock, err := prepareForkchoiceState(ctx, 0, [32]byte{}, [32]byte{}, params.BeaconConfig().ZeroHash, ojc, ofc)
@@ -153,7 +152,7 @@ func TestUnrealizedJustifiedBlockHash(t *testing.T) {
 }
 
 func TestHeadSlot_CanRetrieve(t *testing.T) {
-	c := &Service{}
+	c := testServiceNoDB(t)
 	s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{})
 	require.NoError(t, err)
 	b, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlock())
@@ -200,7 +199,7 @@ func TestHeadBlock_CanRetrieve(t *testing.T) {
 	require.NoError(t, err)
 	wsb, err := blocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
-	c := &Service{}
+	c := testServiceNoDB(t)
 	c.head = &head{block: wsb, state: s}
 
 	received, err := c.HeadBlock(t.Context())
@@ -213,7 +212,7 @@ func TestHeadBlock_CanRetrieve(t *testing.T) {
 func TestHeadState_CanRetrieve(t *testing.T) {
 	s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: 2, GenesisValidatorsRoot: params.BeaconConfig().ZeroHash[:]})
 	require.NoError(t, err)
-	c := &Service{}
+	c := testServiceNoDB(t)
 	c.head = &head{state: s}
 	headState, err := c.HeadState(t.Context())
 	require.NoError(t, err)
@@ -221,7 +220,8 @@ func TestHeadState_CanRetrieve(t *testing.T) {
 }
 
 func TestGenesisTime_CanRetrieve(t *testing.T) {
-	c := &Service{genesisTime: time.Unix(999, 0)}
+	c := testServiceNoDB(t)
+	c.genesisTime = time.Unix(999, 0)
 	wanted := time.Unix(999, 0)
 	assert.Equal(t, wanted, c.GenesisTime(), "Did not get wanted genesis time")
 }
@@ -230,7 +230,7 @@ func TestCurrentFork_CanRetrieve(t *testing.T) {
 	f := &ethpb.Fork{Epoch: 999}
 	s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Fork: f})
 	require.NoError(t, err)
-	c := &Service{}
+	c := testServiceNoDB(t)
 	c.head = &head{state: s}
 	if !proto.Equal(c.CurrentFork(), f) {
 		t.Error("Received incorrect fork version")
@@ -242,7 +242,7 @@ func TestCurrentFork_NilHeadSTate(t *testing.T) {
 		PreviousVersion: params.BeaconConfig().GenesisForkVersion,
 		CurrentVersion:  params.BeaconConfig().GenesisForkVersion,
 	}
-	c := &Service{}
+	c := testServiceNoDB(t)
 	if !proto.Equal(c.CurrentFork(), f) {
 		t.Error("Received incorrect fork version")
 	}
@@ -250,7 +250,7 @@ func TestCurrentFork_NilHeadSTate(t *testing.T) {
 
 func TestGenesisValidatorsRoot_CanRetrieve(t *testing.T) {
 	// Should not panic if head state is nil.
-	c := &Service{}
+	c := testServiceNoDB(t)
 	assert.Equal(t, [32]byte{}, c.GenesisValidatorsRoot(), "Did not get correct genesis validators root")
 
 	s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{GenesisValidatorsRoot: []byte{'a'}})
@@ -269,7 +269,7 @@ func TestHeadETH1Data_CanRetrieve(t *testing.T) {
 	d := &ethpb.Eth1Data{DepositCount: 999}
 	s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Eth1Data: d})
 	require.NoError(t, err)
-	c := &Service{}
+	c := testServiceNoDB(t)
 	c.head = &head{state: s}
 	if !proto.Equal(c.HeadETH1Data(), d) {
 		t.Error("Received incorrect eth1 data")
@@ -298,7 +298,7 @@ func TestIsCanonical_Ok(t *testing.T) {
 
 func TestService_HeadValidatorsIndices(t *testing.T) {
 	s, _ := util.DeterministicGenesisState(t, 10)
-	c := &Service{}
+	c := testServiceNoDB(t)
 
 	c.head = &head{}
 	indices, err := c.HeadValidatorsIndices(t.Context(), 0)
@@ -313,7 +313,7 @@ func TestService_HeadValidatorsIndices(t *testing.T) {
 
 func TestService_HeadGenesisValidatorsRoot(t *testing.T) {
 	s, _ := util.DeterministicGenesisState(t, 1)
-	c := &Service{}
+	c := testServiceNoDB(t)
 
 	c.head = &head{}
 	root := c.HeadGenesisValidatorsRoot()
@@ -332,7 +332,7 @@ func TestService_HeadGenesisValidatorsRoot(t *testing.T) {
 
 func TestService_ChainHeads(t *testing.T) {
 	ctx := t.Context()
-	c := &Service{cfg: &config{ForkChoiceStore: doublylinkedtree.New()}}
+	c := testServiceWithDB(t)
 	ojc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
 	ofc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
 	st, roblock, err := prepareForkchoiceState(ctx, 0, [32]byte{}, [32]byte{}, params.BeaconConfig().ZeroHash, ojc, ofc)
@@ -366,7 +366,7 @@ func TestService_ChainHeads(t *testing.T) {
 
 func TestService_HeadPublicKeyToValidatorIndex(t *testing.T) {
 	s, _ := util.DeterministicGenesisState(t, 10)
-	c := &Service{}
+	c := testServiceNoDB(t)
 	c.head = &head{state: s}
 
 	_, e := c.HeadPublicKeyToValidatorIndex([fieldparams.BLSPubkeyLength]byte{})
@@ -381,7 +381,7 @@ func TestService_HeadPublicKeyToValidatorIndex(t *testing.T) {
 }
 
 func TestService_HeadPublicKeyToValidatorIndexNil(t *testing.T) {
-	c := &Service{}
+	c := testServiceNoDB(t)
 	c.head = nil
 
 	idx, e := c.HeadPublicKeyToValidatorIndex([fieldparams.BLSPubkeyLength]byte{})
@@ -396,7 +396,7 @@ func TestService_HeadPublicKeyToValidatorIndexNil(t *testing.T) {
 
 func TestService_HeadValidatorIndexToPublicKey(t *testing.T) {
 	s, _ := util.DeterministicGenesisState(t, 10)
-	c := &Service{}
+	c := testServiceNoDB(t)
 	c.head = &head{state: s}
 
 	p, err := c.HeadValidatorIndexToPublicKey(t.Context(), 0)
@@ -409,7 +409,7 @@ func TestService_HeadValidatorIndexToPublicKey(t *testing.T) {
 }
 
 func TestService_HeadValidatorIndexToPublicKeyNil(t *testing.T) {
-	c := &Service{}
+	c := testServiceNoDB(t)
 	c.head = nil
 
 	p, err := c.HeadValidatorIndexToPublicKey(t.Context(), 0)
@@ -431,7 +431,8 @@ func TestService_IsOptimistic(t *testing.T) {
 	ctx := t.Context()
 	ojc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
 	ofc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
-	c := &Service{cfg: &config{ForkChoiceStore: doublylinkedtree.New()}, head: &head{root: [32]byte{'b'}}}
+	c := testServiceWithDB(t)
+	c.head = &head{root: [32]byte{'b'}}
 	st, roblock, err := prepareForkchoiceState(ctx, 100, [32]byte{'a'}, [32]byte{}, params.BeaconConfig().ZeroHash, ojc, ofc)
 	require.NoError(t, err)
 	require.NoError(t, c.cfg.ForkChoiceStore.InsertNode(ctx, st, roblock))
@@ -450,14 +451,15 @@ func TestService_IsOptimistic(t *testing.T) {
 	require.Equal(t, true, opt)
 
 	// If head is nil, for some reason, an error should be returned rather than panic.
-	c = &Service{}
+	c = testServiceNoDB(t)
 	_, err = c.IsOptimistic(ctx)
 	require.ErrorIs(t, err, ErrNilHead)
 }
 
 func TestService_IsOptimisticBeforeBellatrix(t *testing.T) {
 	ctx := t.Context()
-	c := &Service{genesisTime: time.Now()}
+	c := testServiceNoDB(t)
+	c.genesisTime = time.Now()
 	opt, err := c.IsOptimistic(ctx)
 	require.NoError(t, err)
 	require.Equal(t, false, opt)
@@ -465,7 +467,8 @@ func TestService_IsOptimisticBeforeBellatrix(t *testing.T) {
 
 func TestService_IsOptimisticForRoot(t *testing.T) {
 	ctx := t.Context()
-	c := &Service{cfg: &config{ForkChoiceStore: doublylinkedtree.New()}, head: &head{root: [32]byte{'b'}}}
+	c := testServiceWithDB(t)
+	c.head = &head{root: [32]byte{'b'}}
 	ojc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
 	ofc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
 	st, roblock, err := prepareForkchoiceState(ctx, 100, [32]byte{'a'}, [32]byte{}, params.BeaconConfig().ZeroHash, ojc, ofc)
@@ -481,9 +484,10 @@ func TestService_IsOptimisticForRoot(t *testing.T) {
 }
 
 func TestService_IsOptimisticForRoot_DB(t *testing.T) {
-	beaconDB := testDB.SetupDB(t)
 	ctx := t.Context()
-	c := &Service{cfg: &config{BeaconDB: beaconDB, ForkChoiceStore: doublylinkedtree.New()}, head: &head{root: [32]byte{'b'}}}
+	c := testServiceWithDB(t)
+	c.head = &head{root: [32]byte{'b'}}
+	beaconDB := c.cfg.BeaconDB
 	c.head = &head{root: params.BeaconConfig().ZeroHash}
 	b := util.NewBeaconBlock()
 	b.Block.Slot = 10
@@ -534,9 +538,9 @@ func TestService_IsOptimisticForRoot_DB(t *testing.T) {
 }
 
 func TestService_IsOptimisticForRoot_DB_non_canonical(t *testing.T) {
-	beaconDB := testDB.SetupDB(t)
 	ctx := t.Context()
-	c := &Service{cfg: &config{BeaconDB: beaconDB, ForkChoiceStore: doublylinkedtree.New()}, head: &head{root: [32]byte{'b'}}}
+	c := testServiceWithDB(t)
+	beaconDB := c.cfg.BeaconDB
 	c.head = &head{root: params.BeaconConfig().ZeroHash}
 	b := util.NewBeaconBlock()
 	b.Block.Slot = 10
@@ -573,9 +577,9 @@ func TestService_IsOptimisticForRoot_DB_non_canonical(t *testing.T) {
 }
 
 func TestService_IsOptimisticForRoot_StateSummaryRecovered(t *testing.T) {
-	beaconDB := testDB.SetupDB(t)
 	ctx := t.Context()
-	c := &Service{cfg: &config{BeaconDB: beaconDB, ForkChoiceStore: doublylinkedtree.New()}, head: &head{root: [32]byte{'b'}}}
+	c := testServiceWithDB(t)
+	beaconDB := c.cfg.BeaconDB
 	c.head = &head{root: params.BeaconConfig().ZeroHash}
 	b := util.NewBeaconBlock()
 	b.Block.Slot = 10
@@ -593,9 +597,9 @@ func TestService_IsOptimisticForRoot_StateSummaryRecovered(t *testing.T) {
 }
 
 func TestService_IsFinalized(t *testing.T) {
-	beaconDB := testDB.SetupDB(t)
 	ctx := t.Context()
-	c := &Service{cfg: &config{BeaconDB: beaconDB, ForkChoiceStore: doublylinkedtree.New()}}
+	c := testServiceWithDB(t)
+	beaconDB := c.cfg.BeaconDB
 	r1 := [32]byte{'a'}
 	require.NoError(t, c.cfg.ForkChoiceStore.UpdateFinalizedCheckpoint(&forkchoicetypes.Checkpoint{
 		Root: r1,

@@ -235,7 +235,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 	beacon.finalizedStateAtStartUp = nil
 
 	if features.Get().EnableLightClient {
-		beacon.lcStore = lightclient.NewLightClientStore()
+		beacon.lcStore = lightclient.NewLightClientStore(beacon.db)
 	}
 
 	return beacon, nil
@@ -895,6 +895,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithCustodyInfo(b.custodyInfo),
 		regularsync.WithSlasherEnabled(b.slasherEnabled),
 		regularsync.WithLightClientStore(b.lcStore),
+		regularsync.WithBatchVerifierLimit(b.cliCtx.Int(flags.BatchVerifierLimit.Name)),
 	)
 	return b.services.RegisterService(rs)
 }

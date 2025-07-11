@@ -22,8 +22,8 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
-	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	mvslice "github.com/OffchainLabs/prysm/v6/container/multi-value-slice"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
@@ -501,7 +501,7 @@ func (s *Server) SubmitVoluntaryExit(w http.ResponseWriter, r *http.Request) {
 	}
 	val, err := headState.ValidatorAtIndexReadOnly(exit.Exit.ValidatorIndex)
 	if err != nil {
-		if errors.Is(err, consensus_types.ErrOutOfBounds) {
+		if errors.Is(err, mvslice.ErrOutOfBounds) {
 			httputil.HandleError(w, "Could not get validator: "+err.Error(), http.StatusBadRequest)
 			return
 		}

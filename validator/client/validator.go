@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/api/client"
-	"github.com/OffchainLabs/prysm/v6/api/client/beacon/health"
 	eventClient "github.com/OffchainLabs/prysm/v6/api/client/event"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/async/event"
@@ -137,6 +136,10 @@ func (v *validator) Done() {
 	if v.ticker != nil {
 		v.ticker.Done()
 	}
+}
+
+func (v *validator) GenesisTime() uint64 {
+	return v.genesisTime
 }
 
 func (v *validator) EventsChan() <-chan *eventClient.Event {
@@ -408,18 +411,6 @@ func (v *validator) checkAndLogValidatorStatus() bool {
 	return someAreActive
 }
 
-// CanonicalHeadSlot returns the slot of canonical block currently found in the
-// beacon chain via RPC.
-func (v *validator) CanonicalHeadSlot(ctx context.Context) (primitives.Slot, error) {
-	ctx, span := trace.StartSpan(ctx, "validator.CanonicalHeadSlot")
-	defer span.End()
-	head, err := v.chainClient.ChainHead(ctx, &emptypb.Empty{})
-	if err != nil {
-		return 0, errors.Wrap(client.ErrConnectionIssue, err.Error())
-	}
-	return head.HeadSlot, nil
-}
-
 // NextSlot emits the next slot number at the start time of that slot.
 func (v *validator) NextSlot() <-chan primitives.Slot {
 	return v.ticker.C()
@@ -566,7 +557,7 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 		v.dutiesLock.Lock()
 		v.duties = nil // Clear assignments so we know to retry the request.
 		v.dutiesLock.Unlock()
-		log.WithError(err).Error("error getting validator duties")
+		log.WithError(err).Error("Error getting validator duties")
 		return err
 	}
 
@@ -1142,7 +1133,7 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 	if len(signedRegReqs) > 0 {
 		go func() {
 			if err := SubmitValidatorRegistrations(ctx, v.validatorClient, signedRegReqs, v.validatorsRegBatchSize); err != nil {
-				log.WithError(errors.Wrap(ErrBuilderValidatorRegistration, err.Error())).Warn("failed to register validator on builder")
+				log.WithError(errors.Wrap(ErrBuilderValidatorRegistration, err.Error())).Warn("Failed to register validator on builder")
 			}
 		}()
 	}
@@ -1151,6 +1142,10 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 }
 
 func (v *validator) StartEventStream(ctx context.Context, topics []string) {
+	if v.EventStreamIsRunning() {
+		log.Debug("EventStream is already running")
+		return
+	}
 	log.WithField("topics", topics).Info("Starting event stream")
 	v.validatorClient.StartEventStream(ctx, topics, v.eventsChannel)
 }
@@ -1242,23 +1237,39 @@ func (v *validator) EventStreamIsRunning() bool {
 	return v.validatorClient.EventStreamIsRunning()
 }
 
-func (v *validator) HealthTracker() health.Tracker {
-	return v.nodeClient.HealthTracker()
-}
-
 func (v *validator) Host() string {
 	return v.validatorClient.Host()
 }
 
-func (v *validator) ChangeHost() {
-	if len(v.beaconNodeHosts) == 1 {
-		log.Infof("Beacon node at %s is not responding, no backup node configured", v.Host())
-		return
-	}
+func (v *validator) changeHost() {
 	next := (v.currentHostIndex + 1) % uint64(len(v.beaconNodeHosts))
-	log.Infof("Beacon node at %s is not responding, switching to %s...", v.beaconNodeHosts[v.currentHostIndex], v.beaconNodeHosts[next])
+	log.WithFields(logrus.Fields{
+		"currentHost": v.beaconNodeHosts[v.currentHostIndex],
+		"nextHost":    v.beaconNodeHosts[next],
+	}).Warn("Beacon node is not responding, switching host")
 	v.validatorClient.SetHost(v.beaconNodeHosts[next])
 	v.currentHostIndex = next
+}
+
+func (v *validator) FindHealthyHost(ctx context.Context) bool {
+	// Tail-recursive closure keeps retry count private.
+	var check func(remaining int) bool
+	check = func(remaining int) bool {
+		if v.nodeClient.IsHealthy(ctx) { // healthy → done
+			return true
+		}
+		if len(v.beaconNodeHosts) == 1 && features.Get().EnableBeaconRESTApi {
+			log.WithField("host", v.Host()).Warn("Beacon node is not responding, no backup node configured")
+			return false
+		}
+		if remaining == 0 || !features.Get().EnableBeaconRESTApi {
+			return false // exhausted or REST disabled
+		}
+		v.changeHost()
+		return check(remaining - 1) // recurse
+	}
+
+	return check(len(v.beaconNodeHosts))
 }
 
 func (v *validator) filterAndCacheActiveKeys(ctx context.Context, pubkeys [][fieldparams.BLSPubkeyLength]byte, slot primitives.Slot) ([][fieldparams.BLSPubkeyLength]byte, error) {

@@ -141,6 +141,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.EnableDistributed,
 			flags.AuthTokenPathFlag,
 			flags.DisableDutiesPolling,
+			flags.MaxHealthChecksFlag,
 		},
 	},
 	{

@@ -40,7 +40,6 @@ const disabledFeatureFlag = "Disabled feature flag"
 // Flags is a struct to represent which features the client will perform on runtime.
 type Flags struct {
 	// Feature related flags.
-	EnableExperimentalState             bool // EnableExperimentalState turns on the latest and greatest (but potentially unstable) changes to the beacon state.
 	WriteSSZStateTransitions            bool // WriteSSZStateTransitions to tmp directory.
 	EnablePeerScorer                    bool // EnablePeerScorer enables experimental peer scoring in p2p.
 	EnableLightClient                   bool // EnableLightClient enables light client APIs.
@@ -50,7 +49,7 @@ type Flags struct {
 	EnableHistoricalSpaceRepresentation bool // EnableHistoricalSpaceRepresentation enables the saving of registry validators in separate buckets to save space
 	EnableBeaconRESTApi                 bool // EnableBeaconRESTApi enables experimental usage of the beacon REST API by the validator when querying a beacon node
 	EnableExperimentalAttestationPool   bool // EnableExperimentalAttestationPool enables an experimental attestation pool design.
-	EnableDutiesV2                      bool // EnableDutiesV2 sets validator client to use the get Duties V2 endpoint
+	DisableDutiesV2                     bool // DisableDutiesV2 sets validator client to use the get Duties endpoint
 	EnableWeb                           bool // EnableWeb enables the webui on the validator client
 	SSZOnly                             bool // SSZOnly forces the validator client to use SSZ for communication with the beacon node when REST mode is enabled (useful for debugging)
 	// Logging related toggles.
@@ -195,12 +194,6 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		return err
 	}
 
-	cfg.EnableExperimentalState = true
-	if ctx.Bool(disableExperimentalState.Name) {
-		logEnabled(disableExperimentalState)
-		cfg.EnableExperimentalState = false
-	}
-
 	if ctx.Bool(writeSSZStateTransitionsFlag.Name) {
 		logEnabled(writeSSZStateTransitionsFlag)
 		cfg.WriteSSZStateTransitions = true
@@ -334,9 +327,10 @@ func ConfigureValidator(ctx *cli.Context) error {
 		logEnabled(writeWalletPasswordOnWebOnboarding)
 		cfg.WriteWalletPasswordOnWebOnboarding = true
 	}
-	if ctx.Bool(attestTimely.Name) {
-		logEnabled(attestTimely)
-		cfg.AttestTimely = true
+	cfg.AttestTimely = true
+	if ctx.Bool(disableAttestTimely.Name) {
+		logEnabled(disableAttestTimely)
+		cfg.AttestTimely = false
 	}
 	if ctx.Bool(enableSlashingProtectionPruning.Name) {
 		logEnabled(enableSlashingProtectionPruning)
@@ -354,9 +348,9 @@ func ConfigureValidator(ctx *cli.Context) error {
 		logEnabled(EnableBeaconRESTApi)
 		cfg.EnableBeaconRESTApi = true
 	}
-	if ctx.Bool(EnableDutiesV2.Name) {
-		logEnabled(EnableDutiesV2)
-		cfg.EnableDutiesV2 = true
+	if ctx.Bool(DisableDutiesV2.Name) {
+		logEnabled(DisableDutiesV2)
+		cfg.DisableDutiesV2 = true
 	}
 	if ctx.Bool(EnableWebFlag.Name) {
 		logEnabled(EnableWebFlag)
