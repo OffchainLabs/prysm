@@ -148,7 +148,7 @@ func convertValueForJSON(v reflect.Value, tag string) interface{} {
 			"tag":  tag,
 			"kind": v.Kind().String(),
 			"type": v.Type().String(),
-		}).Error("unsupported config field kind; value forwarded verbatim")
+		}).Error("Unsupported config field kind; value forwarded verbatim")
 		return v.Interface()
 	}
 }
