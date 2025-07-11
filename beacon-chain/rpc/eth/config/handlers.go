@@ -90,7 +90,6 @@ func convertValueForJSON(v reflect.Value) interface{} {
 	}
 
 	switch v.Kind() {
-
 	// ===== Single byte → 0xAB =====
 	case reflect.Uint8:
 		return hexutil.Encode([]byte{uint8(v.Uint())})
