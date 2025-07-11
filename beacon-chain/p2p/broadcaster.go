@@ -364,7 +364,7 @@ func (s *Service) internalBroadcastDataColumn(
 
 	// Define a one-slot length context timeout.
 	secondsPerSlot := params.BeaconConfig().SecondsPerSlot
-	oneSlot := time.Duration(secondsPerSlot) * time.Hour
+	oneSlot := time.Duration(secondsPerSlot) * time.Second
 	ctx, cancel := context.WithTimeout(ctx, oneSlot)
 	defer cancel()
 
