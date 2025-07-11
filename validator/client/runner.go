@@ -37,22 +37,23 @@ type runner struct {
 // 2 - Wait for validator activation
 func newRunner(ctx context.Context, v iface.Validator, monitor *healthMonitor) (*runner, error) {
 	// Initialize validator and get head slot
-	headSlot, err := initializeValidatorAndGetHeadSlot(ctx, v)
+	err := initialize(ctx, v)
 	if err != nil {
 		v.Done()
 		return nil, err
 	}
+	currentSlot := slots.CurrentSlot(v.GenesisTime()) // set in v.WaitForChainStart
 	// Prepare initial duties update
-	ss, err := slots.EpochStart(slots.ToEpoch(headSlot + 1))
+	ss, err := slots.EpochStart(slots.ToEpoch(currentSlot + 1))
 	if err != nil {
 		log.WithError(err).Error("Failed to get epoch start")
-		ss = headSlot
+		ss = currentSlot
 	}
 	startDeadline := v.SlotDeadline(ss + params.BeaconConfig().SlotsPerEpoch - 1)
 	startCtx, startCancel := context.WithDeadline(ctx, startDeadline)
 	if err := v.UpdateDuties(startCtx); err != nil {
 		// Don't return error here, just log it
-		handleAssignmentError(err, headSlot)
+		handleAssignmentError(err, currentSlot)
 	}
 	startCancel()
 
@@ -62,7 +63,7 @@ func newRunner(ctx context.Context, v iface.Validator, monitor *healthMonitor) (
 		log.Warn("Validator client started without proposer settings such as fee recipient" +
 			" and will continue to use settings provided in the beacon node.")
 	}
-	if err := v.PushProposerSettings(ctx, headSlot, true); err != nil {
+	if err := v.PushProposerSettings(ctx, currentSlot, true); err != nil {
 		v.Done()
 		return nil, errors.Wrap(err, "failed to update proposer settings")
 	}
@@ -172,8 +173,8 @@ func onAccountsChanged(ctx context.Context, v iface.Validator, current [][48]byt
 	}
 }
 
-func initializeValidatorAndGetHeadSlot(ctx context.Context, v iface.Validator) (primitives.Slot, error) {
-	ctx, span := prysmTrace.StartSpan(ctx, "validator.initializeValidatorAndGetHeadSlot")
+func initialize(ctx context.Context, v iface.Validator) error {
+	ctx, span := prysmTrace.StartSpan(ctx, "validator.initialize")
 	defer span.End()
 
 	ticker := time.NewTicker(backOffPeriod)
@@ -181,16 +182,11 @@ func initializeValidatorAndGetHeadSlot(ctx context.Context, v iface.Validator) (
 
 	firstTime := true
 
-	var (
-		headSlot primitives.Slot
-		err      error
-	)
-
 	for {
 		if !firstTime {
 			if ctx.Err() != nil {
 				log.Info("Context canceled, stopping validator")
-				return headSlot, errors.New("context canceled")
+				return errors.New("context canceled")
 			}
 			<-ticker.C
 		}
@@ -203,11 +199,11 @@ func initializeValidatorAndGetHeadSlot(ctx context.Context, v iface.Validator) (
 				continue
 			}
 
-			return 0, errors.Wrap(err, "could not determine if beacon chain started")
+			return errors.Wrap(err, "could not determine if beacon chain started")
 		}
 
 		if err := v.WaitForKeymanagerInitialization(ctx); err != nil {
-			return 0, errors.Wrap(err, "Wallet is not ready")
+			return errors.Wrap(err, "Wallet is not ready")
 		}
 
 		if err := v.WaitForSync(ctx); err != nil {
@@ -216,21 +212,11 @@ func initializeValidatorAndGetHeadSlot(ctx context.Context, v iface.Validator) (
 				continue
 			}
 
-			return 0, errors.Wrap(err, "could not determine if beacon node synced")
+			return errors.Wrap(err, "could not determine if beacon node synced")
 		}
 
 		if err := v.WaitForActivation(ctx); err != nil {
-			return 0, errors.Wrap(err, "could not wait for validator activation")
-		}
-
-		headSlot, err = v.CanonicalHeadSlot(ctx)
-		if isConnectionError(err) {
-			log.WithError(err).Warn("could not get current canonical head slot")
-			continue
-		}
-
-		if err != nil {
-			return 0, errors.Wrap(err, "could not get current canonical head slot")
+			return errors.Wrap(err, "could not wait for validator activation")
 		}
 
 		if err := v.CheckDoppelGanger(ctx); err != nil {
@@ -239,11 +225,12 @@ func initializeValidatorAndGetHeadSlot(ctx context.Context, v iface.Validator) (
 				continue
 			}
 
-			return 0, errors.Wrap(err, "could not succeed with doppelganger check")
+			return errors.Wrap(err, "could not succeed with doppelganger check")
 		}
 		break
 	}
-	return headSlot, nil
+
+	return nil
 }
 
 func performRoles(slotCtx context.Context, allRoles map[[48]byte][]iface.ValidatorRole, v iface.Validator, slot primitives.Slot, wg *sync.WaitGroup, span trace.Span) {

@@ -55,6 +55,7 @@ go_test(
         "blob_test.go",
         "cache_test.go",
         "data_column_test.go",
+        "filesystem_test.go",
         "initializer_test.go",
         "result_test.go",
         "verification_test.go",
@@ -80,6 +81,7 @@ go_test(
         "//testing/util:go_default_library",
         "//time/slots:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
+        "@com_github_spf13_afero//:go_default_library",
         "@com_github_stretchr_testify//require:go_default_library",
     ],
 )

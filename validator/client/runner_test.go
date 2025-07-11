@@ -86,10 +86,9 @@ func TestRetry_On_ConnectionError(t *testing.T) {
 	time.Sleep(time.Duration(retry*6) * backOffPeriod)
 	cancel()
 	// every call will fail retry=10 times so first one will be called 4 * retry=10.
-	assert.Equal(t, retry*3, v.WaitForChainStartCalled, "Expected WaitForChainStart() to be called")
-	assert.Equal(t, retry*2, v.WaitForSyncCalled, "Expected WaitForSync() to be called")
-	assert.Equal(t, retry, v.WaitForActivationCalled, "Expected WaitForActivation() to be called")
-	assert.Equal(t, retry, v.CanonicalHeadSlotCalled, "Expected CanonicalHeadSlotCalled() to be called")
+	assert.Equal(t, retry*2+1, v.WaitForChainStartCalled, "Expected WaitForChainStart() to be called")
+	assert.Equal(t, retry+1, v.WaitForSyncCalled, "Expected WaitForSync() to be called")
+	assert.Equal(t, 1, v.WaitForActivationCalled, "Expected WaitForActivation() to be called")
 }
 
 func TestCancelledContext_WaitsForActivation(t *testing.T) {
@@ -529,14 +528,10 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 	ncm := validatormock.NewMockNodeClient(ctrl)
 	ncm.EXPECT().SyncStatus(liveCtx, gomock.Any()).Return(&ethpb.SyncStatus{Syncing: false}, nil)
 
-	ccm := validatormock.NewMockChainClient(ctrl)
-	ccm.EXPECT().ChainHead(liveCtx, gomock.Any()).Return(&ethpb.ChainHead{}, nil).Do(func(_, _ any) { delay(t) })
-
 	// Setup the actual validator service.
 	v := &validator{
 		validatorClient: vcm,
 		nodeClient:      ncm,
-		chainClient:     ccm,
 		db:              testing2.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, false),
 		interopKeysConfig: &local.InteropKeymanagerConfig{
 			NumValidatorKeys: uint64(params.BeaconConfig().SlotsPerEpoch) * 4, // 4 Attesters per slot.
