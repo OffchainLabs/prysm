@@ -420,7 +420,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra_VerifyAlreadySeen
 }
 
 func TestProcessPendingAtts_NoBroadcastWithBadSignature(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	db := dbtest.SetupDB(t)
 	p2p := p2ptest.NewTestP2P(t)
@@ -429,8 +429,8 @@ func TestProcessPendingAtts_NoBroadcastWithBadSignature(t *testing.T) {
 	b := util.NewBeaconBlock()
 	r32, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
-	util.SaveBlock(t, context.Background(), db, b)
-	require.NoError(t, db.SaveState(context.Background(), st, r32))
+	util.SaveBlock(t, t.Context(), db, b)
+	require.NoError(t, db.SaveState(t.Context(), st, r32))
 
 	chain := &mock.ChainService{
 		State:   st,
@@ -457,7 +457,7 @@ func TestProcessPendingAtts_NoBroadcastWithBadSignature(t *testing.T) {
 	}
 	go s.verifierRoutine()
 
-	committee, err := helpers.BeaconCommitteeFromState(context.Background(), st, 0, 0)
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), st, 0, 0)
 	assert.NoError(t, err)
 	// Arbitrary aggregator index for testing purposes.
 	aggregatorIndex := committee[0]
