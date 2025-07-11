@@ -362,6 +362,18 @@ func (mr *MockValidatorMockRecorder) SetProposerSettings(arg0, arg1 any) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetProposerSettings", reflect.TypeOf((*MockValidator)(nil).SetProposerSettings), arg0, arg1)
 }
 
+// SetTicker mocks base method.
+func (m *MockValidator) SetTicker() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetTicker")
+}
+
+// SetTicker indicates an expected call of SetTicker.
+func (mr *MockValidatorMockRecorder) SetTicker() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTicker", reflect.TypeOf((*MockValidator)(nil).SetTicker))
+}
+
 // SignValidatorRegistrationRequest mocks base method.
 func (m *MockValidator) SignValidatorRegistrationRequest(arg0 context.Context, arg1 iface.SigningFunc, arg2 *eth.ValidatorRegistrationV1) (*eth.SignedValidatorRegistrationV1, bool, error) {
 	m.ctrl.T.Helper()

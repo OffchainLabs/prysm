@@ -333,3 +333,6 @@ func (*FakeValidator) Host() string {
 func (fv *FakeValidator) FindHealthyHost(_ context.Context) bool {
 	return fv.CanChangeHost
 }
+
+func (fv *FakeValidator) SetTicker() {
+}
