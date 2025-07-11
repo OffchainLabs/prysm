@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/network/forks"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	log "github.com/sirupsen/logrus"
 )
 
 // GetDepositContract retrieves deposit contract address and genesis fork version.
@@ -80,7 +81,7 @@ func GetSpec(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJson(w, &structs.GetSpecResponse{Data: data})
 }
 
-func convertValueForJSON(v reflect.Value) interface{} {
+func convertValueForJSON(v reflect.Value, tag string) interface{} {
 	// Unwrap pointers / interfaces
 	for v.Kind() == reflect.Interface || v.Kind() == reflect.Ptr {
 		if v.IsNil() {
@@ -119,7 +120,7 @@ func convertValueForJSON(v reflect.Value) interface{} {
 		n := v.Len()
 		out := make([]interface{}, n)
 		for i := 0; i < n; i++ {
-			out[i] = convertValueForJSON(v.Index(i))
+			out[i] = convertValueForJSON(v.Index(i), tag)
 		}
 		return out
 
@@ -136,12 +137,18 @@ func convertValueForJSON(v reflect.Value) interface{} {
 			if key == "" || key == "-" {
 				key = f.Name
 			}
-			m[key] = convertValueForJSON(v.Field(i))
+			m[key] = convertValueForJSON(v.Field(i), tag)
 		}
 		return m
 
 	// ===== Default =====
 	default:
+		log.WithFields(log.Fields{
+			"fn":   "prepareConfigSpec",
+			"tag":  tag,
+			"kind": v.Kind().String(),
+			"type": v.Type().String(),
+		}).Error("unsupported config field kind; value forwarded verbatim")
 		return v.Interface()
 	}
 }
@@ -162,7 +169,7 @@ func prepareConfigSpec() (map[string]interface{}, error) {
 
 		tag := strings.ToUpper(tField.Tag.Get("yaml"))
 		val := v.Field(i)
-		data[tag] = convertValueForJSON(val)
+		data[tag] = convertValueForJSON(val, tag)
 	}
 
 	return data, nil
