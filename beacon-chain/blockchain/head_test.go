@@ -9,7 +9,6 @@ import (
 
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/blstoexec"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -154,14 +153,9 @@ func TestSaveHead_Different_Reorg(t *testing.T) {
 func Test_notifyNewHeadEvent(t *testing.T) {
 	t.Run("genesis_state_root", func(t *testing.T) {
 		bState, _ := util.DeterministicGenesisState(t, 10)
-		notifier := &mock.MockStateNotifier{RecordEvents: true}
-		srv := &Service{
-			cfg: &config{
-				StateNotifier:   notifier,
-				ForkChoiceStore: doublylinkedtree.New(),
-			},
-			originBlockRoot: [32]byte{1},
-		}
+		srv := testServiceWithDB(t)
+		notifier := srv.cfg.StateNotifier.(*mock.MockStateNotifier)
+		srv.originBlockRoot = [32]byte{1}
 		st, blk, err := prepareForkchoiceState(t.Context(), 0, [32]byte{}, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
 		require.NoError(t, err)
 		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
@@ -185,15 +179,11 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 	})
 	t.Run("non_genesis_values", func(t *testing.T) {
 		bState, _ := util.DeterministicGenesisState(t, 10)
-		notifier := &mock.MockStateNotifier{RecordEvents: true}
 		genesisRoot := [32]byte{1}
-		srv := &Service{
-			cfg: &config{
-				StateNotifier:   notifier,
-				ForkChoiceStore: doublylinkedtree.New(),
-			},
-			originBlockRoot: genesisRoot,
-		}
+
+		srv := testServiceWithDB(t)
+		srv.originBlockRoot = genesisRoot
+		notifier := srv.cfg.StateNotifier.(*mock.MockStateNotifier)
 		st, blk, err := prepareForkchoiceState(t.Context(), 0, [32]byte{}, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
 		require.NoError(t, err)
 		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))

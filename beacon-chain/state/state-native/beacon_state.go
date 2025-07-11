@@ -8,7 +8,6 @@ import (
 	customtypes "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/custom-types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stateutil"
-	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -24,19 +23,14 @@ type BeaconState struct {
 	slot                                primitives.Slot
 	fork                                *ethpb.Fork
 	latestBlockHeader                   *ethpb.BeaconBlockHeader
-	blockRoots                          customtypes.BlockRoots
 	blockRootsMultiValue                *MultiValueBlockRoots
-	stateRoots                          customtypes.StateRoots
 	stateRootsMultiValue                *MultiValueStateRoots
 	historicalRoots                     customtypes.HistoricalRoots
 	eth1Data                            *ethpb.Eth1Data
 	eth1DataVotes                       []*ethpb.Eth1Data
 	eth1DepositIndex                    uint64
-	validators                          []*ethpb.Validator
 	validatorsMultiValue                *MultiValueValidators
-	balances                            []uint64
 	balancesMultiValue                  *MultiValueBalances
-	randaoMixes                         customtypes.RandaoMixes
 	randaoMixesMultiValue               *MultiValueRandaoMixes
 	slashings                           []uint64
 	previousEpochAttestations           []*ethpb.PendingAttestation
@@ -47,7 +41,6 @@ type BeaconState struct {
 	previousJustifiedCheckpoint         *ethpb.Checkpoint
 	currentJustifiedCheckpoint          *ethpb.Checkpoint
 	finalizedCheckpoint                 *ethpb.Checkpoint
-	inactivityScores                    []uint64
 	inactivityScoresMultiValue          *MultiValueInactivityScores
 	currentSyncCommittee                *ethpb.SyncCommittee
 	nextSyncCommittee                   *ethpb.SyncCommittee
@@ -130,28 +123,12 @@ type beaconStateMarshalable struct {
 }
 
 func (b *BeaconState) MarshalJSON() ([]byte, error) {
-	var bRoots customtypes.BlockRoots
-	var sRoots customtypes.StateRoots
-	var mixes customtypes.RandaoMixes
-	var balances []uint64
-	var inactivityScores []uint64
-	var vals []*ethpb.Validator
-
-	if features.Get().EnableExperimentalState {
-		bRoots = b.blockRootsMultiValue.Value(b)
-		sRoots = b.stateRootsMultiValue.Value(b)
-		mixes = b.randaoMixesMultiValue.Value(b)
-		balances = b.balancesMultiValue.Value(b)
-		inactivityScores = b.inactivityScoresMultiValue.Value(b)
-		vals = b.validatorsMultiValue.Value(b)
-	} else {
-		bRoots = b.blockRoots
-		sRoots = b.stateRoots
-		mixes = b.randaoMixes
-		balances = b.balances
-		inactivityScores = b.inactivityScores
-		vals = b.validators
-	}
+	bRoots := b.blockRootsMultiValue.Value(b)
+	sRoots := b.stateRootsMultiValue.Value(b)
+	mixes := b.randaoMixesMultiValue.Value(b)
+	balances := b.balancesMultiValue.Value(b)
+	inactivityScores := b.inactivityScoresMultiValue.Value(b)
+	vals := b.validatorsMultiValue.Value(b)
 
 	marshalable := &beaconStateMarshalable{
 		Version:                             b.version,

@@ -960,7 +960,7 @@ func (s *Service) beaconEndpoints(
 			template: "/eth/v1/beacon/states/{state_id}/pending_deposits",
 			name:     namespace + ".GetPendingDeposits",
 			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.GetPendingDeposits,
@@ -970,7 +970,7 @@ func (s *Service) beaconEndpoints(
 			template: "/eth/v1/beacon/states/{state_id}/pending_consolidations",
 			name:     namespace + ".GetPendingConsolidations",
 			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 			},
 			handler: server.GetPendingConsolidations,
 			methods: []string{http.MethodGet},
@@ -979,7 +979,7 @@ func (s *Service) beaconEndpoints(
 			template: "/eth/v1/beacon/states/{state_id}/pending_partial_withdrawals",
 			name:     namespace + ".GetPendingPartialWithdrawals",
 			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.GetPendingPartialWithdrawals,

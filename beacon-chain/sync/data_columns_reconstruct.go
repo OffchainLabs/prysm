@@ -83,6 +83,15 @@ func (s *Service) reconstructSaveBroadcastDataColumnSidecars(
 		return errors.Wrap(err, "save data column sidecars")
 	}
 
+	slotStartTime := slots.StartTime(uint64(s.cfg.clock.GenesisTime().Unix()), slot)
+	log.WithFields(logrus.Fields{
+		"root":                          fmt.Sprintf("%#x", root),
+		"slot":                          slot,
+		"fromColumnsCount":              storedColumnsCount,
+		"sinceSlotStartTime":            time.Since(slotStartTime),
+		"reconstructionAndSaveDuration": time.Since(startTime),
+	}).Debug("Data columns reconstructed and saved")
+
 	// Update reconstruction metrics
 	dataColumnReconstructionHistogram.Observe(float64(time.Since(startTime).Milliseconds()))
 	dataColumnReconstructionCounter.Add(float64(len(reconstructedSidecars) - len(verifiedSidecars)))
@@ -91,12 +100,6 @@ func (s *Service) reconstructSaveBroadcastDataColumnSidecars(
 	if err := s.scheduleMissingDataColumnSidecarsBroadcast(ctx, root, proposerIndex, slot); err != nil {
 		return errors.Wrap(err, "schedule reconstructed data columns broadcast")
 	}
-
-	log.WithFields(logrus.Fields{
-		"root":             fmt.Sprintf("%#x", root),
-		"slot":             slot,
-		"fromColumnsCount": storedColumnsCount,
-	}).Debug("Data columns reconstructed and saved")
 
 	return nil
 }

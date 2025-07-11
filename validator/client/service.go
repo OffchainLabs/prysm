@@ -55,12 +55,14 @@ type ValidatorService struct {
 	interopKeysConfig       *local.InteropKeymanagerConfig
 	web3SignerConfig        *remoteweb3signer.SetupConfig
 	proposerSettings        *proposer.Settings
+	maxHealthChecks         int
 	validatorsRegBatchSize  int
 	enableAPI               bool
 	emitAccountMetrics      bool
 	logValidatorPerformance bool
 	distributed             bool
 	disableDutiesPolling    bool
+	closeClientFunc         func() // validator client stop function is used here
 }
 
 // Config for the validator service.
@@ -69,6 +71,7 @@ type Config struct {
 	DB                      db.Database
 	Wallet                  *wallet.Wallet
 	WalletInitializedFeed   *event.Feed
+	MaxHealthChecks         int
 	GRPCMaxCallRecvMsgSize  int
 	GRPCRetries             uint
 	GRPCRetryDelay          time.Duration
@@ -88,6 +91,7 @@ type Config struct {
 	EmitAccountMetrics      bool
 	Distributed             bool
 	DisableDutiesPolling    bool
+	CloseClientFunc         func()
 }
 
 // NewValidatorService creates a new validator service for the service
@@ -112,6 +116,8 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 		logValidatorPerformance: cfg.LogValidatorPerformance,
 		distributed:             cfg.Distributed,
 		disableDutiesPolling:    cfg.DisableDutiesPolling,
+		closeClientFunc:         cfg.CloseClientFunc,
+		maxHealthChecks:         cfg.MaxHealthChecks,
 	}
 
 	dialOpts := ConstructDialOptions(
@@ -186,7 +192,7 @@ func (v *ValidatorService) Start() {
 
 	validatorClient := validatorclientfactory.NewValidatorClient(v.conn, restHandler)
 
-	valStruct := &validator{
+	v.validator = &validator{
 		slotFeed:                       new(event.Feed),
 		startBalances:                  make(map[[fieldparams.BLSPubkeyLength]byte]uint64),
 		prevEpochBalances:              make(map[[fieldparams.BLSPubkeyLength]byte]uint64),
@@ -227,17 +233,45 @@ func (v *ValidatorService) Start() {
 		eventsChannel:                  make(chan *eventClient.Event, 1),
 	}
 
-	v.validator = valStruct
-	go run(v.ctx, v.validator)
+	hm := newHealthMonitor(v.ctx, v.cancel, v.maxHealthChecks, v.validator)
+	hm.Start()
+	defer v.closeClientFunc()
+
+	for {
+		select {
+		case <-v.ctx.Done():
+			log.Info("Validator service context canceled, stopping")
+			return
+		case isHealthy := <-hm.HealthyChan():
+			if !isHealthy {
+				// wait until the next health tracker update
+				log.Warn("Validator service health check failed, waiting for healthy beacon node...")
+				continue
+			}
+
+			log.Info("Starting validator runner")
+			runnerCtx, runnerCancel := context.WithCancel(v.ctx)
+
+			runner, err := newRunner(runnerCtx, v.validator, hm)
+			if err != nil {
+				log.WithError(err).Error("Could not create validator runner")
+				runnerCancel() // Ensure context is cancelled
+				return
+			}
+
+			go v.validator.StartEventStream(runnerCtx, eventClient.DefaultEventTopics)
+
+			runner.run(runnerCtx)
+			// run is finished if we get to this point
+			runnerCancel()
+		}
+	}
 }
 
 // Stop the validator service.
 func (v *ValidatorService) Stop() error {
 	v.cancel()
 	log.Info("Stopping service")
-	if v.conn != nil {
-		return v.conn.GetGrpcClientConn().Close()
-	}
 	return nil
 }
 

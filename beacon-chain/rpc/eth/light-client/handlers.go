@@ -6,6 +6,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -16,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 )
 
@@ -33,13 +35,13 @@ func (s *Server) GetLightClientBootstrap(w http.ResponseWriter, req *http.Reques
 	}
 
 	blockRoot := bytesutil.ToBytes32(blockRootParam)
-	bootstrap, err := s.BeaconDB.LightClientBootstrap(ctx, blockRoot[:])
+	bootstrap, err := s.LCStore.LightClientBootstrap(ctx, blockRoot)
 	if err != nil {
-		httputil.HandleError(w, "Could not get light client bootstrap: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if bootstrap == nil {
-		httputil.HandleError(w, "Light client bootstrap not found", http.StatusNotFound)
+		if errors.Is(err, lightclient.ErrLightClientBootstrapNotFound) {
+			httputil.HandleError(w, "Light client bootstrap not found", http.StatusNotFound)
+		} else {
+			httputil.HandleError(w, "Could not get light client bootstrap: "+err.Error(), http.StatusInternalServerError)
+		}
 		return
 	}
 
