@@ -17,7 +17,7 @@ import (
 const baseUrl = "https://raw.githubusercontent.com/ethereum/consensus-specs/dev"
 
 // Regex to find Python's code snippets in markdown.
-var reg2 = regexp.MustCompile(`(?msU)^\x60\x60\x60python\n+def\s(.*)^\x60\x60\x60`)
+var reg2 = regexp.MustCompile(`(?ms)^\x60\x60\x60python\n+def\s(.*?)^\x60\x60\x60`)
 
 func download(cliCtx *cli.Context) error {
 	fmt.Print("Downloading specs:\n")
