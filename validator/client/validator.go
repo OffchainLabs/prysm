@@ -142,14 +142,6 @@ func (v *validator) GenesisTime() time.Time {
 	return v.genesisTime
 }
 
-func (v *validator) CanonicalHeadSlot(ctx context.Context) (primitives.Slot, error) {
-	head, err := v.chainClient.ChainHead(ctx, &emptypb.Empty{})
-	if err != nil {
-		return 0, err
-	}
-	return head.HeadSlot, nil
-}
-
 func (v *validator) EventsChan() <-chan *eventClient.Event {
 	return v.eventsChannel
 }
