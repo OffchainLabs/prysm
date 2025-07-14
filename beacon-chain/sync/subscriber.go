@@ -155,7 +155,7 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 		handle:                   s.committeeIndexBeaconAttestationSubscriber,
 		digest:                   digest,
 		getSubnetsToJoin:         s.persistentAndAggregatorSubnetIndices,
-		getSubnetsRequiringPeers: s.attesterSubnetIndices,
+		getSubnetsRequiringPeers: attesterSubnetIndices,
 	})
 
 	// New gossip topic in Altair
@@ -640,8 +640,8 @@ func (s *Service) persistentAndAggregatorSubnetIndices(currentSlot primitives.Sl
 		return mapFromCount(params.BeaconConfig().AttestationSubnetCount)
 	}
 
-	persistentSubnetIndices := s.persistentSubnetIndices()
-	aggregatorSubnetIndices := s.aggregatorSubnetIndices(currentSlot)
+	persistentSubnetIndices := persistentSubnetIndices()
+	aggregatorSubnetIndices := aggregatorSubnetIndices(currentSlot)
 
 	// Combine subscriptions to get all requested subscriptions.
 	return mapFromSlice(persistentSubnetIndices, aggregatorSubnetIndices)
@@ -669,7 +669,7 @@ func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 		wantedSubnets[subnet] = true
 	}
 
-	for subnet := range s.attesterSubnetIndices(currentSlot) {
+	for subnet := range attesterSubnetIndices(currentSlot) {
 		wantedSubnets[subnet] = true
 	}
 
