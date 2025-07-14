@@ -557,8 +557,8 @@ func (s *Service) initPOWService() {
 				}
 			}
 			// Handle edge case with embedded genesis state by fetching genesis header to determine
-			// its height.
-			if s.chainStartData.Chainstarted && s.chainStartData.GenesisBlock == 0 {
+			// its height only if the deposit requests have not started yet (Pre Pectra EIP-6110 behavior).
+			if s.chainStartData.Chainstarted && s.chainStartData.GenesisBlock == 0 && !s.depositRequestsStarted {
 				genHash := common.BytesToHash(s.chainStartData.Eth1Data.BlockHash)
 				genBlock := s.chainStartData.GenesisBlock
 				// In the event our provided chainstart data references a non-existent block hash,
