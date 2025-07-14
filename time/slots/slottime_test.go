@@ -1,6 +1,7 @@
 package slots
 
 import (
+	"context"
 	"math"
 	"testing"
 	"time"
@@ -700,4 +701,28 @@ func TestToForkVersion(t *testing.T) {
 		result := ToForkVersion(slot - 1)
 		require.Equal(t, version.Phase0, result)
 	})
+}
+
+func TestSlotTickerReplayBehaviour(t *testing.T) {
+	secondsPerslot := uint64(1)
+	st := NewSlotTicker(time.Unix(time.Now().Unix(), 0), secondsPerslot) // 1-second period
+	const ticks = 5
+
+	ctx, cancel := context.WithTimeout(t.Context(), 6*time.Second) // make the timeout very close
+	defer cancel()
+	time.Sleep(time.Duration(ticks) * time.Second) // simulate slow consumer by delaying tick consumption
+	counter := 0
+	prevTime := time.Now()
+	for counter < ticks {
+		select {
+		case <-st.C(): // simulate ticks faster than supposed iteration due to replaying old ticks
+			assert.Equal(t, true, time.Now().Sub(prevTime) < time.Duration(secondsPerslot)*time.Second)
+			counter++
+			prevTime = time.Now()
+		case <-ctx.Done(): // timed out before enough ticks arrived
+			t.Fatalf("expected %d ticks, got %d", ticks, counter)
+		}
+	}
+
+	require.Equal(t, ticks, counter)
 }

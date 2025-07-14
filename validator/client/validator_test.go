@@ -192,7 +192,6 @@ func TestWaitForChainStart_SetsGenesisInfo(t *testing.T) {
 
 			assert.DeepEqual(t, genesisValidatorsRoot[:], savedGenValRoot, "Unexpected saved genesis validators root")
 			assert.Equal(t, genesis, v.genesisTime, "Unexpected chain start time")
-			assert.NotNil(t, v.ticker, "Expected ticker to be set, received nil")
 
 			// Make sure there are no errors running if it is the same data.
 			client.EXPECT().WaitForChainStart(
@@ -236,7 +235,6 @@ func TestWaitForChainStart_SetsGenesisInfo_IncorrectSecondTry(t *testing.T) {
 
 			assert.DeepEqual(t, genesisValidatorsRoot[:], savedGenValRoot, "Unexpected saved genesis validators root")
 			assert.Equal(t, genesis, v.genesisTime, "Unexpected chain start time")
-			assert.NotNil(t, v.ticker, "Expected ticker to be set, received nil")
 
 			genesisValidatorsRoot = bytesutil.ToBytes32([]byte("badvalidators"))
 
@@ -294,38 +292,6 @@ func TestWaitForChainStart_ReceiveErrorFromStream(t *testing.T) {
 	err := v.WaitForChainStart(t.Context())
 	want := "could not receive ChainStart from stream"
 	assert.ErrorContains(t, want, err)
-}
-
-func TestCanonicalHeadSlot_FailedRPC(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	client := validatormock.NewMockChainClient(ctrl)
-	v := validator{
-		chainClient: client,
-		genesisTime: 1,
-	}
-	client.EXPECT().ChainHead(
-		gomock.Any(),
-		gomock.Any(),
-	).Return(nil, errors.New("failed"))
-	_, err := v.CanonicalHeadSlot(t.Context())
-	assert.ErrorContains(t, "failed", err)
-}
-
-func TestCanonicalHeadSlot_OK(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	client := validatormock.NewMockChainClient(ctrl)
-	v := validator{
-		chainClient: client,
-	}
-	client.EXPECT().ChainHead(
-		gomock.Any(),
-		gomock.Any(),
-	).Return(&ethpb.ChainHead{HeadSlot: 0}, nil)
-	headSlot, err := v.CanonicalHeadSlot(t.Context())
-	require.NoError(t, err)
-	assert.Equal(t, primitives.Slot(0), headSlot, "Mismatch slots")
 }
 
 func TestWaitSync_ContextCanceled(t *testing.T) {

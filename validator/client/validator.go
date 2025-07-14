@@ -138,6 +138,10 @@ func (v *validator) Done() {
 	}
 }
 
+func (v *validator) GenesisTime() uint64 {
+	return v.genesisTime
+}
+
 func (v *validator) EventsChan() <-chan *eventClient.Event {
 	return v.eventsChannel
 }
@@ -306,7 +310,6 @@ func (v *validator) WaitForChainStart(ctx context.Context) error {
 			return errors.Wrap(err, "could not save genesis validators root")
 		}
 
-		v.setTicker()
 		return nil
 	}
 
@@ -324,11 +327,25 @@ func (v *validator) WaitForChainStart(ctx context.Context) error {
 		)
 	}
 
-	v.setTicker()
 	return nil
 }
 
-func (v *validator) setTicker() {
+func (v *validator) SetTicker() {
+	// If a ticker already exists, stop it before creating a new one
+	// to prevent resource leaks.
+
+	// note to reader:
+	// This function chooses to adapt to the existing slot ticker instead of changing how it works
+	// The slot ticker will currently start from genesis time but tick based on the current time.
+	// This means that sometimes we need to reset the ticker to avoid replaying old ticks on a slow consumer of the ticks.
+	// i.e.,
+	// 1. tick starts at 0
+	// 2. loop stops consuming on slot 10 due to accounts changed tigger with no active keys
+	// 3. new active keys are added in slot 20 resolving wait for activation
+	// 4. new tick starts ticking from slot 20 instead of slot 10
+	if v.ticker != nil {
+		v.ticker.Done()
+	}
 	// Once the ChainStart log is received, we update the genesis time of the validator client
 	// and begin a slot ticker used to track the current slot the beacon node is in.
 	v.ticker = slots.NewSlotTicker(time.Unix(int64(v.genesisTime), 0), params.BeaconConfig().SecondsPerSlot)
@@ -405,18 +422,6 @@ func (v *validator) checkAndLogValidatorStatus() bool {
 		}
 	}
 	return someAreActive
-}
-
-// CanonicalHeadSlot returns the slot of canonical block currently found in the
-// beacon chain via RPC.
-func (v *validator) CanonicalHeadSlot(ctx context.Context) (primitives.Slot, error) {
-	ctx, span := trace.StartSpan(ctx, "validator.CanonicalHeadSlot")
-	defer span.End()
-	head, err := v.chainClient.ChainHead(ctx, &emptypb.Empty{})
-	if err != nil {
-		return 0, errors.Wrap(client.ErrConnectionIssue, err.Error())
-	}
-	return head.HeadSlot, nil
 }
 
 // NextSlot emits the next slot number at the start time of that slot.
