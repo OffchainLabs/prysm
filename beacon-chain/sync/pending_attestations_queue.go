@@ -101,7 +101,7 @@ func (s *Service) processAttestations(ctx context.Context, attestations []any) {
 		case ethpb.SignedAggregateAttAndProof:
 			s.processAggregate(ctx, t)
 		default:
-			log.Debugf("Unexpected item of type %T in pending attestation queue. Item will not be processed", t)
+			log.Warnf("Unexpected item of type %T in pending attestation queue. Item will not be processed", t)
 		}
 	}
 }
@@ -277,7 +277,10 @@ func (s *Service) savePendingAtt(att ethpb.Att) {
 	})
 }
 
-func (s *Service) savePending(root [32]byte, pending any, areEqual func(other any) bool) {
+// We want to avoid saving duplicate items, which is the purpose of the passed-in closure.
+// It is the responsibility of the caller to provide a function that correctly determines quality
+// in the context of the pending queue.
+func (s *Service) savePending(root [32]byte, pending any, isEqual func(other any) bool) {
 	s.pendingAttsLock.Lock()
 	defer s.pendingAttsLock.Unlock()
 
@@ -300,7 +303,7 @@ func (s *Service) savePending(root [32]byte, pending any, areEqual func(other an
 	// Skip if the attestation/aggregate from the same validator already exists in
 	// the pending queue.
 	for _, a := range s.blkRootToPendingAtts[root] {
-		if areEqual(a) {
+		if isEqual(a) {
 			return
 		}
 	}
