@@ -11,12 +11,9 @@ go_library(
     deps = [
         "//api:go_default_library",
         "//api/server/structs:go_default_library",
-        "//beacon-chain/blockchain:go_default_library",
         "//beacon-chain/core/light-client:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
-        "//beacon-chain/db:go_default_library",
         "//beacon-chain/rpc/eth/shared:go_default_library",
-        "//beacon-chain/rpc/lookup:go_default_library",
         "//config/params:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//monitoring/tracing/trace:go_default_library",
@@ -32,10 +29,7 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = [
-        "handlers_test.go",
-        "helpers_test.go",
-    ],
+    srcs = ["handlers_test.go"],
     embed = [":go_default_library"],
     deps = [
         "//api/server/structs:go_default_library",
