@@ -46,6 +46,7 @@ type ValidatorService struct {
 	ctx                     context.Context
 	cancel                  context.CancelFunc
 	validator               iface.Validator
+	healthMonitor           *healthMonitor
 	db                      db.Database
 	conn                    validatorHelpers.NodeConnection
 	wallet                  *wallet.Wallet
@@ -233,8 +234,8 @@ func (v *ValidatorService) Start() {
 		eventsChannel:                  make(chan *eventClient.Event, 1),
 	}
 
-	hm := newHealthMonitor(v.ctx, v.cancel, v.maxHealthChecks, v.validator)
-	hm.Start()
+	v.healthMonitor = newHealthMonitor(v.ctx, v.cancel, v.maxHealthChecks, v.validator)
+	v.healthMonitor.Start()
 	defer v.closeClientFunc()
 
 	for {
@@ -242,7 +243,7 @@ func (v *ValidatorService) Start() {
 		case <-v.ctx.Done():
 			log.Info("Validator service context canceled, stopping")
 			return
-		case isHealthy := <-hm.HealthyChan():
+		case isHealthy := <-v.healthMonitor.HealthyChan():
 			if !isHealthy {
 				// wait until the next health tracker update
 				log.Warn("Validator service health check failed, waiting for healthy beacon node...")
@@ -252,7 +253,7 @@ func (v *ValidatorService) Start() {
 			log.Info("Starting validator runner")
 			runnerCtx, runnerCancel := context.WithCancel(v.ctx)
 
-			runner, err := newRunner(runnerCtx, v.validator, hm)
+			runner, err := newRunner(runnerCtx, v.validator, v.healthMonitor)
 			if err != nil {
 				log.WithError(err).Error("Could not create validator runner")
 				runnerCancel() // Ensure context is cancelled
@@ -279,6 +280,12 @@ func (v *ValidatorService) Stop() error {
 func (v *ValidatorService) Status() error {
 	if v.conn == nil {
 		return errors.New("no connection to beacon RPC")
+	}
+	if v.healthMonitor == nil {
+		return errors.New("beacon health monitor not initialized")
+	}
+	if v.healthMonitor.isHealthy == false {
+		return errors.New("unable to connect to beacon node")
 	}
 	return nil
 }
