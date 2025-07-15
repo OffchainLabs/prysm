@@ -284,7 +284,7 @@ func (v *ValidatorService) Status() error {
 	if v.healthMonitor == nil {
 		return errors.New("beacon health monitor not initialized")
 	}
-	if v.healthMonitor.isHealthy == false {
+	if !v.healthMonitor.isHealthy {
 		return errors.New("unable to connect to beacon node")
 	}
 	return nil
