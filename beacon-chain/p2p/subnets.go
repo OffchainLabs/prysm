@@ -214,6 +214,10 @@ func (s *Service) defectiveSubnets(
 // In case of a dial failure, it logs the error but continues dialing other peers.
 func (s *Service) dialPeers(maxConcurrentDials int, nodes []*enode.Node) {
 	for start := 0; start < len(nodes); start += maxConcurrentDials {
+		if s.ctx.Err() != nil {
+			return
+		}
+
 		var wg sync.WaitGroup
 		stop := min(start+maxConcurrentDials, len(nodes))
 		for _, node := range nodes[start:stop] {
