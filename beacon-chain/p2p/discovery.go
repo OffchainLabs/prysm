@@ -296,12 +296,6 @@ func (s *Service) listenForNewNodes() {
 	connectivityTicker := time.NewTicker(1 * time.Minute)
 	thresholdCount := 0
 
-	// Restrict dials if limit is applied.
-	maxConcurrentDials := math.MaxInt
-	if flags.MaxDialIsActive() {
-		maxConcurrentDials = flags.Get().MaxConcurrentDials
-	}
-
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -345,78 +339,116 @@ func (s *Service) listenForNewNodes() {
 				return
 			}
 
-			// Search for new peers.
 			func() {
 				ctx, cancel := context.WithTimeout(s.ctx, searchPeriod)
 				defer cancel()
 
-				if err := s.findAndDialPeers(ctx, s.cfg.MaxPeers, maxConcurrentDials); err != nil && !errors.Is(err, context.DeadlineExceeded) {
-					log.WithError(err).Error("Could not find peers")
+				if err := s.findAndDialPeers(ctx); err != nil && !errors.Is(err, context.DeadlineExceeded) {
+					log.WithError(err).Error("Failed to find and dial peers")
 				}
 			}()
 		}
 	}
 }
 
-// findAndDialPeers finds new peers until `targetPeerCount` is reached,
-// and dials them in batches of `maxConcurrentDials` at a time.
-// If the context is cancelled during the search, it stops looking for new peers,
-// but still dials new found peers. In this case, it returns the context error.
-func (s *Service) findAndDialPeers(ctx context.Context, targetPeerCount uint, maxConcurrentDials int) error {
-	for missingPeerCount := s.missingPeerCount(targetPeerCount); missingPeerCount > 0; {
-		// Create an discovery iterator to find new peers.
-		iterator := s.dv5Listener.RandomNodes()
-
-		// The peer crawling stops when enough peers are found in all defective subnets,
-		// or when `batchPeriod` is reached.
-		// It is useful to dial peers even if not all peers in defective subnets
-		// are found.
-		ctx, cancel := context.WithTimeout(ctx, batchPeriod)
-		defer cancel()
-
-		// `iterator.Next` can block indefinitely. `iterator.Close` unblocks it.
-		// So it is important to close the iterator when the context is done to ensure
-		// that the search does not hang indefinitely.
-		go func() {
-			<-ctx.Done()
-			iterator.Close()
-		}()
-
-		// Crawl the network for peers subscribed to the defective subnets.
-		nodeByNodeID := make(map[enode.ID]*enode.Node)
-		for missingPeerCount > 0 && iterator.Next() {
-			if ctx.Err() != nil {
-				// If the context is done, we stop iterating.
-				break
-			}
-			// Iterate on peers and skip those that do not match the filter.
-			node := iterator.Node()
-			if !s.filterPeer(node) {
-				continue
-			}
-
-			// Remove duplicates, keeping the node with higher seq.
-			existing, ok := nodeByNodeID[node.ID()]
-			if ok && existing.Seq() > node.Seq() {
-				continue
-			}
-			nodeByNodeID[node.ID()] = node
-
-			// We found a new peer. Decrease the missing peer count.
-			missingPeerCount--
-		}
-
-		// Convert the map to a slice.
-		peersToDial := make([]*enode.Node, 0, len(nodeByNodeID))
-		for _, node := range nodeByNodeID {
-			peersToDial = append(peersToDial, node)
-		}
-
-		// Dial new peers in batches.
-		s.dialPeers(maxConcurrentDials, peersToDial)
+// FindAndDialPeersWithSubnets ensures that our node is connected to enough peers.
+// If, the threshold is met, then this function immediately returns.
+// Otherwise, it searches for new peers and dials them.
+// If `ctx“ is canceled while searching for peers, search is stopped, but new found peers are still dialed.
+// In this case, the function returns an error.
+func (s *Service) findAndDialPeers(ctx context.Context) error {
+	// Restrict dials if limit is applied.
+	maxConcurrentDials := math.MaxInt
+	if flags.MaxDialIsActive() {
+		maxConcurrentDials = flags.Get().MaxConcurrentDials
 	}
 
-	return ctx.Err()
+	missingPeerCount := s.missingPeerCount(s.cfg.MaxPeers)
+	for missingPeerCount > 0 {
+		// Stop the search/dialing loop if the context is canceled.
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		peersToDial, err := func() ([]*enode.Node, error) {
+			ctx, cancel := context.WithTimeout(ctx, batchPeriod)
+			defer cancel()
+
+			peersToDial, err := s.findPeers(ctx, missingPeerCount)
+			if err != nil && !errors.Is(err, context.DeadlineExceeded) {
+				return nil, errors.Wrap(err, "find peers")
+			}
+
+			return peersToDial, nil
+		}()
+
+		if err != nil {
+			return errors.Wrap(err, "find peers")
+		}
+
+		dialedPeerCount := s.dialPeers(s.ctx, maxConcurrentDials, peersToDial)
+
+		if dialedPeerCount > missingPeerCount {
+			missingPeerCount = 0
+			continue
+		}
+
+		missingPeerCount -= dialedPeerCount
+	}
+
+	return nil
+}
+
+// findAndDialPeers finds new peers until `targetPeerCount` is reached, `batchPeriod` is over,
+// the peers iterator is exhausted or the context is canceled.
+func (s *Service) findPeers(ctx context.Context, missingPeerCount uint) ([]*enode.Node, error) {
+	// Create an discovery iterator to find new peers.
+	iterator := s.dv5Listener.RandomNodes()
+
+	// `iterator.Next` can block indefinitely. `iterator.Close` unblocks it.
+	// So it is important to close the iterator when the context is done to ensure
+	// that the search does not hang indefinitely.
+	go func() {
+		<-ctx.Done()
+		iterator.Close()
+	}()
+
+	// Crawl the network for peers subscribed to the defective subnets.
+	nodeByNodeID := make(map[enode.ID]*enode.Node)
+	for missingPeerCount > 0 && iterator.Next() {
+		if ctx.Err() != nil {
+			peersToDial := make([]*enode.Node, 0, len(nodeByNodeID))
+			for _, node := range nodeByNodeID {
+				peersToDial = append(peersToDial, node)
+			}
+
+			return peersToDial, ctx.Err()
+		}
+
+		// Skip peer not matching the filter.
+		node := iterator.Node()
+		if !s.filterPeer(node) {
+			continue
+		}
+
+		// Remove duplicates, keeping the node with higher seq.
+		existing, ok := nodeByNodeID[node.ID()]
+		if ok && existing.Seq() > node.Seq() {
+			continue
+		}
+		nodeByNodeID[node.ID()] = node
+
+		// We found a new peer. Decrease the missing peer count.
+		missingPeerCount--
+	}
+
+	// Convert the map to a slice.
+	peersToDial := make([]*enode.Node, 0, len(nodeByNodeID))
+	for _, node := range nodeByNodeID {
+		peersToDial = append(peersToDial, node)
+	}
+
+	return peersToDial, nil
 }
 
 // missingPeerCount computes how many peers we are missing to reach the target peer count.

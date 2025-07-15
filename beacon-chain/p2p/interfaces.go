@@ -98,7 +98,7 @@ type (
 		NodeID() enode.ID
 		DiscoveryAddresses() ([]multiaddr.Multiaddr, error)
 		RefreshPersistentSubnets()
-		FindPeersWithSubnets(ctx context.Context, topicFormat string, digest [fieldparams.VersionLength]byte, minimumPeersPerSubnet int, subnets map[uint64]bool) error
+		FindAndDialPeersWithSubnets(ctx context.Context, topicFormat string, digest [fieldparams.VersionLength]byte, minimumPeersPerSubnet int, subnets map[uint64]bool) error
 		AddPingMethod(reqFunc func(ctx context.Context, id peer.ID) error)
 	}
 

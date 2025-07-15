@@ -73,18 +73,20 @@ func (s *Service) nodeFilter(topic string, indices map[uint64]int) (func(node *e
 	}
 }
 
-// FindPeersWithSubnets ensures that our node is connected to at least `minimumPeersPerSubnet`
+// FindAndDialPeersWithSubnets ensures that our node is connected to at least `minimumPeersPerSubnet`
 // peers for each subnet listed in `subnets`.
 // If, for all subnets, the threshold is met, then this function immediately returns.
 // Otherwise, it searches for new peers for defective subnets, and dials them.
-func (s *Service) FindPeersWithSubnets(
+// If `ctx“ is canceled while searching for peers, search is stopped, but new found peers are still dialed.
+// In this case, the function returns an error.
+func (s *Service) FindAndDialPeersWithSubnets(
 	ctx context.Context,
 	topicFormat string,
 	digest [fieldparams.VersionLength]byte,
 	minimumPeersPerSubnet int,
 	subnets map[uint64]bool,
 ) error {
-	ctx, span := trace.StartSpan(ctx, "p2p.FindPeersWithSubnet")
+	ctx, span := trace.StartSpan(ctx, "p2p.FindAndDialPeersWithSubnet")
 	defer span.End()
 
 	// Return early if the discovery listener isn't set.
@@ -100,94 +102,127 @@ func (s *Service) FindPeersWithSubnets(
 
 	defectiveSubnets := s.defectiveSubnets(topicFormat, digest, minimumPeersPerSubnet, subnets)
 	for len(defectiveSubnets) > 0 {
-		if err := func() error {
-			// Create an discovery iterator to find new peers.
-			iterator := s.dv5Listener.RandomNodes()
+		// Stop the search/dialing loop if the context is canceled.
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 
-			// The peer crawling stops when enough peers are found in all defective subnets,
-			// or when `batchPeriod` is reached.
-			// It is useful to dial peers even if not all peers in defective subnets
-			// are found.
+		peersToDial, err := func() ([]*enode.Node, error) {
 			ctx, cancel := context.WithTimeout(ctx, batchPeriod)
 			defer cancel()
 
-			// `iterator.Next` can block indefinitely. `iterator.Close` unblocks it.
-			// So it is important to close the iterator when the context is done to ensure
-			// that the search does not hang indefinitely.
-			go func() {
-				<-ctx.Done()
-				iterator.Close()
-			}()
-
-			// Retrieve the filter function that will be used to filter nodes based on the defective subnets.
-			filter, err := s.nodeFilter(topicFormat, defectiveSubnets)
-			if err != nil {
-				return errors.Wrap(err, "node filter")
+			peersToDial, err := s.findPeersWithSubnets(ctx, topicFormat, digest, minimumPeersPerSubnet, defectiveSubnets)
+			if err != nil && !errors.Is(err, context.DeadlineExceeded) {
+				return nil, errors.Wrap(err, "find peers with subnets")
 			}
 
-			// Crawl the network for peers subscribed to the defective subnets.
-			nodeByNodeID := make(map[enode.ID]*enode.Node)
-			for ctx.Err() == nil && len(defectiveSubnets) > 0 && iterator.Next() {
-				// Get all needed subnets that the node is subscribed to.
-				// Skip nodes that are not subscribed to any of the defective subnets.
-				node := iterator.Node()
-				nodeSubnets, err := filter(node)
-				if err != nil {
-					return errors.Wrap(err, "filter node")
-				}
-				if len(nodeSubnets) == 0 {
-					continue
-				}
+			return peersToDial, nil
+		}()
 
-				// Remove duplicates, keeping the node with higher seq.
-				existing, ok := nodeByNodeID[node.ID()]
-				if ok && existing.Seq() > node.Seq() {
-					continue
-				}
-				nodeByNodeID[node.ID()] = node
+		if err != nil {
+			return errors.Wrap(err, "find peers with subnets batch")
+		}
 
-				// We found a new peer. Modify the defective subnets map
-				// and the filter accordingly.
-				for subnet := range defectiveSubnets {
-					if !nodeSubnets[subnet] {
-						continue
-					}
+		// Dial new peers in batches.
+		s.dialPeers(s.ctx, maxConcurrentDials, peersToDial)
 
-					defectiveSubnets[subnet]--
+		defectiveSubnets = s.defectiveSubnets(topicFormat, digest, minimumPeersPerSubnet, subnets)
+	}
 
-					if defectiveSubnets[subnet] == 0 {
-						delete(defectiveSubnets, subnet)
-					}
+	return nil
+}
 
-					filter, err = s.nodeFilter(topicFormat, defectiveSubnets)
-					if err != nil {
-						return errors.Wrap(err, "node filter")
-					}
-				}
-			}
+// findPeersWithSubnets finds peers subscribed to defective subnets in batches
+// until enough peers are found or the context is canceled.
+// It returns new peers found during the search.
+func (s *Service) findPeersWithSubnets(
+	ctx context.Context,
+	topicFormat string,
+	digest [fieldparams.VersionLength]byte,
+	minimumPeersPerSubnet int,
+	defectiveSubnetsOrigin map[uint64]int,
+) ([]*enode.Node, error) {
+	// Copy the defective subnets map to avoid modifying the original map.
+	defectiveSubnets := make(map[uint64]int, len(defectiveSubnetsOrigin))
+	for k, v := range defectiveSubnetsOrigin {
+		defectiveSubnets[k] = v
+	}
 
+	// Create an discovery iterator to find new peers.
+	iterator := s.dv5Listener.RandomNodes()
+
+	// `iterator.Next` can block indefinitely. `iterator.Close` unblocks it.
+	// So it is important to close the iterator when the context is done to ensure
+	// that the search does not hang indefinitely.
+	go func() {
+		<-ctx.Done()
+		iterator.Close()
+	}()
+
+	// Retrieve the filter function that will be used to filter nodes based on the defective subnets.
+	filter, err := s.nodeFilter(topicFormat, defectiveSubnets)
+	if err != nil {
+		return nil, errors.Wrap(err, "node filter")
+	}
+
+	// Crawl the network for peers subscribed to the defective subnets.
+	nodeByNodeID := make(map[enode.ID]*enode.Node)
+	for len(defectiveSubnets) > 0 && iterator.Next() {
+		if err := ctx.Err(); err != nil {
 			// Convert the map to a slice.
 			peersToDial := make([]*enode.Node, 0, len(nodeByNodeID))
 			for _, node := range nodeByNodeID {
 				peersToDial = append(peersToDial, node)
 			}
 
-			// Dial new peers in batches.
-			s.dialPeers(maxConcurrentDials, peersToDial)
-
-			return nil
-		}(); err != nil {
-			return err
+			return peersToDial, err
 		}
 
-		if err := ctx.Err(); err != nil {
-			return err
+		// Get all needed subnets that the node is subscribed to.
+		// Skip nodes that are not subscribed to any of the defective subnets.
+		node := iterator.Node()
+		nodeSubnets, err := filter(node)
+		if err != nil {
+			return nil, errors.Wrap(err, "filter node")
+		}
+		if len(nodeSubnets) == 0 {
+			continue
 		}
 
-		defectiveSubnets = s.defectiveSubnets(topicFormat, digest, minimumPeersPerSubnet, subnets)
+		// Remove duplicates, keeping the node with higher seq.
+		existing, ok := nodeByNodeID[node.ID()]
+		if ok && existing.Seq() > node.Seq() {
+			continue
+		}
+		nodeByNodeID[node.ID()] = node
+
+		// We found a new peer. Modify the defective subnets map
+		// and the filter accordingly.
+		for subnet := range defectiveSubnets {
+			if !nodeSubnets[subnet] {
+				continue
+			}
+
+			defectiveSubnets[subnet]--
+
+			if defectiveSubnets[subnet] == 0 {
+				delete(defectiveSubnets, subnet)
+			}
+
+			filter, err = s.nodeFilter(topicFormat, defectiveSubnets)
+			if err != nil {
+				return nil, errors.Wrap(err, "node filter")
+			}
+		}
 	}
 
-	return nil
+	// Convert the map to a slice.
+	peersToDial := make([]*enode.Node, 0, len(nodeByNodeID))
+	for _, node := range nodeByNodeID {
+		peersToDial = append(peersToDial, node)
+	}
+
+	return peersToDial, nil
 }
 
 // defectiveSubnets returns a map of subnets that have fewer than the minimum peer count.
@@ -212,10 +247,13 @@ func (s *Service) defectiveSubnets(
 
 // dialPeers dials multiple peers concurrently up to `maxConcurrentDials` at a time.
 // In case of a dial failure, it logs the error but continues dialing other peers.
-func (s *Service) dialPeers(maxConcurrentDials int, nodes []*enode.Node) {
+func (s *Service) dialPeers(ctx context.Context, maxConcurrentDials int, nodes []*enode.Node) uint {
+	var mut sync.Mutex
+
+	counter := uint(0)
 	for start := 0; start < len(nodes); start += maxConcurrentDials {
-		if s.ctx.Err() != nil {
-			return
+		if ctx.Err() != nil {
+			return counter
 		}
 
 		var wg sync.WaitGroup
@@ -235,16 +273,22 @@ func (s *Service) dialPeers(maxConcurrentDials int, nodes []*enode.Node) {
 
 			wg.Add(1)
 			go func() {
-				if err := s.connectWithPeer(s.ctx, *info); err != nil {
+				defer wg.Done()
+				if err := s.connectWithPeer(ctx, *info); err != nil {
 					log.WithError(err).WithField("info", info.String()).Debug("Could not connect with peer")
+					return
 				}
 
-				wg.Done()
+				mut.Lock()
+				defer mut.Unlock()
+				counter++
 			}()
 		}
 
 		wg.Wait()
 	}
+
+	return counter
 }
 
 // filterPeerForAttSubnet returns a method with filters peers specifically for a particular attestation subnet.

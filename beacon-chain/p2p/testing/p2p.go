@@ -408,8 +408,8 @@ func (p *TestP2P) Peers() *peers.Status {
 	return p.peers
 }
 
-// FindPeersWithSubnet mocks the p2p func.
-func (*TestP2P) FindPeersWithSubnets(ctx context.Context, topicFormat string, digest [fieldparams.VersionLength]byte, minimumPeersPerSubnet int, subnets map[uint64]bool) error {
+// FindAndDialPeersWithSubnets mocks the p2p func.
+func (*TestP2P) FindAndDialPeersWithSubnets(ctx context.Context, topicFormat string, digest [fieldparams.VersionLength]byte, minimumPeersPerSubnet int, subnets map[uint64]bool) error {
 	return nil
 }
 

@@ -21,7 +21,7 @@ import (
 	"github.com/prysmaticlabs/go-bitfield"
 )
 
-func TestStartDiscV5_FindPeersWithSubnet(t *testing.T) {
+func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 	// Topology of this test:
 	//
 	//
@@ -96,7 +96,7 @@ func TestStartDiscV5_FindPeersWithSubnet(t *testing.T) {
 	for i := uint64(1); i <= subnetCount; i++ {
 		service, err := NewService(ctx, &Config{
 			Discv5BootStrapAddrs: []string{bootNodeENR},
-			MaxPeers:             30,
+			MaxPeers:             0, // Set to 0 to ensure that peers are discovered via subnets search, and not generic peers discovery.
 			UDPPort:              uint(2000 + i),
 			TCPPort:              uint(3000 + i),
 			QUICPort:             uint(3000 + i),
@@ -123,7 +123,8 @@ func TestStartDiscV5_FindPeersWithSubnet(t *testing.T) {
 		service.dv5Listener.LocalNode().Set(entry)
 
 		// Join and subscribe to the subnet, needed by libp2p.
-		topic, err := service.pubsub.Join(fmt.Sprintf(AttestationSubnetTopicFormat, bootNodeForkDigest, i) + "/ssz_snappy")
+		topicName := fmt.Sprintf(AttestationSubnetTopicFormat, bootNodeForkDigest, i) + "/ssz_snappy"
+		topic, err := service.pubsub.Join(topicName)
 		require.NoError(t, err)
 
 		_, err = topic.Subscribe()
@@ -170,7 +171,7 @@ func TestStartDiscV5_FindPeersWithSubnet(t *testing.T) {
 	ctxWithTimeOut, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	err = service.FindPeersWithSubnets(ctxWithTimeOut, AttestationSubnetTopicFormat, bootNodeForkDigest, minimumPeersPerSubnet, subnets)
+	err = service.FindAndDialPeersWithSubnets(ctxWithTimeOut, AttestationSubnetTopicFormat, bootNodeForkDigest, minimumPeersPerSubnet, subnets)
 	require.NoError(t, err)
 
 	defectiveSubnets = service.defectiveSubnets(AttestationSubnetTopicFormat, bootNodeForkDigest, minimumPeersPerSubnet, subnets)

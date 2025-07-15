@@ -127,7 +127,7 @@ func (s *Service) internalBroadcastAttestation(ctx context.Context, subnet uint6
 			s.subnetLocker(subnet).Lock()
 			defer s.subnetLocker(subnet).Unlock()
 
-			if err := s.FindPeersWithSubnets(ctx, AttestationSubnetTopicFormat, forkDigest, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
+			if err := s.FindAndDialPeersWithSubnets(ctx, AttestationSubnetTopicFormat, forkDigest, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
 				return errors.Wrap(err, "find peers with subnets")
 			}
 
@@ -183,7 +183,7 @@ func (s *Service) broadcastSyncCommittee(ctx context.Context, subnet uint64, sMs
 		if err := func() error {
 			s.subnetLocker(wrappedSubIdx).Lock()
 			defer s.subnetLocker(wrappedSubIdx).Unlock()
-			if err := s.FindPeersWithSubnets(ctx, SyncCommitteeSubnetTopicFormat, forkDigest, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
+			if err := s.FindAndDialPeersWithSubnets(ctx, SyncCommitteeSubnetTopicFormat, forkDigest, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
 				return errors.Wrap(err, "find peers with subnets")
 			}
 
@@ -248,7 +248,7 @@ func (s *Service) internalBroadcastBlob(ctx context.Context, subnet uint64, blob
 			s.subnetLocker(wrappedSubIdx).Lock()
 			defer s.subnetLocker(wrappedSubIdx).Unlock()
 
-			if err := s.FindPeersWithSubnets(ctx, BlobSubnetTopicFormat, forkDigest, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
+			if err := s.FindAndDialPeersWithSubnets(ctx, BlobSubnetTopicFormat, forkDigest, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
 				return errors.Wrap(err, "find peers with subnets")
 			}
 
@@ -419,7 +419,7 @@ func (s *Service) findPeersIfNeeded(
 	defer s.subnetLocker(wrappedSubIdx).Unlock()
 
 	// No peers found, attempt to find peers with this subnet.
-	if err := s.FindPeersWithSubnets(ctx, topicFormat, forkDigest, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
+	if err := s.FindAndDialPeersWithSubnets(ctx, topicFormat, forkDigest, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
 		return errors.Wrap(err, "find peers with subnet")
 	}
 

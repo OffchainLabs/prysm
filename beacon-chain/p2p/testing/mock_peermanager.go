@@ -57,8 +57,8 @@ func (m *MockPeerManager) DiscoveryAddresses() ([]multiaddr.Multiaddr, error) {
 // RefreshPersistentSubnets .
 func (*MockPeerManager) RefreshPersistentSubnets() {}
 
-// FindPeersWithSubnet .
-func (*MockPeerManager) FindPeersWithSubnets(ctx context.Context, topicFormat string, digest [fieldparams.VersionLength]byte, minimumPeersPerSubnet int, subnets map[uint64]bool) error {
+// FindAndDialPeersWithSubnet .
+func (*MockPeerManager) FindAndDialPeersWithSubnets(ctx context.Context, topicFormat string, digest [fieldparams.VersionLength]byte, minimumPeersPerSubnet int, subnets map[uint64]bool) error {
 	return nil
 }
 

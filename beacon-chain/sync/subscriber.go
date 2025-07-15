@@ -526,7 +526,7 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 			ctx, cancel := context.WithTimeout(s.ctx, secondsPerSlotDuration)
 			defer cancel()
 
-			if err := s.cfg.p2p.FindPeersWithSubnets(ctx, p.topicFormat, p.digest, minimumPeersPerSubnet, neededSubnets); err != nil && !errors.Is(err, context.DeadlineExceeded) {
+			if err := s.cfg.p2p.FindAndDialPeersWithSubnets(ctx, p.topicFormat, p.digest, minimumPeersPerSubnet, neededSubnets); err != nil && !errors.Is(err, context.DeadlineExceeded) {
 				log.WithError(err).Debug("Could not find peers with subnets")
 			}
 		}()
@@ -552,7 +552,7 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 					ctx, cancel := context.WithTimeout(s.ctx, secondsPerSlotDuration)
 					defer cancel()
 
-					if err := s.cfg.p2p.FindPeersWithSubnets(ctx, p.topicFormat, p.digest, minimumPeersPerSubnet, neededSubnets); err != nil && !errors.Is(err, context.DeadlineExceeded) {
+					if err := s.cfg.p2p.FindAndDialPeersWithSubnets(ctx, p.topicFormat, p.digest, minimumPeersPerSubnet, neededSubnets); err != nil && !errors.Is(err, context.DeadlineExceeded) {
 						log.WithError(err).Debug("Could not find peers with subnets")
 					}
 				}()
