@@ -207,7 +207,7 @@ func (s *Store) getBaseAndDiffChain(offset uint64, slot primitives.Slot) (state.
 		diffChainIndices = appendUnique(diffChainIndices, diffSlot+offset)
 	}
 
-	baseSnapshot, err := s.getFullSnapshot(0, baseAnchorSlot)
+	baseSnapshot, err := s.getFullSnapshot(baseAnchorSlot)
 	if err != nil {
 		return nil, nil, err
 	}

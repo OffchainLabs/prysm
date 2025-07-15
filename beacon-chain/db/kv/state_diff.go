@@ -40,7 +40,7 @@ func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconStat
 
 	// Save full state if level is 0.
 	if lvl == 0 {
-		return s.saveFullSnapshot(lvl, st)
+		return s.saveFullSnapshot(st)
 	}
 
 	// Get anchor state to compute the diff from.
@@ -124,9 +124,9 @@ func (s *Store) saveHdiff(lvl int, anchor, st state.ReadOnlyBeaconState) error {
 }
 
 // SaveFullSnapshot saves the full level 0 state snapshot to the database.
-func (s *Store) saveFullSnapshot(lvl int, st state.ReadOnlyBeaconState) error {
+func (s *Store) saveFullSnapshot(st state.ReadOnlyBeaconState) error {
 	slot := uint64(st.Slot())
-	key := makeKey(lvl, slot)
+	key := makeKey(0, slot)
 	stateBytes, err := st.MarshalSSZ()
 	if err != nil {
 		return err
@@ -154,7 +154,7 @@ func (s *Store) saveFullSnapshot(lvl int, st state.ReadOnlyBeaconState) error {
 	}
 	// Save the full state to the cache, and invalidate other levels.
 	s.stateDiffCache.clearAnchors()
-	err = s.stateDiffCache.setAnchor(lvl, st)
+	err = s.stateDiffCache.setAnchor(0, st)
 	if err != nil {
 		return err
 	}
@@ -202,8 +202,8 @@ func (s *Store) getDiff(lvl int, slot uint64) (hdiff.HdiffBytes, error) {
 	}, nil
 }
 
-func (s *Store) getFullSnapshot(lvl int, slot uint64) (state.BeaconState, error) {
-	key := makeKey(lvl, slot)
+func (s *Store) getFullSnapshot(slot uint64) (state.BeaconState, error) {
+	key := makeKey(0, slot)
 	var enc []byte
 
 	err := s.db.View(func(tx *bolt.Tx) error {
