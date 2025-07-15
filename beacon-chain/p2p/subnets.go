@@ -255,14 +255,7 @@ func (s *Service) filterPeerForAttSubnet(indices map[uint64]int) func(node *enod
 			return nil, errors.Wrap(err, "attestation subnets")
 		}
 
-		result := make(map[uint64]bool, len(indices))
-		for index := range indices {
-			if subnets[index] {
-				result[index] = true
-			}
-		}
-
-		return result, nil
+		return intersect(indices, subnets), nil
 	}
 }
 
@@ -278,14 +271,7 @@ func (s *Service) filterPeerForSyncSubnet(indices map[uint64]int) func(node *eno
 			return nil, errors.Wrap(err, "sync subnets")
 		}
 
-		result := make(map[uint64]bool, len(indices))
-		for index := range indices {
-			if subnets[index] {
-				result[index] = true
-			}
-		}
-
-		return result, nil
+		return intersect(indices, subnets), nil
 	}
 }
 
@@ -315,14 +301,7 @@ func (s *Service) filterPeerForDataColumnsSubnet(indices map[uint64]int) func(no
 			return nil, errors.Wrap(err, "data column subnets")
 		}
 
-		result := make(map[uint64]bool, len(indices))
-		for index := range indices {
-			if subnets[index] {
-				result[index] = true
-			}
-		}
-
-		return result, nil
+		return intersect(indices, subnets), nil
 	}
 }
 
@@ -611,4 +590,17 @@ func byteCount(bitCount int) int {
 		numOfBytes++
 	}
 	return numOfBytes
+}
+
+// interesect intersects two maps and returns a new map containing only the keys
+// that are present in both maps.
+func intersect(left map[uint64]int, right map[uint64]bool) map[uint64]bool {
+	result := make(map[uint64]bool, len(left))
+	for i := range left {
+		if right[i] {
+			result[i] = true
+		}
+	}
+
+	return result
 }
