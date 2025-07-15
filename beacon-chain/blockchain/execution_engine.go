@@ -141,7 +141,7 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 			}
 
 			if err := s.saveHead(ctx, r, b, st); err != nil {
-				log.WithError(err).Error("could not save head after pruning invalid blocks")
+				log.WithError(err).Error("Could not save head after pruning invalid blocks")
 			}
 
 			log.WithFields(logrus.Fields{
@@ -354,7 +354,7 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 	}
 
 	// Get timestamp.
-	t, err := slots.ToTime(uint64(s.genesisTime.Unix()), slot)
+	t, err := slots.StartTime(s.genesisTime, slot)
 	if err != nil {
 		log.WithError(err).Error("Could not get timestamp to get payload attribute")
 		return emptyAttri

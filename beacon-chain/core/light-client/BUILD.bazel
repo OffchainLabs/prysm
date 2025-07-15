@@ -10,6 +10,7 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client",
     visibility = ["//visibility:public"],
     deps = [
+        "//beacon-chain/db/iface:go_default_library",
         "//beacon-chain/execution:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//config/fieldparams:go_default_library",

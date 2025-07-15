@@ -5,6 +5,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	pb "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -12,7 +13,7 @@ import (
 // GetPayloadResponseV(1|2|3|4) value.
 type GetPayloadResponse struct {
 	ExecutionData   interfaces.ExecutionData
-	BlobsBundle     *pb.BlobsBundle
+	BlobsBundler    pb.BlobsBundler
 	OverrideBuilder bool
 	// todo: should we convert this to Gwei up front?
 	Bid               primitives.Wei
@@ -22,6 +23,10 @@ type GetPayloadResponse struct {
 // bundleGetter is an interface satisfied by get payload responses that have a blobs bundle.
 type bundleGetter interface {
 	GetBlobsBundle() *pb.BlobsBundle
+}
+
+type bundleV2Getter interface {
+	GetBlobsBundle() *pb.BlobsBundleV2
 }
 
 // bidValueGetter is an interface satisfied by get payload responses that have a bid value.
@@ -41,10 +46,13 @@ func NewGetPayloadResponse(msg proto.Message) (*GetPayloadResponse, error) {
 	r := &GetPayloadResponse{}
 	bundleGetter, hasBundle := msg.(bundleGetter)
 	if hasBundle {
-		r.BlobsBundle = bundleGetter.GetBlobsBundle()
+		r.BlobsBundler = bundleGetter.GetBlobsBundle()
+	}
+	bundleV2Getter, hasBundle := msg.(bundleV2Getter)
+	if hasBundle {
+		r.BlobsBundler = bundleV2Getter.GetBlobsBundle()
 	}
 	bidValueGetter, hasBid := msg.(bidValueGetter)
-	executionRequestsGetter, hasExecutionRequests := msg.(executionRequestsGetter)
 	wei := primitives.ZeroWei()
 	if hasBid {
 		// The protobuf types that engine api responses unmarshal into store their values in little endian form.
@@ -60,13 +68,15 @@ func NewGetPayloadResponse(msg proto.Message) (*GetPayloadResponse, error) {
 	}
 	ed, err := NewWrappedExecutionData(msg)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "new wrapped execution data")
 	}
 	r.ExecutionData = ed
+
+	executionRequestsGetter, hasExecutionRequests := msg.(executionRequestsGetter)
 	if hasExecutionRequests {
 		requests, err := executionRequestsGetter.GetDecodedExecutionRequests(params.BeaconConfig().ExecutionRequestLimits())
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "get decoded execution requests")
 		}
 		r.ExecutionRequests = requests
 	}

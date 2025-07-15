@@ -98,7 +98,7 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 	oldHeadRoot := bytesutil.ToBytes32(r)
 	isOptimistic, err := s.cfg.ForkChoiceStore.IsOptimistic(newHeadRoot)
 	if err != nil {
-		log.WithError(err).Error("could not check if node is optimistically synced")
+		log.WithError(err).Error("Could not check if node is optimistically synced")
 	}
 	if headBlock.Block().ParentRoot() != oldHeadRoot {
 		// A chain re-org occurred, so we fire an event notifying the rest of the services.
@@ -111,11 +111,11 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 		dep := math.Max(uint64(headSlot-forkSlot), uint64(newHeadSlot-forkSlot))
 		oldWeight, err := s.cfg.ForkChoiceStore.Weight(oldHeadRoot)
 		if err != nil {
-			log.WithField("root", fmt.Sprintf("%#x", oldHeadRoot)).Warn("could not determine node weight")
+			log.WithField("root", fmt.Sprintf("%#x", oldHeadRoot)).Warn("Could not determine node weight")
 		}
 		newWeight, err := s.cfg.ForkChoiceStore.Weight(newHeadRoot)
 		if err != nil {
-			log.WithField("root", fmt.Sprintf("%#x", newHeadRoot)).Warn("could not determine node weight")
+			log.WithField("root", fmt.Sprintf("%#x", newHeadRoot)).Warn("Could not determine node weight")
 		}
 		log.WithFields(logrus.Fields{
 			"newSlot":            fmt.Sprintf("%d", newHeadSlot),

@@ -210,7 +210,7 @@ func (s *Service) waitForChainInitialization() {
 }
 
 func (s *Service) waitForSync(genesisTime time.Time) {
-	if slots.SinceGenesis(genesisTime) < params.BeaconConfig().SlotsPerEpoch || !s.serviceCfg.SyncChecker.Syncing() {
+	if slots.CurrentSlot(genesisTime) < params.BeaconConfig().SlotsPerEpoch || !s.serviceCfg.SyncChecker.Syncing() {
 		return
 	}
 	slotTicker := slots.NewSlotTicker(s.genesisTime, params.BeaconConfig().SecondsPerSlot)

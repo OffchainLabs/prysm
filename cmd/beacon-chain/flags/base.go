@@ -338,4 +338,10 @@ var (
 		Name:  "subscribe-all-data-subnets",
 		Usage: "Enable subscription to all data subnets.",
 	}
+	// BatchVerifierLimit sets the maximum number of signatures to batch verify at once.
+	BatchVerifierLimit = &cli.IntFlag{
+		Name:  "batch-verifier-limit",
+		Usage: "Maximum number of signatures to batch verify at once for beacon attestation p2p gossip.",
+		Value: 1000,
+	}
 )

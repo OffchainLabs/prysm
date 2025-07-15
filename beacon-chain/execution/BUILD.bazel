@@ -31,6 +31,7 @@ go_library(
         "//beacon-chain/core/feed:go_default_library",
         "//beacon-chain/core/feed/state:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
+        "//beacon-chain/core/peerdas:go_default_library",
         "//beacon-chain/core/transition:go_default_library",
         "//beacon-chain/db:go_default_library",
         "//beacon-chain/execution/types:go_default_library",
@@ -97,6 +98,7 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//async/event:go_default_library",
+        "//beacon-chain/blockchain/kzg:go_default_library",
         "//beacon-chain/cache/depositsnapshot:go_default_library",
         "//beacon-chain/core/feed:go_default_library",
         "//beacon-chain/core/feed/state:go_default_library",

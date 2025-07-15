@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"reflect"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
@@ -188,14 +190,14 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 		)
 	}
 
-	// New gossip topic in Fulu
+	// New gossip topic in Fulu.
 	if params.BeaconConfig().FuluForkEpoch <= epoch {
 		s.subscribeWithParameters(
 			p2p.DataColumnSubnetTopicFormat,
 			s.validateDataColumn,
-			func(context.Context, proto.Message) error { return nil },
+			s.dataColumnSubscriber,
 			digest,
-			func(primitives.Slot) []uint64 { return nil },
+			s.dataColumnSubnetIndices,
 			func(currentSlot primitives.Slot) []uint64 { return []uint64{} },
 		)
 	}
@@ -600,6 +602,19 @@ func (s *Service) enoughPeersAreConnected(subnetTopic string) bool {
 	return peersWithSubnetCount >= threshold
 }
 
+func (s *Service) dataColumnSubnetIndices(_ primitives.Slot) []uint64 {
+	nodeID := s.cfg.p2p.NodeID()
+	custodyGroupCount := s.cfg.custodyInfo.CustodyGroupSamplingSize(peerdas.Target)
+
+	nodeInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
+	if err != nil {
+		log.WithError(err).Error("Could not retrieve peer info")
+		return []uint64{}
+	}
+
+	return sliceFromMap(nodeInfo.DataColumnsSubnets, true /*sorted*/)
+}
+
 func (s *Service) persistentAndAggregatorSubnetIndices(currentSlot primitives.Slot) []uint64 {
 	if flags.Get().SubscribeToAllSubnets {
 		return sliceFromCount(params.BeaconConfig().AttestationSubnetCount)
@@ -726,4 +741,18 @@ func errorIsIgnored(err error) bool {
 		return true
 	}
 	return false
+}
+
+// sliceFromMap returns a sorted list of keys from a map.
+func sliceFromMap(m map[uint64]bool, sorted ...bool) []uint64 {
+	result := make([]uint64, 0, len(m))
+	for k := range m {
+		result = append(result, k)
+	}
+
+	if len(sorted) > 0 && sorted[0] {
+		slices.Sort(result)
+	}
+
+	return result
 }

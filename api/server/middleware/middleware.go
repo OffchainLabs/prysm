@@ -1,11 +1,14 @@
 package middleware
 
 import (
+	"compress/gzip"
 	"fmt"
 	"net/http"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/rs/cors"
+	log "github.com/sirupsen/logrus"
 )
 
 type Middleware func(http.Handler) http.Handler
@@ -110,6 +113,46 @@ func AcceptHeaderHandler(serverAcceptedTypes []string) Middleware {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// AcceptEncodingHeaderHandler compresses the response before sending it back to the client, if gzip is supported.
+func AcceptEncodingHeaderHandler() Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			gz := gzip.NewWriter(w)
+			gzipRW := &gzipResponseWriter{gz: gz, ResponseWriter: w}
+			defer func() {
+				if !gzipRW.zipped {
+					return
+				}
+				if err := gz.Close(); err != nil {
+					log.WithError(err).Error("Failed to close gzip writer")
+				}
+			}()
+
+			next.ServeHTTP(gzipRW, r)
+		})
+	}
+}
+
+type gzipResponseWriter struct {
+	gz *gzip.Writer
+	http.ResponseWriter
+	zipped bool
+}
+
+func (g *gzipResponseWriter) Write(b []byte) (int, error) {
+	if strings.Contains(g.Header().Get("Content-Type"), api.JsonMediaType) {
+		g.zipped = true
+		g.Header().Set("Content-Encoding", "gzip")
+		return g.gz.Write(b)
+	}
+	return g.ResponseWriter.Write(b)
 }
 
 func MiddlewareChain(h http.Handler, mw []Middleware) http.Handler {

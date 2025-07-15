@@ -88,7 +88,7 @@ func (c *sigCache) VerifySignature(sig signatureData, v validatorAtIndexer) (err
 		if err == nil {
 			c.Add(sig, true)
 		} else {
-			log.WithError(err).WithFields(sig.logFields()).Debug("caching failed signature verification result")
+			log.WithError(err).WithFields(sig.logFields()).Debug("Caching failed signature verification result")
 			c.Add(sig, false)
 		}
 	}()
@@ -134,7 +134,7 @@ func (c *sigCache) SignatureVerified(sig signatureData) (bool, error) {
 	}
 	verified, ok := val.(bool)
 	if !ok {
-		log.WithFields(sig.logFields()).Debug("ignoring invalid value found in signature cache")
+		log.WithFields(sig.logFields()).Debug("Ignoring invalid value found in signature cache")
 		// This shouldn't happen, and if it does, the caller should treat it as a cache miss and run verification
 		// again to correctly populate the cache key.
 		return false, nil

@@ -329,7 +329,7 @@ func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.Beacon
 	// The latest block header is from the previous epoch
 	r, err := st.LatestBlockHeader().HashTreeRoot()
 	if err != nil {
-		log.WithError(err).Error("could not update proposer index state-root map")
+		log.WithError(err).Error("Could not update proposer index state-root map")
 		return nil
 	}
 	// The proposer indices cache takes the target root for the previous
@@ -339,12 +339,12 @@ func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.Beacon
 	}
 	target, err := s.cfg.ForkChoiceStore.TargetRootForEpoch(r, e)
 	if err != nil {
-		log.WithError(err).Error("could not update proposer index state-root map")
+		log.WithError(err).Error("Could not update proposer index state-root map")
 		return nil
 	}
 	err = helpers.UpdateCachedCheckpointToStateRoot(st, &forkchoicetypes.Checkpoint{Epoch: e, Root: target})
 	if err != nil {
-		log.WithError(err).Error("could not update proposer index state-root map")
+		log.WithError(err).Error("Could not update proposer index state-root map")
 	}
 	return nil
 }
@@ -562,7 +562,7 @@ func (s *Service) validateMergeTransitionBlock(ctx context.Context, stateVersion
 // If there is not, it will call forkchoice updated with the correct payload attribute then cache the payload ID.
 func (s *Service) runLateBlockTasks() {
 	if err := s.waitForSync(); err != nil {
-		log.WithError(err).Error("failed to wait for initial sync")
+		log.WithError(err).Error("Failed to wait for initial sync")
 		return
 	}
 
@@ -737,7 +737,10 @@ func (s *Service) areDataColumnsAvailable(
 	}
 
 	// Log for DA checks that cross over into the next slot; helpful for debugging.
-	nextSlot := slots.BeginsAt(block.Slot()+1, s.genesisTime)
+	nextSlot, err := slots.StartTime(s.genesisTime, block.Slot()+1)
+	if err != nil {
+		return fmt.Errorf("unable to determine slot start time: %w", err)
+	}
 
 	// Avoid logging if DA check is called after next slot start.
 	if nextSlot.After(time.Now()) {
@@ -855,7 +858,10 @@ func (s *Service) areBlobsAvailable(ctx context.Context, root [fieldparams.RootL
 	nc := s.blobNotifiers.forRoot(root, block.Slot())
 
 	// Log for DA checks that cross over into the next slot; helpful for debugging.
-	nextSlot := slots.BeginsAt(block.Slot()+1, s.genesisTime)
+	nextSlot, err := slots.StartTime(s.genesisTime, block.Slot()+1)
+	if err != nil {
+		return fmt.Errorf("unable to determine slot start time: %w", err)
+	}
 	// Avoid logging if DA check is called after next slot start.
 	if nextSlot.After(time.Now()) {
 		nst := time.AfterFunc(time.Until(nextSlot), func() {
@@ -906,7 +912,7 @@ func uint64MapToSortedSlice(input map[uint64]bool) []uint64 {
 // it also updates the next slot cache and the proposer index cache to deal with skipped slots.
 func (s *Service) lateBlockTasks(ctx context.Context) {
 	currentSlot := s.CurrentSlot()
-	if s.CurrentSlot() == s.HeadSlot() {
+	if currentSlot == s.HeadSlot() {
 		return
 	}
 	s.cfg.ForkChoiceStore.RLock()
@@ -927,10 +933,10 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	// blocks.
 	lastState.CopyAllTries()
 	if err := transition.UpdateNextSlotCache(ctx, lastRoot, lastState); err != nil {
-		log.WithError(err).Debug("could not update next slot state cache")
+		log.WithError(err).Debug("Could not update next slot state cache")
 	}
 	if err := s.handleEpochBoundary(ctx, currentSlot, headState, headRoot[:]); err != nil {
-		log.WithError(err).Error("lateBlockTasks: could not update epoch boundary caches")
+		log.WithError(err).Error("Could not update epoch boundary caches")
 	}
 	// return early if we already started building a block for the current
 	// head root
@@ -944,7 +950,7 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	if attribute.IsEmpty() {
 		headBlock, err := s.headBlock()
 		if err != nil {
-			log.WithError(err).WithField("head_root", headRoot).Error("unable to retrieve head block to fire payload attributes event")
+			log.WithError(err).WithField("head_root", headRoot).Error("Unable to retrieve head block to fire payload attributes event")
 		}
 		// notifyForkchoiceUpdate fires the payload attribute event. But in this case, we won't
 		// call notifyForkchoiceUpdate, so the event is fired here.

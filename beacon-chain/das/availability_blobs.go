@@ -12,7 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/runtime/logging"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
-	errors "github.com/pkg/errors"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -122,7 +122,7 @@ func (s *LazilyPersistentStoreBlob) IsDataAvailable(ctx context.Context, current
 				lf[fmt.Sprintf("fail_%d", i)] = fails[i].Error()
 			}
 			log.WithFields(lf).WithFields(logging.BlockFieldsFromBlob(sidecars[0])).
-				Debug("invalid BlobSidecars received")
+				Debug("Invalid BlobSidecars received")
 		}
 		return errors.Wrapf(err, "invalid BlobSidecars received for block %#x", root)
 	}

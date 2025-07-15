@@ -216,63 +216,20 @@ func TestStore_LightClientUpdate_CanSaveRetrieve(t *testing.T) {
 	db := setupDB(t)
 	ctx := t.Context()
 
-	t.Run("Altair", func(t *testing.T) {
-		update, err := createUpdate(t, version.Altair)
-		require.NoError(t, err)
-		period := uint64(1)
+	for testVersion := version.Altair; testVersion <= version.Electra; testVersion++ {
+		t.Run(version.String(testVersion), func(t *testing.T) {
+			update, err := createUpdate(t, testVersion)
+			require.NoError(t, err)
+			period := uint64(1)
 
-		err = db.SaveLightClientUpdate(ctx, period, update)
-		require.NoError(t, err)
+			err = db.SaveLightClientUpdate(ctx, period, update)
+			require.NoError(t, err)
 
-		retrievedUpdate, err := db.LightClientUpdate(ctx, period)
-		require.NoError(t, err)
-		require.DeepEqual(t, update, retrievedUpdate, "retrieved update does not match saved update")
-	})
-	t.Run("Bellatrix", func(t *testing.T) {
-		update, err := createUpdate(t, version.Bellatrix)
-		require.NoError(t, err)
-		period := uint64(1)
-
-		err = db.SaveLightClientUpdate(ctx, period, update)
-		require.NoError(t, err)
-
-		retrievedUpdate, err := db.LightClientUpdate(ctx, period)
-		require.NoError(t, err)
-		require.DeepEqual(t, update, retrievedUpdate, "retrieved update does not match saved update")
-	})
-	t.Run("Capella", func(t *testing.T) {
-		update, err := createUpdate(t, version.Capella)
-		require.NoError(t, err)
-		period := uint64(1)
-		err = db.SaveLightClientUpdate(ctx, period, update)
-		require.NoError(t, err)
-
-		retrievedUpdate, err := db.LightClientUpdate(ctx, period)
-		require.NoError(t, err)
-		require.DeepEqual(t, update, retrievedUpdate, "retrieved update does not match saved update")
-	})
-	t.Run("Deneb", func(t *testing.T) {
-		update, err := createUpdate(t, version.Deneb)
-		require.NoError(t, err)
-		period := uint64(1)
-		err = db.SaveLightClientUpdate(ctx, period, update)
-		require.NoError(t, err)
-
-		retrievedUpdate, err := db.LightClientUpdate(ctx, period)
-		require.NoError(t, err)
-		require.DeepEqual(t, update, retrievedUpdate, "retrieved update does not match saved update")
-	})
-	t.Run("Electra", func(t *testing.T) {
-		update, err := createUpdate(t, version.Electra)
-		require.NoError(t, err)
-		period := uint64(1)
-		err = db.SaveLightClientUpdate(ctx, period, update)
-		require.NoError(t, err)
-
-		retrievedUpdate, err := db.LightClientUpdate(ctx, period)
-		require.NoError(t, err)
-		require.DeepEqual(t, update, retrievedUpdate, "retrieved update does not match saved update")
-	})
+			retrievedUpdate, err := db.LightClientUpdate(ctx, period)
+			require.NoError(t, err)
+			require.DeepEqual(t, update, retrievedUpdate, "retrieved update does not match saved update")
+		})
+	}
 }
 
 func TestStore_LightClientUpdates_canRetrieveRange(t *testing.T) {
@@ -616,89 +573,38 @@ func TestStore_LightClientBootstrap_CanSaveRetrieve(t *testing.T) {
 		require.IsNil(t, retrievedBootstrap)
 	})
 
-	t.Run("Altair", func(t *testing.T) {
-		bootstrap, err := createDefaultLightClientBootstrap(primitives.Slot(uint64(params.BeaconConfig().AltairForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)))
-		require.NoError(t, err)
+	for testVersion := version.Altair; testVersion <= version.Electra; testVersion++ {
+		t.Run(version.String(testVersion), func(t *testing.T) {
+			bootstrap, err := createDefaultLightClientBootstrap(primitives.Slot(uint64(params.BeaconConfig().VersionToForkEpochMap()[testVersion]) * uint64(params.BeaconConfig().SlotsPerEpoch)))
+			require.NoError(t, err)
 
-		err = bootstrap.SetCurrentSyncCommittee(createRandomSyncCommittee())
-		require.NoError(t, err)
+			err = bootstrap.SetCurrentSyncCommittee(createRandomSyncCommittee())
+			require.NoError(t, err)
 
-		err = db.SaveLightClientBootstrap(ctx, []byte("blockRootAltair"), bootstrap)
-		require.NoError(t, err)
+			blockRoot := []byte("blockRootAltair" + version.String(testVersion))
 
-		retrievedBootstrap, err := db.LightClientBootstrap(ctx, []byte("blockRootAltair"))
-		require.NoError(t, err)
-		require.DeepEqual(t, bootstrap.Header(), retrievedBootstrap.Header(), "retrieved bootstrap header does not match saved bootstrap header")
-		require.DeepEqual(t, bootstrap.CurrentSyncCommittee(), retrievedBootstrap.CurrentSyncCommittee(), "retrieved bootstrap sync committee does not match saved bootstrap sync committee")
-		savedBranch, err := bootstrap.CurrentSyncCommitteeBranch()
-		require.NoError(t, err)
-		retrievedBranch, err := retrievedBootstrap.CurrentSyncCommitteeBranch()
-		require.NoError(t, err)
-		require.DeepEqual(t, savedBranch, retrievedBranch, "retrieved bootstrap sync committee branch does not match saved bootstrap sync committee branch")
-	})
+			err = db.SaveLightClientBootstrap(ctx, blockRoot, bootstrap)
+			require.NoError(t, err)
 
-	t.Run("Capella", func(t *testing.T) {
-		bootstrap, err := createDefaultLightClientBootstrap(primitives.Slot(uint64(params.BeaconConfig().CapellaForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)))
-		require.NoError(t, err)
-
-		err = bootstrap.SetCurrentSyncCommittee(createRandomSyncCommittee())
-		require.NoError(t, err)
-
-		err = db.SaveLightClientBootstrap(ctx, []byte("blockRootCapella"), bootstrap)
-		require.NoError(t, err)
-
-		retrievedBootstrap, err := db.LightClientBootstrap(ctx, []byte("blockRootCapella"))
-		require.NoError(t, err)
-		require.DeepEqual(t, bootstrap.Header(), retrievedBootstrap.Header(), "retrieved bootstrap header does not match saved bootstrap header")
-		require.DeepEqual(t, bootstrap.CurrentSyncCommittee(), retrievedBootstrap.CurrentSyncCommittee(), "retrieved bootstrap sync committee does not match saved bootstrap sync committee")
-		savedBranch, err := bootstrap.CurrentSyncCommitteeBranch()
-		require.NoError(t, err)
-		retrievedBranch, err := retrievedBootstrap.CurrentSyncCommitteeBranch()
-		require.NoError(t, err)
-		require.DeepEqual(t, savedBranch, retrievedBranch, "retrieved bootstrap sync committee branch does not match saved bootstrap sync committee branch")
-	})
-
-	t.Run("Deneb", func(t *testing.T) {
-		bootstrap, err := createDefaultLightClientBootstrap(primitives.Slot(uint64(params.BeaconConfig().DenebForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)))
-		require.NoError(t, err)
-
-		err = bootstrap.SetCurrentSyncCommittee(createRandomSyncCommittee())
-		require.NoError(t, err)
-
-		err = db.SaveLightClientBootstrap(ctx, []byte("blockRootDeneb"), bootstrap)
-		require.NoError(t, err)
-
-		retrievedBootstrap, err := db.LightClientBootstrap(ctx, []byte("blockRootDeneb"))
-		require.NoError(t, err)
-		require.DeepEqual(t, bootstrap.Header(), retrievedBootstrap.Header(), "retrieved bootstrap header does not match saved bootstrap header")
-		require.DeepEqual(t, bootstrap.CurrentSyncCommittee(), retrievedBootstrap.CurrentSyncCommittee(), "retrieved bootstrap sync committee does not match saved bootstrap sync committee")
-		savedBranch, err := bootstrap.CurrentSyncCommitteeBranch()
-		require.NoError(t, err)
-		retrievedBranch, err := retrievedBootstrap.CurrentSyncCommitteeBranch()
-		require.NoError(t, err)
-		require.DeepEqual(t, savedBranch, retrievedBranch, "retrieved bootstrap sync committee branch does not match saved bootstrap sync committee branch")
-	})
-
-	t.Run("Electra", func(t *testing.T) {
-		bootstrap, err := createDefaultLightClientBootstrap(primitives.Slot(uint64(params.BeaconConfig().ElectraForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch)))
-		require.NoError(t, err)
-
-		err = bootstrap.SetCurrentSyncCommittee(createRandomSyncCommittee())
-		require.NoError(t, err)
-
-		err = db.SaveLightClientBootstrap(ctx, []byte("blockRootElectra"), bootstrap)
-		require.NoError(t, err)
-
-		retrievedBootstrap, err := db.LightClientBootstrap(ctx, []byte("blockRootElectra"))
-		require.NoError(t, err)
-		require.DeepEqual(t, bootstrap.Header(), retrievedBootstrap.Header(), "retrieved bootstrap header does not match saved bootstrap header")
-		require.DeepEqual(t, bootstrap.CurrentSyncCommittee(), retrievedBootstrap.CurrentSyncCommittee(), "retrieved bootstrap sync committee does not match saved bootstrap sync committee")
-		savedBranch, err := bootstrap.CurrentSyncCommitteeBranchElectra()
-		require.NoError(t, err)
-		retrievedBranch, err := retrievedBootstrap.CurrentSyncCommitteeBranchElectra()
-		require.NoError(t, err)
-		require.DeepEqual(t, savedBranch, retrievedBranch, "retrieved bootstrap sync committee branch does not match saved bootstrap sync committee branch")
-	})
+			retrievedBootstrap, err := db.LightClientBootstrap(ctx, blockRoot)
+			require.NoError(t, err)
+			require.DeepEqual(t, bootstrap.Header(), retrievedBootstrap.Header(), "retrieved bootstrap header does not match saved bootstrap header")
+			require.DeepEqual(t, bootstrap.CurrentSyncCommittee(), retrievedBootstrap.CurrentSyncCommittee(), "retrieved bootstrap sync committee does not match saved bootstrap sync committee")
+			if testVersion >= version.Electra {
+				savedBranch, err := bootstrap.CurrentSyncCommitteeBranchElectra()
+				require.NoError(t, err)
+				retrievedBranch, err := retrievedBootstrap.CurrentSyncCommitteeBranchElectra()
+				require.NoError(t, err)
+				require.DeepEqual(t, savedBranch, retrievedBranch, "retrieved bootstrap sync committee branch does not match saved bootstrap sync committee branch")
+			} else {
+				savedBranch, err := bootstrap.CurrentSyncCommitteeBranch()
+				require.NoError(t, err)
+				retrievedBranch, err := retrievedBootstrap.CurrentSyncCommitteeBranch()
+				require.NoError(t, err)
+				require.DeepEqual(t, savedBranch, retrievedBranch, "retrieved bootstrap sync committee branch does not match saved bootstrap sync committee branch")
+			}
+		})
+	}
 }
 
 func TestStore_LightClientBootstrap_MultipleBootstrapsWithSameSyncCommittee(t *testing.T) {

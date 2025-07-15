@@ -247,7 +247,7 @@ func GetChunkFromDatabase(
 
 func closeDB(d *slasherkv.Store) {
 	if err := d.Close(); err != nil {
-		log.WithError(err).Error("could not close database")
+		log.WithError(err).Error("Could not close database")
 	}
 }
 

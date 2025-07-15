@@ -2,6 +2,7 @@ package interop_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -31,5 +32,5 @@ func TestGenerateGenesisState(t *testing.T) {
 	require.NoError(t, err)
 	want := int(numValidators)
 	assert.Equal(t, want, genesisState.NumValidators())
-	assert.Equal(t, uint64(0), genesisState.GenesisTime())
+	assert.Equal(t, time.Unix(0, 0), genesisState.GenesisTime())
 }

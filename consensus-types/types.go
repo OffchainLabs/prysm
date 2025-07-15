@@ -15,7 +15,6 @@ var (
 	// ErrUnsupportedField is returned when a getter/setter access is not supported.
 	ErrUnsupportedField = errors.New("unsupported getter")
 	// ErrOutOfBounds is returned when a slice or array index does not exist.
-	ErrOutOfBounds = errors.New("index out of bounds")
 )
 
 // ErrNotSupported constructs a message informing about an unsupported field access.
