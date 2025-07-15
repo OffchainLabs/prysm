@@ -170,6 +170,6 @@ func (s *Service) setupForkchoiceCheckpoints() error {
 		Root: fRoot}); err != nil {
 		return errors.Wrap(err, "could not update forkchoice's finalized checkpoint")
 	}
-	s.cfg.ForkChoiceStore.SetGenesisTime(uint64(s.genesisTime.Unix()))
+	s.cfg.ForkChoiceStore.SetGenesisTime(s.genesisTime)
 	return nil
 }

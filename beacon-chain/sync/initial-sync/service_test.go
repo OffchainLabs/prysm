@@ -242,7 +242,7 @@ func TestService_waitForStateInitialization(t *testing.T) {
 
 		st, err := util.NewBeaconState()
 		require.NoError(t, err)
-		gt := time.Unix(int64(st.GenesisTime()), 0)
+		gt := st.GenesisTime()
 		s, gs := newService(ctx, &mock.ChainService{State: st, Genesis: gt, ValidatorsRoot: [32]byte{}})
 
 		expectedGenesisTime := gt
@@ -356,7 +356,8 @@ func TestService_Resync(t *testing.T) {
 				st, err := util.NewBeaconState()
 				require.NoError(t, err)
 				futureSlot := primitives.Slot(160)
-				require.NoError(t, st.SetGenesisTime(uint64(makeGenesisTime(futureSlot).Unix())))
+				genesis := makeGenesisTime(futureSlot)
+				require.NoError(t, st.SetGenesisTime(genesis))
 				return &mock.ChainService{
 					State: st,
 					Root:  genesisRoot[:],
@@ -364,7 +365,7 @@ func TestService_Resync(t *testing.T) {
 					FinalizedCheckPoint: &eth.Checkpoint{
 						Epoch: slots.ToEpoch(futureSlot),
 					},
-					Genesis:        time.Now(),
+					Genesis:        genesis,
 					ValidatorsRoot: [32]byte{},
 				}
 			},
@@ -392,6 +393,7 @@ func TestService_Resync(t *testing.T) {
 				BlobStorage:   filesystem.NewEphemeralBlobStorage(t),
 			})
 			assert.NotNil(t, s)
+			s.genesisTime = mc.Genesis
 			assert.Equal(t, primitives.Slot(0), s.cfg.Chain.HeadSlot())
 			err := s.Resync()
 			if tt.wantedErr != "" {

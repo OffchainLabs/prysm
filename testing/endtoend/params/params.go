@@ -30,8 +30,8 @@ type params struct {
 	Paths                     *paths
 	Eth1GenesisBlock          *types.Block
 	StartTime                 time.Time
-	CLGenesisTime             uint64
-	Eth1GenesisTime           uint64
+	CLGenesisTime             time.Time
+	Eth1GenesisTime           time.Time
 	NumberOfExecutionCreds    uint64
 }
 
@@ -156,7 +156,7 @@ const (
 
 	jaegerTracingPort = 9150
 
-	startupBufferSecs = 15
+	startupBuffer = 15 * time.Second
 )
 
 func logDir() string {
@@ -206,7 +206,7 @@ func Init(t *testing.T, beaconNodeCount int) error {
 		return err
 	}
 
-	genTime := uint64(time.Now().Unix()) + startupBufferSecs
+	genTime := time.Now().Add(startupBuffer)
 	TestParams = &params{
 		TestPath:               filepath.Join(testPath, fmt.Sprintf("shard-%d", testShardIndex)),
 		LogPath:                logPath,
@@ -259,7 +259,7 @@ func InitMultiClient(t *testing.T, beaconNodeCount int, lighthouseNodeCount int)
 		return err
 	}
 
-	genTime := uint64(time.Now().Unix()) + startupBufferSecs
+	genTime := time.Now().Add(startupBuffer)
 	TestParams = &params{
 		TestPath:                  filepath.Join(testPath, fmt.Sprintf("shard-%d", testShardIndex)),
 		LogPath:                   logPath,

@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/api/server/httprest"
 	"github.com/OffchainLabs/prysm/v6/api/server/middleware"
@@ -1146,7 +1147,7 @@ func (b *BeaconNode) registerBuilderService(cliCtx *cli.Context) error {
 }
 
 func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
-	genesisTimeUnix := params.BeaconConfig().MinGenesisTime + params.BeaconConfig().GenesisDelay
+	genesis := time.Unix(int64(params.BeaconConfig().MinGenesisTime+params.BeaconConfig().GenesisDelay), 0)
 	var backfillService *backfill.Service
 	if err := b.services.FetchService(&backfillService); err != nil {
 		return err
@@ -1161,7 +1162,7 @@ func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
 	p, err := pruner.New(
 		cliCtx.Context,
 		b.db,
-		genesisTimeUnix,
+		genesis,
 		initSyncWaiter(cliCtx.Context, b.initialSyncComplete),
 		backfillService.WaitForCompletion,
 		opts...,

@@ -66,7 +66,7 @@ var (
 type validator struct {
 	duties                             *ethpb.ValidatorDutiesContainer
 	ticker                             slots.Ticker
-	genesisTime                        uint64
+	genesisTime                        time.Time
 	highestValidSlot                   primitives.Slot
 	slotFeed                           *event.Feed
 	startBalances                      map[[fieldparams.BLSPubkeyLength]byte]uint64
@@ -138,7 +138,7 @@ func (v *validator) Done() {
 	}
 }
 
-func (v *validator) GenesisTime() uint64 {
+func (v *validator) GenesisTime() time.Time {
 	return v.genesisTime
 }
 
@@ -298,7 +298,7 @@ func (v *validator) WaitForChainStart(ctx context.Context) error {
 		)
 	}
 
-	v.genesisTime = chainStartRes.GenesisTime
+	v.genesisTime = time.Unix(int64(chainStartRes.GenesisTime), 0)
 
 	curGenValRoot, err := v.db.GenesisValidatorsRoot(ctx)
 	if err != nil {
@@ -348,8 +348,8 @@ func (v *validator) SetTicker() {
 	}
 	// Once the ChainStart log is received, we update the genesis time of the validator client
 	// and begin a slot ticker used to track the current slot the beacon node is in.
-	v.ticker = slots.NewSlotTicker(time.Unix(int64(v.genesisTime), 0), params.BeaconConfig().SecondsPerSlot)
-	log.WithField("genesisTime", time.Unix(int64(v.genesisTime), 0)).Info("Beacon chain started")
+	v.ticker = slots.NewSlotTicker(v.genesisTime, params.BeaconConfig().SecondsPerSlot)
+	log.WithField("genesisTime", v.genesisTime).Info("Beacon chain started")
 }
 
 // WaitForSync checks whether the beacon node has sync to the latest head.
@@ -432,7 +432,7 @@ func (v *validator) NextSlot() <-chan primitives.Slot {
 // SlotDeadline is the start time of the next slot.
 func (v *validator) SlotDeadline(slot primitives.Slot) time.Time {
 	secs := time.Duration((slot + 1).Mul(params.BeaconConfig().SecondsPerSlot))
-	return time.Unix(int64(v.genesisTime), 0 /*ns*/).Add(secs * time.Second)
+	return v.genesisTime.Add(secs * time.Second)
 }
 
 // CheckDoppelGanger checks if the current actively provided keys have
@@ -830,6 +830,7 @@ func (v *validator) isAggregator(
 		err     error
 	)
 	if v.distributed {
+		// This call is blocking. It is awaitng for selection proof response from DV to be written in memory.
 		slotSig, err = v.attSelection(attSelectionKey{slot: slot, index: validatorIndex})
 		if err != nil {
 			return false, err
@@ -1053,7 +1054,11 @@ func (v *validator) logDuties(slot primitives.Slot, currentEpochDuties []*ethpb.
 		"attesterCount": totalAttestingKeys,
 	}).Infof("Schedule for epoch %d", slots.ToEpoch(slot))
 	for i := primitives.Slot(0); i < params.BeaconConfig().SlotsPerEpoch; i++ {
-		startTime := slots.StartTime(v.genesisTime, epochStartSlot+i)
+		startTime, err := slots.StartTime(v.genesisTime, epochStartSlot+i)
+		if err != nil {
+			log.WithError(err).WithField("slot", slot).Error("Slot overflows, unable to log duties!")
+			return
+		}
 		durationTillDuty := (time.Until(startTime) + time.Second).Truncate(time.Second) // Round up to next second.
 
 		slotLog := log.WithFields(logrus.Fields{})
@@ -1407,7 +1412,7 @@ func (v *validator) buildSignedRegReqs(
 		return signedValRegRequests
 	}
 	// if the timestamp is pre-genesis, don't create registrations
-	if v.genesisTime > uint64(time.Now().UTC().Unix()) {
+	if time.Now().Before(v.genesisTime) {
 		return signedValRegRequests
 	}
 
@@ -1493,29 +1498,15 @@ func (v *validator) aggregatedSelectionProofs(ctx context.Context, duties *ethpb
 	ctx, span := trace.StartSpan(ctx, "validator.aggregatedSelectionProofs")
 	defer span.End()
 
+	// Lock the selection proofs until we receive response from DV.
+	v.attSelectionLock.Lock()
+	defer v.attSelectionLock.Unlock()
+
 	// Create new instance of attestation selections map.
-	v.newAttSelections()
+	v.attSelections = make(map[attSelectionKey]iface.BeaconCommitteeSelection)
 
 	var req []iface.BeaconCommitteeSelection
 	for _, duty := range duties.CurrentEpochDuties {
-		if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
-			continue
-		}
-
-		pk := bytesutil.ToBytes48(duty.PublicKey)
-		slotSig, err := v.signSlotWithSelectionProof(ctx, pk, duty.AttesterSlot)
-		if err != nil {
-			return err
-		}
-
-		req = append(req, iface.BeaconCommitteeSelection{
-			SelectionProof: slotSig,
-			Slot:           duty.AttesterSlot,
-			ValidatorIndex: duty.ValidatorIndex,
-		})
-	}
-
-	for _, duty := range duties.NextEpochDuties {
 		if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
 			continue
 		}
@@ -1539,28 +1530,14 @@ func (v *validator) aggregatedSelectionProofs(ctx context.Context, duties *ethpb
 	}
 
 	// Store aggregated selection proofs in state.
-	v.addAttSelections(resp)
-
-	return nil
-}
-
-func (v *validator) addAttSelections(selections []iface.BeaconCommitteeSelection) {
-	v.attSelectionLock.Lock()
-	defer v.attSelectionLock.Unlock()
-
-	for _, s := range selections {
+	for _, s := range resp {
 		v.attSelections[attSelectionKey{
 			slot:  s.Slot,
 			index: s.ValidatorIndex,
 		}] = s
 	}
-}
 
-func (v *validator) newAttSelections() {
-	v.attSelectionLock.Lock()
-	defer v.attSelectionLock.Unlock()
-
-	v.attSelections = make(map[attSelectionKey]iface.BeaconCommitteeSelection)
+	return nil
 }
 
 func (v *validator) attSelection(key attSelectionKey) ([]byte, error) {

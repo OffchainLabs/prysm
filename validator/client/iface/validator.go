@@ -35,7 +35,7 @@ const (
 // Validator interface defines the primary methods of a validator client.
 type Validator interface {
 	Done()
-	GenesisTime() uint64
+	GenesisTime() time.Time
 	EventsChan() <-chan *event.Event
 	AccountsChangedChan() <-chan [][fieldparams.BLSPubkeyLength]byte
 	WaitForChainStart(ctx context.Context) error

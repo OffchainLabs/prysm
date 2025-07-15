@@ -231,7 +231,7 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 	if err != nil {
 		return errors.Wrap(err, "failed to get genesis data")
 	}
-	currSlot := slots.CurrentSlot(uint64(genesis.GenesisTime.AsTime().Unix()))
+	currSlot := slots.CurrentSlot(genesis.GenesisTime.AsTime())
 	currEpoch := slots.ToEpoch(currSlot)
 	lowestBound := primitives.Epoch(0)
 	if currEpoch >= 1 {

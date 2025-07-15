@@ -74,7 +74,7 @@ func BeaconStateFromConsensus(st beaconState.BeaconState) (*BeaconState, error) 
 	}
 
 	return &BeaconState{
-		GenesisTime:                 fmt.Sprintf("%d", st.GenesisTime()),
+		GenesisTime:                 fmt.Sprintf("%d", st.GenesisTime().Unix()),
 		GenesisValidatorsRoot:       hexutil.Encode(st.GenesisValidatorsRoot()),
 		Slot:                        fmt.Sprintf("%d", st.Slot()),
 		Fork:                        ForkFromConsensus(st.Fork()),
@@ -177,7 +177,7 @@ func BeaconStateAltairFromConsensus(st beaconState.BeaconState) (*BeaconStateAlt
 	}
 
 	return &BeaconStateAltair{
-		GenesisTime:                 fmt.Sprintf("%d", st.GenesisTime()),
+		GenesisTime:                 fmt.Sprintf("%d", st.GenesisTime().Unix()),
 		GenesisValidatorsRoot:       hexutil.Encode(st.GenesisValidatorsRoot()),
 		Slot:                        fmt.Sprintf("%d", st.Slot()),
 		Fork:                        ForkFromConsensus(st.Fork()),
@@ -295,7 +295,7 @@ func BeaconStateBellatrixFromConsensus(st beaconState.BeaconState) (*BeaconState
 	}
 
 	return &BeaconStateBellatrix{
-		GenesisTime:                  fmt.Sprintf("%d", st.GenesisTime()),
+		GenesisTime:                  fmt.Sprintf("%d", st.GenesisTime().Unix()),
 		GenesisValidatorsRoot:        hexutil.Encode(st.GenesisValidatorsRoot()),
 		Slot:                         fmt.Sprintf("%d", st.Slot()),
 		Fork:                         ForkFromConsensus(st.Fork()),
@@ -430,7 +430,7 @@ func BeaconStateCapellaFromConsensus(st beaconState.BeaconState) (*BeaconStateCa
 	}
 
 	return &BeaconStateCapella{
-		GenesisTime:                  fmt.Sprintf("%d", st.GenesisTime()),
+		GenesisTime:                  fmt.Sprintf("%d", st.GenesisTime().Unix()),
 		GenesisValidatorsRoot:        hexutil.Encode(st.GenesisValidatorsRoot()),
 		Slot:                         fmt.Sprintf("%d", st.Slot()),
 		Fork:                         ForkFromConsensus(st.Fork()),
@@ -568,7 +568,7 @@ func BeaconStateDenebFromConsensus(st beaconState.BeaconState) (*BeaconStateDene
 	}
 
 	return &BeaconStateDeneb{
-		GenesisTime:                  fmt.Sprintf("%d", st.GenesisTime()),
+		GenesisTime:                  fmt.Sprintf("%d", st.GenesisTime().Unix()),
 		GenesisValidatorsRoot:        hexutil.Encode(st.GenesisValidatorsRoot()),
 		Slot:                         fmt.Sprintf("%d", st.Slot()),
 		Fork:                         ForkFromConsensus(st.Fork()),
@@ -742,7 +742,7 @@ func BeaconStateElectraFromConsensus(st beaconState.BeaconState) (*BeaconStateEl
 	}
 
 	return &BeaconStateElectra{
-		GenesisTime:                   fmt.Sprintf("%d", st.GenesisTime()),
+		GenesisTime:                   fmt.Sprintf("%d", st.GenesisTime().Unix()),
 		GenesisValidatorsRoot:         hexutil.Encode(st.GenesisValidatorsRoot()),
 		Slot:                          fmt.Sprintf("%d", st.Slot()),
 		Fork:                          ForkFromConsensus(st.Fork()),
@@ -932,7 +932,7 @@ func BeaconStateFuluFromConsensus(st beaconState.BeaconState) (*BeaconStateFulu,
 		lookahead[i] = fmt.Sprintf("%d", uint64(v))
 	}
 	return &BeaconStateFulu{
-		GenesisTime:                   fmt.Sprintf("%d", st.GenesisTime()),
+		GenesisTime:                   fmt.Sprintf("%d", st.GenesisTime().Unix()),
 		GenesisValidatorsRoot:         hexutil.Encode(st.GenesisValidatorsRoot()),
 		Slot:                          fmt.Sprintf("%d", st.Slot()),
 		Fork:                          ForkFromConsensus(st.Fork()),

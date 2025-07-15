@@ -55,7 +55,7 @@ type FakeValidator struct {
 	AttSubmitted                      chan interface{}
 	BlockProposed                     chan interface{}
 	AccountsChannel                   chan [][fieldparams.BLSPubkeyLength]byte
-	GenesisT                          uint64
+	GenesisT                          time.Time
 	ReceiveBlocksCalled               int
 	proposerSettings                  *proposer.Settings
 	Balances                          map[[48]byte]uint64
@@ -81,7 +81,7 @@ func (fv *FakeValidator) AccountsChangedChan() <-chan [][fieldparams.BLSPubkeyLe
 	return fv.AccountsChannel
 }
 
-func (fv *FakeValidator) GenesisTime() uint64 {
+func (fv *FakeValidator) GenesisTime() time.Time {
 	return fv.GenesisT
 }
 

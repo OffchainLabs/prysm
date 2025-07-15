@@ -271,7 +271,7 @@ func (vs *Server) getPayloadHeaderFromBuilder(
 		}
 	}
 
-	t, err := slots.ToTime(uint64(vs.TimeFetcher.GenesisTime().Unix()), slot)
+	t, err := slots.StartTime(vs.TimeFetcher.GenesisTime(), slot)
 	if err != nil {
 		return nil, err
 	}

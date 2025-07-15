@@ -143,10 +143,10 @@ func (mr *MockValidatorMockRecorder) FindHealthyHost(arg0 any) *gomock.Call {
 }
 
 // GenesisTime mocks base method.
-func (m *MockValidator) GenesisTime() uint64 {
+func (m *MockValidator) GenesisTime() time.Time {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GenesisTime")
-	ret0, _ := ret[0].(uint64)
+	ret0, _ := ret[0].(time.Time)
 	return ret0
 }
 

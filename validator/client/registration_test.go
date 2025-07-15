@@ -173,7 +173,7 @@ func TestValidator_SignValidatorRegistrationRequest(t *testing.T) {
 						pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 						signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
 						enableAPI:                    false,
-						genesisTime:                  0,
+						genesisTime:                  time.Unix(0, 0),
 					}
 					v.signedValidatorRegistrations[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())] = &ethpb.SignedValidatorRegistrationV1{
 						Message: &ethpb.ValidatorRegistrationV1{
@@ -201,7 +201,7 @@ func TestValidator_SignValidatorRegistrationRequest(t *testing.T) {
 						pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 						signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
 						enableAPI:                    false,
-						genesisTime:                  0,
+						genesisTime:                  time.Unix(0, 0),
 					}
 					v.signedValidatorRegistrations[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())] = &ethpb.SignedValidatorRegistrationV1{
 						Message: &ethpb.ValidatorRegistrationV1{
@@ -229,7 +229,7 @@ func TestValidator_SignValidatorRegistrationRequest(t *testing.T) {
 						pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 						signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
 						enableAPI:                    false,
-						genesisTime:                  0,
+						genesisTime:                  time.Unix(0, 0),
 					}
 					v.signedValidatorRegistrations[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())] = &ethpb.SignedValidatorRegistrationV1{
 						Message: &ethpb.ValidatorRegistrationV1{
@@ -257,7 +257,7 @@ func TestValidator_SignValidatorRegistrationRequest(t *testing.T) {
 						pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 						signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
 						enableAPI:                    false,
-						genesisTime:                  0,
+						genesisTime:                  time.Unix(0, 0),
 					}
 					return &v
 				},

@@ -711,7 +711,7 @@ func (s *Service) cacheBlockHeaders(start, end uint64) error {
 // Determines the earliest voting block from which to start caching all our previous headers from.
 func (s *Service) determineEarliestVotingBlock(ctx context.Context, followBlock uint64) (uint64, error) {
 	genesisTime := s.chainStartData.GenesisTime
-	currSlot := slots.CurrentSlot(genesisTime)
+	currSlot := slots.CurrentSlot(time.Unix(int64(genesisTime), 0)) // lint:ignore uintcast -- Genesis time will never exceed int64 in seconds.
 
 	// In the event genesis has not occurred yet, we just request to go back follow_distance blocks.
 	if genesisTime == 0 || currSlot == 0 {
@@ -837,7 +837,7 @@ func (s *Service) validPowchainData(ctx context.Context) (*ethpb.ETH1ChainData, 
 		}
 		s.chainStartData = &ethpb.ChainStartData{
 			Chainstarted:       true,
-			GenesisTime:        genState.GenesisTime(),
+			GenesisTime:        uint64(genState.GenesisTime().Unix()),
 			GenesisBlock:       0,
 			Eth1Data:           genState.Eth1Data(),
 			ChainstartDeposits: make([]*ethpb.Deposit, 0),

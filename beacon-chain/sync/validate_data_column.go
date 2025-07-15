@@ -180,7 +180,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	dataColumnSidecarVerificationSuccessesCounter.Inc()
 
 	// Get the time at slot start.
-	startTime, err := slots.ToTime(uint64(s.cfg.chain.GenesisTime().Unix()), roDataColumn.SignedBlockHeader.Header.Slot)
+	startTime, err := slots.StartTime(s.cfg.chain.GenesisTime(), roDataColumn.SignedBlockHeader.Header.Slot)
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
