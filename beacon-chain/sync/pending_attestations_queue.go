@@ -255,7 +255,7 @@ func (s *Service) savePendingAggregate(agg ethpb.SignedAggregateAttAndProof) {
 
 	s.savePending(root, agg, func(other any) bool {
 		a, ok := other.(ethpb.SignedAggregateAttAndProof)
-		return !ok || pendingAggregatesAreEqual(agg, a)
+		return ok && pendingAggregatesAreEqual(agg, a)
 	})
 }
 
@@ -273,7 +273,7 @@ func (s *Service) savePendingAtt(att ethpb.Att) {
 
 	s.savePending(root, att, func(other any) bool {
 		a, ok := other.(ethpb.Att)
-		return !ok || pendingAttsAreEqual(att, a)
+		return ok && pendingAttsAreEqual(att, a)
 	})
 }
 
@@ -316,7 +316,18 @@ func pendingAggregatesAreEqual(a, b ethpb.SignedAggregateAttAndProof) bool {
 	if a.Version() != b.Version() {
 		return false
 	}
-	return a.AggregateAttestationAndProof().GetAggregatorIndex() == b.AggregateAttestationAndProof().GetAggregatorIndex()
+	if a.AggregateAttestationAndProof().GetAggregatorIndex() != b.AggregateAttestationAndProof().GetAggregatorIndex() {
+		return false
+	}
+	aAtt := a.AggregateAttestationAndProof().AggregateVal()
+	bAtt := b.AggregateAttestationAndProof().AggregateVal()
+	if aAtt.GetData().Slot != bAtt.GetData().Slot {
+		return false
+	}
+	if aAtt.GetCommitteeIndex() != bAtt.GetCommitteeIndex() {
+		return false
+	}
+	return bytes.Equal(aAtt.GetAggregationBits(), bAtt.GetAggregationBits())
 }
 
 func pendingAttsAreEqual(a, b ethpb.Att) bool {
@@ -357,12 +368,14 @@ func (s *Service) validatePendingAtts(ctx context.Context, slot primitives.Slot)
 			default:
 				log.Debugf("Unexpected item of type %T in pending attestation queue. Item will be removed", t)
 				// Remove the pending attestation from the map in place.
-				atts = append(atts[:i], atts[i+1:]...)
+				atts[i] = atts[len(atts)-1]
+				atts = atts[:len(atts)-1]
 				continue
 			}
 			if slot >= attSlot+params.BeaconConfig().SlotsPerEpoch {
 				// Remove the pending attestation from the map in place.
-				atts = append(atts[:i], atts[i+1:]...)
+				atts[i] = atts[len(atts)-1]
+				atts = atts[:len(atts)-1]
 			}
 		}
 		s.blkRootToPendingAtts[bRoot] = atts
