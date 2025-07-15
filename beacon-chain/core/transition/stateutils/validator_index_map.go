@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	log "github.com/sirupsen/logrus"
 )
 
 // ValidatorIndexMap builds a lookup map for quickly determining the index of
@@ -21,8 +22,12 @@ func ValidatorIndexMap(validators []*ethpb.Validator) map[[fieldparams.BLSPubkey
 		if record == nil {
 			continue
 		}
+		if record.EffectiveBalance == 0 {
+			continue
+		}
 		key := bytesutil.ToBytes48(record.PublicKey)
 		m[key] = primitives.ValidatorIndex(idx)
 	}
+	log.Info("ValidatorIndexMap built with ", len(m), " entries")
 	return m
 }

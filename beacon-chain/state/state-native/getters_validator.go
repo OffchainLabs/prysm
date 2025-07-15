@@ -117,15 +117,40 @@ func (b *BeaconState) ValidatorIndexByPubkey(key [fieldparams.BLSPubkeyLength]by
 		return 0, false
 	}
 	b.lock.RLock()
-	defer b.lock.RUnlock()
 
 	numOfVals := b.validatorsMultiValue.Len(b)
 
+	// Try fast lookup via validator map first
 	idx, ok := b.valMapHandler.Get(key)
-	if ok && primitives.ValidatorIndex(numOfVals) <= idx {
-		return primitives.ValidatorIndex(0), false
+	if ok && idx < primitives.ValidatorIndex(numOfVals) {
+		b.lock.RUnlock()
+		return idx, true
 	}
-	return idx, ok
+	if ok {
+		b.lock.RUnlock()
+		return 0, false // Found in map but out of bounds
+	}
+
+	// Release lock before calling ReadFromEveryValidator to avoid recursive lock
+	b.lock.RUnlock()
+
+	// Fallback: search through all validators using ReadFromEveryValidator
+	var foundIdx primitives.ValidatorIndex
+	var found bool
+
+	err := b.ReadFromEveryValidator(func(i int, val state.ReadOnlyValidator) error {
+		if val.PublicKey() == key {
+			foundIdx = primitives.ValidatorIndex(i)
+			found = true
+			return ErrNilParticipation // Return error to break early
+		}
+		return nil
+	})
+	if err != nil && err != ErrNilParticipation {
+		return 0, false
+	}
+
+	return foundIdx, found
 }
 
 // PubkeyAtIndex returns the pubkey at the given
