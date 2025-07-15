@@ -134,9 +134,6 @@ func (s *Service) processLightClientUpdates(cfg *postBlockProcessConfig) {
 	if err := s.processLightClientUpdate(cfg); err != nil {
 		log.WithError(err).Error("Failed to process light client update")
 	}
-	if err := s.processLightClientBootstrap(cfg); err != nil {
-		log.WithError(err).Error("Failed to process light client bootstrap")
-	}
 	if err := s.processLightClientOptimisticUpdate(cfg.ctx, cfg.roblock, cfg.postState); err != nil {
 		log.WithError(err).Error("Failed to process light client optimistic update")
 	}
@@ -215,20 +212,6 @@ func (s *Service) processLightClientUpdate(cfg *postBlockProcessConfig) error {
 		return nil
 	}
 	log.WithField("period", period).Debug("New light client update is not better than the current one, skipping save")
-	return nil
-}
-
-// processLightClientBootstrap saves a light client bootstrap for this block
-// when feature flag is enabled.
-func (s *Service) processLightClientBootstrap(cfg *postBlockProcessConfig) error {
-	blockRoot := cfg.roblock.Root()
-	bootstrap, err := lightclient.NewLightClientBootstrapFromBeaconState(cfg.ctx, s.CurrentSlot(), cfg.postState, cfg.roblock)
-	if err != nil {
-		return errors.Wrapf(err, "could not create light client bootstrap")
-	}
-	if err := s.lcStore.SaveLightClientBootstrap(cfg.ctx, blockRoot, bootstrap); err != nil {
-		return errors.Wrapf(err, "could not save light client bootstrap")
-	}
 	return nil
 }
 

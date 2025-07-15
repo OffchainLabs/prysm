@@ -52,9 +52,10 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 			bootstrap, err := lightclient.NewLightClientBootstrapFromBeaconState(l.Ctx, slot, l.State, l.Block)
 			require.NoError(t, err)
 
-			lcStore := lightclient.NewLightClientStore(dbtesting.SetupDB(t))
+			db := dbtesting.SetupDB(t)
+			lcStore := lightclient.NewLightClientStore(db)
 
-			err = lcStore.SaveLightClientBootstrap(l.Ctx, blockRoot, bootstrap)
+			err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[:], bootstrap)
 			require.NoError(t, err)
 
 			s := &Server{
@@ -95,9 +96,10 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 			bootstrap, err := lightclient.NewLightClientBootstrapFromBeaconState(l.Ctx, slot, l.State, l.Block)
 			require.NoError(t, err)
 
-			lcStore := lightclient.NewLightClientStore(dbtesting.SetupDB(t))
+			db := dbtesting.SetupDB(t)
+			lcStore := lightclient.NewLightClientStore(db)
 
-			err = lcStore.SaveLightClientBootstrap(l.Ctx, blockRoot, bootstrap)
+			err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[:], bootstrap)
 			require.NoError(t, err)
 
 			s := &Server{
