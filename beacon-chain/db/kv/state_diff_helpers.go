@@ -23,9 +23,9 @@ var (
 )
 
 func makeKey(level int, slot uint64) []byte {
-	buf := make([]byte, 1+8)
+	buf := make([]byte, 16)
 	buf[0] = byte(level)
-	binary.BigEndian.PutUint64(buf[1:], slot)
+	binary.LittleEndian.PutUint64(buf[1:], slot)
 	return buf
 }
 
