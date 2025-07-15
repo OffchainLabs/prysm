@@ -1,3 +1,3 @@
 ### Changed
 
-- Call `MaxExitEpochAndChurn` just once before processing any slashings to reduce CPU load.
+- Pre-calculate exit epoch, churn and active balance before processing slashings to reduce CPU load.

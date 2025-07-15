@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	v "github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -94,7 +95,9 @@ func TestProcessAttesterSlashings_RegressionSlashableIndices(t *testing.T) {
 	for i, s := range b.Block.Body.AttesterSlashings {
 		ss[i] = s
 	}
-	newState, err := blocks.ProcessAttesterSlashings(t.Context(), beaconState, ss, v.SlashValidator, v.ExitInformation(beaconState))
+	activeBal, err := helpers.TotalActiveBalance(beaconState)
+	require.NoError(t, err)
+	newState, err := blocks.ProcessAttesterSlashings(t.Context(), beaconState, ss, v.SlashValidator, v.ExitInformation(beaconState), primitives.Gwei(activeBal))
 	require.NoError(t, err)
 	newRegistry := newState.Validators()
 	if !newRegistry[expectedSlashedVal].Slashed {

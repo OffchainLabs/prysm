@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
 	coreblocks "github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
@@ -15,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
 	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 )
@@ -69,7 +71,14 @@ func (rs *BlockRewardService) GetBlockRewardsData(ctx context.Context, blk inter
 		}
 	}
 	exitInfo := validators.ExitInformation(st)
-	st, err = coreblocks.ProcessAttesterSlashings(ctx, st, blk.Body().AttesterSlashings(), validators.SlashValidator, exitInfo)
+	activeBal, err := helpers.TotalActiveBalance(st)
+	if err != nil {
+		return nil, &httputil.DefaultJsonError{
+			Message: "Could not get total active balance: " + err.Error(),
+			Code:    http.StatusInternalServerError,
+		}
+	}
+	st, err = coreblocks.ProcessAttesterSlashings(ctx, st, blk.Body().AttesterSlashings(), validators.SlashValidator, exitInfo, primitives.Gwei(activeBal))
 	if err != nil {
 		return nil, &httputil.DefaultJsonError{
 			Message: "Could not get attester slashing rewards: " + err.Error(),
@@ -83,7 +92,7 @@ func (rs *BlockRewardService) GetBlockRewardsData(ctx context.Context, blk inter
 			Code:    http.StatusInternalServerError,
 		}
 	}
-	st, err = coreblocks.ProcessProposerSlashings(ctx, st, blk.Body().ProposerSlashings(), validators.SlashValidator, exitInfo)
+	st, err = coreblocks.ProcessProposerSlashings(ctx, st, blk.Body().ProposerSlashings(), validators.SlashValidator, exitInfo, primitives.Gwei(activeBal))
 	if err != nil {
 		return nil, &httputil.DefaultJsonError{
 			Message: "Could not get proposer slashing rewards: " + err.Error(),

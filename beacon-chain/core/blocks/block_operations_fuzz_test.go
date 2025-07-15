@@ -3,6 +3,7 @@ package blocks
 import (
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	v "github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
 	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -191,7 +192,12 @@ func TestFuzzProcessProposerSlashings_10000(t *testing.T) {
 		fuzzer.Fuzz(p)
 		s, err := state_native.InitializeFromProtoUnsafePhase0(state)
 		require.NoError(t, err)
-		r, err := ProcessProposerSlashings(ctx, s, []*ethpb.ProposerSlashing{p}, v.SlashValidator, v.ExitInformation(s))
+		activeBal, err := helpers.TotalActiveBalance(s)
+		if err == nil {
+			// Getting total active balance can fail for reasons such as nil validators in the state.
+			continue
+		}
+		r, err := ProcessProposerSlashings(ctx, s, []*ethpb.ProposerSlashing{p}, v.SlashValidator, v.ExitInformation(s), primitives.Gwei(activeBal))
 		if err != nil && r != nil {
 			t.Fatalf("return value should be nil on err. found: %v on error: %v for state: %v and slashing: %v", r, err, state, p)
 		}
@@ -224,7 +230,12 @@ func TestFuzzProcessAttesterSlashings_10000(t *testing.T) {
 		fuzzer.Fuzz(a)
 		s, err := state_native.InitializeFromProtoUnsafePhase0(state)
 		require.NoError(t, err)
-		r, err := ProcessAttesterSlashings(ctx, s, []ethpb.AttSlashing{a}, v.SlashValidator, v.ExitInformation(s))
+		activeBal, err := helpers.TotalActiveBalance(s)
+		if err == nil {
+			// Getting total active balance can fail for reasons such as nil validators in the state.
+			continue
+		}
+		r, err := ProcessAttesterSlashings(ctx, s, []ethpb.AttSlashing{a}, v.SlashValidator, v.ExitInformation(s), primitives.Gwei(activeBal))
 		if err != nil && r != nil {
 			t.Fatalf("return value should be nil on err. found: %v on error: %v for state: %v and slashing: %v", r, err, state, a)
 		}
