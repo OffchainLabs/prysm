@@ -16,6 +16,11 @@ import (
 
 // BeaconState defines a struct containing utilities for the Ethereum Beacon Chain state, defining
 // getters and setters for its respective values and helpful functions such as HashTreeRoot().
+//
+// Note: genesisTime is time.Time.Unix(). i.e. the number of seconds elapsed since January 1, 1970 UTC.
+// This is preferred over time.Time in the state to avoid unnecessary conversions and precision issues
+// that may break spec compliance. Other areas of Prysm should use time.Time, except when complying
+// with spec.
 type BeaconState struct {
 	version                             int
 	genesisTime                         uint64

@@ -40,7 +40,6 @@ type FakeValidator struct {
 	WaitForWalletInitializationCalled bool
 	NextSlotCalled                    bool
 	WaitForActivationCalled           int
-	CanonicalHeadSlotCalled           int
 	WaitForSyncCalled                 int
 	RetryTillSuccess                  int
 	ProposeBlockArg1                  uint64
@@ -56,7 +55,7 @@ type FakeValidator struct {
 	AttSubmitted                      chan interface{}
 	BlockProposed                     chan interface{}
 	AccountsChannel                   chan [][fieldparams.BLSPubkeyLength]byte
-	GenesisT                          uint64
+	GenesisT                          time.Time
 	ReceiveBlocksCalled               int
 	proposerSettings                  *proposer.Settings
 	Balances                          map[[48]byte]uint64
@@ -82,7 +81,7 @@ func (fv *FakeValidator) AccountsChangedChan() <-chan [][fieldparams.BLSPubkeyLe
 	return fv.AccountsChannel
 }
 
-func (fv *FakeValidator) GenesisTime() uint64 {
+func (fv *FakeValidator) GenesisTime() time.Time {
 	return fv.GenesisT
 }
 
@@ -129,15 +128,6 @@ func (fv *FakeValidator) WaitForSync(_ context.Context) error {
 func (fv *FakeValidator) SlasherReady(_ context.Context) error {
 	fv.SlasherReadyCalled = true
 	return nil
-}
-
-// CanonicalHeadSlot for mocking.
-func (fv *FakeValidator) CanonicalHeadSlot(_ context.Context) (primitives.Slot, error) {
-	fv.CanonicalHeadSlotCalled++
-	if fv.RetryTillSuccess > fv.CanonicalHeadSlotCalled {
-		return 0, api.ErrConnectionIssue
-	}
-	return 0, nil
 }
 
 // SlotDeadline for mocking.
@@ -275,7 +265,7 @@ func (*FakeValidator) HasProposerSettings() bool {
 func (fv *FakeValidator) PushProposerSettings(ctx context.Context, _ primitives.Slot, _ bool) error {
 	time.Sleep(fv.ProposerSettingWait)
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		log.Error("deadline exceeded")
+		log.Error("Deadline exceeded")
 		// can't return error as it will trigger a log.fatal
 		return nil
 	}
@@ -342,4 +332,7 @@ func (*FakeValidator) Host() string {
 
 func (fv *FakeValidator) FindHealthyHost(_ context.Context) bool {
 	return fv.CanChangeHost
+}
+
+func (fv *FakeValidator) SetTicker() {
 }

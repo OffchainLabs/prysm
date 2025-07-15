@@ -393,7 +393,7 @@ func benchmarkHash(sszPath string, sszType string) {
 		runtime.ReadMemStats(stat)
 		root, err := stateTrieState.HashTreeRoot(context.Background())
 		if err != nil {
-			log.Fatal("couldn't hash")
+			log.Fatal("Couldn't hash")
 		}
 		newStat := &runtime.MemStats{}
 		runtime.ReadMemStats(newStat)

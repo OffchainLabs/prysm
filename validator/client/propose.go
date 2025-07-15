@@ -319,7 +319,7 @@ func ProposeExit(
 }
 
 func CurrentEpoch(genesisTime *timestamp.Timestamp) (primitives.Epoch, error) {
-	currentSlot := slots.CurrentSlot(uint64(genesisTime.Seconds))
+	currentSlot := slots.CurrentSlot(genesisTime.AsTime())
 	currentEpoch := slots.ToEpoch(currentSlot)
 	return currentEpoch, nil
 }

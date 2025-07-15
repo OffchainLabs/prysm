@@ -80,7 +80,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 
 	val, tracked := vs.TrackedValidatorsCache.Validator(proposerId)
 	if !tracked {
-		logrus.WithFields(logFields).Warn("could not find tracked proposer index")
+		logrus.WithFields(logFields).Warn("Could not find tracked proposer index")
 	}
 	setFeeRecipientIfBurnAddress(&val)
 
@@ -130,7 +130,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 		FinalizedBlockHash: finalizedBlockHash[:],
 	}
 
-	t, err := slots.ToTime(st.GenesisTime(), slot)
+	t, err := slots.StartTime(st.GenesisTime(), slot)
 	if err != nil {
 		return nil, err
 	}
@@ -312,7 +312,7 @@ func getParentBlockHashPostMerge(st state.BeaconState) ([]byte, error) {
 
 // getParentBlockHashPreMerge retrieves the parent block hash before the merge has completed.
 func getParentBlockHashPreMerge(ctx context.Context, vs *Server, st state.BeaconState, slot primitives.Slot) ([]byte, error) {
-	t, err := slots.ToTime(st.GenesisTime(), slot)
+	t, err := slots.StartTime(st.GenesisTime(), slot)
 	if err != nil {
 		return nil, err
 	}

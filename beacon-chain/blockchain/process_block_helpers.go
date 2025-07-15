@@ -33,7 +33,7 @@ import (
 
 // CurrentSlot returns the current slot based on time.
 func (s *Service) CurrentSlot() primitives.Slot {
-	return slots.CurrentSlot(uint64(s.genesisTime.Unix()))
+	return slots.CurrentSlot(s.genesisTime)
 }
 
 // getFCUArgs returns the arguments to call forkchoice update
@@ -45,7 +45,7 @@ func (s *Service) getFCUArgs(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) er
 		return nil
 	}
 	slot := cfg.roblock.Block().Slot()
-	if slots.WithinVotingWindow(uint64(s.genesisTime.Unix()), slot) {
+	if slots.WithinVotingWindow(s.genesisTime, slot) {
 		return nil
 	}
 	return s.computePayloadAttributes(cfg, fcuArgs)
@@ -68,11 +68,11 @@ func (s *Service) getFCUArgsEarlyBlock(cfg *postBlockProcessConfig, fcuArgs *fcu
 func (s *Service) logNonCanonicalBlockReceived(blockRoot [32]byte, headRoot [32]byte) {
 	receivedWeight, err := s.cfg.ForkChoiceStore.Weight(blockRoot)
 	if err != nil {
-		log.WithField("root", fmt.Sprintf("%#x", blockRoot)).Warn("could not determine node weight")
+		log.WithField("root", fmt.Sprintf("%#x", blockRoot)).Warn("Could not determine node weight")
 	}
 	headWeight, err := s.cfg.ForkChoiceStore.Weight(headRoot)
 	if err != nil {
-		log.WithField("root", fmt.Sprintf("%#x", headRoot)).Warn("could not determine node weight")
+		log.WithField("root", fmt.Sprintf("%#x", headRoot)).Warn("Could not determine node weight")
 	}
 	log.WithFields(logrus.Fields{
 		"receivedRoot":   fmt.Sprintf("%#x", blockRoot),
@@ -226,7 +226,7 @@ func (s *Service) processLightClientBootstrap(cfg *postBlockProcessConfig) error
 	if err != nil {
 		return errors.Wrapf(err, "could not create light client bootstrap")
 	}
-	if err := s.cfg.BeaconDB.SaveLightClientBootstrap(cfg.ctx, blockRoot[:], bootstrap); err != nil {
+	if err := s.lcStore.SaveLightClientBootstrap(cfg.ctx, blockRoot, bootstrap); err != nil {
 		return errors.Wrapf(err, "could not save light client bootstrap")
 	}
 	return nil
@@ -432,7 +432,7 @@ func (s *Service) getBlockPreState(ctx context.Context, b interfaces.ReadOnlyBea
 	}
 
 	// Verify block slot time is not from the future.
-	if err := slots.VerifyTime(uint64(s.genesisTime.Unix()), b.Slot(), params.BeaconConfig().MaximumGossipClockDisparityDuration()); err != nil {
+	if err := slots.VerifyTime(s.genesisTime, b.Slot(), params.BeaconConfig().MaximumGossipClockDisparityDuration()); err != nil {
 		return nil, err
 	}
 
@@ -527,7 +527,7 @@ func (s *Service) updateFinalized(ctx context.Context, cp *ethpb.Checkpoint) err
 		// is meant to be asynchronous and run in the background rather than being
 		// tied to the execution of a block.
 		if err := s.cfg.StateGen.MigrateToCold(s.ctx, fRoot); err != nil {
-			log.WithError(err).Error("could not migrate to cold")
+			log.WithError(err).Error("Could not migrate to cold")
 		}
 	}()
 	return nil
@@ -616,7 +616,7 @@ func (s *Service) insertFinalizedDepositsAndPrune(ctx context.Context, fRoot [32
 	// Update deposit cache.
 	finalizedState, err := s.cfg.StateGen.StateByRoot(ctx, fRoot)
 	if err != nil {
-		log.WithError(err).Error("could not fetch finalized state")
+		log.WithError(err).Error("Could not fetch finalized state")
 		return
 	}
 
@@ -634,7 +634,7 @@ func (s *Service) insertFinalizedDepositsAndPrune(ctx context.Context, fRoot [32
 	// because the Eth1 follow distance makes such long-range reorgs extremely unlikely.
 	eth1DepositIndex, err := mathutil.Int(finalizedState.Eth1DepositIndex())
 	if err != nil {
-		log.WithError(err).Error("could not cast eth1 deposit index")
+		log.WithError(err).Error("Could not cast eth1 deposit index")
 		return
 	}
 	// The deposit index in the state is always the index of the next deposit
@@ -643,12 +643,12 @@ func (s *Service) insertFinalizedDepositsAndPrune(ctx context.Context, fRoot [32
 	finalizedEth1DepIdx := eth1DepositIndex - 1
 	if err = s.cfg.DepositCache.InsertFinalizedDeposits(ctx, int64(finalizedEth1DepIdx), common.Hash(finalizedState.Eth1Data().BlockHash),
 		0 /* Setting a zero value as we have no access to block height */); err != nil {
-		log.WithError(err).Error("could not insert finalized deposits")
+		log.WithError(err).Error("Could not insert finalized deposits")
 		return
 	}
 	// Deposit proofs are only used during state transition and can be safely removed to save space.
 	if err = s.cfg.DepositCache.PruneProofs(ctx, int64(finalizedEth1DepIdx)); err != nil {
-		log.WithError(err).Error("could not prune deposit proofs")
+		log.WithError(err).Error("Could not prune deposit proofs")
 	}
 	// Prune deposits which have already been finalized, the below method prunes all pending deposits (non-inclusive) up
 	// to the provided eth1 deposit index.

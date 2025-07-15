@@ -140,7 +140,7 @@ func (s *Service) internalBroadcastAttestation(ctx context.Context, subnet uint6
 	}
 	// In the event our attestation is outdated and beyond the
 	// acceptable threshold, we exit early and do not broadcast it.
-	currSlot := slots.CurrentSlot(uint64(s.genesisTime.Unix()))
+	currSlot := slots.CurrentSlot(s.genesisTime)
 	if err := helpers.ValidateAttestationTime(att.GetData().Slot, s.genesisTime, params.BeaconConfig().MaximumGossipClockDisparityDuration()); err != nil {
 		log.WithFields(logrus.Fields{
 			"attestationSlot": att.GetData().Slot,
@@ -397,7 +397,7 @@ func (s *Service) internalBroadcastDataColumn(
 	header := dataColumnSidecar.SignedBlockHeader.GetHeader()
 	slot := header.GetSlot()
 
-	slotStartTime, err := slots.ToTime(uint64(s.genesisTime.Unix()), slot)
+	slotStartTime, err := slots.StartTime(s.genesisTime, slot)
 	if err != nil {
 		log.WithError(err).Error("Failed to convert slot to time")
 	}

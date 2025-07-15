@@ -270,7 +270,7 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 						operationNotifier: &chainMock.MockOperationNotifier{},
 						custodyInfo:       &peerdas.CustodyInfo{},
 					},
-					seenDataColumnCache: lruwrpr.New(1),
+					seenDataColumnCache: newSlotAwareCache(1),
 				}
 
 				kzgCommitments := make([][]byte, 0, tt.blobCount)

@@ -10,7 +10,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/crypto/hash"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 )
 
@@ -125,18 +124,18 @@ func ComputeSubnetFromCommitteeAndSlot(activeValCount uint64, comIdx primitives.
 //	valid_attestation_slot = 101
 //
 // In the attestation must be within the range of 95 to 102 in the example above.
-func ValidateAttestationTime(attSlot primitives.Slot, genesisTime time.Time, clockDisparity time.Duration) error {
-	attTime, err := slots.ToTime(uint64(genesisTime.Unix()), attSlot)
+func ValidateAttestationTime(attSlot primitives.Slot, genesis time.Time, clockDisparity time.Duration) error {
+	attTime, err := slots.StartTime(genesis, attSlot)
 	if err != nil {
 		return err
 	}
-	currentSlot := slots.Since(genesisTime)
+	currentSlot := slots.CurrentSlot(genesis)
 
 	// When receiving an attestation, it can be from the future.
 	// so the upper bounds is set to now + clockDisparity(SECONDS_PER_SLOT * 2).
 	// But when sending an attestation, it should not be in future slot.
 	// so the upper bounds is set to now + clockDisparity(MAXIMUM_GOSSIP_CLOCK_DISPARITY).
-	upperBounds := prysmTime.Now().Add(clockDisparity)
+	upperBounds := time.Now().Add(clockDisparity)
 
 	// An attestation cannot be older than the current slot - attestation propagation slot range
 	// with a minor tolerance for peer clock disparity.
@@ -144,7 +143,7 @@ func ValidateAttestationTime(attSlot primitives.Slot, genesisTime time.Time, clo
 	if currentSlot > params.BeaconConfig().AttestationPropagationSlotRange {
 		lowerBoundsSlot = currentSlot - params.BeaconConfig().AttestationPropagationSlotRange
 	}
-	lowerTime, err := slots.ToTime(uint64(genesisTime.Unix()), lowerBoundsSlot)
+	lowerTime, err := slots.StartTime(genesis, lowerBoundsSlot)
 	if err != nil {
 		return err
 	}
@@ -187,7 +186,7 @@ func ValidateAttestationTime(attSlot primitives.Slot, genesisTime time.Time, clo
 // VerifyCheckpointEpoch is within current epoch and previous epoch
 // with respect to current time. Returns true if it's within, false if it's not.
 func VerifyCheckpointEpoch(c *ethpb.Checkpoint, genesis time.Time) bool {
-	currentSlot := slots.CurrentSlot(uint64(genesis.Unix()))
+	currentSlot := slots.CurrentSlot(genesis)
 	currentEpoch := slots.ToEpoch(currentSlot)
 
 	var prevEpoch primitives.Epoch

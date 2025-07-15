@@ -217,10 +217,10 @@ func Test_ValidateAttestationTime(t *testing.T) {
 		{
 			name: "attestation.slot is well beyond current slot",
 			args: args{
-				attSlot:     1 << 32,
-				genesisTime: prysmTime.Now().Add(-15 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+				attSlot:     1024,
+				genesisTime: time.Now().Add(-15 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
 			},
-			wantedErr: "attestation slot 4294967296 not within attestation propagation range of 0 to 15 (current slot)",
+			wantedErr: "attestation slot 1024 not within attestation propagation range of 0 to 15 (current slot)",
 		},
 	}
 	for _, tt := range tests {

@@ -255,7 +255,7 @@ func TestServer_GetBeaconBlock_Bellatrix(t *testing.T) {
 	c.HashesByHeight[0] = terminalBlockHash
 	random, err := helpers.RandaoMix(beaconState, slots.ToEpoch(beaconState.Slot()))
 	require.NoError(t, err)
-	timeStamp, err := slots.ToTime(beaconState.GenesisTime(), bellatrixSlot+1)
+	timeStamp, err := slots.StartTime(beaconState.GenesisTime(), bellatrixSlot+1)
 	require.NoError(t, err)
 
 	payload := &enginev1.ExecutionPayload{
@@ -381,7 +381,7 @@ func TestServer_GetBeaconBlock_Capella(t *testing.T) {
 
 	random, err := helpers.RandaoMix(beaconState, slots.ToEpoch(beaconState.Slot()))
 	require.NoError(t, err)
-	timeStamp, err := slots.ToTime(beaconState.GenesisTime(), capellaSlot+1)
+	timeStamp, err := slots.StartTime(beaconState.GenesisTime(), capellaSlot+1)
 	require.NoError(t, err)
 	payload := &enginev1.ExecutionPayloadCapella{
 		ParentHash:    make([]byte, fieldparams.RootLength),
@@ -494,7 +494,7 @@ func TestServer_GetBeaconBlock_Deneb(t *testing.T) {
 
 	random, err := helpers.RandaoMix(beaconState, slots.ToEpoch(beaconState.Slot()))
 	require.NoError(t, err)
-	timeStamp, err := slots.ToTime(beaconState.GenesisTime(), denebSlot+1)
+	timeStamp, err := slots.StartTime(beaconState.GenesisTime(), denebSlot+1)
 	require.NoError(t, err)
 	payload := &enginev1.ExecutionPayloadDeneb{
 		ParentHash:    make([]byte, fieldparams.RootLength),
@@ -644,7 +644,7 @@ func TestServer_GetBeaconBlock_Electra(t *testing.T) {
 
 	random, err := helpers.RandaoMix(beaconState, slots.ToEpoch(beaconState.Slot()))
 	require.NoError(t, err)
-	timeStamp, err := slots.ToTime(beaconState.GenesisTime(), electraSlot+1)
+	timeStamp, err := slots.StartTime(beaconState.GenesisTime(), electraSlot+1)
 	require.NoError(t, err)
 	payload := &enginev1.ExecutionPayloadDeneb{
 		Timestamp:     uint64(timeStamp.Unix()),
@@ -773,7 +773,7 @@ func TestServer_GetBeaconBlock_Fulu(t *testing.T) {
 
 	random, err := helpers.RandaoMix(beaconState, slots.ToEpoch(beaconState.Slot()))
 	require.NoError(t, err)
-	timeStamp, err := slots.ToTime(beaconState.GenesisTime(), fuluSlot+1)
+	timeStamp, err := slots.StartTime(beaconState.GenesisTime(), fuluSlot+1)
 	require.NoError(t, err)
 	payload := &enginev1.ExecutionPayloadDeneb{
 		Timestamp:     uint64(timeStamp.Unix()),
@@ -3271,7 +3271,7 @@ func TestProposer_GetParentHeadState(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, [32]byte(str), [32]byte(headStr))
 		require.NotEqual(t, [32]byte(str), [32]byte(genesisStr))
-		require.LogsContain(t, hook, "late block attempted reorg failed")
+		require.LogsContain(t, hook, "Late block attempted reorg failed")
 	})
 }
 

@@ -1357,7 +1357,7 @@ func TestStore_NoViableHead_FCU(t *testing.T) {
 	require.NoError(t, service.cfg.BeaconDB.SaveHeadBlockRoot(ctx, parentRoot), "Could not save genesis state")
 
 	for i := 1; i < 6; i++ {
-		driftGenesisTime(service, int64(i), 0)
+		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
 		require.NoError(t, err)
 		b, err := util.GenerateFullBlock(st, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
@@ -1378,7 +1378,7 @@ func TestStore_NoViableHead_FCU(t *testing.T) {
 	}
 
 	for i := 6; i < 12; i++ {
-		driftGenesisTime(service, int64(i), 0)
+		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
 		require.NoError(t, err)
 		b, err := util.GenerateFullBlockAltair(st, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
@@ -1399,7 +1399,7 @@ func TestStore_NoViableHead_FCU(t *testing.T) {
 	}
 
 	for i := 12; i < 18; i++ {
-		driftGenesisTime(service, int64(i), 0)
+		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
 		require.NoError(t, err)
 		b, err := util.GenerateFullBlockBellatrix(st, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
@@ -1548,7 +1548,7 @@ func TestStore_NoViableHead_NewPayload(t *testing.T) {
 	require.NoError(t, service.cfg.BeaconDB.SaveHeadBlockRoot(ctx, parentRoot), "Could not save genesis state")
 
 	for i := 1; i < 6; i++ {
-		driftGenesisTime(service, int64(i), 0)
+		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
 		require.NoError(t, err)
 		b, err := util.GenerateFullBlock(st, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
@@ -1568,7 +1568,7 @@ func TestStore_NoViableHead_NewPayload(t *testing.T) {
 	}
 
 	for i := 6; i < 12; i++ {
-		driftGenesisTime(service, int64(i), 0)
+		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
 		require.NoError(t, err)
 		b, err := util.GenerateFullBlockAltair(st, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
@@ -1589,7 +1589,7 @@ func TestStore_NoViableHead_NewPayload(t *testing.T) {
 	}
 
 	for i := 12; i < 18; i++ {
-		driftGenesisTime(service, int64(i), 0)
+		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
 		require.NoError(t, err)
 		b, err := util.GenerateFullBlockBellatrix(st, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
@@ -1740,7 +1740,7 @@ func TestStore_NoViableHead_Liveness(t *testing.T) {
 	require.NoError(t, service.cfg.BeaconDB.SaveHeadBlockRoot(ctx, parentRoot), "Could not save genesis state")
 
 	for i := 1; i < 6; i++ {
-		driftGenesisTime(service, int64(i), 0)
+		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
 		require.NoError(t, err)
 		b, err := util.GenerateFullBlock(st, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
@@ -1761,7 +1761,7 @@ func TestStore_NoViableHead_Liveness(t *testing.T) {
 	}
 
 	for i := 6; i < 12; i++ {
-		driftGenesisTime(service, int64(i), 0)
+		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
 		require.NoError(t, err)
 		b, err := util.GenerateFullBlockAltair(st, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
@@ -1812,7 +1812,7 @@ func TestStore_NoViableHead_Liveness(t *testing.T) {
 	// import blocks 13 through 18 to justify 12
 	invalidRoots := make([][32]byte, 19-13)
 	for i := 13; i < 19; i++ {
-		driftGenesisTime(service, int64(i), 0)
+		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
 		require.NoError(t, err)
 		b, err := util.GenerateFullBlockBellatrix(st, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
@@ -1907,7 +1907,7 @@ func TestStore_NoViableHead_Liveness(t *testing.T) {
 	require.NoError(t, err)
 	// Import blocks 21--30 (Epoch 3 was not enough to justify 2)
 	for i := 21; i < 30; i++ {
-		driftGenesisTime(service, int64(i), 0)
+		driftGenesisTime(service, primitives.Slot(i), 0)
 		require.NoError(t, err)
 		b, err := util.GenerateFullBlockBellatrix(st, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
 		require.NoError(t, err)
@@ -1993,7 +1993,8 @@ func TestNoViableHead_Reboot(t *testing.T) {
 	require.NoError(t, service.cfg.BeaconDB.SaveGenesisBlockRoot(ctx, genesisRoot), "Could not save genesis state")
 
 	for i := 1; i < 6; i++ {
-		driftGenesisTime(service, int64(i), 0)
+		t.Log(i)
+		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
 		require.NoError(t, err)
 		b, err := util.GenerateFullBlock(st, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
@@ -2013,7 +2014,7 @@ func TestNoViableHead_Reboot(t *testing.T) {
 	}
 
 	for i := 6; i < 12; i++ {
-		driftGenesisTime(service, int64(i), 0)
+		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
 		require.NoError(t, err)
 		b, err := util.GenerateFullBlockAltair(st, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
@@ -2062,7 +2063,7 @@ func TestNoViableHead_Reboot(t *testing.T) {
 
 	// import blocks 13 through 18 to justify 12
 	for i := 13; i < 19; i++ {
-		driftGenesisTime(service, int64(i), 0)
+		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
 		require.NoError(t, err)
 		b, err := util.GenerateFullBlockBellatrix(st, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
@@ -2305,6 +2306,7 @@ func TestOnBlock_HandleBlockAttestations(t *testing.T) {
 func TestFillMissingBlockPayloadId_DiffSlotExitEarly(t *testing.T) {
 	logHook := logTest.NewGlobal()
 	service, tr := minimalTestService(t)
+	service.SetGenesisTime(time.Now())
 	service.lateBlockTasks(tr.ctx)
 	require.LogsDoNotContain(t, logHook, "could not perform late block tasks")
 }
@@ -2317,17 +2319,20 @@ func TestFillMissingBlockPayloadId_PrepareAllPayloads(t *testing.T) {
 	defer resetCfg()
 
 	service, tr := minimalTestService(t)
+	service.SetGenesisTime(time.Now())
+	service.SetForkChoiceGenesisTime(time.Now())
 	service.lateBlockTasks(tr.ctx)
 	require.LogsDoNotContain(t, logHook, "could not perform late block tasks")
 }
 
 // Helper function to simulate the block being on time or delayed for proposer
 // boost. It alters the genesisTime tracked by the store.
-func driftGenesisTime(s *Service, slot, delay int64) {
-	offset := slot*int64(params.BeaconConfig().SecondsPerSlot) + delay
-	newTime := time.Unix(time.Now().Unix()-offset, 0)
-	s.SetGenesisTime(newTime)
-	s.cfg.ForkChoiceStore.SetGenesisTime(uint64(newTime.Unix()))
+func driftGenesisTime(s *Service, slot primitives.Slot, delay time.Duration) {
+	now := time.Now()
+	slotDuration := time.Duration(slot) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+	genesis := now.Add(-slotDuration - delay)
+	s.SetGenesisTime(genesis)
+	s.cfg.ForkChoiceStore.SetGenesisTime(genesis)
 }
 
 func TestMissingBlobIndices(t *testing.T) {
@@ -3194,116 +3199,47 @@ func TestProcessLightClientBootstrap(t *testing.T) {
 	featCfg := &features.Flags{}
 	featCfg.EnableLightClient = true
 	reset := features.InitWithReset(featCfg)
+	defer reset()
 
-	s, tr := minimalTestService(t)
+	s, tr := minimalTestService(t, WithLCStore())
 	ctx := tr.ctx
 
-	t.Run("Altair", func(t *testing.T) {
-		l := util.NewTestLightClient(t, version.Altair)
+	for testVersion := version.Altair; testVersion <= version.Electra; testVersion++ {
+		t.Run(version.String(testVersion), func(t *testing.T) {
+			l := util.NewTestLightClient(t, testVersion)
 
-		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
+			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().VersionToForkEpochMap()[testVersion])*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
-		currentBlockRoot, err := l.Block.Block().HashTreeRoot()
-		require.NoError(t, err)
-		roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
-		require.NoError(t, err)
+			currentBlockRoot, err := l.Block.Block().HashTreeRoot()
+			require.NoError(t, err)
+			roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
+			require.NoError(t, err)
 
-		err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
-		require.NoError(t, err)
-		err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
-		require.NoError(t, err)
+			err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
+			require.NoError(t, err)
+			err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
+			require.NoError(t, err)
 
-		cfg := &postBlockProcessConfig{
-			ctx:            ctx,
-			roblock:        roblock,
-			postState:      l.State,
-			isValidPayload: true,
-		}
+			cfg := &postBlockProcessConfig{
+				ctx:            ctx,
+				roblock:        roblock,
+				postState:      l.State,
+				isValidPayload: true,
+			}
 
-		require.NoError(t, s.processLightClientBootstrap(cfg))
+			require.NoError(t, s.processLightClientBootstrap(cfg))
 
-		// Check that the light client bootstrap is saved
-		b, err := s.cfg.BeaconDB.LightClientBootstrap(ctx, currentBlockRoot[:])
-		require.NoError(t, err)
-		require.NotNil(t, b)
+			// Check that the light client bootstrap is saved
+			b, err := s.lcStore.LightClientBootstrap(ctx, currentBlockRoot)
+			require.NoError(t, err)
+			require.NotNil(t, b)
 
-		stateRoot, err := l.State.HashTreeRoot(ctx)
-		require.NoError(t, err)
-		require.Equal(t, stateRoot, [32]byte(b.Header().Beacon().StateRoot))
-		require.Equal(t, b.Version(), version.Altair)
-	})
-
-	t.Run("Capella", func(t *testing.T) {
-		l := util.NewTestLightClient(t, version.Capella)
-
-		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-
-		currentBlockRoot, err := l.Block.Block().HashTreeRoot()
-		require.NoError(t, err)
-		roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
-		require.NoError(t, err)
-
-		err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
-		require.NoError(t, err)
-		err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
-		require.NoError(t, err)
-
-		cfg := &postBlockProcessConfig{
-			ctx:            ctx,
-			roblock:        roblock,
-			postState:      l.State,
-			isValidPayload: true,
-		}
-
-		require.NoError(t, s.processLightClientBootstrap(cfg))
-
-		// Check that the light client bootstrap is saved
-		b, err := s.cfg.BeaconDB.LightClientBootstrap(ctx, currentBlockRoot[:])
-		require.NoError(t, err)
-		require.NotNil(t, b)
-
-		stateRoot, err := l.State.HashTreeRoot(ctx)
-		require.NoError(t, err)
-		require.Equal(t, stateRoot, [32]byte(b.Header().Beacon().StateRoot))
-		require.Equal(t, b.Version(), version.Capella)
-	})
-
-	t.Run("Deneb", func(t *testing.T) {
-		l := util.NewTestLightClient(t, version.Deneb)
-
-		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-
-		currentBlockRoot, err := l.Block.Block().HashTreeRoot()
-		require.NoError(t, err)
-		roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
-		require.NoError(t, err)
-
-		err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
-		require.NoError(t, err)
-		err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
-		require.NoError(t, err)
-
-		cfg := &postBlockProcessConfig{
-			ctx:            ctx,
-			roblock:        roblock,
-			postState:      l.State,
-			isValidPayload: true,
-		}
-
-		require.NoError(t, s.processLightClientBootstrap(cfg))
-
-		// Check that the light client bootstrap is saved
-		b, err := s.cfg.BeaconDB.LightClientBootstrap(ctx, currentBlockRoot[:])
-		require.NoError(t, err)
-		require.NotNil(t, b)
-
-		stateRoot, err := l.State.HashTreeRoot(ctx)
-		require.NoError(t, err)
-		require.Equal(t, stateRoot, [32]byte(b.Header().Beacon().StateRoot))
-		require.Equal(t, b.Version(), version.Deneb)
-	})
-
-	reset()
+			stateRoot, err := l.State.HashTreeRoot(ctx)
+			require.NoError(t, err)
+			require.Equal(t, stateRoot, [32]byte(b.Header().Beacon().StateRoot))
+			require.Equal(t, b.Version(), testVersion)
+		})
+	}
 }
 
 type testIsAvailableParams struct {

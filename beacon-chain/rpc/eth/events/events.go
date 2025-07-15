@@ -757,7 +757,7 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 	ev.ParentBlockHash = payload.BlockHash()
 	ev.ParentBlockNumber = payload.BlockNumber()
 
-	t, err := slots.ToTime(st.GenesisTime(), ev.ProposalSlot)
+	t, err := slots.StartTime(st.GenesisTime(), ev.ProposalSlot)
 	if err != nil {
 		return ev, errors.Wrap(err, "could not get head state slot time")
 	}
@@ -768,7 +768,10 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 // This event stream is intended to be used by builders and relays.
 // Parent fields are based on state at N_{current_slot}, while the rest of fields are based on state of N_{current_slot + 1}
 func (s *Server) payloadAttributesReader(ctx context.Context, ev payloadattribute.EventData) (lazyReader, error) {
-	deadline := slots.BeginsAt(ev.ProposalSlot, s.ChainInfoFetcher.GenesisTime())
+	deadline, err := slots.StartTime(s.ChainInfoFetcher.GenesisTime(), ev.ProposalSlot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine slot start time: %w", err)
+	}
 	if deadline.Before(time.Now()) {
 		return nil, errors.Wrapf(errPayloadAttributeExpired, "proposal slot time %d", deadline.Unix())
 	}

@@ -185,10 +185,10 @@ var (
 		Usage: "A comma-separatted list of 0x-prefixed hexstrings. Declares blocks with the given blockroots to be invalid. It downscores peers that send these blocks.",
 	}
 
-	// EnableDutiesV2 sets the validator client to use the get duties v2 grpc endpoint
-	EnableDutiesV2 = &cli.BoolFlag{
-		Name:  "enable-duties-v2",
-		Usage: "Forces use of get duties v2 endpoint.",
+	// DisableDutiesV2 sets the validator client to use the get duties grpc endpoint
+	DisableDutiesV2 = &cli.BoolFlag{
+		Name:  "disable-duties-v2",
+		Usage: "Forces use of get duties endpoint instead of v2.",
 	}
 
 	// EnableWebFlag enables controlling the validator client via the Prysm web ui. This is a work in progress.
@@ -223,7 +223,7 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	EnableMinimalSlashingProtection,
 	enableDoppelGangerProtection,
 	EnableBeaconRESTApi,
-	EnableDutiesV2,
+	DisableDutiesV2,
 	EnableWebFlag,
 	SSZOnly,
 }...)

@@ -3,6 +3,7 @@ package interop
 import (
 	"math"
 	"math/big"
+	"time"
 
 	clparams "github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -69,12 +70,12 @@ var minerBalance = big.NewInt(0)
 
 // GethShanghaiTime calculates the absolute time of the shanghai (aka capella) fork block
 // by adding the relative time of the capella the fork epoch to the given genesis timestamp.
-func GethShanghaiTime(genesisTime uint64, cfg *clparams.BeaconChainConfig) *uint64 {
+func GethShanghaiTime(genesisTime time.Time, cfg *clparams.BeaconChainConfig) *uint64 {
 	var shanghaiTime *uint64
 	if cfg.CapellaForkEpoch != math.MaxUint64 {
 		startSlot, err := slots.EpochStart(cfg.CapellaForkEpoch)
 		if err == nil {
-			startTime := slots.StartTime(genesisTime, startSlot)
+			startTime := slots.UnsafeStartTime(genesisTime, startSlot)
 			newTime := uint64(startTime.Unix())
 			shanghaiTime = &newTime
 		}
@@ -84,12 +85,12 @@ func GethShanghaiTime(genesisTime uint64, cfg *clparams.BeaconChainConfig) *uint
 
 // GethCancunTime calculates the absolute time of the cancun (aka deneb) fork block
 // by adding the relative time of the capella the fork epoch to the given genesis timestamp.
-func GethCancunTime(genesisTime uint64, cfg *clparams.BeaconChainConfig) *uint64 {
+func GethCancunTime(genesisTime time.Time, cfg *clparams.BeaconChainConfig) *uint64 {
 	var cancunTime *uint64
 	if cfg.DenebForkEpoch != math.MaxUint64 {
 		startSlot, err := slots.EpochStart(cfg.DenebForkEpoch)
 		if err == nil {
-			startTime := slots.StartTime(genesisTime, startSlot)
+			startTime := slots.UnsafeStartTime(genesisTime, startSlot)
 			newTime := uint64(startTime.Unix())
 			cancunTime = &newTime
 		}
@@ -99,12 +100,12 @@ func GethCancunTime(genesisTime uint64, cfg *clparams.BeaconChainConfig) *uint64
 
 // GethPragueTime calculates the absolute time of the prague (aka electra) fork block
 // by adding the relative time of the capella the fork epoch to the given genesis timestamp.
-func GethPragueTime(genesisTime uint64, cfg *clparams.BeaconChainConfig) *uint64 {
+func GethPragueTime(genesisTime time.Time, cfg *clparams.BeaconChainConfig) *uint64 {
 	var pragueTime *uint64
 	if cfg.ElectraForkEpoch != math.MaxUint64 {
 		startSlot, err := slots.EpochStart(cfg.ElectraForkEpoch)
 		if err == nil {
-			startTime := slots.StartTime(genesisTime, startSlot)
+			startTime := slots.UnsafeStartTime(genesisTime, startSlot)
 			newTime := uint64(startTime.Unix())
 			pragueTime = &newTime
 		}
@@ -115,16 +116,17 @@ func GethPragueTime(genesisTime uint64, cfg *clparams.BeaconChainConfig) *uint64
 // GethTestnetGenesis creates a genesis.json for eth1 clients with a set of defaults suitable for ephemeral testnets,
 // like in an e2e test. The parameters are minimal but the full value is returned unmarshaled so that it can be
 // customized as desired.
-func GethTestnetGenesis(genesisTime uint64, cfg *clparams.BeaconChainConfig) *core.Genesis {
-	shanghaiTime := GethShanghaiTime(genesisTime, cfg)
+func GethTestnetGenesis(genesis time.Time, cfg *clparams.BeaconChainConfig) *core.Genesis {
+	genesisTime := uint64(genesis.Unix())
+	shanghaiTime := GethShanghaiTime(genesis, cfg)
 	if cfg.CapellaForkEpoch == 0 {
 		shanghaiTime = &genesisTime
 	}
-	cancunTime := GethCancunTime(genesisTime, cfg)
+	cancunTime := GethCancunTime(genesis, cfg)
 	if cfg.DenebForkEpoch == 0 {
 		cancunTime = &genesisTime
 	}
-	pragueTime := GethPragueTime(genesisTime, cfg)
+	pragueTime := GethPragueTime(genesis, cfg)
 	if cfg.ElectraForkEpoch == 0 {
 		pragueTime = &genesisTime
 	}

@@ -316,6 +316,17 @@ type BeaconChainConfig struct {
 	DeprecatedMaxBlobsPerBlockFulu int `yaml:"MAX_BLOBS_PER_BLOCK_FULU" spec:"true"`
 }
 
+func (b *BeaconChainConfig) VersionToForkEpochMap() map[int]primitives.Epoch {
+	return map[int]primitives.Epoch{
+		version.Altair:    b.AltairForkEpoch,
+		version.Bellatrix: b.BellatrixForkEpoch,
+		version.Capella:   b.CapellaForkEpoch,
+		version.Deneb:     b.DenebForkEpoch,
+		version.Electra:   b.ElectraForkEpoch,
+		version.Fulu:      b.FuluForkEpoch,
+	}
+}
+
 func (b *BeaconChainConfig) ExecutionRequestLimits() enginev1.ExecutionRequestLimits {
 	return enginev1.ExecutionRequestLimits{
 		Deposits:       b.MaxDepositRequestsPerPayload,

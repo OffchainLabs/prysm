@@ -2,6 +2,7 @@ package util
 
 import (
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -19,9 +20,9 @@ func TestGenesisBeaconStateBellatrix(t *testing.T) {
 	require.NoError(t, err)
 	eth1Data, err := DeterministicEth1Data(len(deposits))
 	require.NoError(t, err)
-	gt := uint64(10000)
+	gt := time.Now()
 	st, err := genesisBeaconStateBellatrix(ctx, deposits, gt, eth1Data)
 	require.NoError(t, err)
-	require.Equal(t, gt, st.GenesisTime())
+	require.Equal(t, gt.Truncate(time.Second), st.GenesisTime()) // Beacon state only keeps time precision of 1s, so we truncate.
 	require.Equal(t, params.BeaconConfig().MaxCommitteesPerSlot, uint64(st.NumValidators()))
 }

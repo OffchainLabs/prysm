@@ -172,7 +172,11 @@ func (dv *RODataColumnsVerifier) NotFromFutureSlot() (err error) {
 
 		// earliestStart represents the time the slot starts, lowered by MAXIMUM_GOSSIP_CLOCK_DISPARITY.
 		// We lower the time by MAXIMUM_GOSSIP_CLOCK_DISPARITY in case system time is running slightly behind real time.
-		earliestStart := dv.clock.SlotStart(dataColumnSlot).Add(-maximumGossipClockDisparity)
+		earliestStart, err := dv.clock.SlotStart(dataColumnSlot)
+		if err != nil {
+			return fmt.Errorf("failed to determine slot start time from clock waiter: %w", err)
+		}
+		earliestStart = earliestStart.Add(-maximumGossipClockDisparity)
 
 		// If the system time is still before earliestStart, we consider the column from a future slot and return an error.
 		if now.Before(earliestStart) {

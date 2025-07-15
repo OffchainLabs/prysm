@@ -268,7 +268,7 @@ func (s *Service) Status() error {
 // StartFromSavedState initializes the blockchain using a previously saved finalized checkpoint.
 func (s *Service) StartFromSavedState(saved state.BeaconState) error {
 	log.Info("Blockchain data already exists in DB, initializing...")
-	s.genesisTime = time.Unix(int64(saved.GenesisTime()), 0) // lint:ignore uintcast -- Genesis time will not exceed int64 in your lifetime.
+	s.genesisTime = saved.GenesisTime()
 	s.cfg.AttService.SetGenesisTime(saved.GenesisTime())
 
 	originRoot, err := s.originRootFromSavedState(s.ctx)
@@ -373,7 +373,7 @@ func (s *Service) startFromExecutionChain() error {
 				if e.Type == statefeed.ChainStarted {
 					data, ok := e.Data.(*statefeed.ChainStartedData)
 					if !ok {
-						log.Error("event data is not type *statefeed.ChainStartedData")
+						log.Error("Event data is not type *statefeed.ChainStartedData")
 						return
 					}
 					log.WithField("startTime", data.StartTime).Debug("Received chain start event")
@@ -410,7 +410,7 @@ func (s *Service) onExecutionChainStart(ctx context.Context, genesisTime time.Ti
 
 	vr := bytesutil.ToBytes32(initializedState.GenesisValidatorsRoot())
 	if err := s.clockSetter.SetClock(startup.NewClock(genesisTime, vr)); err != nil {
-		log.WithError(err).Fatal("failed to initialize blockchain service from execution start event")
+		log.WithError(err).Fatal("Failed to initialize blockchain service from execution start event")
 	}
 }
 
@@ -424,7 +424,7 @@ func (s *Service) initializeBeaconChain(
 	eth1data *ethpb.Eth1Data) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "beacon-chain.Service.initializeBeaconChain")
 	defer span.End()
-	s.genesisTime = genesisTime
+	s.genesisTime = genesisTime.Truncate(time.Second) // Genesis time has a precision of 1 second.
 	unixTime := uint64(genesisTime.Unix())
 
 	genesisState, err := transition.OptimizedGenesisBeaconState(unixTime, preGenesisState, eth1data)
@@ -485,7 +485,7 @@ func (s *Service) saveGenesisData(ctx context.Context, genesisState state.Beacon
 	if err := s.cfg.ForkChoiceStore.SetOptimisticToValid(ctx, genesisBlkRoot); err != nil {
 		return errors.Wrap(err, "Could not set optimistic status of genesis block to false")
 	}
-	s.cfg.ForkChoiceStore.SetGenesisTime(uint64(s.genesisTime.Unix()))
+	s.cfg.ForkChoiceStore.SetGenesisTime(s.genesisTime)
 
 	if err := s.setHead(&head{
 		genesisBlkRoot,

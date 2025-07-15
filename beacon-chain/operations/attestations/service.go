@@ -24,7 +24,7 @@ type Service struct {
 	cancel                  context.CancelFunc
 	err                     error
 	forkChoiceProcessedAtts *lru.Cache
-	genesisTime             uint64
+	genesisTime             time.Time
 }
 
 // Config options for the service.
@@ -95,6 +95,6 @@ func (s *Service) Status() error {
 }
 
 // SetGenesisTime sets genesis time for operation service to use.
-func (s *Service) SetGenesisTime(t uint64) {
-	s.genesisTime = t
+func (s *Service) SetGenesisTime(t time.Time) {
+	s.genesisTime = t.Truncate(time.Second) // Genesis time has a precision of 1 second.
 }
