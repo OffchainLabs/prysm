@@ -58,7 +58,7 @@ const blobSubnetLockerVal = 110
 const dataColumnSubnetVal = 150
 
 // nodeFilter returns a function that filters nodes based on the subnet topic and subnet index.
-func (s *Service) nodeFilter(topic string, indices map[uint64]int) (func(node *enode.Node) map[uint64]bool, error) {
+func (s *Service) nodeFilter(topic string, indices map[uint64]int) (func(node *enode.Node) (map[uint64]bool, error), error) {
 	switch {
 	case strings.Contains(topic, GossipAttestationMessage):
 		return s.filterPeerForAttSubnet(indices), nil
@@ -131,7 +131,10 @@ func (s *Service) FindPeersWithSubnets(
 				// Get all needed subnets that the node is subscribed to.
 				// Skip nodes that are not subscribed to any of the defective subnets.
 				node := iterator.Node()
-				nodeSubnets := filter(node)
+				nodeSubnets, err := filter(node)
+				if err != nil {
+					return errors.Wrap(err, "filter node")
+				}
 				if len(nodeSubnets) == 0 {
 					continue
 				}
@@ -241,15 +244,15 @@ func (s *Service) dialPeers(maxConcurrentDials int, nodes []*enode.Node) {
 }
 
 // filterPeerForAttSubnet returns a method with filters peers specifically for a particular attestation subnet.
-func (s *Service) filterPeerForAttSubnet(indices map[uint64]int) func(node *enode.Node) map[uint64]bool {
-	return func(node *enode.Node) map[uint64]bool {
+func (s *Service) filterPeerForAttSubnet(indices map[uint64]int) func(node *enode.Node) (map[uint64]bool, error) {
+	return func(node *enode.Node) (map[uint64]bool, error) {
 		if !s.filterPeer(node) {
-			return nil
+			return map[uint64]bool{}, nil
 		}
 
 		subnets, err := attestationSubnets(node.Record())
 		if err != nil {
-			return nil
+			return nil, errors.Wrap(err, "attestation subnets")
 		}
 
 		result := make(map[uint64]bool, len(indices))
@@ -259,20 +262,20 @@ func (s *Service) filterPeerForAttSubnet(indices map[uint64]int) func(node *enod
 			}
 		}
 
-		return result
+		return result, nil
 	}
 }
 
 // returns a method with filters peers specifically for a particular sync subnet.
-func (s *Service) filterPeerForSyncSubnet(indices map[uint64]int) func(node *enode.Node) map[uint64]bool {
-	return func(node *enode.Node) map[uint64]bool {
+func (s *Service) filterPeerForSyncSubnet(indices map[uint64]int) func(node *enode.Node) (map[uint64]bool, error) {
+	return func(node *enode.Node) (map[uint64]bool, error) {
 		if !s.filterPeer(node) {
-			return nil
+			return map[uint64]bool{}, nil
 		}
 
 		subnets, err := syncSubnets(node.Record())
 		if err != nil {
-			return nil
+			return nil, errors.Wrap(err, "sync subnets")
 		}
 
 		result := make(map[uint64]bool, len(indices))
@@ -282,34 +285,34 @@ func (s *Service) filterPeerForSyncSubnet(indices map[uint64]int) func(node *eno
 			}
 		}
 
-		return result
+		return result, nil
 	}
 }
 
 // returns a method with filters peers specifically for a particular blob subnet.
 // All peers are supposed to be subscribed to all blob subnets.
-func (s *Service) filterPeerForBlobSubnet() func(_ *enode.Node) map[uint64]bool {
+func (s *Service) filterPeerForBlobSubnet() func(_ *enode.Node) (map[uint64]bool, error) {
 	maxBlobsPerBlock := params.BeaconConfig().AbsoluteMaxBlobsPerBlock()
 	result := make(map[uint64]bool, maxBlobsPerBlock)
 	for i := range maxBlobsPerBlock {
 		result[uint64(i)] = true
 	}
 
-	return func(_ *enode.Node) map[uint64]bool {
-		return result
+	return func(_ *enode.Node) (map[uint64]bool, error) {
+		return result, nil
 	}
 }
 
 // returns a method with filters peers specifically for a particular data column subnet.
-func (s *Service) filterPeerForDataColumnsSubnet(indices map[uint64]int) func(node *enode.Node) map[uint64]bool {
-	return func(node *enode.Node) map[uint64]bool {
+func (s *Service) filterPeerForDataColumnsSubnet(indices map[uint64]int) func(node *enode.Node) (map[uint64]bool, error) {
+	return func(node *enode.Node) (map[uint64]bool, error) {
 		if !s.filterPeer(node) {
-			return nil
+			return map[uint64]bool{}, nil
 		}
 
 		subnets, err := dataColumnSubnets(node.ID(), node.Record())
 		if err != nil {
-			return nil
+			return nil, errors.Wrap(err, "data column subnets")
 		}
 
 		result := make(map[uint64]bool, len(indices))
@@ -319,7 +322,7 @@ func (s *Service) filterPeerForDataColumnsSubnet(indices map[uint64]int) func(no
 			}
 		}
 
-		return result
+		return result, nil
 	}
 }
 
