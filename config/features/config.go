@@ -53,6 +53,7 @@ type Flags struct {
 	EnableDutiesV2                      bool // EnableDutiesV2 sets validator client to use the get Duties V2 endpoint
 	EnableWeb                           bool // EnableWeb enables the webui on the validator client
 	SSZOnly                             bool // SSZOnly forces the validator client to use SSZ for communication with the beacon node when REST mode is enabled (useful for debugging)
+	EnableStateDiff                     bool // EnableStateDiff enables the experimental state diff feature for the beacon node.
 	// Logging related toggles.
 	DisableGRPCConnectionLogs bool // Disables logging when a new grpc client has connected.
 	EnableFullSSZDataLogging  bool // Enables logging for full ssz data on rejected gossip messages
@@ -276,6 +277,10 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	if ctx.IsSet(enableExperimentalAttestationPool.Name) {
 		logEnabled(enableExperimentalAttestationPool)
 		cfg.EnableExperimentalAttestationPool = true
+	}
+	if ctx.IsSet(enableStateDiff.Name) {
+		logEnabled(enableStateDiff)
+		cfg.EnableStateDiff = true
 	}
 	if ctx.IsSet(forceHeadFlag.Name) {
 		logEnabled(forceHeadFlag)
