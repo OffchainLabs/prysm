@@ -65,7 +65,7 @@ func (s *Store) getAnchorState(offset uint64, lvl int, slot primitives.Slot) (an
 	return anchor, nil
 }
 
-// ComputeLevel computes the level in the diff tree. Returns -1 in case slot should not be in tree.
+// computeLevel computes the level in the diff tree. Returns -1 in case slot should not be in tree.
 func computeLevel(offset uint64, slot primitives.Slot) int {
 	rel := uint64(slot) - offset
 	for i, exp := range params.StateHierarchyExponents() {
