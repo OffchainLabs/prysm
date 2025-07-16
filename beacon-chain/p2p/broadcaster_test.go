@@ -725,9 +725,6 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	sub, err := p2.SubscribeToTopic(topic)
 	require.NoError(t, err)
 
-	// libp2p fails without this delay
-	time.Sleep(50 * time.Millisecond)
-
 	// Broadcast to peers and wait.
 	err = service.BroadcastDataColumn(emptyRoot, subnet, sidecar)
 	require.NoError(t, err)
@@ -737,9 +734,9 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	defer cancel()
 
 	msg, err := sub.Next(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	var result ethpb.DataColumnSidecar
-	assert.NoError(t, service.Encoding().DecodeGossip(msg.Data, &result))
-	assert.DeepEqual(t, &result, sidecar)
+	require.NoError(t, service.Encoding().DecodeGossip(msg.Data, &result))
+	require.DeepEqual(t, &result, sidecar)
 }
