@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/iface"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 var ErrLightClientBootstrapNotFound = errors.New("light client bootstrap not found")
@@ -92,8 +93,33 @@ func (s *Store) SaveLightClientUpdate(ctx context.Context, period uint64, update
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Save the light client update to the database
-	return s.beaconDB.SaveLightClientUpdate(ctx, period, update)
+	oldUpdate, err := s.beaconDB.LightClientUpdate(ctx, period)
+	if err != nil {
+		return errors.Wrapf(err, "could not get current light client update")
+	}
+
+	if oldUpdate == nil {
+		if err := s.beaconDB.SaveLightClientUpdate(ctx, period, update); err != nil {
+			return errors.Wrapf(err, "could not save light client update")
+		}
+		log.WithField("period", period).Debug("Saved new light client update")
+		return nil
+	}
+
+	isNewUpdateBetter, err := IsBetterUpdate(update, oldUpdate)
+	if err != nil {
+		return errors.Wrapf(err, "could not compare light client updates")
+	}
+
+	if isNewUpdateBetter {
+		if err := s.beaconDB.SaveLightClientUpdate(ctx, period, update); err != nil {
+			return errors.Wrapf(err, "could not save light client update")
+		}
+		log.WithField("period", period).Debug("Saved new light client update")
+		return nil
+	}
+	log.WithField("period", period).Debug("New light client update is not better than the current one, skipping save")
+	return nil
 }
 
 func (s *Store) SetLastFinalityUpdate(update interfaces.LightClientFinalityUpdate) {

@@ -189,33 +189,7 @@ func (s *Service) processLightClientUpdate(cfg *postBlockProcessConfig) error {
 
 	period := slots.SyncCommitteePeriod(slots.ToEpoch(attestedState.Slot()))
 
-	oldUpdate, err := s.lcStore.LightClientUpdate(cfg.ctx, period)
-	if err != nil {
-		return errors.Wrapf(err, "could not get current light client update")
-	}
-
-	if oldUpdate == nil {
-		if err := s.lcStore.SaveLightClientUpdate(cfg.ctx, period, update); err != nil {
-			return errors.Wrapf(err, "could not save light client update")
-		}
-		log.WithField("period", period).Debug("Saved new light client update")
-		return nil
-	}
-
-	isNewUpdateBetter, err := lightclient.IsBetterUpdate(update, oldUpdate)
-	if err != nil {
-		return errors.Wrapf(err, "could not compare light client updates")
-	}
-
-	if isNewUpdateBetter {
-		if err := s.lcStore.SaveLightClientUpdate(cfg.ctx, period, update); err != nil {
-			return errors.Wrapf(err, "could not save light client update")
-		}
-		log.WithField("period", period).Debug("Saved new light client update")
-		return nil
-	}
-	log.WithField("period", period).Debug("New light client update is not better than the current one, skipping save")
-	return nil
+	return s.lcStore.SaveLightClientUpdate(cfg.ctx, period, update)
 }
 
 // processLightClientBootstrap saves a light client bootstrap for this block
