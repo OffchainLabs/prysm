@@ -132,6 +132,7 @@ func TestAcceptEncodingHeaderHandler(t *testing.T) {
 	dummyContent := "Test gzip middleware content"
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", r.Header.Get("Accept"))
+		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte(dummyContent))
 		require.NoError(t, err)
 	})
@@ -145,19 +146,19 @@ func TestAcceptEncodingHeaderHandler(t *testing.T) {
 		expectCompressed bool
 	}{
 		{
-			name:             "Gzip supported",
+			name:             "Accept gzip",
 			accept:           api.JsonMediaType,
 			acceptEncoding:   "gzip",
 			expectCompressed: true,
 		},
 		{
-			name:             "Multiple encodings supported",
+			name:             "Accept multiple encodings",
 			accept:           api.JsonMediaType,
 			acceptEncoding:   "deflate, gzip",
 			expectCompressed: true,
 		},
 		{
-			name:             "Gzip not supported",
+			name:             "Accept unsupported encoding",
 			accept:           api.JsonMediaType,
 			acceptEncoding:   "deflate",
 			expectCompressed: false,
