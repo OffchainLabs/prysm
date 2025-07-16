@@ -28,6 +28,7 @@ func (s *Service) pingHandler(_ context.Context, msg interface{}, stream libp2pc
 	if !ok {
 		return fmt.Errorf("wrong message type for ping, got %T, wanted *uint64", msg)
 	}
+	sequenceNumber := uint64(*m)
 
 	// Validate the incoming request regarding rate limiting.
 	if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
@@ -40,14 +41,9 @@ func (s *Service) pingHandler(_ context.Context, msg interface{}, stream libp2pc
 	peerID := stream.Conn().RemotePeer()
 
 	// Check if the peer sequence number is higher than the one we have in our store.
-	valid, err := s.validateSequenceNum(*m, peerID)
+	valid, err := s.isSequenceNumberUpToDate(sequenceNumber, peerID)
 	if err != nil {
-		// Downscore peer for giving us a bad sequence number.
-		if errors.Is(err, p2ptypes.ErrInvalidSequenceNum) {
-			newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
-			log.WithFields(logrus.Fields{"peerID": peerID.String(), "reason": "pingInvalidSequenceNumber", "newScore": newScore}).Debug("Downscore peer")
-		}
-
+		s.writeErrorResponseToStream(responseCodeInvalidRequest, p2ptypes.ErrInvalidSequenceNum.Error(), stream)
 		return errors.Wrap(err, "validate sequence number")
 	}
 
@@ -153,16 +149,11 @@ func (s *Service) sendPingRequest(ctx context.Context, peerID peer.ID) error {
 	if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
 		return errors.Wrap(err, "decode sequence number")
 	}
+	sequenceNumber := uint64(*msg)
 
 	// Determine if the peer's sequence number returned by the peer is higher than the one we have in our store.
-	valid, err := s.validateSequenceNum(*msg, peerID)
+	valid, err := s.isSequenceNumberUpToDate(sequenceNumber, peerID)
 	if err != nil {
-		// Descore peer for giving us a bad sequence number.
-		if errors.Is(err, p2ptypes.ErrInvalidSequenceNum) {
-			newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
-			log.WithFields(logrus.Fields{"peerID": peerID.String(), "reason": "pingInvalidSequenceNumber", "newScore": newScore}).Debug("Downscore peer")
-		}
-
 		return errors.Wrap(err, "validate sequence number")
 	}
 
@@ -184,27 +175,40 @@ func (s *Service) sendPingRequest(ctx context.Context, peerID peer.ID) error {
 	return nil
 }
 
-// validateSequenceNum validates the peer's sequence number.
-// - If the peer's sequence number is greater than the sequence number we have in our store for the peer, return false.
-// - If the peer's sequence number is equal to the sequence number we have in our store for the peer, return true.
-// - If the peer's sequence number is less than the sequence number we have in our store for the peer, return an error.
-func (s *Service) validateSequenceNum(seq primitives.SSZUint64, id peer.ID) (bool, error) {
+// isSequenceNumberUpToDate check if our internal sequence number for the peer is up to date wrt. the incoming one.
+// - If the incoming sequence number is greater than the sequence number we have in our store for the peer, return false.
+// - If the incoming sequence number is equal to the sequence number we have in our store for the peer, return true.
+// - If the incoming sequence number is less than the sequence number we have in our store for the peer, return an error.
+func (s *Service) isSequenceNumberUpToDate(incomingSequenceNumber uint64, peerID peer.ID) (bool, error) {
 	// Retrieve the metadata for the peer we got in our store.
-	md, err := s.cfg.p2p.Peers().Metadata(id)
+	storedMetadata, err := s.cfg.p2p.Peers().Metadata(peerID)
 	if err != nil {
-		return false, errors.Wrap(err, "get metadata")
+		return false, errors.Wrap(err, "peers metadata")
 	}
 
 	// If we have no metadata for the peer, return false.
-	if md == nil || md.IsNil() {
+	if storedMetadata == nil || storedMetadata.IsNil() {
 		return false, nil
 	}
 
 	// The peer's sequence number must be less than or equal to the sequence number we have in our store.
-	if md.SequenceNumber() > uint64(seq) {
+	storedSequenceNumber := storedMetadata.SequenceNumber()
+	if storedSequenceNumber > incomingSequenceNumber {
+		newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+		log.WithFields(logrus.Fields{
+			"peerID":                 peerID.String(),
+			"reason":                 "pingInvalidSequenceNumber",
+			"newScore":               newScore,
+			"storedSequenceNumber":   storedSequenceNumber,
+			"incomingSequenceNumber": incomingSequenceNumber,
+		}).Debug("Downscore peer")
 		return false, p2ptypes.ErrInvalidSequenceNum
 	}
 
-	// Return true if the peer's sequence number is equal to the sequence number we have in our store.
-	return md.SequenceNumber() == uint64(seq), nil
+	// If this is the case, our information about the peer is outdated.
+	if storedSequenceNumber < incomingSequenceNumber {
+		return false, nil
+	}
+
+	return true, nil
 }
