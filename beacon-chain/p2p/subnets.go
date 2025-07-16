@@ -120,7 +120,7 @@ func (s *Service) FindAndDialPeersWithSubnets(
 		}()
 
 		if err != nil {
-			return errors.Wrap(err, "find peers with subnets batch")
+			return err
 		}
 
 		// Dial new peers in batches.

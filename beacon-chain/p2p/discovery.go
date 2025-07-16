@@ -383,7 +383,7 @@ func (s *Service) findAndDialPeers(ctx context.Context) error {
 		}()
 
 		if err != nil {
-			return errors.Wrap(err, "find peers")
+			return err
 		}
 
 		dialedPeerCount := s.dialPeers(s.ctx, maxConcurrentDials, peersToDial)
