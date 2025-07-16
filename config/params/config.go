@@ -443,7 +443,7 @@ func (b *BeaconChainConfig) MaxBlobsPerBlock(slot primitives.Slot) int {
 	return b.DeprecatedMaxBlobsPerBlock
 }
 
-// AbsoluteMaxBlobsPerBlock returns the absolute maximum number of blobs per block.
+// AbsoluteMaxBlobsPerBlock returns the absolute maximum number of blobs per block from all forks, including forks that have not occurred yet.
 func (b *BeaconChainConfig) AbsoluteMaxBlobsPerBlock() int {
 	if len(b.BlobSchedule) > 0 {
 		result := 0
