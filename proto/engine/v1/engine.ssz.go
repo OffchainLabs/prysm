@@ -1919,6 +1919,134 @@ func (e *ExecutionPayloadDenebAndBlobsBundle) HashTreeRootWith(hh *ssz.Hasher) (
 	return
 }
 
+// MarshalSSZ ssz marshals the ExecutionPayloadDenebAndBlobsBundleV2 object
+func (e *ExecutionPayloadDenebAndBlobsBundleV2) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(e)
+}
+
+// MarshalSSZTo ssz marshals the ExecutionPayloadDenebAndBlobsBundleV2 object to a target array
+func (e *ExecutionPayloadDenebAndBlobsBundleV2) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(8)
+
+	// Offset (0) 'Payload'
+	dst = ssz.WriteOffset(dst, offset)
+	if e.Payload == nil {
+		e.Payload = new(ExecutionPayloadDeneb)
+	}
+	offset += e.Payload.SizeSSZ()
+
+	// Offset (1) 'BlobsBundle'
+	dst = ssz.WriteOffset(dst, offset)
+	if e.BlobsBundle == nil {
+		e.BlobsBundle = new(BlobsBundleV2)
+	}
+	offset += e.BlobsBundle.SizeSSZ()
+
+	// Field (0) 'Payload'
+	if dst, err = e.Payload.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (1) 'BlobsBundle'
+	if dst, err = e.BlobsBundle.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the ExecutionPayloadDenebAndBlobsBundleV2 object
+func (e *ExecutionPayloadDenebAndBlobsBundleV2) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 8 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0, o1 uint64
+
+	// Offset (0) 'Payload'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 8 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Offset (1) 'BlobsBundle'
+	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
+		return ssz.ErrOffset
+	}
+
+	// Field (0) 'Payload'
+	{
+		buf = tail[o0:o1]
+		if e.Payload == nil {
+			e.Payload = new(ExecutionPayloadDeneb)
+		}
+		if err = e.Payload.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+
+	// Field (1) 'BlobsBundle'
+	{
+		buf = tail[o1:]
+		if e.BlobsBundle == nil {
+			e.BlobsBundle = new(BlobsBundleV2)
+		}
+		if err = e.BlobsBundle.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the ExecutionPayloadDenebAndBlobsBundleV2 object
+func (e *ExecutionPayloadDenebAndBlobsBundleV2) SizeSSZ() (size int) {
+	size = 8
+
+	// Field (0) 'Payload'
+	if e.Payload == nil {
+		e.Payload = new(ExecutionPayloadDeneb)
+	}
+	size += e.Payload.SizeSSZ()
+
+	// Field (1) 'BlobsBundle'
+	if e.BlobsBundle == nil {
+		e.BlobsBundle = new(BlobsBundleV2)
+	}
+	size += e.BlobsBundle.SizeSSZ()
+
+	return
+}
+
+// HashTreeRoot ssz hashes the ExecutionPayloadDenebAndBlobsBundleV2 object
+func (e *ExecutionPayloadDenebAndBlobsBundleV2) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(e)
+}
+
+// HashTreeRootWith ssz hashes the ExecutionPayloadDenebAndBlobsBundleV2 object with a hasher
+func (e *ExecutionPayloadDenebAndBlobsBundleV2) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Payload'
+	if err = e.Payload.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (1) 'BlobsBundle'
+	if err = e.BlobsBundle.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
 // MarshalSSZ ssz marshals the ExecutionPayloadHeader object
 func (e *ExecutionPayloadHeader) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(e)
