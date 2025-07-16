@@ -426,6 +426,24 @@ func GetMockSignRequest(t string) *validatorpb.SignRequest {
 				BlindedBlockElectra: util.HydrateBlindedBeaconBlockElectra(&eth.BlindedBeaconBlockElectra{}),
 			},
 		}
+	case "BLOCK_V2_FULU":
+		return &validatorpb.SignRequest{
+			PublicKey:       make([]byte, fieldparams.BLSPubkeyLength),
+			SigningRoot:     make([]byte, fieldparams.RootLength),
+			SignatureDomain: make([]byte, 4),
+			Object: &validatorpb.SignRequest_BlockFulu{
+				BlockFulu: util.HydrateBeaconBlockElectra(&eth.BeaconBlockElectra{}),
+			},
+		}
+	case "BLOCK_V2_BLINDED_FULU":
+		return &validatorpb.SignRequest{
+			PublicKey:       make([]byte, fieldparams.BLSPubkeyLength),
+			SigningRoot:     make([]byte, fieldparams.RootLength),
+			SignatureDomain: make([]byte, 4),
+			Object: &validatorpb.SignRequest_BlindedBlockFulu{
+				BlindedBlockFulu: util.HydrateBlindedBeaconBlockFulu(&eth.BlindedBeaconBlockFulu{}),
+			},
+		}
 	case "RANDAO_REVEAL":
 		return &validatorpb.SignRequest{
 			PublicKey:       make([]byte, fieldparams.BLSPubkeyLength),

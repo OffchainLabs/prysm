@@ -423,6 +423,34 @@ func GetBlockV2BlindedSignRequest(request *validatorpb.SignRequest, genesisValid
 			return nil, err
 		}
 		b = beaconBlock
+	case *validatorpb.SignRequest_BlockFulu:
+		version = "FULU"
+		block, ok := request.Object.(*validatorpb.SignRequest_BlockFulu)
+		if !ok {
+			return nil, errors.New("failed to cast request object to fulu block")
+		}
+		if block == nil {
+			return nil, errors.New("invalid sign request: fulu block is nil")
+		}
+		beaconBlock, err := blocks.NewBeaconBlock(block.BlockFulu)
+		if err != nil {
+			return nil, err
+		}
+		b = beaconBlock
+	case *validatorpb.SignRequest_BlindedBlockFulu:
+		version = "FULU"
+		blindedBlock, ok := request.Object.(*validatorpb.SignRequest_BlindedBlockFulu)
+		if !ok {
+			return nil, errors.New("failed to cast request object to blinded fulu block")
+		}
+		if blindedBlock == nil {
+			return nil, errors.New("invalid sign request: blinded fulu block is nil")
+		}
+		beaconBlock, err := blocks.NewBeaconBlock(blindedBlock.BlindedBlockFulu)
+		if err != nil {
+			return nil, err
+		}
+		b = beaconBlock
 	default:
 		return nil, errors.New("invalid sign request - invalid object type")
 	}
