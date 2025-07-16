@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	runtimeDebug "runtime/debug"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/node"
@@ -167,7 +166,7 @@ func before(ctx *cli.Context) error {
 	switch format {
 	case "text":
 		formatter := new(prefixed.TextFormatter)
-		formatter.TimestampFormat = time.DateTime
+		formatter.TimestampFormat = "2006-01-02 15:04:05.00"
 		formatter.FullTimestamp = true
 
 		// If persistent log files are written - we disable the log messages coloring because
@@ -183,7 +182,9 @@ func before(ctx *cli.Context) error {
 
 		logrus.SetFormatter(f)
 	case "json":
-		logrus.SetFormatter(&logrus.JSONFormatter{})
+		logrus.SetFormatter(&logrus.JSONFormatter{
+			TimestampFormat: "2006-01-02 15:04:05.00",
+		})
 	case "journald":
 		if err := journald.Enable(); err != nil {
 			return err
