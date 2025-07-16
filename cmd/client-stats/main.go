@@ -60,7 +60,7 @@ func main() {
 		switch format {
 		case "text":
 			formatter := new(prefixed.TextFormatter)
-			formatter.TimestampFormat = time.DateTime
+			formatter.TimestampFormat = "2006-01-02 15:04:05.00"
 			formatter.FullTimestamp = true
 			// If persistent log files are written - we disable the log messages coloring because
 			// the colors are ANSI codes and seen as gibberish in the log files.
@@ -73,7 +73,9 @@ func main() {
 			}
 			logrus.SetFormatter(f)
 		case "json":
-			logrus.SetFormatter(&logrus.JSONFormatter{})
+			logrus.SetFormatter(&logrus.JSONFormatter{
+				TimestampFormat: "2006-01-02 15:04:05.00",
+			})
 		case "journald":
 			if err := journald.Enable(); err != nil {
 				return err
