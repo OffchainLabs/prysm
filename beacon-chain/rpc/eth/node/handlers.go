@@ -83,8 +83,10 @@ func (s *Server) GetIdentity(w http.ResponseWriter, r *http.Request) {
 			P2PAddresses:       p2pAddresses,
 			DiscoveryAddresses: discoveryAddresses,
 			Metadata: &structs.Metadata{
-				SeqNumber: strconv.FormatUint(s.MetadataProvider.MetadataSeq(), 10),
-				Attnets:   hexutil.Encode(s.MetadataProvider.Metadata().AttnetsBitfield()),
+				SeqNumber:         strconv.FormatUint(s.MetadataProvider.MetadataSeq(), 10),
+				Attnets:           hexutil.Encode(s.MetadataProvider.Metadata().AttnetsBitfield()),
+				Syncnets:          hexutil.Encode(s.MetadataProvider.Metadata().SyncnetsBitfield()),
+				CustodyGroupCount: strconv.FormatUint(s.MetadataProvider.Metadata().CustodyGroupCount(), 10),
 			},
 		},
 	}
