@@ -610,6 +610,85 @@ func TestJsonMarshalUnmarshal(t *testing.T) {
 	t.Run("execution bundle electra with deneb payload, blob data, and execution requests", func(t *testing.T) {
 		// TODO #14351: update this test when geth updates
 	})
+
+	t.Run("ExecutionPayloadDenebAndBlobsBundleV2 SSZ marshaling", func(t *testing.T) {
+		payload := &enginev1.ExecutionPayloadDeneb{
+			ParentHash:    make([]byte, 32),
+			FeeRecipient:  make([]byte, 20),
+			StateRoot:     make([]byte, 32),
+			ReceiptsRoot:  make([]byte, 32),
+			LogsBloom:     make([]byte, 256),
+			PrevRandao:    make([]byte, 32),
+			BlockNumber:   123,
+			GasLimit:      456,
+			GasUsed:       789,
+			Timestamp:     1000,
+			ExtraData:     []byte("extra"),
+			BaseFeePerGas: bytesutil.PadTo(big.NewInt(1000000000).Bytes(), 32),
+			BlockHash:     make([]byte, 32),
+			Transactions:  [][]byte{},
+			Withdrawals:   []*enginev1.Withdrawal{},
+			BlobGasUsed:   1024,
+			ExcessBlobGas: 2048,
+		}
+		
+		bundleV2 := &enginev1.BlobsBundleV2{
+			KzgCommitments: [][]byte{make([]byte, 48), make([]byte, 48)},
+			Proofs:         [][]byte{make([]byte, 48), make([]byte, 48)},
+			Blobs:          [][]byte{make([]byte, 131072), make([]byte, 131072)},
+		}
+
+		bundle := &enginev1.ExecutionPayloadDenebAndBlobsBundleV2{
+			Payload:     payload,
+			BlobsBundle: bundleV2,
+		}
+
+		sszBytes, err := bundle.MarshalSSZ()
+		require.NoError(t, err)
+
+		unmarshaled := &enginev1.ExecutionPayloadDenebAndBlobsBundleV2{}
+		err = unmarshaled.UnmarshalSSZ(sszBytes)
+		require.NoError(t, err)
+
+		require.DeepEqual(t, bundle.Payload.BlockNumber, unmarshaled.Payload.BlockNumber)
+		require.DeepEqual(t, bundle.Payload.GasLimit, unmarshaled.Payload.GasLimit)
+		require.DeepEqual(t, bundle.BlobsBundle.KzgCommitments, unmarshaled.BlobsBundle.KzgCommitments)
+		require.DeepEqual(t, bundle.BlobsBundle.Proofs, unmarshaled.BlobsBundle.Proofs)
+	})
+
+	t.Run("BlobsBundleV2 SSZ marshaling", func(t *testing.T) {
+		bundle := &enginev1.BlobsBundleV2{
+			KzgCommitments: [][]byte{
+				make([]byte, 48),
+				make([]byte, 48),
+				make([]byte, 48),
+			},
+			Proofs: [][]byte{
+				make([]byte, 48),
+				make([]byte, 48),
+				make([]byte, 48),
+			},
+			Blobs: [][]byte{
+				make([]byte, 131072),
+				make([]byte, 131072),
+				make([]byte, 131072),
+			},
+		}
+
+		sszBytes, err := bundle.MarshalSSZ()
+		require.NoError(t, err)
+
+		unmarshaled := &enginev1.BlobsBundleV2{}
+		err = unmarshaled.UnmarshalSSZ(sszBytes)
+		require.NoError(t, err)
+
+		require.Equal(t, len(bundle.KzgCommitments), len(unmarshaled.KzgCommitments))
+		require.Equal(t, len(bundle.Proofs), len(unmarshaled.Proofs))
+		require.Equal(t, len(bundle.Blobs), len(unmarshaled.Blobs))
+		require.DeepEqual(t, bundle.KzgCommitments, unmarshaled.KzgCommitments)
+		require.DeepEqual(t, bundle.Proofs, unmarshaled.Proofs)
+		require.DeepEqual(t, bundle.Blobs, unmarshaled.Blobs)
+	})
 }
 
 func TestPayloadIDBytes_MarshalUnmarshalJSON(t *testing.T) {
