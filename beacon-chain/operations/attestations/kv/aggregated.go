@@ -78,16 +78,16 @@ func (c *AttCaches) aggregateParallel(atts map[attestation.Id][]ethpb.Att, leftO
 			for as := range ch {
 				aggregated, err := attaggregation.AggregateDisjointOneBitAtts(as)
 				if err != nil {
-					log.WithError(err).Error("could not aggregate unaggregated attestations")
+					log.WithError(err).Error("Could not aggregate unaggregated attestations")
 					continue
 				}
 				if aggregated == nil {
-					log.Error("nil aggregated attestation")
+					log.Error("Nil aggregated attestation")
 					continue
 				}
 				if aggregated.IsAggregated() {
 					if err := c.SaveAggregatedAttestations([]ethpb.Att{aggregated}); err != nil {
-						log.WithError(err).Error("could not save aggregated attestation")
+						log.WithError(err).Error("Could not save aggregated attestation")
 						continue
 					}
 				} else {

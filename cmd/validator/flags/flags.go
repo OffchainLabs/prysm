@@ -19,6 +19,8 @@ const (
 	WalletDefaultDirName = "prysm-wallet-v2"
 	// DefaultHTTPServerHost for the validator client.
 	DefaultHTTPServerHost = "127.0.0.1"
+
+	DefaultMaxHealthChecks = 0
 )
 
 var (
@@ -393,6 +395,13 @@ var (
 		Name:  "disable-duties-polling",
 		Usage: "Disables polling of duties on dependent root changes.",
 		Value: false,
+	}
+
+	// MaxHealthChecksFlag sets a maximum amount of times to check for beacon node health before validator client times out and shuts down
+	MaxHealthChecksFlag = &cli.IntFlag{
+		Name:  "max-health-checks",
+		Usage: "Maximum number of health checks to perform before exiting if not healthy. Set to 0 or a negative number for indefinite checks.",
+		Value: DefaultMaxHealthChecks,
 	}
 )
 

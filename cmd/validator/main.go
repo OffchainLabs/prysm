@@ -76,6 +76,7 @@ var appFlags = []cli.Flag{
 	flags.EnableDistributed,
 	flags.AuthTokenPathFlag,
 	flags.DisableDutiesPolling,
+	flags.MaxHealthChecksFlag,
 	// Consensys' Web3Signer flags
 	flags.Web3SignerURLFlag,
 	flags.Web3SignerPublicValidatorKeysFlag,

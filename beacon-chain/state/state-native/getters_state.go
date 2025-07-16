@@ -2,8 +2,6 @@ package state_native
 
 import (
 	customtypes "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/custom-types"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/pkg/errors"
@@ -24,20 +22,14 @@ func (b *BeaconState) ToProtoUnsafe() interface{} {
 	var bals []uint64
 	var inactivityScores []uint64
 
-	if features.Get().EnableExperimentalState {
-		if b.balancesMultiValue != nil {
-			bals = b.balancesMultiValue.Value(b)
-		}
-		if b.inactivityScoresMultiValue != nil {
-			inactivityScores = b.inactivityScoresMultiValue.Value(b)
-		}
-		if b.validatorsMultiValue != nil {
-			vals = b.validatorsMultiValue.Value(b)
-		}
-	} else {
-		bals = b.balances
-		inactivityScores = b.inactivityScores
-		vals = b.validators
+	if b.balancesMultiValue != nil {
+		bals = b.balancesMultiValue.Value(b)
+	}
+	if b.inactivityScoresMultiValue != nil {
+		inactivityScores = b.inactivityScoresMultiValue.Value(b)
+	}
+	if b.validatorsMultiValue != nil {
+		vals = b.validatorsMultiValue.Value(b)
 	}
 
 	switch b.version {
@@ -536,13 +528,10 @@ func (b *BeaconState) StateRoots() [][]byte {
 }
 
 func (b *BeaconState) stateRootsVal() customtypes.StateRoots {
-	if features.Get().EnableExperimentalState {
-		if b.stateRootsMultiValue == nil {
-			return nil
-		}
-		return b.stateRootsMultiValue.Value(b)
+	if b.stateRootsMultiValue == nil {
+		return nil
 	}
-	return b.stateRoots
+	return b.stateRootsMultiValue.Value(b)
 }
 
 // StateRootAtIndex retrieves a specific state root based on an
@@ -551,37 +540,14 @@ func (b *BeaconState) StateRootAtIndex(idx uint64) ([]byte, error) {
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
-	if features.Get().EnableExperimentalState {
-		if b.stateRootsMultiValue == nil {
-			return nil, nil
-		}
-		r, err := b.stateRootsMultiValue.At(b, idx)
-		if err != nil {
-			return nil, err
-		}
-		return r[:], nil
-	}
-
-	if b.stateRoots == nil {
+	if b.stateRootsMultiValue == nil {
 		return nil, nil
 	}
-	r, err := b.stateRootAtIndex(idx)
+	r, err := b.stateRootsMultiValue.At(b, idx)
 	if err != nil {
 		return nil, err
 	}
 	return r[:], nil
-}
-
-// stateRootAtIndex retrieves a specific state root based on an
-// input index value.
-// This assumes that a lock is already held on BeaconState.
-//
-// WARNING: This function does not work with the multi-value slice feature.
-func (b *BeaconState) stateRootAtIndex(idx uint64) ([32]byte, error) {
-	if uint64(len(b.stateRoots)) <= idx {
-		return [32]byte{}, errors.Wrapf(consensus_types.ErrOutOfBounds, "state root index %d does not exist", idx)
-	}
-	return b.stateRoots[idx], nil
 }
 
 // ProtobufBeaconStatePhase0 transforms an input into beacon state in the form of protobuf.

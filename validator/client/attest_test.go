@@ -22,7 +22,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/prysmaticlabs/go-bitfield"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
@@ -445,7 +444,7 @@ func TestAttestToBlockHead_DoesNotAttestBeforeDelay(t *testing.T) {
 
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.genesisTime = uint64(prysmTime.Now().Unix())
+			validator.genesisTime = time.Now()
 			m.validatorClient.EXPECT().Duties(
 				gomock.Any(), // ctx
 				gomock.AssignableToTypeOf(&ethpb.DutiesRequest{}),
@@ -478,7 +477,7 @@ func TestAttestToBlockHead_DoesAttestAfterDelay(t *testing.T) {
 			wg.Add(1)
 			defer wg.Wait()
 
-			validator.genesisTime = uint64(prysmTime.Now().Unix())
+			validator.genesisTime = time.Now()
 			validatorIndex := primitives.ValidatorIndex(5)
 			committee := []primitives.ValidatorIndex{0, 3, 4, 2, validatorIndex, 6, 8, 9, 10}
 			var pubKey [fieldparams.BLSPubkeyLength]byte
@@ -603,9 +602,9 @@ func TestSignAttestation(t *testing.T) {
 }
 
 func TestServer_WaitToSlotOneThird_CanWait(t *testing.T) {
-	currentTime := uint64(time.Now().Unix())
+	currentTime := time.Now()
 	currentSlot := primitives.Slot(4)
-	genesisTime := currentTime - uint64(currentSlot.Mul(params.BeaconConfig().SecondsPerSlot))
+	genesisTime := currentTime.Add(-1 * time.Duration(currentSlot.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second)
 
 	v := &validator{
 		genesisTime: genesisTime,
@@ -613,18 +612,18 @@ func TestServer_WaitToSlotOneThird_CanWait(t *testing.T) {
 	}
 
 	timeToSleep := params.BeaconConfig().SecondsPerSlot / 3
-	oneThird := currentTime + timeToSleep
+	oneThird := currentTime.Add(time.Duration(timeToSleep) * time.Second)
 	v.waitOneThirdOrValidBlock(t.Context(), currentSlot)
 
-	if oneThird != uint64(time.Now().Unix()) {
-		t.Errorf("Wanted %d time for slot one third but got %d", oneThird, currentTime)
+	if oneThird.Sub(time.Now()) > 10*time.Millisecond { // Allow for small diff due to execution time.
+		t.Errorf("Wanted %s time for slot one third but got %s", oneThird, currentTime)
 	}
 }
 
 func TestServer_WaitToSlotOneThird_SameReqSlot(t *testing.T) {
-	currentTime := uint64(time.Now().Unix())
+	currentTime := time.Now()
 	currentSlot := primitives.Slot(4)
-	genesisTime := currentTime - uint64(currentSlot.Mul(params.BeaconConfig().SecondsPerSlot))
+	genesisTime := currentTime.Add(-1 * time.Duration(currentSlot.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second)
 
 	v := &validator{
 		genesisTime:      genesisTime,
@@ -634,8 +633,8 @@ func TestServer_WaitToSlotOneThird_SameReqSlot(t *testing.T) {
 
 	v.waitOneThirdOrValidBlock(t.Context(), currentSlot)
 
-	if currentTime != uint64(time.Now().Unix()) {
-		t.Errorf("Wanted %d time for slot one third but got %d", uint64(time.Now().Unix()), currentTime)
+	if currentTime.Sub(time.Now()) > 10*time.Millisecond { // Allow for small diff due to execution time.
+		t.Errorf("Wanted %s time for slot one third but got %s", time.Now(), currentTime)
 	}
 }
 
@@ -643,9 +642,9 @@ func TestServer_WaitToSlotOneThird_ReceiveBlockSlot(t *testing.T) {
 	resetCfg := features.InitWithReset(&features.Flags{AttestTimely: true})
 	defer resetCfg()
 
-	currentTime := uint64(time.Now().Unix())
+	currentTime := time.Now()
 	currentSlot := primitives.Slot(4)
-	genesisTime := currentTime - uint64(currentSlot.Mul(params.BeaconConfig().SecondsPerSlot))
+	genesisTime := currentTime.Add(-1 * time.Duration(currentSlot.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second)
 
 	v := &validator{
 		genesisTime: genesisTime,
@@ -662,8 +661,8 @@ func TestServer_WaitToSlotOneThird_ReceiveBlockSlot(t *testing.T) {
 
 	v.waitOneThirdOrValidBlock(t.Context(), currentSlot)
 
-	if currentTime != uint64(time.Now().Unix()) {
-		t.Errorf("Wanted %d time for slot one third but got %d", uint64(time.Now().Unix()), currentTime)
+	if currentTime.Sub(time.Now()) > 10*time.Millisecond { // Allow for small diff due to execution time.
+		t.Errorf("Wanted %s time for slot one third but got %s", time.Now(), currentTime)
 	}
 }
 

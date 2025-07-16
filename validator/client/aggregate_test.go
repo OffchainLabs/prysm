@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -14,7 +15,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
 	"github.com/prysmaticlabs/go-bitfield"
@@ -256,7 +256,7 @@ func TestWaitForSlotTwoThird_WaitCorrectly(t *testing.T) {
 			defer finish()
 			currentTime := time.Now()
 			numOfSlots := primitives.Slot(4)
-			validator.genesisTime = uint64(currentTime.Unix()) - uint64(numOfSlots.Mul(params.BeaconConfig().SecondsPerSlot))
+			validator.genesisTime = currentTime.Add(-1 * time.Duration(numOfSlots.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second)
 			oneThird := slots.DivideSlotBy(3 /* one third of slot duration */)
 			timeToSleep := oneThird + oneThird
 
@@ -275,7 +275,7 @@ func TestWaitForSlotTwoThird_DoneContext_ReturnsImmediately(t *testing.T) {
 			defer finish()
 			currentTime := time.Now()
 			numOfSlots := primitives.Slot(4)
-			validator.genesisTime = uint64(currentTime.Unix()) - uint64(numOfSlots.Mul(params.BeaconConfig().SecondsPerSlot))
+			validator.genesisTime = currentTime.Add(-1 * time.Duration(numOfSlots.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second)
 
 			expectedTime := time.Now()
 			ctx, cancel := context.WithCancel(t.Context())

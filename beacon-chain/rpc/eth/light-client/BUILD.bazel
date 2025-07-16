@@ -25,6 +25,7 @@ go_library(
         "//runtime/version:go_default_library",
         "//time/slots:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
+        "@com_github_pkg_errors//:go_default_library",
         "@com_github_prysmaticlabs_fastssz//:go_default_library",
     ],
 )
@@ -42,9 +43,9 @@ go_test(
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/light-client:go_default_library",
         "//beacon-chain/db/testing:go_default_library",
-        "//beacon-chain/state:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
+        "//consensus-types/blocks:go_default_library",
         "//consensus-types/interfaces:go_default_library",
         "//consensus-types/light-client:go_default_library",
         "//consensus-types/primitives:go_default_library",

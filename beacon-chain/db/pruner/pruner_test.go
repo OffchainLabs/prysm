@@ -62,7 +62,7 @@ func TestPruner_PruningConditions(t *testing.T) {
 			if !tt.backfillCompleted {
 				backfillWaiter = waiter
 			}
-			p, err := New(ctx, beaconDB, uint64(time.Now().Unix()), initSyncWaiter, backfillWaiter, WithSlotTicker(slotTicker))
+			p, err := New(ctx, beaconDB, time.Now(), initSyncWaiter, backfillWaiter, WithSlotTicker(slotTicker))
 			require.NoError(t, err)
 
 			go p.Start()
@@ -100,7 +100,7 @@ func TestPruner_PruneSuccess(t *testing.T) {
 	p, err := New(
 		ctx,
 		beaconDB,
-		uint64(time.Now().Unix()),
+		time.Now(),
 		nil,
 		nil,
 		WithSlotTicker(slotTicker),

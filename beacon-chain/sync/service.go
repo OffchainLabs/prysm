@@ -10,6 +10,8 @@ import (
 	"time"
 
 	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v6/crypto/rand"
 	lru "github.com/hashicorp/golang-lru"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
@@ -48,6 +50,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/runtime"
 	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/sirupsen/logrus"
 )
 
 var _ runtime.Service = (*Service)(nil)
@@ -103,12 +106,15 @@ type config struct {
 	stateNotifier           statefeed.Notifier
 	blobStorage             *filesystem.BlobStorage
 	dataColumnStorage       *filesystem.DataColumnStorage
+	custodyInfo             *peerdas.CustodyInfo
+	batchVerifierLimit      int
 }
 
 // This defines the interface for interacting with block chain service
 type blockchainService interface {
 	blockchain.BlockReceiver
 	blockchain.BlobReceiver
+	blockchain.DataColumnReceiver
 	blockchain.HeadFetcher
 	blockchain.FinalizationFetcher
 	blockchain.ForkFetcher
@@ -140,7 +146,7 @@ type Service struct {
 	seenBlockCache                   *lru.Cache
 	seenBlobLock                     sync.RWMutex
 	seenBlobCache                    *lru.Cache
-	seenDataColumnCache              *lru.Cache
+	seenDataColumnCache              *slotAwareCache
 	seenAggregatedAttestationLock    sync.RWMutex
 	seenAggregatedAttestationCache   *lru.Cache
 	seenUnAggregatedAttestationLock  sync.RWMutex
@@ -166,6 +172,8 @@ type Service struct {
 	newBlobVerifier                  verification.NewBlobVerifier
 	newColumnsVerifier               verification.NewDataColumnsVerifier
 	availableBlocker                 coverage.AvailableBlocker
+	reconstructionLock               sync.Mutex
+	reconstructionRandGen            *rand.Rand
 	ctxMap                           ContextByteVersions
 	slasherEnabled                   bool
 	lcStore                          *lightClient.Store
@@ -176,15 +184,15 @@ type Service struct {
 func NewService(ctx context.Context, opts ...Option) *Service {
 	ctx, cancel := context.WithCancel(ctx)
 	r := &Service{
-		ctx:                  ctx,
-		cancel:               cancel,
-		chainStarted:         abool.New(),
-		cfg:                  &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
-		slotToPendingBlocks:  gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
-		seenPendingBlocks:    make(map[[32]byte]bool),
-		blkRootToPendingAtts: make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
-		signatureChan:        make(chan *signatureVerifier, verifierLimit),
-		dataColumnLogCh:      make(chan dataColumnLogEntry, 1000),
+		ctx:                   ctx,
+		cancel:                cancel,
+		chainStarted:          abool.New(),
+		cfg:                   &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
+		slotToPendingBlocks:   gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
+		seenPendingBlocks:     make(map[[32]byte]bool),
+		blkRootToPendingAtts:  make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
+		dataColumnLogCh:       make(chan dataColumnLogEntry, 1000),
+		reconstructionRandGen: rand.NewGenerator(),
 	}
 
 	for _, opt := range opts {
@@ -192,6 +200,8 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 			return nil
 		}
 	}
+	// Initialize signature channel with configured limit
+	r.signatureChan = make(chan *signatureVerifier, r.cfg.batchVerifierLimit)
 	// Correctly remove it from our seen pending block map.
 	// The eviction method always assumes that the mutex is held.
 	r.slotToPendingBlocks.OnEvicted(func(s string, i interface{}) {
@@ -260,6 +270,9 @@ func (s *Service) Start() {
 
 	// Update sync metrics.
 	async.RunEvery(s.ctx, syncMetricsInterval, s.updateMetrics)
+
+	// Prune data column cache periodically on finalization.
+	async.RunEvery(s.ctx, 30*time.Second, s.pruneDataColumnCache)
 }
 
 // Stop the regular sync service.
@@ -297,7 +310,7 @@ func (s *Service) Status() error {
 func (s *Service) initCaches() {
 	s.seenBlockCache = lruwrpr.New(seenBlockSize)
 	s.seenBlobCache = lruwrpr.New(seenBlockSize * params.BeaconConfig().DeprecatedMaxBlobsPerBlockElectra)
-	s.seenDataColumnCache = lruwrpr.New(seenDataColumnSize)
+	s.seenDataColumnCache = newSlotAwareCache(seenDataColumnSize)
 	s.seenAggregatedAttestationCache = lruwrpr.New(seenAggregatedAttSize)
 	s.seenUnAggregatedAttestationCache = lruwrpr.New(seenUnaggregatedAttSize)
 	s.seenSyncMessageCache = lruwrpr.New(seenSyncMsgSize)
@@ -312,7 +325,7 @@ func (s *Service) initCaches() {
 func (s *Service) waitForChainStart() {
 	clock, err := s.clockWaiter.WaitForClock(s.ctx)
 	if err != nil {
-		log.WithError(err).Error("sync service failed to receive genesis data")
+		log.WithError(err).Error("Sync service failed to receive genesis data")
 		return
 	}
 	s.cfg.clock = clock
@@ -324,7 +337,7 @@ func (s *Service) waitForChainStart() {
 		log.
 			WithError(err).
 			WithField("genesisValidatorRoot", clock.GenesisValidatorsRoot()).
-			Error("sync service failed to initialize context version map")
+			Error("Sync service failed to initialize context version map")
 		return
 	}
 	s.ctxMap = ctxMap
@@ -351,7 +364,7 @@ func (s *Service) startTasksPostInitialSync() {
 	select {
 	case <-s.initialSyncComplete:
 		// Compute the current epoch.
-		currentSlot := slots.CurrentSlot(uint64(s.cfg.clock.GenesisTime().Unix()))
+		currentSlot := slots.CurrentSlot(s.cfg.clock.GenesisTime())
 		currentEpoch := slots.ToEpoch(currentSlot)
 
 		// Compute the current fork forkDigest.
@@ -383,6 +396,24 @@ func (s *Service) setRateCollector(topic string, c *leakybucket.Collector) {
 // marks the chain as having started.
 func (s *Service) markForChainStart() {
 	s.chainStarted.Set()
+}
+
+// pruneDataColumnCache removes entries from the data column cache that are older than the finalized slot.
+func (s *Service) pruneDataColumnCache() {
+	finalizedCheckpoint := s.cfg.chain.FinalizedCheckpt()
+	finalizedSlot, err := slots.EpochStart(finalizedCheckpoint.Epoch)
+	if err != nil {
+		log.WithError(err).Error("Could not calculate finalized slot for cache pruning")
+		return
+	}
+
+	pruned := s.seenDataColumnCache.pruneSlotsBefore(finalizedSlot)
+	if pruned > 0 {
+		log.WithFields(logrus.Fields{
+			"finalizedSlot": finalizedSlot,
+			"prunedEntries": pruned,
+		}).Debug("Pruned data column cache entries before finalized slot")
+	}
 }
 
 func (s *Service) chainIsStarted() bool {

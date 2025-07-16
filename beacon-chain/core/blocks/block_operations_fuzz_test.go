@@ -119,6 +119,7 @@ func TestFuzzEth1DataHasEnoughSupport_10000(t *testing.T) {
 		require.NoError(t, err)
 		_, err = Eth1DataHasEnoughSupport(s, eth1data)
 		_ = err
+		fuzz.FreeMemory(i)
 	}
 
 }
@@ -319,6 +320,7 @@ func TestFuzzverifyDeposit_10000(t *testing.T) {
 		require.NoError(t, err)
 		err = VerifyDeposit(s, deposit)
 		_ = err
+		fuzz.FreeMemory(i)
 	}
 }
 
@@ -382,5 +384,6 @@ func TestFuzzVerifyExit_10000(t *testing.T) {
 		_ = err
 		err = VerifyExitAndSignature(val, s, ve)
 		_ = err
+		fuzz.FreeMemory(i)
 	}
 }

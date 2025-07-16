@@ -3,18 +3,12 @@ package state_native
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 func FuzzMultiValueBalances(f *testing.F) {
-	resetFn := features.InitWithReset(&features.Flags{
-		EnableExperimentalState: true,
-	})
-	defer resetFn()
-
 	bals := make([]uint64, 65536)
 	firstState, err := InitializeFromProtoPhase0(&ethpb.BeaconState{Balances: bals})
 	require.NoError(f, err)

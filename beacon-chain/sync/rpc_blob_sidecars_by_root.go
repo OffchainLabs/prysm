@@ -92,7 +92,7 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 		if sc.Slot() < minReqSlot {
 			s.writeErrorResponseToStream(responseCodeResourceUnavailable, types.ErrBlobLTMinRequest.Error(), stream)
 			log.WithError(types.ErrBlobLTMinRequest).
-				Debugf("requested blob for block %#x before minimum_request_epoch", blobIdents[i].BlockRoot)
+				Debugf("Requested blob for block %#x before minimum_request_epoch", blobIdents[i].BlockRoot)
 			return types.ErrBlobLTMinRequest
 		}
 

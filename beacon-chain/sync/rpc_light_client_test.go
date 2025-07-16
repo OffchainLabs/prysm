@@ -54,7 +54,7 @@ func TestRPC_LightClientBootstrap(t *testing.T) {
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
 		chainStarted: abool.New(),
-		lcStore:      &lightClient.Store{},
+		lcStore:      lightClient.NewLightClientStore(d),
 		subHandler:   newSubTopicHandler(),
 		rateLimiter:  newRateLimiter(p1),
 	}
@@ -81,7 +81,7 @@ func TestRPC_LightClientBootstrap(t *testing.T) {
 			blockRoot, err := l.Block.Block().HashTreeRoot()
 			require.NoError(t, err)
 
-			require.NoError(t, r.cfg.beaconDB.SaveLightClientBootstrap(ctx, blockRoot[:], bootstrap))
+			require.NoError(t, r.lcStore.SaveLightClientBootstrap(ctx, blockRoot, bootstrap))
 
 			var wg sync.WaitGroup
 			wg.Add(1)

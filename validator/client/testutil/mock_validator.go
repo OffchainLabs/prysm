@@ -7,7 +7,6 @@ import (
 	"time"
 
 	api "github.com/OffchainLabs/prysm/v6/api/client"
-	"github.com/OffchainLabs/prysm/v6/api/client/beacon/health"
 	"github.com/OffchainLabs/prysm/v6/api/client/event"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -24,49 +23,48 @@ var _ iface.Validator = (*FakeValidator)(nil)
 
 // FakeValidator for mocking.
 type FakeValidator struct {
-	IsRegularDeadline                 bool
+	CanChangeHost                     bool
 	LogValidatorGainsAndLossesCalled  bool
 	SaveProtectionsCalled             bool
 	DeleteProtectionCalled            bool
 	SlotDeadlineCalled                bool
 	HandleKeyReloadCalled             bool
-	WaitForWalletInitializationCalled bool
-	SlasherReadyCalled                bool
-	NextSlotCalled                    bool
 	AttestToBlockHeadCalled           bool
+	SlasherReadyCalled                bool
 	DoneCalled                        bool
+	RoleAtCalled                      bool
+	IsRegularDeadline                 bool
 	ProposeBlockCalled                bool
 	UpdateProtectionsCalled           bool
 	UpdateDutiesCalled                bool
-	RoleAtCalled                      bool
-	IndexToPubkeyMap                  map[uint64][fieldparams.BLSPubkeyLength]byte
-	PubkeyToIndexMap                  map[[fieldparams.BLSPubkeyLength]byte]uint64
-	PubkeysToStatusesMap              map[[fieldparams.BLSPubkeyLength]byte]ethpb.ValidatorStatus
-	ProposerSettingWait               time.Duration
-	NextSlotRet                       <-chan primitives.Slot
-	UpdateDutiesArg1                  uint64
-	RoleAtArg1                        uint64
-	AttestToBlockHeadArg1             uint64
-	ProposeBlockArg1                  uint64
-	RetryTillSuccess                  int
-	Balances                          map[[fieldparams.BLSPubkeyLength]byte]uint64
-	CanonicalHeadSlotCalled           int
+	WaitForWalletInitializationCalled bool
+	NextSlotCalled                    bool
 	WaitForActivationCalled           int
 	WaitForSyncCalled                 int
+	RetryTillSuccess                  int
+	ProposeBlockArg1                  uint64
+	AttestToBlockHeadArg1             uint64
+	RoleAtArg1                        uint64
+	UpdateDutiesArg1                  uint64
+	NextSlotRet                       <-chan primitives.Slot
+	ProposerSettingWait               time.Duration
+	PubkeysToStatusesMap              map[[fieldparams.BLSPubkeyLength]byte]ethpb.ValidatorStatus
+	PubkeyToIndexMap                  map[[fieldparams.BLSPubkeyLength]byte]uint64
+	IndexToPubkeyMap                  map[uint64][fieldparams.BLSPubkeyLength]byte
 	WaitForChainStartCalled           int
 	AttSubmitted                      chan interface{}
 	BlockProposed                     chan interface{}
 	AccountsChannel                   chan [][fieldparams.BLSPubkeyLength]byte
-	EventsChannel                     chan *event.Event
-	GenesisT                          uint64
+	GenesisT                          time.Time
 	ReceiveBlocksCalled               int
 	proposerSettings                  *proposer.Settings
-	UpdateDutiesRet                   error
+	Balances                          map[[48]byte]uint64
+	EventsChannel                     chan *event.Event
 	ProposerSettingsErr               error
 	Km                                keymanager.IKeymanager
 	graffiti                          string
-	Tracker                           health.Tracker
 	PublicKey                         string
+	UpdateDutiesRet                   error
 	RolesAtRet                        []iface.ValidatorRole
 }
 
@@ -83,7 +81,7 @@ func (fv *FakeValidator) AccountsChangedChan() <-chan [][fieldparams.BLSPubkeyLe
 	return fv.AccountsChannel
 }
 
-func (fv *FakeValidator) GenesisTime() uint64 {
+func (fv *FakeValidator) GenesisTime() time.Time {
 	return fv.GenesisT
 }
 
@@ -130,15 +128,6 @@ func (fv *FakeValidator) WaitForSync(_ context.Context) error {
 func (fv *FakeValidator) SlasherReady(_ context.Context) error {
 	fv.SlasherReadyCalled = true
 	return nil
-}
-
-// CanonicalHeadSlot for mocking.
-func (fv *FakeValidator) CanonicalHeadSlot(_ context.Context) (primitives.Slot, error) {
-	fv.CanonicalHeadSlotCalled++
-	if fv.RetryTillSuccess > fv.CanonicalHeadSlotCalled {
-		return 0, api.ErrConnectionIssue
-	}
-	return 0, nil
 }
 
 // SlotDeadline for mocking.
@@ -276,7 +265,7 @@ func (*FakeValidator) HasProposerSettings() bool {
 func (fv *FakeValidator) PushProposerSettings(ctx context.Context, _ primitives.Slot, _ bool) error {
 	time.Sleep(fv.ProposerSettingWait)
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		log.Error("deadline exceeded")
+		log.Error("Deadline exceeded")
 		// can't return error as it will trigger a log.fatal
 		return nil
 	}
@@ -337,14 +326,13 @@ func (*FakeValidator) EventStreamIsRunning() bool {
 	return true
 }
 
-func (fv *FakeValidator) HealthTracker() health.Tracker {
-	return fv.Tracker
-}
-
 func (*FakeValidator) Host() string {
 	return "127.0.0.1:0"
 }
 
-func (fv *FakeValidator) ChangeHost() {
-	fv.Host()
+func (fv *FakeValidator) FindHealthyHost(_ context.Context) bool {
+	return fv.CanChangeHost
+}
+
+func (fv *FakeValidator) SetTicker() {
 }

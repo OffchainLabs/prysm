@@ -76,7 +76,7 @@ func (km *Keymanager) ImportKeystores(
 		}
 	}
 	if len(importedKeys) == 0 {
-		log.Warn("no keys were imported")
+		log.Warn("No keys were imported")
 		return statuses, nil
 	}
 	// 2) Update copied keystore with new keys,clear duplicates in existing set

@@ -194,11 +194,11 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 		if IsValidSwitchToCompoundingRequest(st, cr) {
 			srcIdx, ok := st.ValidatorIndexByPubkey(bytesutil.ToBytes48(cr.SourcePubkey))
 			if !ok {
-				log.Error("failed to find source validator index")
+				log.Error("Failed to find source validator index")
 				continue
 			}
 			if err := SwitchToCompoundingValidator(st, srcIdx); err != nil {
-				log.WithError(err).Error("failed to switch to compounding validator")
+				log.WithError(err).Error("Failed to switch to compounding validator")
 			}
 			continue
 		}
@@ -280,7 +280,7 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 		}
 		bal, err := st.PendingBalanceToWithdraw(srcIdx)
 		if err != nil {
-			log.WithError(err).Error("failed to fetch pending balance to withdraw")
+			log.WithError(err).Error("Failed to fetch pending balance to withdraw")
 			continue
 		}
 		if bal > 0 {
@@ -290,7 +290,7 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 		// Initiate the exit of the source validator.
 		exitEpoch, err := ComputeConsolidationEpochAndUpdateChurn(ctx, st, primitives.Gwei(srcV.EffectiveBalance))
 		if err != nil {
-			log.WithError(err).Error("failed to compute consolidation epoch")
+			log.WithError(err).Error("Failed to compute consolidation epoch")
 			continue
 		}
 		srcV.ExitEpoch = exitEpoch

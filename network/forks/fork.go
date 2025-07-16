@@ -24,7 +24,7 @@ func IsForkNextEpoch(genesisTime time.Time, genesisValidatorsRoot []byte) (bool,
 	if len(genesisValidatorsRoot) == 0 {
 		return false, errors.New("genesis validators root is not set")
 	}
-	currentSlot := slots.Since(genesisTime)
+	currentSlot := slots.CurrentSlot(genesisTime)
 	currentEpoch := slots.ToEpoch(currentSlot)
 	fSchedule := params.BeaconConfig().ForkVersionSchedule
 	scheduledForks := SortedForkVersions(fSchedule)
@@ -65,7 +65,7 @@ func CreateForkDigest(
 	if len(genesisValidatorsRoot) == 0 {
 		return [4]byte{}, errors.New("genesis validators root is not set")
 	}
-	currentSlot := slots.Since(genesisTime)
+	currentSlot := slots.CurrentSlot(genesisTime)
 	currentEpoch := slots.ToEpoch(currentSlot)
 
 	forkData, err := Fork(currentEpoch)
