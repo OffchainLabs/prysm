@@ -177,7 +177,7 @@ func (c *client) initializeMockChainService(ctx context.Context) (*mockChain, er
 	if err != nil {
 		return nil, err
 	}
-	currEpoch := slots.ToEpoch(slots.SinceGenesis(genesisResp.GenesisTime.AsTime()))
+	currEpoch := slots.ToEpoch(slots.CurrentSlot(genesisResp.GenesisTime.AsTime()))
 	currFork, err := forks.Fork(currEpoch)
 	if err != nil {
 		return nil, err

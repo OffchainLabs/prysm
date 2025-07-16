@@ -13,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -66,7 +65,7 @@ func TestValidateDataColumn(t *testing.T) {
 		service := &Service{
 			cfg:                 &config{p2p: p, initialSync: &mockSync.Sync{}, clock: clock, chain: chainService},
 			newColumnsVerifier:  newDataColumnsVerifier,
-			seenDataColumnCache: lruwrpr.New(seenDataColumnSize),
+			seenDataColumnCache: newSlotAwareCache(seenDataColumnSize),
 		}
 
 		// Encode a `beaconBlock` message instead of expected.

@@ -707,7 +707,7 @@ func TestSubmitContributionAndProofs(t *testing.T) {
 
 func TestSubmitAggregateAndProofs(t *testing.T) {
 	slot := primitives.Slot(0)
-	mock := &mockChain.ChainService{Slot: &slot}
+	mock := &mockChain.ChainService{Slot: &slot, Genesis: time.Now().Add(-1 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)}
 	s := &Server{
 		CoreService: &core.Service{GenesisTimeFetcher: mock},
 		TimeFetcher: mock,
@@ -2655,7 +2655,7 @@ func TestGetSyncCommitteeDuties(t *testing.T) {
 	genesisTime := time.Now()
 	numVals := uint64(11)
 	st, _ := util.DeterministicGenesisStateAltair(t, numVals)
-	require.NoError(t, st.SetGenesisTime(uint64(genesisTime.Unix())))
+	require.NoError(t, st.SetGenesisTime(genesisTime))
 	vals := st.Validators()
 	currCommittee := &ethpbalpha.SyncCommittee{}
 	for i := 0; i < 5; i++ {
@@ -2841,7 +2841,7 @@ func TestGetSyncCommitteeDuties(t *testing.T) {
 		newSyncPeriodStartSlot := primitives.Slot(uint64(params.BeaconConfig().EpochsPerSyncCommitteePeriod) * uint64(params.BeaconConfig().SlotsPerEpoch))
 		newSyncPeriodSt, _ := util.DeterministicGenesisStateAltair(t, numVals)
 		require.NoError(t, newSyncPeriodSt.SetSlot(newSyncPeriodStartSlot))
-		require.NoError(t, newSyncPeriodSt.SetGenesisTime(uint64(genesisTime.Unix())))
+		require.NoError(t, newSyncPeriodSt.SetGenesisTime(genesisTime))
 		vals := newSyncPeriodSt.Validators()
 		currCommittee := &ethpbalpha.SyncCommittee{}
 		for i := 5; i < 10; i++ {

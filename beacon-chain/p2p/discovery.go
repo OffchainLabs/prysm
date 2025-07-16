@@ -147,7 +147,7 @@ func (s *Service) RefreshPersistentSubnets() {
 	}
 
 	// Get the current epoch.
-	currentSlot := slots.CurrentSlot(uint64(s.genesisTime.Unix()))
+	currentSlot := slots.CurrentSlot(s.genesisTime)
 	currentEpoch := slots.ToEpoch(currentSlot)
 
 	// Get our node ID.

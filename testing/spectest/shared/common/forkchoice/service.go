@@ -60,7 +60,10 @@ func startChainService(t testing.TB,
 	depositCache, err := depositsnapshot.New()
 	require.NoError(t, err)
 
+	genesis := st.GenesisTime()
+
 	fc := doublylinkedtree.New()
+	fc.SetGenesisTime(genesis)
 	sg := stategen.New(db, fc)
 	opts := append([]blockchain.Option{},
 		blockchain.WithExecutionEngineCaller(engineMock),
@@ -78,8 +81,9 @@ func startChainService(t testing.TB,
 		blockchain.WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)),
 		blockchain.WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)),
 		blockchain.WithSyncChecker(mock.MockChecker{}),
+		blockchain.WithGenesisTime(genesis),
 	)
-	service, err := blockchain.NewService(context.Background(), opts...)
+	service, err := blockchain.NewService(t.Context(), opts...)
 	require.NoError(t, err)
 	// force start kzg context here until Deneb fork epoch is decided
 	require.NoError(t, kzg.Start())

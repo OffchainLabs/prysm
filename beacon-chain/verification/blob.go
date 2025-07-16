@@ -2,6 +2,7 @@ package verification
 
 import (
 	"context"
+	"fmt"
 
 	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
@@ -143,7 +144,11 @@ func (bv *ROBlobVerifier) NotFromFutureSlot() (err error) {
 	}
 	// earliestStart represents the time the slot starts, lowered by MAXIMUM_GOSSIP_CLOCK_DISPARITY.
 	// We lower the time by MAXIMUM_GOSSIP_CLOCK_DISPARITY in case system time is running slightly behind real time.
-	earliestStart := bv.clock.SlotStart(bv.blob.Slot()).Add(-1 * params.BeaconConfig().MaximumGossipClockDisparityDuration())
+	earliestStart, err := bv.clock.SlotStart(bv.blob.Slot())
+	if err != nil {
+		return fmt.Errorf("could not determine slot start from clock waiter: %w", err)
+	}
+	earliestStart = earliestStart.Add(-1 * params.BeaconConfig().MaximumGossipClockDisparityDuration())
 	// If the system time is still before earliestStart, we consider the blob from a future slot and return an error.
 	if bv.clock.Now().Before(earliestStart) {
 		log.WithFields(logging.BlobFields(bv.blob)).Debug("Sidecar slot is too far in the future")

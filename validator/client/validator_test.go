@@ -176,14 +176,14 @@ func TestWaitForChainStart_SetsGenesisInfo(t *testing.T) {
 			require.NoError(t, err)
 			assert.DeepEqual(t, []byte(nil), savedGenValRoot, "Unexpected saved genesis validators root")
 
-			genesis := uint64(time.Unix(1, 0).Unix())
+			genesis := time.Unix(1, 0)
 			genesisValidatorsRoot := bytesutil.ToBytes32([]byte("validators"))
 			client.EXPECT().WaitForChainStart(
 				gomock.Any(),
 				&emptypb.Empty{},
 			).Return(&ethpb.ChainStartResponse{
 				Started:               true,
-				GenesisTime:           genesis,
+				GenesisTime:           uint64(genesis.Unix()),
 				GenesisValidatorsRoot: genesisValidatorsRoot[:],
 			}, nil)
 			require.NoError(t, v.WaitForChainStart(t.Context()))
@@ -192,7 +192,6 @@ func TestWaitForChainStart_SetsGenesisInfo(t *testing.T) {
 
 			assert.DeepEqual(t, genesisValidatorsRoot[:], savedGenValRoot, "Unexpected saved genesis validators root")
 			assert.Equal(t, genesis, v.genesisTime, "Unexpected chain start time")
-			assert.NotNil(t, v.ticker, "Expected ticker to be set, received nil")
 
 			// Make sure there are no errors running if it is the same data.
 			client.EXPECT().WaitForChainStart(
@@ -200,7 +199,7 @@ func TestWaitForChainStart_SetsGenesisInfo(t *testing.T) {
 				&emptypb.Empty{},
 			).Return(&ethpb.ChainStartResponse{
 				Started:               true,
-				GenesisTime:           genesis,
+				GenesisTime:           uint64(genesis.Unix()),
 				GenesisValidatorsRoot: genesisValidatorsRoot[:],
 			}, nil)
 			require.NoError(t, v.WaitForChainStart(t.Context()))
@@ -220,14 +219,14 @@ func TestWaitForChainStart_SetsGenesisInfo_IncorrectSecondTry(t *testing.T) {
 				validatorClient: client,
 				db:              db,
 			}
-			genesis := uint64(time.Unix(1, 0).Unix())
+			genesis := time.Unix(1, 0)
 			genesisValidatorsRoot := bytesutil.ToBytes32([]byte("validators"))
 			client.EXPECT().WaitForChainStart(
 				gomock.Any(),
 				&emptypb.Empty{},
 			).Return(&ethpb.ChainStartResponse{
 				Started:               true,
-				GenesisTime:           genesis,
+				GenesisTime:           uint64(genesis.Unix()),
 				GenesisValidatorsRoot: genesisValidatorsRoot[:],
 			}, nil)
 			require.NoError(t, v.WaitForChainStart(t.Context()))
@@ -236,7 +235,6 @@ func TestWaitForChainStart_SetsGenesisInfo_IncorrectSecondTry(t *testing.T) {
 
 			assert.DeepEqual(t, genesisValidatorsRoot[:], savedGenValRoot, "Unexpected saved genesis validators root")
 			assert.Equal(t, genesis, v.genesisTime, "Unexpected chain start time")
-			assert.NotNil(t, v.ticker, "Expected ticker to be set, received nil")
 
 			genesisValidatorsRoot = bytesutil.ToBytes32([]byte("badvalidators"))
 
@@ -246,7 +244,7 @@ func TestWaitForChainStart_SetsGenesisInfo_IncorrectSecondTry(t *testing.T) {
 				&emptypb.Empty{},
 			).Return(&ethpb.ChainStartResponse{
 				Started:               true,
-				GenesisTime:           genesis,
+				GenesisTime:           uint64(genesis.Unix()),
 				GenesisValidatorsRoot: genesisValidatorsRoot[:],
 			}, nil)
 			err = v.WaitForChainStart(t.Context())
@@ -597,7 +595,7 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 	).Return(
 		&ethpb.DomainResponse{SignatureDomain: sigDomain},
 		nil, /*err*/
-	).Times(2)
+	)
 
 	client.EXPECT().AggregatedSelections(
 		gomock.Any(),
@@ -1684,7 +1682,7 @@ func TestValidator_PushSettings(t *testing.T) {
 							NumValidatorKeys: 1,
 							Offset:           1,
 						},
-						genesisTime: 0,
+						genesisTime: time.Unix(0, 0),
 					}
 					// set bellatrix as current epoch
 					params.BeaconConfig().BellatrixForkEpoch = 0
@@ -2740,7 +2738,7 @@ func TestValidator_buildSignedRegReqs_TimestampBeforeGenesis(t *testing.T) {
 	v := validator{
 		signedValidatorRegistrations: map[[48]byte]*ethpb.SignedValidatorRegistrationV1{},
 		validatorClient:              client,
-		genesisTime:                  uint64(time.Now().UTC().Unix() + 1000),
+		genesisTime:                  time.Now().Add(1000 * time.Second),
 		proposerSettings: &proposer.Settings{
 			DefaultConfig: &proposer.Option{
 				FeeRecipientConfig: &proposer.FeeRecipientConfig{

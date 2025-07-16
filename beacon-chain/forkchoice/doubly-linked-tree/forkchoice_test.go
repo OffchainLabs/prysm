@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
@@ -691,7 +690,7 @@ func TestForkChoice_UpdateCheckpoints(t *testing.T) {
 			fcs := setup(tt.justified.Epoch, tt.finalized.Epoch)
 			fcs.store.justifiedCheckpoint = tt.justified
 			fcs.store.finalizedCheckpoint = tt.finalized
-			fcs.store.genesisTime = uint64(time.Now().Unix()) - uint64(tt.currentSlot)*params.BeaconConfig().SecondsPerSlot
+			driftGenesisTime(fcs, tt.currentSlot, 0)
 
 			st, roblock, err := prepareForkchoiceState(ctx, 32, [32]byte{'f'},
 				[32]byte{}, [32]byte{}, tt.finalized.Epoch, tt.finalized.Epoch)

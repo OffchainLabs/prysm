@@ -118,7 +118,7 @@ func TestServer_setExecutionData(t *testing.T) {
 				Timestamp:    uint64(time.Now().Unix()),
 				GasLimit:     gasLimit,
 				Pubkey:       make([]byte, fieldparams.BLSPubkeyLength)}}))
-		ti, err := slots.ToTime(uint64(time.Now().Unix()), 0)
+		ti, err := slots.StartTime(time.Now(), 0)
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
 		require.NoError(t, err)
@@ -160,7 +160,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		chain := &blockchainTest.ChainService{ForkChoiceStore: doublylinkedtree.New(), Genesis: time.Now(), Block: wb}
 		vs.ForkchoiceFetcher = chain
-		vs.ForkchoiceFetcher.SetForkChoiceGenesisTime(uint64(time.Now().Unix()))
+		vs.ForkchoiceFetcher.SetForkChoiceGenesisTime(time.Now())
 		vs.TimeFetcher = chain
 		vs.HeadFetcher = chain
 		b := blk.Block()
@@ -187,7 +187,7 @@ func TestServer_setExecutionData(t *testing.T) {
 				Timestamp:    uint64(time.Now().Unix()),
 				GasLimit:     gasLimit,
 				Pubkey:       make([]byte, fieldparams.BLSPubkeyLength)}}))
-		ti, err := slots.ToTime(uint64(time.Now().Unix()), 0)
+		ti, err := slots.StartTime(time.Now(), 0)
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
 		require.NoError(t, err)
@@ -232,7 +232,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		chain := &blockchainTest.ChainService{ForkChoiceStore: doublylinkedtree.New(), Genesis: time.Now(), Block: wb}
 		vs.ForkFetcher = chain
-		vs.ForkchoiceFetcher.SetForkChoiceGenesisTime(uint64(time.Now().Unix()))
+		vs.ForkchoiceFetcher.SetForkChoiceGenesisTime(time.Now())
 		vs.TimeFetcher = chain
 		vs.HeadFetcher = chain
 
@@ -259,7 +259,7 @@ func TestServer_setExecutionData(t *testing.T) {
 				Timestamp:    uint64(time.Now().Unix()),
 				GasLimit:     gasLimit,
 				Pubkey:       make([]byte, fieldparams.BLSPubkeyLength)}}))
-		ti, err := slots.ToTime(uint64(time.Now().Unix()), 0)
+		ti, err := slots.StartTime(time.Now(), 0)
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
 		require.NoError(t, err)
@@ -303,7 +303,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		chain := &blockchainTest.ChainService{ForkChoiceStore: doublylinkedtree.New(), Genesis: time.Now(), Block: wb}
 		vs.ForkFetcher = chain
-		vs.ForkchoiceFetcher.SetForkChoiceGenesisTime(uint64(time.Now().Unix()))
+		vs.ForkchoiceFetcher.SetForkChoiceGenesisTime(time.Now())
 		vs.TimeFetcher = chain
 		vs.HeadFetcher = chain
 
@@ -330,7 +330,7 @@ func TestServer_setExecutionData(t *testing.T) {
 				Timestamp:    uint64(time.Now().Unix()),
 				GasLimit:     gasLimit,
 				Pubkey:       make([]byte, fieldparams.BLSPubkeyLength)}}))
-		ti, err := slots.ToTime(uint64(time.Now().Unix()), 0)
+		ti, err := slots.StartTime(time.Now(), 0)
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
 		require.NoError(t, err)
@@ -374,7 +374,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		chain := &blockchainTest.ChainService{ForkChoiceStore: doublylinkedtree.New(), Genesis: time.Now(), Block: wb}
 		vs.ForkFetcher = chain
-		vs.ForkchoiceFetcher.SetForkChoiceGenesisTime(uint64(time.Now().Unix()))
+		vs.ForkchoiceFetcher.SetForkChoiceGenesisTime(time.Now())
 		vs.TimeFetcher = chain
 		vs.HeadFetcher = chain
 
@@ -537,7 +537,7 @@ func TestServer_setExecutionData(t *testing.T) {
 
 		blk, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockDeneb())
 		require.NoError(t, err)
-		ti, err := slots.ToTime(uint64(time.Now().Unix()), 0)
+		ti, err := slots.StartTime(time.Now(), 0)
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
 		require.NoError(t, err)
@@ -593,7 +593,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		chain := &blockchainTest.ChainService{ForkChoiceStore: doublylinkedtree.New(), Genesis: time.Now(), Block: wb}
 		vs.ForkFetcher = chain
-		vs.ForkchoiceFetcher.SetForkChoiceGenesisTime(uint64(time.Now().Unix()))
+		vs.ForkchoiceFetcher.SetForkChoiceGenesisTime(time.Now())
 		vs.TimeFetcher = chain
 		vs.HeadFetcher = chain
 
@@ -635,7 +635,7 @@ func TestServer_setExecutionData(t *testing.T) {
 
 		blk, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockElectra())
 		require.NoError(t, err)
-		ti, err := slots.ToTime(uint64(time.Now().Unix()), 0)
+		ti, err := slots.StartTime(time.Now(), 0)
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
 		require.NoError(t, err)
@@ -717,7 +717,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		chain := &blockchainTest.ChainService{ForkChoiceStore: doublylinkedtree.New(), Genesis: time.Now(), Block: wb}
 		vs.ForkFetcher = chain
-		vs.ForkchoiceFetcher.SetForkChoiceGenesisTime(uint64(time.Now().Unix()))
+		vs.ForkchoiceFetcher.SetForkChoiceGenesisTime(time.Now())
 		vs.TimeFetcher = chain
 		vs.HeadFetcher = chain
 
@@ -772,7 +772,7 @@ func TestServer_getPayloadHeader(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 	emptyRoot, err := ssz.TransactionsRoot([][]byte{})
 	require.NoError(t, err)
-	ti, err := slots.ToTime(uint64(time.Now().Unix()), 0)
+	ti, err := slots.StartTime(time.Now(), 0)
 	require.NoError(t, err)
 
 	sk, err := bls.RandKey()
@@ -814,7 +814,7 @@ func TestServer_getPayloadHeader(t *testing.T) {
 	wr, err := ssz.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
 	require.NoError(t, err)
 
-	tiCapella, err := slots.ToTime(uint64(genesis.Unix()), primitives.Slot(fakeCapellaEpoch)*params.BeaconConfig().SlotsPerEpoch)
+	tiCapella, err := slots.StartTime(genesis, primitives.Slot(fakeCapellaEpoch)*params.BeaconConfig().SlotsPerEpoch)
 	require.NoError(t, err)
 	bidCapella := &ethpb.BuilderBidCapella{
 		Header: &v1.ExecutionPayloadHeaderCapella{

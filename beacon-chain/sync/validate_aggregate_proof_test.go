@@ -276,7 +276,7 @@ func TestValidateAggregateAndProof_NotWithinSlotRange(t *testing.T) {
 	}
 	signedAggregateAndProof := &ethpb.SignedAggregateAttestationAndProof{Message: aggregateAndProof, Signature: make([]byte, fieldparams.BLSSignatureLength)}
 
-	require.NoError(t, beaconState.SetGenesisTime(uint64(time.Now().Unix())))
+	require.NoError(t, beaconState.SetGenesisTime(time.Now()))
 
 	r := &Service{
 		cfg: &config{
@@ -360,7 +360,7 @@ func TestValidateAggregateAndProof_ExistedInPool(t *testing.T) {
 	}
 	signedAggregateAndProof := &ethpb.SignedAggregateAttestationAndProof{Message: aggregateAndProof, Signature: make([]byte, fieldparams.BLSSignatureLength)}
 
-	require.NoError(t, beaconState.SetGenesisTime(uint64(time.Now().Unix())))
+	require.NoError(t, beaconState.SetGenesisTime(time.Now()))
 	r := &Service{
 		cfg: &config{
 			attPool:     attestations.NewPool(),
@@ -450,7 +450,7 @@ func TestValidateAggregateAndProof_CanValidate(t *testing.T) {
 	signedAggregateAndProof.Signature, err = signing.ComputeDomainAndSign(beaconState, 0, signedAggregateAndProof.Message, params.BeaconConfig().DomainAggregateAndProof, privKeys[ai])
 	require.NoError(t, err)
 
-	require.NoError(t, beaconState.SetGenesisTime(uint64(time.Now().Unix())))
+	require.NoError(t, beaconState.SetGenesisTime(time.Now()))
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	chain := &mock.ChainService{Genesis: time.Now().Add(-oneEpoch()),
@@ -552,7 +552,7 @@ func TestVerifyIndexInCommittee_SeenAggregatorEpoch(t *testing.T) {
 	signedAggregateAndProof := &ethpb.SignedAggregateAttestationAndProof{Message: aggregateAndProof}
 	signedAggregateAndProof.Signature, err = signing.ComputeDomainAndSign(beaconState, 0, signedAggregateAndProof.Message, params.BeaconConfig().DomainAggregateAndProof, privKeys[ai])
 	require.NoError(t, err)
-	require.NoError(t, beaconState.SetGenesisTime(uint64(time.Now().Unix())))
+	require.NoError(t, beaconState.SetGenesisTime(time.Now()))
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -674,7 +674,7 @@ func TestValidateAggregateAndProof_BadBlock(t *testing.T) {
 	signedAggregateAndProof.Signature, err = signing.ComputeDomainAndSign(beaconState, 0, signedAggregateAndProof.Message, params.BeaconConfig().DomainAggregateAndProof, privKeys[ai])
 	require.NoError(t, err)
 
-	require.NoError(t, beaconState.SetGenesisTime(uint64(time.Now().Unix())))
+	require.NoError(t, beaconState.SetGenesisTime(time.Now()))
 	r := &Service{
 		cfg: &config{
 			p2p:         p,
@@ -764,7 +764,7 @@ func TestValidateAggregateAndProof_RejectWhenAttEpochDoesntEqualTargetEpoch(t *t
 	signedAggregateAndProof.Signature, err = signing.ComputeDomainAndSign(beaconState, 0, signedAggregateAndProof.Message, params.BeaconConfig().DomainAggregateAndProof, privKeys[ai])
 	require.NoError(t, err)
 
-	require.NoError(t, beaconState.SetGenesisTime(uint64(time.Now().Unix())))
+	require.NoError(t, beaconState.SetGenesisTime(time.Now()))
 	r := &Service{
 		cfg: &config{
 			p2p:         p,

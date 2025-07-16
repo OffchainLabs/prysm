@@ -198,7 +198,7 @@ func (vs *Server) WaitForChainStart(_ *emptypb.Empty, stream ethpb.BeaconNodeVal
 	if head != nil && !head.IsNil() {
 		res := &ethpb.ChainStartResponse{
 			Started:               true,
-			GenesisTime:           head.GenesisTime(),
+			GenesisTime:           uint64(head.GenesisTime().Unix()),
 			GenesisValidatorsRoot: head.GenesisValidatorsRoot(),
 		}
 		return stream.Send(res)

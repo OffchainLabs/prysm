@@ -195,7 +195,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	dataColumnSidecarVerificationSuccessesCounter.Inc()
 
 	// Get the time at slot start.
-	startTime, err := slots.ToTime(uint64(s.cfg.chain.GenesisTime().Unix()), roDataColumn.SignedBlockHeader.Header.Slot)
+	startTime, err := slots.StartTime(s.cfg.chain.GenesisTime(), roDataColumn.SignedBlockHeader.Header.Slot)
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
@@ -247,7 +247,7 @@ func (s *Service) hasSeenDataColumnIndex(slot primitives.Slot, proposerIndex pri
 // Sets the data column with the same slot, proposer index, and data column index as seen.
 func (s *Service) setSeenDataColumnIndex(slot primitives.Slot, proposerIndex primitives.ValidatorIndex, index uint64) {
 	key := computeCacheKey(slot, proposerIndex, index)
-	s.seenDataColumnCache.Add(key, true)
+	s.seenDataColumnCache.Add(slot, key, true)
 }
 
 func computeCacheKey(slot primitives.Slot, proposerIndex primitives.ValidatorIndex, index uint64) string {
