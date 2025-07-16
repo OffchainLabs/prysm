@@ -747,7 +747,7 @@ func isDigestValid(digest [4]byte, genesis time.Time, genValRoot [32]byte) (bool
 }
 
 // computeAllNeededSubnets computes the subnets we want to join
-// and the subnets we want to find peers into.
+// and the subnets for which we want to find peers.
 func computeAllNeededSubnets(
 	currentSlot primitives.Slot,
 	getSubnetsToJoin func(currentSlot primitives.Slot) map[uint64]bool,
