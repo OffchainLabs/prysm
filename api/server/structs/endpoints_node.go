@@ -27,6 +27,8 @@ type Identity struct {
 type Metadata struct {
 	SeqNumber string `json:"seq_number"`
 	Attnets   string `json:"attnets"`
+	Syncnets  string `json:"syncnets"`
+	Cgc       string `json:"custody_group_count"`
 }
 
 type GetPeerResponse struct {

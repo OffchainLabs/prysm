@@ -76,6 +76,7 @@ func (s *Server) GetIdentity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	metadata := s.MetadataProvider.Metadata()
 	resp := &structs.GetIdentityResponse{
 		Data: &structs.Identity{
 			PeerId:             peerId,
@@ -84,7 +85,9 @@ func (s *Server) GetIdentity(w http.ResponseWriter, r *http.Request) {
 			DiscoveryAddresses: discoveryAddresses,
 			Metadata: &structs.Metadata{
 				SeqNumber: strconv.FormatUint(s.MetadataProvider.MetadataSeq(), 10),
-				Attnets:   hexutil.Encode(s.MetadataProvider.Metadata().AttnetsBitfield()),
+				Attnets:   hexutil.Encode(metadata.AttnetsBitfield()),
+				Syncnets:  hexutil.Encode(metadata.SyncnetsBitfield()),
+				Cgc:       strconv.FormatUint(metadata.CustodyGroupCount(), 10),
 			},
 		},
 	}
