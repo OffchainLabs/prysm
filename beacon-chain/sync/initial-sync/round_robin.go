@@ -52,7 +52,7 @@ func (s *Service) roundRobinSync() error {
 	}
 
 	// Already at head, no need for 2nd phase.
-	if s.cfg.Chain.HeadSlot() == slots.Since(s.genesisTime) {
+	if s.cfg.Chain.HeadSlot() == slots.CurrentSlot(s.genesisTime) {
 		return nil
 	}
 
@@ -108,7 +108,7 @@ func (s *Service) syncToFinalizedEpoch(ctx context.Context) error {
 
 	log.WithFields(logrus.Fields{
 		"syncedSlot":  s.cfg.Chain.HeadSlot(),
-		"currentSlot": slots.Since(s.genesisTime),
+		"currentSlot": slots.CurrentSlot(s.genesisTime),
 	}).Info("Synced to finalized epoch - now syncing blocks up to current head")
 	if err := queue.stop(); err != nil {
 		log.WithError(err).Debug("Error stopping queue")
@@ -120,7 +120,7 @@ func (s *Service) syncToFinalizedEpoch(ctx context.Context) error {
 // syncToNonFinalizedEpoch sync from head to best known non-finalized epoch supported by majority
 // of peers (no less than MinimumSyncPeers*2 peers).
 func (s *Service) syncToNonFinalizedEpoch(ctx context.Context) error {
-	queue, err := s.startBlocksQueue(ctx, slots.Since(s.genesisTime), modeNonConstrained)
+	queue, err := s.startBlocksQueue(ctx, slots.CurrentSlot(s.genesisTime), modeNonConstrained)
 	if err != nil {
 		return err
 	}
@@ -130,7 +130,7 @@ func (s *Service) syncToNonFinalizedEpoch(ctx context.Context) error {
 	}
 	log.WithFields(logrus.Fields{
 		"syncedSlot":  s.cfg.Chain.HeadSlot(),
-		"currentSlot": slots.Since(s.genesisTime),
+		"currentSlot": slots.CurrentSlot(s.genesisTime),
 	}).Info("Synced to head of chain")
 	if err := queue.stop(); err != nil {
 		log.WithError(err).Debug("Error stopping queue")
@@ -213,14 +213,14 @@ func (s *Service) logSyncStatus(genesis time.Time, blk interfaces.ReadOnlyBeacon
 		rate = 1
 	}
 	if slots.IsEpochStart(blk.Slot()) {
-		timeRemaining := time.Duration(float64(slots.Since(genesis)-blk.Slot())/rate) * time.Second
+		timeRemaining := time.Duration(float64(slots.CurrentSlot(genesis)-blk.Slot())/rate) * time.Second
 		log.WithFields(logrus.Fields{
 			"peers":           len(s.cfg.P2P.Peers().Connected()),
 			"blocksPerSecond": fmt.Sprintf("%.1f", rate),
 		}).Infof(
 			"Processing block %s %d/%d - estimated time remaining %s",
 			fmt.Sprintf("0x%s...", hex.EncodeToString(blkRoot[:])[:8]),
-			blk.Slot(), slots.Since(genesis), timeRemaining,
+			blk.Slot(), slots.CurrentSlot(genesis), timeRemaining,
 		)
 	}
 }
@@ -234,13 +234,13 @@ func (s *Service) logBatchSyncStatus(firstBlk blocks.ROBlock, nBlocks int) {
 		rate = 1
 	}
 	firstRoot := firstBlk.Root()
-	timeRemaining := time.Duration(float64(slots.Since(genesis)-firstBlk.Block().Slot())/rate) * time.Second
+	timeRemaining := time.Duration(float64(slots.CurrentSlot(genesis)-firstBlk.Block().Slot())/rate) * time.Second
 	log.WithFields(logrus.Fields{
 		"peers":                           len(s.cfg.P2P.Peers().Connected()),
 		"blocksPerSecond":                 fmt.Sprintf("%.1f", rate),
 		"batchSize":                       nBlocks,
 		"startingFrom":                    fmt.Sprintf("0x%s...", hex.EncodeToString(firstRoot[:])[:8]),
-		"latestProcessedSlot/currentSlot": fmt.Sprintf("%d/%d", firstBlk.Block().Slot(), slots.Since(genesis)),
+		"latestProcessedSlot/currentSlot": fmt.Sprintf("%d/%d", firstBlk.Block().Slot(), slots.CurrentSlot(genesis)),
 		"estimatedTimeRemaining":          timeRemaining,
 	}).Info("Processing blocks")
 }

@@ -114,11 +114,7 @@ func (s *Store) SaveLightClientUpdate(ctx context.Context, period uint64, update
 	defer s.mu.Unlock()
 
 	// Save the light client update to the database
-	if err := s.beaconDB.SaveLightClientUpdate(ctx, period, update); err != nil {
-		return err
-	}
-
-	return nil
+	return s.beaconDB.SaveLightClientUpdate(ctx, period, update)
 }
 
 func (s *Store) SetLastFinalityUpdate(update interfaces.LightClientFinalityUpdate) {

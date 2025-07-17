@@ -2,6 +2,7 @@ package builder
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	v1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
@@ -1572,4 +1574,167 @@ func TestRequestLogger(t *testing.T) {
 	c.hc = hc
 	err = c.Status(ctx)
 	require.NoError(t, err)
+}
+
+func TestGetVersionsBlockToPayload(t *testing.T) {
+	tests := []struct {
+		name            string
+		blockVersion    int
+		expectedVersion int
+		expectedError   bool
+	}{
+		{
+			name:            "Fulu version",
+			blockVersion:    6, // version.Fulu
+			expectedVersion: 6,
+			expectedError:   false,
+		},
+		{
+			name:            "Deneb version",
+			blockVersion:    4, // version.Deneb
+			expectedVersion: 4,
+			expectedError:   false,
+		},
+		{
+			name:            "Capella version",
+			blockVersion:    3, // version.Capella
+			expectedVersion: 3,
+			expectedError:   false,
+		},
+		{
+			name:            "Bellatrix version",
+			blockVersion:    2, // version.Bellatrix
+			expectedVersion: 2,
+			expectedError:   false,
+		},
+		{
+			name:          "Unsupported version",
+			blockVersion:  0,
+			expectedError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			version, err := getVersionsBlockToPayload(tt.blockVersion)
+			if tt.expectedError {
+				assert.NotNil(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedVersion, version)
+			}
+		})
+	}
+}
+
+func TestParseBlindedBlockResponseSSZ_WithBlobsBundleV2(t *testing.T) {
+	c := &Client{sszEnabled: true}
+
+	// Create test payload
+	payload := &v1.ExecutionPayloadDeneb{
+		ParentHash:    make([]byte, 32),
+		FeeRecipient:  make([]byte, 20),
+		StateRoot:     make([]byte, 32),
+		ReceiptsRoot:  make([]byte, 32),
+		LogsBloom:     make([]byte, 256),
+		PrevRandao:    make([]byte, 32),
+		BlockNumber:   123456,
+		GasLimit:      30000000,
+		GasUsed:       21000,
+		Timestamp:     1234567890,
+		ExtraData:     []byte("test-extra-data"),
+		BaseFeePerGas: make([]byte, 32),
+		BlockHash:     make([]byte, 32),
+		Transactions:  [][]byte{},
+		Withdrawals:   []*v1.Withdrawal{},
+		BlobGasUsed:   1024,
+		ExcessBlobGas: 2048,
+	}
+
+	// Create test BlobsBundleV2
+	bundleV2 := &v1.BlobsBundleV2{
+		KzgCommitments: [][]byte{make([]byte, 48), make([]byte, 48)},
+		Proofs:         [][]byte{make([]byte, 48), make([]byte, 48)},
+		Blobs:          [][]byte{make([]byte, 131072), make([]byte, 131072)},
+	}
+
+	// Test Fulu version (should use ExecutionPayloadDenebAndBlobsBundleV2)
+	t.Run("Fulu version with BlobsBundleV2", func(t *testing.T) {
+		payloadAndBlobsV2 := &v1.ExecutionPayloadDenebAndBlobsBundleV2{
+			Payload:     payload,
+			BlobsBundle: bundleV2,
+		}
+
+		respBytes, err := payloadAndBlobsV2.MarshalSSZ()
+		require.NoError(t, err)
+
+		ed, bundle, err := c.parseBlindedBlockResponseSSZ(respBytes, 6) // version.Fulu
+		require.NoError(t, err)
+		require.NotNil(t, ed)
+		require.NotNil(t, bundle)
+
+		// Verify the bundle is BlobsBundleV2
+		bundleV2Result, ok := bundle.(*v1.BlobsBundleV2)
+		assert.Equal(t, true, ok, "Expected BlobsBundleV2 type")
+		require.Equal(t, len(bundleV2.KzgCommitments), len(bundleV2Result.KzgCommitments))
+		require.Equal(t, len(bundleV2.Proofs), len(bundleV2Result.Proofs))
+		require.Equal(t, len(bundleV2.Blobs), len(bundleV2Result.Blobs))
+	})
+
+	// Test Deneb version (should use regular BlobsBundle)
+	t.Run("Deneb version with regular BlobsBundle", func(t *testing.T) {
+		regularBundle := &v1.BlobsBundle{
+			KzgCommitments: bundleV2.KzgCommitments,
+			Proofs:         bundleV2.Proofs,
+			Blobs:          bundleV2.Blobs,
+		}
+
+		payloadAndBlobs := &v1.ExecutionPayloadDenebAndBlobsBundle{
+			Payload:     payload,
+			BlobsBundle: regularBundle,
+		}
+
+		respBytes, err := payloadAndBlobs.MarshalSSZ()
+		require.NoError(t, err)
+
+		ed, bundle, err := c.parseBlindedBlockResponseSSZ(respBytes, 4) // version.Deneb
+		require.NoError(t, err)
+		require.NotNil(t, ed)
+		require.NotNil(t, bundle)
+
+		// Verify the bundle is regular BlobsBundle
+		regularBundleResult, ok := bundle.(*v1.BlobsBundle)
+		assert.Equal(t, true, ok, "Expected BlobsBundle type")
+		require.Equal(t, len(regularBundle.KzgCommitments), len(regularBundleResult.KzgCommitments))
+	})
+
+	// Test invalid SSZ data
+	t.Run("Invalid SSZ data", func(t *testing.T) {
+		invalidBytes := []byte("invalid-ssz-data")
+
+		ed, bundle, err := c.parseBlindedBlockResponseSSZ(invalidBytes, 6)
+		assert.NotNil(t, err)
+		assert.Equal(t, true, ed == nil)
+		assert.Equal(t, true, bundle == nil)
+	})
+}
+
+func TestSubmitBlindedBlock_BlobsBundlerInterface(t *testing.T) {
+	// Note: The full integration test is complex due to version detection logic
+	// The key functionality is tested in the parseBlindedBlockResponseSSZ tests above
+	// and in the mock service tests which verify the interface changes work correctly
+
+	t.Run("Interface signature verification", func(t *testing.T) {
+		// This test verifies that the SubmitBlindedBlock method signature
+		// has been updated to return BlobsBundler interface
+		
+		client := &Client{}
+
+		// Verify the method exists with the correct signature
+		// by using reflection or by checking it compiles with the interface
+		var _ func(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, v1.BlobsBundler, error) = client.SubmitBlindedBlock
+
+		// This test passes if the signature is correct
+		assert.Equal(t, true, true)
+	})
 }

@@ -70,7 +70,7 @@ func TestProcessAttestations_Ok(t *testing.T) {
 
 	service.genesisTime = prysmTime.Now().Add(-1 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
 	genesisState, pks := util.DeterministicGenesisState(t, 64)
-	require.NoError(t, genesisState.SetGenesisTime(uint64(prysmTime.Now().Unix())-params.BeaconConfig().SecondsPerSlot))
+	require.NoError(t, genesisState.SetGenesisTime(time.Now().Add(-1*time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second)))
 	require.NoError(t, service.saveGenesisData(ctx, genesisState))
 	atts, err := util.GenerateAttestations(genesisState, pks, 1, 0, false)
 	require.NoError(t, err)

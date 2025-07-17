@@ -916,3 +916,46 @@ func TestAssignmentForValidator(t *testing.T) {
 		require.DeepEqual(t, &helpers.LiteAssignment{}, got)
 	})
 }
+
+// Regression for #15450
+func TestInitializeProposerLookahead_RegressionTest(t *testing.T) {
+	ctx := t.Context()
+
+	state, _ := util.DeterministicGenesisState(t, 128)
+	// Set some validators to activate in epoch 3 instead of 0
+	validators := state.Validators()
+	for i := 64; i < 128; i++ {
+		validators[i].ActivationEpoch = 3
+	}
+	require.NoError(t, state.SetValidators(validators))
+	require.NoError(t, state.SetSlot(64)) // epoch 2
+	epoch := slots.ToEpoch(state.Slot())
+
+	proposerLookahead, err := helpers.InitializeProposerLookahead(ctx, state, epoch)
+	require.NoError(t, err)
+	slotsPerEpoch := int(params.BeaconConfig().SlotsPerEpoch)
+	for epochOffset := primitives.Epoch(0); epochOffset < 2; epochOffset++ {
+		targetEpoch := epoch + epochOffset
+
+		activeIndices, err := helpers.ActiveValidatorIndices(ctx, state, targetEpoch)
+		require.NoError(t, err)
+
+		expectedProposers, err := helpers.PrecomputeProposerIndices(state, activeIndices, targetEpoch)
+		require.NoError(t, err)
+
+		startIdx := int(epochOffset) * slotsPerEpoch
+		endIdx := startIdx + slotsPerEpoch
+		actualProposers := proposerLookahead[startIdx:endIdx]
+
+		expectedUint64 := make([]uint64, len(expectedProposers))
+		for i, proposer := range expectedProposers {
+			expectedUint64[i] = uint64(proposer)
+		}
+
+		// This assertion would fail with the original bug:
+		for i, expected := range expectedUint64 {
+			require.Equal(t, expected, actualProposers[i],
+				"Proposer index mismatch at slot %d in epoch %d", i, targetEpoch)
+		}
+	}
+}

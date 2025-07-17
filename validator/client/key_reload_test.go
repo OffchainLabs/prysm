@@ -2,6 +2,7 @@ package client
 
 import (
 	"testing"
+	"time"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -30,7 +31,7 @@ func TestValidator_HandleKeyReload(t *testing.T) {
 		v := validator{
 			validatorClient:  client,
 			km:               newMockKeymanager(t, inactive),
-			genesisTime:      1,
+			genesisTime:      time.Unix(1, 0),
 			chainClient:      chainClient,
 			prysmChainClient: prysmChainClient,
 			pubkeyToStatus:   make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
@@ -63,7 +64,7 @@ func TestValidator_HandleKeyReload(t *testing.T) {
 		v := validator{
 			validatorClient:  client,
 			km:               newMockKeymanager(t, kp),
-			genesisTime:      1,
+			genesisTime:      time.Unix(1, 0),
 			chainClient:      chainClient,
 			prysmChainClient: prysmChainClient,
 			pubkeyToStatus:   make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
@@ -91,7 +92,7 @@ func TestValidator_HandleKeyReload(t *testing.T) {
 		v := validator{
 			validatorClient: client,
 			km:              newMockKeymanager(t, kp),
-			genesisTime:     1,
+			genesisTime:     time.Unix(1, 0),
 			pubkeyToStatus:  make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 		}
 

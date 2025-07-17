@@ -141,7 +141,7 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 			}
 		}
 	} else {
-		updatesConsensus := make([]*structs.LightClientUpdateResponse, 0, len(updates))
+		updatesResponses := make([]*structs.LightClientUpdateResponse, 0, len(updates))
 
 		for _, update := range updates {
 			if ctx.Err() != nil {
@@ -157,10 +157,10 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 				Version: version.String(update.Version()),
 				Data:    updateJson,
 			}
-			updatesConsensus = append(updatesConsensus, updateResponse)
+			updatesResponses = append(updatesResponses, updateResponse)
 		}
 
-		httputil.WriteJson(w, updatesConsensus)
+		httputil.WriteJson(w, updatesResponses)
 	}
 }
 

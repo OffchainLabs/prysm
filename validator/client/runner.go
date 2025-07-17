@@ -67,7 +67,6 @@ func newRunner(ctx context.Context, v iface.Validator, monitor *healthMonitor) (
 		v.Done()
 		return nil, errors.Wrap(err, "failed to update proposer settings")
 	}
-
 	return &runner{
 		validator:     v,
 		healthMonitor: monitor,
@@ -86,7 +85,7 @@ func (r *runner) run(ctx context.Context) {
 	v := r.validator
 	cleanup := v.Done
 	defer cleanup()
-
+	v.SetTicker()
 	for {
 		select {
 		case <-ctx.Done():
@@ -169,6 +168,9 @@ func onAccountsChanged(ctx context.Context, v iface.Validator, current [][48]byt
 		err := v.WaitForActivation(ctx)
 		if err != nil {
 			log.WithError(err).Warn("Could not wait for validator activation")
+		} else {
+			log.Debug("Resetting slot ticker after waiting for validator activation.")
+			v.SetTicker()
 		}
 	}
 }

@@ -355,22 +355,22 @@ func TestStore_UpdateCheckpointState(t *testing.T) {
 func TestAttEpoch_MatchPrevEpoch(t *testing.T) {
 	ctx := t.Context()
 
-	nowTime := uint64(params.BeaconConfig().SlotsPerEpoch) * params.BeaconConfig().SecondsPerSlot
-	require.NoError(t, verifyAttTargetEpoch(ctx, 0, nowTime, &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)}))
+	nowTime := time.Unix(int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot), 0)
+	require.NoError(t, verifyAttTargetEpoch(ctx, time.Unix(0, 0), nowTime, &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)}))
 }
 
 func TestAttEpoch_MatchCurrentEpoch(t *testing.T) {
 	ctx := t.Context()
 
-	nowTime := uint64(params.BeaconConfig().SlotsPerEpoch) * params.BeaconConfig().SecondsPerSlot
-	require.NoError(t, verifyAttTargetEpoch(ctx, 0, nowTime, &ethpb.Checkpoint{Epoch: 1}))
+	nowTime := time.Unix(int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot), 0)
+	require.NoError(t, verifyAttTargetEpoch(ctx, time.Unix(0, 0), nowTime, &ethpb.Checkpoint{Epoch: 1}))
 }
 
 func TestAttEpoch_NotMatch(t *testing.T) {
 	ctx := t.Context()
 
-	nowTime := 2 * uint64(params.BeaconConfig().SlotsPerEpoch) * params.BeaconConfig().SecondsPerSlot
-	err := verifyAttTargetEpoch(ctx, 0, nowTime, &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)})
+	nowTime := time.Unix(2*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot), 0)
+	err := verifyAttTargetEpoch(ctx, time.Unix(0, 0), nowTime, &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)})
 	assert.ErrorContains(t, "target epoch 0 does not match current epoch 2 or prev epoch 1", err)
 }
 

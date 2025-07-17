@@ -143,10 +143,10 @@ func (mr *MockValidatorMockRecorder) FindHealthyHost(arg0 any) *gomock.Call {
 }
 
 // GenesisTime mocks base method.
-func (m *MockValidator) GenesisTime() uint64 {
+func (m *MockValidator) GenesisTime() time.Time {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GenesisTime")
-	ret0, _ := ret[0].(uint64)
+	ret0, _ := ret[0].(time.Time)
 	return ret0
 }
 
@@ -360,6 +360,18 @@ func (m *MockValidator) SetProposerSettings(arg0 context.Context, arg1 *proposer
 func (mr *MockValidatorMockRecorder) SetProposerSettings(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetProposerSettings", reflect.TypeOf((*MockValidator)(nil).SetProposerSettings), arg0, arg1)
+}
+
+// SetTicker mocks base method.
+func (m *MockValidator) SetTicker() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetTicker")
+}
+
+// SetTicker indicates an expected call of SetTicker.
+func (mr *MockValidatorMockRecorder) SetTicker() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTicker", reflect.TypeOf((*MockValidator)(nil).SetTicker))
 }
 
 // SignValidatorRegistrationRequest mocks base method.

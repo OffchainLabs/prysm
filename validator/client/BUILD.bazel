@@ -148,7 +148,6 @@ go_test(
         "//testing/require:go_default_library",
         "//testing/util:go_default_library",
         "//testing/validator-mock:go_default_library",
-        "//time:go_default_library",
         "//time/slots:go_default_library",
         "//validator/accounts/testing:go_default_library",
         "//validator/accounts/wallet:go_default_library",
