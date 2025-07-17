@@ -31,6 +31,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -86,6 +87,7 @@ type Service struct {
 	genesisTime           time.Time
 	genesisValidatorsRoot []byte
 	activeValidatorCount  uint64
+	peerDisconnectionTime *cache.Cache
 }
 
 // NewService initializes a new p2p service compatible with shared.Service interface. No
@@ -115,16 +117,17 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 	ipLimiter := leakybucket.NewCollector(ipLimit, ipBurst, 30*time.Second, true /* deleteEmptyBuckets */)
 
 	s := &Service{
-		ctx:          ctx,
-		cancel:       cancel,
-		cfg:          cfg,
-		addrFilter:   addrFilter,
-		ipLimiter:    ipLimiter,
-		privKey:      privKey,
-		metaData:     metaData,
-		isPreGenesis: true,
-		joinedTopics: make(map[string]*pubsub.Topic, len(gossipTopicMappings)),
-		subnetsLock:  make(map[uint64]*sync.RWMutex),
+		ctx:                   ctx,
+		cancel:                cancel,
+		cfg:                   cfg,
+		addrFilter:            addrFilter,
+		ipLimiter:             ipLimiter,
+		privKey:               privKey,
+		metaData:              metaData,
+		isPreGenesis:          true,
+		joinedTopics:          make(map[string]*pubsub.Topic, len(gossipTopicMappings)),
+		subnetsLock:           make(map[uint64]*sync.RWMutex),
+		peerDisconnectionTime: cache.New(1*time.Second, 1*time.Minute),
 	}
 
 	ipAddr := prysmnetwork.IPAddr()
@@ -496,7 +499,7 @@ func (s *Service) connectWithPeer(ctx context.Context, info peer.AddrInfo) error
 
 	if err := s.host.Connect(ctx, info); err != nil {
 		newScore := s.Peers().Scorers().BadResponsesScorer().Increment(info.ID)
-		log.WithFields(logrus.Fields{"peerID": info.ID, "reason": "connectionError", "newScore": newScore}).Debug("Downscore peer")
+		log.WithError(err).WithFields(logrus.Fields{"peerID": info.ID, "reason": "connectionError", "newScore": newScore}).Debug("Downscore peer")
 
 		return errors.Wrap(err, "peer connect")
 	}

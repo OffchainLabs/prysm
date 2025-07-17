@@ -13,6 +13,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -79,8 +80,8 @@ func (s *Service) disconnectFromPeerOnError(
 // and validating the response from the peer.
 func (s *Service) AddConnectionHandler(reqFunc, goodByeFunc func(ctx context.Context, id peer.ID) error) {
 	// Peer map and lock to keep track of current connection attempts.
+	var peerLock sync.Mutex
 	peerMap := make(map[peer.ID]bool)
-	peerLock := new(sync.Mutex)
 
 	// This is run at the start of each connection attempt, to ensure
 	// that there aren't multiple inflight connection requests for the
@@ -108,6 +109,19 @@ func (s *Service) AddConnectionHandler(reqFunc, goodByeFunc func(ctx context.Con
 	s.host.Network().Notify(&network.NotifyBundle{
 		ConnectedF: func(_ network.Network, conn network.Conn) {
 			remotePeer := conn.RemotePeer()
+			log := log.WithField("peer", remotePeer)
+			direction := conn.Stat().Direction
+
+			// For some reason, right after a disconnection, this `ConnectedF` callback
+			// is called. We want to avoid processing this connection if the peer was
+			// disconnected too recently and if we are at the initiative of this connection.
+			// This is very probably a bug in libp2p.
+			if direction == network.DirOutbound {
+				if err := s.wasDisconnectedTooRecently(remotePeer); err != nil {
+					log.WithError(err).Debug("Skipping connection handler")
+					return
+				}
+			}
 
 			// Connection handler must be non-blocking as part of libp2p design.
 			go func() {
@@ -133,7 +147,6 @@ func (s *Service) AddConnectionHandler(reqFunc, goodByeFunc func(ctx context.Con
 					return
 				}
 
-				direction := conn.Stat().Direction
 				if direction == network.DirOutbound || direction == network.DirUnknown {
 					s.peers.SetConnectionState(conn.RemotePeer(), peers.Connecting)
 					if err := reqFunc(context.TODO(), conn.RemotePeer()); err != nil && !errors.Is(err, io.EOF) {
@@ -188,7 +201,6 @@ func (s *Service) AddConnectionHandler(reqFunc, goodByeFunc func(ctx context.Con
 				}
 
 				s.connectToPeer(conn)
-				return
 			}()
 		},
 	})
@@ -225,6 +237,9 @@ func (s *Service) AddDisconnectionHandler(handler func(ctx context.Context, id p
 				}
 
 				s.peers.SetConnectionState(peerID, peers.Disconnected)
+				if err := s.peerDisconnectionTime.Add(peerID.String(), time.Now(), cache.DefaultExpiration); err != nil {
+					log.WithError(err).Error("Failed to set peer disconnection time")
+				}
 
 				// Only log disconnections if we were fully connected.
 				if priorState == peers.Connected {
@@ -234,6 +249,28 @@ func (s *Service) AddDisconnectionHandler(handler func(ctx context.Context, id p
 			}()
 		},
 	})
+}
+
+// wasDisconnectedTooRecently checks if the peer was disconnected within the last second.
+func (s *Service) wasDisconnectedTooRecently(peerID peer.ID) error {
+	const disconnectionDurationThreshold = 1 * time.Second
+
+	peerDisconnectionTimeObj, ok := s.peerDisconnectionTime.Get(peerID.String())
+	if !ok {
+		return nil
+	}
+
+	peerDisconnectionTime, ok := peerDisconnectionTimeObj.(time.Time)
+	if !ok {
+		return errors.New("invalid peer disconnection time type")
+	}
+
+	timeSinceDisconnection := time.Since(peerDisconnectionTime)
+	if timeSinceDisconnection < disconnectionDurationThreshold {
+		return errors.Errorf("peer %s was disconnected too recently: %s", peerID, timeSinceDisconnection)
+	}
+
+	return nil
 }
 
 func agentString(pid peer.ID, hst host.Host) string {
