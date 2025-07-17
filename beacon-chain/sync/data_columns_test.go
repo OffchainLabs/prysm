@@ -30,7 +30,6 @@ import (
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
 	ecdsaprysm "github.com/OffchainLabs/prysm/v6/crypto/ecdsa"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
@@ -1433,6 +1432,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			conf := params.BeaconConfig()
 			conf.FuluForkEpoch = tc.fuluForkEpoch
 			params.OverrideBeaconConfig(conf)
+			params.BeaconConfig().InitializeForkSchedule()
 
 			// Save the blocks in the store.
 			storage := make(map[[fieldparams.RootLength]byte][]uint64)
@@ -1481,7 +1481,9 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			require.NoError(t, clockSync.SetClock(clock))
 			require.NoError(t, err)
 
-			ctxMap := map[[4]byte]int{{245, 165, 253, 66}: version.Fulu}
+			//ctxMap := map[[4]byte]int{{245, 165, 253, 66}: version.Fulu}
+			ctxMap, err := ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
+			require.NoError(t, err)
 			rateLimiter := leakybucket.NewCollector(1_000, 1_000, 1*time.Hour, false)
 
 			// Fetch the data columns from the peers.
