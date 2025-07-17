@@ -441,7 +441,7 @@ func TestRPC_LightClientUpdatesByRange(t *testing.T) {
 				l := util.NewTestLightClient(t, i, util.WithIncreasedAttestedSlot(uint64(j)))
 				update, err := lightClient.NewLightClientUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 				require.NoError(t, err)
-				require.NoError(t, r.lcStore.SaveLightClientUpdate(ctx, uint64(j), update))
+				require.NoError(t, r.cfg.beaconDB.SaveLightClientUpdate(ctx, uint64(j), update))
 			}
 
 			var wg sync.WaitGroup
