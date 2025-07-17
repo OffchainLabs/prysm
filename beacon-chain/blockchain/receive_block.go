@@ -320,7 +320,7 @@ func (s *Service) executePostFinalizationTasks(ctx context.Context, finalizedSta
 			if err != nil {
 				log.WithError(err).Error("Could not save light client bootstrap by block root")
 			} else {
-				log.Debugf("Saved light client bootstrap for finalized root: %x", finalized.Root)
+				log.Debugf("Saved light client bootstrap for finalized root %#x", finalized.Root)
 			}
 		}()
 	}
