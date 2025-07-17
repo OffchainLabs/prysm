@@ -278,6 +278,8 @@ func (s *Service) Start() {
 // Stop the regular sync service.
 func (s *Service) Stop() error {
 	defer func() {
+		s.cancel()
+
 		if s.rateLimiter != nil {
 			s.rateLimiter.free()
 		}
@@ -286,11 +288,12 @@ func (s *Service) Stop() error {
 	for _, p := range s.cfg.p2p.Host().Mux().Protocols() {
 		s.cfg.p2p.Host().RemoveStreamHandler(p)
 	}
+
 	// Deregister Topic Subscribers.
 	for _, t := range s.cfg.p2p.PubSub().GetTopics() {
 		s.unSubscribeFromTopic(t)
 	}
-	defer s.cancel()
+
 	return nil
 }
 
