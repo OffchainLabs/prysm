@@ -135,13 +135,13 @@ func (node *Node) Start(ctx context.Context) error {
 		if err = helpers.WaitForTextInFile(errLog, "Node revalidated"); err != nil {
 			kerr := runCmd.Process.Kill()
 			if kerr != nil {
-				log.WithError(kerr).Error("error sending kill to failed node command process")
+				log.WithError(kerr).Error("Error sending kill to failed node command process")
 			}
 			retryErr = fmt.Errorf("the first node revalidated log not found, this means the eth1 chain had issues starting: %w", err)
 			continue
 		}
 		node.cmd = runCmd
-		log.Infof("eth1 node started after %d retries", retries)
+		log.Infof("Eth1 node started after %d retries", retries)
 		break
 	}
 	if retryErr != nil {

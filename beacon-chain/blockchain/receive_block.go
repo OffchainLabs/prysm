@@ -183,7 +183,7 @@ func (s *Service) updateCheckpoints(
 			return errors.Wrap(err, "could not get head state")
 		}
 		if err := reportEpochMetrics(ctx, postState, headSt); err != nil {
-			log.WithError(err).Error("could not report epoch metrics")
+			log.WithError(err).Error("Could not report epoch metrics")
 		}
 	}
 	if err := s.updateJustificationOnBlock(ctx, preState, postState, cp.j); err != nil {
@@ -283,7 +283,7 @@ func (s *Service) reportPostBlockProcessing(
 	// Log block sync status.
 	cp = s.cfg.ForkChoiceStore.JustifiedCheckpoint()
 	justified := &ethpb.Checkpoint{Epoch: cp.Epoch, Root: bytesutil.SafeCopyBytes(cp.Root[:])}
-	if err := logBlockSyncStatus(block.Block(), blockRoot, justified, finalized, receivedTime, uint64(s.genesisTime.Unix()), daWaitedTime); err != nil {
+	if err := logBlockSyncStatus(block.Block(), blockRoot, justified, finalized, receivedTime, s.genesisTime, daWaitedTime); err != nil {
 		log.WithError(err).Error("Unable to log block sync status")
 	}
 	// Log payload data

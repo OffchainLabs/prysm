@@ -6,6 +6,7 @@ package state
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	customtypes "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/custom-types"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -64,7 +65,7 @@ type ReadOnlyBeaconState interface {
 	ReadOnlyProposerLookahead
 	ToProtoUnsafe() interface{}
 	ToProto() interface{}
-	GenesisTime() uint64
+	GenesisTime() time.Time
 	GenesisValidatorsRoot() []byte
 	Slot() primitives.Slot
 	Fork() *ethpb.Fork
@@ -97,7 +98,7 @@ type WriteOnlyBeaconState interface {
 	WriteOnlyWithdrawals
 	WriteOnlyDeposits
 	WriteOnlyProposerLookahead
-	SetGenesisTime(val uint64) error
+	SetGenesisTime(val time.Time) error
 	SetGenesisValidatorsRoot(val []byte) error
 	SetSlot(val primitives.Slot) error
 	SetFork(val *ethpb.Fork) error

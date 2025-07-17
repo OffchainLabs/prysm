@@ -44,7 +44,7 @@ func (s *Store) head(ctx context.Context) ([32]byte, error) {
 	if bestDescendant == nil {
 		bestDescendant = justifiedNode
 	}
-	currentEpoch := slots.EpochsSinceGenesis(time.Unix(int64(s.genesisTime), 0))
+	currentEpoch := slots.EpochsSinceGenesis(s.genesisTime)
 	if !bestDescendant.viableForHead(s.justifiedCheckpoint.Epoch, currentEpoch) {
 		s.allTipsAreInvalid = true
 		return [32]byte{}, fmt.Errorf("head at slot %d with weight %d is not eligible, finalizedEpoch, justified Epoch %d, %d != %d, %d",
@@ -99,7 +99,7 @@ func (s *Store) insert(ctx context.Context,
 		unrealizedFinalizedEpoch: finalizedEpoch,
 		optimistic:               true,
 		payloadHash:              payloadHash,
-		timestamp:                uint64(time.Now().Unix()),
+		timestamp:                time.Now(),
 	}
 
 	// Set the node's target checkpoint
@@ -128,15 +128,18 @@ func (s *Store) insert(ctx context.Context,
 	} else {
 		parent.children = append(parent.children, n)
 		// Apply proposer boost
-		timeNow := uint64(time.Now().Unix())
-		if timeNow < s.genesisTime {
+		now := time.Now()
+		if now.Before(s.genesisTime) {
 			return n, nil
 		}
-		secondsIntoSlot := (timeNow - s.genesisTime) % params.BeaconConfig().SecondsPerSlot
 		currentSlot := slots.CurrentSlot(s.genesisTime)
-		boostThreshold := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
+		sss, err := slots.SinceSlotStart(currentSlot, s.genesisTime, now)
+		if err != nil {
+			return nil, fmt.Errorf("could not determine time since current slot started: %w", err)
+		}
+		boostThreshold := time.Duration(params.BeaconConfig().SecondsPerSlot/params.BeaconConfig().IntervalsPerSlot) * time.Second
 		isFirstBlock := s.proposerBoostRoot == [32]byte{}
-		if currentSlot == slot && secondsIntoSlot < boostThreshold && isFirstBlock {
+		if currentSlot == slot && sss < boostThreshold && isFirstBlock {
 			s.proposerBoostRoot = root
 		}
 
@@ -268,17 +271,18 @@ func (f *ForkChoice) HighestReceivedBlockSlot() primitives.Slot {
 }
 
 // HighestReceivedBlockDelay returns the number of slots that the highest
-// received block was late when receiving it
+// received block was late when receiving it. For example, a block was late by 12 slots,
+// then this method is expected to return 12.
 func (f *ForkChoice) HighestReceivedBlockDelay() primitives.Slot {
 	n := f.store.highestReceivedNode
 	if n == nil {
 		return 0
 	}
-	secs, err := slots.SecondsSinceSlotStart(n.slot, f.store.genesisTime, n.timestamp)
+	sss, err := slots.SinceSlotStart(n.slot, f.store.genesisTime, n.timestamp)
 	if err != nil {
 		return 0
 	}
-	return primitives.Slot(secs / params.BeaconConfig().SecondsPerSlot)
+	return primitives.Slot(uint64(sss/time.Second) / params.BeaconConfig().SecondsPerSlot)
 }
 
 // ReceivedBlocksLastEpoch returns the number of blocks received in the last epoch

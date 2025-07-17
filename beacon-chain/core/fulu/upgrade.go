@@ -111,7 +111,7 @@ func UpgradeToFulu(ctx context.Context, beaconState state.BeaconState) (state.Be
 	}
 
 	s := &ethpb.BeaconStateFulu{
-		GenesisTime:           beaconState.GenesisTime(),
+		GenesisTime:           uint64(beaconState.GenesisTime().Unix()),
 		GenesisValidatorsRoot: beaconState.GenesisValidatorsRoot(),
 		Slot:                  beaconState.Slot(),
 		Fork: &ethpb.Fork{

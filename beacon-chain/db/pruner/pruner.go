@@ -60,13 +60,13 @@ type Service struct {
 	initSyncWaiter func() error
 }
 
-func New(ctx context.Context, db iface.Database, genesisTime uint64, initSyncWaiter, backfillWaiter func() error, opts ...ServiceOption) (*Service, error) {
+func New(ctx context.Context, db iface.Database, genesisTime time.Time, initSyncWaiter, backfillWaiter func() error, opts ...ServiceOption) (*Service, error) {
 	p := &Service{
 		ctx:            ctx,
 		db:             db,
 		ps:             pruneStartSlotFunc(helpers.MinEpochsForBlockRequests() + 1), // Default retention epochs is MIN_EPOCHS_FOR_BLOCK_REQUESTS + 1 from the current slot.
 		done:           make(chan struct{}),
-		slotTicker:     slots.NewSlotTicker(slots.StartTime(genesisTime, 0), params.BeaconConfig().SecondsPerSlot),
+		slotTicker:     slots.NewSlotTicker(slots.UnsafeStartTime(genesisTime, 0), params.BeaconConfig().SecondsPerSlot),
 		initSyncWaiter: initSyncWaiter,
 		backfillWaiter: backfillWaiter,
 	}

@@ -106,7 +106,7 @@ func newBlocksQueue(ctx context.Context, cfg *blocksQueueConfig) *blocksQueue {
 	blocksFetcher := cfg.blocksFetcher
 	if blocksFetcher == nil {
 		if cfg.bs == nil {
-			log.Warn("rpc fetcher starting without blob availability cache, duplicate blobs may be requested.")
+			log.Warn("Rpc fetcher starting without blob availability cache, duplicate blobs may be requested.")
 		}
 		blocksFetcher = newBlocksFetcher(ctx, &blocksFetcherConfig{
 			ctxMap: cfg.ctxMap,

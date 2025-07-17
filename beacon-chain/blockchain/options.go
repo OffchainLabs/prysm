@@ -33,6 +33,14 @@ func WithMaxGoroutines(x int) Option {
 	}
 }
 
+// WithLCStore for light client store access.
+func WithLCStore() Option {
+	return func(s *Service) error {
+		s.lcStore = lightclient.NewLightClientStore(s.cfg.BeaconDB)
+		return nil
+	}
+}
+
 // WithWeakSubjectivityCheckpoint for checkpoint sync.
 func WithWeakSubjectivityCheckpoint(c *ethpb.Checkpoint) Option {
 	return func(s *Service) error {
@@ -246,7 +254,7 @@ func WithSlasherEnabled(enabled bool) Option {
 // WithGenesisTime sets the genesis time for the blockchain service.
 func WithGenesisTime(genesisTime time.Time) Option {
 	return func(s *Service) error {
-		s.genesisTime = genesisTime
+		s.genesisTime = genesisTime.Truncate(time.Second) // Genesis time has a precision of 1 second.
 		return nil
 	}
 }

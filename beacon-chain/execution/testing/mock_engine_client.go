@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
@@ -38,6 +39,8 @@ type EngineClient struct {
 	ErrGetPayload               error
 	BlobSidecars                []blocks.VerifiedROBlob
 	ErrorBlobSidecars           error
+	DataColumnSidecars          []blocks.VerifiedRODataColumn
+	ErrorDataColumnSidecars     error
 }
 
 // NewPayload --
@@ -109,8 +112,12 @@ func (e *EngineClient) ReconstructFullBellatrixBlockBatch(
 }
 
 // ReconstructBlobSidecars is a mock implementation of the ReconstructBlobSidecars method.
-func (e *EngineClient) ReconstructBlobSidecars(context.Context, interfaces.ReadOnlySignedBeaconBlock, [32]byte, func(uint64) bool) ([]blocks.VerifiedROBlob, error) {
+func (e *EngineClient) ReconstructBlobSidecars(context.Context, interfaces.ReadOnlySignedBeaconBlock, [fieldparams.RootLength]byte, func(uint64) bool) ([]blocks.VerifiedROBlob, error) {
 	return e.BlobSidecars, e.ErrorBlobSidecars
+}
+
+func (e *EngineClient) ReconstructDataColumnSidecars(context.Context, interfaces.ReadOnlySignedBeaconBlock, [fieldparams.RootLength]byte) ([]blocks.VerifiedRODataColumn, error) {
+	return e.DataColumnSidecars, e.ErrorDataColumnSidecars
 }
 
 // GetTerminalBlockHash --

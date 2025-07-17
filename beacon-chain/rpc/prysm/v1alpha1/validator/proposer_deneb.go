@@ -28,8 +28,14 @@ func BuildBlobSidecars(blk interfaces.SignedBeaconBlock, blobs [][]byte, kzgProo
 		return nil, err
 	}
 	body := blk.Block().Body()
+	// Pre-compute subtrees once before the loop to avoid redundant calculations
+	proofComponents, err := blocks.PrecomputeMerkleProofComponents(body)
+	if err != nil {
+		return nil, err
+	}
+
 	for i := range blobSidecars {
-		proof, err := blocks.MerkleProofKZGCommitment(body, i)
+		proof, err := blocks.MerkleProofKZGCommitmentFromComponents(proofComponents, i)
 		if err != nil {
 			return nil, err
 		}

@@ -116,7 +116,7 @@ func GenerateFullBlockCapella(
 		return nil, errors.Wrap(err, "could not process randao mix")
 	}
 
-	timestamp, err := slots.ToTime(bState.GenesisTime(), slot)
+	timestamp, err := slots.StartTime(bState.GenesisTime(), slot)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get current timestamp")
 	}

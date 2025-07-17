@@ -162,7 +162,7 @@ func ValidatePayload(st state.BeaconState, payload interfaces.ExecutionData) err
 	if !bytes.Equal(payload.PrevRandao(), random) {
 		return ErrInvalidPayloadPrevRandao
 	}
-	t, err := slots.ToTime(st.GenesisTime(), st.Slot())
+	t, err := slots.StartTime(st.GenesisTime(), st.Slot())
 	if err != nil {
 		return err
 	}

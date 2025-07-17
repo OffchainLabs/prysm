@@ -6,6 +6,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -16,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 )
 
@@ -33,13 +35,13 @@ func (s *Server) GetLightClientBootstrap(w http.ResponseWriter, req *http.Reques
 	}
 
 	blockRoot := bytesutil.ToBytes32(blockRootParam)
-	bootstrap, err := s.BeaconDB.LightClientBootstrap(ctx, blockRoot[:])
+	bootstrap, err := s.LCStore.LightClientBootstrap(ctx, blockRoot)
 	if err != nil {
-		httputil.HandleError(w, "Could not get light client bootstrap: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if bootstrap == nil {
-		httputil.HandleError(w, "Light client bootstrap not found", http.StatusNotFound)
+		if errors.Is(err, lightclient.ErrLightClientBootstrapNotFound) {
+			httputil.HandleError(w, "Light client bootstrap not found", http.StatusNotFound)
+		} else {
+			httputil.HandleError(w, "Could not get light client bootstrap: "+err.Error(), http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -93,7 +95,7 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 	endPeriod := startPeriod + count - 1
 
 	// get updates
-	updatesMap, err := s.BeaconDB.LightClientUpdates(ctx, startPeriod, endPeriod)
+	updates, err := s.LCStore.LightClientUpdates(ctx, startPeriod, endPeriod)
 	if err != nil {
 		httputil.HandleError(w, "Could not get light client updates from DB: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -102,15 +104,9 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 	if httputil.RespondWithSsz(req) {
 		w.Header().Set("Content-Type", "application/octet-stream")
 
-		for i := startPeriod; i <= endPeriod; i++ {
+		for _, update := range updates {
 			if ctx.Err() != nil {
 				httputil.HandleError(w, "Context error: "+ctx.Err().Error(), http.StatusInternalServerError)
-			}
-
-			update, ok := updatesMap[i]
-			if !ok {
-				// Only return the first contiguous range of updates
-				break
 			}
 
 			updateSlot := update.AttestedHeader().Beacon().Slot
@@ -145,17 +141,11 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 			}
 		}
 	} else {
-		updates := make([]*structs.LightClientUpdateResponse, 0, len(updatesMap))
+		updatesResponses := make([]*structs.LightClientUpdateResponse, 0, len(updates))
 
-		for i := startPeriod; i <= endPeriod; i++ {
+		for _, update := range updates {
 			if ctx.Err() != nil {
 				httputil.HandleError(w, "Context error: "+ctx.Err().Error(), http.StatusInternalServerError)
-			}
-
-			update, ok := updatesMap[i]
-			if !ok {
-				// Only return the first contiguous range of updates
-				break
 			}
 
 			updateJson, err := structs.LightClientUpdateFromConsensus(update)
@@ -167,10 +157,10 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 				Version: version.String(update.Version()),
 				Data:    updateJson,
 			}
-			updates = append(updates, updateResponse)
+			updatesResponses = append(updatesResponses, updateResponse)
 		}
 
-		httputil.WriteJson(w, updates)
+		httputil.WriteJson(w, updatesResponses)
 	}
 }
 

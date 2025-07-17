@@ -40,6 +40,8 @@ import (
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
+var verifierLimit = 1000
+
 func TestProcessPendingAtts_NoBlockRequestBlock(t *testing.T) {
 	hook := logTest.NewGlobal()
 	db := dbtest.SetupDB(t)
@@ -104,7 +106,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAtt(t *testing.T) {
 		Aggregate: att,
 	}
 
-	require.NoError(t, beaconState.SetGenesisTime(uint64(time.Now().Unix())))
+	require.NoError(t, beaconState.SetGenesisTime(time.Now()))
 
 	chain := &mock.ChainService{Genesis: time.Now(),
 		State: beaconState,
@@ -200,7 +202,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra(t *testing.T) {
 	assert.NoError(t, err)
 	att.Signature = privKeys[committee[0]].Sign(hashTreeRoot[:]).Marshal()
 
-	require.NoError(t, beaconState.SetGenesisTime(uint64(time.Now().Unix())))
+	require.NoError(t, beaconState.SetGenesisTime(time.Now()))
 
 	chain := &mock.ChainService{Genesis: time.Now(),
 		State: beaconState,
@@ -323,7 +325,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra_VerifyAlreadySeen
 	att.SetSignature(privKeys[committee[0]].Sign(hashTreeRoot[:]).Marshal())
 
 	// Set the genesis time.
-	require.NoError(t, beaconState.SetGenesisTime(uint64(time.Now().Unix())))
+	require.NoError(t, beaconState.SetGenesisTime(time.Now()))
 
 	// Setup the chain service mock.
 	chain := &mock.ChainService{
@@ -505,7 +507,7 @@ func TestProcessPendingAtts_NoBroadcastWithBadSignature(t *testing.T) {
 	aggreSig, err := signing.ComputeDomainAndSign(s, 0, aggregateAndProof, params.BeaconConfig().DomainAggregateAndProof, privKeys[aggregatorIndex])
 	require.NoError(t, err)
 
-	require.NoError(t, s.SetGenesisTime(uint64(time.Now().Unix())))
+	require.NoError(t, s.SetGenesisTime(time.Now()))
 	ctx, cancel := context.WithCancel(t.Context())
 	chain2 := &mock.ChainService{Genesis: time.Now(),
 		State: s,
@@ -589,7 +591,7 @@ func TestProcessPendingAtts_HasBlockSaveAggregatedAtt(t *testing.T) {
 	aggreSig, err := signing.ComputeDomainAndSign(beaconState, 0, aggregateAndProof, params.BeaconConfig().DomainAggregateAndProof, privKeys[aggregatorIndex])
 	require.NoError(t, err)
 
-	require.NoError(t, beaconState.SetGenesisTime(uint64(time.Now().Unix())))
+	require.NoError(t, beaconState.SetGenesisTime(time.Now()))
 
 	chain := &mock.ChainService{Genesis: time.Now(),
 		DB:    db,

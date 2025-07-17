@@ -11,7 +11,6 @@ import (
 	customtypes "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/custom-types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stateutil"
-	"github.com/OffchainLabs/prysm/v6/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -116,20 +115,13 @@ var (
 )
 
 const (
-	phase0SharedFieldRefCount                     = 10
-	altairSharedFieldRefCount                     = 11
-	bellatrixSharedFieldRefCount                  = 12
-	capellaSharedFieldRefCount                    = 13
-	denebSharedFieldRefCount                      = 13
-	electraSharedFieldRefCount                    = 16
-	fuluSharedFieldRefCount                       = 17
-	experimentalStatePhase0SharedFieldRefCount    = 5
-	experimentalStateAltairSharedFieldRefCount    = 5
-	experimentalStateBellatrixSharedFieldRefCount = 6
-	experimentalStateCapellaSharedFieldRefCount   = 7
-	experimentalStateDenebSharedFieldRefCount     = 7
-	experimentalStateElectraSharedFieldRefCount   = 10
-	experimentalStateFuluSharedFieldRefCount      = 11
+	phase0SharedFieldRefCount    = 5
+	altairSharedFieldRefCount    = 5
+	bellatrixSharedFieldRefCount = 6
+	capellaSharedFieldRefCount   = 7
+	denebSharedFieldRefCount     = 7
+	electraSharedFieldRefCount   = 10
+	fuluSharedFieldRefCount      = 11
 )
 
 // InitializeFromProtoPhase0 the beacon state from a protobuf representation.
@@ -208,37 +200,12 @@ func InitializeFromProtoUnsafePhase0(st *ethpb.BeaconState) (state.BeaconState, 
 		valMapHandler:    stateutil.NewValMapHandler(st.Validators),
 	}
 
-	if features.Get().EnableExperimentalState {
-		b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
-		b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
-		b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
-		b.balancesMultiValue = NewMultiValueBalances(st.Balances)
-		b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
-		b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStatePhase0SharedFieldRefCount)
-	} else {
-		bRoots := make([][32]byte, fieldparams.BlockRootsLength)
-		for i, r := range st.BlockRoots {
-			bRoots[i] = bytesutil.ToBytes32(r)
-		}
-		b.blockRoots = bRoots
-
-		sRoots := make([][32]byte, fieldparams.StateRootsLength)
-		for i, r := range st.StateRoots {
-			sRoots[i] = bytesutil.ToBytes32(r)
-		}
-		b.stateRoots = sRoots
-
-		mixes := make([][32]byte, fieldparams.RandaoMixesLength)
-		for i, m := range st.RandaoMixes {
-			mixes[i] = bytesutil.ToBytes32(m)
-		}
-		b.randaoMixes = mixes
-
-		b.balances = st.Balances
-		b.validators = st.Validators
-
-		b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, phase0SharedFieldRefCount)
-	}
+	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
+	b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
+	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
+	b.balancesMultiValue = NewMultiValueBalances(st.Balances)
+	b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
+	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, phase0SharedFieldRefCount)
 
 	for _, f := range phase0Fields {
 		b.dirtyFields[f] = true
@@ -257,13 +224,6 @@ func InitializeFromProtoUnsafePhase0(st *ethpb.BeaconState) (state.BeaconState, 
 	b.sharedFieldReferences[types.Slashings] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.PreviousEpochAttestations] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.CurrentEpochAttestations] = stateutil.NewRef(1)
-	if !features.Get().EnableExperimentalState {
-		b.sharedFieldReferences[types.BlockRoots] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.StateRoots] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.RandaoMixes] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.Balances] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.Validators] = stateutil.NewRef(1)
-	}
 
 	state.Count.Inc()
 	// Finalizer runs when dst is being destroyed in garbage collection.
@@ -314,39 +274,13 @@ func InitializeFromProtoUnsafeAltair(st *ethpb.BeaconStateAltair) (state.BeaconS
 		valMapHandler:    stateutil.NewValMapHandler(st.Validators),
 	}
 
-	if features.Get().EnableExperimentalState {
-		b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
-		b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
-		b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
-		b.balancesMultiValue = NewMultiValueBalances(st.Balances)
-		b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
-		b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
-		b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStateAltairSharedFieldRefCount)
-	} else {
-		bRoots := make([][32]byte, fieldparams.BlockRootsLength)
-		for i, r := range st.BlockRoots {
-			bRoots[i] = bytesutil.ToBytes32(r)
-		}
-		b.blockRoots = bRoots
-
-		sRoots := make([][32]byte, fieldparams.StateRootsLength)
-		for i, r := range st.StateRoots {
-			sRoots[i] = bytesutil.ToBytes32(r)
-		}
-		b.stateRoots = sRoots
-
-		mixes := make([][32]byte, fieldparams.RandaoMixesLength)
-		for i, m := range st.RandaoMixes {
-			mixes[i] = bytesutil.ToBytes32(m)
-		}
-		b.randaoMixes = mixes
-
-		b.balances = st.Balances
-		b.validators = st.Validators
-		b.inactivityScores = st.InactivityScores
-
-		b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, altairSharedFieldRefCount)
-	}
+	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
+	b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
+	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
+	b.balancesMultiValue = NewMultiValueBalances(st.Balances)
+	b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
+	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
+	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, altairSharedFieldRefCount)
 
 	for _, f := range altairFields {
 		b.dirtyFields[f] = true
@@ -365,14 +299,6 @@ func InitializeFromProtoUnsafeAltair(st *ethpb.BeaconStateAltair) (state.BeaconS
 	b.sharedFieldReferences[types.Slashings] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.PreviousEpochParticipationBits] = stateutil.NewRef(1) // New in Altair.
 	b.sharedFieldReferences[types.CurrentEpochParticipationBits] = stateutil.NewRef(1)  // New in Altair.
-	if !features.Get().EnableExperimentalState {
-		b.sharedFieldReferences[types.BlockRoots] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.StateRoots] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.RandaoMixes] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.Balances] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.Validators] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.InactivityScores] = stateutil.NewRef(1)
-	}
 
 	state.Count.Inc()
 	// Finalizer runs when dst is being destroyed in garbage collection.
@@ -424,39 +350,13 @@ func InitializeFromProtoUnsafeBellatrix(st *ethpb.BeaconStateBellatrix) (state.B
 		valMapHandler:    stateutil.NewValMapHandler(st.Validators),
 	}
 
-	if features.Get().EnableExperimentalState {
-		b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
-		b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
-		b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
-		b.balancesMultiValue = NewMultiValueBalances(st.Balances)
-		b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
-		b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
-		b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStateBellatrixSharedFieldRefCount)
-	} else {
-		bRoots := make([][32]byte, fieldparams.BlockRootsLength)
-		for i, r := range st.BlockRoots {
-			bRoots[i] = bytesutil.ToBytes32(r)
-		}
-		b.blockRoots = bRoots
-
-		sRoots := make([][32]byte, fieldparams.StateRootsLength)
-		for i, r := range st.StateRoots {
-			sRoots[i] = bytesutil.ToBytes32(r)
-		}
-		b.stateRoots = sRoots
-
-		mixes := make([][32]byte, fieldparams.RandaoMixesLength)
-		for i, m := range st.RandaoMixes {
-			mixes[i] = bytesutil.ToBytes32(m)
-		}
-		b.randaoMixes = mixes
-
-		b.balances = st.Balances
-		b.validators = st.Validators
-		b.inactivityScores = st.InactivityScores
-
-		b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, bellatrixSharedFieldRefCount)
-	}
+	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
+	b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
+	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
+	b.balancesMultiValue = NewMultiValueBalances(st.Balances)
+	b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
+	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
+	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, bellatrixSharedFieldRefCount)
 
 	for _, f := range bellatrixFields {
 		b.dirtyFields[f] = true
@@ -476,14 +376,6 @@ func InitializeFromProtoUnsafeBellatrix(st *ethpb.BeaconStateBellatrix) (state.B
 	b.sharedFieldReferences[types.PreviousEpochParticipationBits] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.CurrentEpochParticipationBits] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.LatestExecutionPayloadHeader] = stateutil.NewRef(1) // New in Bellatrix.
-	if !features.Get().EnableExperimentalState {
-		b.sharedFieldReferences[types.BlockRoots] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.StateRoots] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.RandaoMixes] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.Balances] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.Validators] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.InactivityScores] = stateutil.NewRef(1)
-	}
 
 	state.Count.Inc()
 	// Finalizer runs when dst is being destroyed in garbage collection.
@@ -538,39 +430,13 @@ func InitializeFromProtoUnsafeCapella(st *ethpb.BeaconStateCapella) (state.Beaco
 		valMapHandler:    stateutil.NewValMapHandler(st.Validators),
 	}
 
-	if features.Get().EnableExperimentalState {
-		b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
-		b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
-		b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
-		b.balancesMultiValue = NewMultiValueBalances(st.Balances)
-		b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
-		b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
-		b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStateCapellaSharedFieldRefCount)
-	} else {
-		bRoots := make([][32]byte, fieldparams.BlockRootsLength)
-		for i, r := range st.BlockRoots {
-			bRoots[i] = bytesutil.ToBytes32(r)
-		}
-		b.blockRoots = bRoots
-
-		sRoots := make([][32]byte, fieldparams.StateRootsLength)
-		for i, r := range st.StateRoots {
-			sRoots[i] = bytesutil.ToBytes32(r)
-		}
-		b.stateRoots = sRoots
-
-		mixes := make([][32]byte, fieldparams.RandaoMixesLength)
-		for i, m := range st.RandaoMixes {
-			mixes[i] = bytesutil.ToBytes32(m)
-		}
-		b.randaoMixes = mixes
-
-		b.balances = st.Balances
-		b.validators = st.Validators
-		b.inactivityScores = st.InactivityScores
-
-		b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, capellaSharedFieldRefCount)
-	}
+	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
+	b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
+	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
+	b.balancesMultiValue = NewMultiValueBalances(st.Balances)
+	b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
+	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
+	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, capellaSharedFieldRefCount)
 
 	for _, f := range capellaFields {
 		b.dirtyFields[f] = true
@@ -591,14 +457,6 @@ func InitializeFromProtoUnsafeCapella(st *ethpb.BeaconStateCapella) (state.Beaco
 	b.sharedFieldReferences[types.CurrentEpochParticipationBits] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.LatestExecutionPayloadHeaderCapella] = stateutil.NewRef(1) // New in Capella.
 	b.sharedFieldReferences[types.HistoricalSummaries] = stateutil.NewRef(1)                 // New in Capella.
-	if !features.Get().EnableExperimentalState {
-		b.sharedFieldReferences[types.BlockRoots] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.StateRoots] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.RandaoMixes] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.Balances] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.Validators] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.InactivityScores] = stateutil.NewRef(1)
-	}
 
 	state.Count.Inc()
 	// Finalizer runs when dst is being destroyed in garbage collection.
@@ -651,39 +509,13 @@ func InitializeFromProtoUnsafeDeneb(st *ethpb.BeaconStateDeneb) (state.BeaconSta
 		valMapHandler:    stateutil.NewValMapHandler(st.Validators),
 	}
 
-	if features.Get().EnableExperimentalState {
-		b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
-		b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
-		b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
-		b.balancesMultiValue = NewMultiValueBalances(st.Balances)
-		b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
-		b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
-		b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStateDenebSharedFieldRefCount)
-	} else {
-		bRoots := make([][32]byte, fieldparams.BlockRootsLength)
-		for i, r := range st.BlockRoots {
-			bRoots[i] = bytesutil.ToBytes32(r)
-		}
-		b.blockRoots = bRoots
-
-		sRoots := make([][32]byte, fieldparams.StateRootsLength)
-		for i, r := range st.StateRoots {
-			sRoots[i] = bytesutil.ToBytes32(r)
-		}
-		b.stateRoots = sRoots
-
-		mixes := make([][32]byte, fieldparams.RandaoMixesLength)
-		for i, m := range st.RandaoMixes {
-			mixes[i] = bytesutil.ToBytes32(m)
-		}
-		b.randaoMixes = mixes
-
-		b.balances = st.Balances
-		b.validators = st.Validators
-		b.inactivityScores = st.InactivityScores
-
-		b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, denebSharedFieldRefCount)
-	}
+	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
+	b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
+	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
+	b.balancesMultiValue = NewMultiValueBalances(st.Balances)
+	b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
+	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
+	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, denebSharedFieldRefCount)
 
 	for _, f := range denebFields {
 		b.dirtyFields[f] = true
@@ -704,14 +536,6 @@ func InitializeFromProtoUnsafeDeneb(st *ethpb.BeaconStateDeneb) (state.BeaconSta
 	b.sharedFieldReferences[types.CurrentEpochParticipationBits] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.LatestExecutionPayloadHeaderDeneb] = stateutil.NewRef(1) // New in Deneb.
 	b.sharedFieldReferences[types.HistoricalSummaries] = stateutil.NewRef(1)
-	if !features.Get().EnableExperimentalState {
-		b.sharedFieldReferences[types.BlockRoots] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.StateRoots] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.RandaoMixes] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.Balances] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.Validators] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.InactivityScores] = stateutil.NewRef(1)
-	}
 
 	state.Count.Inc()
 	// Finalizer runs when dst is being destroyed in garbage collection.
@@ -773,39 +597,13 @@ func InitializeFromProtoUnsafeElectra(st *ethpb.BeaconStateElectra) (state.Beaco
 		valMapHandler:    stateutil.NewValMapHandler(st.Validators),
 	}
 
-	if features.Get().EnableExperimentalState {
-		b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
-		b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
-		b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
-		b.balancesMultiValue = NewMultiValueBalances(st.Balances)
-		b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
-		b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
-		b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStateElectraSharedFieldRefCount)
-	} else {
-		bRoots := make([][32]byte, fieldparams.BlockRootsLength)
-		for i, r := range st.BlockRoots {
-			bRoots[i] = bytesutil.ToBytes32(r)
-		}
-		b.blockRoots = bRoots
-
-		sRoots := make([][32]byte, fieldparams.StateRootsLength)
-		for i, r := range st.StateRoots {
-			sRoots[i] = bytesutil.ToBytes32(r)
-		}
-		b.stateRoots = sRoots
-
-		mixes := make([][32]byte, fieldparams.RandaoMixesLength)
-		for i, m := range st.RandaoMixes {
-			mixes[i] = bytesutil.ToBytes32(m)
-		}
-		b.randaoMixes = mixes
-
-		b.balances = st.Balances
-		b.validators = st.Validators
-		b.inactivityScores = st.InactivityScores
-
-		b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, electraSharedFieldRefCount)
-	}
+	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
+	b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
+	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
+	b.balancesMultiValue = NewMultiValueBalances(st.Balances)
+	b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
+	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
+	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, electraSharedFieldRefCount)
 
 	for _, f := range electraFields {
 		b.dirtyFields[f] = true
@@ -829,14 +627,6 @@ func InitializeFromProtoUnsafeElectra(st *ethpb.BeaconStateElectra) (state.Beaco
 	b.sharedFieldReferences[types.PendingDeposits] = stateutil.NewRef(1)           // New in Electra.
 	b.sharedFieldReferences[types.PendingPartialWithdrawals] = stateutil.NewRef(1) // New in Electra.
 	b.sharedFieldReferences[types.PendingConsolidations] = stateutil.NewRef(1)     // New in Electra.
-	if !features.Get().EnableExperimentalState {
-		b.sharedFieldReferences[types.BlockRoots] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.StateRoots] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.RandaoMixes] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.Balances] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.Validators] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.InactivityScores] = stateutil.NewRef(1)
-	}
 
 	state.Count.Inc()
 	// Finalizer runs when dst is being destroyed in garbage collection.
@@ -903,39 +693,13 @@ func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateFulu) (state.BeaconState
 		valMapHandler:    stateutil.NewValMapHandler(st.Validators),
 	}
 
-	if features.Get().EnableExperimentalState {
-		b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
-		b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
-		b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
-		b.balancesMultiValue = NewMultiValueBalances(st.Balances)
-		b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
-		b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
-		b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStateFuluSharedFieldRefCount)
-	} else {
-		bRoots := make([][32]byte, fieldparams.BlockRootsLength)
-		for i, r := range st.BlockRoots {
-			bRoots[i] = bytesutil.ToBytes32(r)
-		}
-		b.blockRoots = bRoots
-
-		sRoots := make([][32]byte, fieldparams.StateRootsLength)
-		for i, r := range st.StateRoots {
-			sRoots[i] = bytesutil.ToBytes32(r)
-		}
-		b.stateRoots = sRoots
-
-		mixes := make([][32]byte, fieldparams.RandaoMixesLength)
-		for i, m := range st.RandaoMixes {
-			mixes[i] = bytesutil.ToBytes32(m)
-		}
-		b.randaoMixes = mixes
-
-		b.balances = st.Balances
-		b.validators = st.Validators
-		b.inactivityScores = st.InactivityScores
-
-		b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, fuluSharedFieldRefCount)
-	}
+	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
+	b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
+	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
+	b.balancesMultiValue = NewMultiValueBalances(st.Balances)
+	b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
+	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
+	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, fuluSharedFieldRefCount)
 
 	for _, f := range fuluFields {
 		b.dirtyFields[f] = true
@@ -960,14 +724,6 @@ func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateFulu) (state.BeaconState
 	b.sharedFieldReferences[types.PendingPartialWithdrawals] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.PendingConsolidations] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.ProposerLookahead] = stateutil.NewRef(1) // New in Fulu.
-	if !features.Get().EnableExperimentalState {
-		b.sharedFieldReferences[types.BlockRoots] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.StateRoots] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.RandaoMixes] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.Balances] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.Validators] = stateutil.NewRef(1)
-		b.sharedFieldReferences[types.InactivityScores] = stateutil.NewRef(1)
-	}
 
 	state.Count.Inc()
 	// Finalizer runs when dst is being destroyed in garbage collection.
@@ -1015,11 +771,8 @@ func (b *BeaconState) Copy() state.BeaconState {
 		earliestConsolidationEpoch:    b.earliestConsolidationEpoch,
 
 		// Large arrays, infrequently changed, constant size.
-		blockRoots:                b.blockRoots,
 		blockRootsMultiValue:      b.blockRootsMultiValue,
-		stateRoots:                b.stateRoots,
 		stateRootsMultiValue:      b.stateRootsMultiValue,
-		randaoMixes:               b.randaoMixes,
 		randaoMixesMultiValue:     b.randaoMixesMultiValue,
 		previousEpochAttestations: b.previousEpochAttestations,
 		currentEpochAttestations:  b.currentEpochAttestations,
@@ -1028,15 +781,12 @@ func (b *BeaconState) Copy() state.BeaconState {
 		proposerLookahead:         b.proposerLookahead,
 
 		// Large arrays, increases over time.
-		balances:                   b.balances,
 		balancesMultiValue:         b.balancesMultiValue,
 		historicalRoots:            b.historicalRoots,
 		historicalSummaries:        b.historicalSummaries,
-		validators:                 b.validators,
 		validatorsMultiValue:       b.validatorsMultiValue,
 		previousEpochParticipation: b.previousEpochParticipation,
 		currentEpochParticipation:  b.currentEpochParticipation,
-		inactivityScores:           b.inactivityScores,
 		inactivityScoresMultiValue: b.inactivityScoresMultiValue,
 		pendingDeposits:            b.pendingDeposits,
 		pendingPartialWithdrawals:  b.pendingPartialWithdrawals,
@@ -1068,51 +818,30 @@ func (b *BeaconState) Copy() state.BeaconState {
 		valMapHandler: b.valMapHandler,
 	}
 
-	if features.Get().EnableExperimentalState {
-		b.blockRootsMultiValue.Copy(b, dst)
-		b.stateRootsMultiValue.Copy(b, dst)
-		b.randaoMixesMultiValue.Copy(b, dst)
-		b.balancesMultiValue.Copy(b, dst)
-		if b.version > version.Phase0 {
-			b.inactivityScoresMultiValue.Copy(b, dst)
-		}
-		b.validatorsMultiValue.Copy(b, dst)
+	b.blockRootsMultiValue.Copy(b, dst)
+	b.stateRootsMultiValue.Copy(b, dst)
+	b.randaoMixesMultiValue.Copy(b, dst)
+	b.balancesMultiValue.Copy(b, dst)
+	if b.version > version.Phase0 {
+		b.inactivityScoresMultiValue.Copy(b, dst)
 	}
+	b.validatorsMultiValue.Copy(b, dst)
 
-	if features.Get().EnableExperimentalState {
-		switch b.version {
-		case version.Phase0:
-			dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStatePhase0SharedFieldRefCount)
-		case version.Altair:
-			dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStateAltairSharedFieldRefCount)
-		case version.Bellatrix:
-			dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStateBellatrixSharedFieldRefCount)
-		case version.Capella:
-			dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStateCapellaSharedFieldRefCount)
-		case version.Deneb:
-			dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStateDenebSharedFieldRefCount)
-		case version.Electra:
-			dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStateElectraSharedFieldRefCount)
-		case version.Fulu:
-			dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, experimentalStateFuluSharedFieldRefCount)
-		}
-	} else {
-		switch b.version {
-		case version.Phase0:
-			dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, phase0SharedFieldRefCount)
-		case version.Altair:
-			dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, altairSharedFieldRefCount)
-		case version.Bellatrix:
-			dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, bellatrixSharedFieldRefCount)
-		case version.Capella:
-			dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, capellaSharedFieldRefCount)
-		case version.Deneb:
-			dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, denebSharedFieldRefCount)
-		case version.Electra:
-			dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, electraSharedFieldRefCount)
-		case version.Fulu:
-			dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, fuluSharedFieldRefCount)
-		}
+	switch b.version {
+	case version.Phase0:
+		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, phase0SharedFieldRefCount)
+	case version.Altair:
+		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, altairSharedFieldRefCount)
+	case version.Bellatrix:
+		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, bellatrixSharedFieldRefCount)
+	case version.Capella:
+		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, capellaSharedFieldRefCount)
+	case version.Deneb:
+		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, denebSharedFieldRefCount)
+	case version.Electra:
+		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, electraSharedFieldRefCount)
+	case version.Fulu:
+		dst.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, fuluSharedFieldRefCount)
 	}
 
 	for field, ref := range b.sharedFieldReferences {
@@ -1256,10 +985,6 @@ func (b *BeaconState) FieldReferencesCount() map[string]uint64 {
 func (b *BeaconState) RecordStateMetrics() {
 	b.lock.RLock()
 	defer b.lock.RUnlock()
-	// Only run this for nodes running with the experimental state.
-	if !features.Get().EnableExperimentalState {
-		return
-	}
 
 	// Validators
 	if b.validatorsMultiValue != nil {
@@ -1413,11 +1138,7 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.FinalizedCheckpoint:
 		return ssz.CheckpointRoot(b.finalizedCheckpoint)
 	case types.InactivityScores:
-		if features.Get().EnableExperimentalState {
-			return stateutil.Uint64ListRootWithRegistryLimit(b.inactivityScoresMultiValue.Value(b))
-		} else {
-			return stateutil.Uint64ListRootWithRegistryLimit(b.inactivityScores)
-		}
+		return stateutil.Uint64ListRootWithRegistryLimit(b.inactivityScoresMultiValue.Value(b))
 	case types.CurrentSyncCommittee:
 		return stateutil.SyncCommitteeRoot(b.currentSyncCommittee)
 	case types.NextSyncCommittee:
@@ -1561,25 +1282,23 @@ func finalizerCleanup(b *BeaconState) {
 		delete(b.stateFieldLeaves, i)
 	}
 
-	if features.Get().EnableExperimentalState {
-		if b.blockRootsMultiValue != nil {
-			b.blockRootsMultiValue.Detach(b)
-		}
-		if b.stateRootsMultiValue != nil {
-			b.stateRootsMultiValue.Detach(b)
-		}
-		if b.randaoMixesMultiValue != nil {
-			b.randaoMixesMultiValue.Detach(b)
-		}
-		if b.balancesMultiValue != nil {
-			b.balancesMultiValue.Detach(b)
-		}
-		if b.inactivityScoresMultiValue != nil {
-			b.inactivityScoresMultiValue.Detach(b)
-		}
-		if b.validatorsMultiValue != nil {
-			b.validatorsMultiValue.Detach(b)
-		}
+	if b.blockRootsMultiValue != nil {
+		b.blockRootsMultiValue.Detach(b)
+	}
+	if b.stateRootsMultiValue != nil {
+		b.stateRootsMultiValue.Detach(b)
+	}
+	if b.randaoMixesMultiValue != nil {
+		b.randaoMixesMultiValue.Detach(b)
+	}
+	if b.balancesMultiValue != nil {
+		b.balancesMultiValue.Detach(b)
+	}
+	if b.inactivityScoresMultiValue != nil {
+		b.inactivityScoresMultiValue.Detach(b)
+	}
+	if b.validatorsMultiValue != nil {
+		b.validatorsMultiValue.Detach(b)
 	}
 
 	state.Count.Sub(1)
@@ -1587,145 +1306,94 @@ func finalizerCleanup(b *BeaconState) {
 
 func (b *BeaconState) blockRootsRootSelector(field types.FieldIndex) ([32]byte, error) {
 	if b.rebuildTrie[field] {
-		if features.Get().EnableExperimentalState {
-			err := b.resetFieldTrie(field, mvslice.MultiValueSliceComposite[[32]byte]{
-				Identifiable:    b,
-				MultiValueSlice: b.blockRootsMultiValue,
-			}, fieldparams.BlockRootsLength)
-			if err != nil {
-				return [32]byte{}, err
-			}
-		} else {
-			err := b.resetFieldTrie(field, b.blockRoots, fieldparams.BlockRootsLength)
-			if err != nil {
-				return [32]byte{}, err
-			}
+		err := b.resetFieldTrie(field, mvslice.MultiValueSliceComposite[[32]byte]{
+			Identifiable:    b,
+			MultiValueSlice: b.blockRootsMultiValue,
+		}, fieldparams.BlockRootsLength)
+		if err != nil {
+			return [32]byte{}, err
 		}
+
 		delete(b.rebuildTrie, field)
 		return b.stateFieldLeaves[field].TrieRoot()
 	}
-	if features.Get().EnableExperimentalState {
-		return b.recomputeFieldTrie(field, mvslice.MultiValueSliceComposite[[32]byte]{
-			Identifiable:    b,
-			MultiValueSlice: b.blockRootsMultiValue,
-		})
-	} else {
-		return b.recomputeFieldTrie(field, b.blockRoots)
-	}
+	return b.recomputeFieldTrie(field, mvslice.MultiValueSliceComposite[[32]byte]{
+		Identifiable:    b,
+		MultiValueSlice: b.blockRootsMultiValue,
+	})
 }
 
 func (b *BeaconState) stateRootsRootSelector(field types.FieldIndex) ([32]byte, error) {
 	if b.rebuildTrie[field] {
-		if features.Get().EnableExperimentalState {
-			err := b.resetFieldTrie(field, mvslice.MultiValueSliceComposite[[32]byte]{
-				Identifiable:    b,
-				MultiValueSlice: b.stateRootsMultiValue,
-			}, fieldparams.StateRootsLength)
-			if err != nil {
-				return [32]byte{}, err
-			}
-		} else {
-			err := b.resetFieldTrie(field, b.stateRoots, fieldparams.StateRootsLength)
-			if err != nil {
-				return [32]byte{}, err
-			}
+		err := b.resetFieldTrie(field, mvslice.MultiValueSliceComposite[[32]byte]{
+			Identifiable:    b,
+			MultiValueSlice: b.stateRootsMultiValue,
+		}, fieldparams.StateRootsLength)
+		if err != nil {
+			return [32]byte{}, err
 		}
+
 		delete(b.rebuildTrie, field)
 		return b.stateFieldLeaves[field].TrieRoot()
 	}
-	if features.Get().EnableExperimentalState {
-		return b.recomputeFieldTrie(field, mvslice.MultiValueSliceComposite[[32]byte]{
-			Identifiable:    b,
-			MultiValueSlice: b.stateRootsMultiValue,
-		})
-	} else {
-		return b.recomputeFieldTrie(field, b.stateRoots)
-	}
+	return b.recomputeFieldTrie(field, mvslice.MultiValueSliceComposite[[32]byte]{
+		Identifiable:    b,
+		MultiValueSlice: b.stateRootsMultiValue,
+	})
 }
 
 func (b *BeaconState) validatorsRootSelector(field types.FieldIndex) ([32]byte, error) {
 	if b.rebuildTrie[field] {
-		if features.Get().EnableExperimentalState {
-			err := b.resetFieldTrie(field, mvslice.MultiValueSliceComposite[*ethpb.Validator]{
-				Identifiable:    b,
-				MultiValueSlice: b.validatorsMultiValue,
-			}, fieldparams.ValidatorRegistryLimit)
-			if err != nil {
-				return [32]byte{}, err
-			}
-		} else {
-			err := b.resetFieldTrie(field, b.validators, fieldparams.ValidatorRegistryLimit)
-			if err != nil {
-				return [32]byte{}, err
-			}
+		err := b.resetFieldTrie(field, mvslice.MultiValueSliceComposite[*ethpb.Validator]{
+			Identifiable:    b,
+			MultiValueSlice: b.validatorsMultiValue,
+		}, fieldparams.ValidatorRegistryLimit)
+		if err != nil {
+			return [32]byte{}, err
 		}
+
 		delete(b.rebuildTrie, field)
 		return b.stateFieldLeaves[field].TrieRoot()
 	}
-	if features.Get().EnableExperimentalState {
-		return b.recomputeFieldTrie(field, mvslice.MultiValueSliceComposite[*ethpb.Validator]{
-			Identifiable:    b,
-			MultiValueSlice: b.validatorsMultiValue,
-		})
-	} else {
-		return b.recomputeFieldTrie(field, b.validators)
-	}
+	return b.recomputeFieldTrie(field, mvslice.MultiValueSliceComposite[*ethpb.Validator]{
+		Identifiable:    b,
+		MultiValueSlice: b.validatorsMultiValue,
+	})
 }
 
 func (b *BeaconState) balancesRootSelector(field types.FieldIndex) ([32]byte, error) {
 	if b.rebuildTrie[field] {
-		if features.Get().EnableExperimentalState {
-			err := b.resetFieldTrie(field, mvslice.MultiValueSliceComposite[uint64]{
-				Identifiable:    b,
-				MultiValueSlice: b.balancesMultiValue,
-			}, stateutil.ValidatorLimitForBalancesChunks())
-			if err != nil {
-				return [32]byte{}, err
-			}
-		} else {
-			err := b.resetFieldTrie(field, b.balances, stateutil.ValidatorLimitForBalancesChunks())
-			if err != nil {
-				return [32]byte{}, err
-			}
+		err := b.resetFieldTrie(field, mvslice.MultiValueSliceComposite[uint64]{
+			Identifiable:    b,
+			MultiValueSlice: b.balancesMultiValue,
+		}, stateutil.ValidatorLimitForBalancesChunks())
+		if err != nil {
+			return [32]byte{}, err
 		}
 		delete(b.rebuildTrie, field)
 		return b.stateFieldLeaves[field].TrieRoot()
 	}
-	if features.Get().EnableExperimentalState {
-		return b.recomputeFieldTrie(field, mvslice.MultiValueSliceComposite[uint64]{
-			Identifiable:    b,
-			MultiValueSlice: b.balancesMultiValue,
-		})
-	} else {
-		return b.recomputeFieldTrie(field, b.balances)
-	}
+	return b.recomputeFieldTrie(field, mvslice.MultiValueSliceComposite[uint64]{
+		Identifiable:    b,
+		MultiValueSlice: b.balancesMultiValue,
+	})
 }
 
 func (b *BeaconState) randaoMixesRootSelector(field types.FieldIndex) ([32]byte, error) {
 	if b.rebuildTrie[field] {
-		if features.Get().EnableExperimentalState {
-			err := b.resetFieldTrie(field, mvslice.MultiValueSliceComposite[[32]byte]{
-				Identifiable:    b,
-				MultiValueSlice: b.randaoMixesMultiValue,
-			}, fieldparams.RandaoMixesLength)
-			if err != nil {
-				return [32]byte{}, err
-			}
-		} else {
-			err := b.resetFieldTrie(field, b.randaoMixes, fieldparams.RandaoMixesLength)
-			if err != nil {
-				return [32]byte{}, err
-			}
+		err := b.resetFieldTrie(field, mvslice.MultiValueSliceComposite[[32]byte]{
+			Identifiable:    b,
+			MultiValueSlice: b.randaoMixesMultiValue,
+		}, fieldparams.RandaoMixesLength)
+		if err != nil {
+			return [32]byte{}, err
 		}
+
 		delete(b.rebuildTrie, field)
 		return b.stateFieldLeaves[field].TrieRoot()
 	}
-	if features.Get().EnableExperimentalState {
-		return b.recomputeFieldTrie(field, mvslice.MultiValueSliceComposite[[32]byte]{
-			Identifiable:    b,
-			MultiValueSlice: b.randaoMixesMultiValue,
-		})
-	} else {
-		return b.recomputeFieldTrie(field, b.randaoMixes)
-	}
+	return b.recomputeFieldTrie(field, mvslice.MultiValueSliceComposite[[32]byte]{
+		Identifiable:    b,
+		MultiValueSlice: b.randaoMixesMultiValue,
+	})
 }
