@@ -53,7 +53,7 @@ func attesterSubnetIndices(currentSlot primitives.Slot) map[uint64]bool {
 	endEpoch := slots.ToEpoch(currentSlot) + 1
 	endSlot := params.BeaconConfig().SlotsPerEpoch.Mul(uint64(endEpoch))
 
-	subnets := make(map[uint64]bool)
+	subnets := make(map[uint64]bool, int(endSlot-currentSlot+1))
 	for i := currentSlot; i <= endSlot; i++ {
 		for _, subnetId := range cache.SubnetIDs.GetAttesterSubnetIDs(i) {
 			subnets[subnetId] = true
