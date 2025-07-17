@@ -432,6 +432,7 @@ func TestFilterSubnetPeers(t *testing.T) {
 	cfg := params.MainnetConfig()
 	cfg.SecondsPerSlot = 1
 	params.OverrideBeaconConfig(cfg)
+	params.BeaconConfig().InitializeForkSchedule()
 
 	gFlags := new(flags.GlobalFlags)
 	gFlags.MinimumPeersPerSubnet = 4
