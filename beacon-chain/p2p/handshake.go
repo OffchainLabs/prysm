@@ -133,57 +133,62 @@ func (s *Service) AddConnectionHandler(reqFunc, goodByeFunc func(ctx context.Con
 					return
 				}
 
-				// Do not perform handshake on inbound dials.
-				if conn.Stat().Direction == network.DirInbound {
-					_, err := s.peers.ChainState(remotePeer)
-					peerExists := err == nil
-					currentTime := prysmTime.Now()
-
-					// Wait for peer to initiate handshake
-					time.Sleep(timeForStatus)
-
-					// Exit if we are disconnected with the peer.
-					if s.host.Network().Connectedness(remotePeer) != network.Connected {
+				direction := conn.Stat().Direction
+				if direction == network.DirOutbound || direction == network.DirUnknown {
+					s.peers.SetConnectionState(conn.RemotePeer(), peers.Connecting)
+					if err := reqFunc(context.TODO(), conn.RemotePeer()); err != nil && !errors.Is(err, io.EOF) {
+						s.disconnectFromPeerOnError(conn, goodByeFunc, err)
 						return
-					}
-
-					// If peer hasn't sent a status request, we disconnect with them
-					if _, err := s.peers.ChainState(remotePeer); errors.Is(err, peerdata.ErrPeerUnknown) || errors.Is(err, peerdata.ErrNoPeerStatus) {
-						statusMessageMissing.Inc()
-						s.disconnectFromPeerOnError(conn, goodByeFunc, errors.Wrap(err, "chain state"))
-						return
-					}
-
-					if peerExists {
-						updated, err := s.peers.ChainStateLastUpdated(remotePeer)
-						if err != nil {
-							s.disconnectFromPeerOnError(conn, goodByeFunc, errors.Wrap(err, "chain state last updated"))
-							return
-						}
-
-						// Exit if we don't receive any current status messages from peer.
-						if updated.IsZero() {
-							s.disconnectFromPeerOnError(conn, goodByeFunc, errors.New("is zero"))
-							return
-						}
-
-						if updated.Before(currentTime) {
-							s.disconnectFromPeerOnError(conn, goodByeFunc, errors.New("did not update"))
-							return
-						}
 					}
 
 					s.connectToPeer(conn)
 					return
 				}
 
-				s.peers.SetConnectionState(conn.RemotePeer(), peers.Connecting)
-				if err := reqFunc(context.TODO(), conn.RemotePeer()); err != nil && !errors.Is(err, io.EOF) {
-					s.disconnectFromPeerOnError(conn, goodByeFunc, err)
+				// The connection is inbound.
+				_, err = s.peers.ChainState(remotePeer)
+				peerExists := err == nil
+				currentTime := prysmTime.Now()
+
+				// Wait for peer to initiate handshake
+				time.Sleep(timeForStatus)
+
+				// Exit if we are disconnected with the peer.
+				if s.host.Network().Connectedness(remotePeer) != network.Connected {
+					return
+				}
+
+				// If peer hasn't sent a status request, we disconnect with them
+				if _, err := s.peers.ChainState(remotePeer); errors.Is(err, peerdata.ErrPeerUnknown) || errors.Is(err, peerdata.ErrNoPeerStatus) {
+					statusMessageMissing.Inc()
+					s.disconnectFromPeerOnError(conn, goodByeFunc, errors.Wrap(err, "chain state"))
+					return
+				}
+
+				if !peerExists {
+					s.connectToPeer(conn)
+					return
+				}
+
+				updated, err := s.peers.ChainStateLastUpdated(remotePeer)
+				if err != nil {
+					s.disconnectFromPeerOnError(conn, goodByeFunc, errors.Wrap(err, "chain state last updated"))
+					return
+				}
+
+				// Exit if we don't receive any current status messages from peer.
+				if updated.IsZero() {
+					s.disconnectFromPeerOnError(conn, goodByeFunc, errors.New("is zero"))
+					return
+				}
+
+				if updated.Before(currentTime) {
+					s.disconnectFromPeerOnError(conn, goodByeFunc, errors.New("did not update"))
 					return
 				}
 
 				s.connectToPeer(conn)
+				return
 			}()
 		},
 	})
