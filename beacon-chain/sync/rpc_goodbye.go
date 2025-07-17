@@ -89,7 +89,7 @@ func (s *Service) disconnectBadPeer(ctx context.Context, id peer.ID, badPeerErr 
 			"peerID": id,
 			"agent":  agentString(id, s.cfg.p2p.Host()),
 		}).
-		Debug("Sent peer disconnection")
+		Debug("Sent bad peer disconnection")
 }
 
 // A custom goodbye method that is used by our connection handler, in the
