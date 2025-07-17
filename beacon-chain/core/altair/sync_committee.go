@@ -217,15 +217,15 @@ func IsSyncCommitteeAggregator(sig []byte) (bool, error) {
 // ValidateSyncMessageTime validates sync message to ensure that the provided slot is valid.
 // Spec: [IGNORE] The message's slot is for the current slot (with a MAXIMUM_GOSSIP_CLOCK_DISPARITY allowance), i.e. sync_committee_message.slot == current_slot
 func ValidateSyncMessageTime(slot primitives.Slot, genesisTime time.Time, clockDisparity time.Duration) error {
-	if err := slots.ValidateClock(slot, uint64(genesisTime.Unix())); err != nil {
+	if err := slots.ValidateClock(slot, genesisTime); err != nil {
 		return err
 	}
-	messageTime, err := slots.ToTime(uint64(genesisTime.Unix()), slot)
+	messageTime, err := slots.StartTime(genesisTime, slot)
 	if err != nil {
 		return err
 	}
-	currentSlot := slots.Since(genesisTime)
-	slotStartTime, err := slots.ToTime(uint64(genesisTime.Unix()), currentSlot)
+	currentSlot := slots.CurrentSlot(genesisTime)
+	slotStartTime, err := slots.StartTime(genesisTime, currentSlot)
 	if err != nil {
 		return err
 	}

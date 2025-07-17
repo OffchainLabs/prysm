@@ -154,6 +154,7 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 	t.Run("genesis_state_root", func(t *testing.T) {
 		bState, _ := util.DeterministicGenesisState(t, 10)
 		srv := testServiceWithDB(t)
+		srv.SetGenesisTime(time.Now())
 		notifier := srv.cfg.StateNotifier.(*mock.MockStateNotifier)
 		srv.originBlockRoot = [32]byte{1}
 		st, blk, err := prepareForkchoiceState(t.Context(), 0, [32]byte{}, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
@@ -180,8 +181,8 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 	t.Run("non_genesis_values", func(t *testing.T) {
 		bState, _ := util.DeterministicGenesisState(t, 10)
 		genesisRoot := [32]byte{1}
-
 		srv := testServiceWithDB(t)
+		srv.SetGenesisTime(time.Now())
 		srv.originBlockRoot = genesisRoot
 		notifier := srv.cfg.StateNotifier.(*mock.MockStateNotifier)
 		st, blk, err := prepareForkchoiceState(t.Context(), 0, [32]byte{}, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
@@ -397,7 +398,7 @@ func TestSaveOrphanedOps(t *testing.T) {
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 	service := setupBeaconChain(t, beaconDB)
-	service.genesisTime = time.Now().Add(time.Duration(-10*int64(1)*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second)
+	service.SetGenesisTime(time.Now().Add(time.Duration(-10*int64(1)*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
 
 	// Chain setup
 	// 0 -- 1 -- 2 -- 3

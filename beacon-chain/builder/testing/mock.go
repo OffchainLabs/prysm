@@ -29,6 +29,7 @@ type MockBuilderService struct {
 	PayloadCapella        *v1.ExecutionPayloadCapella
 	PayloadDeneb          *v1.ExecutionPayloadDeneb
 	BlobBundle            *v1.BlobsBundle
+	BlobBundleV2          *v1.BlobsBundleV2
 	ErrSubmitBlindedBlock error
 	Bid                   *ethpb.SignedBuilderBid
 	BidCapella            *ethpb.SignedBuilderBidCapella
@@ -46,7 +47,7 @@ func (s *MockBuilderService) Configured() bool {
 }
 
 // SubmitBlindedBlock for mocking.
-func (s *MockBuilderService) SubmitBlindedBlock(_ context.Context, b interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, *v1.BlobsBundle, error) {
+func (s *MockBuilderService) SubmitBlindedBlock(_ context.Context, b interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, v1.BlobsBundler, error) {
 	switch b.Version() {
 	case version.Bellatrix:
 		w, err := blocks.WrappedExecutionPayload(s.Payload)
@@ -64,6 +65,16 @@ func (s *MockBuilderService) SubmitBlindedBlock(_ context.Context, b interfaces.
 		w, err := blocks.WrappedExecutionPayloadDeneb(s.PayloadDeneb)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "could not wrap deneb payload")
+		}
+		return w, s.BlobBundle, s.ErrSubmitBlindedBlock
+	case version.Fulu:
+		w, err := blocks.WrappedExecutionPayloadDeneb(s.PayloadDeneb)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "could not wrap deneb payload for fulu")
+		}
+		// For Fulu, return BlobsBundleV2 if available, otherwise regular BlobsBundle
+		if s.BlobBundleV2 != nil {
+			return w, s.BlobBundleV2, s.ErrSubmitBlindedBlock
 		}
 		return w, s.BlobBundle, s.ErrSubmitBlindedBlock
 	default:

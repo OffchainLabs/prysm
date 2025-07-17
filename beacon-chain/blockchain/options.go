@@ -254,7 +254,7 @@ func WithSlasherEnabled(enabled bool) Option {
 // WithGenesisTime sets the genesis time for the blockchain service.
 func WithGenesisTime(genesisTime time.Time) Option {
 	return func(s *Service) error {
-		s.genesisTime = genesisTime
+		s.genesisTime = genesisTime.Truncate(time.Second) // Genesis time has a precision of 1 second.
 		return nil
 	}
 }

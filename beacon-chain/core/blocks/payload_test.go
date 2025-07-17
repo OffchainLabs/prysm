@@ -501,7 +501,7 @@ func Test_ValidatePayload(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
 	random, err := helpers.RandaoMix(st, time.CurrentEpoch(st))
 	require.NoError(t, err)
-	ts, err := slots.ToTime(st.GenesisTime(), st.Slot())
+	ts, err := slots.StartTime(st.GenesisTime(), st.Slot())
 	require.NoError(t, err)
 	tests := []struct {
 		name    string
@@ -551,7 +551,7 @@ func Test_ProcessPayload(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
 	random, err := helpers.RandaoMix(st, time.CurrentEpoch(st))
 	require.NoError(t, err)
-	ts, err := slots.ToTime(st.GenesisTime(), st.Slot())
+	ts, err := slots.StartTime(st.GenesisTime(), st.Slot())
 	require.NoError(t, err)
 	tests := []struct {
 		name    string
@@ -627,7 +627,7 @@ func Test_ProcessPayload_Blinded(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
 	random, err := helpers.RandaoMix(st, time.CurrentEpoch(st))
 	require.NoError(t, err)
-	ts, err := slots.ToTime(st.GenesisTime(), st.Slot())
+	ts, err := slots.StartTime(st.GenesisTime(), st.Slot())
 	require.NoError(t, err)
 	tests := []struct {
 		name   string
@@ -697,7 +697,7 @@ func Test_ValidatePayloadHeader(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
 	random, err := helpers.RandaoMix(st, time.CurrentEpoch(st))
 	require.NoError(t, err)
-	ts, err := slots.ToTime(st.GenesisTime(), st.Slot())
+	ts, err := slots.StartTime(st.GenesisTime(), st.Slot())
 	require.NoError(t, err)
 	tests := []struct {
 		name   string

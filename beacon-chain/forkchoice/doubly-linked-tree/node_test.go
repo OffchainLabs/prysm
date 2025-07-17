@@ -2,6 +2,7 @@ package doublylinkedtree
 
 import (
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/forkchoice"
@@ -262,7 +263,7 @@ func TestNode_TimeStampsChecks(t *testing.T) {
 	ctx := t.Context()
 
 	// early block
-	driftGenesisTime(f, 1, 1)
+	driftGenesisTime(f, 1, time.Second)
 	root := [32]byte{'a'}
 	f.justifiedBalances = []uint64{10}
 	state, blk, err := prepareForkchoiceState(ctx, 1, root, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 0, 0)
@@ -278,9 +279,9 @@ func TestNode_TimeStampsChecks(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, false, late)
 
-	orphanLateBlockFirstThreshold := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
+	orphanLateBlockFirstThreshold := time.Duration(params.BeaconConfig().SecondsPerSlot/params.BeaconConfig().IntervalsPerSlot) * time.Second
 	// late block
-	driftGenesisTime(f, 2, orphanLateBlockFirstThreshold+1)
+	driftGenesisTime(f, 2, orphanLateBlockFirstThreshold+time.Second)
 	root = [32]byte{'b'}
 	state, blk, err = prepareForkchoiceState(ctx, 2, root, [32]byte{'a'}, [32]byte{'B'}, 0, 0)
 	require.NoError(t, err)
@@ -296,7 +297,7 @@ func TestNode_TimeStampsChecks(t *testing.T) {
 	require.Equal(t, false, late)
 
 	// very late block
-	driftGenesisTime(f, 3, ProcessAttestationsThreshold+1)
+	driftGenesisTime(f, 3, ProcessAttestationsThreshold+time.Second)
 	root = [32]byte{'c'}
 	state, blk, err = prepareForkchoiceState(ctx, 3, root, [32]byte{'b'}, [32]byte{'C'}, 0, 0)
 	require.NoError(t, err)

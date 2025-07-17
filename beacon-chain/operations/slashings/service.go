@@ -61,7 +61,7 @@ func (p *PoolService) run() {
 
 	p.waitForChainInitialization()
 
-	electraTime, err := slots.ToTime(uint64(p.clock.GenesisTime().Unix()), electraSlot)
+	electraTime, err := slots.StartTime(p.clock.GenesisTime(), electraSlot)
 	if err != nil {
 		return
 	}

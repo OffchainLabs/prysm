@@ -535,7 +535,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 				require.NoError(t, st.SetSlot(currentSlot+1))
 				b := tc.getBlock()
 				genesis := time.Now()
-				require.NoError(t, st.SetGenesisTime(uint64(genesis.Unix())))
+				require.NoError(t, st.SetGenesisTime(genesis))
 				mockChainService := &mockChain.ChainService{
 					Root:    make([]byte, 32),
 					State:   st,

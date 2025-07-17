@@ -268,7 +268,7 @@ func (s *Service) Status() error {
 // StartFromSavedState initializes the blockchain using a previously saved finalized checkpoint.
 func (s *Service) StartFromSavedState(saved state.BeaconState) error {
 	log.Info("Blockchain data already exists in DB, initializing...")
-	s.genesisTime = time.Unix(int64(saved.GenesisTime()), 0) // lint:ignore uintcast -- Genesis time will not exceed int64 in your lifetime.
+	s.genesisTime = saved.GenesisTime()
 	s.cfg.AttService.SetGenesisTime(saved.GenesisTime())
 
 	originRoot, err := s.originRootFromSavedState(s.ctx)
@@ -424,7 +424,7 @@ func (s *Service) initializeBeaconChain(
 	eth1data *ethpb.Eth1Data) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "beacon-chain.Service.initializeBeaconChain")
 	defer span.End()
-	s.genesisTime = genesisTime
+	s.genesisTime = genesisTime.Truncate(time.Second) // Genesis time has a precision of 1 second.
 	unixTime := uint64(genesisTime.Unix())
 
 	genesisState, err := transition.OptimizedGenesisBeaconState(unixTime, preGenesisState, eth1data)
@@ -485,7 +485,7 @@ func (s *Service) saveGenesisData(ctx context.Context, genesisState state.Beacon
 	if err := s.cfg.ForkChoiceStore.SetOptimisticToValid(ctx, genesisBlkRoot); err != nil {
 		return errors.Wrap(err, "Could not set optimistic status of genesis block to false")
 	}
-	s.cfg.ForkChoiceStore.SetGenesisTime(uint64(s.genesisTime.Unix()))
+	s.cfg.ForkChoiceStore.SetGenesisTime(s.genesisTime)
 
 	if err := s.setHead(&head{
 		genesisBlkRoot,

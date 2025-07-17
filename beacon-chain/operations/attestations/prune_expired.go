@@ -5,7 +5,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 )
 
@@ -97,9 +96,8 @@ func (s *Service) expired(providedSlot primitives.Slot) bool {
 // Handles expiration of attestations before deneb.
 func (s *Service) expiredPreDeneb(slot primitives.Slot) bool {
 	expirationSlot := slot + params.BeaconConfig().SlotsPerEpoch
-	expirationTime := s.genesisTime + uint64(expirationSlot.Mul(params.BeaconConfig().SecondsPerSlot))
-	currentTime := uint64(prysmTime.Now().Unix())
-	return currentTime >= expirationTime
+	expirationTime := s.genesisTime.Add(time.Duration(expirationSlot.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second)
+	return expirationTime.Before(time.Now())
 }
 
 // Attestations for a slot before the returned slot are considered expired.
