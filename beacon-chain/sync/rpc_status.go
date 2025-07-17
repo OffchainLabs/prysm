@@ -169,6 +169,7 @@ func (s *Service) sendRPCStatusRequest(ctx context.Context, peer peer.ID) error 
 
 	code, errMsg, err := ReadStatusCode(stream, s.cfg.p2p.Encoding())
 	if err != nil {
+		log := log.WithError(err)
 		newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peer)
 		log.WithFields(logrus.Fields{"reason": "statusRequestReadStatusCodeError", "newScore": newScore}).Debug("Downscore peer")
 
