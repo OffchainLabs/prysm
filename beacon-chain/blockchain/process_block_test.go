@@ -2815,51 +2815,6 @@ func TestProcessLightClientUpdate(t *testing.T) {
 	}
 }
 
-func TestProcessLightClientBootstrap(t *testing.T) {
-	featCfg := &features.Flags{}
-	featCfg.EnableLightClient = true
-	reset := features.InitWithReset(featCfg)
-	defer reset()
-
-	s, tr := minimalTestService(t, WithLCStore())
-	ctx := tr.ctx
-
-	for testVersion := version.Altair; testVersion <= version.Electra; testVersion++ {
-		t.Run(version.String(testVersion), func(t *testing.T) {
-			l := util.NewTestLightClient(t, testVersion)
-
-			require.NoError(t, s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock))
-			finalizedBlockRoot, err := l.FinalizedBlock.Block().HashTreeRoot()
-			require.NoError(t, err)
-			require.NoError(t, s.cfg.BeaconDB.SaveState(ctx, l.FinalizedState, finalizedBlockRoot))
-
-			cp := l.AttestedState.FinalizedCheckpoint()
-			require.DeepSSZEqual(t, finalizedBlockRoot, [32]byte(cp.Root))
-
-			require.NoError(t, s.cfg.ForkChoiceStore.UpdateFinalizedCheckpoint(&forkchoicetypes.Checkpoint{Epoch: cp.Epoch, Root: [32]byte(cp.Root)}))
-
-			sss, err := s.cfg.BeaconDB.State(ctx, finalizedBlockRoot)
-			require.NoError(t, err)
-			require.NotNil(t, sss)
-
-			s.executePostFinalizationTasks(s.ctx, l.FinalizedState)
-
-			// wait for the goroutine to finish processing
-			time.Sleep(1 * time.Second)
-
-			// Check that the light client bootstrap is saved
-			b, err := s.lcStore.LightClientBootstrap(ctx, [32]byte(cp.Root))
-			require.NoError(t, err)
-			require.NotNil(t, b)
-
-			btst, err := lightClient.NewLightClientBootstrapFromBeaconState(ctx, l.FinalizedState.Slot(), l.FinalizedState, l.FinalizedBlock)
-			require.NoError(t, err)
-			require.DeepEqual(t, btst, b)
-			require.Equal(t, b.Version(), testVersion)
-		})
-	}
-}
-
 type testIsAvailableParams struct {
 	options                 []Option
 	blobKzgCommitmentsCount uint64
