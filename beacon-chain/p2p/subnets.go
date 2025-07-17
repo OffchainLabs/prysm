@@ -642,7 +642,7 @@ func byteCount(bitCount int) int {
 // interesect intersects two maps and returns a new map containing only the keys
 // that are present in both maps.
 func intersect(left map[uint64]int, right map[uint64]bool) map[uint64]bool {
-	result := make(map[uint64]bool, len(left))
+	result := make(map[uint64]bool, min(len(left), len(right)))
 	for i := range left {
 		if right[i] {
 			result[i] = true
