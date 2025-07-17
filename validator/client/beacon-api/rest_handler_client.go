@@ -7,13 +7,17 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
+
+type reqOption func(*http.Request)
 
 type RestHandler interface {
 	Get(ctx context.Context, endpoint string, resp interface{}) error
@@ -25,15 +29,29 @@ type RestHandler interface {
 }
 
 type BeaconApiRestHandler struct {
-	client http.Client
-	host   string
+	client       http.Client
+	host         string
+	reqOverrides []reqOption
 }
 
 // NewBeaconApiRestHandler returns a RestHandler
 func NewBeaconApiRestHandler(client http.Client, host string) RestHandler {
-	return &BeaconApiRestHandler{
+	brh := &BeaconApiRestHandler{
 		client: client,
 		host:   host,
+	}
+	brh.appendAcceptOverride()
+	return brh
+}
+
+// appendAcceptOverride enables the Accept header to be customized at runtime via an environment variable.
+// This is specified as an env var because it is a niche option that prysm may use for performance testing or debugging
+// bug which users are unlikely to need. Using an env var keeps the set of user-facing flags cleaner.
+func (c *BeaconApiRestHandler) appendAcceptOverride() {
+	if accept := os.Getenv(params.EnvNameOverrideAccept); accept != "" {
+		c.reqOverrides = append(c.reqOverrides, func(req *http.Request) {
+			req.Header.Set("Accept", accept)
+		})
 	}
 }
 
@@ -55,7 +73,6 @@ func (c *BeaconApiRestHandler) Get(ctx context.Context, endpoint string, resp in
 	if err != nil {
 		return errors.Wrapf(err, "failed to create request for endpoint %s", url)
 	}
-
 	httpResp, err := c.client.Do(req)
 	if err != nil {
 		return errors.Wrapf(err, "failed to perform request for endpoint %s", url)
@@ -75,10 +92,18 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to create request for endpoint %s", url)
 	}
+	for _, o := range c.reqOverrides {
+		o(req)
+	}
 	primaryAcceptType := fmt.Sprintf("%s;q=%s", api.OctetStreamMediaType, "0.95")
 	secondaryAcceptType := fmt.Sprintf("%s;q=%s", api.JsonMediaType, "0.9")
-	acceptHeaderString := fmt.Sprintf("%s,%s", primaryAcceptType, secondaryAcceptType)
-	req.Header.Set("Accept", acceptHeaderString)
+	if req.Header.Get("Accept") == "" {
+		acceptHeaderString := fmt.Sprintf("%s,%s", primaryAcceptType, secondaryAcceptType)
+		req.Header.Set("Accept", acceptHeaderString)
+	} else {
+		primaryAcceptType = req.Header.Get("Accept")
+		secondaryAcceptType = req.Header.Get("Accept")
+	}
 	httpResp, err := c.client.Do(req)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to perform request for endpoint %s", url)
