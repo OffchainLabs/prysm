@@ -65,7 +65,7 @@ func (s *Service) nodeFilter(topic string, indices map[uint64]int) (func(node *e
 	case strings.Contains(topic, GossipSyncCommitteeMessage):
 		return s.filterPeerForSyncSubnet(indices), nil
 	case strings.Contains(topic, GossipBlobSidecarMessage):
-		return s.filterPeerForBlobSubnet(), nil
+		return s.filterPeerForBlobSubnet(indices), nil
 	case strings.Contains(topic, GossipDataColumnSidecarMessage):
 		return s.filterPeerForDataColumnsSubnet(indices), nil
 	default:
@@ -325,11 +325,10 @@ func (s *Service) filterPeerForSyncSubnet(indices map[uint64]int) func(node *eno
 
 // returns a method with filters peers specifically for a particular blob subnet.
 // All peers are supposed to be subscribed to all blob subnets.
-func (s *Service) filterPeerForBlobSubnet() func(_ *enode.Node) (map[uint64]bool, error) {
-	maxBlobsPerBlock := params.BeaconConfig().AbsoluteMaxBlobsPerBlock()
-	result := make(map[uint64]bool, maxBlobsPerBlock)
-	for i := range maxBlobsPerBlock {
-		result[uint64(i)] = true
+func (s *Service) filterPeerForBlobSubnet(indices map[uint64]int) func(_ *enode.Node) (map[uint64]bool, error) {
+	result := make(map[uint64]bool, len(indices))
+	for i := range indices {
+		result[i] = true
 	}
 
 	return func(_ *enode.Node) (map[uint64]bool, error) {
