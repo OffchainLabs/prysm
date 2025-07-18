@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/paulbellamy/ratecounter"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -345,11 +346,9 @@ func isPunishableError(err error) bool {
 func (s *Service) updatePeerScorerStats(data *blocksQueueFetchedData, count uint64, err error) {
 	if isPunishableError(err) {
 		if verification.IsBlobValidationFailure(err) {
-			newScore := s.cfg.P2P.Peers().Scorers().BadResponsesScorer().Increment(data.blobsFrom)
-			log.WithError(err).WithFields(logrus.Fields{"peerID": data.blobsFrom, "reason": "invalidBlobs", "newScore": newScore}).Debug("Downscore peer")
+			s.downscorePeer(data.blobsFrom, "invalidBlobs")
 		} else {
-			newScore := s.cfg.P2P.Peers().Scorers().BadResponsesScorer().Increment(data.blocksFrom)
-			log.WithError(err).WithFields(logrus.Fields{"peerID": data.blocksFrom, "reason": "invalidBlocks", "newScore": newScore}).Debug("Downscore peer")
+			s.downscorePeer(data.blocksFrom, "invalidBlocks")
 		}
 
 		// If the error is punishable, exit here so that we don't give them credit for providing bad blocks.
@@ -376,4 +375,9 @@ func (s *Service) isProcessedBlock(ctx context.Context, blk blocks.ROBlock) bool
 		return true
 	}
 	return false
+}
+
+func (s *Service) downscorePeer(peerID peer.ID, reason string) {
+	newScore := s.cfg.P2P.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }

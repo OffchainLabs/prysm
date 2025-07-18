@@ -305,10 +305,7 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 			if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
 				logStreamErrors(err, topic)
 				tracing.AnnotateError(span, err)
-
-				newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
-				log.WithFields(logrus.Fields{"reason": "registerRpcError", "newScore": newScore}).Debug("Downscore peer")
-
+				s.downscorePeer(remotePeer, "registerRpcError")
 				return
 			}
 			if err := handle(ctx, msg, stream); err != nil {
@@ -328,10 +325,7 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 			if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
 				logStreamErrors(err, topic)
 				tracing.AnnotateError(span, err)
-
-				newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
-				log.WithFields(logrus.Fields{"reason": "registerRpcError", "newScore": newScore}).Debug("Downscore peer")
-
+				s.downscorePeer(remotePeer, "registerRpcError")
 				return
 			}
 			if err := handle(ctx, nTyp.Elem().Interface(), stream); err != nil {

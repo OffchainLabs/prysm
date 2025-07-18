@@ -16,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 func (s *Service) streamBlobBatch(ctx context.Context, batch blockBatch, wQuota uint64, stream libp2pcore.Stream) (uint64, error) {
@@ -81,10 +80,7 @@ func (s *Service) blobSidecarsByRangeRPCHandler(ctx context.Context, msg interfa
 	rp, err := validateBlobsByRange(r, s.cfg.chain.CurrentSlot())
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
-
-		newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
-		log.WithFields(logrus.Fields{"peerID": remotePeer.String(), "reason": "blobSidecarsByRangeRpcHandlerValidationError", "newScore": newScore}).Debug("Downscore peer")
-
+		s.downscorePeer(remotePeer, "blobSidecarsByRangeRpcHandlerValidationError")
 		tracing.AnnotateError(span, err)
 		return err
 	}

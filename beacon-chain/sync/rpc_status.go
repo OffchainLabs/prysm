@@ -65,8 +65,7 @@ func (s *Service) maintainPeerStatuses() {
 
 				if prysmTime.Now().After(lastUpdated.Add(interval)) {
 					if err := s.reValidatePeer(s.ctx, id); err != nil {
-						newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(id)
-						log.WithFields(logrus.Fields{"reason": "reValidatePeerError", "newScore": newScore}).Debug("Downscore peer")
+						log.WithError(err).Debug("Cannot re-validate peer")
 					}
 				}
 			}(pid)
@@ -169,25 +168,18 @@ func (s *Service) sendRPCStatusRequest(ctx context.Context, peer peer.ID) error 
 
 	code, errMsg, err := ReadStatusCode(stream, s.cfg.p2p.Encoding())
 	if err != nil {
-		log := log.WithError(err)
-		newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peer)
-		log.WithFields(logrus.Fields{"reason": "statusRequestReadStatusCodeError", "newScore": newScore}).Debug("Downscore peer")
-
+		s.downscorePeer(peer, "statusRequestReadStatusCodeError")
 		return errors.Wrap(err, "read status code")
 	}
 
 	if code != 0 {
-		newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peer)
-		log.WithFields(logrus.Fields{"reason": "statusRequestNonNullStatusCode", "newScore": newScore}).Debug("Downscore peer")
-
+		s.downscorePeer(peer, "statusRequestNonNullStatusCode")
 		return errors.New(errMsg)
 	}
 
 	msg := &pb.Status{}
 	if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
-		newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peer)
-		log.WithFields(logrus.Fields{"reason": "statusRequestDecodeError", "newScore": newScore}).Debug("Downscore peer")
-
+		s.downscorePeer(peer, "statusRequestDecodeError")
 		return errors.Wrap(err, "decode status message")
 	}
 
@@ -254,9 +246,7 @@ func (s *Service) statusRPCHandler(ctx context.Context, msg interface{}, stream 
 			return nil
 		default:
 			respCode = responseCodeInvalidRequest
-
-			newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
-			log.WithFields(logrus.Fields{"reason": "statusRpcHandlerInvalidMessage", "newScore": newScore}).Debug("Downscore peer")
+			s.downscorePeer(remotePeer, "statusRpcHandlerInvalidMessage")
 		}
 
 		originalErr := err

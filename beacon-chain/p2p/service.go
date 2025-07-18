@@ -498,9 +498,7 @@ func (s *Service) connectWithPeer(ctx context.Context, info peer.AddrInfo) error
 	defer cancel()
 
 	if err := s.host.Connect(ctx, info); err != nil {
-		newScore := s.Peers().Scorers().BadResponsesScorer().Increment(info.ID)
-		log.WithError(err).WithFields(logrus.Fields{"peerID": info.ID, "reason": "connectionError", "newScore": newScore}).Debug("Downscore peer")
-
+		s.downscorePeer(info.ID, "connectionError")
 		return errors.Wrap(err, "peer connect")
 	}
 	return nil
@@ -531,4 +529,9 @@ func (s *Service) connectToBootnodes() error {
 // required for discovery and pubsub validation.
 func (s *Service) isInitialized() bool {
 	return !s.genesisTime.IsZero() && len(s.genesisValidatorsRoot) == 32
+}
+
+func (s *Service) downscorePeer(peerID peer.ID, reason string) {
+	newScore := s.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }

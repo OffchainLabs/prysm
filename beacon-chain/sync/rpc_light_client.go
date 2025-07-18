@@ -13,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
-	"github.com/sirupsen/logrus"
 )
 
 // lightClientBootstrapRPCHandler handles the /eth2/beacon_chain/req/light_client_bootstrap/1/ RPC request.
@@ -92,9 +91,7 @@ func (s *Service) lightClientUpdatesByRangeRPCHandler(ctx context.Context, msg i
 
 	if r.Count == 0 {
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, "count is 0", stream)
-
-		newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
-		log.WithFields(logrus.Fields{"peerID": remotePeer.String(), "reason": "lightClientUpdatesByRangeRPCHandlerCount0", "newScore": newScore}).Debug("Downscore peer")
+		s.downscorePeer(remotePeer, "lightClientUpdatesByRangeRPCHandlerCount0")
 
 		logger.Error("Count is 0")
 		return nil
@@ -107,10 +104,7 @@ func (s *Service) lightClientUpdatesByRangeRPCHandler(ctx context.Context, msg i
 	endPeriod, err := math.Add64(r.StartPeriod, r.Count-1)
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
-
-		newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
-		log.WithFields(logrus.Fields{"peerID": remotePeer.String(), "reason": "lightClientUpdatesByRangeRPCHandlerEndPeriodOverflow", "newScore": newScore}).Debug("Downscore peer")
-
+		s.downscorePeer(remotePeer, "lightClientUpdatesByRangeRPCHandlerEndPeriodOverflow")
 		tracing.AnnotateError(span, err)
 		logger.WithError(err).Error("End period overflows")
 		return err

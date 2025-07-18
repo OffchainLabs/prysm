@@ -339,11 +339,11 @@ func (q *blocksQueue) onDataReceivedEvent(ctx context.Context) eventHandlerFn {
 			}
 
 			if errors.Is(response.err, beaconsync.ErrInvalidFetchedData) {
-				newScore := q.blocksFetcher.p2p.Peers().Scorers().BadResponsesScorer().Increment(response.blocksFrom)
-				log.WithError(response.err).WithFields(logrus.Fields{"peerID": response.blocksFrom, "reason": "invalidBlocks", "newScore": newScore}).Debug("Downscore peer")
-			} else if errors.Is(response.err, verification.ErrBlobInvalid) {
-				newScore := q.blocksFetcher.p2p.Peers().Scorers().BadResponsesScorer().Increment(response.blobsFrom)
-				log.WithError(response.err).WithFields(logrus.Fields{"peerID": response.blobsFrom, "reason": "invalidBlobs", "newScore": newScore}).Debug("Downscore peer")
+				q.downscorePeer(response.blocksFrom, "invalidBlocks")
+			}
+
+			if errors.Is(response.err, verification.ErrBlobInvalid) {
+				q.downscorePeer(response.blobsFrom, "invalidBlobs")
 			}
 
 			return m.state, response.err
@@ -454,6 +454,11 @@ func (q *blocksQueue) onProcessSkippedEvent(ctx context.Context) eventHandlerFn 
 		}
 		return stateSkipped, q.resetFromSlot(ctx, startSlot)
 	}
+}
+
+func (q *blocksQueue) downscorePeer(peerID peer.ID, reason string) {
+	newScore := q.blocksFetcher.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }
 
 // onCheckStaleEvent is an event that allows to mark stale epochs,

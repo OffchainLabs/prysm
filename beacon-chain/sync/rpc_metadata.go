@@ -15,7 +15,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/sirupsen/logrus"
 )
 
 // metaDataHandler reads the incoming metadata RPC request from the peer.
@@ -173,16 +172,12 @@ func (s *Service) sendMetaDataRequest(ctx context.Context, peerID peer.ID) (meta
 	// Read the METADATA response from the peer.
 	code, errMsg, err := ReadStatusCode(stream, s.cfg.p2p.Encoding())
 	if err != nil {
-		newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
-		log.WithFields(logrus.Fields{"peerID": peerID.String(), "reason": "MetadataReadStatusCodeError", "newScore": newScore}).Debug("Downscore peer")
-
+		s.downscorePeer(peerID, "MetadataReadStatusCodeError")
 		return nil, errors.Wrap(err, "read status code")
 	}
 
 	if code != 0 {
-		newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
-		log.WithFields(logrus.Fields{"peerID": peerID.String(), "reason": "NonNullMetadataReadStatusCode", "newScore": newScore}).Debug("Downscore peer")
-
+		s.downscorePeer(peerID, "NonNullMetadataReadStatusCode")
 		return nil, errors.New(errMsg)
 	}
 
@@ -219,9 +214,7 @@ func (s *Service) sendMetaDataRequest(ctx context.Context, peerID peer.ID) (meta
 
 	// Decode the metadata from the peer.
 	if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
-		newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
-		log.WithFields(logrus.Fields{"peerID": peerID.String(), "reason": "MetadataDecodeError", "newScore": newScore}).Debug("Downscore peer")
-
+		s.downscorePeer(peerID, "MetadataDecodeError")
 		return nil, errors.Wrap(err, "decode with max length")
 	}
 

@@ -18,7 +18,6 @@ import (
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 // sendBeaconBlocksRequest sends a recent beacon blocks request to a peer to get
@@ -97,9 +96,7 @@ func (s *Service) beaconBlocksRootRPCHandler(ctx context.Context, msg interface{
 
 	currentEpoch := slots.ToEpoch(s.cfg.clock.CurrentSlot())
 	if uint64(len(blockRoots)) > params.MaxRequestBlock(currentEpoch) {
-		newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
-		log.WithFields(logrus.Fields{"peerID": remotePeer.String(), "reason": "beaconBlocksRootRPCHandlerTooManyRoots", "newScore": newScore}).Debug("Downscore peer")
-
+		s.downscorePeer(remotePeer, "beaconBlocksRootRPCHandlerTooManyRoots")
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, "requested more than the max block limit", stream)
 		return errors.New("requested more than the max block limit")
 	}

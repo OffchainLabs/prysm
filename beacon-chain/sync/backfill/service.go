@@ -212,9 +212,7 @@ func (s *Service) importBatches(ctx context.Context) {
 		_, err := s.batchImporter(ctx, current, ib, s.store)
 		if err != nil {
 			log.WithError(err).WithFields(ib.logFields()).Debug("Backfill batch failed to import")
-			newScore := s.p2p.Peers().Scorers().BadResponsesScorer().Increment(ib.blockPid)
-			log.WithFields(logrus.Fields{"peerID": ib.blockPid, "reason": "backfillBatchImportError", "newScore": newScore}).Debug("Downscore peer")
-
+			s.downscorePeer(ib.blockPid, "backfillBatchImportError")
 			s.batchSeq.update(ib.withState(batchErrRetryable))
 			// If a batch fails, the subsequent batches are no longer considered importable.
 			break
@@ -381,4 +379,9 @@ func (s *Service) WaitForCompletion() error {
 	case <-s.complete:
 		return nil
 	}
+}
+
+func (s *Service) downscorePeer(peerID peer.ID, reason string) {
+	newScore := s.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }

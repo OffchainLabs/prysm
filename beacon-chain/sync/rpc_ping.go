@@ -138,9 +138,7 @@ func (s *Service) sendPingRequest(ctx context.Context, peerID peer.ID) error {
 
 	// If the peer responded with an error, increment the bad responses scorer.
 	if code != 0 {
-		newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
-		log.WithFields(logrus.Fields{"peerID": peerID.String(), "reason": "NotNullPingReadStatusCode", "newScore": newScore}).Debug("Downscore peer")
-
+		s.downscorePeer(peerID, "NotNullPingReadStatusCode")
 		return errors.Errorf("code: %d - %s", code, errMsg)
 	}
 
@@ -194,14 +192,10 @@ func (s *Service) isSequenceNumberUpToDate(incomingSequenceNumber uint64, peerID
 	// The peer's sequence number must be less than or equal to the sequence number we have in our store.
 	storedSequenceNumber := storedMetadata.SequenceNumber()
 	if storedSequenceNumber > incomingSequenceNumber {
-		newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
-		log.WithFields(logrus.Fields{
-			"peerID":                 peerID.String(),
-			"reason":                 "pingInvalidSequenceNumber",
-			"newScore":               newScore,
+		s.downscorePeer(peerID, "pingInvalidSequenceNumber", logrus.Fields{
 			"storedSequenceNumber":   storedSequenceNumber,
 			"incomingSequenceNumber": incomingSequenceNumber,
-		}).Debug("Downscore peer")
+		})
 		return false, p2ptypes.ErrInvalidSequenceNum
 	}
 
