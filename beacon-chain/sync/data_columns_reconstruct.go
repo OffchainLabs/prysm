@@ -33,14 +33,14 @@ func (s *Service) reconstructSaveBroadcastDataColumnSidecars(
 ) error {
 	startTime := time.Now()
 
+	// Lock to prevent concurrent reconstructions.
+	s.reconstructionLock.Lock()
+	defer s.reconstructionLock.Unlock()
+
 	// Get the columns we store.
 	storedDataColumns := s.cfg.dataColumnStorage.Summary(root)
 	storedColumnsCount := storedDataColumns.Count()
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
-
-	// Lock to prevent concurrent reconstructions.
-	s.reconstructionLock.Lock()
-	defer s.reconstructionLock.Unlock()
 
 	// If reconstruction is not possible or if all columns are already stored, exit early.
 	if storedColumnsCount < peerdas.MinimumColumnsCountToReconstruct() || storedColumnsCount == numberOfColumns {
