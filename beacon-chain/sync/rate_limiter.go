@@ -140,10 +140,7 @@ func (l *limiter) validateRequest(stream network.Stream, amt uint64) error {
 }
 
 // This is used to validate all incoming rpc streams from external peers.
-func (l *limiter) validateRawRpcRequest(stream network.Stream) error {
-	// Treat each request as a minimum of 1.
-	const amt = 1
-
+func (l *limiter) validateRawRpcRequest(stream network.Stream, amt uint64) error {
 	l.RLock()
 	defer l.RUnlock()
 
@@ -155,7 +152,7 @@ func (l *limiter) validateRawRpcRequest(stream network.Stream) error {
 	key := stream.Conn().RemotePeer().String()
 	remaining := collector.Remaining(key)
 
-	if amt > remaining {
+	if amt > uint64(remaining) {
 		l.downscorePeer(remotePeer, rpcLimiterTopic, "rawRateLimitExceeded")
 		writeErrorResponseToStream(responseCodeInvalidRequest, p2ptypes.ErrRateLimited.Error(), stream, l.p2p)
 		return p2ptypes.ErrRateLimited
