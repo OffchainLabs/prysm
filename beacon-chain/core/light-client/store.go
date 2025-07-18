@@ -143,6 +143,27 @@ func (s *Store) SaveLightClientUpdate(ctx context.Context, period uint64, update
 	return nil
 }
 
+func (s *Store) IsBetterFinalityUpdate(newUpdate, oldUpdate interfaces.LightClientFinalityUpdate) bool {
+	if oldUpdate != nil {
+		// The finalized_header.beacon.lastUpdateSlot is greater than that of all previously forwarded finality_updates,
+		// or it matches the highest previously forwarded lastUpdateSlot and also has a sync_aggregate indicating supermajority (> 2/3)
+		// sync committee participation while the previously forwarded finality_update for that lastUpdateSlot did not indicate supermajority
+		newUpdateSlot := newUpdate.FinalizedHeader().Beacon().Slot
+		newHasSupermajority := UpdateHasSupermajority(newUpdate.SyncAggregate())
+
+		lastUpdateSlot := oldUpdate.FinalizedHeader().Beacon().Slot
+		lastHasSupermajority := UpdateHasSupermajority(oldUpdate.SyncAggregate())
+
+		if newUpdateSlot < lastUpdateSlot {
+			return false
+		}
+		if newUpdateSlot == lastUpdateSlot && (lastHasSupermajority || !newHasSupermajority) {
+			return false
+		}
+	}
+	return true
+}
+
 func (s *Store) SetLastFinalityUpdate(update interfaces.LightClientFinalityUpdate) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -165,4 +186,14 @@ func (s *Store) LastOptimisticUpdate() interfaces.LightClientOptimisticUpdate {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.lastOptimisticUpdate
+}
+
+func (s *Store) IsBetterOptimisticUpdate(newUpdate interfaces.LightClientOptimisticUpdate, oldUpdate interfaces.LightClientOptimisticUpdate) bool {
+	if oldUpdate != nil {
+		// The attested_header.beacon.slot is greater than that of all previously forwarded optimistic updates
+		if newUpdate.AttestedHeader().Beacon().Slot <= oldUpdate.AttestedHeader().Beacon().Slot {
+			return false
+		}
+	}
+	return true
 }

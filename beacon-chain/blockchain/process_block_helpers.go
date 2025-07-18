@@ -235,26 +235,11 @@ func (s *Service) processLightClientFinalityUpdate(
 		return errors.Wrap(err, "could not create light client finality update")
 	}
 
-	lastUpdate := s.lcStore.LastFinalityUpdate()
-	if lastUpdate != nil {
-		// The finalized_header.beacon.lastUpdateSlot is greater than that of all previously forwarded finality_updates,
-		// or it matches the highest previously forwarded lastUpdateSlot and also has a sync_aggregate indicating supermajority (> 2/3)
-		// sync committee participation while the previously forwarded finality_update for that lastUpdateSlot did not indicate supermajority
-		newUpdateSlot := newUpdate.FinalizedHeader().Beacon().Slot
-		newHasSupermajority := lightclient.UpdateHasSupermajority(newUpdate.SyncAggregate())
-
-		lastUpdateSlot := lastUpdate.FinalizedHeader().Beacon().Slot
-		lastHasSupermajority := lightclient.UpdateHasSupermajority(lastUpdate.SyncAggregate())
-
-		if newUpdateSlot < lastUpdateSlot {
-			log.Debug("Skip saving light client finality newUpdate: Older than local newUpdate")
-			return nil
-		}
-		if newUpdateSlot == lastUpdateSlot && (lastHasSupermajority || !newHasSupermajority) {
-			log.Debug("Skip saving light client finality update: No supermajority advantage")
-			return nil
-		}
+	if !s.lcStore.IsBetterFinalityUpdate(newUpdate, s.lcStore.LastFinalityUpdate()) {
+		log.Debug("Skip saving light client finality update: current update is better")
+		return nil
 	}
+
 	log.Debug("Saving new light client finality update")
 	s.lcStore.SetLastFinalityUpdate(newUpdate)
 
@@ -300,12 +285,10 @@ func (s *Service) processLightClientOptimisticUpdate(ctx context.Context, signed
 	}
 
 	lastUpdate := s.lcStore.LastOptimisticUpdate()
-	if lastUpdate != nil {
-		// The attested_header.beacon.slot is greater than that of all previously forwarded optimistic updates
-		if newUpdate.AttestedHeader().Beacon().Slot <= lastUpdate.AttestedHeader().Beacon().Slot {
-			log.Debug("Skip saving light client optimistic update: Older than local update")
-			return nil
-		}
+
+	if !s.lcStore.IsBetterOptimisticUpdate(newUpdate, lastUpdate) {
+		log.Debug("Skip saving light client optimistic update: current update is better")
+		return nil
 	}
 
 	log.Debug("Saving new light client optimistic update")
