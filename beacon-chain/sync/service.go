@@ -290,7 +290,7 @@ func (s *Service) Stop() error {
 	// Say goodbye to all peers.
 	for _, peerID := range s.cfg.p2p.Peers().Connected() {
 		if s.cfg.p2p.Host().Network().Connectedness(peerID) == network.Connected {
-			if err := s.sendGoodByeAndDisconnect(context.TODO(), p2ptypes.GoodbyeCodeClientShutdown, peerID); err != nil {
+			if err := s.sendGoodByeAndDisconnect(s.ctx, p2ptypes.GoodbyeCodeClientShutdown, peerID); err != nil {
 				log.WithError(err).WithField("peerID", peerID).Error("Failed to send goodbye message")
 			}
 		}
