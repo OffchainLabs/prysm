@@ -19,8 +19,7 @@ const (
 	// Burst limit for inbound dials.
 	ipBurst = 8
 
-	// High watermark buffer signifies the buffer till which
-	// we will handle inbound requests.
+	// High watermark buffer signifies the buffer till which we will handle inbound requests.
 	highWatermarkBuffer = 20
 )
 
@@ -53,7 +52,7 @@ func (s *Service) InterceptAccept(n network.ConnMultiaddrs) (allow bool) {
 			"reason": "exceeded dial limit"}).Trace("Not accepting inbound dial from ip address")
 		return false
 	}
-	if s.isPeerAtLimit(true /* inbound */) {
+	if s.isPeerAtLimit(inbound) {
 		log.WithFields(logrus.Fields{"peer": n.RemoteMultiaddr(),
 			"reason": "at peer limit"}).Trace("Not accepting inbound dial")
 		return false

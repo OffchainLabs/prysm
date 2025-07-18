@@ -217,6 +217,7 @@ func (s *Service) statusRPCHandler(ctx context.Context, msg interface{}, stream 
 		log.WithFields(logrus.Fields{
 			"peer":  remotePeer,
 			"error": err,
+			"agent": agentString(remotePeer, s.cfg.p2p.Host()),
 		}).Debug("Invalid status message from peer")
 
 		var respCode byte

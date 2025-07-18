@@ -42,9 +42,30 @@ func (s *Store) LightClientBootstrap(ctx context.Context, blockRoot [32]byte) (i
 	return bootstrap, nil
 }
 
-func (s *Store) SaveLightClientBootstrap(ctx context.Context, blockRoot [32]byte, bootstrap interfaces.LightClientBootstrap) error {
+func (s *Store) SaveLightClientBootstrap(ctx context.Context, blockRoot [32]byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	blk, err := s.beaconDB.Block(ctx, blockRoot)
+	if err != nil {
+		return errors.Wrapf(err, "failed to fetch block for root %x", blockRoot)
+	}
+	if blk == nil {
+		return errors.Errorf("failed to fetch block for root %x", blockRoot)
+	}
+
+	state, err := s.beaconDB.State(ctx, blockRoot)
+	if err != nil {
+		return errors.Wrapf(err, "failed to fetch state for block root %x", blockRoot)
+	}
+	if state == nil {
+		return errors.Errorf("failed to fetch state for block root %x", blockRoot)
+	}
+
+	bootstrap, err := NewLightClientBootstrapFromBeaconState(ctx, state.Slot(), state, blk)
+	if err != nil {
+		return errors.Wrapf(err, "failed to create light client bootstrap for block root %x", blockRoot)
+	}
 
 	// Save the light client bootstrap to the database
 	if err := s.beaconDB.SaveLightClientBootstrap(ctx, blockRoot[:], bootstrap); err != nil {

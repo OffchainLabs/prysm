@@ -68,9 +68,9 @@ func (*FakeP2P) DiscoveryAddresses() ([]multiaddr.Multiaddr, error) {
 	return nil, nil
 }
 
-// FindPeersWithSubnet mocks the p2p func.
-func (*FakeP2P) FindPeersWithSubnet(_ context.Context, _ string, _ uint64, _ int) (bool, error) {
-	return false, nil
+// FindAndDialPeersWithSubnets mocks the p2p func.
+func (*FakeP2P) FindAndDialPeersWithSubnets(ctx context.Context, topicFormat string, digest [fieldparams.VersionLength]byte, minimumPeersPerSubnet int, subnets map[uint64]bool) error {
+	return nil
 }
 
 // RefreshPersistentSubnets mocks the p2p func.
@@ -167,7 +167,7 @@ func (*FakeP2P) BroadcastLightClientFinalityUpdate(_ context.Context, _ interfac
 }
 
 // BroadcastDataColumn -- fake.
-func (*FakeP2P) BroadcastDataColumn(_ [fieldparams.RootLength]byte, _ uint64, _ *ethpb.DataColumnSidecar, _ ...chan<- bool) error {
+func (*FakeP2P) BroadcastDataColumn(_ [fieldparams.RootLength]byte, _ uint64, _ *ethpb.DataColumnSidecar) error {
 	return nil
 }
 
