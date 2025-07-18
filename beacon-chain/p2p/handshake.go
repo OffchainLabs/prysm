@@ -147,7 +147,7 @@ func (s *Service) AddConnectionHandler(reqFunc, goodByeFunc func(ctx context.Con
 					return
 				}
 
-				if direction == network.DirOutbound || direction == network.DirUnknown {
+				if direction != network.DirInbound {
 					s.peers.SetConnectionState(conn.RemotePeer(), peers.Connecting)
 					if err := reqFunc(context.TODO(), conn.RemotePeer()); err != nil && !errors.Is(err, io.EOF) {
 						s.disconnectFromPeerOnError(conn, goodByeFunc, err)
