@@ -25,14 +25,14 @@ func ParseAccept(header string) []mediaRange {
 		field = strings.TrimSpace(field)
 		mt, params, err := mime.ParseMediaType(field)
 		if err != nil {
-			continue // malformed entry
+			continue // skip malformed entry
 		}
 
 		q := 1.0
 		if qs, ok := params["q"]; ok {
 			v, err := strconv.ParseFloat(qs, 64)
 			if err != nil || v < 0 || v > 1 {
-				continue // ✱ skip invalid q‑values ✱
+				continue // skip invalid q‑values
 			}
 			q = v
 		}
@@ -62,7 +62,7 @@ func Matches(header, ct string) bool {
 	for _, r := range ParseAccept(header) {
 		switch {
 		case r.q == 0:
-			continue // explicitly unacceptable
+			continue
 		case r.mt == "*/*":
 			return true
 		case strings.HasSuffix(r.mt, "/*"):
