@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type mediaRange struct {
@@ -25,6 +27,7 @@ func ParseAccept(header string) []mediaRange {
 		field = strings.TrimSpace(field)
 		mt, params, err := mime.ParseMediaType(field)
 		if err != nil {
+			log.WithField("error", err.Error()).Debug("Failed to parse header field")
 			continue // skip malformed entry
 		}
 
@@ -32,6 +35,7 @@ func ParseAccept(header string) []mediaRange {
 		if qs, ok := params["q"]; ok {
 			v, err := strconv.ParseFloat(qs, 64)
 			if err != nil || v < 0 || v > 1 {
+				log.WithField("q", qs).Debug("Invalid quality factor (0-1)")
 				continue // skip invalid q‑values
 			}
 			q = v
