@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/api/apiutil"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	"github.com/pkg/errors"
@@ -92,18 +93,16 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to create request for endpoint %s", url)
 	}
+
+	primaryAcceptType := fmt.Sprintf("%s;q=%s", api.OctetStreamMediaType, "0.95")
+	secondaryAcceptType := fmt.Sprintf("%s;q=%s", api.JsonMediaType, "0.9")
+	acceptHeaderString := fmt.Sprintf("%s,%s", primaryAcceptType, secondaryAcceptType)
+	req.Header.Set("Accept", acceptHeaderString)
+
 	for _, o := range c.reqOverrides {
 		o(req)
 	}
-	primaryAcceptType := fmt.Sprintf("%s;q=%s", api.OctetStreamMediaType, "0.95")
-	secondaryAcceptType := fmt.Sprintf("%s;q=%s", api.JsonMediaType, "0.9")
-	if req.Header.Get("Accept") == "" {
-		acceptHeaderString := fmt.Sprintf("%s,%s", primaryAcceptType, secondaryAcceptType)
-		req.Header.Set("Accept", acceptHeaderString)
-	} else {
-		primaryAcceptType = req.Header.Get("Accept")
-		secondaryAcceptType = req.Header.Get("Accept")
-	}
+
 	httpResp, err := c.client.Do(req)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to perform request for endpoint %s", url)
@@ -118,11 +117,10 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to read response body for %s", httpResp.Request.URL)
 	}
-	if !strings.Contains(primaryAcceptType, contentType) {
+	if !apiutil.PrimaryAcceptMatches(req.Header.Get("Accept"), contentType) {
 		log.WithFields(logrus.Fields{
-			"primaryAcceptType":   primaryAcceptType,
-			"secondaryAcceptType": secondaryAcceptType,
-			"receivedAcceptType":  contentType,
+			"Accept":             req.Header.Get("Accept"),
+			"receivedAcceptType": contentType,
 		}).Debug("Server responded with non primary accept type")
 	}
 
