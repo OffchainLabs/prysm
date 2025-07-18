@@ -26,7 +26,7 @@ func (s *Service) lightClientBootstrapRPCHandler(ctx context.Context, msg interf
 
 	SetRPCStreamDeadlines(stream)
 	if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
-		logger.WithError(err).Error("Canno validate request")
+		logger.WithError(err).Error("Cannot validate request")
 		return err
 	}
 	s.rateLimiter.add(stream, 1)
