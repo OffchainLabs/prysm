@@ -323,16 +323,16 @@ func TestMultiAddrConversion_OK(t *testing.T) {
 }
 
 func TestStaticPeering_PeersAreAdded(t *testing.T) {
+	const port = uint(6000)
 	cs := startup.NewClockSynchronizer()
 	cfg := &Config{
 		MaxPeers:    30,
 		ClockWaiter: cs,
 	}
-	port := 6000
 	var staticPeers []string
 	var hosts []host.Host
 	// setup other nodes
-	for i := 1; i <= 5; i++ {
+	for i := uint(1); i <= 5; i++ {
 		h, _, ipaddr := createHost(t, port+i)
 		staticPeers = append(staticPeers, fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s", ipaddr, port+i, h.ID()))
 		hosts = append(hosts, h)
@@ -406,14 +406,14 @@ func TestInboundPeerLimit(t *testing.T) {
 		_ = addPeer(t, s.peers, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED), false)
 	}
 
-	require.Equal(t, true, s.isPeerAtLimit(false), "not at limit for outbound peers")
-	require.Equal(t, false, s.isPeerAtLimit(true), "at limit for inbound peers")
+	require.Equal(t, true, s.isPeerAtLimit(all), "not at limit for outbound peers")
+	require.Equal(t, false, s.isPeerAtLimit(inbound), "at limit for inbound peers")
 
 	for i := 0; i < highWatermarkBuffer; i++ {
 		_ = addPeer(t, s.peers, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED), false)
 	}
 
-	require.Equal(t, true, s.isPeerAtLimit(true), "not at limit for inbound peers")
+	require.Equal(t, true, s.isPeerAtLimit(inbound), "not at limit for inbound peers")
 }
 
 func TestOutboundPeerThreshold(t *testing.T) {

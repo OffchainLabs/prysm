@@ -42,7 +42,7 @@ func (s *Service) goodbyeRPCHandler(_ context.Context, msg interface{}, stream l
 		return fmt.Errorf("wrong message type for goodbye, got %T, wanted *uint64", msg)
 	}
 	if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
-		log.WithError(err).Debug("Goodbye message from rate-limited peer.")
+		log.WithError(err).Debug("Goodbye message from rate-limited peer")
 	} else {
 		s.rateLimiter.add(stream, 1)
 	}
@@ -65,7 +65,12 @@ func (s *Service) disconnectBadPeer(ctx context.Context, id peer.ID, badPeerErr 
 		log.WithError(err).Debug("Error when disconnecting with bad peer")
 	}
 
-	log.WithError(badPeerErr).WithField("peerID", id).Debug("Initiate peer disconnection")
+	log.WithError(badPeerErr).
+		WithFields(logrus.Fields{
+			"peerID": id,
+			"agent":  agentString(id, s.cfg.p2p.Host()),
+		}).
+		Debug("Sent peer disconnection")
 }
 
 // A custom goodbye method that is used by our connection handler, in the

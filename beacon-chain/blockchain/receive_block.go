@@ -300,15 +300,30 @@ func (s *Service) reportPostBlockProcessing(
 
 func (s *Service) executePostFinalizationTasks(ctx context.Context, finalizedState state.BeaconState) {
 	finalized := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
+
+	// Send finalization event
 	go func() {
 		s.sendNewFinalizedEvent(ctx, finalizedState)
 	}()
 
+	// Insert finalized deposits into finalized deposit trie
 	depCtx, cancel := context.WithTimeout(context.Background(), depositDeadline)
 	go func() {
 		s.insertFinalizedDepositsAndPrune(depCtx, finalized.Root)
 		cancel()
 	}()
+
+	if features.Get().EnableLightClient {
+		// Save a light client bootstrap for the finalized checkpoint
+		go func() {
+			err := s.lcStore.SaveLightClientBootstrap(s.ctx, finalized.Root)
+			if err != nil {
+				log.WithError(err).Error("Could not save light client bootstrap by block root")
+			} else {
+				log.Debugf("Saved light client bootstrap for finalized root %#x", finalized.Root)
+			}
+		}()
+	}
 }
 
 // ReceiveBlockBatch processes the whole block batch at once, assuming the block batch is linear ,transitioning

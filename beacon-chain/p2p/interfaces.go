@@ -49,7 +49,7 @@ type (
 		BroadcastBlob(ctx context.Context, subnet uint64, blob *ethpb.BlobSidecar) error
 		BroadcastLightClientOptimisticUpdate(ctx context.Context, update interfaces.LightClientOptimisticUpdate) error
 		BroadcastLightClientFinalityUpdate(ctx context.Context, update interfaces.LightClientFinalityUpdate) error
-		BroadcastDataColumn(root [fieldparams.RootLength]byte, columnSubnet uint64, dataColumnSidecar *ethpb.DataColumnSidecar, peersChecked ...chan<- bool) error
+		BroadcastDataColumn(root [fieldparams.RootLength]byte, columnSubnet uint64, dataColumnSidecar *ethpb.DataColumnSidecar) error
 	}
 
 	// SetStreamHandler configures p2p to handle streams of a certain topic ID.
@@ -98,7 +98,7 @@ type (
 		NodeID() enode.ID
 		DiscoveryAddresses() ([]multiaddr.Multiaddr, error)
 		RefreshPersistentSubnets()
-		FindPeersWithSubnet(ctx context.Context, topic string, subIndex uint64, threshold int) (bool, error)
+		FindAndDialPeersWithSubnets(ctx context.Context, topicFormat string, digest [fieldparams.VersionLength]byte, minimumPeersPerSubnet int, subnets map[uint64]bool) error
 		AddPingMethod(reqFunc func(ctx context.Context, id peer.ID) error)
 	}
 

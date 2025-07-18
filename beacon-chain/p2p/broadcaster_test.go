@@ -216,9 +216,10 @@ func TestService_BroadcastAttestation(t *testing.T) {
 }
 
 func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
+	const port = uint(2000)
+
 	// Setup bootnode.
 	cfg := &Config{PingInterval: testPingInterval}
-	port := 2000
 	cfg.UDPPort = uint(port)
 	_, pkey := createAddrAndPrivKey(t)
 	ipAddr := net.ParseIP("127.0.0.1")
@@ -245,7 +246,7 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		PingInterval:         testPingInterval,
 	}
 	// Setup 2 different hosts
-	for i := 1; i <= 2; i++ {
+	for i := uint(1); i <= 2; i++ {
 		h, pkey, ipAddr := createHost(t, port+i)
 		cfg.UDPPort = uint(port + i)
 		cfg.TCPPort = uint(port + i)
@@ -687,7 +688,7 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	// Create a host.
 	_, pkey, ipAddr := createHost(t, port)
 
-	p := &Service{
+	service := &Service{
 		ctx:                   t.Context(),
 		host:                  p1.BHost,
 		pubsub:                p1.PubSub(),
@@ -701,56 +702,44 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	}
 
 	// Create a listener.
-	listener, err := p.startDiscoveryV5(ipAddr, pkey)
+	listener, err := service.startDiscoveryV5(ipAddr, pkey)
 	require.NoError(t, err)
 
-	p.dv5Listener = listener
+	service.dv5Listener = listener
 
-	digest, err := p.currentForkDigest()
+	digest, err := service.currentForkDigest()
 	require.NoError(t, err)
 
 	subnet := peerdas.ComputeSubnetForDataColumnSidecar(columnIndex)
-	topic := fmt.Sprintf(topicFormat, digest, subnet)
+	topic := fmt.Sprintf(topicFormat, digest, subnet) + service.Encoding().ProtocolSuffix()
 
 	roSidecars, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, []util.DataColumnParam{{Index: columnIndex}})
 	sidecar := roSidecars[0].DataColumnSidecar
 
-	// Async listen for the pubsub, must be before the broadcast.
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	peersChecked := make(chan bool, 0)
-
-	go func(tt *testing.T) {
-		defer wg.Done()
-
-		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-		defer cancel()
-
-		// Wait for the peers to be checked.
-		<-peersChecked
-
-		// External peer subscribes to the topic.
-		topic += p.Encoding().ProtocolSuffix()
-		sub, err := p2.SubscribeToTopic(topic)
-		require.NoError(tt, err)
-
-		msg, err := sub.Next(ctx)
-		require.NoError(tt, err)
-
-		var result ethpb.DataColumnSidecar
-		require.NoError(tt, p.Encoding().DecodeGossip(msg.Data, &result))
-		require.DeepEqual(tt, &result, sidecar)
-	}(t)
-
-	var emptyRoot [fieldparams.RootLength]byte
-
 	// Attempt to broadcast nil object should fail.
-	err = p.BroadcastDataColumn(emptyRoot, subnet, nil)
+	var emptyRoot [fieldparams.RootLength]byte
+	err = service.BroadcastDataColumn(emptyRoot, subnet, nil)
 	require.ErrorContains(t, "attempted to broadcast nil", err)
 
-	// Broadcast to peers and wait.
-	err = p.BroadcastDataColumn(emptyRoot, subnet, sidecar, peersChecked)
+	// Subscribe to the topic.
+	sub, err := p2.SubscribeToTopic(topic)
 	require.NoError(t, err)
-	require.Equal(t, false, util.WaitTimeout(&wg, 1*time.Minute), "Failed to receive pubsub within 1s")
+
+	// libp2p fails without this delay
+	time.Sleep(50 * time.Millisecond)
+
+	// Broadcast to peers and wait.
+	err = service.BroadcastDataColumn(emptyRoot, subnet, sidecar)
+	require.NoError(t, err)
+
+	// Receive the message.
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	msg, err := sub.Next(ctx)
+	require.NoError(t, err)
+
+	var result ethpb.DataColumnSidecar
+	require.NoError(t, service.Encoding().DecodeGossip(msg.Data, &result))
+	require.DeepEqual(t, &result, sidecar)
 }

@@ -18,6 +18,8 @@ import (
 )
 
 const (
+	agentVersionKey = "AgentVersion"
+
 	// The time to wait for a status request.
 	timeForStatus = 10 * time.Second
 )
@@ -28,29 +30,16 @@ func peerMultiaddrString(conn network.Conn) string {
 	return fmt.Sprintf("%s/p2p/%s", remoteMultiaddr, remotePeerID)
 }
 
-func peerAgentString(pid peer.ID, host host.Host) string {
-	const unknownAgent = "unknown"
-
-	rawAgent, err := host.Peerstore().Get(pid, "AgentVersion")
-	if err != nil {
-		return unknownAgent
-	}
-
-	agent, ok := rawAgent.(string)
-	if !ok {
-		return unknownAgent
-	}
-
-	return agent
-}
-
 func (s *Service) connectToPeer(conn network.Conn) {
-	s.peers.SetConnectionState(conn.RemotePeer(), peers.Connected)
+	remotePeer := conn.RemotePeer()
+
+	s.peers.SetConnectionState(remotePeer, peers.Connected)
 	// Go through the handshake process.
 	log.WithFields(logrus.Fields{
 		"direction":   conn.Stat().Direction.String(),
 		"multiAddr":   peerMultiaddrString(conn),
 		"activePeers": len(s.peers.Active()),
+		"agent":       agentString(remotePeer, s.Host()),
 	}).Debug("Initiate peer connection")
 }
 
@@ -76,9 +65,9 @@ func (s *Service) disconnectFromPeerOnError(
 		WithError(badPeerErr).
 		WithFields(logrus.Fields{
 			"multiaddr":            peerMultiaddrString(conn),
-			"agent":                peerAgentString(remotePeerID, s.host),
 			"direction":            conn.Stat().Direction.String(),
 			"remainingActivePeers": len(s.peers.Active()),
+			"agent":                agentString(remotePeerID, s.Host()),
 		}).
 		Debug("Initiate peer disconnection")
 
@@ -207,9 +196,10 @@ func (s *Service) AddDisconnectionHandler(handler func(ctx context.Context, id p
 		DisconnectedF: func(net network.Network, conn network.Conn) {
 			peerID := conn.RemotePeer()
 
-			log.WithFields(logrus.Fields{
+			log := log.WithFields(logrus.Fields{
 				"multiAddr": peerMultiaddrString(conn),
 				"direction": conn.Stat().Direction.String(),
+				"agent":     agentString(peerID, s.Host()),
 			})
 			// Must be handled in a goroutine as this callback cannot be blocking.
 			go func() {
@@ -239,4 +229,15 @@ func (s *Service) AddDisconnectionHandler(handler func(ctx context.Context, id p
 			}()
 		},
 	})
+}
+
+func agentString(pid peer.ID, hst host.Host) string {
+	rawVersion, storeErr := hst.Peerstore().Get(pid, agentVersionKey)
+
+	result, ok := rawVersion.(string)
+	if storeErr != nil || !ok {
+		result = ""
+	}
+
+	return result
 }
