@@ -22,8 +22,8 @@ type LazilyPersistentStoreColumn struct {
 	store                  *filesystem.DataColumnStorage
 	nodeID                 enode.ID
 	cache                  *dataColumnCache
-	custodyInfo            *peerdas.CustodyInfo
 	newDataColumnsVerifier verification.NewDataColumnsVerifier
+	custodyGroupCount      uint64
 }
 
 var _ AvailabilityStore = &LazilyPersistentStoreColumn{}
@@ -38,13 +38,18 @@ type DataColumnsVerifier interface {
 
 // NewLazilyPersistentStoreColumn creates a new LazilyPersistentStoreColumn.
 // WARNING: The resulting LazilyPersistentStoreColumn is NOT thread-safe.
-func NewLazilyPersistentStoreColumn(store *filesystem.DataColumnStorage, nodeID enode.ID, newDataColumnsVerifier verification.NewDataColumnsVerifier, custodyInfo *peerdas.CustodyInfo) *LazilyPersistentStoreColumn {
+func NewLazilyPersistentStoreColumn(
+	store *filesystem.DataColumnStorage,
+	nodeID enode.ID,
+	newDataColumnsVerifier verification.NewDataColumnsVerifier,
+	custodyGroupCount uint64,
+) *LazilyPersistentStoreColumn {
 	return &LazilyPersistentStoreColumn{
 		store:                  store,
 		nodeID:                 nodeID,
 		cache:                  newDataColumnCache(),
-		custodyInfo:            custodyInfo,
 		newDataColumnsVerifier: newDataColumnsVerifier,
+		custodyGroupCount:      custodyGroupCount,
 	}
 }
 
@@ -155,6 +160,8 @@ func (s *LazilyPersistentStoreColumn) IsDataAvailable(ctx context.Context, curre
 
 // fullCommitmentsToCheck returns the commitments to check for a given block.
 func (s *LazilyPersistentStoreColumn) fullCommitmentsToCheck(nodeID enode.ID, block blocks.ROBlock, currentSlot primitives.Slot) (*safeCommitmentsArray, error) {
+	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
+
 	// Return early for blocks that are pre-Fulu.
 	if block.Version() < version.Fulu {
 		return &safeCommitmentsArray{}, nil
@@ -183,11 +190,9 @@ func (s *LazilyPersistentStoreColumn) fullCommitmentsToCheck(nodeID enode.ID, bl
 		return &safeCommitmentsArray{}, nil
 	}
 
-	// Retrieve the groups count.
-	custodyGroupCount := s.custodyInfo.ActualGroupCount()
-
 	// Retrieve peer info.
-	peerInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
+	samplingSize := max(s.custodyGroupCount, samplesPerSlot)
+	peerInfo, _, err := peerdas.Info(nodeID, samplingSize)
 	if err != nil {
 		return nil, errors.Wrap(err, "peer info")
 	}

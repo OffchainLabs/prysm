@@ -196,6 +196,16 @@ func (*FakeP2P) InterceptUpgraded(network.Conn) (allow bool, reason control.Disc
 	return true, 0
 }
 
+// CustodyGroupCount -- fake.
+func (*FakeP2P) CustodyGroupCount() uint64 {
+	return 0
+}
+
+// SetCustostyGroupCount -- fake.
+func (*FakeP2P) SetCustodyGroupCount(uint64) {
+}
+
+// CustodyGroupCountFromPeer -- fake.
 func (*FakeP2P) CustodyGroupCountFromPeer(peer.ID) uint64 {
 	return 0
 }

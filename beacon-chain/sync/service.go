@@ -18,7 +18,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
 	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
@@ -33,6 +32,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/backfill/coverage"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
@@ -105,7 +105,6 @@ type config struct {
 	stateNotifier           statefeed.Notifier
 	blobStorage             *filesystem.BlobStorage
 	dataColumnStorage       *filesystem.DataColumnStorage
-	custodyInfo             *peerdas.CustodyInfo
 	batchVerifierLimit      int
 }
 
@@ -263,11 +262,18 @@ func (s *Service) Start() {
 		return nil
 	})
 	s.cfg.p2p.AddPingMethod(s.sendPingRequest)
+
+	custodyGroupCount, err := s.getAndSaveCustodyGroupCount()
+	if err != nil {
+		log.WithError(err).Error("Could not get and save custody group count")
+	}
+
+	s.cfg.p2p.SetCustodyGroupCount(custodyGroupCount)
 	s.processPendingBlocksQueue()
 	s.processPendingAttsQueue()
 	s.maintainPeerStatuses()
+	s.maintainCustodyGroupCount()
 	s.resyncIfBehind()
-	s.maintainValidatorsCustody()
 
 	// Update sync metrics.
 	async.RunEvery(s.ctx, syncMetricsInterval, s.updateMetrics)
@@ -419,6 +425,66 @@ func (s *Service) pruneDataColumnCache() {
 
 func (s *Service) chainIsStarted() bool {
 	return s.chainStarted.IsSet()
+}
+
+func (s *Service) getAndSaveCustodyGroupCount() (uint64, error) {
+	isSubscribedToAllDataSubnets := flags.Get().SubscribeAllDataSubnets
+	beaconConfig := params.BeaconConfig()
+	numberOfColumns := beaconConfig.NumberOfColumns
+	custodyRequirement := beaconConfig.CustodyRequirement
+
+	// First, set the custody group count to the minimal required value.
+	custodyGroupCount := custodyRequirement
+
+	// If the node is subscribed to all data subnets, then we custody all data columns.
+	if isSubscribedToAllDataSubnets {
+		custodyGroupCount = numberOfColumns
+	}
+
+	if s.cfg.beaconDB == nil {
+		return custodyGroupCount, errors.New("beacon database is not set")
+	}
+
+	// Retrieve the previous custody group count from the database.
+	wasSubscribedToAllDataSubnets, err := s.cfg.beaconDB.SubscribedToAllDataSubnets(s.ctx)
+	if err != nil {
+		log.WithError(err).Error("Could not retrieve subscription status to all data subnets")
+	}
+
+	// Warn the user if the subscription status has changed.
+	if wasSubscribedToAllDataSubnets && !isSubscribedToAllDataSubnets {
+		log.Warnf(
+			"Because the flag `--%s` was previously used, the node will still subscribe to all data subnets.",
+			flags.SubscribeAllDataSubnets.Name,
+		)
+	}
+
+	// Update the subscription status in the database if we were not subscribed to all data subnets
+	// and now we are.
+	if !wasSubscribedToAllDataSubnets && isSubscribedToAllDataSubnets {
+		if err := s.cfg.beaconDB.SaveSubscribedToAllDataSubnets(s.ctx, isSubscribedToAllDataSubnets); err != nil {
+			return custodyGroupCount, errors.Wrap(err, "save subscribed to all data subnets")
+		}
+	}
+
+	// Load the previous custody group count from the database.
+	previousCustodyGroupCount, err := s.cfg.beaconDB.CustodyGroupCount(s.ctx)
+	if err != nil {
+		return custodyGroupCount, errors.Wrap(err, "custody group count")
+	}
+
+	// If the previous custody group count was the same as the current one, return it.
+	custodyGroupCount = max(custodyGroupCount, previousCustodyGroupCount)
+	if custodyGroupCount == previousCustodyGroupCount {
+		return custodyGroupCount, nil
+	}
+
+	// The previous custody group count was lower than the current one, so we need to update it.
+	if err := s.cfg.beaconDB.SaveCustodyGroupCount(s.ctx, custodyGroupCount); err != nil {
+		return custodyGroupCount, errors.Wrap(err, "save custody group count")
+	}
+
+	return custodyGroupCount, nil
 }
 
 // Checker defines a struct which can verify whether a node is currently

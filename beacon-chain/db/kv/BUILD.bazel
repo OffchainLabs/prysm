@@ -8,6 +8,7 @@ go_library(
         "backup.go",
         "blocks.go",
         "checkpoint.go",
+        "custody.go",
         "deposit_contract.go",
         "encoding.go",
         "error.go",

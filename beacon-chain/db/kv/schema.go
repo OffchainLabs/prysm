@@ -70,4 +70,9 @@ var (
 
 	// Migrations
 	migrationsBucket = []byte("migrations")
+
+	// Custody
+	custodyBucket              = []byte("custody")
+	groupCountKey              = []byte("group-count")
+	subscribeAllDataSubnetsKey = []byte("subscribe-all-data-subnets")
 )

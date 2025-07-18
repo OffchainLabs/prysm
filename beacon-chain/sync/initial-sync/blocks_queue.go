@@ -5,7 +5,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
@@ -76,7 +75,6 @@ type blocksQueueConfig struct {
 	dcs                 filesystem.DataColumnStorageSummarizer
 	bv                  verification.NewBlobVerifier
 	cv                  verification.NewDataColumnsVerifier
-	custodyInfo         *peerdas.CustodyInfo
 }
 
 // blocksQueue is a priority queue that serves as a intermediary between block fetchers (producers)
@@ -114,16 +112,15 @@ func newBlocksQueue(ctx context.Context, cfg *blocksQueueConfig) *blocksQueue {
 			log.Warn("Rpc fetcher starting without blob availability cache, duplicate blobs may be requested.")
 		}
 		blocksFetcher = newBlocksFetcher(ctx, &blocksFetcherConfig{
-			ctxMap:      cfg.ctxMap,
-			chain:       cfg.chain,
-			p2p:         cfg.p2p,
-			db:          cfg.db,
-			clock:       cfg.clock,
-			bs:          cfg.bs,
-			dcs:         cfg.dcs,
-			bv:          cfg.bv,
-			cv:          cfg.cv,
-			custodyInfo: cfg.custodyInfo,
+			ctxMap: cfg.ctxMap,
+			chain:  cfg.chain,
+			p2p:    cfg.p2p,
+			db:     cfg.db,
+			clock:  cfg.clock,
+			bs:     cfg.bs,
+			dcs:    cfg.dcs,
+			bv:     cfg.bv,
+			cv:     cfg.cv,
 		})
 	}
 	highestExpectedSlot := cfg.highestExpectedSlot

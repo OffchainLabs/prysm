@@ -35,10 +35,11 @@ type (
 		DataColumnsHandler
 	}
 
-	// Accessor provides access to the Broadcaster and PeerManager interfaces.
+	// Accessor provides access to the Broadcaster, PeerManager and DataColumnsHandler interfaces.
 	Accessor interface {
 		Broadcaster
 		PeerManager
+		DataColumnsHandler
 	}
 
 	// Broadcaster broadcasts messages to peers over the p2p pubsub protocol.
@@ -120,6 +121,8 @@ type (
 
 	// DataColumnsHandler abstracts some data columns related methods.
 	DataColumnsHandler interface {
+		CustodyGroupCount() uint64
+		SetCustodyGroupCount(uint64)
 		CustodyGroupCountFromPeer(peer.ID) uint64
 	}
 )

@@ -16,7 +16,6 @@ import (
 
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
@@ -157,27 +156,26 @@ func TestCreateLocalNode(t *testing.T) {
 	}{
 		{
 			name:          "valid config",
-			cfg:           &Config{CustodyInfo: &peerdas.CustodyInfo{}},
 			expectedError: false,
 		},
 		{
 			name:          "invalid host address",
-			cfg:           &Config{HostAddress: "invalid", CustodyInfo: &peerdas.CustodyInfo{}},
+			cfg:           &Config{HostAddress: "invalid"},
 			expectedError: true,
 		},
 		{
 			name:          "valid host address",
-			cfg:           &Config{HostAddress: "192.168.0.1", CustodyInfo: &peerdas.CustodyInfo{}},
+			cfg:           &Config{HostAddress: "192.168.0.1"},
 			expectedError: false,
 		},
 		{
 			name:          "invalid host DNS",
-			cfg:           &Config{HostDNS: "invalid", CustodyInfo: &peerdas.CustodyInfo{}},
+			cfg:           &Config{HostDNS: "invalid"},
 			expectedError: true,
 		},
 		{
 			name:          "valid host DNS",
-			cfg:           &Config{HostDNS: "www.google.com", CustodyInfo: &peerdas.CustodyInfo{}},
+			cfg:           &Config{HostDNS: "www.google.com"},
 			expectedError: false,
 		},
 	}
@@ -199,6 +197,7 @@ func TestCreateLocalNode(t *testing.T) {
 				genesisTime:           time.Now(),
 				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 				cfg:                   tt.cfg,
+				custodyGroupCount:     params.BeaconConfig().CustodyRequirement,
 			}
 
 			localNode, err := service.createLocalNode(privKey, address, udpPort, tcpPort, quicPort)
@@ -210,7 +209,7 @@ func TestCreateLocalNode(t *testing.T) {
 			require.NoError(t, err)
 
 			expectedAddress := address
-			if tt.cfg.HostAddress != "" {
+			if tt.cfg != nil && tt.cfg.HostAddress != "" {
 				expectedAddress = net.ParseIP(tt.cfg.HostAddress)
 			}
 
@@ -784,10 +783,11 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 					actualPingCount++
 					return nil
 				},
-				cfg:                   &Config{UDPPort: 2000, CustodyInfo: &peerdas.CustodyInfo{}},
+				cfg:                   &Config{UDPPort: 2000},
 				peers:                 p2p.Peers(),
 				genesisTime:           time.Now().Add(-time.Duration(tc.epochSinceGenesis*secondsPerEpoch) * time.Second),
 				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+				custodyGroupCount:     params.BeaconConfig().CustodyRequirement,
 			}
 
 			// Set the listener and the metadata.

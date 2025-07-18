@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -58,6 +59,8 @@ type TestP2P struct {
 	Digest          [4]byte
 	peers           *peers.Status
 	LocalMetadata   metadata.Metadata
+	cgcMut          sync.RWMutex
+	cgc             uint64 // custody group count
 }
 
 // NewTestP2P initializes a new p2p test service.
@@ -461,6 +464,23 @@ func (*TestP2P) InterceptUpgraded(network.Conn) (allow bool, reason control.Disc
 	return true, 0
 }
 
+// CustodyGroupCount .
+func (s *TestP2P) CustodyGroupCount() uint64 {
+	s.cgcMut.RLock()
+	defer s.cgcMut.RUnlock()
+
+	return s.cgc
+}
+
+// SetCustodyGroupCount .
+func (s *TestP2P) SetCustodyGroupCount(cgc uint64) {
+	s.cgcMut.Lock()
+	defer s.cgcMut.Unlock()
+
+	s.cgc = cgc
+}
+
+// CustodyGroupCountFromPeer .
 func (s *TestP2P) CustodyGroupCountFromPeer(pid peer.ID) uint64 {
 	// By default, we assume the peer custodies the minimum number of groups.
 	custodyRequirement := params.BeaconConfig().CustodyRequirement

@@ -12,7 +12,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
@@ -55,7 +54,6 @@ type Config struct {
 	InitialSyncComplete chan struct{}
 	BlobStorage         *filesystem.BlobStorage
 	DataColumnStorage   *filesystem.DataColumnStorage
-	CustodyInfo         *peerdas.CustodyInfo
 }
 
 // Service service.
@@ -393,11 +391,13 @@ func (s *Service) fetchOriginBlobs(pids []peer.ID, rob blocks.ROBlock) error {
 }
 
 func (s *Service) fetchOriginColumns(pids []peer.ID, roBlock blocks.ROBlock) error {
-	actualSamplingSize := s.cfg.CustodyInfo.CustodyGroupSamplingSize(peerdas.Actual)
 	nodeID := s.cfg.P2P.NodeID()
 	storage := s.cfg.DataColumnStorage
+	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
+	custodyGroupCount := s.cfg.P2P.CustodyGroupCount()
+	samplingSize := max(custodyGroupCount, samplesPerSlot)
 
-	missingColumns, err := sync.MissingDataColumns(roBlock, nodeID, actualSamplingSize, storage)
+	missingColumns, err := sync.MissingDataColumns(roBlock, nodeID, samplingSize, storage)
 	if err != nil {
 		return errors.Wrap(err, "missing data columns")
 	}

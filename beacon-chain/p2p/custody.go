@@ -9,6 +9,22 @@ import (
 
 var _ DataColumnsHandler = (*Service)(nil)
 
+// CustodyGroupCount returns the custody group count.
+func (s *Service) CustodyGroupCount() uint64 {
+	s.custodyGroupCountMut.Lock()
+	defer s.custodyGroupCountMut.Unlock()
+	return s.custodyGroupCount
+}
+
+func (s *Service) SetCustodyGroupCount(custodyGroupCount uint64) {
+	s.custodyGroupCountMut.Lock()
+	defer s.custodyGroupCountMut.Unlock()
+
+	log.WithField("value", custodyGroupCount).Debug("Custody group count updated")
+
+	s.custodyGroupCount = custodyGroupCount
+}
+
 // CustodyGroupCountFromPeer retrieves custody group count from a peer.
 // It first tries to get the custody group count from the peer's metadata,
 // then falls back to the ENR value if the metadata is not available, then
