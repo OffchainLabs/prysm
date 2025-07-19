@@ -145,9 +145,9 @@ func (s *Store) SaveLightClientUpdate(ctx context.Context, period uint64, update
 
 func (s *Store) IsBetterFinalityUpdate(newUpdate, oldUpdate interfaces.LightClientFinalityUpdate) bool {
 	if oldUpdate != nil {
-		// The finalized_header.beacon.newUpdateSlot is greater than that of all previously forwarded finality_updates,
-		// or it matches the highest previously forwarded lastUpdateSlot and also has a sync_aggregate indicating supermajority (> 2/3)
-		// sync committee participation while the previously forwarded finality_update for that lastUpdateSlot did not indicate supermajority
+		// The finalized_header.beacon.slot is greater than that of all previously forwarded finality_updates,
+		// or it matches the highest previously forwarded slot and also has a sync_aggregate indicating supermajority (> 2/3)
+		// sync committee participation while the previously forwarded finality_update for that slot did not indicate supermajority
 		newUpdateSlot := newUpdate.FinalizedHeader().Beacon().Slot
 		newHasSupermajority := UpdateHasSupermajority(newUpdate.SyncAggregate())
 
