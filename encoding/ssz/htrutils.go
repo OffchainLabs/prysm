@@ -78,8 +78,12 @@ func SlashingsRoot(slashings []uint64) ([32]byte, error) {
 }
 
 // TransactionsRoot computes the HTR for the Transactions' property of the ExecutionPayload
-func TransactionsRoot(txs []Transaction) ([32]byte, error) {
-	return SliceRoot(txs, fieldparams.MaxTxsPerPayloadLength)
+func TransactionsRoot(txs [][]byte) ([32]byte, error) {
+	transactions := make([]Transaction, len(txs))
+	for i, tx := range txs {
+		transactions[i] = Transaction(tx)
+	}
+	return SliceRoot(transactions, fieldparams.MaxTxsPerPayloadLength)
 }
 
 // WithdrawalSliceRoot computes the HTR of a slice of withdrawals.
