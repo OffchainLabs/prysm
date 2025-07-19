@@ -235,7 +235,7 @@ func (s *Service) processLightClientFinalityUpdate(
 		return errors.Wrap(err, "could not create light client finality update")
 	}
 
-	if !s.lcStore.IsBetterFinalityUpdate(newUpdate, s.lcStore.LastFinalityUpdate()) {
+	if !lightclient.IsBetterFinalityUpdate(newUpdate, s.lcStore.LastFinalityUpdate()) {
 		log.Debug("Skip saving light client finality update: current update is better")
 		return nil
 	}
@@ -284,9 +284,7 @@ func (s *Service) processLightClientOptimisticUpdate(ctx context.Context, signed
 		return errors.Wrap(err, "could not create light client optimistic update")
 	}
 
-	lastUpdate := s.lcStore.LastOptimisticUpdate()
-
-	if !s.lcStore.IsBetterOptimisticUpdate(newUpdate, lastUpdate) {
+	if !lightclient.IsBetterOptimisticUpdate(newUpdate, s.lcStore.LastOptimisticUpdate()) {
 		log.Debug("Skip saving light client optimistic update: current update is better")
 		return nil
 	}

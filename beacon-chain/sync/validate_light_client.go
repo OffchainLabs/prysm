@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
@@ -63,7 +64,7 @@ func (s *Service) validateLightClientOptimisticUpdate(ctx context.Context, pid p
 		return pubsub.ValidationIgnore, nil
 	}
 
-	if !s.lcStore.IsBetterOptimisticUpdate(newUpdate, s.lcStore.LastOptimisticUpdate()) {
+	if !lightclient.IsBetterOptimisticUpdate(newUpdate, s.lcStore.LastOptimisticUpdate()) {
 		log.WithFields(logrus.Fields{
 			"attestedSlot":       fmt.Sprintf("%d", newUpdate.AttestedHeader().Beacon().Slot),
 			"signatureSlot":      fmt.Sprintf("%d", newUpdate.SignatureSlot()),
@@ -130,7 +131,7 @@ func (s *Service) validateLightClientFinalityUpdate(ctx context.Context, pid pee
 		return pubsub.ValidationIgnore, nil
 	}
 
-	if !s.lcStore.IsBetterFinalityUpdate(newUpdate, s.lcStore.LastFinalityUpdate()) {
+	if !lightclient.IsBetterFinalityUpdate(newUpdate, s.lcStore.LastFinalityUpdate()) {
 		log.WithFields(logrus.Fields{
 			"attestedSlot":       fmt.Sprintf("%d", newUpdate.AttestedHeader().Beacon().Slot),
 			"signatureSlot":      fmt.Sprintf("%d", newUpdate.SignatureSlot()),

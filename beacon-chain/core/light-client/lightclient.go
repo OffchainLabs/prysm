@@ -520,9 +520,9 @@ func ComputeWithdrawalsRoot(payload interfaces.ExecutionData) ([]byte, error) {
 
 func BlockToLightClientHeader(
 	ctx context.Context,
-	attestedBlockVersion int, // this is the version that the light client header should be in, based on the attested block.
+	attestedBlockVersion int,                   // this is the version that the light client header should be in, based on the attested block.
 	block interfaces.ReadOnlySignedBeaconBlock, // this block is either the attested block, or the finalized block.
-	// in case of the latter, we might need to upgrade it to the attested block's version.
+// in case of the latter, we might need to upgrade it to the attested block's version.
 ) (interfaces.LightClientHeader, error) {
 	if block.Version() > attestedBlockVersion {
 		return nil, errors.Errorf("block version %s is greater than attested block version %s", version.String(block.Version()), version.String(attestedBlockVersion))
@@ -754,4 +754,35 @@ func UpdateHasSupermajority(syncAggregate *pb.SyncAggregate) bool {
 	maxActiveParticipants := syncAggregate.SyncCommitteeBits.Len()
 	numActiveParticipants := syncAggregate.SyncCommitteeBits.Count()
 	return numActiveParticipants*3 >= maxActiveParticipants*2
+}
+
+func IsBetterFinalityUpdate(newUpdate, oldUpdate interfaces.LightClientFinalityUpdate) bool {
+	if oldUpdate != nil {
+		// The finalized_header.beacon.slot is greater than that of all previously forwarded finality_updates,
+		// or it matches the highest previously forwarded slot and also has a sync_aggregate indicating supermajority (> 2/3)
+		// sync committee participation while the previously forwarded finality_update for that slot did not indicate supermajority
+		newUpdateSlot := newUpdate.FinalizedHeader().Beacon().Slot
+		newHasSupermajority := UpdateHasSupermajority(newUpdate.SyncAggregate())
+
+		lastUpdateSlot := oldUpdate.FinalizedHeader().Beacon().Slot
+		lastHasSupermajority := UpdateHasSupermajority(oldUpdate.SyncAggregate())
+
+		if newUpdateSlot < lastUpdateSlot {
+			return false
+		}
+		if newUpdateSlot == lastUpdateSlot && (lastHasSupermajority || !newHasSupermajority) {
+			return false
+		}
+	}
+	return true
+}
+
+func IsBetterOptimisticUpdate(newUpdate interfaces.LightClientOptimisticUpdate, oldUpdate interfaces.LightClientOptimisticUpdate) bool {
+	if oldUpdate != nil {
+		// The attested_header.beacon.slot is greater than that of all previously forwarded optimistic updates
+		if newUpdate.AttestedHeader().Beacon().Slot <= oldUpdate.AttestedHeader().Beacon().Slot {
+			return false
+		}
+	}
+	return true
 }
