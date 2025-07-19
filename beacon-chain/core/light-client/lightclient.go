@@ -757,32 +757,31 @@ func UpdateHasSupermajority(syncAggregate *pb.SyncAggregate) bool {
 }
 
 func IsBetterFinalityUpdate(newUpdate, oldUpdate interfaces.LightClientFinalityUpdate) bool {
-	if oldUpdate != nil {
-		// The finalized_header.beacon.slot is greater than that of all previously forwarded finality_updates,
-		// or it matches the highest previously forwarded slot and also has a sync_aggregate indicating supermajority (> 2/3)
-		// sync committee participation while the previously forwarded finality_update for that slot did not indicate supermajority
-		newUpdateSlot := newUpdate.FinalizedHeader().Beacon().Slot
-		newHasSupermajority := UpdateHasSupermajority(newUpdate.SyncAggregate())
+	if oldUpdate == nil {
+		return true
+	}
+	// The finalized_header.beacon.slot is greater than that of all previously forwarded finality_updates,
+	// or it matches the highest previously forwarded slot and also has a sync_aggregate indicating supermajority (> 2/3)
+	// sync committee participation while the previously forwarded finality_update for that slot did not indicate supermajority
+	newUpdateSlot := newUpdate.FinalizedHeader().Beacon().Slot
+	newHasSupermajority := UpdateHasSupermajority(newUpdate.SyncAggregate())
 
-		lastUpdateSlot := oldUpdate.FinalizedHeader().Beacon().Slot
-		lastHasSupermajority := UpdateHasSupermajority(oldUpdate.SyncAggregate())
+	lastUpdateSlot := oldUpdate.FinalizedHeader().Beacon().Slot
+	lastHasSupermajority := UpdateHasSupermajority(oldUpdate.SyncAggregate())
 
-		if newUpdateSlot < lastUpdateSlot {
-			return false
-		}
-		if newUpdateSlot == lastUpdateSlot && (lastHasSupermajority || !newHasSupermajority) {
-			return false
-		}
+	if newUpdateSlot < lastUpdateSlot {
+		return false
+	}
+	if newUpdateSlot == lastUpdateSlot && (lastHasSupermajority || !newHasSupermajority) {
+		return false
 	}
 	return true
 }
 
 func IsBetterOptimisticUpdate(newUpdate interfaces.LightClientOptimisticUpdate, oldUpdate interfaces.LightClientOptimisticUpdate) bool {
-	if oldUpdate != nil {
-		// The attested_header.beacon.slot is greater than that of all previously forwarded optimistic updates
-		if newUpdate.AttestedHeader().Beacon().Slot <= oldUpdate.AttestedHeader().Beacon().Slot {
-			return false
-		}
+	if oldUpdate == nil {
+		return true
 	}
-	return true
+	// The attested_header.beacon.slot is greater than that of all previously forwarded optimistic updates
+	return newUpdate.AttestedHeader().Beacon().Slot > oldUpdate.AttestedHeader().Beacon().Slot
 }
