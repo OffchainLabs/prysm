@@ -7,6 +7,7 @@ import (
 	"path"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition/interop"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -14,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/io/file"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -35,7 +37,7 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		return err
 	}
 
-	go s.reconstructAndBroadcastBlobs(ctx, signed)
+	go s.processSidecarsFromExecution(ctx, signed)
 
 	if err := s.cfg.chain.ReceiveBlock(ctx, signed, root, nil); err != nil {
 		if blockchain.IsInvalidBlock(err) {
@@ -59,14 +61,108 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 	return err
 }
 
-// reconstructAndBroadcastBlobs processes and broadcasts blob sidecars for a given beacon block.
-// This function reconstructs the blob sidecars from the EL using the block's KZG commitments,
-// broadcasts the reconstructed blobs over P2P, and saves them into the blob storage.
-func (s *Service) reconstructAndBroadcastBlobs(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) {
-	if block.Version() < version.Deneb {
+// processSidecarsFromExecution retrieves (if available) sidecars data from the execution client,
+// builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
+func (s *Service) processSidecarsFromExecution(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) {
+	if block.Version() >= version.Fulu {
+		s.processDataColumnSidecarsFromExecution(ctx, block)
 		return
 	}
 
+	if block.Version() >= version.Deneb {
+		s.processBlobSidecarsFromExecution(ctx, block)
+		return
+	}
+}
+
+// processDataColumnSidecarsFromExecution retrieves (if available) data column sidecars data from the execution client,
+// builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
+func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, roSignedBlock interfaces.ReadOnlySignedBeaconBlock) {
+	block := roSignedBlock.Block()
+
+	log := log.WithFields(logrus.Fields{
+		"slot":          block.Slot(),
+		"proposerIndex": block.ProposerIndex(),
+	})
+
+	kzgCommitments, err := block.Body().BlobKzgCommitments()
+	if err != nil {
+		log.WithError(err).Error("Failed to read commitments from block")
+		return
+	}
+
+	if len(kzgCommitments) == 0 {
+		// No blobs to reconstruct.
+		return
+	}
+
+	blockRoot, err := block.HashTreeRoot()
+	if err != nil {
+		log.WithError(err).Error("Failed to calculate block root")
+		return
+	}
+
+	log = log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot))
+
+	if s.cfg.dataColumnStorage == nil {
+		log.Warning("Data column storage is not enabled, skip saving data column, but continue to reconstruct and broadcast data column")
+	}
+
+	// When this function is called, it's from the time when the block is received, so in almost all situations we need to get the data column from EL instead of the blob storage.
+	sidecars, err := s.cfg.executionReconstructor.ReconstructDataColumnSidecars(ctx, roSignedBlock, blockRoot)
+	if err != nil {
+		log.WithError(err).Debug("Cannot reconstruct data column sidecars after receiving the block")
+		return
+	}
+
+	// Return early if no blobs are retrieved from the EL.
+	if len(sidecars) == 0 {
+		return
+	}
+
+	nodeID := s.cfg.p2p.NodeID()
+
+	s.cfg.custodyInfo.Mut.RLock()
+	defer s.cfg.custodyInfo.Mut.RUnlock()
+
+	groupCount := s.cfg.custodyInfo.ActualGroupCount()
+	info, _, err := peerdas.Info(nodeID, groupCount)
+	if err != nil {
+		log.WithError(err).Error("Failed to get peer info")
+		return
+	}
+
+	blockSlot := block.Slot()
+	proposerIndex := block.ProposerIndex()
+
+	// Broadcast and save data columns sidecars to custody but not yet received.
+	sidecarCount := uint64(len(sidecars))
+	for columnIndex := range info.CustodyColumns {
+		log := log.WithField("columnIndex", columnIndex)
+		if columnIndex >= sidecarCount {
+			log.Error("Column custody index out of range - should never happen")
+			continue
+		}
+
+		if s.hasSeenDataColumnIndex(blockSlot, proposerIndex, columnIndex) {
+			continue
+		}
+
+		sidecar := sidecars[columnIndex]
+
+		if err := s.cfg.p2p.BroadcastDataColumn(blockRoot, sidecar.Index, sidecar.DataColumnSidecar); err != nil {
+			log.WithError(err).Error("Failed to broadcast data column")
+		}
+
+		if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
+			log.WithError(err).Error("Failed to receive data column")
+		}
+	}
+}
+
+// processBlobSidecarsFromExecution retrieves (if available) blob sidecars data from the execution client,
+// builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
+func (s *Service) processBlobSidecarsFromExecution(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) {
 	startTime, err := slots.StartTime(s.cfg.chain.GenesisTime(), block.Block().Slot())
 	if err != nil {
 		log.WithError(err).Error("Failed to convert slot to time")

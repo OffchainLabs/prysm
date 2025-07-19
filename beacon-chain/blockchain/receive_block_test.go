@@ -9,7 +9,9 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/voluntaryexits"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -19,6 +21,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	ethpbv1 "github.com/OffchainLabs/prysm/v6/proto/eth/v1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
@@ -563,4 +566,49 @@ func Test_executePostFinalizationTasks(t *testing.T) {
 		require.Equal(t, primitives.ValidatorIndex(0), index) // first index
 	})
 
+}
+
+func TestProcessLightClientBootstrap(t *testing.T) {
+	featCfg := &features.Flags{}
+	featCfg.EnableLightClient = true
+	reset := features.InitWithReset(featCfg)
+	defer reset()
+
+	s, tr := minimalTestService(t, WithLCStore())
+	ctx := tr.ctx
+
+	for testVersion := version.Altair; testVersion <= version.Electra; testVersion++ {
+		t.Run(version.String(testVersion), func(t *testing.T) {
+			l := util.NewTestLightClient(t, testVersion)
+
+			require.NoError(t, s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock))
+			finalizedBlockRoot, err := l.FinalizedBlock.Block().HashTreeRoot()
+			require.NoError(t, err)
+			require.NoError(t, s.cfg.BeaconDB.SaveState(ctx, l.FinalizedState, finalizedBlockRoot))
+
+			cp := l.AttestedState.FinalizedCheckpoint()
+			require.DeepSSZEqual(t, finalizedBlockRoot, [32]byte(cp.Root))
+
+			require.NoError(t, s.cfg.ForkChoiceStore.UpdateFinalizedCheckpoint(&forkchoicetypes.Checkpoint{Epoch: cp.Epoch, Root: [32]byte(cp.Root)}))
+
+			sss, err := s.cfg.BeaconDB.State(ctx, finalizedBlockRoot)
+			require.NoError(t, err)
+			require.NotNil(t, sss)
+
+			s.executePostFinalizationTasks(s.ctx, l.FinalizedState)
+
+			// wait for the goroutine to finish processing
+			time.Sleep(1 * time.Second)
+
+			// Check that the light client bootstrap is saved
+			b, err := s.lcStore.LightClientBootstrap(ctx, [32]byte(cp.Root))
+			require.NoError(t, err)
+			require.NotNil(t, b)
+
+			btst, err := lightClient.NewLightClientBootstrapFromBeaconState(ctx, l.FinalizedState.Slot(), l.FinalizedState, l.FinalizedBlock)
+			require.NoError(t, err)
+			require.DeepEqual(t, btst, b)
+			require.Equal(t, b.Version(), testVersion)
+		})
+	}
 }

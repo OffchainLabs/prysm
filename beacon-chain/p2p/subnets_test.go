@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"reflect"
 	"testing"
 	"time"
 
@@ -22,7 +21,7 @@ import (
 	"github.com/prysmaticlabs/go-bitfield"
 )
 
-func TestStartDiscV5_FindPeersWithSubnet(t *testing.T) {
+func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 	// Topology of this test:
 	//
 	//
@@ -37,7 +36,12 @@ func TestStartDiscV5_FindPeersWithSubnet(t *testing.T) {
 	// In our case: The node i is subscribed to subnet i, with i = 1, 2, 3
 
 	// Define the genesis validators root, to ensure everybody is on the same network.
-	const genesisValidatorRootStr = "0xdeadbeefcafecafedeadbeefcafecafedeadbeefcafecafedeadbeefcafecafe"
+	const (
+		genesisValidatorRootStr = "0xdeadbeefcafecafedeadbeefcafecafedeadbeefcafecafedeadbeefcafecafe"
+		subnetCount             = 3
+		minimumPeersPerSubnet   = 1
+	)
+
 	genesisValidatorsRoot, err := hex.DecodeString(genesisValidatorRootStr[2:])
 	require.NoError(t, err)
 
@@ -87,13 +91,12 @@ func TestStartDiscV5_FindPeersWithSubnet(t *testing.T) {
 
 	// Create 3 nodes, each subscribed to a different subnet.
 	// Each node is connected to the bootstrap node.
-	services := make([]*Service, 0, 3)
+	services := make([]*Service, 0, subnetCount)
 
-	for i := 1; i <= 3; i++ {
-		subnet := uint64(i)
+	for i := uint64(1); i <= subnetCount; i++ {
 		service, err := NewService(ctx, &Config{
 			Discv5BootStrapAddrs: []string{bootNodeENR},
-			MaxPeers:             30,
+			MaxPeers:             0, // Set to 0 to ensure that peers are discovered via subnets search, and not generic peers discovery.
 			UDPPort:              uint(2000 + i),
 			TCPPort:              uint(3000 + i),
 			QUICPort:             uint(3000 + i),
@@ -115,12 +118,13 @@ func TestStartDiscV5_FindPeersWithSubnet(t *testing.T) {
 
 		// Set the ENR `attnets`, used by Prysm to filter peers by subnet.
 		bitV := bitfield.NewBitvector64()
-		bitV.SetBitAt(subnet, true)
+		bitV.SetBitAt(i, true)
 		entry := enr.WithEntry(attSubnetEnrKey, &bitV)
 		service.dv5Listener.LocalNode().Set(entry)
 
 		// Join and subscribe to the subnet, needed by libp2p.
-		topic, err := service.pubsub.Join(fmt.Sprintf(AttestationSubnetTopicFormat, bootNodeForkDigest, subnet) + "/ssz_snappy")
+		topicName := fmt.Sprintf(AttestationSubnetTopicFormat, bootNodeForkDigest, i) + "/ssz_snappy"
+		topic, err := service.pubsub.Join(topicName)
 		require.NoError(t, err)
 
 		_, err = topic.Subscribe()
@@ -160,37 +164,18 @@ func TestStartDiscV5_FindPeersWithSubnet(t *testing.T) {
 		require.NoError(t, err)
 	}()
 
-	// Look up 3 different subnets.
-	exists := make([]bool, 0, 3)
-	for i := 1; i <= 3; i++ {
-		subnet := uint64(i)
-		topic := fmt.Sprintf(AttestationSubnetTopicFormat, bootNodeForkDigest, subnet)
+	subnets := map[uint64]bool{1: true, 2: true, 3: true}
+	defectiveSubnets := service.defectiveSubnets(AttestationSubnetTopicFormat, bootNodeForkDigest, minimumPeersPerSubnet, subnets)
+	require.Equal(t, subnetCount, len(defectiveSubnets))
 
-		exist := false
+	ctxWithTimeOut, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 
-		// This for loop is used to ensure we don't get stuck in `FindPeersWithSubnet`.
-		// Read the documentation of `FindPeersWithSubnet` for more details.
-		for j := 0; j < 3; j++ {
-			ctxWithTimeOut, cancel := context.WithTimeout(ctx, 5*time.Second)
-			defer cancel()
+	err = service.FindAndDialPeersWithSubnets(ctxWithTimeOut, AttestationSubnetTopicFormat, bootNodeForkDigest, minimumPeersPerSubnet, subnets)
+	require.NoError(t, err)
 
-			exist, err = service.FindPeersWithSubnet(ctxWithTimeOut, topic, subnet, 1)
-			require.NoError(t, err)
-
-			if exist {
-				break
-			}
-		}
-
-		require.NoError(t, err)
-		exists = append(exists, exist)
-
-	}
-
-	// Check if all peers are found.
-	for _, exist := range exists {
-		require.Equal(t, true, exist, "Peer with subnet doesn't exist")
-	}
+	defectiveSubnets = service.defectiveSubnets(AttestationSubnetTopicFormat, bootNodeForkDigest, minimumPeersPerSubnet, subnets)
+	require.Equal(t, 0, len(defectiveSubnets))
 }
 
 func Test_AttSubnets(t *testing.T) {
@@ -305,37 +290,34 @@ func Test_AttSubnets(t *testing.T) {
 			wantErr: false,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db, err := enode.OpenDB("")
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			priv, _, err := crypto.GenerateSecp256k1Key(rand.Reader)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			convertedKey, err := ecdsaprysm.ConvertFromInterfacePrivKey(priv)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			localNode := enode.NewLocalNode(db, convertedKey)
 			record := tt.record(localNode)
 
-			got, err := attSubnets(record)
+			got, err := attestationSubnets(record)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("syncSubnets() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("attestationSubnets() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
 			if tt.wantErr {
-				assert.ErrorContains(t, tt.errContains, err)
+				require.ErrorContains(t, tt.errContains, err)
 			}
 
-			want := make(map[uint64]bool, len(tt.want))
+			require.Equal(t, len(tt.want), len(got))
 			for _, subnet := range tt.want {
-				want[subnet] = true
-			}
-
-			if !reflect.DeepEqual(got, want) {
-				t.Errorf("syncSubnets() got = %v, want %v", got, want)
+				require.Equal(t, true, got[subnet])
 			}
 		})
 	}
@@ -494,11 +476,14 @@ func Test_SyncSubnets(t *testing.T) {
 				t.Errorf("syncSubnets() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+
 			if tt.wantErr {
 				assert.ErrorContains(t, tt.errContains, err)
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("syncSubnets() got = %v, want %v", got, tt.want)
+
+			require.Equal(t, len(tt.want), len(got))
+			for _, subnet := range tt.want {
+				require.Equal(t, true, got[subnet])
 			}
 		})
 	}

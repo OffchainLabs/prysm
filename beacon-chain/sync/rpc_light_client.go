@@ -110,7 +110,7 @@ func (s *Service) lightClientUpdatesByRangeRPCHandler(ctx context.Context, msg i
 
 	logger.Infof("LC: requesting updates by range (StartPeriod: %d, EndPeriod: %d)", r.StartPeriod, r.StartPeriod+r.Count-1)
 
-	updates, err := s.cfg.beaconDB.LightClientUpdates(ctx, r.StartPeriod, endPeriod)
+	updates, err := s.lcStore.LightClientUpdates(ctx, r.StartPeriod, endPeriod)
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
 		tracing.AnnotateError(span, err)
@@ -125,12 +125,7 @@ func (s *Service) lightClientUpdatesByRangeRPCHandler(ctx context.Context, msg i
 		return nil
 	}
 
-	for i := r.StartPeriod; i <= endPeriod; i++ {
-		u, ok := updates[i]
-		if !ok {
-			break
-		}
-
+	for _, u := range updates {
 		SetStreamWriteDeadline(stream, defaultWriteDuration)
 		if err = WriteLightClientUpdateChunk(stream, s.cfg.clock, s.cfg.p2p.Encoding(), u); err != nil {
 			s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)

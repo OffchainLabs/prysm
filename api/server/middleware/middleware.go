@@ -127,7 +127,7 @@ func AcceptEncodingHeaderHandler() Middleware {
 			gz := gzip.NewWriter(w)
 			gzipRW := &gzipResponseWriter{gz: gz, ResponseWriter: w}
 			defer func() {
-				if !gzipRW.zipped {
+				if !gzipRW.zip {
 					return
 				}
 				if err := gz.Close(); err != nil {
@@ -143,13 +143,22 @@ func AcceptEncodingHeaderHandler() Middleware {
 type gzipResponseWriter struct {
 	gz *gzip.Writer
 	http.ResponseWriter
-	zipped bool
+	zip bool
+}
+
+func (g *gzipResponseWriter) WriteHeader(statusCode int) {
+	if strings.Contains(g.Header().Get("Content-Type"), api.JsonMediaType) {
+		// Removing the current Content-Length because zipping will change it.
+		g.Header().Del("Content-Length")
+		g.Header().Set("Content-Encoding", "gzip")
+		g.zip = true
+	}
+
+	g.ResponseWriter.WriteHeader(statusCode)
 }
 
 func (g *gzipResponseWriter) Write(b []byte) (int, error) {
-	if strings.Contains(g.Header().Get("Content-Type"), api.JsonMediaType) {
-		g.zipped = true
-		g.Header().Set("Content-Encoding", "gzip")
+	if g.zip {
 		return g.gz.Write(b)
 	}
 	return g.ResponseWriter.Write(b)

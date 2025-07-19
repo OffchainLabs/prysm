@@ -669,11 +669,11 @@ func ComputeCommittee(
 // InitializeProposerLookahead computes the list of the proposer indices for the next MIN_SEED_LOOKAHEAD + 1 epochs.
 func InitializeProposerLookahead(ctx context.Context, state state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]uint64, error) {
 	lookAhead := make([]uint64, 0, uint64(params.BeaconConfig().MinSeedLookahead+1)*uint64(params.BeaconConfig().SlotsPerEpoch))
-	indices, err := ActiveValidatorIndices(ctx, state, epoch)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get active indices")
-	}
 	for i := range params.BeaconConfig().MinSeedLookahead + 1 {
+		indices, err := ActiveValidatorIndices(ctx, state, epoch+i)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get active indices")
+		}
 		proposerIndices, err := PrecomputeProposerIndices(state, indices, epoch+i)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute proposer indices")
