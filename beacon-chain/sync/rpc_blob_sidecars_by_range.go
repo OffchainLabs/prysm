@@ -95,7 +95,7 @@ func (s *Service) blobSidecarsByRangeRPCHandler(ctx context.Context, msg interfa
 	}
 
 	beaconConfig := params.BeaconConfig()
-	currentEpoch := slots.ToEpoch(s.cfg.chain.CurrentSlot())
+	currentEpoch := slots.ToEpoch(s.cfg.clock.CurrentSlot())
 
 	var batch blockBatch
 
