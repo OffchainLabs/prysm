@@ -954,9 +954,12 @@ func TestForkChoiceSafeHead(t *testing.T) {
 	for i := 2; i < 10; i++ {
 		st, b, err = prepareForkchoiceState(ctx, primitives.Slot(i), indexToHash(uint64(i)), indexToHash(uint64(i-1)), params.BeaconConfig().ZeroHash, 0, 0)
 		require.NoError(t, err)
-		t.Logf("Inserting node %d", b.Block().Slot())
 		require.NoError(t, f.InsertNode(ctx, st, b))
 	}
+	// Add a node at slot 11 to ensure highest received node is at current slot
+	st, b, err = prepareForkchoiceState(ctx, primitives.Slot(11), indexToHash(uint64(11)), indexToHash(uint64(9)), params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, b))
 
 	tests := []struct {
 		name         string
@@ -967,25 +970,25 @@ func TestForkChoiceSafeHead(t *testing.T) {
 		{
 			name:         "safeHead is head-1",
 			currentSlot:  primitives.Slot(11),
-			nodeBalances: []uint64{10, 10, 10, 10, 10, 10, 10, 10, 10, 14},
+			nodeBalances: []uint64{10, 10, 10, 10, 10, 10, 10, 10, 10, 14, 10},
 			wantRoot:     indexToHash(9),
 		},
 		{
 			name:         "safeHead is head-2",
 			currentSlot:  primitives.Slot(11),
-			nodeBalances: []uint64{10, 10, 10, 10, 10, 10, 10, 10, 10, 10},
-			wantRoot:     indexToHash(8),
+			nodeBalances: []uint64{10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10},
+			wantRoot:     indexToHash(9),
 		},
 		{
 			name:         "safeHead is head-3",
 			currentSlot:  primitives.Slot(11),
-			nodeBalances: []uint64{10, 10, 10, 10, 10, 10, 10, 10, 10, 0},
-			wantRoot:     indexToHash(6),
+			nodeBalances: []uint64{10, 10, 10, 10, 10, 10, 10, 10, 10, 0, 10},
+			wantRoot:     indexToHash(7),
 		},
 		{
 			name:         "safeHead is justified",
 			currentSlot:  primitives.Slot(11),
-			nodeBalances: []uint64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+			nodeBalances: []uint64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 			wantRoot:     params.BeaconConfig().ZeroHash,
 		},
 	}
@@ -1000,6 +1003,7 @@ func TestForkChoiceSafeHead(t *testing.T) {
 			for i := 1; i < 10; i++ {
 				s.nodeByRoot[indexToHash(uint64(i))].balance = tc.nodeBalances[i]
 			}
+			s.nodeByRoot[indexToHash(uint64(11))].balance = tc.nodeBalances[10]
 
 			_, err = f.Head(ctx)
 			require.NoError(t, err)

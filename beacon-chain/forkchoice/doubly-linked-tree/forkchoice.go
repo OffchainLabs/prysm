@@ -93,6 +93,11 @@ func (f *ForkChoice) Head(
 		return [32]byte{}, errors.Wrap(err, "Could not get head")
 	}
 
+	// Return early if the head is not the highest received node before updating the safe head.
+	if f.store.highestReceivedNode.slot != slots.CurrentSlot(f.store.genesisTime) {
+		return h, nil
+	}
+
 	if err := f.updateSafeHead(ctx); err != nil {
 		log.WithError(err).Error("Could not update safe head")
 	}
@@ -137,7 +142,7 @@ func (f *ForkChoice) logSafeHead(ctx context.Context, newSafeHeadRoot [32]byte, 
 	}
 	log.WithFields(logrus.Fields{
 		"currentSlot":        fmt.Sprintf("%d", currentSlot),
-		"sinceSlotStartTime": fmt.Sprintf("%d", secondsSinceSlotStart),
+		"sinceSlotStartTime": fmt.Sprintf("%d", secondsSinceSlotStart.Milliseconds()),
 		"newSafeHeadSlot":    fmt.Sprintf("%d", newSafeHeadSlot),
 		"newSafeHeadRoot":    fmt.Sprintf("%#x", newSafeHeadRoot),
 		"weight":             fmt.Sprintf("%d", newSafeHeadNode.weight),

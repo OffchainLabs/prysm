@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 // ProcessAttestationsThreshold is the amount of time after which we
@@ -276,12 +277,24 @@ func (n *Node) confirmed(slot primitives.Slot, committeeWeight uint64, pbRoot [3
 
 	nodeWeight := n.weight
 
+	var pbWeightSubtracted bool
 	if n.root == pbRoot || (n.bestDescendant != nil && n.bestDescendant.root == pbRoot) {
 		if nodeWeight < pbValue {
 			return false
 		}
 		nodeWeight -= pbValue
+		pbWeightSubtracted = true
 	}
+
+	log.WithFields(logrus.Fields{
+		"slot":               slot,
+		"nodeSlot":           n.slot,
+		"committeeWeight":    committeeWeight,
+		"maxWeight":          maxWeight,
+		"nodeWeight":         nodeWeight,
+		"threshold":          threshold,
+		"pbWeightSubtracted": pbWeightSubtracted,
+	}).Info("Checking confirmation")
 
 	return nodeWeight > threshold
 }
