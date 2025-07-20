@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
@@ -30,7 +29,6 @@ import (
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
 	ecdsaprysm "github.com/OffchainLabs/prysm/v6/crypto/ecdsa"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
@@ -400,8 +398,9 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 	cfg := params.BeaconConfig().Copy()
 	cfg.FuluForkEpoch = 0
 	params.OverrideBeaconConfig(cfg)
+	params.BeaconConfig().InitializeForkSchedule()
 
-	chainService, clock := defaultMockChain(t, 0)
+	_, clock := defaultMockChain(t, 0)
 
 	// Create test block with blobs
 	pbSignedBeaconBlock := util.NewBeaconBlockDeneb()
@@ -584,11 +583,12 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 				if cols, exists := tc.skipColumns[setup.offset]; exists {
 					skipColumnsMap = cols
 				}
-				peerP2P := createAndConnectCustodyPeer(t, setup, dataColumnSidecars, chainService, hostP2P, tracker, skipColumnsMap)
+				peerP2P := createAndConnectCustodyPeer(t, setup, dataColumnSidecars, clock, hostP2P, tracker, skipColumnsMap)
 				peerIDs = append(peerIDs, peerP2P.PeerID())
 			}
 
-			ctxMap := map[[4]byte]int{{245, 165, 253, 66}: version.Fulu}
+			ctxMap, err := ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
+			require.NoError(t, err)
 			verifier := func(cols []blocks.RODataColumn, reqs []verification.Requirement) verification.DataColumnsVerifier {
 				clockSync := startup.NewClockSynchronizer()
 				require.NoError(t, clockSync.SetClock(clock))
@@ -660,7 +660,7 @@ func TestRequestDataColumnSidecarsByRoot(t *testing.T) {
 // createAndConnectCustodyPeer creates a new peer with a deterministic private key and connects it to the p2p service.
 // It then sets up the peer to respond with data columns it custodies.
 // TODO: Before merging into develop, makes sure the blockRoot is taken into account in this mock.
-func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSidecars []*pb.DataColumnSidecar, chainService *mock.ChainService, hostP2P *p2ptest.TestP2P, tracker *requestTracker, skipColumns map[uint64]bool) *p2ptest.TestP2P {
+func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSidecars []*pb.DataColumnSidecar, clock *startup.Clock, hostP2P *p2ptest.TestP2P, tracker *requestTracker, skipColumns map[uint64]bool) *p2ptest.TestP2P {
 	privateKeyBytes := make([]byte, 32)
 	for i := range 32 {
 		privateKeyBytes[i] = byte(setup.offset + i)
@@ -714,7 +714,7 @@ func createAndConnectCustodyPeer(t *testing.T, setup peerSetup, dataColumnSideca
 
 				col := dataColumnSidecars[column]
 
-				if err := WriteDataColumnSidecarChunk(stream, chainService, peerP2P.Encoding(), col); err != nil {
+				if err := WriteDataColumnSidecarChunk(stream, clock, peerP2P.Encoding(), col); err != nil {
 					log.WithError(err).Error("Failed to write data column sidecar chunk")
 					closeStream(stream, log)
 					return
@@ -1009,7 +1009,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 		fuluForkEpoch primitives.Epoch
 
 		// Current slot.
-		currentSlot uint64
+		currentSlot primitives.Slot
 
 		// Blocks with blobs parameters that will be used as `bwb` parameter.
 		blocksParams []blockParams
@@ -1366,11 +1366,9 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
 			// Consistency checks.
 			require.Equal(t, len(tc.blocksParams), len(tc.addedRODataColumns))
-
-			// Create a context.
-			ctx := context.Background()
 
 			// Create blocks, RO data columns and data columns sidecar from slot.
 			roBlocks := make([]blocks.ROBlock, len(tc.blocksParams))
@@ -1431,6 +1429,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			conf := params.BeaconConfig()
 			conf.FuluForkEpoch = tc.fuluForkEpoch
 			params.OverrideBeaconConfig(conf)
+			params.BeaconConfig().InitializeForkSchedule()
 
 			// Save the blocks in the store.
 			storage := make(map[[fieldparams.RootLength]byte][]uint64)
@@ -1448,7 +1447,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			dataColumnStorageSummarizer := filesystem.NewMockDataColumnStorageSummarizer(t, storage)
 
 			// Create a chain and a clock.
-			chain, clock := defaultMockChain(t, tc.currentSlot)
+			_, clock := defaultMockChain(t, tc.currentSlot)
 
 			// Create the P2P service.
 			p2pSvc := p2ptest.NewTestP2P(t, libp2p.Identity(genFixedCustodyPeer(t)))
@@ -1459,7 +1458,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 			// Connect the peers.
 			peers := make([]*p2ptest.TestP2P, 0, len(tc.peersParams))
 			for i, peerParams := range tc.peersParams {
-				peer := createAndConnectPeerForRange(t, p2pSvc, chain, dataColumnsSidecarBySlot, peerParams, i)
+				peer := createAndConnectPeerForRange(t, p2pSvc, clock, dataColumnsSidecarBySlot, peerParams, i)
 				peers = append(peers, peer)
 			}
 
@@ -1475,11 +1474,8 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 				p2pSvc.Peers().SetChainState(peerID, status)
 			}
 
-			clockSync := startup.NewClockSynchronizer()
-			require.NoError(t, clockSync.SetClock(clock))
+			ctxMap, err := ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
 			require.NoError(t, err)
-
-			ctxMap := map[[4]byte]int{{245, 165, 253, 66}: version.Fulu}
 			rateLimiter := leakybucket.NewCollector(1_000, 1_000, 1*time.Hour, false)
 
 			// Fetch the data columns from the peers.
@@ -1531,7 +1527,7 @@ func TestFetchDataColumnsFromPeers(t *testing.T) {
 func createAndConnectPeerForRange(
 	t *testing.T,
 	p2pService *p2ptest.TestP2P,
-	chainService *mock.ChainService,
+	clock *startup.Clock,
 	dataColumnsSidecarFromSlot map[primitives.Slot][]*pb.DataColumnSidecar,
 	peerParams peerParams,
 	offset int,
@@ -1574,7 +1570,7 @@ func createAndConnectPeerForRange(
 			dataColumn := dataColumnsSidecar[responseParams.columnIndex]
 
 			// Send the response.
-			err := WriteDataColumnSidecarChunk(stream, chainService, p2pService.Encoding(), dataColumn)
+			err := WriteDataColumnSidecarChunk(stream, clock, p2pService.Encoding(), dataColumn)
 			require.NoError(t, err)
 		}
 
