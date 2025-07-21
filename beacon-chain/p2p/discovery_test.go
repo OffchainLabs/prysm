@@ -370,14 +370,17 @@ func TestStaticPeering_PeersAreAdded(t *testing.T) {
 }
 
 func TestHostIsResolved(t *testing.T) {
-	// ip.addr.tools - construct domain names that resolve to any given IP address
-	// ex: 192-0-2-1.ip.addr.tools resolves to 192.0.2.1.
-	exampleHost := "96-7-129-13.ip.addr.tools"
-	exampleIP := "96.7.129.13"
+	host := "dns.google"
+	ips := map[string]bool{
+		"8.8.8.8":              true,
+		"8.8.4.4":              true,
+		"2001:4860:4860::8888": true,
+		"2001:4860:4860::8844": true,
+	}
 
 	s := &Service{
 		cfg: &Config{
-			HostDNS: exampleHost,
+			HostDNS: host,
 		},
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
@@ -387,7 +390,7 @@ func TestHostIsResolved(t *testing.T) {
 	require.NoError(t, err)
 
 	newIP := list.Self().IP()
-	assert.Equal(t, exampleIP, newIP.String(), "Did not resolve to expected IP")
+	assert.Equal(t, true, ips[newIP.String()], "Did not resolve to expected IP")
 }
 
 func TestInboundPeerLimit(t *testing.T) {

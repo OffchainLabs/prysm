@@ -660,7 +660,7 @@ func TestLightClientHandler_GetLightClientFinalityUpdate(t *testing.T) {
 			ctx := t.Context()
 
 			l := util.NewTestLightClient(t, testVersion)
-			update, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+			update, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 			require.NoError(t, err)
 
 			s := &Server{LCStore: &lightclient.Store{}}
@@ -685,7 +685,7 @@ func TestLightClientHandler_GetLightClientFinalityUpdate(t *testing.T) {
 			ctx := t.Context()
 
 			l := util.NewTestLightClient(t, testVersion)
-			update, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+			update, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 			require.NoError(t, err)
 
 			s := &Server{LCStore: &lightclient.Store{}}
@@ -740,7 +740,7 @@ func TestLightClientHandler_GetLightClientOptimisticUpdate(t *testing.T) {
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			ctx := t.Context()
 			l := util.NewTestLightClient(t, testVersion)
-			update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
+			update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock)
 			require.NoError(t, err)
 
 			s := &Server{LCStore: &lightclient.Store{}}
@@ -764,7 +764,7 @@ func TestLightClientHandler_GetLightClientOptimisticUpdate(t *testing.T) {
 		t.Run(version.String(testVersion)+" SSZ", func(t *testing.T) {
 			ctx := t.Context()
 			l := util.NewTestLightClient(t, testVersion)
-			update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
+			update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock)
 			require.NoError(t, err)
 
 			s := &Server{LCStore: &lightclient.Store{}}
