@@ -112,14 +112,16 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 			return
 		}
 	}()
+	accept := req.Header.Get("Accept")
 	contentType := httpResp.Header.Get("Content-Type")
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to read response body for %s", httpResp.Request.URL)
 	}
-	if !apiutil.PrimaryAcceptMatches(req.Header.Get("Accept"), contentType) {
+
+	if !apiutil.PrimaryAcceptMatches(accept, contentType) {
 		log.WithFields(logrus.Fields{
-			"Accept":             req.Header.Get("Accept"),
+			"Accept":       accept,
 			"Content-Type": contentType,
 		}).Debug("Server responded with non primary accept type")
 	}

@@ -16,6 +16,36 @@ type mediaRange struct {
 	spec int     // 2=exact, 1=type/*, 0=*/*
 }
 
+func parseMediaRange(field string) (mediaRange, bool) {
+	field = strings.TrimSpace(field)
+
+	mt, params, err := mime.ParseMediaType(field)
+	if err != nil {
+		log.WithError(err).Debug("Failed to parse header field")
+		return mediaRange{}, false
+	}
+
+	q := 1.0
+	if qs, ok := params["q"]; ok {
+		v, err := strconv.ParseFloat(qs, 64)
+		if err != nil || v < 0 || v > 1 {
+			log.WithField("q", qs).Debug("Invalid quality factor (0-1)")
+			return mediaRange{}, false
+		}
+		q = v
+	}
+
+	spec := 2
+	switch {
+	case mt == "*/*":
+		spec = 0
+	case strings.HasSuffix(mt, "/*"):
+		spec = 1
+	}
+
+	return mediaRange{mt: mt, q: q, raw: field, spec: spec}, true
+}
+
 // ParseAccept returns media ranges sorted by q (desc) then specificity.
 func ParseAccept(header string) []mediaRange {
 	if header == "" {
@@ -24,32 +54,9 @@ func ParseAccept(header string) []mediaRange {
 
 	var out []mediaRange
 	for _, field := range strings.Split(header, ",") {
-		field = strings.TrimSpace(field)
-		mt, params, err := mime.ParseMediaType(field)
-		if err != nil {
-			log.WithField("error", err.Error()).Debug("Failed to parse header field")
-			continue // skip malformed entry
+		if r, ok := parseMediaRange(field); ok {
+			out = append(out, r)
 		}
-
-		q := 1.0
-		if qs, ok := params["q"]; ok {
-			v, err := strconv.ParseFloat(qs, 64)
-			if err != nil || v < 0 || v > 1 {
-				log.WithField("q", qs).Debug("Invalid quality factor (0-1)")
-				continue // skip invalid q‑values
-			}
-			q = v
-		}
-
-		spec := 2
-		switch {
-		case mt == "*/*":
-			spec = 0
-		case strings.HasSuffix(mt, "/*"):
-			spec = 1
-		}
-
-		out = append(out, mediaRange{mt: mt, q: q, raw: field, spec: spec})
 	}
 
 	sort.SliceStable(out, func(i, j int) bool {
@@ -98,9 +105,23 @@ func Negotiate(header string, serverTypes []string) (string, bool) {
 
 // PrimaryAcceptMatches only checks if the first accept matches
 func PrimaryAcceptMatches(header, produced string) bool {
-	if header == "" {
-		return true
+	if strings.TrimSpace(header) == "" {
+		return true // implicit */*
 	}
-	primary := strings.TrimSpace(strings.SplitN(header, ",", 2)[0])
-	return Matches(primary, produced)
+
+	bestSoFar := -1.0
+	for _, field := range strings.Split(header, ",") {
+		r, ok := parseMediaRange(field)
+		if !ok || r.q == 0 {
+			continue
+		}
+
+		if Matches(r.mt, produced) && r.q > bestSoFar {
+			return true
+		}
+		if r.q > bestSoFar {
+			bestSoFar = r.q
+		}
+	}
+	return false
 }

@@ -116,18 +116,47 @@ func TestNegotiate(t *testing.T) {
 
 func TestPrimaryAcceptMatches(t *testing.T) {
 	tests := []struct {
+		name     string
 		accept   string
 		produced string
 		expect   bool
 	}{
-		{accept: "application/json;q=0.9,application/xml", produced: "application/json", expect: true},
-		{accept: "application/*;q=0.2,*/*;q=0.1", produced: "application/xml", expect: true},
-		{accept: "image/png,application/json", produced: "application/json", expect: false},
-		{accept: "", produced: "text/plain", expect: true}, // header absent ⇒ */*
+		{
+			name:     "prefers json",
+			accept:   "application/json;q=0.9,application/xml",
+			produced: "application/json",
+			expect:   true,
+		},
+		{
+			name:     "wildcard application beats other wildcard",
+			accept:   "application/*;q=0.2,*/*;q=0.1",
+			produced: "application/xml",
+			expect:   true,
+		},
+		{
+			name:     "json wins",
+			accept:   "application/xml;q=0.8,application/json;q=0.9",
+			produced: "application/json",
+			expect:   true,
+		},
+		{
+			name:     "json not primary",
+			accept:   "image/png,application/json",
+			produced: "application/json",
+			expect:   false,
+		},
+		{
+			name:     "absent header",
+			accept:   "",
+			produced: "text/plain",
+			expect:   true,
+		},
 	}
 
 	for _, tc := range tests {
-		got := PrimaryAcceptMatches(tc.accept, tc.produced)
-		require.Equal(t, got, tc.expect)
+		t.Run(tc.name, func(t *testing.T) {
+			got := PrimaryAcceptMatches(tc.accept, tc.produced)
+			require.Equal(t, got, tc.expect)
+		})
 	}
 }
