@@ -726,3 +726,309 @@ func saveInitialFinalizedCheckpointData(t *testing.T, ctx context.Context, beaco
 
 	return finalizedBlockRoot
 }
+
+func TestLightClientStore_LightClientUpdatesByRange(t *testing.T) {
+
+	t.Run("no updates", func(t *testing.T) {
+		d := testDB.SetupDB(t)
+		ctx := context.Background()
+
+		finalizedBlockRoot := saveInitialFinalizedCheckpointData(t, ctx, d)
+		require.NoError(t, d.SaveHeadBlockRoot(ctx, finalizedBlockRoot))
+
+		s := NewLightClientStore(d, &p2pTesting.FakeP2P{}, new(event.Feed))
+		require.NotNil(t, s)
+
+		updates, err := s.LightClientUpdates(ctx, 2, 5)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(updates))
+	})
+
+	t.Run("single update from db", func(t *testing.T) {
+		d := testDB.SetupDB(t)
+		ctx := context.Background()
+
+		finalizedBlockRoot := saveInitialFinalizedCheckpointData(t, ctx, d)
+		require.NoError(t, d.SaveHeadBlockRoot(ctx, finalizedBlockRoot))
+
+		s := NewLightClientStore(d, &p2pTesting.FakeP2P{}, new(event.Feed))
+		require.NotNil(t, s)
+
+		l := util.NewTestLightClient(t, version.Altair)
+		update, err := NewLightClientUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+		require.NoError(t, err)
+
+		require.NoError(t, d.SaveLightClientUpdate(ctx, 3, update))
+
+		updates, err := s.LightClientUpdates(ctx, 3, 3)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(updates))
+		require.DeepEqual(t, update, updates[0], "Expected to find the update in the store")
+	})
+
+	t.Run("multiple updates from db", func(t *testing.T) {
+		d := testDB.SetupDB(t)
+		ctx := context.Background()
+
+		finalizedBlockRoot := saveInitialFinalizedCheckpointData(t, ctx, d)
+		require.NoError(t, d.SaveHeadBlockRoot(ctx, finalizedBlockRoot))
+
+		s := NewLightClientStore(d, &p2pTesting.FakeP2P{}, new(event.Feed))
+		require.NotNil(t, s)
+
+		l := util.NewTestLightClient(t, version.Altair)
+		update, err := NewLightClientUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+		require.NoError(t, err)
+
+		require.NoError(t, d.SaveLightClientUpdate(ctx, 3, update))
+		require.NoError(t, d.SaveLightClientUpdate(ctx, 4, update))
+		require.NoError(t, d.SaveLightClientUpdate(ctx, 5, update))
+
+		updates, err := s.LightClientUpdates(ctx, 3, 5)
+		require.NoError(t, err)
+		require.Equal(t, 3, len(updates))
+		require.DeepEqual(t, update, updates[0], "Expected to find the update in the store")
+		require.DeepEqual(t, update, updates[1], "Expected to find the update in the store")
+		require.DeepEqual(t, update, updates[2], "Expected to find the update in the store")
+	})
+
+	t.Run("single update from cache", func(t *testing.T) {
+		d := testDB.SetupDB(t)
+		ctx := context.Background()
+
+		finalizedBlockRoot := saveInitialFinalizedCheckpointData(t, ctx, d)
+		require.NoError(t, d.SaveHeadBlockRoot(ctx, finalizedBlockRoot))
+
+		s := NewLightClientStore(d, &p2pTesting.FakeP2P{}, new(event.Feed))
+		require.NotNil(t, s)
+
+		l := util.NewTestLightClient(t, version.Altair)
+		update, err := NewLightClientUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+		require.NoError(t, err)
+
+		cacheItem := &lightClientCacheItem{
+			period:     3,
+			bestUpdate: &update,
+		}
+		s.nonFinalityCache.items[[32]byte{3}] = cacheItem
+
+		headRoot := saveStateAndBlockWithParentRoot(t, ctx, d, [32]byte{3})
+		require.NoError(t, d.SaveHeadBlockRoot(ctx, headRoot))
+
+		updates, err := s.LightClientUpdates(ctx, 3, 3)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(updates))
+		require.DeepEqual(t, update, updates[0], "Expected to find the update in the store")
+	})
+
+	t.Run("multiple updates from cache", func(t *testing.T) {
+		d := testDB.SetupDB(t)
+		ctx := context.Background()
+
+		finalizedBlockRoot := saveInitialFinalizedCheckpointData(t, ctx, d)
+		require.NoError(t, d.SaveHeadBlockRoot(ctx, finalizedBlockRoot))
+
+		s := NewLightClientStore(d, &p2pTesting.FakeP2P{}, new(event.Feed))
+		require.NotNil(t, s)
+
+		l := util.NewTestLightClient(t, version.Altair)
+		update, err := NewLightClientUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+		require.NoError(t, err)
+
+		cacheItemP3 := &lightClientCacheItem{
+			period:     3,
+			bestUpdate: &update,
+		}
+		s.nonFinalityCache.items[[32]byte{3}] = cacheItemP3
+
+		cacheItemP4 := &lightClientCacheItem{
+			period:     4,
+			bestUpdate: &update,
+			parent:     cacheItemP3,
+		}
+		s.nonFinalityCache.items[[32]byte{4}] = cacheItemP4
+
+		cacheItemP5 := &lightClientCacheItem{
+			period:     5,
+			bestUpdate: &update,
+			parent:     cacheItemP4,
+		}
+		s.nonFinalityCache.items[[32]byte{5}] = cacheItemP5
+
+		headRoot := saveStateAndBlockWithParentRoot(t, ctx, d, [32]byte{5})
+		require.NoError(t, d.SaveHeadBlockRoot(ctx, headRoot))
+
+		updates, err := s.LightClientUpdates(ctx, 3, 5)
+		require.NoError(t, err)
+		require.Equal(t, 3, len(updates))
+		require.DeepEqual(t, update, updates[0], "Expected to find the update in the store")
+		require.DeepEqual(t, update, updates[1], "Expected to find the update in the store")
+		require.DeepEqual(t, update, updates[2], "Expected to find the update in the store")
+	})
+
+	t.Run("multiple updates from both db and cache - no overlap", func(t *testing.T) {
+		d := testDB.SetupDB(t)
+		ctx := context.Background()
+
+		finalizedBlockRoot := saveInitialFinalizedCheckpointData(t, ctx, d)
+		require.NoError(t, d.SaveHeadBlockRoot(ctx, finalizedBlockRoot))
+
+		s := NewLightClientStore(d, &p2pTesting.FakeP2P{}, new(event.Feed))
+		require.NotNil(t, s)
+
+		l := util.NewTestLightClient(t, version.Altair)
+		update, err := NewLightClientUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+		require.NoError(t, err)
+
+		require.NoError(t, d.SaveLightClientUpdate(ctx, 1, update))
+		require.NoError(t, d.SaveLightClientUpdate(ctx, 2, update))
+
+		cacheItemP3 := &lightClientCacheItem{
+			period:     3,
+			bestUpdate: &update,
+		}
+		s.nonFinalityCache.items[[32]byte{3}] = cacheItemP3
+
+		cacheItemP4 := &lightClientCacheItem{
+			period:     4,
+			bestUpdate: &update,
+			parent:     cacheItemP3,
+		}
+		s.nonFinalityCache.items[[32]byte{4}] = cacheItemP4
+
+		cacheItemP5 := &lightClientCacheItem{
+			period:     5,
+			bestUpdate: &update,
+			parent:     cacheItemP4,
+		}
+		s.nonFinalityCache.items[[32]byte{5}] = cacheItemP5
+
+		headRoot := saveStateAndBlockWithParentRoot(t, ctx, d, [32]byte{5})
+		require.NoError(t, d.SaveHeadBlockRoot(ctx, headRoot))
+
+		updates, err := s.LightClientUpdates(ctx, 1, 5)
+		require.NoError(t, err)
+		require.Equal(t, 5, len(updates))
+		for i := 0; i < 5; i++ {
+			require.DeepEqual(t, update, updates[i], "Expected to find the update in the store")
+		}
+	})
+
+	t.Run("multiple updates from both db and cache - overlap", func(t *testing.T) {
+		d := testDB.SetupDB(t)
+		ctx := context.Background()
+
+		finalizedBlockRoot := saveInitialFinalizedCheckpointData(t, ctx, d)
+		require.NoError(t, d.SaveHeadBlockRoot(ctx, finalizedBlockRoot))
+
+		s := NewLightClientStore(d, &p2pTesting.FakeP2P{}, new(event.Feed))
+		require.NotNil(t, s)
+
+		l1 := util.NewTestLightClient(t, version.Altair)
+		update1, err := NewLightClientUpdateFromBeaconState(l1.Ctx, l1.State, l1.Block, l1.AttestedState, l1.AttestedBlock, l1.FinalizedBlock)
+		require.NoError(t, err)
+
+		l2 := util.NewTestLightClient(t, version.Altair, util.WithIncreasedAttestedSlot(1))
+		update2, err := NewLightClientUpdateFromBeaconState(l2.Ctx, l2.State, l2.Block, l2.AttestedState, l2.AttestedBlock, l2.FinalizedBlock)
+		require.NoError(t, err)
+
+		require.DeepNotEqual(t, update1, update2)
+
+		require.NoError(t, d.SaveLightClientUpdate(ctx, 1, update1))
+		require.NoError(t, d.SaveLightClientUpdate(ctx, 2, update1))
+		require.NoError(t, d.SaveLightClientUpdate(ctx, 3, update1))
+		require.NoError(t, d.SaveLightClientUpdate(ctx, 4, update1))
+
+		cacheItemP3 := &lightClientCacheItem{
+			period:     3,
+			bestUpdate: &update2,
+		}
+		s.nonFinalityCache.items[[32]byte{3}] = cacheItemP3
+
+		cacheItemP4 := &lightClientCacheItem{
+			period:     4,
+			bestUpdate: &update2,
+			parent:     cacheItemP3,
+		}
+		s.nonFinalityCache.items[[32]byte{4}] = cacheItemP4
+
+		cacheItemP5 := &lightClientCacheItem{
+			period:     5,
+			bestUpdate: &update2,
+			parent:     cacheItemP4,
+		}
+		s.nonFinalityCache.items[[32]byte{5}] = cacheItemP5
+
+		headRoot := saveStateAndBlockWithParentRoot(t, ctx, d, [32]byte{5})
+		require.NoError(t, d.SaveHeadBlockRoot(ctx, headRoot))
+
+		updates, err := s.LightClientUpdates(ctx, 1, 5)
+		require.NoError(t, err)
+		require.Equal(t, 5, len(updates))
+		// first two updates should be update1
+		for i := 0; i < 2; i++ {
+			require.DeepEqual(t, update1, updates[i], "Expected to find the update in the store")
+		}
+		// next three updates should be update2 - as cache overrides db
+		for i := 2; i < 5; i++ {
+			require.DeepEqual(t, update2, updates[i], "Expected to find the update in the store")
+		}
+	})
+
+	t.Run("first continuous range", func(t *testing.T) {
+		d := testDB.SetupDB(t)
+		ctx := context.Background()
+
+		finalizedBlockRoot := saveInitialFinalizedCheckpointData(t, ctx, d)
+		require.NoError(t, d.SaveHeadBlockRoot(ctx, finalizedBlockRoot))
+
+		s := NewLightClientStore(d, &p2pTesting.FakeP2P{}, new(event.Feed))
+		require.NotNil(t, s)
+
+		l1 := util.NewTestLightClient(t, version.Altair)
+		update, err := NewLightClientUpdateFromBeaconState(l1.Ctx, l1.State, l1.Block, l1.AttestedState, l1.AttestedBlock, l1.FinalizedBlock)
+		require.NoError(t, err)
+
+		require.NoError(t, d.SaveLightClientUpdate(ctx, 1, update))
+		require.NoError(t, d.SaveLightClientUpdate(ctx, 2, update))
+
+		cacheItemP4 := &lightClientCacheItem{
+			period:     4,
+			bestUpdate: &update,
+		}
+		s.nonFinalityCache.items[[32]byte{4}] = cacheItemP4
+
+		cacheItemP5 := &lightClientCacheItem{
+			period:     5,
+			bestUpdate: &update,
+			parent:     cacheItemP4,
+		}
+		s.nonFinalityCache.items[[32]byte{5}] = cacheItemP5
+
+		headRoot := saveStateAndBlockWithParentRoot(t, ctx, d, [32]byte{5})
+		require.NoError(t, d.SaveHeadBlockRoot(ctx, headRoot))
+
+		updates, err := s.LightClientUpdates(ctx, 1, 5)
+		require.NoError(t, err)
+		require.Equal(t, 2, len(updates))
+		require.DeepEqual(t, update, updates[0], "Expected to find the update in the store")
+		require.DeepEqual(t, update, updates[1], "Expected to find the update in the store")
+	})
+
+}
+
+func saveStateAndBlockWithParentRoot(t *testing.T, ctx context.Context, d db.Database, parentRoot [32]byte) [32]byte {
+	blk := util.NewBeaconBlock()
+	blk.Block.ParentRoot = parentRoot[:]
+
+	blkRoot, err := blk.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	util.SaveBlock(t, ctx, d, blk)
+
+	st, err := util.NewBeaconState()
+	require.NoError(t, err)
+	require.NoError(t, d.SaveState(ctx, st, blkRoot))
+
+	return blkRoot
+}

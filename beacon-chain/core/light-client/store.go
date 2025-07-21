@@ -215,7 +215,17 @@ func (s *Store) LightClientUpdates(ctx context.Context, startPeriod, endPeriod u
 		return nil, err
 	}
 
+	cacheUpdatesByPeriod, err := s.getCacheUpdatesByPeriod(ctx)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to get updates from cache")
+	}
+
+	for period, update := range cacheUpdatesByPeriod {
+		updatesMap[period] = update
+	}
+
 	var updates []interfaces.LightClientUpdate
+
 	for i := startPeriod; i <= endPeriod; i++ {
 		update, ok := updatesMap[i]
 		if !ok {
@@ -229,16 +239,61 @@ func (s *Store) LightClientUpdates(ctx context.Context, startPeriod, endPeriod u
 }
 
 func (s *Store) LightClientUpdate(ctx context.Context, period uint64) (interfaces.LightClientUpdate, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	// Fetch the light client update for the given period from the database
-	update, err := s.beaconDB.LightClientUpdate(ctx, period)
+	// we don't need to lock here because the LightClientUpdates method locks the store
+	updates, err := s.LightClientUpdates(ctx, period, period)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "failed to get light client update for period %d", period)
+	}
+	if len(updates) == 0 {
+		return nil, nil
+	}
+	return updates[0], nil
+}
+
+func (s *Store) getCacheUpdatesByPeriod(ctx context.Context) (map[uint64]interfaces.LightClientUpdate, error) {
+	updatesByPeriod := make(map[uint64]interfaces.LightClientUpdate)
+
+	headBlock, err := s.beaconDB.HeadBlock(ctx)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to get head block from database")
+	}
+	if headBlock == nil {
+		return nil, errors.New("head block not found in database")
 	}
 
-	return update, nil
+	headRoot := headBlock.Block().ParentRoot()
+
+	var headItem *lightClientCacheItem
+	var ok bool
+
+	for {
+		if headRoot == s.nonFinalityCache.tail || headRoot == [32]byte{} {
+			return updatesByPeriod, nil
+		}
+
+		headItem, ok = s.nonFinalityCache.items[headRoot]
+		if ok {
+			break
+		} else {
+			blk, err := s.beaconDB.Block(ctx, headRoot)
+			if err != nil {
+				return nil, errors.Wrapf(err, "failed to fetch block for root %x", headRoot)
+			}
+			if blk == nil {
+				return nil, errors.Errorf("failed to fetch block for root %x", headRoot)
+			}
+			headRoot = blk.Block().ParentRoot()
+		}
+	}
+
+	for headItem != nil {
+		if _, exists := updatesByPeriod[headItem.period]; !exists {
+			updatesByPeriod[headItem.period] = *headItem.bestUpdate
+		}
+		headItem = headItem.parent
+	}
+
+	return updatesByPeriod, nil
 }
 
 func (s *Store) SaveLightClientUpdate(ctx context.Context, period uint64, update interfaces.LightClientUpdate) error {
