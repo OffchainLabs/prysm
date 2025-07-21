@@ -357,17 +357,15 @@ func Unique[T comparable](a []T) []T {
 	if len(a) <= 1 {
 		return a
 	}
-	found := map[T]bool{}
-	result := make([]T, len(a))
-	end := 0
-	for i := range a {
-		if !found[a[i]] {
-			found[a[i]] = true
-			result[end] = a[i]
-			end += 1
+	found := make(map[T]bool, len(a))
+	result := make([]T, 0, len(a))
+	for _, v := range a {
+		if !found[v] {
+			found[v] = true
+			result = append(result, v)
 		}
 	}
-	return result[:end]
+	return result
 }
 
 // Reverse reverses any slice in place
