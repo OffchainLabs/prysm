@@ -96,7 +96,7 @@ func Negotiate(header string, serverTypes []string) (string, bool) {
 	return "", false
 }
 
-// PrimaryAcceptMatches only checks the first accept maches
+// PrimaryAcceptMatches only checks if the first accept matches
 func PrimaryAcceptMatches(header, produced string) bool {
 	if header == "" {
 		return true
