@@ -143,7 +143,19 @@ type EngineCaller interface {
 	GetTerminalBlockHash(ctx context.Context, transitionTime uint64) ([]byte, bool, error)
 }
 
+// DataAvailabilityChecker defines an interface for checking if data is available
+// for a given block root.
+type DataAvailabilityChecker interface {
+	IsDataAvailable(ctx context.Context, blockRoot [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) (bool, error)
+}
+
 var ErrEmptyBlockHash = errors.New("Block hash is empty 0x0000...")
+
+// reconstructResult holds the result and error from a reconstruction call
+type reconstructResult struct {
+	result []blocks.VerifiedRODataColumn
+	err    error
+}
 
 // NewPayload request calls the engine_newPayloadVX method via JSON-RPC.
 func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error) {
@@ -659,7 +671,60 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 // ReconstructDataColumnSidecars reconstructs the verified data column sidecars for a given beacon block.
 // It retrieves the KZG commitments from the block body, fetches the associated blobs and cell proofs from the EL,
 // and constructs the corresponding verified read-only data column sidecars.
+// This method includes retry logic for getBlobsV2 calls and prevents duplicate concurrent calls.
 func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, signedROBlock interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte) ([]blocks.VerifiedRODataColumn, error) {
+	// Check if there's already an in-flight reconstruction call for this block
+	if resultChanInterface, exists := s.activeReconstructCalls.Load(blockRoot); exists {
+		resultChan := resultChanInterface.(chan reconstructResult)
+		// Wait for the in-flight call to complete and return its result
+		select {
+		case result := <-resultChan:
+			return result.result, result.err
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+
+	// Create a result channel for this reconstruction call
+	resultChan := make(chan reconstructResult, 1)
+	
+	// Try to claim this reconstruction call
+	if existingChanInterface, loaded := s.activeReconstructCalls.LoadOrStore(blockRoot, resultChan); loaded {
+		existingChan := existingChanInterface.(chan reconstructResult)
+		// Another goroutine claimed it, wait for that result
+		select {
+		case result := <-existingChan:
+			return result.result, result.err
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+
+	// We claimed the reconstruction call, ensure cleanup
+	defer s.activeReconstructCalls.Delete(blockRoot)
+	defer close(resultChan)
+
+	// Perform the actual reconstruction
+	result, err := s.reconstructDataColumnSidecarsOnce(ctx, signedROBlock, blockRoot)
+
+	// Notify all waiters of the result (including the error)
+	resultChan <- reconstructResult{result: result, err: err}
+
+	// Only start retry if we need more data and don't have an active retry
+	if (err != nil || len(result) == 0) && !s.hasActiveRetry(blockRoot) {
+		// Check if we already have all required data
+		if !s.isDataAlreadyAvailable(ctx, blockRoot, signedROBlock) {
+			// Start background retry goroutine
+			go s.retryReconstructDataColumnSidecars(ctx, signedROBlock, blockRoot)
+		}
+	}
+
+	return result, err
+}
+
+// reconstructDataColumnSidecarsOnce performs a single attempt to reconstruct data column sidecars.
+// This is the original ReconstructDataColumnSidecars logic extracted for reuse in retry logic.
+func (s *Service) reconstructDataColumnSidecarsOnce(ctx context.Context, signedROBlock interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte) ([]blocks.VerifiedRODataColumn, error) {
 	block := signedROBlock.Block()
 
 	log := log.WithFields(logrus.Fields{
@@ -1011,6 +1076,74 @@ func toBlockNumArg(number *big.Int) string {
 		return "safe"
 	}
 	return hexutil.EncodeBig(number)
+}
+
+// retryReconstructDataColumnSidecars performs periodic retry attempts for getBlobsV2.
+func (s *Service) retryReconstructDataColumnSidecars(ctx context.Context, signedROBlock interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte) {
+	retryCtx, cancel := context.WithTimeout(ctx, 12*time.Second) // 1 slot timeout
+	defer cancel()
+
+	// Track active retry
+	s.activeRetries.Store(blockRoot, cancel)
+	defer s.activeRetries.Delete(blockRoot)
+
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+
+	attemptCount := 0
+	startTime := time.Now()
+	log := log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot))
+
+	for {
+		select {
+		case <-ticker.C:
+			attemptCount++
+
+			// Check if data is now available from any source
+			if s.isDataAlreadyAvailable(retryCtx, blockRoot, signedROBlock) {
+				log.WithField("attempts", attemptCount).Debug("Data became available, stopping getBlobsV2 retry")
+				getBlobsRetryAttempts.WithLabelValues("data_available").Inc()
+				getBlobsRetryDuration.WithLabelValues("data_available").Observe(time.Since(startTime).Seconds())
+				return
+			}
+
+			// Retry getBlobsV2
+			log.WithField("attempt", attemptCount).Debug("Retrying getBlobsV2")
+			if result, err := s.reconstructDataColumnSidecarsOnce(retryCtx, signedROBlock, blockRoot); err == nil && len(result) > 0 {
+				log.WithField("attempts", attemptCount).Debug("getBlobsV2 retry succeeded")
+				getBlobsRetryAttempts.WithLabelValues("success").Inc()
+				getBlobsRetryDuration.WithLabelValues("success").Observe(time.Since(startTime).Seconds())
+				return
+			}
+
+		case <-retryCtx.Done():
+			log.WithField("attempts", attemptCount).Debug("getBlobsV2 retry timeout")
+			getBlobsRetryAttempts.WithLabelValues("timeout").Inc()
+			getBlobsRetryDuration.WithLabelValues("timeout").Observe(time.Since(startTime).Seconds())
+			return
+		}
+	}
+}
+
+// hasActiveRetry checks if there's an active retry for the given block root.
+func (s *Service) hasActiveRetry(blockRoot [fieldparams.RootLength]byte) bool {
+	_, exists := s.activeRetries.Load(blockRoot)
+	return exists
+}
+
+// isDataAlreadyAvailable checks if all required data is already available for the given block.
+func (s *Service) isDataAlreadyAvailable(ctx context.Context, blockRoot [fieldparams.RootLength]byte, signedROBlock interfaces.ReadOnlySignedBeaconBlock) bool {
+	if s.availabilityChecker == nil {
+		return false
+	}
+
+	available, err := s.availabilityChecker.IsDataAvailable(ctx, blockRoot, signedROBlock)
+	if err != nil {
+		log.WithError(err).Debug("Error checking data availability")
+		return false
+	}
+
+	return available
 }
 
 // wrapWithBlockRoot returns a new error with the given block root.
