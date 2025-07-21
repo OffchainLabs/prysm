@@ -788,6 +788,9 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		return err
 	}
 
+	// Set the blockchain service as the data availability checker for getBlobsV2 retries
+	web3Service.SetDataAvailabilityChecker(chainService)
+
 	var initSync *initialsync.Service
 	if err := b.services.FetchService(&initSync); err != nil {
 		return err

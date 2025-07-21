@@ -162,6 +162,9 @@ type Service struct {
 	verifierWaiter          *verification.InitializerWaiter
 	blobVerifier            verification.NewBlobVerifier
 	capabilityCache         *capabilityCache
+	activeRetries           sync.Map // map[blockRoot]context.CancelFunc for tracking active retries
+	activeReconstructCalls  sync.Map // map[blockRoot]chan reconstructResult for tracking in-flight reconstruction calls
+	availabilityChecker     DataAvailabilityChecker
 }
 
 // NewService sets up a new instance with an ethclient when given a web3 endpoint as a string in the config.
@@ -261,6 +264,12 @@ func (s *Service) Stop() error {
 		s.rpcClient.Close()
 	}
 	return nil
+}
+
+// SetDataAvailabilityChecker sets the data availability checker after service creation.
+// This allows the checker to be set after the blockchain service is available.
+func (s *Service) SetDataAvailabilityChecker(checker DataAvailabilityChecker) {
+	s.availabilityChecker = checker
 }
 
 // ClearPreGenesisData clears out the stored chainstart deposits and beacon state.
