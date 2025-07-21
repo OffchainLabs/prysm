@@ -3179,14 +3179,7 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 					lOld, cfgOld := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.oldOptions...)
 					require.NoError(t, s.processLightClientOptimisticUpdate(cfgOld.ctx, cfgOld.roblock, cfgOld.postState))
 
-					oldActualUpdate, err = lightClient.NewLightClientOptimisticUpdateFromBeaconState(
-						lOld.Ctx,
-						lOld.State.Slot(),
-						lOld.State,
-						lOld.Block,
-						lOld.AttestedState,
-						lOld.AttestedBlock,
-					)
+					oldActualUpdate, err = lightClient.NewLightClientOptimisticUpdateFromBeaconState(lOld.Ctx, lOld.State, lOld.Block, lOld.AttestedState, lOld.AttestedBlock)
 					require.NoError(t, err)
 
 					// check that the old update is saved
@@ -3200,14 +3193,7 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 				lNew, cfgNew := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.newOptions...)
 				require.NoError(t, s.processLightClientOptimisticUpdate(cfgNew.ctx, cfgNew.roblock, cfgNew.postState))
 
-				newActualUpdate, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(
-					lNew.Ctx,
-					lNew.State.Slot(),
-					lNew.State,
-					lNew.Block,
-					lNew.AttestedState,
-					lNew.AttestedBlock,
-				)
+				newActualUpdate, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(lNew.Ctx, lNew.State, lNew.Block, lNew.AttestedState, lNew.AttestedBlock)
 				require.NoError(t, err)
 
 				require.DeepNotEqual(t, newActualUpdate, oldActualUpdate, "new update should not be equal to old update")
@@ -3335,15 +3321,7 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 					require.NoError(t, s.processLightClientFinalityUpdate(cfgOld.ctx, cfgOld.roblock, cfgOld.postState))
 
 					// check that the old update is saved
-					actualOldUpdate, err = lightClient.NewLightClientFinalityUpdateFromBeaconState(
-						ctx,
-						cfgOld.postState.Slot(),
-						cfgOld.postState,
-						cfgOld.roblock,
-						lOld.AttestedState,
-						lOld.AttestedBlock,
-						lOld.FinalizedBlock,
-					)
+					actualOldUpdate, err = lightClient.NewLightClientFinalityUpdateFromBeaconState(ctx, cfgOld.postState, cfgOld.roblock, lOld.AttestedState, lOld.AttestedBlock, lOld.FinalizedBlock)
 					require.NoError(t, err)
 					oldUpdate := s.lcStore.LastFinalityUpdate()
 					require.DeepEqual(t, actualOldUpdate, oldUpdate)
@@ -3354,15 +3332,7 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 				require.NoError(t, s.processLightClientFinalityUpdate(cfgNew.ctx, cfgNew.roblock, cfgNew.postState))
 
 				// check that the actual old update and the actual new update are different
-				actualNewUpdate, err = lightClient.NewLightClientFinalityUpdateFromBeaconState(
-					ctx,
-					cfgNew.postState.Slot(),
-					cfgNew.postState,
-					cfgNew.roblock,
-					lNew.AttestedState,
-					lNew.AttestedBlock,
-					lNew.FinalizedBlock,
-				)
+				actualNewUpdate, err = lightClient.NewLightClientFinalityUpdateFromBeaconState(ctx, cfgNew.postState, cfgNew.roblock, lNew.AttestedState, lNew.AttestedBlock, lNew.FinalizedBlock)
 				require.NoError(t, err)
 				require.DeepNotEqual(t, actualOldUpdate, actualNewUpdate)
 

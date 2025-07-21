@@ -26,14 +26,12 @@ const ErrNotEnoughSyncCommitteeBits = "sync committee bits count is less than re
 
 func NewLightClientFinalityUpdateFromBeaconState(
 	ctx context.Context,
-	currentSlot primitives.Slot,
 	state state.BeaconState,
 	block interfaces.ReadOnlySignedBeaconBlock,
 	attestedState state.BeaconState,
 	attestedBlock interfaces.ReadOnlySignedBeaconBlock,
-	finalizedBlock interfaces.ReadOnlySignedBeaconBlock,
-) (interfaces.LightClientFinalityUpdate, error) {
-	update, err := NewLightClientUpdateFromBeaconState(ctx, currentSlot, state, block, attestedState, attestedBlock, finalizedBlock)
+	finalizedBlock interfaces.ReadOnlySignedBeaconBlock) (interfaces.LightClientFinalityUpdate, error) {
+	update, err := NewLightClientUpdateFromBeaconState(ctx, state, block, attestedState, attestedBlock, finalizedBlock)
 	if err != nil {
 		return nil, err
 	}
@@ -43,13 +41,11 @@ func NewLightClientFinalityUpdateFromBeaconState(
 
 func NewLightClientOptimisticUpdateFromBeaconState(
 	ctx context.Context,
-	currentSlot primitives.Slot,
 	state state.BeaconState,
 	block interfaces.ReadOnlySignedBeaconBlock,
 	attestedState state.BeaconState,
-	attestedBlock interfaces.ReadOnlySignedBeaconBlock,
-) (interfaces.LightClientOptimisticUpdate, error) {
-	update, err := NewLightClientUpdateFromBeaconState(ctx, currentSlot, state, block, attestedState, attestedBlock, nil)
+	attestedBlock interfaces.ReadOnlySignedBeaconBlock) (interfaces.LightClientOptimisticUpdate, error) {
+	update, err := NewLightClientUpdateFromBeaconState(ctx, state, block, attestedState, attestedBlock, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +62,6 @@ func NewLightClientOptimisticUpdateFromBeaconState(
 //     if locally available (may be unavailable, e.g., when using checkpoint sync, or if it was pruned locally)
 func NewLightClientUpdateFromBeaconState(
 	ctx context.Context,
-	currentSlot primitives.Slot,
 	state state.BeaconState,
 	block interfaces.ReadOnlySignedBeaconBlock,
 	attestedState state.BeaconState,
@@ -520,9 +515,9 @@ func ComputeWithdrawalsRoot(payload interfaces.ExecutionData) ([]byte, error) {
 
 func BlockToLightClientHeader(
 	ctx context.Context,
-	attestedBlockVersion int, // this is the version that the light client header should be in, based on the attested block.
+	attestedBlockVersion int,                   // this is the version that the light client header should be in, based on the attested block.
 	block interfaces.ReadOnlySignedBeaconBlock, // this block is either the attested block, or the finalized block.
-	// in case of the latter, we might need to upgrade it to the attested block's version.
+// in case of the latter, we might need to upgrade it to the attested block's version.
 ) (interfaces.LightClientHeader, error) {
 	if block.Version() > attestedBlockVersion {
 		return nil, errors.Errorf("block version %s is greater than attested block version %s", version.String(block.Version()), version.String(attestedBlockVersion))
@@ -778,7 +773,7 @@ func IsBetterFinalityUpdate(newUpdate, oldUpdate interfaces.LightClientFinalityU
 	return true
 }
 
-func IsBetterOptimisticUpdate(newUpdate interfaces.LightClientOptimisticUpdate, oldUpdate interfaces.LightClientOptimisticUpdate) bool {
+func IsBetterOptimisticUpdate(newUpdate, oldUpdate interfaces.LightClientOptimisticUpdate) bool {
 	if oldUpdate == nil {
 		return true
 	}

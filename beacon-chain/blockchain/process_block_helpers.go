@@ -171,15 +171,7 @@ func (s *Service) processLightClientUpdate(cfg *postBlockProcessConfig) error {
 		return errors.Wrapf(err, "could not get finalized block for root %#x", finalizedRoot)
 	}
 
-	update, err := lightclient.NewLightClientUpdateFromBeaconState(
-		cfg.ctx,
-		s.CurrentSlot(),
-		cfg.postState,
-		cfg.roblock,
-		attestedState,
-		attestedBlock,
-		finalizedBlock,
-	)
+	update, err := lightclient.NewLightClientUpdateFromBeaconState(cfg.ctx, cfg.postState, cfg.roblock, attestedState, attestedBlock, finalizedBlock)
 	if err != nil {
 		return errors.Wrapf(err, "could not create light client update")
 	}
@@ -221,15 +213,7 @@ func (s *Service) processLightClientFinalityUpdate(
 		return errors.Wrapf(err, "could not get finalized block for root %#x", finalizedRoot)
 	}
 
-	newUpdate, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(
-		ctx,
-		postState.Slot(),
-		postState,
-		signed,
-		attestedState,
-		attestedBlock,
-		finalizedBlock,
-	)
+	newUpdate, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(ctx, postState, signed, attestedState, attestedBlock, finalizedBlock)
 
 	if err != nil {
 		return errors.Wrap(err, "could not create light client finality update")
@@ -267,14 +251,7 @@ func (s *Service) processLightClientOptimisticUpdate(ctx context.Context, signed
 		return errors.Wrapf(err, "could not get attested state for root %#x", attestedRoot)
 	}
 
-	newUpdate, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(
-		ctx,
-		postState.Slot(),
-		postState,
-		signed,
-		attestedState,
-		attestedBlock,
-	)
+	newUpdate, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(ctx, postState, signed, attestedState, attestedBlock)
 
 	if err != nil {
 		if strings.Contains(err.Error(), lightclient.ErrNotEnoughSyncCommitteeBits) {
