@@ -61,7 +61,7 @@ func ParseAccept(header string) []mediaRange {
 	return out
 }
 
-// Matches reports whether ct is acceptable per the header.
+// Matches reports whether content type is acceptable per the header.
 func Matches(header, ct string) bool {
 	for _, r := range ParseAccept(header) {
 		switch {
