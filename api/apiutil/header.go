@@ -25,31 +25,34 @@ func parseMediaRange(field string) (mediaRange, bool) {
 		return mediaRange{}, false
 	}
 
-	q := 1.0
+	r := mediaRange{mt: mt, q: 1, spec: 2, raw: field}
+
 	if qs, ok := params["q"]; ok {
 		v, err := strconv.ParseFloat(qs, 64)
 		if err != nil || v < 0 || v > 1 {
-			log.WithField("q", qs).Debug("Invalid quality factor (0-1)")
-			return mediaRange{}, false
+			log.WithField("q", qs).Debug("Invalid quality factor (0‑1)")
+			return mediaRange{}, false // skip invalid entry
 		}
-		q = v
+		r.q = v
 	}
 
-	spec := 2
 	switch {
 	case mt == "*/*":
-		spec = 0
+		r.spec = 0
 	case strings.HasSuffix(mt, "/*"):
-		spec = 1
+		r.spec = 1
 	}
+	return r, true
+}
 
-	return mediaRange{mt: mt, q: q, raw: field, spec: spec}, true
+func hasExplicitQ(r mediaRange) bool {
+	return strings.Contains(strings.ToLower(r.raw), ";q=")
 }
 
 // ParseAccept returns media ranges sorted by q (desc) then specificity.
 func ParseAccept(header string) []mediaRange {
 	if header == "" {
-		return []mediaRange{{mt: "*/*", q: 1, spec: 0}}
+		return []mediaRange{{mt: "*/*", q: 1, spec: 0, raw: "*/*"}}
 	}
 
 	var out []mediaRange
@@ -60,10 +63,14 @@ func ParseAccept(header string) []mediaRange {
 	}
 
 	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].q == out[j].q {
-			return out[i].spec > out[j].spec
+		ei, ej := hasExplicitQ(out[i]), hasExplicitQ(out[j])
+		if ei != ej {
+			return ei // explicit beats implicit
 		}
-		return out[i].q > out[j].q
+		if out[i].q != out[j].q {
+			return out[i].q > out[j].q
+		}
+		return out[i].spec > out[j].spec
 	})
 	return out
 }
@@ -105,23 +112,11 @@ func Negotiate(header string, serverTypes []string) (string, bool) {
 
 // PrimaryAcceptMatches only checks if the first accept matches
 func PrimaryAcceptMatches(header, produced string) bool {
-	if strings.TrimSpace(header) == "" {
-		return true // implicit */*
-	}
-
-	bestSoFar := -1.0
-	for _, field := range strings.Split(header, ",") {
-		r, ok := parseMediaRange(field)
-		if !ok || r.q == 0 {
-			continue
+	for _, r := range ParseAccept(header) {
+		if r.q == 0 {
+			continue // explicitly unacceptable – skip
 		}
-
-		if Matches(r.mt, produced) && r.q > bestSoFar {
-			return true
-		}
-		if r.q > bestSoFar {
-			bestSoFar = r.q
-		}
+		return Matches(r.mt, produced)
 	}
 	return false
 }

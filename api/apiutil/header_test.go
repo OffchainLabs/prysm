@@ -140,6 +140,12 @@ func TestPrimaryAcceptMatches(t *testing.T) {
 			expect:   true,
 		},
 		{
+			name:     "json loses",
+			accept:   "application/xml;q=0.8,application/json;q=0.9,application/octet-stream;q=0.99",
+			produced: "application/json",
+			expect:   false,
+		},
+		{
 			name:     "json not primary",
 			accept:   "image/png,application/json",
 			produced: "application/json",
