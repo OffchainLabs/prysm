@@ -146,6 +146,12 @@ func TestPrimaryAcceptMatches(t *testing.T) {
 			expect:   false,
 		},
 		{
+			name:     "json wins with non q option",
+			accept:   "application/xml;q=0.8,image/png,application/json;q=0.9",
+			produced: "application/json",
+			expect:   true,
+		},
+		{
 			name:     "json not primary",
 			accept:   "image/png,application/json",
 			produced: "application/json",
