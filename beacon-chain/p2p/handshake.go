@@ -238,7 +238,10 @@ func (s *Service) AddDisconnectionHandler(handler func(ctx context.Context, id p
 
 				s.peers.SetConnectionState(peerID, peers.Disconnected)
 				if err := s.peerDisconnectionTime.Add(peerID.String(), time.Now(), cache.DefaultExpiration); err != nil {
-					log.WithError(err).Error("Failed to set peer disconnection time")
+					// The `DisconnectedF` funcition already called for this peer less than `cache.DefaultExpiration` ago. Skip.
+					// (Very probably a bug in libp2p.)
+					log.WithError(err).Trace("Failed to set peer disconnection time")
+					return
 				}
 
 				// Only log disconnections if we were fully connected.
