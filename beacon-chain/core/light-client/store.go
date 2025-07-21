@@ -24,13 +24,20 @@ type Store struct {
 	lastOptimisticUpdate interfaces.LightClientOptimisticUpdate // tracks the best optimistic update seen so far
 	p2p                  p2p.Accessor
 	stateFeed            event.SubscriberSender
+	nonFinalityCache     *lightClientCache
 }
 
 func NewLightClientStore(db iface.HeadAccessDatabase, p p2p.Accessor, e event.SubscriberSender) *Store {
+	cp, err := db.FinalizedCheckpoint(context.Background())
+	if err != nil {
+		log.WithError(err).Fatal("Failed to get finalized checkpoint from database")
+		return nil
+	}
 	return &Store{
-		beaconDB:  db,
-		p2p:       p,
-		stateFeed: e,
+		beaconDB:         db,
+		p2p:              p,
+		stateFeed:        e,
+		nonFinalityCache: newLightClientCache([32]byte(cp.Root)),
 	}
 }
 

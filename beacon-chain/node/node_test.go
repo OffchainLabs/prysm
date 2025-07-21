@@ -74,7 +74,9 @@ func TestNodeStart_Ok(t *testing.T) {
 	set := flag.NewFlagSet("test", 0)
 	set.String("datadir", tmp, "node data directory")
 	set.String("suggested-fee-recipient", "0x6e35733c5af9B61374A128e6F85f553aF09ff89A", "fee recipient")
+	set.Bool("enable-light-client", true, "enable light client")
 	require.NoError(t, set.Set("suggested-fee-recipient", "0x6e35733c5af9B61374A128e6F85f553aF09ff89A"))
+	require.NoError(t, set.Set("enable-light-client", "true"))
 
 	ctx, cancel := newCliContextWithCancel(&app, set)
 
@@ -88,6 +90,7 @@ func TestNodeStart_Ok(t *testing.T) {
 
 	node, err := New(ctx, cancel, options...)
 	require.NoError(t, err)
+	require.NotNil(t, node.lcStore)
 	node.services = &runtime.ServiceRegistry{}
 	go func() {
 		node.Start()
