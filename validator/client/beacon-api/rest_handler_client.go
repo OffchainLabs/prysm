@@ -120,7 +120,7 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 	if !apiutil.PrimaryAcceptMatches(req.Header.Get("Accept"), contentType) {
 		log.WithFields(logrus.Fields{
 			"Accept":             req.Header.Get("Accept"),
-			"receivedAcceptType": contentType,
+			"Content-Type": contentType,
 		}).Debug("Server responded with non primary accept type")
 	}
 
