@@ -81,7 +81,7 @@ func TestRPC_LightClientBootstrap(t *testing.T) {
 			blockRoot, err := l.Block.Block().HashTreeRoot()
 			require.NoError(t, err)
 
-			require.NoError(t, r.lcStore.SaveLightClientBootstrap(ctx, blockRoot, bootstrap))
+			require.NoError(t, r.cfg.beaconDB.SaveLightClientBootstrap(ctx, blockRoot[:], bootstrap))
 
 			var wg sync.WaitGroup
 			wg.Add(1)
@@ -199,7 +199,7 @@ func TestRPC_LightClientOptimisticUpdate(t *testing.T) {
 		t.Run(version.String(i), func(t *testing.T) {
 			l := util.NewTestLightClient(t, i)
 
-			update, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
+			update, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock)
 			require.NoError(t, err)
 
 			r.lcStore.SetLastOptimisticUpdate(update)
@@ -319,7 +319,7 @@ func TestRPC_LightClientFinalityUpdate(t *testing.T) {
 		t.Run(version.String(i), func(t *testing.T) {
 			l := util.NewTestLightClient(t, i)
 
-			update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+			update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 			require.NoError(t, err)
 
 			r.lcStore.SetLastFinalityUpdate(update)
@@ -439,7 +439,7 @@ func TestRPC_LightClientUpdatesByRange(t *testing.T) {
 		t.Run(version.String(i), func(t *testing.T) {
 			for j := 0; j < 5; j++ {
 				l := util.NewTestLightClient(t, i, util.WithIncreasedAttestedSlot(uint64(j)))
-				update, err := lightClient.NewLightClientUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+				update, err := lightClient.NewLightClientUpdateFromBeaconState(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 				require.NoError(t, err)
 				require.NoError(t, r.cfg.beaconDB.SaveLightClientUpdate(ctx, uint64(j), update))
 			}

@@ -224,7 +224,7 @@ func (p *TestP2P) BroadcastLightClientFinalityUpdate(_ context.Context, _ interf
 }
 
 // BroadcastDataColumn broadcasts a data column for mock.
-func (p *TestP2P) BroadcastDataColumn([fieldparams.RootLength]byte, uint64, *ethpb.DataColumnSidecar, ...chan<- bool) error {
+func (p *TestP2P) BroadcastDataColumn([fieldparams.RootLength]byte, uint64, *ethpb.DataColumnSidecar) error {
 	p.BroadcastCalled.Store(true)
 	return nil
 }
@@ -408,9 +408,9 @@ func (p *TestP2P) Peers() *peers.Status {
 	return p.peers
 }
 
-// FindPeersWithSubnet mocks the p2p func.
-func (*TestP2P) FindPeersWithSubnet(_ context.Context, _ string, _ uint64, _ int) (bool, error) {
-	return false, nil
+// FindAndDialPeersWithSubnets mocks the p2p func.
+func (*TestP2P) FindAndDialPeersWithSubnets(ctx context.Context, topicFormat string, digest [fieldparams.VersionLength]byte, minimumPeersPerSubnet int, subnets map[uint64]bool) error {
+	return nil
 }
 
 // RefreshPersistentSubnets mocks the p2p func.

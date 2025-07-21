@@ -24,6 +24,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const minimumPeersPerSubnetForBroadcast = 1
+
 // ErrMessageNotMapped occurs on a Broadcast attempt when a message has not been defined in the
 // GossipTypeMapping.
 var ErrMessageNotMapped = errors.New("message type is not mapped to a PubSub topic")
@@ -124,15 +126,13 @@ func (s *Service) internalBroadcastAttestation(ctx context.Context, subnet uint6
 		if err := func() error {
 			s.subnetLocker(subnet).Lock()
 			defer s.subnetLocker(subnet).Unlock()
-			ok, err := s.FindPeersWithSubnet(ctx, attestationToTopic(subnet, forkDigest), subnet, 1)
-			if err != nil {
-				return err
+
+			if err := s.FindAndDialPeersWithSubnets(ctx, AttestationSubnetTopicFormat, forkDigest, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
+				return errors.Wrap(err, "find peers with subnets")
 			}
-			if ok {
-				savedAttestationBroadcasts.Inc()
-				return nil
-			}
-			return errors.New("failed to find peers for subnet")
+
+			savedAttestationBroadcasts.Inc()
+			return nil
 		}(); err != nil {
 			log.WithError(err).Error("Failed to find peers")
 			tracing.AnnotateError(span, err)
@@ -183,15 +183,12 @@ func (s *Service) broadcastSyncCommittee(ctx context.Context, subnet uint64, sMs
 		if err := func() error {
 			s.subnetLocker(wrappedSubIdx).Lock()
 			defer s.subnetLocker(wrappedSubIdx).Unlock()
-			ok, err := s.FindPeersWithSubnet(ctx, syncCommitteeToTopic(subnet, forkDigest), subnet, 1)
-			if err != nil {
-				return err
+			if err := s.FindAndDialPeersWithSubnets(ctx, SyncCommitteeSubnetTopicFormat, forkDigest, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
+				return errors.Wrap(err, "find peers with subnets")
 			}
-			if ok {
-				savedSyncCommitteeBroadcasts.Inc()
-				return nil
-			}
-			return errors.New("failed to find peers for subnet")
+
+			savedSyncCommitteeBroadcasts.Inc()
+			return nil
 		}(); err != nil {
 			log.WithError(err).Error("Failed to find peers")
 			tracing.AnnotateError(span, err)
@@ -250,15 +247,13 @@ func (s *Service) internalBroadcastBlob(ctx context.Context, subnet uint64, blob
 		if err := func() error {
 			s.subnetLocker(wrappedSubIdx).Lock()
 			defer s.subnetLocker(wrappedSubIdx).Unlock()
-			ok, err := s.FindPeersWithSubnet(ctx, blobSubnetToTopic(subnet, forkDigest), subnet, 1)
-			if err != nil {
-				return err
+
+			if err := s.FindAndDialPeersWithSubnets(ctx, BlobSubnetTopicFormat, forkDigest, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
+				return errors.Wrap(err, "find peers with subnets")
 			}
-			if ok {
-				blobSidecarBroadcasts.Inc()
-				return nil
-			}
-			return errors.New("failed to find peers for subnet")
+
+			blobSidecarBroadcasts.Inc()
+			return nil
 		}(); err != nil {
 			log.WithError(err).Error("Failed to find peers")
 			tracing.AnnotateError(span, err)
@@ -329,7 +324,6 @@ func (s *Service) BroadcastDataColumn(
 	root [fieldparams.RootLength]byte,
 	dataColumnSubnet uint64,
 	dataColumnSidecar *ethpb.DataColumnSidecar,
-	peersCheckedChans ...chan<- bool, // Used for testing purposes to signal when peers are checked.
 ) error {
 	// Add tracing to the function.
 	ctx, span := trace.StartSpan(s.ctx, "p2p.BroadcastDataColumn")
@@ -349,7 +343,7 @@ func (s *Service) BroadcastDataColumn(
 	}
 
 	// Non-blocking broadcast, with attempts to discover a column subnet peer if none available.
-	go s.internalBroadcastDataColumn(ctx, root, dataColumnSubnet, dataColumnSidecar, forkDigest, peersCheckedChans)
+	go s.internalBroadcastDataColumn(ctx, root, dataColumnSubnet, dataColumnSidecar, forkDigest)
 
 	return nil
 }
@@ -360,7 +354,6 @@ func (s *Service) internalBroadcastDataColumn(
 	columnSubnet uint64,
 	dataColumnSidecar *ethpb.DataColumnSidecar,
 	forkDigest [fieldparams.VersionLength]byte,
-	peersCheckedChans []chan<- bool, // Used for testing purposes to signal when peers are checked.
 ) {
 	// Add tracing to the function.
 	_, span := trace.StartSpan(ctx, "p2p.internalBroadcastDataColumn")
@@ -382,7 +375,7 @@ func (s *Service) internalBroadcastDataColumn(
 	wrappedSubIdx := columnSubnet + dataColumnSubnetVal
 
 	// Find peers if needed.
-	if err := s.findPeersIfNeeded(ctx, wrappedSubIdx, topic, columnSubnet, peersCheckedChans); err != nil {
+	if err := s.findPeersIfNeeded(ctx, wrappedSubIdx, DataColumnSubnetTopicFormat, forkDigest, columnSubnet); err != nil {
 		log.WithError(err).Error("Failed to find peers for data column subnet")
 		tracing.AnnotateError(span, err)
 	}
@@ -416,34 +409,18 @@ func (s *Service) internalBroadcastDataColumn(
 func (s *Service) findPeersIfNeeded(
 	ctx context.Context,
 	wrappedSubIdx uint64,
-	topic string,
+	topicFormat string,
+	forkDigest [fieldparams.VersionLength]byte,
 	subnet uint64,
-	peersCheckedChans []chan<- bool, // Used for testing purposes to signal when peers are checked.
 ) error {
+	// Sending a data column sidecar to only one peer is not ideal,
+	// but it ensures at least one peer receives it.
 	s.subnetLocker(wrappedSubIdx).Lock()
 	defer s.subnetLocker(wrappedSubIdx).Unlock()
 
-	// Sending a data column sidecar to only one peer is not ideal,
-	// but it ensures at least one peer receives it.
-	const peerCount = 1
-
-	if s.hasPeerWithSubnet(topic) {
-		// Exit early if we already have peers with this subnet.
-		return nil
-	}
-
-	// Used for testing purposes.
-	if len(peersCheckedChans) > 0 {
-		peersCheckedChans[0] <- true
-	}
-
 	// No peers found, attempt to find peers with this subnet.
-	ok, err := s.FindPeersWithSubnet(ctx, topic, subnet, peerCount)
-	if err != nil {
+	if err := s.FindAndDialPeersWithSubnets(ctx, topicFormat, forkDigest, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
 		return errors.Wrap(err, "find peers with subnet")
-	}
-	if !ok {
-		return errors.Errorf("failed to find peers for topic %s with subnet %d", topic, subnet)
 	}
 
 	return nil

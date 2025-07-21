@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"strings"
 	"sync"
@@ -11,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
@@ -23,7 +25,6 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -57,249 +58,297 @@ const blobSubnetLockerVal = 110
 const dataColumnSubnetVal = 150
 
 // nodeFilter returns a function that filters nodes based on the subnet topic and subnet index.
-func (s *Service) nodeFilter(topic string, index uint64) (func(node *enode.Node) bool, error) {
+func (s *Service) nodeFilter(topic string, indices map[uint64]int) (func(node *enode.Node) (map[uint64]bool, error), error) {
 	switch {
 	case strings.Contains(topic, GossipAttestationMessage):
-		return s.filterPeerForAttSubnet(index), nil
+		return s.filterPeerForAttSubnet(indices), nil
 	case strings.Contains(topic, GossipSyncCommitteeMessage):
-		return s.filterPeerForSyncSubnet(index), nil
+		return s.filterPeerForSyncSubnet(indices), nil
 	case strings.Contains(topic, GossipBlobSidecarMessage):
-		return s.filterPeerForBlobSubnet(), nil
+		return s.filterPeerForBlobSubnet(indices), nil
 	case strings.Contains(topic, GossipDataColumnSidecarMessage):
-		return s.filterPeerForDataColumnsSubnet(index), nil
+		return s.filterPeerForDataColumnsSubnet(indices), nil
 	default:
 		return nil, errors.Errorf("no subnet exists for provided topic: %s", topic)
 	}
 }
 
-// searchForPeers performs a network search for peers subscribed to a particular subnet.
-// It exits as soon as one of these conditions is met:
-// - It looped through `batchSize` nodes.
-// - It found `peersToFindCount“ peers corresponding to the `filter` criteria.
-// - Iterator is exhausted.
-func searchForPeers(
-	iterator enode.Iterator,
-	batchPeriod time.Duration,
-	peersToFindCount uint,
-	filter func(node *enode.Node) bool,
-) []*enode.Node {
-	nodeFromNodeID := make(map[enode.ID]*enode.Node)
-	start := time.Now()
+// FindAndDialPeersWithSubnets ensures that our node is connected to at least `minimumPeersPerSubnet`
+// peers for each subnet listed in `subnets`.
+// If, for all subnets, the threshold is met, then this function immediately returns.
+// Otherwise, it searches for new peers for defective subnets, and dials them.
+// If `ctx“ is canceled while searching for peers, search is stopped, but new found peers are still dialed.
+// In this case, the function returns an error.
+func (s *Service) FindAndDialPeersWithSubnets(
+	ctx context.Context,
+	topicFormat string,
+	digest [fieldparams.VersionLength]byte,
+	minimumPeersPerSubnet int,
+	subnets map[uint64]bool,
+) error {
+	ctx, span := trace.StartSpan(ctx, "p2p.FindAndDialPeersWithSubnet")
+	defer span.End()
 
-	for time.Since(start) < batchPeriod && uint(len(nodeFromNodeID)) < peersToFindCount && iterator.Next() {
+	// Return early if the discovery listener isn't set.
+	if s.dv5Listener == nil {
+		return nil
+	}
+
+	// Restrict dials if limit is applied.
+	maxConcurrentDials := math.MaxInt
+	if flags.MaxDialIsActive() {
+		maxConcurrentDials = flags.Get().MaxConcurrentDials
+	}
+
+	defectiveSubnets := s.defectiveSubnets(topicFormat, digest, minimumPeersPerSubnet, subnets)
+	for len(defectiveSubnets) > 0 {
+		// Stop the search/dialing loop if the context is canceled.
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		peersToDial, err := func() ([]*enode.Node, error) {
+			ctx, cancel := context.WithTimeout(ctx, batchPeriod)
+			defer cancel()
+
+			peersToDial, err := s.findPeersWithSubnets(ctx, topicFormat, digest, minimumPeersPerSubnet, defectiveSubnets)
+			if err != nil && !errors.Is(err, context.DeadlineExceeded) {
+				return nil, errors.Wrap(err, "find peers with subnets")
+			}
+
+			return peersToDial, nil
+		}()
+
+		if err != nil {
+			return err
+		}
+
+		// Dial new peers in batches.
+		s.dialPeers(s.ctx, maxConcurrentDials, peersToDial)
+
+		defectiveSubnets = s.defectiveSubnets(topicFormat, digest, minimumPeersPerSubnet, subnets)
+	}
+
+	return nil
+}
+
+// findPeersWithSubnets finds peers subscribed to defective subnets in batches
+// until enough peers are found or the context is canceled.
+// It returns new peers found during the search.
+func (s *Service) findPeersWithSubnets(
+	ctx context.Context,
+	topicFormat string,
+	digest [fieldparams.VersionLength]byte,
+	minimumPeersPerSubnet int,
+	defectiveSubnetsOrigin map[uint64]int,
+) ([]*enode.Node, error) {
+	// Copy the defective subnets map to avoid modifying the original map.
+	defectiveSubnets := make(map[uint64]int, len(defectiveSubnetsOrigin))
+	for k, v := range defectiveSubnetsOrigin {
+		defectiveSubnets[k] = v
+	}
+
+	// Create an discovery iterator to find new peers.
+	iterator := s.dv5Listener.RandomNodes()
+
+	// `iterator.Next` can block indefinitely. `iterator.Close` unblocks it.
+	// So it is important to close the iterator when the context is done to ensure
+	// that the search does not hang indefinitely.
+	go func() {
+		<-ctx.Done()
+		iterator.Close()
+	}()
+
+	// Retrieve the filter function that will be used to filter nodes based on the defective subnets.
+	filter, err := s.nodeFilter(topicFormat, defectiveSubnets)
+	if err != nil {
+		return nil, errors.Wrap(err, "node filter")
+	}
+
+	// Crawl the network for peers subscribed to the defective subnets.
+	nodeByNodeID := make(map[enode.ID]*enode.Node)
+	for len(defectiveSubnets) > 0 && iterator.Next() {
+		if err := ctx.Err(); err != nil {
+			// Convert the map to a slice.
+			peersToDial := make([]*enode.Node, 0, len(nodeByNodeID))
+			for _, node := range nodeByNodeID {
+				peersToDial = append(peersToDial, node)
+			}
+
+			return peersToDial, err
+		}
+
+		// Get all needed subnets that the node is subscribed to.
+		// Skip nodes that are not subscribed to any of the defective subnets.
 		node := iterator.Node()
-
-		// Filter out nodes that do not meet the criteria.
-		if !filter(node) {
+		nodeSubnets, err := filter(node)
+		if err != nil {
+			return nil, errors.Wrap(err, "filter node")
+		}
+		if len(nodeSubnets) == 0 {
 			continue
 		}
 
 		// Remove duplicates, keeping the node with higher seq.
-		prevNode, ok := nodeFromNodeID[node.ID()]
-		if ok && prevNode.Seq() > node.Seq() {
+		existing, ok := nodeByNodeID[node.ID()]
+		if ok && existing.Seq() > node.Seq() {
 			continue
 		}
+		nodeByNodeID[node.ID()] = node
 
-		nodeFromNodeID[node.ID()] = node
+		// We found a new peer. Modify the defective subnets map
+		// and the filter accordingly.
+		for subnet := range defectiveSubnets {
+			if !nodeSubnets[subnet] {
+				continue
+			}
+
+			defectiveSubnets[subnet]--
+
+			if defectiveSubnets[subnet] == 0 {
+				delete(defectiveSubnets, subnet)
+			}
+
+			filter, err = s.nodeFilter(topicFormat, defectiveSubnets)
+			if err != nil {
+				return nil, errors.Wrap(err, "node filter")
+			}
+		}
 	}
 
 	// Convert the map to a slice.
-	nodes := make([]*enode.Node, 0, len(nodeFromNodeID))
-	for _, node := range nodeFromNodeID {
-		nodes = append(nodes, node)
+	peersToDial := make([]*enode.Node, 0, len(nodeByNodeID))
+	for _, node := range nodeByNodeID {
+		peersToDial = append(peersToDial, node)
 	}
 
-	return nodes
+	return peersToDial, nil
 }
 
-// dialPeer dials a peer in a separate goroutine.
-func (s *Service) dialPeer(ctx context.Context, wg *sync.WaitGroup, node *enode.Node) {
-	info, _, err := convertToAddrInfo(node)
-	if err != nil {
-		return
-	}
-
-	if info == nil {
-		return
-	}
-
-	wg.Add(1)
-	go func() {
-		if err := s.connectWithPeer(ctx, *info); err != nil {
-			log.WithError(err).Tracef("Could not connect with peer %s", info.String())
+// defectiveSubnets returns a map of subnets that have fewer than the minimum peer count.
+func (s *Service) defectiveSubnets(
+	topicFormat string,
+	digest [fieldparams.VersionLength]byte,
+	minimumPeersPerSubnet int,
+	subnets map[uint64]bool,
+) map[uint64]int {
+	missingCountPerSubnet := make(map[uint64]int, len(subnets))
+	for subnet := range subnets {
+		topic := fmt.Sprintf(topicFormat, digest, subnet) + s.Encoding().ProtocolSuffix()
+		peers := s.pubsub.ListPeers(topic)
+		peerCount := len(peers)
+		if peerCount < minimumPeersPerSubnet {
+			missingCountPerSubnet[subnet] = minimumPeersPerSubnet - peerCount
 		}
+	}
 
-		wg.Done()
-	}()
+	return missingCountPerSubnet
 }
 
-// FindPeersWithSubnet performs a network search for peers
-// subscribed to a particular subnet. Then it tries to connect
-// with those peers. This method will block until either:
-// - the required amount of peers are found, or
-// - the context is terminated.
-// On some edge cases, this method may hang indefinitely while peers
-// are actually found. In such a case, the user should cancel the context
-// and re-run the method again.
-func (s *Service) FindPeersWithSubnet(
-	ctx context.Context,
-	topic string,
-	index uint64,
-	threshold int,
-) (bool, error) {
-	const minLogInterval = 1 * time.Minute
+// dialPeers dials multiple peers concurrently up to `maxConcurrentDials` at a time.
+// In case of a dial failure, it logs the error but continues dialing other peers.
+func (s *Service) dialPeers(ctx context.Context, maxConcurrentDials int, nodes []*enode.Node) uint {
+	var mut sync.Mutex
 
-	ctx, span := trace.StartSpan(ctx, "p2p.FindPeersWithSubnet")
-	defer span.End()
-
-	span.SetAttributes(trace.Int64Attribute("index", int64(index))) // lint:ignore uintcast -- It's safe to do this for tracing.
-
-	if s.dv5Listener == nil {
-		// Return if discovery isn't set
-		return false, nil
-	}
-
-	topic += s.Encoding().ProtocolSuffix()
-	iterator := s.dv5Listener.RandomNodes()
-	defer iterator.Close()
-
-	filter, err := s.nodeFilter(topic, index)
-	if err != nil {
-		return false, errors.Wrap(err, "node filter")
-	}
-
-	peersSummary := func(topic string, threshold int) (int, int) {
-		// Retrieve how many peers we have for this topic.
-		peerCountForTopic := len(s.pubsub.ListPeers(topic))
-
-		// Compute how many peers we are missing to reach the threshold.
-		missingPeerCountForTopic := max(0, threshold-peerCountForTopic)
-
-		return peerCountForTopic, missingPeerCountForTopic
-	}
-
-	// Compute how many peers we are missing to reach the threshold.
-	peerCountForTopic, missingPeerCountForTopic := peersSummary(topic, threshold)
-
-	// Exit early if we have enough peers.
-	if missingPeerCountForTopic == 0 {
-		return true, nil
-	}
-
-	log := log.WithFields(logrus.Fields{
-		"topic":           topic,
-		"targetPeerCount": threshold,
-	})
-
-	log.WithField("currentPeerCount", peerCountForTopic).Debug("Searching for new peers for a subnet - start")
-
-	lastLogTime := time.Now()
-
-	wg := new(sync.WaitGroup)
-	for {
-		// If the context is done, we can exit the loop. This is the unhappy path.
-		if err := ctx.Err(); err != nil {
-			return false, errors.Errorf(
-				"unable to find requisite number of peers for topic %s - only %d out of %d peers available after searching",
-				topic, peerCountForTopic, threshold,
-			)
+	counter := uint(0)
+	for start := 0; start < len(nodes); start += maxConcurrentDials {
+		if ctx.Err() != nil {
+			return counter
 		}
 
-		// Search for new peers in the network.
-		nodes := searchForPeers(iterator, batchPeriod, uint(missingPeerCountForTopic), filter)
-
-		// Restrict dials if limit is applied.
-		maxConcurrentDials := math.MaxInt
-		if flags.MaxDialIsActive() {
-			maxConcurrentDials = flags.Get().MaxConcurrentDials
-		}
-
-		// Dial the peers in batches.
-		for start := 0; start < len(nodes); start += maxConcurrentDials {
-			stop := min(start+maxConcurrentDials, len(nodes))
-			for _, node := range nodes[start:stop] {
-				s.dialPeer(ctx, wg, node)
+		var wg sync.WaitGroup
+		stop := min(start+maxConcurrentDials, len(nodes))
+		for _, node := range nodes[start:stop] {
+			log := log.WithField("nodeID", node.ID())
+			info, _, err := convertToAddrInfo(node)
+			if err != nil {
+				log.WithError(err).Debug("Could not convert node to addr info")
+				continue
 			}
 
-			// Wait for all dials to be completed.
-			wg.Wait()
+			if info == nil {
+				log.Debug("Nil addr info")
+				continue
+			}
+
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if err := s.connectWithPeer(ctx, *info); err != nil {
+					log.WithError(err).WithField("info", info.String()).Debug("Could not connect with peer")
+					return
+				}
+
+				mut.Lock()
+				defer mut.Unlock()
+				counter++
+			}()
 		}
 
-		peerCountForTopic, missingPeerCountForTopic := peersSummary(topic, threshold)
-
-		// If we have enough peers, we can exit the loop. This is the happy path.
-		if missingPeerCountForTopic == 0 {
-			break
-		}
-
-		if time.Since(lastLogTime) > minLogInterval {
-			lastLogTime = time.Now()
-			log.WithField("currentPeerCount", peerCountForTopic).Debug("Searching for new peers for a subnet - continue")
-		}
+		wg.Wait()
 	}
 
-	log.WithField("currentPeerCount", threshold).Debug("Searching for new peers for a subnet - success")
-	return true, nil
+	return counter
 }
 
-// returns a method with filters peers specifically for a particular attestation subnet.
-func (s *Service) filterPeerForAttSubnet(index uint64) func(node *enode.Node) bool {
-	return func(node *enode.Node) bool {
+// filterPeerForAttSubnet returns a method with filters peers specifically for a particular attestation subnet.
+func (s *Service) filterPeerForAttSubnet(indices map[uint64]int) func(node *enode.Node) (map[uint64]bool, error) {
+	return func(node *enode.Node) (map[uint64]bool, error) {
 		if !s.filterPeer(node) {
-			return false
+			return map[uint64]bool{}, nil
 		}
 
-		subnets, err := attSubnets(node.Record())
+		subnets, err := attestationSubnets(node.Record())
 		if err != nil {
-			return false
+			return nil, errors.Wrap(err, "attestation subnets")
 		}
 
-		return subnets[index]
+		return intersect(indices, subnets), nil
 	}
 }
 
 // returns a method with filters peers specifically for a particular sync subnet.
-func (s *Service) filterPeerForSyncSubnet(index uint64) func(node *enode.Node) bool {
-	return func(node *enode.Node) bool {
+func (s *Service) filterPeerForSyncSubnet(indices map[uint64]int) func(node *enode.Node) (map[uint64]bool, error) {
+	return func(node *enode.Node) (map[uint64]bool, error) {
 		if !s.filterPeer(node) {
-			return false
+			return map[uint64]bool{}, nil
 		}
+
 		subnets, err := syncSubnets(node.Record())
 		if err != nil {
-			return false
+			return nil, errors.Wrap(err, "sync subnets")
 		}
-		indExists := false
-		for _, comIdx := range subnets {
-			if comIdx == index {
-				indExists = true
-				break
-			}
-		}
-		return indExists
+
+		return intersect(indices, subnets), nil
 	}
 }
 
 // returns a method with filters peers specifically for a particular blob subnet.
 // All peers are supposed to be subscribed to all blob subnets.
-func (s *Service) filterPeerForBlobSubnet() func(_ *enode.Node) bool {
-	return func(_ *enode.Node) bool {
-		return true
+func (s *Service) filterPeerForBlobSubnet(indices map[uint64]int) func(_ *enode.Node) (map[uint64]bool, error) {
+	result := make(map[uint64]bool, len(indices))
+	for i := range indices {
+		result[i] = true
+	}
+
+	return func(_ *enode.Node) (map[uint64]bool, error) {
+		return result, nil
 	}
 }
 
 // returns a method with filters peers specifically for a particular data column subnet.
-func (s *Service) filterPeerForDataColumnsSubnet(index uint64) func(node *enode.Node) bool {
-	return func(node *enode.Node) bool {
+func (s *Service) filterPeerForDataColumnsSubnet(indices map[uint64]int) func(node *enode.Node) (map[uint64]bool, error) {
+	return func(node *enode.Node) (map[uint64]bool, error) {
 		if !s.filterPeer(node) {
-			return false
+			return map[uint64]bool{}, nil
 		}
 
 		subnets, err := dataColumnSubnets(node.ID(), node.Record())
 		if err != nil {
-			return false
+			return nil, errors.Wrap(err, "data column subnets")
 		}
 
-		return subnets[index]
+		return intersect(indices, subnets), nil
 	}
 }
 
@@ -475,43 +524,47 @@ func initializeSyncCommSubnets(node *enode.LocalNode) *enode.LocalNode {
 
 // Reads the attestation subnets entry from a node's ENR and determines
 // the committee indices of the attestation subnets the node is subscribed to.
-func attSubnets(record *enr.Record) (map[uint64]bool, error) {
+func attestationSubnets(record *enr.Record) (map[uint64]bool, error) {
 	bitV, err := attBitvector(record)
 	if err != nil {
-		return nil, err
-	}
-	committeeIdxs := make(map[uint64]bool)
-	// lint:ignore uintcast -- subnet count can be safely cast to int.
-	if len(bitV) != byteCount(int(attestationSubnetCount)) {
-		return committeeIdxs, errors.Errorf("invalid bitvector provided, it has a size of %d", len(bitV))
+		return nil, errors.Wrap(err, "att bit vector")
 	}
 
-	for i := uint64(0); i < attestationSubnetCount; i++ {
+	// lint:ignore uintcast -- subnet count can be safely cast to int.
+	if len(bitV) != byteCount(int(attestationSubnetCount)) {
+		return nil, errors.Errorf("invalid bitvector provided, it has a size of %d", len(bitV))
+	}
+
+	indices := make(map[uint64]bool, attestationSubnetCount)
+	for i := range attestationSubnetCount {
 		if bitV.BitAt(i) {
-			committeeIdxs[i] = true
+			indices[i] = true
 		}
 	}
-	return committeeIdxs, nil
+
+	return indices, nil
 }
 
 // Reads the sync subnets entry from a node's ENR and determines
 // the committee indices of the sync subnets the node is subscribed to.
-func syncSubnets(record *enr.Record) ([]uint64, error) {
+func syncSubnets(record *enr.Record) (map[uint64]bool, error) {
 	bitV, err := syncBitvector(record)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "sync bit vector")
 	}
+
 	// lint:ignore uintcast -- subnet count can be safely cast to int.
 	if len(bitV) != byteCount(int(syncCommsSubnetCount)) {
-		return []uint64{}, errors.Errorf("invalid bitvector provided, it has a size of %d", len(bitV))
+		return nil, errors.Errorf("invalid bitvector provided, it has a size of %d", len(bitV))
 	}
-	var committeeIdxs []uint64
-	for i := uint64(0); i < syncCommsSubnetCount; i++ {
+
+	indices := make(map[uint64]bool, syncCommsSubnetCount)
+	for i := range syncCommsSubnetCount {
 		if bitV.BitAt(i) {
-			committeeIdxs = append(committeeIdxs, i)
+			indices[i] = true
 		}
 	}
-	return committeeIdxs, nil
+	return indices, nil
 }
 
 // Retrieve the data columns subnets from a node's ENR and node ID.
@@ -584,4 +637,17 @@ func byteCount(bitCount int) int {
 		numOfBytes++
 	}
 	return numOfBytes
+}
+
+// interesect intersects two maps and returns a new map containing only the keys
+// that are present in both maps.
+func intersect(left map[uint64]int, right map[uint64]bool) map[uint64]bool {
+	result := make(map[uint64]bool, min(len(left), len(right)))
+	for i := range left {
+		if right[i] {
+			result[i] = true
+		}
+	}
+
+	return result
 }
