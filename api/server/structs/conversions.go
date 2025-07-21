@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v6/container/slice"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/math"
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
@@ -699,12 +700,17 @@ func (m *SyncCommitteeMessage) ToConsensus() (*eth.SyncCommitteeMessage, error) 
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Signature")
 	}
+	// Add validation to check if the signature is valid BLS format
+	signature, err := bls.SignatureFromBytes(sig)
+	if err != nil {
+		return nil, server.NewDecodeError(errors.New("Invalid Signature"), "Signature")
+	}
 
 	return &eth.SyncCommitteeMessage{
 		Slot:           primitives.Slot(slot),
 		BlockRoot:      root,
 		ValidatorIndex: primitives.ValidatorIndex(valIndex),
-		Signature:      sig,
+		Signature:      signature.Marshal(),
 	}, nil
 }
 
