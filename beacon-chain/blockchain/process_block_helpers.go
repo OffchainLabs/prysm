@@ -3,14 +3,11 @@ package blockchain
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
-
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
@@ -130,20 +127,13 @@ func (s *Service) sendStateFeedOnBlock(cfg *postBlockProcessConfig) {
 }
 
 func (s *Service) processLightClientUpdates(cfg *postBlockProcessConfig) {
-	if err := s.processLightClientUpdate(cfg); err != nil {
+	if err := s.processLightClientData(cfg); err != nil {
 		log.WithError(err).Error("Failed to process light client update")
-	}
-	if err := s.processLightClientOptimisticUpdate(cfg.ctx, cfg.roblock, cfg.postState); err != nil {
-		log.WithError(err).Error("Failed to process light client optimistic update")
-	}
-	if err := s.processLightClientFinalityUpdate(cfg.ctx, cfg.roblock, cfg.postState); err != nil {
-		log.WithError(err).Error("Failed to process light client finality update")
 	}
 }
 
-// processLightClientUpdate saves the light client update for this block
-// if it's better than the already saved one, when feature flag is enabled.
-func (s *Service) processLightClientUpdate(cfg *postBlockProcessConfig) error {
+// processLightClientData saves the light client data in lcStore, when feature flag is enabled.
+func (s *Service) processLightClientData(cfg *postBlockProcessConfig) error {
 	attestedRoot := cfg.roblock.Block().ParentRoot()
 	attestedBlock, err := s.getBlock(cfg.ctx, attestedRoot)
 	if err != nil {
@@ -170,93 +160,7 @@ func (s *Service) processLightClientUpdate(cfg *postBlockProcessConfig) error {
 		return errors.Wrapf(err, "could not get finalized block for root %#x", finalizedRoot)
 	}
 
-	update, err := lightclient.NewLightClientUpdateFromBeaconState(cfg.ctx, cfg.postState, cfg.roblock, attestedState, attestedBlock, finalizedBlock)
-	if err != nil {
-		return errors.Wrapf(err, "could not create light client update")
-	}
-
-	period := slots.SyncCommitteePeriod(slots.ToEpoch(attestedState.Slot()))
-
-	return s.lcStore.SaveLightClientUpdate(cfg.ctx, period, update)
-}
-
-func (s *Service) processLightClientFinalityUpdate(
-	ctx context.Context,
-	signed interfaces.ReadOnlySignedBeaconBlock,
-	postState state.BeaconState,
-) error {
-	attestedRoot := signed.Block().ParentRoot()
-	attestedBlock, err := s.cfg.BeaconDB.Block(ctx, attestedRoot)
-	if err != nil {
-		return errors.Wrapf(err, "could not get attested block for root %#x", attestedRoot)
-	}
-	attestedState, err := s.cfg.StateGen.StateByRoot(ctx, attestedRoot)
-	if err != nil {
-		return errors.Wrapf(err, "could not get attested state for root %#x", attestedRoot)
-	}
-
-	finalizedCheckpoint := attestedState.FinalizedCheckpoint()
-
-	if finalizedCheckpoint == nil {
-		return nil
-	}
-
-	finalizedRoot := bytesutil.ToBytes32(finalizedCheckpoint.Root)
-	finalizedBlock, err := s.cfg.BeaconDB.Block(ctx, finalizedRoot)
-	if err != nil {
-		if errors.Is(err, errBlockNotFoundInCacheOrDB) {
-			log.Debugf("Skipping processing light client finality update: Finalized block is nil for root %#x", finalizedRoot)
-			return nil
-		}
-		return errors.Wrapf(err, "could not get finalized block for root %#x", finalizedRoot)
-	}
-
-	newUpdate, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(ctx, postState, signed, attestedState, attestedBlock, finalizedBlock)
-
-	if err != nil {
-		return errors.Wrap(err, "could not create light client finality update")
-	}
-
-	if !lightclient.IsBetterFinalityUpdate(newUpdate, s.lcStore.LastFinalityUpdate()) {
-		log.Debug("Skip saving light client finality update: current update is better")
-		return nil
-	}
-
-	s.lcStore.SetLastFinalityUpdate(newUpdate, true)
-
-	return nil
-}
-
-func (s *Service) processLightClientOptimisticUpdate(ctx context.Context, signed interfaces.ReadOnlySignedBeaconBlock,
-	postState state.BeaconState) error {
-	attestedRoot := signed.Block().ParentRoot()
-	attestedBlock, err := s.cfg.BeaconDB.Block(ctx, attestedRoot)
-	if err != nil {
-		return errors.Wrapf(err, "could not get attested block for root %#x", attestedRoot)
-	}
-	attestedState, err := s.cfg.StateGen.StateByRoot(ctx, attestedRoot)
-	if err != nil {
-		return errors.Wrapf(err, "could not get attested state for root %#x", attestedRoot)
-	}
-
-	newUpdate, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(ctx, postState, signed, attestedState, attestedBlock)
-
-	if err != nil {
-		if strings.Contains(err.Error(), lightclient.ErrNotEnoughSyncCommitteeBits) {
-			log.WithError(err).Debug("Skipping processing light client optimistic update")
-			return nil
-		}
-		return errors.Wrap(err, "could not create light client optimistic update")
-	}
-
-	if !lightclient.IsBetterOptimisticUpdate(newUpdate, s.lcStore.LastOptimisticUpdate()) {
-		log.Debug("Skip saving light client optimistic update: current update is better")
-		return nil
-	}
-
-	s.lcStore.SetLastOptimisticUpdate(newUpdate, true)
-
-	return nil
+	return s.lcStore.SaveLCData(cfg.ctx, cfg.postState, cfg.roblock, attestedState, attestedBlock, finalizedBlock)
 }
 
 // updateCachesPostBlockProcessing updates the next slot cache and handles the epoch

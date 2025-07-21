@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/async/event"
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
@@ -103,7 +104,7 @@ func TestValidateLightClientOptimisticUpdate(t *testing.T) {
 				// drift back appropriate number of epochs based on fork + 2 slots for signature slot + time for gossip propagation + any extra drift
 				genesisDrift := v*slotsPerEpoch*secondsPerSlot + 2*secondsPerSlot + secondsPerSlot/slotIntervals + test.genesisDrift
 				chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(genesisDrift), 0)}
-				s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}, lcStore: lightClient.NewLightClientStore(nil, &p2ptest.FakeP2P{}, new(event.Feed))}
+				s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}, lcStore: lightClient.NewLightClientStore(testDB.SetupDB(t), &p2ptest.FakeP2P{}, new(event.Feed))}
 
 				var oldUpdate interfaces.LightClientOptimisticUpdate
 				var err error
@@ -243,7 +244,7 @@ func TestValidateLightClientFinalityUpdate(t *testing.T) {
 				// drift back appropriate number of epochs based on fork + 2 slots for signature slot + time for gossip propagation + any extra drift
 				genesisDrift := v*slotsPerEpoch*secondsPerSlot + 2*secondsPerSlot + secondsPerSlot/slotIntervals + test.genesisDrift
 				chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(genesisDrift), 0)}
-				s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}, lcStore: lightClient.NewLightClientStore(nil, &p2ptest.FakeP2P{}, new(event.Feed))}
+				s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}, lcStore: lightClient.NewLightClientStore(testDB.SetupDB(t), &p2ptest.FakeP2P{}, new(event.Feed))}
 
 				var oldUpdate interfaces.LightClientFinalityUpdate
 				var err error

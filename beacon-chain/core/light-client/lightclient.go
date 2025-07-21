@@ -592,6 +592,10 @@ func HasFinality(update interfaces.LightClientUpdate) (bool, error) {
 }
 
 func IsBetterUpdate(newUpdate, oldUpdate interfaces.LightClientUpdate) (bool, error) {
+	if oldUpdate == nil {
+		return true, nil
+	}
+
 	maxActiveParticipants := newUpdate.SyncAggregate().SyncCommitteeBits.Len()
 	newNumActiveParticipants := newUpdate.SyncAggregate().SyncCommitteeBits.Count()
 	oldNumActiveParticipants := oldUpdate.SyncAggregate().SyncCommitteeBits.Count()

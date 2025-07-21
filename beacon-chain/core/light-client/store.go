@@ -9,7 +9,9 @@ import (
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/iface"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
@@ -39,6 +41,120 @@ func NewLightClientStore(db iface.HeadAccessDatabase, p p2p.Accessor, e event.Su
 		stateFeed:        e,
 		nonFinalityCache: newLightClientCache([32]byte(cp.Root)),
 	}
+}
+
+func (s *Store) SaveLCData(ctx context.Context,
+	state state.BeaconState,
+	block interfaces.ReadOnlySignedBeaconBlock,
+	attestedState state.BeaconState,
+	attestedBlock interfaces.ReadOnlySignedBeaconBlock,
+	finalizedBlock interfaces.ReadOnlySignedBeaconBlock) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// compute required data
+	update, err := NewLightClientUpdateFromBeaconState(ctx, state, block, attestedState, attestedBlock, finalizedBlock)
+	if err != nil {
+		return errors.Wrapf(err, "failed to create light client update")
+	}
+	finalityUpdate, err := NewLightClientFinalityUpdateFromBeaconState(ctx, state, block, attestedState, attestedBlock, finalizedBlock)
+	if err != nil {
+		return errors.Wrapf(err, "failed to create light client finality update")
+	}
+	optimisticUpdate, err := NewLightClientOptimisticUpdateFromBeaconState(ctx, state, block, attestedState, attestedBlock)
+	if err != nil {
+		return errors.Wrapf(err, "failed to create light client optimistic update")
+	}
+	period := slots.SyncCommitteePeriod(slots.ToEpoch(update.AttestedHeader().Beacon().Slot))
+	blockRoot, err := attestedBlock.Block().HashTreeRoot()
+	if err != nil {
+		return errors.Wrapf(err, "failed to compute attested block root")
+	}
+	parentRoot := [32]byte(update.AttestedHeader().Beacon().ParentRoot)
+	signatureBlockRoot, err := block.Block().HashTreeRoot()
+	if err != nil {
+		return errors.Wrapf(err, "failed to compute signature block root")
+	}
+	headRoot, err := s.beaconDB.HeadBlockRoot()
+	if err != nil {
+		return errors.Wrapf(err, "failed to get head block root from database")
+	}
+	newBlockIsHead := signatureBlockRoot == headRoot
+
+	// create the new cache item
+	cacheItem := &lightClientCacheItem{
+		period: period,
+		slot:   block.Block().Slot(),
+	}
+
+	// check if parent exists in cache
+	parentItem, ok := s.nonFinalityCache.items[parentRoot]
+	if !ok {
+		// if not, create an item for the parent, but don't need to save it.
+		bestUpdateSoFar, err := s.beaconDB.LightClientUpdate(ctx, period)
+		if err != nil {
+			return errors.Wrapf(err, "could not get best light client update for period %d", period)
+		}
+		parentItem = &lightClientCacheItem{
+			period:             period,
+			bestUpdate:         &bestUpdateSoFar,
+			bestFinalityUpdate: &s.lastFinalityUpdate,
+		}
+	} else {
+		cacheItem.parent = parentItem
+	}
+
+	// if at a period boundary, no need to compare data, just save new ones
+	if parentItem.period != period {
+		cacheItem.bestUpdate = &update
+		cacheItem.bestFinalityUpdate = &finalityUpdate
+		s.nonFinalityCache.items[blockRoot] = cacheItem
+
+		s.setLastOptimisticUpdate(optimisticUpdate, true)
+
+		// if the new block is not head, we don't want to change our lastFinalityUpdate
+		if newBlockIsHead {
+			s.setLastFinalityUpdate(finalityUpdate, true)
+		}
+
+		return nil
+	}
+
+	// if in the same period, compare updates
+	isUpdateBetter, err := IsBetterUpdate(update, *parentItem.bestUpdate)
+	if err != nil {
+		return errors.Wrapf(err, "could not compare light client updates")
+	}
+	if isUpdateBetter {
+		cacheItem.bestUpdate = &update
+	} else {
+		cacheItem.bestUpdate = parentItem.bestUpdate
+	}
+
+	var finalityUpdateChanged bool
+	isBetterFinalityUpdate := IsBetterFinalityUpdate(finalityUpdate, *parentItem.bestFinalityUpdate)
+	if isBetterFinalityUpdate {
+		finalityUpdateChanged = true
+		cacheItem.bestFinalityUpdate = &finalityUpdate
+	} else {
+		finalityUpdateChanged = false
+		cacheItem.bestFinalityUpdate = parentItem.bestFinalityUpdate
+	}
+
+	// save new item in cache
+	s.nonFinalityCache.items[blockRoot] = cacheItem
+
+	// save lastOptimisticUpdate if better
+	if isBetterOptimisticUpdate := IsBetterOptimisticUpdate(optimisticUpdate, s.lastOptimisticUpdate); isBetterOptimisticUpdate {
+		s.setLastOptimisticUpdate(optimisticUpdate, true)
+	}
+
+	// if the new block is considered the head, set the last finality update
+	if newBlockIsHead {
+		s.setLastFinalityUpdate(*cacheItem.bestFinalityUpdate, finalityUpdateChanged)
+	}
+
+	return nil
 }
 
 func (s *Store) LightClientBootstrap(ctx context.Context, blockRoot [32]byte) (interfaces.LightClientBootstrap, error) {
@@ -162,6 +278,10 @@ func (s *Store) SetLastFinalityUpdate(update interfaces.LightClientFinalityUpdat
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	s.setLastFinalityUpdate(update, broadcast)
+}
+
+func (s *Store) setLastFinalityUpdate(update interfaces.LightClientFinalityUpdate, broadcast bool) {
 	if broadcast && IsFinalityUpdateValidForBroadcast(update, s.lastFinalityUpdate) {
 		if err := s.p2p.BroadcastLightClientFinalityUpdate(context.Background(), update); err != nil {
 			log.WithError(err).Error("Could not broadcast light client finality update")
@@ -187,6 +307,10 @@ func (s *Store) SetLastOptimisticUpdate(update interfaces.LightClientOptimisticU
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	s.setLastOptimisticUpdate(update, broadcast)
+}
+
+func (s *Store) setLastOptimisticUpdate(update interfaces.LightClientOptimisticUpdate, broadcast bool) {
 	if broadcast {
 		if err := s.p2p.BroadcastLightClientOptimisticUpdate(context.Background(), update); err != nil {
 			log.WithError(err).Error("Could not broadcast light client optimistic update")
