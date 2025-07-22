@@ -11,10 +11,12 @@ import (
 
 	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/crypto/rand"
 	lru "github.com/hashicorp/golang-lru"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	gcache "github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
@@ -278,19 +280,32 @@ func (s *Service) Start() {
 // Stop the regular sync service.
 func (s *Service) Stop() error {
 	defer func() {
+		s.cancel()
+
 		if s.rateLimiter != nil {
 			s.rateLimiter.free()
 		}
 	}()
+
+	// Say goodbye to all peers.
+	for _, peerID := range s.cfg.p2p.Peers().Connected() {
+		if s.cfg.p2p.Host().Network().Connectedness(peerID) == network.Connected {
+			if err := s.sendGoodByeAndDisconnect(s.ctx, p2ptypes.GoodbyeCodeClientShutdown, peerID); err != nil {
+				log.WithError(err).WithField("peerID", peerID).Error("Failed to send goodbye message")
+			}
+		}
+	}
+
 	// Removing RPC Stream handlers.
 	for _, p := range s.cfg.p2p.Host().Mux().Protocols() {
 		s.cfg.p2p.Host().RemoveStreamHandler(p)
 	}
+
 	// Deregister Topic Subscribers.
 	for _, t := range s.cfg.p2p.PubSub().GetTopics() {
 		s.unSubscribeFromTopic(t)
 	}
-	defer s.cancel()
+
 	return nil
 }
 

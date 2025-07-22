@@ -20,6 +20,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -238,7 +239,7 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 		defer span.End()
 		span.SetAttributes(trace.StringAttribute("topic", topic))
 		span.SetAttributes(trace.StringAttribute("peer", remotePeer.String()))
-		log := log.WithField("peer", stream.Conn().RemotePeer().String()).WithField("topic", string(stream.Protocol()))
+		log := log.WithFields(logrus.Fields{"peer": remotePeer.String(), "topic": string(stream.Protocol())})
 
 		// Check before hand that peer is valid.
 		if err := s.cfg.p2p.Peers().IsBad(remotePeer); err != nil {
@@ -248,7 +249,7 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 			return
 		}
 		// Validate request according to peer limits.
-		if err := s.rateLimiter.validateRawRpcRequest(stream); err != nil {
+		if err := s.rateLimiter.validateRawRpcRequest(stream, 1); err != nil {
 			log.WithError(err).Debug("Could not validate rpc request from peer")
 			return
 		}
@@ -304,7 +305,7 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 			if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
 				logStreamErrors(err, topic)
 				tracing.AnnotateError(span, err)
-				s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+				s.downscorePeer(remotePeer, "registerRpcError")
 				return
 			}
 			if err := handle(ctx, msg, stream); err != nil {
@@ -324,7 +325,7 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 			if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
 				logStreamErrors(err, topic)
 				tracing.AnnotateError(span, err)
-				s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+				s.downscorePeer(remotePeer, "registerRpcError")
 				return
 			}
 			if err := handle(ctx, nTyp.Elem().Interface(), stream); err != nil {

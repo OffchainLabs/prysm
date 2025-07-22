@@ -42,7 +42,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 	}
 
 	requestedColumnIdents := *ref
-	remotePeerId := stream.Conn().RemotePeer()
+	remotePeer := stream.Conn().RemotePeer()
 
 	ctx, cancel := context.WithTimeout(ctx, ttfbTimeout)
 	defer cancel()
@@ -51,7 +51,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 
 	// Penalize peers that send invalid requests.
 	if err := validateDataColumnsByRootRequest(requestedColumnIdents); err != nil {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeerId)
+		s.downscorePeer(remotePeer, "dataColumnSidecarByRootRPCHandlerValidationError")
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
 		return errors.Wrap(err, "validate data columns by root request")
 	}
@@ -85,7 +85,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 	}
 
 	log := log.WithFields(logrus.Fields{
-		"peer":    remotePeerId,
+		"peer":    remotePeer,
 		"columns": requestedColumnsByRootLog,
 	})
 

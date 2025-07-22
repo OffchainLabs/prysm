@@ -172,12 +172,12 @@ func (s *Service) sendMetaDataRequest(ctx context.Context, peerID peer.ID) (meta
 	// Read the METADATA response from the peer.
 	code, errMsg, err := ReadStatusCode(stream, s.cfg.p2p.Encoding())
 	if err != nil {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+		s.downscorePeer(peerID, "MetadataReadStatusCodeError")
 		return nil, errors.Wrap(err, "read status code")
 	}
 
 	if code != 0 {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+		s.downscorePeer(peerID, "NonNullMetadataReadStatusCode")
 		return nil, errors.New(errMsg)
 	}
 
@@ -214,8 +214,8 @@ func (s *Service) sendMetaDataRequest(ctx context.Context, peerID peer.ID) (meta
 
 	// Decode the metadata from the peer.
 	if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
-		return nil, err
+		s.downscorePeer(peerID, "MetadataDecodeError")
+		return nil, errors.Wrap(err, "decode with max length")
 	}
 
 	return msg, nil
