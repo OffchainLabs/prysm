@@ -25,6 +25,7 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/sirupsen/logrus"
 )
 
 type (
