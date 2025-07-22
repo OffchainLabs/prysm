@@ -25,18 +25,18 @@ func TestLightClientStore(t *testing.T) {
 
 	// Create test light client updates for Capella and Deneb
 	lCapella := util.NewTestLightClient(t, version.Capella)
-	opUpdateCapella, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(lCapella.Ctx, lCapella.State.Slot(), lCapella.State, lCapella.Block, lCapella.AttestedState, lCapella.AttestedBlock)
+	opUpdateCapella, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(lCapella.Ctx, lCapella.State, lCapella.Block, lCapella.AttestedState, lCapella.AttestedBlock)
 	require.NoError(t, err)
 	require.NotNil(t, opUpdateCapella, "OptimisticUpdateCapella is nil")
-	finUpdateCapella, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(lCapella.Ctx, lCapella.State.Slot(), lCapella.State, lCapella.Block, lCapella.AttestedState, lCapella.AttestedBlock, lCapella.FinalizedBlock)
+	finUpdateCapella, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(lCapella.Ctx, lCapella.State, lCapella.Block, lCapella.AttestedState, lCapella.AttestedBlock, lCapella.FinalizedBlock)
 	require.NoError(t, err)
 	require.NotNil(t, finUpdateCapella, "FinalityUpdateCapella is nil")
 
 	lDeneb := util.NewTestLightClient(t, version.Deneb)
-	opUpdateDeneb, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(lDeneb.Ctx, lDeneb.State.Slot(), lDeneb.State, lDeneb.Block, lDeneb.AttestedState, lDeneb.AttestedBlock)
+	opUpdateDeneb, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(lDeneb.Ctx, lDeneb.State, lDeneb.Block, lDeneb.AttestedState, lDeneb.AttestedBlock)
 	require.NoError(t, err)
 	require.NotNil(t, opUpdateDeneb, "OptimisticUpdateDeneb is nil")
-	finUpdateDeneb, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(lDeneb.Ctx, lDeneb.State.Slot(), lDeneb.State, lDeneb.Block, lDeneb.AttestedState, lDeneb.AttestedBlock, lDeneb.FinalizedBlock)
+	finUpdateDeneb, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(lDeneb.Ctx, lDeneb.State, lDeneb.Block, lDeneb.AttestedState, lDeneb.AttestedBlock, lDeneb.FinalizedBlock)
 	require.NoError(t, err)
 	require.NotNil(t, finUpdateDeneb, "FinalityUpdateDeneb is nil")
 

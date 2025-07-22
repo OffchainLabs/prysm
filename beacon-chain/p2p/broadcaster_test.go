@@ -547,7 +547,7 @@ func TestService_BroadcastLightClientOptimisticUpdate(t *testing.T) {
 	}
 
 	l := util.NewTestLightClient(t, version.Altair)
-	msg, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
+	msg, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock)
 	require.NoError(t, err)
 
 	GossipTypeMapping[reflect.TypeOf(msg)] = LightClientOptimisticUpdateTopicFormat
@@ -614,7 +614,7 @@ func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
 	}
 
 	l := util.NewTestLightClient(t, version.Altair)
-	msg, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+	msg, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 	require.NoError(t, err)
 
 	GossipTypeMapping[reflect.TypeOf(msg)] = LightClientFinalityUpdateTopicFormat
