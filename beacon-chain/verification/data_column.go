@@ -22,7 +22,7 @@ import (
 var (
 	// GossipDataColumnSidecarRequirements defines the set of requirements that DataColumnSidecars received on gossip
 	// must satisfy in order to upgrade an RODataColumn to a VerifiedRODataColumn.
-	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#data_column_sidecar_subnet_id
+	// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#data_column_sidecar_subnet_id
 	GossipDataColumnSidecarRequirements = []Requirement{
 		RequireValidFields,
 		RequireCorrectSubnet,
@@ -40,7 +40,7 @@ var (
 
 	// ByRangeRequestDataColumnSidecarRequirements defines the set of requirements that DataColumnSidecars received
 	// via the by range request must satisfy in order to upgrade an RODataColumn to a VerifiedRODataColumn.
-	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#datacolumnsidecarsbyrange-v1
+	// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#datacolumnsidecarsbyrange-v1
 	ByRangeRequestDataColumnSidecarRequirements = []Requirement{
 		RequireValidFields,
 		RequireSidecarInclusionProven,

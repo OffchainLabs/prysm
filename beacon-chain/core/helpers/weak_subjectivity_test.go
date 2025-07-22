@@ -292,7 +292,7 @@ func TestMinEpochsForBlockRequests(t *testing.T) {
 	params.SetActiveTestCleanup(t, params.MainnetConfig())
 	var expected primitives.Epoch = 33024
 	// expected value of 33024 via spec commentary:
-	// https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/p2p-interface.md#why-are-blocksbyrange-requests-only-required-to-be-served-for-the-latest-min_epochs_for_block_requests-epochs
+	// https://github.com/ethereum/consensus-specs/blob/master/specs/phase0/p2p-interface.md#why-are-blocksbyrange-requests-only-required-to-be-served-for-the-latest-min_epochs_for_block_requests-epochs
 	//	MIN_EPOCHS_FOR_BLOCK_REQUESTS is calculated using the arithmetic from compute_weak_subjectivity_period found in the weak subjectivity guide. Specifically to find this max epoch range, we use the worst case event of a very large validator size (>= MIN_PER_EPOCH_CHURN_LIMIT * CHURN_LIMIT_QUOTIENT).
 	//
 	//	MIN_EPOCHS_FOR_BLOCK_REQUESTS = (
