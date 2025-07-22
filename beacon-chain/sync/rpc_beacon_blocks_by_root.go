@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
@@ -93,11 +92,14 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 // requestAndSaveMissingDataColumns checks if the data columns are missing for the given block.
 // If so, requests them and saves them to the storage.
 func (s *Service) requestAndSaveMissingDataColumnSidecars(block blocks.ROBlock) error {
+	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
+	custodyGroupCount := s.cfg.p2p.CustodyGroupCount()
+	samplingSize := max(custodyGroupCount, samplesPerSlot)
+
 	nodeID := s.cfg.p2p.NodeID()
-	actualSamplingSize := s.cfg.custodyInfo.CustodyGroupSamplingSize(peerdas.Actual)
 	storage := s.cfg.dataColumnStorage
 
-	missingColumns, err := MissingDataColumns(block, nodeID, actualSamplingSize, storage)
+	missingColumns, err := MissingDataColumns(block, nodeID, samplingSize, storage)
 	if err != nil {
 		return errors.Wrap(err, "missing data columns")
 	}

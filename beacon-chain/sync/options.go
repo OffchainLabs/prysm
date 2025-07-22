@@ -7,7 +7,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
 	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
@@ -203,14 +202,6 @@ func WithAvailableBlocker(avb coverage.AvailableBlocker) Option {
 func WithTrackedValidatorsCache(c *cache.TrackedValidatorsCache) Option {
 	return func(s *Service) error {
 		s.trackedValidatorsCache = c
-		return nil
-	}
-}
-
-// WithCustodyInfo for custody info.
-func WithCustodyInfo(custodyInfo *peerdas.CustodyInfo) Option {
-	return func(s *Service) error {
-		s.cfg.custodyInfo = custodyInfo
 		return nil
 	}
 }

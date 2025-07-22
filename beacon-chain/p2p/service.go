@@ -86,6 +86,8 @@ type Service struct {
 	genesisTime           time.Time
 	genesisValidatorsRoot []byte
 	activeValidatorCount  uint64
+	custodyGroupCountMut  sync.RWMutex // Protects custodyGroupCount
+	custodyGroupCount     uint64
 }
 
 // NewService initializes a new p2p service compatible with shared.Service interface. No

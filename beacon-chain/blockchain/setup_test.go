@@ -30,6 +30,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -54,6 +55,7 @@ type mockBroadcaster struct {
 
 type mockAccessor struct {
 	mockBroadcaster
+	mockDataColumnsHandler
 	p2pTesting.MockPeerManager
 }
 
@@ -96,6 +98,32 @@ func (mb *mockBroadcaster) BroadcastBLSChanges(_ context.Context, _ []*ethpb.Sig
 }
 
 var _ p2p.Broadcaster = (*mockBroadcaster)(nil)
+
+// mockDataColumnsHandler is a mock implementation of p2p.DataColumnsHandler
+type mockDataColumnsHandler struct {
+	mut sync.RWMutex
+	cgc uint64
+}
+
+func (dch *mockDataColumnsHandler) CustodyGroupCount() uint64 {
+	dch.mut.RLock()
+	defer dch.mut.RUnlock()
+
+	return dch.cgc
+}
+
+func (dch *mockDataColumnsHandler) SetCustodyGroupCount(cgc uint64) {
+	dch.mut.Lock()
+	defer dch.mut.Unlock()
+
+	dch.cgc = cgc
+}
+
+func (dch *mockDataColumnsHandler) CustodyGroupCountFromPeer(peer.ID) uint64 {
+	return 0
+}
+
+var _ p2p.DataColumnsHandler = (*mockDataColumnsHandler)(nil)
 
 type testServiceRequirements struct {
 	ctx     context.Context

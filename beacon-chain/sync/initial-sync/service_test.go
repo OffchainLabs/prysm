@@ -8,7 +8,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/async/abool"
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
 	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
@@ -162,7 +161,6 @@ func TestService_InitStartStop(t *testing.T) {
 				ClockWaiter:         gs,
 				StateNotifier:       &mock.MockStateNotifier{},
 				InitialSyncComplete: make(chan struct{}),
-				CustodyInfo:         &peerdas.CustodyInfo{},
 			})
 			s.verifierWaiter = verification.NewInitializerWaiter(gs, nil, nil)
 			time.Sleep(500 * time.Millisecond)
@@ -199,7 +197,7 @@ func TestService_waitForStateInitialization(t *testing.T) {
 		cs := startup.NewClockSynchronizer()
 		ctx, cancel := context.WithCancel(ctx)
 		s := &Service{
-			cfg:          &Config{Chain: mc, StateNotifier: mc.StateNotifier(), ClockWaiter: cs, InitialSyncComplete: make(chan struct{}), CustodyInfo: &peerdas.CustodyInfo{}},
+			cfg:          &Config{Chain: mc, StateNotifier: mc.StateNotifier(), ClockWaiter: cs, InitialSyncComplete: make(chan struct{})},
 			ctx:          ctx,
 			cancel:       cancel,
 			synced:       abool.New(),
@@ -307,7 +305,6 @@ func TestService_markSynced(t *testing.T) {
 		Chain:               mc,
 		StateNotifier:       mc.StateNotifier(),
 		InitialSyncComplete: make(chan struct{}),
-		CustodyInfo:         &peerdas.CustodyInfo{},
 	})
 	require.NotNil(t, s)
 	assert.Equal(t, false, s.chainStarted.IsSet())
@@ -394,7 +391,6 @@ func TestService_Resync(t *testing.T) {
 				Chain:         mc,
 				StateNotifier: mc.StateNotifier(),
 				BlobStorage:   filesystem.NewEphemeralBlobStorage(t),
-				CustodyInfo:   &peerdas.CustodyInfo{},
 			})
 			assert.NotNil(t, s)
 			s.genesisTime = mc.Genesis
@@ -415,7 +411,6 @@ func TestService_Resync(t *testing.T) {
 func TestService_Initialized(t *testing.T) {
 	s := NewService(t.Context(), &Config{
 		StateNotifier: &mock.MockStateNotifier{},
-		CustodyInfo:   &peerdas.CustodyInfo{},
 	})
 	s.chainStarted.Set()
 	assert.Equal(t, true, s.Initialized())

@@ -625,10 +625,23 @@ func (s *Service) connectedPeersCount(subnetTopic string) int {
 }
 
 func (s *Service) dataColumnSubnetIndices(primitives.Slot) map[uint64]bool {
+	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 	nodeID := s.cfg.p2p.NodeID()
-	custodyGroupCount := s.cfg.custodyInfo.CustodyGroupSamplingSize(peerdas.Target)
 
-	nodeInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
+	// Compute the validators custody requirement.
+	validatorsCustodyRequirement, err := s.validatorsCustodyRequirement()
+	if err != nil {
+		log.WithError(err).Error("Could not retrieve validators custody requirement")
+		return map[uint64]bool{}
+	}
+
+	// Compute the sampling size.
+	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/das-core.md#custody-sampling
+	custodyGroupCount := s.cfg.p2p.CustodyGroupCount()
+	samplingSize := max(samplesPerSlot, custodyGroupCount, validatorsCustodyRequirement)
+
+	// Compute the subnets to subscribe to.
+	nodeInfo, _, err := peerdas.Info(nodeID, samplingSize)
 	if err != nil {
 		log.WithError(err).Error("Could not retrieve peer info")
 		return nil

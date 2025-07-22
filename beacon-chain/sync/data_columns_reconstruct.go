@@ -32,6 +32,7 @@ func (s *Service) reconstructSaveBroadcastDataColumnSidecars(
 	root [fieldparams.RootLength]byte,
 ) error {
 	startTime := time.Now()
+	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 
 	// Lock to prevent concurrent reconstructions.
 	s.reconstructionLock.Lock()
@@ -49,8 +50,9 @@ func (s *Service) reconstructSaveBroadcastDataColumnSidecars(
 
 	// Retrieve our local node info.
 	nodeID := s.cfg.p2p.NodeID()
-	custodyGroupCount := s.cfg.custodyInfo.ActualGroupCount()
-	localNodeInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
+	custodyGroupCount := s.cfg.p2p.CustodyGroupCount()
+	samplingSize := max(custodyGroupCount, samplesPerSlot)
+	localNodeInfo, _, err := peerdas.Info(nodeID, samplingSize)
 	if err != nil {
 		return errors.Wrap(err, "peer info")
 	}
@@ -155,10 +157,8 @@ func (s *Service) broadcastMissingDataColumnSidecars(
 	// Get the node ID.
 	nodeID := s.cfg.p2p.NodeID()
 
-	// Get the custody group count.
-	custodyGroupCount := s.cfg.custodyInfo.ActualGroupCount()
-
 	// Retrieve the local node info.
+	custodyGroupCount := s.cfg.p2p.CustodyGroupCount()
 	localNodeInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
 	if err != nil {
 		return errors.Wrap(err, "peerdas info")

@@ -7,7 +7,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/async/abool"
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
 	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	p2pt "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
@@ -310,7 +309,7 @@ func TestService_roundRobinSync(t *testing.T) {
 			clock := startup.NewClock(gt, vr)
 			s := &Service{
 				ctx:          context.Background(),
-				cfg:          &Config{Chain: mc, P2P: p, DB: beaconDB, CustodyInfo: &peerdas.CustodyInfo{}},
+				cfg:          &Config{Chain: mc, P2P: p, DB: beaconDB},
 				synced:       abool.New(),
 				chainStarted: abool.NewBool(true),
 				clock:        clock,
@@ -570,7 +569,7 @@ func TestService_blockProviderScoring(t *testing.T) {
 	clock := startup.NewClock(gt, vr)
 	s := &Service{
 		ctx:          context.Background(),
-		cfg:          &Config{Chain: mc, P2P: p, DB: beaconDB, CustodyInfo: &peerdas.CustodyInfo{}},
+		cfg:          &Config{Chain: mc, P2P: p, DB: beaconDB},
 		synced:       abool.New(),
 		chainStarted: abool.NewBool(true),
 		clock:        clock,
@@ -639,7 +638,7 @@ func TestService_syncToFinalizedEpoch(t *testing.T) {
 	}
 	s := &Service{
 		ctx:          context.Background(),
-		cfg:          &Config{Chain: mc, P2P: p, DB: beaconDB, CustodyInfo: &peerdas.CustodyInfo{}},
+		cfg:          &Config{Chain: mc, P2P: p, DB: beaconDB},
 		synced:       abool.New(),
 		chainStarted: abool.NewBool(true),
 		counter:      ratecounter.NewRateCounter(counterSeconds * time.Second),
