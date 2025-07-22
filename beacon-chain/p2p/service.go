@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	prysmnetwork "github.com/OffchainLabs/prysm/v6/network"
@@ -31,6 +32,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -61,32 +63,42 @@ var (
 )
 
 // Service for managing peer to peer (p2p) networking.
-type Service struct {
-	started               bool
-	isPreGenesis          bool
-	pingMethod            func(ctx context.Context, id peer.ID) error
-	pingMethodLock        sync.RWMutex
-	cancel                context.CancelFunc
-	cfg                   *Config
-	peers                 *peers.Status
-	addrFilter            *multiaddr.Filters
-	ipLimiter             *leakybucket.Collector
-	privKey               *ecdsa.PrivateKey
-	metaData              metadata.Metadata
-	pubsub                *pubsub.PubSub
-	joinedTopics          map[string]*pubsub.Topic
-	joinedTopicsLock      sync.RWMutex
-	subnetsLock           map[uint64]*sync.RWMutex
-	subnetsLockLock       sync.Mutex // Lock access to subnetsLock
-	initializationLock    sync.Mutex
-	dv5Listener           ListenerRebooter
-	startupErr            error
-	ctx                   context.Context
-	host                  host.Host
-	genesisTime           time.Time
-	genesisValidatorsRoot []byte
-	activeValidatorCount  uint64
-}
+type (
+	Service struct {
+		started               bool
+		isPreGenesis          bool
+		pingMethod            func(ctx context.Context, id peer.ID) error
+		pingMethodLock        sync.RWMutex
+		cancel                context.CancelFunc
+		cfg                   *Config
+		peers                 *peers.Status
+		addrFilter            *multiaddr.Filters
+		ipLimiter             *leakybucket.Collector
+		privKey               *ecdsa.PrivateKey
+		metaData              metadata.Metadata
+		pubsub                *pubsub.PubSub
+		joinedTopics          map[string]*pubsub.Topic
+		joinedTopicsLock      sync.RWMutex
+		subnetsLock           map[uint64]*sync.RWMutex
+		subnetsLockLock       sync.Mutex // Lock access to subnetsLock
+		initializationLock    sync.Mutex
+		dv5Listener           ListenerRebooter
+		startupErr            error
+		ctx                   context.Context
+		host                  host.Host
+		genesisTime           time.Time
+		genesisValidatorsRoot []byte
+		activeValidatorCount  uint64
+		peerDisconnectionTime *cache.Cache
+		custodyInfo           *custodyInfo
+		custodyInfoLock       sync.RWMutex // Lock access to custodyInfo
+	}
+
+	custodyInfo struct {
+		earliestAvailableSlot primitives.Slot
+		groupCount            uint64
+	}
+)
 
 // NewService initializes a new p2p service compatible with shared.Service interface. No
 // connections are made until the Start function is called during the service registry startup.
@@ -115,16 +127,17 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 	ipLimiter := leakybucket.NewCollector(ipLimit, ipBurst, 30*time.Second, true /* deleteEmptyBuckets */)
 
 	s := &Service{
-		ctx:          ctx,
-		cancel:       cancel,
-		cfg:          cfg,
-		addrFilter:   addrFilter,
-		ipLimiter:    ipLimiter,
-		privKey:      privKey,
-		metaData:     metaData,
-		isPreGenesis: true,
-		joinedTopics: make(map[string]*pubsub.Topic, len(gossipTopicMappings)),
-		subnetsLock:  make(map[uint64]*sync.RWMutex),
+		ctx:                   ctx,
+		cancel:                cancel,
+		cfg:                   cfg,
+		addrFilter:            addrFilter,
+		ipLimiter:             ipLimiter,
+		privKey:               privKey,
+		metaData:              metaData,
+		isPreGenesis:          true,
+		joinedTopics:          make(map[string]*pubsub.Topic, len(gossipTopicMappings)),
+		subnetsLock:           make(map[uint64]*sync.RWMutex),
+		peerDisconnectionTime: cache.New(1*time.Second, 1*time.Minute),
 	}
 
 	ipAddr := prysmnetwork.IPAddr()
@@ -408,7 +421,10 @@ func (s *Service) pingPeersAndLogEnr() {
 	defer s.pingMethodLock.RUnlock()
 
 	localENR := s.dv5Listener.Self()
-	log.WithField("ENR", localENR).Info("New node record")
+	log.WithFields(logrus.Fields{
+		"ENR": localENR,
+		"seq": localENR.Seq(),
+	}).Info("New node record")
 
 	if s.pingMethod == nil {
 		return
@@ -486,14 +502,17 @@ func (s *Service) connectWithPeer(ctx context.Context, info peer.AddrInfo) error
 	if info.ID == s.host.ID() {
 		return nil
 	}
+
 	if err := s.Peers().IsBad(info.ID); err != nil {
-		return errors.Wrap(err, "refused to connect to bad peer")
+		return errors.Wrap(err, "bad peer")
 	}
+
 	ctx, cancel := context.WithTimeout(ctx, maxDialTimeout)
 	defer cancel()
+
 	if err := s.host.Connect(ctx, info); err != nil {
-		s.Peers().Scorers().BadResponsesScorer().Increment(info.ID)
-		return err
+		s.downscorePeer(info.ID, "connectionError")
+		return errors.Wrap(err, "peer connect")
 	}
 	return nil
 }
@@ -523,4 +542,9 @@ func (s *Service) connectToBootnodes() error {
 // required for discovery and pubsub validation.
 func (s *Service) isInitialized() bool {
 	return !s.genesisTime.IsZero() && len(s.genesisValidatorsRoot) == 32
+}
+
+func (s *Service) downscorePeer(peerID peer.ID, reason string) {
+	newScore := s.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }

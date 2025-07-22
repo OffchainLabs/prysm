@@ -13,6 +13,7 @@ import (
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -35,22 +36,40 @@ var backOffTime = map[primitives.SSZUint64]time.Duration{
 
 // goodbyeRPCHandler reads the incoming goodbye rpc message from the peer.
 func (s *Service) goodbyeRPCHandler(_ context.Context, msg interface{}, stream libp2pcore.Stream) error {
+	const amount = 1
 	SetRPCStreamDeadlines(stream)
+	peerID := stream.Conn().RemotePeer()
 
 	m, ok := msg.(*primitives.SSZUint64)
 	if !ok {
 		return fmt.Errorf("wrong message type for goodbye, got %T, wanted *uint64", msg)
 	}
-	if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
-		log.WithError(err).Debug("Goodbye message from rate-limited peer")
-	} else {
+
+	isRateLimitedPeer := false
+	if err := s.rateLimiter.validateRequest(stream, amount); err != nil {
+		if !errors.Is(err, p2ptypes.ErrRateLimited) {
+			return errors.Wrap(err, "validate request")
+		}
+		isRateLimitedPeer = true
+	}
+
+	if !isRateLimitedPeer {
 		s.rateLimiter.add(stream, 1)
 	}
-	log := log.WithField("Reason", goodbyeMessage(*m))
-	log.WithField("peer", stream.Conn().RemotePeer()).Trace("Peer has sent a goodbye message")
-	s.cfg.p2p.Peers().SetNextValidTime(stream.Conn().RemotePeer(), goodByeBackoff(*m))
-	// closes all streams with the peer
-	return s.cfg.p2p.Disconnect(stream.Conn().RemotePeer())
+
+	log.WithFields(logrus.Fields{
+		"peer":          peerID,
+		"reason":        goodbyeMessage(*m),
+		"isRateLimited": isRateLimitedPeer,
+	}).Debug("Received a goodbye message")
+
+	s.cfg.p2p.Peers().SetNextValidTime(peerID, goodByeBackoff(*m))
+
+	if err := s.cfg.p2p.Disconnect(peerID); err != nil {
+		return errors.Wrap(err, "disconnect")
+	}
+
+	return nil
 }
 
 // disconnectBadPeer checks whether peer is considered bad by some scorer, and tries to disconnect
@@ -70,7 +89,7 @@ func (s *Service) disconnectBadPeer(ctx context.Context, id peer.ID, badPeerErr 
 			"peerID": id,
 			"agent":  agentString(id, s.cfg.p2p.Host()),
 		}).
-		Debug("Sent peer disconnection")
+		Debug("Sent bad peer disconnection")
 }
 
 // A custom goodbye method that is used by our connection handler, in the

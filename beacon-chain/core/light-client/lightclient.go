@@ -26,14 +26,12 @@ const ErrNotEnoughSyncCommitteeBits = "sync committee bits count is less than re
 
 func NewLightClientFinalityUpdateFromBeaconState(
 	ctx context.Context,
-	currentSlot primitives.Slot,
 	state state.BeaconState,
 	block interfaces.ReadOnlySignedBeaconBlock,
 	attestedState state.BeaconState,
 	attestedBlock interfaces.ReadOnlySignedBeaconBlock,
-	finalizedBlock interfaces.ReadOnlySignedBeaconBlock,
-) (interfaces.LightClientFinalityUpdate, error) {
-	update, err := NewLightClientUpdateFromBeaconState(ctx, currentSlot, state, block, attestedState, attestedBlock, finalizedBlock)
+	finalizedBlock interfaces.ReadOnlySignedBeaconBlock) (interfaces.LightClientFinalityUpdate, error) {
+	update, err := NewLightClientUpdateFromBeaconState(ctx, state, block, attestedState, attestedBlock, finalizedBlock)
 	if err != nil {
 		return nil, err
 	}
@@ -43,13 +41,11 @@ func NewLightClientFinalityUpdateFromBeaconState(
 
 func NewLightClientOptimisticUpdateFromBeaconState(
 	ctx context.Context,
-	currentSlot primitives.Slot,
 	state state.BeaconState,
 	block interfaces.ReadOnlySignedBeaconBlock,
 	attestedState state.BeaconState,
-	attestedBlock interfaces.ReadOnlySignedBeaconBlock,
-) (interfaces.LightClientOptimisticUpdate, error) {
-	update, err := NewLightClientUpdateFromBeaconState(ctx, currentSlot, state, block, attestedState, attestedBlock, nil)
+	attestedBlock interfaces.ReadOnlySignedBeaconBlock) (interfaces.LightClientOptimisticUpdate, error) {
+	update, err := NewLightClientUpdateFromBeaconState(ctx, state, block, attestedState, attestedBlock, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +62,6 @@ func NewLightClientOptimisticUpdateFromBeaconState(
 //     if locally available (may be unavailable, e.g., when using checkpoint sync, or if it was pruned locally)
 func NewLightClientUpdateFromBeaconState(
 	ctx context.Context,
-	currentSlot primitives.Slot,
 	state state.BeaconState,
 	block interfaces.ReadOnlySignedBeaconBlock,
 	attestedState state.BeaconState,
@@ -521,8 +516,7 @@ func ComputeWithdrawalsRoot(payload interfaces.ExecutionData) ([]byte, error) {
 func BlockToLightClientHeader(
 	ctx context.Context,
 	attestedBlockVersion int, // this is the version that the light client header should be in, based on the attested block.
-	block interfaces.ReadOnlySignedBeaconBlock, // this block is either the attested block, or the finalized block.
-	// in case of the latter, we might need to upgrade it to the attested block's version.
+	block interfaces.ReadOnlySignedBeaconBlock, // this block is either the attested block, or the finalized block. in case of the latter, we might need to upgrade it to the attested block's version.
 ) (interfaces.LightClientHeader, error) {
 	if block.Version() > attestedBlockVersion {
 		return nil, errors.Errorf("block version %s is greater than attested block version %s", version.String(block.Version()), version.String(attestedBlockVersion))
@@ -756,7 +750,9 @@ func UpdateHasSupermajority(syncAggregate *pb.SyncAggregate) bool {
 	return numActiveParticipants*3 >= maxActiveParticipants*2
 }
 
-func IsBetterFinalityUpdate(newUpdate, oldUpdate interfaces.LightClientFinalityUpdate) bool {
+// IsFinalityUpdateValidForBroadcast checks if a finality update needs to be broadcasted.
+// It is also used to check if an incoming gossiped finality update is valid for forwarding and saving.
+func IsFinalityUpdateValidForBroadcast(newUpdate, oldUpdate interfaces.LightClientFinalityUpdate) bool {
 	if oldUpdate == nil {
 		return true
 	}
@@ -778,7 +774,36 @@ func IsBetterFinalityUpdate(newUpdate, oldUpdate interfaces.LightClientFinalityU
 	return true
 }
 
-func IsBetterOptimisticUpdate(newUpdate interfaces.LightClientOptimisticUpdate, oldUpdate interfaces.LightClientOptimisticUpdate) bool {
+// IsBetterFinalityUpdate checks if the new finality update is better than the old one for saving.
+// This does not concern broadcasting, but rather the decision of whether to save the new update.
+// For broadcasting checks, use IsFinalityUpdateValidForBroadcast.
+func IsBetterFinalityUpdate(newUpdate, oldUpdate interfaces.LightClientFinalityUpdate) bool {
+	if oldUpdate == nil {
+		return true
+	}
+
+	// Full nodes SHOULD provide the LightClientFinalityUpdate with the highest attested_header.beacon.slot (if multiple, highest signature_slot)
+	newFinalizedSlot := newUpdate.FinalizedHeader().Beacon().Slot
+	newAttestedSlot := newUpdate.AttestedHeader().Beacon().Slot
+
+	oldFinalizedSlot := oldUpdate.FinalizedHeader().Beacon().Slot
+	oldAttestedSlot := oldUpdate.AttestedHeader().Beacon().Slot
+
+	if newFinalizedSlot < oldFinalizedSlot {
+		return false
+	}
+	if newFinalizedSlot == oldFinalizedSlot {
+		if newAttestedSlot < oldAttestedSlot {
+			return false
+		}
+		if newAttestedSlot == oldAttestedSlot && newUpdate.SignatureSlot() <= oldUpdate.SignatureSlot() {
+			return false
+		}
+	}
+	return true
+}
+
+func IsBetterOptimisticUpdate(newUpdate, oldUpdate interfaces.LightClientOptimisticUpdate) bool {
 	if oldUpdate == nil {
 		return true
 	}

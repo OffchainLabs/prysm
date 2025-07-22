@@ -17,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 type Service struct {
@@ -211,7 +212,7 @@ func (s *Service) importBatches(ctx context.Context) {
 		_, err := s.batchImporter(ctx, current, ib, s.store)
 		if err != nil {
 			log.WithError(err).WithFields(ib.logFields()).Debug("Backfill batch failed to import")
-			s.downscore(ib)
+			s.downscorePeer(ib.blockPid, "backfillBatchImportError")
 			s.batchSeq.update(ib.withState(batchErrRetryable))
 			// If a batch fails, the subsequent batches are no longer considered importable.
 			break
@@ -336,10 +337,6 @@ func (s *Service) initBatches() error {
 	return nil
 }
 
-func (s *Service) downscore(b batch) {
-	s.p2p.Peers().Scorers().BadResponsesScorer().Increment(b.blockPid)
-}
-
 func (*Service) Stop() error {
 	return nil
 }
@@ -382,4 +379,9 @@ func (s *Service) WaitForCompletion() error {
 	case <-s.complete:
 		return nil
 	}
+}
+
+func (s *Service) downscorePeer(peerID peer.ID, reason string) {
+	newScore := s.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }

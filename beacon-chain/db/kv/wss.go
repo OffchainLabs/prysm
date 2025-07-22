@@ -43,6 +43,7 @@ func (s *Store) SaveOrigin(ctx context.Context, serState, serBlock []byte) error
 		return errors.Wrap(err, "failed to initialize origin block w/ bytes + config+fork")
 	}
 	blk := wblk.Block()
+	slot := blk.Slot()
 
 	blockRoot, err := blk.HashTreeRoot()
 	if err != nil {
@@ -51,43 +52,43 @@ func (s *Store) SaveOrigin(ctx context.Context, serState, serBlock []byte) error
 
 	pr := blk.ParentRoot()
 	bf := &dbval.BackfillStatus{
-		LowSlot:       uint64(wblk.Block().Slot()),
+		LowSlot:       uint64(slot),
 		LowRoot:       blockRoot[:],
 		LowParentRoot: pr[:],
 		OriginRoot:    blockRoot[:],
-		OriginSlot:    uint64(wblk.Block().Slot()),
+		OriginSlot:    uint64(slot),
 	}
 
 	if err = s.SaveBackfillStatus(ctx, bf); err != nil {
 		return errors.Wrap(err, "unable to save backfill status data to db for checkpoint sync")
 	}
 
-	log.WithField("root", fmt.Sprintf("%#x", blockRoot)).Info("Saving checkpoint block to db")
+	log.WithField("root", fmt.Sprintf("%#x", blockRoot)).Info("Saving checkpoint data into database")
 	if err := s.SaveBlock(ctx, wblk); err != nil {
-		return errors.Wrap(err, "could not save checkpoint block")
+		return errors.Wrap(err, "save block")
 	}
 
 	// save state
-	log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Info("Calling SaveState")
 	if err = s.SaveState(ctx, state, blockRoot); err != nil {
-		return errors.Wrap(err, "could not save state")
+		return errors.Wrap(err, "save state")
 	}
+
 	if err = s.SaveStateSummary(ctx, &ethpb.StateSummary{
 		Slot: state.Slot(),
 		Root: blockRoot[:],
 	}); err != nil {
-		return errors.Wrap(err, "could not save state summary")
+		return errors.Wrap(err, "save state summary")
 	}
 
 	// mark block as head of chain, so that processing will pick up from this point
 	if err = s.SaveHeadBlockRoot(ctx, blockRoot); err != nil {
-		return errors.Wrap(err, "could not save head block root")
+		return errors.Wrap(err, "save head block root")
 	}
 
 	// save origin block root in a special key, to be used when the canonical
 	// origin (start of chain, ie alternative to genesis) block or state is needed
 	if err = s.SaveOriginCheckpointBlockRoot(ctx, blockRoot); err != nil {
-		return errors.Wrap(err, "could not save origin block root")
+		return errors.Wrap(err, "save origin checkpoint block root")
 	}
 
 	// rebuild the checkpoint from the block
@@ -96,15 +97,18 @@ func (s *Store) SaveOrigin(ctx context.Context, serState, serBlock []byte) error
 	if err != nil {
 		return err
 	}
+
 	chkpt := &ethpb.Checkpoint{
 		Epoch: primitives.Epoch(slotEpoch),
 		Root:  blockRoot[:],
 	}
+
 	if err = s.SaveJustifiedCheckpoint(ctx, chkpt); err != nil {
-		return errors.Wrap(err, "could not mark checkpoint sync block as justified")
+		return errors.Wrap(err, "save justified checkpoint")
 	}
+
 	if err = s.SaveFinalizedCheckpoint(ctx, chkpt); err != nil {
-		return errors.Wrap(err, "could not mark checkpoint sync block as finalized")
+		return errors.Wrap(err, "save finalized checkpoint")
 	}
 
 	return nil

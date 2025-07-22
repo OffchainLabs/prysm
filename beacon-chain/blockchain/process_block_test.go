@@ -2894,7 +2894,6 @@ func TestIsDataAvailable(t *testing.T) {
 		}
 
 		params := testIsAvailableParams{
-			options:                 []Option{WithCustodyInfo(&peerdas.CustodyInfo{})},
 			columnsToSave:           indices,
 			blobKzgCommitmentsCount: 3,
 		}
@@ -2907,7 +2906,6 @@ func TestIsDataAvailable(t *testing.T) {
 
 	t.Run("Fulu - no missing data columns", func(t *testing.T) {
 		params := testIsAvailableParams{
-			options:                 []Option{WithCustodyInfo(&peerdas.CustodyInfo{})},
 			columnsToSave:           []uint64{1, 17, 19, 42, 75, 87, 102, 117, 119}, // 119 is not needed
 			blobKzgCommitmentsCount: 3,
 		}
@@ -2922,7 +2920,7 @@ func TestIsDataAvailable(t *testing.T) {
 		startWaiting := make(chan bool)
 
 		testParams := testIsAvailableParams{
-			options:       []Option{WithCustodyInfo(&peerdas.CustodyInfo{}), WithStartWaitingDataColumnSidecars(startWaiting)},
+			options:       []Option{WithStartWaitingDataColumnSidecars(startWaiting)},
 			columnsToSave: []uint64{1, 17, 19, 75, 102, 117, 119}, // 119 is not needed, 42 and 87 are missing
 
 			blobKzgCommitmentsCount: 3,
@@ -2959,6 +2957,9 @@ func TestIsDataAvailable(t *testing.T) {
 			require.NoError(t, err)
 		}()
 
+		ctx, cancel := context.WithTimeout(ctx, time.Second*2)
+		defer cancel()
+
 		err = service.isDataAvailable(ctx, root, signed)
 		require.NoError(t, err)
 	})
@@ -2971,10 +2972,6 @@ func TestIsDataAvailable(t *testing.T) {
 
 		startWaiting := make(chan bool)
 
-		var custodyInfo peerdas.CustodyInfo
-		custodyInfo.TargetGroupCount.SetValidatorsCustodyRequirement(cgc)
-		custodyInfo.ToAdvertiseGroupCount.Set(cgc)
-
 		minimumColumnsCountToReconstruct := peerdas.MinimumColumnsCountToReconstruct()
 		indices := make([]uint64, 0, minimumColumnsCountToReconstruct-missingColumns)
 
@@ -2983,12 +2980,14 @@ func TestIsDataAvailable(t *testing.T) {
 		}
 
 		testParams := testIsAvailableParams{
-			options:                 []Option{WithCustodyInfo(&custodyInfo), WithStartWaitingDataColumnSidecars(startWaiting)},
+			options:                 []Option{WithStartWaitingDataColumnSidecars(startWaiting)},
 			columnsToSave:           indices,
 			blobKzgCommitmentsCount: 3,
 		}
 
 		ctx, _, service, root, signed := testIsAvailableSetup(t, testParams)
+		_, _, err := service.cfg.P2P.UpdateCustodyInfo(0, cgc)
+		require.NoError(t, err)
 		block := signed.Block()
 		slot := block.Slot()
 		proposerIndex := block.ProposerIndex()
@@ -3020,6 +3019,9 @@ func TestIsDataAvailable(t *testing.T) {
 			require.NoError(t, err)
 		}()
 
+		ctx, cancel := context.WithTimeout(ctx, time.Second*2)
+		defer cancel()
+
 		err = service.isDataAvailable(ctx, root, signed)
 		require.NoError(t, err)
 	})
@@ -3028,7 +3030,7 @@ func TestIsDataAvailable(t *testing.T) {
 		startWaiting := make(chan bool)
 
 		params := testIsAvailableParams{
-			options:                 []Option{WithCustodyInfo(&peerdas.CustodyInfo{}), WithStartWaitingDataColumnSidecars(startWaiting)},
+			options:                 []Option{WithStartWaitingDataColumnSidecars(startWaiting)},
 			blobKzgCommitmentsCount: 3,
 		}
 
@@ -3170,7 +3172,7 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 
 			t.Run(version.String(testVersion)+"_"+tc.name, func(t *testing.T) {
 				s.genesisTime = time.Unix(time.Now().Unix()-(int64(forkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-				s.lcStore = &lightClient.Store{}
+				s.lcStore = lightClient.NewLightClientStore(s.cfg.BeaconDB, s.cfg.P2P, s.cfg.StateNotifier.StateFeed())
 
 				var oldActualUpdate interfaces.LightClientOptimisticUpdate
 				var err error
@@ -3179,14 +3181,7 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 					lOld, cfgOld := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.oldOptions...)
 					require.NoError(t, s.processLightClientOptimisticUpdate(cfgOld.ctx, cfgOld.roblock, cfgOld.postState))
 
-					oldActualUpdate, err = lightClient.NewLightClientOptimisticUpdateFromBeaconState(
-						lOld.Ctx,
-						lOld.State.Slot(),
-						lOld.State,
-						lOld.Block,
-						lOld.AttestedState,
-						lOld.AttestedBlock,
-					)
+					oldActualUpdate, err = lightClient.NewLightClientOptimisticUpdateFromBeaconState(lOld.Ctx, lOld.State, lOld.Block, lOld.AttestedState, lOld.AttestedBlock)
 					require.NoError(t, err)
 
 					// check that the old update is saved
@@ -3200,14 +3195,7 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 				lNew, cfgNew := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.newOptions...)
 				require.NoError(t, s.processLightClientOptimisticUpdate(cfgNew.ctx, cfgNew.roblock, cfgNew.postState))
 
-				newActualUpdate, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(
-					lNew.Ctx,
-					lNew.State.Slot(),
-					lNew.State,
-					lNew.Block,
-					lNew.AttestedState,
-					lNew.AttestedBlock,
-				)
+				newActualUpdate, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(lNew.Ctx, lNew.State, lNew.Block, lNew.AttestedState, lNew.AttestedBlock)
 				require.NoError(t, err)
 
 				require.DeepNotEqual(t, newActualUpdate, oldActualUpdate, "new update should not be equal to old update")
@@ -3260,39 +3248,39 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 			expectReplace: true,
 		},
 		{
-			name:          "Old update is better - age - no supermajority",
+			name:          "Old update is better - finalized slot is higher",
 			oldOptions:    []util.LightClientOption{util.WithIncreasedFinalizedSlot(1)},
 			newOptions:    []util.LightClientOption{},
 			expectReplace: false,
 		},
 		{
-			name:          "Old update is better - age - both supermajority",
-			oldOptions:    []util.LightClientOption{util.WithIncreasedFinalizedSlot(1), util.WithSupermajority()},
-			newOptions:    []util.LightClientOption{util.WithSupermajority()},
-			expectReplace: false,
-		},
-		{
-			name:          "Old update is better - supermajority",
-			oldOptions:    []util.LightClientOption{util.WithSupermajority()},
+			name:          "Old update is better - attested slot is higher",
+			oldOptions:    []util.LightClientOption{util.WithIncreasedAttestedSlot(1)},
 			newOptions:    []util.LightClientOption{},
 			expectReplace: false,
 		},
 		{
-			name:          "New update is better - age - both supermajority",
-			oldOptions:    []util.LightClientOption{util.WithSupermajority()},
-			newOptions:    []util.LightClientOption{util.WithIncreasedFinalizedSlot(1), util.WithSupermajority()},
+			name:          "Old update is better - signature slot is higher",
+			oldOptions:    []util.LightClientOption{util.WithIncreasedSignatureSlot(1)},
+			newOptions:    []util.LightClientOption{},
+			expectReplace: false,
+		},
+		{
+			name:          "New update is better - finalized slot is higher",
+			oldOptions:    []util.LightClientOption{},
+			newOptions:    []util.LightClientOption{util.WithIncreasedAttestedSlot(1)},
 			expectReplace: true,
 		},
 		{
-			name:          "New update is better - age - no supermajority",
+			name:          "New update is better - attested slot is higher",
 			oldOptions:    []util.LightClientOption{},
-			newOptions:    []util.LightClientOption{util.WithIncreasedFinalizedSlot(1)},
+			newOptions:    []util.LightClientOption{util.WithIncreasedAttestedSlot(1)},
 			expectReplace: true,
 		},
 		{
-			name:          "New update is better - supermajority",
+			name:          "New update is better - signature slot is higher",
 			oldOptions:    []util.LightClientOption{},
-			newOptions:    []util.LightClientOption{util.WithSupermajority()},
+			newOptions:    []util.LightClientOption{util.WithIncreasedSignatureSlot(1)},
 			expectReplace: true,
 		},
 	}
@@ -3324,7 +3312,7 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 
 			t.Run(version.String(testVersion)+"_"+tc.name, func(t *testing.T) {
 				s.genesisTime = time.Unix(time.Now().Unix()-(int64(forkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-				s.lcStore = &lightClient.Store{}
+				s.lcStore = lightClient.NewLightClientStore(s.cfg.BeaconDB, s.cfg.P2P, s.cfg.StateNotifier.StateFeed())
 
 				var actualOldUpdate, actualNewUpdate interfaces.LightClientFinalityUpdate
 				var err error
@@ -3335,15 +3323,7 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 					require.NoError(t, s.processLightClientFinalityUpdate(cfgOld.ctx, cfgOld.roblock, cfgOld.postState))
 
 					// check that the old update is saved
-					actualOldUpdate, err = lightClient.NewLightClientFinalityUpdateFromBeaconState(
-						ctx,
-						cfgOld.postState.Slot(),
-						cfgOld.postState,
-						cfgOld.roblock,
-						lOld.AttestedState,
-						lOld.AttestedBlock,
-						lOld.FinalizedBlock,
-					)
+					actualOldUpdate, err = lightClient.NewLightClientFinalityUpdateFromBeaconState(ctx, cfgOld.postState, cfgOld.roblock, lOld.AttestedState, lOld.AttestedBlock, lOld.FinalizedBlock)
 					require.NoError(t, err)
 					oldUpdate := s.lcStore.LastFinalityUpdate()
 					require.DeepEqual(t, actualOldUpdate, oldUpdate)
@@ -3354,15 +3334,7 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 				require.NoError(t, s.processLightClientFinalityUpdate(cfgNew.ctx, cfgNew.roblock, cfgNew.postState))
 
 				// check that the actual old update and the actual new update are different
-				actualNewUpdate, err = lightClient.NewLightClientFinalityUpdateFromBeaconState(
-					ctx,
-					cfgNew.postState.Slot(),
-					cfgNew.postState,
-					cfgNew.roblock,
-					lNew.AttestedState,
-					lNew.AttestedBlock,
-					lNew.FinalizedBlock,
-				)
+				actualNewUpdate, err = lightClient.NewLightClientFinalityUpdateFromBeaconState(ctx, cfgNew.postState, cfgNew.roblock, lNew.AttestedState, lNew.AttestedBlock, lNew.FinalizedBlock)
 				require.NoError(t, err)
 				require.DeepNotEqual(t, actualOldUpdate, actualNewUpdate)
 

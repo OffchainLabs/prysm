@@ -50,7 +50,7 @@ func (c *client) registerRPCHandler(baseTopic string, handle rpcHandler) {
 
 		// since metadata requests do not have any data in the payload, we
 		// do not decode anything.
-		if baseTopic == p2p.RPCMetaDataTopicV1 || baseTopic == p2p.RPCMetaDataTopicV2 {
+		if baseTopic == p2p.RPCMetaDataTopicV1 || baseTopic == p2p.RPCMetaDataTopicV2 || baseTopic == p2p.RPCMetaDataTopicV3 {
 			if err := handle(context.Background(), base, stream); err != nil {
 				if !errors.Is(err, p2ptypes.ErrWrongForkDigestVersion) {
 					log.WithError(err).Debug("Could not handle p2p RPC")

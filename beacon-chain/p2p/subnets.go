@@ -181,6 +181,11 @@ func (s *Service) findPeersWithSubnets(
 		// Get all needed subnets that the node is subscribed to.
 		// Skip nodes that are not subscribed to any of the defective subnets.
 		node := iterator.Node()
+
+		if !s.filterPeer(node) {
+			continue
+		}
+
 		nodeSubnets, err := filter(node)
 		if err != nil {
 			return nil, errors.Wrap(err, "filter node")
@@ -385,11 +390,23 @@ func (s *Service) updateSubnetRecordWithMetadata(bitV bitfield.Bitvector64) {
 // with a new value for a bitfield of subnets tracked. It also record's
 // the sync committee subnet in the enr. It also updates the node's
 // metadata by increasing the sequence number and the subnets tracked by the node.
-func (s *Service) updateSubnetRecordWithMetadataV2(bitVAtt bitfield.Bitvector64, bitVSync bitfield.Bitvector4) {
+func (s *Service) updateSubnetRecordWithMetadataV2(
+	bitVAtt bitfield.Bitvector64,
+	bitVSync bitfield.Bitvector4,
+	custodyGroupCount uint64,
+) {
 	entry := enr.WithEntry(attSubnetEnrKey, &bitVAtt)
 	subEntry := enr.WithEntry(syncCommsSubnetEnrKey, &bitVSync)
-	s.dv5Listener.LocalNode().Set(entry)
-	s.dv5Listener.LocalNode().Set(subEntry)
+
+	localNode := s.dv5Listener.LocalNode()
+	localNode.Set(entry)
+	localNode.Set(subEntry)
+
+	if params.FuluEnabled() {
+		custodyGroupCountEntry := enr.WithEntry(custodyGroupCountEnrKey, custodyGroupCount)
+		localNode.Set(custodyGroupCountEntry)
+	}
+
 	s.metaData = wrapper.WrappedMetadataV1(&pb.MetaDataV1{
 		SeqNumber: s.metaData.SequenceNumber() + 1,
 		Attnets:   bitVAtt,
@@ -416,10 +433,8 @@ func (s *Service) updateSubnetRecordWithMetadataV3(
 	localNode.Set(syncSubnetsEntry)
 	localNode.Set(custodyGroupCountEntry)
 
-	newSeqNumber := s.metaData.SequenceNumber() + 1
-
 	s.metaData = wrapper.WrappedMetadataV2(&pb.MetaDataV2{
-		SeqNumber:         newSeqNumber,
+		SeqNumber:         s.metaData.SequenceNumber() + 1,
 		Attnets:           bitVAtt,
 		Syncnets:          bitVSync,
 		CustodyGroupCount: custodyGroupCount,

@@ -74,10 +74,13 @@ func (s *Service) blobSidecarsByRangeRPCHandler(ctx context.Context, msg interfa
 	if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
 		return err
 	}
+
+	remotePeer := stream.Conn().RemotePeer()
+
 	rp, err := validateBlobsByRange(r, s.cfg.chain.CurrentSlot())
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+		s.downscorePeer(remotePeer, "blobSidecarsByRangeRpcHandlerValidationError")
 		tracing.AnnotateError(span, err)
 		return err
 	}
@@ -87,7 +90,7 @@ func (s *Service) blobSidecarsByRangeRPCHandler(ctx context.Context, msg interfa
 	defer ticker.Stop()
 	batcher, err := newBlockRangeBatcher(rp, s.cfg.beaconDB, s.rateLimiter, s.cfg.chain.IsCanonical, ticker)
 	if err != nil {
-		log.WithError(err).Info("error in BlobSidecarsByRange batch")
+		log.WithError(err).Error("Cannot create new block range batcher")
 		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
 		tracing.AnnotateError(span, err)
 		return err
@@ -112,7 +115,7 @@ func (s *Service) blobSidecarsByRangeRPCHandler(ctx context.Context, msg interfa
 		}
 	}
 	if err := batch.error(); err != nil {
-		log.WithError(err).Debug("error in BlobSidecarsByRange batch")
+		log.WithError(err).Debug("Error in BlobSidecarsByRange batch")
 
 		// If a rate limit is hit, it means an error response has already been sent and the stream has been closed.
 		if !errors.Is(err, p2ptypes.ErrRateLimited) {

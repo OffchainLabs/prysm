@@ -20,6 +20,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -39,28 +40,29 @@ type rpcHandler func(context.Context, interface{}, libp2pcore.Stream) error
 
 // rpcHandlerByTopicFromFork returns the RPC handlers for a given fork index.
 func (s *Service) rpcHandlerByTopicFromFork(forkIndex int) (map[string]rpcHandler, error) {
-	// Fulu: https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#messages
+	// Fulu: https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#messages
 	if forkIndex >= version.Fulu {
 		return map[string]rpcHandler{
+			p2p.RPCStatusTopicV2:                    s.statusRPCHandler, // Updated in Fulu
 			p2p.RPCGoodByeTopicV1:                   s.goodbyeRPCHandler,
 			p2p.RPCBlocksByRangeTopicV2:             s.beaconBlocksByRangeRPCHandler,
 			p2p.RPCBlocksByRootTopicV2:              s.beaconBlocksRootRPCHandler,
 			p2p.RPCPingTopicV1:                      s.pingHandler,
-			p2p.RPCMetaDataTopicV3:                  s.metaDataHandler, // Modified in Fulu
-			p2p.RPCBlobSidecarsByRootTopicV1:        s.blobSidecarByRootRPCHandler,
-			p2p.RPCBlobSidecarsByRangeTopicV1:       s.blobSidecarsByRangeRPCHandler,
+			p2p.RPCMetaDataTopicV3:                  s.metaDataHandler,                     // Updated in Fulu
+			p2p.RPCBlobSidecarsByRootTopicV1:        s.blobSidecarByRootRPCHandler,         // Modified in Fulu
+			p2p.RPCBlobSidecarsByRangeTopicV1:       s.blobSidecarsByRangeRPCHandler,       // Modified in Fulu
 			p2p.RPCDataColumnSidecarsByRootTopicV1:  s.dataColumnSidecarByRootRPCHandler,   // Added in Fulu
 			p2p.RPCDataColumnSidecarsByRangeTopicV1: s.dataColumnSidecarsByRangeRPCHandler, // Added in Fulu
 		}, nil
 	}
 
-	// Electra: https://github.com/ethereum/consensus-specs/blob/dev/specs/electra/p2p-interface.md#messages
+	// Electra: https://github.com/ethereum/consensus-specs/blob/master/specs/electra/p2p-interface.md#messages
 	if forkIndex >= version.Electra {
 		return map[string]rpcHandler{
 			p2p.RPCStatusTopicV1:              s.statusRPCHandler,
 			p2p.RPCGoodByeTopicV1:             s.goodbyeRPCHandler,
-			p2p.RPCBlocksByRangeTopicV2:       s.beaconBlocksByRangeRPCHandler,
-			p2p.RPCBlocksByRootTopicV2:        s.beaconBlocksRootRPCHandler,
+			p2p.RPCBlocksByRangeTopicV2:       s.beaconBlocksByRangeRPCHandler, // Modified in Electra
+			p2p.RPCBlocksByRootTopicV2:        s.beaconBlocksRootRPCHandler,    // Modified in Electra
 			p2p.RPCPingTopicV1:                s.pingHandler,
 			p2p.RPCMetaDataTopicV2:            s.metaDataHandler,
 			p2p.RPCBlobSidecarsByRootTopicV1:  s.blobSidecarByRootRPCHandler,   // Modified in Electra
@@ -68,7 +70,7 @@ func (s *Service) rpcHandlerByTopicFromFork(forkIndex int) (map[string]rpcHandle
 		}, nil
 	}
 
-	// Deneb: https://github.com/ethereum/consensus-specs/blob/dev/specs/deneb/p2p-interface.md#messages
+	// Deneb: https://github.com/ethereum/consensus-specs/blob/master/specs/deneb/p2p-interface.md#messages
 	if forkIndex >= version.Deneb {
 		return map[string]rpcHandler{
 			p2p.RPCStatusTopicV1:              s.statusRPCHandler,
@@ -82,15 +84,15 @@ func (s *Service) rpcHandlerByTopicFromFork(forkIndex int) (map[string]rpcHandle
 		}, nil
 	}
 
-	// Capella: https://github.com/ethereum/consensus-specs/blob/dev/specs/capella/p2p-interface.md#messages
-	// Bellatrix: https://github.com/ethereum/consensus-specs/blob/dev/specs/bellatrix/p2p-interface.md#messages
-	// Altair: https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/p2p-interface.md#messages
+	// Capella: https://github.com/ethereum/consensus-specs/blob/master/specs/capella/p2p-interface.md#messages
+	// Bellatrix: https://github.com/ethereum/consensus-specs/blob/master/specs/bellatrix/p2p-interface.md#messages
+	// Altair: https://github.com/ethereum/consensus-specs/blob/master/specs/altair/p2p-interface.md#messages
 	if forkIndex >= version.Altair {
 		handler := map[string]rpcHandler{
 			p2p.RPCStatusTopicV1:        s.statusRPCHandler,
 			p2p.RPCGoodByeTopicV1:       s.goodbyeRPCHandler,
-			p2p.RPCBlocksByRangeTopicV2: s.beaconBlocksByRangeRPCHandler, // Updated in Altair and modified in Capella
-			p2p.RPCBlocksByRootTopicV2:  s.beaconBlocksRootRPCHandler,    // Updated in Altair and modified in Capella
+			p2p.RPCBlocksByRangeTopicV2: s.beaconBlocksByRangeRPCHandler, // Updated in Altair and modified in Bellatrix and Capella
+			p2p.RPCBlocksByRootTopicV2:  s.beaconBlocksRootRPCHandler,    // Updated in Altair and modified in Bellatrix and Capella
 			p2p.RPCPingTopicV1:          s.pingHandler,
 			p2p.RPCMetaDataTopicV2:      s.metaDataHandler, // Updated in Altair
 		}
@@ -105,7 +107,7 @@ func (s *Service) rpcHandlerByTopicFromFork(forkIndex int) (map[string]rpcHandle
 		return handler, nil
 	}
 
-	// PhaseO: https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/p2p-interface.md#messages
+	// PhaseO: https://github.com/ethereum/consensus-specs/blob/master/specs/phase0/p2p-interface.md#messages
 	if forkIndex >= version.Phase0 {
 		return map[string]rpcHandler{
 			p2p.RPCStatusTopicV1:        s.statusRPCHandler,
@@ -238,7 +240,7 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 		defer span.End()
 		span.SetAttributes(trace.StringAttribute("topic", topic))
 		span.SetAttributes(trace.StringAttribute("peer", remotePeer.String()))
-		log := log.WithField("peer", stream.Conn().RemotePeer().String()).WithField("topic", string(stream.Protocol()))
+		log := log.WithFields(logrus.Fields{"peer": remotePeer.String(), "topic": string(stream.Protocol())})
 
 		// Check before hand that peer is valid.
 		if err := s.cfg.p2p.Peers().IsBad(remotePeer); err != nil {
@@ -248,7 +250,7 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 			return
 		}
 		// Validate request according to peer limits.
-		if err := s.rateLimiter.validateRawRpcRequest(stream); err != nil {
+		if err := s.rateLimiter.validateRawRpcRequest(stream, 1); err != nil {
 			log.WithError(err).Debug("Could not validate rpc request from peer")
 			return
 		}
@@ -304,7 +306,7 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 			if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
 				logStreamErrors(err, topic)
 				tracing.AnnotateError(span, err)
-				s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+				s.downscorePeer(remotePeer, "registerRpcError")
 				return
 			}
 			if err := handle(ctx, msg, stream); err != nil {
@@ -324,7 +326,7 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 			if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
 				logStreamErrors(err, topic)
 				tracing.AnnotateError(span, err)
-				s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+				s.downscorePeer(remotePeer, "registerRpcError")
 				return
 			}
 			if err := handle(ctx, nTyp.Elem().Interface(), stream); err != nil {

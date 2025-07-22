@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/async/abool"
+	"github.com/OffchainLabs/prysm/v6/async/event"
 	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	db "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
@@ -54,7 +55,7 @@ func TestRPC_LightClientBootstrap(t *testing.T) {
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
 		chainStarted: abool.New(),
-		lcStore:      lightClient.NewLightClientStore(d),
+		lcStore:      lightClient.NewLightClientStore(d, &p2ptest.FakeP2P{}, new(event.Feed)),
 		subHandler:   newSubTopicHandler(),
 		rateLimiter:  newRateLimiter(p1),
 	}
@@ -176,7 +177,7 @@ func TestRPC_LightClientOptimisticUpdate(t *testing.T) {
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
 		chainStarted: abool.New(),
-		lcStore:      &lightClient.Store{},
+		lcStore:      lightClient.NewLightClientStore(d, &p2ptest.FakeP2P{}, new(event.Feed)),
 		subHandler:   newSubTopicHandler(),
 		rateLimiter:  newRateLimiter(p1),
 	}
@@ -199,10 +200,10 @@ func TestRPC_LightClientOptimisticUpdate(t *testing.T) {
 		t.Run(version.String(i), func(t *testing.T) {
 			l := util.NewTestLightClient(t, i)
 
-			update, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
+			update, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock)
 			require.NoError(t, err)
 
-			r.lcStore.SetLastOptimisticUpdate(update)
+			r.lcStore.SetLastOptimisticUpdate(update, false)
 
 			var wg sync.WaitGroup
 			wg.Add(1)
@@ -296,7 +297,7 @@ func TestRPC_LightClientFinalityUpdate(t *testing.T) {
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
 		chainStarted: abool.New(),
-		lcStore:      &lightClient.Store{},
+		lcStore:      lightClient.NewLightClientStore(d, &p2ptest.FakeP2P{}, new(event.Feed)),
 		subHandler:   newSubTopicHandler(),
 		rateLimiter:  newRateLimiter(p1),
 	}
@@ -319,10 +320,10 @@ func TestRPC_LightClientFinalityUpdate(t *testing.T) {
 		t.Run(version.String(i), func(t *testing.T) {
 			l := util.NewTestLightClient(t, i)
 
-			update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+			update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 			require.NoError(t, err)
 
-			r.lcStore.SetLastFinalityUpdate(update)
+			r.lcStore.SetLastFinalityUpdate(update, false)
 
 			var wg sync.WaitGroup
 			wg.Add(1)
@@ -416,7 +417,7 @@ func TestRPC_LightClientUpdatesByRange(t *testing.T) {
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
 		chainStarted: abool.New(),
-		lcStore:      lightClient.NewLightClientStore(d),
+		lcStore:      lightClient.NewLightClientStore(d, &p2ptest.FakeP2P{}, new(event.Feed)),
 		subHandler:   newSubTopicHandler(),
 		rateLimiter:  newRateLimiter(p1),
 	}
@@ -439,7 +440,7 @@ func TestRPC_LightClientUpdatesByRange(t *testing.T) {
 		t.Run(version.String(i), func(t *testing.T) {
 			for j := 0; j < 5; j++ {
 				l := util.NewTestLightClient(t, i, util.WithIncreasedAttestedSlot(uint64(j)))
-				update, err := lightClient.NewLightClientUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+				update, err := lightClient.NewLightClientUpdateFromBeaconState(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 				require.NoError(t, err)
 				require.NoError(t, r.cfg.beaconDB.SaveLightClientUpdate(ctx, uint64(j), update))
 			}

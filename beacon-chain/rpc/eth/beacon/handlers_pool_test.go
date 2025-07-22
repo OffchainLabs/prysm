@@ -1103,9 +1103,9 @@ func TestSubmitSyncCommitteeSignatures(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 1, len(msgsInPool))
 		assert.Equal(t, primitives.Slot(1), msgsInPool[0].Slot)
-		assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(msgsInPool[0].BlockRoot))
+		assert.Equal(t, "0xbacd20f09da907734434f052bd4c9503aa16bab1960e89ea20610d08d064481c", hexutil.Encode(msgsInPool[0].BlockRoot))
 		assert.Equal(t, primitives.ValidatorIndex(1), msgsInPool[0].ValidatorIndex)
-		assert.Equal(t, "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505", hexutil.Encode(msgsInPool[0].Signature))
+		assert.Equal(t, "0xb591bd4ca7d745b6e027879645d7c014fecb8c58631af070f7607acc0c1c948a5102a33267f0e4ba41a85b254b07df91185274375b2e6436e37e81d2fd46cb3751f5a6c86efb7499c1796c0c17e122a54ac067bb0f5ff41f3241659cceb0c21c", hexutil.Encode(msgsInPool[0].Signature))
 		assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
 	})
 	t.Run("multiple", func(t *testing.T) {
@@ -2497,23 +2497,23 @@ var (
 	singleSyncCommitteeMsg = `[
   {
     "slot": "1",
-    "beacon_block_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+    "beacon_block_root": "0xbacd20f09da907734434f052bd4c9503aa16bab1960e89ea20610d08d064481c",
     "validator_index": "1",
-    "signature": "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505"
+    "signature": "0xb591bd4ca7d745b6e027879645d7c014fecb8c58631af070f7607acc0c1c948a5102a33267f0e4ba41a85b254b07df91185274375b2e6436e37e81d2fd46cb3751f5a6c86efb7499c1796c0c17e122a54ac067bb0f5ff41f3241659cceb0c21c"
   }
 ]`
 	multipleSyncCommitteeMsg = `[
   {
     "slot": "1",
-    "beacon_block_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+    "beacon_block_root": "0xbacd20f09da907734434f052bd4c9503aa16bab1960e89ea20610d08d064481c",
     "validator_index": "1",
-    "signature": "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505"
+    "signature": "0xb591bd4ca7d745b6e027879645d7c014fecb8c58631af070f7607acc0c1c948a5102a33267f0e4ba41a85b254b07df91185274375b2e6436e37e81d2fd46cb3751f5a6c86efb7499c1796c0c17e122a54ac067bb0f5ff41f3241659cceb0c21c"
   },
   {
     "slot": "2",
-    "beacon_block_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+    "beacon_block_root": "0x2757f6fd8590925cd000a86a3e543f98a93eae23781783a33e34504729a8ad0c",
     "validator_index": "1",
-    "signature": "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505"
+    "signature": "0x99dfe11b6c8b306d2c72eb891926d37922d226ea8e1e7484d6c30fab746494f192b0daa3e40c13f1e335b35238f3362c113455a329b1fab0bc500bc47f643786f49e151d5b5052afb51af57ba5aa34a6051dc90ee4de83a26eb54a895061d89a"
   }
 ]`
 	// signature is invalid
@@ -2523,6 +2523,18 @@ var (
     "beacon_block_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
     "validator_index": "1",
     "signature": "foo"
+  },
+  {
+	"slot": "1121",
+	"beacon_block_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+	"validator_index": "1",
+	"signature": "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505"
+  },
+  {
+	"slot": "1121",
+	"beacon_block_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
+	"validator_index": "2",
+	"signature": "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505"
   }
 ]`
 	// signatures are invalid

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -200,7 +201,7 @@ func TestGetSpec(t *testing.T) {
 	data, ok := resp.Data.(map[string]interface{})
 	require.Equal(t, true, ok)
 
-	assert.Equal(t, 175, len(data))
+	assert.Equal(t, 176, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -577,6 +578,11 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "102", v)
 			case "BLOB_SIDECAR_SUBNET_COUNT_ELECTRA":
 				assert.Equal(t, "103", v)
+			case "BLOB_SCHEDULE":
+				// BLOB_SCHEDULE should be an empty slice when no schedule is defined
+				blobSchedule, ok := v.([]interface{})
+				assert.Equal(t, true, ok)
+				assert.Equal(t, 0, len(blobSchedule))
 			default:
 				t.Errorf("Incorrect key: %s", k)
 			}
@@ -636,4 +642,87 @@ func TestForkSchedule_Ok(t *testing.T) {
 		os := forks.NewOrderedSchedule(params.BeaconConfig())
 		assert.Equal(t, os.Len(), len(resp.Data))
 	})
+}
+
+func TestGetSpec_BlobSchedule(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig().Copy()
+	config.FuluForkEpoch = 1
+
+	// Set up a blob schedule with test data
+	config.BlobSchedule = []params.BlobScheduleEntry{
+		{
+			Epoch:            primitives.Epoch(100),
+			MaxBlobsPerBlock: 6,
+		},
+		{
+			Epoch:            primitives.Epoch(200),
+			MaxBlobsPerBlock: 9,
+		},
+	}
+	params.OverrideBeaconConfig(config)
+
+	request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/config/spec", nil)
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+
+	GetSpec(writer, request)
+	require.Equal(t, http.StatusOK, writer.Code)
+	resp := structs.GetSpecResponse{}
+	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
+	data, ok := resp.Data.(map[string]interface{})
+	require.Equal(t, true, ok)
+
+	// Verify BLOB_SCHEDULE is present and properly formatted
+	blobScheduleValue, exists := data["BLOB_SCHEDULE"]
+	require.Equal(t, true, exists)
+
+	// Verify it's a slice of maps (actual JSON object, not string)
+	// The JSON unmarshaling converts it to []interface{} with map[string]interface{} entries
+	blobScheduleSlice, ok := blobScheduleValue.([]interface{})
+	require.Equal(t, true, ok)
+
+	// Convert to generic interface for easier testing
+	var blobSchedule []map[string]interface{}
+	for _, entry := range blobScheduleSlice {
+		entryMap, ok := entry.(map[string]interface{})
+		require.Equal(t, true, ok)
+		blobSchedule = append(blobSchedule, entryMap)
+	}
+
+	// Verify the blob schedule content
+	require.Equal(t, 2, len(blobSchedule))
+
+	// Check first entry - values should be strings for consistent API output
+	assert.Equal(t, "100", blobSchedule[0]["EPOCH"])
+	assert.Equal(t, "6", blobSchedule[0]["MAX_BLOBS_PER_BLOCK"])
+
+	// Check second entry - values should be strings for consistent API output
+	assert.Equal(t, "200", blobSchedule[1]["EPOCH"])
+	assert.Equal(t, "9", blobSchedule[1]["MAX_BLOBS_PER_BLOCK"])
+}
+
+func TestGetSpec_BlobSchedule_NotFulu(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig().Copy()
+	// Fulu not scheduled (default: math.MaxUint64)
+	config.FuluForkEpoch = math.MaxUint64
+	config.BlobSchedule = []params.BlobScheduleEntry{
+		{Epoch: primitives.Epoch(100), MaxBlobsPerBlock: 6},
+	}
+	params.OverrideBeaconConfig(config)
+
+	request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/config/spec", nil)
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+
+	GetSpec(writer, request)
+	require.Equal(t, http.StatusOK, writer.Code)
+	resp := structs.GetSpecResponse{}
+	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
+	data, ok := resp.Data.(map[string]interface{})
+	require.Equal(t, true, ok)
+
+	_, exists := data["BLOB_SCHEDULE"]
+	require.Equal(t, false, exists)
 }
