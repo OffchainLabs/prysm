@@ -515,7 +515,7 @@ func TestDiscoveryV5_SeqNumber(t *testing.T) {
 	nodeTwo := enode.NewLocalNode(db, keyTwo) // use the same db with different key
 	nodeTwo.Set(enr.IPv6{0x20, 0x01, 0x48, 0x60, 0, 0, 0x20, 0x01, 0, 0, 0, 0, 0, 0, 0x00, 0x68})
 	seqTwo := nodeTwo.Seq()
-	assert.Equal(t, seqTwo != newSeq, true)
+	assert.NotEqual(t, seqTwo, newSeq)
 	sTwo := &Service{dv5Listener: mockListener{localNode: nodeTwo}}
 	_, err = sTwo.DiscoveryAddresses()
 	require.NoError(t, err)
