@@ -11,7 +11,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
@@ -2722,4 +2725,480 @@ func testNewBlobVerifier() verification.NewBlobVerifier {
 			},
 		}
 	}
+}
+
+// Test retry helper methods
+func TestRetryHelperMethods(t *testing.T) {
+	client := &Service{}
+	blockRoot := [32]byte{1, 2, 3}
+
+	t.Run("hasActiveRetry returns false initially", func(t *testing.T) {
+		hasActive := client.hasActiveRetry(blockRoot)
+		require.Equal(t, false, hasActive)
+	})
+
+	t.Run("hasActiveRetry returns true after storing cancel function", func(t *testing.T) {
+		_, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		client.activeRetries.Store(blockRoot, cancel)
+
+		hasActive := client.hasActiveRetry(blockRoot)
+		require.Equal(t, true, hasActive)
+
+		// Clean up
+		client.activeRetries.Delete(blockRoot)
+	})
+
+	t.Run("isDataAlreadyAvailable returns false when no checker", func(t *testing.T) {
+		client.availabilityChecker = nil
+		isAvailable := client.isDataAlreadyAvailable(context.Background(), blockRoot, nil)
+		require.Equal(t, false, isAvailable)
+	})
+
+	t.Run("isDataAlreadyAvailable uses checker when available", func(t *testing.T) {
+		mockChecker := &mockDataAvailabilityChecker{
+			isAvailable: true,
+		}
+		client.availabilityChecker = mockChecker
+
+		isAvailable := client.isDataAlreadyAvailable(context.Background(), blockRoot, nil)
+		require.Equal(t, true, isAvailable)
+		require.Equal(t, true, mockChecker.called)
+	})
+}
+
+// Test ReconstructDataColumnSidecars with retry logic
+func TestReconstructDataColumnSidecars_WithRetry(t *testing.T) {
+	// Start the trusted setup.
+	err := kzg.Start()
+	require.NoError(t, err)
+
+	// Setup test config
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.CapellaForkEpoch = 1
+	cfg.DenebForkEpoch = 2
+	cfg.ElectraForkEpoch = 3
+	cfg.FuluForkEpoch = 4
+	params.OverrideBeaconConfig(cfg)
+
+	// Create test block
+	kzgCommitments := createRandomKzgCommitments(t, 3)
+	sb := util.NewBeaconBlockFulu()
+	sb.Block.Body.BlobKzgCommitments = kzgCommitments
+	signedB, err := blocks.NewSignedBeaconBlock(sb)
+	require.NoError(t, err)
+	r := [32]byte{1, 2, 3}
+
+	t.Run("successful initial call does not trigger retry", func(t *testing.T) {
+		ctx := context.Background()
+		// Setup server that returns all blobs
+		blobMasks := []bool{true, true, true}
+		srv := createBlobServerV2(t, 3, blobMasks)
+		defer srv.Close()
+
+		client := &Service{
+			availabilityChecker: &mockDataAvailabilityChecker{isAvailable: false},
+		}
+		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
+		defer rpcClient.Close()
+
+		dataColumns, err := client.ReconstructDataColumnSidecars(ctx, signedB, r)
+		require.NoError(t, err)
+		require.Equal(t, 128, len(dataColumns))
+
+		// Should not have any active retries since initial call succeeded
+		require.Equal(t, false, client.hasActiveRetry(r))
+	})
+
+	t.Run("failed initial call triggers retry", func(t *testing.T) {
+		ctx := context.Background()
+		// Setup server that returns no blobs
+		srv := createBlobServerV2(t, 0, []bool{})
+		defer srv.Close()
+
+		client := &Service{
+			availabilityChecker: &mockDataAvailabilityChecker{isAvailable: false},
+		}
+		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
+		defer rpcClient.Close()
+
+		dataColumns, err := client.ReconstructDataColumnSidecars(ctx, signedB, r)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(dataColumns))
+
+		// Wait a bit for the goroutine to start
+		time.Sleep(10 * time.Millisecond)
+
+		// Should have active retry since initial call returned empty
+		require.Equal(t, true, client.hasActiveRetry(r))
+
+		// Clean up
+		if cancel, ok := client.activeRetries.Load(r); ok {
+			cancel.(context.CancelFunc)()
+		}
+	})
+
+	t.Run("does not start retry if data already available", func(t *testing.T) {
+		ctx := context.Background()
+		// Setup server that returns no blobs
+		srv := createBlobServerV2(t, 0, []bool{})
+		defer srv.Close()
+
+		client := &Service{
+			availabilityChecker: &mockDataAvailabilityChecker{isAvailable: true},
+		}
+		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
+		defer rpcClient.Close()
+
+		dataColumns, err := client.ReconstructDataColumnSidecars(ctx, signedB, r)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(dataColumns))
+
+		// Should not have active retry since data is already available
+		require.Equal(t, false, client.hasActiveRetry(r))
+	})
+
+	t.Run("does not start duplicate retry", func(t *testing.T) {
+		ctx := context.Background()
+		// Setup server that returns no blobs
+		srv := createBlobServerV2(t, 0, []bool{})
+		defer srv.Close()
+
+		client := &Service{
+			availabilityChecker: &mockDataAvailabilityChecker{isAvailable: false},
+		}
+		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
+		defer rpcClient.Close()
+
+		// First call should start retry
+		dataColumns, err := client.ReconstructDataColumnSidecars(ctx, signedB, r)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(dataColumns))
+
+		// Wait a bit for the goroutine to start
+		time.Sleep(10 * time.Millisecond)
+		require.Equal(t, true, client.hasActiveRetry(r))
+
+		// Second call should not start another retry
+		dataColumns, err = client.ReconstructDataColumnSidecars(ctx, signedB, r)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(dataColumns))
+		require.Equal(t, true, client.hasActiveRetry(r))
+
+		// Clean up
+		if cancel, ok := client.activeRetries.Load(r); ok {
+			cancel.(context.CancelFunc)()
+		}
+	})
+}
+
+// Test timeout and cleanup behavior
+func TestRetryTimeout(t *testing.T) {
+	// Start the trusted setup.
+	err := kzg.Start()
+	require.NoError(t, err)
+
+	// Setup test config
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.CapellaForkEpoch = 1
+	cfg.DenebForkEpoch = 2
+	cfg.ElectraForkEpoch = 3
+	cfg.FuluForkEpoch = 4
+	params.OverrideBeaconConfig(cfg)
+
+	// Create test block
+	kzgCommitments := createRandomKzgCommitments(t, 1)
+	sb := util.NewBeaconBlockFulu()
+	sb.Block.Body.BlobKzgCommitments = kzgCommitments
+	signedB, err := blocks.NewSignedBeaconBlock(sb)
+	require.NoError(t, err)
+	r := [32]byte{1, 2, 3}
+
+	t.Run("retry cleans up after timeout", func(t *testing.T) {
+		// Setup server that always returns no blobs
+		srv := createBlobServerV2(t, 0, []bool{})
+		defer srv.Close()
+
+		client := &Service{
+			availabilityChecker: &mockDataAvailabilityChecker{isAvailable: false},
+		}
+		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
+		defer rpcClient.Close()
+
+		// Start retry with very short timeout for testing
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer cancel()
+
+		go client.retryReconstructDataColumnSidecars(ctx, signedB, r)
+
+		// Wait a bit for the goroutine to start
+		time.Sleep(10 * time.Millisecond)
+
+		// Should have active retry initially
+		require.Equal(t, true, client.hasActiveRetry(r))
+
+		// Wait for timeout
+		time.Sleep(100 * time.Millisecond)
+
+		// Should be cleaned up after timeout
+		require.Equal(t, false, client.hasActiveRetry(r))
+	})
+}
+
+// Test concurrent retry scenarios
+func TestConcurrentRetries(t *testing.T) {
+	// Start the trusted setup.
+	err := kzg.Start()
+	require.NoError(t, err)
+
+	// Setup test config
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.CapellaForkEpoch = 1
+	cfg.DenebForkEpoch = 2
+	cfg.ElectraForkEpoch = 3
+	cfg.FuluForkEpoch = 4
+	params.OverrideBeaconConfig(cfg)
+
+	t.Run("multiple blocks can have concurrent retries", func(t *testing.T) {
+		// Setup server that returns no blobs
+		srv := createBlobServerV2(t, 0, []bool{})
+		defer srv.Close()
+
+		client := &Service{
+			availabilityChecker: &mockDataAvailabilityChecker{isAvailable: false},
+		}
+		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
+		defer rpcClient.Close()
+
+		// Create multiple test blocks
+		testBlocks := make([]interfaces.ReadOnlySignedBeaconBlock, 3)
+		roots := make([][32]byte, 3)
+
+		for i := 0; i < 3; i++ {
+			kzgCommitments := createRandomKzgCommitments(t, 1)
+			sb := util.NewBeaconBlockFulu()
+			sb.Block.Body.BlobKzgCommitments = kzgCommitments
+			signedB, err := blocks.NewSignedBeaconBlock(sb)
+			require.NoError(t, err)
+			testBlocks[i] = signedB
+			roots[i] = [32]byte{byte(i), byte(i), byte(i)}
+		}
+
+		ctx := context.Background()
+
+		// Start retries for all blocks
+		for i := 0; i < 3; i++ {
+			_, err := client.ReconstructDataColumnSidecars(ctx, testBlocks[i], roots[i])
+			require.NoError(t, err)
+		}
+
+		// Wait a bit for the goroutines to start
+		time.Sleep(10 * time.Millisecond)
+
+		// All should have active retries
+		for i := 0; i < 3; i++ {
+			require.Equal(t, true, client.hasActiveRetry(roots[i]))
+		}
+
+		// Clean up
+		for i := 0; i < 3; i++ {
+			if cancel, ok := client.activeRetries.Load(roots[i]); ok {
+				cancel.(context.CancelFunc)()
+			}
+		}
+	})
+}
+
+// Test end-to-end retry behavior with data availability changes
+func TestRetryBehaviorWithDataAvailability(t *testing.T) {
+	// Start the trusted setup.
+	err := kzg.Start()
+	require.NoError(t, err)
+
+	// Setup test config
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.CapellaForkEpoch = 1
+	cfg.DenebForkEpoch = 2
+	cfg.ElectraForkEpoch = 3
+	cfg.FuluForkEpoch = 4
+	params.OverrideBeaconConfig(cfg)
+
+	// Create test block
+	kzgCommitments := createRandomKzgCommitments(t, 1)
+	sb := util.NewBeaconBlockFulu()
+	sb.Block.Body.BlobKzgCommitments = kzgCommitments
+	signedB, err := blocks.NewSignedBeaconBlock(sb)
+	require.NoError(t, err)
+	r := [32]byte{1, 2, 3}
+
+	t.Run("retry stops when data becomes available", func(t *testing.T) {
+		// Setup server that returns no blobs initially
+		srv := createBlobServerV2(t, 0, []bool{})
+		defer srv.Close()
+
+		// Availability checker starts false but becomes true after delay
+		mockChecker := &mockDataAvailabilityChecker{isAvailable: false}
+		client := &Service{
+			availabilityChecker: mockChecker,
+		}
+		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
+		defer rpcClient.Close()
+
+		// Start the initial reconstruction which should trigger retry
+		ctx := context.Background()
+		dataColumns, err := client.ReconstructDataColumnSidecars(ctx, signedB, r)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(dataColumns))
+
+		// Wait a bit for the goroutine to start
+		time.Sleep(10 * time.Millisecond)
+
+		// Verify retry started
+		require.Equal(t, true, client.hasActiveRetry(r))
+
+		// After a short delay, make data available
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			mockChecker.isAvailable = true
+		}()
+
+		// Wait for retry to stop
+		time.Sleep(300 * time.Millisecond)
+
+		// Retry should have stopped
+		require.Equal(t, false, client.hasActiveRetry(r))
+
+		// Verify availability checker was called during retry
+		require.Equal(t, true, mockChecker.called)
+	})
+
+	t.Run("retry continues when data is not available", func(t *testing.T) {
+		// Setup server that returns no blobs
+		srv := createBlobServerV2(t, 0, []bool{})
+		defer srv.Close()
+
+		// Availability checker always returns false
+		mockChecker := &mockDataAvailabilityChecker{isAvailable: false}
+		client := &Service{
+			availabilityChecker: mockChecker,
+		}
+		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
+		defer rpcClient.Close()
+
+		// Start the initial reconstruction which should trigger retry
+		ctx := context.Background()
+		dataColumns, err := client.ReconstructDataColumnSidecars(ctx, signedB, r)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(dataColumns))
+
+		// Wait a bit for the goroutine to start
+		time.Sleep(10 * time.Millisecond)
+
+		// Verify retry started
+		require.Equal(t, true, client.hasActiveRetry(r))
+
+		// Wait a bit - retry should still be active
+		time.Sleep(100 * time.Millisecond)
+		require.Equal(t, true, client.hasActiveRetry(r))
+
+		// Clean up
+		if cancel, ok := client.activeRetries.Load(r); ok {
+			cancel.(context.CancelFunc)()
+		}
+
+		// Wait for cleanup
+		time.Sleep(50 * time.Millisecond)
+		require.Equal(t, false, client.hasActiveRetry(r))
+	})
+}
+
+// Mock data availability checker for testing
+type mockDataAvailabilityChecker struct {
+	isAvailable bool
+	called      bool
+}
+
+func (m *mockDataAvailabilityChecker) IsDataAvailable(ctx context.Context, blockRoot [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) (bool, error) {
+	m.called = true
+	return m.isAvailable, nil
+}
+
+// TestConcurrentReconstructDataColumnSidecars tests that concurrent calls to ReconstructDataColumnSidecars
+// don't result in multiple getBlobsV2 calls for the same block root
+func TestConcurrentReconstructDataColumnSidecars(t *testing.T) {
+	t.Run("concurrent calls share result", func(t *testing.T) {
+		// Setup server that tracks call count
+		callCount := int32(0)
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			atomic.AddInt32(&callCount, 1)
+			w.Header().Set("Content-Type", "application/json")
+			// Simulate some processing time
+			time.Sleep(10 * time.Millisecond)
+
+			if strings.Contains(r.URL.RequestURI(), GetBlobsV2) {
+				// Return empty result - simulating EL doesn't have the data yet
+				resp := []interface{}{nil}
+				respJSON, _ := json.Marshal(map[string]interface{}{
+					"jsonrpc": "2.0",
+					"id":      1,
+					"result":  resp,
+				})
+				_, _ = w.Write(respJSON)
+				return
+			}
+		}))
+		defer srv.Close()
+
+		// Setup client
+		client := &Service{}
+		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
+		defer rpcClient.Close()
+
+		// Create test block with KZG commitments
+		slot := primitives.Slot(100)
+		block := util.NewBeaconBlockDeneb()
+		block.Block.Slot = slot
+		commitment := [48]byte{1, 2, 3}
+		block.Block.Body.BlobKzgCommitments = [][]byte{commitment[:]}
+
+		signedBlock, err := blocks.NewSignedBeaconBlock(block)
+		require.NoError(t, err)
+
+		blockRoot, err := signedBlock.Block().HashTreeRoot()
+		require.NoError(t, err)
+
+		ctx := context.Background()
+
+		// Start multiple concurrent calls
+		numCalls := 5
+		var wg sync.WaitGroup
+		results := make([][]blocks.VerifiedRODataColumn, numCalls)
+		errors := make([]error, numCalls)
+
+		for i := 0; i < numCalls; i++ {
+			wg.Add(1)
+			go func(index int) {
+				defer wg.Done()
+				result, err := client.ReconstructDataColumnSidecars(ctx, signedBlock, blockRoot)
+				results[index] = result
+				errors[index] = err
+			}(i)
+		}
+
+		// Wait for all calls to complete
+		wg.Wait()
+
+		// Verify that GetBlobsV2 was called only once, not numCalls times
+		finalCallCount := atomic.LoadInt32(&callCount)
+		require.Equal(t, int32(1), finalCallCount, "Expected GetBlobsV2 to be called only once, but was called %d times", finalCallCount)
+
+		// Verify all calls got the same result length
+		for i := 1; i < numCalls; i++ {
+			require.Equal(t, len(results[0]), len(results[i]), "All concurrent calls should return same result length")
+		}
+	})
 }
