@@ -1138,7 +1138,6 @@ func (s *Service) eventsEndpoints() []endpoint {
 			name:     namespace + ".StreamEvents",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.EventStreamMediaType}),
-				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.StreamEvents,
 			methods: []string{http.MethodGet},
