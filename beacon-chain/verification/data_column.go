@@ -165,7 +165,7 @@ func (dv *RODataColumnsVerifier) NotFromFutureSlot() (err error) {
 		// Extract the data column slot.
 		dataColumnSlot := dataColumn.Slot()
 
-		// Skip if the data column slotis the same as the current slot.
+		// Skip if the data column slot is the same as the current slot.
 		if currentSlot == dataColumnSlot {
 			continue
 		}
@@ -174,7 +174,7 @@ func (dv *RODataColumnsVerifier) NotFromFutureSlot() (err error) {
 		// We lower the time by MAXIMUM_GOSSIP_CLOCK_DISPARITY in case system time is running slightly behind real time.
 		earliestStart, err := dv.clock.SlotStart(dataColumnSlot)
 		if err != nil {
-			return fmt.Errorf("failed to determine slot start time from clock waiter: %w", err)
+			return columnErrBuilder(errors.Wrap(err, "failed to determine slot start time from clock waiter"))
 		}
 		earliestStart = earliestStart.Add(-maximumGossipClockDisparity)
 
@@ -204,11 +204,8 @@ func (dv *RODataColumnsVerifier) SlotAboveFinalized() (err error) {
 	}
 
 	for _, dataColumn := range dv.dataColumns {
-		// Extract the data column slot.
-		dataColumnSlot := dataColumn.Slot()
-
 		// Check if the data column slot is after first slot of the epoch corresponding to the finalized checkpoint.
-		if dataColumnSlot <= startSlot {
+		if dataColumn.Slot() <= startSlot {
 			return columnErrBuilder(errSlotNotAfterFinalized)
 		}
 	}
@@ -271,10 +268,8 @@ func (dv *RODataColumnsVerifier) SidecarParentSeen(parentSeen func([fieldparams.
 	defer dv.recordResult(RequireSidecarParentSeen, &err)
 
 	for _, dataColumn := range dv.dataColumns {
-		// Extract the root of the parent block corresponding to the data column.
-		parentRoot := dataColumn.ParentRoot()
-
 		// Skip if the parent root has been seen.
+		parentRoot := dataColumn.ParentRoot()
 		if parentSeen != nil && parentSeen(parentRoot) {
 			continue
 		}
@@ -295,10 +290,7 @@ func (dv *RODataColumnsVerifier) SidecarParentValid(badParent func([fieldparams.
 	defer dv.recordResult(RequireSidecarParentValid, &err)
 
 	for _, dataColumn := range dv.dataColumns {
-		// Extract the root of the parent block corresponding to the data column.
-		parentRoot := dataColumn.ParentRoot()
-
-		if badParent != nil && badParent(parentRoot) {
+		if badParent != nil && badParent(dataColumn.ParentRoot()) {
 			return columnErrBuilder(errSidecarParentInvalid)
 		}
 	}
@@ -314,21 +306,15 @@ func (dv *RODataColumnsVerifier) SidecarParentSlotLower() (err error) {
 	defer dv.recordResult(RequireSidecarParentSlotLower, &err)
 
 	for _, dataColumn := range dv.dataColumns {
-		// Extract the root of the parent block corresponding to the data column.
-		parentRoot := dataColumn.ParentRoot()
-
 		// Compute the slot of the parent block.
-		parentSlot, err := dv.fc.Slot(parentRoot)
+		parentSlot, err := dv.fc.Slot(dataColumn.ParentRoot())
 		if err != nil {
 			return columnErrBuilder(errors.Wrap(err, "slot"))
 		}
 
-		// Extract the slot of the data column.
-		dataColumnSlot := dataColumn.Slot()
-
 		// Check if the data column slot is after the parent slot.
-		if parentSlot >= dataColumnSlot {
-			return errSlotNotAfterParent
+		if parentSlot >= dataColumn.Slot() {
+			return columnErrBuilder(errSlotNotAfterParent)
 		}
 	}
 
@@ -435,7 +421,7 @@ func (dv *RODataColumnsVerifier) SidecarProposerExpected(ctx context.Context) (e
 		// Compute the target root for the epoch.
 		targetRoot, err := dv.fc.TargetRootForEpoch(parentRoot, dataColumnEpoch)
 		if err != nil {
-			return [fieldparams.RootLength]byte{}, errors.Wrap(err, "target root from epoch")
+			return [fieldparams.RootLength]byte{}, columnErrBuilder(errors.Wrap(err, "target root from epoch"))
 		}
 
 		// Store the target root in the cache.
@@ -534,7 +520,7 @@ func inclusionProofKey(c blocks.RODataColumn) ([160]byte, error) {
 
 	root, err := c.SignedBlockHeader.HashTreeRoot()
 	if err != nil {
-		return [160]byte{}, errors.Wrap(err, "hash tree root")
+		return [160]byte{}, columnErrBuilder(errors.Wrap(err, "hash tree root"))
 	}
 
 	for i := range c.KzgCommitmentsInclusionProof {
