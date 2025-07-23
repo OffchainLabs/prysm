@@ -74,7 +74,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	verifier := s.newColumnsVerifier(roDataColumns, verification.GossipDataColumnSidecarRequirements)
 
 	// Start the verification process.
-	// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#the-gossip-domain-gossipsub
+	// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#data_column_sidecar_subnet_id
 
 	// [REJECT] The sidecar is valid as verified by `verify_data_column_sidecar(sidecar)`.
 	if err := verifier.ValidFields(); err != nil {
@@ -86,7 +86,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		return pubsub.ValidationReject, err
 	}
 
-	// [IGNORE] The sidecar is not from a future slot (with a `MAXIMUM_GOSSIP_CLOCK_DISPARITY`` allowance
+	// [IGNORE] The sidecar is not from a future slot (with a `MAXIMUM_GOSSIP_CLOCK_DISPARITY` allowance)
 	//  -- i.e. validate that `block_header.slot <= current_slot` (a client MAY queue future sidecars for processing at the appropriate slot).
 	if err := verifier.NotFromFutureSlot(); err != nil {
 		return pubsub.ValidationIgnore, err
@@ -132,13 +132,13 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		return pubsub.ValidationReject, err
 	}
 
-	// [REJECT] The current finalized_checkpoint is an ancestor of the sidecar's block
+	// [REJECT] The current `finalized_checkpoint` is an ancestor of the sidecar's block
 	// -- i.e. `get_checkpoint_block(store, block_header.parent_root, store.finalized_checkpoint.epoch) == store.finalized_checkpoint.root`.
 	if err := verifier.SidecarDescendsFromFinalized(); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
-	// [REJECT] The sidecar's kzg_commitments field inclusion proof is valid as verified by `verify_data_column_sidecar_inclusion_proof(sidecar)`.
+	// [REJECT] The sidecar's `kzg_commitments` field inclusion proof is valid as verified by `verify_data_column_sidecar_inclusion_proof(sidecar)`.
 	if err := verifier.SidecarInclusionProven(); err != nil {
 		return pubsub.ValidationReject, err
 	}
@@ -154,7 +154,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		return pubsub.ValidationIgnore, nil
 	}
 
-	// [REJECT] The sidecar is proposed by the expected `proposer_index` for the block's slot in the context of the current shuffling (defined by block_header.parent_root/block_header.slot).
+	// [REJECT] The sidecar is proposed by the expected `proposer_index` for the block's slot in the context of the current shuffling (defined by `block_header.parent_root`/`block_header.slot`).
 	// If the `proposer_index` cannot immediately be verified against the expected shuffling, the sidecar MAY be queued for later processing while proposers for the block's branch are calculated
 	// -- in such a case do not REJECT, instead IGNORE this message.
 	if err := verifier.SidecarProposerExpected(ctx); err != nil {
