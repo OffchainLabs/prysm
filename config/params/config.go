@@ -502,7 +502,6 @@ func FuluEnabled() bool {
 func WithinDAPeriod(block, current primitives.Epoch) bool {
 	if block >= BeaconConfig().FuluForkEpoch {
 		return block+BeaconConfig().MinEpochsForDataColumnSidecarsRequest >= current
-	} else {
-		return block+BeaconConfig().MinEpochsForBlobsSidecarsRequest >= current
 	}
+	return block+BeaconConfig().MinEpochsForBlobsSidecarsRequest >= current
 }
