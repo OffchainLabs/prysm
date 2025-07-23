@@ -503,5 +503,6 @@ func WithinDAPeriod(block, current primitives.Epoch) bool {
 	if block >= BeaconConfig().FuluForkEpoch {
 		return block+BeaconConfig().MinEpochsForDataColumnSidecarsRequest >= current
 	}
+
 	return block+BeaconConfig().MinEpochsForBlobsSidecarsRequest >= current
 }
