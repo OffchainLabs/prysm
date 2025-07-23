@@ -51,7 +51,6 @@ type Flags struct {
 	EnableExperimentalAttestationPool   bool // EnableExperimentalAttestationPool enables an experimental attestation pool design.
 	DisableDutiesV2                     bool // DisableDutiesV2 sets validator client to use the get Duties endpoint
 	EnableWeb                           bool // EnableWeb enables the webui on the validator client
-	SSZOnly                             bool // SSZOnly forces the validator client to use SSZ for communication with the beacon node when REST mode is enabled (useful for debugging)
 	// Logging related toggles.
 	DisableGRPCConnectionLogs bool // Disables logging when a new grpc client has connected.
 	EnableFullSSZDataLogging  bool // Enables logging for full ssz data on rejected gossip messages
@@ -339,10 +338,6 @@ func ConfigureValidator(ctx *cli.Context) error {
 	if ctx.Bool(EnableWebFlag.Name) {
 		logEnabled(EnableWebFlag)
 		cfg.EnableWeb = true
-	}
-	if ctx.Bool(SSZOnly.Name) {
-		logEnabled(SSZOnly)
-		cfg.SSZOnly = true
 	}
 
 	cfg.KeystoreImportDebounceInterval = ctx.Duration(dynamicKeyReloadDebounceInterval.Name)

@@ -427,6 +427,7 @@ func (b *BeaconChainConfig) TargetBlobsPerBlock(slot primitives.Slot) int {
 	return b.DeprecatedMaxBlobsPerBlock / 2
 }
 
+// MaxBlobsPerBlock returns the maximum number of blobs per block for the given slot.
 func (b *BeaconChainConfig) MaxBlobsPerBlock(slot primitives.Slot) int {
 	epoch := primitives.Epoch(slot.DivSlot(b.SlotsPerEpoch))
 
@@ -449,6 +450,7 @@ func (b *BeaconChainConfig) MaxBlobsPerBlock(slot primitives.Slot) int {
 	if epoch >= b.ElectraForkEpoch {
 		return b.DeprecatedMaxBlobsPerBlockElectra
 	}
+
 	return b.DeprecatedMaxBlobsPerBlock
 }
 
@@ -496,7 +498,11 @@ func FuluEnabled() bool {
 	return BeaconConfig().FuluForkEpoch < math.MaxUint64
 }
 
-// WithinDAPeriod checks if the block epoch is within MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS of the given current epoch.
+// WithinDAPeriod checks if the block epoch is within the data availability retention period.
 func WithinDAPeriod(block, current primitives.Epoch) bool {
+	if block >= BeaconConfig().FuluForkEpoch {
+		return block+BeaconConfig().MinEpochsForDataColumnSidecarsRequest >= current
+	}
+
 	return block+BeaconConfig().MinEpochsForBlobsSidecarsRequest >= current
 }

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
@@ -64,16 +64,13 @@ func (s *Service) validateLightClientOptimisticUpdate(ctx context.Context, pid p
 		return pubsub.ValidationIgnore, nil
 	}
 
-	lastStoredUpdate := s.lcStore.LastOptimisticUpdate()
-	if lastStoredUpdate != nil {
-		lastUpdateSlot := lastStoredUpdate.AttestedHeader().Beacon().Slot
-		newUpdateSlot := newUpdate.AttestedHeader().Beacon().Slot
-
-		// [IGNORE] The attested_header.beacon.slot is greater than that of all previously forwarded optimistic_updates
-		if newUpdateSlot <= lastUpdateSlot {
-			log.Debug("Newly received light client optimistic update ignored. new update is older than stored update")
-			return pubsub.ValidationIgnore, nil
-		}
+	if !lightclient.IsBetterOptimisticUpdate(newUpdate, s.lcStore.LastOptimisticUpdate()) {
+		log.WithFields(logrus.Fields{
+			"attestedSlot":       fmt.Sprintf("%d", newUpdate.AttestedHeader().Beacon().Slot),
+			"signatureSlot":      fmt.Sprintf("%d", newUpdate.SignatureSlot()),
+			"attestedHeaderRoot": fmt.Sprintf("%x", attestedHeaderRoot),
+		}).Debug("Newly received light client optimistic update ignored. current update is better.")
+		return pubsub.ValidationIgnore, nil
 	}
 
 	log.WithFields(logrus.Fields{
@@ -134,29 +131,13 @@ func (s *Service) validateLightClientFinalityUpdate(ctx context.Context, pid pee
 		return pubsub.ValidationIgnore, nil
 	}
 
-	lastStoredUpdate := s.lcStore.LastFinalityUpdate()
-	if lastStoredUpdate != nil {
-		lastUpdateSlot := lastStoredUpdate.FinalizedHeader().Beacon().Slot
-		newUpdateSlot := newUpdate.FinalizedHeader().Beacon().Slot
-
-		// [IGNORE] The finalized_header.beacon.slot is greater than that of all previously forwarded finality_updates,
-		// or it matches the highest previously forwarded slot and also has a sync_aggregate indicating supermajority (> 2/3)
-		// sync committee participation while the previously forwarded finality_update for that slot did not indicate supermajority
-		lastUpdateHasSupermajority := lightClient.UpdateHasSupermajority(lastStoredUpdate.SyncAggregate())
-		newUpdateHasSupermajority := lightClient.UpdateHasSupermajority(newUpdate.SyncAggregate())
-
-		if newUpdateSlot < lastUpdateSlot {
-			log.Debug("Newly received light client finality update ignored. new update is older than stored update")
-			return pubsub.ValidationIgnore, nil
-		}
-		if newUpdateSlot == lastUpdateSlot && (lastUpdateHasSupermajority || !newUpdateHasSupermajority) {
-			log.WithFields(logrus.Fields{
-				"attestedSlot":       fmt.Sprintf("%d", newUpdate.AttestedHeader().Beacon().Slot),
-				"signatureSlot":      fmt.Sprintf("%d", newUpdate.SignatureSlot()),
-				"attestedHeaderRoot": fmt.Sprintf("%x", attestedHeaderRoot),
-			}).Debug("Newly received light client finality update ignored. no supermajority advantage.")
-			return pubsub.ValidationIgnore, nil
-		}
+	if !lightclient.IsBetterFinalityUpdate(newUpdate, s.lcStore.LastFinalityUpdate()) {
+		log.WithFields(logrus.Fields{
+			"attestedSlot":       fmt.Sprintf("%d", newUpdate.AttestedHeader().Beacon().Slot),
+			"signatureSlot":      fmt.Sprintf("%d", newUpdate.SignatureSlot()),
+			"attestedHeaderRoot": fmt.Sprintf("%x", attestedHeaderRoot),
+		}).Debug("Newly received light client finality update ignored. current update is better.")
+		return pubsub.ValidationIgnore, nil
 	}
 
 	log.WithFields(logrus.Fields{

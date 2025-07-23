@@ -73,7 +73,7 @@ message BeaconBlockBody {
 
   // Block operations
   // Refer to spec constants at
-  // https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#max-operations-per-block
+  // https://github.com/ethereum/consensus-specs/blob/master/specs/phase0/beacon-chain.md#max-operations-per-block
 
   // At most MAX_PROPOSER_SLASHINGS.
   repeated ProposerSlashing proposer_slashings = 4

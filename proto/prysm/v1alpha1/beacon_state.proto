@@ -191,7 +191,7 @@ message PowBlock {
 
 // The beacon state for Altair hard fork 1.
 // Reference:
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/beacon-chain.md#beaconstate
+// https://github.com/ethereum/consensus-specs/blob/master/specs/altair/beacon-chain.md#beaconstate
 message BeaconStateAltair {
   // Versioning [1001-2000]
   uint64 genesis_time = 1001;

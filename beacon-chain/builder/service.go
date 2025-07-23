@@ -24,7 +24,7 @@ var ErrNoBuilder = errors.New("builder endpoint not configured")
 
 // BlockBuilder defines the interface for interacting with the block builder
 type BlockBuilder interface {
-	SubmitBlindedBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, *v1.BlobsBundle, error)
+	SubmitBlindedBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, v1.BlobsBundler, error)
 	GetHeader(ctx context.Context, slot primitives.Slot, parentHash [32]byte, pubKey [48]byte) (builder.SignedBid, error)
 	RegisterValidator(ctx context.Context, reg []*ethpb.SignedValidatorRegistrationV1) error
 	RegistrationByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (*ethpb.ValidatorRegistrationV1, error)
@@ -68,7 +68,7 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 			log.WithError(err).Error("Failed to check builder status")
 		} else {
 			log.WithField("endpoint", s.c.NodeURL()).Info("Builder has been configured")
-			log.Warn("Outsourcing block construction to external builders adds non-trivial delay to block propagation time.  " +
+			log.Warn("Outsourcing block construction to external builders adds non-trivial delay to block propagation time. " +
 				"Builder-constructed blocks or fallback blocks may get orphaned. Use at your own risk!")
 		}
 	}
@@ -87,7 +87,7 @@ func (s *Service) Stop() error {
 }
 
 // SubmitBlindedBlock submits a blinded block to the builder relay network.
-func (s *Service) SubmitBlindedBlock(ctx context.Context, b interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, *v1.BlobsBundle, error) {
+func (s *Service) SubmitBlindedBlock(ctx context.Context, b interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, v1.BlobsBundler, error) {
 	ctx, span := trace.StartSpan(ctx, "builder.SubmitBlindedBlock")
 	defer span.End()
 	start := time.Now()

@@ -1026,12 +1026,7 @@ func (*Service) configEndpoints() []endpoint {
 
 func (s *Service) lightClientEndpoints(blocker lookup.Blocker, stater lookup.Stater) []endpoint {
 	server := &lightclient.Server{
-		Blocker:          blocker,
-		Stater:           stater,
-		HeadFetcher:      s.cfg.HeadFetcher,
-		ChainInfoFetcher: s.cfg.ChainInfoFetcher,
-		BeaconDB:         s.cfg.BeaconDB,
-		LCStore:          s.cfg.LCStore,
+		LCStore: s.cfg.LCStore,
 	}
 
 	const namespace = "lightclient"
@@ -1143,7 +1138,6 @@ func (s *Service) eventsEndpoints() []endpoint {
 			name:     namespace + ".StreamEvents",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.EventStreamMediaType}),
-				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.StreamEvents,
 			methods: []string{http.MethodGet},

@@ -102,6 +102,11 @@ message ExecutionPayloadDenebAndBlobsBundle {
   BlobsBundle blobs_bundle = 2;
 }
 
+message ExecutionPayloadDenebAndBlobsBundleV2 {
+  ExecutionPayloadDeneb payload = 1;
+  BlobsBundleV2 blobs_bundle = 2;
+}
+
 message ExecutionPayloadDenebWithValueAndBlobsBundle {
   ExecutionPayloadDeneb payload = 1;
   bytes value = 2;

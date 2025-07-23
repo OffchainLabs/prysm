@@ -36,6 +36,7 @@ type TestLightClient struct {
 	AttestedState  state.BeaconState
 	AttestedBlock  interfaces.ReadOnlySignedBeaconBlock
 	FinalizedBlock interfaces.ReadOnlySignedBeaconBlock
+	FinalizedState state.BeaconState
 }
 type LightClientOption func(l *TestLightClient)
 
@@ -127,6 +128,7 @@ func (l *TestLightClient) setupTestAltair() *TestLightClient {
 	require.NoError(l.T, attestedState.SetSlot(attestedSlot))
 
 	var signedFinalizedBlock interfaces.SignedBeaconBlock
+	var finalizedState state.BeaconState
 	// Finalized checkpoint
 	if !l.noFinalizedCheckpoint {
 		finalizedSlot := primitives.Slot(uint64(params.BeaconConfig().AltairForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch))
@@ -134,7 +136,7 @@ func (l *TestLightClient) setupTestAltair() *TestLightClient {
 			finalizedSlot = finalizedSlot.Add(l.increaseFinalizedSlotBy)
 		}
 		// Finalized State & Block
-		finalizedState, err := NewBeaconStateAltair()
+		finalizedState, err = NewBeaconStateAltair()
 		require.NoError(l.T, err)
 		require.NoError(l.T, finalizedState.SetSlot(finalizedSlot))
 
@@ -216,6 +218,7 @@ func (l *TestLightClient) setupTestAltair() *TestLightClient {
 	l.Ctx = ctx
 	l.FinalizedBlock = signedFinalizedBlock
 	l.AttestedBlock = signedAttestedBlock
+	l.FinalizedState = finalizedState
 
 	return l
 }
@@ -236,6 +239,7 @@ func (l *TestLightClient) setupTestBellatrix() *TestLightClient {
 	require.NoError(l.T, attestedState.SetSlot(attestedSlot))
 
 	var signedFinalizedBlock interfaces.SignedBeaconBlock
+	var finalizedState state.BeaconState
 	// Finalized checkpoint
 	if !l.noFinalizedCheckpoint {
 		var finalizedSlot primitives.Slot
@@ -245,7 +249,7 @@ func (l *TestLightClient) setupTestBellatrix() *TestLightClient {
 				finalizedSlot = finalizedSlot.Add(l.increaseFinalizedSlotBy)
 			}
 
-			finalizedState, err := NewBeaconStateAltair()
+			finalizedState, err = NewBeaconStateAltair()
 			require.NoError(l.T, err)
 			require.NoError(l.T, finalizedState.SetSlot(finalizedSlot))
 
@@ -268,7 +272,7 @@ func (l *TestLightClient) setupTestBellatrix() *TestLightClient {
 				finalizedSlot = finalizedSlot.Add(l.increaseFinalizedSlotBy)
 			}
 
-			finalizedState, err := NewBeaconStateBellatrix()
+			finalizedState, err = NewBeaconStateBellatrix()
 			require.NoError(l.T, err)
 			require.NoError(l.T, finalizedState.SetSlot(finalizedSlot))
 
@@ -386,6 +390,7 @@ func (l *TestLightClient) setupTestBellatrix() *TestLightClient {
 	l.Ctx = ctx
 	l.FinalizedBlock = signedFinalizedBlock
 	l.AttestedBlock = signedAttestedBlock
+	l.FinalizedState = finalizedState
 
 	return l
 }
@@ -406,6 +411,7 @@ func (l *TestLightClient) setupTestCapella() *TestLightClient {
 	require.NoError(l.T, attestedState.SetSlot(attestedSlot))
 
 	var signedFinalizedBlock interfaces.SignedBeaconBlock
+	var finalizedState state.BeaconState
 	// Finalized checkpoint
 	if !l.noFinalizedCheckpoint {
 		var finalizedSlot primitives.Slot
@@ -415,7 +421,7 @@ func (l *TestLightClient) setupTestCapella() *TestLightClient {
 				finalizedSlot = finalizedSlot.Add(l.increaseFinalizedSlotBy)
 			}
 
-			finalizedState, err := NewBeaconStateBellatrix()
+			finalizedState, err = NewBeaconStateBellatrix()
 			require.NoError(l.T, err)
 			require.NoError(l.T, finalizedState.SetSlot(finalizedSlot))
 
@@ -438,7 +444,7 @@ func (l *TestLightClient) setupTestCapella() *TestLightClient {
 				finalizedSlot = finalizedSlot.Add(l.increaseFinalizedSlotBy)
 			}
 
-			finalizedState, err := NewBeaconStateCapella()
+			finalizedState, err = NewBeaconStateCapella()
 			require.NoError(l.T, err)
 			require.NoError(l.T, finalizedState.SetSlot(finalizedSlot))
 
@@ -557,6 +563,7 @@ func (l *TestLightClient) setupTestCapella() *TestLightClient {
 	l.Block = signedSignatureBlock
 	l.Ctx = ctx
 	l.FinalizedBlock = signedFinalizedBlock
+	l.FinalizedState = finalizedState
 
 	return l
 }
@@ -577,6 +584,7 @@ func (l *TestLightClient) setupTestDeneb() *TestLightClient {
 	require.NoError(l.T, attestedState.SetSlot(attestedSlot))
 
 	var signedFinalizedBlock interfaces.SignedBeaconBlock
+	var finalizedState state.BeaconState
 	// Finalized checkpoint
 	if !l.noFinalizedCheckpoint {
 		var finalizedSlot primitives.Slot
@@ -587,7 +595,7 @@ func (l *TestLightClient) setupTestDeneb() *TestLightClient {
 				finalizedSlot = finalizedSlot.Add(l.increaseFinalizedSlotBy)
 			}
 
-			finalizedState, err := NewBeaconStateCapella()
+			finalizedState, err = NewBeaconStateCapella()
 			require.NoError(l.T, err)
 			require.NoError(l.T, finalizedState.SetSlot(finalizedSlot))
 
@@ -610,7 +618,7 @@ func (l *TestLightClient) setupTestDeneb() *TestLightClient {
 				finalizedSlot = finalizedSlot.Add(l.increaseFinalizedSlotBy)
 			}
 
-			finalizedState, err := NewBeaconStateDeneb()
+			finalizedState, err = NewBeaconStateDeneb()
 			require.NoError(l.T, err)
 			require.NoError(l.T, finalizedState.SetSlot(finalizedSlot))
 
@@ -729,6 +737,7 @@ func (l *TestLightClient) setupTestDeneb() *TestLightClient {
 	l.Block = signedSignatureBlock
 	l.Ctx = ctx
 	l.FinalizedBlock = signedFinalizedBlock
+	l.FinalizedState = finalizedState
 
 	return l
 }
@@ -749,6 +758,7 @@ func (l *TestLightClient) setupTestElectra() *TestLightClient {
 	require.NoError(l.T, attestedState.SetSlot(attestedSlot))
 
 	var signedFinalizedBlock interfaces.SignedBeaconBlock
+	var finalizedState state.BeaconState
 	// Finalized checkpoint
 	if !l.noFinalizedCheckpoint {
 		var finalizedSlot primitives.Slot
@@ -759,7 +769,7 @@ func (l *TestLightClient) setupTestElectra() *TestLightClient {
 				finalizedSlot = finalizedSlot.Add(l.increaseFinalizedSlotBy)
 			}
 
-			finalizedState, err := NewBeaconStateDeneb()
+			finalizedState, err = NewBeaconStateDeneb()
 			require.NoError(l.T, err)
 			require.NoError(l.T, finalizedState.SetSlot(finalizedSlot))
 
@@ -782,7 +792,7 @@ func (l *TestLightClient) setupTestElectra() *TestLightClient {
 				finalizedSlot = finalizedSlot.Add(l.increaseFinalizedSlotBy)
 			}
 
-			finalizedState, err := NewBeaconStateElectra()
+			finalizedState, err = NewBeaconStateElectra()
 			require.NoError(l.T, err)
 			require.NoError(l.T, finalizedState.SetSlot(finalizedSlot))
 
@@ -901,6 +911,7 @@ func (l *TestLightClient) setupTestElectra() *TestLightClient {
 	l.Block = signedSignatureBlock
 	l.Ctx = ctx
 	l.FinalizedBlock = signedFinalizedBlock
+	l.FinalizedState = finalizedState
 
 	return l
 }

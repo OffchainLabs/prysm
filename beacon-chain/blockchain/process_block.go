@@ -666,10 +666,9 @@ func (s *Service) areDataColumnsAvailable(
 	root [fieldparams.RootLength]byte,
 	block interfaces.ReadOnlyBeaconBlock,
 ) error {
-	// We are only required to check within MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS
+	// We are only required to check within MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS.
 	blockSlot, currentSlot := block.Slot(), s.CurrentSlot()
 	blockEpoch, currentEpoch := slots.ToEpoch(blockSlot), slots.ToEpoch(currentSlot)
-
 	if !params.WithinDAPeriod(blockEpoch, currentEpoch) {
 		return nil
 	}

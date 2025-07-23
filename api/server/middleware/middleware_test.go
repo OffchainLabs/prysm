@@ -13,6 +13,23 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// frozenHeaderRecorder allows asserting that response headers were not modified
+// after the call to WriteHeader.
+//
+// Its purpose is to have a regression test for https://github.com/OffchainLabs/prysm/pull/15499.
+type frozenHeaderRecorder struct {
+	*httptest.ResponseRecorder
+	frozenHeader http.Header
+}
+
+func (r *frozenHeaderRecorder) WriteHeader(code int) {
+	if r.frozenHeader != nil {
+		return
+	}
+	r.ResponseRecorder.WriteHeader(code)
+	r.frozenHeader = r.ResponseRecorder.Header().Clone()
+}
+
 func TestNormalizeQueryValuesHandler(t *testing.T) {
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, err := w.Write([]byte("next handler"))
@@ -132,6 +149,7 @@ func TestAcceptEncodingHeaderHandler(t *testing.T) {
 	dummyContent := "Test gzip middleware content"
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", r.Header.Get("Accept"))
+		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte(dummyContent))
 		require.NoError(t, err)
 	})
@@ -145,19 +163,19 @@ func TestAcceptEncodingHeaderHandler(t *testing.T) {
 		expectCompressed bool
 	}{
 		{
-			name:             "Gzip supported",
+			name:             "Accept gzip",
 			accept:           api.JsonMediaType,
 			acceptEncoding:   "gzip",
 			expectCompressed: true,
 		},
 		{
-			name:             "Multiple encodings supported",
+			name:             "Accept multiple encodings",
 			accept:           api.JsonMediaType,
 			acceptEncoding:   "deflate, gzip",
 			expectCompressed: true,
 		},
 		{
-			name:             "Gzip not supported",
+			name:             "Accept unsupported encoding",
 			accept:           api.JsonMediaType,
 			acceptEncoding:   "deflate",
 			expectCompressed: false,
@@ -183,12 +201,12 @@ func TestAcceptEncodingHeaderHandler(t *testing.T) {
 			if tt.acceptEncoding != "" {
 				req.Header.Set("Accept-Encoding", tt.acceptEncoding)
 			}
-			rr := httptest.NewRecorder()
+			rr := &frozenHeaderRecorder{ResponseRecorder: httptest.NewRecorder()}
 
 			handler.ServeHTTP(rr, req)
 
 			if tt.expectCompressed {
-				require.Equal(t, "gzip", rr.Header().Get("Content-Encoding"), "Expected Content-Encoding header to be 'gzip'")
+				require.Equal(t, "gzip", rr.frozenHeader.Get("Content-Encoding"), "Expected Content-Encoding header to be 'gzip'")
 
 				compressedBody := rr.Body.Bytes()
 				require.NotEqual(t, dummyContent, string(compressedBody), "Response body should be compressed and differ from the original")
