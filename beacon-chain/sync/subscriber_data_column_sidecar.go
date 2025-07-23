@@ -97,7 +97,7 @@ func (s *Service) triggerGetBlobsV2ForDataColumnSidecar(ctx context.Context, blo
 	// Trigger the retry by calling the execution service's reconstruct method
 	go func() {
 		log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Debug("Triggering getBlobsV2 retry for data column sidecar")
-		
+
 		// This will trigger retry logic if needed
 		if s.cfg.executionReconstructor != nil {
 			_, err := s.cfg.executionReconstructor.ReconstructDataColumnSidecars(ctx, signedBlock, blockRoot)
