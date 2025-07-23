@@ -682,7 +682,7 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, signedROBlo
 
 	// Create a result channel for this reconstruction call
 	resultChan := make(chan reconstructResult, 1)
-	
+
 	// Try to claim this reconstruction call
 	if existingChanInterface, loaded := s.activeReconstructCalls.LoadOrStore(blockRoot, resultChan); loaded {
 		existingChan := existingChanInterface.(chan reconstructResult)
@@ -1105,14 +1105,14 @@ func (s *Service) retryReconstructDataColumnSidecars(ctx context.Context, signed
 			// Retry getBlobsV2
 			log.WithField("attempt", attemptCount).Debug("Retrying getBlobsV2")
 			if result, err := s.reconstructDataColumnSidecarsOnce(retryCtx, signedROBlock, blockRoot); err == nil && len(result) > 0 {
-				log.WithField("attempts", attemptCount).Debug("getBlobsV2 retry succeeded")
+				log.WithField("attempts", attemptCount).Debug("Retry of getBlobsV2 succeeded")
 				getBlobsRetryAttempts.WithLabelValues("success").Inc()
 				getBlobsRetryDuration.WithLabelValues("success").Observe(time.Since(startTime).Seconds())
 				return
 			}
 
 		case <-retryCtx.Done():
-			log.WithField("attempts", attemptCount).Debug("getBlobsV2 retry timeout")
+			log.WithField("attempts", attemptCount).Debug("Timeout of getBlobsV2 retry")
 			getBlobsRetryAttempts.WithLabelValues("timeout").Inc()
 			getBlobsRetryDuration.WithLabelValues("timeout").Observe(time.Since(startTime).Seconds())
 			return
