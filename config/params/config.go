@@ -498,7 +498,11 @@ func FuluEnabled() bool {
 	return BeaconConfig().FuluForkEpoch < math.MaxUint64
 }
 
-// WithinDAPeriod checks if the block epoch is within MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS of the given current epoch.
+// WithinDAPeriod checks if the block epoch is within the data availability retention period.
 func WithinDAPeriod(block, current primitives.Epoch) bool {
+	if block >= BeaconConfig().FuluForkEpoch {
+		return block+BeaconConfig().MinEpochsForDataColumnSidecarsRequest >= current
+	}
+
 	return block+BeaconConfig().MinEpochsForBlobsSidecarsRequest >= current
 }

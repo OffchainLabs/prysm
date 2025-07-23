@@ -264,6 +264,7 @@ func TestRebootDiscoveryListener(t *testing.T) {
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		cfg:                   &Config{UDPPort: uint(port)},
 	}
+
 	createListener := func() (*discover.UDPv5, error) {
 		return s.createListener(ipAddr, pkey)
 	}
@@ -293,6 +294,7 @@ func TestMultiAddrsConversion_InvalidIPAddr(t *testing.T) {
 	s := &Service{
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+		cfg:                   &Config{},
 	}
 	node, err := s.createLocalNode(pkey, addr, 0, 0, 0)
 	require.NoError(t, err)
@@ -493,6 +495,35 @@ func TestMultipleDiscoveryAddresses(t *testing.T) {
 	}
 	assert.Equal(t, true, ipv4Found, "IPv4 discovery address not found")
 	assert.Equal(t, true, ipv6Found, "IPv6 discovery address not found")
+}
+
+func TestDiscoveryV5_SeqNumber(t *testing.T) {
+	db, err := enode.OpenDB(t.TempDir())
+	require.NoError(t, err)
+	_, key := createAddrAndPrivKey(t)
+	node := enode.NewLocalNode(db, key)
+	node.Set(enr.IPv4{127, 0, 0, 1})
+	currentSeq := node.Seq()
+	s := &Service{dv5Listener: mockListener{localNode: node}}
+	_, err = s.DiscoveryAddresses()
+	require.NoError(t, err)
+	newSeq := node.Seq()
+	require.Equal(t, currentSeq+1, newSeq) // node seq should increase when discovery starts
+
+	// see that the keys changing, will change the node seq
+	_, keyTwo := createAddrAndPrivKey(t)
+	nodeTwo := enode.NewLocalNode(db, keyTwo) // use the same db with different key
+	nodeTwo.Set(enr.IPv6{0x20, 0x01, 0x48, 0x60, 0, 0, 0x20, 0x01, 0, 0, 0, 0, 0, 0, 0x00, 0x68})
+	seqTwo := nodeTwo.Seq()
+	assert.NotEqual(t, seqTwo, newSeq)
+	sTwo := &Service{dv5Listener: mockListener{localNode: nodeTwo}}
+	_, err = sTwo.DiscoveryAddresses()
+	require.NoError(t, err)
+	assert.Equal(t, seqTwo+1, nodeTwo.Seq())
+
+	// see that reloading the same node with same key and db results in same seq number
+	nodeThree := enode.NewLocalNode(db, key)
+	assert.Equal(t, node.Seq(), nodeThree.Seq())
 }
 
 func TestCorrectUDPVersion(t *testing.T) {

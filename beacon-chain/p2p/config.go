@@ -27,6 +27,7 @@ type Config struct {
 	HostDNS              string
 	PrivateKey           string
 	DataDir              string
+	DiscoveryDir         string
 	MetaDataDir          string
 	QUICPort             uint
 	TCPPort              uint

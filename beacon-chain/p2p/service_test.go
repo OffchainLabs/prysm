@@ -403,7 +403,7 @@ func TestService_connectWithPeer(t *testing.T) {
 				return ps
 			}(),
 			info:    peer.AddrInfo{ID: "bad"},
-			wantErr: "refused to connect to bad peer",
+			wantErr: "bad peer",
 		},
 	}
 	for _, tt := range tests {

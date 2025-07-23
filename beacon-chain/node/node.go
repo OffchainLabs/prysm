@@ -699,6 +699,7 @@ func (b *BeaconNode) registerP2P(cliCtx *cli.Context) error {
 		Discv5BootStrapAddrs: p2p.ParseBootStrapAddrs(bootstrapNodeAddrs),
 		RelayNodeAddr:        cliCtx.String(cmd.RelayNode.Name),
 		DataDir:              dataDir,
+		DiscoveryDir:         filepath.Join(dataDir, "discovery"),
 		LocalIP:              cliCtx.String(cmd.P2PIP.Name),
 		HostAddress:          cliCtx.String(cmd.P2PHost.Name),
 		HostDNS:              cliCtx.String(cmd.P2PHostDNS.Name),
