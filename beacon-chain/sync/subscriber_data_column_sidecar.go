@@ -91,7 +91,7 @@ func (s *Service) triggerGetBlobsV2ForDataColumnSidecar(ctx context.Context, blo
 	commitments, err := blockBody.BlobKzgCommitments()
 	if err != nil || len(commitments) == 0 {
 		// No commitments, no need to trigger retry
-		return nil
+		return err
 	}
 
 	// Trigger the retry by calling the execution service's reconstruct method
