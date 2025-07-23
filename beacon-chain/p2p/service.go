@@ -31,6 +31,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -86,6 +87,7 @@ type Service struct {
 	genesisTime           time.Time
 	genesisValidatorsRoot []byte
 	activeValidatorCount  uint64
+	peerDisconnectionTime *cache.Cache
 }
 
 // NewService initializes a new p2p service compatible with shared.Service interface. No
@@ -115,16 +117,17 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 	ipLimiter := leakybucket.NewCollector(ipLimit, ipBurst, 30*time.Second, true /* deleteEmptyBuckets */)
 
 	s := &Service{
-		ctx:          ctx,
-		cancel:       cancel,
-		cfg:          cfg,
-		addrFilter:   addrFilter,
-		ipLimiter:    ipLimiter,
-		privKey:      privKey,
-		metaData:     metaData,
-		isPreGenesis: true,
-		joinedTopics: make(map[string]*pubsub.Topic, len(gossipTopicMappings)),
-		subnetsLock:  make(map[uint64]*sync.RWMutex),
+		ctx:                   ctx,
+		cancel:                cancel,
+		cfg:                   cfg,
+		addrFilter:            addrFilter,
+		ipLimiter:             ipLimiter,
+		privKey:               privKey,
+		metaData:              metaData,
+		isPreGenesis:          true,
+		joinedTopics:          make(map[string]*pubsub.Topic, len(gossipTopicMappings)),
+		subnetsLock:           make(map[uint64]*sync.RWMutex),
+		peerDisconnectionTime: cache.New(1*time.Second, 1*time.Minute),
 	}
 
 	ipAddr := prysmnetwork.IPAddr()
@@ -486,14 +489,17 @@ func (s *Service) connectWithPeer(ctx context.Context, info peer.AddrInfo) error
 	if info.ID == s.host.ID() {
 		return nil
 	}
+
 	if err := s.Peers().IsBad(info.ID); err != nil {
-		return errors.Wrap(err, "refused to connect to bad peer")
+		return errors.Wrap(err, "bad peer")
 	}
+
 	ctx, cancel := context.WithTimeout(ctx, maxDialTimeout)
 	defer cancel()
+
 	if err := s.host.Connect(ctx, info); err != nil {
-		s.Peers().Scorers().BadResponsesScorer().Increment(info.ID)
-		return err
+		s.downscorePeer(info.ID, "connectionError")
+		return errors.Wrap(err, "peer connect")
 	}
 	return nil
 }
@@ -523,4 +529,9 @@ func (s *Service) connectToBootnodes() error {
 // required for discovery and pubsub validation.
 func (s *Service) isInitialized() bool {
 	return !s.genesisTime.IsZero() && len(s.genesisValidatorsRoot) == 32
+}
+
+func (s *Service) downscorePeer(peerID peer.ID, reason string) {
+	newScore := s.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }

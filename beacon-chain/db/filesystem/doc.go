@@ -75,7 +75,7 @@ data-columns
 
 Computation of the maximum size of a DataColumnSidecar
 ------------------------------------------------------
-https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/das-core.md#datacolumnsidecar
+https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/das-core.md#datacolumnsidecar
 
 
 class DataColumnSidecar(Container):

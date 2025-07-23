@@ -25,12 +25,12 @@ func TestEndToEnd_MinimalConfig_Web3Signer_PersistentKeys(t *testing.T) {
 	e2eMinimal(t, types.InitForkCfg(version.Bellatrix, version.Electra, params.E2ETestConfig()), types.WithRemoteSignerAndPersistentKeysFile()).run()
 }
 
-func TestEndToEnd_MinimalConfig_ValidatorRESTApi(t *testing.T) {
-	e2eMinimal(t, types.InitForkCfg(version.Bellatrix, version.Electra, params.E2ETestConfig()), types.WithCheckpointSync(), types.WithValidatorRESTApi()).run()
-}
-
 func TestEndToEnd_MinimalConfig_ValidatorRESTApi_SSZ(t *testing.T) {
 	e2eMinimal(t, types.InitForkCfg(version.Bellatrix, version.Electra, params.E2ETestConfig()), types.WithCheckpointSync(), types.WithValidatorRESTApi(), types.WithSSZOnly()).run()
+}
+
+func TestEndToEnd_MinimalConfig_ValidatorRESTApi(t *testing.T) {
+	e2eMinimal(t, types.InitForkCfg(version.Bellatrix, version.Electra, params.E2ETestConfig()), types.WithCheckpointSync(), types.WithValidatorRESTApi()).run()
 }
 
 func TestEndToEnd_ScenarioRun_EEOffline(t *testing.T) {

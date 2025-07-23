@@ -100,7 +100,7 @@ service BeaconChain {
   // that it was included in a block. The attestation may have expired.
   // Refer to the Ethereum Beacon Chain specification for more details on how
   // attestations are processed and when they are no longer valid.
-  // https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#attestations
+  // https://github.com/ethereum/consensus-specs/blob/master/specs/phase0/beacon-chain.md#attestations
   rpc AttestationPool(AttestationPoolRequest)
       returns (AttestationPoolResponse) {
     option deprecated = true;
@@ -117,7 +117,7 @@ service BeaconChain {
   // that it was included in a block. The attestation may have expired.
   // Refer to the Ethereum Beacon Chain specification for more details on how
   // attestations are processed and when they are no longer valid.
-  // https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#attestations
+  // https://github.com/ethereum/consensus-specs/blob/master/specs/phase0/beacon-chain.md#attestations
   rpc AttestationPoolElectra(AttestationPoolRequest)
       returns (AttestationPoolElectraResponse) {
     option deprecated = true;
