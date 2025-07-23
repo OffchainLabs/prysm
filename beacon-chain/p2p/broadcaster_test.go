@@ -11,7 +11,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
@@ -24,7 +23,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/network/forks"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	testpb "github.com/OffchainLabs/prysm/v6/proto/testing"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
@@ -546,8 +544,7 @@ func TestService_BroadcastLightClientOptimisticUpdate(t *testing.T) {
 		}),
 	}
 
-	l := util.NewTestLightClient(t, version.Altair)
-	msg, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock)
+	msg, err := util.MockOptimisticUpdate()
 	require.NoError(t, err)
 
 	GossipTypeMapping[reflect.TypeOf(msg)] = LightClientOptimisticUpdateTopicFormat
@@ -613,8 +610,7 @@ func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
 		}),
 	}
 
-	l := util.NewTestLightClient(t, version.Altair)
-	msg, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+	msg, err := util.MockFinalityUpdate()
 	require.NoError(t, err)
 
 	GossipTypeMapping[reflect.TypeOf(msg)] = LightClientFinalityUpdateTopicFormat

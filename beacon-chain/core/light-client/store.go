@@ -4,7 +4,11 @@ import (
 	"context"
 	"sync"
 
+	"github.com/OffchainLabs/prysm/v6/async/event"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
+	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/iface"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -16,13 +20,17 @@ type Store struct {
 	mu sync.RWMutex
 
 	beaconDB             iface.HeadAccessDatabase
-	lastFinalityUpdate   interfaces.LightClientFinalityUpdate
-	lastOptimisticUpdate interfaces.LightClientOptimisticUpdate
+	lastFinalityUpdate   interfaces.LightClientFinalityUpdate   // tracks the best finality update seen so far
+	lastOptimisticUpdate interfaces.LightClientOptimisticUpdate // tracks the best optimistic update seen so far
+	p2p                  p2p.Accessor
+	stateFeed            event.SubscriberSender
 }
 
-func NewLightClientStore(db iface.HeadAccessDatabase) *Store {
+func NewLightClientStore(db iface.HeadAccessDatabase, p p2p.Accessor, e event.SubscriberSender) *Store {
 	return &Store{
-		beaconDB: db,
+		beaconDB:  db,
+		p2p:       p,
+		stateFeed: e,
 	}
 }
 
@@ -143,10 +151,23 @@ func (s *Store) SaveLightClientUpdate(ctx context.Context, period uint64, update
 	return nil
 }
 
-func (s *Store) SetLastFinalityUpdate(update interfaces.LightClientFinalityUpdate) {
+func (s *Store) SetLastFinalityUpdate(update interfaces.LightClientFinalityUpdate, broadcast bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if broadcast && IsFinalityUpdateValidForBroadcast(update, s.lastFinalityUpdate) {
+		if err := s.p2p.BroadcastLightClientFinalityUpdate(context.Background(), update); err != nil {
+			log.WithError(err).Error("Could not broadcast light client finality update")
+		}
+	}
+
 	s.lastFinalityUpdate = update
+	log.Debug("Saved new light client finality update")
+
+	s.stateFeed.Send(&feed.Event{
+		Type: statefeed.LightClientFinalityUpdate,
+		Data: update,
+	})
 }
 
 func (s *Store) LastFinalityUpdate() interfaces.LightClientFinalityUpdate {
@@ -155,10 +176,23 @@ func (s *Store) LastFinalityUpdate() interfaces.LightClientFinalityUpdate {
 	return s.lastFinalityUpdate
 }
 
-func (s *Store) SetLastOptimisticUpdate(update interfaces.LightClientOptimisticUpdate) {
+func (s *Store) SetLastOptimisticUpdate(update interfaces.LightClientOptimisticUpdate, broadcast bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if broadcast {
+		if err := s.p2p.BroadcastLightClientOptimisticUpdate(context.Background(), update); err != nil {
+			log.WithError(err).Error("Could not broadcast light client optimistic update")
+		}
+	}
+
 	s.lastOptimisticUpdate = update
+	log.Debug("Saved new light client optimistic update")
+
+	s.stateFeed.Send(&feed.Event{
+		Type: statefeed.LightClientOptimisticUpdate,
+		Data: update,
+	})
 }
 
 func (s *Store) LastOptimisticUpdate() interfaces.LightClientOptimisticUpdate {

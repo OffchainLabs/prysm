@@ -1,7 +1,6 @@
 package blockchain
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -198,8 +197,7 @@ func (s *Service) processLightClientFinalityUpdate(
 
 	finalizedCheckpoint := attestedState.FinalizedCheckpoint()
 
-	// Check if the finalized checkpoint has changed
-	if finalizedCheckpoint == nil || bytes.Equal(finalizedCheckpoint.GetRoot(), postState.FinalizedCheckpoint().Root) {
+	if finalizedCheckpoint == nil {
 		return nil
 	}
 
@@ -224,17 +222,7 @@ func (s *Service) processLightClientFinalityUpdate(
 		return nil
 	}
 
-	log.Debug("Saving new light client finality update")
-	s.lcStore.SetLastFinalityUpdate(newUpdate)
-
-	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
-		Type: statefeed.LightClientFinalityUpdate,
-		Data: newUpdate,
-	})
-
-	if err = s.cfg.P2P.BroadcastLightClientFinalityUpdate(ctx, newUpdate); err != nil {
-		return errors.Wrap(err, "could not broadcast light client finality update")
-	}
+	s.lcStore.SetLastFinalityUpdate(newUpdate, true)
 
 	return nil
 }
@@ -266,17 +254,7 @@ func (s *Service) processLightClientOptimisticUpdate(ctx context.Context, signed
 		return nil
 	}
 
-	log.Debug("Saving new light client optimistic update")
-	s.lcStore.SetLastOptimisticUpdate(newUpdate)
-
-	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
-		Type: statefeed.LightClientOptimisticUpdate,
-		Data: newUpdate,
-	})
-
-	if err = s.cfg.P2P.BroadcastLightClientOptimisticUpdate(ctx, newUpdate); err != nil {
-		return errors.Wrap(err, "could not broadcast light client optimistic update")
-	}
+	s.lcStore.SetLastOptimisticUpdate(newUpdate, true)
 
 	return nil
 }

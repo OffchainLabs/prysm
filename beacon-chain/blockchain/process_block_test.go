@@ -3170,7 +3170,7 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 
 			t.Run(version.String(testVersion)+"_"+tc.name, func(t *testing.T) {
 				s.genesisTime = time.Unix(time.Now().Unix()-(int64(forkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-				s.lcStore = &lightClient.Store{}
+				s.lcStore = lightClient.NewLightClientStore(s.cfg.BeaconDB, s.cfg.P2P, s.cfg.StateNotifier.StateFeed())
 
 				var oldActualUpdate interfaces.LightClientOptimisticUpdate
 				var err error
@@ -3246,39 +3246,39 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 			expectReplace: true,
 		},
 		{
-			name:          "Old update is better - age - no supermajority",
+			name:          "Old update is better - finalized slot is higher",
 			oldOptions:    []util.LightClientOption{util.WithIncreasedFinalizedSlot(1)},
 			newOptions:    []util.LightClientOption{},
 			expectReplace: false,
 		},
 		{
-			name:          "Old update is better - age - both supermajority",
-			oldOptions:    []util.LightClientOption{util.WithIncreasedFinalizedSlot(1), util.WithSupermajority()},
-			newOptions:    []util.LightClientOption{util.WithSupermajority()},
-			expectReplace: false,
-		},
-		{
-			name:          "Old update is better - supermajority",
-			oldOptions:    []util.LightClientOption{util.WithSupermajority()},
+			name:          "Old update is better - attested slot is higher",
+			oldOptions:    []util.LightClientOption{util.WithIncreasedAttestedSlot(1)},
 			newOptions:    []util.LightClientOption{},
 			expectReplace: false,
 		},
 		{
-			name:          "New update is better - age - both supermajority",
-			oldOptions:    []util.LightClientOption{util.WithSupermajority()},
-			newOptions:    []util.LightClientOption{util.WithIncreasedFinalizedSlot(1), util.WithSupermajority()},
+			name:          "Old update is better - signature slot is higher",
+			oldOptions:    []util.LightClientOption{util.WithIncreasedSignatureSlot(1)},
+			newOptions:    []util.LightClientOption{},
+			expectReplace: false,
+		},
+		{
+			name:          "New update is better - finalized slot is higher",
+			oldOptions:    []util.LightClientOption{},
+			newOptions:    []util.LightClientOption{util.WithIncreasedAttestedSlot(1)},
 			expectReplace: true,
 		},
 		{
-			name:          "New update is better - age - no supermajority",
+			name:          "New update is better - attested slot is higher",
 			oldOptions:    []util.LightClientOption{},
-			newOptions:    []util.LightClientOption{util.WithIncreasedFinalizedSlot(1)},
+			newOptions:    []util.LightClientOption{util.WithIncreasedAttestedSlot(1)},
 			expectReplace: true,
 		},
 		{
-			name:          "New update is better - supermajority",
+			name:          "New update is better - signature slot is higher",
 			oldOptions:    []util.LightClientOption{},
-			newOptions:    []util.LightClientOption{util.WithSupermajority()},
+			newOptions:    []util.LightClientOption{util.WithIncreasedSignatureSlot(1)},
 			expectReplace: true,
 		},
 	}
@@ -3310,7 +3310,7 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 
 			t.Run(version.String(testVersion)+"_"+tc.name, func(t *testing.T) {
 				s.genesisTime = time.Unix(time.Now().Unix()-(int64(forkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-				s.lcStore = &lightClient.Store{}
+				s.lcStore = lightClient.NewLightClientStore(s.cfg.BeaconDB, s.cfg.P2P, s.cfg.StateNotifier.StateFeed())
 
 				var actualOldUpdate, actualNewUpdate interfaces.LightClientFinalityUpdate
 				var err error
