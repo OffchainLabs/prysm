@@ -27,7 +27,7 @@ var (
 )
 
 // dataColumnSidecarByRootRPCHandler handles the data column sidecars by root RPC request.
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#datacolumnsidecarsbyroot-v1
+// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#datacolumnsidecarsbyroot-v1
 func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg interface{}, stream libp2pcore.Stream) error {
 	ctx, span := trace.StartSpan(ctx, "sync.dataColumnSidecarByRootRPCHandler")
 	defer span.End()

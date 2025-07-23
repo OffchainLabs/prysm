@@ -25,6 +25,7 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/sirupsen/logrus"
 )
 
 type (
@@ -544,7 +545,7 @@ func (s *Service) createLocalNode(
 	ipAddr net.IP,
 	udpPort, tcpPort, quicPort int,
 ) (*enode.LocalNode, error) {
-	db, err := enode.OpenDB("")
+	db, err := enode.OpenDB(s.cfg.DiscoveryDir)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not open node's peer database")
 	}
@@ -603,7 +604,10 @@ func (s *Service) createLocalNode(
 			localNode.SetFallbackIP(firstIP)
 		}
 	}
-
+	log.WithFields(logrus.Fields{
+		"seq": localNode.Seq(),
+		"id":  localNode.ID(),
+	}).Debug("Local node created")
 	return localNode, nil
 }
 
@@ -619,7 +623,11 @@ func (s *Service) startDiscoveryV5(
 		return nil, errors.Wrap(err, "could not create listener")
 	}
 	record := wrappedListener.Self()
-	log.WithField("ENR", record.String()).Info("Started discovery v5")
+
+	log.WithFields(logrus.Fields{
+		"ENR": record.String(),
+		"seq": record.Seq(),
+	}).Info("Started discovery v5")
 	return wrappedListener, nil
 }
 

@@ -411,7 +411,10 @@ func (s *Service) pingPeersAndLogEnr() {
 	defer s.pingMethodLock.RUnlock()
 
 	localENR := s.dv5Listener.Self()
-	log.WithField("ENR", localENR).Info("New node record")
+	log.WithFields(logrus.Fields{
+		"ENR": localENR,
+		"seq": localENR.Seq(),
+	}).Info("New node record")
 
 	if s.pingMethod == nil {
 		return
