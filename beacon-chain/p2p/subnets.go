@@ -181,6 +181,11 @@ func (s *Service) findPeersWithSubnets(
 		// Get all needed subnets that the node is subscribed to.
 		// Skip nodes that are not subscribed to any of the defective subnets.
 		node := iterator.Node()
+
+		if !s.filterPeer(node) {
+			continue
+		}
+
 		nodeSubnets, err := filter(node)
 		if err != nil {
 			return nil, errors.Wrap(err, "filter node")

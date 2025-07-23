@@ -262,7 +262,7 @@ func (vs *Server) activationStatus(
 // It cannot faithfully attest to the head block of the chain, since it has not fully verified that block.
 //
 // Spec:
-// https://github.com/ethereum/consensus-specs/blob/dev/sync/optimistic.md
+// https://github.com/ethereum/consensus-specs/blob/master/sync/optimistic.md
 func (vs *Server) optimisticStatus(ctx context.Context) error {
 	if slots.ToEpoch(vs.TimeFetcher.CurrentSlot()) < params.BeaconConfig().BellatrixForkEpoch {
 		return nil

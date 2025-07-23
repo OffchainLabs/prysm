@@ -104,6 +104,7 @@ go_library(
         "@com_github_libp2p_go_mplex//:go_default_library",
         "@com_github_multiformats_go_multiaddr//:go_default_library",
         "@com_github_multiformats_go_multiaddr//net:go_default_library",
+        "@com_github_patrickmn_go_cache//:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
         "@com_github_prometheus_client_golang//prometheus:go_default_library",
         "@com_github_prometheus_client_golang//prometheus/promauto:go_default_library",

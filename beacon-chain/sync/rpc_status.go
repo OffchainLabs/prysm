@@ -37,6 +37,9 @@ func (s *Service) maintainPeerStatuses() {
 			wg.Add(1)
 			go func(id peer.ID) {
 				defer wg.Done()
+
+				log := log.WithField("peer", id)
+
 				// If our peer status has not been updated correctly we disconnect over here
 				// and set the connection state over here instead.
 				if s.cfg.p2p.Host().Network().Connectedness(id) != network.Connected {
@@ -45,27 +48,26 @@ func (s *Service) maintainPeerStatuses() {
 						log.WithError(err).Debug("Error when disconnecting with peer")
 					}
 					s.cfg.p2p.Peers().SetConnectionState(id, peers.Disconnected)
-					log.WithFields(logrus.Fields{
-						"peer":   id,
-						"reason": "maintain peer statuses - peer is not connected",
-					}).Debug("Initiate peer disconnection")
+					log.WithField("reason", "maintainPeerStatusesNotConnectedPeer").Debug("Initiate peer disconnection")
 					return
 				}
+
 				// Disconnect from peers that are considered bad by any of the registered scorers.
 				if err := s.cfg.p2p.Peers().IsBad(id); err != nil {
 					s.disconnectBadPeer(s.ctx, id, err)
 					return
 				}
+
 				// If the status hasn't been updated in the recent interval time.
 				lastUpdated, err := s.cfg.p2p.Peers().ChainStateLastUpdated(id)
 				if err != nil {
 					// Peer has vanished; nothing to do.
 					return
 				}
+
 				if prysmTime.Now().After(lastUpdated.Add(interval)) {
 					if err := s.reValidatePeer(s.ctx, id); err != nil {
-						log.WithField("peer", id).WithError(err).Debug("Could not revalidate peer")
-						s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(id)
+						log.WithError(err).Debug("Cannot re-validate peer")
 					}
 				}
 			}(pid)
@@ -130,7 +132,7 @@ func (s *Service) shouldReSync() bool {
 }
 
 // sendRPCStatusRequest for a given topic with an expected protobuf message type.
-func (s *Service) sendRPCStatusRequest(ctx context.Context, id peer.ID) error {
+func (s *Service) sendRPCStatusRequest(ctx context.Context, peer peer.ID) error {
 	ctx, cancel := context.WithTimeout(ctx, respTimeout)
 	defer cancel()
 
@@ -157,7 +159,7 @@ func (s *Service) sendRPCStatusRequest(ctx context.Context, id peer.ID) error {
 	cp := s.cfg.chain.FinalizedCheckpt()
 	status := s.buildStatusFromEpoch(currentEpoch, forkDigest, cp.Root, cp.Epoch, headRoot)
 
-	stream, err := s.cfg.p2p.Send(ctx, status, topic, id)
+	stream, err := s.cfg.p2p.Send(ctx, status, topic, peer)
 	if err != nil {
 		return errors.Wrap(err, "p2p send")
 	}
@@ -166,11 +168,11 @@ func (s *Service) sendRPCStatusRequest(ctx context.Context, id peer.ID) error {
 
 	code, errMsg, err := ReadStatusCode(stream, s.cfg.p2p.Encoding())
 	if err != nil {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+		s.downscorePeer(peer, "statusRequestReadStatusCodeError")
 		return errors.Wrap(err, "read status code")
 	}
 	if code != 0 {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(id)
+		s.downscorePeer(peer, "statusRequestNonNullStatusCode")
 		return errors.New(errMsg)
 	}
 
@@ -181,9 +183,9 @@ func (s *Service) sendRPCStatusRequest(ctx context.Context, id peer.ID) error {
 
 	// If validation fails, validation error is logged, and peer status scorer will mark peer as bad.
 	err = s.validateStatusMessage(ctx, msg)
-	s.cfg.p2p.Peers().Scorers().PeerStatusScorer().SetPeerStatus(id, msg, err)
-	if err := s.cfg.p2p.Peers().IsBad(id); err != nil {
-		s.disconnectBadPeer(s.ctx, id, err)
+	s.cfg.p2p.Peers().Scorers().PeerStatusScorer().SetPeerStatus(peer, msg, err)
+	if err := s.cfg.p2p.Peers().IsBad(peer); err != nil {
+		s.disconnectBadPeer(s.ctx, peer, err)
 	}
 
 	return err
@@ -269,7 +271,7 @@ func (s *Service) statusRPCHandler(ctx context.Context, msg interface{}, stream 
 			return nil
 		default:
 			respCode = responseCodeInvalidRequest
-			s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
+			s.downscorePeer(remotePeer, "statusRpcHandlerInvalidMessage")
 		}
 
 		originalErr := err

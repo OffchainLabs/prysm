@@ -381,7 +381,7 @@ func initializeStateWithForkDigest(_ context.Context, t *testing.T, gs startup.C
 	return fd
 }
 
-// TODO: Uncomment when out of devnet
+// TODO: Uncomment out of devnet.
 // func TestService_connectWithPeer(t *testing.T) {
 // 	params.SetupTestConfigCleanup(t)
 // 	tests := []struct {
@@ -393,7 +393,7 @@ func initializeStateWithForkDigest(_ context.Context, t *testing.T, gs startup.C
 // 		{
 // 			name: "bad peer",
 // 			peers: func() *peers.Status {
-// 				ps := peers.NewStatus(context.Background(), &peers.StatusConfig{
+// 				ps := peers.NewStatus(t.Context(), &peers.StatusConfig{
 // 					ScorerParams: &scorers.Config{},
 // 				})
 // 				for i := 0; i < 10; i++ {
@@ -402,7 +402,7 @@ func initializeStateWithForkDigest(_ context.Context, t *testing.T, gs startup.C
 // 				return ps
 // 			}(),
 // 			info:    peer.AddrInfo{ID: "bad"},
-// 			wantErr: "refused to connect to bad peer",
+// 			wantErr: "bad peer",
 // 		},
 // 	}
 // 	for _, tt := range tests {
@@ -413,7 +413,7 @@ func initializeStateWithForkDigest(_ context.Context, t *testing.T, gs startup.C
 // 					t.Fatal(err)
 // 				}
 // 			}()
-// 			ctx := context.Background()
+// 			ctx := t.Context()
 // 			s := &Service{
 // 				host:  h,
 // 				peers: tt.peers,
