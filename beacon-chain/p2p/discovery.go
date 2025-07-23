@@ -607,7 +607,7 @@ func (s *Service) createLocalNode(
 	log.WithFields(logrus.Fields{
 		"seq": localNode.Seq(),
 		"id":  localNode.ID(),
-	}).Debug("Local node discovery information")
+	}).Debug("Local node created")
 	return localNode, nil
 }
 
