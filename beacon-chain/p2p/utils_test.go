@@ -1,15 +1,22 @@
 package p2p
 
 import (
+	"math/rand"
+	"path/filepath"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
+	"github.com/OffchainLabs/prysm/v6/io/file"
+	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/prysmaticlabs/go-bitfield"
 	logTest "github.com/sirupsen/logrus/hooks/test"
+	"google.golang.org/protobuf/proto"
 )
 
 // Test `verifyConnectivity` function by trying to connect to google.com (successfully)
@@ -79,4 +86,76 @@ func TestConvertPeerIDToNodeID(t *testing.T) {
 
 	actualNodeIDStr := actualNodeID.String()
 	require.Equal(t, expectedNodeIDStr, actualNodeIDStr)
+}
+
+func TestMetaDataFromFile(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	tempDir := t.TempDir()
+	path := filepath.Join(tempDir, metaDataPath)
+
+	// Generate metadata V1
+	seqNum := rand.Uint64()
+	md := &pb.MetaDataV1{
+		SeqNumber: seqNum,
+		Attnets:   bitfield.NewBitvector64(),
+		Syncnets:  bitfield.NewBitvector4(),
+	}
+	metaData := wrapper.WrappedMetadataV1(md)
+
+	// Save to file
+	err := saveMetaDataToFile(path, metaData.Copy())
+	require.NoError(t, err)
+
+	// Load file, and compare
+	mdFromFile, err := metaDataFromFile(path)
+	require.NoError(t, err)
+	require.DeepEqual(t, metaData.Copy(), mdFromFile.Copy())
+}
+
+func TestMetaDataFromFile_V0(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	tempDir := t.TempDir()
+	path := filepath.Join(tempDir, metaDataPath)
+
+	// Generate metadata V0
+	seqNum := rand.Uint64()
+	md := &pb.MetaDataV0{
+		SeqNumber: seqNum,
+		Attnets:   bitfield.NewBitvector64(),
+	}
+	metaData := wrapper.WrappedMetadataV0(md)
+
+	// Save to file
+	err := saveMetaDataToFile(path, metaData.Copy())
+	require.NoError(t, err)
+
+	// Load file, and compare
+	mdFromFile, err := metaDataFromFile(path)
+	require.NoError(t, err)
+	require.DeepEqual(t, metaData.Copy(), mdFromFile.Copy())
+}
+
+func TestMetaDataMigrationFromProtoToSsz(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	tempDir := t.TempDir()
+	path := filepath.Join(tempDir, metaDataPath)
+
+	// Generate metadata V0 and save with proto-encoded
+	seqNum := rand.Uint64()
+	md := &pb.MetaDataV0{
+		SeqNumber: seqNum,
+		Attnets:   bitfield.NewBitvector64(),
+	}
+	wmd := wrapper.WrappedMetadataV0(md)
+	dst, err := proto.Marshal(md)
+	require.NoError(t, err)
+
+	err = file.WriteFile(path, dst)
+	require.NoError(t, err)
+
+	migratedMd, err := migrateFromProtoToSsz(path)
+	require.NoError(t, err)
+
+	// Check if sequence number is incremented
+	require.Equal(t, wmd.SequenceNumber()+1, migratedMd.SequenceNumber())
 }

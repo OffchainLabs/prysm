@@ -25,6 +25,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
+	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
@@ -123,43 +124,130 @@ func privKeyFromFile(path string) (*ecdsa.PrivateKey, error) {
 
 // Retrieves node p2p metadata from a set of configuration values
 // from the p2p service.
-// TODO: Figure out how to do a v1/v2 check.
+// When using static peer id, metaDataFromConfig returns default V1 metadata.
 func metaDataFromConfig(cfg *Config) (metadata.Metadata, error) {
-	defaultKeyPath := path.Join(cfg.DataDir, metaDataPath)
-	metaDataPath := cfg.MetaDataDir
+	// Load V1 metadata by default, since V1 metadata can be covered to V0.
+	defaultMd := &pb.MetaDataV1{
+		SeqNumber: 0,
+		Attnets:   bitfield.NewBitvector64(),
+		Syncnets:  bitfield.NewBitvector4(),
+	}
+	wrappedDefaultMd := wrapper.WrappedMetadataV1(defaultMd)
 
-	_, err := os.Stat(defaultKeyPath)
-	defaultMetadataExist := !os.IsNotExist(err)
-	if err != nil && defaultMetadataExist {
+	// If --p2p-static-id is false, return default metadata for initialization
+	if !cfg.StaticPeerID {
+		return wrappedDefaultMd, nil
+	}
+
+	mdPath, exist := resolveMetaDataPath(cfg)
+	if exist {
+		md, err := metaDataFromFile(mdPath)
+		if err != nil {
+			if errors.Is(err, ssz.ErrSize) {
+				// In case previous metadata file is encoded by proto,
+				// we need to migrate it into ssz encoded version.
+				return migrateFromProtoToSsz(mdPath)
+			}
+			return nil, err
+		}
+		return md, err
+	}
+	if err := saveMetaDataToFile(mdPath, wrappedDefaultMd); err != nil {
 		return nil, err
 	}
-	if metaDataPath == "" && !defaultMetadataExist {
-		metaData := &pb.MetaDataV0{
-			SeqNumber: 0,
-			Attnets:   bitfield.NewBitvector64(),
-		}
-		dst, err := proto.Marshal(metaData)
-		if err != nil {
-			return nil, err
-		}
-		if err := file.WriteFile(defaultKeyPath, dst); err != nil {
-			return nil, err
-		}
-		return wrapper.WrappedMetadataV0(metaData), nil
+
+	return wrappedDefaultMd, nil
+}
+
+// resolveMetaDataPath returns path and the existence of that path.
+// Issue while opening a file(e.g. permission issues) will be handled at metaDataFromFile.
+func resolveMetaDataPath(cfg *Config) (string, bool) {
+	var mdPath string
+
+	// Prioritize if --p2p-metadata is provided.
+	if cfg.MetaDataDir != "" {
+		mdPath = cfg.MetaDataDir
+	} else {
+		mdPath = path.Join(cfg.DataDir, metaDataPath)
 	}
-	if defaultMetadataExist && metaDataPath == "" {
-		metaDataPath = defaultKeyPath
+
+	// Return path and existence of the file.
+	_, err := os.Stat(mdPath)
+	if !os.IsNotExist(err) {
+		return mdPath, true
 	}
-	src, err := os.ReadFile(metaDataPath) // #nosec G304
+	return mdPath, false
+}
+
+// metaDataFromFile retrieves unmarshalled p2p metadata from file.
+func metaDataFromFile(path string) (metadata.Metadata, error) {
+	src, err := os.ReadFile(path) // #nosec G304
 	if err != nil {
 		log.WithError(err).Error("Error reading metadata from file")
 		return nil, err
 	}
-	metaData := &pb.MetaDataV0{}
-	if err := proto.Unmarshal(src, metaData); err != nil {
+
+	// Load V1 version (after altair) regardless of current fork by default.
+	md := &pb.MetaDataV1{}
+	err = md.UnmarshalSSZ(src)
+	if err != nil {
+		// If unmarshal failed, try to unmarshal for V0
+		log.WithError(err).Info("Error unmarshalling V1 metadata from file, try to unmarshal for V0.")
+		md0 := &pb.MetaDataV0{}
+		md0Err := md0.UnmarshalSSZ(src)
+		if md0Err != nil {
+			log.WithError(md0Err).Error("Error unmarshalling V0 metadata from file")
+			return nil, md0Err
+		}
+		return wrapper.WrappedMetadataV0(md0), nil
+	}
+	return wrapper.WrappedMetadataV1(md), nil
+}
+
+// saveMetaDataToFile writes marshalled metadata to given path.
+func saveMetaDataToFile(path string, metadata metadata.Metadata) error {
+	enc, err := metadata.MarshalSSZ()
+	if err != nil {
+		log.WithError(err).Error("Error marshalling metadata to SSZ")
+		return err
+	}
+
+	if err := file.WriteFile(path, enc); err != nil {
+		log.WithError(err).Error("Failed to write to disk")
+		return err
+	}
+	return nil
+}
+
+// migrateFromProtoToSsz tries to unmarshal by proto, and migrates to ssz encoded file
+// if unmarshalling is successful.
+func migrateFromProtoToSsz(path string) (metadata.Metadata, error) {
+	src, err := os.ReadFile(path) // #nosec G304
+	if err != nil {
+		log.WithError(err).Error("Error reading metadata from file")
 		return nil, err
 	}
-	return wrapper.WrappedMetadataV0(metaData), nil
+
+	md := &pb.MetaDataV0{}
+	if err := proto.Unmarshal(src, md); err != nil {
+		return nil, err
+	}
+
+	wmd := wrapper.WrappedMetadataV0(md)
+	// increment sequence number
+	seqNum := wmd.SequenceNumber() + 1
+	newMd := &pb.MetaDataV1{
+		SeqNumber: seqNum,
+		Attnets:   wmd.AttnetsBitfield().Bytes(),
+		Syncnets:  bitfield.NewBitvector4(),
+	}
+	wrappedNewMd := wrapper.WrappedMetadataV1(newMd)
+
+	saveErr := saveMetaDataToFile(path, wrappedNewMd)
+	if saveErr != nil {
+		return nil, saveErr
+	}
+	return wrapper.WrappedMetadataV1(newMd), nil
 }
 
 // Attempt to dial an address to verify its connectivity

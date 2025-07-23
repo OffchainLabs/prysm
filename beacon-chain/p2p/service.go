@@ -295,6 +295,17 @@ func (s *Service) Stop() error {
 	if s.dv5Listener != nil {
 		s.dv5Listener.Close()
 	}
+	// Save metadata to file if static peer id is enabled.
+	if s.cfg.StaticPeerID {
+		md := s.Metadata()
+		mdPath, exist := resolveMetaDataPath(s.cfg)
+		if exist {
+			err := saveMetaDataToFile(mdPath, md)
+			if err != nil {
+				log.WithError(err).Error("Could not save metadata to file")
+			}
+		}
+	}
 	return nil
 }
 
