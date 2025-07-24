@@ -131,7 +131,6 @@ type config struct {
 	headers                 []string
 	finalizedStateAtStartup state.BeaconState
 	jwtId                   string
-	getBlobsRetryInterval   time.Duration
 }
 
 // Service fetches important information about the canonical
