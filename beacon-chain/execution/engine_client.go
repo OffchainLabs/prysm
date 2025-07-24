@@ -104,6 +104,8 @@ const (
 	// The only counter part is the `engine_getPayloadv<x>` takes a lot of time.
 	// defaultEngineTimeout = time.Second
 	defaultEngineTimeout = 2 * time.Second
+	// defaultGetBlobsRetryInterval is the default retry interval for getBlobsV2 calls.
+	defaultGetBlobsRetryInterval = 200 * time.Millisecond
 )
 
 var (
@@ -1087,7 +1089,12 @@ func (s *Service) retryReconstructDataColumnSidecars(ctx context.Context, signed
 	s.activeRetries.Store(blockRoot, cancel)
 	defer s.activeRetries.Delete(blockRoot)
 
-	ticker := time.NewTicker(s.getBlobsRetryInterval)
+	// Ensure we have a valid retry interval
+	retryInterval := s.getBlobsRetryInterval
+	if retryInterval <= 0 {
+		retryInterval = defaultGetBlobsRetryInterval // default fallback
+	}
+	ticker := time.NewTicker(retryInterval)
 	defer ticker.Stop()
 
 	attemptCount := 0
