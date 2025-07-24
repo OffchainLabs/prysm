@@ -131,6 +131,7 @@ type config struct {
 	headers                 []string
 	finalizedStateAtStartup state.BeaconState
 	jwtId                   string
+	getBlobsRetryInterval   time.Duration
 }
 
 // Service fetches important information about the canonical
@@ -165,6 +166,7 @@ type Service struct {
 	activeRetries           sync.Map // map[blockRoot]context.CancelFunc for tracking active retries
 	activeReconstructCalls  sync.Map // map[blockRoot]chan reconstructResult for tracking in-flight reconstruction calls
 	availabilityChecker     DataAvailabilityChecker
+	getBlobsRetryInterval   time.Duration // retry interval for getBlobsV2 calls
 }
 
 // NewService sets up a new instance with an ethclient when given a web3 endpoint as a string in the config.
@@ -203,6 +205,7 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 		preGenesisState:         genState,
 		eth1HeadTicker:          time.NewTicker(time.Duration(params.BeaconConfig().SecondsPerETH1Block) * time.Second),
 		capabilityCache:         &capabilityCache{},
+		getBlobsRetryInterval:   200 * time.Millisecond, // default value
 	}
 
 	for _, opt := range opts {

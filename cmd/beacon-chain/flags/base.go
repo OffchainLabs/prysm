@@ -257,6 +257,12 @@ var (
 		Name:  "engine-endpoint-timeout-seconds",
 		Usage: "Sets the execution engine timeout (seconds) for execution payload semantics (forkchoiceUpdated, newPayload)",
 	}
+	// GetBlobsRetryIntervalMs defines the retry interval in milliseconds for getBlobsV2 calls when reconstructing data column sidecars.
+	GetBlobsRetryIntervalMs = &cli.Uint64Flag{
+		Name:  "getblobs-retry-interval-ms",
+		Usage: "Sets the retry interval (milliseconds) for getBlobsV2 calls when reconstructing data column sidecars",
+		Value: 200,
+	}
 	// Eth1HeaderReqLimit defines a flag to set the maximum number of headers that a deposit log query can fetch. If none is set, 1000 will be the limit.
 	Eth1HeaderReqLimit = &cli.Uint64Flag{
 		Name:  "eth1-header-req-limit",

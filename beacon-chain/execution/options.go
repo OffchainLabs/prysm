@@ -1,6 +1,8 @@
 package execution
 
 import (
+	"time"
+
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
@@ -121,6 +123,14 @@ func WithJwtId(jwtId string) Option {
 func WithVerifierWaiter(v *verification.InitializerWaiter) Option {
 	return func(s *Service) error {
 		s.verifierWaiter = v
+		return nil
+	}
+}
+
+// WithGetBlobsRetryInterval sets the retry interval for getBlobsV2 calls.
+func WithGetBlobsRetryInterval(interval time.Duration) Option {
+	return func(s *Service) error {
+		s.getBlobsRetryInterval = interval
 		return nil
 	}
 }

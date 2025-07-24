@@ -1080,14 +1080,14 @@ func toBlockNumArg(number *big.Int) string {
 
 // retryReconstructDataColumnSidecars performs periodic retry attempts for getBlobsV2.
 func (s *Service) retryReconstructDataColumnSidecars(ctx context.Context, signedROBlock interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte) {
-	retryCtx, cancel := context.WithTimeout(ctx, 12*time.Second) // 1 slot timeout
+	retryCtx, cancel := context.WithTimeout(ctx, time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second) // 1 slot timeout
 	defer cancel()
 
 	// Track active retry
 	s.activeRetries.Store(blockRoot, cancel)
 	defer s.activeRetries.Delete(blockRoot)
 
-	ticker := time.NewTicker(200 * time.Millisecond)
+	ticker := time.NewTicker(s.getBlobsRetryInterval)
 	defer ticker.Stop()
 
 	attemptCount := 0
