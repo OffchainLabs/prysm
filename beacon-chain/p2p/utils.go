@@ -134,12 +134,16 @@ func metaDataFromConfig(cfg *Config) (metadata.Metadata, error) {
 	}
 	wrappedDefaultMd := wrapper.WrappedMetadataV1(defaultMd)
 
-	// If --p2p-static-id is false, return default metadata for initialization
+	// For not using static peer ID, return default metadata for initialization
 	if !cfg.StaticPeerID {
 		return wrappedDefaultMd, nil
 	}
 
-	mdPath, exist := resolveMetaDataPath(cfg)
+	mdPath, exist, err := resolveMetaDataPath(cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	if exist {
 		md, err := metaDataFromFile(mdPath)
 		if err != nil {
@@ -160,31 +164,25 @@ func metaDataFromConfig(cfg *Config) (metadata.Metadata, error) {
 }
 
 // resolveMetaDataPath returns path and the existence of that path.
-// Issue while opening a file(e.g. permission issues) will be handled at metaDataFromFile.
-func resolveMetaDataPath(cfg *Config) (string, bool) {
-	var mdPath string
-
-	// Prioritize if --p2p-metadata is provided.
-	if cfg.MetaDataDir != "" {
-		mdPath = cfg.MetaDataDir
-	} else {
+func resolveMetaDataPath(cfg *Config) (string, bool, error) {
+	mdPath := cfg.MetaDataDir
+	if mdPath == "" {
 		mdPath = path.Join(cfg.DataDir, metaDataPath)
 	}
 
 	// Return path and existence of the file.
-	_, err := os.Stat(mdPath)
-	if !os.IsNotExist(err) {
-		return mdPath, true
+	dirExists, err := file.Exists(mdPath, file.Regular)
+	if err != nil {
+		return mdPath, false, err
 	}
-	return mdPath, false
+	return mdPath, dirExists, nil
 }
 
 // metaDataFromFile retrieves unmarshalled p2p metadata from file.
 func metaDataFromFile(path string) (metadata.Metadata, error) {
-	src, err := os.ReadFile(path) // #nosec G304
+	src, err := file.ReadFileAsBytes(path)
 	if err != nil {
-		log.WithError(err).Error("Error reading metadata from file")
-		return nil, err
+		return nil, errors.Wrapf(err, "error reading metadata from file %s", path)
 	}
 
 	// Load V1 version (after altair) regardless of current fork by default.
@@ -192,12 +190,10 @@ func metaDataFromFile(path string) (metadata.Metadata, error) {
 	err = md.UnmarshalSSZ(src)
 	if err != nil {
 		// If unmarshal failed, try to unmarshal for V0
-		log.WithError(err).Info("Error unmarshalling V1 metadata from file, try to unmarshal for V0.")
 		md0 := &pb.MetaDataV0{}
 		md0Err := md0.UnmarshalSSZ(src)
 		if md0Err != nil {
-			log.WithError(md0Err).Error("Error unmarshalling V0 metadata from file")
-			return nil, md0Err
+			return nil, errors.Wrap(md0Err, "error unmarshalling metadata from file")
 		}
 		return wrapper.WrappedMetadataV0(md0), nil
 	}
@@ -208,13 +204,11 @@ func metaDataFromFile(path string) (metadata.Metadata, error) {
 func saveMetaDataToFile(path string, metadata metadata.Metadata) error {
 	enc, err := metadata.MarshalSSZ()
 	if err != nil {
-		log.WithError(err).Error("Error marshalling metadata to SSZ")
-		return err
+		return errors.Wrap(err, "error marshalling metadata to SSZ")
 	}
 
 	if err := file.WriteFile(path, enc); err != nil {
-		log.WithError(err).Error("Failed to write to disk")
-		return err
+		return errors.Wrapf(err, "error writing metadata to file %s", path)
 	}
 	return nil
 }
