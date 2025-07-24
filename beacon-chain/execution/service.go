@@ -204,7 +204,7 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 		preGenesisState:         genState,
 		eth1HeadTicker:          time.NewTicker(time.Duration(params.BeaconConfig().SecondsPerETH1Block) * time.Second),
 		capabilityCache:         &capabilityCache{},
-		getBlobsRetryInterval:   200 * time.Millisecond, // default value
+		getBlobsRetryInterval:   defaultGetBlobsRetryInterval, // default value
 	}
 
 	for _, opt := range opts {

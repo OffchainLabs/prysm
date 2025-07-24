@@ -99,6 +99,8 @@ const (
 	GetBlobsV2 = "engine_getBlobsV2"
 	// Defines the seconds before timing out engine endpoints with non-block execution semantics.
 	defaultEngineTimeout = time.Second
+	// defaultGetBlobsRetryInterval is the default retry interval for getBlobsV2 calls.
+	defaultGetBlobsRetryInterval = 200 * time.Millisecond
 )
 
 var (
@@ -1082,7 +1084,12 @@ func (s *Service) retryReconstructDataColumnSidecars(ctx context.Context, signed
 	s.activeRetries.Store(blockRoot, cancel)
 	defer s.activeRetries.Delete(blockRoot)
 
-	ticker := time.NewTicker(s.getBlobsRetryInterval)
+	// Ensure we have a valid retry interval
+	retryInterval := s.getBlobsRetryInterval
+	if retryInterval <= 0 {
+		retryInterval = defaultGetBlobsRetryInterval // default fallback
+	}
+	ticker := time.NewTicker(retryInterval)
 	defer ticker.Stop()
 
 	attemptCount := 0

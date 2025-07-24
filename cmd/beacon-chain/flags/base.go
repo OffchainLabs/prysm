@@ -257,6 +257,7 @@ var (
 		Usage: "Sets the execution engine timeout (seconds) for execution payload semantics (forkchoiceUpdated, newPayload)",
 	}
 	// GetBlobsRetryIntervalMs defines the retry interval in milliseconds for getBlobsV2 calls when reconstructing data column sidecars.
+	// Default value matches defaultGetBlobsRetryInterval in beacon-chain/execution/engine_client.go.
 	GetBlobsRetryIntervalMs = &cli.Uint64Flag{
 		Name:  "getblobs-retry-interval-ms",
 		Usage: "Sets the retry interval (milliseconds) for getBlobsV2 calls when reconstructing data column sidecars",
