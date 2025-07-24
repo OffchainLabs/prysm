@@ -196,6 +196,26 @@ func TestReconstructBlobs(t *testing.T) {
 		require.ErrorIs(t, err, peerdas.ErrDataColumnSidecarsNotSortedByIndex)
 	})
 
+	t.Run("consecutive duplicates", func(t *testing.T) {
+		_, _, verifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, 3)
+
+		// [0, 1, 1, 3, 4, ...]
+		verifiedRoSidecars[2] = verifiedRoSidecars[1]
+
+		_, err := peerdas.ReconstructBlobs(emptyBlock, verifiedRoSidecars, []int{0})
+		require.ErrorIs(t, err, peerdas.ErrDataColumnSidecarsNotSortedByIndex)
+	})
+
+	t.Run("non-consecutive duplicates", func(t *testing.T) {
+		_, _, verifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, 3)
+
+		// [0, 1, 2, 1, 4, ...]
+		verifiedRoSidecars[3] = verifiedRoSidecars[1]
+
+		_, err := peerdas.ReconstructBlobs(emptyBlock, verifiedRoSidecars, []int{0})
+		require.ErrorIs(t, err, peerdas.ErrDataColumnSidecarsNotSortedByIndex)
+	})
+
 	t.Run("not enough columns", func(t *testing.T) {
 		_, _, verifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, 3)
 
