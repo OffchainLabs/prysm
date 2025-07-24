@@ -3,6 +3,8 @@ package sync
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
@@ -89,18 +91,32 @@ func (s *Service) triggerGetBlobsV2ForDataColumnSidecar(ctx context.Context, blo
 	// Check if this block has blob commitments that would need getBlobsV2
 	blockBody := signedBlock.Block().Body()
 	commitments, err := blockBody.BlobKzgCommitments()
-	if err != nil || len(commitments) == 0 {
-		// No commitments, no need to trigger retry
+	if err != nil {
 		return err
+	}
+	if len(commitments) == 0 {
+		return nil
 	}
 
 	// Trigger the retry by calling the execution service's reconstruct method
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.WithField("error", r).
+					WithField("recoveredAt", "triggerGetBlobsV2ForDataColumnSidecar").
+					WithField("stack", string(debug.Stack())).
+					Error("Panic occurred in getBlobsV2 retry goroutine")
+			}
+		}()
+
+		bgCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
 		log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Debug("Triggering getBlobsV2 retry for data column sidecar")
 
 		// This will trigger retry logic if needed
 		if s.cfg.executionReconstructor != nil {
-			_, err := s.cfg.executionReconstructor.ReconstructDataColumnSidecars(ctx, signedBlock, blockRoot)
+			_, err := s.cfg.executionReconstructor.ReconstructDataColumnSidecars(bgCtx, signedBlock, blockRoot)
 			if err != nil {
 				log.WithError(err).Debug("getBlobsV2 retry triggered by data column sidecar failed")
 			}
