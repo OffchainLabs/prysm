@@ -48,7 +48,7 @@ func TestMinimumColumnsCountToReconstruct(t *testing.T) {
 			params.OverrideBeaconConfig(cfg)
 
 			// Compute the minimum number of columns needed to reconstruct.
-			actual := peerdas.MinimumColumnsCountToReconstruct()
+			actual := peerdas.MinimumColumnCountToReconstruct()
 			require.Equal(t, tc.expected, actual)
 		})
 	}
@@ -100,7 +100,7 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 	t.Run("not enough columns to enable reconstruction", func(t *testing.T) {
 		_, _, verifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, 3)
 
-		minimum := peerdas.MinimumColumnsCountToReconstruct()
+		minimum := peerdas.MinimumColumnCountToReconstruct()
 		_, err := peerdas.ReconstructDataColumnSidecars(verifiedRoSidecars[:minimum-1])
 		require.ErrorIs(t, err, peerdas.ErrNotEnoughDataColumnSidecars)
 	})
