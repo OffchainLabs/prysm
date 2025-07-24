@@ -357,7 +357,7 @@ func (s *Service) buildStatusFromStream(
 			FinalizedEpoch:        FinalizedEpoch,
 			HeadRoot:              headRoot,
 			HeadSlot:              s.cfg.chain.HeadSlot(),
-			EarliestAvailableSlot: 0,
+			EarliestAvailableSlot: s.cfg.p2p.EarliestAvailableSlot(),
 		}
 
 		return status, nil

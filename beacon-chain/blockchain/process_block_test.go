@@ -2986,7 +2986,8 @@ func TestIsDataAvailable(t *testing.T) {
 		}
 
 		ctx, _, service, root, signed := testIsAvailableSetup(t, testParams)
-		service.cfg.P2P.SetCustodyGroupCount(cgc)
+		_, _, err := service.cfg.P2P.UpdateCustodyInfo(0, cgc)
+		require.NoError(t, err)
 		block := signed.Block()
 		slot := block.Slot()
 		proposerIndex := block.ProposerIndex()

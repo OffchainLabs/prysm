@@ -33,6 +33,7 @@ type ReadOnlyDatabase interface {
 	IsFinalizedBlock(ctx context.Context, blockRoot [32]byte) bool
 	FinalizedChildBlock(ctx context.Context, blockRoot [32]byte) (interfaces.ReadOnlySignedBeaconBlock, error)
 	HighestRootsBelowSlot(ctx context.Context, slot primitives.Slot) (primitives.Slot, [][32]byte, error)
+	EarliestSlot(ctx context.Context) (primitives.Slot, error)
 	// State related methods.
 	State(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error)
 	StateOrError(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error)
@@ -64,7 +65,7 @@ type ReadOnlyDatabase interface {
 	OriginCheckpointBlockRoot(ctx context.Context) ([32]byte, error)
 	BackfillStatus(context.Context) (*dbval.BackfillStatus, error)
 	// Custody operations.
-	CustodyGroupCount(ctx context.Context) (uint64, error)
+	CustodyInfo(ctx context.Context) (uint64, uint64, error)
 	SubscribedToAllDataSubnets(ctx context.Context) (bool, error)
 }
 
@@ -108,6 +109,8 @@ type NoHeadAccessDatabase interface {
 	// Custody operations.
 	SaveCustodyGroupCount(ctx context.Context, custodyGroupCount uint64) error
 	SaveSubscribedToAllDataSubnets(ctx context.Context, subscribed bool) error
+	UpdateSubscribedToAllDataSubnets(ctx context.Context, subscribed bool) (bool, error)
+	UpdateCustodyInfo(ctx context.Context, custodyGroupCount uint64, earliestAvailableSlot primitives.Slot) (uint64, primitives.Slot, error)
 }
 
 // HeadAccessDatabase defines a struct with access to reading chain head data.

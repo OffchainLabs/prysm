@@ -273,7 +273,8 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 					seenDataColumnCache: newSlotAwareCache(1),
 				}
 
-				s.cfg.p2p.SetCustodyGroupCount(custodyRequirement)
+				_, _, err := s.cfg.p2p.UpdateCustodyInfo(0, custodyRequirement)
+				require.NoError(t, err)
 
 				kzgCommitments := make([][]byte, 0, tt.blobCount)
 				for range tt.blobCount {

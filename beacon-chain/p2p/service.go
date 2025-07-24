@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	prysmnetwork "github.com/OffchainLabs/prysm/v6/network"
@@ -87,9 +88,10 @@ type Service struct {
 	genesisTime           time.Time
 	genesisValidatorsRoot []byte
 	activeValidatorCount  uint64
-	custodyGroupCountMut  sync.RWMutex // Protects custodyGroupCount
-	custodyGroupCount     uint64
 	peerDisconnectionTime *cache.Cache
+	custodyInfoMut        sync.RWMutex // Protects custodyGroupCount and earliestAvailableSlot
+	custodyGroupCount     uint64
+	earliestAvailableSlot primitives.Slot
 }
 
 // NewService initializes a new p2p service compatible with shared.Service interface. No

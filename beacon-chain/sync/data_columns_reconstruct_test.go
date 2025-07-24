@@ -146,7 +146,8 @@ func TestBroadcastMissingDataColumnSidecars(t *testing.T) {
 			WithP2P(p2p),
 			WithDataColumnStorage(storage),
 		)
-		service.cfg.p2p.SetCustodyGroupCount(cgc)
+		_, _, err = service.cfg.p2p.UpdateCustodyInfo(0, cgc)
+		require.NoError(t, err)
 
 		for _, index := range [...]uint64{1, 17, 19, 102, 117} { // 42, 75 and 87 are missing
 			key := computeCacheKey(slot, proposerIndex, index)

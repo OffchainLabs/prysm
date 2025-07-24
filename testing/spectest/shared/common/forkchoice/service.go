@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
+	p2pTesting "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
@@ -82,6 +83,7 @@ func startChainService(t testing.TB,
 		blockchain.WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)),
 		blockchain.WithSyncChecker(mock.MockChecker{}),
 		blockchain.WithGenesisTime(genesis),
+		blockchain.WithP2PBroadcaster(&p2pTesting.TestP2P{}),
 	)
 	service, err := blockchain.NewService(t.Context(), opts...)
 	require.NoError(t, err)
