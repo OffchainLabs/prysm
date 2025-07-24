@@ -647,6 +647,7 @@ func TestForkSchedule_Ok(t *testing.T) {
 func TestGetSpec_BlobSchedule(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	config := params.BeaconConfig().Copy()
+	config.FuluForkEpoch = 1
 
 	// Set up a blob schedule with test data
 	config.BlobSchedule = []params.BlobScheduleEntry{
