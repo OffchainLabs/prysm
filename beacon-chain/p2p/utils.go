@@ -25,7 +25,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
@@ -35,6 +34,8 @@ const keyPath = "network-keys"
 const metaDataPath = "metaData"
 
 const dialTimeout = 1 * time.Second
+
+var errUnexpectedMetadataSize = fmt.Errorf("metadata file has unexpected size")
 
 // SerializeENR takes the enr record in its key-value form and serializes it.
 func SerializeENR(record *enr.Record) (string, error) {
@@ -147,7 +148,7 @@ func metaDataFromConfig(cfg *Config) (metadata.Metadata, error) {
 	if exist {
 		md, err := metaDataFromFile(mdPath)
 		if err != nil {
-			if errors.Is(err, ssz.ErrSize) {
+			if errors.Is(err, errUnexpectedMetadataSize) {
 				// In case previous metadata file is encoded by proto,
 				// we need to migrate it into ssz encoded version.
 				return migrateFromProtoToSsz(mdPath)
@@ -208,7 +209,7 @@ func metaDataFromFile(path string) (metadata.Metadata, error) {
 			md = wrapper.WrappedMetadataV2(v2)
 		}
 	default:
-		return nil, fmt.Errorf("metadata file has unexpected size: %d", len(src))
+		return nil, errUnexpectedMetadataSize
 	}
 
 	if unmarshalErr != nil {
@@ -234,10 +235,9 @@ func saveMetaDataToFile(path string, metadata metadata.Metadata) error {
 // migrateFromProtoToSsz tries to unmarshal by proto, and migrates to ssz encoded file
 // if unmarshalling is successful.
 func migrateFromProtoToSsz(path string) (metadata.Metadata, error) {
-	src, err := os.ReadFile(path) // #nosec G304
+	src, err := file.ReadFileAsBytes(path)
 	if err != nil {
-		log.WithError(err).Error("Error reading metadata from file")
-		return nil, err
+		return nil, errors.Wrapf(err, "error reading metadata from file %s", path)
 	}
 
 	md := &pb.MetaDataV0{}
@@ -246,10 +246,8 @@ func migrateFromProtoToSsz(path string) (metadata.Metadata, error) {
 	}
 
 	wmd := wrapper.WrappedMetadataV0(md)
-	// increment sequence number
-	seqNum := wmd.SequenceNumber() + 1
 	newMd := &pb.MetaDataV1{
-		SeqNumber: seqNum,
+		SeqNumber: wmd.SequenceNumber() + 1,
 		Attnets:   wmd.AttnetsBitfield().Bytes(),
 		Syncnets:  bitfield.NewBitvector4(),
 	}
