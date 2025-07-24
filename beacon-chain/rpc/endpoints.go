@@ -990,6 +990,7 @@ func (s *Service) beaconEndpoints(
 			name:     namespace + ".GetProposerLookahead",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.GetProposerLookahead,
 			methods: []string{http.MethodGet},

@@ -5366,12 +5366,13 @@ func TestGetPendingPartialWithdrawals(t *testing.T) {
 }
 
 func TestGetProposerLookahead(t *testing.T) {
+	numValidators := 50
 	// Create a Fulu state with proposer lookahead data
-	st, _ := util.DeterministicGenesisStateFulu(t, 50)
+	st, _ := util.DeterministicGenesisStateFulu(t, uint64(numValidators))
 	lookaheadSize := int(params.BeaconConfig().MinSeedLookahead+1) * int(params.BeaconConfig().SlotsPerEpoch)
 	lookahead := make([]primitives.ValidatorIndex, lookaheadSize)
 	for i := 0; i < lookaheadSize; i++ {
-		lookahead[i] = primitives.ValidatorIndex(i % 50) // Cycle through validators
+		lookahead[i] = primitives.ValidatorIndex(i % numValidators) // Cycle through validators
 	}
 
 	require.NoError(t, st.SetProposerLookahead(lookahead))
@@ -5409,7 +5410,7 @@ func TestGetProposerLookahead(t *testing.T) {
 		// Verify the data
 		require.Equal(t, lookaheadSize, len(resp.Data))
 		for i := 0; i < lookaheadSize; i++ {
-			expectedIdx := strconv.FormatUint(uint64(i%50), 10)
+			expectedIdx := strconv.FormatUint(uint64(i%numValidators), 10)
 			require.Equal(t, expectedIdx, resp.Data[i])
 		}
 	})
