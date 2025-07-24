@@ -185,19 +185,37 @@ func metaDataFromFile(path string) (metadata.Metadata, error) {
 		return nil, errors.Wrapf(err, "error reading metadata from file %s", path)
 	}
 
-	// Load V1 version (after altair) regardless of current fork by default.
-	md := &pb.MetaDataV1{}
-	err = md.UnmarshalSSZ(src)
-	if err != nil {
-		// If unmarshal failed, try to unmarshal for V0
-		md0 := &pb.MetaDataV0{}
-		md0Err := md0.UnmarshalSSZ(src)
-		if md0Err != nil {
-			return nil, errors.Wrap(md0Err, "error unmarshalling metadata from file")
+	var md metadata.Metadata
+	var unmarshalErr error
+
+	switch len(src) {
+	case (&pb.MetaDataV0{}).SizeSSZ():
+		v0 := &pb.MetaDataV0{}
+		unmarshalErr = v0.UnmarshalSSZ(src)
+		if unmarshalErr == nil {
+			md = wrapper.WrappedMetadataV0(v0)
 		}
-		return wrapper.WrappedMetadataV0(md0), nil
+	case (&pb.MetaDataV1{}).SizeSSZ():
+		v1 := &pb.MetaDataV1{}
+		unmarshalErr = v1.UnmarshalSSZ(src)
+		if unmarshalErr == nil {
+			md = wrapper.WrappedMetadataV1(v1)
+		}
+	case (&pb.MetaDataV2{}).SizeSSZ():
+		v2 := &pb.MetaDataV2{}
+		unmarshalErr = v2.UnmarshalSSZ(src)
+		if unmarshalErr == nil {
+			md = wrapper.WrappedMetadataV2(v2)
+		}
+	default:
+		return nil, fmt.Errorf("metadata file has unexpected size: %d", len(src))
 	}
-	return wrapper.WrappedMetadataV1(md), nil
+
+	if unmarshalErr != nil {
+		return nil, errors.Wrap(unmarshalErr, "error unmarshalling metadata from file")
+	}
+
+	return md, nil
 }
 
 // saveMetaDataToFile writes marshalled metadata to given path.
