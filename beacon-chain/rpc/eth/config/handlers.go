@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -166,6 +167,9 @@ func prepareConfigSpec() (map[string]interface{}, error) {
 		if !isSpec {
 			continue
 		}
+		if shouldSkip(tField) {
+			continue
+		}
 
 		tag := strings.ToUpper(tField.Tag.Get("yaml"))
 		val := v.Field(i)
@@ -173,4 +177,13 @@ func prepareConfigSpec() (map[string]interface{}, error) {
 	}
 
 	return data, nil
+}
+
+func shouldSkip(tField reflect.StructField) bool {
+	// Dynamically skip blob schedule if Fulu is not yet scheduled.
+	if params.BeaconConfig().FuluForkEpoch == math.MaxUint64 &&
+		tField.Type == reflect.TypeOf(params.BeaconConfig().BlobSchedule) {
+		return true
+	}
+	return false
 }

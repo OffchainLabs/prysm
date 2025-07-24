@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -698,4 +699,29 @@ func TestGetSpec_BlobSchedule(t *testing.T) {
 	// Check second entry - values should be strings for consistent API output
 	assert.Equal(t, "200", blobSchedule[1]["EPOCH"])
 	assert.Equal(t, "9", blobSchedule[1]["MAX_BLOBS_PER_BLOCK"])
+}
+
+func TestGetSpec_BlobSchedule_NotFulu(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig().Copy()
+	// Fulu not scheduled (default: math.MaxUint64)
+	config.FuluForkEpoch = math.MaxUint64
+	config.BlobSchedule = []params.BlobScheduleEntry{
+		{Epoch: primitives.Epoch(100), MaxBlobsPerBlock: 6},
+	}
+	params.OverrideBeaconConfig(config)
+
+	request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/config/spec", nil)
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+
+	GetSpec(writer, request)
+	require.Equal(t, http.StatusOK, writer.Code)
+	resp := structs.GetSpecResponse{}
+	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
+	data, ok := resp.Data.(map[string]interface{})
+	require.Equal(t, true, ok)
+
+	_, exists := data["BLOB_SCHEDULE"]
+	require.Equal(t, false, exists)
 }
