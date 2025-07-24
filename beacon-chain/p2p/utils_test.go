@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
 	"github.com/OffchainLabs/prysm/v6/io/file"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -90,49 +91,59 @@ func TestConvertPeerIDToNodeID(t *testing.T) {
 
 func TestMetaDataFromFile(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	tempDir := t.TempDir()
-	path := filepath.Join(tempDir, metaDataPath)
 
-	// Generate metadata V1
-	seqNum := rand.Uint64()
-	md := &pb.MetaDataV1{
-		SeqNumber: seqNum,
-		Attnets:   bitfield.NewBitvector64(),
-		Syncnets:  bitfield.NewBitvector4(),
+	tests := []struct {
+		name     string
+		metaData metadata.Metadata
+	}{
+		{
+			name: "V0",
+			metaData: func() metadata.Metadata {
+				md := &pb.MetaDataV0{
+					SeqNumber: rand.Uint64(),
+					Attnets:   bitfield.NewBitvector64(),
+				}
+				return wrapper.WrappedMetadataV0(md)
+			}(),
+		},
+		{
+			name: "V1",
+			metaData: func() metadata.Metadata {
+				md := &pb.MetaDataV1{
+					SeqNumber: rand.Uint64(),
+					Attnets:   bitfield.NewBitvector64(),
+					Syncnets:  bitfield.NewBitvector4(),
+				}
+				return wrapper.WrappedMetadataV1(md)
+			}(),
+		},
+		{
+			name: "V2",
+			metaData: func() metadata.Metadata {
+				md := &pb.MetaDataV2{
+					SeqNumber:         rand.Uint64(),
+					Attnets:           bitfield.NewBitvector64(),
+					Syncnets:          bitfield.NewBitvector4(),
+					CustodyGroupCount: rand.Uint64(),
+				}
+				return wrapper.WrappedMetadataV2(md)
+			}(),
+		},
 	}
-	metaData := wrapper.WrappedMetadataV1(md)
 
-	// Save to file
-	err := saveMetaDataToFile(path, metaData.Copy())
-	require.NoError(t, err)
+	for _, tt := range tests {
+		tempDir := t.TempDir()
+		path := filepath.Join(tempDir, metaDataPath)
 
-	// Load file, and compare
-	mdFromFile, err := metaDataFromFile(path)
-	require.NoError(t, err)
-	require.DeepEqual(t, metaData.Copy(), mdFromFile.Copy())
-}
+		// Save to file
+		err := saveMetaDataToFile(path, tt.metaData.Copy())
+		require.NoError(t, err)
 
-func TestMetaDataFromFile_V0(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	tempDir := t.TempDir()
-	path := filepath.Join(tempDir, metaDataPath)
-
-	// Generate metadata V0
-	seqNum := rand.Uint64()
-	md := &pb.MetaDataV0{
-		SeqNumber: seqNum,
-		Attnets:   bitfield.NewBitvector64(),
+		// Load file, and compare
+		mdFromFile, err := metaDataFromFile(path)
+		require.NoError(t, err)
+		require.DeepEqual(t, tt.metaData.Copy(), mdFromFile.Copy())
 	}
-	metaData := wrapper.WrappedMetadataV0(md)
-
-	// Save to file
-	err := saveMetaDataToFile(path, metaData.Copy())
-	require.NoError(t, err)
-
-	// Load file, and compare
-	mdFromFile, err := metaDataFromFile(path)
-	require.NoError(t, err)
-	require.DeepEqual(t, metaData.Copy(), mdFromFile.Copy())
 }
 
 func TestMetaDataMigrationFromProtoToSsz(t *testing.T) {
