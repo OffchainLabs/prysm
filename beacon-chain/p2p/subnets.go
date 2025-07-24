@@ -384,6 +384,7 @@ func (s *Service) updateSubnetRecordWithMetadata(bitV bitfield.Bitvector64) {
 		SeqNumber: s.metaData.SequenceNumber() + 1,
 		Attnets:   bitV,
 	})
+	s.saveMetaDataIfNeeded()
 }
 
 // Updates the service's discv5 listener record's attestation subnet
@@ -400,6 +401,7 @@ func (s *Service) updateSubnetRecordWithMetadataV2(bitVAtt bitfield.Bitvector64,
 		Attnets:   bitVAtt,
 		Syncnets:  bitVSync,
 	})
+	s.saveMetaDataIfNeeded()
 }
 
 // updateSubnetRecordWithMetadataV3 updates:
@@ -429,6 +431,23 @@ func (s *Service) updateSubnetRecordWithMetadataV3(
 		Syncnets:          bitVSync,
 		CustodyGroupCount: custodyGroupCount,
 	})
+	s.saveMetaDataIfNeeded()
+}
+
+// saveMetaDataIfNeeded saves the metadata to the file if the static peer ID flag is set.
+func (s *Service) saveMetaDataIfNeeded() {
+	if s.cfg.StaticPeerID {
+		mdPath, exist, err := resolveMetaDataPath(s.cfg)
+		if err != nil {
+			return
+		}
+
+		if exist {
+			if err := saveMetaDataToFile(mdPath, s.Metadata()); err != nil {
+				return
+			}
+		}
+	}
 }
 
 func initializePersistentSubnets(id enode.ID, epoch primitives.Epoch) error {
