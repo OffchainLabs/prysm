@@ -81,7 +81,7 @@ func TestRPC_LightClientBootstrap(t *testing.T) {
 			blockRoot, err := l.Block.Block().HashTreeRoot()
 			require.NoError(t, err)
 
-			require.NoError(t, r.lcStore.SaveLightClientBootstrap(ctx, blockRoot, bootstrap))
+			require.NoError(t, r.cfg.beaconDB.SaveLightClientBootstrap(ctx, blockRoot[:], bootstrap))
 
 			var wg sync.WaitGroup
 			wg.Add(1)
@@ -199,7 +199,7 @@ func TestRPC_LightClientOptimisticUpdate(t *testing.T) {
 		t.Run(version.String(i), func(t *testing.T) {
 			l := util.NewTestLightClient(t, i)
 
-			update, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
+			update, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock)
 			require.NoError(t, err)
 
 			r.lcStore.SetLastOptimisticUpdate(update)
@@ -319,7 +319,7 @@ func TestRPC_LightClientFinalityUpdate(t *testing.T) {
 		t.Run(version.String(i), func(t *testing.T) {
 			l := util.NewTestLightClient(t, i)
 
-			update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+			update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 			require.NoError(t, err)
 
 			r.lcStore.SetLastFinalityUpdate(update)
@@ -416,7 +416,7 @@ func TestRPC_LightClientUpdatesByRange(t *testing.T) {
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
 		chainStarted: abool.New(),
-		lcStore:      &lightClient.Store{},
+		lcStore:      lightClient.NewLightClientStore(d),
 		subHandler:   newSubTopicHandler(),
 		rateLimiter:  newRateLimiter(p1),
 	}
@@ -439,7 +439,7 @@ func TestRPC_LightClientUpdatesByRange(t *testing.T) {
 		t.Run(version.String(i), func(t *testing.T) {
 			for j := 0; j < 5; j++ {
 				l := util.NewTestLightClient(t, i, util.WithIncreasedAttestedSlot(uint64(j)))
-				update, err := lightClient.NewLightClientUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+				update, err := lightClient.NewLightClientUpdateFromBeaconState(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 				require.NoError(t, err)
 				require.NoError(t, r.cfg.beaconDB.SaveLightClientUpdate(ctx, uint64(j), update))
 			}
@@ -493,11 +493,11 @@ func TestRPC_LightClientUpdatesByRange(t *testing.T) {
 					t.Fatalf("unsupported version %d", i)
 				}
 
-				update, err := r.cfg.beaconDB.LightClientUpdates(ctx, 0, 4)
+				updates, err := r.lcStore.LightClientUpdates(ctx, 0, 4)
 				require.NoError(t, err)
-				bootstrapSSZ, err := update[uint64(responseCounter)].MarshalSSZ()
+				updateSSZ, err := updates[uint64(responseCounter)].MarshalSSZ()
 				require.NoError(t, err)
-				require.DeepSSZEqual(t, resSSZ, bootstrapSSZ)
+				require.DeepSSZEqual(t, resSSZ, updateSSZ)
 				responseCounter++
 			})
 

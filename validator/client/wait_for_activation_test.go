@@ -194,7 +194,7 @@ func TestWaitForActivation_AccountsChanged(t *testing.T) {
 		v := validator{
 			validatorClient:  validatorClient,
 			km:               km,
-			genesisTime:      1,
+			genesisTime:      time.Unix(1, 0),
 			chainClient:      chainClient,
 			prysmChainClient: prysmChainClient,
 			pubkeyToStatus:   make(map[[48]byte]*validatorStatus),

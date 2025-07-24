@@ -666,10 +666,9 @@ func (s *Service) areDataColumnsAvailable(
 	root [fieldparams.RootLength]byte,
 	block interfaces.ReadOnlyBeaconBlock,
 ) error {
-	// We are only required to check within MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS
+	// We are only required to check within MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS.
 	blockSlot, currentSlot := block.Slot(), s.CurrentSlot()
 	blockEpoch, currentEpoch := slots.ToEpoch(blockSlot), slots.ToEpoch(currentSlot)
-
 	if !params.WithinDAPeriod(blockEpoch, currentEpoch) {
 		return nil
 	}
@@ -737,7 +736,10 @@ func (s *Service) areDataColumnsAvailable(
 	}
 
 	// Log for DA checks that cross over into the next slot; helpful for debugging.
-	nextSlot := slots.BeginsAt(block.Slot()+1, s.genesisTime)
+	nextSlot, err := slots.StartTime(s.genesisTime, block.Slot()+1)
+	if err != nil {
+		return fmt.Errorf("unable to determine slot start time: %w", err)
+	}
 
 	// Avoid logging if DA check is called after next slot start.
 	if nextSlot.After(time.Now()) {
@@ -855,7 +857,10 @@ func (s *Service) areBlobsAvailable(ctx context.Context, root [fieldparams.RootL
 	nc := s.blobNotifiers.forRoot(root, block.Slot())
 
 	// Log for DA checks that cross over into the next slot; helpful for debugging.
-	nextSlot := slots.BeginsAt(block.Slot()+1, s.genesisTime)
+	nextSlot, err := slots.StartTime(s.genesisTime, block.Slot()+1)
+	if err != nil {
+		return fmt.Errorf("unable to determine slot start time: %w", err)
+	}
 	// Avoid logging if DA check is called after next slot start.
 	if nextSlot.After(time.Now()) {
 		nst := time.AfterFunc(time.Until(nextSlot), func() {
@@ -906,7 +911,7 @@ func uint64MapToSortedSlice(input map[uint64]bool) []uint64 {
 // it also updates the next slot cache and the proposer index cache to deal with skipped slots.
 func (s *Service) lateBlockTasks(ctx context.Context) {
 	currentSlot := s.CurrentSlot()
-	if s.CurrentSlot() == s.HeadSlot() {
+	if currentSlot == s.HeadSlot() {
 		return
 	}
 	s.cfg.ForkChoiceStore.RLock()

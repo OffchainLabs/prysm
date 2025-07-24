@@ -11,10 +11,12 @@ import (
 
 	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/crypto/rand"
 	lru "github.com/hashicorp/golang-lru"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	gcache "github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
@@ -50,6 +52,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/runtime"
 	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/sirupsen/logrus"
 )
 
 var _ runtime.Service = (*Service)(nil)
@@ -145,7 +148,7 @@ type Service struct {
 	seenBlockCache                   *lru.Cache
 	seenBlobLock                     sync.RWMutex
 	seenBlobCache                    *lru.Cache
-	seenDataColumnCache              *lru.Cache
+	seenDataColumnCache              *slotAwareCache
 	seenAggregatedAttestationLock    sync.RWMutex
 	seenAggregatedAttestationCache   *lru.Cache
 	seenUnAggregatedAttestationLock  sync.RWMutex
@@ -269,24 +272,40 @@ func (s *Service) Start() {
 
 	// Update sync metrics.
 	async.RunEvery(s.ctx, syncMetricsInterval, s.updateMetrics)
+
+	// Prune data column cache periodically on finalization.
+	async.RunEvery(s.ctx, 30*time.Second, s.pruneDataColumnCache)
 }
 
 // Stop the regular sync service.
 func (s *Service) Stop() error {
 	defer func() {
+		s.cancel()
+
 		if s.rateLimiter != nil {
 			s.rateLimiter.free()
 		}
 	}()
+
+	// Say goodbye to all peers.
+	for _, peerID := range s.cfg.p2p.Peers().Connected() {
+		if s.cfg.p2p.Host().Network().Connectedness(peerID) == network.Connected {
+			if err := s.sendGoodByeAndDisconnect(s.ctx, p2ptypes.GoodbyeCodeClientShutdown, peerID); err != nil {
+				log.WithError(err).WithField("peerID", peerID).Error("Failed to send goodbye message")
+			}
+		}
+	}
+
 	// Removing RPC Stream handlers.
 	for _, p := range s.cfg.p2p.Host().Mux().Protocols() {
 		s.cfg.p2p.Host().RemoveStreamHandler(p)
 	}
+
 	// Deregister Topic Subscribers.
 	for _, t := range s.cfg.p2p.PubSub().GetTopics() {
 		s.unSubscribeFromTopic(t)
 	}
-	defer s.cancel()
+
 	return nil
 }
 
@@ -306,7 +325,7 @@ func (s *Service) Status() error {
 func (s *Service) initCaches() {
 	s.seenBlockCache = lruwrpr.New(seenBlockSize)
 	s.seenBlobCache = lruwrpr.New(seenBlockSize * params.BeaconConfig().DeprecatedMaxBlobsPerBlockElectra)
-	s.seenDataColumnCache = lruwrpr.New(seenDataColumnSize)
+	s.seenDataColumnCache = newSlotAwareCache(seenDataColumnSize)
 	s.seenAggregatedAttestationCache = lruwrpr.New(seenAggregatedAttSize)
 	s.seenUnAggregatedAttestationCache = lruwrpr.New(seenUnaggregatedAttSize)
 	s.seenSyncMessageCache = lruwrpr.New(seenSyncMsgSize)
@@ -321,7 +340,7 @@ func (s *Service) initCaches() {
 func (s *Service) waitForChainStart() {
 	clock, err := s.clockWaiter.WaitForClock(s.ctx)
 	if err != nil {
-		log.WithError(err).Error("sync service failed to receive genesis data")
+		log.WithError(err).Error("Sync service failed to receive genesis data")
 		return
 	}
 	s.cfg.clock = clock
@@ -333,7 +352,7 @@ func (s *Service) waitForChainStart() {
 		log.
 			WithError(err).
 			WithField("genesisValidatorRoot", clock.GenesisValidatorsRoot()).
-			Error("sync service failed to initialize context version map")
+			Error("Sync service failed to initialize context version map")
 		return
 	}
 	s.ctxMap = ctxMap
@@ -360,7 +379,7 @@ func (s *Service) startTasksPostInitialSync() {
 	select {
 	case <-s.initialSyncComplete:
 		// Compute the current epoch.
-		currentSlot := slots.CurrentSlot(uint64(s.cfg.clock.GenesisTime().Unix()))
+		currentSlot := slots.CurrentSlot(s.cfg.clock.GenesisTime())
 		currentEpoch := slots.ToEpoch(currentSlot)
 
 		// Compute the current fork forkDigest.
@@ -392,6 +411,24 @@ func (s *Service) setRateCollector(topic string, c *leakybucket.Collector) {
 // marks the chain as having started.
 func (s *Service) markForChainStart() {
 	s.chainStarted.Set()
+}
+
+// pruneDataColumnCache removes entries from the data column cache that are older than the finalized slot.
+func (s *Service) pruneDataColumnCache() {
+	finalizedCheckpoint := s.cfg.chain.FinalizedCheckpt()
+	finalizedSlot, err := slots.EpochStart(finalizedCheckpoint.Epoch)
+	if err != nil {
+		log.WithError(err).Error("Could not calculate finalized slot for cache pruning")
+		return
+	}
+
+	pruned := s.seenDataColumnCache.pruneSlotsBefore(finalizedSlot)
+	if pruned > 0 {
+		log.WithFields(logrus.Fields{
+			"finalizedSlot": finalizedSlot,
+			"prunedEntries": pruned,
+		}).Debug("Pruned data column cache entries before finalized slot")
+	}
 }
 
 func (s *Service) chainIsStarted() bool {

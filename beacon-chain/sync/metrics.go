@@ -236,7 +236,7 @@ func (s *Service) updateMetrics() {
 	if err != nil {
 		log.WithError(err).Debugf("Could not compute fork digest")
 	}
-	indices := s.aggregatorSubnetIndices(s.cfg.clock.CurrentSlot())
+	indices := aggregatorSubnetIndices(s.cfg.clock.CurrentSlot())
 	syncIndices := cache.SyncSubnetIDs.GetAllSubnets(slots.ToEpoch(s.cfg.clock.CurrentSlot()))
 	attTopic := p2p.GossipTypeMapping[reflect.TypeOf(&pb.Attestation{})]
 	syncTopic := p2p.GossipTypeMapping[reflect.TypeOf(&pb.SyncCommitteeMessage{})]

@@ -7,11 +7,13 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -141,6 +143,25 @@ func TestGetSSZ(t *testing.T) {
 		require.NoError(t, err)
 		assert.LogsContain(t, logHook, "Server responded with non primary accept type")
 	})
+}
+
+func TestAcceptOverrideSSZ(t *testing.T) {
+	name := "TestAcceptOverride"
+	orig := os.Getenv(params.EnvNameOverrideAccept)
+	defer func() {
+		require.NoError(t, os.Setenv(params.EnvNameOverrideAccept, orig))
+	}()
+	require.NoError(t, os.Setenv(params.EnvNameOverrideAccept, name))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, name, r.Header.Get("Accept"))
+		w.WriteHeader(200)
+		_, err := w.Write([]byte("ok"))
+		require.NoError(t, err)
+	}))
+	defer srv.Close()
+	c := NewBeaconApiRestHandler(http.Client{Timeout: time.Second * 5}, srv.URL)
+	_, _, err := c.GetSSZ(t.Context(), "/test")
+	require.NoError(t, err)
 }
 
 func TestPost(t *testing.T) {

@@ -64,7 +64,6 @@ go_test(
         "//runtime/version:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
-        "//time:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_ethereum_go_ethereum//core/types:go_default_library",
         "@com_github_go_yaml_yaml//:go_default_library",

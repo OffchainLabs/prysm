@@ -283,3 +283,10 @@ type GetPendingPartialWithdrawalsResponse struct {
 	Finalized           bool                        `json:"finalized"`
 	Data                []*PendingPartialWithdrawal `json:"data"`
 }
+
+type GetProposerLookaheadResponse struct {
+	Version             string   `json:"version"`
+	ExecutionOptimistic bool     `json:"execution_optimistic"`
+	Finalized           bool     `json:"finalized"`
+	Data                []string `json:"data"` // validator indexes
+}

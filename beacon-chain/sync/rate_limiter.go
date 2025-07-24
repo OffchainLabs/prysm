@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/trailofbits/go-mutexasserts"
@@ -122,7 +123,7 @@ func (l *limiter) validateRequest(stream network.Stream, amt uint64) error {
 
 	collector, err := l.retrieveCollector(topic)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "retrieve collector")
 	}
 
 	remaining := collector.Remaining(remotePeer.String())
@@ -131,7 +132,7 @@ func (l *limiter) validateRequest(stream network.Stream, amt uint64) error {
 		amt = 1
 	}
 	if amt > uint64(remaining) {
-		l.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
+		l.downscorePeer(remotePeer, topic, "rateLimitExceeded")
 		writeErrorResponseToStream(responseCodeInvalidRequest, p2ptypes.ErrRateLimited.Error(), stream, l.p2p)
 		return p2ptypes.ErrRateLimited
 	}
@@ -139,22 +140,20 @@ func (l *limiter) validateRequest(stream network.Stream, amt uint64) error {
 }
 
 // This is used to validate all incoming rpc streams from external peers.
-func (l *limiter) validateRawRpcRequest(stream network.Stream) error {
+func (l *limiter) validateRawRpcRequest(stream network.Stream, amt uint64) error {
 	l.RLock()
 	defer l.RUnlock()
 
-	topic := rpcLimiterTopic
-
-	collector, err := l.retrieveCollector(topic)
+	remotePeer := stream.Conn().RemotePeer()
+	collector, err := l.retrieveCollector(rpcLimiterTopic)
 	if err != nil {
 		return err
 	}
 	key := stream.Conn().RemotePeer().String()
 	remaining := collector.Remaining(key)
-	// Treat each request as a minimum of 1.
-	amt := int64(1)
-	if amt > remaining {
-		l.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+
+	if amt > uint64(remaining) {
+		l.downscorePeer(remotePeer, rpcLimiterTopic, "rawRateLimitExceeded")
 		writeErrorResponseToStream(responseCodeInvalidRequest, p2ptypes.ErrRateLimited.Error(), stream, l.p2p)
 		return p2ptypes.ErrRateLimited
 	}
@@ -232,4 +231,14 @@ func (l *limiter) retrieveCollector(topic string) (*leakybucket.Collector, error
 
 func (_ *limiter) topicLogger(topic string) *logrus.Entry {
 	return log.WithField("rateLimiter", topic)
+}
+
+func (l *limiter) downscorePeer(peerID peer.ID, topic, reason string) {
+	newScore := l.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	log.WithFields(logrus.Fields{
+		"peerID":   peerID.String(),
+		"reason":   reason,
+		"newScore": newScore,
+		"topic":    topic,
+	}).Debug("Downscore peer")
 }

@@ -283,7 +283,7 @@ func (s *Service) reportPostBlockProcessing(
 	// Log block sync status.
 	cp = s.cfg.ForkChoiceStore.JustifiedCheckpoint()
 	justified := &ethpb.Checkpoint{Epoch: cp.Epoch, Root: bytesutil.SafeCopyBytes(cp.Root[:])}
-	if err := logBlockSyncStatus(block.Block(), blockRoot, justified, finalized, receivedTime, uint64(s.genesisTime.Unix()), daWaitedTime); err != nil {
+	if err := logBlockSyncStatus(block.Block(), blockRoot, justified, finalized, receivedTime, s.genesisTime, daWaitedTime); err != nil {
 		log.WithError(err).Error("Unable to log block sync status")
 	}
 	// Log payload data
@@ -300,15 +300,30 @@ func (s *Service) reportPostBlockProcessing(
 
 func (s *Service) executePostFinalizationTasks(ctx context.Context, finalizedState state.BeaconState) {
 	finalized := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
+
+	// Send finalization event
 	go func() {
 		s.sendNewFinalizedEvent(ctx, finalizedState)
 	}()
 
+	// Insert finalized deposits into finalized deposit trie
 	depCtx, cancel := context.WithTimeout(context.Background(), depositDeadline)
 	go func() {
 		s.insertFinalizedDepositsAndPrune(depCtx, finalized.Root)
 		cancel()
 	}()
+
+	if features.Get().EnableLightClient {
+		// Save a light client bootstrap for the finalized checkpoint
+		go func() {
+			err := s.lcStore.SaveLightClientBootstrap(s.ctx, finalized.Root)
+			if err != nil {
+				log.WithError(err).Error("Could not save light client bootstrap by block root")
+			} else {
+				log.Debugf("Saved light client bootstrap for finalized root %#x", finalized.Root)
+			}
+		}()
+	}
 }
 
 // ReceiveBlockBatch processes the whole block batch at once, assuming the block batch is linear ,transitioning

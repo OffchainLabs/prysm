@@ -22,6 +22,7 @@ go_library(
         "electra_state.go",
         "fulu.go",
         "fulu_block.go",
+        "fulu_state.go",
         "helpers.go",
         "lightclient.go",
         "logging.go",
