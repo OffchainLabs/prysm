@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	types "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -14,6 +15,9 @@ import (
 
 func (c *blobsTestCase) defaultOldestSlotByRange(t *testing.T) types.Slot {
 	currentEpoch := c.clock.CurrentEpoch()
+	if currentEpoch < params.BeaconConfig().MinEpochsForBlobsSidecarsRequest {
+		t.Fatal("bad test setup, current epoch is less than MinEpochsForBlobsSidecarsRequest")
+	}
 	oldestEpoch := currentEpoch - params.BeaconConfig().MinEpochsForBlobsSidecarsRequest
 	if oldestEpoch < params.BeaconConfig().DenebForkEpoch {
 		oldestEpoch = params.BeaconConfig().DenebForkEpoch
@@ -99,10 +103,12 @@ func TestBlobByRangeOK(t *testing.T) {
 	nc.MaxRequestBlobSidecars = 100
 	params.OverrideBeaconConfig(nc)
 
+	defaultSlot := primitives.Slot(params.BeaconConfig().DenebForkEpoch+1000) * params.BeaconConfig().SlotsPerEpoch
 	cases := []*blobsTestCase{
 		{
-			name:    "beginning of window + 10",
-			nblocks: 10,
+			name:        "beginning of window + 10",
+			nblocks:     10,
+			currentSlot: defaultSlot,
 		},
 		{
 			name:    "10 slots before window, 10 slots after, count = 20",
@@ -113,6 +119,7 @@ func TestBlobByRangeOK(t *testing.T) {
 					Count:     20,
 				}
 			},
+			currentSlot: defaultSlot,
 		},
 		{
 			name:    "request before window, empty response",
@@ -123,7 +130,8 @@ func TestBlobByRangeOK(t *testing.T) {
 					Count:     10,
 				}
 			},
-			total: func() *int { x := 0; return &x }(),
+			total:       func() *int { x := 0; return &x }(),
+			currentSlot: defaultSlot,
 		},
 		{
 			name:    "10 blocks * 4 blobs = 40",
@@ -134,7 +142,8 @@ func TestBlobByRangeOK(t *testing.T) {
 					Count:     20,
 				}
 			},
-			total: func() *int { x := params.BeaconConfig().MaxBlobsPerBlock(0) * 10; return &x }(), // 10 blocks * 4 blobs = 40
+			total:       func() *int { x := params.BeaconConfig().MaxBlobsPerBlock(0) * 10; return &x }(), // 10 blocks * 4 blobs = 40
+			currentSlot: defaultSlot,
 		},
 		{
 			name:    "when request count > MAX_REQUEST_BLOCKS_DENEB, MAX_REQUEST_BLOBS_SIDECARS sidecars in response",
@@ -145,7 +154,8 @@ func TestBlobByRangeOK(t *testing.T) {
 					Count:     params.BeaconConfig().MaxRequestBlocksDeneb + 1,
 				}
 			},
-			total: func() *int { x := int(params.BeaconConfig().MaxRequestBlobSidecars); return &x }(),
+			total:       func() *int { x := int(params.BeaconConfig().MaxRequestBlobSidecars); return &x }(),
+			currentSlot: defaultSlot,
 		},
 	}
 	for _, c := range cases {

@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	types "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
@@ -47,6 +48,7 @@ type blobsTestCase struct {
 	topic               protocol.ID
 	oldestSlot          oldestSlotCallback
 	streamReader        expectedRequirer
+	currentSlot         primitives.Slot
 }
 
 type testHandler func(s *Service) rpcHandler
@@ -175,7 +177,7 @@ func (c *blobsTestCase) setup(t *testing.T) (*Service, []blocks.ROBlob, func()) 
 		params.OverrideBeaconConfig(cfg)
 	}
 	maxBlobs := int(params.BeaconConfig().MaxBlobsPerBlock(0))
-	chain, clock := defaultMockChain(t, 0)
+	chain, clock := defaultMockChain(t, c.currentSlot)
 	if c.chain == nil {
 		c.chain = chain
 	}
@@ -270,22 +272,23 @@ func repositionFutureEpochs(cfg *params.BeaconChainConfig) {
 	}
 }
 
-func defaultMockChain(t *testing.T, currentSlot uint64) (*mock.ChainService, *startup.Clock) {
+func defaultMockChain(t *testing.T, currentSlot primitives.Slot) (*mock.ChainService, *startup.Clock) {
 	de := params.BeaconConfig().DenebForkEpoch
 	df, err := params.Fork(de)
 	require.NoError(t, err)
 	denebBuffer := params.BeaconConfig().MinEpochsForBlobsSidecarsRequest + 1000
 	ce := de + denebBuffer
 	fe := ce - 2
-	cs, err := slots.EpochStart(ce)
-	require.NoError(t, err)
 	genesis := time.Now()
 	mockNow := startup.MockNower{}
 	clock := startup.NewClock(genesis, params.BeaconConfig().GenesisValidatorsRoot, startup.WithNower(mockNow.Now))
-	mockNow.SetSlot(t, clock, cs)
+	mockNow.SetSlot(t, clock, primitives.Slot(currentSlot))
+	currentSlotPtr := new(primitives.Slot)
+	*currentSlotPtr = currentSlot
 	chain := &mock.ChainService{
 		FinalizedCheckPoint: &ethpb.Checkpoint{Epoch: fe},
 		Fork:                df,
+		Slot:                currentSlotPtr,
 	}
 
 	return chain, clock
