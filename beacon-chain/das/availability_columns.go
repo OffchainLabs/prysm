@@ -130,7 +130,7 @@ func (s *LazilyPersistentStoreColumn) IsDataAvailable(ctx context.Context, curre
 	verifier := s.newDataColumnsVerifier(roDataColumns, verification.ByRangeRequestDataColumnSidecarRequirements)
 
 	if err := verifier.ValidFields(); err != nil {
-		return errors.Wrap(err, "valid")
+		return errors.Wrap(err, "valid fields")
 	}
 
 	if err := verifier.SidecarInclusionProven(); err != nil {
@@ -164,7 +164,7 @@ func (s *LazilyPersistentStoreColumn) fullCommitmentsToCheck(nodeID enode.ID, bl
 	blockSlot := block.Block().Slot()
 	blockEpoch := slots.ToEpoch(blockSlot)
 
-	// Compute the current spoch.
+	// Compute the current epoch.
 	currentEpoch := slots.ToEpoch(currentSlot)
 
 	// Return early if the request is out of the MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS window.
