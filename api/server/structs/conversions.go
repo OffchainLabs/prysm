@@ -701,7 +701,7 @@ func (m *SyncCommitteeMessage) ToConsensus() (*eth.SyncCommitteeMessage, error) 
 		return nil, server.NewDecodeError(err, "Signature")
 	}
 	// Add validation to check if the signature is valid BLS format
-	signature, err := bls.SignatureFromBytes(sig)
+	_, err = bls.SignatureFromBytes(sig)
 	if err != nil {
 		return nil, server.NewDecodeError(errors.New("Invalid Signature"), "Signature")
 	}
@@ -710,7 +710,7 @@ func (m *SyncCommitteeMessage) ToConsensus() (*eth.SyncCommitteeMessage, error) 
 		Slot:           primitives.Slot(slot),
 		BlockRoot:      root,
 		ValidatorIndex: primitives.ValidatorIndex(valIndex),
-		Signature:      signature.Marshal(),
+		Signature:      sig,
 	}, nil
 }
 
