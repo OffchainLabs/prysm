@@ -123,6 +123,7 @@ go_test(
         "@com_github_crate_crypto_go_kzg_4844//:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
+        "@com_github_prysmaticlabs_fastssz//:go_default_library",
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
         "@com_github_sirupsen_logrus//hooks/test:go_default_library",
         "@com_github_stretchr_testify//mock:go_default_library",

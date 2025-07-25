@@ -118,8 +118,9 @@ func (s *Server) produceBlockV3(ctx context.Context, w http.ResponseWriter, r *h
 	consensusBlockValue, httpError := getConsensusBlockValue(ctx, s.BlockRewardFetcher, v1alpha1resp.Block)
 	if httpError != nil {
 		log.WithError(httpError).Debug("Failed to get consensus block value")
-		// Having the consensus block value is not critical to block production
-		consensusBlockValue = ""
+		// Having the consensus block value is not critical to block production.
+		// We set it to zero to satisfy the specification, which requires a numeric value.
+		consensusBlockValue = "0"
 	}
 
 	w.Header().Set(api.ExecutionPayloadBlindedHeader, fmt.Sprintf("%v", v1alpha1resp.IsBlinded))

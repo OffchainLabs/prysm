@@ -21,9 +21,9 @@ const (
 	broadcastMissingDataColumnsSlack           = 2 * time.Second
 )
 
-// reconstructSaveBroadcastDataColumnSidecars reconstructs if possible and
-// needed all data column sidecars. Then, it saves into the store missing
-// sidecars. After a delay, it broadcasts in the background not seen via gossip
+// reconstructSaveBroadcastDataColumnSidecars reconstructs, if possible,
+// all data column sidecars. Then, it saves missing sidecars to the store.
+// After a delay, it broadcasts in the background not seen via gossip
 // (but reconstructed) sidecars.
 func (s *Service) reconstructSaveBroadcastDataColumnSidecars(
 	ctx context.Context,
@@ -57,7 +57,7 @@ func (s *Service) reconstructSaveBroadcastDataColumnSidecars(
 		return errors.Wrap(err, "peer info")
 	}
 
-	// Load all the possible data columns sidecars, to minimize reconstruction time.
+	// Load all the possible data column sidecars, to minimize reconstruction time.
 	verifiedSidecars, err := s.cfg.dataColumnStorage.Get(root, nil)
 	if err != nil {
 		return errors.Wrap(err, "get data column sidecars")
@@ -78,7 +78,7 @@ func (s *Service) reconstructSaveBroadcastDataColumnSidecars(
 		}
 	}
 
-	// Save the data columns sidecars in the database.
+	// Save the data column sidecars to the database.
 	// Note: We do not call `receiveDataColumn`, because it will ignore
 	// incoming data columns via gossip while we did not broadcast (yet) the reconstructed data columns.
 	if err := s.cfg.dataColumnStorage.Save(toSaveSidecars); err != nil {
@@ -97,7 +97,7 @@ func (s *Service) reconstructSaveBroadcastDataColumnSidecars(
 		"reconstructionAndSaveDuration": time.Since(startTime),
 	}).Debug("Data columns reconstructed and saved")
 
-	// Update reconstruction metrics
+	// Update reconstruction metrics.
 	dataColumnReconstructionHistogram.Observe(float64(time.Since(startTime).Milliseconds()))
 	dataColumnReconstructionCounter.Add(float64(len(reconstructedSidecars) - len(verifiedSidecars)))
 
