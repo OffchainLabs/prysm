@@ -123,7 +123,7 @@ func ReconstructDataColumnSidecars(inVerifiedRoSidecars []blocks.VerifiedRODataC
 
 // ConstructDataColumnSidecars constructs data column sidecars from a block, (un-extended) blobs and
 // cell proofs corresponding the extended blobs. The main purpose of this function is to
-// construct data columns sidecars from data obtained from the execution client via:
+// construct data column sidecars from data obtained from the execution client via:
 // - `engine_getBlobsV2` - https://github.com/ethereum/execution-apis/blob/main/src/engine/osaka.md#engine_getblobsv2, or
 // - `engine_getPayloadV5` - https://github.com/ethereum/execution-apis/blob/main/src/engine/osaka.md#engine_getpayloadv5
 // Note: In this function, to stick with the `BlobsBundleV2` format returned by the execution client in `engine_getPayloadV5`,
@@ -222,8 +222,8 @@ func ReconstructBlobs(block blocks.ROBlock, verifiedDataColumnSidecars []blocks.
 	// Check if the data column sidecars are aligned with the block.
 	dataColumnSidecars := make([]blocks.RODataColumn, 0, len(verifiedDataColumnSidecars))
 	for _, verifiedDataColumnSidecar := range verifiedDataColumnSidecars {
-		dataColumnSicecar := verifiedDataColumnSidecar.RODataColumn
-		dataColumnSidecars = append(dataColumnSidecars, dataColumnSicecar)
+		dataColumnSidecar := verifiedDataColumnSidecar.RODataColumn
+		dataColumnSidecars = append(dataColumnSidecars, dataColumnSidecar)
 	}
 
 	if err := DataColumnsAlignWithBlock(block, dataColumnSidecars); err != nil {
@@ -241,7 +241,7 @@ func ReconstructBlobs(block blocks.ROBlock, verifiedDataColumnSidecars []blocks.
 		return blobSidecars, nil
 	}
 
-	// We need to reconstruct the blobs.
+	// We need to reconstruct the data column sidecars.
 	reconstructedDataColumnSidecars, err := ReconstructDataColumnSidecars(verifiedDataColumnSidecars)
 	if err != nil {
 		return nil, errors.Wrap(err, "reconstruct data column sidecars")

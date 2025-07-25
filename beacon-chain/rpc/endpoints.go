@@ -985,6 +985,16 @@ func (s *Service) beaconEndpoints(
 			handler: server.GetPendingPartialWithdrawals,
 			methods: []string{http.MethodGet},
 		},
+		{
+			template: "/eth/v1/beacon/states/{state_id}/proposer_lookahead",
+			name:     namespace + ".GetProposerLookahead",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetProposerLookahead,
+			methods: []string{http.MethodGet},
+		},
 	}
 }
 
