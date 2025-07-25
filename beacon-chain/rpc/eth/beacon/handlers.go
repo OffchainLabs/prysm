@@ -1790,6 +1790,63 @@ func (s *Server) GetPendingPartialWithdrawals(w http.ResponseWriter, r *http.Req
 	}
 }
 
+func (s *Server) GetProposerLookahead(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "beacon.GetProposerLookahead")
+	defer span.End()
+
+	stateId := r.PathValue("state_id")
+	if stateId == "" {
+		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		return
+	}
+	st, err := s.Stater.State(ctx, []byte(stateId))
+	if err != nil {
+		shared.WriteStateFetchError(w, err)
+		return
+	}
+	if st.Version() < version.Fulu {
+		httputil.HandleError(w, "state_id is prior to fulu", http.StatusBadRequest)
+		return
+	}
+	pl, err := st.ProposerLookahead()
+	if err != nil {
+		httputil.HandleError(w, "Could not get proposer look ahead: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(api.VersionHeader, version.String(st.Version()))
+	if httputil.RespondWithSsz(r) {
+		sszLen := (*primitives.ValidatorIndex)(nil).SizeSSZ()
+		sszData := make([]byte, len(pl)*sszLen)
+		for i, idx := range pl {
+			copy(sszData[i*sszLen:(i+1)*sszLen], ssz.MarshalUint64([]byte{}, uint64(idx)))
+		}
+		httputil.WriteSsz(w, sszData)
+	} else {
+		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
+		if err != nil {
+			httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		if err != nil {
+			httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
+		vi := make([]string, len(pl))
+		for i, v := range pl {
+			vi[i] = strconv.FormatUint(uint64(v), 10)
+		}
+		resp := structs.GetProposerLookaheadResponse{
+			Version:             version.String(st.Version()),
+			ExecutionOptimistic: isOptimistic,
+			Finalized:           isFinalized,
+			Data:                vi,
+		}
+		httputil.WriteJson(w, resp)
+	}
+}
+
 // SerializeItems serializes a slice of items, each of which implements the MarshalSSZ method,
 // into a single byte array.
 func serializeItems[T interface{ MarshalSSZ() ([]byte, error) }](items []T) ([]byte, error) {
