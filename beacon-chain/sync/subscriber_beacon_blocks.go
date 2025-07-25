@@ -135,7 +135,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, ro
 	blockSlot := block.Slot()
 	proposerIndex := block.ProposerIndex()
 
-	// Broadcast and save data columns sidecars to custody but not yet received.
+	// Broadcast and save data column sidecars to custody but not yet received.
 	sidecarCount := uint64(len(sidecars))
 	for columnIndex := range info.CustodyColumns {
 		log := log.WithField("columnIndex", columnIndex)
