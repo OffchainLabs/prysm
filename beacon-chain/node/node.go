@@ -129,6 +129,7 @@ type BeaconNode struct {
 	syncChecker              *initialsync.SyncChecker
 	slasherEnabled           bool
 	lcStore                  *lightclient.Store
+	inclusionLists           *cache.InclusionLists
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -161,6 +162,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		blsToExecPool:           blstoexec.NewPool(),
 		trackedValidatorsCache:  cache.NewTrackedValidatorsCache(),
 		payloadIDCache:          cache.NewPayloadIDCache(),
+		inclusionLists:          cache.NewInclusionLists(),
 		slasherBlockHeadersFeed: new(event.Feed),
 		slasherAttestationsFeed: new(event.Feed),
 		serviceFlagOpts:         &serviceFlagOpts{},
@@ -803,6 +805,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithCustodyInfo(b.custodyInfo),
 		blockchain.WithSlasherEnabled(b.slasherEnabled),
 		blockchain.WithLightClientStore(b.lcStore),
+		blockchain.WithInclusionListCache(b.inclusionLists),
 	)
 
 	blockchainService, err := blockchain.NewService(b.ctx, opts...)
@@ -892,6 +895,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithSlasherEnabled(b.slasherEnabled),
 		regularsync.WithLightClientStore(b.lcStore),
 		regularsync.WithBatchVerifierLimit(b.cliCtx.Int(flags.BatchVerifierLimit.Name)),
+		regularsync.WithInclusionListsCache(b.inclusionLists),
 	)
 	return b.services.RegisterService(rs)
 }
@@ -1039,6 +1043,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		TrackedValidatorsCache:    b.trackedValidatorsCache,
 		PayloadIDCache:            b.payloadIDCache,
 		LCStore:                   b.lcStore,
+		InclusionListsCache:       b.inclusionLists,
 	})
 
 	return b.services.RegisterService(rpcService)

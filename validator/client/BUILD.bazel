@@ -6,6 +6,7 @@ go_library(
         "aggregate.go",
         "attest.go",
         "health_monitor.go",
+        "inclusion_list.go",
         "key_reload.go",
         "log.go",
         "metrics.go",

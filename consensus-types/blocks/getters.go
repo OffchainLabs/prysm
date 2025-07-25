@@ -713,6 +713,14 @@ func (b *BeaconBlock) Version() int {
 	return b.version
 }
 
+func (b *BeaconBlock) NotSatisfyingInclusionList() bool {
+	return b.notSatisfyingInclusionList
+}
+
+func (b *BeaconBlock) MarkInclusionListNotSatisfied() {
+	b.notSatisfyingInclusionList = true
+}
+
 // HashTreeRoot returns the ssz root of the block.
 func (b *BeaconBlock) HashTreeRoot() ([field_params.RootLength]byte, error) {
 	pb, err := b.Proto()

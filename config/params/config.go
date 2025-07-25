@@ -127,6 +127,7 @@ type BeaconChainConfig struct {
 	DomainApplicationMask             [4]byte `yaml:"DOMAIN_APPLICATION_MASK" spec:"true"`               // DomainApplicationMask defines the BLS signature domain for application mask.
 	DomainApplicationBuilder          [4]byte `yaml:"DOMAIN_APPLICATION_BUILDER" spec:"true"`            // DomainApplicationBuilder defines the BLS signature domain for application builder.
 	DomainBLSToExecutionChange        [4]byte `yaml:"DOMAIN_BLS_TO_EXECUTION_CHANGE" spec:"true"`        // DomainBLSToExecutionChange defines the BLS signature domain to change withdrawal addresses to ETH1 prefix
+	DomainInclusionListCommittee      [4]byte `yaml:"DOMAIN_INCLUSION_LIST_COMMITTEE" spec:"true"`       // DomainInclusionListCommittee defines the BLS signature domain for inclusion list committee root.
 
 	// Prysm constants.
 	GenesisValidatorsRoot          [32]byte        // GenesisValidatorsRoot is the root hash of the genesis validators.
@@ -171,6 +172,8 @@ type BeaconChainConfig struct {
 	ElectraForkEpoch     primitives.Epoch `yaml:"ELECTRA_FORK_EPOCH" spec:"true"`     // ElectraForkEpoch is used to represent the assigned fork epoch for electra.
 	FuluForkVersion      []byte           `yaml:"FULU_FORK_VERSION" spec:"true"`      // FuluForkVersion is used to represent the fork version for fulu.
 	FuluForkEpoch        primitives.Epoch `yaml:"FULU_FORK_EPOCH" spec:"true"`        // FuluForkEpoch is used to represent the assigned fork epoch for fulu.
+	Eip7805ForkVersion   []byte           `yaml:"EIP7805_FORK_VERSION" spec:"true"`   // Eip7805ForkVersion is used to represent the fork version for fulu.
+	Eip7805ForkEpoch     primitives.Epoch `yaml:"EIP7805_FORK_EPOCH" spec:"true"`     // Eip7805ForkEpoch is used to represent the assigned fork epoch for fulu.
 
 	ForkVersionSchedule map[[fieldparams.VersionLength]byte]primitives.Epoch // Schedule of fork epochs by version.
 	ForkVersionNames    map[[fieldparams.VersionLength]byte]string           // Human-readable names of fork versions.
@@ -314,6 +317,9 @@ type BeaconChainConfig struct {
 	// DeprecatedMaxBlobsPerBlockFulu defines the max blobs that could exist in a block post Fulu hard fork.
 	// Deprecated: This field is no longer supported. Avoid using it.
 	DeprecatedMaxBlobsPerBlockFulu int `yaml:"MAX_BLOBS_PER_BLOCK_FULU" spec:"true"`
+
+	InclusionListCommitteeSize  uint64
+	InclusionListFreezeDeadLine uint64
 }
 
 func (b *BeaconChainConfig) VersionToForkEpochMap() map[int]primitives.Epoch {
@@ -379,6 +385,7 @@ func ConfigForkVersions(b *BeaconChainConfig) map[[fieldparams.VersionLength]byt
 		bytesutil.ToBytes4(b.DenebForkVersion):     version.Deneb,
 		bytesutil.ToBytes4(b.ElectraForkVersion):   version.Electra,
 		bytesutil.ToBytes4(b.FuluForkVersion):      version.Fulu,
+		bytesutil.ToBytes4(b.Eip7805ForkVersion):   version.Focil,
 	}
 }
 

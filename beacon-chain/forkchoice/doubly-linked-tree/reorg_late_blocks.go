@@ -147,11 +147,6 @@ func (f *ForkChoice) GetProposerHead() [32]byte {
 		return head.root
 	}
 
-	// Only orphan a block if the parent LMD vote is strong
-	if parent.weight*100 < f.store.committeeWeight*params.BeaconConfig().ReorgParentWeightThreshold {
-		return head.root
-	}
-
 	// Only reorg if we are proposing early
 	sss, err := slots.SinceSlotStart(currentSlot, f.store.genesisTime, time.Now())
 	if err != nil {
@@ -161,5 +156,23 @@ func (f *ForkChoice) GetProposerHead() [32]byte {
 	if sss >= orphanLateBlockProposingEarly*time.Second {
 		return head.root
 	}
+
+	// Newly added in EIP-7805
+	//     reorg_prerequisites = all([shuffling_stable, ffg_competitive, finalization_ok,
+	//                           proposing_on_time, single_slot_reorg, head_weak, parent_strong])
+	//
+	//    # Check that the head block is in the unsatisfied inclusion list blocks
+	//    inclusion_list_not_satisfied = head_root in store.unsatisfied_inclusion_list_blocks  # [New in EIP-7805]
+	//
+	//    if reorg_prerequisites and (head_late or inclusion_list_not_satisfied):
+	//        return parent_root
+	//    else:
+	//    return head_root
+
+	// Only orphan a block if the parent LMD vote is strong and satisfies inclusion list
+	if parent.weight*100 < f.store.committeeWeight*params.BeaconConfig().ReorgParentWeightThreshold && !head.notSatisfyingInclusionList {
+		return head.root
+	}
+
 	return parent.root
 }

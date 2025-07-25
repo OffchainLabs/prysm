@@ -68,6 +68,9 @@ type FakeValidator struct {
 	RolesAtRet                        []iface.ValidatorRole
 }
 
+func (fv *FakeValidator) SubmitInclusionList(ctx context.Context, slot primitives.Slot, pubKey [48]byte) {
+}
+
 // Done for mocking.
 func (fv *FakeValidator) Done() {
 	fv.DoneCalled = true

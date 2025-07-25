@@ -25,6 +25,7 @@ proto_library(
         "powchain.proto",
         "slasher.proto",
         "validator.proto",
+        "focil.proto",
         ":ssz_proto_files",
     ],
     visibility = ["//visibility:public"],
@@ -192,6 +193,8 @@ ssz_fulu_objs = [
     "SignedBeaconBlockContentsFulu",
     "SignedBeaconBlockFulu",
     "SignedBlindedBeaconBlockFulu",
+    "InclusionList",
+    "SignedInclusionList",
 ]
 
 ssz_gen_marshal(

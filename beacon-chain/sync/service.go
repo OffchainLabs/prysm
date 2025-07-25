@@ -180,6 +180,7 @@ type Service struct {
 	slasherEnabled                   bool
 	lcStore                          *lightClient.Store
 	dataColumnLogCh                  chan dataColumnLogEntry
+	inclusionLists                   *cache.InclusionLists
 }
 
 // NewService initializes new regular sync service.

@@ -36,6 +36,7 @@ const (
 	GossipLightClientOptimisticUpdateMessage = "light_client_optimistic_update"
 	// GossipDataColumnSidecarMessage is the name for the data column sidecar message type.
 	GossipDataColumnSidecarMessage = "data_column_sidecar"
+	GossipInclusionList            = "inclusion_list"
 
 	// Topic Formats
 	//
@@ -65,4 +66,5 @@ const (
 	LightClientOptimisticUpdateTopicFormat = GossipProtocolAndDigest + GossipLightClientOptimisticUpdateMessage
 	// DataColumnSubnetTopicFormat is the topic format for the data column subnet.
 	DataColumnSubnetTopicFormat = GossipProtocolAndDigest + GossipDataColumnSidecarMessage + "_%d"
+	InclusionListTopicFormat    = GossipProtocolAndDigest + GossipInclusionList
 )

@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
@@ -143,11 +144,12 @@ type dutiesMetadata struct {
 }
 
 type metadata struct {
-	committeesAtSlot uint64
-	proposalSlots    map[primitives.ValidatorIndex][]primitives.Slot
-	startSlot        primitives.Slot
-	committeesBySlot [][][]primitives.ValidatorIndex
-	liteAssignment   *helpers.LiteAssignment
+	committeesAtSlot              uint64
+	proposalSlots                 map[primitives.ValidatorIndex][]primitives.Slot
+	startSlot                     primitives.Slot
+	committeesBySlot              [][][]primitives.ValidatorIndex
+	liteAssignment                *helpers.LiteAssignment
+	inclusionListCommitteesBySlot [][]primitives.ValidatorIndex
 }
 
 func loadDutiesMetadata(ctx context.Context, s state.BeaconState, reqEpoch primitives.Epoch) (*dutiesMetadata, error) {
@@ -193,6 +195,18 @@ func loadMetadata(ctx context.Context, s state.BeaconState, reqEpoch primitives.
 		return nil, err
 	}
 
+	// Compute inclusion list committees for each slot in the epoch
+	meta.inclusionListCommitteesBySlot = make([][]primitives.ValidatorIndex, params.BeaconConfig().SlotsPerEpoch)
+	for i := primitives.Slot(0); i < params.BeaconConfig().SlotsPerEpoch; i++ {
+		slot := meta.startSlot + i
+		inclusionListCommittee, err := helpers.GetInclusionListCommittee(ctx, s, slot)
+		if err != nil {
+			// Skip inclusion list committee computation if not supported for this slot
+			continue
+		}
+		meta.inclusionListCommitteesBySlot[i] = inclusionListCommittee
+	}
+
 	return meta, nil
 }
 
@@ -215,10 +229,36 @@ func (vs *Server) buildValidatorDuty(
 	assignment.ProposerSlots = meta.current.proposalSlots[idx]
 	populateCommitteeFields(assignment, meta.current.liteAssignment)
 
+	// Check for inclusion list committee assignment in current epoch
+	for slotOffset, inclusionListCommittee := range meta.current.inclusionListCommitteesBySlot {
+		for _, validatorIndex := range inclusionListCommittee {
+			if validatorIndex == idx {
+				assignment.InclusionListCommitteeSlot = meta.current.startSlot + primitives.Slot(slotOffset)
+				break
+			}
+		}
+		if assignment.InclusionListCommitteeSlot != 0 {
+			break
+		}
+	}
+
 	nextAssignment.ValidatorIndex = idx
 	nextAssignment.Status = statusEnum
 	nextAssignment.CommitteesAtSlot = meta.next.committeesAtSlot
 	populateCommitteeFields(nextAssignment, meta.next.liteAssignment)
+
+	// Check for inclusion list committee assignment in next epoch
+	for slotOffset, inclusionListCommittee := range meta.next.inclusionListCommitteesBySlot {
+		for _, validatorIndex := range inclusionListCommittee {
+			if validatorIndex == idx {
+				nextAssignment.InclusionListCommitteeSlot = meta.next.startSlot + primitives.Slot(slotOffset)
+				break
+			}
+		}
+		if nextAssignment.InclusionListCommitteeSlot != 0 {
+			break
+		}
+	}
 
 	// Sync committee flags
 	if coreTime.HigherEqualThanAltairVersionAndEpoch(s, reqEpoch) {

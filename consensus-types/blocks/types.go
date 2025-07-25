@@ -63,12 +63,13 @@ var _ interfaces.ReadOnlyBeaconBlockBody = &BeaconBlockBody{}
 
 // BeaconBlock is the main beacon block structure. It can represent any block type.
 type BeaconBlock struct {
-	version       int
-	slot          primitives.Slot
-	proposerIndex primitives.ValidatorIndex
-	parentRoot    [field_params.RootLength]byte
-	stateRoot     [field_params.RootLength]byte
-	body          *BeaconBlockBody
+	version                    int
+	slot                       primitives.Slot
+	proposerIndex              primitives.ValidatorIndex
+	parentRoot                 [field_params.RootLength]byte
+	stateRoot                  [field_params.RootLength]byte
+	body                       *BeaconBlockBody
+	notSatisfyingInclusionList bool
 }
 
 // SignedBeaconBlock is the main signed beacon block structure. It can represent any block type.

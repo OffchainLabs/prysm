@@ -14,14 +14,15 @@ type ValidatorDutiesContainer struct {
 
 // ValidatorDuty is all the information needed to execute validator duties
 type ValidatorDuty struct {
-	CommitteeLength         uint64
-	CommitteeIndex          primitives.CommitteeIndex
-	CommitteesAtSlot        uint64
-	ValidatorCommitteeIndex uint64
-	AttesterSlot            primitives.Slot
-	ProposerSlots           []primitives.Slot
-	PublicKey               []byte
-	Status                  ValidatorStatus
-	ValidatorIndex          primitives.ValidatorIndex
-	IsSyncCommittee         bool
+	CommitteeLength            uint64
+	CommitteeIndex             primitives.CommitteeIndex
+	CommitteesAtSlot           uint64
+	ValidatorCommitteeIndex    uint64
+	AttesterSlot               primitives.Slot
+	ProposerSlots              []primitives.Slot
+	PublicKey                  []byte
+	Status                     ValidatorStatus
+	ValidatorIndex             primitives.ValidatorIndex
+	IsSyncCommittee            bool
+	InclusionListCommitteeSlot primitives.Slot
 }

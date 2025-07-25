@@ -550,12 +550,10 @@ func (s *Service) GetAttestationData(
 		return nil, &RpcError{Reason: Unavailable, Err: errOptimisticMode}
 	}
 
-	headRoot, err := s.HeadFetcher.HeadRoot(ctx)
-	if err != nil {
-		return nil, &RpcError{Reason: Internal, Err: errors.Wrap(err, "could not get head root")}
-	}
+	headRoot := s.ChainInfoFetcher.GetAttesterHead() // Attesters vote based on IL constrained head root.
+
 	targetEpoch := slots.ToEpoch(req.Slot)
-	targetRoot, err := s.HeadFetcher.TargetRootForEpoch(bytesutil.ToBytes32(headRoot), targetEpoch)
+	targetRoot, err := s.HeadFetcher.TargetRootForEpoch(headRoot, targetEpoch)
 	if err != nil {
 		return nil, &RpcError{Reason: Internal, Err: errors.Wrap(err, "could not get target root")}
 	}
@@ -565,7 +563,7 @@ func (s *Service) GetAttestationData(
 		return nil, &RpcError{Reason: Internal, Err: errors.Wrap(err, "could not get head state")}
 	}
 	if coreTime.CurrentEpoch(headState) < slots.ToEpoch(req.Slot) { // Ensure justified checkpoint safety by processing head state across the boundary.
-		headState, err = transition.ProcessSlotsUsingNextSlotCache(ctx, headState, headRoot, req.Slot)
+		headState, err = transition.ProcessSlotsUsingNextSlotCache(ctx, headState, headRoot[:], req.Slot)
 		if err != nil {
 			return nil, &RpcError{Reason: Internal, Err: errors.Errorf("could not process slots up to %d: %v", req.Slot, err)}
 		}
@@ -574,7 +572,7 @@ func (s *Service) GetAttestationData(
 
 	if err = s.AttestationCache.Put(&cache.AttestationConsensusData{
 		Slot:     req.Slot,
-		HeadRoot: headRoot,
+		HeadRoot: headRoot[:],
 		Target: forkchoicetypes.Checkpoint{
 			Epoch: targetEpoch,
 			Root:  targetRoot,
@@ -590,7 +588,7 @@ func (s *Service) GetAttestationData(
 	return &ethpb.AttestationData{
 		Slot:            req.Slot,
 		CommitteeIndex:  committeeIndex,
-		BeaconBlockRoot: headRoot,
+		BeaconBlockRoot: headRoot[:],
 		Source: &ethpb.Checkpoint{
 			Epoch: justifiedCheckpoint.Epoch,
 			Root:  justifiedCheckpoint.Root,

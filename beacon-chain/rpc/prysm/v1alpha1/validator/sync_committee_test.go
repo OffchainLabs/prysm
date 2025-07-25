@@ -25,14 +25,14 @@ import (
 )
 
 func TestGetSyncMessageBlockRoot_OK(t *testing.T) {
-	r := []byte{'a'}
+	r := [32]byte{'a'}
 	server := &Server{
-		HeadFetcher: &mock.ChainService{Root: r},
-		TimeFetcher: &mock.ChainService{Genesis: time.Now()},
+		TimeFetcher:       &mock.ChainService{Genesis: time.Now()},
+		ForkchoiceFetcher: &mock.ChainService{Root: r[:]},
 	}
 	res, err := server.GetSyncMessageBlockRoot(t.Context(), &emptypb.Empty{})
 	require.NoError(t, err)
-	require.DeepEqual(t, r, res.Root)
+	require.DeepEqual(t, r[:], res.Root)
 }
 
 func TestGetSyncMessageBlockRoot_Optimistic(t *testing.T) {
@@ -42,7 +42,7 @@ func TestGetSyncMessageBlockRoot_Optimistic(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	server := &Server{
-		HeadFetcher:           &mock.ChainService{},
+		ForkchoiceFetcher:     &mock.ChainService{},
 		TimeFetcher:           &mock.ChainService{Genesis: time.Now()},
 		OptimisticModeFetcher: &mock.ChainService{Optimistic: true},
 	}
@@ -53,7 +53,7 @@ func TestGetSyncMessageBlockRoot_Optimistic(t *testing.T) {
 	require.ErrorContains(t, errOptimisticMode.Error(), err)
 
 	server = &Server{
-		HeadFetcher:           &mock.ChainService{},
+		ForkchoiceFetcher:     &mock.ChainService{},
 		TimeFetcher:           &mock.ChainService{Genesis: time.Now()},
 		OptimisticModeFetcher: &mock.ChainService{Optimistic: false},
 	}
@@ -118,6 +118,7 @@ func TestGetSyncCommitteeContribution_FiltersDuplicates(t *testing.T) {
 		HeadFetcher:       headFetcher,
 		P2P:               &mockp2p.MockBroadcaster{},
 		TimeFetcher:       &mock.ChainService{Genesis: time.Now()},
+		ForkchoiceFetcher: headFetcher,
 	}
 	secKey, err := bls.RandKey()
 	require.NoError(t, err)

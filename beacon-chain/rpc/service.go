@@ -123,6 +123,7 @@ type Config struct {
 	TrackedValidatorsCache    *cache.TrackedValidatorsCache
 	PayloadIDCache            *cache.PayloadIDCache
 	LCStore                   *lightClient.Store
+	InclusionListsCache       *cache.InclusionLists
 }
 
 // NewService instantiates a new RPC service instance that will
@@ -212,6 +213,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		FinalizedFetcher:      s.cfg.FinalizationFetcher,
 		ReplayerBuilder:       ch,
 		OptimisticModeFetcher: s.cfg.OptimisticModeFetcher,
+		ChainInfoFetcher:      s.cfg.ChainInfoFetcher,
 	}
 	validatorServer := &validatorv1alpha1.Server{
 		Ctx:                     s.ctx,
@@ -252,6 +254,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		TrackedValidatorsCache:  s.cfg.TrackedValidatorsCache,
 		PayloadIDCache:          s.cfg.PayloadIDCache,
 		AttestationStateFetcher: s.cfg.AttestationReceiver,
+		InclusionLists:          s.cfg.InclusionListsCache,
 	}
 	s.validatorServer = validatorServer
 	nodeServer := &nodev1alpha1.Server{

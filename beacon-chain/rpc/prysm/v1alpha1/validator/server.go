@@ -80,6 +80,7 @@ type Server struct {
 	ClockWaiter             startup.ClockWaiter
 	CoreService             *core.Service
 	AttestationStateFetcher blockchain.AttestationStateFetcher
+	InclusionLists          *cache.InclusionLists
 }
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
