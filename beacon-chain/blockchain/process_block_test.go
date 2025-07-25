@@ -2894,7 +2894,6 @@ func TestIsDataAvailable(t *testing.T) {
 		}
 
 		params := testIsAvailableParams{
-			options:                 []Option{WithCustodyInfo(&peerdas.CustodyInfo{})},
 			columnsToSave:           indices,
 			blobKzgCommitmentsCount: 3,
 		}
@@ -2907,7 +2906,6 @@ func TestIsDataAvailable(t *testing.T) {
 
 	t.Run("Fulu - no missing data columns", func(t *testing.T) {
 		params := testIsAvailableParams{
-			options:                 []Option{WithCustodyInfo(&peerdas.CustodyInfo{})},
 			columnsToSave:           []uint64{1, 17, 19, 42, 75, 87, 102, 117, 119}, // 119 is not needed
 			blobKzgCommitmentsCount: 3,
 		}
@@ -2922,7 +2920,7 @@ func TestIsDataAvailable(t *testing.T) {
 		startWaiting := make(chan bool)
 
 		testParams := testIsAvailableParams{
-			options:       []Option{WithCustodyInfo(&peerdas.CustodyInfo{}), WithStartWaitingDataColumnSidecars(startWaiting)},
+			options:       []Option{WithStartWaitingDataColumnSidecars(startWaiting)},
 			columnsToSave: []uint64{1, 17, 19, 75, 102, 117, 119}, // 119 is not needed, 42 and 87 are missing
 
 			blobKzgCommitmentsCount: 3,
@@ -2959,6 +2957,9 @@ func TestIsDataAvailable(t *testing.T) {
 			require.NoError(t, err)
 		}()
 
+		ctx, cancel := context.WithTimeout(ctx, time.Second*2)
+		defer cancel()
+
 		err = service.isDataAvailable(ctx, root, signed)
 		require.NoError(t, err)
 	})
@@ -2971,10 +2972,6 @@ func TestIsDataAvailable(t *testing.T) {
 
 		startWaiting := make(chan bool)
 
-		var custodyInfo peerdas.CustodyInfo
-		custodyInfo.TargetGroupCount.SetValidatorsCustodyRequirement(cgc)
-		custodyInfo.ToAdvertiseGroupCount.Set(cgc)
-
 		minimumColumnsCountToReconstruct := peerdas.MinimumColumnsCountToReconstruct()
 		indices := make([]uint64, 0, minimumColumnsCountToReconstruct-missingColumns)
 
@@ -2983,12 +2980,14 @@ func TestIsDataAvailable(t *testing.T) {
 		}
 
 		testParams := testIsAvailableParams{
-			options:                 []Option{WithCustodyInfo(&custodyInfo), WithStartWaitingDataColumnSidecars(startWaiting)},
+			options:                 []Option{WithStartWaitingDataColumnSidecars(startWaiting)},
 			columnsToSave:           indices,
 			blobKzgCommitmentsCount: 3,
 		}
 
 		ctx, _, service, root, signed := testIsAvailableSetup(t, testParams)
+		_, _, err := service.cfg.P2P.UpdateCustodyInfo(0, cgc)
+		require.NoError(t, err)
 		block := signed.Block()
 		slot := block.Slot()
 		proposerIndex := block.ProposerIndex()
@@ -3020,6 +3019,9 @@ func TestIsDataAvailable(t *testing.T) {
 			require.NoError(t, err)
 		}()
 
+		ctx, cancel := context.WithTimeout(ctx, time.Second*2)
+		defer cancel()
+
 		err = service.isDataAvailable(ctx, root, signed)
 		require.NoError(t, err)
 	})
@@ -3028,7 +3030,7 @@ func TestIsDataAvailable(t *testing.T) {
 		startWaiting := make(chan bool)
 
 		params := testIsAvailableParams{
-			options:                 []Option{WithCustodyInfo(&peerdas.CustodyInfo{}), WithStartWaitingDataColumnSidecars(startWaiting)},
+			options:                 []Option{WithStartWaitingDataColumnSidecars(startWaiting)},
 			blobKzgCommitmentsCount: 3,
 		}
 

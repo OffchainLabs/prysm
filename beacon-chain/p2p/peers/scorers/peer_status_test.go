@@ -35,7 +35,7 @@ func TestScorers_PeerStatus_Score(t *testing.T) {
 			name: "existent bad peer",
 			update: func(scorer *scorers.PeerStatusScorer) {
 				scorer.SetHeadSlot(0)
-				scorer.SetPeerStatus("peer1", &pb.Status{
+				scorer.SetPeerStatus("peer1", &pb.StatusV2{
 					HeadRoot: make([]byte, 32),
 					HeadSlot: 64,
 				}, p2ptypes.ErrWrongForkDigestVersion)
@@ -48,7 +48,7 @@ func TestScorers_PeerStatus_Score(t *testing.T) {
 			name: "existent peer no head slot for the host node is known",
 			update: func(scorer *scorers.PeerStatusScorer) {
 				scorer.SetHeadSlot(0)
-				scorer.SetPeerStatus("peer1", &pb.Status{
+				scorer.SetPeerStatus("peer1", &pb.StatusV2{
 					HeadRoot: make([]byte, 32),
 					HeadSlot: 64,
 				}, nil)
@@ -61,7 +61,7 @@ func TestScorers_PeerStatus_Score(t *testing.T) {
 			name: "existent peer head is before ours",
 			update: func(scorer *scorers.PeerStatusScorer) {
 				scorer.SetHeadSlot(128)
-				scorer.SetPeerStatus("peer1", &pb.Status{
+				scorer.SetPeerStatus("peer1", &pb.StatusV2{
 					HeadRoot: make([]byte, 32),
 					HeadSlot: 64,
 				}, nil)
@@ -75,12 +75,12 @@ func TestScorers_PeerStatus_Score(t *testing.T) {
 			update: func(scorer *scorers.PeerStatusScorer) {
 				headSlot := primitives.Slot(128)
 				scorer.SetHeadSlot(headSlot)
-				scorer.SetPeerStatus("peer1", &pb.Status{
+				scorer.SetPeerStatus("peer1", &pb.StatusV2{
 					HeadRoot: make([]byte, 32),
 					HeadSlot: headSlot + 64,
 				}, nil)
 				// Set another peer to a higher score.
-				scorer.SetPeerStatus("peer2", &pb.Status{
+				scorer.SetPeerStatus("peer2", &pb.StatusV2{
 					HeadRoot: make([]byte, 32),
 					HeadSlot: headSlot + 128,
 				}, nil)
@@ -95,7 +95,7 @@ func TestScorers_PeerStatus_Score(t *testing.T) {
 			update: func(scorer *scorers.PeerStatusScorer) {
 				headSlot := primitives.Slot(128)
 				scorer.SetHeadSlot(headSlot)
-				scorer.SetPeerStatus("peer1", &pb.Status{
+				scorer.SetPeerStatus("peer1", &pb.StatusV2{
 					HeadRoot: make([]byte, 32),
 					HeadSlot: headSlot + 64,
 				}, nil)
@@ -108,7 +108,7 @@ func TestScorers_PeerStatus_Score(t *testing.T) {
 			name: "existent peer no max known slot",
 			update: func(scorer *scorers.PeerStatusScorer) {
 				scorer.SetHeadSlot(0)
-				scorer.SetPeerStatus("peer1", &pb.Status{
+				scorer.SetPeerStatus("peer1", &pb.StatusV2{
 					HeadRoot: make([]byte, 32),
 					HeadSlot: 0,
 				}, nil)
@@ -141,7 +141,7 @@ func TestScorers_PeerStatus_IsBadPeer(t *testing.T) {
 	assert.NoError(t, peerStatuses.Scorers().IsBadPeer(pid))
 	assert.NoError(t, peerStatuses.Scorers().PeerStatusScorer().IsBadPeer(pid))
 
-	peerStatuses.Scorers().PeerStatusScorer().SetPeerStatus(pid, &pb.Status{}, p2ptypes.ErrWrongForkDigestVersion)
+	peerStatuses.Scorers().PeerStatusScorer().SetPeerStatus(pid, &pb.StatusV2{}, p2ptypes.ErrWrongForkDigestVersion)
 	assert.NotNil(t, peerStatuses.Scorers().IsBadPeer(pid))
 	assert.NotNil(t, peerStatuses.Scorers().PeerStatusScorer().IsBadPeer(pid))
 }
@@ -160,9 +160,9 @@ func TestScorers_PeerStatus_BadPeers(t *testing.T) {
 	assert.NoError(t, peerStatuses.Scorers().IsBadPeer(pid3))
 	assert.NoError(t, peerStatuses.Scorers().PeerStatusScorer().IsBadPeer(pid3))
 
-	peerStatuses.Scorers().PeerStatusScorer().SetPeerStatus(pid1, &pb.Status{}, p2ptypes.ErrWrongForkDigestVersion)
-	peerStatuses.Scorers().PeerStatusScorer().SetPeerStatus(pid2, &pb.Status{}, nil)
-	peerStatuses.Scorers().PeerStatusScorer().SetPeerStatus(pid3, &pb.Status{}, p2ptypes.ErrWrongForkDigestVersion)
+	peerStatuses.Scorers().PeerStatusScorer().SetPeerStatus(pid1, &pb.StatusV2{}, p2ptypes.ErrWrongForkDigestVersion)
+	peerStatuses.Scorers().PeerStatusScorer().SetPeerStatus(pid2, &pb.StatusV2{}, nil)
+	peerStatuses.Scorers().PeerStatusScorer().SetPeerStatus(pid3, &pb.StatusV2{}, p2ptypes.ErrWrongForkDigestVersion)
 	assert.NotNil(t, peerStatuses.Scorers().IsBadPeer(pid1))
 	assert.NotNil(t, peerStatuses.Scorers().PeerStatusScorer().IsBadPeer(pid1))
 	assert.NoError(t, peerStatuses.Scorers().IsBadPeer(pid2))
@@ -179,12 +179,12 @@ func TestScorers_PeerStatus_PeerStatus(t *testing.T) {
 	})
 	status, err := peerStatuses.Scorers().PeerStatusScorer().PeerStatus("peer1")
 	require.ErrorContains(t, peerdata.ErrPeerUnknown.Error(), err)
-	assert.Equal(t, (*pb.Status)(nil), status)
+	assert.Equal(t, (*pb.StatusV2)(nil), status)
 
-	peerStatuses.Scorers().PeerStatusScorer().SetPeerStatus("peer1", &pb.Status{
+	peerStatuses.Scorers().PeerStatusScorer().SetPeerStatus("peer1", &pb.StatusV2{
 		HeadSlot: 128,
 	}, nil)
-	peerStatuses.Scorers().PeerStatusScorer().SetPeerStatus("peer2", &pb.Status{
+	peerStatuses.Scorers().PeerStatusScorer().SetPeerStatus("peer2", &pb.StatusV2{
 		HeadSlot: 128,
 	}, p2ptypes.ErrInvalidEpoch)
 	status, err = peerStatuses.Scorers().PeerStatusScorer().PeerStatus("peer1")

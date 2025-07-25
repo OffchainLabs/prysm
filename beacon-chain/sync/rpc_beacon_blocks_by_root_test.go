@@ -394,7 +394,7 @@ func TestRequestPendingBlobs(t *testing.T) {
 		}
 		p1.Peers().Add(new(enr.Record), p2.PeerID(), nil, network.DirOutbound)
 		p1.Peers().SetConnectionState(p2.PeerID(), peers.Connected)
-		p1.Peers().SetChainState(p2.PeerID(), &ethpb.Status{FinalizedEpoch: 1})
+		p1.Peers().SetChainState(p2.PeerID(), &ethpb.StatusV2{FinalizedEpoch: 1})
 		s := &Service{
 			cfg: &config{
 				p2p:         p1,

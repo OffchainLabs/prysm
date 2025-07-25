@@ -336,7 +336,7 @@ var (
 	// SubscribeAllDataSubnets enables subscription to all data subnets.
 	SubscribeAllDataSubnets = &cli.BoolFlag{
 		Name:  "subscribe-all-data-subnets",
-		Usage: "Enable subscription to all data subnets.",
+		Usage: "Enable subscription to all data subnets. Once set, unsetting this flag won't have any effect.",
 	}
 	// BatchVerifierLimit sets the maximum number of signatures to batch verify at once.
 	BatchVerifierLimit = &cli.IntFlag{

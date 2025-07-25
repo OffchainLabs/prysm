@@ -176,19 +176,6 @@ func ComputeCustodyGroupForColumn(columnIndex uint64) (uint64, error) {
 	return columnIndex % numberOfCustodyGroups, nil
 }
 
-// CustodyGroupSamplingSize returns the number of custody groups the node should sample from.
-// https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/das-core.md#custody-sampling
-func (custodyInfo *CustodyInfo) CustodyGroupSamplingSize(ct CustodyType) uint64 {
-	custodyGroupCount := custodyInfo.TargetGroupCount.Get()
-
-	if ct == Actual {
-		custodyGroupCount = custodyInfo.ActualGroupCount()
-	}
-
-	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
-	return max(samplesPerSlot, custodyGroupCount)
-}
-
 // CustodyColumns computes the custody columns from the custody groups.
 func CustodyColumns(custodyGroups []uint64) (map[uint64]bool, error) {
 	numberOfCustodyGroups := params.BeaconConfig().NumberOfCustodyGroups
