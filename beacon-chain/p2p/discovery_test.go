@@ -156,6 +156,7 @@ func TestCreateLocalNode(t *testing.T) {
 	}{
 		{
 			name:          "valid config",
+			cfg:           &Config{},
 			expectedError: false,
 		},
 		{
