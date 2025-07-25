@@ -125,15 +125,18 @@ func privKeyFromFile(path string) (*ecdsa.PrivateKey, error) {
 
 // Retrieves node p2p metadata from a set of configuration values
 // from the p2p service.
-// When using static peer id, metaDataFromConfig returns default V1 metadata.
+// When using static peer id, metaDataFromConfig returns default V0 metadata.
 func metaDataFromConfig(cfg *Config) (metadata.Metadata, error) {
-	// Load V1 metadata by default, since V1 metadata can be covered to V0.
-	defaultMd := &pb.MetaDataV1{
+	// NOTE: Load V0 metadata by default because:
+	// - As the p2p service accesses metadata as an interface, and all versions implement the interface,
+	//   there is no error in calling the fields of higher versions. It just returns the default value.
+	// - This approach allows us to avoid unnecessary code changes when the metadata version bumps.
+	// - `RefreshPersistentSubnets` runs twice every slot and it manages updating and saving metadata.
+	defaultMd := &pb.MetaDataV0{
 		SeqNumber: 0,
 		Attnets:   bitfield.NewBitvector64(),
-		Syncnets:  bitfield.NewBitvector4(),
 	}
-	wrappedDefaultMd := wrapper.WrappedMetadataV1(defaultMd)
+	wrappedDefaultMd := wrapper.WrappedMetadataV0(defaultMd)
 
 	// For not using static peer ID, return default metadata for initialization
 	if !cfg.StaticPeerID {
@@ -234,6 +237,7 @@ func saveMetaDataToFile(path string, metadata metadata.Metadata) error {
 
 // migrateFromProtoToSsz tries to unmarshal by proto, and migrates to ssz encoded file
 // if unmarshalling is successful.
+// NOTE: This function treats the metadata as V0, same reasoning as in `metaDataFromConfig`.
 func migrateFromProtoToSsz(path string) (metadata.Metadata, error) {
 	src, err := file.ReadFileAsBytes(path)
 	if err != nil {
@@ -244,20 +248,19 @@ func migrateFromProtoToSsz(path string) (metadata.Metadata, error) {
 	if err := proto.Unmarshal(src, md); err != nil {
 		return nil, err
 	}
+	wrappedMd := wrapper.WrappedMetadataV0(md)
 
-	wmd := wrapper.WrappedMetadataV0(md)
-	newMd := &pb.MetaDataV1{
-		SeqNumber: wmd.SequenceNumber() + 1,
-		Attnets:   wmd.AttnetsBitfield().Bytes(),
-		Syncnets:  bitfield.NewBitvector4(),
+	// Increment the sequence number for avoiding conflicts with existing metadata.
+	newMd := &pb.MetaDataV0{
+		SeqNumber: wrappedMd.SequenceNumber() + 1,
+		Attnets:   wrappedMd.AttnetsBitfield().Bytes(),
 	}
-	wrappedNewMd := wrapper.WrappedMetadataV1(newMd)
+	wrappedMd = wrapper.WrappedMetadataV0(newMd)
 
-	saveErr := saveMetaDataToFile(path, wrappedNewMd)
-	if saveErr != nil {
-		return nil, saveErr
+	if err = saveMetaDataToFile(path, wrappedMd); err != nil {
+		return nil, err
 	}
-	return wrapper.WrappedMetadataV1(newMd), nil
+	return wrappedMd, nil
 }
 
 // Attempt to dial an address to verify its connectivity

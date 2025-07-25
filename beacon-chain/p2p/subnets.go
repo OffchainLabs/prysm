@@ -439,11 +439,13 @@ func (s *Service) saveMetaDataIfNeeded() {
 	if s.cfg.StaticPeerID {
 		mdPath, exist, err := resolveMetaDataPath(s.cfg)
 		if err != nil {
+			log.WithError(err).Error("Could not resolve p2p metadata path")
 			return
 		}
 
 		if exist {
 			if err := saveMetaDataToFile(mdPath, s.Metadata()); err != nil {
+				log.WithError(err).Error("Could not save metadata to file")
 				return
 			}
 		}
