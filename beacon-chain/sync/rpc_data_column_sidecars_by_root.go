@@ -27,7 +27,7 @@ var (
 )
 
 // dataColumnSidecarByRootRPCHandler handles the data column sidecars by root RPC request.
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#datacolumnsidecarsbyroot-v1
+// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#datacolumnsidecarsbyroot-v1
 func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg interface{}, stream libp2pcore.Stream) error {
 	ctx, span := trace.StartSpan(ctx, "sync.dataColumnSidecarByRootRPCHandler")
 	defer span.End()
@@ -36,13 +36,13 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
 	// Check if the message type is the one expected.
-	ref, ok := msg.(*types.DataColumnsByRootIdentifiers)
+	ref, ok := msg.(types.DataColumnsByRootIdentifiers)
 	if !ok {
 		return notDataColumnsByRootIdentifiersError
 	}
 
-	requestedColumnIdents := *ref
-	remotePeerId := stream.Conn().RemotePeer()
+	requestedColumnIdents := ref
+	remotePeer := stream.Conn().RemotePeer()
 
 	ctx, cancel := context.WithTimeout(ctx, ttfbTimeout)
 	defer cancel()
@@ -51,7 +51,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 
 	// Penalize peers that send invalid requests.
 	if err := validateDataColumnsByRootRequest(requestedColumnIdents); err != nil {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeerId)
+		s.downscorePeer(remotePeer, "dataColumnSidecarByRootRPCHandlerValidationError")
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
 		return errors.Wrap(err, "validate data columns by root request")
 	}
@@ -85,7 +85,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 	}
 
 	log := log.WithFields(logrus.Fields{
-		"peer":    remotePeerId,
+		"peer":    remotePeer,
 		"columns": requestedColumnsByRootLog,
 	})
 

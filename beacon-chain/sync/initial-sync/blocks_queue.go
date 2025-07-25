@@ -5,7 +5,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
@@ -76,7 +75,6 @@ type blocksQueueConfig struct {
 	dcs                 filesystem.DataColumnStorageSummarizer
 	bv                  verification.NewBlobVerifier
 	cv                  verification.NewDataColumnsVerifier
-	custodyInfo         *peerdas.CustodyInfo
 }
 
 // blocksQueue is a priority queue that serves as a intermediary between block fetchers (producers)
@@ -114,16 +112,15 @@ func newBlocksQueue(ctx context.Context, cfg *blocksQueueConfig) *blocksQueue {
 			log.Warn("Rpc fetcher starting without blob availability cache, duplicate blobs may be requested.")
 		}
 		blocksFetcher = newBlocksFetcher(ctx, &blocksFetcherConfig{
-			ctxMap:      cfg.ctxMap,
-			chain:       cfg.chain,
-			p2p:         cfg.p2p,
-			db:          cfg.db,
-			clock:       cfg.clock,
-			bs:          cfg.bs,
-			dcs:         cfg.dcs,
-			bv:          cfg.bv,
-			cv:          cfg.cv,
-			custodyInfo: cfg.custodyInfo,
+			ctxMap: cfg.ctxMap,
+			chain:  cfg.chain,
+			p2p:    cfg.p2p,
+			db:     cfg.db,
+			clock:  cfg.clock,
+			bs:     cfg.bs,
+			dcs:    cfg.dcs,
+			bv:     cfg.bv,
+			cv:     cfg.cv,
 		})
 	}
 	highestExpectedSlot := cfg.highestExpectedSlot
@@ -346,14 +343,15 @@ func (q *blocksQueue) onDataReceivedEvent(ctx context.Context) eventHandlerFn {
 					}
 				}
 			}
+
 			if errors.Is(response.err, beaconsync.ErrInvalidFetchedData) {
-				// Peer returned invalid data, penalize.
-				q.blocksFetcher.p2p.Peers().Scorers().BadResponsesScorer().Increment(response.blocksFrom)
-				log.WithField("pid", response.blocksFrom).Debug("Peer is penalized for invalid blocks")
-			} else if errors.Is(response.err, verification.ErrBlobInvalid) {
-				q.blocksFetcher.p2p.Peers().Scorers().BadResponsesScorer().Increment(response.blobsFrom)
-				log.WithField("pid", response.blobsFrom).Debug("Peer is penalized for invalid blob response")
+				q.downscorePeer(response.blocksFrom, "invalidBlocks")
 			}
+
+			if errors.Is(response.err, verification.ErrBlobInvalid) {
+				q.downscorePeer(response.blobsFrom, "invalidBlobs")
+			}
+
 			return m.state, response.err
 		}
 		m.fetched = *response
@@ -462,6 +460,11 @@ func (q *blocksQueue) onProcessSkippedEvent(ctx context.Context) eventHandlerFn 
 		}
 		return stateSkipped, q.resetFromSlot(ctx, startSlot)
 	}
+}
+
+func (q *blocksQueue) downscorePeer(peerID peer.ID, reason string) {
+	newScore := q.blocksFetcher.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }
 
 // onCheckStaleEvent is an event that allows to mark stale epochs,

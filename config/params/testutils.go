@@ -4,6 +4,10 @@ import (
 	"testing"
 )
 
+const (
+	EnvNameOverrideAccept = "PRYSM_API_OVERRIDE_ACCEPT"
+)
+
 // SetupTestConfigCleanup preserves configurations allowing to modify them within tests without any
 // restrictions, everything is restored after the test.
 func SetupTestConfigCleanup(t testing.TB) {

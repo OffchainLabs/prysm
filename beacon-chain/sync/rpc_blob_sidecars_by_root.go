@@ -39,7 +39,7 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 	cs := s.cfg.clock.CurrentSlot()
 	remotePeer := stream.Conn().RemotePeer()
 	if err := validateBlobByRootRequest(blobIdents, cs); err != nil {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
+		s.downscorePeer(remotePeer, "blobSidecarsByRootRpcHandlerValidationError")
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
 		return err
 	}

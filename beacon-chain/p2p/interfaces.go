@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -35,10 +36,11 @@ type (
 		DataColumnsHandler
 	}
 
-	// Accessor provides access to the Broadcaster and PeerManager interfaces.
+	// Accessor provides access to the Broadcaster, PeerManager and DataColumnsHandler interfaces.
 	Accessor interface {
 		Broadcaster
 		PeerManager
+		DataColumnsHandler
 	}
 
 	// Broadcaster broadcasts messages to peers over the p2p pubsub protocol.
@@ -49,7 +51,7 @@ type (
 		BroadcastBlob(ctx context.Context, subnet uint64, blob *ethpb.BlobSidecar) error
 		BroadcastLightClientOptimisticUpdate(ctx context.Context, update interfaces.LightClientOptimisticUpdate) error
 		BroadcastLightClientFinalityUpdate(ctx context.Context, update interfaces.LightClientFinalityUpdate) error
-		BroadcastDataColumn(root [fieldparams.RootLength]byte, columnSubnet uint64, dataColumnSidecar *ethpb.DataColumnSidecar, peersChecked ...chan<- bool) error
+		BroadcastDataColumn(root [fieldparams.RootLength]byte, columnSubnet uint64, dataColumnSidecar *ethpb.DataColumnSidecar) error
 	}
 
 	// SetStreamHandler configures p2p to handle streams of a certain topic ID.
@@ -98,7 +100,7 @@ type (
 		NodeID() enode.ID
 		DiscoveryAddresses() ([]multiaddr.Multiaddr, error)
 		RefreshPersistentSubnets()
-		FindPeersWithSubnet(ctx context.Context, topic string, subIndex uint64, threshold int) (bool, error)
+		FindAndDialPeersWithSubnets(ctx context.Context, topicFormat string, digest [fieldparams.VersionLength]byte, minimumPeersPerSubnet int, subnets map[uint64]bool) error
 		AddPingMethod(reqFunc func(ctx context.Context, id peer.ID) error)
 	}
 
@@ -120,6 +122,9 @@ type (
 
 	// DataColumnsHandler abstracts some data columns related methods.
 	DataColumnsHandler interface {
+		EarliestAvailableSlot() primitives.Slot
+		CustodyGroupCount() uint64
+		UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error)
 		CustodyGroupCountFromPeer(peer.ID) uint64
 	}
 )

@@ -4,10 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -29,7 +27,7 @@ var commitments = [][]byte{
 func TestPersist(t *testing.T) {
 	t.Run("no sidecars", func(t *testing.T) {
 		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
-		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, nil, &peerdas.CustodyInfo{})
+		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, nil, 0)
 		err := lazilyPersistentStoreColumns.Persist(0)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(lazilyPersistentStoreColumns.cache.entries))
@@ -44,7 +42,7 @@ func TestPersist(t *testing.T) {
 		}
 
 		roSidecars, _ := roSidecarsFromDataColumnParamsByBlockRoot(t, dataColumnParamsByBlockRoot)
-		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, nil, &peerdas.CustodyInfo{})
+		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, nil, 0)
 
 		err := lazilyPersistentStoreColumns.Persist(0, roSidecars...)
 		require.ErrorIs(t, err, errMixedRoots)
@@ -59,7 +57,7 @@ func TestPersist(t *testing.T) {
 		}
 
 		roSidecars, _ := roSidecarsFromDataColumnParamsByBlockRoot(t, dataColumnParamsByBlockRoot)
-		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, nil, &peerdas.CustodyInfo{})
+		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, nil, 0)
 
 		err := lazilyPersistentStoreColumns.Persist(1_000_000, roSidecars...)
 		require.NoError(t, err)
@@ -76,7 +74,7 @@ func TestPersist(t *testing.T) {
 		}
 
 		roSidecars, roDataColumns := roSidecarsFromDataColumnParamsByBlockRoot(t, dataColumnParamsByBlockRoot)
-		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, nil, &peerdas.CustodyInfo{})
+		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, nil, 0)
 
 		err := lazilyPersistentStoreColumns.Persist(slot, roSidecars...)
 		require.NoError(t, err)
@@ -114,7 +112,7 @@ func TestIsDataAvailable(t *testing.T) {
 		signedRoBlock := newSignedRoBlock(t, signedBeaconBlockFulu)
 
 		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
-		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, newDataColumnsVerifier, &peerdas.CustodyInfo{})
+		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, newDataColumnsVerifier, 0)
 
 		err := lazilyPersistentStoreColumns.IsDataAvailable(ctx, 0 /*current slot*/, signedRoBlock)
 		require.NoError(t, err)
@@ -135,9 +133,9 @@ func TestIsDataAvailable(t *testing.T) {
 		root := signedRoBlock.Root()
 
 		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
-		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, newDataColumnsVerifier, &peerdas.CustodyInfo{})
+		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, enode.ID{}, newDataColumnsVerifier, 0)
 
-		indices := [...]uint64{1, 17, 87, 102}
+		indices := [...]uint64{1, 17, 19, 42, 75, 87, 102, 117}
 		dataColumnsParams := make([]util.DataColumnParam, 0, len(indices))
 		for _, index := range indices {
 			dataColumnParams := util.DataColumnParam{
@@ -221,14 +219,10 @@ func TestFullCommitmentsToCheck(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			resetFlags := flags.Get()
-			gFlags := new(flags.GlobalFlags)
-			gFlags.SubscribeAllDataSubnets = true
-			flags.Init(gFlags)
-			defer flags.Init(resetFlags)
+			numberOfColumns := params.BeaconConfig().NumberOfColumns
 
 			b := tc.block(t)
-			s := NewLazilyPersistentStoreColumn(nil, enode.ID{}, nil, &peerdas.CustodyInfo{})
+			s := NewLazilyPersistentStoreColumn(nil, enode.ID{}, nil, numberOfColumns)
 
 			commitmentsArray, err := s.fullCommitmentsToCheck(enode.ID{}, b, tc.slot)
 			require.NoError(t, err)

@@ -918,6 +918,16 @@ func (s *Service) beaconEndpoints(
 			handler: server.GetPendingPartialWithdrawals,
 			methods: []string{http.MethodGet},
 		},
+		{
+			template: "/eth/v1/beacon/states/{state_id}/proposer_lookahead",
+			name:     namespace + ".GetProposerLookahead",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetProposerLookahead,
+			methods: []string{http.MethodGet},
+		},
 	}
 }
 
@@ -956,12 +966,7 @@ func (*Service) configEndpoints() []endpoint {
 
 func (s *Service) lightClientEndpoints(blocker lookup.Blocker, stater lookup.Stater) []endpoint {
 	server := &lightclient.Server{
-		Blocker:          blocker,
-		Stater:           stater,
-		HeadFetcher:      s.cfg.HeadFetcher,
-		ChainInfoFetcher: s.cfg.ChainInfoFetcher,
-		BeaconDB:         s.cfg.BeaconDB,
-		LCStore:          s.cfg.LCStore,
+		LCStore: s.cfg.LCStore,
 	}
 
 	const namespace = "lightclient"

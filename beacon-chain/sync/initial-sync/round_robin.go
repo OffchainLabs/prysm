@@ -11,11 +11,13 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/paulbellamy/ratecounter"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -81,7 +83,6 @@ func (s *Service) startBlocksQueue(ctx context.Context, highestSlot primitives.S
 		bs:                  s.cfg.BlobStorage,
 		dcs:                 s.cfg.DataColumnStorage,
 		cv:                  s.newDataColumnsVerifier,
-		custodyInfo:         s.cfg.CustodyInfo,
 	}
 	queue := newBlocksQueue(ctx, cfg)
 	if err := queue.start(); err != nil {
@@ -178,7 +179,7 @@ func (s *Service) processFetchedDataRegSync(ctx context.Context, data *blocksQue
 
 	blobBatchVerifier := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.InitsyncBlobSidecarRequirements)
 	lazilyPersistentStoreBlobs := das.NewLazilyPersistentStore(s.cfg.BlobStorage, blobBatchVerifier)
-	lazilyPersistentStoreColumn := das.NewLazilyPersistentStoreColumn(s.cfg.DataColumnStorage, nodeID, s.newDataColumnsVerifier, s.cfg.CustodyInfo)
+	lazilyPersistentStoreColumn := das.NewLazilyPersistentStoreColumn(s.cfg.DataColumnStorage, nodeID, s.newDataColumnsVerifier, s.cfg.P2P.CustodyGroupCount())
 
 	log := log.WithField("firstSlot", data.bwb[0].Block.Block().Slot())
 	logBlobs, logDataColumns := log, log
@@ -426,7 +427,11 @@ func (s *Service) processBlocksWithDataColumns(ctx context.Context, bwbs []block
 		return nil
 	}
 
-	persistentStoreColumn := das.NewLazilyPersistentStoreColumn(s.cfg.DataColumnStorage, s.cfg.P2P.NodeID(), s.newDataColumnsVerifier, s.cfg.CustodyInfo)
+	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
+	custodyGroupCount := s.cfg.P2P.CustodyGroupCount()
+	samplingSize := max(custodyGroupCount, samplesPerSlot)
+
+	persistentStoreColumn := das.NewLazilyPersistentStoreColumn(s.cfg.DataColumnStorage, s.cfg.P2P.NodeID(), s.newDataColumnsVerifier, samplingSize)
 	s.logBatchSyncStatus(firstBlock, bwbCount)
 
 	for _, bwb := range bwbs {
@@ -457,12 +462,11 @@ func isPunishableError(err error) bool {
 func (s *Service) updatePeerScorerStats(data *blocksQueueFetchedData, count uint64, err error) {
 	if isPunishableError(err) {
 		if verification.IsBlobValidationFailure(err) {
-			log.WithError(err).WithField("peer_id", data.blobsFrom).Warn("Downscoring peer for invalid blobs")
-			s.cfg.P2P.Peers().Scorers().BadResponsesScorer().Increment(data.blobsFrom)
+			s.downscorePeer(data.blobsFrom, "invalidBlobs")
 		} else {
-			log.WithError(err).WithField("peer_id", data.blocksFrom).Warn("Downscoring peer for invalid blocks")
-			s.cfg.P2P.Peers().Scorers().BadResponsesScorer().Increment(data.blocksFrom)
+			s.downscorePeer(data.blocksFrom, "invalidBlocks")
 		}
+
 		// If the error is punishable, exit here so that we don't give them credit for providing bad blocks.
 		return
 	}
@@ -487,4 +491,9 @@ func (s *Service) isProcessedBlock(ctx context.Context, blk blocks.ROBlock) bool
 		return true
 	}
 	return false
+}
+
+func (s *Service) downscorePeer(peerID peer.ID, reason string) {
+	newScore := s.cfg.P2P.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }

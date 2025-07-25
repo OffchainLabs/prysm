@@ -30,6 +30,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -54,6 +55,7 @@ type mockBroadcaster struct {
 
 type mockAccessor struct {
 	mockBroadcaster
+	mockDataColumnsHandler
 	p2pTesting.MockPeerManager
 }
 
@@ -87,7 +89,7 @@ func (mb *mockBroadcaster) BroadcastLightClientFinalityUpdate(_ context.Context,
 	return nil
 }
 
-func (mb *mockBroadcaster) BroadcastDataColumn(_ [fieldparams.RootLength]byte, _ uint64, _ *ethpb.DataColumnSidecar, _ ...chan<- bool) error {
+func (mb *mockBroadcaster) BroadcastDataColumn(_ [fieldparams.RootLength]byte, _ uint64, _ *ethpb.DataColumnSidecar) error {
 	mb.broadcastCalled = true
 	return nil
 }
@@ -96,6 +98,43 @@ func (mb *mockBroadcaster) BroadcastBLSChanges(_ context.Context, _ []*ethpb.Sig
 }
 
 var _ p2p.Broadcaster = (*mockBroadcaster)(nil)
+
+// mockDataColumnsHandler is a mock implementation of p2p.DataColumnsHandler
+type mockDataColumnsHandler struct {
+	mut                   sync.RWMutex
+	earliestAvailableSlot primitives.Slot
+	custodyGroupCount     uint64
+}
+
+func (dch *mockDataColumnsHandler) EarliestAvailableSlot() primitives.Slot {
+	dch.mut.RLock()
+	defer dch.mut.RUnlock()
+
+	return dch.earliestAvailableSlot
+}
+
+func (dch *mockDataColumnsHandler) CustodyGroupCount() uint64 {
+	dch.mut.RLock()
+	defer dch.mut.RUnlock()
+
+	return dch.custodyGroupCount
+}
+
+func (dch *mockDataColumnsHandler) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
+	dch.mut.Lock()
+	defer dch.mut.Unlock()
+
+	dch.earliestAvailableSlot = earliestAvailableSlot
+	dch.custodyGroupCount = custodyGroupCount
+
+	return earliestAvailableSlot, custodyGroupCount, nil
+}
+
+func (dch *mockDataColumnsHandler) CustodyGroupCountFromPeer(peer.ID) uint64 {
+	return 0
+}
+
+var _ p2p.DataColumnsHandler = (*mockDataColumnsHandler)(nil)
 
 type testServiceRequirements struct {
 	ctx     context.Context

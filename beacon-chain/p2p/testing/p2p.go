@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -17,6 +18,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -33,6 +35,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
@@ -48,16 +51,19 @@ const (
 
 // TestP2P represents a p2p implementation that can be used for testing.
 type TestP2P struct {
-	t               *testing.T
-	BHost           host.Host
-	EnodeID         enode.ID
-	pubsub          *pubsub.PubSub
-	joinedTopics    map[string]*pubsub.Topic
-	BroadcastCalled atomic.Bool
-	DelaySend       bool
-	Digest          [4]byte
-	peers           *peers.Status
-	LocalMetadata   metadata.Metadata
+	t                     *testing.T
+	BHost                 host.Host
+	EnodeID               enode.ID
+	pubsub                *pubsub.PubSub
+	joinedTopics          map[string]*pubsub.Topic
+	BroadcastCalled       atomic.Bool
+	DelaySend             bool
+	Digest                [4]byte
+	peers                 *peers.Status
+	LocalMetadata         metadata.Metadata
+	custodyInfoMut        sync.RWMutex
+	earliestAvailableSlot primitives.Slot
+	custodyGroupCount     uint64
 }
 
 // NewTestP2P initializes a new p2p test service.
@@ -224,7 +230,7 @@ func (p *TestP2P) BroadcastLightClientFinalityUpdate(_ context.Context, _ interf
 }
 
 // BroadcastDataColumn broadcasts a data column for mock.
-func (p *TestP2P) BroadcastDataColumn([fieldparams.RootLength]byte, uint64, *ethpb.DataColumnSidecar, ...chan<- bool) error {
+func (p *TestP2P) BroadcastDataColumn([fieldparams.RootLength]byte, uint64, *ethpb.DataColumnSidecar) error {
 	p.BroadcastCalled.Store(true)
 	return nil
 }
@@ -408,9 +414,9 @@ func (p *TestP2P) Peers() *peers.Status {
 	return p.peers
 }
 
-// FindPeersWithSubnet mocks the p2p func.
-func (*TestP2P) FindPeersWithSubnet(_ context.Context, _ string, _ uint64, _ int) (bool, error) {
-	return false, nil
+// FindAndDialPeersWithSubnets mocks the p2p func.
+func (*TestP2P) FindAndDialPeersWithSubnets(ctx context.Context, topicFormat string, digest [fieldparams.VersionLength]byte, minimumPeersPerSubnet int, subnets map[uint64]bool) error {
+	return nil
 }
 
 // RefreshPersistentSubnets mocks the p2p func.
@@ -461,6 +467,48 @@ func (*TestP2P) InterceptUpgraded(network.Conn) (allow bool, reason control.Disc
 	return true, 0
 }
 
+// CustodyGroupCount .
+func (s *TestP2P) CustodyGroupCount() uint64 {
+	s.custodyInfoMut.RLock()
+	defer s.custodyInfoMut.RUnlock()
+
+	return s.custodyGroupCount
+}
+
+// SetCustodyGroupCount .
+// UdpateCustodyInfo updates the custody group count and earliest available slot
+// if the new custody group count is greater than the stored one.
+// It returns the (potentially updated) earliest available slot and custody group count.
+func (s *TestP2P) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
+	s.custodyInfoMut.Lock()
+	defer s.custodyInfoMut.Unlock()
+
+	if custodyGroupCount <= s.custodyGroupCount {
+		return s.earliestAvailableSlot, s.custodyGroupCount, nil
+	}
+
+	if earliestAvailableSlot < s.earliestAvailableSlot {
+		return 0, 0, errors.Errorf(
+			"earliest available slot %d is less than the current one %d. (custody group count: %d, current one: %d)",
+			earliestAvailableSlot, s.earliestAvailableSlot, custodyGroupCount, s.custodyGroupCount,
+		)
+	}
+
+	s.earliestAvailableSlot = earliestAvailableSlot
+	s.custodyGroupCount = custodyGroupCount
+
+	return earliestAvailableSlot, custodyGroupCount, nil
+}
+
+// EarliestAvailableSlot .
+func (s *TestP2P) EarliestAvailableSlot() primitives.Slot {
+	s.custodyInfoMut.RLock()
+	defer s.custodyInfoMut.RUnlock()
+
+	return s.earliestAvailableSlot
+}
+
+// CustodyGroupCountFromPeer .
 func (s *TestP2P) CustodyGroupCountFromPeer(pid peer.ID) uint64 {
 	// By default, we assume the peer custodies the minimum number of groups.
 	custodyRequirement := params.BeaconConfig().CustodyRequirement

@@ -85,20 +85,20 @@ func TestRateLimiter_ExceedCapacity(t *testing.T) {
 // 	stream, err := p1.BHost.NewStream(context.Background(), p2.PeerID(), protocol.ID(topic))
 // 	require.NoError(t, err, "could not create stream")
 
-// 	for i := 0; i < 2*defaultBurstLimit; i++ {
-// 		err = rlimiter.validateRawRpcRequest(stream)
-// 		rlimiter.addRawStream(stream)
-// 		require.NoError(t, err, "could not validate incoming request")
-// 	}
-// 	// Triggers rate limit error on burst.
-// 	assert.ErrorContains(t, p2ptypes.ErrRateLimited.Error(), rlimiter.validateRawRpcRequest(stream))
+// for i := 0; i < 2*defaultBurstLimit; i++ {
+// 	err = rlimiter.validateRawRpcRequest(stream, 1)
+// 	rlimiter.addRawStream(stream)
+// 	require.NoError(t, err, "could not validate incoming request")
+// }
+// // Triggers rate limit error on burst.
+// assert.ErrorContains(t, p2ptypes.ErrRateLimited.Error(), rlimiter.validateRawRpcRequest(stream, 1))
 
-// 	// Make Peer bad.
-// 	for i := 0; i < defaultBurstLimit; i++ {
-// 		assert.ErrorContains(t, p2ptypes.ErrRateLimited.Error(), rlimiter.validateRawRpcRequest(stream))
-// 	}
-// 	assert.NotNil(t, p1.Peers().IsBad(p2.PeerID()), "peer is not marked as a bad peer")
-// 	require.NoError(t, stream.Close(), "could not close stream")
+// // Make Peer bad.
+// for i := 0; i < defaultBurstLimit; i++ {
+// 	assert.ErrorContains(t, p2ptypes.ErrRateLimited.Error(), rlimiter.validateRawRpcRequest(stream, 1))
+// }
+// assert.NotNil(t, p1.Peers().IsBad(p2.PeerID()), "peer is not marked as a bad peer")
+// require.NoError(t, stream.Close(), "could not close stream")
 
 // 	if util.WaitTimeout(&wg, 1*time.Second) {
 // 		t.Fatal("Did not receive stream within 1 sec")

@@ -4,7 +4,6 @@ import (
 	"time"
 
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 )
@@ -27,6 +26,7 @@ type Config struct {
 	HostDNS              string
 	PrivateKey           string
 	DataDir              string
+	DiscoveryDir         string
 	MetaDataDir          string
 	QUICPort             uint
 	TCPPort              uint
@@ -39,7 +39,6 @@ type Config struct {
 	StateNotifier        statefeed.Notifier
 	DB                   db.ReadOnlyDatabase
 	ClockWaiter          startup.ClockWaiter
-	CustodyInfo          *peerdas.CustodyInfo
 }
 
 // validateConfig validates whether the values provided are accurate and will set

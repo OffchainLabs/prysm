@@ -7,7 +7,6 @@ import (
 	"time"
 
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	p2pt "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
@@ -37,10 +36,9 @@ func TestBlocksQueue_InitStartStop(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
-		chain:       mc,
-		p2p:         p2p,
-		clock:       startup.NewClock(mc.Genesis, mc.ValidatorsRoot),
-		custodyInfo: &peerdas.CustodyInfo{},
+		chain: mc,
+		p2p:   p2p,
+		clock: startup.NewClock(mc.Genesis, mc.ValidatorsRoot),
 	})
 
 	t.Run("stop without start", func(t *testing.T) {
@@ -255,10 +253,9 @@ func TestBlocksQueue_Loop(t *testing.T) {
 			defer cancel()
 
 			fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
-				chain:       mc,
-				p2p:         p2p,
-				clock:       startup.NewClock(mc.Genesis, mc.ValidatorsRoot),
-				custodyInfo: &peerdas.CustodyInfo{},
+				chain: mc,
+				p2p:   p2p,
+				clock: startup.NewClock(mc.Genesis, mc.ValidatorsRoot),
 			})
 			queue := newBlocksQueue(ctx, &blocksQueueConfig{
 				blocksFetcher:       fetcher,
@@ -314,9 +311,8 @@ func TestBlocksQueue_onScheduleEvent(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
-		chain:       mc,
-		p2p:         p2p,
-		custodyInfo: &peerdas.CustodyInfo{},
+		chain: mc,
+		p2p:   p2p,
 	})
 
 	t.Run("expired context", func(t *testing.T) {
@@ -410,9 +406,8 @@ func TestBlocksQueue_onDataReceivedEvent(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
-		chain:       mc,
-		p2p:         p2p,
-		custodyInfo: &peerdas.CustodyInfo{},
+		chain: mc,
+		p2p:   p2p,
 	})
 
 	t.Run("expired context", func(t *testing.T) {
@@ -527,7 +522,7 @@ func TestBlocksQueue_onDataReceivedEvent(t *testing.T) {
 		})
 		assert.ErrorContains(t, beaconsync.ErrInvalidFetchedData.Error(), err)
 		assert.Equal(t, stateScheduled, updatedState)
-		assert.LogsContain(t, hook, "msg=\"Peer is penalized for invalid blocks\" pid=ZiCa")
+		assert.LogsContain(t, hook, "Downscore peer")
 	})
 
 	t.Run("transition ok", func(t *testing.T) {
@@ -570,9 +565,8 @@ func TestBlocksQueue_onReadyToSendEvent(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
-		chain:       mc,
-		p2p:         p2p,
-		custodyInfo: &peerdas.CustodyInfo{},
+		chain: mc,
+		p2p:   p2p,
 	})
 
 	t.Run("expired context", func(t *testing.T) {
@@ -630,9 +624,8 @@ func TestBlocksQueue_onReadyToSendEvent(t *testing.T) {
 	const pidDataParsed = "abc"
 	t.Run("send from the first machine", func(t *testing.T) {
 		fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
-			chain:       mc,
-			p2p:         p2p,
-			custodyInfo: &peerdas.CustodyInfo{},
+			chain: mc,
+			p2p:   p2p,
 		})
 		queue := newBlocksQueue(ctx, &blocksQueueConfig{
 			blocksFetcher:       fetcher,
@@ -660,9 +653,8 @@ func TestBlocksQueue_onReadyToSendEvent(t *testing.T) {
 
 	t.Run("previous machines are not processed - do not send", func(t *testing.T) {
 		fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
-			chain:       mc,
-			p2p:         p2p,
-			custodyInfo: &peerdas.CustodyInfo{},
+			chain: mc,
+			p2p:   p2p,
 		})
 		queue := newBlocksQueue(ctx, &blocksQueueConfig{
 			blocksFetcher:       fetcher,
@@ -696,9 +688,8 @@ func TestBlocksQueue_onReadyToSendEvent(t *testing.T) {
 
 	t.Run("previous machines are processed - send", func(t *testing.T) {
 		fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
-			chain:       mc,
-			p2p:         p2p,
-			custodyInfo: &peerdas.CustodyInfo{},
+			chain: mc,
+			p2p:   p2p,
 		})
 		queue := newBlocksQueue(ctx, &blocksQueueConfig{
 			blocksFetcher:       fetcher,
@@ -732,9 +723,8 @@ func TestBlocksQueue_onProcessSkippedEvent(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
-		chain:       mc,
-		p2p:         p2p,
-		custodyInfo: &peerdas.CustodyInfo{},
+		chain: mc,
+		p2p:   p2p,
 	})
 
 	t.Run("expired context", func(t *testing.T) {
@@ -862,9 +852,8 @@ func TestBlocksQueue_onProcessSkippedEvent(t *testing.T) {
 			{blocks: makeSequence(1, 160), finalizedEpoch: 5, headSlot: 128},
 		}, p.Peers())
 		fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
-			chain:       mc,
-			p2p:         p,
-			custodyInfo: &peerdas.CustodyInfo{},
+			chain: mc,
+			p2p:   p,
 		})
 		queue := newBlocksQueue(ctx, &blocksQueueConfig{
 			blocksFetcher:       fetcher,
@@ -890,9 +879,8 @@ func TestBlocksQueue_onProcessSkippedEvent(t *testing.T) {
 			{blocks: makeSequence(200, 320), finalizedEpoch: 8, headSlot: 300},
 		}, p.Peers())
 		fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
-			chain:       mc,
-			p2p:         p,
-			custodyInfo: &peerdas.CustodyInfo{},
+			chain: mc,
+			p2p:   p,
 		})
 		queue := newBlocksQueue(ctx, &blocksQueueConfig{
 			blocksFetcher:       fetcher,
@@ -941,9 +929,8 @@ func TestBlocksQueue_onProcessSkippedEvent(t *testing.T) {
 			{blocks: makeSequence(200, 320), finalizedEpoch: 8, headSlot: 320},
 		}, p.Peers())
 		fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
-			chain:       mc,
-			p2p:         p,
-			custodyInfo: &peerdas.CustodyInfo{},
+			chain: mc,
+			p2p:   p,
 		})
 		queue := newBlocksQueue(ctx, &blocksQueueConfig{
 			blocksFetcher:       fetcher,
@@ -1073,11 +1060,10 @@ func TestBlocksQueue_stuckInUnfavourableFork(t *testing.T) {
 	fetcher := newBlocksFetcher(
 		ctx,
 		&blocksFetcherConfig{
-			chain:       mc,
-			p2p:         p2p,
-			db:          beaconDB,
-			clock:       startup.NewClock(mc.Genesis, mc.ValidatorsRoot),
-			custodyInfo: &peerdas.CustodyInfo{},
+			chain: mc,
+			p2p:   p2p,
+			db:    beaconDB,
+			clock: startup.NewClock(mc.Genesis, mc.ValidatorsRoot),
 		},
 	)
 	fetcher.rateLimiter = leakybucket.NewCollector(6400, 6400, 1*time.Second, false)
@@ -1296,11 +1282,10 @@ func TestBlocksQueue_stuckWhenHeadIsSetToOrphanedBlock(t *testing.T) {
 	fetcher := newBlocksFetcher(
 		ctx,
 		&blocksFetcherConfig{
-			chain:       mc,
-			p2p:         p2p,
-			db:          beaconDB,
-			clock:       startup.NewClock(mc.Genesis, mc.ValidatorsRoot),
-			custodyInfo: &peerdas.CustodyInfo{},
+			chain: mc,
+			p2p:   p2p,
+			db:    beaconDB,
+			clock: startup.NewClock(mc.Genesis, mc.ValidatorsRoot),
 		},
 	)
 	fetcher.rateLimiter = leakybucket.NewCollector(6400, 6400, 1*time.Second, false)

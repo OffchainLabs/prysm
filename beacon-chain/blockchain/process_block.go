@@ -666,10 +666,11 @@ func (s *Service) areDataColumnsAvailable(
 	root [fieldparams.RootLength]byte,
 	block interfaces.ReadOnlyBeaconBlock,
 ) error {
+	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
+
 	// We are only required to check within MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS
 	blockSlot, currentSlot := block.Slot(), s.CurrentSlot()
 	blockEpoch, currentEpoch := slots.ToEpoch(blockSlot), slots.ToEpoch(currentSlot)
-
 	if !params.WithinDAPeriod(blockEpoch, currentEpoch) {
 		return nil
 	}
@@ -693,13 +694,15 @@ func (s *Service) areDataColumnsAvailable(
 	// https://github.com/ethereum/consensus-specs/blob/v1.5.0-alpha.10/specs/fulu/das-core.md#custody-sampling
 	nodeID := s.cfg.P2P.NodeID()
 
-	// Prevent custody group count to change during the rest of the function.
-	s.cfg.CustodyInfo.Mut.RLock()
-	defer s.cfg.CustodyInfo.Mut.RUnlock()
-
 	// Get the custody group sampling size for the node.
-	custodyGroupSamplingSize := s.cfg.CustodyInfo.CustodyGroupSamplingSize(peerdas.Actual)
-	peerInfo, _, err := peerdas.Info(nodeID, custodyGroupSamplingSize)
+	custodyGroupCount := s.cfg.P2P.CustodyGroupCount()
+
+	// Compute the sampling size.
+	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/das-core.md#custody-sampling
+	samplingSize := max(samplesPerSlot, custodyGroupCount)
+
+	// Get the peer info for the node.
+	peerInfo, _, err := peerdas.Info(nodeID, samplingSize)
 	if err != nil {
 		return errors.Wrap(err, "peer info")
 	}

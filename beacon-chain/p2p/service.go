@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	prysmnetwork "github.com/OffchainLabs/prysm/v6/network"
@@ -31,30 +32,35 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
 var _ runtime.Service = (*Service)(nil)
 
-// In the event that we are at our peer limit, we
-// stop looking for new peers and instead poll
-// for the current peer limit status for the time period
-// defined below.
-var pollingPeriod = 6 * time.Second
+const (
+	// When looking for new nodes, if not enough nodes are found,
+	// we stop after this spent time.
+	batchPeriod = 2 * time.Second
 
-// When looking for new nodes, if not enough nodes are found,
-// we stop after this spent time.
-var batchPeriod = 2 * time.Second
+	// maxBadResponses is the maximum number of bad responses from a peer before we stop talking to it.
+	maxBadResponses = 5
+)
 
-// Refresh rate of ENR set at twice per slot.
-var refreshRate = slots.DivideSlotBy(2)
+var (
+	// Refresh rate of ENR set at twice per slot.
+	refreshRate = slots.DivideSlotBy(2)
 
-// maxBadResponses is the maximum number of bad responses from a peer before we stop talking to it.
-const maxBadResponses = 5
+	// maxDialTimeout is the timeout for a single peer dial.
+	maxDialTimeout = params.BeaconConfig().RespTimeoutDuration()
 
-// maxDialTimeout is the timeout for a single peer dial.
-var maxDialTimeout = params.BeaconConfig().RespTimeoutDuration()
+	// In the event that we are at our peer limit, we
+	// stop looking for new peers and instead poll
+	// for the current peer limit status for the time period
+	// defined below.
+	pollingPeriod = 6 * time.Second
+)
 
 // Service for managing peer to peer (p2p) networking.
 type Service struct {
@@ -82,6 +88,10 @@ type Service struct {
 	genesisTime           time.Time
 	genesisValidatorsRoot []byte
 	activeValidatorCount  uint64
+	peerDisconnectionTime *cache.Cache
+	custodyInfoMut        sync.RWMutex // Protects custodyGroupCount and earliestAvailableSlot
+	custodyGroupCount     uint64
+	earliestAvailableSlot primitives.Slot
 }
 
 // NewService initializes a new p2p service compatible with shared.Service interface. No
@@ -111,16 +121,17 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 	ipLimiter := leakybucket.NewCollector(ipLimit, ipBurst, 30*time.Second, true /* deleteEmptyBuckets */)
 
 	s := &Service{
-		ctx:          ctx,
-		cancel:       cancel,
-		cfg:          cfg,
-		addrFilter:   addrFilter,
-		ipLimiter:    ipLimiter,
-		privKey:      privKey,
-		metaData:     metaData,
-		isPreGenesis: true,
-		joinedTopics: make(map[string]*pubsub.Topic, len(gossipTopicMappings)),
-		subnetsLock:  make(map[uint64]*sync.RWMutex),
+		ctx:                   ctx,
+		cancel:                cancel,
+		cfg:                   cfg,
+		addrFilter:            addrFilter,
+		ipLimiter:             ipLimiter,
+		privKey:               privKey,
+		metaData:              metaData,
+		isPreGenesis:          true,
+		joinedTopics:          make(map[string]*pubsub.Topic, len(gossipTopicMappings)),
+		subnetsLock:           make(map[uint64]*sync.RWMutex),
+		peerDisconnectionTime: cache.New(1*time.Second, 1*time.Minute),
 	}
 
 	ipAddr := prysmnetwork.IPAddr()
@@ -251,6 +262,7 @@ func (s *Service) Start() {
 			"inboundTCP":  inboundTCPCount,
 			"outboundTCP": outboundTCPCount,
 			"total":       total,
+			"target":      s.cfg.MaxPeers,
 		}
 
 		if features.Get().EnableQUIC {
@@ -403,7 +415,10 @@ func (s *Service) pingPeersAndLogEnr() {
 	defer s.pingMethodLock.RUnlock()
 
 	localENR := s.dv5Listener.Self()
-	log.WithField("ENR", localENR).Info("New node record")
+	log.WithFields(logrus.Fields{
+		"ENR": localENR,
+		"seq": localENR.Seq(),
+	}).Info("New node record")
 
 	if s.pingMethod == nil {
 		return
@@ -481,14 +496,17 @@ func (s *Service) connectWithPeer(ctx context.Context, info peer.AddrInfo) error
 	if info.ID == s.host.ID() {
 		return nil
 	}
+
 	if err := s.Peers().IsBad(info.ID); err != nil {
-		return errors.Wrap(err, "refused to connect to bad peer")
+		return errors.Wrap(err, "bad peer")
 	}
+
 	ctx, cancel := context.WithTimeout(ctx, maxDialTimeout)
 	defer cancel()
+
 	if err := s.host.Connect(ctx, info); err != nil {
-		s.Peers().Scorers().BadResponsesScorer().Increment(info.ID)
-		return err
+		s.downscorePeer(info.ID, "connectionError")
+		return errors.Wrap(err, "peer connect")
 	}
 	return nil
 }
@@ -518,4 +536,9 @@ func (s *Service) connectToBootnodes() error {
 // required for discovery and pubsub validation.
 func (s *Service) isInitialized() bool {
 	return !s.genesisTime.IsZero() && len(s.genesisValidatorsRoot) == 32
+}
+
+func (s *Service) downscorePeer(peerID peer.ID, reason string) {
+	newScore := s.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }

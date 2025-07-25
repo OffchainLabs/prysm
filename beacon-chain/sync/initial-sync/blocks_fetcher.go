@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
@@ -82,7 +81,6 @@ type blocksFetcherConfig struct {
 	dcs                      filesystem.DataColumnStorageSummarizer
 	bv                       verification.NewBlobVerifier
 	cv                       verification.NewDataColumnsVerifier
-	custodyInfo              *peerdas.CustodyInfo
 }
 
 // blocksFetcher is a service to fetch chain data from peers.
@@ -110,7 +108,6 @@ type blocksFetcher struct {
 	capacityWeight  float64       // how remaining capacity affects peer selection
 	mode            syncMode      // allows to use fetcher in different sync scenarios
 	quit            chan struct{} // termination notifier
-	custodyInfo     *peerdas.CustodyInfo
 }
 
 // peerLock restricts fetcher actions on per peer basis. Currently, used for rate limiting.
@@ -182,7 +179,6 @@ func newBlocksFetcher(ctx context.Context, cfg *blocksFetcherConfig) *blocksFetc
 		capacityWeight:  capacityWeight,
 		mode:            cfg.mode,
 		quit:            make(chan struct{}),
-		custodyInfo:     cfg.custodyInfo,
 	}
 }
 
@@ -356,6 +352,7 @@ func (f *blocksFetcher) handleRequest(ctx context.Context, start primitives.Slot
 // It mutates `Blobs` and `Columns` fields of `response.bwb` with fetched sidecars.
 func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []peer.ID, bwScs []blocks.BlockWithROSidecars) (peer.ID, error) {
 	const batchSize = 32
+	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 
 	// Find the first block with a slot greater than or equal to the first Fulu slot.
 	// (Blocks are sorted by slot.)
@@ -395,8 +392,9 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []
 	}
 
 	// Fetch data column sidecars.
-	actualGroupCount := f.custodyInfo.ActualGroupCount()
-	fetchedDataColumnsByRoot, err := prysmsync.RequestMissingDataColumnsByRange(ctx, f.clock, f.ctxMap, f.p2p, f.rateLimiter, actualGroupCount, f.dcs, dataColumnBlocks, batchSize)
+	custodyGroupCount := f.p2p.CustodyGroupCount()
+	samplingSize := max(custodyGroupCount, samplesPerSlot)
+	fetchedDataColumnsByRoot, err := prysmsync.RequestMissingDataColumnsByRange(ctx, f.clock, f.ctxMap, f.p2p, f.rateLimiter, samplingSize, f.dcs, dataColumnBlocks, batchSize)
 	if err != nil {
 		return blobsPid, errors.Wrap(err, "fetch missing data columns from peers")
 	}

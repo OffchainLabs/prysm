@@ -16,7 +16,6 @@ import (
 
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
@@ -157,27 +156,27 @@ func TestCreateLocalNode(t *testing.T) {
 	}{
 		{
 			name:          "valid config",
-			cfg:           &Config{CustodyInfo: &peerdas.CustodyInfo{}},
+			cfg:           &Config{},
 			expectedError: false,
 		},
 		{
 			name:          "invalid host address",
-			cfg:           &Config{HostAddress: "invalid", CustodyInfo: &peerdas.CustodyInfo{}},
+			cfg:           &Config{HostAddress: "invalid"},
 			expectedError: true,
 		},
 		{
 			name:          "valid host address",
-			cfg:           &Config{HostAddress: "192.168.0.1", CustodyInfo: &peerdas.CustodyInfo{}},
+			cfg:           &Config{HostAddress: "192.168.0.1"},
 			expectedError: false,
 		},
 		{
 			name:          "invalid host DNS",
-			cfg:           &Config{HostDNS: "invalid", CustodyInfo: &peerdas.CustodyInfo{}},
+			cfg:           &Config{HostDNS: "invalid"},
 			expectedError: true,
 		},
 		{
 			name:          "valid host DNS",
-			cfg:           &Config{HostDNS: "www.google.com", CustodyInfo: &peerdas.CustodyInfo{}},
+			cfg:           &Config{HostDNS: "www.google.com"},
 			expectedError: false,
 		},
 	}
@@ -199,6 +198,7 @@ func TestCreateLocalNode(t *testing.T) {
 				genesisTime:           time.Now(),
 				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 				cfg:                   tt.cfg,
+				custodyGroupCount:     params.BeaconConfig().CustodyRequirement,
 			}
 
 			localNode, err := service.createLocalNode(privKey, address, udpPort, tcpPort, quicPort)
@@ -210,7 +210,7 @@ func TestCreateLocalNode(t *testing.T) {
 			require.NoError(t, err)
 
 			expectedAddress := address
-			if tt.cfg.HostAddress != "" {
+			if tt.cfg != nil && tt.cfg.HostAddress != "" {
 				expectedAddress = net.ParseIP(tt.cfg.HostAddress)
 			}
 
@@ -264,6 +264,7 @@ func TestRebootDiscoveryListener(t *testing.T) {
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		cfg:                   &Config{UDPPort: uint(port)},
 	}
+
 	createListener := func() (*discover.UDPv5, error) {
 		return s.createListener(ipAddr, pkey)
 	}
@@ -293,6 +294,7 @@ func TestMultiAddrsConversion_InvalidIPAddr(t *testing.T) {
 	s := &Service{
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+		cfg:                   &Config{},
 	}
 	node, err := s.createLocalNode(pkey, addr, 0, 0, 0)
 	require.NoError(t, err)
@@ -323,16 +325,16 @@ func TestMultiAddrConversion_OK(t *testing.T) {
 }
 
 func TestStaticPeering_PeersAreAdded(t *testing.T) {
+	const port = uint(6000)
 	cs := startup.NewClockSynchronizer()
 	cfg := &Config{
 		MaxPeers:    30,
 		ClockWaiter: cs,
 	}
-	port := 6000
 	var staticPeers []string
 	var hosts []host.Host
 	// setup other nodes
-	for i := 1; i <= 5; i++ {
+	for i := uint(1); i <= 5; i++ {
 		h, _, ipaddr := createHost(t, port+i)
 		staticPeers = append(staticPeers, fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s", ipaddr, port+i, h.ID()))
 		hosts = append(hosts, h)
@@ -370,14 +372,17 @@ func TestStaticPeering_PeersAreAdded(t *testing.T) {
 }
 
 func TestHostIsResolved(t *testing.T) {
-	// ip.addr.tools - construct domain names that resolve to any given IP address
-	// ex: 192-0-2-1.ip.addr.tools resolves to 192.0.2.1.
-	exampleHost := "96-7-129-13.ip.addr.tools"
-	exampleIP := "96.7.129.13"
+	host := "dns.google"
+	ips := map[string]bool{
+		"8.8.8.8":              true,
+		"8.8.4.4":              true,
+		"2001:4860:4860::8888": true,
+		"2001:4860:4860::8844": true,
+	}
 
 	s := &Service{
 		cfg: &Config{
-			HostDNS: exampleHost,
+			HostDNS: host,
 		},
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
@@ -387,7 +392,7 @@ func TestHostIsResolved(t *testing.T) {
 	require.NoError(t, err)
 
 	newIP := list.Self().IP()
-	assert.Equal(t, exampleIP, newIP.String(), "Did not resolve to expected IP")
+	assert.Equal(t, true, ips[newIP.String()], "Did not resolve to expected IP")
 }
 
 func TestInboundPeerLimit(t *testing.T) {
@@ -406,14 +411,14 @@ func TestInboundPeerLimit(t *testing.T) {
 		_ = addPeer(t, s.peers, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED), false)
 	}
 
-	require.Equal(t, true, s.isPeerAtLimit(false), "not at limit for outbound peers")
-	require.Equal(t, false, s.isPeerAtLimit(true), "at limit for inbound peers")
+	require.Equal(t, true, s.isPeerAtLimit(all), "not at limit for outbound peers")
+	require.Equal(t, false, s.isPeerAtLimit(inbound), "at limit for inbound peers")
 
 	for i := 0; i < highWatermarkBuffer; i++ {
 		_ = addPeer(t, s.peers, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED), false)
 	}
 
-	require.Equal(t, true, s.isPeerAtLimit(true), "not at limit for inbound peers")
+	require.Equal(t, true, s.isPeerAtLimit(inbound), "not at limit for inbound peers")
 }
 
 func TestOutboundPeerThreshold(t *testing.T) {
@@ -490,6 +495,35 @@ func TestMultipleDiscoveryAddresses(t *testing.T) {
 	}
 	assert.Equal(t, true, ipv4Found, "IPv4 discovery address not found")
 	assert.Equal(t, true, ipv6Found, "IPv6 discovery address not found")
+}
+
+func TestDiscoveryV5_SeqNumber(t *testing.T) {
+	db, err := enode.OpenDB(t.TempDir())
+	require.NoError(t, err)
+	_, key := createAddrAndPrivKey(t)
+	node := enode.NewLocalNode(db, key)
+	node.Set(enr.IPv4{127, 0, 0, 1})
+	currentSeq := node.Seq()
+	s := &Service{dv5Listener: mockListener{localNode: node}}
+	_, err = s.DiscoveryAddresses()
+	require.NoError(t, err)
+	newSeq := node.Seq()
+	require.Equal(t, currentSeq+1, newSeq) // node seq should increase when discovery starts
+
+	// see that the keys changing, will change the node seq
+	_, keyTwo := createAddrAndPrivKey(t)
+	nodeTwo := enode.NewLocalNode(db, keyTwo) // use the same db with different key
+	nodeTwo.Set(enr.IPv6{0x20, 0x01, 0x48, 0x60, 0, 0, 0x20, 0x01, 0, 0, 0, 0, 0, 0, 0x00, 0x68})
+	seqTwo := nodeTwo.Seq()
+	assert.NotEqual(t, seqTwo, newSeq)
+	sTwo := &Service{dv5Listener: mockListener{localNode: nodeTwo}}
+	_, err = sTwo.DiscoveryAddresses()
+	require.NoError(t, err)
+	assert.Equal(t, seqTwo+1, nodeTwo.Seq())
+
+	// see that reloading the same node with same key and db results in same seq number
+	nodeThree := enode.NewLocalNode(db, key)
+	assert.Equal(t, node.Seq(), nodeThree.Seq())
 }
 
 func TestCorrectUDPVersion(t *testing.T) {
@@ -784,10 +818,11 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 					actualPingCount++
 					return nil
 				},
-				cfg:                   &Config{UDPPort: 2000, CustodyInfo: &peerdas.CustodyInfo{}},
+				cfg:                   &Config{UDPPort: 2000},
 				peers:                 p2p.Peers(),
 				genesisTime:           time.Now().Add(-time.Duration(tc.epochSinceGenesis*secondsPerEpoch) * time.Second),
 				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+				custodyGroupCount:     params.BeaconConfig().CustodyRequirement,
 			}
 
 			// Set the listener and the metadata.
