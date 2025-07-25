@@ -74,5 +74,6 @@ var (
 	// Custody
 	custodyBucket              = []byte("custody")
 	groupCountKey              = []byte("group-count")
+	earliestAvailableSlotKey   = []byte("earliest-available-slot")
 	subscribeAllDataSubnetsKey = []byte("subscribe-all-data-subnets")
 )

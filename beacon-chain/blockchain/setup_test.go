@@ -101,22 +101,33 @@ var _ p2p.Broadcaster = (*mockBroadcaster)(nil)
 
 // mockDataColumnsHandler is a mock implementation of p2p.DataColumnsHandler
 type mockDataColumnsHandler struct {
-	mut sync.RWMutex
-	cgc uint64
+	mut                   sync.RWMutex
+	earliestAvailableSlot primitives.Slot
+	custodyGroupCount     uint64
+}
+
+func (dch *mockDataColumnsHandler) EarliestAvailableSlot() primitives.Slot {
+	dch.mut.RLock()
+	defer dch.mut.RUnlock()
+
+	return dch.earliestAvailableSlot
 }
 
 func (dch *mockDataColumnsHandler) CustodyGroupCount() uint64 {
 	dch.mut.RLock()
 	defer dch.mut.RUnlock()
 
-	return dch.cgc
+	return dch.custodyGroupCount
 }
 
-func (dch *mockDataColumnsHandler) SetCustodyGroupCount(cgc uint64) {
+func (dch *mockDataColumnsHandler) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
 	dch.mut.Lock()
 	defer dch.mut.Unlock()
 
-	dch.cgc = cgc
+	dch.earliestAvailableSlot = earliestAvailableSlot
+	dch.custodyGroupCount = custodyGroupCount
+
+	return earliestAvailableSlot, custodyGroupCount, nil
 }
 
 func (dch *mockDataColumnsHandler) CustodyGroupCountFromPeer(peer.ID) uint64 {

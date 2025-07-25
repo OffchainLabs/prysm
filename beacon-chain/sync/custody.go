@@ -7,6 +7,8 @@ import (
 	"github.com/OffchainLabs/prysm/v6/async"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -39,6 +41,23 @@ func (s *Service) validatorsCustodyRequirement() (uint64, error) {
 	return result, nil
 }
 
+// custodyGroupCount computes the custody group count based on the custody requirement,
+// the validators custody requirement, and whether the node is subscribed to all data subnets.
+func (s *Service) custodyGroupCount() (uint64, error) {
+	beaconConfig := params.BeaconConfig()
+
+	if flags.Get().SubscribeAllDataSubnets {
+		return beaconConfig.NumberOfCustodyGroups, nil
+	}
+
+	validatorsCustodyRequirement, err := s.validatorsCustodyRequirement()
+	if err != nil {
+		return 0, errors.Wrap(err, "validators custody requirement")
+	}
+
+	return max(beaconConfig.CustodyRequirement, validatorsCustodyRequirement), nil
+}
+
 func (s *Service) maintainCustodyGroupCount() {
 	const (
 		interval         = 1 * time.Minute
@@ -46,6 +65,12 @@ func (s *Service) maintainCustodyGroupCount() {
 	)
 
 	async.RunEvery(s.ctx, interval, func() {
+		custodyGroupCount, err := s.custodyGroupCount()
+		if err != nil {
+			log.WithError(err).Error("Could not compute custody group count")
+			return
+		}
+
 		// Check that all subscribed data column sidecars topics have at least `minimumPeerCount` peers.
 		topics := s.cfg.p2p.PubSub().GetTopics()
 		enoughPeers := true
@@ -69,23 +94,29 @@ func (s *Service) maintainCustodyGroupCount() {
 			return
 		}
 
-		// Compute the validators custody requirement.
-		validatorsCustodyRequirement, err := s.validatorsCustodyRequirement()
+		headROBlock, err := s.cfg.chain.HeadBlock(s.ctx)
 		if err != nil {
-			log.WithError(err).Error("Could not retrieve validators custody requirement")
+			log.WithError(err).Error("Could not retrieve head block")
+			return
+		}
+		headSlot := headROBlock.Block().Slot()
+
+		earliestSlot, storedGroupCount, err := s.cfg.p2p.UpdateCustodyInfo(headSlot, custodyGroupCount)
+		if err != nil {
+			log.WithError(err).Error("Could not update custody info")
 			return
 		}
 
-		currentCustodyGroupCount := s.cfg.p2p.CustodyGroupCount()
-
-		custodyGroupCount := max(currentCustodyGroupCount, validatorsCustodyRequirement)
-		if custodyGroupCount == currentCustodyGroupCount {
-			// No change needed, return early.
+		if storedGroupCount >= custodyGroupCount {
 			return
 		}
 
 		// Update the custody group count in the P2P service and the database.
-		s.cfg.p2p.SetCustodyGroupCount(custodyGroupCount)
+		if _, _, err := s.cfg.p2p.UpdateCustodyInfo(earliestSlot, storedGroupCount); err != nil {
+			log.WithError(err).Error("Could not update custody info")
+			return
+		}
+
 		if err := s.cfg.beaconDB.SaveCustodyGroupCount(s.ctx, custodyGroupCount); err != nil {
 			log.WithError(err).Error("Could not save custody group count")
 			return

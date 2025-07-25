@@ -3,26 +3,66 @@ package p2p
 import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
 var _ DataColumnsHandler = (*Service)(nil)
 
+// EarliestAvailableSlot returns the earliest available slot.
+func (s *Service) EarliestAvailableSlot() primitives.Slot {
+	s.custodyInfoMut.RLock()
+	defer s.custodyInfoMut.RUnlock()
+
+	return s.earliestAvailableSlot
+}
+
 // CustodyGroupCount returns the custody group count.
 func (s *Service) CustodyGroupCount() uint64 {
-	s.custodyGroupCountMut.Lock()
-	defer s.custodyGroupCountMut.Unlock()
+	s.custodyInfoMut.Lock()
+	defer s.custodyInfoMut.Unlock()
+
 	return s.custodyGroupCount
 }
 
-func (s *Service) SetCustodyGroupCount(custodyGroupCount uint64) {
-	s.custodyGroupCountMut.Lock()
-	defer s.custodyGroupCountMut.Unlock()
+// UdpateCustodyInfo updates the custody group count and earliest available slot
+// if the new custody group count is greater than the stored one.
+// It returns the (potentially updated) earliest available slot and custody group count.
+func (s *Service) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
+	s.custodyInfoMut.Lock()
+	defer s.custodyInfoMut.Unlock()
 
-	log.WithField("value", custodyGroupCount).Debug("Custody group count updated")
+	if custodyGroupCount <= s.custodyGroupCount {
+		return s.earliestAvailableSlot, s.custodyGroupCount, nil
+	}
+
+	if earliestAvailableSlot < s.earliestAvailableSlot {
+		return 0, 0, errors.Errorf(
+			"earliest available slot %d is less than the current one %d. (custody group count: %d, current one: %d)",
+			earliestAvailableSlot, s.earliestAvailableSlot, custodyGroupCount, s.custodyGroupCount,
+		)
+	}
 
 	s.custodyGroupCount = custodyGroupCount
+
+	fuluForkSlot, err := fuluForkSlot()
+	if err != nil {
+		return 0, 0, errors.Wrap(err, "fulu fork slot")
+	}
+
+	if earliestAvailableSlot >= fuluForkSlot {
+		s.earliestAvailableSlot = earliestAvailableSlot
+	}
+
+	log.WithFields(logrus.Fields{
+		"earliestAvailableSlot": s.earliestAvailableSlot,
+		"custodyGroupCount":     s.custodyGroupCount,
+	}).Debug("Custody info updated")
+
+	return s.earliestAvailableSlot, s.custodyGroupCount, nil
 }
 
 // CustodyGroupCountFromPeer retrieves custody group count from a peer.
@@ -87,4 +127,20 @@ func (s *Service) custodyGroupCountFromPeerENR(pid peer.ID) uint64 {
 	}
 
 	return custodyGroupCount
+}
+
+func fuluForkSlot() (primitives.Slot, error) {
+	beaconConfig := params.BeaconConfig()
+
+	fuluForkEpoch := beaconConfig.FuluForkEpoch
+	if fuluForkEpoch == beaconConfig.FarFutureEpoch {
+		return beaconConfig.FarFutureSlot, nil
+	}
+
+	forkFuluSlot, err := slots.EpochStart(fuluForkEpoch)
+	if err != nil {
+		return 0, errors.Wrap(err, "epoch start")
+	}
+
+	return forkFuluSlot, nil
 }
