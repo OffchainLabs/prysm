@@ -436,7 +436,7 @@ func (s *Service) updateSubnetRecordWithMetadataV3(
 
 // saveMetaDataIfNeeded saves the metadata to the file if the static peer ID flag is set.
 func (s *Service) saveMetaDataIfNeeded() {
-	if s.cfg.StaticPeerID {
+	if s.cfg.StaticPeerID || params.FuluEnabled() {
 		mdPath, exist, err := resolveMetaDataPath(s.cfg)
 		if err != nil {
 			log.WithError(err).Error("Could not resolve p2p metadata path")

@@ -138,8 +138,10 @@ func metaDataFromConfig(cfg *Config) (metadata.Metadata, error) {
 	}
 	wrappedDefaultMd := wrapper.WrappedMetadataV0(defaultMd)
 
-	// For not using static peer ID, return default metadata for initialization
-	if !cfg.StaticPeerID {
+	// Return default metadata for initialization if
+	// 1. Node is not using static peer ID, and
+	// 2. Fulu is not enabled.
+	if !cfg.StaticPeerID && !params.FuluEnabled() {
 		return wrappedDefaultMd, nil
 	}
 
