@@ -703,7 +703,7 @@ func (m *SyncCommitteeMessage) ToConsensus() (*eth.SyncCommitteeMessage, error) 
 	// Add validation to check if the signature is valid BLS format
 	_, err = bls.SignatureFromBytes(sig)
 	if err != nil {
-		return nil, server.NewDecodeError(errors.New("Invalid Signature"), "Signature")
+		return nil, server.NewDecodeError(err, "Signature")
 	}
 
 	return &eth.SyncCommitteeMessage{
