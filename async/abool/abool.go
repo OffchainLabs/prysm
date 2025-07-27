@@ -55,7 +55,7 @@ func (ab *AtomicBool) SetTo(yes bool) {
 
 // Toggle inverts the Boolean then returns the value before inverting.
 func (ab *AtomicBool) Toggle() bool {
-	return atomic.AddInt32((*int32)(ab), 1)&1 == 0
+	return atomic.AddInt32((*int32)(ab), 1)&1 == 1
 }
 
 // SetToIf sets the Boolean to new only if the Boolean matches the old.
