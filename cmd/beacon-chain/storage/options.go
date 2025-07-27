@@ -2,6 +2,7 @@ package storage
 
 import (
 	"path"
+	"slices"
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
@@ -44,10 +45,8 @@ func layoutFlagUsage() string {
 }
 
 func validateLayoutFlag(_ *cli.Context, v string) error {
-	for _, l := range filesystem.LayoutNames {
-		if v == l {
-			return nil
-		}
+	if slices.Contains(filesystem.LayoutNames, v) {
+		return nil
 	}
 	return errors.Errorf("invalid value '%s' for flag --%s, %s", v, BlobStorageLayout.Name, layoutOptions())
 }
