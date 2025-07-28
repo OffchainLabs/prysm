@@ -327,6 +327,16 @@ func (s *Service) executePostFinalizationTasks(ctx context.Context, finalizedSta
 				log.Debugf("Saved light client bootstrap for finalized root %#x", finalized.Root)
 			}
 		}()
+
+		// Clean up the light client store caches
+		go func() {
+			err := s.lcStore.MigrateToCold(s.ctx, finalized.Root)
+			if err != nil {
+				log.WithError(err).Error("Could not migrate light client store to cold storage")
+			} else {
+				log.Debugf("Migrated light client store to cold storage for finalized root %#x", finalized.Root)
+			}
+		}()
 	}
 }
 

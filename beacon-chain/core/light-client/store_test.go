@@ -1,12 +1,18 @@
 package light_client
 
 import (
+	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/async/event"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	p2pTesting "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
@@ -97,7 +103,7 @@ func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 	p2p.BroadcastCalled.Store(false) // Reset for next test
 
 	// update 2 with same finality slot, increased attested slot, and supermajority - should save and broadcast
-	l2 := util.NewTestLightClient(t, version.Altair, util.WithIncreasedAttestedSlot(2), util.WithSupermajority())
+	l2 := util.NewTestLightClient(t, version.Altair, util.WithIncreasedAttestedSlot(2), util.WithSupermajority(0))
 	update2, err := NewLightClientFinalityUpdateFromBeaconState(l2.Ctx, l2.State, l2.Block, l2.AttestedState, l2.AttestedBlock, l2.FinalizedBlock)
 	require.NoError(t, err, "Failed to create light client finality update")
 
@@ -111,7 +117,7 @@ func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 	p2p.BroadcastCalled.Store(false) // Reset for next test
 
 	// update 3 with same finality slot, increased attested slot, and supermajority - should save but not broadcast
-	l3 := util.NewTestLightClient(t, version.Altair, util.WithIncreasedAttestedSlot(3), util.WithSupermajority())
+	l3 := util.NewTestLightClient(t, version.Altair, util.WithIncreasedAttestedSlot(3), util.WithSupermajority(0))
 	update3, err := NewLightClientFinalityUpdateFromBeaconState(l3.Ctx, l3.State, l3.Block, l3.AttestedState, l3.AttestedBlock, l3.FinalizedBlock)
 	require.NoError(t, err, "Failed to create light client finality update")
 
@@ -124,7 +130,7 @@ func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 	require.Equal(t, false, p2p.BroadcastCalled.Load(), "Broadcast should not have been when previous was already broadcast")
 
 	// update 4 with increased finality slot, increased attested slot, and supermajority - should save and broadcast
-	l4 := util.NewTestLightClient(t, version.Altair, util.WithIncreasedFinalizedSlot(1), util.WithIncreasedAttestedSlot(1), util.WithSupermajority())
+	l4 := util.NewTestLightClient(t, version.Altair, util.WithIncreasedFinalizedSlot(1), util.WithIncreasedAttestedSlot(1), util.WithSupermajority(0))
 	update4, err := NewLightClientFinalityUpdateFromBeaconState(l4.Ctx, l4.State, l4.Block, l4.AttestedState, l4.AttestedBlock, l4.FinalizedBlock)
 	require.NoError(t, err, "Failed to create light client finality update")
 
@@ -138,7 +144,7 @@ func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 	p2p.BroadcastCalled.Store(false) // Reset for next test
 
 	// update 5 with the same new finality slot, increased attested slot, and supermajority - should save but not broadcast
-	l5 := util.NewTestLightClient(t, version.Altair, util.WithIncreasedFinalizedSlot(1), util.WithIncreasedAttestedSlot(2), util.WithSupermajority())
+	l5 := util.NewTestLightClient(t, version.Altair, util.WithIncreasedFinalizedSlot(1), util.WithIncreasedAttestedSlot(2), util.WithSupermajority(0))
 	update5, err := NewLightClientFinalityUpdateFromBeaconState(l5.Ctx, l5.State, l5.Block, l5.AttestedState, l5.AttestedBlock, l5.FinalizedBlock)
 	require.NoError(t, err, "Failed to create light client finality update")
 
@@ -165,7 +171,6 @@ func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 }
 
 func TestLightClientStore_SaveLCData(t *testing.T) {
-
 	t.Run("no parent in cache or db - new is head", func(t *testing.T) {
 		db := testDB.SetupDB(t)
 		s := NewLightClientStore(db, &p2pTesting.FakeP2P{}, new(event.Feed))
@@ -239,7 +244,7 @@ func TestLightClientStore_SaveLCData(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, db.SaveLightClientUpdate(l.Ctx, period, update), "Failed to save light client update in db")
 
-		l2 := util.NewTestLightClient(t, version.Altair, util.WithIncreasedAttestedSlot(1), util.WithSupermajority()) // updates from this setup should be all better
+		l2 := util.NewTestLightClient(t, version.Altair, util.WithIncreasedAttestedSlot(1), util.WithSupermajority(0)) // updates from this setup should be all better
 		// make the new block the head
 		blkRoot, err := l2.Block.Block().HashTreeRoot()
 		require.NoError(t, err)
@@ -269,7 +274,7 @@ func TestLightClientStore_SaveLCData(t *testing.T) {
 		require.NotNil(t, s)
 
 		l := util.NewTestLightClient(t, version.Altair)
-		l2 := util.NewTestLightClient(t, version.Altair, util.WithIncreasedAttestedSlot(1), util.WithSupermajority()) // updates from this setup should be all better
+		l2 := util.NewTestLightClient(t, version.Altair, util.WithIncreasedAttestedSlot(1), util.WithSupermajority(0)) // updates from this setup should be all better
 
 		// save the cache item for this period in cache
 		period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedBlock.Block().Slot()))
@@ -314,7 +319,7 @@ func TestLightClientStore_SaveLCData(t *testing.T) {
 		require.NotNil(t, s)
 
 		l := util.NewTestLightClient(t, version.Altair)
-		l2 := util.NewTestLightClient(t, version.Bellatrix, util.WithIncreasedAttestedSlot(1), util.WithSupermajority()) // updates from this setup should be all better
+		l2 := util.NewTestLightClient(t, version.Bellatrix, util.WithIncreasedAttestedSlot(1), util.WithSupermajority(0)) // updates from this setup should be all better
 
 		// save the cache item for this period1 in cache
 		period1 := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedBlock.Block().Slot()))
@@ -352,4 +357,372 @@ func TestLightClientStore_SaveLCData(t *testing.T) {
 		require.DeepEqual(t, update, *s.nonFinalityCache.items[attstedBlkRoot].bestUpdate, "Expected to find the update in the non-finality cache")
 		require.DeepEqual(t, finalityUpdate, *s.nonFinalityCache.items[attstedBlkRoot].bestFinalityUpdate, "Expected to find the finality update in the non-finality cache")
 	})
+}
+
+func TestLightClientStore_MigrateToCold(t *testing.T) {
+	// This tests the scenario where chain advances but the cache is empty.
+	// It should see that there is nothing in the cache to migrate and just update the tail to the new finalized root.
+	t.Run("empty cache", func(t *testing.T) {
+		beaconDB := testDB.SetupDB(t)
+		ctx := context.Background()
+
+		finalizedBlockRoot := saveInitialFinalizedCheckpointData(t, ctx, beaconDB)
+
+		s := NewLightClientStore(beaconDB, &p2pTesting.FakeP2P{}, new(event.Feed))
+		require.NotNil(t, s)
+
+		require.DeepSSZEqual(t, finalizedBlockRoot, s.nonFinalityCache.tail)
+
+		for i := 0; i < 3; i++ {
+			newBlock := util.NewBeaconBlock()
+			newBlock.Block.Slot = primitives.Slot(32 + uint64(i))
+			newBlock.Block.ParentRoot = finalizedBlockRoot[:]
+			signedNewBlock, err := blocks.NewSignedBeaconBlock(newBlock)
+			require.NoError(t, err)
+			blockRoot, err := signedNewBlock.Block().HashTreeRoot()
+			require.NoError(t, err)
+			require.NoError(t, beaconDB.SaveBlock(ctx, signedNewBlock))
+			finalizedBlockRoot = blockRoot
+		}
+
+		err := s.MigrateToCold(ctx, finalizedBlockRoot)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(s.nonFinalityCache.items))
+		require.DeepSSZEqual(t, finalizedBlockRoot, s.nonFinalityCache.tail)
+	})
+
+	// This tests the scenario where chain advances but the CANONICAL cache is empty.
+	// It should see that there is nothing in the canonical cache to migrate and just update the tail to the new finalized root AND delete anything non-canonical.
+	t.Run("non canonical cache", func(t *testing.T) {
+		beaconDB := testDB.SetupDB(t)
+		ctx := context.Background()
+
+		finalizedBlockRoot := saveInitialFinalizedCheckpointData(t, ctx, beaconDB)
+
+		s := NewLightClientStore(beaconDB, &p2pTesting.FakeP2P{}, new(event.Feed))
+		require.NotNil(t, s)
+
+		require.DeepSSZEqual(t, finalizedBlockRoot, s.nonFinalityCache.tail)
+
+		for i := 0; i < 3; i++ {
+			newBlock := util.NewBeaconBlock()
+			newBlock.Block.Slot = primitives.Slot(32 + uint64(i))
+			newBlock.Block.ParentRoot = finalizedBlockRoot[:]
+			signedNewBlock, err := blocks.NewSignedBeaconBlock(newBlock)
+			require.NoError(t, err)
+			blockRoot, err := signedNewBlock.Block().HashTreeRoot()
+			require.NoError(t, err)
+			require.NoError(t, beaconDB.SaveBlock(ctx, signedNewBlock))
+			finalizedBlockRoot = blockRoot
+		}
+
+		// Add a non-canonical item to the cache
+		cacheItem := &lightClientCacheItem{
+			period: 0,
+			slot:   33,
+		}
+		nonCanonicalBlockRoot := [32]byte{1, 2, 3, 4}
+		s.nonFinalityCache.items[nonCanonicalBlockRoot] = cacheItem
+
+		require.Equal(t, 1, len(s.nonFinalityCache.items))
+
+		err := s.MigrateToCold(ctx, finalizedBlockRoot)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(s.nonFinalityCache.items), "Expected the non-canonical item in the cache to be deleted")
+		require.DeepSSZEqual(t, finalizedBlockRoot, s.nonFinalityCache.tail)
+	})
+
+	// db has update - cache has both canonical and non-canonical items. finalized height is higher than all.
+	// should update the update in db and delete cache.
+	t.Run("mixed cache - finality higher than cache", func(t *testing.T) {
+		beaconDB := testDB.SetupDB(t)
+		ctx := context.Background()
+
+		finalizedBlockRoot := saveInitialFinalizedCheckpointData(t, ctx, beaconDB)
+		require.NoError(t, beaconDB.SaveHeadBlockRoot(ctx, finalizedBlockRoot))
+
+		s := NewLightClientStore(beaconDB, &p2pTesting.FakeP2P{}, new(event.Feed))
+		require.NotNil(t, s)
+
+		require.DeepSSZEqual(t, finalizedBlockRoot, s.nonFinalityCache.tail)
+
+		// Save an update for this period in db
+		l := util.NewTestLightClient(t, version.Altair)
+		update, err := NewLightClientUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+		require.NoError(t, err)
+		period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedBlock.Block().Slot()))
+		require.NoError(t, beaconDB.SaveLightClientUpdate(ctx, period, update))
+
+		lastBlockRoot := finalizedBlockRoot
+		lastSlot := primitives.Slot(32)
+		lastUpdate := update
+		for i := 1; i < 4; i++ {
+			l = util.NewTestLightClient(t, version.Altair, util.WithIncreasedAttestedSlot(uint64(i)), util.WithSupermajority(0))
+			require.NoError(t, beaconDB.SaveBlock(ctx, l.Block))
+			require.NoError(t, s.SaveLCData(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock))
+			root, err := l.Block.Block().HashTreeRoot()
+			require.NoError(t, err)
+			lastBlockRoot = root
+			lastSlot = l.Block.Block().Slot()
+			update, err = NewLightClientUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+			require.NoError(t, err)
+			lastUpdate = update
+		}
+
+		require.Equal(t, 3, len(s.nonFinalityCache.items))
+
+		newBlock := util.NewBeaconBlock()
+		newBlock.Block.Slot = lastSlot.Add(1)
+		newBlock.Block.ParentRoot = lastBlockRoot[:]
+		signedNewBlock, err := blocks.NewSignedBeaconBlock(newBlock)
+		require.NoError(t, err)
+		blockRoot, err := signedNewBlock.Block().HashTreeRoot()
+		require.NoError(t, err)
+		require.NoError(t, beaconDB.SaveBlock(ctx, signedNewBlock))
+		finalizedBlockRoot = blockRoot
+
+		// Add a non-canonical item to the cache
+		cacheItem := &lightClientCacheItem{
+			period: 0,
+			slot:   33,
+		}
+		nonCanonicalBlockRoot := [32]byte{1, 2, 3, 4}
+		s.nonFinalityCache.items[nonCanonicalBlockRoot] = cacheItem
+
+		require.Equal(t, 4, len(s.nonFinalityCache.items))
+
+		err = s.MigrateToCold(ctx, finalizedBlockRoot)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(s.nonFinalityCache.items), "Expected the non-canonical item in the cache to be deleted")
+		require.DeepSSZEqual(t, finalizedBlockRoot, s.nonFinalityCache.tail)
+		u, err := beaconDB.LightClientUpdate(ctx, period)
+		require.NoError(t, err)
+		require.NotNil(t, u)
+		require.DeepEqual(t, lastUpdate, u)
+	})
+
+	// db has update - cache has both canonical and non-canonical items. finalized height is in the middle.
+	// should update the update in db and delete items in cache before finalized slot.
+	t.Run("mixed cache - finality middle of cache", func(t *testing.T) {
+		beaconDB := testDB.SetupDB(t)
+		ctx := context.Background()
+
+		finalizedBlockRoot := saveInitialFinalizedCheckpointData(t, ctx, beaconDB)
+		require.NoError(t, beaconDB.SaveHeadBlockRoot(ctx, finalizedBlockRoot))
+
+		s := NewLightClientStore(beaconDB, &p2pTesting.FakeP2P{}, new(event.Feed))
+		require.NotNil(t, s)
+
+		require.DeepSSZEqual(t, finalizedBlockRoot, s.nonFinalityCache.tail)
+
+		// Save an update for this period in db
+		l := util.NewTestLightClient(t, version.Altair)
+		update, err := NewLightClientUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+		require.NoError(t, err)
+		period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedBlock.Block().Slot()))
+		require.NoError(t, beaconDB.SaveLightClientUpdate(ctx, period, update))
+
+		lastBlockRoot := finalizedBlockRoot
+		lastSlot := primitives.Slot(32)
+		lastUpdate := update
+		lastAttestedRoot := [32]byte{}
+		for i := 1; i < 4; i++ {
+			l = util.NewTestLightClient(t, version.Altair, util.WithIncreasedAttestedSlot(uint64(i)), util.WithSupermajority(uint64(i)), util.WithAttestedParentRoot(lastAttestedRoot))
+			require.NoError(t, beaconDB.SaveBlock(ctx, l.Block))
+			require.NoError(t, s.SaveLCData(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock))
+			root, err := l.Block.Block().HashTreeRoot()
+			require.NoError(t, err)
+			lastBlockRoot = root
+			lastSlot = l.Block.Block().Slot()
+			update, err = NewLightClientUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+			require.NoError(t, err)
+			lastUpdate = update
+			lastAttestedRoot, err = l.AttestedBlock.Block().HashTreeRoot()
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, 3, len(s.nonFinalityCache.items))
+
+		newBlock := util.NewBeaconBlock()
+		newBlock.Block.Slot = lastSlot.Add(1)
+		newBlock.Block.ParentRoot = lastBlockRoot[:]
+		signedNewBlock, err := blocks.NewSignedBeaconBlock(newBlock)
+		require.NoError(t, err)
+		blockRoot, err := signedNewBlock.Block().HashTreeRoot()
+		require.NoError(t, err)
+		require.NoError(t, beaconDB.SaveBlock(ctx, signedNewBlock))
+		finalizedBlockRoot = blockRoot
+
+		// Add a non-canonical item to the cache
+		cacheItem := &lightClientCacheItem{
+			period: 0,
+			slot:   33,
+		}
+		nonCanonicalBlockRoot := [32]byte{1, 2, 3, 4}
+		s.nonFinalityCache.items[nonCanonicalBlockRoot] = cacheItem
+
+		require.Equal(t, 4, len(s.nonFinalityCache.items))
+
+		for i := 4; i < 7; i++ {
+			l = util.NewTestLightClient(t, version.Altair, util.WithIncreasedAttestedSlot(uint64(i)), util.WithSupermajority(0), util.WithAttestedParentRoot(lastAttestedRoot))
+			require.NoError(t, beaconDB.SaveBlock(ctx, l.Block))
+			require.NoError(t, s.SaveLCData(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock))
+			lastAttestedRoot, err = l.AttestedBlock.Block().HashTreeRoot()
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, 7, len(s.nonFinalityCache.items))
+
+		err = s.MigrateToCold(ctx, finalizedBlockRoot)
+		require.NoError(t, err)
+		require.Equal(t, 3, len(s.nonFinalityCache.items), "Expected the non-canonical item in the cache to be deleted")
+		require.DeepSSZEqual(t, finalizedBlockRoot, s.nonFinalityCache.tail)
+		u, err := beaconDB.LightClientUpdate(ctx, period)
+		require.NoError(t, err)
+		require.NotNil(t, u)
+		require.DeepEqual(t, lastUpdate, u)
+	})
+
+	// we have multiple periods in the cache before finalization happens. we expect all of them to be saved in db.
+	t.Run("finality after multiple periods in cache", func(t *testing.T) {
+		beaconDB := testDB.SetupDB(t)
+		ctx := context.Background()
+
+		cfg := params.BeaconConfig().Copy()
+		cfg.EpochsPerSyncCommitteePeriod = 1
+		params.OverrideBeaconConfig(cfg)
+
+		finalizedBlockRoot := saveInitialFinalizedCheckpointData(t, ctx, beaconDB)
+		require.NoError(t, beaconDB.SaveHeadBlockRoot(ctx, finalizedBlockRoot))
+
+		s := NewLightClientStore(beaconDB, &p2pTesting.FakeP2P{}, new(event.Feed))
+		require.NotNil(t, s)
+
+		require.DeepSSZEqual(t, finalizedBlockRoot, s.nonFinalityCache.tail)
+
+		// Save an update for this period1 in db
+		l := util.NewTestLightClient(t, version.Altair)
+		update, err := NewLightClientUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+		require.NoError(t, err)
+		period1 := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedBlock.Block().Slot()))
+		require.NoError(t, beaconDB.SaveLightClientUpdate(ctx, period1, update))
+
+		lastBlockRoot := finalizedBlockRoot
+		lastSlot := primitives.Slot(32)
+		lastUpdatePeriod1 := update
+		lastAttestedRoot := [32]byte{}
+		for i := 1; i < 4; i++ {
+			l = util.NewTestLightClient(t, version.Altair, util.WithIncreasedAttestedSlot(uint64(i)), util.WithSupermajority(uint64(i)), util.WithAttestedParentRoot(lastAttestedRoot))
+			require.NoError(t, beaconDB.SaveBlock(ctx, l.Block))
+			require.NoError(t, s.SaveLCData(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock))
+			root, err := l.Block.Block().HashTreeRoot()
+			require.NoError(t, err)
+			lastBlockRoot = root
+			lastSlot = l.Block.Block().Slot()
+			lastUpdatePeriod1, err = NewLightClientUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+			require.NoError(t, err)
+			lastAttestedRoot, err = l.AttestedBlock.Block().HashTreeRoot()
+			require.NoError(t, err)
+		}
+
+		period2 := period1
+		var lastUpdatePeriod2 interfaces.LightClientUpdate
+		for i := 1; i < 4; i++ {
+			l = util.NewTestLightClient(t, version.Altair, util.WithIncreasedAttestedSlot(uint64(i)+33), util.WithSupermajority(uint64(i)), util.WithAttestedParentRoot(lastAttestedRoot))
+			require.NoError(t, beaconDB.SaveBlock(ctx, l.Block))
+			require.NoError(t, s.SaveLCData(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock))
+			root, err := l.Block.Block().HashTreeRoot()
+			require.NoError(t, err)
+			lastBlockRoot = root
+			lastSlot = l.Block.Block().Slot()
+			lastUpdatePeriod2, err = NewLightClientUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+			require.NoError(t, err)
+			lastAttestedRoot, err = l.AttestedBlock.Block().HashTreeRoot()
+			require.NoError(t, err)
+			period2 = slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedBlock.Block().Slot()))
+		}
+
+		require.Equal(t, 6, len(s.nonFinalityCache.items))
+
+		newBlock := util.NewBeaconBlock()
+		newBlock.Block.Slot = lastSlot.Add(1)
+		newBlock.Block.ParentRoot = lastBlockRoot[:]
+		signedNewBlock, err := blocks.NewSignedBeaconBlock(newBlock)
+		require.NoError(t, err)
+		blockRoot, err := signedNewBlock.Block().HashTreeRoot()
+		require.NoError(t, err)
+		require.NoError(t, beaconDB.SaveBlock(ctx, signedNewBlock))
+		finalizedBlockRoot = blockRoot
+
+		// Add a non-canonical item to the cache
+		cacheItem := &lightClientCacheItem{
+			period: 0,
+			slot:   33,
+		}
+		nonCanonicalBlockRoot := [32]byte{1, 2, 3, 4}
+		s.nonFinalityCache.items[nonCanonicalBlockRoot] = cacheItem
+
+		require.Equal(t, 7, len(s.nonFinalityCache.items))
+
+		for i := 4; i < 7; i++ {
+			l = util.NewTestLightClient(t, version.Altair, util.WithIncreasedAttestedSlot(uint64(i)+33), util.WithSupermajority(0), util.WithAttestedParentRoot(lastAttestedRoot))
+			require.NoError(t, beaconDB.SaveBlock(ctx, l.Block))
+			require.NoError(t, s.SaveLCData(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock))
+			lastAttestedRoot, err = l.AttestedBlock.Block().HashTreeRoot()
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, 10, len(s.nonFinalityCache.items))
+
+		err = s.MigrateToCold(ctx, finalizedBlockRoot)
+		require.NoError(t, err)
+		require.Equal(t, 3, len(s.nonFinalityCache.items), "Expected the non-canonical item in the cache to be deleted")
+		require.DeepSSZEqual(t, finalizedBlockRoot, s.nonFinalityCache.tail)
+		u, err := beaconDB.LightClientUpdate(ctx, period2)
+		require.NoError(t, err)
+		require.NotNil(t, u)
+		require.DeepEqual(t, lastUpdatePeriod2, u)
+		u, err = beaconDB.LightClientUpdate(ctx, period1)
+		require.NoError(t, err)
+		require.NotNil(t, u)
+		require.DeepEqual(t, lastUpdatePeriod1, u)
+	})
+}
+
+func saveInitialFinalizedCheckpointData(t *testing.T, ctx context.Context, beaconDB db.Database) [32]byte {
+	genesis := util.NewBeaconBlock()
+	genesisRoot, err := genesis.Block.HashTreeRoot()
+	require.NoError(t, err)
+	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, genesisRoot))
+	util.SaveBlock(t, ctx, beaconDB, genesis)
+	genesisState, err := util.NewBeaconState()
+	require.NoError(t, err)
+	require.NoError(t, beaconDB.SaveState(ctx, genesisState, genesisRoot))
+
+	finalizedState, err := util.NewBeaconState()
+	require.NoError(t, err)
+	finalizedBlock := util.NewBeaconBlock()
+	finalizedBlock.Block.Slot = 32
+	finalizedBlock.Block.ParentRoot = genesisRoot[:]
+	signedFinalizedBlock, err := blocks.NewSignedBeaconBlock(finalizedBlock)
+	require.NoError(t, err)
+	finalizedBlockHeader, err := signedFinalizedBlock.Header()
+	require.NoError(t, err)
+	require.NoError(t, finalizedState.SetLatestBlockHeader(finalizedBlockHeader.Header))
+	finalizedStateRoot, err := finalizedState.HashTreeRoot(ctx)
+	require.NoError(t, err)
+	finalizedBlock.Block.StateRoot = finalizedStateRoot[:]
+	signedFinalizedBlock, err = blocks.NewSignedBeaconBlock(finalizedBlock)
+	require.NoError(t, err)
+	finalizedBlockRoot, err := signedFinalizedBlock.Block().HashTreeRoot()
+	require.NoError(t, err)
+	cp := ethpb.Checkpoint{
+		Epoch: 1,
+		Root:  finalizedBlockRoot[:],
+	}
+	require.NoError(t, beaconDB.SaveBlock(ctx, signedFinalizedBlock))
+	require.NoError(t, beaconDB.SaveState(ctx, finalizedState, finalizedBlockRoot))
+	require.NoError(t, beaconDB.SaveFinalizedCheckpoint(ctx, &cp))
+
+	return finalizedBlockRoot
 }

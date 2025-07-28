@@ -331,3 +331,87 @@ func (s *Store) LastOptimisticUpdate() interfaces.LightClientOptimisticUpdate {
 	defer s.mu.RUnlock()
 	return s.lastOptimisticUpdate
 }
+
+func (s *Store) MigrateToCold(ctx context.Context, root [32]byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if len(s.nonFinalityCache.items) == 0 {
+		log.Debug("Non-finality cache is empty. Skipping migration.")
+		s.nonFinalityCache.tail = root
+		return nil
+	}
+
+	blk, err := s.beaconDB.Block(ctx, root)
+	if err != nil {
+		return errors.Wrapf(err, "failed to fetch block for finalized root %x", root)
+	}
+	if blk == nil {
+		return errors.Errorf("failed to fetch block for finalized root %x", root)
+	}
+	cpSlot := blk.Block().Slot()
+	headRoot := blk.Block().ParentRoot()
+
+	var headItem *lightClientCacheItem
+	var ok bool
+
+	for {
+		if headRoot == s.nonFinalityCache.tail || headRoot == [32]byte{} {
+			log.Debug("Did not find any canonical item in the non-finality cache. Skipping migration.")
+			s.nonFinalityCache.tail = root
+
+			// delete non-finality cache items older than checkpoint slot
+			for k, v := range s.nonFinalityCache.items {
+				if v.slot < cpSlot {
+					delete(s.nonFinalityCache.items, k)
+				}
+			}
+
+			return nil
+		}
+
+		headItem, ok = s.nonFinalityCache.items[headRoot]
+		if ok {
+			break
+		} else {
+			blk, err = s.beaconDB.Block(ctx, headRoot)
+			if err != nil {
+				return errors.Wrapf(err, "failed to fetch block for root %x", headRoot)
+			}
+			if blk == nil {
+				return errors.Errorf("failed to fetch block for root %x", headRoot)
+			}
+			headRoot = blk.Block().ParentRoot()
+		}
+	}
+
+	updateByPeriod := make(map[uint64]interfaces.LightClientUpdate)
+	for headItem != nil {
+		if _, ok := updateByPeriod[headItem.period]; ok {
+			// We already have an update for this period, skip this item
+			headItem = headItem.parent
+			continue
+		}
+		updateByPeriod[headItem.period] = *headItem.bestUpdate
+		headItem = headItem.parent
+	}
+
+	// save updates to db
+	for period, update := range updateByPeriod {
+		err = s.beaconDB.SaveLightClientUpdate(ctx, period, update)
+		if err != nil {
+			return errors.Wrapf(err, "failed to save light client update for period %d", period)
+		}
+	}
+
+	// delete non-finality cache items
+	for k, v := range s.nonFinalityCache.items {
+		if v.slot < cpSlot {
+			delete(s.nonFinalityCache.items, k)
+		}
+	}
+
+	s.nonFinalityCache.tail = root
+
+	return nil
+}

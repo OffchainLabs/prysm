@@ -219,12 +219,12 @@ func TestValidateLightClientFinalityUpdate(t *testing.T) {
 		{
 			name:             "new update is better - supermajority",
 			oldUpdateOptions: []util.LightClientOption{},
-			newUpdateOptions: []util.LightClientOption{util.WithSupermajority()},
+			newUpdateOptions: []util.LightClientOption{util.WithSupermajority(0)},
 			expectedResult:   pubsub.ValidationAccept,
 		},
 		{
 			name:             "old update is better - supermajority",
-			oldUpdateOptions: []util.LightClientOption{util.WithSupermajority()},
+			oldUpdateOptions: []util.LightClientOption{util.WithSupermajority(0)},
 			newUpdateOptions: []util.LightClientOption{},
 			expectedResult:   pubsub.ValidationIgnore,
 		},

@@ -19,7 +19,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filters"
 	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
 	mockExecution "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing"
@@ -3141,7 +3140,7 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 		{
 			name:          "Same age",
 			oldOptions:    []util.LightClientOption{},
-			newOptions:    []util.LightClientOption{util.WithSupermajority()}, // supermajority does not matter here and is only added to result in two different updates
+			newOptions:    []util.LightClientOption{util.WithSupermajority(0)}, // supermajority does not matter here and is only added to result in two different updates
 			expectReplace: false,
 		},
 		{
@@ -3372,46 +3371,4 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 			})
 		}
 	}
-}
-
-func TestBS(t *testing.T) {
-	featCfg := &features.Flags{}
-	featCfg.EnableLightClient = true
-	reset := features.InitWithReset(featCfg)
-	defer reset()
-
-	s, tr := minimalTestService(t, WithLCStore())
-	ctx := tr.ctx
-
-	require.NoError(t, s.cfg.BeaconDB.SaveGenesisBlockRoot(ctx, [32]byte{1, 2, 3, 4, 5}))
-	roots := make([][32]byte, 0, 10)
-	parentRoot := [32]byte{}
-	for i := 1; i <= 32; i++ {
-		blk := util.NewBeaconBlock()
-		blk.Block.Slot = primitives.Slot(i)
-		blk.Block.ParentRoot = parentRoot[:]
-		signedBlk, err := consensusblocks.NewSignedBeaconBlock(blk)
-		require.NoError(t, err)
-		require.NoError(t, s.cfg.BeaconDB.SaveBlock(ctx, signedBlk), "Could not save block %d", i)
-		parentRoot, err = blk.Block.HashTreeRoot()
-		require.NoError(t, err)
-		roots = append(roots, parentRoot)
-	}
-
-	for i := 1; i <= 32; i++ {
-		z, r, err := s.cfg.BeaconDB.BlockRootsBySlot(ctx, primitives.Slot(i))
-		require.Equal(t, true, z)
-		require.NoError(t, err)
-		require.Equal(t, 1, len(r), "Expected one block root for slot %d", i)
-		require.DeepSSZEqual(t, roots[i], r[0], "Expected block root for slot %d to be %x, got %x", i, roots[i-5], r[0])
-	}
-
-	filter := filters.NewFilter().SetStartSlot(5).SetEndSlot(11)
-	rs, err := s.cfg.BeaconDB.BlockRoots(ctx, filter)
-	require.NoError(t, err)
-	require.Equal(t, 7, len(rs), "Expected 7 block roots, got %d", len(rs))
-	for i := 0; i < len(rs); i++ {
-		require.Equal(t, roots[i], rs[i], "Expected block root %d to be %x, got %x", i+5, roots[i], rs[i])
-	}
-
 }

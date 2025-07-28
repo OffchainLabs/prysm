@@ -712,7 +712,7 @@ func TestSubscribe_ReceivesLCOptimisticUpdate(t *testing.T) {
 
 	r.markForChainStart()
 
-	l := util.NewTestLightClient(t, version.Altair, util.WithSupermajority())
+	l := util.NewTestLightClient(t, version.Altair, util.WithSupermajority(0))
 	update, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock)
 	require.NoError(t, err, "Error generating light client optimistic update")
 
@@ -779,7 +779,7 @@ func TestSubscribe_ReceivesLCFinalityUpdate(t *testing.T) {
 
 	r.markForChainStart()
 
-	l := util.NewTestLightClient(t, version.Altair, util.WithSupermajority())
+	l := util.NewTestLightClient(t, version.Altair, util.WithSupermajority(0))
 	update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 	require.NoError(t, err, "Error generating light client finality update")
 
