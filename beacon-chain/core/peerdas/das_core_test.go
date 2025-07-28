@@ -17,8 +17,8 @@ func TestCustodyGroups(t *testing.T) {
 	// --------------------------------------------
 	// The happy path is unit tested in spec tests.
 	// --------------------------------------------
-	numberOfCustodyGroup := params.BeaconConfig().NumberOfCustodyGroups
-	_, err := peerdas.CustodyGroups(enode.ID{}, numberOfCustodyGroup+1)
+	numberOfCustodyGroups := params.BeaconConfig().NumberOfCustodyGroups
+	_, err := peerdas.CustodyGroups(enode.ID{}, numberOfCustodyGroups+1)
 	require.ErrorIs(t, err, peerdas.ErrCustodyGroupCountTooLarge)
 }
 
@@ -26,8 +26,8 @@ func TestComputeColumnsForCustodyGroup(t *testing.T) {
 	// --------------------------------------------
 	// The happy path is unit tested in spec tests.
 	// --------------------------------------------
-	numberOfCustodyGroup := params.BeaconConfig().NumberOfCustodyGroups
-	_, err := peerdas.ComputeColumnsForCustodyGroup(numberOfCustodyGroup)
+	numberOfCustodyGroups := params.BeaconConfig().NumberOfCustodyGroups
+	_, err := peerdas.ComputeColumnsForCustodyGroup(numberOfCustodyGroups)
 	require.ErrorIs(t, err, peerdas.ErrCustodyGroupTooLarge)
 }
 
