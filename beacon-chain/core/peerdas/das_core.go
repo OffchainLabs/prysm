@@ -41,17 +41,17 @@ const (
 // CustodyGroups computes the custody groups the node should participate in for custody.
 // https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/das-core.md#get_custody_groups
 func CustodyGroups(nodeId enode.ID, custodyGroupCount uint64) ([]uint64, error) {
-	numberOfCustodyGroup := params.BeaconConfig().NumberOfCustodyGroups
+	numberOfCustodyGroups := params.BeaconConfig().NumberOfCustodyGroups
 
 	// Check if the custody group count is larger than the number of custody groups.
-	if custodyGroupCount > numberOfCustodyGroup {
+	if custodyGroupCount > numberOfCustodyGroups {
 		return nil, ErrCustodyGroupCountTooLarge
 	}
 
 	// Shortcut if all custody groups are needed.
-	if custodyGroupCount == numberOfCustodyGroup {
-		custodyGroups := make([]uint64, 0, numberOfCustodyGroup)
-		for i := range numberOfCustodyGroup {
+	if custodyGroupCount == numberOfCustodyGroups {
+		custodyGroups := make([]uint64, 0, numberOfCustodyGroups)
+		for i := range numberOfCustodyGroups {
 			custodyGroups = append(custodyGroups, i)
 		}
 
@@ -73,7 +73,7 @@ func CustodyGroups(nodeId enode.ID, custodyGroupCount uint64) ([]uint64, error) 
 		hashedCurrentId := hash.Hash(currentIdBytesLittleEndian)
 
 		// Get the custody group ID.
-		custodyGroup := binary.LittleEndian.Uint64(hashedCurrentId[:8]) % numberOfCustodyGroup
+		custodyGroup := binary.LittleEndian.Uint64(hashedCurrentId[:8]) % numberOfCustodyGroups
 
 		// Add the custody group to the map.
 		if !custodyGroupsMap[custodyGroup] {
@@ -88,15 +88,15 @@ func CustodyGroups(nodeId enode.ID, custodyGroupCount uint64) ([]uint64, error) 
 			// Increment the current ID.
 			currentId.Add(currentId, one)
 		}
-
-		// Sort the custody groups.
-		slices.Sort[[]uint64](custodyGroups)
 	}
 
 	// Final check.
 	if uint64(len(custodyGroups)) != custodyGroupCount {
 		return nil, errWrongComputedCustodyGroupCount
 	}
+
+	// Sort the custody groups.
+	slices.Sort[[]uint64](custodyGroups)
 
 	return custodyGroups, nil
 }
@@ -105,19 +105,19 @@ func CustodyGroups(nodeId enode.ID, custodyGroupCount uint64) ([]uint64, error) 
 // https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/das-core.md#compute_columns_for_custody_group
 func ComputeColumnsForCustodyGroup(custodyGroup uint64) ([]uint64, error) {
 	beaconConfig := params.BeaconConfig()
-	numberOfCustodyGroup := beaconConfig.NumberOfCustodyGroups
+	numberOfCustodyGroups := beaconConfig.NumberOfCustodyGroups
 
-	if custodyGroup >= numberOfCustodyGroup {
+	if custodyGroup >= numberOfCustodyGroups {
 		return nil, ErrCustodyGroupTooLarge
 	}
 
 	numberOfColumns := beaconConfig.NumberOfColumns
 
-	columnsPerGroup := numberOfColumns / numberOfCustodyGroup
+	columnsPerGroup := numberOfColumns / numberOfCustodyGroups
 
 	columns := make([]uint64, 0, columnsPerGroup)
 	for i := range columnsPerGroup {
-		column := numberOfCustodyGroup*i + custodyGroup
+		column := numberOfCustodyGroups*i + custodyGroup
 		columns = append(columns, column)
 	}
 
@@ -127,7 +127,7 @@ func ComputeColumnsForCustodyGroup(custodyGroup uint64) ([]uint64, error) {
 // DataColumnSidecars computes the data column sidecars from the signed block, cells and cell proofs.
 // The returned value contains pointers to function parameters.
 // (If the caller alterates `cellsAndProofs` afterwards, the returned value will be modified as well.)
-// https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.3/specs/fulu/das-core.md#get_data_column_sidecars
+// https://github.com/ethereum/consensus-specs/blob/v1.6.0-alpha.3/specs/fulu/validator.md#get_data_column_sidecars_from_block
 func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, cellsAndProofs []kzg.CellsAndProofs) ([]*ethpb.DataColumnSidecar, error) {
 	if signedBlock == nil || signedBlock.IsNil() || len(cellsAndProofs) == 0 {
 		return nil, nil
@@ -151,7 +151,7 @@ func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, cellsA
 
 	kzgCommitmentsInclusionProof, err := blocks.MerkleProofKZGCommitments(blockBody)
 	if err != nil {
-		return nil, errors.Wrap(err, "merkle proof ZKG commitments")
+		return nil, errors.Wrap(err, "merkle proof KZG commitments")
 	}
 
 	dataColumnSidecars, err := dataColumnsSidecars(signedBlockHeader, blobKzgCommitments, kzgCommitmentsInclusionProof, cellsAndProofs)
@@ -219,6 +219,7 @@ func CustodyColumns(custodyGroups []uint64) (map[uint64]bool, error) {
 // the KZG commitment includion proofs and cells and cell proofs.
 // The returned value contains pointers to function parameters.
 // (If the caller alterates input parameters afterwards, the returned value will be modified as well.)
+// https://github.com/ethereum/consensus-specs/blob/v1.6.0-alpha.3/specs/fulu/validator.md#get_data_column_sidecars
 func dataColumnsSidecars(
 	signedBlockHeader *ethpb.SignedBeaconBlockHeader,
 	blobKzgCommitments [][]byte,
