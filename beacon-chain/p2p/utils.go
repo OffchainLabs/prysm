@@ -147,26 +147,28 @@ func metaDataFromConfig(cfg *Config) (metadata.Metadata, error) {
 
 	mdPath, exist, err := resolveMetaDataPath(cfg)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("resolve metadata path: %w", err)
 	}
 
-	if exist {
-		md, err := metaDataFromFile(mdPath)
-		if err != nil {
-			if errors.Is(err, errUnexpectedMetadataSize) {
-				// In case previous metadata file is encoded by proto,
-				// we need to migrate it into ssz encoded version.
-				return migrateFromProtoToSsz(mdPath)
-			}
-			return nil, err
+	if !exist {
+		if err := saveMetaDataToFile(mdPath, wrappedDefaultMd); err != nil {
+			return nil, fmt.Errorf("saving default metadata to file %s: %w", mdPath, err)
 		}
-		return md, err
-	}
-	if err := saveMetaDataToFile(mdPath, wrappedDefaultMd); err != nil {
-		return nil, err
+
+		return wrappedDefaultMd, nil
 	}
 
-	return wrappedDefaultMd, nil
+	md, err := metaDataFromFile(mdPath)
+	if err != nil {
+		if errors.Is(err, errUnexpectedMetadataSize) {
+			// In case previous metadata file is encoded by proto,
+			// we need to migrate it into ssz encoded version.
+			return migrateFromProtoToSsz(mdPath)
+		}
+		return nil, fmt.Errorf("reading metadata from file %s: %w", mdPath, err)
+	}
+
+	return md, nil
 }
 
 // resolveMetaDataPath returns path and the existence of that path.
@@ -188,7 +190,7 @@ func resolveMetaDataPath(cfg *Config) (string, bool, error) {
 func metaDataFromFile(path string) (metadata.Metadata, error) {
 	src, err := file.ReadFileAsBytes(path)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error reading metadata from file %s", path)
+		return nil, fmt.Errorf("reading metadata from file %s: %w", path, err)
 	}
 
 	var md metadata.Metadata
@@ -218,7 +220,7 @@ func metaDataFromFile(path string) (metadata.Metadata, error) {
 	}
 
 	if unmarshalErr != nil {
-		return nil, errors.Wrap(unmarshalErr, "error unmarshalling metadata from file")
+		return nil, fmt.Errorf("unmarshalling metadata from file %s: %w", path, unmarshalErr)
 	}
 
 	return md, nil
@@ -228,11 +230,11 @@ func metaDataFromFile(path string) (metadata.Metadata, error) {
 func saveMetaDataToFile(path string, metadata metadata.Metadata) error {
 	enc, err := metadata.MarshalSSZ()
 	if err != nil {
-		return errors.Wrap(err, "error marshalling metadata to SSZ")
+		return fmt.Errorf("marshalling metadata to SSZ: %w", err)
 	}
 
 	if err := file.WriteFile(path, enc); err != nil {
-		return errors.Wrapf(err, "error writing metadata to file %s", path)
+		return fmt.Errorf("writing metadata to file %s: %w", path, err)
 	}
 	return nil
 }
@@ -243,12 +245,12 @@ func saveMetaDataToFile(path string, metadata metadata.Metadata) error {
 func migrateFromProtoToSsz(path string) (metadata.Metadata, error) {
 	src, err := file.ReadFileAsBytes(path)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error reading metadata from file %s", path)
+		return nil, fmt.Errorf("reading metadata from file %s: %w", path, err)
 	}
 
 	md := &pb.MetaDataV0{}
 	if err := proto.Unmarshal(src, md); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unmarshalling metadata from file %s: %w", path, err)
 	}
 	wrappedMd := wrapper.WrappedMetadataV0(md)
 
@@ -260,7 +262,7 @@ func migrateFromProtoToSsz(path string) (metadata.Metadata, error) {
 	wrappedMd = wrapper.WrappedMetadataV0(newMd)
 
 	if err = saveMetaDataToFile(path, wrappedMd); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("saving migrated metadata to file %s: %w", path, err)
 	}
 	return wrappedMd, nil
 }
