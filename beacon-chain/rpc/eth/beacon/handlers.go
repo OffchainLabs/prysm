@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
@@ -658,6 +659,12 @@ func (s *Server) PublishBlock(w http.ResponseWriter, r *http.Request) {
 // broadcast all given signed blobs. The broadcast behaviour may be adjusted via the
 // `broadcast_validation` query parameter.
 func (s *Server) PublishBlockV2(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	defer func() {
+		duration := time.Since(start).Milliseconds()
+		publishBlockV2Duration.Observe(float64(duration))
+	}()
+
 	ctx, span := trace.StartSpan(r.Context(), "beacon.PublishBlockV2")
 	defer span.End()
 	if shared.IsSyncing(r.Context(), w, s.SyncChecker, s.HeadFetcher, s.TimeFetcher, s.OptimisticModeFetcher) {
