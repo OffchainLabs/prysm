@@ -1,0 +1,2 @@
+### Added
+- Add optional `--use-hashtree` flag to beacon-chain and validator clients for using the hashtree library instead of gohashtree for vectorized SHA-256 merkle tree hashing. The hashtree library provides optimized assembly implementations for x86_64 and ARM64 architectures without CGO overhead.

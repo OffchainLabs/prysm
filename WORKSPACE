@@ -415,6 +415,10 @@ load("@prysm//third_party/herumi:herumi.bzl", "bls_dependencies")
 
 bls_dependencies()
 
+load("@prysm//third_party/hashtree:hashtree.bzl", "hashtree_dependencies")
+
+hashtree_dependencies()
+
 load("@prysm//testing/endtoend:deps.bzl", "e2e_deps")
 
 e2e_deps()

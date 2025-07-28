@@ -25,6 +25,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/config/proposer"
 	"github.com/OffchainLabs/prysm/v6/config/proposer/loader"
+	"github.com/OffchainLabs/prysm/v6/crypto/hash/htr"
 	"github.com/OffchainLabs/prysm/v6/io/file"
 	"github.com/OffchainLabs/prysm/v6/monitoring/prometheus"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
@@ -73,6 +74,14 @@ func NewValidatorClient(cliCtx *cli.Context) (*ValidatorClient, error) {
 		cliCtx.Bool(cmd.EnableTracingFlag.Name),
 	); err != nil {
 		return nil, err
+	}
+
+	// Initialize hashtree library configuration based on feature flag
+	if features.Get().UseHashtree {
+		htr.SetUseHashtree(true)
+		log.Info("Using hashtree library for vectorized SHA-256 hashing")
+	} else {
+		log.Info("Using gohashtree library for vectorized SHA-256 hashing")
 	}
 
 	verbosity := cliCtx.String(cmd.VerbosityFlag.Name)

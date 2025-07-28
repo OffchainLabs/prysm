@@ -902,6 +902,8 @@ github.com/prysmaticlabs/go-bitfield v0.0.0-20240328144219-a1caa50c3a1e h1:ATgOe
 github.com/prysmaticlabs/go-bitfield v0.0.0-20240328144219-a1caa50c3a1e/go.mod h1:wmuf/mdK4VMD+jA9ThwcUKjg3a2XWM9cVfFYjDyY4j4=
 github.com/prysmaticlabs/gohashtree v0.0.4-beta.0.20240624100937-73632381301b h1:VK7thFOnhxAZ/5aolr5Os4beiubuD08WiuiHyRqgwks=
 github.com/prysmaticlabs/gohashtree v0.0.4-beta.0.20240624100937-73632381301b/go.mod h1:HRuvtXLZ4WkaB1MItToVH2e8ZwKwZPY5/Rcby+CvvLY=
+github.com/prysmaticlabs/hashtree v0.2.0 h1:vMBmqDmW9G7RYEc/Fv7OYnt9vCl8SYgDB2qQlm8Uj+k=
+github.com/prysmaticlabs/hashtree v0.2.0/go.mod h1:8eJvdNI+eWfxzaCYVQ6EEMuBGx+kn3rMTaUI7aAVlCY=
 github.com/prysmaticlabs/prombbolt v0.0.0-20210126082820-9b7adba6db7c h1:9PHRCuO/VN0s9k+RmLykho7AjDxblNYI5bYKed16NPU=
 github.com/prysmaticlabs/prombbolt v0.0.0-20210126082820-9b7adba6db7c/go.mod h1:ZRws458tYHS/Zs936OQ6oCrL+Ict5O4Xpwve1UQ6C9M=
 github.com/prysmaticlabs/protoc-gen-go-cast v0.0.0-20230228205207-28762a7b9294 h1:q9wE0ZZRdTUAAeyFP/w0SwBEnCqlVy2+on6X2/e+eAU=

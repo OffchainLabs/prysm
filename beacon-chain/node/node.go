@@ -62,6 +62,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/container/slice"
+	"github.com/OffchainLabs/prysm/v6/crypto/hash/htr"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/monitoring/prometheus"
 	"github.com/OffchainLabs/prysm/v6/runtime"
@@ -136,6 +137,14 @@ type BeaconNode struct {
 func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*BeaconNode, error) {
 	if err := configureBeacon(cliCtx); err != nil {
 		return nil, errors.Wrap(err, "could not set beacon configuration options")
+	}
+
+	// Initialize hashtree library configuration based on feature flag
+	if features.Get().UseHashtree {
+		htr.SetUseHashtree(true)
+		log.Info("Using hashtree library for vectorized SHA-256 hashing")
+	} else {
+		log.Info("Using gohashtree library for vectorized SHA-256 hashing")
 	}
 
 	// Initializes any forks here.

@@ -197,6 +197,13 @@ var (
 		Usage: "(Work in progress): Enables the web portal for the validator client.",
 		Value: false,
 	}
+
+	// UseHashtreeFlag enables using the hashtree library instead of gohashtree for vectorized hashing.
+	UseHashtreeFlag = &cli.BoolFlag{
+		Name:  "use-hashtree",
+		Usage: "Uses the hashtree library instead of gohashtree for vectorized SHA-256 merkle tree hashing.",
+		Value: false,
+	}
 )
 
 // devModeFlags holds list of flags that are set when development mode is on.
@@ -219,6 +226,7 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	EnableBeaconRESTApi,
 	DisableDutiesV2,
 	EnableWebFlag,
+	UseHashtreeFlag,
 }...)
 
 // E2EValidatorFlags contains a list of the validator feature flags to be tested in E2E.
@@ -257,6 +265,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	enableExperimentalAttestationPool,
 	forceHeadFlag,
 	blacklistRoots,
+	UseHashtreeFlag,
 }, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
 
 func combinedFlags(flags ...[]cli.Flag) []cli.Flag {

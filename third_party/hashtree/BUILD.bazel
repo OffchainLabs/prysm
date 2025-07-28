@@ -1,0 +1,12 @@
+# Alias to the hashtree library from the external repository
+alias(
+    name = "hashtree",
+    actual = "@offchainlabs_hashtree//:hashtree",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "go_default_library",
+    actual = "@offchainlabs_hashtree//:hashtree",
+    visibility = ["//visibility:public"],
+)
