@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
 	"github.com/OffchainLabs/prysm/v6/crypto/hash"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/io/file"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -35,6 +37,8 @@ var (
 	syncCommsSubnetEnrKey   = params.BeaconNetworkConfig().SyncCommsSubnetKey
 	custodyGroupCountEnrKey = params.BeaconNetworkConfig().CustodyGroupCountKey
 )
+
+const errSavingMetadata = "saving metadata after updating subnets: %w"
 
 // The value used with the subnet, in order
 // to create an appropriate key to retrieve
@@ -377,21 +381,27 @@ func (s *Service) hasPeerWithSubnet(subnetTopic string) bool {
 // with a new value for a bitfield of subnets tracked. It also updates
 // the node's metadata by increasing the sequence number and the
 // subnets tracked by the node.
-func (s *Service) updateSubnetRecordWithMetadata(bitV bitfield.Bitvector64) {
+func (s *Service) updateSubnetRecordWithMetadata(bitV bitfield.Bitvector64) error {
 	entry := enr.WithEntry(attSubnetEnrKey, &bitV)
 	s.dv5Listener.LocalNode().Set(entry)
 	s.metaData = wrapper.WrappedMetadataV0(&pb.MetaDataV0{
 		SeqNumber: s.metaData.SequenceNumber() + 1,
 		Attnets:   bitV,
 	})
-	s.saveMetaDataIfNeeded()
+
+	err := s.saveMetaDataIfNeeded()
+	if err != nil {
+		return fmt.Errorf(errSavingMetadata, err)
+	}
+
+	return nil
 }
 
 // Updates the service's discv5 listener record's attestation subnet
 // with a new value for a bitfield of subnets tracked. It also record's
 // the sync committee subnet in the enr. It also updates the node's
 // metadata by increasing the sequence number and the subnets tracked by the node.
-func (s *Service) updateSubnetRecordWithMetadataV2(bitVAtt bitfield.Bitvector64, bitVSync bitfield.Bitvector4) {
+func (s *Service) updateSubnetRecordWithMetadataV2(bitVAtt bitfield.Bitvector64, bitVSync bitfield.Bitvector4) error {
 	entry := enr.WithEntry(attSubnetEnrKey, &bitVAtt)
 	subEntry := enr.WithEntry(syncCommsSubnetEnrKey, &bitVSync)
 	s.dv5Listener.LocalNode().Set(entry)
@@ -401,7 +411,13 @@ func (s *Service) updateSubnetRecordWithMetadataV2(bitVAtt bitfield.Bitvector64,
 		Attnets:   bitVAtt,
 		Syncnets:  bitVSync,
 	})
-	s.saveMetaDataIfNeeded()
+
+	err := s.saveMetaDataIfNeeded()
+	if err != nil {
+		return fmt.Errorf(errSavingMetadata, err)
+	}
+
+	return nil
 }
 
 // updateSubnetRecordWithMetadataV3 updates:
@@ -413,7 +429,7 @@ func (s *Service) updateSubnetRecordWithMetadataV3(
 	bitVAtt bitfield.Bitvector64,
 	bitVSync bitfield.Bitvector4,
 	custodyGroupCount uint64,
-) {
+) error {
 	attSubnetsEntry := enr.WithEntry(attSubnetEnrKey, &bitVAtt)
 	syncSubnetsEntry := enr.WithEntry(syncCommsSubnetEnrKey, &bitVSync)
 	custodyGroupCountEntry := enr.WithEntry(custodyGroupCountEnrKey, custodyGroupCount)
@@ -431,29 +447,42 @@ func (s *Service) updateSubnetRecordWithMetadataV3(
 		Syncnets:          bitVSync,
 		CustodyGroupCount: custodyGroupCount,
 	})
-	s.saveMetaDataIfNeeded()
+
+	err := s.saveMetaDataIfNeeded()
+	if err != nil {
+		return fmt.Errorf(errSavingMetadata, err)
+	}
+
+	return nil
 }
 
 // saveMetaDataIfNeeded saves the metadata to the file if the static peer ID flag is set.
-func (s *Service) saveMetaDataIfNeeded() {
+func (s *Service) saveMetaDataIfNeeded() error {
+	// Short-circuit if we don't need to save metadata.
 	if !(s.cfg.StaticPeerID || params.FuluEnabled()) {
-		return
+		return nil
 	}
 
-	mdPath, exist, err := resolveMetaDataPath(s.cfg)
+	// Resolve the metadata file path. If the path is not set, use the default one.
+	mdPath := s.cfg.MetaDataFile
+	if mdPath == "" {
+		mdPath = path.Join(s.cfg.DataDir, metaDataPath)
+	}
+
+	exists, err := file.Exists(mdPath, file.Regular)
 	if err != nil {
-		log.WithError(err).Error("Could not resolve p2p metadata path")
-		return
+		return fmt.Errorf("checking metadata file existence: %w", err)
 	}
 
-	if !exist {
-		return
+	if !exists {
+		return fmt.Errorf("metadata file %s does not exist", mdPath)
 	}
 
 	if err := saveMetaDataToFile(mdPath, s.Metadata()); err != nil {
-		log.WithError(err).Error("Could not save metadata to file")
-		return
+		return fmt.Errorf("saving metadata to file %s: %w", mdPath, err)
 	}
+
+	return nil
 }
 
 func initializePersistentSubnets(id enode.ID, epoch primitives.Epoch) error {

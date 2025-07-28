@@ -145,12 +145,18 @@ func metaDataFromConfig(cfg *Config) (metadata.Metadata, error) {
 		return wrappedDefaultMd, nil
 	}
 
-	mdPath, exist, err := resolveMetaDataPath(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("resolve metadata path: %w", err)
+	// Resolve the metadata file path. If the path is not set, use the default one.
+	mdPath := cfg.MetaDataFile
+	if mdPath == "" {
+		mdPath = path.Join(cfg.DataDir, metaDataPath)
 	}
 
-	if !exist {
+	exists, err := file.Exists(mdPath, file.Regular)
+	if err != nil {
+		return nil, fmt.Errorf("checking metadata file existence: %w", err)
+	}
+
+	if !exists {
 		if err := saveMetaDataToFile(mdPath, wrappedDefaultMd); err != nil {
 			return nil, fmt.Errorf("saving default metadata to file %s: %w", mdPath, err)
 		}
@@ -169,21 +175,6 @@ func metaDataFromConfig(cfg *Config) (metadata.Metadata, error) {
 	}
 
 	return md, nil
-}
-
-// resolveMetaDataPath returns path and the existence of that path.
-func resolveMetaDataPath(cfg *Config) (string, bool, error) {
-	mdPath := cfg.MetaDataFile
-	if mdPath == "" {
-		mdPath = path.Join(cfg.DataDir, metaDataPath)
-	}
-
-	// Return path and existence of the file.
-	exists, err := file.Exists(mdPath, file.Regular)
-	if err != nil {
-		return mdPath, false, err
-	}
-	return mdPath, exists, nil
 }
 
 // metaDataFromFile retrieves unmarshalled p2p metadata from file.
