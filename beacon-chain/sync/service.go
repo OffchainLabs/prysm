@@ -287,25 +287,33 @@ func (s *Service) Stop() error {
 		}
 	}()
 
-	// Say goodbye to all peers.
+	// Create context with timeout to prevent hanging
+	goodbyeCtx, cancel := context.WithTimeout(s.ctx, 10*time.Second)
+	defer cancel()
+
+	// Use WaitGroup to ensure all goodbye messages complete
+	var wg sync.WaitGroup
 	for _, peerID := range s.cfg.p2p.Peers().Connected() {
 		if s.cfg.p2p.Host().Network().Connectedness(peerID) == network.Connected {
-			if err := s.sendGoodByeAndDisconnect(s.ctx, p2ptypes.GoodbyeCodeClientShutdown, peerID); err != nil {
-				log.WithError(err).WithField("peerID", peerID).Error("Failed to send goodbye message")
-			}
+			wg.Add(1)
+			go func(pid peer.ID) {
+				defer wg.Done()
+				if err := s.sendGoodByeAndDisconnect(goodbyeCtx, p2ptypes.GoodbyeCodeClientShutdown, pid); err != nil {
+					log.WithError(err).WithField("peerID", pid).Error("Failed to send goodbye message")
+				}
+			}(peerID)
 		}
 	}
+	wg.Wait()
+	log.Debug("All goodbye messages sent successfully")
 
-	// Removing RPC Stream handlers.
+	// Now safe to remove handlers / unsubscribe.
 	for _, p := range s.cfg.p2p.Host().Mux().Protocols() {
 		s.cfg.p2p.Host().RemoveStreamHandler(p)
 	}
-
-	// Deregister Topic Subscribers.
 	for _, t := range s.cfg.p2p.PubSub().GetTopics() {
 		s.unSubscribeFromTopic(t)
 	}
-
 	return nil
 }
 
