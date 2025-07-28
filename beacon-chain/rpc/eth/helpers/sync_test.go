@@ -1,7 +1,6 @@
 package helpers
 
 import (
-	"context"
 	"strconv"
 	"testing"
 
@@ -25,7 +24,7 @@ import (
 )
 
 func TestIsOptimistic(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("head optimistic", func(t *testing.T) {
 		cs := &chainmock.ChainService{Optimistic: true}

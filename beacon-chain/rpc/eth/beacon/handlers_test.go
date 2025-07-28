@@ -43,6 +43,7 @@ import (
 	GoKZG "github.com/crate-crypto/go-kzg-4844"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/go-bitfield"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/mock"
@@ -3490,7 +3491,7 @@ func TestPublishBlindedBlockV2SSZ(t *testing.T) {
 }
 
 func TestValidateConsensus(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	parentState, privs := util.DeterministicGenesisState(t, params.MinimalSpecConfig().MinGenesisActiveValidatorCount)
 	parentBlock, err := util.GenerateFullBlock(parentState, privs, util.DefaultBlockGenConfig(), parentState.Slot())
@@ -3525,7 +3526,7 @@ func TestValidateEquivocation(t *testing.T) {
 		roblock, err := blocks.NewROBlockWithRoot(blk, bytesutil.ToBytes32([]byte("root")))
 		require.NoError(t, err)
 		fc := doublylinkedtree.New()
-		require.NoError(t, fc.InsertNode(context.Background(), st, roblock))
+		require.NoError(t, fc.InsertNode(t.Context(), st, roblock))
 		server := &Server{
 			ForkchoiceFetcher: &chainMock.ChainService{ForkChoiceStore: fc},
 		}
@@ -3544,7 +3545,7 @@ func TestValidateEquivocation(t *testing.T) {
 		require.NoError(t, err)
 
 		fc := doublylinkedtree.New()
-		require.NoError(t, fc.InsertNode(context.Background(), st, roblock))
+		require.NoError(t, fc.InsertNode(t.Context(), st, roblock))
 		server := &Server{
 			ForkchoiceFetcher: &chainMock.ChainService{ForkChoiceStore: fc},
 		}
@@ -3556,7 +3557,7 @@ func TestValidateEquivocation(t *testing.T) {
 
 func TestServer_GetBlockRoot(t *testing.T) {
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	url := "http://example.com/eth/v1/beacon/blocks/{block_id}/root"
 	genBlk, blkContainers := fillDBTestBlocks(ctx, t, beaconDB)
@@ -3767,7 +3768,7 @@ func TestServer_GetBlockRoot(t *testing.T) {
 }
 
 func TestGetStateFork(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/beacon/states/{state_id}/fork", nil)
 	request.SetPathValue("state_id", "head")
 	request.Header.Set("Accept", "application/octet-stream")
@@ -3877,7 +3878,7 @@ func TestGetStateFork(t *testing.T) {
 
 func TestGetCommittees(t *testing.T) {
 	db := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	url := "http://example.com/eth/v1/beacon/states/{state_id}/committees"
 
 	var st state.BeaconState
@@ -4078,11 +4079,52 @@ func TestGetCommittees(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, true, resp.Finalized)
 	})
+
+	t.Run("Invalid slot for given epoch", func(t *testing.T) {
+		cases := []struct {
+			name      string
+			epoch     string
+			slot      string
+			expectMsg string
+		}{
+			{
+				name:      "Slot after the specified epoch",
+				epoch:     "10",
+				slot:      "400",
+				expectMsg: "Slot 400 does not belong in epoch 10",
+			},
+			{
+				name:      "Slot before the specified epoch",
+				epoch:     "10",
+				slot:      "300",
+				expectMsg: "Slot 300 does not belong in epoch 10",
+			},
+		}
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				query := url + "?epoch=" + tc.epoch + "&slot=" + tc.slot
+				request := httptest.NewRequest(http.MethodGet, query, nil)
+				request.SetPathValue("state_id", "head")
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+				s.GetCommittees(writer, request)
+				assert.Equal(t, http.StatusBadRequest, writer.Code)
+				var resp struct {
+					Message string `json:"message"`
+					Code    int    `json:"code"`
+				}
+				err := json.Unmarshal(writer.Body.Bytes(), &resp)
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectMsg, resp.Message)
+			})
+		}
+	})
 }
 
 func TestGetBlockHeaders(t *testing.T) {
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	_, blkContainers := fillDBTestBlocks(ctx, t, beaconDB)
 	headBlock := blkContainers[len(blkContainers)-1]
@@ -4674,7 +4716,7 @@ func TestGetDepositSnapshot(t *testing.T) {
 	chainData := &eth.ETH1ChainData{
 		DepositSnapshot: snapshot.ToProto(),
 	}
-	err = beaconDB.SaveExecutionChainData(context.Background(), chainData)
+	err = beaconDB.SaveExecutionChainData(t.Context(), chainData)
 	require.NoError(t, err)
 	s := Server{
 		BeaconDB: beaconDB,
@@ -4726,11 +4768,11 @@ func TestServer_broadcastBlobSidecars(t *testing.T) {
 
 	blk, err := blocks.NewSignedBeaconBlock(b.Block)
 	require.NoError(t, err)
-	require.NoError(t, server.broadcastSeenBlockSidecars(context.Background(), blk, b.GetDeneb().Blobs, b.GetDeneb().KzgProofs))
+	require.NoError(t, server.broadcastSeenBlockSidecars(t.Context(), blk, b.GetDeneb().Blobs, b.GetDeneb().KzgProofs))
 	require.LogsDoNotContain(t, hook, "Broadcasted blob sidecar for already seen block")
 
 	server.FinalizationFetcher = &chainMock.ChainService{NotFinalized: false}
-	require.NoError(t, server.broadcastSeenBlockSidecars(context.Background(), blk, b.GetDeneb().Blobs, b.GetDeneb().KzgProofs))
+	require.NoError(t, server.broadcastSeenBlockSidecars(t.Context(), blk, b.GetDeneb().Blobs, b.GetDeneb().KzgProofs))
 	require.LogsContain(t, hook, "Broadcasted blob sidecar for already seen block")
 }
 
@@ -5318,6 +5360,193 @@ func TestGetPendingPartialWithdrawals(t *testing.T) {
 		require.Equal(t, http.StatusOK, rec.Code)
 
 		var resp structs.GetPendingPartialWithdrawalsResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		require.Equal(t, true, resp.Finalized)
+	})
+}
+
+func TestGetProposerLookahead(t *testing.T) {
+	numValidators := 50
+	// Create a Fulu state with proposer lookahead data
+	st, _ := util.DeterministicGenesisStateFulu(t, uint64(numValidators))
+	lookaheadSize := int(params.BeaconConfig().MinSeedLookahead+1) * int(params.BeaconConfig().SlotsPerEpoch)
+	lookahead := make([]primitives.ValidatorIndex, lookaheadSize)
+	for i := 0; i < lookaheadSize; i++ {
+		lookahead[i] = primitives.ValidatorIndex(i % numValidators) // Cycle through validators
+	}
+
+	require.NoError(t, st.SetProposerLookahead(lookahead))
+
+	chainService := &chainMock.ChainService{
+		Optimistic:     false,
+		FinalizedRoots: map[[32]byte]bool{},
+	}
+	server := &Server{
+		Stater: &testutil.MockStater{
+			BeaconState: st,
+		},
+		OptimisticModeFetcher: chainService,
+		FinalizationFetcher:   chainService,
+	}
+
+	t.Run("json response", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/proposer_lookahead", nil)
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		server.GetProposerLookahead(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, "fulu", rec.Header().Get(api.VersionHeader))
+
+		var resp structs.GetProposerLookaheadResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+
+		expectedVersion := version.String(st.Version())
+		require.Equal(t, expectedVersion, resp.Version)
+		require.Equal(t, false, resp.ExecutionOptimistic)
+		require.Equal(t, false, resp.Finalized)
+
+		// Verify the data
+		require.Equal(t, lookaheadSize, len(resp.Data))
+		for i := 0; i < lookaheadSize; i++ {
+			expectedIdx := strconv.FormatUint(uint64(i%numValidators), 10)
+			require.Equal(t, expectedIdx, resp.Data[i])
+		}
+	})
+
+	t.Run("ssz response", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/proposer_lookahead", nil)
+		req.Header.Set("Accept", "application/octet-stream")
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		server.GetProposerLookahead(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, "fulu", rec.Header().Get(api.VersionHeader))
+		responseBytes := rec.Body.Bytes()
+		validatorIndexSize := (*primitives.ValidatorIndex)(nil).SizeSSZ()
+		require.Equal(t, len(responseBytes), validatorIndexSize*lookaheadSize)
+
+		recoveredIndices := make([]primitives.ValidatorIndex, lookaheadSize)
+		for i := 0; i < lookaheadSize; i++ {
+			start := i * validatorIndexSize
+			end := start + validatorIndexSize
+
+			idx := ssz.UnmarshallUint64(responseBytes[start:end])
+			recoveredIndices[i] = primitives.ValidatorIndex(idx)
+		}
+		require.DeepEqual(t, lookahead, recoveredIndices)
+	})
+
+	t.Run("pre fulu state", func(t *testing.T) {
+		preEplusSt, _ := util.DeterministicGenesisStateElectra(t, 1)
+		preFuluServer := &Server{
+			Stater: &testutil.MockStater{
+				BeaconState: preEplusSt,
+			},
+			OptimisticModeFetcher: chainService,
+			FinalizationFetcher:   chainService,
+		}
+
+		// Test JSON request
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/proposer_lookahead", nil)
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		preFuluServer.GetProposerLookahead(rec, req)
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+
+		var errResp struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &errResp))
+		require.Equal(t, "state_id is prior to fulu", errResp.Message)
+
+		// Test SSZ request
+		sszReq := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/proposer_lookahead", nil)
+		sszReq.Header.Set("Accept", "application/octet-stream")
+		sszReq.SetPathValue("state_id", "head")
+		sszRec := httptest.NewRecorder()
+		sszRec.Body = new(bytes.Buffer)
+
+		preFuluServer.GetProposerLookahead(sszRec, sszReq)
+		require.Equal(t, http.StatusBadRequest, sszRec.Code)
+
+		var sszErrResp struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		}
+		require.NoError(t, json.Unmarshal(sszRec.Body.Bytes(), &sszErrResp))
+		require.Equal(t, "state_id is prior to fulu", sszErrResp.Message)
+	})
+
+	t.Run("missing state_id parameter", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/proposer_lookahead", nil)
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		server.GetProposerLookahead(rec, req)
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+
+		var errResp struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &errResp))
+		require.Equal(t, "state_id is required in URL params", errResp.Message)
+	})
+
+	t.Run("optimistic node", func(t *testing.T) {
+		optimisticChainService := &chainMock.ChainService{
+			Optimistic:     true,
+			FinalizedRoots: map[[32]byte]bool{},
+		}
+		optimisticServer := &Server{
+			Stater:                server.Stater,
+			OptimisticModeFetcher: optimisticChainService,
+			FinalizationFetcher:   optimisticChainService,
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/proposer_lookahead", nil)
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		optimisticServer.GetProposerLookahead(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var resp structs.GetProposerLookaheadResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		require.Equal(t, true, resp.ExecutionOptimistic)
+	})
+
+	t.Run("finalized node", func(t *testing.T) {
+		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		require.NoError(t, err)
+
+		finalizedChainService := &chainMock.ChainService{
+			Optimistic:     false,
+			FinalizedRoots: map[[32]byte]bool{blockRoot: true},
+		}
+		finalizedServer := &Server{
+			Stater:                server.Stater,
+			OptimisticModeFetcher: finalizedChainService,
+			FinalizationFetcher:   finalizedChainService,
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/proposer_lookahead", nil)
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		finalizedServer.GetProposerLookahead(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var resp structs.GetProposerLookaheadResponse
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 		require.Equal(t, true, resp.Finalized)
 	})

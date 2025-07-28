@@ -1,7 +1,6 @@
 package blocks_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
@@ -63,7 +62,7 @@ func TestProcessAttesterSlashings_DataNotSlashable(t *testing.T) {
 	for i, s := range b.Block.Body.AttesterSlashings {
 		ss[i] = s
 	}
-	_, err = blocks.ProcessAttesterSlashings(context.Background(), beaconState, ss, v.SlashValidator)
+	_, err = blocks.ProcessAttesterSlashings(t.Context(), beaconState, ss, v.SlashValidator)
 	assert.ErrorContains(t, "attestations are not slashable", err)
 }
 
@@ -102,7 +101,7 @@ func TestProcessAttesterSlashings_IndexedAttestationFailedToVerify(t *testing.T)
 	for i, s := range b.Block.Body.AttesterSlashings {
 		ss[i] = s
 	}
-	_, err = blocks.ProcessAttesterSlashings(context.Background(), beaconState, ss, v.SlashValidator)
+	_, err = blocks.ProcessAttesterSlashings(t.Context(), beaconState, ss, v.SlashValidator)
 	assert.ErrorContains(t, "validator indices count exceeds MAX_VALIDATORS_PER_COMMITTEE", err)
 }
 
@@ -244,7 +243,7 @@ func TestProcessAttesterSlashings_AppliesCorrectStatus(t *testing.T) {
 			currentSlot := 2 * params.BeaconConfig().SlotsPerEpoch
 			require.NoError(t, tc.st.SetSlot(currentSlot))
 
-			newState, err := blocks.ProcessAttesterSlashings(context.Background(), tc.st, []ethpb.AttSlashing{tc.slashing}, v.SlashValidator)
+			newState, err := blocks.ProcessAttesterSlashings(t.Context(), tc.st, []ethpb.AttSlashing{tc.slashing}, v.SlashValidator)
 			require.NoError(t, err)
 			newRegistry := newState.Validators()
 

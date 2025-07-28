@@ -1,7 +1,6 @@
 package slasher
 
 import (
-	"context"
 	"io"
 	"os"
 	"testing"
@@ -39,7 +38,7 @@ func TestService_StartStop_ChainInitialized(t *testing.T) {
 		Slot:  &currentSlot,
 	}
 	gs := startup.NewClockSynchronizer()
-	srv, err := New(context.Background(), &ServiceConfig{
+	srv, err := New(t.Context(), &ServiceConfig{
 		IndexedAttestationsFeed: new(event.Feed),
 		BeaconBlockHeadersFeed:  new(event.Feed),
 		StateNotifier:           &mock.MockStateNotifier{},

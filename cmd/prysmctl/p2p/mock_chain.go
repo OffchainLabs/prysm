@@ -32,5 +32,5 @@ func (m *mockChain) GenesisTime() time.Time {
 }
 
 func (m *mockChain) CurrentSlot() primitives.Slot {
-	return slots.SinceGenesis(m.genesisTime)
+	return slots.CurrentSlot(m.genesisTime)
 }

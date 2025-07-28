@@ -1,7 +1,6 @@
 package validator
 
 import (
-	"context"
 	"math"
 	"math/big"
 	"testing"
@@ -37,7 +36,7 @@ import (
 func TestServer_setExecutionData(t *testing.T) {
 	hook := logTest.NewGlobal()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	cfg := params.BeaconConfig().Copy()
 	cfg.BellatrixForkEpoch = 0
 	cfg.CapellaForkEpoch = 0
@@ -52,11 +51,11 @@ func TestServer_setExecutionData(t *testing.T) {
 	b2pbCapella := util.NewBeaconBlockCapella()
 	b2rCapella, err := b2pbCapella.Block.HashTreeRoot()
 	require.NoError(t, err)
-	util.SaveBlock(t, context.Background(), beaconDB, b2pbCapella)
+	util.SaveBlock(t, t.Context(), beaconDB, b2pbCapella)
 	require.NoError(t, capellaTransitionState.SetFinalizedCheckpoint(&ethpb.Checkpoint{
 		Root: b2rCapella[:],
 	}))
-	require.NoError(t, beaconDB.SaveFeeRecipientsByValidatorIDs(context.Background(), []primitives.ValidatorIndex{0}, []common.Address{{}}))
+	require.NoError(t, beaconDB.SaveFeeRecipientsByValidatorIDs(t.Context(), []primitives.ValidatorIndex{0}, []common.Address{{}}))
 
 	denebTransitionState, _ := util.DeterministicGenesisStateDeneb(t, 1)
 	wrappedHeaderDeneb, err := blocks.WrappedExecutionPayloadHeaderDeneb(&v1.ExecutionPayloadHeaderDeneb{BlockNumber: 2})
@@ -65,7 +64,7 @@ func TestServer_setExecutionData(t *testing.T) {
 	b2pbDeneb := util.NewBeaconBlockDeneb()
 	b2rDeneb, err := b2pbDeneb.Block.HashTreeRoot()
 	require.NoError(t, err)
-	util.SaveBlock(t, context.Background(), beaconDB, b2pbDeneb)
+	util.SaveBlock(t, t.Context(), beaconDB, b2pbDeneb)
 	require.NoError(t, denebTransitionState.SetFinalizedCheckpoint(&ethpb.Checkpoint{
 		Root: b2rDeneb[:],
 	}))
@@ -103,7 +102,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, b.Slot(), b.ProposerIndex(), gasLimit)
 		require.NoError(t, err)
 		require.IsNil(t, builderBid)
-		_, bundle, err := setExecutionData(context.Background(), blk, res, builderBid, defaultBuilderBoostFactor)
+		_, bundle, err := setExecutionData(t.Context(), blk, res, builderBid, defaultBuilderBoostFactor)
 		require.NoError(t, err)
 		require.IsNil(t, bundle)
 		e, err := blk.Block().Body().Execution()
@@ -119,7 +118,7 @@ func TestServer_setExecutionData(t *testing.T) {
 				Timestamp:    uint64(time.Now().Unix()),
 				GasLimit:     gasLimit,
 				Pubkey:       make([]byte, fieldparams.BLSPubkeyLength)}}))
-		ti, err := slots.ToTime(uint64(time.Now().Unix()), 0)
+		ti, err := slots.StartTime(time.Now(), 0)
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
 		require.NoError(t, err)
@@ -161,7 +160,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		chain := &blockchainTest.ChainService{ForkChoiceStore: doublylinkedtree.New(), Genesis: time.Now(), Block: wb}
 		vs.ForkchoiceFetcher = chain
-		vs.ForkchoiceFetcher.SetForkChoiceGenesisTime(uint64(time.Now().Unix()))
+		vs.ForkchoiceFetcher.SetForkChoiceGenesisTime(time.Now())
 		vs.TimeFetcher = chain
 		vs.HeadFetcher = chain
 		b := blk.Block()
@@ -172,7 +171,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		_, err = builderBid.Header()
 		require.NoError(t, err)
-		_, bundle, err := setExecutionData(context.Background(), blk, res, builderBid, defaultBuilderBoostFactor)
+		_, bundle, err := setExecutionData(t.Context(), blk, res, builderBid, defaultBuilderBoostFactor)
 		require.NoError(t, err)
 		require.IsNil(t, bundle)
 		e, err := blk.Block().Body().Execution()
@@ -188,7 +187,7 @@ func TestServer_setExecutionData(t *testing.T) {
 				Timestamp:    uint64(time.Now().Unix()),
 				GasLimit:     gasLimit,
 				Pubkey:       make([]byte, fieldparams.BLSPubkeyLength)}}))
-		ti, err := slots.ToTime(uint64(time.Now().Unix()), 0)
+		ti, err := slots.StartTime(time.Now(), 0)
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
 		require.NoError(t, err)
@@ -233,7 +232,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		chain := &blockchainTest.ChainService{ForkChoiceStore: doublylinkedtree.New(), Genesis: time.Now(), Block: wb}
 		vs.ForkFetcher = chain
-		vs.ForkchoiceFetcher.SetForkChoiceGenesisTime(uint64(time.Now().Unix()))
+		vs.ForkchoiceFetcher.SetForkChoiceGenesisTime(time.Now())
 		vs.TimeFetcher = chain
 		vs.HeadFetcher = chain
 
@@ -244,7 +243,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		_, err = builderBid.Header()
 		require.NoError(t, err)
-		_, bundle, err := setExecutionData(context.Background(), blk, res, builderBid, defaultBuilderBoostFactor)
+		_, bundle, err := setExecutionData(t.Context(), blk, res, builderBid, defaultBuilderBoostFactor)
 		require.NoError(t, err)
 		require.IsNil(t, bundle)
 		e, err := blk.Block().Body().Execution()
@@ -260,7 +259,7 @@ func TestServer_setExecutionData(t *testing.T) {
 				Timestamp:    uint64(time.Now().Unix()),
 				GasLimit:     gasLimit,
 				Pubkey:       make([]byte, fieldparams.BLSPubkeyLength)}}))
-		ti, err := slots.ToTime(uint64(time.Now().Unix()), 0)
+		ti, err := slots.StartTime(time.Now(), 0)
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
 		require.NoError(t, err)
@@ -304,7 +303,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		chain := &blockchainTest.ChainService{ForkChoiceStore: doublylinkedtree.New(), Genesis: time.Now(), Block: wb}
 		vs.ForkFetcher = chain
-		vs.ForkchoiceFetcher.SetForkChoiceGenesisTime(uint64(time.Now().Unix()))
+		vs.ForkchoiceFetcher.SetForkChoiceGenesisTime(time.Now())
 		vs.TimeFetcher = chain
 		vs.HeadFetcher = chain
 
@@ -315,7 +314,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		_, err = builderBid.Header()
 		require.NoError(t, err)
-		_, bundle, err := setExecutionData(context.Background(), blk, res, builderBid, math.MaxUint64)
+		_, bundle, err := setExecutionData(t.Context(), blk, res, builderBid, math.MaxUint64)
 		require.NoError(t, err)
 		require.IsNil(t, bundle)
 		e, err := blk.Block().Body().Execution()
@@ -331,7 +330,7 @@ func TestServer_setExecutionData(t *testing.T) {
 				Timestamp:    uint64(time.Now().Unix()),
 				GasLimit:     gasLimit,
 				Pubkey:       make([]byte, fieldparams.BLSPubkeyLength)}}))
-		ti, err := slots.ToTime(uint64(time.Now().Unix()), 0)
+		ti, err := slots.StartTime(time.Now(), 0)
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
 		require.NoError(t, err)
@@ -375,7 +374,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		chain := &blockchainTest.ChainService{ForkChoiceStore: doublylinkedtree.New(), Genesis: time.Now(), Block: wb}
 		vs.ForkFetcher = chain
-		vs.ForkchoiceFetcher.SetForkChoiceGenesisTime(uint64(time.Now().Unix()))
+		vs.ForkchoiceFetcher.SetForkChoiceGenesisTime(time.Now())
 		vs.TimeFetcher = chain
 		vs.HeadFetcher = chain
 
@@ -386,7 +385,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		_, err = builderBid.Header()
 		require.NoError(t, err)
-		_, bundle, err := setExecutionData(context.Background(), blk, res, builderBid, 0)
+		_, bundle, err := setExecutionData(t.Context(), blk, res, builderBid, 0)
 		require.NoError(t, err)
 		require.IsNil(t, bundle)
 		e, err := blk.Block().Body().Execution()
@@ -407,7 +406,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		_, err = builderBid.Header()
 		require.NoError(t, err)
-		_, bundle, err := setExecutionData(context.Background(), blk, res, builderBid, defaultBuilderBoostFactor)
+		_, bundle, err := setExecutionData(t.Context(), blk, res, builderBid, defaultBuilderBoostFactor)
 		require.NoError(t, err)
 		require.IsNil(t, bundle)
 		e, err := blk.Block().Body().Execution()
@@ -434,7 +433,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		_, err = builderBid.Header()
 		require.NoError(t, err)
-		_, bundle, err := setExecutionData(context.Background(), blk, res, builderBid, defaultBuilderBoostFactor)
+		_, bundle, err := setExecutionData(t.Context(), blk, res, builderBid, defaultBuilderBoostFactor)
 		require.NoError(t, err)
 		require.IsNil(t, bundle)
 		e, err := blk.Block().Body().Execution()
@@ -464,7 +463,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		_, err = builderBid.Header()
 		require.NoError(t, err)
-		_, bundle, err := setExecutionData(context.Background(), blk, res, builderBid, defaultBuilderBoostFactor)
+		_, bundle, err := setExecutionData(t.Context(), blk, res, builderBid, defaultBuilderBoostFactor)
 		require.NoError(t, err)
 		require.IsNil(t, bundle)
 		e, err := blk.Block().Body().Execution()
@@ -490,7 +489,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, b.Slot(), b.ProposerIndex(), gasLimit)
 		require.ErrorIs(t, consensus_types.ErrNilObjectWrapped, err) // Builder returns fault. Use local block
 		require.IsNil(t, builderBid)
-		_, bundle, err := setExecutionData(context.Background(), blk, res, nil, defaultBuilderBoostFactor)
+		_, bundle, err := setExecutionData(t.Context(), blk, res, nil, defaultBuilderBoostFactor)
 		require.NoError(t, err)
 		require.IsNil(t, bundle)
 		e, err := blk.Block().Body().Execution()
@@ -520,7 +519,7 @@ func TestServer_setExecutionData(t *testing.T) {
 			PayloadIDBytes: id,
 			GetPayloadResponse: &blocks.GetPayloadResponse{
 				ExecutionData: ed,
-				BlobsBundle:   blobsBundle,
+				BlobsBundler:  blobsBundle,
 				Bid:           primitives.ZeroWei(),
 			},
 		}
@@ -528,7 +527,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		res, err := vs.getLocalPayload(ctx, blk.Block(), capellaTransitionState)
 		require.NoError(t, err)
 		require.Equal(t, uint64(4), res.ExecutionData.BlockNumber())
-		require.DeepEqual(t, res.BlobsBundle, blobsBundle)
+		require.DeepEqual(t, res.BlobsBundler, blobsBundle)
 	})
 	t.Run("Can get builder payload and blobs in Deneb", func(t *testing.T) {
 		cfg := params.BeaconConfig().Copy()
@@ -538,7 +537,7 @@ func TestServer_setExecutionData(t *testing.T) {
 
 		blk, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockDeneb())
 		require.NoError(t, err)
-		ti, err := slots.ToTime(uint64(time.Now().Unix()), 0)
+		ti, err := slots.StartTime(time.Now(), 0)
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
 		require.NoError(t, err)
@@ -594,7 +593,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		chain := &blockchainTest.ChainService{ForkChoiceStore: doublylinkedtree.New(), Genesis: time.Now(), Block: wb}
 		vs.ForkFetcher = chain
-		vs.ForkchoiceFetcher.SetForkChoiceGenesisTime(uint64(time.Now().Unix()))
+		vs.ForkchoiceFetcher.SetForkChoiceGenesisTime(time.Now())
 		vs.TimeFetcher = chain
 		vs.HeadFetcher = chain
 
@@ -620,7 +619,7 @@ func TestServer_setExecutionData(t *testing.T) {
 
 		res, err := vs.getLocalPayload(ctx, blk.Block(), denebTransitionState)
 		require.NoError(t, err)
-		_, bundle, err := setExecutionData(context.Background(), blk, res, builderBid, defaultBuilderBoostFactor)
+		_, bundle, err := setExecutionData(t.Context(), blk, res, builderBid, defaultBuilderBoostFactor)
 		require.NoError(t, err)
 		require.IsNil(t, bundle)
 
@@ -636,7 +635,7 @@ func TestServer_setExecutionData(t *testing.T) {
 
 		blk, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockElectra())
 		require.NoError(t, err)
-		ti, err := slots.ToTime(uint64(time.Now().Unix()), 0)
+		ti, err := slots.StartTime(time.Now(), 0)
 		require.NoError(t, err)
 		sk, err := bls.RandKey()
 		require.NoError(t, err)
@@ -718,7 +717,7 @@ func TestServer_setExecutionData(t *testing.T) {
 		require.NoError(t, err)
 		chain := &blockchainTest.ChainService{ForkChoiceStore: doublylinkedtree.New(), Genesis: time.Now(), Block: wb}
 		vs.ForkFetcher = chain
-		vs.ForkchoiceFetcher.SetForkChoiceGenesisTime(uint64(time.Now().Unix()))
+		vs.ForkchoiceFetcher.SetForkChoiceGenesisTime(time.Now())
 		vs.TimeFetcher = chain
 		vs.HeadFetcher = chain
 
@@ -744,7 +743,7 @@ func TestServer_setExecutionData(t *testing.T) {
 
 		res, err := vs.getLocalPayload(ctx, blk.Block(), denebTransitionState)
 		require.NoError(t, err)
-		_, bundle, err := setExecutionData(context.Background(), blk, res, builderBid, defaultBuilderBoostFactor)
+		_, bundle, err := setExecutionData(t.Context(), blk, res, builderBid, defaultBuilderBoostFactor)
 		require.NoError(t, err)
 		require.IsNil(t, bundle)
 
@@ -773,7 +772,7 @@ func TestServer_getPayloadHeader(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 	emptyRoot, err := ssz.TransactionsRoot([][]byte{})
 	require.NoError(t, err)
-	ti, err := slots.ToTime(uint64(time.Now().Unix()), 0)
+	ti, err := slots.StartTime(time.Now(), 0)
 	require.NoError(t, err)
 
 	sk, err := bls.RandKey()
@@ -815,7 +814,7 @@ func TestServer_getPayloadHeader(t *testing.T) {
 	wr, err := ssz.WithdrawalSliceRoot(withdrawals, fieldparams.MaxWithdrawalsPerPayload)
 	require.NoError(t, err)
 
-	tiCapella, err := slots.ToTime(uint64(genesis.Unix()), primitives.Slot(fakeCapellaEpoch)*params.BeaconConfig().SlotsPerEpoch)
+	tiCapella, err := slots.StartTime(genesis, primitives.Slot(fakeCapellaEpoch)*params.BeaconConfig().SlotsPerEpoch)
 	require.NoError(t, err)
 	bidCapella := &ethpb.BuilderBidCapella{
 		Header: &v1.ExecutionPayloadHeaderCapella{
@@ -1013,7 +1012,7 @@ func TestServer_getPayloadHeader(t *testing.T) {
 				Genesis: genesis,
 			}}
 			regCache := cache.NewRegistrationCache()
-			regCache.UpdateIndexToRegisteredMap(context.Background(), map[primitives.ValidatorIndex]*ethpb.ValidatorRegistrationV1{
+			regCache.UpdateIndexToRegisteredMap(t.Context(), map[primitives.ValidatorIndex]*ethpb.ValidatorRegistrationV1{
 				0: {
 					GasLimit:     gasLimit,
 					FeeRecipient: make([]byte, 20),
@@ -1021,9 +1020,9 @@ func TestServer_getPayloadHeader(t *testing.T) {
 				},
 			})
 			tc.mock.RegistrationCache = regCache
-			hb, err := vs.HeadFetcher.HeadBlock(context.Background())
+			hb, err := vs.HeadFetcher.HeadBlock(t.Context())
 			require.NoError(t, err)
-			bid, err := vs.getPayloadHeaderFromBuilder(context.Background(), hb.Block().Slot(), 0, 30000000)
+			bid, err := vs.getPayloadHeaderFromBuilder(t.Context(), hb.Block().Slot(), 0, 30000000)
 			if tc.err != "" {
 				require.ErrorContains(t, tc.err, err)
 			} else {

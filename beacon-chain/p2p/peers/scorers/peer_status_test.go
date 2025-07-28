@@ -1,7 +1,6 @@
 package scorers_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
@@ -16,8 +15,7 @@ import (
 )
 
 func TestScorers_PeerStatus_Score(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	tests := []struct {
 		name   string
@@ -136,7 +134,7 @@ func TestScorers_PeerStatus_Score(t *testing.T) {
 }
 
 func TestScorers_PeerStatus_IsBadPeer(t *testing.T) {
-	peerStatuses := peers.NewStatus(context.Background(), &peers.StatusConfig{
+	peerStatuses := peers.NewStatus(t.Context(), &peers.StatusConfig{
 		ScorerParams: &scorers.Config{},
 	})
 	pid := peer.ID("peer1")
@@ -149,7 +147,7 @@ func TestScorers_PeerStatus_IsBadPeer(t *testing.T) {
 }
 
 func TestScorers_PeerStatus_BadPeers(t *testing.T) {
-	peerStatuses := peers.NewStatus(context.Background(), &peers.StatusConfig{
+	peerStatuses := peers.NewStatus(t.Context(), &peers.StatusConfig{
 		ScorerParams: &scorers.Config{},
 	})
 	pid1 := peer.ID("peer1")
@@ -176,7 +174,7 @@ func TestScorers_PeerStatus_BadPeers(t *testing.T) {
 }
 
 func TestScorers_PeerStatus_PeerStatus(t *testing.T) {
-	peerStatuses := peers.NewStatus(context.Background(), &peers.StatusConfig{
+	peerStatuses := peers.NewStatus(t.Context(), &peers.StatusConfig{
 		ScorerParams: &scorers.Config{},
 	})
 	status, err := peerStatuses.Scorers().PeerStatusScorer().PeerStatus("peer1")

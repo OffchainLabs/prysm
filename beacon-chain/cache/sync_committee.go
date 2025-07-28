@@ -178,7 +178,7 @@ func (s *SyncCommitteeCache) UpdatePositionsInCommittee(syncCommitteeBoundaryRoo
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	if clearCount != s.cleared.Load() {
-		log.Warn("cache rotated during async committee update operation - abandoning cache update")
+		log.Warn("Cache rotated during async committee update operation - abandoning cache update")
 		return nil
 	}
 

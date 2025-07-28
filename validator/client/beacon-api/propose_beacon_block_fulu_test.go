@@ -2,7 +2,6 @@ package beacon_api
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"testing"
 
@@ -38,7 +37,7 @@ func TestProposeBeaconBlock_Fulu(t *testing.T) {
 	)
 
 	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
-	proposeResponse, err := validatorClient.proposeBeaconBlock(context.Background(), genericSignedBlock)
+	proposeResponse, err := validatorClient.proposeBeaconBlock(t.Context(), genericSignedBlock)
 	assert.NoError(t, err)
 	require.NotNil(t, proposeResponse)
 

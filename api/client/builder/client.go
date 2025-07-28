@@ -72,7 +72,7 @@ func (*requestLogger) observe(r *http.Request) (e error) {
 		log.WithFields(log.Fields{
 			"bodyBase64": "(nil value)",
 			"url":        r.URL.String(),
-		}).Info("builder http request")
+		}).Info("Builder http request")
 		return nil
 	}
 	t := io.TeeReader(r.Body, b)
@@ -89,7 +89,7 @@ func (*requestLogger) observe(r *http.Request) (e error) {
 	log.WithFields(log.Fields{
 		"bodyBase64": string(body),
 		"url":        r.URL.String(),
-	}).Info("builder http request")
+	}).Info("Builder http request")
 
 	return nil
 }
@@ -101,7 +101,7 @@ type BuilderClient interface {
 	NodeURL() string
 	GetHeader(ctx context.Context, slot primitives.Slot, parentHash [32]byte, pubkey [48]byte) (SignedBid, error)
 	RegisterValidator(ctx context.Context, svr []*ethpb.SignedValidatorRegistrationV1) error
-	SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, *v1.BlobsBundle, error)
+	SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, v1.BlobsBundler, error)
 	Status(ctx context.Context) error
 }
 
@@ -241,7 +241,7 @@ func (c *Client) GetHeader(ctx context.Context, slot primitives.Slot, parentHash
 		return nil, errors.Wrap(err, "error getting header from builder server")
 	}
 
-	bid, err := c.parseHeaderResponse(data, header)
+	bid, err := c.parseHeaderResponse(data, header, slot)
 	if err != nil {
 		return nil, errors.Wrapf(
 			err,
@@ -254,7 +254,7 @@ func (c *Client) GetHeader(ctx context.Context, slot primitives.Slot, parentHash
 	return bid, nil
 }
 
-func (c *Client) parseHeaderResponse(data []byte, header http.Header) (SignedBid, error) {
+func (c *Client) parseHeaderResponse(data []byte, header http.Header, slot primitives.Slot) (SignedBid, error) {
 	var versionHeader string
 	if c.sszEnabled || header.Get(api.VersionHeader) != "" {
 		versionHeader = header.Get(api.VersionHeader)
@@ -276,7 +276,7 @@ func (c *Client) parseHeaderResponse(data []byte, header http.Header) (SignedBid
 	}
 
 	if ver >= version.Electra {
-		return c.parseHeaderElectra(data)
+		return c.parseHeaderElectra(data, slot)
 	}
 	if ver >= version.Deneb {
 		return c.parseHeaderDeneb(data)
@@ -291,7 +291,7 @@ func (c *Client) parseHeaderResponse(data []byte, header http.Header) (SignedBid
 	return nil, fmt.Errorf("unsupported header version %s", versionHeader)
 }
 
-func (c *Client) parseHeaderElectra(data []byte) (SignedBid, error) {
+func (c *Client) parseHeaderElectra(data []byte, slot primitives.Slot) (SignedBid, error) {
 	if c.sszEnabled {
 		sb := &ethpb.SignedBuilderBidElectra{}
 		if err := sb.UnmarshalSSZ(data); err != nil {
@@ -303,7 +303,7 @@ func (c *Client) parseHeaderElectra(data []byte) (SignedBid, error) {
 	if err := json.Unmarshal(data, hr); err != nil {
 		return nil, errors.Wrap(err, "could not unmarshal ExecHeaderResponseElectra JSON")
 	}
-	p, err := hr.ToProto()
+	p, err := hr.ToProto(slot)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not convert ExecHeaderResponseElectra to proto")
 	}
@@ -446,6 +446,9 @@ func sszValidatorRegisterRequest(svr []*ethpb.SignedValidatorRegistrationV1) ([]
 var errResponseVersionMismatch = errors.New("builder API response uses a different version than requested in " + api.VersionHeader + " header")
 
 func getVersionsBlockToPayload(blockVersion int) (int, error) {
+	if blockVersion >= version.Fulu {
+		return version.Fulu, nil
+	}
 	if blockVersion >= version.Deneb {
 		return version.Deneb, nil
 	}
@@ -460,7 +463,7 @@ func getVersionsBlockToPayload(blockVersion int) (int, error) {
 
 // SubmitBlindedBlock calls the builder API endpoint that binds the validator to the builder and submits the block.
 // The response is the full execution payload used to create the blinded block.
-func (c *Client) SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, *v1.BlobsBundle, error) {
+func (c *Client) SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, v1.BlobsBundler, error) {
 	body, postOpts, err := c.buildBlindedBlockRequest(sb)
 	if err != nil {
 		return nil, nil, err
@@ -558,7 +561,7 @@ func (c *Client) buildBlindedBlockRequest(sb interfaces.ReadOnlySignedBeaconBloc
 func (c *Client) parseBlindedBlockResponse(
 	respBytes []byte,
 	forkVersion int,
-) (interfaces.ExecutionData, *v1.BlobsBundle, error) {
+) (interfaces.ExecutionData, v1.BlobsBundler, error) {
 	if c.sszEnabled {
 		return c.parseBlindedBlockResponseSSZ(respBytes, forkVersion)
 	}
@@ -568,8 +571,18 @@ func (c *Client) parseBlindedBlockResponse(
 func (c *Client) parseBlindedBlockResponseSSZ(
 	respBytes []byte,
 	forkVersion int,
-) (interfaces.ExecutionData, *v1.BlobsBundle, error) {
-	if forkVersion >= version.Deneb {
+) (interfaces.ExecutionData, v1.BlobsBundler, error) {
+	if forkVersion >= version.Fulu {
+		payloadAndBlobs := &v1.ExecutionPayloadDenebAndBlobsBundleV2{}
+		if err := payloadAndBlobs.UnmarshalSSZ(respBytes); err != nil {
+			return nil, nil, errors.Wrap(err, "unable to unmarshal ExecutionPayloadDenebAndBlobsBundleV2 SSZ")
+		}
+		ed, err := blocks.NewWrappedExecutionData(payloadAndBlobs.Payload)
+		if err != nil {
+			return nil, nil, errors.Wrapf(err, "unable to wrap execution data for %s", version.String(forkVersion))
+		}
+		return ed, payloadAndBlobs.BlobsBundle, nil
+	} else if forkVersion >= version.Deneb {
 		payloadAndBlobs := &v1.ExecutionPayloadDenebAndBlobsBundle{}
 		if err := payloadAndBlobs.UnmarshalSSZ(respBytes); err != nil {
 			return nil, nil, errors.Wrap(err, "unable to unmarshal ExecutionPayloadDenebAndBlobsBundle SSZ")

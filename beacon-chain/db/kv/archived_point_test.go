@@ -1,7 +1,6 @@
 package kv
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -12,7 +11,7 @@ import (
 
 func TestArchivedPointIndexRoot_CanSaveRetrieve(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	i1 := primitives.Slot(100)
 	r1 := [32]byte{'A'}
 
@@ -28,7 +27,7 @@ func TestArchivedPointIndexRoot_CanSaveRetrieve(t *testing.T) {
 
 func TestLastArchivedPoint_CanRetrieve(t *testing.T) {
 	db := setupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	i, err := db.LastArchivedSlot(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, primitives.Slot(0), i, "Did not get correct index")

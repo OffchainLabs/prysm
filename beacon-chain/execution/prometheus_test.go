@@ -13,7 +13,7 @@ import (
 // also tests the interchangeability of the explicit prometheus Register/Unregister
 // and the implicit methods within the collector implementation
 func TestCleanup(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	pc, err := NewPowchainCollector(ctx)
 	assert.NoError(t, err, "Unexpected error calling NewPowchainCollector")
 	unregistered := pc.unregister()
@@ -37,7 +37,7 @@ func TestCleanup(t *testing.T) {
 // does come at the cost of an extra channel cluttering up
 // PowchainCollector, just for this test.
 func TestCancellation(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	pc, err := NewPowchainCollector(ctx)
 	assert.NoError(t, err, "Unexpected error calling NewPowchainCollector")
 	ticker := time.NewTicker(10 * time.Second)

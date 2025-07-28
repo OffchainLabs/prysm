@@ -248,14 +248,14 @@ func (s *Service) ProcessChainStart(genesisTime uint64, eth1BlockHash [32]byte, 
 	for i := range s.chainStartData.ChainstartDeposits {
 		proof, err := s.depositTrie.MerkleProof(i)
 		if err != nil {
-			log.WithError(err).Error("unable to generate deposit proof")
+			log.WithError(err).Error("Unable to generate deposit proof")
 		}
 		s.chainStartData.ChainstartDeposits[i].Proof = proof
 	}
 
 	root, err := s.depositTrie.HashTreeRoot()
 	if err != nil { // This should never happen.
-		log.WithError(err).Error("unable to determine root of deposit trie, aborting chain start")
+		log.WithError(err).Error("Unable to determine root of deposit trie, aborting chain start")
 		return
 	}
 	s.chainStartData.Eth1Data = &ethpb.Eth1Data{

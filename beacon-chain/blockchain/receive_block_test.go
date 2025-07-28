@@ -1,7 +1,6 @@
 package blockchain
 
 import (
-	"context"
 	"sync"
 	"testing"
 	"time"
@@ -9,7 +8,10 @@ import (
 	blockchainTesting "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/voluntaryexits"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -19,6 +21,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	ethpbv1 "github.com/OffchainLabs/prysm/v6/proto/eth/v1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
@@ -28,7 +31,7 @@ import (
 )
 
 func TestService_ReceiveBlock(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	genesis, keys := util.DeterministicGenesisState(t, 64)
 	copiedGen := genesis.Copy()
@@ -180,6 +183,19 @@ func TestService_ReceiveBlock(t *testing.T) {
 	}
 	wg.Wait()
 }
+func TestHandleDA(t *testing.T) {
+	signedBeaconBlock, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlock{
+		Block: &ethpb.BeaconBlock{
+			Body: &ethpb.BeaconBlockBody{},
+		},
+	})
+	require.NoError(t, err)
+
+	s, _ := minimalTestService(t)
+	elapsed, err := s.handleDA(t.Context(), signedBeaconBlock, [fieldparams.RootLength]byte{}, nil)
+	require.NoError(t, err)
+	require.Equal(t, true, elapsed > 0, "Elapsed time should be greater than 0")
+}
 
 func TestService_ReceiveBlockUpdateHead(t *testing.T) {
 	s, tr := minimalTestService(t,
@@ -215,7 +231,7 @@ func TestService_ReceiveBlockUpdateHead(t *testing.T) {
 }
 
 func TestService_ReceiveBlockBatch(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	genesis, keys := util.DeterministicGenesisState(t, 64)
 	genFullBlock := func(t *testing.T, conf *util.BlockGenConfig, slot primitives.Slot) *ethpb.SignedBeaconBlock {
@@ -280,23 +296,23 @@ func TestService_ReceiveBlockBatch(t *testing.T) {
 func TestService_HasBlock(t *testing.T) {
 	s, _ := minimalTestService(t)
 	r := [32]byte{'a'}
-	if s.HasBlock(context.Background(), r) {
+	if s.HasBlock(t.Context(), r) {
 		t.Error("Should not have block")
 	}
 	wsb, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlock())
 	require.NoError(t, err)
-	require.NoError(t, s.saveInitSyncBlock(context.Background(), r, wsb))
-	if !s.HasBlock(context.Background(), r) {
+	require.NoError(t, s.saveInitSyncBlock(t.Context(), r, wsb))
+	if !s.HasBlock(t.Context(), r) {
 		t.Error("Should have block")
 	}
 	b := util.NewBeaconBlock()
 	b.Block.Slot = 1
-	util.SaveBlock(t, context.Background(), s.cfg.BeaconDB, b)
+	util.SaveBlock(t, t.Context(), s.cfg.BeaconDB, b)
 	r, err = b.Block.HashTreeRoot()
 	require.NoError(t, err)
-	require.Equal(t, true, s.HasBlock(context.Background(), r))
+	require.Equal(t, true, s.HasBlock(t.Context(), r))
 	s.blockBeingSynced.set(r)
-	require.Equal(t, false, s.HasBlock(context.Background(), r))
+	require.Equal(t, false, s.HasBlock(t.Context(), r))
 }
 
 func TestCheckSaveHotStateDB_Enabling(t *testing.T) {
@@ -305,7 +321,7 @@ func TestCheckSaveHotStateDB_Enabling(t *testing.T) {
 	st := params.BeaconConfig().SlotsPerEpoch.Mul(uint64(epochsSinceFinalitySaveHotStateDB))
 	s.genesisTime = time.Now().Add(time.Duration(-1*int64(st)*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second)
 
-	require.NoError(t, s.checkSaveHotStateDB(context.Background()))
+	require.NoError(t, s.checkSaveHotStateDB(t.Context()))
 	assert.LogsContain(t, hook, "Entering mode to save hot states in DB")
 }
 
@@ -316,19 +332,19 @@ func TestCheckSaveHotStateDB_Disabling(t *testing.T) {
 
 	st := params.BeaconConfig().SlotsPerEpoch.Mul(uint64(epochsSinceFinalitySaveHotStateDB))
 	s.genesisTime = time.Now().Add(time.Duration(-1*int64(st)*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second)
-	require.NoError(t, s.checkSaveHotStateDB(context.Background()))
+	require.NoError(t, s.checkSaveHotStateDB(t.Context()))
 	s.genesisTime = time.Now()
 
-	require.NoError(t, s.checkSaveHotStateDB(context.Background()))
+	require.NoError(t, s.checkSaveHotStateDB(t.Context()))
 	assert.LogsContain(t, hook, "Exiting mode to save hot states in DB")
 }
 
 func TestCheckSaveHotStateDB_Overflow(t *testing.T) {
 	hook := logTest.NewGlobal()
 	s, _ := minimalTestService(t)
-	s.genesisTime = time.Now()
+	s.SetGenesisTime(time.Now())
 
-	require.NoError(t, s.checkSaveHotStateDB(context.Background()))
+	require.NoError(t, s.checkSaveHotStateDB(t.Context()))
 	assert.LogsDoNotContain(t, hook, "Entering mode to save hot states in DB")
 }
 
@@ -336,8 +352,9 @@ func TestHandleCaches_EnablingLargeSize(t *testing.T) {
 	hook := logTest.NewGlobal()
 	s, _ := minimalTestService(t)
 	st := params.BeaconConfig().SlotsPerEpoch.Mul(uint64(epochsSinceFinalitySaveHotStateDB))
-	s.genesisTime = time.Now().Add(time.Duration(-1*int64(st)*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second)
+	s.SetGenesisTime(time.Now().Add(time.Duration(-1*int64(st)*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
 
+	helpers.ClearCache()
 	require.NoError(t, s.handleCaches())
 	assert.LogsContain(t, hook, "Expanding committee cache size")
 }
@@ -443,7 +460,7 @@ func Test_executePostFinalizationTasks(t *testing.T) {
 
 	headState, err := util.NewBeaconStateElectra()
 	require.NoError(t, err)
-	finalizedStRoot, err := headState.HashTreeRoot(context.Background())
+	finalizedStRoot, err := headState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 
 	genesis := util.NewBeaconBlock()
@@ -549,4 +566,49 @@ func Test_executePostFinalizationTasks(t *testing.T) {
 		require.Equal(t, primitives.ValidatorIndex(0), index) // first index
 	})
 
+}
+
+func TestProcessLightClientBootstrap(t *testing.T) {
+	featCfg := &features.Flags{}
+	featCfg.EnableLightClient = true
+	reset := features.InitWithReset(featCfg)
+	defer reset()
+
+	s, tr := minimalTestService(t, WithLCStore())
+	ctx := tr.ctx
+
+	for testVersion := version.Altair; testVersion <= version.Electra; testVersion++ {
+		t.Run(version.String(testVersion), func(t *testing.T) {
+			l := util.NewTestLightClient(t, testVersion)
+
+			require.NoError(t, s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock))
+			finalizedBlockRoot, err := l.FinalizedBlock.Block().HashTreeRoot()
+			require.NoError(t, err)
+			require.NoError(t, s.cfg.BeaconDB.SaveState(ctx, l.FinalizedState, finalizedBlockRoot))
+
+			cp := l.AttestedState.FinalizedCheckpoint()
+			require.DeepSSZEqual(t, finalizedBlockRoot, [32]byte(cp.Root))
+
+			require.NoError(t, s.cfg.ForkChoiceStore.UpdateFinalizedCheckpoint(&forkchoicetypes.Checkpoint{Epoch: cp.Epoch, Root: [32]byte(cp.Root)}))
+
+			sss, err := s.cfg.BeaconDB.State(ctx, finalizedBlockRoot)
+			require.NoError(t, err)
+			require.NotNil(t, sss)
+
+			s.executePostFinalizationTasks(s.ctx, l.FinalizedState)
+
+			// wait for the goroutine to finish processing
+			time.Sleep(1 * time.Second)
+
+			// Check that the light client bootstrap is saved
+			b, err := s.lcStore.LightClientBootstrap(ctx, [32]byte(cp.Root))
+			require.NoError(t, err)
+			require.NotNil(t, b)
+
+			btst, err := lightClient.NewLightClientBootstrapFromBeaconState(ctx, l.FinalizedState.Slot(), l.FinalizedState, l.FinalizedBlock)
+			require.NoError(t, err)
+			require.DeepEqual(t, btst, b)
+			require.Equal(t, b.Version(), testVersion)
+		})
+	}
 }

@@ -146,7 +146,7 @@ func TestService_InitStartStop(t *testing.T) {
 		}
 		t.Run(tt.name, func(t *testing.T) {
 			defer hook.Reset()
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			mc := &mock.ChainService{Genesis: time.Now(), ValidatorsRoot: [32]byte{}}
 			// Allow overriding with customized chain service.
@@ -211,7 +211,7 @@ func TestService_waitForStateInitialization(t *testing.T) {
 
 	t.Run("no state and context close", func(t *testing.T) {
 		defer hook.Reset()
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 
 		s, _ := newService(ctx, &mock.ChainService{Genesis: time.Now(), ValidatorsRoot: [32]byte{}})
@@ -231,18 +231,18 @@ func TestService_waitForStateInitialization(t *testing.T) {
 			t.Fatalf("Test should have exited by now, timed out")
 		}
 		assert.LogsContain(t, hook, "Waiting for state to be initialized")
-		assert.LogsContain(t, hook, "initial-sync failed to receive startup event")
+		assert.LogsContain(t, hook, "Initial-sync failed to receive startup event")
 		assert.LogsDoNotContain(t, hook, "Subscription to state notifier failed")
 	})
 
 	t.Run("no state and state init event received", func(t *testing.T) {
 		defer hook.Reset()
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 
 		st, err := util.NewBeaconState()
 		require.NoError(t, err)
-		gt := time.Unix(int64(st.GenesisTime()), 0)
+		gt := st.GenesisTime()
 		s, gs := newService(ctx, &mock.ChainService{State: st, Genesis: gt, ValidatorsRoot: [32]byte{}})
 
 		expectedGenesisTime := gt
@@ -270,7 +270,7 @@ func TestService_waitForStateInitialization(t *testing.T) {
 
 	t.Run("no state and state init event received and service start", func(t *testing.T) {
 		defer hook.Reset()
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		s, gs := newService(ctx, &mock.ChainService{Genesis: time.Now(), ValidatorsRoot: [32]byte{}})
 		// Initialize mock feed
@@ -299,7 +299,7 @@ func TestService_waitForStateInitialization(t *testing.T) {
 
 func TestService_markSynced(t *testing.T) {
 	mc := &mock.ChainService{Genesis: time.Now(), ValidatorsRoot: [32]byte{}}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
 	s := NewService(ctx, &Config{
 		Chain:               mc,
@@ -334,7 +334,7 @@ func TestService_Resync(t *testing.T) {
 	}, p.Peers())
 	cache.initializeRootCache(makeSequence(1, 160), t)
 	beaconDB := dbtest.SetupDB(t)
-	util.SaveBlock(t, context.Background(), beaconDB, util.NewBeaconBlock())
+	util.SaveBlock(t, t.Context(), beaconDB, util.NewBeaconBlock())
 	cache.RLock()
 	genesisRoot := cache.rootCache[0]
 	cache.RUnlock()
@@ -356,7 +356,8 @@ func TestService_Resync(t *testing.T) {
 				st, err := util.NewBeaconState()
 				require.NoError(t, err)
 				futureSlot := primitives.Slot(160)
-				require.NoError(t, st.SetGenesisTime(uint64(makeGenesisTime(futureSlot).Unix())))
+				genesis := makeGenesisTime(futureSlot)
+				require.NoError(t, st.SetGenesisTime(genesis))
 				return &mock.ChainService{
 					State: st,
 					Root:  genesisRoot[:],
@@ -364,7 +365,7 @@ func TestService_Resync(t *testing.T) {
 					FinalizedCheckPoint: &eth.Checkpoint{
 						Epoch: slots.ToEpoch(futureSlot),
 					},
-					Genesis:        time.Now(),
+					Genesis:        genesis,
 					ValidatorsRoot: [32]byte{},
 				}
 			},
@@ -377,7 +378,7 @@ func TestService_Resync(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer hook.Reset()
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			mc := &mock.ChainService{}
 			// Allow overriding with customized chain service.
@@ -392,6 +393,7 @@ func TestService_Resync(t *testing.T) {
 				BlobStorage:   filesystem.NewEphemeralBlobStorage(t),
 			})
 			assert.NotNil(t, s)
+			s.genesisTime = mc.Genesis
 			assert.Equal(t, primitives.Slot(0), s.cfg.Chain.HeadSlot())
 			err := s.Resync()
 			if tt.wantedErr != "" {
@@ -407,7 +409,7 @@ func TestService_Resync(t *testing.T) {
 }
 
 func TestService_Initialized(t *testing.T) {
-	s := NewService(context.Background(), &Config{
+	s := NewService(t.Context(), &Config{
 		StateNotifier: &mock.MockStateNotifier{},
 	})
 	s.chainStarted.Set()
@@ -417,7 +419,7 @@ func TestService_Initialized(t *testing.T) {
 }
 
 func TestService_Synced(t *testing.T) {
-	s := NewService(context.Background(), &Config{})
+	s := NewService(t.Context(), &Config{})
 	s.synced.UnSet()
 	assert.Equal(t, false, s.Synced())
 	s.synced.Set()
@@ -491,7 +493,7 @@ func TestMissingBlobRequest(t *testing.T) {
 }
 
 func TestOriginOutsideRetention(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	bdb := dbtest.SetupDB(t)
 	genesis := time.Unix(0, 0)
 	secsPerEpoch := params.BeaconConfig().SecondsPerSlot * uint64(params.BeaconConfig().SlotsPerEpoch)

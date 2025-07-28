@@ -1,7 +1,6 @@
 package blockchain
 
 import (
-	"context"
 	"testing"
 
 	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
@@ -11,7 +10,7 @@ import (
 )
 
 func TestService_getBlock(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 	s := setupBeaconChain(t, beaconDB)
 	b1 := util.NewBeaconBlock()
@@ -42,7 +41,7 @@ func TestService_getBlock(t *testing.T) {
 }
 
 func TestService_hasBlockInInitSyncOrDB(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 	s := setupBeaconChain(t, beaconDB)
 	b1 := util.NewBeaconBlock()

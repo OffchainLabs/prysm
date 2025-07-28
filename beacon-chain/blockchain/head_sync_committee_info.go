@@ -18,9 +18,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Initialize the state cache for sync committees.
-var syncCommitteeHeadStateCache = cache.NewSyncCommitteeHeadState()
-
 // HeadSyncCommitteeFetcher is the interface that wraps the head sync committee related functions.
 // The head sync committee functions return callers sync committee indices and public keys with respect to current head state.
 type HeadSyncCommitteeFetcher interface {
@@ -143,7 +140,7 @@ func (s *Service) getSyncCommitteeHeadState(ctx context.Context, slot primitives
 	defer mLock.Unlock()
 
 	// If there's already a head state exists with the request slot, we don't need to process slots.
-	cachedState, err := syncCommitteeHeadStateCache.Get(slot)
+	cachedState, err := s.syncCommitteeHeadState.Get(slot)
 	switch {
 	case err == nil:
 		syncHeadStateHit.Inc()
@@ -166,7 +163,7 @@ func (s *Service) getSyncCommitteeHeadState(ctx context.Context, slot primitives
 			return nil, err
 		}
 		syncHeadStateMiss.Inc()
-		err = syncCommitteeHeadStateCache.Put(slot, headState)
+		err = s.syncCommitteeHeadState.Put(slot, headState)
 		return headState, err
 	default:
 		// In the event, we encounter another error

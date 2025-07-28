@@ -1,4 +1,4 @@
-package attestations
+package attestations_test
 
 import (
 	"io"
@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/encoding/ssz/equality"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation/aggregation"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation/aggregation/attestations"
 	aggtesting "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation/aggregation/testing"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -46,7 +47,7 @@ func TestAggregateAttestations_AggregatePair(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		got, err := AggregatePair(tt.a1, tt.a2)
+		got, err := attestations.AggregatePair(tt.a1, tt.a2)
 		require.NoError(t, err)
 		require.Equal(t, true, equality.DeepEqual(got, tt.want))
 	}
@@ -67,7 +68,7 @@ func TestAggregateAttestations_AggregatePair_OverlapFails(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		_, err := AggregatePair(tt.a1, tt.a2)
+		_, err := attestations.AggregatePair(tt.a1, tt.a2)
 		require.ErrorContains(t, aggregation.ErrBitsOverlap.Error(), err)
 	}
 }
@@ -83,7 +84,7 @@ func TestAggregateAttestations_AggregatePair_DiffLengthFails(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		_, err := AggregatePair(tt.a1, tt.a2)
+		_, err := attestations.AggregatePair(tt.a1, tt.a2)
 		require.ErrorContains(t, bitfield.ErrBitlistDifferentLength.Error(), err)
 	}
 }
@@ -209,7 +210,7 @@ func TestAggregateAttestations_Aggregate(t *testing.T) {
 
 	for _, tt := range tests {
 		runner := func() {
-			got, err := Aggregate(aggtesting.MakeAttestationsFromBitlists(tt.inputs))
+			got, err := attestations.Aggregate(aggtesting.MakeAttestationsFromBitlists(tt.inputs))
 			if tt.err != nil {
 				require.ErrorContains(t, tt.err.Error(), err)
 				return
@@ -233,7 +234,7 @@ func TestAggregateAttestations_Aggregate(t *testing.T) {
 
 	t.Run("broken attestation bitset", func(t *testing.T) {
 		wantErr := "bitlist cannot be nil or empty: invalid max_cover problem"
-		_, err := Aggregate(aggtesting.MakeAttestationsFromBitlists([]bitfield.Bitlist{
+		_, err := attestations.Aggregate(aggtesting.MakeAttestationsFromBitlists([]bitfield.Bitlist{
 			{0b00000011, 0b0},
 			{0b00000111, 0b100},
 			{0b00000100, 0b1},
@@ -245,7 +246,7 @@ func TestAggregateAttestations_Aggregate(t *testing.T) {
 		// The first item cannot be aggregated, and should be pushed down the list,
 		// by two swaps with aggregated items (aggregation is done in-place, so the very same
 		// underlying array is used for storing both aggregated and non-aggregated items).
-		got, err := Aggregate(aggtesting.MakeAttestationsFromBitlists([]bitfield.Bitlist{
+		got, err := attestations.Aggregate(aggtesting.MakeAttestationsFromBitlists([]bitfield.Bitlist{
 			{0b10000000, 0b1},
 			{0b11000101, 0b1},
 			{0b00011000, 0b1},

@@ -1,7 +1,6 @@
 package kv
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,7 +13,7 @@ import (
 
 func TestStore_Backup(t *testing.T) {
 	db := setupDB(t, nil)
-	ctx := context.Background()
+	ctx := t.Context()
 	root := [32]byte{1}
 	require.NoError(t, db.SaveGenesisValidatorsRoot(ctx, root[:]))
 	require.NoError(t, db.Backup(ctx, "", true))
@@ -44,7 +43,7 @@ func TestStore_Backup(t *testing.T) {
 func TestStore_NestedBackup(t *testing.T) {
 	keys := [][fieldparams.BLSPubkeyLength]byte{{'A'}, {'B'}}
 	db := setupDB(t, keys)
-	ctx := context.Background()
+	ctx := t.Context()
 	root := [32]byte{1}
 	idxAtt := &ethpb.IndexedAttestation{
 		AttestingIndices: nil,
@@ -64,8 +63,8 @@ func TestStore_NestedBackup(t *testing.T) {
 		Signature: make([]byte, 96),
 	}
 	require.NoError(t, db.SaveGenesisValidatorsRoot(ctx, root[:]))
-	require.NoError(t, db.SaveAttestationForPubKey(context.Background(), keys[0], [32]byte{'C'}, idxAtt))
-	require.NoError(t, db.SaveAttestationForPubKey(context.Background(), keys[1], [32]byte{'C'}, idxAtt))
+	require.NoError(t, db.SaveAttestationForPubKey(t.Context(), keys[0], [32]byte{'C'}, idxAtt))
+	require.NoError(t, db.SaveAttestationForPubKey(t.Context(), keys[1], [32]byte{'C'}, idxAtt))
 	require.NoError(t, db.Backup(ctx, "", true))
 
 	backupsPath := filepath.Join(db.databasePath, backupsDirectoryName)
@@ -91,7 +90,7 @@ func TestStore_NestedBackup(t *testing.T) {
 
 	signingRoot32 := [32]byte{'C'}
 
-	hist, err := backedDB.AttestationHistoryForPubKey(context.Background(), keys[0])
+	hist, err := backedDB.AttestationHistoryForPubKey(t.Context(), keys[0])
 	require.NoError(t, err)
 	require.DeepEqual(t, &common.AttestationRecord{
 		PubKey:      keys[0],
@@ -100,7 +99,7 @@ func TestStore_NestedBackup(t *testing.T) {
 		SigningRoot: signingRoot32[:],
 	}, hist[0])
 
-	hist, err = backedDB.AttestationHistoryForPubKey(context.Background(), keys[1])
+	hist, err = backedDB.AttestationHistoryForPubKey(t.Context(), keys[1])
 	require.NoError(t, err)
 	require.DeepEqual(t, &common.AttestationRecord{
 		PubKey:      keys[1],
@@ -109,12 +108,12 @@ func TestStore_NestedBackup(t *testing.T) {
 		SigningRoot: signingRoot32[:],
 	}, hist[0])
 
-	ep, exists, err := backedDB.LowestSignedSourceEpoch(context.Background(), keys[0])
+	ep, exists, err := backedDB.LowestSignedSourceEpoch(t.Context(), keys[0])
 	require.NoError(t, err)
 	require.Equal(t, true, exists)
 	require.Equal(t, 10, int(ep))
 
-	ep, exists, err = backedDB.LowestSignedSourceEpoch(context.Background(), keys[1])
+	ep, exists, err = backedDB.LowestSignedSourceEpoch(t.Context(), keys[1])
 	require.NoError(t, err)
 	require.Equal(t, true, exists)
 	require.Equal(t, 10, int(ep))

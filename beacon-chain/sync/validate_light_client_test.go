@@ -2,7 +2,6 @@ package sync
 
 import (
 	"bytes"
-	"context"
 	"testing"
 	"time"
 
@@ -23,7 +22,7 @@ import (
 
 func TestValidateLightClientOptimisticUpdate_NilMessageOrTopic(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	p := p2ptest.NewTestP2P(t)
 	s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}}}
 
@@ -98,7 +97,7 @@ func TestValidateLightClientOptimisticUpdate(t *testing.T) {
 	for _, test := range tests {
 		for v := 1; v < 6; v++ {
 			t.Run(test.name+"_"+version.String(v), func(t *testing.T) {
-				ctx := context.Background()
+				ctx := t.Context()
 				p := p2ptest.NewTestP2P(t)
 				// drift back appropriate number of epochs based on fork + 2 slots for signature slot + time for gossip propagation + any extra drift
 				genesisDrift := v*slotsPerEpoch*secondsPerSlot + 2*secondsPerSlot + secondsPerSlot/slotIntervals + test.genesisDrift
@@ -109,14 +108,14 @@ func TestValidateLightClientOptimisticUpdate(t *testing.T) {
 				var err error
 				if test.oldUpdateOptions != nil {
 					l := util.NewTestLightClient(t, v, test.oldUpdateOptions...)
-					oldUpdate, err = lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
+					oldUpdate, err = lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock)
 					require.NoError(t, err)
 
 					s.lcStore.SetLastOptimisticUpdate(oldUpdate)
 				}
 
 				l := util.NewTestLightClient(t, v, test.newUpdateOptions...)
-				newUpdate, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
+				newUpdate, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock)
 				require.NoError(t, err)
 				buf := new(bytes.Buffer)
 				_, err = p.Encoding().EncodeGossip(buf, newUpdate)
@@ -145,7 +144,7 @@ func TestValidateLightClientOptimisticUpdate(t *testing.T) {
 
 func TestValidateLightClientFinalityUpdate_NilMessageOrTopic(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	p := p2ptest.NewTestP2P(t)
 	s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}}}
 
@@ -238,7 +237,7 @@ func TestValidateLightClientFinalityUpdate(t *testing.T) {
 	for _, test := range tests {
 		for v := 1; v < 6; v++ {
 			t.Run(test.name+"_"+version.String(v), func(t *testing.T) {
-				ctx := context.Background()
+				ctx := t.Context()
 				p := p2ptest.NewTestP2P(t)
 				// drift back appropriate number of epochs based on fork + 2 slots for signature slot + time for gossip propagation + any extra drift
 				genesisDrift := v*slotsPerEpoch*secondsPerSlot + 2*secondsPerSlot + secondsPerSlot/slotIntervals + test.genesisDrift
@@ -249,14 +248,14 @@ func TestValidateLightClientFinalityUpdate(t *testing.T) {
 				var err error
 				if test.oldUpdateOptions != nil {
 					l := util.NewTestLightClient(t, v, test.oldUpdateOptions...)
-					oldUpdate, err = lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+					oldUpdate, err = lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 					require.NoError(t, err)
 
 					s.lcStore.SetLastFinalityUpdate(oldUpdate)
 				}
 
 				l := util.NewTestLightClient(t, v, test.newUpdateOptions...)
-				newUpdate, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+				newUpdate, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 				require.NoError(t, err)
 				buf := new(bytes.Buffer)
 				_, err = p.Encoding().EncodeGossip(buf, newUpdate)

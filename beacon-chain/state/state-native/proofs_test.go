@@ -1,7 +1,6 @@
 package state_native_test
 
 import (
-	"context"
 	"testing"
 
 	statenative "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
@@ -12,7 +11,7 @@ import (
 )
 
 func TestBeaconStateMerkleProofs_phase0_notsupported(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	st, _ := util.DeterministicGenesisState(t, 256)
 	t.Run("current sync committee", func(t *testing.T) {
 		_, err := st.CurrentSyncCommitteeProof(ctx)
@@ -28,7 +27,7 @@ func TestBeaconStateMerkleProofs_phase0_notsupported(t *testing.T) {
 	})
 }
 func TestBeaconStateMerkleProofs_altair(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	altair, err := util.NewBeaconStateAltair()
 	require.NoError(t, err)
 	htr, err := altair.HashTreeRoot(ctx)
@@ -97,7 +96,7 @@ func TestBeaconStateMerkleProofs_altair(t *testing.T) {
 }
 
 func TestBeaconStateMerkleProofs_bellatrix(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	bellatrix, err := util.NewBeaconStateBellatrix()
 	require.NoError(t, err)
 	htr, err := bellatrix.HashTreeRoot(ctx)

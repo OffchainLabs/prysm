@@ -1,7 +1,6 @@
 package grpc
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
@@ -16,7 +15,7 @@ type customErrorData struct {
 
 func TestAppendHeaders(t *testing.T) {
 	t.Run("one_header", func(t *testing.T) {
-		ctx := AppendHeaders(context.Background(), []string{"first=value1"})
+		ctx := AppendHeaders(t.Context(), []string{"first=value1"})
 		md, ok := metadata.FromOutgoingContext(ctx)
 		require.Equal(t, true, ok, "Failed to read context metadata")
 		require.Equal(t, 1, md.Len(), "MetadataV0 contains wrong number of values")
@@ -24,7 +23,7 @@ func TestAppendHeaders(t *testing.T) {
 	})
 
 	t.Run("multiple_headers", func(t *testing.T) {
-		ctx := AppendHeaders(context.Background(), []string{"first=value1", "second=value2"})
+		ctx := AppendHeaders(t.Context(), []string{"first=value1", "second=value2"})
 		md, ok := metadata.FromOutgoingContext(ctx)
 		require.Equal(t, true, ok, "Failed to read context metadata")
 		require.Equal(t, 2, md.Len(), "MetadataV0 contains wrong number of values")
@@ -33,7 +32,7 @@ func TestAppendHeaders(t *testing.T) {
 	})
 
 	t.Run("one_empty_header", func(t *testing.T) {
-		ctx := AppendHeaders(context.Background(), []string{"first=value1", ""})
+		ctx := AppendHeaders(t.Context(), []string{"first=value1", ""})
 		md, ok := metadata.FromOutgoingContext(ctx)
 		require.Equal(t, true, ok, "Failed to read context metadata")
 		require.Equal(t, 1, md.Len(), "MetadataV0 contains wrong number of values")
@@ -42,7 +41,7 @@ func TestAppendHeaders(t *testing.T) {
 
 	t.Run("incorrect_header", func(t *testing.T) {
 		logHook := logTest.NewGlobal()
-		ctx := AppendHeaders(context.Background(), []string{"first=value1", "second"})
+		ctx := AppendHeaders(t.Context(), []string{"first=value1", "second"})
 		md, ok := metadata.FromOutgoingContext(ctx)
 		require.Equal(t, true, ok, "Failed to read context metadata")
 		require.Equal(t, 1, md.Len(), "MetadataV0 contains wrong number of values")
@@ -51,7 +50,7 @@ func TestAppendHeaders(t *testing.T) {
 	})
 
 	t.Run("header_value_with_equal_sign", func(t *testing.T) {
-		ctx := AppendHeaders(context.Background(), []string{"first=value=1"})
+		ctx := AppendHeaders(t.Context(), []string{"first=value=1"})
 		md, ok := metadata.FromOutgoingContext(ctx)
 		require.Equal(t, true, ok, "Failed to read context metadata")
 		require.Equal(t, 1, md.Len(), "MetadataV0 contains wrong number of values")

@@ -4,6 +4,7 @@ package operation
 import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
@@ -37,8 +38,14 @@ const (
 	// SingleAttReceived is sent after a single attestation object is received from gossip or rpc
 	SingleAttReceived = 9
 
+	// DataColumnSidecarReceived is sent after a data column sidecar is received from gossip or rpc.
+	DataColumnSidecarReceived = 10
+
 	// BlockGossipReceived is sent after a block has been received from gossip or API that passes validation rules.
-	BlockGossipReceived = 10
+	BlockGossipReceived = 11
+
+	// DataColumnReceived is sent after a data column has been seen after gossip validation rules.
+	DataColumnReceived = 12
 )
 
 // UnAggregatedAttReceivedData is the data sent with UnaggregatedAttReceived events.
@@ -90,8 +97,20 @@ type SingleAttReceivedData struct {
 	Attestation ethpb.Att
 }
 
+// DataColumnSidecarReceivedData is the data sent with DataColumnSidecarReceived events.
+type DataColumnSidecarReceivedData struct {
+	DataColumn *blocks.VerifiedRODataColumn
+}
+
 // BlockGossipReceivedData is the data sent with BlockGossipReceived events.
 type BlockGossipReceivedData struct {
 	// SignedBlock is the block that was received.
 	SignedBlock interfaces.ReadOnlySignedBeaconBlock
+}
+
+type DataColumnReceivedData struct {
+	Slot           primitives.Slot
+	Index          uint64
+	BlockRoot      [32]byte
+	KzgCommitments [][]byte
 }

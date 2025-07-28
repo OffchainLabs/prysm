@@ -16,6 +16,7 @@ import (
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	coreTime "github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
@@ -46,26 +47,29 @@ import (
 // Service represents a service that handles the internal
 // logic of managing the full PoS beacon chain.
 type Service struct {
-	cfg                  *config
-	ctx                  context.Context
-	cancel               context.CancelFunc
-	genesisTime          time.Time
-	head                 *head
-	headLock             sync.RWMutex
-	originBlockRoot      [32]byte // genesis root, or weak subjectivity checkpoint root, depending on how the node is initialized
-	boundaryRoots        [][32]byte
-	checkpointStateCache *cache.CheckpointStateCache
-	initSyncBlocks       map[[32]byte]interfaces.ReadOnlySignedBeaconBlock
-	initSyncBlocksLock   sync.RWMutex
-	wsVerifier           *WeakSubjectivityVerifier
-	clockSetter          startup.ClockSetter
-	clockWaiter          startup.ClockWaiter
-	syncComplete         chan struct{}
-	blobNotifiers        *blobNotifierMap
-	blockBeingSynced     *currentlySyncingBlock
-	blobStorage          *filesystem.BlobStorage
-	slasherEnabled       bool
-	lcStore              *lightClient.Store
+	cfg                            *config
+	ctx                            context.Context
+	cancel                         context.CancelFunc
+	genesisTime                    time.Time
+	head                           *head
+	headLock                       sync.RWMutex
+	originBlockRoot                [32]byte // genesis root, or weak subjectivity checkpoint root, depending on how the node is initialized
+	boundaryRoots                  [][32]byte
+	checkpointStateCache           *cache.CheckpointStateCache
+	initSyncBlocks                 map[[32]byte]interfaces.ReadOnlySignedBeaconBlock
+	initSyncBlocksLock             sync.RWMutex
+	wsVerifier                     *WeakSubjectivityVerifier
+	clockSetter                    startup.ClockSetter
+	clockWaiter                    startup.ClockWaiter
+	syncComplete                   chan struct{}
+	blobNotifiers                  *blobNotifierMap
+	blockBeingSynced               *currentlySyncingBlock
+	blobStorage                    *filesystem.BlobStorage
+	dataColumnStorage              *filesystem.DataColumnStorage
+	slasherEnabled                 bool
+	lcStore                        *lightClient.Store
+	startWaitingDataColumnSidecars chan bool // for testing purposes only
+	syncCommitteeHeadState         *cache.SyncCommitteeHeadStateCache
 }
 
 // config options for the service.
@@ -81,7 +85,7 @@ type config struct {
 	ExitPool                voluntaryexits.PoolManager
 	SlashingPool            slashings.PoolManager
 	BLSToExecPool           blstoexec.PoolManager
-	P2p                     p2p.Broadcaster
+	P2P                     p2p.Accessor
 	MaxRoutines             int
 	StateNotifier           statefeed.Notifier
 	ForkChoiceStore         f.ForkChoicer
@@ -93,6 +97,7 @@ type config struct {
 	FinalizedStateAtStartUp state.BeaconState
 	ExecutionEngineCaller   execution.EngineCaller
 	SyncChecker             Checker
+	CustodyInfo             *peerdas.CustodyInfo
 }
 
 // Checker is an interface used to determine if a node is in initial sync
@@ -176,14 +181,15 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 		seenIndex: make(map[[32]byte][]bool),
 	}
 	srv := &Service{
-		ctx:                  ctx,
-		cancel:               cancel,
-		boundaryRoots:        [][32]byte{},
-		checkpointStateCache: cache.NewCheckpointStateCache(),
-		initSyncBlocks:       make(map[[32]byte]interfaces.ReadOnlySignedBeaconBlock),
-		blobNotifiers:        bn,
-		cfg:                  &config{},
-		blockBeingSynced:     &currentlySyncingBlock{roots: make(map[[32]byte]struct{})},
+		ctx:                    ctx,
+		cancel:                 cancel,
+		boundaryRoots:          [][32]byte{},
+		checkpointStateCache:   cache.NewCheckpointStateCache(),
+		initSyncBlocks:         make(map[[32]byte]interfaces.ReadOnlySignedBeaconBlock),
+		blobNotifiers:          bn,
+		cfg:                    &config{},
+		blockBeingSynced:       &currentlySyncingBlock{roots: make(map[[32]byte]struct{})},
+		syncCommitteeHeadState: cache.NewSyncCommitteeHeadState(),
 	}
 	for _, opt := range opts {
 		if err := opt(srv); err != nil {
@@ -262,7 +268,7 @@ func (s *Service) Status() error {
 // StartFromSavedState initializes the blockchain using a previously saved finalized checkpoint.
 func (s *Service) StartFromSavedState(saved state.BeaconState) error {
 	log.Info("Blockchain data already exists in DB, initializing...")
-	s.genesisTime = time.Unix(int64(saved.GenesisTime()), 0) // lint:ignore uintcast -- Genesis time will not exceed int64 in your lifetime.
+	s.genesisTime = saved.GenesisTime()
 	s.cfg.AttService.SetGenesisTime(saved.GenesisTime())
 
 	originRoot, err := s.originRootFromSavedState(s.ctx)
@@ -367,7 +373,7 @@ func (s *Service) startFromExecutionChain() error {
 				if e.Type == statefeed.ChainStarted {
 					data, ok := e.Data.(*statefeed.ChainStartedData)
 					if !ok {
-						log.Error("event data is not type *statefeed.ChainStartedData")
+						log.Error("Event data is not type *statefeed.ChainStartedData")
 						return
 					}
 					log.WithField("startTime", data.StartTime).Debug("Received chain start event")
@@ -404,7 +410,7 @@ func (s *Service) onExecutionChainStart(ctx context.Context, genesisTime time.Ti
 
 	vr := bytesutil.ToBytes32(initializedState.GenesisValidatorsRoot())
 	if err := s.clockSetter.SetClock(startup.NewClock(genesisTime, vr)); err != nil {
-		log.WithError(err).Fatal("failed to initialize blockchain service from execution start event")
+		log.WithError(err).Fatal("Failed to initialize blockchain service from execution start event")
 	}
 }
 
@@ -418,7 +424,7 @@ func (s *Service) initializeBeaconChain(
 	eth1data *ethpb.Eth1Data) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "beacon-chain.Service.initializeBeaconChain")
 	defer span.End()
-	s.genesisTime = genesisTime
+	s.genesisTime = genesisTime.Truncate(time.Second) // Genesis time has a precision of 1 second.
 	unixTime := uint64(genesisTime.Unix())
 
 	genesisState, err := transition.OptimizedGenesisBeaconState(unixTime, preGenesisState, eth1data)
@@ -479,7 +485,7 @@ func (s *Service) saveGenesisData(ctx context.Context, genesisState state.Beacon
 	if err := s.cfg.ForkChoiceStore.SetOptimisticToValid(ctx, genesisBlkRoot); err != nil {
 		return errors.Wrap(err, "Could not set optimistic status of genesis block to false")
 	}
-	s.cfg.ForkChoiceStore.SetGenesisTime(uint64(s.genesisTime.Unix()))
+	s.cfg.ForkChoiceStore.SetGenesisTime(s.genesisTime)
 
 	if err := s.setHead(&head{
 		genesisBlkRoot,

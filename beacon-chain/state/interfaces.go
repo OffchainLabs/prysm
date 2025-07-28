@@ -6,6 +6,7 @@ package state
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	customtypes "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/custom-types"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -61,14 +62,15 @@ type ReadOnlyBeaconState interface {
 	ReadOnlySyncCommittee
 	ReadOnlyDeposits
 	ReadOnlyConsolidations
+	ReadOnlyProposerLookahead
 	ToProtoUnsafe() interface{}
 	ToProto() interface{}
-	GenesisTime() uint64
+	GenesisTime() time.Time
 	GenesisValidatorsRoot() []byte
 	Slot() primitives.Slot
 	Fork() *ethpb.Fork
 	LatestBlockHeader() *ethpb.BeaconBlockHeader
-	HistoricalRoots() ([][]byte, error)
+	HistoricalRoots() [][]byte
 	HistoricalSummaries() ([]*ethpb.HistoricalSummary, error)
 	Slashings() []uint64
 	FieldReferencesCount() map[string]uint64
@@ -95,7 +97,8 @@ type WriteOnlyBeaconState interface {
 	WriteOnlyConsolidations
 	WriteOnlyWithdrawals
 	WriteOnlyDeposits
-	SetGenesisTime(val uint64) error
+	WriteOnlyProposerLookahead
+	SetGenesisTime(val time.Time) error
 	SetGenesisValidatorsRoot(val []byte) error
 	SetSlot(val primitives.Slot) error
 	SetFork(val *ethpb.Fork) error
@@ -239,6 +242,10 @@ type ReadOnlyConsolidations interface {
 	NumPendingConsolidations() (uint64, error)
 }
 
+type ReadOnlyProposerLookahead interface {
+	ProposerLookahead() ([]primitives.ValidatorIndex, error)
+}
+
 // WriteOnlyBlockRoots defines a struct which only has write access to block roots methods.
 type WriteOnlyBlockRoots interface {
 	SetBlockRoots(val [][]byte) error
@@ -339,4 +346,8 @@ type WriteOnlyDeposits interface {
 	SetDepositRequestsStartIndex(index uint64) error
 	SetPendingDeposits(val []*ethpb.PendingDeposit) error
 	SetDepositBalanceToConsume(primitives.Gwei) error
+}
+
+type WriteOnlyProposerLookahead interface {
+	SetProposerLookahead([]primitives.ValidatorIndex) error
 }

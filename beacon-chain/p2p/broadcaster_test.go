@@ -9,11 +9,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
@@ -74,7 +77,7 @@ func TestService_Broadcast(t *testing.T) {
 	wg.Add(1)
 	go func(tt *testing.T) {
 		defer wg.Done()
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 		defer cancel()
 
 		incomingMessage, err := sub.Next(ctx)
@@ -88,7 +91,7 @@ func TestService_Broadcast(t *testing.T) {
 	}(t)
 
 	// Broadcast to peers and wait.
-	require.NoError(t, p.Broadcast(context.Background(), msg))
+	require.NoError(t, p.Broadcast(t.Context(), msg))
 	if util.WaitTimeout(&wg, 1*time.Second) {
 		t.Error("Failed to receive pubsub within 1s")
 	}
@@ -99,7 +102,7 @@ func TestService_Broadcast_ReturnsErr_TopicNotMapped(t *testing.T) {
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 	}
-	assert.ErrorContains(t, ErrMessageNotMapped.Error(), p.Broadcast(context.Background(), &testpb.AddressBook{}))
+	assert.ErrorContains(t, ErrMessageNotMapped.Error(), p.Broadcast(t.Context(), &testpb.AddressBook{}))
 }
 
 func TestService_Attestation_Subnet(t *testing.T) {
@@ -162,7 +165,7 @@ func TestService_BroadcastAttestation(t *testing.T) {
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		subnetsLockLock:       sync.Mutex{},
-		peers: peers.NewStatus(context.Background(), &peers.StatusConfig{
+		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
 			ScorerParams: &scorers.Config{},
 		}),
 	}
@@ -188,7 +191,7 @@ func TestService_BroadcastAttestation(t *testing.T) {
 	wg.Add(1)
 	go func(tt *testing.T) {
 		defer wg.Done()
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 		defer cancel()
 
 		incomingMessage, err := sub.Next(ctx)
@@ -202,7 +205,7 @@ func TestService_BroadcastAttestation(t *testing.T) {
 	}(t)
 
 	// Attempt to broadcast nil object should fail.
-	ctx := context.Background()
+	ctx := t.Context()
 	require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastAttestation(ctx, subnet, nil))
 
 	// Broadcast to peers and wait.
@@ -213,9 +216,10 @@ func TestService_BroadcastAttestation(t *testing.T) {
 }
 
 func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
+	const port = uint(2000)
+
 	// Setup bootnode.
 	cfg := &Config{PingInterval: testPingInterval}
-	port := 2000
 	cfg.UDPPort = uint(port)
 	_, pkey := createAddrAndPrivKey(t)
 	ipAddr := net.ParseIP("127.0.0.1")
@@ -242,7 +246,7 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		PingInterval:         testPingInterval,
 	}
 	// Setup 2 different hosts
-	for i := 1; i <= 2; i++ {
+	for i := uint(1); i <= 2; i++ {
 		h, pkey, ipAddr := createHost(t, port+i)
 		cfg.UDPPort = uint(port + i)
 		cfg.TCPPort = uint(port + i)
@@ -283,20 +287,20 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		}
 	}()
 
-	ps1, err := pubsub.NewGossipSub(context.Background(), hosts[0],
+	ps1, err := pubsub.NewGossipSub(t.Context(), hosts[0],
 		pubsub.WithMessageSigning(false),
 		pubsub.WithStrictSignatureVerification(false),
 	)
 	require.NoError(t, err)
 
-	ps2, err := pubsub.NewGossipSub(context.Background(), hosts[1],
+	ps2, err := pubsub.NewGossipSub(t.Context(), hosts[1],
 		pubsub.WithMessageSigning(false),
 		pubsub.WithStrictSignatureVerification(false),
 	)
 	require.NoError(t, err)
 	p := &Service{
 		host:                  hosts[0],
-		ctx:                   context.Background(),
+		ctx:                   t.Context(),
 		pubsub:                ps1,
 		dv5Listener:           listeners[0],
 		joinedTopics:          map[string]*pubsub.Topic{},
@@ -305,14 +309,14 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		subnetsLockLock:       sync.Mutex{},
-		peers: peers.NewStatus(context.Background(), &peers.StatusConfig{
+		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
 			ScorerParams: &scorers.Config{},
 		}),
 	}
 
 	p2 := &Service{
 		host:                  hosts[1],
-		ctx:                   context.Background(),
+		ctx:                   t.Context(),
 		pubsub:                ps2,
 		dv5Listener:           listeners[1],
 		joinedTopics:          map[string]*pubsub.Topic{},
@@ -321,7 +325,7 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		subnetsLockLock:       sync.Mutex{},
-		peers: peers.NewStatus(context.Background(), &peers.StatusConfig{
+		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
 			ScorerParams: &scorers.Config{},
 		}),
 	}
@@ -362,7 +366,7 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	wg.Add(1)
 	go func(tt *testing.T) {
 		defer wg.Done()
-		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 4*time.Second)
 		defer cancel()
 
 		incomingMessage, err := sub.Next(ctx)
@@ -376,7 +380,7 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	}(t)
 
 	// Broadcast to peers and wait.
-	require.NoError(t, p.BroadcastAttestation(context.Background(), subnet, msg))
+	require.NoError(t, p.BroadcastAttestation(t.Context(), subnet, msg))
 	if util.WaitTimeout(&wg, 4*time.Second) {
 		t.Error("Failed to receive pubsub within 4s")
 	}
@@ -399,7 +403,7 @@ func TestService_BroadcastSyncCommittee(t *testing.T) {
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		subnetsLockLock:       sync.Mutex{},
-		peers: peers.NewStatus(context.Background(), &peers.StatusConfig{
+		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
 			ScorerParams: &scorers.Config{},
 		}),
 	}
@@ -425,7 +429,7 @@ func TestService_BroadcastSyncCommittee(t *testing.T) {
 	wg.Add(1)
 	go func(tt *testing.T) {
 		defer wg.Done()
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 		defer cancel()
 
 		incomingMessage, err := sub.Next(ctx)
@@ -439,7 +443,7 @@ func TestService_BroadcastSyncCommittee(t *testing.T) {
 	}(t)
 
 	// Broadcasting nil should fail.
-	ctx := context.Background()
+	ctx := t.Context()
 	require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastSyncCommitteeMessage(ctx, subnet, nil))
 
 	// Broadcast to peers and wait.
@@ -464,7 +468,7 @@ func TestService_BroadcastBlob(t *testing.T) {
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		subnetsLockLock:       sync.Mutex{},
-		peers: peers.NewStatus(context.Background(), &peers.StatusConfig{
+		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
 			ScorerParams: &scorers.Config{},
 		}),
 	}
@@ -502,7 +506,7 @@ func TestService_BroadcastBlob(t *testing.T) {
 	wg.Add(1)
 	go func(tt *testing.T) {
 		defer wg.Done()
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 		defer cancel()
 
 		incomingMessage, err := sub.Next(ctx)
@@ -514,7 +518,7 @@ func TestService_BroadcastBlob(t *testing.T) {
 	}(t)
 
 	// Attempt to broadcast nil object should fail.
-	ctx := context.Background()
+	ctx := t.Context()
 	require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastBlob(ctx, subnet, nil))
 
 	// Broadcast to peers and wait.
@@ -537,13 +541,13 @@ func TestService_BroadcastLightClientOptimisticUpdate(t *testing.T) {
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		subnetsLockLock:       sync.Mutex{},
-		peers: peers.NewStatus(context.Background(), &peers.StatusConfig{
+		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
 			ScorerParams: &scorers.Config{},
 		}),
 	}
 
 	l := util.NewTestLightClient(t, version.Altair)
-	msg, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
+	msg, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock)
 	require.NoError(t, err)
 
 	GossipTypeMapping[reflect.TypeOf(msg)] = LightClientOptimisticUpdateTopicFormat
@@ -563,7 +567,7 @@ func TestService_BroadcastLightClientOptimisticUpdate(t *testing.T) {
 	wg.Add(1)
 	go func(tt *testing.T) {
 		defer wg.Done()
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 		defer cancel()
 
 		incomingMessage, err := sub.Next(ctx)
@@ -577,7 +581,7 @@ func TestService_BroadcastLightClientOptimisticUpdate(t *testing.T) {
 	}(t)
 
 	// Broadcasting nil should fail.
-	ctx := context.Background()
+	ctx := t.Context()
 	require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastLightClientOptimisticUpdate(ctx, nil))
 	var nilUpdate interfaces.LightClientOptimisticUpdate
 	require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastLightClientOptimisticUpdate(ctx, nilUpdate))
@@ -604,13 +608,13 @@ func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		subnetsLockLock:       sync.Mutex{},
-		peers: peers.NewStatus(context.Background(), &peers.StatusConfig{
+		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
 			ScorerParams: &scorers.Config{},
 		}),
 	}
 
 	l := util.NewTestLightClient(t, version.Altair)
-	msg, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+	msg, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 	require.NoError(t, err)
 
 	GossipTypeMapping[reflect.TypeOf(msg)] = LightClientFinalityUpdateTopicFormat
@@ -630,7 +634,7 @@ func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
 	wg.Add(1)
 	go func(tt *testing.T) {
 		defer wg.Done()
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 		defer cancel()
 
 		incomingMessage, err := sub.Next(ctx)
@@ -644,7 +648,7 @@ func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
 	}(t)
 
 	// Broadcasting nil should fail.
-	ctx := context.Background()
+	ctx := t.Context()
 	require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastLightClientFinalityUpdate(ctx, nil))
 	var nilUpdate interfaces.LightClientFinalityUpdate
 	require.ErrorContains(t, "attempted to broadcast nil", p.BroadcastLightClientFinalityUpdate(ctx, nilUpdate))
@@ -654,4 +658,88 @@ func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
 	if util.WaitTimeout(&wg, 1*time.Second) {
 		t.Error("Failed to receive pubsub within 1s")
 	}
+}
+
+func TestService_BroadcastDataColumn(t *testing.T) {
+	const (
+		port        = 2000
+		columnIndex = 12
+		topicFormat = DataColumnSubnetTopicFormat
+	)
+
+	// Load the KZG trust setup.
+	err := kzg.Start()
+	require.NoError(t, err)
+
+	gFlags := new(flags.GlobalFlags)
+	gFlags.MinimumPeersPerSubnet = 1
+	flags.Init(gFlags)
+
+	// Reset config.
+	defer flags.Init(new(flags.GlobalFlags))
+
+	// Create two peers and connect them.
+	p1, p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+	p1.Connect(p2)
+
+	// Test the peers are connected.
+	require.NotEqual(t, 0, len(p1.BHost.Network().Peers()), "No peers")
+
+	// Create a host.
+	_, pkey, ipAddr := createHost(t, port)
+
+	service := &Service{
+		ctx:                   t.Context(),
+		host:                  p1.BHost,
+		pubsub:                p1.PubSub(),
+		joinedTopics:          map[string]*pubsub.Topic{},
+		cfg:                   &Config{},
+		genesisTime:           time.Now(),
+		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+		subnetsLock:           make(map[uint64]*sync.RWMutex),
+		subnetsLockLock:       sync.Mutex{},
+		peers:                 peers.NewStatus(t.Context(), &peers.StatusConfig{ScorerParams: &scorers.Config{}}),
+	}
+
+	// Create a listener.
+	listener, err := service.startDiscoveryV5(ipAddr, pkey)
+	require.NoError(t, err)
+
+	service.dv5Listener = listener
+
+	digest, err := service.currentForkDigest()
+	require.NoError(t, err)
+
+	subnet := peerdas.ComputeSubnetForDataColumnSidecar(columnIndex)
+	topic := fmt.Sprintf(topicFormat, digest, subnet) + service.Encoding().ProtocolSuffix()
+
+	roSidecars, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, []util.DataColumnParam{{Index: columnIndex}})
+	sidecar := roSidecars[0].DataColumnSidecar
+
+	// Attempt to broadcast nil object should fail.
+	var emptyRoot [fieldparams.RootLength]byte
+	err = service.BroadcastDataColumn(emptyRoot, subnet, nil)
+	require.ErrorContains(t, "attempted to broadcast nil", err)
+
+	// Subscribe to the topic.
+	sub, err := p2.SubscribeToTopic(topic)
+	require.NoError(t, err)
+
+	// libp2p fails without this delay
+	time.Sleep(50 * time.Millisecond)
+
+	// Broadcast to peers and wait.
+	err = service.BroadcastDataColumn(emptyRoot, subnet, sidecar)
+	require.NoError(t, err)
+
+	// Receive the message.
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	msg, err := sub.Next(ctx)
+	require.NoError(t, err)
+
+	var result ethpb.DataColumnSidecar
+	require.NoError(t, service.Encoding().DecodeGossip(msg.Data, &result))
+	require.DeepEqual(t, &result, sidecar)
 }

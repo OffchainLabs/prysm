@@ -45,7 +45,7 @@ func TestPendingAttestationRecords_Len(t *testing.T) {
 }
 
 func TestStore_CheckSlashableAttestation_DoubleVote(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	numValidators := 1
 	pubKeys := make([][fieldparams.BLSPubkeyLength]byte, numValidators)
 	validatorDB := setupDB(t, pubKeys)
@@ -116,7 +116,7 @@ func TestStore_CheckSlashableAttestation_DoubleVote(t *testing.T) {
 }
 
 func TestStore_CheckSlashableAttestation_SurroundVote_MultipleTargetsPerSource(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	numValidators := 1
 	pubKeys := make([][fieldparams.BLSPubkeyLength]byte, numValidators)
 	validatorDB := setupDB(t, pubKeys)
@@ -141,7 +141,7 @@ func TestStore_CheckSlashableAttestation_SurroundVote_MultipleTargetsPerSource(t
 }
 
 func TestStore_CheckSlashableAttestation_SurroundVote_54kEpochs(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	numValidators := 1
 	numEpochs := primitives.Epoch(54000)
 	pubKeys := make([][fieldparams.BLSPubkeyLength]byte, numValidators)
@@ -214,7 +214,7 @@ func TestStore_CheckSlashableAttestation_SurroundVote_54kEpochs(t *testing.T) {
 }
 
 func TestLowestSignedSourceEpoch_SaveRetrieve(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	validatorDB, err := NewKVStore(ctx, t.TempDir(), &Config{})
 	require.NoError(t, err, "Failed to instantiate DB")
 	t.Cleanup(func() {
@@ -273,7 +273,7 @@ func TestLowestSignedSourceEpoch_SaveRetrieve(t *testing.T) {
 }
 
 func TestLowestSignedTargetEpoch_SaveRetrieveReplace(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	validatorDB, err := NewKVStore(ctx, t.TempDir(), &Config{})
 	require.NoError(t, err, "Failed to instantiate DB")
 	t.Cleanup(func() {
@@ -332,7 +332,7 @@ func TestLowestSignedTargetEpoch_SaveRetrieveReplace(t *testing.T) {
 }
 
 func TestStore_SaveAttestationsForPubKey(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	numValidators := 1
 	pubKeys := make([][fieldparams.BLSPubkeyLength]byte, numValidators)
 	validatorDB := setupDB(t, pubKeys)
@@ -373,7 +373,7 @@ func TestStore_SaveAttestationsForPubKey(t *testing.T) {
 
 func TestSaveAttestationForPubKey_BatchWrites_FullCapacity(t *testing.T) {
 	hook := logTest.NewGlobal()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	numValidators := attestationBatchCapacity
 	pubKeys := make([][fieldparams.BLSPubkeyLength]byte, numValidators)
@@ -426,7 +426,7 @@ func TestSaveAttestationForPubKey_BatchWrites_FullCapacity(t *testing.T) {
 
 func TestSaveAttestationForPubKey_BatchWrites_LowCapacity_TimerReached(t *testing.T) {
 	hook := logTest.NewGlobal()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	// Number of validators equal to half the total capacity
 	// of batch attestation processing. This will allow us to
@@ -501,7 +501,7 @@ func benchCheckSurroundVote(
 	numEpochs primitives.Epoch,
 	shouldSurround bool,
 ) {
-	ctx := context.Background()
+	ctx := b.Context()
 	validatorDB, err := NewKVStore(ctx, filepath.Join(b.TempDir(), "benchsurroundvote"), &Config{
 		PubKeys: pubKeys,
 	})
@@ -562,13 +562,13 @@ func TestStore_flushAttestationRecords_InProgress(t *testing.T) {
 	s.batchedAttestationsFlushInProgress.Set()
 
 	hook := logTest.NewGlobal()
-	s.flushAttestationRecords(context.Background(), nil)
+	s.flushAttestationRecords(t.Context(), nil)
 	assert.LogsContain(t, hook, "Attempted to flush attestation records when already in progress")
 }
 
 func BenchmarkStore_SaveAttestationForPubKey(b *testing.B) {
 	var wg sync.WaitGroup
-	ctx := context.Background()
+	ctx := b.Context()
 
 	// Create pubkeys
 	pubkeys := make([][fieldparams.BLSPubkeyLength]byte, 10)

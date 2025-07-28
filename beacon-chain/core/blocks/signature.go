@@ -200,7 +200,7 @@ func createAttestationSignatureBatch(
 		if err != nil {
 			return nil, err
 		}
-		if err := attestation.IsValidAttestationIndices(ctx, ia); err != nil {
+		if err := attestation.IsValidAttestationIndices(ctx, ia, params.BeaconConfig().MaxValidatorsPerCommittee, params.BeaconConfig().MaxCommitteesPerSlot); err != nil {
 			return nil, err
 		}
 		indices := ia.GetAttestingIndices()

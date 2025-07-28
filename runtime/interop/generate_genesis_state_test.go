@@ -1,8 +1,8 @@
 package interop_test
 
 import (
-	"context"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -25,12 +25,12 @@ func TestGenerateGenesisState(t *testing.T) {
 	require.NoError(t, err)
 	root, err := tr.HashTreeRoot()
 	require.NoError(t, err)
-	genesisState, err := transition.GenesisBeaconState(context.Background(), deposits, 0, &eth.Eth1Data{
+	genesisState, err := transition.GenesisBeaconState(t.Context(), deposits, 0, &eth.Eth1Data{
 		DepositRoot:  root[:],
 		DepositCount: uint64(len(deposits)),
 	})
 	require.NoError(t, err)
 	want := int(numValidators)
 	assert.Equal(t, want, genesisState.NumValidators())
-	assert.Equal(t, uint64(0), genesisState.GenesisTime())
+	assert.Equal(t, time.Unix(0, 0), genesisState.GenesisTime())
 }

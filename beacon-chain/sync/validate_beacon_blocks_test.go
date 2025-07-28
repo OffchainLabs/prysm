@@ -47,7 +47,7 @@ import (
 func TestValidateBeaconBlockPubSub_InvalidSignature(t *testing.T) {
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
 	parentBlock := util.NewBeaconBlock()
 	util.SaveBlock(t, ctx, db, parentBlock)
@@ -110,13 +110,13 @@ func TestValidateBeaconBlockPubSub_InvalidSignature(t *testing.T) {
 
 func TestValidateBeaconBlockPubSub_BlockAlreadyPresentInDB(t *testing.T) {
 	db := dbtest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	p := p2ptest.NewTestP2P(t)
 	msg := util.NewBeaconBlock()
 	msg.Block.Slot = 100
 	msg.Block.ParentRoot = util.Random32Bytes(t)
-	util.SaveBlock(t, context.Background(), db, msg)
+	util.SaveBlock(t, t.Context(), db, msg)
 
 	chainService := &mock.ChainService{Genesis: time.Now()}
 	r := &Service{
@@ -154,7 +154,7 @@ func TestValidateBeaconBlockPubSub_BlockAlreadyPresentInDB(t *testing.T) {
 func TestValidateBeaconBlockPubSub_CanRecoverStateSummary(t *testing.T) {
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
 	parentBlock := util.NewBeaconBlock()
 	util.SaveBlock(t, ctx, db, parentBlock)
@@ -219,7 +219,7 @@ func TestValidateBeaconBlockPubSub_CanRecoverStateSummary(t *testing.T) {
 func TestValidateBeaconBlockPubSub_IsInCache(t *testing.T) {
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
 	parentBlock := util.NewBeaconBlock()
 	bRoot, err := parentBlock.Block.HashTreeRoot()
@@ -228,7 +228,7 @@ func TestValidateBeaconBlockPubSub_IsInCache(t *testing.T) {
 	require.NoError(t, db.SaveStateSummary(ctx, &ethpb.StateSummary{Root: bRoot[:]}))
 	copied := beaconState.Copy()
 	require.NoError(t, copied.SetSlot(1))
-	proposerIdx, err := helpers.BeaconProposerIndex(context.Background(), copied)
+	proposerIdx, err := helpers.BeaconProposerIndex(t.Context(), copied)
 	require.NoError(t, err)
 	msg := util.NewBeaconBlock()
 	msg.Block.ParentRoot = bRoot[:]
@@ -285,7 +285,7 @@ func TestValidateBeaconBlockPubSub_IsInCache(t *testing.T) {
 func TestValidateBeaconBlockPubSub_ValidProposerSignature(t *testing.T) {
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
 	parentBlock := util.NewBeaconBlock()
 	util.SaveBlock(t, ctx, db, parentBlock)
@@ -351,7 +351,7 @@ func TestValidateBeaconBlockPubSub_ValidProposerSignature(t *testing.T) {
 func TestValidateBeaconBlockPubSub_WithLookahead(t *testing.T) {
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
 	parentBlock := util.NewBeaconBlock()
 	util.SaveBlock(t, ctx, db, parentBlock)
@@ -362,7 +362,7 @@ func TestValidateBeaconBlockPubSub_WithLookahead(t *testing.T) {
 	copied := beaconState.Copy()
 	// The next block is only 1 epoch ahead so as to not induce a new seed.
 	blkSlot := params.BeaconConfig().SlotsPerEpoch.Mul(uint64(coreTime.NextEpoch(copied)))
-	copied, err = transition.ProcessSlots(context.Background(), copied, blkSlot)
+	copied, err = transition.ProcessSlots(t.Context(), copied, blkSlot)
 	require.NoError(t, err)
 	proposerIdx, err := helpers.BeaconProposerIndex(ctx, copied)
 	require.NoError(t, err)
@@ -420,7 +420,7 @@ func TestValidateBeaconBlockPubSub_WithLookahead(t *testing.T) {
 func TestValidateBeaconBlockPubSub_AdvanceEpochsForState(t *testing.T) {
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
 	parentBlock := util.NewBeaconBlock()
 	util.SaveBlock(t, ctx, db, parentBlock)
@@ -431,7 +431,7 @@ func TestValidateBeaconBlockPubSub_AdvanceEpochsForState(t *testing.T) {
 	copied := beaconState.Copy()
 	// The next block is at least 2 epochs ahead to induce shuffling and a new seed.
 	blkSlot := params.BeaconConfig().SlotsPerEpoch * 2
-	copied, err = transition.ProcessSlots(context.Background(), copied, blkSlot)
+	copied, err = transition.ProcessSlots(t.Context(), copied, blkSlot)
 	require.NoError(t, err)
 	proposerIdx, err := helpers.BeaconProposerIndex(ctx, copied)
 	require.NoError(t, err)
@@ -488,7 +488,7 @@ func TestValidateBeaconBlockPubSub_AdvanceEpochsForState(t *testing.T) {
 func TestValidateBeaconBlockPubSub_Syncing(t *testing.T) {
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	b := []byte("sk")
 	b32 := bytesutil.ToBytes32(b)
 	sk, err := bls.SecretKeyFromBytes(b32[:])
@@ -529,7 +529,7 @@ func TestValidateBeaconBlockPubSub_Syncing(t *testing.T) {
 func TestValidateBeaconBlockPubSub_IgnoreAndQueueBlocksFromNearFuture(t *testing.T) {
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
 	parentBlock := util.NewBeaconBlock()
@@ -598,7 +598,7 @@ func TestValidateBeaconBlockPubSub_IgnoreAndQueueBlocksFromNearFuture(t *testing
 func TestValidateBeaconBlockPubSub_RejectBlocksFromFuture(t *testing.T) {
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	b := []byte("sk")
 	b32 := bytesutil.ToBytes32(b)
 	sk, err := bls.SecretKeyFromBytes(b32[:])
@@ -648,7 +648,7 @@ func TestValidateBeaconBlockPubSub_RejectBlocksFromThePast(t *testing.T) {
 	b := []byte("sk")
 	b32 := bytesutil.ToBytes32(b)
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	sk, err := bls.SecretKeyFromBytes(b32[:])
 	require.NoError(t, err)
 	msg := util.NewBeaconBlock()
@@ -697,7 +697,7 @@ func TestValidateBeaconBlockPubSub_RejectBlocksFromThePast(t *testing.T) {
 func TestValidateBeaconBlockPubSub_SeenProposerSlot(t *testing.T) {
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
 	parentBlock := util.NewBeaconBlock()
 	util.SaveBlock(t, ctx, db, parentBlock)
@@ -784,7 +784,7 @@ func TestValidateBeaconBlockPubSub_FilterByFinalizedEpoch(t *testing.T) {
 	p := p2ptest.NewTestP2P(t)
 
 	parent := util.NewBeaconBlock()
-	util.SaveBlock(t, context.Background(), db, parent)
+	util.SaveBlock(t, t.Context(), db, parent)
 	parentRoot, err := parent.Block.HashTreeRoot()
 	require.NoError(t, err)
 	chain := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
@@ -824,7 +824,7 @@ func TestValidateBeaconBlockPubSub_FilterByFinalizedEpoch(t *testing.T) {
 		},
 	}
 
-	res, err := r.validateBeaconBlockPubSub(context.Background(), "", m)
+	res, err := r.validateBeaconBlockPubSub(t.Context(), "", m)
 	_ = err
 	assert.Equal(t, pubsub.ValidationIgnore, res)
 
@@ -840,7 +840,7 @@ func TestValidateBeaconBlockPubSub_FilterByFinalizedEpoch(t *testing.T) {
 		},
 	}
 
-	res, err = r.validateBeaconBlockPubSub(context.Background(), "", m)
+	res, err = r.validateBeaconBlockPubSub(t.Context(), "", m)
 	assert.NoError(t, err)
 	assert.Equal(t, pubsub.ValidationIgnore, res)
 }
@@ -848,7 +848,7 @@ func TestValidateBeaconBlockPubSub_FilterByFinalizedEpoch(t *testing.T) {
 func TestValidateBeaconBlockPubSub_ParentNotFinalizedDescendant(t *testing.T) {
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
 	parentBlock := util.NewBeaconBlock()
 	util.SaveBlock(t, ctx, db, parentBlock)
@@ -915,7 +915,7 @@ func TestValidateBeaconBlockPubSub_ParentNotFinalizedDescendant(t *testing.T) {
 func TestValidateBeaconBlockPubSub_InvalidParentBlock(t *testing.T) {
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
 	parentBlock := util.NewBeaconBlock()
 	util.SaveBlock(t, ctx, db, parentBlock)
@@ -1014,7 +1014,7 @@ func TestValidateBeaconBlockPubSub_InvalidParentBlock(t *testing.T) {
 func TestValidateBeaconBlockPubSub_InsertValidPendingBlock(t *testing.T) {
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
 	parentBlock := util.NewBeaconBlock()
 	util.SaveBlock(t, ctx, db, parentBlock)
@@ -1078,7 +1078,7 @@ func TestValidateBeaconBlockPubSub_InsertValidPendingBlock(t *testing.T) {
 func TestValidateBeaconBlockPubSub_RejectBlocksFromBadParent(t *testing.T) {
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
 	parentBlock := util.NewBeaconBlock()
@@ -1092,7 +1092,7 @@ func TestValidateBeaconBlockPubSub_RejectBlocksFromBadParent(t *testing.T) {
 	copied := beaconState.Copy()
 	// The next block is at least 2 epochs ahead to induce shuffling and a new seed.
 	blkSlot := params.BeaconConfig().SlotsPerEpoch * 2
-	copied, err = transition.ProcessSlots(context.Background(), copied, blkSlot)
+	copied, err = transition.ProcessSlots(t.Context(), copied, blkSlot)
 	require.NoError(t, err)
 	proposerIdx, err := helpers.BeaconProposerIndex(ctx, copied)
 	require.NoError(t, err)
@@ -1162,7 +1162,7 @@ func TestService_setBadBlock_DoesntSetWithContextErr(t *testing.T) {
 	s.initCaches()
 
 	root := [32]byte{'b', 'a', 'd'}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	s.setBadBlock(ctx, root)
 	if s.hasBadBlock(root) {
@@ -1172,7 +1172,7 @@ func TestService_setBadBlock_DoesntSetWithContextErr(t *testing.T) {
 
 func TestService_isBlockQueueable(t *testing.T) {
 	currentTime := time.Now().Round(time.Second)
-	genesisTime := uint64(currentTime.Unix() - int64(params.BeaconConfig().SecondsPerSlot))
+	genesisTime := currentTime.Add(-1 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
 	blockSlot := primitives.Slot(1)
 
 	// slot time within MAXIMUM_GOSSIP_CLOCK_DISPARITY, so don't queue the block.
@@ -1189,14 +1189,14 @@ func TestService_isBlockQueueable(t *testing.T) {
 func TestValidateBeaconBlockPubSub_ValidExecutionPayload(t *testing.T) {
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconState, privKeys := util.DeterministicGenesisStateBellatrix(t, 100)
 	parentBlock := util.NewBeaconBlockBellatrix()
 	util.SaveBlock(t, ctx, db, parentBlock)
 	bRoot, err := parentBlock.Block.HashTreeRoot()
 	require.NoError(t, err)
-	presentTime := time.Now().Unix()
-	require.NoError(t, beaconState.SetGenesisTime(uint64(presentTime)))
+	now := time.Now()
+	require.NoError(t, beaconState.SetGenesisTime(now))
 	require.NoError(t, db.SaveState(ctx, beaconState, bRoot))
 	require.NoError(t, db.SaveStateSummary(ctx, &ethpb.StateSummary{Root: bRoot[:]}))
 	copied := beaconState.Copy()
@@ -1208,7 +1208,7 @@ func TestValidateBeaconBlockPubSub_ValidExecutionPayload(t *testing.T) {
 	msg.Block.ParentRoot = bRoot[:]
 	msg.Block.Slot = 1
 	msg.Block.ProposerIndex = proposerIdx
-	msg.Block.Body.ExecutionPayload.Timestamp = uint64(presentTime) + params.BeaconConfig().SecondsPerSlot
+	msg.Block.Body.ExecutionPayload.Timestamp = uint64(now.Unix()) + params.BeaconConfig().SecondsPerSlot
 	msg.Block.Body.ExecutionPayload.GasUsed = 10
 	msg.Block.Body.ExecutionPayload.GasLimit = 11
 	msg.Block.Body.ExecutionPayload.BlockHash = bytesutil.PadTo([]byte("blockHash"), 32)
@@ -1218,7 +1218,7 @@ func TestValidateBeaconBlockPubSub_ValidExecutionPayload(t *testing.T) {
 	require.NoError(t, err)
 
 	stateGen := stategen.New(db, doublylinkedtree.New())
-	chainService := &mock.ChainService{Genesis: time.Unix(presentTime-int64(params.BeaconConfig().SecondsPerSlot), 0),
+	chainService := &mock.ChainService{Genesis: now.Add(-1 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
 		DB: db,
 		FinalizedCheckPoint: &ethpb.Checkpoint{
 			Epoch: 0,
@@ -1262,7 +1262,7 @@ func TestValidateBeaconBlockPubSub_ValidExecutionPayload(t *testing.T) {
 func TestValidateBeaconBlockPubSub_InvalidPayloadTimestamp(t *testing.T) {
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconState, privKeys := util.DeterministicGenesisStateBellatrix(t, 100)
 	parentBlock := util.NewBeaconBlockBellatrix()
 	util.SaveBlock(t, ctx, db, parentBlock)
@@ -1333,7 +1333,7 @@ func TestValidateBeaconBlockPubSub_InvalidPayloadTimestamp(t *testing.T) {
 func Test_validateBellatrixBeaconBlock(t *testing.T) {
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	stateGen := stategen.New(db, doublylinkedtree.New())
 	presentTime := time.Now().Unix()
 	chainService := &mock.ChainService{Genesis: time.Unix(presentTime-int64(params.BeaconConfig().SecondsPerSlot), 0),
@@ -1364,7 +1364,7 @@ func Test_validateBellatrixBeaconBlock(t *testing.T) {
 func Test_validateBellatrixBeaconBlockParentValidation(t *testing.T) {
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	stateGen := stategen.New(db, doublylinkedtree.New())
 
 	beaconState, privKeys := util.DeterministicGenesisStateBellatrix(t, 100)
@@ -1383,7 +1383,7 @@ func Test_validateBellatrixBeaconBlockParentValidation(t *testing.T) {
 	msg.Block.ParentRoot = bRoot[:]
 	msg.Block.Slot = 1
 	msg.Block.ProposerIndex = proposerIdx
-	msg.Block.Body.ExecutionPayload.Timestamp = beaconState.GenesisTime() + params.BeaconConfig().SecondsPerSlot
+	msg.Block.Body.ExecutionPayload.Timestamp = uint64(beaconState.GenesisTime().Add(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second).Unix())
 	msg.Block.Body.ExecutionPayload.GasUsed = 10
 	msg.Block.Body.ExecutionPayload.GasLimit = 11
 	msg.Block.Body.ExecutionPayload.BlockHash = bytesutil.PadTo([]byte("blockHash"), 32)
@@ -1395,7 +1395,7 @@ func Test_validateBellatrixBeaconBlockParentValidation(t *testing.T) {
 	blk, err := blocks.NewSignedBeaconBlock(msg)
 	require.NoError(t, err)
 
-	chainService := &mock.ChainService{Genesis: time.Unix(int64(beaconState.GenesisTime()), 0),
+	chainService := &mock.ChainService{Genesis: beaconState.GenesisTime(),
 		OptimisticRoots: make(map[[32]byte]bool),
 		FinalizedCheckPoint: &ethpb.Checkpoint{
 			Epoch: 0,
@@ -1421,7 +1421,7 @@ func Test_validateBellatrixBeaconBlockParentValidation(t *testing.T) {
 func Test_validateBeaconBlockProcessingWhenParentIsOptimistic(t *testing.T) {
 	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	stateGen := stategen.New(db, doublylinkedtree.New())
 
 	beaconState, privKeys := util.DeterministicGenesisStateBellatrix(t, 100)
@@ -1440,7 +1440,7 @@ func Test_validateBeaconBlockProcessingWhenParentIsOptimistic(t *testing.T) {
 	msg.Block.ParentRoot = bRoot[:]
 	msg.Block.Slot = 1
 	msg.Block.ProposerIndex = proposerIdx
-	msg.Block.Body.ExecutionPayload.Timestamp = beaconState.GenesisTime() + params.BeaconConfig().SecondsPerSlot
+	msg.Block.Body.ExecutionPayload.Timestamp = uint64(beaconState.GenesisTime().Add(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second).Unix())
 	msg.Block.Body.ExecutionPayload.GasUsed = 10
 	msg.Block.Body.ExecutionPayload.GasLimit = 11
 	msg.Block.Body.ExecutionPayload.BlockHash = bytesutil.PadTo([]byte("blockHash"), 32)
@@ -1449,7 +1449,7 @@ func Test_validateBeaconBlockProcessingWhenParentIsOptimistic(t *testing.T) {
 	msg.Signature, err = signing.ComputeDomainAndSign(beaconState, 0, msg.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[proposerIdx])
 	require.NoError(t, err)
 
-	chainService := &mock.ChainService{Genesis: time.Unix(int64(beaconState.GenesisTime()), 0),
+	chainService := &mock.ChainService{Genesis: beaconState.GenesisTime(),
 		DB:         db,
 		Optimistic: true,
 		FinalizedCheckPoint: &ethpb.Checkpoint{
@@ -1520,7 +1520,7 @@ func Test_validateDenebBeaconBlock(t *testing.T) {
 }
 
 func TestDetectAndBroadcastEquivocation(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	p := p2ptest.NewTestP2P(t)
 	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
 

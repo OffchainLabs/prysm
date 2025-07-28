@@ -21,28 +21,29 @@ import (
 )
 
 const (
-	DefaultSignatureCacheSize = 256
+	defaultSignatureCacheSize      = 256
+	defaultInclusionProofCacheSize = 2
 )
 
-// ValidatorAtIndexer defines the method needed to retrieve a validator by its index.
+// validatorAtIndexer defines the method needed to retrieve a validator by its index.
 // This interface is satisfied by state.BeaconState, but can also be satisfied by a cache.
-type ValidatorAtIndexer interface {
+type validatorAtIndexer interface {
 	ValidatorAtIndex(idx primitives.ValidatorIndex) (*ethpb.Validator, error)
 }
 
-// SignatureCache represents a type that can perform signature verification and cache the result so that it
+// signatureCache represents a type that can perform signature verification and cache the result so that it
 // can be used when the same signature is seen in multiple places, like a SignedBeaconBlockHeader
 // found in multiple BlobSidecars.
-type SignatureCache interface {
+type signatureCache interface {
 	// VerifySignature perform signature verification and caches the result.
-	VerifySignature(sig SignatureData, v ValidatorAtIndexer) (err error)
+	VerifySignature(sig signatureData, v validatorAtIndexer) (err error)
 	// SignatureVerified accesses the result of a previous signature verification.
-	SignatureVerified(sig SignatureData) (bool, error)
+	SignatureVerified(sig signatureData) (bool, error)
 }
 
-// SignatureData represents the set of parameters that together uniquely identify a signature observed on
+// signatureData represents the set of parameters that together uniquely identify a signature observed on
 // a beacon block. This is used as the key for the signature cache.
-type SignatureData struct {
+type signatureData struct {
 	Root      [32]byte
 	Parent    [32]byte
 	Signature [96]byte
@@ -50,7 +51,7 @@ type SignatureData struct {
 	Slot      primitives.Slot
 }
 
-func (d SignatureData) logFields() logrus.Fields {
+func (d signatureData) logFields() logrus.Fields {
 	return logrus.Fields{
 		"root":       fmt.Sprintf("%#x", d.Root),
 		"parentRoot": fmt.Sprintf("%#x", d.Parent),
@@ -73,13 +74,21 @@ type sigCache struct {
 	getFork forkLookup
 }
 
-// VerifySignature verifies the given signature data against the key obtained via ValidatorAtIndexer.
-func (c *sigCache) VerifySignature(sig SignatureData, v ValidatorAtIndexer) (err error) {
+type inclusionProofCache struct {
+	*lru.Cache
+}
+
+func newInclusionProofCache(size int) *inclusionProofCache {
+	return &inclusionProofCache{Cache: lruwrpr.New(size)}
+}
+
+// VerifySignature verifies the given signature data against the key obtained via validatorAtIndexer.
+func (c *sigCache) VerifySignature(sig signatureData, v validatorAtIndexer) (err error) {
 	defer func() {
 		if err == nil {
 			c.Add(sig, true)
 		} else {
-			log.WithError(err).WithFields(sig.logFields()).Debug("caching failed signature verification result")
+			log.WithError(err).WithFields(sig.logFields()).Debug("Caching failed signature verification result")
 			c.Add(sig, false)
 		}
 	}()
@@ -118,14 +127,14 @@ func (c *sigCache) VerifySignature(sig SignatureData, v ValidatorAtIndexer) (err
 // SignatureVerified checks the signature cache for the given key, and returns a boolean value of true
 // if it has been seen before, and an error value indicating whether the signature verification succeeded.
 // ie only a result of (true, nil) means a previous signature check passed.
-func (c *sigCache) SignatureVerified(sig SignatureData) (bool, error) {
+func (c *sigCache) SignatureVerified(sig signatureData) (bool, error) {
 	val, seen := c.Get(sig)
 	if !seen {
 		return false, nil
 	}
 	verified, ok := val.(bool)
 	if !ok {
-		log.WithFields(sig.logFields()).Debug("ignoring invalid value found in signature cache")
+		log.WithFields(sig.logFields()).Debug("Ignoring invalid value found in signature cache")
 		// This shouldn't happen, and if it does, the caller should treat it as a cache miss and run verification
 		// again to correctly populate the cache key.
 		return false, nil
@@ -136,10 +145,10 @@ func (c *sigCache) SignatureVerified(sig SignatureData) (bool, error) {
 	return true, signing.ErrSigFailedToVerify
 }
 
-// ProposerCache represents a type that can compute the proposer for a given slot + parent root,
+// proposerCache represents a type that can compute the proposer for a given slot + parent root,
 // and cache the result so that it can be reused when the same verification needs to be performed
 // across multiple values.
-type ProposerCache interface {
+type proposerCache interface {
 	ComputeProposer(ctx context.Context, root [32]byte, slot primitives.Slot, pst state.BeaconState) (primitives.ValidatorIndex, error)
 	Proposer(c *forkchoicetypes.Checkpoint, slot primitives.Slot) (primitives.ValidatorIndex, bool)
 }

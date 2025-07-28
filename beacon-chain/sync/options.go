@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
 	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
@@ -173,6 +174,14 @@ func WithBlobStorage(b *filesystem.BlobStorage) Option {
 	}
 }
 
+// WithDataColumnStorage gives the sync package direct access to DataColumnStorage.
+func WithDataColumnStorage(b *filesystem.DataColumnStorage) Option {
+	return func(s *Service) error {
+		s.cfg.dataColumnStorage = b
+		return nil
+	}
+}
+
 // WithVerifierWaiter gives the sync package direct access to the verifier waiter.
 func WithVerifierWaiter(v *verification.InitializerWaiter) Option {
 	return func(s *Service) error {
@@ -190,6 +199,14 @@ func WithAvailableBlocker(avb coverage.AvailableBlocker) Option {
 	}
 }
 
+// WithCustodyInfo for custody info.
+func WithCustodyInfo(custodyInfo *peerdas.CustodyInfo) Option {
+	return func(s *Service) error {
+		s.cfg.custodyInfo = custodyInfo
+		return nil
+	}
+}
+
 // WithSlasherEnabled configures the sync package to support slashing detection.
 func WithSlasherEnabled(enabled bool) Option {
 	return func(s *Service) error {
@@ -202,6 +219,14 @@ func WithSlasherEnabled(enabled bool) Option {
 func WithLightClientStore(lcs *lightClient.Store) Option {
 	return func(s *Service) error {
 		s.lcStore = lcs
+		return nil
+	}
+}
+
+// WithBatchVerifierLimit sets the maximum number of signatures to batch verify at once.
+func WithBatchVerifierLimit(limit int) Option {
+	return func(s *Service) error {
+		s.cfg.batchVerifierLimit = limit
 		return nil
 	}
 }

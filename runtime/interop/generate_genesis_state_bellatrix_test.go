@@ -1,7 +1,6 @@
 package interop
 
 import (
-	"context"
 	"testing"
 
 	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
@@ -34,7 +33,7 @@ func TestGenerateGenesisStateBellatrix(t *testing.T) {
 		DepositCount: 0,
 		BlockHash:    make([]byte, 32),
 	}
-	g, _, err := GenerateGenesisStateBellatrix(context.Background(), 0, params.BeaconConfig().MinGenesisActiveValidatorCount, ep, e1d)
+	g, _, err := GenerateGenesisStateBellatrix(t.Context(), 0, params.BeaconConfig().MinGenesisActiveValidatorCount, ep, e1d)
 	require.NoError(t, err)
 
 	tr, err := trie.NewTrie(params.BeaconConfig().DepositContractTreeDepth)

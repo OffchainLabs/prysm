@@ -1,7 +1,6 @@
 package lookup
 
 import (
-	"context"
 	"strconv"
 	"strings"
 	"testing"
@@ -24,7 +23,7 @@ import (
 )
 
 func TestGetState(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	headSlot := primitives.Slot(123)
 	fillSlot := func(state *ethpb.BeaconState) error {
@@ -213,7 +212,7 @@ func TestGetState(t *testing.T) {
 }
 
 func TestGetStateRoot(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	headSlot := primitives.Slot(123)
 	fillSlot := func(state *ethpb.BeaconState) error {
@@ -419,14 +418,15 @@ func TestGetStateRoot(t *testing.T) {
 }
 
 func TestNewStateNotFoundError(t *testing.T) {
-	e := NewStateNotFoundError(100)
-	assert.Equal(t, "state not found in the last 100 state roots", e.message)
+	stateRoot := []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20}
+	e := NewStateNotFoundError(100, stateRoot)
+	assert.Equal(t, "state not found in the last 100 state roots, looking for state root: 0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20", e.message)
 }
 
 func TestStateBySlot_FutureSlot(t *testing.T) {
 	slot := primitives.Slot(100)
 	p := BeaconDbStater{GenesisTimeFetcher: &chainMock.ChainService{Slot: &slot}}
-	_, err := p.StateBySlot(context.Background(), 101)
+	_, err := p.StateBySlot(t.Context(), 101)
 	assert.ErrorContains(t, "requested slot is in the future", err)
 }
 
@@ -440,7 +440,7 @@ func TestStateBySlot_AfterHeadSlot(t *testing.T) {
 	mockReplayer := mockstategen.NewReplayerBuilder()
 	mockReplayer.SetMockStateForSlot(slotSt, 101)
 	p := BeaconDbStater{ChainInfoFetcher: mock, GenesisTimeFetcher: mock, ReplayerBuilder: mockReplayer}
-	st, err := p.StateBySlot(context.Background(), 101)
+	st, err := p.StateBySlot(t.Context(), 101)
 	require.NoError(t, err)
 	assert.Equal(t, primitives.Slot(101), st.Slot())
 }

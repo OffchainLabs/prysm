@@ -518,7 +518,7 @@ func (s *Store) unmarshalState(_ context.Context, enc []byte, validatorEntries [
 
 	switch {
 	case hasFuluKey(enc):
-		protoState := &ethpb.BeaconStateElectra{}
+		protoState := &ethpb.BeaconStateFulu{}
 		if err := protoState.UnmarshalSSZ(enc[len(fuluKey):]); err != nil {
 			return nil, errors.Wrap(err, "failed to unmarshal encoding for Fulu")
 		}
@@ -690,7 +690,7 @@ func marshalState(ctx context.Context, st state.ReadOnlyBeaconState) ([]byte, er
 		}
 		return snappy.Encode(nil, append(ElectraKey, rawObj...)), nil
 	case version.Fulu:
-		rState, ok := st.ToProtoUnsafe().(*ethpb.BeaconStateElectra)
+		rState, ok := st.ToProtoUnsafe().(*ethpb.BeaconStateFulu)
 		if !ok {
 			return nil, errors.New("non valid inner state")
 		}
@@ -744,14 +744,9 @@ func (s *Store) validatorEntries(ctx context.Context, blockRoot [32]byte) ([]*et
 			// get the entry bytes from the cache or from the DB.
 			v, ok := s.validatorEntryCache.Get(key)
 			if ok {
-				valEntry, vType := v.(*ethpb.Validator)
-				if vType {
-					validatorEntries = append(validatorEntries, valEntry)
-					validatorEntryCacheHit.Inc()
-				} else {
-					// this should never happen, but anyway it's good to bail out if one happens.
-					return errors.New("validator cache does not have proper object type")
-				}
+				valEntry := v
+				validatorEntries = append(validatorEntries, valEntry)
+				validatorEntryCacheHit.Inc()
 			} else {
 				// not in cache, so get it from the DB, decode it and add to the entry list.
 				valEntryBytes := valBkt.Get(key)

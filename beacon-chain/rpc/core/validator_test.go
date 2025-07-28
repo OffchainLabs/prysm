@@ -1,7 +1,6 @@
 package core
 
 import (
-	"context"
 	"encoding/binary"
 	"testing"
 	"time"
@@ -72,7 +71,7 @@ func pubKey(i uint64) []byte {
 
 func TestService_SubmitSignedAggregateSelectionProof(t *testing.T) {
 	slot := primitives.Slot(0)
-	mock := &mockChain.ChainService{Slot: &slot}
+	mock := &mockChain.ChainService{Slot: &slot, Genesis: time.Now().Add(-75 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)}
 	s := &Service{GenesisTimeFetcher: mock}
 	var err error
 	t.Run("Happy path electra", func(t *testing.T) {
@@ -107,7 +106,8 @@ func TestService_SubmitSignedAggregateSelectionProof(t *testing.T) {
 			},
 			Signature: fakeSig,
 		}
-		rpcError := s.SubmitSignedAggregateSelectionProof(context.Background(), agg)
+		rpcError := s.SubmitSignedAggregateSelectionProof(t.Context(), agg)
+		t.Log(rpcError)
 		assert.Equal(t, true, rpcError == nil)
 	})
 
@@ -122,7 +122,7 @@ func TestService_SubmitSignedAggregateSelectionProof(t *testing.T) {
 			},
 			Signature: make([]byte, 96),
 		}
-		rpcError := s.SubmitSignedAggregateSelectionProof(context.Background(), agg)
+		rpcError := s.SubmitSignedAggregateSelectionProof(t.Context(), agg)
 		assert.ErrorContains(t, "old aggregate and proof", rpcError.Err)
 	})
 
@@ -136,7 +136,7 @@ func TestService_SubmitSignedAggregateSelectionProof(t *testing.T) {
 			},
 			Signature: make([]byte, 96),
 		}
-		rpcError := s.SubmitSignedAggregateSelectionProof(context.Background(), agg)
+		rpcError := s.SubmitSignedAggregateSelectionProof(t.Context(), agg)
 		assert.ErrorContains(t, "electra aggregate and proof not supported yet", rpcError.Err)
 	})
 }

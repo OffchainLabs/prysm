@@ -1,7 +1,6 @@
 package verification
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
@@ -90,15 +89,15 @@ type mockValidatorAtIndexer struct {
 	cb func(idx primitives.ValidatorIndex) (*eth.Validator, error)
 }
 
-// ValidatorAtIndex implements ValidatorAtIndexer.
+// ValidatorAtIndex implements validatorAtIndexer.
 func (m *mockValidatorAtIndexer) ValidatorAtIndex(idx primitives.ValidatorIndex) (*eth.Validator, error) {
 	return m.cb(idx)
 }
 
-var _ ValidatorAtIndexer = &mockValidatorAtIndexer{}
+var _ validatorAtIndexer = &mockValidatorAtIndexer{}
 
 func TestProposerCache(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	// 3 validators because that was the first number that produced a non-zero proposer index by default
 	st, _ := util.DeterministicGenesisStateDeneb(t, 3)
 

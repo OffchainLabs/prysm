@@ -2,7 +2,6 @@ package beacon_api
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"strconv"
@@ -43,7 +42,7 @@ func TestSubscribeCommitteeSubnets_Valid(t *testing.T) {
 	committeeSubscriptionsBytes, err := json.Marshal(jsonCommitteeSubscriptions)
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
@@ -204,7 +203,7 @@ func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			ctx := context.Background()
+			ctx := t.Context()
 
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 			if testCase.expectSubscribeRestCall {

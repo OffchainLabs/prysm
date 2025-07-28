@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/async/event"
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
@@ -20,8 +21,13 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/blstoexec"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	p2pTesting "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"google.golang.org/protobuf/proto"
@@ -46,6 +52,11 @@ type mockBroadcaster struct {
 	broadcastCalled bool
 }
 
+type mockAccessor struct {
+	mockBroadcaster
+	p2pTesting.MockPeerManager
+}
+
 func (mb *mockBroadcaster) Broadcast(_ context.Context, _ proto.Message) error {
 	mb.broadcastCalled = true
 	return nil
@@ -62,6 +73,21 @@ func (mb *mockBroadcaster) BroadcastSyncCommitteeMessage(_ context.Context, _ ui
 }
 
 func (mb *mockBroadcaster) BroadcastBlob(_ context.Context, _ uint64, _ *ethpb.BlobSidecar) error {
+	mb.broadcastCalled = true
+	return nil
+}
+
+func (mb *mockBroadcaster) BroadcastLightClientOptimisticUpdate(_ context.Context, _ interfaces.LightClientOptimisticUpdate) error {
+	mb.broadcastCalled = true
+	return nil
+}
+
+func (mb *mockBroadcaster) BroadcastLightClientFinalityUpdate(_ context.Context, _ interfaces.LightClientFinalityUpdate) error {
+	mb.broadcastCalled = true
+	return nil
+}
+
+func (mb *mockBroadcaster) BroadcastDataColumn(_ [fieldparams.RootLength]byte, _ uint64, _ *ethpb.DataColumnSidecar) error {
 	mb.broadcastCalled = true
 	return nil
 }
@@ -85,9 +111,11 @@ type testServiceRequirements struct {
 }
 
 func minimalTestService(t *testing.T, opts ...Option) (*Service, *testServiceRequirements) {
-	ctx := context.Background()
+	ctx := t.Context()
+	genesis := time.Now().Add(-1 * 4 * time.Duration(params.BeaconConfig().SlotsPerEpoch*primitives.Slot(params.BeaconConfig().SecondsPerSlot)) * time.Second) // Genesis was 4 epochs ago.
 	beaconDB := testDB.SetupDB(t)
 	fcs := doublylinkedtree.New()
+	fcs.SetGenesisTime(genesis)
 	sg := stategen.New(beaconDB, fcs)
 	notif := &mockBeaconNode{}
 	fcs.SetBalancesByRooter(sg.ActiveNonSlashedBalancesByRoot)
@@ -121,9 +149,12 @@ func minimalTestService(t *testing.T, opts ...Option) (*Service, *testServiceReq
 		WithDepositCache(dc),
 		WithTrackedValidatorsCache(cache.NewTrackedValidatorsCache()),
 		WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)),
+		WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)),
 		WithSyncChecker(mock.MockChecker{}),
 		WithExecutionEngineCaller(&mockExecution.EngineClient{}),
+		WithP2PBroadcaster(&mockAccessor{}),
 		WithLightClientStore(&lightclient.Store{}),
+		WithGenesisTime(genesis),
 	}
 	// append the variadic opts so they override the defaults by being processed afterwards
 	opts = append(defOpts, opts...)

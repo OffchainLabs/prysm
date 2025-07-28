@@ -77,8 +77,9 @@ func privKey(cfg *Config) (*ecdsa.PrivateKey, error) {
 		return nil, err
 	}
 
-	// If the StaticPeerID flag is not set and if peerDAS is not enabled, return the private key.
-	if !(cfg.StaticPeerID || params.PeerDASEnabled()) {
+	// If the StaticPeerID flag is not set or the Fulu epoch is not set, return the private key.
+	// Starting at Fulu, we don't want to generate a new key every time, to avoid custody columns changes.
+	if !(cfg.StaticPeerID || params.FuluEnabled()) {
 		return ecdsaprysm.ConvertFromInterfacePrivKey(priv)
 	}
 
@@ -200,6 +201,11 @@ func ConvertPeerIDToNodeID(pid peer.ID) (enode.ID, error) {
 		return [32]byte{}, errors.Wrap(err, "parse public key")
 	}
 
-	newPubkey := &ecdsa.PublicKey{Curve: gCrypto.S256(), X: pubKeyObjSecp256k1.X(), Y: pubKeyObjSecp256k1.Y()}
+	newPubkey := &ecdsa.PublicKey{
+		Curve: gCrypto.S256(),
+		X:     pubKeyObjSecp256k1.X(),
+		Y:     pubKeyObjSecp256k1.Y(),
+	}
+
 	return enode.PubkeyToIDV4(newPubkey), nil
 }

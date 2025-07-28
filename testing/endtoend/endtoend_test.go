@@ -425,10 +425,7 @@ func (r *testRunner) testDoppelGangerProtection(ctx context.Context) error {
 	if r.t.Failed() {
 		return errors.New("doppelganger was unable to be found")
 	}
-	// Expect an abrupt exit for the validator client.
-	if err := g.Wait(); err == nil || !strings.Contains(err.Error(), errGeneralCode) {
-		return fmt.Errorf("wanted an error of %s but received %v", errGeneralCode, err)
-	}
+	require.NoError(r.t, g.Wait())
 	return nil
 }
 
@@ -493,7 +490,7 @@ func (r *testRunner) defaultEndToEndRun() error {
 
 	// Calculate genesis time.
 	nodeClient := eth.NewNodeClient(conns[0])
-	genesis, err := nodeClient.GetGenesis(context.Background(), &emptypb.Empty{})
+	genesis, err := nodeClient.GetGenesis(t.Context(), &emptypb.Empty{})
 	require.NoError(t, err)
 	tickingStartTime := helpers.EpochTickerStartTime(genesis)
 
@@ -592,7 +589,7 @@ func (r *testRunner) scenarioRun() error {
 
 	// Calculate genesis time.
 	nodeClient := eth.NewNodeClient(conns[0])
-	genesis, err := nodeClient.GetGenesis(context.Background(), &emptypb.Empty{})
+	genesis, err := nodeClient.GetGenesis(t.Context(), &emptypb.Empty{})
 	require.NoError(t, err)
 	tickingStartTime := helpers.EpochTickerStartTime(genesis)
 

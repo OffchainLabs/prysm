@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/async/abool"
 	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
@@ -37,7 +38,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 					Genesis:        gt,
 					ValidatorsRoot: vr,
 				}
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				r := &Service{
 					ctx:    ctx,
 					cancel: cancel,
@@ -46,6 +47,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 						chain:       chainService,
 						clock:       startup.NewClock(gt, vr),
 						initialSync: &mockSync.Sync{IsSyncing: false},
+						custodyInfo: &peerdas.CustodyInfo{},
 					},
 					chainStarted: abool.New(),
 					subHandler:   newSubTopicHandler(),
@@ -72,7 +74,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 				bCfg.AltairForkEpoch = 5
 				params.OverrideBeaconConfig(bCfg)
 				params.BeaconConfig().InitializeForkSchedule()
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				r := &Service{
 					ctx:    ctx,
 					cancel: cancel,
@@ -81,6 +83,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 						chain:       chainService,
 						clock:       startup.NewClock(gt, vr),
 						initialSync: &mockSync.Sync{IsSyncing: false},
+						custodyInfo: &peerdas.CustodyInfo{},
 					},
 					chainStarted: abool.New(),
 					subHandler:   newSubTopicHandler(),
@@ -116,7 +119,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 				bCfg.BellatrixForkEpoch = 5
 				params.OverrideBeaconConfig(bCfg)
 				params.BeaconConfig().InitializeForkSchedule()
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				r := &Service{
 					ctx:    ctx,
 					cancel: cancel,
@@ -125,6 +128,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 						chain:       chainService,
 						clock:       startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
 						initialSync: &mockSync.Sync{IsSyncing: false},
+						custodyInfo: &peerdas.CustodyInfo{},
 					},
 					chainStarted: abool.New(),
 					subHandler:   newSubTopicHandler(),
@@ -158,7 +162,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 				bCfg.DenebForkEpoch = 5
 				params.OverrideBeaconConfig(bCfg)
 				params.BeaconConfig().InitializeForkSchedule()
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				r := &Service{
 					ctx:    ctx,
 					cancel: cancel,
@@ -167,6 +171,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 						chain:       chainService,
 						clock:       startup.NewClock(gt, vr),
 						initialSync: &mockSync.Sync{IsSyncing: false},
+						custodyInfo: &peerdas.CustodyInfo{},
 					},
 					chainStarted: abool.New(),
 					subHandler:   newSubTopicHandler(),
@@ -202,7 +207,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 				bCfg.ElectraForkEpoch = 5
 				params.OverrideBeaconConfig(bCfg)
 				params.BeaconConfig().InitializeForkSchedule()
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				r := &Service{
 					ctx:    ctx,
 					cancel: cancel,
@@ -211,6 +216,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 						chain:       chainService,
 						clock:       startup.NewClock(gt, vr),
 						initialSync: &mockSync.Sync{IsSyncing: false},
+						custodyInfo: &peerdas.CustodyInfo{},
 					},
 					chainStarted: abool.New(),
 					subHandler:   newSubTopicHandler(),
@@ -246,7 +252,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 				bCfg.FuluForkEpoch = 5
 				params.OverrideBeaconConfig(bCfg)
 				params.BeaconConfig().InitializeForkSchedule()
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				r := &Service{
 					ctx:    ctx,
 					cancel: cancel,
@@ -255,6 +261,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 						chain:       chainService,
 						clock:       startup.NewClock(gt, vr),
 						initialSync: &mockSync.Sync{IsSyncing: false},
+						custodyInfo: &peerdas.CustodyInfo{},
 					},
 					chainStarted: abool.New(),
 					subHandler:   newSubTopicHandler(),
@@ -274,6 +281,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 				}
 				assert.Equal(t, true, rpcMap[p2p.RPCBlobSidecarsByRangeTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix()], "topic doesn't exist")
 				assert.Equal(t, true, rpcMap[p2p.RPCBlobSidecarsByRootTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix()], "topic doesn't exist")
+				assert.Equal(t, true, rpcMap[p2p.RPCMetaDataTopicV3+s.cfg.p2p.Encoding().ProtocolSuffix()], "topic doesn't exist")
 			},
 		},
 	}
@@ -306,7 +314,7 @@ func TestService_CheckForPreviousEpochFork(t *testing.T) {
 					ValidatorsRoot: [32]byte{'A'},
 				}
 				clock := startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				r := &Service{
 					ctx:    ctx,
 					cancel: cancel,
@@ -352,7 +360,7 @@ func TestService_CheckForPreviousEpochFork(t *testing.T) {
 				bCfg.AltairForkEpoch = 3
 				params.OverrideBeaconConfig(bCfg)
 				params.BeaconConfig().InitializeForkSchedule()
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				r := &Service{
 					ctx:    ctx,
 					cancel: cancel,
@@ -439,7 +447,7 @@ func TestService_CheckForPreviousEpochFork(t *testing.T) {
 				bCfg.BellatrixForkEpoch = 3
 				params.OverrideBeaconConfig(bCfg)
 				params.BeaconConfig().InitializeForkSchedule()
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				r := &Service{
 					ctx:    ctx,
 					cancel: cancel,

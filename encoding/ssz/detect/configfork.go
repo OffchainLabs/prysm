@@ -27,7 +27,7 @@ type VersionedUnmarshaler struct {
 	// Fork aligns with the fork names in config/params/values.go
 	Fork int
 	// Version corresponds to the Version type defined in the beacon-chain spec, aka a "fork version number":
-	// https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#custom-types
+	// https://github.com/ethereum/consensus-specs/blob/master/specs/phase0/beacon-chain.md#custom-types
 	Version [fieldparams.VersionLength]byte
 }
 
@@ -166,7 +166,7 @@ func (cf *VersionedUnmarshaler) UnmarshalBeaconState(marshaled []byte) (s state.
 			return nil, errors.Wrapf(err, "failed to init state trie from state, detected fork=%s", forkName)
 		}
 	case version.Fulu:
-		st := &ethpb.BeaconStateElectra{}
+		st := &ethpb.BeaconStateFulu{}
 		err = st.UnmarshalSSZ(marshaled)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to unmarshal state, detected fork=%s", forkName)
