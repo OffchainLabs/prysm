@@ -173,17 +173,17 @@ func metaDataFromConfig(cfg *Config) (metadata.Metadata, error) {
 
 // resolveMetaDataPath returns path and the existence of that path.
 func resolveMetaDataPath(cfg *Config) (string, bool, error) {
-	mdPath := cfg.MetaDataDir
+	mdPath := cfg.MetaDataFile
 	if mdPath == "" {
 		mdPath = path.Join(cfg.DataDir, metaDataPath)
 	}
 
 	// Return path and existence of the file.
-	dirExists, err := file.Exists(mdPath, file.Regular)
+	exists, err := file.Exists(mdPath, file.Regular)
 	if err != nil {
 		return mdPath, false, err
 	}
-	return mdPath, dirExists, nil
+	return mdPath, exists, nil
 }
 
 // metaDataFromFile retrieves unmarshalled p2p metadata from file.

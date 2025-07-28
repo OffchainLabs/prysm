@@ -28,7 +28,7 @@ type Config struct {
 	PrivateKey           string
 	DataDir              string
 	DiscoveryDir         string
-	MetaDataDir          string
+	MetaDataFile         string
 	QUICPort             uint
 	TCPPort              uint
 	UDPPort              uint

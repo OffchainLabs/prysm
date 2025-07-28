@@ -705,7 +705,7 @@ func (b *BeaconNode) registerP2P(cliCtx *cli.Context) error {
 		HostDNS:              cliCtx.String(cmd.P2PHostDNS.Name),
 		PrivateKey:           cliCtx.String(cmd.P2PPrivKey.Name),
 		StaticPeerID:         cliCtx.Bool(cmd.P2PStaticID.Name),
-		MetaDataDir:          cliCtx.String(cmd.P2PMetadata.Name),
+		MetaDataFile:         cliCtx.String(cmd.P2PMetadata.Name),
 		QUICPort:             cliCtx.Uint(cmd.P2PQUICPort.Name),
 		TCPPort:              cliCtx.Uint(cmd.P2PTCPPort.Name),
 		UDPPort:              cliCtx.Uint(cmd.P2PUDPPort.Name),
