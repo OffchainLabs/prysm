@@ -19,6 +19,6 @@ func RunProposerSlashingTest(t *testing.T, config string, fork string, block blo
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get total active balance")
 		}
-		return blocks.ProcessProposerSlashings(ctx, s, b.Block().Body().ProposerSlashings(), v.SlashValidator, v.ExitInformation(s), primitives.Gwei(activeBal))
+		return blocks.ProcessProposerSlashings(ctx, s, b.Block().Body().ProposerSlashings(), v.ExitInformation(s), primitives.Gwei(activeBal))
 	})
 }

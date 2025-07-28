@@ -20,14 +20,6 @@ import (
 // ErrCouldNotVerifyBlockHeader is returned when a block header's signature cannot be verified.
 var ErrCouldNotVerifyBlockHeader = errors.New("could not verify beacon block header")
 
-type slashValidatorFunc func(
-	ctx context.Context,
-	st state.BeaconState,
-	vid primitives.ValidatorIndex,
-	exitInfo *validators.ExitInfo,
-	totalActiveBalance primitives.Gwei,
-) (state.BeaconState, error)
-
 // ProcessProposerSlashings is one of the operations performed
 // on each processed beacon block to slash proposers based on
 // slashing conditions if any slashable events occurred.
@@ -58,13 +50,12 @@ func ProcessProposerSlashings(
 	ctx context.Context,
 	beaconState state.BeaconState,
 	slashings []*ethpb.ProposerSlashing,
-	slashFunc slashValidatorFunc,
 	exitInfo *validators.ExitInfo,
 	totalActiveBalance primitives.Gwei,
 ) (state.BeaconState, error) {
 	var err error
 	for _, slashing := range slashings {
-		beaconState, err = ProcessProposerSlashing(ctx, beaconState, slashing, slashFunc, exitInfo, totalActiveBalance)
+		beaconState, err = ProcessProposerSlashing(ctx, beaconState, slashing, exitInfo, totalActiveBalance)
 		if err != nil {
 			return nil, err
 		}
@@ -77,7 +68,6 @@ func ProcessProposerSlashing(
 	ctx context.Context,
 	beaconState state.BeaconState,
 	slashing *ethpb.ProposerSlashing,
-	slashFunc slashValidatorFunc,
 	exitInfo *validators.ExitInfo,
 	totalActiveBalance primitives.Gwei,
 ) (state.BeaconState, error) {
@@ -88,7 +78,7 @@ func ProcessProposerSlashing(
 	if err = VerifyProposerSlashing(beaconState, slashing); err != nil {
 		return nil, errors.Wrap(err, "could not verify proposer slashing")
 	}
-	beaconState, err = slashFunc(ctx, beaconState, slashing.Header_1.Header.ProposerIndex, exitInfo, totalActiveBalance)
+	beaconState, err = validators.SlashValidator(ctx, beaconState, slashing.Header_1.Header.ProposerIndex, exitInfo, totalActiveBalance)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not slash proposer index %d", slashing.Header_1.Header.ProposerIndex)
 	}

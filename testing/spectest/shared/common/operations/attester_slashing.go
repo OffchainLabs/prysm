@@ -19,6 +19,6 @@ func RunAttesterSlashingTest(t *testing.T, config string, fork string, block blo
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get total active balance")
 		}
-		return blocks.ProcessAttesterSlashings(ctx, s, b.Block().Body().AttesterSlashings(), v.SlashValidator, v.ExitInformation(s), primitives.Gwei(activeBal))
+		return blocks.ProcessAttesterSlashings(ctx, s, b.Block().Body().AttesterSlashings(), v.ExitInformation(s), primitives.Gwei(activeBal))
 	})
 }

@@ -197,7 +197,7 @@ func TestFuzzProcessProposerSlashings_10000(t *testing.T) {
 			// Getting total active balance can fail for reasons such as nil validators in the state.
 			continue
 		}
-		r, err := ProcessProposerSlashings(ctx, s, []*ethpb.ProposerSlashing{p}, v.SlashValidator, v.ExitInformation(s), primitives.Gwei(activeBal))
+		r, err := ProcessProposerSlashings(ctx, s, []*ethpb.ProposerSlashing{p}, v.ExitInformation(s), primitives.Gwei(activeBal))
 		if err != nil && r != nil {
 			t.Fatalf("return value should be nil on err. found: %v on error: %v for state: %v and slashing: %v", r, err, state, p)
 		}
@@ -235,7 +235,7 @@ func TestFuzzProcessAttesterSlashings_10000(t *testing.T) {
 			// Getting total active balance can fail for reasons such as nil validators in the state.
 			continue
 		}
-		r, err := ProcessAttesterSlashings(ctx, s, []ethpb.AttSlashing{a}, v.SlashValidator, v.ExitInformation(s), primitives.Gwei(activeBal))
+		r, err := ProcessAttesterSlashings(ctx, s, []ethpb.AttSlashing{a}, v.ExitInformation(s), primitives.Gwei(activeBal))
 		if err != nil && r != nil {
 			t.Fatalf("return value should be nil on err. found: %v on error: %v for state: %v and slashing: %v", r, err, state, a)
 		}

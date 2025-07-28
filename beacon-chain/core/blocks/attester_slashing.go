@@ -40,13 +40,12 @@ func ProcessAttesterSlashings(
 	ctx context.Context,
 	beaconState state.BeaconState,
 	slashings []ethpb.AttSlashing,
-	slashFunc slashValidatorFunc,
 	exitInfo *validators.ExitInfo,
 	totalActiveBalance primitives.Gwei,
 ) (state.BeaconState, error) {
 	var err error
 	for _, slashing := range slashings {
-		beaconState, err = ProcessAttesterSlashing(ctx, beaconState, slashing, slashFunc, exitInfo, totalActiveBalance)
+		beaconState, err = ProcessAttesterSlashing(ctx, beaconState, slashing, exitInfo, totalActiveBalance)
 		if err != nil {
 			return nil, err
 		}
@@ -59,7 +58,6 @@ func ProcessAttesterSlashing(
 	ctx context.Context,
 	beaconState state.BeaconState,
 	slashing ethpb.AttSlashing,
-	slashFunc slashValidatorFunc,
 	exitInfo *validators.ExitInfo,
 	totalActiveBalance primitives.Gwei,
 ) (state.BeaconState, error) {
@@ -80,7 +78,7 @@ func ProcessAttesterSlashing(
 			return nil, err
 		}
 		if helpers.IsSlashableValidator(val.ActivationEpoch(), val.WithdrawableEpoch(), val.Slashed(), currentEpoch) {
-			beaconState, err = slashFunc(ctx, beaconState, primitives.ValidatorIndex(validatorIndex), exitInfo, totalActiveBalance)
+			beaconState, err = validators.SlashValidator(ctx, beaconState, primitives.ValidatorIndex(validatorIndex), exitInfo, totalActiveBalance)
 			if err != nil {
 				return nil, errors.Wrapf(err, "could not slash validator index %d", validatorIndex)
 			}

@@ -59,11 +59,11 @@ func ProcessOperations(ctx context.Context, st state.BeaconState, block interfac
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get total active balance")
 	}
-	st, err = ProcessProposerSlashings(ctx, st, bb.ProposerSlashings(), v.SlashValidator, exitInfo, primitives.Gwei(activeBal))
+	st, err = ProcessProposerSlashings(ctx, st, bb.ProposerSlashings(), exitInfo, primitives.Gwei(activeBal))
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process altair proposer slashing")
 	}
-	st, err = ProcessAttesterSlashings(ctx, st, bb.AttesterSlashings(), v.SlashValidator, exitInfo, primitives.Gwei(activeBal))
+	st, err = ProcessAttesterSlashings(ctx, st, bb.AttesterSlashings(), exitInfo, primitives.Gwei(activeBal))
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process altair attester slashing")
 	}

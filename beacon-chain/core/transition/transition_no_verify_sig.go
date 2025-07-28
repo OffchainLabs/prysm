@@ -384,11 +384,11 @@ func altairOperations(ctx context.Context, st state.BeaconState, beaconBlock int
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get total active balance")
 	}
-	st, err = b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), v.SlashValidator, exitInfo, primitives.Gwei(activeBal))
+	st, err = b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), exitInfo, primitives.Gwei(activeBal))
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process altair proposer slashing")
 	}
-	st, err = b.ProcessAttesterSlashings(ctx, st, beaconBlock.Body().AttesterSlashings(), v.SlashValidator, exitInfo, primitives.Gwei(activeBal))
+	st, err = b.ProcessAttesterSlashings(ctx, st, beaconBlock.Body().AttesterSlashings(), exitInfo, primitives.Gwei(activeBal))
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process altair attester slashing")
 	}
@@ -415,11 +415,11 @@ func phase0Operations(ctx context.Context, st state.BeaconState, beaconBlock int
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get total active balance")
 	}
-	st, err = b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), v.SlashValidator, exitInfo, primitives.Gwei(activeBal))
+	st, err = b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), exitInfo, primitives.Gwei(activeBal))
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process block proposer slashings")
 	}
-	st, err = b.ProcessAttesterSlashings(ctx, st, beaconBlock.Body().AttesterSlashings(), v.SlashValidator, exitInfo, primitives.Gwei(activeBal))
+	st, err = b.ProcessAttesterSlashings(ctx, st, beaconBlock.Body().AttesterSlashings(), exitInfo, primitives.Gwei(activeBal))
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process block attester slashings")
 	}

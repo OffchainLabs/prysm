@@ -64,7 +64,7 @@ func TestProcessAttesterSlashings_DataNotSlashable(t *testing.T) {
 	}
 	activeBal, err := helpers.TotalActiveBalance(beaconState)
 	require.NoError(t, err)
-	_, err = blocks.ProcessAttesterSlashings(t.Context(), beaconState, ss, v.SlashValidator, v.ExitInformation(beaconState), primitives.Gwei(activeBal))
+	_, err = blocks.ProcessAttesterSlashings(t.Context(), beaconState, ss, v.ExitInformation(beaconState), primitives.Gwei(activeBal))
 	assert.ErrorContains(t, "attestations are not slashable", err)
 }
 
@@ -104,7 +104,7 @@ func TestProcessAttesterSlashings_IndexedAttestationFailedToVerify(t *testing.T)
 	}
 	activeBal, err := helpers.TotalActiveBalance(beaconState)
 	require.NoError(t, err)
-	_, err = blocks.ProcessAttesterSlashings(t.Context(), beaconState, ss, v.SlashValidator, v.ExitInformation(beaconState), primitives.Gwei(activeBal))
+	_, err = blocks.ProcessAttesterSlashings(t.Context(), beaconState, ss, v.ExitInformation(beaconState), primitives.Gwei(activeBal))
 	assert.ErrorContains(t, "validator indices count exceeds MAX_VALIDATORS_PER_COMMITTEE", err)
 }
 
@@ -248,7 +248,7 @@ func TestProcessAttesterSlashings_AppliesCorrectStatus(t *testing.T) {
 
 			activeBal, err := helpers.TotalActiveBalance(tc.st)
 			require.NoError(t, err)
-			newState, err := blocks.ProcessAttesterSlashings(t.Context(), tc.st, []ethpb.AttSlashing{tc.slashing}, v.SlashValidator, v.ExitInformation(tc.st), primitives.Gwei(activeBal))
+			newState, err := blocks.ProcessAttesterSlashings(t.Context(), tc.st, []ethpb.AttSlashing{tc.slashing}, v.ExitInformation(tc.st), primitives.Gwei(activeBal))
 			require.NoError(t, err)
 			newRegistry := newState.Validators()
 
@@ -348,7 +348,7 @@ func TestProcessAttesterSlashing_ExitEpochGetsUpdated(t *testing.T) {
 	require.NoError(t, err)
 	exitInfo := v.ExitInformation(st)
 	assert.Equal(t, primitives.Epoch(0), exitInfo.HighestExitEpoch)
-	_, err = blocks.ProcessAttesterSlashings(t.Context(), st, []ethpb.AttSlashing{slashing1, slashing2}, v.SlashValidator, exitInfo, primitives.Gwei(activeBal))
+	_, err = blocks.ProcessAttesterSlashings(t.Context(), st, []ethpb.AttSlashing{slashing1, slashing2}, exitInfo, primitives.Gwei(activeBal))
 	require.NoError(t, err)
 	assert.Equal(t, primitives.Epoch(6), exitInfo.HighestExitEpoch)
 }
