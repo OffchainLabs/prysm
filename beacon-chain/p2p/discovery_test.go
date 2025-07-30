@@ -16,7 +16,6 @@ import (
 
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
@@ -256,7 +255,7 @@ func TestCreateLocalNode(t *testing.T) {
 
 			// Check cgc config.
 			custodyGroupCount := new(uint64)
-			require.NoError(t, localNode.Node().Record().Load(enr.WithEntry(peerdas.CustodyGroupCountEnrKey, custodyGroupCount)))
+			require.NoError(t, localNode.Node().Record().Load(enr.WithEntry(params.BeaconNetworkConfig().CustodyGroupCountKey, custodyGroupCount)))
 			require.Equal(t, custodyRequirement, *custodyGroupCount)
 		})
 	}
@@ -666,7 +665,7 @@ func checkPingCountCacheMetadataRecord(
 	if expected.custodyGroupCount != nil {
 		// Check custody subnet count in ENR.
 		var actualCustodyGroupCount uint64
-		err := service.dv5Listener.LocalNode().Node().Record().Load(enr.WithEntry(peerdas.CustodyGroupCountEnrKey, &actualCustodyGroupCount))
+		err := service.dv5Listener.LocalNode().Node().Record().Load(enr.WithEntry(params.BeaconNetworkConfig().CustodyGroupCountKey, &actualCustodyGroupCount))
 		require.NoError(t, err)
 		require.Equal(t, *expected.custodyGroupCount, actualCustodyGroupCount)
 
