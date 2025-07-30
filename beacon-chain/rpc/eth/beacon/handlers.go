@@ -1008,9 +1008,13 @@ func (s *Server) validateConsensus(ctx context.Context, b *eth.GenericSignedBeac
 	}
 
 	parentStateRoot := parentBlock.Block().StateRoot()
-	parentState, err := s.Stater.State(ctx, parentStateRoot[:])
-	if err != nil {
-		return errors.Wrap(err, "could not get parent state")
+	// Check if the state is already cached
+	parentState := transition.NextSlotState(parentBlockRoot[:], blk.Block().Slot())
+	if parentState == nil {
+		parentState, err = s.Stater.State(ctx, parentStateRoot[:])
+		if err != nil {
+			return errors.Wrap(err, "could not get parent state")
+		}
 	}
 	_, err = transition.ExecuteStateTransition(ctx, parentState, blk)
 	if err != nil {
