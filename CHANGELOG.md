@@ -9,7 +9,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 v6.0.5 raises the default builder gas limit[1] from 36M to 45M, and includes a number of optimizations and bugfixes. Also included are incremental light client support components and fusaka features waiting to be activated. This is likely the second to last release in the v6 cycle before fusaka testing releases next month.
 
 Noteworthy improvements and bugfixes:
-- mvslice now on by default default. This copy-on-write design for BeaconState field reduces the memory overhead of keeping multiple BeaconStates in RAM for block processing. Congrats @rkapka on the feature graduation!
+- The `--disable-experimental-state` flag has been removed, marking the full graduation of the Copy-on-write design for BeaconState fields, which reduces the memory overhead of keeping multiple BeaconStates in RAM for block processing. Congrats @rkapka!
 - The behavior set by the `--attest_timely` flag is now on by default, with the flag itself deprecated.
 - GetDutiesV2 introduced, lowering duty request latency and beacon node load.
 - Multiple changes to the validator event loop for improved stability.
