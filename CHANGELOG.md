@@ -4,6 +4,86 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [v6.0.5](https://github.com/prysmaticlabs/prysm/compare/v6.0.4...v6.0.5) - 2025-07-29
+
+### Added
+
+- PeerDAS: Add `CustodyInfo` in `BeaconNode`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15378)
+- GetDutiesV2 gRPC function, removes committee list from duties, replaced with committee length, validator committee index. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15273)
+- Added feature flag for validator client to use get duties v2. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15380)
+- PeerDAS: Implement DAS. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15367)
+- `verifyBlobCommitmentCount`: Print max allowed blob count in error message. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15386)
+- Data column support for beacon api event end point. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15387)
+- Implement EIP-7917: Stable proposer lookahead. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15129)
+- Implement `dataColumnSidecarByRootRPCHandler`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15405)
+- New ssz-only flag for validator client to enable calling rest apis in SSZ, starting with get block endpoint. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15390)
+- Implement `dataColumnSidecarsByRangeRPCHandler`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15421)
+- New `StatusV2` proto message. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15423)
+- Implement `SendDataColumnSidecarsByRangeRequest`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15430)
+- Implement `SendDataColumnSidecarsByRootRequest`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15430)
+- Implement beacon API blob sidecar enpoint for Fulu. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15436)
+- PeerDAS: Implement the new Fulu Metadata. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15440)
+- PeerDAS: Implement reconstruction. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15454)
+- Implement engine method `GetBlobsV2`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15469)
+- Implement execution `ReconstructDataColumnSidecars`, which reconstruct data column sidecars from data fetched from the execution layer. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15469)
+- new `--batch-verifier-limit` flag to configure max number of signatures to batch verify on gossip. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15467)
+- `disable-attest-timely` flag to disable attest timely. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15410)
+- Added `max-health-checks` flag that sets the maximum times the validator tries to check the health of the beacon node before timing out. 0 or a negative number is indefinite. (the default is 0). [[PR]](https://github.com/prysmaticlabs/prysm/pull/15401)
+- Add method `VersionToForkEpochMap()` to the `BeaconChainConfig` in the `params` package. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15482)
+- Add log capitalization analyzer and apply changes across codebase. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15452)
+- Slot aware cache for seen data column gossip p2p to reduce memory usages. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15477)
+- **Gzip Compression for Beacon API:**. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14982)
+- Implement data column sidecars reconstruction with data retrieved from the execution client when receiving a block via gossip. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15483)
+- Add support for parsing and handling `ExecutionPayloadAndBlobsBundleV2`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15503)
+
+### Changed
+
+- `parseIndices`: Return `[]int` instead of `[]uint64`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15386)
+- Reclaim memory manually in some tests that fuzz the beacon state. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15395)
+- when REST api is enabled the get Block api defaults to requesting and receiving SSZ instead of JSON, JSON is the fallback. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15390)
+- Remove "invalid" from logs for incoming blob sidecar that is missing parent or out of range slot. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15428)
+- In `TopicFromMessage`: Do not assume anymore that all Fulu specific topic are V3 only. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15423)
+- `readChunkedDataColumnSidecar`: Add `validationFunctions` parameter and add tests. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15423)
+- Put the initiation of LC Store behind the `enable-light-client` flag. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15464)
+- default batch signature verification limit increased from 50 to 1000. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15467)
+- Increase mainnet DefaultBuilderGasLimit from 36M to 45M. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15455)
+- Attest timely is now default. `attest-timely` flag is now deprecated. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15410)
+- Move data col reconstruction log to a more accurate place in the code. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15475)
+- Makes the multivalue slice permanent in the state and removes old paths. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15414)
+- Previously, we optimistically believed the beacon node was healthy and tried to get chain start, but now we do a health check at the start. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15401)
+- Optimize proposer inclusion proof calcuation by pre caching subtries. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15473)
+- Move setter/getter functions for LC Bootstrap into LcStore for a unified interface. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15476)
+- Changed `enable-duties-v2` to `disable-duties-v2` to default to using duties v2. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15445)
+- Changed `uint64` genesis time to use `time.Time`. Also did some refactoring and cleanup that was enabled by these changes. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15419)
+- Add milliseconds to log timestamps. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15496)
+- Move setter/getter functions for LC Updates into LcStore for a unified interface. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15488)
+- Change LC Bootstrap logic to only save bootstraps on finalized checkpoints instead of every block. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15497)
+
+### Removed
+
+- Removed //tools/eth1voting tool. This is no longer needed as the beacon chain no longer uses eth1data voting since Electra. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15415)
+- Remove deposit count from sync new block log. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15420)
+- Unused `DataColumnIdentifier` proto message. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15423)
+- Validator client will no longer need to call the canonical head api. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15480)
+
+### Fixed
+
+- Added regression test for [PR 15369](https://github.com/OffchainLabs/prysm/pull/15369). [[PR]](https://github.com/prysmaticlabs/prysm/pull/15379)
+- Added missing `meta` field to the response of the endpoint `/eth/v1/node/peers` to align with the Beacon API spec (#15370). [[PR]](https://github.com/prysmaticlabs/prysm/pull/15371)
+- Non deterministic output order of `dataColumnSidecarByRootRPCHandler`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15441)
+- Fixed the versioning bug for light client data types in the Beacon API. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15400)
+- `--chain-config-file`: Do not use any more mainnet boot nodes. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15460)
+- Fix panic on dutiesv2 when there is no committee assignment on the epoch. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15466)
+- Allow SSZ requests for pending deposits, partial withdrawals and consolidations. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15474)
+- Validator client shuts down cleanly on error instead of fatal error. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15401)
+- Fixes edge case starting validator client with new validator keys starts the slot ticker too early resulting in replayed slots in the main runner loop. Fixes edge case of replayed slots when waiting for account acivations. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15479)
+- DV aggregations failing first slot of the epoch. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15156)
+- Skip genesis block retrieval when EIP-6110 deposit requests have started to prevent "pruned history unavailable" errors with execution clients that have pruned pre-merge data. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15494)
+- Fixed lookahead initialization at the fulu fork. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15450)
+- Write `Content-Encoding` header in the response properly when gzip encoding is requested. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15499)
+- Subnets subscription: Avoid dynamic subscribing blocking in case not enough peers per subnets are found. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15471)
+- Do not apply the gzip middleware to the event stream API. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15517)
+
 ## [v6.0.4](https://github.com/prysmaticlabs/prysm/compare/v6.0.3...v6.0.4) - 2025-06-05
 
 This release has more work on PeerDAS, and light client support. Additionally, we have a few bug fixes:
