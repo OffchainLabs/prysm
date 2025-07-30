@@ -296,6 +296,10 @@ func (s *Service) StartFromSavedState(saved state.BeaconState) error {
 		return errors.Wrap(err, "failed to initialize blockchain service")
 	}
 
+	if !params.FuluEnabled() {
+		return nil
+	}
+
 	earliestAvailableSlot, custodySubnetCount, err := s.updateCustodyInfoInDB(saved.Slot())
 	if err != nil {
 		return errors.Wrap(err, "could not get and save custody group count")
