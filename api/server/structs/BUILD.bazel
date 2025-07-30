@@ -36,6 +36,7 @@ go_library(
         "//consensus-types/primitives:go_default_library",
         "//consensus-types/validator:go_default_library",
         "//container/slice:go_default_library",
+        "//crypto/bls:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//math:go_default_library",
         "//proto/engine/v1:go_default_library",
