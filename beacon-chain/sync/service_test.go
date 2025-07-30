@@ -441,7 +441,5 @@ func TestService_Stop_ConcurrentGoodbyeMessages(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, true, duration < 500*time.Millisecond, "Goodbye messages should be sent concurrently")
 
-	if util.WaitTimeout(&wg, 2*time.Second) {
-		t.Fatal("Not all peers received goodbye messages")
-	}
+	require.Equal(t, false, util.WaitTimeout(&wg, 2*time.Second))
 }
