@@ -102,8 +102,6 @@ func (s *Service) forkchoiceUpdateWithExecution(ctx context.Context, args *fcuCo
 		log.WithError(err).Error("Could not save head")
 	}
 
-	go s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), args.headBlock, args.headRoot, s.CurrentSlot()+1)
-
 	// Only need to prune attestations from pool if the head has changed.
 	s.pruneAttsFromPool(s.ctx, args.headState, args.headBlock)
 	return nil
