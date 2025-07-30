@@ -55,9 +55,9 @@ func ProcessOperations(ctx context.Context, st state.BeaconState, block interfac
 	bb := block.Body()
 	// Electra extends the altair operations.
 	exitInfo := v.ExitInformation(st)
-	activeBal, err := helpers.TotalActiveBalance(st)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get total active balance")
+	activeBal := exitInfo.TotalActiveBalance
+	if err := helpers.UpdateTotalActiveBalanceCache(st, activeBal); err != nil {
+		return nil, errors.Wrap(err, "could not update total active balance cache")
 	}
 	st, err = ProcessProposerSlashings(ctx, st, bb.ProposerSlashings(), exitInfo, primitives.Gwei(activeBal))
 	if err != nil {

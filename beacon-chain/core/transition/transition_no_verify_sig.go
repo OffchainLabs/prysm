@@ -380,9 +380,9 @@ func altairOperations(ctx context.Context, st state.BeaconState, beaconBlock int
 	var err error
 
 	exitInfo := v.ExitInformation(st)
-	activeBal, err := helpers.TotalActiveBalance(st)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get total active balance")
+	activeBal := exitInfo.TotalActiveBalance
+	if err := helpers.UpdateTotalActiveBalanceCache(st, activeBal); err != nil {
+		return nil, errors.Wrap(err, "could not update total active balance cache")
 	}
 	st, err = b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), exitInfo, primitives.Gwei(activeBal))
 	if err != nil {
@@ -411,9 +411,9 @@ func phase0Operations(ctx context.Context, st state.BeaconState, beaconBlock int
 	var err error
 
 	exitInfo := v.ExitInformation(st)
-	activeBal, err := helpers.TotalActiveBalance(st)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get total active balance")
+	activeBal := exitInfo.TotalActiveBalance
+	if err := helpers.UpdateTotalActiveBalanceCache(st, activeBal); err != nil {
+		return nil, errors.Wrap(err, "could not update total active balance cache")
 	}
 	st, err = b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), exitInfo, primitives.Gwei(activeBal))
 	if err != nil {

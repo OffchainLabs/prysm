@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/math"
+	mathutil "github.com/OffchainLabs/prysm/v6/math"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -21,8 +22,9 @@ import (
 
 // ExitInfo provides information about validator exits in the state.
 type ExitInfo struct {
-	HighestExitEpoch primitives.Epoch
-	Churn            uint64
+	HighestExitEpoch   primitives.Epoch
+	Churn              uint64
+	TotalActiveBalance uint64
 }
 
 // ErrValidatorAlreadyExited is an error raised when trying to process an exit of
@@ -34,6 +36,9 @@ func ExitInformation(s state.BeaconState) *ExitInfo {
 	exitInfo := &ExitInfo{}
 
 	farFutureEpoch := params.BeaconConfig().FarFutureEpoch
+	currentEpoch := slots.ToEpoch(s.Slot())
+	totalActiveBalance := uint64(0)
+
 	err := s.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
 		e := val.ExitEpoch()
 		if e != farFutureEpoch {
@@ -44,9 +49,18 @@ func ExitInformation(s state.BeaconState) *ExitInfo {
 				exitInfo.Churn++
 			}
 		}
+
+		// Calculate total active balance in the same loop
+		if helpers.IsActiveValidatorUsingTrie(val, currentEpoch) {
+			totalActiveBalance += val.EffectiveBalance()
+		}
+
 		return nil
 	})
 	_ = err
+
+	// Apply minimum balance as per spec
+	exitInfo.TotalActiveBalance = mathutil.Max(params.BeaconConfig().EffectiveBalanceIncrement, totalActiveBalance)
 	return exitInfo
 }
 

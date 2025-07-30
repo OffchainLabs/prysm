@@ -15,9 +15,9 @@ func (vs *Server) getSlashings(ctx context.Context, head state.BeaconState) ([]*
 	var err error
 
 	exitInfo := v.ExitInformation(head)
-	activeBal, err := helpers.TotalActiveBalance(head)
-	if err != nil {
-		log.WithError(err).Warn("Could not get total active balance")
+	activeBal := exitInfo.TotalActiveBalance
+	if err := helpers.UpdateTotalActiveBalanceCache(head, activeBal); err != nil {
+		log.WithError(err).Warn("Could not update total active balance cache")
 	}
 	proposerSlashings := vs.SlashingsPool.PendingProposerSlashings(ctx, head, false /*noLimit*/)
 	validProposerSlashings := make([]*ethpb.ProposerSlashing, 0, len(proposerSlashings))
