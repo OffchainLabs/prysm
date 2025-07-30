@@ -6,6 +6,21 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [v6.0.5](https://github.com/prysmaticlabs/prysm/compare/v6.0.4...v6.0.5) - 2025-07-29
 
+v6.0.5 raises the default builder gas limit[1] from 36M to 45M, and includes a number of optimizations and bugfixes. Also included are incremental light client support components and fusaka features waiting to be activated. This is likely the second to last release in the v6 cycle before fusaka testing releases next month.
+
+Noteworthy improvements and bugfixes:
+- mvslice now on by default default. This copy-on-write design for BeaconState field reduces the memory overhead of keeping multiple BeaconStates in RAM for block processing. Congrats @rkapka on the feature graduation!
+- The behavior set by the `--attest_timely` flag is now on by default, with the flag itself deprecated.
+- GetDutiesV2 introduced, lowering duty request latency and beacon node load.
+- Multiple changes to the validator event loop for improved stability.
+- Improvements to rest-mode validator, defaulting to SSZ where available and adding support to more endpoints.
+- Beacon API honoring the gzip content-encoding header.
+- Log timestamps now include milliseconds.
+
+Special thanks to external contributors!: @Alleysira, @KaloyanTanev, @rose2221
+
+[1] To override this limit, use the validator flag `--suggested-gas-limit` or set the `builder.gas_limit` setting in your [proposer settings file](https://prysm.offchainlabs.com/docs/configure-prysm/fee-recipient/#advanced-configure-mev-builder-and-gas-limit).
+
 ### Added
 
 - PeerDAS: Add `CustodyInfo` in `BeaconNode`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15378)
