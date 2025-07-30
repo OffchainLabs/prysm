@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	v "github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
@@ -50,10 +49,8 @@ func TestProcessProposerSlashings_UnmatchedHeaderSlots(t *testing.T) {
 			ProposerSlashings: slashings,
 		},
 	}
-	activeBal, err := helpers.TotalActiveBalance(beaconState)
-	require.NoError(t, err)
 	want := "mismatched header slots"
-	_, err = blocks.ProcessProposerSlashings(t.Context(), beaconState, b.Block.Body.ProposerSlashings, v.ExitInformation(beaconState), primitives.Gwei(activeBal))
+	_, err := blocks.ProcessProposerSlashings(t.Context(), beaconState, b.Block.Body.ProposerSlashings, v.ExitInformation(beaconState))
 	assert.ErrorContains(t, want, err)
 }
 
@@ -85,10 +82,8 @@ func TestProcessProposerSlashings_SameHeaders(t *testing.T) {
 			ProposerSlashings: slashings,
 		},
 	}
-	activeBal, err := helpers.TotalActiveBalance(beaconState)
-	require.NoError(t, err)
 	want := "expected slashing headers to differ"
-	_, err = blocks.ProcessProposerSlashings(t.Context(), beaconState, b.Block.Body.ProposerSlashings, v.ExitInformation(beaconState), primitives.Gwei(activeBal))
+	_, err := blocks.ProcessProposerSlashings(t.Context(), beaconState, b.Block.Body.ProposerSlashings, v.ExitInformation(beaconState))
 	assert.ErrorContains(t, want, err)
 }
 
@@ -134,13 +129,11 @@ func TestProcessProposerSlashings_ValidatorNotSlashable(t *testing.T) {
 			ProposerSlashings: slashings,
 		},
 	}
-	activeBal, err := helpers.TotalActiveBalance(beaconState)
-	require.NoError(t, err)
 	want := fmt.Sprintf(
 		"validator with key %#x is not slashable",
 		bytesutil.ToBytes48(beaconState.Validators()[0].PublicKey),
 	)
-	_, err = blocks.ProcessProposerSlashings(t.Context(), beaconState, b.Block.Body.ProposerSlashings, v.ExitInformation(beaconState), primitives.Gwei(activeBal))
+	_, err = blocks.ProcessProposerSlashings(t.Context(), beaconState, b.Block.Body.ProposerSlashings, v.ExitInformation(beaconState))
 	assert.ErrorContains(t, want, err)
 }
 
@@ -179,9 +172,7 @@ func TestProcessProposerSlashings_AppliesCorrectStatus(t *testing.T) {
 	block := util.NewBeaconBlock()
 	block.Block.Body.ProposerSlashings = slashings
 
-	activeBal, err := helpers.TotalActiveBalance(beaconState)
-	require.NoError(t, err)
-	newState, err := blocks.ProcessProposerSlashings(t.Context(), beaconState, block.Block.Body.ProposerSlashings, v.ExitInformation(beaconState), primitives.Gwei(activeBal))
+	newState, err := blocks.ProcessProposerSlashings(t.Context(), beaconState, block.Block.Body.ProposerSlashings, v.ExitInformation(beaconState))
 	require.NoError(t, err)
 
 	newStateVals := newState.Validators()
@@ -229,9 +220,7 @@ func TestProcessProposerSlashings_AppliesCorrectStatusAltair(t *testing.T) {
 	block := util.NewBeaconBlock()
 	block.Block.Body.ProposerSlashings = slashings
 
-	activeBal, err := helpers.TotalActiveBalance(beaconState)
-	require.NoError(t, err)
-	newState, err := blocks.ProcessProposerSlashings(t.Context(), beaconState, block.Block.Body.ProposerSlashings, v.ExitInformation(beaconState), primitives.Gwei(activeBal))
+	newState, err := blocks.ProcessProposerSlashings(t.Context(), beaconState, block.Block.Body.ProposerSlashings, v.ExitInformation(beaconState))
 	require.NoError(t, err)
 
 	newStateVals := newState.Validators()
@@ -279,9 +268,7 @@ func TestProcessProposerSlashings_AppliesCorrectStatusBellatrix(t *testing.T) {
 	block := util.NewBeaconBlock()
 	block.Block.Body.ProposerSlashings = slashings
 
-	activeBal, err := helpers.TotalActiveBalance(beaconState)
-	require.NoError(t, err)
-	newState, err := blocks.ProcessProposerSlashings(t.Context(), beaconState, block.Block.Body.ProposerSlashings, v.ExitInformation(beaconState), primitives.Gwei(activeBal))
+	newState, err := blocks.ProcessProposerSlashings(t.Context(), beaconState, block.Block.Body.ProposerSlashings, v.ExitInformation(beaconState))
 	require.NoError(t, err)
 
 	newStateVals := newState.Validators()
@@ -329,9 +316,7 @@ func TestProcessProposerSlashings_AppliesCorrectStatusCapella(t *testing.T) {
 	block := util.NewBeaconBlock()
 	block.Block.Body.ProposerSlashings = slashings
 
-	activeBal, err := helpers.TotalActiveBalance(beaconState)
-	require.NoError(t, err)
-	newState, err := blocks.ProcessProposerSlashings(t.Context(), beaconState, block.Block.Body.ProposerSlashings, v.ExitInformation(beaconState), primitives.Gwei(activeBal))
+	newState, err := blocks.ProcessProposerSlashings(t.Context(), beaconState, block.Block.Body.ProposerSlashings, v.ExitInformation(beaconState))
 	require.NoError(t, err)
 
 	newStateVals := newState.Validators()

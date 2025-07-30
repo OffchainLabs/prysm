@@ -8,7 +8,6 @@ import (
 	v "github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/pkg/errors"
 )
 
@@ -55,15 +54,14 @@ func ProcessOperations(ctx context.Context, st state.BeaconState, block interfac
 	bb := block.Body()
 	// Electra extends the altair operations.
 	exitInfo := v.ExitInformation(st)
-	activeBal := exitInfo.TotalActiveBalance
-	if err := helpers.UpdateTotalActiveBalanceCache(st, activeBal); err != nil {
+	if err := helpers.UpdateTotalActiveBalanceCache(st, exitInfo.TotalActiveBalance); err != nil {
 		return nil, errors.Wrap(err, "could not update total active balance cache")
 	}
-	st, err = ProcessProposerSlashings(ctx, st, bb.ProposerSlashings(), exitInfo, primitives.Gwei(activeBal))
+	st, err = ProcessProposerSlashings(ctx, st, bb.ProposerSlashings(), exitInfo)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process altair proposer slashing")
 	}
-	st, err = ProcessAttesterSlashings(ctx, st, bb.AttesterSlashings(), exitInfo, primitives.Gwei(activeBal))
+	st, err = ProcessAttesterSlashings(ctx, st, bb.AttesterSlashings(), exitInfo)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process altair attester slashing")
 	}

@@ -5,20 +5,13 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	v "github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/pkg/errors"
 )
 
 func RunProposerSlashingTest(t *testing.T, config string, fork string, block blockWithSSZObject, sszToState SSZToState) {
 	runSlashingTest(t, config, fork, "proposer_slashing", block, sszToState, func(ctx context.Context, s state.BeaconState, b interfaces.ReadOnlySignedBeaconBlock) (state.BeaconState, error) {
-		activeBal, err := helpers.TotalActiveBalance(s)
-		if err != nil {
-			return nil, errors.Wrap(err, "could not get total active balance")
-		}
-		return blocks.ProcessProposerSlashings(ctx, s, b.Block().Body().ProposerSlashings(), v.ExitInformation(s), primitives.Gwei(activeBal))
+		return blocks.ProcessProposerSlashings(ctx, s, b.Block().Body().ProposerSlashings(), v.ExitInformation(s))
 	})
 }

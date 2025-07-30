@@ -10,7 +10,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
@@ -51,11 +50,10 @@ func ProcessProposerSlashings(
 	beaconState state.BeaconState,
 	slashings []*ethpb.ProposerSlashing,
 	exitInfo *validators.ExitInfo,
-	totalActiveBalance primitives.Gwei,
 ) (state.BeaconState, error) {
 	var err error
 	for _, slashing := range slashings {
-		beaconState, err = ProcessProposerSlashing(ctx, beaconState, slashing, exitInfo, totalActiveBalance)
+		beaconState, err = ProcessProposerSlashing(ctx, beaconState, slashing, exitInfo)
 		if err != nil {
 			return nil, err
 		}
@@ -69,7 +67,6 @@ func ProcessProposerSlashing(
 	beaconState state.BeaconState,
 	slashing *ethpb.ProposerSlashing,
 	exitInfo *validators.ExitInfo,
-	totalActiveBalance primitives.Gwei,
 ) (state.BeaconState, error) {
 	var err error
 	if slashing == nil {
@@ -78,7 +75,7 @@ func ProcessProposerSlashing(
 	if err = VerifyProposerSlashing(beaconState, slashing); err != nil {
 		return nil, errors.Wrap(err, "could not verify proposer slashing")
 	}
-	beaconState, err = validators.SlashValidator(ctx, beaconState, slashing.Header_1.Header.ProposerIndex, exitInfo, totalActiveBalance)
+	beaconState, err = validators.SlashValidator(ctx, beaconState, slashing.Header_1.Header.ProposerIndex, exitInfo)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not slash proposer index %d", slashing.Header_1.Header.ProposerIndex)
 	}

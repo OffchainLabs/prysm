@@ -233,11 +233,10 @@ func SlashValidator(
 	s state.BeaconState,
 	slashedIdx primitives.ValidatorIndex,
 	exitInfo *ExitInfo,
-	totalActiveBalance primitives.Gwei,
 ) (state.BeaconState, error) {
 	var err error
 
-	s, err = InitiateValidatorExitForTotalBal(ctx, s, slashedIdx, exitInfo, totalActiveBalance)
+	s, err = InitiateValidatorExitForTotalBal(ctx, s, slashedIdx, exitInfo, primitives.Gwei(exitInfo.TotalActiveBalance))
 	if err != nil && !errors.Is(err, ErrValidatorAlreadyExited) {
 		return nil, errors.Wrapf(err, "could not initiate validator %d exit", slashedIdx)
 	}

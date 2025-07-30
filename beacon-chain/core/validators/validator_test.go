@@ -196,9 +196,7 @@ func TestSlashValidator_OK(t *testing.T) {
 	require.NoError(t, err, "Could not get proposer")
 	proposerBal, err := state.BalanceAtIndex(proposer)
 	require.NoError(t, err)
-	activeBal, err := helpers.TotalActiveBalance(state)
-	require.NoError(t, err)
-	slashedState, err := validators.SlashValidator(t.Context(), state, slashedIdx, validators.ExitInformation(state), primitives.Gwei(activeBal))
+	slashedState, err := validators.SlashValidator(t.Context(), state, slashedIdx, validators.ExitInformation(state))
 	require.NoError(t, err, "Could not slash validator")
 	require.Equal(t, true, slashedState.Version() == version.Phase0)
 
@@ -252,9 +250,7 @@ func TestSlashValidator_Electra(t *testing.T) {
 	require.NoError(t, err, "Could not get proposer")
 	proposerBal, err := state.BalanceAtIndex(proposer)
 	require.NoError(t, err)
-	activeBal, err := helpers.TotalActiveBalance(state)
-	require.NoError(t, err)
-	slashedState, err := validators.SlashValidator(t.Context(), state, slashedIdx, validators.ExitInformation(state), primitives.Gwei(activeBal))
+	slashedState, err := validators.SlashValidator(t.Context(), state, slashedIdx, validators.ExitInformation(state))
 	require.NoError(t, err, "Could not slash validator")
 	require.Equal(t, true, slashedState.Version() == version.Electra)
 
