@@ -88,7 +88,6 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.P2PHostDNS,
 			cmd.P2PIP,
 			cmd.P2PMaxPeers,
-			cmd.P2PMetadata,
 			cmd.P2PPrivKey,
 			cmd.P2PQUICPort,
 			cmd.P2PStaticID,

@@ -126,14 +126,13 @@ func privKeyFromFile(path string) (*ecdsa.PrivateKey, error) {
 // TODO: Figure out how to do a v1/v2 check.
 func metaDataFromConfig(cfg *Config) (metadata.Metadata, error) {
 	defaultKeyPath := path.Join(cfg.DataDir, metaDataPath)
-	metaDataPath := cfg.MetaDataDir
 
 	_, err := os.Stat(defaultKeyPath)
 	defaultMetadataExist := !os.IsNotExist(err)
 	if err != nil && defaultMetadataExist {
 		return nil, err
 	}
-	if metaDataPath == "" && !defaultMetadataExist {
+	if !defaultMetadataExist {
 		metaData := &pb.MetaDataV0{
 			SeqNumber: 0,
 			Attnets:   bitfield.NewBitvector64(),
@@ -147,10 +146,8 @@ func metaDataFromConfig(cfg *Config) (metadata.Metadata, error) {
 		}
 		return wrapper.WrappedMetadataV0(metaData), nil
 	}
-	if defaultMetadataExist && metaDataPath == "" {
-		metaDataPath = defaultKeyPath
-	}
-	src, err := os.ReadFile(metaDataPath) // #nosec G304
+
+	src, err := os.ReadFile(defaultKeyPath) // #nosec G304
 	if err != nil {
 		log.WithError(err).Error("Error reading metadata from file")
 		return nil, err
