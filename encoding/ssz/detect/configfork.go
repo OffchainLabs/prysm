@@ -292,3 +292,11 @@ func (cf *VersionedUnmarshaler) validateVersion(slot primitives.Slot) error {
 	}
 	return nil
 }
+
+func UnmarshalState(marshaled []byte) (state.BeaconState, error) {
+	vu, err := FromState(marshaled)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to detect version from state")
+	}
+	return vu.UnmarshalBeaconState(marshaled)
+}

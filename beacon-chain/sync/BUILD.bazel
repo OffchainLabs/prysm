@@ -14,6 +14,7 @@ go_library(
         "decode_pubsub.go",
         "doc.go",
         "error.go",
+        "fetch_data_column_sidecars.go",
         "fork_watcher.go",
         "fuzz_exports.go",  # keep
         "log.go",
