@@ -8,13 +8,13 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 v6.0.5 raises the default builder gas limit[1] from 36M to 45M, and includes a number of optimizations and bugfixes. Also included are incremental light client support components and fusaka features waiting to be activated. This is likely the second to last release in the v6 cycle before fusaka testing releases next month.
 
-Noteworthy improvements and bugfixes:
-- The `--disable-experimental-state` flag has been removed, marking the full graduation of the Copy-on-write design for BeaconState fields, which reduces the memory overhead of keeping multiple BeaconStates in RAM for block processing. Congrats @rkapka!
+Noteworthy improvements, changes and bugfixes:
+- The `--disable-experimental-state` beacon-node flag has been removed, marking the full graduation of the [Copy-on-write design](https://hackmd.io/zlTJ6Qe_RiueT3y2R77BvA) for BeaconState fields, which reduces the memory overhead of keeping multiple BeaconStates in RAM for block processing. Congrats @rkapka!
 - The behavior set by the `--attest_timely` flag is now on by default, with the flag itself deprecated.
-- GetDutiesV2 introduced, lowering duty request latency and beacon node load.
-- Multiple changes to the validator event loop for improved stability.
-- Improvements to rest-mode validator, defaulting to SSZ where available and adding support to more endpoints.
-- Beacon API honoring the gzip content-encoding header.
+- GetDutiesV2 introduced, lowering duty request latency and beacon-node load. Multiple other improvements and bugfixes have been made to harden the validator run loop.
+- New validator flag `--max-health-checks` configures a validator to switch to a fallback beacon node after the given number of health check failures.
+- Improvements to rest-mode validator, defaulting to SSZ where available and adding SSZ support to more Beacon API endpoints.
+- Beacon API now honors the gzip content-encoding header.
 - Log timestamps now include milliseconds.
 
 Special thanks to external contributors!: @Alleysira, @KaloyanTanev, @rose2221
