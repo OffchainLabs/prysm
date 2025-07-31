@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -92,6 +93,8 @@ type Service struct {
 	custodyInfoMut        sync.RWMutex // Protects custodyGroupCount and earliestAvailableSlot
 	custodyGroupCount     uint64
 	earliestAvailableSlot primitives.Slot
+	clock                 *startup.Clock
+	allForkDigests        map[[4]byte]struct{}
 }
 
 // NewService initializes a new p2p service compatible with shared.Service interface. No
@@ -196,6 +199,7 @@ func (s *Service) Start() {
 	// Waits until the state is initialized via an event feed.
 	// Used for fork-related data when connecting peers.
 	s.awaitStateInitialized()
+	s.setAllForkDigests()
 	s.isPreGenesis = false
 
 	var relayNodes []string
@@ -449,7 +453,7 @@ func (s *Service) awaitStateInitialized() {
 	s.genesisTime = clock.GenesisTime()
 	gvr := clock.GenesisValidatorsRoot()
 	s.genesisValidatorsRoot = gvr[:]
-	_, err = s.currentForkDigest() // initialize fork digest cache
+	_, err = s.currentForkDigest()
 	if err != nil {
 		log.WithError(err).Error("Could not initialize fork digest")
 	}

@@ -186,6 +186,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 	beacon.ConfigOptions = append([]params.Option{params.WithGenesisValidatorsRoot(genesis.ValidatorsRoot())}, beacon.ConfigOptions...)
 	params.BeaconConfig().ApplyOptions(beacon.ConfigOptions...)
 	params.BeaconConfig().InitializeForkSchedule()
+	params.LogDigests(params.BeaconConfig())
 
 	synchronizer := startup.NewClockSynchronizer()
 	beacon.clockWaiter = synchronizer

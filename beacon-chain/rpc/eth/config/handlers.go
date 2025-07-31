@@ -11,7 +11,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	log "github.com/sirupsen/logrus"
@@ -35,34 +34,25 @@ func GetForkSchedule(w http.ResponseWriter, r *http.Request) {
 	_, span := trace.StartSpan(r.Context(), "config.GetForkSchedule")
 	defer span.End()
 
-	schedule := params.BeaconConfig().ForkVersionSchedule
+	schedule := params.SortedForkSchedule()
+	data := make([]*structs.Fork, 0, len(schedule))
 	if len(schedule) == 0 {
 		httputil.WriteJson(w, &structs.GetForkScheduleResponse{
-			Data: make([]*structs.Fork, 0),
+			Data: data,
 		})
-		return
 	}
-
-	versions := forks.SortedForkVersions(schedule)
-	chainForks := make([]*structs.Fork, len(schedule))
-	var previous, current []byte
-	for i, v := range versions {
-		if i == 0 {
-			previous = params.BeaconConfig().GenesisForkVersion
-		} else {
-			previous = current
-		}
-		copyV := v
-		current = copyV[:]
-		chainForks[i] = &structs.Fork{
-			PreviousVersion: hexutil.Encode(previous),
-			CurrentVersion:  hexutil.Encode(current),
-			Epoch:           fmt.Sprintf("%d", schedule[v]),
-		}
+	previous := schedule[0]
+	for _, entry := range schedule {
+		data = append(data, &structs.Fork{
+			PreviousVersion: hexutil.Encode(previous.ForkVersion[:]),
+			CurrentVersion:  hexutil.Encode(entry.ForkVersion[:]),
+			Epoch:           fmt.Sprintf("%d", entry.Epoch),
+		})
+		previous = entry
 	}
 
 	httputil.WriteJson(w, &structs.GetForkScheduleResponse{
-		Data: chainForks,
+		Data: data,
 	})
 }
 

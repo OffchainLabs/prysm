@@ -13,8 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/common"
@@ -592,43 +590,34 @@ func TestGetSpec(t *testing.T) {
 
 func TestForkSchedule_Ok(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
-		genesisForkVersion := []byte("Genesis")
-		firstForkVersion, firstForkEpoch := []byte("Firs"), primitives.Epoch(100)
-		secondForkVersion, secondForkEpoch := []byte("Seco"), primitives.Epoch(200)
-		thirdForkVersion, thirdForkEpoch := []byte("Thir"), primitives.Epoch(300)
 
 		params.SetupTestConfigCleanup(t)
 		config := params.BeaconConfig().Copy()
-		config.GenesisForkVersion = genesisForkVersion
-		// Create fork schedule adding keys in non-sorted order.
-		schedule := make(map[[4]byte]primitives.Epoch, 3)
-		schedule[bytesutil.ToBytes4(secondForkVersion)] = secondForkEpoch
-		schedule[bytesutil.ToBytes4(firstForkVersion)] = firstForkEpoch
-		schedule[bytesutil.ToBytes4(thirdForkVersion)] = thirdForkEpoch
-		config.ForkVersionSchedule = schedule
-		params.OverrideBeaconConfig(config)
+		config.InitializeForkSchedule()
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/config/fork_schedule", nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
+		genesisStr, firstStr, secondStr := hexutil.Encode(config.GenesisForkVersion), hexutil.Encode(config.AltairForkVersion), hexutil.Encode(config.BellatrixForkVersion)
 		GetForkSchedule(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
 		resp := &structs.GetForkScheduleResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-		require.Equal(t, 3, len(resp.Data))
+		schedule := params.SortedForkSchedule()
+		require.Equal(t, len(schedule), len(resp.Data))
 		fork := resp.Data[0]
-		assert.DeepEqual(t, hexutil.Encode(genesisForkVersion), fork.PreviousVersion)
-		assert.DeepEqual(t, hexutil.Encode(firstForkVersion), fork.CurrentVersion)
-		assert.Equal(t, fmt.Sprintf("%d", firstForkEpoch), fork.Epoch)
+		assert.Equal(t, genesisStr, fork.PreviousVersion)
+		assert.Equal(t, genesisStr, fork.CurrentVersion)
+		assert.Equal(t, fmt.Sprintf("%d", config.GenesisEpoch), fork.Epoch)
 		fork = resp.Data[1]
-		assert.DeepEqual(t, hexutil.Encode(firstForkVersion), fork.PreviousVersion)
-		assert.DeepEqual(t, hexutil.Encode(secondForkVersion), fork.CurrentVersion)
-		assert.Equal(t, fmt.Sprintf("%d", secondForkEpoch), fork.Epoch)
+		assert.Equal(t, genesisStr, fork.PreviousVersion)
+		assert.Equal(t, firstStr, fork.CurrentVersion)
+		assert.Equal(t, fmt.Sprintf("%d", config.AltairForkEpoch), fork.Epoch)
 		fork = resp.Data[2]
-		assert.DeepEqual(t, hexutil.Encode(secondForkVersion), fork.PreviousVersion)
-		assert.DeepEqual(t, hexutil.Encode(thirdForkVersion), fork.CurrentVersion)
-		assert.Equal(t, fmt.Sprintf("%d", thirdForkEpoch), fork.Epoch)
+		assert.Equal(t, firstStr, fork.PreviousVersion)
+		assert.Equal(t, secondStr, fork.CurrentVersion)
+		assert.Equal(t, fmt.Sprintf("%d", config.BellatrixForkEpoch), fork.Epoch)
 	})
 	t.Run("correct number of forks", func(t *testing.T) {
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/config/fork_schedule", nil)
@@ -639,8 +628,8 @@ func TestForkSchedule_Ok(t *testing.T) {
 		require.Equal(t, http.StatusOK, writer.Code)
 		resp := &structs.GetForkScheduleResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-		os := forks.NewOrderedSchedule(params.BeaconConfig())
-		assert.Equal(t, os.Len(), len(resp.Data))
+		os := params.SortedForkSchedule()
+		assert.Equal(t, len(os), len(resp.Data))
 	})
 }
 
