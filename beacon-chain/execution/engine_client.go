@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
@@ -153,10 +154,12 @@ type DataAvailabilityChecker interface {
 
 var ErrEmptyBlockHash = errors.New("Block hash is empty 0x0000...")
 
-// reconstructResult holds the result and error from a reconstruction call
-type reconstructResult struct {
+// sharedReconstructResult holds a shared result that can be safely accessed by multiple goroutines
+type sharedReconstructResult struct {
+	mu     sync.RWMutex
 	result []blocks.VerifiedRODataColumn
 	err    error
+	done   chan struct{} // closed when result is ready
 }
 
 // NewPayload request calls the engine_newPayloadVX method via JSON-RPC.
@@ -675,28 +678,25 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 // and constructs the corresponding verified read-only data column sidecars.
 // This method includes retry logic for getBlobsV2 calls and prevents duplicate concurrent calls.
 func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, signedROBlock interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte) ([]blocks.VerifiedRODataColumn, error) {
-	// Check if there's already an in-flight reconstruction call for this block
-	if resultChanInterface, exists := s.activeReconstructCalls.Load(blockRoot); exists {
-		resultChan := resultChanInterface.(chan reconstructResult)
-		// Wait for the in-flight call to complete and return its result
-		select {
-		case result := <-resultChan:
-			return result.result, result.err
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
+	// Create a shared result structure for broadcasting to multiple waiters
+	sharedResult := &sharedReconstructResult{
+		done: make(chan struct{}),
 	}
+	defer close(sharedResult.done)
 
-	// Create a result channel for this reconstruction call
-	resultChan := make(chan reconstructResult, 1)
-
-	// Try to claim this reconstruction call
-	if existingChanInterface, loaded := s.activeReconstructCalls.LoadOrStore(blockRoot, resultChan); loaded {
-		existingChan := existingChanInterface.(chan reconstructResult)
+	// Atomically try to claim this reconstruction call
+	if existingInterface, loaded := s.activeReconstructCalls.LoadOrStore(blockRoot, sharedResult); loaded {
+		existing, ok := existingInterface.(*sharedReconstructResult)
+		if !ok {
+			return nil, errors.New("invalid result type in activeReconstructCalls")
+		}
 		// Another goroutine claimed it, wait for that result
 		select {
-		case result := <-existingChan:
-			return result.result, result.err
+		case <-existing.done:
+			existing.mu.RLock()
+			result, err := existing.result, existing.err
+			existing.mu.RUnlock()
+			return result, err
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}
@@ -704,16 +704,27 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, signedROBlo
 
 	// We claimed the reconstruction call, ensure cleanup
 	defer s.activeReconstructCalls.Delete(blockRoot)
-	defer close(resultChan)
 
 	// Perform the actual reconstruction
 	result, err := s.reconstructDataColumnSidecarsOnce(ctx, signedROBlock, blockRoot)
+	if err != nil {
+		wrappedErr := errors.Wrap(err, "failed to reconstruct data column sidecars")
+		// Store the result for all waiters
+		sharedResult.mu.Lock()
+		sharedResult.result = result
+		sharedResult.err = wrappedErr
+		sharedResult.mu.Unlock()
+		return result, wrappedErr
+	}
 
-	// Notify all waiters of the result (including the error)
-	resultChan <- reconstructResult{result: result, err: err}
+	// Store the successful result for all waiters
+	sharedResult.mu.Lock()
+	sharedResult.result = result
+	sharedResult.err = nil
+	sharedResult.mu.Unlock()
 
 	// Only start retry if we need more data and don't have an active retry
-	if (err != nil || len(result) == 0) && !s.hasActiveRetry(blockRoot) {
+	if len(result) == 0 && !s.hasActiveRetry(blockRoot) {
 		// Check if we already have all required data
 		if !s.isDataAlreadyAvailable(ctx, blockRoot, signedROBlock) {
 			// Start background retry goroutine
@@ -721,7 +732,7 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, signedROBlo
 		}
 	}
 
-	return result, err
+	return result, nil
 }
 
 // reconstructDataColumnSidecarsOnce performs a single attempt to reconstruct data column sidecars.
