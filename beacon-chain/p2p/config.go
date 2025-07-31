@@ -37,7 +37,7 @@ type Config struct {
 	AllowListCIDR        string
 	DenyListCIDR         []string
 	StateNotifier        statefeed.Notifier
-	DB                   db.ReadOnlyDatabase
+	DB                   db.NoHeadAccessDatabase
 	ClockWaiter          startup.ClockWaiter
 	CustodyInfo          *peerdas.CustodyInfo
 }

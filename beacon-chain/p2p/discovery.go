@@ -211,7 +211,10 @@ func (s *Service) RefreshPersistentSubnets() {
 		}
 
 		// Some data changed. Update the record and the metadata.
-		s.updateSubnetRecordWithMetadata(bitV)
+		// Not returning early here because the error comes from saving the metadata sequence number.
+		if err := s.updateSubnetRecordWithMetadata(bitV); err != nil {
+			log.WithError(err).Error("Failed to update subnet record with metadata")
+		}
 
 		// Ping all peers.
 		s.pingPeersAndLogEnr()
@@ -251,7 +254,10 @@ func (s *Service) RefreshPersistentSubnets() {
 		}
 
 		// Some data have changed, update our record and metadata.
-		s.updateSubnetRecordWithMetadataV2(bitV, bitS)
+		// Not returning early here because the error comes from saving the metadata sequence number.
+		if err := s.updateSubnetRecordWithMetadataV2(bitV, bitS); err != nil {
+			log.WithError(err).Error("Failed to update subnet record with metadata")
+		}
 
 		// Ping all peers to inform them of new metadata
 		s.pingPeersAndLogEnr()
@@ -281,7 +287,10 @@ func (s *Service) RefreshPersistentSubnets() {
 	}
 
 	// Some data changed. Update the record and the metadata.
-	s.updateSubnetRecordWithMetadataV3(bitV, bitS, custodyGroupCount)
+	// Not returning early here because the error comes from saving the metadata sequence number.
+	if err := s.updateSubnetRecordWithMetadataV3(bitV, bitS, custodyGroupCount); err != nil {
+		log.WithError(err).Error("Failed to update subnet record with metadata")
+	}
 
 	// Ping all peers.
 	s.pingPeersAndLogEnr()
