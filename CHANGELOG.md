@@ -4,11 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
-## [v6.0.5](https://github.com/prysmaticlabs/prysm/compare/v6.0.4...v6.0.5) - 2025-07-29
+## [v6.0.5](https://github.com/prysmaticlabs/prysm/compare/v6.0.4...v6.0.5) - 2025-07-31
 
 v6.0.5 raises the default builder gas limit[1] from 36M to 45M, and includes a number of optimizations and bugfixes. Also included are incremental light client support components and fusaka features waiting to be activated. This is likely the second to last release in the v6 cycle before fusaka testing releases next month.
 
-Noteworthy improvements, changes and bugfixes:
+#### Noteworthy improvements, changes and bugfixes:
 - The `--disable-experimental-state` beacon-node flag has been removed, marking the full graduation of the [Copy-on-write design](https://hackmd.io/zlTJ6Qe_RiueT3y2R77BvA) for BeaconState fields, which reduces the memory overhead of keeping multiple BeaconStates in RAM for block processing. Congrats @rkapka!
 - The behavior set by the `--attest_timely` flag is now on by default, with the flag itself deprecated.
 - GetDutiesV2 introduced, lowering duty request latency and beacon-node load. Multiple other improvements and bugfixes have been made to harden the validator run loop.
@@ -17,7 +17,7 @@ Noteworthy improvements, changes and bugfixes:
 - Beacon API now honors the gzip content-encoding header.
 - Log timestamps now include milliseconds.
 
-Special thanks to external contributors!: @Alleysira, @KaloyanTanev, @rose2221
+**Special thanks to external contributors!**: @Alleysira, @KaloyanTanev, @rose2221
 
 [1] To override this limit, use the validator flag `--suggested-gas-limit` or set the `builder.gas_limit` setting in your [proposer settings file](https://prysm.offchainlabs.com/docs/configure-prysm/fee-recipient/#advanced-configure-mev-builder-and-gas-limit).
 
