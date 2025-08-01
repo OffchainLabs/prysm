@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/async/event"
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
@@ -102,7 +103,7 @@ func TestValidateLightClientOptimisticUpdate(t *testing.T) {
 				// drift back appropriate number of epochs based on fork + 2 slots for signature slot + time for gossip propagation + any extra drift
 				genesisDrift := v*slotsPerEpoch*secondsPerSlot + 2*secondsPerSlot + secondsPerSlot/slotIntervals + test.genesisDrift
 				chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(genesisDrift), 0)}
-				s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}, lcStore: &lightClient.Store{}}
+				s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}, lcStore: lightClient.NewLightClientStore(nil, &p2ptest.FakeP2P{}, new(event.Feed))}
 
 				var oldUpdate interfaces.LightClientOptimisticUpdate
 				var err error
@@ -111,7 +112,7 @@ func TestValidateLightClientOptimisticUpdate(t *testing.T) {
 					oldUpdate, err = lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock)
 					require.NoError(t, err)
 
-					s.lcStore.SetLastOptimisticUpdate(oldUpdate)
+					s.lcStore.SetLastOptimisticUpdate(oldUpdate, false)
 				}
 
 				l := util.NewTestLightClient(t, v, test.newUpdateOptions...)
@@ -242,7 +243,7 @@ func TestValidateLightClientFinalityUpdate(t *testing.T) {
 				// drift back appropriate number of epochs based on fork + 2 slots for signature slot + time for gossip propagation + any extra drift
 				genesisDrift := v*slotsPerEpoch*secondsPerSlot + 2*secondsPerSlot + secondsPerSlot/slotIntervals + test.genesisDrift
 				chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(genesisDrift), 0)}
-				s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}, lcStore: &lightClient.Store{}}
+				s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}, lcStore: lightClient.NewLightClientStore(nil, &p2ptest.FakeP2P{}, new(event.Feed))}
 
 				var oldUpdate interfaces.LightClientFinalityUpdate
 				var err error
@@ -251,7 +252,7 @@ func TestValidateLightClientFinalityUpdate(t *testing.T) {
 					oldUpdate, err = lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 					require.NoError(t, err)
 
-					s.lcStore.SetLastFinalityUpdate(oldUpdate)
+					s.lcStore.SetLastFinalityUpdate(oldUpdate, false)
 				}
 
 				l := util.NewTestLightClient(t, v, test.newUpdateOptions...)
