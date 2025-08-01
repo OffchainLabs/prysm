@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -82,13 +83,20 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 			continue
 		}
 
+		timeNow := time.Now()
 		meta.current.liteAssignment = helpers.AssignmentForValidator(meta.current.committeesBySlot, meta.current.startSlot, idx)
-		meta.next.liteAssignment = helpers.AssignmentForValidator(meta.next.committeesBySlot, meta.next.startSlot, idx)
+		log.Info("Time took to compute current epoch assignment", time.Since(timeNow))
 
+		timeNow = time.Now()
+		meta.next.liteAssignment = helpers.AssignmentForValidator(meta.next.committeesBySlot, meta.next.startSlot, idx)
+		log.Info("Time took to compute next epoch assignment", time.Since(timeNow))
+
+		timeNow = time.Now()
 		assignment, nextAssignment, err := vs.buildValidatorDuty(pubKey, idx, s, req.Epoch, meta)
 		if err != nil {
 			return nil, err
 		}
+		log.Info("Time took to build validator duty", time.Since(timeNow))
 		validatorAssignments = append(validatorAssignments, assignment)
 		nextValidatorAssignments = append(nextValidatorAssignments, nextAssignment)
 	}
@@ -208,19 +216,24 @@ func (vs *Server) buildValidatorDuty(
 	assignment := &ethpb.DutiesV2Response_Duty{PublicKey: pubKey}
 	nextAssignment := &ethpb.DutiesV2Response_Duty{PublicKey: pubKey}
 
+	timeNow := time.Now()
 	statusEnum := assignmentStatus(s, idx)
 	assignment.ValidatorIndex = idx
 	assignment.Status = statusEnum
 	assignment.CommitteesAtSlot = meta.current.committeesAtSlot
 	assignment.ProposerSlots = meta.current.proposalSlots[idx]
 	populateCommitteeFields(assignment, meta.current.liteAssignment)
+	log.Info("Time took to compute current epoch assignment status", time.Since(timeNow))
 
+	timeNow = time.Now()
 	nextAssignment.ValidatorIndex = idx
 	nextAssignment.Status = statusEnum
 	nextAssignment.CommitteesAtSlot = meta.next.committeesAtSlot
 	populateCommitteeFields(nextAssignment, meta.next.liteAssignment)
+	log.Info("Time took to compute next epoch assignment status", time.Since(timeNow))
 
 	// Sync committee flags
+	timeNow = time.Now()
 	if coreTime.HigherEqualThanAltairVersionAndEpoch(s, reqEpoch) {
 		inSync, err := helpers.IsCurrentPeriodSyncCommittee(s, idx)
 		if err != nil {
@@ -256,6 +269,7 @@ func (vs *Server) buildValidatorDuty(
 			}
 		}
 	}
+	log.Info("Time took to compute sync committee flags", time.Since(timeNow))
 
 	return assignment, nextAssignment, nil
 }
