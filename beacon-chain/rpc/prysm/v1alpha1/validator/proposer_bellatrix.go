@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"strings"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/api/client/builder"
@@ -219,11 +218,10 @@ func (vs *Server) getPayloadHeaderFromBuilder(
 	if signedBid == nil || signedBid.IsNil() {
 		return nil, errors.New("builder returned nil bid")
 	}
-	epoch := slots.ToEpoch(slot)
-	entry := params.GetNetworkScheduleEntry(epoch)
-	forkName := version.String(entry.VersionEnum)
-	if !strings.EqualFold(version.String(signedBid.Version()), forkName) {
-		return nil, fmt.Errorf("builder bid response version: %d is different from head block version: %d for epoch %d", signedBid.Version(), b.Version(), slots.ToEpoch(slot))
+	bidVersion := signedBid.Version()
+	headBlockVersion := b.Version()
+	if !isVersionCompatible(bidVersion, headBlockVersion) {
+		return nil, fmt.Errorf("builder bid response version: %d is not compatible with head block version: %d for epoch %d", bidVersion, headBlockVersion, slots.ToEpoch(slot))
 	}
 
 	bid, err := signedBid.Message()
