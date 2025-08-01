@@ -406,6 +406,29 @@ func AssignmentForValidator(
 	return &LiteAssignment{} // validator is not scheduled this epoch
 }
 
+// BuildValidatorAssignmentMap creates a reverse index map from validator index to assignment
+// for O(1) lookups instead of O(slots * committees * committee_size) linear search.
+func BuildValidatorAssignmentMap(
+	bySlot [][][]primitives.ValidatorIndex,
+	startSlot primitives.Slot,
+) map[primitives.ValidatorIndex]*LiteAssignment {
+	validatorToAssignment := make(map[primitives.ValidatorIndex]*LiteAssignment)
+	
+	for relativeSlot, committees := range bySlot {
+		for cIdx, committee := range committees {
+			for pos, vIdx := range committee {
+				validatorToAssignment[vIdx] = &LiteAssignment{
+					AttesterSlot:            startSlot + primitives.Slot(relativeSlot),
+					CommitteeIndex:          primitives.CommitteeIndex(cIdx),
+					CommitteeLength:         uint64(len(committee)),
+					ValidatorCommitteeIndex: uint64(pos),
+				}
+			}
+		}
+	}
+	return validatorToAssignment
+}
+
 // CommitteeAssignments calculates committee assignments for each validator during the specified epoch.
 // It retrieves active validator indices, determines the number of committees per slot, and computes
 // assignments for each validator based on their presence in the provided validators slice.

@@ -917,6 +917,52 @@ func TestAssignmentForValidator(t *testing.T) {
 	})
 }
 
+func TestBuildValidatorAssignmentMap(t *testing.T) {
+	start := primitives.Slot(200)
+	bySlot := [][][]primitives.ValidatorIndex{
+		{{1, 2, 3}},
+		{{7, 8, 9}},
+	}
+
+	assignmentMap := helpers.BuildValidatorAssignmentMap(bySlot, start)
+
+	// Test validator 8 assignment (should match TestAssignmentForValidator)
+	vIdx := primitives.ValidatorIndex(8)
+	got, exists := assignmentMap[vIdx]
+	assert.Equal(t, true, exists)
+	require.NotNil(t, got)
+	require.Equal(t, start+1, got.AttesterSlot)
+	require.Equal(t, primitives.CommitteeIndex(0), got.CommitteeIndex)
+	require.Equal(t, uint64(3), got.CommitteeLength)
+	require.Equal(t, uint64(1), got.ValidatorCommitteeIndex)
+
+	// Test validator 1 assignment
+	vIdx1 := primitives.ValidatorIndex(1)
+	got1, exists1 := assignmentMap[vIdx1]
+	assert.Equal(t, true, exists1)
+	require.NotNil(t, got1)
+	require.Equal(t, start, got1.AttesterSlot)
+	require.Equal(t, primitives.CommitteeIndex(0), got1.CommitteeIndex)
+	require.Equal(t, uint64(3), got1.CommitteeLength)
+	require.Equal(t, uint64(0), got1.ValidatorCommitteeIndex)
+
+	// Test non-existent validator
+	_, exists99 := assignmentMap[primitives.ValidatorIndex(99)]
+	assert.Equal(t, false, exists99)
+
+	// Verify that we get the same results as the linear search
+	for _, committees := range bySlot {
+		for _, committee := range committees {
+			for _, validatorIdx := range committee {
+				linearResult := helpers.AssignmentForValidator(bySlot, start, validatorIdx)
+				mapResult, mapExists := assignmentMap[validatorIdx]
+				assert.Equal(t, true, mapExists)
+				require.DeepEqual(t, linearResult, mapResult)
+			}
+		}
+	}
+}
+
 // Regression for #15450
 func TestInitializeProposerLookahead_RegressionTest(t *testing.T) {
 	ctx := t.Context()

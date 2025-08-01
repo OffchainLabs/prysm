@@ -84,11 +84,21 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 		}
 
 		timeNow := time.Now()
-		meta.current.liteAssignment = helpers.AssignmentForValidator(meta.current.committeesBySlot, meta.current.startSlot, idx)
+		// O(1) lookup instead of O(slots * committees * committee_size) linear search
+		if assignment, exists := meta.current.validatorAssignmentMap[idx]; exists {
+			meta.current.liteAssignment = assignment
+		} else {
+			meta.current.liteAssignment = &helpers.LiteAssignment{}
+		}
 		log.Info("Time took to compute current epoch assignment", time.Since(timeNow))
 
 		timeNow = time.Now()
-		meta.next.liteAssignment = helpers.AssignmentForValidator(meta.next.committeesBySlot, meta.next.startSlot, idx)
+		// O(1) lookup instead of O(slots * committees * committee_size) linear search
+		if assignment, exists := meta.next.validatorAssignmentMap[idx]; exists {
+			meta.next.liteAssignment = assignment
+		} else {
+			meta.next.liteAssignment = &helpers.LiteAssignment{}
+		}
 		log.Info("Time took to compute next epoch assignment", time.Since(timeNow))
 
 		timeNow = time.Now()
@@ -151,11 +161,12 @@ type dutiesMetadata struct {
 }
 
 type metadata struct {
-	committeesAtSlot uint64
-	proposalSlots    map[primitives.ValidatorIndex][]primitives.Slot
-	startSlot        primitives.Slot
-	committeesBySlot [][][]primitives.ValidatorIndex
-	liteAssignment   *helpers.LiteAssignment
+	committeesAtSlot       uint64
+	proposalSlots          map[primitives.ValidatorIndex][]primitives.Slot
+	startSlot              primitives.Slot
+	committeesBySlot       [][][]primitives.ValidatorIndex
+	validatorAssignmentMap map[primitives.ValidatorIndex]*helpers.LiteAssignment
+	liteAssignment         *helpers.LiteAssignment // Deprecated: use validatorAssignmentMap for O(1) lookups
 }
 
 func loadDutiesMetadata(ctx context.Context, s state.BeaconState, reqEpoch primitives.Epoch) (*dutiesMetadata, error) {
@@ -200,6 +211,9 @@ func loadMetadata(ctx context.Context, s state.BeaconState, reqEpoch primitives.
 	if err != nil {
 		return nil, err
 	}
+
+	// Build reverse index map for O(1) validator assignment lookups
+	meta.validatorAssignmentMap = helpers.BuildValidatorAssignmentMap(meta.committeesBySlot, meta.startSlot)
 
 	return meta, nil
 }
