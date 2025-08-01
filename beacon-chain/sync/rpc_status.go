@@ -343,7 +343,7 @@ func (s *Service) buildStatusFromStream(
 			return nil, err
 		}
 
-		if _, err2 := stream.Write(resp); err != nil {
+		if _, err2 := stream.Write(resp); err2 != nil {
 			log.WithError(err2).Debug("Could not write to stream")
 		}
 
