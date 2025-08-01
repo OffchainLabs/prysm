@@ -685,9 +685,15 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, signedROBlo
 		}
 		
 		// Empty result - check if data is already available
-		if s.isDataAlreadyAvailable(ctx, blockRoot, signedROBlock) {
-			// Data is already available, no need to reconstruct or retry
-			return []blocks.VerifiedRODataColumn{}, nil
+		if s.availabilityChecker != nil {
+			available, err := s.availabilityChecker.IsDataAvailable(ctx, blockRoot, signedROBlock)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to check data availability")
+			}
+			if available {
+				// Data is already available, no need to reconstruct or retry
+				return []blocks.VerifiedRODataColumn{}, nil
+			}
 		}
 
 		// Create a new context with a timeout for the retry goroutine.
@@ -1105,9 +1111,14 @@ func (s *Service) retryReconstructDataColumnSidecars(retryCtx context.Context, c
 			attemptCount++
 
 			// Check if data is now available from any source
-			if s.isDataAlreadyAvailable(retryCtx, blockRoot, signedROBlock) {
-				log.WithField("attempts", attemptCount).Debug("Data became available, stopping retry")
-				return
+			if s.availabilityChecker != nil {
+				available, err := s.availabilityChecker.IsDataAvailable(retryCtx, blockRoot, signedROBlock)
+				if err != nil {
+					log.WithError(err).Debug("Error checking data availability during retry")
+				} else if available {
+					log.WithField("attempts", attemptCount).Debug("Data became available, stopping retry")
+					return
+				}
 			}
 
 			// Retry reconstruction
@@ -1124,20 +1135,6 @@ func (s *Service) retryReconstructDataColumnSidecars(retryCtx context.Context, c
 	}
 }
 
-// isDataAlreadyAvailable checks if all required data is already available for the given block.
-func (s *Service) isDataAlreadyAvailable(ctx context.Context, blockRoot [fieldparams.RootLength]byte, signedROBlock interfaces.ReadOnlySignedBeaconBlock) bool {
-	if s.availabilityChecker == nil {
-		return false
-	}
-
-	available, err := s.availabilityChecker.IsDataAvailable(ctx, blockRoot, signedROBlock)
-	if err != nil {
-		log.WithError(err).Debug("Error checking data availability")
-		return false
-	}
-
-	return available
-}
 
 // wrapWithBlockRoot returns a new error with the given block root.
 func wrapWithBlockRoot(err error, blockRoot [32]byte, message string) error {
