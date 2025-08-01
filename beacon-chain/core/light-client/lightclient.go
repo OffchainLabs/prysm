@@ -797,7 +797,7 @@ func IsBetterFinalityUpdate(newUpdate, oldUpdate interfaces.LightClientFinalityU
 			return false
 		}
 		if newAttestedSlot == oldAttestedSlot && newUpdate.SignatureSlot() <= oldUpdate.SignatureSlot() {
-				return false
+			return false
 		}
 	}
 	return true
