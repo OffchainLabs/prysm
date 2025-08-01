@@ -21,10 +21,10 @@ func ValidatorsCustodyRequirement(state beaconState.ReadOnlyBeaconState, validat
 	}
 
 	beaconConfig := params.BeaconConfig()
-	numberOfCustodyGroup := beaconConfig.NumberOfCustodyGroups
+	numberOfCustodyGroups := beaconConfig.NumberOfCustodyGroups
 	validatorCustodyRequirement := beaconConfig.ValidatorCustodyRequirement
 	balancePerAdditionalCustodyGroup := beaconConfig.BalancePerAdditionalCustodyGroup
 
 	count := totalNodeBalance / balancePerAdditionalCustodyGroup
-	return min(max(count, validatorCustodyRequirement), numberOfCustodyGroup), nil
+	return min(max(count, validatorCustodyRequirement), numberOfCustodyGroups), nil
 }

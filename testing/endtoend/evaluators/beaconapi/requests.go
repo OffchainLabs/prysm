@@ -322,6 +322,7 @@ var (
 			}())),
 		"/validator/liveness/{param1}": newMetadata[structs.GetLivenessResponse](
 			v1PathTemplate,
+			withSanityCheckOnly(),
 			withParams(func(currentEpoch primitives.Epoch) []string {
 				return []string{fmt.Sprintf("%v", currentEpoch)}
 			}),

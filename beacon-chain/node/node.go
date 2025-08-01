@@ -236,7 +236,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 	beacon.finalizedStateAtStartUp = nil
 
 	if features.Get().EnableLightClient {
-		beacon.lcStore = lightclient.NewLightClientStore(beacon.db)
+		beacon.lcStore = lightclient.NewLightClientStore(beacon.db, beacon.fetchP2P(), beacon.StateFeed())
 	}
 
 	return beacon, nil
