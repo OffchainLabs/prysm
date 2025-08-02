@@ -16,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	coreTime "github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
@@ -300,12 +299,11 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%s: %v", "decode block failed", err)
 	}
-	isPeerDASEnabled := coreTime.PeerDASIsActive(block.Block().Slot())
 
 	if block.IsBlinded() {
-		block, blobSidecars, dataColumnSideCars, err = vs.handleBlindedBlock(ctx, block, isPeerDASEnabled)
+		block, blobSidecars, dataColumnSideCars, err = vs.handleBlindedBlock(ctx, block)
 	} else if block.Version() >= version.Deneb {
-		blobSidecars, dataColumnSideCars, err = vs.handleUnblindedBlock(block, req, isPeerDASEnabled)
+		blobSidecars, dataColumnSideCars, err = vs.handleUnblindedBlock(block, req)
 	}
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "%s: %v", "handle block failed", err)
@@ -317,6 +315,7 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	}
 
 	slot := block.Block().Slot()
+	epoch := slots.ToEpoch(slot)
 
 	var wg sync.WaitGroup
 	errChan := make(chan error, 1)
@@ -330,7 +329,7 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 		errChan <- nil
 	}()
 
-	if isPeerDASEnabled {
+	if epoch >= params.BeaconConfig().FuluForkEpoch {
 		if err := vs.broadcastAndReceiveDataColumns(ctx, dataColumnSideCars, root, slot); err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not broadcast/receive data columns: %v", err)
 		}
@@ -349,7 +348,7 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 }
 
 // handleBlindedBlock processes blinded beacon blocks.
-func (vs *Server) handleBlindedBlock(ctx context.Context, block interfaces.SignedBeaconBlock, isPeerDASEnabled bool) (interfaces.SignedBeaconBlock, []*ethpb.BlobSidecar, []*ethpb.DataColumnSidecar, error) {
+func (vs *Server) handleBlindedBlock(ctx context.Context, block interfaces.SignedBeaconBlock) (interfaces.SignedBeaconBlock, []*ethpb.BlobSidecar, []*ethpb.DataColumnSidecar, error) {
 	if block.Version() < version.Bellatrix {
 		return nil, nil, nil, errors.New("pre-Bellatrix blinded block")
 	}
@@ -372,7 +371,10 @@ func (vs *Server) handleBlindedBlock(ctx context.Context, block interfaces.Signe
 		return nil, nil, nil, errors.Wrap(err, "unblind")
 	}
 
-	if isPeerDASEnabled {
+	blockSlot := block.Block().Slot()
+	blockEpoch := slots.ToEpoch(blockSlot)
+
+	if blockEpoch >= params.BeaconConfig().FuluForkEpoch {
 		dataColumnSideCars, err := peerdas.ConstructDataColumnSidecars(block, bundle.GetBlobs(), bundle.GetProofs())
 		if err != nil {
 			return nil, nil, nil, errors.Wrap(err, "construct data column sidecars")
@@ -392,14 +394,16 @@ func (vs *Server) handleBlindedBlock(ctx context.Context, block interfaces.Signe
 func (vs *Server) handleUnblindedBlock(
 	block interfaces.SignedBeaconBlock,
 	req *ethpb.GenericSignedBeaconBlock,
-	isPeerDASEnabled bool,
 ) ([]*ethpb.BlobSidecar, []*ethpb.DataColumnSidecar, error) {
 	rawBlobs, proofs, err := blobsAndProofs(req)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if isPeerDASEnabled {
+	blockSlot := block.Block().Slot()
+	blockEpoch := slots.ToEpoch(blockSlot)
+
+	if blockEpoch >= params.BeaconConfig().FuluForkEpoch {
 		dataColumnSideCars, err := peerdas.ConstructDataColumnSidecars(block, rawBlobs, proofs)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "construct data column sidecars")

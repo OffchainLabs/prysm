@@ -98,12 +98,7 @@ const (
 	// GetBlobsV2 request string for JSON-RPC.
 	GetBlobsV2 = "engine_getBlobsV2"
 	// Defines the seconds before timing out engine endpoints with non-block execution semantics.
-	// TODO: Remove temporarily needed hack since geth takes an input blobs txs with blobs proofs, and
-	// does the heavy lifting of building cells proofs, while normally this is done by the tx sender.
-	// This is a cool hack because it lets the CL to act as if the tx sender actually computed the cells proofs.
-	// The only counter part is the `engine_getPayloadv<x>` takes a lot of time.
-	// defaultEngineTimeout = time.Second
-	defaultEngineTimeout = 2 * time.Second
+	defaultEngineTimeout = time.Second
 )
 
 var (
