@@ -201,6 +201,55 @@ func (c *Client) do(ctx context.Context, method string, path string, body io.Rea
 	return
 }
 
+// doPostFulu is similar to do but accepts 202 Accepted status code for post-Fulu builder API calls
+func (c *Client) doPostFulu(ctx context.Context, method string, path string, body io.Reader, opts ...reqOption) (res []byte, header http.Header, err error) {
+	ctx, span := trace.StartSpan(ctx, "builder.client.doPostFulu")
+	defer func() {
+		tracing.AnnotateError(span, err)
+		span.End()
+	}()
+
+	u := c.baseURL.ResolveReference(&url.URL{Path: path})
+
+	span.SetAttributes(trace.StringAttribute("url", u.String()),
+		trace.StringAttribute("method", method))
+
+	req, err := http.NewRequestWithContext(ctx, method, u.String(), body)
+	if err != nil {
+		return
+	}
+	req.Header.Add("User-Agent", version.BuildData())
+	for _, o := range opts {
+		o(req)
+	}
+	for _, o := range c.obvs {
+		if err = o.observe(req); err != nil {
+			return
+		}
+	}
+	r, err := c.hc.Do(req)
+	if err != nil {
+		return
+	}
+	defer func() {
+		closeErr := r.Body.Close()
+		if closeErr != nil {
+			log.WithError(closeErr).Error("Failed to close response body")
+		}
+	}()
+	if r.StatusCode != http.StatusAccepted {
+		err = non200Err(r)
+		return
+	}
+	res, err = io.ReadAll(io.LimitReader(r.Body, client.MaxBodySize))
+	if err != nil {
+		err = errors.Wrap(err, "error reading http response body from builder server")
+		return
+	}
+	header = r.Header
+	return
+}
+
 var execHeaderTemplate = template.Must(template.New("").Parse(getExecHeaderPath))
 
 func execHeaderPath(slot primitives.Slot, parentHash [32]byte, pubkey [48]byte) (string, error) {
@@ -511,12 +560,12 @@ func (c *Client) SubmitBlindedBlockPostFulu(ctx context.Context, sb interfaces.R
 	}
 
 	// Post the blinded block - the response should only contain a status code (no payload)
-	_, _, err = c.do(ctx, http.MethodPost, postBlindedBeaconBlockPath, bytes.NewBuffer(body), postOpts)
+	_, _, err = c.doPostFulu(ctx, http.MethodPost, postBlindedBeaconBlockPath, bytes.NewBuffer(body), postOpts)
 	if err != nil {
 		return errors.Wrap(err, "error posting the blinded block to the builder api post-Fulu")
 	}
 
-	// Success is indicated by no error (status 200)
+	// Success is indicated by no error (status 202)
 	return nil
 }
 

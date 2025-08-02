@@ -1567,7 +1567,7 @@ func TestSubmitBlindedBlockPostFulu(t *testing.T) {
 				require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
 				// Post-Fulu: only return status code, no payload
 				return &http.Response{
-					StatusCode: http.StatusOK,
+					StatusCode: http.StatusAccepted,
 					Body:       io.NopCloser(bytes.NewBufferString("")),
 					Request:    r.Clone(ctx),
 				}, nil
@@ -1592,7 +1592,7 @@ func TestSubmitBlindedBlockPostFulu(t *testing.T) {
 				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
 				// Post-Fulu: only return status code, no payload
 				return &http.Response{
-					StatusCode: http.StatusOK,
+					StatusCode: http.StatusAccepted,
 					Body:       io.NopCloser(bytes.NewBufferString("")),
 					Request:    r.Clone(ctx),
 				}, nil
