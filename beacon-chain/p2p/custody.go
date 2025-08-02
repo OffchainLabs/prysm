@@ -10,59 +10,106 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var _ DataColumnsHandler = (*Service)(nil)
+var _ CustodyManager = (*Service)(nil)
 
 // EarliestAvailableSlot returns the earliest available slot.
-func (s *Service) EarliestAvailableSlot() primitives.Slot {
-	s.custodyInfoMut.RLock()
-	defer s.custodyInfoMut.RUnlock()
+func (s *Service) EarliestAvailableSlot() (primitives.Slot, error) {
+	s.custodyInfoLock.RLock()
+	defer s.custodyInfoLock.RUnlock()
 
-	return s.earliestAvailableSlot
+	if s.custodyInfo == nil {
+		return 0, errors.New("no custody info available")
+	}
+
+	return s.custodyInfo.earliestAvailableSlot, nil
 }
 
 // CustodyGroupCount returns the custody group count.
-func (s *Service) CustodyGroupCount() uint64 {
-	s.custodyInfoMut.Lock()
-	defer s.custodyInfoMut.Unlock()
+func (s *Service) CustodyGroupCount() (uint64, error) {
+	s.custodyInfoLock.Lock()
+	defer s.custodyInfoLock.Unlock()
 
-	return s.custodyGroupCount
-}
-
-// UdpateCustodyInfo updates the custody group count and earliest available slot
-// if the new custody group count is greater than the stored one.
-// It returns the (potentially updated) earliest available slot and custody group count.
-func (s *Service) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
-	s.custodyInfoMut.Lock()
-	defer s.custodyInfoMut.Unlock()
-
-	if custodyGroupCount <= s.custodyGroupCount {
-		return s.earliestAvailableSlot, s.custodyGroupCount, nil
+	if s.custodyInfo == nil {
+		return 0, errors.New("no custody info available")
 	}
 
-	if earliestAvailableSlot < s.earliestAvailableSlot {
+	return s.custodyInfo.groupCount, nil
+}
+
+// UpdateCustodyInfo updates the stored custody group count to the incoming one
+// if the incoming one is greater than the stored one. In this case, the
+// incoming earliest available slot should be greater than or equal to the
+// stored one or an error is returned.
+//
+//   - If there is no stored custody info, or
+//   - If the incoming earliest available slot is greater than or equal to the
+//     fulu fork slot and the incoming custody group count is greater than the
+//     number of samples per slot
+//
+// then the stored earliest available slot is updated to the incoming one.
+//
+// This function returns a boolean indicating whether the custody info was
+// updated and the (possibly updated) custody info itself.
+//
+// Rationale:
+//   - The custody group count can only be increased (specification)
+//   - If the custody group count is increased before Fulu, we can still serve
+//     all the data, since there is no sharding before Fulu. As a consequence
+//     we do not need to update the earliest available slot in this case.
+//   - If the custody group count is increased after Fulu, but to a value less
+//     than or equal to the number of samples per slot, we can still serve all
+//     the data, since we store all sampled data column sidecars in all cases.
+//     As a consequence, we do not need to update the earliest available slot
+//   - If the custody group count is increased after Fulu to a value higher than
+//     the number of samples per slot, then, until the backfill is complete, we
+//     are unable to serve the data column sidecars corresponding to the new
+//     custody groups. As a consequence, we need to update the earliest
+//     available slot to inform the peers that we are not able to serve data
+//     column sidecars before this point.
+func (s *Service) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
+	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
+
+	s.custodyInfoLock.Lock()
+	defer s.custodyInfoLock.Unlock()
+
+	if s.custodyInfo == nil {
+		s.custodyInfo = &custodyInfo{
+			earliestAvailableSlot: earliestAvailableSlot,
+			groupCount:            custodyGroupCount,
+		}
+		return earliestAvailableSlot, custodyGroupCount, nil
+	}
+
+	inMemory := s.custodyInfo
+	if custodyGroupCount <= inMemory.groupCount {
+		return inMemory.earliestAvailableSlot, inMemory.groupCount, nil
+	}
+
+	if earliestAvailableSlot < inMemory.earliestAvailableSlot {
 		return 0, 0, errors.Errorf(
 			"earliest available slot %d is less than the current one %d. (custody group count: %d, current one: %d)",
-			earliestAvailableSlot, s.earliestAvailableSlot, custodyGroupCount, s.custodyGroupCount,
+			earliestAvailableSlot, inMemory.earliestAvailableSlot, custodyGroupCount, inMemory.groupCount,
 		)
 	}
 
-	s.custodyGroupCount = custodyGroupCount
+	if custodyGroupCount <= samplesPerSlot {
+		inMemory.groupCount = custodyGroupCount
+		return inMemory.earliestAvailableSlot, custodyGroupCount, nil
+	}
 
 	fuluForkSlot, err := fuluForkSlot()
 	if err != nil {
 		return 0, 0, errors.Wrap(err, "fulu fork slot")
 	}
 
-	if earliestAvailableSlot >= fuluForkSlot {
-		s.earliestAvailableSlot = earliestAvailableSlot
+	if earliestAvailableSlot < fuluForkSlot {
+		inMemory.groupCount = custodyGroupCount
+		return inMemory.earliestAvailableSlot, custodyGroupCount, nil
 	}
 
-	log.WithFields(logrus.Fields{
-		"earliestAvailableSlot": s.earliestAvailableSlot,
-		"custodyGroupCount":     s.custodyGroupCount,
-	}).Debug("Custody info updated")
-
-	return s.earliestAvailableSlot, s.custodyGroupCount, nil
+	inMemory.earliestAvailableSlot = earliestAvailableSlot
+	inMemory.groupCount = custodyGroupCount
+	return earliestAvailableSlot, custodyGroupCount, nil
 }
 
 // CustodyGroupCountFromPeer retrieves custody group count from a peer.

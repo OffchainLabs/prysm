@@ -33,14 +33,14 @@ type (
 		ConnectionHandler
 		PeersProvider
 		MetadataProvider
-		DataColumnsHandler
+		CustodyManager
 	}
 
-	// Accessor provides access to the Broadcaster, PeerManager and DataColumnsHandler interfaces.
+	// Accessor provides access to the Broadcaster, PeerManager and CustodyManager interfaces.
 	Accessor interface {
 		Broadcaster
 		PeerManager
-		DataColumnsHandler
+		CustodyManager
 	}
 
 	// Broadcaster broadcasts messages to peers over the p2p pubsub protocol.
@@ -120,10 +120,10 @@ type (
 		MetadataSeq() uint64
 	}
 
-	// DataColumnsHandler abstracts some data columns related methods.
-	DataColumnsHandler interface {
-		EarliestAvailableSlot() primitives.Slot
-		CustodyGroupCount() uint64
+	// CustodyManager abstracts some data columns related methods.
+	CustodyManager interface {
+		EarliestAvailableSlot() (primitives.Slot, error)
+		CustodyGroupCount() (uint64, error)
 		UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error)
 		CustodyGroupCountFromPeer(peer.ID) uint64
 	}

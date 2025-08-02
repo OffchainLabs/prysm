@@ -179,7 +179,6 @@ func (s *Service) processFetchedDataRegSync(ctx context.Context, data *blocksQue
 
 	blobBatchVerifier := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.InitsyncBlobSidecarRequirements)
 	lazilyPersistentStoreBlobs := das.NewLazilyPersistentStore(s.cfg.BlobStorage, blobBatchVerifier)
-	lazilyPersistentStoreColumn := das.NewLazilyPersistentStoreColumn(s.cfg.DataColumnStorage, nodeID, s.newDataColumnsVerifier, s.cfg.P2P.CustodyGroupCount())
 
 	log := log.WithField("firstSlot", data.bwb[0].Block.Block().Slot())
 	logBlobs, logDataColumns := log, log
@@ -208,6 +207,16 @@ func (s *Service) processFetchedDataRegSync(ctx context.Context, data *blocksQue
 		}
 	}
 
+	if len(blocksWithDataColumns) == 0 {
+		return uint64(len(bwb)), nil
+	}
+
+	custodyGroupCount, err := s.cfg.P2P.CustodyGroupCount()
+	if err != nil {
+		return 0, errors.Wrap(err, "fetch custody group count from peer")
+	}
+
+	lazilyPersistentStoreColumn := das.NewLazilyPersistentStoreColumn(s.cfg.DataColumnStorage, nodeID, s.newDataColumnsVerifier, custodyGroupCount)
 	for i, b := range blocksWithDataColumns {
 		logDataColumns := logDataColumns.WithFields(syncFields(b.Block))
 
@@ -428,7 +437,12 @@ func (s *Service) processBlocksWithDataColumns(ctx context.Context, bwbs []block
 	}
 
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
-	custodyGroupCount := s.cfg.P2P.CustodyGroupCount()
+
+	custodyGroupCount, err := s.cfg.P2P.CustodyGroupCount()
+	if err != nil {
+		return errors.Wrap(err, "fetch custody group count from peer")
+	}
+
 	samplingSize := max(custodyGroupCount, samplesPerSlot)
 
 	persistentStoreColumn := das.NewLazilyPersistentStoreColumn(s.cfg.DataColumnStorage, s.cfg.P2P.NodeID(), s.newDataColumnsVerifier, samplingSize)

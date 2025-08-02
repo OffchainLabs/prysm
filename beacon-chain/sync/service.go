@@ -267,7 +267,11 @@ func (s *Service) Start() {
 	s.processPendingBlocksQueue()
 	s.processPendingAttsQueue()
 	s.maintainPeerStatuses()
-	s.maintainCustodyGroupCount()
+
+	if params.FuluEnabled() {
+		s.maintainCustodyInfo()
+	}
+
 	s.resyncIfBehind()
 
 	// Update sync metrics.

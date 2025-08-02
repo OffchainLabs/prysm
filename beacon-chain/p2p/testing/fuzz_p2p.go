@@ -198,16 +198,16 @@ func (*FakeP2P) InterceptUpgraded(network.Conn) (allow bool, reason control.Disc
 }
 
 // EarliestAvailableSlot -- fake.
-func (*FakeP2P) EarliestAvailableSlot() primitives.Slot {
-	return 0
+func (*FakeP2P) EarliestAvailableSlot() (primitives.Slot, error) {
+	return 0, nil
 }
 
 // CustodyGroupCount -- fake.
-func (*FakeP2P) CustodyGroupCount() uint64 {
-	return 0
+func (*FakeP2P) CustodyGroupCount() (uint64, error) {
+	return 0, nil
 }
 
-// SetCustostyGroupCount -- fake.
+// UpdateCustodyInfo -- fake.
 func (s *FakeP2P) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
 	return earliestAvailableSlot, custodyGroupCount, nil
 }

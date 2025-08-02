@@ -645,7 +645,7 @@ func (s *Service) dataColumnSubnetIndices(primitives.Slot) map[uint64]bool {
 
 // samplingSize computes the sampling size based on the samples per slot value,
 // the validators custody requirement, and whether the node is subscribed to all data subnets.
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/das-core.md#custody-sampling
+// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/das-core.md#custody-sampling
 func (s *Service) samplingSize() (uint64, error) {
 	beaconConfig := params.BeaconConfig()
 
@@ -659,7 +659,12 @@ func (s *Service) samplingSize() (uint64, error) {
 		return 0, errors.Wrap(err, "validators custody requirement")
 	}
 
-	return max(beaconConfig.SamplesPerSlot, validatorsCustodyRequirement), nil
+	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount()
+	if err != nil {
+		return 0, errors.Wrap(err, "custody group count")
+	}
+
+	return max(beaconConfig.SamplesPerSlot, validatorsCustodyRequirement, custodyGroupCount), nil
 }
 
 func (s *Service) persistentAndAggregatorSubnetIndices(currentSlot primitives.Slot) map[uint64]bool {

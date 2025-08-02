@@ -154,7 +154,6 @@ func (ds *Server) getPeer(pid peer.ID) (*ethpb.DebugPeerResponse, error) {
 	}
 
 	// Convert statusV2 into status
-	// TODO: Should we do it this way or the other way around?
 	peerStatus := &ethpb.Status{
 		ForkDigest:     pStatus.ForkDigest,
 		FinalizedRoot:  pStatus.FinalizedRoot,

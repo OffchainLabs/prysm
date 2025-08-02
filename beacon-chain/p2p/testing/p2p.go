@@ -35,7 +35,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/multiformats/go-multiaddr"
-	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
@@ -61,7 +60,7 @@ type TestP2P struct {
 	Digest                [4]byte
 	peers                 *peers.Status
 	LocalMetadata         metadata.Metadata
-	custodyInfoMut        sync.RWMutex
+	custodyInfoMut        sync.RWMutex // protects custodyGroupCount and earliestAvailableSlot
 	earliestAvailableSlot primitives.Slot
 	custodyGroupCount     uint64
 }
@@ -467,45 +466,31 @@ func (*TestP2P) InterceptUpgraded(network.Conn) (allow bool, reason control.Disc
 	return true, 0
 }
 
-// CustodyGroupCount .
-func (s *TestP2P) CustodyGroupCount() uint64 {
+// EarliestAvailableSlot .
+func (s *TestP2P) EarliestAvailableSlot() (primitives.Slot, error) {
 	s.custodyInfoMut.RLock()
 	defer s.custodyInfoMut.RUnlock()
 
-	return s.custodyGroupCount
+	return s.earliestAvailableSlot, nil
 }
 
-// SetCustodyGroupCount .
-// UdpateCustodyInfo updates the custody group count and earliest available slot
-// if the new custody group count is greater than the stored one.
-// It returns the (potentially updated) earliest available slot and custody group count.
+// CustodyGroupCount .
+func (s *TestP2P) CustodyGroupCount() (uint64, error) {
+	s.custodyInfoMut.RLock()
+	defer s.custodyInfoMut.RUnlock()
+
+	return s.custodyGroupCount, nil
+}
+
+// UpdateCustodyInfo .
 func (s *TestP2P) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
 	s.custodyInfoMut.Lock()
 	defer s.custodyInfoMut.Unlock()
 
-	if custodyGroupCount <= s.custodyGroupCount {
-		return s.earliestAvailableSlot, s.custodyGroupCount, nil
-	}
-
-	if earliestAvailableSlot < s.earliestAvailableSlot {
-		return 0, 0, errors.Errorf(
-			"earliest available slot %d is less than the current one %d. (custody group count: %d, current one: %d)",
-			earliestAvailableSlot, s.earliestAvailableSlot, custodyGroupCount, s.custodyGroupCount,
-		)
-	}
-
 	s.earliestAvailableSlot = earliestAvailableSlot
 	s.custodyGroupCount = custodyGroupCount
 
-	return earliestAvailableSlot, custodyGroupCount, nil
-}
-
-// EarliestAvailableSlot .
-func (s *TestP2P) EarliestAvailableSlot() primitives.Slot {
-	s.custodyInfoMut.RLock()
-	defer s.custodyInfoMut.RUnlock()
-
-	return s.earliestAvailableSlot
+	return s.earliestAvailableSlot, s.custodyGroupCount, nil
 }
 
 // CustodyGroupCountFromPeer .

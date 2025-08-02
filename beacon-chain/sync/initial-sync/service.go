@@ -394,7 +394,12 @@ func (s *Service) fetchOriginColumns(pids []peer.ID, roBlock blocks.ROBlock) err
 	nodeID := s.cfg.P2P.NodeID()
 	storage := s.cfg.DataColumnStorage
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
-	custodyGroupCount := s.cfg.P2P.CustodyGroupCount()
+
+	custodyGroupCount, err := s.cfg.P2P.CustodyGroupCount()
+	if err != nil {
+		return errors.Wrap(err, "fetch custody group count from peer")
+	}
+
 	samplingSize := max(custodyGroupCount, samplesPerSlot)
 
 	missingColumns, err := sync.MissingDataColumns(roBlock, nodeID, samplingSize, storage)

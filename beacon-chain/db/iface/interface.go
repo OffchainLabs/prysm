@@ -64,9 +64,6 @@ type ReadOnlyDatabase interface {
 	// Origin checkpoint sync support
 	OriginCheckpointBlockRoot(ctx context.Context) ([32]byte, error)
 	BackfillStatus(context.Context) (*dbval.BackfillStatus, error)
-	// Custody operations.
-	CustodyInfo(ctx context.Context) (uint64, uint64, error)
-	SubscribedToAllDataSubnets(ctx context.Context) (bool, error)
 }
 
 // NoHeadAccessDatabase defines a struct without access to chain head data.
@@ -107,10 +104,8 @@ type NoHeadAccessDatabase interface {
 	DeleteHistoricalDataBeforeSlot(ctx context.Context, slot primitives.Slot, batchSize int) (int, error)
 
 	// Custody operations.
-	SaveCustodyGroupCount(ctx context.Context, custodyGroupCount uint64) error
-	SaveSubscribedToAllDataSubnets(ctx context.Context, subscribed bool) error
 	UpdateSubscribedToAllDataSubnets(ctx context.Context, subscribed bool) (bool, error)
-	UpdateCustodyInfo(ctx context.Context, custodyGroupCount uint64, earliestAvailableSlot primitives.Slot) (uint64, primitives.Slot, error)
+	UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error)
 }
 
 // HeadAccessDatabase defines a struct with access to reading chain head data.

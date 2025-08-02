@@ -33,9 +33,11 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//api/server/structs:go_default_library",
+        "//async/event:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/light-client:go_default_library",
         "//beacon-chain/db/testing:go_default_library",
+        "//beacon-chain/p2p/testing:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
