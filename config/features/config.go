@@ -79,6 +79,8 @@ type Flags struct {
 	SaveInvalidBlock bool // SaveInvalidBlock saves invalid block to temp.
 	SaveInvalidBlob  bool // SaveInvalidBlob saves invalid blob to temp.
 
+	SlowDutiesProfile bool // SlowDutiesProfile enables performance profiling when GetDutiesV2 is slow.
+
 	EnableDiscoveryReboot bool // EnableDiscoveryReboot allows the node to have its local listener to be rebooted in the event of discovery issues.
 
 	// KeystoreImportDebounceInterval specifies the time duration the validator waits to reload new keys if they have
@@ -200,6 +202,11 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	if ctx.Bool(saveInvalidBlobTempFlag.Name) {
 		logEnabled(saveInvalidBlobTempFlag)
 		cfg.SaveInvalidBlob = true
+	}
+
+	if ctx.IsSet(slowDutiesProfileFlag.Name) {
+		logEnabled(slowDutiesProfileFlag)
+		cfg.SlowDutiesProfile = true
 	}
 
 	if ctx.IsSet(disableGRPCConnectionLogging.Name) {

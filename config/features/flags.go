@@ -45,6 +45,10 @@ var (
 		Name:  "save-invalid-blob-temp",
 		Usage: "Writes invalid blobs to temp directory.",
 	}
+	slowDutiesProfileFlag = &cli.BoolFlag{
+		Name:  "slow-duties-profile",
+		Usage: "Enable performance profiling when GetDutiesV2 takes longer than 2s. Saves profiles to <datadir>/debug.",
+	}
 	disableGRPCConnectionLogging = &cli.BoolFlag{
 		Name: "disable-grpc-connection-logging",
 		Usage: `WARNING: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API..
@@ -232,6 +236,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	writeSSZStateTransitionsFlag,
 	saveInvalidBlockTempFlag,
 	saveInvalidBlobTempFlag,
+	slowDutiesProfileFlag,
 	disableGRPCConnectionLogging,
 	HoleskyTestnet,
 	SepoliaTestnet,
