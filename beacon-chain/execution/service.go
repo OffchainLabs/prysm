@@ -164,7 +164,6 @@ type Service struct {
 	capabilityCache         *capabilityCache
 	activeRetries           sync.Map // map[blockRoot]context.CancelFunc for tracking active retries
 	availabilityChecker     DataAvailabilityChecker
-	getBlobsRetryInterval   time.Duration // retry interval for getBlobsV2 calls
 }
 
 // NewService sets up a new instance with an ethclient when given a web3 endpoint as a string in the config.
@@ -203,7 +202,6 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 		preGenesisState:         genState,
 		eth1HeadTicker:          time.NewTicker(time.Duration(params.BeaconConfig().SecondsPerETH1Block) * time.Second),
 		capabilityCache:         &capabilityCache{},
-		getBlobsRetryInterval:   defaultGetBlobsRetryInterval, // default value
 	}
 
 	for _, opt := range opts {

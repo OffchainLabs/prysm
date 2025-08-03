@@ -1094,12 +1094,7 @@ func (s *Service) retryReconstructDataColumnSidecars(retryCtx context.Context, c
 		s.activeRetries.Delete(blockRoot)
 	}()
 
-	// Ensure we have a valid retry interval
-	retryInterval := s.getBlobsRetryInterval
-	if retryInterval <= 0 {
-		retryInterval = defaultGetBlobsRetryInterval
-	}
-	ticker := time.NewTicker(retryInterval)
+	ticker := time.NewTicker(defaultGetBlobsRetryInterval)
 	defer ticker.Stop()
 
 	attemptCount := 0
