@@ -684,6 +684,30 @@ func (s *Service) isDataAvailable(
 	return nil
 }
 
+// isDataImmediatelyAvailable checks if all required data is currently available in the database
+// without waiting for missing data. Returns nil if all data is available, error otherwise.
+func (s *Service) isDataImmediatelyAvailable(
+	ctx context.Context,
+	root [fieldparams.RootLength]byte,
+	signedBlock interfaces.ReadOnlySignedBeaconBlock,
+) error {
+	block := signedBlock.Block()
+	if block == nil {
+		return errors.New("invalid nil beacon block")
+	}
+
+	blockVersion := block.Version()
+	if blockVersion >= version.Fulu {
+		return s.areDataColumnsImmediatelyAvailable(ctx, root, block)
+	}
+
+	if blockVersion >= version.Deneb {
+		return s.areBlobsImmediatelyAvailable(ctx, root, block)
+	}
+
+	return nil
+}
+
 // areDataColumnsAvailable blocks until all data columns committed to in the block are available,
 // or an error or context cancellation occurs. A nil result means that the data availability check is successful.
 func (s *Service) areDataColumnsAvailable(
@@ -924,6 +948,116 @@ func (s *Service) areBlobsAvailable(ctx context.Context, root [fieldparams.RootL
 			return errors.Wrapf(ctx.Err(), "context deadline waiting for blob sidecars slot: %d, BlockRoot: %#x", block.Slot(), root)
 		}
 	}
+}
+
+// areDataColumnsImmediatelyAvailable checks if all required data columns are currently
+// available in the database without waiting for missing ones.
+func (s *Service) areDataColumnsImmediatelyAvailable(
+	ctx context.Context,
+	root [fieldparams.RootLength]byte,
+	block interfaces.ReadOnlyBeaconBlock,
+) error {
+	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
+
+	// We are only required to check within MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS
+	blockSlot, currentSlot := block.Slot(), s.CurrentSlot()
+	blockEpoch, currentEpoch := slots.ToEpoch(blockSlot), slots.ToEpoch(currentSlot)
+	if !params.WithinDAPeriod(blockEpoch, currentEpoch) {
+		return nil
+	}
+
+	body := block.Body()
+	if body == nil {
+		return errors.New("invalid nil beacon block body")
+	}
+
+	kzgCommitments, err := body.BlobKzgCommitments()
+	if err != nil {
+		return errors.Wrap(err, "blob KZG commitments")
+	}
+
+	// If block has no commitments there is nothing to check.
+	if len(kzgCommitments) == 0 {
+		return nil
+	}
+
+	// All columns to sample need to be available for the block to be considered available.
+	nodeID := s.cfg.P2P.NodeID()
+
+	// Get the custody group sampling size for the node.
+	custodyGroupCount := s.cfg.P2P.CustodyGroupCount()
+
+	// Compute the sampling size.
+	samplingSize := max(samplesPerSlot, custodyGroupCount)
+
+	// Get the peer info for the node.
+	peerInfo, _, err := peerdas.Info(nodeID, samplingSize)
+	if err != nil {
+		return errors.Wrap(err, "peer info")
+	}
+
+	// Get the count of data columns we already have in the store.
+	summary := s.dataColumnStorage.Summary(root)
+	storedDataColumnsCount := summary.Count()
+
+	minimumColumnCountToReconstruct := peerdas.MinimumColumnsCountToReconstruct()
+
+	// As soon as we have enough data column sidecars, we can reconstruct the missing ones.
+	// We don't need to wait for the rest of the data columns to declare the block as available.
+	if storedDataColumnsCount >= minimumColumnCountToReconstruct {
+		return nil
+	}
+
+	// Get a map of data column indices that are not currently available.
+	missingMap, err := missingDataColumnIndices(s.dataColumnStorage, root, peerInfo.CustodyColumns)
+	if err != nil {
+		return errors.Wrap(err, "missing data columns")
+	}
+
+	// If there are no missing indices, all data column sidecars are available.
+	if len(missingMap) == 0 {
+		return nil
+	}
+
+	// If any data is missing, return error immediately (don't wait)
+	missingIndices := uint64MapToSortedSlice(missingMap)
+	return fmt.Errorf("data columns not immediately available, missing %v", missingIndices)
+}
+
+// areBlobsImmediatelyAvailable checks if all required blobs are currently
+// available in the database without waiting for missing ones.
+func (s *Service) areBlobsImmediatelyAvailable(ctx context.Context, root [fieldparams.RootLength]byte, block interfaces.ReadOnlyBeaconBlock) error {
+	// We are only required to check within MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS
+	if !params.WithinDAPeriod(slots.ToEpoch(block.Slot()), slots.ToEpoch(s.CurrentSlot())) {
+		return nil
+	}
+
+	body := block.Body()
+	if body == nil {
+		return errors.New("invalid nil beacon block body")
+	}
+	kzgCommitments, err := body.BlobKzgCommitments()
+	if err != nil {
+		return errors.Wrap(err, "could not get KZG commitments")
+	}
+	// expected is the number of kzg commitments observed in the block.
+	expected := len(kzgCommitments)
+	if expected == 0 {
+		return nil
+	}
+	// get a map of BlobSidecar indices that are not currently available.
+	missing, err := missingBlobIndices(s.blobStorage, root, kzgCommitments, block.Slot())
+	if err != nil {
+		return errors.Wrap(err, "missing indices")
+	}
+	// If there are no missing indices, all BlobSidecars are available.
+	if len(missing) == 0 {
+		return nil
+	}
+
+	// If any blobs are missing, return error immediately (don't wait)
+	missingIndices := uint64MapToSortedSlice(missing)
+	return fmt.Errorf("blobs not immediately available, missing %v", missingIndices)
 }
 
 // uint64MapToSortedSlice produces a sorted uint64 slice from a map.

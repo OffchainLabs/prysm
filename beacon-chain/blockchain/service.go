@@ -518,6 +518,20 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 	return earliestAvailableSlot, custodyGroupCount, nil
 }
 
+// IsDataAvailable implements the DataAvailabilityChecker interface for use by the execution service.
+// It checks if all required blob and data column data is immediately available in the database without waiting.
+func (s *Service) IsDataAvailable(ctx context.Context, blockRoot [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) (bool, error) {
+	// Use non-blocking immediate availability check
+	err := s.isDataImmediatelyAvailable(ctx, blockRoot, signedBlock)
+	if err != nil {
+		// If there's an error, data is not immediately available
+		return false, err
+	}
+
+	// If no error, data is immediately available
+	return true, nil
+}
+
 func spawnCountdownIfPreGenesis(ctx context.Context, genesisTime time.Time, db db.HeadAccessDatabase) {
 	currentTime := prysmTime.Now()
 	if currentTime.After(genesisTime) {
@@ -550,7 +564,7 @@ func fuluForkSlot() (primitives.Slot, error) {
 
 	return forkFuluSlot, nil
 }
-	
+
 // IsDataAvailable implements the DataAvailabilityChecker interface for use by the execution service.
 // It checks if all required blob and data column data is available for the given block.
 func (s *Service) IsDataAvailable(ctx context.Context, blockRoot [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) (bool, error) {
