@@ -589,16 +589,16 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 }
 
 // IsDataAvailable implements the DataAvailabilityChecker interface for use by the execution service.
-// It checks if all required blob and data column data is available for the given block.
+// It checks if all required blob and data column data is immediately available in the database without waiting.
 func (s *Service) IsDataAvailable(ctx context.Context, blockRoot [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) (bool, error) {
-	// Use the internal data availability checking method
-	err := s.isDataAvailable(ctx, blockRoot, signedBlock)
+	// Use non-blocking immediate availability check
+	err := s.isDataImmediatelyAvailable(ctx, blockRoot, signedBlock)
 	if err != nil {
-		// If there's an error, data is not available
+		// If there's an error, data is not immediately available
 		return false, err
 	}
 
-	// If no error, data is available
+	// If no error, data is immediately available
 	return true, nil
 }
 
