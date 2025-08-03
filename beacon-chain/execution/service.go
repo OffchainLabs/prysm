@@ -163,7 +163,6 @@ type Service struct {
 	blobVerifier            verification.NewBlobVerifier
 	capabilityCache         *capabilityCache
 	activeRetries           sync.Map // map[blockRoot]context.CancelFunc for tracking active retries
-	activeReconstructCalls  sync.Map // map[blockRoot]chan reconstructResult for tracking in-flight reconstruction calls
 	availabilityChecker     DataAvailabilityChecker
 	getBlobsRetryInterval   time.Duration // retry interval for getBlobsV2 calls
 }

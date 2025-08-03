@@ -3,8 +3,6 @@ package sync
 import (
 	"context"
 	"fmt"
-	"runtime/debug"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
@@ -33,8 +31,7 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 
 	// Trigger getBlobsV2 when receiving data column sidecar
 	if err := s.triggerGetBlobsV2ForDataColumnSidecar(ctx, root); err != nil {
-		// Log error but don't fail - this is a best-effort retry trigger
-		log.WithError(err).Debug("Failed to trigger getBlobsV2 for data column sidecar")
+		return errors.Wrap(err, "failed to trigger getBlobsV2 for data column sidecar")
 	}
 
 	return nil
@@ -70,13 +67,6 @@ func (s *Service) triggerGetBlobsV2ForDataColumnSidecar(ctx context.Context, blo
 		return nil
 	}
 
-	// Try to get the block from the database or cache
-	if !s.cfg.chain.HasBlock(ctx, blockRoot) {
-		// Block not available yet, this is expected in some cases
-		log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Debug("Block not available for getBlobsV2 retry trigger")
-		return nil
-	}
-
 	// Get the specific block by root from database
 	signedBlock, err := s.cfg.beaconDB.Block(ctx, blockRoot)
 	if err != nil {
@@ -99,29 +89,17 @@ func (s *Service) triggerGetBlobsV2ForDataColumnSidecar(ctx context.Context, blo
 	}
 
 	// Trigger the retry by calling the execution service's reconstruct method
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.WithField("error", r).
-					WithField("recoveredAt", "triggerGetBlobsV2ForDataColumnSidecar").
-					WithField("stack", string(debug.Stack())).
-					Error("Panic occurred in getBlobsV2 retry goroutine")
-			}
-		}()
+	// ReconstructDataColumnSidecars handles concurrent calls internally
+	log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Debug("Triggering getBlobsV2 retry for data column sidecar")
 
-		bgCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
+	if s.cfg.executionReconstructor == nil {
+		return nil
+	}
 
-		log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Debug("Triggering getBlobsV2 retry for data column sidecar")
-
-		// This will trigger retry logic if needed
-		if s.cfg.executionReconstructor != nil {
-			_, err := s.cfg.executionReconstructor.ReconstructDataColumnSidecars(bgCtx, signedBlock, blockRoot)
-			if err != nil {
-				log.WithError(err).Debug("getBlobsV2 retry triggered by data column sidecar failed")
-			}
-		}
-	}()
+	_, err = s.cfg.executionReconstructor.ReconstructDataColumnSidecars(ctx, signedBlock, blockRoot)
+	if err != nil {
+		return errors.Wrap(err, "getBlobsV2 retry triggered by data column sidecar failed")
+	}
 
 	return nil
 }
