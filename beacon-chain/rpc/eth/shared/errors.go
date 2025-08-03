@@ -2,6 +2,7 @@ package shared
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/lookup"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -43,4 +44,27 @@ func WriteBlockFetchError(w http.ResponseWriter, blk interfaces.ReadOnlySignedBe
 		return false
 	}
 	return true
+}
+
+// WriteOptimisticStatusError writes an appropriate error based on the supplied argument.
+// The argument error should be a result of checking optimistic status.
+func WriteOptimisticStatusError(w http.ResponseWriter, err error) {
+	var parseErr *lookup.StateIdParseError
+	if errors.As(err, &parseErr) {
+		httputil.HandleError(w, "Invalid state ID: "+parseErr.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Check for various database lookup errors that should return 404
+	errMsg := err.Error()
+	if strings.Contains(errMsg, "could not fetch state") ||
+		strings.Contains(errMsg, "state not found") ||
+		strings.Contains(errMsg, "no block roots returned from the database") ||
+		strings.Contains(errMsg, "could not get block roots for slot") ||
+		strings.Contains(errMsg, "could not obtain block") ||
+		strings.Contains(errMsg, "could not get ancestor root") {
+		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusNotFound)
+		return
+	}
+	httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
 }

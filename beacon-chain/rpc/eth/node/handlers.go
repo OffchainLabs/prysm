@@ -35,7 +35,7 @@ func (s *Server) GetSyncStatus(w http.ResponseWriter, r *http.Request) {
 
 	isOptimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
 	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		shared.WriteOptimisticStatusError(w, err)
 		return
 	}
 
@@ -131,7 +131,7 @@ func (s *Server) GetHealth(w http.ResponseWriter, r *http.Request) {
 
 	optimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
 	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		shared.WriteOptimisticStatusError(w, err)
 	}
 	if s.SyncChecker.Synced() && !optimistic {
 		return
