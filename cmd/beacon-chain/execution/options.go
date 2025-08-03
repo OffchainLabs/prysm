@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
@@ -24,12 +23,10 @@ func FlagOptions(c *cli.Context) ([]execution.Option, error) {
 		return nil, errors.Wrap(err, "could not read JWT secret file for authenticating execution API")
 	}
 	headers := strings.Split(c.String(flags.ExecutionEngineHeaders.Name), ",")
-	retryInterval := time.Duration(c.Uint64(flags.GetBlobsRetryIntervalMs.Name)) * time.Millisecond
 	opts := []execution.Option{
 		execution.WithHttpEndpoint(endpoint),
 		execution.WithEth1HeaderRequestLimit(c.Uint64(flags.Eth1HeaderReqLimit.Name)),
 		execution.WithHeaders(headers),
-		execution.WithGetBlobsRetryInterval(retryInterval),
 	}
 	if len(jwtSecret) > 0 {
 		opts = append(opts, execution.WithHttpEndpointAndJWTSecret(endpoint, jwtSecret))
