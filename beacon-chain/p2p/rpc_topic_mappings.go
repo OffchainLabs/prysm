@@ -108,6 +108,8 @@ const (
 	RPCDataColumnSidecarsByRangeTopicV1 = protocolPrefix + DataColumnSidecarsByRangeName + SchemaVersionV1
 
 	// V2 RPC Topics
+	// RPCStatusTopicV2 defines the v1 topic for the status rpc method.
+	RPCStatusTopicV2 = protocolPrefix + StatusMessageName + SchemaVersionV2
 	// RPCBlocksByRangeTopicV2 defines v2 the topic for the blocks by range rpc method.
 	RPCBlocksByRangeTopicV2 = protocolPrefix + BeaconBlocksByRangeMessageName + SchemaVersionV2
 	// RPCBlocksByRootTopicV2 defines the v2 topic for the blocks by root rpc method.
@@ -130,6 +132,7 @@ var (
 	RPCTopicMappings = map[string]interface{}{
 		// RPC Status Message
 		RPCStatusTopicV1: new(pb.Status),
+		RPCStatusTopicV2: new(pb.StatusV2),
 
 		// RPC Goodbye Message
 		RPCGoodByeTopicV1: new(primitives.SSZUint64),
@@ -201,6 +204,7 @@ var (
 
 	// Maps all the RPC messages which are to updated in fulu.
 	fuluMapping = map[string]string{
+		StatusMessageName:   SchemaVersionV2,
 		MetadataMessageName: SchemaVersionV3,
 	}
 

@@ -16,7 +16,6 @@ import (
 
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
@@ -66,6 +65,7 @@ func TestCreateListener(t *testing.T) {
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		cfg:                   &Config{UDPPort: uint(port)},
+		custodyInfo:           &custodyInfo{},
 	}
 	listener, err := s.createListener(ipAddr, pkey)
 	require.NoError(t, err)
@@ -92,6 +92,7 @@ func TestStartDiscV5_DiscoverAllPeers(t *testing.T) {
 		cfg:                   &Config{UDPPort: uint(port), PingInterval: testPingInterval, DisableLivenessCheck: true},
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: genesisValidatorsRoot,
+		custodyInfo:           &custodyInfo{},
 	}
 	bootListener, err := s.createListener(ipAddr, pkey)
 	require.NoError(t, err)
@@ -117,6 +118,7 @@ func TestStartDiscV5_DiscoverAllPeers(t *testing.T) {
 			cfg:                   cfg,
 			genesisTime:           genesisTime,
 			genesisValidatorsRoot: genesisValidatorsRoot,
+			custodyInfo:           &custodyInfo{},
 		}
 		listener, err := s.startDiscoveryV5(ipAddr, pkey)
 		assert.NoError(t, err, "Could not start discovery for node")
@@ -158,27 +160,27 @@ func TestCreateLocalNode(t *testing.T) {
 	}{
 		{
 			name:          "valid config",
-			cfg:           &Config{CustodyInfo: &peerdas.CustodyInfo{}},
+			cfg:           &Config{},
 			expectedError: false,
 		},
 		{
 			name:          "invalid host address",
-			cfg:           &Config{HostAddress: "invalid", CustodyInfo: &peerdas.CustodyInfo{}},
+			cfg:           &Config{HostAddress: "invalid"},
 			expectedError: true,
 		},
 		{
 			name:          "valid host address",
-			cfg:           &Config{HostAddress: "192.168.0.1", CustodyInfo: &peerdas.CustodyInfo{}},
+			cfg:           &Config{HostAddress: "192.168.0.1"},
 			expectedError: false,
 		},
 		{
 			name:          "invalid host DNS",
-			cfg:           &Config{HostDNS: "invalid", CustodyInfo: &peerdas.CustodyInfo{}},
+			cfg:           &Config{HostDNS: "invalid"},
 			expectedError: true,
 		},
 		{
 			name:          "valid host DNS",
-			cfg:           &Config{HostDNS: "www.google.com", CustodyInfo: &peerdas.CustodyInfo{}},
+			cfg:           &Config{HostDNS: "www.google.com"},
 			expectedError: false,
 		},
 	}
@@ -192,6 +194,8 @@ func TestCreateLocalNode(t *testing.T) {
 				quicPort = 3000
 			)
 
+			custodyRequirement := params.BeaconConfig().CustodyRequirement
+
 			// Create a private key.
 			address, privKey := createAddrAndPrivKey(t)
 
@@ -200,6 +204,7 @@ func TestCreateLocalNode(t *testing.T) {
 				genesisTime:           time.Now(),
 				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 				cfg:                   tt.cfg,
+				custodyInfo:           &custodyInfo{groupCount: custodyRequirement},
 			}
 
 			localNode, err := service.createLocalNode(privKey, address, udpPort, tcpPort, quicPort)
@@ -211,7 +216,7 @@ func TestCreateLocalNode(t *testing.T) {
 			require.NoError(t, err)
 
 			expectedAddress := address
-			if tt.cfg.HostAddress != "" {
+			if tt.cfg != nil && tt.cfg.HostAddress != "" {
 				expectedAddress = net.ParseIP(tt.cfg.HostAddress)
 			}
 
@@ -251,8 +256,8 @@ func TestCreateLocalNode(t *testing.T) {
 
 			// Check cgc config.
 			custodyGroupCount := new(uint64)
-			require.NoError(t, localNode.Node().Record().Load(enr.WithEntry(peerdas.CustodyGroupCountEnrKey, custodyGroupCount)))
-			require.Equal(t, params.BeaconConfig().CustodyRequirement, *custodyGroupCount)
+			require.NoError(t, localNode.Node().Record().Load(enr.WithEntry(params.BeaconNetworkConfig().CustodyGroupCountKey, custodyGroupCount)))
+			require.Equal(t, custodyRequirement, *custodyGroupCount)
 		})
 	}
 }
@@ -264,6 +269,7 @@ func TestRebootDiscoveryListener(t *testing.T) {
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		cfg:                   &Config{UDPPort: uint(port)},
+		custodyInfo:           &custodyInfo{},
 	}
 
 	createListener := func() (*discover.UDPv5, error) {
@@ -296,6 +302,7 @@ func TestMultiAddrsConversion_InvalidIPAddr(t *testing.T) {
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		cfg:                   &Config{},
+		custodyInfo:           &custodyInfo{},
 	}
 	node, err := s.createLocalNode(pkey, addr, 0, 0, 0)
 	require.NoError(t, err)
@@ -314,6 +321,7 @@ func TestMultiAddrConversion_OK(t *testing.T) {
 		},
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+		custodyInfo:           &custodyInfo{},
 	}
 	listener, err := s.createListener(ipAddr, pkey)
 	require.NoError(t, err)
@@ -389,6 +397,7 @@ func TestHostIsResolved(t *testing.T) {
 		},
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+		custodyInfo:           &custodyInfo{},
 	}
 	ip, key := createAddrAndPrivKey(t)
 	list, err := s.createListener(ip, key)
@@ -458,6 +467,7 @@ func TestUDPMultiAddress(t *testing.T) {
 		cfg:                   &Config{UDPPort: uint(port)},
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: genesisValidatorsRoot,
+		custodyInfo:           &custodyInfo{},
 	}
 
 	createListener := func() (*discover.UDPv5, error) {
@@ -658,7 +668,7 @@ func checkPingCountCacheMetadataRecord(
 	if expected.custodyGroupCount != nil {
 		// Check custody subnet count in ENR.
 		var actualCustodyGroupCount uint64
-		err := service.dv5Listener.LocalNode().Node().Record().Load(enr.WithEntry(peerdas.CustodyGroupCountEnrKey, &actualCustodyGroupCount))
+		err := service.dv5Listener.LocalNode().Node().Record().Load(enr.WithEntry(params.BeaconNetworkConfig().CustodyGroupCountKey, &actualCustodyGroupCount))
 		require.NoError(t, err)
 		require.Equal(t, *expected.custodyGroupCount, actualCustodyGroupCount)
 
@@ -821,10 +831,11 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 					actualPingCount++
 					return nil
 				},
-				cfg:                   &Config{UDPPort: 2000, CustodyInfo: &peerdas.CustodyInfo{}, DB: testDB.SetupDB(t)},
+				cfg:                   &Config{UDPPort: 2000, DB: testDB.SetupDB(t)},
 				peers:                 p2p.Peers(),
 				genesisTime:           time.Now().Add(-time.Duration(tc.epochSinceGenesis*secondsPerEpoch) * time.Second),
 				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+				custodyInfo:           &custodyInfo{groupCount: custodyGroupCount},
 			}
 
 			// Set the listener and the metadata.

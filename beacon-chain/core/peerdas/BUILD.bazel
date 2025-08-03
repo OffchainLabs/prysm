@@ -16,7 +16,6 @@ go_library(
     deps = [
         "//beacon-chain/blockchain/kzg:go_default_library",
         "//beacon-chain/state:go_default_library",
-        "//cmd/beacon-chain/flags:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
@@ -53,7 +52,6 @@ go_test(
         ":go_default_library",
         "//beacon-chain/blockchain/kzg:go_default_library",
         "//beacon-chain/state/state-native:go_default_library",
-        "//cmd/beacon-chain/flags:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",

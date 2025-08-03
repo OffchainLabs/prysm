@@ -51,7 +51,7 @@ func TestProcessPendingAtts_NoBlockRequestBlock(t *testing.T) {
 	assert.Equal(t, 1, len(p1.BHost.Network().Peers()), "Expected peers to be connected")
 	p1.Peers().Add(new(enr.Record), p2.PeerID(), nil, network.DirOutbound)
 	p1.Peers().SetConnectionState(p2.PeerID(), peers.Connected)
-	p1.Peers().SetChainState(p2.PeerID(), &ethpb.Status{})
+	p1.Peers().SetChainState(p2.PeerID(), &ethpb.StatusV2{})
 
 	chain := &mock.ChainService{Genesis: prysmTime.Now(), FinalizedCheckPoint: &ethpb.Checkpoint{}}
 	r := &Service{

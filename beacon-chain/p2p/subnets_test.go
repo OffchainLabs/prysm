@@ -75,6 +75,7 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 		cfg:                   &Config{UDPPort: 2000, TCPPort: 3000, QUICPort: 3000, DisableLivenessCheck: true, PingInterval: testPingInterval},
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: genesisValidatorsRoot,
+		custodyInfo:           &custodyInfo{},
 	}
 
 	bootNodeForkDigest, err := bootNodeService.currentForkDigest()
@@ -111,6 +112,7 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 
 		service.genesisTime = genesisTime
 		service.genesisValidatorsRoot = genesisValidatorsRoot
+		service.custodyInfo = &custodyInfo{}
 
 		nodeForkDigest, err := service.currentForkDigest()
 		require.NoError(t, err)
@@ -161,6 +163,7 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 
 	service.genesisTime = genesisTime
 	service.genesisValidatorsRoot = genesisValidatorsRoot
+	service.custodyInfo = &custodyInfo{}
 
 	service.Start()
 	defer func() {

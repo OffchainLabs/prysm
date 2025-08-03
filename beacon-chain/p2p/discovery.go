@@ -239,39 +239,47 @@ func (s *Service) RefreshPersistentSubnets() {
 	// Get the sync subnet bitfield in our metadata.
 	currentBitSInMetadata := s.Metadata().SyncnetsBitfield()
 
-	// Is our sync bitvector record up to date?
 	isBitSUpToDate := bytes.Equal(bitS, inRecordBitS) && bytes.Equal(bitS, currentBitSInMetadata)
 
 	// Compare current epoch with the Fulu fork epoch.
 	fuluForkEpoch := params.BeaconConfig().FuluForkEpoch
 
+	custodyGroupCount, inRecordCustodyGroupCount := uint64(0), uint64(0)
+	if params.FuluEnabled() {
+		// Get the custody group count we store in our record.
+		inRecordCustodyGroupCount, err = peerdas.CustodyGroupCountFromRecord(record)
+		if err != nil {
+			log.WithError(err).Error("Could not retrieve custody group count")
+			return
+		}
+
+		custodyGroupCount, err = s.CustodyGroupCount()
+		if err != nil {
+			log.WithError(err).Error("Could not retrieve custody group count")
+			return
+		}
+	}
+
 	// We add `1` to the current epoch because we want to prepare one epoch before the Fulu fork.
 	if currentEpoch+1 < fuluForkEpoch {
+		// Is our custody group count record up to date?
+		isCustodyGroupCountUpToDate := custodyGroupCount == inRecordCustodyGroupCount
+
 		// Altair behaviour.
-		if metadataVersion == version.Altair && isBitVUpToDate && isBitSUpToDate {
+		if metadataVersion == version.Altair && isBitVUpToDate && isBitSUpToDate && (!params.FuluEnabled() || isCustodyGroupCountUpToDate) {
 			// Nothing to do, return early.
 			return
 		}
 
 		// Some data have changed, update our record and metadata.
 		// Not returning early here because the error comes from saving the metadata sequence number.
-		if err := s.updateSubnetRecordWithMetadataV2(bitV, bitS); err != nil {
+		if err := s.updateSubnetRecordWithMetadataV2(bitV, bitS, custodyGroupCount); err != nil {
 			log.WithError(err).Error("Failed to update subnet record with metadata")
 		}
 
 		// Ping all peers to inform them of new metadata
 		s.pingPeersAndLogEnr()
 
-		return
-	}
-
-	// Get the current custody group count.
-	custodyGroupCount := s.cfg.CustodyInfo.ActualGroupCount()
-
-	// Get the custody group count we store in our record.
-	inRecordCustodyGroupCount, err := peerdas.CustodyGroupCountFromRecord(record)
-	if err != nil {
-		log.WithError(err).Error("Could not retrieve custody subnet count")
 		return
 	}
 
@@ -574,11 +582,6 @@ func (s *Service) createLocalNode(
 		localNode.Set(quicEntry)
 	}
 
-	if params.FuluEnabled() {
-		custodyGroupCount := s.cfg.CustodyInfo.ActualGroupCount()
-		localNode.Set(peerdas.Cgc(custodyGroupCount))
-	}
-
 	localNode.SetFallbackIP(ipAddr)
 	localNode.SetFallbackUDP(udpPort)
 
@@ -589,6 +592,16 @@ func (s *Service) createLocalNode(
 
 	localNode = initializeAttSubnets(localNode)
 	localNode = initializeSyncCommSubnets(localNode)
+
+	if params.FuluEnabled() {
+		custodyGroupCount, err := s.CustodyGroupCount()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not retrieve custody group count")
+		}
+
+		custodyGroupCountEntry := peerdas.Cgc(custodyGroupCount)
+		localNode.Set(custodyGroupCountEntry)
+	}
 
 	if s.cfg != nil && s.cfg.HostAddress != "" {
 		hostIP := net.ParseIP(s.cfg.HostAddress)

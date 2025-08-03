@@ -30,6 +30,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -54,6 +55,7 @@ type mockBroadcaster struct {
 
 type mockAccessor struct {
 	mockBroadcaster
+	mockCustodyManager
 	p2pTesting.MockPeerManager
 }
 
@@ -96,6 +98,43 @@ func (mb *mockBroadcaster) BroadcastBLSChanges(_ context.Context, _ []*ethpb.Sig
 }
 
 var _ p2p.Broadcaster = (*mockBroadcaster)(nil)
+
+// mockCustodyManager is a mock implementation of p2p.CustodyManager
+type mockCustodyManager struct {
+	mut                   sync.RWMutex
+	earliestAvailableSlot primitives.Slot
+	custodyGroupCount     uint64
+}
+
+func (dch *mockCustodyManager) EarliestAvailableSlot() (primitives.Slot, error) {
+	dch.mut.RLock()
+	defer dch.mut.RUnlock()
+
+	return dch.earliestAvailableSlot, nil
+}
+
+func (dch *mockCustodyManager) CustodyGroupCount() (uint64, error) {
+	dch.mut.RLock()
+	defer dch.mut.RUnlock()
+
+	return dch.custodyGroupCount, nil
+}
+
+func (dch *mockCustodyManager) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
+	dch.mut.Lock()
+	defer dch.mut.Unlock()
+
+	dch.earliestAvailableSlot = earliestAvailableSlot
+	dch.custodyGroupCount = custodyGroupCount
+
+	return earliestAvailableSlot, custodyGroupCount, nil
+}
+
+func (dch *mockCustodyManager) CustodyGroupCountFromPeer(peer.ID) uint64 {
+	return 0
+}
+
+var _ p2p.CustodyManager = (*mockCustodyManager)(nil)
 
 type testServiceRequirements struct {
 	ctx     context.Context

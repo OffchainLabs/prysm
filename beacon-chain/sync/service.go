@@ -9,19 +9,6 @@ import (
 	"sync"
 	"time"
 
-	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/crypto/rand"
-	lru "github.com/hashicorp/golang-lru"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	libp2pcore "github.com/libp2p/go-libp2p/core"
-	"github.com/libp2p/go-libp2p/core/network"
-	"github.com/libp2p/go-libp2p/core/peer"
-	gcache "github.com/patrickmn/go-cache"
-	"github.com/pkg/errors"
-	"github.com/trailofbits/go-mutexasserts"
-
 	"github.com/OffchainLabs/prysm/v6/async"
 	"github.com/OffchainLabs/prysm/v6/async/abool"
 	"github.com/OffchainLabs/prysm/v6/async/event"
@@ -30,6 +17,7 @@ import (
 	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
@@ -39,6 +27,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/synccommittee"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/voluntaryexits"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/backfill/coverage"
@@ -48,11 +37,20 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
+	"github.com/OffchainLabs/prysm/v6/crypto/rand"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime"
 	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
+	lru "github.com/hashicorp/golang-lru"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	libp2pcore "github.com/libp2p/go-libp2p/core"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	gcache "github.com/patrickmn/go-cache"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"github.com/trailofbits/go-mutexasserts"
 )
 
 var _ runtime.Service = (*Service)(nil)
@@ -108,7 +106,6 @@ type config struct {
 	stateNotifier           statefeed.Notifier
 	blobStorage             *filesystem.BlobStorage
 	dataColumnStorage       *filesystem.DataColumnStorage
-	custodyInfo             *peerdas.CustodyInfo
 	batchVerifierLimit      int
 }
 
@@ -176,6 +173,7 @@ type Service struct {
 	availableBlocker                 coverage.AvailableBlocker
 	reconstructionLock               sync.Mutex
 	reconstructionRandGen            *rand.Rand
+	trackedValidatorsCache           *cache.TrackedValidatorsCache
 	ctxMap                           ContextByteVersions
 	slasherEnabled                   bool
 	lcStore                          *lightClient.Store
@@ -265,9 +263,15 @@ func (s *Service) Start() {
 		return nil
 	})
 	s.cfg.p2p.AddPingMethod(s.sendPingRequest)
+
 	s.processPendingBlocksQueue()
 	s.processPendingAttsQueue()
 	s.maintainPeerStatuses()
+
+	if params.FuluEnabled() {
+		s.maintainCustodyInfo()
+	}
+
 	s.resyncIfBehind()
 
 	// Update sync metrics.

@@ -7,7 +7,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	chainMock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
@@ -200,6 +199,8 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 	})
 
 	t.Run("data columns", func(t *testing.T) {
+		custodyRequirement := params.BeaconConfig().CustodyRequirement
+
 		// load trusted setup
 		err := kzg.Start()
 		require.NoError(t, err)
@@ -268,10 +269,12 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 							DataColumnSidecars: tt.dataColumnSidecars,
 						},
 						operationNotifier: &chainMock.MockOperationNotifier{},
-						custodyInfo:       &peerdas.CustodyInfo{},
 					},
 					seenDataColumnCache: newSlotAwareCache(1),
 				}
+
+				_, _, err := s.cfg.p2p.UpdateCustodyInfo(0, custodyRequirement)
+				require.NoError(t, err)
 
 				kzgCommitments := make([][]byte, 0, tt.blobCount)
 				for range tt.blobCount {

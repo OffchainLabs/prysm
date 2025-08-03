@@ -10,8 +10,12 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client",
     visibility = ["//visibility:public"],
     deps = [
+        "//async/event:go_default_library",
+        "//beacon-chain/core/feed:go_default_library",
+        "//beacon-chain/core/feed/state:go_default_library",
         "//beacon-chain/db/iface:go_default_library",
         "//beacon-chain/execution:go_default_library",
+        "//beacon-chain/p2p:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
@@ -39,6 +43,9 @@ go_test(
     ],
     deps = [
         ":go_default_library",
+        "//async/event:go_default_library",
+        "//beacon-chain/db/testing:go_default_library",
+        "//beacon-chain/p2p/testing:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types:go_default_library",
