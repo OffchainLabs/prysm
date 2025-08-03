@@ -21,9 +21,9 @@ import (
 
 const (
 	// overlay parameters
-	gossipSubD   = 8  // topic stable mesh target count
-	gossipSubDlo = 6  // topic stable mesh low watermark
-	gossipSubDhi = 12 // topic stable mesh high watermark
+	gossipSubD   = 3  // topic stable mesh target count
+	gossipSubDlo = 2  // topic stable mesh low watermark
+	gossipSubDhi = 4  // topic stable mesh high watermark
 
 	// gossip parameters
 	gossipSubMcacheLen    = 6   // number of windows to retain full messages in cache for `IWANT` responses
