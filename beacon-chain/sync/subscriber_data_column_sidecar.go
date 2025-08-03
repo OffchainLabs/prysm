@@ -61,12 +61,6 @@ func (s *Service) receiveDataColumnSidecar(ctx context.Context, sidecar blocks.V
 // triggerGetBlobsV2ForDataColumnSidecar triggers getBlobsV2 retry when receiving a data column sidecar.
 // This function attempts to fetch the block and trigger the execution service's retry mechanism.
 func (s *Service) triggerGetBlobsV2ForDataColumnSidecar(ctx context.Context, blockRoot [32]byte) error {
-	// Check if service is properly configured
-	if s.cfg == nil || s.cfg.chain == nil || s.cfg.beaconDB == nil {
-		log.Debug("Service not properly configured for getBlobsV2 retry trigger")
-		return nil
-	}
-
 	// Get the specific block by root from database
 	signedBlock, err := s.cfg.beaconDB.Block(ctx, blockRoot)
 	if err != nil {
