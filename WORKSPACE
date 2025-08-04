@@ -190,7 +190,7 @@ load("@rules_oci//oci:pull.bzl", "oci_pull")
 # A multi-arch base image
 oci_pull(
     name = "linux_debian11_multiarch_base",  # Debian bullseye
-    digest = "sha256:b82f113425c5b5c714151aaacd8039bc141821cdcd3c65202d42bdf9c43ae60b",  # 2023-12-12
+    digest = "sha256:55a5e011b2c4246b4c51e01fcc2b452d151e03df052e357465f0392fcd59fddf",
     image = "gcr.io/prysmaticlabs/distroless/cc-debian11",
     platforms = [
         "linux/amd64",
