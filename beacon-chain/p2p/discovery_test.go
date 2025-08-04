@@ -64,6 +64,7 @@ func TestCreateListener(t *testing.T) {
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		cfg:                   &Config{UDPPort: uint(port)},
+		custodyInfo:           &custodyInfo{},
 	}
 	listener, err := s.createListener(ipAddr, pkey)
 	require.NoError(t, err)
@@ -90,6 +91,7 @@ func TestStartDiscV5_DiscoverAllPeers(t *testing.T) {
 		cfg:                   &Config{UDPPort: uint(port), PingInterval: testPingInterval, DisableLivenessCheck: true},
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: genesisValidatorsRoot,
+		custodyInfo:           &custodyInfo{},
 	}
 	bootListener, err := s.createListener(ipAddr, pkey)
 	require.NoError(t, err)
@@ -115,6 +117,7 @@ func TestStartDiscV5_DiscoverAllPeers(t *testing.T) {
 			cfg:                   cfg,
 			genesisTime:           genesisTime,
 			genesisValidatorsRoot: genesisValidatorsRoot,
+			custodyInfo:           &custodyInfo{},
 		}
 		listener, err := s.startDiscoveryV5(ipAddr, pkey)
 		assert.NoError(t, err, "Could not start discovery for node")
@@ -190,6 +193,8 @@ func TestCreateLocalNode(t *testing.T) {
 				quicPort = 3000
 			)
 
+			custodyRequirement := params.BeaconConfig().CustodyRequirement
+
 			// Create a private key.
 			address, privKey := createAddrAndPrivKey(t)
 
@@ -198,7 +203,7 @@ func TestCreateLocalNode(t *testing.T) {
 				genesisTime:           time.Now(),
 				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 				cfg:                   tt.cfg,
-				custodyGroupCount:     params.BeaconConfig().CustodyRequirement,
+				custodyInfo:           &custodyInfo{groupCount: custodyRequirement},
 			}
 
 			localNode, err := service.createLocalNode(privKey, address, udpPort, tcpPort, quicPort)
@@ -251,7 +256,7 @@ func TestCreateLocalNode(t *testing.T) {
 			// Check cgc config.
 			custodyGroupCount := new(uint64)
 			require.NoError(t, localNode.Node().Record().Load(enr.WithEntry(params.BeaconNetworkConfig().CustodyGroupCountKey, custodyGroupCount)))
-			require.Equal(t, params.BeaconConfig().CustodyRequirement, *custodyGroupCount)
+			require.Equal(t, custodyRequirement, *custodyGroupCount)
 		})
 	}
 }
@@ -263,6 +268,7 @@ func TestRebootDiscoveryListener(t *testing.T) {
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		cfg:                   &Config{UDPPort: uint(port)},
+		custodyInfo:           &custodyInfo{},
 	}
 
 	createListener := func() (*discover.UDPv5, error) {
@@ -295,6 +301,7 @@ func TestMultiAddrsConversion_InvalidIPAddr(t *testing.T) {
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		cfg:                   &Config{},
+		custodyInfo:           &custodyInfo{},
 	}
 	node, err := s.createLocalNode(pkey, addr, 0, 0, 0)
 	require.NoError(t, err)
@@ -313,6 +320,7 @@ func TestMultiAddrConversion_OK(t *testing.T) {
 		},
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+		custodyInfo:           &custodyInfo{},
 	}
 	listener, err := s.createListener(ipAddr, pkey)
 	require.NoError(t, err)
@@ -386,6 +394,7 @@ func TestHostIsResolved(t *testing.T) {
 		},
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+		custodyInfo:           &custodyInfo{},
 	}
 	ip, key := createAddrAndPrivKey(t)
 	list, err := s.createListener(ip, key)
@@ -455,6 +464,7 @@ func TestUDPMultiAddress(t *testing.T) {
 		cfg:                   &Config{UDPPort: uint(port)},
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: genesisValidatorsRoot,
+		custodyInfo:           &custodyInfo{},
 	}
 
 	createListener := func() (*discover.UDPv5, error) {
@@ -822,7 +832,7 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 				peers:                 p2p.Peers(),
 				genesisTime:           time.Now().Add(-time.Duration(tc.epochSinceGenesis*secondsPerEpoch) * time.Second),
 				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
-				custodyGroupCount:     params.BeaconConfig().CustodyRequirement,
+				custodyInfo:           &custodyInfo{groupCount: custodyGroupCount},
 			}
 
 			// Set the listener and the metadata.

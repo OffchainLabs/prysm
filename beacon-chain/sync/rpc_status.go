@@ -343,7 +343,7 @@ func (s *Service) buildStatusFromStream(
 			return nil, err
 		}
 
-		if _, err2 := stream.Write(resp); err != nil {
+		if _, err2 := stream.Write(resp); err2 != nil {
 			log.WithError(err2).Debug("Could not write to stream")
 		}
 
@@ -351,13 +351,18 @@ func (s *Service) buildStatusFromStream(
 	}
 
 	if streamVersion == p2p.SchemaVersionV2 {
+		earliestAvailableSlot, err := s.cfg.p2p.EarliestAvailableSlot()
+		if err != nil {
+			return nil, errors.Wrap(err, "earliest available slot")
+		}
+
 		status := &pb.StatusV2{
 			ForkDigest:            forkDigest[:],
 			FinalizedRoot:         finalizedRoot,
 			FinalizedEpoch:        FinalizedEpoch,
 			HeadRoot:              headRoot,
 			HeadSlot:              s.cfg.chain.HeadSlot(),
-			EarliestAvailableSlot: s.cfg.p2p.EarliestAvailableSlot(),
+			EarliestAvailableSlot: earliestAvailableSlot,
 		}
 
 		return status, nil

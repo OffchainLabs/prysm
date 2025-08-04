@@ -121,7 +121,12 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, ro
 	}
 
 	nodeID := s.cfg.p2p.NodeID()
-	custodyGroupCount := s.cfg.p2p.CustodyGroupCount()
+	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount()
+	if err != nil {
+		log.WithError(err).Error("Failed to get custody group count")
+		return
+	}
+
 	info, _, err := peerdas.Info(nodeID, custodyGroupCount)
 	if err != nil {
 		log.WithError(err).Error("Failed to get peer info")

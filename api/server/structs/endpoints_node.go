@@ -25,10 +25,10 @@ type Identity struct {
 }
 
 type Metadata struct {
-	SeqNumber         string `json:"seq_number"`
-	Attnets           string `json:"attnets"`
-	Syncnets          string `json:"syncnets"`
-	CustodyGroupCount string `json:"custody_group_count"`
+	SeqNumber string `json:"seq_number"`
+	Attnets   string `json:"attnets"`
+	Syncnets  string `json:"syncnets,omitempty"`
+	Cgc       string `json:"custody_group_count,omitempty"`
 }
 
 type GetPeerResponse struct {

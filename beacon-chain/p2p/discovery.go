@@ -241,14 +241,21 @@ func (s *Service) RefreshPersistentSubnets() {
 	// Compare current epoch with the Fulu fork epoch.
 	fuluForkEpoch := params.BeaconConfig().FuluForkEpoch
 
-	// Get the custody group count we store in our record.
-	inRecordCustodyGroupCount, err := peerdas.CustodyGroupCountFromRecord(record)
-	if err != nil {
-		log.WithError(err).Error("Could not retrieve custody subnet count")
-		return
-	}
+	custodyGroupCount, inRecordCustodyGroupCount := uint64(0), uint64(0)
+	if params.FuluEnabled() {
+		// Get the custody group count we store in our record.
+		inRecordCustodyGroupCount, err = peerdas.CustodyGroupCountFromRecord(record)
+		if err != nil {
+			log.WithError(err).Error("Could not retrieve custody group count")
+			return
+		}
 
-	custodyGroupCount := s.CustodyGroupCount()
+		custodyGroupCount, err = s.CustodyGroupCount()
+		if err != nil {
+			log.WithError(err).Error("Could not retrieve custody group count")
+			return
+		}
+	}
 
 	// We add `1` to the current epoch because we want to prepare one epoch before the Fulu fork.
 	if currentEpoch+1 < fuluForkEpoch {
@@ -577,9 +584,15 @@ func (s *Service) createLocalNode(
 	localNode = initializeAttSubnets(localNode)
 	localNode = initializeSyncCommSubnets(localNode)
 
-	custodyGroupCount := s.CustodyGroupCount()
-	custodyGroupCountEntry := peerdas.Cgc(custodyGroupCount)
-	localNode.Set(custodyGroupCountEntry)
+	if params.FuluEnabled() {
+		custodyGroupCount, err := s.CustodyGroupCount()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not retrieve custody group count")
+		}
+
+		custodyGroupCountEntry := peerdas.Cgc(custodyGroupCount)
+		localNode.Set(custodyGroupCountEntry)
+	}
 
 	if s.cfg != nil && s.cfg.HostAddress != "" {
 		hostIP := net.ParseIP(s.cfg.HostAddress)

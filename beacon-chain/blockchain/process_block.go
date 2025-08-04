@@ -669,7 +669,7 @@ func (s *Service) areDataColumnsAvailable(
 ) error {
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 
-	// We are only required to check within MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS
+	// We are only required to check within MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS
 	blockSlot, currentSlot := block.Slot(), s.CurrentSlot()
 	blockEpoch, currentEpoch := slots.ToEpoch(blockSlot), slots.ToEpoch(currentSlot)
 	if !params.WithinDAPeriod(blockEpoch, currentEpoch) {
@@ -692,14 +692,16 @@ func (s *Service) areDataColumnsAvailable(
 	}
 
 	// All columns to sample need to be available for the block to be considered available.
-	// https://github.com/ethereum/consensus-specs/blob/v1.5.0-alpha.10/specs/fulu/das-core.md#custody-sampling
 	nodeID := s.cfg.P2P.NodeID()
 
 	// Get the custody group sampling size for the node.
-	custodyGroupCount := s.cfg.P2P.CustodyGroupCount()
+	custodyGroupCount, err := s.cfg.P2P.CustodyGroupCount()
+	if err != nil {
+		return errors.Wrap(err, "custody group count")
+	}
 
 	// Compute the sampling size.
-	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/das-core.md#custody-sampling
+	// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/das-core.md#custody-sampling
 	samplingSize := max(samplesPerSlot, custodyGroupCount)
 
 	// Get the peer info for the node.

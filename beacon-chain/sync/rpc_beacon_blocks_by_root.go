@@ -93,7 +93,12 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 // If so, requests them and saves them to the storage.
 func (s *Service) requestAndSaveMissingDataColumnSidecars(block blocks.ROBlock) error {
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
-	custodyGroupCount := s.cfg.p2p.CustodyGroupCount()
+
+	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount()
+	if err != nil {
+		return errors.Wrap(err, "fetch custody group count from peer")
+	}
+
 	samplingSize := max(custodyGroupCount, samplesPerSlot)
 
 	nodeID := s.cfg.p2p.NodeID()

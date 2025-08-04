@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/network/forks"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	log "github.com/sirupsen/logrus"
 )
 
 // GetDepositContract retrieves deposit contract address and genesis fork version.
@@ -80,39 +82,108 @@ func GetSpec(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJson(w, &structs.GetSpecResponse{Data: data})
 }
 
-func prepareConfigSpec() (map[string]string, error) {
-	data := make(map[string]string)
+func convertValueForJSON(v reflect.Value, tag string) interface{} {
+	// Unwrap pointers / interfaces
+	for v.Kind() == reflect.Interface || v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			return nil
+		}
+		v = v.Elem()
+	}
+
+	switch v.Kind() {
+	// ===== Single byte → 0xAB =====
+	case reflect.Uint8:
+		return hexutil.Encode([]byte{uint8(v.Uint())})
+
+	// ===== Other unsigned numbers → "123" =====
+	case reflect.Uint, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return strconv.FormatUint(v.Uint(), 10)
+
+	// ===== Signed numbers → "123" =====
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return strconv.FormatInt(v.Int(), 10)
+
+	// ===== Raw bytes – encode to hex =====
+	case reflect.Slice:
+		if v.Type().Elem().Kind() == reflect.Uint8 {
+			return hexutil.Encode(v.Bytes())
+		}
+		fallthrough
+	case reflect.Array:
+		if v.Type().Elem().Kind() == reflect.Uint8 {
+			// Need a copy because v.Slice is illegal on arrays directly
+			tmp := make([]byte, v.Len())
+			reflect.Copy(reflect.ValueOf(tmp), v)
+			return hexutil.Encode(tmp)
+		}
+		// Generic slice/array handling
+		n := v.Len()
+		out := make([]interface{}, n)
+		for i := 0; i < n; i++ {
+			out[i] = convertValueForJSON(v.Index(i), tag)
+		}
+		return out
+
+	// ===== Struct =====
+	case reflect.Struct:
+		t := v.Type()
+		m := make(map[string]interface{}, v.NumField())
+		for i := 0; i < v.NumField(); i++ {
+			f := t.Field(i)
+			if !v.Field(i).CanInterface() {
+				continue // unexported
+			}
+			key := f.Tag.Get("json")
+			if key == "" || key == "-" {
+				key = f.Name
+			}
+			m[key] = convertValueForJSON(v.Field(i), tag)
+		}
+		return m
+
+	// ===== Default =====
+	default:
+		log.WithFields(log.Fields{
+			"fn":   "prepareConfigSpec",
+			"tag":  tag,
+			"kind": v.Kind().String(),
+			"type": v.Type().String(),
+		}).Error("Unsupported config field kind; value forwarded verbatim")
+		return v.Interface()
+	}
+}
+
+func prepareConfigSpec() (map[string]interface{}, error) {
+	data := make(map[string]interface{})
 	config := *params.BeaconConfig()
+
 	t := reflect.TypeOf(config)
 	v := reflect.ValueOf(config)
 
 	for i := 0; i < t.NumField(); i++ {
 		tField := t.Field(i)
-		_, isSpecField := tField.Tag.Lookup("spec")
-		if !isSpecField {
-			// Field should not be returned from API.
+		_, isSpec := tField.Tag.Lookup("spec")
+		if !isSpec {
+			continue
+		}
+		if shouldSkip(tField) {
 			continue
 		}
 
-		tagValue := strings.ToUpper(tField.Tag.Get("yaml"))
-		vField := v.Field(i)
-		switch vField.Kind() {
-		case reflect.Int:
-			data[tagValue] = strconv.FormatInt(vField.Int(), 10)
-		case reflect.Uint64:
-			data[tagValue] = strconv.FormatUint(vField.Uint(), 10)
-		case reflect.Slice:
-			data[tagValue] = hexutil.Encode(vField.Bytes())
-		case reflect.Array:
-			data[tagValue] = hexutil.Encode(reflect.ValueOf(&config).Elem().Field(i).Slice(0, vField.Len()).Bytes())
-		case reflect.String:
-			data[tagValue] = vField.String()
-		case reflect.Uint8:
-			data[tagValue] = hexutil.Encode([]byte{uint8(vField.Uint())})
-		default:
-			return nil, fmt.Errorf("unsupported config field type: %s", vField.Kind().String())
-		}
+		tag := strings.ToUpper(tField.Tag.Get("yaml"))
+		val := v.Field(i)
+		data[tag] = convertValueForJSON(val, tag)
 	}
 
 	return data, nil
+}
+
+func shouldSkip(tField reflect.StructField) bool {
+	// Dynamically skip blob schedule if Fulu is not yet scheduled.
+	if params.BeaconConfig().FuluForkEpoch == math.MaxUint64 &&
+		tField.Type == reflect.TypeOf(params.BeaconConfig().BlobSchedule) {
+		return true
+	}
+	return false
 }

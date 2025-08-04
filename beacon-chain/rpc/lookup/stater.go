@@ -44,9 +44,9 @@ type StateNotFoundError struct {
 }
 
 // NewStateNotFoundError creates a new error instance.
-func NewStateNotFoundError(stateRootsSize int) StateNotFoundError {
+func NewStateNotFoundError(stateRootsSize int, stateRoot []byte) StateNotFoundError {
 	return StateNotFoundError{
-		message: fmt.Sprintf("state not found in the last %d state roots", stateRootsSize),
+		message: fmt.Sprintf("state not found in the last %d state roots, looking for state root: %#x", stateRootsSize, stateRoot),
 	}
 }
 
@@ -221,7 +221,7 @@ func (p *BeaconDbStater) stateByRoot(ctx context.Context, stateRoot []byte) (sta
 		}
 	}
 
-	stateNotFoundErr := NewStateNotFoundError(len(headState.StateRoots()))
+	stateNotFoundErr := NewStateNotFoundError(len(headState.StateRoots()), stateRoot)
 	return nil, &stateNotFoundErr
 }
 

@@ -15,6 +15,94 @@ import (
 
 var nilFinalizedStateError = errors.New("finalized state is nil")
 
+func (s *Service) maintainCustodyInfo() {
+	const interval = 1 * time.Minute
+
+	async.RunEvery(s.ctx, interval, func() {
+		if err := s.updateCustodyInfoIfNeeded(); err != nil {
+			log.WithError(err).Error("Failed to update custody info")
+		}
+	})
+}
+
+func (s *Service) updateCustodyInfoIfNeeded() error {
+	const minimumPeerCount = 1
+
+	// Get our actual custody group count.
+	actualCustodyGrounpCount, err := s.cfg.p2p.CustodyGroupCount()
+	if err != nil {
+		return errors.Wrap(err, "p2p custody group count")
+	}
+
+	// Get our target custody group count.
+	targetCustodyGroupCount, err := s.custodyGroupCount()
+	if err != nil {
+		return errors.Wrap(err, "custody group count")
+	}
+
+	// If the actual custody group count is already equal to the target, skip the update.
+	if actualCustodyGrounpCount >= targetCustodyGroupCount {
+		return nil
+	}
+
+	// Check that all subscribed data column sidecars topics have at least `minimumPeerCount` peers.
+	topics := s.cfg.p2p.PubSub().GetTopics()
+	enoughPeers := true
+	for _, topic := range topics {
+		if !strings.Contains(topic, p2p.GossipDataColumnSidecarMessage) {
+			continue
+		}
+
+		if peers := s.cfg.p2p.PubSub().ListPeers(topic); len(peers) < minimumPeerCount {
+			// If a topic has fewer than the minimum required peers, log a warning.
+			log.WithFields(logrus.Fields{
+				"topic":            topic,
+				"peerCount":        len(peers),
+				"minimumPeerCount": minimumPeerCount,
+			}).Debug("Insufficient peers for data column sidecar topic to maintain custody count")
+			enoughPeers = false
+		}
+	}
+
+	if !enoughPeers {
+		return nil
+	}
+
+	headROBlock, err := s.cfg.chain.HeadBlock(s.ctx)
+	if err != nil {
+		return errors.Wrap(err, "head block")
+	}
+	headSlot := headROBlock.Block().Slot()
+
+	storedEarliestSlot, storedGroupCount, err := s.cfg.p2p.UpdateCustodyInfo(headSlot, targetCustodyGroupCount)
+	if err != nil {
+		return errors.Wrap(err, "p2p update custody info")
+	}
+
+	if _, _, err := s.cfg.beaconDB.UpdateCustodyInfo(s.ctx, storedEarliestSlot, storedGroupCount); err != nil {
+		return errors.Wrap(err, "beacon db update custody info")
+	}
+
+	return nil
+}
+
+// custodyGroupCount computes the custody group count based on the custody requirement,
+// the validators custody requirement, and whether the node is subscribed to all data subnets.
+func (s *Service) custodyGroupCount() (uint64, error) {
+	beaconConfig := params.BeaconConfig()
+
+	if flags.Get().SubscribeAllDataSubnets {
+		return beaconConfig.NumberOfCustodyGroups, nil
+	}
+
+	validatorsCustodyRequirement, err := s.validatorsCustodyRequirement()
+	if err != nil {
+		return 0, errors.Wrap(err, "validators custody requirement")
+	}
+
+	return max(beaconConfig.CustodyRequirement, validatorsCustodyRequirement), nil
+}
+
 // validatorsCustodyRequirements computes the custody requirements based on the
 // finalized state and the tracked validators.
 func (s *Service) validatorsCustodyRequirement() (uint64, error) {
@@ -39,87 +127,4 @@ func (s *Service) validatorsCustodyRequirement() (uint64, error) {
 	}
 
 	return result, nil
-}
-
-// custodyGroupCount computes the custody group count based on the custody requirement,
-// the validators custody requirement, and whether the node is subscribed to all data subnets.
-func (s *Service) custodyGroupCount() (uint64, error) {
-	beaconConfig := params.BeaconConfig()
-
-	if flags.Get().SubscribeAllDataSubnets {
-		return beaconConfig.NumberOfCustodyGroups, nil
-	}
-
-	validatorsCustodyRequirement, err := s.validatorsCustodyRequirement()
-	if err != nil {
-		return 0, errors.Wrap(err, "validators custody requirement")
-	}
-
-	return max(beaconConfig.CustodyRequirement, validatorsCustodyRequirement), nil
-}
-
-func (s *Service) maintainCustodyGroupCount() {
-	const (
-		interval         = 1 * time.Minute
-		minimumPeerCount = 1
-	)
-
-	async.RunEvery(s.ctx, interval, func() {
-		custodyGroupCount, err := s.custodyGroupCount()
-		if err != nil {
-			log.WithError(err).Error("Could not compute custody group count")
-			return
-		}
-
-		// Check that all subscribed data column sidecars topics have at least `minimumPeerCount` peers.
-		topics := s.cfg.p2p.PubSub().GetTopics()
-		enoughPeers := true
-		for _, topic := range topics {
-			if !strings.Contains(topic, p2p.GossipDataColumnSidecarMessage) {
-				continue
-			}
-
-			if peers := s.cfg.p2p.PubSub().ListPeers(topic); len(peers) < minimumPeerCount {
-				// If a topic has fewer than the minimum required peers, log a warning.
-				log.WithFields(logrus.Fields{
-					"topic":            topic,
-					"peerCount":        len(peers),
-					"minimumPeerCount": minimumPeerCount,
-				}).Debug("Insufficient peers for data column sidecar topic to maintain custody count")
-				enoughPeers = false
-			}
-		}
-
-		if !enoughPeers {
-			return
-		}
-
-		headROBlock, err := s.cfg.chain.HeadBlock(s.ctx)
-		if err != nil {
-			log.WithError(err).Error("Could not retrieve head block")
-			return
-		}
-		headSlot := headROBlock.Block().Slot()
-
-		earliestSlot, storedGroupCount, err := s.cfg.p2p.UpdateCustodyInfo(headSlot, custodyGroupCount)
-		if err != nil {
-			log.WithError(err).Error("Could not update custody info")
-			return
-		}
-
-		if storedGroupCount >= custodyGroupCount {
-			return
-		}
-
-		// Update the custody group count in the P2P service and the database.
-		if _, _, err := s.cfg.p2p.UpdateCustodyInfo(earliestSlot, storedGroupCount); err != nil {
-			log.WithError(err).Error("Could not update custody info")
-			return
-		}
-
-		if err := s.cfg.beaconDB.SaveCustodyGroupCount(s.ctx, custodyGroupCount); err != nil {
-			log.WithError(err).Error("Could not save custody group count")
-			return
-		}
-	})
 }

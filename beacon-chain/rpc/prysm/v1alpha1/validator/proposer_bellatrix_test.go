@@ -25,6 +25,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
 	v1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -156,7 +157,7 @@ func TestServer_setExecutionData(t *testing.T) {
 			HasConfigured: true,
 			Cfg:           &builderTest.Config{BeaconDB: beaconDB},
 		}
-		wb, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockBellatrix())
+		wb, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockCapella())
 		require.NoError(t, err)
 		chain := &blockchainTest.ChainService{ForkChoiceStore: doublylinkedtree.New(), Genesis: time.Now(), Block: wb}
 		vs.ForkchoiceFetcher = chain
@@ -973,7 +974,7 @@ func TestServer_getPayloadHeader(t *testing.T) {
 					return wb
 				}(),
 			},
-			err: "is different from head block version",
+			err: "builder bid response version: 3 is not compatible with head block version: 2 for epoch 1",
 		},
 		{
 			name: "different bid version during hard fork",
@@ -982,7 +983,7 @@ func TestServer_getPayloadHeader(t *testing.T) {
 			},
 			fetcher: &blockchainTest.ChainService{
 				Block: func() interfaces.ReadOnlySignedBeaconBlock {
-					wb, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockBellatrix())
+					wb, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockCapella())
 					require.NoError(t, err)
 					wb.SetSlot(primitives.Slot(fakeCapellaEpoch) * params.BeaconConfig().SlotsPerEpoch)
 					return wb
@@ -1004,6 +1005,86 @@ func TestServer_getPayloadHeader(t *testing.T) {
 				}(),
 			},
 			err: "incorrect header gas limit 30000000 != 31000000",
+		},
+		{
+			name: "electra bid with fulu head block - compatible",
+			mock: func() *builderTest.MockBuilderService {
+				// Create Electra bid
+				requests := &v1.ExecutionRequests{
+					Deposits: []*v1.DepositRequest{
+						{
+							Pubkey:                bytesutil.PadTo([]byte{byte('a')}, fieldparams.BLSPubkeyLength),
+							WithdrawalCredentials: bytesutil.PadTo([]byte{byte('b')}, fieldparams.RootLength),
+							Amount:                params.BeaconConfig().MinActivationBalance,
+							Signature:             bytesutil.PadTo([]byte{byte('c')}, fieldparams.BLSSignatureLength),
+							Index:                 0,
+						},
+					},
+					Withdrawals: []*v1.WithdrawalRequest{
+						{
+							SourceAddress:   bytesutil.PadTo([]byte{byte('d')}, common.AddressLength),
+							ValidatorPubkey: bytesutil.PadTo([]byte{byte('e')}, fieldparams.BLSPubkeyLength),
+							Amount:          params.BeaconConfig().MinActivationBalance,
+						},
+					},
+					Consolidations: []*v1.ConsolidationRequest{
+						{
+							SourceAddress: bytesutil.PadTo([]byte{byte('f')}, common.AddressLength),
+							SourcePubkey:  bytesutil.PadTo([]byte{byte('g')}, fieldparams.BLSPubkeyLength),
+							TargetPubkey:  bytesutil.PadTo([]byte{byte('h')}, fieldparams.BLSPubkeyLength),
+						},
+					},
+				}
+
+				electraBid := &ethpb.BuilderBidElectra{
+					Header: &v1.ExecutionPayloadHeaderDeneb{
+						FeeRecipient:     make([]byte, fieldparams.FeeRecipientLength),
+						StateRoot:        make([]byte, fieldparams.RootLength),
+						ReceiptsRoot:     make([]byte, fieldparams.RootLength),
+						LogsBloom:        make([]byte, fieldparams.LogsBloomLength),
+						PrevRandao:       make([]byte, fieldparams.RootLength),
+						BaseFeePerGas:    make([]byte, fieldparams.RootLength),
+						BlockHash:        make([]byte, fieldparams.RootLength),
+						TransactionsRoot: bytesutil.PadTo([]byte{1}, fieldparams.RootLength),
+						ParentHash:       params.BeaconConfig().ZeroHash[:],
+						Timestamp:        uint64(ti.Unix()),
+						BlockNumber:      2,
+						WithdrawalsRoot:  make([]byte, fieldparams.RootLength),
+						BlobGasUsed:      123,
+						ExcessBlobGas:    456,
+						GasLimit:         gasLimit,
+					},
+					Pubkey:             sk.PublicKey().Marshal(),
+					Value:              bytesutil.PadTo([]byte{1, 2, 3}, 32),
+					BlobKzgCommitments: [][]byte{bytesutil.PadTo([]byte{2}, fieldparams.BLSPubkeyLength)},
+					ExecutionRequests:  requests,
+				}
+
+				d := params.BeaconConfig().DomainApplicationBuilder
+				domain, err := signing.ComputeDomain(d, nil, nil)
+				require.NoError(t, err)
+				sr, err := signing.ComputeSigningRoot(electraBid, domain)
+				require.NoError(t, err)
+
+				sBidElectra := &ethpb.SignedBuilderBidElectra{
+					Message:   electraBid,
+					Signature: sk.Sign(sr[:]).Marshal(),
+				}
+
+				return &builderTest.MockBuilderService{
+					BidElectra: sBidElectra,
+				}
+			}(),
+			fetcher: &blockchainTest.ChainService{
+				Block: func() interfaces.ReadOnlySignedBeaconBlock {
+					// Create Fulu head block
+					wb, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockFulu())
+					require.NoError(t, err)
+					wb.SetSlot(primitives.Slot(params.BeaconConfig().BellatrixForkEpoch) * params.BeaconConfig().SlotsPerEpoch)
+					return wb
+				}(),
+			},
+			// Should succeed because Electra bids are compatible with Fulu head blocks
 		},
 	}
 	for _, tc := range tests {
@@ -1218,6 +1299,110 @@ func Test_expectedGasLimit(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := expectedGasLimit(tt.args.parentGasLimit, tt.args.targetGasLimit); got != tt.want {
 				t.Errorf("expectedGasLimit() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsVersionCompatible(t *testing.T) {
+
+	tests := []struct {
+		name             string
+		bidVersion       int
+		headBlockVersion int
+		want             bool
+	}{
+		{
+			name:             "Exact version match - Bellatrix",
+			bidVersion:       version.Bellatrix,
+			headBlockVersion: version.Bellatrix,
+			want:             true,
+		},
+		{
+			name:             "Exact version match - Capella",
+			bidVersion:       version.Capella,
+			headBlockVersion: version.Capella,
+			want:             true,
+		},
+		{
+			name:             "Exact version match - Deneb",
+			bidVersion:       version.Deneb,
+			headBlockVersion: version.Deneb,
+			want:             true,
+		},
+		{
+			name:             "Exact version match - Electra",
+			bidVersion:       version.Electra,
+			headBlockVersion: version.Electra,
+			want:             true,
+		},
+		{
+			name:             "Exact version match - Fulu",
+			bidVersion:       version.Fulu,
+			headBlockVersion: version.Fulu,
+			want:             true,
+		},
+		{
+			name:             "Electra bid with Fulu head block - Compatible",
+			bidVersion:       version.Electra,
+			headBlockVersion: version.Fulu,
+			want:             true,
+		},
+		{
+			name:             "Fulu bid with Electra head block - Not compatible",
+			bidVersion:       version.Fulu,
+			headBlockVersion: version.Electra,
+			want:             false,
+		},
+		{
+			name:             "Deneb bid with Electra head block - Not compatible",
+			bidVersion:       version.Deneb,
+			headBlockVersion: version.Electra,
+			want:             false,
+		},
+		{
+			name:             "Electra bid with Deneb head block - Not compatible",
+			bidVersion:       version.Electra,
+			headBlockVersion: version.Deneb,
+			want:             false,
+		},
+		{
+			name:             "Capella bid with Deneb head block - Not compatible",
+			bidVersion:       version.Capella,
+			headBlockVersion: version.Deneb,
+			want:             false,
+		},
+		{
+			name:             "Bellatrix bid with Capella head block - Not compatible",
+			bidVersion:       version.Bellatrix,
+			headBlockVersion: version.Capella,
+			want:             false,
+		},
+		{
+			name:             "Phase0 bid with Altair head block - Not compatible",
+			bidVersion:       version.Phase0,
+			headBlockVersion: version.Altair,
+			want:             false,
+		},
+		{
+			name:             "Deneb bid with Fulu head block - Not compatible",
+			bidVersion:       version.Deneb,
+			headBlockVersion: version.Fulu,
+			want:             false,
+		},
+		{
+			name:             "Capella bid with Fulu head block - Not compatible",
+			bidVersion:       version.Capella,
+			headBlockVersion: version.Fulu,
+			want:             false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isVersionCompatible(tt.bidVersion, tt.headBlockVersion)
+			if got != tt.want {
+				t.Errorf("isVersionCompatible(%d, %d) = %v, want %v", tt.bidVersion, tt.headBlockVersion, got, tt.want)
 			}
 		})
 	}

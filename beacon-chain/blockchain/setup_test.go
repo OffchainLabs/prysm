@@ -55,7 +55,7 @@ type mockBroadcaster struct {
 
 type mockAccessor struct {
 	mockBroadcaster
-	mockDataColumnsHandler
+	mockCustodyManager
 	p2pTesting.MockPeerManager
 }
 
@@ -99,28 +99,28 @@ func (mb *mockBroadcaster) BroadcastBLSChanges(_ context.Context, _ []*ethpb.Sig
 
 var _ p2p.Broadcaster = (*mockBroadcaster)(nil)
 
-// mockDataColumnsHandler is a mock implementation of p2p.DataColumnsHandler
-type mockDataColumnsHandler struct {
+// mockCustodyManager is a mock implementation of p2p.CustodyManager
+type mockCustodyManager struct {
 	mut                   sync.RWMutex
 	earliestAvailableSlot primitives.Slot
 	custodyGroupCount     uint64
 }
 
-func (dch *mockDataColumnsHandler) EarliestAvailableSlot() primitives.Slot {
+func (dch *mockCustodyManager) EarliestAvailableSlot() (primitives.Slot, error) {
 	dch.mut.RLock()
 	defer dch.mut.RUnlock()
 
-	return dch.earliestAvailableSlot
+	return dch.earliestAvailableSlot, nil
 }
 
-func (dch *mockDataColumnsHandler) CustodyGroupCount() uint64 {
+func (dch *mockCustodyManager) CustodyGroupCount() (uint64, error) {
 	dch.mut.RLock()
 	defer dch.mut.RUnlock()
 
-	return dch.custodyGroupCount
+	return dch.custodyGroupCount, nil
 }
 
-func (dch *mockDataColumnsHandler) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
+func (dch *mockCustodyManager) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
 	dch.mut.Lock()
 	defer dch.mut.Unlock()
 
@@ -130,11 +130,11 @@ func (dch *mockDataColumnsHandler) UpdateCustodyInfo(earliestAvailableSlot primi
 	return earliestAvailableSlot, custodyGroupCount, nil
 }
 
-func (dch *mockDataColumnsHandler) CustodyGroupCountFromPeer(peer.ID) uint64 {
+func (dch *mockCustodyManager) CustodyGroupCountFromPeer(peer.ID) uint64 {
 	return 0
 }
 
-var _ p2p.DataColumnsHandler = (*mockDataColumnsHandler)(nil)
+var _ p2p.CustodyManager = (*mockCustodyManager)(nil)
 
 type testServiceRequirements struct {
 	ctx     context.Context

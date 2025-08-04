@@ -50,7 +50,11 @@ func (s *Service) reconstructSaveBroadcastDataColumnSidecars(
 
 	// Retrieve our local node info.
 	nodeID := s.cfg.p2p.NodeID()
-	custodyGroupCount := s.cfg.p2p.CustodyGroupCount()
+	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount()
+	if err != nil {
+		return errors.Wrap(err, "custody group count")
+	}
+
 	samplingSize := max(custodyGroupCount, samplesPerSlot)
 	localNodeInfo, _, err := peerdas.Info(nodeID, samplingSize)
 	if err != nil {
@@ -158,7 +162,11 @@ func (s *Service) broadcastMissingDataColumnSidecars(
 	nodeID := s.cfg.p2p.NodeID()
 
 	// Retrieve the local node info.
-	custodyGroupCount := s.cfg.p2p.CustodyGroupCount()
+	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount()
+	if err != nil {
+		return errors.Wrap(err, "custody group count")
+	}
+
 	localNodeInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
 	if err != nil {
 		return errors.Wrap(err, "peerdas info")

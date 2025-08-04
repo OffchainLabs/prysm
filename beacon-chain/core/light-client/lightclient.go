@@ -750,7 +750,9 @@ func UpdateHasSupermajority(syncAggregate *pb.SyncAggregate) bool {
 	return numActiveParticipants*3 >= maxActiveParticipants*2
 }
 
-func IsBetterFinalityUpdate(newUpdate, oldUpdate interfaces.LightClientFinalityUpdate) bool {
+// IsFinalityUpdateValidForBroadcast checks if a finality update needs to be broadcasted.
+// It is also used to check if an incoming gossiped finality update is valid for forwarding and saving.
+func IsFinalityUpdateValidForBroadcast(newUpdate, oldUpdate interfaces.LightClientFinalityUpdate) bool {
 	if oldUpdate == nil {
 		return true
 	}
@@ -768,6 +770,35 @@ func IsBetterFinalityUpdate(newUpdate, oldUpdate interfaces.LightClientFinalityU
 	}
 	if newUpdateSlot == lastUpdateSlot && (lastHasSupermajority || !newHasSupermajority) {
 		return false
+	}
+	return true
+}
+
+// IsBetterFinalityUpdate checks if the new finality update is better than the old one for saving.
+// This does not concern broadcasting, but rather the decision of whether to save the new update.
+// For broadcasting checks, use IsFinalityUpdateValidForBroadcast.
+func IsBetterFinalityUpdate(newUpdate, oldUpdate interfaces.LightClientFinalityUpdate) bool {
+	if oldUpdate == nil {
+		return true
+	}
+
+	// Full nodes SHOULD provide the LightClientFinalityUpdate with the highest attested_header.beacon.slot (if multiple, highest signature_slot)
+	newFinalizedSlot := newUpdate.FinalizedHeader().Beacon().Slot
+	newAttestedSlot := newUpdate.AttestedHeader().Beacon().Slot
+
+	oldFinalizedSlot := oldUpdate.FinalizedHeader().Beacon().Slot
+	oldAttestedSlot := oldUpdate.AttestedHeader().Beacon().Slot
+
+	if newFinalizedSlot < oldFinalizedSlot {
+		return false
+	}
+	if newFinalizedSlot == oldFinalizedSlot {
+		if newAttestedSlot < oldAttestedSlot {
+			return false
+		}
+		if newAttestedSlot == oldAttestedSlot && newUpdate.SignatureSlot() <= oldUpdate.SignatureSlot() {
+			return false
+		}
 	}
 	return true
 }

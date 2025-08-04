@@ -392,7 +392,11 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []
 	}
 
 	// Fetch data column sidecars.
-	custodyGroupCount := f.p2p.CustodyGroupCount()
+	custodyGroupCount, err := f.p2p.CustodyGroupCount()
+	if err != nil {
+		return blobsPid, errors.Wrap(err, "fetch custody group count from peer")
+	}
+
 	samplingSize := max(custodyGroupCount, samplesPerSlot)
 	fetchedDataColumnsByRoot, err := prysmsync.RequestMissingDataColumnsByRange(ctx, f.clock, f.ctxMap, f.p2p, f.rateLimiter, samplingSize, f.dcs, dataColumnBlocks, batchSize)
 	if err != nil {
