@@ -2748,23 +2748,6 @@ func TestRetryHelperMethods(t *testing.T) {
 		// Clean up
 		client.activeRetries.Delete(blockRoot)
 	})
-
-	t.Run("isDataAlreadyAvailable returns false when no checker", func(t *testing.T) {
-		client.availabilityChecker = nil
-		isAvailable := client.isDataAlreadyAvailable(context.Background(), blockRoot, nil)
-		require.Equal(t, false, isAvailable)
-	})
-
-	t.Run("isDataAlreadyAvailable uses checker when available", func(t *testing.T) {
-		mockChecker := &mockDataAvailabilityChecker{
-			isAvailable: true,
-		}
-		client.availabilityChecker = mockChecker
-
-		isAvailable := client.isDataAlreadyAvailable(context.Background(), blockRoot, nil)
-		require.Equal(t, true, isAvailable)
-		require.Equal(t, true, mockChecker.called)
-	})
 }
 
 // Test ReconstructDataColumnSidecars with retry logic
@@ -2931,7 +2914,11 @@ func TestRetryTimeout(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 		defer cancel()
 
-		go client.retryReconstructDataColumnSidecars(ctx, signedB, r)
+		// Add the retry to the active retries map (this is normally done by ReconstructDataColumnSidecars)
+		_, loaded := client.activeRetries.LoadOrStore(r, cancel)
+		require.Equal(t, false, loaded)
+
+		go client.retryReconstructDataColumnSidecars(ctx, cancel, signedB, r)
 
 		// Wait a bit for the goroutine to start
 		time.Sleep(10 * time.Millisecond)
