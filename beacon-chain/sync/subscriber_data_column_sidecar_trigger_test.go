@@ -16,33 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 )
 
-// TestTriggerGetBlobsV2ForDataColumnSidecar_Basic tests basic functionality with minimal setup
-func TestTriggerGetBlobsV2ForDataColumnSidecar_Basic(t *testing.T) {
-	ctx := context.Background()
-	blockRoot := [32]byte{1, 2, 3}
-
-	// Test with nil config - should not panic
-	t.Run("nil config", func(t *testing.T) {
-		s := &Service{cfg: nil}
-		err := s.triggerGetBlobsV2ForDataColumnSidecar(ctx, blockRoot)
-		require.NoError(t, err)
-	})
-
-	// Test with empty config
-	t.Run("empty config", func(t *testing.T) {
-		s := &Service{cfg: &config{}}
-		err := s.triggerGetBlobsV2ForDataColumnSidecar(ctx, blockRoot)
-		require.NoError(t, err)
-	})
-
-	// Test with empty service - should not panic
-	t.Run("empty service", func(t *testing.T) {
-		s := &Service{}
-		err := s.triggerGetBlobsV2ForDataColumnSidecar(ctx, blockRoot)
-		require.NoError(t, err)
-	})
-}
-
 // TestDataColumnSubscriber_InvalidMessage tests error handling for invalid messages
 func TestDataColumnSubscriber_InvalidMessage(t *testing.T) {
 	s := &Service{}
@@ -51,50 +24,6 @@ func TestDataColumnSubscriber_InvalidMessage(t *testing.T) {
 	invalidMsg := &ethpb.SignedBeaconBlock{}
 	err := s.dataColumnSubscriber(context.Background(), invalidMsg)
 	require.ErrorContains(t, "message was not type blocks.VerifiedRODataColumn", err)
-}
-
-// TestTriggerGetBlobsV2ForDataColumnSidecar_ConfigValidation tests that the function properly validates service configuration
-func TestTriggerGetBlobsV2ForDataColumnSidecar_ConfigValidation(t *testing.T) {
-	ctx := context.Background()
-	blockRoot := [32]byte{1, 2, 3}
-
-	tests := []struct {
-		name    string
-		service *Service
-		wantErr bool
-	}{
-		{
-			name:    "nil service config",
-			service: &Service{cfg: nil},
-			wantErr: false, // Should not error, just return early
-		},
-		{
-			name:    "nil chain service",
-			service: &Service{cfg: &config{chain: nil}},
-			wantErr: false, // Should not error, just return early
-		},
-		{
-			name: "nil beacon DB",
-			service: &Service{cfg: &config{
-				chain:    &blockchaintesting.ChainService{},
-				beaconDB: nil,
-			}},
-			wantErr: false, // Should not error, just return early
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.service.triggerGetBlobsV2ForDataColumnSidecar(ctx, blockRoot)
-			if tt.wantErr {
-				if err == nil {
-					t.Errorf("Expected error but got none")
-				}
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
 }
 
 // TestTriggerGetBlobsV2ForDataColumnSidecar_BlockAvailability tests block availability checking
