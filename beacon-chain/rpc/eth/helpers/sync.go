@@ -3,15 +3,18 @@ package helpers
 import (
 	"bytes"
 	"context"
+	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/lookup"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
@@ -127,7 +130,7 @@ func isStateRootOptimistic(
 ) (bool, error) {
 	st, err := stateFetcher.State(ctx, stateId)
 	if err != nil {
-		return true, errors.Wrap(err, "could not fetch state")
+		return true, lookup.NewFetchStateError(err)
 	}
 	if st.Slot() == chainInfo.HeadSlot() {
 		return optimisticModeFetcher.IsOptimistic(ctx)
@@ -151,4 +154,15 @@ func isStateRootOptimistic(
 	}
 	// No block matching requested state root, return true.
 	return true, nil
+}
+
+// HandleIsOptimisticError adds more fine grained handling of the IsOptimistic function's error and sets the error in the response writer
+func HandleIsOptimisticError(w http.ResponseWriter, err error) {
+	var fetchErr *lookup.FetchStateError
+	if errors.As(err, &fetchErr) {
+		shared.WriteStateFetchError(w, err)
+		return
+	}
+	httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+	return
 }
