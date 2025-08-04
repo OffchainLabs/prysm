@@ -124,4 +124,3 @@ func WithVerifierWaiter(v *verification.InitializerWaiter) Option {
 		return nil
 	}
 }
-
