@@ -684,7 +684,6 @@ func (s *Service) isDataAvailable(
 	return nil
 }
 
-
 // areDataColumnsAvailable blocks until all data columns committed to in the block are available,
 // or an error or context cancellation occurs. A nil result means that the data availability check is successful.
 func (s *Service) areDataColumnsAvailable(
