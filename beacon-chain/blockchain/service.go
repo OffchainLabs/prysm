@@ -34,10 +34,10 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
@@ -529,7 +529,7 @@ func (s *Service) IsDataAvailable(ctx context.Context, blockRoot [32]byte, signe
 
 	blockVersion := block.Version()
 	var err error
-	
+
 	if blockVersion >= version.Fulu {
 		err = s.areDataColumnsImmediatelyAvailable(ctx, blockRoot, block)
 	} else if blockVersion >= version.Deneb {
