@@ -65,15 +65,10 @@ func TestReconstructDataColumns(t *testing.T) {
 		err := storage.Save(verifiedRoDataColumns[:minimumCount])
 		require.NoError(t, err)
 
-		custodyInfo := &peerdas.CustodyInfo{}
-		custodyInfo.TargetGroupCount.SetValidatorsCustodyRequirement(cgc)
-		custodyInfo.ToAdvertiseGroupCount.Set(cgc)
-
 		service := NewService(
 			ctx,
 			WithP2P(p2ptest.NewTestP2P(t)),
 			WithDataColumnStorage(storage),
-			WithCustodyInfo(custodyInfo),
 			WithChainService(&mockChain.ChainService{}),
 		)
 
@@ -121,14 +116,9 @@ func TestBroadcastMissingDataColumnSidecars(t *testing.T) {
 	slot, proposerIndex := block.Slot(), block.ProposerIndex()
 
 	t.Run("no missing sidecars", func(t *testing.T) {
-		custodyInfo := &peerdas.CustodyInfo{}
-		custodyInfo.TargetGroupCount.SetValidatorsCustodyRequirement(cgc)
-		custodyInfo.ToAdvertiseGroupCount.Set(cgc)
-
 		service := NewService(
 			ctx,
 			WithP2P(p2ptest.NewTestP2P(t)),
-			WithCustodyInfo(custodyInfo),
 		)
 
 		for _, index := range [...]uint64{1, 17, 19, 42, 75, 87, 102, 117} {
@@ -141,10 +131,6 @@ func TestBroadcastMissingDataColumnSidecars(t *testing.T) {
 	})
 
 	t.Run("some missing sidecars", func(t *testing.T) {
-		custodyInfo := &peerdas.CustodyInfo{}
-		custodyInfo.TargetGroupCount.SetValidatorsCustodyRequirement(cgc)
-		custodyInfo.ToAdvertiseGroupCount.Set(cgc)
-
 		toSave := make([]blocks.VerifiedRODataColumn, 0, 2)
 		for _, index := range [...]uint64{42, 87} {
 			toSave = append(toSave, verifiedRoDataColumns[index])
@@ -158,9 +144,10 @@ func TestBroadcastMissingDataColumnSidecars(t *testing.T) {
 		service := NewService(
 			ctx,
 			WithP2P(p2p),
-			WithCustodyInfo(custodyInfo),
 			WithDataColumnStorage(storage),
 		)
+		_, _, err = service.cfg.p2p.UpdateCustodyInfo(0, cgc)
+		require.NoError(t, err)
 
 		for _, index := range [...]uint64{1, 17, 19, 102, 117} { // 42, 75 and 87 are missing
 			key := computeCacheKey(slot, proposerIndex, index)
@@ -186,6 +173,5 @@ func TestBroadcastMissingDataColumnSidecars(t *testing.T) {
 		}
 
 		require.Equal(t, true, p2p.BroadcastCalled.Load())
-
 	})
 }

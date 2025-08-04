@@ -32,5 +32,5 @@ func TestResume(t *testing.T) {
 	require.DeepSSZEqual(t, beaconState.ToProtoUnsafe(), resumeState.ToProtoUnsafe())
 	assert.Equal(t, params.BeaconConfig().SlotsPerEpoch, service.finalizedInfo.slot, "Did not get watned slot")
 	assert.Equal(t, service.finalizedInfo.root, root, "Did not get wanted root")
-	assert.NotNil(t, service.finalizedState(), "Wanted a non nil finalized state")
+	assert.NotNil(t, service.FinalizedState(), "Wanted a non nil finalized state")
 }

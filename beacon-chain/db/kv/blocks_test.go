@@ -1,6 +1,7 @@
 package kv
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -1326,4 +1327,87 @@ func TestStore_RegistrationsByValidatorID(t *testing.T) {
 	_, err = db.RegistrationByValidatorID(ctx, 3)
 	want := errors.Wrap(ErrNotFoundFeeRecipient, "validator id 3")
 	require.Equal(t, want.Error(), err.Error())
+}
+
+// Block creates a phase0 beacon block at the specified slot and saves it to the database.
+func createAndSaveBlock(t *testing.T, ctx context.Context, db *Store, slot primitives.Slot) {
+	block := util.NewBeaconBlock()
+	block.Block.Slot = slot
+
+	wrappedBlock, err := blocks.NewSignedBeaconBlock(block)
+	require.NoError(t, err)
+	require.NoError(t, db.SaveBlock(ctx, wrappedBlock))
+}
+
+func TestStore_EarliestSlot(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("empty database returns ErrNotFound", func(t *testing.T) {
+		db := setupDB(t)
+
+		slot, err := db.EarliestSlot(ctx)
+		require.ErrorIs(t, err, ErrNotFound)
+		assert.Equal(t, primitives.Slot(0), slot)
+	})
+
+	t.Run("database with only genesis block", func(t *testing.T) {
+		db := setupDB(t)
+
+		// Create and save genesis block (slot 0)
+		createAndSaveBlock(t, ctx, db, 0)
+
+		slot, err := db.EarliestSlot(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, primitives.Slot(0), slot)
+	})
+
+	t.Run("database with genesis and blocks in genesis epoch", func(t *testing.T) {
+		db := setupDB(t)
+		slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+
+		// Create and save genesis block (slot 0)
+		createAndSaveBlock(t, ctx, db, 0)
+
+		// Create and save a block in the genesis epoch
+		createAndSaveBlock(t, ctx, db, primitives.Slot(slotsPerEpoch-1))
+
+		slot, err := db.EarliestSlot(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, primitives.Slot(0), slot)
+	})
+
+	t.Run("database with genesis and blocks beyond genesis epoch", func(t *testing.T) {
+		db := setupDB(t)
+		slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+
+		// Create and save genesis block (slot 0)
+		createAndSaveBlock(t, ctx, db, 0)
+
+		// Create and save a block beyond the genesis epoch
+		nextEpochSlot := primitives.Slot(slotsPerEpoch)
+		createAndSaveBlock(t, ctx, db, nextEpochSlot)
+
+		slot, err := db.EarliestSlot(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, nextEpochSlot, slot)
+	})
+
+	t.Run("database starting from checkpoint (non-zero earliest slot)", func(t *testing.T) {
+		db := setupDB(t)
+		slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+
+		// Simulate starting from a checkpoint by creating blocks starting from a later slot
+		checkpointSlot := primitives.Slot(slotsPerEpoch * 10) // 10 epochs later
+		nextEpochSlot := checkpointSlot + slotsPerEpoch
+
+		// Create and save first block at checkpoint slot
+		createAndSaveBlock(t, ctx, db, checkpointSlot)
+
+		// Create and save another block in the next epoch
+		createAndSaveBlock(t, ctx, db, nextEpochSlot)
+
+		slot, err := db.EarliestSlot(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, nextEpochSlot, slot)
+	})
 }
