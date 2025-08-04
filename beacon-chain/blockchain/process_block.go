@@ -659,29 +659,6 @@ func (s *Service) isDataAvailable(
 	return nil
 }
 
-// isDataImmediatelyAvailable checks if all required data is currently available in the database
-// without waiting for missing data. Returns nil if all data is available, error otherwise.
-func (s *Service) isDataImmediatelyAvailable(
-	ctx context.Context,
-	root [fieldparams.RootLength]byte,
-	signedBlock interfaces.ReadOnlySignedBeaconBlock,
-) error {
-	block := signedBlock.Block()
-	if block == nil {
-		return errors.New("invalid nil beacon block")
-	}
-
-	blockVersion := block.Version()
-	if blockVersion >= version.Fulu {
-		return s.areDataColumnsImmediatelyAvailable(ctx, root, block)
-	}
-
-	if blockVersion >= version.Deneb {
-		return s.areBlobsImmediatelyAvailable(ctx, root, block)
-	}
-
-	return nil
-}
 
 // areDataColumnsAvailable blocks until all data columns committed to in the block are available,
 // or an error or context cancellation occurs. A nil result means that the data availability check is successful.

@@ -36,6 +36,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -591,8 +592,20 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 // IsDataAvailable implements the DataAvailabilityChecker interface for use by the execution service.
 // It checks if all required blob and data column data is immediately available in the database without waiting.
 func (s *Service) IsDataAvailable(ctx context.Context, blockRoot [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) (bool, error) {
-	// Use non-blocking immediate availability check
-	err := s.isDataImmediatelyAvailable(ctx, blockRoot, signedBlock)
+	block := signedBlock.Block()
+	if block == nil {
+		return false, errors.New("invalid nil beacon block")
+	}
+
+	blockVersion := block.Version()
+	var err error
+	
+	if blockVersion >= version.Fulu {
+		err = s.areDataColumnsImmediatelyAvailable(ctx, blockRoot, block)
+	} else if blockVersion >= version.Deneb {
+		err = s.areBlobsImmediatelyAvailable(ctx, blockRoot, block)
+	}
+
 	if err != nil {
 		// If there's an error, data is not immediately available
 		return false, err
