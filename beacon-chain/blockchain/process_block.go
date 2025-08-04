@@ -962,7 +962,10 @@ func (s *Service) areDataColumnsImmediatelyAvailable(
 	nodeID := s.cfg.P2P.NodeID()
 
 	// Get the custody group sampling size for the node.
-	custodyGroupCount := s.cfg.P2P.CustodyGroupCount()
+	custodyGroupCount, err := s.cfg.P2P.CustodyGroupCount()
+	if err != nil {
+		return errors.Wrap(err, "custody group count error")
+	}
 
 	// Compute the sampling size.
 	samplingSize := max(samplesPerSlot, custodyGroupCount)
