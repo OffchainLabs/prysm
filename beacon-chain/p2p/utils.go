@@ -123,7 +123,7 @@ func privKeyFromFile(path string) (*ecdsa.PrivateKey, error) {
 }
 
 // Retrieves metadata sequence number from DB and returns a Metadata(V0) object
-func metaDataFromDB(ctx context.Context, db db.ReadOnlyDatabase) (metadata.Metadata, error) {
+func metaDataFromDB(ctx context.Context, db db.ReadOnlyDatabaseWithSeqNum) (metadata.Metadata, error) {
 	seqNum, err := db.MetadataSeqNum(ctx)
 	// We can proceed if error is `kv.ErrNotFoundMetadataSeqNum` by using default value of 0 for sequence number.
 	if err != nil && !errors.Is(err, kv.ErrNotFoundMetadataSeqNum) {

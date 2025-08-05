@@ -69,6 +69,17 @@ type ReadOnlyDatabase interface {
 	MetadataSeqNum(ctx context.Context) (uint64, error)
 }
 
+// ReadOnlyDatabaseWithSeqNum defines a struct which has read access to database methods
+// and also has read/write access to the p2p metadata sequence number.
+// Only used for the p2p service.
+type ReadOnlyDatabaseWithSeqNum interface {
+	ReadOnlyDatabase
+
+	// P2P Metadata operations.
+	MetadataSeqNum(ctx context.Context) (uint64, error)
+	SaveMetadataSeqNum(ctx context.Context, seqNum uint64) error
+}
+
 // NoHeadAccessDatabase defines a struct without access to chain head data.
 type NoHeadAccessDatabase interface {
 	ReadOnlyDatabase
