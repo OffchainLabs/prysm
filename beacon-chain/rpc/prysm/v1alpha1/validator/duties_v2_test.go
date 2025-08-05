@@ -559,3 +559,170 @@ func TestGetDutiesV2_SyncNotReady(t *testing.T) {
 	_, err := vs.GetDutiesV2(t.Context(), &ethpb.DutiesRequest{})
 	assert.ErrorContains(t, "Syncing to latest head", err)
 }
+
+func TestBuildValidatorAssignmentMap(t *testing.T) {
+	start := primitives.Slot(200)
+	bySlot := [][][]primitives.ValidatorIndex{
+		{{1, 2, 3}},        // slot 200, committee 0
+		{{7, 8, 9}},        // slot 201, committee 0  
+		{{4, 5}, {10, 11}}, // slot 202, committee 0 & 1
+	}
+
+	assignmentMap := buildValidatorAssignmentMap(bySlot, start)
+
+	// Test validator 8 assignment (slot 201, committee 0, position 1)
+	vIdx := primitives.ValidatorIndex(8)
+	got, exists := assignmentMap[vIdx]
+	assert.Equal(t, true, exists)
+	require.NotNil(t, got)
+	assert.Equal(t, start+1, got.AttesterSlot)
+	assert.Equal(t, primitives.CommitteeIndex(0), got.CommitteeIndex)
+	assert.Equal(t, uint64(3), got.CommitteeLength)
+	assert.Equal(t, uint64(1), got.ValidatorCommitteeIndex)
+
+	// Test validator 1 assignment (slot 200, committee 0, position 0)
+	vIdx1 := primitives.ValidatorIndex(1)
+	got1, exists1 := assignmentMap[vIdx1]
+	assert.Equal(t, true, exists1)
+	require.NotNil(t, got1)
+	assert.Equal(t, start, got1.AttesterSlot)
+	assert.Equal(t, primitives.CommitteeIndex(0), got1.CommitteeIndex)
+	assert.Equal(t, uint64(3), got1.CommitteeLength)
+	assert.Equal(t, uint64(0), got1.ValidatorCommitteeIndex)
+
+	// Test validator 10 assignment (slot 202, committee 1, position 0)
+	vIdx10 := primitives.ValidatorIndex(10)
+	got10, exists10 := assignmentMap[vIdx10]
+	assert.Equal(t, true, exists10)
+	require.NotNil(t, got10)
+	assert.Equal(t, start+2, got10.AttesterSlot)
+	assert.Equal(t, primitives.CommitteeIndex(1), got10.CommitteeIndex)
+	assert.Equal(t, uint64(2), got10.CommitteeLength)
+	assert.Equal(t, uint64(0), got10.ValidatorCommitteeIndex)
+
+	// Test non-existent validator
+	_, exists99 := assignmentMap[primitives.ValidatorIndex(99)]
+	assert.Equal(t, false, exists99)
+
+	// Verify that we get the same results as the linear search
+	for _, committees := range bySlot {
+		for _, committee := range committees {
+			for _, validatorIdx := range committee {
+				linearResult := helpers.AssignmentForValidator(bySlot, start, validatorIdx)
+				mapResult, mapExists := assignmentMap[validatorIdx]
+				assert.Equal(t, true, mapExists)
+				require.DeepEqual(t, linearResult, mapResult)
+			}
+		}
+	}
+}
+
+func TestGetValidatorAssignment_WithAssignmentMap(t *testing.T) {
+	start := primitives.Slot(100)
+	bySlot := [][][]primitives.ValidatorIndex{
+		{{1, 2, 3}},
+		{{4, 5, 6}},
+	}
+
+	// Test with pre-built assignment map (large request scenario)
+	meta := &metadata{
+		startSlot:              start,
+		committeesBySlot:       bySlot,
+		validatorAssignmentMap: buildValidatorAssignmentMap(bySlot, start),
+	}
+
+	vs := &Server{}
+	
+	// Test existing validator (validator 2 is at position 1 in the committee, not position 2)
+	assignment := vs.getValidatorAssignment(meta, primitives.ValidatorIndex(2))
+	require.NotNil(t, assignment)
+	assert.Equal(t, start, assignment.AttesterSlot)
+	assert.Equal(t, primitives.CommitteeIndex(0), assignment.CommitteeIndex)
+	assert.Equal(t, uint64(1), assignment.ValidatorCommitteeIndex)
+
+	// Test non-existent validator should return empty assignment
+	assignment = vs.getValidatorAssignment(meta, primitives.ValidatorIndex(99))
+	require.NotNil(t, assignment)
+	assert.Equal(t, primitives.Slot(0), assignment.AttesterSlot)
+	assert.Equal(t, primitives.CommitteeIndex(0), assignment.CommitteeIndex)
+}
+
+func TestGetValidatorAssignment_WithoutAssignmentMap(t *testing.T) {
+	start := primitives.Slot(100)
+	bySlot := [][][]primitives.ValidatorIndex{
+		{{1, 2, 3}},
+		{{4, 5, 6}},
+	}
+
+	// Test without assignment map (small request scenario)
+	meta := &metadata{
+		startSlot:              start,
+		committeesBySlot:       bySlot,
+		validatorAssignmentMap: nil, // No map - should use linear search
+	}
+
+	vs := &Server{}
+	
+	// Test existing validator
+	assignment := vs.getValidatorAssignment(meta, primitives.ValidatorIndex(5))
+	require.NotNil(t, assignment)
+	assert.Equal(t, start+1, assignment.AttesterSlot)
+	assert.Equal(t, primitives.CommitteeIndex(0), assignment.CommitteeIndex)
+	assert.Equal(t, uint64(1), assignment.ValidatorCommitteeIndex)
+
+	// Test non-existent validator should return empty assignment
+	assignment = vs.getValidatorAssignment(meta, primitives.ValidatorIndex(99))
+	require.NotNil(t, assignment)
+	assert.Equal(t, primitives.Slot(0), assignment.AttesterSlot)
+	assert.Equal(t, primitives.CommitteeIndex(0), assignment.CommitteeIndex)
+}
+
+func TestLoadMetadata_ThresholdBehavior(t *testing.T) {
+	state, _ := util.DeterministicGenesisState(t, 128)
+	epoch := primitives.Epoch(0)
+
+	tests := []struct {
+		name                    string
+		numValidators          int
+		expectAssignmentMap    bool
+	}{
+		{
+			name:                    "Small request - below threshold",
+			numValidators:          100,
+			expectAssignmentMap:    false,
+		},
+		{
+			name:                    "Large request - at threshold",
+			numValidators:          validatorLookupThreshold,
+			expectAssignmentMap:    true,
+		},
+		{
+			name:                    "Large request - above threshold", 
+			numValidators:          validatorLookupThreshold + 1000,
+			expectAssignmentMap:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			meta, err := loadMetadata(t.Context(), state, epoch, tt.numValidators)
+			require.NoError(t, err)
+			require.NotNil(t, meta)
+
+			if tt.expectAssignmentMap {
+				require.NotNil(t, meta.validatorAssignmentMap, "Expected assignment map to be built for large requests")
+				assert.Equal(t, true, len(meta.validatorAssignmentMap) > 0, "Assignment map should not be empty")
+			} else {
+				// For small requests, the map should be nil (not initialized)
+				if meta.validatorAssignmentMap != nil {
+					t.Errorf("Expected no assignment map for small requests, got: %v", meta.validatorAssignmentMap)
+				}
+			}
+
+			// Common fields should always be set
+			assert.Equal(t, true, meta.committeesAtSlot > 0)
+			require.NotNil(t, meta.committeesBySlot)
+			assert.Equal(t, true, len(meta.committeesBySlot) > 0)
+		})
+	}
+}

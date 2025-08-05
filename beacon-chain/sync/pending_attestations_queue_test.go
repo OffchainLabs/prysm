@@ -738,6 +738,90 @@ func TestSavePendingAtts_BeyondLimit(t *testing.T) {
 	assert.Equal(t, 0, len(s.blkRootToPendingAtts[r2]), "Saved pending atts")
 }
 
+func TestProcessPendingAtts_BlockNotInForkChoice(t *testing.T) {
+	hook := logTest.NewGlobal()
+	db := dbtest.SetupDB(t)
+	p1 := p2ptest.NewTestP2P(t)
+	validators := uint64(256)
+
+	beaconState, privKeys := util.DeterministicGenesisState(t, validators)
+
+	sb := util.NewBeaconBlock()
+	util.SaveBlock(t, t.Context(), db, sb)
+	root, err := sb.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	aggBits := bitfield.NewBitlist(8)
+	aggBits.SetBitAt(1, true)
+	att := &ethpb.Attestation{
+		Data: &ethpb.AttestationData{
+			BeaconBlockRoot: root[:],
+			Source:          &ethpb.Checkpoint{Epoch: 0, Root: bytesutil.PadTo([]byte("hello-world"), 32)},
+			Target:          &ethpb.Checkpoint{Epoch: 0, Root: root[:]},
+		},
+		AggregationBits: aggBits,
+	}
+
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
+	assert.NoError(t, err)
+	attestingIndices, err := attestation.AttestingIndices(att, committee)
+	require.NoError(t, err)
+	attesterDomain, err := signing.Domain(beaconState.Fork(), 0, params.BeaconConfig().DomainBeaconAttester, beaconState.GenesisValidatorsRoot())
+	require.NoError(t, err)
+	hashTreeRoot, err := signing.ComputeSigningRoot(att.Data, attesterDomain)
+	assert.NoError(t, err)
+	for _, i := range attestingIndices {
+		att.Signature = privKeys[i].Sign(hashTreeRoot[:]).Marshal()
+	}
+
+	aggregateAndProof := &ethpb.AggregateAttestationAndProof{
+		Aggregate: att,
+	}
+
+	require.NoError(t, beaconState.SetGenesisTime(time.Now()))
+
+	// Mock chain service that returns false for InForkchoice
+	chain := &mock.ChainService{Genesis: time.Now(),
+		State: beaconState,
+		FinalizedCheckPoint: &ethpb.Checkpoint{
+			Root:  aggregateAndProof.Aggregate.Data.BeaconBlockRoot,
+			Epoch: 0,
+		},
+		// Set NotFinalized to true so InForkchoice returns false
+		NotFinalized: true,
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	r := &Service{
+		ctx: ctx,
+		cfg: &config{
+			p2p:      p1,
+			beaconDB: db,
+			chain:    chain,
+			clock:    startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+			attPool:  attestations.NewPool(),
+		},
+		blkRootToPendingAtts: make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
+	}
+
+	s, err := util.NewBeaconState()
+	require.NoError(t, err)
+	require.NoError(t, r.cfg.beaconDB.SaveState(t.Context(), s, root))
+
+	// Add pending attestation
+	r.blkRootToPendingAtts[root] = []ethpb.SignedAggregateAttAndProof{&ethpb.SignedAggregateAttestationAndProof{Message: aggregateAndProof}}
+	
+	// Process pending attestations - should not process because block is not in fork choice
+	require.NoError(t, r.processPendingAtts(t.Context()))
+
+	// Verify attestations were not processed (should still be pending)
+	assert.Equal(t, 1, len(r.blkRootToPendingAtts[root]), "Attestations should still be pending")
+	assert.Equal(t, 0, len(r.cfg.attPool.UnaggregatedAttestations()), "Should not save attestation when block not in fork choice")
+	assert.Equal(t, 0, len(r.cfg.attPool.AggregatedAttestations()), "Should not save attestation when block not in fork choice")
+	require.LogsDoNotContain(t, hook, "Verified and saved pending attestations to pool")
+}
+
 func Test_attsAreEqual_Committee(t *testing.T) {
 	t.Run("Phase 0 equal", func(t *testing.T) {
 		att1 := &ethpb.SignedAggregateAttestationAndProof{
