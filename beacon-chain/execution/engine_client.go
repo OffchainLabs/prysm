@@ -1135,7 +1135,6 @@ func (s *Service) hasActiveRetry(blockRoot [fieldparams.RootLength]byte) bool {
 	return exists
 }
 
-
 // wrapWithBlockRoot returns a new error with the given block root.
 func wrapWithBlockRoot(err error, blockRoot [32]byte, message string) error {
 	return errors.Wrap(err, fmt.Sprintf("%s for block %#x", message, blockRoot))
