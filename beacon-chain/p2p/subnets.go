@@ -387,8 +387,7 @@ func (s *Service) updateSubnetRecordWithMetadata(bitV bitfield.Bitvector64) erro
 		Attnets:   bitV,
 	})
 
-	err := s.saveSequenceNumberIfNeeded()
-	if err != nil {
+	if err := s.saveSequenceNumberIfNeeded(); err != nil {
 		return fmt.Errorf(errSavingSequenceNumber, err)
 	}
 	return nil
@@ -421,8 +420,7 @@ func (s *Service) updateSubnetRecordWithMetadataV2(
 		Syncnets:  bitVSync,
 	})
 
-	err := s.saveSequenceNumberIfNeeded()
-	if err != nil {
+	if err := s.saveSequenceNumberIfNeeded(); err != nil {
 		return fmt.Errorf(errSavingSequenceNumber, err)
 	}
 	return nil
@@ -454,8 +452,7 @@ func (s *Service) updateSubnetRecordWithMetadataV3(
 		CustodyGroupCount: custodyGroupCount,
 	})
 
-	err := s.saveSequenceNumberIfNeeded()
-	if err != nil {
+	if err := s.saveSequenceNumberIfNeeded(); err != nil {
 		return fmt.Errorf(errSavingSequenceNumber, err)
 	}
 	return nil
@@ -470,8 +467,7 @@ func (s *Service) saveSequenceNumberIfNeeded() error {
 		return nil
 	}
 
-	ctx := context.Background()
-	return s.cfg.DB.SaveMetadataSeqNum(ctx, s.metaData.SequenceNumber())
+	return s.cfg.DB.SaveMetadataSeqNum(s.ctx, s.metaData.SequenceNumber())
 }
 
 func initializePersistentSubnets(id enode.ID, epoch primitives.Epoch) error {
