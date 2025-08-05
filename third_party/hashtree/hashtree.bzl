@@ -14,6 +14,7 @@ def hashtree_dependencies():
             "https://github.com/OffchainLabs/hashtree/archive/main.tar.gz",
         ],
         build_file = "@prysm//third_party/hashtree:hashtree_source.BUILD",
+        integrity = "sha256-FLfalJ7at89Tgm/XnZ90zRxjYqkBmv2dD418uhfVvYc=",
     )
 
 def _maybe(repo_rule, name, **kwargs):
