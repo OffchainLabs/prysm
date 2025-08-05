@@ -25,6 +25,7 @@ go_library(
         "//beacon-chain/forkchoice:go_default_library",
         "//beacon-chain/forkchoice/doubly-linked-tree:go_default_library",
         "//beacon-chain/operations/attestations:go_default_library",
+        "//beacon-chain/p2p/testing:go_default_library",
         "//beacon-chain/startup:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//beacon-chain/state/state-native:go_default_library",

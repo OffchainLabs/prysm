@@ -114,6 +114,7 @@ func TestService_Start_OnlyStartsOnce(t *testing.T) {
 	s, err := NewService(t.Context(), cfg)
 	require.NoError(t, err)
 	s.dv5Listener = &mockListener{}
+	s.custodyInfo = &custodyInfo{}
 	exitRoutine := make(chan bool)
 	go func() {
 		s.Start()
@@ -211,6 +212,7 @@ func TestListenForNewNodes(t *testing.T) {
 		cfg:                   cfg,
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: gvr[:],
+		custodyInfo:           &custodyInfo{},
 	}
 
 	bootListener, err := s.createListener(ipAddr, pkey)
@@ -252,6 +254,7 @@ func TestListenForNewNodes(t *testing.T) {
 			cfg:                   cfg,
 			genesisTime:           genesisTime,
 			genesisValidatorsRoot: gvr[:],
+			custodyInfo:           &custodyInfo{},
 		}
 
 		listener, err := s.startDiscoveryV5(ipAddr, pkey)
@@ -281,6 +284,7 @@ func TestListenForNewNodes(t *testing.T) {
 
 	s, err = NewService(t.Context(), cfg)
 	require.NoError(t, err)
+	s.custodyInfo = &custodyInfo{}
 
 	go s.Start()
 

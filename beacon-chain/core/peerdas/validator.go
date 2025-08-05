@@ -8,7 +8,7 @@ import (
 )
 
 // ValidatorsCustodyRequirement returns the number of custody groups regarding the validator indices attached to the beacon node.
-// https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/validator.md#validator-custody
+// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/validator.md#validator-custody
 func ValidatorsCustodyRequirement(state beaconState.ReadOnlyBeaconState, validatorsIndex map[primitives.ValidatorIndex]bool) (uint64, error) {
 	totalNodeBalance := uint64(0)
 	for index := range validatorsIndex {
@@ -21,10 +21,10 @@ func ValidatorsCustodyRequirement(state beaconState.ReadOnlyBeaconState, validat
 	}
 
 	beaconConfig := params.BeaconConfig()
-	numberOfCustodyGroup := beaconConfig.NumberOfCustodyGroups
+	numberOfCustodyGroups := beaconConfig.NumberOfCustodyGroups
 	validatorCustodyRequirement := beaconConfig.ValidatorCustodyRequirement
 	balancePerAdditionalCustodyGroup := beaconConfig.BalancePerAdditionalCustodyGroup
 
 	count := totalNodeBalance / balancePerAdditionalCustodyGroup
-	return min(max(count, validatorCustodyRequirement), numberOfCustodyGroup), nil
+	return min(max(count, validatorCustodyRequirement), numberOfCustodyGroups), nil
 }

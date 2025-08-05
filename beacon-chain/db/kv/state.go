@@ -253,6 +253,10 @@ func (s *Store) saveStatesEfficientInternal(ctx context.Context, tx *bolt.Tx, bl
 			if err := s.processElectra(ctx, rawType, rt[:], bucket, valIdxBkt, validatorKeys[i]); err != nil {
 				return err
 			}
+		case *ethpb.BeaconStateFulu:
+			if err := s.processFulu(ctx, rawType, rt[:], bucket, valIdxBkt, validatorKeys[i]); err != nil {
+				return err
+			}
 		default:
 			return errors.New("invalid state type")
 		}
@@ -358,6 +362,24 @@ func (s *Store) processElectra(ctx context.Context, pbState *ethpb.BeaconStateEl
 		return err
 	}
 	encodedState := snappy.Encode(nil, append(ElectraKey, rawObj...))
+	if err := bucket.Put(rootHash, encodedState); err != nil {
+		return err
+	}
+	pbState.Validators = valEntries
+	if err := valIdxBkt.Put(rootHash, validatorKey); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Store) processFulu(ctx context.Context, pbState *ethpb.BeaconStateFulu, rootHash []byte, bucket, valIdxBkt *bolt.Bucket, validatorKey []byte) error {
+	valEntries := pbState.Validators
+	pbState.Validators = make([]*ethpb.Validator, 0)
+	rawObj, err := pbState.MarshalSSZ()
+	if err != nil {
+		return err
+	}
+	encodedState := snappy.Encode(nil, append(fuluKey, rawObj...))
 	if err := bucket.Put(rootHash, encodedState); err != nil {
 		return err
 	}

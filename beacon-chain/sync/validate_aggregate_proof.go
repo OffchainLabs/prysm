@@ -246,7 +246,7 @@ func (s *Service) validateBlockInAttestation(ctx context.Context, satt ethpb.Sig
 	blockRoot := bytesutil.ToBytes32(satt.AggregateAttestationAndProof().AggregateVal().GetData().BeaconBlockRoot)
 	if !s.hasBlockAndState(ctx, blockRoot) {
 		// A node doesn't have the block, it'll request from peer while saving the pending attestation to a queue.
-		s.savePendingAtt(satt)
+		s.savePendingAggregate(satt)
 		return false
 	}
 	return true

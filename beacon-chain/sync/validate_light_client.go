@@ -131,7 +131,7 @@ func (s *Service) validateLightClientFinalityUpdate(ctx context.Context, pid pee
 		return pubsub.ValidationIgnore, nil
 	}
 
-	if !lightclient.IsBetterFinalityUpdate(newUpdate, s.lcStore.LastFinalityUpdate()) {
+	if !lightclient.IsFinalityUpdateValidForBroadcast(newUpdate, s.lcStore.LastFinalityUpdate()) {
 		log.WithFields(logrus.Fields{
 			"attestedSlot":       fmt.Sprintf("%d", newUpdate.AttestedHeader().Beacon().Slot),
 			"signatureSlot":      fmt.Sprintf("%d", newUpdate.SignatureSlot()),

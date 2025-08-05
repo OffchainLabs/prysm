@@ -17,6 +17,13 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const (
+	// validatorLookupThreshold determines when to use full assignment map vs cached linear search.
+	// For requests with fewer validators, we use cached linear search to avoid the overhead
+	// of building a complete assignment map for all validators in the epoch.
+	validatorLookupThreshold = 3000
+)
+
 // GetDutiesV2 returns the duties assigned to a list of validators specified
 // in the request object.
 //
@@ -53,8 +60,7 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 	span.SetAttributes(trace.Int64Attribute("num_pubkeys", int64(len(req.PublicKeys))))
 	defer span.End()
 
-	// Load committee and proposer metadata
-	meta, err := loadDutiesMetadata(ctx, s, req.Epoch)
+	meta, err := loadDutiesMetadata(ctx, s, req.Epoch, len(req.PublicKeys))
 	if err != nil {
 		return nil, err
 	}
@@ -68,24 +74,22 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 			return nil, status.Errorf(codes.Aborted, "Could not continue fetching assignments: %v", ctx.Err())
 		}
 
-		idx, ok := s.ValidatorIndexByPubkey(bytesutil.ToBytes48(pubKey))
+		validatorIndex, ok := s.ValidatorIndexByPubkey(bytesutil.ToBytes48(pubKey))
 		if !ok {
-			// Unknown validator: still append placeholder duty with UNKNOWN_STATUS
-			validatorAssignments = append(validatorAssignments, &ethpb.DutiesV2Response_Duty{
+			unknownDuty := &ethpb.DutiesV2Response_Duty{
 				PublicKey: pubKey,
 				Status:    ethpb.ValidatorStatus_UNKNOWN_STATUS,
-			})
-			nextValidatorAssignments = append(nextValidatorAssignments, &ethpb.DutiesV2Response_Duty{
-				PublicKey: pubKey,
-				Status:    ethpb.ValidatorStatus_UNKNOWN_STATUS,
-			})
+			}
+			validatorAssignments = append(validatorAssignments, unknownDuty)
+			nextValidatorAssignments = append(nextValidatorAssignments, unknownDuty)
 			continue
 		}
 
-		meta.current.liteAssignment = helpers.AssignmentForValidator(meta.current.committeesBySlot, meta.current.startSlot, idx)
-		meta.next.liteAssignment = helpers.AssignmentForValidator(meta.next.committeesBySlot, meta.next.startSlot, idx)
+		meta.current.liteAssignment = vs.getValidatorAssignment(meta.current, validatorIndex)
 
-		assignment, nextAssignment, err := vs.buildValidatorDuty(pubKey, idx, s, req.Epoch, meta)
+		meta.next.liteAssignment = vs.getValidatorAssignment(meta.next, validatorIndex)
+
+		assignment, nextAssignment, err := vs.buildValidatorDuty(pubKey, validatorIndex, s, req.Epoch, meta)
 		if err != nil {
 			return nil, err
 		}
@@ -143,17 +147,18 @@ type dutiesMetadata struct {
 }
 
 type metadata struct {
-	committeesAtSlot uint64
-	proposalSlots    map[primitives.ValidatorIndex][]primitives.Slot
-	startSlot        primitives.Slot
-	committeesBySlot [][][]primitives.ValidatorIndex
-	liteAssignment   *helpers.LiteAssignment
+	committeesAtSlot       uint64
+	proposalSlots          map[primitives.ValidatorIndex][]primitives.Slot
+	startSlot              primitives.Slot
+	committeesBySlot       [][][]primitives.ValidatorIndex
+	validatorAssignmentMap map[primitives.ValidatorIndex]*helpers.LiteAssignment
+	liteAssignment         *helpers.LiteAssignment
 }
 
-func loadDutiesMetadata(ctx context.Context, s state.BeaconState, reqEpoch primitives.Epoch) (*dutiesMetadata, error) {
+func loadDutiesMetadata(ctx context.Context, s state.BeaconState, reqEpoch primitives.Epoch, numValidators int) (*dutiesMetadata, error) {
 	meta := &dutiesMetadata{}
 	var err error
-	meta.current, err = loadMetadata(ctx, s, reqEpoch)
+	meta.current, err = loadMetadata(ctx, s, reqEpoch, numValidators)
 	if err != nil {
 		return nil, err
 	}
@@ -163,14 +168,14 @@ func loadDutiesMetadata(ctx context.Context, s state.BeaconState, reqEpoch primi
 		return nil, status.Errorf(codes.Internal, "Could not compute proposer slots: %v", err)
 	}
 
-	meta.next, err = loadMetadata(ctx, s, reqEpoch+1)
+	meta.next, err = loadMetadata(ctx, s, reqEpoch+1, numValidators)
 	if err != nil {
 		return nil, err
 	}
 	return meta, nil
 }
 
-func loadMetadata(ctx context.Context, s state.BeaconState, reqEpoch primitives.Epoch) (*metadata, error) {
+func loadMetadata(ctx context.Context, s state.BeaconState, reqEpoch primitives.Epoch, numValidators int) (*metadata, error) {
 	meta := &metadata{}
 
 	if err := helpers.VerifyAssignmentEpoch(reqEpoch, s); err != nil {
@@ -193,7 +198,46 @@ func loadMetadata(ctx context.Context, s state.BeaconState, reqEpoch primitives.
 		return nil, err
 	}
 
+	if numValidators >= validatorLookupThreshold {
+		meta.validatorAssignmentMap = buildValidatorAssignmentMap(meta.committeesBySlot, meta.startSlot)
+	}
+
 	return meta, nil
+}
+
+// buildValidatorAssignmentMap creates a map from validator index to assignment for O(1) lookup.
+func buildValidatorAssignmentMap(
+	bySlot [][][]primitives.ValidatorIndex,
+	startSlot primitives.Slot,
+) map[primitives.ValidatorIndex]*helpers.LiteAssignment {
+	validatorToAssignment := make(map[primitives.ValidatorIndex]*helpers.LiteAssignment)
+
+	for relativeSlot, committees := range bySlot {
+		for cIdx, committee := range committees {
+			for pos, vIdx := range committee {
+				validatorToAssignment[vIdx] = &helpers.LiteAssignment{
+					AttesterSlot:            startSlot + primitives.Slot(relativeSlot),
+					CommitteeIndex:          primitives.CommitteeIndex(cIdx),
+					CommitteeLength:         uint64(len(committee)),
+					ValidatorCommitteeIndex: uint64(pos),
+				}
+			}
+		}
+	}
+	return validatorToAssignment
+}
+
+// getValidatorAssignment retrieves the assignment for a validator using either
+// the pre-built assignment map (for large requests) or linear search (for small requests).
+func (vs *Server) getValidatorAssignment(meta *metadata, validatorIndex primitives.ValidatorIndex) *helpers.LiteAssignment {
+	if meta.validatorAssignmentMap != nil {
+		if assignment, exists := meta.validatorAssignmentMap[validatorIndex]; exists {
+			return assignment
+		}
+		return &helpers.LiteAssignment{}
+	}
+
+	return helpers.AssignmentForValidator(meta.committeesBySlot, meta.startSlot, validatorIndex)
 }
 
 // buildValidatorDuty builds both current‑epoch and next‑epoch V2 duty objects

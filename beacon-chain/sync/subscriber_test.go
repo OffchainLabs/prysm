@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/async/abool"
+	"github.com/OffchainLabs/prysm/v6/async/event"
 	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
@@ -684,7 +685,7 @@ func TestSubscribe_ReceivesLCOptimisticUpdate(t *testing.T) {
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
 		chainStarted: abool.New(),
-		lcStore:      &lightClient.Store{},
+		lcStore:      lightClient.NewLightClientStore(d, &p2ptest.FakeP2P{}, new(event.Feed)),
 		subHandler:   newSubTopicHandler(),
 	}
 	topic := p2p.LightClientOptimisticUpdateTopicFormat
@@ -751,7 +752,7 @@ func TestSubscribe_ReceivesLCFinalityUpdate(t *testing.T) {
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
 		chainStarted: abool.New(),
-		lcStore:      &lightClient.Store{},
+		lcStore:      lightClient.NewLightClientStore(d, &p2ptest.FakeP2P{}, new(event.Feed)),
 		subHandler:   newSubTopicHandler(),
 	}
 	topic := p2p.LightClientFinalityUpdateTopicFormat

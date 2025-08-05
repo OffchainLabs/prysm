@@ -141,6 +141,11 @@ func TestTopicFromMessage_CorrectType(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "/eth2/beacon_chain/req/beacon_blocks_by_range/2", topic)
 
+		// Modified in fulu fork.
+		topic, err = TopicFromMessage(StatusMessageName, fuluForkEpoch)
+		require.NoError(t, err)
+		require.Equal(t, "/eth2/beacon_chain/req/status/2", topic)
+
 		// Modified both in altair and fulu fork.
 		topic, err = TopicFromMessage(MetadataMessageName, fuluForkEpoch)
 		require.NoError(t, err)
