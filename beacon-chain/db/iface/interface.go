@@ -75,8 +75,6 @@ type ReadOnlyDatabase interface {
 type ReadOnlyDatabaseWithSeqNum interface {
 	ReadOnlyDatabase
 
-	// P2P Metadata operations.
-	MetadataSeqNum(ctx context.Context) (uint64, error)
 	SaveMetadataSeqNum(ctx context.Context, seqNum uint64) error
 }
 
