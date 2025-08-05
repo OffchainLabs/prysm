@@ -2910,24 +2910,26 @@ func TestRetryTimeout(t *testing.T) {
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		// Start retry with very short timeout for testing
-		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-		defer cancel()
+		// Modify config to have very short slot time for testing
+		originalConfig := params.BeaconConfig()
+		cfg := originalConfig.Copy()
+		cfg.SecondsPerSlot = 1 // 1 second timeout for retry
+		params.OverrideBeaconConfig(cfg)
+		defer params.OverrideBeaconConfig(originalConfig)
 
-		// Add the retry to the active retries map (this is normally done by ReconstructDataColumnSidecars)
-		_, loaded := client.activeRetries.LoadOrStore(r, cancel)
-		require.Equal(t, false, loaded)
+		// Call ReconstructDataColumnSidecars which will start retry internally
+		ctx := context.Background()
+		_, err := client.ReconstructDataColumnSidecars(ctx, signedB, r)
+		require.NoError(t, err) // Should not error, just return empty result
 
-		go client.retryReconstructDataColumnSidecars(ctx, cancel, signedB, r)
-
-		// Wait a bit for the goroutine to start
+		// Wait a bit for the retry goroutine to start
 		time.Sleep(10 * time.Millisecond)
 
 		// Should have active retry initially
 		require.Equal(t, true, client.hasActiveRetry(r))
 
-		// Wait for timeout
-		time.Sleep(100 * time.Millisecond)
+		// Wait for timeout (longer than the 1 second timeout we set)
+		time.Sleep(1200 * time.Millisecond)
 
 		// Should be cleaned up after timeout
 		require.Equal(t, false, client.hasActiveRetry(r))

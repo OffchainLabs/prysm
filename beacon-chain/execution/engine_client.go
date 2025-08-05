@@ -705,7 +705,63 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, signedROBlo
 		}
 
 		// This goroutine is now responsible for starting the retry.
-		go s.retryReconstructDataColumnSidecars(retryCtx, cancel, signedROBlock, blockRoot)
+		// Perform periodic retry attempts for data column reconstruction inline.
+		go func() {
+			startTime := time.Now()
+			// Defer the cancellation of the context and the removal of the active retry tracker.
+			defer func() {
+				cancel()
+				s.activeRetries.Delete(blockRoot)
+			}()
+
+			ticker := time.NewTicker(defaultGetBlobsRetryInterval)
+			defer ticker.Stop()
+
+			attemptCount := 0
+			retryLog := log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot))
+
+			for {
+				select {
+				case <-ticker.C:
+					attemptCount++
+					getBlobsRetryAttempts.WithLabelValues("attempt").Inc()
+
+					// Check if data is now available from any source
+					if s.availabilityChecker != nil {
+						available, err := s.availabilityChecker.IsDataAvailable(retryCtx, blockRoot, signedROBlock)
+						if err != nil {
+							retryLog.WithError(err).Debug("Error checking data availability during retry")
+							continue
+						} else if available {
+							retryLog.WithField("attempts", attemptCount).Debug("Data became available, stopping retry")
+							getBlobsRetryAttempts.WithLabelValues("success_available").Inc()
+							getBlobsRetryDuration.WithLabelValues("success").Observe(time.Since(startTime).Seconds())
+							return
+						}
+					}
+
+					// Retry reconstruction
+					retryLog.WithField("attempt", attemptCount).Debug("Retrying data column reconstruction")
+					result, err := s.reconstructDataColumnSidecarsOnce(retryCtx, signedROBlock, blockRoot)
+					if err != nil {
+						retryLog.WithError(err).Debug("Reconstruction attempt failed, will retry")
+						continue
+					}
+					if len(result) > 0 {
+						retryLog.WithField("attempts", attemptCount).Debug("Retry succeeded")
+						getBlobsRetryAttempts.WithLabelValues("success_reconstructed").Inc()
+						getBlobsRetryDuration.WithLabelValues("success").Observe(time.Since(startTime).Seconds())
+						return
+					}
+
+				case <-retryCtx.Done():
+					retryLog.WithField("attempts", attemptCount).Debug("Retry timeout")
+					getBlobsRetryAttempts.WithLabelValues("timeout").Inc()
+					getBlobsRetryDuration.WithLabelValues("timeout").Observe(time.Since(startTime).Seconds())
+					return
+				}
+			}
+		}()
 
 		// Return empty result for now; the background retry will handle it.
 		return []blocks.VerifiedRODataColumn{}, nil
@@ -1079,58 +1135,6 @@ func (s *Service) hasActiveRetry(blockRoot [fieldparams.RootLength]byte) bool {
 	return exists
 }
 
-// retryReconstructDataColumnSidecars performs periodic retry attempts for data column reconstruction.
-// The provided `cancel` function is tied to the `retryCtx` and must be called on exit to clean up resources.
-func (s *Service) retryReconstructDataColumnSidecars(retryCtx context.Context, cancel context.CancelFunc, signedROBlock interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte) {
-	startTime := time.Now()
-	// Defer the cancellation of the context and the removal of the active retry tracker.
-	defer func() {
-		cancel()
-		s.activeRetries.Delete(blockRoot)
-	}()
-
-	ticker := time.NewTicker(defaultGetBlobsRetryInterval)
-	defer ticker.Stop()
-
-	attemptCount := 0
-	log := log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot))
-
-	for {
-		select {
-		case <-ticker.C:
-			attemptCount++
-			getBlobsRetryAttempts.WithLabelValues("attempt").Inc()
-
-			// Check if data is now available from any source
-			if s.availabilityChecker != nil {
-				available, err := s.availabilityChecker.IsDataAvailable(retryCtx, blockRoot, signedROBlock)
-				if err != nil {
-					log.WithError(err).Debug("Error checking data availability during retry")
-				} else if available {
-					log.WithField("attempts", attemptCount).Debug("Data became available, stopping retry")
-					getBlobsRetryAttempts.WithLabelValues("success_available").Inc()
-					getBlobsRetryDuration.WithLabelValues("success").Observe(time.Since(startTime).Seconds())
-					return
-				}
-			}
-
-			// Retry reconstruction
-			log.WithField("attempt", attemptCount).Debug("Retrying data column reconstruction")
-			if result, err := s.reconstructDataColumnSidecarsOnce(retryCtx, signedROBlock, blockRoot); err == nil && len(result) > 0 {
-				log.WithField("attempts", attemptCount).Debug("Retry succeeded")
-				getBlobsRetryAttempts.WithLabelValues("success_reconstructed").Inc()
-				getBlobsRetryDuration.WithLabelValues("success").Observe(time.Since(startTime).Seconds())
-				return
-			}
-
-		case <-retryCtx.Done():
-			log.WithField("attempts", attemptCount).Debug("Retry timeout")
-			getBlobsRetryAttempts.WithLabelValues("timeout").Inc()
-			getBlobsRetryDuration.WithLabelValues("timeout").Observe(time.Since(startTime).Seconds())
-			return
-		}
-	}
-}
 
 // wrapWithBlockRoot returns a new error with the given block root.
 func wrapWithBlockRoot(err error, blockRoot [32]byte, message string) error {
