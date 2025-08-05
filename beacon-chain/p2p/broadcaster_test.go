@@ -227,6 +227,7 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		cfg:                   cfg,
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: genesisValidatorsRoot,
+		custodyInfo:           &custodyInfo{},
 	}
 	bootListener, err := s.createListener(ipAddr, pkey)
 	require.NoError(t, err)
@@ -255,6 +256,7 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 			cfg:                   cfg,
 			genesisTime:           genesisTime,
 			genesisValidatorsRoot: genesisValidatorsRoot,
+			custodyInfo:           &custodyInfo{},
 		}
 		listener, err := s.startDiscoveryV5(ipAddr, pkey)
 		// Set for 2nd peer
@@ -695,6 +697,7 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		subnetsLockLock:       sync.Mutex{},
 		peers:                 peers.NewStatus(t.Context(), &peers.StatusConfig{ScorerParams: &scorers.Config{}}),
+		custodyInfo:           &custodyInfo{},
 	}
 
 	// Create a listener.

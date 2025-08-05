@@ -109,6 +109,8 @@ func (ds *Server) getPeer(pid peer.ID) (*ethpb.DebugPeerResponse, error) {
 			peerInfo.MetadataV0 = metadata.MetadataObjV0()
 		case metadata.MetadataObjV1() != nil:
 			peerInfo.MetadataV1 = metadata.MetadataObjV1()
+		case metadata.MetadataObjV2() != nil:
+			peerInfo.MetadataV2 = metadata.MetadataObjV2()
 		}
 	}
 	addresses := peerStore.Addrs(pid)
@@ -127,7 +129,7 @@ func (ds *Server) getPeer(pid peer.ID) (*ethpb.DebugPeerResponse, error) {
 	if err != nil {
 		// In the event chain state is non existent, we
 		// initialize with the zero value.
-		pStatus = new(ethpb.Status)
+		pStatus = new(ethpb.StatusV2)
 	}
 	lastUpdated, err := peers.ChainStateLastUpdated(pid)
 	if err != nil {
@@ -150,6 +152,16 @@ func (ds *Server) getPeer(pid peer.ID) (*ethpb.DebugPeerResponse, error) {
 		BehaviourPenalty:   float32(bPenalty),
 		ValidationError:    errorToString(peers.Scorers().ValidationError(pid)),
 	}
+
+	// Convert statusV2 into status
+	peerStatus := &ethpb.Status{
+		ForkDigest:     pStatus.ForkDigest,
+		FinalizedRoot:  pStatus.FinalizedRoot,
+		FinalizedEpoch: pStatus.FinalizedEpoch,
+		HeadRoot:       pStatus.HeadRoot,
+		HeadSlot:       pStatus.HeadSlot,
+	}
+
 	return &ethpb.DebugPeerResponse{
 		ListeningAddresses: stringAddrs,
 		Direction:          pbDirection,
@@ -157,7 +169,7 @@ func (ds *Server) getPeer(pid peer.ID) (*ethpb.DebugPeerResponse, error) {
 		PeerId:             pid.String(),
 		Enr:                enr,
 		PeerInfo:           peerInfo,
-		PeerStatus:         pStatus,
+		PeerStatus:         peerStatus,
 		LastUpdated:        unixTime,
 		ScoreInfo:          scoreInfo,
 	}, nil

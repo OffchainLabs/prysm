@@ -26,7 +26,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
 	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
@@ -124,7 +123,6 @@ type BeaconNode struct {
 	BlobStorageOptions       []filesystem.BlobStorageOption
 	DataColumnStorage        *filesystem.DataColumnStorage
 	DataColumnStorageOptions []filesystem.DataColumnStorageOption
-	custodyInfo              *peerdas.CustodyInfo
 	verifyInitWaiter         *verification.InitializerWaiter
 	syncChecker              *initialsync.SyncChecker
 	slasherEnabled           bool
@@ -166,7 +164,6 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		serviceFlagOpts:         &serviceFlagOpts{},
 		initialSyncComplete:     make(chan struct{}),
 		syncChecker:             &initialsync.SyncChecker{},
-		custodyInfo:             &peerdas.CustodyInfo{},
 		slasherEnabled:          cliCtx.Bool(flags.SlasherFlag.Name),
 	}
 
@@ -717,7 +714,6 @@ func (b *BeaconNode) registerP2P(cliCtx *cli.Context) error {
 		StateNotifier:        b,
 		DB:                   b.db,
 		ClockWaiter:          b.clockWaiter,
-		CustodyInfo:          b.custodyInfo,
 	})
 	if err != nil {
 		return err
@@ -800,7 +796,6 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithTrackedValidatorsCache(b.trackedValidatorsCache),
 		blockchain.WithPayloadIDCache(b.payloadIDCache),
 		blockchain.WithSyncChecker(b.syncChecker),
-		blockchain.WithCustodyInfo(b.custodyInfo),
 		blockchain.WithSlasherEnabled(b.slasherEnabled),
 		blockchain.WithLightClientStore(b.lcStore),
 	)
@@ -888,7 +883,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithDataColumnStorage(b.DataColumnStorage),
 		regularsync.WithVerifierWaiter(b.verifyInitWaiter),
 		regularsync.WithAvailableBlocker(bFillStore),
-		regularsync.WithCustodyInfo(b.custodyInfo),
+		regularsync.WithTrackedValidatorsCache(b.trackedValidatorsCache),
 		regularsync.WithSlasherEnabled(b.slasherEnabled),
 		regularsync.WithLightClientStore(b.lcStore),
 		regularsync.WithBatchVerifierLimit(b.cliCtx.Int(flags.BatchVerifierLimit.Name)),
