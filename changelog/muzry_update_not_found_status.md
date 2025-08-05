@@ -1,2 +1,2 @@
-### Updated
-- Update endpoint to return 404 after isOptimistic check
+### Fixed
+- Fixed endpoint response to return 404 or 400 after isOptimistic check
