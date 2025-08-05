@@ -105,7 +105,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	// Verify the block being voted and the processed state is in beaconDB and the block has passed validation if it's in the beaconDB.
 	blockRoot := bytesutil.ToBytes32(data.BeaconBlockRoot)
 	if !s.hasBlockAndState(ctx, blockRoot) {
-		return s.saveToPendingAttPool(att)
+		s.savePendingAtt(att)
 	}
 	if !s.cfg.chain.InForkchoice(blockRoot) {
 		tracing.AnnotateError(span, blockchain.ErrNotDescendantOfFinalized)
@@ -402,32 +402,4 @@ func (s *Service) hasBlockAndState(ctx context.Context, blockRoot [32]byte) bool
 	hasStateSummary := s.cfg.beaconDB.HasStateSummary(ctx, blockRoot)
 	hasState := hasStateSummary || s.cfg.beaconDB.HasState(ctx, blockRoot)
 	return hasState && s.cfg.chain.HasBlock(ctx, blockRoot)
-}
-
-func (s *Service) saveToPendingAttPool(att eth.Att) (pubsub.ValidationResult, error) {
-	// A node doesn't have the block, it'll request from peer while saving the pending attestation to a queue.
-	if att.Version() >= version.Electra {
-		a, ok := att.(*eth.SingleAttestation)
-		// This will never fail in practice because we asserted the version
-		if !ok {
-			return pubsub.ValidationIgnore, fmt.Errorf("attestation has wrong type (expected %T, got %T)", &eth.SingleAttestation{}, att)
-		}
-		// Even though there is no AggregateAndProof type to hold a single attestation, our design of pending atts pool
-		// requires to have an AggregateAndProof object, even for unaggregated attestations.
-		// Because of this we need to have a single attestation version of it to be able to save single attestations into the pool.
-		// It's not possible to convert the single attestation into an electra attestation before saving to the pool
-		// because crucial verification steps can't be performed without the block, and converting prior to these checks
-		// opens up DoS attacks.
-		// The AggregateAndProof object is discarded once we process the pending attestation and code paths dealing
-		// with "real" AggregateAndProof objects (ones that hold actual aggregates) don't use the single attestation version anywhere.
-		s.savePendingAtt(&eth.SignedAggregateAttestationAndProofSingle{Message: &eth.AggregateAttestationAndProofSingle{Aggregate: a}})
-	} else {
-		a, ok := att.(*eth.Attestation)
-		// This will never fail in practice because we asserted the version
-		if !ok {
-			return pubsub.ValidationIgnore, fmt.Errorf("attestation has wrong type (expected %T, got %T)", &eth.Attestation{}, att)
-		}
-		s.savePendingAtt(&eth.SignedAggregateAttestationAndProof{Message: &eth.AggregateAttestationAndProof{Aggregate: a}})
-	}
-	return pubsub.ValidationIgnore, nil
 }
