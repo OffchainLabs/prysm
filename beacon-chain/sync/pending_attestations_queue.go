@@ -68,7 +68,7 @@ func (s *Service) processPendingAtts(ctx context.Context) error {
 		attestations := s.blkRootToPendingAtts[bRoot]
 		s.pendingAttsLock.RUnlock()
 		// has the pending attestation's missing block arrived and the node processed block yet?
-		if s.cfg.beaconDB.HasBlock(ctx, bRoot) && (s.cfg.beaconDB.HasState(ctx, bRoot) || s.cfg.beaconDB.HasStateSummary(ctx, bRoot)) {
+		if s.cfg.beaconDB.HasBlock(ctx, bRoot) && (s.cfg.beaconDB.HasState(ctx, bRoot) || s.cfg.beaconDB.HasStateSummary(ctx, bRoot)) && s.cfg.chain.InForkchoice(bRoot) {
 			s.processAttestations(ctx, attestations)
 			log.WithFields(logrus.Fields{
 				"blockRoot":        hex.EncodeToString(bytesutil.Trunc(bRoot[:])),
