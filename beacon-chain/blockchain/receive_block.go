@@ -84,7 +84,10 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 	}
 
 	receivedTime := time.Now()
-	s.blockBeingSynced.set(blockRoot)
+	if err := s.blockBeingSynced.set(blockRoot); err == errBlockBeingSynced {
+		log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Debug("Ignoring block currently being synced")
+		return nil
+	}
 	defer s.blockBeingSynced.unset(blockRoot)
 
 	blockCopy, err := block.Copy()
