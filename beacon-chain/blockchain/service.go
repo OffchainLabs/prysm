@@ -46,6 +46,13 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// DataAvailabilityChecker defines an interface for checking if data is available
+// for a given block root. This interface is implemented by the blockchain service
+// which has knowledge of the beacon chain's data availability requirements.
+type DataAvailabilityChecker interface {
+	IsDataAvailable(ctx context.Context, blockRoot [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) (bool, error)
+}
+
 // Service represents a service that handles the internal
 // logic of managing the full PoS beacon chain.
 type Service struct {
