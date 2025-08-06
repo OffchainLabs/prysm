@@ -82,6 +82,16 @@ func (s *Service) triggerGetBlobsV2ForDataColumnSidecar(ctx context.Context, blo
 		return nil
 	}
 
+	// Check if data is already available
+	available, err := s.cfg.chain.IsDataAvailable(ctx, blockRoot, signedBlock)
+	if err != nil {
+		log.WithError(err).Debug("Error checking data availability during getBlobsV2 trigger")
+	}
+	if available {
+		log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Debug("Data already available, skipping getBlobsV2 retry")
+		return nil
+	}
+
 	// Trigger the retry by calling the execution service's reconstruct method
 	// ReconstructDataColumnSidecars handles concurrent calls internally
 	log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Debug("Triggering getBlobsV2 retry for data column sidecar")

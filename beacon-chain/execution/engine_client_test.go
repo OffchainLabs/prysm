@@ -2780,9 +2780,7 @@ func TestReconstructDataColumnSidecars_WithRetry(t *testing.T) {
 		srv := createBlobServerV2(t, 3, blobMasks)
 		defer srv.Close()
 
-		client := &Service{
-			availabilityChecker: &mockDataAvailabilityChecker{isAvailable: false},
-		}
+		client := &Service{}
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
@@ -2800,9 +2798,7 @@ func TestReconstructDataColumnSidecars_WithRetry(t *testing.T) {
 		srv := createBlobServerV2(t, 0, []bool{})
 		defer srv.Close()
 
-		client := &Service{
-			availabilityChecker: &mockDataAvailabilityChecker{isAvailable: false},
-		}
+		client := &Service{}
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
@@ -2822,25 +2818,6 @@ func TestReconstructDataColumnSidecars_WithRetry(t *testing.T) {
 		}
 	})
 
-	t.Run("does not start retry if data already available", func(t *testing.T) {
-		ctx := context.Background()
-		// Setup server that returns no blobs
-		srv := createBlobServerV2(t, 0, []bool{})
-		defer srv.Close()
-
-		client := &Service{
-			availabilityChecker: &mockDataAvailabilityChecker{isAvailable: true},
-		}
-		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
-		defer rpcClient.Close()
-
-		dataColumns, err := client.ReconstructDataColumnSidecars(ctx, signedB, r)
-		require.NoError(t, err)
-		require.Equal(t, 0, len(dataColumns))
-
-		// Should not have active retry since data is already available
-		require.Equal(t, false, client.hasActiveRetry(r))
-	})
 
 	t.Run("does not start duplicate retry", func(t *testing.T) {
 		ctx := context.Background()
@@ -2848,9 +2825,7 @@ func TestReconstructDataColumnSidecars_WithRetry(t *testing.T) {
 		srv := createBlobServerV2(t, 0, []bool{})
 		defer srv.Close()
 
-		client := &Service{
-			availabilityChecker: &mockDataAvailabilityChecker{isAvailable: false},
-		}
+		client := &Service{}
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
@@ -2904,9 +2879,7 @@ func TestRetryTimeout(t *testing.T) {
 		srv := createBlobServerV2(t, 0, []bool{})
 		defer srv.Close()
 
-		client := &Service{
-			availabilityChecker: &mockDataAvailabilityChecker{isAvailable: false},
-		}
+		client := &Service{}
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
@@ -2956,9 +2929,7 @@ func TestConcurrentRetries(t *testing.T) {
 		srv := createBlobServerV2(t, 0, []bool{})
 		defer srv.Close()
 
-		client := &Service{
-			availabilityChecker: &mockDataAvailabilityChecker{isAvailable: false},
-		}
+		client := &Service{}
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
@@ -3029,11 +3000,7 @@ func TestRetryBehaviorWithDataAvailability(t *testing.T) {
 		srv := createBlobServerV2(t, 0, []bool{})
 		defer srv.Close()
 
-		// Availability checker starts false but becomes true after delay
-		mockChecker := &mockDataAvailabilityChecker{isAvailable: false}
-		client := &Service{
-			availabilityChecker: mockChecker,
-		}
+		client := &Service{}
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
@@ -3049,20 +3016,11 @@ func TestRetryBehaviorWithDataAvailability(t *testing.T) {
 		// Verify retry started
 		require.Equal(t, true, client.hasActiveRetry(r))
 
-		// After a short delay, make data available
-		go func() {
-			time.Sleep(100 * time.Millisecond)
-			mockChecker.isAvailable = true
-		}()
-
-		// Wait for retry to stop
+		// Wait for retry timeout (the retry will continue since there's no way to stop it now)
 		time.Sleep(300 * time.Millisecond)
 
-		// Retry should have stopped
-		require.Equal(t, false, client.hasActiveRetry(r))
-
-		// Verify availability checker was called during retry
-		require.Equal(t, true, mockChecker.called)
+		// Retry should still be active since there's no availability check to stop it
+		require.Equal(t, true, client.hasActiveRetry(r))
 	})
 
 	t.Run("retry continues when data is not available", func(t *testing.T) {
@@ -3070,11 +3028,7 @@ func TestRetryBehaviorWithDataAvailability(t *testing.T) {
 		srv := createBlobServerV2(t, 0, []bool{})
 		defer srv.Close()
 
-		// Availability checker always returns false
-		mockChecker := &mockDataAvailabilityChecker{isAvailable: false}
-		client := &Service{
-			availabilityChecker: mockChecker,
-		}
+		client := &Service{}
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
@@ -3105,16 +3059,6 @@ func TestRetryBehaviorWithDataAvailability(t *testing.T) {
 	})
 }
 
-// Mock data availability checker for testing
-type mockDataAvailabilityChecker struct {
-	isAvailable bool
-	called      bool
-}
-
-func (m *mockDataAvailabilityChecker) IsDataAvailable(ctx context.Context, blockRoot [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) (bool, error) {
-	m.called = true
-	return m.isAvailable, nil
-}
 
 // TestConcurrentReconstructDataColumnSidecars tests that concurrent calls to ReconstructDataColumnSidecars
 // don't result in multiple getBlobsV2 calls for the same block root

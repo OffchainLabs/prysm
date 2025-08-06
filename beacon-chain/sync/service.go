@@ -123,6 +123,13 @@ type blockchainService interface {
 	blockchain.OptimisticModeFetcher
 	blockchain.SlashingReceiver
 	blockchain.ForkchoiceFetcher
+	DataAvailabilityChecker
+}
+
+// DataAvailabilityChecker defines an interface for checking if data is available
+// for a given block root.
+type DataAvailabilityChecker interface {
+	IsDataAvailable(ctx context.Context, blockRoot [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) (bool, error)
 }
 
 // Service is responsible for handling all run time p2p related operations as the

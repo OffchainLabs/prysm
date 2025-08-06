@@ -14,6 +14,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/pkg/errors"
 )
 
 // TestDataColumnSubscriber_InvalidMessage tests error handling for invalid messages
@@ -97,8 +98,11 @@ func TestTriggerGetBlobsV2ForDataColumnSidecar_WithValidBlock(t *testing.T) {
 		// Save block to database
 		require.NoError(t, db.SaveBlock(ctx, signedBlock))
 
-		mockChain := &blockchaintesting.ChainService{
-			DB: db, // Set the DB so HasBlock can find the block
+		// Mock chain service that reports data is NOT available (to trigger execution service)
+		mockChain := &MockChainServiceWithAvailability{
+			ChainService:      &blockchaintesting.ChainService{DB: db},
+			dataAvailable:     false, // Data not available, should trigger execution service
+			availabilityError: nil,
 		}
 
 		s := &Service{
@@ -118,6 +122,82 @@ func TestTriggerGetBlobsV2ForDataColumnSidecar_WithValidBlock(t *testing.T) {
 		// Verify that the execution reconstructor was called
 		if !mockReconstructor.reconstructCalled {
 			t.Errorf("Expected ReconstructDataColumnSidecars to be called")
+		}
+	})
+
+	t.Run("does not start retry if data already available", func(t *testing.T) {
+		// Mock execution reconstructor to track calls
+		mockReconstructor := &MockExecutionReconstructor{
+			reconstructCalled: false,
+		}
+
+		db := dbtesting.SetupDB(t)
+
+		// Save block to database
+		require.NoError(t, db.SaveBlock(ctx, signedBlock))
+
+		// Mock chain service that reports data is already available
+		mockChain := &MockChainServiceWithAvailability{
+			ChainService:      &blockchaintesting.ChainService{DB: db},
+			dataAvailable:     true,
+			availabilityError: nil,
+		}
+
+		s := &Service{
+			cfg: &config{
+				chain:                  mockChain,
+				beaconDB:               db,
+				executionReconstructor: mockReconstructor,
+			},
+		}
+
+		err := s.triggerGetBlobsV2ForDataColumnSidecar(ctx, blockRoot)
+		require.NoError(t, err)
+
+		// Wait a bit to ensure no goroutine was started
+		time.Sleep(10 * time.Millisecond)
+
+		// Verify that the execution reconstructor was NOT called since data is already available
+		if mockReconstructor.reconstructCalled {
+			t.Errorf("Expected ReconstructDataColumnSidecars NOT to be called when data is already available")
+		}
+	})
+
+	t.Run("calls execution service when availability check returns error", func(t *testing.T) {
+		// Mock execution reconstructor to track calls
+		mockReconstructor := &MockExecutionReconstructor{
+			reconstructCalled: false,
+		}
+
+		db := dbtesting.SetupDB(t)
+
+		// Save block to database
+		require.NoError(t, db.SaveBlock(ctx, signedBlock))
+
+		// Mock chain service that returns an error for availability check
+		mockChain := &MockChainServiceWithAvailability{
+			ChainService:      &blockchaintesting.ChainService{DB: db},
+			dataAvailable:     false,                                 // This should be ignored due to error
+			availabilityError: errors.New("availability check error"), // Error should cause fallback to execution service
+		}
+
+		s := &Service{
+			cfg: &config{
+				chain:                  mockChain,
+				beaconDB:               db,
+				executionReconstructor: mockReconstructor,
+			},
+		}
+
+		err := s.triggerGetBlobsV2ForDataColumnSidecar(ctx, blockRoot)
+		require.NoError(t, err) // Function should not return error, just log it
+
+		// Wait a bit for the goroutine to execute
+		time.Sleep(10 * time.Millisecond)
+
+		// Verify that the execution reconstructor was called despite the error
+		if !mockReconstructor.reconstructCalled {
+			t.Errorf("Expected ReconstructDataColumnSidecars to be called when availability check returns error")
 		}
 	})
 
@@ -189,4 +269,16 @@ func (m *MockExecutionReconstructor) ReconstructBlobSidecars(ctx context.Context
 func (m *MockExecutionReconstructor) ReconstructDataColumnSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte) ([]blocks.VerifiedRODataColumn, error) {
 	m.reconstructCalled = true
 	return m.reconstructResult, m.reconstructError
+}
+
+// MockChainServiceWithAvailability wraps the testing ChainService to allow configuring IsDataAvailable
+type MockChainServiceWithAvailability struct {
+	*blockchaintesting.ChainService
+	dataAvailable     bool
+	availabilityError error
+}
+
+// IsDataAvailable overrides the default implementation to return configurable values for testing
+func (m *MockChainServiceWithAvailability) IsDataAvailable(ctx context.Context, blockRoot [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) (bool, error) {
+	return m.dataAvailable, m.availabilityError
 }
