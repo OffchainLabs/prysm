@@ -682,7 +682,12 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, signedROBlo
 		if s.availabilityChecker != nil {
 			available, err := s.availabilityChecker.IsDataAvailable(ctx, blockRoot, signedROBlock)
 			if err != nil {
-				return nil, errors.Wrap(err, "failed to check data availability")
+				// Fatal context errors: bubble up.
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					return nil, err
+				}
+				// Other kinds of error: log and continue to check if available
+				log.WithError(err).Warn("DA checker returned error; will retry anyway")
 			}
 			if available {
 				// Data is already available, no need to reconstruct or retry
