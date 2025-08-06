@@ -108,6 +108,17 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, ro
 		log.Warning("Data column storage is not enabled, skip saving data column, but continue to reconstruct and broadcast data column")
 	}
 
+	// Check if data is already available to avoid unnecessary execution client calls
+	available, err := s.cfg.chain.IsDataAvailable(ctx, blockRoot, roSignedBlock)
+	if err != nil {
+		log.WithError(err).Debug("Error checking data availability")
+		return
+	}
+	if available {
+		log.Debug("Data already available, skipping execution client call")
+		return
+	}
+
 	// When this function is called, it's from the time when the block is received, so in almost all situations we need to get the data column from EL instead of the blob storage.
 	sidecars, err := s.cfg.executionReconstructor.ReconstructDataColumnSidecars(ctx, roSignedBlock, blockRoot)
 	if err != nil {

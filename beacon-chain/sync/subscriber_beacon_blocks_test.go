@@ -17,6 +17,7 @@ import (
 	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
@@ -294,4 +295,179 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 		}
 	})
 
+}
+
+// TestProcessDataColumnSidecarsFromExecution_DataAvailabilityCheck tests the data availability optimization
+func TestProcessDataColumnSidecarsFromExecution_DataAvailabilityCheck(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	params.OverrideBeaconConfig(params.MinimalSpecConfig())
+
+	ctx := context.Background()
+	
+	// Create a test block with KZG commitments
+	block := util.NewBeaconBlockDeneb()
+	block.Block.Slot = 100
+	commitment := [48]byte{1, 2, 3}
+	block.Block.Body.BlobKzgCommitments = [][]byte{commitment[:]}
+	
+	signedBlock, err := blocks.NewSignedBeaconBlock(block)
+	require.NoError(t, err)
+
+	t.Run("skips execution call when data is available", func(t *testing.T) {
+		mockChain := &MockChainServiceTrackingCalls{
+			ChainService:        &chainMock.ChainService{},
+			dataAvailable:       true, // Data is available
+			availabilityError:   nil,
+			isDataAvailableCalled: false,
+		}
+
+		mockExecutionClient := &MockExecutionClientTrackingCalls{
+			EngineClient: &mockExecution.EngineClient{},
+			reconstructCalled: false,
+		}
+		
+		s := &Service{
+			cfg: &config{
+				chain:                  mockChain,
+				executionReconstructor: mockExecutionClient,
+			},
+		}
+
+		// This should call IsDataAvailable and return early without calling execution client
+		s.processDataColumnSidecarsFromExecution(ctx, signedBlock)
+		
+		// Verify the expected call pattern
+		assert.Equal(t, true, mockChain.isDataAvailableCalled, "Expected IsDataAvailable to be called")
+		assert.Equal(t, false, mockExecutionClient.reconstructCalled, "Expected execution client NOT to be called when data is available")
+	})
+
+	t.Run("returns early when IsDataAvailable returns error", func(t *testing.T) {
+		mockChain := &MockChainServiceTrackingCalls{
+			ChainService:        &chainMock.ChainService{},
+			dataAvailable:       false, // This should be ignored due to error
+			availabilityError:   errors.New("test error from IsDataAvailable"),
+			isDataAvailableCalled: false,
+		}
+
+		mockExecutionClient := &MockExecutionClientTrackingCalls{
+			EngineClient: &mockExecution.EngineClient{},
+			reconstructCalled: false,
+		}
+		
+		s := &Service{
+			cfg: &config{
+				chain:                  mockChain,
+				executionReconstructor: mockExecutionClient,
+			},
+		}
+
+		// This should call IsDataAvailable, get an error, and return early without calling execution client
+		s.processDataColumnSidecarsFromExecution(ctx, signedBlock)
+		
+		// Verify the expected call pattern
+		assert.Equal(t, true, mockChain.isDataAvailableCalled, "Expected IsDataAvailable to be called")
+		assert.Equal(t, false, mockExecutionClient.reconstructCalled, "Expected execution client NOT to be called when IsDataAvailable returns error")
+	})
+
+	t.Run("calls execution client when data not available", func(t *testing.T) {
+		mockChain := &MockChainServiceTrackingCalls{
+			ChainService:        &chainMock.ChainService{},
+			dataAvailable:       false, // Data not available
+			availabilityError:   nil,
+			isDataAvailableCalled: false,
+		}
+
+		mockExecutionClient := &MockExecutionClientTrackingCalls{
+			EngineClient: &mockExecution.EngineClient{
+				DataColumnSidecars: []blocks.VerifiedRODataColumn{}, // Empty response is fine for this test
+			},
+			reconstructCalled: false,
+		}
+		
+		s := &Service{
+			cfg: &config{
+				chain:                  mockChain,
+				executionReconstructor: mockExecutionClient,
+			},
+		}
+
+		// This should call IsDataAvailable, get false, and proceed to call execution client
+		s.processDataColumnSidecarsFromExecution(ctx, signedBlock)
+		
+		// Verify the expected call pattern
+		assert.Equal(t, true, mockChain.isDataAvailableCalled, "Expected IsDataAvailable to be called")
+		assert.Equal(t, true, mockExecutionClient.reconstructCalled, "Expected execution client to be called when data is not available")
+	})
+
+	t.Run("returns early when block has no KZG commitments", func(t *testing.T) {
+		// Create a block without KZG commitments
+		blockNoCommitments := util.NewBeaconBlockDeneb()
+		blockNoCommitments.Block.Slot = 100
+		blockNoCommitments.Block.Body.BlobKzgCommitments = [][]byte{} // No commitments
+		
+		signedBlockNoCommitments, err := blocks.NewSignedBeaconBlock(blockNoCommitments)
+		require.NoError(t, err)
+
+		mockChain := &MockChainServiceTrackingCalls{
+			ChainService:        &chainMock.ChainService{},
+			dataAvailable:       false,
+			availabilityError:   nil,
+			isDataAvailableCalled: false,
+		}
+
+		mockExecutionClient := &MockExecutionClientTrackingCalls{
+			EngineClient: &mockExecution.EngineClient{},
+			reconstructCalled: false,
+		}
+		
+		s := &Service{
+			cfg: &config{
+				chain:                  mockChain,
+				executionReconstructor: mockExecutionClient,
+			},
+		}
+
+		// This should return early before checking data availability or calling execution client
+		s.processDataColumnSidecarsFromExecution(ctx, signedBlockNoCommitments)
+		
+		// Verify neither method was called since there are no commitments
+		assert.Equal(t, false, mockChain.isDataAvailableCalled, "Expected IsDataAvailable NOT to be called when no KZG commitments")
+		assert.Equal(t, false, mockExecutionClient.reconstructCalled, "Expected execution client NOT to be called when no KZG commitments")
+	})
+}
+
+// MockChainServiceTrackingCalls tracks calls to IsDataAvailable for testing
+type MockChainServiceTrackingCalls struct {
+	*chainMock.ChainService
+	dataAvailable         bool
+	availabilityError     error
+	isDataAvailableCalled bool
+}
+
+func (m *MockChainServiceTrackingCalls) IsDataAvailable(ctx context.Context, blockRoot [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) (bool, error) {
+	m.isDataAvailableCalled = true
+	return m.dataAvailable, m.availabilityError
+}
+
+// MockExecutionClientTrackingCalls tracks calls to ReconstructDataColumnSidecars for testing
+type MockExecutionClientTrackingCalls struct {
+	*mockExecution.EngineClient
+	reconstructCalled bool
+}
+
+func (m *MockExecutionClientTrackingCalls) ReconstructDataColumnSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte) ([]blocks.VerifiedRODataColumn, error) {
+	m.reconstructCalled = true
+	return m.EngineClient.DataColumnSidecars, m.EngineClient.ErrorDataColumnSidecars
+}
+
+func (m *MockExecutionClientTrackingCalls) ReconstructFullBlock(ctx context.Context, blindedBlock interfaces.ReadOnlySignedBeaconBlock) (interfaces.SignedBeaconBlock, error) {
+	return m.EngineClient.ReconstructFullBlock(ctx, blindedBlock)
+}
+
+func (m *MockExecutionClientTrackingCalls) ReconstructFullBellatrixBlockBatch(ctx context.Context, blindedBlocks []interfaces.ReadOnlySignedBeaconBlock) ([]interfaces.SignedBeaconBlock, error) {
+	return m.EngineClient.ReconstructFullBellatrixBlockBatch(ctx, blindedBlocks)
+}
+
+func (m *MockExecutionClientTrackingCalls) ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, hasIndex func(uint64) bool) ([]blocks.VerifiedROBlob, error) {
+	return m.EngineClient.ReconstructBlobSidecars(ctx, block, blockRoot, hasIndex)
 }
