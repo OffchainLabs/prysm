@@ -142,11 +142,6 @@ type EngineCaller interface {
 	GetTerminalBlockHash(ctx context.Context, transitionTime uint64) ([]byte, bool, error)
 }
 
-// DataAvailabilityChecker defines an interface for checking if data is available
-// for a given block root.
-type DataAvailabilityChecker interface {
-	IsDataAvailable(ctx context.Context, blockRoot [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) (bool, error)
-}
 
 var ErrEmptyBlockHash = errors.New("Block hash is empty 0x0000...")
 
@@ -678,22 +673,7 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, signedROBlo
 			return result, nil // Success - return data
 		}
 
-		// Empty result - check if data is already available
-		if s.availabilityChecker != nil {
-			available, err := s.availabilityChecker.IsDataAvailable(ctx, blockRoot, signedROBlock)
-			if err != nil {
-				// Fatal context errors: bubble up.
-				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-					return nil, err
-				}
-				// Other kinds of error: log and continue to check if available
-				log.WithError(err).Warn("DA checker returned error; will retry anyway")
-			}
-			if available {
-				// Data is already available, no need to reconstruct or retry
-				return []blocks.VerifiedRODataColumn{}, nil
-			}
-		}
+		// Empty result - initiate retry mechanism
 
 		// Create a new context with a timeout for the retry goroutine.
 		retryCtx, cancel := context.WithTimeout(ctx, time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second)
@@ -731,19 +711,6 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, signedROBlo
 					attemptCount++
 					getBlobsRetryAttempts.WithLabelValues("attempt").Inc()
 
-					// Check if data is now available from any source
-					if s.availabilityChecker != nil {
-						available, err := s.availabilityChecker.IsDataAvailable(retryCtx, blockRoot, signedROBlock)
-						if err != nil {
-							retryLog.WithError(err).Debug("Error checking data availability during retry")
-							continue
-						} else if available {
-							retryLog.WithField("attempts", attemptCount).Debug("Data became available, stopping retry")
-							getBlobsRetryAttempts.WithLabelValues("success_available").Inc()
-							getBlobsRetryDuration.WithLabelValues("success").Observe(time.Since(startTime).Seconds())
-							return
-						}
-					}
 
 					// Retry reconstruction
 					retryLog.WithField("attempt", attemptCount).Debug("Retrying data column reconstruction")
