@@ -7,8 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/sync/singleflight"
-
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
@@ -142,11 +140,7 @@ type EngineCaller interface {
 	GetTerminalBlockHash(ctx context.Context, transitionTime uint64) ([]byte, bool, error)
 }
 
-
 var ErrEmptyBlockHash = errors.New("Block hash is empty 0x0000...")
-
-// Global singleflight group for data column reconstruction
-var reconstructSingleflight singleflight.Group
 
 // NewPayload request calls the engine_newPayloadVX method via JSON-RPC.
 func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error) {
@@ -663,7 +657,7 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 // It uses singleflight to ensure only one reconstruction per blockRoot.
 func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, signedROBlock interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte) ([]blocks.VerifiedRODataColumn, error) {
 	// Use singleflight to ensure only one reconstruction per blockRoot
-	v, err, _ := reconstructSingleflight.Do(fmt.Sprintf("%x", blockRoot), func() (interface{}, error) {
+	v, err, _ := s.reconstructSingleflight.Do(fmt.Sprintf("%x", blockRoot), func() (interface{}, error) {
 		// Try reconstruction once
 		result, err := s.reconstructDataColumnSidecarsOnce(ctx, signedROBlock, blockRoot)
 		if err != nil {
@@ -710,7 +704,6 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, signedROBlo
 				case <-ticker.C:
 					attemptCount++
 					getBlobsRetryAttempts.WithLabelValues("attempt").Inc()
-
 
 					// Retry reconstruction
 					retryLog.WithField("attempt", attemptCount).Debug("Retrying data column reconstruction")
