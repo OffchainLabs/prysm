@@ -528,7 +528,7 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 
 // IsDataAvailable implements the DataAvailabilityChecker interface for use by the execution service.
 // It checks if all required blob and data column data is immediately available in the database without waiting.
-func (s *Service) IsDataAvailable(ctx context.Context, blockRoot [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) (bool, error) {
+func (s *Service) IsDataAvailable(ctx context.Context, blockRoot [fieldparams.RootLength]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) (bool, error) {
 	block := signedBlock.Block()
 	if block == nil {
 		return false, errors.New("invalid nil beacon block")
