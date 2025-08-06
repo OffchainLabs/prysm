@@ -240,9 +240,10 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 			}
 		}
 
-		if err := avs.IsDataAvailable(ctx, s.CurrentSlot(), b); err != nil {
-			return errors.Wrapf(err, "could not validate sidecar availability at slot %d", b.Block().Slot())
+		if s.areSidecarsAvailable(ctx, avs, b) != nil {
+			return errors.Wrapf(err, "could not validate sidecar availability for block %#x at slot %d", b.Root(), b.Block().Slot())
 		}
+
 		args := &forkchoicetypes.BlockAndCheckpoints{Block: b,
 			JustifiedCheckpoint: jCheckpoints[i],
 			FinalizedCheckpoint: fCheckpoints[i]}
@@ -306,6 +307,26 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		return err
 	}
 	return s.saveHeadNoDB(ctx, lastB, lastBR, preState, !isValidPayload)
+}
+
+func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.AvailabilityStore, roBlock consensusblocks.ROBlock) error {
+	blockVersion := roBlock.Version()
+	block := roBlock.Block()
+	slot := block.Slot()
+
+	if version.Deneb <= blockVersion && blockVersion < version.Fulu {
+		if err := avs.IsDataAvailable(ctx, s.CurrentSlot(), roBlock); err != nil {
+			return errors.Wrapf(err, "could not validate sidecar availability at slot %d", slot)
+		}
+	}
+
+	if version.Fulu <= blockVersion {
+		if err := s.areDataColumnsAvailable(ctx, roBlock.Root(), block); err != nil {
+			return errors.Wrapf(err, "are data columns available for block %#x with slot %d", roBlock.Root(), slot)
+		}
+	}
+
+	return nil
 }
 
 func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.BeaconState) error {

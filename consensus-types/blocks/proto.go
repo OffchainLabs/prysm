@@ -1,6 +1,8 @@
 package blocks
 
 import (
+	"fmt"
+
 	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
@@ -398,7 +400,7 @@ func (b *BeaconBlock) Proto() (proto.Message, error) { // nolint:gocognit
 			Body:          body,
 		}, nil
 	default:
-		return nil, errors.New("unsupported beacon block version")
+		return nil, fmt.Errorf("unsupported beacon block version: %s", version.String(b.version))
 	}
 }
 
