@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	blockchaintesting "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	dbtesting "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -279,6 +280,12 @@ type MockChainServiceWithAvailability struct {
 }
 
 // IsDataAvailable overrides the default implementation to return configurable values for testing
-func (m *MockChainServiceWithAvailability) IsDataAvailable(ctx context.Context, blockRoot [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) (bool, error) {
-	return m.dataAvailable, m.availabilityError
+func (m *MockChainServiceWithAvailability) IsDataAvailable(ctx context.Context, blockRoot [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) error {
+	if m.availabilityError != nil {
+		return m.availabilityError
+	}
+	if !m.dataAvailable {
+		return blockchain.ErrDataNotAvailable
+	}
+	return nil
 }

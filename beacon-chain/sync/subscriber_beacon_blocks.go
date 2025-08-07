@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/io/file"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
@@ -109,13 +110,14 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, ro
 	}
 
 	// Check if data is already available to avoid unnecessary execution client calls
-	available, err := s.cfg.chain.IsDataAvailable(ctx, blockRoot, roSignedBlock)
-	if err != nil {
-		log.WithError(err).Debug("Error checking data availability")
+	switch err := s.cfg.chain.IsDataAvailable(ctx, blockRoot, roSignedBlock); {
+	case err == nil:
+		log.Debug("Data already available – skipping execution-client call")
 		return
-	}
-	if available {
-		log.Debug("Data already available, skipping execution client call")
+	case errors.Is(err, blockchain.ErrDataNotAvailable):
+		// continue
+	default:
+		log.WithError(err).Error("Failed to check data availability")
 		return
 	}
 
