@@ -49,8 +49,10 @@ import (
 // DataAvailabilityChecker defines an interface for checking if data is available
 // for a given block root. This interface is implemented by the blockchain service
 // which has knowledge of the beacon chain's data availability requirements.
+// Returns nil if data is available, ErrDataNotAvailable if data is not available,
+// or another error for other failures.
 type DataAvailabilityChecker interface {
-	IsDataAvailable(ctx context.Context, blockRoot [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) (bool, error)
+	IsDataAvailable(ctx context.Context, blockRoot [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) error
 }
 
 // Service represents a service that handles the internal
@@ -115,6 +117,9 @@ type Checker interface {
 }
 
 var ErrMissingClockSetter = errors.New("blockchain Service initialized without a startup.ClockSetter")
+
+// ErrDataNotAvailable is returned when block data is not immediately available for processing.
+var ErrDataNotAvailable = errors.New("block data is not available")
 
 type blobNotifierMap struct {
 	sync.RWMutex
@@ -602,28 +607,28 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 
 // IsDataAvailable implements the DataAvailabilityChecker interface for use by the execution service.
 // It checks if all required blob and data column data is immediately available in the database without waiting.
-func (s *Service) IsDataAvailable(ctx context.Context, blockRoot [fieldparams.RootLength]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) (bool, error) {
+func (s *Service) IsDataAvailable(ctx context.Context, blockRoot [fieldparams.RootLength]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) error {
 	block := signedBlock.Block()
 	if block == nil {
-		return false, errors.New("invalid nil beacon block")
+		return errors.New("invalid nil beacon block")
 	}
 
 	blockVersion := block.Version()
-	var err error
 
 	if blockVersion >= version.Fulu {
-		err = s.areDataColumnsImmediatelyAvailable(ctx, blockRoot, block)
-	} else if blockVersion >= version.Deneb {
-		err = s.areBlobsImmediatelyAvailable(ctx, blockRoot, block)
+		if err := s.areDataColumnsImmediatelyAvailable(ctx, blockRoot, block); err != nil {
+			return errors.Wrap(ErrDataNotAvailable, err.Error())
+		}
+		return nil
 	}
 
-	if err != nil {
-		// If there's an error, data is not immediately available
-		return false, err
+	if blockVersion >= version.Deneb {
+		if err := s.areBlobsImmediatelyAvailable(ctx, blockRoot, block); err != nil {
+			return errors.Wrap(ErrDataNotAvailable, err.Error())
+		}
 	}
 
-	// If no error, data is immediately available
-	return true, nil
+	return nil
 }
 
 func spawnCountdownIfPreGenesis(ctx context.Context, genesisTime time.Time, db db.HeadAccessDatabase) {

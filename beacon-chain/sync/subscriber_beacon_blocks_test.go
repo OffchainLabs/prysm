@@ -444,9 +444,15 @@ type MockChainServiceTrackingCalls struct {
 	isDataAvailableCalled bool
 }
 
-func (m *MockChainServiceTrackingCalls) IsDataAvailable(ctx context.Context, blockRoot [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) (bool, error) {
+func (m *MockChainServiceTrackingCalls) IsDataAvailable(ctx context.Context, blockRoot [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) error {
 	m.isDataAvailableCalled = true
-	return m.dataAvailable, m.availabilityError
+	if m.availabilityError != nil {
+		return m.availabilityError
+	}
+	if !m.dataAvailable {
+		return blockchain.ErrDataNotAvailable
+	}
+	return nil
 }
 
 // MockExecutionClientTrackingCalls tracks calls to ReconstructDataColumnSidecars for testing

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -83,13 +84,15 @@ func (s *Service) triggerGetBlobsV2ForDataColumnSidecar(ctx context.Context, blo
 	}
 
 	// Check if data is already available
-	available, err := s.cfg.chain.IsDataAvailable(ctx, blockRoot, signedBlock)
-	if err != nil {
-		log.WithError(err).Debug("Error checking data availability during getBlobsV2 trigger")
-	}
-	if available {
+	switch err := s.cfg.chain.IsDataAvailable(ctx, blockRoot, signedBlock); {
+	case err == nil:
 		log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Debug("Data already available, skipping getBlobsV2 retry")
 		return nil
+
+	case errors.Is(err, blockchain.ErrDataNotAvailable):
+		// fall through and trigger getBlobsV2.
+	default:
+		return errors.Wrap(err, "Error checking data availability during getBlobsV2 trigger")
 	}
 
 	// Trigger the retry by calling the execution service's reconstruct method
