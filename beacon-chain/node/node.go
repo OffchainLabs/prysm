@@ -788,7 +788,6 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		return err
 	}
 
-
 	var initSync *initialsync.Service
 	if err := b.services.FetchService(&initSync); err != nil {
 		return err
