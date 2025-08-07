@@ -1305,104 +1305,103 @@ func Test_expectedGasLimit(t *testing.T) {
 }
 
 func TestIsVersionCompatible(t *testing.T) {
-
 	tests := []struct {
-		name             string
-		bidVersion       int
-		headBlockVersion int
-		want             bool
+		name               string
+		bidVersion         int
+		currentForkVersion int
+		want               bool
 	}{
 		{
-			name:             "Exact version match - Bellatrix",
-			bidVersion:       version.Bellatrix,
-			headBlockVersion: version.Bellatrix,
-			want:             true,
+			name:               "Exact version match - Bellatrix",
+			bidVersion:         version.Bellatrix,
+			currentForkVersion: version.Bellatrix,
+			want:               true,
 		},
 		{
-			name:             "Exact version match - Capella",
-			bidVersion:       version.Capella,
-			headBlockVersion: version.Capella,
-			want:             true,
+			name:               "Exact version match - Capella",
+			bidVersion:         version.Capella,
+			currentForkVersion: version.Capella,
+			want:               true,
 		},
 		{
-			name:             "Exact version match - Deneb",
-			bidVersion:       version.Deneb,
-			headBlockVersion: version.Deneb,
-			want:             true,
+			name:               "Exact version match - Deneb",
+			bidVersion:         version.Deneb,
+			currentForkVersion: version.Deneb,
+			want:               true,
 		},
 		{
-			name:             "Exact version match - Electra",
-			bidVersion:       version.Electra,
-			headBlockVersion: version.Electra,
-			want:             true,
+			name:               "Exact version match - Electra",
+			bidVersion:         version.Electra,
+			currentForkVersion: version.Electra,
+			want:               true,
 		},
 		{
-			name:             "Exact version match - Fulu",
-			bidVersion:       version.Fulu,
-			headBlockVersion: version.Fulu,
-			want:             true,
+			name:               "Exact version match - Fulu",
+			bidVersion:         version.Fulu,
+			currentForkVersion: version.Fulu,
+			want:               true,
 		},
 		{
-			name:             "Electra bid with Fulu head block - Compatible",
-			bidVersion:       version.Electra,
-			headBlockVersion: version.Fulu,
-			want:             true,
+			name:               "Electra bid with Fulu head block - Compatible",
+			bidVersion:         version.Electra,
+			currentForkVersion: version.Fulu,
+			want:               true,
 		},
 		{
-			name:             "Fulu bid with Electra head block - Not compatible",
-			bidVersion:       version.Fulu,
-			headBlockVersion: version.Electra,
-			want:             false,
+			name:               "Fulu bid with Electra head block - Not compatible",
+			bidVersion:         version.Fulu,
+			currentForkVersion: version.Electra,
+			want:               false,
 		},
 		{
-			name:             "Deneb bid with Electra head block - Not compatible",
-			bidVersion:       version.Deneb,
-			headBlockVersion: version.Electra,
-			want:             false,
+			name:               "Deneb bid with Electra head block - Not compatible",
+			bidVersion:         version.Deneb,
+			currentForkVersion: version.Electra,
+			want:               false,
 		},
 		{
-			name:             "Electra bid with Deneb head block - Not compatible",
-			bidVersion:       version.Electra,
-			headBlockVersion: version.Deneb,
-			want:             false,
+			name:               "Electra bid with Deneb head block - Not compatible",
+			bidVersion:         version.Electra,
+			currentForkVersion: version.Deneb,
+			want:               false,
 		},
 		{
-			name:             "Capella bid with Deneb head block - Not compatible",
-			bidVersion:       version.Capella,
-			headBlockVersion: version.Deneb,
-			want:             false,
+			name:               "Capella bid with Deneb head block - Not compatible",
+			bidVersion:         version.Capella,
+			currentForkVersion: version.Deneb,
+			want:               false,
 		},
 		{
-			name:             "Bellatrix bid with Capella head block - Not compatible",
-			bidVersion:       version.Bellatrix,
-			headBlockVersion: version.Capella,
-			want:             false,
+			name:               "Bellatrix bid with Capella head block - Not compatible",
+			bidVersion:         version.Bellatrix,
+			currentForkVersion: version.Capella,
+			want:               false,
 		},
 		{
-			name:             "Phase0 bid with Altair head block - Not compatible",
-			bidVersion:       version.Phase0,
-			headBlockVersion: version.Altair,
-			want:             false,
+			name:               "Phase0 bid with Altair head block - Not compatible",
+			bidVersion:         version.Phase0,
+			currentForkVersion: version.Altair,
+			want:               false,
 		},
 		{
-			name:             "Deneb bid with Fulu head block - Not compatible",
-			bidVersion:       version.Deneb,
-			headBlockVersion: version.Fulu,
-			want:             false,
+			name:               "Deneb bid with Fulu head block - Not compatible",
+			bidVersion:         version.Deneb,
+			currentForkVersion: version.Fulu,
+			want:               false,
 		},
 		{
-			name:             "Capella bid with Fulu head block - Not compatible",
-			bidVersion:       version.Capella,
-			headBlockVersion: version.Fulu,
-			want:             false,
+			name:               "Capella bid with Fulu head block - Not compatible",
+			bidVersion:         version.Capella,
+			currentForkVersion: version.Fulu,
+			want:               false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := isVersionCompatible(tt.bidVersion, tt.headBlockVersion)
+			got := isVersionCompatible(tt.bidVersion, tt.currentForkVersion)
 			if got != tt.want {
-				t.Errorf("isVersionCompatible(%d, %d) = %v, want %v", tt.bidVersion, tt.headBlockVersion, got, tt.want)
+				t.Errorf("isVersionCompatible(%d, %d) = %v, want %v", tt.bidVersion, tt.currentForkVersion, got, tt.want)
 			}
 		})
 	}
