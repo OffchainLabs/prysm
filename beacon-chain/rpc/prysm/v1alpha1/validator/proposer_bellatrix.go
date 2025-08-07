@@ -322,7 +322,7 @@ func (vs *Server) getPayloadHeaderFromBuilder(
 func validateBuilderSignature(signedBid builder.SignedBid) error {
 	d, err := signing.ComputeDomain(params.BeaconConfig().DomainApplicationBuilder,
 		nil, /* fork version */
-		nil /* genesis val root */)
+		nil  /* genesis val root */)
 	if err != nil {
 		return err
 	}
@@ -468,6 +468,11 @@ func isVersionCompatible(bidVersion, headBlockVersion int) bool {
 
 	// Allow Electra bids for Fulu blocks - they have compatible payload formats
 	if bidVersion == version.Electra && headBlockVersion == version.Fulu {
+		return true
+	}
+
+	// Allow Capella bids for Bellatrix blocks - they have compatible formats
+	if bidVersion == version.Capella && headBlockVersion == version.Bellatrix {
 		return true
 	}
 

@@ -1379,6 +1379,12 @@ func TestIsVersionCompatible(t *testing.T) {
 			want:             false,
 		},
 		{
+			name:             "Capella bid with Bellatrix head block - Compatible",
+			bidVersion:       version.Capella,
+			headBlockVersion: version.Bellatrix,
+			want:             true,
+		},
+		{
 			name:             "Phase0 bid with Altair head block - Not compatible",
 			bidVersion:       version.Phase0,
 			headBlockVersion: version.Altair,
