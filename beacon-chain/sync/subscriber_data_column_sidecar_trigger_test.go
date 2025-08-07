@@ -164,7 +164,45 @@ func TestTriggerGetBlobsV2ForDataColumnSidecar_WithValidBlock(t *testing.T) {
 		}
 	})
 
-	t.Run("calls execution service when availability check returns error", func(t *testing.T) {
+	t.Run("calls execution service when data not available", func(t *testing.T) {
+		// Mock execution reconstructor to track calls
+		mockReconstructor := &MockExecutionReconstructor{
+			reconstructCalled: false,
+		}
+
+		db := dbtesting.SetupDB(t)
+
+		// Save block to database
+		require.NoError(t, db.SaveBlock(ctx, signedBlock))
+
+		// Mock chain service that returns ErrDataNotAvailable
+		mockChain := &MockChainServiceWithAvailability{
+			ChainService:      &blockchaintesting.ChainService{DB: db},
+			dataAvailable:     false,                     // Data not available
+			availabilityError: blockchain.ErrDataNotAvailable, // Should trigger execution service call
+		}
+
+		s := &Service{
+			cfg: &config{
+				chain:                  mockChain,
+				beaconDB:               db,
+				executionReconstructor: mockReconstructor,
+			},
+		}
+
+		err := s.triggerGetBlobsV2ForDataColumnSidecar(ctx, blockRoot)
+		require.NoError(t, err) // Function should succeed and call execution service
+
+		// Wait a bit for the goroutine to execute
+		time.Sleep(10 * time.Millisecond)
+
+		// Verify that the execution reconstructor was called
+		if !mockReconstructor.reconstructCalled {
+			t.Errorf("Expected ReconstructDataColumnSidecars to be called when data is not available")
+		}
+	})
+
+	t.Run("returns error when availability check returns error", func(t *testing.T) {
 		// Mock execution reconstructor to track calls
 		mockReconstructor := &MockExecutionReconstructor{
 			reconstructCalled: false,
@@ -179,7 +217,7 @@ func TestTriggerGetBlobsV2ForDataColumnSidecar_WithValidBlock(t *testing.T) {
 		mockChain := &MockChainServiceWithAvailability{
 			ChainService:      &blockchaintesting.ChainService{DB: db},
 			dataAvailable:     false,                                 // This should be ignored due to error
-			availabilityError: errors.New("availability check error"), // Error should cause fallback to execution service
+			availabilityError: errors.New("availability check error"), // Error should cause function to return error
 		}
 
 		s := &Service{
@@ -191,14 +229,11 @@ func TestTriggerGetBlobsV2ForDataColumnSidecar_WithValidBlock(t *testing.T) {
 		}
 
 		err := s.triggerGetBlobsV2ForDataColumnSidecar(ctx, blockRoot)
-		require.NoError(t, err) // Function should not return error, just log it
+		require.ErrorContains(t, "availability check error", err) // Function should return the availability check error
 
-		// Wait a bit for the goroutine to execute
-		time.Sleep(10 * time.Millisecond)
-
-		// Verify that the execution reconstructor was called despite the error
-		if !mockReconstructor.reconstructCalled {
-			t.Errorf("Expected ReconstructDataColumnSidecars to be called when availability check returns error")
+		// Verify that the execution reconstructor was NOT called since function returned early with error
+		if mockReconstructor.reconstructCalled {
+			t.Errorf("Expected ReconstructDataColumnSidecars NOT to be called when availability check returns error")
 		}
 	})
 

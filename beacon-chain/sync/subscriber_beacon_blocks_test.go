@@ -303,29 +303,29 @@ func TestProcessDataColumnSidecarsFromExecution_DataAvailabilityCheck(t *testing
 	params.OverrideBeaconConfig(params.MinimalSpecConfig())
 
 	ctx := context.Background()
-	
+
 	// Create a test block with KZG commitments
 	block := util.NewBeaconBlockDeneb()
 	block.Block.Slot = 100
 	commitment := [48]byte{1, 2, 3}
 	block.Block.Body.BlobKzgCommitments = [][]byte{commitment[:]}
-	
+
 	signedBlock, err := blocks.NewSignedBeaconBlock(block)
 	require.NoError(t, err)
 
 	t.Run("skips execution call when data is available", func(t *testing.T) {
 		mockChain := &MockChainServiceTrackingCalls{
-			ChainService:        &chainMock.ChainService{},
-			dataAvailable:       true, // Data is available
-			availabilityError:   nil,
+			ChainService:          &chainMock.ChainService{},
+			dataAvailable:         true, // Data is available
+			availabilityError:     nil,
 			isDataAvailableCalled: false,
 		}
 
 		mockExecutionClient := &MockExecutionClientTrackingCalls{
-			EngineClient: &mockExecution.EngineClient{},
+			EngineClient:      &mockExecution.EngineClient{},
 			reconstructCalled: false,
 		}
-		
+
 		s := &Service{
 			cfg: &config{
 				chain:                  mockChain,
@@ -335,7 +335,7 @@ func TestProcessDataColumnSidecarsFromExecution_DataAvailabilityCheck(t *testing
 
 		// This should call IsDataAvailable and return early without calling execution client
 		s.processDataColumnSidecarsFromExecution(ctx, signedBlock)
-		
+
 		// Verify the expected call pattern
 		assert.Equal(t, true, mockChain.isDataAvailableCalled, "Expected IsDataAvailable to be called")
 		assert.Equal(t, false, mockExecutionClient.reconstructCalled, "Expected execution client NOT to be called when data is available")
@@ -343,17 +343,17 @@ func TestProcessDataColumnSidecarsFromExecution_DataAvailabilityCheck(t *testing
 
 	t.Run("returns early when IsDataAvailable returns error", func(t *testing.T) {
 		mockChain := &MockChainServiceTrackingCalls{
-			ChainService:        &chainMock.ChainService{},
-			dataAvailable:       false, // This should be ignored due to error
-			availabilityError:   errors.New("test error from IsDataAvailable"),
+			ChainService:          &chainMock.ChainService{},
+			dataAvailable:         false, // This should be ignored due to error
+			availabilityError:     errors.New("test error from IsDataAvailable"),
 			isDataAvailableCalled: false,
 		}
 
 		mockExecutionClient := &MockExecutionClientTrackingCalls{
-			EngineClient: &mockExecution.EngineClient{},
+			EngineClient:      &mockExecution.EngineClient{},
 			reconstructCalled: false,
 		}
-		
+
 		s := &Service{
 			cfg: &config{
 				chain:                  mockChain,
@@ -363,7 +363,7 @@ func TestProcessDataColumnSidecarsFromExecution_DataAvailabilityCheck(t *testing
 
 		// This should call IsDataAvailable, get an error, and return early without calling execution client
 		s.processDataColumnSidecarsFromExecution(ctx, signedBlock)
-		
+
 		// Verify the expected call pattern
 		assert.Equal(t, true, mockChain.isDataAvailableCalled, "Expected IsDataAvailable to be called")
 		assert.Equal(t, false, mockExecutionClient.reconstructCalled, "Expected execution client NOT to be called when IsDataAvailable returns error")
@@ -371,9 +371,9 @@ func TestProcessDataColumnSidecarsFromExecution_DataAvailabilityCheck(t *testing
 
 	t.Run("calls execution client when data not available", func(t *testing.T) {
 		mockChain := &MockChainServiceTrackingCalls{
-			ChainService:        &chainMock.ChainService{},
-			dataAvailable:       false, // Data not available
-			availabilityError:   nil,
+			ChainService:          &chainMock.ChainService{},
+			dataAvailable:         false, // Data not available
+			availabilityError:     nil,
 			isDataAvailableCalled: false,
 		}
 
@@ -383,7 +383,7 @@ func TestProcessDataColumnSidecarsFromExecution_DataAvailabilityCheck(t *testing
 			},
 			reconstructCalled: false,
 		}
-		
+
 		s := &Service{
 			cfg: &config{
 				chain:                  mockChain,
@@ -393,7 +393,7 @@ func TestProcessDataColumnSidecarsFromExecution_DataAvailabilityCheck(t *testing
 
 		// This should call IsDataAvailable, get false, and proceed to call execution client
 		s.processDataColumnSidecarsFromExecution(ctx, signedBlock)
-		
+
 		// Verify the expected call pattern
 		assert.Equal(t, true, mockChain.isDataAvailableCalled, "Expected IsDataAvailable to be called")
 		assert.Equal(t, true, mockExecutionClient.reconstructCalled, "Expected execution client to be called when data is not available")
@@ -404,22 +404,22 @@ func TestProcessDataColumnSidecarsFromExecution_DataAvailabilityCheck(t *testing
 		blockNoCommitments := util.NewBeaconBlockDeneb()
 		blockNoCommitments.Block.Slot = 100
 		blockNoCommitments.Block.Body.BlobKzgCommitments = [][]byte{} // No commitments
-		
+
 		signedBlockNoCommitments, err := blocks.NewSignedBeaconBlock(blockNoCommitments)
 		require.NoError(t, err)
 
 		mockChain := &MockChainServiceTrackingCalls{
-			ChainService:        &chainMock.ChainService{},
-			dataAvailable:       false,
-			availabilityError:   nil,
+			ChainService:          &chainMock.ChainService{},
+			dataAvailable:         false,
+			availabilityError:     nil,
 			isDataAvailableCalled: false,
 		}
 
 		mockExecutionClient := &MockExecutionClientTrackingCalls{
-			EngineClient: &mockExecution.EngineClient{},
+			EngineClient:      &mockExecution.EngineClient{},
 			reconstructCalled: false,
 		}
-		
+
 		s := &Service{
 			cfg: &config{
 				chain:                  mockChain,
@@ -429,7 +429,7 @@ func TestProcessDataColumnSidecarsFromExecution_DataAvailabilityCheck(t *testing
 
 		// This should return early before checking data availability or calling execution client
 		s.processDataColumnSidecarsFromExecution(ctx, signedBlockNoCommitments)
-		
+
 		// Verify neither method was called since there are no commitments
 		assert.Equal(t, false, mockChain.isDataAvailableCalled, "Expected IsDataAvailable NOT to be called when no KZG commitments")
 		assert.Equal(t, false, mockExecutionClient.reconstructCalled, "Expected execution client NOT to be called when no KZG commitments")
@@ -438,10 +438,10 @@ func TestProcessDataColumnSidecarsFromExecution_DataAvailabilityCheck(t *testing
 
 // MockChainServiceTrackingCalls tracks calls to IsDataAvailable for testing
 type MockChainServiceTrackingCalls struct {
-	*chainMock.ChainService
-	dataAvailable         bool
-	availabilityError     error
 	isDataAvailableCalled bool
+	dataAvailable         bool
+	*chainMock.ChainService
+	availabilityError error
 }
 
 func (m *MockChainServiceTrackingCalls) IsDataAvailable(ctx context.Context, blockRoot [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) error {
