@@ -471,6 +471,11 @@ func isVersionCompatible(bidVersion, headBlockVersion int) bool {
 		return true
 	}
 
+	// Allow Capella bids for Bellatrix blocks - they have compatible payload formats
+	if bidVersion == version.Capella && headBlockVersion == version.Bellatrix {
+		return true
+	}
+
 	// For all other cases, require exact version match
 	return false
 }
