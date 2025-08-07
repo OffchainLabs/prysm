@@ -739,7 +739,6 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, signedROBlo
 }
 
 // reconstructDataColumnSidecarsOnce performs a single attempt to reconstruct data column sidecars.
-// This is the original ReconstructDataColumnSidecars logic extracted for reuse in retry logic.
 func (s *Service) reconstructDataColumnSidecarsOnce(ctx context.Context, signedROBlock interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte) ([]blocks.VerifiedRODataColumn, error) {
 	block := signedROBlock.Block()
 
