@@ -1,8 +1,9 @@
+load("@prysm//tools/go:def.bzl", "go_library")
 load("@bazel_gazelle//:def.bzl", "gazelle")
 load("@com_github_atlassian_bazel_tools//gometalinter:def.bzl", "gometalinter")
 load("@com_github_atlassian_bazel_tools//goimports:def.bzl", "goimports")
 load("@io_kubernetes_build//defs:run_in_workspace.bzl", "workspace_binary")
-load("@io_bazel_rules_go//go:def.bzl", "nogo")
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "nogo")
 load("@bazel_skylib//rules:common_settings.bzl", "string_setting")
 load("@prysm//tools/nogo_config:def.bzl", "nogo_config_exclude")
 
@@ -280,5 +281,33 @@ common_files = {
 sh_binary(
     name = "prysm_sh",
     srcs = ["prysm.sh"],
+    visibility = ["//visibility:public"],
+)
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "compare_states.go",
+        "reproduce_bug.go",
+        "verify_fix.go",
+    ],
+    importpath = "github.com/OffchainLabs/prysm/v6",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//beacon-chain/core/helpers:go_default_library",
+        "//beacon-chain/core/transition:go_default_library",
+        "//beacon-chain/state:go_default_library",
+        "//beacon-chain/state/state-native:go_default_library",
+        "//consensus-types/blocks:go_default_library",
+        "//proto/prysm/v1alpha1:go_default_library",
+        "//time/slots:go_default_library",
+        "@com_github_pkg_errors//:go_default_library",
+        "@in_gopkg_d4l3k_messagediff_v1//:go_default_library",
+    ],
+)
+
+go_binary(
+    name = "v6",
+    embed = [":go_default_library"],
     visibility = ["//visibility:public"],
 )

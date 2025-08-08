@@ -27,6 +27,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/cmd"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/crypto/hash/htr"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
@@ -48,7 +49,6 @@ type Flags struct {
 	EnableDoppelGanger                  bool // EnableDoppelGanger enables doppelganger protection on startup for the validator.
 	EnableHistoricalSpaceRepresentation bool // EnableHistoricalSpaceRepresentation enables the saving of registry validators in separate buckets to save space
 	EnableBeaconRESTApi                 bool // EnableBeaconRESTApi enables experimental usage of the beacon REST API by the validator when querying a beacon node
-	UseHashtree                         bool // UseHashtree enables using the hashtree library instead of gohashtree for vectorized hashing
 	EnableExperimentalAttestationPool   bool // EnableExperimentalAttestationPool enables an experimental attestation pool design.
 	DisableDutiesV2                     bool // DisableDutiesV2 sets validator client to use the get Duties endpoint
 	EnableWeb                           bool // EnableWeb enables the webui on the validator client
@@ -276,6 +276,13 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		cfg.ForceHead = ctx.String(forceHeadFlag.Name)
 	}
 
+	if ctx.Bool(UseHashtreeFlag.Name) {
+		logEnabled(UseHashtreeFlag)
+		htr.SetUseHashtree(true)
+	} else {
+		log.Info("Using gohashtree library for vectorized SHA-256 hashing")
+	}
+
 	if ctx.IsSet(blacklistRoots.Name) {
 		logEnabled(blacklistRoots)
 		cfg.BlacklistedRoots = parseBlacklistedRoots(ctx.StringSlice(blacklistRoots.Name))
@@ -334,7 +341,9 @@ func ConfigureValidator(ctx *cli.Context) error {
 	}
 	if ctx.Bool(UseHashtreeFlag.Name) {
 		logEnabled(UseHashtreeFlag)
-		cfg.UseHashtree = true
+		htr.SetUseHashtree(true)
+	} else {
+		log.Info("Using gohashtree library for vectorized SHA-256 hashing")
 	}
 	if ctx.Bool(DisableDutiesV2.Name) {
 		logEnabled(DisableDutiesV2)
