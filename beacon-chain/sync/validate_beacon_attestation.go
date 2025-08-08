@@ -91,11 +91,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	// Generate cache key for unaggregated attestation tracking
 	attKey, err := generateUnaggregatedAttCacheKey(att)
 	if err != nil {
-		if att.Version() >= version.Electra {
-			log.Debug("Called hasSeenUnaggregatedAtt with a non-single Electra attestation")
-		} else {
-			log.Debug("Attestation does not have exactly 1 bit set")
-		}
+		log.WithError(err).Error("Could not generate cache key for attestation tracking")
 		return pubsub.ValidationIgnore, nil
 	}
 
