@@ -12,13 +12,6 @@ config_setting(
     ],
 )
 
-config_setting(
-    name = "linux_amd64",
-    constraint_values = [
-        "@platforms//os:linux",
-        "@platforms//cpu:x86_64",
-    ],
-)
 
 # Build hashtree library for AMD64 - only build when targeting x86_64
 genrule(
@@ -199,7 +192,7 @@ go_library(
         "wrapper_windows_amd64.s",
     ] + select({
         ":windows_amd64": [":build_hashtree_windows_amd64"],
-        ":linux_amd64": [":build_hashtree_amd64"],
+        "@platforms//cpu:x86_64": [":build_hashtree_amd64"],
         "@platforms//cpu:aarch64": [":build_hashtree_arm64"],
         "//conditions:default": [":build_hashtree_generic"],
     }),
