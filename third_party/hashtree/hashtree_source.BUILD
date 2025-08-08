@@ -3,6 +3,23 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 package(default_visibility = ["//visibility:public"])
 
+# Config settings for platform detection
+config_setting(
+    name = "windows_amd64",
+    constraint_values = [
+        "@platforms//os:windows",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+config_setting(
+    name = "linux_amd64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
 # Build hashtree library for AMD64 - only build when targeting x86_64
 genrule(
     name = "build_hashtree_amd64",
@@ -109,6 +126,58 @@ genrule(
     tags = ["requires-network"],
 )
 
+# Build hashtree library for Windows AMD64 - compile from source
+genrule(
+    name = "build_hashtree_windows_amd64",
+    srcs = [
+        "src/hashtree.c",
+        "src/hashtree.h",
+        "src/sha256_generic.c", 
+        "src/sha256_shani.S",
+        "src/sha256_avx_x16.S",
+        "src/sha256_avx_x8.S", 
+        "src/sha256_avx_x4.S",
+        "src/sha256_avx_x1.S",
+        "src/sha256_sse_x1.S",
+    ],
+    outs = ["hashtree_windows_amd64.syso"],
+    cmd = """
+        # Create build directories
+        mkdir -p build/obj build/lib
+        
+        # Use Bazel's Windows cross-compilation toolchain
+        COMPILER="$${CC:-x86_64-w64-mingw32-gcc}"
+        ARCHIVER="$${AR:-x86_64-w64-mingw32-ar}"
+        
+        # Add debugging output
+        echo "Building hashtree for Windows with compiler: $$COMPILER"
+        echo "Building hashtree for Windows with archiver: $$ARCHIVER"
+        
+        # Compile assembly files for Windows (Intel syntax)
+        $$COMPILER -g -c $(location src/sha256_shani.S) -o build/obj/sha256_shani.o
+        $$COMPILER -g -c $(location src/sha256_avx_x16.S) -o build/obj/sha256_avx_x16.o
+        $$COMPILER -g -c $(location src/sha256_avx_x8.S) -o build/obj/sha256_avx_x8.o
+        $$COMPILER -g -c $(location src/sha256_avx_x4.S) -o build/obj/sha256_avx_x4.o
+        $$COMPILER -g -c $(location src/sha256_avx_x1.S) -o build/obj/sha256_avx_x1.o
+        $$COMPILER -g -c $(location src/sha256_sse_x1.S) -o build/obj/sha256_sse_x1.o
+        
+        # Compile C files for Windows
+        $$COMPILER -g -Wall -Werror -O3 -c $(location src/sha256_generic.c) -o build/obj/sha256_generic.o
+        $$COMPILER -g -Wall -Werror -O3 -c $(location src/hashtree.c) -I. -o build/obj/hashtree.o
+        
+        # Create static library (Windows uses .lib extension but we create .a for compatibility)
+        $$ARCHIVER rcs build/lib/libhashtree.a build/obj/*.o
+        
+        # Copy to syso file
+        cp build/lib/libhashtree.a $@
+    """,
+    target_compatible_with = [
+        "@platforms//os:windows",
+        "@platforms//cpu:x86_64",
+    ],
+    tags = ["requires-network"],
+)
+
 # Empty syso file for platforms where hashtree is not available
 genrule(
     name = "build_hashtree_generic",
@@ -127,8 +196,10 @@ go_library(
         "sha256_1_generic.go",
         "wrapper_linux_amd64.s",
         "wrapper_arm64.s",
+        "wrapper_windows_amd64.s",
     ] + select({
-        "@platforms//cpu:x86_64": [":build_hashtree_amd64"],
+        ":windows_amd64": [":build_hashtree_windows_amd64"],
+        ":linux_amd64": [":build_hashtree_amd64"],
         "@platforms//cpu:aarch64": [":build_hashtree_arm64"],
         "//conditions:default": [":build_hashtree_generic"],
     }),
