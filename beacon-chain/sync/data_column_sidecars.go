@@ -25,6 +25,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// DataColumnSidecarsParams stores the common parameters needed to
+// fetch data column sidecars from peers.
 type DataColumnSidecarsParams struct {
 	Ctx         context.Context
 	Tor         blockchain.TemporalOracle
@@ -333,7 +335,8 @@ func fetchDataColumnSidecarsFromPeers(
 	indicesByRootByPeer map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool,
 ) (map[goPeer.ID][]blocks.RODataColumn, error) {
 	var (
-		wg  sync.WaitGroup
+		wg sync.WaitGroup
+
 		mut sync.Mutex
 	)
 
