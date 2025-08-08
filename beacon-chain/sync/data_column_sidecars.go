@@ -242,7 +242,12 @@ func tryRequestingColumnsFromPeers(
 	slotByRoot := computeSlotByBlockRoot(roBlocks)
 
 	// Determine all sidecars each peers are expected to custody.
-	connectedPeers := p.P2P.Peers().Connected()
+	connectedPeersSlice := p.P2P.Peers().Connected()
+	connectedPeers := make(map[goPeer.ID]bool, len(connectedPeersSlice))
+	for _, peer := range connectedPeersSlice {
+		connectedPeers[peer] = true
+	}
+
 	indicesByRootByPeer, err := computeIndicesByRootByPeer(p.P2P, slotByRoot, missingIndicesByRoot, connectedPeers)
 	if err != nil {
 		return nil, errors.Wrap(err, "explore peers")
@@ -256,39 +261,14 @@ func tryRequestingColumnsFromPeers(
 		}
 
 		// Select peers to query the missing sidecars from.
-		internalIndicesByRootByPeer := copyIndicesByRootByPeer(indicesByRootByPeer)
-		indicesByRootByPeerToQuery := make(map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool)
-		for len(internalIndicesByRootByPeer) > 0 {
-			// Randomly select a peer with enough bandwidth.
-			peer, err := randomPeer(p.Ctx, randomSource, p.RateLimiter, len(missingIndicesByRoot), indicesByRootByPeer)
-			if err != nil {
-				return nil, errors.Wrap(err, "select random peer")
-			}
+		indicesByRootByPeerToQuery, err := selectPeers(p, randomSource, len(missingIndicesByRoot), indicesByRootByPeer)
+		if err != nil {
+			return nil, errors.Wrap(err, "select peers")
+		}
 
-			// Query all the sidecars that peer can offer us.
-			newIndicesByRoot := indicesByRootByPeer[peer]
-			indicesByRootByPeerToQuery[peer] = newIndicesByRoot
-
-			// Remove this peer from the maps to avoid re-selection.
-			delete(indicesByRootByPeer, peer)
-			delete(internalIndicesByRootByPeer, peer)
-
-			// Delete the corresponding sidecars from other peers in the internal map
-			// to avoid re-selection during this iteration.
-			for peer, indicesByRoot := range internalIndicesByRootByPeer {
-				for root, indices := range indicesByRoot {
-					newIndices := newIndicesByRoot[root]
-					for index := range newIndices {
-						delete(indices, index)
-					}
-					if len(indices) == 0 {
-						delete(indicesByRoot, root)
-					}
-				}
-				if len(indicesByRoot) == 0 {
-					delete(internalIndicesByRootByPeer, peer)
-				}
-			}
+		// Remove selected peers from the maps.
+		for peer := range indicesByRootByPeerToQuery {
+			delete(connectedPeers, peer)
 		}
 
 		// Fetch the sidecars from the chosen peers.
@@ -318,6 +298,11 @@ func tryRequestingColumnsFromPeers(
 				}
 			}
 		}
+
+		indicesByRootByPeer, err = computeIndicesByRootByPeer(p.P2P, slotByRoot, missingIndicesByRoot, connectedPeers)
+		if err != nil {
+			return nil, errors.Wrap(err, "explore peers")
+		}
 	}
 
 	if len(missingIndicesByRoot) > 0 {
@@ -325,6 +310,53 @@ func tryRequestingColumnsFromPeers(
 	}
 
 	return verifiedColumnsByRoot, nil
+}
+
+// selectPeers selects peers to query the sidecars.
+func selectPeers(
+	p DataColumnSidecarsParams,
+	randomSource *rand.Rand,
+	count int,
+	origIndicesByRootByPeer map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool,
+) (map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool, error) {
+	// Select peers to query the missing sidecars from.
+	indicesByRootByPeer := copyIndicesByRootByPeer(origIndicesByRootByPeer)
+	internalIndicesByRootByPeer := copyIndicesByRootByPeer(indicesByRootByPeer)
+	indicesByRootByPeerToQuery := make(map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool)
+	for len(internalIndicesByRootByPeer) > 0 {
+		// Randomly select a peer with enough bandwidth.
+		peer, err := randomPeer(p.Ctx, randomSource, p.RateLimiter, count, indicesByRootByPeer)
+		if err != nil {
+			return nil, errors.Wrap(err, "select random peer")
+		}
+
+		// Query all the sidecars that peer can offer us.
+		newIndicesByRoot := indicesByRootByPeer[peer]
+		indicesByRootByPeerToQuery[peer] = newIndicesByRoot
+
+		// Remove this peer from the maps to avoid re-selection.
+		delete(indicesByRootByPeer, peer)
+		delete(internalIndicesByRootByPeer, peer)
+
+		// Delete the corresponding sidecars from other peers in the internal map
+		// to avoid re-selection during this iteration.
+		for peer, indicesByRoot := range internalIndicesByRootByPeer {
+			for root, indices := range indicesByRoot {
+				newIndices := newIndicesByRoot[root]
+				for index := range newIndices {
+					delete(indices, index)
+				}
+				if len(indices) == 0 {
+					delete(indicesByRoot, root)
+				}
+			}
+			if len(indicesByRoot) == 0 {
+				delete(internalIndicesByRootByPeer, peer)
+			}
+		}
+	}
+
+	return indicesByRootByPeerToQuery, nil
 }
 
 // fetchDataColumnSidecarsFromPeers retrieves data column sidecars from peers.
@@ -599,17 +631,19 @@ func verifyByRootDataColumnSidecars(newVerifier verification.NewDataColumnsVerif
 	return verifiedRoDataColumns, nil
 }
 
-// computeIndicesByRootByPeer returns a peers->root->indices map.
+// computeIndicesByRootByPeer returns a peers->root->indices map only for
+// root and indices given in `indicesByBlockRoot`. It also only selects peers
+// for a given root only if its head state is higher than the block slot.
 func computeIndicesByRootByPeer(
 	p2p prysmP2P.P2P,
 	slotByBlockRoot map[[fieldparams.RootLength]byte]primitives.Slot,
 	indicesByBlockRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
-	peers []goPeer.ID,
+	peers map[goPeer.ID]bool,
 ) (map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool, error) {
 	// First, compute custody columns for all peers
 	peersByIndex := make(map[uint64]map[goPeer.ID]bool)
 	headSlotByPeer := make(map[goPeer.ID]primitives.Slot)
-	for _, peer := range peers {
+	for peer := range peers {
 		// Computes the custody columns for each peer
 		nodeID, err := prysmP2P.ConvertPeerIDToNodeID(peer)
 		if err != nil {

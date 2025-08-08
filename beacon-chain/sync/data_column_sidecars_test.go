@@ -193,7 +193,12 @@ func TestComputeIndicesByRootByPeer(t *testing.T) {
 		},
 	}
 
-	actual, err := computeIndicesByRootByPeer(p2p, slotByBlockRoot, indicesByBlockRoot, peerIDs)
+	peerIDsMap := make(map[peer.ID]bool, len(peerIDs))
+	for _, id := range peerIDs {
+		peerIDsMap[id] = true
+	}
+
+	actual, err := computeIndicesByRootByPeer(p2p, slotByBlockRoot, indicesByBlockRoot, peerIDsMap)
 	require.NoError(t, err)
 	require.Equal(t, len(expected), len(actual))
 
