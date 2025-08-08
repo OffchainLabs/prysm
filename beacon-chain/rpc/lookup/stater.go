@@ -21,22 +21,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-type StateIdDecodeError struct {
-	message string
-}
-
-// NewStateIdDecodeError creates a new error instance.
-func NewStateIdDecodeError(reason error) StateIdDecodeError {
-	return StateIdDecodeError{
-		message: errors.Wrapf(reason, "could not decode state ID").Error(),
-	}
-}
-
-// Error returns the underlying error message.
-func (e *StateIdDecodeError) Error() string {
-	return e.message
-}
-
 type FetchStateError struct {
 	message string
 	cause   error

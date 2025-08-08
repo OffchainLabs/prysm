@@ -23,12 +23,6 @@ func WriteStateFetchError(w http.ResponseWriter, err error) {
 		httputil.HandleError(w, "Invalid state ID: "+parseErr.Error(), http.StatusBadRequest)
 		return
 	}
-	var decodeErr *lookup.StateIdDecodeError
-	if errors.As(err, &decodeErr) {
-		httputil.HandleError(w, "Invalid state ID: "+decodeErr.Error(), http.StatusBadRequest)
-		return
-	}
-
 	httputil.HandleError(w, "Could not get state: "+err.Error(), http.StatusInternalServerError)
 }
 

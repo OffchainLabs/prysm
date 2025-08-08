@@ -393,15 +393,6 @@ func TestHandleIsOptimisticError(t *testing.T) {
 		require.Equal(t, http.StatusNotFound, rr.Code)
 		require.StringContains(t, notFoundErr.Error(), rr.Body.String())
 	})
-	t.Run("fetch-state error handled as 400", func(t *testing.T) {
-		rr := httptest.NewRecorder()
-		decodeErr := lookup.StateIdDecodeError{}
-		fetchErr := lookup.NewFetchStateError(&decodeErr)
-		HandleIsOptimisticError(rr, fetchErr)
-
-		require.Equal(t, http.StatusBadRequest, rr.Code)
-		require.StringContains(t, decodeErr.Error(), rr.Body.String())
-	})
 	t.Run("no block roots error handled as 404", func(t *testing.T) {
 		rr := httptest.NewRecorder()
 		blockRootsErr := lookup.NewBlockRootsNotFoundError()

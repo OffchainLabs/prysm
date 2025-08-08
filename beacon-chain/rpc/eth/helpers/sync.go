@@ -56,7 +56,7 @@ func IsOptimistic(
 		if bytesutil.IsHex(stateId) {
 			id, err := hexutil.Decode(stateIdString)
 			if err != nil {
-				e := lookup.NewStateIdDecodeError(err)
+				e := lookup.NewStateIdParseError(err)
 				return false, &e
 			}
 			return isStateRootOptimistic(ctx, id, optimisticModeFetcher, stateFetcher, chainInfo, database)

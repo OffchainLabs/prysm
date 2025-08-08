@@ -32,11 +32,6 @@ func TestWriteStateFetchError(t *testing.T) {
 			expectedCode:    http.StatusBadRequest,
 		},
 		{
-			err:             &lookup.StateIdDecodeError{},
-			expectedMessage: "Invalid state ID",
-			expectedCode:    http.StatusBadRequest,
-		},
-		{
 			err:             errors.New("state not found"),
 			expectedMessage: "Could not get state",
 			expectedCode:    http.StatusInternalServerError,
