@@ -873,6 +873,7 @@ func TestServer_getPayloadHeader(t *testing.T) {
 		err                   string
 		returnedHeader        *v1.ExecutionPayloadHeader
 		returnedHeaderCapella *v1.ExecutionPayloadHeaderCapella
+		forkVersion           int
 	}{
 		{
 			name: "can't request before bellatrix epoch",
@@ -974,7 +975,7 @@ func TestServer_getPayloadHeader(t *testing.T) {
 					return wb
 				}(),
 			},
-			err: "builder bid response version: 3 is not compatible with head block version: 2 for epoch 1",
+			err: "builder bid response version: 3 is not compatible with expected version: 2 for epoch 1",
 		},
 		{
 			name: "different bid version during hard fork",
@@ -1085,10 +1086,21 @@ func TestServer_getPayloadHeader(t *testing.T) {
 				}(),
 			},
 			// Should succeed because Electra bids are compatible with Fulu head blocks
+			forkVersion: version.Fulu,
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.forkVersion != 0 {
+				params.SetupTestConfigCleanup(t)
+				cfg := params.BeaconConfig()
+				if tc.forkVersion == version.Fulu {
+					cfg.FuluForkEpoch = 0
+					cfg.BellatrixForkEpoch = 0
+					cfg.InitializeForkSchedule()
+				}
+				params.OverrideBeaconConfig(cfg)
+			}
 			vs := &Server{BeaconDB: dbTest.SetupDB(t), BlockBuilder: tc.mock, HeadFetcher: tc.fetcher, TimeFetcher: &blockchainTest.ChainService{
 				Genesis: genesis,
 			}}
