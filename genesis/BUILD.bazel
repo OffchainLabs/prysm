@@ -34,6 +34,7 @@ go_test(
     deps = [
         ":go_default_library",
         "//config/params:go_default_library",
+        "//genesis/embedded:go_default_library",
         "//testing/require:go_default_library",
     ],
 )
