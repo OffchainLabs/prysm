@@ -367,6 +367,7 @@ func tryReconstructFromStorageAndPeers(
 			}
 		}
 
+		// Compute indices by root by peers with the updated missing indices and connected peers.
 		indicesByRootByPeer, err = computeIndicesByRootByPeer(p.P2P, slotByRoot, missingIndicesByRoot, connectedPeers)
 		if err != nil {
 			return nil, errors.Wrap(err, "explore peers")
@@ -520,6 +521,32 @@ func selectPeers(
 	}
 
 	return indicesByRootByPeerToQuery, nil
+}
+
+// updateResults updates the missing indices and verified sidecars maps based on the newly verified sidecars.
+func updateResults(
+	verifiedSidecars []blocks.VerifiedRODataColumn,
+	origMissingIndicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
+) (map[[fieldparams.RootLength]byte]map[uint64]bool, map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn) {
+	// Copy the original map to avoid modifying it directly.
+	missingIndicesByRoot := copyIndicesByRoot(origMissingIndicesByRoot)
+	verifiedSidecarsByRoot := make(map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn)
+	for _, verifiedSidecar := range verifiedSidecars {
+		blockRoot := verifiedSidecar.BlockRoot()
+		index := verifiedSidecar.Index
+
+		// Add to the result map grouped by block root
+		verifiedSidecarsByRoot[blockRoot] = append(verifiedSidecarsByRoot[blockRoot], verifiedSidecar)
+
+		if indices, ok := missingIndicesByRoot[blockRoot]; ok {
+			delete(indices, index)
+			if len(indices) == 0 {
+				delete(missingIndicesByRoot, blockRoot)
+			}
+		}
+	}
+
+	return missingIndicesByRoot, verifiedSidecarsByRoot
 }
 
 // fetchDataColumnSidecarsFromPeers retrieves data column sidecars from peers.
