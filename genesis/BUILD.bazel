@@ -30,9 +30,12 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["initialize_test.go"],
+    srcs = [
+        "embedded_test.go",
+        "initialize_test.go",
+    ],
+    embed = [":go_default_library"],
     deps = [
-        ":go_default_library",
         "//config/params:go_default_library",
         "//genesis/embedded:go_default_library",
         "//testing/require:go_default_library",
