@@ -469,6 +469,13 @@ func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {
 func TestService_setSeenUnaggregatedAtt(t *testing.T) {
 	s := NewService(t.Context(), WithP2P(p2ptest.NewTestP2P(t)))
 
+	// Helper function to generate key and handle errors in tests
+	generateKey := func(t *testing.T, att ethpb.Att) string {
+		key, err := generateUnaggregatedAttCacheKey(att)
+		require.NoError(t, err)
+		return key
+	}
+
 	t.Run("phase0", func(t *testing.T) {
 		s.initCaches()
 
@@ -502,31 +509,41 @@ func TestService_setSeenUnaggregatedAtt(t *testing.T) {
 		}
 
 		t.Run("empty cache", func(t *testing.T) {
-			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c0a0))
+			key := generateKey(t, s0c0a0)
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(key))
 		})
 		t.Run("ok", func(t *testing.T) {
-			s.setSeenUnaggregatedAtt(s0c0a0)
-			assert.Equal(t, true, s.hasSeenUnaggregatedAtt(s0c0a0))
+			key := generateKey(t, s0c0a0)
+			s.setSeenUnaggregatedAtt(key)
+			assert.Equal(t, true, s.hasSeenUnaggregatedAtt(key))
 		})
 		t.Run("different slot", func(t *testing.T) {
-			s.setSeenUnaggregatedAtt(s1c0a0)
-			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(s2c0a0))
+			key1 := generateKey(t, s1c0a0)
+			key2 := generateKey(t, s2c0a0)
+			s.setSeenUnaggregatedAtt(key1)
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(key2))
 		})
 		t.Run("different committee index", func(t *testing.T) {
-			s.setSeenUnaggregatedAtt(s0c1a0)
-			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c2a0))
+			key1 := generateKey(t, s0c1a0)
+			key2 := generateKey(t, s0c2a0)
+			s.setSeenUnaggregatedAtt(key1)
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(key2))
 		})
 		t.Run("different bit", func(t *testing.T) {
-			s.setSeenUnaggregatedAtt(s0c0a1)
-			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c0a2))
+			key1 := generateKey(t, s0c0a1)
+			key2 := generateKey(t, s0c0a2)
+			s.setSeenUnaggregatedAtt(key1)
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(key2))
 		})
 		t.Run("0 bits set is considered not seen", func(t *testing.T) {
 			a := &ethpb.Attestation{AggregationBits: bitfield.Bitlist{0b1000}}
-			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(a))
+			_, err := generateUnaggregatedAttCacheKey(a)
+			require.Equal(t, err != nil, true, "Should error because no bits set is invalid")
 		})
 		t.Run("multiple bits set is considered not seen", func(t *testing.T) {
 			a := &ethpb.Attestation{AggregationBits: bitfield.Bitlist{0b1111}}
-			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(a))
+			_, err := generateUnaggregatedAttCacheKey(a)
+			require.Equal(t, err != nil, true, "Should error because no bits set is invalid")
 		})
 	})
 	t.Run("electra", func(t *testing.T) {
@@ -569,27 +586,36 @@ func TestService_setSeenUnaggregatedAtt(t *testing.T) {
 		}
 
 		t.Run("empty cache", func(t *testing.T) {
-			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c0a0))
+			key := generateKey(t, s0c0a0)
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(key))
 		})
 		t.Run("ok", func(t *testing.T) {
-			s.setSeenUnaggregatedAtt(s0c0a0)
-			assert.Equal(t, true, s.hasSeenUnaggregatedAtt(s0c0a0))
+			key := generateKey(t, s0c0a0)
+			s.setSeenUnaggregatedAtt(key)
+			assert.Equal(t, true, s.hasSeenUnaggregatedAtt(key))
 		})
 		t.Run("different slot", func(t *testing.T) {
-			s.setSeenUnaggregatedAtt(s1c0a0)
-			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(s2c0a0))
+			key1 := generateKey(t, s1c0a0)
+			key2 := generateKey(t, s2c0a0)
+			s.setSeenUnaggregatedAtt(key1)
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(key2))
 		})
 		t.Run("different committee index", func(t *testing.T) {
-			s.setSeenUnaggregatedAtt(s0c1a0)
-			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c2a0))
+			key1 := generateKey(t, s0c1a0)
+			key2 := generateKey(t, s0c2a0)
+			s.setSeenUnaggregatedAtt(key1)
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(key2))
 		})
 		t.Run("different attester", func(t *testing.T) {
-			s.setSeenUnaggregatedAtt(s0c0a1)
-			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(s0c0a2))
+			key1 := generateKey(t, s0c0a1)
+			key2 := generateKey(t, s0c0a2)
+			s.setSeenUnaggregatedAtt(key1)
+			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(key2))
 		})
 		t.Run("single attestation is considered not seen", func(t *testing.T) {
 			a := &ethpb.AttestationElectra{}
-			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(a))
+			_, err := generateUnaggregatedAttCacheKey(a)
+			require.Equal(t, err != nil, true, "Should error because no bits set is invalid")
 		})
 	})
 }

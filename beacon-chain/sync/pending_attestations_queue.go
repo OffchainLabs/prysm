@@ -146,6 +146,12 @@ func (s *Service) processAggregate(ctx context.Context, aggregate ethpb.SignedAg
 func (s *Service) processAtt(ctx context.Context, att ethpb.Att) {
 	data := att.GetData()
 
+	// Generate cache key for unaggregated attestation tracking
+	attKey, err := generateUnaggregatedAttCacheKey(att)
+	if err != nil {
+		log.Debug("Could not generate cache key for attestation tracking")
+	}
+
 	// This is an important validation before retrieving attestation pre state to defend against
 	// attestation's target intentionally referencing a checkpoint that's long ago.
 	if !s.cfg.chain.InForkchoice(bytesutil.ToBytes32(data.BeaconBlockRoot)) {
@@ -225,7 +231,9 @@ func (s *Service) processAtt(ctx context.Context, att ethpb.Att) {
 			}
 		}
 
-		s.setSeenUnaggregatedAtt(att)
+		if err == nil {
+			s.setSeenUnaggregatedAtt(attKey)
+		}
 
 		valCount, err := helpers.ActiveValidatorCount(ctx, preState, slots.ToEpoch(data.Slot))
 		if err != nil {
