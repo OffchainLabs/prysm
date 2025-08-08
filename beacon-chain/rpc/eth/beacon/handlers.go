@@ -1008,9 +1008,29 @@ func (s *Server) validateConsensus(ctx context.Context, b *eth.GenericSignedBeac
 	}
 
 	parentStateRoot := parentBlock.Block().StateRoot()
-	parentState, err := s.Stater.State(ctx, parentStateRoot[:])
-	if err != nil {
-		return errors.Wrap(err, "could not get parent state")
+	// Check if the state is already cached
+	parentState := transition.NextSlotState(parentBlockRoot[:], blk.Block().Slot())
+	if parentState == nil {
+		// The state is not advanced in the NSC, check first if the parent post-state is head
+		headRoot, err := s.HeadFetcher.HeadRoot(ctx)
+		if err != nil {
+			return errors.Wrap(err, "could not get head root")
+		}
+		if bytes.Equal(headRoot, parentBlockRoot[:]) {
+			parentState, err = s.HeadFetcher.HeadState(ctx)
+			if err != nil {
+				return errors.Wrap(err, "could not get head state")
+			}
+			parentState, err = transition.ProcessSlots(ctx, parentState, blk.Block().Slot())
+			if err != nil {
+				return errors.Wrap(err, "could not process slots to get parent state")
+			}
+		} else {
+			parentState, err = s.Stater.State(ctx, parentStateRoot[:])
+			if err != nil {
+				return errors.Wrap(err, "could not get parent state")
+			}
+		}
 	}
 	_, err = transition.ExecuteStateTransition(ctx, parentState, blk)
 	if err != nil {

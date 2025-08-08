@@ -265,7 +265,8 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 			s.metaData = wrapper.WrappedMetadataV0(new(ethpb.MetaDataV0))
 			bitV := bitfield.NewBitvector64()
 			bitV.SetBitAt(subnet, true)
-			s.updateSubnetRecordWithMetadata(bitV)
+			err := s.updateSubnetRecordWithMetadata(bitV)
+			require.NoError(t, err)
 		}
 		assert.NoError(t, err, "Could not start discovery for node")
 		listeners = append(listeners, listener)
