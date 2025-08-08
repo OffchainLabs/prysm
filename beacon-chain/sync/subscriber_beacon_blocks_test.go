@@ -215,8 +215,11 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 		cfg.FuluForkEpoch = 0
 		params.OverrideBeaconConfig(cfg)
 
-		chainService := &chainMock.ChainService{
-			Genesis: time.Now(),
+		// Create a chain service that returns ErrDataNotAvailable to trigger execution service calls
+		chainService := &ChainServiceDataNotAvailable{
+			ChainService: &chainMock.ChainService{
+				Genesis: time.Now(),
+			},
 		}
 
 		allColumns := make([]blocks.VerifiedRODataColumn, 128)
@@ -476,4 +479,13 @@ func (m *MockExecutionClientTrackingCalls) ReconstructFullBellatrixBlockBatch(ct
 
 func (m *MockExecutionClientTrackingCalls) ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, hasIndex func(uint64) bool) ([]blocks.VerifiedROBlob, error) {
 	return m.EngineClient.ReconstructBlobSidecars(ctx, block, blockRoot, hasIndex)
+}
+
+// ChainServiceDataNotAvailable wraps ChainService and overrides IsDataAvailable to return ErrDataNotAvailable
+type ChainServiceDataNotAvailable struct {
+	*chainMock.ChainService
+}
+
+func (c *ChainServiceDataNotAvailable) IsDataAvailable(ctx context.Context, blockRoot [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) error {
+	return blockchain.ErrDataNotAvailable
 }
