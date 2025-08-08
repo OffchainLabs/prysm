@@ -366,6 +366,11 @@ func tryReconstructFromStorageAndPeers(
 				result[root] = append(result[root], sidecar)
 			}
 		}
+
+		indicesByRootByPeer, err = computeIndicesByRootByPeer(p.P2P, slotByRoot, missingIndicesByRoot, connectedPeers)
+		if err != nil {
+			return nil, errors.Wrap(err, "explore peers")
+		}
 	}
 
 	log.WithFields(logrus.Fields{
@@ -468,6 +473,53 @@ func updateResults(
 	}
 
 	return verifiedSidecarsByRoot
+}
+
+// selectPeers selects peers to query the sidecars.
+func selectPeers(
+	p DataColumnSidecarsParams,
+	randomSource *rand.Rand,
+	count int,
+	origIndicesByRootByPeer map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool,
+) (map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool, error) {
+	// Select peers to query the missing sidecars from.
+	indicesByRootByPeer := copyIndicesByRootByPeer(origIndicesByRootByPeer)
+	internalIndicesByRootByPeer := copyIndicesByRootByPeer(indicesByRootByPeer)
+	indicesByRootByPeerToQuery := make(map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool)
+	for len(internalIndicesByRootByPeer) > 0 {
+		// Randomly select a peer with enough bandwidth.
+		peer, err := randomPeer(p.Ctx, randomSource, p.RateLimiter, count, indicesByRootByPeer)
+		if err != nil {
+			return nil, errors.Wrap(err, "select random peer")
+		}
+
+		// Query all the sidecars that peer can offer us.
+		newIndicesByRoot := indicesByRootByPeer[peer]
+		indicesByRootByPeerToQuery[peer] = newIndicesByRoot
+
+		// Remove this peer from the maps to avoid re-selection.
+		delete(indicesByRootByPeer, peer)
+		delete(internalIndicesByRootByPeer, peer)
+
+		// Delete the corresponding sidecars from other peers in the internal map
+		// to avoid re-selection during this iteration.
+		for peer, indicesByRoot := range internalIndicesByRootByPeer {
+			for root, indices := range indicesByRoot {
+				newIndices := newIndicesByRoot[root]
+				for index := range newIndices {
+					delete(indices, index)
+				}
+				if len(indices) == 0 {
+					delete(indicesByRoot, root)
+				}
+			}
+			if len(indicesByRoot) == 0 {
+				delete(internalIndicesByRootByPeer, peer)
+			}
+		}
+	}
+
+	return indicesByRootByPeerToQuery, nil
 }
 
 // fetchDataColumnSidecarsFromPeers retrieves data column sidecars from peers.
