@@ -716,6 +716,8 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, signedROBlo
 						retryLog.WithField("attempts", attemptCount).Debug("Retry succeeded")
 						getBlobsRetryAttempts.WithLabelValues("success_reconstructed").Inc()
 						getBlobsRetryDuration.WithLabelValues("success").Observe(time.Since(startTime).Seconds())
+						// Clean up active retry tracker immediately on success
+						s.activeRetries.Delete(blockRoot)
 						return
 					}
 
