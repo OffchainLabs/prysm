@@ -728,3 +728,111 @@ func signedTestBlindedBlockFulu(t *testing.T, slot primitives.Slot) interfaces.R
 	require.NoError(t, err)
 	return s
 }
+
+func TestUnmarshalStateStandalone(t *testing.T) {
+	ctx := t.Context()
+	defer util.HackForksMaxuint(t, []int{version.Electra, version.Fulu})()
+
+	bc := params.BeaconConfig()
+	altairSlot, err := slots.EpochStart(bc.AltairForkEpoch)
+	require.NoError(t, err)
+	bellaSlot, err := slots.EpochStart(bc.BellatrixForkEpoch)
+	require.NoError(t, err)
+	capellaSlot, err := slots.EpochStart(bc.CapellaForkEpoch)
+	require.NoError(t, err)
+	denebSlot, err := slots.EpochStart(bc.DenebForkEpoch)
+	require.NoError(t, err)
+	electraSlot, err := slots.EpochStart(bc.ElectraForkEpoch)
+	require.NoError(t, err)
+	fuluSlot, err := slots.EpochStart(bc.FuluForkEpoch)
+	require.NoError(t, err)
+
+	cases := []struct {
+		name        string
+		version     int
+		slot        primitives.Slot
+		forkversion [4]byte
+	}{
+		{
+			name:        "phase0",
+			version:     version.Phase0,
+			slot:        0,
+			forkversion: bytesutil.ToBytes4(bc.GenesisForkVersion),
+		},
+		{
+			name:        "altair",
+			version:     version.Altair,
+			slot:        altairSlot,
+			forkversion: bytesutil.ToBytes4(bc.AltairForkVersion),
+		},
+		{
+			name:        "bellatrix",
+			version:     version.Bellatrix,
+			slot:        bellaSlot,
+			forkversion: bytesutil.ToBytes4(bc.BellatrixForkVersion),
+		},
+		{
+			name:        "capella",
+			version:     version.Capella,
+			slot:        capellaSlot,
+			forkversion: bytesutil.ToBytes4(bc.CapellaForkVersion),
+		},
+		{
+			name:        "deneb",
+			version:     version.Deneb,
+			slot:        denebSlot,
+			forkversion: bytesutil.ToBytes4(bc.DenebForkVersion),
+		},
+		{
+			name:        "electra",
+			version:     version.Electra,
+			slot:        electraSlot,
+			forkversion: bytesutil.ToBytes4(bc.ElectraForkVersion),
+		},
+		{
+			name:        "fulu",
+			version:     version.Fulu,
+			slot:        fuluSlot,
+			forkversion: bytesutil.ToBytes4(bc.FuluForkVersion),
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			// Create a state for the specific version
+			originalState, err := stateForVersion(c.version)
+			require.NoError(t, err)
+			require.NoError(t, originalState.SetFork(&ethpb.Fork{
+				PreviousVersion: make([]byte, 4),
+				CurrentVersion:  c.forkversion[:],
+				Epoch:           0,
+			}))
+			require.NoError(t, originalState.SetSlot(c.slot))
+
+			marshaled, err := originalState.MarshalSSZ()
+			require.NoError(t, err)
+
+			unmarshaledState, err := UnmarshalState(marshaled)
+			require.NoError(t, err)
+			require.NotNil(t, unmarshaledState)
+
+			// Verify the unmarshaled state matches the original
+			expectedRoot, err := originalState.HashTreeRoot(ctx)
+			require.NoError(t, err)
+			actualRoot, err := unmarshaledState.HashTreeRoot(ctx)
+			require.NoError(t, err)
+			require.DeepEqual(t, expectedRoot, actualRoot)
+
+			// Verify basic state properties
+			require.Equal(t, c.slot, unmarshaledState.Slot())
+			fork := unmarshaledState.Fork()
+			require.DeepEqual(t, c.forkversion[:], fork.CurrentVersion)
+		})
+	}
+
+	t.Run("invalid state data", func(t *testing.T) {
+		invalidData := []byte("bad")
+		_, err := UnmarshalState(invalidData)
+		require.ErrorContains(t, "failed to detect version from state", err)
+	})
+}
