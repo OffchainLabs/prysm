@@ -71,7 +71,7 @@ func findGenesisFile(dir string) (GenesisData, error) {
 	}
 	files, err := os.ReadDir(dir)
 	if err != nil {
-		return GenesisData{}, fmt.Errorf("%w: %v", ErrGenesisFileNotFound, err)
+		return GenesisData{}, fmt.Errorf("%w: %w", ErrGenesisFileNotFound, err)
 	}
 	for _, f := range files {
 		gd, err := tryParseFname(dir, f)
