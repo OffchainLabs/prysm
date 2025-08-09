@@ -10,6 +10,7 @@ import (
 
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
+	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -31,15 +32,19 @@ func TestStartDiscv5_DifferentForkDigests(t *testing.T) {
 	ipAddr, pkey := createAddrAndPrivKey(t)
 	genesisTime := time.Now()
 	genesisValidatorsRoot := make([]byte, fieldparams.RootLength)
+	db := testDB.SetupDB(t)
+
 	s := &Service{
 		cfg: &Config{
 			UDPPort:              uint(port),
 			StateNotifier:        &mock.MockStateNotifier{},
 			PingInterval:         testPingInterval,
 			DisableLivenessCheck: true,
+			DB:                   db,
 		},
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: genesisValidatorsRoot,
+		custodyInfo:           &custodyInfo{},
 	}
 	bootListener, err := s.createListener(ipAddr, pkey)
 	require.NoError(t, err)
@@ -56,6 +61,7 @@ func TestStartDiscv5_DifferentForkDigests(t *testing.T) {
 		StateNotifier:        &mock.MockStateNotifier{},
 		PingInterval:         testPingInterval,
 		DisableLivenessCheck: true,
+		DB:                   db,
 	}
 
 	var listeners []*listenerWrapper
@@ -73,6 +79,7 @@ func TestStartDiscv5_DifferentForkDigests(t *testing.T) {
 			cfg:                   cfg,
 			genesisTime:           genesisTime,
 			genesisValidatorsRoot: root,
+			custodyInfo:           &custodyInfo{},
 		}
 		listener, err := s.startDiscoveryV5(ipAddr, pkey)
 		assert.NoError(t, err, "Could not start discovery for node")
@@ -130,10 +137,13 @@ func TestStartDiscv5_SameForkDigests_DifferentNextForkData(t *testing.T) {
 	ipAddr, pkey := createAddrAndPrivKey(t)
 	genesisTime := time.Now()
 	genesisValidatorsRoot := make([]byte, 32)
+	db := testDB.SetupDB(t)
+
 	s := &Service{
-		cfg:                   &Config{UDPPort: uint(port), PingInterval: testPingInterval, DisableLivenessCheck: true},
+		cfg:                   &Config{UDPPort: uint(port), PingInterval: testPingInterval, DisableLivenessCheck: true, DB: db},
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: genesisValidatorsRoot,
+		custodyInfo:           &custodyInfo{},
 	}
 	bootListener, err := s.createListener(ipAddr, pkey)
 	require.NoError(t, err)
@@ -149,6 +159,7 @@ func TestStartDiscv5_SameForkDigests_DifferentNextForkData(t *testing.T) {
 		UDPPort:              uint(port),
 		PingInterval:         testPingInterval,
 		DisableLivenessCheck: true,
+		DB:                   db,
 	}
 
 	var listeners []*listenerWrapper
@@ -168,6 +179,7 @@ func TestStartDiscv5_SameForkDigests_DifferentNextForkData(t *testing.T) {
 			cfg:                   cfg,
 			genesisTime:           genesisTime,
 			genesisValidatorsRoot: genesisValidatorsRoot,
+			custodyInfo:           &custodyInfo{},
 		}
 		listener, err := s.startDiscoveryV5(ipAddr, pkey)
 		assert.NoError(t, err, "Could not start discovery for node")

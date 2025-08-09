@@ -531,21 +531,6 @@ func (a *AggregateAttestationAndProofElectra) AggregateVal() Att {
 }
 
 // Version --
-func (a *AggregateAttestationAndProofSingle) Version() int {
-	return version.Electra
-}
-
-// IsNil --
-func (a *AggregateAttestationAndProofSingle) IsNil() bool {
-	return a == nil || a.Aggregate == nil || a.Aggregate.IsNil()
-}
-
-// AggregateVal --
-func (a *AggregateAttestationAndProofSingle) AggregateVal() Att {
-	return a.Aggregate
-}
-
-// Version --
 func (a *SignedAggregateAttestationAndProof) Version() int {
 	return version.Phase0
 }
@@ -572,20 +557,5 @@ func (a *SignedAggregateAttestationAndProofElectra) IsNil() bool {
 
 // AggregateAttestationAndProof --
 func (a *SignedAggregateAttestationAndProofElectra) AggregateAttestationAndProof() AggregateAttAndProof {
-	return a.Message
-}
-
-// Version --
-func (a *SignedAggregateAttestationAndProofSingle) Version() int {
-	return version.Electra
-}
-
-// IsNil --
-func (a *SignedAggregateAttestationAndProofSingle) IsNil() bool {
-	return a == nil || a.Message == nil || a.Message.IsNil()
-}
-
-// AggregateAttestationAndProof --
-func (a *SignedAggregateAttestationAndProofSingle) AggregateAttestationAndProof() AggregateAttAndProof {
 	return a.Message
 }

@@ -44,6 +44,8 @@ var (
 	errMaxBlobsExceeded = verification.AsVerificationFailure(errors.New("expected commitments in block exceeds MAX_BLOBS_PER_BLOCK"))
 	// errMaxDataColumnsExceeded is returned when the number of data columns exceeds the maximum allowed.
 	errMaxDataColumnsExceeded = verification.AsVerificationFailure(errors.New("expected data columns for node exceeds NUMBER_OF_COLUMNS"))
+	// errBlockBeingSynced is returned when a block is being synced.
+	errBlockBeingSynced = errors.New("block is being synced")
 )
 
 // An invalid block is the block that fails state transition based on the core protocol rules.

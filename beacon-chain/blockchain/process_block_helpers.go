@@ -1,7 +1,6 @@
 package blockchain
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -171,15 +170,7 @@ func (s *Service) processLightClientUpdate(cfg *postBlockProcessConfig) error {
 		return errors.Wrapf(err, "could not get finalized block for root %#x", finalizedRoot)
 	}
 
-	update, err := lightclient.NewLightClientUpdateFromBeaconState(
-		cfg.ctx,
-		s.CurrentSlot(),
-		cfg.postState,
-		cfg.roblock,
-		attestedState,
-		attestedBlock,
-		finalizedBlock,
-	)
+	update, err := lightclient.NewLightClientUpdateFromBeaconState(cfg.ctx, cfg.postState, cfg.roblock, attestedState, attestedBlock, finalizedBlock)
 	if err != nil {
 		return errors.Wrapf(err, "could not create light client update")
 	}
@@ -206,8 +197,7 @@ func (s *Service) processLightClientFinalityUpdate(
 
 	finalizedCheckpoint := attestedState.FinalizedCheckpoint()
 
-	// Check if the finalized checkpoint has changed
-	if finalizedCheckpoint == nil || bytes.Equal(finalizedCheckpoint.GetRoot(), postState.FinalizedCheckpoint().Root) {
+	if finalizedCheckpoint == nil {
 		return nil
 	}
 
@@ -221,51 +211,18 @@ func (s *Service) processLightClientFinalityUpdate(
 		return errors.Wrapf(err, "could not get finalized block for root %#x", finalizedRoot)
 	}
 
-	newUpdate, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(
-		ctx,
-		postState.Slot(),
-		postState,
-		signed,
-		attestedState,
-		attestedBlock,
-		finalizedBlock,
-	)
+	newUpdate, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(ctx, postState, signed, attestedState, attestedBlock, finalizedBlock)
 
 	if err != nil {
 		return errors.Wrap(err, "could not create light client finality update")
 	}
 
-	lastUpdate := s.lcStore.LastFinalityUpdate()
-	if lastUpdate != nil {
-		// The finalized_header.beacon.lastUpdateSlot is greater than that of all previously forwarded finality_updates,
-		// or it matches the highest previously forwarded lastUpdateSlot and also has a sync_aggregate indicating supermajority (> 2/3)
-		// sync committee participation while the previously forwarded finality_update for that lastUpdateSlot did not indicate supermajority
-		newUpdateSlot := newUpdate.FinalizedHeader().Beacon().Slot
-		newHasSupermajority := lightclient.UpdateHasSupermajority(newUpdate.SyncAggregate())
-
-		lastUpdateSlot := lastUpdate.FinalizedHeader().Beacon().Slot
-		lastHasSupermajority := lightclient.UpdateHasSupermajority(lastUpdate.SyncAggregate())
-
-		if newUpdateSlot < lastUpdateSlot {
-			log.Debug("Skip saving light client finality newUpdate: Older than local newUpdate")
-			return nil
-		}
-		if newUpdateSlot == lastUpdateSlot && (lastHasSupermajority || !newHasSupermajority) {
-			log.Debug("Skip saving light client finality update: No supermajority advantage")
-			return nil
-		}
+	if !lightclient.IsBetterFinalityUpdate(newUpdate, s.lcStore.LastFinalityUpdate()) {
+		log.Debug("Skip saving light client finality update: current update is better")
+		return nil
 	}
-	log.Debug("Saving new light client finality update")
-	s.lcStore.SetLastFinalityUpdate(newUpdate)
 
-	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
-		Type: statefeed.LightClientFinalityUpdate,
-		Data: newUpdate,
-	})
-
-	if err = s.cfg.P2P.BroadcastLightClientFinalityUpdate(ctx, newUpdate); err != nil {
-		return errors.Wrap(err, "could not broadcast light client finality update")
-	}
+	s.lcStore.SetLastFinalityUpdate(newUpdate, true)
 
 	return nil
 }
@@ -282,14 +239,7 @@ func (s *Service) processLightClientOptimisticUpdate(ctx context.Context, signed
 		return errors.Wrapf(err, "could not get attested state for root %#x", attestedRoot)
 	}
 
-	newUpdate, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(
-		ctx,
-		postState.Slot(),
-		postState,
-		signed,
-		attestedState,
-		attestedBlock,
-	)
+	newUpdate, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(ctx, postState, signed, attestedState, attestedBlock)
 
 	if err != nil {
 		if strings.Contains(err.Error(), lightclient.ErrNotEnoughSyncCommitteeBits) {
@@ -299,26 +249,12 @@ func (s *Service) processLightClientOptimisticUpdate(ctx context.Context, signed
 		return errors.Wrap(err, "could not create light client optimistic update")
 	}
 
-	lastUpdate := s.lcStore.LastOptimisticUpdate()
-	if lastUpdate != nil {
-		// The attested_header.beacon.slot is greater than that of all previously forwarded optimistic updates
-		if newUpdate.AttestedHeader().Beacon().Slot <= lastUpdate.AttestedHeader().Beacon().Slot {
-			log.Debug("Skip saving light client optimistic update: Older than local update")
-			return nil
-		}
+	if !lightclient.IsBetterOptimisticUpdate(newUpdate, s.lcStore.LastOptimisticUpdate()) {
+		log.Debug("Skip saving light client optimistic update: current update is better")
+		return nil
 	}
 
-	log.Debug("Saving new light client optimistic update")
-	s.lcStore.SetLastOptimisticUpdate(newUpdate)
-
-	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
-		Type: statefeed.LightClientOptimisticUpdate,
-		Data: newUpdate,
-	})
-
-	if err = s.cfg.P2P.BroadcastLightClientOptimisticUpdate(ctx, newUpdate); err != nil {
-		return errors.Wrap(err, "could not broadcast light client optimistic update")
-	}
+	s.lcStore.SetLastOptimisticUpdate(newUpdate, true)
 
 	return nil
 }

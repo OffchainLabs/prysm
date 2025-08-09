@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"strings"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/api/client/builder"
@@ -220,16 +219,17 @@ func (vs *Server) getPayloadHeaderFromBuilder(
 	if signedBid == nil || signedBid.IsNil() {
 		return nil, errors.New("builder returned nil bid")
 	}
+	bidVersion := signedBid.Version()
 	fork, err := forks.Fork(slots.ToEpoch(slot))
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to get fork information")
 	}
-	forkName, ok := params.BeaconConfig().ForkVersionNames[bytesutil.ToBytes4(fork.CurrentVersion)]
+	forkVersion, ok := params.ConfigForkVersions(params.BeaconConfig())[bytesutil.ToBytes4(fork.CurrentVersion)]
 	if !ok {
 		return nil, errors.New("unable to find current fork in schedule")
 	}
-	if !strings.EqualFold(version.String(signedBid.Version()), forkName) {
-		return nil, fmt.Errorf("builder bid response version: %d is different from head block version: %d for epoch %d", signedBid.Version(), b.Version(), slots.ToEpoch(slot))
+	if !isVersionCompatible(bidVersion, forkVersion) {
+		return nil, fmt.Errorf("builder bid response version: %d is not compatible with expected version: %d for epoch %d", bidVersion, forkVersion, slots.ToEpoch(slot))
 	}
 
 	bid, err := signedBid.Message()
@@ -465,4 +465,20 @@ func expectedGasLimit(parentGasLimit, proposerGasLimit uint64) uint64 {
 		return parentGasLimit - maxGasLimitDiff
 	}
 	return proposerGasLimit
+}
+
+// isVersionCompatible checks if a builder bid version is compatible with the head block version.
+func isVersionCompatible(bidVersion, headBlockVersion int) bool {
+	// Exact version match is always compatible
+	if bidVersion == headBlockVersion {
+		return true
+	}
+
+	// Allow Electra bids for Fulu blocks - they have compatible payload formats
+	if bidVersion == version.Electra && headBlockVersion == version.Fulu {
+		return true
+	}
+
+	// For all other cases, require exact version match
+	return false
 }

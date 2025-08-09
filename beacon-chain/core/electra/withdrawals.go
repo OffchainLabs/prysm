@@ -102,13 +102,13 @@ func ProcessWithdrawalRequests(ctx context.Context, st state.BeaconState, wrs []
 			return nil, err
 		} else if n == params.BeaconConfig().PendingPartialWithdrawalsLimit && !isFullExitRequest {
 			// if the PendingPartialWithdrawalsLimit is met, the user would have paid for a partial withdrawal that's not included
-			log.Debugln("Skipping execution layer withdrawal request, PendingPartialWithdrawalsLimit reached")
+			log.Debug("Skipping execution layer withdrawal request, PendingPartialWithdrawalsLimit reached")
 			continue
 		}
 
 		vIdx, exists := st.ValidatorIndexByPubkey(bytesutil.ToBytes48(wr.ValidatorPubkey))
 		if !exists {
-			log.Debugf("Skipping execution layer withdrawal request, validator index for %s not found\n", hexutil.Encode(wr.ValidatorPubkey))
+			log.WithField("validator", hexutil.Encode(wr.ValidatorPubkey)).Debug("Skipping execution layer withdrawal request, validator index not found")
 			continue
 		}
 		validator, err := st.ValidatorAtIndexReadOnly(vIdx)
@@ -120,23 +120,23 @@ func ProcessWithdrawalRequests(ctx context.Context, st state.BeaconState, wrs []
 		wc := validator.GetWithdrawalCredentials()
 		isCorrectSourceAddress := bytes.Equal(wc[12:], wr.SourceAddress)
 		if !hasCorrectCredential || !isCorrectSourceAddress {
-			log.Debugln("Skipping execution layer withdrawal request, wrong withdrawal credentials")
+			log.Debug("Skipping execution layer withdrawal request, wrong withdrawal credentials")
 			continue
 		}
 
 		// Verify the validator is active.
 		if !helpers.IsActiveValidatorUsingTrie(validator, currentEpoch) {
-			log.Debugln("Skipping execution layer withdrawal request, validator not active")
+			log.Debug("Skipping execution layer withdrawal request, validator not active")
 			continue
 		}
 		// Verify the validator has not yet submitted an exit.
 		if validator.ExitEpoch() != params.BeaconConfig().FarFutureEpoch {
-			log.Debugln("Skipping execution layer withdrawal request, validator has submitted an exit already")
+			log.Debug("Skipping execution layer withdrawal request, validator has submitted an exit already")
 			continue
 		}
 		// Verify the validator has been active long enough.
 		if currentEpoch < validator.ActivationEpoch().AddEpoch(params.BeaconConfig().ShardCommitteePeriod) {
-			log.Debugln("Skipping execution layer withdrawal request, validator has not been active long enough")
+			log.Debug("Skipping execution layer withdrawal request, validator has not been active long enough")
 			continue
 		}
 

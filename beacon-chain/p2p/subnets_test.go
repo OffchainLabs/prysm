@@ -10,6 +10,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	ecdsaprysm "github.com/OffchainLabs/prysm/v6/crypto/ecdsa"
@@ -74,6 +75,7 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 		cfg:                   &Config{UDPPort: 2000, TCPPort: 3000, QUICPort: 3000, DisableLivenessCheck: true, PingInterval: testPingInterval},
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: genesisValidatorsRoot,
+		custodyInfo:           &custodyInfo{},
 	}
 
 	bootNodeForkDigest, err := bootNodeService.currentForkDigest()
@@ -92,6 +94,7 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 	// Create 3 nodes, each subscribed to a different subnet.
 	// Each node is connected to the bootstrap node.
 	services := make([]*Service, 0, subnetCount)
+	db := testDB.SetupDB(t)
 
 	for i := uint64(1); i <= subnetCount; i++ {
 		service, err := NewService(ctx, &Config{
@@ -102,12 +105,14 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 			QUICPort:             uint(3000 + i),
 			PingInterval:         testPingInterval,
 			DisableLivenessCheck: true,
+			DB:                   db,
 		})
 
 		require.NoError(t, err)
 
 		service.genesisTime = genesisTime
 		service.genesisValidatorsRoot = genesisValidatorsRoot
+		service.custodyInfo = &custodyInfo{}
 
 		nodeForkDigest, err := service.currentForkDigest()
 		require.NoError(t, err)
@@ -150,6 +155,7 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 		UDPPort:              2010,
 		TCPPort:              3010,
 		QUICPort:             3010,
+		DB:                   db,
 	}
 
 	service, err := NewService(ctx, cfg)
@@ -157,6 +163,7 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 
 	service.genesisTime = genesisTime
 	service.genesisValidatorsRoot = genesisValidatorsRoot
+	service.custodyInfo = &custodyInfo{}
 
 	service.Start()
 	defer func() {

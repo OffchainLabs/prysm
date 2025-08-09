@@ -158,12 +158,6 @@ var (
 		Usage: "Enables the peer id of the node to be fixed by saving the generated network key to the default key path.",
 		Value: false,
 	}
-	// P2PMetadata defines a flag to specify the location of the peer metadata file.
-	P2PMetadata = &cli.StringFlag{
-		Name:  "p2p-metadata",
-		Usage: "The file containing the metadata to communicate with other peers.",
-		Value: "",
-	}
 	// P2PMaxPeers defines a flag to specify the max number of peers in libp2p.
 	P2PMaxPeers = &cli.IntFlag{
 		Name:  "p2p-max-peers",

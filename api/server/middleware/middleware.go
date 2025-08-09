@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/api/apiutil"
 	"github.com/rs/cors"
 	log "github.com/sirupsen/logrus"
 )
@@ -74,42 +75,10 @@ func ContentTypeHandler(acceptedMediaTypes []string) Middleware {
 func AcceptHeaderHandler(serverAcceptedTypes []string) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			acceptHeader := r.Header.Get("Accept")
-			// header is optional and should skip if not provided
-			if acceptHeader == "" {
-				next.ServeHTTP(w, r)
+			if _, ok := apiutil.Negotiate(r.Header.Get("Accept"), serverAcceptedTypes); !ok {
+				http.Error(w, "Not Acceptable", http.StatusNotAcceptable)
 				return
 			}
-
-			accepted := false
-			acceptTypes := strings.Split(acceptHeader, ",")
-			// follows rules defined in https://datatracker.ietf.org/doc/html/rfc2616#section-14.1
-			for _, acceptType := range acceptTypes {
-				acceptType = strings.TrimSpace(acceptType)
-				if acceptType == "*/*" {
-					accepted = true
-					break
-				}
-				for _, serverAcceptedType := range serverAcceptedTypes {
-					if strings.HasPrefix(acceptType, serverAcceptedType) {
-						accepted = true
-						break
-					}
-					if acceptType != "/*" && strings.HasSuffix(acceptType, "/*") && strings.HasPrefix(serverAcceptedType, acceptType[:len(acceptType)-2]) {
-						accepted = true
-						break
-					}
-				}
-				if accepted {
-					break
-				}
-			}
-
-			if !accepted {
-				http.Error(w, fmt.Sprintf("Not Acceptable: %s", acceptHeader), http.StatusNotAcceptable)
-				return
-			}
-
 			next.ServeHTTP(w, r)
 		})
 	}

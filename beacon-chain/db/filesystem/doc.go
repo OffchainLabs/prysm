@@ -20,7 +20,7 @@ File organisation
   The remaining 7 bits (from 0 to 127) represent the index of the data column.
   This sentinel bit is needed to distinguish between the column with index 0 and no column.
   Example: If the column with index 5 is in the 3th position in the file, then indices[5] = 0x80 + 0x03 = 0x83.
-- The rest of the file is a repeat of the SSZ encoded data columns sidecars.
+- The rest of the file is a repeat of the SSZ encoded data column sidecars.
 
 
 |------------------------------------------|------------------------------------------------------------------------------------|
@@ -75,7 +75,7 @@ data-columns
 
 Computation of the maximum size of a DataColumnSidecar
 ------------------------------------------------------
-https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/das-core.md#datacolumnsidecar
+https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/das-core.md#datacolumnsidecar
 
 
 class DataColumnSidecar(Container):

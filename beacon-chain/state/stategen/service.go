@@ -196,7 +196,7 @@ func (s *State) isFinalizedRoot(r [32]byte) bool {
 }
 
 // Returns the cached and copied finalized state.
-func (s *State) finalizedState() state.BeaconState {
+func (s *State) FinalizedState() state.BeaconState {
 	s.finalizedInfo.lock.RLock()
 	defer s.finalizedInfo.lock.RUnlock()
 	return s.finalizedInfo.state.Copy()

@@ -251,7 +251,7 @@ func (dcs *DataColumnStorage) Summary(root [fieldparams.RootLength]byte) DataCol
 }
 
 // Save saves data column sidecars into the database and asynchronously performs pruning.
-// The returned chanel is closed when the pruning is complete.
+// The returned channel is closed when the pruning is complete.
 func (dcs *DataColumnStorage) Save(dataColumnSidecars []blocks.VerifiedRODataColumn) error {
 	startTime := time.Now()
 
@@ -266,8 +266,7 @@ func (dcs *DataColumnStorage) Save(dataColumnSidecars []blocks.VerifiedRODataCol
 		return errWrongNumberOfColumns
 	}
 
-	highestEpoch := primitives.Epoch(0)
-	dataColumnSidecarsbyRoot := make(map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn)
+	dataColumnSidecarsByRoot := make(map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn)
 
 	// Group data column sidecars by root.
 	for _, dataColumnSidecar := range dataColumnSidecars {
@@ -278,23 +277,20 @@ func (dcs *DataColumnStorage) Save(dataColumnSidecars []blocks.VerifiedRODataCol
 
 		// Group data column sidecars by root.
 		root := dataColumnSidecar.BlockRoot()
-		dataColumnSidecarsbyRoot[root] = append(dataColumnSidecarsbyRoot[root], dataColumnSidecar)
+		dataColumnSidecarsByRoot[root] = append(dataColumnSidecarsByRoot[root], dataColumnSidecar)
 	}
 
-	for root, dataColumnSidecars := range dataColumnSidecarsbyRoot {
+	for root, dataColumnSidecars := range dataColumnSidecarsByRoot {
 		// Safety check all data column sidecars for this root are from the same slot.
-		firstSlot := dataColumnSidecars[0].SignedBlockHeader.Header.Slot
+		slot := dataColumnSidecars[0].Slot()
 		for _, dataColumnSidecar := range dataColumnSidecars[1:] {
-			if dataColumnSidecar.SignedBlockHeader.Header.Slot != firstSlot {
+			if dataColumnSidecar.Slot() != slot {
 				return errDataColumnSidecarsFromDifferentSlots
 			}
 		}
 
-		// Set the highest epoch.
-		epoch := slots.ToEpoch(dataColumnSidecars[0].Slot())
-		highestEpoch = max(highestEpoch, epoch)
-
 		// Save data columns in the filesystem.
+		epoch := slots.ToEpoch(slot)
 		if err := dcs.saveFilesystem(root, epoch, dataColumnSidecars); err != nil {
 			return errors.Wrap(err, "save filesystem")
 		}
@@ -306,7 +302,7 @@ func (dcs *DataColumnStorage) Save(dataColumnSidecars []blocks.VerifiedRODataCol
 		}
 
 		// Compute the data columns ident.
-		dataColumnsIdent := DataColumnsIdent{Root: root, Epoch: slots.ToEpoch(dataColumnSidecars[0].Slot()), Indices: indices}
+		dataColumnsIdent := DataColumnsIdent{Root: root, Epoch: epoch, Indices: indices}
 
 		// Set data columns in the cache.
 		if err := dcs.cache.set(dataColumnsIdent); err != nil {

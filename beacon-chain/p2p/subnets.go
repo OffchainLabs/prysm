@@ -57,6 +57,8 @@ const blobSubnetLockerVal = 110
 // chosen more than sync, attestation and blob subnet (6) combined.
 const dataColumnSubnetVal = 150
 
+const errSavingSequenceNumber = "saving sequence number after updating subnets: %w"
+
 // nodeFilter returns a function that filters nodes based on the subnet topic and subnet index.
 func (s *Service) nodeFilter(topic string, indices map[uint64]int) (func(node *enode.Node) (map[uint64]bool, error), error) {
 	switch {
@@ -181,6 +183,11 @@ func (s *Service) findPeersWithSubnets(
 		// Get all needed subnets that the node is subscribed to.
 		// Skip nodes that are not subscribed to any of the defective subnets.
 		node := iterator.Node()
+
+		if !s.filterPeer(node) {
+			continue
+		}
+
 		nodeSubnets, err := filter(node)
 		if err != nil {
 			return nil, errors.Wrap(err, "filter node")
@@ -372,29 +379,51 @@ func (s *Service) hasPeerWithSubnet(subnetTopic string) bool {
 // with a new value for a bitfield of subnets tracked. It also updates
 // the node's metadata by increasing the sequence number and the
 // subnets tracked by the node.
-func (s *Service) updateSubnetRecordWithMetadata(bitV bitfield.Bitvector64) {
+func (s *Service) updateSubnetRecordWithMetadata(bitV bitfield.Bitvector64) error {
 	entry := enr.WithEntry(attSubnetEnrKey, &bitV)
 	s.dv5Listener.LocalNode().Set(entry)
 	s.metaData = wrapper.WrappedMetadataV0(&pb.MetaDataV0{
 		SeqNumber: s.metaData.SequenceNumber() + 1,
 		Attnets:   bitV,
 	})
+
+	if err := s.saveSequenceNumberIfNeeded(); err != nil {
+		return fmt.Errorf(errSavingSequenceNumber, err)
+	}
+	return nil
 }
 
 // Updates the service's discv5 listener record's attestation subnet
 // with a new value for a bitfield of subnets tracked. It also record's
 // the sync committee subnet in the enr. It also updates the node's
 // metadata by increasing the sequence number and the subnets tracked by the node.
-func (s *Service) updateSubnetRecordWithMetadataV2(bitVAtt bitfield.Bitvector64, bitVSync bitfield.Bitvector4) {
+func (s *Service) updateSubnetRecordWithMetadataV2(
+	bitVAtt bitfield.Bitvector64,
+	bitVSync bitfield.Bitvector4,
+	custodyGroupCount uint64,
+) error {
 	entry := enr.WithEntry(attSubnetEnrKey, &bitVAtt)
 	subEntry := enr.WithEntry(syncCommsSubnetEnrKey, &bitVSync)
-	s.dv5Listener.LocalNode().Set(entry)
-	s.dv5Listener.LocalNode().Set(subEntry)
+
+	localNode := s.dv5Listener.LocalNode()
+	localNode.Set(entry)
+	localNode.Set(subEntry)
+
+	if params.FuluEnabled() {
+		custodyGroupCountEntry := enr.WithEntry(custodyGroupCountEnrKey, custodyGroupCount)
+		localNode.Set(custodyGroupCountEntry)
+	}
+
 	s.metaData = wrapper.WrappedMetadataV1(&pb.MetaDataV1{
 		SeqNumber: s.metaData.SequenceNumber() + 1,
 		Attnets:   bitVAtt,
 		Syncnets:  bitVSync,
 	})
+
+	if err := s.saveSequenceNumberIfNeeded(); err != nil {
+		return fmt.Errorf(errSavingSequenceNumber, err)
+	}
+	return nil
 }
 
 // updateSubnetRecordWithMetadataV3 updates:
@@ -406,7 +435,7 @@ func (s *Service) updateSubnetRecordWithMetadataV3(
 	bitVAtt bitfield.Bitvector64,
 	bitVSync bitfield.Bitvector4,
 	custodyGroupCount uint64,
-) {
+) error {
 	attSubnetsEntry := enr.WithEntry(attSubnetEnrKey, &bitVAtt)
 	syncSubnetsEntry := enr.WithEntry(syncCommsSubnetEnrKey, &bitVSync)
 	custodyGroupCountEntry := enr.WithEntry(custodyGroupCountEnrKey, custodyGroupCount)
@@ -416,14 +445,29 @@ func (s *Service) updateSubnetRecordWithMetadataV3(
 	localNode.Set(syncSubnetsEntry)
 	localNode.Set(custodyGroupCountEntry)
 
-	newSeqNumber := s.metaData.SequenceNumber() + 1
-
 	s.metaData = wrapper.WrappedMetadataV2(&pb.MetaDataV2{
-		SeqNumber:         newSeqNumber,
+		SeqNumber:         s.metaData.SequenceNumber() + 1,
 		Attnets:           bitVAtt,
 		Syncnets:          bitVSync,
 		CustodyGroupCount: custodyGroupCount,
 	})
+
+	if err := s.saveSequenceNumberIfNeeded(); err != nil {
+		return fmt.Errorf(errSavingSequenceNumber, err)
+	}
+	return nil
+}
+
+// saveSequenceNumberIfNeeded saves the sequence number in DB if either of the following conditions is met:
+// - the static peer ID flag is set
+// - the fulu epoch is set
+func (s *Service) saveSequenceNumberIfNeeded() error {
+	// Short-circuit if we don't need to save the sequence number.
+	if !(s.cfg.StaticPeerID || params.FuluEnabled()) {
+		return nil
+	}
+
+	return s.cfg.DB.SaveMetadataSeqNum(s.ctx, s.metaData.SequenceNumber())
 }
 
 func initializePersistentSubnets(id enode.ID, epoch primitives.Epoch) error {

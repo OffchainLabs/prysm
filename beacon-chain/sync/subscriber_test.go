@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/async/abool"
+	"github.com/OffchainLabs/prysm/v6/async/event"
 	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
@@ -684,7 +685,7 @@ func TestSubscribe_ReceivesLCOptimisticUpdate(t *testing.T) {
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
 		chainStarted: abool.New(),
-		lcStore:      &lightClient.Store{},
+		lcStore:      lightClient.NewLightClientStore(d, &p2ptest.FakeP2P{}, new(event.Feed)),
 		subHandler:   newSubTopicHandler(),
 	}
 	topic := p2p.LightClientOptimisticUpdateTopicFormat
@@ -703,7 +704,7 @@ func TestSubscribe_ReceivesLCOptimisticUpdate(t *testing.T) {
 	r.markForChainStart()
 
 	l := util.NewTestLightClient(t, version.Altair, util.WithSupermajority())
-	update, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
+	update, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock)
 	require.NoError(t, err, "Error generating light client optimistic update")
 
 	p2pService.ReceivePubSub(topic, update.Proto())
@@ -751,7 +752,7 @@ func TestSubscribe_ReceivesLCFinalityUpdate(t *testing.T) {
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
 		chainStarted: abool.New(),
-		lcStore:      &lightClient.Store{},
+		lcStore:      lightClient.NewLightClientStore(d, &p2ptest.FakeP2P{}, new(event.Feed)),
 		subHandler:   newSubTopicHandler(),
 	}
 	topic := p2p.LightClientFinalityUpdateTopicFormat
@@ -770,7 +771,7 @@ func TestSubscribe_ReceivesLCFinalityUpdate(t *testing.T) {
 	r.markForChainStart()
 
 	l := util.NewTestLightClient(t, version.Altair, util.WithSupermajority())
-	update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+	update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 	require.NoError(t, err, "Error generating light client finality update")
 
 	p2pService.ReceivePubSub(topic, update.Proto())

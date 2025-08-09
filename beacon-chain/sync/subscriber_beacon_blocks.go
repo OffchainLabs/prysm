@@ -121,12 +121,13 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, ro
 	}
 
 	nodeID := s.cfg.p2p.NodeID()
+	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount()
+	if err != nil {
+		log.WithError(err).Error("Failed to get custody group count")
+		return
+	}
 
-	s.cfg.custodyInfo.Mut.RLock()
-	defer s.cfg.custodyInfo.Mut.RUnlock()
-
-	groupCount := s.cfg.custodyInfo.ActualGroupCount()
-	info, _, err := peerdas.Info(nodeID, groupCount)
+	info, _, err := peerdas.Info(nodeID, custodyGroupCount)
 	if err != nil {
 		log.WithError(err).Error("Failed to get peer info")
 		return
@@ -135,7 +136,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, ro
 	blockSlot := block.Slot()
 	proposerIndex := block.ProposerIndex()
 
-	// Broadcast and save data columns sidecars to custody but not yet received.
+	// Broadcast and save data column sidecars to custody but not yet received.
 	sidecarCount := uint64(len(sidecars))
 	for columnIndex := range info.CustodyColumns {
 		log := log.WithField("columnIndex", columnIndex)
