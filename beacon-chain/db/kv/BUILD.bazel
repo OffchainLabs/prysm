@@ -120,7 +120,6 @@ go_test(
         "//consensus-types/primitives:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//genesis:go_default_library",
-        "//genesis/embedded:go_default_library",
         "//proto/dbval:go_default_library",
         "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",

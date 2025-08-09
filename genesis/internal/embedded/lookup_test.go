@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/genesis/embedded"
+	"github.com/OffchainLabs/prysm/v6/genesis/internal/embedded"
 )
 
 func TestGenesisState(t *testing.T) {

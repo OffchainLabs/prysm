@@ -13,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/genesis"
-	"github.com/OffchainLabs/prysm/v6/genesis/embedded"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
@@ -27,8 +26,11 @@ func TestInitialize(t *testing.T) {
 }
 
 func TestEmbeddedMainnetHardcodedValues(t *testing.T) {
-	// Load the embedded mainnet state
-	state, err := embedded.ByName(params.MainnetName)
+	// Initialize genesis with mainnet config to load embedded state
+	require.NoError(t, genesis.Initialize(t.Context(), t.TempDir()))
+	
+	// Get the initialized genesis state
+	state, err := genesis.State()
 	require.NoError(t, err)
 	require.NotNil(t, state)
 
