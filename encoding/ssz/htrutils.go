@@ -29,11 +29,19 @@ func Uint64Root(val uint64) [32]byte {
 
 // ForkRoot computes the HashTreeRoot Merkleization of Fork
 func ForkRoot(fork *ethpb.Fork) ([32]byte, error) {
+	if fork == nil {
+		fieldRoots := make([][32]byte, 3)
+		return BitwiseMerkleize(fieldRoots, uint64(len(fieldRoots)), uint64(len(fieldRoots)))
+	}
 	return fork.HashTreeRoot()
 }
 
 // CheckpointRoot computes the HashTreeRoot Merkleization of Checkpoint
 func CheckpointRoot(checkpoint *ethpb.Checkpoint) ([32]byte, error) {
+	if checkpoint == nil {
+		fieldRoots := make([][32]byte, 2)
+		return BitwiseMerkleize(fieldRoots, uint64(len(fieldRoots)), uint64(len(fieldRoots)))
+	}
 	return checkpoint.HashTreeRoot()
 }
 
