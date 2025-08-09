@@ -22,28 +22,62 @@ func TestUint64Root(t *testing.T) {
 }
 
 func TestForkRoot(t *testing.T) {
-	testFork := ethpb.Fork{
-		PreviousVersion: []byte{123, 0, 0, 0},
-		CurrentVersion:  []byte{124, 0, 0, 0},
-		Epoch:           1234567890,
+	tests := []struct {
+		name     string
+		fork     *ethpb.Fork
+		expected [32]byte
+	}{
+		{
+			name:     "nil",
+			fork:     nil,
+			expected: [32]byte{219, 86, 17, 78, 0, 253, 212, 193, 248, 92, 137, 43, 243, 90, 201, 168, 146, 137, 170, 236, 177, 235, 208, 169, 108, 222, 96, 106, 116, 139, 93, 113},
+		},
+		{
+			name: "valid fork",
+			fork: &ethpb.Fork{
+				PreviousVersion: []byte{123, 0, 0, 0},
+				CurrentVersion:  []byte{124, 0, 0, 0},
+				Epoch:           1234567890,
+			},
+			expected: [32]byte{19, 46, 77, 103, 92, 175, 247, 33, 100, 64, 17, 111, 199, 145, 69, 38, 217, 112, 6, 16, 149, 201, 225, 144, 192, 228, 197, 172, 157, 78, 114, 140},
+		},
 	}
-	expected := [32]byte{19, 46, 77, 103, 92, 175, 247, 33, 100, 64, 17, 111, 199, 145, 69, 38, 217, 112, 6, 16, 149, 201, 225, 144, 192, 228, 197, 172, 157, 78, 114, 140}
-
-	result, err := ssz.ForkRoot(&testFork)
-	require.NoError(t, err)
-	assert.Equal(t, expected, result)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ssz.ForkRoot(tt.fork)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }
 
 func TestCheckPointRoot(t *testing.T) {
-	testCheckpoint := ethpb.Checkpoint{
-		Epoch: 1234567890,
-		Root:  []byte{222, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+	tests := []struct {
+		name       string
+		checkpoint *ethpb.Checkpoint
+		expected   [32]byte
+	}{
+		{
+			name:       "nil",
+			checkpoint: nil,
+			expected:   [32]byte{245, 165, 253, 66, 209, 106, 32, 48, 39, 152, 239, 110, 211, 9, 151, 155, 67, 0, 61, 35, 32, 217, 240, 232, 234, 152, 49, 169, 39, 89, 251, 75},
+		},
+		{
+			name: "valid checkpoint",
+			checkpoint: &ethpb.Checkpoint{
+				Epoch: 1234567890,
+				Root:  []byte{222, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+			},
+			expected: [32]byte{228, 65, 39, 109, 183, 249, 167, 232, 125, 239, 25, 155, 207, 4, 84, 174, 176, 229, 175, 224, 62, 33, 215, 254, 170, 220, 132, 65, 246, 128, 68, 194},
+		},
 	}
-	expected := [32]byte{228, 65, 39, 109, 183, 249, 167, 232, 125, 239, 25, 155, 207, 4, 84, 174, 176, 229, 175, 224, 62, 33, 215, 254, 170, 220, 132, 65, 246, 128, 68, 194}
-
-	result, err := ssz.CheckpointRoot(&testCheckpoint)
-	require.NoError(t, err)
-	assert.Equal(t, expected, result)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ssz.CheckpointRoot(tt.checkpoint)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }
 
 func TestByteArrayRootWithLimit(t *testing.T) {
