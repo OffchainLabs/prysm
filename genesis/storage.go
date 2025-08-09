@@ -141,12 +141,14 @@ func setPkgVar(d GenesisData, initialized bool) {
 }
 
 func loadState() (state.BeaconState, error) {
-	stateMu.Lock()
-	defer stateMu.Unlock()
 	s, err := stateFromFile(data.filePath())
 	if err != nil {
 		return nil, errors.Wrapf(err, "InitializeFromProtoUnsafePhase0")
 	}
+
+	stateMu.Lock()
+	defer stateMu.Unlock()
+
 	data.State = s
 	return data.State, nil
 }
