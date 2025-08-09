@@ -112,7 +112,7 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 		return nil, errors.Wrapf(err, "failed to generate p2p private key")
 	}
 
-	metaData, err := metaDataFromConfig(cfg)
+	metaData, err := metaDataFromDB(ctx, cfg.DB)
 	if err != nil {
 		log.WithError(err).Error("Failed to create peer metadata")
 		return nil, err

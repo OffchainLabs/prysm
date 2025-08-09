@@ -1,8 +1,10 @@
 package p2p
 
 import (
+	"context"
 	"testing"
 
+	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -79,4 +81,28 @@ func TestConvertPeerIDToNodeID(t *testing.T) {
 
 	actualNodeIDStr := actualNodeID.String()
 	require.Equal(t, expectedNodeIDStr, actualNodeIDStr)
+}
+
+func TestMetadataFromDB(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+
+	t.Run("Metadata from DB", func(t *testing.T) {
+		beaconDB := testDB.SetupDB(t)
+		err := beaconDB.SaveMetadataSeqNum(t.Context(), 42)
+		require.NoError(t, err)
+
+		metaData, err := metaDataFromDB(context.Background(), beaconDB)
+		require.NoError(t, err)
+
+		assert.Equal(t, uint64(42), metaData.SequenceNumber())
+	})
+
+	t.Run("Use default sequence number (=0) as Metadata not found on DB", func(t *testing.T) {
+		beaconDB := testDB.SetupDB(t)
+
+		metaData, err := metaDataFromDB(context.Background(), beaconDB)
+		require.NoError(t, err)
+
+		assert.Equal(t, uint64(0), metaData.SequenceNumber())
+	})
 }

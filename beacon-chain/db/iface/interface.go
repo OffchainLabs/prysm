@@ -64,6 +64,18 @@ type ReadOnlyDatabase interface {
 	// Origin checkpoint sync support
 	OriginCheckpointBlockRoot(ctx context.Context) ([32]byte, error)
 	BackfillStatus(context.Context) (*dbval.BackfillStatus, error)
+
+	// P2P Metadata operations.
+	MetadataSeqNum(ctx context.Context) (uint64, error)
+}
+
+// ReadOnlyDatabaseWithSeqNum defines a struct which has read access to database methods
+// and also has read/write access to the p2p metadata sequence number.
+// Only used for the p2p service.
+type ReadOnlyDatabaseWithSeqNum interface {
+	ReadOnlyDatabase
+
+	SaveMetadataSeqNum(ctx context.Context, seqNum uint64) error
 }
 
 // NoHeadAccessDatabase defines a struct without access to chain head data.
@@ -106,6 +118,9 @@ type NoHeadAccessDatabase interface {
 	// Custody operations.
 	UpdateSubscribedToAllDataSubnets(ctx context.Context, subscribed bool) (bool, error)
 	UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error)
+
+	// P2P Metadata operations.
+	SaveMetadataSeqNum(ctx context.Context, seqNum uint64) error
 }
 
 // HeadAccessDatabase defines a struct with access to reading chain head data.

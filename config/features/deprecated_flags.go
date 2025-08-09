@@ -108,6 +108,11 @@ var (
 		Usage:  deprecatedUsage,
 		Hidden: true,
 	}
+	deprecatedP2PMetadata = &cli.StringFlag{
+		Name:   "p2p-metadata",
+		Usage:  deprecatedUsage,
+		Hidden: true,
+	}
 )
 
 // Deprecated flags for both the beacon node and validator client.
@@ -130,6 +135,7 @@ var deprecatedFlags = []cli.Flag{
 	deprecatedEnableQuic,
 	deprecatedAttestTimely,
 	deprecatedDisableExperimentalState,
+	deprecatedP2PMetadata,
 }
 
 var upcomingDeprecation = []cli.Flag{

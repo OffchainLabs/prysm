@@ -19,6 +19,9 @@ var ErrNotFoundGenesisBlockRoot = errors.Wrap(ErrNotFound, "OriginGenesisRoot")
 // ErrNotFoundFeeRecipient is a not found error specifically for the fee recipient getter
 var ErrNotFoundFeeRecipient = errors.Wrap(ErrNotFound, "fee recipient")
 
+// ErrNotFoundMetadataSeqNum is a not found error specifically for the metadata sequence number getter
+var ErrNotFoundMetadataSeqNum = errors.Wrap(ErrNotFound, "metadata sequence number")
+
 var errEmptyBlockSlice = errors.New("[]blocks.ROBlock is empty")
 var errIncorrectBlockParent = errors.New("unexpected missing or forked blocks in a []ROBlock")
 var errFinalizedChildNotFound = errors.New("unable to find finalized root descending from backfill batch")

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -343,7 +344,7 @@ func TestService_MonitorsStateForkUpdates(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 	cs := startup.NewClockSynchronizer()
-	s, err := NewService(ctx, &Config{ClockWaiter: cs})
+	s, err := NewService(ctx, &Config{ClockWaiter: cs, DB: testDB.SetupDB(t)})
 	require.NoError(t, err)
 
 	require.Equal(t, false, s.isInitialized())

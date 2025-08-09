@@ -8,6 +8,7 @@ import (
 	"time"
 
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
 	testp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
@@ -21,6 +22,7 @@ func TestService_PublishToTopicConcurrentMapWrite(t *testing.T) {
 	s, err := NewService(t.Context(), &Config{
 		StateNotifier: &mock.MockStateNotifier{},
 		ClockWaiter:   cs,
+		DB:            testDB.SetupDB(t),
 	})
 	require.NoError(t, err)
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
