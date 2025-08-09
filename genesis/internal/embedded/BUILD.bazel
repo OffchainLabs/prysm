@@ -9,8 +9,6 @@ go_library(
     embedsrcs = ["mainnet.ssz.snappy"],
     importpath = "github.com/OffchainLabs/prysm/v6/genesis/internal/embedded",
     visibility = [
-        "//beacon-chain/db:__subpackages__",
-        "//config/params:__pkg__",
         "//genesis:__pkg__",
     ],
     deps = [
