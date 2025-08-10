@@ -21,6 +21,113 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
+func TestBuildByRangeRequests(t *testing.T) {
+	const nullBatchSize = 0
+
+	t.Run("empty", func(t *testing.T) {
+		actual, err := buildByRangeRequests(nil, nil, nil, nullBatchSize)
+		require.NoError(t, err)
+
+		require.Equal(t, 0, len(actual))
+	})
+
+	t.Run("missing Root", func(t *testing.T) {
+		indicesByRoot := map[[fieldparams.RootLength]byte]map[uint64]bool{
+			{1}: {1: true, 2: true},
+		}
+
+		_, err := buildByRangeRequests(nil, nil, indicesByRoot, nullBatchSize)
+		require.NotNil(t, err)
+	})
+
+	t.Run("indices differ", func(t *testing.T) {
+		indicesByRoot := map[[fieldparams.RootLength]byte]map[uint64]bool{
+			{1}: {1: true, 2: true},
+			{2}: {1: true, 2: true},
+			{3}: {2: true, 3: true},
+		}
+
+		slotByRoot := map[[fieldparams.RootLength]byte]primitives.Slot{
+			{1}: 1,
+			{2}: 2,
+			{3}: 3,
+		}
+
+		actual, err := buildByRangeRequests(slotByRoot, nil, indicesByRoot, nullBatchSize)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(actual))
+	})
+
+	t.Run("slots non contiguous", func(t *testing.T) {
+		indicesByRoot := map[[fieldparams.RootLength]byte]map[uint64]bool{
+			{1}: {1: true, 2: true},
+			{2}: {1: true, 2: true},
+		}
+
+		slotByRoot := map[[fieldparams.RootLength]byte]primitives.Slot{
+			{1}: 1,
+			{2}: 3,
+		}
+
+		slotsWithCommitments := map[primitives.Slot]bool{
+			1: true,
+			2: true,
+			3: true,
+		}
+
+		actual, err := buildByRangeRequests(slotByRoot, slotsWithCommitments, indicesByRoot, nullBatchSize)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(actual))
+	})
+
+	t.Run("nominal", func(t *testing.T) {
+		const batchSize = 3
+
+		indicesByRoot := map[[fieldparams.RootLength]byte]map[uint64]bool{
+			{1}: {1: true, 2: true},
+			{3}: {1: true, 2: true},
+			{4}: {1: true, 2: true},
+			{7}: {1: true, 2: true},
+		}
+
+		slotByRoot := map[[fieldparams.RootLength]byte]primitives.Slot{
+			{1}: 1,
+			{3}: 3,
+			{4}: 4,
+			{7}: 7,
+		}
+
+		slotsWithCommitments := map[primitives.Slot]bool{
+			1: true,
+			3: true,
+			4: true,
+			7: true,
+		}
+
+		expected := []*ethpb.DataColumnSidecarsByRangeRequest{
+			{
+				StartSlot: 1,
+				Count:     3,
+				Columns:   []uint64{1, 2},
+			},
+			{
+				StartSlot: 4,
+				Count:     3,
+				Columns:   []uint64{1, 2},
+			},
+			{
+				StartSlot: 7,
+				Count:     1,
+				Columns:   []uint64{1, 2},
+			},
+		}
+
+		actual, err := buildByRangeRequests(slotByRoot, slotsWithCommitments, indicesByRoot, batchSize)
+		require.NoError(t, err)
+		require.DeepEqual(t, expected, actual)
+	})
+}
+
 func TestBuildByRootRequest(t *testing.T) {
 	root1 := [fieldparams.RootLength]byte{1}
 	root2 := [fieldparams.RootLength]byte{2}

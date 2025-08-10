@@ -444,6 +444,8 @@ func sendDataColumnSidecarsRequest(
 	peerID goPeer.ID,
 	indicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
 ) ([]blocks.RODataColumn, error) {
+	const batchSize = 32
+
 	rootCount := int64(len(indicesByRoot))
 	requestedSidecarsCount := 0
 	for _, indices := range indicesByRoot {
@@ -457,7 +459,7 @@ func sendDataColumnSidecarsRequest(
 	})
 
 	// Try to build a by range byRangeRequest first.
-	byRangeRequests, err := buildByRangeRequests(slotByRoot, slotsWithCommitments, indicesByRoot)
+	byRangeRequests, err := buildByRangeRequests(slotByRoot, slotsWithCommitments, indicesByRoot, batchSize)
 	if err != nil {
 		return nil, errors.Wrap(err, "craft by range request")
 	}
@@ -513,15 +515,15 @@ func sendDataColumnSidecarsRequest(
 }
 
 // buildByRangeRequests constructs a by range request from the given indices,
-// only if the indices are contiguous and if the blocks are contiguous.
+// only if the indices are the same all blocks and if the blocks are contiguous.
 // (Missing blocks or blocks without commitments do count as contiguous)
+// If one of this condition is not met, returns nil.
 func buildByRangeRequests(
 	slotByRoot map[[fieldparams.RootLength]byte]primitives.Slot,
 	slotsWithCommitments map[primitives.Slot]bool,
 	indicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
+	batchSize uint64,
 ) ([]*ethpb.DataColumnSidecarsByRangeRequest, error) {
-	const batchSize = 32
-
 	if len(indicesByRoot) == 0 {
 		return nil, nil
 	}
@@ -565,8 +567,8 @@ func buildByRangeRequests(
 	totalCount := uint64(endSlot - startSlot + 1)
 
 	requests := make([]*ethpb.DataColumnSidecarsByRangeRequest, 0, totalCount/batchSize)
-	for start := startSlot; start <= endSlot; start += batchSize {
-		end := min(start+batchSize-1, endSlot)
+	for start := startSlot; start <= endSlot; start += primitives.Slot(batchSize) {
+		end := min(start+primitives.Slot(batchSize)-1, endSlot)
 		request := &ethpb.DataColumnSidecarsByRangeRequest{
 			StartSlot: start,
 			Count:     uint64(end - start + 1),
