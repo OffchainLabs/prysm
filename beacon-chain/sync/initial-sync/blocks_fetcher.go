@@ -366,23 +366,23 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []
 		return bwScs[i].Block.Version() >= version.Fulu
 	})
 
-	blocksWithBlobs := bwScs[:firstFuluIndex]
-	blocksWithDataColumns := bwScs[firstFuluIndex:]
+	preFuluBlocks := bwScs[:firstFuluIndex]
+	postFuluBlocks := bwScs[firstFuluIndex:]
 
 	var (
 		blobsPid peer.ID
 		err      error
 	)
 
-	if len(blocksWithBlobs) > 0 {
+	if len(preFuluBlocks) > 0 {
 		// Fetch blob sidecars.
-		blobsPid, err = f.fetchBlobsFromPeer(ctx, blocksWithBlobs, pid, peers)
+		blobsPid, err = f.fetchBlobsFromPeer(ctx, preFuluBlocks, pid, peers)
 		if err != nil {
 			return "", errors.Wrap(err, "fetch blobs from peer")
 		}
 	}
 
-	if len(blocksWithDataColumns) == 0 {
+	if len(postFuluBlocks) == 0 {
 		return blobsPid, nil
 	}
 
@@ -408,8 +408,8 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []
 		NewVerifier: f.cv,
 	}
 
-	roBlocks := make([]blocks.ROBlock, 0, len(blocksWithDataColumns))
-	for _, block := range blocksWithDataColumns {
+	roBlocks := make([]blocks.ROBlock, 0, len(postFuluBlocks))
+	for _, block := range postFuluBlocks {
 		roBlocks = append(roBlocks, block.Block)
 	}
 
