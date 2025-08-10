@@ -356,6 +356,10 @@ func (f *blocksFetcher) handleRequest(ctx context.Context, start primitives.Slot
 func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []peer.ID, bwScs []blocks.BlockWithROSidecars) (peer.ID, error) {
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 
+	if len(bwScs) == 0 {
+		return "", nil
+	}
+
 	// Find the first block with a slot greater than or equal to the first Fulu slot.
 	// (Blocks are sorted by slot.)
 	firstFuluIndex := sort.Search(len(bwScs), func(i int) bool {
@@ -364,10 +368,6 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []
 
 	blocksWithBlobs := bwScs[:firstFuluIndex]
 	blocksWithDataColumns := bwScs[firstFuluIndex:]
-
-	if len(blocksWithBlobs) == 0 && len(blocksWithDataColumns) == 0 {
-		return "", nil
-	}
 
 	var (
 		blobsPid peer.ID
