@@ -352,6 +352,7 @@ func (f *blocksFetcher) handleRequest(ctx context.Context, start primitives.Slot
 // It mutates `Blobs` and `Columns` fields of `response.bwb` with fetched sidecars.
 // `pid` is the initial peer to request blob from (usually the peer from which the block originated),
 // `peers` is a list of peers to use for the request blobs if `pid` fails.
+// `bwScs` must me sorted by slot.
 // It returns the peer ID from which blobs were fetched (if any).
 func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []peer.ID, bwScs []blocks.BlockWithROSidecars) (peer.ID, error) {
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
@@ -361,7 +362,6 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []
 	}
 
 	// Find the first block with a slot greater than or equal to the first Fulu slot.
-	// (Blocks are sorted by slot.)
 	firstFuluIndex := sort.Search(len(bwScs), func(i int) bool {
 		return bwScs[i].Block.Version() >= version.Fulu
 	})
@@ -497,6 +497,7 @@ type commitmentCountList []commitmentCount
 
 // countCommitments makes a list of all blocks that have commitments that need to be satisfied.
 // This gives us a representation to finish building the request that is lightweight and readable for testing.
+// `bwb` must be sorted by slot.
 func countCommitments(bwb []blocks.BlockWithROSidecars, retentionStart primitives.Slot) commitmentCountList {
 	if len(bwb) == 0 {
 		return nil
@@ -653,6 +654,7 @@ func missingCommitError(root [32]byte, slot primitives.Slot, missing [][]byte) e
 // This function mutates the input `bwb` argument.
 // `pid` is the initial peer to request blobs from (usually the peer from which the block originated),
 // `peers` is a list of peers to use for the request if `pid` fails.
+// `bwb` must be sorted by slot.
 // It returns the peer ID from which blobs were fetched.
 func (f *blocksFetcher) fetchBlobsFromPeer(ctx context.Context, bwb []blocks.BlockWithROSidecars, pid peer.ID, peers []peer.ID) (peer.ID, error) {
 	if len(bwb) == 0 {
