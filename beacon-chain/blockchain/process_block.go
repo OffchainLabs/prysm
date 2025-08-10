@@ -240,7 +240,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 			}
 		}
 
-		if s.areSidecarsAvailable(ctx, avs, b) != nil {
+		if err := s.areSidecarsAvailable(ctx, avs, b); err != nil {
 			return errors.Wrapf(err, "could not validate sidecar availability for block %#x at slot %d", b.Root(), b.Block().Slot())
 		}
 
