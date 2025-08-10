@@ -117,16 +117,16 @@ func (vs *Server) getLocalPayloadFromEngine(
 	}
 
 	finalizedBlockHash := [32]byte{}
-	justifiedBlockHash := [32]byte{}
+	safeBlockHash := [32]byte{}
 	// Blocks before Bellatrix don't have execution payloads. Use zeros as the hash.
 	if st.Version() >= version.Bellatrix {
 		finalizedBlockHash = vs.FinalizationFetcher.FinalizedBlockHash()
-		justifiedBlockHash = vs.FinalizationFetcher.UnrealizedJustifiedPayloadBlockHash()
+		safeBlockHash = vs.ForkchoiceFetcher.SafeBlockHash()
 	}
 
 	f := &enginev1.ForkchoiceState{
 		HeadBlockHash:      parentHash,
-		SafeBlockHash:      justifiedBlockHash[:],
+		SafeBlockHash:      safeBlockHash[:],
 		FinalizedBlockHash: finalizedBlockHash[:],
 	}
 

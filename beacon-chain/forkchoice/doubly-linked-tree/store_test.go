@@ -630,3 +630,110 @@ func TestStore_HighestReceivedBlockDelay(t *testing.T) {
 
 	require.Equal(t, primitives.Slot(12), f.HighestReceivedBlockDelay())
 }
+
+func TestStore_safeHead(t *testing.T) {
+	genesisEpoch := params.BeaconConfig().GenesisEpoch
+	root1 := [32]byte{0x01}
+	root2 := [32]byte{0x02}
+	root3 := [32]byte{0x03}
+
+	tests := []struct {
+		name        string
+		setupStore  func() *Store
+		wantRoot    [32]byte
+		expectErr   bool
+		expectedErr error
+	}{
+		{
+			name: "context cancelled returns error",
+			setupStore: func() *Store {
+				return &Store{}
+			},
+			wantRoot:  [32]byte{},
+			expectErr: true,
+		},
+		{
+			name: "justified root missing and not genesis returns error",
+			setupStore: func() *Store {
+				return &Store{
+					justifiedCheckpoint: &forkchoicetypes.Checkpoint{
+						Epoch: 1,
+						Root:  root1,
+					},
+					nodeByRoot: make(map[[32]byte]*Node),
+				}
+			},
+			wantRoot:  [32]byte{},
+			expectErr: true,
+		},
+		{
+			name: "justified is genesis, uses tree root",
+			setupStore: func() *Store {
+				return &Store{
+					justifiedCheckpoint: &forkchoicetypes.Checkpoint{
+						Epoch: genesisEpoch,
+						Root:  [32]byte{}, // zero hash
+					},
+					nodeByRoot:   map[[32]byte]*Node{},
+					treeRootNode: &Node{root: root2},
+				}
+			},
+			wantRoot:  root2,
+			expectErr: false,
+		},
+		{
+			name: "justified exists with no best confirmed descendant",
+			setupStore: func() *Store {
+				node := &Node{root: root1}
+				return &Store{
+					justifiedCheckpoint: &forkchoicetypes.Checkpoint{
+						Epoch: 1,
+						Root:  root1,
+					},
+					nodeByRoot: map[[32]byte]*Node{
+						root1: node,
+					},
+				}
+			},
+			wantRoot:  root1,
+			expectErr: false,
+		},
+		{
+			name: "justified exists with best confirmed descendant",
+			setupStore: func() *Store {
+				descendant := &Node{root: root3}
+				node := &Node{root: root1, bestConfirmedDescendant: descendant}
+				return &Store{
+					justifiedCheckpoint: &forkchoicetypes.Checkpoint{
+						Epoch: 2,
+						Root:  root1,
+					},
+					nodeByRoot: map[[32]byte]*Node{
+						root1: node,
+					},
+				}
+			},
+			wantRoot:  root3,
+			expectErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := tt.setupStore()
+			ctx := context.Background()
+			if tt.name == "context cancelled returns error" {
+				c, cancel := context.WithCancel(ctx)
+				cancel()
+				ctx = c
+			}
+			got, err := store.safeHead(ctx)
+			if (err != nil) != tt.expectErr {
+				t.Fatalf("expected error: %v, got: %v", tt.expectErr, err)
+			}
+			if err == nil && got != tt.wantRoot {
+				t.Errorf("safeHead() = %x, want %x", got, tt.wantRoot)
+			}
+		})
+	}
+}

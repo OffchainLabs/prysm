@@ -27,6 +27,7 @@ const (
 	previousJustifiedCheckpointCalled
 	justifiedPayloadBlockHashCalled
 	unrealizedJustifiedPayloadBlockHashCalled
+	safeBlockHashCalled
 	nodeCountCalled
 	highestReceivedBlockSlotCalled
 	highestReceivedBlockRootCalled
@@ -106,6 +107,11 @@ func TestROLocking(t *testing.T) {
 			name: "unrealizedJustifiedPayloadBlockHashCalled",
 			call: unrealizedJustifiedPayloadBlockHashCalled,
 			cb:   func(g FastGetter) { g.UnrealizedJustifiedPayloadBlockHash() },
+		},
+		{
+			name: "safeBlockHashCalled",
+			call: safeBlockHashCalled,
+			cb:   func(g FastGetter) { g.SafeBlockHash() },
 		},
 		{
 			name: "nodeCountCalled",
@@ -246,6 +252,11 @@ func (ro *mockROForkchoice) JustifiedPayloadBlockHash() [32]byte {
 
 func (ro *mockROForkchoice) UnrealizedJustifiedPayloadBlockHash() [32]byte {
 	ro.calls = append(ro.calls, unrealizedJustifiedPayloadBlockHashCalled)
+	return [32]byte{}
+}
+
+func (ro *mockROForkchoice) SafeBlockHash() [32]byte {
+	ro.calls = append(ro.calls, safeBlockHashCalled)
 	return [32]byte{}
 }
 

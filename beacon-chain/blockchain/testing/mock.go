@@ -632,6 +632,11 @@ func (s *ChainService) CachedHeadRoot() [32]byte {
 	return [32]byte{}
 }
 
+// SafeBlockHash mocks the same method in the chain service
+func (s *ChainService) SafeBlockHash() [32]byte {
+	return [32]byte{}
+}
+
 // GetProposerHead mocks the same method in the chain service
 func (s *ChainService) GetProposerHead() [32]byte {
 	if s.ForkChoiceStore != nil {

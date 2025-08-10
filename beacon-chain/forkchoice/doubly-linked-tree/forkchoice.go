@@ -29,6 +29,7 @@ func New() *ForkChoice {
 		unrealizedFinalizedCheckpoint: &forkchoicetypes.Checkpoint{},
 		prevJustifiedCheckpoint:       &forkchoicetypes.Checkpoint{},
 		finalizedCheckpoint:           &forkchoicetypes.Checkpoint{},
+		safeHeadRoot:                  [32]byte{},
 		proposerBoostRoot:             [32]byte{},
 		nodeByRoot:                    make(map[[fieldparams.RootLength]byte]*Node),
 		nodeByPayload:                 make(map[[fieldparams.RootLength]byte]*Node),
@@ -70,11 +71,115 @@ func (f *ForkChoice) Head(
 
 	jc := f.JustifiedCheckpoint()
 	fc := f.FinalizedCheckpoint()
-	currentEpoch := slots.EpochsSinceGenesis(f.store.genesisTime)
-	if err := f.store.treeRootNode.updateBestDescendant(ctx, jc.Epoch, fc.Epoch, currentEpoch); err != nil {
-		return [32]byte{}, errors.Wrap(err, "could not update best descendant")
+
+	currentSlot := slots.CurrentSlot(f.store.genesisTime)
+	secondsSinceSlotStart, err := slots.SinceSlotStart(currentSlot, f.store.genesisTime, time.Now())
+	if err != nil {
+		log.WithError(err).Error("Could not compute seconds since slot start")
 	}
-	return f.store.head(ctx)
+	if err := f.store.treeRootNode.updateBestDescendant(ctx, &updateDescendantArgs{
+		justifiedEpoch:        jc.Epoch,
+		finalizedEpoch:        fc.Epoch,
+		currentSlot:           currentSlot,
+		secondsSinceSlotStart: secondsSinceSlotStart,
+		committeeWeight:       f.store.committeeWeight,
+		pbRoot:                f.store.proposerBoostRoot,
+		pbValue:               f.store.previousProposerBoostScore,
+	}); err != nil {
+		return [32]byte{}, errors.Wrap(err, "Could not update best descendant")
+	}
+	h, err := f.store.head(ctx)
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "Could not get head")
+	}
+
+	// Return early if the head is not the highest received node before updating the safe head.
+	if f.store.highestReceivedNode.slot != slots.CurrentSlot(f.store.genesisTime) {
+		return h, nil
+	}
+
+	if err := f.updateSafeHead(ctx); err != nil {
+		log.WithError(err).Error("Could not update safe head")
+	}
+
+	return h, nil
+}
+
+// updateSafeHead updates the safe head in the fork choice store.
+func (f *ForkChoice) updateSafeHead(
+	ctx context.Context,
+) error {
+	oldSafeHeadRoot := f.store.safeHeadRoot
+	newSafeHeadRoot, err := f.store.safeHead(ctx)
+	if err != nil {
+		return errors.Wrap(err, "Could not get safe head")
+	}
+
+	// If the safe head has not changed, return early.
+	if oldSafeHeadRoot == newSafeHeadRoot {
+		return nil
+	}
+
+	// Update safe head
+	f.store.safeHeadRoot = newSafeHeadRoot
+
+	f.logSafeHead(ctx, newSafeHeadRoot, oldSafeHeadRoot)
+
+	return nil
+}
+
+func (f *ForkChoice) logSafeHead(ctx context.Context, newSafeHeadRoot [32]byte, oldSafeHeadRoot [32]byte) {
+	newSafeHeadNode, ok := f.store.nodeByRoot[newSafeHeadRoot]
+	if !ok || newSafeHeadNode == nil {
+		log.WithError(ErrNilNode).Error("Could not find new safe head node")
+		return
+	}
+	newSafeHeadSlot := newSafeHeadNode.slot
+	currentSlot := slots.CurrentSlot(f.store.genesisTime)
+	secondsSinceSlotStart, err := slots.SinceSlotStart(currentSlot, f.store.genesisTime, time.Now())
+	if err != nil {
+		log.WithError(err).Error("Could not compute seconds since slot start")
+	}
+	log.WithFields(logrus.Fields{
+		"currentSlot":        fmt.Sprintf("%d", currentSlot),
+		"sinceSlotStartTime": fmt.Sprintf("%d", secondsSinceSlotStart.Milliseconds()),
+		"newSafeHeadSlot":    fmt.Sprintf("%d", newSafeHeadSlot),
+		"newSafeHeadRoot":    fmt.Sprintf("%#x", newSafeHeadRoot),
+		"weight":             fmt.Sprintf("%d", newSafeHeadNode.weight),
+	}).Info("Safe head has changed")
+
+	// Update metrics.
+	safeHeadSlotNumber.Set(float64(newSafeHeadSlot))
+
+	// Check if the safe head reorged.
+	commonRoot, forkSlot, err := f.CommonAncestor(ctx, oldSafeHeadRoot, newSafeHeadRoot)
+	if err != nil {
+		log.WithError(err).Error("Could not find common ancestor root")
+		return
+	}
+
+	// The safe head has reorged. This is bad!
+	if oldSafeHeadRoot != [32]byte{} && commonRoot != oldSafeHeadRoot {
+		oldSafeHeadNode, ok := f.store.nodeByRoot[oldSafeHeadRoot]
+		if !ok || oldSafeHeadNode == nil {
+			log.WithError(ErrNilNode).Error("Could not find old safe head node")
+			return
+		}
+		oldSafeHeadSlot := oldSafeHeadNode.slot
+		dis := oldSafeHeadSlot + newSafeHeadSlot - 2*forkSlot
+		dep := max(uint64(oldSafeHeadSlot-forkSlot), uint64(newSafeHeadSlot-forkSlot))
+		log.WithFields(logrus.Fields{
+			"oldSafeHeadSlot":    fmt.Sprintf("%d", oldSafeHeadSlot),
+			"oldSafeHeadRoot":    fmt.Sprintf("%#x", oldSafeHeadRoot),
+			"commonAncestorRoot": fmt.Sprintf("%#x", commonRoot),
+			"distance":           dis,
+			"depth":              dep,
+		}).Error("Safe head reorg occurred")
+
+		safeHeadReorgDistance.Observe(float64(dis))
+		safeHeadReorgDepth.Observe(float64(dep))
+		safeHeadReorgCount.Inc()
+	}
 }
 
 // ProcessAttestation processes attestation for vote accounting, it iterates around validator indices
@@ -537,6 +642,23 @@ func (f *ForkChoice) UnrealizedJustifiedPayloadBlockHash() [32]byte {
 	return node.payloadHash
 }
 
+// SafeBlockHash returns the hash of the payload at the safe head
+func (f *ForkChoice) SafeBlockHash() [32]byte {
+	switch params.BeaconConfig().SafeBlockAlgorithm {
+	case "justified":
+		return f.JustifiedPayloadBlockHash()
+	case "fast-confirmation":
+		safeHeadRoot := f.store.safeHeadRoot
+		node, ok := f.store.nodeByRoot[safeHeadRoot]
+		if !ok || node == nil {
+			return [32]byte{}
+		}
+		return node.payloadHash
+	default:
+		return f.UnrealizedJustifiedPayloadBlockHash()
+	}
+}
+
 // ForkChoiceDump returns a full dump of forkchoice.
 func (f *ForkChoice) ForkChoiceDump(ctx context.Context) (*forkchoice2.Dump, error) {
 	jc := &ethpb.Checkpoint{
@@ -570,6 +692,7 @@ func (f *ForkChoice) ForkChoiceDump(ctx context.Context) (*forkchoice2.Dump, err
 	resp := &forkchoice2.Dump{
 		JustifiedCheckpoint:           jc,
 		UnrealizedJustifiedCheckpoint: ujc,
+		SafeHeadRoot:                  f.store.safeHeadRoot[:],
 		FinalizedCheckpoint:           fc,
 		UnrealizedFinalizedCheckpoint: ufc,
 		ProposerBoostRoot:             f.store.proposerBoostRoot[:],

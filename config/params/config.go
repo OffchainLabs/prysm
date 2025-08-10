@@ -314,6 +314,10 @@ type BeaconChainConfig struct {
 	// DeprecatedMaxBlobsPerBlockFulu defines the max blobs that could exist in a block post Fulu hard fork.
 	// Deprecated: This field is no longer supported. Avoid using it.
 	DeprecatedMaxBlobsPerBlockFulu int `yaml:"MAX_BLOBS_PER_BLOCK_FULU" spec:"true"`
+
+	// Safe block config value
+	FastConfirmationByzantineThreshold uint64 // FastConfirmationByzantineThreshold is the Byzantine threshold percentage (0-100) used for fast confirmation.
+	SafeBlockAlgorithm                 string // SafeBlockAlgorithm is the algorithm for safe block selection
 }
 
 func (b *BeaconChainConfig) VersionToForkEpochMap() map[int]primitives.Epoch {

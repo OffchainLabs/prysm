@@ -28,6 +28,7 @@ type Store struct {
 	unrealizedFinalizedCheckpoint *forkchoicetypes.Checkpoint            // best unrealized finalized checkpoint in store.
 	prevJustifiedCheckpoint       *forkchoicetypes.Checkpoint            // previous justified checkpoint in store.
 	finalizedCheckpoint           *forkchoicetypes.Checkpoint            // latest finalized epoch in store.
+	safeHeadRoot                  [fieldparams.RootLength]byte           // safe head root in store.
 	proposerBoostRoot             [fieldparams.RootLength]byte           // latest block root that was boosted after being received in a timely manner.
 	previousProposerBoostRoot     [fieldparams.RootLength]byte           // previous block root that was boosted after being received in a timely manner.
 	previousProposerBoostScore    uint64                                 // previous proposer boosted root score.
@@ -62,6 +63,7 @@ type Node struct {
 	bestDescendant           *Node                        // bestDescendant node of this node.
 	optimistic               bool                         // whether the block has been fully validated or not
 	timestamp                time.Time                    // The timestamp when the node was inserted.
+	bestConfirmedDescendant  *Node                        // bestConfirmedDescendant node of this node.
 }
 
 // Vote defines an individual validator's vote.

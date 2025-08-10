@@ -333,6 +333,7 @@ var (
 		Usage: "Specifies the retention period for the pruner service in terms of epochs. " +
 			"If this value is less than MIN_EPOCHS_FOR_BLOCK_REQUESTS, it will be ignored.",
 	}
+
 	// SubscribeAllDataSubnets enables subscription to all data subnets.
 	SubscribeAllDataSubnets = &cli.BoolFlag{
 		Name:  "subscribe-all-data-subnets",
@@ -343,5 +344,19 @@ var (
 		Name:  "batch-verifier-limit",
 		Usage: "Maximum number of signatures to batch verify at once for beacon attestation p2p gossip.",
 		Value: 1000,
+	}
+
+	FastConfirmationByzantineThreshold = &cli.Uint64Flag{
+		Name:    "fast-confirmation-byzantine-threshold",
+		Usage:   "Byzantine threshold percentage (0-100) used for fast confirmation",
+		Value:   33,
+		Aliases: []string{"fc-threshold"},
+	}
+
+	SafeBlock = &cli.StringFlag{
+		Name:    "safe-block",
+		Usage:   "Algorithm for safe block selection: justified, unrealized-justified, or fast-confirmation",
+		Value:   "unrealized-justified",
+		Aliases: []string{"sb"},
 	}
 )

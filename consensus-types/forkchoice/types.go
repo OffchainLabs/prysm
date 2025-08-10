@@ -33,6 +33,7 @@ type Dump struct {
 	FinalizedCheckpoint           *eth.Checkpoint
 	UnrealizedJustifiedCheckpoint *eth.Checkpoint
 	UnrealizedFinalizedCheckpoint *eth.Checkpoint
+	SafeHeadRoot                  []byte
 	ProposerBoostRoot             []byte
 	PreviousProposerBoostRoot     []byte
 	HeadRoot                      []byte

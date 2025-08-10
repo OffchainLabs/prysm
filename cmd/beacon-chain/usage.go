@@ -162,6 +162,8 @@ var appHelpFlagGroups = []flagGroup{
 			flags.ExecutionJWTSecretFlag,
 			flags.JwtId,
 			flags.InteropMockEth1DataVotesFlag,
+			flags.FastConfirmationByzantineThreshold,
+			flags.SafeBlock,
 		},
 	},
 	{ // Flags relevant to configuring beacon chain monitoring.
