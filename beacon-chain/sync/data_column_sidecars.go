@@ -483,15 +483,27 @@ func selectPeers(
 	count int,
 	origIndicesByRootByPeer map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool,
 ) (map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool, error) {
+	const randomPeerTimeout = 30 * time.Second
+
 	// Select peers to query the missing sidecars from.
 	indicesByRootByPeer := copyIndicesByRootByPeer(origIndicesByRootByPeer)
 	internalIndicesByRootByPeer := copyIndicesByRootByPeer(indicesByRootByPeer)
 	indicesByRootByPeerToQuery := make(map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool)
 	for len(internalIndicesByRootByPeer) > 0 {
 		// Randomly select a peer with enough bandwidth.
-		peer, err := randomPeer(p.Ctx, randomSource, p.RateLimiter, count, indicesByRootByPeer)
+		peer, err := func() (goPeer.ID, error) {
+			ctx, cancel := context.WithTimeout(p.Ctx, randomPeerTimeout)
+			defer cancel()
+
+			peer, err := randomPeer(ctx, randomSource, p.RateLimiter, count, indicesByRootByPeer)
+			if err != nil {
+				return "", errors.Wrap(err, "select random peer")
+			}
+
+			return peer, err
+		}()
 		if err != nil {
-			return nil, errors.Wrap(err, "select random peer")
+			return nil, err
 		}
 
 		// Query all the sidecars that peer can offer us.
