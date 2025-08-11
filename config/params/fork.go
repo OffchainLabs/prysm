@@ -45,7 +45,7 @@ func ForkFromConfig(cfg *BeaconChainConfig, epoch primitives.Epoch) *ethpb.Fork 
 	current := cfg.networkSchedule.ForEpoch(epoch)
 	previous := current
 	if current.Epoch > 0 {
-		previous = BeaconConfig().networkSchedule.ForEpoch(current.Epoch - 1)
+		previous = cfg.networkSchedule.ForEpoch(current.Epoch - 1)
 	}
 	return &ethpb.Fork{
 		PreviousVersion: previous.ForkVersion[:],

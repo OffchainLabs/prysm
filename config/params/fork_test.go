@@ -165,3 +165,24 @@ func TestLastForkEpoch(t *testing.T) {
 	cfg := params.BeaconConfig().Copy()
 	require.Equal(t, cfg.ElectraForkEpoch, params.LastForkEpoch())
 }
+
+func TestForkFromConfig_UsesPassedConfig(t *testing.T) {
+	testCfg := params.BeaconConfig().Copy()
+	testCfg.AltairForkVersion = []byte{0x02, 0x00, 0x00, 0x00}
+	testCfg.GenesisForkVersion = []byte{0x03, 0x00, 0x00, 0x00}
+	testCfg.AltairForkEpoch = 100
+	testCfg.InitializeForkSchedule()
+
+	// Test at Altair fork epoch - should use the passed config's versions
+	fork := params.ForkFromConfig(testCfg, testCfg.AltairForkEpoch)
+
+	want := &ethpb.Fork{
+		Epoch:           testCfg.AltairForkEpoch,
+		CurrentVersion:  testCfg.AltairForkVersion,
+		PreviousVersion: testCfg.GenesisForkVersion,
+	}
+
+	if !reflect.DeepEqual(fork, want) {
+		t.Errorf("ForkFromConfig() got = %v, want %v", fork, want)
+	}
+}
