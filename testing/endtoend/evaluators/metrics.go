@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/genesis"
 	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -88,8 +87,9 @@ var metricComparisonTests = []comparisonTest{
 }
 
 func metricsTest(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
-	clock := startup.NewClock(genesis.Time(), genesis.ValidatorsRoot())
-	forkDigest := params.ForkDigest(clock.CurrentEpoch())
+	currentSlot := slots.CurrentSlot(genesis.Time())
+	currentEpoch := slots.ToEpoch(currentSlot)
+	forkDigest := params.ForkDigest(currentEpoch)
 	for i := 0; i < len(conns); i++ {
 		response, err := http.Get(fmt.Sprintf("http://localhost:%d/metrics", e2e.TestParams.Ports.PrysmBeaconNodeMetricsPort+i))
 		if err != nil {
