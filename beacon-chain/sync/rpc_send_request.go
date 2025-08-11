@@ -564,7 +564,7 @@ func SendDataColumnSidecarsByRootRequest(p DataColumnSidecarsParams, peer goPeer
 	}
 
 	// Send the request to the peer.
-	stream, err := p.P2P.Send(p.Ctx, identifiers, topic, peer)
+	stream, err := p.P2P.Send(p.Ctx, &identifiers, topic, peer)
 	if err != nil {
 		return nil, errors.Wrap(err, "p2p api send")
 	}
