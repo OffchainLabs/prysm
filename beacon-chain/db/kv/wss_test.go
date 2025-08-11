@@ -20,7 +20,7 @@ func TestSaveOrigin(t *testing.T) {
 
 	// Initialize genesis with mainnet config - this will load the embedded mainnet state
 	require.NoError(t, genesis.Initialize(ctx, t.TempDir()))
-	
+
 	// Get the initialized genesis state
 	st, err := genesis.State()
 	require.NoError(t, err)

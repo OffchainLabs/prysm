@@ -564,7 +564,7 @@ func TestBuildValidatorAssignmentMap(t *testing.T) {
 	start := primitives.Slot(200)
 	bySlot := [][][]primitives.ValidatorIndex{
 		{{1, 2, 3}},        // slot 200, committee 0
-		{{7, 8, 9}},        // slot 201, committee 0  
+		{{7, 8, 9}},        // slot 201, committee 0
 		{{4, 5}, {10, 11}}, // slot 202, committee 0 & 1
 	}
 
@@ -632,7 +632,7 @@ func TestGetValidatorAssignment_WithAssignmentMap(t *testing.T) {
 	}
 
 	vs := &Server{}
-	
+
 	// Test existing validator (validator 2 is at position 1 in the committee, not position 2)
 	assignment := vs.getValidatorAssignment(meta, primitives.ValidatorIndex(2))
 	require.NotNil(t, assignment)
@@ -662,7 +662,7 @@ func TestGetValidatorAssignment_WithoutAssignmentMap(t *testing.T) {
 	}
 
 	vs := &Server{}
-	
+
 	// Test existing validator
 	assignment := vs.getValidatorAssignment(meta, primitives.ValidatorIndex(5))
 	require.NotNil(t, assignment)
@@ -682,24 +682,24 @@ func TestLoadMetadata_ThresholdBehavior(t *testing.T) {
 	epoch := primitives.Epoch(0)
 
 	tests := []struct {
-		name                    string
-		numValidators          int
-		expectAssignmentMap    bool
+		name                string
+		numValidators       int
+		expectAssignmentMap bool
 	}{
 		{
-			name:                    "Small request - below threshold",
-			numValidators:          100,
-			expectAssignmentMap:    false,
+			name:                "Small request - below threshold",
+			numValidators:       100,
+			expectAssignmentMap: false,
 		},
 		{
-			name:                    "Large request - at threshold",
-			numValidators:          validatorLookupThreshold,
-			expectAssignmentMap:    true,
+			name:                "Large request - at threshold",
+			numValidators:       validatorLookupThreshold,
+			expectAssignmentMap: true,
 		},
 		{
-			name:                    "Large request - above threshold", 
-			numValidators:          validatorLookupThreshold + 1000,
-			expectAssignmentMap:    true,
+			name:                "Large request - above threshold",
+			numValidators:       validatorLookupThreshold + 1000,
+			expectAssignmentMap: true,
 		},
 	}
 
