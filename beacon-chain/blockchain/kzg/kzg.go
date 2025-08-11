@@ -19,7 +19,7 @@ const BytesPerCell = ckzg4844.BytesPerCell
 // Cell represents a chunk of an encoded Blob.
 type Cell [BytesPerCell]byte
 
-// Commitment represent a KZG commitment to a Blob.
+// Commitment represents a KZG commitment to a Blob.
 type Commitment [48]byte
 
 // Proof represents a KZG proof that attests to the validity of a Blob or parts of it.
@@ -75,7 +75,7 @@ func ComputeBlobKZGProof(blob *Blob, commitment Commitment) (Proof, error) {
 
 	proof, err := kzg4844.ComputeBlobProof(&kzgBlob, kzg4844.Commitment(commitment))
 	if err != nil {
-		return [48]byte{}, err
+		return Proof{}, err
 	}
 	return Proof(proof), nil
 }
@@ -93,7 +93,7 @@ func ComputeCellsAndKZGProofs(blob *Blob) (CellsAndProofs, error) {
 	return makeCellsAndProofs(ckzgCells[:], ckzgProofs[:])
 }
 
-// VerifyCellKZGProofBatch verifies the KZG proofs for a given slice of commitments, cells indices, cells and proofs.
+// VerifyCellKZGProofBatch verifies the KZG proofs for a given slice of commitments, cell indices, cells and proofs.
 // Note: It is way more efficient to call once this function with big slices than calling it multiple times with small slices.
 func VerifyCellKZGProofBatch(commitmentsBytes []Bytes48, cellIndices []uint64, cells []Cell, proofsBytes []Bytes48) (bool, error) {
 	// Convert `Cell` type to `ckzg4844.Cell`
