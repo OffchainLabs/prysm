@@ -1,6 +1,7 @@
 package params
 
 import (
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
@@ -12,7 +13,7 @@ func DigestChangesAfter(e primitives.Epoch) bool {
 	return ok
 }
 
-// ForkDigestFromEpoch retrieves the fork digest from the current schedule determined
+// ForkDigestUsingConfig retrieves the fork digest from the current schedule determined
 // by the provided epoch.
 func ForkDigestUsingConfig(epoch primitives.Epoch, cfg *BeaconChainConfig) [4]byte {
 	entry := cfg.networkSchedule.ForEpoch(epoch)
@@ -23,7 +24,7 @@ func ForkDigest(epoch primitives.Epoch) [4]byte {
 	return ForkDigestUsingConfig(epoch, BeaconConfig())
 }
 
-func computeForkDataRoot(version [4]byte, root [32]byte) ([32]byte, error) {
+func computeForkDataRoot(version [fieldparams.VersionLength]byte, root [32]byte) ([32]byte, error) {
 	r, err := (&ethpb.ForkData{
 		CurrentVersion:        version[:],
 		GenesisValidatorsRoot: root[:],
@@ -53,20 +54,20 @@ func ForkFromConfig(cfg *BeaconChainConfig, epoch primitives.Epoch) *ethpb.Fork 
 	}
 }
 
-// RetrieveForkDataFromDigest performs the inverse, where it tries to determine the fork version
+// ForkDataFromDigest performs the inverse, where it tries to determine the fork version
 // and epoch from a provided digest by looping through our current fork schedule.
-func ForkDataFromDigest(digest [4]byte) ([4]byte, primitives.Epoch, error) {
+func ForkDataFromDigest(digest [4]byte) ([fieldparams.VersionLength]byte, primitives.Epoch, error) {
 	cfg := BeaconConfig()
 	entry, ok := cfg.networkSchedule.byDigest[digest]
 	if !ok {
-		return [4]byte{}, 0, errors.Errorf("no fork exists for a digest of %#x", digest)
+		return [fieldparams.VersionLength]byte{}, 0, errors.Errorf("no fork exists for a digest of %#x", digest)
 	}
 	return entry.ForkVersion, entry.Epoch, nil
 }
 
 // NextForkData retrieves the next fork data according to the
 // provided current epoch.
-func NextForkData(epoch primitives.Epoch) ([4]byte, primitives.Epoch) {
+func NextForkData(epoch primitives.Epoch) ([fieldparams.VersionLength]byte, primitives.Epoch) {
 	entry := BeaconConfig().networkSchedule.Next(epoch)
 	return entry.ForkVersion, entry.Epoch
 }

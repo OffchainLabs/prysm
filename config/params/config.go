@@ -322,9 +322,10 @@ type BeaconChainConfig struct {
 	// DeprecatedMaxBlobsPerBlockFulu defines the max blobs that could exist in a block post Fulu hard fork.
 	// Deprecated: This field is no longer supported. Avoid using it.
 	DeprecatedMaxBlobsPerBlockFulu int `yaml:"MAX_BLOBS_PER_BLOCK_FULU" spec:"true"`
-	forkSchedule                   *NetworkSchedule
-	bpoSchedule                    *NetworkSchedule
-	networkSchedule                *NetworkSchedule
+
+	forkSchedule    *NetworkSchedule
+	bpoSchedule     *NetworkSchedule
+	networkSchedule *NetworkSchedule
 }
 
 func (b *BeaconChainConfig) VersionToForkEpochMap() map[int]primitives.Epoch {
@@ -369,6 +370,7 @@ func (e NetworkScheduleEntry) LogFields() log.Fields {
 		"forkDigest":       fmt.Sprintf("%#x", e.ForkDigest),
 		"maxBlobsPerBlock": e.MaxBlobsPerBlock,
 		"epoch":            e.Epoch,
+		"bpoEpoch":         e.BPOEpoch,
 		"isFork":           e.isFork,
 		"forkEnum":         version.String(e.VersionEnum),
 		"sanity":           fmt.Sprintf("%#x", root),
@@ -384,6 +386,7 @@ func (ns NetworkScheduleEntry) Copy() NetworkScheduleEntry {
 		VersionEnum:      ns.VersionEnum,
 		MaxBlobsPerBlock: ns.MaxBlobsPerBlock,
 		Epoch:            ns.Epoch,
+		BPOEpoch:         ns.BPOEpoch,
 		isFork:           ns.isFork,
 	}
 }
@@ -406,33 +409,15 @@ func (b *BeaconChainConfig) InitializeForkSchedule() {
 	b.bpoSchedule = initBPOSchedule(b)
 	combined := b.forkSchedule.merge(b.bpoSchedule)
 	if err := combined.prepare(b); err != nil {
-		log.WithError(err).Error("Failed to prepare network schedule", "error", err)
+		log.WithError(err).Error("Failed to prepare network schedule")
 	}
 	b.networkSchedule = combined
 }
 
 func LogDigests(b *BeaconChainConfig) {
-	gvr := BeaconConfig().GenesisValidatorsRoot
 	schedule := b.networkSchedule
 	for _, e := range schedule.entries {
-		root, err := computeForkDataRoot(e.ForkVersion, gvr)
-		if err != nil {
-			log.WithField("version", fmt.Sprintf("%#x", e.ForkVersion)).
-				WithField("genesisValidatorsRoot", fmt.Sprintf("%#x", gvr)).
-				WithError(err).Error("Failed to compute fork data root")
-		}
-		fields := log.Fields{
-			"forkVersion":      fmt.Sprintf("%#x", e.ForkVersion),
-			"forkDigest":       fmt.Sprintf("%#x", e.ForkDigest),
-			"maxBlobsPerBlock": e.MaxBlobsPerBlock,
-			"epoch":            e.Epoch,
-			"bpoEpoch":         e.BPOEpoch,
-			"isFork":           e.isFork,
-			"forkEnum":         version.String(e.VersionEnum),
-			"sanity":           fmt.Sprintf("%#x", root),
-			"gvr":              fmt.Sprintf("%#x", gvr),
-		}
-		log.WithFields(fields).Debug("Network schedule entry initialized")
+		log.WithFields(e.LogFields()).Debug("Network schedule entry initialized")
 		digests := make([]string, 0, len(schedule.byDigest))
 		for k := range schedule.byDigest {
 			digests = append(digests, fmt.Sprintf("%#x", k))
@@ -444,7 +429,7 @@ func LogDigests(b *BeaconChainConfig) {
 type NetworkSchedule struct {
 	entries   []NetworkScheduleEntry
 	byEpoch   map[primitives.Epoch]*NetworkScheduleEntry
-	byVersion map[[4]byte]*NetworkScheduleEntry
+	byVersion map[[fieldparams.VersionLength]byte]*NetworkScheduleEntry
 	byDigest  map[[4]byte]*NetworkScheduleEntry
 }
 
@@ -452,7 +437,7 @@ func newNetworkSchedule(entries []NetworkScheduleEntry) *NetworkSchedule {
 	return &NetworkSchedule{
 		entries:   entries,
 		byEpoch:   make(map[primitives.Epoch]*NetworkScheduleEntry),
-		byVersion: make(map[[4]byte]*NetworkScheduleEntry),
+		byVersion: make(map[[fieldparams.VersionLength]byte]*NetworkScheduleEntry),
 		byDigest:  make(map[[4]byte]*NetworkScheduleEntry),
 	}
 }
@@ -472,7 +457,7 @@ func (ns *NetworkSchedule) Next(epoch primitives.Epoch) NetworkScheduleEntry {
 	if idx < 0 {
 		return ns.entries[0]
 	}
-	if idx > lastIdx-1 {
+	if idx == lastIdx {
 		return ns.entries[lastIdx]
 	}
 	return ns.entries[idx+1]
@@ -589,7 +574,7 @@ func entryWithForkDigest(entry NetworkScheduleEntry, b *BeaconChainConfig) (Netw
 	if err != nil {
 		return entry, err
 	}
-	entry.ForkDigest = bytesutil.ToBytes4(root[:])
+	entry.ForkDigest = to4(root[:])
 	if entry.Epoch < b.FuluForkEpoch {
 		return entry, nil
 	}
