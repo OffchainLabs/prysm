@@ -179,11 +179,15 @@ func TestAddForkEntry_NextForkVersion(t *testing.T) {
 }
 
 func TestUpdateENR_FuluForkDigest(t *testing.T) {
-	setupTest := func(t *testing.T) (*enode.LocalNode, func()) {
+	setupTest := func(t *testing.T, fuluEnabled bool) (*enode.LocalNode, func()) {
 		params.SetupTestConfigCleanup(t)
 
 		cfg := params.BeaconConfig().Copy()
-		cfg.FuluForkEpoch = 100
+		if fuluEnabled {
+			cfg.FuluForkEpoch = 100
+		} else {
+			cfg.FuluForkEpoch = cfg.FarFutureEpoch
+		}
 		cfg.FuluForkVersion = []byte{5, 0, 0, 0}
 		params.OverrideBeaconConfig(cfg)
 		cfg.InitializeForkSchedule()
@@ -203,12 +207,14 @@ func TestUpdateENR_FuluForkDigest(t *testing.T) {
 
 	tests := []struct {
 		name         string
+		fuluEnabled  bool
 		currentEntry params.NetworkScheduleEntry
 		nextEntry    params.NetworkScheduleEntry
 		validateNFD  func(t *testing.T, localNode *enode.LocalNode, nextEntry params.NetworkScheduleEntry)
 	}{
 		{
-			name: "different digests sets nfd to next digest",
+			name:        "different digests sets nfd to next digest",
+			fuluEnabled: true,
 			currentEntry: params.NetworkScheduleEntry{
 				Epoch:       50,
 				ForkDigest:  [4]byte{1, 2, 3, 4},
@@ -227,7 +233,8 @@ func TestUpdateENR_FuluForkDigest(t *testing.T) {
 			},
 		},
 		{
-			name: "same digests sets nfd to empty",
+			name:        "same digests sets nfd to empty",
+			fuluEnabled: true,
 			currentEntry: params.NetworkScheduleEntry{
 				Epoch:       50,
 				ForkDigest:  [4]byte{1, 2, 3, 4},
@@ -245,11 +252,30 @@ func TestUpdateENR_FuluForkDigest(t *testing.T) {
 				assert.DeepEqual(t, make([]byte, len(nextEntry.ForkDigest)), nfdValue, "nfd entry should be empty bytes when digests are same")
 			},
 		},
+		{
+			name:        "fulu disabled does not add nfd field",
+			fuluEnabled: false,
+			currentEntry: params.NetworkScheduleEntry{
+				Epoch:       50,
+				ForkDigest:  [4]byte{1, 2, 3, 4},
+				ForkVersion: [4]byte{1, 0, 0, 0},
+			},
+			nextEntry: params.NetworkScheduleEntry{
+				Epoch:       100,
+				ForkDigest:  [4]byte{5, 6, 7, 8}, // Different from current
+				ForkVersion: [4]byte{2, 0, 0, 0},
+			},
+			validateNFD: func(t *testing.T, localNode *enode.LocalNode, nextEntry params.NetworkScheduleEntry) {
+				var nfdValue []byte
+				err := localNode.Node().Record().Load(enr.WithEntry(nfdEnrKey, &nfdValue))
+				require.ErrorContains(t, "missing ENR key", err, "nfd field should not be present when Fulu fork is disabled")
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			localNode, cleanup := setupTest(t)
+			localNode, cleanup := setupTest(t, tt.fuluEnabled)
 			defer cleanup()
 
 			currentEntry := tt.currentEntry
