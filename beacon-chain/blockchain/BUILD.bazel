@@ -182,6 +182,7 @@ go_test(
         "//container/trie:go_default_library",
         "//crypto/bls:go_default_library",
         "//encoding/bytesutil:go_default_library",
+        "//genesis:go_default_library",
         "//proto/engine/v1:go_default_library",
         "//proto/eth/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",

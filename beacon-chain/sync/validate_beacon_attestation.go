@@ -88,9 +88,16 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 
 	committeeIndex := att.GetCommitteeIndex()
 
+	// Generate cache key for unaggregated attestation tracking
+	attKey, err := generateUnaggregatedAttCacheKey(att)
+	if err != nil {
+		log.WithError(err).Error("Could not generate cache key for attestation tracking")
+		return pubsub.ValidationIgnore, nil
+	}
+
 	if !s.slasherEnabled {
 		// Verify this the first attestation received for the participating validator for the slot.
-		if s.hasSeenUnaggregatedAtt(att) {
+		if s.hasSeenUnaggregatedAtt(attKey) {
 			return pubsub.ValidationIgnore, nil
 		}
 		// Reject an attestation if it references an invalid block.
@@ -209,7 +216,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 		Data: eventData,
 	})
 
-	s.setSeenUnaggregatedAtt(att)
+	s.setSeenUnaggregatedAtt(attKey)
 
 	// Attach final validated attestation to the message for further pipeline use
 	msg.ValidatorData = attForValidation
@@ -339,23 +346,18 @@ func validateAttestingIndex(
 	return pubsub.ValidationAccept, nil
 }
 
-// Returns true if the attestation was already seen for the participating validator for the slot.
-func (s *Service) hasSeenUnaggregatedAtt(att eth.Att) bool {
-	s.seenUnAggregatedAttestationLock.RLock()
-	defer s.seenUnAggregatedAttestationLock.RUnlock()
-
+// generateUnaggregatedAttCacheKey generates the cache key for unaggregated attestation tracking.
+func generateUnaggregatedAttCacheKey(att eth.Att) (string, error) {
 	var attester uint64
 	if att.Version() >= version.Electra {
 		if !att.IsSingle() {
-			log.Debug("Called hasSeenUnaggregatedAtt with a non-single Electra attestation")
-			return false
+			return "", errors.New("non-single Electra attestation")
 		}
 		attester = uint64(att.GetAttestingIndex())
 	} else {
 		aggBits := att.GetAggregationBits()
 		if aggBits.Count() != 1 {
-			log.Debug("Attestation does not have exactly 1 bit set")
-			return false
+			return "", errors.New("attestation does not have exactly 1 bit set")
 		}
 		attester = uint64(att.GetAggregationBits().BitIndices()[0])
 	}
@@ -364,36 +366,24 @@ func (s *Service) hasSeenUnaggregatedAtt(att eth.Att) bool {
 	binary.LittleEndian.PutUint64(b, uint64(att.GetData().Slot))
 	binary.LittleEndian.PutUint64(b[8:16], uint64(att.GetCommitteeIndex()))
 	binary.LittleEndian.PutUint64(b[16:], attester)
-	_, seen := s.seenUnAggregatedAttestationCache.Get(string(b))
+	return string(b), nil
+}
+
+// Returns true if the attestation was already seen for the participating validator for the slot.
+func (s *Service) hasSeenUnaggregatedAtt(key string) bool {
+	s.seenUnAggregatedAttestationLock.RLock()
+	defer s.seenUnAggregatedAttestationLock.RUnlock()
+
+	_, seen := s.seenUnAggregatedAttestationCache.Get(key)
 	return seen
 }
 
 // Set an incoming attestation as seen for the participating validator for the slot.
-func (s *Service) setSeenUnaggregatedAtt(att eth.Att) {
+func (s *Service) setSeenUnaggregatedAtt(key string) {
 	s.seenUnAggregatedAttestationLock.Lock()
 	defer s.seenUnAggregatedAttestationLock.Unlock()
 
-	var attester uint64
-	if att.Version() >= version.Electra {
-		if !att.IsSingle() {
-			log.Debug("Called setSeenUnaggregatedAtt with a non-single Electra attestation. It will not be marked as seen")
-			return
-		}
-		attester = uint64(att.GetAttestingIndex())
-	} else {
-		aggBits := att.GetAggregationBits()
-		if aggBits.Count() != 1 {
-			log.Debug("Attestation does not have exactly 1 bit set. It will not be marked as seen")
-			return
-		}
-		attester = uint64(att.GetAggregationBits().BitIndices()[0])
-	}
-
-	b := make([]byte, 24)
-	binary.LittleEndian.PutUint64(b, uint64(att.GetData().Slot))
-	binary.LittleEndian.PutUint64(b[8:16], uint64(att.GetCommitteeIndex()))
-	binary.LittleEndian.PutUint64(b[16:], attester)
-	s.seenUnAggregatedAttestationCache.Add(string(b), true)
+	s.seenUnAggregatedAttestationCache.Add(key, true)
 }
 
 // hasBlockAndState returns true if the beacon node knows about a block and associated state in the

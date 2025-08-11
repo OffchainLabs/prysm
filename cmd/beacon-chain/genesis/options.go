@@ -2,8 +2,8 @@ package genesis
 
 import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/node"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/genesis"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/checkpoint"
+	"github.com/OffchainLabs/prysm/v6/genesis"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
@@ -24,11 +24,21 @@ var (
 	}
 )
 
-// BeaconNodeOptions is responsible for determining if the checkpoint sync options have been used, and if so,
-// reading the block and state ssz-serialized values from the filesystem locations specified and preparing a
-// checkpoint.Initializer, which uses the provided io.ReadClosers to initialize the beacon node database.
+// BeaconNodeOptions handles options for customizing the source of the genesis state.
 func BeaconNodeOptions(c *cli.Context) ([]node.Option, error) {
 	statePath := c.Path(StatePath.Name)
+	if statePath != "" {
+		opt := func(node *node.BeaconNode) (err error) {
+			provider, err := genesis.NewFileProvider(statePath)
+			if err != nil {
+				return errors.Wrap(err, "error preparing to initialize genesis db state from local ssz files")
+			}
+			node.GenesisProviders = append(node.GenesisProviders, provider)
+			return nil
+		}
+		return []node.Option{opt}, nil
+	}
+
 	remoteURL := c.String(BeaconAPIURL.Name)
 	if remoteURL == "" && c.String(checkpoint.RemoteURL.Name) != "" {
 		log.Infof("Using checkpoint sync url %s for value in --%s flag", c.String(checkpoint.RemoteURL.Name), BeaconAPIURL.Name)
@@ -36,26 +46,16 @@ func BeaconNodeOptions(c *cli.Context) ([]node.Option, error) {
 	}
 	if remoteURL != "" {
 		opt := func(node *node.BeaconNode) error {
-			var err error
-			node.GenesisInitializer, err = genesis.NewAPIInitializer(remoteURL)
+			provider, err := genesis.NewAPIProvider(remoteURL)
 			if err != nil {
 				return errors.Wrap(err, "error constructing beacon node api client for genesis state init")
 			}
+
+			node.GenesisProviders = append(node.GenesisProviders, provider)
 			return nil
 		}
 		return []node.Option{opt}, nil
 	}
 
-	if statePath == "" {
-		return nil, nil
-	}
-
-	opt := func(node *node.BeaconNode) (err error) {
-		node.GenesisInitializer, err = genesis.NewFileInitializer(statePath)
-		if err != nil {
-			return errors.Wrap(err, "error preparing to initialize genesis db state from local ssz files")
-		}
-		return nil
-	}
-	return []node.Option{opt}, nil
+	return nil, nil
 }

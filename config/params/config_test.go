@@ -6,9 +6,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/genesis"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/genesis"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
@@ -97,14 +97,14 @@ func TestConfig_WithinDAPeriod(t *testing.T) {
 }
 
 func TestConfigGenesisValidatorRoot(t *testing.T) {
-	g, err := genesis.State(params.MainnetName)
-	require.NoError(t, err)
-
-	gvr := g.GenesisValidatorsRoot()
-
-	if !bytes.Equal(gvr, params.BeaconConfig().GenesisValidatorsRoot[:]) {
+	params.SetActiveTestCleanup(t, params.MainnetBeaconConfig)
+	genesis.StoreEmbeddedDuringTest(t, params.BeaconConfig().ConfigName)
+	g, err := genesis.State()
+	require.NoError(t, err, "failed to load genesis state")
+	if !bytes.Equal(g.GenesisValidatorsRoot(), params.BeaconConfig().GenesisValidatorsRoot[:]) {
 		t.Fatal("mainnet params genesis validator root does not match the mainnet genesis state value")
 	}
+	require.Equal(t, params.BeaconConfig().GenesisValidatorsRoot, genesis.ValidatorsRoot())
 }
 
 func TestMaxBlobsPerBlock(t *testing.T) {

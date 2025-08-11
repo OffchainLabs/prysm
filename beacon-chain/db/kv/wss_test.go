@@ -3,9 +3,9 @@ package kv
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/genesis"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/genesis"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 )
@@ -18,7 +18,11 @@ func TestSaveOrigin(t *testing.T) {
 	ctx := t.Context()
 	db := setupDB(t)
 
-	st, err := genesis.State(params.MainnetName)
+	// Initialize genesis with mainnet config - this will load the embedded mainnet state
+	require.NoError(t, genesis.Initialize(ctx, t.TempDir()))
+	
+	// Get the initialized genesis state
+	st, err := genesis.State()
 	require.NoError(t, err)
 
 	sb, err := st.MarshalSSZ()

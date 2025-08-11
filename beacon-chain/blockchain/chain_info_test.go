@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/genesis"
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
@@ -624,6 +625,7 @@ func Test_hashForGenesisRoot(t *testing.T) {
 	ctx := t.Context()
 	c := setupBeaconChain(t, beaconDB)
 	st, _ := util.DeterministicGenesisStateElectra(t, 10)
+	genesis.StoreDuringTest(t, genesis.GenesisData{State: st})
 	require.NoError(t, c.cfg.BeaconDB.SaveGenesisData(ctx, st))
 	root, err := beaconDB.GenesisBlockRoot(ctx)
 	require.NoError(t, err)
