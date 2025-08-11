@@ -9,14 +9,17 @@ import (
 // updates the node's discovery service to reflect any new fork version
 // changes.
 func (s *Service) forkWatcher() {
+	// Exit early if discovery is disabled - there's no ENR to update
+	if s.dv5Listener == nil {
+		log.Debug("Discovery disabled, exiting fork watcher")
+		return
+	}
+
 	slotTicker := slots.NewSlotTicker(s.genesisTime, params.BeaconConfig().SecondsPerSlot)
 	var scheduleEntry params.NetworkScheduleEntry
 	for {
 		select {
 		case currSlot := <-slotTicker.C():
-			if s.dv5Listener == nil {
-				continue // TODO: Should forkWatcher run at all if we're in "local" mode?
-			}
 			currentEpoch := slots.ToEpoch(currSlot)
 			newEntry := params.GetNetworkScheduleEntry(currentEpoch)
 			if newEntry.ForkDigest != scheduleEntry.ForkDigest {
