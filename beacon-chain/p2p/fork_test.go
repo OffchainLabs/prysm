@@ -177,3 +177,85 @@ func TestAddForkEntry_NextForkVersion(t *testing.T) {
 		"Wanted Next Fork Version to be equal to last entry in schedule")
 
 }
+
+func TestUpdateENR_FuluForkDigest(t *testing.T) {
+	setupTest := func(t *testing.T) (*enode.LocalNode, func()) {
+		params.SetupTestConfigCleanup(t)
+
+		cfg := params.BeaconConfig().Copy()
+		cfg.FuluForkEpoch = 100
+		cfg.FuluForkVersion = []byte{5, 0, 0, 0}
+		params.OverrideBeaconConfig(cfg)
+		cfg.InitializeForkSchedule()
+
+		pkey, err := privKey(&Config{DataDir: t.TempDir()})
+		require.NoError(t, err, "Could not get private key")
+		db, err := enode.OpenDB("")
+		require.NoError(t, err)
+
+		localNode := enode.NewLocalNode(db, pkey)
+		cleanup := func() {
+			db.Close()
+		}
+
+		return localNode, cleanup
+	}
+
+	tests := []struct {
+		name         string
+		currentEntry params.NetworkScheduleEntry
+		nextEntry    params.NetworkScheduleEntry
+		validateNFD  func(t *testing.T, localNode *enode.LocalNode, nextEntry params.NetworkScheduleEntry)
+	}{
+		{
+			name: "different digests sets nfd to next digest",
+			currentEntry: params.NetworkScheduleEntry{
+				Epoch:       50,
+				ForkDigest:  [4]byte{1, 2, 3, 4},
+				ForkVersion: [4]byte{1, 0, 0, 0},
+			},
+			nextEntry: params.NetworkScheduleEntry{
+				Epoch:       100,
+				ForkDigest:  [4]byte{5, 6, 7, 8}, // Different from current
+				ForkVersion: [4]byte{2, 0, 0, 0},
+			},
+			validateNFD: func(t *testing.T, localNode *enode.LocalNode, nextEntry params.NetworkScheduleEntry) {
+				var nfdValue []byte
+				err := localNode.Node().Record().Load(enr.WithEntry(nfdEnrKey, &nfdValue))
+				require.NoError(t, err)
+				assert.DeepEqual(t, nextEntry.ForkDigest[:], nfdValue, "nfd entry should equal next fork digest")
+			},
+		},
+		{
+			name: "same digests sets nfd to empty",
+			currentEntry: params.NetworkScheduleEntry{
+				Epoch:       50,
+				ForkDigest:  [4]byte{1, 2, 3, 4},
+				ForkVersion: [4]byte{1, 0, 0, 0},
+			},
+			nextEntry: params.NetworkScheduleEntry{
+				Epoch:       100,
+				ForkDigest:  [4]byte{1, 2, 3, 4}, // Same as current
+				ForkVersion: [4]byte{2, 0, 0, 0},
+			},
+			validateNFD: func(t *testing.T, localNode *enode.LocalNode, nextEntry params.NetworkScheduleEntry) {
+				var nfdValue []byte
+				err := localNode.Node().Record().Load(enr.WithEntry(nfdEnrKey, &nfdValue))
+				require.NoError(t, err)
+				assert.DeepEqual(t, make([]byte, len(nextEntry.ForkDigest)), nfdValue, "nfd entry should be empty bytes when digests are same")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			localNode, cleanup := setupTest(t)
+			defer cleanup()
+
+			currentEntry := tt.currentEntry
+			nextEntry := tt.nextEntry
+			require.NoError(t, updateENR(localNode, currentEntry, nextEntry))
+			tt.validateNFD(t, localNode, nextEntry)
+		})
+	}
+}
