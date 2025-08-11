@@ -197,28 +197,33 @@ func (s *Service) findPeersWithSubnets(
 		}
 
 		// Remove duplicates, keeping the node with higher seq.
-		existing, ok := nodeByNodeID[node.ID()]
-		if ok && existing.Seq() > node.Seq() {
-			continue
-		}
-		nodeByNodeID[node.ID()] = node
-
-		// We found a new peer. Modify the defective subnets map
-		// and the filter accordingly.
-		for subnet := range defectiveSubnets {
-			if !nodeSubnets[subnet] {
+		// Remove duplicates, keeping the node with higher seq.
+		if existing, ok := nodeByNodeID[node.ID()]; ok {
+			// If existing has >= seq, keep it and skip.
+			if existing.Seq() >= node.Seq() {
 				continue
 			}
+			// Replacement with higher seq
+			nodeByNodeID[node.ID()] = node
+		} else {
+			// We found a new peer. Modify the defective subnets map
+			// and the filter accordingly.
+			nodeByNodeID[node.ID()] = node
+			for subnet := range defectiveSubnets {
+				if !nodeSubnets[subnet] {
+					continue
+				}
 
-			defectiveSubnets[subnet]--
+				defectiveSubnets[subnet]--
 
-			if defectiveSubnets[subnet] == 0 {
-				delete(defectiveSubnets, subnet)
-			}
+				if defectiveSubnets[subnet] == 0 {
+					delete(defectiveSubnets, subnet)
+				}
 
-			filter, err = s.nodeFilter(topicFormat, defectiveSubnets)
-			if err != nil {
-				return nil, errors.Wrap(err, "node filter")
+				filter, err = s.nodeFilter(topicFormat, defectiveSubnets)
+				if err != nil {
+					return nil, errors.Wrap(err, "node filter")
+				}
 			}
 		}
 	}

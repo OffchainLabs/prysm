@@ -450,14 +450,18 @@ func (s *Service) findPeers(ctx context.Context, missingPeerCount uint) ([]*enod
 		}
 
 		// Remove duplicates, keeping the node with higher seq.
-		existing, ok := nodeByNodeID[node.ID()]
-		if ok && existing.Seq() > node.Seq() {
-			continue
+		if existing, ok := nodeByNodeID[node.ID()]; ok {
+			// If existing has >= seq, keep it and skip.
+			if existing.Seq() >= node.Seq() {
+				continue
+			}
+			// Replacement with higher seq: do NOT decrement.
+			nodeByNodeID[node.ID()] = node
+		} else {
+			// We found a new peer. Decrease the missing peer count.
+			nodeByNodeID[node.ID()] = node
+			missingPeerCount-- // brand-new distinct peer
 		}
-		nodeByNodeID[node.ID()] = node
-
-		// We found a new peer. Decrease the missing peer count.
-		missingPeerCount--
 	}
 
 	// Convert the map to a slice.
