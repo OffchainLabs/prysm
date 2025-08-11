@@ -263,7 +263,7 @@ func TestBlocksQueue_Loop(t *testing.T) {
 				highestExpectedSlot: tt.highestExpectedSlot,
 			})
 			assert.NoError(t, queue.start())
-			processBlock := func(b blocks.BlockWithROBlobs) error {
+			processBlock := func(b blocks.BlockWithROSidecars) error {
 				block := b.Block
 				if !beaconDB.HasBlock(ctx, block.Block().ParentRoot()) {
 					return fmt.Errorf("%w: %#x", errParentDoesNotExist, block.Block().ParentRoot())
@@ -275,7 +275,7 @@ func TestBlocksQueue_Loop(t *testing.T) {
 				return mc.ReceiveBlock(ctx, block, root, nil)
 			}
 
-			var blocks []blocks.BlockWithROBlobs
+			var blocks []blocks.BlockWithROSidecars
 			for data := range queue.fetchedData {
 				for _, b := range data.bwb {
 					if err := processBlock(b); err != nil {
@@ -538,7 +538,7 @@ func TestBlocksQueue_onDataReceivedEvent(t *testing.T) {
 		require.NoError(t, err)
 		response := &fetchRequestResponse{
 			blocksFrom: "abc",
-			bwb: []blocks.BlockWithROBlobs{
+			bwb: []blocks.BlockWithROSidecars{
 				{Block: blocks.ROBlock{ReadOnlySignedBeaconBlock: wsb}},
 				{Block: blocks.ROBlock{ReadOnlySignedBeaconBlock: wsbCopy}},
 			},
@@ -640,7 +640,7 @@ func TestBlocksQueue_onReadyToSendEvent(t *testing.T) {
 		queue.smm.machines[256].fetched.blocksFrom = pidDataParsed
 		rwsb, err := blocks.NewROBlock(wsb)
 		require.NoError(t, err)
-		queue.smm.machines[256].fetched.bwb = []blocks.BlockWithROBlobs{
+		queue.smm.machines[256].fetched.bwb = []blocks.BlockWithROSidecars{
 			{Block: rwsb},
 		}
 
@@ -674,7 +674,7 @@ func TestBlocksQueue_onReadyToSendEvent(t *testing.T) {
 		queue.smm.machines[320].fetched.blocksFrom = pidDataParsed
 		rwsb, err := blocks.NewROBlock(wsb)
 		require.NoError(t, err)
-		queue.smm.machines[320].fetched.bwb = []blocks.BlockWithROBlobs{
+		queue.smm.machines[320].fetched.bwb = []blocks.BlockWithROSidecars{
 			{Block: rwsb},
 		}
 
@@ -705,7 +705,7 @@ func TestBlocksQueue_onReadyToSendEvent(t *testing.T) {
 		queue.smm.machines[320].fetched.blocksFrom = pidDataParsed
 		rwsb, err := blocks.NewROBlock(wsb)
 		require.NoError(t, err)
-		queue.smm.machines[320].fetched.bwb = []blocks.BlockWithROBlobs{
+		queue.smm.machines[320].fetched.bwb = []blocks.BlockWithROSidecars{
 			{Block: rwsb},
 		}
 

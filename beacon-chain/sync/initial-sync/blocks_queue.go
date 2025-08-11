@@ -72,6 +72,8 @@ type blocksQueueConfig struct {
 	db                  db.ReadOnlyDatabase
 	mode                syncMode
 	bs                  filesystem.BlobStorageSummarizer
+	dcs                 filesystem.DataColumnStorageReader
+	cv                  verification.NewDataColumnsVerifier
 }
 
 // blocksQueue is a priority queue that serves as a intermediary between block fetchers (producers)
@@ -96,7 +98,7 @@ type blocksQueue struct {
 type blocksQueueFetchedData struct {
 	blocksFrom peer.ID
 	blobsFrom  peer.ID
-	bwb        []blocks.BlockWithROBlobs
+	bwb        []blocks.BlockWithROSidecars
 }
 
 // newBlocksQueue creates initialized priority queue.
@@ -115,6 +117,8 @@ func newBlocksQueue(ctx context.Context, cfg *blocksQueueConfig) *blocksQueue {
 			db:     cfg.db,
 			clock:  cfg.clock,
 			bs:     cfg.bs,
+			dcs:    cfg.dcs,
+			cv:     cfg.cv,
 		})
 	}
 	highestExpectedSlot := cfg.highestExpectedSlot

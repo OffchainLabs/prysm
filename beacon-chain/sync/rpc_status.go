@@ -38,7 +38,10 @@ func (s *Service) maintainPeerStatuses() {
 			go func(id peer.ID) {
 				defer wg.Done()
 
-				log := log.WithField("peer", id)
+				log := log.WithFields(logrus.Fields{
+					"peer":  id,
+					"agent": agentString(id, s.cfg.p2p.Host()),
+				})
 
 				// If our peer status has not been updated correctly we disconnect over here
 				// and set the connection state over here instead.
