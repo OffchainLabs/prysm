@@ -9,11 +9,14 @@ import (
 	"time"
 
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
+	testp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
@@ -30,48 +33,6 @@ import (
 
 const testPingInterval = 100 * time.Millisecond
 
-type mockListener struct {
-	localNode *enode.LocalNode
-}
-
-func (m mockListener) Self() *enode.Node {
-	return m.localNode.Node()
-}
-
-func (mockListener) Close() {
-	// no-op
-}
-
-func (mockListener) Lookup(enode.ID) []*enode.Node {
-	panic("implement me")
-}
-
-func (mockListener) ReadRandomNodes(_ []*enode.Node) int {
-	panic("implement me")
-}
-
-func (mockListener) Resolve(*enode.Node) *enode.Node {
-	panic("implement me")
-}
-
-func (mockListener) Ping(*enode.Node) error {
-	panic("implement me")
-}
-
-func (mockListener) RequestENR(*enode.Node) (*enode.Node, error) {
-	panic("implement me")
-}
-
-func (mockListener) LocalNode() *enode.LocalNode {
-	panic("implement me")
-}
-
-func (mockListener) RandomNodes() enode.Iterator {
-	panic("implement me")
-}
-
-func (mockListener) RebootListener() error { panic("implement me") }
-
 func createHost(t *testing.T, port uint) (host.Host, *ecdsa.PrivateKey, net.IP) {
 	_, pkey := createAddrAndPrivKey(t)
 	ipAddr := net.ParseIP("127.0.0.1")
@@ -87,7 +48,7 @@ func TestService_Stop_SetsStartedToFalse(t *testing.T) {
 	s, err := NewService(t.Context(), &Config{StateNotifier: &mock.MockStateNotifier{}, DB: testDB.SetupDB(t)})
 	require.NoError(t, err)
 	s.started = true
-	s.dv5Listener = &mockListener{}
+	s.dv5Listener = testp2p.NewMockListener(nil, nil)
 	assert.NoError(t, s.Stop())
 	assert.Equal(t, false, s.started)
 }
@@ -113,7 +74,7 @@ func TestService_Start_OnlyStartsOnce(t *testing.T) {
 	}
 	s, err := NewService(t.Context(), cfg)
 	require.NoError(t, err)
-	s.dv5Listener = &mockListener{}
+	s.dv5Listener = testp2p.NewMockListener(nil, nil)
 	s.custodyInfo = &custodyInfo{}
 	exitRoutine := make(chan bool)
 	go func() {
@@ -133,14 +94,14 @@ func TestService_Start_OnlyStartsOnce(t *testing.T) {
 func TestService_Status_NotRunning(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	s := &Service{started: false}
-	s.dv5Listener = &mockListener{}
+	s.dv5Listener = testp2p.NewMockListener(nil, nil)
 	assert.ErrorContains(t, "not running", s.Status(), "Status returned wrong error")
 }
 
 func TestService_Status_NoGenesisTimeSet(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	s := &Service{started: true}
-	s.dv5Listener = &mockListener{}
+	s.dv5Listener = testp2p.NewMockListener(nil, nil)
 	assert.ErrorContains(t, "no genesis time set", s.Status(), "Status returned wrong error")
 
 	s.genesisTime = time.Now()
@@ -432,6 +393,229 @@ func TestService_connectWithPeer(t *testing.T) {
 				require.ErrorContains(t, tt.wantErr, err)
 			} else {
 				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestFindPeersWithSubnets_NodeDeduplication tests the node deduplication logic in findPeersWithSubnets
+func TestFindPeersWithSubnets_NodeDeduplication(t *testing.T) {
+	// Setup test environment
+	params.SetupTestConfigCleanup(t)
+	cache.SubnetIDs.EmptyAllCaches()
+	defer cache.SubnetIDs.EmptyAllCaches()
+
+	ctx := context.Background()
+	db := testDB.SetupDB(t)
+
+	// Create LocalNodes and manipulate sequence numbers and subnets
+	localNode1 := createTestNodeWithID(t, "node1")
+	localNode2 := createTestNodeWithID(t, "node2")
+	localNode3 := createTestNodeWithID(t, "node3")
+
+	// Create different sequence versions of node1 with subnet 1
+	setNodeSubnets(localNode1, []uint64{1})
+	setNodeSeq(localNode1, 1)
+	node1_seq1_subnet1 := localNode1.Node()
+	setNodeSeq(localNode1, 2)
+	node1_seq2_subnet1 := localNode1.Node() // Same ID, higher seq
+	setNodeSeq(localNode1, 3)
+	node1_seq3_subnet1 := localNode1.Node() // Same ID, even higher seq
+
+	// Node2 with different sequences and subnets
+	setNodeSubnets(localNode2, []uint64{1})
+	node2_seq1_subnet1 := localNode2.Node()
+	setNodeSubnets(localNode2, []uint64{2}) // Different subnet
+	setNodeSeq(localNode2, 2)
+	node2_seq2_subnet2 := localNode2.Node()
+
+	// Node3 with multiple subnets
+	setNodeSubnets(localNode3, []uint64{1, 2})
+	node3_seq1_subnet1_2 := localNode3.Node()
+
+	tests := []struct {
+		name             string
+		nodes            []*enode.Node
+		defectiveSubnets map[uint64]int
+		expectedCount    int
+		description      string
+		eval             func(t *testing.T, result []*enode.Node) // Custom validation function
+	}{
+		{
+			name: "No duplicates - unique nodes with same subnet",
+			nodes: []*enode.Node{
+				node2_seq1_subnet1,
+				node3_seq1_subnet1_2,
+			},
+			defectiveSubnets: map[uint64]int{1: 2},
+			expectedCount:    2,
+			description:      "Should return all unique nodes subscribed to subnet",
+			eval:             nil, // No special validation needed
+		},
+		{
+			name: "Duplicate with lower seq first - should replace",
+			nodes: []*enode.Node{
+				node1_seq1_subnet1,
+				node1_seq2_subnet1, // Higher seq, should replace
+				node2_seq1_subnet1, // Different node to ensure we process enough nodes
+			},
+			defectiveSubnets: map[uint64]int{1: 2}, // Need 2 peers for subnet 1
+			expectedCount:    2,
+			description:      "Should replace with higher seq node for same subnet",
+			eval: func(t *testing.T, result []*enode.Node) {
+				found := false
+				for _, node := range result {
+					if node.ID() == node1_seq2_subnet1.ID() && node.Seq() == node1_seq2_subnet1.Seq() {
+						found = true
+						break
+					}
+				}
+				require.Equal(t, true, found, "Should have node with higher seq")
+			},
+		},
+		{
+			name: "Duplicate with higher seq first - should keep existing",
+			nodes: []*enode.Node{
+				node1_seq3_subnet1, // Higher seq
+				node1_seq2_subnet1, // Lower seq, should be skipped (continue branch)
+				node1_seq1_subnet1, // Even lower seq, should also be skipped (continue branch)
+				node2_seq1_subnet1, // Different node
+			},
+			defectiveSubnets: map[uint64]int{1: 2},
+			expectedCount:    2,
+			description:      "Should keep existing node with higher seq and skip lower seq duplicates",
+			eval: func(t *testing.T, result []*enode.Node) {
+				found := false
+				for _, node := range result {
+					if node.ID() == node1_seq3_subnet1.ID() && node.Seq() == node1_seq3_subnet1.Seq() {
+						found = true
+						break
+					}
+				}
+				require.Equal(t, true, found, "Should have node with highest seq")
+			},
+		},
+		{
+			name: "Multiple updates for same node",
+			nodes: []*enode.Node{
+				node1_seq1_subnet1,
+				node1_seq2_subnet1, // Should replace seq1
+				node1_seq3_subnet1, // Should replace seq2
+				node2_seq1_subnet1, // Different node
+			},
+			defectiveSubnets: map[uint64]int{1: 2},
+			expectedCount:    2,
+			description:      "Should keep updating to highest seq",
+			eval: func(t *testing.T, result []*enode.Node) {
+				found := false
+				for _, node := range result {
+					if node.ID() == node1_seq3_subnet1.ID() && node.Seq() == node1_seq3_subnet1.Seq() {
+						found = true
+						break
+					}
+				}
+				require.Equal(t, true, found, "Should have node with highest seq")
+			},
+		},
+		{
+			name: "Duplicate with equal seq in subnets - should skip",
+			nodes: []*enode.Node{
+				node1_seq2_subnet1, // First occurrence
+				node1_seq2_subnet1, // Same exact node instance, should be skipped (continue branch)
+				node2_seq1_subnet1, // Different node
+			},
+			defectiveSubnets: map[uint64]int{1: 2},
+			expectedCount:    2,
+			description:      "Should skip duplicate with equal sequence number in subnet search",
+			eval: func(t *testing.T, result []*enode.Node) {
+				foundNode1 := false
+				foundNode2 := false
+				node1Count := 0
+				for _, node := range result {
+					if node.ID() == node1_seq2_subnet1.ID() {
+						require.Equal(t, node1_seq2_subnet1.Seq(), node.Seq(), "Node1 should have expected seq")
+						foundNode1 = true
+						node1Count++
+					}
+					if node.ID() == node2_seq1_subnet1.ID() {
+						foundNode2 = true
+					}
+				}
+				require.Equal(t, true, foundNode1, "Should have node1")
+				require.Equal(t, true, foundNode2, "Should have node2")
+				require.Equal(t, 1, node1Count, "Should have exactly one instance of node1")
+			},
+		},
+		{
+			name: "Mix with different subnets",
+			nodes: []*enode.Node{
+				node2_seq1_subnet1,
+				node2_seq2_subnet2, // Higher seq but different subnet
+				node3_seq1_subnet1_2,
+			},
+			defectiveSubnets: map[uint64]int{1: 2, 2: 1},
+			expectedCount:    2, // node2 (latest) and node3
+			description:      "Should handle nodes with different subnet subscriptions",
+			eval:             nil, // Basic count validation is sufficient
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Initialize flags for subnet operations
+			gFlags := new(flags.GlobalFlags)
+			gFlags.MinimumPeersPerSubnet = 1
+			flags.Init(gFlags)
+			defer flags.Init(new(flags.GlobalFlags))
+
+			// Create test P2P instance
+			fakePeer := testp2p.NewTestP2P(t)
+
+			// Create mock service
+			s := &Service{
+				cfg: &Config{
+					MaxPeers: 30,
+					DB:       db,
+				},
+				genesisTime:           time.Now(),
+				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+				peers: peers.NewStatus(ctx, &peers.StatusConfig{
+					PeerLimit:    30,
+					ScorerParams: &scorers.Config{},
+				}),
+				host: fakePeer.BHost,
+			}
+
+			// Create local node for the listener
+			localNode := createTestNodeRandom(t)
+
+			// Create mock listener with iterator
+			mockIter := testp2p.NewMockIterator(tt.nodes)
+			s.dv5Listener = testp2p.NewMockListener(localNode, mockIter)
+
+			// Get fork digest for topic format
+			digest, err := s.currentForkDigest()
+			require.NoError(t, err)
+
+			// Run findPeersWithSubnets
+			ctxWithTimeout, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+			defer cancel()
+
+			result, err := s.findPeersWithSubnets(
+				ctxWithTimeout,
+				AttestationSubnetTopicFormat,
+				digest,
+				1,
+				tt.defectiveSubnets,
+			)
+
+			// Verify results
+			require.NoError(t, err, tt.description)
+			require.Equal(t, tt.expectedCount, len(result), tt.description)
+
+			// Run custom validation if provided
+			if tt.eval != nil {
+				tt.eval(t, result)
 			}
 		})
 	}
