@@ -58,5 +58,5 @@ func BuildValidatorData() string {
 			gitCommit = strings.TrimRight(string(commit), "\r\n")
 		}
 	}
-	return fmt.Sprintf("PrismValidator/%s/%s", gitTag, gitCommit)
+	return fmt.Sprintf("PrysmVC/%s/%s", gitTag, gitCommit)
 }
