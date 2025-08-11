@@ -60,13 +60,12 @@ func Start() error {
 	if !kzgLoaded {
 		const precompute uint = 8
 
-		kzgLoaded = true
-
 		// Free the current trusted setup before running this method.
 		// CKZG panics if the same setup is run multiple times.
 		if err = CKZG.LoadTrustedSetup(g1MonomialBytes, g1LagrangeBytes, g2MonomialBytes, precompute); err != nil {
-			return errors.Wrap(err, "load trust setup")
+			return errors.Wrap(err, "load trusted setup")
 		}
+		kzgLoaded = true
 	}
 
 	return nil
