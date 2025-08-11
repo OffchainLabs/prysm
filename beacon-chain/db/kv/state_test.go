@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/genesis"
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
@@ -488,7 +489,7 @@ func TestGenesisState_CanSaveRetrieve(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, st.SetSlot(1))
 	require.NoError(t, db.SaveGenesisBlockRoot(t.Context(), headRoot))
-	require.NoError(t, db.SaveState(t.Context(), st, headRoot))
+	genesis.StoreStateDuringTest(t, st)
 
 	savedGenesisS, err := db.GenesisState(t.Context())
 	require.NoError(t, err)
@@ -661,7 +662,7 @@ func TestStore_GenesisState_CanGetHighestBelow(t *testing.T) {
 	require.NoError(t, err)
 	genesisRoot := [32]byte{'a'}
 	require.NoError(t, db.SaveGenesisBlockRoot(t.Context(), genesisRoot))
-	require.NoError(t, db.SaveState(t.Context(), genesisState, genesisRoot))
+	genesis.StoreStateDuringTest(t, genesisState)
 
 	b := util.NewBeaconBlock()
 	b.Block.Slot = 1

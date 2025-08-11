@@ -3,6 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "clear_db.go",
         "config.go",
         "log.go",
         "node.go",
@@ -49,7 +50,6 @@ go_library(
         "//beacon-chain/sync/backfill:go_default_library",
         "//beacon-chain/sync/backfill/coverage:go_default_library",
         "//beacon-chain/sync/checkpoint:go_default_library",
-        "//beacon-chain/sync/genesis:go_default_library",
         "//beacon-chain/sync/initial-sync:go_default_library",
         "//beacon-chain/verification:go_default_library",
         "//cmd:go_default_library",
@@ -59,6 +59,7 @@ go_library(
         "//consensus-types/primitives:go_default_library",
         "//container/slice:go_default_library",
         "//encoding/bytesutil:go_default_library",
+        "//genesis:go_default_library",
         "//monitoring/prometheus:go_default_library",
         "//monitoring/tracing:go_default_library",
         "//runtime:go_default_library",

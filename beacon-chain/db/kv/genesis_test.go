@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/iface"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/genesis"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
@@ -152,6 +153,7 @@ func TestEnsureEmbeddedGenesis(t *testing.T) {
 		require.NoError(t, undo())
 	}()
 
+	genesis.StoreEmbeddedDuringTest(t, params.BeaconConfig().ConfigName)
 	ctx := t.Context()
 	db := setupDB(t)
 

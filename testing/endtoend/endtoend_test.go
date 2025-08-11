@@ -18,11 +18,12 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/api/client/beacon"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/genesis"
 	"github.com/OffchainLabs/prysm/v6/io/file"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
@@ -61,6 +62,7 @@ type testRunner struct {
 	config     *e2etypes.E2EConfig
 	comHandler *componentHandler
 	depositor  *eth1.Depositor
+	genesis    state.BeaconState
 }
 
 // newTestRunner creates E2E test runner.
@@ -165,6 +167,25 @@ func (r *testRunner) waitForChainStart() {
 	r.t.Run("chain started", func(t *testing.T) {
 		require.NoError(t, helpers.WaitForTextInFile(beaconLogFile, "Chain started in sync service"), "Chain did not start")
 	})
+	r.postStartConfigure()
+}
+
+// postStartConfigure runs at the end of waitForChainStart to set up common runtime dependencies
+// like genesis state and configuration (fork schedule) setup.
+// It needs to run later because the genesis state cannot be correctly generated until after the
+// miner EL component finishes startup and sets the eth1block.
+func (r *testRunner) postStartConfigure() {
+	// set up genesis state with the same value it will have for components
+	gs, err := components.GenerateGenesis(r.t.Context())
+	if err != nil {
+		r.t.Fatal(errors.Wrap(err, "generate genesis")) // // lint:nopanic -- the test runner startup chain doesn't handle errors cleanly
+	}
+	r.genesis = gs
+	genesis.StoreStateDuringTest(r.t, gs)
+
+	// initialize genesis and fork schedule params in the test runner config to the same values they will have in the components
+	params.BeaconConfig().ApplyOptions(params.WithGenesisValidatorsRoot(bytesutil.ToBytes32(gs.GenesisValidatorsRoot())))
+	params.BeaconConfig().InitializeForkSchedule()
 }
 
 // runEvaluators executes assigned evaluators.
@@ -636,7 +657,7 @@ func (r *testRunner) multiScenarioMulticlient(ec *e2etypes.EvaluationContext, ep
 		Status    *enginev1.PayloadStatus  `json:"payloadStatus"`
 		PayloadId *enginev1.PayloadIDBytes `json:"payloadId"`
 	}
-	lastForkEpoch := forks.LastForkEpoch()
+	lastForkEpoch := params.LastForkEpoch()
 	freezeStartEpoch := lastForkEpoch + 1
 	freezeEndEpoch := lastForkEpoch + 2
 	optimisticStartEpoch := lastForkEpoch + 6
@@ -753,7 +774,7 @@ func (r *testRunner) eeOffline(_ *e2etypes.EvaluationContext, epoch uint64, _ []
 // will test this with our optimistic sync evaluator to ensure everything works
 // as expected.
 func (r *testRunner) multiScenario(ec *e2etypes.EvaluationContext, epoch uint64, conns []*grpc.ClientConn) bool {
-	lastForkEpoch := forks.LastForkEpoch()
+	lastForkEpoch := params.LastForkEpoch()
 	freezeStartEpoch := lastForkEpoch + 1
 	freezeEndEpoch := lastForkEpoch + 2
 	valOfflineStartEpoch := lastForkEpoch + 6

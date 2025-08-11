@@ -5,8 +5,8 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
@@ -181,17 +181,9 @@ func (s *Service) sendMetaDataRequest(ctx context.Context, peerID peer.ID) (meta
 		return nil, errors.New(errMsg)
 	}
 
-	// Get the genesis validators root.
-	valRoot := s.cfg.clock.GenesisValidatorsRoot()
-
-	// Get the fork digest from the current epoch and the genesis validators root.
-	rpcCtx, err := forks.ForkDigestFromEpoch(currentEpoch, valRoot[:])
-	if err != nil {
-		return nil, errors.Wrap(err, "fork digest from epoch")
-	}
-
+	digest := params.ForkDigest(currentEpoch)
 	// Instantiate zero value of the metadata.
-	msg, err := extractDataTypeFromTypeMap(types.MetaDataMap, rpcCtx[:], s.cfg.clock)
+	msg, err := extractDataTypeFromTypeMap(types.MetaDataMap, digest[:], s.cfg.clock)
 	if err != nil {
 		return nil, errors.Wrap(err, "extract data type from type map")
 	}

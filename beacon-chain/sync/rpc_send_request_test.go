@@ -888,6 +888,13 @@ func TestErrInvalidFetchedDataDistinction(t *testing.T) {
 }
 
 func TestSendDataColumnSidecarsByRangeRequest(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	beaconConfig := params.BeaconConfig()
+	beaconConfig.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(beaconConfig)
+	params.BeaconConfig().InitializeForkSchedule()
+	ctxMap, err := ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
+	require.NoError(t, err)
 	nilTestCases := []struct {
 		name    string
 		request *ethpb.DataColumnSidecarsByRangeRequest
@@ -1033,10 +1040,7 @@ func TestSendDataColumnSidecarsByRangeRequest(t *testing.T) {
 				assert.NoError(t, err)
 			})
 
-			ctx := t.Context()
-			ctxMap := ContextByteVersions{[4]byte{245, 165, 253, 66}: version.Fulu}
-
-			actual, err := SendDataColumnSidecarsByRangeRequest(ctx, clock, p1, p2.PeerID(), ctxMap, requestSent)
+			actual, err := SendDataColumnSidecarsByRangeRequest(t.Context(), clock, p1, p2.PeerID(), ctxMap, requestSent)
 			if tc.expectedError != nil {
 				require.ErrorContains(t, tc.expectedError.Error(), err)
 				if util.WaitTimeout(&wg, time.Second) {
@@ -1181,6 +1185,13 @@ func TestIsSidecarIndexRequested(t *testing.T) {
 }
 
 func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	beaconConfig := params.BeaconConfig()
+	beaconConfig.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(beaconConfig)
+	params.BeaconConfig().InitializeForkSchedule()
+	ctxMap, err := ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
+	require.NoError(t, err)
 	nilTestCases := []struct {
 		name    string
 		request p2ptypes.DataColumnsByRootIdentifiers
@@ -1335,10 +1346,7 @@ func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
 				assert.NoError(t, err)
 			})
 
-			ctx := t.Context()
-			ctxMap := ContextByteVersions{[4]byte{245, 165, 253, 66}: version.Fulu}
-
-			actual, err := SendDataColumnSidecarsByRootRequest(ctx, clock, p1, p2.PeerID(), ctxMap, sentRequest)
+			actual, err := SendDataColumnSidecarsByRootRequest(t.Context(), clock, p1, p2.PeerID(), ctxMap, sentRequest)
 			if tc.expectedError != nil {
 				require.ErrorContains(t, tc.expectedError.Error(), err)
 				if util.WaitTimeout(&wg, time.Second) {

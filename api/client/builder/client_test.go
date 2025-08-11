@@ -1727,7 +1727,7 @@ func TestSubmitBlindedBlock_BlobsBundlerInterface(t *testing.T) {
 	t.Run("Interface signature verification", func(t *testing.T) {
 		// This test verifies that the SubmitBlindedBlock method signature
 		// has been updated to return BlobsBundler interface
-		
+
 		client := &Client{}
 
 		// Verify the method exists with the correct signature

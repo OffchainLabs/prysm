@@ -3,18 +3,17 @@ package p2p
 import (
 	"bytes"
 	"fmt"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
+
+var errEth2ENRDigestMismatch = errors.New("fork digest of peer does not match local value")
 
 // ENR key used for Ethereum consensus-related fork data.
 var eth2ENRKey = params.BeaconNetworkConfig().ETH2Key
@@ -25,29 +24,31 @@ func (s *Service) currentForkDigest() ([4]byte, error) {
 	if !s.isInitialized() {
 		return [4]byte{}, errors.New("state is not initialized")
 	}
-	return forks.CreateForkDigest(s.genesisTime, s.genesisValidatorsRoot)
+
+	currentSlot := slots.CurrentSlot(s.genesisTime)
+	currentEpoch := slots.ToEpoch(currentSlot)
+	return params.ForkDigest(currentEpoch), nil
 }
 
 // Compares fork ENRs between an incoming peer's record and our node's
 // local record values for current and next fork version/epoch.
-func (s *Service) compareForkENR(record *enr.Record) error {
-	currentRecord := s.dv5Listener.LocalNode().Node().Record()
-	peerForkENR, err := forkEntry(record)
+func compareForkENR(self, peer *enr.Record) error {
+	peerForkENR, err := forkEntry(peer)
 	if err != nil {
 		return err
 	}
-	currentForkENR, err := forkEntry(currentRecord)
+	currentForkENR, err := forkEntry(self)
 	if err != nil {
 		return err
 	}
-	enrString, err := SerializeENR(record)
+	enrString, err := SerializeENR(peer)
 	if err != nil {
 		return err
 	}
 	// Clients SHOULD connect to peers with current_fork_digest, next_fork_version,
 	// and next_fork_epoch that match local values.
 	if !bytes.Equal(peerForkENR.CurrentForkDigest, currentForkENR.CurrentForkDigest) {
-		return fmt.Errorf(
+		return errors.Wrapf(errEth2ENRDigestMismatch,
 			"fork digest of peer with ENR %s: %v, does not match local value: %v",
 			enrString,
 			peerForkENR.CurrentForkDigest,
@@ -74,41 +75,24 @@ func (s *Service) compareForkENR(record *enr.Record) error {
 	return nil
 }
 
-// Adds a fork entry as an ENR record under the Ethereum consensus EnrKey for
-// the local node. The fork entry is an ssz-encoded enrForkID type
-// which takes into account the current fork version from the current
-// epoch to create a fork digest, the next fork version,
-// and the next fork epoch.
-func addForkEntry(
-	node *enode.LocalNode,
-	genesisTime time.Time,
-	genesisValidatorsRoot []byte,
-) (*enode.LocalNode, error) {
-	digest, err := forks.CreateForkDigest(genesisTime, genesisValidatorsRoot)
-	if err != nil {
-		return nil, err
-	}
-	currentSlot := slots.CurrentSlot(genesisTime)
-	currentEpoch := slots.ToEpoch(currentSlot)
-	if prysmTime.Now().Before(genesisTime) {
-		currentEpoch = 0
-	}
-	nextForkVersion, nextForkEpoch, err := forks.NextForkData(currentEpoch)
-	if err != nil {
-		return nil, err
-	}
+func updateENR(node *enode.LocalNode, entry, next params.NetworkScheduleEntry) error {
 	enrForkID := &pb.ENRForkID{
-		CurrentForkDigest: digest[:],
-		NextForkVersion:   nextForkVersion[:],
-		NextForkEpoch:     nextForkEpoch,
+		CurrentForkDigest: entry.ForkDigest[:],
+		NextForkVersion:   next.ForkVersion[:],
+		NextForkEpoch:     next.Epoch,
 	}
+	log.
+		WithField("CurrentForkDigest", fmt.Sprintf("%#x", enrForkID.CurrentForkDigest)).
+		WithField("NextForkVersion", fmt.Sprintf("%#x", enrForkID.NextForkVersion)).
+		WithField("NextForkEpoch", fmt.Sprintf("%d", enrForkID.NextForkEpoch)).
+		Info("Updating ENR Fork ID")
 	enc, err := enrForkID.MarshalSSZ()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	forkEntry := enr.WithEntry(eth2ENRKey, enc)
 	node.Set(forkEntry)
-	return node, nil
+	return nil
 }
 
 // Retrieves an enrForkID from an ENR record by key lookup

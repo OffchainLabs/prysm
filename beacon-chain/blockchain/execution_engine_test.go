@@ -19,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/genesis"
 	v1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
@@ -309,6 +310,7 @@ func Test_NotifyForkchoiceUpdate_NIlLVH(t *testing.T) {
 		block: wba,
 	}
 
+	genesis.StoreStateDuringTest(t, st)
 	require.NoError(t, beaconDB.SaveState(ctx, st, bra))
 	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, bra))
 	a := &fcuConfig{
@@ -403,6 +405,7 @@ func Test_NotifyForkchoiceUpdateRecursive_DoublyLinkedTree(t *testing.T) {
 	require.NoError(t, err)
 
 	bState, _ := util.DeterministicGenesisState(t, 10)
+	genesis.StoreStateDuringTest(t, bState)
 	require.NoError(t, beaconDB.SaveState(ctx, bState, bra))
 	require.NoError(t, fcs.InsertNode(ctx, state, blkRoot))
 	state, blkRoot, err = prepareForkchoiceState(ctx, 2, brb, bra, [32]byte{'B'}, ojc, ofc)

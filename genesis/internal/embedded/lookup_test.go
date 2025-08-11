@@ -1,10 +1,10 @@
-package genesis_test
+package embedded_test
 
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/genesis"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/genesis/internal/embedded"
 )
 
 func TestGenesisState(t *testing.T) {
@@ -17,7 +17,7 @@ func TestGenesisState(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			st, err := genesis.State(tt.name)
+			st, err := embedded.ByName(tt.name)
 			if err != nil {
 				t.Fatal(err)
 			}
