@@ -95,7 +95,7 @@ func updateENR(node *enode.LocalNode, entry, next params.NetworkScheduleEntry) e
 		} else {
 			node.Set(enr.WithEntry(nfdEnrKey, next.ForkDigest[:]))
 		}
-		logFields[nfdEnrKey] = fmt.Sprintf("%#x", next.ForkDigest)
+		logFields["NextForkDigest"] = fmt.Sprintf("%#x", next.ForkDigest)
 	}
 	log.WithFields(logFields).Info("Updating ENR Fork ID")
 	enc, err := enrForkID.MarshalSSZ()
