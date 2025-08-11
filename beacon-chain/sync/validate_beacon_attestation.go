@@ -52,7 +52,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	defer span.End()
 
 	if msg.Topic == nil {
-		return pubsub.ValidationReject, errInvalidTopic
+		return pubsub.ValidationReject, p2p.ErrInvalidTopic
 	}
 
 	m, err := s.decodePubsubMessage(msg)

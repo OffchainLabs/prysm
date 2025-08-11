@@ -17,7 +17,6 @@ import (
 )
 
 var errNilPubsubMessage = errors.New("nil pubsub message")
-var errInvalidTopic = errors.New("invalid topic format")
 
 func (s *Service) decodePubsubMessage(msg *pubsub.Message) (ssz.Unmarshaler, error) {
 	if msg == nil || msg.Topic == nil || *msg.Topic == "" {
@@ -73,7 +72,7 @@ func (s *Service) decodePubsubMessage(msg *pubsub.Message) (ssz.Unmarshaler, err
 func (*Service) replaceForkDigest(topic string) (string, error) {
 	subStrings := strings.Split(topic, "/")
 	if len(subStrings) != 4 {
-		return "", errInvalidTopic
+		return "", p2p.ErrInvalidTopic
 	}
 	subStrings[2] = "%x"
 	return strings.Join(subStrings, "/"), nil

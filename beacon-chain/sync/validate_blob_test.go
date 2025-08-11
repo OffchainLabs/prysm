@@ -51,7 +51,7 @@ func TestValidateBlob_InvalidTopic(t *testing.T) {
 	result, err := s.validateBlob(ctx, "", &pubsub.Message{
 		Message: &pb.Message{},
 	})
-	require.ErrorIs(t, errInvalidTopic, err)
+	require.ErrorIs(t, p2p.ErrInvalidTopic, err)
 	require.Equal(t, result, pubsub.ValidationReject)
 }
 
