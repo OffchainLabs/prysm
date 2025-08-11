@@ -172,7 +172,7 @@ func (vs *Server) DomainData(ctx context.Context, request *ethpb.DomainRequest) 
 			})
 		}
 	}
-	return computeDomainData(rd, request.Epoch, params.ForkFromConfig(params.BeaconConfig(), epoch))
+	return computeDomainData(rd, epoch, params.ForkFromConfig(params.BeaconConfig(), epoch))
 }
 
 func computeDomainData(domain [4]byte, epoch primitives.Epoch, fork *ethpb.Fork) (*ethpb.DomainResponse, error) {

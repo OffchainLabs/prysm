@@ -56,16 +56,16 @@ type (
 		// but for which no subscriptions are needed.
 		getSubnetsRequiringPeers func(currentSlot primitives.Slot) map[uint64]bool
 	}
-)
 
-type subscribeToSubnetsParameters struct {
-	subscriptionBySubnet map[uint64]*pubsub.Subscription
-	topicFormat          string
-	digest               [4]byte
-	validate             wrappedVal
-	handle               subHandler
-	getSubnetsToJoin     func(currentSlot primitives.Slot) map[uint64]bool
-}
+	subscribeToSubnetsParameters struct {
+		subscriptionBySubnet map[uint64]*pubsub.Subscription
+		topicFormat          string
+		digest               [4]byte
+		validate             wrappedVal
+		handle               subHandler
+		getSubnetsToJoin     func(currentSlot primitives.Slot) map[uint64]bool
+	}
+)
 
 var errInvalidDigest = errors.New("invalid digest")
 
@@ -494,9 +494,9 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 		log.WithError(err).Error("Could not subscribe to subnets")
 	}
 
-	current := s.cfg.clock.CurrentSlot()
+	currentSlot := s.cfg.clock.CurrentSlot()
 	slotDuration := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
-	neededSubnets := computeAllNeededSubnets(current, p.getSubnetsToJoin, p.getSubnetsRequiringPeers)
+	neededSubnets := computeAllNeededSubnets(currentSlot, p.getSubnetsToJoin, p.getSubnetsRequiringPeers)
 	minimumPeersPerSubnet := flags.Get().MinimumPeersPerSubnet
 	// Subscribe to expected subnets and search for peers if needed at every slot.
 	go func() {
@@ -548,7 +548,7 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 		for {
 			select {
 			case <-logTicker.C:
-				subnetsToFindPeersIndex := computeAllNeededSubnets(current, p.getSubnetsToJoin, p.getSubnetsRequiringPeers)
+				subnetsToFindPeersIndex := computeAllNeededSubnets(currentSlot, p.getSubnetsToJoin, p.getSubnetsRequiringPeers)
 
 				isSubnetWithMissingPeers := false
 				// Find new peers for wanted subnets if needed.
