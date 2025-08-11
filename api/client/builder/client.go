@@ -153,7 +153,8 @@ func (c *Client) NodeURL() string {
 type reqOption func(*http.Request)
 
 // do is a generic, opinionated request function to reduce boilerplate amongst the methods in this package api/client/builder.
-func (c *Client) do(ctx context.Context, method string, path string, body io.Reader, opts ...reqOption) (res []byte, header http.Header, err error) {
+// It validates that the HTTP response status matches the expectedStatus parameter.
+func (c *Client) do(ctx context.Context, method string, path string, body io.Reader, expectedStatus int, opts ...reqOption) (res []byte, header http.Header, err error) {
 	ctx, span := trace.StartSpan(ctx, "builder.client.do")
 	defer func() {
 		tracing.AnnotateError(span, err)
@@ -188,57 +189,8 @@ func (c *Client) do(ctx context.Context, method string, path string, body io.Rea
 			log.WithError(closeErr).Error("Failed to close response body")
 		}
 	}()
-	if r.StatusCode != http.StatusOK {
-		err = non200Err(r)
-		return
-	}
-	res, err = io.ReadAll(io.LimitReader(r.Body, client.MaxBodySize))
-	if err != nil {
-		err = errors.Wrap(err, "error reading http response body from builder server")
-		return
-	}
-	header = r.Header
-	return
-}
-
-// doPostFulu is similar to do but accepts 202 Accepted status code for post-Fulu builder API calls
-func (c *Client) doPostFulu(ctx context.Context, method string, path string, body io.Reader, opts ...reqOption) (res []byte, header http.Header, err error) {
-	ctx, span := trace.StartSpan(ctx, "builder.client.doPostFulu")
-	defer func() {
-		tracing.AnnotateError(span, err)
-		span.End()
-	}()
-
-	u := c.baseURL.ResolveReference(&url.URL{Path: path})
-
-	span.SetAttributes(trace.StringAttribute("url", u.String()),
-		trace.StringAttribute("method", method))
-
-	req, err := http.NewRequestWithContext(ctx, method, u.String(), body)
-	if err != nil {
-		return
-	}
-	req.Header.Add("User-Agent", version.BuildData())
-	for _, o := range opts {
-		o(req)
-	}
-	for _, o := range c.obvs {
-		if err = o.observe(req); err != nil {
-			return
-		}
-	}
-	r, err := c.hc.Do(req)
-	if err != nil {
-		return
-	}
-	defer func() {
-		closeErr := r.Body.Close()
-		if closeErr != nil {
-			log.WithError(closeErr).Error("Failed to close response body")
-		}
-	}()
-	if r.StatusCode != http.StatusAccepted {
-		err = non200Err(r)
+	if r.StatusCode != expectedStatus {
+		err = unexpectedStatusErr(r, expectedStatus)
 		return
 	}
 	res, err = io.ReadAll(io.LimitReader(r.Body, client.MaxBodySize))
@@ -286,7 +238,7 @@ func (c *Client) GetHeader(ctx context.Context, slot primitives.Slot, parentHash
 			r.Header.Set("Accept", api.JsonMediaType)
 		}
 	}
-	data, header, err := c.do(ctx, http.MethodGet, path, nil, getOpts)
+	data, header, err := c.do(ctx, http.MethodGet, path, nil, http.StatusOK, getOpts)
 	if err != nil {
 		return nil, errors.Wrap(err, "error getting header from builder server")
 	}
@@ -459,7 +411,7 @@ func (c *Client) RegisterValidator(ctx context.Context, svr []*ethpb.SignedValid
 		}
 	}
 
-	if _, _, err = c.do(ctx, http.MethodPost, postRegisterValidatorPath, bytes.NewBuffer(body), postOpts); err != nil {
+	if _, _, err = c.do(ctx, http.MethodPost, postRegisterValidatorPath, bytes.NewBuffer(body), http.StatusOK, postOpts); err != nil {
 		return errors.Wrap(err, "do")
 	}
 	log.WithField("registrationCount", len(svr)).Debug("Successfully registered validator(s) on builder")
@@ -521,7 +473,7 @@ func (c *Client) SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlyS
 
 	// post the blinded block - the execution payload response should contain the unblinded payload, along with the
 	// blobs bundle if it is post deneb.
-	data, header, err := c.do(ctx, http.MethodPost, postBlindedBeaconBlockPath, bytes.NewBuffer(body), postOpts)
+	data, header, err := c.do(ctx, http.MethodPost, postBlindedBeaconBlockPath, bytes.NewBuffer(body), http.StatusOK, postOpts)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "error posting the blinded block to the builder api")
 	}
@@ -560,7 +512,7 @@ func (c *Client) SubmitBlindedBlockPostFulu(ctx context.Context, sb interfaces.R
 	}
 
 	// Post the blinded block - the response should only contain a status code (no payload)
-	_, _, err = c.doPostFulu(ctx, http.MethodPost, postBlindedBeaconBlockPath, bytes.NewBuffer(body), postOpts)
+	_, _, err = c.do(ctx, http.MethodPost, postBlindedBeaconBlockPath, bytes.NewBuffer(body), http.StatusAccepted, postOpts)
 	if err != nil {
 		return errors.Wrap(err, "error posting the blinded block to the builder api post-Fulu")
 	}
@@ -725,11 +677,11 @@ func (c *Client) Status(ctx context.Context) error {
 	getOpts := func(r *http.Request) {
 		r.Header.Set("Accept", api.JsonMediaType)
 	}
-	_, _, err := c.do(ctx, http.MethodGet, getStatus, nil, getOpts)
+	_, _, err := c.do(ctx, http.MethodGet, getStatus, nil, http.StatusOK, getOpts)
 	return err
 }
 
-func non200Err(response *http.Response) error {
+func unexpectedStatusErr(response *http.Response, expected int) error {
 	bodyBytes, err := io.ReadAll(io.LimitReader(response.Body, client.MaxErrBodySize))
 	var errMessage ErrorMessage
 	var body string
@@ -738,7 +690,7 @@ func non200Err(response *http.Response) error {
 	} else {
 		body = "response body:\n" + string(bodyBytes)
 	}
-	msg := fmt.Sprintf("code=%d, url=%s, body=%s", response.StatusCode, response.Request.URL, body)
+	msg := fmt.Sprintf("expected=%d, got=%d, url=%s, body=%s", expected, response.StatusCode, response.Request.URL, body)
 	switch response.StatusCode {
 	case http.StatusUnsupportedMediaType:
 		log.WithError(ErrUnsupportedMediaType).Debug(msg)
