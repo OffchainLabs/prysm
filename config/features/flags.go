@@ -199,6 +199,12 @@ var (
 		Usage: "A comma-separatted list of 0x-prefixed hexstrings. Declares blocks with the given blockroots to be invalid. It downscores peers that send these blocks.",
 	}
 
+	// disableGetBlobs disables getting data column sidecars from execution layer optimization
+	disableGetBlobs = &cli.BoolFlag{
+		Name:  "disable-get-blobs",
+		Usage: "Disables the optimization to get data column sidecars from the execution layer, returns early from processDataColumnSidecarsFromExecution.",
+	}
+
 	// DisableDutiesV2 sets the validator client to use the get duties grpc endpoint
 	DisableDutiesV2 = &cli.BoolFlag{
 		Name:  "disable-duties-v2",
@@ -273,6 +279,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	DataColumnsIgnoreSlotMultiple,
 	forceHeadFlag,
 	blacklistRoots,
+	disableGetBlobs,
 }, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
 
 func combinedFlags(flags ...[]cli.Flag) []cli.Flag {

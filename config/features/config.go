@@ -54,6 +54,7 @@ type Flags struct {
 	// Logging related toggles.
 	DisableGRPCConnectionLogs bool // Disables logging when a new grpc client has connected.
 	EnableFullSSZDataLogging  bool // Enables logging for full ssz data on rejected gossip messages
+	DisableGetBlobs           bool // DisableGetBlobs disables the optimization to get data column sidecars from the execution layer.
 
 	// Slasher toggles.
 	DisableBroadcastSlashings bool // DisableBroadcastSlashings disables p2p broadcasting of proposer and attester slashings.
@@ -294,6 +295,11 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	if ctx.IsSet(DataColumnsIgnoreSlotMultiple.Name) {
 		logEnabled(DataColumnsIgnoreSlotMultiple)
 		cfg.DataColumnsIgnoreSlotMultiple = ctx.Uint64(DataColumnsIgnoreSlotMultiple.Name)
+	}
+
+	if ctx.IsSet(disableGetBlobs.Name) {
+		logEnabled(disableGetBlobs)
+		cfg.DisableGetBlobs = true
 	}
 
 	cfg.AggregateIntervals = [3]time.Duration{aggregateFirstInterval.Value, aggregateSecondInterval.Value, aggregateThirdInterval.Value}

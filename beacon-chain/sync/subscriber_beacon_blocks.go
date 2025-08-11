@@ -78,6 +78,10 @@ func (s *Service) processSidecarsFromExecution(ctx context.Context, block interf
 // processDataColumnSidecarsFromExecution retrieves (if available) data column sidecars data from the execution client,
 // builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
 func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, roSignedBlock interfaces.ReadOnlySignedBeaconBlock) {
+	if features.Get().DisableGetBlobs {
+		return
+	}
+
 	block := roSignedBlock.Block()
 
 	log := log.WithFields(logrus.Fields{
