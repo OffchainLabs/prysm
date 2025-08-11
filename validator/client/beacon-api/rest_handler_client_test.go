@@ -36,7 +36,7 @@ func TestGet(t *testing.T) {
 	mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
 		marshalledJson, err := json.Marshal(genesisJson)
 		require.NoError(t, err)
-
+		assert.Equal(t, "PrysmVC/Unknown/Local build", r.Header.Get("User-Agent"))
 		w.Header().Set("Content-Type", api.JsonMediaType)
 		_, err = w.Write(marshalledJson)
 		require.NoError(t, err)
@@ -70,6 +70,7 @@ func TestGetSSZ(t *testing.T) {
 		mux := http.NewServeMux()
 		mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
 			assert.StringContains(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+			assert.Equal(t, "PrysmVC/Unknown/Local build", r.Header.Get("User-Agent"))
 			w.Header().Set("Content-Type", api.OctetStreamMediaType)
 			_, err := w.Write(expectedBody)
 			require.NoError(t, err)
@@ -182,6 +183,7 @@ func TestPost(t *testing.T) {
 	mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
 		// Make sure the request headers have been set
 		assert.Equal(t, "bar", r.Header.Get("foo"))
+		assert.Equal(t, "PrysmVC/Unknown/Local build", r.Header.Get("User-Agent"))
 		assert.Equal(t, api.JsonMediaType, r.Header.Get("Content-Type"))
 
 		// Make sure the data matches
