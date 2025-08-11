@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/pkg/errors"
@@ -25,8 +25,9 @@ func (s *Service) currentForkDigest() ([4]byte, error) {
 		return [4]byte{}, errors.New("state is not initialized")
 	}
 
-	clock := startup.NewClock(s.genesisTime, [32]byte(s.genesisValidatorsRoot))
-	return params.ForkDigest(clock.CurrentEpoch()), nil
+	currentSlot := slots.CurrentSlot(s.genesisTime)
+	currentEpoch := slots.ToEpoch(currentSlot)
+	return params.ForkDigest(currentEpoch), nil
 }
 
 // Compares fork ENRs between an incoming peer's record and our node's
