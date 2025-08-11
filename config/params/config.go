@@ -537,8 +537,7 @@ func (ns *NetworkSchedule) prepare(b *BeaconChainConfig) error {
 	if err != nil {
 		return err
 	}
-	// TODO: I don't think I need this copy thing but I'm paranoid and tired, remove it later
-	ns.entries[0] = lastFork.Copy()
+	ns.entries[0] = lastFork
 	ns.index(ns.entries[0])
 	var lastBlobs *NetworkScheduleEntry
 	for i := 1; i < len(ns.entries); i++ {
