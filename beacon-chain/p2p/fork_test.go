@@ -56,9 +56,9 @@ func TestCompareForkENR(t *testing.T) {
 				peer := enode.NewLocalNode(db, k)
 				testDigest := [4]byte{0xFF, 0xFF, 0xFF, 0xFF}
 				require.NotEqual(t, current.ForkDigest, testDigest, "ensure test fork digest is unique")
-				current := current.Copy()
-				current.ForkDigest = testDigest
-				require.NoError(t, updateENR(peer, current, next))
+				currentCopy := current
+				currentCopy.ForkDigest = testDigest
+				require.NoError(t, updateENR(peer, currentCopy, next))
 				return peer.Node()
 			},
 			expectErr: errEth2ENRDigestMismatch,
@@ -70,9 +70,9 @@ func TestCompareForkENR(t *testing.T) {
 				peer := enode.NewLocalNode(db, k)
 				testVersion := [4]byte{0xFF, 0xFF, 0xFF, 0xFF}
 				require.NotEqual(t, next.ForkVersion, testVersion, "ensure test fork version is unique")
-				next := next.Copy()
-				next.ForkVersion = testVersion
-				require.NoError(t, updateENR(peer, current, next))
+				nextCopy := next
+				nextCopy.ForkVersion = testVersion
+				require.NoError(t, updateENR(peer, current, nextCopy))
 				return peer.Node()
 			},
 			expectLog: "Peer matches fork digest but has different next fork version",
@@ -82,9 +82,9 @@ func TestCompareForkENR(t *testing.T) {
 			node: func(t *testing.T) *enode.Node {
 				// Create a peer with the same current fork digest and next fork version/epoch.
 				peer := enode.NewLocalNode(db, k)
-				next := next.Copy()
-				next.Epoch = next.Epoch + 1
-				require.NoError(t, updateENR(peer, current, next))
+				nextCopy := next
+				nextCopy.Epoch = nextCopy.Epoch + 1
+				require.NoError(t, updateENR(peer, current, nextCopy))
 				return peer.Node()
 			},
 			expectLog: "Peer matches fork digest but has different next fork epoch",

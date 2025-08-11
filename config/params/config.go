@@ -379,18 +379,6 @@ func (e NetworkScheduleEntry) LogFields() log.Fields {
 	return fields
 }
 
-func (ns NetworkScheduleEntry) Copy() NetworkScheduleEntry {
-	return NetworkScheduleEntry{
-		ForkVersion:      ns.ForkVersion,
-		ForkDigest:       ns.ForkDigest,
-		VersionEnum:      ns.VersionEnum,
-		MaxBlobsPerBlock: ns.MaxBlobsPerBlock,
-		Epoch:            ns.Epoch,
-		BPOEpoch:         ns.BPOEpoch,
-		isFork:           ns.isFork,
-	}
-}
-
 type BlobScheduleEntry NetworkScheduleEntry
 
 func (b *BeaconChainConfig) ApplyOptions(opts ...Option) {
