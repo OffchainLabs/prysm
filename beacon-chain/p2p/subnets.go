@@ -197,7 +197,6 @@ func (s *Service) findPeersWithSubnets(
 		}
 
 		// Remove duplicates, keeping the node with higher seq.
-		// Remove duplicates, keeping the node with higher seq.
 		if existing, ok := nodeByNodeID[node.ID()]; ok {
 			// If existing has >= seq, keep it and skip.
 			if existing.Seq() >= node.Seq() {
