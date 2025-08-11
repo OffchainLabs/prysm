@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -357,7 +356,7 @@ type NetworkScheduleEntry struct {
 	isFork           bool
 }
 
-func (e NetworkScheduleEntry) LogFields() logrus.Fields {
+func (e NetworkScheduleEntry) LogFields() log.Fields {
 	gvr := BeaconConfig().GenesisValidatorsRoot
 	root, err := computeForkDataRoot(e.ForkVersion, gvr)
 	if err != nil {
@@ -365,7 +364,7 @@ func (e NetworkScheduleEntry) LogFields() logrus.Fields {
 			WithField("genesisValidatorsRoot", fmt.Sprintf("%#x", gvr)).
 			WithError(err).Error("Failed to compute fork data root")
 	}
-	fields := logrus.Fields{
+	fields := log.Fields{
 		"forkVersion":      fmt.Sprintf("%#x", e.ForkVersion),
 		"forkDigest":       fmt.Sprintf("%#x", e.ForkDigest),
 		"maxBlobsPerBlock": e.MaxBlobsPerBlock,
@@ -422,7 +421,7 @@ func LogDigests(b *BeaconChainConfig) {
 				WithField("genesisValidatorsRoot", fmt.Sprintf("%#x", gvr)).
 				WithError(err).Error("Failed to compute fork data root")
 		}
-		fields := logrus.Fields{
+		fields := log.Fields{
 			"forkVersion":      fmt.Sprintf("%#x", e.ForkVersion),
 			"forkDigest":       fmt.Sprintf("%#x", e.ForkDigest),
 			"maxBlobsPerBlock": e.MaxBlobsPerBlock,
