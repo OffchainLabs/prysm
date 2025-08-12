@@ -7,16 +7,16 @@ import (
 // MockListener is a mock implementation of the Listener and ListenerRebooter interfaces
 // that can be used in tests. It provides configurable behavior for all methods.
 type MockListener struct {
-	LocalNodeFunc    func() *enode.LocalNode
-	SelfFunc         func() *enode.Node
-	RandomNodesFunc  func() enode.Iterator
-	LookupFunc       func(enode.ID) []*enode.Node
-	ResolveFunc      func(*enode.Node) *enode.Node
-	PingFunc         func(*enode.Node) error
-	RequestENRFunc   func(*enode.Node) (*enode.Node, error)
-	RebootFunc       func() error
-	CloseFunc        func()
-	
+	LocalNodeFunc   func() *enode.LocalNode
+	SelfFunc        func() *enode.Node
+	RandomNodesFunc func() enode.Iterator
+	LookupFunc      func(enode.ID) []*enode.Node
+	ResolveFunc     func(*enode.Node) *enode.Node
+	PingFunc        func(*enode.Node) error
+	RequestENRFunc  func(*enode.Node) (*enode.Node, error)
+	RebootFunc      func() error
+	CloseFunc       func()
+
 	// Default implementations
 	localNode *enode.LocalNode
 	iterator  enode.Iterator
