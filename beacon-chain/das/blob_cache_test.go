@@ -155,6 +155,41 @@ func TestFilter(t *testing.T) {
 			},
 			err: errCommitmentMismatch,
 		},
+		{
+			name: "empty scs array with commitments",
+			setup: func(t *testing.T) (*blobCacheEntry, [][]byte, []blocks.ROBlob) {
+				// This reproduces the panic condition where entry.scs is empty or nil
+				// but we have commitments to check
+				entry := &blobCacheEntry{
+					scs: nil, // Empty/nil array that caused the panic
+				}
+				// Create a commitment that would trigger the check at index 0
+				commits := [][]byte{
+					bytesutil.PadTo([]byte("commitment1"), 48),
+				}
+				return entry, commits, nil
+			},
+			err: errMissingSidecar,
+		},
+		{
+			name: "scs array shorter than commitments",
+			setup: func(t *testing.T) (*blobCacheEntry, [][]byte, []blocks.ROBlob) {
+				// This reproduces the condition where entry.scs exists but is shorter
+				// than the number of commitments we're checking
+				entry := &blobCacheEntry{
+					scs: make([]*blocks.ROBlob, 2), // Only 2 slots
+				}
+				// Create 4 commitments, accessing index 2 and 3 would have panicked
+				commits := [][]byte{
+					nil,
+					nil,
+					bytesutil.PadTo([]byte("commitment3"), 48),
+					bytesutil.PadTo([]byte("commitment4"), 48),
+				}
+				return entry, commits, nil
+			},
+			err: errMissingSidecar,
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
