@@ -272,10 +272,7 @@ func tryRequestingColumnsFromPeers(
 		}
 
 		// Fetch the sidecars from the chosen peers.
-		roDataColumnsByPeer, err := fetchDataColumnSidecarsFromPeers(p, slotByRoot, slotsWithCommitments, indicesByRootByPeerToQuery)
-		if err != nil {
-			return nil, errors.Wrap(err, "fetch data column sidecars from peers")
-		}
+		roDataColumnsByPeer := fetchDataColumnSidecarsFromPeers(p, slotByRoot, slotsWithCommitments, indicesByRootByPeerToQuery)
 
 		// Verify the received data column sidecars.
 		verifiedRoDataColumnSidecars, err := verifyDataColumnSidecarsByPeer(p.P2P, p.NewVerifier, roDataColumnsByPeer)
@@ -395,10 +392,9 @@ func fetchDataColumnSidecarsFromPeers(
 	slotByRoot map[[fieldparams.RootLength]byte]primitives.Slot,
 	slotsWithCommitments map[primitives.Slot]bool,
 	indicesByRootByPeer map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool,
-) (map[goPeer.ID][]blocks.RODataColumn, error) {
+) map[goPeer.ID][]blocks.RODataColumn {
 	var (
-		wg sync.WaitGroup
-
+		wg  sync.WaitGroup
 		mut sync.Mutex
 	)
 
@@ -434,7 +430,7 @@ func fetchDataColumnSidecarsFromPeers(
 
 	wg.Wait()
 
-	return roDataColumnsByPeer, nil
+	return roDataColumnsByPeer
 }
 
 func sendDataColumnSidecarsRequest(

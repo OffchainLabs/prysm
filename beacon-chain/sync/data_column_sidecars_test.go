@@ -26,6 +26,100 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
+func TestFetchDataColumnSidecarsFromPeers(t *testing.T) {
+	const count = 4
+
+	kzgCommitmentsInclusionProof := make([][]byte, 0, count)
+	for range count {
+		kzgCommitmentsInclusionProof = append(kzgCommitmentsInclusionProof, make([]byte, 32))
+	}
+
+	expectedResponseSidecarPb := &ethpb.DataColumnSidecar{
+		Index: 2,
+		SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
+			Header: &ethpb.BeaconBlockHeader{
+				Slot:       1,
+				ParentRoot: make([]byte, fieldparams.RootLength),
+				StateRoot:  make([]byte, fieldparams.RootLength),
+				BodyRoot:   make([]byte, fieldparams.RootLength),
+			},
+			Signature: make([]byte, fieldparams.BLSSignatureLength),
+		},
+		KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
+	}
+
+	expectedResponseSidecar, err := blocks.NewRODataColumn(expectedResponseSidecarPb)
+	require.NoError(t, err)
+
+	ctxMap := ContextByteVersions{[4]byte{245, 165, 253, 66}: version.Fulu}
+	clock := startup.NewClock(time.Now(), [fieldparams.RootLength]byte{})
+
+	slotByRoot := map[[fieldparams.RootLength]byte]primitives.Slot{
+		{1}: 1,
+		{3}: 3,
+		{4}: 4,
+		{7}: 7,
+	}
+
+	slotsWithCommitments := map[primitives.Slot]bool{
+		1: true,
+		3: true,
+		4: true,
+		7: true,
+	}
+
+	expectedRequest := &ethpb.DataColumnSidecarsByRangeRequest{
+		StartSlot: 1,
+		Count:     7,
+		Columns:   []uint64{1, 2},
+	}
+
+	protocol := fmt.Sprintf("%s/ssz_snappy", p2p.RPCDataColumnSidecarsByRangeTopicV1)
+	p2p, other := testp2p.NewTestP2P(t), testp2p.NewTestP2P(t)
+	p2p.Connect(other)
+
+	other.SetStreamHandler(protocol, func(stream network.Stream) {
+		receivedRequest := new(ethpb.DataColumnSidecarsByRangeRequest)
+		err := other.Encoding().DecodeWithMaxLength(stream, receivedRequest)
+		assert.NoError(t, err)
+		assert.DeepEqual(t, expectedRequest, receivedRequest)
+
+		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), expectedResponseSidecarPb)
+		assert.NoError(t, err)
+
+		err = stream.CloseWrite()
+		assert.NoError(t, err)
+	})
+
+	indicesByRootByPeer := map[peer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool{
+		other.PeerID(): {
+			{1}: {1: true, 2: true},
+			{3}: {1: true, 2: true},
+			{4}: {1: true, 2: true},
+			{7}: {1: true, 2: true},
+		},
+	}
+
+	params := DataColumnSidecarsParams{
+		Ctx:         t.Context(),
+		Tor:         clock,
+		P2P:         p2p,
+		CtxMap:      ctxMap,
+		RateLimiter: leakybucket.NewCollector(1., 1, time.Second, false /* deleteEmptyBuckets */),
+	}
+
+	expectedResponse := map[peer.ID][]blocks.RODataColumn{
+		other.PeerID(): {expectedResponseSidecar},
+	}
+
+	actualResponse := fetchDataColumnSidecarsFromPeers(params, slotByRoot, slotsWithCommitments, indicesByRootByPeer)
+	require.Equal(t, len(expectedResponse), len(actualResponse))
+
+	for peerID := range expectedResponse {
+		require.DeepSSZEqual(t, expectedResponse[peerID], actualResponse[peerID])
+	}
+}
+
 func TestSendDataColumnSidecarsRequest(t *testing.T) {
 	const count = 4
 
