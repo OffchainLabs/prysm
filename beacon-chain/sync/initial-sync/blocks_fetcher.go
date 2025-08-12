@@ -830,7 +830,11 @@ func (f *blocksFetcher) hasSufficientBandwidth(peers []peer.ID, count uint64) []
 	filteredPeers := make([]peer.ID, 0, len(peers))
 
 	for _, peer := range peers {
-		if uint64(f.rateLimiter.Remaining(peer.String())) < count {
+		remaining := uint64(0)
+		if remainingInt := f.rateLimiter.Remaining(peer.String()); remainingInt > 0 {
+			remaining = uint64(remainingInt)
+		}
+		if remaining < count {
 			continue
 		}
 		filteredPeers = append(filteredPeers, peer)
