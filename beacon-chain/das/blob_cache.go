@@ -104,7 +104,7 @@ func (e *blobCacheEntry) filter(root [32]byte, kc [][]byte, slot primitives.Slot
 		if i < uint64(len(e.scs)) {
 			sidecar = e.scs[i]
 		}
-		
+
 		if kc[i] == nil {
 			if sidecar != nil {
 				return nil, errors.Wrapf(errCommitmentMismatch, "root=%#x, index=%#x, commitment=%#x, no block commitment", root, i, sidecar.KzgCommitment)
