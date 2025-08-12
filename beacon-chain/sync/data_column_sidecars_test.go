@@ -262,7 +262,6 @@ func TestSelectPeers(t *testing.T) {
 	}
 
 	actual, err := selectPeers(params, randomSource, count, indicesByRootByPeer)
-
 	require.NoError(t, err)
 	require.Equal(t, len(expected), len(actual))
 	for peerID := range expected {
