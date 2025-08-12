@@ -81,11 +81,23 @@ func updateENR(node *enode.LocalNode, entry, next params.NetworkScheduleEntry) e
 		NextForkVersion:   next.ForkVersion[:],
 		NextForkEpoch:     next.Epoch,
 	}
-	log.
-		WithField("CurrentForkDigest", fmt.Sprintf("%#x", enrForkID.CurrentForkDigest)).
-		WithField("NextForkVersion", fmt.Sprintf("%#x", enrForkID.NextForkVersion)).
-		WithField("NextForkEpoch", fmt.Sprintf("%d", enrForkID.NextForkEpoch)).
-		Info("Updating ENR Fork ID")
+	if entry.Epoch == next.Epoch {
+		enrForkID.NextForkEpoch = params.BeaconConfig().FarFutureEpoch
+	}
+	logFields := logrus.Fields{
+		"CurrentForkDigest": fmt.Sprintf("%#x", enrForkID.CurrentForkDigest),
+		"NextForkVersion":   fmt.Sprintf("%#x", enrForkID.NextForkVersion),
+		"NextForkEpoch":     fmt.Sprintf("%d", enrForkID.NextForkEpoch),
+	}
+	if params.BeaconConfig().FuluForkEpoch != params.BeaconConfig().FarFutureEpoch {
+		if entry.ForkDigest == next.ForkDigest {
+			node.Set(enr.WithEntry(nfdEnrKey, make([]byte, len(next.ForkDigest))))
+		} else {
+			node.Set(enr.WithEntry(nfdEnrKey, next.ForkDigest[:]))
+		}
+		logFields["NextForkDigest"] = fmt.Sprintf("%#x", next.ForkDigest)
+	}
+	log.WithFields(logFields).Info("Updating ENR Fork ID")
 	enc, err := enrForkID.MarshalSSZ()
 	if err != nil {
 		return err
