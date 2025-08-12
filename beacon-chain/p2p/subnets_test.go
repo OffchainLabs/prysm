@@ -3,7 +3,6 @@ package p2p
 import (
 	"context"
 	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"testing"
 	"time"
@@ -36,17 +35,8 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 	// find and connect to a node already subscribed to a specific subnet.
 	// In our case: The node i is subscribed to subnet i, with i = 1, 2, 3
 
-	// Define the genesis validators root, to ensure everybody is on the same network.
-	const (
-		genesisValidatorRootStr = "0xdeadbeefcafecafedeadbeefcafecafedeadbeefcafecafedeadbeefcafecafe"
-		subnetCount             = 3
-		minimumPeersPerSubnet   = 1
-	)
-
-	genesisValidatorsRoot, err := hex.DecodeString(genesisValidatorRootStr[2:])
-	require.NoError(t, err)
-
-	// Create a context.
+	const subnetCount = 3
+	const minimumPeersPerSubnet = 1
 	ctx := t.Context()
 
 	// Use shorter period for testing.
@@ -58,6 +48,7 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 
 	// Create flags.
 	params.SetupTestConfigCleanup(t)
+	params.BeaconConfig().InitializeForkSchedule()
 	gFlags := new(flags.GlobalFlags)
 	gFlags.MinimumPeersPerSubnet = 1
 	flags.Init(gFlags)
@@ -74,7 +65,7 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 	bootNodeService := &Service{
 		cfg:                   &Config{UDPPort: 2000, TCPPort: 3000, QUICPort: 3000, DisableLivenessCheck: true, PingInterval: testPingInterval},
 		genesisTime:           genesisTime,
-		genesisValidatorsRoot: genesisValidatorsRoot,
+		genesisValidatorsRoot: params.BeaconConfig().GenesisValidatorsRoot[:],
 		custodyInfo:           &custodyInfo{},
 	}
 
@@ -111,7 +102,7 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 		require.NoError(t, err)
 
 		service.genesisTime = genesisTime
-		service.genesisValidatorsRoot = genesisValidatorsRoot
+		service.genesisValidatorsRoot = params.BeaconConfig().GenesisValidatorsRoot[:]
 		service.custodyInfo = &custodyInfo{}
 
 		nodeForkDigest, err := service.currentForkDigest()
@@ -158,11 +149,11 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 		DB:                   db,
 	}
 
-	service, err := NewService(ctx, cfg)
+	service, err := NewService(t.Context(), cfg)
 	require.NoError(t, err)
 
 	service.genesisTime = genesisTime
-	service.genesisValidatorsRoot = genesisValidatorsRoot
+	service.genesisValidatorsRoot = params.BeaconConfig().GenesisValidatorsRoot[:]
 	service.custodyInfo = &custodyInfo{}
 
 	service.Start()

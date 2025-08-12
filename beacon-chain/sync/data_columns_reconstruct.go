@@ -127,7 +127,7 @@ func (s *Service) scheduleMissingDataColumnSidecarsBroadcast(
 	})
 
 	// Get the time corresponding to the start of the slot.
-	genesisTime := s.cfg.chain.GenesisTime()
+	genesisTime := s.cfg.clock.GenesisTime()
 	slotStartTime, err := slots.StartTime(genesisTime, slot)
 	if err != nil {
 		return errors.Wrap(err, "failed to calculate slot start time")

@@ -1,12 +1,10 @@
 package sync
 
 import (
-	"fmt"
 	"reflect"
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
@@ -19,7 +17,6 @@ import (
 )
 
 var errNilPubsubMessage = errors.New("nil pubsub message")
-var errInvalidTopic = errors.New("invalid topic format")
 
 func (s *Service) decodePubsubMessage(msg *pubsub.Message) (ssz.Unmarshaler, error) {
 	if msg == nil || msg.Topic == nil || *msg.Topic == "" {
@@ -75,7 +72,7 @@ func (s *Service) decodePubsubMessage(msg *pubsub.Message) (ssz.Unmarshaler, err
 func (*Service) replaceForkDigest(topic string) (string, error) {
 	subStrings := strings.Split(topic, "/")
 	if len(subStrings) != 4 {
-		return "", errInvalidTopic
+		return "", p2p.ErrInvalidTopic
 	}
 	subStrings[2] = "%x"
 	return strings.Join(subStrings, "/"), nil
@@ -105,29 +102,21 @@ func extractDataTypeFromTypeMap[T any](typeMap map[[4]byte]func() (T, error), di
 	if len(digest) == 0 {
 		f, ok := typeMap[bytesutil.ToBytes4(params.BeaconConfig().GenesisForkVersion)]
 		if !ok {
-			return zero, fmt.Errorf("no %T type exists for the genesis fork version", zero)
+			return zero, errors.Wrapf(errInvalidDigest, "no %T type exists for the genesis fork version", zero)
 		}
 		return f()
 	}
 	if len(digest) != forkDigestLength {
-		return zero, errors.Errorf("invalid digest returned, wanted a length of %d but received %d", forkDigestLength, len(digest))
+		return zero, errors.Wrapf(errInvalidDigest, "invalid digest returned, wanted a length of %d but received %d", forkDigestLength, len(digest))
 	}
-	vRoot := tor.GenesisValidatorsRoot()
-	for k, f := range typeMap {
-		rDigest, err := signing.ComputeForkDigest(k[:], vRoot[:])
-		if err != nil {
-			return zero, err
-		}
-		if rDigest == bytesutil.ToBytes4(digest) {
-			return f()
-		}
+	forkVersion, _, err := params.ForkDataFromDigest([4]byte(digest))
+	if err != nil {
+		return zero, errors.Wrapf(ErrNoValidDigest, "could not extract %T data type, saw digest=%#x", zero, digest)
 	}
-	return zero, errors.Wrapf(
-		ErrNoValidDigest,
-		"could not extract %T data type, saw digest=%#x, genesis=%v, vr=%#x",
-		zero,
-		digest,
-		tor.GenesisTime(),
-		tor.GenesisValidatorsRoot(),
-	)
+
+	f, ok := typeMap[forkVersion]
+	if ok {
+		return f()
+	}
+	return zero, errors.Wrapf(ErrNoValidDigest, "could not extract %T data type, saw digest=%#x", zero, digest)
 }

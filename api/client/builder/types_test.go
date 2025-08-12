@@ -1699,7 +1699,7 @@ func TestExecutionPayloadHeaderCapellaRoundtrip(t *testing.T) {
 	require.DeepEqual(t, string(expected[0:len(expected)-1]), string(m))
 }
 
-func TestErrorMessage_non200Err(t *testing.T) {
+func TestErrorMessage_unexpectedStatusErr(t *testing.T) {
 	mockRequest := &http.Request{
 		URL: &url.URL{Path: "example.com"},
 	}
@@ -1779,7 +1779,7 @@ func TestErrorMessage_non200Err(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := non200Err(tt.args)
+			err := unexpectedStatusErr(tt.args, http.StatusOK)
 			if err != nil && tt.wantMessage != "" {
 				require.ErrorContains(t, tt.wantMessage, err)
 			}

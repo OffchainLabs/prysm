@@ -13,7 +13,7 @@ import (
 )
 
 func (c *blobsTestCase) defaultOldestSlotByRange(t *testing.T) types.Slot {
-	currentEpoch := slots.ToEpoch(c.chain.CurrentSlot())
+	currentEpoch := c.clock.CurrentEpoch()
 	oldestEpoch := currentEpoch - params.BeaconConfig().MinEpochsForBlobsSidecarsRequest
 	if oldestEpoch < params.BeaconConfig().DenebForkEpoch {
 		oldestEpoch = params.BeaconConfig().DenebForkEpoch
@@ -183,7 +183,6 @@ func TestBlobsByRangeValidation(t *testing.T) {
 		name    string
 		current types.Slot
 		req     *ethpb.BlobSidecarsByRangeRequest
-		// chain := defaultMockChain(t)
 
 		start types.Slot
 		end   types.Slot

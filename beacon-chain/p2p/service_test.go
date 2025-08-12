@@ -16,8 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	prysmTime "github.com/OffchainLabs/prysm/v6/time"
@@ -346,14 +344,16 @@ func TestPeer_Disconnect(t *testing.T) {
 
 func TestService_JoinLeaveTopic(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
+	params.BeaconConfig().InitializeForkSchedule()
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 	gs := startup.NewClockSynchronizer()
 	s, err := NewService(ctx, &Config{StateNotifier: &mock.MockStateNotifier{}, ClockWaiter: gs, DB: testDB.SetupDB(t)})
 	require.NoError(t, err)
 
-	go s.awaitStateInitialized()
 	fd := initializeStateWithForkDigest(ctx, t, gs)
+	s.setAllForkDigests()
+	s.awaitStateInitialized()
 
 	assert.Equal(t, 0, len(s.joinedTopics))
 
@@ -382,15 +382,13 @@ func TestService_JoinLeaveTopic(t *testing.T) {
 // digest associated with that genesis event.
 func initializeStateWithForkDigest(_ context.Context, t *testing.T, gs startup.ClockSetter) [4]byte {
 	gt := prysmTime.Now()
-	gvr := bytesutil.ToBytes32(bytesutil.PadTo([]byte("genesis validators root"), 32))
-	require.NoError(t, gs.SetClock(startup.NewClock(gt, gvr)))
-
-	fd, err := forks.CreateForkDigest(gt, gvr[:])
-	require.NoError(t, err)
+	gvr := params.BeaconConfig().GenesisValidatorsRoot
+	clock := startup.NewClock(gt, gvr)
+	require.NoError(t, gs.SetClock(clock))
 
 	time.Sleep(50 * time.Millisecond) // wait for pubsub filter to initialize.
 
-	return fd
+	return params.ForkDigest(clock.CurrentEpoch())
 }
 
 func TestService_connectWithPeer(t *testing.T) {

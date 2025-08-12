@@ -14,14 +14,13 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v6/config/features"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/messagehandler"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -58,17 +57,13 @@ type (
 		getSubnetsRequiringPeers func(currentSlot primitives.Slot) map[uint64]bool
 	}
 
-	// parameters used for the `subscribeToSubnets` function.
 	subscribeToSubnetsParameters struct {
-		subscriptionBySubnet  map[uint64]*pubsub.Subscription
-		topicFormat           string
-		digest                [4]byte
-		genesisValidatorsRoot [fieldparams.RootLength]byte
-		genesisTime           time.Time
-		currentSlot           primitives.Slot
-		validate              wrappedVal
-		handle                subHandler
-		getSubnetsToJoin      func(currentSlot primitives.Slot) map[uint64]bool
+		subscriptionBySubnet map[uint64]*pubsub.Subscription
+		topicFormat          string
+		digest               [4]byte
+		validate             wrappedVal
+		handle               subHandler
+		getSubnetsToJoin     func(currentSlot primitives.Slot) map[uint64]bool
 	}
 )
 
@@ -242,8 +237,7 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 // subscribe to a given topic with a given validator and subscription handler.
 // The base protobuf message is used to initialize new messages for decoding.
 func (s *Service) subscribe(topic string, validator wrappedVal, handle subHandler, digest [4]byte) *pubsub.Subscription {
-	genRoot := s.cfg.clock.GenesisValidatorsRoot()
-	_, e, err := forks.RetrieveForkDataFromDigest(digest, genRoot[:])
+	_, e, err := params.ForkDataFromDigest(digest)
 	if err != nil {
 		// Impossible condition as it would mean digest does not exist.
 		panic(err) // lint:nopanic -- Impossible condition.
@@ -452,8 +446,7 @@ func (s *Service) subscribeToSubnets(p subscribeToSubnetsParameters) error {
 		return nil
 	}
 
-	// Check the validity of the digest.
-	valid, err := isDigestValid(p.digest, p.genesisTime, p.genesisValidatorsRoot)
+	valid, err := isDigestValid(p.digest, s.cfg.clock)
 	if err != nil {
 		return errors.Wrap(err, "is digest valid")
 	}
@@ -465,13 +458,8 @@ func (s *Service) subscribeToSubnets(p subscribeToSubnetsParameters) error {
 		return errInvalidDigest
 	}
 
-	// Retrieve the subnets we want to join.
-	subnetsToJoin := p.getSubnetsToJoin(p.currentSlot)
-
-	// Remove subscriptions that are no longer wanted.
+	subnetsToJoin := p.getSubnetsToJoin(s.cfg.clock.CurrentSlot())
 	s.pruneSubscriptions(p.subscriptionBySubnet, subnetsToJoin, p.topicFormat, p.digest)
-
-	// Subscribe to wanted and not already registered subnets.
 	for subnet := range subnetsToJoin {
 		subnetTopic := fmt.Sprintf(p.topicFormat, p.digest, subnet)
 
@@ -486,44 +474,34 @@ func (s *Service) subscribeToSubnets(p subscribeToSubnetsParameters) error {
 
 // subscribeWithParameters subscribes to a list of subnets.
 func (s *Service) subscribeWithParameters(p subscribeParameters) {
-	minimumPeersPerSubnet := flags.Get().MinimumPeersPerSubnet
-	subscriptionBySubnet := make(map[uint64]*pubsub.Subscription)
-	genesisValidatorsRoot := s.cfg.clock.GenesisValidatorsRoot()
-	genesisTime := s.cfg.clock.GenesisTime()
-	secondsPerSlot := params.BeaconConfig().SecondsPerSlot
-	secondsPerSlotDuration := time.Duration(secondsPerSlot) * time.Second
-	currentSlot := s.cfg.clock.CurrentSlot()
-	neededSubnets := computeAllNeededSubnets(currentSlot, p.getSubnetsToJoin, p.getSubnetsRequiringPeers)
-
 	shortTopicFormat := p.topicFormat
 	shortTopicFormatLen := len(shortTopicFormat)
 	if shortTopicFormatLen >= 3 && shortTopicFormat[shortTopicFormatLen-3:] == "_%d" {
 		shortTopicFormat = shortTopicFormat[:shortTopicFormatLen-3]
 	}
-
 	shortTopic := fmt.Sprintf(shortTopicFormat, p.digest)
 
 	parameters := subscribeToSubnetsParameters{
-		subscriptionBySubnet:  subscriptionBySubnet,
-		topicFormat:           p.topicFormat,
-		digest:                p.digest,
-		genesisValidatorsRoot: genesisValidatorsRoot,
-		genesisTime:           genesisTime,
-		currentSlot:           currentSlot,
-		validate:              p.validate,
-		handle:                p.handle,
-		getSubnetsToJoin:      p.getSubnetsToJoin,
+		subscriptionBySubnet: make(map[uint64]*pubsub.Subscription),
+		topicFormat:          p.topicFormat,
+		digest:               p.digest,
+		validate:             p.validate,
+		handle:               p.handle,
+		getSubnetsToJoin:     p.getSubnetsToJoin,
 	}
-
 	err := s.subscribeToSubnets(parameters)
 	if err != nil {
 		log.WithError(err).Error("Could not subscribe to subnets")
 	}
 
+	currentSlot := s.cfg.clock.CurrentSlot()
+	slotDuration := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+	neededSubnets := computeAllNeededSubnets(currentSlot, p.getSubnetsToJoin, p.getSubnetsRequiringPeers)
+	minimumPeersPerSubnet := flags.Get().MinimumPeersPerSubnet
 	// Subscribe to expected subnets and search for peers if needed at every slot.
 	go func() {
 		func() {
-			ctx, cancel := context.WithTimeout(s.ctx, secondsPerSlotDuration)
+			ctx, cancel := context.WithTimeout(s.ctx, slotDuration)
 			defer cancel()
 
 			if err := s.cfg.p2p.FindAndDialPeersWithSubnets(ctx, p.topicFormat, p.digest, minimumPeersPerSubnet, neededSubnets); err != nil && !errors.Is(err, context.DeadlineExceeded) {
@@ -531,25 +509,23 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 			}
 		}()
 
-		slotTicker := slots.NewSlotTicker(genesisTime, secondsPerSlot)
+		slotTicker := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
 		defer slotTicker.Done()
 
 		for {
 			select {
-			case currentSlot := <-slotTicker.C():
-				parameters.currentSlot = currentSlot
+			case <-slotTicker.C():
 				if err := s.subscribeToSubnets(parameters); err != nil {
 					if errors.Is(err, errInvalidDigest) {
 						log.WithField("topics", shortTopic).Debug("Digest is invalid, stopping subscription")
 						return
 					}
-
 					log.WithError(err).Error("Could not subscribe to subnets")
 					continue
 				}
 
 				func() {
-					ctx, cancel := context.WithTimeout(s.ctx, secondsPerSlotDuration)
+					ctx, cancel := context.WithTimeout(s.ctx, slotDuration)
 					defer cancel()
 
 					if err := s.cfg.p2p.FindAndDialPeersWithSubnets(ctx, p.topicFormat, p.digest, minimumPeersPerSubnet, neededSubnets); err != nil && !errors.Is(err, context.DeadlineExceeded) {
@@ -753,27 +729,19 @@ func (*Service) addDigestAndIndexToTopic(topic string, digest [4]byte, idx uint6
 }
 
 func (s *Service) currentForkDigest() ([4]byte, error) {
-	genRoot := s.cfg.clock.GenesisValidatorsRoot()
-	return forks.CreateForkDigest(s.cfg.clock.GenesisTime(), genRoot[:])
+	return params.ForkDigest(s.cfg.clock.CurrentEpoch()), nil
 }
 
 // Checks if the provided digest matches up with the current supposed digest.
-func isDigestValid(digest [4]byte, genesis time.Time, genValRoot [32]byte) (bool, error) {
-	retDigest, err := forks.CreateForkDigest(genesis, genValRoot[:])
-	if err != nil {
-		return false, err
-	}
-	isNextEpoch, err := forks.IsForkNextEpoch(genesis, genValRoot[:])
-	if err != nil {
-		return false, err
-	}
+func isDigestValid(digest [4]byte, clock *startup.Clock) (bool, error) {
+	current := clock.CurrentEpoch()
 	// In the event there is a fork the next epoch,
 	// we skip the check, as we subscribe subnets an
 	// epoch in advance.
-	if isNextEpoch {
+	if params.DigestChangesAfter(current) {
 		return true, nil
 	}
-	return retDigest == digest, nil
+	return params.ForkDigest(current) == digest, nil
 }
 
 // computeAllNeededSubnets computes the subnets we want to join
