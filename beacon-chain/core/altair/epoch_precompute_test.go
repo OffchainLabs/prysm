@@ -2,6 +2,8 @@ package altair
 
 import (
 	"math"
+	"math/big"
+	"math/bits"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/epoch/precompute"
@@ -547,4 +549,142 @@ func testStateBellatrix() (state.BeaconState, error) {
 		InactivityScores: []uint64{0, 0, 0, 0},
 		Balances:         []uint64{0, 0, 0, 0},
 	})
+}
+
+// helper: compute the mathematically correct head reward using big.Int
+func expectedHeadRewardBig(
+	effectiveBalance, activeCurrentEpoch, prevEpochHeadAttested uint64,
+	baseRewardMultiplier, headWeight, weightDenominator, increment uint64,
+) uint64 {
+	// baseReward := (effectiveBalance / increment) * baseRewardMultiplier
+	effDiv := new(big.Int).SetUint64(effectiveBalance / increment)
+	brMul  := new(big.Int).SetUint64(baseRewardMultiplier)
+	baseReward := new(big.Int).Mul(effDiv, brMul)
+
+	attestedDiv := new(big.Int).SetUint64(prevEpochHeadAttested / increment)
+	den := new(big.Int).Mul(
+		new(big.Int).SetUint64(activeCurrentEpoch/increment),
+		new(big.Int).SetUint64(weightDenominator),
+	)
+
+	num := new(big.Int).Mul(baseReward, new(big.Int).SetUint64(headWeight))
+	num.Mul(num, attestedDiv)
+
+	num.Quo(num, den) // floor division
+	return num.Uint64()
+}
+
+func TestAttestationDelta_HeadRewardOverflow(t *testing.T) {
+	cfg := params.BeaconConfig()
+
+	// Mainnet-like constants (the test does not assume exact numbers; it reads them)
+	increment := cfg.EffectiveBalanceIncrement       // typically 1e9 (gwei)
+	weightDenominator := cfg.WeightDenominator       // typically 64
+	headWeight := cfg.TimelyHeadWeight               // typically 14
+
+	// Construct a pathological-but-valid config:
+	// 1024 validators * 10,000,000 ETH effective balance
+	effectiveBalance := uint64(10_000_000) * increment // 10,000,000 ETH in gwei
+	activeCurrent := uint64(1024) * effectiveBalance
+	prevHead := activeCurrent // assume full participation for simplicity
+
+	// Validator flags to ensure we take the "reward" path (no penalties)
+	val := &precompute.Validator{
+		IsActivePrevEpoch:              true,
+		IsSlashed:                      false,
+		IsWithdrawableCurrentEpoch:     false,
+		IsPrevEpochSourceAttester:      true,
+		IsPrevEpochTargetAttester:      true,
+		IsPrevEpochHeadAttester:        true,
+		CurrentEpochEffectiveBalance:   effectiveBalance,
+		InactivityScore:                0,
+	}
+	bal := &precompute.Balance{
+		ActiveCurrentEpoch:      activeCurrent,
+		PrevEpochAttested:       activeCurrent,
+		PrevEpochTargetAttested: activeCurrent,
+		PrevEpochHeadAttested:   prevHead,
+	}
+
+	// Use a big multiplier to trigger overflow (matches the report)
+	const baseRewardMultiplier = uint64(200_000_000)
+	const inactivityDenominator = uint64(1) // irrelevant since no penalty branch is taken
+	const inactivityLeak = false
+
+	// In the 'older' attestationDelta this would fail in the comparison later
+	got, err := attestationDelta(
+		bal, val,
+		baseRewardMultiplier, inactivityDenominator,
+		inactivityLeak,
+	)
+	if err != nil {
+		t.Fatalf("attestationDelta error: %v", err)
+	}
+
+	// Compute mathematically correct head reward with big.Int for comparison
+	want := expectedHeadRewardBig(
+		effectiveBalance, activeCurrent, prevHead,
+		baseRewardMultiplier, headWeight, weightDenominator, increment,
+	)
+
+	if got.HeadReward != want {
+		t.Fatalf("HeadReward mismatch (possible overflow): got=%d want=%d", got.HeadReward, want)
+	}
+}
+
+// Proves that simple reordering:
+//   ((baseReward*headWeight)/weightDenominator) * (attested/increment) / activeIncrement
+// still overflows the intermediate multiplication, and verifies that safeMul3Div2 handles it correctly.
+func TestHeadReward_EarlyDivisionStillOverflows(t *testing.T) {
+	cfg := params.BeaconConfig()
+	increment := cfg.EffectiveBalanceIncrement   // typically 1e9
+	weightDen := cfg.WeightDenominator           // typically 64
+	headWeight := cfg.TimelyHeadWeight           // typically 14
+
+	// Pathological but valid: 1024 validators @ 10,000,000 ETH effective balance
+	effectiveBalance := uint64(10_000_000) * increment
+	activeCurrent := uint64(1024) * effectiveBalance
+	prevHead := activeCurrent 
+
+	const baseRewardMultiplier = uint64(200_000_000)
+
+	// Ground-truth (non-overflow) result using big.Int and the original single-flooring formula.
+	want := expectedHeadRewardBig(
+		effectiveBalance, activeCurrent, prevHead,
+		baseRewardMultiplier, headWeight, weightDen, increment,
+	)
+
+	// Compute the pieces of the 'naive' formula.
+	baseReward := (effectiveBalance / increment) * baseRewardMultiplier
+	// Step 1: early divide by weightDenominator
+	n1 := (baseReward * headWeight) / weightDen // this fits in uint64 for our numbers
+	// Step 2: multiply by (prevHead/increment) — this is where overflow happens
+	attDiv := prevHead / increment
+
+	// Detect overflow explicitly.
+	hi, lo := bits.Mul64(n1, attDiv)
+	if hi == 0 {
+		t.Fatalf("Expected overflow in n1*attDiv, but hi==0 (test ineffective). n1=%d attDiv=%d lo=%d", n1, attDiv, lo)
+	}
+
+	// Now actually do the naive formula in uint64 to show the wrong answer.
+	nCorrected := (n1 * attDiv) / (activeCurrent / increment)
+
+	if nCorrected == want {
+		t.Fatalf("Early-division formula unexpectedly matched ground truth; adjust constants.")
+	}
+	
+	// Verify that the naive approach fails
+	t.Logf("Early-division overflows: got=%d want=%d (hi of n1*attDiv=%d)", nCorrected, want, hi)
+	
+	// Now verify that safeMul3Div2 handles it correctly
+	att := prevHead / increment
+	denA := activeCurrent / increment
+	denB := weightDen
+	got := safeMul3Div2(baseReward, headWeight, att, denA, denB)
+	
+	if got != want {
+		t.Fatalf("safeMul3Div2 mismatch: got=%d want=%d", got, want)
+	}
+	t.Logf("safeMul3Div2 correctly computed: %d", got)
 }
