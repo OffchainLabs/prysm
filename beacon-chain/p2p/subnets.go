@@ -206,27 +206,25 @@ func (s *Service) findPeersWithSubnets(
 			}
 			// Replacement with higher seq
 			nodeByNodeID[node.ID()] = node
-		} else {
-			// We found a new peer. Modify the defective subnets map
-			// and the filter accordingly.
-			nodeByNodeID[node.ID()] = node
-			for subnet := range defectiveSubnets {
-				if !nodeSubnets[subnet] {
-					continue
-				}
-
-				defectiveSubnets[subnet]--
-
-				if defectiveSubnets[subnet] == 0 {
-					delete(defectiveSubnets, subnet)
-				}
-
-				filter, err = s.nodeFilter(topicFormat, defectiveSubnets)
-				if err != nil {
-					return nil, errors.Wrap(err, "node filter")
-				}
+			continue
+		}
+		// We found a new peer. Modify the defective subnets map
+		// and the filter accordingly.
+		nodeByNodeID[node.ID()] = node
+		for subnet := range defectiveSubnets {
+			if !nodeSubnets[subnet] {
+				continue
+			}
+			defectiveSubnets[subnet]--
+			if defectiveSubnets[subnet] == 0 {
+				delete(defectiveSubnets, subnet)
+			}
+			filter, err = s.nodeFilter(topicFormat, defectiveSubnets)
+			if err != nil {
+				return nil, errors.Wrap(err, "node filter")
 			}
 		}
+	}
 	}
 
 	// Convert the map to a slice.
