@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/rand"
@@ -66,7 +67,7 @@ func createTestNodeWithID(t *testing.T, id string) *enode.LocalNode {
 	h := sha256.New()
 	h.Write([]byte(id))
 	seedBytes := h.Sum(nil)
-	
+
 	// Create a deterministic reader using the seed
 	deterministicReader := bytes.NewReader(seedBytes)
 
