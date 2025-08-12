@@ -255,11 +255,6 @@ func tryRequestingColumnsFromPeers(
 
 	verifiedColumnsByRoot := make(map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn)
 	for len(missingIndicesByRoot) > 0 && len(indicesByRootByPeer) > 0 {
-		count := 0
-		for _, indices := range missingIndicesByRoot {
-			count += len(indices)
-		}
-
 		// Select peers to query the missing sidecars from.
 		indicesByRootByPeerToQuery, err := selectPeers(p, randomSource, len(missingIndicesByRoot), indicesByRootByPeer)
 		if err != nil {
