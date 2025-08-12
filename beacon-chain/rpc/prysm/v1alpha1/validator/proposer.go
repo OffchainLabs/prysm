@@ -286,6 +286,19 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%s: %v", "decode block failed", err)
 	}
+	root, err := block.Block().HashTreeRoot()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not hash tree root: %v", err)
+	}
+
+	// For post-Fulu blinded blocks, submit to relay and return early
+	if block.IsBlinded() && slots.ToEpoch(block.Block().Slot()) >= params.BeaconConfig().FuluForkEpoch {
+		err := vs.BlockBuilder.SubmitBlindedBlockPostFulu(ctx, block)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not submit blinded block post-Fulu: %v", err)
+		}
+		return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
+	}
 
 	var sidecars []*ethpb.BlobSidecar
 	if block.IsBlinded() {
@@ -295,11 +308,6 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	}
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "%s: %v", "handle block failed", err)
-	}
-
-	root, err := block.Block().HashTreeRoot()
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not hash tree root: %v", err)
 	}
 
 	var wg sync.WaitGroup
@@ -327,7 +335,8 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
 }
 
-// handleBlindedBlock processes blinded beacon blocks.
+// handleBlindedBlock processes blinded beacon blocks (pre-Fulu only).
+// Post-Fulu blinded blocks are handled directly in ProposeBeaconBlock.
 func (vs *Server) handleBlindedBlock(ctx context.Context, block interfaces.SignedBeaconBlock) (interfaces.SignedBeaconBlock, []*ethpb.BlobSidecar, error) {
 	if block.Version() < version.Bellatrix {
 		return nil, nil, errors.New("pre-Bellatrix blinded block")

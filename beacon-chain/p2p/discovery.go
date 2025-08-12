@@ -585,8 +585,11 @@ func (s *Service) createLocalNode(
 	localNode.SetFallbackIP(ipAddr)
 	localNode.SetFallbackUDP(udpPort)
 
-	localNode, err = addForkEntry(localNode, s.genesisTime, s.genesisValidatorsRoot)
-	if err != nil {
+	currentSlot := slots.CurrentSlot(s.genesisTime)
+	currentEpoch := slots.ToEpoch(currentSlot)
+	current := params.GetNetworkScheduleEntry(currentEpoch)
+	next := params.NextNetworkScheduleEntry(currentEpoch)
+	if err := updateENR(localNode, current, next); err != nil {
 		return nil, errors.Wrap(err, "could not add eth2 fork version entry to enr")
 	}
 
@@ -707,7 +710,7 @@ func (s *Service) filterPeer(node *enode.Node) bool {
 	// Ignore nodes that don't match our fork digest.
 	nodeENR := node.Record()
 	if s.genesisValidatorsRoot != nil {
-		if err := s.compareForkENR(nodeENR); err != nil {
+		if err := compareForkENR(s.dv5Listener.LocalNode().Node().Record(), nodeENR); err != nil {
 			log.WithError(err).Trace("Fork ENR mismatches between peer and local node")
 			return false
 		}

@@ -7,7 +7,8 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
@@ -18,8 +19,8 @@ func TestSubTopicHandler_CRUD(t *testing.T) {
 	assert.Equal(t, false, h.topicExists("junk"))
 	assert.Equal(t, false, h.digestExists([4]byte{}))
 
-	digest, err := forks.CreateForkDigest(time.Now(), make([]byte, 32))
-	assert.NoError(t, err)
+	clock := startup.NewClock(time.Now(), [32]byte{})
+	digest := params.ForkDigest(clock.CurrentEpoch())
 	enc := encoder.SszNetworkEncoder{}
 
 	// Valid topic added in.

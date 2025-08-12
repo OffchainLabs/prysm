@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "clock.go",
         "synchronizer.go",
+        "testing.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/startup",
     visibility = ["//visibility:public"],

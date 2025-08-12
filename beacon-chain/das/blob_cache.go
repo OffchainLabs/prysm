@@ -99,20 +99,26 @@ func (e *blobCacheEntry) filter(root [32]byte, kc [][]byte, slot primitives.Slot
 		if e.diskSummary.HasIndex(i) {
 			continue
 		}
+		// Check if e.scs has this index before accessing
+		var sidecar *blocks.ROBlob
+		if i < uint64(len(e.scs)) {
+			sidecar = e.scs[i]
+		}
+
 		if kc[i] == nil {
-			if e.scs[i] != nil {
-				return nil, errors.Wrapf(errCommitmentMismatch, "root=%#x, index=%#x, commitment=%#x, no block commitment", root, i, e.scs[i].KzgCommitment)
+			if sidecar != nil {
+				return nil, errors.Wrapf(errCommitmentMismatch, "root=%#x, index=%#x, commitment=%#x, no block commitment", root, i, sidecar.KzgCommitment)
 			}
 			continue
 		}
 
-		if e.scs[i] == nil {
+		if sidecar == nil {
 			return nil, errors.Wrapf(errMissingSidecar, "root=%#x, index=%#x", root, i)
 		}
-		if !bytes.Equal(kc[i], e.scs[i].KzgCommitment) {
-			return nil, errors.Wrapf(errCommitmentMismatch, "root=%#x, index=%#x, commitment=%#x, block commitment=%#x", root, i, e.scs[i].KzgCommitment, kc[i])
+		if !bytes.Equal(kc[i], sidecar.KzgCommitment) {
+			return nil, errors.Wrapf(errCommitmentMismatch, "root=%#x, index=%#x, commitment=%#x, block commitment=%#x", root, i, sidecar.KzgCommitment, kc[i])
 		}
-		scs = append(scs, *e.scs[i])
+		scs = append(scs, *sidecar)
 	}
 
 	return scs, nil

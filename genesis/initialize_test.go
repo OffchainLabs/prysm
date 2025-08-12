@@ -28,7 +28,7 @@ func TestInitialize(t *testing.T) {
 func TestEmbeddedMainnetHardcodedValues(t *testing.T) {
 	// Initialize genesis with mainnet config to load embedded state
 	require.NoError(t, genesis.Initialize(t.Context(), t.TempDir()))
-	
+
 	// Get the initialized genesis state
 	state, err := genesis.State()
 	require.NoError(t, err)

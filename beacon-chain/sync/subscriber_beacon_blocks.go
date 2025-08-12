@@ -164,7 +164,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, ro
 // processBlobSidecarsFromExecution retrieves (if available) blob sidecars data from the execution client,
 // builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
 func (s *Service) processBlobSidecarsFromExecution(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) {
-	startTime, err := slots.StartTime(s.cfg.chain.GenesisTime(), block.Block().Slot())
+	startTime, err := slots.StartTime(s.cfg.clock.GenesisTime(), block.Block().Slot())
 	if err != nil {
 		log.WithError(err).Error("Failed to convert slot to time")
 	}

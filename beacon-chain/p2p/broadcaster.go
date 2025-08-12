@@ -15,7 +15,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/crypto/hash"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
@@ -274,14 +273,8 @@ func (s *Service) BroadcastLightClientOptimisticUpdate(ctx context.Context, upda
 		return errors.New("attempted to broadcast nil light client optimistic update")
 	}
 
-	forkDigest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(update.AttestedHeader().Beacon().Slot), s.genesisValidatorsRoot)
-	if err != nil {
-		err := errors.Wrap(err, "could not retrieve fork digest")
-		tracing.AnnotateError(span, err)
-		return err
-	}
-
-	if err := s.broadcastObject(ctx, update, lcOptimisticToTopic(forkDigest)); err != nil {
+	digest := params.ForkDigest(slots.ToEpoch(update.AttestedHeader().Beacon().Slot))
+	if err := s.broadcastObject(ctx, update, lcOptimisticToTopic(digest)); err != nil {
 		log.WithError(err).Debug("Failed to broadcast light client optimistic update")
 		err := errors.Wrap(err, "could not publish message")
 		tracing.AnnotateError(span, err)
@@ -300,13 +293,7 @@ func (s *Service) BroadcastLightClientFinalityUpdate(ctx context.Context, update
 		return errors.New("attempted to broadcast nil light client finality update")
 	}
 
-	forkDigest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(update.AttestedHeader().Beacon().Slot), s.genesisValidatorsRoot)
-	if err != nil {
-		err := errors.Wrap(err, "could not retrieve fork digest")
-		tracing.AnnotateError(span, err)
-		return err
-	}
-
+	forkDigest := params.ForkDigest(slots.ToEpoch(update.AttestedHeader().Beacon().Slot))
 	if err := s.broadcastObject(ctx, update, lcFinalityToTopic(forkDigest)); err != nil {
 		log.WithError(err).Debug("Failed to broadcast light client finality update")
 		err := errors.Wrap(err, "could not publish message")
