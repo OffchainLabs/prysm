@@ -302,6 +302,9 @@ func tryRequestingColumnsFromPeers(
 }
 
 // selectPeers selects peers to query the sidecars.
+// It begins by randomly selecting a peer in `origIndicesByRootByPeer` that has enough bandwidth,
+// and assigns to it all its available sidecars. Then, it randomly select an other peer, until
+// all sidecars in `missingIndicesByRoot` are covered.
 func selectPeers(
 	p DataColumnSidecarsParams,
 	randomSource *rand.Rand,
@@ -332,7 +335,7 @@ func selectPeers(
 		}
 
 		// Query all the sidecars that peer can offer us.
-		newIndicesByRoot := indicesByRootByPeer[peer]
+		newIndicesByRoot := internalIndicesByRootByPeer[peer]
 		indicesByRootByPeerToQuery[peer] = newIndicesByRoot
 
 		// Remove this peer from the maps to avoid re-selection.

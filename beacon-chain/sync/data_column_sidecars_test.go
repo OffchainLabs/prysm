@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -16,7 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
-	"github.com/OffchainLabs/prysm/v6/crypto/rand"
+
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
@@ -25,6 +26,58 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
+
+func TestSelectPeers(t *testing.T) {
+	const (
+		count = 3
+		seed  = 46
+	)
+
+	params := DataColumnSidecarsParams{
+		Ctx:         t.Context(),
+		RateLimiter: leakybucket.NewCollector(1., 10, time.Second, false /* deleteEmptyBuckets */),
+	}
+
+	randomSource := rand.New(rand.NewSource(seed))
+
+	indicesByRootByPeer := map[peer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool{
+		"peer1": {
+			{1}: {12: true, 13: true},
+			{2}: {13: true, 14: true, 15: true},
+			{3}: {14: true, 15: true},
+		},
+		"peer2": {
+			{1}: {13: true, 14: true},
+			{2}: {13: true, 14: true, 15: true},
+			{3}: {14: true, 16: true},
+		},
+	}
+
+	expected := map[peer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool{
+		"peer1": {
+			{1}: {12: true},
+			{3}: {15: true},
+		},
+		"peer2": {
+			{1}: {13: true, 14: true},
+			{2}: {13: true, 14: true, 15: true},
+			{3}: {14: true, 16: true},
+		},
+	}
+
+	actual, err := selectPeers(params, randomSource, count, indicesByRootByPeer)
+	require.NoError(t, err)
+	require.Equal(t, len(expected), len(actual))
+	for peerID := range expected {
+		require.Equal(t, len(expected[peerID]), len(actual[peerID]))
+		for root := range expected[peerID] {
+			require.Equal(t, len(expected[peerID][root]), len(actual[peerID][root]))
+			for indices := range expected[peerID][root] {
+				require.Equal(t, expected[peerID][root][indices], actual[peerID][root][indices])
+			}
+		}
+	}
+}
 
 func TestUpdateResults(t *testing.T) {
 	_, verifiedSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, []util.DataColumnParam{
@@ -280,7 +333,7 @@ func TestSendDataColumnSidecarsRequest(t *testing.T) {
 			receivedRequest := new(p2ptypes.DataColumnsByRootIdentifiers)
 			err := other.Encoding().DecodeWithMaxLength(stream, receivedRequest)
 			assert.NoError(t, err)
-			assert.DeepEqual(t, *expectedRequest, *receivedRequest)
+			assert.DeepSSZEqual(t, *expectedRequest, *receivedRequest)
 
 			err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), expectedResponsePb)
 			assert.NoError(t, err)
@@ -431,7 +484,7 @@ func TestBuildByRootRequest(t *testing.T) {
 	}
 
 	actual := buildByRootRequest(input)
-	require.DeepEqual(t, expected, actual)
+	require.DeepSSZEqual(t, expected, actual)
 }
 
 func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
@@ -603,7 +656,9 @@ func TestComputeIndicesByRootByPeer(t *testing.T) {
 }
 
 func TestRandomPeer(t *testing.T) {
-	randomSource := rand.NewGenerator()
+	// Fixed seed.
+	const seed = 42
+	randomSource := rand.New(rand.NewSource(seed))
 
 	t.Run("no peers", func(t *testing.T) {
 		pid, err := randomPeer(t.Context(), randomSource, leakybucket.NewCollector(4, 8, time.Second, false /* deleteEmptyBuckets */), 1, nil)
