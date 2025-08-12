@@ -2,10 +2,12 @@ package sync
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	testp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
@@ -16,10 +18,169 @@ import (
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v6/crypto/rand"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
+
+func TestSendDataColumnSidecarsRequest(t *testing.T) {
+	const count = 4
+
+	kzgCommitmentsInclusionProof := make([][]byte, 0, count)
+	for range count {
+		kzgCommitmentsInclusionProof = append(kzgCommitmentsInclusionProof, make([]byte, 32))
+	}
+
+	expectedResponsePb := &ethpb.DataColumnSidecar{
+		Index: 2,
+		SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
+			Header: &ethpb.BeaconBlockHeader{
+				Slot:       1,
+				ParentRoot: make([]byte, fieldparams.RootLength),
+				StateRoot:  make([]byte, fieldparams.RootLength),
+				BodyRoot:   make([]byte, fieldparams.RootLength),
+			},
+			Signature: make([]byte, fieldparams.BLSSignatureLength),
+		},
+		KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
+	}
+
+	expectedResponse, err := blocks.NewRODataColumn(expectedResponsePb)
+	require.NoError(t, err)
+
+	ctxMap := ContextByteVersions{[4]byte{245, 165, 253, 66}: version.Fulu}
+	clock := startup.NewClock(time.Now(), [fieldparams.RootLength]byte{})
+
+	t.Run("contiguous", func(t *testing.T) {
+		indicesByRoot := map[[fieldparams.RootLength]byte]map[uint64]bool{
+			{1}: {1: true, 2: true},
+			{3}: {1: true, 2: true},
+			{4}: {1: true, 2: true},
+			{7}: {1: true, 2: true},
+		}
+
+		slotByRoot := map[[fieldparams.RootLength]byte]primitives.Slot{
+			{1}: 1,
+			{3}: 3,
+			{4}: 4,
+			{7}: 7,
+		}
+
+		slotsWithCommitments := map[primitives.Slot]bool{
+			1: true,
+			3: true,
+			4: true,
+			7: true,
+		}
+
+		expectedRequest := &ethpb.DataColumnSidecarsByRangeRequest{
+			StartSlot: 1,
+			Count:     7,
+			Columns:   []uint64{1, 2},
+		}
+
+		protocol := fmt.Sprintf("%s/ssz_snappy", p2p.RPCDataColumnSidecarsByRangeTopicV1)
+		p2p, other := testp2p.NewTestP2P(t), testp2p.NewTestP2P(t)
+		p2p.Connect(other)
+
+		other.SetStreamHandler(protocol, func(stream network.Stream) {
+			receivedRequest := new(ethpb.DataColumnSidecarsByRangeRequest)
+			err := other.Encoding().DecodeWithMaxLength(stream, receivedRequest)
+			assert.NoError(t, err)
+			assert.DeepEqual(t, expectedRequest, receivedRequest)
+
+			err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), expectedResponsePb)
+			assert.NoError(t, err)
+
+			err = stream.CloseWrite()
+			assert.NoError(t, err)
+		})
+
+		params := DataColumnSidecarsParams{
+			Ctx:         t.Context(),
+			Tor:         clock,
+			P2P:         p2p,
+			CtxMap:      ctxMap,
+			RateLimiter: leakybucket.NewCollector(1., 1, time.Second, false /* deleteEmptyBuckets */),
+		}
+
+		actualResponse, err := sendDataColumnSidecarsRequest(params, slotByRoot, slotsWithCommitments, other.PeerID(), indicesByRoot)
+		require.NoError(t, err)
+		require.DeepEqual(t, expectedResponse, actualResponse[0])
+	})
+
+	t.Run("non contiguous", func(t *testing.T) {
+		indicesByRoot := map[[fieldparams.RootLength]byte]map[uint64]bool{
+			expectedResponse.BlockRoot(): {1: true, 2: true},
+			{4}:                          {1: true, 2: true},
+			{7}:                          {1: true, 2: true},
+		}
+
+		slotByRoot := map[[fieldparams.RootLength]byte]primitives.Slot{
+			expectedResponse.BlockRoot(): 1,
+			{4}:                          4,
+			{7}:                          7,
+		}
+
+		slotsWithCommitments := map[primitives.Slot]bool{
+			1: true,
+			3: true,
+			4: true,
+			7: true,
+		}
+
+		roots := [...][fieldparams.RootLength]byte{expectedResponse.BlockRoot(), {4}, {7}}
+
+		expectedRequest := &p2ptypes.DataColumnsByRootIdentifiers{
+			{
+				BlockRoot: roots[0][:],
+				Columns:   []uint64{1, 2},
+			},
+			{
+				BlockRoot: roots[1][:],
+				Columns:   []uint64{1, 2},
+			},
+			{
+				BlockRoot: roots[2][:],
+				Columns:   []uint64{1, 2},
+			},
+		}
+
+		protocol := fmt.Sprintf("%s/ssz_snappy", p2p.RPCDataColumnSidecarsByRootTopicV1)
+		p2p, other := testp2p.NewTestP2P(t), testp2p.NewTestP2P(t)
+		p2p.Connect(other)
+
+		clock := startup.NewClock(time.Now(), [fieldparams.RootLength]byte{})
+
+		other.SetStreamHandler(protocol, func(stream network.Stream) {
+			receivedRequest := new(p2ptypes.DataColumnsByRootIdentifiers)
+			err := other.Encoding().DecodeWithMaxLength(stream, receivedRequest)
+			assert.NoError(t, err)
+			assert.DeepEqual(t, *expectedRequest, *receivedRequest)
+
+			err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), expectedResponsePb)
+			assert.NoError(t, err)
+
+			err = stream.CloseWrite()
+			assert.NoError(t, err)
+		})
+
+		params := DataColumnSidecarsParams{
+			Ctx:         t.Context(),
+			Tor:         clock,
+			P2P:         p2p,
+			CtxMap:      ctxMap,
+			RateLimiter: leakybucket.NewCollector(1., 1, time.Second, false /* deleteEmptyBuckets */),
+		}
+
+		actualResponse, err := sendDataColumnSidecarsRequest(params, slotByRoot, slotsWithCommitments, other.PeerID(), indicesByRoot)
+		require.NoError(t, err)
+		require.DeepEqual(t, expectedResponse, actualResponse[0])
+	})
+}
 
 func TestBuildByRangeRequests(t *testing.T) {
 	const nullBatchSize = 0

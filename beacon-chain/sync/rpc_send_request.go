@@ -617,11 +617,11 @@ func isSidecarIndexRootRequested(request p2ptypes.DataColumnsByRootIdentifiers) 
 		indices, ok := columnsIndexFromRoot[root]
 
 		if !ok {
-			return errors.Errorf("root #%x returned by peer but not requested", root)
+			return errors.Errorf("root %#x returned by peer but not requested", root)
 		}
 
 		if !indices[index] {
-			return errors.Errorf("index %d for root #%x returned by peer but not requested", index, root)
+			return errors.Errorf("index %d for root %#x returned by peer but not requested", index, root)
 		}
 
 		return nil
