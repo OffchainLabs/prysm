@@ -196,6 +196,7 @@ func (s *Service) Start() {
 
 	if err := s.fetchOriginSidecars(peers); err != nil {
 		log.WithError(err).Error("Error fetching origin sidecars")
+		return
 	}
 	if err := s.roundRobinSync(); err != nil {
 		if errors.Is(s.ctx.Err(), context.Canceled) {
