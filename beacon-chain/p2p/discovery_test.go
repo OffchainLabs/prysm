@@ -68,7 +68,7 @@ func createTestNodeWithID(t *testing.T, id string) *enode.LocalNode {
 	seedBytes := h.Sum(nil)
 	
 	// Create a deterministic reader using the seed
-	deterministicReader := strings.NewReader(string(seedBytes))
+	deterministicReader := bytes.NewReader(seedBytes)
 
 	// Generate the private key using the same approach as the production code
 	privKey, _, err := crypto.GenerateSecp256k1Key(deterministicReader)
