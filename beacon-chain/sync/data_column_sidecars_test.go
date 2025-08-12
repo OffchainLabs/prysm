@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	testp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
@@ -26,6 +27,33 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
+
+func TestCategorizeIndices(t *testing.T) {
+	storage := filesystem.NewEphemeralDataColumnStorage(t)
+
+	_, verifiedRoSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, []util.DataColumnParam{
+		{Slot: 1, Index: 12, Column: [][]byte{{1}, {2}, {3}}},
+		{Slot: 1, Index: 14, Column: [][]byte{{1}, {2}, {3}}},
+	})
+
+	err := storage.Save(verifiedRoSidecars)
+	require.NoError(t, err)
+
+	expectedToQuery := map[uint64]bool{13: true}
+	expectedStored := map[uint64]bool{12: true, 14: true}
+
+	actualToQuery, actualStored := categorizeIndices(storage, verifiedRoSidecars[0].BlockRoot(), []uint64{12, 13, 14})
+
+	require.Equal(t, len(expectedToQuery), len(actualToQuery))
+	require.Equal(t, len(expectedStored), len(actualStored))
+
+	for index := range expectedToQuery {
+		require.Equal(t, true, actualToQuery[index])
+	}
+	for index := range expectedStored {
+		require.Equal(t, true, actualStored[index])
+	}
+}
 
 func TestSelectPeers(t *testing.T) {
 	const (
