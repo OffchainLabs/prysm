@@ -26,6 +26,33 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
+func TestUpdateResults(t *testing.T) {
+	_, verifiedSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, []util.DataColumnParam{
+		{Slot: 1, Index: 12, Column: [][]byte{{1}, {2}, {3}}},
+		{Slot: 1, Index: 13, Column: [][]byte{{1}, {2}, {3}}},
+		{Slot: 2, Index: 13, Column: [][]byte{{1}, {2}, {3}}},
+		{Slot: 2, Index: 14, Column: [][]byte{{1}, {2}, {3}}},
+	})
+
+	missingIndicesByRoot := map[[fieldparams.RootLength]byte]map[uint64]bool{
+		verifiedSidecars[0].BlockRoot(): {12: true, 13: true},
+		verifiedSidecars[2].BlockRoot(): {13: true, 14: true, 15: true},
+	}
+
+	expectedMissingIndicesByRoot := map[[fieldparams.RootLength]byte]map[uint64]bool{
+		verifiedSidecars[2].BlockRoot(): {15: true},
+	}
+
+	expectedVerifiedSidecarsByRoot := map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn{
+		verifiedSidecars[0].BlockRoot(): {verifiedSidecars[0], verifiedSidecars[1]},
+		verifiedSidecars[2].BlockRoot(): {verifiedSidecars[2], verifiedSidecars[3]},
+	}
+
+	actualMissingIndicesByRoot, actualVerifiedSidecarsByRoot := updateResults(verifiedSidecars, missingIndicesByRoot)
+	require.DeepEqual(t, expectedMissingIndicesByRoot, actualMissingIndicesByRoot)
+	require.DeepEqual(t, expectedVerifiedSidecarsByRoot, actualVerifiedSidecarsByRoot)
+}
+
 func TestFetchDataColumnSidecarsFromPeers(t *testing.T) {
 	const count = 4
 
