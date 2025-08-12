@@ -225,7 +225,6 @@ func (s *Service) findPeersWithSubnets(
 			}
 		}
 	}
-	}
 
 	// Convert the map to a slice.
 	peersToDial := make([]*enode.Node, 0, len(nodeByNodeID))
