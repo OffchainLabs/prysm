@@ -2,6 +2,7 @@ package altair
 
 import (
 	"context"
+	"math/big"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/epoch/precompute"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
@@ -295,6 +296,26 @@ func AttestationsDelta(beaconState state.BeaconState, bal *precompute.Balance, v
 	return attDeltas, nil
 }
 
+// safeMul3Div2 returns floor((a * b * c) / (d * e)) without uint64 overflow.
+func safeMul3Div2(a, b, c, d, e uint64) uint64 {
+	if a == 0 || b == 0 || c == 0 {
+		return 0
+	}
+	var A, B, C, D, E big.Int
+	A.SetUint64(a)
+	B.SetUint64(b)
+	C.SetUint64(c)
+	D.SetUint64(d)
+	E.SetUint64(e)
+
+	num := new(big.Int).Mul(&A, &B)
+	num.Mul(num, &C)
+	den := new(big.Int).Mul(&D, &E)
+	num.Quo(num, den) // floor division, matches original integer semantics
+
+	return num.Uint64()
+}
+
 func attestationDelta(
 	bal *precompute.Balance,
 	val *precompute.Validator,
@@ -317,31 +338,35 @@ func attestationDelta(
 	tgtWeight := cfg.TimelyTargetWeight
 	headWeight := cfg.TimelyHeadWeight
 	attDelta := &AttDelta{}
-	// Process source reward / penalty
+	
+	// Source reward / penalty
 	if val.IsPrevEpochSourceAttester && !val.IsSlashed {
 		if !inactivityLeak {
-			n := baseReward * srcWeight * (bal.PrevEpochAttested / increment)
-			attDelta.SourceReward += n / (activeIncrement * weightDenominator)
+			attDelta.SourceReward += safeMul3Div2(
+				baseReward, srcWeight, bal.PrevEpochAttested/increment,
+				activeIncrement, weightDenominator)
 		}
 	} else {
 		attDelta.SourcePenalty += baseReward * srcWeight / weightDenominator
 	}
 
-	// Process target reward / penalty
+	// Target reward / penalty
 	if val.IsPrevEpochTargetAttester && !val.IsSlashed {
 		if !inactivityLeak {
-			n := baseReward * tgtWeight * (bal.PrevEpochTargetAttested / increment)
-			attDelta.TargetReward += n / (activeIncrement * weightDenominator)
+			attDelta.TargetReward += safeMul3Div2(
+				baseReward, tgtWeight, bal.PrevEpochTargetAttested/increment,
+				activeIncrement, weightDenominator)
 		}
 	} else {
 		attDelta.TargetPenalty += baseReward * tgtWeight / weightDenominator
 	}
 
-	// Process head reward / penalty
+	// Head reward / penalty
 	if val.IsPrevEpochHeadAttester && !val.IsSlashed {
 		if !inactivityLeak {
-			n := baseReward * headWeight * (bal.PrevEpochHeadAttested / increment)
-			attDelta.HeadReward += n / (activeIncrement * weightDenominator)
+			attDelta.HeadReward += safeMul3Div2(
+				baseReward, headWeight, bal.PrevEpochHeadAttested/increment,
+				activeIncrement, weightDenominator)
 		}
 	}
 
