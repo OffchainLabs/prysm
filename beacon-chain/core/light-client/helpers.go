@@ -3,7 +3,6 @@ package light_client
 import (
 	"context"
 	"fmt"
-	"sort"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -241,28 +240,4 @@ func emptyPayloadProof() [][]byte {
 		proof[i] = b[:]
 	}
 	return proof
-}
-
-func contains(slice []uint64, val uint64) bool {
-	for _, x := range slice {
-		if x == val {
-			return true
-		}
-	}
-	return false
-}
-
-func appendAndSortUnique(s []uint64, v uint64) []uint64 {
-	// check existence
-	for _, x := range s {
-		if x == v {
-			return s
-		}
-	}
-	// not found → append + sort
-	s = append(s, v)
-	sort.Slice(s, func(i, j int) bool {
-		return s[i] < s[j]
-	})
-	return s
 }
