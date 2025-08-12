@@ -1,3 +1,3 @@
 ### Fixed
 
-- fixing find peer functions regression introduced in PR#15471 for skipping existing nodes with equal sequence and not reducing peer count on existing with more sequence.
+- Fixed regression in find peer functions introduced in PR#15471, where nodes with equal sequence numbers were incorrectly skipped and the peer count was incorrectly reduced when replacing nodes with higher sequence numbers.
