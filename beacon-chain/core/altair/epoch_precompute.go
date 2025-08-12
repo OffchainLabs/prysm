@@ -338,7 +338,7 @@ func attestationDelta(
 	tgtWeight := cfg.TimelyTargetWeight
 	headWeight := cfg.TimelyHeadWeight
 	attDelta := &AttDelta{}
-	
+
 	// Source reward / penalty
 	if val.IsPrevEpochSourceAttester && !val.IsSlashed {
 		if !inactivityLeak {
