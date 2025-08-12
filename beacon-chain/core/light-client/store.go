@@ -296,39 +296,6 @@ func (s *Store) getCacheUpdatesByPeriod(ctx context.Context) (map[uint64]interfa
 	return updatesByPeriod, nil
 }
 
-func (s *Store) SaveLightClientUpdate(ctx context.Context, period uint64, update interfaces.LightClientUpdate) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	oldUpdate, err := s.beaconDB.LightClientUpdate(ctx, period)
-	if err != nil {
-		return errors.Wrapf(err, "could not get current light client update")
-	}
-
-	if oldUpdate == nil {
-		if err := s.beaconDB.SaveLightClientUpdate(ctx, period, update); err != nil {
-			return errors.Wrapf(err, "could not save light client update")
-		}
-		log.WithField("period", period).Debug("Saved new light client update")
-		return nil
-	}
-
-	isNewUpdateBetter, err := IsBetterUpdate(update, oldUpdate)
-	if err != nil {
-		return errors.Wrapf(err, "could not compare light client updates")
-	}
-
-	if isNewUpdateBetter {
-		if err := s.beaconDB.SaveLightClientUpdate(ctx, period, update); err != nil {
-			return errors.Wrapf(err, "could not save light client update")
-		}
-		log.WithField("period", period).Debug("Saved new light client update")
-		return nil
-	}
-	log.WithField("period", period).Debug("New light client update is not better than the current one, skipping save")
-	return nil
-}
-
 func (s *Store) SetLastFinalityUpdate(update interfaces.LightClientFinalityUpdate, broadcast bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

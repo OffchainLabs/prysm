@@ -423,6 +423,16 @@ func TestRPC_LightClientUpdatesByRange(t *testing.T) {
 				require.NoError(t, r.cfg.beaconDB.SaveLightClientUpdate(ctx, uint64(j), update))
 			}
 
+			// save a head block in db
+			blk := util.NewBeaconBlock()
+			blkRoot, err := blk.Block.HashTreeRoot()
+			require.NoError(t, err)
+			util.SaveBlock(t, ctx, d, blk)
+			st, err := util.NewBeaconState()
+			require.NoError(t, err)
+			require.NoError(t, d.SaveState(ctx, st, blkRoot))
+			require.NoError(t, d.SaveHeadBlockRoot(ctx, blkRoot))
+
 			var wg sync.WaitGroup
 			wg.Add(1)
 

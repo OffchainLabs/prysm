@@ -2747,6 +2747,8 @@ func TestProcessLightClientUpdate(t *testing.T) {
 			require.NoError(t, err)
 			err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
 			require.NoError(t, err)
+			err = s.cfg.BeaconDB.SaveHeadBlockRoot(ctx, currentBlockRoot)
+			require.NoError(t, err)
 
 			err = s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock)
 			require.NoError(t, err)
@@ -2778,7 +2780,7 @@ func TestProcessLightClientUpdate(t *testing.T) {
 				oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedBlock)
 				require.NoError(t, err)
 
-				err = s.lcStore.SaveLightClientUpdate(ctx, period, oldUpdate)
+				err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
 				require.NoError(t, err)
 
 				require.NoError(t, s.processLightClientData(cfg))
@@ -2807,7 +2809,7 @@ func TestProcessLightClientUpdate(t *testing.T) {
 					SyncCommitteeSignature: make([]byte, 96),
 				})
 
-				err = s.lcStore.SaveLightClientUpdate(ctx, period, oldUpdate)
+				err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
 				require.NoError(t, err)
 
 				require.NoError(t, s.processLightClientData(cfg))

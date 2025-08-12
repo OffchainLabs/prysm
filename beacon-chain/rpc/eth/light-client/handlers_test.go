@@ -2,6 +2,7 @@ package lightclient
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -14,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/async/event"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	dbtesting "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	p2ptesting "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -189,9 +191,11 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 					LCStore: lightclient.NewLightClientStore(db, &p2ptesting.FakeP2P{}, new(event.Feed)),
 				}
 
+				saveHead(t, ctx, db)
+
 				updatePeriod := startPeriod
 				for _, update := range updates {
-					err := s.LCStore.SaveLightClientUpdate(ctx, updatePeriod, update)
+					err := db.SaveLightClientUpdate(ctx, updatePeriod, update)
 					require.NoError(t, err)
 					updatePeriod++
 				}
@@ -330,6 +334,8 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 					LCStore: lightclient.NewLightClientStore(db, &p2ptesting.FakeP2P{}, new(event.Feed)),
 				}
 
+				saveHead(t, ctx, db)
+
 				updates := make([]interfaces.LightClientUpdate, 2)
 
 				updatePeriod := firstForkSlot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
@@ -339,7 +345,7 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 				updates[0], err = createUpdate(t, testVersion)
 				require.NoError(t, err)
 
-				err = s.LCStore.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[0])
+				err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[0])
 				require.NoError(t, err)
 
 				updatePeriod = secondForkSlot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
@@ -347,7 +353,7 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 				updates[1], err = createUpdate(t, testVersion+1)
 				require.NoError(t, err)
 
-				err = s.LCStore.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[1])
+				err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[1])
 				require.NoError(t, err)
 
 				t.Run("json", func(t *testing.T) {
@@ -450,6 +456,8 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 			LCStore: lightclient.NewLightClientStore(db, &p2ptesting.FakeP2P{}, new(event.Feed)),
 		}
 
+		saveHead(t, ctx, db)
+
 		updates := make([]interfaces.LightClientUpdate, 3)
 
 		updatePeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
@@ -458,7 +466,7 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 			updates[i], err = createUpdate(t, version.Altair)
 			require.NoError(t, err)
 
-			err = s.LCStore.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[i])
+			err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[i])
 			require.NoError(t, err)
 
 			updatePeriod++
@@ -497,6 +505,8 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 			LCStore: lightclient.NewLightClientStore(db, &p2ptesting.FakeP2P{}, new(event.Feed)),
 		}
 
+		saveHead(t, ctx, db)
+
 		updates := make([]interfaces.LightClientUpdate, 3)
 
 		updatePeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
@@ -506,7 +516,7 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 			updates[i], err = createUpdate(t, version.Altair)
 			require.NoError(t, err)
 
-			err = s.LCStore.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[i])
+			err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[i])
 			require.NoError(t, err)
 
 			updatePeriod++
@@ -536,6 +546,9 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 	})
 
 	t.Run("start period before altair", func(t *testing.T) {
+		config.AltairForkEpoch = 1
+		params.OverrideBeaconConfig(config)
+
 		db := dbtesting.SetupDB(t)
 		s := &Server{
 			LCStore: lightclient.NewLightClientStore(db, &p2ptesting.FakeP2P{}, new(event.Feed)),
@@ -548,11 +561,10 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 
 		s.GetLightClientUpdatesByRange(writer, request)
 
-		require.Equal(t, http.StatusOK, writer.Code)
-		var resp structs.LightClientUpdatesByRangeResponse
-		err := json.Unmarshal(writer.Body.Bytes(), &resp.Updates)
-		require.NoError(t, err)
-		require.Equal(t, 0, len(resp.Updates))
+		require.Equal(t, http.StatusBadRequest, writer.Code)
+
+		config.AltairForkEpoch = 0
+		params.OverrideBeaconConfig(config)
 	})
 
 	t.Run("missing updates", func(t *testing.T) {
@@ -563,6 +575,8 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 			s := &Server{
 				LCStore: lightclient.NewLightClientStore(db, &p2ptesting.FakeP2P{}, new(event.Feed)),
 			}
+
+			saveHead(t, ctx, db)
 
 			updates := make([]interfaces.LightClientUpdate, 3)
 
@@ -577,7 +591,7 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 				updates[i], err = createUpdate(t, version.Altair)
 				require.NoError(t, err)
 
-				err = s.LCStore.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[i])
+				err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[i])
 				require.NoError(t, err)
 
 				updatePeriod++
@@ -608,6 +622,8 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 				LCStore: lightclient.NewLightClientStore(db, &p2ptesting.FakeP2P{}, new(event.Feed)),
 			}
 
+			saveHead(t, ctx, db)
+
 			updates := make([]interfaces.LightClientUpdate, 3)
 
 			updatePeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
@@ -622,7 +638,7 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 				updates[i], err = createUpdate(t, version.Altair)
 				require.NoError(t, err)
 
-				err = s.LCStore.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[i])
+				err = db.SaveLightClientUpdate(ctx, uint64(updatePeriod), updates[i])
 				require.NoError(t, err)
 
 				updatePeriod++
@@ -983,4 +999,15 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 	require.NoError(t, update.SetFinalizedHeader(header))
 
 	return update, nil
+}
+
+func saveHead(t *testing.T, ctx context.Context, d db.Database) {
+	blk := util.NewBeaconBlock()
+	blkRoot, err := blk.Block.HashTreeRoot()
+	require.NoError(t, err)
+	util.SaveBlock(t, ctx, d, blk)
+	st, err := util.NewBeaconState()
+	require.NoError(t, err)
+	require.NoError(t, d.SaveState(ctx, st, blkRoot))
+	require.NoError(t, d.SaveHeadBlockRoot(ctx, blkRoot))
 }

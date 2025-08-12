@@ -155,6 +155,7 @@ go_test(
         "//beacon-chain/das:go_default_library",
         "//beacon-chain/db:go_default_library",
         "//beacon-chain/db/filesystem:go_default_library",
+        "//beacon-chain/db/filters:go_default_library",
         "//beacon-chain/db/testing:go_default_library",
         "//beacon-chain/execution:go_default_library",
         "//beacon-chain/execution/testing:go_default_library",

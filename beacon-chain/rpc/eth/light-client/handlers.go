@@ -90,6 +90,11 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 		return
 	}
 
+	if startPeriod*uint64(config.EpochsPerSyncCommitteePeriod) < uint64(config.AltairForkEpoch) {
+		httputil.HandleError(w, "Invalid 'start_period': before Altair fork", http.StatusBadRequest)
+		return
+	}
+
 	endPeriod := startPeriod + count - 1
 
 	// get updates
