@@ -386,11 +386,14 @@ func (s *Service) processBatchedBlocks(ctx context.Context, bwb []blocks.BlockWi
 	blocksWithBlobs := bwb[:firstFuluIndex]
 	blocksWithDataColumns := bwb[firstFuluIndex:]
 
-	if err := s.processBlocksWithBlobs(ctx, blocksWithBlobs, bFunc, firstBlock); err != nil {
+		preFulu = append(preFulu, blockWithSidecars)
+	}
+
+	if err := s.processBlocksWithBlobs(ctx, preFulu, bFunc, firstBlock); err != nil {
 		return 0, errors.Wrap(err, "processing blocks with blobs")
 	}
 
-	if err := s.processBlocksWithDataColumns(ctx, blocksWithDataColumns, bFunc, firstBlock); err != nil {
+	if err := s.processBlocksWithDataColumns(ctx, postFulu, bFunc, firstBlock); err != nil {
 		return 0, errors.Wrap(err, "processing blocks with data columns")
 	}
 
