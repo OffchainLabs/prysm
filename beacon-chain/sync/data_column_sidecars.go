@@ -750,7 +750,7 @@ func randomPeer(
 	randomSource *rand.Rand,
 	rateLimiter *leakybucket.Collector,
 	count int,
-	indicesByRootByPeer map[goPeer.ID]map[[32]byte]map[uint64]bool,
+	indicesByRootByPeer map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool,
 ) (goPeer.ID, error) {
 	const waitPeriod = 5 * time.Second
 
@@ -786,7 +786,7 @@ func randomPeer(
 
 // copyIndicesByRootByPeer creates a deep copy of the given nested map.
 // Returns a new map with the same structure and contents.
-func copyIndicesByRootByPeer(original map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool) map[goPeer.ID]map[[32]byte]map[uint64]bool {
+func copyIndicesByRootByPeer(original map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool) map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool {
 	copied := make(map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool, len(original))
 	for peer, indicesByRoot := range original {
 		copied[peer] = copyIndicesByRoot(indicesByRoot)
