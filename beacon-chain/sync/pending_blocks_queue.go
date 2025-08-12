@@ -200,6 +200,18 @@ var errNoPeersForPending = errors.New("no suitable peers to process pending bloc
 // processAndBroadcastBlock validates, processes, and broadcasts a block.
 // Part of the function is to request missing sidecars from peers if the block contains kzg commitments.
 func (s *Service) processAndBroadcastBlock(ctx context.Context, b interfaces.ReadOnlySignedBeaconBlock, blkRoot [fieldparams.RootLength]byte) error {
+	if err := s.processBlock(ctx, b, blkRoot); err != nil {
+		return errors.Wrap(err, "process block")
+	}
+
+	if err := s.receiveAndBroadCastBlock(ctx, b, blkRoot, b.Block().Slot()); err != nil {
+		return errors.Wrap(err, "receive and broadcast block")
+	}
+
+	return nil
+}
+
+func (s *Service) processBlock(ctx context.Context, b interfaces.ReadOnlySignedBeaconBlock, blkRoot [fieldparams.RootLength]byte) error {
 	blockSlot := b.Block().Slot()
 
 	if err := s.validateBeaconBlock(ctx, b, blkRoot); err != nil {
@@ -221,17 +233,13 @@ func (s *Service) processAndBroadcastBlock(ctx context.Context, b interfaces.Rea
 			return errors.Wrap(err, "request and save missing data column sidecars")
 		}
 
-		if err := s.receiveAndBroadCastBlock(ctx, b, blkRoot, blockSlot); err != nil {
-			return errors.Wrap(err, "receive and broadcast block")
-		}
-
 		return nil
 	}
 
 	if blockEpoch >= denebForkEpoch {
 		request, err := s.pendingBlobsRequestForBlock(blkRoot, b)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "pending blobs request for block")
 		}
 
 		if len(request) > 0 {
@@ -243,19 +251,11 @@ func (s *Service) processAndBroadcastBlock(ctx context.Context, b interfaces.Rea
 			}
 
 			if err := s.sendAndSaveBlobSidecars(ctx, request, peers[rand.NewGenerator().Int()%peerCount], b); err != nil {
-				return err
+				return errors.Wrap(err, "send and save blob sidecars")
 			}
 		}
 
-		if err := s.receiveAndBroadCastBlock(ctx, b, blkRoot, blockSlot); err != nil {
-			return errors.Wrap(err, "receive and broadcast block")
-		}
-
 		return nil
-	}
-
-	if err := s.receiveAndBroadCastBlock(ctx, b, blkRoot, blockSlot); err != nil {
-		return errors.Wrap(err, "receive and broadcast block")
 	}
 
 	return nil
