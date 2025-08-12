@@ -569,8 +569,7 @@ func fetchDataColumnSidecarsFromPeers(
 	indicesByRootByPeer map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool,
 ) map[goPeer.ID][]blocks.RODataColumn {
 	var (
-		wg sync.WaitGroup
-
+		wg  sync.WaitGroup
 		mut sync.Mutex
 	)
 
