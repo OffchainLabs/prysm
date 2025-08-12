@@ -45,6 +45,9 @@ func (cs *columnBatch) needed() peerdas.ColumnIndices {
 	// avoid iterating every single block+index by only searching for indices
 	// we haven't found yet.
 	for _, v := range cs.blockColumnsByRoot {
+		if len(search) == 0 {
+			return ci
+		}
 		for col := range search {
 			if v.remaining[col] {
 				ci[col] = true
@@ -217,9 +220,11 @@ func buildColumnBatch(b batch, fuluBlocks verifiedROBlocks, p p2p.P2P) (*columnB
 		})
 		fuluBlocks = fuluBlocks[fuluStart:]
 	}
-	// Get the custody group sampling size for the node.
-	//custodyGroupSamplingSize := ci.CustodyGroupSamplingSize(peerdas.Actual)
-	peerInfo, _, err := peerdas.Info(p.NodeID(), p.CustodyGroupCount())
+
+	// Note that in the case where custody_group_count is the minimum CUSTODY_REQUIREMENT, we will
+	// still download the extra columns dictated by SAMPLES_PER_SLOT. This is a hack to avoid complexity in the DA check.
+	// We may want to revisit this to reduce bandwidth and storage for nodes with 0 validators attached.
+	peerInfo, _, err := peerdas.Info(p.NodeID(), max(p.CustodyGroupCount(), params.BeaconConfig().SamplesPerSlot))
 	if err != nil {
 		return nil, errors.Wrap(err, "peer info")
 	}
