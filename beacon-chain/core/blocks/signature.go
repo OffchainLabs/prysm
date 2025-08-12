@@ -11,7 +11,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -101,7 +100,7 @@ func VerifyBlockHeaderSignature(beaconState state.BeaconState, header *ethpb.Sig
 // via the respective epoch.
 func VerifyBlockSignatureUsingCurrentFork(beaconState state.ReadOnlyBeaconState, blk interfaces.ReadOnlySignedBeaconBlock, blkRoot [32]byte) error {
 	currentEpoch := slots.ToEpoch(blk.Block().Slot())
-	fork, err := forks.Fork(currentEpoch)
+	fork, err := params.Fork(currentEpoch)
 	if err != nil {
 		return err
 	}

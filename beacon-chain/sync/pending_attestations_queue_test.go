@@ -263,31 +263,23 @@ func TestProcessPendingAtts_HasBlockSaveUnaggregatedAttElectra(t *testing.T) {
 func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra_VerifyAlreadySeen(t *testing.T) {
 	// Setup configuration and fork version schedule.
 	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig()
-	fvs := map[[fieldparams.VersionLength]byte]primitives.Epoch{
-		bytesutil.ToBytes4(cfg.GenesisForkVersion):   1,
-		bytesutil.ToBytes4(cfg.AltairForkVersion):    2,
-		bytesutil.ToBytes4(cfg.BellatrixForkVersion): 3,
-		bytesutil.ToBytes4(cfg.CapellaForkVersion):   4,
-		bytesutil.ToBytes4(cfg.DenebForkVersion):     5,
-		bytesutil.ToBytes4(cfg.FuluForkVersion):      6,
-		bytesutil.ToBytes4(cfg.ElectraForkVersion):   0,
-	}
-	cfg.ForkVersionSchedule = fvs
-	params.OverrideBeaconConfig(cfg)
+	params.BeaconConfig().InitializeForkSchedule()
 
 	// Initialize logging, database, and P2P components.
 	hook := logTest.NewGlobal()
 	db := dbtest.SetupDB(t)
 	p1 := p2ptest.NewTestP2P(t)
 	validators := uint64(256)
+	currentSlot := 1 + (primitives.Slot(params.BeaconConfig().ElectraForkEpoch) * params.BeaconConfig().SlotsPerEpoch)
+	genesisOffset := time.Duration(currentSlot) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+	clock := startup.NewClock(time.Now().Add(-1*genesisOffset), params.BeaconConfig().GenesisValidatorsRoot)
 
 	// Create genesis state and associated keys.
 	beaconState, privKeys := util.DeterministicGenesisStateElectra(t, validators)
-	require.NoError(t, beaconState.SetSlot(1))
+	require.NoError(t, beaconState.SetSlot(clock.CurrentSlot()))
 
-	// Create and save a new Beacon block.
 	sb := util.NewBeaconBlockElectra()
+	sb.Block.Slot = clock.CurrentSlot()
 	util.SaveBlock(t, t.Context(), db, sb)
 
 	// Save state with block root.
@@ -298,10 +290,10 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra_VerifyAlreadySeen
 	att := &ethpb.SingleAttestation{
 		CommitteeId: 8, // choose a non 0
 		Data: &ethpb.AttestationData{
-			Slot:            1,
+			Slot:            clock.CurrentSlot(),
 			BeaconBlockRoot: root[:],
-			Source:          &ethpb.Checkpoint{Epoch: 0, Root: make([]byte, fieldparams.RootLength)},
-			Target:          &ethpb.Checkpoint{Epoch: 0, Root: root[:]},
+			Source:          &ethpb.Checkpoint{Epoch: clock.CurrentEpoch() - 1, Root: make([]byte, fieldparams.RootLength)},
+			Target:          &ethpb.Checkpoint{Epoch: clock.CurrentEpoch(), Root: root[:]},
 			CommitteeIndex:  0,
 		},
 	}
@@ -312,7 +304,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra_VerifyAlreadySeen
 	att.AttesterIndex = committee[0]
 
 	// Compute attester domain and signature.
-	attesterDomain, err := signing.Domain(beaconState.Fork(), 0, params.BeaconConfig().DomainBeaconAttester, beaconState.GenesisValidatorsRoot())
+	attesterDomain, err := signing.Domain(beaconState.Fork(), clock.CurrentEpoch(), params.BeaconConfig().DomainBeaconAttester, beaconState.GenesisValidatorsRoot())
 	require.NoError(t, err)
 	hashTreeRoot, err := signing.ComputeSigningRoot(att.Data, attesterDomain)
 	assert.NoError(t, err)
@@ -327,7 +319,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra_VerifyAlreadySeen
 		State:   beaconState,
 		FinalizedCheckPoint: &ethpb.Checkpoint{
 			Root:  att.Data.BeaconBlockRoot,
-			Epoch: 0,
+			Epoch: clock.CurrentEpoch() - 2,
 		},
 	}
 
@@ -348,7 +340,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra_VerifyAlreadySeen
 			p2p:                 p1,
 			beaconDB:            db,
 			chain:               chain,
-			clock:               startup.NewClock(chain.Genesis.Add(time.Duration(-1*int(params.BeaconConfig().SecondsPerSlot))*time.Second), chain.ValidatorsRoot),
+			clock:               clock,
 			attPool:             attestations.NewPool(),
 			attestationNotifier: &mock.SimpleNotifier{Feed: opn},
 		},
@@ -359,7 +351,8 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra_VerifyAlreadySeen
 	go r.verifierRoutine()
 
 	// Save a new beacon state and link it with the block root.
-	s, err := util.NewBeaconStateElectra()
+	slotOpt := func(s *ethpb.BeaconStateElectra) error { s.Slot = clock.CurrentSlot(); return nil }
+	s, err := util.NewBeaconStateElectra(slotOpt)
 	require.NoError(t, err)
 	require.NoError(t, r.cfg.beaconDB.SaveState(t.Context(), s, root))
 

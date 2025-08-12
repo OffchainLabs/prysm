@@ -22,11 +22,11 @@ import (
 )
 
 type testSetup struct {
-	service     *Service
-	p2pService  *p2ptest.TestP2P
-	beaconDB    db.Database
-	ctx         context.Context
-	initialSlot primitives.Slot
+	service      *Service
+	p2pService   *p2ptest.TestP2P
+	beaconDB     db.Database
+	ctx          context.Context
+	initialSlot  primitives.Slot
 	initialCount uint64
 }
 
@@ -34,7 +34,7 @@ func setupCustodyTest(t *testing.T, withChain bool) *testSetup {
 	ctx := t.Context()
 	p2pService := p2ptest.NewTestP2P(t)
 	beaconDB := dbtesting.SetupDB(t)
-	
+
 	const (
 		initialEarliestSlot = primitives.Slot(50)
 		initialCustodyCount = uint64(5)
@@ -123,7 +123,7 @@ func TestUpdateCustodyInfoIfNeeded(t *testing.T) {
 
 	t.Run("Skip update when actual custody count >= target", func(t *testing.T) {
 		setup := setupCustodyTest(t, false)
-		
+
 		err := setup.service.updateCustodyInfoIfNeeded()
 		require.NoError(t, err)
 

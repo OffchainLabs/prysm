@@ -27,7 +27,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
@@ -320,8 +319,8 @@ func Test_wrapAndReportValidation(t *testing.T) {
 		Genesis:        time.Now(),
 		ValidatorsRoot: [32]byte{0x01},
 	}
-	fd, err := forks.CreateForkDigest(mChain.GenesisTime(), mChain.ValidatorsRoot[:])
-	assert.NoError(t, err)
+	clock := startup.NewClock(mChain.Genesis, mChain.ValidatorsRoot)
+	fd := params.ForkDigest(clock.CurrentEpoch())
 	mockTopic := fmt.Sprintf(p2p.BlockSubnetTopicFormat, fd) + encoder.SszNetworkEncoder{}.ProtocolSuffix()
 	type args struct {
 		topic        string
@@ -561,26 +560,21 @@ func TestSubscribeWithSyncSubnets_DynamicOK(t *testing.T) {
 
 func TestSubscribeWithSyncSubnets_DynamicSwitchFork(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	p := p2ptest.NewTestP2P(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.AltairForkEpoch = 1
-	cfg.SecondsPerSlot = 1
-	cfg.SlotsPerEpoch = 4
-	params.OverrideBeaconConfig(cfg)
 	params.BeaconConfig().InitializeForkSchedule()
+	p := p2ptest.NewTestP2P(t)
 	ctx, cancel := context.WithCancel(t.Context())
-	currSlot := primitives.Slot(100)
-	gt := time.Now().Add(-time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
-	vr := [32]byte{'A'}
+	defer cancel()
+	vr := params.BeaconConfig().GenesisValidatorsRoot
+	mockNow := &startup.MockNower{}
+	clock := startup.NewClock(time.Now(), vr, startup.WithNower(mockNow.Now))
+	denebSlot, err := slots.EpochStart(params.BeaconConfig().DenebForkEpoch)
+	require.NoError(t, err)
+	mockNow.SetSlot(t, clock, denebSlot)
 	r := Service{
 		ctx: ctx,
 		cfg: &config{
-			chain: &mockChain.ChainService{
-				Genesis:        gt,
-				ValidatorsRoot: vr,
-				Slot:           &currSlot,
-			},
-			clock: startup.NewClock(gt, vr),
+			chain: &mockChain.ChainService{},
+			clock: clock,
 			p2p:   p,
 		},
 		chainStarted: abool.New(),
@@ -589,16 +583,19 @@ func TestSubscribeWithSyncSubnets_DynamicSwitchFork(t *testing.T) {
 	// Empty cache at the end of the test.
 	defer cache.SyncSubnetIDs.EmptyAllCaches()
 	cache.SyncSubnetIDs.AddSyncCommitteeSubnets([]byte("pubkey"), 0, []uint64{0, 1}, 10*time.Second)
-	genRoot := r.cfg.clock.GenesisValidatorsRoot()
-	digest, err := signing.ComputeForkDigest(params.BeaconConfig().GenesisForkVersion, genRoot[:])
-	assert.NoError(t, err)
+	digest := params.ForkDigest(r.cfg.clock.CurrentEpoch())
+	version, e, err := params.ForkDataFromDigest(digest)
+	require.NoError(t, err)
+	require.Equal(t, [4]byte(params.BeaconConfig().DenebForkVersion), version)
+	require.Equal(t, params.BeaconConfig().DenebForkEpoch, e)
 
-	r.subscribeWithParameters(subscribeParameters{
-		topicFormat:      p2p.SyncCommitteeSubnetTopicFormat,
-		digest:           digest,
-		getSubnetsToJoin: r.activeSyncSubnetIndices,
-	})
-	time.Sleep(2 * time.Second)
+	sp := subscribeToSubnetsParameters{
+		subscriptionBySubnet: make(map[uint64]*pubsub.Subscription),
+		topicFormat:          p2p.SyncCommitteeSubnetTopicFormat,
+		digest:               digest,
+		getSubnetsToJoin:     r.activeSyncSubnetIndices,
+	}
+	require.NoError(t, r.subscribeToSubnets(sp))
 	assert.Equal(t, 2, len(r.cfg.p2p.PubSub().GetTopics()))
 	topicMap := map[string]bool{}
 	for _, t := range r.cfg.p2p.PubSub().GetTopics() {
@@ -610,25 +607,37 @@ func TestSubscribeWithSyncSubnets_DynamicSwitchFork(t *testing.T) {
 	secondSub := fmt.Sprintf(p2p.SyncCommitteeSubnetTopicFormat, digest, 1) + r.cfg.p2p.Encoding().ProtocolSuffix()
 	assert.Equal(t, true, topicMap[secondSub])
 
-	// Expect that all old topics will be unsubscribed.
-	time.Sleep(2 * time.Second)
-	assert.Equal(t, 0, len(r.cfg.p2p.PubSub().GetTopics()))
+	electraSlot, err := slots.EpochStart(params.BeaconConfig().ElectraForkEpoch)
+	require.NoError(t, err)
+	mockNow.SetSlot(t, clock, electraSlot)
+	digest = params.ForkDigest(r.cfg.clock.CurrentEpoch())
+	version, e, err = params.ForkDataFromDigest(digest)
+	require.NoError(t, err)
+	require.Equal(t, [4]byte(params.BeaconConfig().ElectraForkVersion), version)
+	require.Equal(t, params.BeaconConfig().ElectraForkEpoch, e)
 
-	cancel()
+	sp.digest = digest
+	// clear the cache and re-subscribe to subnets.
+	// this should result in the subscriptions being removed
+	cache.SyncSubnetIDs.EmptyAllCaches()
+	require.NoError(t, r.subscribeToSubnets(sp))
+	assert.Equal(t, 0, len(r.cfg.p2p.PubSub().GetTopics()))
 }
 
 func TestIsDigestValid(t *testing.T) {
-	genRoot := [32]byte{'A'}
-	digest, err := signing.ComputeForkDigest(params.BeaconConfig().GenesisForkVersion, genRoot[:])
+	params.SetupTestConfigCleanup(t)
+	params.BeaconConfig().InitializeForkSchedule()
+	clock := startup.NewClock(time.Now().Add(-100*time.Second), params.BeaconConfig().GenesisValidatorsRoot)
+	digest, err := signing.ComputeForkDigest(params.BeaconConfig().GenesisForkVersion, params.BeaconConfig().GenesisValidatorsRoot[:])
 	assert.NoError(t, err)
-	valid, err := isDigestValid(digest, time.Now().Add(-100*time.Second), genRoot)
+	valid, err := isDigestValid(digest, clock)
 	assert.NoError(t, err)
 	assert.Equal(t, true, valid)
 
 	// Compute future fork digest that will be invalid currently.
-	digest, err = signing.ComputeForkDigest(params.BeaconConfig().AltairForkVersion, genRoot[:])
+	digest, err = signing.ComputeForkDigest(params.BeaconConfig().AltairForkVersion, params.BeaconConfig().GenesisValidatorsRoot[:])
 	assert.NoError(t, err)
-	valid, err = isDigestValid(digest, time.Now().Add(-100*time.Second), genRoot)
+	valid, err = isDigestValid(digest, clock)
 	assert.NoError(t, err)
 	assert.Equal(t, false, valid)
 }

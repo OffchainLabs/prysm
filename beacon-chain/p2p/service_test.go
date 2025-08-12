@@ -9,14 +9,13 @@ import (
 	"time"
 
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	prysmTime "github.com/OffchainLabs/prysm/v6/time"
@@ -85,7 +84,7 @@ func createHost(t *testing.T, port uint) (host.Host, *ecdsa.PrivateKey, net.IP) 
 
 func TestService_Stop_SetsStartedToFalse(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	s, err := NewService(t.Context(), &Config{StateNotifier: &mock.MockStateNotifier{}})
+	s, err := NewService(t.Context(), &Config{StateNotifier: &mock.MockStateNotifier{}, DB: testDB.SetupDB(t)})
 	require.NoError(t, err)
 	s.started = true
 	s.dv5Listener = &mockListener{}
@@ -95,7 +94,7 @@ func TestService_Stop_SetsStartedToFalse(t *testing.T) {
 
 func TestService_Stop_DontPanicIfDv5ListenerIsNotInited(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	s, err := NewService(t.Context(), &Config{StateNotifier: &mock.MockStateNotifier{}})
+	s, err := NewService(t.Context(), &Config{StateNotifier: &mock.MockStateNotifier{}, DB: testDB.SetupDB(t)})
 	require.NoError(t, err)
 	assert.NoError(t, s.Stop())
 }
@@ -110,6 +109,7 @@ func TestService_Start_OnlyStartsOnce(t *testing.T) {
 		TCPPort:     3000,
 		QUICPort:    3000,
 		ClockWaiter: cs,
+		DB:          testDB.SetupDB(t),
 	}
 	s, err := NewService(t.Context(), cfg)
 	require.NoError(t, err)
@@ -159,6 +159,7 @@ func TestService_Start_NoDiscoverFlag(t *testing.T) {
 		StateNotifier: &mock.MockStateNotifier{},
 		NoDiscovery:   true, // <-- no s.dv5Listener is created
 		ClockWaiter:   cs,
+		DB:            testDB.SetupDB(t),
 	}
 	s, err := NewService(t.Context(), cfg)
 	require.NoError(t, err)
@@ -194,6 +195,7 @@ func TestListenForNewNodes(t *testing.T) {
 	)
 
 	params.SetupTestConfigCleanup(t)
+	db := testDB.SetupDB(t)
 
 	// Setup bootnode.
 	cfg := &Config{
@@ -201,6 +203,7 @@ func TestListenForNewNodes(t *testing.T) {
 		PingInterval:         testPingInterval,
 		DisableLivenessCheck: true,
 		UDPPort:              port,
+		DB:                   db,
 	}
 
 	_, pkey := createAddrAndPrivKey(t)
@@ -246,6 +249,7 @@ func TestListenForNewNodes(t *testing.T) {
 			ClockWaiter:          cs,
 			UDPPort:              port + i,
 			TCPPort:              port + i,
+			DB:                   db,
 		}
 
 		h, pkey, ipAddr := createHost(t, port+i)
@@ -340,14 +344,16 @@ func TestPeer_Disconnect(t *testing.T) {
 
 func TestService_JoinLeaveTopic(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
+	params.BeaconConfig().InitializeForkSchedule()
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 	gs := startup.NewClockSynchronizer()
-	s, err := NewService(ctx, &Config{StateNotifier: &mock.MockStateNotifier{}, ClockWaiter: gs})
+	s, err := NewService(ctx, &Config{StateNotifier: &mock.MockStateNotifier{}, ClockWaiter: gs, DB: testDB.SetupDB(t)})
 	require.NoError(t, err)
 
-	go s.awaitStateInitialized()
 	fd := initializeStateWithForkDigest(ctx, t, gs)
+	s.setAllForkDigests()
+	s.awaitStateInitialized()
 
 	assert.Equal(t, 0, len(s.joinedTopics))
 
@@ -376,15 +382,13 @@ func TestService_JoinLeaveTopic(t *testing.T) {
 // digest associated with that genesis event.
 func initializeStateWithForkDigest(_ context.Context, t *testing.T, gs startup.ClockSetter) [4]byte {
 	gt := prysmTime.Now()
-	gvr := bytesutil.ToBytes32(bytesutil.PadTo([]byte("genesis validators root"), 32))
-	require.NoError(t, gs.SetClock(startup.NewClock(gt, gvr)))
-
-	fd, err := forks.CreateForkDigest(gt, gvr[:])
-	require.NoError(t, err)
+	gvr := params.BeaconConfig().GenesisValidatorsRoot
+	clock := startup.NewClock(gt, gvr)
+	require.NoError(t, gs.SetClock(clock))
 
 	time.Sleep(50 * time.Millisecond) // wait for pubsub filter to initialize.
 
-	return fd
+	return params.ForkDigest(clock.CurrentEpoch())
 }
 
 func TestService_connectWithPeer(t *testing.T) {

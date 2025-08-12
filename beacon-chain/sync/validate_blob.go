@@ -7,6 +7,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -34,7 +35,7 @@ func (s *Service) validateBlob(ctx context.Context, pid peer.ID, msg *pubsub.Mes
 		return pubsub.ValidationIgnore, nil
 	}
 	if msg.Topic == nil {
-		return pubsub.ValidationReject, errInvalidTopic
+		return pubsub.ValidationReject, p2p.ErrInvalidTopic
 	}
 	m, err := s.decodePubsubMessage(msg)
 	if err != nil {
@@ -68,7 +69,7 @@ func (s *Service) validateBlob(ctx context.Context, pid peer.ID, msg *pubsub.Mes
 		return pubsub.ValidationIgnore, err
 	}
 
-	startTime, err := slots.StartTime(s.cfg.chain.GenesisTime(), blob.Slot())
+	startTime, err := slots.StartTime(s.cfg.clock.GenesisTime(), blob.Slot())
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}

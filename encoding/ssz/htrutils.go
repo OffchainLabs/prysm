@@ -11,6 +11,12 @@ import (
 	"github.com/pkg/errors"
 )
 
+type Transaction []byte
+
+func (t Transaction) HashTreeRoot() ([32]byte, error) {
+	return ByteSliceRoot(t, fieldparams.MaxBytesPerTxLength)
+}
+
 // Uint64Root computes the HashTreeRoot Merkleization of
 // a simple uint64 value according to the Ethereum
 // Simple Serialize specification.
@@ -21,33 +27,22 @@ func Uint64Root(val uint64) [32]byte {
 	return root
 }
 
-// ForkRoot computes the HashTreeRoot Merkleization of
-// a Fork struct value according to the Ethereum
-// Simple Serialize specification.
+// ForkRoot computes the HashTreeRoot Merkleization of Fork
 func ForkRoot(fork *ethpb.Fork) ([32]byte, error) {
-	fieldRoots := make([][32]byte, 3)
-	if fork != nil {
-		fieldRoots[0] = bytesutil.ToBytes32(fork.PreviousVersion)
-		fieldRoots[1] = bytesutil.ToBytes32(fork.CurrentVersion)
-		forkEpochBuf := make([]byte, 8)
-		binary.LittleEndian.PutUint64(forkEpochBuf, uint64(fork.Epoch))
-		fieldRoots[2] = bytesutil.ToBytes32(forkEpochBuf)
+	if fork == nil {
+		fieldRoots := make([][32]byte, 3)
+		return BitwiseMerkleize(fieldRoots, uint64(len(fieldRoots)), uint64(len(fieldRoots)))
 	}
-	return BitwiseMerkleize(fieldRoots, uint64(len(fieldRoots)), uint64(len(fieldRoots)))
+	return fork.HashTreeRoot()
 }
 
-// CheckpointRoot computes the HashTreeRoot Merkleization of
-// a InitWithReset struct value according to the Ethereum
-// Simple Serialize specification.
+// CheckpointRoot computes the HashTreeRoot Merkleization of Checkpoint
 func CheckpointRoot(checkpoint *ethpb.Checkpoint) ([32]byte, error) {
-	fieldRoots := make([][32]byte, 2)
-	if checkpoint != nil {
-		epochBuf := make([]byte, 8)
-		binary.LittleEndian.PutUint64(epochBuf, uint64(checkpoint.Epoch))
-		fieldRoots[0] = bytesutil.ToBytes32(epochBuf)
-		fieldRoots[1] = bytesutil.ToBytes32(checkpoint.Root)
+	if checkpoint == nil {
+		fieldRoots := make([][32]byte, 2)
+		return BitwiseMerkleize(fieldRoots, uint64(len(fieldRoots)), uint64(len(fieldRoots)))
 	}
-	return BitwiseMerkleize(fieldRoots, uint64(len(fieldRoots)), uint64(len(fieldRoots)))
+	return checkpoint.HashTreeRoot()
 }
 
 // ByteArrayRootWithLimit computes the HashTreeRoot Merkleization of
@@ -91,54 +86,18 @@ func SlashingsRoot(slashings []uint64) ([32]byte, error) {
 }
 
 // TransactionsRoot computes the HTR for the Transactions' property of the ExecutionPayload
-// The code was largely copy/pasted from the code generated to compute the HTR of the entire
-// ExecutionPayload.
 func TransactionsRoot(txs [][]byte) ([32]byte, error) {
-	txRoots := make([][32]byte, 0)
-	for i := 0; i < len(txs); i++ {
-		rt, err := ByteSliceRoot(txs[i], fieldparams.MaxBytesPerTxLength) // getting the transaction root here
-		if err != nil {
-			return [32]byte{}, err
-		}
-		txRoots = append(txRoots, rt)
+	transactions := make([]Transaction, len(txs))
+	for i, tx := range txs {
+		transactions[i] = Transaction(tx)
 	}
-
-	bytesRoot, err := BitwiseMerkleize(txRoots, uint64(len(txRoots)), fieldparams.MaxTxsPerPayloadLength)
-	if err != nil {
-		return [32]byte{}, errors.Wrap(err, "could not compute  merkleization")
-	}
-	bytesRootBuf := new(bytes.Buffer)
-	if err := binary.Write(bytesRootBuf, binary.LittleEndian, uint64(len(txs))); err != nil {
-		return [32]byte{}, errors.Wrap(err, "could not marshal length")
-	}
-	bytesRootBufRoot := make([]byte, 32)
-	copy(bytesRootBufRoot, bytesRootBuf.Bytes())
-	return MixInLength(bytesRoot, bytesRootBufRoot), nil
+	return SliceRoot(transactions, fieldparams.MaxTxsPerPayloadLength)
 }
 
 // WithdrawalSliceRoot computes the HTR of a slice of withdrawals.
 // The limit parameter is used as input to the bitwise merkleization algorithm.
 func WithdrawalSliceRoot(withdrawals []*enginev1.Withdrawal, limit uint64) ([32]byte, error) {
-	roots := make([][32]byte, len(withdrawals))
-	for i := 0; i < len(withdrawals); i++ {
-		r, err := withdrawalRoot(withdrawals[i])
-		if err != nil {
-			return [32]byte{}, err
-		}
-		roots[i] = r
-	}
-
-	bytesRoot, err := BitwiseMerkleize(roots, uint64(len(roots)), limit)
-	if err != nil {
-		return [32]byte{}, errors.Wrap(err, "could not compute  merkleization")
-	}
-	bytesRootBuf := new(bytes.Buffer)
-	if err := binary.Write(bytesRootBuf, binary.LittleEndian, uint64(len(withdrawals))); err != nil {
-		return [32]byte{}, errors.Wrap(err, "could not marshal length")
-	}
-	bytesRootBufRoot := make([]byte, 32)
-	copy(bytesRootBufRoot, bytesRootBuf.Bytes())
-	return MixInLength(bytesRoot, bytesRootBufRoot), nil
+	return SliceRoot(withdrawals, limit)
 }
 
 // DepositRequestsSliceRoot computes the HTR of a slice of deposit requests.
@@ -176,14 +135,9 @@ func ByteSliceRoot(slice []byte, maxLength uint64) ([32]byte, error) {
 }
 
 func withdrawalRoot(w *enginev1.Withdrawal) ([32]byte, error) {
-	fieldRoots := make([][32]byte, 4)
-	if w != nil {
-		binary.LittleEndian.PutUint64(fieldRoots[0][:], w.Index)
-
-		binary.LittleEndian.PutUint64(fieldRoots[1][:], uint64(w.ValidatorIndex))
-
-		fieldRoots[2] = bytesutil.ToBytes32(w.Address)
-		binary.LittleEndian.PutUint64(fieldRoots[3][:], w.Amount)
+	if w == nil {
+		fieldRoots := make([][32]byte, 4)
+		return BitwiseMerkleize(fieldRoots, uint64(len(fieldRoots)), uint64(len(fieldRoots)))
 	}
-	return BitwiseMerkleize(fieldRoots, uint64(len(fieldRoots)), uint64(len(fieldRoots)))
+	return w.HashTreeRoot()
 }

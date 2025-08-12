@@ -19,7 +19,10 @@ func (_ *Server) GetBeaconConfig(_ context.Context, _ *emptypb.Empty) (*ethpb.Be
 	numFields := val.Type().NumField()
 	res := make(map[string]string, numFields)
 	for i := 0; i < numFields; i++ {
-		res[val.Type().Field(i).Name] = fmt.Sprintf("%v", val.Field(i).Interface())
+		field := val.Type().Field(i)
+		if field.IsExported() {
+			res[field.Name] = fmt.Sprintf("%v", val.Field(i).Interface())
+		}
 	}
 	return &ethpb.BeaconConfig{
 		Config: res,

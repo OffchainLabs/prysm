@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"bytes"
 	"context"
 	"slices"
 	"sync"
@@ -585,6 +586,15 @@ func buildByRootRequest(indicesByRoot map[[fieldparams.RootLength]byte]map[uint6
 		}
 		identifiers = append(identifiers, identifier)
 	}
+
+	// Sort identifiers to have a deterministic output.
+	slices.SortFunc(identifiers, func(left, right *eth.DataColumnsByRootIdentifier) int {
+		if cmp := bytes.Compare(left.BlockRoot, right.BlockRoot); cmp != 0 {
+			return cmp
+		}
+		return slices.Compare(left.Columns, right.Columns)
+	})
+
 	return identifiers
 }
 

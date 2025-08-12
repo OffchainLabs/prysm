@@ -45,6 +45,11 @@ func (MockClient) SubmitBlindedBlock(_ context.Context, _ interfaces.ReadOnlySig
 	return nil, nil, nil
 }
 
+// SubmitBlindedBlockPostFulu --
+func (MockClient) SubmitBlindedBlockPostFulu(_ context.Context, _ interfaces.ReadOnlySignedBeaconBlock) error {
+	return nil
+}
+
 // Status --
 func (MockClient) Status(_ context.Context) error {
 	return nil

@@ -225,7 +225,12 @@ func (s *Service) processAtt(ctx context.Context, att ethpb.Att) {
 			}
 		}
 
-		s.setSeenUnaggregatedAtt(att)
+		attKey, err := generateUnaggregatedAttCacheKey(att)
+		if err != nil {
+			log.WithError(err).Error("Could not generate cache key for attestation tracking")
+		} else {
+			s.setSeenUnaggregatedAtt(attKey)
+		}
 
 		valCount, err := helpers.ActiveValidatorCount(ctx, preState, slots.ToEpoch(data.Slot))
 		if err != nil {

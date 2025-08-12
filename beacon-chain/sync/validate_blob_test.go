@@ -51,7 +51,7 @@ func TestValidateBlob_InvalidTopic(t *testing.T) {
 	result, err := s.validateBlob(ctx, "", &pubsub.Message{
 		Message: &pb.Message{},
 	})
-	require.ErrorIs(t, errInvalidTopic, err)
+	require.ErrorIs(t, p2p.ErrInvalidTopic, err)
 	require.Equal(t, result, pubsub.ValidationReject)
 }
 
@@ -142,10 +142,12 @@ func TestValidateBlob_AlreadySeenInCache(t *testing.T) {
 }
 
 func TestValidateBlob_InvalidTopicIndex(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	params.BeaconConfig().InitializeForkSchedule()
 	ctx := t.Context()
 	p := p2ptest.NewTestP2P(t)
 	chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0)}
-	s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}}
+	s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, params.BeaconConfig().GenesisValidatorsRoot)}}
 	s.newBlobVerifier = testNewBlobVerifier()
 
 	_, scs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, chainService.CurrentSlot()+1, 1)
@@ -163,7 +165,7 @@ func TestValidateBlob_InvalidTopicIndex(t *testing.T) {
 			Data:  buf.Bytes(),
 			Topic: &topic,
 		}})
-	require.ErrorContains(t, "/eth2/f5a5fd42/blob_sidecar_1", err)
+	require.ErrorContains(t, "blob_sidecar_1", err)
 	require.Equal(t, result, pubsub.ValidationReject)
 }
 

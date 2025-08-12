@@ -14,12 +14,12 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v6/crypto/rand"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
@@ -154,6 +154,15 @@ func TestUpdateResults(t *testing.T) {
 func TestFetchDataColumnSidecarsFromPeers(t *testing.T) {
 	const count = 4
 
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	clock := startup.NewClock(time.Now(), [fieldparams.RootLength]byte{})
+	ctxMap, err := ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
+	require.NoError(t, err)
+
 	kzgCommitmentsInclusionProof := make([][]byte, 0, count)
 	for range count {
 		kzgCommitmentsInclusionProof = append(kzgCommitmentsInclusionProof, make([]byte, 32))
@@ -175,9 +184,6 @@ func TestFetchDataColumnSidecarsFromPeers(t *testing.T) {
 
 	expectedResponseSidecar, err := blocks.NewRODataColumn(expectedResponseSidecarPb)
 	require.NoError(t, err)
-
-	ctxMap := ContextByteVersions{[4]byte{245, 165, 253, 66}: version.Fulu}
-	clock := startup.NewClock(time.Now(), [fieldparams.RootLength]byte{})
 
 	slotByRoot := map[[fieldparams.RootLength]byte]primitives.Slot{
 		{1}: 1,
@@ -248,6 +254,11 @@ func TestFetchDataColumnSidecarsFromPeers(t *testing.T) {
 func TestSendDataColumnSidecarsRequest(t *testing.T) {
 	const count = 4
 
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
 	kzgCommitmentsInclusionProof := make([][]byte, 0, count)
 	for range count {
 		kzgCommitmentsInclusionProof = append(kzgCommitmentsInclusionProof, make([]byte, 32))
@@ -270,8 +281,9 @@ func TestSendDataColumnSidecarsRequest(t *testing.T) {
 	expectedResponse, err := blocks.NewRODataColumn(expectedResponsePb)
 	require.NoError(t, err)
 
-	ctxMap := ContextByteVersions{[4]byte{245, 165, 253, 66}: version.Fulu}
-	clock := startup.NewClock(time.Now(), [fieldparams.RootLength]byte{})
+	clock := startup.NewClock(time.Now(), params.BeaconConfig().GenesisValidatorsRoot)
+	ctxMap, err := ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
+	require.NoError(t, err)
 
 	t.Run("contiguous", func(t *testing.T) {
 		indicesByRoot := map[[fieldparams.RootLength]byte]map[uint64]bool{
@@ -355,10 +367,6 @@ func TestSendDataColumnSidecarsRequest(t *testing.T) {
 
 		expectedRequest := &p2ptypes.DataColumnsByRootIdentifiers{
 			{
-				BlockRoot: roots[0][:],
-				Columns:   []uint64{1, 2},
-			},
-			{
 				BlockRoot: roots[1][:],
 				Columns:   []uint64{1, 2},
 			},
@@ -366,13 +374,15 @@ func TestSendDataColumnSidecarsRequest(t *testing.T) {
 				BlockRoot: roots[2][:],
 				Columns:   []uint64{1, 2},
 			},
+			{
+				BlockRoot: roots[0][:],
+				Columns:   []uint64{1, 2},
+			},
 		}
 
 		protocol := fmt.Sprintf("%s/ssz_snappy", p2p.RPCDataColumnSidecarsByRootTopicV1)
 		p2p, other := testp2p.NewTestP2P(t), testp2p.NewTestP2P(t)
 		p2p.Connect(other)
-
-		clock := startup.NewClock(time.Now(), [fieldparams.RootLength]byte{})
 
 		other.SetStreamHandler(protocol, func(stream network.Stream) {
 			receivedRequest := new(p2ptypes.DataColumnsByRootIdentifiers)

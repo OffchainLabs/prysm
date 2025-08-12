@@ -52,7 +52,6 @@ go_library(
         "//consensus-types/validator:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//monitoring/tracing/trace:go_default_library",
-        "//network/forks:go_default_library",
         "//network/httputil:go_default_library",
         "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
