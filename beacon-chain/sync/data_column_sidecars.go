@@ -498,7 +498,7 @@ func selectPeers(
 			ctx, cancel := context.WithTimeout(p.Ctx, randomPeerTimeout)
 			defer cancel()
 
-			peer, err := randomPeer(ctx, randomSource, p.RateLimiter, count, indicesByRootByPeer)
+			peer, err := randomPeer(ctx, randomSource, p.RateLimiter, count, internalIndicesByRootByPeer)
 			if err != nil {
 				return "", errors.Wrap(err, "select random peer")
 			}
@@ -510,7 +510,11 @@ func selectPeers(
 		}
 
 		// Query all the sidecars that peer can offer us.
-		newIndicesByRoot := internalIndicesByRootByPeer[peer]
+		newIndicesByRoot, ok := internalIndicesByRootByPeer[peer]
+		if !ok {
+			return nil, errors.Errorf("peer %s not found in internal indices by root by peer map", peer)
+		}
+
 		indicesByRootByPeerToQuery[peer] = newIndicesByRoot
 
 		// Remove this peer from the maps to avoid re-selection.
