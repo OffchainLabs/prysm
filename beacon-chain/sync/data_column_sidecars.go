@@ -84,7 +84,7 @@ func FetchDataColumnSidecars(
 		// Step 1: Get the requested sidecars for this root if available in storage
 		requestedColumns, err := tryGetDirectColumns(params.Storage, root, indices)
 		if err != nil {
-			return nil, errors.Wrap(err, "try get direct columns")
+			return nil, errors.Wrapf(err, "try get direct columns for root %#x", root)
 		}
 		if requestedColumns != nil {
 			result[root] = requestedColumns
@@ -94,7 +94,7 @@ func FetchDataColumnSidecars(
 		// Step 2: If step 1 failed, reconstruct the requested sidecars from what is available in storage
 		requestedColumns, err = tryGetReconstructedColumns(params.Storage, root, indices)
 		if err != nil {
-			return nil, errors.Wrap(err, "try get reconstructed columns")
+			return nil, errors.Wrapf(err, "try get reconstructed columns for root %#x", root)
 		}
 		if requestedColumns != nil {
 			result[root] = requestedColumns
@@ -120,19 +120,33 @@ func FetchDataColumnSidecars(
 
 	// Step 3b: Request missing sidecars from peers.
 	start, count := time.Now(), computeTotalCount(indicesByRootToQuery)
-	result, err := tryRequestingColumnsFromPeers(params, roBlocks, slotsWithCommitments, indicesByRootToQuery)
+	fromPeersResult, err := tryRequestingColumnsFromPeers(params, roBlocks, slotsWithCommitments, indicesByRootToQuery)
 	if err != nil {
 		return nil, errors.Wrap(err, "request from peers")
 	}
 
 	log.WithFields(logrus.Fields{"duration": time.Since(start), "count": count}).Debug("Requested data column sidecars from peers")
 
-	return result, nil
+	for root, verifiedSidecars := range fromPeersResult {
+		result[root] = append(result[root], verifiedSidecars...)
+	}
+
+	// Step 3c: Load the stored sidecars.
+	for root, indicesStored := range indicesByRootStored {
+		requestedColumns, err := tryGetDirectColumns(params.Storage, root, sortedSliceFromMap(indicesStored))
+		if err != nil {
+			return nil, errors.Wrapf(err, "try get direct columns for root %#x", root)
+		}
+
+		result[root] = append(result[root], requestedColumns...)
+	}
+
+	return fromPeersResult, nil
 }
 
 // tryGetDirectColumns attempts to retrieve all requested columns directly from storage
-// if they are all available. Returns the columns if successful, nil and nil if not all available,
-// or nil and error if an error occurs.
+// if they are all available. Returns the columns if successful, and nil if at list one
+// requested sidecar is not available in the storage.
 func tryGetDirectColumns(storage filesystem.DataColumnStorageReader, blockRoot [fieldparams.RootLength]byte, indices []uint64) ([]blocks.VerifiedRODataColumn, error) {
 	// Check if all requested indices are present in cache
 	storedIndices := storage.Summary(blockRoot).Stored()
@@ -219,8 +233,8 @@ func categorizeIndices(storage filesystem.DataColumnStorageReader, blockRoot [fi
 // It explores the connected peers to find those that are expected to custody the requested columns
 // and returns only when all requested columns are either retrieved or have been tried to be retrieved
 // by all possible peers.
-// Returns a map of block roots to their verified read-only data column sidecars and a map of block roots to indices of
-// still missing sidecars after all attempts.
+// Returns a map of block roots to their verified read-only data column sidecars and a map of block roots.
+// Returns an error if at least one requested column could not be retrieved.
 func tryRequestingColumnsFromPeers(
 	p DataColumnSidecarsParams,
 	roBlocks []blocks.ROBlock,
