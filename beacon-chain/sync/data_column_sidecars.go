@@ -235,23 +235,15 @@ func categorizeIndices(storage filesystem.DataColumnStorageReader, blockRoot [fi
 // by all possible peers.
 // Returns a map of block roots to their verified read-only data column sidecars and a map of block roots.
 // Returns an error if at least one requested column could not be retrieved.
+// WARNING: This function alters `missingIndicesByRoot`. The caller should NOT use it after running this function.
 func tryRequestingColumnsFromPeers(
 	p DataColumnSidecarsParams,
 	roBlocks []blocks.ROBlock,
 	slotsWithCommitments map[primitives.Slot]bool,
-	indicesByRootToQuery map[[fieldparams.RootLength]byte]map[uint64]bool,
+	missingIndicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
 ) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
 	// Create a new random source for peer selection.
 	randomSource := rand.NewGenerator()
-
-	// Copy the requested indices to avoid modifying the original map.
-	missingIndicesByRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool, len(indicesByRootToQuery))
-	for root, indices := range indicesByRootToQuery {
-		missingIndicesByRoot[root] = make(map[uint64]bool, len(indices))
-		for index := range indices {
-			missingIndicesByRoot[root][index] = true
-		}
-	}
 
 	// Compute slots by block root.
 	slotByRoot := computeSlotByBlockRoot(roBlocks)
