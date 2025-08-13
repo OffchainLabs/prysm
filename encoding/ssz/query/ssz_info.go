@@ -3,6 +3,8 @@ package query
 import (
 	"fmt"
 	"reflect"
+	"sort"
+	"strings"
 )
 
 // sszInfo holds the all necessary data for analyzing SSZ data types.
@@ -56,4 +58,53 @@ func (info *sszInfo) ContainerInfo() (containerInfo, error) {
 	}
 
 	return info.containerInfo, nil
+}
+
+// Print returns a string representation of the sszInfo, which is useful for debugging.
+func (info *sszInfo) Print() string {
+	if info == nil {
+		return "<nil>"
+	}
+	var builder strings.Builder
+	printRecursive(info, &builder, "")
+	return builder.String()
+}
+
+func printRecursive(info *sszInfo, builder *strings.Builder, prefix string) {
+	var sizeDesc string
+	if info.isVariable {
+		sizeDesc = "Variable-size"
+	} else {
+		sizeDesc = "Fixed-size"
+	}
+
+	switch info.sszType {
+	case Container:
+		builder.WriteString(fmt.Sprintf("%s: %s (%s / fixed size: %d, total size: %d)\n", info.sszType, info.typ.Name(), sizeDesc, info.FixedSize(), info.Size()))
+	default:
+		builder.WriteString(fmt.Sprintf("%s (%s / size: %d)\n", info.sszType, sizeDesc, info.Size()))
+	}
+
+	keys := make([]string, 0, len(info.containerInfo))
+	for k := range info.containerInfo {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for i, key := range keys {
+		connector := "├─"
+		nextPrefix := prefix + "│  "
+		if i == len(keys)-1 {
+			connector = "└─"
+			nextPrefix = prefix + "   "
+		}
+
+		builder.WriteString(fmt.Sprintf("%s%s %s (offset: %d) ", prefix, connector, key, info.containerInfo[key].offset))
+
+		if nestedInfo := info.containerInfo[key].sszInfo; nestedInfo != nil {
+			printRecursive(nestedInfo, builder, nextPrefix)
+		} else {
+			builder.WriteString("\n")
+		}
+	}
 }
