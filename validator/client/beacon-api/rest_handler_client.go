@@ -75,7 +75,7 @@ func (c *BeaconApiRestHandler) Get(ctx context.Context, endpoint string, resp in
 	if err != nil {
 		return errors.Wrapf(err, "failed to create request for endpoint %s", url)
 	}
-	req.Header.Set("User-Agent", version.BuildValidatorData())
+	req.Header.Set("User-Agent", version.BuildData())
 	httpResp, err := c.client.Do(req)
 	if err != nil {
 		return errors.Wrapf(err, "failed to perform request for endpoint %s", url)
@@ -105,7 +105,7 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 		o(req)
 	}
 
-	req.Header.Set("User-Agent", version.BuildValidatorData())
+	req.Header.Set("User-Agent", version.BuildData())
 	httpResp, err := c.client.Do(req)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to perform request for endpoint %s", url)
@@ -165,7 +165,7 @@ func (c *BeaconApiRestHandler) Post(
 		req.Header.Set(headerKey, headerValue)
 	}
 	req.Header.Set("Content-Type", api.JsonMediaType)
-	req.Header.Set("User-Agent", version.BuildValidatorData())
+	req.Header.Set("User-Agent", version.BuildData())
 	httpResp, err := c.client.Do(req)
 	if err != nil {
 		return errors.Wrapf(err, "failed to perform request for endpoint %s", url)

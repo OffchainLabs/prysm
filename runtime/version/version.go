@@ -47,16 +47,3 @@ func BuildData() string {
 	}
 	return fmt.Sprintf("Prysm/%s/%s", gitTag, gitCommit)
 }
-
-func BuildValidatorData() string {
-	// if doing a local build, these values are not interpolated
-	if gitCommit == "{STABLE_GIT_COMMIT}" {
-		commit, err := exec.Command("git", "rev-parse", "HEAD").Output()
-		if err != nil {
-			log.Println(err)
-		} else {
-			gitCommit = strings.TrimRight(string(commit), "\r\n")
-		}
-	}
-	return fmt.Sprintf("PrysmVC/%s/%s", gitTag, gitCommit)
-}
