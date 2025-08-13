@@ -1398,3 +1398,103 @@ func TestFetchSidecars(t *testing.T) {
 		require.Equal(t, samplesPerSlot, uint64(len(blocksWithSidecars[1].Columns)))
 	})
 }
+func TestFirstFuluIndex(t *testing.T) {
+	bellatrix := util.NewBeaconBlockBellatrix()
+	signedBellatrix, err := blocks.NewSignedBeaconBlock(bellatrix)
+	require.NoError(t, err)
+	roBellatrix, err := blocks.NewROBlock(signedBellatrix)
+	require.NoError(t, err)
+
+	capella := util.NewBeaconBlockCapella()
+	signedCapella, err := blocks.NewSignedBeaconBlock(capella)
+	require.NoError(t, err)
+	roCapella, err := blocks.NewROBlock(signedCapella)
+	require.NoError(t, err)
+
+	deneb := util.NewBeaconBlockDeneb()
+	signedDeneb, err := blocks.NewSignedBeaconBlock(deneb)
+	require.NoError(t, err)
+	roDeneb, err := blocks.NewROBlock(signedDeneb)
+	require.NoError(t, err)
+
+	fulu := util.NewBeaconBlockFulu()
+	signedFulu, err := blocks.NewSignedBeaconBlock(fulu)
+	require.NoError(t, err)
+	roFulu, err := blocks.NewROBlock(signedFulu)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name          string
+		setupBlocks   func(t *testing.T) []blocks.BlockWithROSidecars
+		expectedIndex int
+		expectError   bool
+	}{
+		{
+			name: "all blocks are pre-Fulu",
+			setupBlocks: func(t *testing.T) []blocks.BlockWithROSidecars {
+				return []blocks.BlockWithROSidecars{
+					{Block: roBellatrix},
+					{Block: roCapella},
+					{Block: roDeneb},
+				}
+			},
+			expectedIndex: 3, // Should be the length of the slice
+			expectError:   false,
+		},
+		{
+			name: "all blocks are Fulu or later",
+			setupBlocks: func(t *testing.T) []blocks.BlockWithROSidecars {
+				return []blocks.BlockWithROSidecars{
+					{Block: roFulu},
+					{Block: roFulu},
+				}
+			},
+			expectedIndex: 0,
+			expectError:   false,
+		},
+		{
+			name: "mixed blocks correctly sorted",
+			setupBlocks: func(t *testing.T) []blocks.BlockWithROSidecars {
+
+				return []blocks.BlockWithROSidecars{
+					{Block: roBellatrix},
+					{Block: roCapella},
+					{Block: roDeneb},
+					{Block: roFulu},
+					{Block: roFulu},
+				}
+			},
+			expectedIndex: 3, // Index where Fulu blocks start
+			expectError:   false,
+		},
+		{
+			name: "mixed blocks incorrectly sorted",
+			setupBlocks: func(t *testing.T) []blocks.BlockWithROSidecars {
+				return []blocks.BlockWithROSidecars{
+					{Block: roBellatrix},
+					{Block: roCapella},
+					{Block: roFulu},
+					{Block: roDeneb},
+					{Block: roFulu},
+				}
+			},
+			expectedIndex: 0,
+			expectError:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			blocks := tt.setupBlocks(t)
+			index, err := findFirstFuluIndex(blocks)
+
+			if tt.expectError {
+				require.NotNil(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedIndex, index)
+		})
+	}
+}

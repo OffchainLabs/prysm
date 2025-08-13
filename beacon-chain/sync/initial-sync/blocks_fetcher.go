@@ -361,28 +361,25 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []
 		return "", nil
 	}
 
-	// Find the first block with a slot greater than or equal to the first Fulu slot.
-	firstFuluIndex := sort.Search(len(bwScs), func(i int) bool {
-		return bwScs[i].Block.Version() >= version.Fulu
-	})
+	firstFuluIndex, err := findFirstFuluIndex(bwScs)
+	if err != nil {
+		return "", errors.Wrap(err, "find first Fulu index")
+	}
 
-	preFuluBlocks := bwScs[:firstFuluIndex]
-	postFuluBlocks := bwScs[firstFuluIndex:]
+	preFulu := bwScs[:firstFuluIndex]
+	postFulu := bwScs[firstFuluIndex:]
 
-	var (
-		blobsPid peer.ID
-		err      error
-	)
+	var blobsPid peer.ID
 
-	if len(preFuluBlocks) > 0 {
+	if len(preFulu) > 0 {
 		// Fetch blob sidecars.
-		blobsPid, err = f.fetchBlobsFromPeer(ctx, preFuluBlocks, pid, peers)
+		blobsPid, err = f.fetchBlobsFromPeer(ctx, preFulu, pid, peers)
 		if err != nil {
 			return "", errors.Wrap(err, "fetch blobs from peer")
 		}
 	}
 
-	if len(postFuluBlocks) == 0 {
+	if len(postFulu) == 0 {
 		return blobsPid, nil
 	}
 
@@ -408,8 +405,8 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []
 		NewVerifier: f.cv,
 	}
 
-	roBlocks := make([]blocks.ROBlock, 0, len(postFuluBlocks))
-	for _, block := range postFuluBlocks {
+	roBlocks := make([]blocks.ROBlock, 0, len(postFulu))
+	for _, block := range postFulu {
 		roBlocks = append(roBlocks, block.Block)
 	}
 
@@ -872,4 +869,24 @@ func dedupPeers(peers []peer.ID) []peer.ID {
 		peerExists[peers[i]] = true
 	}
 	return newPeerList
+}
+
+// findFirstFuluIndex returns the index of the first block with a version >= Fulu.
+// It returns an error if blocks are not correctly sorted by version regarding Fulu.
+func findFirstFuluIndex(bwScs []blocks.BlockWithROSidecars) (int, error) {
+	firstFuluIndex := len(bwScs)
+
+	for i, bwSc := range bwScs {
+		blockVersion := bwSc.Block.Version()
+		if blockVersion >= version.Fulu && firstFuluIndex > i {
+			firstFuluIndex = i
+			continue
+		}
+
+		if blockVersion < version.Fulu && firstFuluIndex <= i {
+			return 0, errors.New("blocks are not sorted by version")
+		}
+	}
+
+	return firstFuluIndex, nil
 }
