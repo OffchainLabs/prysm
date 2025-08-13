@@ -758,9 +758,7 @@ func TestFindPeersWithSubnets_NodeDeduplication(t *testing.T) {
 	}
 }
 
-// TestFindPeersWithSubnets_FilterPeerRemoval tests that nodes failing filterPeer are removed when searching for subnet peers
 func TestFindPeersWithSubnets_FilterPeerRemoval(t *testing.T) {
-	// Setup test environment
 	params.SetupTestConfigCleanup(t)
 	cache.SubnetIDs.EmptyAllCaches()
 	defer cache.SubnetIDs.EmptyAllCaches()
@@ -768,7 +766,6 @@ func TestFindPeersWithSubnets_FilterPeerRemoval(t *testing.T) {
 	ctx := context.Background()
 	db := testDB.SetupDB(t)
 
-	// Create LocalNodes
 	localNode1 := createTestNodeWithID(t, "node1")
 	localNode2 := createTestNodeWithID(t, "node2")
 	localNode3 := createTestNodeWithID(t, "node3")
@@ -952,18 +949,14 @@ func TestFindPeersWithSubnets_FilterPeerRemoval(t *testing.T) {
 				}
 			}
 
-			// Create local node for the listener
 			localNode := createTestNodeRandom(t)
 
-			// Create mock listener with iterator
 			mockIter := testp2p.NewMockIterator(tt.nodes)
 			s.dv5Listener = testp2p.NewMockListener(localNode, mockIter)
 
-			// Get fork digest for topic format
 			digest, err := s.currentForkDigest()
 			require.NoError(t, err)
 
-			// Run findPeersWithSubnets
 			ctxWithTimeout, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 			defer cancel()
 
@@ -975,11 +968,9 @@ func TestFindPeersWithSubnets_FilterPeerRemoval(t *testing.T) {
 				tt.defectiveSubnets,
 			)
 
-			// Verify results
 			require.NoError(t, err, tt.description)
 			require.Equal(t, tt.expectedCount, len(result), tt.description)
 
-			// Run custom validation if provided
 			if tt.eval != nil {
 				tt.eval(t, result)
 			}
