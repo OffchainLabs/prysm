@@ -908,8 +908,6 @@ func (s *Service) areDataColumnsImmediatelyAvailable(
 	root [fieldparams.RootLength]byte,
 	block interfaces.ReadOnlyBeaconBlock,
 ) error {
-	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
-
 	// We are only required to check within MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS
 	blockSlot, currentSlot := block.Slot(), s.CurrentSlot()
 	blockEpoch, currentEpoch := slots.ToEpoch(blockSlot), slots.ToEpoch(currentSlot)
@@ -941,6 +939,7 @@ func (s *Service) areDataColumnsImmediatelyAvailable(
 		return errors.Wrap(err, "custody group count error")
 	}
 
+	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 	// Compute the sampling size.
 	samplingSize := max(samplesPerSlot, custodyGroupCount)
 
