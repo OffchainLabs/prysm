@@ -47,6 +47,10 @@ var (
 		RequireSidecarKzgProofVerified,
 	}
 
+	// SpectestDataColumnSidecarRequirements is used by the forkchoice spectests when verifying data columns used in the on_block tests.
+	SpectestDataColumnSidecarRequirements = requirementList(GossipDataColumnSidecarRequirements).excluding(
+		RequireSidecarParentSeen, RequireSidecarParentValid)
+
 	errColumnsInvalid = errors.New("data columns failed verification")
 	errBadTopicLength = errors.New("topic length is invalid")
 	errBadTopic       = errors.New("topic is not of the one expected")
