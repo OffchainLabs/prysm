@@ -195,7 +195,7 @@ func (s *Service) findPeersWithSubnets(
 		if !s.filterPeer(node) {
 			if ok {
 				// this means the existing peer with the lower sequence number is no longer valid
-				delete(nodeByNodeID, node.ID())
+				delete(nodeByNodeID, existing.ID())
 			}
 			continue
 		}
