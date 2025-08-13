@@ -1,4 +1,4 @@
-package light_client
+package lightClient
 
 import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"

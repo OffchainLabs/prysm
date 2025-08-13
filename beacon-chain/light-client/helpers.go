@@ -1,4 +1,4 @@
-package light_client
+package lightClient
 
 import (
 	"context"

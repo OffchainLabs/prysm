@@ -1,7 +1,7 @@
 package lightclient
 
 import (
-	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/light-client"
 )
 
 type Server struct {

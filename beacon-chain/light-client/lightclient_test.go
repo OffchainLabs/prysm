@@ -1,15 +1,15 @@
-package light_client_test
+package lightClient_test
 
 import (
 	"reflect"
 	"strings"
 	"testing"
 
+	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	light_client "github.com/OffchainLabs/prysm/v6/consensus-types/light-client"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 
-	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	consensustypes "github.com/OffchainLabs/prysm/v6/consensus-types"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
