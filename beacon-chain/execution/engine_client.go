@@ -670,7 +670,7 @@ func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, signedROBlo
 		// Empty result - initiate retry mechanism
 
 		// Create a new context with a timeout for the retry goroutine.
-		retryCtx, cancel := context.WithTimeout(ctx, time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second)
+		retryCtx, cancel := context.WithTimeout(s.ctx, time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second)
 
 		// LoadOrStore atomically checks for an existing retry and stores
 		// a new one if none exists. This prevents a race condition.
