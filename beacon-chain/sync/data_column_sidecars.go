@@ -141,7 +141,7 @@ func FetchDataColumnSidecars(
 		result[root] = append(result[root], requestedColumns...)
 	}
 
-	return fromPeersResult, nil
+	return result, nil
 }
 
 // tryGetDirectColumns attempts to retrieve all requested columns directly from storage

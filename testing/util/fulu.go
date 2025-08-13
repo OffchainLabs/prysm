@@ -54,6 +54,12 @@ func WithParentRoot(root [fieldparams.RootLength]byte) FuluBlockGeneratorOption 
 	}
 }
 
+func WithSlot(slot primitives.Slot) FuluBlockGeneratorOption {
+	return func(g *fuluBlockGenerator) {
+		g.slot = slot
+	}
+}
+
 func GenerateTestFuluBlockWithSidecars(t *testing.T, blobCount int, options ...FuluBlockGeneratorOption) (blocks.ROBlock, []blocks.RODataColumn, []blocks.VerifiedRODataColumn) {
 	generator := &fuluBlockGenerator{blobCount: blobCount}
 
