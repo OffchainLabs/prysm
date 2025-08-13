@@ -23,6 +23,20 @@ import (
 	"github.com/pkg/errors"
 )
 
+type BlockRootsNotFoundError struct {
+	message string
+}
+
+func NewBlockRootsNotFoundError() *BlockRootsNotFoundError {
+	return &BlockRootsNotFoundError{
+		message: "no block roots returned from the database",
+	}
+}
+
+func (e BlockRootsNotFoundError) Error() string {
+	return e.message
+}
+
 // BlockIdParseError represents an error scenario where a block ID could not be parsed.
 type BlockIdParseError struct {
 	message string
