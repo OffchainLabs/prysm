@@ -378,13 +378,13 @@ func (s *Service) processBatchedBlocks(ctx context.Context, bwb []blocks.BlockWi
 			errParentDoesNotExist, firstBlock.Block().ParentRoot(), firstBlock.Block().Slot())
 	}
 
-	// Seaerate blocks with blobs from blocks with data columns.
-	fistDataColumnIndex := sort.Search(len(bwb), func(i int) bool {
-		return bwb[i].Block.Version() >= version.Fulu
-	})
+	firstFuluIndex, err := findFirstFuluIndex(bwb)
+	if err != nil {
+		return 0, errors.Wrap(err, "finding first Fulu index")
+	}
 
-	blocksWithBlobs := bwb[:fistDataColumnIndex]
-	blocksWithDataColumns := bwb[fistDataColumnIndex:]
+	blocksWithBlobs := bwb[:firstFuluIndex]
+	blocksWithDataColumns := bwb[firstFuluIndex:]
 
 	if err := s.processBlocksWithBlobs(ctx, blocksWithBlobs, bFunc, firstBlock); err != nil {
 		return 0, errors.Wrap(err, "processing blocks with blobs")
