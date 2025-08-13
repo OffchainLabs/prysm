@@ -356,9 +356,8 @@ func (f *blocksFetcher) handleRequest(ctx context.Context, start primitives.Slot
 // It returns the peer ID from which blobs were fetched (if any).
 func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []peer.ID, bwScs []blocks.BlockWithROSidecars) (peer.ID, error) {
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
-	count := len(bwScs)
 
-	if count == 0 {
+	if len(bwScs) == 0 {
 		return "", nil
 	}
 
