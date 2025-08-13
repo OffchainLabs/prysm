@@ -446,18 +446,18 @@ func (s *Service) findPeers(ctx context.Context, missingPeerCount uint) ([]*enod
 		node := iterator.Node()
 
 		// Remove duplicates, keeping the node with higher seq.
-		if existing, ok := nodeByNodeID[node.ID()]; ok {
-			// If existing has >= seq, keep it and skip.
-			if existing.Seq() >= node.Seq() {
-				continue
-			}
-			// Replacement with higher seq: do NOT decrement.
-			nodeByNodeID[node.ID()] = node
-			continue
+		existing, ok := nodeByNodeID[node.ID()]
+		if ok && existing.Seq() >= node.Seq() {
+			continue // keep existing and skip.
 		}
 
+		// Treat nodes that exist in nodeByNodeID with higher seq numbers as new peers
 		// Skip peer not matching the filter.
 		if !s.filterPeer(node) {
+			if ok {
+				// this means the existing peer with the lower sequence number is no longer valid
+				delete(nodeByNodeID, node.ID())
+			}
 			continue
 		}
 
