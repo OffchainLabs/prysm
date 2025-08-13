@@ -378,23 +378,19 @@ func (s *Service) processBatchedBlocks(ctx context.Context, bwb []blocks.BlockWi
 			errParentDoesNotExist, firstBlock.Block().ParentRoot(), firstBlock.Block().Slot())
 	}
 
-	count := len(bwb)
-	preFulu, postFulu := make([]blocks.BlockWithROSidecars, 0, count), make([]blocks.BlockWithROSidecars, 0, count)
+	// Seaerate blocks with blobs from blocks with data columns.
+	fistDataColumnIndex := sort.Search(len(bwb), func(i int) bool {
+		return bwb[i].Block.Version() >= version.Fulu
+	})
 
-	for _, blockWithSidecars := range bwb {
-		if blockWithSidecars.Block.Version() >= version.Fulu {
-			postFulu = append(postFulu, blockWithSidecars)
-			continue
-		}
+	blocksWithBlobs := bwb[:fistDataColumnIndex]
+	blocksWithDataColumns := bwb[fistDataColumnIndex:]
 
-		preFulu = append(preFulu, blockWithSidecars)
-	}
-
-	if err := s.processBlocksWithBlobs(ctx, preFulu, bFunc, firstBlock); err != nil {
+	if err := s.processBlocksWithBlobs(ctx, blocksWithBlobs, bFunc, firstBlock); err != nil {
 		return 0, errors.Wrap(err, "processing blocks with blobs")
 	}
 
-	if err := s.processBlocksWithDataColumns(ctx, postFulu, bFunc, firstBlock); err != nil {
+	if err := s.processBlocksWithDataColumns(ctx, blocksWithDataColumns, bFunc, firstBlock); err != nil {
 		return 0, errors.Wrap(err, "processing blocks with data columns")
 	}
 
