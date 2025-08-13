@@ -1,6 +1,7 @@
 package query
 
 import (
+	"fmt"
 	"reflect"
 )
 
@@ -15,6 +16,9 @@ type sszInfo struct {
 	isVariable bool
 	// fixedSize is the total size of the struct's fixed part.
 	fixedSize uint64
+
+	// For Container types:
+	containerInfo containerInfo
 }
 
 func (info *sszInfo) FixedSize() uint64 {
@@ -36,4 +40,20 @@ func (info *sszInfo) Size() uint64 {
 
 	// TODO: Handle variable-sized types.
 	return 0
+}
+
+func (info *sszInfo) ContainerInfo() (containerInfo, error) {
+	if info == nil {
+		return nil, fmt.Errorf("sszInfo is nil")
+	}
+
+	if info.sszType != Container {
+		return nil, fmt.Errorf("sszInfo is not a Container type, got %s", info.sszType)
+	}
+
+	if info.containerInfo == nil {
+		return nil, fmt.Errorf("sszInfo.fieldInfos is nil")
+	}
+
+	return info.containerInfo, nil
 }
