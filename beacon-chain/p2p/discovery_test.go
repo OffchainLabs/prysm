@@ -964,7 +964,6 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 	params.OverrideBeaconConfig(defaultCfg)
 }
 
-// TestFindPeers_NodeDeduplication tests the node deduplication logic in findPeers
 func TestFindPeers_NodeDeduplication(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cache.SubnetIDs.EmptyAllCaches()
@@ -1122,10 +1121,8 @@ func TestFindPeers_NodeDeduplication(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create test P2P instance
 			fakePeer := testp2p.NewTestP2P(t)
 
-			// Create mock service
 			s := &Service{
 				cfg: &Config{
 					MaxPeers: 30,
@@ -1138,15 +1135,11 @@ func TestFindPeers_NodeDeduplication(t *testing.T) {
 				host: fakePeer.BHost,
 			}
 
-			// Create local node for the listener
 			localNode := createTestNodeRandom(t)
-
-			// Create mock listener with iterator
 			mockIter := testp2p.NewMockIterator(tt.nodes)
 			s.dv5Listener = testp2p.NewMockListener(localNode, mockIter)
 
-			// Run findPeers
-			ctxWithTimeout, cancel := context.WithTimeout(ctx, 1*time.Second) // Increased timeout
+			ctxWithTimeout, cancel := context.WithTimeout(ctx, 1*time.Second)
 			defer cancel()
 
 			result, err := s.findPeers(ctxWithTimeout, tt.missingPeers)
@@ -1154,10 +1147,107 @@ func TestFindPeers_NodeDeduplication(t *testing.T) {
 			require.NoError(t, err, tt.description)
 			require.Equal(t, tt.expectedCount, len(result), tt.description)
 
-			// Run custom validation if provided
 			if tt.eval != nil {
 				tt.eval(t, result)
 			}
 		})
 	}
+}
+
+// callbackIterator allows us to execute callbacks at specific points during iteration
+type callbackIterator struct {
+	nodes     []*enode.Node
+	index     int
+	callbacks map[int]func() // map from index to callback function
+}
+
+func (c *callbackIterator) Next() bool {
+	// Execute callback before checking if we can continue (if one exists)
+	if callback, exists := c.callbacks[c.index]; exists {
+		callback()
+	}
+
+	return c.index < len(c.nodes)
+}
+
+func (c *callbackIterator) Node() *enode.Node {
+	if c.index >= len(c.nodes) {
+		return nil
+	}
+
+	node := c.nodes[c.index]
+	c.index++
+	return node
+}
+
+func (c *callbackIterator) Close() {
+	// Nothing to clean up for this simple implementation
+}
+
+func TestFindPeers_received_bad_existing_node(t *testing.T) {
+	// This test successfully triggers delete(nodeByNodeID, node.ID()) in subnets.go by:
+	// 1. Processing node1_seq1 first (passes filterPeer, gets added to map
+	// 2. Callback marks peer as bad before processing node1_seq2"
+	// 3. Processing node1_seq2 (fails filterPeer, triggers delete since ok=true
+	params.SetupTestConfigCleanup(t)
+	cache.SubnetIDs.EmptyAllCaches()
+	defer cache.SubnetIDs.EmptyAllCaches()
+
+	ctx := context.Background()
+
+	// Create LocalNode with same ID but different sequences
+	localNode1 := createTestNodeWithID(t, "testnode")
+	node1_seq1 := localNode1.Node() // Get current node
+	currentSeq := node1_seq1.Seq()
+	setNodeSeq(localNode1, currentSeq+1) // Increment sequence by 1
+	node1_seq2 := localNode1.Node()      // This should have higher seq
+
+	// Additional node to ensure we have enough peers to process
+	localNode2 := createTestNodeWithID(t, "othernode")
+	node2 := localNode2.Node()
+
+	fakePeer := testp2p.NewTestP2P(t)
+
+	service := &Service{
+		cfg: &Config{
+			MaxPeers: 30,
+		},
+		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+		peers: peers.NewStatus(ctx, &peers.StatusConfig{
+			PeerLimit:    30,
+			ScorerParams: &scorers.Config{},
+		}),
+		host: fakePeer.BHost,
+	}
+
+	// Create iterator with callback that marks peer as bad before processing node1_seq2
+	iter := &callbackIterator{
+		nodes: []*enode.Node{node1_seq1, node1_seq2, node2},
+		index: 0,
+		callbacks: map[int]func(){
+			1: func() { // Before processing node1_seq2 (index 1)
+				// Mark peer as bad before processing node1_seq2
+				peerData, _, _ := convertToAddrInfo(node1_seq2)
+				if peerData != nil {
+					service.peers.Add(node1_seq2.Record(), peerData.ID, nil, network.DirUnknown)
+					// Mark as bad peer - need enough increments to exceed threshold (6)
+					for i := 0; i < 10; i++ {
+						service.peers.Scorers().BadResponsesScorer().Increment(peerData.ID)
+					}
+				}
+			},
+		},
+	}
+
+	localNode := createTestNodeRandom(t)
+	service.dv5Listener = testp2p.NewMockListener(localNode, iter)
+
+	// Run findPeers - node1_seq1 gets processed first, then callback marks peer bad, then node1_seq2 fails
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+
+	result, err := service.findPeers(ctxWithTimeout, 3)
+
+	require.NoError(t, err)
+	require.Equal(t, 1, len(result))
 }
