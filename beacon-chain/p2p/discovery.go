@@ -457,6 +457,7 @@ func (s *Service) findPeers(ctx context.Context, missingPeerCount uint) ([]*enod
 			if ok {
 				// this means the existing peer with the lower sequence number is no longer valid
 				delete(nodeByNodeID, existing.ID())
+				missingPeerCount++
 			}
 			continue
 		}
