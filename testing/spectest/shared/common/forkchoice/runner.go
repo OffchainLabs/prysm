@@ -150,7 +150,9 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 						}
 					}
 					runBlobStep(t, step, beaconBlock, fork, folder, testsFolderPath, builder)
-					runDataColumnStep(t, step, beaconBlock, fork, folder, testsFolderPath, builder)
+					if len(step.DataColumns) > 0 {
+						runDataColumnStep(t, step, beaconBlock, fork, folder, testsFolderPath, builder)
+					}
 					if beaconBlock != nil {
 						if step.Valid != nil && !*step.Valid {
 							builder.InvalidBlock(t, beaconBlock)
@@ -304,13 +306,7 @@ func runDataColumnStep(t *testing.T,
 	testsFolderPath string,
 	builder *Builder,
 ) {
-	var columnFiles []*string
-	if len(step.DataColumns) > 0 {
-		columnFiles = append(columnFiles, step.DataColumns...)
-	}
-	if len(columnFiles) == 0 {
-		return
-	}
+	columnFiles := step.DataColumns
 
 	require.NotNil(t, beaconBlock)
 	require.Equal(t, true, fork >= version.Fulu)
@@ -400,7 +396,7 @@ func runDataColumnStep(t *testing.T,
 			}
 		}
 		dv := ini.NewDataColumnsVerifier(allColumns, forkchoiceReqs)
-		ctx := context.Background()
+		ctx := t.Context()
 
 		if step.Valid != nil && !*step.Valid {
 			if err := dv.ValidFields(); err != nil {
