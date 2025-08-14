@@ -13,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
 	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	p2pt "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
@@ -142,7 +141,7 @@ func TestService_InitStartStop(t *testing.T) {
 		},
 	}
 
-	p := p2pt.NewTestP2P(t)
+	p := p2ptest.NewTestP2P(t)
 	connectPeers(t, p, []*peerData{}, p.Peers())
 	for i, tt := range tests {
 		if i == 0 {
@@ -332,7 +331,7 @@ func TestService_markSynced(t *testing.T) {
 }
 
 func TestService_Resync(t *testing.T) {
-	p := p2pt.NewTestP2P(t)
+	p := p2ptest.NewTestP2P(t)
 	connectPeers(t, p, []*peerData{
 		{blocks: makeSequence(1, 160), finalizedEpoch: 5, headSlot: 160},
 	}, p.Peers())
