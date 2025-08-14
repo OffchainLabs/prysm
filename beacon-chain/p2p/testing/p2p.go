@@ -228,8 +228,8 @@ func (p *TestP2P) BroadcastLightClientFinalityUpdate(_ context.Context, _ interf
 	return nil
 }
 
-// BroadcastDataColumn broadcasts a data column for mock.
-func (p *TestP2P) BroadcastDataColumn([fieldparams.RootLength]byte, uint64, *ethpb.DataColumnSidecar) error {
+// BroadcastDataColumnSidecar broadcasts a data column for mock.
+func (p *TestP2P) BroadcastDataColumnSidecar([fieldparams.RootLength]byte, uint64, *ethpb.DataColumnSidecar) error {
 	p.BroadcastCalled.Store(true)
 	return nil
 }

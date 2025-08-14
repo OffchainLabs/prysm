@@ -305,15 +305,15 @@ func (s *Service) BroadcastLightClientFinalityUpdate(ctx context.Context, update
 	return nil
 }
 
-// BroadcastDataColumn broadcasts a data column to the p2p network, the message is assumed to be
+// BroadcastDataColumnSidecar broadcasts a data column to the p2p network, the message is assumed to be
 // broadcasted to the current fork and to the input column subnet.
-func (s *Service) BroadcastDataColumn(
+func (s *Service) BroadcastDataColumnSidecar(
 	root [fieldparams.RootLength]byte,
 	dataColumnSubnet uint64,
 	dataColumnSidecar *ethpb.DataColumnSidecar,
 ) error {
 	// Add tracing to the function.
-	ctx, span := trace.StartSpan(s.ctx, "p2p.BroadcastDataColumn")
+	ctx, span := trace.StartSpan(s.ctx, "p2p.BroadcastDataColumnSidecar")
 	defer span.End()
 
 	// Ensure the data column sidecar is not nil.
@@ -330,12 +330,12 @@ func (s *Service) BroadcastDataColumn(
 	}
 
 	// Non-blocking broadcast, with attempts to discover a column subnet peer if none available.
-	go s.internalBroadcastDataColumn(ctx, root, dataColumnSubnet, dataColumnSidecar, forkDigest)
+	go s.internalBroadcastDataColumnSidecar(ctx, root, dataColumnSubnet, dataColumnSidecar, forkDigest)
 
 	return nil
 }
 
-func (s *Service) internalBroadcastDataColumn(
+func (s *Service) internalBroadcastDataColumnSidecar(
 	ctx context.Context,
 	root [fieldparams.RootLength]byte,
 	columnSubnet uint64,
@@ -343,7 +343,7 @@ func (s *Service) internalBroadcastDataColumn(
 	forkDigest [fieldparams.VersionLength]byte,
 ) {
 	// Add tracing to the function.
-	_, span := trace.StartSpan(ctx, "p2p.internalBroadcastDataColumn")
+	_, span := trace.StartSpan(ctx, "p2p.internalBroadcastDataColumnSidecar")
 	defer span.End()
 
 	// Increase the number of broadcast attempts.

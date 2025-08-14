@@ -2889,7 +2889,7 @@ func TestIsDataAvailable(t *testing.T) {
 	})
 
 	t.Run("Fulu - more than half of the columns in custody", func(t *testing.T) {
-		minimumColumnsCountToReconstruct := peerdas.MinimumColumnsCountToReconstruct()
+		minimumColumnsCountToReconstruct := peerdas.MinimumColumnCountToReconstruct()
 		indices := make([]uint64, 0, minimumColumnsCountToReconstruct)
 		for i := range minimumColumnsCountToReconstruct {
 			indices = append(indices, i)
@@ -2974,7 +2974,7 @@ func TestIsDataAvailable(t *testing.T) {
 
 		startWaiting := make(chan bool)
 
-		minimumColumnsCountToReconstruct := peerdas.MinimumColumnsCountToReconstruct()
+		minimumColumnsCountToReconstruct := peerdas.MinimumColumnCountToReconstruct()
 		indices := make([]uint64, 0, minimumColumnsCountToReconstruct-missingColumns)
 
 		for i := range minimumColumnsCountToReconstruct - missingColumns {
