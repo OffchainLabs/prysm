@@ -314,16 +314,20 @@ func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.Availability
 	block := roBlock.Block()
 	slot := block.Slot()
 
-	if version.Deneb <= blockVersion && blockVersion < version.Fulu {
-		if err := avs.IsDataAvailable(ctx, s.CurrentSlot(), roBlock); err != nil {
-			return errors.Wrapf(err, "could not validate sidecar availability at slot %d", slot)
-		}
-	}
-
-	if version.Fulu <= blockVersion {
+	if blockVersion >= version.Fulu {
 		if err := s.areDataColumnsAvailable(ctx, roBlock.Root(), block); err != nil {
 			return errors.Wrapf(err, "are data columns available for block %#x with slot %d", roBlock.Root(), slot)
 		}
+
+		return nil
+	}
+
+	if blockVersion >= version.Deneb {
+		if err := avs.IsDataAvailable(ctx, s.CurrentSlot(), roBlock); err != nil {
+			return errors.Wrapf(err, "could not validate sidecar availability at slot %d", slot)
+		}
+
+		return nil
 	}
 
 	return nil
