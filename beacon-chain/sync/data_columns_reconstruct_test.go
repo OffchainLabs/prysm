@@ -30,7 +30,7 @@ func TestReconstructDataColumns(t *testing.T) {
 	root, block := roBlock.Root(), roBlock.Block()
 	slot, proposerIndex := block.Slot(), block.ProposerIndex()
 
-	minimumCount := peerdas.MinimumColumnsCountToReconstruct()
+	minimumCount := peerdas.MinimumColumnCountToReconstruct()
 
 	t.Run("not enough stored sidecars", func(t *testing.T) {
 		storage := filesystem.NewEphemeralDataColumnStorage(t)
@@ -61,7 +61,7 @@ func TestReconstructDataColumns(t *testing.T) {
 		const cgc = 8
 
 		storage := filesystem.NewEphemeralDataColumnStorage(t)
-		minimumCount := peerdas.MinimumColumnsCountToReconstruct()
+		minimumCount := peerdas.MinimumColumnCountToReconstruct()
 		err := storage.Save(verifiedRoDataColumns[:minimumCount])
 		require.NoError(t, err)
 

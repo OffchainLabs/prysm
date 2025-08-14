@@ -177,7 +177,7 @@ func tryGetDirectColumns(storage filesystem.DataColumnStorageReader, blockRoot [
 func tryGetReconstructedColumns(storage filesystem.DataColumnStorageReader, blockRoot [fieldparams.RootLength]byte, indices []uint64) ([]blocks.VerifiedRODataColumn, error) {
 	// Check if we have enough columns for reconstruction
 	summary := storage.Summary(blockRoot)
-	if summary.Count() < peerdas.MinimumColumnsCountToReconstruct() {
+	if summary.Count() < peerdas.MinimumColumnCountToReconstruct() {
 		return nil, nil
 	}
 

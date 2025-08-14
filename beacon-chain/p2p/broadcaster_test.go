@@ -716,7 +716,7 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 
 	// Attempt to broadcast nil object should fail.
 	var emptyRoot [fieldparams.RootLength]byte
-	err = service.BroadcastDataColumn(emptyRoot, subnet, nil)
+	err = service.BroadcastDataColumnSidecar(emptyRoot, subnet, nil)
 	require.ErrorContains(t, "attempted to broadcast nil", err)
 
 	// Subscribe to the topic.
@@ -727,7 +727,7 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Broadcast to peers and wait.
-	err = service.BroadcastDataColumn(emptyRoot, subnet, sidecar)
+	err = service.BroadcastDataColumnSidecar(emptyRoot, subnet, sidecar)
 	require.NoError(t, err)
 
 	// Receive the message.
