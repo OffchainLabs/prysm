@@ -20,7 +20,6 @@ import (
 	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
-	prysmsync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -420,7 +419,7 @@ func (s *Service) fetchOriginColumns(pids []peer.ID, roBlock blocks.ROBlock) err
 	// Fetch origin data column sidecars.
 	root := roBlock.Root()
 
-	params := prysmsync.DataColumnSidecarsParams{
+	params := sync.DataColumnSidecarsParams{
 		Ctx:         s.ctx,
 		Tor:         s.clock,
 		P2P:         s.cfg.P2P,
@@ -429,7 +428,7 @@ func (s *Service) fetchOriginColumns(pids []peer.ID, roBlock blocks.ROBlock) err
 		NewVerifier: s.newDataColumnsVerifier,
 	}
 
-	verfifiedRoDataColumnsByRoot, err := prysmsync.FetchDataColumnSidecars(params, []blocks.ROBlock{roBlock}, info.CustodyColumns)
+	verfifiedRoDataColumnsByRoot, err := sync.FetchDataColumnSidecars(params, []blocks.ROBlock{roBlock}, info.CustodyColumns)
 	if err != nil {
 		return errors.Wrap(err, "fetch data column sidecars")
 	}
