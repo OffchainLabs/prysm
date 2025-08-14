@@ -145,7 +145,7 @@ func FetchDataColumnSidecars(
 }
 
 // tryGetDirectColumns attempts to retrieve all requested columns directly from storage
-// if they are all available. Returns the columns if successful, and nil if at list one
+// if they are all available. Returns the columns if successful, and nil if at least one
 // requested sidecar is not available in the storage.
 func tryGetDirectColumns(storage filesystem.DataColumnStorageReader, blockRoot [fieldparams.RootLength]byte, indices []uint64) ([]blocks.VerifiedRODataColumn, error) {
 	// Check if all requested indices are present in cache
