@@ -98,6 +98,8 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.StaticPeers,
 			flags.BlobBatchLimit,
 			flags.BlobBatchLimitBurstFactor,
+			flags.DataColumnBatchLimit,
+			flags.DataColumnBatchLimitBurstFactor,
 			flags.BlockBatchLimit,
 			flags.BlockBatchLimitBurstFactor,
 			flags.MaxConcurrentDials,
