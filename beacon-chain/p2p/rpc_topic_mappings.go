@@ -169,7 +169,7 @@ var (
 		RPCDataColumnSidecarsByRangeTopicV1: new(pb.DataColumnSidecarsByRangeRequest),
 
 		// DataColumnSidecarsByRoot v1 Message
-		RPCDataColumnSidecarsByRootTopicV1: new(p2ptypes.DataColumnsByRootIdentifiers),
+		RPCDataColumnSidecarsByRootTopicV1: p2ptypes.DataColumnsByRootIdentifiers{},
 	}
 
 	// Maps all registered protocol prefixes.
