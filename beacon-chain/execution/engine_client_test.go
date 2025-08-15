@@ -2585,7 +2585,7 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 	require.NoError(t, err)
 	sb, err := blocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
-	
+
 	t.Run("GetBlobsV2 is not supported", func(t *testing.T) {
 		_, err := client.ReconstructDataColumnSidecars(client.ctx, sb, r)
 		require.ErrorContains(t, "get blobs V2 for block", err)
@@ -2775,17 +2775,16 @@ func TestReconstructDataColumnSidecars_WithRetry(t *testing.T) {
 	r := [32]byte{1, 2, 3}
 
 	t.Run("successful initial call does not trigger retry", func(t *testing.T) {
-		ctx := context.Background()
 		// Setup server that returns all blobs
 		blobMasks := []bool{true, true, true}
 		srv := createBlobServerV2(t, 3, blobMasks)
 		defer srv.Close()
 
-		client := &Service{}
+		client := &Service{ctx: context.Background()}
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		dataColumns, err := client.ReconstructDataColumnSidecars(ctx, signedB, r)
+		dataColumns, err := client.ReconstructDataColumnSidecars(client.ctx, signedB, r)
 		require.NoError(t, err)
 		require.Equal(t, 128, len(dataColumns))
 
@@ -2794,16 +2793,15 @@ func TestReconstructDataColumnSidecars_WithRetry(t *testing.T) {
 	})
 
 	t.Run("failed initial call triggers retry", func(t *testing.T) {
-		ctx := context.Background()
 		// Setup server that returns no blobs
 		srv := createBlobServerV2(t, 0, []bool{})
 		defer srv.Close()
 
-		client := &Service{}
+		client := &Service{ctx: context.Background()}
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		dataColumns, err := client.ReconstructDataColumnSidecars(ctx, signedB, r)
+		dataColumns, err := client.ReconstructDataColumnSidecars(client.ctx, signedB, r)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(dataColumns))
 
@@ -2821,17 +2819,16 @@ func TestReconstructDataColumnSidecars_WithRetry(t *testing.T) {
 
 
 	t.Run("does not start duplicate retry", func(t *testing.T) {
-		ctx := context.Background()
 		// Setup server that returns no blobs
 		srv := createBlobServerV2(t, 0, []bool{})
 		defer srv.Close()
 
-		client := &Service{}
+		client := &Service{ctx: context.Background()}
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
 		// First call should start retry
-		dataColumns, err := client.ReconstructDataColumnSidecars(ctx, signedB, r)
+		dataColumns, err := client.ReconstructDataColumnSidecars(client.ctx, signedB, r)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(dataColumns))
 
@@ -2840,7 +2837,7 @@ func TestReconstructDataColumnSidecars_WithRetry(t *testing.T) {
 		require.Equal(t, true, client.hasActiveRetry(r))
 
 		// Second call should not start another retry
-		dataColumns, err = client.ReconstructDataColumnSidecars(ctx, signedB, r)
+		dataColumns, err = client.ReconstructDataColumnSidecars(client.ctx, signedB, r)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(dataColumns))
 		require.Equal(t, true, client.hasActiveRetry(r))
@@ -2880,7 +2877,8 @@ func TestRetryTimeout(t *testing.T) {
 		srv := createBlobServerV2(t, 0, []bool{})
 		defer srv.Close()
 
-		client := &Service{}
+		ctx := context.Background()
+		client := &Service{ctx: ctx}
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
@@ -2892,7 +2890,6 @@ func TestRetryTimeout(t *testing.T) {
 		defer params.OverrideBeaconConfig(originalConfig)
 
 		// Call ReconstructDataColumnSidecars which will start retry internally
-		ctx := context.Background()
 		_, err := client.ReconstructDataColumnSidecars(ctx, signedB, r)
 		require.NoError(t, err) // Should not error, just return empty result
 
@@ -2930,7 +2927,8 @@ func TestConcurrentRetries(t *testing.T) {
 		srv := createBlobServerV2(t, 0, []bool{})
 		defer srv.Close()
 
-		client := &Service{}
+		ctx := context.Background()
+		client := &Service{ctx: ctx}
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
@@ -2947,8 +2945,6 @@ func TestConcurrentRetries(t *testing.T) {
 			testBlocks[i] = signedB
 			roots[i] = [32]byte{byte(i), byte(i), byte(i)}
 		}
-
-		ctx := context.Background()
 
 		// Start retries for all blocks
 		for i := 0; i < 3; i++ {
@@ -3001,7 +2997,7 @@ func TestRetryBehaviorWithDataAvailability(t *testing.T) {
 		srv := createBlobServerV2(t, 0, []bool{})
 		defer srv.Close()
 
-		client := &Service{}
+		client := &Service{ctx: context.Background()}
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
@@ -3029,12 +3025,12 @@ func TestRetryBehaviorWithDataAvailability(t *testing.T) {
 		srv := createBlobServerV2(t, 0, []bool{})
 		defer srv.Close()
 
-		client := &Service{}
+		ctx := context.Background()
+		client := &Service{ctx: ctx}
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
 		// Start the initial reconstruction which should trigger retry
-		ctx := context.Background()
 		dataColumns, err := client.ReconstructDataColumnSidecars(ctx, signedB, r)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(dataColumns))
@@ -3088,7 +3084,8 @@ func TestConcurrentReconstructDataColumnSidecars(t *testing.T) {
 		defer srv.Close()
 
 		// Setup client
-		client := &Service{}
+		ctx := context.Background()
+		client := &Service{ctx: ctx}
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
@@ -3104,8 +3101,6 @@ func TestConcurrentReconstructDataColumnSidecars(t *testing.T) {
 
 		blockRoot, err := signedBlock.Block().HashTreeRoot()
 		require.NoError(t, err)
-
-		ctx := context.Background()
 
 		// Start multiple concurrent calls
 		numCalls := 5
