@@ -34,7 +34,7 @@ func (s *ValidationStage) Execute(ctx *ProcessingContext, blocks []consensusbloc
 		}
 		
 		// For single mode, check if already synced
-		if ctx.Mode == ModeSingle {
+		if ctx.IsSingle() {
 			if s.service.InForkchoice(blockRoot) {
 				return fmt.Errorf("block already synced: %#x", blockRoot)
 			}
@@ -56,22 +56,150 @@ func (s *ValidationStage) Execute(ctx *ProcessingContext, blocks []consensusbloc
 	return nil
 }
 
-// StateTransitionStage handles state transitions
-type StateTransitionStage struct {
+// StateTransitionExecutionAndDAStage combines state transition, execution validation, and DA checks
+// into a single stage for optimal batch performance while maintaining code reuse
+type StateTransitionExecutionAndDAStage struct {
 	service *Service
 }
 
-func (s *StateTransitionStage) Name() string { return "state_transition" }
-func (s *StateTransitionStage) SupportsBatch() bool { return true }
+func (s *StateTransitionExecutionAndDAStage) Name() string { return "state_transition_execution_and_da" }
+func (s *StateTransitionExecutionAndDAStage) SupportsBatch() bool { return true }
 
-func (s *StateTransitionStage) Execute(ctx *ProcessingContext, blocks []consensusblocks.ROBlock) error {
-	if ctx.Mode == ModeBatch && len(blocks) > 1 {
-		return s.executeBatch(ctx, blocks)
+func (s *StateTransitionExecutionAndDAStage) Execute(ctx *ProcessingContext, blocks []consensusblocks.ROBlock) error {
+	if ctx.IsSingle() {
+		return s.processSingleBlock(ctx, blocks[0])
 	}
-	return s.executeSingle(ctx, blocks[0])
+	return s.processBatchBlocks(ctx, blocks)
 }
 
-func (s *StateTransitionStage) executeSingle(ctx *ProcessingContext, block consensusblocks.ROBlock) error {
+// ProcessMode defines how to execute block processing
+type ProcessMode int
+
+const (
+	ProcessParallel ProcessMode = iota // Run state transition and execution in parallel
+	ProcessSequential                  // Run state transition and execution sequentially
+)
+
+// BlockProcessResult contains the result of processing a single block
+type BlockProcessResult struct {
+	preState        state.BeaconState
+	postState       state.BeaconState
+	isValidPayload  bool
+	sigSet          *bls.SignatureBatch
+	checkpoints     []*ethpb.Checkpoint
+	daWaitedTime    time.Duration
+}
+
+// processBlock handles the core validation logic shared between single and batch modes
+func (s *StateTransitionExecutionAndDAStage) processBlock(
+	ctx *ProcessingContext,
+	block consensusblocks.ROBlock,
+	blockIndex int,
+	preState state.BeaconState,
+	mode ProcessMode,
+) (*BlockProcessResult, error) {
+	blockRoot := ctx.BlockRoots[blockIndex]
+	result := &BlockProcessResult{
+		preState: preState,
+	}
+
+	// Save current checkpoints (reused logic)
+	cp := s.service.saveCurrentCheckpoints(preState)
+	result.checkpoints = []*ethpb.Checkpoint{
+		{Epoch: cp.j, Root: nil},
+		{Epoch: cp.f, Root: nil},
+		{Epoch: cp.c, Root: nil},
+	}
+
+	// Get state version info for execution validation (reused logic)
+	preStateVersion, preStateHeader, err := getStateVersionAndPayload(preState)
+	if err != nil {
+		return nil, err
+	}
+
+	if mode == ProcessParallel {
+		// Single mode: Run state transition and execution validation IN PARALLEL
+		eg, _ := errgroup.WithContext(ctx.Context)
+		var postState state.BeaconState
+		var isValidPayload bool
+
+		eg.Go(func() error {
+			var err error
+			postState, err = s.service.validateStateTransition(ctx.Context, preState, block)
+			if err != nil {
+				return errors.Wrap(err, "failed to validate consensus state transition function")
+			}
+			return nil
+		})
+
+		eg.Go(func() error {
+			var err error
+			isValidPayload, err = s.service.validateExecutionOnBlock(ctx.Context, preStateVersion, preStateHeader, block)
+			if err != nil {
+				return errors.Wrap(err, "could not notify the engine of the new payload")
+			}
+			return nil
+		})
+
+		if err := eg.Wait(); err != nil {
+			return nil, err
+		}
+
+		result.postState = postState
+		result.isValidPayload = isValidPayload
+	} else {
+		// Batch mode: Run state transition and execution validation SEQUENTIALLY
+		// Execute state transition without signature verification for batch optimization
+		var set *bls.SignatureBatch
+		set, result.postState, err = transition.ExecuteStateTransitionNoVerifyAnySig(ctx.Context, preState, block)
+		if err != nil {
+			return nil, invalidBlock{error: err}
+		}
+		result.sigSet = set
+
+		// Validate execution payload
+		postVersion, postHeader, err := getStateVersionAndPayload(result.postState)
+		if err != nil {
+			return nil, err
+		}
+
+		result.isValidPayload, err = s.service.notifyNewPayload(ctx.Context, postVersion, postHeader, block)
+		if err != nil {
+			return nil, s.service.handleInvalidExecutionError(ctx.Context, err, blockRoot, block.Block().ParentRoot())
+		}
+
+		// Validate merge transition if needed (reused logic)
+		if result.isValidPayload {
+			if err := s.service.validateMergeTransitionBlock(ctx.Context, preStateVersion, preStateHeader, block); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return result, nil
+}
+
+// checkDataAvailability handles DA checks for a single block (reused logic)
+func (s *StateTransitionExecutionAndDAStage) checkDataAvailability(
+	ctx *ProcessingContext,
+	block consensusblocks.ROBlock,
+	blockIndex int,
+) (time.Duration, error) {
+	blockRoot := ctx.BlockRoots[blockIndex]
+	start := time.Now()
+
+	if ctx.AVS == nil {
+		blockCopy, err := block.Copy()
+		if err != nil {
+			return 0, err
+		}
+		return time.Since(start), s.service.isDataAvailable(ctx.Context, blockRoot, blockCopy)
+	}
+
+	return time.Since(start), ctx.AVS.IsDataAvailable(ctx.Context, s.service.CurrentSlot(), block)
+}
+
+func (s *StateTransitionExecutionAndDAStage) processSingleBlock(ctx *ProcessingContext, block consensusblocks.ROBlock) error {
 	idx := ctx.CurrentBlockIndex
 	
 	// Get pre-state
@@ -79,29 +207,32 @@ func (s *StateTransitionStage) executeSingle(ctx *ProcessingContext, block conse
 	if err != nil {
 		return errors.Wrap(err, "could not get block's prestate")
 	}
-	ctx.PreStates[0] = preState
-	ctx.CurrentPreState = preState
+	ctx.SetPreStateForBlock(0, preState)
 	
-	// Execute state transition
-	postState, err := s.service.validateStateTransition(ctx.Context, preState, block)
+	// Process block using shared logic with parallel execution
+	result, err := s.processBlock(ctx, block, idx, preState, ProcessParallel)
 	if err != nil {
 		return err
 	}
-	ctx.States[0] = postState
-	ctx.CurrentState = postState
 	
-	// Save current checkpoints
-	cp := s.service.saveCurrentCheckpoints(preState)
-	ctx.Checkpoints[idx] = []*ethpb.Checkpoint{
-		{Epoch: cp.j, Root: nil},
-		{Epoch: cp.f, Root: nil},
-		{Epoch: cp.c, Root: nil},
+	// Store results
+	ctx.SetPostStateForBlock(0, result.postState)
+	ctx.IsValidPayloads[idx] = result.isValidPayload
+	ctx.Checkpoints[idx] = result.checkpoints
+	
+	// Check data availability using shared logic
+	daWaitedTime, err := s.checkDataAvailability(ctx, block, idx)
+	if err != nil {
+		return err
 	}
+	ctx.DAWaitedTime = daWaitedTime
 	
 	return nil
 }
 
-func (s *StateTransitionStage) executeBatch(ctx *ProcessingContext, blocks []consensusblocks.ROBlock) error {
+func (s *StateTransitionExecutionAndDAStage) processBatchBlocks(ctx *ProcessingContext, blocks []consensusblocks.ROBlock) error {
+	// Single-loop batch processing for optimal performance
+	
 	if len(blocks) == 0 {
 		return errors.New("no blocks provided")
 	}
@@ -120,35 +251,41 @@ func (s *StateTransitionStage) executeBatch(ctx *ProcessingContext, blocks []con
 		return errors.Wrap(err, "could not fill in missing blocks to forkchoice")
 	}
 	
-	// Process each block in sequence, reusing the same state variable
+	// SINGLE LOOP: Process each block with state transition, execution validation, and DA checks
 	for i, block := range blocks {
-		// Store pre-state for validation stages that need it
+		// Store pre-state for other stages that need it
 		ctx.CurrentPreState = preState.Copy()
 		
-		// Execute state transition without signature verification
-		var set *bls.SignatureBatch
-		set, preState, err = transition.ExecuteStateTransitionNoVerifyAnySig(ctx.Context, preState, block)
+		// Process block using shared logic with sequential execution
+		result, err := s.processBlock(ctx, block, i, preState, ProcessSequential)
 		if err != nil {
-			return invalidBlock{error: err}
+			return err
 		}
+		
+		// Check data availability using shared logic
+		_, err = s.checkDataAvailability(ctx, block, i)
+		if err != nil {
+			return err
+		}
+		
+		// Store results
+		ctx.IsValidPayloads[i] = result.isValidPayload
+		ctx.SigSets[i] = result.sigSet
+		ctx.Checkpoints[i] = result.checkpoints
 		
 		// Save boundary states at epoch transitions (like original)
-		if slots.IsEpochStart(preState.Slot()) {
-			ctx.BoundaryStates[block.Root()] = preState.Copy()
+		if slots.IsEpochStart(result.postState.Slot()) {
+			ctx.BoundaryStates[block.Root()] = result.postState.Copy()
 		}
 		
-		ctx.CurrentState = preState
-		ctx.SigSets[i] = set
-		
-		// Save checkpoints
-		ctx.Checkpoints[i] = []*ethpb.Checkpoint{
-			preState.CurrentJustifiedCheckpoint(),
-			preState.FinalizedCheckpoint(),
-		}
+		// Update streaming state for next iteration
+		ctx.CurrentState = result.postState
+		preState = result.postState
 	}
 	
 	return nil
 }
+
 
 // SignatureVerificationStage handles signature verification
 type SignatureVerificationStage struct {
@@ -159,7 +296,7 @@ func (s *SignatureVerificationStage) Name() string { return "signature_verificat
 func (s *SignatureVerificationStage) SupportsBatch() bool { return true }
 
 func (s *SignatureVerificationStage) Execute(ctx *ProcessingContext, blocks []consensusblocks.ROBlock) error {
-	if ctx.Mode == ModeBatch && len(blocks) > 1 {
+	if ctx.IsBatch() {
 		return s.verifyBatchSignatures(ctx)
 	}
 	return s.verifySingleSignatures(ctx, blocks[0])
@@ -196,134 +333,7 @@ func (s *SignatureVerificationStage) verifySingleSignatures(ctx *ProcessingConte
 	return nil
 }
 
-// ExecutionValidationStage handles execution layer validation
-type ExecutionValidationStage struct {
-	service *Service
-}
 
-func (s *ExecutionValidationStage) Name() string { return "execution_validation" }
-func (s *ExecutionValidationStage) SupportsBatch() bool { return true }
-
-func (s *ExecutionValidationStage) Execute(ctx *ProcessingContext, blocks []consensusblocks.ROBlock) error {
-	if ctx.Mode == ModeBatch && len(blocks) > 1 {
-		return s.validateBatchExecution(ctx, blocks)
-	}
-	return s.validateSingleExecution(ctx, blocks[0])
-}
-
-func (s *ExecutionValidationStage) validateSingleExecution(ctx *ProcessingContext, block consensusblocks.ROBlock) error {
-	idx := ctx.CurrentBlockIndex
-	preStateVersion, preStateHeader, err := getStateVersionAndPayload(ctx.PreStates[0])
-	if err != nil {
-		return err
-	}
-	
-	eg, _ := errgroup.WithContext(ctx.Context)
-	var isValidPayload bool
-	
-	eg.Go(func() error {
-		var err error
-		isValidPayload, err = s.service.validateExecutionOnBlock(ctx.Context, preStateVersion, preStateHeader, block)
-		if err != nil {
-			return errors.Wrap(err, "could not notify the engine of the new payload")
-		}
-		return nil
-	})
-	
-	if err := eg.Wait(); err != nil {
-		return err
-	}
-	
-	ctx.IsValidPayloads[idx] = isValidPayload
-	return nil
-}
-
-func (s *ExecutionValidationStage) validateBatchExecution(ctx *ProcessingContext, blocks []consensusblocks.ROBlock) error {
-	// Need to process blocks to get the states for validation
-	// This is called after StateTransitionStage, so CurrentState has the final state
-	// We need to replay to get intermediate states for validation
-	
-	// Get initial pre-state
-	preState, err := s.service.cfg.StateGen.StateByRootInitialSync(ctx.Context, blocks[0].Block().ParentRoot())
-	if err != nil {
-		return err
-	}
-	
-	for i, block := range blocks {
-		preVersion, preHeader, err := getStateVersionAndPayload(preState)
-		if err != nil {
-			return err
-		}
-		
-		// Execute transition to get post state (already done in StateTransitionStage, but we need intermediate states)
-		var postState state.BeaconState
-		if i == len(blocks)-1 {
-			// Last block, use the current state
-			postState = ctx.CurrentState
-		} else {
-			// Need to compute intermediate state
-			_, postState, err = transition.ExecuteStateTransitionNoVerifyAnySig(ctx.Context, preState, block)
-			if err != nil {
-				return err
-			}
-		}
-		
-		postVersion, postHeader, err := getStateVersionAndPayload(postState)
-		if err != nil {
-			return err
-		}
-		
-		isValidPayload, err := s.service.notifyNewPayload(ctx.Context,
-			postVersion, postHeader, block)
-		if err != nil {
-			blockRoot := ctx.BlockRoots[i]
-			return s.service.handleInvalidExecutionError(ctx.Context, err, blockRoot, block.Block().ParentRoot())
-		}
-		
-		ctx.IsValidPayloads[i] = isValidPayload
-		
-		if isValidPayload {
-			if err := s.service.validateMergeTransitionBlock(ctx.Context, preVersion,
-				preHeader, block); err != nil {
-				return err
-			}
-		}
-		
-		preState = postState
-	}
-	
-	return nil
-}
-
-// DataAvailabilityStage handles data availability checks
-type DataAvailabilityStage struct {
-	service *Service
-}
-
-func (s *DataAvailabilityStage) Name() string { return "data_availability" }
-func (s *DataAvailabilityStage) SupportsBatch() bool { return false }
-
-func (s *DataAvailabilityStage) Execute(ctx *ProcessingContext, blocks []consensusblocks.ROBlock) error {
-	// DA checks are done per block
-	block := blocks[0]
-	idx := ctx.CurrentBlockIndex
-	blockRoot := ctx.BlockRoots[idx]
-	
-	start := time.Now()
-	defer func() {
-		ctx.DAWaitedTime = time.Since(start)
-	}()
-	
-	if ctx.AVS == nil {
-		blockCopy, err := block.Copy()
-		if err != nil {
-			return err
-		}
-		return s.service.isDataAvailable(ctx.Context, blockRoot, blockCopy)
-	}
-	
-	return ctx.AVS.IsDataAvailable(ctx.Context, s.service.CurrentSlot(), block)
-}
 
 // ForkchoiceStage handles forkchoice operations
 type ForkchoiceStage struct {
@@ -334,7 +344,7 @@ func (s *ForkchoiceStage) Name() string { return "forkchoice" }
 func (s *ForkchoiceStage) SupportsBatch() bool { return true }
 
 func (s *ForkchoiceStage) Execute(ctx *ProcessingContext, blocks []consensusblocks.ROBlock) error {
-	if ctx.Mode == ModeBatch && len(blocks) > 1 {
+	if ctx.IsBatch() {
 		return s.executeBatchForkchoice(ctx, blocks)
 	}
 	return s.executeSingleForkchoice(ctx, blocks[0])
@@ -350,19 +360,66 @@ func (s *ForkchoiceStage) executeSingleForkchoice(ctx *ProcessingContext, block 
 		return err
 	}
 	
-	if err := s.service.savePostStateInfo(ctx.Context, blockRoot, blockCopy, ctx.States[0]); err != nil {
+	// Take forkchoice lock (single mode always needs it)
+	s.service.cfg.ForkChoiceStore.Lock()
+	defer s.service.cfg.ForkChoiceStore.Unlock()
+	
+	// Get the post state
+	postState := ctx.GetPostStateForBlock(0)
+	
+	if err := s.service.savePostStateInfo(ctx.Context, blockRoot, blockCopy, postState); err != nil {
 		return errors.Wrap(err, "could not save post state info")
 	}
 	
-	// Execute post block processing
+	// Execute post block processing (within the forkchoice lock)
 	args := &postBlockProcessConfig{
 		ctx:            ctx.Context,
 		roblock:        block,
-		postState:      ctx.States[0],
+		postState:      postState,
 		isValidPayload: ctx.IsValidPayloads[idx],
 	}
 	
-	return s.service.postBlockProcess(args)
+	if err := s.service.postBlockProcess(args); err != nil {
+		return errors.Wrap(err, "could not process block")
+	}
+	
+	// IMPORTANT: Single-mode post-processing MUST happen within forkchoice lock
+	// Update checkpoints (requires forkchoice lock)
+	preState := ctx.GetPreStateForBlock(0)
+	cp := ffgCheckpoints{
+		j: ctx.Checkpoints[0][0].Epoch,
+		f: ctx.Checkpoints[0][1].Epoch,
+		c: ctx.Checkpoints[0][2].Epoch,
+	}
+	
+	if err := s.service.updateCheckpoints(ctx.Context, cp, preState, postState, blockRoot); err != nil {
+		return err
+	}
+	
+	// Handle slasher if enabled
+	if s.service.slasherEnabled {
+		go s.service.sendBlockAttestationsToSlasher(blockCopy, preState)
+	}
+	
+	// Prune operation pools (only if block is head)
+	if err := s.service.prunePostBlockOperationPools(ctx.Context, blockCopy, blockRoot); err != nil {
+		log.WithError(err).Error("Could not prune canonical objects from pool")
+	}
+	
+	// Check save hot state DB (requires forkchoice lock)
+	if err := s.service.checkSaveHotStateDB(ctx.Context); err != nil {
+		return err
+	}
+	
+	// Handle caches (requires forkchoice lock)
+	if err := s.service.handleCaches(); err != nil {
+		return err
+	}
+	
+	// Report processing metrics
+	s.service.reportPostBlockProcessing(blockCopy, blockRoot, ctx.ReceivedTime, ctx.DAWaitedTime)
+	
+	return nil
 }
 
 func (s *ForkchoiceStage) executeBatchForkchoice(ctx *ProcessingContext, blocks []consensusblocks.ROBlock) error {
@@ -453,74 +510,4 @@ func (s *ForkchoiceStage) executeBatchForkchoice(ctx *ProcessingContext, blocks 
 	return s.service.saveHeadNoDB(ctx.Context, lastBlock, lastRoot, ctx.CurrentState, !ctx.IsValidPayloads[len(blocks)-1])
 }
 
-// PostProcessingStage handles post-processing operations
-type PostProcessingStage struct {
-	service *Service
-}
 
-func (s *PostProcessingStage) Name() string { return "post_processing" }
-func (s *PostProcessingStage) SupportsBatch() bool { return false }
-
-func (s *PostProcessingStage) Execute(ctx *ProcessingContext, blocks []consensusblocks.ROBlock) error {
-	if ctx.Mode == ModeBatch {
-		return s.executeBatchPostProcessing(ctx, blocks)
-	}
-	return s.executeSinglePostProcessing(ctx, blocks[0])
-}
-
-func (s *PostProcessingStage) executeSinglePostProcessing(ctx *ProcessingContext, block consensusblocks.ROBlock) error {
-	idx := ctx.CurrentBlockIndex
-	blockRoot := ctx.BlockRoots[idx]
-	preState := ctx.PreStates[0]
-	postState := ctx.States[0]
-	
-	// Update checkpoints
-	cp := ffgCheckpoints{
-		j: ctx.Checkpoints[idx][0].Epoch,
-		f: ctx.Checkpoints[idx][1].Epoch,
-		c: ctx.Checkpoints[idx][2].Epoch,
-	}
-	
-	if err := s.service.updateCheckpoints(ctx.Context, cp, preState, postState, blockRoot); err != nil {
-		return err
-	}
-	
-	// Handle slasher if enabled
-	if s.service.slasherEnabled {
-		blockCopy, err := block.Copy()
-		if err != nil {
-			return err
-		}
-		go s.service.sendBlockAttestationsToSlasher(blockCopy, preState)
-	}
-	
-	// Prune operation pools
-	blockCopy, err := block.Copy()
-	if err != nil {
-		return err
-	}
-	if err := s.service.prunePostBlockOperationPools(ctx.Context, blockCopy, blockRoot); err != nil {
-		log.WithError(err).Error("Could not prune canonical objects from pool")
-	}
-	
-	// Check save hot state DB
-	if err := s.service.checkSaveHotStateDB(ctx.Context); err != nil {
-		return err
-	}
-	
-	// Handle caches
-	if err := s.service.handleCaches(); err != nil {
-		return err
-	}
-	
-	// Report processing metrics
-	s.service.reportPostBlockProcessing(blockCopy, blockRoot, ctx.ReceivedTime, ctx.DAWaitedTime)
-	
-	return nil
-}
-
-func (s *PostProcessingStage) executeBatchPostProcessing(ctx *ProcessingContext, blocks []consensusblocks.ROBlock) error {
-	// For batch mode, minimal post-processing is done
-	// Most of the batch-specific work is already done in ForkchoiceStage
-	return nil
-}

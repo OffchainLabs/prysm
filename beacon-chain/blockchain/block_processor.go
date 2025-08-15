@@ -67,16 +67,13 @@ type BlockProcessor struct {
 	stages  []ProcessingStage
 }
 
-// NewBlockProcessor creates a new unified block processor
+// NewBlockProcessor creates a new unified block processor with optimal performance
 func NewBlockProcessor(service *Service) *BlockProcessor {
 	stages := []ProcessingStage{
 		&ValidationStage{service: service},
-		&StateTransitionStage{service: service},
+		&StateTransitionExecutionAndDAStage{service: service}, // Combined for single-loop batch performance
 		&SignatureVerificationStage{service: service},
-		&ExecutionValidationStage{service: service},
-		&DataAvailabilityStage{service: service},
-		&ForkchoiceStage{service: service},
-		&PostProcessingStage{service: service},
+		&ForkchoiceStage{service: service}, // Includes post-processing for single mode
 	}
 
 	return &BlockProcessor{
@@ -87,8 +84,12 @@ func NewBlockProcessor(service *Service) *BlockProcessor {
 
 // Process executes the block processing pipeline
 func (bp *BlockProcessor) Process(pc *ProcessingContext, blocks []consensusblocks.ROBlock) error {
-	// Initialize based on mode
-	if pc.Mode == ModeSingle {
+	// Set batch size for strategy
+	pc.BatchSize = len(blocks)
+	
+	// Initialize based on strategy
+	strategy := pc.Strategy()
+	if strategy.IsSingle() {
 		// Single mode: allocate single-element arrays
 		pc.States = make([]state.BeaconState, 1)
 		pc.PreStates = make([]state.BeaconState, 1)
@@ -109,7 +110,8 @@ func (bp *BlockProcessor) Process(pc *ProcessingContext, blocks []consensusblock
 
 	// Execute each stage
 	for _, stage := range bp.stages {
-		if pc.Mode == ModeBatch && !stage.SupportsBatch() && len(blocks) > 1 {
+		// For batch mode with multiple blocks, non-batch stages need individual processing
+		if pc.IsBatch() && !stage.SupportsBatch() && len(blocks) > 1 {
 			// Process individually for stages that don't support batch
 			for i, block := range blocks {
 				pc.CurrentBlockIndex = i
