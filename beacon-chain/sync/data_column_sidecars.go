@@ -865,6 +865,8 @@ func randomPeer(
 			}
 		}
 
+		slices.Sort(nonRateLimitedPeers)
+
 		if len(nonRateLimitedPeers) == 0 {
 			log.WithFields(logrus.Fields{
 				"peerCount": peerCount,

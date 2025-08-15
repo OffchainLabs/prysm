@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -20,7 +21,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
-	"github.com/OffchainLabs/prysm/v6/crypto/rand"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -229,7 +229,7 @@ func TestCategorizeIndices(t *testing.T) {
 func TestSelectPeers(t *testing.T) {
 	const (
 		count = 3
-		seed  = 46
+		seed  = 42
 	)
 
 	params := DataColumnSidecarsParams{
@@ -237,7 +237,7 @@ func TestSelectPeers(t *testing.T) {
 		RateLimiter: leakybucket.NewCollector(1., 10, time.Second, false /* deleteEmptyBuckets */),
 	}
 
-	randomSource := rand.NewGenerator()
+	randomSource := rand.New(rand.NewSource(seed))
 
 	indicesByRootByPeer := map[peer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool{
 		"peer1": {
@@ -252,19 +252,7 @@ func TestSelectPeers(t *testing.T) {
 		},
 	}
 
-	expected_1 := map[peer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool{
-		"peer1": {
-			{1}: {12: true, 13: true},
-			{2}: {13: true, 14: true, 15: true},
-			{3}: {14: true, 15: true},
-		},
-		"peer2": {
-			{1}: {14: true},
-			{3}: {16: true},
-		},
-	}
-
-	expected_2 := map[peer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool{
+	expected := map[peer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool{
 		"peer1": {
 			{1}: {12: true},
 			{3}: {15: true},
@@ -277,11 +265,6 @@ func TestSelectPeers(t *testing.T) {
 	}
 
 	actual, err := selectPeers(params, randomSource, count, indicesByRootByPeer)
-
-	expected := expected_1
-	if len(actual["peer1"]) == 2 {
-		expected = expected_2
-	}
 
 	require.NoError(t, err)
 	require.Equal(t, len(expected), len(actual))
@@ -884,8 +867,8 @@ func TestComputeIndicesByRootByPeer(t *testing.T) {
 
 func TestRandomPeer(t *testing.T) {
 	// Fixed seed.
-	const seed = 42
-	randomSource := rand.NewGenerator()
+	const seed = 43
+	randomSource := rand.New(rand.NewSource(seed))
 
 	t.Run("no peers", func(t *testing.T) {
 		pid, err := randomPeer(t.Context(), randomSource, leakybucket.NewCollector(4, 8, time.Second, false /* deleteEmptyBuckets */), 1, nil)
@@ -916,7 +899,11 @@ func TestRandomPeer(t *testing.T) {
 
 		pid, err := randomPeer(t.Context(), randomSource, collector, count, indicesByRootByPeer)
 		require.NoError(t, err)
-		require.Equal(t, true, map[peer.ID]bool{peer1: true, peer2: true, peer3: true}[pid])
+		require.Equal(t, peer1, pid)
+
+		pid, err = randomPeer(t.Context(), randomSource, collector, count, indicesByRootByPeer)
+		require.NoError(t, err)
+		require.Equal(t, peer2, pid)
 	})
 }
 
