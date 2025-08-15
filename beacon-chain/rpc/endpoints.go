@@ -1003,7 +1003,7 @@ func (s *Service) beaconEndpoints(
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},
-			handler: server.GetPendingPartialWithdrawals,
+			handler: server.GetBlobs,
 			methods: []string{http.MethodGet},
 		},
 	}

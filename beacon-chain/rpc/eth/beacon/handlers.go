@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -1880,9 +1881,6 @@ func (s *Server) GetBlobs(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.GetBlobs")
 	defer span.End()
 
-	ctx, span := trace.StartSpan(r.Context(), "beacon.Blobs")
-	defer span.End()
-
 	indices, err := parseIndices(r.URL, s.TimeFetcher.CurrentSlot())
 	if err != nil {
 		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
@@ -1921,11 +1919,12 @@ func (s *Server) GetBlobs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if httputil.RespondWithSsz(r) {
-		sszResp, err := buildSidecarsSSZResponse(verifiedBlobs)
+		sszResp, err := buildBlobSszResponse(verifiedBlobs)
 		if err != nil {
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+
 		w.Header().Set(api.VersionHeader, version.String(blk.Version()))
 		httputil.WriteSsz(w, sszResp)
 		return
@@ -1942,9 +1941,11 @@ func (s *Server) GetBlobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := buildSidecarsJsonResponse(verifiedBlobs)
-	resp := &structs.SidecarsResponse{
-		Version:             version.String(blk.Version()),
+	data := make([]string, len(verifiedBlobs))
+	for i, v := range verifiedBlobs {
+		data[i] = hexutil.Encode(v.Blob)
+	}
+	resp := &structs.GetBlobsResponse{
 		Data:                data,
 		ExecutionOptimistic: isOptimistic,
 		Finalized:           s.FinalizationFetcher.IsFinalized(ctx, blkRoot),
@@ -1966,4 +1967,35 @@ func serializeItems[T interface{ MarshalSSZ() ([]byte, error) }](items []T) ([]b
 		result = append(result, b...)
 	}
 	return result, nil
+}
+
+// parseIndices filters out invalid and duplicate blob indices
+func parseIndices(url *url.URL, s primitives.Slot) ([]int, error) {
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(s)
+	rawIndices := url.Query()["indices"]
+	indices := make([]int, 0, maxBlobsPerBlock)
+	invalidIndices := make([]string, 0)
+loop:
+	for _, raw := range rawIndices {
+		ix, err := strconv.Atoi(raw)
+		if err != nil {
+			invalidIndices = append(invalidIndices, raw)
+			continue
+		}
+		if !(0 <= ix && ix < maxBlobsPerBlock) {
+			invalidIndices = append(invalidIndices, raw)
+			continue
+		}
+		for i := range indices {
+			if ix == indices[i] {
+				continue loop
+			}
+		}
+		indices = append(indices, ix)
+	}
+
+	if len(invalidIndices) > 0 {
+		return nil, fmt.Errorf("requested blob indices %v are invalid", invalidIndices)
+	}
+	return indices, nil
 }
