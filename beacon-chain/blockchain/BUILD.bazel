@@ -3,6 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "block_processor.go",
         "chain_info.go",
         "chain_info_forkchoice.go",
         "currently_syncing_block.go",
@@ -22,6 +23,7 @@ go_library(
         "process_attestation_helpers.go",
         "process_block.go",
         "process_block_helpers.go",
+        "processing_stages.go",
         "receive_attestation.go",
         "receive_blob.go",
         "receive_block.go",

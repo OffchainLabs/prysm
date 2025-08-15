@@ -5,10 +5,13 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
@@ -76,14 +79,16 @@ func (s *StateTransitionStage) executeSingle(ctx *ProcessingContext, block conse
 	if err != nil {
 		return errors.Wrap(err, "could not get block's prestate")
 	}
-	ctx.PreStates[idx] = preState
+	ctx.PreStates[0] = preState
+	ctx.CurrentPreState = preState
 	
 	// Execute state transition
 	postState, err := s.service.validateStateTransition(ctx.Context, preState, block)
 	if err != nil {
 		return err
 	}
-	ctx.States[idx] = postState
+	ctx.States[0] = postState
+	ctx.CurrentState = postState
 	
 	// Save current checkpoints
 	cp := s.service.saveCurrentCheckpoints(preState)
@@ -115,9 +120,10 @@ func (s *StateTransitionStage) executeBatch(ctx *ProcessingContext, blocks []con
 		return errors.Wrap(err, "could not fill in missing blocks to forkchoice")
 	}
 	
-	// Process each block in sequence
+	// Process each block in sequence, reusing the same state variable
 	for i, block := range blocks {
-		ctx.PreStates[i] = preState.Copy()
+		// Store pre-state for validation stages that need it
+		ctx.CurrentPreState = preState.Copy()
 		
 		// Execute state transition without signature verification
 		var set *bls.SignatureBatch
@@ -126,7 +132,12 @@ func (s *StateTransitionStage) executeBatch(ctx *ProcessingContext, blocks []con
 			return invalidBlock{error: err}
 		}
 		
-		ctx.States[i] = preState
+		// Save boundary states at epoch transitions (like original)
+		if slots.IsEpochStart(preState.Slot()) {
+			ctx.BoundaryStates[block.Root()] = preState.Copy()
+		}
+		
+		ctx.CurrentState = preState
 		ctx.SigSets[i] = set
 		
 		// Save checkpoints
@@ -202,7 +213,7 @@ func (s *ExecutionValidationStage) Execute(ctx *ProcessingContext, blocks []cons
 
 func (s *ExecutionValidationStage) validateSingleExecution(ctx *ProcessingContext, block consensusblocks.ROBlock) error {
 	idx := ctx.CurrentBlockIndex
-	preStateVersion, preStateHeader, err := getStateVersionAndPayload(ctx.PreStates[idx])
+	preStateVersion, preStateHeader, err := getStateVersionAndPayload(ctx.PreStates[0])
 	if err != nil {
 		return err
 	}
@@ -228,12 +239,36 @@ func (s *ExecutionValidationStage) validateSingleExecution(ctx *ProcessingContex
 }
 
 func (s *ExecutionValidationStage) validateBatchExecution(ctx *ProcessingContext, blocks []consensusblocks.ROBlock) error {
+	// Need to process blocks to get the states for validation
+	// This is called after StateTransitionStage, so CurrentState has the final state
+	// We need to replay to get intermediate states for validation
+	
+	// Get initial pre-state
+	preState, err := s.service.cfg.StateGen.StateByRootInitialSync(ctx.Context, blocks[0].Block().ParentRoot())
+	if err != nil {
+		return err
+	}
+	
 	for i, block := range blocks {
-		preVersion, preHeader, err := getStateVersionAndPayload(ctx.PreStates[i])
+		preVersion, preHeader, err := getStateVersionAndPayload(preState)
 		if err != nil {
 			return err
 		}
-		postVersion, postHeader, err := getStateVersionAndPayload(ctx.States[i])
+		
+		// Execute transition to get post state (already done in StateTransitionStage, but we need intermediate states)
+		var postState state.BeaconState
+		if i == len(blocks)-1 {
+			// Last block, use the current state
+			postState = ctx.CurrentState
+		} else {
+			// Need to compute intermediate state
+			_, postState, err = transition.ExecuteStateTransitionNoVerifyAnySig(ctx.Context, preState, block)
+			if err != nil {
+				return err
+			}
+		}
+		
+		postVersion, postHeader, err := getStateVersionAndPayload(postState)
 		if err != nil {
 			return err
 		}
@@ -253,6 +288,8 @@ func (s *ExecutionValidationStage) validateBatchExecution(ctx *ProcessingContext
 				return err
 			}
 		}
+		
+		preState = postState
 	}
 	
 	return nil
@@ -313,7 +350,7 @@ func (s *ForkchoiceStage) executeSingleForkchoice(ctx *ProcessingContext, block 
 		return err
 	}
 	
-	if err := s.service.savePostStateInfo(ctx.Context, blockRoot, blockCopy, ctx.States[idx]); err != nil {
+	if err := s.service.savePostStateInfo(ctx.Context, blockRoot, blockCopy, ctx.States[0]); err != nil {
 		return errors.Wrap(err, "could not save post state info")
 	}
 	
@@ -321,7 +358,7 @@ func (s *ForkchoiceStage) executeSingleForkchoice(ctx *ProcessingContext, block 
 	args := &postBlockProcessConfig{
 		ctx:            ctx.Context,
 		roblock:        block,
-		postState:      ctx.States[idx],
+		postState:      ctx.States[0],
 		isValidPayload: ctx.IsValidPayloads[idx],
 	}
 	
@@ -329,16 +366,70 @@ func (s *ForkchoiceStage) executeSingleForkchoice(ctx *ProcessingContext, block 
 }
 
 func (s *ForkchoiceStage) executeBatchForkchoice(ctx *ProcessingContext, blocks []consensusblocks.ROBlock) error {
-	// Implementation based on existing onBlockBatch forkchoice logic
-	// This is a simplified version - the full implementation would include
-	// all the batch-specific optimizations from the original code
+	// Save blocks and prepare forkchoice nodes
+	pendingNodes := make([]*forkchoicetypes.BlockAndCheckpoints, len(blocks))
+	
+	for i, b := range blocks {
+		root := b.Root()
+		
+		// Save block to database
+		if err := s.service.saveInitSyncBlock(ctx.Context, root, b); err != nil {
+			return err
+		}
+		
+		// Save state summary
+		if err := s.service.cfg.BeaconDB.SaveStateSummary(ctx.Context, &ethpb.StateSummary{
+			Slot: b.Block().Slot(),
+			Root: root[:],
+		}); err != nil {
+			return err
+		}
+		
+		// Prepare forkchoice node
+		args := &forkchoicetypes.BlockAndCheckpoints{
+			Block:               b,
+			JustifiedCheckpoint: ctx.Checkpoints[i][0],
+			FinalizedCheckpoint: ctx.Checkpoints[i][1],
+		}
+		pendingNodes[len(blocks)-i-1] = args
+		
+		// Update justified/finalized checkpoints if needed
+		if i > 0 && ctx.Checkpoints[i][0].Epoch > ctx.Checkpoints[i-1][0].Epoch {
+			if err := s.service.cfg.BeaconDB.SaveJustifiedCheckpoint(ctx.Context, ctx.Checkpoints[i][0]); err != nil {
+				return err
+			}
+		}
+		if i > 0 && ctx.Checkpoints[i][1].Epoch > ctx.Checkpoints[i-1][1].Epoch {
+			if err := s.service.updateFinalized(ctx.Context, ctx.Checkpoints[i][1]); err != nil {
+				return err
+			}
+		}
+	}
+	
+	// Save boundary states
+	for r, st := range ctx.BoundaryStates {
+		if err := s.service.cfg.StateGen.SaveState(ctx.Context, r, st); err != nil {
+			return err
+		}
+	}
 	
 	lastBlock := blocks[len(blocks)-1]
-	lastState := ctx.States[len(blocks)-1]
 	lastRoot := ctx.BlockRoots[len(blocks)-1]
 	
+	// Save the final state
+	if err := s.service.cfg.StateGen.SaveState(ctx.Context, lastRoot, ctx.CurrentState); err != nil {
+		return err
+	}
+	
+	// Insert all nodes but the last one to forkchoice
+	if len(pendingNodes) > 1 {
+		if err := s.service.cfg.ForkChoiceStore.InsertChain(ctx.Context, pendingNodes[:len(pendingNodes)-1]); err != nil {
+			return errors.Wrap(err, "could not insert batch to forkchoice")
+		}
+	}
+	
 	// Insert the last block to forkchoice
-	if err := s.service.cfg.ForkChoiceStore.InsertNode(ctx.Context, lastState, lastBlock); err != nil {
+	if err := s.service.cfg.ForkChoiceStore.InsertNode(ctx.Context, ctx.CurrentState, lastBlock); err != nil {
 		return errors.Wrap(err, "could not insert last block in batch to forkchoice")
 	}
 	
@@ -349,7 +440,17 @@ func (s *ForkchoiceStage) executeBatchForkchoice(ctx *ProcessingContext, blocks 
 		}
 	}
 	
-	return nil
+	// Notify forkchoice update
+	fcuArgs := &fcuConfig{
+		headState: ctx.CurrentState,
+		headRoot:  lastRoot,
+		headBlock: lastBlock,
+	}
+	if _, err := s.service.notifyForkchoiceUpdate(ctx.Context, fcuArgs); err != nil {
+		return err
+	}
+	
+	return s.service.saveHeadNoDB(ctx.Context, lastBlock, lastRoot, ctx.CurrentState, !ctx.IsValidPayloads[len(blocks)-1])
 }
 
 // PostProcessingStage handles post-processing operations
@@ -370,8 +471,8 @@ func (s *PostProcessingStage) Execute(ctx *ProcessingContext, blocks []consensus
 func (s *PostProcessingStage) executeSinglePostProcessing(ctx *ProcessingContext, block consensusblocks.ROBlock) error {
 	idx := ctx.CurrentBlockIndex
 	blockRoot := ctx.BlockRoots[idx]
-	preState := ctx.PreStates[idx]
-	postState := ctx.States[idx]
+	preState := ctx.PreStates[0]
+	postState := ctx.States[0]
 	
 	// Update checkpoints
 	cp := ffgCheckpoints{

@@ -24,25 +24,34 @@ const (
 
 // ProcessingContext contains all the context needed for block processing
 type ProcessingContext struct {
-	Context     context.Context
-	Mode        ProcessingMode
-	AVS         das.AvailabilityStore
-	BatchSize   int
+	Context   context.Context
+	Mode      ProcessingMode
+	AVS       das.AvailabilityStore
+	BatchSize int
+
+	// Single state tracking (reused in batch mode)
+	CurrentState    state.BeaconState
+	CurrentPreState state.BeaconState
 	
-	// Results tracking
-	States      []state.BeaconState
-	Checkpoints [][]*ethpb.Checkpoint
-	SigSets     []*bls.SignatureBatch
+	// Boundary states (only epoch boundaries saved)
+	BoundaryStates map[[32]byte]state.BeaconState
+	
+	// For single mode only (size 1)
+	States    []state.BeaconState
+	PreStates []state.BeaconState
+	
+	// Lightweight data - OK to keep all
+	Checkpoints     [][]*ethpb.Checkpoint
+	SigSets         []*bls.SignatureBatch
 	IsValidPayloads []bool
-	PreStates   []state.BeaconState
-	
+	BlockRoots      [][32]byte
+
 	// Timing info
 	ReceivedTime time.Time
 	DAWaitedTime time.Duration
-	
+
 	// Current block processing info
 	CurrentBlockIndex int
-	BlockRoots       [][32]byte
 }
 
 // ProcessingStage represents a stage in the block processing pipeline
@@ -69,7 +78,7 @@ func NewBlockProcessor(service *Service) *BlockProcessor {
 		&ForkchoiceStage{service: service},
 		&PostProcessingStage{service: service},
 	}
-	
+
 	return &BlockProcessor{
 		service: service,
 		stages:  stages,
@@ -77,35 +86,43 @@ func NewBlockProcessor(service *Service) *BlockProcessor {
 }
 
 // Process executes the block processing pipeline
-func (bp *BlockProcessor) Process(ctx *ProcessingContext, blocks []consensusblocks.ROBlock) error {
-	// Initialize context state
-	ctx.States = make([]state.BeaconState, len(blocks))
-	ctx.Checkpoints = make([][]*ethpb.Checkpoint, len(blocks))
-	ctx.SigSets = make([]*bls.SignatureBatch, len(blocks))
-	ctx.IsValidPayloads = make([]bool, len(blocks))
-	ctx.PreStates = make([]state.BeaconState, len(blocks))
-	ctx.BlockRoots = make([][32]byte, len(blocks))
-	
-	for i, block := range blocks {
-		ctx.BlockRoots[i] = block.Root()
+func (bp *BlockProcessor) Process(pc *ProcessingContext, blocks []consensusblocks.ROBlock) error {
+	// Initialize based on mode
+	if pc.Mode == ModeSingle {
+		// Single mode: allocate single-element arrays
+		pc.States = make([]state.BeaconState, 1)
+		pc.PreStates = make([]state.BeaconState, 1)
+	} else {
+		// Batch mode: use streaming approach with boundary states
+		pc.BoundaryStates = make(map[[32]byte]state.BeaconState)
 	}
 	
+	// Lightweight arrays - always allocate full size
+	pc.Checkpoints = make([][]*ethpb.Checkpoint, len(blocks))
+	pc.SigSets = make([]*bls.SignatureBatch, len(blocks))
+	pc.IsValidPayloads = make([]bool, len(blocks))
+	pc.BlockRoots = make([][32]byte, len(blocks))
+
+	for i, block := range blocks {
+		pc.BlockRoots[i] = block.Root()
+	}
+
 	// Execute each stage
 	for _, stage := range bp.stages {
-		if ctx.Mode == ModeBatch && !stage.SupportsBatch() && len(blocks) > 1 {
+		if pc.Mode == ModeBatch && !stage.SupportsBatch() && len(blocks) > 1 {
 			// Process individually for stages that don't support batch
 			for i, block := range blocks {
-				ctx.CurrentBlockIndex = i
-				if err := stage.Execute(ctx, []consensusblocks.ROBlock{block}); err != nil {
+				pc.CurrentBlockIndex = i
+				if err := stage.Execute(pc, []consensusblocks.ROBlock{block}); err != nil {
 					return errors.Wrapf(err, "stage %s failed for block %d", stage.Name(), i)
 				}
 			}
 		} else {
-			if err := stage.Execute(ctx, blocks); err != nil {
+			if err := stage.Execute(pc, blocks); err != nil {
 				return errors.Wrapf(err, "stage %s failed", stage.Name())
 			}
 		}
 	}
-	
+
 	return nil
 }
