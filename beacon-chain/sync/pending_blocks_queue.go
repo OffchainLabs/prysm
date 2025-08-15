@@ -334,24 +334,8 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 		return nil
 	}
 
-	// Remove duplicates (if any) from the list of roots.
-	roots = dedupRoots(roots)
-
-	// Filters out in place roots that are already seen in pending blocks or being synced.
-	func() {
-		s.pendingQueueLock.RLock()
-		defer s.pendingQueueLock.RUnlock()
-
-		for i := len(roots) - 1; i >= 0; i-- {
-			r := roots[i]
-			if s.seenPendingBlocks[r] || s.cfg.chain.BlockBeingSynced(r) {
-				roots = append(roots[:i], roots[i+1:]...)
-				continue
-			}
-
-			log.WithField("blockRoot", fmt.Sprintf("%#x", r)).Debug("Requesting block by root")
-		}
-	}()
+	// Filter out roots that are already seen in pending blocks or being synced.
+	roots = s.filterOutPendingAndSynced(roots)
 
 	// Nothing to do, exit early.
 	if len(roots) == 0 {
@@ -429,6 +413,27 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 	}).Debug("Send batch root request: Some roots are still missing after all allowed tries")
 
 	return nil
+}
+
+// filterOutPendingAndSynced filters out roots that are already seen in pending blocks or being synced.
+func (s *Service) filterOutPendingAndSynced(roots [][fieldparams.RootLength]byte) [][fieldparams.RootLength]byte {
+	// Remove duplicates (if any) from the list of roots.
+	roots = dedupRoots(roots)
+
+	// Filters out in place roots that are already seen in pending blocks or being synced.
+	s.pendingQueueLock.RLock()
+	defer s.pendingQueueLock.RUnlock()
+
+	for i := len(roots) - 1; i >= 0; i-- {
+		r := roots[i]
+		if s.seenPendingBlocks[r] || s.cfg.chain.BlockBeingSynced(r) {
+			roots = append(roots[:i], roots[i+1:]...)
+			continue
+		}
+
+		log.WithField("blockRoot", fmt.Sprintf("%#x", r)).Debug("Requesting block by root")
+	}
+	return roots
 }
 
 func (s *Service) sortedPendingSlots() []primitives.Slot {
