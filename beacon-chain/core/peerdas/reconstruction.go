@@ -18,8 +18,8 @@ var (
 	ErrBlobsCellsProofsMismatch = errors.New("blobs and cells proofs mismatch")
 )
 
-// MinimumColumnsCountToReconstruct return the minimum number of columns needed to proceed to a reconstruction.
-func MinimumColumnsCountToReconstruct() uint64 {
+// MinimumColumnCountToReconstruct return the minimum number of columns needed to proceed to a reconstruction.
+func MinimumColumnCountToReconstruct() uint64 {
 	// If the number of columns is odd, then we need total / 2 + 1 columns to reconstruct.
 	// If the number of columns is even, then we need total / 2 columns to reconstruct.
 	return (params.BeaconConfig().NumberOfColumns + 1) / 2
@@ -58,7 +58,7 @@ func ReconstructDataColumnSidecars(inVerifiedRoSidecars []blocks.VerifiedRODataC
 
 	// Check if there is enough sidecars to reconstruct the missing columns.
 	sidecarCount := len(sidecarByIndex)
-	if uint64(sidecarCount) < MinimumColumnsCountToReconstruct() {
+	if uint64(sidecarCount) < MinimumColumnCountToReconstruct() {
 		return nil, ErrNotEnoughDataColumnSidecars
 	}
 

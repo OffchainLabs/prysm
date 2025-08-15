@@ -584,7 +584,7 @@ func (s *Service) runLateBlockTasks() {
 // It returns a map where each key represents a missing BlobSidecar index.
 // An empty map means we have all indices; a non-empty map can be used to compare incoming
 // BlobSidecars against the set of known missing sidecars.
-func missingBlobIndices(bs *filesystem.BlobStorage, root [fieldparams.RootLength]byte, expected [][]byte, slot primitives.Slot) (map[uint64]bool, error) {
+func missingBlobIndices(store *filesystem.BlobStorage, root [fieldparams.RootLength]byte, expected [][]byte, slot primitives.Slot) (map[uint64]bool, error) {
 	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(slot)
 	if len(expected) == 0 {
 		return nil, nil
@@ -592,7 +592,7 @@ func missingBlobIndices(bs *filesystem.BlobStorage, root [fieldparams.RootLength
 	if len(expected) > maxBlobsPerBlock {
 		return nil, errMaxBlobsExceeded
 	}
-	indices := bs.Summary(root)
+	indices := store.Summary(root)
 	missing := make(map[uint64]bool, len(expected))
 	for i := range expected {
 		if len(expected[i]) > 0 && !indices.HasIndex(uint64(i)) {
@@ -607,7 +607,7 @@ func missingBlobIndices(bs *filesystem.BlobStorage, root [fieldparams.RootLength
 // It returns a map where each key represents a missing DataColumnSidecar index.
 // An empty map means we have all indices; a non-empty map can be used to compare incoming
 // DataColumns against the set of known missing sidecars.
-func missingDataColumnIndices(bs *filesystem.DataColumnStorage, root [fieldparams.RootLength]byte, expected map[uint64]bool) (map[uint64]bool, error) {
+func missingDataColumnIndices(store *filesystem.DataColumnStorage, root [fieldparams.RootLength]byte, expected map[uint64]bool) (map[uint64]bool, error) {
 	if len(expected) == 0 {
 		return nil, nil
 	}
@@ -619,7 +619,7 @@ func missingDataColumnIndices(bs *filesystem.DataColumnStorage, root [fieldparam
 	}
 
 	// Get a summary of the data columns stored in the database.
-	summary := bs.Summary(root)
+	summary := store.Summary(root)
 
 	// Check all expected data columns against the summary.
 	missing := make(map[uint64]bool)
@@ -717,7 +717,7 @@ func (s *Service) areDataColumnsAvailable(
 	summary := s.dataColumnStorage.Summary(root)
 	storedDataColumnsCount := summary.Count()
 
-	minimumColumnCountToReconstruct := peerdas.MinimumColumnsCountToReconstruct()
+	minimumColumnCountToReconstruct := peerdas.MinimumColumnCountToReconstruct()
 
 	// As soon as we have enough data column sidecars, we can reconstruct the missing ones.
 	// We don't need to wait for the rest of the data columns to declare the block as available.
@@ -820,7 +820,7 @@ func (s *Service) areDataColumnsAvailable(
 				missingIndices = uint64MapToSortedSlice(missingMap)
 			}
 
-			return errors.Wrapf(ctx.Err(), "data column sidecars slot: %d, BlockRoot: %#x, missing %v", block.Slot(), root, missingIndices)
+			return errors.Wrapf(ctx.Err(), "data column sidecars slot: %d, BlockRoot: %#x, missing: %v", block.Slot(), root, missingIndices)
 		}
 	}
 }
