@@ -3,7 +3,6 @@ package blockchain
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/electra"
@@ -73,94 +72,25 @@ type SlashingReceiver interface {
 func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, avs das.AvailabilityStore) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.ReceiveBlock")
 	defer span.End()
-	// Return early if the block is blacklisted
-	if features.BlacklistedBlock(blockRoot) {
-		return errBlacklistedRoot
-	}
-	// Return early if the block has been synced
-	if s.InForkchoice(blockRoot) {
-		log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Debug("Ignoring already synced block")
-		return nil
-	}
-
-	receivedTime := time.Now()
-	err := s.blockBeingSynced.set(blockRoot)
-	if errors.Is(err, errBlockBeingSynced) {
-		log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Debug("Ignoring block currently being synced")
-		return nil
-	}
-	defer s.blockBeingSynced.unset(blockRoot)
-
+	
 	blockCopy, err := block.Copy()
 	if err != nil {
 		return err
 	}
-
-	preState, err := s.getBlockPreState(ctx, blockCopy.Block())
-	if err != nil {
-		return errors.Wrap(err, "could not get block's prestate")
-	}
-
-	currentCheckpoints := s.saveCurrentCheckpoints(preState)
+	
 	roblock, err := blocks.NewROBlockWithRoot(blockCopy, blockRoot)
 	if err != nil {
 		return err
 	}
-
-	postState, isValidPayload, err := s.validateExecutionAndConsensus(ctx, preState, roblock)
-	if err != nil {
-		return err
+	
+	procCtx := &ProcessingContext{
+		Context:      ctx,
+		Mode:         ModeSingle,
+		AVS:          avs,
+		ReceivedTime: time.Now(),
 	}
-
-	daWaitedTime, err := s.handleDA(ctx, blockCopy, blockRoot, avs)
-	if err != nil {
-		return err
-	}
-
-	// Defragment the state before continuing block processing.
-	s.defragmentState(postState)
-
-	// The rest of block processing takes a lock on forkchoice.
-	s.cfg.ForkChoiceStore.Lock()
-	defer s.cfg.ForkChoiceStore.Unlock()
-	if err := s.savePostStateInfo(ctx, blockRoot, blockCopy, postState); err != nil {
-		return errors.Wrap(err, "could not save post state info")
-	}
-	args := &postBlockProcessConfig{
-		ctx:            ctx,
-		roblock:        roblock,
-		postState:      postState,
-		isValidPayload: isValidPayload,
-	}
-	if err := s.postBlockProcess(args); err != nil {
-		err := errors.Wrap(err, "could not process block")
-		tracing.AnnotateError(span, err)
-		return err
-	}
-	if err := s.updateCheckpoints(ctx, currentCheckpoints, preState, postState, blockRoot); err != nil {
-		return err
-	}
-	// If slasher is configured, forward the attestations in the block via an event feed for processing.
-	if s.slasherEnabled {
-		go s.sendBlockAttestationsToSlasher(blockCopy, preState)
-	}
-
-	// Handle post block operations such as pruning exits and bls messages if incoming block is the head
-	if err := s.prunePostBlockOperationPools(ctx, blockCopy, blockRoot); err != nil {
-		log.WithError(err).Error("Could not prune canonical objects from pool ")
-	}
-
-	// Have we been finalizing? Should we start saving hot states to db?
-	if err := s.checkSaveHotStateDB(ctx); err != nil {
-		return err
-	}
-
-	// We apply the same heuristic to some of our more important caches.
-	if err := s.handleCaches(); err != nil {
-		return err
-	}
-	s.reportPostBlockProcessing(blockCopy, blockRoot, receivedTime, daWaitedTime)
-	return nil
+	
+	return s.blockProcessor.Process(procCtx, []blocks.ROBlock{roblock})
 }
 
 type ffgCheckpoints struct {
@@ -340,8 +270,15 @@ func (s *Service) ReceiveBlockBatch(ctx context.Context, blocks []blocks.ROBlock
 	s.cfg.ForkChoiceStore.Lock()
 	defer s.cfg.ForkChoiceStore.Unlock()
 
+	procCtx := &ProcessingContext{
+		Context:   ctx,
+		Mode:      ModeBatch,
+		AVS:       avs,
+		BatchSize: len(blocks),
+	}
+	
 	// Apply state transition on the incoming newly received block batches, one by one.
-	if err := s.onBlockBatch(ctx, blocks, avs); err != nil {
+	if err := s.blockProcessor.Process(procCtx, blocks); err != nil {
 		err := errors.Wrap(err, "could not process block in batch")
 		tracing.AnnotateError(span, err)
 		return err

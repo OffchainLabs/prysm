@@ -69,6 +69,7 @@ type Service struct {
 	lcStore                        *lightClient.Store
 	startWaitingDataColumnSidecars chan bool // for testing purposes only
 	syncCommitteeHeadState         *cache.SyncCommitteeHeadStateCache
+	blockProcessor                 *BlockProcessor
 }
 
 // config options for the service.
@@ -189,6 +190,9 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 		blockBeingSynced:       &currentlySyncingBlock{roots: make(map[[32]byte]struct{})},
 		syncCommitteeHeadState: cache.NewSyncCommitteeHeadState(),
 	}
+	
+	// Initialize the block processor after srv is created but before options are applied
+	srv.blockProcessor = NewBlockProcessor(srv)
 	for _, opt := range opts {
 		if err := opt(srv); err != nil {
 			return nil, err
