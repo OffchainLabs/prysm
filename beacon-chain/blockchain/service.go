@@ -30,6 +30,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
@@ -588,18 +589,4 @@ func fuluForkSlot() (primitives.Slot, error) {
 	}
 
 	return forkFuluSlot, nil
-}
-
-// IsDataAvailable implements the DataAvailabilityChecker interface for use by the execution service.
-// It checks if all required blob and data column data is available for the given block.
-func (s *Service) IsDataAvailable(ctx context.Context, blockRoot [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) (bool, error) {
-	// Use the internal data availability checking method
-	err := s.isDataAvailable(ctx, blockRoot, signedBlock)
-	if err != nil {
-		// If there's an error, data is not available
-		return false, err
-	}
-
-	// If no error, data is available
-	return true, nil
 }

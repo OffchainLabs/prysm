@@ -978,7 +978,7 @@ func (s *Service) areDataColumnsImmediatelyAvailable(
 	summary := s.dataColumnStorage.Summary(root)
 	storedDataColumnsCount := summary.Count()
 
-	minimumColumnCountToReconstruct := peerdas.MinimumColumnsCountToReconstruct()
+	minimumColumnCountToReconstruct := peerdas.MinimumColumnCountToReconstruct()
 
 	// As soon as we have enough data column sidecars, we can reconstruct the missing ones.
 	// We don't need to wait for the rest of the data columns to declare the block as available.
