@@ -136,24 +136,6 @@ func (s *Service) FindAndDialPeersWithSubnets(
 	return nil
 }
 
-// rollbackDefectiveSubnets rolls back a node's contribution to the defective subnets map.
-// It increments the defective count for each subnet the node was previously satisfying.
-// If a subnet was previously satisfied and removed from the map, this reintroduces it as defective.
-func rollbackDefectiveSubnets(
-	nodeID enode.ID,
-	subnetsByNodeID map[enode.ID]map[uint64]bool,
-	defectiveSubnets map[uint64]int,
-) {
-	if subs, ok := subnetsByNodeID[nodeID]; ok {
-		for subnet := range subs {
-			// If the subnet was previously satisfied and removed from the map,
-			// this increments a zero value and reintroduces it as defective.
-			defectiveSubnets[subnet] = defectiveSubnets[subnet] + 1
-		}
-		delete(subnetsByNodeID, nodeID)
-	}
-}
-
 // updateDefectiveSubnets updates the defective subnets map when a node with matching subnets is found.
 // It decrements the defective count for each subnet the node satisfies and removes subnets
 // that are fully satisfied (count reaches 0).
@@ -207,7 +189,6 @@ func (s *Service) findPeersWithSubnets(
 
 	// Crawl the network for peers subscribed to the defective subnets.
 	nodeByNodeID := make(map[enode.ID]*enode.Node)
-	subnetsByNodeID := make(map[enode.ID]map[uint64]bool)
 
 	for len(defectiveSubnets) > 0 && iterator.Next() {
 		if err := ctx.Err(); err != nil {
@@ -234,12 +215,8 @@ func (s *Service) findPeersWithSubnets(
 			if ok {
 				// this means the existing peer with the lower sequence number is no longer valid
 				delete(nodeByNodeID, existing.ID())
-				rollbackDefectiveSubnets(existing.ID(), subnetsByNodeID, defectiveSubnets)
-				// After rolling back, refresh the filter based on the new defective set.
-				filter, err = s.nodeFilter(topicFormat, defectiveSubnets)
-				if err != nil {
-					return nil, errors.Wrap(err, "node filter")
-				}
+				// Note: We are choosing to not rollback changes to the defective subnets map in favor of calling s.defectiveSubnets once again after dialing peers.
+				// This is a case that should rarely happen and should be handled through a second iteration in FindAndDialPeersWithSubnets
 			}
 			continue
 		}
@@ -257,7 +234,6 @@ func (s *Service) findPeersWithSubnets(
 		// We found a new peer. Modify the defective subnets map
 		// and the filter accordingly.
 		nodeByNodeID[node.ID()] = node
-		subnetsByNodeID[node.ID()] = nodeSubnets
 
 		updateDefectiveSubnets(nodeSubnets, defectiveSubnets)
 		filter, err = s.nodeFilter(topicFormat, defectiveSubnets)
