@@ -139,8 +139,17 @@ func (l *periodicEpochLayout) pruneBefore(before primitives.Epoch) (*pruneSummar
 
 	//Clean up empty period directories
 	for periodDir := range periodsToCheck {
-		if err := l.fs.Remove(periodDir); err != nil {
-			log.WithField("dir", periodDir).WithError(err).Error("Period directory not empty or failed to remove")
+		entries, err := afero.ReadDir(l.fs, periodDir)
+		if err != nil {
+			log.WithField("dir", periodDir).WithError(err).Debug("Failed to read period directory contents")
+			continue
+		}
+
+		// Only attempt to remove if directory is empty
+		if len(entries) == 0 {
+			if err := l.fs.Remove(periodDir); err != nil {
+				log.WithField("dir", periodDir).WithError(err).Error("Failed to remove empty period directory")
+			}
 		}
 	}
 
