@@ -194,6 +194,7 @@ func (s *Service) blobEndpoints(blocker lookup.Blocker) []endpoint {
 	const namespace = "blob"
 	return []endpoint{
 		{
+			// Deprecated: /eth/v1/beacon/blob_sidecars/{block_id} post FULU
 			template: "/eth/v1/beacon/blob_sidecars/{block_id}",
 			name:     namespace + ".Blobs",
 			middleware: []middleware.Middleware{
@@ -993,6 +994,16 @@ func (s *Service) beaconEndpoints(
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.GetProposerLookahead,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v1/beacon/blobs/{block_id}",
+			name:     namespace + ".getBlobs",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetPendingPartialWithdrawals,
 			methods: []string{http.MethodGet},
 		},
 	}
