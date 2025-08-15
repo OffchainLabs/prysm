@@ -1093,4 +1093,47 @@ func TestFindPeersWithSubnets_received_bad_existing_node(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, 1, len(result))
+	require.Equal(t, localNode2.Node().ID(), result[0].ID()) // only node2 should remain
+}
+
+func TestRollbackAndUpdateIntegration(t *testing.T) {
+	// Initial state: need 2 peers for subnet 1 and 2 peers for subnet 2
+	defectiveSubnets := map[uint64]int{1: 2, 2: 2}
+	subnetsByNodeID := make(map[enode.ID]map[uint64]bool)
+
+	// Node 1 satisfies both subnets
+	node1ID := enode.ID{1}
+	node1Subnets := map[uint64]bool{1: true, 2: true}
+
+	subnetsByNodeID[node1ID] = node1Subnets
+	updateDefectiveSubnets(node1Subnets, defectiveSubnets)
+
+	require.DeepEqual(t, map[uint64]int{1: 1, 2: 1}, defectiveSubnets,
+		"After adding node1, both subnets should need 1 more peer")
+
+	// Now rollback node1 (simulating a bad peer scenario)
+	rollbackDefectiveSubnets(node1ID, subnetsByNodeID, defectiveSubnets)
+
+	// After rollback, should be back to original state
+	require.DeepEqual(t, map[uint64]int{1: 2, 2: 2}, defectiveSubnets,
+		"After rollback, should be back to needing 2 peers for each subnet")
+	require.Equal(t, 0, len(subnetsByNodeID),
+		"Node should be removed from subnetsByNodeID after rollback")
+
+	// Test scenario where subnet was fully satisfied then rolled back
+	defectiveSubnets = map[uint64]int{1: 1} // Only need 1 peer for subnet 1
+	subnetsByNodeID = make(map[enode.ID]map[uint64]bool)
+
+	// Add node that satisfies subnet 1
+	subnetsByNodeID[node1ID] = map[uint64]bool{1: true}
+	updateDefectiveSubnets(map[uint64]bool{1: true}, defectiveSubnets)
+
+	// Subnet 1 should be fully satisfied and removed
+	require.Equal(t, 0, len(defectiveSubnets),
+		"Subnet 1 should be removed when fully satisfied")
+
+	// Rollback should reintroduce subnet 1 as defective
+	rollbackDefectiveSubnets(node1ID, subnetsByNodeID, defectiveSubnets)
+	require.DeepEqual(t, map[uint64]int{1: 1}, defectiveSubnets,
+		"Subnet 1 should be reintroduced as defective after rollback")
 }
