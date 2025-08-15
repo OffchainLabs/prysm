@@ -348,13 +348,13 @@ func (b *BeaconChainConfig) ExecutionRequestLimits() enginev1.ExecutionRequestLi
 }
 
 type NetworkScheduleEntry struct {
-	ForkVersion      [fieldparams.VersionLength]byte
-	ForkDigest       [4]byte
-	MaxBlobsPerBlock uint64           `yaml:"MAX_BLOBS_PER_BLOCK" json:"MAX_BLOBS_PER_BLOCK"`
-	Epoch            primitives.Epoch `yaml:"EPOCH" json:"EPOCH"`
-	BPOEpoch         primitives.Epoch
-	VersionEnum      int
-	isFork           bool
+	ForkVersion      [fieldparams.VersionLength]byte `yaml:"-" json:"-"`
+	ForkDigest       [4]byte                         `yaml:"-" json:"-"`
+	MaxBlobsPerBlock uint64                          `yaml:"MAX_BLOBS_PER_BLOCK" json:"MAX_BLOBS_PER_BLOCK"`
+	Epoch            primitives.Epoch                `yaml:"EPOCH" json:"EPOCH"`
+	BPOEpoch         primitives.Epoch                `yaml:"-" json:"-"`
+	VersionEnum      int                             `yaml:"-" json:"-"`
+	isFork           bool                            `yaml:"-" json:"-"`
 }
 
 func (e NetworkScheduleEntry) LogFields() log.Fields {
