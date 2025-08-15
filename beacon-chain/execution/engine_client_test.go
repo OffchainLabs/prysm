@@ -2573,7 +2573,10 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 	cfg.FuluForkEpoch = 4
 	params.OverrideBeaconConfig(cfg)
 
-	client := &Service{capabilityCache: &capabilityCache{}}
+	client := &Service{
+		ctx: context.Background(),
+		capabilityCache: &capabilityCache{},
+	}
 	b := util.NewBeaconBlockFulu()
 	b.Block.Slot = 4 * params.BeaconConfig().SlotsPerEpoch
 	kzgCommitments := createRandomKzgCommitments(t, 6)
@@ -2582,11 +2585,9 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 	require.NoError(t, err)
 	sb, err := blocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
-
-	ctx := context.Background()
-
+	
 	t.Run("GetBlobsV2 is not supported", func(t *testing.T) {
-		_, err := client.ReconstructDataColumnSidecars(ctx, sb, r)
+		_, err := client.ReconstructDataColumnSidecars(client.ctx, sb, r)
 		require.ErrorContains(t, "get blobs V2 for block", err)
 	})
 
@@ -2597,7 +2598,7 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		dataColumns, err := client.ReconstructDataColumnSidecars(ctx, sb, r)
+		dataColumns, err := client.ReconstructDataColumnSidecars(client.ctx, sb, r)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(dataColumns))
 	})
@@ -2610,7 +2611,7 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		dataColumns, err := client.ReconstructDataColumnSidecars(ctx, sb, r)
+		dataColumns, err := client.ReconstructDataColumnSidecars(client.ctx, sb, r)
 		require.NoError(t, err)
 		require.Equal(t, 128, len(dataColumns))
 	})
@@ -2623,7 +2624,7 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		dataColumns, err := client.ReconstructDataColumnSidecars(ctx, sb, r)
+		dataColumns, err := client.ReconstructDataColumnSidecars(client.ctx, sb, r)
 		require.ErrorContains(t, errMissingBlobsAndProofsFromEL.Error(), err)
 		require.Equal(t, 0, len(dataColumns))
 	})
