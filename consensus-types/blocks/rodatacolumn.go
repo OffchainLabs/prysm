@@ -76,18 +76,6 @@ func (dc *RODataColumn) ParentRoot() [fieldparams.RootLength]byte {
 	return bytesutil.ToBytes32(dc.SignedBlockHeader.Header.ParentRoot)
 }
 
-// ParentRoot returns the parent root of the data column sidecar.
-// TODO: Add test
-func (dc *RODataColumn) StateRoot() [fieldparams.RootLength]byte {
-	return bytesutil.ToBytes32(dc.SignedBlockHeader.Header.StateRoot)
-}
-
-// ParentRoot returns the parent root of the data column sidecar.
-// TODO: Add test
-func (dc *RODataColumn) BodyRoot() [fieldparams.RootLength]byte {
-	return bytesutil.ToBytes32(dc.SignedBlockHeader.Header.BodyRoot)
-}
-
 // VerifiedRODataColumn represents an RODataColumn that has undergone full verification (eg block sig, inclusion proof, commitment check).
 type VerifiedRODataColumn struct {
 	RODataColumn

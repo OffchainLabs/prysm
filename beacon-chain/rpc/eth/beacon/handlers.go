@@ -1008,9 +1008,29 @@ func (s *Server) validateConsensus(ctx context.Context, b *eth.GenericSignedBeac
 	}
 
 	parentStateRoot := parentBlock.Block().StateRoot()
-	parentState, err := s.Stater.State(ctx, parentStateRoot[:])
-	if err != nil {
-		return errors.Wrap(err, "could not get parent state")
+	// Check if the state is already cached
+	parentState := transition.NextSlotState(parentBlockRoot[:], blk.Block().Slot())
+	if parentState == nil {
+		// The state is not advanced in the NSC, check first if the parent post-state is head
+		headRoot, err := s.HeadFetcher.HeadRoot(ctx)
+		if err != nil {
+			return errors.Wrap(err, "could not get head root")
+		}
+		if bytes.Equal(headRoot, parentBlockRoot[:]) {
+			parentState, err = s.HeadFetcher.HeadState(ctx)
+			if err != nil {
+				return errors.Wrap(err, "could not get head state")
+			}
+			parentState, err = transition.ProcessSlots(ctx, parentState, blk.Block().Slot())
+			if err != nil {
+				return errors.Wrap(err, "could not process slots to get parent state")
+			}
+		} else {
+			parentState, err = s.Stater.State(ctx, parentStateRoot[:])
+			if err != nil {
+				return errors.Wrap(err, "could not get parent state")
+			}
+		}
 	}
 	_, err = transition.ExecuteStateTransition(ctx, parentState, blk)
 	if err != nil {
@@ -1200,7 +1220,7 @@ func (s *Server) GetStateFork(w http.ResponseWriter, r *http.Request) {
 	fork := st.Fork()
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status"+err.Error(), http.StatusInternalServerError)
+		helpers.HandleIsOptimisticError(w, err)
 		return
 	}
 	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
@@ -1311,7 +1331,7 @@ func (s *Server) GetCommittees(w http.ResponseWriter, r *http.Request) {
 
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		helpers.HandleIsOptimisticError(w, err)
 		return
 	}
 
@@ -1492,7 +1512,7 @@ func (s *Server) GetFinalityCheckpoints(w http.ResponseWriter, r *http.Request) 
 	}
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		helpers.HandleIsOptimisticError(w, err)
 		return
 	}
 	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
@@ -1666,7 +1686,7 @@ func (s *Server) GetPendingConsolidations(w http.ResponseWriter, r *http.Request
 	} else {
 		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 		if err != nil {
-			httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+			helpers.HandleIsOptimisticError(w, err)
 			return
 		}
 		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
@@ -1722,7 +1742,7 @@ func (s *Server) GetPendingDeposits(w http.ResponseWriter, r *http.Request) {
 	} else {
 		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 		if err != nil {
-			httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+			helpers.HandleIsOptimisticError(w, err)
 			return
 		}
 		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
@@ -1778,7 +1798,7 @@ func (s *Server) GetPendingPartialWithdrawals(w http.ResponseWriter, r *http.Req
 	} else {
 		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 		if err != nil {
-			httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+			helpers.HandleIsOptimisticError(w, err)
 			return
 		}
 		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
@@ -1831,7 +1851,7 @@ func (s *Server) GetProposerLookahead(w http.ResponseWriter, r *http.Request) {
 	} else {
 		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 		if err != nil {
-			httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+			helpers.HandleIsOptimisticError(w, err)
 			return
 		}
 		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()

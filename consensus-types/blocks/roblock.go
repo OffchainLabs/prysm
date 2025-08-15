@@ -98,11 +98,10 @@ func (s ROBlockSlice) Len() int {
 
 // BlockWithROSidecars is a wrapper that collects the block and blob values together.
 // This is helpful because these values are collated from separate RPC requests.
-// TODO: Use a more generic name
 type BlockWithROSidecars struct {
 	Block   ROBlock
 	Blobs   []ROBlob
-	Columns []RODataColumn
+	Columns []VerifiedRODataColumn
 }
 
 // BlockWithROBlobsSlice gives convenient access to getting a slice of just the ROBlocks,

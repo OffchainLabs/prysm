@@ -38,7 +38,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v6/crypto/rand"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime"
 	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -135,7 +134,7 @@ type Service struct {
 	cancel                           context.CancelFunc
 	slotToPendingBlocks              *gcache.Cache
 	seenPendingBlocks                map[[32]byte]bool
-	blkRootToPendingAtts             map[[32]byte][]ethpb.SignedAggregateAttAndProof
+	blkRootToPendingAtts             map[[32]byte][]any
 	subHandler                       *subTopicHandler
 	pendingAttsLock                  sync.RWMutex
 	pendingQueueLock                 sync.RWMutex
@@ -179,6 +178,7 @@ type Service struct {
 	slasherEnabled                   bool
 	lcStore                          *lightClient.Store
 	dataColumnLogCh                  chan dataColumnLogEntry
+	registeredNetworkEntry           params.NetworkScheduleEntry
 }
 
 // NewService initializes new regular sync service.
@@ -191,7 +191,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 		cfg:                   &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
 		slotToPendingBlocks:   gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
 		seenPendingBlocks:     make(map[[32]byte]bool),
-		blkRootToPendingAtts:  make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
+		blkRootToPendingAtts:  make(map[[32]byte][]any),
 		dataColumnLogCh:       make(chan dataColumnLogEntry, 1000),
 		reconstructionRandGen: rand.NewGenerator(),
 	}
@@ -266,7 +266,7 @@ func (s *Service) Start() {
 	s.cfg.p2p.AddPingMethod(s.sendPingRequest)
 
 	s.processPendingBlocksQueue()
-	s.processPendingAttsQueue()
+	s.runPendingAttsQueue()
 	s.maintainPeerStatuses()
 
 	if params.FuluEnabled() {

@@ -22,6 +22,7 @@ import (
 	contracts "github.com/OffchainLabs/prysm/v6/contracts/deposit"
 	"github.com/OffchainLabs/prysm/v6/contracts/deposit/mock"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/genesis"
 	"github.com/OffchainLabs/prysm/v6/monitoring/clientstats"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
@@ -381,6 +382,7 @@ func TestInitDepositCache_OK(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, s.cfg.beaconDB.SaveGenesisBlockRoot(t.Context(), blockRootA))
 	require.NoError(t, s.cfg.beaconDB.SaveState(t.Context(), emptyState, blockRootA))
+	genesis.StoreStateDuringTest(t, emptyState)
 	s.chainStartData.Chainstarted = true
 	require.NoError(t, s.initDepositCaches(t.Context(), ctrs))
 	require.Equal(t, 3, len(s.cfg.depositCache.PendingContainers(t.Context(), nil)))
@@ -446,6 +448,7 @@ func TestInitDepositCacheWithFinalization_OK(t *testing.T) {
 	require.NoError(t, s.cfg.beaconDB.SaveGenesisBlockRoot(t.Context(), headRoot))
 	require.NoError(t, s.cfg.beaconDB.SaveState(t.Context(), emptyState, headRoot))
 	require.NoError(t, stateGen.SaveState(t.Context(), headRoot, emptyState))
+	genesis.StoreStateDuringTest(t, emptyState)
 	s.cfg.stateGen = stateGen
 	require.NoError(t, emptyState.SetEth1DepositIndex(3))
 
@@ -594,6 +597,7 @@ func TestService_EnsureConsistentPowchainData(t *testing.T) {
 	require.NoError(t, err)
 	assert.NoError(t, genState.SetSlot(1000))
 
+	genesis.StoreStateDuringTest(t, genState)
 	require.NoError(t, s1.cfg.beaconDB.SaveGenesisData(t.Context(), genState))
 	_, err = s1.validPowchainData(t.Context())
 	require.NoError(t, err)
@@ -655,6 +659,7 @@ func TestService_EnsureValidPowchainData(t *testing.T) {
 	require.NoError(t, err)
 	assert.NoError(t, genState.SetSlot(1000))
 
+	genesis.StoreStateDuringTest(t, genState)
 	require.NoError(t, s1.cfg.beaconDB.SaveGenesisData(t.Context(), genState))
 
 	err = s1.cfg.beaconDB.SaveExecutionChainData(t.Context(), &ethpb.ETH1ChainData{

@@ -3,13 +3,13 @@ package p2p
 import (
 	"context"
 	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	ecdsaprysm "github.com/OffchainLabs/prysm/v6/crypto/ecdsa"
@@ -35,17 +35,8 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 	// find and connect to a node already subscribed to a specific subnet.
 	// In our case: The node i is subscribed to subnet i, with i = 1, 2, 3
 
-	// Define the genesis validators root, to ensure everybody is on the same network.
-	const (
-		genesisValidatorRootStr = "0xdeadbeefcafecafedeadbeefcafecafedeadbeefcafecafedeadbeefcafecafe"
-		subnetCount             = 3
-		minimumPeersPerSubnet   = 1
-	)
-
-	genesisValidatorsRoot, err := hex.DecodeString(genesisValidatorRootStr[2:])
-	require.NoError(t, err)
-
-	// Create a context.
+	const subnetCount = 3
+	const minimumPeersPerSubnet = 1
 	ctx := t.Context()
 
 	// Use shorter period for testing.
@@ -57,6 +48,7 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 
 	// Create flags.
 	params.SetupTestConfigCleanup(t)
+	params.BeaconConfig().InitializeForkSchedule()
 	gFlags := new(flags.GlobalFlags)
 	gFlags.MinimumPeersPerSubnet = 1
 	flags.Init(gFlags)
@@ -73,7 +65,7 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 	bootNodeService := &Service{
 		cfg:                   &Config{UDPPort: 2000, TCPPort: 3000, QUICPort: 3000, DisableLivenessCheck: true, PingInterval: testPingInterval},
 		genesisTime:           genesisTime,
-		genesisValidatorsRoot: genesisValidatorsRoot,
+		genesisValidatorsRoot: params.BeaconConfig().GenesisValidatorsRoot[:],
 		custodyInfo:           &custodyInfo{},
 	}
 
@@ -93,6 +85,7 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 	// Create 3 nodes, each subscribed to a different subnet.
 	// Each node is connected to the bootstrap node.
 	services := make([]*Service, 0, subnetCount)
+	db := testDB.SetupDB(t)
 
 	for i := uint64(1); i <= subnetCount; i++ {
 		service, err := NewService(ctx, &Config{
@@ -103,12 +96,13 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 			QUICPort:             uint(3000 + i),
 			PingInterval:         testPingInterval,
 			DisableLivenessCheck: true,
+			DB:                   db,
 		})
 
 		require.NoError(t, err)
 
 		service.genesisTime = genesisTime
-		service.genesisValidatorsRoot = genesisValidatorsRoot
+		service.genesisValidatorsRoot = params.BeaconConfig().GenesisValidatorsRoot[:]
 		service.custodyInfo = &custodyInfo{}
 
 		nodeForkDigest, err := service.currentForkDigest()
@@ -152,13 +146,14 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 		UDPPort:              2010,
 		TCPPort:              3010,
 		QUICPort:             3010,
+		DB:                   db,
 	}
 
-	service, err := NewService(ctx, cfg)
+	service, err := NewService(t.Context(), cfg)
 	require.NoError(t, err)
 
 	service.genesisTime = genesisTime
-	service.genesisValidatorsRoot = genesisValidatorsRoot
+	service.genesisValidatorsRoot = params.BeaconConfig().GenesisValidatorsRoot[:]
 	service.custodyInfo = &custodyInfo{}
 
 	service.Start()

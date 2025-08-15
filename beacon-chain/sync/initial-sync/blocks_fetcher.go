@@ -3,11 +3,13 @@ package initialsync
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
@@ -24,7 +26,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v6/crypto/rand"
-	mathPrysm "github.com/OffchainLabs/prysm/v6/math"
+	"github.com/OffchainLabs/prysm/v6/math"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	p2ppb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
@@ -78,8 +80,7 @@ type blocksFetcherConfig struct {
 	peerFilterCapacityWeight float64
 	mode                     syncMode
 	bs                       filesystem.BlobStorageSummarizer
-	dcs                      filesystem.DataColumnStorageSummarizer
-	bv                       verification.NewBlobVerifier
+	dcs                      filesystem.DataColumnStorageReader
 	cv                       verification.NewDataColumnsVerifier
 }
 
@@ -97,8 +98,7 @@ type blocksFetcher struct {
 	p2p             p2p.P2P
 	db              db.ReadOnlyDatabase
 	bs              filesystem.BlobStorageSummarizer
-	dcs             filesystem.DataColumnStorageSummarizer
-	bv              verification.NewBlobVerifier
+	dcs             filesystem.DataColumnStorageReader
 	cv              verification.NewDataColumnsVerifier
 	blocksPerPeriod uint64
 	rateLimiter     *leakybucket.Collector
@@ -169,7 +169,6 @@ func newBlocksFetcher(ctx context.Context, cfg *blocksFetcherConfig) *blocksFetc
 		db:              cfg.db,
 		bs:              cfg.bs,
 		dcs:             cfg.dcs,
-		bv:              cfg.bv,
 		cv:              cfg.cv,
 		blocksPerPeriod: uint64(blocksPerPeriod),
 		rateLimiter:     rateLimiter,
@@ -190,7 +189,7 @@ func maxBatchLimit() int {
 	if params.DenebEnabled() {
 		maxLimit = params.BeaconConfig().MaxRequestBlocksDeneb
 	}
-	castedMaxLimit, err := mathPrysm.Int(maxLimit)
+	castedMaxLimit, err := math.Int(maxLimit)
 	if err != nil {
 		// Should be impossible to hit this case.
 		log.WithError(err).Error("Unable to calculate the max batch limit")
@@ -339,6 +338,7 @@ func (f *blocksFetcher) handleRequest(ctx context.Context, start primitives.Slot
 	if response.err == nil {
 		pid, err := f.fetchSidecars(ctx, response.blocksFrom, peers, response.bwb)
 		if err != nil {
+			log.WithError(err).Error("Failed to fetch sidecars")
 			response.err = err
 		}
 
@@ -350,69 +350,80 @@ func (f *blocksFetcher) handleRequest(ctx context.Context, start primitives.Slot
 
 // fetchSidecars fetches sidecars corresponding to blocks in `response.bwb`.
 // It mutates `Blobs` and `Columns` fields of `response.bwb` with fetched sidecars.
+// `pid` is the initial peer to request blob from (usually the peer from which the block originated),
+// `peers` is a list of peers to use for the request blobs if `pid` fails.
+// `bwScs` must me sorted by slot.
+// It returns the peer ID from which blobs were fetched (if any).
 func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []peer.ID, bwScs []blocks.BlockWithROSidecars) (peer.ID, error) {
-	const batchSize = 32
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 
-	// Find the first block with a slot greater than or equal to the first Fulu slot.
-	// (Blocks are sorted by slot.)
-	firstFuluIndex := sort.Search(len(bwScs), func(i int) bool {
-		return bwScs[i].Block.Version() >= version.Fulu
-	})
-
-	blocksWithBlobs := bwScs[:firstFuluIndex]
-	blocksWithDataColumns := bwScs[firstFuluIndex:]
-
-	if len(blocksWithBlobs) == 0 && len(blocksWithDataColumns) == 0 {
+	if len(bwScs) == 0 {
 		return "", nil
 	}
 
-	var (
-		blobsPid peer.ID
-		err      error
-	)
+	firstFuluIndex, err := findFirstFuluIndex(bwScs)
+	if err != nil {
+		return "", errors.Wrap(err, "find first Fulu index")
+	}
 
-	if len(blocksWithBlobs) > 0 {
+	preFulu := bwScs[:firstFuluIndex]
+	postFulu := bwScs[firstFuluIndex:]
+
+	var blobsPid peer.ID
+
+	if len(preFulu) > 0 {
 		// Fetch blob sidecars.
-		blobsPid, err = f.fetchBlobsFromPeer(ctx, blocksWithBlobs, pid, peers)
+		blobsPid, err = f.fetchBlobsFromPeer(ctx, preFulu, pid, peers)
 		if err != nil {
 			return "", errors.Wrap(err, "fetch blobs from peer")
 		}
 	}
 
-	if len(blocksWithDataColumns) == 0 {
+	if len(postFulu) == 0 {
 		return blobsPid, nil
 	}
 
-	// Extract blocks.
-	dataColumnBlocks := make([]blocks.ROBlock, 0, len(blocksWithBlobs))
-	for _, blockWithSidecars := range blocksWithDataColumns {
-		block := blockWithSidecars.Block
-		dataColumnBlocks = append(dataColumnBlocks, block)
-	}
-
-	// Fetch data column sidecars.
+	// Compute the columns to request.
 	custodyGroupCount, err := f.p2p.CustodyGroupCount()
 	if err != nil {
-		return blobsPid, errors.Wrap(err, "fetch custody group count from peer")
+		return blobsPid, errors.Wrap(err, "custody group count")
 	}
 
 	samplingSize := max(custodyGroupCount, samplesPerSlot)
-	fetchedDataColumnsByRoot, err := prysmsync.RequestMissingDataColumnsByRange(ctx, f.clock, f.ctxMap, f.p2p, f.rateLimiter, samplingSize, f.dcs, dataColumnBlocks, batchSize)
+	info, _, err := peerdas.Info(f.p2p.NodeID(), samplingSize)
 	if err != nil {
-		return blobsPid, errors.Wrap(err, "fetch missing data columns from peers")
+		return blobsPid, errors.Wrap(err, "custody info")
+	}
+
+	params := prysmsync.DataColumnSidecarsParams{
+		Ctx:         ctx,
+		Tor:         f.clock,
+		P2P:         f.p2p,
+		RateLimiter: f.rateLimiter,
+		CtxMap:      f.ctxMap,
+		Storage:     f.dcs,
+		NewVerifier: f.cv,
+	}
+
+	roBlocks := make([]blocks.ROBlock, 0, len(postFulu))
+	for _, block := range postFulu {
+		roBlocks = append(roBlocks, block.Block)
+	}
+
+	verifiedRoDataColumnsByRoot, err := prysmsync.FetchDataColumnSidecars(params, roBlocks, info.CustodyColumns)
+	if err != nil {
+		return "", errors.Wrap(err, "fetch data column sidecars")
 	}
 
 	// Populate the response.
 	for i := range bwScs {
 		bwSc := &bwScs[i]
 		root := bwSc.Block.Root()
-		if columns, ok := fetchedDataColumnsByRoot[root]; ok {
+		if columns, ok := verifiedRoDataColumnsByRoot[root]; ok {
 			bwSc.Columns = columns
 		}
 	}
 
-	// TODO: Return the (multiple) peer IDs that provided the data columns and not only the one for blobs.
 	return blobsPid, nil
 }
 
@@ -436,26 +447,26 @@ func (f *blocksFetcher) fetchBlocksFromPeer(
 	// peers are dialed first.
 	peers = append(bestPeers, peers...)
 	peers = dedupPeers(peers)
-	for _, peer := range peers {
-		blocks, err := f.requestBlocks(ctx, req, peer)
+	for _, p := range peers {
+		blocks, err := f.requestBlocks(ctx, req, p)
 		if err != nil {
-			log.WithField("peer", peer).WithError(err).Debug("Could not request blocks by range from peer")
+			log.WithField("peer", p).WithError(err).Debug("Could not request blocks by range from peer")
 			continue
 		}
-		f.p2p.Peers().Scorers().BlockProviderScorer().Touch(peer)
+		f.p2p.Peers().Scorers().BlockProviderScorer().Touch(p)
 		robs, err := sortedBlockWithVerifiedBlobSlice(blocks)
 		if err != nil {
-			log.WithField("peer", peer).WithError(err).Debug("Invalid BeaconBlocksByRange response")
+			log.WithField("peer", p).WithError(err).Debug("Invalid BeaconBlocksByRange response")
 			continue
 		}
 		if len(features.Get().BlacklistedRoots) > 0 {
 			for _, b := range robs {
 				if features.BlacklistedBlock(b.Block.Root()) {
-					return nil, peer, prysmsync.ErrInvalidFetchedData
+					return nil, p, prysmsync.ErrInvalidFetchedData
 				}
 			}
 		}
-		return robs, peer, err
+		return robs, p, err
 	}
 	return nil, "", errNoPeersAvailable
 }
@@ -483,6 +494,7 @@ type commitmentCountList []commitmentCount
 
 // countCommitments makes a list of all blocks that have commitments that need to be satisfied.
 // This gives us a representation to finish building the request that is lightweight and readable for testing.
+// `bwb` must be sorted by slot.
 func countCommitments(bwb []blocks.BlockWithROSidecars, retentionStart primitives.Slot) commitmentCountList {
 	if len(bwb) == 0 {
 		return nil
@@ -637,6 +649,10 @@ func missingCommitError(root [32]byte, slot primitives.Slot, missing [][]byte) e
 
 // fetchBlobsFromPeer fetches blocks from a single randomly selected peer.
 // This function mutates the input `bwb` argument.
+// `pid` is the initial peer to request blobs from (usually the peer from which the block originated),
+// `peers` is a list of peers to use for the request if `pid` fails.
+// `bwb` must be sorted by slot.
+// It returns the peer ID from which blobs were fetched.
 func (f *blocksFetcher) fetchBlobsFromPeer(ctx context.Context, bwb []blocks.BlockWithROSidecars, pid peer.ID, peers []peer.ID) (peer.ID, error) {
 	if len(bwb) == 0 {
 		return "", nil
@@ -688,14 +704,9 @@ func sortedSliceFromMap(m map[uint64]bool) []uint64 {
 		result = append(result, k)
 	}
 
-	sort.Slice(result, func(i, j int) bool {
-		return result[i] < result[j]
-	})
-
+	slices.Sort(result)
 	return result
 }
-
-// waitForPeersFo
 
 // requestBlocks is a wrapper for handling BeaconBlocksByRangeRequest requests/streams.
 func (f *blocksFetcher) requestBlocks(
@@ -792,7 +803,7 @@ func (f *blocksFetcher) waitForBandwidth(pid peer.ID, count uint64) error {
 		// Exit early if we have sufficient capacity
 		return nil
 	}
-	intCount, err := mathPrysm.Int(count)
+	intCount, err := math.Int(count)
 	if err != nil {
 		return err
 	}
@@ -809,14 +820,17 @@ func (f *blocksFetcher) waitForBandwidth(pid peer.ID, count uint64) error {
 }
 
 func (f *blocksFetcher) hasSufficientBandwidth(peers []peer.ID, count uint64) []peer.ID {
-	var filteredPeers []peer.ID
+	filteredPeers := make([]peer.ID, 0, len(peers))
 
-	for _, p := range peers {
-		if uint64(f.rateLimiter.Remaining(p.String())) < count {
+	for _, peer := range peers {
+		remaining := uint64(0)
+		if remainingInt := f.rateLimiter.Remaining(peer.String()); remainingInt > 0 {
+			remaining = uint64(remainingInt)
+		}
+		if remaining < count {
 			continue
 		}
-		copiedP := p
-		filteredPeers = append(filteredPeers, copiedP)
+		filteredPeers = append(filteredPeers, peer)
 	}
 	return filteredPeers
 }
@@ -855,4 +869,24 @@ func dedupPeers(peers []peer.ID) []peer.ID {
 		peerExists[peers[i]] = true
 	}
 	return newPeerList
+}
+
+// findFirstFuluIndex returns the index of the first block with a version >= Fulu.
+// It returns an error if blocks are not correctly sorted by version regarding Fulu.
+func findFirstFuluIndex(bwScs []blocks.BlockWithROSidecars) (int, error) {
+	firstFuluIndex := len(bwScs)
+
+	for i, bwSc := range bwScs {
+		blockVersion := bwSc.Block.Version()
+		if blockVersion >= version.Fulu && firstFuluIndex > i {
+			firstFuluIndex = i
+			continue
+		}
+
+		if blockVersion < version.Fulu && firstFuluIndex <= i {
+			return 0, errors.New("blocks are not sorted by version")
+		}
+	}
+
+	return firstFuluIndex, nil
 }

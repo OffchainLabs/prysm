@@ -21,6 +21,27 @@ import (
 	"github.com/pkg/errors"
 )
 
+type FetchStateError struct {
+	message string
+	cause   error
+}
+
+func NewFetchStateError(cause error) *FetchStateError {
+	return &FetchStateError{
+		message: "could not fetch state",
+		cause:   cause,
+	}
+}
+
+func (e *FetchStateError) Error() string {
+	if e.cause != nil {
+		return e.message + ": " + e.cause.Error()
+	}
+	return e.message
+}
+
+func (e *FetchStateError) Unwrap() error { return e.cause }
+
 // StateIdParseError represents an error scenario where a state ID could not be parsed.
 type StateIdParseError struct {
 	message string

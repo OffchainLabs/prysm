@@ -3286,3 +3286,252 @@ func TestProposer_ElectraBlobsAndProofs(t *testing.T) {
 	require.Equal(t, 10, len(blobs))
 	require.Equal(t, 10, len(proofs))
 }
+
+func TestServer_ProposeBeaconBlock_PostFuluBlindedBlock(t *testing.T) {
+	db := dbutil.SetupDB(t)
+	ctx := t.Context()
+
+	beaconState, parentRoot, _ := util.DeterministicGenesisStateWithGenesisBlock(t, ctx, db, 100)
+	require.NoError(t, beaconState.SetSlot(1))
+
+	t.Run("post-Fulu blinded block - early return success", func(t *testing.T) {
+		// Set up config with Fulu fork at epoch 5
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.FuluForkEpoch = 5
+		params.OverrideBeaconConfig(cfg)
+
+		mockBuilder := &builderTest.MockBuilderService{
+			HasConfigured:                 true,
+			Cfg:                           &builderTest.Config{BeaconDB: db},
+			ErrSubmitBlindedBlockPostFulu: nil, // Success case
+		}
+
+		c := &mock.ChainService{State: beaconState, Root: parentRoot[:]}
+		proposerServer := &Server{
+			ChainStartFetcher: &mockExecution.Chain{},
+			Eth1InfoFetcher:   &mockExecution.Chain{},
+			Eth1BlockFetcher:  &mockExecution.Chain{},
+			BlockReceiver:     c,
+			BlobReceiver:      c,
+			HeadFetcher:       c,
+			BlockNotifier:     c.BlockNotifier(),
+			OperationNotifier: c.OperationNotifier(),
+			StateGen:          stategen.New(db, doublylinkedtree.New()),
+			TimeFetcher:       c,
+			SyncChecker:       &mockSync.Sync{IsSyncing: false},
+			BeaconDB:          db,
+			BlockBuilder:      mockBuilder,
+			P2P:               &mockp2p.MockBroadcaster{},
+		}
+
+		// Create a blinded block at slot 160 (epoch 5, which is >= FuluForkEpoch)
+		blindedBlock := util.NewBlindedBeaconBlockDeneb()
+		blindedBlock.Message.Slot = 160 // This puts us at epoch 5 (160/32 = 5)
+		blindedBlock.Message.ProposerIndex = 0
+		blindedBlock.Message.ParentRoot = parentRoot[:]
+		blindedBlock.Message.StateRoot = make([]byte, 32)
+
+		req := &ethpb.GenericSignedBeaconBlock{
+			Block: &ethpb.GenericSignedBeaconBlock_BlindedDeneb{BlindedDeneb: blindedBlock},
+		}
+
+		// This should trigger the post-Fulu early return path
+		res, err := proposerServer.ProposeBeaconBlock(ctx, req)
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		require.NotEmpty(t, res.BlockRoot)
+	})
+
+	t.Run("post-Fulu blinded block - builder submission error", func(t *testing.T) {
+		// Set up config with Fulu fork at epoch 5
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.FuluForkEpoch = 5
+		params.OverrideBeaconConfig(cfg)
+
+		mockBuilder := &builderTest.MockBuilderService{
+			HasConfigured:                 true,
+			Cfg:                           &builderTest.Config{BeaconDB: db},
+			ErrSubmitBlindedBlockPostFulu: errors.New("post-Fulu builder submission failed"),
+		}
+
+		c := &mock.ChainService{State: beaconState, Root: parentRoot[:]}
+		proposerServer := &Server{
+			ChainStartFetcher: &mockExecution.Chain{},
+			Eth1InfoFetcher:   &mockExecution.Chain{},
+			Eth1BlockFetcher:  &mockExecution.Chain{},
+			BlockReceiver:     c,
+			BlobReceiver:      c,
+			HeadFetcher:       c,
+			BlockNotifier:     c.BlockNotifier(),
+			OperationNotifier: c.OperationNotifier(),
+			StateGen:          stategen.New(db, doublylinkedtree.New()),
+			TimeFetcher:       c,
+			SyncChecker:       &mockSync.Sync{IsSyncing: false},
+			BeaconDB:          db,
+			BlockBuilder:      mockBuilder,
+			P2P:               &mockp2p.MockBroadcaster{},
+		}
+
+		// Create a blinded block at slot 160 (epoch 5)
+		blindedBlock := util.NewBlindedBeaconBlockDeneb()
+		blindedBlock.Message.Slot = 160
+		blindedBlock.Message.ProposerIndex = 0
+		blindedBlock.Message.ParentRoot = parentRoot[:]
+		blindedBlock.Message.StateRoot = make([]byte, 32)
+
+		req := &ethpb.GenericSignedBeaconBlock{
+			Block: &ethpb.GenericSignedBeaconBlock_BlindedDeneb{BlindedDeneb: blindedBlock},
+		}
+
+		_, err := proposerServer.ProposeBeaconBlock(ctx, req)
+		require.ErrorContains(t, "Could not submit blinded block post-Fulu", err)
+		require.ErrorContains(t, "post-Fulu builder submission failed", err)
+	})
+
+	t.Run("pre-Fulu blinded block - uses regular handleBlindedBlock path", func(t *testing.T) {
+		// Set up config with Fulu fork at epoch 10 (future)
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.FuluForkEpoch = 10
+		params.OverrideBeaconConfig(cfg)
+
+		mockBuilder := &builderTest.MockBuilderService{
+			HasConfigured: true,
+			Cfg:           &builderTest.Config{BeaconDB: db},
+			PayloadDeneb:  &enginev1.ExecutionPayloadDeneb{},
+			BlobBundle:    &enginev1.BlobsBundle{},
+		}
+
+		c := &mock.ChainService{State: beaconState, Root: parentRoot[:]}
+		proposerServer := &Server{
+			ChainStartFetcher: &mockExecution.Chain{},
+			Eth1InfoFetcher:   &mockExecution.Chain{},
+			Eth1BlockFetcher:  &mockExecution.Chain{},
+			BlockReceiver:     c,
+			BlobReceiver:      c,
+			HeadFetcher:       c,
+			BlockNotifier:     c.BlockNotifier(),
+			OperationNotifier: c.OperationNotifier(),
+			StateGen:          stategen.New(db, doublylinkedtree.New()),
+			TimeFetcher:       c,
+			SyncChecker:       &mockSync.Sync{IsSyncing: false},
+			BeaconDB:          db,
+			BlockBuilder:      mockBuilder,
+			P2P:               &mockp2p.MockBroadcaster{},
+		}
+
+		// Create a blinded block at slot 160 (epoch 5, which is < FuluForkEpoch=10)
+		blindedBlock := util.NewBlindedBeaconBlockDeneb()
+		blindedBlock.Message.Slot = 160
+		blindedBlock.Message.ProposerIndex = 0
+		blindedBlock.Message.ParentRoot = parentRoot[:]
+		blindedBlock.Message.StateRoot = make([]byte, 32)
+
+		req := &ethpb.GenericSignedBeaconBlock{
+			Block: &ethpb.GenericSignedBeaconBlock_BlindedDeneb{BlindedDeneb: blindedBlock},
+		}
+
+		// This should NOT trigger the post-Fulu early return path, but use handleBlindedBlock instead
+		res, err := proposerServer.ProposeBeaconBlock(ctx, req)
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		require.NotEmpty(t, res.BlockRoot)
+	})
+
+	t.Run("boundary test - exactly at Fulu fork epoch", func(t *testing.T) {
+		// Set up config with Fulu fork at epoch 5
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.FuluForkEpoch = 5
+		params.OverrideBeaconConfig(cfg)
+
+		mockBuilder := &builderTest.MockBuilderService{
+			HasConfigured:                 true,
+			Cfg:                           &builderTest.Config{BeaconDB: db},
+			ErrSubmitBlindedBlockPostFulu: nil,
+		}
+
+		c := &mock.ChainService{State: beaconState, Root: parentRoot[:]}
+		proposerServer := &Server{
+			ChainStartFetcher: &mockExecution.Chain{},
+			Eth1InfoFetcher:   &mockExecution.Chain{},
+			Eth1BlockFetcher:  &mockExecution.Chain{},
+			BlockReceiver:     c,
+			BlobReceiver:      c,
+			HeadFetcher:       c,
+			BlockNotifier:     c.BlockNotifier(),
+			OperationNotifier: c.OperationNotifier(),
+			StateGen:          stategen.New(db, doublylinkedtree.New()),
+			TimeFetcher:       c,
+			SyncChecker:       &mockSync.Sync{IsSyncing: false},
+			BeaconDB:          db,
+			BlockBuilder:      mockBuilder,
+			P2P:               &mockp2p.MockBroadcaster{},
+		}
+
+		// Create a blinded block at slot 160 (exactly epoch 5)
+		blindedBlock := util.NewBlindedBeaconBlockDeneb()
+		blindedBlock.Message.Slot = 160 // 160/32 = 5 (exactly at FuluForkEpoch)
+		blindedBlock.Message.ProposerIndex = 0
+		blindedBlock.Message.ParentRoot = parentRoot[:]
+		blindedBlock.Message.StateRoot = make([]byte, 32)
+
+		req := &ethpb.GenericSignedBeaconBlock{
+			Block: &ethpb.GenericSignedBeaconBlock_BlindedDeneb{BlindedDeneb: blindedBlock},
+		}
+
+		// Should trigger post-Fulu path since epoch 5 >= FuluForkEpoch (5)
+		res, err := proposerServer.ProposeBeaconBlock(ctx, req)
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		require.NotEmpty(t, res.BlockRoot)
+	})
+
+	t.Run("unblinded block - not affected by post-Fulu condition", func(t *testing.T) {
+		// Set up config with Fulu fork at epoch 5
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.FuluForkEpoch = 5
+		params.OverrideBeaconConfig(cfg)
+
+		c := &mock.ChainService{State: beaconState, Root: parentRoot[:]}
+		proposerServer := &Server{
+			ChainStartFetcher: &mockExecution.Chain{},
+			Eth1InfoFetcher:   &mockExecution.Chain{},
+			Eth1BlockFetcher:  &mockExecution.Chain{},
+			BlockReceiver:     c,
+			BlobReceiver:      c,
+			HeadFetcher:       c,
+			BlockNotifier:     c.BlockNotifier(),
+			OperationNotifier: c.OperationNotifier(),
+			StateGen:          stategen.New(db, doublylinkedtree.New()),
+			TimeFetcher:       c,
+			SyncChecker:       &mockSync.Sync{IsSyncing: false},
+			BeaconDB:          db,
+			P2P:               &mockp2p.MockBroadcaster{},
+		}
+
+		// Create an unblinded block at slot 160 (epoch 5)
+		unblindeBlock := util.NewBeaconBlockDeneb()
+		unblindeBlock.Block.Slot = 160
+		unblindeBlock.Block.ProposerIndex = 0
+		unblindeBlock.Block.ParentRoot = parentRoot[:]
+		unblindeBlock.Block.StateRoot = make([]byte, 32)
+
+		req := &ethpb.GenericSignedBeaconBlock{
+			Block: &ethpb.GenericSignedBeaconBlock_Deneb{
+				Deneb: &ethpb.SignedBeaconBlockContentsDeneb{
+					Block: unblindeBlock,
+				},
+			},
+		}
+
+		// Unblinded blocks should not trigger post-Fulu condition, even at epoch >= FuluForkEpoch
+		res, err := proposerServer.ProposeBeaconBlock(ctx, req)
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		require.NotEmpty(t, res.BlockRoot)
+	})
+}

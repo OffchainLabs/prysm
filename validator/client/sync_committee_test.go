@@ -512,3 +512,87 @@ func TestSubmitSignedContributionAndProof_Ok(t *testing.T) {
 		})
 	}
 }
+
+func TestSubmitSignedContributionAndProof_OncePerPubkeyAndSubcommittee(t *testing.T) {
+	// Hardcode secret key in order to have a valid aggregator signature.
+	rawKey, err := hex.DecodeString("659e875e1b062c03f2f2a57332974d475b97df6cfc581d322e79642d39aca8fd")
+	assert.NoError(t, err)
+	validatorKey, err := bls.SecretKeyFromBytes(rawKey)
+	assert.NoError(t, err)
+
+	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
+		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
+			validator, m, validatorKey, finish := setupWithKey(t, validatorKey, isSlashingProtectionMinimal)
+			validatorIndex := primitives.ValidatorIndex(7)
+			committee := []primitives.ValidatorIndex{0, 3, 4, 2, validatorIndex, 6, 8, 9, 10}
+			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:       validatorKey.PublicKey().Marshal(),
+					CommitteeLength: uint64(len(committee)),
+					ValidatorIndex:  validatorIndex,
+				},
+			}}
+			defer finish()
+
+			// Sync committee aggregator is selected twice in the sync committee
+			aggregatorCommitteeIndices := []primitives.CommitteeIndex{1, 2}
+			var pubKey [fieldparams.BLSPubkeyLength]byte
+			copy(pubKey[:], validatorKey.PublicKey().Marshal())
+			m.validatorClient.EXPECT().SyncSubcommitteeIndex(
+				gomock.Any(), // ctx
+				&ethpb.SyncSubcommitteeIndexRequest{
+					Slot:      1,
+					PublicKey: pubKey[:],
+				},
+			).Return(&ethpb.SyncSubcommitteeIndexResponse{Indices: aggregatorCommitteeIndices}, nil)
+
+			m.validatorClient.EXPECT().
+				DomainData(gomock.Any(), // ctx
+					gomock.Any()). // epoch
+				Times(2).
+				Return(&ethpb.DomainResponse{
+					SignatureDomain: make([]byte, 32),
+				}, nil)
+
+			aggBits := bitfield.NewBitvector128()
+			aggBits.SetBitAt(0, true)
+			m.validatorClient.EXPECT().SyncCommitteeContribution(
+				gomock.Any(), // ctx
+				&ethpb.SyncCommitteeContributionRequest{
+					Slot:      1,
+					PublicKey: pubKey[:],
+					SubnetId:  0,
+				},
+			).Return(&ethpb.SyncCommitteeContribution{
+				BlockRoot:       make([]byte, fieldparams.RootLength),
+				Signature:       make([]byte, 96),
+				AggregationBits: aggBits,
+			}, nil)
+
+			m.validatorClient.EXPECT().
+				DomainData(gomock.Any(), // ctx
+					gomock.Any()). // epoch
+				Return(&ethpb.DomainResponse{
+					SignatureDomain: make([]byte, 32),
+				}, nil)
+
+			m.validatorClient.EXPECT().SubmitSignedContributionAndProof(
+				gomock.Any(), // ctx
+				gomock.AssignableToTypeOf(&ethpb.SignedContributionAndProof{
+					Message: &ethpb.ContributionAndProof{
+						AggregatorIndex: 7,
+						Contribution: &ethpb.SyncCommitteeContribution{
+							BlockRoot:         make([]byte, 32),
+							Signature:         make([]byte, 96),
+							AggregationBits:   bitfield.NewBitvector128(),
+							Slot:              1,
+							SubcommitteeIndex: 1,
+						},
+					},
+				}),
+			).Return(&emptypb.Empty{}, nil)
+
+			validator.SubmitSignedContributionAndProof(t.Context(), 1, pubKey)
+		})
+	}
+}

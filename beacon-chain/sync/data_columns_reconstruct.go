@@ -44,7 +44,7 @@ func (s *Service) reconstructSaveBroadcastDataColumnSidecars(
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
 	// If reconstruction is not possible or if all columns are already stored, exit early.
-	if storedColumnsCount < peerdas.MinimumColumnsCountToReconstruct() || storedColumnsCount == numberOfColumns {
+	if storedColumnsCount < peerdas.MinimumColumnCountToReconstruct() || storedColumnsCount == numberOfColumns {
 		return nil
 	}
 
@@ -127,7 +127,7 @@ func (s *Service) scheduleMissingDataColumnSidecarsBroadcast(
 	})
 
 	// Get the time corresponding to the start of the slot.
-	genesisTime := s.cfg.chain.GenesisTime()
+	genesisTime := s.cfg.clock.GenesisTime()
 	slotStartTime, err := slots.StartTime(genesisTime, slot)
 	if err != nil {
 		return errors.Wrap(err, "failed to calculate slot start time")
@@ -198,7 +198,7 @@ func (s *Service) broadcastMissingDataColumnSidecars(
 		subnet := peerdas.ComputeSubnetForDataColumnSidecar(verifiedRODataColumn.Index)
 
 		// Broadcast the missing data column.
-		if err := s.cfg.p2p.BroadcastDataColumn(root, subnet, verifiedRODataColumn.DataColumnSidecar); err != nil {
+		if err := s.cfg.p2p.BroadcastDataColumnSidecar(root, subnet, verifiedRODataColumn.DataColumnSidecar); err != nil {
 			log.WithError(err).Error("Broadcast data column")
 		}
 

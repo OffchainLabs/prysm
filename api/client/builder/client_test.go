@@ -1555,6 +1555,89 @@ func testSignedBlindedBeaconBlockElectra(t *testing.T) *eth.SignedBlindedBeaconB
 	}
 }
 
+func TestSubmitBlindedBlockPostFulu(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("success", func(t *testing.T) {
+		hc := &http.Client{
+			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+				require.Equal(t, postBlindedBeaconBlockPath, r.URL.Path)
+				require.Equal(t, "bellatrix", r.Header.Get("Eth-Consensus-Version"))
+				require.Equal(t, api.JsonMediaType, r.Header.Get("Content-Type"))
+				require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
+				// Post-Fulu: only return status code, no payload
+				return &http.Response{
+					StatusCode: http.StatusAccepted,
+					Body:       io.NopCloser(bytes.NewBufferString("")),
+					Request:    r.Clone(ctx),
+				}, nil
+			}),
+		}
+		c := &Client{
+			hc:      hc,
+			baseURL: &url.URL{Host: "localhost:3500", Scheme: "http"},
+		}
+		sbbb, err := blocks.NewSignedBeaconBlock(testSignedBlindedBeaconBlockBellatrix(t))
+		require.NoError(t, err)
+		err = c.SubmitBlindedBlockPostFulu(ctx, sbbb)
+		require.NoError(t, err)
+	})
+
+	t.Run("success_ssz", func(t *testing.T) {
+		hc := &http.Client{
+			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+				require.Equal(t, postBlindedBeaconBlockPath, r.URL.Path)
+				require.Equal(t, "bellatrix", r.Header.Get(api.VersionHeader))
+				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Content-Type"))
+				require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+				// Post-Fulu: only return status code, no payload
+				return &http.Response{
+					StatusCode: http.StatusAccepted,
+					Body:       io.NopCloser(bytes.NewBufferString("")),
+					Request:    r.Clone(ctx),
+				}, nil
+			}),
+		}
+		c := &Client{
+			hc:         hc,
+			baseURL:    &url.URL{Host: "localhost:3500", Scheme: "http"},
+			sszEnabled: true,
+		}
+		sbbb, err := blocks.NewSignedBeaconBlock(testSignedBlindedBeaconBlockBellatrix(t))
+		require.NoError(t, err)
+		err = c.SubmitBlindedBlockPostFulu(ctx, sbbb)
+		require.NoError(t, err)
+	})
+
+	t.Run("error_response", func(t *testing.T) {
+		hc := &http.Client{
+			Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+				require.Equal(t, postBlindedBeaconBlockPath, r.URL.Path)
+				require.Equal(t, "bellatrix", r.Header.Get("Eth-Consensus-Version"))
+				message := ErrorMessage{
+					Code:    400,
+					Message: "Bad Request",
+				}
+				resp, err := json.Marshal(message)
+				require.NoError(t, err)
+				return &http.Response{
+					StatusCode: http.StatusBadRequest,
+					Body:       io.NopCloser(bytes.NewBuffer(resp)),
+					Request:    r.Clone(ctx),
+				}, nil
+			}),
+		}
+		c := &Client{
+			hc:      hc,
+			baseURL: &url.URL{Host: "localhost:3500", Scheme: "http"},
+		}
+		sbbb, err := blocks.NewSignedBeaconBlock(testSignedBlindedBeaconBlockBellatrix(t))
+		require.NoError(t, err)
+		err = c.SubmitBlindedBlockPostFulu(ctx, sbbb)
+		require.ErrorIs(t, err, ErrNotOK)
+	})
+}
+
 func TestRequestLogger(t *testing.T) {
 	wo := WithObserver(&requestLogger{})
 	c, err := NewClient("localhost:3500", wo)

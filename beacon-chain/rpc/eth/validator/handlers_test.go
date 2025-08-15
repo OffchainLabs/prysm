@@ -2645,6 +2645,78 @@ func TestGetProposerDuties(t *testing.T) {
 	})
 }
 
+func TestGetProposerDuties_FuluState(t *testing.T) {
+	helpers.ClearCache()
+
+	// Create a Fulu state with slot 0 (before epoch 1 start slot which is 32)
+	fuluState, err := util.NewBeaconStateFulu()
+	require.NoError(t, err)
+	require.NoError(t, fuluState.SetSlot(0)) // Set to slot 0
+
+	// Create some validators for the test
+	depChainStart := params.BeaconConfig().MinGenesisActiveValidatorCount
+	deposits, _, err := util.DeterministicDepositsAndKeys(depChainStart)
+	require.NoError(t, err)
+
+	validators := make([]*ethpbalpha.Validator, len(deposits))
+	for i, deposit := range deposits {
+		validators[i] = &ethpbalpha.Validator{
+			PublicKey:             deposit.Data.PublicKey,
+			ActivationEpoch:       0,
+			ExitEpoch:             params.BeaconConfig().FarFutureEpoch,
+			WithdrawalCredentials: make([]byte, 32),
+		}
+	}
+	require.NoError(t, fuluState.SetValidators(validators))
+
+	// Set up block roots
+	genesis := util.NewBeaconBlock()
+	genesisRoot, err := genesis.Block.HashTreeRoot()
+	require.NoError(t, err)
+	roots := make([][]byte, fieldparams.BlockRootsLength)
+	roots[0] = genesisRoot[:]
+	require.NoError(t, fuluState.SetBlockRoots(roots))
+
+	chainSlot := primitives.Slot(0)
+	chain := &mockChain.ChainService{
+		State: fuluState, Root: genesisRoot[:], Slot: &chainSlot,
+	}
+
+	db := dbutil.SetupDB(t)
+	require.NoError(t, db.SaveGenesisBlockRoot(t.Context(), genesisRoot))
+
+	s := &Server{
+		Stater:                 &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{0: fuluState}},
+		HeadFetcher:            chain,
+		TimeFetcher:            chain,
+		OptimisticModeFetcher:  chain,
+		SyncChecker:            &mockSync.Sync{IsSyncing: false},
+		PayloadIDCache:         cache.NewPayloadIDCache(),
+		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+		BeaconDB:               db,
+	}
+
+	// Request epoch 1 duties, which should require advancing from slot 0 to slot 32
+	// But for Fulu state, this advancement should be skipped
+	request := httptest.NewRequest(http.MethodGet, "http://www.example.com/eth/v1/validator/duties/proposer/{epoch}", nil)
+	request.SetPathValue("epoch", "1")
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+
+	s.GetProposerDuties(writer, request)
+	assert.Equal(t, http.StatusOK, writer.Code)
+
+	// Verify the state was not advanced - it should still be at slot 0
+	// This is the key assertion for the regression test
+	assert.Equal(t, primitives.Slot(0), fuluState.Slot(), "Fulu state should not have been advanced")
+
+	resp := &structs.GetProposerDutiesResponse{}
+	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+
+	// Should still return proposer duties despite not advancing the state
+	assert.Equal(t, true, len(resp.Data) > 0, "Should return proposer duties even without state advancement")
+}
+
 func TestGetSyncCommitteeDuties(t *testing.T) {
 	helpers.ClearCache()
 	params.SetupTestConfigCleanup(t)

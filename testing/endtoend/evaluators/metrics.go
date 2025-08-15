@@ -12,8 +12,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
+	"github.com/OffchainLabs/prysm/v6/genesis"
 	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
 	"github.com/OffchainLabs/prysm/v6/testing/endtoend/policies"
@@ -29,14 +28,8 @@ const maxMemStatsBytes = 2000000000 // 2 GiB.
 // MetricsCheck performs a check on metrics to make sure caches are functioning, and
 // overall health is good. Not checking the first epoch so the sample size isn't too small.
 var MetricsCheck = types.Evaluator{
-	Name: "metrics_check_epoch_%d",
-	Policy: func(currentEpoch primitives.Epoch) bool {
-		// Hack to allow slow block proposal times to pass E2E
-		if currentEpoch >= params.BeaconConfig().DenebForkEpoch {
-			return false
-		}
-		return policies.AfterNthEpoch(0)(currentEpoch)
-	},
+	Name:       "metrics_check_epoch_%d",
+	Policy:     policies.AfterNthEpoch(0),
 	Evaluation: metricsTest,
 }
 
@@ -94,14 +87,9 @@ var metricComparisonTests = []comparisonTest{
 }
 
 func metricsTest(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
-	genesis, err := eth.NewNodeClient(conns[0]).GetGenesis(context.Background(), &emptypb.Empty{})
-	if err != nil {
-		return err
-	}
-	forkDigest, err := forks.CreateForkDigest(time.Unix(genesis.GenesisTime.Seconds, 0), genesis.GenesisValidatorsRoot)
-	if err != nil {
-		return err
-	}
+	currentSlot := slots.CurrentSlot(genesis.Time())
+	currentEpoch := slots.ToEpoch(currentSlot)
+	forkDigest := params.ForkDigest(currentEpoch)
 	for i := 0; i < len(conns); i++ {
 		response, err := http.Get(fmt.Sprintf("http://localhost:%d/metrics", e2e.TestParams.Ports.PrysmBeaconNodeMetricsPort+i))
 		if err != nil {

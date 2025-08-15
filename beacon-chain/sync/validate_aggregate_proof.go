@@ -246,7 +246,7 @@ func (s *Service) validateBlockInAttestation(ctx context.Context, satt ethpb.Sig
 	blockRoot := bytesutil.ToBytes32(satt.AggregateAttestationAndProof().AggregateVal().GetData().BeaconBlockRoot)
 	if !s.hasBlockAndState(ctx, blockRoot) {
 		// A node doesn't have the block, it'll request from peer while saving the pending attestation to a queue.
-		s.savePendingAtt(satt)
+		s.savePendingAggregate(satt)
 		return false
 	}
 	return true
@@ -254,18 +254,22 @@ func (s *Service) validateBlockInAttestation(ctx context.Context, satt ethpb.Sig
 
 // Returns true if the node has received aggregate for the aggregator with index and target epoch.
 func (s *Service) hasSeenAggregatorIndexEpoch(epoch primitives.Epoch, aggregatorIndex primitives.ValidatorIndex) bool {
+	b := append(bytesutil.Bytes32(uint64(epoch)), bytesutil.Bytes32(uint64(aggregatorIndex))...)
+
 	s.seenAggregatedAttestationLock.RLock()
 	defer s.seenAggregatedAttestationLock.RUnlock()
-	b := append(bytesutil.Bytes32(uint64(epoch)), bytesutil.Bytes32(uint64(aggregatorIndex))...)
+
 	_, seen := s.seenAggregatedAttestationCache.Get(string(b))
 	return seen
 }
 
 // Set aggregate's aggregator index target epoch as seen.
 func (s *Service) setAggregatorIndexEpochSeen(epoch primitives.Epoch, aggregatorIndex primitives.ValidatorIndex) {
+	b := append(bytesutil.Bytes32(uint64(epoch)), bytesutil.Bytes32(uint64(aggregatorIndex))...)
+
 	s.seenAggregatedAttestationLock.Lock()
 	defer s.seenAggregatedAttestationLock.Unlock()
-	b := append(bytesutil.Bytes32(uint64(epoch)), bytesutil.Bytes32(uint64(aggregatorIndex))...)
+
 	s.seenAggregatedAttestationCache.Add(string(b), true)
 }
 

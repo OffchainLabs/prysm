@@ -211,7 +211,10 @@ func (s *Service) RefreshPersistentSubnets() {
 		}
 
 		// Some data changed. Update the record and the metadata.
-		s.updateSubnetRecordWithMetadata(bitV)
+		// Not returning early here because the error comes from saving the metadata sequence number.
+		if err := s.updateSubnetRecordWithMetadata(bitV); err != nil {
+			log.WithError(err).Error("Failed to update subnet record with metadata")
+		}
 
 		// Ping all peers.
 		s.pingPeersAndLogEnr()
@@ -269,7 +272,10 @@ func (s *Service) RefreshPersistentSubnets() {
 		}
 
 		// Some data have changed, update our record and metadata.
-		s.updateSubnetRecordWithMetadataV2(bitV, bitS, custodyGroupCount)
+		// Not returning early here because the error comes from saving the metadata sequence number.
+		if err := s.updateSubnetRecordWithMetadataV2(bitV, bitS, custodyGroupCount); err != nil {
+			log.WithError(err).Error("Failed to update subnet record with metadata")
+		}
 
 		// Ping all peers to inform them of new metadata
 		s.pingPeersAndLogEnr()
@@ -289,7 +295,10 @@ func (s *Service) RefreshPersistentSubnets() {
 	}
 
 	// Some data changed. Update the record and the metadata.
-	s.updateSubnetRecordWithMetadataV3(bitV, bitS, custodyGroupCount)
+	// Not returning early here because the error comes from saving the metadata sequence number.
+	if err := s.updateSubnetRecordWithMetadataV3(bitV, bitS, custodyGroupCount); err != nil {
+		log.WithError(err).Error("Failed to update subnet record with metadata")
+	}
 
 	// Ping all peers.
 	s.pingPeersAndLogEnr()
@@ -576,8 +585,11 @@ func (s *Service) createLocalNode(
 	localNode.SetFallbackIP(ipAddr)
 	localNode.SetFallbackUDP(udpPort)
 
-	localNode, err = addForkEntry(localNode, s.genesisTime, s.genesisValidatorsRoot)
-	if err != nil {
+	currentSlot := slots.CurrentSlot(s.genesisTime)
+	currentEpoch := slots.ToEpoch(currentSlot)
+	current := params.GetNetworkScheduleEntry(currentEpoch)
+	next := params.NextNetworkScheduleEntry(currentEpoch)
+	if err := updateENR(localNode, current, next); err != nil {
 		return nil, errors.Wrap(err, "could not add eth2 fork version entry to enr")
 	}
 
@@ -698,7 +710,7 @@ func (s *Service) filterPeer(node *enode.Node) bool {
 	// Ignore nodes that don't match our fork digest.
 	nodeENR := node.Record()
 	if s.genesisValidatorsRoot != nil {
-		if err := s.compareForkENR(nodeENR); err != nil {
+		if err := compareForkENR(s.dv5Listener.LocalNode().Node().Record(), nodeENR); err != nil {
 			log.WithError(err).Trace("Fork ENR mismatches between peer and local node")
 			return false
 		}

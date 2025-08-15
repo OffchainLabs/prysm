@@ -58,7 +58,7 @@ func (s *Service) validateSyncCommitteeMessage(
 	}
 
 	if msg.Topic == nil {
-		return pubsub.ValidationReject, errInvalidTopic
+		return pubsub.ValidationReject, p2p.ErrInvalidTopic
 	}
 
 	// Read the data from the pubsub message, and reject if there is an error.

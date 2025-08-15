@@ -10,9 +10,9 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
@@ -108,7 +108,7 @@ func NewInitializerWaiter(cw startup.ClockWaiter, fc Forkchoicer, sr StateByRoot
 		o(iw)
 	}
 	if iw.getFork == nil {
-		iw.getFork = forks.Fork
+		iw.getFork = params.Fork
 	}
 	return iw
 }

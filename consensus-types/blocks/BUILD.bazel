@@ -13,7 +13,6 @@ go_library(
         "roblob.go",
         "roblock.go",
         "rodatacolumn.go",
-        "rosidecar.go",
         "setters.go",
         "types.go",
     ],
@@ -54,7 +53,6 @@ go_test(
         "roblob_test.go",
         "roblock_test.go",
         "rodatacolumn_test.go",
-        "rosidecar_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
@@ -74,6 +72,5 @@ go_test(
         "@com_github_prysmaticlabs_fastssz//:go_default_library",
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
         "@com_github_prysmaticlabs_gohashtree//:go_default_library",
-        "@com_github_stretchr_testify//require:go_default_library",
     ],
 )

@@ -34,3 +34,7 @@ var fieldMap map[types.FieldIndex]types.DataType
 func errNotSupported(funcName string, ver int) error {
 	return fmt.Errorf("%s is not supported for %s", funcName, version.String(ver))
 }
+
+func IsNil(s state.BeaconState) bool {
+	return s == nil || s.IsNil()
+}

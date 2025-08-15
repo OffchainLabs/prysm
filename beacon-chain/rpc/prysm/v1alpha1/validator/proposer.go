@@ -15,12 +15,9 @@ import (
 	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
@@ -61,31 +58,28 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	if err != nil {
 		log.WithError(err).Error("Could not convert slot to time")
 	}
-
-	log := log.WithField("slot", req.Slot)
-	log.WithField("sinceSlotStartTime", time.Since(t)).Info("Begin building block")
+	log.WithFields(logrus.Fields{
+		"slot":               req.Slot,
+		"sinceSlotStartTime": time.Since(t),
+	}).Info("Begin building block")
 
 	// A syncing validator should not produce a block.
 	if vs.SyncChecker.Syncing() {
-		log.Error("Fail to build block: node is syncing")
 		return nil, status.Error(codes.Unavailable, "Syncing to latest head, not ready to respond")
 	}
 	// An optimistic validator MUST NOT produce a block (i.e., sign across the DOMAIN_BEACON_PROPOSER domain).
 	if slots.ToEpoch(req.Slot) >= params.BeaconConfig().BellatrixForkEpoch {
 		if err := vs.optimisticStatus(ctx); err != nil {
-			log.WithError(err).Error("Fail to build block: node is optimistic")
 			return nil, status.Errorf(codes.Unavailable, "Validator is not ready to propose: %v", err)
 		}
 	}
 
 	head, parentRoot, err := vs.getParentState(ctx, req.Slot)
 	if err != nil {
-		log.WithError(err).Error("Fail to build block: could not get parent state")
 		return nil, err
 	}
 	sBlk, err := getEmptyBlock(req.Slot)
 	if err != nil {
-		log.WithError(err).Error("Fail to build block: could not get empty block")
 		return nil, status.Errorf(codes.Internal, "Could not prepare block: %v", err)
 	}
 	// Set slot, graffiti, randao reveal, and parent root.
@@ -97,7 +91,6 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	// Set proposer index.
 	idx, err := helpers.BeaconProposerIndex(ctx, head)
 	if err != nil {
-		log.WithError(err).Error("Fail to build block: could not calculate proposer index")
 		return nil, fmt.Errorf("could not calculate proposer index %w", err)
 	}
 	sBlk.SetProposerIndex(idx)
@@ -108,7 +101,7 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	}
 
 	resp, err := vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor)
-	log = log.WithFields(logrus.Fields{
+	log := log.WithFields(logrus.Fields{
 		"slot":               req.Slot,
 		"sinceSlotStartTime": time.Since(t),
 		"validator":          sBlk.Block().ProposerIndex(),
@@ -281,13 +274,7 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // ProposeBeaconBlock handles the proposal of beacon blocks.
-// TODO: Add tests
 func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSignedBeaconBlock) (*ethpb.ProposeResponse, error) {
-	var (
-		blobSidecars       []*ethpb.BlobSidecar
-		dataColumnSideCars []*ethpb.DataColumnSidecar
-	)
-
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.ProposeBeaconBlock")
 	defer span.End()
 
@@ -299,26 +286,33 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%s: %v", "decode block failed", err)
 	}
-
-	if block.IsBlinded() {
-		block, blobSidecars, dataColumnSideCars, err = vs.handleBlindedBlock(ctx, block)
-	} else if block.Version() >= version.Deneb {
-		blobSidecars, dataColumnSideCars, err = vs.handleUnblindedBlock(block, req)
-	}
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "%s: %v", "handle block failed", err)
-	}
-
 	root, err := block.Block().HashTreeRoot()
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not hash tree root: %v", err)
 	}
 
-	slot := block.Block().Slot()
-	epoch := slots.ToEpoch(slot)
+	// For post-Fulu blinded blocks, submit to relay and return early
+	if block.IsBlinded() && slots.ToEpoch(block.Block().Slot()) >= params.BeaconConfig().FuluForkEpoch {
+		err := vs.BlockBuilder.SubmitBlindedBlockPostFulu(ctx, block)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not submit blinded block post-Fulu: %v", err)
+		}
+		return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
+	}
+
+	var sidecars []*ethpb.BlobSidecar
+	if block.IsBlinded() {
+		block, sidecars, err = vs.handleBlindedBlock(ctx, block)
+	} else if block.Version() >= version.Deneb {
+		sidecars, err = vs.blobSidecarsFromUnblindedBlock(block, req)
+	}
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "%s: %v", "handle block failed", err)
+	}
 
 	var wg sync.WaitGroup
 	errChan := make(chan error, 1)
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -329,14 +323,8 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 		errChan <- nil
 	}()
 
-	if epoch >= params.BeaconConfig().FuluForkEpoch {
-		if err := vs.broadcastAndReceiveDataColumns(ctx, dataColumnSideCars, root, slot); err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not broadcast/receive data columns: %v", err)
-		}
-	} else {
-		if err := vs.broadcastAndReceiveBlobs(ctx, blobSidecars, root); err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not broadcast/receive blobs: %v", err)
-		}
+	if err := vs.broadcastAndReceiveBlobs(ctx, sidecars, root); err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive blobs: %v", err)
 	}
 
 	wg.Wait()
@@ -347,81 +335,48 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
 }
 
-// handleBlindedBlock processes blinded beacon blocks.
-func (vs *Server) handleBlindedBlock(ctx context.Context, block interfaces.SignedBeaconBlock) (interfaces.SignedBeaconBlock, []*ethpb.BlobSidecar, []*ethpb.DataColumnSidecar, error) {
+// handleBlindedBlock processes blinded beacon blocks (pre-Fulu only).
+// Post-Fulu blinded blocks are handled directly in ProposeBeaconBlock.
+func (vs *Server) handleBlindedBlock(ctx context.Context, block interfaces.SignedBeaconBlock) (interfaces.SignedBeaconBlock, []*ethpb.BlobSidecar, error) {
 	if block.Version() < version.Bellatrix {
-		return nil, nil, nil, errors.New("pre-Bellatrix blinded block")
+		return nil, nil, errors.New("pre-Bellatrix blinded block")
 	}
-
 	if vs.BlockBuilder == nil || !vs.BlockBuilder.Configured() {
-		return nil, nil, nil, errors.New("unconfigured block builder")
+		return nil, nil, errors.New("unconfigured block builder")
 	}
 
 	copiedBlock, err := block.Copy()
 	if err != nil {
-		return nil, nil, nil, errors.Wrap(err, "block copy")
+		return nil, nil, err
 	}
 
 	payload, bundle, err := vs.BlockBuilder.SubmitBlindedBlock(ctx, block)
 	if err != nil {
-		return nil, nil, nil, errors.Wrap(err, "submit blinded block")
+		return nil, nil, errors.Wrap(err, "submit blinded block failed")
 	}
 
 	if err := copiedBlock.Unblind(payload); err != nil {
-		return nil, nil, nil, errors.Wrap(err, "unblind")
+		return nil, nil, errors.Wrap(err, "unblind failed")
 	}
 
-	blockSlot := block.Block().Slot()
-	blockEpoch := slots.ToEpoch(blockSlot)
-
-	if blockEpoch >= params.BeaconConfig().FuluForkEpoch {
-		dataColumnSideCars, err := peerdas.ConstructDataColumnSidecars(block, bundle.GetBlobs(), bundle.GetProofs())
-		if err != nil {
-			return nil, nil, nil, errors.Wrap(err, "construct data column sidecars")
-		}
-
-		return copiedBlock, nil, dataColumnSideCars, nil
-	}
-
-	blobSidecars, err := unblindBlobsSidecars(copiedBlock, bundle)
+	sidecars, err := unblindBlobsSidecars(copiedBlock, bundle)
 	if err != nil {
-		return nil, nil, nil, errors.Wrap(err, "unblind blobs sidecars: commitment value doesn't match block")
+		return nil, nil, errors.Wrap(err, "unblind blobs sidecars: commitment value doesn't match block")
 	}
 
-	return copiedBlock, blobSidecars, nil, nil
+	return copiedBlock, sidecars, nil
 }
 
-func (vs *Server) handleUnblindedBlock(
-	block interfaces.SignedBeaconBlock,
-	req *ethpb.GenericSignedBeaconBlock,
-) ([]*ethpb.BlobSidecar, []*ethpb.DataColumnSidecar, error) {
+func (vs *Server) blobSidecarsFromUnblindedBlock(block interfaces.SignedBeaconBlock, req *ethpb.GenericSignedBeaconBlock) ([]*ethpb.BlobSidecar, error) {
 	rawBlobs, proofs, err := blobsAndProofs(req)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-
-	blockSlot := block.Block().Slot()
-	blockEpoch := slots.ToEpoch(blockSlot)
-
-	if blockEpoch >= params.BeaconConfig().FuluForkEpoch {
-		dataColumnSideCars, err := peerdas.ConstructDataColumnSidecars(block, rawBlobs, proofs)
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "construct data column sidecars")
-		}
-
-		return nil, dataColumnSideCars, nil
-	}
-
-	blobSidecars, err := BuildBlobSidecars(block, rawBlobs, proofs)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "build blob sidecars")
-	}
-
-	return blobSidecars, nil, nil
+	return BuildBlobSidecars(block, rawBlobs, proofs)
 }
 
 // broadcastReceiveBlock broadcasts a block and handles its reception.
-func (vs *Server) broadcastReceiveBlock(ctx context.Context, block interfaces.SignedBeaconBlock, root [fieldparams.RootLength]byte) error {
+func (vs *Server) broadcastReceiveBlock(ctx context.Context, block interfaces.SignedBeaconBlock, root [32]byte) error {
 	protoBlock, err := block.Proto()
 	if err != nil {
 		return errors.Wrap(err, "protobuf conversion failed")
@@ -437,7 +392,7 @@ func (vs *Server) broadcastReceiveBlock(ctx context.Context, block interfaces.Si
 }
 
 // broadcastAndReceiveBlobs handles the broadcasting and reception of blob sidecars.
-func (vs *Server) broadcastAndReceiveBlobs(ctx context.Context, sidecars []*ethpb.BlobSidecar, root [fieldparams.RootLength]byte) error {
+func (vs *Server) broadcastAndReceiveBlobs(ctx context.Context, sidecars []*ethpb.BlobSidecar, root [32]byte) error {
 	eg, eCtx := errgroup.WithContext(ctx)
 	for i, sc := range sidecars {
 		// Copy the iteration instance to a local variable to give each go-routine its own copy to play with.
@@ -464,69 +419,6 @@ func (vs *Server) broadcastAndReceiveBlobs(ctx context.Context, sidecars []*ethp
 		})
 	}
 	return eg.Wait()
-}
-
-// broadcastAndReceiveDataColumns handles the broadcasting and reception of data columns sidecars.
-func (vs *Server) broadcastAndReceiveDataColumns(
-	ctx context.Context,
-	sidecars []*ethpb.DataColumnSidecar,
-	root [fieldparams.RootLength]byte,
-	slot primitives.Slot,
-) error {
-	dataColumnsWithholdCount := features.Get().DataColumnsWithholdCount
-	verifiedRODataColumns := make([]blocks.VerifiedRODataColumn, 0, len(sidecars))
-
-	eg, _ := errgroup.WithContext(ctx)
-	for _, sd := range sidecars {
-		roDataColumn, err := blocks.NewRODataColumnWithRoot(sd, root)
-		if err != nil {
-			return errors.Wrap(err, "new read-only data column with root")
-		}
-
-		// We build this block ourselves, so we can upgrade the read only data column sidecar into a verified one.
-		verifiedRODataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
-		verifiedRODataColumns = append(verifiedRODataColumns, verifiedRODataColumn)
-
-		// Copy the iteration instance to a local variable to give each go-routine its own copy to play with.
-		// See https://golang.org/doc/faq#closures_and_goroutines for more details.
-		sidecar := sd
-		eg.Go(func() error {
-			if sidecar.Index < dataColumnsWithholdCount {
-				log.WithFields(logrus.Fields{
-					"root":  fmt.Sprintf("%#x", root),
-					"slot":  slot,
-					"index": sidecar.Index,
-				}).Warning("Withholding data column")
-
-				return nil
-			}
-
-			// Compute the subnet index based on the column index.
-			subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
-
-			if err := vs.P2P.BroadcastDataColumn(root, subnet, sidecar); err != nil {
-				return errors.Wrap(err, "broadcast data column")
-			}
-
-			return nil
-		})
-	}
-
-	if err := eg.Wait(); err != nil {
-		return errors.Wrap(err, "wait for data columns to be broadcasted")
-	}
-
-	if err := vs.DataColumnReceiver.ReceiveDataColumns(verifiedRODataColumns); err != nil {
-		return errors.Wrap(err, "receive data column")
-	}
-
-	for _, verifiedRODataColumn := range verifiedRODataColumns {
-		vs.OperationNotifier.OperationFeed().Send(&feed.Event{
-			Type: operation.DataColumnSidecarReceived,
-			Data: &operation.DataColumnSidecarReceivedData{DataColumn: &verifiedRODataColumn}, // #nosec G601
-		})
-	}
-	return nil
 }
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
