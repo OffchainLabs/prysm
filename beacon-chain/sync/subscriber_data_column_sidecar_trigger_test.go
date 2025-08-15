@@ -315,7 +315,7 @@ type MockChainServiceWithAvailability struct {
 }
 
 // IsDataAvailable overrides the default implementation to return configurable values for testing
-func (m *MockChainServiceWithAvailability) IsDataAvailable(ctx context.Context, blockRoot [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) error {
+func (m *MockChainServiceWithAvailability) IsDataAvailable(ctx context.Context, roBlock blocks.ROBlock) error {
 	if m.availabilityError != nil {
 		return m.availabilityError
 	}

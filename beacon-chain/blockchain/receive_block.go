@@ -255,7 +255,11 @@ func (s *Service) handleDA(
 	}(time.Now())
 
 	if avs == nil {
-		if err = s.isDataAvailable(ctx, blockRoot, block); err != nil {
+		roBlock, roErr := blocks.NewROBlockWithRoot(block, blockRoot)
+		if roErr != nil {
+			return elapsed, errors.Wrap(roErr, "failed to create ROBlock")
+		}
+		if err = s.isDataAvailable(ctx, roBlock); err != nil {
 			return
 		}
 

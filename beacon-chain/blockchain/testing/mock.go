@@ -733,7 +733,7 @@ func (c *ChainService) TargetRootForEpoch(_ [32]byte, _ primitives.Epoch) ([32]b
 }
 
 // IsDataAvailable implements the data availability checker interface for testing
-func (c *ChainService) IsDataAvailable(_ context.Context, _ [32]byte, _ interfaces.ReadOnlySignedBeaconBlock) error {
+func (c *ChainService) IsDataAvailable(_ context.Context, _ blocks.ROBlock) error {
 	return nil
 }
 

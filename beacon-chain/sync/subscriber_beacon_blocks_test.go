@@ -447,7 +447,7 @@ type MockChainServiceTrackingCalls struct {
 	availabilityError error
 }
 
-func (m *MockChainServiceTrackingCalls) IsDataAvailable(ctx context.Context, blockRoot [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) error {
+func (m *MockChainServiceTrackingCalls) IsDataAvailable(ctx context.Context, roBlock blocks.ROBlock) error {
 	m.isDataAvailableCalled = true
 	if m.availabilityError != nil {
 		return m.availabilityError
@@ -486,6 +486,6 @@ type ChainServiceDataNotAvailable struct {
 	*chainMock.ChainService
 }
 
-func (c *ChainServiceDataNotAvailable) IsDataAvailable(ctx context.Context, blockRoot [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) error {
+func (c *ChainServiceDataNotAvailable) IsDataAvailable(ctx context.Context, roBlock blocks.ROBlock) error {
 	return blockchain.ErrDataNotAvailable
 }

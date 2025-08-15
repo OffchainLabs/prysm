@@ -30,7 +30,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
@@ -46,12 +45,12 @@ import (
 )
 
 // DataAvailabilityChecker defines an interface for checking if data is available
-// for a given block root. This interface is implemented by the blockchain service
+// for a given block. This interface is implemented by the blockchain service
 // which has knowledge of the beacon chain's data availability requirements.
 // Returns nil if data is available, ErrDataNotAvailable if data is not available,
 // or another error for other failures.
 type DataAvailabilityChecker interface {
-	IsDataAvailable(ctx context.Context, blockRoot [32]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) error
+	IsDataAvailable(ctx context.Context, roBlock blocks.ROBlock) error
 }
 
 // Service represents a service that handles the internal
@@ -534,12 +533,13 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 
 // IsDataAvailable implements the DataAvailabilityChecker interface for use by the execution service.
 // It checks if all required blob and data column data is immediately available in the database without waiting.
-func (s *Service) IsDataAvailable(ctx context.Context, blockRoot [fieldparams.RootLength]byte, signedBlock interfaces.ReadOnlySignedBeaconBlock) error {
-	block := signedBlock.Block()
+func (s *Service) IsDataAvailable(ctx context.Context, roBlock blocks.ROBlock) error {
+	block := roBlock.Block()
 	if block == nil {
 		return errors.New("invalid nil beacon block")
 	}
 
+	blockRoot := roBlock.Root()
 	blockVersion := block.Version()
 
 	if blockVersion >= version.Fulu {

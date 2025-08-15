@@ -110,7 +110,12 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, ro
 	}
 
 	// Check if data is already available to avoid unnecessary execution client calls
-	switch err := s.cfg.chain.IsDataAvailable(ctx, blockRoot, roSignedBlock); {
+	roBlock, err := blocks.NewROBlockWithRoot(roSignedBlock, blockRoot)
+	if err != nil {
+		log.WithError(err).Error("Failed to create ROBlock")
+		return
+	}
+	switch err := s.cfg.chain.IsDataAvailable(ctx, roBlock); {
 	case err == nil:
 		log.Debug("Data already available – skipping execution-client call")
 		return

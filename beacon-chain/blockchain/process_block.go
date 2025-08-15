@@ -664,14 +664,14 @@ func missingDataColumnIndices(store *filesystem.DataColumnStorage, root [fieldpa
 // closed, the context hits cancellation/timeout, or notifications have been received for all the missing sidecars.
 func (s *Service) isDataAvailable(
 	ctx context.Context,
-	root [fieldparams.RootLength]byte,
-	signedBlock interfaces.ReadOnlySignedBeaconBlock,
+	roBlock consensusblocks.ROBlock,
 ) error {
-	block := signedBlock.Block()
+	block := roBlock.Block()
 	if block == nil {
 		return errors.New("invalid nil beacon block")
 	}
 
+	root := roBlock.Root()
 	blockVersion := block.Version()
 	if blockVersion >= version.Fulu {
 		return s.areDataColumnsAvailable(ctx, root, block)

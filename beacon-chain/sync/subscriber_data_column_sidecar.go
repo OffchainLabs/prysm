@@ -84,7 +84,11 @@ func (s *Service) triggerGetBlobsV2ForDataColumnSidecar(ctx context.Context, blo
 	}
 
 	// Check if data is already available
-	switch err := s.cfg.chain.IsDataAvailable(ctx, blockRoot, signedBlock); {
+	roBlock, err := blocks.NewROBlockWithRoot(signedBlock, blockRoot)
+	if err != nil {
+		return errors.Wrap(err, "failed to create ROBlock")
+	}
+	switch err := s.cfg.chain.IsDataAvailable(ctx, roBlock); {
 	case err == nil:
 		log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Debug("Data already available, skipping getBlobsV2 retry")
 		return nil
