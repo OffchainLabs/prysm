@@ -3,6 +3,7 @@ package sync
 import (
 	"bytes"
 	"context"
+	"math"
 	"slices"
 	"sync"
 	"time"
@@ -479,7 +480,10 @@ func sendDataColumnSidecarsRequest(
 		start := time.Now()
 		roDataColumns := make([]blocks.RODataColumn, 0, count)
 		for _, request := range byRangeRequests {
-			params.RateLimiter.Add(peerID.String(), rootCount)
+			if params.RateLimiter != nil {
+				params.RateLimiter.Add(peerID.String(), rootCount)
+			}
+
 			localRoDataColumns, err := SendDataColumnSidecarsByRangeRequest(params, peerID, request)
 			if err != nil {
 				return nil, errors.Wrapf(err, "send data column sidecars by range request to peer %s", peerID)
@@ -503,7 +507,9 @@ func sendDataColumnSidecarsRequest(
 
 	// Send the by root request.
 	start := time.Now()
-	params.RateLimiter.Add(peerID.String(), rootCount)
+	if params.RateLimiter != nil {
+		params.RateLimiter.Add(peerID.String(), rootCount)
+	}
 	roDataColumns, err := SendDataColumnSidecarsByRootRequest(params, peerID, byRootRequest)
 	if err != nil {
 		return nil, errors.Wrapf(err, "send data column sidecars by root request to peer %s", peerID)
@@ -777,7 +783,10 @@ func randomPeer(
 	for ctx.Err() == nil {
 		nonRateLimitedPeers := make([]goPeer.ID, 0, len(indicesByRootByPeer))
 		for peer := range indicesByRootByPeer {
-			remaining := rateLimiter.Remaining(peer.String())
+			remaining := int64(math.MaxInt64)
+			if rateLimiter != nil {
+				remaining = rateLimiter.Remaining(peer.String())
+			}
 			if remaining >= int64(count) {
 				nonRateLimitedPeers = append(nonRateLimitedPeers, peer)
 			}
