@@ -81,7 +81,13 @@ func RequestDataColumnSidecarsByRoot(
 			byRootRequest := &eth.DataColumnsByRootIdentifier{BlockRoot: blockRoot[:], Columns: peerRequestedColumns}
 
 			// Send the requests to the peer.
-			peerSidecars, err := SendDataColumnSidecarsByRootRequest(ctx, clock, p2p, peer, ctxMap, types.DataColumnsByRootIdentifiers{byRootRequest})
+			params := DataColumnSidecarsParams{
+				Ctx:    ctx,
+				Tor:    clock,
+				P2P:    p2p,
+				CtxMap: ctxMap,
+			}
+			peerSidecars, err := SendDataColumnSidecarsByRootRequest(params, peer, types.DataColumnsByRootIdentifiers{byRootRequest})
 			if err != nil {
 				// Remove this peer since it failed to respond correctly.
 				delete(dataColumnsByAdmissiblePeer, peer)
@@ -198,7 +204,7 @@ func RequestMissingDataColumnsByRange(
 	p2p p2p.P2P,
 	rateLimiter *leakybucket.Collector,
 	groupCount uint64,
-	dataColumnsStorage filesystem.DataColumnStorageSummarizer,
+	dataColumnsStorage filesystem.DataColumnStorageReader,
 	blks []blocks.ROBlock,
 	batchSize int,
 ) (map[[fieldparams.RootLength]byte][]blocks.RODataColumn, error) {
@@ -356,7 +362,7 @@ func RequestMissingDataColumnsByRange(
 
 // MissingDataColumns looks at the data columns we should store for a given block regarding `custodyGroupCount`,
 // and returns the indices of the missing ones.
-func MissingDataColumns(block blocks.ROBlock, nodeID enode.ID, custodyGroupCount uint64, dataColumnStorage filesystem.DataColumnStorageSummarizer) ([]uint64, error) {
+func MissingDataColumns(block blocks.ROBlock, nodeID enode.ID, custodyGroupCount uint64, dataColumnStorage filesystem.DataColumnStorageReader) ([]uint64, error) {
 	// Blocks before Fulu have no data columns.
 	if block.Version() < version.Fulu {
 		return nil, nil
@@ -709,7 +715,13 @@ func fetchDataColumnsFromPeers(
 			Columns:   columnsToFetch,
 		}
 
-		peerRoDataColumns, err := SendDataColumnSidecarsByRangeRequest(ctx, clock, p2p, peer, ctxMap, request)
+		params := DataColumnSidecarsParams{
+			Ctx:    ctx,
+			Tor:    clock,
+			P2P:    p2p,
+			CtxMap: ctxMap,
+		}
+		peerRoDataColumns, err := SendDataColumnSidecarsByRangeRequest(params, peer, request)
 		if err != nil {
 			return nil, errors.Wrap(err, "send data column sidecars by range request")
 		}
