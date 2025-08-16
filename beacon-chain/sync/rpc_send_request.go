@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"sort"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
@@ -689,4 +690,15 @@ func readChunkedDataColumnSidecar(
 	}
 
 	return &roDataColumn, nil
+}
+
+func DataColumnSidecarsByRangeRequest(columns []uint64, start, end primitives.Slot) *ethpb.DataColumnSidecarsByRangeRequest {
+	sort.Slice(columns, func(i, j int) bool {
+		return columns[i] < columns[j]
+	})
+	return &ethpb.DataColumnSidecarsByRangeRequest{
+		StartSlot: start,
+		Count:     uint64(end-start) + 1,
+		Columns:   columns,
+	}
 }

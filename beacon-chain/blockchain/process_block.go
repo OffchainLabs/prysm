@@ -133,7 +133,7 @@ func getStateVersionAndPayload(st state.BeaconState) (int, interfaces.ExecutionD
 	return preStateVersion, preStateHeader, nil
 }
 
-func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlock, avs das.AvailabilityStore) error {
+func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlock, avs das.AvailabilityChecker) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.onBlockBatch")
 	defer span.End()
 
@@ -309,7 +309,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	return s.saveHeadNoDB(ctx, lastB, lastBR, preState, !isValidPayload)
 }
 
-func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.AvailabilityStore, roBlock consensusblocks.ROBlock) error {
+func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.AvailabilityChecker, roBlock consensusblocks.ROBlock) error {
 	blockVersion := roBlock.Version()
 	block := roBlock.Block()
 	slot := block.Slot()

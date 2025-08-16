@@ -13,7 +13,7 @@ type MockAvailabilityStore struct {
 	PersistBlobsCallback       func(current primitives.Slot, blobSidecar ...blocks.ROBlob) error
 }
 
-var _ AvailabilityStore = &MockAvailabilityStore{}
+var _ AvailabilityChecker = &MockAvailabilityStore{}
 
 // IsDataAvailable satisfies the corresponding method of the AvailabilityStore interface in a way that is useful for tests.
 func (m *MockAvailabilityStore) IsDataAvailable(ctx context.Context, current primitives.Slot, b blocks.ROBlock) error {

@@ -89,7 +89,7 @@ func (w *p2pWorker) run(ctx context.Context) {
 			}
 			log.WithFields(b.logFields()).WithField("backfillWorker", w.id).Debug("Backfill worker received batch")
 			if b.state == batchSyncBlobs {
-				w.done <- w.handleSidecars(ctx, b)
+				w.done <- w.handleBlobs(ctx, b)
 				continue
 			}
 			if b.state == batchSyncColumns {
@@ -178,8 +178,21 @@ func (w *p2pWorker) handleColumns(ctx context.Context, b batch) batch {
 	b.columnPid = b.busy
 	start := time.Now()
 	vr := b.validatingColumnRequest()
+	// TODO: the upstream definition of SendDataColumnSidecarsByRangeRequest requires this params type
+	// which has several ambiguously optional fields. The sidecar request functions should be refactored
+	// to use a more explicit set of parameters. RateLimiter, Storage and NewVerifier are not used inside
+	// SendDataColumnSidecarsByRangeRequest.
+	p := sync.DataColumnSidecarsParams{
+		Ctx: ctx,
+		Tor: w.cfg.c,
+		P2P: w.p2p,
+		//RateLimiter *leakybucket.Collector
+		CtxMap: w.cfg.cm,
+		//Storage:     w.cfg.cfs,
+		//NewVerifier: vr.validate,
+	}
 	// Response is dropped because the validation code adds the columns to the columnSync AvailabilityStore under the hood.
-	_, err := sync.SendDataColumnSidecarsByRangeRequest(ctx, w.cfg.c, w.p2p, b.busy, w.cfg.cm, vr.req, vr.validate)
+	_, err := sync.SendDataColumnSidecarsByRangeRequest(p, b.busy, vr.req, vr.validate)
 	if err != nil {
 		return b.withRetryableError(errors.Wrap(err, "failed to request data column sidecars"))
 	}

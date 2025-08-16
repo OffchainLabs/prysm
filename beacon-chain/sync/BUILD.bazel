@@ -10,7 +10,6 @@ go_library(
         "custody.go",
         "data_column_assignment.go",
         "data_column_sidecars.go",
-        "data_columns.go",
         "data_columns_reconstruct.go",
         "deadlines.go",
         "decode_pubsub.go",

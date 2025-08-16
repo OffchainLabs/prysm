@@ -29,7 +29,7 @@ type LazilyPersistentStoreBlob struct {
 	verifier BlobBatchVerifier
 }
 
-var _ AvailabilityStore = &LazilyPersistentStoreBlob{}
+var _ AvailabilityChecker = &LazilyPersistentStoreBlob{}
 
 // BlobBatchVerifier enables LazyAvailabilityStore to manage the verification process
 // going from ROBlob->VerifiedROBlob, while avoiding the decision of which individual verifications

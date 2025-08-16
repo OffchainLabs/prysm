@@ -61,11 +61,15 @@ func (cs *columnBatch) needed() peerdas.ColumnIndices {
 
 type columnSync struct {
 	*columnBatch
-	store   das.AvailabilityStore
+	store   *das.LazilyPersistentStoreColumn
 	current primitives.Slot
 }
 
 func newColumnSync(b batch, blks verifiedROBlocks, current primitives.Slot, p p2p.P2P, vbs verifiedROBlocks, cfg *workerCfg) (*columnSync, error) {
+	cgc, err := p.CustodyGroupCount()
+	if err != nil {
+		return nil, errors.Wrap(err, "custody group count")
+	}
 	cb, err := buildColumnBatch(b, blks, p)
 	if err != nil {
 		return nil, err
@@ -76,7 +80,7 @@ func newColumnSync(b batch, blks verifiedROBlocks, current primitives.Slot, p p2
 	return &columnSync{
 		columnBatch: cb,
 		current:     current,
-		store:       das.NewLazilyPersistentStoreColumn(cfg.cfs, p.NodeID(), cfg.ndcv, p.CustodyGroupCount()),
+		store:       das.NewLazilyPersistentStoreColumn(cfg.cfs, p.NodeID(), cfg.ndcv, cgc),
 	}, nil
 }
 
@@ -168,7 +172,7 @@ func (v *validatingColumnRequest) countedValidation(cd blocks.RODataColumn) bool
 			return false
 		}
 	}
-	if err := v.cs.store.Persist(v.cs.current, blocks.NewSidecarFromDataColumnSidecar(cd)); err != nil {
+	if err := v.cs.store.Persist(v.cs.current, cd); err != nil {
 		log.WithError(err).Error("failed to persist data column")
 		return false
 	}
@@ -223,11 +227,15 @@ func buildColumnBatch(b batch, fuluBlocks verifiedROBlocks, p p2p.P2P) (*columnB
 		})
 		fuluBlocks = fuluBlocks[fuluStart:]
 	}
+	cgc, err := p.CustodyGroupCount()
+	if err != nil {
+		return nil, errors.Wrap(err, "custody group count")
+	}
 
 	// Note that in the case where custody_group_count is the minimum CUSTODY_REQUIREMENT, we will
 	// still download the extra columns dictated by SAMPLES_PER_SLOT. This is a hack to avoid complexity in the DA check.
 	// We may want to revisit this to reduce bandwidth and storage for nodes with 0 validators attached.
-	peerInfo, _, err := peerdas.Info(p.NodeID(), max(p.CustodyGroupCount(), params.BeaconConfig().SamplesPerSlot))
+	peerInfo, _, err := peerdas.Info(p.NodeID(), max(cgc, params.BeaconConfig().SamplesPerSlot))
 	if err != nil {
 		return nil, errors.Wrap(err, "peer info")
 	}

@@ -13,8 +13,8 @@ var errAvailabilityCheckerInvalid = errors.New("invalid availability checker sta
 
 type multiStore struct {
 	fuluStart   primitives.Slot
-	columnStore das.AvailabilityStore
-	blobStore   das.AvailabilityStore
+	columnStore das.AvailabilityChecker
+	blobStore   das.AvailabilityChecker
 }
 
 // Persist implements das.AvailabilityStore.
