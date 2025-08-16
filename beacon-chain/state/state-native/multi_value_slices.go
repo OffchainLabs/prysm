@@ -47,7 +47,7 @@ func NewMultiValueRandaoMixes(mixes [][]byte) *MultiValueRandaoMixes {
 	mv := &MultiValueRandaoMixes{}
 	mv.Init(items)
 	multiValueCountGauge.WithLabelValues(types.RandaoMixes.String()).Inc()
-	runtime.SetFinalizer(mv, randaoMixesFinalizer)
+	runtime.AddCleanup(mv, randaoMixesCleanup, 0)
 	return mv
 }
 
@@ -63,7 +63,7 @@ func NewMultiValueBlockRoots(roots [][]byte) *MultiValueBlockRoots {
 	mv := &MultiValueBlockRoots{}
 	mv.Init(items)
 	multiValueCountGauge.WithLabelValues(types.BlockRoots.String()).Inc()
-	runtime.SetFinalizer(mv, blockRootsFinalizer)
+	runtime.AddCleanup(mv, blockRootsCleanup, 0)
 	return mv
 }
 
@@ -79,7 +79,7 @@ func NewMultiValueStateRoots(roots [][]byte) *MultiValueStateRoots {
 	mv := &MultiValueStateRoots{}
 	mv.Init(items)
 	multiValueCountGauge.WithLabelValues(types.StateRoots.String()).Inc()
-	runtime.SetFinalizer(mv, stateRootsFinalizer)
+	runtime.AddCleanup(mv, stateRootsCleanup, 0)
 	return mv
 }
 
@@ -93,7 +93,7 @@ func NewMultiValueBalances(balances []uint64) *MultiValueBalances {
 	mv := &MultiValueBalances{}
 	mv.Init(items)
 	multiValueCountGauge.WithLabelValues(types.Balances.String()).Inc()
-	runtime.SetFinalizer(mv, balancesFinalizer)
+	runtime.AddCleanup(mv, balancesCleanup, 0)
 	return mv
 }
 
@@ -107,7 +107,7 @@ func NewMultiValueInactivityScores(scores []uint64) *MultiValueInactivityScores 
 	mv := &MultiValueInactivityScores{}
 	mv.Init(items)
 	multiValueCountGauge.WithLabelValues(types.InactivityScores.String()).Inc()
-	runtime.SetFinalizer(mv, inactivityScoresFinalizer)
+	runtime.AddCleanup(mv, inactivityScoresCleanup, 0)
 	return mv
 }
 
@@ -119,7 +119,7 @@ func NewMultiValueValidators(vals []*ethpb.Validator) *MultiValueValidators {
 	mv := &MultiValueValidators{}
 	mv.Init(vals)
 	multiValueCountGauge.WithLabelValues(types.Validators.String()).Inc()
-	runtime.SetFinalizer(mv, validatorsFinalizer)
+	runtime.AddCleanup(mv, validatorsCleanup, 0)
 	return mv
 }
 
@@ -133,65 +133,65 @@ func (b *BeaconState) Defragment() {
 		b.blockRootsMultiValue = b.blockRootsMultiValue.Reset(b)
 		initialMVslice.Detach(b)
 		multiValueCountGauge.WithLabelValues(types.BlockRoots.String()).Inc()
-		runtime.SetFinalizer(b.blockRootsMultiValue, blockRootsFinalizer)
+		runtime.AddCleanup(b.blockRootsMultiValue, blockRootsCleanup, 0)
 	}
 	if b.stateRootsMultiValue != nil && b.stateRootsMultiValue.IsFragmented() {
 		initialMVslice := b.stateRootsMultiValue
 		b.stateRootsMultiValue = b.stateRootsMultiValue.Reset(b)
 		initialMVslice.Detach(b)
 		multiValueCountGauge.WithLabelValues(types.StateRoots.String()).Inc()
-		runtime.SetFinalizer(b.stateRootsMultiValue, stateRootsFinalizer)
+		runtime.AddCleanup(b.stateRootsMultiValue, stateRootsCleanup, 0)
 	}
 	if b.randaoMixesMultiValue != nil && b.randaoMixesMultiValue.IsFragmented() {
 		initialMVslice := b.randaoMixesMultiValue
 		b.randaoMixesMultiValue = b.randaoMixesMultiValue.Reset(b)
 		initialMVslice.Detach(b)
 		multiValueCountGauge.WithLabelValues(types.RandaoMixes.String()).Inc()
-		runtime.SetFinalizer(b.randaoMixesMultiValue, randaoMixesFinalizer)
+		runtime.AddCleanup(b.randaoMixesMultiValue, randaoMixesCleanup, 0)
 	}
 	if b.balancesMultiValue != nil && b.balancesMultiValue.IsFragmented() {
 		initialMVslice := b.balancesMultiValue
 		b.balancesMultiValue = b.balancesMultiValue.Reset(b)
 		initialMVslice.Detach(b)
 		multiValueCountGauge.WithLabelValues(types.Balances.String()).Inc()
-		runtime.SetFinalizer(b.balancesMultiValue, balancesFinalizer)
+		runtime.AddCleanup(b.balancesMultiValue, balancesCleanup, 0)
 	}
 	if b.validatorsMultiValue != nil && b.validatorsMultiValue.IsFragmented() {
 		initialMVslice := b.validatorsMultiValue
 		b.validatorsMultiValue = b.validatorsMultiValue.Reset(b)
 		initialMVslice.Detach(b)
 		multiValueCountGauge.WithLabelValues(types.Validators.String()).Inc()
-		runtime.SetFinalizer(b.validatorsMultiValue, validatorsFinalizer)
+		runtime.AddCleanup(b.validatorsMultiValue, validatorsCleanup, 0)
 	}
 	if b.inactivityScoresMultiValue != nil && b.inactivityScoresMultiValue.IsFragmented() {
 		initialMVslice := b.inactivityScoresMultiValue
 		b.inactivityScoresMultiValue = b.inactivityScoresMultiValue.Reset(b)
 		initialMVslice.Detach(b)
 		multiValueCountGauge.WithLabelValues(types.InactivityScores.String()).Inc()
-		runtime.SetFinalizer(b.inactivityScoresMultiValue, inactivityScoresFinalizer)
+		runtime.AddCleanup(b.inactivityScoresMultiValue, inactivityScoresCleanup, 0)
 	}
 }
 
-func randaoMixesFinalizer(m *MultiValueRandaoMixes) {
+func randaoMixesCleanup(_ int) {
 	multiValueCountGauge.WithLabelValues(types.RandaoMixes.String()).Dec()
 }
 
-func blockRootsFinalizer(m *MultiValueBlockRoots) {
+func blockRootsCleanup(_ int) {
 	multiValueCountGauge.WithLabelValues(types.BlockRoots.String()).Dec()
 }
 
-func stateRootsFinalizer(m *MultiValueStateRoots) {
+func stateRootsCleanup(_ int) {
 	multiValueCountGauge.WithLabelValues(types.StateRoots.String()).Dec()
 }
 
-func balancesFinalizer(m *MultiValueBalances) {
+func balancesCleanup(_ int) {
 	multiValueCountGauge.WithLabelValues(types.Balances.String()).Dec()
 }
 
-func validatorsFinalizer(m *MultiValueValidators) {
+func validatorsCleanup(_ int) {
 	multiValueCountGauge.WithLabelValues(types.Validators.String()).Dec()
 }
 
-func inactivityScoresFinalizer(m *MultiValueInactivityScores) {
+func inactivityScoresCleanup(_ int) {
 	multiValueCountGauge.WithLabelValues(types.InactivityScores.String()).Dec()
 }
