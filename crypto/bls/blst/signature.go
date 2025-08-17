@@ -262,7 +262,7 @@ func VerifyMultipleSignatures(sigs [][]byte, msgs [][32]byte, pubKeys []common.P
 		// Protect against the generator returning 0. Since the scalar value is
 		// derived from a big endian byte slice, we take the last byte.
 		rbytes[len(rbytes)-1] |= 0x01
-		scalar.FromBEndian(rbytes[:])
+		scalar.FromBE(rbytes[:])
 	}
 	dummySig := new(blstSignature)
 
