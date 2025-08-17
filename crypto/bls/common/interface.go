@@ -1,6 +1,6 @@
 // Package common provides the BLS interfaces that are implemented by the various BLS wrappers.
 //
-// This package should not be used by downstream consumers. These interfaces are re-exporter by
+// This package should not be used by downstream consumers. These interfaces are re-exported by
 // github.com/prysmaticlabs/prysm/crypto/bls. This package exists to prevent an import circular
 // dependency.
 package common
