@@ -52,7 +52,7 @@ type fcuConfig struct {
 	attributes    payloadattribute.Attributer
 }
 
-// sendFCU handles the logic to notify the engine of a forckhoice update
+// sendFCU handles the logic to notify the engine of a forkchoice update
 // for the first time when processing an incoming block during regular sync. It
 // always updates the shuffling caches and handles epoch transitions when the
 // incoming block is late, preparing payload attributes in this case while it
@@ -87,7 +87,7 @@ func (s *Service) sendFCUWithAttributes(cfg *postBlockProcessConfig, fcuArgs *fc
 	}
 }
 
-// fockchoiceUpdateWithExecution is a wrapper around notifyForkchoiceUpdate. It decides whether a new call to FCU should be made.
+// forkchoiceUpdateWithExecution is a wrapper around notifyForkchoiceUpdate. It decides whether a new call to FCU should be made.
 func (s *Service) forkchoiceUpdateWithExecution(ctx context.Context, args *fcuConfig) error {
 	_, span := trace.StartSpan(ctx, "beacon-chain.blockchain.forkchoiceUpdateWithExecution")
 	defer span.End()
