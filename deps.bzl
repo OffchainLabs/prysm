@@ -2450,6 +2450,12 @@ def prysm_deps():
         version = "v1.4.11",
     )
     go_repository(
+        name = "com_github_offchainlabs_go_bitfield",
+        importpath = "github.com/OffchainLabs/go-bitfield",
+        sum = "h1:2U6to0u/KUhG4RogHmVyd95QTL740dDuoNyRkueFH8Q=",
+        version = "v0.0.0-20250830171457-8344ca593cfa",
+    )
+    go_repository(
         name = "com_github_oklog_oklog",
         importpath = "github.com/oklog/oklog",
         sum = "h1:wVfs8F+in6nTBMkA7CbRw+zZMIB7nNM825cM1wuzoTk=",
