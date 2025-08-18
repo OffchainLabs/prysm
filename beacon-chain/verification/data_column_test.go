@@ -52,9 +52,9 @@ func TestColumnSatisfyRequirement(t *testing.T) {
 	parentRoot := [fieldparams.RootLength]byte{}
 
 	columns := GenerateTestDataColumns(t, parentRoot, columnSlot, blobCount)
-	intializer := Initializer{}
+	initializer := Initializer{}
 
-	v := intializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
+	v := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
 	require.Equal(t, false, v.results.executed(RequireValidProposerSignature))
 	v.SatisfyRequirement(RequireValidProposerSignature)
 	require.Equal(t, true, v.results.executed(RequireValidProposerSignature))
@@ -672,19 +672,19 @@ func TestDataColumnsSidecarDescendsFromFinalized(t *testing.T) {
 
 func TestDataColumnsSidecarInclusionProven(t *testing.T) {
 	testCases := []struct {
-		name     string
-		alterate bool
-		isError  bool
+		name      string
+		alternate bool
+		isError   bool
 	}{
 		{
-			name:     "Inclusion proven",
-			alterate: false,
-			isError:  false,
+			name:      "Inclusion proven",
+			alternate: false,
+			isError:   false,
 		},
 		{
-			name:     "Inclusion not proven",
-			alterate: true,
-			isError:  true,
+			name:      "Inclusion not proven",
+			alternate: true,
+			isError:   true,
 		},
 	}
 
@@ -697,7 +697,7 @@ func TestDataColumnsSidecarInclusionProven(t *testing.T) {
 
 			parentRoot := [fieldparams.RootLength]byte{}
 			columns := GenerateTestDataColumns(t, parentRoot, columnSlot, blobCount)
-			if tc.alterate {
+			if tc.alternate {
 				firstColumn := columns[0]
 				byte0 := firstColumn.SignedBlockHeader.Header.BodyRoot[0]
 				firstColumn.SignedBlockHeader.Header.BodyRoot[0] = byte0 ^ 255

@@ -40,7 +40,7 @@ import (
 const (
 	// This specifies the limit till which we process all dirty indices for a certain field.
 	// If we have more dirty indices than the threshold, then we rebuild the whole trie. This
-	// comes due to the fact that O(alogn) > O(n) beyond a certain value of a.
+	// comes due to the fact that O(a log n) > O(n) beyond a certain value of a.
 	indicesLimit = 20000
 )
 

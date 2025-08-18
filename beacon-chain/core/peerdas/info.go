@@ -17,8 +17,8 @@ type info struct {
 }
 
 const (
-	nodeInfoCacheSize   = 200
-	nodeInfoCachKeySize = 32 + 8
+	nodeInfoCacheSize    = 200
+	nodeInfoCacheKeySize = 32 + 8
 )
 
 var (
@@ -99,8 +99,8 @@ func createInfoCacheIfNeeded() error {
 }
 
 // computeInfoCacheKey returns a unique key for a node and its custodyGroupCount.
-func computeInfoCacheKey(nodeID enode.ID, custodyGroupCount uint64) [nodeInfoCachKeySize]byte {
-	var key [nodeInfoCachKeySize]byte
+func computeInfoCacheKey(nodeID enode.ID, custodyGroupCount uint64) [nodeInfoCacheKeySize]byte {
+	var key [nodeInfoCacheKeySize]byte
 
 	copy(key[:32], nodeID[:])
 	binary.BigEndian.PutUint64(key[32:], custodyGroupCount)

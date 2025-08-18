@@ -315,12 +315,12 @@ func startNode(ctx *cli.Context, cancel context.CancelFunc) error {
 		backfill.BeaconNodeOptions,
 	}
 	for _, of := range optFuncs {
-		ofo, err := of(ctx)
+		optsFromFunc, err := of(ctx)
 		if err != nil {
 			return err
 		}
-		if ofo != nil {
-			opts = append(opts, ofo...)
+		if optsFromFunc != nil {
+			opts = append(opts, optsFromFunc...)
 		}
 	}
 

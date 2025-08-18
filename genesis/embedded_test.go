@@ -8,7 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
-func TestEmbededGenesisDataMatchesMainnet(t *testing.T) {
+func TestEmbeddedGenesisDataMatchesMainnet(t *testing.T) {
 	st, err := embedded.ByName(params.MainnetName)
 	require.NoError(t, err)
 	gvr := st.GenesisValidatorsRoot()

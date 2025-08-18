@@ -120,7 +120,7 @@ func (m *ErrorMessage) UnmarshalSSZ(buf []byte) error {
 	bufLen := len(buf)
 	maxLength := maxErrorLength
 	if bufLen > maxLength {
-		return errors.Errorf("expected buffer with length of upto %d but received length %d", maxLength, bufLen)
+		return errors.Errorf("expected buffer with length of up to %d but received length %d", maxLength, bufLen)
 	}
 	errMsg := make([]byte, bufLen)
 	copy(errMsg, buf)
@@ -250,7 +250,7 @@ func (d *DataColumnsByRootIdentifiers) UnmarshalSSZ(buf []byte) error {
 	}
 	valueStart := offsetEnd
 
-	// Decode the identifers.
+	// Decode the identifiers.
 	*d = make([]*eth.DataColumnsByRootIdentifier, count)
 	var start uint32
 	end := uint32(len(buf))

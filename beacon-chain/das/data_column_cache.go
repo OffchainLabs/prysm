@@ -53,7 +53,7 @@ func (e *dataColumnCacheEntry) setDiskSummary(sum filesystem.DataColumnStorageSu
 
 // stash adds an item to the in-memory cache of DataColumnSidecars.
 // Only the first DataColumnSidecar of a given Index will be kept in the cache.
-// stash will return an error if the given data colunn is already in the cache, or if the Index is out of bounds.
+// stash will return an error if the given data column is already in the cache, or if the Index is out of bounds.
 func (e *dataColumnCacheEntry) stash(sc *blocks.RODataColumn) error {
 	if sc.Index >= fieldparams.NumberOfColumns {
 		return errors.Wrapf(errColumnIndexTooHigh, "index=%d", sc.Index)

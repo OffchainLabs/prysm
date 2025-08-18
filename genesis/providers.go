@@ -35,7 +35,7 @@ func NewAPIProvider(beaconNodeHost string) (*APIProvider, error) {
 	return &APIProvider{c: c}, nil
 }
 
-// Genesis satisfies the Provider interface by retrieving the genesis state from the beacon node API and unmarshaling it into a phase0 beacon state.
+// Genesis satisfies the Provider interface by retrieving the genesis state from the beacon node API and unmarshalling it into a phase0 beacon state.
 func (dl *APIProvider) Genesis(ctx context.Context) (state.BeaconState, error) {
 	sb, err := dl.c.GetState(ctx, beacon.IdGenesis)
 	if err != nil {
@@ -60,7 +60,7 @@ func NewFileProvider(statePath string) (*FileProvider, error) {
 	return &FileProvider{statePath: statePath}, nil
 }
 
-// Genesis satisfies the Provider interface by reading the genesis state from a file and unmarshaling it.
+// Genesis satisfies the Provider interface by reading the genesis state from a file and unmarshalling it.
 func (fi *FileProvider) Genesis(_ context.Context) (state.BeaconState, error) {
 	return stateFromFile(fi.statePath)
 }

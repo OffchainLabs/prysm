@@ -542,7 +542,7 @@ func (dcs *DataColumnStorage) prune() {
 		}
 
 		if period < highestPeriodToPrune {
-			// Remove everything lower thant highest period to prune.
+			// Remove everything lower than highest period to prune.
 			if err := dcs.fs.RemoveAll(periodStr); err != nil {
 				log.WithError(err).Error("Error encountered while removing period directory")
 			}

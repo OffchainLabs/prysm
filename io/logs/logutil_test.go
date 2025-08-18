@@ -27,7 +27,7 @@ func TestMaskCredentialsLogging(t *testing.T) {
 	}
 }
 
-func TestConfigurePersistantLogging(t *testing.T) {
+func TestConfigurePersistentLogging(t *testing.T) {
 	testParentDir := t.TempDir()
 
 	// 1. Test creation of file in an existing parent directory
