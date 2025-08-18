@@ -17,6 +17,7 @@ go_library(
         "//beacon-chain/blockchain/testing:go_default_library",
         "//beacon-chain/cache:go_default_library",
         "//beacon-chain/cache/depositsnapshot:go_default_library",
+        "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/time:go_default_library",
         "//beacon-chain/core/transition:go_default_library",
         "//beacon-chain/db/filesystem:go_default_library",
