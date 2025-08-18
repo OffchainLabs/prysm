@@ -254,8 +254,8 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 	beacon.finalizedStateAtStartUp = nil
 
 	if features.Get().EnableLightClient {
-		beacon.lcStore = lightclient.NewLightClientStore(beacon.db, beacon.fetchP2P(), beacon.StateFeed())
-		if beacon.lcStore == nil {
+		beacon.lcStore, err = lightclient.NewLightClientStore(ctx, beacon.fetchP2P(), beacon.StateFeed(), beacon.db)
+		if err != nil {
 			return nil, errors.New("failed to create light client store")
 		}
 	}

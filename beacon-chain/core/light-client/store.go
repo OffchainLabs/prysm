@@ -26,21 +26,21 @@ type Store struct {
 	lastOptimisticUpdate interfaces.LightClientOptimisticUpdate // tracks the best optimistic update seen so far
 	p2p                  p2p.Accessor
 	stateFeed            event.SubscriberSender
-	nonFinalityCache     *lightClientCache
+	cache                *cache // non finality cache
 }
 
-func NewLightClientStore(db iface.HeadAccessDatabase, p p2p.Accessor, e event.SubscriberSender) *Store {
-	cp, err := db.FinalizedCheckpoint(context.Background())
+func NewLightClientStore(ctx context.Context, p p2p.Accessor, e event.SubscriberSender, db iface.HeadAccessDatabase) (*Store, error) {
+	cp, err := db.FinalizedCheckpoint(ctx)
 	if err != nil {
 		log.WithError(err).Fatal("Failed to get finalized checkpoint from database")
-		return nil
+		return nil, nil
 	}
 	return &Store{
-		beaconDB:         db,
-		p2p:              p,
-		stateFeed:        e,
-		nonFinalityCache: newLightClientCache([32]byte(cp.Root)),
-	}
+		beaconDB:  db,
+		p2p:       p,
+		stateFeed: e,
+		cache:     newLightClientCache([32]byte(cp.Root)),
+	}, nil
 }
 
 func (s *Store) SaveLCData(ctx context.Context,
@@ -48,7 +48,8 @@ func (s *Store) SaveLCData(ctx context.Context,
 	block interfaces.ReadOnlySignedBeaconBlock,
 	attestedState state.BeaconState,
 	attestedBlock interfaces.ReadOnlySignedBeaconBlock,
-	finalizedBlock interfaces.ReadOnlySignedBeaconBlock) error {
+	finalizedBlock interfaces.ReadOnlySignedBeaconBlock,
+	headBlockRoot [32]byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -75,40 +76,37 @@ func (s *Store) SaveLCData(ctx context.Context,
 	if err != nil {
 		return errors.Wrapf(err, "failed to compute signature block root")
 	}
-	headRoot, err := s.beaconDB.HeadBlockRoot()
-	if err != nil {
-		return errors.Wrapf(err, "failed to get head block root from database")
-	}
-	newBlockIsHead := signatureBlockRoot == headRoot
+
+	newBlockIsHead := signatureBlockRoot == headBlockRoot
 
 	// create the new cache item
-	cacheItem := &lightClientCacheItem{
+	newCacheItem := &cacheItem{
 		period: period,
 		slot:   block.Block().Slot(),
 	}
 
 	// check if parent exists in cache
-	parentItem, ok := s.nonFinalityCache.items[parentRoot]
+	parentItem, ok := s.cache.items[parentRoot]
 	if !ok {
 		// if not, create an item for the parent, but don't need to save it.
 		bestUpdateSoFar, err := s.beaconDB.LightClientUpdate(ctx, period)
 		if err != nil {
 			return errors.Wrapf(err, "could not get best light client update for period %d", period)
 		}
-		parentItem = &lightClientCacheItem{
+		parentItem = &cacheItem{
 			period:             period,
 			bestUpdate:         &bestUpdateSoFar,
 			bestFinalityUpdate: &s.lastFinalityUpdate,
 		}
 	} else {
-		cacheItem.parent = parentItem
+		newCacheItem.parent = parentItem
 	}
 
 	// if at a period boundary, no need to compare data, just save new ones
 	if parentItem.period != period {
-		cacheItem.bestUpdate = &update
-		cacheItem.bestFinalityUpdate = &finalityUpdate
-		s.nonFinalityCache.items[blockRoot] = cacheItem
+		newCacheItem.bestUpdate = &update
+		newCacheItem.bestFinalityUpdate = &finalityUpdate
+		s.cache.items[blockRoot] = newCacheItem
 
 		s.setLastOptimisticUpdate(optimisticUpdate, true)
 
@@ -126,23 +124,23 @@ func (s *Store) SaveLCData(ctx context.Context,
 		return errors.Wrapf(err, "could not compare light client updates")
 	}
 	if isUpdateBetter {
-		cacheItem.bestUpdate = &update
+		newCacheItem.bestUpdate = &update
 	} else {
-		cacheItem.bestUpdate = parentItem.bestUpdate
+		newCacheItem.bestUpdate = parentItem.bestUpdate
 	}
 
 	var finalityUpdateChanged bool
 	isBetterFinalityUpdate := IsBetterFinalityUpdate(finalityUpdate, *parentItem.bestFinalityUpdate)
 	if isBetterFinalityUpdate {
 		finalityUpdateChanged = true
-		cacheItem.bestFinalityUpdate = &finalityUpdate
+		newCacheItem.bestFinalityUpdate = &finalityUpdate
 	} else {
 		finalityUpdateChanged = false
-		cacheItem.bestFinalityUpdate = parentItem.bestFinalityUpdate
+		newCacheItem.bestFinalityUpdate = parentItem.bestFinalityUpdate
 	}
 
 	// save new item in cache
-	s.nonFinalityCache.items[blockRoot] = cacheItem
+	s.cache.items[blockRoot] = newCacheItem
 
 	// save lastOptimisticUpdate if better
 	if isBetterOptimisticUpdate := IsBetterOptimisticUpdate(optimisticUpdate, s.lastOptimisticUpdate); isBetterOptimisticUpdate {
@@ -151,7 +149,7 @@ func (s *Store) SaveLCData(ctx context.Context,
 
 	// if the new block is considered the head, set the last finality update
 	if newBlockIsHead {
-		s.setLastFinalityUpdate(*cacheItem.bestFinalityUpdate, finalityUpdateChanged)
+		s.setLastFinalityUpdate(*newCacheItem.bestFinalityUpdate, finalityUpdateChanged)
 	}
 
 	return nil
@@ -205,7 +203,7 @@ func (s *Store) SaveLightClientBootstrap(ctx context.Context, blockRoot [32]byte
 	return nil
 }
 
-func (s *Store) LightClientUpdates(ctx context.Context, startPeriod, endPeriod uint64) ([]interfaces.LightClientUpdate, error) {
+func (s *Store) LightClientUpdates(ctx context.Context, startPeriod, endPeriod uint64, headBlock interfaces.ReadOnlySignedBeaconBlock) ([]interfaces.LightClientUpdate, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -215,7 +213,7 @@ func (s *Store) LightClientUpdates(ctx context.Context, startPeriod, endPeriod u
 		return nil, err
 	}
 
-	cacheUpdatesByPeriod, err := s.getCacheUpdatesByPeriod(ctx)
+	cacheUpdatesByPeriod, err := s.getCacheUpdatesByPeriod(ctx, headBlock)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get updates from cache")
 	}
@@ -238,9 +236,9 @@ func (s *Store) LightClientUpdates(ctx context.Context, startPeriod, endPeriod u
 	return updates, nil
 }
 
-func (s *Store) LightClientUpdate(ctx context.Context, period uint64) (interfaces.LightClientUpdate, error) {
+func (s *Store) LightClientUpdate(ctx context.Context, period uint64, headBlock interfaces.ReadOnlySignedBeaconBlock) (interfaces.LightClientUpdate, error) {
 	// we don't need to lock here because the LightClientUpdates method locks the store
-	updates, err := s.LightClientUpdates(ctx, period, period)
+	updates, err := s.LightClientUpdates(ctx, period, period, headBlock)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get light client update for period %d", period)
 	}
@@ -250,28 +248,20 @@ func (s *Store) LightClientUpdate(ctx context.Context, period uint64) (interface
 	return updates[0], nil
 }
 
-func (s *Store) getCacheUpdatesByPeriod(ctx context.Context) (map[uint64]interfaces.LightClientUpdate, error) {
+func (s *Store) getCacheUpdatesByPeriod(ctx context.Context, headBlock interfaces.ReadOnlySignedBeaconBlock) (map[uint64]interfaces.LightClientUpdate, error) {
 	updatesByPeriod := make(map[uint64]interfaces.LightClientUpdate)
-
-	headBlock, err := s.beaconDB.HeadBlock(ctx)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to get head block from database")
-	}
-	if headBlock == nil {
-		return nil, errors.New("head block not found in database")
-	}
 
 	headRoot := headBlock.Block().ParentRoot()
 
-	var headItem *lightClientCacheItem
+	var headItem *cacheItem
 	var ok bool
 
 	for {
-		if headRoot == s.nonFinalityCache.tail || headRoot == [32]byte{} {
+		if headRoot == s.cache.tail || headRoot == [32]byte{} {
 			return updatesByPeriod, nil
 		}
 
-		headItem, ok = s.nonFinalityCache.items[headRoot]
+		headItem, ok = s.cache.items[headRoot]
 		if ok {
 			break
 		} else {
@@ -358,9 +348,9 @@ func (s *Store) MigrateToCold(ctx context.Context, root [32]byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if len(s.nonFinalityCache.items) == 0 {
+	if len(s.cache.items) == 0 {
 		log.Debug("Non-finality cache is empty. Skipping migration.")
-		s.nonFinalityCache.tail = root
+		s.cache.tail = root
 		return nil
 	}
 
@@ -374,25 +364,25 @@ func (s *Store) MigrateToCold(ctx context.Context, root [32]byte) error {
 	cpSlot := blk.Block().Slot()
 	headRoot := blk.Block().ParentRoot()
 
-	var headItem *lightClientCacheItem
+	var headItem *cacheItem
 	var ok bool
 
 	for {
-		if headRoot == s.nonFinalityCache.tail || headRoot == [32]byte{} {
+		if headRoot == s.cache.tail || headRoot == [32]byte{} {
 			log.Debug("Did not find any canonical item in the non-finality cache. Skipping migration.")
-			s.nonFinalityCache.tail = root
+			s.cache.tail = root
 
 			// delete non-finality cache items older than checkpoint slot
-			for k, v := range s.nonFinalityCache.items {
+			for k, v := range s.cache.items {
 				if v.slot < cpSlot {
-					delete(s.nonFinalityCache.items, k)
+					delete(s.cache.items, k)
 				}
 			}
 
 			return nil
 		}
 
-		headItem, ok = s.nonFinalityCache.items[headRoot]
+		headItem, ok = s.cache.items[headRoot]
 		if ok {
 			break
 		} else {
@@ -427,13 +417,13 @@ func (s *Store) MigrateToCold(ctx context.Context, root [32]byte) error {
 	}
 
 	// delete non-finality cache items
-	for k, v := range s.nonFinalityCache.items {
+	for k, v := range s.cache.items {
 		if v.slot < cpSlot {
-			delete(s.nonFinalityCache.items, k)
+			delete(s.cache.items, k)
 		}
 	}
 
-	s.nonFinalityCache.tail = root
+	s.cache.tail = root
 
 	return nil
 }

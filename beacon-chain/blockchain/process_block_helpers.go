@@ -126,28 +126,26 @@ func (s *Service) sendStateFeedOnBlock(cfg *postBlockProcessConfig) {
 	})
 }
 
+// processLightClientUpdates saves the light client data in lcStore, when feature flag is enabled.
 func (s *Service) processLightClientUpdates(cfg *postBlockProcessConfig) {
-	if err := s.processLightClientData(cfg); err != nil {
-		log.WithError(err).Error("Failed to process light client update")
-	}
-}
-
-// processLightClientData saves the light client data in lcStore, when feature flag is enabled.
-func (s *Service) processLightClientData(cfg *postBlockProcessConfig) error {
 	attestedRoot := cfg.roblock.Block().ParentRoot()
 	attestedBlock, err := s.getBlock(cfg.ctx, attestedRoot)
 	if err != nil {
-		return errors.Wrapf(err, "could not get attested block for root %#x", attestedRoot)
+		log.WithError(err).Error("processLightClientUpdates: Could not get attested block")
+		return
 	}
 	if attestedBlock == nil || attestedBlock.IsNil() {
-		return errors.New("attested block is nil")
+		log.WithError(err).Error("processLightClientUpdates: Could not get attested block")
+		return
 	}
 	attestedState, err := s.cfg.StateGen.StateByRoot(cfg.ctx, attestedRoot)
 	if err != nil {
-		return errors.Wrapf(err, "could not get attested state for root %#x", attestedRoot)
+		log.WithError(err).Error("processLightClientUpdates: Could not get attested state")
+		return
 	}
 	if attestedState == nil || attestedState.IsNil() {
-		return errors.New("attested state is nil")
+		log.WithError(err).Error("processLightClientUpdates: Could not get attested state")
+		return
 	}
 
 	finalizedRoot := attestedState.FinalizedCheckpoint().Root
@@ -155,12 +153,17 @@ func (s *Service) processLightClientData(cfg *postBlockProcessConfig) error {
 	if err != nil {
 		if errors.Is(err, errBlockNotFoundInCacheOrDB) {
 			log.Debugf("Skipping saving light client update because finalized block is nil for root %#x", finalizedRoot)
-			return nil
+			return
 		}
-		return errors.Wrapf(err, "could not get finalized block for root %#x", finalizedRoot)
+		log.WithError(err).Error("processLightClientUpdates: Could not get finalized block")
+		return
 	}
 
-	return s.lcStore.SaveLCData(cfg.ctx, cfg.postState, cfg.roblock, attestedState, attestedBlock, finalizedBlock)
+	err = s.lcStore.SaveLCData(cfg.ctx, cfg.postState, cfg.roblock, attestedState, attestedBlock, finalizedBlock, s.headRoot())
+	if err != nil {
+		log.WithError(err).Error("processLightClientUpdates: Could not save light client data")
+	}
+	log.Debug("Processed light client updates")
 }
 
 // updateCachesPostBlockProcessing updates the next slot cache and handles the epoch

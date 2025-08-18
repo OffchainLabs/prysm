@@ -13,7 +13,7 @@ func TestLCCache(t *testing.T) {
 
 	require.Equal(t, true, lcCache.tail == cpRoot)
 
-	item := &lightClientCacheItem{
+	item := &cacheItem{
 		period:             5,
 		bestUpdate:         nil,
 		bestFinalityUpdate: nil,

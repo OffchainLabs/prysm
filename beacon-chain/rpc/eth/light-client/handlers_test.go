@@ -13,6 +13,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/async/event"
+	blockchainTest "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
@@ -57,7 +58,8 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 			require.NoError(t, err)
 
 			db := dbtesting.SetupDB(t)
-			lcStore := lightclient.NewLightClientStore(db, &p2ptesting.FakeP2P{}, new(event.Feed))
+			lcStore, err := lightclient.NewLightClientStore(t.Context(), &p2ptesting.FakeP2P{}, new(event.Feed), db)
+			require.NoError(t, err)
 
 			err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[:], bootstrap)
 			require.NoError(t, err)
@@ -101,7 +103,8 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 			require.NoError(t, err)
 
 			db := dbtesting.SetupDB(t)
-			lcStore := lightclient.NewLightClientStore(db, &p2ptesting.FakeP2P{}, new(event.Feed))
+			lcStore, err := lightclient.NewLightClientStore(t.Context(), &p2ptesting.FakeP2P{}, new(event.Feed), db)
+			require.NoError(t, err)
 
 			err = db.SaveLightClientBootstrap(l.Ctx, blockRoot[:], bootstrap)
 			require.NoError(t, err)
@@ -144,8 +147,10 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 	}
 
 	t.Run("no bootstrap found", func(t *testing.T) {
+		lcStore, err := lightclient.NewLightClientStore(t.Context(), &p2ptesting.FakeP2P{}, new(event.Feed), dbtesting.SetupDB(t))
+		require.NoError(t, err)
 		s := &Server{
-			LCStore: lightclient.NewLightClientStore(dbtesting.SetupDB(t), &p2ptesting.FakeP2P{}, new(event.Feed)),
+			LCStore: lcStore,
 		}
 		request := httptest.NewRequest("GET", "http://foo.com/", nil)
 		request.SetPathValue("block_root", hexutil.Encode([]byte{0x00, 0x01, 0x02}))
@@ -187,8 +192,18 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 					updates = append(updates, update)
 				}
 
+				lcStore, err := lightclient.NewLightClientStore(t.Context(), &p2ptesting.FakeP2P{}, new(event.Feed), db)
+				require.NoError(t, err)
+
+				blk := util.NewBeaconBlock()
+				signedBlk, err := blocks.NewSignedBeaconBlock(blk)
+				require.NoError(t, err)
+
 				s := &Server{
-					LCStore: lightclient.NewLightClientStore(db, &p2ptesting.FakeP2P{}, new(event.Feed)),
+					LCStore: lcStore,
+					HeadFetcher: &blockchainTest.ChainService{
+						Block: signedBlk,
+					},
 				}
 
 				saveHead(t, ctx, db)
@@ -330,8 +345,18 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 				secondForkSlot := primitives.Slot(params.BeaconConfig().VersionToForkEpochMap()[testVersion+1] * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
 
 				db := dbtesting.SetupDB(t)
+				lcStore, err := lightclient.NewLightClientStore(t.Context(), &p2ptesting.FakeP2P{}, new(event.Feed), db)
+				require.NoError(t, err)
+
+				blk := util.NewBeaconBlock()
+				signedBlk, err := blocks.NewSignedBeaconBlock(blk)
+				require.NoError(t, err)
+
 				s := &Server{
-					LCStore: lightclient.NewLightClientStore(db, &p2ptesting.FakeP2P{}, new(event.Feed)),
+					LCStore: lcStore,
+					HeadFetcher: &blockchainTest.ChainService{
+						Block: signedBlk,
+					},
 				}
 
 				saveHead(t, ctx, db)
@@ -341,7 +366,6 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 				updatePeriod := firstForkSlot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
 				startPeriod := updatePeriod
 
-				var err error
 				updates[0], err = createUpdate(t, testVersion)
 				require.NoError(t, err)
 
@@ -452,8 +476,18 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 		slot := primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
 
 		db := dbtesting.SetupDB(t)
+		lcStore, err := lightclient.NewLightClientStore(t.Context(), &p2ptesting.FakeP2P{}, new(event.Feed), db)
+		require.NoError(t, err)
+
+		blk := util.NewBeaconBlock()
+		signedBlk, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+
 		s := &Server{
-			LCStore: lightclient.NewLightClientStore(db, &p2ptesting.FakeP2P{}, new(event.Feed)),
+			LCStore: lcStore,
+			HeadFetcher: &blockchainTest.ChainService{
+				Block: signedBlk,
+			},
 		}
 
 		saveHead(t, ctx, db)
@@ -461,7 +495,7 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 		updates := make([]interfaces.LightClientUpdate, 3)
 
 		updatePeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
-		var err error
+
 		for i := 0; i < 3; i++ {
 			updates[i], err = createUpdate(t, version.Altair)
 			require.NoError(t, err)
@@ -501,8 +535,18 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 		slot := primitives.Slot(config.AltairForkEpoch * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
 
 		db := dbtesting.SetupDB(t)
+		lcStore, err := lightclient.NewLightClientStore(t.Context(), &p2ptesting.FakeP2P{}, new(event.Feed), db)
+		require.NoError(t, err)
+
+		blk := util.NewBeaconBlock()
+		signedBlk, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+
 		s := &Server{
-			LCStore: lightclient.NewLightClientStore(db, &p2ptesting.FakeP2P{}, new(event.Feed)),
+			LCStore: lcStore,
+			HeadFetcher: &blockchainTest.ChainService{
+				Block: signedBlk,
+			},
 		}
 
 		saveHead(t, ctx, db)
@@ -511,7 +555,6 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 
 		updatePeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
 
-		var err error
 		for i := 0; i < 3; i++ {
 			updates[i], err = createUpdate(t, version.Altair)
 			require.NoError(t, err)
@@ -550,9 +593,13 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 		params.OverrideBeaconConfig(config)
 
 		db := dbtesting.SetupDB(t)
+		lcStore, err := lightclient.NewLightClientStore(t.Context(), &p2ptesting.FakeP2P{}, new(event.Feed), db)
+		require.NoError(t, err)
+
 		s := &Server{
-			LCStore: lightclient.NewLightClientStore(db, &p2ptesting.FakeP2P{}, new(event.Feed)),
+			LCStore: lcStore,
 		}
+
 		startPeriod := 0
 		url := fmt.Sprintf("http://foo.com/?count=128&start_period=%d", startPeriod)
 		request := httptest.NewRequest("GET", url, nil)
@@ -572,8 +619,18 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 
 		t.Run("missing update in the middle", func(t *testing.T) {
 			db := dbtesting.SetupDB(t)
+			lcStore, err := lightclient.NewLightClientStore(t.Context(), &p2ptesting.FakeP2P{}, new(event.Feed), db)
+			require.NoError(t, err)
+
+			blk := util.NewBeaconBlock()
+			signedBlk, err := blocks.NewSignedBeaconBlock(blk)
+			require.NoError(t, err)
+
 			s := &Server{
-				LCStore: lightclient.NewLightClientStore(db, &p2ptesting.FakeP2P{}, new(event.Feed)),
+				LCStore: lcStore,
+				HeadFetcher: &blockchainTest.ChainService{
+					Block: signedBlk,
+				},
 			}
 
 			saveHead(t, ctx, db)
@@ -582,7 +639,6 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 
 			updatePeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
 
-			var err error
 			for i := 0; i < 3; i++ {
 				if i == 1 { // skip this update
 					updatePeriod++
@@ -618,8 +674,18 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 
 		t.Run("missing update at the beginning", func(t *testing.T) {
 			db := dbtesting.SetupDB(t)
+			lcStore, err := lightclient.NewLightClientStore(t.Context(), &p2ptesting.FakeP2P{}, new(event.Feed), db)
+			require.NoError(t, err)
+
+			blk := util.NewBeaconBlock()
+			signedBlk, err := blocks.NewSignedBeaconBlock(blk)
+			require.NoError(t, err)
+
 			s := &Server{
-				LCStore: lightclient.NewLightClientStore(db, &p2ptesting.FakeP2P{}, new(event.Feed)),
+				LCStore: lcStore,
+				HeadFetcher: &blockchainTest.ChainService{
+					Block: signedBlk,
+				},
 			}
 
 			saveHead(t, ctx, db)
@@ -628,7 +694,6 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 
 			updatePeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
 
-			var err error
 			for i := 0; i < 3; i++ {
 				if i == 0 { // skip this update
 					updatePeriod++
@@ -681,7 +746,12 @@ func TestLightClientHandler_GetLightClientFinalityUpdate(t *testing.T) {
 			update, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 			require.NoError(t, err)
 
-			s := &Server{LCStore: lightclient.NewLightClientStore(dbtesting.SetupDB(t), &p2ptesting.FakeP2P{}, new(event.Feed))}
+			lcStore, err := lightclient.NewLightClientStore(t.Context(), &p2ptesting.FakeP2P{}, new(event.Feed), dbtesting.SetupDB(t))
+			require.NoError(t, err)
+
+			s := &Server{
+				LCStore: lcStore,
+			}
 			s.LCStore.SetLastFinalityUpdate(update, false)
 
 			request := httptest.NewRequest("GET", "http://foo.com", nil)
@@ -706,7 +776,12 @@ func TestLightClientHandler_GetLightClientFinalityUpdate(t *testing.T) {
 			update, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 			require.NoError(t, err)
 
-			s := &Server{LCStore: lightclient.NewLightClientStore(dbtesting.SetupDB(t), &p2ptesting.FakeP2P{}, new(event.Feed))}
+			lcStore, err := lightclient.NewLightClientStore(t.Context(), &p2ptesting.FakeP2P{}, new(event.Feed), dbtesting.SetupDB(t))
+			require.NoError(t, err)
+
+			s := &Server{
+				LCStore: lcStore,
+			}
 			s.LCStore.SetLastFinalityUpdate(update, false)
 
 			request := httptest.NewRequest("GET", "http://foo.com", nil)
@@ -745,7 +820,12 @@ func TestLightClientHandler_GetLightClientOptimisticUpdate(t *testing.T) {
 	helpers.ClearCache()
 
 	t.Run("no update", func(t *testing.T) {
-		s := &Server{LCStore: lightclient.NewLightClientStore(dbtesting.SetupDB(t), &p2ptesting.FakeP2P{}, new(event.Feed))}
+		lcStore, err := lightclient.NewLightClientStore(t.Context(), &p2ptesting.FakeP2P{}, new(event.Feed), dbtesting.SetupDB(t))
+		require.NoError(t, err)
+
+		s := &Server{
+			LCStore: lcStore,
+		}
 
 		request := httptest.NewRequest("GET", "http://foo.com", nil)
 		writer := httptest.NewRecorder()
@@ -761,7 +841,12 @@ func TestLightClientHandler_GetLightClientOptimisticUpdate(t *testing.T) {
 			update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock)
 			require.NoError(t, err)
 
-			s := &Server{LCStore: lightclient.NewLightClientStore(dbtesting.SetupDB(t), &p2ptesting.FakeP2P{}, new(event.Feed))}
+			lcStore, err := lightclient.NewLightClientStore(t.Context(), &p2ptesting.FakeP2P{}, new(event.Feed), dbtesting.SetupDB(t))
+			require.NoError(t, err)
+
+			s := &Server{
+				LCStore: lcStore,
+			}
 			s.LCStore.SetLastOptimisticUpdate(update, false)
 
 			request := httptest.NewRequest("GET", "http://foo.com", nil)
@@ -785,7 +870,12 @@ func TestLightClientHandler_GetLightClientOptimisticUpdate(t *testing.T) {
 			update, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock)
 			require.NoError(t, err)
 
-			s := &Server{LCStore: lightclient.NewLightClientStore(dbtesting.SetupDB(t), &p2ptesting.FakeP2P{}, new(event.Feed))}
+			lcStore, err := lightclient.NewLightClientStore(t.Context(), &p2ptesting.FakeP2P{}, new(event.Feed), dbtesting.SetupDB(t))
+			require.NoError(t, err)
+
+			s := &Server{
+				LCStore: lcStore,
+			}
 			s.LCStore.SetLastOptimisticUpdate(update, false)
 
 			request := httptest.NewRequest("GET", "http://foo.com", nil)

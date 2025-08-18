@@ -104,10 +104,11 @@ func TestValidateLightClientOptimisticUpdate(t *testing.T) {
 				// drift back appropriate number of epochs based on fork + 2 slots for signature slot + time for gossip propagation + any extra drift
 				genesisDrift := v*slotsPerEpoch*secondsPerSlot + 2*secondsPerSlot + secondsPerSlot/slotIntervals + test.genesisDrift
 				chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(genesisDrift), 0)}
-				s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}, lcStore: lightClient.NewLightClientStore(testDB.SetupDB(t), &p2ptest.FakeP2P{}, new(event.Feed))}
+				lcStore, err := lightClient.NewLightClientStore(ctx, &p2ptest.FakeP2P{}, new(event.Feed), testDB.SetupDB(t))
+				require.NoError(t, err)
+				s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}, lcStore: lcStore}
 
 				var oldUpdate interfaces.LightClientOptimisticUpdate
-				var err error
 				if test.oldUpdateOptions != nil {
 					l := util.NewTestLightClient(t, v, test.oldUpdateOptions...)
 					oldUpdate, err = lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock)
@@ -244,10 +245,11 @@ func TestValidateLightClientFinalityUpdate(t *testing.T) {
 				// drift back appropriate number of epochs based on fork + 2 slots for signature slot + time for gossip propagation + any extra drift
 				genesisDrift := v*slotsPerEpoch*secondsPerSlot + 2*secondsPerSlot + secondsPerSlot/slotIntervals + test.genesisDrift
 				chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(genesisDrift), 0)}
-				s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}, lcStore: lightClient.NewLightClientStore(testDB.SetupDB(t), &p2ptest.FakeP2P{}, new(event.Feed))}
+				lcStore, err := lightClient.NewLightClientStore(ctx, &p2ptest.FakeP2P{}, new(event.Feed), testDB.SetupDB(t))
+				require.NoError(t, err)
+				s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}, lcStore: lcStore}
 
 				var oldUpdate interfaces.LightClientFinalityUpdate
-				var err error
 				if test.oldUpdateOptions != nil {
 					l := util.NewTestLightClient(t, v, test.oldUpdateOptions...)
 					oldUpdate, err = lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)

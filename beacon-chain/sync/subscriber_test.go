@@ -683,6 +683,9 @@ func TestSubscribe_ReceivesLCOptimisticUpdate(t *testing.T) {
 		Genesis:        time.Unix(time.Now().Unix()-int64(genesisDrift), 0),
 	}
 	d := db.SetupDB(t)
+	lcStore, err := lightClient.NewLightClientStore(ctx, &p2ptest.FakeP2P{}, new(event.Feed), d)
+	require.NoError(t, err)
+
 	r := Service{
 		ctx: ctx,
 		cfg: &config{
@@ -694,14 +697,13 @@ func TestSubscribe_ReceivesLCOptimisticUpdate(t *testing.T) {
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
 		chainStarted: abool.New(),
-		lcStore:      lightClient.NewLightClientStore(d, &p2ptest.FakeP2P{}, new(event.Feed)),
+		lcStore:      lcStore,
 		subHandler:   newSubTopicHandler(),
 	}
 	topic := p2p.LightClientOptimisticUpdateTopicFormat
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	var err error
 	p2pService.Digest, err = r.currentForkDigest()
 	require.NoError(t, err)
 	r.subscribe(topic, r.validateLightClientOptimisticUpdate, func(ctx context.Context, msg proto.Message) error {
@@ -750,6 +752,9 @@ func TestSubscribe_ReceivesLCFinalityUpdate(t *testing.T) {
 		Genesis:        time.Unix(time.Now().Unix()-int64(genesisDrift), 0),
 	}
 	d := db.SetupDB(t)
+	lcStore, err := lightClient.NewLightClientStore(ctx, &p2ptest.FakeP2P{}, new(event.Feed), d)
+	require.NoError(t, err)
+
 	r := Service{
 		ctx: ctx,
 		cfg: &config{
@@ -761,14 +766,13 @@ func TestSubscribe_ReceivesLCFinalityUpdate(t *testing.T) {
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
 		chainStarted: abool.New(),
-		lcStore:      lightClient.NewLightClientStore(d, &p2ptest.FakeP2P{}, new(event.Feed)),
+		lcStore:      lcStore,
 		subHandler:   newSubTopicHandler(),
 	}
 	topic := p2p.LightClientFinalityUpdateTopicFormat
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	var err error
 	p2pService.Digest, err = r.currentForkDigest()
 	require.NoError(t, err)
 	r.subscribe(topic, r.validateLightClientFinalityUpdate, func(ctx context.Context, msg proto.Message) error {
