@@ -845,6 +845,7 @@ func (b *BeaconNode) registerInitialSyncService(complete chan struct{}) error {
 		ClockWaiter:         b.clockWaiter,
 		InitialSyncComplete: complete,
 		BlobStorage:         b.BlobStorage,
+		DataColumnStorage:   b.DataColumnStorage,
 	}, opts...)
 	return b.services.RegisterService(is)
 }

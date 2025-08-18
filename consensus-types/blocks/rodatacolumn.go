@@ -66,14 +66,14 @@ func (dc *RODataColumn) Slot() primitives.Slot {
 	return dc.SignedBlockHeader.Header.Slot
 }
 
-// ParentRoot returns the parent root of the data column sidecar.
-func (dc *RODataColumn) ParentRoot() [fieldparams.RootLength]byte {
-	return bytesutil.ToBytes32(dc.SignedBlockHeader.Header.ParentRoot)
-}
-
 // ProposerIndex returns the proposer index of the data column sidecar.
 func (dc *RODataColumn) ProposerIndex() primitives.ValidatorIndex {
 	return dc.SignedBlockHeader.Header.ProposerIndex
+}
+
+// ParentRoot returns the parent root of the data column sidecar.
+func (dc *RODataColumn) ParentRoot() [fieldparams.RootLength]byte {
+	return bytesutil.ToBytes32(dc.SignedBlockHeader.Header.ParentRoot)
 }
 
 // VerifiedRODataColumn represents an RODataColumn that has undergone full verification (eg block sig, inclusion proof, commitment check).

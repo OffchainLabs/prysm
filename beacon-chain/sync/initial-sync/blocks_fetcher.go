@@ -3,11 +3,13 @@ package initialsync
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
@@ -15,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	prysmsync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/verify"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -34,7 +37,6 @@ import (
 )
 
 const (
-
 	// maxPendingRequests limits how many concurrent fetch request one can initiate.
 	maxPendingRequests = 64
 	// peersPercentagePerRequest caps percentage of peers to be used in a request.
@@ -78,6 +80,8 @@ type blocksFetcherConfig struct {
 	peerFilterCapacityWeight float64
 	mode                     syncMode
 	bs                       filesystem.BlobStorageSummarizer
+	dcs                      filesystem.DataColumnStorageReader
+	cv                       verification.NewDataColumnsVerifier
 }
 
 // blocksFetcher is a service to fetch chain data from peers.
@@ -94,6 +98,8 @@ type blocksFetcher struct {
 	p2p             p2p.P2P
 	db              db.ReadOnlyDatabase
 	bs              filesystem.BlobStorageSummarizer
+	dcs             filesystem.DataColumnStorageReader
+	cv              verification.NewDataColumnsVerifier
 	blocksPerPeriod uint64
 	rateLimiter     *leakybucket.Collector
 	peerLocks       map[peer.ID]*peerLock
@@ -124,7 +130,7 @@ type fetchRequestResponse struct {
 	blobsFrom  peer.ID
 	start      primitives.Slot
 	count      uint64
-	bwb        []blocks.BlockWithROBlobs
+	bwb        []blocks.BlockWithROSidecars
 	err        error
 }
 
@@ -162,6 +168,8 @@ func newBlocksFetcher(ctx context.Context, cfg *blocksFetcherConfig) *blocksFetc
 		p2p:             cfg.p2p,
 		db:              cfg.db,
 		bs:              cfg.bs,
+		dcs:             cfg.dcs,
+		cv:              cfg.cv,
 		blocksPerPeriod: uint64(blocksPerPeriod),
 		rateLimiter:     rateLimiter,
 		peerLocks:       make(map[peer.ID]*peerLock),
@@ -298,7 +306,7 @@ func (f *blocksFetcher) handleRequest(ctx context.Context, start primitives.Slot
 	response := &fetchRequestResponse{
 		start: start,
 		count: count,
-		bwb:   []blocks.BlockWithROBlobs{},
+		bwb:   []blocks.BlockWithROSidecars{},
 		err:   nil,
 	}
 
@@ -317,30 +325,114 @@ func (f *blocksFetcher) handleRequest(ctx context.Context, start primitives.Slot
 	if f.mode == modeStopOnFinalizedEpoch {
 		highestFinalizedSlot := params.BeaconConfig().SlotsPerEpoch.Mul(uint64(targetEpoch + 1))
 		if start > highestFinalizedSlot {
-			response.err = fmt.Errorf("%w, slot: %d, highest finalized slot: %d",
-				errSlotIsTooHigh, start, highestFinalizedSlot)
+			response.err = fmt.Errorf(
+				"%w, slot: %d, highest finalized slot: %d",
+				errSlotIsTooHigh, start, highestFinalizedSlot,
+			)
+
 			return response
 		}
 	}
 
 	response.bwb, response.blocksFrom, response.err = f.fetchBlocksFromPeer(ctx, start, count, peers)
 	if response.err == nil {
-		pid, bwb, err := f.fetchBlobsFromPeer(ctx, response.bwb, response.blocksFrom, peers)
+		pid, err := f.fetchSidecars(ctx, response.blocksFrom, peers, response.bwb)
 		if err != nil {
+			log.WithError(err).Error("Failed to fetch sidecars")
 			response.err = err
 		}
-		response.bwb = bwb
+
 		response.blobsFrom = pid
 	}
+
 	return response
 }
 
-// fetchBlocksFromPeer fetches blocks from a single randomly selected peer.
+// fetchSidecars fetches sidecars corresponding to blocks in `response.bwb`.
+// It mutates `Blobs` and `Columns` fields of `response.bwb` with fetched sidecars.
+// `pid` is the initial peer to request blob from (usually the peer from which the block originated),
+// `peers` is a list of peers to use for the request blobs if `pid` fails.
+// `bwScs` must me sorted by slot.
+// It returns the peer ID from which blobs were fetched (if any).
+func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []peer.ID, bwScs []blocks.BlockWithROSidecars) (peer.ID, error) {
+	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
+
+	if len(bwScs) == 0 {
+		return "", nil
+	}
+
+	firstFuluIndex, err := findFirstFuluIndex(bwScs)
+	if err != nil {
+		return "", errors.Wrap(err, "find first Fulu index")
+	}
+
+	preFulu := bwScs[:firstFuluIndex]
+	postFulu := bwScs[firstFuluIndex:]
+
+	var blobsPid peer.ID
+
+	if len(preFulu) > 0 {
+		// Fetch blob sidecars.
+		blobsPid, err = f.fetchBlobsFromPeer(ctx, preFulu, pid, peers)
+		if err != nil {
+			return "", errors.Wrap(err, "fetch blobs from peer")
+		}
+	}
+
+	if len(postFulu) == 0 {
+		return blobsPid, nil
+	}
+
+	// Compute the columns to request.
+	custodyGroupCount, err := f.p2p.CustodyGroupCount()
+	if err != nil {
+		return blobsPid, errors.Wrap(err, "custody group count")
+	}
+
+	samplingSize := max(custodyGroupCount, samplesPerSlot)
+	info, _, err := peerdas.Info(f.p2p.NodeID(), samplingSize)
+	if err != nil {
+		return blobsPid, errors.Wrap(err, "custody info")
+	}
+
+	params := prysmsync.DataColumnSidecarsParams{
+		Ctx:         ctx,
+		Tor:         f.clock,
+		P2P:         f.p2p,
+		RateLimiter: f.rateLimiter,
+		CtxMap:      f.ctxMap,
+		Storage:     f.dcs,
+		NewVerifier: f.cv,
+	}
+
+	roBlocks := make([]blocks.ROBlock, 0, len(postFulu))
+	for _, block := range postFulu {
+		roBlocks = append(roBlocks, block.Block)
+	}
+
+	verifiedRoDataColumnsByRoot, err := prysmsync.FetchDataColumnSidecars(params, roBlocks, info.CustodyColumns)
+	if err != nil {
+		return "", errors.Wrap(err, "fetch data column sidecars")
+	}
+
+	// Populate the response.
+	for i := range bwScs {
+		bwSc := &bwScs[i]
+		root := bwSc.Block.Root()
+		if columns, ok := verifiedRoDataColumnsByRoot[root]; ok {
+			bwSc.Columns = columns
+		}
+	}
+
+	return blobsPid, nil
+}
+
+// fetchBlocksFromPeer fetches blocks from a single randomly selected peer, sorted by slot.
 func (f *blocksFetcher) fetchBlocksFromPeer(
 	ctx context.Context,
 	start primitives.Slot, count uint64,
 	peers []peer.ID,
-) ([]blocks.BlockWithROBlobs, peer.ID, error) {
+) ([]blocks.BlockWithROSidecars, peer.ID, error) {
 	ctx, span := trace.StartSpan(ctx, "initialsync.fetchBlocksFromPeer")
 	defer span.End()
 
@@ -355,8 +447,7 @@ func (f *blocksFetcher) fetchBlocksFromPeer(
 	// peers are dialed first.
 	peers = append(bestPeers, peers...)
 	peers = dedupPeers(peers)
-	for i := 0; i < len(peers); i++ {
-		p := peers[i]
+	for _, p := range peers {
 		blocks, err := f.requestBlocks(ctx, req, p)
 		if err != nil {
 			log.WithField("peer", p).WithError(err).Debug("Could not request blocks by range from peer")
@@ -380,14 +471,14 @@ func (f *blocksFetcher) fetchBlocksFromPeer(
 	return nil, "", errNoPeersAvailable
 }
 
-func sortedBlockWithVerifiedBlobSlice(bs []interfaces.ReadOnlySignedBeaconBlock) ([]blocks.BlockWithROBlobs, error) {
-	rb := make([]blocks.BlockWithROBlobs, len(bs))
-	for i, b := range bs {
+func sortedBlockWithVerifiedBlobSlice(blks []interfaces.ReadOnlySignedBeaconBlock) ([]blocks.BlockWithROSidecars, error) {
+	rb := make([]blocks.BlockWithROSidecars, len(blks))
+	for i, b := range blks {
 		ro, err := blocks.NewROBlock(b)
 		if err != nil {
 			return nil, err
 		}
-		rb[i] = blocks.BlockWithROBlobs{Block: ro}
+		rb[i] = blocks.BlockWithROSidecars{Block: ro}
 	}
 	sort.Sort(blocks.BlockWithROBlobsSlice(rb))
 	return rb, nil
@@ -403,7 +494,8 @@ type commitmentCountList []commitmentCount
 
 // countCommitments makes a list of all blocks that have commitments that need to be satisfied.
 // This gives us a representation to finish building the request that is lightweight and readable for testing.
-func countCommitments(bwb []blocks.BlockWithROBlobs, retentionStart primitives.Slot) commitmentCountList {
+// `bwb` must be sorted by slot.
+func countCommitments(bwb []blocks.BlockWithROSidecars, retentionStart primitives.Slot) commitmentCountList {
 	if len(bwb) == 0 {
 		return nil
 	}
@@ -485,7 +577,9 @@ func (r *blobRange) Request() *p2ppb.BlobSidecarsByRangeRequest {
 var errBlobVerification = errors.New("peer unable to serve aligned BlobSidecarsByRange and BeaconBlockSidecarsByRange responses")
 var errMissingBlobsForBlockCommitments = errors.Wrap(errBlobVerification, "blobs unavailable for processing block with kzg commitments")
 
-func verifyAndPopulateBlobs(bwb []blocks.BlockWithROBlobs, blobs []blocks.ROBlob, req *p2ppb.BlobSidecarsByRangeRequest, bss filesystem.BlobStorageSummarizer) ([]blocks.BlockWithROBlobs, error) {
+// verifyAndPopulateBlobs mutate the input `bwb` argument by adding verified blobs.
+// This function mutates the input `bwb` argument.
+func verifyAndPopulateBlobs(bwb []blocks.BlockWithROSidecars, blobs []blocks.ROBlob, req *p2ppb.BlobSidecarsByRangeRequest, bss filesystem.BlobStorageSummarizer) error {
 	blobsByRoot := make(map[[32]byte][]blocks.ROBlob)
 	for i := range blobs {
 		if blobs[i].Slot() < req.StartSlot {
@@ -495,46 +589,53 @@ func verifyAndPopulateBlobs(bwb []blocks.BlockWithROBlobs, blobs []blocks.ROBlob
 		blobsByRoot[br] = append(blobsByRoot[br], blobs[i])
 	}
 	for i := range bwb {
-		bwi, err := populateBlock(bwb[i], blobsByRoot[bwb[i].Block.Root()], req, bss)
+		err := populateBlock(&bwb[i], blobsByRoot[bwb[i].Block.Root()], req, bss)
 		if err != nil {
 			if errors.Is(err, errDidntPopulate) {
 				continue
 			}
-			return bwb, err
+			return err
 		}
-		bwb[i] = bwi
 	}
-	return bwb, nil
+	return nil
 }
 
 var errDidntPopulate = errors.New("skipping population of block")
 
-func populateBlock(bw blocks.BlockWithROBlobs, blobs []blocks.ROBlob, req *p2ppb.BlobSidecarsByRangeRequest, bss filesystem.BlobStorageSummarizer) (blocks.BlockWithROBlobs, error) {
+// populateBlock verifies and populates blobs for a block.
+// This function mutates the input `bw` argument.
+func populateBlock(bw *blocks.BlockWithROSidecars, blobs []blocks.ROBlob, req *p2ppb.BlobSidecarsByRangeRequest, bss filesystem.BlobStorageSummarizer) error {
 	blk := bw.Block
 	if blk.Version() < version.Deneb || blk.Block().Slot() < req.StartSlot {
-		return bw, errDidntPopulate
+		return errDidntPopulate
 	}
+
 	commits, err := blk.Block().Body().BlobKzgCommitments()
 	if err != nil {
-		return bw, errDidntPopulate
+		return errDidntPopulate
 	}
+
 	if len(commits) == 0 {
-		return bw, errDidntPopulate
+		return errDidntPopulate
 	}
+
 	// Drop blobs on the floor if we already have them.
 	if bss != nil && bss.Summary(blk.Root()).AllAvailable(len(commits)) {
-		return bw, errDidntPopulate
+		return errDidntPopulate
 	}
+
 	if len(commits) != len(blobs) {
-		return bw, missingCommitError(blk.Root(), blk.Block().Slot(), commits)
+		return missingCommitError(blk.Root(), blk.Block().Slot(), commits)
 	}
+
 	for ci := range commits {
 		if err := verify.BlobAlignsWithBlock(blobs[ci], blk); err != nil {
-			return bw, err
+			return err
 		}
 	}
+
 	bw.Blobs = blobs
-	return bw, nil
+	return nil
 }
 
 func missingCommitError(root [32]byte, slot primitives.Slot, missing [][]byte) error {
@@ -547,29 +648,38 @@ func missingCommitError(root [32]byte, slot primitives.Slot, missing [][]byte) e
 }
 
 // fetchBlobsFromPeer fetches blocks from a single randomly selected peer.
-func (f *blocksFetcher) fetchBlobsFromPeer(ctx context.Context, bwb []blocks.BlockWithROBlobs, pid peer.ID, peers []peer.ID) (peer.ID, []blocks.BlockWithROBlobs, error) {
+// This function mutates the input `bwb` argument.
+// `pid` is the initial peer to request blobs from (usually the peer from which the block originated),
+// `peers` is a list of peers to use for the request if `pid` fails.
+// `bwb` must be sorted by slot.
+// It returns the peer ID from which blobs were fetched.
+func (f *blocksFetcher) fetchBlobsFromPeer(ctx context.Context, bwb []blocks.BlockWithROSidecars, pid peer.ID, peers []peer.ID) (peer.ID, error) {
+	if len(bwb) == 0 {
+		return "", nil
+	}
+
 	ctx, span := trace.StartSpan(ctx, "initialsync.fetchBlobsFromPeer")
 	defer span.End()
 	if slots.ToEpoch(f.clock.CurrentSlot()) < params.BeaconConfig().DenebForkEpoch {
-		return "", bwb, nil
+		return "", nil
 	}
 	blobWindowStart, err := prysmsync.BlobRPCMinValidSlot(f.clock.CurrentSlot())
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
 	// Construct request message based on observed interval of blocks in need of blobs.
 	req := countCommitments(bwb, blobWindowStart).blobRange(f.bs).Request()
 	if req == nil {
-		return "", bwb, nil
+		return "", nil
 	}
 	peers = f.filterPeers(ctx, peers, peersPercentagePerRequest)
 	// We dial the initial peer first to ensure that we get the desired set of blobs.
-	wantedPeers := append([]peer.ID{pid}, peers...)
-	bestPeers := f.hasSufficientBandwidth(wantedPeers, req.Count)
+	peers = append([]peer.ID{pid}, peers...)
+	peers = f.hasSufficientBandwidth(peers, req.Count)
 	// We append the best peers to the front so that higher capacity
 	// peers are dialed first. If all of them fail, we fallback to the
 	// initial peer we wanted to request blobs from.
-	peers = append(bestPeers, pid)
+	peers = append(peers, pid)
 	for i := 0; i < len(peers); i++ {
 		p := peers[i]
 		blobs, err := f.requestBlobs(ctx, req, p)
@@ -578,14 +688,24 @@ func (f *blocksFetcher) fetchBlobsFromPeer(ctx context.Context, bwb []blocks.Blo
 			continue
 		}
 		f.p2p.Peers().Scorers().BlockProviderScorer().Touch(p)
-		robs, err := verifyAndPopulateBlobs(bwb, blobs, req, f.bs)
-		if err != nil {
+		if err := verifyAndPopulateBlobs(bwb, blobs, req, f.bs); err != nil {
 			log.WithField("peer", p).WithError(err).Debug("Invalid BeaconBlobsByRange response")
 			continue
 		}
-		return p, robs, err
+		return p, err
 	}
-	return "", nil, errNoPeersAvailable
+	return "", errNoPeersAvailable
+}
+
+// sortedSliceFromMap returns a sorted slice of keys from a map.
+func sortedSliceFromMap(m map[uint64]bool) []uint64 {
+	result := make([]uint64, 0, len(m))
+	for k := range m {
+		result = append(result, k)
+	}
+
+	slices.Sort(result)
+	return result
 }
 
 // requestBlocks is a wrapper for handling BeaconBlocksByRangeRequest requests/streams.
@@ -642,6 +762,7 @@ func (f *blocksFetcher) requestBlobs(ctx context.Context, req *p2ppb.BlobSidecar
 	}
 	f.rateLimiter.Add(pid.String(), int64(req.Count))
 	l.Unlock()
+
 	return prysmsync.SendBlobsByRangeRequest(ctx, f.clock, f.p2p, pid, f.ctxMap, req)
 }
 
@@ -699,13 +820,17 @@ func (f *blocksFetcher) waitForBandwidth(pid peer.ID, count uint64) error {
 }
 
 func (f *blocksFetcher) hasSufficientBandwidth(peers []peer.ID, count uint64) []peer.ID {
-	filteredPeers := []peer.ID{}
-	for _, p := range peers {
-		if uint64(f.rateLimiter.Remaining(p.String())) < count {
+	filteredPeers := make([]peer.ID, 0, len(peers))
+
+	for _, peer := range peers {
+		remaining := uint64(0)
+		if remainingInt := f.rateLimiter.Remaining(peer.String()); remainingInt > 0 {
+			remaining = uint64(remainingInt)
+		}
+		if remaining < count {
 			continue
 		}
-		copiedP := p
-		filteredPeers = append(filteredPeers, copiedP)
+		filteredPeers = append(filteredPeers, peer)
 	}
 	return filteredPeers
 }
@@ -744,4 +869,24 @@ func dedupPeers(peers []peer.ID) []peer.ID {
 		peerExists[peers[i]] = true
 	}
 	return newPeerList
+}
+
+// findFirstFuluIndex returns the index of the first block with a version >= Fulu.
+// It returns an error if blocks are not correctly sorted by version regarding Fulu.
+func findFirstFuluIndex(bwScs []blocks.BlockWithROSidecars) (int, error) {
+	firstFuluIndex := len(bwScs)
+
+	for i, bwSc := range bwScs {
+		blockVersion := bwSc.Block.Version()
+		if blockVersion >= version.Fulu && firstFuluIndex > i {
+			firstFuluIndex = i
+			continue
+		}
+
+		if blockVersion < version.Fulu && firstFuluIndex <= i {
+			return 0, errors.New("blocks are not sorted by version")
+		}
+	}
+
+	return firstFuluIndex, nil
 }

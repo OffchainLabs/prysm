@@ -12,11 +12,12 @@ import (
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	p2pm "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	p2pt "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	beaconsync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
@@ -266,7 +267,7 @@ func TestBlocksFetcher_RoundRobin(t *testing.T) {
 
 			beaconDB := dbtest.SetupDB(t)
 
-			p := p2pt.NewTestP2P(t)
+			p := p2ptest.NewTestP2P(t)
 			connectPeers(t, p, tt.peers, p.Peers())
 			cache.RLock()
 			genesisRoot := cache.rootCache[0]
@@ -307,9 +308,9 @@ func TestBlocksFetcher_RoundRobin(t *testing.T) {
 				fetcher.stop()
 			}()
 
-			processFetchedBlocks := func() ([]blocks.BlockWithROBlobs, error) {
+			processFetchedBlocks := func() ([]blocks.BlockWithROSidecars, error) {
 				defer cancel()
-				var unionRespBlocks []blocks.BlockWithROBlobs
+				var unionRespBlocks []blocks.BlockWithROSidecars
 
 				for {
 					select {
@@ -398,6 +399,7 @@ func TestBlocksFetcher_scheduleRequest(t *testing.T) {
 			fetcher.scheduleRequest(t.Context(), 1, blockBatchLimit))
 	})
 }
+
 func TestBlocksFetcher_handleRequest(t *testing.T) {
 	blockBatchLimit := flags.Get().BlockBatchLimit
 	chainConfig := struct {
@@ -455,7 +457,7 @@ func TestBlocksFetcher_handleRequest(t *testing.T) {
 			}
 		}()
 
-		var bwb []blocks.BlockWithROBlobs
+		var bwb []blocks.BlockWithROSidecars
 		select {
 		case <-ctx.Done():
 			t.Error(ctx.Err())
@@ -531,9 +533,9 @@ func TestBlocksFetcher_requestBeaconBlocksByRange(t *testing.T) {
 }
 
 func TestBlocksFetcher_RequestBlocksRateLimitingLocks(t *testing.T) {
-	p1 := p2pt.NewTestP2P(t)
-	p2 := p2pt.NewTestP2P(t)
-	p3 := p2pt.NewTestP2P(t)
+	p1 := p2ptest.NewTestP2P(t)
+	p2 := p2ptest.NewTestP2P(t)
+	p3 := p2ptest.NewTestP2P(t)
 	p1.Connect(p2)
 	p1.Connect(p3)
 	require.Equal(t, 2, len(p1.BHost.Network().Peers()), "Expected peers to be connected")
@@ -543,7 +545,7 @@ func TestBlocksFetcher_RequestBlocksRateLimitingLocks(t *testing.T) {
 		Count:     64,
 	}
 
-	topic := p2pm.RPCBlocksByRangeTopicV1
+	topic := p2p.RPCBlocksByRangeTopicV1
 	protocol := libp2pcore.ProtocolID(topic + p2.Encoding().ProtocolSuffix())
 	streamHandlerFn := func(stream network.Stream) {
 		assert.NoError(t, stream.Close())
@@ -602,15 +604,15 @@ func TestBlocksFetcher_RequestBlocksRateLimitingLocks(t *testing.T) {
 }
 
 func TestBlocksFetcher_WaitForBandwidth(t *testing.T) {
-	p1 := p2pt.NewTestP2P(t)
-	p2 := p2pt.NewTestP2P(t)
+	p1 := p2ptest.NewTestP2P(t)
+	p2 := p2ptest.NewTestP2P(t)
 	p1.Connect(p2)
 	require.Equal(t, 1, len(p1.BHost.Network().Peers()), "Expected peers to be connected")
 	req := &ethpb.BeaconBlocksByRangeRequest{
 		Count: 64,
 	}
 
-	topic := p2pm.RPCBlocksByRangeTopicV1
+	topic := p2p.RPCBlocksByRangeTopicV1
 	protocol := libp2pcore.ProtocolID(topic + p2.Encoding().ProtocolSuffix())
 	streamHandlerFn := func(stream network.Stream) {
 		assert.NoError(t, stream.Close())
@@ -638,7 +640,7 @@ func TestBlocksFetcher_WaitForBandwidth(t *testing.T) {
 }
 
 func TestBlocksFetcher_requestBlocksFromPeerReturningInvalidBlocks(t *testing.T) {
-	p1 := p2pt.NewTestP2P(t)
+	p1 := p2ptest.NewTestP2P(t)
 	tests := []struct {
 		name         string
 		req          *ethpb.BeaconBlocksByRangeRequest
@@ -883,7 +885,7 @@ func TestBlocksFetcher_requestBlocksFromPeerReturningInvalidBlocks(t *testing.T)
 		},
 	}
 
-	topic := p2pm.RPCBlocksByRangeTopicV1
+	topic := p2p.RPCBlocksByRangeTopicV1
 	protocol := libp2pcore.ProtocolID(topic + p1.Encoding().ProtocolSuffix())
 
 	ctx, cancel := context.WithCancel(t.Context())
@@ -893,7 +895,7 @@ func TestBlocksFetcher_requestBlocksFromPeerReturningInvalidBlocks(t *testing.T)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p2 := p2pt.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
 			p1.Connect(p2)
 
 			p2.BHost.SetStreamHandler(protocol, tt.handlerGenFn(tt.req))
@@ -993,7 +995,7 @@ func TestBlobRangeForBlocks(t *testing.T) {
 func TestBlobRequest(t *testing.T) {
 	var nilReq *ethpb.BlobSidecarsByRangeRequest
 	// no blocks
-	req := countCommitments([]blocks.BlockWithROBlobs{}, 0).blobRange(nil).Request()
+	req := countCommitments([]blocks.BlockWithROSidecars{}, 0).blobRange(nil).Request()
 	require.Equal(t, nilReq, req)
 	blks, _ := util.ExtendBlocksPlusBlobs(t, []blocks.ROBlock{}, 10)
 	sbbs := make([]interfaces.ReadOnlySignedBeaconBlock, len(blks))
@@ -1026,22 +1028,16 @@ func TestBlobRequest(t *testing.T) {
 }
 
 func TestCountCommitments(t *testing.T) {
-	// no blocks
-	// blocks before retention start filtered
-	// blocks without commitments filtered
-	// pre-deneb filtered
-	// variety of commitment counts are accurate, from 1 to max
 	type testcase struct {
-		name      string
-		bwb       func(t *testing.T, c testcase) []blocks.BlockWithROBlobs
-		numBlocks int
-		retStart  primitives.Slot
-		resCount  int
+		name     string
+		bwb      func(t *testing.T, c testcase) []blocks.BlockWithROSidecars
+		retStart primitives.Slot
+		resCount int
 	}
 	cases := []testcase{
 		{
 			name: "nil blocks is safe",
-			bwb: func(t *testing.T, c testcase) []blocks.BlockWithROBlobs {
+			bwb: func(t *testing.T, c testcase) []blocks.BlockWithROSidecars {
 				return nil
 			},
 			retStart: 0,
@@ -1179,7 +1175,7 @@ func TestCommitmentCountList(t *testing.T) {
 	}
 }
 
-func testSequenceBlockWithBlob(t *testing.T, nblocks int) ([]blocks.BlockWithROBlobs, []blocks.ROBlob) {
+func testSequenceBlockWithBlob(t *testing.T, nblocks int) ([]blocks.BlockWithROSidecars, []blocks.ROBlob) {
 	blks, blobs := util.ExtendBlocksPlusBlobs(t, []blocks.ROBlock{}, nblocks)
 	sbbs := make([]interfaces.ReadOnlySignedBeaconBlock, len(blks))
 	for i := range blks {
@@ -1190,7 +1186,7 @@ func testSequenceBlockWithBlob(t *testing.T, nblocks int) ([]blocks.BlockWithROB
 	return bwb, blobs
 }
 
-func testReqFromResp(bwb []blocks.BlockWithROBlobs) *ethpb.BlobSidecarsByRangeRequest {
+func testReqFromResp(bwb []blocks.BlockWithROSidecars) *ethpb.BlobSidecarsByRangeRequest {
 	return &ethpb.BlobSidecarsByRangeRequest{
 		StartSlot: bwb[0].Block.Block().Slot(),
 		Count:     uint64(bwb[len(bwb)-1].Block.Block().Slot()-bwb[0].Block.Block().Slot()) + 1,
@@ -1207,7 +1203,7 @@ func TestVerifyAndPopulateBlobs(t *testing.T) {
 		}
 		require.Equal(t, len(blobs), len(expectedCommits))
 
-		bwb, err := verifyAndPopulateBlobs(bwb, blobs, testReqFromResp(bwb), nil)
+		err := verifyAndPopulateBlobs(bwb, blobs, testReqFromResp(bwb), nil)
 		require.NoError(t, err)
 		for _, bw := range bwb {
 			commits, err := bw.Block.Block().Body().BlobKzgCommitments()
@@ -1228,7 +1224,7 @@ func TestVerifyAndPopulateBlobs(t *testing.T) {
 	})
 	t.Run("missing blobs", func(t *testing.T) {
 		bwb, blobs := testSequenceBlockWithBlob(t, 10)
-		_, err := verifyAndPopulateBlobs(bwb, blobs[1:], testReqFromResp(bwb), nil)
+		err := verifyAndPopulateBlobs(bwb, blobs[1:], testReqFromResp(bwb), nil)
 		require.ErrorIs(t, err, errMissingBlobsForBlockCommitments)
 	})
 	t.Run("no blobs for last block", func(t *testing.T) {
@@ -1240,7 +1236,7 @@ func TestVerifyAndPopulateBlobs(t *testing.T) {
 		blobs = blobs[0 : len(blobs)-len(cmts)]
 		lastBlk, _ = util.GenerateTestDenebBlockWithSidecar(t, lastBlk.Block().ParentRoot(), lastBlk.Block().Slot(), 0)
 		bwb[lastIdx].Block = lastBlk
-		_, err = verifyAndPopulateBlobs(bwb, blobs, testReqFromResp(bwb), nil)
+		err = verifyAndPopulateBlobs(bwb, blobs, testReqFromResp(bwb), nil)
 		require.NoError(t, err)
 	})
 	t.Run("blobs not copied if all locally available", func(t *testing.T) {
@@ -1254,7 +1250,7 @@ func TestVerifyAndPopulateBlobs(t *testing.T) {
 			r7: {0, 1, 2, 3, 4, 5},
 		}
 		bss := filesystem.NewMockBlobStorageSummarizer(t, onDisk)
-		bwb, err := verifyAndPopulateBlobs(bwb, blobs, testReqFromResp(bwb), bss)
+		err := verifyAndPopulateBlobs(bwb, blobs, testReqFromResp(bwb), bss)
 		require.NoError(t, err)
 		require.Equal(t, 6, len(bwb[i1].Blobs))
 		require.Equal(t, 0, len(bwb[i7].Blobs))
@@ -1301,4 +1297,204 @@ func TestBlockFetcher_HasSufficientBandwidth(t *testing.T) {
 		}
 	}
 	assert.Equal(t, 2, len(receivedPeers))
+}
+
+func TestSortedSliceFromMap(t *testing.T) {
+	m := map[uint64]bool{1: true, 3: true, 2: true, 4: true}
+	expected := []uint64{1, 2, 3, 4}
+
+	actual := sortedSliceFromMap(m)
+	require.DeepSSZEqual(t, expected, actual)
+}
+
+func TestFetchSidecars(t *testing.T) {
+	ctx := t.Context()
+	t.Run("No blocks", func(t *testing.T) {
+		fetcher := new(blocksFetcher)
+
+		pid, err := fetcher.fetchSidecars(ctx, "", nil, []blocks.BlockWithROSidecars{})
+		assert.NoError(t, err)
+		assert.Equal(t, peer.ID(""), pid)
+	})
+
+	t.Run("Nominal", func(t *testing.T) {
+		beaconConfig := params.BeaconConfig()
+		numberOfColumns := beaconConfig.NumberOfColumns
+		samplesPerSlot := beaconConfig.SamplesPerSlot
+
+		// Define "now" to be one epoch after genesis time + retention period.
+		genesisTime := time.Date(2025, time.August, 10, 0, 0, 0, 0, time.UTC)
+		secondsPerSlot := beaconConfig.SecondsPerSlot
+		slotsPerEpoch := beaconConfig.SlotsPerEpoch
+		secondsPerEpoch := uint64(slotsPerEpoch.Mul(secondsPerSlot))
+		retentionEpochs := beaconConfig.MinEpochsForDataColumnSidecarsRequest
+		nowWrtGenesisSecs := retentionEpochs.Add(1).Mul(secondsPerEpoch)
+		now := genesisTime.Add(time.Duration(nowWrtGenesisSecs) * time.Second)
+
+		genesisValidatorRoot := [fieldparams.RootLength]byte{}
+		nower := func() time.Time { return now }
+		clock := startup.NewClock(genesisTime, genesisValidatorRoot, startup.WithNower(nower))
+
+		// Define a Deneb block with blobs out of retention period.
+		denebBlock := util.NewBeaconBlockDeneb()
+		denebBlock.Block.Slot = 0 // Genesis slot, out of retention period.
+		signedDenebBlock, err := blocks.NewSignedBeaconBlock(denebBlock)
+		require.NoError(t, err)
+		roDebebBlock, err := blocks.NewROBlock(signedDenebBlock)
+		require.NoError(t, err)
+
+		// Define a Fulu block with blobs in the retention period.
+		fuluBlock := util.NewBeaconBlockFulu()
+		fuluBlock.Block.Slot = slotsPerEpoch                                                            // Within retention period.
+		fuluBlock.Block.Body.BlobKzgCommitments = [][]byte{make([]byte, fieldparams.KzgCommitmentSize)} // Dummy commitment.
+		signedFuluBlock, err := blocks.NewSignedBeaconBlock(fuluBlock)
+		require.NoError(t, err)
+		roFuluBlock, err := blocks.NewROBlock(signedFuluBlock)
+		require.NoError(t, err)
+
+		bodyRoot, err := fuluBlock.Block.Body.HashTreeRoot()
+		require.NoError(t, err)
+
+		// Create and save data column sidecars for this fulu block in the database.
+		params := make([]util.DataColumnParam, 0, numberOfColumns)
+		for i := range numberOfColumns {
+			param := util.DataColumnParam{Index: i, Slot: slotsPerEpoch, BodyRoot: bodyRoot[:]}
+			params = append(params, param)
+		}
+		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, params)
+
+		// Create a data columns storage.
+		dir := t.TempDir()
+		dataColumnStorage, err := filesystem.NewDataColumnStorage(ctx, filesystem.WithDataColumnBasePath(dir))
+		require.NoError(t, err)
+
+		// Save the data column sidecars to the storage.
+		err = dataColumnStorage.Save(verifiedRoDataColumnSidecars)
+		require.NoError(t, err)
+
+		// Create a blocks fetcher.
+		fetcher := &blocksFetcher{
+			clock: clock,
+			p2p:   p2ptest.NewTestP2P(t),
+			dcs:   dataColumnStorage,
+		}
+
+		// Fetch sidecars.
+		blocksWithSidecars := []blocks.BlockWithROSidecars{
+			{Block: roDebebBlock},
+			{Block: roFuluBlock},
+		}
+		pid, err := fetcher.fetchSidecars(ctx, "", nil, blocksWithSidecars)
+		require.NoError(t, err)
+		require.Equal(t, peer.ID(""), pid)
+
+		// Verify that block with sidecars were modified correctly.
+		require.Equal(t, 0, len(blocksWithSidecars[0].Blobs))
+		require.Equal(t, 0, len(blocksWithSidecars[0].Columns))
+		require.Equal(t, 0, len(blocksWithSidecars[1].Blobs))
+
+		// We don't check the content of the columns here. The extensive test is done
+		// in TestFetchDataColumnsSidecars.
+		require.Equal(t, samplesPerSlot, uint64(len(blocksWithSidecars[1].Columns)))
+	})
+}
+func TestFirstFuluIndex(t *testing.T) {
+	bellatrix := util.NewBeaconBlockBellatrix()
+	signedBellatrix, err := blocks.NewSignedBeaconBlock(bellatrix)
+	require.NoError(t, err)
+	roBellatrix, err := blocks.NewROBlock(signedBellatrix)
+	require.NoError(t, err)
+
+	capella := util.NewBeaconBlockCapella()
+	signedCapella, err := blocks.NewSignedBeaconBlock(capella)
+	require.NoError(t, err)
+	roCapella, err := blocks.NewROBlock(signedCapella)
+	require.NoError(t, err)
+
+	deneb := util.NewBeaconBlockDeneb()
+	signedDeneb, err := blocks.NewSignedBeaconBlock(deneb)
+	require.NoError(t, err)
+	roDeneb, err := blocks.NewROBlock(signedDeneb)
+	require.NoError(t, err)
+
+	fulu := util.NewBeaconBlockFulu()
+	signedFulu, err := blocks.NewSignedBeaconBlock(fulu)
+	require.NoError(t, err)
+	roFulu, err := blocks.NewROBlock(signedFulu)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name          string
+		setupBlocks   func(t *testing.T) []blocks.BlockWithROSidecars
+		expectedIndex int
+		expectError   bool
+	}{
+		{
+			name: "all blocks are pre-Fulu",
+			setupBlocks: func(t *testing.T) []blocks.BlockWithROSidecars {
+				return []blocks.BlockWithROSidecars{
+					{Block: roBellatrix},
+					{Block: roCapella},
+					{Block: roDeneb},
+				}
+			},
+			expectedIndex: 3, // Should be the length of the slice
+			expectError:   false,
+		},
+		{
+			name: "all blocks are Fulu or later",
+			setupBlocks: func(t *testing.T) []blocks.BlockWithROSidecars {
+				return []blocks.BlockWithROSidecars{
+					{Block: roFulu},
+					{Block: roFulu},
+				}
+			},
+			expectedIndex: 0,
+			expectError:   false,
+		},
+		{
+			name: "mixed blocks correctly sorted",
+			setupBlocks: func(t *testing.T) []blocks.BlockWithROSidecars {
+
+				return []blocks.BlockWithROSidecars{
+					{Block: roBellatrix},
+					{Block: roCapella},
+					{Block: roDeneb},
+					{Block: roFulu},
+					{Block: roFulu},
+				}
+			},
+			expectedIndex: 3, // Index where Fulu blocks start
+			expectError:   false,
+		},
+		{
+			name: "mixed blocks incorrectly sorted",
+			setupBlocks: func(t *testing.T) []blocks.BlockWithROSidecars {
+				return []blocks.BlockWithROSidecars{
+					{Block: roBellatrix},
+					{Block: roCapella},
+					{Block: roFulu},
+					{Block: roDeneb},
+					{Block: roFulu},
+				}
+			},
+			expectedIndex: 0,
+			expectError:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			blocks := tt.setupBlocks(t)
+			index, err := findFirstFuluIndex(blocks)
+
+			if tt.expectError {
+				require.NotNil(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedIndex, index)
+		})
+	}
 }

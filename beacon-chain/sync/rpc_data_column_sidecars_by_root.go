@@ -36,12 +36,12 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
 	// Check if the message type is the one expected.
-	ref, ok := msg.(*types.DataColumnsByRootIdentifiers)
+	ref, ok := msg.(types.DataColumnsByRootIdentifiers)
 	if !ok {
 		return notDataColumnsByRootIdentifiersError
 	}
 
-	requestedColumnIdents := *ref
+	requestedColumnIdents := ref
 	remotePeer := stream.Conn().RemotePeer()
 
 	ctx, cancel := context.WithTimeout(ctx, ttfbTimeout)

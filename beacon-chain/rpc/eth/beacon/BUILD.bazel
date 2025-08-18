@@ -72,6 +72,7 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "handlers_equivocation_test.go",
         "handlers_pool_test.go",
         "handlers_state_test.go",
         "handlers_test.go",
