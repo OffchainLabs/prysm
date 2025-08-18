@@ -1956,14 +1956,15 @@ func (s *Server) GetBlobs(w http.ResponseWriter, r *http.Request) {
 }
 
 func marshalOnlyBlobsSSZ(blobs []*blocks.VerifiedROBlob) ([]byte, error) {
-	dst := make([]byte, 0, len(blobs)*fieldparams.BlobSize)
-	for i := 0; i < len(blobs); i++ {
-		if size := len(blobs[i].Blob); size != fieldparams.BlobSize {
-			return nil, fmt.Errorf("--.Blobs[%d] wrong length: got %d, want %d", i, size, fieldparams.BlobSize)
+	sszLen := fieldparams.BlobSize
+	sszData := make([]byte, 0, len(blobs)*sszLen)
+	for i := range blobs {
+		if size := len(blobs[i].Blob); size != sszLen {
+			return nil, fmt.Errorf("--.Blobs[%d] wrong length: got %d, want %d", i, size, sszLen)
 		}
-		dst = append(dst, blobs[i].Blob...)
+		copy(sszData[i*sszLen:(i+1)*sszLen], blobs[i].Blob)
 	}
-	return dst, nil
+	return sszData, nil
 }
 
 // SerializeItems serializes a slice of items, each of which implements the MarshalSSZ method,
