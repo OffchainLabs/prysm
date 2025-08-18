@@ -355,7 +355,7 @@ func (p *BeaconDbBlocker) blobsFromStoredDataColumns(block blocks.ROBlock, indic
 	stored := summary.Stored()
 	count := uint64(len(stored))
 
-	if count < peerdas.MinimumColumnsCountToReconstruct() {
+	if count < peerdas.MinimumColumnCountToReconstruct() {
 		// There is no way to reconstruct the data columns.
 		return nil, &core.RpcError{
 			Err:    errors.Errorf("the node does not custody enough data columns to reconstruct blobs - please start the beacon node with the `--%s` flag to ensure this call to succeed, or retry later if it is already the case", flags.SubscribeAllDataSubnets.Name),

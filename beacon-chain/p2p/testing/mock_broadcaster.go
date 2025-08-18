@@ -62,8 +62,8 @@ func (m *MockBroadcaster) BroadcastLightClientFinalityUpdate(_ context.Context, 
 	return nil
 }
 
-// BroadcastDataColumn broadcasts a data column for mock.
-func (m *MockBroadcaster) BroadcastDataColumn([fieldparams.RootLength]byte, uint64, *ethpb.DataColumnSidecar) error {
+// BroadcastDataColumnSidecar broadcasts a data column for mock.
+func (m *MockBroadcaster) BroadcastDataColumnSidecar([fieldparams.RootLength]byte, uint64, *ethpb.DataColumnSidecar) error {
 	m.BroadcastCalled.Store(true)
 	return nil
 }

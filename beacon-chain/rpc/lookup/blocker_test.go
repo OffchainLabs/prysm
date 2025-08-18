@@ -443,7 +443,7 @@ func TestGetBlob(t *testing.T) {
 		setupFulu(t)
 
 		_, dataColumnStorage := filesystem.NewEphemeralDataColumnStorageAndFs(t)
-		err = dataColumnStorage.Save(verifiedRoDataColumnSidecars[1 : peerdas.MinimumColumnsCountToReconstruct()+1])
+		err = dataColumnStorage.Save(verifiedRoDataColumnSidecars[1 : peerdas.MinimumColumnCountToReconstruct()+1])
 		require.NoError(t, err)
 
 		blocker := &BeaconDbBlocker{

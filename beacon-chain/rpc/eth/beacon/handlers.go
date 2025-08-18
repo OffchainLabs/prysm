@@ -701,7 +701,7 @@ func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *
 	// Validate and optionally broadcast sidecars on equivocation.
 	if err := s.validateBroadcast(ctx, r, genericBlock); err != nil {
 		if errors.Is(err, errEquivocatedBlock) {
-			b, err := blocks.NewSignedBeaconBlock(genericBlock)
+			b, err := blocks.NewSignedBeaconBlock(genericBlock.Block)
 			if err != nil {
 				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 				return
@@ -855,7 +855,7 @@ func (s *Server) publishBlock(ctx context.Context, w http.ResponseWriter, r *htt
 	// Validate and optionally broadcast sidecars on equivocation.
 	if err := s.validateBroadcast(ctx, r, genericBlock); err != nil {
 		if errors.Is(err, errEquivocatedBlock) {
-			b, err := blocks.NewSignedBeaconBlock(genericBlock)
+			b, err := blocks.NewSignedBeaconBlock(genericBlock.Block)
 			if err != nil {
 				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 				return

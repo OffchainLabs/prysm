@@ -17,7 +17,7 @@ func (s *Service) ReceiveDataColumns(dataColumnSidecars []blocks.VerifiedRODataC
 // ReceiveDataColumn receives a single data column.
 func (s *Service) ReceiveDataColumn(dataColumnSidecar blocks.VerifiedRODataColumn) error {
 	if err := s.dataColumnStorage.Save([]blocks.VerifiedRODataColumn{dataColumnSidecar}); err != nil {
-		return errors.Wrap(err, "save data column sidecars")
+		return errors.Wrap(err, "save data column sidecar")
 	}
 
 	return nil

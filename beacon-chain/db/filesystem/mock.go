@@ -144,14 +144,3 @@ func NewEphemeralDataColumnStorageWithMocker(t testing.TB) (*DataColumnMocker, *
 	fs, dcs := NewEphemeralDataColumnStorageAndFs(t)
 	return &DataColumnMocker{fs: fs, dcs: dcs}, dcs
 }
-
-func NewMockDataColumnStorageSummarizer(t *testing.T, set map[[fieldparams.RootLength]byte][]uint64) DataColumnStorageSummarizer {
-	c := newDataColumnStorageSummaryCache()
-	for root, indices := range set {
-		if err := c.set(DataColumnsIdent{Root: root, Epoch: 0, Indices: indices}); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	return c
-}
