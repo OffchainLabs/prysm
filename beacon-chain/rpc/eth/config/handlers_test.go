@@ -168,6 +168,8 @@ func TestGetSpec(t *testing.T) {
 	config.BlobsidecarSubnetCount = 101
 	config.BlobsidecarSubnetCountElectra = 102
 	config.SyncMessageDueBPS = 103
+	config.BuilderWithdrawalPrefixByte = byte('b')
+	config.BuilderIndexSelfBuild = primitives.BuilderIndex(125)
 
 	var dbp [4]byte
 	copy(dbp[:], []byte{'0', '0', '0', '1'})
@@ -190,6 +192,9 @@ func TestGetSpec(t *testing.T) {
 	var daap [4]byte
 	copy(daap[:], []byte{'0', '0', '0', '7'})
 	config.DomainAggregateAndProof = daap
+	var dbb [4]byte
+	copy(dbb[:], []byte{'0', '0', '0', '8'})
+	config.DomainBeaconBuilder = dbb
 	var dam [4]byte
 	copy(dam[:], []byte{'1', '0', '0', '0'})
 	config.DomainApplicationMask = dam
@@ -205,7 +210,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 175, len(data))
+	assert.Equal(t, 178, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -419,8 +424,14 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "0x0a000000", v)
 			case "DOMAIN_APPLICATION_BUILDER":
 				assert.Equal(t, "0x00000001", v)
+			case "DOMAIN_BEACON_BUILDER":
+				assert.Equal(t, "0x30303038", v)
 			case "DOMAIN_BLOB_SIDECAR":
 				assert.Equal(t, "0x00000000", v)
+			case "BUILDER_WITHDRAWAL_PREFIX":
+				assert.Equal(t, "0x62", v)
+			case "BUILDER_INDEX_SELF_BUILD":
+				assert.Equal(t, "125", v)
 			case "TRANSITION_TOTAL_DIFFICULTY":
 				assert.Equal(t, "0", v)
 			case "TERMINAL_BLOCK_HASH_ACTIVATION_EPOCH":

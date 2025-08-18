@@ -1246,3 +1246,89 @@ func genPayloadAttestations(num int) []*v1alpha1.PayloadAttestation {
 	}
 	return pas
 }
+
+func TestCopyBuilderPendingWithdrawal(t *testing.T) {
+	t.Run("nil returns nil", func(t *testing.T) {
+		if got := v1alpha1.CopyBuilderPendingWithdrawal(nil); got != nil {
+			t.Fatalf("CopyBuilderPendingWithdrawal(nil) = %v, want nil", got)
+		}
+	})
+
+	t.Run("deep copy", func(t *testing.T) {
+		original := &v1alpha1.BuilderPendingWithdrawal{
+			FeeRecipient: []byte{0x01, 0x02},
+			Amount:       primitives.Gwei(10),
+			BuilderIndex: primitives.BuilderIndex(3),
+		}
+
+		copied := v1alpha1.CopyBuilderPendingWithdrawal(original)
+		if copied == original {
+			t.Fatalf("expected new pointer for withdrawal copy")
+		}
+		if !reflect.DeepEqual(copied, original) {
+			t.Fatalf("CopyBuilderPendingWithdrawal() = %v, want %v", copied, original)
+		}
+
+		original.FeeRecipient[0] = 0xFF
+		original.Amount = primitives.Gwei(20)
+		original.BuilderIndex = primitives.BuilderIndex(9)
+
+		if copied.FeeRecipient[0] == original.FeeRecipient[0] {
+			t.Fatalf("fee recipient was not deep copied")
+		}
+		if copied.Amount != primitives.Gwei(10) {
+			t.Fatalf("amount mutated on copy: %d", copied.Amount)
+		}
+		if copied.BuilderIndex != primitives.BuilderIndex(3) {
+			t.Fatalf("builder index mutated on copy: %d", copied.BuilderIndex)
+		}
+	})
+}
+
+func TestCopyBuilderPendingPayment(t *testing.T) {
+	t.Run("nil returns nil", func(t *testing.T) {
+		if got := v1alpha1.CopyBuilderPendingPayment(nil); got != nil {
+			t.Fatalf("CopyBuilderPendingPayment(nil) = %v, want nil", got)
+		}
+	})
+
+	t.Run("deep copy", func(t *testing.T) {
+		original := &v1alpha1.BuilderPendingPayment{
+			Weight: primitives.Gwei(5),
+			Withdrawal: &v1alpha1.BuilderPendingWithdrawal{
+				FeeRecipient: []byte{0x0A, 0x0B},
+				Amount:       primitives.Gwei(50),
+				BuilderIndex: primitives.BuilderIndex(7),
+			},
+		}
+
+		copied := v1alpha1.CopyBuilderPendingPayment(original)
+		if copied == original {
+			t.Fatalf("expected new pointer for payment copy")
+		}
+		if copied.Withdrawal == original.Withdrawal {
+			t.Fatalf("expected nested withdrawal to be deep copied")
+		}
+		if !reflect.DeepEqual(copied, original) {
+			t.Fatalf("CopyBuilderPendingPayment() = %v, want %v", copied, original)
+		}
+
+		original.Weight = primitives.Gwei(10)
+		original.Withdrawal.FeeRecipient[0] = 0xFF
+		original.Withdrawal.Amount = primitives.Gwei(75)
+		original.Withdrawal.BuilderIndex = primitives.BuilderIndex(9)
+
+		if copied.Weight != primitives.Gwei(5) {
+			t.Fatalf("weight mutated on copy: %d", copied.Weight)
+		}
+		if copied.Withdrawal.FeeRecipient[0] == original.Withdrawal.FeeRecipient[0] {
+			t.Fatalf("withdrawal fee recipient was not deep copied")
+		}
+		if copied.Withdrawal.Amount != primitives.Gwei(50) {
+			t.Fatalf("withdrawal amount mutated on copy: %d", copied.Withdrawal.Amount)
+		}
+		if copied.Withdrawal.BuilderIndex != primitives.BuilderIndex(7) {
+			t.Fatalf("withdrawal builder index mutated on copy: %d", copied.Withdrawal.BuilderIndex)
+		}
+	})
+}
