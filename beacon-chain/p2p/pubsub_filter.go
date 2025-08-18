@@ -86,7 +86,7 @@ func (s *Service) checkSubscribable(topic string) error {
 	var digest [4]byte
 	dl, err := hex.Decode(digest[:], []byte(rawDigest))
 	if err != nil {
-		return errors.Wrapf(errDigestInvalid, "%w", err)
+		return errors.Wrapf(errDigestInvalid, "%v", err)
 	}
 	if dl != 4 {
 		return errors.Wrapf(errDigestInvalid, "wrong byte length")
