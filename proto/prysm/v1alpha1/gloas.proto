@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package ethereum.eth.v1alpha1;
+
+import "proto/eth/ext/options.proto";
+
+message ExecutionPayloadHeaderGloas {
+  bytes parent_block_hash = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes parent_block_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes block_hash = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  uint64 gas_limit = 4;
+  uint64 builder_index = 5 [ (ethereum.eth.ext.cast_type) =
+  "github.com/OffchainLabs/prysm/v6/"
+      "consensus-types/primitives.ValidatorIndex" ];
+  uint64 slot = 6 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
+  ];
+  uint64 value = 7;
+  bytes blob_kzg_commitments_root = 8 [ (ethereum.eth.ext.ssz_size) = "32" ];
+}
+
+message SignedExecutionPayloadHeader {
+  ExecutionPayloadHeaderGloas message = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
