@@ -18,6 +18,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+var errMissingBlobsForBlockCommitments = errors.New("block has KZG commitments but missing blob sidecars")
+
 func (s *Service) streamBlobBatch(ctx context.Context, batch blockBatch, wQuota uint64, stream libp2pcore.Stream) (uint64, error) {
 	// Defensive check to guard against underflow.
 	if wQuota == 0 {
@@ -27,14 +29,42 @@ func (s *Service) streamBlobBatch(ctx context.Context, batch blockBatch, wQuota 
 	defer span.End()
 	for _, b := range batch.canonical() {
 		root := b.Root()
-		idxs := s.cfg.blobStorage.Summary(root)
-		for i := range idxs.MaxBlobsForEpoch() {
+		blobSummary := s.cfg.blobStorage.Summary(root)
+
+		// Get the number of KZG commitments in the block
+		commitments, err := b.Block().Body().BlobKzgCommitments()
+		if err != nil {
+			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
+			return wQuota, errors.Wrapf(err, "could not retrieve KZG commitments for block root %#x", root)
+		}
+		kzgCommitmentsCount := len(commitments)
+
+		// Check if we have all required blob sidecars only if there are KZG commitments
+		if kzgCommitmentsCount > 0 {
+			// Count available blob sidecars
+			availableSidecars := 0
+			for i := 0; i < kzgCommitmentsCount; i++ {
+				if blobSummary.HasIndex(uint64(i)) {
+					availableSidecars++
+				}
+			}
+
+			if availableSidecars != kzgCommitmentsCount {
+				s.writeErrorResponseToStream(responseCodeServerError, errMissingBlobsForBlockCommitments.Error(), stream)
+				return wQuota, errors.Wrapf(errMissingBlobsForBlockCommitments,
+					"block root %#x has %d KZG commitments but only %d available sidecars",
+					root, kzgCommitmentsCount, availableSidecars)
+			}
+		}
+
+		// Only proceed with sending blobs if we have all required sidecars
+		for i := range blobSummary.MaxBlobsForEpoch() {
 			// index not available, skip
-			if !idxs.HasIndex(i) {
+			if !blobSummary.HasIndex(uint64(i)) {
 				continue
 			}
 			// We won't check for file not found since the .Indices method should normally prevent that from happening.
-			sc, err := s.cfg.blobStorage.Get(b.Root(), i)
+			sc, err := s.cfg.blobStorage.Get(b.Root(), uint64(i))
 			if err != nil {
 				s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
 				return wQuota, errors.Wrapf(err, "could not retrieve sidecar: index %d, block root %#x", i, root)
