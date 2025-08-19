@@ -22,8 +22,8 @@ func GenerateCommitmentAndProof(blob GoKZG.Blob) (GoKZG.KZGCommitment, GoKZG.KZG
 }
 
 func TestVerify(t *testing.T) {
-	sidecars := make([]blocks.ROBlob, 0)
-	require.NoError(t, Verify(sidecars...))
+	blobSidecars := make([]blocks.ROBlob, 0)
+	require.NoError(t, Verify(blobSidecars...))
 }
 
 func TestBytesToAny(t *testing.T) {

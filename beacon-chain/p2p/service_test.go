@@ -13,13 +13,13 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
+	testp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	prysmTime "github.com/OffchainLabs/prysm/v6/time"
-	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -29,48 +29,6 @@ import (
 )
 
 const testPingInterval = 100 * time.Millisecond
-
-type mockListener struct {
-	localNode *enode.LocalNode
-}
-
-func (m mockListener) Self() *enode.Node {
-	return m.localNode.Node()
-}
-
-func (mockListener) Close() {
-	// no-op
-}
-
-func (mockListener) Lookup(enode.ID) []*enode.Node {
-	panic("implement me")
-}
-
-func (mockListener) ReadRandomNodes(_ []*enode.Node) int {
-	panic("implement me")
-}
-
-func (mockListener) Resolve(*enode.Node) *enode.Node {
-	panic("implement me")
-}
-
-func (mockListener) Ping(*enode.Node) error {
-	panic("implement me")
-}
-
-func (mockListener) RequestENR(*enode.Node) (*enode.Node, error) {
-	panic("implement me")
-}
-
-func (mockListener) LocalNode() *enode.LocalNode {
-	panic("implement me")
-}
-
-func (mockListener) RandomNodes() enode.Iterator {
-	panic("implement me")
-}
-
-func (mockListener) RebootListener() error { panic("implement me") }
 
 func createHost(t *testing.T, port uint) (host.Host, *ecdsa.PrivateKey, net.IP) {
 	_, pkey := createAddrAndPrivKey(t)
@@ -87,7 +45,7 @@ func TestService_Stop_SetsStartedToFalse(t *testing.T) {
 	s, err := NewService(t.Context(), &Config{StateNotifier: &mock.MockStateNotifier{}, DB: testDB.SetupDB(t)})
 	require.NoError(t, err)
 	s.started = true
-	s.dv5Listener = &mockListener{}
+	s.dv5Listener = testp2p.NewMockListener(nil, nil)
 	assert.NoError(t, s.Stop())
 	assert.Equal(t, false, s.started)
 }
@@ -113,7 +71,7 @@ func TestService_Start_OnlyStartsOnce(t *testing.T) {
 	}
 	s, err := NewService(t.Context(), cfg)
 	require.NoError(t, err)
-	s.dv5Listener = &mockListener{}
+	s.dv5Listener = testp2p.NewMockListener(nil, nil)
 	s.custodyInfo = &custodyInfo{}
 	exitRoutine := make(chan bool)
 	go func() {
@@ -133,14 +91,14 @@ func TestService_Start_OnlyStartsOnce(t *testing.T) {
 func TestService_Status_NotRunning(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	s := &Service{started: false}
-	s.dv5Listener = &mockListener{}
+	s.dv5Listener = testp2p.NewMockListener(nil, nil)
 	assert.ErrorContains(t, "not running", s.Status(), "Status returned wrong error")
 }
 
 func TestService_Status_NoGenesisTimeSet(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	s := &Service{started: true}
-	s.dv5Listener = &mockListener{}
+	s.dv5Listener = testp2p.NewMockListener(nil, nil)
 	assert.ErrorContains(t, "no genesis time set", s.Status(), "Status returned wrong error")
 
 	s.genesisTime = time.Now()

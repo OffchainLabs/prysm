@@ -100,6 +100,14 @@ type (
 	}
 )
 
+// DataColumnStorageReader is an interface to read data column sidecars from the filesystem.
+type DataColumnStorageReader interface {
+	Summary(root [fieldparams.RootLength]byte) DataColumnStorageSummary
+	Get(root [fieldparams.RootLength]byte, indices []uint64) ([]blocks.VerifiedRODataColumn, error)
+}
+
+var _ DataColumnStorageReader = &DataColumnStorage{}
+
 // WithDataColumnBasePath is a required option that sets the base path of data column storage.
 func WithDataColumnBasePath(base string) DataColumnStorageOption {
 	return func(b *DataColumnStorage) error {

@@ -24,7 +24,7 @@ import (
 type forkData struct {
 	blocksFrom peer.ID
 	blobsFrom  peer.ID
-	bwb        []blocks.BlockWithROBlobs
+	bwb        []blocks.BlockWithROSidecars
 }
 
 // nonSkippedSlotAfter checks slots after the given one in an attempt to find a non-empty future slot.
@@ -275,16 +275,18 @@ func (f *blocksFetcher) findForkWithPeer(ctx context.Context, pid peer.ID, slot 
 			"slot": block.Block().Slot(),
 			"root": fmt.Sprintf("%#x", parentRoot),
 		}).Debug("Block with unknown parent root has been found")
-		altBlocks, err := sortedBlockWithVerifiedBlobSlice(blocks[i-1:])
+		bwb, err := sortedBlockWithVerifiedBlobSlice(blocks[i-1:])
 		if err != nil {
 			return nil, errors.Wrap(err, "invalid blocks received in findForkWithPeer")
 		}
+
 		// We need to fetch the blobs for the given alt-chain if any exist, so that we can try to verify and import
 		// the blocks.
-		bpid, bwb, err := f.fetchBlobsFromPeer(ctx, altBlocks, pid, []peer.ID{pid})
+		bpid, err := f.fetchSidecars(ctx, pid, []peer.ID{pid}, bwb)
 		if err != nil {
-			return nil, errors.Wrap(err, "unable to retrieve blobs for blocks found in findForkWithPeer")
+			return nil, errors.Wrap(err, "fetch sidecars")
 		}
+
 		// The caller will use the BlocksWith VerifiedBlobs in bwb as the starting point for
 		// round-robin syncing the alternate chain.
 		return &forkData{blocksFrom: pid, blobsFrom: bpid, bwb: bwb}, nil
@@ -303,10 +305,9 @@ func (f *blocksFetcher) findAncestor(ctx context.Context, pid peer.ID, b interfa
 			if err != nil {
 				return nil, errors.Wrap(err, "received invalid blocks in findAncestor")
 			}
-			var bpid peer.ID
-			bpid, bwb, err = f.fetchBlobsFromPeer(ctx, bwb, pid, []peer.ID{pid})
+			bpid, err := f.fetchSidecars(ctx, pid, []peer.ID{pid}, bwb)
 			if err != nil {
-				return nil, errors.Wrap(err, "unable to retrieve blobs for blocks found in findAncestor")
+				return nil, errors.Wrap(err, "fetch sidecars")
 			}
 			return &forkData{
 				blocksFrom: pid,
@@ -350,9 +351,12 @@ func (f *blocksFetcher) calculateHeadAndTargetEpochs() (headEpoch, targetEpoch p
 		cp := f.chain.FinalizedCheckpt()
 		headEpoch = cp.Epoch
 		targetEpoch, peers = f.p2p.Peers().BestFinalized(params.BeaconConfig().MaxPeersToSync, headEpoch)
-	} else {
-		headEpoch = slots.ToEpoch(f.chain.HeadSlot())
-		targetEpoch, peers = f.p2p.Peers().BestNonFinalized(flags.Get().MinimumSyncPeers, headEpoch)
+
+		return headEpoch, targetEpoch, peers
 	}
+
+	headEpoch = slots.ToEpoch(f.chain.HeadSlot())
+	targetEpoch, peers = f.p2p.Peers().BestNonFinalized(flags.Get().MinimumSyncPeers, headEpoch)
+
 	return headEpoch, targetEpoch, peers
 }

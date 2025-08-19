@@ -1,9 +1,11 @@
 package p2p
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/rand"
+	"crypto/sha256"
 	"fmt"
 	mathRand "math/rand"
 	"net"
@@ -56,6 +58,81 @@ func createAddrAndPrivKey(t *testing.T) (net.IP, *ecdsa.PrivateKey) {
 	pkey, err := privKey(&Config{DataDir: tempPath})
 	require.NoError(t, err, "Could not get private key")
 	return ipAddr, pkey
+}
+
+// createTestNodeWithID creates a LocalNode for testing with deterministic private key
+// This is needed for deduplication tests where we need the same node ID across different sequence numbers
+func createTestNodeWithID(t *testing.T, id string) *enode.LocalNode {
+	// Create a deterministic reader based on the ID for consistent key generation
+	h := sha256.New()
+	h.Write([]byte(id))
+	seedBytes := h.Sum(nil)
+
+	// Create a deterministic reader using the seed
+	deterministicReader := bytes.NewReader(seedBytes)
+
+	// Generate the private key using the same approach as the production code
+	privKey, _, err := crypto.GenerateSecp256k1Key(deterministicReader)
+	require.NoError(t, err)
+
+	// Convert to ECDSA private key for enode usage
+	ecdsaPrivKey, err := ecdsaprysm.ConvertFromInterfacePrivKey(privKey)
+	require.NoError(t, err)
+
+	db, err := enode.OpenDB("")
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	localNode := enode.NewLocalNode(db, ecdsaPrivKey)
+
+	// Set basic properties
+	localNode.SetStaticIP(net.ParseIP("127.0.0.1"))
+	localNode.Set(enr.TCP(3000))
+	localNode.Set(enr.UDP(3000))
+	localNode.Set(enr.WithEntry(eth2ENRKey, make([]byte, 16)))
+
+	return localNode
+}
+
+// createTestNodeRandom creates a LocalNode for testing using the existing createAddrAndPrivKey function
+func createTestNodeRandom(t *testing.T) *enode.LocalNode {
+	_, privKey := createAddrAndPrivKey(t)
+
+	db, err := enode.OpenDB("")
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	localNode := enode.NewLocalNode(db, privKey)
+
+	// Set basic properties
+	localNode.SetStaticIP(net.ParseIP("127.0.0.1"))
+	localNode.Set(enr.TCP(3000))
+	localNode.Set(enr.UDP(3000))
+	localNode.Set(enr.WithEntry(eth2ENRKey, make([]byte, 16)))
+
+	return localNode
+}
+
+// setNodeSeq updates a LocalNode to have the specified sequence number
+func setNodeSeq(localNode *enode.LocalNode, seq uint64) {
+	// Force set the sequence number - we need to update the record seq-1 times
+	// because it starts at 1
+	currentSeq := localNode.Node().Seq()
+	for currentSeq < seq {
+		localNode.Set(enr.WithEntry("dummy", currentSeq))
+		currentSeq++
+	}
+}
+
+// setNodeSubnets sets the attestation subnets for a LocalNode
+func setNodeSubnets(localNode *enode.LocalNode, attSubnets []uint64) {
+	if len(attSubnets) > 0 {
+		bitV := bitfield.NewBitvector64()
+		for _, subnet := range attSubnets {
+			bitV.SetBitAt(subnet, true)
+		}
+		localNode.Set(enr.WithEntry(attSubnetEnrKey, &bitV))
+	}
 }
 
 func TestCreateListener(t *testing.T) {
@@ -492,7 +569,7 @@ func TestMultipleDiscoveryAddresses(t *testing.T) {
 	node := enode.NewLocalNode(db, key)
 	node.Set(enr.IPv4{127, 0, 0, 1})
 	node.Set(enr.IPv6{0x20, 0x01, 0x48, 0x60, 0, 0, 0x20, 0x01, 0, 0, 0, 0, 0, 0, 0x00, 0x68})
-	s := &Service{dv5Listener: mockListener{localNode: node}}
+	s := &Service{dv5Listener: testp2p.NewMockListener(node, nil)}
 
 	multiAddresses, err := s.DiscoveryAddresses()
 	require.NoError(t, err)
@@ -517,7 +594,7 @@ func TestDiscoveryV5_SeqNumber(t *testing.T) {
 	node := enode.NewLocalNode(db, key)
 	node.Set(enr.IPv4{127, 0, 0, 1})
 	currentSeq := node.Seq()
-	s := &Service{dv5Listener: mockListener{localNode: node}}
+	s := &Service{dv5Listener: testp2p.NewMockListener(node, nil)}
 	_, err = s.DiscoveryAddresses()
 	require.NoError(t, err)
 	newSeq := node.Seq()
@@ -529,7 +606,7 @@ func TestDiscoveryV5_SeqNumber(t *testing.T) {
 	nodeTwo.Set(enr.IPv6{0x20, 0x01, 0x48, 0x60, 0, 0, 0x20, 0x01, 0, 0, 0, 0, 0, 0, 0x00, 0x68})
 	seqTwo := nodeTwo.Seq()
 	assert.NotEqual(t, seqTwo, newSeq)
-	sTwo := &Service{dv5Listener: mockListener{localNode: nodeTwo}}
+	sTwo := &Service{dv5Listener: testp2p.NewMockListener(nodeTwo, nil)}
 	_, err = sTwo.DiscoveryAddresses()
 	require.NoError(t, err)
 	assert.Equal(t, seqTwo+1, nodeTwo.Seq())
@@ -885,4 +962,292 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 
 	// Reset the config.
 	params.OverrideBeaconConfig(defaultCfg)
+}
+
+func TestFindPeers_NodeDeduplication(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cache.SubnetIDs.EmptyAllCaches()
+	defer cache.SubnetIDs.EmptyAllCaches()
+
+	ctx := context.Background()
+
+	// Create LocalNodes and manipulate sequence numbers
+	localNode1 := createTestNodeWithID(t, "node1")
+	localNode2 := createTestNodeWithID(t, "node2")
+	localNode3 := createTestNodeWithID(t, "node3")
+
+	// Create different sequence versions of node1
+	setNodeSeq(localNode1, 1)
+	node1_seq1 := localNode1.Node()
+	setNodeSeq(localNode1, 2)
+	node1_seq2 := localNode1.Node() // Same ID, higher seq
+	setNodeSeq(localNode1, 3)
+	node1_seq3 := localNode1.Node() // Same ID, even higher seq
+
+	// Other nodes with seq 1
+	node2_seq1 := localNode2.Node()
+	node3_seq1 := localNode3.Node()
+
+	tests := []struct {
+		name          string
+		nodes         []*enode.Node
+		missingPeers  uint
+		expectedCount int
+		description   string
+		eval          func(t *testing.T, result []*enode.Node)
+	}{
+		{
+			name: "No duplicates - all unique nodes",
+			nodes: []*enode.Node{
+				node2_seq1,
+				node3_seq1,
+			},
+			missingPeers:  2,
+			expectedCount: 2,
+			description:   "Should return all unique nodes without deduplication",
+			eval:          nil, // No special validation needed
+		},
+		{
+			name: "Duplicate with lower seq comes first - should replace",
+			nodes: []*enode.Node{
+				node1_seq1,
+				node1_seq2, // Higher seq, should replace
+				node2_seq1, // Different node added after duplicates are processed
+			},
+			missingPeers:  2, // Need 2 peers so we process all nodes
+			expectedCount: 2, // Should get node1 (with higher seq) and node2
+			description:   "Should keep node with higher sequence number when duplicate found",
+			eval: func(t *testing.T, result []*enode.Node) {
+				// Should have node2 and node1 with higher seq (node1_seq2)
+				foundNode1WithHigherSeq := false
+				for _, node := range result {
+					if node.ID() == node1_seq2.ID() {
+						require.Equal(t, node1_seq2.Seq(), node.Seq(), "Node1 should have higher seq")
+						foundNode1WithHigherSeq = true
+					}
+				}
+				require.Equal(t, true, foundNode1WithHigherSeq, "Should have node1 with higher seq")
+			},
+		},
+		{
+			name: "Duplicate with higher seq comes first - should keep existing",
+			nodes: []*enode.Node{
+				node1_seq3, // Higher seq
+				node1_seq2, // Lower seq, should be skipped (continue branch)
+				node1_seq1, // Even lower seq, should also be skipped (continue branch)
+				node2_seq1, // Different node added after duplicates are processed
+			},
+			missingPeers:  2,
+			expectedCount: 2,
+			description:   "Should keep existing node when it has higher sequence number and skip all lower seq duplicates",
+			eval: func(t *testing.T, result []*enode.Node) {
+				// Should have kept the node with highest seq (node1_seq3)
+				foundNode1WithHigherSeq := false
+				for _, node := range result {
+					if node.ID() == node1_seq3.ID() {
+						require.Equal(t, node1_seq3.Seq(), node.Seq(), "Node1 should have highest seq")
+						foundNode1WithHigherSeq = true
+					}
+				}
+				require.Equal(t, true, foundNode1WithHigherSeq, "Should have node1 with highest seq")
+			},
+		},
+		{
+			name: "Multiple duplicates with increasing seq",
+			nodes: []*enode.Node{
+				node1_seq1,
+				node1_seq2, // Should replace seq1
+				node1_seq3, // Should replace seq2
+				node2_seq1, // Different node added after duplicates are processed
+			},
+			missingPeers:  2,
+			expectedCount: 2,
+			description:   "Should keep updating to highest sequence number",
+			eval: func(t *testing.T, result []*enode.Node) {
+				// Should have the node with highest seq (node1_seq3)
+				foundNode1WithHigherSeq := false
+				for _, node := range result {
+					if node.ID() == node1_seq3.ID() {
+						require.Equal(t, node1_seq3.Seq(), node.Seq(), "Node1 should have highest seq")
+						foundNode1WithHigherSeq = true
+					}
+				}
+				require.Equal(t, true, foundNode1WithHigherSeq, "Should have node1 with highest seq")
+			},
+		},
+		{
+			name: "Duplicate with equal seq comes after - should skip",
+			nodes: []*enode.Node{
+				node1_seq2, // First occurrence
+				node1_seq2, // Same exact node instance, should be skipped (continue branch for >= case)
+				node2_seq1, // Different node
+			},
+			missingPeers:  2,
+			expectedCount: 2,
+			description:   "Should skip duplicate with equal sequence number",
+			eval: func(t *testing.T, result []*enode.Node) {
+				// Should have exactly one instance of node1_seq2 and one instance of node2_seq1
+				foundNode1 := false
+				foundNode2 := false
+				for _, node := range result {
+					if node.ID() == node1_seq2.ID() {
+						require.Equal(t, node1_seq2.Seq(), node.Seq(), "Node1 should have the expected seq")
+						require.Equal(t, false, foundNode1, "Should have only one instance of node1") // Ensure no duplicates
+						foundNode1 = true
+					}
+					if node.ID() == node2_seq1.ID() {
+						foundNode2 = true
+					}
+				}
+				require.Equal(t, true, foundNode1, "Should have node1")
+				require.Equal(t, true, foundNode2, "Should have node2")
+			},
+		},
+		{
+			name: "Mix of unique and duplicate nodes",
+			nodes: []*enode.Node{
+				node1_seq1,
+				node2_seq1,
+				node1_seq2, // Should replace node1_seq1
+				node3_seq1,
+				node1_seq3, // Should replace node1_seq2
+			},
+			missingPeers:  3,
+			expectedCount: 3,
+			description:   "Should handle mix of unique nodes and duplicates correctly",
+			eval:          nil, // Basic count validation is sufficient
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakePeer := testp2p.NewTestP2P(t)
+
+			s := &Service{
+				cfg: &Config{
+					MaxPeers: 30,
+				},
+				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+				peers: peers.NewStatus(ctx, &peers.StatusConfig{
+					PeerLimit:    30,
+					ScorerParams: &scorers.Config{},
+				}),
+				host: fakePeer.BHost,
+			}
+
+			localNode := createTestNodeRandom(t)
+			mockIter := testp2p.NewMockIterator(tt.nodes)
+			s.dv5Listener = testp2p.NewMockListener(localNode, mockIter)
+
+			ctxWithTimeout, cancel := context.WithTimeout(ctx, 1*time.Second)
+			defer cancel()
+
+			result, err := s.findPeers(ctxWithTimeout, tt.missingPeers)
+
+			require.NoError(t, err, tt.description)
+			require.Equal(t, tt.expectedCount, len(result), tt.description)
+
+			if tt.eval != nil {
+				tt.eval(t, result)
+			}
+		})
+	}
+}
+
+// callbackIterator allows us to execute callbacks at specific points during iteration
+type callbackIterator struct {
+	nodes     []*enode.Node
+	index     int
+	callbacks map[int]func() // map from index to callback function
+}
+
+func (c *callbackIterator) Next() bool {
+	// Execute callback before checking if we can continue (if one exists)
+	if callback, exists := c.callbacks[c.index]; exists {
+		callback()
+	}
+
+	return c.index < len(c.nodes)
+}
+
+func (c *callbackIterator) Node() *enode.Node {
+	if c.index >= len(c.nodes) {
+		return nil
+	}
+
+	node := c.nodes[c.index]
+	c.index++
+	return node
+}
+
+func (c *callbackIterator) Close() {
+	// Nothing to clean up for this simple implementation
+}
+
+func TestFindPeers_received_bad_existing_node(t *testing.T) {
+	// This test successfully triggers delete(nodeByNodeID, node.ID()) in subnets.go by:
+	// 1. Processing node1_seq1 first (passes filterPeer, gets added to map
+	// 2. Callback marks peer as bad before processing node1_seq2"
+	// 3. Processing node1_seq2 (fails filterPeer, triggers delete since ok=true
+	params.SetupTestConfigCleanup(t)
+	cache.SubnetIDs.EmptyAllCaches()
+	defer cache.SubnetIDs.EmptyAllCaches()
+
+	ctx := context.Background()
+
+	// Create LocalNode with same ID but different sequences
+	localNode1 := createTestNodeWithID(t, "testnode")
+	node1_seq1 := localNode1.Node() // Get current node
+	currentSeq := node1_seq1.Seq()
+	setNodeSeq(localNode1, currentSeq+1) // Increment sequence by 1
+	node1_seq2 := localNode1.Node()      // This should have higher seq
+
+	// Additional node to ensure we have enough peers to process
+	localNode2 := createTestNodeWithID(t, "othernode")
+	node2 := localNode2.Node()
+
+	fakePeer := testp2p.NewTestP2P(t)
+
+	service := &Service{
+		cfg: &Config{
+			MaxPeers: 30,
+		},
+		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+		peers: peers.NewStatus(ctx, &peers.StatusConfig{
+			PeerLimit:    30,
+			ScorerParams: &scorers.Config{},
+		}),
+		host: fakePeer.BHost,
+	}
+
+	// Create iterator with callback that marks peer as bad before processing node1_seq2
+	iter := &callbackIterator{
+		nodes: []*enode.Node{node1_seq1, node1_seq2, node2},
+		index: 0,
+		callbacks: map[int]func(){
+			1: func() { // Before processing node1_seq2 (index 1)
+				// Mark peer as bad before processing node1_seq2
+				peerData, _, _ := convertToAddrInfo(node1_seq2)
+				if peerData != nil {
+					service.peers.Add(node1_seq2.Record(), peerData.ID, nil, network.DirUnknown)
+					// Mark as bad peer - need enough increments to exceed threshold (6)
+					for i := 0; i < 10; i++ {
+						service.peers.Scorers().BadResponsesScorer().Increment(peerData.ID)
+					}
+				}
+			},
+		},
+	}
+
+	localNode := createTestNodeRandom(t)
+	service.dv5Listener = testp2p.NewMockListener(localNode, iter)
+
+	// Run findPeers - node1_seq1 gets processed first, then callback marks peer bad, then node1_seq2 fails
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+
+	result, err := service.findPeers(ctxWithTimeout, 3)
+
+	require.NoError(t, err)
+	require.Equal(t, 1, len(result))
 }

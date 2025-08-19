@@ -443,20 +443,27 @@ func (s *Service) findPeers(ctx context.Context, missingPeerCount uint) ([]*enod
 			return peersToDial, ctx.Err()
 		}
 
-		// Skip peer not matching the filter.
 		node := iterator.Node()
-		if !s.filterPeer(node) {
-			continue
-		}
 
 		// Remove duplicates, keeping the node with higher seq.
 		existing, ok := nodeByNodeID[node.ID()]
-		if ok && existing.Seq() > node.Seq() {
+		if ok && existing.Seq() >= node.Seq() {
+			continue // keep existing and skip.
+		}
+
+		// Treat nodes that exist in nodeByNodeID with higher seq numbers as new peers
+		// Skip peer not matching the filter.
+		if !s.filterPeer(node) {
+			if ok {
+				// this means the existing peer with the lower sequence number is no longer valid
+				delete(nodeByNodeID, existing.ID())
+				missingPeerCount++
+			}
 			continue
 		}
-		nodeByNodeID[node.ID()] = node
 
 		// We found a new peer. Decrease the missing peer count.
+		nodeByNodeID[node.ID()] = node
 		missingPeerCount--
 	}
 

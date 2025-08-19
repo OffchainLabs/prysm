@@ -53,30 +53,25 @@ func NewLazilyPersistentStore(store *filesystem.BlobStorage, verifier BlobBatchV
 // Persist adds blobs to the working blob cache. Blobs stored in this cache will be persisted
 // for at least as long as the node is running. Once IsDataAvailable succeeds, all blobs referenced
 // by the given block are guaranteed to be persisted for the remainder of the retention period.
-func (s *LazilyPersistentStoreBlob) Persist(current primitives.Slot, sidecars ...blocks.ROSidecar) error {
+func (s *LazilyPersistentStoreBlob) Persist(current primitives.Slot, sidecars ...blocks.ROBlob) error {
 	if len(sidecars) == 0 {
 		return nil
 	}
 
-	blobSidecars, err := blocks.BlobSidecarsFromSidecars(sidecars)
-	if err != nil {
-		return errors.Wrap(err, "blob sidecars from sidecars")
-	}
-
-	if len(blobSidecars) > 1 {
-		firstRoot := blobSidecars[0].BlockRoot()
-		for _, sidecar := range blobSidecars[1:] {
+	if len(sidecars) > 1 {
+		firstRoot := sidecars[0].BlockRoot()
+		for _, sidecar := range sidecars[1:] {
 			if sidecar.BlockRoot() != firstRoot {
 				return errMixedRoots
 			}
 		}
 	}
-	if !params.WithinDAPeriod(slots.ToEpoch(blobSidecars[0].Slot()), slots.ToEpoch(current)) {
+	if !params.WithinDAPeriod(slots.ToEpoch(sidecars[0].Slot()), slots.ToEpoch(current)) {
 		return nil
 	}
-	key := keyFromSidecar(blobSidecars[0])
+	key := keyFromSidecar(sidecars[0])
 	entry := s.cache.ensure(key)
-	for _, blobSidecar := range blobSidecars {
+	for _, blobSidecar := range sidecars {
 		if err := entry.stash(&blobSidecar); err != nil {
 			return err
 		}
