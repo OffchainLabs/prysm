@@ -427,9 +427,9 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 		require.DeepSSZEqual(t, finalizedBlockRoot, s.cache.tail)
 	})
 
-	// db has update - cache has both canonical and non-canonical items. finalized height is higher than all.
+	// db has update - cache has both canonical and non-canonical items.
 	// should update the update in db and delete cache.
-	t.Run("mixed cache - finality higher than cache", func(t *testing.T) {
+	t.Run("mixed cache - finality immediately after cache", func(t *testing.T) {
 		beaconDB := testDB.SetupDB(t)
 		ctx := context.Background()
 
@@ -450,32 +450,22 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 		require.NoError(t, beaconDB.SaveLightClientUpdate(ctx, period, update))
 
 		lastBlockRoot := finalizedBlockRoot
-		lastSlot := primitives.Slot(32)
+		lastAttestedRoot := finalizedBlockRoot
 		lastUpdate := update
 		for i := 1; i < 4; i++ {
-			l = util.NewTestLightClient(t, version.Altair, util.WithIncreasedAttestedSlot(uint64(i)), util.WithSupermajority(0))
+			l = util.NewTestLightClient(t, version.Altair, util.WithIncreasedAttestedSlot(uint64(i)), util.WithSupermajority(uint64(i)), util.WithAttestedParentRoot(lastAttestedRoot))
 			require.NoError(t, beaconDB.SaveBlock(ctx, l.Block))
 			require.NoError(t, s.SaveLCData(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock, [32]byte{1}))
-			root, err := l.Block.Block().HashTreeRoot()
+			lastBlockRoot, err = l.Block.Block().HashTreeRoot()
 			require.NoError(t, err)
-			lastBlockRoot = root
-			lastSlot = l.Block.Block().Slot()
+			lastAttestedRoot, err = l.AttestedBlock.Block().HashTreeRoot()
+			require.NoError(t, err)
 			update, err = NewLightClientUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 			require.NoError(t, err)
 			lastUpdate = update
 		}
 
 		require.Equal(t, 3, len(s.cache.items))
-
-		newBlock := util.NewBeaconBlock()
-		newBlock.Block.Slot = lastSlot.Add(1)
-		newBlock.Block.ParentRoot = lastBlockRoot[:]
-		signedNewBlock, err := blocks.NewSignedBeaconBlock(newBlock)
-		require.NoError(t, err)
-		blockRoot, err := signedNewBlock.Block().HashTreeRoot()
-		require.NoError(t, err)
-		require.NoError(t, beaconDB.SaveBlock(ctx, signedNewBlock))
-		finalizedBlockRoot = blockRoot
 
 		// Add a non-canonical item to the cache
 		cacheItem := &cacheItem{
@@ -487,10 +477,10 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 
 		require.Equal(t, 4, len(s.cache.items))
 
-		err = s.MigrateToCold(ctx, finalizedBlockRoot)
+		err = s.MigrateToCold(ctx, lastBlockRoot)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(s.cache.items), "Expected the non-canonical item in the cache to be deleted")
-		require.DeepSSZEqual(t, finalizedBlockRoot, s.cache.tail)
+		require.DeepSSZEqual(t, lastBlockRoot, s.cache.tail)
 		u, err := beaconDB.LightClientUpdate(ctx, period)
 		require.NoError(t, err)
 		require.NotNil(t, u)
@@ -520,7 +510,6 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 		require.NoError(t, beaconDB.SaveLightClientUpdate(ctx, period, update))
 
 		lastBlockRoot := finalizedBlockRoot
-		lastSlot := primitives.Slot(32)
 		lastUpdate := update
 		lastAttestedRoot := [32]byte{}
 		for i := 1; i < 4; i++ {
@@ -530,7 +519,6 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 			root, err := l.Block.Block().HashTreeRoot()
 			require.NoError(t, err)
 			lastBlockRoot = root
-			lastSlot = l.Block.Block().Slot()
 			update, err = NewLightClientUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 			require.NoError(t, err)
 			lastUpdate = update
@@ -539,16 +527,6 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 		}
 
 		require.Equal(t, 3, len(s.cache.items))
-
-		newBlock := util.NewBeaconBlock()
-		newBlock.Block.Slot = lastSlot.Add(1)
-		newBlock.Block.ParentRoot = lastBlockRoot[:]
-		signedNewBlock, err := blocks.NewSignedBeaconBlock(newBlock)
-		require.NoError(t, err)
-		blockRoot, err := signedNewBlock.Block().HashTreeRoot()
-		require.NoError(t, err)
-		require.NoError(t, beaconDB.SaveBlock(ctx, signedNewBlock))
-		finalizedBlockRoot = blockRoot
 
 		// Add a non-canonical item to the cache
 		cacheItem := &cacheItem{
@@ -570,10 +548,10 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 
 		require.Equal(t, 7, len(s.cache.items))
 
-		err = s.MigrateToCold(ctx, finalizedBlockRoot)
+		err = s.MigrateToCold(ctx, lastBlockRoot)
 		require.NoError(t, err)
 		require.Equal(t, 3, len(s.cache.items), "Expected the non-canonical item in the cache to be deleted")
-		require.DeepSSZEqual(t, finalizedBlockRoot, s.cache.tail)
+		require.DeepSSZEqual(t, lastBlockRoot, s.cache.tail)
 		u, err := beaconDB.LightClientUpdate(ctx, period)
 		require.NoError(t, err)
 		require.NotNil(t, u)
@@ -606,7 +584,6 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 		require.NoError(t, beaconDB.SaveLightClientUpdate(ctx, period1, update))
 
 		lastBlockRoot := finalizedBlockRoot
-		lastSlot := primitives.Slot(32)
 		lastUpdatePeriod1 := update
 		lastAttestedRoot := [32]byte{}
 		for i := 1; i < 4; i++ {
@@ -616,7 +593,6 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 			root, err := l.Block.Block().HashTreeRoot()
 			require.NoError(t, err)
 			lastBlockRoot = root
-			lastSlot = l.Block.Block().Slot()
 			lastUpdatePeriod1, err = NewLightClientUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 			require.NoError(t, err)
 			lastAttestedRoot, err = l.AttestedBlock.Block().HashTreeRoot()
@@ -632,7 +608,6 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 			root, err := l.Block.Block().HashTreeRoot()
 			require.NoError(t, err)
 			lastBlockRoot = root
-			lastSlot = l.Block.Block().Slot()
 			lastUpdatePeriod2, err = NewLightClientUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 			require.NoError(t, err)
 			lastAttestedRoot, err = l.AttestedBlock.Block().HashTreeRoot()
@@ -641,16 +616,6 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 		}
 
 		require.Equal(t, 6, len(s.cache.items))
-
-		newBlock := util.NewBeaconBlock()
-		newBlock.Block.Slot = lastSlot.Add(1)
-		newBlock.Block.ParentRoot = lastBlockRoot[:]
-		signedNewBlock, err := blocks.NewSignedBeaconBlock(newBlock)
-		require.NoError(t, err)
-		blockRoot, err := signedNewBlock.Block().HashTreeRoot()
-		require.NoError(t, err)
-		require.NoError(t, beaconDB.SaveBlock(ctx, signedNewBlock))
-		finalizedBlockRoot = blockRoot
 
 		// Add a non-canonical item to the cache
 		cacheItem := &cacheItem{
@@ -672,10 +637,10 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 
 		require.Equal(t, 10, len(s.cache.items))
 
-		err = s.MigrateToCold(ctx, finalizedBlockRoot)
+		err = s.MigrateToCold(ctx, lastBlockRoot)
 		require.NoError(t, err)
 		require.Equal(t, 3, len(s.cache.items), "Expected the non-canonical item in the cache to be deleted")
-		require.DeepSSZEqual(t, finalizedBlockRoot, s.cache.tail)
+		require.DeepSSZEqual(t, lastBlockRoot, s.cache.tail)
 		u, err := beaconDB.LightClientUpdate(ctx, period2)
 		require.NoError(t, err)
 		require.NotNil(t, u)
@@ -726,7 +691,6 @@ func saveInitialFinalizedCheckpointData(t *testing.T, ctx context.Context, beaco
 }
 
 func TestLightClientStore_LightClientUpdatesByRange(t *testing.T) {
-
 	t.Run("no updates", func(t *testing.T) {
 		d := testDB.SetupDB(t)
 		ctx := context.Background()

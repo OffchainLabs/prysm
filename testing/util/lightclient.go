@@ -103,10 +103,10 @@ func WithFinalizedCheckpointInPrevFork() LightClientOption {
 }
 
 // WithSupermajority specifies whether the sync committee bits have supermajority or not
-func WithSupermajority(increaseNumParticipantsBy uint64) LightClientOption {
+func WithSupermajority(increaseActiveParticipantsBy uint64) LightClientOption {
 	return func(l *TestLightClient) {
 		l.supermajority = true
-		l.increaseActiveParticipantsBy = increaseNumParticipantsBy
+		l.increaseActiveParticipantsBy = increaseActiveParticipantsBy
 	}
 }
 
