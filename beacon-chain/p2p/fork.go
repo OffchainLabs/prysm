@@ -99,7 +99,7 @@ func compareForkENR(self, peer *enr.Record) error {
 	// or a Blob-Parameters-Only fork. This new entry MUST be added once FULU_FORK_EPOCH is assigned
 	// any value other than FAR_FUTURE_EPOCH. Adding this entry prior to the Fulu fork will not
 	// impact peering as nodes will ignore unknown ENR entries and nfd mismatches do not cause
-	// disconnnects.
+	// disconnects.
 	// When discovering and interfacing with peers, nodes MUST evaluate nfd alongside their existing
 	// consideration of the ENRForkID::next_* fields under the eth2 key, to form a more accurate
 	// view of the peer's intended next fork for the purposes of sustained peering. If there is a
