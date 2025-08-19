@@ -1957,7 +1957,7 @@ func (s *Server) GetBlobs(w http.ResponseWriter, r *http.Request) {
 
 func marshalOnlyBlobsSSZ(blobs []*blocks.VerifiedROBlob) ([]byte, error) {
 	sszLen := fieldparams.BlobSize
-	sszData := make([]byte, 0, len(blobs)*sszLen)
+	sszData := make([]byte, len(blobs)*sszLen)
 	for i := range blobs {
 		if size := len(blobs[i].Blob); size != sszLen {
 			return nil, fmt.Errorf("--.Blobs[%d] wrong length: got %d, want %d", i, size, sszLen)
