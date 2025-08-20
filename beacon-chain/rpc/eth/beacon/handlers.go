@@ -1952,7 +1952,6 @@ func (s *Server) GetBlobs(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set(api.VersionHeader, version.String(blk.Version()))
 	httputil.WriteJson(w, resp)
-
 }
 
 func marshalOnlyBlobsSSZ(blobs []*blocks.VerifiedROBlob) ([]byte, error) {
