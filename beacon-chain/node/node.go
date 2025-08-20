@@ -587,19 +587,29 @@ func (b *BeaconNode) validateSyncFlags() error {
 	// Database is empty, check if user has provided required flags
 	syncFromGenesis := b.cliCtx.Bool(flags.SyncFromGenesis.Name)
 	hasCheckpointSync := b.CheckpointInitializer != nil
-	hasWeakSubjectivityCheckpoint := b.cliCtx.String(flags.WeakSubjectivityCheckpoint.Name) != ""
 
-	if !syncFromGenesis && !hasCheckpointSync && !hasWeakSubjectivityCheckpoint {
+	if !syncFromGenesis && !hasCheckpointSync {
 		return errors.New("when starting with an empty database, you must specify either:\n" +
 			"  --sync-from-genesis (to sync from genesis)\n" +
 			"  --checkpoint-sync-url <url> (to sync from a remote beacon node)\n" +
-			"  --checkpoint-state <path> and --checkpoint-block <path> (to sync from local files)\n" +
-			"  --weak-subjectivity-checkpoint <block_root:epoch> (for additional safety)\n\n" +
+			"  --checkpoint-state <path> and --checkpoint-block <path> (to sync from local files)\n\n" +
 			"Checkpoint sync is recommended for faster syncing.")
+	}
+
+	// Check for conflicting sync options
+	if syncFromGenesis && hasCheckpointSync {
+		return errors.New("conflicting sync options: cannot use both --sync-from-genesis and checkpoint sync flags. " +
+			"Please choose either genesis sync or checkpoint sync, not both.")
+	}
+
+	if syncFromGenesis {
+		log.Warn("Syncing from genesis is enabled. This will take a very long time and is not recommended. " +
+			"Consider using checkpoint sync instead with --checkpoint-sync-url.")
 	}
 
 	return nil
 }
+
 func (b *BeaconNode) startSlasherDB(cliCtx *cli.Context, clearer *dbClearer) error {
 	if !b.slasherEnabled {
 		return nil
