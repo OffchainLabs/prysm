@@ -106,6 +106,7 @@ type config struct {
 	blobStorage             *filesystem.BlobStorage
 	dataColumnStorage       *filesystem.DataColumnStorage
 	batchVerifierLimit      int
+	kzgBatchVerifierLimit   int
 }
 
 // This defines the interface for interacting with block chain service
@@ -164,6 +165,7 @@ type Service struct {
 	syncContributionBitsOverlapLock  sync.RWMutex
 	syncContributionBitsOverlapCache *lru.Cache
 	signatureChan                    chan *signatureVerifier
+	kzgChan                          chan *kzgVerifier
 	clockWaiter                      startup.ClockWaiter
 	initialSyncComplete              chan struct{}
 	verifierWaiter                   *verification.InitializerWaiter
@@ -202,6 +204,8 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 	}
 	// Initialize signature channel with configured limit
 	r.signatureChan = make(chan *signatureVerifier, r.cfg.batchVerifierLimit)
+	// Initialize KZG channel with configured limit
+	r.kzgChan = make(chan *kzgVerifier, r.cfg.kzgBatchVerifierLimit)
 	// Correctly remove it from our seen pending block map.
 	// The eviction method always assumes that the mutex is held.
 	r.slotToPendingBlocks.OnEvicted(func(s string, i interface{}) {
@@ -254,6 +258,7 @@ func (s *Service) Start() {
 	s.newColumnsVerifier = newDataColumnsVerifierFromInitializer(v)
 
 	go s.verifierRoutine()
+	go s.kzgVerifierRoutine()
 	go s.startTasksPostInitialSync()
 	go s.processDataColumnLogs()
 
