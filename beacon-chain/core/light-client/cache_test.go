@@ -7,11 +7,8 @@ import (
 )
 
 func TestLCCache(t *testing.T) {
-	cpRoot := [32]byte{1, 2, 3}
-	lcCache := newLightClientCache(cpRoot)
+	lcCache := newLightClientCache()
 	require.NotNil(t, lcCache)
-
-	require.Equal(t, true, lcCache.tail == cpRoot)
 
 	item := &cacheItem{
 		period:             5,

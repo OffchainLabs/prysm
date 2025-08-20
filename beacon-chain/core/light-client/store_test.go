@@ -30,7 +30,7 @@ func TestLightClientStore(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	// Initialize the light client store
-	lcStore, err := NewLightClientStore(t.Context(), &p2pTesting.FakeP2P{}, new(event.Feed), testDB.SetupDB(t))
+	lcStore, err := NewLightClientStore(&p2pTesting.FakeP2P{}, new(event.Feed), testDB.SetupDB(t))
 	require.NoError(t, err)
 
 	// Create test light client updates for Capella and Deneb
@@ -73,7 +73,7 @@ func TestLightClientStore(t *testing.T) {
 
 func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 	p2p := p2pTesting.NewTestP2P(t)
-	lcStore, err := NewLightClientStore(t.Context(), p2p, new(event.Feed), testDB.SetupDB(t))
+	lcStore, err := NewLightClientStore(p2p, new(event.Feed), testDB.SetupDB(t))
 	require.NoError(t, err)
 
 	// update 0 with basic data and no supermajority following an empty lastFinalityUpdate - should save and broadcast
@@ -175,7 +175,7 @@ func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 func TestLightClientStore_SaveLCData(t *testing.T) {
 	t.Run("no parent in cache or db - new is head", func(t *testing.T) {
 		db := testDB.SetupDB(t)
-		s, err := NewLightClientStore(t.Context(), &p2pTesting.FakeP2P{}, new(event.Feed), db)
+		s, err := NewLightClientStore(&p2pTesting.FakeP2P{}, new(event.Feed), db)
 		require.NotNil(t, s)
 		require.NoError(t, err)
 
@@ -203,7 +203,7 @@ func TestLightClientStore_SaveLCData(t *testing.T) {
 
 	t.Run("no parent in cache or db - new not head", func(t *testing.T) {
 		db := testDB.SetupDB(t)
-		s, err := NewLightClientStore(t.Context(), &p2pTesting.FakeP2P{}, new(event.Feed), db)
+		s, err := NewLightClientStore(&p2pTesting.FakeP2P{}, new(event.Feed), db)
 		require.NotNil(t, s)
 		require.NoError(t, err)
 
@@ -231,7 +231,7 @@ func TestLightClientStore_SaveLCData(t *testing.T) {
 
 	t.Run("parent in db", func(t *testing.T) {
 		db := testDB.SetupDB(t)
-		s, err := NewLightClientStore(t.Context(), &p2pTesting.FakeP2P{}, new(event.Feed), db)
+		s, err := NewLightClientStore(&p2pTesting.FakeP2P{}, new(event.Feed), db)
 		require.NotNil(t, s)
 		require.NoError(t, err)
 
@@ -267,7 +267,7 @@ func TestLightClientStore_SaveLCData(t *testing.T) {
 
 	t.Run("parent in cache", func(t *testing.T) {
 		db := testDB.SetupDB(t)
-		s, err := NewLightClientStore(t.Context(), &p2pTesting.FakeP2P{}, new(event.Feed), db)
+		s, err := NewLightClientStore(&p2pTesting.FakeP2P{}, new(event.Feed), db)
 		require.NotNil(t, s)
 		require.NoError(t, err)
 
@@ -310,7 +310,7 @@ func TestLightClientStore_SaveLCData(t *testing.T) {
 
 	t.Run("parent in the previous period", func(t *testing.T) {
 		db := testDB.SetupDB(t)
-		s, err := NewLightClientStore(t.Context(), &p2pTesting.FakeP2P{}, new(event.Feed), db)
+		s, err := NewLightClientStore(&p2pTesting.FakeP2P{}, new(event.Feed), db)
 		require.NotNil(t, s)
 		require.NoError(t, err)
 
@@ -361,11 +361,9 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 
 		finalizedBlockRoot, _ := saveInitialFinalizedCheckpointData(t, ctx, beaconDB)
 
-		s, err := NewLightClientStore(t.Context(), &p2pTesting.FakeP2P{}, new(event.Feed), beaconDB)
+		s, err := NewLightClientStore(&p2pTesting.FakeP2P{}, new(event.Feed), beaconDB)
 		require.NotNil(t, s)
 		require.NoError(t, err)
-
-		require.DeepSSZEqual(t, finalizedBlockRoot, s.cache.tail)
 
 		for i := 0; i < 3; i++ {
 			newBlock := util.NewBeaconBlock()
@@ -382,7 +380,6 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 		err = s.MigrateToCold(ctx, finalizedBlockRoot)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(s.cache.items))
-		require.DeepSSZEqual(t, finalizedBlockRoot, s.cache.tail)
 	})
 
 	// This tests the scenario where chain advances but the CANONICAL cache is empty.
@@ -393,11 +390,9 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 
 		finalizedBlockRoot, _ := saveInitialFinalizedCheckpointData(t, ctx, beaconDB)
 
-		s, err := NewLightClientStore(t.Context(), &p2pTesting.FakeP2P{}, new(event.Feed), beaconDB)
+		s, err := NewLightClientStore(&p2pTesting.FakeP2P{}, new(event.Feed), beaconDB)
 		require.NotNil(t, s)
 		require.NoError(t, err)
-
-		require.DeepSSZEqual(t, finalizedBlockRoot, s.cache.tail)
 
 		for i := 0; i < 3; i++ {
 			newBlock := util.NewBeaconBlock()
@@ -424,7 +419,6 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 		err = s.MigrateToCold(ctx, finalizedBlockRoot)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(s.cache.items), "Expected the non-canonical item in the cache to be deleted")
-		require.DeepSSZEqual(t, finalizedBlockRoot, s.cache.tail)
 	})
 
 	// db has update - cache has both canonical and non-canonical items.
@@ -436,11 +430,9 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 		finalizedBlockRoot, _ := saveInitialFinalizedCheckpointData(t, ctx, beaconDB)
 		require.NoError(t, beaconDB.SaveHeadBlockRoot(ctx, finalizedBlockRoot))
 
-		s, err := NewLightClientStore(t.Context(), &p2pTesting.FakeP2P{}, new(event.Feed), beaconDB)
+		s, err := NewLightClientStore(&p2pTesting.FakeP2P{}, new(event.Feed), beaconDB)
 		require.NotNil(t, s)
 		require.NoError(t, err)
-
-		require.DeepSSZEqual(t, finalizedBlockRoot, s.cache.tail)
 
 		// Save an update for this period in db
 		l := util.NewTestLightClient(t, version.Altair)
@@ -480,7 +472,6 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 		err = s.MigrateToCold(ctx, lastBlockRoot)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(s.cache.items), "Expected the non-canonical item in the cache to be deleted")
-		require.DeepSSZEqual(t, lastBlockRoot, s.cache.tail)
 		u, err := beaconDB.LightClientUpdate(ctx, period)
 		require.NoError(t, err)
 		require.NotNil(t, u)
@@ -496,11 +487,9 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 		finalizedBlockRoot, _ := saveInitialFinalizedCheckpointData(t, ctx, beaconDB)
 		require.NoError(t, beaconDB.SaveHeadBlockRoot(ctx, finalizedBlockRoot))
 
-		s, err := NewLightClientStore(t.Context(), &p2pTesting.FakeP2P{}, new(event.Feed), beaconDB)
+		s, err := NewLightClientStore(&p2pTesting.FakeP2P{}, new(event.Feed), beaconDB)
 		require.NotNil(t, s)
 		require.NoError(t, err)
-
-		require.DeepSSZEqual(t, finalizedBlockRoot, s.cache.tail)
 
 		// Save an update for this period in db
 		l := util.NewTestLightClient(t, version.Altair)
@@ -551,7 +540,6 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 		err = s.MigrateToCold(ctx, lastBlockRoot)
 		require.NoError(t, err)
 		require.Equal(t, 3, len(s.cache.items), "Expected the non-canonical item in the cache to be deleted")
-		require.DeepSSZEqual(t, lastBlockRoot, s.cache.tail)
 		u, err := beaconDB.LightClientUpdate(ctx, period)
 		require.NoError(t, err)
 		require.NotNil(t, u)
@@ -570,11 +558,9 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 		finalizedBlockRoot, _ := saveInitialFinalizedCheckpointData(t, ctx, beaconDB)
 		require.NoError(t, beaconDB.SaveHeadBlockRoot(ctx, finalizedBlockRoot))
 
-		s, err := NewLightClientStore(t.Context(), &p2pTesting.FakeP2P{}, new(event.Feed), beaconDB)
+		s, err := NewLightClientStore(&p2pTesting.FakeP2P{}, new(event.Feed), beaconDB)
 		require.NotNil(t, s)
 		require.NoError(t, err)
-
-		require.DeepSSZEqual(t, finalizedBlockRoot, s.cache.tail)
 
 		// Save an update for this period1 in db
 		l := util.NewTestLightClient(t, version.Altair)
@@ -640,7 +626,6 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 		err = s.MigrateToCold(ctx, lastBlockRoot)
 		require.NoError(t, err)
 		require.Equal(t, 3, len(s.cache.items), "Expected the non-canonical item in the cache to be deleted")
-		require.DeepSSZEqual(t, lastBlockRoot, s.cache.tail)
 		u, err := beaconDB.LightClientUpdate(ctx, period2)
 		require.NoError(t, err)
 		require.NotNil(t, u)
@@ -697,7 +682,7 @@ func TestLightClientStore_LightClientUpdatesByRange(t *testing.T) {
 
 		_, finalizedBlock := saveInitialFinalizedCheckpointData(t, ctx, d)
 
-		s, err := NewLightClientStore(t.Context(), &p2pTesting.FakeP2P{}, new(event.Feed), d)
+		s, err := NewLightClientStore(&p2pTesting.FakeP2P{}, new(event.Feed), d)
 		require.NotNil(t, s)
 		require.NoError(t, err)
 
@@ -712,7 +697,7 @@ func TestLightClientStore_LightClientUpdatesByRange(t *testing.T) {
 
 		_, finalizedBlock := saveInitialFinalizedCheckpointData(t, ctx, d)
 
-		s, err := NewLightClientStore(t.Context(), &p2pTesting.FakeP2P{}, new(event.Feed), d)
+		s, err := NewLightClientStore(&p2pTesting.FakeP2P{}, new(event.Feed), d)
 		require.NotNil(t, s)
 		require.NoError(t, err)
 
@@ -734,7 +719,7 @@ func TestLightClientStore_LightClientUpdatesByRange(t *testing.T) {
 
 		_, finalizedBlock := saveInitialFinalizedCheckpointData(t, ctx, d)
 
-		s, err := NewLightClientStore(t.Context(), &p2pTesting.FakeP2P{}, new(event.Feed), d)
+		s, err := NewLightClientStore(&p2pTesting.FakeP2P{}, new(event.Feed), d)
 		require.NotNil(t, s)
 		require.NoError(t, err)
 
@@ -760,7 +745,7 @@ func TestLightClientStore_LightClientUpdatesByRange(t *testing.T) {
 
 		_, _ = saveInitialFinalizedCheckpointData(t, ctx, d)
 
-		s, err := NewLightClientStore(t.Context(), &p2pTesting.FakeP2P{}, new(event.Feed), d)
+		s, err := NewLightClientStore(&p2pTesting.FakeP2P{}, new(event.Feed), d)
 		require.NotNil(t, s)
 		require.NoError(t, err)
 
@@ -788,7 +773,7 @@ func TestLightClientStore_LightClientUpdatesByRange(t *testing.T) {
 
 		_, _ = saveInitialFinalizedCheckpointData(t, ctx, d)
 
-		s, err := NewLightClientStore(t.Context(), &p2pTesting.FakeP2P{}, new(event.Feed), d)
+		s, err := NewLightClientStore(&p2pTesting.FakeP2P{}, new(event.Feed), d)
 		require.NotNil(t, s)
 		require.NoError(t, err)
 
@@ -832,7 +817,7 @@ func TestLightClientStore_LightClientUpdatesByRange(t *testing.T) {
 
 		_, _ = saveInitialFinalizedCheckpointData(t, ctx, d)
 
-		s, err := NewLightClientStore(t.Context(), &p2pTesting.FakeP2P{}, new(event.Feed), d)
+		s, err := NewLightClientStore(&p2pTesting.FakeP2P{}, new(event.Feed), d)
 		require.NotNil(t, s)
 		require.NoError(t, err)
 
@@ -879,7 +864,7 @@ func TestLightClientStore_LightClientUpdatesByRange(t *testing.T) {
 
 		_, _ = saveInitialFinalizedCheckpointData(t, ctx, d)
 
-		s, err := NewLightClientStore(t.Context(), &p2pTesting.FakeP2P{}, new(event.Feed), d)
+		s, err := NewLightClientStore(&p2pTesting.FakeP2P{}, new(event.Feed), d)
 		require.NotNil(t, s)
 		require.NoError(t, err)
 
@@ -939,7 +924,7 @@ func TestLightClientStore_LightClientUpdatesByRange(t *testing.T) {
 
 		_, _ = saveInitialFinalizedCheckpointData(t, ctx, d)
 
-		s, err := NewLightClientStore(t.Context(), &p2pTesting.FakeP2P{}, new(event.Feed), d)
+		s, err := NewLightClientStore(&p2pTesting.FakeP2P{}, new(event.Feed), d)
 		require.NotNil(t, s)
 		require.NoError(t, err)
 

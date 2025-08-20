@@ -44,7 +44,7 @@ func TestRPC_LightClientBootstrap(t *testing.T) {
 		Genesis:        time.Unix(time.Now().Unix(), 0),
 	}
 	d := db.SetupDB(t)
-	lcStore, err := lightClient.NewLightClientStore(ctx, &p2ptest.FakeP2P{}, new(event.Feed), d)
+	lcStore, err := lightClient.NewLightClientStore(&p2ptest.FakeP2P{}, new(event.Feed), d)
 	require.NoError(t, err)
 
 	r := Service{
@@ -163,7 +163,7 @@ func TestRPC_LightClientOptimisticUpdate(t *testing.T) {
 		Genesis:        time.Unix(time.Now().Unix(), 0),
 	}
 	d := db.SetupDB(t)
-	lcStore, err := lightClient.NewLightClientStore(ctx, &p2ptest.FakeP2P{}, new(event.Feed), d)
+	lcStore, err := lightClient.NewLightClientStore(&p2ptest.FakeP2P{}, new(event.Feed), d)
 	require.NoError(t, err)
 
 	r := Service{
@@ -281,7 +281,7 @@ func TestRPC_LightClientFinalityUpdate(t *testing.T) {
 		Genesis:        time.Unix(time.Now().Unix(), 0),
 	}
 	d := db.SetupDB(t)
-	lcStore, err := lightClient.NewLightClientStore(ctx, &p2ptest.FakeP2P{}, new(event.Feed), d)
+	lcStore, err := lightClient.NewLightClientStore(&p2ptest.FakeP2P{}, new(event.Feed), d)
 	require.NoError(t, err)
 
 	r := Service{
@@ -404,7 +404,7 @@ func TestRPC_LightClientUpdatesByRange(t *testing.T) {
 		Block:          signedBlk,
 	}
 	d := db.SetupDB(t)
-	lcStore, err := lightClient.NewLightClientStore(ctx, &p2ptest.FakeP2P{}, new(event.Feed), d)
+	lcStore, err := lightClient.NewLightClientStore(&p2ptest.FakeP2P{}, new(event.Feed), d)
 	require.NoError(t, err)
 
 	r := Service{

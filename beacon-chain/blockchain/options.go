@@ -36,7 +36,7 @@ func WithMaxGoroutines(x int) Option {
 func WithLCStore() Option {
 	return func(s *Service) error {
 		var err error
-		s.lcStore, err = lightclient.NewLightClientStore(s.ctx, s.cfg.P2P, s.cfg.StateNotifier.StateFeed(), s.cfg.BeaconDB)
+		s.lcStore, err = lightclient.NewLightClientStore(s.cfg.P2P, s.cfg.StateNotifier.StateFeed(), s.cfg.BeaconDB)
 		if err != nil {
 			return err
 		}

@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -29,17 +30,12 @@ type Store struct {
 	cache                *cache // non finality cache
 }
 
-func NewLightClientStore(ctx context.Context, p p2p.Accessor, e event.SubscriberSender, db iface.HeadAccessDatabase) (*Store, error) {
-	cp, err := db.FinalizedCheckpoint(ctx)
-	if err != nil {
-		log.WithError(err).Fatal("Failed to get finalized checkpoint from database")
-		return nil, nil
-	}
+func NewLightClientStore(p p2p.Accessor, e event.SubscriberSender, db iface.HeadAccessDatabase) (*Store, error) {
 	return &Store{
 		beaconDB:  db,
 		p2p:       p,
 		stateFeed: e,
-		cache:     newLightClientCache([32]byte(cp.Root)),
+		cache:     newLightClientCache(),
 	}, nil
 }
 
@@ -332,7 +328,6 @@ func (s *Store) MigrateToCold(ctx context.Context, finalizedRoot [32]byte) error
 	// This is a safety check and should not happen in normal operation.
 	if len(s.cache.items) == 0 {
 		log.Debug("Non-finality cache is empty. Skipping migration.")
-		s.cache.tail = finalizedRoot
 		return nil
 	}
 
@@ -351,28 +346,22 @@ func (s *Store) MigrateToCold(ctx context.Context, finalizedRoot [32]byte) error
 
 	headItem, ok = s.cache.items[headRoot]
 	if !ok {
-		log.Debugf("Head root %x not found in light client cache. Cleaning the broken part of the cache and advancing tail.", headRoot)
-		s.cache.tail = finalizedRoot
+		log.Debugf("Head root %x not found in light client cache. Cleaning the broken part of the cache.", headRoot)
 
 		// delete non-finality cache items older than finalized slot
-		for k, v := range s.cache.items {
-			if v.slot < finalizedSlot {
-				delete(s.cache.items, k)
-			}
-		}
+		s.cleanCache(finalizedSlot)
 
 		return nil
 	}
 
 	updateByPeriod := make(map[uint64]interfaces.LightClientUpdate)
-	for headItem != nil {
-		if _, ok := updateByPeriod[headItem.period]; ok {
+	// Traverse the cache from the head item to the tail, collecting updates
+	for item := headItem; item != nil; item = item.parent {
+		if _, seen := updateByPeriod[item.period]; seen {
 			// We already have an update for this period, skip this item
-			headItem = headItem.parent
 			continue
 		}
-		updateByPeriod[headItem.period] = *headItem.bestUpdate
-		headItem = headItem.parent
+		updateByPeriod[item.period] = *item.bestUpdate
 	}
 
 	// save updates to db
@@ -383,14 +372,20 @@ func (s *Store) MigrateToCold(ctx context.Context, finalizedRoot [32]byte) error
 		}
 	}
 
-	// delete non-finality cache items
+	// delete non-finality cache items older than finalized slot
+	s.cleanCache(finalizedSlot)
+
+	return nil
+}
+
+func (s *Store) cleanCache(finalizedSlot primitives.Slot) {
+	// delete non-finality cache items older than finalized slot
 	for k, v := range s.cache.items {
 		if v.slot < finalizedSlot {
 			delete(s.cache.items, k)
 		}
+		if v.parent != nil && v.parent.slot < finalizedSlot {
+			v.parent = nil // remove parent reference
+		}
 	}
-
-	s.cache.tail = finalizedRoot
-
-	return nil
 }

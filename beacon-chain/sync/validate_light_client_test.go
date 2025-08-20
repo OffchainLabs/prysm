@@ -104,7 +104,7 @@ func TestValidateLightClientOptimisticUpdate(t *testing.T) {
 				// drift back appropriate number of epochs based on fork + 2 slots for signature slot + time for gossip propagation + any extra drift
 				genesisDrift := v*slotsPerEpoch*secondsPerSlot + 2*secondsPerSlot + secondsPerSlot/slotIntervals + test.genesisDrift
 				chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(genesisDrift), 0)}
-				lcStore, err := lightClient.NewLightClientStore(ctx, &p2ptest.FakeP2P{}, new(event.Feed), testDB.SetupDB(t))
+				lcStore, err := lightClient.NewLightClientStore(&p2ptest.FakeP2P{}, new(event.Feed), testDB.SetupDB(t))
 				require.NoError(t, err)
 				s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}, lcStore: lcStore}
 
@@ -245,7 +245,7 @@ func TestValidateLightClientFinalityUpdate(t *testing.T) {
 				// drift back appropriate number of epochs based on fork + 2 slots for signature slot + time for gossip propagation + any extra drift
 				genesisDrift := v*slotsPerEpoch*secondsPerSlot + 2*secondsPerSlot + secondsPerSlot/slotIntervals + test.genesisDrift
 				chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(genesisDrift), 0)}
-				lcStore, err := lightClient.NewLightClientStore(ctx, &p2ptest.FakeP2P{}, new(event.Feed), testDB.SetupDB(t))
+				lcStore, err := lightClient.NewLightClientStore(&p2ptest.FakeP2P{}, new(event.Feed), testDB.SetupDB(t))
 				require.NoError(t, err)
 				s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}, lcStore: lcStore}
 

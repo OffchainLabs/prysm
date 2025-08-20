@@ -8,9 +8,9 @@ import (
 // cache tracks LC data over the non finalized chain for different branches.
 type cache struct {
 	items map[[32]byte]*cacheItem
-	tail  [32]byte // the latest finalized block root.
 }
 
+// cacheItem represents the LC data for a block. It tracks the best update and finality update seen in that branch.
 type cacheItem struct {
 	period             uint64          // sync committee period
 	slot               primitives.Slot // slot of the signature block
@@ -19,9 +19,8 @@ type cacheItem struct {
 	parent             *cacheItem // parent item in the cache, can be nil
 }
 
-func newLightClientCache(finalizedBlockRoot [32]byte) *cache {
+func newLightClientCache() *cache {
 	return &cache{
 		items: make(map[[32]byte]*cacheItem),
-		tail:  finalizedBlockRoot,
 	}
 }

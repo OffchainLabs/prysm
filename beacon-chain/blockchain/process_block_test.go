@@ -3185,7 +3185,7 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 
 			t.Run(version.String(testVersion)+"_"+tc.name, func(t *testing.T) {
 				s.genesisTime = time.Unix(time.Now().Unix()-(int64(forkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-				s.lcStore, err = lightClient.NewLightClientStore(ctx, s.cfg.P2P, s.cfg.StateNotifier.StateFeed(), s.cfg.BeaconDB)
+				s.lcStore, err = lightClient.NewLightClientStore(s.cfg.P2P, s.cfg.StateNotifier.StateFeed(), s.cfg.BeaconDB)
 				require.NoError(t, err)
 
 				var oldActualUpdate interfaces.LightClientOptimisticUpdate
@@ -3328,7 +3328,7 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 			t.Run(version.String(testVersion)+"_"+tc.name, func(t *testing.T) {
 				s.genesisTime = time.Unix(time.Now().Unix()-(int64(forkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 				var err error
-				s.lcStore, err = lightClient.NewLightClientStore(ctx, s.cfg.P2P, s.cfg.StateNotifier.StateFeed(), s.cfg.BeaconDB)
+				s.lcStore, err = lightClient.NewLightClientStore(s.cfg.P2P, s.cfg.StateNotifier.StateFeed(), s.cfg.BeaconDB)
 				require.NoError(t, err)
 
 				var actualOldUpdate, actualNewUpdate interfaces.LightClientFinalityUpdate
