@@ -229,3 +229,11 @@ func WithBatchVerifierLimit(limit int) Option {
 		return nil
 	}
 }
+
+// WithKzgBatchVerifierLimit sets the maximum number of KZG proofs to batch verify at once.
+func WithKzgBatchVerifierLimit(limit int) Option {
+	return func(s *Service) error {
+		s.cfg.kzgBatchVerifierLimit = limit
+		return nil
+	}
+}

@@ -344,4 +344,10 @@ var (
 		Usage: "Maximum number of signatures to batch verify at once for beacon attestation p2p gossip.",
 		Value: 1000,
 	}
+	// KzgBatchVerifierLimit sets the maximum number of KZG proofs to batch verify at once.
+	KzgBatchVerifierLimit = &cli.IntFlag{
+		Name:  "kzg-batch-verifier-limit",
+		Usage: "Maximum number of KZG proofs to batch verify at once for data column p2p gossip.",
+		Value: 25,
+	}
 )
