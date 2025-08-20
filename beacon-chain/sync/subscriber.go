@@ -494,12 +494,12 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 		log.WithError(err).Error("Could not subscribe to subnets")
 	}
 
-	currentSlot := s.cfg.clock.CurrentSlot()
 	slotDuration := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
-	neededSubnets := computeAllNeededSubnets(currentSlot, p.getSubnetsToJoin, p.getSubnetsRequiringPeers)
 	minimumPeersPerSubnet := flags.Get().MinimumPeersPerSubnet
 	// Subscribe to expected subnets and search for peers if needed at every slot.
 	go func() {
+		currentSlot := s.cfg.clock.CurrentSlot()
+		neededSubnets := computeAllNeededSubnets(currentSlot, p.getSubnetsToJoin, p.getSubnetsRequiringPeers)
 		func() {
 			ctx, cancel := context.WithTimeout(s.ctx, slotDuration)
 			defer cancel()
@@ -515,6 +515,9 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 		for {
 			select {
 			case <-slotTicker.C():
+				currentSlot := s.cfg.clock.CurrentSlot()
+				neededSubnets := computeAllNeededSubnets(currentSlot, p.getSubnetsToJoin, p.getSubnetsRequiringPeers)
+
 				if err := s.subscribeToSubnets(parameters); err != nil {
 					if errors.Is(err, errInvalidDigest) {
 						log.WithField("topics", shortTopic).Debug("Digest is invalid, stopping subscription")
@@ -548,6 +551,7 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 		for {
 			select {
 			case <-logTicker.C:
+				currentSlot := s.cfg.clock.CurrentSlot()
 				subnetsToFindPeersIndex := computeAllNeededSubnets(currentSlot, p.getSubnetsToJoin, p.getSubnetsRequiringPeers)
 
 				isSubnetWithMissingPeers := false

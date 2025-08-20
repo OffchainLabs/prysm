@@ -7,6 +7,7 @@ go_library(
         "fuzz_p2p.go",
         "mock_broadcaster.go",
         "mock_host.go",
+        "mock_listener.go",
         "mock_metadataprovider.go",
         "mock_peermanager.go",
         "mock_peersprovider.go",

@@ -8,9 +8,11 @@ import (
 	"github.com/OffchainLabs/prysm/v6/async/abool"
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	p2pt "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -373,7 +375,7 @@ func TestService_processBlock(t *testing.T) {
 		require.NoError(t, err)
 		rowsb, err := blocks.NewROBlock(wsb)
 		require.NoError(t, err)
-		err = s.processBlock(ctx, genesis, blocks.BlockWithROBlobs{Block: rowsb}, func(
+		err = s.processBlock(ctx, genesis, blocks.BlockWithROSidecars{Block: rowsb}, func(
 			ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, _ das.AvailabilityStore) error {
 			assert.NoError(t, s.cfg.Chain.ReceiveBlock(ctx, block, blockRoot, nil))
 			return nil
@@ -385,7 +387,7 @@ func TestService_processBlock(t *testing.T) {
 		require.NoError(t, err)
 		rowsb, err = blocks.NewROBlock(wsb)
 		require.NoError(t, err)
-		err = s.processBlock(ctx, genesis, blocks.BlockWithROBlobs{Block: rowsb}, func(
+		err = s.processBlock(ctx, genesis, blocks.BlockWithROSidecars{Block: rowsb}, func(
 			ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, _ das.AvailabilityStore) error {
 			return nil
 		}, nil)
@@ -396,7 +398,7 @@ func TestService_processBlock(t *testing.T) {
 		require.NoError(t, err)
 		rowsb, err = blocks.NewROBlock(wsb)
 		require.NoError(t, err)
-		err = s.processBlock(ctx, genesis, blocks.BlockWithROBlobs{Block: rowsb}, func(
+		err = s.processBlock(ctx, genesis, blocks.BlockWithROSidecars{Block: rowsb}, func(
 			ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, _ das.AvailabilityStore) error {
 			assert.NoError(t, s.cfg.Chain.ReceiveBlock(ctx, block, blockRoot, nil))
 			return nil
@@ -432,7 +434,7 @@ func TestService_processBlockBatch(t *testing.T) {
 	s.genesisTime = genesis
 
 	t.Run("process non-linear batch", func(t *testing.T) {
-		var batch []blocks.BlockWithROBlobs
+		var batch []blocks.BlockWithROSidecars
 		currBlockRoot := genesisBlkRoot
 		for i := primitives.Slot(1); i < 10; i++ {
 			parentRoot := currBlockRoot
@@ -446,11 +448,11 @@ func TestService_processBlockBatch(t *testing.T) {
 			require.NoError(t, err)
 			rowsb, err := blocks.NewROBlock(wsb)
 			require.NoError(t, err)
-			batch = append(batch, blocks.BlockWithROBlobs{Block: rowsb})
+			batch = append(batch, blocks.BlockWithROSidecars{Block: rowsb})
 			currBlockRoot = blk1Root
 		}
 
-		var batch2 []blocks.BlockWithROBlobs
+		var batch2 []blocks.BlockWithROSidecars
 		for i := primitives.Slot(10); i < 20; i++ {
 			parentRoot := currBlockRoot
 			blk1 := util.NewBeaconBlock()
@@ -463,7 +465,7 @@ func TestService_processBlockBatch(t *testing.T) {
 			require.NoError(t, err)
 			rowsb, err := blocks.NewROBlock(wsb)
 			require.NoError(t, err)
-			batch2 = append(batch2, blocks.BlockWithROBlobs{Block: rowsb})
+			batch2 = append(batch2, blocks.BlockWithROSidecars{Block: rowsb})
 			currBlockRoot = blk1Root
 		}
 
@@ -485,7 +487,7 @@ func TestService_processBlockBatch(t *testing.T) {
 		assert.ErrorContains(t, "block is already processed", err)
 		require.Equal(t, uint64(0), count)
 
-		var badBatch2 []blocks.BlockWithROBlobs
+		var badBatch2 []blocks.BlockWithROSidecars
 		for i, b := range batch2 {
 			// create a non-linear batch
 			if i%3 == 0 && i != 0 {
@@ -685,7 +687,7 @@ func TestService_ValidUnprocessed(t *testing.T) {
 	require.NoError(t, err)
 	util.SaveBlock(t, t.Context(), beaconDB, genesisBlk)
 
-	var batch []blocks.BlockWithROBlobs
+	var batch []blocks.BlockWithROSidecars
 	currBlockRoot := genesisBlkRoot
 	for i := primitives.Slot(1); i < 10; i++ {
 		parentRoot := currBlockRoot
@@ -699,7 +701,7 @@ func TestService_ValidUnprocessed(t *testing.T) {
 		require.NoError(t, err)
 		rowsb, err := blocks.NewROBlock(wsb)
 		require.NoError(t, err)
-		batch = append(batch, blocks.BlockWithROBlobs{Block: rowsb})
+		batch = append(batch, blocks.BlockWithROSidecars{Block: rowsb})
 		currBlockRoot = blk1Root
 	}
 
@@ -711,4 +713,156 @@ func TestService_ValidUnprocessed(t *testing.T) {
 
 	// Ensure that the unprocessed batch is returned correctly.
 	assert.Equal(t, len(retBlocks), len(batch)-2)
+}
+
+func TestService_PropcessFetchedDataRegSync(t *testing.T) {
+	ctx := t.Context()
+
+	// Create a data columns storage.
+	dir := t.TempDir()
+	dataColumnStorage, err := filesystem.NewDataColumnStorage(ctx, filesystem.WithDataColumnBasePath(dir))
+	require.NoError(t, err)
+
+	// Create Fulu blocks.
+	fuluBlock1 := util.NewBeaconBlockFulu()
+	signedFuluBlock1, err := blocks.NewSignedBeaconBlock(fuluBlock1)
+	require.NoError(t, err)
+	roFuluBlock1, err := blocks.NewROBlock(signedFuluBlock1)
+	require.NoError(t, err)
+	block1Root := roFuluBlock1.Root()
+
+	fuluBlock2 := util.NewBeaconBlockFulu()
+	fuluBlock2.Block.Body.BlobKzgCommitments = [][]byte{make([]byte, fieldparams.KzgCommitmentSize)} // Dummy commitment.
+	fuluBlock2.Block.Slot = 1
+	fuluBlock2.Block.ParentRoot = block1Root[:]
+	signedFuluBlock2, err := blocks.NewSignedBeaconBlock(fuluBlock2)
+	require.NoError(t, err)
+
+	roFuluBlock2, err := blocks.NewROBlock(signedFuluBlock2)
+	require.NoError(t, err)
+	block2Root := roFuluBlock2.Root()
+	parentRoot2 := roFuluBlock2.Block().ParentRoot()
+	bodyRoot2, err := roFuluBlock2.Block().Body().HashTreeRoot()
+	require.NoError(t, err)
+
+	// Create a mock chain service.
+	const validatorCount = uint64(64)
+	state, _ := util.DeterministicGenesisState(t, validatorCount)
+	chain := &mock.ChainService{
+		FinalizedCheckPoint: &eth.Checkpoint{},
+		DB:                  dbtest.SetupDB(t),
+		State:               state,
+		Root:                block1Root[:],
+	}
+
+	// Create a new service instance.
+	service := &Service{
+		cfg: &Config{
+			Chain:             chain,
+			DataColumnStorage: dataColumnStorage,
+		},
+		counter: ratecounter.NewRateCounter(counterSeconds * time.Second),
+	}
+
+	// Save the parent block in the database.
+	err = chain.DB.SaveBlock(ctx, roFuluBlock1)
+	require.NoError(t, err)
+
+	// Create data column sidecars.
+	const count = uint64(3)
+	params := make([]util.DataColumnParam, 0, count)
+	for i := range count {
+		param := util.DataColumnParam{Index: i, BodyRoot: bodyRoot2[:], ParentRoot: parentRoot2[:], Slot: roFuluBlock2.Block().Slot()}
+		params = append(params, param)
+	}
+	_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, params)
+
+	blocksWithSidecars := []blocks.BlockWithROSidecars{
+		{Block: roFuluBlock2, Columns: verifiedRoDataColumnSidecars},
+	}
+
+	data := &blocksQueueFetchedData{
+		bwb: blocksWithSidecars,
+	}
+
+	actual, err := service.processFetchedDataRegSync(ctx, data)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), actual)
+
+	// Check block and data column sidecars were saved correctly.
+	require.Equal(t, true, chain.DB.HasBlock(ctx, block2Root))
+
+	summary := dataColumnStorage.Summary(block2Root)
+	for i := range count {
+		require.Equal(t, true, summary.HasIndex(i))
+	}
+}
+
+func TestService_processBlocksWithDataColumns(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("no blocks", func(t *testing.T) {
+		fuluBlock := util.NewBeaconBlockFulu()
+
+		signedFuluBlock, err := blocks.NewSignedBeaconBlock(fuluBlock)
+		require.NoError(t, err)
+		roFuluBlock, err := blocks.NewROBlock(signedFuluBlock)
+		require.NoError(t, err)
+
+		service := new(Service)
+		err = service.processBlocksWithDataColumns(ctx, nil, nil, roFuluBlock)
+		require.NoError(t, err)
+	})
+
+	t.Run("nominal", func(t *testing.T) {
+		fuluBlock := util.NewBeaconBlockFulu()
+		fuluBlock.Block.Body.BlobKzgCommitments = [][]byte{make([]byte, fieldparams.KzgCommitmentSize)} // Dummy commitment.
+		signedFuluBlock, err := blocks.NewSignedBeaconBlock(fuluBlock)
+		require.NoError(t, err)
+		roFuluBlock, err := blocks.NewROBlock(signedFuluBlock)
+		require.NoError(t, err)
+		bodyRoot, err := roFuluBlock.Block().Body().HashTreeRoot()
+		require.NoError(t, err)
+
+		// Create data column sidecars.
+		const count = uint64(3)
+		params := make([]util.DataColumnParam, 0, count)
+		for i := range count {
+			param := util.DataColumnParam{Index: i, BodyRoot: bodyRoot[:]}
+			params = append(params, param)
+		}
+		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, params)
+
+		blocksWithSidecars := []blocks.BlockWithROSidecars{
+			{Block: roFuluBlock, Columns: verifiedRoDataColumnSidecars},
+		}
+
+		// Create a data columns storage.
+		dir := t.TempDir()
+		dataColumnStorage, err := filesystem.NewDataColumnStorage(ctx, filesystem.WithDataColumnBasePath(dir))
+		require.NoError(t, err)
+
+		// Create a service.
+		service := &Service{
+			cfg: &Config{
+				P2P:               p2pt.NewTestP2P(t),
+				DataColumnStorage: dataColumnStorage,
+			},
+			counter: ratecounter.NewRateCounter(counterSeconds * time.Second),
+		}
+
+		receiverFunc := func(ctx context.Context, blks []blocks.ROBlock, avs das.AvailabilityStore) error {
+			require.Equal(t, 1, len(blks))
+			return nil
+		}
+
+		err = service.processBlocksWithDataColumns(ctx, blocksWithSidecars, receiverFunc, roFuluBlock)
+		require.NoError(t, err)
+
+		// Verify that the data columns were saved correctly.
+		summary := dataColumnStorage.Summary(roFuluBlock.Root())
+		for i := range count {
+			require.Equal(t, true, summary.HasIndex(i))
+		}
+	})
 }

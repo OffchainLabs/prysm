@@ -136,6 +136,24 @@ func (s *Service) FindAndDialPeersWithSubnets(
 	return nil
 }
 
+// updateDefectiveSubnets updates the defective subnets map when a node with matching subnets is found.
+// It decrements the defective count for each subnet the node satisfies and removes subnets
+// that are fully satisfied (count reaches 0).
+func updateDefectiveSubnets(
+	nodeSubnets map[uint64]bool,
+	defectiveSubnets map[uint64]int,
+) {
+	for subnet := range defectiveSubnets {
+		if !nodeSubnets[subnet] {
+			continue
+		}
+		defectiveSubnets[subnet]--
+		if defectiveSubnets[subnet] == 0 {
+			delete(defectiveSubnets, subnet)
+		}
+	}
+}
+
 // findPeersWithSubnets finds peers subscribed to defective subnets in batches
 // until enough peers are found or the context is canceled.
 // It returns new peers found during the search.
@@ -171,6 +189,7 @@ func (s *Service) findPeersWithSubnets(
 
 	// Crawl the network for peers subscribed to the defective subnets.
 	nodeByNodeID := make(map[enode.ID]*enode.Node)
+
 	for len(defectiveSubnets) > 0 && iterator.Next() {
 		if err := ctx.Err(); err != nil {
 			// Convert the map to a slice.
@@ -182,14 +201,28 @@ func (s *Service) findPeersWithSubnets(
 			return peersToDial, err
 		}
 
-		// Get all needed subnets that the node is subscribed to.
-		// Skip nodes that are not subscribed to any of the defective subnets.
 		node := iterator.Node()
 
+		// Remove duplicates, keeping the node with higher seq.
+		existing, ok := nodeByNodeID[node.ID()]
+		if ok && existing.Seq() >= node.Seq() {
+			continue // keep existing and skip.
+		}
+
+		// Treat nodes that exist in nodeByNodeID with higher seq numbers as new peers
+		// Skip peer not matching the filter.
 		if !s.filterPeer(node) {
+			if ok {
+				// this means the existing peer with the lower sequence number is no longer valid
+				delete(nodeByNodeID, existing.ID())
+				// Note: We are choosing to not rollback changes to the defective subnets map in favor of calling s.defectiveSubnets once again after dialing peers.
+				// This is a case that should rarely happen and should be handled through a second iteration in FindAndDialPeersWithSubnets
+			}
 			continue
 		}
 
+		// Get all needed subnets that the node is subscribed to.
+		// Skip nodes that are not subscribed to any of the defective subnets.
 		nodeSubnets, err := filter(node)
 		if err != nil {
 			return nil, errors.Wrap(err, "filter node")
@@ -198,30 +231,14 @@ func (s *Service) findPeersWithSubnets(
 			continue
 		}
 
-		// Remove duplicates, keeping the node with higher seq.
-		existing, ok := nodeByNodeID[node.ID()]
-		if ok && existing.Seq() > node.Seq() {
-			continue
-		}
-		nodeByNodeID[node.ID()] = node
-
 		// We found a new peer. Modify the defective subnets map
 		// and the filter accordingly.
-		for subnet := range defectiveSubnets {
-			if !nodeSubnets[subnet] {
-				continue
-			}
+		nodeByNodeID[node.ID()] = node
 
-			defectiveSubnets[subnet]--
-
-			if defectiveSubnets[subnet] == 0 {
-				delete(defectiveSubnets, subnet)
-			}
-
-			filter, err = s.nodeFilter(topicFormat, defectiveSubnets)
-			if err != nil {
-				return nil, errors.Wrap(err, "node filter")
-			}
+		updateDefectiveSubnets(nodeSubnets, defectiveSubnets)
+		filter, err = s.nodeFilter(topicFormat, defectiveSubnets)
+		if err != nil {
+			return nil, errors.Wrap(err, "node filter")
 		}
 	}
 

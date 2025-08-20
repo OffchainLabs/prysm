@@ -68,7 +68,7 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 		stream, err := localP2P.BHost.NewStream(t.Context(), remoteP2P.BHost.ID(), protocolID)
 		require.NoError(t, err)
 
-		msg := &types.DataColumnsByRootIdentifiers{{Columns: []uint64{1, 2, 3}}}
+		msg := types.DataColumnsByRootIdentifiers{{Columns: []uint64{1, 2, 3}}}
 		require.Equal(t, true, localP2P.Peers().Scorers().BadResponsesScorer().Score(remoteP2P.PeerID()) >= 0)
 
 		err = service.dataColumnSidecarByRootRPCHandler(t.Context(), msg, stream)
@@ -169,7 +169,7 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 		stream, err := localP2P.BHost.NewStream(ctx, remoteP2P.BHost.ID(), protocolID)
 		require.NoError(t, err)
 
-		msg := &types.DataColumnsByRootIdentifiers{
+		msg := types.DataColumnsByRootIdentifiers{
 			{
 				BlockRoot: root0[:],
 				Columns:   []uint64{1, 2, 3},
