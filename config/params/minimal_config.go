@@ -103,9 +103,6 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.EpochsPerSyncCommitteePeriod = 8
 	minimalConfig.MinEpochsForBlockRequests = 272
 
-	// New Deneb params
-	minimalConfig.MaxBlobCommitmentsPerBlock = 4096
-	minimalConfig.KzgCommitmentInclusionProofDepth = 17
 
 	// New Electra params
 	minimalConfig.MinPerEpochChurnLimitElectra = 64000000000
