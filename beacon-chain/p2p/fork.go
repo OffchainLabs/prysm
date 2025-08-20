@@ -87,11 +87,6 @@ func compareForkENR(self, peer *enr.Record) error {
 			peerString, peerEntry.NextForkVersion, selfEntry.NextForkVersion)
 	}
 
-	// Don't consider nfd if the fulu fork epoch is not set.
-	if params.BeaconConfig().FuluForkEpoch == params.BeaconConfig().FarFutureEpoch {
-		return nil
-	}
-
 	// Fulu adds the following to the spec:
 	// ---
 	// A new entry is added to the ENR under the key nfd, short for next fork digest. This entry
@@ -117,6 +112,9 @@ func compareForkENR(self, peer *enr.Record) error {
 	// don't match.
 	//
 	// Given that the next_fork_epoch matches, we will require the next_fork_digest to match.
+	if !params.FuluEnabled() {
+		return nil
+	}
 	peerNFD, selfNFD := nfd(peer), nfd(self)
 	if peerNFD != selfNFD {
 		return errors.Wrapf(errNextDigestMismatch,
