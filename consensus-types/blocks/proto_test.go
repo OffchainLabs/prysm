@@ -1792,6 +1792,61 @@ func bodyBlindedElectra(t *testing.T) *BeaconBlockBody {
 	}
 }
 
+func TestSignedBeaconBlockProtoGloas(t *testing.T) {
+	payload := []*eth.PayloadAttestation{{Signature: []byte{0x01}}}
+	bid := &eth.SignedExecutionPayloadBid{Signature: []byte{0x02}}
+	sb := &SignedBeaconBlock{
+		version: version.Gloas,
+		block: &BeaconBlock{
+			version: version.Gloas,
+			body: &BeaconBlockBody{
+				version:                   version.Gloas,
+				payloadAttestations:       payload,
+				signedExecutionPayloadBid: bid,
+			},
+		},
+	}
+
+	msg, err := sb.Proto()
+	require.NoError(t, err)
+	gloas, ok := msg.(*eth.SignedBeaconBlockGloas)
+	require.Equal(t, true, ok)
+	require.DeepEqual(t, payload, gloas.Block.Body.PayloadAttestations)
+	require.DeepEqual(t, bid, gloas.Block.Body.SignedExecutionPayloadBid)
+}
+
+func TestInitSignedBlockFromProtoGloas(t *testing.T) {
+	bits := bitfield.NewBitvector512()
+	bits.SetBitAt(0, true)
+	pb := &eth.SignedBeaconBlockGloas{
+		Block: &eth.BeaconBlockGloas{
+			Body: &eth.BeaconBlockBodyGloas{
+				PayloadAttestations: []*eth.PayloadAttestation{
+					{
+						AggregationBits: bits,
+						Signature:       []byte{0x01},
+					},
+				},
+				SignedExecutionPayloadBid: &eth.SignedExecutionPayloadBid{Signature: []byte{0x02}},
+			},
+		},
+		Signature: []byte{0x03},
+	}
+
+	sb, err := initSignedBlockFromProtoGloas(pb)
+	require.NoError(t, err)
+	require.Equal(t, version.Gloas, sb.Version())
+
+	gotPayload, err := sb.Block().Body().PayloadAttestations()
+	require.NoError(t, err)
+	require.Equal(t, 1, len(gotPayload))
+	require.DeepEqual(t, pb.Block.Body.PayloadAttestations, gotPayload)
+
+	gotBid, err := sb.Block().Body().SignedExecutionPayloadBid()
+	require.NoError(t, err)
+	require.DeepEqual(t, pb.Block.Body.SignedExecutionPayloadBid, gotBid)
+}
+
 func getFields() fields {
 	b20 := make([]byte, 20)
 	b48 := make([]byte, 48)
