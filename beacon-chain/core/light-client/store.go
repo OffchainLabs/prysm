@@ -93,15 +93,15 @@ func (s *Store) SaveLCData(ctx context.Context,
 		}
 		parentItem = &cacheItem{
 			period:             period,
-			bestUpdate:         &bestUpdateSoFar,
-			bestFinalityUpdate: &s.lastFinalityUpdate,
+			bestUpdate:         bestUpdateSoFar,
+			bestFinalityUpdate: s.lastFinalityUpdate,
 		}
 	}
 
 	// if at a period boundary, no need to compare data, just save new ones
 	if parentItem.period != period {
-		newCacheItem.bestUpdate = &update
-		newCacheItem.bestFinalityUpdate = &finalityUpdate
+		newCacheItem.bestUpdate = update
+		newCacheItem.bestFinalityUpdate = finalityUpdate
 		s.cache.items[blockRoot] = newCacheItem
 
 		s.setLastOptimisticUpdate(optimisticUpdate, true)
@@ -115,19 +115,19 @@ func (s *Store) SaveLCData(ctx context.Context,
 	}
 
 	// if in the same period, compare updates
-	isUpdateBetter, err := IsBetterUpdate(update, *parentItem.bestUpdate)
+	isUpdateBetter, err := IsBetterUpdate(update, parentItem.bestUpdate)
 	if err != nil {
 		return errors.Wrapf(err, "could not compare light client updates")
 	}
 	if isUpdateBetter {
-		newCacheItem.bestUpdate = &update
+		newCacheItem.bestUpdate = update
 	} else {
 		newCacheItem.bestUpdate = parentItem.bestUpdate
 	}
 
-	isBetterFinalityUpdate := IsBetterFinalityUpdate(finalityUpdate, *parentItem.bestFinalityUpdate)
+	isBetterFinalityUpdate := IsBetterFinalityUpdate(finalityUpdate, parentItem.bestFinalityUpdate)
 	if isBetterFinalityUpdate {
-		newCacheItem.bestFinalityUpdate = &finalityUpdate
+		newCacheItem.bestFinalityUpdate = finalityUpdate
 	} else {
 		newCacheItem.bestFinalityUpdate = parentItem.bestFinalityUpdate
 	}
@@ -142,7 +142,7 @@ func (s *Store) SaveLCData(ctx context.Context,
 
 	// if the new block is considered the head, set the last finality update
 	if newBlockIsHead {
-		s.setLastFinalityUpdate(*newCacheItem.bestFinalityUpdate, isBetterFinalityUpdate)
+		s.setLastFinalityUpdate(newCacheItem.bestFinalityUpdate, isBetterFinalityUpdate)
 	}
 
 	return nil
@@ -254,7 +254,7 @@ func (s *Store) getCacheUpdatesByPeriod(headBlock interfaces.ReadOnlySignedBeaco
 
 	for headItem != nil {
 		if _, exists := updatesByPeriod[headItem.period]; !exists {
-			updatesByPeriod[headItem.period] = *headItem.bestUpdate
+			updatesByPeriod[headItem.period] = headItem.bestUpdate
 		}
 		headItem = headItem.parent
 	}
@@ -324,7 +324,7 @@ func (s *Store) MigrateToCold(ctx context.Context, finalizedRoot [32]byte) error
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// If there cache is empty (some problem in processing data), we can update the tail and skip migration.
+	// If there cache is empty (some problem in processing data), we can skip migration.
 	// This is a safety check and should not happen in normal operation.
 	if len(s.cache.items) == 0 {
 		log.Debug("Non-finality cache is empty. Skipping migration.")
@@ -333,10 +333,10 @@ func (s *Store) MigrateToCold(ctx context.Context, finalizedRoot [32]byte) error
 
 	blk, err := s.beaconDB.Block(ctx, finalizedRoot)
 	if err != nil {
-		return errors.Wrapf(err, "failed to fetch block for finalized finalizedRoot %x", finalizedRoot)
+		return errors.Wrapf(err, "failed to fetch block for finalized root %x", finalizedRoot)
 	}
 	if blk == nil {
-		return errors.Errorf("nil block for finalized finalizedRoot %x", finalizedRoot)
+		return errors.Errorf("nil block for finalized root %x", finalizedRoot)
 	}
 	finalizedSlot := blk.Block().Slot()
 	headRoot := blk.Block().ParentRoot()
@@ -346,7 +346,7 @@ func (s *Store) MigrateToCold(ctx context.Context, finalizedRoot [32]byte) error
 
 	headItem, ok = s.cache.items[headRoot]
 	if !ok {
-		log.Debugf("Head root %x not found in light client cache. Cleaning the broken part of the cache.", headRoot)
+		log.Debugf("Finalized block's parent root %x not found in light client cache. Cleaning the broken part of the cache.", headRoot)
 
 		// delete non-finality cache items older than finalized slot
 		s.cleanCache(finalizedSlot)
@@ -361,14 +361,14 @@ func (s *Store) MigrateToCold(ctx context.Context, finalizedRoot [32]byte) error
 			// We already have an update for this period, skip this item
 			continue
 		}
-		updateByPeriod[item.period] = *item.bestUpdate
+		updateByPeriod[item.period] = item.bestUpdate
 	}
 
 	// save updates to db
 	for period, update := range updateByPeriod {
 		err = s.beaconDB.SaveLightClientUpdate(ctx, period, update)
 		if err != nil {
-			log.WithError(err).Errorf("failed to save light client update for period %d. skipping this period.", period)
+			log.WithError(err).Errorf("failed to save light client update for period %d. Skipping this period.", period)
 		}
 	}
 

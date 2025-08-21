@@ -515,7 +515,7 @@ func ComputeWithdrawalsRoot(payload interfaces.ExecutionData) ([]byte, error) {
 
 func BlockToLightClientHeader(
 	ctx context.Context,
-	attestedBlockVersion int, // this is the version that the light client header should be in, based on the attested block.
+	attestedBlockVersion int,                   // this is the version that the light client header should be in, based on the attested block.
 	block interfaces.ReadOnlySignedBeaconBlock, // this block is either the attested block, or the finalized block. in case of the latter, we might need to upgrade it to the attested block's version.
 ) (interfaces.LightClientHeader, error) {
 	if block.Version() > attestedBlockVersion {
@@ -592,7 +592,7 @@ func HasFinality(update interfaces.LightClientUpdate) (bool, error) {
 }
 
 func IsBetterUpdate(newUpdate, oldUpdate interfaces.LightClientUpdate) (bool, error) {
-	if oldUpdate == nil {
+	if oldUpdate == nil || oldUpdate.IsNil() {
 		return true, nil
 	}
 
@@ -782,7 +782,7 @@ func IsFinalityUpdateValidForBroadcast(newUpdate, oldUpdate interfaces.LightClie
 // This does not concern broadcasting, but rather the decision of whether to save the new update.
 // For broadcasting checks, use IsFinalityUpdateValidForBroadcast.
 func IsBetterFinalityUpdate(newUpdate, oldUpdate interfaces.LightClientFinalityUpdate) bool {
-	if oldUpdate == nil {
+	if oldUpdate == nil || oldUpdate.IsNil() {
 		return true
 	}
 
@@ -808,7 +808,7 @@ func IsBetterFinalityUpdate(newUpdate, oldUpdate interfaces.LightClientFinalityU
 }
 
 func IsBetterOptimisticUpdate(newUpdate, oldUpdate interfaces.LightClientOptimisticUpdate) bool {
-	if oldUpdate == nil {
+	if oldUpdate == nil || oldUpdate.IsNil() {
 		return true
 	}
 	// The attested_header.beacon.slot is greater than that of all previously forwarded optimistic updates

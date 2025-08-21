@@ -12,11 +12,11 @@ type cache struct {
 
 // cacheItem represents the LC data for a block. It tracks the best update and finality update seen in that branch.
 type cacheItem struct {
+	parent             *cacheItem      // parent item in the cache, can be nil
 	period             uint64          // sync committee period
 	slot               primitives.Slot // slot of the signature block
-	bestUpdate         *interfaces.LightClientUpdate
-	bestFinalityUpdate *interfaces.LightClientFinalityUpdate
-	parent             *cacheItem // parent item in the cache, can be nil
+	bestUpdate         interfaces.LightClientUpdate
+	bestFinalityUpdate interfaces.LightClientFinalityUpdate
 }
 
 func newLightClientCache() *cache {

@@ -135,7 +135,7 @@ func (s *Service) processLightClientUpdates(cfg *postBlockProcessConfig) {
 		return
 	}
 	if attestedBlock == nil || attestedBlock.IsNil() {
-		log.WithError(err).Error("processLightClientUpdates: Could not get attested block")
+		log.Error("processLightClientUpdates: Could not get attested block")
 		return
 	}
 	attestedState, err := s.cfg.StateGen.StateByRoot(cfg.ctx, attestedRoot)
@@ -144,7 +144,7 @@ func (s *Service) processLightClientUpdates(cfg *postBlockProcessConfig) {
 		return
 	}
 	if attestedState == nil || attestedState.IsNil() {
-		log.WithError(err).Error("processLightClientUpdates: Could not get attested state")
+		log.Error("processLightClientUpdates: Could not get attested state")
 		return
 	}
 

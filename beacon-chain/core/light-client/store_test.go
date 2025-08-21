@@ -197,8 +197,8 @@ func TestLightClientStore_SaveLCData(t *testing.T) {
 
 		require.DeepEqual(t, finalityUpdate, s.lastFinalityUpdate, "Expected to find the last finality update in the store")
 		require.DeepEqual(t, optimisticUpdate, s.lastOptimisticUpdate, "Expected to find the last optimistic update in the store")
-		require.DeepEqual(t, update, *s.cache.items[attstedBlkRoot].bestUpdate, "Expected to find the update in the non-finality cache")
-		require.DeepEqual(t, finalityUpdate, *s.cache.items[attstedBlkRoot].bestFinalityUpdate, "Expected to find the finality update in the non-finality cache")
+		require.DeepEqual(t, update, s.cache.items[attstedBlkRoot].bestUpdate, "Expected to find the update in the non-finality cache")
+		require.DeepEqual(t, finalityUpdate, s.cache.items[attstedBlkRoot].bestFinalityUpdate, "Expected to find the finality update in the non-finality cache")
 	})
 
 	t.Run("no parent in cache or db - new not head", func(t *testing.T) {
@@ -225,8 +225,8 @@ func TestLightClientStore_SaveLCData(t *testing.T) {
 
 		require.IsNil(t, s.lastFinalityUpdate, "Expected to not find the last finality update in the store since the block is not head")
 		require.DeepEqual(t, optimisticUpdate, s.lastOptimisticUpdate, "Expected to find the last optimistic update in the store")
-		require.DeepEqual(t, update, *s.cache.items[attstedBlkRoot].bestUpdate, "Expected to find the update in the non-finality cache")
-		require.DeepEqual(t, finalityUpdate, *s.cache.items[attstedBlkRoot].bestFinalityUpdate, "Expected to find the finality update in the non-finality cache")
+		require.DeepEqual(t, update, s.cache.items[attstedBlkRoot].bestUpdate, "Expected to find the update in the non-finality cache")
+		require.DeepEqual(t, finalityUpdate, s.cache.items[attstedBlkRoot].bestFinalityUpdate, "Expected to find the finality update in the non-finality cache")
 	})
 
 	t.Run("parent in db", func(t *testing.T) {
@@ -261,8 +261,8 @@ func TestLightClientStore_SaveLCData(t *testing.T) {
 
 		require.DeepEqual(t, finalityUpdate, s.lastFinalityUpdate, "Expected to find the last finality update in the store")
 		require.DeepEqual(t, optimisticUpdate, s.lastOptimisticUpdate, "Expected to find the last optimistic update in the store")
-		require.DeepEqual(t, update, *s.cache.items[attstedBlkRoot].bestUpdate, "Expected to find the update in the non-finality cache")
-		require.DeepEqual(t, finalityUpdate, *s.cache.items[attstedBlkRoot].bestFinalityUpdate, "Expected to find the finality update in the non-finality cache")
+		require.DeepEqual(t, update, s.cache.items[attstedBlkRoot].bestUpdate, "Expected to find the update in the non-finality cache")
+		require.DeepEqual(t, finalityUpdate, s.cache.items[attstedBlkRoot].bestFinalityUpdate, "Expected to find the finality update in the non-finality cache")
 	})
 
 	t.Run("parent in cache", func(t *testing.T) {
@@ -282,8 +282,8 @@ func TestLightClientStore_SaveLCData(t *testing.T) {
 		require.NoError(t, err)
 		item := &cacheItem{
 			period:             period,
-			bestUpdate:         &update,
-			bestFinalityUpdate: &finalityUpdate,
+			bestUpdate:         update,
+			bestFinalityUpdate: finalityUpdate,
 		}
 		attestedBlockRoot := l2.AttestedBlock.Block().ParentRoot() // we want this item to be the parent of the new block
 		s.cache.items[attestedBlockRoot] = item
@@ -304,8 +304,8 @@ func TestLightClientStore_SaveLCData(t *testing.T) {
 
 		require.DeepEqual(t, finalityUpdate, s.lastFinalityUpdate, "Expected to find the last finality update in the store")
 		require.DeepEqual(t, optimisticUpdate, s.lastOptimisticUpdate, "Expected to find the last optimistic update in the store")
-		require.DeepEqual(t, update, *s.cache.items[attstedBlkRoot].bestUpdate, "Expected to find the update in the non-finality cache")
-		require.DeepEqual(t, finalityUpdate, *s.cache.items[attstedBlkRoot].bestFinalityUpdate, "Expected to find the finality update in the non-finality cache")
+		require.DeepEqual(t, update, s.cache.items[attstedBlkRoot].bestUpdate, "Expected to find the update in the non-finality cache")
+		require.DeepEqual(t, finalityUpdate, s.cache.items[attstedBlkRoot].bestFinalityUpdate, "Expected to find the finality update in the non-finality cache")
 	})
 
 	t.Run("parent in the previous period", func(t *testing.T) {
@@ -325,8 +325,8 @@ func TestLightClientStore_SaveLCData(t *testing.T) {
 		require.NoError(t, err)
 		item := &cacheItem{
 			period:             period1,
-			bestUpdate:         &update,
-			bestFinalityUpdate: &finalityUpdate,
+			bestUpdate:         update,
+			bestFinalityUpdate: finalityUpdate,
 		}
 		attestedBlockRoot := l2.AttestedBlock.Block().ParentRoot() // we want this item to be the parent of the new block
 		s.cache.items[attestedBlockRoot] = item
@@ -347,8 +347,8 @@ func TestLightClientStore_SaveLCData(t *testing.T) {
 
 		require.DeepEqual(t, finalityUpdate, s.lastFinalityUpdate, "Expected to find the last finality update in the store")
 		require.DeepEqual(t, optimisticUpdate, s.lastOptimisticUpdate, "Expected to find the last optimistic update in the store")
-		require.DeepEqual(t, update, *s.cache.items[attstedBlkRoot].bestUpdate, "Expected to find the update in the non-finality cache")
-		require.DeepEqual(t, finalityUpdate, *s.cache.items[attstedBlkRoot].bestFinalityUpdate, "Expected to find the finality update in the non-finality cache")
+		require.DeepEqual(t, update, s.cache.items[attstedBlkRoot].bestUpdate, "Expected to find the update in the non-finality cache")
+		require.DeepEqual(t, finalityUpdate, s.cache.items[attstedBlkRoot].bestFinalityUpdate, "Expected to find the finality update in the non-finality cache")
 	})
 }
 
@@ -755,7 +755,7 @@ func TestLightClientStore_LightClientUpdatesByRange(t *testing.T) {
 
 		cacheItem := &cacheItem{
 			period:     3,
-			bestUpdate: &update,
+			bestUpdate: update,
 		}
 		s.cache.items[[32]byte{3}] = cacheItem
 
@@ -783,20 +783,20 @@ func TestLightClientStore_LightClientUpdatesByRange(t *testing.T) {
 
 		cacheItemP3 := &cacheItem{
 			period:     3,
-			bestUpdate: &update,
+			bestUpdate: update,
 		}
 		s.cache.items[[32]byte{3}] = cacheItemP3
 
 		cacheItemP4 := &cacheItem{
 			period:     4,
-			bestUpdate: &update,
+			bestUpdate: update,
 			parent:     cacheItemP3,
 		}
 		s.cache.items[[32]byte{4}] = cacheItemP4
 
 		cacheItemP5 := &cacheItem{
 			period:     5,
-			bestUpdate: &update,
+			bestUpdate: update,
 			parent:     cacheItemP4,
 		}
 		s.cache.items[[32]byte{5}] = cacheItemP5
@@ -830,20 +830,20 @@ func TestLightClientStore_LightClientUpdatesByRange(t *testing.T) {
 
 		cacheItemP3 := &cacheItem{
 			period:     3,
-			bestUpdate: &update,
+			bestUpdate: update,
 		}
 		s.cache.items[[32]byte{3}] = cacheItemP3
 
 		cacheItemP4 := &cacheItem{
 			period:     4,
-			bestUpdate: &update,
+			bestUpdate: update,
 			parent:     cacheItemP3,
 		}
 		s.cache.items[[32]byte{4}] = cacheItemP4
 
 		cacheItemP5 := &cacheItem{
 			period:     5,
-			bestUpdate: &update,
+			bestUpdate: update,
 			parent:     cacheItemP4,
 		}
 		s.cache.items[[32]byte{5}] = cacheItemP5
@@ -885,20 +885,20 @@ func TestLightClientStore_LightClientUpdatesByRange(t *testing.T) {
 
 		cacheItemP3 := &cacheItem{
 			period:     3,
-			bestUpdate: &update2,
+			bestUpdate: update2,
 		}
 		s.cache.items[[32]byte{3}] = cacheItemP3
 
 		cacheItemP4 := &cacheItem{
 			period:     4,
-			bestUpdate: &update2,
+			bestUpdate: update2,
 			parent:     cacheItemP3,
 		}
 		s.cache.items[[32]byte{4}] = cacheItemP4
 
 		cacheItemP5 := &cacheItem{
 			period:     5,
-			bestUpdate: &update2,
+			bestUpdate: update2,
 			parent:     cacheItemP4,
 		}
 		s.cache.items[[32]byte{5}] = cacheItemP5
@@ -937,13 +937,13 @@ func TestLightClientStore_LightClientUpdatesByRange(t *testing.T) {
 
 		cacheItemP4 := &cacheItem{
 			period:     4,
-			bestUpdate: &update,
+			bestUpdate: update,
 		}
 		s.cache.items[[32]byte{4}] = cacheItemP4
 
 		cacheItemP5 := &cacheItem{
 			period:     5,
-			bestUpdate: &update,
+			bestUpdate: update,
 			parent:     cacheItemP4,
 		}
 		s.cache.items[[32]byte{5}] = cacheItemP5
