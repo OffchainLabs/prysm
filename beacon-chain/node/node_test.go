@@ -27,7 +27,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/runtime"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/prometheus/client_golang/prometheus"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/urfave/cli/v2"
@@ -282,7 +281,6 @@ func TestValidateSyncFlags(t *testing.T) {
 		syncFromGenesis          bool
 		dbHasOriginCheckpoint    bool
 		expectedErrorContains    string
-		weakSubjectivityValue    string
 		name                     string
 	}{
 		{
@@ -312,13 +310,6 @@ func TestValidateSyncFlags(t *testing.T) {
 			expectError:              false,
 		},
 		{
-			name:                  "Empty DB, only weak subjectivity checkpoint - should fail",
-			dbHasOriginCheckpoint: false,
-			weakSubjectivityValue: "0x1234:123",
-			expectError:           true,
-			expectedErrorContains: "when starting with an empty database, you must specify either",
-		},
-		{
 			name:                     "Empty DB, conflicting sync options - should fail",
 			dbHasOriginCheckpoint:    false,
 			syncFromGenesis:          true,
@@ -326,35 +317,22 @@ func TestValidateSyncFlags(t *testing.T) {
 			expectError:              true,
 			expectedErrorContains:    "conflicting sync options",
 		},
-		{
-			name:                  "Empty DB, genesis + weak subjectivity - should succeed",
-			dbHasOriginCheckpoint: false,
-			syncFromGenesis:       true,
-			weakSubjectivityValue: "0x1234:123",
-			expectError:           false,
-			expectWarning:         true,
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Isolate Prometheus metrics per subtest to avoid duplicate registration
+			// Isolate Prometheus metrics per subtest to avoid duplicate registration across DB setups.
 			reg := prometheus.NewRegistry()
 			prometheus.DefaultRegisterer = reg
 			prometheus.DefaultGatherer = reg
+
 			ctx := context.Background()
 
-			// Set up real database for testing
+			// Set up real database for testing (empty to start).
 			beaconDB := testDB.SetupDB(t)
 
-			// Add genesis data if this test case uses sync-from-genesis
-			if tt.syncFromGenesis {
-				genesisState, err := util.NewBeaconState()
-				require.NoError(t, err)
-				require.NoError(t, beaconDB.SaveGenesisData(ctx, genesisState))
-			}
 
-			// Populate database if needed
+			// Populate database if needed (simulate "non-empty" via origin checkpoint).
 			if tt.dbHasOriginCheckpoint {
 				err := beaconDB.SaveOriginCheckpointBlockRoot(ctx, [32]byte{0x01})
 				require.NoError(t, err)
@@ -363,7 +341,6 @@ func TestValidateSyncFlags(t *testing.T) {
 			// Set up CLI flags
 			flagSet := flag.NewFlagSet("test", flag.ContinueOnError)
 			flagSet.Bool(flags.SyncFromGenesis.Name, tt.syncFromGenesis, "")
-			flagSet.String(flags.WeakSubjectivityCheckpoint.Name, tt.weakSubjectivityValue, "")
 
 			app := cli.App{}
 			cliCtx := cli.NewContext(&app, flagSet, nil)

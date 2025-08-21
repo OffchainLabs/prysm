@@ -584,6 +584,11 @@ func (b *BeaconNode) validateSyncFlags() error {
 		return errors.Wrap(err, "could not check origin checkpoint block root")
 	}
 
+	// if genesis exists, also consider DB non-empty.
+	if gb, err := b.db.GenesisBlock(b.ctx); err == nil && gb != nil && !gb.IsNil() {
+		return nil
+	}
+
 	// Database is empty, check if user has provided required flags
 	syncFromGenesis := b.cliCtx.Bool(flags.SyncFromGenesis.Name)
 	hasCheckpointSync := b.CheckpointInitializer != nil
