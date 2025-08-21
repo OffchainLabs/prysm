@@ -804,13 +804,9 @@ func encodeTargetEpoch(epoch primitives.Epoch) []byte {
 // Encodes a validator index using 5 bytes instead of 8 as a
 // client optimization to save space in the database. Because the max validator
 // registry size is 2**40, this is a safe optimization.
+
 func encodeValidatorIndex(index primitives.ValidatorIndex) []byte {
-	buf := make([]byte, 5)
-	v := uint64(index)
-	buf[0] = byte(v)
-	buf[1] = byte(v >> 8)
-	buf[2] = byte(v >> 16)
-	buf[3] = byte(v >> 24)
-	buf[4] = byte(v >> 32)
-	return buf
+	buf := make([]byte, 8)
+	binary.LittleEndian.PutUint64(buf, uint64(index))
+	return buf[:5]
 }
