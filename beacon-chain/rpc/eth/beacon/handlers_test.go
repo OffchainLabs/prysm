@@ -4800,6 +4800,222 @@ func Test_validateBlobSidecars(t *testing.T) {
 	b, err = blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
 	require.ErrorContains(t, "could not verify blob proof: can't verify opening proof", s.validateBlobSidecars(b, [][]byte{blob[:]}, [][]byte{proof[:]}))
+
+	blobs := [][]byte{}
+	commitments := [][]byte{}
+	proofs := [][]byte{}
+	for i := 0; i < 10; i++ {
+		blobs = append(blobs, blob[:])
+		commitments = append(commitments, commitment[:])
+		proofs = append(proofs, proof[:])
+	}
+	t.Run("pre-Deneb block should return early", func(t *testing.T) {
+		// Create a pre-Deneb block (e.g., Capella)
+		blk := util.NewBeaconBlockCapella()
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		s := &Server{}
+		// Should return nil for pre-Deneb blocks regardless of blobs
+		require.NoError(t, s.validateBlobSidecars(b, [][]byte{}, [][]byte{}))
+		require.NoError(t, s.validateBlobSidecars(b, blobs[:1], proofs[:1]))
+	})
+
+	t.Run("Deneb block with valid single blob", func(t *testing.T) {
+		blk := util.NewBeaconBlockDeneb()
+		blk.Block.Body.BlobKzgCommitments = [][]byte{commitment[:]}
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		s := &Server{}
+		require.NoError(t, s.validateBlobSidecars(b, [][]byte{blob[:]}, [][]byte{proof[:]}))
+	})
+
+	t.Run("Deneb block with max blobs (6)", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		defer params.OverrideBeaconConfig(cfg)
+
+		testCfg := params.BeaconConfig().Copy()
+		testCfg.DenebForkEpoch = 0
+		testCfg.ElectraForkEpoch = 100
+		testCfg.DeprecatedMaxBlobsPerBlock = 6
+		params.OverrideBeaconConfig(testCfg)
+
+		blk := util.NewBeaconBlockDeneb()
+		blk.Block.Slot = 10 // Deneb slot
+		blk.Block.Body.BlobKzgCommitments = commitments[:6]
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		s := &Server{}
+		// Should pass with exactly 6 blobs
+		require.NoError(t, s.validateBlobSidecars(b, blobs[:6], proofs[:6]))
+	})
+
+	t.Run("Deneb block exceeding max blobs", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		defer params.OverrideBeaconConfig(cfg)
+
+		testCfg := params.BeaconConfig().Copy()
+		testCfg.DenebForkEpoch = 0
+		testCfg.ElectraForkEpoch = 100
+		testCfg.DeprecatedMaxBlobsPerBlock = 6
+		params.OverrideBeaconConfig(testCfg)
+
+		blk := util.NewBeaconBlockDeneb()
+		blk.Block.Slot = 10 // Deneb slot
+		blk.Block.Body.BlobKzgCommitments = commitments[:7]
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		s := &Server{}
+		// Should fail with 7 blobs when max is 6
+		err = s.validateBlobSidecars(b, blobs[:7], proofs[:7])
+		require.ErrorContains(t, "number of blobs over max, 7 > 6", err)
+	})
+
+	t.Run("Electra block with valid blobs", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		defer params.OverrideBeaconConfig(cfg)
+
+		// Set up Electra config with max 9 blobs
+		testCfg := params.BeaconConfig().Copy()
+		testCfg.DenebForkEpoch = 0
+		testCfg.ElectraForkEpoch = 5
+		testCfg.DeprecatedMaxBlobsPerBlock = 6
+		testCfg.DeprecatedMaxBlobsPerBlockElectra = 9
+		params.OverrideBeaconConfig(testCfg)
+
+		blk := util.NewBeaconBlockElectra()
+		blk.Block.Slot = 160 // Electra slot (epoch 5+)
+		blk.Block.Body.BlobKzgCommitments = commitments[:9]
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		s := &Server{}
+		// Should pass with 9 blobs in Electra
+		require.NoError(t, s.validateBlobSidecars(b, blobs[:9], proofs[:9]))
+	})
+
+	t.Run("Electra block exceeding max blobs", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		defer params.OverrideBeaconConfig(cfg)
+
+		// Set up Electra config with max 9 blobs
+		testCfg := params.BeaconConfig().Copy()
+		testCfg.DenebForkEpoch = 0
+		testCfg.ElectraForkEpoch = 5
+		testCfg.DeprecatedMaxBlobsPerBlock = 6
+		testCfg.DeprecatedMaxBlobsPerBlockElectra = 9
+		params.OverrideBeaconConfig(testCfg)
+
+		blk := util.NewBeaconBlockElectra()
+		blk.Block.Slot = 160 // Electra slot
+		blk.Block.Body.BlobKzgCommitments = commitments[:10]
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		s := &Server{}
+		// Should fail with 10 blobs when max is 9
+		err = s.validateBlobSidecars(b, blobs[:10], proofs[:10])
+		require.ErrorContains(t, "number of blobs over max, 10 > 9", err)
+	})
+
+	t.Run("Fulu block with valid blobs", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		defer params.OverrideBeaconConfig(cfg)
+
+		testCfg := params.BeaconConfig().Copy()
+		testCfg.DenebForkEpoch = 0
+		testCfg.ElectraForkEpoch = 5
+		testCfg.FuluForkEpoch = 10
+		testCfg.DeprecatedMaxBlobsPerBlock = 6
+		testCfg.DeprecatedMaxBlobsPerBlockElectra = 9
+		params.OverrideBeaconConfig(testCfg)
+
+		blk := util.NewBeaconBlockFulu()
+		blk.Block.Slot = 320 // Fulu slot (epoch 10+)
+		blk.Block.Body.BlobKzgCommitments = commitments[:9]
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		s := &Server{}
+		// Should pass with 9 blobs in Fulu
+		require.NoError(t, s.validateBlobSidecars(b, blobs[:9], proofs[:9]))
+	})
+
+	t.Run("Fulu block exceeding max blobs", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		defer params.OverrideBeaconConfig(cfg)
+
+		testCfg := params.BeaconConfig().Copy()
+		testCfg.DenebForkEpoch = 0
+		testCfg.ElectraForkEpoch = 5
+		testCfg.FuluForkEpoch = 10
+		testCfg.DeprecatedMaxBlobsPerBlock = 6
+		testCfg.DeprecatedMaxBlobsPerBlockElectra = 9
+		params.OverrideBeaconConfig(testCfg)
+
+		blk := util.NewBeaconBlockFulu()
+		blk.Block.Slot = 320 // Fulu slot (epoch 10+)
+		blk.Block.Body.BlobKzgCommitments = commitments[:10]
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		s := &Server{}
+		// Should fail with 10 blobs when max is 9
+		err = s.validateBlobSidecars(b, blobs[:10], proofs[:10])
+		require.ErrorContains(t, "number of blobs over max, 10 > 9", err)
+	})
+
+	t.Run("BlobSchedule with progressive increases (BPO)", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		defer params.OverrideBeaconConfig(cfg)
+
+		// Set up config with BlobSchedule (BPO - Blob Production Optimization)
+		testCfg := params.BeaconConfig().Copy()
+		testCfg.DenebForkEpoch = 0
+		testCfg.ElectraForkEpoch = 100
+		testCfg.FuluForkEpoch = 200
+		testCfg.DeprecatedMaxBlobsPerBlock = 6
+		testCfg.DeprecatedMaxBlobsPerBlockElectra = 9
+		// Define blob schedule with progressive increases
+		testCfg.BlobSchedule = []params.BlobScheduleEntry{
+			{Epoch: 0, MaxBlobsPerBlock: 3},  // Start with 3 blobs
+			{Epoch: 10, MaxBlobsPerBlock: 5}, // Increase to 5 at epoch 10
+			{Epoch: 20, MaxBlobsPerBlock: 7}, // Increase to 7 at epoch 20
+			{Epoch: 30, MaxBlobsPerBlock: 9}, // Increase to 9 at epoch 30
+		}
+		params.OverrideBeaconConfig(testCfg)
+
+		s := &Server{}
+
+		// Test epoch 0-9: max 3 blobs
+		t.Run("epoch 0-9: max 3 blobs", func(t *testing.T) {
+			blk := util.NewBeaconBlockDeneb()
+			blk.Block.Slot = 5 // Epoch 0
+			blk.Block.Body.BlobKzgCommitments = commitments[:3]
+			b, err := blocks.NewSignedBeaconBlock(blk)
+			require.NoError(t, err)
+			require.NoError(t, s.validateBlobSidecars(b, blobs[:3], proofs[:3]))
+
+			// Should fail with 4 blobs
+			blk.Block.Body.BlobKzgCommitments = commitments[:4]
+			b, err = blocks.NewSignedBeaconBlock(blk)
+			require.NoError(t, err)
+			err = s.validateBlobSidecars(b, blobs[:4], proofs[:4])
+			require.ErrorContains(t, "number of blobs over max, 4 > 3", err)
+		})
+
+		// Test epoch 30+: max 9 blobs
+		t.Run("epoch 30+: max 9 blobs", func(t *testing.T) {
+			blk := util.NewBeaconBlockDeneb()
+			blk.Block.Slot = 960 // Epoch 30
+			blk.Block.Body.BlobKzgCommitments = commitments[:9]
+			b, err := blocks.NewSignedBeaconBlock(blk)
+			require.NoError(t, err)
+			require.NoError(t, s.validateBlobSidecars(b, blobs[:9], proofs[:9]))
+
+			// Should fail with 10 blobs
+			blk.Block.Body.BlobKzgCommitments = commitments[:10]
+			b, err = blocks.NewSignedBeaconBlock(blk)
+			require.NoError(t, err)
+			err = s.validateBlobSidecars(b, blobs[:10], proofs[:10])
+			require.ErrorContains(t, "number of blobs over max, 10 > 9", err)
+		})
+	})
 }
 
 func TestGetPendingConsolidations(t *testing.T) {

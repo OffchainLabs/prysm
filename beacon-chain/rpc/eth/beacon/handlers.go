@@ -1078,6 +1078,10 @@ func (s *Server) validateBlobSidecars(blk interfaces.SignedBeaconBlock, blobs []
 	if len(blobs) != len(proofs) || len(blobs) != len(kzgs) {
 		return errors.New("number of blobs, proofs, and commitments do not match")
 	}
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(blk.Block().Slot())
+	if len(blobs) > maxBlobsPerBlock {
+		return fmt.Errorf("number of blobs over max, %d > %d", len(blobs), maxBlobsPerBlock)
+	}
 	for i, blob := range blobs {
 		b := kzg4844.Blob(blob)
 		if err := kzg4844.VerifyBlobProof(&b, kzg4844.Commitment(kzgs[i]), kzg4844.Proof(proofs[i])); err != nil {
