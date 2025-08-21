@@ -28,6 +28,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/prometheus/client_golang/prometheus"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/urfave/cli/v2"
 )
@@ -337,11 +338,15 @@ func TestValidateSyncFlags(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Isolate Prometheus metrics per subtest to avoid duplicate registration
+			reg := prometheus.NewRegistry()
+			prometheus.DefaultRegisterer = reg
+			prometheus.DefaultGatherer = reg
 			ctx := context.Background()
-			
+
 			// Set up real database for testing
 			beaconDB := testDB.SetupDB(t)
-			
+
 			// Add genesis data if this test case uses sync-from-genesis
 			if tt.syncFromGenesis {
 				genesisState, err := util.NewBeaconState()
@@ -359,7 +364,7 @@ func TestValidateSyncFlags(t *testing.T) {
 			flagSet := flag.NewFlagSet("test", flag.ContinueOnError)
 			flagSet.Bool(flags.SyncFromGenesis.Name, tt.syncFromGenesis, "")
 			flagSet.String(flags.WeakSubjectivityCheckpoint.Name, tt.weakSubjectivityValue, "")
-			
+
 			app := cli.App{}
 			cliCtx := cli.NewContext(&app, flagSet, nil)
 
@@ -396,8 +401,8 @@ func TestValidateSyncFlags(t *testing.T) {
 			if tt.expectWarning {
 				found := false
 				for _, entry := range hook.Entries {
-					if entry.Level.String() == "warning" && 
-					   strings.Contains(entry.Message, "Syncing from genesis is enabled") {
+					if entry.Level.String() == "warning" &&
+						strings.Contains(entry.Message, "Syncing from genesis is enabled") {
 						found = true
 						break
 					}
@@ -414,4 +419,3 @@ type mockCheckpointInitializer struct{}
 func (m *mockCheckpointInitializer) Initialize(ctx context.Context, db db.Database) error {
 	return nil
 }
-
