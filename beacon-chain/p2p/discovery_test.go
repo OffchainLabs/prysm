@@ -89,7 +89,7 @@ func createTestNodeWithID(t *testing.T, id string) *enode.LocalNode {
 	localNode.SetStaticIP(net.ParseIP("127.0.0.1"))
 	localNode.Set(enr.TCP(3000))
 	localNode.Set(enr.UDP(3000))
-	localNode.Set(enr.WithEntry(eth2ENRKey, make([]byte, 16)))
+	localNode.Set(enr.WithEntry(eth2EnrKey, make([]byte, 16)))
 
 	return localNode
 }
@@ -108,7 +108,7 @@ func createTestNodeRandom(t *testing.T) *enode.LocalNode {
 	localNode.SetStaticIP(net.ParseIP("127.0.0.1"))
 	localNode.Set(enr.TCP(3000))
 	localNode.Set(enr.UDP(3000))
-	localNode.Set(enr.WithEntry(eth2ENRKey, make([]byte, 16)))
+	localNode.Set(enr.WithEntry(eth2EnrKey, make([]byte, 16)))
 
 	return localNode
 }
@@ -318,7 +318,7 @@ func TestCreateLocalNode(t *testing.T) {
 
 			// Check fork is set.
 			fork := new([]byte)
-			require.NoError(t, localNode.Node().Record().Load(enr.WithEntry(eth2ENRKey, fork)))
+			require.NoError(t, localNode.Node().Record().Load(enr.WithEntry(eth2EnrKey, fork)))
 			require.NotEmpty(t, *fork)
 
 			// Check att subnets.
