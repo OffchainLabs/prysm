@@ -128,16 +128,18 @@ func (node *Node) Start(ctx context.Context) error {
 		if err = runCmd.Start(); err != nil {
 			return fmt.Errorf("failed to start eth1 chain: %w", err)
 		}
-		// TODO: the log is not very descriptive but it's always the first log where the chain has
-		// - a peer
-		// - http server started
-		// - genesis synced
+		// The next check waits for a coarse-grained readiness log line.
+		// It typically appears after the node has:
+		// - at least one peer,
+		// - the HTTP server started,
+		// - and genesis synced.
 		if err = helpers.WaitForTextInFile(errLog, "Node revalidated"); err != nil {
 			kerr := runCmd.Process.Kill()
 			if kerr != nil {
 				log.WithError(kerr).Error("Error sending kill to failed node command process")
 			}
-			retryErr = fmt.Errorf("the first node revalidated log not found, this means the eth1 chain had issues starting: %w", err)
+			logPath := path.Join(e2e.TestParams.LogPath, "eth1_"+strconv.Itoa(node.index)+".log")
+			retryErr = fmt.Errorf("eth1 node did not emit 'Node revalidated' readiness log. This likely indicates startup issues (no peers yet, HTTP server not up, or genesis not synced). Check logs at %s: %w", logPath, err)
 			continue
 		}
 		node.cmd = runCmd

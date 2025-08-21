@@ -475,7 +475,8 @@ func TestRPCBeaconBlocksByRange_RPCHandlerRateLimitOverflow(t *testing.T) {
 
 		pcl := protocol.ID(p2p.RPCBlocksByRangeTopicV1)
 		topic := string(pcl)
-		defaultBlockBurstFactor := 2 // TODO: can we update the default value set in TestMain to match flags?
+		// Use the configured burst factor to match TestMain flags instead of a hardcoded value.
+		defaultBlockBurstFactor := flags.Get().BlockBatchLimitBurstFactor
 		r.rateLimiter.limiterMap[topic] = leakybucket.NewCollector(0.000001, int64(flags.Get().BlockBatchLimit*defaultBlockBurstFactor), time.Second, false)
 		req := &ethpb.BeaconBlocksByRangeRequest{
 			StartSlot: 100,
@@ -487,7 +488,9 @@ func TestRPCBeaconBlocksByRange_RPCHandlerRateLimitOverflow(t *testing.T) {
 		assert.NoError(t, sendRequest(p1, p2, r, req, true, true))
 
 		remainingCapacity := r.rateLimiter.limiterMap[topic].Remaining(p2.PeerID().String())
-		expectedCapacity := int64(0) // Whole capacity is used, but no overflow.
+		// Expect remaining capacity to be total capacity minus request size.
+		totalCapacity := int64(flags.Get().BlockBatchLimit * defaultBlockBurstFactor)
+		expectedCapacity := totalCapacity - int64(reqSize)
 		assert.Equal(t, expectedCapacity, remainingCapacity, "Unexpected rate limiting capacity")
 	})
 
