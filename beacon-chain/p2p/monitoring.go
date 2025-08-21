@@ -46,31 +46,39 @@ var (
 	})
 	savedAttestationBroadcasts = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "p2p_attestation_subnet_recovered_broadcasts",
-		Help: "The number of attestations that were attempted to be broadcast with no peers on " +
+		Help: "The number of attestations message broadcast attempts with no peers on " +
 			"the subnet. The beacon node increments this counter when the broadcast is blocked " +
 			"until a subnet peer can be found.",
 	})
 	attestationBroadcastAttempts = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "p2p_attestation_subnet_attempted_broadcasts",
-		Help: "The number of attestations that were attempted to be broadcast.",
+		Help: "The number of attestations message broadcast attempts.",
 	})
 	savedSyncCommitteeBroadcasts = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "p2p_sync_committee_subnet_recovered_broadcasts",
-		Help: "The number of sync committee messages that were attempted to be broadcast with no peers on " +
+		Help: "The number of sync committee messages broadcast attempts with no peers on " +
 			"the subnet. The beacon node increments this counter when the broadcast is blocked " +
 			"until a subnet peer can be found.",
 	})
-	blobSidecarCommitteeBroadcasts = promauto.NewCounter(prometheus.CounterOpts{
+	blobSidecarBroadcasts = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "p2p_blob_sidecar_committee_broadcasts",
-		Help: "The number of blob sidecar committee messages that were broadcast with no peer on.",
+		Help: "The number of blob sidecar messages that were broadcast with no peer on.",
 	})
 	syncCommitteeBroadcastAttempts = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "p2p_sync_committee_subnet_attempted_broadcasts",
-		Help: "The number of sync committee that were attempted to be broadcast.",
+		Help: "The number of sync committee message broadcast attempts.",
 	})
-	blobSidecarCommitteeBroadcastAttempts = promauto.NewCounter(prometheus.CounterOpts{
+	blobSidecarBroadcastAttempts = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "p2p_blob_sidecar_committee_attempted_broadcasts",
-		Help: "The number of blob sidecar committee messages that were attempted to be broadcast.",
+		Help: "The number of blob sidecar message broadcast attempts.",
+	})
+	dataColumnSidecarBroadcasts = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "p2p_data_column_sidecar_broadcasts",
+		Help: "The number of data column sidecar messages that were broadcasted.",
+	})
+	dataColumnSidecarBroadcastAttempts = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "p2p_data_column_sidecar_attempted_broadcasts",
+		Help: "The number of data column sidecar message broadcast attempts.",
 	})
 
 	// Gossip Tracer Metrics

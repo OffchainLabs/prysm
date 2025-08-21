@@ -51,7 +51,7 @@ func expectResetStream(t *testing.T, stream network.Stream) {
 func TestRegisterRPC_ReceivesValidMessage(t *testing.T) {
 	p2p := p2ptest.NewTestP2P(t)
 	r := &Service{
-		ctx:         context.Background(),
+		ctx:         t.Context(),
 		cfg:         &config{p2p: p2p},
 		rateLimiter: newRateLimiter(p2p),
 	}
@@ -89,7 +89,7 @@ func TestRPC_ReceivesInvalidMessage(t *testing.T) {
 	remotePeer.Connect(p2p)
 
 	r := &Service{
-		ctx:         context.Background(),
+		ctx:         t.Context(),
 		cfg:         &config{p2p: p2p},
 		rateLimiter: newRateLimiter(p2p),
 	}
@@ -112,7 +112,7 @@ func TestRPC_ReceivesInvalidMessage(t *testing.T) {
 	}()
 	r.registerRPC(topic, handler)
 
-	stream, err := remotePeer.Host().NewStream(context.Background(), p2p.BHost.ID(), protocol.ID(topic+p2p.Encoding().ProtocolSuffix()))
+	stream, err := remotePeer.Host().NewStream(t.Context(), p2p.BHost.ID(), protocol.ID(topic+p2p.Encoding().ProtocolSuffix()))
 	require.NoError(t, err)
 	// Write invalid SSZ object to peer.
 	_, err = stream.Write([]byte("JUNK MESSAGE"))

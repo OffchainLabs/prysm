@@ -1,7 +1,6 @@
 package wallet
 
 import (
-	"context"
 	"flag"
 	"os"
 	"path/filepath"
@@ -72,7 +71,7 @@ func TestRecoverDerivedWallet(t *testing.T) {
 	cliCtx := createRecoverCliCtx(t, cfg)
 	require.NoError(t, walletRecover(cliCtx))
 
-	ctx := context.Background()
+	ctx := t.Context()
 	w, err := wallet.OpenWallet(cliCtx.Context, &wallet.Config{
 		WalletDir:      cfg.walletDir,
 		WalletPassword: password,

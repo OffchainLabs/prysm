@@ -47,7 +47,7 @@ import (
 	grpcprometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"go.opencensus.io/plugin/ocgrpc"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
@@ -120,6 +120,7 @@ type Config struct {
 	Router                    *http.ServeMux
 	ClockWaiter               startup.ClockWaiter
 	BlobStorage               *filesystem.BlobStorage
+	DataColumnStorage         *filesystem.DataColumnStorage
 	TrackedValidatorsCache    *cache.TrackedValidatorsCache
 	PayloadIDCache            *cache.PayloadIDCache
 	LCStore                   *lightClient.Store
@@ -146,7 +147,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 	log.WithField("address", address).Info("gRPC server listening on port")
 
 	opts := []grpc.ServerOption{
-		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
 		grpc.StreamInterceptor(middleware.ChainStreamServer(
 			recovery.StreamServerInterceptor(
 				recovery.WithRecoveryHandlerContext(tracing.RecoveryHandlerFunc),
@@ -196,6 +197,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		ChainInfoFetcher:   s.cfg.ChainInfoFetcher,
 		GenesisTimeFetcher: s.cfg.GenesisTimeFetcher,
 		BlobStorage:        s.cfg.BlobStorage,
+		DataColumnStorage:  s.cfg.DataColumnStorage,
 	}
 	rewardFetcher := &rewards.BlockRewardService{Replayer: ch, DB: s.cfg.BeaconDB}
 	coreService := &core.Service{

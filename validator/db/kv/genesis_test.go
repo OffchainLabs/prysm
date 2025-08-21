@@ -1,7 +1,6 @@
 package kv
 
 import (
-	"context"
 	"testing"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -10,7 +9,7 @@ import (
 )
 
 func TestStore_GenesisValidatorsRoot_ReadAndWrite(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	tests := []struct {
 		name    string

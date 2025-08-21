@@ -28,7 +28,7 @@ func (s *Service) lightClientOptimisticUpdateSubscriber(_ context.Context, msg p
 		"attestedHeaderRoot": fmt.Sprintf("%x", attestedHeaderRoot),
 	}).Debug("Saving newly received light client optimistic update.")
 
-	s.lcStore.SetLastOptimisticUpdate(update)
+	s.lcStore.SetLastOptimisticUpdate(update, false)
 
 	s.cfg.stateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.LightClientOptimisticUpdate,
@@ -55,7 +55,7 @@ func (s *Service) lightClientFinalityUpdateSubscriber(_ context.Context, msg pro
 		"attestedHeaderRoot": fmt.Sprintf("%x", attestedHeaderRoot),
 	}).Debug("Saving newly received light client finality update.")
 
-	s.lcStore.SetLastFinalityUpdate(update)
+	s.lcStore.SetLastFinalityUpdate(update, false)
 
 	s.cfg.stateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.LightClientFinalityUpdate,

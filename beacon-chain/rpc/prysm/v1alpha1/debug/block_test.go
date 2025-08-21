@@ -1,7 +1,6 @@
 package debug
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -21,7 +20,7 @@ import (
 
 func TestServer_GetBlock(t *testing.T) {
 	db := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	b := util.NewBeaconBlock()
 	b.Block.Slot = 100
@@ -50,7 +49,7 @@ func TestServer_GetBlock(t *testing.T) {
 
 func TestServer_GetAttestationInclusionSlot(t *testing.T) {
 	db := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	offset := int64(2 * params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
 	bs := &Server{
 		BeaconDB:           db,
@@ -61,7 +60,7 @@ func TestServer_GetAttestationInclusionSlot(t *testing.T) {
 	s, _ := util.DeterministicGenesisState(t, 2048)
 	tr := [32]byte{'a'}
 	require.NoError(t, bs.StateGen.SaveState(ctx, tr, s))
-	c, err := helpers.BeaconCommitteeFromState(context.Background(), s, 1, 0)
+	c, err := helpers.BeaconCommitteeFromState(t.Context(), s, 1, 0)
 	require.NoError(t, err)
 
 	a := &ethpb.Attestation{

@@ -7,12 +7,11 @@ import (
 	"testing"
 	"time"
 
+	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
@@ -21,12 +20,11 @@ import (
 
 func TestService_CanSubscribe(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	currentFork := [4]byte{0x01, 0x02, 0x03, 0x04}
+	params.BeaconConfig().InitializeForkSchedule()
 	validProtocolSuffix := "/" + encoder.ProtocolSuffixSSZSnappy
-	genesisTime := time.Now()
-	var valRoot [32]byte
-	digest, err := forks.CreateForkDigest(genesisTime, valRoot[:])
-	assert.NoError(t, err)
+	clock := startup.NewClock(time.Now(), params.BeaconConfig().GenesisValidatorsRoot)
+	currentFork := params.GetNetworkScheduleEntry(clock.CurrentEpoch()).ForkDigest
+	digest := params.ForkDigest(clock.CurrentEpoch())
 	type test struct {
 		name  string
 		topic string
@@ -90,7 +88,14 @@ func TestService_CanSubscribe(t *testing.T) {
 		formatting := []interface{}{digest}
 
 		// Special case for attestation subnets which have a second formatting placeholder.
-		if topic == AttestationSubnetTopicFormat || topic == SyncCommitteeSubnetTopicFormat || topic == BlobSubnetTopicFormat {
+		topics := map[string]bool{
+			AttestationSubnetTopicFormat:   true,
+			SyncCommitteeSubnetTopicFormat: true,
+			BlobSubnetTopicFormat:          true,
+			DataColumnSubnetTopicFormat:    true,
+		}
+
+		if topics[topic] {
 			formatting = append(formatting, 0 /* some subnet ID */)
 		}
 
@@ -101,12 +106,14 @@ func TestService_CanSubscribe(t *testing.T) {
 		}
 		tests = append(tests, tt)
 	}
+	valRoot := clock.GenesisValidatorsRoot()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Service{
 				genesisValidatorsRoot: valRoot[:],
-				genesisTime:           genesisTime,
+				genesisTime:           clock.GenesisTime(),
 			}
+			s.setAllForkDigests()
 			if got := s.CanSubscribe(tt.topic); got != tt.want {
 				t.Errorf("CanSubscribe(%s) = %v, want %v", tt.topic, got, tt.want)
 			}
@@ -212,11 +219,10 @@ func TestGossipTopicMapping_scanfcheck_GossipTopicFormattingSanityCheck(t *testi
 
 func TestService_FilterIncomingSubscriptions(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
+	params.BeaconConfig().InitializeForkSchedule()
+	clock := startup.NewClock(time.Now(), params.BeaconConfig().GenesisValidatorsRoot)
+	digest := params.ForkDigest(clock.CurrentEpoch())
 	validProtocolSuffix := "/" + encoder.ProtocolSuffixSSZSnappy
-	genesisTime := time.Now()
-	var valRoot [32]byte
-	digest, err := forks.CreateForkDigest(genesisTime, valRoot[:])
-	assert.NoError(t, err)
 	type args struct {
 		id   peer.ID
 		subs []*pubsubpb.RPC_SubOpts
@@ -313,12 +319,14 @@ func TestService_FilterIncomingSubscriptions(t *testing.T) {
 			},
 		},
 	}
+	valRoot := clock.GenesisValidatorsRoot()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Service{
 				genesisValidatorsRoot: valRoot[:],
-				genesisTime:           genesisTime,
+				genesisTime:           clock.GenesisTime(),
 			}
+			s.setAllForkDigests()
 			got, err := s.FilterIncomingSubscriptions(tt.args.id, tt.args.subs)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("FilterIncomingSubscriptions() error = %v, wantErr %v", err, tt.wantErr)
@@ -333,10 +341,10 @@ func TestService_FilterIncomingSubscriptions(t *testing.T) {
 
 func TestService_MonitorsStateForkUpdates(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 	cs := startup.NewClockSynchronizer()
-	s, err := NewService(ctx, &Config{ClockWaiter: cs})
+	s, err := NewService(ctx, &Config{ClockWaiter: cs, DB: testDB.SetupDB(t)})
 	require.NoError(t, err)
 
 	require.Equal(t, false, s.isInitialized())

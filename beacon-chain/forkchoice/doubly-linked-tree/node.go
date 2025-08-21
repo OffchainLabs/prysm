@@ -3,6 +3,7 @@ package doublylinkedtree
 import (
 	"bytes"
 	"context"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	forkchoice2 "github.com/OffchainLabs/prysm/v6/consensus-types/forkchoice"
@@ -11,9 +12,9 @@ import (
 	"github.com/pkg/errors"
 )
 
-// ProcessAttestationsThreshold  is the number of seconds after which we
+// ProcessAttestationsThreshold is the amount of time after which we
 // process attestations for the current slot
-const ProcessAttestationsThreshold = 10
+const ProcessAttestationsThreshold = 10 * time.Second
 
 // applyWeightChanges recomputes the weight of the node passed as an argument and all of its descendants,
 // using the current balance stored in each node.
@@ -131,10 +132,10 @@ func (n *Node) setNodeAndParentValidated(ctx context.Context) error {
 // Note that genesisTime has seconds granularity, therefore we use a strict
 // inequality < here. For example a block that arrives 3.9999 seconds into the
 // slot will have secs = 3 below.
-func (n *Node) arrivedEarly(genesisTime uint64) (bool, error) {
-	secs, err := slots.SecondsSinceSlotStart(n.slot, genesisTime, n.timestamp)
-	votingWindow := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
-	return secs < votingWindow, err
+func (n *Node) arrivedEarly(genesis time.Time) (bool, error) {
+	sss, err := slots.SinceSlotStart(n.slot, genesis, n.timestamp.Truncate(time.Second)) // Truncate such that 3.9999 seconds will have a value of 3.
+	votingWindow := time.Duration(params.BeaconConfig().SecondsPerSlot/params.BeaconConfig().IntervalsPerSlot) * time.Second
+	return sss < votingWindow, err
 }
 
 // arrivedAfterOrphanCheck returns whether this block was inserted after the
@@ -142,8 +143,8 @@ func (n *Node) arrivedEarly(genesisTime uint64) (bool, error) {
 // Note that genesisTime has seconds granularity, therefore we use an
 // inequality >= here. For example a block that arrives 10.00001 seconds into the
 // slot will have secs = 10 below.
-func (n *Node) arrivedAfterOrphanCheck(genesisTime uint64) (bool, error) {
-	secs, err := slots.SecondsSinceSlotStart(n.slot, genesisTime, n.timestamp)
+func (n *Node) arrivedAfterOrphanCheck(genesis time.Time) (bool, error) {
+	secs, err := slots.SinceSlotStart(n.slot, genesis, n.timestamp.Truncate(time.Second)) // Truncate such that 10.00001 seconds will have a value of 10.
 	return secs >= ProcessAttestationsThreshold, err
 }
 

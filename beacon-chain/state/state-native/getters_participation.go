@@ -4,7 +4,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
 	customtypes "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/custom-types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stateutil"
-	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 )
 
@@ -82,11 +81,7 @@ func (b *BeaconState) UnrealizedCheckpointBalances() (uint64, uint64, uint64, er
 		return 0, 0, 0, ErrNilParticipation
 	}
 
-	if features.Get().EnableExperimentalState {
-		return stateutil.UnrealizedCheckpointBalances(cp, pp, stateutil.NewValMultiValueSliceReader(b.validatorsMultiValue, b), currentEpoch)
-	} else {
-		return stateutil.UnrealizedCheckpointBalances(cp, pp, stateutil.NewValSliceReader(b.validators), currentEpoch)
-	}
+	return stateutil.UnrealizedCheckpointBalances(cp, pp, stateutil.NewValMultiValueSliceReader(b.validatorsMultiValue, b), currentEpoch)
 }
 
 // currentEpochParticipationVal corresponding to participation bits on the beacon chain.

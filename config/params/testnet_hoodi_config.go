@@ -53,6 +53,8 @@ func HoodiConfig() *BeaconChainConfig {
 	cfg.FuluForkVersion = []byte{0x70, 0x00, 0x09, 0x10}
 	cfg.TerminalTotalDifficulty = "0"
 	cfg.DepositContractAddress = "0x00000000219ab540356cBB839Cbe05303d7705Fa"
+	cfg.BlobSchedule = []BlobScheduleEntry{}
+	cfg.DefaultBuilderGasLimit = uint64(60000000)
 	cfg.InitializeForkSchedule()
 	return cfg
 }

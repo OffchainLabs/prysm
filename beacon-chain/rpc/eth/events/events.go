@@ -72,6 +72,8 @@ const (
 	LightClientFinalityUpdateTopic = "light_client_finality_update"
 	// LightClientOptimisticUpdateTopic represents a new light client optimistic update event topic.
 	LightClientOptimisticUpdateTopic = "light_client_optimistic_update"
+	// DataColumnTopic represents a data column sidecar event topic
+	DataColumnTopic = "data_column_sidecar"
 )
 
 var (
@@ -105,6 +107,7 @@ var opsFeedEventTopics = map[feed.EventType]string{
 	operation.AttesterSlashingReceived:          AttesterSlashingTopic,
 	operation.ProposerSlashingReceived:          ProposerSlashingTopic,
 	operation.BlockGossipReceived:               BlockGossipTopic,
+	operation.DataColumnReceived:                DataColumnTopic,
 }
 
 var stateFeedEventTopics = map[feed.EventType]string{
@@ -461,6 +464,8 @@ func topicForEvent(event *feed.Event) string {
 		return BlockTopic
 	case payloadattribute.EventData:
 		return PayloadAttributesTopic
+	case *operation.DataColumnReceivedData:
+		return DataColumnTopic
 	default:
 		return InvalidTopic
 	}
@@ -494,6 +499,19 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 				Block: hexutil.Encode(blockRoot[:]),
 			}
 			return jsonMarshalReader(eventName, blk)
+		}, nil
+	case *operation.DataColumnReceivedData:
+		return func() io.Reader {
+			kzgCommitments := make([]string, len(v.KzgCommitments))
+			for i, kzgCommitment := range v.KzgCommitments {
+				kzgCommitments[i] = hexutil.Encode(kzgCommitment)
+			}
+			return jsonMarshalReader(eventName, &structs.DataColumnGossipEvent{
+				Slot:           fmt.Sprintf("%d", v.Slot),
+				Index:          fmt.Sprintf("%d", v.Index),
+				BlockRoot:      hexutil.Encode(v.BlockRoot[:]),
+				KzgCommitments: kzgCommitments,
+			})
 		}, nil
 	case *operation.AggregatedAttReceivedData:
 		switch att := v.Attestation.AggregateVal().(type) {
@@ -739,7 +757,7 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 	ev.ParentBlockHash = payload.BlockHash()
 	ev.ParentBlockNumber = payload.BlockNumber()
 
-	t, err := slots.ToTime(st.GenesisTime(), ev.ProposalSlot)
+	t, err := slots.StartTime(st.GenesisTime(), ev.ProposalSlot)
 	if err != nil {
 		return ev, errors.Wrap(err, "could not get head state slot time")
 	}
@@ -750,7 +768,10 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 // This event stream is intended to be used by builders and relays.
 // Parent fields are based on state at N_{current_slot}, while the rest of fields are based on state of N_{current_slot + 1}
 func (s *Server) payloadAttributesReader(ctx context.Context, ev payloadattribute.EventData) (lazyReader, error) {
-	deadline := slots.BeginsAt(ev.ProposalSlot, s.ChainInfoFetcher.GenesisTime())
+	deadline, err := slots.StartTime(s.ChainInfoFetcher.GenesisTime(), ev.ProposalSlot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine slot start time: %w", err)
+	}
 	if deadline.Before(time.Now()) {
 		return nil, errors.Wrapf(errPayloadAttributeExpired, "proposal slot time %d", deadline.Unix())
 	}

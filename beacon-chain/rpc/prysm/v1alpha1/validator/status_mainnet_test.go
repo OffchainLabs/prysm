@@ -1,7 +1,6 @@
 package validator
 
 import (
-	"context"
 	"encoding/binary"
 	"testing"
 	"time"
@@ -25,7 +24,7 @@ func TestValidatorStatus_Active(t *testing.T) {
 	// This test breaks if it doesn't use mainnet config
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.MainnetConfig())
-	ctx := context.Background()
+	ctx := t.Context()
 
 	pubkey := generatePubkey(1)
 
@@ -82,7 +81,7 @@ func TestValidatorStatus_Active(t *testing.T) {
 	req := &ethpb.ValidatorStatusRequest{
 		PublicKey: pubkey,
 	}
-	resp, err := vs.ValidatorStatus(context.Background(), req)
+	resp, err := vs.ValidatorStatus(t.Context(), req)
 	require.NoError(t, err, "Could not get validator status")
 
 	expected := &ethpb.ValidatorStatusResponse{

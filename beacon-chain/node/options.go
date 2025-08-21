@@ -5,6 +5,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 )
 
 // Option for beacon node configuration.
@@ -47,6 +48,30 @@ func WithBlobStorage(bs *filesystem.BlobStorage) Option {
 func WithBlobStorageOptions(opt ...filesystem.BlobStorageOption) Option {
 	return func(bn *BeaconNode) error {
 		bn.BlobStorageOptions = append(bn.BlobStorageOptions, opt...)
+		return nil
+	}
+}
+
+func WithConfigOptions(opt ...params.Option) Option {
+	return func(bn *BeaconNode) error {
+		bn.ConfigOptions = append(bn.ConfigOptions, opt...)
+		return nil
+	}
+}
+
+// WithDataColumnStorage sets the DataColumnStorage backend for the BeaconNode
+func WithDataColumnStorage(bs *filesystem.DataColumnStorage) Option {
+	return func(bn *BeaconNode) error {
+		bn.DataColumnStorage = bs
+		return nil
+	}
+}
+
+// WithDataColumnStorageOptions appends 1 or more filesystem.DataColumnStorageOption on the beacon node,
+// to be used when initializing data column storage.
+func WithDataColumnStorageOptions(opt ...filesystem.DataColumnStorageOption) Option {
+	return func(bn *BeaconNode) error {
+		bn.DataColumnStorageOptions = append(bn.DataColumnStorageOptions, opt...)
 		return nil
 	}
 }

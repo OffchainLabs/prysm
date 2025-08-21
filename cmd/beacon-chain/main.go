@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	runtimeDebug "runtime/debug"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/node"
@@ -16,12 +15,12 @@ import (
 	dbcommands "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/genesis"
 	jwtcommands "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/jwt"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/storage"
 	backfill "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/backfill"
 	bflags "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/backfill/flags"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/checkpoint"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/genesis"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/io/file"
 	"github.com/OffchainLabs/prysm/v6/io/logs"
@@ -60,6 +59,8 @@ var appFlags = []cli.Flag{
 	flags.BlockBatchLimitBurstFactor,
 	flags.BlobBatchLimit,
 	flags.BlobBatchLimitBurstFactor,
+	flags.DataColumnBatchLimit,
+	flags.DataColumnBatchLimitBurstFactor,
 	flags.InteropMockEth1DataVotesFlag,
 	flags.SlotsPerArchivedPoint,
 	flags.DisableDebugRPCEndpoints,
@@ -85,6 +86,7 @@ var appFlags = []cli.Flag{
 	flags.BeaconDBPruning,
 	flags.PrunerRetentionEpochs,
 	flags.EnableBuilderSSZ,
+	flags.SubscribeAllDataSubnets,
 	cmd.MinimalConfigFlag,
 	cmd.E2EConfigFlag,
 	cmd.RPCMaxPageSizeFlag,
@@ -101,7 +103,6 @@ var appFlags = []cli.Flag{
 	cmd.P2PMaxPeers,
 	cmd.P2PPrivKey,
 	cmd.P2PStaticID,
-	cmd.P2PMetadata,
 	cmd.P2PAllowList,
 	cmd.P2PDenyList,
 	cmd.PubsubQueueSize,
@@ -149,6 +150,7 @@ var appFlags = []cli.Flag{
 	bflags.BackfillBatchSize,
 	bflags.BackfillWorkerCount,
 	bflags.BackfillOldestSlot,
+	flags.BatchVerifierLimit,
 }
 
 func init() {
@@ -166,7 +168,7 @@ func before(ctx *cli.Context) error {
 	switch format {
 	case "text":
 		formatter := new(prefixed.TextFormatter)
-		formatter.TimestampFormat = time.DateTime
+		formatter.TimestampFormat = "2006-01-02 15:04:05.00"
 		formatter.FullTimestamp = true
 
 		// If persistent log files are written - we disable the log messages coloring because
@@ -182,7 +184,9 @@ func before(ctx *cli.Context) error {
 
 		logrus.SetFormatter(f)
 	case "json":
-		logrus.SetFormatter(&logrus.JSONFormatter{})
+		logrus.SetFormatter(&logrus.JSONFormatter{
+			TimestampFormat: "2006-01-02 15:04:05.00",
+		})
 	case "journald":
 		if err := journald.Enable(); err != nil {
 			return err

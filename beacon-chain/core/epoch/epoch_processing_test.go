@@ -1,7 +1,6 @@
 package epoch_test
 
 import (
-	"context"
 	"fmt"
 	"math"
 	"testing"
@@ -148,8 +147,7 @@ func TestProcessFinalUpdates_CanProcess(t *testing.T) {
 	assert.DeepNotEqual(t, params.BeaconConfig().ZeroHash[:], mix, "latest RANDAO still zero hashes")
 
 	// Verify historical root accumulator was appended.
-	roots, err := newS.HistoricalRoots()
-	require.NoError(t, err)
+	roots := newS.HistoricalRoots()
 	assert.Equal(t, 1, len(roots), "Unexpected slashed balance")
 	currAtt, err := newS.CurrentEpochAttestations()
 	require.NoError(t, err)
@@ -171,7 +169,7 @@ func TestProcessRegistryUpdates_NoRotation(t *testing.T) {
 	}
 	beaconState, err := state_native.InitializeFromProtoPhase0(base)
 	require.NoError(t, err)
-	newState, err := epoch.ProcessRegistryUpdates(context.Background(), beaconState)
+	newState, err := epoch.ProcessRegistryUpdates(t.Context(), beaconState)
 	require.NoError(t, err)
 	for i, validator := range newState.Validators() {
 		assert.Equal(t, params.BeaconConfig().MaxSeedLookahead, validator.ExitEpoch, "Could not update registry %d", i)
@@ -195,7 +193,7 @@ func TestProcessRegistryUpdates_EligibleToActivate(t *testing.T) {
 	beaconState, err := state_native.InitializeFromProtoPhase0(base)
 	require.NoError(t, err)
 	currentEpoch := time.CurrentEpoch(beaconState)
-	newState, err := epoch.ProcessRegistryUpdates(context.Background(), beaconState)
+	newState, err := epoch.ProcessRegistryUpdates(t.Context(), beaconState)
 	require.NoError(t, err)
 	for i, validator := range newState.Validators() {
 		if uint64(i) < limit && validator.ActivationEpoch != helpers.ActivationExitEpoch(currentEpoch) {
@@ -230,7 +228,7 @@ func TestProcessRegistryUpdates_EligibleToActivate_Cancun(t *testing.T) {
 	beaconState, err := state_native.InitializeFromProtoDeneb(base)
 	require.NoError(t, err)
 	currentEpoch := time.CurrentEpoch(beaconState)
-	newState, err := epoch.ProcessRegistryUpdates(context.Background(), beaconState)
+	newState, err := epoch.ProcessRegistryUpdates(t.Context(), beaconState)
 	require.NoError(t, err)
 	for i, validator := range newState.Validators() {
 		// Note: In Deneb, only validators indices before `MaxPerEpochActivationChurnLimit` should be activated.
@@ -258,7 +256,7 @@ func TestProcessRegistryUpdates_ActivationCompletes(t *testing.T) {
 	}
 	beaconState, err := state_native.InitializeFromProtoPhase0(base)
 	require.NoError(t, err)
-	newState, err := epoch.ProcessRegistryUpdates(context.Background(), beaconState)
+	newState, err := epoch.ProcessRegistryUpdates(t.Context(), beaconState)
 	require.NoError(t, err)
 	for i, validator := range newState.Validators() {
 		assert.Equal(t, params.BeaconConfig().MaxSeedLookahead, validator.ExitEpoch, "Could not update registry %d, unexpected exit slot", i)
@@ -282,7 +280,7 @@ func TestProcessRegistryUpdates_ValidatorsEjected(t *testing.T) {
 	}
 	beaconState, err := state_native.InitializeFromProtoPhase0(base)
 	require.NoError(t, err)
-	newState, err := epoch.ProcessRegistryUpdates(context.Background(), beaconState)
+	newState, err := epoch.ProcessRegistryUpdates(t.Context(), beaconState)
 	require.NoError(t, err)
 	for i, validator := range newState.Validators() {
 		assert.Equal(t, params.BeaconConfig().MaxSeedLookahead+1, validator.ExitEpoch, "Could not update registry %d, unexpected exit slot", i)
@@ -307,7 +305,7 @@ func TestProcessRegistryUpdates_CanExits(t *testing.T) {
 	}
 	beaconState, err := state_native.InitializeFromProtoPhase0(base)
 	require.NoError(t, err)
-	newState, err := epoch.ProcessRegistryUpdates(context.Background(), beaconState)
+	newState, err := epoch.ProcessRegistryUpdates(t.Context(), beaconState)
 	require.NoError(t, err)
 	for i, validator := range newState.Validators() {
 		assert.Equal(t, exitEpoch, validator.ExitEpoch, "Could not update registry %d, unexpected exit slot", i)
@@ -379,8 +377,7 @@ func TestProcessHistoricalDataUpdate(t *testing.T) {
 				return st
 			},
 			verifier: func(st state.BeaconState) {
-				roots, err := st.HistoricalRoots()
-				require.NoError(t, err)
+				roots := st.HistoricalRoots()
 				require.Equal(t, 0, len(roots))
 			},
 		},
@@ -388,13 +385,12 @@ func TestProcessHistoricalDataUpdate(t *testing.T) {
 			name: "before capella can process and get historical root",
 			st: func() state.BeaconState {
 				st, _ := util.DeterministicGenesisState(t, 1)
-				st, err := transition.ProcessSlots(context.Background(), st, params.BeaconConfig().SlotsPerHistoricalRoot-1)
+				st, err := transition.ProcessSlots(t.Context(), st, params.BeaconConfig().SlotsPerHistoricalRoot-1)
 				require.NoError(t, err)
 				return st
 			},
 			verifier: func(st state.BeaconState) {
-				roots, err := st.HistoricalRoots()
-				require.NoError(t, err)
+				roots := st.HistoricalRoots()
 				require.Equal(t, 1, len(roots))
 
 				b := &ethpb.HistoricalBatch{
@@ -413,7 +409,7 @@ func TestProcessHistoricalDataUpdate(t *testing.T) {
 			name: "after capella can process and get historical summary",
 			st: func() state.BeaconState {
 				st, _ := util.DeterministicGenesisStateCapella(t, 1)
-				st, err := transition.ProcessSlots(context.Background(), st, params.BeaconConfig().SlotsPerHistoricalRoot-1)
+				st, err := transition.ProcessSlots(t.Context(), st, params.BeaconConfig().SlotsPerHistoricalRoot-1)
 				require.NoError(t, err)
 				return st
 			},
@@ -431,8 +427,7 @@ func TestProcessHistoricalDataUpdate(t *testing.T) {
 					StateSummaryRoot: sr[:],
 				}
 				require.DeepEqual(t, b, summaries[0])
-				hrs, err := st.HistoricalRoots()
-				require.NoError(t, err)
+				hrs := st.HistoricalRoots()
 				require.DeepEqual(t, hrs, [][]byte{})
 			},
 		},

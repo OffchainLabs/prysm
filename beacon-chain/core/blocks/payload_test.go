@@ -501,7 +501,7 @@ func Test_ValidatePayload(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
 	random, err := helpers.RandaoMix(st, time.CurrentEpoch(st))
 	require.NoError(t, err)
-	ts, err := slots.ToTime(st.GenesisTime(), st.Slot())
+	ts, err := slots.StartTime(st.GenesisTime(), st.Slot())
 	require.NoError(t, err)
 	tests := []struct {
 		name    string
@@ -551,7 +551,7 @@ func Test_ProcessPayload(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
 	random, err := helpers.RandaoMix(st, time.CurrentEpoch(st))
 	require.NoError(t, err)
-	ts, err := slots.ToTime(st.GenesisTime(), st.Slot())
+	ts, err := slots.StartTime(st.GenesisTime(), st.Slot())
 	require.NoError(t, err)
 	tests := []struct {
 		name    string
@@ -627,7 +627,7 @@ func Test_ProcessPayload_Blinded(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
 	random, err := helpers.RandaoMix(st, time.CurrentEpoch(st))
 	require.NoError(t, err)
-	ts, err := slots.ToTime(st.GenesisTime(), st.Slot())
+	ts, err := slots.StartTime(st.GenesisTime(), st.Slot())
 	require.NoError(t, err)
 	tests := []struct {
 		name   string
@@ -697,7 +697,7 @@ func Test_ValidatePayloadHeader(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
 	random, err := helpers.RandaoMix(st, time.CurrentEpoch(st))
 	require.NoError(t, err)
-	ts, err := slots.ToTime(st.GenesisTime(), st.Slot())
+	ts, err := slots.StartTime(st.GenesisTime(), st.Slot())
 	require.NoError(t, err)
 	tests := []struct {
 		name   string
@@ -926,8 +926,10 @@ func TestVerifyBlobCommitmentCount(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, blocks.VerifyBlobCommitmentCount(rb.Slot(), rb.Body()))
 
-	b = &ethpb.BeaconBlockDeneb{Body: &ethpb.BeaconBlockBodyDeneb{BlobKzgCommitments: make([][]byte, params.BeaconConfig().MaxBlobsPerBlock(rb.Slot())+1)}}
+	maxCommitmentsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(rb.Slot())
+
+	b = &ethpb.BeaconBlockDeneb{Body: &ethpb.BeaconBlockBodyDeneb{BlobKzgCommitments: make([][]byte, maxCommitmentsPerBlock+1)}}
 	rb, err = consensusblocks.NewBeaconBlock(b)
 	require.NoError(t, err)
-	require.ErrorContains(t, fmt.Sprintf("too many kzg commitments in block: %d", params.BeaconConfig().MaxBlobsPerBlock(rb.Slot())+1), blocks.VerifyBlobCommitmentCount(rb.Slot(), rb.Body()))
+	require.ErrorContains(t, fmt.Sprintf("too many kzg commitments in block: actual count %d - max allowed %d", maxCommitmentsPerBlock+1, maxCommitmentsPerBlock), blocks.VerifyBlobCommitmentCount(rb.Slot(), rb.Body()))
 }

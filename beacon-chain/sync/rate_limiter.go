@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/trailofbits/go-mutexasserts"
@@ -47,17 +48,23 @@ func newRateLimiter(p2pProvider p2p.P2P) *limiter {
 	allowedBlobsPerSecond := float64(flags.Get().BlobBatchLimit)
 	allowedBlobsBurst := int64(flags.Get().BlobBatchLimitBurstFactor * flags.Get().BlobBatchLimit)
 
+	// Initialize data column limits.
+	allowedDataColumnsPerSecond := float64(flags.Get().DataColumnBatchLimit)
+	allowedDataColumnsBurst := int64(flags.Get().DataColumnBatchLimitBurstFactor * flags.Get().DataColumnBatchLimit)
+
 	// Set topic map for all rpc topics.
 	topicMap := make(map[string]*leakybucket.Collector, len(p2p.RPCTopicMappings))
 	// Goodbye Message
 	topicMap[addEncoding(p2p.RPCGoodByeTopicV1)] = leakybucket.NewCollector(1, 1, leakyBucketPeriod, false /* deleteEmptyBuckets */)
-	// MetadataV0 Message
+	// Metadata Message
 	topicMap[addEncoding(p2p.RPCMetaDataTopicV1)] = leakybucket.NewCollector(1, defaultBurstLimit, leakyBucketPeriod, false /* deleteEmptyBuckets */)
 	topicMap[addEncoding(p2p.RPCMetaDataTopicV2)] = leakybucket.NewCollector(1, defaultBurstLimit, leakyBucketPeriod, false /* deleteEmptyBuckets */)
+	topicMap[addEncoding(p2p.RPCMetaDataTopicV3)] = leakybucket.NewCollector(1, defaultBurstLimit, leakyBucketPeriod, false /* deleteEmptyBuckets */)
 	// Ping Message
 	topicMap[addEncoding(p2p.RPCPingTopicV1)] = leakybucket.NewCollector(1, defaultBurstLimit, leakyBucketPeriod, false /* deleteEmptyBuckets */)
 	// Status Message
 	topicMap[addEncoding(p2p.RPCStatusTopicV1)] = leakybucket.NewCollector(1, defaultBurstLimit, leakyBucketPeriod, false /* deleteEmptyBuckets */)
+	topicMap[addEncoding(p2p.RPCStatusTopicV2)] = leakybucket.NewCollector(1, defaultBurstLimit, leakyBucketPeriod, false /* deleteEmptyBuckets */)
 
 	// Use a single collector for block requests
 	blockCollector := leakybucket.NewCollector(allowedBlocksPerSecond, allowedBlocksBurst, blockBucketPeriod, false /* deleteEmptyBuckets */)
@@ -66,6 +73,9 @@ func newRateLimiter(p2pProvider p2p.P2P) *limiter {
 
 	// for BlobSidecarsByRoot and BlobSidecarsByRange
 	blobCollector := leakybucket.NewCollector(allowedBlobsPerSecond, allowedBlobsBurst, blockBucketPeriod, false)
+
+	// for DataColumnSidecarsByRoot and DataColumnSidecarsByRange
+	dataColumnSidecars := leakybucket.NewCollector(allowedDataColumnsPerSecond, allowedDataColumnsBurst, blockBucketPeriod, false)
 
 	// BlocksByRoots requests
 	topicMap[addEncoding(p2p.RPCBlocksByRootTopicV1)] = blockCollector
@@ -79,6 +89,17 @@ func newRateLimiter(p2pProvider p2p.P2P) *limiter {
 	topicMap[addEncoding(p2p.RPCBlobSidecarsByRootTopicV1)] = blobCollector
 	// BlobSidecarsByRangeV1
 	topicMap[addEncoding(p2p.RPCBlobSidecarsByRangeTopicV1)] = blobCollector
+
+	// Light client requests
+	topicMap[addEncoding(p2p.RPCLightClientBootstrapTopicV1)] = leakybucket.NewCollector(1, defaultBurstLimit, leakyBucketPeriod, false /* deleteEmptyBuckets */)
+	topicMap[addEncoding(p2p.RPCLightClientUpdatesByRangeTopicV1)] = leakybucket.NewCollector(1, defaultBurstLimit, leakyBucketPeriod, false /* deleteEmptyBuckets */)
+	topicMap[addEncoding(p2p.RPCLightClientOptimisticUpdateTopicV1)] = leakybucket.NewCollector(1, defaultBurstLimit, leakyBucketPeriod, false /* deleteEmptyBuckets */)
+	topicMap[addEncoding(p2p.RPCLightClientFinalityUpdateTopicV1)] = leakybucket.NewCollector(1, defaultBurstLimit, leakyBucketPeriod, false /* deleteEmptyBuckets */)
+
+	// DataColumnSidecarsByRootV1
+	topicMap[addEncoding(p2p.RPCDataColumnSidecarsByRootTopicV1)] = dataColumnSidecars
+	// DataColumnSidecarsByRangeV1
+	topicMap[addEncoding(p2p.RPCDataColumnSidecarsByRangeTopicV1)] = dataColumnSidecars
 
 	// General topic for all rpc requests.
 	topicMap[rpcLimiterTopic] = leakybucket.NewCollector(5, defaultBurstLimit*2, leakyBucketPeriod, false /* deleteEmptyBuckets */)
@@ -103,7 +124,7 @@ func (l *limiter) validateRequest(stream network.Stream, amt uint64) error {
 
 	collector, err := l.retrieveCollector(topic)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "retrieve collector")
 	}
 
 	remaining := collector.Remaining(remotePeer.String())
@@ -112,7 +133,7 @@ func (l *limiter) validateRequest(stream network.Stream, amt uint64) error {
 		amt = 1
 	}
 	if amt > uint64(remaining) {
-		l.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
+		l.downscorePeer(remotePeer, topic, "rateLimitExceeded")
 		writeErrorResponseToStream(responseCodeInvalidRequest, p2ptypes.ErrRateLimited.Error(), stream, l.p2p)
 		return p2ptypes.ErrRateLimited
 	}
@@ -120,22 +141,20 @@ func (l *limiter) validateRequest(stream network.Stream, amt uint64) error {
 }
 
 // This is used to validate all incoming rpc streams from external peers.
-func (l *limiter) validateRawRpcRequest(stream network.Stream) error {
+func (l *limiter) validateRawRpcRequest(stream network.Stream, amt uint64) error {
 	l.RLock()
 	defer l.RUnlock()
 
-	topic := rpcLimiterTopic
-
-	collector, err := l.retrieveCollector(topic)
+	remotePeer := stream.Conn().RemotePeer()
+	collector, err := l.retrieveCollector(rpcLimiterTopic)
 	if err != nil {
 		return err
 	}
 	key := stream.Conn().RemotePeer().String()
 	remaining := collector.Remaining(key)
-	// Treat each request as a minimum of 1.
-	amt := int64(1)
-	if amt > remaining {
-		l.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+
+	if amt > uint64(remaining) {
+		l.downscorePeer(remotePeer, rpcLimiterTopic, "rawRateLimitExceeded")
 		writeErrorResponseToStream(responseCodeInvalidRequest, p2ptypes.ErrRateLimited.Error(), stream, l.p2p)
 		return p2ptypes.ErrRateLimited
 	}
@@ -213,4 +232,14 @@ func (l *limiter) retrieveCollector(topic string) (*leakybucket.Collector, error
 
 func (_ *limiter) topicLogger(topic string) *logrus.Entry {
 	return log.WithField("rateLimiter", topic)
+}
+
+func (l *limiter) downscorePeer(peerID peer.ID, topic, reason string) {
+	newScore := l.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	log.WithFields(logrus.Fields{
+		"peerID":   peerID.String(),
+		"reason":   reason,
+		"newScore": newScore,
+		"topic":    topic,
+	}).Debug("Downscore peer")
 }

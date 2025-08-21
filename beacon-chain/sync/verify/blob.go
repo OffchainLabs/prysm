@@ -17,9 +17,12 @@ var (
 
 // BlobAlignsWithBlock verifies if the blob aligns with the block.
 func BlobAlignsWithBlock(blob blocks.ROBlob, block blocks.ROBlock) error {
-	if block.Version() < version.Deneb {
+	blockVersion := block.Version()
+
+	if blockVersion < version.Deneb || blockVersion >= version.Fulu {
 		return nil
 	}
+
 	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(blob.Slot())
 	if blob.Index >= uint64(maxBlobsPerBlock) {
 		return errors.Wrapf(ErrIncorrectBlobIndex, "index %d exceeds MAX_BLOBS_PER_BLOCK %d", blob.Index, maxBlobsPerBlock)

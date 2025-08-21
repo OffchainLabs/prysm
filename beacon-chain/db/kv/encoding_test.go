@@ -1,7 +1,6 @@
 package kv
 
 import (
-	"context"
 	"testing"
 
 	testpb "github.com/OffchainLabs/prysm/v6/proto/testing"
@@ -12,6 +11,6 @@ func Test_encode_handlesNilFromFunction(t *testing.T) {
 	foo := func() *testpb.Puzzle {
 		return nil
 	}
-	_, err := encode(context.Background(), foo())
+	_, err := encode(t.Context(), foo())
 	require.ErrorContains(t, "cannot encode nil message", err)
 }

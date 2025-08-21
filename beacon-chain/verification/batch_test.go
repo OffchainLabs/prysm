@@ -1,7 +1,6 @@
 package verification
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -12,7 +11,7 @@ import (
 )
 
 func TestBatchVerifier(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	mockCV := func(err error) roblobCommitmentVerifier {
 		return func(...blocks.ROBlob) error {
 			return err
@@ -104,7 +103,7 @@ func TestBatchVerifier(t *testing.T) {
 				blbs[0].SignedBlockHeader.Signature = []byte("wrong")
 				return blk, blbs
 			},
-			err:    ErrBatchSignatureMismatch,
+			err:    errBatchSignatureMismatch,
 			nblobs: 2,
 		},
 		{
@@ -124,7 +123,7 @@ func TestBatchVerifier(t *testing.T) {
 				blbs[0] = wr
 				return blk, blbs
 			},
-			err:    ErrBatchBlockRootMismatch,
+			err:    errBatchBlockRootMismatch,
 			nblobs: 1,
 		},
 		{

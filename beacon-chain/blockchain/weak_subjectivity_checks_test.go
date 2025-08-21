@@ -1,11 +1,8 @@
 package blockchain
 
 import (
-	"context"
 	"testing"
 
-	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -18,11 +15,8 @@ import (
 )
 
 func TestService_VerifyWeakSubjectivityRoot(t *testing.T) {
-	beaconDB := testDB.SetupDB(t)
-
 	b := util.NewBeaconBlock()
 	b.Block.Slot = 1792480
-	util.SaveBlock(t, context.Background(), beaconDB, b)
 	r, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
 
@@ -69,17 +63,17 @@ func TestService_VerifyWeakSubjectivityRoot(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			s := testServiceWithDB(t)
+			beaconDB := s.cfg.BeaconDB
+			util.SaveBlock(t, t.Context(), beaconDB, b)
 			wv, err := NewWeakSubjectivityVerifier(tt.checkpt, beaconDB)
-			require.Equal(t, !tt.disabled, wv.enabled)
 			require.NoError(t, err)
-			fcs := doublylinkedtree.New()
-			s := &Service{
-				cfg:        &config{BeaconDB: beaconDB, WeakSubjectivityCheckpt: tt.checkpt, ForkChoiceStore: fcs},
-				wsVerifier: wv,
-			}
-			require.NoError(t, fcs.UpdateFinalizedCheckpoint(&forkchoicetypes.Checkpoint{Epoch: tt.finalizedEpoch}))
+			s.cfg.WeakSubjectivityCheckpt = tt.checkpt
+			s.wsVerifier = wv
+			require.Equal(t, !tt.disabled, wv.enabled)
+			require.NoError(t, s.cfg.ForkChoiceStore.UpdateFinalizedCheckpoint(&forkchoicetypes.Checkpoint{Epoch: tt.finalizedEpoch}))
 			cp := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
-			err = s.wsVerifier.VerifyWeakSubjectivity(context.Background(), cp.Epoch)
+			err = s.wsVerifier.VerifyWeakSubjectivity(t.Context(), cp.Epoch)
 			if tt.wantErr == nil {
 				require.NoError(t, err)
 			} else {

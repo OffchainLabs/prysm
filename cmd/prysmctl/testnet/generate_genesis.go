@@ -233,7 +233,7 @@ func generateGenesis(ctx context.Context) (state.BeaconState, error) {
 		if err != nil {
 			return nil, err
 		}
-		log.Printf("reading deposits from JSON at %s", expanded)
+		log.Printf("Reading deposits from JSON at %s", expanded)
 		b, err := os.ReadFile(expanded) // #nosec G304
 		if err != nil {
 			return nil, err
@@ -260,9 +260,10 @@ func generateGenesis(ctx context.Context) (state.BeaconState, error) {
 		}
 		// set timestamps for genesis and shanghai fork
 		gen.Timestamp = f.GenesisTime
-		gen.Config.ShanghaiTime = interop.GethShanghaiTime(f.GenesisTime, params.BeaconConfig())
-		gen.Config.CancunTime = interop.GethCancunTime(f.GenesisTime, params.BeaconConfig())
-		gen.Config.PragueTime = interop.GethPragueTime(f.GenesisTime, params.BeaconConfig())
+		genesis := time.Unix(int64(f.GenesisTime), 0)
+		gen.Config.ShanghaiTime = interop.GethShanghaiTime(genesis, params.BeaconConfig())
+		gen.Config.CancunTime = interop.GethCancunTime(genesis, params.BeaconConfig())
+		gen.Config.PragueTime = interop.GethPragueTime(genesis, params.BeaconConfig())
 
 		fields := logrus.Fields{}
 		if gen.Config.ShanghaiTime != nil {
@@ -280,7 +281,7 @@ func generateGenesis(ctx context.Context) (state.BeaconState, error) {
 			gen.Config.TerminalTotalDifficulty = big.NewInt(0)
 		}
 	} else {
-		gen = interop.GethTestnetGenesis(f.GenesisTime, params.BeaconConfig())
+		gen = interop.GethTestnetGenesis(time.Unix(int64(f.GenesisTime), 0), params.BeaconConfig())
 	}
 
 	if f.GethGenesisJsonOut != "" {
@@ -296,7 +297,7 @@ func generateGenesis(ctx context.Context) (state.BeaconState, error) {
 	gb := gen.ToBlock()
 
 	// TODO: expose the PregenesisCreds option with a cli flag - for now defaulting to no withdrawal credentials at genesis
-	genesisState, err := interop.NewPreminedGenesis(ctx, f.GenesisTime, nv, 0, v, gb, opts...)
+	genesisState, err := interop.NewPreminedGenesis(ctx, time.Unix(int64(f.GenesisTime), 0), nv, 0, v, gb, opts...)
 	if err != nil {
 		return nil, err
 	}

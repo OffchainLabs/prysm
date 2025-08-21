@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -59,10 +60,8 @@ func (s *Service) OnAttestation(ctx context.Context, a ethpb.Att, disparity time
 		return err
 	}
 
-	genesisTime := uint64(s.genesisTime.Unix())
-
 	// Verify attestation target is from current epoch or previous epoch.
-	if err := verifyAttTargetEpoch(ctx, genesisTime, uint64(time.Now().Add(disparity).Unix()), tgt); err != nil {
+	if err := verifyAttTargetEpoch(ctx, s.genesisTime, time.Now().Add(disparity), tgt); err != nil {
 		return err
 	}
 
@@ -75,7 +74,7 @@ func (s *Service) OnAttestation(ctx context.Context, a ethpb.Att, disparity time
 	// validate_aggregate_proof.go and validate_beacon_attestation.go
 
 	// Verify attestations can only affect the fork choice of subsequent slots.
-	if err := slots.VerifyTime(genesisTime, a.GetData().Slot+1, disparity); err != nil {
+	if err := slots.VerifyTime(s.genesisTime, a.GetData().Slot+1, disparity); err != nil {
 		return err
 	}
 
@@ -88,7 +87,7 @@ func (s *Service) OnAttestation(ctx context.Context, a ethpb.Att, disparity time
 	if err != nil {
 		return err
 	}
-	if err := attestation.IsValidAttestationIndices(ctx, indexedAtt); err != nil {
+	if err := attestation.IsValidAttestationIndices(ctx, indexedAtt, params.BeaconConfig().MaxValidatorsPerCommittee, params.BeaconConfig().MaxCommitteesPerSlot); err != nil {
 		return err
 	}
 

@@ -58,6 +58,7 @@ type ValidatorClient struct {
 	wallet                *wallet.Wallet
 	walletInitializedFeed *event.Feed
 	stop                  chan struct{} // Channel to wait for termination notifications.
+	once                  sync.Once
 }
 
 // NewValidatorClient creates a new instance of the Prysm validator client.
@@ -161,13 +162,15 @@ func (c *ValidatorClient) Start() {
 
 // Close handles graceful shutdown of the system.
 func (c *ValidatorClient) Close() {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+	c.once.Do(func() { // runs exactly one time
+		c.lock.Lock()
+		defer c.lock.Unlock()
 
-	c.services.StopAll()
-	log.Info("Stopping Prysm validator")
-	c.cancel()
-	close(c.stop)
+		c.services.StopAll()
+		log.Info("Stopping Prysm validator")
+		c.cancel()
+		close(c.stop)
+	})
 }
 
 // checkLegacyDatabaseLocation checks is a database exists in the specified location.
@@ -222,7 +225,7 @@ func (c *ValidatorClient) getLegacyDatabaseLocation(
 
 func getWallet(cliCtx *cli.Context) (*wallet.Wallet, error) {
 	if cliCtx.IsSet(flags.InteropNumValidators.Name) {
-		log.Info("no wallet required for interop validation")
+		log.Info("No wallet required for interop validation")
 		return nil, nil
 	}
 	if cliCtx.IsSet(flags.Web3SignerURLFlag.Name) {
@@ -376,6 +379,7 @@ func (c *ValidatorClient) registerPrometheusService(cliCtx *cli.Context) error {
 		return nil
 	}
 	service := prometheus.NewService(
+		cliCtx.Context,
 		fmt.Sprintf("%s:%d", cliCtx.String(cmd.MonitoringHostFlag.Name), cliCtx.Int(flags.MonitoringPortFlag.Name)),
 		c.services,
 	)
@@ -436,10 +440,12 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 		Web3SignerConfig:        web3signerConfig,
 		ProposerSettings:        ps,
 		ValidatorsRegBatchSize:  cliCtx.Int(flags.ValidatorsRegistrationBatchSizeFlag.Name),
-		EnableAPI:               cliCtx.Bool(flags.EnableWebFlag.Name) || cliCtx.Bool(flags.EnableRPCFlag.Name),
+		EnableAPI:               features.Get().EnableWeb || cliCtx.Bool(flags.EnableRPCFlag.Name),
 		LogValidatorPerformance: !cliCtx.Bool(flags.DisablePenaltyRewardLogFlag.Name),
 		EmitAccountMetrics:      !cliCtx.Bool(flags.DisableAccountMetricsFlag.Name),
 		Distributed:             cliCtx.Bool(flags.EnableDistributed.Name),
+		CloseClientFunc:         c.Close,
+		MaxHealthChecks:         cliCtx.Int(flags.MaxHealthChecksFlag.Name),
 	})
 	if err != nil {
 		return errors.Wrap(err, "could not initialize validator service")
@@ -500,7 +506,7 @@ func proposerSettings(cliCtx *cli.Context, db iface.ValidatorDB) (*proposer.Sett
 }
 
 func (c *ValidatorClient) registerRPCService(cliCtx *cli.Context) error {
-	serveWebUI := cliCtx.IsSet(flags.EnableWebFlag.Name)
+	serveWebUI := features.Get().EnableWeb
 	if !cliCtx.IsSet(flags.EnableRPCFlag.Name) && !serveWebUI {
 		return nil
 	}
@@ -556,7 +562,6 @@ func (c *ValidatorClient) registerRPCService(cliCtx *cli.Context) error {
 		AuthTokenPath:          authTokenPath,
 		Middlewares:            middlewares,
 		Router:                 http.NewServeMux(),
-		ServeWebUI:             serveWebUI,
 	})
 	return c.services.RegisterService(s)
 }

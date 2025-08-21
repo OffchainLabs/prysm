@@ -1,0 +1,173 @@
+package peerdas_test
+
+import (
+	"testing"
+
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+)
+
+func TestCustodyGroups(t *testing.T) {
+	// --------------------------------------------
+	// The happy path is unit tested in spec tests.
+	// --------------------------------------------
+	numberOfCustodyGroups := params.BeaconConfig().NumberOfCustodyGroups
+	_, err := peerdas.CustodyGroups(enode.ID{}, numberOfCustodyGroups+1)
+	require.ErrorIs(t, err, peerdas.ErrCustodyGroupCountTooLarge)
+}
+
+func TestComputeColumnsForCustodyGroup(t *testing.T) {
+	// --------------------------------------------
+	// The happy path is unit tested in spec tests.
+	// --------------------------------------------
+	numberOfCustodyGroups := params.BeaconConfig().NumberOfCustodyGroups
+	_, err := peerdas.ComputeColumnsForCustodyGroup(numberOfCustodyGroups)
+	require.ErrorIs(t, err, peerdas.ErrCustodyGroupTooLarge)
+}
+
+func TestDataColumnSidecars(t *testing.T) {
+	t.Run("nil signed block", func(t *testing.T) {
+		var expected []*ethpb.DataColumnSidecar = nil
+		actual, err := peerdas.DataColumnSidecars(nil, []kzg.CellsAndProofs{})
+		require.NoError(t, err)
+
+		require.DeepSSZEqual(t, expected, actual)
+	})
+
+	t.Run("empty cells and proofs", func(t *testing.T) {
+		// Create a protobuf signed beacon block.
+		signedBeaconBlockPb := util.NewBeaconBlockDeneb()
+
+		// Create a signed beacon block from the protobuf.
+		signedBeaconBlock, err := blocks.NewSignedBeaconBlock(signedBeaconBlockPb)
+		require.NoError(t, err)
+
+		actual, err := peerdas.DataColumnSidecars(signedBeaconBlock, []kzg.CellsAndProofs{})
+		require.NoError(t, err)
+		require.IsNil(t, actual)
+	})
+
+	t.Run("sizes mismatch", func(t *testing.T) {
+		// Create a protobuf signed beacon block.
+		signedBeaconBlockPb := util.NewBeaconBlockDeneb()
+
+		// Create a signed beacon block from the protobuf.
+		signedBeaconBlock, err := blocks.NewSignedBeaconBlock(signedBeaconBlockPb)
+		require.NoError(t, err)
+
+		// Create cells and proofs.
+		cellsAndProofs := make([]kzg.CellsAndProofs, 1)
+
+		_, err = peerdas.DataColumnSidecars(signedBeaconBlock, cellsAndProofs)
+		require.ErrorIs(t, err, peerdas.ErrSizeMismatch)
+	})
+
+	t.Run("cells array too short for column index", func(t *testing.T) {
+		// Create a Fulu block with a blob commitment.
+		signedBeaconBlockPb := util.NewBeaconBlockFulu()
+		signedBeaconBlockPb.Block.Body.BlobKzgCommitments = [][]byte{make([]byte, 48)}
+
+		// Create a signed beacon block from the protobuf.
+		signedBeaconBlock, err := blocks.NewSignedBeaconBlock(signedBeaconBlockPb)
+		require.NoError(t, err)
+
+		// Create cells and proofs with insufficient cells for the number of columns.
+		// This simulates a scenario where cellsAndProofs has fewer cells than expected columns.
+		cellsAndProofs := []kzg.CellsAndProofs{
+			{
+				Cells:  make([]kzg.Cell, 10),  // Only 10 cells
+				Proofs: make([]kzg.Proof, 10), // Only 10 proofs
+			},
+		}
+
+		// This should fail because the function will try to access columns up to NumberOfColumns
+		// but we only have 10 cells/proofs.
+		_, err = peerdas.DataColumnSidecars(signedBeaconBlock, cellsAndProofs)
+		require.ErrorContains(t, "column index", err)
+		require.ErrorContains(t, "exceeds cells length", err)
+	})
+
+	t.Run("proofs array too short for column index", func(t *testing.T) {
+		// Create a Fulu block with a blob commitment.
+		signedBeaconBlockPb := util.NewBeaconBlockFulu()
+		signedBeaconBlockPb.Block.Body.BlobKzgCommitments = [][]byte{make([]byte, 48)}
+
+		// Create a signed beacon block from the protobuf.
+		signedBeaconBlock, err := blocks.NewSignedBeaconBlock(signedBeaconBlockPb)
+		require.NoError(t, err)
+
+		// Create cells and proofs with sufficient cells but insufficient proofs.
+		numberOfColumns := params.BeaconConfig().NumberOfColumns
+		cellsAndProofs := []kzg.CellsAndProofs{
+			{
+				Cells:  make([]kzg.Cell, numberOfColumns),
+				Proofs: make([]kzg.Proof, 5), // Only 5 proofs, less than columns
+			},
+		}
+
+		// This should fail when trying to access proof beyond index 4.
+		_, err = peerdas.DataColumnSidecars(signedBeaconBlock, cellsAndProofs)
+		require.ErrorContains(t, "column index", err)
+		require.ErrorContains(t, "exceeds proofs length", err)
+	})
+}
+
+func TestComputeCustodyGroupForColumn(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig()
+	config.NumberOfColumns = 128
+	config.NumberOfCustodyGroups = 64
+	params.OverrideBeaconConfig(config)
+
+	t.Run("index too large", func(t *testing.T) {
+		_, err := peerdas.ComputeCustodyGroupForColumn(1_000_000)
+		require.ErrorIs(t, err, peerdas.ErrIndexTooLarge)
+	})
+
+	t.Run("nominal", func(t *testing.T) {
+		expected := uint64(2)
+		actual, err := peerdas.ComputeCustodyGroupForColumn(2)
+		require.NoError(t, err)
+		require.Equal(t, expected, actual)
+
+		expected = uint64(3)
+		actual, err = peerdas.ComputeCustodyGroupForColumn(3)
+		require.NoError(t, err)
+		require.Equal(t, expected, actual)
+
+		expected = uint64(2)
+		actual, err = peerdas.ComputeCustodyGroupForColumn(66)
+		require.NoError(t, err)
+		require.Equal(t, expected, actual)
+
+		expected = uint64(3)
+		actual, err = peerdas.ComputeCustodyGroupForColumn(67)
+		require.NoError(t, err)
+		require.Equal(t, expected, actual)
+	})
+}
+
+func TestCustodyColumns(t *testing.T) {
+	t.Run("group too large", func(t *testing.T) {
+		_, err := peerdas.CustodyColumns([]uint64{1_000_000})
+		require.ErrorIs(t, err, peerdas.ErrCustodyGroupTooLarge)
+	})
+
+	t.Run("nominal", func(t *testing.T) {
+		input := []uint64{1, 2}
+		expected := map[uint64]bool{1: true, 2: true}
+
+		actual, err := peerdas.CustodyColumns(input)
+		require.NoError(t, err)
+		require.Equal(t, len(expected), len(actual))
+		for i := range actual {
+			require.Equal(t, expected[i], actual[i])
+		}
+	})
+}

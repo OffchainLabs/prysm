@@ -19,6 +19,8 @@ const (
 	WalletDefaultDirName = "prysm-wallet-v2"
 	// DefaultHTTPServerHost for the validator client.
 	DefaultHTTPServerHost = "127.0.0.1"
+
+	DefaultMaxHealthChecks = 0
 )
 
 var (
@@ -325,12 +327,7 @@ var (
 		Usage: "Skips the y/n confirmation userprompt for sending a deposit to the deposit contract.",
 		Value: false,
 	}
-	// EnableWebFlag enables controlling the validator client via the Prysm web ui. This is a work in progress.
-	EnableWebFlag = &cli.BoolFlag{
-		Name:  "web",
-		Usage: "(Work in progress): Enables the web portal for the validator client.",
-		Value: false,
-	}
+
 	// SlashingProtectionExportDirFlag allows specifying the output directory
 	// for a validator's slashing protection history.
 	SlashingProtectionExportDirFlag = &cli.StringFlag{
@@ -398,6 +395,13 @@ var (
 		Name:  "disable-duties-polling",
 		Usage: "Disables polling of duties on dependent root changes.",
 		Value: false,
+	}
+
+	// MaxHealthChecksFlag sets a maximum amount of times to check for beacon node health before validator client times out and shuts down
+	MaxHealthChecksFlag = &cli.IntFlag{
+		Name:  "max-health-checks",
+		Usage: "Maximum number of health checks to perform before exiting if not healthy. Set to 0 or a negative number for indefinite checks.",
+		Value: DefaultMaxHealthChecks,
 	}
 )
 

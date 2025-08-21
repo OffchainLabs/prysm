@@ -1,7 +1,6 @@
 package transition_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
@@ -33,7 +32,7 @@ func BenchmarkExecuteStateTransition_FullBlock(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		wsb, err := blocks.NewSignedBeaconBlock(block)
 		require.NoError(b, err)
-		_, err = coreState.ExecuteStateTransition(context.Background(), cleanStates[i], wsb)
+		_, err = coreState.ExecuteStateTransition(b.Context(), cleanStates[i], wsb)
 		require.NoError(b, err)
 	}
 }
@@ -53,19 +52,19 @@ func BenchmarkExecuteStateTransition_WithCache(b *testing.B) {
 	// some attestations in block are from previous epoch
 	currentSlot := beaconState.Slot()
 	require.NoError(b, beaconState.SetSlot(beaconState.Slot()-params.BeaconConfig().SlotsPerEpoch))
-	require.NoError(b, helpers.UpdateCommitteeCache(context.Background(), beaconState, time.CurrentEpoch(beaconState)))
+	require.NoError(b, helpers.UpdateCommitteeCache(b.Context(), beaconState, time.CurrentEpoch(beaconState)))
 	require.NoError(b, beaconState.SetSlot(currentSlot))
 	// Run the state transition once to populate the cache.
 	wsb, err := blocks.NewSignedBeaconBlock(block)
 	require.NoError(b, err)
-	_, err = coreState.ExecuteStateTransition(context.Background(), beaconState, wsb)
+	_, err = coreState.ExecuteStateTransition(b.Context(), beaconState, wsb)
 	require.NoError(b, err, "Failed to process block, benchmarks will fail")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		wsb, err := blocks.NewSignedBeaconBlock(block)
 		require.NoError(b, err)
-		_, err = coreState.ExecuteStateTransition(context.Background(), cleanStates[i], wsb)
+		_, err = coreState.ExecuteStateTransition(b.Context(), cleanStates[i], wsb)
 		require.NoError(b, err, "Failed to process block, benchmarks will fail")
 	}
 }
@@ -81,14 +80,14 @@ func BenchmarkProcessEpoch_2FullEpochs(b *testing.B) {
 	// some attestations in block are from previous epoch
 	currentSlot := beaconState.Slot()
 	require.NoError(b, beaconState.SetSlot(beaconState.Slot()-params.BeaconConfig().SlotsPerEpoch))
-	require.NoError(b, helpers.UpdateCommitteeCache(context.Background(), beaconState, time.CurrentEpoch(beaconState)))
+	require.NoError(b, helpers.UpdateCommitteeCache(b.Context(), beaconState, time.CurrentEpoch(beaconState)))
 	require.NoError(b, beaconState.SetSlot(currentSlot))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		// ProcessEpochPrecompute is the optimized version of process epoch. It's enabled by default
 		// at run time.
-		_, err := coreState.ProcessEpochPrecompute(context.Background(), beaconState.Copy())
+		_, err := coreState.ProcessEpochPrecompute(b.Context(), beaconState.Copy())
 		require.NoError(b, err)
 	}
 }
@@ -99,7 +98,7 @@ func BenchmarkHashTreeRoot_FullState(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := beaconState.HashTreeRoot(context.Background())
+		_, err := beaconState.HashTreeRoot(b.Context())
 		require.NoError(b, err)
 	}
 }
@@ -108,7 +107,7 @@ func BenchmarkHashTreeRootState_FullState(b *testing.B) {
 	beaconState, err := benchmark.PreGenstateFullEpochs()
 	require.NoError(b, err)
 
-	ctx := context.Background()
+	ctx := b.Context()
 
 	// Hydrate the HashTreeRootState cache.
 	_, err = beaconState.HashTreeRoot(ctx)

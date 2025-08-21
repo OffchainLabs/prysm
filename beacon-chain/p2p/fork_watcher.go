@@ -9,27 +9,26 @@ import (
 // updates the node's discovery service to reflect any new fork version
 // changes.
 func (s *Service) forkWatcher() {
+	// Exit early if discovery is disabled - there's no ENR to update
+	if s.dv5Listener == nil {
+		log.Debug("Discovery disabled, exiting fork watcher")
+		return
+	}
+
 	slotTicker := slots.NewSlotTicker(s.genesisTime, params.BeaconConfig().SecondsPerSlot)
+	var scheduleEntry params.NetworkScheduleEntry
 	for {
 		select {
 		case currSlot := <-slotTicker.C():
-			currEpoch := slots.ToEpoch(currSlot)
-			if currEpoch == params.BeaconConfig().AltairForkEpoch ||
-				currEpoch == params.BeaconConfig().BellatrixForkEpoch ||
-				currEpoch == params.BeaconConfig().CapellaForkEpoch ||
-				currEpoch == params.BeaconConfig().DenebForkEpoch ||
-				currEpoch == params.BeaconConfig().ElectraForkEpoch ||
-				currEpoch == params.BeaconConfig().FuluForkEpoch {
-				// If we are in the fork epoch, we update our enr with
-				// the updated fork digest. These repeatedly does
-				// this over the epoch, which might be slightly wasteful
-				// but is fine nonetheless.
-				if s.dv5Listener != nil { // make sure it's not a local network
-					_, err := addForkEntry(s.dv5Listener.LocalNode(), s.genesisTime, s.genesisValidatorsRoot)
-					if err != nil {
-						log.WithError(err).Error("Could not add fork entry")
-					}
+			currentEpoch := slots.ToEpoch(currSlot)
+			newEntry := params.GetNetworkScheduleEntry(currentEpoch)
+			if newEntry.ForkDigest != scheduleEntry.ForkDigest {
+				nextEntry := params.NextNetworkScheduleEntry(currentEpoch)
+				if err := updateENR(s.dv5Listener.LocalNode(), newEntry, nextEntry); err != nil {
+					log.WithFields(newEntry.LogFields()).WithError(err).Error("Could not add fork entry")
+					continue // don't replace scheduleEntry until this succeeds
 				}
+				scheduleEntry = newEntry
 			}
 		case <-s.ctx.Done():
 			log.Debug("Context closed, exiting goroutine")

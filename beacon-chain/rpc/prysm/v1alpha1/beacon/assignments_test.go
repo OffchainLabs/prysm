@@ -1,7 +1,6 @@
 package beacon
 
 import (
-	"context"
 	"encoding/binary"
 	"fmt"
 	"strconv"
@@ -25,7 +24,7 @@ import (
 
 func TestServer_ListAssignments_CannotRequestFutureEpoch(t *testing.T) {
 	db := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	bs := &Server{
 		BeaconDB:           db,
 		GenesisTimeFetcher: &mock.ChainService{},
@@ -47,7 +46,7 @@ func TestServer_ListAssignments_CannotRequestFutureEpoch(t *testing.T) {
 func TestServer_ListAssignments_Pagination_InputOutOfRange(t *testing.T) {
 	helpers.ClearCache()
 	db := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	count := 100
 	validators := make([]*ethpb.Validator, 0, count)
 	for i := 0; i < count; i++ {
@@ -89,7 +88,7 @@ func TestServer_ListAssignments_Pagination_InputOutOfRange(t *testing.T) {
 	}
 
 	wanted := fmt.Sprintf("page start %d >= list %d", 500, count)
-	_, err = bs.ListValidatorAssignments(context.Background(), &ethpb.ListValidatorAssignmentsRequest{
+	_, err = bs.ListValidatorAssignments(t.Context(), &ethpb.ListValidatorAssignmentsRequest{
 		PageToken:   strconv.Itoa(2),
 		QueryFilter: &ethpb.ListValidatorAssignmentsRequest_Genesis{Genesis: true},
 	})
@@ -105,14 +104,14 @@ func TestServer_ListAssignments_Pagination_ExceedsMaxPageSize(t *testing.T) {
 		PageToken: strconv.Itoa(0),
 		PageSize:  exceedsMax,
 	}
-	_, err := bs.ListValidatorAssignments(context.Background(), req)
+	_, err := bs.ListValidatorAssignments(t.Context(), req)
 	assert.ErrorContains(t, wanted, err)
 }
 
 func TestServer_ListAssignments_Pagination_DefaultPageSize_NoArchive(t *testing.T) {
 	helpers.ClearCache()
 	db := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	count := 500
 	validators := make([]*ethpb.Validator, 0, count)
 	for i := 0; i < count; i++ {
@@ -164,7 +163,7 @@ func TestServer_ListAssignments_Pagination_DefaultPageSize_NoArchive(t *testing.
 		ReplayerBuilder:    mockstategen.NewReplayerBuilder(mockstategen.WithMockState(s)),
 	}
 
-	res, err := bs.ListValidatorAssignments(context.Background(), &ethpb.ListValidatorAssignmentsRequest{
+	res, err := bs.ListValidatorAssignments(t.Context(), &ethpb.ListValidatorAssignmentsRequest{
 		QueryFilter: &ethpb.ListValidatorAssignmentsRequest_Genesis{Genesis: true},
 	})
 	require.NoError(t, err)
@@ -174,7 +173,7 @@ func TestServer_ListAssignments_Pagination_DefaultPageSize_NoArchive(t *testing.
 
 	activeIndices, err := helpers.ActiveValidatorIndices(ctx, s, 0)
 	require.NoError(t, err)
-	assignments, err := helpers.CommitteeAssignments(context.Background(), s, 0, activeIndices[0:params.BeaconConfig().DefaultPageSize])
+	assignments, err := helpers.CommitteeAssignments(t.Context(), s, 0, activeIndices[0:params.BeaconConfig().DefaultPageSize])
 	require.NoError(t, err)
 	proposerSlots, err := helpers.ProposerAssignments(ctx, s, 0)
 	require.NoError(t, err)
@@ -197,7 +196,7 @@ func TestServer_ListAssignments_FilterPubkeysIndices_NoPagination(t *testing.T) 
 	helpers.ClearCache()
 	db := dbTest.SetupDB(t)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	count := 100
 	validators := make([]*ethpb.Validator, 0, count)
 	withdrawCreds := make([]byte, 32)
@@ -238,7 +237,7 @@ func TestServer_ListAssignments_FilterPubkeysIndices_NoPagination(t *testing.T) 
 	pubKey2 := make([]byte, params.BeaconConfig().BLSPubkeyLength)
 	binary.LittleEndian.PutUint64(pubKey2, 2)
 	req := &ethpb.ListValidatorAssignmentsRequest{PublicKeys: [][]byte{pubKey1, pubKey2}, Indices: []primitives.ValidatorIndex{2, 3}}
-	res, err := bs.ListValidatorAssignments(context.Background(), req)
+	res, err := bs.ListValidatorAssignments(t.Context(), req)
 	require.NoError(t, err)
 
 	// Construct the wanted assignments.
@@ -246,7 +245,7 @@ func TestServer_ListAssignments_FilterPubkeysIndices_NoPagination(t *testing.T) 
 
 	activeIndices, err := helpers.ActiveValidatorIndices(ctx, s, 0)
 	require.NoError(t, err)
-	assignments, err := helpers.CommitteeAssignments(context.Background(), s, 0, activeIndices[1:4])
+	assignments, err := helpers.CommitteeAssignments(t.Context(), s, 0, activeIndices[1:4])
 	require.NoError(t, err)
 	proposerSlots, err := helpers.ProposerAssignments(ctx, s, 0)
 	require.NoError(t, err)
@@ -269,7 +268,7 @@ func TestServer_ListAssignments_FilterPubkeysIndices_NoPagination(t *testing.T) 
 func TestServer_ListAssignments_CanFilterPubkeysIndices_WithPagination(t *testing.T) {
 	helpers.ClearCache()
 	db := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	count := 100
 	validators := make([]*ethpb.Validator, 0, count)
 	withdrawCred := make([]byte, 32)
@@ -308,7 +307,7 @@ func TestServer_ListAssignments_CanFilterPubkeysIndices_WithPagination(t *testin
 	addDefaultReplayerBuilder(bs, db)
 
 	req := &ethpb.ListValidatorAssignmentsRequest{Indices: []primitives.ValidatorIndex{1, 2, 3, 4, 5, 6}, PageSize: 2, PageToken: "1"}
-	res, err := bs.ListValidatorAssignments(context.Background(), req)
+	res, err := bs.ListValidatorAssignments(t.Context(), req)
 	require.NoError(t, err)
 
 	// Construct the wanted assignments.
@@ -316,7 +315,7 @@ func TestServer_ListAssignments_CanFilterPubkeysIndices_WithPagination(t *testin
 
 	activeIndices, err := helpers.ActiveValidatorIndices(ctx, s, 0)
 	require.NoError(t, err)
-	as, err := helpers.CommitteeAssignments(context.Background(), s, 0, activeIndices[3:5])
+	as, err := helpers.CommitteeAssignments(t.Context(), s, 0, activeIndices[3:5])
 	require.NoError(t, err)
 	proposalSlots, err := helpers.ProposerAssignments(ctx, s, 0)
 	require.NoError(t, err)
@@ -344,9 +343,9 @@ func TestServer_ListAssignments_CanFilterPubkeysIndices_WithPagination(t *testin
 	// Test the wrap around scenario.
 	assignments = nil
 	req = &ethpb.ListValidatorAssignmentsRequest{Indices: []primitives.ValidatorIndex{1, 2, 3, 4, 5, 6}, PageSize: 5, PageToken: "1"}
-	res, err = bs.ListValidatorAssignments(context.Background(), req)
+	res, err = bs.ListValidatorAssignments(t.Context(), req)
 	require.NoError(t, err)
-	as, err = helpers.CommitteeAssignments(context.Background(), s, 0, activeIndices[6:7])
+	as, err = helpers.CommitteeAssignments(t.Context(), s, 0, activeIndices[6:7])
 	require.NoError(t, err)
 	proposalSlots, err = helpers.ProposerAssignments(ctx, s, 0)
 	require.NoError(t, err)

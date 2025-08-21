@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
@@ -658,6 +659,12 @@ func (s *Server) PublishBlock(w http.ResponseWriter, r *http.Request) {
 // broadcast all given signed blobs. The broadcast behaviour may be adjusted via the
 // `broadcast_validation` query parameter.
 func (s *Server) PublishBlockV2(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	defer func() {
+		duration := time.Since(start).Milliseconds()
+		publishBlockV2Duration.Observe(float64(duration))
+	}()
+
 	ctx, span := trace.StartSpan(r.Context(), "beacon.PublishBlockV2")
 	defer span.End()
 	if shared.IsSyncing(r.Context(), w, s.SyncChecker, s.HeadFetcher, s.TimeFetcher, s.OptimisticModeFetcher) {
@@ -694,7 +701,7 @@ func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *
 	// Validate and optionally broadcast sidecars on equivocation.
 	if err := s.validateBroadcast(ctx, r, genericBlock); err != nil {
 		if errors.Is(err, errEquivocatedBlock) {
-			b, err := blocks.NewSignedBeaconBlock(genericBlock)
+			b, err := blocks.NewSignedBeaconBlock(genericBlock.Block)
 			if err != nil {
 				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 				return
@@ -848,7 +855,7 @@ func (s *Server) publishBlock(ctx context.Context, w http.ResponseWriter, r *htt
 	// Validate and optionally broadcast sidecars on equivocation.
 	if err := s.validateBroadcast(ctx, r, genericBlock); err != nil {
 		if errors.Is(err, errEquivocatedBlock) {
-			b, err := blocks.NewSignedBeaconBlock(genericBlock)
+			b, err := blocks.NewSignedBeaconBlock(genericBlock.Block)
 			if err != nil {
 				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 				return
@@ -1001,9 +1008,29 @@ func (s *Server) validateConsensus(ctx context.Context, b *eth.GenericSignedBeac
 	}
 
 	parentStateRoot := parentBlock.Block().StateRoot()
-	parentState, err := s.Stater.State(ctx, parentStateRoot[:])
-	if err != nil {
-		return errors.Wrap(err, "could not get parent state")
+	// Check if the state is already cached
+	parentState := transition.NextSlotState(parentBlockRoot[:], blk.Block().Slot())
+	if parentState == nil {
+		// The state is not advanced in the NSC, check first if the parent post-state is head
+		headRoot, err := s.HeadFetcher.HeadRoot(ctx)
+		if err != nil {
+			return errors.Wrap(err, "could not get head root")
+		}
+		if bytes.Equal(headRoot, parentBlockRoot[:]) {
+			parentState, err = s.HeadFetcher.HeadState(ctx)
+			if err != nil {
+				return errors.Wrap(err, "could not get head state")
+			}
+			parentState, err = transition.ProcessSlots(ctx, parentState, blk.Block().Slot())
+			if err != nil {
+				return errors.Wrap(err, "could not process slots to get parent state")
+			}
+		} else {
+			parentState, err = s.Stater.State(ctx, parentStateRoot[:])
+			if err != nil {
+				return errors.Wrap(err, "could not get parent state")
+			}
+		}
 	}
 	_, err = transition.ExecuteStateTransition(ctx, parentState, blk)
 	if err != nil {
@@ -1193,7 +1220,7 @@ func (s *Server) GetStateFork(w http.ResponseWriter, r *http.Request) {
 	fork := st.Fork()
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status"+err.Error(), http.StatusInternalServerError)
+		helpers.HandleIsOptimisticError(w, err)
 		return
 	}
 	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
@@ -1265,6 +1292,15 @@ func (s *Server) GetCommittees(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Could not get epoch end slot: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	// Validate that the provided slot belongs to the specified epoch, as required by the Beacon API spec.
+	if rawSlot != "" {
+		if sl < uint64(startSlot) || sl > uint64(endSlot) {
+			httputil.HandleError(w, fmt.Sprintf("Slot %d does not belong in epoch %d", sl, epoch), http.StatusBadRequest)
+			return
+		}
+	}
+
 	committeesPerSlot := corehelpers.SlotCommitteeCount(activeCount)
 	committees := make([]*structs.Committee, 0)
 	for slot := startSlot; slot <= endSlot; slot++ {
@@ -1295,7 +1331,7 @@ func (s *Server) GetCommittees(w http.ResponseWriter, r *http.Request) {
 
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		helpers.HandleIsOptimisticError(w, err)
 		return
 	}
 
@@ -1476,7 +1512,7 @@ func (s *Server) GetFinalityCheckpoints(w http.ResponseWriter, r *http.Request) 
 	}
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		helpers.HandleIsOptimisticError(w, err)
 		return
 	}
 	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
@@ -1650,7 +1686,7 @@ func (s *Server) GetPendingConsolidations(w http.ResponseWriter, r *http.Request
 	} else {
 		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 		if err != nil {
-			httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+			helpers.HandleIsOptimisticError(w, err)
 			return
 		}
 		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
@@ -1706,7 +1742,7 @@ func (s *Server) GetPendingDeposits(w http.ResponseWriter, r *http.Request) {
 	} else {
 		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 		if err != nil {
-			httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+			helpers.HandleIsOptimisticError(w, err)
 			return
 		}
 		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
@@ -1762,7 +1798,7 @@ func (s *Server) GetPendingPartialWithdrawals(w http.ResponseWriter, r *http.Req
 	} else {
 		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 		if err != nil {
-			httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+			helpers.HandleIsOptimisticError(w, err)
 			return
 		}
 		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
@@ -1776,6 +1812,63 @@ func (s *Server) GetPendingPartialWithdrawals(w http.ResponseWriter, r *http.Req
 			ExecutionOptimistic: isOptimistic,
 			Finalized:           isFinalized,
 			Data:                structs.PendingPartialWithdrawalsFromConsensus(ppw),
+		}
+		httputil.WriteJson(w, resp)
+	}
+}
+
+func (s *Server) GetProposerLookahead(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "beacon.GetProposerLookahead")
+	defer span.End()
+
+	stateId := r.PathValue("state_id")
+	if stateId == "" {
+		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		return
+	}
+	st, err := s.Stater.State(ctx, []byte(stateId))
+	if err != nil {
+		shared.WriteStateFetchError(w, err)
+		return
+	}
+	if st.Version() < version.Fulu {
+		httputil.HandleError(w, "state_id is prior to fulu", http.StatusBadRequest)
+		return
+	}
+	pl, err := st.ProposerLookahead()
+	if err != nil {
+		httputil.HandleError(w, "Could not get proposer look ahead: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(api.VersionHeader, version.String(st.Version()))
+	if httputil.RespondWithSsz(r) {
+		sszLen := (*primitives.ValidatorIndex)(nil).SizeSSZ()
+		sszData := make([]byte, len(pl)*sszLen)
+		for i, idx := range pl {
+			copy(sszData[i*sszLen:(i+1)*sszLen], ssz.MarshalUint64([]byte{}, uint64(idx)))
+		}
+		httputil.WriteSsz(w, sszData)
+	} else {
+		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
+		if err != nil {
+			helpers.HandleIsOptimisticError(w, err)
+			return
+		}
+		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		if err != nil {
+			httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
+		vi := make([]string, len(pl))
+		for i, v := range pl {
+			vi[i] = strconv.FormatUint(uint64(v), 10)
+		}
+		resp := structs.GetProposerLookaheadResponse{
+			Version:             version.String(st.Version()),
+			ExecutionOptimistic: isOptimistic,
+			Finalized:           isFinalized,
+			Data:                vi,
 		}
 		httputil.WriteJson(w, resp)
 	}

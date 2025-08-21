@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
+	p2pTesting "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
@@ -60,7 +61,10 @@ func startChainService(t testing.TB,
 	depositCache, err := depositsnapshot.New()
 	require.NoError(t, err)
 
+	genesis := st.GenesisTime()
+
 	fc := doublylinkedtree.New()
+	fc.SetGenesisTime(genesis)
 	sg := stategen.New(db, fc)
 	opts := append([]blockchain.Option{},
 		blockchain.WithExecutionEngineCaller(engineMock),
@@ -76,9 +80,12 @@ func startChainService(t testing.TB,
 		blockchain.WithPayloadIDCache(cache.NewPayloadIDCache()),
 		blockchain.WithClockSynchronizer(clockSync),
 		blockchain.WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)),
+		blockchain.WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)),
 		blockchain.WithSyncChecker(mock.MockChecker{}),
+		blockchain.WithGenesisTime(genesis),
+		blockchain.WithP2PBroadcaster(&p2pTesting.TestP2P{}),
 	)
-	service, err := blockchain.NewService(context.Background(), opts...)
+	service, err := blockchain.NewService(t.Context(), opts...)
 	require.NoError(t, err)
 	// force start kzg context here until Deneb fork epoch is decided
 	require.NoError(t, kzg.Start())

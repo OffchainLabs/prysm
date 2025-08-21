@@ -55,7 +55,7 @@ func (s *Server) registerBeaconClient() error {
 		s.beaconApiTimeout,
 	)
 
-	restHandler := beaconApi.NewBeaconApiJsonRestHandler(
+	restHandler := beaconApi.NewBeaconApiRestHandler(
 		http.Client{Timeout: s.beaconApiTimeout, Transport: otelhttp.NewTransport(http.DefaultTransport)},
 		s.beaconApiEndpoint,
 	)

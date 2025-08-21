@@ -1,7 +1,6 @@
 package helpers_test
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -49,7 +48,7 @@ func TestWeakSubjectivity_ComputeWeakSubjectivityPeriod(t *testing.T) {
 			// Reset committee cache - as we need to recalculate active validator set for each test.
 			helpers.ClearCache()
 
-			got, err := helpers.ComputeWeakSubjectivityPeriod(context.Background(), genState(t, tt.valCount, tt.avgBalance), params.BeaconConfig())
+			got, err := helpers.ComputeWeakSubjectivityPeriod(t.Context(), genState(t, tt.valCount, tt.avgBalance), params.BeaconConfig())
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, got, "valCount: %v, avgBalance: %v", tt.valCount, tt.avgBalance)
 		})
@@ -181,7 +180,7 @@ func TestWeakSubjectivity_IsWithinWeakSubjectivityPeriod(t *testing.T) {
 			helpers.ClearCache()
 
 			sr, _, e := tt.genWsCheckpoint()
-			got, err := helpers.IsWithinWeakSubjectivityPeriod(context.Background(), tt.epoch, tt.genWsState(), sr, e, params.BeaconConfig())
+			got, err := helpers.IsWithinWeakSubjectivityPeriod(t.Context(), tt.epoch, tt.genWsState(), sr, e, params.BeaconConfig())
 			if tt.wantedErr != "" {
 				assert.Equal(t, false, got)
 				assert.ErrorContains(t, tt.wantedErr, err)
@@ -293,7 +292,7 @@ func TestMinEpochsForBlockRequests(t *testing.T) {
 	params.SetActiveTestCleanup(t, params.MainnetConfig())
 	var expected primitives.Epoch = 33024
 	// expected value of 33024 via spec commentary:
-	// https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/p2p-interface.md#why-are-blocksbyrange-requests-only-required-to-be-served-for-the-latest-min_epochs_for_block_requests-epochs
+	// https://github.com/ethereum/consensus-specs/blob/master/specs/phase0/p2p-interface.md#why-are-blocksbyrange-requests-only-required-to-be-served-for-the-latest-min_epochs_for_block_requests-epochs
 	//	MIN_EPOCHS_FOR_BLOCK_REQUESTS is calculated using the arithmetic from compute_weak_subjectivity_period found in the weak subjectivity guide. Specifically to find this max epoch range, we use the worst case event of a very large validator size (>= MIN_PER_EPOCH_CHURN_LIMIT * CHURN_LIMIT_QUOTIENT).
 	//
 	//	MIN_EPOCHS_FOR_BLOCK_REQUESTS = (
