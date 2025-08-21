@@ -173,7 +173,6 @@ func (vs *Server) aggregatedSyncCommitteeMessages(ctx context.Context, slot prim
 		go func() {
 			defer wg.Done()
 
-			var err error
 			aggregatedSig := make([]byte, 96)
 			aggregatedSig[0] = 0xC0
 			if len(sigsPerSubcommittee[i]) != 0 {
@@ -182,11 +181,9 @@ func (vs *Server) aggregatedSyncCommitteeMessages(ctx context.Context, slot prim
 					uncompressedSigs[j], err = bls.SignatureFromBytesNoValidation(sig)
 					if err != nil {
 						log.WithError(err).Error("Could not create sync committee signature from bytes")
+						// Skip aggregating this subcommittee
+						return
 					}
-				}
-				if err != nil {
-					// Skip aggregating this subcommittee
-					return
 				}
 				contributionsChan <- &ethpb.SyncCommitteeContribution{
 					Slot:              slot,
