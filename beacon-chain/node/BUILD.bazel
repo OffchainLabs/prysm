@@ -102,6 +102,7 @@ go_test(
         "//testing/require:go_default_library",
         "//testing/util:go_default_library",
         "@com_github_ethereum_go_ethereum//common:go_default_library",
+        "@com_github_prometheus_client_golang//prometheus:go_default_library",
         "@com_github_sirupsen_logrus//hooks/test:go_default_library",
         "@com_github_urfave_cli_v2//:go_default_library",
     ],
