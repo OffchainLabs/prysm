@@ -16,14 +16,12 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/sirupsen/logrus"
-	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
 func TestCompareForkENR(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
+	params.BeaconConfig().FuluForkEpoch = params.BeaconConfig().ElectraForkEpoch + 4096
 	params.BeaconConfig().InitializeForkSchedule()
-	logrus.SetLevel(logrus.TraceLevel)
 
 	db, err := enode.OpenDB("")
 	assert.NoError(t, err)
@@ -61,10 +59,10 @@ func TestCompareForkENR(t *testing.T) {
 				require.NoError(t, updateENR(peer, currentCopy, next))
 				return peer.Node()
 			},
-			expectErr: errEth2ENRDigestMismatch,
+			expectErr: errCurrentDigestMismatch,
 		},
 		{
-			name: "next fork version mismatch",
+			name: "next_fork_epoch match, next_fork_version mismatch",
 			node: func(t *testing.T) *enode.Node {
 				// Create a peer with the same current fork digest and next fork version/epoch.
 				peer := enode.NewLocalNode(db, k)
@@ -75,25 +73,44 @@ func TestCompareForkENR(t *testing.T) {
 				require.NoError(t, updateENR(peer, current, nextCopy))
 				return peer.Node()
 			},
-			expectLog: "Peer matches fork digest but has different next fork version",
+			expectErr: errNextVersionMismatch,
 		},
 		{
-			name: "next fork epoch mismatch",
+			name: "next fork epoch mismatch, next fork digest mismatch",
 			node: func(t *testing.T) *enode.Node {
 				// Create a peer with the same current fork digest and next fork version/epoch.
 				peer := enode.NewLocalNode(db, k)
 				nextCopy := next
+				// next epoch does not match, and neither does the next fork digest.
 				nextCopy.Epoch = nextCopy.Epoch + 1
+				nfd := [4]byte{0xFF, 0xFF, 0xFF, 0xFF}
+				require.NotEqual(t, next.ForkDigest, nfd)
+				//peer.Set(enr.WithEntry(nfdEnrKey, nfd[:]))
+				nextCopy.ForkDigest = nfd
 				require.NoError(t, updateENR(peer, current, nextCopy))
 				return peer.Node()
 			},
-			expectLog: "Peer matches fork digest but has different next fork epoch",
+			// no error because we allow a different next fork version / digest if the next fork epoch does not match
+		},
+		{
+			name: "next fork epoch -match-, next fork digest mismatch",
+			node: func(t *testing.T) *enode.Node {
+				peer := enode.NewLocalNode(db, k)
+				nextCopy := next
+				nfd := [4]byte{0xFF, 0xFF, 0xFF, 0xFF}
+				// next epoch *does match*, but the next fork digest doesn't - so we should get an error.
+				require.NotEqual(t, next.ForkDigest, nfd)
+				nextCopy.ForkDigest = nfd
+				//peer.Set(enr.WithEntry(nfdEnrKey, nfd[:]))
+				require.NoError(t, updateENR(peer, current, nextCopy))
+				return peer.Node()
+			},
+			expectErr: errNextDigestMismatch,
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			hook := logTest.NewGlobal()
 			peer := c.node(t)
 			err := compareForkENR(self.Node().Record(), peer.Record())
 			if c.expectErr != nil {
@@ -101,11 +118,25 @@ func TestCompareForkENR(t *testing.T) {
 			} else {
 				require.NoError(t, err, "Expected no error comparing fork ENRs")
 			}
-			if c.expectLog != "" {
-				require.LogsContain(t, hook, c.expectLog, "Expected log message not found")
-			}
 		})
 	}
+}
+
+func TestNfdSetAndLoad(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	params.BeaconConfig().FuluForkEpoch = params.BeaconConfig().ElectraForkEpoch + 4096
+	params.BeaconConfig().InitializeForkSchedule()
+	db, err := enode.OpenDB("")
+	assert.NoError(t, err)
+	_, k := createAddrAndPrivKey(t)
+	clock := startup.NewClock(time.Now(), params.BeaconConfig().GenesisValidatorsRoot)
+	current := params.GetNetworkScheduleEntry(clock.CurrentEpoch())
+	next := params.NextNetworkScheduleEntry(clock.CurrentEpoch())
+	next.ForkDigest = [4]byte{0xFF, 0xFF, 0xFF, 0xFF} // Ensure a unique digest for testing.
+	self := enode.NewLocalNode(db, k)
+	require.NoError(t, updateENR(self, current, next))
+	n := nfd(self.Node().Record())
+	assert.Equal(t, next.ForkDigest, n, "Expected nfd to match next fork digest")
 }
 
 func TestDiscv5_AddRetrieveForkEntryENR(t *testing.T) {
@@ -122,7 +153,7 @@ func TestDiscv5_AddRetrieveForkEntryENR(t *testing.T) {
 	}
 	enc, err := enrForkID.MarshalSSZ()
 	require.NoError(t, err)
-	entry := enr.WithEntry(eth2ENRKey, enc)
+	entry := enr.WithEntry(eth2EnrKey, enc)
 	temp := t.TempDir()
 	randNum := rand.Int()
 	tempPath := path.Join(temp, strconv.Itoa(randNum))

@@ -10,6 +10,7 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -40,49 +41,68 @@ func (s *Service) setAllForkDigests() {
 	}
 }
 
+var (
+	errNotReadyToSubscribe         = fmt.Errorf("not ready to subscribe, service is not initialized")
+	errMissingLeadingSlash         = fmt.Errorf("topic is missing leading slash")
+	errTopicMissingProtocolVersion = fmt.Errorf("topic is missing protocol version (eth2)")
+	errTopicPathWrongPartCount     = fmt.Errorf("topic path has wrong part count")
+	errDigestInvalid               = fmt.Errorf("digest is invalid")
+	errDigestUnexpected            = fmt.Errorf("digest is unexpected")
+	errSnappySuffixMissing         = fmt.Errorf("snappy suffix is missing")
+	errTopicNotFound               = fmt.Errorf("topic not found in gossip topic mappings")
+)
+
 // CanSubscribe returns true if the topic is of interest and we could subscribe to it.
 func (s *Service) CanSubscribe(topic string) bool {
-	if !s.isInitialized() {
+	if err := s.checkSubscribable(topic); err != nil {
+		if !errors.Is(err, errNotReadyToSubscribe) {
+			logrus.WithError(err).WithField("topic", topic).Debug("CanSubscribe failed")
+		}
 		return false
+	}
+	return true
+}
+
+func (s *Service) checkSubscribable(topic string) error {
+	if !s.isInitialized() {
+		return errNotReadyToSubscribe
 	}
 	parts := strings.Split(topic, "/")
 	if len(parts) != 5 {
-		return false
+		return errTopicPathWrongPartCount
 	}
 	// The topic must start with a slash, which means the first part will be empty.
 	if parts[0] != "" {
-		return false
+		return errMissingLeadingSlash
 	}
-	if parts[1] != "eth2" {
-		return false
+	protocol, rawDigest, suffix := parts[1], parts[2], parts[4]
+	if protocol != "eth2" {
+		return errTopicMissingProtocolVersion
+	}
+	if suffix != encoder.ProtocolSuffixSSZSnappy {
+		return errSnappySuffixMissing
 	}
 
 	var digest [4]byte
-	dl, err := hex.Decode(digest[:], []byte(parts[2]))
-	if err == nil && dl != 4 {
-		err = fmt.Errorf("expected 4 bytes, got %d", dl)
-	}
+	dl, err := hex.Decode(digest[:], []byte(rawDigest))
 	if err != nil {
-		log.WithError(err).WithField("topic", topic).WithField("digest", parts[2]).Error("CanSubscribe failed to parse message")
-		return false
+		return errors.Wrapf(errDigestInvalid, "%v", err)
+	}
+	if dl != 4 {
+		return errors.Wrapf(errDigestInvalid, "wrong byte length")
 	}
 	if _, ok := s.allForkDigests[digest]; !ok {
-		log.WithField("topic", topic).WithField("digest", fmt.Sprintf("%#x", digest)).Error("CanSubscribe failed to find digest in allForkDigests")
-		return false
-	}
-
-	if parts[4] != encoder.ProtocolSuffixSSZSnappy {
-		return false
+		return errDigestUnexpected
 	}
 
 	// Check the incoming topic matches any topic mapping. This includes a check for part[3].
 	for gt := range gossipTopicMappings {
 		if _, err := scanfcheck(strings.Join(parts[0:4], "/"), gt); err == nil {
-			return true
+			return nil
 		}
 	}
 
-	return false
+	return errTopicNotFound
 }
 
 // FilterIncomingSubscriptions is invoked for all RPCs containing subscription notifications.
@@ -100,7 +120,22 @@ func (s *Service) FilterIncomingSubscriptions(peerID peer.ID, subs []*pubsubpb.R
 		return nil, pubsub.ErrTooManySubscriptions
 	}
 
-	return pubsub.FilterSubscriptions(subs, s.CanSubscribe), nil
+	return pubsub.FilterSubscriptions(subs, s.logCheckSubscribableError(peerID)), nil
+}
+
+func (s *Service) logCheckSubscribableError(pid peer.ID) func(string) bool {
+	return func(topic string) bool {
+		if err := s.checkSubscribable(topic); err != nil {
+			if !errors.Is(err, errNotReadyToSubscribe) {
+				log.WithError(err).WithFields(logrus.Fields{
+					"peerID": pid,
+					"topic":  topic,
+				}).Debug("Peer subscription rejected")
+			}
+			return false
+		}
+		return true
+	}
 }
 
 // scanfcheck uses fmt.Sscanf to check that a given string matches expected format. This method
