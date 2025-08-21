@@ -203,7 +203,7 @@ func (s *Store) LightClientUpdates(ctx context.Context, startPeriod, endPeriod u
 	// Fetch the light client updatesMap from the database
 	updatesMap, err := s.beaconDB.LightClientUpdates(ctx, startPeriod, endPeriod)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "failed to get updates from the database")
 	}
 
 	cacheUpdatesByPeriod, err := s.getCacheUpdatesByPeriod(headBlock)
@@ -244,19 +244,19 @@ func (s *Store) LightClientUpdate(ctx context.Context, period uint64, headBlock 
 func (s *Store) getCacheUpdatesByPeriod(headBlock interfaces.ReadOnlySignedBeaconBlock) (map[uint64]interfaces.LightClientUpdate, error) {
 	updatesByPeriod := make(map[uint64]interfaces.LightClientUpdate)
 
-	headRoot := headBlock.Block().ParentRoot()
+	cacheHeadRoot := headBlock.Block().ParentRoot()
 
-	headItem, ok := s.cache.items[headRoot]
+	cacheHeadItem, ok := s.cache.items[cacheHeadRoot]
 	if !ok {
-		log.Debugf("Head root %x not found in light client cache. Returning empty updates map for non finality cache.", headRoot)
+		log.Debugf("Head root %x not found in light client cache. Returning empty updates map for non finality cache.", cacheHeadRoot)
 		return updatesByPeriod, nil
 	}
 
-	for headItem != nil {
-		if _, exists := updatesByPeriod[headItem.period]; !exists {
-			updatesByPeriod[headItem.period] = headItem.bestUpdate
+	for cacheHeadItem != nil {
+		if _, exists := updatesByPeriod[cacheHeadItem.period]; !exists {
+			updatesByPeriod[cacheHeadItem.period] = cacheHeadItem.bestUpdate
 		}
-		headItem = headItem.parent
+		cacheHeadItem = cacheHeadItem.parent
 	}
 
 	return updatesByPeriod, nil
@@ -339,14 +339,14 @@ func (s *Store) MigrateToCold(ctx context.Context, finalizedRoot [32]byte) error
 		return errors.Errorf("nil block for finalized root %x", finalizedRoot)
 	}
 	finalizedSlot := blk.Block().Slot()
-	headRoot := blk.Block().ParentRoot()
+	finalizedCacheHeadRoot := blk.Block().ParentRoot()
 
-	var headItem *cacheItem
+	var finalizedCacheHead *cacheItem
 	var ok bool
 
-	headItem, ok = s.cache.items[headRoot]
+	finalizedCacheHead, ok = s.cache.items[finalizedCacheHeadRoot]
 	if !ok {
-		log.Debugf("Finalized block's parent root %x not found in light client cache. Cleaning the broken part of the cache.", headRoot)
+		log.Debugf("Finalized block's parent root %x not found in light client cache. Cleaning the broken part of the cache.", finalizedCacheHeadRoot)
 
 		// delete non-finality cache items older than finalized slot
 		s.cleanCache(finalizedSlot)
@@ -356,7 +356,7 @@ func (s *Store) MigrateToCold(ctx context.Context, finalizedRoot [32]byte) error
 
 	updateByPeriod := make(map[uint64]interfaces.LightClientUpdate)
 	// Traverse the cache from the head item to the tail, collecting updates
-	for item := headItem; item != nil; item = item.parent {
+	for item := finalizedCacheHead; item != nil; item = item.parent {
 		if _, seen := updateByPeriod[item.period]; seen {
 			// We already have an update for this period, skip this item
 			continue
