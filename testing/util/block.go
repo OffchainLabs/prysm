@@ -44,6 +44,7 @@ type BlockGenConfig struct {
 	NumDepositRequests       uint64 // Only for post Electra blocks
 	NumWithdrawalRequests    uint64 // Only for post Electra blocks
 	NumConsolidationRequests uint64 // Only for post Electra blocks
+	NumBlobKzgCommitments    uint64 // Only for post Deneb blocks
 }
 
 // DefaultBlockGenConfig returns the block config that utilizes the
@@ -61,6 +62,7 @@ func DefaultBlockGenConfig() *BlockGenConfig {
 		NumConsolidationRequests: 0,
 		NumWithdrawalRequests:    0,
 		NumDepositRequests:       0,
+		NumBlobKzgCommitments:    0,
 	}
 }
 

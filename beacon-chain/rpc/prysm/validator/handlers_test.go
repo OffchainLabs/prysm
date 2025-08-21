@@ -2,7 +2,6 @@ package validator
 
 import (
 	"bytes"
-	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -81,7 +80,7 @@ func TestServer_GetValidatorParticipation_CurrentAndPrevEpoch(t *testing.T) {
 	helpers.ClearCache()
 	beaconDB := dbTest.SetupDB(t)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	validatorCount := uint64(32)
 
 	validators := make([]*ethpb.Validator, validatorCount)
@@ -185,7 +184,7 @@ func TestServer_GetValidatorParticipation_OrphanedUntilGenesis(t *testing.T) {
 	params.OverrideBeaconConfig(params.BeaconConfig())
 
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	validatorCount := uint64(100)
 
 	validators := make([]*ethpb.Validator, validatorCount)
@@ -287,7 +286,7 @@ func TestServer_GetValidatorParticipation_CurrentAndPrevEpochWithBits(t *testing
 		validatorCount := uint64(32)
 		genState, _ := util.DeterministicGenesisStateAltair(t, validatorCount)
 
-		c, err := altair.NextSyncCommittee(context.Background(), genState)
+		c, err := altair.NextSyncCommittee(t.Context(), genState)
 		require.NoError(t, err)
 		require.NoError(t, genState.SetCurrentSyncCommittee(c))
 
@@ -305,7 +304,7 @@ func TestServer_GetValidatorParticipation_CurrentAndPrevEpochWithBits(t *testing
 	t.Run("bellatrix", func(t *testing.T) {
 		validatorCount := uint64(32)
 		genState, _ := util.DeterministicGenesisStateBellatrix(t, validatorCount)
-		c, err := altair.NextSyncCommittee(context.Background(), genState)
+		c, err := altair.NextSyncCommittee(t.Context(), genState)
 		require.NoError(t, err)
 		require.NoError(t, genState.SetCurrentSyncCommittee(c))
 
@@ -323,7 +322,7 @@ func TestServer_GetValidatorParticipation_CurrentAndPrevEpochWithBits(t *testing
 	t.Run("capella", func(t *testing.T) {
 		validatorCount := uint64(32)
 		genState, _ := util.DeterministicGenesisStateCapella(t, validatorCount)
-		c, err := altair.NextSyncCommittee(context.Background(), genState)
+		c, err := altair.NextSyncCommittee(t.Context(), genState)
 		require.NoError(t, err)
 		require.NoError(t, genState.SetCurrentSyncCommittee(c))
 
@@ -343,7 +342,7 @@ func runGetValidatorParticipationCurrentEpoch(t *testing.T, genState state.Beaco
 	helpers.ClearCache()
 	beaconDB := dbTest.SetupDB(t)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	validatorCount := uint64(32)
 
 	gsr, err := genState.HashTreeRoot(ctx)
@@ -441,7 +440,7 @@ func TestServer_GetValidatorActiveSetChanges_NoState(t *testing.T) {
 func TestServer_GetValidatorActiveSetChanges(t *testing.T) {
 	beaconDB := dbTest.SetupDB(t)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	validators := make([]*ethpb.Validator, 8)
 	headState, err := util.NewBeaconState()
 	require.NoError(t, err)

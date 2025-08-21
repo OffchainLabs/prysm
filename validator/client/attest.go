@@ -277,7 +277,11 @@ func (v *validator) waitOneThirdOrValidBlock(ctx context.Context, slot primitive
 	}
 
 	delay := slots.DivideSlotBy(3 /* a third of the slot duration */)
-	startTime := slots.StartTime(v.genesisTime, slot)
+	startTime, err := slots.StartTime(v.genesisTime, slot)
+	if err != nil {
+		log.WithError(err).WithField("slot", slot).Error("Slot overflows, unable to wait for slot two thirds!")
+		return
+	}
 	finalTime := startTime.Add(delay)
 	wait := prysmTime.Until(finalTime)
 	if wait <= 0 {

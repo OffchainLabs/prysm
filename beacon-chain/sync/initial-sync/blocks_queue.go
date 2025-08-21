@@ -72,6 +72,8 @@ type blocksQueueConfig struct {
 	db                  db.ReadOnlyDatabase
 	mode                syncMode
 	bs                  filesystem.BlobStorageSummarizer
+	dcs                 filesystem.DataColumnStorageReader
+	cv                  verification.NewDataColumnsVerifier
 }
 
 // blocksQueue is a priority queue that serves as a intermediary between block fetchers (producers)
@@ -96,7 +98,7 @@ type blocksQueue struct {
 type blocksQueueFetchedData struct {
 	blocksFrom peer.ID
 	blobsFrom  peer.ID
-	bwb        []blocks.BlockWithROBlobs
+	bwb        []blocks.BlockWithROSidecars
 }
 
 // newBlocksQueue creates initialized priority queue.
@@ -106,7 +108,7 @@ func newBlocksQueue(ctx context.Context, cfg *blocksQueueConfig) *blocksQueue {
 	blocksFetcher := cfg.blocksFetcher
 	if blocksFetcher == nil {
 		if cfg.bs == nil {
-			log.Warn("rpc fetcher starting without blob availability cache, duplicate blobs may be requested.")
+			log.Warn("Rpc fetcher starting without blob availability cache, duplicate blobs may be requested.")
 		}
 		blocksFetcher = newBlocksFetcher(ctx, &blocksFetcherConfig{
 			ctxMap: cfg.ctxMap,
@@ -115,6 +117,8 @@ func newBlocksQueue(ctx context.Context, cfg *blocksQueueConfig) *blocksQueue {
 			db:     cfg.db,
 			clock:  cfg.clock,
 			bs:     cfg.bs,
+			dcs:    cfg.dcs,
+			cv:     cfg.cv,
 		})
 	}
 	highestExpectedSlot := cfg.highestExpectedSlot
@@ -337,14 +341,15 @@ func (q *blocksQueue) onDataReceivedEvent(ctx context.Context) eventHandlerFn {
 					}
 				}
 			}
+
 			if errors.Is(response.err, beaconsync.ErrInvalidFetchedData) {
-				// Peer returned invalid data, penalize.
-				q.blocksFetcher.p2p.Peers().Scorers().BadResponsesScorer().Increment(response.blocksFrom)
-				log.WithField("pid", response.blocksFrom).Debug("Peer is penalized for invalid blocks")
-			} else if errors.Is(response.err, verification.ErrBlobInvalid) {
-				q.blocksFetcher.p2p.Peers().Scorers().BadResponsesScorer().Increment(response.blobsFrom)
-				log.WithField("pid", response.blobsFrom).Debug("Peer is penalized for invalid blob response")
+				q.downscorePeer(response.blocksFrom, "invalidBlocks")
 			}
+
+			if errors.Is(response.err, verification.ErrBlobInvalid) {
+				q.downscorePeer(response.blobsFrom, "invalidBlobs")
+			}
+
 			return m.state, response.err
 		}
 		m.fetched = *response
@@ -453,6 +458,11 @@ func (q *blocksQueue) onProcessSkippedEvent(ctx context.Context) eventHandlerFn 
 		}
 		return stateSkipped, q.resetFromSlot(ctx, startSlot)
 	}
+}
+
+func (q *blocksQueue) downscorePeer(peerID peer.ID, reason string) {
+	newScore := q.blocksFetcher.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }
 
 // onCheckStaleEvent is an event that allows to mark stale epochs,

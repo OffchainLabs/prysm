@@ -82,43 +82,73 @@ func TestTopicDeconstructor(t *testing.T) {
 }
 
 func TestTopicFromMessage_CorrectType(t *testing.T) {
+	const (
+		genesisEpoch    = primitives.Epoch(0)
+		altairForkEpoch = primitives.Epoch(100)
+		fuluForkEpoch   = primitives.Epoch(200)
+	)
+
 	params.SetupTestConfigCleanup(t)
 	bCfg := params.BeaconConfig().Copy()
-	forkEpoch := primitives.Epoch(100)
-	bCfg.AltairForkEpoch = forkEpoch
-	bCfg.ForkVersionSchedule[bytesutil.ToBytes4(bCfg.AltairForkVersion)] = primitives.Epoch(100)
+
+	bCfg.AltairForkEpoch = altairForkEpoch
+	bCfg.ForkVersionSchedule[bytesutil.ToBytes4(bCfg.AltairForkVersion)] = altairForkEpoch
+
+	bCfg.FuluForkEpoch = fuluForkEpoch
+	bCfg.ForkVersionSchedule[bytesutil.ToBytes4(bCfg.FuluForkVersion)] = fuluForkEpoch
+
 	params.OverrideBeaconConfig(bCfg)
 
-	// Garbage Message
-	badMsg := "wljdjska"
-	_, err := TopicFromMessage(badMsg, 0)
-	assert.ErrorContains(t, fmt.Sprintf("%s: %s", invalidRPCMessageType, badMsg), err)
-	// Before Fork
-	for m := range messageMapping {
-		topic, err := TopicFromMessage(m, 0)
-		assert.NoError(t, err)
+	t.Run("garbage message", func(t *testing.T) {
+		// Garbage Message
+		const badMsg = "wljdjska"
+		_, err := TopicFromMessage(badMsg, genesisEpoch)
+		require.ErrorContains(t, fmt.Sprintf("%s: %s", invalidRPCMessageType, badMsg), err)
+	})
 
-		assert.Equal(t, true, strings.Contains(topic, SchemaVersionV1))
-		_, _, version, err := TopicDeconstructor(topic)
-		assert.NoError(t, err)
-		assert.Equal(t, SchemaVersionV1, version)
-	}
+	t.Run("before altair fork", func(t *testing.T) {
+		for m := range messageMapping {
+			topic, err := TopicFromMessage(m, genesisEpoch)
+			require.NoError(t, err)
 
-	// Altair Fork
-	for m := range messageMapping {
-		topic, err := TopicFromMessage(m, forkEpoch)
-		assert.NoError(t, err)
-
-		if altairMapping[m] {
-			assert.Equal(t, true, strings.Contains(topic, SchemaVersionV2))
+			require.Equal(t, true, strings.Contains(topic, SchemaVersionV1))
 			_, _, version, err := TopicDeconstructor(topic)
-			assert.NoError(t, err)
-			assert.Equal(t, SchemaVersionV2, version)
-		} else {
-			assert.Equal(t, true, strings.Contains(topic, SchemaVersionV1))
-			_, _, version, err := TopicDeconstructor(topic)
-			assert.NoError(t, err)
-			assert.Equal(t, SchemaVersionV1, version)
+			require.NoError(t, err)
+			require.Equal(t, SchemaVersionV1, version)
 		}
-	}
+	})
+
+	t.Run("after altair fork but before fulu fork", func(t *testing.T) {
+		// Not modified in altair fork.
+		topic, err := TopicFromMessage(GoodbyeMessageName, altairForkEpoch)
+		require.NoError(t, err)
+		require.Equal(t, "/eth2/beacon_chain/req/goodbye/1", topic)
+
+		// Modified in altair fork.
+		topic, err = TopicFromMessage(MetadataMessageName, altairForkEpoch)
+		require.NoError(t, err)
+		require.Equal(t, "/eth2/beacon_chain/req/metadata/2", topic)
+	})
+
+	t.Run("after fulu fork", func(t *testing.T) {
+		// Not modified in any fork.
+		topic, err := TopicFromMessage(GoodbyeMessageName, fuluForkEpoch)
+		require.NoError(t, err)
+		require.Equal(t, "/eth2/beacon_chain/req/goodbye/1", topic)
+
+		// Modified in altair fork.
+		topic, err = TopicFromMessage(BeaconBlocksByRangeMessageName, fuluForkEpoch)
+		require.NoError(t, err)
+		require.Equal(t, "/eth2/beacon_chain/req/beacon_blocks_by_range/2", topic)
+
+		// Modified in fulu fork.
+		topic, err = TopicFromMessage(StatusMessageName, fuluForkEpoch)
+		require.NoError(t, err)
+		require.Equal(t, "/eth2/beacon_chain/req/status/2", topic)
+
+		// Modified both in altair and fulu fork.
+		topic, err = TopicFromMessage(MetadataMessageName, fuluForkEpoch)
+		require.NoError(t, err)
+		require.Equal(t, "/eth2/beacon_chain/req/metadata/3", topic)
+	})
 }

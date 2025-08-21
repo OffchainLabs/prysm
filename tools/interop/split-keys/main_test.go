@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"encoding/hex"
 	"fmt"
 	"path/filepath"
@@ -69,7 +68,7 @@ func Test_spreadKeysAcrossImportedWallets(t *testing.T) {
 		walletPassword,
 	)
 	require.NoError(t, err)
-	ctx := context.Background()
+	ctx := t.Context()
 	for i := 0; i < numWallets; i++ {
 		w, err := wallet.OpenWallet(ctx, &wallet.Config{
 			WalletDir:      filepath.Join(tmpDir, fmt.Sprintf("wallet_%d", i)),

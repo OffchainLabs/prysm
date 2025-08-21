@@ -151,7 +151,7 @@ func (rs *stateReplayer) ReplayToSlot(ctx context.Context, replayTo primitives.S
 		"startSlot": s.Slot(),
 		"endSlot":   replayTo,
 		"diff":      replayTo - s.Slot(),
-	}).Debug("calling process_slots on remaining slots")
+	}).Debug("Calling process_slots on remaining slots")
 
 	// err will be handled after the bookend log
 	s, err = ReplayProcessSlots(ctx, s, replayTo)
@@ -161,7 +161,7 @@ func (rs *stateReplayer) ReplayToSlot(ctx context.Context, replayTo primitives.S
 	duration := time.Since(start)
 	log.WithFields(logrus.Fields{
 		"duration": duration,
-	}).Debug("time spent in process_slots")
+	}).Debug("Time spent in process_slots")
 	replayToSlotSummary.Observe(float64(duration.Milliseconds()))
 
 	return s, nil

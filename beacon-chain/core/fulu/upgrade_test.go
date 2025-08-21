@@ -25,7 +25,7 @@ func TestUpgradeToFulu(t *testing.T) {
 	require.NoError(t, st.SetBalances(bals))
 
 	preForkState := st.Copy()
-	mSt, err := fulu.UpgradeToFulu(st)
+	mSt, err := fulu.UpgradeToFulu(t.Context(), st)
 	require.NoError(t, err)
 
 	require.Equal(t, preForkState.GenesisTime(), mSt.GenesisTime())
@@ -43,10 +43,8 @@ func TestUpgradeToFulu(t *testing.T) {
 	require.DeepSSZEqual(t, preForkState.BlockRoots(), mSt.BlockRoots())
 	require.DeepSSZEqual(t, preForkState.StateRoots(), mSt.StateRoots())
 
-	hr1, err := preForkState.HistoricalRoots()
-	require.NoError(t, err)
-	hr2, err := mSt.HistoricalRoots()
-	require.NoError(t, err)
+	hr1 := preForkState.HistoricalRoots()
+	hr2 := mSt.HistoricalRoots()
 	require.DeepEqual(t, hr1, hr2)
 
 	require.DeepSSZEqual(t, preForkState.Eth1Data(), mSt.Eth1Data())

@@ -15,6 +15,7 @@ import (
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -43,7 +44,7 @@ func (s *Service) beaconBlocksByRangeRPCHandler(ctx context.Context, msg interfa
 	rp, err := validateRangeRequest(m, s.cfg.clock.CurrentSlot())
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeer)
+		s.downscorePeer(remotePeer, "beaconBlocksByRangeRPCHandlerValidationError")
 		tracing.AnnotateError(span, err)
 		return err
 	}
@@ -54,7 +55,7 @@ func (s *Service) beaconBlocksByRangeRPCHandler(ctx context.Context, msg interfa
 			"endSlot":   rp.end,
 			"size":      rp.size,
 			"current":   s.cfg.clock.CurrentSlot(),
-		}).Debug("error in validating range availability")
+		}).Debug("Error in validating range availability")
 		s.writeErrorResponseToStream(responseCodeResourceUnavailable, p2ptypes.ErrResourceUnavailable.Error(), stream)
 		tracing.AnnotateError(span, err)
 		return nil
@@ -78,7 +79,7 @@ func (s *Service) beaconBlocksByRangeRPCHandler(ctx context.Context, msg interfa
 	defer ticker.Stop()
 	batcher, err := newBlockRangeBatcher(rp, s.cfg.beaconDB, s.rateLimiter, s.cfg.chain.IsCanonical, ticker)
 	if err != nil {
-		log.WithError(err).Info("error in BlocksByRange batch")
+		log.WithError(err).Info("Error in BlocksByRange batch")
 		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
 		tracing.AnnotateError(span, err)
 		return err
@@ -200,4 +201,14 @@ func (s *Service) writeBlockBatchToStream(ctx context.Context, batch blockBatch,
 	}
 
 	return nil
+}
+
+func (s *Service) downscorePeer(peerID peer.ID, reason string, fields ...logrus.Fields) {
+	log := log
+	for _, field := range fields {
+		log = log.WithFields(field)
+	}
+
+	newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }

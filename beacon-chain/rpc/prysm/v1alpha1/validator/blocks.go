@@ -248,6 +248,8 @@ func (vs *Server) sendBlocks(stream ethpb.BeaconNodeValidator_StreamBlocksAltair
 		b.Block = &ethpb.StreamBlocksResponse_DenebBlock{DenebBlock: p}
 	case *ethpb.SignedBeaconBlockElectra:
 		b.Block = &ethpb.StreamBlocksResponse_ElectraBlock{ElectraBlock: p}
+	case *ethpb.SignedBeaconBlockFulu:
+		b.Block = &ethpb.StreamBlocksResponse_FuluBlock{FuluBlock: p}
 	default:
 		log.Errorf("Unknown block type %T", p)
 	}

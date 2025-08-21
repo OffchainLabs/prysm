@@ -6,192 +6,63 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/OffchainLabs/prysm/v6/api/apiutil"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 )
 
-// nolint:gocognit
+type blockProcessingResult struct {
+	consensusVersion string
+	beaconBlockRoot  [32]byte
+	marshalledJSON   []byte
+	blinded          bool
+}
+
 func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *ethpb.GenericSignedBeaconBlock) (*ethpb.ProposeResponse, error) {
-	var consensusVersion string
-	var beaconBlockRoot [32]byte
-
+	var res *blockProcessingResult
 	var err error
-	var marshalledSignedBeaconBlockJson []byte
-	blinded := false
-
 	switch blockType := in.Block.(type) {
 	case *ethpb.GenericSignedBeaconBlock_Phase0:
-		consensusVersion = "phase0"
-		beaconBlockRoot, err = blockType.Phase0.Block.HashTreeRoot()
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to compute block root for phase0 beacon block")
-		}
-
-		marshalledSignedBeaconBlockJson, err = marshallBeaconBlockPhase0(blockType.Phase0)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to marshall phase0 beacon block")
-		}
+		res, err = handlePhase0Block(blockType)
 	case *ethpb.GenericSignedBeaconBlock_Altair:
-		consensusVersion = "altair"
-		beaconBlockRoot, err = blockType.Altair.Block.HashTreeRoot()
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to compute block root for altair beacon block")
-		}
-
-		marshalledSignedBeaconBlockJson, err = marshallBeaconBlockAltair(blockType.Altair)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to marshall altair beacon block")
-		}
+		res, err = handleAltairBlock(blockType)
 	case *ethpb.GenericSignedBeaconBlock_Bellatrix:
-		consensusVersion = "bellatrix"
-		beaconBlockRoot, err = blockType.Bellatrix.Block.HashTreeRoot()
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to compute block root for bellatrix beacon block")
-		}
-
-		marshalledSignedBeaconBlockJson, err = marshallBeaconBlockBellatrix(blockType.Bellatrix)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to marshall bellatrix beacon block")
-		}
+		res, err = handleBellatrixBlock(blockType)
 	case *ethpb.GenericSignedBeaconBlock_BlindedBellatrix:
-		blinded = true
-		consensusVersion = "bellatrix"
-		beaconBlockRoot, err = blockType.BlindedBellatrix.Block.HashTreeRoot()
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to compute block root for blinded bellatrix beacon block")
-		}
-
-		marshalledSignedBeaconBlockJson, err = marshallBeaconBlockBlindedBellatrix(blockType.BlindedBellatrix)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to marshall blinded bellatrix beacon block")
-		}
+		res, err = handleBlindedBellatrixBlock(blockType)
 	case *ethpb.GenericSignedBeaconBlock_Capella:
-		consensusVersion = "capella"
-		beaconBlockRoot, err = blockType.Capella.Block.HashTreeRoot()
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to compute block root for capella beacon block")
-		}
-
-		marshalledSignedBeaconBlockJson, err = marshallBeaconBlockCapella(blockType.Capella)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to marshall capella beacon block")
-		}
+		res, err = handleCapellaBlock(blockType)
 	case *ethpb.GenericSignedBeaconBlock_BlindedCapella:
-		blinded = true
-		consensusVersion = "capella"
-		beaconBlockRoot, err = blockType.BlindedCapella.Block.HashTreeRoot()
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to compute block root for blinded capella beacon block")
-		}
-
-		marshalledSignedBeaconBlockJson, err = marshallBeaconBlockBlindedCapella(blockType.BlindedCapella)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to marshall blinded capella beacon block")
-		}
+		res, err = handleBlindedCapellaBlock(blockType)
 	case *ethpb.GenericSignedBeaconBlock_Deneb:
-		consensusVersion = "deneb"
-		beaconBlockRoot, err = blockType.Deneb.Block.HashTreeRoot()
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to compute block root for deneb beacon block")
-		}
-		signedBlock, err := structs.SignedBeaconBlockContentsDenebFromConsensus(blockType.Deneb)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to convert deneb beacon block contents")
-		}
-		marshalledSignedBeaconBlockJson, err = json.Marshal(signedBlock)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to marshal deneb beacon block contents")
-		}
+		res, err = handleDenebBlockContents(blockType)
 	case *ethpb.GenericSignedBeaconBlock_BlindedDeneb:
-		blinded = true
-		consensusVersion = "deneb"
-		beaconBlockRoot, err = blockType.BlindedDeneb.HashTreeRoot()
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to compute block root for blinded deneb beacon block")
-		}
-		signedBlock, err := structs.SignedBlindedBeaconBlockDenebFromConsensus(blockType.BlindedDeneb)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to convert blinded deneb beacon block contents")
-		}
-		marshalledSignedBeaconBlockJson, err = json.Marshal(signedBlock)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to marshal blinded deneb beacon block contents")
-		}
+		res, err = handleBlindedDenebBlock(blockType)
 	case *ethpb.GenericSignedBeaconBlock_Electra:
-		consensusVersion = "electra"
-		beaconBlockRoot, err = blockType.Electra.Block.HashTreeRoot()
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to compute block root for electra beacon block")
-		}
-		signedBlock, err := structs.SignedBeaconBlockContentsElectraFromConsensus(blockType.Electra)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to convert electra beacon block contents")
-		}
-		marshalledSignedBeaconBlockJson, err = json.Marshal(signedBlock)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to marshal electra beacon block contents")
-		}
+		res, err = handleElectraBlockContents(blockType)
 	case *ethpb.GenericSignedBeaconBlock_BlindedElectra:
-		blinded = true
-		consensusVersion = "electra"
-		beaconBlockRoot, err = blockType.BlindedElectra.HashTreeRoot()
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to compute block root for blinded electra beacon block")
-		}
-		signedBlock, err := structs.SignedBlindedBeaconBlockElectraFromConsensus(blockType.BlindedElectra)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to convert blinded electra beacon block contents")
-		}
-		marshalledSignedBeaconBlockJson, err = json.Marshal(signedBlock)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to marshal blinded electra beacon block contents")
-		}
+		res, err = handleBlindedElectraBlock(blockType)
 	case *ethpb.GenericSignedBeaconBlock_Fulu:
-		consensusVersion = "fulu"
-		beaconBlockRoot, err = blockType.Fulu.Block.HashTreeRoot()
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to compute block root for fulu beacon block")
-		}
-		signedBlock, err := structs.SignedBeaconBlockContentsFuluFromConsensus(blockType.Fulu)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to convert fulu beacon block contents")
-		}
-		marshalledSignedBeaconBlockJson, err = json.Marshal(signedBlock)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to marshal fulu beacon block contents")
-		}
+		res, err = handleFuluBlockContents(blockType)
 	case *ethpb.GenericSignedBeaconBlock_BlindedFulu:
-		blinded = true
-		consensusVersion = "fulu"
-		beaconBlockRoot, err = blockType.BlindedFulu.HashTreeRoot()
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to compute block root for blinded fulu beacon block")
-		}
-		signedBlock, err := structs.SignedBlindedBeaconBlockFuluFromConsensus(blockType.BlindedFulu)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to convert blinded fulu beacon block contents")
-		}
-		marshalledSignedBeaconBlockJson, err = json.Marshal(signedBlock)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to marshal blinded fulu beacon block contents")
-		}
+		res, err = handleBlindedFuluBlock(blockType)
 	default:
 		return nil, errors.Errorf("unsupported block type %T", in.Block)
 	}
 
+	if err != nil {
+		return nil, err
+	}
+
 	endpoint := "/eth/v2/beacon/blocks"
 
-	if blinded {
+	if res.blinded {
 		endpoint = "/eth/v2/beacon/blinded_blocks"
 	}
 
-	headers := map[string]string{"Eth-Consensus-Version": consensusVersion}
-	err = c.jsonRestHandler.Post(ctx, endpoint, headers, bytes.NewBuffer(marshalledSignedBeaconBlockJson), nil)
+	headers := map[string]string{"Eth-Consensus-Version": res.consensusVersion}
+	err = c.jsonRestHandler.Post(ctx, endpoint, headers, bytes.NewBuffer(res.marshalledJSON), nil)
 	errJson := &httputil.DefaultJsonError{}
 	if err != nil {
 		if !errors.As(err, &errJson) {
@@ -204,237 +75,273 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 		return nil, errJson
 	}
 
-	return &ethpb.ProposeResponse{BlockRoot: beaconBlockRoot[:]}, nil
+	return &ethpb.ProposeResponse{BlockRoot: res.beaconBlockRoot[:]}, nil
 }
 
-func marshallBeaconBlockPhase0(block *ethpb.SignedBeaconBlock) ([]byte, error) {
-	signedBeaconBlockJson := &structs.SignedBeaconBlock{
-		Signature: hexutil.Encode(block.Signature),
-		Message: &structs.BeaconBlock{
-			Body: &structs.BeaconBlockBody{
-				Attestations:      jsonifyAttestations(block.Block.Body.Attestations),
-				AttesterSlashings: jsonifyAttesterSlashings(block.Block.Body.AttesterSlashings),
-				Deposits:          jsonifyDeposits(block.Block.Body.Deposits),
-				Eth1Data:          jsonifyEth1Data(block.Block.Body.Eth1Data),
-				Graffiti:          hexutil.Encode(block.Block.Body.Graffiti),
-				ProposerSlashings: jsonifyProposerSlashings(block.Block.Body.ProposerSlashings),
-				RandaoReveal:      hexutil.Encode(block.Block.Body.RandaoReveal),
-				VoluntaryExits:    JsonifySignedVoluntaryExits(block.Block.Body.VoluntaryExits),
-			},
-			ParentRoot:    hexutil.Encode(block.Block.ParentRoot),
-			ProposerIndex: apiutil.Uint64ToString(block.Block.ProposerIndex),
-			Slot:          apiutil.Uint64ToString(block.Block.Slot),
-			StateRoot:     hexutil.Encode(block.Block.StateRoot),
-		},
-	}
+func handlePhase0Block(block *ethpb.GenericSignedBeaconBlock_Phase0) (*blockProcessingResult, error) {
+	var res blockProcessingResult
+	res.consensusVersion = "phase0"
+	res.blinded = false
 
-	return json.Marshal(signedBeaconBlockJson)
+	beaconBlockRoot, err := block.Phase0.Block.HashTreeRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to compute block root for phase0 beacon block")
+	}
+	res.beaconBlockRoot = beaconBlockRoot
+
+	signedBlock := structs.SignedBeaconBlockPhase0FromConsensus(block.Phase0)
+	res.marshalledJSON, err = json.Marshal(signedBlock)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshall phase0 beacon block to json")
+	}
+	return &res, nil
 }
 
-func marshallBeaconBlockAltair(block *ethpb.SignedBeaconBlockAltair) ([]byte, error) {
-	signedBeaconBlockAltairJson := &structs.SignedBeaconBlockAltair{
-		Signature: hexutil.Encode(block.Signature),
-		Message: &structs.BeaconBlockAltair{
-			ParentRoot:    hexutil.Encode(block.Block.ParentRoot),
-			ProposerIndex: apiutil.Uint64ToString(block.Block.ProposerIndex),
-			Slot:          apiutil.Uint64ToString(block.Block.Slot),
-			StateRoot:     hexutil.Encode(block.Block.StateRoot),
-			Body: &structs.BeaconBlockBodyAltair{
-				Attestations:      jsonifyAttestations(block.Block.Body.Attestations),
-				AttesterSlashings: jsonifyAttesterSlashings(block.Block.Body.AttesterSlashings),
-				Deposits:          jsonifyDeposits(block.Block.Body.Deposits),
-				Eth1Data:          jsonifyEth1Data(block.Block.Body.Eth1Data),
-				Graffiti:          hexutil.Encode(block.Block.Body.Graffiti),
-				ProposerSlashings: jsonifyProposerSlashings(block.Block.Body.ProposerSlashings),
-				RandaoReveal:      hexutil.Encode(block.Block.Body.RandaoReveal),
-				VoluntaryExits:    JsonifySignedVoluntaryExits(block.Block.Body.VoluntaryExits),
-				SyncAggregate: &structs.SyncAggregate{
-					SyncCommitteeBits:      hexutil.Encode(block.Block.Body.SyncAggregate.SyncCommitteeBits),
-					SyncCommitteeSignature: hexutil.Encode(block.Block.Body.SyncAggregate.SyncCommitteeSignature),
-				},
-			},
-		},
-	}
+func handleAltairBlock(block *ethpb.GenericSignedBeaconBlock_Altair) (*blockProcessingResult, error) {
+	var res blockProcessingResult
+	res.consensusVersion = "altair"
+	res.blinded = false
 
-	return json.Marshal(signedBeaconBlockAltairJson)
+	beaconBlockRoot, err := block.Altair.Block.HashTreeRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to compute block root for altair beacon block")
+	}
+	res.beaconBlockRoot = beaconBlockRoot
+
+	signedBlock := structs.SignedBeaconBlockAltairFromConsensus(block.Altair)
+	res.marshalledJSON, err = json.Marshal(signedBlock)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshall altair beacon block to json")
+	}
+	return &res, nil
 }
 
-func marshallBeaconBlockBellatrix(block *ethpb.SignedBeaconBlockBellatrix) ([]byte, error) {
-	signedBeaconBlockBellatrixJson := &structs.SignedBeaconBlockBellatrix{
-		Signature: hexutil.Encode(block.Signature),
-		Message: &structs.BeaconBlockBellatrix{
-			ParentRoot:    hexutil.Encode(block.Block.ParentRoot),
-			ProposerIndex: apiutil.Uint64ToString(block.Block.ProposerIndex),
-			Slot:          apiutil.Uint64ToString(block.Block.Slot),
-			StateRoot:     hexutil.Encode(block.Block.StateRoot),
-			Body: &structs.BeaconBlockBodyBellatrix{
-				Attestations:      jsonifyAttestations(block.Block.Body.Attestations),
-				AttesterSlashings: jsonifyAttesterSlashings(block.Block.Body.AttesterSlashings),
-				Deposits:          jsonifyDeposits(block.Block.Body.Deposits),
-				Eth1Data:          jsonifyEth1Data(block.Block.Body.Eth1Data),
-				Graffiti:          hexutil.Encode(block.Block.Body.Graffiti),
-				ProposerSlashings: jsonifyProposerSlashings(block.Block.Body.ProposerSlashings),
-				RandaoReveal:      hexutil.Encode(block.Block.Body.RandaoReveal),
-				VoluntaryExits:    JsonifySignedVoluntaryExits(block.Block.Body.VoluntaryExits),
-				SyncAggregate: &structs.SyncAggregate{
-					SyncCommitteeBits:      hexutil.Encode(block.Block.Body.SyncAggregate.SyncCommitteeBits),
-					SyncCommitteeSignature: hexutil.Encode(block.Block.Body.SyncAggregate.SyncCommitteeSignature),
-				},
-				ExecutionPayload: &structs.ExecutionPayload{
-					ParentHash:    hexutil.Encode(block.Block.Body.ExecutionPayload.ParentHash),
-					FeeRecipient:  hexutil.Encode(block.Block.Body.ExecutionPayload.FeeRecipient),
-					StateRoot:     hexutil.Encode(block.Block.Body.ExecutionPayload.StateRoot),
-					ReceiptsRoot:  hexutil.Encode(block.Block.Body.ExecutionPayload.ReceiptsRoot),
-					LogsBloom:     hexutil.Encode(block.Block.Body.ExecutionPayload.LogsBloom),
-					PrevRandao:    hexutil.Encode(block.Block.Body.ExecutionPayload.PrevRandao),
-					BlockNumber:   apiutil.Uint64ToString(block.Block.Body.ExecutionPayload.BlockNumber),
-					GasLimit:      apiutil.Uint64ToString(block.Block.Body.ExecutionPayload.GasLimit),
-					GasUsed:       apiutil.Uint64ToString(block.Block.Body.ExecutionPayload.GasUsed),
-					Timestamp:     apiutil.Uint64ToString(block.Block.Body.ExecutionPayload.Timestamp),
-					ExtraData:     hexutil.Encode(block.Block.Body.ExecutionPayload.ExtraData),
-					BaseFeePerGas: bytesutil.LittleEndianBytesToBigInt(block.Block.Body.ExecutionPayload.BaseFeePerGas).String(),
-					BlockHash:     hexutil.Encode(block.Block.Body.ExecutionPayload.BlockHash),
-					Transactions:  jsonifyTransactions(block.Block.Body.ExecutionPayload.Transactions),
-				},
-			},
-		},
+func handleBellatrixBlock(block *ethpb.GenericSignedBeaconBlock_Bellatrix) (*blockProcessingResult, error) {
+	var res blockProcessingResult
+	res.consensusVersion = "bellatrix"
+	res.blinded = false
+
+	beaconBlockRoot, err := block.Bellatrix.Block.HashTreeRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to compute block root for bellatrix beacon block")
+	}
+	res.beaconBlockRoot = beaconBlockRoot
+
+	signedBlock, err := structs.SignedBeaconBlockBellatrixFromConsensus(block.Bellatrix)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshall bellatrix beacon block")
+	}
+	res.marshalledJSON, err = json.Marshal(signedBlock)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshall bellatrix beacon block to json")
 	}
 
-	return json.Marshal(signedBeaconBlockBellatrixJson)
+	return &res, nil
 }
 
-func marshallBeaconBlockBlindedBellatrix(block *ethpb.SignedBlindedBeaconBlockBellatrix) ([]byte, error) {
-	signedBeaconBlockBellatrixJson := &structs.SignedBlindedBeaconBlockBellatrix{
-		Signature: hexutil.Encode(block.Signature),
-		Message: &structs.BlindedBeaconBlockBellatrix{
-			ParentRoot:    hexutil.Encode(block.Block.ParentRoot),
-			ProposerIndex: apiutil.Uint64ToString(block.Block.ProposerIndex),
-			Slot:          apiutil.Uint64ToString(block.Block.Slot),
-			StateRoot:     hexutil.Encode(block.Block.StateRoot),
-			Body: &structs.BlindedBeaconBlockBodyBellatrix{
-				Attestations:      jsonifyAttestations(block.Block.Body.Attestations),
-				AttesterSlashings: jsonifyAttesterSlashings(block.Block.Body.AttesterSlashings),
-				Deposits:          jsonifyDeposits(block.Block.Body.Deposits),
-				Eth1Data:          jsonifyEth1Data(block.Block.Body.Eth1Data),
-				Graffiti:          hexutil.Encode(block.Block.Body.Graffiti),
-				ProposerSlashings: jsonifyProposerSlashings(block.Block.Body.ProposerSlashings),
-				RandaoReveal:      hexutil.Encode(block.Block.Body.RandaoReveal),
-				VoluntaryExits:    JsonifySignedVoluntaryExits(block.Block.Body.VoluntaryExits),
-				SyncAggregate: &structs.SyncAggregate{
-					SyncCommitteeBits:      hexutil.Encode(block.Block.Body.SyncAggregate.SyncCommitteeBits),
-					SyncCommitteeSignature: hexutil.Encode(block.Block.Body.SyncAggregate.SyncCommitteeSignature),
-				},
-				ExecutionPayloadHeader: &structs.ExecutionPayloadHeader{
-					ParentHash:       hexutil.Encode(block.Block.Body.ExecutionPayloadHeader.ParentHash),
-					FeeRecipient:     hexutil.Encode(block.Block.Body.ExecutionPayloadHeader.FeeRecipient),
-					StateRoot:        hexutil.Encode(block.Block.Body.ExecutionPayloadHeader.StateRoot),
-					ReceiptsRoot:     hexutil.Encode(block.Block.Body.ExecutionPayloadHeader.ReceiptsRoot),
-					LogsBloom:        hexutil.Encode(block.Block.Body.ExecutionPayloadHeader.LogsBloom),
-					PrevRandao:       hexutil.Encode(block.Block.Body.ExecutionPayloadHeader.PrevRandao),
-					BlockNumber:      apiutil.Uint64ToString(block.Block.Body.ExecutionPayloadHeader.BlockNumber),
-					GasLimit:         apiutil.Uint64ToString(block.Block.Body.ExecutionPayloadHeader.GasLimit),
-					GasUsed:          apiutil.Uint64ToString(block.Block.Body.ExecutionPayloadHeader.GasUsed),
-					Timestamp:        apiutil.Uint64ToString(block.Block.Body.ExecutionPayloadHeader.Timestamp),
-					ExtraData:        hexutil.Encode(block.Block.Body.ExecutionPayloadHeader.ExtraData),
-					BaseFeePerGas:    bytesutil.LittleEndianBytesToBigInt(block.Block.Body.ExecutionPayloadHeader.BaseFeePerGas).String(),
-					BlockHash:        hexutil.Encode(block.Block.Body.ExecutionPayloadHeader.BlockHash),
-					TransactionsRoot: hexutil.Encode(block.Block.Body.ExecutionPayloadHeader.TransactionsRoot),
-				},
-			},
-		},
+func handleBlindedBellatrixBlock(block *ethpb.GenericSignedBeaconBlock_BlindedBellatrix) (*blockProcessingResult, error) {
+	var res blockProcessingResult
+	res.consensusVersion = "bellatrix"
+	res.blinded = true
+
+	beaconBlockRoot, err := block.BlindedBellatrix.Block.HashTreeRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to compute block root for bellatrix beacon block")
+	}
+	res.beaconBlockRoot = beaconBlockRoot
+
+	signedBlock, err := structs.SignedBlindedBeaconBlockBellatrixFromConsensus(block.BlindedBellatrix)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshall blinded bellatrix beacon block")
+	}
+	res.marshalledJSON, err = json.Marshal(signedBlock)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshall blinded bellatrix beacon block to json")
 	}
 
-	return json.Marshal(signedBeaconBlockBellatrixJson)
+	return &res, nil
 }
 
-func marshallBeaconBlockCapella(block *ethpb.SignedBeaconBlockCapella) ([]byte, error) {
-	signedBeaconBlockCapellaJson := &structs.SignedBeaconBlockCapella{
-		Signature: hexutil.Encode(block.Signature),
-		Message: &structs.BeaconBlockCapella{
-			ParentRoot:    hexutil.Encode(block.Block.ParentRoot),
-			ProposerIndex: apiutil.Uint64ToString(block.Block.ProposerIndex),
-			Slot:          apiutil.Uint64ToString(block.Block.Slot),
-			StateRoot:     hexutil.Encode(block.Block.StateRoot),
-			Body: &structs.BeaconBlockBodyCapella{
-				Attestations:      jsonifyAttestations(block.Block.Body.Attestations),
-				AttesterSlashings: jsonifyAttesterSlashings(block.Block.Body.AttesterSlashings),
-				Deposits:          jsonifyDeposits(block.Block.Body.Deposits),
-				Eth1Data:          jsonifyEth1Data(block.Block.Body.Eth1Data),
-				Graffiti:          hexutil.Encode(block.Block.Body.Graffiti),
-				ProposerSlashings: jsonifyProposerSlashings(block.Block.Body.ProposerSlashings),
-				RandaoReveal:      hexutil.Encode(block.Block.Body.RandaoReveal),
-				VoluntaryExits:    JsonifySignedVoluntaryExits(block.Block.Body.VoluntaryExits),
-				SyncAggregate: &structs.SyncAggregate{
-					SyncCommitteeBits:      hexutil.Encode(block.Block.Body.SyncAggregate.SyncCommitteeBits),
-					SyncCommitteeSignature: hexutil.Encode(block.Block.Body.SyncAggregate.SyncCommitteeSignature),
-				},
-				ExecutionPayload: &structs.ExecutionPayloadCapella{
-					ParentHash:    hexutil.Encode(block.Block.Body.ExecutionPayload.ParentHash),
-					FeeRecipient:  hexutil.Encode(block.Block.Body.ExecutionPayload.FeeRecipient),
-					StateRoot:     hexutil.Encode(block.Block.Body.ExecutionPayload.StateRoot),
-					ReceiptsRoot:  hexutil.Encode(block.Block.Body.ExecutionPayload.ReceiptsRoot),
-					LogsBloom:     hexutil.Encode(block.Block.Body.ExecutionPayload.LogsBloom),
-					PrevRandao:    hexutil.Encode(block.Block.Body.ExecutionPayload.PrevRandao),
-					BlockNumber:   apiutil.Uint64ToString(block.Block.Body.ExecutionPayload.BlockNumber),
-					GasLimit:      apiutil.Uint64ToString(block.Block.Body.ExecutionPayload.GasLimit),
-					GasUsed:       apiutil.Uint64ToString(block.Block.Body.ExecutionPayload.GasUsed),
-					Timestamp:     apiutil.Uint64ToString(block.Block.Body.ExecutionPayload.Timestamp),
-					ExtraData:     hexutil.Encode(block.Block.Body.ExecutionPayload.ExtraData),
-					BaseFeePerGas: bytesutil.LittleEndianBytesToBigInt(block.Block.Body.ExecutionPayload.BaseFeePerGas).String(),
-					BlockHash:     hexutil.Encode(block.Block.Body.ExecutionPayload.BlockHash),
-					Transactions:  jsonifyTransactions(block.Block.Body.ExecutionPayload.Transactions),
-					Withdrawals:   jsonifyWithdrawals(block.Block.Body.ExecutionPayload.Withdrawals),
-				},
-				BLSToExecutionChanges: jsonifyBlsToExecutionChanges(block.Block.Body.BlsToExecutionChanges),
-			},
-		},
+func handleCapellaBlock(block *ethpb.GenericSignedBeaconBlock_Capella) (*blockProcessingResult, error) {
+	var res blockProcessingResult
+	res.consensusVersion = "capella"
+	res.blinded = false
+
+	beaconBlockRoot, err := block.Capella.Block.HashTreeRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to compute block root for capella beacon block")
+	}
+	res.beaconBlockRoot = beaconBlockRoot
+
+	signedBlock, err := structs.SignedBeaconBlockCapellaFromConsensus(block.Capella)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshall capella beacon block")
+	}
+	res.marshalledJSON, err = json.Marshal(signedBlock)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshall capella beacon block to json")
 	}
 
-	return json.Marshal(signedBeaconBlockCapellaJson)
+	return &res, nil
 }
 
-func marshallBeaconBlockBlindedCapella(block *ethpb.SignedBlindedBeaconBlockCapella) ([]byte, error) {
-	signedBeaconBlockCapellaJson := &structs.SignedBlindedBeaconBlockCapella{
-		Signature: hexutil.Encode(block.Signature),
-		Message: &structs.BlindedBeaconBlockCapella{
-			ParentRoot:    hexutil.Encode(block.Block.ParentRoot),
-			ProposerIndex: apiutil.Uint64ToString(block.Block.ProposerIndex),
-			Slot:          apiutil.Uint64ToString(block.Block.Slot),
-			StateRoot:     hexutil.Encode(block.Block.StateRoot),
-			Body: &structs.BlindedBeaconBlockBodyCapella{
-				Attestations:      jsonifyAttestations(block.Block.Body.Attestations),
-				AttesterSlashings: jsonifyAttesterSlashings(block.Block.Body.AttesterSlashings),
-				Deposits:          jsonifyDeposits(block.Block.Body.Deposits),
-				Eth1Data:          jsonifyEth1Data(block.Block.Body.Eth1Data),
-				Graffiti:          hexutil.Encode(block.Block.Body.Graffiti),
-				ProposerSlashings: jsonifyProposerSlashings(block.Block.Body.ProposerSlashings),
-				RandaoReveal:      hexutil.Encode(block.Block.Body.RandaoReveal),
-				VoluntaryExits:    JsonifySignedVoluntaryExits(block.Block.Body.VoluntaryExits),
-				SyncAggregate: &structs.SyncAggregate{
-					SyncCommitteeBits:      hexutil.Encode(block.Block.Body.SyncAggregate.SyncCommitteeBits),
-					SyncCommitteeSignature: hexutil.Encode(block.Block.Body.SyncAggregate.SyncCommitteeSignature),
-				},
-				ExecutionPayloadHeader: &structs.ExecutionPayloadHeaderCapella{
-					ParentHash:       hexutil.Encode(block.Block.Body.ExecutionPayloadHeader.ParentHash),
-					FeeRecipient:     hexutil.Encode(block.Block.Body.ExecutionPayloadHeader.FeeRecipient),
-					StateRoot:        hexutil.Encode(block.Block.Body.ExecutionPayloadHeader.StateRoot),
-					ReceiptsRoot:     hexutil.Encode(block.Block.Body.ExecutionPayloadHeader.ReceiptsRoot),
-					LogsBloom:        hexutil.Encode(block.Block.Body.ExecutionPayloadHeader.LogsBloom),
-					PrevRandao:       hexutil.Encode(block.Block.Body.ExecutionPayloadHeader.PrevRandao),
-					BlockNumber:      apiutil.Uint64ToString(block.Block.Body.ExecutionPayloadHeader.BlockNumber),
-					GasLimit:         apiutil.Uint64ToString(block.Block.Body.ExecutionPayloadHeader.GasLimit),
-					GasUsed:          apiutil.Uint64ToString(block.Block.Body.ExecutionPayloadHeader.GasUsed),
-					Timestamp:        apiutil.Uint64ToString(block.Block.Body.ExecutionPayloadHeader.Timestamp),
-					ExtraData:        hexutil.Encode(block.Block.Body.ExecutionPayloadHeader.ExtraData),
-					BaseFeePerGas:    bytesutil.LittleEndianBytesToBigInt(block.Block.Body.ExecutionPayloadHeader.BaseFeePerGas).String(),
-					BlockHash:        hexutil.Encode(block.Block.Body.ExecutionPayloadHeader.BlockHash),
-					TransactionsRoot: hexutil.Encode(block.Block.Body.ExecutionPayloadHeader.TransactionsRoot),
-					WithdrawalsRoot:  hexutil.Encode(block.Block.Body.ExecutionPayloadHeader.WithdrawalsRoot),
-				},
-				BLSToExecutionChanges: jsonifyBlsToExecutionChanges(block.Block.Body.BlsToExecutionChanges),
-			},
-		},
+func handleBlindedCapellaBlock(block *ethpb.GenericSignedBeaconBlock_BlindedCapella) (*blockProcessingResult, error) {
+	var res blockProcessingResult
+	res.consensusVersion = "capella"
+	res.blinded = true
+
+	beaconBlockRoot, err := block.BlindedCapella.Block.HashTreeRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to compute block root for blinded capella beacon block")
+	}
+	res.beaconBlockRoot = beaconBlockRoot
+
+	signedBlock, err := structs.SignedBlindedBeaconBlockCapellaFromConsensus(block.BlindedCapella)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshall blinded capella beacon block")
+	}
+	res.marshalledJSON, err = json.Marshal(signedBlock)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshall blinded capella beacon block to json")
 	}
 
-	return json.Marshal(signedBeaconBlockCapellaJson)
+	return &res, nil
+}
+
+func handleDenebBlockContents(block *ethpb.GenericSignedBeaconBlock_Deneb) (*blockProcessingResult, error) {
+	var res blockProcessingResult
+	res.consensusVersion = "deneb"
+	res.blinded = false
+
+	beaconBlockRoot, err := block.Deneb.Block.HashTreeRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to compute block root for deneb beacon block")
+	}
+	res.beaconBlockRoot = beaconBlockRoot
+
+	signedBlock, err := structs.SignedBeaconBlockContentsDenebFromConsensus(block.Deneb)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshall deneb beacon block contents")
+	}
+	res.marshalledJSON, err = json.Marshal(signedBlock)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshall deneb beacon block contents to json")
+	}
+
+	return &res, nil
+}
+
+func handleBlindedDenebBlock(block *ethpb.GenericSignedBeaconBlock_BlindedDeneb) (*blockProcessingResult, error) {
+	var res blockProcessingResult
+	res.consensusVersion = "deneb"
+	res.blinded = true
+
+	beaconBlockRoot, err := block.BlindedDeneb.HashTreeRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to compute block root for deneb blinded beacon block")
+	}
+	res.beaconBlockRoot = beaconBlockRoot
+
+	signedBlock, err := structs.SignedBlindedBeaconBlockDenebFromConsensus(block.BlindedDeneb)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshall deneb blinded beacon block ")
+	}
+	res.marshalledJSON, err = json.Marshal(signedBlock)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshall deneb blinded beacon block to json")
+	}
+
+	return &res, nil
+}
+
+func handleElectraBlockContents(block *ethpb.GenericSignedBeaconBlock_Electra) (*blockProcessingResult, error) {
+	var res blockProcessingResult
+	res.consensusVersion = "electra"
+	res.blinded = false
+
+	beaconBlockRoot, err := block.Electra.Block.HashTreeRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to compute block root for electra beacon block")
+	}
+	res.beaconBlockRoot = beaconBlockRoot
+
+	signedBlock, err := structs.SignedBeaconBlockContentsElectraFromConsensus(block.Electra)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshall electra beacon block contents")
+	}
+	res.marshalledJSON, err = json.Marshal(signedBlock)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshall electra beacon block contents to json")
+	}
+
+	return &res, nil
+}
+
+func handleBlindedElectraBlock(block *ethpb.GenericSignedBeaconBlock_BlindedElectra) (*blockProcessingResult, error) {
+	var res blockProcessingResult
+	res.consensusVersion = "electra"
+	res.blinded = true
+
+	beaconBlockRoot, err := block.BlindedElectra.HashTreeRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to compute block root for electra blinded beacon block")
+	}
+	res.beaconBlockRoot = beaconBlockRoot
+
+	signedBlock, err := structs.SignedBlindedBeaconBlockElectraFromConsensus(block.BlindedElectra)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshall electra blinded beacon block")
+	}
+	res.marshalledJSON, err = json.Marshal(signedBlock)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshall electra blinded beacon block to json")
+	}
+
+	return &res, nil
+}
+
+func handleFuluBlockContents(block *ethpb.GenericSignedBeaconBlock_Fulu) (*blockProcessingResult, error) {
+	var res blockProcessingResult
+	res.consensusVersion = "fulu"
+	res.blinded = false
+
+	beaconBlockRoot, err := block.Fulu.Block.HashTreeRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to compute block root for fulu beacon block")
+	}
+	res.beaconBlockRoot = beaconBlockRoot
+
+	signedBlock, err := structs.SignedBeaconBlockContentsFuluFromConsensus(block.Fulu)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshall fulu beacon block contents")
+	}
+	res.marshalledJSON, err = json.Marshal(signedBlock)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshall fulu beacon block contents to json")
+	}
+
+	return &res, nil
+}
+
+func handleBlindedFuluBlock(block *ethpb.GenericSignedBeaconBlock_BlindedFulu) (*blockProcessingResult, error) {
+	var res blockProcessingResult
+	res.consensusVersion = "fulu"
+	res.blinded = true
+
+	beaconBlockRoot, err := block.BlindedFulu.HashTreeRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to compute block root for fulu blinded beacon block")
+	}
+	res.beaconBlockRoot = beaconBlockRoot
+
+	signedBlock, err := structs.SignedBlindedBeaconBlockFuluFromConsensus(block.BlindedFulu)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshall fulu blinded beacon block")
+	}
+	res.marshalledJSON, err = json.Marshal(signedBlock)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshall fulu blinded beacon block to json")
+	}
+
+	return &res, nil
 }

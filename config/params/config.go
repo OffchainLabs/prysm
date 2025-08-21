@@ -2,14 +2,24 @@
 package params
 
 import (
+	"encoding/binary"
+	"fmt"
 	"math"
+	"slices"
+	"sort"
+	"strings"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/crypto/hash"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/pkg/errors"
 )
 
 // BeaconChainConfig contains constant configs for node to participate in beacon chain.
@@ -242,7 +252,7 @@ type BeaconChainConfig struct {
 	MaxPerEpochActivationChurnLimit  uint64           `yaml:"MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT" spec:"true"`  // MaxPerEpochActivationChurnLimit is the maximum amount of churn allotted for validator activation.
 	MinEpochsForBlobsSidecarsRequest primitives.Epoch `yaml:"MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS" spec:"true"` // MinEpochsForBlobsSidecarsRequest is the minimum number of epochs the node will keep the blobs for.
 	MaxRequestBlobSidecars           uint64           `yaml:"MAX_REQUEST_BLOB_SIDECARS" spec:"true"`             // MaxRequestBlobSidecars is the maximum number of blobs to request in a single request.
-	MaxRequestBlobSidecarsElectra    uint64           `yaml:"MAX_REQUEST_BLOB_SIDECARS_ELECTRA" spec:"true"`     // MaxRequestBlobSidecarsElectra is the maximum number of blobs to request in a single request.
+	MaxRequestBlobSidecarsElectra    uint64           `yaml:"MAX_REQUEST_BLOB_SIDECARS_ELECTRA" spec:"true"`     // MaxRequestBlobSidecarsElectra is the maximum number of blobs to request in a single request after the electra epoch.
 	MaxRequestBlocksDeneb            uint64           `yaml:"MAX_REQUEST_BLOCKS_DENEB" spec:"true"`              // MaxRequestBlocksDeneb is the maximum number of blocks in a single request after the deneb epoch.
 	FieldElementsPerBlob             uint64           `yaml:"FIELD_ELEMENTS_PER_BLOB" spec:"true"`               // FieldElementsPerBlob is the number of field elements that constitute a single blob.
 	MaxBlobCommitmentsPerBlock       uint64           `yaml:"MAX_BLOB_COMMITMENTS_PER_BLOCK" spec:"true"`        // MaxBlobCommitmentsPerBlock is the maximum number of KZG commitments that a block can have.
@@ -265,14 +275,17 @@ type BeaconChainConfig struct {
 	MaxDepositRequestsPerPayload          uint64 `yaml:"MAX_DEPOSIT_REQUESTS_PER_PAYLOAD" spec:"true"`           // MaxDepositRequestsPerPayload is the maximum number of execution layer deposits in each payload
 	UnsetDepositRequestsStartIndex        uint64 `yaml:"UNSET_DEPOSIT_REQUESTS_START_INDEX" spec:"true"`         // UnsetDepositRequestsStartIndex is used to check the start index for eip6110
 
-	// PeerDAS Values
-	SamplesPerSlot                        uint64           `yaml:"SAMPLES_PER_SLOT"`                             // SamplesPerSlot refers to the number of random samples a node queries per slot.
-	CustodyRequirement                    uint64           `yaml:"CUSTODY_REQUIREMENT"`                          // CustodyRequirement refers to the minimum amount of subnets a peer must custody and serve samples from.
-	MinEpochsForDataColumnSidecarsRequest primitives.Epoch `yaml:"MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS"` // MinEpochsForDataColumnSidecarsRequest is the minimum number of epochs the node will keep the data columns for.
-	MaxRequestDataColumnSidecars          uint64           `yaml:"MAX_REQUEST_DATA_COLUMN_SIDECARS" spec:"true"` // MaxRequestDataColumnSidecars is the maximum number of data column sidecars in a single request
-	MaxCellsInExtendedMatrix              uint64           `yaml:"MAX_CELLS_IN_EXTENDED_MATRIX" spec:"true"`     // MaxCellsInExtendedMatrix is the full data of one-dimensional erasure coding extended blobs (in row major format).
-	NumberOfColumns                       uint64           `yaml:"NUMBER_OF_COLUMNS" spec:"true"`                // NumberOfColumns in the extended data matrix.
-	DataColumnSidecarSubnetCount          uint64           `yaml:"DATA_COLUMN_SIDECAR_SUBNET_COUNT" spec:"true"` // DataColumnSidecarSubnetCount is the number of data column sidecar subnets used in the gossipsub protocol
+	// Values introduced in Fulu upgrade
+	NumberOfColumns                       uint64           `yaml:"NUMBER_OF_COLUMNS" spec:"true"`                            // NumberOfColumns in the extended data matrix.
+	SamplesPerSlot                        uint64           `yaml:"SAMPLES_PER_SLOT" spec:"true"`                             // SamplesPerSlot is the minimum number of samples for an honest node.
+	NumberOfCustodyGroups                 uint64           `yaml:"NUMBER_OF_CUSTODY_GROUPS" spec:"true"`                     // NumberOfCustodyGroups available for nodes to custody.
+	CustodyRequirement                    uint64           `yaml:"CUSTODY_REQUIREMENT" spec:"true"`                          // CustodyRequirement is minimum number of custody groups an honest node custodies and serves samples from.
+	MinEpochsForDataColumnSidecarsRequest primitives.Epoch `yaml:"MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS" spec:"true"` // MinEpochsForDataColumnSidecarsRequest is the minimum number of epochs the node will keep the data columns for.
+	MaxCellsInExtendedMatrix              uint64           `yaml:"MAX_CELLS_IN_EXTENDED_MATRIX"`                             // MaxCellsInExtendedMatrix is the full data of one-dimensional erasure coding extended blobs (in row major format).
+	DataColumnSidecarSubnetCount          uint64           `yaml:"DATA_COLUMN_SIDECAR_SUBNET_COUNT" spec:"true"`             // DataColumnSidecarSubnetCount is the number of data column sidecar subnets used in the gossipsub protocol
+	MaxRequestDataColumnSidecars          uint64           `yaml:"MAX_REQUEST_DATA_COLUMN_SIDECARS" spec:"true"`             // MaxRequestDataColumnSidecars is the maximum number of data column sidecars in a single request
+	ValidatorCustodyRequirement           uint64           `yaml:"VALIDATOR_CUSTODY_REQUIREMENT" spec:"true"`                // ValidatorCustodyRequirement is the minimum number of custody groups an honest node with validators attached custodies and serves samples from
+	BalancePerAdditionalCustodyGroup      uint64           `yaml:"BALANCE_PER_ADDITIONAL_CUSTODY_GROUP" spec:"true"`         // BalancePerAdditionalCustodyGroup is the balance increment corresponding to one additional group to custody.
 
 	// Networking Specific Parameters
 	MaxPayloadSize                  uint64          `yaml:"MAX_PAYLOAD_SIZE" spec:"true"`                   // MAX_PAYLOAD_SIZE is the maximum allowed size of uncompressed payload in gossip messages and rpc chunks.
@@ -292,6 +305,7 @@ type BeaconChainConfig struct {
 	NodeIdBits                      uint64          `yaml:"NODE_ID_BITS" spec:"true"`                       // NodeIdBits defines the bit length of a node id.
 
 	// Blobs Values
+	BlobSchedule []BlobScheduleEntry `yaml:"BLOB_SCHEDULE" spec:"true"`
 
 	// Deprecated_MaxBlobsPerBlock defines the max blobs that could exist in a block.
 	// Deprecated: This field is no longer supported. Avoid using it.
@@ -304,13 +318,291 @@ type BeaconChainConfig struct {
 	// DeprecatedTargetBlobsPerBlockElectra defines the target number of blobs per block post Electra hard fork.
 	// Deprecated: This field is no longer supported. Avoid using it.
 	DeprecatedTargetBlobsPerBlockElectra int `yaml:"TARGET_BLOBS_PER_BLOCK_ELECTRA" spec:"true"`
+
+	// DeprecatedMaxBlobsPerBlockFulu defines the max blobs that could exist in a block post Fulu hard fork.
+	// Deprecated: This field is no longer supported. Avoid using it.
+	DeprecatedMaxBlobsPerBlockFulu int `yaml:"MAX_BLOBS_PER_BLOCK_FULU" spec:"true"`
+
+	forkSchedule    *NetworkSchedule
+	bpoSchedule     *NetworkSchedule
+	networkSchedule *NetworkSchedule
 }
 
+func (b *BeaconChainConfig) VersionToForkEpochMap() map[int]primitives.Epoch {
+	return map[int]primitives.Epoch{
+		version.Altair:    b.AltairForkEpoch,
+		version.Bellatrix: b.BellatrixForkEpoch,
+		version.Capella:   b.CapellaForkEpoch,
+		version.Deneb:     b.DenebForkEpoch,
+		version.Electra:   b.ElectraForkEpoch,
+		version.Fulu:      b.FuluForkEpoch,
+	}
+}
+
+func (b *BeaconChainConfig) ExecutionRequestLimits() enginev1.ExecutionRequestLimits {
+	return enginev1.ExecutionRequestLimits{
+		Deposits:       b.MaxDepositRequestsPerPayload,
+		Withdrawals:    b.MaxWithdrawalsPerPayload,
+		Consolidations: b.MaxConsolidationsRequestsPerPayload,
+	}
+}
+
+type NetworkScheduleEntry struct {
+	ForkVersion      [fieldparams.VersionLength]byte `yaml:"-" json:"-"`
+	ForkDigest       [4]byte                         `yaml:"-" json:"-"`
+	MaxBlobsPerBlock uint64                          `yaml:"MAX_BLOBS_PER_BLOCK" json:"MAX_BLOBS_PER_BLOCK"`
+	Epoch            primitives.Epoch                `yaml:"EPOCH" json:"EPOCH"`
+	BPOEpoch         primitives.Epoch                `yaml:"-" json:"-"`
+	VersionEnum      int                             `yaml:"-" json:"-"`
+	isFork           bool                            `yaml:"-" json:"-"`
+}
+
+func (e NetworkScheduleEntry) LogFields() log.Fields {
+	gvr := BeaconConfig().GenesisValidatorsRoot
+	root, err := computeForkDataRoot(e.ForkVersion, gvr)
+	if err != nil {
+		log.WithField("version", fmt.Sprintf("%#x", e.ForkVersion)).
+			WithField("genesisValidatorsRoot", fmt.Sprintf("%#x", gvr)).
+			WithError(err).Error("Failed to compute fork data root")
+	}
+	fields := log.Fields{
+		"forkVersion":      fmt.Sprintf("%#x", e.ForkVersion),
+		"forkDigest":       fmt.Sprintf("%#x", e.ForkDigest),
+		"maxBlobsPerBlock": e.MaxBlobsPerBlock,
+		"epoch":            e.Epoch,
+		"bpoEpoch":         e.BPOEpoch,
+		"isFork":           e.isFork,
+		"forkEnum":         version.String(e.VersionEnum),
+		"sanity":           fmt.Sprintf("%#x", root),
+		"gvr":              fmt.Sprintf("%#x", gvr),
+	}
+	return fields
+}
+
+type BlobScheduleEntry NetworkScheduleEntry
+
+func (b *BeaconChainConfig) ApplyOptions(opts ...Option) {
+	for _, opt := range opts {
+		opt(b)
+	}
+}
+
+// TODO: this needs to be able to return an error
 // InitializeForkSchedule initializes the schedules forks baked into the config.
 func (b *BeaconChainConfig) InitializeForkSchedule() {
 	// Reset Fork Version Schedule.
 	b.ForkVersionSchedule = configForkSchedule(b)
 	b.ForkVersionNames = configForkNames(b)
+	b.forkSchedule = initForkSchedule(b)
+	b.bpoSchedule = initBPOSchedule(b)
+	combined := b.forkSchedule.merge(b.bpoSchedule)
+	if err := combined.prepare(b); err != nil {
+		log.WithError(err).Error("Failed to prepare network schedule")
+	}
+	b.networkSchedule = combined
+}
+
+func LogDigests(b *BeaconChainConfig) {
+	schedule := b.networkSchedule
+	for _, e := range schedule.entries {
+		log.WithFields(e.LogFields()).Debug("Network schedule entry initialized")
+		digests := make([]string, 0, len(schedule.byDigest))
+		for k := range schedule.byDigest {
+			digests = append(digests, fmt.Sprintf("%#x", k))
+		}
+		log.WithField("digest_keys", strings.Join(digests, ", ")).Debug("Digests seen")
+	}
+}
+
+type NetworkSchedule struct {
+	entries   []NetworkScheduleEntry
+	byEpoch   map[primitives.Epoch]*NetworkScheduleEntry
+	byVersion map[[fieldparams.VersionLength]byte]*NetworkScheduleEntry
+	byDigest  map[[4]byte]*NetworkScheduleEntry
+}
+
+func newNetworkSchedule(entries []NetworkScheduleEntry) *NetworkSchedule {
+	return &NetworkSchedule{
+		entries:   entries,
+		byEpoch:   make(map[primitives.Epoch]*NetworkScheduleEntry),
+		byVersion: make(map[[fieldparams.VersionLength]byte]*NetworkScheduleEntry),
+		byDigest:  make(map[[4]byte]*NetworkScheduleEntry),
+	}
+}
+
+func (ns *NetworkSchedule) epochIdx(epoch primitives.Epoch) int {
+	for i := len(ns.entries) - 1; i >= 0; i-- {
+		if ns.entries[i].Epoch <= epoch {
+			return i
+		}
+	}
+	return -1
+}
+
+func (ns *NetworkSchedule) Next(epoch primitives.Epoch) NetworkScheduleEntry {
+	lastIdx := len(ns.entries) - 1
+	idx := ns.epochIdx(epoch)
+	if idx < 0 {
+		return ns.entries[0]
+	}
+	if idx == lastIdx {
+		return ns.entries[lastIdx]
+	}
+	return ns.entries[idx+1]
+}
+
+func (ns *NetworkSchedule) LastEntry() NetworkScheduleEntry {
+	for i := len(ns.entries) - 1; i >= 0; i-- {
+		if ns.entries[i].Epoch != BeaconConfig().FarFutureEpoch {
+			return ns.entries[i]
+		}
+	}
+	return ns.entries[0]
+}
+
+// LastFork is the last full fork (this is used by e2e testing)
+func (ns *NetworkSchedule) LastFork() NetworkScheduleEntry {
+	for i := len(ns.entries) - 1; i >= 0; i-- {
+		if ns.entries[i].isFork && ns.entries[i].Epoch != BeaconConfig().FarFutureEpoch {
+			return ns.entries[i]
+		}
+	}
+	return ns.entries[0]
+}
+
+func (ns *NetworkSchedule) ForEpoch(epoch primitives.Epoch) NetworkScheduleEntry {
+	idx := ns.epochIdx(epoch)
+	if idx < 0 {
+		return ns.entries[0]
+	}
+	if idx >= len(ns.entries)-1 {
+		return ns.entries[len(ns.entries)-1]
+	}
+	return ns.entries[idx]
+}
+
+func (ns *NetworkSchedule) activatedAt(epoch primitives.Epoch) (*NetworkScheduleEntry, bool) {
+	entry, ok := ns.byEpoch[epoch]
+	return entry, ok
+}
+
+func (ns *NetworkSchedule) merge(other *NetworkSchedule) *NetworkSchedule {
+	merged := make([]NetworkScheduleEntry, 0, len(ns.entries)+len(other.entries))
+	merged = append(merged, ns.entries...)
+	merged = append(merged, other.entries...)
+	sort.Slice(merged, func(i, j int) bool {
+		if merged[i].Epoch == merged[j].Epoch {
+			if merged[i].VersionEnum == merged[j].VersionEnum {
+				return merged[i].isFork
+			}
+			return merged[i].VersionEnum < merged[j].VersionEnum
+		}
+		return merged[i].Epoch < merged[j].Epoch
+	})
+	return newNetworkSchedule(merged)
+}
+
+func (ns *NetworkSchedule) index(e NetworkScheduleEntry) {
+	if _, ok := ns.byDigest[e.ForkDigest]; !ok {
+		ns.byDigest[e.ForkDigest] = &e
+	}
+	if _, ok := ns.byVersion[e.ForkVersion]; !ok {
+		ns.byVersion[e.ForkVersion] = &e
+	}
+	if _, ok := ns.byEpoch[e.Epoch]; !ok {
+		ns.byEpoch[e.Epoch] = &e
+	}
+}
+
+func (ns *NetworkSchedule) prepare(b *BeaconChainConfig) error {
+	if len(ns.entries) == 0 {
+		return errors.New("cannot compute digests for an empty network schedule")
+	}
+	if !ns.entries[0].isFork {
+		return errors.New("cannot compute digests for a network schedule without a fork entry")
+	}
+	lastFork, err := entryWithForkDigest(ns.entries[0], b)
+	if err != nil {
+		return err
+	}
+	ns.entries[0] = lastFork
+	ns.index(ns.entries[0])
+	var lastBlobs *NetworkScheduleEntry
+	for i := 1; i < len(ns.entries); i++ {
+		entry := ns.entries[i]
+
+		if entry.isFork {
+			lastFork = entry
+		} else {
+			entry.ForkVersion = lastFork.ForkVersion
+			entry.VersionEnum = lastFork.VersionEnum
+		}
+
+		if entry.MaxBlobsPerBlock > 0 || !entry.isFork {
+			entry.BPOEpoch = entry.Epoch
+			lastBlobs = &entry
+		} else if lastBlobs != nil {
+			entry.MaxBlobsPerBlock = lastBlobs.MaxBlobsPerBlock
+			entry.BPOEpoch = lastBlobs.BPOEpoch
+		}
+
+		entry, err = entryWithForkDigest(entry, b)
+		if err != nil {
+			return err
+		}
+		ns.entries[i] = entry
+		ns.index(entry)
+	}
+	return nil
+}
+
+func entryWithForkDigest(entry NetworkScheduleEntry, b *BeaconChainConfig) (NetworkScheduleEntry, error) {
+	root, err := computeForkDataRoot(entry.ForkVersion, b.GenesisValidatorsRoot)
+	if err != nil {
+		return entry, err
+	}
+	entry.ForkDigest = to4(root[:])
+	if entry.Epoch < b.FuluForkEpoch {
+		return entry, nil
+	}
+	if entry.MaxBlobsPerBlock > math.MaxUint32 {
+		return entry, fmt.Errorf("max blobs per block exceeds maximum uint32 value")
+	}
+	hb := make([]byte, 16)
+	binary.LittleEndian.PutUint64(hb[0:8], uint64(entry.BPOEpoch))
+	binary.LittleEndian.PutUint64(hb[8:], entry.MaxBlobsPerBlock)
+	bpoHash := hash.Hash(hb)
+	entry.ForkDigest[0] = entry.ForkDigest[0] ^ bpoHash[0]
+	entry.ForkDigest[1] = entry.ForkDigest[1] ^ bpoHash[1]
+	entry.ForkDigest[2] = entry.ForkDigest[2] ^ bpoHash[2]
+	entry.ForkDigest[3] = entry.ForkDigest[3] ^ bpoHash[3]
+	return entry, nil
+}
+
+var to4 = bytesutil.ToBytes4
+
+func initForkSchedule(b *BeaconChainConfig) *NetworkSchedule {
+	return newNetworkSchedule([]NetworkScheduleEntry{
+		{Epoch: b.GenesisEpoch, isFork: true, ForkVersion: to4(b.GenesisForkVersion), VersionEnum: version.Phase0},
+		{Epoch: b.AltairForkEpoch, isFork: true, ForkVersion: to4(b.AltairForkVersion), VersionEnum: version.Altair},
+		{Epoch: b.BellatrixForkEpoch, isFork: true, ForkVersion: to4(b.BellatrixForkVersion), VersionEnum: version.Bellatrix},
+		{Epoch: b.CapellaForkEpoch, isFork: true, ForkVersion: to4(b.CapellaForkVersion), VersionEnum: version.Capella},
+		{Epoch: b.DenebForkEpoch, isFork: true, ForkVersion: to4(b.DenebForkVersion), MaxBlobsPerBlock: uint64(b.DeprecatedMaxBlobsPerBlock), VersionEnum: version.Deneb},
+		{Epoch: b.ElectraForkEpoch, isFork: true, ForkVersion: to4(b.ElectraForkVersion), MaxBlobsPerBlock: uint64(b.DeprecatedMaxBlobsPerBlockElectra), VersionEnum: version.Electra},
+		{Epoch: b.FuluForkEpoch, isFork: true, ForkVersion: to4(b.FuluForkVersion), VersionEnum: version.Fulu},
+	})
+}
+
+func initBPOSchedule(b *BeaconChainConfig) *NetworkSchedule {
+	sort.Slice(b.BlobSchedule, func(i, j int) bool {
+		return b.BlobSchedule[i].Epoch < b.BlobSchedule[j].Epoch
+	})
+	entries := make([]NetworkScheduleEntry, len(b.BlobSchedule))
+	for i := range b.BlobSchedule {
+		entries[i] = NetworkScheduleEntry(b.BlobSchedule[i])
+		entries[i].BPOEpoch = entries[i].Epoch
+	}
+	return newNetworkSchedule(entries)
 }
 
 func configForkSchedule(b *BeaconChainConfig) map[[fieldparams.VersionLength]byte]primitives.Epoch {
@@ -389,38 +681,63 @@ func (b *BeaconChainConfig) TargetBlobsPerBlock(slot primitives.Slot) int {
 	if primitives.Epoch(slot.DivSlot(b.SlotsPerEpoch)) >= b.ElectraForkEpoch {
 		return b.DeprecatedTargetBlobsPerBlockElectra
 	}
+
 	return b.DeprecatedMaxBlobsPerBlock / 2
 }
 
-// MaxBlobsPerBlock returns the maximum number of blobs per block for the given slot,
-// adjusting for the Electra fork.
+// MaxBlobsPerBlock returns the maximum number of blobs per block for the given slot.
 func (b *BeaconChainConfig) MaxBlobsPerBlock(slot primitives.Slot) int {
-	if primitives.Epoch(slot.DivSlot(b.SlotsPerEpoch)) >= b.ElectraForkEpoch {
+	epoch := primitives.Epoch(slot.DivSlot(b.SlotsPerEpoch))
+
+	if len(b.BlobSchedule) > 0 {
+		if !slices.IsSortedFunc(b.BlobSchedule, func(a, b BlobScheduleEntry) int {
+			return int(a.Epoch - b.Epoch)
+		}) {
+			slices.SortFunc(b.BlobSchedule, func(a, b BlobScheduleEntry) int {
+				return int(a.Epoch - b.Epoch)
+			})
+		}
+
+		for i := len(b.BlobSchedule) - 1; i >= 0; i-- {
+			if epoch >= b.BlobSchedule[i].Epoch {
+				return int(b.BlobSchedule[i].MaxBlobsPerBlock)
+			}
+		}
+	}
+
+	if epoch >= b.ElectraForkEpoch {
 		return b.DeprecatedMaxBlobsPerBlockElectra
 	}
+
 	return b.DeprecatedMaxBlobsPerBlock
 }
 
-// MaxBlobsPerBlockByVersion returns the maximum number of blobs per block for the given fork version
-func (b *BeaconChainConfig) MaxBlobsPerBlockByVersion(v int) int {
-	if v >= version.Electra {
-		return b.DeprecatedMaxBlobsPerBlockElectra
-	}
-	return b.DeprecatedMaxBlobsPerBlock
-}
-
-// MaxBlobsPerBlockByEpoch returns the maximum number of blobs per block for the given epoch,
-// adjusting for the Electra fork.
+// MaxBlobsPerBlockAtEpoch returns the maximum number of blobs per block for the given epoch
 func (b *BeaconChainConfig) MaxBlobsPerBlockAtEpoch(epoch primitives.Epoch) int {
+	if len(b.BlobSchedule) > 0 {
+		if !slices.IsSortedFunc(b.BlobSchedule, func(a, b BlobScheduleEntry) int {
+			return int(a.Epoch - b.Epoch)
+		}) {
+			slices.SortFunc(b.BlobSchedule, func(a, b BlobScheduleEntry) int {
+				return int(a.Epoch - b.Epoch)
+			})
+		}
+
+		for i := len(b.BlobSchedule) - 1; i >= 0; i-- {
+			if epoch >= b.BlobSchedule[i].Epoch {
+				return int(b.BlobSchedule[i].MaxBlobsPerBlock)
+			}
+		}
+	}
+
 	if epoch >= b.ElectraForkEpoch {
 		return b.DeprecatedMaxBlobsPerBlockElectra
 	}
 	return b.DeprecatedMaxBlobsPerBlock
 }
 
-// DenebEnabled centralizes the check to determine if code paths
-// that are specific to deneb should be allowed to execute. This will make it easier to find call sites that do this
-// kind of check and remove them post-deneb.
+// DenebEnabled centralizes the check to determine if code paths that are specific to deneb should be allowed to execute.
+// This will make it easier to find call sites that do this kind of check and remove them post-deneb.
 func DenebEnabled() bool {
 	return BeaconConfig().DenebForkEpoch < math.MaxUint64
 }
@@ -432,13 +749,17 @@ func ElectraEnabled() bool {
 	return BeaconConfig().ElectraForkEpoch < math.MaxUint64
 }
 
-// PeerDASEnabled centralizes the check to determine if code paths
-// that are specific to peerdas should be allowed to execute.
-func PeerDASEnabled() bool {
+// FuluEnabled centralizes the check to determine if code paths that are specific to Fulu should be allowed to execute.
+// This will make it easier to find call sites that do this kind of check and remove them post-fulu.
+func FuluEnabled() bool {
 	return BeaconConfig().FuluForkEpoch < math.MaxUint64
 }
 
-// WithinDAPeriod checks if the block epoch is within MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS of the given current epoch.
+// WithinDAPeriod checks if the block epoch is within the data availability retention period.
 func WithinDAPeriod(block, current primitives.Epoch) bool {
+	if block >= BeaconConfig().FuluForkEpoch {
+		return block+BeaconConfig().MinEpochsForDataColumnSidecarsRequest >= current
+	}
+
 	return block+BeaconConfig().MinEpochsForBlobsSidecarsRequest >= current
 }

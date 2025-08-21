@@ -17,6 +17,15 @@ def prysm_image_upload(
         extension = "tar.gz",
     )
 
+    pkg_tar(
+        name = "sh_symlink_tar",
+        symlinks = {
+            "bin/sh": "/bin/bash",
+        },
+        tags = tags,
+        extension = "tar.gz",
+    )
+
     oci_image(
         name = "oci_image",
         base = "@linux_debian11_multiarch_base",
@@ -43,6 +52,7 @@ def prysm_image_upload(
             "@arm64_debian11_libpcre2",
           ],
         }) + [
+            ":sh_symlink_tar",
             ":binary_tar",
         ],
         labels = {

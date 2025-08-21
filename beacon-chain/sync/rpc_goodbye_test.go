@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"context"
 	"sync"
 	"testing"
 	"time"
@@ -52,11 +51,11 @@ func TestGoodByeRPCHandler_Disconnects_With_Peer(t *testing.T) {
 		defer wg.Done()
 		expectResetStream(t, stream)
 	})
-	stream1, err := p1.BHost.NewStream(context.Background(), p2.BHost.ID(), pcl)
+	stream1, err := p1.BHost.NewStream(t.Context(), p2.BHost.ID(), pcl)
 	require.NoError(t, err)
 	failureCode := p2ptypes.GoodbyeCodeClientShutdown
 
-	assert.NoError(t, r.goodbyeRPCHandler(context.Background(), &failureCode, stream1))
+	assert.NoError(t, r.goodbyeRPCHandler(t.Context(), &failureCode, stream1))
 
 	if util.WaitTimeout(&wg, 1*time.Second) {
 		t.Fatal("Did not receive stream within 1 sec")
@@ -97,11 +96,11 @@ func TestGoodByeRPCHandler_BackOffPeer(t *testing.T) {
 		defer wg.Done()
 		expectResetStream(t, stream)
 	})
-	stream1, err := p1.BHost.NewStream(context.Background(), p2.BHost.ID(), pcl)
+	stream1, err := p1.BHost.NewStream(t.Context(), p2.BHost.ID(), pcl)
 	require.NoError(t, err)
 	failureCode := p2ptypes.GoodbyeCodeClientShutdown
 
-	assert.NoError(t, r.goodbyeRPCHandler(context.Background(), &failureCode, stream1))
+	assert.NoError(t, r.goodbyeRPCHandler(t.Context(), &failureCode, stream1))
 
 	if util.WaitTimeout(&wg, 1*time.Second) {
 		t.Fatal("Did not receive stream within 1 sec")
@@ -124,11 +123,11 @@ func TestGoodByeRPCHandler_BackOffPeer(t *testing.T) {
 		expectResetStream(t, stream)
 	})
 
-	stream2, err := p1.BHost.NewStream(context.Background(), p3.BHost.ID(), pcl)
+	stream2, err := p1.BHost.NewStream(t.Context(), p3.BHost.ID(), pcl)
 	require.NoError(t, err)
 	failureCode = p2ptypes.GoodbyeCodeBanned
 
-	assert.NoError(t, r.goodbyeRPCHandler(context.Background(), &failureCode, stream2))
+	assert.NoError(t, r.goodbyeRPCHandler(t.Context(), &failureCode, stream2))
 
 	if util.WaitTimeout(&wg, 1*time.Second) {
 		t.Fatal("Did not receive stream within 1 sec")
@@ -180,7 +179,7 @@ func TestSendGoodbye_SendsMessage(t *testing.T) {
 		assert.NoError(t, stream.Close())
 	})
 
-	err := r.sendGoodByeMessage(context.Background(), failureCode, p2.BHost.ID())
+	err := r.sendGoodByeMessage(t.Context(), failureCode, p2.BHost.ID())
 	assert.NoError(t, err)
 
 	if util.WaitTimeout(&wg, 1*time.Second) {
@@ -227,7 +226,7 @@ func TestSendGoodbye_DisconnectWithPeer(t *testing.T) {
 		assert.NoError(t, stream.Close())
 	})
 
-	assert.NoError(t, r.sendGoodByeAndDisconnect(context.Background(), failureCode, p2.BHost.ID()))
+	assert.NoError(t, r.sendGoodByeAndDisconnect(t.Context(), failureCode, p2.BHost.ID()))
 	conns := p1.BHost.Network().ConnsToPeer(p2.BHost.ID())
 	if len(conns) > 0 {
 		t.Error("Peer is still not disconnected despite sending a goodbye message")

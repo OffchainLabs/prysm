@@ -41,7 +41,7 @@ func TestProcessAttestationNoVerifySignature_BeaconFuzzIssue78(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	_, err = blocks.ProcessAttestationNoVerifySignature(ctx, st, att)
 	require.ErrorContains(t, "committee index 1 >= committee count 1", err)
 }

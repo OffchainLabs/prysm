@@ -70,7 +70,7 @@ func (f *ForkChoice) Head(
 
 	jc := f.JustifiedCheckpoint()
 	fc := f.FinalizedCheckpoint()
-	currentEpoch := slots.EpochsSinceGenesis(time.Unix(int64(f.store.genesisTime), 0))
+	currentEpoch := slots.EpochsSinceGenesis(f.store.genesisTime)
 	if err := f.store.treeRootNode.updateBestDescendant(ctx, jc.Epoch, fc.Epoch, currentEpoch); err != nil {
 		return [32]byte{}, errors.Wrap(err, "could not update best descendant")
 	}
@@ -127,7 +127,7 @@ func (f *ForkChoice) InsertNode(ctx context.Context, state state.BeaconState, ro
 	if err := f.updateCheckpoints(ctx, jc, fc); err != nil {
 		_, remErr := f.store.removeNode(ctx, node)
 		if remErr != nil {
-			log.WithError(remErr).Error("could not remove node")
+			log.WithError(remErr).Error("Could not remove node")
 		}
 		return errors.Wrap(err, "could not update checkpoints")
 	}
@@ -486,8 +486,8 @@ func (f *ForkChoice) InsertChain(ctx context.Context, chain []*forkchoicetypes.B
 }
 
 // SetGenesisTime sets the genesisTime tracked by forkchoice
-func (f *ForkChoice) SetGenesisTime(genesisTime uint64) {
-	f.store.genesisTime = genesisTime
+func (f *ForkChoice) SetGenesisTime(genesis time.Time) {
+	f.store.genesisTime = genesis.Truncate(time.Second) // Genesis time has a precision of 1 second.
 }
 
 // SetOriginRoot sets the genesis block root

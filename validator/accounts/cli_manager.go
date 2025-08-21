@@ -87,7 +87,7 @@ func (acm *CLIManager) prepareBeaconClients(ctx context.Context) (*iface.Validat
 		acm.beaconApiTimeout,
 	)
 
-	restHandler := beaconApi.NewBeaconApiJsonRestHandler(
+	restHandler := beaconApi.NewBeaconApiRestHandler(
 		http.Client{Timeout: acm.beaconApiTimeout},
 		acm.beaconApiEndpoint,
 	)

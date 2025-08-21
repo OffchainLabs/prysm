@@ -72,7 +72,11 @@ func feeRecipientIsPresent(_ *types.EvaluationContext, conns ...*grpc.ClientConn
 	if err != nil {
 		return errors.Wrap(err, "failed to get chain head")
 	}
-	req := &ethpb.ListBlocksRequest{QueryFilter: &ethpb.ListBlocksRequest_Epoch{Epoch: chainHead.HeadEpoch.Sub(1)}}
+	epoch := chainHead.HeadEpoch
+	if epoch > 0 {
+		epoch--
+	}
+	req := &ethpb.ListBlocksRequest{QueryFilter: &ethpb.ListBlocksRequest_Epoch{Epoch: epoch}}
 	blks, err := client.ListBeaconBlocks(context.Background(), req)
 	if err != nil {
 		return errors.Wrap(err, "failed to list blocks")
@@ -103,7 +107,7 @@ func feeRecipientIsPresent(_ *types.EvaluationContext, conns ...*grpc.ClientConn
 				continue
 			}
 			if len(payload.FeeRecipient) == 0 || hexutil.Encode(payload.FeeRecipient) == params.BeaconConfig().EthBurnAddressHex {
-				log.WithField("proposerIndex", bb.ProposerIndex).WithField("slot", bb.Slot).Error("fee recipient eval bug")
+				log.WithField("proposerIndex", bb.ProposerIndex).WithField("slot", bb.Slot).Error("Fee recipient eval bug")
 				return errors.New("fee recipient is not set")
 			}
 
@@ -134,7 +138,7 @@ func feeRecipientIsPresent(_ *types.EvaluationContext, conns ...*grpc.ClientConn
 					WithField("slot", bb.Slot).
 					WithField("proposerIndex", bb.ProposerIndex).
 					WithField("feeRecipient", fr.Hex()).
-					Warn("unknown key observed, not a deterministically generated key")
+					Warn("Unknown key observed, not a deterministically generated key")
 				return errors.New("unknown key observed, not a deterministically generated key")
 			}
 

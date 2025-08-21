@@ -1,7 +1,6 @@
 package execution
 
 import (
-	"context"
 	"encoding/binary"
 	"math/big"
 	"testing"
@@ -39,7 +38,7 @@ func TestProcessDepositLog_OK(t *testing.T) {
 	t.Cleanup(func() {
 		server.Stop()
 	})
-	web3Service, err := NewService(context.Background(),
+	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDepositContractAddress(testAcc.ContractAddr),
 		WithDatabase(beaconDB),
@@ -79,7 +78,7 @@ func TestProcessDepositLog_OK(t *testing.T) {
 		t.Fatal("no logs")
 	}
 
-	err = web3Service.ProcessLog(context.Background(), &logs[0])
+	err = web3Service.ProcessLog(t.Context(), &logs[0])
 	require.NoError(t, err)
 
 	require.LogsDoNotContain(t, hook, "Could not unpack log")
@@ -108,7 +107,7 @@ func TestProcessDepositLog_InsertsPendingDeposit(t *testing.T) {
 		server.Stop()
 	})
 
-	web3Service, err := NewService(context.Background(),
+	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDepositContractAddress(testAcc.ContractAddr),
 		WithDatabase(beaconDB),
@@ -149,12 +148,12 @@ func TestProcessDepositLog_InsertsPendingDeposit(t *testing.T) {
 
 	web3Service.chainStartData.Chainstarted = true
 
-	err = web3Service.ProcessDepositLog(context.Background(), &logs[0])
+	err = web3Service.ProcessDepositLog(t.Context(), &logs[0])
 	require.NoError(t, err)
-	err = web3Service.ProcessDepositLog(context.Background(), &logs[1])
+	err = web3Service.ProcessDepositLog(t.Context(), &logs[1])
 	require.NoError(t, err)
 
-	pendingDeposits := web3Service.cfg.depositCache.PendingDeposits(context.Background(), nil /*blockNum*/)
+	pendingDeposits := web3Service.cfg.depositCache.PendingDeposits(t.Context(), nil /*blockNum*/)
 	require.Equal(t, 2, len(pendingDeposits), "Unexpected number of deposits")
 
 	hook.Reset()
@@ -169,7 +168,7 @@ func TestUnpackDepositLogData_OK(t *testing.T) {
 	t.Cleanup(func() {
 		server.Stop()
 	})
-	web3Service, err := NewService(context.Background(),
+	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDepositContractAddress(testAcc.ContractAddr),
 		WithDatabase(beaconDB),
@@ -224,7 +223,7 @@ func TestProcessETH2GenesisLog_8DuplicatePubkeys(t *testing.T) {
 		server.Stop()
 	})
 
-	web3Service, err := NewService(context.Background(),
+	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDepositContractAddress(testAcc.ContractAddr),
 		WithDatabase(beaconDB),
@@ -273,7 +272,7 @@ func TestProcessETH2GenesisLog_8DuplicatePubkeys(t *testing.T) {
 	require.NoError(t, err, "Unable to retrieve logs")
 
 	for i := range logs {
-		err = web3Service.ProcessLog(context.Background(), &logs[i])
+		err = web3Service.ProcessLog(t.Context(), &logs[i])
 		require.NoError(t, err)
 	}
 	assert.Equal(t, false, web3Service.chainStartData.Chainstarted, "Genesis has been triggered despite being 8 duplicate keys")
@@ -299,7 +298,7 @@ func TestProcessETH2GenesisLog(t *testing.T) {
 	t.Cleanup(func() {
 		server.Stop()
 	})
-	web3Service, err := NewService(context.Background(),
+	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDepositContractAddress(testAcc.ContractAddr),
 		WithDatabase(beaconDB),
@@ -352,11 +351,11 @@ func TestProcessETH2GenesisLog(t *testing.T) {
 	defer stateSub.Unsubscribe()
 
 	for i := range logs {
-		err = web3Service.ProcessLog(context.Background(), &logs[i])
+		err = web3Service.ProcessLog(t.Context(), &logs[i])
 		require.NoError(t, err)
 	}
 
-	err = web3Service.ProcessETH1Block(context.Background(), big.NewInt(int64(logs[len(logs)-1].BlockNumber)))
+	err = web3Service.ProcessETH1Block(t.Context(), big.NewInt(int64(logs[len(logs)-1].BlockNumber)))
 	require.NoError(t, err)
 
 	cachedDeposits := web3Service.chainStartData.ChainstartDeposits
@@ -392,7 +391,7 @@ func TestProcessETH2GenesisLog_CorrectNumOfDeposits(t *testing.T) {
 		server.Stop()
 	})
 
-	web3Service, err := NewService(context.Background(),
+	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDepositContractAddress(testAcc.ContractAddr),
 		WithDatabase(kvStore),
@@ -405,7 +404,7 @@ func TestProcessETH2GenesisLog_CorrectNumOfDeposits(t *testing.T) {
 	web3Service.rpcClient = &mockExecution.RPCClient{Backend: testAcc.Backend}
 	web3Service.httpLogger = testAcc.Backend.Client()
 	web3Service.latestEth1Data.LastRequestedBlock = 0
-	block, err := testAcc.Backend.Client().BlockByNumber(context.Background(), nil)
+	block, err := testAcc.Backend.Client().BlockByNumber(t.Context(), nil)
 	require.NoError(t, err)
 	web3Service.latestEth1Data.BlockHeight = block.NumberU64()
 	web3Service.latestEth1Data.BlockTime = block.Time()
@@ -446,7 +445,7 @@ func TestProcessETH2GenesisLog_CorrectNumOfDeposits(t *testing.T) {
 	for i := uint64(0); i < params.BeaconConfig().Eth1FollowDistance; i++ {
 		testAcc.Backend.Commit()
 	}
-	b, err := testAcc.Backend.Client().BlockByNumber(context.Background(), nil)
+	b, err := testAcc.Backend.Client().BlockByNumber(t.Context(), nil)
 	require.NoError(t, err)
 	web3Service.latestEth1Data.BlockHeight = b.NumberU64()
 	web3Service.latestEth1Data.BlockTime = b.Time()
@@ -456,7 +455,7 @@ func TestProcessETH2GenesisLog_CorrectNumOfDeposits(t *testing.T) {
 	stateSub := web3Service.cfg.stateNotifier.StateFeed().Subscribe(stateChannel)
 	defer stateSub.Unsubscribe()
 
-	err = web3Service.processPastLogs(context.Background())
+	err = web3Service.processPastLogs(t.Context())
 	require.NoError(t, err)
 
 	cachedDeposits := web3Service.chainStartData.ChainstartDeposits
@@ -479,6 +478,93 @@ func TestProcessETH2GenesisLog_CorrectNumOfDeposits(t *testing.T) {
 	hook.Reset()
 }
 
+func TestProcessLogs_DepositRequestsStarted(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	hook := logTest.NewGlobal()
+	testAcc, err := mock.Setup()
+	require.NoError(t, err, "Unable to set up simulated backend")
+	kvStore := testDB.SetupDB(t)
+	depositCache, err := depositsnapshot.New()
+	require.NoError(t, err)
+	server, endpoint, err := mockExecution.SetupRPCServer()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		server.Stop()
+	})
+
+	web3Service, err := NewService(t.Context(),
+		WithHttpEndpoint(endpoint),
+		WithDepositContractAddress(testAcc.ContractAddr),
+		WithDatabase(kvStore),
+		WithDepositCache(depositCache),
+	)
+	require.NoError(t, err, "unable to setup web3 ETH1.0 chain service")
+	web3Service = setDefaultMocks(web3Service)
+	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend.Client())
+	require.NoError(t, err)
+	web3Service.rpcClient = &mockExecution.RPCClient{Backend: testAcc.Backend}
+	web3Service.httpLogger = testAcc.Backend.Client()
+	web3Service.latestEth1Data.LastRequestedBlock = 0
+	block, err := testAcc.Backend.Client().BlockByNumber(t.Context(), nil)
+	require.NoError(t, err)
+	web3Service.latestEth1Data.BlockHeight = block.NumberU64()
+	web3Service.latestEth1Data.BlockTime = block.Time()
+	bConfig := params.MinimalSpecConfig().Copy()
+	bConfig.MinGenesisTime = 0
+	bConfig.SecondsPerETH1Block = 1
+	params.OverrideBeaconConfig(bConfig)
+	nConfig := params.BeaconNetworkConfig()
+	nConfig.ContractDeploymentBlock = 0
+	params.OverrideBeaconNetworkConfig(nConfig)
+
+	testAcc.Backend.Commit()
+
+	totalNumOfDeposits := depositsReqForChainStart + 30
+
+	deposits, _, err := util.DeterministicDepositsAndKeys(uint64(totalNumOfDeposits))
+	require.NoError(t, err)
+	_, depositRoots, err := util.DeterministicDepositTrie(len(deposits))
+	require.NoError(t, err)
+	depositOffset := 5
+
+	// 64 Validators are used as size required for beacon-chain to start. This number
+	// is defined in the deposit contract as the number required for the testnet. The actual number
+	// is 2**14
+	for i := 0; i < totalNumOfDeposits; i++ {
+		data := deposits[i].Data
+		testAcc.TxOpts.Value = mock.Amount32Eth()
+		testAcc.TxOpts.GasLimit = 1000000
+		_, err = testAcc.Contract.Deposit(testAcc.TxOpts, data.PublicKey, data.WithdrawalCredentials, data.Signature, depositRoots[i])
+		require.NoError(t, err, "Could not deposit to deposit contract")
+		// pack 8 deposits into a block with an offset of
+		// 5
+		if (i+1)%8 == depositOffset {
+			testAcc.Backend.Commit()
+		}
+	}
+	// Forward the chain to account for the follow distance
+	for i := uint64(0); i < params.BeaconConfig().Eth1FollowDistance; i++ {
+		testAcc.Backend.Commit()
+	}
+	b, err := testAcc.Backend.Client().BlockByNumber(t.Context(), nil)
+	require.NoError(t, err)
+	web3Service.latestEth1Data.BlockHeight = b.NumberU64()
+	web3Service.latestEth1Data.BlockTime = b.Time()
+
+	// Set up our subscriber now to listen for the chain started event.
+	stateChannel := make(chan *feed.Event, 1)
+	stateSub := web3Service.cfg.stateNotifier.StateFeed().Subscribe(stateChannel)
+	defer stateSub.Unsubscribe()
+
+	web3Service.depositRequestsStarted = true
+	web3Service.initPOWService()
+	require.NoError(t, err)
+
+	require.Equal(t, int64(-1), web3Service.lastReceivedMerkleIndex, "Processed deposit logs even when requests are active")
+
+	hook.Reset()
+}
+
 func TestProcessETH2GenesisLog_LargePeriodOfNoLogs(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	hook := logTest.NewGlobal()
@@ -493,7 +579,7 @@ func TestProcessETH2GenesisLog_LargePeriodOfNoLogs(t *testing.T) {
 		server.Stop()
 	})
 
-	web3Service, err := NewService(context.Background(),
+	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDepositContractAddress(testAcc.ContractAddr),
 		WithDatabase(kvStore),
@@ -506,7 +592,7 @@ func TestProcessETH2GenesisLog_LargePeriodOfNoLogs(t *testing.T) {
 	web3Service.rpcClient = &mockExecution.RPCClient{Backend: testAcc.Backend}
 	web3Service.httpLogger = testAcc.Backend.Client()
 	web3Service.latestEth1Data.LastRequestedBlock = 0
-	b, err := testAcc.Backend.Client().BlockByNumber(context.Background(), nil)
+	b, err := testAcc.Backend.Client().BlockByNumber(t.Context(), nil)
 	require.NoError(t, err)
 	web3Service.latestEth1Data.BlockHeight = b.NumberU64()
 	web3Service.latestEth1Data.BlockTime = b.Time()
@@ -546,7 +632,7 @@ func TestProcessETH2GenesisLog_LargePeriodOfNoLogs(t *testing.T) {
 	for i := uint64(0); i < 1500; i++ {
 		testAcc.Backend.Commit()
 	}
-	genesisBlock, err := testAcc.Backend.Client().BlockByNumber(context.Background(), nil)
+	genesisBlock, err := testAcc.Backend.Client().BlockByNumber(t.Context(), nil)
 	require.NoError(t, err)
 
 	wantedGenesisTime := genesisBlock.Time()
@@ -555,7 +641,7 @@ func TestProcessETH2GenesisLog_LargePeriodOfNoLogs(t *testing.T) {
 	for i := uint64(0); i < params.BeaconConfig().Eth1FollowDistance; i++ {
 		testAcc.Backend.Commit()
 	}
-	currBlock, err := testAcc.Backend.Client().BlockByNumber(context.Background(), nil)
+	currBlock, err := testAcc.Backend.Client().BlockByNumber(t.Context(), nil)
 	require.NoError(t, err)
 	web3Service.latestEth1Data.BlockHeight = currBlock.NumberU64()
 	web3Service.latestEth1Data.BlockTime = currBlock.Time()
@@ -571,7 +657,7 @@ func TestProcessETH2GenesisLog_LargePeriodOfNoLogs(t *testing.T) {
 	stateSub := web3Service.cfg.stateNotifier.StateFeed().Subscribe(stateChannel)
 	defer stateSub.Unsubscribe()
 
-	err = web3Service.processPastLogs(context.Background())
+	err = web3Service.processPastLogs(t.Context())
 	require.NoError(t, err)
 
 	cachedDeposits := web3Service.chainStartData.ChainstartDeposits
@@ -599,7 +685,7 @@ func TestCheckForChainstart_NoValidator(t *testing.T) {
 	require.NoError(t, err, "Unable to set up simulated backend")
 	beaconDB := testDB.SetupDB(t)
 	s := newPowchainService(t, testAcc, beaconDB)
-	s.processChainStartIfReady(context.Background(), [32]byte{}, nil, 0)
+	s.processChainStartIfReady(t.Context(), [32]byte{}, nil, 0)
 	require.LogsDoNotContain(t, hook, "Could not determine active validator count from pre genesis state")
 }
 
@@ -611,7 +697,7 @@ func newPowchainService(t *testing.T, eth1Backend *mock.TestAccount, beaconDB db
 	t.Cleanup(func() {
 		server.Stop()
 	})
-	web3Service, err := NewService(context.Background(),
+	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDepositContractAddress(eth1Backend.ContractAddr),
 		WithDatabase(beaconDB),

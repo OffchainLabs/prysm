@@ -15,5 +15,5 @@ func VerifyBeaconStateValidatorAtIndexReadOnlyHandlesNilSlice(t *testing.T, fact
 	require.NoError(t, err)
 
 	_, err = st.ValidatorAtIndexReadOnly(0)
-	assert.Equal(t, state.ErrNilValidatorsInState, err)
+	assert.ErrorContains(t, "index 0 out of bounds", err)
 }

@@ -83,7 +83,10 @@ func (v *validator) SubmitSyncCommitteeMessage(ctx context.Context, slot primiti
 	}
 
 	msgSlot := msg.Slot
-	slotTime := time.Unix(int64(v.genesisTime+uint64(msgSlot)*params.BeaconConfig().SecondsPerSlot), 0)
+	slotTime, err := slots.StartTime(v.genesisTime, msgSlot)
+	if err != nil {
+		log.WithError(err).Error("Failed to determine slot start time")
+	}
 	log.WithFields(logrus.Fields{
 		"slot":               msg.Slot,
 		"slotStartTime":      slotTime,
@@ -127,6 +130,7 @@ func (v *validator) SubmitSignedContributionAndProof(ctx context.Context, slot p
 
 	v.waitToSlotTwoThirds(ctx, slot)
 
+	coveredSubnets := make(map[uint64]bool)
 	for i, comIdx := range indexRes.Indices {
 		isAggregator, err := altair.IsSyncCommitteeAggregator(selectionProofs[i])
 		if err != nil {
@@ -138,6 +142,10 @@ func (v *validator) SubmitSignedContributionAndProof(ctx context.Context, slot p
 		}
 		subCommitteeSize := params.BeaconConfig().SyncCommitteeSize / params.BeaconConfig().SyncCommitteeSubnetCount
 		subnet := uint64(comIdx) / subCommitteeSize
+		if coveredSubnets[subnet] {
+			// Don't submit a message for the same subnet multiple times
+			continue
+		}
 		contribution, err := v.validatorClient.SyncCommitteeContribution(ctx, &ethpb.SyncCommitteeContributionRequest{
 			Slot:      slot,
 			PublicKey: pubKey[:],
@@ -175,8 +183,13 @@ func (v *validator) SubmitSignedContributionAndProof(ctx context.Context, slot p
 			return
 		}
 
+		coveredSubnets[subnet] = true
+
 		contributionSlot := contributionAndProof.Contribution.Slot
-		slotTime := time.Unix(int64(v.genesisTime+uint64(contributionSlot)*params.BeaconConfig().SecondsPerSlot), 0)
+		slotTime, err := slots.StartTime(v.genesisTime, contributionSlot)
+		if err != nil {
+			log.WithError(err).Error("Failed to determine slot start time")
+		}
 		log.WithFields(logrus.Fields{
 			"slot":               contributionAndProof.Contribution.Slot,
 			"slotStartTime":      slotTime,

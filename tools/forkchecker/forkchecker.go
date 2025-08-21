@@ -49,7 +49,7 @@ func main() {
 	for _, endpt := range endpts {
 		conn, err := grpc.Dial(endpt, grpc.WithInsecure())
 		if err != nil {
-			log.WithError(err).Fatal("fail to dial")
+			log.WithError(err).Fatal("Fail to dial")
 		}
 		clients[endpt] = pb.NewBeaconChainClient(conn)
 	}

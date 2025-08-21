@@ -1,4 +1,4 @@
-package attestations
+package attestations_test
 
 import (
 	"testing"
@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation/aggregation"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation/aggregation/attestations"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/prysmaticlabs/go-bitfield"
 )
@@ -70,7 +71,7 @@ func TestAggregateAttestations_MaxCover_NewMaxCover(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.DeepEqual(t, tt.want, NewMaxCover(tt.args.atts))
+			assert.DeepEqual(t, tt.want, attestations.NewMaxCover(tt.args.atts))
 		})
 	}
 }
@@ -78,7 +79,7 @@ func TestAggregateAttestations_MaxCover_NewMaxCover(t *testing.T) {
 func TestAggregateAttestations_MaxCover_AttList_validate(t *testing.T) {
 	tests := []struct {
 		name      string
-		atts      attList
+		atts      attestations.AttList
 		wantedErr string
 	}{
 		{
@@ -88,17 +89,17 @@ func TestAggregateAttestations_MaxCover_AttList_validate(t *testing.T) {
 		},
 		{
 			name:      "empty list",
-			atts:      attList{},
+			atts:      attestations.AttList{},
 			wantedErr: "empty list",
 		},
 		{
 			name:      "first bitlist is nil",
-			atts:      attList{&ethpb.Attestation{}},
+			atts:      attestations.AttList{&ethpb.Attestation{}},
 			wantedErr: "bitlist cannot be nil or empty",
 		},
 		{
 			name: "non first bitlist is nil",
-			atts: attList{
+			atts: attestations.AttList{
 				&ethpb.Attestation{AggregationBits: bitfield.NewBitlist(64)},
 				&ethpb.Attestation{},
 			},
@@ -106,14 +107,14 @@ func TestAggregateAttestations_MaxCover_AttList_validate(t *testing.T) {
 		},
 		{
 			name: "first bitlist is empty",
-			atts: attList{
+			atts: attestations.AttList{
 				&ethpb.Attestation{AggregationBits: bitfield.Bitlist{}},
 			},
 			wantedErr: "bitlist cannot be nil or empty",
 		},
 		{
 			name: "non first bitlist is empty",
-			atts: attList{
+			atts: attestations.AttList{
 				&ethpb.Attestation{AggregationBits: bitfield.NewBitlist(64)},
 				&ethpb.Attestation{AggregationBits: bitfield.Bitlist{}},
 			},
@@ -121,7 +122,7 @@ func TestAggregateAttestations_MaxCover_AttList_validate(t *testing.T) {
 		},
 		{
 			name: "valid bitlists",
-			atts: attList{
+			atts: attestations.AttList{
 				&ethpb.Attestation{AggregationBits: bitfield.NewBitlist(64)},
 				&ethpb.Attestation{AggregationBits: bitfield.NewBitlist(64)},
 				&ethpb.Attestation{AggregationBits: bitfield.NewBitlist(64)},
@@ -131,7 +132,7 @@ func TestAggregateAttestations_MaxCover_AttList_validate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.atts.validate()
+			err := tt.atts.ValidateForTesting()
 			if tt.wantedErr != "" {
 				assert.ErrorContains(t, tt.wantedErr, err)
 			} else {
@@ -292,7 +293,7 @@ func TestAggregateAttestations_rearrangeProcessedAttestations(t *testing.T) {
 					}
 				}
 			}
-			rearrangeProcessedAttestations(tt.atts, candidates, tt.keys)
+			attestations.RearrangeProcessedAttestations(tt.atts, candidates, tt.keys)
 			assert.DeepEqual(t, tt.atts, tt.wantAtts)
 		})
 	}
@@ -312,7 +313,7 @@ func TestAggregateAttestations_aggregateAttestations(t *testing.T) {
 		{
 			name:          "nil attestation",
 			wantTargetIdx: 0,
-			wantErr:       ErrInvalidAttestationCount.Error(),
+			wantErr:       attestations.ErrInvalidAttestationCount.Error(),
 			keys:          []int{0, 1, 2},
 		},
 		{
@@ -321,13 +322,13 @@ func TestAggregateAttestations_aggregateAttestations(t *testing.T) {
 				&ethpb.Attestation{},
 			},
 			wantTargetIdx: 0,
-			wantErr:       ErrInvalidAttestationCount.Error(),
+			wantErr:       attestations.ErrInvalidAttestationCount.Error(),
 			keys:          []int{0, 1, 2},
 		},
 		{
 			name:          "no keys",
 			wantTargetIdx: 0,
-			wantErr:       ErrInvalidAttestationCount.Error(),
+			wantErr:       attestations.ErrInvalidAttestationCount.Error(),
 		},
 		{
 			name: "two attestations, none selected",
@@ -336,7 +337,7 @@ func TestAggregateAttestations_aggregateAttestations(t *testing.T) {
 				&ethpb.Attestation{AggregationBits: bitfield.Bitlist{0x01}},
 			},
 			wantTargetIdx: 0,
-			wantErr:       ErrInvalidAttestationCount.Error(),
+			wantErr:       attestations.ErrInvalidAttestationCount.Error(),
 			keys:          []int{},
 		},
 		{
@@ -346,7 +347,7 @@ func TestAggregateAttestations_aggregateAttestations(t *testing.T) {
 				&ethpb.Attestation{AggregationBits: bitfield.Bitlist{0x01}},
 			},
 			wantTargetIdx: 0,
-			wantErr:       ErrInvalidAttestationCount.Error(),
+			wantErr:       attestations.ErrInvalidAttestationCount.Error(),
 			keys:          []int{0},
 		},
 		{
@@ -414,7 +415,7 @@ func TestAggregateAttestations_aggregateAttestations(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotTargetIdx, err := aggregateAttestations(tt.atts, tt.keys, tt.coverage)
+			gotTargetIdx, err := attestations.AggregateAttestations(tt.atts, tt.keys, tt.coverage)
 			if tt.wantErr != "" {
 				assert.ErrorContains(t, tt.wantErr, err)
 				return

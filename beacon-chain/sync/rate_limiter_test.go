@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"context"
 	"sync"
 	"testing"
 	"time"
@@ -18,7 +17,7 @@ import (
 
 func TestNewRateLimiter(t *testing.T) {
 	rlimiter := newRateLimiter(mockp2p.NewTestP2P(t))
-	assert.Equal(t, len(rlimiter.limiterMap), 12, "correct number of topics not registered")
+	assert.Equal(t, len(rlimiter.limiterMap), 20, "correct number of topics not registered")
 }
 
 func TestNewRateLimiter_FreeCorrectly(t *testing.T) {
@@ -45,7 +44,7 @@ func TestRateLimiter_ExceedCapacity(t *testing.T) {
 		assert.Equal(t, p2ptypes.ErrRateLimited.Error(), errMsg, "not equal errors")
 	})
 	wg.Add(1)
-	stream, err := p1.BHost.NewStream(context.Background(), p2.PeerID(), protocol.ID(topic))
+	stream, err := p1.BHost.NewStream(t.Context(), p2.PeerID(), protocol.ID(topic))
 	require.NoError(t, err, "could not create stream")
 
 	err = rlimiter.validateRequest(stream, 64)
@@ -82,20 +81,20 @@ func TestRateLimiter_ExceedRawCapacity(t *testing.T) {
 		assert.Equal(t, p2ptypes.ErrRateLimited.Error(), errMsg, "not equal errors")
 	})
 	wg.Add(1)
-	stream, err := p1.BHost.NewStream(context.Background(), p2.PeerID(), protocol.ID(topic))
+	stream, err := p1.BHost.NewStream(t.Context(), p2.PeerID(), protocol.ID(topic))
 	require.NoError(t, err, "could not create stream")
 
 	for i := 0; i < 2*defaultBurstLimit; i++ {
-		err = rlimiter.validateRawRpcRequest(stream)
+		err = rlimiter.validateRawRpcRequest(stream, 1)
 		rlimiter.addRawStream(stream)
 		require.NoError(t, err, "could not validate incoming request")
 	}
 	// Triggers rate limit error on burst.
-	assert.ErrorContains(t, p2ptypes.ErrRateLimited.Error(), rlimiter.validateRawRpcRequest(stream))
+	assert.ErrorContains(t, p2ptypes.ErrRateLimited.Error(), rlimiter.validateRawRpcRequest(stream, 1))
 
 	// Make Peer bad.
 	for i := 0; i < defaultBurstLimit; i++ {
-		assert.ErrorContains(t, p2ptypes.ErrRateLimited.Error(), rlimiter.validateRawRpcRequest(stream))
+		assert.ErrorContains(t, p2ptypes.ErrRateLimited.Error(), rlimiter.validateRawRpcRequest(stream, 1))
 	}
 	assert.NotNil(t, p1.Peers().IsBad(p2.PeerID()), "peer is not marked as a bad peer")
 	require.NoError(t, stream.Close(), "could not close stream")

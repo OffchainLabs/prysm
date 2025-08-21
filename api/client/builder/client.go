@@ -72,7 +72,7 @@ func (*requestLogger) observe(r *http.Request) (e error) {
 		log.WithFields(log.Fields{
 			"bodyBase64": "(nil value)",
 			"url":        r.URL.String(),
-		}).Info("builder http request")
+		}).Info("Builder http request")
 		return nil
 	}
 	t := io.TeeReader(r.Body, b)
@@ -89,7 +89,7 @@ func (*requestLogger) observe(r *http.Request) (e error) {
 	log.WithFields(log.Fields{
 		"bodyBase64": string(body),
 		"url":        r.URL.String(),
-	}).Info("builder http request")
+	}).Info("Builder http request")
 
 	return nil
 }
@@ -101,7 +101,8 @@ type BuilderClient interface {
 	NodeURL() string
 	GetHeader(ctx context.Context, slot primitives.Slot, parentHash [32]byte, pubkey [48]byte) (SignedBid, error)
 	RegisterValidator(ctx context.Context, svr []*ethpb.SignedValidatorRegistrationV1) error
-	SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, *v1.BlobsBundle, error)
+	SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, v1.BlobsBundler, error)
+	SubmitBlindedBlockPostFulu(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) error
 	Status(ctx context.Context) error
 }
 
@@ -152,7 +153,8 @@ func (c *Client) NodeURL() string {
 type reqOption func(*http.Request)
 
 // do is a generic, opinionated request function to reduce boilerplate amongst the methods in this package api/client/builder.
-func (c *Client) do(ctx context.Context, method string, path string, body io.Reader, opts ...reqOption) (res []byte, header http.Header, err error) {
+// It validates that the HTTP response status matches the expectedStatus parameter.
+func (c *Client) do(ctx context.Context, method string, path string, body io.Reader, expectedStatus int, opts ...reqOption) (res []byte, header http.Header, err error) {
 	ctx, span := trace.StartSpan(ctx, "builder.client.do")
 	defer func() {
 		tracing.AnnotateError(span, err)
@@ -187,8 +189,8 @@ func (c *Client) do(ctx context.Context, method string, path string, body io.Rea
 			log.WithError(closeErr).Error("Failed to close response body")
 		}
 	}()
-	if r.StatusCode != http.StatusOK {
-		err = non200Err(r)
+	if r.StatusCode != expectedStatus {
+		err = unexpectedStatusErr(r, expectedStatus)
 		return
 	}
 	res, err = io.ReadAll(io.LimitReader(r.Body, client.MaxBodySize))
@@ -236,12 +238,12 @@ func (c *Client) GetHeader(ctx context.Context, slot primitives.Slot, parentHash
 			r.Header.Set("Accept", api.JsonMediaType)
 		}
 	}
-	data, header, err := c.do(ctx, http.MethodGet, path, nil, getOpts)
+	data, header, err := c.do(ctx, http.MethodGet, path, nil, http.StatusOK, getOpts)
 	if err != nil {
 		return nil, errors.Wrap(err, "error getting header from builder server")
 	}
 
-	bid, err := c.parseHeaderResponse(data, header)
+	bid, err := c.parseHeaderResponse(data, header, slot)
 	if err != nil {
 		return nil, errors.Wrapf(
 			err,
@@ -254,7 +256,7 @@ func (c *Client) GetHeader(ctx context.Context, slot primitives.Slot, parentHash
 	return bid, nil
 }
 
-func (c *Client) parseHeaderResponse(data []byte, header http.Header) (SignedBid, error) {
+func (c *Client) parseHeaderResponse(data []byte, header http.Header, slot primitives.Slot) (SignedBid, error) {
 	var versionHeader string
 	if c.sszEnabled || header.Get(api.VersionHeader) != "" {
 		versionHeader = header.Get(api.VersionHeader)
@@ -276,7 +278,7 @@ func (c *Client) parseHeaderResponse(data []byte, header http.Header) (SignedBid
 	}
 
 	if ver >= version.Electra {
-		return c.parseHeaderElectra(data)
+		return c.parseHeaderElectra(data, slot)
 	}
 	if ver >= version.Deneb {
 		return c.parseHeaderDeneb(data)
@@ -291,7 +293,7 @@ func (c *Client) parseHeaderResponse(data []byte, header http.Header) (SignedBid
 	return nil, fmt.Errorf("unsupported header version %s", versionHeader)
 }
 
-func (c *Client) parseHeaderElectra(data []byte) (SignedBid, error) {
+func (c *Client) parseHeaderElectra(data []byte, slot primitives.Slot) (SignedBid, error) {
 	if c.sszEnabled {
 		sb := &ethpb.SignedBuilderBidElectra{}
 		if err := sb.UnmarshalSSZ(data); err != nil {
@@ -303,7 +305,7 @@ func (c *Client) parseHeaderElectra(data []byte) (SignedBid, error) {
 	if err := json.Unmarshal(data, hr); err != nil {
 		return nil, errors.Wrap(err, "could not unmarshal ExecHeaderResponseElectra JSON")
 	}
-	p, err := hr.ToProto()
+	p, err := hr.ToProto(slot)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not convert ExecHeaderResponseElectra to proto")
 	}
@@ -409,7 +411,7 @@ func (c *Client) RegisterValidator(ctx context.Context, svr []*ethpb.SignedValid
 		}
 	}
 
-	if _, _, err = c.do(ctx, http.MethodPost, postRegisterValidatorPath, bytes.NewBuffer(body), postOpts); err != nil {
+	if _, _, err = c.do(ctx, http.MethodPost, postRegisterValidatorPath, bytes.NewBuffer(body), http.StatusOK, postOpts); err != nil {
 		return errors.Wrap(err, "do")
 	}
 	log.WithField("registrationCount", len(svr)).Debug("Successfully registered validator(s) on builder")
@@ -446,6 +448,9 @@ func sszValidatorRegisterRequest(svr []*ethpb.SignedValidatorRegistrationV1) ([]
 var errResponseVersionMismatch = errors.New("builder API response uses a different version than requested in " + api.VersionHeader + " header")
 
 func getVersionsBlockToPayload(blockVersion int) (int, error) {
+	if blockVersion >= version.Fulu {
+		return version.Fulu, nil
+	}
 	if blockVersion >= version.Deneb {
 		return version.Deneb, nil
 	}
@@ -460,7 +465,7 @@ func getVersionsBlockToPayload(blockVersion int) (int, error) {
 
 // SubmitBlindedBlock calls the builder API endpoint that binds the validator to the builder and submits the block.
 // The response is the full execution payload used to create the blinded block.
-func (c *Client) SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, *v1.BlobsBundle, error) {
+func (c *Client) SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, v1.BlobsBundler, error) {
 	body, postOpts, err := c.buildBlindedBlockRequest(sb)
 	if err != nil {
 		return nil, nil, err
@@ -468,7 +473,7 @@ func (c *Client) SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlyS
 
 	// post the blinded block - the execution payload response should contain the unblinded payload, along with the
 	// blobs bundle if it is post deneb.
-	data, header, err := c.do(ctx, http.MethodPost, postBlindedBeaconBlockPath, bytes.NewBuffer(body), postOpts)
+	data, header, err := c.do(ctx, http.MethodPost, postBlindedBeaconBlockPath, bytes.NewBuffer(body), http.StatusOK, postOpts)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "error posting the blinded block to the builder api")
 	}
@@ -496,6 +501,24 @@ func (c *Client) SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlyS
 	}
 
 	return ed, blobs, nil
+}
+
+// SubmitBlindedBlockPostFulu calls the builder API endpoint post-Fulu where relays only return status codes.
+// This method is used after the Fulu fork when MEV-boost relays no longer return execution payloads.
+func (c *Client) SubmitBlindedBlockPostFulu(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) error {
+	body, postOpts, err := c.buildBlindedBlockRequest(sb)
+	if err != nil {
+		return err
+	}
+
+	// Post the blinded block - the response should only contain a status code (no payload)
+	_, _, err = c.do(ctx, http.MethodPost, postBlindedBeaconBlockPath, bytes.NewBuffer(body), http.StatusAccepted, postOpts)
+	if err != nil {
+		return errors.Wrap(err, "error posting the blinded block to the builder api post-Fulu")
+	}
+
+	// Success is indicated by no error (status 202)
+	return nil
 }
 
 func (c *Client) checkBlockVersion(respBytes []byte, header http.Header) (int, error) {
@@ -558,7 +581,7 @@ func (c *Client) buildBlindedBlockRequest(sb interfaces.ReadOnlySignedBeaconBloc
 func (c *Client) parseBlindedBlockResponse(
 	respBytes []byte,
 	forkVersion int,
-) (interfaces.ExecutionData, *v1.BlobsBundle, error) {
+) (interfaces.ExecutionData, v1.BlobsBundler, error) {
 	if c.sszEnabled {
 		return c.parseBlindedBlockResponseSSZ(respBytes, forkVersion)
 	}
@@ -568,8 +591,18 @@ func (c *Client) parseBlindedBlockResponse(
 func (c *Client) parseBlindedBlockResponseSSZ(
 	respBytes []byte,
 	forkVersion int,
-) (interfaces.ExecutionData, *v1.BlobsBundle, error) {
-	if forkVersion >= version.Deneb {
+) (interfaces.ExecutionData, v1.BlobsBundler, error) {
+	if forkVersion >= version.Fulu {
+		payloadAndBlobs := &v1.ExecutionPayloadDenebAndBlobsBundleV2{}
+		if err := payloadAndBlobs.UnmarshalSSZ(respBytes); err != nil {
+			return nil, nil, errors.Wrap(err, "unable to unmarshal ExecutionPayloadDenebAndBlobsBundleV2 SSZ")
+		}
+		ed, err := blocks.NewWrappedExecutionData(payloadAndBlobs.Payload)
+		if err != nil {
+			return nil, nil, errors.Wrapf(err, "unable to wrap execution data for %s", version.String(forkVersion))
+		}
+		return ed, payloadAndBlobs.BlobsBundle, nil
+	} else if forkVersion >= version.Deneb {
 		payloadAndBlobs := &v1.ExecutionPayloadDenebAndBlobsBundle{}
 		if err := payloadAndBlobs.UnmarshalSSZ(respBytes); err != nil {
 			return nil, nil, errors.Wrap(err, "unable to unmarshal ExecutionPayloadDenebAndBlobsBundle SSZ")
@@ -644,11 +677,11 @@ func (c *Client) Status(ctx context.Context) error {
 	getOpts := func(r *http.Request) {
 		r.Header.Set("Accept", api.JsonMediaType)
 	}
-	_, _, err := c.do(ctx, http.MethodGet, getStatus, nil, getOpts)
+	_, _, err := c.do(ctx, http.MethodGet, getStatus, nil, http.StatusOK, getOpts)
 	return err
 }
 
-func non200Err(response *http.Response) error {
+func unexpectedStatusErr(response *http.Response, expected int) error {
 	bodyBytes, err := io.ReadAll(io.LimitReader(response.Body, client.MaxErrBodySize))
 	var errMessage ErrorMessage
 	var body string
@@ -657,7 +690,7 @@ func non200Err(response *http.Response) error {
 	} else {
 		body = "response body:\n" + string(bodyBytes)
 	}
-	msg := fmt.Sprintf("code=%d, url=%s, body=%s", response.StatusCode, response.Request.URL, body)
+	msg := fmt.Sprintf("expected=%d, got=%d, url=%s, body=%s", expected, response.StatusCode, response.Request.URL, body)
 	switch response.StatusCode {
 	case http.StatusUnsupportedMediaType:
 		log.WithError(ErrUnsupportedMediaType).Debug(msg)

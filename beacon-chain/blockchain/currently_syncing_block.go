@@ -7,10 +7,15 @@ type currentlySyncingBlock struct {
 	roots map[[32]byte]struct{}
 }
 
-func (b *currentlySyncingBlock) set(root [32]byte) {
+func (b *currentlySyncingBlock) set(root [32]byte) error {
 	b.Lock()
 	defer b.Unlock()
+	_, ok := b.roots[root]
+	if ok {
+		return errBlockBeingSynced
+	}
 	b.roots[root] = struct{}{}
+	return nil
 }
 
 func (b *currentlySyncingBlock) unset(root [32]byte) {

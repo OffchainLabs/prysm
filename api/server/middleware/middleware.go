@@ -1,11 +1,15 @@
 package middleware
 
 import (
+	"compress/gzip"
 	"fmt"
 	"net/http"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/api/apiutil"
 	"github.com/rs/cors"
+	log "github.com/sirupsen/logrus"
 )
 
 type Middleware func(http.Handler) http.Handler
@@ -71,45 +75,62 @@ func ContentTypeHandler(acceptedMediaTypes []string) Middleware {
 func AcceptHeaderHandler(serverAcceptedTypes []string) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			acceptHeader := r.Header.Get("Accept")
-			// header is optional and should skip if not provided
-			if acceptHeader == "" {
+			if _, ok := apiutil.Negotiate(r.Header.Get("Accept"), serverAcceptedTypes); !ok {
+				http.Error(w, "Not Acceptable", http.StatusNotAcceptable)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// AcceptEncodingHeaderHandler compresses the response before sending it back to the client, if gzip is supported.
+func AcceptEncodingHeaderHandler() Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			accepted := false
-			acceptTypes := strings.Split(acceptHeader, ",")
-			// follows rules defined in https://datatracker.ietf.org/doc/html/rfc2616#section-14.1
-			for _, acceptType := range acceptTypes {
-				acceptType = strings.TrimSpace(acceptType)
-				if acceptType == "*/*" {
-					accepted = true
-					break
+			gz := gzip.NewWriter(w)
+			gzipRW := &gzipResponseWriter{gz: gz, ResponseWriter: w}
+			defer func() {
+				if !gzipRW.zip {
+					return
 				}
-				for _, serverAcceptedType := range serverAcceptedTypes {
-					if strings.HasPrefix(acceptType, serverAcceptedType) {
-						accepted = true
-						break
-					}
-					if acceptType != "/*" && strings.HasSuffix(acceptType, "/*") && strings.HasPrefix(serverAcceptedType, acceptType[:len(acceptType)-2]) {
-						accepted = true
-						break
-					}
+				if err := gz.Close(); err != nil {
+					log.WithError(err).Error("Failed to close gzip writer")
 				}
-				if accepted {
-					break
-				}
-			}
+			}()
 
-			if !accepted {
-				http.Error(w, fmt.Sprintf("Not Acceptable: %s", acceptHeader), http.StatusNotAcceptable)
-				return
-			}
-
-			next.ServeHTTP(w, r)
+			next.ServeHTTP(gzipRW, r)
 		})
 	}
+}
+
+type gzipResponseWriter struct {
+	gz *gzip.Writer
+	http.ResponseWriter
+	zip bool
+}
+
+func (g *gzipResponseWriter) WriteHeader(statusCode int) {
+	if strings.Contains(g.Header().Get("Content-Type"), api.JsonMediaType) {
+		// Removing the current Content-Length because zipping will change it.
+		g.Header().Del("Content-Length")
+		g.Header().Set("Content-Encoding", "gzip")
+		g.zip = true
+	}
+
+	g.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (g *gzipResponseWriter) Write(b []byte) (int, error) {
+	if g.zip {
+		return g.gz.Write(b)
+	}
+	return g.ResponseWriter.Write(b)
 }
 
 func MiddlewareChain(h http.Handler, mw []Middleware) http.Handler {

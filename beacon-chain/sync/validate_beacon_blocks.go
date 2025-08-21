@@ -150,7 +150,7 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 	// Be lenient in handling early blocks. Instead of discarding blocks arriving later than
 	// MAXIMUM_GOSSIP_CLOCK_DISPARITY in future, we tolerate blocks arriving at max two slots
 	// earlier (SECONDS_PER_SLOT * 2 seconds). Queue such blocks and process them at the right slot.
-	genesisTime := uint64(s.cfg.clock.GenesisTime().Unix())
+	genesisTime := s.cfg.clock.GenesisTime()
 	if err := slots.VerifyTime(genesisTime, blk.Block().Slot(), earlyBlockProcessingTolerance); err != nil {
 		log.WithError(err).WithFields(getBlockFields(blk)).Debug("Ignored block: could not verify slot time")
 		return pubsub.ValidationIgnore, nil
@@ -232,7 +232,7 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 
 	// Log the arrival time of the accepted block
 	graffiti := blk.Block().Body().Graffiti()
-	startTime, err := slots.ToTime(genesisTime, blk.Block().Slot())
+	startTime, err := slots.StartTime(genesisTime, blk.Block().Slot())
 	logFields := logrus.Fields{
 		"blockSlot":     blk.Block().Slot(),
 		"proposerIndex": blk.Block().ProposerIndex(),
@@ -360,7 +360,7 @@ func (s *Service) validateBellatrixBeaconBlock(ctx context.Context, parentState 
 		return nil
 	}
 
-	t, err := slots.ToTime(parentState.GenesisTime(), blk.Slot())
+	t, err := slots.StartTime(parentState.GenesisTime(), blk.Slot())
 	if err != nil {
 		return err
 	}
@@ -443,8 +443,8 @@ func (s *Service) setBadBlock(ctx context.Context, root [32]byte) {
 }
 
 // This captures metrics for block arrival time by subtracts slot start time.
-func captureArrivalTimeMetric(genesisTime uint64, currentSlot primitives.Slot) error {
-	startTime, err := slots.ToTime(genesisTime, currentSlot)
+func captureArrivalTimeMetric(genesis time.Time, currentSlot primitives.Slot) error {
+	startTime, err := slots.StartTime(genesis, currentSlot)
 	if err != nil {
 		return err
 	}
@@ -459,8 +459,8 @@ func captureArrivalTimeMetric(genesisTime uint64, currentSlot primitives.Slot) e
 // current_time +  MAXIMUM_GOSSIP_CLOCK_DISPARITY. in short, this function
 // returns true if the corresponding block should be queued and false if
 // the block should be processed immediately.
-func isBlockQueueable(genesisTime uint64, slot primitives.Slot, receivedTime time.Time) bool {
-	slotTime, err := slots.ToTime(genesisTime, slot)
+func isBlockQueueable(genesisTime time.Time, slot primitives.Slot, receivedTime time.Time) bool {
+	slotTime, err := slots.StartTime(genesisTime, slot)
 	if err != nil {
 		return false
 	}

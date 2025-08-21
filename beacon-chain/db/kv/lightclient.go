@@ -153,6 +153,13 @@ func decodeLightClientBootstrap(enc []byte) (interfaces.LightClientBootstrap, []
 		}
 		m = bootstrap
 		syncCommitteeHash = enc[len(altairKey) : len(altairKey)+32]
+	case hasBellatrixKey(enc):
+		bootstrap := &ethpb.LightClientBootstrapAltair{}
+		if err := bootstrap.UnmarshalSSZ(enc[len(bellatrixKey)+32:]); err != nil {
+			return nil, nil, errors.Wrap(err, "could not unmarshal Bellatrix light client bootstrap")
+		}
+		m = bootstrap
+		syncCommitteeHash = enc[len(bellatrixKey) : len(bellatrixKey)+32]
 	case hasCapellaKey(enc):
 		bootstrap := &ethpb.LightClientBootstrapCapella{}
 		if err := bootstrap.UnmarshalSSZ(enc[len(capellaKey)+32:]); err != nil {
@@ -265,6 +272,12 @@ func decodeLightClientUpdate(enc []byte) (interfaces.LightClientUpdate, error) {
 			return nil, errors.Wrap(err, "could not unmarshal Altair light client update")
 		}
 		m = update
+	case hasBellatrixKey(enc):
+		update := &ethpb.LightClientUpdateAltair{}
+		if err := update.UnmarshalSSZ(enc[len(bellatrixKey):]); err != nil {
+			return nil, errors.Wrap(err, "could not unmarshal Bellatrix light client update")
+		}
+		m = update
 	case hasCapellaKey(enc):
 		update := &ethpb.LightClientUpdateCapella{}
 		if err := update.UnmarshalSSZ(enc[len(capellaKey):]); err != nil {
@@ -297,6 +310,8 @@ func keyForLightClientUpdate(v int) ([]byte, error) {
 		return denebKey, nil
 	case version.Capella:
 		return capellaKey, nil
+	case version.Bellatrix:
+		return bellatrixKey, nil
 	case version.Altair:
 		return altairKey, nil
 	default:

@@ -2,10 +2,6 @@ package state_native
 
 import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stateutil"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
 	"github.com/pkg/errors"
 )
 
@@ -15,21 +11,10 @@ func (b *BeaconState) SetRandaoMixes(val [][]byte) error {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	if features.Get().EnableExperimentalState {
-		if b.randaoMixesMultiValue != nil {
-			b.randaoMixesMultiValue.Detach(b)
-		}
-		b.randaoMixesMultiValue = NewMultiValueRandaoMixes(val)
-	} else {
-		b.sharedFieldReferences[types.RandaoMixes].MinusRef()
-		b.sharedFieldReferences[types.RandaoMixes] = stateutil.NewRef(1)
-
-		rootsArr := make([][32]byte, fieldparams.RandaoMixesLength)
-		for i := 0; i < len(rootsArr); i++ {
-			copy(rootsArr[i][:], val[i])
-		}
-		b.randaoMixes = rootsArr
+	if b.randaoMixesMultiValue != nil {
+		b.randaoMixesMultiValue.Detach(b)
 	}
+	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(val)
 
 	b.markFieldAsDirty(types.RandaoMixes)
 	b.rebuildTrie[types.RandaoMixes] = true
@@ -39,29 +24,8 @@ func (b *BeaconState) SetRandaoMixes(val [][]byte) error {
 // UpdateRandaoMixesAtIndex for the beacon state. Updates the randao mixes
 // at a specific index to a new value.
 func (b *BeaconState) UpdateRandaoMixesAtIndex(idx uint64, val [32]byte) error {
-	if features.Get().EnableExperimentalState {
-		if err := b.randaoMixesMultiValue.UpdateAt(b, idx, val); err != nil {
-			return errors.Wrap(err, "could not update randao mixes")
-		}
-	} else {
-		if uint64(len(b.randaoMixes)) <= idx {
-			return errors.Wrapf(consensus_types.ErrOutOfBounds, "randao mix index %d does not exist", idx)
-		}
-
-		b.lock.Lock()
-
-		m := b.randaoMixes
-		if ref := b.sharedFieldReferences[types.RandaoMixes]; ref.Refs() > 1 {
-			// Copy elements in underlying array by reference.
-			m = make([][32]byte, len(b.randaoMixes))
-			copy(m, b.randaoMixes)
-			ref.MinusRef()
-			b.sharedFieldReferences[types.RandaoMixes] = stateutil.NewRef(1)
-		}
-		m[idx] = val
-		b.randaoMixes = m
-
-		b.lock.Unlock()
+	if err := b.randaoMixesMultiValue.UpdateAt(b, idx, val); err != nil {
+		return errors.Wrap(err, "could not update randao mixes")
 	}
 
 	b.lock.Lock()

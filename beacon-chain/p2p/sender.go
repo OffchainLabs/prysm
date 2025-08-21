@@ -22,8 +22,9 @@ func (s *Service) Send(ctx context.Context, message interface{}, baseTopic strin
 	ctx, span := trace.StartSpan(ctx, "p2p.Send")
 	defer span.End()
 	if err := VerifyTopicMapping(baseTopic, message); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "verify topic mapping")
 	}
+
 	topic := baseTopic + s.Encoding().ProtocolSuffix()
 	span.SetAttributes(trace.StringAttribute("topic", topic))
 
@@ -39,19 +40,21 @@ func (s *Service) Send(ctx context.Context, message interface{}, baseTopic strin
 	stream, err := s.host.NewStream(ctx, pid, protocol.ID(topic))
 	if err != nil {
 		tracing.AnnotateError(span, err)
-		return nil, err
+		return nil, errors.Wrap(err, "new stream")
 	}
-	// do not encode anything if we are sending a metadata request
-	if baseTopic != RPCMetaDataTopicV1 && baseTopic != RPCMetaDataTopicV2 {
+
+	// Do not encode anything if we are sending a metadata request
+	if baseTopic != RPCMetaDataTopicV1 && baseTopic != RPCMetaDataTopicV2 && baseTopic != RPCMetaDataTopicV3 {
 		castedMsg, ok := message.(ssz.Marshaler)
 		if !ok {
 			return nil, errors.Errorf("%T does not support the ssz marshaller interface", message)
 		}
+
 		if _, err := s.Encoding().EncodeWithMaxLength(stream, castedMsg); err != nil {
 			tracing.AnnotateError(span, err)
 			_err := stream.Reset()
 			_ = _err
-			return nil, err
+			return nil, errors.Wrap(err, "encode with max length")
 		}
 	}
 
@@ -60,7 +63,7 @@ func (s *Service) Send(ctx context.Context, message interface{}, baseTopic strin
 		tracing.AnnotateError(span, err)
 		_err := stream.Reset()
 		_ = _err
-		return nil, err
+		return nil, errors.Wrap(err, "close write")
 	}
 
 	return stream, nil

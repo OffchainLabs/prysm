@@ -1,7 +1,7 @@
 workspace(name = "prysm")
 
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 http_archive(
     name = "rules_pkg",
@@ -15,8 +15,6 @@ http_archive(
 load("@rules_pkg//:deps.bzl", "rules_pkg_dependencies")
 
 rules_pkg_dependencies()
-
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 http_archive(
     name = "toolchains_protoc",
@@ -192,7 +190,7 @@ load("@rules_oci//oci:pull.bzl", "oci_pull")
 # A multi-arch base image
 oci_pull(
     name = "linux_debian11_multiarch_base",  # Debian bullseye
-    digest = "sha256:b82f113425c5b5c714151aaacd8039bc141821cdcd3c65202d42bdf9c43ae60b",  # 2023-12-12
+    digest = "sha256:55a5e011b2c4246b4c51e01fcc2b452d151e03df052e357465f0392fcd59fddf",
     image = "gcr.io/prysmaticlabs/distroless/cc-debian11",
     platforms = [
         "linux/amd64",
@@ -210,7 +208,7 @@ load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_depe
 go_rules_dependencies()
 
 go_register_toolchains(
-    go_version = "1.24.0",
+    go_version = "1.24.6",
     nogo = "@//:nogo",
 )
 
@@ -255,56 +253,18 @@ filegroup(
     url = "https://github.com/ethereum/EIPs/archive/5480440fe51742ed23342b68cf106cefd427e39d.tar.gz",
 )
 
-consensus_spec_version = "v1.5.0-beta.5"
+consensus_spec_version = "v1.6.0-alpha.4"
 
-bls_test_version = "v0.1.1"
+load("@prysm//tools:download_spectests.bzl", "consensus_spec_tests")
 
-http_archive(
-    name = "consensus_spec_tests_general",
-    build_file_content = """
-filegroup(
-    name = "test_data",
-    srcs = glob([
-        "**/*.ssz_snappy",
-        "**/*.yaml",
-    ]),
-    visibility = ["//visibility:public"],
-)
-    """,
-    integrity = "sha256-H+Pt4z+HCVDnEBAv814yvsjR7f5l1IpumjFoTj2XnLE=",
-    url = "https://github.com/ethereum/consensus-spec-tests/releases/download/%s/general.tar.gz" % consensus_spec_version,
-)
-
-http_archive(
-    name = "consensus_spec_tests_minimal",
-    build_file_content = """
-filegroup(
-    name = "test_data",
-    srcs = glob([
-        "**/*.ssz_snappy",
-        "**/*.yaml",
-    ]),
-    visibility = ["//visibility:public"],
-)
-    """,
-    integrity = "sha256-Dqiwf5BG7yYyURGf+i87AIdArAyztvcgjoi2kSxrGvo=",
-    url = "https://github.com/ethereum/consensus-spec-tests/releases/download/%s/minimal.tar.gz" % consensus_spec_version,
-)
-
-http_archive(
-    name = "consensus_spec_tests_mainnet",
-    build_file_content = """
-filegroup(
-    name = "test_data",
-    srcs = glob([
-        "**/*.ssz_snappy",
-        "**/*.yaml",
-    ]),
-    visibility = ["//visibility:public"],
-)
-    """,
-    integrity = "sha256-xrmsFF243pzXHAjh1EQYKS9gtcwmtHK3wRZDSLlVVRk=",
-    url = "https://github.com/ethereum/consensus-spec-tests/releases/download/%s/mainnet.tar.gz" % consensus_spec_version,
+consensus_spec_tests(
+    name = "consensus_spec_tests",
+    flavors = {
+        "general": "sha256-MaN4zu3o0vWZypUHS5r4D8WzJF4wANoadM8qm6iyDs4=",
+        "minimal": "sha256-aZGNPp/bBvJgq3Wf6vyR0H6G3DOkbSuggEmOL4jEmtg=",
+        "mainnet": "sha256-C7jjosvpzUgw3GPajlsWBV02ZbkZ5Uv4ikmOqfDGajI=",
+    },
+    version = consensus_spec_version,
 )
 
 http_archive(
@@ -318,10 +278,12 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-c+gGapqifCvFtmtxfhOwieBDO2Syxp13GECWEpWM/Ho=",
+    integrity = "sha256-qreawRS77l8CebiNww8z727qUItw7KlHY1Xqj7IrPdk=",
     strip_prefix = "consensus-specs-" + consensus_spec_version[1:],
     url = "https://github.com/ethereum/consensus-specs/archive/refs/tags/%s.tar.gz" % consensus_spec_version,
 )
+
+bls_test_version = "v0.1.1"
 
 http_archive(
     name = "bls_spec_tests",

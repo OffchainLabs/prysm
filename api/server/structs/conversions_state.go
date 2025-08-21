@@ -26,10 +26,7 @@ func BeaconStateFromConsensus(st beaconState.BeaconState) (*BeaconState, error) 
 	for i, r := range srcSr {
 		sr[i] = hexutil.Encode(r)
 	}
-	srcHr, err := st.HistoricalRoots()
-	if err != nil {
-		return nil, err
-	}
+	srcHr := st.HistoricalRoots()
 	hr := make([]string, len(srcHr))
 	for i, r := range srcHr {
 		hr[i] = hexutil.Encode(r)
@@ -77,7 +74,7 @@ func BeaconStateFromConsensus(st beaconState.BeaconState) (*BeaconState, error) 
 	}
 
 	return &BeaconState{
-		GenesisTime:                 fmt.Sprintf("%d", st.GenesisTime()),
+		GenesisTime:                 fmt.Sprintf("%d", st.GenesisTime().Unix()),
 		GenesisValidatorsRoot:       hexutil.Encode(st.GenesisValidatorsRoot()),
 		Slot:                        fmt.Sprintf("%d", st.Slot()),
 		Fork:                        ForkFromConsensus(st.Fork()),
@@ -116,10 +113,7 @@ func BeaconStateAltairFromConsensus(st beaconState.BeaconState) (*BeaconStateAlt
 	for i, r := range srcSr {
 		sr[i] = hexutil.Encode(r)
 	}
-	srcHr, err := st.HistoricalRoots()
-	if err != nil {
-		return nil, err
-	}
+	srcHr := st.HistoricalRoots()
 	hr := make([]string, len(srcHr))
 	for i, r := range srcHr {
 		hr[i] = hexutil.Encode(r)
@@ -183,7 +177,7 @@ func BeaconStateAltairFromConsensus(st beaconState.BeaconState) (*BeaconStateAlt
 	}
 
 	return &BeaconStateAltair{
-		GenesisTime:                 fmt.Sprintf("%d", st.GenesisTime()),
+		GenesisTime:                 fmt.Sprintf("%d", st.GenesisTime().Unix()),
 		GenesisValidatorsRoot:       hexutil.Encode(st.GenesisValidatorsRoot()),
 		Slot:                        fmt.Sprintf("%d", st.Slot()),
 		Fork:                        ForkFromConsensus(st.Fork()),
@@ -225,10 +219,7 @@ func BeaconStateBellatrixFromConsensus(st beaconState.BeaconState) (*BeaconState
 	for i, r := range srcSr {
 		sr[i] = hexutil.Encode(r)
 	}
-	srcHr, err := st.HistoricalRoots()
-	if err != nil {
-		return nil, err
-	}
+	srcHr := st.HistoricalRoots()
 	hr := make([]string, len(srcHr))
 	for i, r := range srcHr {
 		hr[i] = hexutil.Encode(r)
@@ -304,7 +295,7 @@ func BeaconStateBellatrixFromConsensus(st beaconState.BeaconState) (*BeaconState
 	}
 
 	return &BeaconStateBellatrix{
-		GenesisTime:                  fmt.Sprintf("%d", st.GenesisTime()),
+		GenesisTime:                  fmt.Sprintf("%d", st.GenesisTime().Unix()),
 		GenesisValidatorsRoot:        hexutil.Encode(st.GenesisValidatorsRoot()),
 		Slot:                         fmt.Sprintf("%d", st.Slot()),
 		Fork:                         ForkFromConsensus(st.Fork()),
@@ -347,10 +338,7 @@ func BeaconStateCapellaFromConsensus(st beaconState.BeaconState) (*BeaconStateCa
 	for i, r := range srcSr {
 		sr[i] = hexutil.Encode(r)
 	}
-	srcHr, err := st.HistoricalRoots()
-	if err != nil {
-		return nil, err
-	}
+	srcHr := st.HistoricalRoots()
 	hr := make([]string, len(srcHr))
 	for i, r := range srcHr {
 		hr[i] = hexutil.Encode(r)
@@ -442,7 +430,7 @@ func BeaconStateCapellaFromConsensus(st beaconState.BeaconState) (*BeaconStateCa
 	}
 
 	return &BeaconStateCapella{
-		GenesisTime:                  fmt.Sprintf("%d", st.GenesisTime()),
+		GenesisTime:                  fmt.Sprintf("%d", st.GenesisTime().Unix()),
 		GenesisValidatorsRoot:        hexutil.Encode(st.GenesisValidatorsRoot()),
 		Slot:                         fmt.Sprintf("%d", st.Slot()),
 		Fork:                         ForkFromConsensus(st.Fork()),
@@ -488,10 +476,7 @@ func BeaconStateDenebFromConsensus(st beaconState.BeaconState) (*BeaconStateDene
 	for i, r := range srcSr {
 		sr[i] = hexutil.Encode(r)
 	}
-	srcHr, err := st.HistoricalRoots()
-	if err != nil {
-		return nil, err
-	}
+	srcHr := st.HistoricalRoots()
 	hr := make([]string, len(srcHr))
 	for i, r := range srcHr {
 		hr[i] = hexutil.Encode(r)
@@ -583,7 +568,7 @@ func BeaconStateDenebFromConsensus(st beaconState.BeaconState) (*BeaconStateDene
 	}
 
 	return &BeaconStateDeneb{
-		GenesisTime:                  fmt.Sprintf("%d", st.GenesisTime()),
+		GenesisTime:                  fmt.Sprintf("%d", st.GenesisTime().Unix()),
 		GenesisValidatorsRoot:        hexutil.Encode(st.GenesisValidatorsRoot()),
 		Slot:                         fmt.Sprintf("%d", st.Slot()),
 		Fork:                         ForkFromConsensus(st.Fork()),
@@ -629,10 +614,7 @@ func BeaconStateElectraFromConsensus(st beaconState.BeaconState) (*BeaconStateEl
 	for i, r := range srcSr {
 		sr[i] = hexutil.Encode(r)
 	}
-	srcHr, err := st.HistoricalRoots()
-	if err != nil {
-		return nil, err
-	}
+	srcHr := st.HistoricalRoots()
 	hr := make([]string, len(srcHr))
 	for i, r := range srcHr {
 		hr[i] = hexutil.Encode(r)
@@ -760,7 +742,7 @@ func BeaconStateElectraFromConsensus(st beaconState.BeaconState) (*BeaconStateEl
 	}
 
 	return &BeaconStateElectra{
-		GenesisTime:                   fmt.Sprintf("%d", st.GenesisTime()),
+		GenesisTime:                   fmt.Sprintf("%d", st.GenesisTime().Unix()),
 		GenesisValidatorsRoot:         hexutil.Encode(st.GenesisValidatorsRoot()),
 		Slot:                          fmt.Sprintf("%d", st.Slot()),
 		Fork:                          ForkFromConsensus(st.Fork()),
@@ -815,10 +797,7 @@ func BeaconStateFuluFromConsensus(st beaconState.BeaconState) (*BeaconStateFulu,
 	for i, r := range srcSr {
 		sr[i] = hexutil.Encode(r)
 	}
-	srcHr, err := st.HistoricalRoots()
-	if err != nil {
-		return nil, err
-	}
+	srcHr := st.HistoricalRoots()
 	hr := make([]string, len(srcHr))
 	for i, r := range srcHr {
 		hr[i] = hexutil.Encode(r)
@@ -944,9 +923,16 @@ func BeaconStateFuluFromConsensus(st beaconState.BeaconState) (*BeaconStateFulu,
 	if err != nil {
 		return nil, err
 	}
-
+	srcLookahead, err := st.ProposerLookahead()
+	if err != nil {
+		return nil, err
+	}
+	lookahead := make([]string, len(srcLookahead))
+	for i, v := range srcLookahead {
+		lookahead[i] = fmt.Sprintf("%d", uint64(v))
+	}
 	return &BeaconStateFulu{
-		GenesisTime:                   fmt.Sprintf("%d", st.GenesisTime()),
+		GenesisTime:                   fmt.Sprintf("%d", st.GenesisTime().Unix()),
 		GenesisValidatorsRoot:         hexutil.Encode(st.GenesisValidatorsRoot()),
 		Slot:                          fmt.Sprintf("%d", st.Slot()),
 		Fork:                          ForkFromConsensus(st.Fork()),
@@ -983,5 +969,6 @@ func BeaconStateFuluFromConsensus(st beaconState.BeaconState) (*BeaconStateFulu,
 		PendingDeposits:               PendingDepositsFromConsensus(pbd),
 		PendingPartialWithdrawals:     PendingPartialWithdrawalsFromConsensus(ppw),
 		PendingConsolidations:         PendingConsolidationsFromConsensus(pc),
+		ProposerLookahead:             lookahead,
 	}, nil
 }
