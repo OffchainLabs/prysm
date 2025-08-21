@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,15 +15,19 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
+	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
 	mockExecution "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/monitor"
 	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/runtime"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/urfave/cli/v2"
 )
@@ -49,6 +54,7 @@ func TestNodeClose_OK(t *testing.T) {
 	set.Bool("demo-config", true, "demo configuration")
 	set.String("deposit-contract", "0x0000000000000000000000000000000000000000", "deposit contract address")
 	set.String("suggested-fee-recipient", "0x6e35733c5af9B61374A128e6F85f553aF09ff89A", "fee recipient")
+	set.Bool("sync-from-genesis", true, "sync from genesis")
 	require.NoError(t, set.Set("suggested-fee-recipient", "0x6e35733c5af9B61374A128e6F85f553aF09ff89A"))
 	cmd.ValidatorMonitorIndicesFlag.Value = &cli.IntSlice{}
 	cmd.ValidatorMonitorIndicesFlag.Value.SetInt(1)
@@ -74,6 +80,7 @@ func TestNodeStart_Ok(t *testing.T) {
 	set := flag.NewFlagSet("test", 0)
 	set.String("datadir", tmp, "node data directory")
 	set.String("suggested-fee-recipient", "0x6e35733c5af9B61374A128e6F85f553aF09ff89A", "fee recipient")
+	set.Bool("sync-from-genesis", true, "sync from genesis")
 	require.NoError(t, set.Set("suggested-fee-recipient", "0x6e35733c5af9B61374A128e6F85f553aF09ff89A"))
 
 	ctx, cancel := newCliContextWithCancel(&app, set)
@@ -104,6 +111,7 @@ func TestNodeStart_SyncChecker(t *testing.T) {
 	set := flag.NewFlagSet("test", 0)
 	set.String("datadir", tmp, "node data directory")
 	set.String("suggested-fee-recipient", "0x6e35733c5af9B61374A128e6F85f553aF09ff89A", "fee recipient")
+	set.Bool("sync-from-genesis", true, "sync from genesis")
 	require.NoError(t, set.Set("suggested-fee-recipient", "0x6e35733c5af9B61374A128e6F85f553aF09ff89A"))
 
 	ctx, cancel := newCliContextWithCancel(&app, set)
@@ -143,6 +151,7 @@ func TestClearDB(t *testing.T) {
 	set.String("datadir", tmp, "node data directory")
 	set.Bool(cmd.ForceClearDB.Name, true, "force clear db")
 	set.String("suggested-fee-recipient", "0x6e35733c5af9B61374A128e6F85f553aF09ff89A", "fee recipient")
+	set.Bool("sync-from-genesis", true, "sync from genesis")
 	require.NoError(t, set.Set("suggested-fee-recipient", "0x6e35733c5af9B61374A128e6F85f553aF09ff89A"))
 	context, cancel := newCliContextWithCancel(&app, set)
 
@@ -262,3 +271,147 @@ func TestCORS(t *testing.T) {
 		})
 	}
 }
+
+// TestValidateSyncFlags tests the validateSyncFlags function with real database instances
+func TestValidateSyncFlags(t *testing.T) {
+	tests := []struct {
+		expectWarning            bool
+		expectError              bool
+		hasCheckpointInitializer bool
+		syncFromGenesis          bool
+		dbHasOriginCheckpoint    bool
+		expectedErrorContains    string
+		weakSubjectivityValue    string
+		name                     string
+	}{
+		{
+			name:                  "Database not empty - validation skipped",
+			dbHasOriginCheckpoint: true,
+			syncFromGenesis:       false,
+			expectError:           false,
+		},
+		{
+			name:                  "Empty DB, no sync flags - should fail",
+			dbHasOriginCheckpoint: false,
+			syncFromGenesis:       false,
+			expectError:           true,
+			expectedErrorContains: "when starting with an empty database, you must specify either",
+		},
+		{
+			name:                  "Empty DB, sync from genesis - should succeed with warning",
+			dbHasOriginCheckpoint: false,
+			syncFromGenesis:       true,
+			expectError:           false,
+			expectWarning:         true,
+		},
+		{
+			name:                     "Empty DB, checkpoint sync - should succeed",
+			dbHasOriginCheckpoint:    false,
+			hasCheckpointInitializer: true,
+			expectError:              false,
+		},
+		{
+			name:                  "Empty DB, only weak subjectivity checkpoint - should fail",
+			dbHasOriginCheckpoint: false,
+			weakSubjectivityValue: "0x1234:123",
+			expectError:           true,
+			expectedErrorContains: "when starting with an empty database, you must specify either",
+		},
+		{
+			name:                     "Empty DB, conflicting sync options - should fail",
+			dbHasOriginCheckpoint:    false,
+			syncFromGenesis:          true,
+			hasCheckpointInitializer: true,
+			expectError:              true,
+			expectedErrorContains:    "conflicting sync options",
+		},
+		{
+			name:                  "Empty DB, genesis + weak subjectivity - should succeed",
+			dbHasOriginCheckpoint: false,
+			syncFromGenesis:       true,
+			weakSubjectivityValue: "0x1234:123",
+			expectError:           false,
+			expectWarning:         true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			
+			// Set up real database for testing
+			beaconDB := testDB.SetupDB(t)
+			
+			// Add genesis data if this test case uses sync-from-genesis
+			if tt.syncFromGenesis {
+				genesisState, err := util.NewBeaconState()
+				require.NoError(t, err)
+				require.NoError(t, beaconDB.SaveGenesisData(ctx, genesisState))
+			}
+
+			// Populate database if needed
+			if tt.dbHasOriginCheckpoint {
+				err := beaconDB.SaveOriginCheckpointBlockRoot(ctx, [32]byte{0x01})
+				require.NoError(t, err)
+			}
+
+			// Set up CLI flags
+			flagSet := flag.NewFlagSet("test", flag.ContinueOnError)
+			flagSet.Bool(flags.SyncFromGenesis.Name, tt.syncFromGenesis, "")
+			flagSet.String(flags.WeakSubjectivityCheckpoint.Name, tt.weakSubjectivityValue, "")
+			
+			app := cli.App{}
+			cliCtx := cli.NewContext(&app, flagSet, nil)
+
+			// Create BeaconNode with test setup
+			beaconNode := &BeaconNode{
+				ctx:    ctx,
+				db:     beaconDB,
+				cliCtx: cliCtx,
+			}
+
+			// Set CheckpointInitializer if needed
+			if tt.hasCheckpointInitializer {
+				beaconNode.CheckpointInitializer = &mockCheckpointInitializer{}
+			}
+
+			// Capture log output for warning detection
+			hook := logTest.NewGlobal()
+			defer hook.Reset()
+
+			// Call the function under test
+			err := beaconNode.validateSyncFlags()
+
+			// Validate results
+			if tt.expectError {
+				require.NotNil(t, err)
+				if tt.expectedErrorContains != "" {
+					require.ErrorContains(t, tt.expectedErrorContains, err)
+				}
+			} else {
+				require.NoError(t, err)
+			}
+
+			// Check for warning log if expected
+			if tt.expectWarning {
+				found := false
+				for _, entry := range hook.Entries {
+					if entry.Level.String() == "warning" && 
+					   strings.Contains(entry.Message, "Syncing from genesis is enabled") {
+						found = true
+						break
+					}
+				}
+				require.Equal(t, true, found, "Expected warning log about genesis sync")
+			}
+		})
+	}
+}
+
+// mockCheckpointInitializer is a simple mock for testing
+type mockCheckpointInitializer struct{}
+
+func (m *mockCheckpointInitializer) Initialize(ctx context.Context, db db.Database) error {
+	return nil
+}
+
