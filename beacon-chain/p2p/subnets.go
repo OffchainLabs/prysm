@@ -27,8 +27,6 @@ import (
 	"github.com/prysmaticlabs/go-bitfield"
 )
 
-const nfdEnrKey = "nfd" // The ENR record key for "nfd" (Next Fork Digest).
-
 var (
 	attestationSubnetCount = params.BeaconConfig().AttestationSubnetCount
 	syncCommsSubnetCount   = params.BeaconConfig().SyncCommitteeSubnetCount
