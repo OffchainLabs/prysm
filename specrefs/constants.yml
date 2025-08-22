@@ -9,6 +9,13 @@
     BASE_REWARDS_PER_EPOCH: uint64 = 4
     </spec>
 
+- name: BASIS_POINTS
+  sources: []
+  spec: |
+    <spec constant_var="BASIS_POINTS" fork="phase0" hash="cb0c8561">
+    BASIS_POINTS: uint64 = 10000
+    </spec>
+
 - name: BLS_MODULUS
   sources: []
   spec: |

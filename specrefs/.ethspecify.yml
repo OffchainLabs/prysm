@@ -1,4 +1,4 @@
-version: v1.6.0-alpha.4
+version: v1.6.0-alpha.5
 style: full
 
 specrefs:
@@ -17,6 +17,11 @@ exceptions:
     - CELLS_PER_EXT_BLOB#fulu
     - UPDATE_TIMEOUT#altair
 
+    # Not implemented: gloas (future fork)
+    - KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH_GLOAS#gloas
+    - MAX_PAYLOAD_ATTESTATIONS#gloas
+    - PTC_SIZE#gloas
+
   constants:
     # Constants in the KZG library
     - BLS_MODULUS#deneb
@@ -34,6 +39,7 @@ exceptions:
     - RANDOM_CHALLENGE_KZG_CELL_BATCH_DOMAIN#fulu
 
     # Not implemented
+    - BASIS_POINTS#phase0
     - ENDIANNESS#phase0
     - MAX_CONCURRENT_REQUESTS#phase0
     - PARTICIPATION_FLAG_WEIGHTS#altair
@@ -42,10 +48,56 @@ exceptions:
     - UINT64_MAX#phase0
     - UINT64_MAX_SQRT#phase0
 
+    # Not implemented: gloas (future fork)
+    - BUILDER_PAYMENT_THRESHOLD_DENOMINATOR#gloas
+    - BUILDER_PAYMENT_THRESHOLD_NUMERATOR#gloas
+    - BUILDER_PENDING_WITHDRAWALS_LIMIT#gloas
+    - BUILDER_WITHDRAWAL_PREFIX#gloas
+    - DOMAIN_BEACON_BUILDER#gloas
+    - DOMAIN_PTC_ATTESTER#gloas
+    - PAYLOAD_STATUS_EMPTY#gloas
+    - PAYLOAD_STATUS_FULL#gloas
+    - PAYLOAD_STATUS_PENDING#gloas
+
+  configs:
+    # Not implemented (placeholders)
+    - AGGREGRATE_DUE_BPS#phase0
+    - ATTESTATION_DUE_BPS#phase0
+    - CONTRIBUTION_DUE_BPS#altair
+    - PROPOSER_REORG_CUTOFF_BPS#phase0
+    - SLOT_DURATION_MS#phase0
+    - SYNC_MESSAGE_DUE_BPS#altair
+
+    # Not implemented: gloas (future fork)
+    - AGGREGRATE_DUE_BPS_GLOAS#gloas
+    - ATTESTATION_DUE_BPS_GLOAS#gloas
+    - CONTRIBUTION_DUE_BPS_GLOAS#gloas
+    - GLOAS_FORK_EPOCH#gloas
+    - GLOAS_FORK_VERSION#gloas
+    - MAX_REQUEST_PAYLOADS#gloas
+    - PAYLOAD_ATTESTATION_DUE_BPS#gloas
+    - SYNC_MESSAGE_DUE_BPS_GLOAS#gloas
+
   ssz_objects:
     # Not implemented
     - Eth1Block#phase0
     - MatrixEntry#fulu
+
+    # Not implemented: gloas (future fork)
+    - BeaconBlockBody#gloas
+    - BeaconState#gloas
+    - BuilderPendingPayment#gloas
+    - BuilderPendingWithdrawal#gloas
+    - DataColumnSidecar#gloas
+    - ExecutionPayloadEnvelope#gloas
+    - ExecutionPayloadHeader#gloas
+    - ForkChoiceNode#gloas
+    - IndexedPayloadAttestation#gloas
+    - PayloadAttestation#gloas
+    - PayloadAttestationData#gloas
+    - PayloadAttestationMessage#gloas
+    - SignedExecutionPayloadEnvelope#gloas
+    - SignedExecutionPayloadHeader#gloas
 
   dataclasses:
     # Not implemented
@@ -54,6 +106,10 @@ exceptions:
     - LightClientStore#altair
     - OptimisticStore#bellatrix
     - Store#phase0
+
+    # Not implemented: gloas (future fork)
+    - LatestMessage#gloas
+    - Store#gloas
 
   functions:
     # Functions implemented by KZG library for EIP-4844
@@ -130,6 +186,7 @@ exceptions:
     - get_matching_target_attestations#phase0
     - get_proposer_head#phase0
     - get_proposer_score#phase0
+    - get_slot_component_duration_ms#phase0
     - get_slot_signature#phase0
     - get_unslashed_attesting_indices#phase0
     - get_voting_source#phase0
@@ -145,6 +202,7 @@ exceptions:
     - is_valid_merkle_branch#phase0
     - on_tick#phase0
     - on_tick_per_slot#phase0
+    - seconds_to_milliseconds#phase0
     - store_target_checkpoint_state#phase0
     - update_latest_messages#phase0
     - validate_on_attestation#phase0
@@ -227,3 +285,64 @@ exceptions:
     - get_data_column_sidecars_from_column_sidecar#fulu
     - get_extended_sample_count#fulu
     - recover_matrix#fulu
+
+    # Not implemented: gloas (future fork)
+    - compute_balance_weighted_acceptance#gloas
+    - compute_balance_weighted_selection#gloas
+    - compute_fork_version#gloas
+    - compute_proposer_indices#gloas
+    - get_ancestor#gloas
+    - get_attestation_participation_flag_indices#gloas
+    - get_builder_payment_quorum_threshold#gloas
+    - get_checkpoint_block#gloas
+    - get_data_column_sidecars#gloas
+    - get_data_column_sidecars_from_block#gloas
+    - get_execution_payload_envelope_signature#gloas
+    - get_execution_payload_header_signature#gloas
+    - get_expected_withdrawals#gloas
+    - get_forkchoice_store#gloas
+    - get_head#gloas
+    - get_indexed_payload_attestation#gloas
+    - get_next_sync_committee_indices#gloas
+    - get_node_children#gloas
+    - get_parent_payload_status#gloas
+    - get_payload_attestation_message_signature#gloas
+    - get_payload_status_tiebreaker#gloas
+    - get_ptc#gloas
+    - get_ptc_assignment#gloas
+    - get_weight#gloas
+    - has_builder_withdrawal_credential#gloas
+    - has_compounding_withdrawal_credential#gloas
+    - is_attestation_same_slot#gloas
+    - is_builder_payment_withdrawable#gloas
+    - is_builder_withdrawal_credential#gloas
+    - is_merge_transition_complete#gloas
+    - is_parent_block_full#gloas
+    - is_parent_node_full#gloas
+    - is_payload_timely#gloas
+    - is_supporting_vote#gloas
+    - is_valid_indexed_payload_attestation#gloas
+    - notify_ptc_messages#gloas
+    - on_block#gloas
+    - on_execution_payload#gloas
+    - on_payload_attestation_message#gloas
+    - prepare_execution_payload#gloas
+    - process_attestation#gloas
+    - process_block#gloas
+    - process_builder_pending_payments#gloas
+    - process_epoch#gloas
+    - process_execution_payload#gloas
+    - process_execution_payload_header#gloas
+    - process_operations#gloas
+    - process_payload_attestation#gloas
+    - process_slot#gloas
+    - process_withdrawals#gloas
+    - remove_flag#gloas
+    - should_extend_payload#gloas
+    - update_latest_messages#gloas
+    - upgrade_to_gloas#gloas
+    - validate_merge_block#gloas
+    - validate_on_attestation#gloas
+    - verify_data_column_sidecar_inclusion_proof#gloas
+    - verify_execution_payload_envelope_signature#gloas
+    - verify_execution_payload_header_signature#gloas
