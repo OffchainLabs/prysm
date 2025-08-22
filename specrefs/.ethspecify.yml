@@ -1,0 +1,229 @@
+version: v1.6.0-alpha.4
+style: full
+
+specrefs:
+  search_root: ..
+  files:
+    - configs.yml
+    - constants.yml
+    - containers.yml
+    - dataclasses.yml
+    - functions.yml
+    - presets.yml
+
+exceptions:
+  presets:
+    # Not implemented
+    - CELLS_PER_EXT_BLOB#fulu
+    - UPDATE_TIMEOUT#altair
+
+  constants:
+    # Constants in the KZG library
+    - BLS_MODULUS#deneb
+    - BYTES_PER_COMMITMENT#deneb
+    - BYTES_PER_FIELD_ELEMENT#deneb
+    - BYTES_PER_PROOF#deneb
+    - FIAT_SHAMIR_PROTOCOL_DOMAIN#deneb
+    - G1_POINT_AT_INFINITY#deneb
+    - G2_POINT_AT_INFINITY#deneb
+    - KZG_ENDIANNESS#deneb
+    - KZG_SETUP_G2_LENGTH#deneb
+    - KZG_SETUP_G2_MONOMIAL#deneb
+    - PRIMITIVE_ROOT_OF_UNITY#deneb
+    - RANDOM_CHALLENGE_KZG_BATCH_DOMAIN#deneb
+    - RANDOM_CHALLENGE_KZG_CELL_BATCH_DOMAIN#fulu
+
+    # Not implemented
+    - ENDIANNESS#phase0
+    - MAX_CONCURRENT_REQUESTS#phase0
+    - PARTICIPATION_FLAG_WEIGHTS#altair
+    - SAFE_SLOTS_TO_IMPORT_OPTIMISTICALLY#bellatrix
+    - UINT256_MAX#fulu
+    - UINT64_MAX#phase0
+    - UINT64_MAX_SQRT#phase0
+
+  ssz_objects:
+    # Not implemented
+    - Eth1Block#phase0
+    - MatrixEntry#fulu
+
+  dataclasses:
+    # Not implemented
+    - BlobParameters#fulu
+    - LatestMessage#phase0
+    - LightClientStore#altair
+    - OptimisticStore#bellatrix
+    - Store#phase0
+
+  functions:
+    # Functions implemented by KZG library for EIP-4844
+    - bit_reversal_permutation#deneb
+    - blob_to_kzg_commitment#deneb
+    - blob_to_polynomial#deneb
+    - bls_field_to_bytes#deneb
+    - bytes_to_bls_field#deneb
+    - bytes_to_kzg_commitment#deneb
+    - bytes_to_kzg_proof#deneb
+    - compute_blob_kzg_proof#deneb
+    - compute_challenge#deneb
+    - compute_kzg_proof#deneb
+    - compute_kzg_proof_impl#deneb
+    - compute_powers#deneb
+    - compute_quotient_eval_within_domain#deneb
+    - compute_roots_of_unity#deneb
+    - evaluate_polynomial_in_evaluation_form#deneb
+    - g1_lincomb#deneb
+    - hash_to_bls_field#deneb
+    - is_power_of_two#deneb
+    - multi_exp#deneb
+    - reverse_bits#deneb
+    - validate_kzg_g1#deneb
+    - verify_blob_kzg_proof#deneb
+    - verify_blob_kzg_proof_batch#deneb
+    - verify_kzg_proof#deneb
+    - verify_kzg_proof_batch#deneb
+    - verify_kzg_proof_impl#deneb
+
+    # Functions implemented by KZG library for EIP-7594
+    - _fft_field#fulu
+    - add_polynomialcoeff#fulu
+    - cell_to_coset_evals#fulu
+    - compute_cells#fulu
+    - compute_cells_and_kzg_proofs#fulu
+    - compute_cells_and_kzg_proofs_polynomialcoeff#fulu
+    - compute_kzg_proof_multi_impl#fulu
+    - compute_verify_cell_kzg_proof_batch_challenge#fulu
+    - construct_vanishing_polynomial#fulu
+    - coset_evals_to_cell#fulu
+    - coset_fft_field#fulu
+    - coset_for_cell#fulu
+    - coset_shift_for_cell#fulu
+    - divide_polynomialcoeff#fulu
+    - evaluate_polynomialcoeff#fulu
+    - fft_field#fulu
+    - interpolate_polynomialcoeff#fulu
+    - multiply_polynomialcoeff#fulu
+    - polynomial_eval_to_coeff#fulu
+    - recover_cells_and_kzg_proofs#fulu
+    - recover_polynomialcoeff#fulu
+    - vanishing_polynomialcoeff#fulu
+    - verify_cell_kzg_proof_batch#fulu
+    - verify_cell_kzg_proof_batch_impl#fulu
+
+    # Not implemented: phase0
+    - calculate_committee_fraction#phase0
+    - compute_pulled_up_tip#phase0
+    - filter_block_tree#phase0
+    - get_aggregate_and_proof#phase0
+    - get_attestation_component_deltas#phase0
+    - get_attesting_balance#phase0
+    - get_base_reward#phase0
+    - get_checkpoint_block#phase0
+    - get_current_store_epoch#phase0
+    - get_eligible_validator_indices#phase0
+    - get_epoch_signature#phase0
+    - get_eth1_vote#phase0
+    - get_filtered_block_tree#phase0
+    - get_forkchoice_store#phase0
+    - get_matching_head_attestations#phase0
+    - get_matching_source_attestations#phase0
+    - get_matching_target_attestations#phase0
+    - get_proposer_head#phase0
+    - get_proposer_score#phase0
+    - get_slot_signature#phase0
+    - get_unslashed_attesting_indices#phase0
+    - get_voting_source#phase0
+    - is_candidate_block#phase0
+    - is_ffg_competitive#phase0
+    - is_finalization_ok#phase0
+    - is_head_late#phase0
+    - is_head_weak#phase0
+    - is_parent_strong#phase0
+    - is_proposer#phase0
+    - is_proposing_on_time#phase0
+    - is_shuffling_stable#phase0
+    - is_valid_merkle_branch#phase0
+    - on_tick#phase0
+    - on_tick_per_slot#phase0
+    - store_target_checkpoint_state#phase0
+    - update_latest_messages#phase0
+    - validate_on_attestation#phase0
+    - validate_target_epoch_against_current_time#phase0
+    - xor#phase0
+
+    # Not implemented: altair
+    - compute_sync_committee_period_at_slot#altair
+    - compute_timestamp_at_slot#bellatrix
+    - get_contribution_and_proof#altair
+    - get_index_for_new_validator#altair
+    - get_safety_threshold#altair
+    - get_subtree_index#altair
+    - get_sync_committee_message#altair
+    - get_sync_committee_selection_proof#altair
+    - get_unslashed_participating_indices#altair
+    - is_assigned_to_sync_committee#altair
+    - is_finality_update#altair
+    - is_next_sync_committee_known#altair
+    - is_valid_light_client_header#altair
+    - is_valid_normalized_merkle_branch#altair
+    - process_light_client_store_force_update#altair
+    - process_light_client_update#altair
+    - process_sync_committee_contributions#altair
+    - set_or_append_list#altair
+    - validate_light_client_update#altair
+
+    # Not implemented: bellatrix
+    - get_execution_payload#bellatrix
+    - is_merge_transition_block#bellatrix
+    - is_optimistic_candidate_block#bellatrix
+    - latest_verified_ancestor#bellatrix
+    - prepare_execution_payload#bellatrix
+
+    # Not implemented: capella
+    - get_lc_execution_root#capella
+    - is_valid_light_client_header#capella
+    - prepare_execution_payload#capella
+    - process_epoch#capella
+    - upgrade_lc_bootstrap_to_capella#capella
+    - upgrade_lc_finality_update_to_capella#capella
+    - upgrade_lc_header_to_capella#capella
+    - upgrade_lc_optimistic_update_to_capella#capella
+    - upgrade_lc_store_to_capella#capella
+    - upgrade_lc_update_to_capella#capella
+
+    # Not implemented: deneb
+    - get_lc_execution_root#deneb
+    - is_valid_light_client_header#deneb
+    - prepare_execution_payload#deneb
+    - upgrade_lc_bootstrap_to_deneb#deneb
+    - upgrade_lc_finality_update_to_deneb#deneb
+    - upgrade_lc_header_to_deneb#deneb
+    - upgrade_lc_optimistic_update_to_deneb#deneb
+    - upgrade_lc_store_to_deneb#deneb
+    - upgrade_lc_update_to_deneb#deneb
+
+    # Not implemented: electra
+    - compute_weak_subjectivity_period#electra
+    - current_sync_committee_gindex_at_slot#electra
+    - finalized_root_gindex_at_slot#electra
+    - get_eth1_vote#electra
+    - get_lc_execution_root#electra
+    - is_compounding_withdrawal_credential#electra
+    - is_within_weak_subjectivity_period#electra
+    - next_sync_committee_gindex_at_slot#electra
+    - normalize_merkle_branch#electra
+    - prepare_execution_payload#electra
+    - upgrade_lc_bootstrap_to_electra#electra
+    - upgrade_lc_finality_update_to_electra#electra
+    - upgrade_lc_header_to_electra#electra
+    - upgrade_lc_optimistic_update_to_electra#electra
+    - upgrade_lc_store_to_electra#electra
+    - upgrade_lc_update_to_electra#electra
+
+    # Not implemented: fulu
+    - compute_fork_digest#fulu
+    - compute_matrix#fulu
+    - get_blob_parameters#fulu
+    - get_data_column_sidecars_from_column_sidecar#fulu
+    - get_extended_sample_count#fulu
+    - recover_matrix#fulu
