@@ -282,7 +282,7 @@ type CommitteeAssignment struct {
 // than or equal to the minimum valid start slot calculated based on the state's current slot and historical roots.
 func VerifyAssignmentEpoch(epoch primitives.Epoch, state state.BeaconState) error {
 	nextEpoch := time.NextEpoch(state)
-	if epoch > nextEpoch {
+	if epoch > nextEpoch && state.Version() < version.Fulu { // due to fulu not transitioning the state forward and using the proposer look ahead instead
 		return fmt.Errorf("epoch %d can't be greater than next epoch %d", epoch, nextEpoch)
 	}
 
