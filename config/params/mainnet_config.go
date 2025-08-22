@@ -34,7 +34,6 @@ const (
 )
 
 var mainnetNetworkConfig = &NetworkConfig{
-	ETH2Key:                    "eth2",
 	AttSubnetKey:               "attnets",
 	SyncCommsSubnetKey:         "syncnets",
 	CustodyGroupCountKey:       "cgc",
