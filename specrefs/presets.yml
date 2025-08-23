@@ -1,0 +1,716 @@
+- name: BASE_REWARD_FACTOR
+  sources:
+    - file: config/params/config.go
+      search: BaseRewardFactor\s+.*yaml:"BASE_REWARD_FACTOR"
+      regex: true
+  spec: |
+    <spec preset_var="BASE_REWARD_FACTOR" fork="phase0" hash="ba06d7ce">
+    BASE_REWARD_FACTOR: uint64 = 64
+    </spec>
+
+- name: BYTES_PER_LOGS_BLOOM
+  sources:
+    - file: config/params/config.go
+      search: BytesPerLogsBloom\s+.*yaml:"BYTES_PER_LOGS_BLOOM"
+      regex: true
+  spec: |
+    <spec preset_var="BYTES_PER_LOGS_BLOOM" fork="bellatrix" hash="97101cb2">
+    BYTES_PER_LOGS_BLOOM: uint64 = 256
+    </spec>
+
+- name: CELLS_PER_EXT_BLOB
+  sources: []
+  spec: |
+    <spec preset_var="CELLS_PER_EXT_BLOB" fork="fulu" hash="217075f3">
+    CELLS_PER_EXT_BLOB = 128
+    </spec>
+
+- name: EFFECTIVE_BALANCE_INCREMENT
+  sources:
+    - file: config/params/config.go
+      search: EffectiveBalanceIncrement\s+.*yaml:"EFFECTIVE_BALANCE_INCREMENT"
+      regex: true
+  spec: |
+    <spec preset_var="EFFECTIVE_BALANCE_INCREMENT" fork="phase0" hash="23dfe52c">
+    EFFECTIVE_BALANCE_INCREMENT: Gwei = 1000000000
+    </spec>
+
+- name: EPOCHS_PER_ETH1_VOTING_PERIOD
+  sources:
+    - file: config/params/config.go
+      search: EpochsPerEth1VotingPeriod\s+.*yaml:"EPOCHS_PER_ETH1_VOTING_PERIOD"
+      regex: true
+  spec: |
+    <spec preset_var="EPOCHS_PER_ETH1_VOTING_PERIOD" fork="phase0" hash="6b6a0053">
+    EPOCHS_PER_ETH1_VOTING_PERIOD: uint64 = 64
+    </spec>
+
+- name: EPOCHS_PER_HISTORICAL_VECTOR
+  sources:
+    - file: config/fieldparams/mainnet.go
+      search: RandaoMixesLength\s*=
+      regex: true
+  spec: |
+    <spec preset_var="EPOCHS_PER_HISTORICAL_VECTOR" fork="phase0" hash="6156dc33">
+    EPOCHS_PER_HISTORICAL_VECTOR: uint64 = 65536
+    </spec>
+
+- name: EPOCHS_PER_SLASHINGS_VECTOR
+  sources:
+    - file: config/fieldparams/mainnet.go
+      search: SlashingsLength\s*=
+      regex: true
+  spec: |
+    <spec preset_var="EPOCHS_PER_SLASHINGS_VECTOR" fork="phase0" hash="c237469a">
+    EPOCHS_PER_SLASHINGS_VECTOR: uint64 = 8192
+    </spec>
+
+- name: EPOCHS_PER_SYNC_COMMITTEE_PERIOD
+  sources:
+    - file: config/params/config.go
+      search: EpochsPerSyncCommitteePeriod\s+.*yaml:"EPOCHS_PER_SYNC_COMMITTEE_PERIOD"
+      regex: true
+  spec: |
+    <spec preset_var="EPOCHS_PER_SYNC_COMMITTEE_PERIOD" fork="altair" hash="f02bdf72">
+    EPOCHS_PER_SYNC_COMMITTEE_PERIOD: uint64 = 256
+    </spec>
+
+- name: FIELD_ELEMENTS_PER_BLOB
+  sources:
+    - file: config/params/config.go
+      search: FieldElementsPerBlob\s+.*yaml:"FIELD_ELEMENTS_PER_BLOB"
+      regex: true
+  spec: |
+    <spec preset_var="FIELD_ELEMENTS_PER_BLOB" fork="deneb" hash="a86948eb">
+    FIELD_ELEMENTS_PER_BLOB: uint64 = 4096
+    </spec>
+
+- name: FIELD_ELEMENTS_PER_CELL
+  sources:
+    - file: config/fieldparams/mainnet.go
+      search: CellsPerBlob\s*=
+      regex: true
+  spec: |
+    <spec preset_var="FIELD_ELEMENTS_PER_CELL" fork="fulu" hash="6af85ab8">
+    FIELD_ELEMENTS_PER_CELL: uint64 = 64
+    </spec>
+
+- name: FIELD_ELEMENTS_PER_EXT_BLOB
+  sources:
+    - file: proto/ssz_proto_library.bzl
+      search: mainnet\s*=\s*\{[^}]*"field_elements_per_ext_blob\.size".*[^}]*\}
+      regex: true
+  spec: |
+    <spec preset_var="FIELD_ELEMENTS_PER_EXT_BLOB" fork="fulu" hash="6994b51d">
+    FIELD_ELEMENTS_PER_EXT_BLOB = 8192
+    </spec>
+
+- name: HISTORICAL_ROOTS_LIMIT
+  sources:
+    - file: config/fieldparams/mainnet.go
+      search: HistoricalRootsLength\s*=
+      regex: true
+  spec: |
+    <spec preset_var="HISTORICAL_ROOTS_LIMIT" fork="phase0" hash="498b6597">
+    HISTORICAL_ROOTS_LIMIT: uint64 = 16777216
+    </spec>
+
+- name: HYSTERESIS_DOWNWARD_MULTIPLIER
+  sources:
+    - file: config/params/config.go
+      search: HysteresisDownwardMultiplier\s+.*yaml:"HYSTERESIS_DOWNWARD_MULTIPLIER"
+      regex: true
+  spec: |
+    <spec preset_var="HYSTERESIS_DOWNWARD_MULTIPLIER" fork="phase0" hash="95d603c9">
+    HYSTERESIS_DOWNWARD_MULTIPLIER: uint64 = 1
+    </spec>
+
+- name: HYSTERESIS_QUOTIENT
+  sources:
+    - file: config/params/config.go
+      search: HysteresisQuotient\s+.*yaml:"HYSTERESIS_QUOTIENT"
+      regex: true
+  spec: |
+    <spec preset_var="HYSTERESIS_QUOTIENT" fork="phase0" hash="c3849917">
+    HYSTERESIS_QUOTIENT: uint64 = 4
+    </spec>
+
+- name: HYSTERESIS_UPWARD_MULTIPLIER
+  sources:
+    - file: config/params/config.go
+      search: HysteresisUpwardMultiplier\s+.*yaml:"HYSTERESIS_UPWARD_MULTIPLIER"
+      regex: true
+  spec: |
+    <spec preset_var="HYSTERESIS_UPWARD_MULTIPLIER" fork="phase0" hash="34607474">
+    HYSTERESIS_UPWARD_MULTIPLIER: uint64 = 5
+    </spec>
+
+- name: INACTIVITY_PENALTY_QUOTIENT
+  sources:
+    - file: config/params/config.go
+      search: InactivityPenaltyQuotient\s+.*yaml:"INACTIVITY_PENALTY_QUOTIENT"
+      regex: true
+  spec: |
+    <spec preset_var="INACTIVITY_PENALTY_QUOTIENT" fork="phase0" hash="5d82db62">
+    INACTIVITY_PENALTY_QUOTIENT: uint64 = 67108864
+    </spec>
+
+- name: INACTIVITY_PENALTY_QUOTIENT_ALTAIR
+  sources:
+    - file: config/params/config.go
+      search: InactivityPenaltyQuotientAltair\s+.*yaml:"INACTIVITY_PENALTY_QUOTIENT_ALTAIR"
+      regex: true
+  spec: |
+    <spec preset_var="INACTIVITY_PENALTY_QUOTIENT_ALTAIR" fork="altair" hash="d0d3c505">
+    INACTIVITY_PENALTY_QUOTIENT_ALTAIR: uint64 = 50331648
+    </spec>
+
+- name: INACTIVITY_PENALTY_QUOTIENT_BELLATRIX
+  sources:
+    - file: config/params/config.go
+      search: InactivityPenaltyQuotientBellatrix\s+.*yaml:"INACTIVITY_PENALTY_QUOTIENT_BELLATRIX"
+      regex: true
+  spec: |
+    <spec preset_var="INACTIVITY_PENALTY_QUOTIENT_BELLATRIX" fork="bellatrix" hash="33fd626d">
+    INACTIVITY_PENALTY_QUOTIENT_BELLATRIX: uint64 = 16777216
+    </spec>
+
+- name: KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH
+  sources:
+    - file: proto/ssz_proto_library.bzl
+      search: mainnet\s*=\s*\{[^}]*"kzg_commitments_inclusion_proof_depth\.size":.*[^}]*\}
+      regex: true
+  spec: |
+    <spec preset_var="KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH" fork="fulu" hash="22280638">
+    KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH: uint64 = 4
+    </spec>
+
+- name: KZG_COMMITMENT_INCLUSION_PROOF_DEPTH
+  sources:
+    - file: config/fieldparams/mainnet.go
+      search: KzgCommitmentInclusionProofDepth\s*=
+      regex: true
+  spec: |
+    <spec preset_var="KZG_COMMITMENT_INCLUSION_PROOF_DEPTH" fork="deneb" hash="79db011d">
+    KZG_COMMITMENT_INCLUSION_PROOF_DEPTH: uint64 = 17
+    </spec>
+
+- name: MAX_ATTESTATIONS
+  sources:
+    - file: config/params/config.go
+      search: MaxAttestations\s+.*yaml:"MAX_ATTESTATIONS"
+      regex: true
+  spec: |
+    <spec preset_var="MAX_ATTESTATIONS" fork="phase0" hash="afe55d3f">
+    MAX_ATTESTATIONS = 128
+    </spec>
+
+- name: MAX_ATTESTATIONS_ELECTRA
+  sources:
+    - file: config/params/config.go
+      search: MaxAttestationsElectra\s+.*yaml:"MAX_ATTESTATIONS_ELECTRA"
+      regex: true
+  spec: |
+    <spec preset_var="MAX_ATTESTATIONS_ELECTRA" fork="electra" hash="4dbaf2dd">
+    MAX_ATTESTATIONS_ELECTRA = 8
+    </spec>
+
+- name: MAX_ATTESTER_SLASHINGS
+  sources:
+    - file: config/params/config.go
+      search: MaxAttesterSlashings\s+.*yaml:"MAX_ATTESTER_SLASHINGS"
+      regex: true
+  spec: |
+    <spec preset_var="MAX_ATTESTER_SLASHINGS" fork="phase0" hash="c1416d33">
+    MAX_ATTESTER_SLASHINGS = 2
+    </spec>
+
+- name: MAX_ATTESTER_SLASHINGS_ELECTRA
+  sources:
+    - file: config/params/config.go
+      search: MaxAttesterSlashingsElectra\s+.*yaml:"MAX_ATTESTER_SLASHINGS_ELECTRA"
+      regex: true
+  spec: |
+    <spec preset_var="MAX_ATTESTER_SLASHINGS_ELECTRA" fork="electra" hash="fc70c923">
+    MAX_ATTESTER_SLASHINGS_ELECTRA = 1
+    </spec>
+
+- name: MAX_BLOB_COMMITMENTS_PER_BLOCK
+  sources:
+    - file: config/fieldparams/mainnet.go
+      search: MaxBlobCommitmentsPerBlock\s*=
+      regex: true
+  spec: |
+    <spec preset_var="MAX_BLOB_COMMITMENTS_PER_BLOCK" fork="deneb" hash="0ad15e8f">
+    MAX_BLOB_COMMITMENTS_PER_BLOCK: uint64 = 4096
+    </spec>
+
+- name: MAX_BLS_TO_EXECUTION_CHANGES
+  sources:
+    - file: config/params/config.go
+      search: MaxBlsToExecutionChanges\s+.*yaml:"MAX_BLS_TO_EXECUTION_CHANGES"
+      regex: true
+  spec: |
+    <spec preset_var="MAX_BLS_TO_EXECUTION_CHANGES" fork="capella" hash="1eee2f2f">
+    MAX_BLS_TO_EXECUTION_CHANGES = 16
+    </spec>
+
+- name: MAX_BYTES_PER_TRANSACTION
+  sources:
+    - file: config/params/config.go
+      search: MaxBytesPerTransaction\s+.*yaml:"MAX_BYTES_PER_TRANSACTION"
+      regex: true
+  spec: |
+    <spec preset_var="MAX_BYTES_PER_TRANSACTION" fork="bellatrix" hash="3684e68f">
+    MAX_BYTES_PER_TRANSACTION: uint64 = 1073741824
+    </spec>
+
+- name: MAX_COMMITTEES_PER_SLOT#phase0
+  sources:
+    - file: config/params/config.go
+      search: MaxCommitteesPerSlot\s+.*yaml:"MAX_COMMITTEES_PER_SLOT"
+      regex: true
+  spec: |
+    <spec preset_var="MAX_COMMITTEES_PER_SLOT" fork="phase0" hash="0442c4b7">
+    MAX_COMMITTEES_PER_SLOT: uint64 = 64
+    </spec>
+
+- name: MAX_COMMITTEES_PER_SLOT#electra
+  sources:
+    - file: config/params/config.go
+      search: MaxCommitteesPerSlot\s+.*yaml:"MAX_COMMITTEES_PER_SLOT"
+      regex: true
+  spec: |
+    <spec preset_var="MAX_COMMITTEES_PER_SLOT" fork="electra" hash="0442c4b7">
+    MAX_COMMITTEES_PER_SLOT: uint64 = 64
+    </spec>
+
+- name: MAX_CONSOLIDATION_REQUESTS_PER_PAYLOAD
+  sources:
+    - file: config/params/config.go
+      search: MaxConsolidationsRequestsPerPayload\s+.*yaml:"MAX_CONSOLIDATION_REQUESTS_PER_PAYLOAD"
+      regex: true
+  spec: |
+    <spec preset_var="MAX_CONSOLIDATION_REQUESTS_PER_PAYLOAD" fork="electra" hash="59ec80e5">
+    MAX_CONSOLIDATION_REQUESTS_PER_PAYLOAD: uint64 = 2
+    </spec>
+
+- name: MAX_DEPOSITS
+  sources:
+    - file: config/params/config.go
+      search: MaxDeposits\s+.*yaml:"MAX_DEPOSITS"
+      regex: true
+  spec: |
+    <spec preset_var="MAX_DEPOSITS" fork="phase0" hash="542a0f96">
+    MAX_DEPOSITS = 16
+    </spec>
+
+- name: MAX_DEPOSIT_REQUESTS_PER_PAYLOAD
+  sources:
+    - file: config/params/config.go
+      search: MaxDepositRequestsPerPayload\s+.*yaml:"MAX_DEPOSIT_REQUESTS_PER_PAYLOAD"
+      regex: true
+  spec: |
+    <spec preset_var="MAX_DEPOSIT_REQUESTS_PER_PAYLOAD" fork="electra" hash="6c60ff83">
+    MAX_DEPOSIT_REQUESTS_PER_PAYLOAD: uint64 = 8192
+    </spec>
+
+- name: MAX_EFFECTIVE_BALANCE
+  sources:
+    - file: config/params/config.go
+      search: MaxEffectiveBalance\s+.*yaml:"MAX_EFFECTIVE_BALANCE"
+      regex: true
+  spec: |
+    <spec preset_var="MAX_EFFECTIVE_BALANCE" fork="phase0" hash="13dd1310">
+    MAX_EFFECTIVE_BALANCE: Gwei = 32000000000
+    </spec>
+
+- name: MAX_EFFECTIVE_BALANCE_ELECTRA
+  sources:
+    - file: config/params/config.go
+      search: MaxEffectiveBalanceElectra\s+.*yaml:"MAX_EFFECTIVE_BALANCE_ELECTRA"
+      regex: true
+  spec: |
+    <spec preset_var="MAX_EFFECTIVE_BALANCE_ELECTRA" fork="electra" hash="2ec17dc4">
+    MAX_EFFECTIVE_BALANCE_ELECTRA: Gwei = 2048000000000
+    </spec>
+
+- name: MAX_EXTRA_DATA_BYTES
+  sources:
+    - file: config/params/config.go
+      search: MaxExtraDataBytes\s+.*yaml:"MAX_EXTRA_DATA_BYTES"
+      regex: true
+  spec: |
+    <spec preset_var="MAX_EXTRA_DATA_BYTES" fork="bellatrix" hash="9d278744">
+    MAX_EXTRA_DATA_BYTES = 32
+    </spec>
+
+- name: MAX_PENDING_DEPOSITS_PER_EPOCH
+  sources:
+    - file: config/params/config.go
+      search: MaxPendingDepositsPerEpoch\s+.*yaml:"MAX_PENDING_DEPOSITS_PER_EPOCH"
+      regex: true
+  spec: |
+    <spec preset_var="MAX_PENDING_DEPOSITS_PER_EPOCH" fork="electra" hash="f532a46f">
+    MAX_PENDING_DEPOSITS_PER_EPOCH: uint64 = 16
+    </spec>
+
+- name: MAX_PENDING_PARTIALS_PER_WITHDRAWALS_SWEEP
+  sources:
+    - file: config/params/config.go
+      search: MaxPendingPartialsPerWithdrawalsSweep\s+.*yaml:"MAX_PENDING_PARTIALS_PER_WITHDRAWALS_SWEEP"
+      regex: true
+  spec: |
+    <spec preset_var="MAX_PENDING_PARTIALS_PER_WITHDRAWALS_SWEEP" fork="electra" hash="e7b2f394">
+    MAX_PENDING_PARTIALS_PER_WITHDRAWALS_SWEEP: uint64 = 8
+    </spec>
+
+- name: MAX_PROPOSER_SLASHINGS
+  sources:
+    - file: config/params/config.go
+      search: MaxProposerSlashings\s+.*yaml:"MAX_PROPOSER_SLASHINGS"
+      regex: true
+  spec: |
+    <spec preset_var="MAX_PROPOSER_SLASHINGS" fork="phase0" hash="87bfd9ed">
+    MAX_PROPOSER_SLASHINGS = 16
+    </spec>
+
+- name: MAX_SEED_LOOKAHEAD
+  sources:
+    - file: config/params/config.go
+      search: MaxSeedLookahead\s+.*yaml:"MAX_SEED_LOOKAHEAD"
+      regex: true
+  spec: |
+    <spec preset_var="MAX_SEED_LOOKAHEAD" fork="phase0" hash="b7ae8929">
+    MAX_SEED_LOOKAHEAD: uint64 = 4
+    </spec>
+
+- name: MAX_TRANSACTIONS_PER_PAYLOAD
+  sources:
+    - file: config/params/config.go
+      search: MaxTransactionsPerPayload\s+.*yaml:"MAX_TRANSACTIONS_PER_PAYLOAD"
+      regex: true
+  spec: |
+    <spec preset_var="MAX_TRANSACTIONS_PER_PAYLOAD" fork="bellatrix" hash="1088e3b2">
+    MAX_TRANSACTIONS_PER_PAYLOAD: uint64 = 1048576
+    </spec>
+
+- name: MAX_VALIDATORS_PER_COMMITTEE#phase0
+  sources:
+    - file: config/params/config.go
+      search: MaxValidatorsPerCommittee\s+.*yaml:"MAX_VALIDATORS_PER_COMMITTEE"
+      regex: true
+  spec: |
+    <spec preset_var="MAX_VALIDATORS_PER_COMMITTEE" fork="phase0" hash="900abcb2">
+    MAX_VALIDATORS_PER_COMMITTEE: uint64 = 2048
+    </spec>
+
+- name: MAX_VALIDATORS_PER_COMMITTEE#electra
+  sources:
+    - file: config/params/config.go
+      search: MaxValidatorsPerCommittee\s+.*yaml:"MAX_VALIDATORS_PER_COMMITTEE"
+      regex: true
+  spec: |
+    <spec preset_var="MAX_VALIDATORS_PER_COMMITTEE" fork="electra" hash="900abcb2">
+    MAX_VALIDATORS_PER_COMMITTEE: uint64 = 2048
+    </spec>
+
+- name: MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP
+  sources:
+    - file: config/params/config.go
+      search: MaxValidatorsPerWithdrawalsSweep\s+.*yaml:"MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP"
+      regex: true
+  spec: |
+    <spec preset_var="MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP" fork="capella" hash="ac61940c">
+    MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP = 16384
+    </spec>
+
+- name: MAX_VOLUNTARY_EXITS
+  sources:
+    - file: config/params/config.go
+      search: MaxVoluntaryExits\s+.*yaml:"MAX_VOLUNTARY_EXITS"
+      regex: true
+  spec: |
+    <spec preset_var="MAX_VOLUNTARY_EXITS" fork="phase0" hash="a0a7ac5e">
+    MAX_VOLUNTARY_EXITS = 16
+    </spec>
+
+- name: MAX_WITHDRAWALS_PER_PAYLOAD
+  sources:
+    - file: config/fieldparams/mainnet.go
+      search: MaxWithdrawalsPerPayload\s*=
+      regex: true
+  spec: |
+    <spec preset_var="MAX_WITHDRAWALS_PER_PAYLOAD" fork="capella" hash="c406effb">
+    MAX_WITHDRAWALS_PER_PAYLOAD: uint64 = 16
+    </spec>
+
+- name: MAX_WITHDRAWAL_REQUESTS_PER_PAYLOAD
+  sources:
+    - file: config/params/config.go
+      search: MaxWithdrawalRequestsPerPayload\s+.*yaml:"MAX_WITHDRAWAL_REQUESTS_PER_PAYLOAD"
+      regex: true
+  spec: |
+    <spec preset_var="MAX_WITHDRAWAL_REQUESTS_PER_PAYLOAD" fork="electra" hash="9f04de0d">
+    MAX_WITHDRAWAL_REQUESTS_PER_PAYLOAD: uint64 = 16
+    </spec>
+
+- name: MIN_ACTIVATION_BALANCE
+  sources:
+    - file: config/params/config.go
+      search: MinActivationBalance\s+.*yaml:"MIN_ACTIVATION_BALANCE"
+      regex: true
+  spec: |
+    <spec preset_var="MIN_ACTIVATION_BALANCE" fork="electra" hash="fcbcbab5">
+    MIN_ACTIVATION_BALANCE: Gwei = 32000000000
+    </spec>
+
+- name: MIN_ATTESTATION_INCLUSION_DELAY
+  sources:
+    - file: config/params/config.go
+      search: MinAttestationInclusionDelay\s+.*yaml:"MIN_ATTESTATION_INCLUSION_DELAY"
+      regex: true
+  spec: |
+    <spec preset_var="MIN_ATTESTATION_INCLUSION_DELAY" fork="phase0" hash="2e9435aa">
+    MIN_ATTESTATION_INCLUSION_DELAY: uint64 = 1
+    </spec>
+
+- name: MIN_DEPOSIT_AMOUNT
+  sources:
+    - file: config/params/config.go
+      search: MinDepositAmount\s+.*yaml:"MIN_DEPOSIT_AMOUNT"
+      regex: true
+  spec: |
+    <spec preset_var="MIN_DEPOSIT_AMOUNT" fork="phase0" hash="388f2923">
+    MIN_DEPOSIT_AMOUNT: Gwei = 1000000000
+    </spec>
+
+- name: MIN_EPOCHS_TO_INACTIVITY_PENALTY
+  sources:
+    - file: config/params/config.go
+      search: MinEpochsToInactivityPenalty\s+.*yaml:"MIN_EPOCHS_TO_INACTIVITY_PENALTY"
+      regex: true
+  spec: |
+    <spec preset_var="MIN_EPOCHS_TO_INACTIVITY_PENALTY" fork="phase0" hash="339d14c4">
+    MIN_EPOCHS_TO_INACTIVITY_PENALTY: uint64 = 4
+    </spec>
+
+- name: MIN_SEED_LOOKAHEAD
+  sources:
+    - file: config/params/config.go
+      search: MinSeedLookahead\s+.*yaml:"MIN_SEED_LOOKAHEAD"
+      regex: true
+  spec: |
+    <spec preset_var="MIN_SEED_LOOKAHEAD" fork="phase0" hash="48a0462b">
+    MIN_SEED_LOOKAHEAD: uint64 = 1
+    </spec>
+
+- name: MIN_SLASHING_PENALTY_QUOTIENT
+  sources:
+    - file: config/params/config.go
+      search: MinSlashingPenaltyQuotient\s+.*yaml:"MIN_SLASHING_PENALTY_QUOTIENT"
+      regex: true
+  spec: |
+    <spec preset_var="MIN_SLASHING_PENALTY_QUOTIENT" fork="phase0" hash="0204123d">
+    MIN_SLASHING_PENALTY_QUOTIENT: uint64 = 128
+    </spec>
+
+- name: MIN_SLASHING_PENALTY_QUOTIENT_ALTAIR
+  sources:
+    - file: config/params/config.go
+      search: MinSlashingPenaltyQuotientAltair\s+.*yaml:"MIN_SLASHING_PENALTY_QUOTIENT_ALTAIR"
+      regex: true
+  spec: |
+    <spec preset_var="MIN_SLASHING_PENALTY_QUOTIENT_ALTAIR" fork="altair" hash="4845bc05">
+    MIN_SLASHING_PENALTY_QUOTIENT_ALTAIR: uint64 = 64
+    </spec>
+
+- name: MIN_SLASHING_PENALTY_QUOTIENT_BELLATRIX
+  sources:
+    - file: config/params/config.go
+      search: MinSlashingPenaltyQuotientBellatrix\s+.*yaml:"MIN_SLASHING_PENALTY_QUOTIENT_BELLATRIX"
+      regex: true
+  spec: |
+    <spec preset_var="MIN_SLASHING_PENALTY_QUOTIENT_BELLATRIX" fork="bellatrix" hash="2a5af13c">
+    MIN_SLASHING_PENALTY_QUOTIENT_BELLATRIX: uint64 = 32
+    </spec>
+
+- name: MIN_SLASHING_PENALTY_QUOTIENT_ELECTRA
+  sources:
+    - file: config/params/config.go
+      search: MinSlashingPenaltyQuotientElectra\s+.*yaml:"MIN_SLASHING_PENALTY_QUOTIENT_ELECTRA"
+      regex: true
+  spec: |
+    <spec preset_var="MIN_SLASHING_PENALTY_QUOTIENT_ELECTRA" fork="electra" hash="03888289">
+    MIN_SLASHING_PENALTY_QUOTIENT_ELECTRA: uint64 = 4096
+    </spec>
+
+- name: MIN_SYNC_COMMITTEE_PARTICIPANTS
+  sources:
+    - file: config/params/config.go
+      search: MinSyncCommitteeParticipants\s+.*yaml:"MIN_SYNC_COMMITTEE_PARTICIPANTS"
+      regex: true
+  spec: |
+    <spec preset_var="MIN_SYNC_COMMITTEE_PARTICIPANTS" fork="altair" hash="7ca6fd1f">
+    MIN_SYNC_COMMITTEE_PARTICIPANTS = 1
+    </spec>
+
+- name: NUMBER_OF_COLUMNS
+  sources:
+    - file: config/params/config.go
+      search: NumberOfColumns\s+uint64
+      regex: true
+  spec: |
+    <spec preset_var="NUMBER_OF_COLUMNS" fork="fulu" hash="f6441e62">
+    NUMBER_OF_COLUMNS: uint64 = 128
+    </spec>
+
+- name: PENDING_CONSOLIDATIONS_LIMIT
+  sources:
+    - file: config/fieldparams/mainnet.go
+      search: PendingConsolidationsLimit\s*=
+      regex: true
+  spec: |
+    <spec preset_var="PENDING_CONSOLIDATIONS_LIMIT" fork="electra" hash="f28398d0">
+    PENDING_CONSOLIDATIONS_LIMIT: uint64 = 262144
+    </spec>
+
+- name: PENDING_DEPOSITS_LIMIT
+  sources:
+    - file: config/fieldparams/mainnet.go
+      search: PendingDepositsLimit\s*=
+      regex: true
+  spec: |
+    <spec preset_var="PENDING_DEPOSITS_LIMIT" fork="electra" hash="8f7ed296">
+    PENDING_DEPOSITS_LIMIT: uint64 = 134217728
+    </spec>
+
+- name: PENDING_PARTIAL_WITHDRAWALS_LIMIT
+  sources:
+    - file: config/fieldparams/mainnet.go
+      search: PendingPartialWithdrawalsLimit\s*=
+      regex: true
+  spec: |
+    <spec preset_var="PENDING_PARTIAL_WITHDRAWALS_LIMIT" fork="electra" hash="9ae3fe56">
+    PENDING_PARTIAL_WITHDRAWALS_LIMIT: uint64 = 134217728
+    </spec>
+
+- name: PROPORTIONAL_SLASHING_MULTIPLIER
+  sources:
+    - file: config/params/config.go
+      search: ProportionalSlashingMultiplier\s+.*yaml:"PROPORTIONAL_SLASHING_MULTIPLIER"
+      regex: true
+  spec: |
+    <spec preset_var="PROPORTIONAL_SLASHING_MULTIPLIER" fork="phase0" hash="7675c5ad">
+    PROPORTIONAL_SLASHING_MULTIPLIER: uint64 = 1
+    </spec>
+
+- name: PROPORTIONAL_SLASHING_MULTIPLIER_ALTAIR
+  sources:
+    - file: config/params/config.go
+      search: ProportionalSlashingMultiplierAltair\s+.*yaml:"PROPORTIONAL_SLASHING_MULTIPLIER_ALTAIR"
+      regex: true
+  spec: |
+    <spec preset_var="PROPORTIONAL_SLASHING_MULTIPLIER_ALTAIR" fork="altair" hash="5e6aedb9">
+    PROPORTIONAL_SLASHING_MULTIPLIER_ALTAIR: uint64 = 2
+    </spec>
+
+- name: PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX
+  sources:
+    - file: config/params/config.go
+      search: ProportionalSlashingMultiplierBellatrix\s+.*yaml:"PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX"
+      regex: true
+  spec: |
+    <spec preset_var="PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX" fork="bellatrix" hash="e36837df">
+    PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX: uint64 = 3
+    </spec>
+
+- name: PROPOSER_REWARD_QUOTIENT
+  sources:
+    - file: config/params/config.go
+      search: ProposerRewardQuotient\s+.*yaml:"PROPOSER_REWARD_QUOTIENT"
+      regex: true
+  spec: |
+    <spec preset_var="PROPOSER_REWARD_QUOTIENT" fork="phase0" hash="a60dab3e">
+    PROPOSER_REWARD_QUOTIENT: uint64 = 8
+    </spec>
+
+- name: SHUFFLE_ROUND_COUNT
+  sources:
+    - file: config/params/config.go
+      search: ShuffleRoundCount\s+.*yaml:"SHUFFLE_ROUND_COUNT"
+      regex: true
+  spec: |
+    <spec preset_var="SHUFFLE_ROUND_COUNT" fork="phase0" hash="ed107076">
+    SHUFFLE_ROUND_COUNT: uint64 = 90
+    </spec>
+
+- name: SLOTS_PER_EPOCH
+  sources:
+    - file: config/fieldparams/mainnet.go
+      search: SlotsPerEpoch\s*=
+      regex: true
+  spec: |
+    <spec preset_var="SLOTS_PER_EPOCH" fork="phase0" hash="cb41af43">
+    SLOTS_PER_EPOCH: uint64 = 32
+    </spec>
+
+- name: SLOTS_PER_HISTORICAL_ROOT
+  sources:
+    - file: config/fieldparams/mainnet.go
+      search: BlockRootsLength\s*=
+      regex: true
+  spec: |
+    <spec preset_var="SLOTS_PER_HISTORICAL_ROOT" fork="phase0" hash="1d0bdd1d">
+    SLOTS_PER_HISTORICAL_ROOT: uint64 = 8192
+    </spec>
+
+- name: SYNC_COMMITTEE_SIZE
+  sources:
+    - file: config/fieldparams/mainnet.go
+      search: SyncCommitteeLength\s*=
+      regex: true
+  spec: |
+    <spec preset_var="SYNC_COMMITTEE_SIZE" fork="altair" hash="d31740c9">
+    SYNC_COMMITTEE_SIZE: uint64 = 512
+    </spec>
+
+- name: TARGET_COMMITTEE_SIZE
+  sources:
+    - file: config/params/config.go
+      search: TargetCommitteeSize\s+.*yaml:"TARGET_COMMITTEE_SIZE"
+      regex: true
+  spec: |
+    <spec preset_var="TARGET_COMMITTEE_SIZE" fork="phase0" hash="d56fdb68">
+    TARGET_COMMITTEE_SIZE: uint64 = 128
+    </spec>
+
+- name: VALIDATOR_REGISTRY_LIMIT
+  sources:
+    - file: config/fieldparams/mainnet.go
+      search: ValidatorRegistryLimit\s*=
+      regex: true
+  spec: |
+    <spec preset_var="VALIDATOR_REGISTRY_LIMIT" fork="phase0" hash="8fa5412c">
+    VALIDATOR_REGISTRY_LIMIT: uint64 = 1099511627776
+    </spec>
+
+- name: WHISTLEBLOWER_REWARD_QUOTIENT
+  sources:
+    - file: config/params/config.go
+      search: WhistleBlowerRewardQuotient\s+.*yaml:"WHISTLEBLOWER_REWARD_QUOTIENT"
+      regex: true
+  spec: |
+    <spec preset_var="WHISTLEBLOWER_REWARD_QUOTIENT" fork="phase0" hash="62962c52">
+    WHISTLEBLOWER_REWARD_QUOTIENT: uint64 = 512
+    </spec>
+
+- name: WHISTLEBLOWER_REWARD_QUOTIENT_ELECTRA
+  sources:
+    - file: config/params/config.go
+      search: WhistleBlowerRewardQuotientElectra\s+.*yaml:"WHISTLEBLOWER_REWARD_QUOTIENT_ELECTRA"
+      regex: true
+  spec: |
+    <spec preset_var="WHISTLEBLOWER_REWARD_QUOTIENT_ELECTRA" fork="electra" hash="8021dedf">
+    WHISTLEBLOWER_REWARD_QUOTIENT_ELECTRA: uint64 = 4096
+    </spec>
