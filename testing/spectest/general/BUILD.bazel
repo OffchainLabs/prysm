@@ -5,6 +5,7 @@ go_test(
     srcs = ["deneb__kzg__verify_blob_kzg_proof_batch_test.go"],
     data = ["@consensus_spec_tests//:test_data"],
     tags = ["spectest"],
+    timeout = "short",
     deps = [
         "//beacon-chain/blockchain/kzg:go_default_library",
         "//consensus-types/blocks:go_default_library",

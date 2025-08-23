@@ -222,6 +222,7 @@ go_test(
     ],
     data = ["@consensus_spec_tests//:test_data"],
     tags = ["spectest"],
+    timeout = "long",
     deps = [
         "//config/params:go_default_library",
         "//runtime/version:go_default_library",
