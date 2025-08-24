@@ -21,14 +21,3 @@ func DataColumnFields(column blocks.RODataColumn) logrus.Fields {
 		"colIdx":             column.Index,
 	}
 }
-
-// BlockFieldsFromColumn extracts the set of fields from a given DataColumnSidecar which are shared by the block and
-// all other sidecars for the block.
-func BlockFieldsFromColumn(column blocks.RODataColumn) logrus.Fields {
-	return logrus.Fields{
-		"slot":          column.Slot(),
-		"proposerIndex": column.ProposerIndex(),
-		"blockRoot":     fmt.Sprintf("%#x", column.BlockRoot()),
-		"parentRoot":    fmt.Sprintf("%#x", column.ParentRoot()),
-	}
-}

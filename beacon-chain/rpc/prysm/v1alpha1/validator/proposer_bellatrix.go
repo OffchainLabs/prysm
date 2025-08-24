@@ -219,9 +219,11 @@ func (vs *Server) getPayloadHeaderFromBuilder(
 		return nil, errors.New("builder returned nil bid")
 	}
 	bidVersion := signedBid.Version()
-	headBlockVersion := b.Version()
-	if !isVersionCompatible(bidVersion, headBlockVersion) {
-		return nil, fmt.Errorf("builder bid response version: %d is not compatible with head block version: %d for epoch %d", bidVersion, headBlockVersion, slots.ToEpoch(slot))
+	epoch := slots.ToEpoch(slot)
+	entry := params.GetNetworkScheduleEntry(epoch)
+	forkVersion := entry.VersionEnum
+	if !isVersionCompatible(bidVersion, forkVersion) {
+		return nil, fmt.Errorf("builder bid response version: %d is not compatible with expected version: %d for epoch %d", bidVersion, forkVersion, epoch)
 	}
 
 	bid, err := signedBid.Message()

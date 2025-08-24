@@ -2,11 +2,14 @@ package helpers
 
 import (
 	"errors"
+	"net/http"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/lookup"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -26,6 +29,22 @@ func PrepareStateFetchGRPCError(err error) error {
 		return status.Errorf(codes.InvalidArgument, "Invalid state ID: %v", parseErr)
 	}
 	return status.Errorf(codes.Internal, "Invalid state ID: %v", err)
+}
+
+// HandleIsOptimisticError handles errors from IsOptimistic function calls and writes appropriate HTTP responses.
+func HandleIsOptimisticError(w http.ResponseWriter, err error) {
+	var fetchErr *lookup.FetchStateError
+	if errors.As(err, &fetchErr) {
+		shared.WriteStateFetchError(w, err)
+		return
+	}
+
+	var blockRootsNotFoundErr *lookup.BlockRootsNotFoundError
+	if errors.As(err, &blockRootsNotFoundErr) {
+		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusNotFound)
+		return
+	}
+	httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
 }
 
 // IndexedVerificationFailure represents a collection of verification failures.

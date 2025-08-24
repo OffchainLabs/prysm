@@ -3504,9 +3504,14 @@ func TestValidateConsensus(t *testing.T) {
 	require.NoError(t, err)
 	parentRoot, err := parentSbb.Block().HashTreeRoot()
 	require.NoError(t, err)
+	mockChainService := &chainMock.ChainService{
+		State: parentState,
+		Root:  parentRoot[:],
+	}
 	server := &Server{
-		Blocker: &testutil.MockBlocker{RootBlockMap: map[[32]byte]interfaces.ReadOnlySignedBeaconBlock{parentRoot: parentSbb}},
-		Stater:  &testutil.MockStater{StatesByRoot: map[[32]byte]state.BeaconState{bytesutil.ToBytes32(parentBlock.Block.StateRoot): parentState}},
+		Blocker:     &testutil.MockBlocker{RootBlockMap: map[[32]byte]interfaces.ReadOnlySignedBeaconBlock{parentRoot: parentSbb}},
+		Stater:      &testutil.MockStater{StatesByRoot: map[[32]byte]state.BeaconState{bytesutil.ToBytes32(parentBlock.Block.StateRoot): parentState}},
+		HeadFetcher: mockChainService,
 	}
 
 	require.NoError(t, server.validateConsensus(ctx, &eth.GenericSignedBeaconBlock{

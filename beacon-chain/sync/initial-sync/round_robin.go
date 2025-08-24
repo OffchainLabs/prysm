@@ -11,7 +11,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -167,8 +166,6 @@ func (s *Service) processFetchedDataRegSync(ctx context.Context, data *blocksQue
 		return 0, nil
 	}
 
-	nodeID := s.cfg.P2P.NodeID()
-
 	// Separate blocks with blobs from blocks with data columns.
 	fistDataColumnIndex := sort.Search(len(bwb), func(i int) bool {
 		return bwb[i].Block.Version() >= version.Fulu
@@ -188,9 +185,7 @@ func (s *Service) processFetchedDataRegSync(ctx context.Context, data *blocksQue
 	}
 
 	for i, b := range blocksWithBlobs {
-		sidecars := blocks.NewSidecarsFromBlobSidecars(b.Blobs)
-
-		if err := lazilyPersistentStoreBlobs.Persist(s.clock.CurrentSlot(), sidecars...); err != nil {
+		if err := lazilyPersistentStoreBlobs.Persist(s.clock.CurrentSlot(), b.Blobs...); err != nil {
 			logBlobs.WithError(err).WithFields(syncFields(b.Block)).Warning("Batch failure due to BlobSidecar issues")
 			return uint64(i), err
 		}
@@ -211,23 +206,25 @@ func (s *Service) processFetchedDataRegSync(ctx context.Context, data *blocksQue
 		return uint64(len(bwb)), nil
 	}
 
-	custodyGroupCount, err := s.cfg.P2P.CustodyGroupCount()
-	if err != nil {
-		return 0, errors.Wrap(err, "fetch custody group count from peer")
+	// Save data column sidecars.
+	count := 0
+	for _, b := range blocksWithDataColumns {
+		count += len(b.Columns)
 	}
 
-	lazilyPersistentStoreColumn := das.NewLazilyPersistentStoreColumn(s.cfg.DataColumnStorage, nodeID, s.newDataColumnsVerifier, custodyGroupCount)
+	sidecarsToSave := make([]blocks.VerifiedRODataColumn, 0, count)
+	for _, blockWithDataColumns := range blocksWithDataColumns {
+		sidecarsToSave = append(sidecarsToSave, blockWithDataColumns.Columns...)
+	}
+
+	if err := s.cfg.DataColumnStorage.Save(sidecarsToSave); err != nil {
+		return 0, errors.Wrap(err, "save data column sidecars")
+	}
+
 	for i, b := range blocksWithDataColumns {
 		logDataColumns := logDataColumns.WithFields(syncFields(b.Block))
 
-		sicecars := blocks.NewSidecarsFromDataColumnSidecars(b.Columns)
-
-		if err := lazilyPersistentStoreColumn.Persist(s.clock.CurrentSlot(), sicecars...); err != nil {
-			logDataColumns.WithError(err).Warning("Batch failure due to DataColumnSidecar issues")
-			return uint64(i), err
-		}
-
-		if err := s.processBlock(ctx, s.genesisTime, b, s.cfg.Chain.ReceiveBlock, lazilyPersistentStoreColumn); err != nil {
+		if err := s.processBlock(ctx, s.genesisTime, b, s.cfg.Chain.ReceiveBlock, nil); err != nil {
 			switch {
 			case errors.Is(err, errParentDoesNotExist):
 				logDataColumns.
@@ -381,13 +378,13 @@ func (s *Service) processBatchedBlocks(ctx context.Context, bwb []blocks.BlockWi
 			errParentDoesNotExist, firstBlock.Block().ParentRoot(), firstBlock.Block().Slot())
 	}
 
-	// Seaerate blocks with blobs from blocks with data columns.
-	fistDataColumnIndex := sort.Search(len(bwb), func(i int) bool {
-		return bwb[i].Block.Version() >= version.Fulu
-	})
+	firstFuluIndex, err := findFirstFuluIndex(bwb)
+	if err != nil {
+		return 0, errors.Wrap(err, "finding first Fulu index")
+	}
 
-	blocksWithBlobs := bwb[:fistDataColumnIndex]
-	blocksWithDataColumns := bwb[fistDataColumnIndex:]
+	blocksWithBlobs := bwb[:firstFuluIndex]
+	blocksWithDataColumns := bwb[firstFuluIndex:]
 
 	if err := s.processBlocksWithBlobs(ctx, blocksWithBlobs, bFunc, firstBlock); err != nil {
 		return 0, errors.Wrap(err, "processing blocks with blobs")
@@ -415,9 +412,7 @@ func (s *Service) processBlocksWithBlobs(ctx context.Context, bwbs []blocks.Bloc
 			continue
 		}
 
-		sidecars := blocks.NewSidecarsFromBlobSidecars(bwb.Blobs)
-
-		if err := persistentStore.Persist(s.clock.CurrentSlot(), sidecars...); err != nil {
+		if err := persistentStore.Persist(s.clock.CurrentSlot(), bwb.Blobs...); err != nil {
 			return errors.Wrap(err, "persisting blobs")
 		}
 	}
@@ -436,32 +431,25 @@ func (s *Service) processBlocksWithDataColumns(ctx context.Context, bwbs []block
 		return nil
 	}
 
-	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
-
-	custodyGroupCount, err := s.cfg.P2P.CustodyGroupCount()
-	if err != nil {
-		return errors.Wrap(err, "fetch custody group count from peer")
-	}
-
-	samplingSize := max(custodyGroupCount, samplesPerSlot)
-
-	persistentStoreColumn := das.NewLazilyPersistentStoreColumn(s.cfg.DataColumnStorage, s.cfg.P2P.NodeID(), s.newDataColumnsVerifier, samplingSize)
 	s.logBatchSyncStatus(firstBlock, bwbCount)
 
+	// Save data column sidecars.
+	count := 0
 	for _, bwb := range bwbs {
-		if len(bwb.Columns) == 0 {
-			continue
-		}
+		count += len(bwb.Columns)
+	}
 
-		sidecars := blocks.NewSidecarsFromDataColumnSidecars(bwb.Columns)
+	sidecarsToSave := make([]blocks.VerifiedRODataColumn, 0, count)
+	for _, blockWithDataColumns := range bwbs {
+		sidecarsToSave = append(sidecarsToSave, blockWithDataColumns.Columns...)
+	}
 
-		if err := persistentStoreColumn.Persist(s.clock.CurrentSlot(), sidecars...); err != nil {
-			return errors.Wrap(err, "persisting columns")
-		}
+	if err := s.cfg.DataColumnStorage.Save(sidecarsToSave); err != nil {
+		return errors.Wrap(err, "save data column sidecars")
 	}
 
 	robs := blocks.BlockWithROBlobsSlice(bwbs).ROBlocks()
-	if err := bFunc(ctx, robs, persistentStoreColumn); err != nil {
+	if err := bFunc(ctx, robs, nil); err != nil {
 		return errors.Wrap(err, "process post-Fulu blocks")
 	}
 

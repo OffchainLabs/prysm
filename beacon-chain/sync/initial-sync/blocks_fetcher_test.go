@@ -17,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	beaconsync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
@@ -1304,4 +1305,196 @@ func TestSortedSliceFromMap(t *testing.T) {
 
 	actual := sortedSliceFromMap(m)
 	require.DeepSSZEqual(t, expected, actual)
+}
+
+func TestFetchSidecars(t *testing.T) {
+	ctx := t.Context()
+	t.Run("No blocks", func(t *testing.T) {
+		fetcher := new(blocksFetcher)
+
+		pid, err := fetcher.fetchSidecars(ctx, "", nil, []blocks.BlockWithROSidecars{})
+		assert.NoError(t, err)
+		assert.Equal(t, peer.ID(""), pid)
+	})
+
+	t.Run("Nominal", func(t *testing.T) {
+		beaconConfig := params.BeaconConfig()
+		numberOfColumns := beaconConfig.NumberOfColumns
+		samplesPerSlot := beaconConfig.SamplesPerSlot
+
+		// Define "now" to be one epoch after genesis time + retention period.
+		genesisTime := time.Date(2025, time.August, 10, 0, 0, 0, 0, time.UTC)
+		secondsPerSlot := beaconConfig.SecondsPerSlot
+		slotsPerEpoch := beaconConfig.SlotsPerEpoch
+		secondsPerEpoch := uint64(slotsPerEpoch.Mul(secondsPerSlot))
+		retentionEpochs := beaconConfig.MinEpochsForDataColumnSidecarsRequest
+		nowWrtGenesisSecs := retentionEpochs.Add(1).Mul(secondsPerEpoch)
+		now := genesisTime.Add(time.Duration(nowWrtGenesisSecs) * time.Second)
+
+		genesisValidatorRoot := [fieldparams.RootLength]byte{}
+		nower := func() time.Time { return now }
+		clock := startup.NewClock(genesisTime, genesisValidatorRoot, startup.WithNower(nower))
+
+		// Define a Deneb block with blobs out of retention period.
+		denebBlock := util.NewBeaconBlockDeneb()
+		denebBlock.Block.Slot = 0 // Genesis slot, out of retention period.
+		signedDenebBlock, err := blocks.NewSignedBeaconBlock(denebBlock)
+		require.NoError(t, err)
+		roDebebBlock, err := blocks.NewROBlock(signedDenebBlock)
+		require.NoError(t, err)
+
+		// Define a Fulu block with blobs in the retention period.
+		fuluBlock := util.NewBeaconBlockFulu()
+		fuluBlock.Block.Slot = slotsPerEpoch                                                            // Within retention period.
+		fuluBlock.Block.Body.BlobKzgCommitments = [][]byte{make([]byte, fieldparams.KzgCommitmentSize)} // Dummy commitment.
+		signedFuluBlock, err := blocks.NewSignedBeaconBlock(fuluBlock)
+		require.NoError(t, err)
+		roFuluBlock, err := blocks.NewROBlock(signedFuluBlock)
+		require.NoError(t, err)
+
+		bodyRoot, err := fuluBlock.Block.Body.HashTreeRoot()
+		require.NoError(t, err)
+
+		// Create and save data column sidecars for this fulu block in the database.
+		params := make([]util.DataColumnParam, 0, numberOfColumns)
+		for i := range numberOfColumns {
+			param := util.DataColumnParam{Index: i, Slot: slotsPerEpoch, BodyRoot: bodyRoot[:]}
+			params = append(params, param)
+		}
+		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, params)
+
+		// Create a data columns storage.
+		dir := t.TempDir()
+		dataColumnStorage, err := filesystem.NewDataColumnStorage(ctx, filesystem.WithDataColumnBasePath(dir))
+		require.NoError(t, err)
+
+		// Save the data column sidecars to the storage.
+		err = dataColumnStorage.Save(verifiedRoDataColumnSidecars)
+		require.NoError(t, err)
+
+		// Create a blocks fetcher.
+		fetcher := &blocksFetcher{
+			clock: clock,
+			p2p:   p2ptest.NewTestP2P(t),
+			dcs:   dataColumnStorage,
+		}
+
+		// Fetch sidecars.
+		blocksWithSidecars := []blocks.BlockWithROSidecars{
+			{Block: roDebebBlock},
+			{Block: roFuluBlock},
+		}
+		pid, err := fetcher.fetchSidecars(ctx, "", nil, blocksWithSidecars)
+		require.NoError(t, err)
+		require.Equal(t, peer.ID(""), pid)
+
+		// Verify that block with sidecars were modified correctly.
+		require.Equal(t, 0, len(blocksWithSidecars[0].Blobs))
+		require.Equal(t, 0, len(blocksWithSidecars[0].Columns))
+		require.Equal(t, 0, len(blocksWithSidecars[1].Blobs))
+
+		// We don't check the content of the columns here. The extensive test is done
+		// in TestFetchDataColumnsSidecars.
+		require.Equal(t, samplesPerSlot, uint64(len(blocksWithSidecars[1].Columns)))
+	})
+}
+func TestFirstFuluIndex(t *testing.T) {
+	bellatrix := util.NewBeaconBlockBellatrix()
+	signedBellatrix, err := blocks.NewSignedBeaconBlock(bellatrix)
+	require.NoError(t, err)
+	roBellatrix, err := blocks.NewROBlock(signedBellatrix)
+	require.NoError(t, err)
+
+	capella := util.NewBeaconBlockCapella()
+	signedCapella, err := blocks.NewSignedBeaconBlock(capella)
+	require.NoError(t, err)
+	roCapella, err := blocks.NewROBlock(signedCapella)
+	require.NoError(t, err)
+
+	deneb := util.NewBeaconBlockDeneb()
+	signedDeneb, err := blocks.NewSignedBeaconBlock(deneb)
+	require.NoError(t, err)
+	roDeneb, err := blocks.NewROBlock(signedDeneb)
+	require.NoError(t, err)
+
+	fulu := util.NewBeaconBlockFulu()
+	signedFulu, err := blocks.NewSignedBeaconBlock(fulu)
+	require.NoError(t, err)
+	roFulu, err := blocks.NewROBlock(signedFulu)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name          string
+		setupBlocks   func(t *testing.T) []blocks.BlockWithROSidecars
+		expectedIndex int
+		expectError   bool
+	}{
+		{
+			name: "all blocks are pre-Fulu",
+			setupBlocks: func(t *testing.T) []blocks.BlockWithROSidecars {
+				return []blocks.BlockWithROSidecars{
+					{Block: roBellatrix},
+					{Block: roCapella},
+					{Block: roDeneb},
+				}
+			},
+			expectedIndex: 3, // Should be the length of the slice
+			expectError:   false,
+		},
+		{
+			name: "all blocks are Fulu or later",
+			setupBlocks: func(t *testing.T) []blocks.BlockWithROSidecars {
+				return []blocks.BlockWithROSidecars{
+					{Block: roFulu},
+					{Block: roFulu},
+				}
+			},
+			expectedIndex: 0,
+			expectError:   false,
+		},
+		{
+			name: "mixed blocks correctly sorted",
+			setupBlocks: func(t *testing.T) []blocks.BlockWithROSidecars {
+
+				return []blocks.BlockWithROSidecars{
+					{Block: roBellatrix},
+					{Block: roCapella},
+					{Block: roDeneb},
+					{Block: roFulu},
+					{Block: roFulu},
+				}
+			},
+			expectedIndex: 3, // Index where Fulu blocks start
+			expectError:   false,
+		},
+		{
+			name: "mixed blocks incorrectly sorted",
+			setupBlocks: func(t *testing.T) []blocks.BlockWithROSidecars {
+				return []blocks.BlockWithROSidecars{
+					{Block: roBellatrix},
+					{Block: roCapella},
+					{Block: roFulu},
+					{Block: roDeneb},
+					{Block: roFulu},
+				}
+			},
+			expectedIndex: 0,
+			expectError:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			blocks := tt.setupBlocks(t)
+			index, err := findFirstFuluIndex(blocks)
+
+			if tt.expectError {
+				require.NotNil(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedIndex, index)
+		})
+	}
 }

@@ -206,8 +206,8 @@ func (s BlobSidecarsByRootReq) Swap(i, j int) {
 }
 
 // Len is the number of elements in the collection.
-func (s *BlobSidecarsByRootReq) Len() int {
-	return len(*s)
+func (s BlobSidecarsByRootReq) Len() int {
+	return len(s)
 }
 
 // ====================================

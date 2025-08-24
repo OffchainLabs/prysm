@@ -7,10 +7,10 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/cmd"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/genesis"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/storage"
 	backfill "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/backfill/flags"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/checkpoint"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/genesis"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/runtime/debug"
 	"github.com/urfave/cli/v2"
@@ -88,7 +88,6 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.P2PHostDNS,
 			cmd.P2PIP,
 			cmd.P2PMaxPeers,
-			cmd.P2PMetadata,
 			cmd.P2PPrivKey,
 			cmd.P2PQUICPort,
 			cmd.P2PStaticID,

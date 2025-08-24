@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
@@ -57,22 +58,17 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 	})
 
 	// The following part deals with sidecars.
+	postFuluBlocks := make([]blocks.ROBlock, 0, len(blks))
 	for _, blk := range blks {
 		blockVersion := blk.Version()
 
-		if blockVersion < version.Deneb {
-			continue
-		}
-
-		roBlock, err := blocks.NewROBlock(blk)
-		if err != nil {
-			return errors.Wrap(err, "new ro block")
-		}
-
 		if blockVersion >= version.Fulu {
-			if err := s.requestAndSaveMissingDataColumnSidecars(roBlock); err != nil {
-				return errors.Wrap(err, "request and save missing data columns")
+			roBlock, err := blocks.NewROBlock(blk)
+			if err != nil {
+				return errors.Wrap(err, "new ro block")
 			}
+
+			postFuluBlocks = append(postFuluBlocks, roBlock)
 
 			continue
 		}
@@ -86,12 +82,16 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 		}
 	}
 
+	if err := s.requestAndSaveMissingDataColumnSidecars(postFuluBlocks); err != nil {
+		return errors.Wrap(err, "request and save missing data columns")
+	}
+
 	return err
 }
 
 // requestAndSaveMissingDataColumns checks if the data columns are missing for the given block.
 // If so, requests them and saves them to the storage.
-func (s *Service) requestAndSaveMissingDataColumnSidecars(block blocks.ROBlock) error {
+func (s *Service) requestAndSaveMissingDataColumnSidecars(blks []blocks.ROBlock) error {
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 
 	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount()
@@ -100,27 +100,38 @@ func (s *Service) requestAndSaveMissingDataColumnSidecars(block blocks.ROBlock) 
 	}
 
 	samplingSize := max(custodyGroupCount, samplesPerSlot)
-
-	nodeID := s.cfg.p2p.NodeID()
-	storage := s.cfg.dataColumnStorage
-
-	missingColumns, err := MissingDataColumns(block, nodeID, samplingSize, storage)
+	info, _, err := peerdas.Info(s.cfg.p2p.NodeID(), samplingSize)
 	if err != nil {
-		return errors.Wrap(err, "missing data columns")
+		return errors.Wrap(err, "custody info")
 	}
 
-	// We already store all the data columns we should custody, nothing to do.
-	if len(missingColumns) == 0 {
-		return nil
+	// Fetch missing data column sidecars.
+	params := DataColumnSidecarsParams{
+		Ctx:         s.ctx,
+		Tor:         s.cfg.clock,
+		P2P:         s.cfg.p2p,
+		CtxMap:      s.ctxMap,
+		Storage:     s.cfg.dataColumnStorage,
+		NewVerifier: s.newColumnsVerifier,
 	}
 
-	peers := s.getBestPeers()
-	sidecars, err := RequestDataColumnSidecarsByRoot(s.ctx, missingColumns, block, peers, s.cfg.clock, s.cfg.p2p, s.ctxMap, s.newColumnsVerifier)
+	sidecarsByRoot, err := FetchDataColumnSidecars(params, blks, info.CustodyColumns)
 	if err != nil {
-		return errors.Wrap(err, "request data column sidecars")
+		return errors.Wrap(err, "fetch data column sidecars")
 	}
 
-	if err := s.cfg.dataColumnStorage.Save(sidecars); err != nil {
+	// Save the sidecars to the storage.
+	count := 0
+	for _, sidecars := range sidecarsByRoot {
+		count += len(sidecars)
+	}
+
+	sidecarsToSave := make([]blocks.VerifiedRODataColumn, 0, count)
+	for _, sidecars := range sidecarsByRoot {
+		sidecarsToSave = append(sidecarsToSave, sidecars...)
+	}
+
+	if err := s.cfg.dataColumnStorage.Save(sidecarsToSave); err != nil {
 		return errors.Wrap(err, "save")
 	}
 

@@ -15,7 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	cmdshared "github.com/OffchainLabs/prysm/v6/cmd"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/genesis"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/genesis"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/io/file"
@@ -172,7 +172,7 @@ func NewBeaconNode(config *e2etypes.E2EConfig, index int, enr string) *BeaconNod
 
 func (node *BeaconNode) saveGenesis(ctx context.Context) (string, error) {
 	// The deposit contract starts with an empty trie, we use the BeaconState to "pre-mine" the validator registry,
-	g, err := generateGenesis(ctx)
+	g, err := GenerateGenesis(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -355,7 +355,7 @@ func (node *BeaconNode) UnderlyingProcess() *os.Process {
 	return node.cmd.Process
 }
 
-func generateGenesis(ctx context.Context) (state.BeaconState, error) {
+func GenerateGenesis(ctx context.Context) (state.BeaconState, error) {
 	if e2e.TestParams.Eth1GenesisBlock == nil {
 		return nil, errors.New("Cannot construct bellatrix block, e2e.TestParams.Eth1GenesisBlock == nil")
 	}

@@ -371,13 +371,13 @@ func TestBlocksFetcher_findForkWithPeer(t *testing.T) {
 
 	t.Run("slot is too early", func(t *testing.T) {
 		p2 := p2pt.NewTestP2P(t)
-		_, err := fetcher.findForkWithPeer(ctx, p2.PeerID(), nil, 0)
+		_, err := fetcher.findForkWithPeer(ctx, p2.PeerID(), 0)
 		assert.ErrorContains(t, "slot is too low to backtrack", err)
 	})
 
 	t.Run("no peer status", func(t *testing.T) {
 		p2 := p2pt.NewTestP2P(t)
-		_, err := fetcher.findForkWithPeer(ctx, p2.PeerID(), nil, 64)
+		_, err := fetcher.findForkWithPeer(ctx, p2.PeerID(), 64)
 		assert.ErrorContains(t, "cannot obtain peer's status", err)
 	})
 
@@ -391,7 +391,7 @@ func TestBlocksFetcher_findForkWithPeer(t *testing.T) {
 			HeadRoot: nil,
 			HeadSlot: 0,
 		})
-		_, err := fetcher.findForkWithPeer(ctx, p2.PeerID(), nil, 64)
+		_, err := fetcher.findForkWithPeer(ctx, p2.PeerID(), 64)
 		assert.ErrorContains(t, "cannot locate non-empty slot for a peer", err)
 	})
 
@@ -401,7 +401,7 @@ func TestBlocksFetcher_findForkWithPeer(t *testing.T) {
 		defer func() {
 			assert.NoError(t, p1.Disconnect(p2))
 		}()
-		_, err := fetcher.findForkWithPeer(ctx, p2, nil, 64)
+		_, err := fetcher.findForkWithPeer(ctx, p2, 64)
 		assert.ErrorContains(t, "no alternative blocks exist within scanned range", err)
 	})
 
@@ -413,7 +413,7 @@ func TestBlocksFetcher_findForkWithPeer(t *testing.T) {
 		defer func() {
 			assert.NoError(t, p1.Disconnect(p2))
 		}()
-		fork, err := fetcher.findForkWithPeer(ctx, p2, nil, 64)
+		fork, err := fetcher.findForkWithPeer(ctx, p2, 64)
 		require.NoError(t, err)
 		require.Equal(t, 10, len(fork.bwb))
 		assert.Equal(t, forkedSlot, fork.bwb[0].Block.Block().Slot(), "Expected slot %d to be ancestor", forkedSlot)
@@ -426,7 +426,7 @@ func TestBlocksFetcher_findForkWithPeer(t *testing.T) {
 		defer func() {
 			assert.NoError(t, p1.Disconnect(p2))
 		}()
-		_, err := fetcher.findForkWithPeer(ctx, p2, nil, 64)
+		_, err := fetcher.findForkWithPeer(ctx, p2, 64)
 		require.ErrorContains(t, "failed to find common ancestor", err)
 	})
 
@@ -438,7 +438,7 @@ func TestBlocksFetcher_findForkWithPeer(t *testing.T) {
 		defer func() {
 			assert.NoError(t, p1.Disconnect(p2))
 		}()
-		fork, err := fetcher.findForkWithPeer(ctx, p2, nil, 64)
+		fork, err := fetcher.findForkWithPeer(ctx, p2, 64)
 		require.NoError(t, err)
 
 		reqEnd := testForkStartSlot(t, 64) + primitives.Slot(findForkReqRangeSize())
@@ -512,7 +512,7 @@ func TestBlocksFetcher_findAncestor(t *testing.T) {
 
 		wsb, err := blocks.NewSignedBeaconBlock(knownBlocks[4])
 		require.NoError(t, err)
-		_, err = fetcher.findAncestor(ctx, p2.PeerID(), nil, wsb)
+		_, err = fetcher.findAncestor(ctx, p2.PeerID(), wsb)
 		assert.ErrorContains(t, "protocols not supported", err)
 	})
 
@@ -525,7 +525,7 @@ func TestBlocksFetcher_findAncestor(t *testing.T) {
 		wsb, err := blocks.NewSignedBeaconBlock(knownBlocks[4])
 		require.NoError(t, err)
 
-		fork, err := fetcher.findAncestor(ctx, p2.PeerID(), nil, wsb)
+		fork, err := fetcher.findAncestor(ctx, p2.PeerID(), wsb)
 		assert.ErrorContains(t, "no common ancestor found", err)
 		assert.Equal(t, (*forkData)(nil), fork)
 	})

@@ -311,7 +311,10 @@ func TestService_HasBlock(t *testing.T) {
 	r, err = b.Block.HashTreeRoot()
 	require.NoError(t, err)
 	require.Equal(t, true, s.HasBlock(t.Context(), r))
-	s.blockBeingSynced.set(r)
+	err = s.blockBeingSynced.set(r)
+	require.NoError(t, err)
+	err = s.blockBeingSynced.set(r)
+	require.ErrorIs(t, err, errBlockBeingSynced)
 	require.Equal(t, false, s.HasBlock(t.Context(), r))
 }
 

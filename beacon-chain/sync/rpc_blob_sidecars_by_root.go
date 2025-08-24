@@ -44,7 +44,7 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 		return err
 	}
 	// Sort the identifiers so that requests for the same blob root will be adjacent, minimizing db lookups.
-	sort.Sort(&blobIdents)
+	sort.Sort(blobIdents)
 
 	batchSize := flags.Get().BlobBatchLimit
 	var ticker *time.Ticker
@@ -97,7 +97,7 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 		}
 
 		SetStreamWriteDeadline(stream, defaultWriteDuration)
-		if chunkErr := WriteBlobSidecarChunk(stream, s.cfg.chain, s.cfg.p2p.Encoding(), sc); chunkErr != nil {
+		if chunkErr := WriteBlobSidecarChunk(stream, s.cfg.clock, s.cfg.p2p.Encoding(), sc); chunkErr != nil {
 			log.WithError(chunkErr).Debug("Could not send a chunked response")
 			s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
 			tracing.AnnotateError(span, chunkErr)

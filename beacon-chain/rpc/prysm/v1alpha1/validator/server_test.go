@@ -2,6 +2,7 @@ package validator
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -17,11 +18,13 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/genesis"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/mock"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc/codes"
@@ -317,55 +320,63 @@ func TestWaitForChainStart_NotStartedThenLogFired(t *testing.T) {
 	require.LogsContain(t, hook, "Sending genesis time")
 }
 
-func TestServer_DomainData_Exits(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.ForkVersionSchedule = map[[4]byte]primitives.Epoch{
-		[4]byte(cfg.GenesisForkVersion):   primitives.Epoch(0),
-		[4]byte(cfg.AltairForkVersion):    primitives.Epoch(5),
-		[4]byte(cfg.BellatrixForkVersion): primitives.Epoch(10),
-		[4]byte(cfg.CapellaForkVersion):   primitives.Epoch(15),
-		[4]byte(cfg.DenebForkVersion):     primitives.Epoch(20),
-	}
-	params.OverrideBeaconConfig(cfg)
-	beaconState := &ethpb.BeaconStateBellatrix{
-		Slot: 4000,
-	}
-	block := util.NewBeaconBlock()
-	genesisRoot, err := block.Block.HashTreeRoot()
-	require.NoError(t, err, "Could not get signing root")
-	s, err := state_native.InitializeFromProtoUnsafeBellatrix(beaconState)
+func testSigDomainForSlot(t *testing.T, domain [4]byte, chsrv *mockChain.ChainService, epoch primitives.Epoch) *ethpb.DomainResponse {
+	cfg := params.BeaconConfig()
+	gvr := genesis.ValidatorsRoot()
+	s, err := state_native.InitializeFromProtoUnsafeDeneb(&ethpb.BeaconStateDeneb{
+		Slot:                  primitives.Slot(epoch) * cfg.SlotsPerEpoch,
+		GenesisValidatorsRoot: gvr[:],
+	})
 	require.NoError(t, err)
+	chsrv.State = s
 	vs := &Server{
 		Ctx:               t.Context(),
 		ChainStartFetcher: &mockExecution.Chain{},
-		HeadFetcher:       &mockChain.ChainService{State: s, Root: genesisRoot[:]},
+		HeadFetcher:       chsrv,
 	}
-
-	reqDomain, err := vs.DomainData(t.Context(), &ethpb.DomainRequest{
-		Epoch:  100,
-		Domain: params.BeaconConfig().DomainDeposit[:],
-	})
-	assert.NoError(t, err)
-	wantedDomain, err := signing.ComputeDomain(params.BeaconConfig().DomainDeposit, params.BeaconConfig().DenebForkVersion, make([]byte, 32))
-	assert.NoError(t, err)
-	assert.DeepEqual(t, reqDomain.SignatureDomain, wantedDomain)
-
-	beaconStateNew := &ethpb.BeaconStateDeneb{
-		Slot: 4000,
-	}
-	s, err = state_native.InitializeFromProtoUnsafeDeneb(beaconStateNew)
-	require.NoError(t, err)
-	vs.HeadFetcher = &mockChain.ChainService{State: s, Root: genesisRoot[:]}
-
-	reqDomain, err = vs.DomainData(t.Context(), &ethpb.DomainRequest{
-		Epoch:  100,
-		Domain: params.BeaconConfig().DomainVoluntaryExit[:],
+	domainResp, err := vs.DomainData(t.Context(), &ethpb.DomainRequest{
+		Epoch:  epoch,
+		Domain: domain[:],
 	})
 	require.NoError(t, err)
+	return domainResp
+}
 
-	wantedDomain, err = signing.ComputeDomain(params.BeaconConfig().DomainVoluntaryExit, params.BeaconConfig().CapellaForkVersion, make([]byte, 32))
-	require.NoError(t, err)
+func requireSigningEqual(t *testing.T, name string, domain [4]byte, req, want primitives.Epoch, chsrv *mockChain.ChainService) {
+	t.Run(fmt.Sprintf("%s_%#x", name, domain), func(t *testing.T) {
+		gvr := genesis.ValidatorsRoot()
+		resp := testSigDomainForSlot(t, domain, chsrv, req)
+		entry := params.GetNetworkScheduleEntry(want)
+		wanted, err := signing.ComputeDomain(domain, entry.ForkVersion[:], gvr[:])
+		assert.NoError(t, err)
+		assert.Equal(t, hexutil.Encode(wanted), hexutil.Encode(resp.SignatureDomain))
+	})
+}
 
-	assert.DeepEqual(t, reqDomain.SignatureDomain, wantedDomain)
+func TestServer_DomainData_Exits(t *testing.T) {
+	// This test makes 2 sets of assertions:
+	// - the deposit domain is always computed wrt the fork version at the given epoch
+	// - the exit domain is the same until deneb, at which point it is always computed wrt the capella fork version
+	params.SetActiveTestCleanup(t, params.MainnetConfig())
+	params.BeaconConfig().InitializeForkSchedule()
+	cfg := params.BeaconConfig()
+
+	block := util.NewBeaconBlock()
+	genesisRoot, err := block.Block.HashTreeRoot()
+	require.NoError(t, err, "Could not get signing root")
+	chsrv := &mockChain.ChainService{Root: genesisRoot[:]}
+	last := params.LastForkEpoch()
+	requireSigningEqual(t, "genesis deposit", cfg.DomainDeposit, cfg.GenesisEpoch, cfg.GenesisEpoch, chsrv)
+	requireSigningEqual(t, "altair deposit", cfg.DomainDeposit, cfg.AltairForkEpoch, cfg.AltairForkEpoch, chsrv)
+	requireSigningEqual(t, "bellatrix deposit", cfg.DomainDeposit, cfg.BellatrixForkEpoch, cfg.BellatrixForkEpoch, chsrv)
+	requireSigningEqual(t, "capella deposit", cfg.DomainDeposit, cfg.CapellaForkEpoch, cfg.CapellaForkEpoch, chsrv)
+	requireSigningEqual(t, "deneb deposit", cfg.DomainDeposit, cfg.DenebForkEpoch, cfg.DenebForkEpoch, chsrv)
+	requireSigningEqual(t, "last epoch deposit", cfg.DomainDeposit, last, last, chsrv)
+
+	requireSigningEqual(t, "genesis exit", cfg.DomainVoluntaryExit, cfg.GenesisEpoch, cfg.GenesisEpoch, chsrv)
+	requireSigningEqual(t, "altair exit", cfg.DomainVoluntaryExit, cfg.AltairForkEpoch, cfg.AltairForkEpoch, chsrv)
+	requireSigningEqual(t, "bellatrix exit", cfg.DomainVoluntaryExit, cfg.BellatrixForkEpoch, cfg.BellatrixForkEpoch, chsrv)
+	requireSigningEqual(t, "capella exit", cfg.DomainVoluntaryExit, cfg.CapellaForkEpoch, cfg.CapellaForkEpoch, chsrv)
+	requireSigningEqual(t, "deneb exit", cfg.DomainVoluntaryExit, cfg.DenebForkEpoch, cfg.CapellaForkEpoch, chsrv)
+	requireSigningEqual(t, "last epoch exit", cfg.DomainVoluntaryExit, last, cfg.CapellaForkEpoch, chsrv)
 }

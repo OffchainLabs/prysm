@@ -1,0 +1,43 @@
+name: Check Spec References
+on: [push, pull_request]
+
+jobs:
+  check-specrefs:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Check version consistency
+      run: |
+        WORKSPACE_VERSION=$(grep 'consensus_spec_version = ' WORKSPACE | sed 's/.*"\(.*\)"/\1/')
+        ETHSPECIFY_VERSION=$(grep '^version:' specrefs/.ethspecify.yml | sed 's/version: //')
+        if [ "$WORKSPACE_VERSION" != "$ETHSPECIFY_VERSION" ]; then
+          echo "Version mismatch between WORKSPACE and ethspecify"
+          echo "  WORKSPACE: $WORKSPACE_VERSION"
+          echo "  specrefs/.ethspecify.yml: $ETHSPECIFY_VERSION"
+          exit 1
+        else
+          echo "Versions match: $WORKSPACE_VERSION"
+        fi
+
+    - name: Install ethspecify
+      run: python3 -mpip install ethspecify
+
+    - name: Update spec references
+      run: ethspecify process --path=specrefs
+
+    - name: Check for differences
+      run: |
+        if ! git diff --exit-code specrefs >/dev/null; then
+          echo "Spec references are out-of-date!"
+          echo ""
+          git --no-pager diff specrefs
+          exit 1
+        else
+          echo "Spec references are up-to-date!"
+        fi
+
+    - name: Check spec references
+      run: ethspecify check --path=specrefs

@@ -190,7 +190,7 @@ func TestBlobsByRootValidation(t *testing.T) {
 	}()
 	capellaSlot, err := slots.EpochStart(params.BeaconConfig().CapellaForkEpoch)
 	require.NoError(t, err)
-	dmc, clock := defaultMockChain(t, 0)
+	dmc, clock := defaultMockChain(t)
 	dmc.Slot = &capellaSlot
 	dmc.FinalizedCheckPoint = &ethpb.Checkpoint{Epoch: params.BeaconConfig().CapellaForkEpoch}
 	cases := []*blobsTestCase{

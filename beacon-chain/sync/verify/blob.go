@@ -18,7 +18,8 @@ var (
 // BlobAlignsWithBlock verifies if the blob aligns with the block.
 func BlobAlignsWithBlock(blob blocks.ROBlob, block blocks.ROBlock) error {
 	blockVersion := block.Version()
-	if !(version.Deneb <= blockVersion && blockVersion < version.Fulu) {
+
+	if blockVersion < version.Deneb || blockVersion >= version.Fulu {
 		return nil
 	}
 

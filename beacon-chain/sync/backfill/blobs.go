@@ -91,9 +91,7 @@ func (bs *blobSync) validateNext(rb blocks.ROBlob) error {
 		return err
 	}
 
-	sc := blocks.NewSidecarFromBlobSidecar(rb)
-
-	if err := bs.store.Persist(bs.current, sc); err != nil {
+	if err := bs.store.Persist(bs.current, rb); err != nil {
 		return err
 	}
 

@@ -67,6 +67,55 @@ func TestDataColumnSidecars(t *testing.T) {
 		_, err = peerdas.DataColumnSidecars(signedBeaconBlock, cellsAndProofs)
 		require.ErrorIs(t, err, peerdas.ErrSizeMismatch)
 	})
+
+	t.Run("cells array too short for column index", func(t *testing.T) {
+		// Create a Fulu block with a blob commitment.
+		signedBeaconBlockPb := util.NewBeaconBlockFulu()
+		signedBeaconBlockPb.Block.Body.BlobKzgCommitments = [][]byte{make([]byte, 48)}
+
+		// Create a signed beacon block from the protobuf.
+		signedBeaconBlock, err := blocks.NewSignedBeaconBlock(signedBeaconBlockPb)
+		require.NoError(t, err)
+
+		// Create cells and proofs with insufficient cells for the number of columns.
+		// This simulates a scenario where cellsAndProofs has fewer cells than expected columns.
+		cellsAndProofs := []kzg.CellsAndProofs{
+			{
+				Cells:  make([]kzg.Cell, 10),  // Only 10 cells
+				Proofs: make([]kzg.Proof, 10), // Only 10 proofs
+			},
+		}
+
+		// This should fail because the function will try to access columns up to NumberOfColumns
+		// but we only have 10 cells/proofs.
+		_, err = peerdas.DataColumnSidecars(signedBeaconBlock, cellsAndProofs)
+		require.ErrorContains(t, "column index", err)
+		require.ErrorContains(t, "exceeds cells length", err)
+	})
+
+	t.Run("proofs array too short for column index", func(t *testing.T) {
+		// Create a Fulu block with a blob commitment.
+		signedBeaconBlockPb := util.NewBeaconBlockFulu()
+		signedBeaconBlockPb.Block.Body.BlobKzgCommitments = [][]byte{make([]byte, 48)}
+
+		// Create a signed beacon block from the protobuf.
+		signedBeaconBlock, err := blocks.NewSignedBeaconBlock(signedBeaconBlockPb)
+		require.NoError(t, err)
+
+		// Create cells and proofs with sufficient cells but insufficient proofs.
+		numberOfColumns := params.BeaconConfig().NumberOfColumns
+		cellsAndProofs := []kzg.CellsAndProofs{
+			{
+				Cells:  make([]kzg.Cell, numberOfColumns),
+				Proofs: make([]kzg.Proof, 5), // Only 5 proofs, less than columns
+			},
+		}
+
+		// This should fail when trying to access proof beyond index 4.
+		_, err = peerdas.DataColumnSidecars(signedBeaconBlock, cellsAndProofs)
+		require.ErrorContains(t, "column index", err)
+		require.ErrorContains(t, "exceeds proofs length", err)
+	})
 }
 
 func TestComputeCustodyGroupForColumn(t *testing.T) {

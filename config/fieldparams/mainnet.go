@@ -46,9 +46,6 @@ const (
 	MaxRandomValueElectra                 = uint64(1<<16 - 1) // MaxRandomValueElectra defines max for a random value using for proposer and sync committee sampling.
 
 	// Introduced in Fulu network upgrade.
-	CellsPerBlob         = 64                                          // CellsPerBlob refers to the number of cells in a (non-extended) blob.
-	FieldElementsPerCell = 64                                          // FieldElementsPerCell refers to the number of field elements in a cell.
-	BytesPerFieldElement = 32                                          // BytesPerFieldElement refers to the number of bytes in a field element.
-	BytesPerCells        = FieldElementsPerCell * BytesPerFieldElement // BytesPerCells refers to the number of bytes in a cell.
-	NumberOfColumns      = 128                                         // NumberOfColumns refers to the specified number of data columns that can exist in a network.
+	NumberOfColumns = 128 // NumberOfColumns refers to the specified number of data columns that can exist in a network.
+	CellsPerBlob    = 64  // CellsPerBlob refers to the number of cells in a (non-extended) blob.
 )

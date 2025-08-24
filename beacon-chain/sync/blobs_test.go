@@ -21,7 +21,6 @@ import (
 	types "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -156,11 +155,7 @@ func (r *expectedBlobChunk) requireExpected(t *testing.T, s *Service, stream net
 
 	c, err := readContextFromStream(stream)
 	require.NoError(t, err)
-
-	valRoot := s.cfg.chain.GenesisValidatorsRoot()
-	ctxBytes, err := forks.ForkDigestFromEpoch(slots.ToEpoch(r.sidecar.Slot()), valRoot[:])
-	require.NoError(t, err)
-	require.Equal(t, ctxBytes, bytesutil.ToBytes4(c))
+	require.Equal(t, params.ForkDigest(slots.ToEpoch(r.sidecar.Slot())), bytesutil.ToBytes4(c))
 
 	sc := &ethpb.BlobSidecar{}
 	require.NoError(t, encoding.DecodeWithMaxLength(stream, sc))
@@ -180,7 +175,7 @@ func (c *blobsTestCase) setup(t *testing.T) (*Service, []blocks.ROBlob, func()) 
 		params.OverrideBeaconConfig(cfg)
 	}
 	maxBlobs := int(params.BeaconConfig().MaxBlobsPerBlock(0))
-	chain, clock := defaultMockChain(t, 0)
+	chain, clock := defaultMockChain(t)
 	if c.chain == nil {
 		c.chain = chain
 	}
@@ -270,33 +265,24 @@ func (c *blobsTestCase) run(t *testing.T) {
 // we use max uints for future forks, but this causes overflows when computing slots
 // so it is helpful in tests to temporarily reposition the epochs to give room for some math.
 func repositionFutureEpochs(cfg *params.BeaconChainConfig) {
-	if cfg.CapellaForkEpoch == math.MaxUint64 {
-		cfg.CapellaForkEpoch = cfg.BellatrixForkEpoch + 100
-	}
-	if cfg.DenebForkEpoch == math.MaxUint64 {
-		cfg.DenebForkEpoch = cfg.CapellaForkEpoch + 100
+	if cfg.FuluForkEpoch == math.MaxUint64 {
+		cfg.FuluForkEpoch = cfg.ElectraForkEpoch + 100
 	}
 }
 
-func defaultMockChain(t *testing.T, currentSlot uint64) (*mock.ChainService, *startup.Clock) {
+func defaultMockChain(t *testing.T) (*mock.ChainService, *startup.Clock) {
 	de := params.BeaconConfig().DenebForkEpoch
-	df, err := forks.Fork(de)
+	df, err := params.Fork(de)
 	require.NoError(t, err)
 	denebBuffer := params.BeaconConfig().MinEpochsForBlobsSidecarsRequest + 1000
 	ce := de + denebBuffer
 	fe := ce - 2
 	cs, err := slots.EpochStart(ce)
 	require.NoError(t, err)
-	now := time.Now()
-	genOffset := types.Slot(params.BeaconConfig().SecondsPerSlot) * cs
-	genesisTime := now.Add(-1 * time.Second * time.Duration(int64(genOffset)))
-
-	clock := startup.NewClock(genesisTime, [32]byte{}, startup.WithNower(
-		func() time.Time {
-			return genesisTime.Add(time.Duration(currentSlot*params.BeaconConfig().SecondsPerSlot) * time.Second)
-		},
-	))
-
+	genesis := time.Now()
+	mockNow := startup.MockNower{}
+	clock := startup.NewClock(genesis, params.BeaconConfig().GenesisValidatorsRoot, startup.WithNower(mockNow.Now))
+	mockNow.SetSlot(t, clock, cs)
 	chain := &mock.ChainService{
 		FinalizedCheckPoint: &ethpb.Checkpoint{Epoch: fe},
 		Fork:                df,

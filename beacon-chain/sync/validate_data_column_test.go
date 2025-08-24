@@ -50,7 +50,7 @@ func TestValidateDataColumn(t *testing.T) {
 		s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}}}
 
 		result, err := s.validateDataColumn(ctx, "", &pubsub.Message{Message: &pb.Message{}})
-		require.ErrorIs(t, errInvalidTopic, err)
+		require.ErrorIs(t, p2p.ErrInvalidTopic, err)
 		require.Equal(t, result, pubsub.ValidationReject)
 	})
 

@@ -26,13 +26,13 @@ const (
 	SyncCommitteeAggregationBytesLength   = 1                 // SyncCommitteeAggregationBytesLength defines the sync committee aggregate bytes.
 	SyncAggregateSyncCommitteeBytesLength = 4                 // SyncAggregateSyncCommitteeBytesLength defines the length of sync committee bytes in a sync aggregate.
 	MaxWithdrawalsPerPayload              = 4                 // MaxWithdrawalsPerPayloadLength defines the maximum number of withdrawals that can be included in a payload.
-	MaxBlobCommitmentsPerBlock            = 32                // MaxBlobCommitmentsPerBlock defines the theoretical limit of blobs can be included in a block.
-	LogMaxBlobCommitments                 = 5                 // Log_2 of MaxBlobCommitmentsPerBlock
+	MaxBlobCommitmentsPerBlock            = 4096              // MaxBlobCommitmentsPerBlock defines the theoretical limit of blobs can be included in a block.
+	LogMaxBlobCommitments                 = 12                // Log_2 of MaxBlobCommitmentsPerBlock
 	BlobLength                            = 131072            // BlobLength defines the byte length of a blob.
 	BlobSize                              = 131072            // defined to match blob.size in bazel ssz codegen
 	BlobSidecarSize                       = 131928            // defined to match blob sidecar size in bazel ssz codegen
 	KzgCommitmentSize                     = 48                // KzgCommitmentSize defines the byte length of a KZG commitment.
-	KzgCommitmentInclusionProofDepth      = 10                // Merkle proof depth for blob_kzg_commitments list item
+	KzgCommitmentInclusionProofDepth      = 17                // Merkle proof depth for blob_kzg_commitments list item
 	ExecutionBranchDepth                  = 4                 // ExecutionBranchDepth defines the number of leaves in a merkle proof of the execution payload header.
 	SyncCommitteeBranchDepth              = 5                 // SyncCommitteeBranchDepth defines the number of leaves in a merkle proof of a sync committee.
 	SyncCommitteeBranchDepthElectra       = 6                 // SyncCommitteeBranchDepthElectra defines the number of leaves in a merkle proof of a sync committee.
@@ -46,9 +46,6 @@ const (
 	MaxRandomValueElectra                 = uint64(1<<16 - 1) // Maximum value for a random value using for proposer and sync committee sampling.
 
 	// Introduced in Fulu network upgrade.
-	CellsPerBlob         = 64                                          // CellsPerBlob refers to the number of cells in a (non-extended) blob.
-	FieldElementsPerCell = 64                                          // FieldElementsPerCell refers to the number of field elements in a cell.
-	BytesPerFieldElement = 32                                          // BytesPerFieldElement refers to the number of bytes in a field element.
-	BytesPerCells        = FieldElementsPerCell * BytesPerFieldElement // BytesPerCells refers to the number of bytes in a cell.
-	NumberOfColumns      = 128                                         // NumberOfColumns refers to the specified number of data columns that can exist in a network.
+	NumberOfColumns = 128 // NumberOfColumns refers to the specified number of data columns that can exist in a network.
+	CellsPerBlob    = 64  // CellsPerBlob refers to the number of cells in a (non-extended) blob.
 )

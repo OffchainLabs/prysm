@@ -350,15 +350,15 @@ func (b *SignedBeaconBlock) Unblind(e interfaces.ExecutionData) error {
 	}
 	payloadRoot, err := e.HashTreeRoot()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "hash tree root")
 	}
 	header, err := b.Block().Body().Execution()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "get execution payload header from block body")
 	}
 	headerRoot, err := header.HashTreeRoot()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "header hash tree root")
 	}
 	if payloadRoot != headerRoot {
 		return errors.New("cannot unblind with different execution data")

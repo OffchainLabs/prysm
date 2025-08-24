@@ -42,7 +42,7 @@ func ConfigureGlobalFlags(ctx *cli.Context) {
 	cfg := &GlobalFlags{}
 
 	if ctx.Bool(SubscribeToAllSubnets.Name) {
-		log.Warning("Subscribing to all attestation Subnets")
+		log.Warning("Subscribing to all attestation subnets")
 		cfg.SubscribeToAllSubnets = true
 	}
 

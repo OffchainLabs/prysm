@@ -13,7 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
+	"github.com/OffchainLabs/prysm/v6/genesis"
 	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
 	"github.com/OffchainLabs/prysm/v6/testing/endtoend/policies"
@@ -94,14 +94,9 @@ var metricComparisonTests = []comparisonTest{
 }
 
 func metricsTest(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
-	genesis, err := eth.NewNodeClient(conns[0]).GetGenesis(context.Background(), &emptypb.Empty{})
-	if err != nil {
-		return err
-	}
-	forkDigest, err := forks.CreateForkDigest(time.Unix(genesis.GenesisTime.Seconds, 0), genesis.GenesisValidatorsRoot)
-	if err != nil {
-		return err
-	}
+	currentSlot := slots.CurrentSlot(genesis.Time())
+	currentEpoch := slots.ToEpoch(currentSlot)
+	forkDigest := params.ForkDigest(currentEpoch)
 	for i := 0; i < len(conns); i++ {
 		response, err := http.Get(fmt.Sprintf("http://localhost:%d/metrics", e2e.TestParams.Ports.PrysmBeaconNodeMetricsPort+i))
 		if err != nil {
