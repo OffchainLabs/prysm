@@ -151,7 +151,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, ro
 
 		sidecar := sidecars[columnIndex]
 
-		if err := s.cfg.p2p.BroadcastDataColumn(blockRoot, sidecar.Index, sidecar.DataColumnSidecar); err != nil {
+		if err := s.cfg.p2p.BroadcastDataColumnSidecar(blockRoot, sidecar.Index, sidecar.DataColumnSidecar); err != nil {
 			log.WithError(err).Error("Failed to broadcast data column")
 		}
 

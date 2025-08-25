@@ -115,6 +115,17 @@ type NoHeadAccessDatabase interface {
 	CleanUpDirtyStates(ctx context.Context, slotsPerArchivedPoint primitives.Slot) error
 	DeleteHistoricalDataBeforeSlot(ctx context.Context, slot primitives.Slot, batchSize int) (int, error)
 
+	// Genesis operations.
+	LoadGenesis(ctx context.Context, stateBytes []byte) error
+	SaveGenesisData(ctx context.Context, state state.BeaconState) error
+	EnsureEmbeddedGenesis(ctx context.Context) error
+
+	// Support for checkpoint sync and backfill.
+	SaveOriginCheckpointBlockRoot(ctx context.Context, blockRoot [32]byte) error
+	SaveOrigin(ctx context.Context, serState, serBlock []byte) error
+	SaveBackfillStatus(context.Context, *dbval.BackfillStatus) error
+	BackfillFinalizedIndex(ctx context.Context, blocks []blocks.ROBlock, finalizedChildRoot [32]byte) error
+
 	// Custody operations.
 	UpdateSubscribedToAllDataSubnets(ctx context.Context, subscribed bool) (bool, error)
 	UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error)
@@ -131,16 +142,6 @@ type HeadAccessDatabase interface {
 	HeadBlock(ctx context.Context) (interfaces.ReadOnlySignedBeaconBlock, error)
 	HeadBlockRoot() ([32]byte, error)
 	SaveHeadBlockRoot(ctx context.Context, blockRoot [32]byte) error
-
-	// Genesis operations.
-	LoadGenesis(ctx context.Context, stateBytes []byte) error
-	SaveGenesisData(ctx context.Context, state state.BeaconState) error
-	EnsureEmbeddedGenesis(ctx context.Context) error
-
-	// Support for checkpoint sync and backfill.
-	SaveOrigin(ctx context.Context, serState, serBlock []byte) error
-	SaveBackfillStatus(context.Context, *dbval.BackfillStatus) error
-	BackfillFinalizedIndex(ctx context.Context, blocks []blocks.ROBlock, finalizedChildRoot [32]byte) error
 }
 
 // SlasherDatabase interface for persisting data related to detecting slashable offenses on Ethereum.

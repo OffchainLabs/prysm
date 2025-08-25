@@ -845,6 +845,7 @@ func (b *BeaconNode) registerInitialSyncService(complete chan struct{}) error {
 		ClockWaiter:         b.clockWaiter,
 		InitialSyncComplete: complete,
 		BlobStorage:         b.BlobStorage,
+		DataColumnStorage:   b.DataColumnStorage,
 	}, opts...)
 	return b.services.RegisterService(is)
 }
@@ -966,6 +967,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		Router:                    router,
 		ClockWaiter:               b.clockWaiter,
 		BlobStorage:               b.BlobStorage,
+		DataColumnStorage:         b.DataColumnStorage,
 		TrackedValidatorsCache:    b.trackedValidatorsCache,
 		PayloadIDCache:            b.payloadIDCache,
 		LCStore:                   b.lcStore,

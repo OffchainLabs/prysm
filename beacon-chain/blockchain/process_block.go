@@ -240,9 +240,10 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 			}
 		}
 
-		if err := avs.IsDataAvailable(ctx, s.CurrentSlot(), b); err != nil {
-			return errors.Wrapf(err, "could not validate sidecar availability at slot %d", b.Block().Slot())
+		if err := s.areSidecarsAvailable(ctx, avs, b); err != nil {
+			return errors.Wrapf(err, "could not validate sidecar availability for block %#x at slot %d", b.Root(), b.Block().Slot())
 		}
+
 		args := &forkchoicetypes.BlockAndCheckpoints{Block: b,
 			JustifiedCheckpoint: jCheckpoints[i],
 			FinalizedCheckpoint: fCheckpoints[i]}
@@ -306,6 +307,30 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		return err
 	}
 	return s.saveHeadNoDB(ctx, lastB, lastBR, preState, !isValidPayload)
+}
+
+func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.AvailabilityStore, roBlock consensusblocks.ROBlock) error {
+	blockVersion := roBlock.Version()
+	block := roBlock.Block()
+	slot := block.Slot()
+
+	if blockVersion >= version.Fulu {
+		if err := s.areDataColumnsAvailable(ctx, roBlock.Root(), block); err != nil {
+			return errors.Wrapf(err, "are data columns available for block %#x with slot %d", roBlock.Root(), slot)
+		}
+
+		return nil
+	}
+
+	if blockVersion >= version.Deneb {
+		if err := avs.IsDataAvailable(ctx, s.CurrentSlot(), roBlock); err != nil {
+			return errors.Wrapf(err, "could not validate sidecar availability at slot %d", slot)
+		}
+
+		return nil
+	}
+
+	return nil
 }
 
 func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.BeaconState) error {
@@ -584,7 +609,7 @@ func (s *Service) runLateBlockTasks() {
 // It returns a map where each key represents a missing BlobSidecar index.
 // An empty map means we have all indices; a non-empty map can be used to compare incoming
 // BlobSidecars against the set of known missing sidecars.
-func missingBlobIndices(bs *filesystem.BlobStorage, root [fieldparams.RootLength]byte, expected [][]byte, slot primitives.Slot) (map[uint64]bool, error) {
+func missingBlobIndices(store *filesystem.BlobStorage, root [fieldparams.RootLength]byte, expected [][]byte, slot primitives.Slot) (map[uint64]bool, error) {
 	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(slot)
 	if len(expected) == 0 {
 		return nil, nil
@@ -592,7 +617,7 @@ func missingBlobIndices(bs *filesystem.BlobStorage, root [fieldparams.RootLength
 	if len(expected) > maxBlobsPerBlock {
 		return nil, errMaxBlobsExceeded
 	}
-	indices := bs.Summary(root)
+	indices := store.Summary(root)
 	missing := make(map[uint64]bool, len(expected))
 	for i := range expected {
 		if len(expected[i]) > 0 && !indices.HasIndex(uint64(i)) {
@@ -607,7 +632,7 @@ func missingBlobIndices(bs *filesystem.BlobStorage, root [fieldparams.RootLength
 // It returns a map where each key represents a missing DataColumnSidecar index.
 // An empty map means we have all indices; a non-empty map can be used to compare incoming
 // DataColumns against the set of known missing sidecars.
-func missingDataColumnIndices(bs *filesystem.DataColumnStorage, root [fieldparams.RootLength]byte, expected map[uint64]bool) (map[uint64]bool, error) {
+func missingDataColumnIndices(store *filesystem.DataColumnStorage, root [fieldparams.RootLength]byte, expected map[uint64]bool) (map[uint64]bool, error) {
 	if len(expected) == 0 {
 		return nil, nil
 	}
@@ -619,7 +644,7 @@ func missingDataColumnIndices(bs *filesystem.DataColumnStorage, root [fieldparam
 	}
 
 	// Get a summary of the data columns stored in the database.
-	summary := bs.Summary(root)
+	summary := store.Summary(root)
 
 	// Check all expected data columns against the summary.
 	missing := make(map[uint64]bool)
@@ -717,7 +742,7 @@ func (s *Service) areDataColumnsAvailable(
 	summary := s.dataColumnStorage.Summary(root)
 	storedDataColumnsCount := summary.Count()
 
-	minimumColumnCountToReconstruct := peerdas.MinimumColumnsCountToReconstruct()
+	minimumColumnCountToReconstruct := peerdas.MinimumColumnCountToReconstruct()
 
 	// As soon as we have enough data column sidecars, we can reconstruct the missing ones.
 	// We don't need to wait for the rest of the data columns to declare the block as available.
@@ -820,7 +845,7 @@ func (s *Service) areDataColumnsAvailable(
 				missingIndices = uint64MapToSortedSlice(missingMap)
 			}
 
-			return errors.Wrapf(ctx.Err(), "data column sidecars slot: %d, BlockRoot: %#x, missing %v", block.Slot(), root, missingIndices)
+			return errors.Wrapf(ctx.Err(), "data column sidecars slot: %d, BlockRoot: %#x, missing: %v", block.Slot(), root, missingIndices)
 		}
 	}
 }

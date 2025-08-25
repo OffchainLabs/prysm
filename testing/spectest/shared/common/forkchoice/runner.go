@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
@@ -62,6 +63,7 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 
 		for _, folder := range testFolders {
 			t.Run(folder.Name(), func(t *testing.T) {
+				helpers.ClearCache()
 				preStepsFile, err := util.BazelFileBytes(testsFolderPath, folder.Name(), "steps.yaml")
 				require.NoError(t, err)
 				var steps []Step
@@ -148,6 +150,9 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 						}
 					}
 					runBlobStep(t, step, beaconBlock, fork, folder, testsFolderPath, builder)
+					if len(step.DataColumns) > 0 {
+						runDataColumnStep(t, step, beaconBlock, fork, folder, testsFolderPath, builder)
+					}
 					if beaconBlock != nil {
 						if step.Valid != nil && !*step.Valid {
 							builder.InvalidBlock(t, beaconBlock)
@@ -293,10 +298,154 @@ func runBlobStep(t *testing.T,
 	}
 }
 
+func runDataColumnStep(t *testing.T,
+	step Step,
+	beaconBlock interfaces.ReadOnlySignedBeaconBlock,
+	fork int,
+	folder os.DirEntry,
+	testsFolderPath string,
+	builder *Builder,
+) {
+	columnFiles := step.DataColumns
+
+	require.NotNil(t, beaconBlock)
+	require.Equal(t, true, fork >= version.Fulu)
+
+	block := beaconBlock.Block()
+	root, err := block.HashTreeRoot()
+	require.NoError(t, err)
+	kzgs, err := block.Body().BlobKzgCommitments()
+	require.NoError(t, err)
+	sh, err := beaconBlock.Header()
+	require.NoError(t, err)
+	// Use the same error that the verification system returns for data columns
+	errDataColumnsInvalid := errors.New("data columns failed verification")
+	requireVerifyExpected := errAssertionForStep(step, errDataColumnsInvalid)
+
+	var allColumns []blocks.RODataColumn
+
+	for columnIndex, columnFile := range columnFiles {
+		if columnFile == nil || *columnFile == "null" {
+			continue
+		}
+
+		dataColumnFile, err := util.BazelFileBytes(testsFolderPath, folder.Name(), fmt.Sprint(*columnFile, ".ssz_snappy"))
+		require.NoError(t, err)
+		dataColumnSSZ, err := snappy.Decode(nil /* dst */, dataColumnFile)
+		require.NoError(t, err)
+
+		var pb *ethpb.DataColumnSidecar
+
+		if step.Valid != nil && !*step.Valid {
+			pb = &ethpb.DataColumnSidecar{}
+			if err := pb.UnmarshalSSZ(dataColumnSSZ); err != nil {
+				pb = &ethpb.DataColumnSidecar{
+					Index:             uint64(columnIndex),
+					Column:            [][]byte{},
+					KzgCommitments:    kzgs,
+					KzgProofs:         make([][]byte, 0),
+					SignedBlockHeader: sh,
+				}
+			}
+		} else {
+			numCells := len(kzgs)
+			column := make([][]byte, numCells)
+			for cellIndex := 0; cellIndex < numCells; cellIndex++ {
+				cell := make([]byte, 2048)
+				cellStart := cellIndex * 2048
+				cellEnd := cellStart + 2048
+				if cellEnd <= len(dataColumnSSZ) {
+					copy(cell, dataColumnSSZ[cellStart:cellEnd])
+				}
+				column[cellIndex] = cell
+			}
+
+			inclusionProof, err := blocks.MerkleProofKZGCommitments(block.Body())
+			require.NoError(t, err)
+
+			pb = &ethpb.DataColumnSidecar{
+				Index:                        uint64(columnIndex),
+				Column:                       column,
+				KzgCommitments:               kzgs,
+				SignedBlockHeader:            sh,
+				KzgCommitmentsInclusionProof: inclusionProof,
+			}
+		}
+
+		ro, err := blocks.NewRODataColumnWithRoot(pb, root)
+		require.NoError(t, err)
+		allColumns = append(allColumns, ro)
+	}
+
+	if len(allColumns) > 0 {
+		ini, err := builder.vwait.WaitForInitializer(context.Background())
+		require.NoError(t, err)
+		// Use different verification requirements based on whether this is a valid or invalid test case
+		var forkchoiceReqs []verification.Requirement
+		if step.Valid != nil && !*step.Valid {
+			forkchoiceReqs = verification.SpectestDataColumnSidecarRequirements
+		} else {
+			forkchoiceReqs = []verification.Requirement{
+				verification.RequireNotFromFutureSlot,
+				verification.RequireSlotAboveFinalized,
+				verification.RequireValidProposerSignature,
+				verification.RequireSidecarParentSlotLower,
+				verification.RequireSidecarDescendsFromFinalized,
+				verification.RequireSidecarInclusionProven,
+				verification.RequireSidecarProposerExpected,
+			}
+		}
+		dv := ini.NewDataColumnsVerifier(allColumns, forkchoiceReqs)
+		ctx := t.Context()
+
+		if step.Valid != nil && !*step.Valid {
+			if err := dv.ValidFields(); err != nil {
+				t.Logf("ValidFields error: %s", err.Error())
+			}
+		}
+
+		if err := dv.NotFromFutureSlot(); err != nil {
+			t.Logf("NotFromFutureSlot error: %s", err.Error())
+		}
+		if err := dv.SlotAboveFinalized(); err != nil {
+			t.Logf("SlotAboveFinalized error: %s", err.Error())
+		}
+		if err := dv.SidecarInclusionProven(); err != nil {
+			t.Logf("SidecarInclusionProven error: %s", err.Error())
+		}
+		if err := dv.ValidProposerSignature(ctx); err != nil {
+			t.Logf("ValidProposerSignature error: %s", err.Error())
+		}
+		if err := dv.SidecarParentSlotLower(); err != nil {
+			t.Logf("SidecarParentSlotLower error: %s", err.Error())
+		}
+		if err := dv.SidecarDescendsFromFinalized(); err != nil {
+			t.Logf("SidecarDescendsFromFinalized error: %s", err.Error())
+		}
+		if err := dv.SidecarProposerExpected(ctx); err != nil {
+			t.Logf("SidecarProposerExpected error: %s", err.Error())
+		}
+
+		vdc, err := dv.VerifiedRODataColumns()
+		requireVerifyExpected(t, err)
+
+		if err == nil {
+			for _, column := range vdc {
+				require.NoError(t, builder.service.ReceiveDataColumn(column))
+			}
+		}
+	}
+}
+
 func errAssertionForStep(step Step, expect error) func(t *testing.T, err error) {
 	if !*step.Valid {
 		return func(t *testing.T, err error) {
-			require.ErrorIs(t, err, expect)
+			if expect.Error() == "data columns failed verification" {
+				require.NotNil(t, err)
+				require.Equal(t, true, strings.Contains(err.Error(), expect.Error()))
+			} else {
+				require.ErrorIs(t, err, expect)
+			}
 		}
 	}
 	return func(t *testing.T, err error) {

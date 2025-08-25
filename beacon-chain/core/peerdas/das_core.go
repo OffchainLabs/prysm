@@ -223,6 +223,14 @@ func dataColumnsSidecars(
 			cellsForRow := cellsAndProofs[rowIndex].Cells
 			proofsForRow := cellsAndProofs[rowIndex].Proofs
 
+			// Validate that we have enough cells and proofs for this column index
+			if columnIndex >= uint64(len(cellsForRow)) {
+				return nil, errors.Errorf("column index %d exceeds cells length %d for blob %d", columnIndex, len(cellsForRow), rowIndex)
+			}
+			if columnIndex >= uint64(len(proofsForRow)) {
+				return nil, errors.Errorf("column index %d exceeds proofs length %d for blob %d", columnIndex, len(proofsForRow), rowIndex)
+			}
+
 			cell := cellsForRow[columnIndex]
 			column = append(column, cell)
 

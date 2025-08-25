@@ -56,11 +56,7 @@ func (s *Server) GetValidatorCount(w http.ResponseWriter, r *http.Request) {
 
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateID), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
-		errJson := &httputil.DefaultJsonError{
-			Message: fmt.Sprintf("could not check if slot's block is optimistic: %v", err),
-			Code:    http.StatusInternalServerError,
-		}
-		httputil.WriteError(w, errJson)
+		helpers.HandleIsOptimisticError(w, err)
 		return
 	}
 
