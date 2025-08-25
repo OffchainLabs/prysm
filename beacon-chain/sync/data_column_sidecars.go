@@ -3,7 +3,6 @@ package sync
 import (
 	"bytes"
 	"context"
-	"math"
 	"slices"
 	"sync"
 	"time"
@@ -856,11 +855,7 @@ func randomPeer(
 	for ctx.Err() == nil {
 		nonRateLimitedPeers := make([]goPeer.ID, 0, len(indicesByRootByPeer))
 		for peer := range indicesByRootByPeer {
-			remaining := int64(math.MaxInt64)
-			if rateLimiter != nil {
-				remaining = rateLimiter.Remaining(peer.String())
-			}
-			if remaining >= int64(count) {
+			if rateLimiter == nil || rateLimiter.Remaining(peer.String()) >= int64(count) {
 				nonRateLimitedPeers = append(nonRateLimitedPeers, peer)
 			}
 		}
