@@ -3209,6 +3209,17 @@
         return (store.time - store.genesis_time) // SECONDS_PER_SLOT
     </spec>
 
+- name: get_slot_component_duration_ms
+  sources: []
+  spec: |
+    <spec fn="get_slot_component_duration_ms" fork="phase0" hash="b81504df">
+    def get_slot_component_duration_ms(basis_points: uint64) -> uint64:
+        """
+        Calculate the duration of a slot component in milliseconds.
+        """
+        return basis_points * SLOT_DURATION_MS // BASIS_POINTS
+    </spec>
+
 - name: get_source_deltas
   sources:
     - file: beacon-chain/core/epoch/precompute/reward_penalty.go
@@ -4240,12 +4251,12 @@
 - name: is_proposing_on_time
   sources: []
   spec: |
-    <spec fn="is_proposing_on_time" fork="phase0" hash="81d1985f">
+    <spec fn="is_proposing_on_time" fork="phase0" hash="cadfde05">
     def is_proposing_on_time(store: Store) -> bool:
-        # Use half `SECONDS_PER_SLOT // INTERVALS_PER_SLOT` as the proposer reorg deadline
-        time_into_slot = (store.time - store.genesis_time) % SECONDS_PER_SLOT
-        proposer_reorg_cutoff = SECONDS_PER_SLOT // INTERVALS_PER_SLOT // 2
-        return time_into_slot <= proposer_reorg_cutoff
+        seconds_since_genesis = store.time - store.genesis_time
+        time_into_slot_ms = seconds_to_milliseconds(seconds_since_genesis) % SLOT_DURATION_MS
+        proposer_reorg_cutoff_ms = get_slot_component_duration_ms(PROPOSER_REORG_CUTOFF_BPS)
+        return time_into_slot_ms <= proposer_reorg_cutoff_ms
     </spec>
 
 - name: is_shuffling_stable
@@ -4695,7 +4706,7 @@
     - file: beacon-chain/blockchain/receive_block.go
       search: func (s *Service) ReceiveBlock(
   spec: |
-    <spec fn="on_block" fork="phase0" hash="f44d049a">
+    <spec fn="on_block" fork="phase0" hash="0bd081f0">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         block = signed_block.message
         # Parent block must be known
@@ -4726,8 +4737,10 @@
         store.block_states[block_root] = state
 
         # Add block timeliness to the store
-        time_into_slot = (store.time - store.genesis_time) % SECONDS_PER_SLOT
-        is_before_attesting_interval = time_into_slot < SECONDS_PER_SLOT // INTERVALS_PER_SLOT
+        seconds_since_genesis = store.time - store.genesis_time
+        time_into_slot_ms = seconds_to_milliseconds(seconds_since_genesis) % SLOT_DURATION_MS
+        attestation_threshold_ms = get_slot_component_duration_ms(ATTESTATION_DUE_BPS)
+        is_before_attesting_interval = time_into_slot_ms < attestation_threshold_ms
         is_timely = get_current_slot(store) == block.slot and is_before_attesting_interval
         store.block_timeliness[hash_tree_root(block)] = is_timely
 
@@ -4748,7 +4761,7 @@
     - file: beacon-chain/blockchain/receive_block.go
       search: func (s *Service) ReceiveBlock(
   spec: |
-    <spec fn="on_block" fork="bellatrix" hash="1b2d9640">
+    <spec fn="on_block" fork="bellatrix" hash="cceac63a">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         """
         Run ``on_block`` upon receiving a new block.
@@ -4790,8 +4803,10 @@
         store.block_states[block_root] = state
 
         # Add block timeliness to the store
-        time_into_slot = (store.time - store.genesis_time) % SECONDS_PER_SLOT
-        is_before_attesting_interval = time_into_slot < SECONDS_PER_SLOT // INTERVALS_PER_SLOT
+        seconds_since_genesis = store.time - store.genesis_time
+        time_into_slot_ms = seconds_to_milliseconds(seconds_since_genesis) % SLOT_DURATION_MS
+        attestation_threshold_ms = get_slot_component_duration_ms(ATTESTATION_DUE_BPS)
+        is_before_attesting_interval = time_into_slot_ms < attestation_threshold_ms
         is_timely = get_current_slot(store) == block.slot and is_before_attesting_interval
         store.block_timeliness[hash_tree_root(block)] = is_timely
 
@@ -4812,7 +4827,7 @@
     - file: beacon-chain/blockchain/receive_block.go
       search: func (s *Service) ReceiveBlock(
   spec: |
-    <spec fn="on_block" fork="capella" hash="14995ab0">
+    <spec fn="on_block" fork="capella" hash="b051b7c6">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         """
         Run ``on_block`` upon receiving a new block.
@@ -4846,8 +4861,10 @@
         store.block_states[block_root] = state
 
         # Add block timeliness to the store
-        time_into_slot = (store.time - store.genesis_time) % SECONDS_PER_SLOT
-        is_before_attesting_interval = time_into_slot < SECONDS_PER_SLOT // INTERVALS_PER_SLOT
+        seconds_since_genesis = store.time - store.genesis_time
+        time_into_slot_ms = seconds_to_milliseconds(seconds_since_genesis) % SLOT_DURATION_MS
+        attestation_threshold_ms = get_slot_component_duration_ms(ATTESTATION_DUE_BPS)
+        is_before_attesting_interval = time_into_slot_ms < attestation_threshold_ms
         is_timely = get_current_slot(store) == block.slot and is_before_attesting_interval
         store.block_timeliness[hash_tree_root(block)] = is_timely
 
@@ -4868,7 +4885,7 @@
     - file: beacon-chain/blockchain/receive_block.go
       search: func (s *Service) ReceiveBlock(
   spec: |
-    <spec fn="on_block" fork="deneb" hash="34d79a7b">
+    <spec fn="on_block" fork="deneb" hash="1f48df4d">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         """
         Run ``on_block`` upon receiving a new block.
@@ -4892,9 +4909,7 @@
 
         # [New in Deneb:EIP4844]
         # Check if blob data is available
-        # If not, this block MAY be queued and subsequently considered when blob data becomes available
-        # *Note*: Extraneous or invalid Blobs (in addition to the expected/referenced valid blobs)
-        # received on the p2p network MUST NOT invalidate a block that is otherwise valid and available
+        # If not, this payload MAY be queued and subsequently considered when blob data becomes available
         assert is_data_available(hash_tree_root(block), block.body.blob_kzg_commitments)
 
         # Check the block is valid and compute the post-state
@@ -4909,8 +4924,10 @@
         store.block_states[block_root] = state
 
         # Add block timeliness to the store
-        time_into_slot = (store.time - store.genesis_time) % SECONDS_PER_SLOT
-        is_before_attesting_interval = time_into_slot < SECONDS_PER_SLOT // INTERVALS_PER_SLOT
+        seconds_since_genesis = store.time - store.genesis_time
+        time_into_slot_ms = seconds_to_milliseconds(seconds_since_genesis) % SLOT_DURATION_MS
+        attestation_threshold_ms = get_slot_component_duration_ms(ATTESTATION_DUE_BPS)
+        is_before_attesting_interval = time_into_slot_ms < attestation_threshold_ms
         is_timely = get_current_slot(store) == block.slot and is_before_attesting_interval
         store.block_timeliness[hash_tree_root(block)] = is_timely
 
@@ -4931,7 +4948,7 @@
     - file: beacon-chain/blockchain/receive_block.go
       search: func (s *Service) ReceiveBlock(
   spec: |
-    <spec fn="on_block" fork="fulu" hash="b01ca61f">
+    <spec fn="on_block" fork="fulu" hash="a27a9edb">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         """
         Run ``on_block`` upon receiving a new block.
@@ -4956,6 +4973,8 @@
         assert store.finalized_checkpoint.root == finalized_checkpoint_block
 
         # [Modified in Fulu:EIP7594]
+        # Check if blob data is available
+        # If not, this payload MAY be queued and subsequently considered when blob data becomes available
         assert is_data_available(hash_tree_root(block))
 
         # Check the block is valid and compute the post-state
@@ -4968,8 +4987,10 @@
         store.block_states[block_root] = state
 
         # Add block timeliness to the store
-        time_into_slot = (store.time - store.genesis_time) % SECONDS_PER_SLOT
-        is_before_attesting_interval = time_into_slot < SECONDS_PER_SLOT // INTERVALS_PER_SLOT
+        seconds_since_genesis = store.time - store.genesis_time
+        time_into_slot_ms = seconds_to_milliseconds(seconds_since_genesis) % SLOT_DURATION_MS
+        attestation_threshold_ms = get_slot_component_duration_ms(ATTESTATION_DUE_BPS)
+        is_before_attesting_interval = time_into_slot_ms < attestation_threshold_ms
         is_timely = get_current_slot(store) == block.slot and is_before_attesting_interval
         store.block_timeliness[hash_tree_root(block)] = is_timely
 
@@ -7540,6 +7561,20 @@
             assert block.state_root == hash_tree_root(state)
     </spec>
 
+- name: seconds_to_milliseconds
+  sources: []
+  spec: |
+    <spec fn="seconds_to_milliseconds" fork="phase0" hash="b2cc9743">
+    def seconds_to_milliseconds(seconds: uint64) -> uint64:
+        """
+        Convert seconds to milliseconds with overflow protection.
+        Returns ``UINT64_MAX`` if the result would overflow.
+        """
+        if seconds > UINT64_MAX // 1000:
+            return UINT64_MAX
+        return seconds * 1000
+    </spec>
+
 - name: store_target_checkpoint_state
   sources: []
   spec: |
@@ -8572,17 +8607,16 @@
     - file: beacon-chain/core/peerdas/p2p_interface.go
       search: func VerifyDataColumnSidecarInclusionProof(
   spec: |
-    <spec fn="verify_data_column_sidecar_inclusion_proof" fork="fulu" hash="a6757e5e">
+    <spec fn="verify_data_column_sidecar_inclusion_proof" fork="fulu" hash="aaa9b8d8">
     def verify_data_column_sidecar_inclusion_proof(sidecar: DataColumnSidecar) -> bool:
         """
         Verify if the given KZG commitments included in the given beacon block.
         """
-        gindex = get_subtree_index(get_generalized_index(BeaconBlockBody, "blob_kzg_commitments"))
         return is_valid_merkle_branch(
             leaf=hash_tree_root(sidecar.kzg_commitments),
             branch=sidecar.kzg_commitments_inclusion_proof,
             depth=KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH,
-            index=gindex,
+            index=get_subtree_index(get_generalized_index(BeaconBlockBody, "blob_kzg_commitments")),
             root=sidecar.signed_block_header.message.body_root,
         )
     </spec>

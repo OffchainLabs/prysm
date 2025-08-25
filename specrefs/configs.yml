@@ -18,6 +18,13 @@
     ALTAIR_FORK_VERSION: Version = '0x01000000'
     </spec>
 
+- name: AGGREGRATE_DUE_BPS
+  sources: []
+  spec: |
+    <spec config_var="AGGREGRATE_DUE_BPS" fork="phase0" hash="74073466">
+    AGGREGRATE_DUE_BPS: uint64 = 6667
+    </spec>
+
 - name: ATTESTATION_PROPAGATION_SLOT_RANGE
   sources:
     - file: config/params/config.go
@@ -56,6 +63,13 @@
   spec: |
     <spec config_var="ATTESTATION_SUBNET_PREFIX_BITS" fork="phase0" hash="d6f5ea62">
     ATTESTATION_SUBNET_PREFIX_BITS: int = 6
+    </spec>
+
+- name: ATTESTATION_DUE_BPS
+  sources: []
+  spec: |
+    <spec config_var="ATTESTATION_DUE_BPS" fork="phase0" hash="929dd1c9">
+    ATTESTATION_DUE_BPS: uint64 = 3333
     </spec>
 
 - name: BALANCE_PER_ADDITIONAL_CUSTODY_GROUP
@@ -529,6 +543,13 @@
     PROPOSER_SCORE_BOOST: uint64 = 40
     </spec>
 
+- name: PROPOSER_REORG_CUTOFF_BPS
+  sources: []
+  spec: |
+    <spec config_var="PROPOSER_REORG_CUTOFF_BPS" fork="phase0" hash="a487cc43">
+    PROPOSER_REORG_CUTOFF_BPS: uint64 = 1667
+    </spec>
+
 - name: REORG_HEAD_WEIGHT_THRESHOLD
   sources:
     - file: config/params/config.go
@@ -587,6 +608,13 @@
   spec: |
     <spec config_var="SECONDS_PER_SLOT" fork="phase0" hash="a9118f10">
     SECONDS_PER_SLOT: uint64 = 12
+    </spec>
+
+- name: SLOT_DURATION_MS
+  sources: []
+  spec: |
+    <spec config_var="SLOT_DURATION_MS" fork="phase0" hash="b6d4ba6d">
+    SLOT_DURATION_MS: uint64 = 12000
     </spec>
 
 - name: SHARD_COMMITTEE_PERIOD
@@ -648,3 +676,18 @@
     <spec config_var="VALIDATOR_CUSTODY_REQUIREMENT" fork="fulu" hash="4dfc4457">
     VALIDATOR_CUSTODY_REQUIREMENT = 8
     </spec>
+
+- name: CONTRIBUTION_DUE_BPS
+  sources: []
+  spec: |
+    <spec config_var="CONTRIBUTION_DUE_BPS" fork="altair" hash="a3808203">
+    CONTRIBUTION_DUE_BPS: uint64 = 6667
+    </spec>
+
+- name: SYNC_MESSAGE_DUE_BPS
+  sources: []
+  spec: |
+    <spec config_var="SYNC_MESSAGE_DUE_BPS" fork="altair" hash="791b29d8">
+    SYNC_MESSAGE_DUE_BPS: uint64 = 3333
+    </spec>
+
