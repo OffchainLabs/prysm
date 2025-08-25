@@ -969,7 +969,7 @@ func TestFindPeers_NodeDeduplication(t *testing.T) {
 	cache.SubnetIDs.EmptyAllCaches()
 	defer cache.SubnetIDs.EmptyAllCaches()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Create LocalNodes and manipulate sequence numbers
 	localNode1 := createTestNodeWithID(t, "node1")
@@ -1193,8 +1193,6 @@ func TestFindPeers_received_bad_existing_node(t *testing.T) {
 	cache.SubnetIDs.EmptyAllCaches()
 	defer cache.SubnetIDs.EmptyAllCaches()
 
-	ctx := context.Background()
-
 	// Create LocalNode with same ID but different sequences
 	localNode1 := createTestNodeWithID(t, "testnode")
 	node1_seq1 := localNode1.Node() // Get current node
@@ -1213,7 +1211,7 @@ func TestFindPeers_received_bad_existing_node(t *testing.T) {
 			MaxPeers: 30,
 		},
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
-		peers: peers.NewStatus(ctx, &peers.StatusConfig{
+		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
 			PeerLimit:    30,
 			ScorerParams: &scorers.Config{},
 		}),
@@ -1243,7 +1241,7 @@ func TestFindPeers_received_bad_existing_node(t *testing.T) {
 	service.dv5Listener = testp2p.NewMockListener(localNode, iter)
 
 	// Run findPeers - node1_seq1 gets processed first, then callback marks peer bad, then node1_seq2 fails
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, 1*time.Second)
+	ctxWithTimeout, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 	defer cancel()
 
 	result, err := service.findPeers(ctxWithTimeout, 3)
