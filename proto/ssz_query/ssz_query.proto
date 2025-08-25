@@ -29,7 +29,7 @@ message FixedTestContainer {
   // Boolean type - test boolean serialization (1 byte in SSZ)
   bool field_bool = 5;      // Test: boolean basic type, offset: 12
   
-  // Fixed-size bytes - test various byte array lengths
+  // Fixed-size bytes - test byte array
   bytes field_bytes32 = 8 [ (ethereum.eth.ext.ssz_size) = "32" ]; // Test: 32-byte array, offset: 13
   
   // Nested container - test container nesting and field access
