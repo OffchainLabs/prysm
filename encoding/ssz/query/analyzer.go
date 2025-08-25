@@ -18,13 +18,13 @@ const (
 	sszSizeTag = "ssz-size"
 )
 
-// AnalyzeSSZInfo analyzes given object and returns its SSZ information.
-func AnalyzeSSZInfo(obj any) (*sszInfo, error) {
+// AnalyzeObject analyzes given object and returns its SSZ information.
+func AnalyzeObject(obj any) (*sszInfo, error) {
 	value := dereferencePointer(obj)
 
 	info, err := analyzeType(value.Type(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("analyze type %s: %w", value.Type().Name(), err)
+		return nil, fmt.Errorf("could not analyze type %s: %w", value.Type().Name(), err)
 	}
 
 	return info, nil
@@ -50,7 +50,7 @@ func analyzeType(typ reflect.Type, tag *reflect.StructTag) (*sszInfo, error) {
 		return analyzeType(typ.Elem(), tag)
 
 	default:
-		return nil, fmt.Errorf("unsupported type for SSZ calculation: %v", typ.Kind())
+		return nil, fmt.Errorf("unsupported type %v for SSZ calculation", typ.Kind())
 	}
 }
 
@@ -80,14 +80,13 @@ func analyzeBasicType(typ reflect.Type) (*sszInfo, error) {
 		sszInfo.sszType = Boolean
 		sszInfo.fixedSize = 1
 	default:
-		return nil, fmt.Errorf("unsupported basic type for SSZ calculation: %v", typ.Kind())
+		return nil, fmt.Errorf("unsupported basic type %v for SSZ calculation", typ.Kind())
 	}
 
 	return sszInfo, nil
 }
 
 // analyzeHomogeneousColType analyzes homogeneous collection types (e.g., List, Vector, Bitlist, Bitvector) and returns its SSZ info.
-// TODO: Support multi-dimensional parsing for tags. It only takes the first dimension into account.
 func analyzeHomogeneousColType(typ reflect.Type, tag *reflect.StructTag) (*sszInfo, error) {
 	if typ.Kind() != reflect.Slice {
 		return nil, fmt.Errorf("can only analyze slice types, got %v", typ.Kind())
@@ -99,16 +98,20 @@ func analyzeHomogeneousColType(typ reflect.Type, tag *reflect.StructTag) (*sszIn
 
 	elementInfo, err := analyzeType(typ.Elem(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("analyze element type for homogeneous collection: %w", err)
+		return nil, fmt.Errorf("could not analyze element type for homogeneous collection: %w", err)
 	}
 
 	// 1. Check if the type is List/Bitlist by checking `ssz-max` tag.
 	sszMax := tag.Get(sszMaxTag)
 	if sszMax != "" {
 		dims := strings.Split(sszMax, ",")
+		if len(dims) > 1 {
+			return nil, fmt.Errorf("multi-dimensional lists are not supported, got %d dimensions", len(dims))
+		}
+
 		limit, err := strconv.ParseUint(dims[0], 10, 64)
 		if err != nil {
-			return nil, fmt.Errorf("invalid ssz-max tag (%s) on field: %w", sszMax, err)
+			return nil, fmt.Errorf("invalid ssz-max tag (%s): %w", sszMax, err)
 		}
 
 		return analyzeListType(typ, elementInfo, limit)
@@ -117,9 +120,13 @@ func analyzeHomogeneousColType(typ reflect.Type, tag *reflect.StructTag) (*sszIn
 	// 2. Handle Vector/Bitvector type.
 	sszSize := tag.Get(sszSizeTag)
 	dims := strings.Split(sszSize, ",")
+	if len(dims) > 1 {
+		return nil, fmt.Errorf("multi-dimensional vectors are not supported, got %d dimensions", len(dims))
+	}
+
 	length, err := strconv.ParseUint(dims[0], 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("invalid ssz-size tag (%s) on field: %w", sszSize, err)
+		return nil, fmt.Errorf("invalid ssz-size tag (%s): %w", sszSize, err)
 	}
 
 	return analyzeVectorType(typ, elementInfo, length)
@@ -194,7 +201,7 @@ func analyzeContainerType(typ reflect.Type) (*sszInfo, error) {
 		// Analyze each field so that we can complete full SSZ information.
 		info, err := analyzeType(field.Type, &field.Tag)
 		if err != nil {
-			return nil, fmt.Errorf("analyze type for field %s: %w", fieldName, err)
+			return nil, fmt.Errorf("could not analyze type for field %s: %w", fieldName, err)
 		}
 
 		// If one of the fields is variable-sized,

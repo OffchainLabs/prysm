@@ -19,7 +19,7 @@ type sszInfo struct {
 	// fixedSize is the total size of the struct's fixed part.
 	fixedSize uint64
 
-	// For Container types:
+	// For Container types.
 	containerInfo containerInfo
 }
 
@@ -40,7 +40,7 @@ func (info *sszInfo) Size() uint64 {
 		return info.fixedSize
 	}
 
-	// TODO: Handle variable-sized types.
+	// NOTE: Handle variable-sized types.
 	return 0
 }
 
@@ -54,7 +54,7 @@ func (info *sszInfo) ContainerInfo() (containerInfo, error) {
 	}
 
 	if info.containerInfo == nil {
-		return nil, fmt.Errorf("sszInfo.fieldInfos is nil")
+		return nil, fmt.Errorf("sszInfo.containerInfo is nil")
 	}
 
 	return info.containerInfo, nil

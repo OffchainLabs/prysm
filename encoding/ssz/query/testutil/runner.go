@@ -10,7 +10,7 @@ import (
 
 func RunStructTest(t *testing.T, spec TestSpec) {
 	t.Run(spec.Name, func(t *testing.T) {
-		info, err := query.AnalyzeSSZInfo(spec.Type)
+		info, err := query.AnalyzeObject(spec.Type)
 		assert.NoError(t, err)
 
 		testInstance := spec.Instance
@@ -29,8 +29,6 @@ func RunStructTest(t *testing.T, spec TestSpec) {
 				assert.NoError(t, err)
 
 				expectedRawBytes := marshalledData[offset : offset+length]
-				assert.Equal(t, uint64(len(expectedRawBytes)), length, "Extracted value length mismatch: got %d, want %d", len(expectedRawBytes), length)
-
 				rawBytes, err := marshalAny(pathTest.Expected)
 				assert.NoError(t, err, "Marshalling expected value should not return an error")
 				assert.DeepEqual(t, expectedRawBytes, rawBytes, "Extracted value should match expected")

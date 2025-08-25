@@ -8,17 +8,46 @@ import (
 )
 
 func TestParsePath(t *testing.T) {
-	path := ".data.target.root"
-
-	parsedPath, err := query.ParsePath(path)
-	assert.NoError(t, err)
-
-	expectedPath := []query.PathElement{
-		{Name: "data"},
-		{Name: "target"},
-		{Name: "root"},
+	tests := []struct {
+		name     string
+		path     string
+		expected []query.PathElement
+		wantErr  bool
+	}{
+		{
+			name: "simple nested path",
+			path: "data.target.root",
+			expected: []query.PathElement{
+				{Name: "data"},
+				{Name: "target"},
+				{Name: "root"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "simple nested path with leading dot",
+			path: ".data.target.root",
+			expected: []query.PathElement{
+				{Name: "data"},
+				{Name: "target"},
+				{Name: "root"},
+			},
+			wantErr: false,
+		},
 	}
 
-	assert.Equal(t, 3, len(parsedPath), "Expected 3 path elements, got %d", len(parsedPath))
-	assert.DeepEqual(t, expectedPath, parsedPath, "Parsed path does not match expected path")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parsedPath, err := query.ParsePath(tt.path)
+
+			if tt.wantErr {
+				assert.NotNil(t, err, "Expected error but got none")
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, len(tt.expected), len(parsedPath), "Expected %d path elements, got %d", len(tt.expected), len(parsedPath))
+			assert.DeepEqual(t, tt.expected, parsedPath, "Parsed path does not match expected path")
+		})
+	}
 }

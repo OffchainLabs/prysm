@@ -5,10 +5,7 @@ import (
 	"strings"
 )
 
-// PathElement represents a single element in a path. It only supports field names currently.
-//
-// TODO 1: Add feature for accessing by index of a list or vector.
-// TODO 2: Add feature for getting the length of a list or vector.
+// PathElement represents a single element in a path.
 type PathElement struct {
 	Name string
 }

@@ -9,7 +9,7 @@ import (
 )
 
 func TestAnalyzeSSZInfo(t *testing.T) {
-	info, err := query.AnalyzeSSZInfo(&ethpb.IndexedAttestationElectra{})
+	info, err := query.AnalyzeObject(&ethpb.IndexedAttestationElectra{})
 	assert.NoError(t, err)
 
 	assert.NotNil(t, info, "Expected non-nil SSZ info")

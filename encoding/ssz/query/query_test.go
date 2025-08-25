@@ -13,7 +13,7 @@ func TestCalculateOffsetAndLength(t *testing.T) {
 	path, err := query.ParsePath(".data.target.root")
 	assert.NoError(t, err)
 
-	info, err := query.AnalyzeSSZInfo(&ethpb.IndexedAttestationElectra{})
+	info, err := query.AnalyzeObject(&ethpb.IndexedAttestationElectra{})
 	assert.NoError(t, err)
 
 	_, offset, length, err := query.CalculateOffsetAndLength(info, path)

@@ -21,9 +21,7 @@ const (
 	Bitlist
 
 	// Added in EIP-7916
-	// TODO: Support ProgressiveList
 	ProgressiveList
-	// TODO: Support Union
 	Union
 )
 
