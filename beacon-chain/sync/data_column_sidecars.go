@@ -82,7 +82,7 @@ func FetchDataColumnSidecars(
 		root := roBlock.Root()
 
 		// Step 1: Get the requested sidecars for this root if available in storage
-		requestedColumns, err := tryGetDirectColumns(params.Storage, root, indices)
+		requestedColumns, err := tryGetStoredColumns(params.Storage, root, indices)
 		if err != nil {
 			return nil, errors.Wrapf(err, "try get direct columns for root %#x", root)
 		}
@@ -150,7 +150,7 @@ func FetchDataColumnSidecars(
 			continue
 		}
 
-		storedColumns, err := tryGetDirectColumns(params.Storage, root, sortedSliceFromMap(storedIndices))
+		storedColumns, err := tryGetStoredColumns(params.Storage, root, sortedSliceFromMap(storedIndices))
 		if err != nil {
 			return nil, errors.Wrapf(err, "try get direct columns for root %#x", root)
 		}
@@ -161,10 +161,10 @@ func FetchDataColumnSidecars(
 	return result, nil
 }
 
-// tryGetDirectColumns attempts to retrieve all requested columns directly from storage
-// if they are all available. Returns the columns if successful, and nil if at least one
+// tryGetStoredColumns attempts to retrieve all requested data column sidecars directly from storage
+// if they are all available. Returns the sidecars if successful, and nil if at least one
 // requested sidecar is not available in the storage.
-func tryGetDirectColumns(storage filesystem.DataColumnStorageReader, blockRoot [fieldparams.RootLength]byte, indices []uint64) ([]blocks.VerifiedRODataColumn, error) {
+func tryGetStoredColumns(storage filesystem.DataColumnStorageReader, blockRoot [fieldparams.RootLength]byte, indices []uint64) ([]blocks.VerifiedRODataColumn, error) {
 	// Check if all requested indices are present in cache
 	storedIndices := storage.Summary(blockRoot).Stored()
 	allRequestedPresent := true
