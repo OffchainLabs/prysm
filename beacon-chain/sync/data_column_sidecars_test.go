@@ -3,10 +3,12 @@ package sync
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
@@ -19,7 +21,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
-	"github.com/OffchainLabs/prysm/v6/crypto/rand"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -36,6 +37,7 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 	// Slot 2: No commitment
 	// Slot 3: All sidecars are saved excepted the needed ones
 	// Slot 4: Some sidecars are in the storage, other have to be retrieved from peers.
+	// Slot 5: Some sidecars are in the storage, other have to be retrieved from peers but peers do not deliver all requested sidecars.
 
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -93,6 +95,27 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 	err = storage.Save(toStore4)
 	require.NoError(t, err)
 
+	// Block 5
+	minimumColumnsCountToReconstruct := peerdas.MinimumColumnCountToReconstruct()
+	block5, _, verifiedSidecars5 := util.GenerateTestFuluBlockWithSidecars(t, blobCount, util.WithSlot(5))
+	root5 := block5.Root()
+
+	toStoreCount := minimumColumnsCountToReconstruct - 1
+	toStore5 := make([]blocks.VerifiedRODataColumn, 0, toStoreCount)
+
+	for i := uint64(0); uint64(len(toStore5)) < toStoreCount; i++ {
+		sidecar := verifiedSidecars5[minimumColumnsCountToReconstruct+i]
+		if sidecar.Index == 81 {
+			continue
+		}
+
+		toStore5 = append(toStore5, sidecar)
+	}
+
+	err = storage.Save(toStore5)
+	require.NoError(t, err)
+
+	// Custody columns with this private key and 4-cgc: 31, 81, 97, 105
 	privateKeyBytes := [32]byte{1}
 	privateKey, err := crypto.UnmarshalSecp256k1PrivateKey(privateKeyBytes[:])
 	require.NoError(t, err)
@@ -105,12 +128,12 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 	p2p.Connect(other)
 
 	p2p.Peers().SetChainState(other.PeerID(), &ethpb.StatusV2{
-		HeadSlot: 4,
+		HeadSlot: 5,
 	})
 
 	expectedRequest := &ethpb.DataColumnSidecarsByRangeRequest{
 		StartSlot: 4,
-		Count:     1,
+		Count:     2,
 		Columns:   []uint64{31, 81},
 	}
 
@@ -138,6 +161,9 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars4[81].DataColumnSidecar)
 		assert.NoError(t, err)
 
+		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars5[81].DataColumnSidecar)
+		assert.NoError(t, err)
+
 		err = stream.CloseWrite()
 		assert.NoError(t, err)
 	})
@@ -157,9 +183,10 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 		// no root2 (no commitments in this block)
 		root3: {verifiedSidecars3[31], verifiedSidecars3[81], verifiedSidecars3[106]},
 		root4: {verifiedSidecars4[31], verifiedSidecars4[81], verifiedSidecars4[106]},
+		root5: {verifiedSidecars5[31], verifiedSidecars5[81], verifiedSidecars5[106]},
 	}
 
-	blocks := []blocks.ROBlock{block1, block2, block3, block4}
+	blocks := []blocks.ROBlock{block1, block2, block3, block4, block5}
 	actual, err := FetchDataColumnSidecars(params, blocks, indices)
 	require.NoError(t, err)
 
@@ -202,7 +229,7 @@ func TestCategorizeIndices(t *testing.T) {
 func TestSelectPeers(t *testing.T) {
 	const (
 		count = 3
-		seed  = 46
+		seed  = 42
 	)
 
 	params := DataColumnSidecarsParams{
@@ -210,7 +237,7 @@ func TestSelectPeers(t *testing.T) {
 		RateLimiter: leakybucket.NewCollector(1., 10, time.Second, false /* deleteEmptyBuckets */),
 	}
 
-	randomSource := rand.NewGenerator()
+	randomSource := rand.New(rand.NewSource(seed))
 
 	indicesByRootByPeer := map[peer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool{
 		"peer1": {
@@ -225,19 +252,7 @@ func TestSelectPeers(t *testing.T) {
 		},
 	}
 
-	expected_1 := map[peer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool{
-		"peer1": {
-			{1}: {12: true, 13: true},
-			{2}: {13: true, 14: true, 15: true},
-			{3}: {14: true, 15: true},
-		},
-		"peer2": {
-			{1}: {14: true},
-			{3}: {16: true},
-		},
-	}
-
-	expected_2 := map[peer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool{
+	expected := map[peer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool{
 		"peer1": {
 			{1}: {12: true},
 			{3}: {15: true},
@@ -250,11 +265,6 @@ func TestSelectPeers(t *testing.T) {
 	}
 
 	actual, err := selectPeers(params, randomSource, count, indicesByRootByPeer)
-
-	expected := expected_1
-	if len(actual["peer1"]) == 2 {
-		expected = expected_2
-	}
 
 	require.NoError(t, err)
 	require.Equal(t, len(expected), len(actual))
@@ -291,8 +301,8 @@ func TestUpdateResults(t *testing.T) {
 		verifiedSidecars[2].BlockRoot(): {verifiedSidecars[2], verifiedSidecars[3]},
 	}
 
-	actualMissingIndicesByRoot, actualVerifiedSidecarsByRoot := updateResults(verifiedSidecars, missingIndicesByRoot)
-	require.DeepEqual(t, expectedMissingIndicesByRoot, actualMissingIndicesByRoot)
+	actualVerifiedSidecarsByRoot := updateResults(verifiedSidecars, missingIndicesByRoot)
+	require.DeepEqual(t, expectedMissingIndicesByRoot, missingIndicesByRoot)
 	require.DeepEqual(t, expectedVerifiedSidecarsByRoot, actualVerifiedSidecarsByRoot)
 }
 
@@ -857,8 +867,8 @@ func TestComputeIndicesByRootByPeer(t *testing.T) {
 
 func TestRandomPeer(t *testing.T) {
 	// Fixed seed.
-	const seed = 42
-	randomSource := rand.NewGenerator()
+	const seed = 43
+	randomSource := rand.New(rand.NewSource(seed))
 
 	t.Run("no peers", func(t *testing.T) {
 		pid, err := randomPeer(t.Context(), randomSource, leakybucket.NewCollector(4, 8, time.Second, false /* deleteEmptyBuckets */), 1, nil)
@@ -889,7 +899,11 @@ func TestRandomPeer(t *testing.T) {
 
 		pid, err := randomPeer(t.Context(), randomSource, collector, count, indicesByRootByPeer)
 		require.NoError(t, err)
-		require.Equal(t, true, map[peer.ID]bool{peer1: true, peer2: true, peer3: true}[pid])
+		require.Equal(t, peer1, pid)
+
+		pid, err = randomPeer(t.Context(), randomSource, collector, count, indicesByRootByPeer)
+		require.NoError(t, err)
+		require.Equal(t, peer2, pid)
 	})
 }
 
