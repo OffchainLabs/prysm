@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package ssz_query;
+
+import "proto/eth/ext/options.proto";
+
+option go_package = "github.com/OffchainLabs/prysm/v6/proto/ssz_query";
+
+
+// ===== FIXED-SIZE TEST CONTAINERS =====
+// These containers are designed to test SSZ query functionality with comprehensive coverage
+// of all fixed-size SSZ types according to the SSZ specification.
+
+// FixedNestedContainer - nested container for testing nested field access
+// Tests: nested container navigation, field offset calculations within nested structures
+message FixedNestedContainer {
+  uint64 value1 = 1;  // Test: uint64 basic type, offset calculation in nested context
+  bytes value2 = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];  // Test: fixed-size bytes in nested container
+}
+
+// FixedTestContainer - comprehensive fixed-size container for SSZ query testing
+// Tests: All basic fixed-size SSZ types, nested containers, vectors, offset/length calculations
+// Total size: 365 bytes (4+4+4+8+1+8+16+32+40+192+56)
+message FixedTestContainer {
+  // Basic integer types - test different integer sizes and their SSZ serialization
+  uint32 field_uint8 = 1;   // Test: uint8 representation (4 bytes in protobuf/SSZ), offset: 0
+  uint32 field_uint16 = 2;  // Test: uint16 representation (4 bytes in protobuf/SSZ), offset: 4  
+  uint32 field_uint32 = 3;  // Test: uint32 basic type, offset: 8
+  uint64 field_uint64 = 4;  // Test: uint64 basic type, offset: 12
+  
+  // Boolean type - test boolean serialization (1 byte in SSZ)
+  bool field_bool = 5;      // Test: boolean basic type, offset: 20
+  
+  // Fixed-size bytes - test various byte array lengths
+  bytes field_bytes8 = 6 [ (ethereum.eth.ext.ssz_size) = "8" ];   // Test: 8-byte array, offset: 21
+  bytes field_bytes16 = 7 [ (ethereum.eth.ext.ssz_size) = "16" ]; // Test: 16-byte array, offset: 29
+  bytes field_bytes32 = 8 [ (ethereum.eth.ext.ssz_size) = "32" ]; // Test: 32-byte array, offset: 45
+  
+  // Nested container - test container nesting and field access
+  FixedNestedContainer nested = 9;  // Test: nested container navigation, offset: 77
+  
+  // Vector type - test fixed-size array of basic elements  
+  repeated uint64 vector_field = 10 [ (ethereum.eth.ext.ssz_size) = "24" ];  // Test: Vector[24] of uint64, offset: 117
+  
+  // Additional bytes field - test field ordering and offset calculation
+  bytes field_trailing = 11 [ (ethereum.eth.ext.ssz_size) = "56" ]; // Test: trailing field after vector, offset: 309
+}
