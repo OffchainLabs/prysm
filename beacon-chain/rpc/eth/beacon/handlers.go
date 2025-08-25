@@ -13,6 +13,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
 	corehelpers "github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
@@ -34,7 +35,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/sirupsen/logrus"
@@ -1077,19 +1077,47 @@ func (s *Server) validateBlobs(blk interfaces.SignedBeaconBlock, blobs [][]byte,
 	if err != nil {
 		return errors.Wrap(err, "could not get blob kzg commitments")
 	}
-	if len(blobs) != len(proofs) || len(blobs) != len(kzgs) {
-		return errors.New("number of blobs, proofs, and commitments do not match")
+	// Validate counts based on block version
+	if blk.Version() >= version.Fulu {
+		// For Fulu blocks, proofs are cell proofs (blobs * numberOfColumns)
+		numberOfColumns := params.BeaconConfig().NumberOfColumns
+		expectedProofs := uint64(len(blobs)) * numberOfColumns
+		if len(proofs) != int(expectedProofs) || len(blobs) != len(kzgs) {
+			return fmt.Errorf("number of blobs (%d), cell proofs (%d), and commitments (%d) do not match (expected %d cell proofs)", len(blobs), len(proofs), len(kzgs), expectedProofs)
+		}
+	} else {
+		// For pre-Fulu blocks, proofs are blob proofs (1:1 with blobs)
+		if len(blobs) != len(proofs) || len(blobs) != len(kzgs) {
+			return errors.New("number of blobs, proofs, and commitments do not match")
+		}
 	}
+
 	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(blk.Block().Slot())
 	if len(blobs) > maxBlobsPerBlock {
 		return fmt.Errorf("number of blobs over max, %d > %d", len(blobs), maxBlobsPerBlock)
 	}
-	for i, blob := range blobs {
-		b := kzg4844.Blob(blob)
-		if err := kzg4844.VerifyBlobProof(&b, kzg4844.Commitment(kzgs[i]), kzg4844.Proof(proofs[i])); err != nil {
-			return errors.Wrap(err, "could not verify blob proof")
+
+	// Convert KZG commitments to byte slices for batch verification
+	commitments := make([][]byte, len(kzgs))
+	for i, commitment := range kzgs {
+		commitments[i] = commitment
+	}
+
+	if blk.Version() >= version.Fulu {
+		// For Fulu blocks, proofs are cell proofs from execution client's BlobsBundleV2
+		// Verify cell proofs directly without reconstructing data column sidecars
+		numberOfColumns := params.BeaconConfig().NumberOfColumns
+		if err := kzg.VerifyCellKZGProofBatchFromBlobData(blobs, commitments, proofs, numberOfColumns); err != nil {
+			return errors.Wrap(err, "could not verify cell proofs")
+		}
+	} else {
+
+		// Use batch verification for better performance
+		if err := kzg.VerifyBlobKZGProofBatch(blobs, commitments, proofs); err != nil {
+			return errors.Wrap(err, "could not verify blob proofs")
 		}
 	}
+
 	return nil
 }
 
