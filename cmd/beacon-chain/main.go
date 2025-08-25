@@ -144,6 +144,7 @@ var appFlags = []cli.Flag{
 	flags.SlasherFlag,
 	flags.JwtId,
 	storage.BlobStoragePathFlag,
+	storage.DataColumnStoragePathFlag,
 	storage.BlobRetentionEpochFlag,
 	storage.BlobStorageLayout,
 	bflags.EnableExperimentalBackfill,
