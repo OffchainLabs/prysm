@@ -1,7 +1,7 @@
 package query
 
 import (
-	"fmt"
+	"errors"
 	"strings"
 )
 
@@ -14,7 +14,7 @@ func ParsePath(rawPath string) ([]PathElement, error) {
 	// We use dot notation, so we split the path by '.'.
 	rawElements := strings.Split(rawPath, ".")
 	if len(rawElements) == 0 {
-		return nil, fmt.Errorf("empty path provided")
+		return nil, errors.New("empty path provided")
 	}
 
 	if rawElements[0] == "" {

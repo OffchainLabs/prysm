@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/encoding/ssz/query"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 func TestParsePath(t *testing.T) {
@@ -41,13 +41,13 @@ func TestParsePath(t *testing.T) {
 			parsedPath, err := query.ParsePath(tt.path)
 
 			if tt.wantErr {
-				assert.NotNil(t, err, "Expected error but got none")
+				require.NotNil(t, err, "Expected error but got none")
 				return
 			}
 
-			assert.NoError(t, err)
-			assert.Equal(t, len(tt.expected), len(parsedPath), "Expected %d path elements, got %d", len(tt.expected), len(parsedPath))
-			assert.DeepEqual(t, tt.expected, parsedPath, "Parsed path does not match expected path")
+			require.NoError(t, err)
+			require.Equal(t, len(tt.expected), len(parsedPath), "Expected %d path elements, got %d", len(tt.expected), len(parsedPath))
+			require.DeepEqual(t, tt.expected, parsedPath, "Parsed path does not match expected path")
 		})
 	}
 }

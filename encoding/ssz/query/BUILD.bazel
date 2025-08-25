@@ -25,6 +25,6 @@ go_test(
         ":go_default_library",
         "//encoding/ssz/query/testutil:go_default_library",
         "//proto/ssz_query:go_default_library",
-        "//testing/assert:go_default_library",
+        "//testing/require:go_default_library",
     ],
 )
