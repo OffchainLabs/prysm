@@ -1,42 +1,11 @@
 package testutil
 
 import (
-	"crypto/rand"
 	"fmt"
 	"reflect"
-	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/testing/require"
 	ssz "github.com/prysmaticlabs/fastssz"
 )
-
-// DummyData is a struct that holds dummy data for testing purposes.
-type DummyData struct {
-	Root      []byte
-	Pubkey    []byte
-	Signature []byte
-}
-
-// RandomDummyData generates random dummy data for testing purposes.
-func RandomDummyData(t *testing.T) *DummyData {
-	dummyRoot := make([]byte, 32)
-	_, err := rand.Read(dummyRoot)
-	require.NoError(t, err)
-
-	dummyPubkey := make([]byte, 48)
-	_, err = rand.Read(dummyPubkey)
-	require.NoError(t, err)
-
-	dummySignature := make([]byte, 96)
-	_, err = rand.Read(dummySignature)
-	require.NoError(t, err)
-
-	return &DummyData{
-		Root:      dummyRoot,
-		Pubkey:    dummyPubkey,
-		Signature: dummySignature,
-	}
-}
 
 // marshalAny marshals any value into SSZ format.
 func marshalAny(value any) ([]byte, error) {
@@ -62,13 +31,15 @@ func marshalAny(value any) ([]byte, error) {
 	case []byte:
 		return v, nil
 	case []uint64:
-		buf := make([]byte, len(v)*8)
-		for i, val := range v {
-			buf = ssz.MarshalUint64(buf[i*8:], val)
+		buf := make([]byte, 0, len(v)*8)
+		for _, val := range v {
+			buf = ssz.MarshalUint64(buf, val)
 		}
 		return buf, nil
 	case uint64:
 		return ssz.MarshalUint64(make([]byte, 0), v), nil
+	case uint32:
+		return ssz.MarshalUint32(make([]byte, 0), v), nil
 	case bool:
 		return ssz.MarshalBool(make([]byte, 0), v), nil
 

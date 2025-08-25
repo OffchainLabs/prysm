@@ -24,7 +24,7 @@ go_test(
     deps = [
         ":go_default_library",
         "//encoding/ssz/query/testutil:go_default_library",
-        "//proto/prysm/v1alpha1:go_default_library",
+        "//proto/ssz_query:go_default_library",
         "//testing/assert:go_default_library",
     ],
 )
