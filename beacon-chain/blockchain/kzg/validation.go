@@ -6,20 +6,20 @@ import (
 )
 
 // Verify performs single or batch verification of commitments depending on the number of given BlobSidecars.
-func Verify(sidecars ...blocks.ROBlob) error {
-	if len(sidecars) == 0 {
+func Verify(blobSidecars ...blocks.ROBlob) error {
+	if len(blobSidecars) == 0 {
 		return nil
 	}
-	if len(sidecars) == 1 {
+	if len(blobSidecars) == 1 {
 		return kzgContext.VerifyBlobKZGProof(
-			bytesToBlob(sidecars[0].Blob),
-			bytesToCommitment(sidecars[0].KzgCommitment),
-			bytesToKZGProof(sidecars[0].KzgProof))
+			bytesToBlob(blobSidecars[0].Blob),
+			bytesToCommitment(blobSidecars[0].KzgCommitment),
+			bytesToKZGProof(blobSidecars[0].KzgProof))
 	}
-	blobs := make([]GoKZG.Blob, len(sidecars))
-	cmts := make([]GoKZG.KZGCommitment, len(sidecars))
-	proofs := make([]GoKZG.KZGProof, len(sidecars))
-	for i, sidecar := range sidecars {
+	blobs := make([]GoKZG.Blob, len(blobSidecars))
+	cmts := make([]GoKZG.KZGCommitment, len(blobSidecars))
+	proofs := make([]GoKZG.KZGProof, len(blobSidecars))
+	for i, sidecar := range blobSidecars {
 		blobs[i] = *bytesToBlob(sidecar.Blob)
 		cmts[i] = bytesToCommitment(sidecar.KzgCommitment)
 		proofs[i] = bytesToKZGProof(sidecar.KzgProof)

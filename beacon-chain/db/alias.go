@@ -10,6 +10,11 @@ type ReadOnlyDatabase = iface.ReadOnlyDatabase
 // about head info. For head info, use github.com/prysmaticlabs/prysm/blockchain.HeadFetcher.
 type NoHeadAccessDatabase = iface.NoHeadAccessDatabase
 
+// ReadOnlyDatabaseWithSeqNum exposes Prysm's Ethereum data backend for read access only, no information about
+// head info, but with read/write access to the p2p metadata sequence number.
+// This is used for the p2p service.
+type ReadOnlyDatabaseWithSeqNum = iface.ReadOnlyDatabaseWithSeqNum
+
 // HeadAccessDatabase exposes Prysm's Ethereum backend for read/write access with information about
 // chain head information. This interface should be used sparingly as the HeadFetcher is the source
 // of truth around chain head information while this interface serves as persistent storage for the

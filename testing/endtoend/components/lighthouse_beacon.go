@@ -276,7 +276,7 @@ func (node *LighthouseBeaconNode) createTestnetDir(ctx context.Context, index in
 
 func (node *LighthouseBeaconNode) saveGenesis(ctx context.Context, testNetDir string) error {
 	// The deposit contract starts with an empty trie, we use the BeaconState to "pre-mine" the validator registry,
-	g, err := generateGenesis(ctx)
+	g, err := GenerateGenesis(ctx)
 	if err != nil {
 		return err
 	}

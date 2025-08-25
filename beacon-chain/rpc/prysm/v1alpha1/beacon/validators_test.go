@@ -1,7 +1,6 @@
 package beacon
 
 import (
-	"context"
 	"encoding/binary"
 	"fmt"
 	"sort"
@@ -49,7 +48,7 @@ const (
 
 func TestServer_GetValidatorActiveSetChanges_CannotRequestFutureEpoch(t *testing.T) {
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	st, err := util.NewBeaconState()
 	require.NoError(t, err)
 	require.NoError(t, st.SetSlot(0))
@@ -77,7 +76,7 @@ func TestServer_GetValidatorActiveSetChanges_CannotRequestFutureEpoch(t *testing
 
 func TestServer_ListValidatorBalances_CannotRequestFutureEpoch(t *testing.T) {
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	st, err := util.NewBeaconState()
 	require.NoError(t, err)
@@ -105,7 +104,7 @@ func TestServer_ListValidatorBalances_CannotRequestFutureEpoch(t *testing.T) {
 func TestServer_ListValidatorBalances_NoResults(t *testing.T) {
 	beaconDB := dbTest.SetupDB(t)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	st, err := util.NewBeaconState()
 	require.NoError(t, err)
 	require.NoError(t, st.SetSlot(0))
@@ -146,7 +145,7 @@ func TestServer_ListValidatorBalances_NoResults(t *testing.T) {
 
 func TestServer_ListValidatorBalances_DefaultResponse_NoArchive(t *testing.T) {
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	numItems := 100
 	validators := make([]*ethpb.Validator, numItems)
@@ -196,7 +195,7 @@ func TestServer_ListValidatorBalances_DefaultResponse_NoArchive(t *testing.T) {
 
 func TestServer_ListValidatorBalances_PaginationOutOfRange(t *testing.T) {
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	_, _, headState := setupValidators(t, beaconDB, 100)
 	b := util.NewBeaconBlock()
@@ -215,7 +214,7 @@ func TestServer_ListValidatorBalances_PaginationOutOfRange(t *testing.T) {
 	}
 
 	wanted := fmt.Sprintf("page start %d >= list %d", 200, len(headState.Balances()))
-	_, err = bs.ListValidatorBalances(context.Background(), &ethpb.ListValidatorBalancesRequest{
+	_, err = bs.ListValidatorBalances(t.Context(), &ethpb.ListValidatorBalancesRequest{
 		PageToken:   strconv.Itoa(2),
 		PageSize:    100,
 		QueryFilter: &ethpb.ListValidatorBalancesRequest_Epoch{Epoch: 0},
@@ -233,7 +232,7 @@ func TestServer_ListValidatorBalances_ExceedsMaxPageSize(t *testing.T) {
 		cmd.Get().MaxRPCPageSize,
 	)
 	req := &ethpb.ListValidatorBalancesRequest{PageSize: exceedsMax}
-	_, err := bs.ListValidatorBalances(context.Background(), req)
+	_, err := bs.ListValidatorBalances(t.Context(), req)
 	assert.ErrorContains(t, wanted, err)
 }
 
@@ -245,7 +244,7 @@ func pubKey(i uint64) []byte {
 
 func TestServer_ListValidatorBalances_Pagination_Default(t *testing.T) {
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	_, _, headState := setupValidators(t, beaconDB, 100)
 	b := util.NewBeaconBlock()
@@ -318,7 +317,7 @@ func TestServer_ListValidatorBalances_Pagination_Default(t *testing.T) {
 			}},
 	}
 	for _, test := range tests {
-		res, err := bs.ListValidatorBalances(context.Background(), test.req)
+		res, err := bs.ListValidatorBalances(t.Context(), test.req)
 		require.NoError(t, err)
 		if !proto.Equal(res, test.res) {
 			t.Errorf("Expected %v, received %v", test.res, res)
@@ -328,7 +327,7 @@ func TestServer_ListValidatorBalances_Pagination_Default(t *testing.T) {
 
 func TestServer_ListValidatorBalances_Pagination_CustomPageSizes(t *testing.T) {
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	count := 1000
 	_, _, headState := setupValidators(t, beaconDB, count)
@@ -387,7 +386,7 @@ func TestServer_ListValidatorBalances_Pagination_CustomPageSizes(t *testing.T) {
 				TotalSize:     int32(count)}},
 	}
 	for _, test := range tests {
-		res, err := bs.ListValidatorBalances(context.Background(), test.req)
+		res, err := bs.ListValidatorBalances(t.Context(), test.req)
 		require.NoError(t, err)
 		if !proto.Equal(res, test.res) {
 			t.Errorf("Expected %v, received %v", test.res, res)
@@ -398,7 +397,7 @@ func TestServer_ListValidatorBalances_Pagination_CustomPageSizes(t *testing.T) {
 func TestServer_ListValidatorBalances_OutOfRange(t *testing.T) {
 	beaconDB := dbTest.SetupDB(t)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	_, _, headState := setupValidators(t, beaconDB, 1)
 	b := util.NewBeaconBlock()
 	gRoot, err := b.Block.HashTreeRoot()
@@ -417,13 +416,13 @@ func TestServer_ListValidatorBalances_OutOfRange(t *testing.T) {
 
 	req := &ethpb.ListValidatorBalancesRequest{Indices: []primitives.ValidatorIndex{primitives.ValidatorIndex(1)}, QueryFilter: &ethpb.ListValidatorBalancesRequest_Epoch{Epoch: 0}}
 	wanted := "Validator index 1 >= balance list 1"
-	_, err = bs.ListValidatorBalances(context.Background(), req)
+	_, err = bs.ListValidatorBalances(t.Context(), req)
 	assert.ErrorContains(t, wanted, err)
 }
 
 func TestServer_ListValidators_CannotRequestFutureEpoch(t *testing.T) {
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	st, err := util.NewBeaconState()
 	require.NoError(t, err)
@@ -472,7 +471,7 @@ func TestServer_ListValidators_reqStateIsNil(t *testing.T) {
 	// request uses HeadFetcher to get reqState.
 	req1 := &ethpb.ListValidatorsRequest{PageToken: strconv.Itoa(1), PageSize: 100}
 	wanted := "Requested state is nil"
-	_, err := bs.ListValidators(context.Background(), req1)
+	_, err := bs.ListValidators(t.Context(), req1)
 	assert.ErrorContains(t, wanted, err)
 
 	// request uses StateGen to get reqState.
@@ -481,14 +480,14 @@ func TestServer_ListValidators_reqStateIsNil(t *testing.T) {
 		PageToken:   strconv.Itoa(1),
 		PageSize:    100,
 	}
-	_, err = bs.ListValidators(context.Background(), req2)
+	_, err = bs.ListValidators(t.Context(), req2)
 	assert.ErrorContains(t, wanted, err)
 }
 
 func TestServer_ListValidators_NoResults(t *testing.T) {
 	beaconDB := dbTest.SetupDB(t)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	st, err := util.NewBeaconState()
 	require.NoError(t, err)
 	require.NoError(t, st.SetSlot(0))
@@ -526,7 +525,7 @@ func TestServer_ListValidators_NoResults(t *testing.T) {
 }
 
 func TestServer_ListValidators_OnlyActiveValidators(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := dbTest.SetupDB(t)
 	count := 100
 	balances := make([]uint64, count)
@@ -589,7 +588,7 @@ func TestServer_ListValidators_OnlyActiveValidators(t *testing.T) {
 }
 
 func TestServer_ListValidators_InactiveInTheMiddle(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := dbTest.SetupDB(t)
 	count := 100
 	balances := make([]uint64, count)
@@ -660,7 +659,7 @@ func TestServer_ListValidators_InactiveInTheMiddle(t *testing.T) {
 
 func TestServer_ListValidatorBalances_UnknownValidatorInResponse(t *testing.T) {
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	_, _, headState := setupValidators(t, beaconDB, 4)
 	b := util.NewBeaconBlock()
@@ -697,7 +696,7 @@ func TestServer_ListValidatorBalances_UnknownValidatorInResponse(t *testing.T) {
 		NextPageToken: "",
 		TotalSize:     3,
 	}
-	res, err := bs.ListValidatorBalances(context.Background(), req)
+	res, err := bs.ListValidatorBalances(t.Context(), req)
 	require.NoError(t, err)
 	if !proto.Equal(res, wanted) {
 		t.Errorf("Expected %v, received %v", wanted, res)
@@ -732,7 +731,7 @@ func TestServer_ListValidators_NoPagination(t *testing.T) {
 		StateGen: stategen.New(beaconDB, doublylinkedtree.New()),
 	}
 
-	received, err := bs.ListValidators(context.Background(), &ethpb.ListValidatorsRequest{})
+	received, err := bs.ListValidators(t.Context(), &ethpb.ListValidatorsRequest{})
 	require.NoError(t, err)
 	assert.DeepSSZEqual(t, want, received.ValidatorList, "Incorrect respond of validators")
 }
@@ -759,7 +758,7 @@ func TestServer_ListValidators_StategenNotUsed(t *testing.T) {
 		},
 	}
 
-	received, err := bs.ListValidators(context.Background(), &ethpb.ListValidatorsRequest{})
+	received, err := bs.ListValidators(t.Context(), &ethpb.ListValidatorsRequest{})
 	require.NoError(t, err)
 	assert.DeepEqual(t, want, received.ValidatorList, "Incorrect respond of validators")
 }
@@ -806,7 +805,7 @@ func TestServer_ListValidators_IndicesPubKeys(t *testing.T) {
 		Indices:    indicesWanted,
 		PublicKeys: pubKeysWanted,
 	}
-	received, err := bs.ListValidators(context.Background(), req)
+	received, err := bs.ListValidators(t.Context(), req)
 	require.NoError(t, err)
 	assert.DeepEqual(t, want, received.ValidatorList, "Incorrect respond of validators")
 }
@@ -941,7 +940,7 @@ func TestServer_ListValidators_Pagination(t *testing.T) {
 				TotalSize:     int32(count)}},
 	}
 	for _, test := range tests {
-		res, err := bs.ListValidators(context.Background(), test.req)
+		res, err := bs.ListValidators(t.Context(), test.req)
 		require.NoError(t, err)
 		if !proto.Equal(res, test.res) {
 			t.Errorf("Incorrect validator response, wanted %v, received %v", test.res, res)
@@ -973,7 +972,7 @@ func TestServer_ListValidators_PaginationOutOfRange(t *testing.T) {
 
 	req := &ethpb.ListValidatorsRequest{PageToken: strconv.Itoa(1), PageSize: 100}
 	wanted := fmt.Sprintf("page start %d >= list %d", req.PageSize, len(validators))
-	_, err := bs.ListValidators(context.Background(), req)
+	_, err := bs.ListValidators(t.Context(), req)
 	assert.ErrorContains(t, wanted, err)
 }
 
@@ -983,7 +982,7 @@ func TestServer_ListValidators_ExceedsMaxPageSize(t *testing.T) {
 
 	wanted := fmt.Sprintf("Requested page size %d can not be greater than max size %d", exceedsMax, cmd.Get().MaxRPCPageSize)
 	req := &ethpb.ListValidatorsRequest{PageToken: strconv.Itoa(0), PageSize: exceedsMax}
-	_, err := bs.ListValidators(context.Background(), req)
+	_, err := bs.ListValidators(t.Context(), req)
 	assert.ErrorContains(t, wanted, err)
 }
 
@@ -1016,7 +1015,7 @@ func TestServer_ListValidators_DefaultPageSize(t *testing.T) {
 	}
 
 	req := &ethpb.ListValidatorsRequest{}
-	res, err := bs.ListValidators(context.Background(), req)
+	res, err := bs.ListValidators(t.Context(), req)
 	require.NoError(t, err)
 
 	i := 0
@@ -1029,7 +1028,7 @@ func TestServer_ListValidators_FromOldEpoch(t *testing.T) {
 	params.OverrideBeaconConfig(params.BeaconConfig())
 	transition.SkipSlotCache.Disable()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	slot := primitives.Slot(0)
 	epochs := primitives.Epoch(10)
 	numVals := uint64(10)
@@ -1065,7 +1064,7 @@ func TestServer_ListValidators_FromOldEpoch(t *testing.T) {
 			Genesis: true,
 		},
 	}
-	res, err := bs.ListValidators(context.Background(), req)
+	res, err := bs.ListValidators(t.Context(), req)
 	require.NoError(t, err)
 	assert.Equal(t, int(numVals), len(res.ValidatorList))
 
@@ -1082,7 +1081,7 @@ func TestServer_ListValidators_FromOldEpoch(t *testing.T) {
 			Epoch: epochs,
 		},
 	}
-	res, err = bs.ListValidators(context.Background(), req)
+	res, err = bs.ListValidators(t.Context(), req)
 	require.NoError(t, err)
 
 	require.Equal(t, len(want), len(res.ValidatorList), "incorrect number of validators")
@@ -1094,7 +1093,7 @@ func TestServer_ListValidators_ProcessHeadStateSlots(t *testing.T) {
 	params.OverrideBeaconConfig(params.MinimalSpecConfig())
 
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	headSlot := primitives.Slot(32)
 	numValidators := params.BeaconConfig().MinGenesisActiveValidatorCount
@@ -1144,7 +1143,7 @@ func TestServer_ListValidators_ProcessHeadStateSlots(t *testing.T) {
 			Epoch: 1,
 		},
 	}
-	res, err := bs.ListValidators(context.Background(), req)
+	res, err := bs.ListValidators(t.Context(), req)
 	require.NoError(t, err)
 	assert.Equal(t, len(want), len(res.ValidatorList), "Incorrect number of validators")
 	for i := 0; i < len(res.ValidatorList); i++ {
@@ -1223,7 +1222,7 @@ func TestServer_GetValidator(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		res, err := bs.GetValidator(context.Background(), test.req)
+		res, err := bs.GetValidator(t.Context(), test.req)
 		if test.wantedErr != "" {
 			require.ErrorContains(t, test.wantedErr, err)
 		} else {
@@ -1236,7 +1235,7 @@ func TestServer_GetValidator(t *testing.T) {
 func TestServer_GetValidatorActiveSetChanges(t *testing.T) {
 	beaconDB := dbTest.SetupDB(t)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	validators := make([]*ethpb.Validator, 8)
 	headState, err := util.NewBeaconState()
 	require.NoError(t, err)
@@ -1364,7 +1363,7 @@ func TestServer_GetValidatorQueue_PendingActivation(t *testing.T) {
 			State: headState,
 		},
 	}
-	res, err := bs.GetValidatorQueue(context.Background(), &emptypb.Empty{})
+	res, err := bs.GetValidatorQueue(t.Context(), &emptypb.Empty{})
 	require.NoError(t, err)
 	// We verify the keys are properly sorted by the validators' activation eligibility epoch.
 	wanted := [][]byte{
@@ -1372,7 +1371,7 @@ func TestServer_GetValidatorQueue_PendingActivation(t *testing.T) {
 		pubKey(2),
 		pubKey(3),
 	}
-	activeValidatorCount, err := helpers.ActiveValidatorCount(context.Background(), headState, coreTime.CurrentEpoch(headState))
+	activeValidatorCount, err := helpers.ActiveValidatorCount(t.Context(), headState, coreTime.CurrentEpoch(headState))
 	require.NoError(t, err)
 	wantChurn := helpers.ValidatorActivationChurnLimit(activeValidatorCount)
 	assert.Equal(t, wantChurn, res.ChurnLimit)
@@ -1408,12 +1407,12 @@ func TestServer_GetValidatorQueue_ExitedValidatorLeavesQueue(t *testing.T) {
 	}
 
 	// First we check if validator with index 1 is in the exit queue.
-	res, err := bs.GetValidatorQueue(context.Background(), &emptypb.Empty{})
+	res, err := bs.GetValidatorQueue(t.Context(), &emptypb.Empty{})
 	require.NoError(t, err)
 	wanted := [][]byte{
 		bytesutil.PadTo([]byte("2"), 48),
 	}
-	activeValidatorCount, err := helpers.ActiveValidatorCount(context.Background(), headState, coreTime.CurrentEpoch(headState))
+	activeValidatorCount, err := helpers.ActiveValidatorCount(t.Context(), headState, coreTime.CurrentEpoch(headState))
 	require.NoError(t, err)
 	wantChurn := helpers.ValidatorExitChurnLimit(activeValidatorCount)
 	assert.Equal(t, wantChurn, res.ChurnLimit)
@@ -1424,7 +1423,7 @@ func TestServer_GetValidatorQueue_ExitedValidatorLeavesQueue(t *testing.T) {
 	// Now, we move the state.slot past the exit epoch of the validator, and now
 	// the validator should no longer exist in the queue.
 	require.NoError(t, headState.SetSlot(params.BeaconConfig().SlotsPerEpoch.Mul(uint64(validators[1].ExitEpoch+1))))
-	res, err = bs.GetValidatorQueue(context.Background(), &emptypb.Empty{})
+	res, err = bs.GetValidatorQueue(t.Context(), &emptypb.Empty{})
 	require.NoError(t, err)
 	assert.Equal(t, 0, len(res.ExitPublicKeys))
 }
@@ -1464,7 +1463,7 @@ func TestServer_GetValidatorQueue_PendingExit(t *testing.T) {
 			State: headState,
 		},
 	}
-	res, err := bs.GetValidatorQueue(context.Background(), &emptypb.Empty{})
+	res, err := bs.GetValidatorQueue(t.Context(), &emptypb.Empty{})
 	require.NoError(t, err)
 	// We verify the keys are properly sorted by the validators' withdrawable epoch.
 	wanted := [][]byte{
@@ -1472,7 +1471,7 @@ func TestServer_GetValidatorQueue_PendingExit(t *testing.T) {
 		pubKey(2),
 		pubKey(3),
 	}
-	activeValidatorCount, err := helpers.ActiveValidatorCount(context.Background(), headState, coreTime.CurrentEpoch(headState))
+	activeValidatorCount, err := helpers.ActiveValidatorCount(t.Context(), headState, coreTime.CurrentEpoch(headState))
 	require.NoError(t, err)
 	wantChurn := helpers.ValidatorExitChurnLimit(activeValidatorCount)
 	assert.Equal(t, wantChurn, res.ChurnLimit)
@@ -1480,7 +1479,7 @@ func TestServer_GetValidatorQueue_PendingExit(t *testing.T) {
 }
 
 func TestServer_GetValidatorParticipation_CannotRequestFutureEpoch(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	headState, err := util.NewBeaconState()
 	require.NoError(t, err)
 	require.NoError(t, headState.SetSlot(0))
@@ -1509,7 +1508,7 @@ func TestServer_GetValidatorParticipation_CurrentAndPrevEpoch(t *testing.T) {
 	helpers.ClearCache()
 	beaconDB := dbTest.SetupDB(t)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	validatorCount := uint64(32)
 
 	validators := make([]*ethpb.Validator, validatorCount)
@@ -1593,7 +1592,7 @@ func TestServer_GetValidatorParticipation_OrphanedUntilGenesis(t *testing.T) {
 	params.OverrideBeaconConfig(params.BeaconConfig())
 
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	validatorCount := uint64(100)
 
 	validators := make([]*ethpb.Validator, validatorCount)
@@ -1676,7 +1675,7 @@ func TestServer_GetValidatorParticipation_CurrentAndPrevEpochWithBits(t *testing
 	t.Run("altair", func(t *testing.T) {
 		validatorCount := uint64(32)
 		genState, _ := util.DeterministicGenesisStateAltair(t, validatorCount)
-		c, err := altair.NextSyncCommittee(context.Background(), genState)
+		c, err := altair.NextSyncCommittee(t.Context(), genState)
 		require.NoError(t, err)
 		require.NoError(t, genState.SetCurrentSyncCommittee(c))
 
@@ -1694,7 +1693,7 @@ func TestServer_GetValidatorParticipation_CurrentAndPrevEpochWithBits(t *testing
 	t.Run("bellatrix", func(t *testing.T) {
 		validatorCount := uint64(32)
 		genState, _ := util.DeterministicGenesisStateBellatrix(t, validatorCount)
-		c, err := altair.NextSyncCommittee(context.Background(), genState)
+		c, err := altair.NextSyncCommittee(t.Context(), genState)
 		require.NoError(t, err)
 		require.NoError(t, genState.SetCurrentSyncCommittee(c))
 
@@ -1712,7 +1711,7 @@ func TestServer_GetValidatorParticipation_CurrentAndPrevEpochWithBits(t *testing
 	t.Run("capella", func(t *testing.T) {
 		validatorCount := uint64(32)
 		genState, _ := util.DeterministicGenesisStateCapella(t, validatorCount)
-		c, err := altair.NextSyncCommittee(context.Background(), genState)
+		c, err := altair.NextSyncCommittee(t.Context(), genState)
 		require.NoError(t, err)
 		require.NoError(t, genState.SetCurrentSyncCommittee(c))
 
@@ -1732,7 +1731,7 @@ func runGetValidatorParticipationCurrentAndPrevEpoch(t *testing.T, genState stat
 	helpers.ClearCache()
 	beaconDB := dbTest.SetupDB(t)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	validatorCount := uint64(32)
 
 	gsr, err := genState.HashTreeRoot(ctx)
@@ -1800,7 +1799,7 @@ func runGetValidatorParticipationCurrentAndPrevEpoch(t *testing.T, genState stat
 }
 
 func TestGetValidatorPerformance_Syncing(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	bs := &Server{
 		CoreService: &core.Service{
@@ -1818,7 +1817,7 @@ func TestGetValidatorPerformance_OK(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.MinimalSpecConfig())
 
-	ctx := context.Background()
+	ctx := t.Context()
 	epoch := primitives.Epoch(1)
 	headState, err := util.NewBeaconState()
 	require.NoError(t, err)
@@ -1894,7 +1893,7 @@ func TestGetValidatorPerformance_OK(t *testing.T) {
 }
 
 func TestGetValidatorPerformance_Indices(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	epoch := primitives.Epoch(1)
 	defaultBal := params.BeaconConfig().MaxEffectiveBalance
 	extraBal := params.BeaconConfig().MaxEffectiveBalance + params.BeaconConfig().GweiPerEth
@@ -1965,7 +1964,7 @@ func TestGetValidatorPerformance_Indices(t *testing.T) {
 }
 
 func TestGetValidatorPerformance_IndicesPubkeys(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	epoch := primitives.Epoch(1)
 	defaultBal := params.BeaconConfig().MaxEffectiveBalance
 	extraBal := params.BeaconConfig().MaxEffectiveBalance + params.BeaconConfig().GweiPerEth
@@ -2042,7 +2041,7 @@ func TestGetValidatorPerformanceAltair_OK(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.MinimalSpecConfig())
 
-	ctx := context.Background()
+	ctx := t.Context()
 	epoch := primitives.Epoch(1)
 	headState, _ := util.DeterministicGenesisStateAltair(t, 32)
 	require.NoError(t, headState.SetSlot(params.BeaconConfig().SlotsPerEpoch.Mul(uint64(epoch+1))))
@@ -2112,7 +2111,7 @@ func TestGetValidatorPerformanceBellatrix_OK(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.MinimalSpecConfig())
 
-	ctx := context.Background()
+	ctx := t.Context()
 	epoch := primitives.Epoch(1)
 	headState, _ := util.DeterministicGenesisStateBellatrix(t, 32)
 	require.NoError(t, headState.SetSlot(params.BeaconConfig().SlotsPerEpoch.Mul(uint64(epoch+1))))
@@ -2182,7 +2181,7 @@ func TestGetValidatorPerformanceCapella_OK(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.MinimalSpecConfig())
 
-	ctx := context.Background()
+	ctx := t.Context()
 	epoch := primitives.Epoch(1)
 	headState, _ := util.DeterministicGenesisStateCapella(t, 32)
 	require.NoError(t, headState.SetSlot(params.BeaconConfig().SlotsPerEpoch.Mul(uint64(epoch+1))))
@@ -2276,7 +2275,7 @@ func TestServer_GetIndividualVotes_RequestFutureSlot(t *testing.T) {
 		Epoch: slots.ToEpoch(bs.CoreService.GenesisTimeFetcher.CurrentSlot()) + 1,
 	}
 	wanted := errNoEpochInfoError
-	_, err := bs.GetIndividualVotes(context.Background(), req)
+	_, err := bs.GetIndividualVotes(t.Context(), req)
 	assert.ErrorContains(t, wanted, err)
 }
 
@@ -2285,7 +2284,7 @@ func TestServer_GetIndividualVotes_ValidatorsDontExist(t *testing.T) {
 	params.OverrideBeaconConfig(params.MinimalSpecConfig())
 
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	var slot primitives.Slot = 0
 	validators := uint64(64)
@@ -2362,7 +2361,7 @@ func TestServer_GetIndividualVotes_Working(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.MinimalSpecConfig())
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	validators := uint64(32)
 	stateWithValidators, _ := util.DeterministicGenesisState(t, validators)
@@ -2443,7 +2442,7 @@ func TestServer_GetIndividualVotes_Working(t *testing.T) {
 func TestServer_GetIndividualVotes_WorkingAltair(t *testing.T) {
 	helpers.ClearCache()
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	var slot primitives.Slot = 0
 	validators := uint64(32)
@@ -2516,7 +2515,7 @@ func TestServer_GetIndividualVotes_AltairEndOfEpoch(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.BeaconConfig())
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	validators := uint64(32)
 	beaconState, _ := util.DeterministicGenesisStateAltair(t, validators)
@@ -2606,7 +2605,7 @@ func TestServer_GetIndividualVotes_BellatrixEndOfEpoch(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.BeaconConfig())
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	validators := uint64(32)
 	beaconState, _ := util.DeterministicGenesisStateBellatrix(t, validators)
@@ -2696,7 +2695,7 @@ func TestServer_GetIndividualVotes_CapellaEndOfEpoch(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.BeaconConfig())
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	validators := uint64(32)
 	beaconState, _ := util.DeterministicGenesisStateCapella(t, validators)

@@ -46,7 +46,7 @@ func (s *Server) getBeaconStateV2(ctx context.Context, w http.ResponseWriter, id
 
 	isOptimistic, err := helpers.IsOptimistic(ctx, id, s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
-		httputil.HandleError(w, "Could not check if state is optimistic: "+err.Error(), http.StatusInternalServerError)
+		helpers.HandleIsOptimisticError(w, err)
 		return
 	}
 	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
@@ -189,7 +189,7 @@ func (s *Server) GetForkChoice(w http.ResponseWriter, r *http.Request) {
 				UnrealizedFinalizedEpoch: fmt.Sprintf("%d", n.UnrealizedFinalizedEpoch),
 				Balance:                  fmt.Sprintf("%d", n.Balance),
 				ExecutionOptimistic:      n.ExecutionOptimistic,
-				TimeStamp:                fmt.Sprintf("%d", n.Timestamp),
+				TimeStamp:                n.Timestamp.String(),
 				Target:                   fmt.Sprintf("%#x", n.Target),
 			},
 		}

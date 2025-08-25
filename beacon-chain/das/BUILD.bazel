@@ -3,8 +3,9 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
-        "availability.go",
-        "cache.go",
+        "availability_blobs.go",
+        "blob_cache.go",
+        "data_column_cache.go",
         "iface.go",
         "mock.go",
     ],
@@ -13,6 +14,7 @@ go_library(
     deps = [
         "//beacon-chain/db/filesystem:go_default_library",
         "//beacon-chain/verification:go_default_library",
+        "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/primitives:go_default_library",
@@ -27,13 +29,15 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
-        "availability_test.go",
-        "cache_test.go",
+        "availability_blobs_test.go",
+        "blob_cache_test.go",
+        "data_column_cache_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
         "//beacon-chain/db/filesystem:go_default_library",
         "//beacon-chain/verification:go_default_library",
+        "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/primitives:go_default_library",

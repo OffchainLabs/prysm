@@ -54,7 +54,7 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	defer span.End()
 	span.SetAttributes(trace.Int64Attribute("slot", int64(req.Slot)))
 
-	t, err := slots.ToTime(uint64(vs.TimeFetcher.GenesisTime().Unix()), req.Slot)
+	t, err := slots.StartTime(vs.TimeFetcher.GenesisTime(), req.Slot)
 	if err != nil {
 		log.WithError(err).Error("Could not convert slot to time")
 	}
@@ -136,7 +136,7 @@ func logFailedReorgAttempt(slot primitives.Slot, oldHeadRoot, headRoot [32]byte)
 		"slot":        slot,
 		"oldHeadRoot": fmt.Sprintf("%#x", oldHeadRoot),
 		"headRoot":    fmt.Sprintf("%#x", headRoot),
-	}).Warn("late block attempted reorg failed")
+	}).Warn("Late block attempted reorg failed")
 }
 
 func (vs *Server) getHeadNoReorg(ctx context.Context, slot primitives.Slot, parentRoot [32]byte) (state.BeaconState, error) {
@@ -232,7 +232,7 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 	}()
 
 	winningBid := primitives.ZeroWei()
-	var bundle *enginev1.BlobsBundle
+	var bundle enginev1.BlobsBundler
 	if sBlk.Version() >= version.Bellatrix {
 		local, err := vs.getLocalPayload(ctx, sBlk.Block(), head)
 		if err != nil {
@@ -286,6 +286,19 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%s: %v", "decode block failed", err)
 	}
+	root, err := block.Block().HashTreeRoot()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not hash tree root: %v", err)
+	}
+
+	// For post-Fulu blinded blocks, submit to relay and return early
+	if block.IsBlinded() && slots.ToEpoch(block.Block().Slot()) >= params.BeaconConfig().FuluForkEpoch {
+		err := vs.BlockBuilder.SubmitBlindedBlockPostFulu(ctx, block)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not submit blinded block post-Fulu: %v", err)
+		}
+		return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
+	}
 
 	var sidecars []*ethpb.BlobSidecar
 	if block.IsBlinded() {
@@ -295,11 +308,6 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	}
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "%s: %v", "handle block failed", err)
-	}
-
-	root, err := block.Block().HashTreeRoot()
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not hash tree root: %v", err)
 	}
 
 	var wg sync.WaitGroup
@@ -327,7 +335,8 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
 }
 
-// handleBlindedBlock processes blinded beacon blocks.
+// handleBlindedBlock processes blinded beacon blocks (pre-Fulu only).
+// Post-Fulu blinded blocks are handled directly in ProposeBeaconBlock.
 func (vs *Server) handleBlindedBlock(ctx context.Context, block interfaces.SignedBeaconBlock) (interfaces.SignedBeaconBlock, []*ethpb.BlobSidecar, error) {
 	if block.Version() < version.Bellatrix {
 		return nil, nil, errors.New("pre-Bellatrix blinded block")
@@ -430,7 +439,7 @@ func (vs *Server) PrepareBeaconProposer(
 		if feeRecipient == primitives.ExecutionAddress([20]byte{}) {
 			feeRecipient = primitives.ExecutionAddress(params.BeaconConfig().DefaultFeeRecipient)
 			if feeRecipient == primitives.ExecutionAddress([20]byte{}) {
-				log.WithField("validatorIndex", r.ValidatorIndex).Warn("fee recipient is the burn address")
+				log.WithField("validatorIndex", r.ValidatorIndex).Warn("Fee recipient is the burn address")
 			}
 		}
 		val := cache.TrackedValidator{

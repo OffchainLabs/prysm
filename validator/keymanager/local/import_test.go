@@ -1,7 +1,6 @@
 package local
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"testing"
@@ -54,7 +53,7 @@ func TestLocalKeymanager_NoDuplicates(t *testing.T) {
 	dr := &Keymanager{
 		wallet: wallet,
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	_, err := dr.CreateAccountsKeystore(ctx, privKeys, pubKeys)
 	require.NoError(t, err)
 
@@ -97,7 +96,7 @@ func TestLocalKeymanager_NoDuplicates(t *testing.T) {
 
 func TestLocalKeymanager_ImportKeystores(t *testing.T) {
 	hook := logTest.NewGlobal()
-	ctx := context.Background()
+	ctx := t.Context()
 	// Setup the keymanager.
 	wallet := &mock.Wallet{
 		Files:          make(map[string]map[string][]byte),
@@ -244,7 +243,7 @@ func TestLocalKeymanager_ImportKeystores(t *testing.T) {
 			fmt.Sprintf("incorrect password for key 0x%s", keystores[1].Pubkey),
 			statuses[1].Message,
 		)
-		require.LogsContain(t, hook, "no keys were imported")
+		require.LogsContain(t, hook, "No keys were imported")
 	})
 	t.Run("file write fails during import", func(t *testing.T) {
 		wallet.HasWriteFileError = true

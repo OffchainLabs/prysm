@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -14,7 +15,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
 	"github.com/prysmaticlabs/go-bitfield"
@@ -32,7 +32,7 @@ func TestSubmitAggregateAndProof_GetDutiesRequestFailure(t *testing.T) {
 
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.SubmitAggregateAndProof(context.Background(), 0, pubKey)
+			validator.SubmitAggregateAndProof(t.Context(), 0, pubKey)
 
 			require.LogsContain(t, hook, "Could not fetch validator assignment")
 		})
@@ -79,7 +79,7 @@ func TestSubmitAggregateAndProof_SignFails(t *testing.T) {
 				gomock.Any(), // epoch
 			).Return(&ethpb.DomainResponse{SignatureDomain: nil}, errors.New("bad domain root"))
 
-			validator.SubmitAggregateAndProof(context.Background(), 0, pubKey)
+			validator.SubmitAggregateAndProof(t.Context(), 0, pubKey)
 		})
 	}
 }
@@ -129,7 +129,7 @@ func TestSubmitAggregateAndProof_Ok(t *testing.T) {
 				gomock.AssignableToTypeOf(&ethpb.SignedAggregateSubmitRequest{}),
 			).Return(&ethpb.SignedAggregateSubmitResponse{AttestationDataRoot: make([]byte, 32)}, nil)
 
-			validator.SubmitAggregateAndProof(context.Background(), 0, pubKey)
+			validator.SubmitAggregateAndProof(t.Context(), 0, pubKey)
 		})
 	}
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
@@ -182,7 +182,7 @@ func TestSubmitAggregateAndProof_Ok(t *testing.T) {
 				gomock.AssignableToTypeOf(&ethpb.SignedAggregateSubmitElectraRequest{}),
 			).Return(&ethpb.SignedAggregateSubmitResponse{AttestationDataRoot: make([]byte, 32)}, nil)
 
-			validator.SubmitAggregateAndProof(context.Background(), params.BeaconConfig().SlotsPerEpoch.Mul(electraForkEpoch), pubKey)
+			validator.SubmitAggregateAndProof(t.Context(), params.BeaconConfig().SlotsPerEpoch.Mul(electraForkEpoch), pubKey)
 		})
 	}
 }
@@ -190,7 +190,7 @@ func TestSubmitAggregateAndProof_Ok(t *testing.T) {
 func TestSubmitAggregateAndProof_Distributed(t *testing.T) {
 	validatorIdx := primitives.ValidatorIndex(123)
 	slot := primitives.Slot(456)
-	ctx := context.Background()
+	ctx := t.Context()
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
 			validator, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
@@ -256,12 +256,12 @@ func TestWaitForSlotTwoThird_WaitCorrectly(t *testing.T) {
 			defer finish()
 			currentTime := time.Now()
 			numOfSlots := primitives.Slot(4)
-			validator.genesisTime = uint64(currentTime.Unix()) - uint64(numOfSlots.Mul(params.BeaconConfig().SecondsPerSlot))
+			validator.genesisTime = currentTime.Add(-1 * time.Duration(numOfSlots.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second)
 			oneThird := slots.DivideSlotBy(3 /* one third of slot duration */)
 			timeToSleep := oneThird + oneThird
 
 			twoThirdTime := currentTime.Add(timeToSleep)
-			validator.waitToSlotTwoThirds(context.Background(), numOfSlots)
+			validator.waitToSlotTwoThirds(t.Context(), numOfSlots)
 			currentTime = time.Now()
 			assert.Equal(t, twoThirdTime.Unix(), currentTime.Unix())
 		})
@@ -275,10 +275,10 @@ func TestWaitForSlotTwoThird_DoneContext_ReturnsImmediately(t *testing.T) {
 			defer finish()
 			currentTime := time.Now()
 			numOfSlots := primitives.Slot(4)
-			validator.genesisTime = uint64(currentTime.Unix()) - uint64(numOfSlots.Mul(params.BeaconConfig().SecondsPerSlot))
+			validator.genesisTime = currentTime.Add(-1 * time.Duration(numOfSlots.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second)
 
 			expectedTime := time.Now()
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(t.Context())
 			cancel()
 			validator.waitToSlotTwoThirds(ctx, numOfSlots)
 			currentTime = time.Now()
@@ -307,7 +307,7 @@ func TestAggregateAndProofSignature_CanSignValidSignature(t *testing.T) {
 				}),
 				SelectionProof: make([]byte, 96),
 			}
-			sig, err := validator.aggregateAndProofSig(context.Background(), pubKey, agg, 0 /* slot */)
+			sig, err := validator.aggregateAndProofSig(t.Context(), pubKey, agg, 0 /* slot */)
 			require.NoError(t, err)
 			_, err = bls.SignatureFromBytes(sig)
 			require.NoError(t, err)
@@ -338,7 +338,7 @@ func TestAggregateAndProofSignature_CanSignValidSignature(t *testing.T) {
 				}),
 				SelectionProof: make([]byte, 96),
 			}
-			sig, err := validator.aggregateAndProofSig(context.Background(), pubKey, agg, params.BeaconConfig().SlotsPerEpoch.Mul(electraForkEpoch) /* slot */)
+			sig, err := validator.aggregateAndProofSig(t.Context(), pubKey, agg, params.BeaconConfig().SlotsPerEpoch.Mul(electraForkEpoch) /* slot */)
 			require.NoError(t, err)
 			_, err = bls.SignatureFromBytes(sig)
 			require.NoError(t, err)

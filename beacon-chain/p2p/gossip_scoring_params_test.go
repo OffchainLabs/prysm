@@ -1,7 +1,6 @@
 package p2p
 
 import (
-	"context"
 	"testing"
 
 	dbutil "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
@@ -22,7 +21,7 @@ func TestCorrect_ActiveValidatorsCount(t *testing.T) {
 
 	db := dbutil.SetupDB(t)
 	s := &Service{
-		ctx: context.Background(),
+		ctx: t.Context(),
 		cfg: &Config{DB: db},
 	}
 	bState, err := util.NewBeaconState(func(state *ethpb.BeaconState) error {

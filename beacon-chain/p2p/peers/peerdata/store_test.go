@@ -1,7 +1,6 @@
 package peerdata_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
@@ -11,8 +10,7 @@ import (
 )
 
 func TestStore_GetSetDelete(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	store := peerdata.NewStore(ctx, &peerdata.StoreConfig{
 		MaxPeers: 12,
@@ -52,8 +50,7 @@ func TestStore_GetSetDelete(t *testing.T) {
 }
 
 func TestStore_PeerDataGetOrCreate(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	store := peerdata.NewStore(ctx, &peerdata.StoreConfig{
 		MaxPeers: 12,
@@ -82,7 +79,7 @@ func TestStore_PeerDataGetOrCreate(t *testing.T) {
 }
 
 func TestStore_TrustedPeers(t *testing.T) {
-	store := peerdata.NewStore(context.Background(), &peerdata.StoreConfig{
+	store := peerdata.NewStore(t.Context(), &peerdata.StoreConfig{
 		MaxPeers: 12,
 	})
 

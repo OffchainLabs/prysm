@@ -21,7 +21,7 @@ import (
 )
 
 func TestStateByRoot_GenesisState(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
 	service := New(beaconDB, doublylinkedtree.New())
@@ -38,7 +38,7 @@ func TestStateByRoot_GenesisState(t *testing.T) {
 }
 
 func TestStateByRoot_ColdState(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
 	service := New(beaconDB, doublylinkedtree.New())
@@ -77,7 +77,7 @@ func TestStateByRoot_ColdState(t *testing.T) {
 }
 
 func TestStateByRootIfCachedNoCopy_HotState(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
 	service := New(beaconDB, doublylinkedtree.New())
@@ -92,7 +92,7 @@ func TestStateByRootIfCachedNoCopy_HotState(t *testing.T) {
 }
 
 func TestStateByRootIfCachedNoCopy_ColdState(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
 	service := New(beaconDB, doublylinkedtree.New())
@@ -115,7 +115,7 @@ func TestStateByRootIfCachedNoCopy_ColdState(t *testing.T) {
 }
 
 func TestDeleteStateFromCaches(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
 	service := New(beaconDB, doublylinkedtree.New())
@@ -186,7 +186,7 @@ type testSetupSlots struct {
 }
 
 func TestLoadStateByRoot(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	persistEpochBoundary := func(r testChain, slot primitives.Slot) {
 		require.NoError(t, r.srv.epochBoundaryStateCache.put(r.blockRoot(r.t, slot), r.state(t, slot)))
 	}
@@ -401,9 +401,9 @@ func TestLoadStateByRoot(t *testing.T) {
 	require.NoError(t, err)
 
 	// make state at slot 10 by transitioning a copy of st9 with ib10 (aka blk10)
-	st10, err = executeStateTransitionStateGen(context.Background(), st10, ib10)
+	st10, err = executeStateTransitionStateGen(t.Context(), st10, ib10)
 	require.NoError(t, err)
-	st10Root, err := st10.HashTreeRoot(context.Background())
+	st10Root, err := st10.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 	// update state root for block 10 now that its been through stf
 	blk10.Block.StateRoot = st10Root[:]
@@ -416,7 +416,7 @@ func TestLoadStateByRoot(t *testing.T) {
 	blk11 := util.NewBeaconBlock()
 	blk11.Block.Slot = 11
 	blk11.Block.ParentRoot = rob10.RootSlice()
-	idx11, err := helpers.BeaconProposerIndexAtSlot(context.Background(), st10, blk11.Block.Slot)
+	idx11, err := helpers.BeaconProposerIndexAtSlot(t.Context(), st10, blk11.Block.Slot)
 	require.NoError(t, err)
 	blk11.Block.ProposerIndex = idx11
 	ib11, err := blt.NewSignedBeaconBlock(blk11)
@@ -424,9 +424,9 @@ func TestLoadStateByRoot(t *testing.T) {
 
 	// same steps as 9->10; stf 10->11, then block update
 	st11 := st10.Copy()
-	st11, err = executeStateTransitionStateGen(context.Background(), st11, ib11)
+	st11, err = executeStateTransitionStateGen(t.Context(), st11, ib11)
 	require.NoError(t, err)
-	st11Root, err := st11.HashTreeRoot(context.Background())
+	st11Root, err := st11.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 	// update state root for block 11 now that its been through stf
 	blk11.Block.StateRoot = st11Root[:]
@@ -489,7 +489,7 @@ func TestLoadStateByRoot(t *testing.T) {
 }
 
 func TestLastAncestorState_CanGetUsingDB(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 	service := New(beaconDB, doublylinkedtree.New())
 
@@ -529,7 +529,7 @@ func TestLastAncestorState_CanGetUsingDB(t *testing.T) {
 }
 
 func TestLastAncestorState_CanGetUsingCache(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 	service := New(beaconDB, doublylinkedtree.New())
 
@@ -569,7 +569,7 @@ func TestLastAncestorState_CanGetUsingCache(t *testing.T) {
 }
 
 func TestState_HasState(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 	service := New(beaconDB, doublylinkedtree.New())
 	s, err := util.NewBeaconState()
@@ -601,7 +601,7 @@ func TestState_HasState(t *testing.T) {
 }
 
 func TestState_HasStateInCache(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 	service := New(beaconDB, doublylinkedtree.New())
 	s, err := util.NewBeaconState()

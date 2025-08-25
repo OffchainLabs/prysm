@@ -26,7 +26,7 @@ type Config struct {
 	HostDNS              string
 	PrivateKey           string
 	DataDir              string
-	MetaDataDir          string
+	DiscoveryDir         string
 	QUICPort             uint
 	TCPPort              uint
 	UDPPort              uint
@@ -36,7 +36,7 @@ type Config struct {
 	AllowListCIDR        string
 	DenyListCIDR         []string
 	StateNotifier        statefeed.Notifier
-	DB                   db.ReadOnlyDatabase
+	DB                   db.ReadOnlyDatabaseWithSeqNum
 	ClockWaiter          startup.ClockWaiter
 }
 

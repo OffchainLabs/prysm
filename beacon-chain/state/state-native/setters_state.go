@@ -2,10 +2,6 @@ package state_native
 
 import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stateutil"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
 	"github.com/pkg/errors"
 )
 
@@ -15,21 +11,10 @@ func (b *BeaconState) SetStateRoots(val [][]byte) error {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	if features.Get().EnableExperimentalState {
-		if b.stateRootsMultiValue != nil {
-			b.stateRootsMultiValue.Detach(b)
-		}
-		b.stateRootsMultiValue = NewMultiValueStateRoots(val)
-	} else {
-		b.sharedFieldReferences[types.StateRoots].MinusRef()
-		b.sharedFieldReferences[types.StateRoots] = stateutil.NewRef(1)
-
-		rootsArr := make([][32]byte, fieldparams.StateRootsLength)
-		for i := 0; i < len(rootsArr); i++ {
-			copy(rootsArr[i][:], val[i])
-		}
-		b.stateRoots = rootsArr
+	if b.stateRootsMultiValue != nil {
+		b.stateRootsMultiValue.Detach(b)
 	}
+	b.stateRootsMultiValue = NewMultiValueStateRoots(val)
 
 	b.markFieldAsDirty(types.StateRoots)
 	b.rebuildTrie[types.StateRoots] = true
@@ -39,29 +24,8 @@ func (b *BeaconState) SetStateRoots(val [][]byte) error {
 // UpdateStateRootAtIndex for the beacon state. Updates the state root
 // at a specific index to a new value.
 func (b *BeaconState) UpdateStateRootAtIndex(idx uint64, stateRoot [32]byte) error {
-	if features.Get().EnableExperimentalState {
-		if err := b.stateRootsMultiValue.UpdateAt(b, idx, stateRoot); err != nil {
-			return errors.Wrap(err, "could not update state roots")
-		}
-	} else {
-		if uint64(len(b.stateRoots)) <= idx {
-			return errors.Wrapf(consensus_types.ErrOutOfBounds, "state root index %d does not exist", idx)
-		}
-
-		b.lock.Lock()
-
-		r := b.stateRoots
-		if ref := b.sharedFieldReferences[types.StateRoots]; ref.Refs() > 1 {
-			// Copy elements in underlying array by reference.
-			r = make([][32]byte, len(b.stateRoots))
-			copy(r, b.stateRoots)
-			ref.MinusRef()
-			b.sharedFieldReferences[types.StateRoots] = stateutil.NewRef(1)
-		}
-		r[idx] = stateRoot
-		b.stateRoots = r
-
-		b.lock.Unlock()
+	if err := b.stateRootsMultiValue.UpdateAt(b, idx, stateRoot); err != nil {
+		return errors.Wrap(err, "could not update state roots")
 	}
 
 	b.lock.Lock()

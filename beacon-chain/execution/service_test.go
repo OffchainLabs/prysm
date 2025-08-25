@@ -22,6 +22,7 @@ import (
 	contracts "github.com/OffchainLabs/prysm/v6/contracts/deposit"
 	"github.com/OffchainLabs/prysm/v6/contracts/deposit/mock"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/genesis"
 	"github.com/OffchainLabs/prysm/v6/monitoring/clientstats"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
@@ -100,7 +101,7 @@ func TestStart_OK(t *testing.T) {
 	waiter := verification.NewInitializerWaiter(
 		c, forkchoice.NewROForkChoice(nil), nil)
 
-	web3Service, err := NewService(context.Background(),
+	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDepositContractAddress(testAcc.ContractAddr),
 		WithDatabase(beaconDB),
@@ -130,7 +131,7 @@ func TestStart_NoHttpEndpointDefinedFails_WithoutChainStarted(t *testing.T) {
 	beaconDB := dbutil.SetupDB(t)
 	testAcc, err := mock.Setup()
 	require.NoError(t, err, "Unable to set up simulated backend")
-	_, err = NewService(context.Background(),
+	_, err = NewService(t.Context(),
 		WithHttpEndpoint(""),
 		WithDepositContractAddress(testAcc.ContractAddr),
 		WithDatabase(beaconDB),
@@ -149,7 +150,7 @@ func TestStop_OK(t *testing.T) {
 	t.Cleanup(func() {
 		server.Stop()
 	})
-	web3Service, err := NewService(context.Background(),
+	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDepositContractAddress(testAcc.ContractAddr),
 		WithDatabase(beaconDB),
@@ -179,7 +180,7 @@ func TestService_Eth1Synced(t *testing.T) {
 	t.Cleanup(func() {
 		server.Stop()
 	})
-	web3Service, err := NewService(context.Background(),
+	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDepositContractAddress(testAcc.ContractAddr),
 		WithDatabase(beaconDB),
@@ -189,7 +190,7 @@ func TestService_Eth1Synced(t *testing.T) {
 	web3Service.depositContractCaller, err = contracts.NewDepositContractCaller(testAcc.ContractAddr, testAcc.Backend.Client())
 	require.NoError(t, err)
 
-	header, err := testAcc.Backend.Client().HeaderByNumber(context.Background(), nil)
+	header, err := testAcc.Backend.Client().HeaderByNumber(t.Context(), nil)
 	require.NoError(t, err)
 	currTime := header.Time
 	now := time.Now()
@@ -206,7 +207,7 @@ func TestFollowBlock_OK(t *testing.T) {
 	t.Cleanup(func() {
 		server.Stop()
 	})
-	web3Service, err := NewService(context.Background(),
+	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDepositContractAddress(testAcc.ContractAddr),
 		WithDatabase(beaconDB),
@@ -221,7 +222,7 @@ func TestFollowBlock_OK(t *testing.T) {
 
 	web3Service = setDefaultMocks(web3Service)
 	web3Service.rpcClient = &mockExecution.RPCClient{Backend: testAcc.Backend}
-	block, err := testAcc.Backend.Client().BlockByNumber(context.Background(), nil)
+	block, err := testAcc.Backend.Client().BlockByNumber(t.Context(), nil)
 	require.NoError(t, err)
 	baseHeight := block.NumberU64()
 	// process follow_distance blocks
@@ -229,16 +230,16 @@ func TestFollowBlock_OK(t *testing.T) {
 	for i := 0; i < int(params.BeaconConfig().Eth1FollowDistance); i++ {
 		lastHash = testAcc.Backend.Commit()
 	}
-	lb, err := testAcc.Backend.Client().BlockByHash(context.Background(), lastHash)
+	lb, err := testAcc.Backend.Client().BlockByHash(t.Context(), lastHash)
 	require.NoError(t, err)
 	log.Println(lb.NumberU64())
 	// set current height
-	block, err = testAcc.Backend.Client().BlockByNumber(context.Background(), nil)
+	block, err = testAcc.Backend.Client().BlockByNumber(t.Context(), nil)
 	require.NoError(t, err)
 	web3Service.latestEth1Data.BlockHeight = block.NumberU64()
 	web3Service.latestEth1Data.BlockTime = block.Time()
 
-	h, err := web3Service.followedBlockHeight(context.Background())
+	h, err := web3Service.followedBlockHeight(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, baseHeight, h, "Unexpected block height")
 	numToForward := uint64(2)
@@ -248,13 +249,13 @@ func TestFollowBlock_OK(t *testing.T) {
 		testAcc.Backend.Commit()
 	}
 
-	newBlock, err := testAcc.Backend.Client().BlockByNumber(context.Background(), nil)
+	newBlock, err := testAcc.Backend.Client().BlockByNumber(t.Context(), nil)
 	require.NoError(t, err)
 	// set current height
 	web3Service.latestEth1Data.BlockHeight = newBlock.NumberU64()
 	web3Service.latestEth1Data.BlockTime = newBlock.Time()
 
-	h, err = web3Service.followedBlockHeight(context.Background())
+	h, err = web3Service.followedBlockHeight(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, expectedHeight, h, "Unexpected block height")
 }
@@ -294,7 +295,7 @@ func TestHandlePanic_OK(t *testing.T) {
 	t.Cleanup(func() {
 		server.Stop()
 	})
-	web3Service, err := NewService(context.Background(),
+	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDatabase(beaconDB),
 	)
@@ -331,7 +332,7 @@ func TestLogTillGenesis_OK(t *testing.T) {
 	t.Cleanup(func() {
 		server.Stop()
 	})
-	web3Service, err := NewService(context.Background(),
+	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDepositContractAddress(testAcc.ContractAddr),
 		WithDatabase(beaconDB),
@@ -371,19 +372,20 @@ func TestInitDepositCache_OK(t *testing.T) {
 	var err error
 	s.cfg.depositCache, err = depositsnapshot.New()
 	require.NoError(t, err)
-	require.NoError(t, s.initDepositCaches(context.Background(), ctrs))
+	require.NoError(t, s.initDepositCaches(t.Context(), ctrs))
 
-	require.Equal(t, 0, len(s.cfg.depositCache.PendingContainers(context.Background(), nil)))
+	require.Equal(t, 0, len(s.cfg.depositCache.PendingContainers(t.Context(), nil)))
 
 	blockRootA := [32]byte{'a'}
 
 	emptyState, err := util.NewBeaconState()
 	require.NoError(t, err)
-	require.NoError(t, s.cfg.beaconDB.SaveGenesisBlockRoot(context.Background(), blockRootA))
-	require.NoError(t, s.cfg.beaconDB.SaveState(context.Background(), emptyState, blockRootA))
+	require.NoError(t, s.cfg.beaconDB.SaveGenesisBlockRoot(t.Context(), blockRootA))
+	require.NoError(t, s.cfg.beaconDB.SaveState(t.Context(), emptyState, blockRootA))
+	genesis.StoreStateDuringTest(t, emptyState)
 	s.chainStartData.Chainstarted = true
-	require.NoError(t, s.initDepositCaches(context.Background(), ctrs))
-	require.Equal(t, 3, len(s.cfg.depositCache.PendingContainers(context.Background(), nil)))
+	require.NoError(t, s.initDepositCaches(t.Context(), ctrs))
+	require.Equal(t, 3, len(s.cfg.depositCache.PendingContainers(t.Context(), nil)))
 }
 
 func TestInitDepositCacheWithFinalization_OK(t *testing.T) {
@@ -432,9 +434,9 @@ func TestInitDepositCacheWithFinalization_OK(t *testing.T) {
 	var err error
 	s.cfg.depositCache, err = depositsnapshot.New()
 	require.NoError(t, err)
-	require.NoError(t, s.initDepositCaches(context.Background(), ctrs))
+	require.NoError(t, s.initDepositCaches(t.Context(), ctrs))
 
-	require.Equal(t, 0, len(s.cfg.depositCache.PendingContainers(context.Background(), nil)))
+	require.Equal(t, 0, len(s.cfg.depositCache.PendingContainers(t.Context(), nil)))
 
 	headBlock := util.NewBeaconBlock()
 	headRoot, err := headBlock.Block.HashTreeRoot()
@@ -443,21 +445,22 @@ func TestInitDepositCacheWithFinalization_OK(t *testing.T) {
 
 	emptyState, err := util.NewBeaconState()
 	require.NoError(t, err)
-	require.NoError(t, s.cfg.beaconDB.SaveGenesisBlockRoot(context.Background(), headRoot))
-	require.NoError(t, s.cfg.beaconDB.SaveState(context.Background(), emptyState, headRoot))
-	require.NoError(t, stateGen.SaveState(context.Background(), headRoot, emptyState))
+	require.NoError(t, s.cfg.beaconDB.SaveGenesisBlockRoot(t.Context(), headRoot))
+	require.NoError(t, s.cfg.beaconDB.SaveState(t.Context(), emptyState, headRoot))
+	require.NoError(t, stateGen.SaveState(t.Context(), headRoot, emptyState))
+	genesis.StoreStateDuringTest(t, emptyState)
 	s.cfg.stateGen = stateGen
 	require.NoError(t, emptyState.SetEth1DepositIndex(3))
 
-	ctx := context.Background()
+	ctx := t.Context()
 	require.NoError(t, beaconDB.SaveFinalizedCheckpoint(ctx, &ethpb.Checkpoint{Epoch: slots.ToEpoch(0), Root: headRoot[:]}))
 	s.cfg.finalizedStateAtStartup = emptyState
 
 	s.chainStartData.Chainstarted = true
-	require.NoError(t, s.initDepositCaches(context.Background(), ctrs))
+	require.NoError(t, s.initDepositCaches(t.Context(), ctrs))
 	fDeposits, err := s.cfg.depositCache.FinalizedDeposits(ctx)
 	require.NoError(t, err)
-	deps := s.cfg.depositCache.NonFinalizedDeposits(context.Background(), fDeposits.MerkleTrieIndex(), nil)
+	deps := s.cfg.depositCache.NonFinalizedDeposits(t.Context(), fDeposits.MerkleTrieIndex(), nil)
 	assert.Equal(t, 0, len(deps))
 }
 
@@ -470,7 +473,7 @@ func TestNewService_EarliestVotingBlock(t *testing.T) {
 	t.Cleanup(func() {
 		server.Stop()
 	})
-	web3Service, err := NewService(context.Background(),
+	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDepositContractAddress(testAcc.ContractAddr),
 		WithDatabase(beaconDB),
@@ -486,7 +489,7 @@ func TestNewService_EarliestVotingBlock(t *testing.T) {
 
 	// Genesis not set
 	followBlock := uint64(2000)
-	blk, err := web3Service.determineEarliestVotingBlock(context.Background(), followBlock)
+	blk, err := web3Service.determineEarliestVotingBlock(t.Context(), followBlock)
 	require.NoError(t, err)
 	assert.Equal(t, followBlock-conf.Eth1FollowDistance, blk, "unexpected earliest voting block")
 
@@ -497,14 +500,14 @@ func TestNewService_EarliestVotingBlock(t *testing.T) {
 	for i := 0; i < numToForward; i++ {
 		testAcc.Backend.Commit()
 	}
-	currHeader, err := testAcc.Backend.Client().HeaderByNumber(context.Background(), nil)
+	currHeader, err := testAcc.Backend.Client().HeaderByNumber(t.Context(), nil)
 	require.NoError(t, err)
 	currTime := currHeader.Time
 	now := time.Now()
 	err = testAcc.Backend.AdjustTime(now.Sub(time.Unix(int64(currTime), 0)))
 	require.NoError(t, err)
 	testAcc.Backend.Commit()
-	currHeader, err = testAcc.Backend.Client().HeaderByNumber(context.Background(), nil)
+	currHeader, err = testAcc.Backend.Client().HeaderByNumber(t.Context(), nil)
 	require.NoError(t, err)
 	currTime = currHeader.Time
 	web3Service.latestEth1Data.BlockHeight = currHeader.Number.Uint64()
@@ -512,7 +515,7 @@ func TestNewService_EarliestVotingBlock(t *testing.T) {
 	web3Service.chainStartData.GenesisTime = currTime
 
 	// With a current slot of zero, only request follow_blocks behind.
-	blk, err = web3Service.determineEarliestVotingBlock(context.Background(), followBlock)
+	blk, err = web3Service.determineEarliestVotingBlock(t.Context(), followBlock)
 	require.NoError(t, err)
 	assert.Equal(t, followBlock-conf.Eth1FollowDistance, blk, "unexpected earliest voting block")
 
@@ -528,14 +531,14 @@ func TestNewService_Eth1HeaderRequLimit(t *testing.T) {
 	t.Cleanup(func() {
 		server.Stop()
 	})
-	s1, err := NewService(context.Background(),
+	s1, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDepositContractAddress(testAcc.ContractAddr),
 		WithDatabase(beaconDB),
 	)
 	require.NoError(t, err, "unable to setup web3 ETH1.0 chain service")
 	assert.Equal(t, defaultEth1HeaderReqLimit, s1.cfg.eth1HeaderReqLimit, "default eth1 header request limit not set")
-	s2, err := NewService(context.Background(),
+	s2, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDepositContractAddress(testAcc.ContractAddr),
 		WithDatabase(beaconDB),
@@ -584,7 +587,7 @@ func TestService_EnsureConsistentPowchainData(t *testing.T) {
 	t.Cleanup(func() {
 		srv.Stop()
 	})
-	s1, err := NewService(context.Background(),
+	s1, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDatabase(beaconDB),
 		WithDepositCache(cache),
@@ -594,11 +597,12 @@ func TestService_EnsureConsistentPowchainData(t *testing.T) {
 	require.NoError(t, err)
 	assert.NoError(t, genState.SetSlot(1000))
 
-	require.NoError(t, s1.cfg.beaconDB.SaveGenesisData(context.Background(), genState))
-	_, err = s1.validPowchainData(context.Background())
+	genesis.StoreStateDuringTest(t, genState)
+	require.NoError(t, s1.cfg.beaconDB.SaveGenesisData(t.Context(), genState))
+	_, err = s1.validPowchainData(t.Context())
 	require.NoError(t, err)
 
-	eth1Data, err := s1.cfg.beaconDB.ExecutionChainData(context.Background())
+	eth1Data, err := s1.cfg.beaconDB.ExecutionChainData(t.Context())
 	assert.NoError(t, err)
 
 	assert.NotNil(t, eth1Data)
@@ -615,7 +619,7 @@ func TestService_InitializeCorrectly(t *testing.T) {
 	t.Cleanup(func() {
 		srv.Stop()
 	})
-	s1, err := NewService(context.Background(),
+	s1, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDatabase(beaconDB),
 		WithDepositCache(cache),
@@ -625,14 +629,14 @@ func TestService_InitializeCorrectly(t *testing.T) {
 	require.NoError(t, err)
 	assert.NoError(t, genState.SetSlot(1000))
 
-	require.NoError(t, s1.cfg.beaconDB.SaveGenesisData(context.Background(), genState))
-	_, err = s1.validPowchainData(context.Background())
+	require.NoError(t, s1.cfg.beaconDB.SaveGenesisData(t.Context(), genState))
+	_, err = s1.validPowchainData(t.Context())
 	require.NoError(t, err)
 
-	eth1Data, err := s1.cfg.beaconDB.ExecutionChainData(context.Background())
+	eth1Data, err := s1.cfg.beaconDB.ExecutionChainData(t.Context())
 	assert.NoError(t, err)
 
-	assert.NoError(t, s1.initializeEth1Data(context.Background(), eth1Data))
+	assert.NoError(t, s1.initializeEth1Data(t.Context(), eth1Data))
 	assert.Equal(t, int64(-1), s1.lastReceivedMerkleIndex, "received incorrect last received merkle index")
 }
 
@@ -645,7 +649,7 @@ func TestService_EnsureValidPowchainData(t *testing.T) {
 	t.Cleanup(func() {
 		srv.Stop()
 	})
-	s1, err := NewService(context.Background(),
+	s1, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDatabase(beaconDB),
 		WithDepositCache(cache),
@@ -655,17 +659,18 @@ func TestService_EnsureValidPowchainData(t *testing.T) {
 	require.NoError(t, err)
 	assert.NoError(t, genState.SetSlot(1000))
 
-	require.NoError(t, s1.cfg.beaconDB.SaveGenesisData(context.Background(), genState))
+	genesis.StoreStateDuringTest(t, genState)
+	require.NoError(t, s1.cfg.beaconDB.SaveGenesisData(t.Context(), genState))
 
-	err = s1.cfg.beaconDB.SaveExecutionChainData(context.Background(), &ethpb.ETH1ChainData{
+	err = s1.cfg.beaconDB.SaveExecutionChainData(t.Context(), &ethpb.ETH1ChainData{
 		ChainstartData:    &ethpb.ChainStartData{Chainstarted: true},
 		DepositContainers: []*ethpb.DepositContainer{{Index: 1}},
 	})
 	require.NoError(t, err)
-	_, err = s1.validPowchainData(context.Background())
+	_, err = s1.validPowchainData(t.Context())
 	require.NoError(t, err)
 
-	eth1Data, err := s1.cfg.beaconDB.ExecutionChainData(context.Background())
+	eth1Data, err := s1.cfg.beaconDB.ExecutionChainData(t.Context())
 	assert.NoError(t, err)
 
 	assert.NotNil(t, eth1Data)
@@ -741,7 +746,7 @@ func TestETH1Endpoints(t *testing.T) {
 	beaconDB := dbutil.SetupDB(t)
 
 	mbs := &mockBSUpdater{}
-	s1, err := NewService(context.Background(),
+	s1, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoints[0]),
 		WithDepositContractAddress(testAcc.ContractAddr),
 		WithDatabase(beaconDB),
@@ -796,7 +801,7 @@ func TestService_FollowBlock(t *testing.T) {
 		headerCache:    newHeaderCache(),
 		latestEth1Data: &ethpb.LatestETH1Data{BlockTime: (3000 * 40) + followTime, BlockHeight: 3000},
 	}
-	h, err := s.followedBlockHeight(context.Background())
+	h, err := s.followedBlockHeight(t.Context())
 	assert.NoError(t, err)
 	// With a much higher blocktime, the follow height is respectively shortened.
 	assert.Equal(t, uint64(2283), h)
@@ -841,7 +846,7 @@ func TestService_migrateOldDepositTree(t *testing.T) {
 	t.Cleanup(func() {
 		srv.Stop()
 	})
-	s, err := NewService(context.Background(),
+	s, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
 		WithDatabase(beaconDB),
 		WithDepositCache(cache),

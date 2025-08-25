@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
@@ -24,6 +25,7 @@ import (
 	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations/kv"
+	mockp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -33,6 +35,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/genesis"
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
@@ -49,7 +52,7 @@ import (
 )
 
 func Test_pruneAttsFromPool_Electra(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	logHook := logTest.NewGlobal()
 
 	params.SetupTestConfigCleanup(t)
@@ -57,11 +60,8 @@ func Test_pruneAttsFromPool_Electra(t *testing.T) {
 	cfg.TargetCommitteeSize = 8
 	params.OverrideBeaconConfig(cfg)
 
-	s := Service{
-		cfg: &config{
-			AttPool: kv.NewAttCaches(),
-		},
-	}
+	s := testServiceNoDB(t)
+	s.cfg.AttPool = kv.NewAttCaches()
 
 	data := &ethpb.AttestationData{
 		BeaconBlockRoot: make([]byte, 32),
@@ -239,7 +239,7 @@ func TestFillForkChoiceMissingBlocks_CanSave(t *testing.T) {
 	fcp2 := &forkchoicetypes.Checkpoint{Epoch: 0, Root: r0}
 	require.NoError(t, service.cfg.ForkChoiceStore.UpdateFinalizedCheckpoint(fcp2))
 	err = service.fillInForkChoiceMissingBlocks(
-		context.Background(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
+		t.Context(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
 	require.NoError(t, err)
 
 	// 5 nodes from the block tree 1. B0 - B3 - B4 - B6 - B8
@@ -282,7 +282,7 @@ func TestFillForkChoiceMissingBlocks_RootsMatch(t *testing.T) {
 	require.NoError(t, service.cfg.ForkChoiceStore.UpdateFinalizedCheckpoint(fcp2))
 
 	err = service.fillInForkChoiceMissingBlocks(
-		context.Background(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
+		t.Context(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
 	require.NoError(t, err)
 
 	// 5 nodes from the block tree 1. B0 - B3 - B4 - B6 - B8
@@ -292,7 +292,7 @@ func TestFillForkChoiceMissingBlocks_RootsMatch(t *testing.T) {
 	wantedRoots := [][]byte{roots[0], roots[3], roots[4], roots[6], roots[8]}
 	for i, rt := range wantedRoots {
 		assert.Equal(t, true, service.cfg.ForkChoiceStore.HasNode(bytesutil.ToBytes32(rt)), fmt.Sprintf("Didn't save node: %d", i))
-		assert.Equal(t, true, service.cfg.BeaconDB.HasBlock(context.Background(), bytesutil.ToBytes32(rt)))
+		assert.Equal(t, true, service.cfg.BeaconDB.HasBlock(t.Context(), bytesutil.ToBytes32(rt)))
 	}
 }
 
@@ -338,7 +338,7 @@ func TestFillForkChoiceMissingBlocks_FilterFinalized(t *testing.T) {
 	// Set finalized epoch to 2.
 	require.NoError(t, service.cfg.ForkChoiceStore.UpdateFinalizedCheckpoint(&forkchoicetypes.Checkpoint{Epoch: 2, Root: r64}))
 	err = service.fillInForkChoiceMissingBlocks(
-		context.Background(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
+		t.Context(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
 	require.NoError(t, err)
 
 	// There should be 1 node: block 65
@@ -371,7 +371,7 @@ func TestFillForkChoiceMissingBlocks_FinalizedSibling(t *testing.T) {
 	require.NoError(t, err)
 
 	err = service.fillInForkChoiceMissingBlocks(
-		context.Background(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
+		t.Context(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
 	require.Equal(t, ErrNotDescendantOfFinalized.Error(), err.Error())
 }
 
@@ -449,33 +449,34 @@ func blockTree1(t *testing.T, beaconDB db.Database, genesisRoot []byte) ([][]byt
 		beaconBlock.Block.ParentRoot = bytesutil.PadTo(b.Block.ParentRoot, 32)
 		wsb, err := consensusblocks.NewSignedBeaconBlock(beaconBlock)
 		require.NoError(t, err)
-		if err := beaconDB.SaveBlock(context.Background(), wsb); err != nil {
+		if err := beaconDB.SaveBlock(t.Context(), wsb); err != nil {
 			return nil, err
 		}
-		if err := beaconDB.SaveState(context.Background(), st.Copy(), bytesutil.ToBytes32(beaconBlock.Block.ParentRoot)); err != nil {
+		if err := beaconDB.SaveState(t.Context(), st.Copy(), bytesutil.ToBytes32(beaconBlock.Block.ParentRoot)); err != nil {
 			return nil, errors.Wrap(err, "could not save state")
 		}
 	}
-	if err := beaconDB.SaveState(context.Background(), st.Copy(), r1); err != nil {
+	if err := beaconDB.SaveState(t.Context(), st.Copy(), r1); err != nil {
 		return nil, err
 	}
-	if err := beaconDB.SaveState(context.Background(), st.Copy(), r7); err != nil {
+	if err := beaconDB.SaveState(t.Context(), st.Copy(), r7); err != nil {
 		return nil, err
 	}
-	if err := beaconDB.SaveState(context.Background(), st.Copy(), r8); err != nil {
+	if err := beaconDB.SaveState(t.Context(), st.Copy(), r8); err != nil {
 		return nil, err
 	}
 	return [][]byte{r0[:], r1[:], nil, r3[:], r4[:], r5[:], r6[:], r7[:], r8[:]}, nil
 }
 
 func TestCurrentSlot_HandlesOverflow(t *testing.T) {
-	svc := Service{genesisTime: prysmTime.Now().Add(1 * time.Hour)}
+	svc := testServiceNoDB(t)
+	svc.genesisTime = prysmTime.Now().Add(1 * time.Hour)
 
 	slot := svc.CurrentSlot()
 	require.Equal(t, primitives.Slot(0), slot, "Unexpected slot")
 }
 func TestAncestorByDB_CtxErr(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	opts := testServiceOptsWithDB(t)
 	service, err := NewService(ctx, opts...)
 	require.NoError(t, err)
@@ -508,18 +509,18 @@ func TestAncestor_HandleSkipSlot(t *testing.T) {
 		beaconBlock := util.NewBeaconBlock()
 		beaconBlock.Block.Slot = b.Block.Slot
 		beaconBlock.Block.ParentRoot = bytesutil.PadTo(b.Block.ParentRoot, 32)
-		util.SaveBlock(t, context.Background(), beaconDB, beaconBlock)
+		util.SaveBlock(t, t.Context(), beaconDB, beaconBlock)
 	}
 
 	// Slots 100 to 200 are skip slots. Requesting root at 150 will yield root at 100. The last physical block.
-	r, err := service.Ancestor(context.Background(), r200[:], 150)
+	r, err := service.Ancestor(t.Context(), r200[:], 150)
 	require.NoError(t, err)
 	if bytesutil.ToBytes32(r) != r100 {
 		t.Error("Did not get correct root")
 	}
 
 	// Slots 1 to 100 are skip slots. Requesting root at 50 will yield root at 1. The last physical block.
-	r, err = service.Ancestor(context.Background(), r200[:], 50)
+	r, err = service.Ancestor(t.Context(), r200[:], 50)
 	require.NoError(t, err)
 	if bytesutil.ToBytes32(r) != r1 {
 		t.Error("Did not get correct root")
@@ -527,7 +528,7 @@ func TestAncestor_HandleSkipSlot(t *testing.T) {
 }
 
 func TestAncestor_CanUseForkchoice(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	opts := testServiceOptsWithDB(t)
 	service, err := NewService(ctx, opts...)
 	require.NoError(t, err)
@@ -555,12 +556,12 @@ func TestAncestor_CanUseForkchoice(t *testing.T) {
 		beaconBlock.Block.ParentRoot = bytesutil.PadTo(b.Block.ParentRoot, 32)
 		r, err := b.Block.HashTreeRoot()
 		require.NoError(t, err)
-		st, blkRoot, err := prepareForkchoiceState(context.Background(), b.Block.Slot, r, bytesutil.ToBytes32(b.Block.ParentRoot), params.BeaconConfig().ZeroHash, ojc, ofc)
+		st, blkRoot, err := prepareForkchoiceState(t.Context(), b.Block.Slot, r, bytesutil.ToBytes32(b.Block.ParentRoot), params.BeaconConfig().ZeroHash, ojc, ofc)
 		require.NoError(t, err)
 		require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blkRoot))
 	}
 
-	r, err := service.Ancestor(context.Background(), r200[:], 150)
+	r, err := service.Ancestor(t.Context(), r200[:], 150)
 	require.NoError(t, err)
 	if bytesutil.ToBytes32(r) != r100 {
 		t.Error("Did not get correct root")
@@ -592,14 +593,14 @@ func TestAncestor_CanUseDB(t *testing.T) {
 		beaconBlock := util.NewBeaconBlock()
 		beaconBlock.Block.Slot = b.Block.Slot
 		beaconBlock.Block.ParentRoot = bytesutil.PadTo(b.Block.ParentRoot, 32)
-		util.SaveBlock(t, context.Background(), beaconDB, beaconBlock)
+		util.SaveBlock(t, t.Context(), beaconDB, beaconBlock)
 	}
 
-	st, blkRoot, err := prepareForkchoiceState(context.Background(), 200, r200, r200, params.BeaconConfig().ZeroHash, ojc, ofc)
+	st, blkRoot, err := prepareForkchoiceState(t.Context(), 200, r200, r200, params.BeaconConfig().ZeroHash, ojc, ofc)
 	require.NoError(t, err)
 	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blkRoot))
 
-	r, err := service.Ancestor(context.Background(), r200[:], 150)
+	r, err := service.Ancestor(t.Context(), r200[:], 150)
 	require.NoError(t, err)
 	if bytesutil.ToBytes32(r) != r100 {
 		t.Error("Did not get correct root")
@@ -607,7 +608,7 @@ func TestAncestor_CanUseDB(t *testing.T) {
 }
 
 func TestEnsureRootNotZeroHashes(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	opts := testServiceOptsNoDB()
 	service, err := NewService(ctx, opts...)
 	require.NoError(t, err)
@@ -621,7 +622,7 @@ func TestEnsureRootNotZeroHashes(t *testing.T) {
 }
 
 func TestHandleEpochBoundary_UpdateFirstSlot(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	opts := testServiceOptsNoDB()
 	service, err := NewService(ctx, opts...)
 	require.NoError(t, err)
@@ -920,7 +921,7 @@ func TestRemoveBlockAttestationsInPool(t *testing.T) {
 	r, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 	service := setupBeaconChain(t, beaconDB)
 	require.NoError(t, service.cfg.BeaconDB.SaveStateSummary(ctx, &ethpb.StateSummary{Root: r[:]}))
@@ -933,7 +934,7 @@ func TestRemoveBlockAttestationsInPool(t *testing.T) {
 	require.NoError(t, service.cfg.AttPool.SaveAggregatedAttestations(atts))
 	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
-	service.pruneAttsFromPool(context.Background(), nil /* state not needed pre-Electra */, wsb)
+	service.pruneAttsFromPool(t.Context(), nil /* state not needed pre-Electra */, wsb)
 	require.LogsDoNotContain(t, logHook, "Could not prune attestations")
 	require.Equal(t, 0, service.cfg.AttPool.AggregatedAttestationCount())
 }
@@ -1357,7 +1358,7 @@ func TestStore_NoViableHead_FCU(t *testing.T) {
 	require.NoError(t, service.cfg.BeaconDB.SaveHeadBlockRoot(ctx, parentRoot), "Could not save genesis state")
 
 	for i := 1; i < 6; i++ {
-		driftGenesisTime(service, int64(i), 0)
+		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
 		require.NoError(t, err)
 		b, err := util.GenerateFullBlock(st, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
@@ -1378,7 +1379,7 @@ func TestStore_NoViableHead_FCU(t *testing.T) {
 	}
 
 	for i := 6; i < 12; i++ {
-		driftGenesisTime(service, int64(i), 0)
+		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
 		require.NoError(t, err)
 		b, err := util.GenerateFullBlockAltair(st, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
@@ -1399,7 +1400,7 @@ func TestStore_NoViableHead_FCU(t *testing.T) {
 	}
 
 	for i := 12; i < 18; i++ {
-		driftGenesisTime(service, int64(i), 0)
+		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
 		require.NoError(t, err)
 		b, err := util.GenerateFullBlockBellatrix(st, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
@@ -1548,7 +1549,7 @@ func TestStore_NoViableHead_NewPayload(t *testing.T) {
 	require.NoError(t, service.cfg.BeaconDB.SaveHeadBlockRoot(ctx, parentRoot), "Could not save genesis state")
 
 	for i := 1; i < 6; i++ {
-		driftGenesisTime(service, int64(i), 0)
+		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
 		require.NoError(t, err)
 		b, err := util.GenerateFullBlock(st, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
@@ -1568,7 +1569,7 @@ func TestStore_NoViableHead_NewPayload(t *testing.T) {
 	}
 
 	for i := 6; i < 12; i++ {
-		driftGenesisTime(service, int64(i), 0)
+		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
 		require.NoError(t, err)
 		b, err := util.GenerateFullBlockAltair(st, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
@@ -1589,7 +1590,7 @@ func TestStore_NoViableHead_NewPayload(t *testing.T) {
 	}
 
 	for i := 12; i < 18; i++ {
-		driftGenesisTime(service, int64(i), 0)
+		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
 		require.NoError(t, err)
 		b, err := util.GenerateFullBlockBellatrix(st, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
@@ -1740,7 +1741,7 @@ func TestStore_NoViableHead_Liveness(t *testing.T) {
 	require.NoError(t, service.cfg.BeaconDB.SaveHeadBlockRoot(ctx, parentRoot), "Could not save genesis state")
 
 	for i := 1; i < 6; i++ {
-		driftGenesisTime(service, int64(i), 0)
+		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
 		require.NoError(t, err)
 		b, err := util.GenerateFullBlock(st, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
@@ -1761,7 +1762,7 @@ func TestStore_NoViableHead_Liveness(t *testing.T) {
 	}
 
 	for i := 6; i < 12; i++ {
-		driftGenesisTime(service, int64(i), 0)
+		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
 		require.NoError(t, err)
 		b, err := util.GenerateFullBlockAltair(st, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
@@ -1812,7 +1813,7 @@ func TestStore_NoViableHead_Liveness(t *testing.T) {
 	// import blocks 13 through 18 to justify 12
 	invalidRoots := make([][32]byte, 19-13)
 	for i := 13; i < 19; i++ {
-		driftGenesisTime(service, int64(i), 0)
+		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
 		require.NoError(t, err)
 		b, err := util.GenerateFullBlockBellatrix(st, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
@@ -1907,7 +1908,7 @@ func TestStore_NoViableHead_Liveness(t *testing.T) {
 	require.NoError(t, err)
 	// Import blocks 21--30 (Epoch 3 was not enough to justify 2)
 	for i := 21; i < 30; i++ {
-		driftGenesisTime(service, int64(i), 0)
+		driftGenesisTime(service, primitives.Slot(i), 0)
 		require.NoError(t, err)
 		b, err := util.GenerateFullBlockBellatrix(st, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
 		require.NoError(t, err)
@@ -1980,20 +1981,22 @@ func TestNoViableHead_Reboot(t *testing.T) {
 	genesisState, keys := util.DeterministicGenesisState(t, 64)
 	stateRoot, err := genesisState.HashTreeRoot(ctx)
 	require.NoError(t, err, "Could not hash genesis state")
-	genesis := blocks.NewGenesisBlock(stateRoot[:])
-	wsb, err := consensusblocks.NewSignedBeaconBlock(genesis)
+	gb := blocks.NewGenesisBlock(stateRoot[:])
+	wsb, err := consensusblocks.NewSignedBeaconBlock(gb)
 	require.NoError(t, err)
-	genesisRoot, err := genesis.Block.HashTreeRoot()
+	genesisRoot, err := gb.Block.HashTreeRoot()
 	require.NoError(t, err, "Could not get signing root")
 	require.NoError(t, service.cfg.BeaconDB.SaveBlock(ctx, wsb), "Could not save genesis block")
 	require.NoError(t, service.saveGenesisData(ctx, genesisState))
 
+	genesis.StoreStateDuringTest(t, genesisState)
 	require.NoError(t, service.cfg.BeaconDB.SaveState(ctx, genesisState, genesisRoot), "Could not save genesis state")
 	require.NoError(t, service.cfg.BeaconDB.SaveHeadBlockRoot(ctx, genesisRoot), "Could not save genesis state")
 	require.NoError(t, service.cfg.BeaconDB.SaveGenesisBlockRoot(ctx, genesisRoot), "Could not save genesis state")
 
 	for i := 1; i < 6; i++ {
-		driftGenesisTime(service, int64(i), 0)
+		t.Log(i)
+		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
 		require.NoError(t, err)
 		b, err := util.GenerateFullBlock(st, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
@@ -2013,7 +2016,7 @@ func TestNoViableHead_Reboot(t *testing.T) {
 	}
 
 	for i := 6; i < 12; i++ {
-		driftGenesisTime(service, int64(i), 0)
+		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
 		require.NoError(t, err)
 		b, err := util.GenerateFullBlockAltair(st, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
@@ -2062,7 +2065,7 @@ func TestNoViableHead_Reboot(t *testing.T) {
 
 	// import blocks 13 through 18 to justify 12
 	for i := 13; i < 19; i++ {
-		driftGenesisTime(service, int64(i), 0)
+		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
 		require.NoError(t, err)
 		b, err := util.GenerateFullBlockBellatrix(st, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
@@ -2305,6 +2308,7 @@ func TestOnBlock_HandleBlockAttestations(t *testing.T) {
 func TestFillMissingBlockPayloadId_DiffSlotExitEarly(t *testing.T) {
 	logHook := logTest.NewGlobal()
 	service, tr := minimalTestService(t)
+	service.SetGenesisTime(time.Now())
 	service.lateBlockTasks(tr.ctx)
 	require.LogsDoNotContain(t, logHook, "could not perform late block tasks")
 }
@@ -2317,26 +2321,29 @@ func TestFillMissingBlockPayloadId_PrepareAllPayloads(t *testing.T) {
 	defer resetCfg()
 
 	service, tr := minimalTestService(t)
+	service.SetGenesisTime(time.Now())
+	service.SetForkChoiceGenesisTime(time.Now())
 	service.lateBlockTasks(tr.ctx)
 	require.LogsDoNotContain(t, logHook, "could not perform late block tasks")
 }
 
 // Helper function to simulate the block being on time or delayed for proposer
 // boost. It alters the genesisTime tracked by the store.
-func driftGenesisTime(s *Service, slot, delay int64) {
-	offset := slot*int64(params.BeaconConfig().SecondsPerSlot) + delay
-	newTime := time.Unix(time.Now().Unix()-offset, 0)
-	s.SetGenesisTime(newTime)
-	s.cfg.ForkChoiceStore.SetGenesisTime(uint64(newTime.Unix()))
+func driftGenesisTime(s *Service, slot primitives.Slot, delay time.Duration) {
+	now := time.Now()
+	slotDuration := time.Duration(slot) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+	genesis := now.Add(-slotDuration - delay)
+	s.SetGenesisTime(genesis)
+	s.cfg.ForkChoiceStore.SetGenesisTime(genesis)
 }
 
-func TestMissingIndices(t *testing.T) {
+func TestMissingBlobIndices(t *testing.T) {
 	cases := []struct {
 		name     string
 		expected [][]byte
 		present  []uint64
 		result   map[uint64]struct{}
-		root     [32]byte
+		root     [fieldparams.RootLength]byte
 		err      error
 	}{
 		{
@@ -2394,7 +2401,7 @@ func TestMissingIndices(t *testing.T) {
 		bm, bs := filesystem.NewEphemeralBlobStorageWithMocker(t)
 		t.Run(c.name, func(t *testing.T) {
 			require.NoError(t, bm.CreateFakeIndices(c.root, 0, c.present...))
-			missing, err := missingIndices(bs, c.root, c.expected, 0)
+			missing, err := missingBlobIndices(bs, c.root, c.expected, 0)
 			if c.err != nil {
 				require.ErrorIs(t, err, c.err)
 				return
@@ -2402,9 +2409,70 @@ func TestMissingIndices(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, len(c.result), len(missing))
 			for key := range c.result {
-				m, ok := missing[key]
-				require.Equal(t, true, ok)
-				require.Equal(t, c.result[key], m)
+				require.Equal(t, true, missing[key])
+			}
+		})
+	}
+}
+
+func TestMissingDataColumnIndices(t *testing.T) {
+	countPlusOne := params.BeaconConfig().NumberOfColumns + 1
+	tooManyColumns := make(map[uint64]bool, countPlusOne)
+	for i := range countPlusOne {
+		tooManyColumns[uint64(i)] = true
+	}
+
+	testCases := []struct {
+		name          string
+		storedIndices []uint64
+		input         map[uint64]bool
+		expected      map[uint64]bool
+		err           error
+	}{
+		{
+			name:  "zero len expected",
+			input: map[uint64]bool{},
+		},
+		{
+			name:  "expected exceeds max",
+			input: tooManyColumns,
+			err:   errMaxDataColumnsExceeded,
+		},
+		{
+			name:          "all missing",
+			storedIndices: []uint64{},
+			input:         map[uint64]bool{0: true, 1: true, 2: true},
+			expected:      map[uint64]bool{0: true, 1: true, 2: true},
+		},
+		{
+			name:          "none missing",
+			input:         map[uint64]bool{0: true, 1: true, 2: true},
+			expected:      map[uint64]bool{},
+			storedIndices: []uint64{0, 1, 2, 3, 4}, // Extra columns stored but not expected
+		},
+		{
+			name:          "some missing",
+			storedIndices: []uint64{0, 20},
+			input:         map[uint64]bool{0: true, 10: true, 20: true, 30: true},
+			expected:      map[uint64]bool{10: true, 30: true},
+		},
+	}
+
+	var emptyRoot [fieldparams.RootLength]byte
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			dcm, dcs := filesystem.NewEphemeralDataColumnStorageWithMocker(t)
+			err := dcm.CreateFakeIndices(emptyRoot, 0, tc.storedIndices...)
+			require.NoError(t, err)
+
+			// Test the function
+			actual, err := missingDataColumnIndices(dcs, emptyRoot, tc.input)
+			require.ErrorIs(t, err, tc.err)
+
+			require.Equal(t, len(tc.expected), len(actual))
+			for key := range tc.expected {
+				require.Equal(t, true, actual[key])
 			}
 		})
 	}
@@ -2604,7 +2672,7 @@ func TestRollbackBlock_ContextDeadline(t *testing.T) {
 	require.Equal(t, true, hasState)
 
 	// Set deadlined context when processing the block
-	cancCtx, canc := context.WithCancel(context.Background())
+	cancCtx, canc := context.WithCancel(t.Context())
 	canc()
 	roblock, err = consensusblocks.NewROBlockWithRoot(wsb, root)
 	require.NoError(t, err)
@@ -2643,65 +2711,20 @@ func fakeResult(missing []uint64) map[uint64]struct{} {
 	return r
 }
 
-func TestSaveLightClientUpdate(t *testing.T) {
+func TestProcessLightClientUpdate(t *testing.T) {
 	featCfg := &features.Flags{}
 	featCfg.EnableLightClient = true
 	reset := features.InitWithReset(featCfg)
+	defer reset()
 
-	s, tr := minimalTestService(t)
+	s, tr := minimalTestService(t, WithLCStore())
 	ctx := tr.ctx
 
-	t.Run("Altair", func(t *testing.T) {
-		t.Run("No old update", func(t *testing.T) {
-			l := util.NewTestLightClient(t, version.Altair)
+	for testVersion := version.Altair; testVersion <= version.Electra; testVersion++ {
+		t.Run(version.String(testVersion), func(t *testing.T) {
+			l := util.NewTestLightClient(t, testVersion)
 
-			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-
-			err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
-			require.NoError(t, err)
-			attestedBlockRoot, err := l.AttestedBlock.Block().HashTreeRoot()
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.AttestedState, attestedBlockRoot)
-			require.NoError(t, err)
-
-			currentBlockRoot, err := l.Block.Block().HashTreeRoot()
-			require.NoError(t, err)
-			roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock)
-			require.NoError(t, err)
-
-			cfg := &postBlockProcessConfig{
-				ctx:            ctx,
-				roblock:        roblock,
-				postState:      l.State,
-				isValidPayload: true,
-			}
-
-			s.saveLightClientUpdate(cfg)
-
-			// Check that the light client update is saved
-			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
-
-			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
-			require.NoError(t, err)
-			require.NotNil(t, u)
-			attestedStateRoot, err := l.AttestedState.HashTreeRoot(ctx)
-			require.NoError(t, err)
-			require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
-			require.Equal(t, u.Version(), version.Altair)
-		})
-
-		t.Run("New update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t, version.Altair)
-
-			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
+			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().VersionToForkEpochMap()[testVersion])*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
 
 			err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
 			require.NoError(t, err)
@@ -2732,517 +2755,297 @@ func TestSaveLightClientUpdate(t *testing.T) {
 
 			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
 
-			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(s.CurrentSlot(), l.AttestedState)
-			require.NoError(t, err)
+			t.Run("no old update", func(t *testing.T) {
+				require.NoError(t, s.processLightClientUpdate(cfg))
 
-			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
-			require.NoError(t, err)
-
-			s.saveLightClientUpdate(cfg)
-
-			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
-			require.NoError(t, err)
-			require.NotNil(t, u)
-			attestedStateRoot, err := l.AttestedState.HashTreeRoot(ctx)
-			require.NoError(t, err)
-			require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
-			require.Equal(t, u.Version(), version.Altair)
-		})
-
-		t.Run("Old update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t, version.Altair)
-
-			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-
-			err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
-			require.NoError(t, err)
-			attestedBlockRoot, err := l.AttestedBlock.Block().HashTreeRoot()
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.AttestedState, attestedBlockRoot)
-			require.NoError(t, err)
-
-			currentBlockRoot, err := l.Block.Block().HashTreeRoot()
-			require.NoError(t, err)
-			roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock)
-			require.NoError(t, err)
-
-			cfg := &postBlockProcessConfig{
-				ctx:            ctx,
-				roblock:        roblock,
-				postState:      l.State,
-				isValidPayload: true,
-			}
-
-			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
-
-			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(s.CurrentSlot(), l.AttestedState)
-			require.NoError(t, err)
-
-			scb := make([]byte, 64)
-			for i := 0; i < 5; i++ {
-				scb[i] = 0x01
-			}
-			oldUpdate.SetSyncAggregate(&ethpb.SyncAggregate{
-				SyncCommitteeBits:      scb,
-				SyncCommitteeSignature: make([]byte, 96),
+				// Check that the light client update is saved
+				u, err := s.lcStore.LightClientUpdate(ctx, period)
+				require.NoError(t, err)
+				require.NotNil(t, u)
+				attestedStateRoot, err := l.AttestedState.HashTreeRoot(ctx)
+				require.NoError(t, err)
+				require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
+				require.Equal(t, u.Version(), testVersion)
 			})
 
-			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
-			require.NoError(t, err)
+			t.Run("new update is better", func(t *testing.T) {
+				// create and save old update
+				oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedBlock)
+				require.NoError(t, err)
 
-			s.saveLightClientUpdate(cfg)
+				err = s.lcStore.SaveLightClientUpdate(ctx, period, oldUpdate)
+				require.NoError(t, err)
 
-			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
-			require.NoError(t, err)
-			require.NotNil(t, u)
-			require.DeepEqual(t, oldUpdate, u)
-			require.Equal(t, u.Version(), version.Altair)
-		})
-	})
+				require.NoError(t, s.processLightClientUpdate(cfg))
 
-	t.Run("Capella", func(t *testing.T) {
-		t.Run("No old update", func(t *testing.T) {
-			l := util.NewTestLightClient(t, version.Capella)
-
-			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-
-			err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
-			require.NoError(t, err)
-			attestedBlockRoot, err := l.AttestedBlock.Block().HashTreeRoot()
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.AttestedState, attestedBlockRoot)
-			require.NoError(t, err)
-
-			currentBlockRoot, err := l.Block.Block().HashTreeRoot()
-			require.NoError(t, err)
-			roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock)
-			require.NoError(t, err)
-
-			cfg := &postBlockProcessConfig{
-				ctx:            ctx,
-				roblock:        roblock,
-				postState:      l.State,
-				isValidPayload: true,
-			}
-
-			s.saveLightClientUpdate(cfg)
-
-			// Check that the light client update is saved
-			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
-			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
-			require.NoError(t, err)
-			require.NotNil(t, u)
-			attestedStateRoot, err := l.AttestedState.HashTreeRoot(ctx)
-			require.NoError(t, err)
-			require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
-			require.Equal(t, u.Version(), version.Capella)
-		})
-
-		t.Run("New update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t, version.Capella)
-
-			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-
-			err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
-			require.NoError(t, err)
-			attestedBlockRoot, err := l.AttestedBlock.Block().HashTreeRoot()
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.AttestedState, attestedBlockRoot)
-			require.NoError(t, err)
-
-			currentBlockRoot, err := l.Block.Block().HashTreeRoot()
-			require.NoError(t, err)
-			roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock)
-			require.NoError(t, err)
-
-			cfg := &postBlockProcessConfig{
-				ctx:            ctx,
-				roblock:        roblock,
-				postState:      l.State,
-				isValidPayload: true,
-			}
-
-			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
-
-			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(s.CurrentSlot(), l.AttestedState)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
-			require.NoError(t, err)
-
-			s.saveLightClientUpdate(cfg)
-
-			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
-			require.NoError(t, err)
-			require.NotNil(t, u)
-			attestedStateRoot, err := l.AttestedState.HashTreeRoot(ctx)
-			require.NoError(t, err)
-			require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
-			require.Equal(t, u.Version(), version.Capella)
-		})
-
-		t.Run("Old update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t, version.Capella)
-
-			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-
-			err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
-			require.NoError(t, err)
-			attestedBlockRoot, err := l.AttestedBlock.Block().HashTreeRoot()
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.AttestedState, attestedBlockRoot)
-			require.NoError(t, err)
-
-			currentBlockRoot, err := l.Block.Block().HashTreeRoot()
-			require.NoError(t, err)
-			roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock)
-			require.NoError(t, err)
-
-			cfg := &postBlockProcessConfig{
-				ctx:            ctx,
-				roblock:        roblock,
-				postState:      l.State,
-				isValidPayload: true,
-			}
-
-			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
-
-			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(s.CurrentSlot(), l.AttestedState)
-			require.NoError(t, err)
-
-			scb := make([]byte, 64)
-			for i := 0; i < 5; i++ {
-				scb[i] = 0x01
-			}
-			oldUpdate.SetSyncAggregate(&ethpb.SyncAggregate{
-				SyncCommitteeBits:      scb,
-				SyncCommitteeSignature: make([]byte, 96),
+				u, err := s.lcStore.LightClientUpdate(ctx, period)
+				require.NoError(t, err)
+				require.NotNil(t, u)
+				attestedStateRoot, err := l.AttestedState.HashTreeRoot(ctx)
+				require.NoError(t, err)
+				require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
+				require.Equal(t, u.Version(), testVersion)
 			})
 
-			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
-			require.NoError(t, err)
+			t.Run("old update is better", func(t *testing.T) {
+				// create and save old update
+				oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedBlock)
+				require.NoError(t, err)
 
-			s.saveLightClientUpdate(cfg)
+				// set a better sync aggregate
+				scb := make([]byte, 64)
+				for i := 0; i < 5; i++ {
+					scb[i] = 0x01
+				}
+				oldUpdate.SetSyncAggregate(&ethpb.SyncAggregate{
+					SyncCommitteeBits:      scb,
+					SyncCommitteeSignature: make([]byte, 96),
+				})
 
-			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
-			require.NoError(t, err)
-			require.NotNil(t, u)
-			require.DeepEqual(t, oldUpdate, u)
-			require.Equal(t, u.Version(), version.Capella)
-		})
-	})
+				err = s.lcStore.SaveLightClientUpdate(ctx, period, oldUpdate)
+				require.NoError(t, err)
 
-	t.Run("Deneb", func(t *testing.T) {
-		t.Run("No old update", func(t *testing.T) {
-			l := util.NewTestLightClient(t, version.Deneb)
+				require.NoError(t, s.processLightClientUpdate(cfg))
 
-			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-
-			err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
-			require.NoError(t, err)
-			attestedBlockRoot, err := l.AttestedBlock.Block().HashTreeRoot()
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.AttestedState, attestedBlockRoot)
-			require.NoError(t, err)
-
-			currentBlockRoot, err := l.Block.Block().HashTreeRoot()
-			require.NoError(t, err)
-			roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock)
-			require.NoError(t, err)
-
-			cfg := &postBlockProcessConfig{
-				ctx:            ctx,
-				roblock:        roblock,
-				postState:      l.State,
-				isValidPayload: true,
-			}
-
-			s.saveLightClientUpdate(cfg)
-
-			// Check that the light client update is saved
-			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
-			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
-			require.NoError(t, err)
-			require.NotNil(t, u)
-			attestedStateRoot, err := l.AttestedState.HashTreeRoot(ctx)
-			require.NoError(t, err)
-			require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
-			require.Equal(t, u.Version(), version.Deneb)
-		})
-
-		t.Run("New update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t, version.Deneb)
-
-			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-
-			err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
-			require.NoError(t, err)
-			attestedBlockRoot, err := l.AttestedBlock.Block().HashTreeRoot()
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.AttestedState, attestedBlockRoot)
-			require.NoError(t, err)
-
-			currentBlockRoot, err := l.Block.Block().HashTreeRoot()
-			require.NoError(t, err)
-			roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock)
-			require.NoError(t, err)
-
-			cfg := &postBlockProcessConfig{
-				ctx:            ctx,
-				roblock:        roblock,
-				postState:      l.State,
-				isValidPayload: true,
-			}
-
-			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
-
-			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(s.CurrentSlot(), l.AttestedState)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
-			require.NoError(t, err)
-
-			s.saveLightClientUpdate(cfg)
-
-			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
-			require.NoError(t, err)
-			require.NotNil(t, u)
-			attestedStateRoot, err := l.AttestedState.HashTreeRoot(ctx)
-			require.NoError(t, err)
-			require.Equal(t, attestedStateRoot, [32]byte(u.AttestedHeader().Beacon().StateRoot))
-			require.Equal(t, u.Version(), version.Deneb)
-		})
-
-		t.Run("Old update is better", func(t *testing.T) {
-			l := util.NewTestLightClient(t, version.Deneb)
-
-			s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-
-			err := s.cfg.BeaconDB.SaveBlock(ctx, l.AttestedBlock)
-			require.NoError(t, err)
-			attestedBlockRoot, err := l.AttestedBlock.Block().HashTreeRoot()
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.AttestedState, attestedBlockRoot)
-			require.NoError(t, err)
-
-			currentBlockRoot, err := l.Block.Block().HashTreeRoot()
-			require.NoError(t, err)
-			roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
-			require.NoError(t, err)
-			err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
-			require.NoError(t, err)
-
-			err = s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock)
-			require.NoError(t, err)
-
-			cfg := &postBlockProcessConfig{
-				ctx:            ctx,
-				roblock:        roblock,
-				postState:      l.State,
-				isValidPayload: true,
-			}
-
-			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
-
-			// create and save old update
-			oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(s.CurrentSlot(), l.AttestedState)
-			require.NoError(t, err)
-
-			scb := make([]byte, 64)
-			for i := 0; i < 5; i++ {
-				scb[i] = 0x01
-			}
-			oldUpdate.SetSyncAggregate(&ethpb.SyncAggregate{
-				SyncCommitteeBits:      scb,
-				SyncCommitteeSignature: make([]byte, 96),
+				u, err := s.lcStore.LightClientUpdate(ctx, period)
+				require.NoError(t, err)
+				require.NotNil(t, u)
+				require.DeepEqual(t, oldUpdate, u)
+				require.Equal(t, u.Version(), testVersion)
 			})
-
-			err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
-			require.NoError(t, err)
-
-			s.saveLightClientUpdate(cfg)
-
-			u, err := s.cfg.BeaconDB.LightClientUpdate(ctx, period)
-			require.NoError(t, err)
-			require.NotNil(t, u)
-			require.DeepEqual(t, oldUpdate, u)
-			require.Equal(t, u.Version(), version.Deneb)
 		})
-	})
-
-	reset()
+	}
 }
 
-func TestSaveLightClientBootstrap(t *testing.T) {
-	featCfg := &features.Flags{}
-	featCfg.EnableLightClient = true
-	reset := features.InitWithReset(featCfg)
+type testIsAvailableParams struct {
+	options                 []Option
+	blobKzgCommitmentsCount uint64
+	columnsToSave           []uint64
+}
 
-	s, tr := minimalTestService(t)
-	ctx := tr.ctx
+func testIsAvailableSetup(t *testing.T, params testIsAvailableParams) (context.Context, context.CancelFunc, *Service, [fieldparams.RootLength]byte, interfaces.SignedBeaconBlock) {
+	ctx, cancel := context.WithCancel(t.Context())
+	dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
 
-	t.Run("Altair", func(t *testing.T) {
-		l := util.NewTestLightClient(t, version.Altair)
+	options := append(params.options, WithDataColumnStorage(dataColumnStorage))
+	service, _ := minimalTestService(t, options...)
 
-		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().AltairForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
+	genesisState, secretKeys := util.DeterministicGenesisStateElectra(t, 32 /*validator count*/)
 
-		currentBlockRoot, err := l.Block.Block().HashTreeRoot()
-		require.NoError(t, err)
-		roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
-		require.NoError(t, err)
+	err := service.saveGenesisData(ctx, genesisState)
+	require.NoError(t, err)
 
-		err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
-		require.NoError(t, err)
-		err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
-		require.NoError(t, err)
+	conf := util.DefaultBlockGenConfig()
+	conf.NumBlobKzgCommitments = params.blobKzgCommitmentsCount
 
-		cfg := &postBlockProcessConfig{
-			ctx:            ctx,
-			roblock:        roblock,
-			postState:      l.State,
-			isValidPayload: true,
+	signedBeaconBlock, err := util.GenerateFullBlockFulu(genesisState, secretKeys, conf, 10 /*block slot*/)
+	require.NoError(t, err)
+
+	block := signedBeaconBlock.Block
+	bodyRoot, err := block.Body.HashTreeRoot()
+	require.NoError(t, err)
+
+	root, err := block.HashTreeRoot()
+	require.NoError(t, err)
+
+	dataColumnsParams := make([]util.DataColumnParam, 0, len(params.columnsToSave))
+	for _, i := range params.columnsToSave {
+		dataColumnParam := util.DataColumnParam{
+			Index:         i,
+			Slot:          block.Slot,
+			ProposerIndex: block.ProposerIndex,
+			ParentRoot:    block.ParentRoot,
+			StateRoot:     block.StateRoot,
+			BodyRoot:      bodyRoot[:],
 		}
+		dataColumnsParams = append(dataColumnsParams, dataColumnParam)
+	}
 
-		s.saveLightClientBootstrap(cfg)
+	_, verifiedRODataColumns := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnsParams)
 
-		// Check that the light client bootstrap is saved
-		b, err := s.cfg.BeaconDB.LightClientBootstrap(ctx, currentBlockRoot[:])
+	err = dataColumnStorage.Save(verifiedRODataColumns)
+	require.NoError(t, err)
+
+	signed, err := consensusblocks.NewSignedBeaconBlock(signedBeaconBlock)
+	require.NoError(t, err)
+
+	return ctx, cancel, service, root, signed
+}
+
+func TestIsDataAvailable(t *testing.T) {
+	t.Run("Fulu - out of retention window", func(t *testing.T) {
+		params := testIsAvailableParams{options: []Option{WithGenesisTime(time.Unix(0, 0))}}
+		ctx, _, service, root, signed := testIsAvailableSetup(t, params)
+
+		err := service.isDataAvailable(ctx, root, signed)
 		require.NoError(t, err)
-		require.NotNil(t, b)
-
-		stateRoot, err := l.State.HashTreeRoot(ctx)
-		require.NoError(t, err)
-		require.Equal(t, stateRoot, [32]byte(b.Header().Beacon().StateRoot))
-		require.Equal(t, b.Version(), version.Altair)
 	})
 
-	t.Run("Capella", func(t *testing.T) {
-		l := util.NewTestLightClient(t, version.Capella)
+	t.Run("Fulu - no commitment in blocks", func(t *testing.T) {
+		ctx, _, service, root, signed := testIsAvailableSetup(t, testIsAvailableParams{})
 
-		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().CapellaForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-
-		currentBlockRoot, err := l.Block.Block().HashTreeRoot()
+		err := service.isDataAvailable(ctx, root, signed)
 		require.NoError(t, err)
-		roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
-		require.NoError(t, err)
-
-		err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
-		require.NoError(t, err)
-		err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
-		require.NoError(t, err)
-
-		cfg := &postBlockProcessConfig{
-			ctx:            ctx,
-			roblock:        roblock,
-			postState:      l.State,
-			isValidPayload: true,
-		}
-
-		s.saveLightClientBootstrap(cfg)
-
-		// Check that the light client bootstrap is saved
-		b, err := s.cfg.BeaconDB.LightClientBootstrap(ctx, currentBlockRoot[:])
-		require.NoError(t, err)
-		require.NotNil(t, b)
-
-		stateRoot, err := l.State.HashTreeRoot(ctx)
-		require.NoError(t, err)
-		require.Equal(t, stateRoot, [32]byte(b.Header().Beacon().StateRoot))
-		require.Equal(t, b.Version(), version.Capella)
 	})
 
-	t.Run("Deneb", func(t *testing.T) {
-		l := util.NewTestLightClient(t, version.Deneb)
-
-		s.genesisTime = time.Unix(time.Now().Unix()-(int64(params.BeaconConfig().DenebForkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-
-		currentBlockRoot, err := l.Block.Block().HashTreeRoot()
-		require.NoError(t, err)
-		roblock, err := consensusblocks.NewROBlockWithRoot(l.Block, currentBlockRoot)
-		require.NoError(t, err)
-
-		err = s.cfg.BeaconDB.SaveBlock(ctx, roblock)
-		require.NoError(t, err)
-		err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
-		require.NoError(t, err)
-
-		cfg := &postBlockProcessConfig{
-			ctx:            ctx,
-			roblock:        roblock,
-			postState:      l.State,
-			isValidPayload: true,
+	t.Run("Fulu - more than half of the columns in custody", func(t *testing.T) {
+		minimumColumnsCountToReconstruct := peerdas.MinimumColumnCountToReconstruct()
+		indices := make([]uint64, 0, minimumColumnsCountToReconstruct)
+		for i := range minimumColumnsCountToReconstruct {
+			indices = append(indices, i)
 		}
 
-		s.saveLightClientBootstrap(cfg)
+		params := testIsAvailableParams{
+			columnsToSave:           indices,
+			blobKzgCommitmentsCount: 3,
+		}
 
-		// Check that the light client bootstrap is saved
-		b, err := s.cfg.BeaconDB.LightClientBootstrap(ctx, currentBlockRoot[:])
-		require.NoError(t, err)
-		require.NotNil(t, b)
+		ctx, _, service, root, signed := testIsAvailableSetup(t, params)
 
-		stateRoot, err := l.State.HashTreeRoot(ctx)
+		err := service.isDataAvailable(ctx, root, signed)
 		require.NoError(t, err)
-		require.Equal(t, stateRoot, [32]byte(b.Header().Beacon().StateRoot))
-		require.Equal(t, b.Version(), version.Deneb)
 	})
 
-	reset()
+	t.Run("Fulu - no missing data columns", func(t *testing.T) {
+		params := testIsAvailableParams{
+			columnsToSave:           []uint64{1, 17, 19, 42, 75, 87, 102, 117, 119}, // 119 is not needed
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, _, service, root, signed := testIsAvailableSetup(t, params)
+
+		err := service.isDataAvailable(ctx, root, signed)
+		require.NoError(t, err)
+	})
+
+	t.Run("Fulu - some initially missing data columns (no reconstruction)", func(t *testing.T) {
+		startWaiting := make(chan bool)
+
+		testParams := testIsAvailableParams{
+			options:       []Option{WithStartWaitingDataColumnSidecars(startWaiting)},
+			columnsToSave: []uint64{1, 17, 19, 75, 102, 117, 119}, // 119 is not needed, 42 and 87 are missing
+
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, _, service, root, signed := testIsAvailableSetup(t, testParams)
+		block := signed.Block()
+		slot := block.Slot()
+		proposerIndex := block.ProposerIndex()
+		parentRoot := block.ParentRoot()
+		stateRoot := block.StateRoot()
+		bodyRoot, err := block.Body().HashTreeRoot()
+		require.NoError(t, err)
+
+		_, verifiedSidecarsWrongRoot := util.CreateTestVerifiedRoDataColumnSidecars(
+			t,
+			[]util.DataColumnParam{
+				{Index: 42, Slot: slot + 1}, // Needed index, but not for this slot.
+			})
+
+		_, verifiedSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, []util.DataColumnParam{
+			{Index: 87, Slot: slot, ProposerIndex: proposerIndex, ParentRoot: parentRoot[:], StateRoot: stateRoot[:], BodyRoot: bodyRoot[:]}, // Needed index
+			{Index: 1, Slot: slot, ProposerIndex: proposerIndex, ParentRoot: parentRoot[:], StateRoot: stateRoot[:], BodyRoot: bodyRoot[:]},  // Not needed index
+			{Index: 42, Slot: slot, ProposerIndex: proposerIndex, ParentRoot: parentRoot[:], StateRoot: stateRoot[:], BodyRoot: bodyRoot[:]}, // Needed index
+		})
+
+		go func() {
+			<-startWaiting
+
+			err := service.dataColumnStorage.Save(verifiedSidecarsWrongRoot)
+			require.NoError(t, err)
+
+			err = service.dataColumnStorage.Save(verifiedSidecars)
+			require.NoError(t, err)
+		}()
+
+		ctx, cancel := context.WithTimeout(ctx, time.Second*2)
+		defer cancel()
+
+		err = service.isDataAvailable(ctx, root, signed)
+		require.NoError(t, err)
+	})
+
+	t.Run("Fulu - some initially missing data columns (reconstruction)", func(t *testing.T) {
+		const (
+			missingColumns = uint64(2)
+			cgc            = 128
+		)
+
+		startWaiting := make(chan bool)
+
+		minimumColumnsCountToReconstruct := peerdas.MinimumColumnCountToReconstruct()
+		indices := make([]uint64, 0, minimumColumnsCountToReconstruct-missingColumns)
+
+		for i := range minimumColumnsCountToReconstruct - missingColumns {
+			indices = append(indices, i)
+		}
+
+		testParams := testIsAvailableParams{
+			options:                 []Option{WithStartWaitingDataColumnSidecars(startWaiting)},
+			columnsToSave:           indices,
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, _, service, root, signed := testIsAvailableSetup(t, testParams)
+		_, _, err := service.cfg.P2P.UpdateCustodyInfo(0, cgc)
+		require.NoError(t, err)
+		block := signed.Block()
+		slot := block.Slot()
+		proposerIndex := block.ProposerIndex()
+		parentRoot := block.ParentRoot()
+		stateRoot := block.StateRoot()
+		bodyRoot, err := block.Body().HashTreeRoot()
+		require.NoError(t, err)
+
+		dataColumnParams := make([]util.DataColumnParam, 0, missingColumns)
+		for i := minimumColumnsCountToReconstruct - missingColumns; i < minimumColumnsCountToReconstruct; i++ {
+			dataColumnParam := util.DataColumnParam{
+				Index:         i,
+				Slot:          slot,
+				ProposerIndex: proposerIndex,
+				ParentRoot:    parentRoot[:],
+				StateRoot:     stateRoot[:],
+				BodyRoot:      bodyRoot[:],
+			}
+
+			dataColumnParams = append(dataColumnParams, dataColumnParam)
+		}
+
+		_, verifiedSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParams)
+
+		go func() {
+			<-startWaiting
+
+			err := service.dataColumnStorage.Save(verifiedSidecars)
+			require.NoError(t, err)
+		}()
+
+		ctx, cancel := context.WithTimeout(ctx, time.Second*2)
+		defer cancel()
+
+		err = service.isDataAvailable(ctx, root, signed)
+		require.NoError(t, err)
+	})
+
+	t.Run("Fulu - some columns are definitively missing", func(t *testing.T) {
+		startWaiting := make(chan bool)
+
+		params := testIsAvailableParams{
+			options:                 []Option{WithStartWaitingDataColumnSidecars(startWaiting)},
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, cancel, service, root, signed := testIsAvailableSetup(t, params)
+
+		go func() {
+			<-startWaiting
+			cancel()
+		}()
+
+		err := service.isDataAvailable(ctx, root, signed)
+		require.NotNil(t, err)
+	})
 }
 
 func setupLightClientTestRequirements(ctx context.Context, t *testing.T, s *Service, v int, options ...util.LightClientOption) (*util.TestLightClient, *postBlockProcessConfig) {
@@ -3309,6 +3112,7 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 	params.OverrideBeaconConfig(beaconCfg)
 
 	s, tr := minimalTestService(t)
+	s.cfg.P2P = &mockp2p.FakeP2P{}
 	ctx := tr.ctx
 
 	testCases := []struct {
@@ -3354,7 +3158,7 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 				expectedVersion = version.Altair
 			case 2:
 				forkEpoch = uint64(params.BeaconConfig().BellatrixForkEpoch)
-				expectedVersion = version.Altair
+				expectedVersion = version.Bellatrix
 			case 3:
 				forkEpoch = uint64(params.BeaconConfig().CapellaForkEpoch)
 				expectedVersion = version.Capella
@@ -3363,14 +3167,14 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 				expectedVersion = version.Deneb
 			case 5:
 				forkEpoch = uint64(params.BeaconConfig().ElectraForkEpoch)
-				expectedVersion = version.Deneb
+				expectedVersion = version.Electra
 			default:
 				t.Errorf("Unsupported fork version %s", version.String(testVersion))
 			}
 
 			t.Run(version.String(testVersion)+"_"+tc.name, func(t *testing.T) {
 				s.genesisTime = time.Unix(time.Now().Unix()-(int64(forkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-				s.lcStore = &lightClient.Store{}
+				s.lcStore = lightClient.NewLightClientStore(s.cfg.BeaconDB, s.cfg.P2P, s.cfg.StateNotifier.StateFeed())
 
 				var oldActualUpdate interfaces.LightClientOptimisticUpdate
 				var err error
@@ -3379,14 +3183,7 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 					lOld, cfgOld := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.oldOptions...)
 					require.NoError(t, s.processLightClientOptimisticUpdate(cfgOld.ctx, cfgOld.roblock, cfgOld.postState))
 
-					oldActualUpdate, err = lightClient.NewLightClientOptimisticUpdateFromBeaconState(
-						lOld.Ctx,
-						lOld.State.Slot(),
-						lOld.State,
-						lOld.Block,
-						lOld.AttestedState,
-						lOld.AttestedBlock,
-					)
+					oldActualUpdate, err = lightClient.NewLightClientOptimisticUpdateFromBeaconState(lOld.Ctx, lOld.State, lOld.Block, lOld.AttestedState, lOld.AttestedBlock)
 					require.NoError(t, err)
 
 					// check that the old update is saved
@@ -3400,14 +3197,7 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 				lNew, cfgNew := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.newOptions...)
 				require.NoError(t, s.processLightClientOptimisticUpdate(cfgNew.ctx, cfgNew.roblock, cfgNew.postState))
 
-				newActualUpdate, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(
-					lNew.Ctx,
-					lNew.State.Slot(),
-					lNew.State,
-					lNew.Block,
-					lNew.AttestedState,
-					lNew.AttestedBlock,
-				)
+				newActualUpdate, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(lNew.Ctx, lNew.State, lNew.Block, lNew.AttestedState, lNew.AttestedBlock)
 				require.NoError(t, err)
 
 				require.DeepNotEqual(t, newActualUpdate, oldActualUpdate, "new update should not be equal to old update")
@@ -3444,6 +3234,7 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 	params.OverrideBeaconConfig(beaconCfg)
 
 	s, tr := minimalTestService(t)
+	s.cfg.P2P = &mockp2p.FakeP2P{}
 	ctx := tr.ctx
 
 	testCases := []struct {
@@ -3459,39 +3250,39 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 			expectReplace: true,
 		},
 		{
-			name:          "Old update is better - age - no supermajority",
+			name:          "Old update is better - finalized slot is higher",
 			oldOptions:    []util.LightClientOption{util.WithIncreasedFinalizedSlot(1)},
 			newOptions:    []util.LightClientOption{},
 			expectReplace: false,
 		},
 		{
-			name:          "Old update is better - age - both supermajority",
-			oldOptions:    []util.LightClientOption{util.WithIncreasedFinalizedSlot(1), util.WithSupermajority()},
-			newOptions:    []util.LightClientOption{util.WithSupermajority()},
-			expectReplace: false,
-		},
-		{
-			name:          "Old update is better - supermajority",
-			oldOptions:    []util.LightClientOption{util.WithSupermajority()},
+			name:          "Old update is better - attested slot is higher",
+			oldOptions:    []util.LightClientOption{util.WithIncreasedAttestedSlot(1)},
 			newOptions:    []util.LightClientOption{},
 			expectReplace: false,
 		},
 		{
-			name:          "New update is better - age - both supermajority",
-			oldOptions:    []util.LightClientOption{util.WithSupermajority()},
-			newOptions:    []util.LightClientOption{util.WithIncreasedFinalizedSlot(1), util.WithSupermajority()},
+			name:          "Old update is better - signature slot is higher",
+			oldOptions:    []util.LightClientOption{util.WithIncreasedSignatureSlot(1)},
+			newOptions:    []util.LightClientOption{},
+			expectReplace: false,
+		},
+		{
+			name:          "New update is better - finalized slot is higher",
+			oldOptions:    []util.LightClientOption{},
+			newOptions:    []util.LightClientOption{util.WithIncreasedAttestedSlot(1)},
 			expectReplace: true,
 		},
 		{
-			name:          "New update is better - age - no supermajority",
+			name:          "New update is better - attested slot is higher",
 			oldOptions:    []util.LightClientOption{},
-			newOptions:    []util.LightClientOption{util.WithIncreasedFinalizedSlot(1)},
+			newOptions:    []util.LightClientOption{util.WithIncreasedAttestedSlot(1)},
 			expectReplace: true,
 		},
 		{
-			name:          "New update is better - supermajority",
+			name:          "New update is better - signature slot is higher",
 			oldOptions:    []util.LightClientOption{},
-			newOptions:    []util.LightClientOption{util.WithSupermajority()},
+			newOptions:    []util.LightClientOption{util.WithIncreasedSignatureSlot(1)},
 			expectReplace: true,
 		},
 	}
@@ -3507,7 +3298,7 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 				expectedVersion = version.Altair
 			case 2:
 				forkEpoch = uint64(params.BeaconConfig().BellatrixForkEpoch)
-				expectedVersion = version.Altair
+				expectedVersion = version.Bellatrix
 			case 3:
 				forkEpoch = uint64(params.BeaconConfig().CapellaForkEpoch)
 				expectedVersion = version.Capella
@@ -3523,7 +3314,7 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 
 			t.Run(version.String(testVersion)+"_"+tc.name, func(t *testing.T) {
 				s.genesisTime = time.Unix(time.Now().Unix()-(int64(forkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-				s.lcStore = &lightClient.Store{}
+				s.lcStore = lightClient.NewLightClientStore(s.cfg.BeaconDB, s.cfg.P2P, s.cfg.StateNotifier.StateFeed())
 
 				var actualOldUpdate, actualNewUpdate interfaces.LightClientFinalityUpdate
 				var err error
@@ -3534,15 +3325,7 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 					require.NoError(t, s.processLightClientFinalityUpdate(cfgOld.ctx, cfgOld.roblock, cfgOld.postState))
 
 					// check that the old update is saved
-					actualOldUpdate, err = lightClient.NewLightClientFinalityUpdateFromBeaconState(
-						ctx,
-						cfgOld.postState.Slot(),
-						cfgOld.postState,
-						cfgOld.roblock,
-						lOld.AttestedState,
-						lOld.AttestedBlock,
-						lOld.FinalizedBlock,
-					)
+					actualOldUpdate, err = lightClient.NewLightClientFinalityUpdateFromBeaconState(ctx, cfgOld.postState, cfgOld.roblock, lOld.AttestedState, lOld.AttestedBlock, lOld.FinalizedBlock)
 					require.NoError(t, err)
 					oldUpdate := s.lcStore.LastFinalityUpdate()
 					require.DeepEqual(t, actualOldUpdate, oldUpdate)
@@ -3553,15 +3336,7 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 				require.NoError(t, s.processLightClientFinalityUpdate(cfgNew.ctx, cfgNew.roblock, cfgNew.postState))
 
 				// check that the actual old update and the actual new update are different
-				actualNewUpdate, err = lightClient.NewLightClientFinalityUpdateFromBeaconState(
-					ctx,
-					cfgNew.postState.Slot(),
-					cfgNew.postState,
-					cfgNew.roblock,
-					lNew.AttestedState,
-					lNew.AttestedBlock,
-					lNew.FinalizedBlock,
-				)
+				actualNewUpdate, err = lightClient.NewLightClientFinalityUpdateFromBeaconState(ctx, cfgNew.postState, cfgNew.roblock, lNew.AttestedState, lNew.AttestedBlock, lNew.FinalizedBlock)
 				require.NoError(t, err)
 				require.DeepNotEqual(t, actualOldUpdate, actualNewUpdate)
 

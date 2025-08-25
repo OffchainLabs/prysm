@@ -8,6 +8,7 @@ import (
 	"time"
 
 	prysmTrace "github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -51,6 +52,7 @@ func Setup(ctx context.Context, serviceName, processName, endpoint string, sampl
 				semconv.SchemaURL,
 				semconv.ServiceNameKey.String(serviceName),
 				attribute.String("process_name", processName),
+				attribute.String("build", version.BuildData()),
 			),
 		),
 	)

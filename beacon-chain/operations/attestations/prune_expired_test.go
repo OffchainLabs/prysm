@@ -13,12 +13,11 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestPruneExpired_Ticker(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 
 	s, err := NewService(ctx, &Config{
@@ -48,7 +47,7 @@ func TestPruneExpired_Ticker(t *testing.T) {
 	}
 
 	// Rewind back one epoch worth of time.
-	s.genesisTime = uint64(prysmTime.Now().Unix()) - uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
+	s.genesisTime = time.Now().Add(-1 * time.Duration(params.BeaconConfig().SlotsPerEpoch) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
 
 	go s.pruneExpired()
 
@@ -83,7 +82,7 @@ func TestPruneExpired_Ticker(t *testing.T) {
 }
 
 func TestPruneExpired_PruneExpiredAtts(t *testing.T) {
-	s, err := NewService(context.Background(), &Config{Pool: NewPool()})
+	s, err := NewService(t.Context(), &Config{Pool: NewPool()})
 	require.NoError(t, err)
 
 	ad1 := util.HydrateAttestationData(&ethpb.AttestationData{})
@@ -101,7 +100,7 @@ func TestPruneExpired_PruneExpiredAtts(t *testing.T) {
 	}
 
 	// Rewind back one epoch worth of time.
-	s.genesisTime = uint64(prysmTime.Now().Unix()) - uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
+	s.genesisTime = time.Now().Add(-1 * time.Duration(params.BeaconConfig().SlotsPerEpoch) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
 
 	s.pruneExpiredAtts()
 	// All the attestations on slot 0 should be pruned.
@@ -118,11 +117,11 @@ func TestPruneExpired_PruneExpiredAtts(t *testing.T) {
 }
 
 func TestPruneExpired_Expired(t *testing.T) {
-	s, err := NewService(context.Background(), &Config{Pool: NewPool()})
+	s, err := NewService(t.Context(), &Config{Pool: NewPool()})
 	require.NoError(t, err)
 
 	// Rewind back one epoch worth of time.
-	s.genesisTime = uint64(prysmTime.Now().Unix()) - uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
+	s.genesisTime = time.Now().Add(-1 * time.Duration(params.BeaconConfig().SlotsPerEpoch) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
 	assert.Equal(t, true, s.expired(0), "Should be expired")
 	assert.Equal(t, false, s.expired(1), "Should not be expired")
 }
@@ -133,11 +132,11 @@ func TestPruneExpired_ExpiredDeneb(t *testing.T) {
 	cfg.DenebForkEpoch = 3
 	params.OverrideBeaconConfig(cfg)
 
-	s, err := NewService(context.Background(), &Config{Pool: NewPool()})
+	s, err := NewService(t.Context(), &Config{Pool: NewPool()})
 	require.NoError(t, err)
 
 	// Rewind back 4 epochs + 10 slots worth of time.
-	s.genesisTime = uint64(prysmTime.Now().Unix()) - (4*uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot)) + 10)
+	s.genesisTime = time.Now().Add(-4*time.Duration(params.BeaconConfig().SlotsPerEpoch*primitives.Slot(params.BeaconConfig().SecondsPerSlot))*time.Second - 10*time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second)
 	secondEpochStart := primitives.Slot(2 * uint64(params.BeaconConfig().SlotsPerEpoch))
 	thirdEpochStart := primitives.Slot(3 * uint64(params.BeaconConfig().SlotsPerEpoch))
 

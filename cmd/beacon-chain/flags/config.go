@@ -8,14 +8,17 @@ import (
 // GlobalFlags specifies all the global flags for the
 // beacon node.
 type GlobalFlags struct {
-	SubscribeToAllSubnets      bool
-	MinimumSyncPeers           int
-	MinimumPeersPerSubnet      int
-	MaxConcurrentDials         int
-	BlockBatchLimit            int
-	BlockBatchLimitBurstFactor int
-	BlobBatchLimit             int
-	BlobBatchLimitBurstFactor  int
+	SubscribeToAllSubnets           bool
+	SubscribeAllDataSubnets         bool
+	MinimumSyncPeers                int
+	MinimumPeersPerSubnet           int
+	MaxConcurrentDials              int
+	BlockBatchLimit                 int
+	BlockBatchLimitBurstFactor      int
+	BlobBatchLimit                  int
+	BlobBatchLimitBurstFactor       int
+	DataColumnBatchLimit            int
+	DataColumnBatchLimitBurstFactor int
 }
 
 var globalConfig *GlobalFlags
@@ -37,16 +40,26 @@ func Init(c *GlobalFlags) {
 // based on the provided cli context.
 func ConfigureGlobalFlags(ctx *cli.Context) {
 	cfg := &GlobalFlags{}
+
 	if ctx.Bool(SubscribeToAllSubnets.Name) {
-		log.Warn("Subscribing to All Attestation Subnets")
+		log.Warning("Subscribing to all attestation subnets")
 		cfg.SubscribeToAllSubnets = true
 	}
+
+	if ctx.Bool(SubscribeAllDataSubnets.Name) {
+		log.Warning("Subscribing to all data subnets")
+		cfg.SubscribeAllDataSubnets = true
+	}
+
 	cfg.BlockBatchLimit = ctx.Int(BlockBatchLimit.Name)
 	cfg.BlockBatchLimitBurstFactor = ctx.Int(BlockBatchLimitBurstFactor.Name)
 	cfg.BlobBatchLimit = ctx.Int(BlobBatchLimit.Name)
 	cfg.BlobBatchLimitBurstFactor = ctx.Int(BlobBatchLimitBurstFactor.Name)
+	cfg.DataColumnBatchLimit = ctx.Int(DataColumnBatchLimit.Name)
+	cfg.DataColumnBatchLimitBurstFactor = ctx.Int(DataColumnBatchLimitBurstFactor.Name)
 	cfg.MinimumPeersPerSubnet = ctx.Int(MinPeersPerSubnet.Name)
 	cfg.MaxConcurrentDials = ctx.Int(MaxConcurrentDials.Name)
+
 	configureMinimumPeers(ctx, cfg)
 
 	Init(cfg)

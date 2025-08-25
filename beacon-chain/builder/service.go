@@ -24,7 +24,8 @@ var ErrNoBuilder = errors.New("builder endpoint not configured")
 
 // BlockBuilder defines the interface for interacting with the block builder
 type BlockBuilder interface {
-	SubmitBlindedBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, *v1.BlobsBundle, error)
+	SubmitBlindedBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, v1.BlobsBundler, error)
+	SubmitBlindedBlockPostFulu(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) error
 	GetHeader(ctx context.Context, slot primitives.Slot, parentHash [32]byte, pubKey [48]byte) (builder.SignedBid, error)
 	RegisterValidator(ctx context.Context, reg []*ethpb.SignedValidatorRegistrationV1) error
 	RegistrationByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (*ethpb.ValidatorRegistrationV1, error)
@@ -68,7 +69,7 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 			log.WithError(err).Error("Failed to check builder status")
 		} else {
 			log.WithField("endpoint", s.c.NodeURL()).Info("Builder has been configured")
-			log.Warn("Outsourcing block construction to external builders adds non-trivial delay to block propagation time.  " +
+			log.Warn("Outsourcing block construction to external builders adds non-trivial delay to block propagation time. " +
 				"Builder-constructed blocks or fallback blocks may get orphaned. Use at your own risk!")
 		}
 	}
@@ -87,7 +88,7 @@ func (s *Service) Stop() error {
 }
 
 // SubmitBlindedBlock submits a blinded block to the builder relay network.
-func (s *Service) SubmitBlindedBlock(ctx context.Context, b interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, *v1.BlobsBundle, error) {
+func (s *Service) SubmitBlindedBlock(ctx context.Context, b interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, v1.BlobsBundler, error) {
 	ctx, span := trace.StartSpan(ctx, "builder.SubmitBlindedBlock")
 	defer span.End()
 	start := time.Now()
@@ -99,6 +100,22 @@ func (s *Service) SubmitBlindedBlock(ctx context.Context, b interfaces.ReadOnlyS
 	}
 
 	return s.c.SubmitBlindedBlock(ctx, b)
+}
+
+// SubmitBlindedBlockPostFulu submits a blinded block to the builder relay network post-Fulu.
+// After Fulu, relays only return status codes (no payload).
+func (s *Service) SubmitBlindedBlockPostFulu(ctx context.Context, b interfaces.ReadOnlySignedBeaconBlock) error {
+	ctx, span := trace.StartSpan(ctx, "builder.SubmitBlindedBlockPostFulu")
+	defer span.End()
+	start := time.Now()
+	defer func() {
+		submitBlindedBlockLatency.Observe(float64(time.Since(start).Milliseconds()))
+	}()
+	if s.c == nil {
+		return ErrNoBuilder
+	}
+
+	return s.c.SubmitBlindedBlockPostFulu(ctx, b)
 }
 
 // GetHeader retrieves the header for a given slot and parent hash from the builder relay network.

@@ -12,7 +12,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	"github.com/OffchainLabs/prysm/v6/runtime/interop"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
@@ -30,18 +29,17 @@ func TestDomainCache(t *testing.T) {
 	}
 
 	vRoot, err := hexutil.Decode("0x0011223344556677889900112233445566778899001122334455667788990011")
+	require.NoError(t, err)
 	dType := cfg.DomainBeaconProposer
-	require.NoError(t, err)
 	require.Equal(t, 32, len(vRoot))
-	fsched := forks.NewOrderedSchedule(cfg)
-	dc, err := newDomainCache(vRoot, dType, fsched)
+	dc, err := newDomainCache(vRoot, dType)
 	require.NoError(t, err)
-	require.Equal(t, len(fsched), len(dc.forkDomains))
-	for i := range fsched {
-		e := fsched[i].Epoch
-		ad, err := dc.forEpoch(e)
+	schedule := params.SortedForkSchedule()
+	require.Equal(t, len(schedule), len(dc.forkDomains))
+	for _, entry := range schedule {
+		ad, err := dc.forEpoch(entry.Epoch)
 		require.NoError(t, err)
-		ed, err := signing.ComputeDomain(dType, fsched[i].Version[:], vRoot)
+		ed, err := signing.ComputeDomain(dType, entry.ForkVersion[:], vRoot)
 		require.NoError(t, err)
 		require.DeepEqual(t, ed, ad)
 	}

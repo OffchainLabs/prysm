@@ -1,7 +1,6 @@
 package transition_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
@@ -12,7 +11,7 @@ import (
 )
 
 func TestTrailingSlotState_RoundTrip(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	r := []byte{'a'}
 	s := transition.NextSlotState(r, 0)
 	require.Equal(t, nil, s)
@@ -36,7 +35,7 @@ func TestTrailingSlotState_RoundTrip(t *testing.T) {
 }
 
 func TestTrailingSlotState_StateAdvancedBeyondRequest(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	r := []byte{'a'}
 	s := transition.NextSlotState(r, 0)
 	require.Equal(t, nil, s)

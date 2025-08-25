@@ -2,8 +2,6 @@ package state_native
 
 import (
 	customtypes "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/custom-types"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/pkg/errors"
@@ -24,20 +22,14 @@ func (b *BeaconState) ToProtoUnsafe() interface{} {
 	var bals []uint64
 	var inactivityScores []uint64
 
-	if features.Get().EnableExperimentalState {
-		if b.balancesMultiValue != nil {
-			bals = b.balancesMultiValue.Value(b)
-		}
-		if b.inactivityScoresMultiValue != nil {
-			inactivityScores = b.inactivityScoresMultiValue.Value(b)
-		}
-		if b.validatorsMultiValue != nil {
-			vals = b.validatorsMultiValue.Value(b)
-		}
-	} else {
-		bals = b.balances
-		inactivityScores = b.inactivityScores
-		vals = b.validators
+	if b.balancesMultiValue != nil {
+		bals = b.balancesMultiValue.Value(b)
+	}
+	if b.inactivityScoresMultiValue != nil {
+		inactivityScores = b.inactivityScoresMultiValue.Value(b)
+	}
+	if b.validatorsMultiValue != nil {
+		vals = b.validatorsMultiValue.Value(b)
 	}
 
 	switch b.version {
@@ -182,7 +174,7 @@ func (b *BeaconState) ToProtoUnsafe() interface{} {
 			NextWithdrawalValidatorIndex: b.nextWithdrawalValidatorIndex,
 			HistoricalSummaries:          b.historicalSummaries,
 		}
-	case version.Electra, version.Fulu:
+	case version.Electra:
 		return &ethpb.BeaconStateElectra{
 			GenesisTime:                   b.genesisTime,
 			GenesisValidatorsRoot:         gvrCopy[:],
@@ -221,6 +213,51 @@ func (b *BeaconState) ToProtoUnsafe() interface{} {
 			PendingDeposits:               b.pendingDeposits,
 			PendingPartialWithdrawals:     b.pendingPartialWithdrawals,
 			PendingConsolidations:         b.pendingConsolidations,
+		}
+	case version.Fulu:
+		lookahead := make([]uint64, len(b.proposerLookahead))
+		for i, v := range b.proposerLookahead {
+			lookahead[i] = uint64(v)
+		}
+		return &ethpb.BeaconStateFulu{
+			GenesisTime:                   b.genesisTime,
+			GenesisValidatorsRoot:         gvrCopy[:],
+			Slot:                          b.slot,
+			Fork:                          b.fork,
+			LatestBlockHeader:             b.latestBlockHeader,
+			BlockRoots:                    br,
+			StateRoots:                    sr,
+			HistoricalRoots:               b.historicalRoots.Slice(),
+			Eth1Data:                      b.eth1Data,
+			Eth1DataVotes:                 b.eth1DataVotes,
+			Eth1DepositIndex:              b.eth1DepositIndex,
+			Validators:                    vals,
+			Balances:                      bals,
+			RandaoMixes:                   rm,
+			Slashings:                     b.slashings,
+			PreviousEpochParticipation:    b.previousEpochParticipation,
+			CurrentEpochParticipation:     b.currentEpochParticipation,
+			JustificationBits:             b.justificationBits,
+			PreviousJustifiedCheckpoint:   b.previousJustifiedCheckpoint,
+			CurrentJustifiedCheckpoint:    b.currentJustifiedCheckpoint,
+			FinalizedCheckpoint:           b.finalizedCheckpoint,
+			InactivityScores:              inactivityScores,
+			CurrentSyncCommittee:          b.currentSyncCommittee,
+			NextSyncCommittee:             b.nextSyncCommittee,
+			LatestExecutionPayloadHeader:  b.latestExecutionPayloadHeaderDeneb,
+			NextWithdrawalIndex:           b.nextWithdrawalIndex,
+			NextWithdrawalValidatorIndex:  b.nextWithdrawalValidatorIndex,
+			HistoricalSummaries:           b.historicalSummaries,
+			DepositRequestsStartIndex:     b.depositRequestsStartIndex,
+			DepositBalanceToConsume:       b.depositBalanceToConsume,
+			ExitBalanceToConsume:          b.exitBalanceToConsume,
+			EarliestExitEpoch:             b.earliestExitEpoch,
+			ConsolidationBalanceToConsume: b.consolidationBalanceToConsume,
+			EarliestConsolidationEpoch:    b.earliestConsolidationEpoch,
+			PendingDeposits:               b.pendingDeposits,
+			PendingPartialWithdrawals:     b.pendingPartialWithdrawals,
+			PendingConsolidations:         b.pendingConsolidations,
+			ProposerLookahead:             lookahead,
 		}
 	default:
 		return nil
@@ -388,7 +425,7 @@ func (b *BeaconState) ToProto() interface{} {
 			NextWithdrawalValidatorIndex: b.nextWithdrawalValidatorIndex,
 			HistoricalSummaries:          b.historicalSummariesVal(),
 		}
-	case version.Electra, version.Fulu:
+	case version.Electra:
 		return &ethpb.BeaconStateElectra{
 			GenesisTime:                   b.genesisTime,
 			GenesisValidatorsRoot:         gvrCopy[:],
@@ -428,6 +465,51 @@ func (b *BeaconState) ToProto() interface{} {
 			PendingPartialWithdrawals:     b.pendingPartialWithdrawalsVal(),
 			PendingConsolidations:         b.pendingConsolidationsVal(),
 		}
+	case version.Fulu:
+		lookahead := make([]uint64, len(b.proposerLookahead))
+		for i, v := range b.proposerLookahead {
+			lookahead[i] = uint64(v)
+		}
+		return &ethpb.BeaconStateFulu{
+			GenesisTime:                   b.genesisTime,
+			GenesisValidatorsRoot:         gvrCopy[:],
+			Slot:                          b.slot,
+			Fork:                          b.forkVal(),
+			LatestBlockHeader:             b.latestBlockHeaderVal(),
+			BlockRoots:                    br,
+			StateRoots:                    sr,
+			HistoricalRoots:               b.historicalRoots.Slice(),
+			Eth1Data:                      b.eth1DataVal(),
+			Eth1DataVotes:                 b.eth1DataVotesVal(),
+			Eth1DepositIndex:              b.eth1DepositIndex,
+			Validators:                    b.validatorsVal(),
+			Balances:                      b.balancesVal(),
+			RandaoMixes:                   rm,
+			Slashings:                     b.slashingsVal(),
+			PreviousEpochParticipation:    b.previousEpochParticipationVal(),
+			CurrentEpochParticipation:     b.currentEpochParticipationVal(),
+			JustificationBits:             b.justificationBitsVal(),
+			PreviousJustifiedCheckpoint:   b.previousJustifiedCheckpointVal(),
+			CurrentJustifiedCheckpoint:    b.currentJustifiedCheckpointVal(),
+			FinalizedCheckpoint:           b.finalizedCheckpointVal(),
+			InactivityScores:              b.inactivityScoresVal(),
+			CurrentSyncCommittee:          b.currentSyncCommitteeVal(),
+			NextSyncCommittee:             b.nextSyncCommitteeVal(),
+			LatestExecutionPayloadHeader:  b.latestExecutionPayloadHeaderDeneb.Copy(),
+			NextWithdrawalIndex:           b.nextWithdrawalIndex,
+			NextWithdrawalValidatorIndex:  b.nextWithdrawalValidatorIndex,
+			HistoricalSummaries:           b.historicalSummariesVal(),
+			DepositRequestsStartIndex:     b.depositRequestsStartIndex,
+			DepositBalanceToConsume:       b.depositBalanceToConsume,
+			ExitBalanceToConsume:          b.exitBalanceToConsume,
+			EarliestExitEpoch:             b.earliestExitEpoch,
+			ConsolidationBalanceToConsume: b.consolidationBalanceToConsume,
+			EarliestConsolidationEpoch:    b.earliestConsolidationEpoch,
+			PendingDeposits:               b.pendingDepositsVal(),
+			PendingPartialWithdrawals:     b.pendingPartialWithdrawalsVal(),
+			PendingConsolidations:         b.pendingConsolidationsVal(),
+			ProposerLookahead:             lookahead,
+		}
 	default:
 		return nil
 	}
@@ -446,13 +528,10 @@ func (b *BeaconState) StateRoots() [][]byte {
 }
 
 func (b *BeaconState) stateRootsVal() customtypes.StateRoots {
-	if features.Get().EnableExperimentalState {
-		if b.stateRootsMultiValue == nil {
-			return nil
-		}
-		return b.stateRootsMultiValue.Value(b)
+	if b.stateRootsMultiValue == nil {
+		return nil
 	}
-	return b.stateRoots
+	return b.stateRootsMultiValue.Value(b)
 }
 
 // StateRootAtIndex retrieves a specific state root based on an
@@ -461,37 +540,14 @@ func (b *BeaconState) StateRootAtIndex(idx uint64) ([]byte, error) {
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
-	if features.Get().EnableExperimentalState {
-		if b.stateRootsMultiValue == nil {
-			return nil, nil
-		}
-		r, err := b.stateRootsMultiValue.At(b, idx)
-		if err != nil {
-			return nil, err
-		}
-		return r[:], nil
-	}
-
-	if b.stateRoots == nil {
+	if b.stateRootsMultiValue == nil {
 		return nil, nil
 	}
-	r, err := b.stateRootAtIndex(idx)
+	r, err := b.stateRootsMultiValue.At(b, idx)
 	if err != nil {
 		return nil, err
 	}
 	return r[:], nil
-}
-
-// stateRootAtIndex retrieves a specific state root based on an
-// input index value.
-// This assumes that a lock is already held on BeaconState.
-//
-// WARNING: This function does not work with the multi-value slice feature.
-func (b *BeaconState) stateRootAtIndex(idx uint64) ([32]byte, error) {
-	if uint64(len(b.stateRoots)) <= idx {
-		return [32]byte{}, errors.Wrapf(consensus_types.ErrOutOfBounds, "state root index %d does not exist", idx)
-	}
-	return b.stateRoots[idx], nil
 }
 
 // ProtobufBeaconStatePhase0 transforms an input into beacon state in the form of protobuf.
@@ -554,4 +610,12 @@ func ProtobufBeaconStateElectra(s interface{}) (*ethpb.BeaconStateElectra, error
 	return pbState, nil
 }
 
-var ProtobufBeaconStateFulu = ProtobufBeaconStateElectra
+// ProtobufBeaconStateFulu transforms an input into beacon state Fulu in the form of protobuf.
+// Error is returned if the input is not type protobuf beacon state.
+func ProtobufBeaconStateFulu(s interface{}) (*ethpb.BeaconStateFulu, error) {
+	pbState, ok := s.(*ethpb.BeaconStateFulu)
+	if !ok {
+		return nil, errors.New("input is not type pb.BeaconStateFulu")
+	}
+	return pbState, nil
+}

@@ -1,7 +1,6 @@
 package rpc
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
@@ -11,7 +10,7 @@ import (
 
 func TestGrpcHeaders(t *testing.T) {
 	s := &Server{
-		ctx:         context.Background(),
+		ctx:         t.Context(),
 		grpcHeaders: []string{"first=value1", "second=value2"},
 	}
 	err := s.registerBeaconClient()

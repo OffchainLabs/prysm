@@ -7,7 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -139,7 +139,7 @@ func (u *optimisticUpdateAltair) Proto() proto.Message {
 }
 
 func (u *optimisticUpdateAltair) Version() int {
-	return version.Altair
+	return slots.ToForkVersion(u.attestedHeader.Beacon().Slot)
 }
 
 func (u *optimisticUpdateAltair) AttestedHeader() interfaces.LightClientHeader {
@@ -223,7 +223,7 @@ func (u *optimisticUpdateCapella) Proto() proto.Message {
 }
 
 func (u *optimisticUpdateCapella) Version() int {
-	return version.Capella
+	return slots.ToForkVersion(u.attestedHeader.Beacon().Slot)
 }
 
 func (u *optimisticUpdateCapella) AttestedHeader() interfaces.LightClientHeader {
@@ -307,7 +307,7 @@ func (u *optimisticUpdateDeneb) Proto() proto.Message {
 }
 
 func (u *optimisticUpdateDeneb) Version() int {
-	return version.Deneb
+	return slots.ToForkVersion(u.attestedHeader.Beacon().Slot)
 }
 
 func (u *optimisticUpdateDeneb) AttestedHeader() interfaces.LightClientHeader {

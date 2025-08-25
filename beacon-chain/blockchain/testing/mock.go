@@ -75,6 +75,7 @@ type ChainService struct {
 	BlockSlot                   primitives.Slot
 	SyncingRoot                 [32]byte
 	Blobs                       []blocks.VerifiedROBlob
+	DataColumns                 []blocks.VerifiedRODataColumn
 	TargetRoot                  [32]byte
 	MockHeadSlot                *primitives.Slot
 }
@@ -554,11 +555,11 @@ func (s *ChainService) UpdateHead(ctx context.Context, slot primitives.Slot) {
 	ojc := &ethpb.Checkpoint{}
 	st, root, err := prepareForkchoiceState(ctx, slot, bytesutil.ToBytes32(s.Root), [32]byte{}, [32]byte{}, ojc, ojc)
 	if err != nil {
-		logrus.WithError(err).Error("could not update head")
+		logrus.WithError(err).Error("Could not update head")
 	}
 	err = s.ForkChoiceStore.InsertNode(ctx, st, root)
 	if err != nil {
-		logrus.WithError(err).Error("could not insert node to forkchoice")
+		logrus.WithError(err).Error("Could not insert node to forkchoice")
 	}
 }
 
@@ -640,7 +641,7 @@ func (s *ChainService) GetProposerHead() [32]byte {
 }
 
 // SetForkChoiceGenesisTime mocks the same method in the chain service
-func (s *ChainService) SetForkChoiceGenesisTime(timestamp uint64) {
+func (s *ChainService) SetForkChoiceGenesisTime(timestamp time.Time) {
 	if s.ForkChoiceStore != nil {
 		s.ForkChoiceStore.SetGenesisTime(timestamp)
 	}
@@ -712,6 +713,17 @@ func (c *ChainService) BlockBeingSynced(root [32]byte) bool {
 // ReceiveBlob implements the same method in the chain service
 func (c *ChainService) ReceiveBlob(_ context.Context, b blocks.VerifiedROBlob) error {
 	c.Blobs = append(c.Blobs, b)
+	return nil
+}
+
+// ReceiveDataColumn implements the same method in chain service
+func (c *ChainService) ReceiveDataColumn(dc blocks.VerifiedRODataColumn) error {
+	c.DataColumns = append(c.DataColumns, dc)
+	return nil
+}
+
+// ReceiveDataColumns implements the same method in chain service
+func (*ChainService) ReceiveDataColumns(_ []blocks.VerifiedRODataColumn) error {
 	return nil
 }
 

@@ -2,7 +2,6 @@ package beacon_api
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"testing"
 
@@ -102,7 +101,7 @@ func TestGetAggregatedSyncSelections(t *testing.T) {
 			reqBody, err := json.Marshal(test.req)
 			require.NoError(t, err)
 
-			ctx := context.Background()
+			ctx := t.Context()
 			jsonRestHandler.EXPECT().Post(
 				gomock.Any(),
 				"/eth/v1/validator/sync_committee_selections",

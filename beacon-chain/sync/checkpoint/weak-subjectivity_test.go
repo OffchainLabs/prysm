@@ -2,7 +2,6 @@ package checkpoint
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,7 +16,6 @@ import (
 	blocktest "github.com/OffchainLabs/prysm/v6/consensus-types/blocks/testing"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/ssz/detect"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -75,7 +73,7 @@ func TestFname(t *testing.T) {
 }
 
 func TestDownloadWeakSubjectivityCheckpoint(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	cfg := params.MainnetConfig()
 
 	epoch := cfg.AltairForkEpoch - 1
@@ -84,7 +82,7 @@ func TestDownloadWeakSubjectivityCheckpoint(t *testing.T) {
 	require.NoError(t, err)
 	wst, err := util.NewBeaconState()
 	require.NoError(t, err)
-	fork, err := forkForEpoch(cfg, epoch)
+	fork, err := params.Fork(epoch)
 	require.NoError(t, err)
 	require.NoError(t, wst.SetFork(fork))
 
@@ -171,7 +169,7 @@ func TestDownloadWeakSubjectivityCheckpoint(t *testing.T) {
 // runs computeBackwardsCompatible directly
 // and via ComputeWeakSubjectivityCheckpoint with a round tripper that triggers the backwards compatible code path
 func TestDownloadBackwardsCompatibleCombined(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	cfg := params.MainnetConfig()
 
 	st, expectedEpoch := defaultTestHeadState(t, cfg)
@@ -183,7 +181,7 @@ func TestDownloadBackwardsCompatibleCombined(t *testing.T) {
 	require.NoError(t, err)
 	wst, err := util.NewBeaconState()
 	require.NoError(t, err)
-	fork, err := forkForEpoch(cfg, cfg.GenesisEpoch)
+	fork, err := params.Fork(cfg.GenesisEpoch)
 	require.NoError(t, err)
 	require.NoError(t, wst.SetFork(fork))
 
@@ -275,38 +273,16 @@ func TestGetWeakSubjectivityEpochFromHead(t *testing.T) {
 	}}
 	c, err := beacon.NewClient("http://localhost:3500", client.WithRoundTripper(trans))
 	require.NoError(t, err)
-	actualEpoch, err := getWeakSubjectivityEpochFromHead(context.Background(), c)
+	actualEpoch, err := getWeakSubjectivityEpochFromHead(t.Context(), c)
 	require.NoError(t, err)
 	require.Equal(t, expectedEpoch, actualEpoch)
-}
-
-func forkForEpoch(cfg *params.BeaconChainConfig, epoch primitives.Epoch) (*ethpb.Fork, error) {
-	os := forks.NewOrderedSchedule(cfg)
-	currentVersion, err := os.VersionForEpoch(epoch)
-	if err != nil {
-		return nil, err
-	}
-	prevVersion, err := os.Previous(currentVersion)
-	if err != nil {
-		if !errors.Is(err, forks.ErrNoPreviousVersion) {
-			return nil, err
-		}
-		// use same version for both in the case of genesis
-		prevVersion = currentVersion
-	}
-	forkEpoch := cfg.ForkVersionSchedule[currentVersion]
-	return &ethpb.Fork{
-		PreviousVersion: prevVersion[:],
-		CurrentVersion:  currentVersion[:],
-		Epoch:           forkEpoch,
-	}, nil
 }
 
 func defaultTestHeadState(t *testing.T, cfg *params.BeaconChainConfig) (state.BeaconState, primitives.Epoch) {
 	st, err := util.NewBeaconStateAltair()
 	require.NoError(t, err)
 
-	fork, err := forkForEpoch(cfg, cfg.AltairForkEpoch)
+	fork, err := params.Fork(cfg.AltairForkEpoch)
 	require.NoError(t, err)
 	require.NoError(t, st.SetFork(fork))
 
