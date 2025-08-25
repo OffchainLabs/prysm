@@ -5,7 +5,8 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/encoding/ssz/query"
 	"github.com/OffchainLabs/prysm/v6/encoding/ssz/query/testutil"
-	ssz_query "github.com/OffchainLabs/prysm/v6/proto/ssz_query"
+	"github.com/OffchainLabs/prysm/v6/proto/ssz_query"
+	sszquerypb "github.com/OffchainLabs/prysm/v6/proto/ssz_query"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
@@ -107,7 +108,7 @@ func TestCalculateOffsetAndLength(t *testing.T) {
 			path, err := query.ParsePath(tt.path)
 			require.NoError(t, err)
 
-			info, err := query.AnalyzeObject(&ssz_query.FixedTestContainer{})
+			info, err := query.AnalyzeObject(&sszquerypb.FixedTestContainer{})
 			require.NoError(t, err)
 
 			_, offset, length, err := query.CalculateOffsetAndLength(info, path)
@@ -169,7 +170,7 @@ func createFixedTestContainer() any {
 		FieldBytes32: fieldBytes32,
 
 		// Nested container
-		Nested: &ssz_query.FixedNestedContainer{
+		Nested: &sszquerypb.FixedNestedContainer{
 			Value1: 123,
 			Value2: nestedValue2,
 		},
@@ -183,11 +184,11 @@ func createFixedTestContainer() any {
 }
 
 func getFixedTestContainerSpec() testutil.TestSpec {
-	testContainer := createFixedTestContainer().(*ssz_query.FixedTestContainer)
+	testContainer := createFixedTestContainer().(*sszquerypb.FixedTestContainer)
 
 	return testutil.TestSpec{
 		Name:     "FixedTestContainer",
-		Type:     ssz_query.FixedTestContainer{},
+		Type:     sszquerypb.FixedTestContainer{},
 		Instance: testContainer,
 		PathTests: []testutil.PathTest{
 			// Basic types
