@@ -107,9 +107,9 @@ func BroadcastDataColumnSidecars(
 type BlobOption func(*blobOptions)
 
 type blobOptions struct {
-	onReceiveBlob      func(ctx context.Context, blob blocks.VerifiedROBlob) error
-	onBlobProcessed    func(blob blocks.VerifiedROBlob)
-	onCheckForkchoice  func(root [32]byte) bool
+	onReceiveBlob     func(ctx context.Context, blob blocks.VerifiedROBlob) error
+	onBlobProcessed   func(blob blocks.VerifiedROBlob)
+	onCheckForkchoice func(root [32]byte) bool
 }
 
 // WithBlobReceiver sets the callback for receiving blobs.
