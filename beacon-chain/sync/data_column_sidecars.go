@@ -317,6 +317,7 @@ func tryRequestingColumnsFromPeers(
 
 // tryReconstructFromStorageAndPeers attempts to reconstruct missing data column sidecars
 // using the data available in the storage and the data fetched from peers.
+// If, for at least one root, the reconstruction is not possible, an error is returned.
 func tryReconstructFromStorageAndPeers(
 	storage filesystem.DataColumnStorageReader,
 	fromPeersByRoot map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn,
