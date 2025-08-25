@@ -554,9 +554,7 @@ func (s *MockClockSetter) SetClock(g *startup.Clock) error {
 func TestNotifyIndex(t *testing.T) {
 	// Initialize a blobNotifierMap
 	bn := &blobNotifierMap{
-		// TODO: Separate blobs from data columns
-		// seenIndex: make(map[[32]byte][]bool),
-		seenIndex: make(map[[32]byte][fieldparams.NumberOfColumns]bool),
+		seenIndex: make(map[[32]byte][]bool),
 		notifiers: make(map[[32]byte]chan uint64),
 	}
 

@@ -11,6 +11,8 @@ import (
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
 	testp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -347,49 +349,48 @@ func initializeStateWithForkDigest(_ context.Context, t *testing.T, gs startup.C
 	return params.ForkDigest(clock.CurrentEpoch())
 }
 
-// TODO: Uncomment out of devnet.
-// func TestService_connectWithPeer(t *testing.T) {
-// 	params.SetupTestConfigCleanup(t)
-// 	tests := []struct {
-// 		name    string
-// 		peers   *peers.Status
-// 		info    peer.AddrInfo
-// 		wantErr string
-// 	}{
-// 		{
-// 			name: "bad peer",
-// 			peers: func() *peers.Status {
-// 				ps := peers.NewStatus(t.Context(), &peers.StatusConfig{
-// 					ScorerParams: &scorers.Config{},
-// 				})
-// 				for i := 0; i < 10; i++ {
-// 					ps.Scorers().BadResponsesScorer().Increment("bad")
-// 				}
-// 				return ps
-// 			}(),
-// 			info:    peer.AddrInfo{ID: "bad"},
-// 			wantErr: "bad peer",
-// 		},
-// 	}
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			h, _, _ := createHost(t, 34567)
-// 			defer func() {
-// 				if err := h.Close(); err != nil {
-// 					t.Fatal(err)
-// 				}
-// 			}()
-// 			ctx := t.Context()
-// 			s := &Service{
-// 				host:  h,
-// 				peers: tt.peers,
-// 			}
-// 			err := s.connectWithPeer(ctx, tt.info)
-// 			if len(tt.wantErr) > 0 {
-// 				require.ErrorContains(t, tt.wantErr, err)
-// 			} else {
-// 				require.NoError(t, err)
-// 			}
-// 		})
-// 	}
-// }
+func TestService_connectWithPeer(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	tests := []struct {
+		name    string
+		peers   *peers.Status
+		info    peer.AddrInfo
+		wantErr string
+	}{
+		{
+			name: "bad peer",
+			peers: func() *peers.Status {
+				ps := peers.NewStatus(t.Context(), &peers.StatusConfig{
+					ScorerParams: &scorers.Config{},
+				})
+				for i := 0; i < 10; i++ {
+					ps.Scorers().BadResponsesScorer().Increment("bad")
+				}
+				return ps
+			}(),
+			info:    peer.AddrInfo{ID: "bad"},
+			wantErr: "bad peer",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h, _, _ := createHost(t, 34567)
+			defer func() {
+				if err := h.Close(); err != nil {
+					t.Fatal(err)
+				}
+			}()
+			ctx := t.Context()
+			s := &Service{
+				host:  h,
+				peers: tt.peers,
+			}
+			err := s.connectWithPeer(ctx, tt.info)
+			if len(tt.wantErr) > 0 {
+				require.ErrorContains(t, tt.wantErr, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}

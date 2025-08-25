@@ -62,9 +62,7 @@ const (
 
 const (
 	// CollocationLimit restricts how many peer identities we can see from a single ip or ipv6 subnet.
-	// TODO: Revert this when out of devnet.
-	// CollocationLimit = 5
-	CollocationLimit = 9999
+	CollocationLimit = 5
 
 	// Additional buffer beyond current peer limit, from which we can store the relevant peer statuses.
 	maxLimitBuffer = 150
@@ -782,7 +780,6 @@ func (p *Status) BestFinalized(maxPeers int, ourFinalizedEpoch primitives.Epoch)
 // BestNonFinalized returns the highest known epoch, higher than ours,
 // and is shared by at least minPeers.
 func (p *Status) BestNonFinalized(minPeers int, ourHeadEpoch primitives.Epoch) (primitives.Epoch, []peer.ID) {
-	// Retrieve all connected peers.
 	connected := p.Connected()
 	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
 	ourHeadSlot := slotsPerEpoch.Mul(uint64(ourHeadEpoch))

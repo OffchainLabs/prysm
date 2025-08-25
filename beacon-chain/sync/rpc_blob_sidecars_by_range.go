@@ -71,11 +71,9 @@ func (s *Service) blobSidecarsByRangeRPCHandler(ctx context.Context, msg interfa
 	if !ok {
 		return errors.New("message is not type *pb.BlobsSidecarsByRangeRequest")
 	}
-
-	// TODO: Uncomment out of devnet.
-	// if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
-	// 	return err
-	// }
+	if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
+		return err
+	}
 
 	remotePeer := stream.Conn().RemotePeer()
 
@@ -104,7 +102,6 @@ func (s *Service) blobSidecarsByRangeRPCHandler(ctx context.Context, msg interfa
 	if slots.ToEpoch(s.cfg.clock.CurrentSlot()) >= params.BeaconConfig().ElectraForkEpoch {
 		wQuota = params.BeaconConfig().MaxRequestBlobSidecarsElectra
 	}
-
 	for batch, ok = batcher.next(ctx, stream); ok; batch, ok = batcher.next(ctx, stream) {
 		batchStart := time.Now()
 		wQuota, err = s.streamBlobBatch(ctx, batch, wQuota, stream)

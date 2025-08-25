@@ -78,10 +78,9 @@ func (bb *blockRangeBatcher) next(ctx context.Context, stream libp2pcore.Stream)
 	if !more {
 		return blockBatch{}, false
 	}
-	// TODO: Uncomment out of devnet.
-	// if err := bb.limiter.validateRequest(stream, bb.size); err != nil {
-	// 	return blockBatch{err: errors.Wrap(err, "throttled by rate limiter")}, false
-	// }
+	if err := bb.limiter.validateRequest(stream, bb.size); err != nil {
+		return blockBatch{err: errors.Wrap(err, "throttled by rate limiter")}, false
+	}
 
 	// Wait for the ticker before doing anything expensive, unless this is the first batch.
 	if bb.ticker != nil && bb.current != nil {
