@@ -160,7 +160,7 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    size = "medium",
+    size = "small",
     srcs = [
         "batch_verifier_test.go",
         "blobs_test.go",

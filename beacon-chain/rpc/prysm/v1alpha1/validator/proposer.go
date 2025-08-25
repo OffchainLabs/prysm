@@ -330,14 +330,8 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 		errChan <- nil
 	}()
 
-	if block.Version() >= version.Fulu {
-		if err := vs.broadcastAndReceiveDataColumns(ctx, dataColumnSideCars, root, block.Block().Slot()); err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not broadcast/receive data columns: %v", err)
-		}
-	} else {
-		if err := vs.broadcastAndReceiveBlobs(ctx, blobSidecars, root); err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not broadcast/receive blobs: %v", err)
-		}
+	if err := vs.broadcastAndReceiveSidecars(ctx, block, root, blobSidecars, dataColumnSideCars); err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive sidecars: %v", err)
 	}
 
 	wg.Wait()
@@ -346,6 +340,28 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	}
 
 	return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
+}
+
+// broadcastAndReceiveSidecars broadcasts and receives sidecars.
+func (vs *Server) broadcastAndReceiveSidecars(
+	ctx context.Context,
+	block interfaces.SignedBeaconBlock,
+	root [fieldparams.RootLength]byte,
+	blobSidecars []*ethpb.BlobSidecar,
+	dataColumnSideCars []*ethpb.DataColumnSidecar,
+) error {
+	if block.Version() >= version.Fulu {
+		if err := vs.broadcastAndReceiveDataColumns(ctx, dataColumnSideCars, root, block.Block().Slot()); err != nil {
+			return errors.Wrap(err, "broadcast and receive data columns")
+		}
+		return nil
+	}
+
+	if err := vs.broadcastAndReceiveBlobs(ctx, blobSidecars, root); err != nil {
+		return errors.Wrap(err, "broadcast and receive blobs")
+	}
+
+	return nil
 }
 
 // handleBlindedBlock processes blinded beacon blocks (pre-Fulu only).
