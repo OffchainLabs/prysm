@@ -1,6 +1,7 @@
 package query_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/encoding/ssz/query"
@@ -19,86 +20,62 @@ func TestCalculateOffsetAndLength(t *testing.T) {
 	}{
 		// Basic integer types
 		{
-			name:           "field_uint8",
-			path:           ".field_uint8",
-			expectedOffset: 0,
-			expectedLength: 4,
-		},
-		{
-			name:           "field_uint16",
-			path:           ".field_uint16",
-			expectedOffset: 4,
-			expectedLength: 4,
-		},
-		{
 			name:           "field_uint32",
 			path:           ".field_uint32",
-			expectedOffset: 8,
+			expectedOffset: 0,
 			expectedLength: 4,
 		},
 		{
 			name:           "field_uint64",
 			path:           ".field_uint64",
-			expectedOffset: 12,
+			expectedOffset: 4,
 			expectedLength: 8,
 		},
 		// Boolean type
 		{
 			name:           "field_bool",
 			path:           ".field_bool",
-			expectedOffset: 20,
+			expectedOffset: 12,
 			expectedLength: 1,
 		},
 		// Fixed-size bytes
 		{
-			name:           "field_bytes8",
-			path:           ".field_bytes8",
-			expectedOffset: 21,
-			expectedLength: 8,
-		},
-		{
-			name:           "field_bytes16",
-			path:           ".field_bytes16",
-			expectedOffset: 29,
-			expectedLength: 16,
-		},
-		{
 			name:           "field_bytes32",
 			path:           ".field_bytes32",
-			expectedOffset: 45,
+			expectedOffset: 13,
 			expectedLength: 32,
 		},
 		// Nested container
 		{
 			name:           "nested container",
 			path:           ".nested",
-			expectedOffset: 77,
+			expectedOffset: 45,
 			expectedLength: 40,
 		},
 		{
 			name:           "nested value1",
 			path:           ".nested.value1",
-			expectedOffset: 77,
+			expectedOffset: 45,
 			expectedLength: 8,
 		},
 		{
 			name:           "nested value2",
 			path:           ".nested.value2",
-			expectedOffset: 85,
+			expectedOffset: 53,
 			expectedLength: 32,
 		},
 		// Vector field
 		{
 			name:           "vector field",
 			path:           ".vector_field",
-			expectedOffset: 117,
+			expectedOffset: 85,
 			expectedLength: 192, // 24 * 8 bytes
 		},
 		// Trailing field
 		{
-			name:           "field_trailing",
-			path:           ".field_trailing",
-			expectedOffset: 309,
+			name:           "trailing_field",
+			path:           ".trailing_field",
+			expectedOffset: 277,
 			expectedLength: 56,
 		},
 	}
@@ -131,16 +108,6 @@ func TestRoundTripSszInfo(t *testing.T) {
 }
 
 func createFixedTestContainer() any {
-	fieldBytes8 := make([]byte, 8)
-	for i := range fieldBytes8 {
-		fieldBytes8[i] = byte(i)
-	}
-
-	fieldBytes16 := make([]byte, 16)
-	for i := range fieldBytes16 {
-		fieldBytes16[i] = byte(i + 8)
-	}
-
 	fieldBytes32 := make([]byte, 32)
 	for i := range fieldBytes32 {
 		fieldBytes32[i] = byte(i + 24)
@@ -151,22 +118,18 @@ func createFixedTestContainer() any {
 		nestedValue2[i] = byte(i + 56)
 	}
 
-	fieldTrailing := make([]byte, 56)
-	for i := range fieldTrailing {
-		fieldTrailing[i] = byte(i + 88)
+	trailingField := make([]byte, 56)
+	for i := range trailingField {
+		trailingField[i] = byte(i + 88)
 	}
 
 	return &ssz_query.FixedTestContainer{
 		// Basic types
-		FieldUint8:  255,                  // Max value for uint8 representation
-		FieldUint16: 65535,                // Max value for uint16 representation
-		FieldUint32: 4294967295,           // Max value for uint32
-		FieldUint64: 18446744073709551615, // Max value for uint64
+		FieldUint32: math.MaxUint32,
+		FieldUint64: math.MaxUint64,
 		FieldBool:   true,
 
 		// Fixed-size bytes
-		FieldBytes8:  fieldBytes8,
-		FieldBytes16: fieldBytes16,
 		FieldBytes32: fieldBytes32,
 
 		// Nested container
@@ -179,7 +142,7 @@ func createFixedTestContainer() any {
 		VectorField: []uint64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24},
 
 		// Trailing field
-		FieldTrailing: fieldTrailing,
+		TrailingField: trailingField,
 	}
 }
 
@@ -193,14 +156,6 @@ func getFixedTestContainerSpec() testutil.TestSpec {
 		PathTests: []testutil.PathTest{
 			// Basic types
 			{
-				Path:     ".field_uint8",
-				Expected: testContainer.FieldUint8,
-			},
-			{
-				Path:     ".field_uint16",
-				Expected: testContainer.FieldUint16,
-			},
-			{
 				Path:     ".field_uint32",
 				Expected: testContainer.FieldUint32,
 			},
@@ -213,14 +168,6 @@ func getFixedTestContainerSpec() testutil.TestSpec {
 				Expected: testContainer.FieldBool,
 			},
 			// Fixed-size bytes
-			{
-				Path:     ".field_bytes8",
-				Expected: testContainer.FieldBytes8,
-			},
-			{
-				Path:     ".field_bytes16",
-				Expected: testContainer.FieldBytes16,
-			},
 			{
 				Path:     ".field_bytes32",
 				Expected: testContainer.FieldBytes32,
@@ -245,8 +192,8 @@ func getFixedTestContainerSpec() testutil.TestSpec {
 			},
 			// Trailing field
 			{
-				Path:     ".field_trailing",
-				Expected: testContainer.FieldTrailing,
+				Path:     ".trailing_field",
+				Expected: testContainer.TrailingField,
 			},
 		},
 	}

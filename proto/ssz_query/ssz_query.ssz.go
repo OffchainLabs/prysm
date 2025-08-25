@@ -85,43 +85,23 @@ func (f *FixedTestContainer) MarshalSSZ() ([]byte, error) {
 func (f *FixedTestContainer) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
 
-	// Field (0) 'FieldUint8'
-	dst = ssz.MarshalUint32(dst, f.FieldUint8)
-
-	// Field (1) 'FieldUint16'
-	dst = ssz.MarshalUint32(dst, f.FieldUint16)
-
-	// Field (2) 'FieldUint32'
+	// Field (0) 'FieldUint32'
 	dst = ssz.MarshalUint32(dst, f.FieldUint32)
 
-	// Field (3) 'FieldUint64'
+	// Field (1) 'FieldUint64'
 	dst = ssz.MarshalUint64(dst, f.FieldUint64)
 
-	// Field (4) 'FieldBool'
+	// Field (2) 'FieldBool'
 	dst = ssz.MarshalBool(dst, f.FieldBool)
 
-	// Field (5) 'FieldBytes8'
-	if size := len(f.FieldBytes8); size != 8 {
-		err = ssz.ErrBytesLengthFn("--.FieldBytes8", size, 8)
-		return
-	}
-	dst = append(dst, f.FieldBytes8...)
-
-	// Field (6) 'FieldBytes16'
-	if size := len(f.FieldBytes16); size != 16 {
-		err = ssz.ErrBytesLengthFn("--.FieldBytes16", size, 16)
-		return
-	}
-	dst = append(dst, f.FieldBytes16...)
-
-	// Field (7) 'FieldBytes32'
+	// Field (3) 'FieldBytes32'
 	if size := len(f.FieldBytes32); size != 32 {
 		err = ssz.ErrBytesLengthFn("--.FieldBytes32", size, 32)
 		return
 	}
 	dst = append(dst, f.FieldBytes32...)
 
-	// Field (8) 'Nested'
+	// Field (4) 'Nested'
 	if f.Nested == nil {
 		f.Nested = new(FixedNestedContainer)
 	}
@@ -129,7 +109,7 @@ func (f *FixedTestContainer) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		return
 	}
 
-	// Field (9) 'VectorField'
+	// Field (5) 'VectorField'
 	if size := len(f.VectorField); size != 24 {
 		err = ssz.ErrVectorLengthFn("--.VectorField", size, 24)
 		return
@@ -138,12 +118,12 @@ func (f *FixedTestContainer) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		dst = ssz.MarshalUint64(dst, f.VectorField[ii])
 	}
 
-	// Field (10) 'FieldTrailing'
-	if size := len(f.FieldTrailing); size != 56 {
-		err = ssz.ErrBytesLengthFn("--.FieldTrailing", size, 56)
+	// Field (6) 'TrailingField'
+	if size := len(f.TrailingField); size != 56 {
+		err = ssz.ErrBytesLengthFn("--.TrailingField", size, 56)
 		return
 	}
-	dst = append(dst, f.FieldTrailing...)
+	dst = append(dst, f.TrailingField...)
 
 	return
 }
@@ -152,72 +132,54 @@ func (f *FixedTestContainer) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 func (f *FixedTestContainer) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size != 365 {
+	if size != 333 {
 		return ssz.ErrSize
 	}
 
-	// Field (0) 'FieldUint8'
-	f.FieldUint8 = ssz.UnmarshallUint32(buf[0:4])
+	// Field (0) 'FieldUint32'
+	f.FieldUint32 = ssz.UnmarshallUint32(buf[0:4])
 
-	// Field (1) 'FieldUint16'
-	f.FieldUint16 = ssz.UnmarshallUint32(buf[4:8])
+	// Field (1) 'FieldUint64'
+	f.FieldUint64 = ssz.UnmarshallUint64(buf[4:12])
 
-	// Field (2) 'FieldUint32'
-	f.FieldUint32 = ssz.UnmarshallUint32(buf[8:12])
-
-	// Field (3) 'FieldUint64'
-	f.FieldUint64 = ssz.UnmarshallUint64(buf[12:20])
-
-	// Field (4) 'FieldBool'
-	f.FieldBool, err = ssz.DecodeBool(buf[20:21])
+	// Field (2) 'FieldBool'
+	f.FieldBool, err = ssz.DecodeBool(buf[12:13])
 	if err != nil {
 		return err
 	}
 
-	// Field (5) 'FieldBytes8'
-	if cap(f.FieldBytes8) == 0 {
-		f.FieldBytes8 = make([]byte, 0, len(buf[21:29]))
-	}
-	f.FieldBytes8 = append(f.FieldBytes8, buf[21:29]...)
-
-	// Field (6) 'FieldBytes16'
-	if cap(f.FieldBytes16) == 0 {
-		f.FieldBytes16 = make([]byte, 0, len(buf[29:45]))
-	}
-	f.FieldBytes16 = append(f.FieldBytes16, buf[29:45]...)
-
-	// Field (7) 'FieldBytes32'
+	// Field (3) 'FieldBytes32'
 	if cap(f.FieldBytes32) == 0 {
-		f.FieldBytes32 = make([]byte, 0, len(buf[45:77]))
+		f.FieldBytes32 = make([]byte, 0, len(buf[13:45]))
 	}
-	f.FieldBytes32 = append(f.FieldBytes32, buf[45:77]...)
+	f.FieldBytes32 = append(f.FieldBytes32, buf[13:45]...)
 
-	// Field (8) 'Nested'
+	// Field (4) 'Nested'
 	if f.Nested == nil {
 		f.Nested = new(FixedNestedContainer)
 	}
-	if err = f.Nested.UnmarshalSSZ(buf[77:117]); err != nil {
+	if err = f.Nested.UnmarshalSSZ(buf[45:85]); err != nil {
 		return err
 	}
 
-	// Field (9) 'VectorField'
+	// Field (5) 'VectorField'
 	f.VectorField = ssz.ExtendUint64(f.VectorField, 24)
 	for ii := 0; ii < 24; ii++ {
-		f.VectorField[ii] = ssz.UnmarshallUint64(buf[117:309][ii*8 : (ii+1)*8])
+		f.VectorField[ii] = ssz.UnmarshallUint64(buf[85:277][ii*8 : (ii+1)*8])
 	}
 
-	// Field (10) 'FieldTrailing'
-	if cap(f.FieldTrailing) == 0 {
-		f.FieldTrailing = make([]byte, 0, len(buf[309:365]))
+	// Field (6) 'TrailingField'
+	if cap(f.TrailingField) == 0 {
+		f.TrailingField = make([]byte, 0, len(buf[277:333]))
 	}
-	f.FieldTrailing = append(f.FieldTrailing, buf[309:365]...)
+	f.TrailingField = append(f.TrailingField, buf[277:333]...)
 
 	return err
 }
 
 // SizeSSZ returns the ssz encoded size in bytes for the FixedTestContainer object
 func (f *FixedTestContainer) SizeSSZ() (size int) {
-	size = 365
+	size = 333
 	return
 }
 
@@ -230,48 +192,28 @@ func (f *FixedTestContainer) HashTreeRoot() ([32]byte, error) {
 func (f *FixedTestContainer) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
-	// Field (0) 'FieldUint8'
-	hh.PutUint32(f.FieldUint8)
-
-	// Field (1) 'FieldUint16'
-	hh.PutUint32(f.FieldUint16)
-
-	// Field (2) 'FieldUint32'
+	// Field (0) 'FieldUint32'
 	hh.PutUint32(f.FieldUint32)
 
-	// Field (3) 'FieldUint64'
+	// Field (1) 'FieldUint64'
 	hh.PutUint64(f.FieldUint64)
 
-	// Field (4) 'FieldBool'
+	// Field (2) 'FieldBool'
 	hh.PutBool(f.FieldBool)
 
-	// Field (5) 'FieldBytes8'
-	if size := len(f.FieldBytes8); size != 8 {
-		err = ssz.ErrBytesLengthFn("--.FieldBytes8", size, 8)
-		return
-	}
-	hh.PutBytes(f.FieldBytes8)
-
-	// Field (6) 'FieldBytes16'
-	if size := len(f.FieldBytes16); size != 16 {
-		err = ssz.ErrBytesLengthFn("--.FieldBytes16", size, 16)
-		return
-	}
-	hh.PutBytes(f.FieldBytes16)
-
-	// Field (7) 'FieldBytes32'
+	// Field (3) 'FieldBytes32'
 	if size := len(f.FieldBytes32); size != 32 {
 		err = ssz.ErrBytesLengthFn("--.FieldBytes32", size, 32)
 		return
 	}
 	hh.PutBytes(f.FieldBytes32)
 
-	// Field (8) 'Nested'
+	// Field (4) 'Nested'
 	if err = f.Nested.HashTreeRootWith(hh); err != nil {
 		return
 	}
 
-	// Field (9) 'VectorField'
+	// Field (5) 'VectorField'
 	{
 		if size := len(f.VectorField); size != 24 {
 			err = ssz.ErrVectorLengthFn("--.VectorField", size, 24)
@@ -284,12 +226,12 @@ func (f *FixedTestContainer) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		hh.Merkleize(subIndx)
 	}
 
-	// Field (10) 'FieldTrailing'
-	if size := len(f.FieldTrailing); size != 56 {
-		err = ssz.ErrBytesLengthFn("--.FieldTrailing", size, 56)
+	// Field (6) 'TrailingField'
+	if size := len(f.TrailingField); size != 56 {
+		err = ssz.ErrBytesLengthFn("--.TrailingField", size, 56)
 		return
 	}
-	hh.PutBytes(f.FieldTrailing)
+	hh.PutBytes(f.TrailingField)
 
 	hh.Merkleize(indx)
 	return
