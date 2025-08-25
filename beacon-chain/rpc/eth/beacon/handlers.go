@@ -15,10 +15,12 @@ import (
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
 	corehelpers "github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filters"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
+	rpcHelpers "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/v1alpha1/validator"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -1078,6 +1080,7 @@ func (s *Server) validateBlobSidecars(blk interfaces.SignedBeaconBlock, blobs []
 	if len(blobs) != len(proofs) || len(blobs) != len(kzgs) {
 		return errors.New("number of blobs, proofs, and commitments do not match")
 	}
+
 	for i, blob := range blobs {
 		b := kzg4844.Blob(blob)
 		if err := kzg4844.VerifyBlobProof(&b, kzg4844.Commitment(kzgs[i]), kzg4844.Proof(proofs[i])); err != nil {
@@ -1615,7 +1618,7 @@ func (s *Server) GetDepositSnapshot(w http.ResponseWriter, r *http.Request) {
 	)
 }
 
-// Broadcast blob sidecars even if the block of the same slot has been imported.
+// Broadcast datacolumn sidecars or blob sidecars  even if the block of the same slot has been imported.
 // To ensure safety, we will only broadcast blob sidecars if the header references the same block that was previously seen.
 // Otherwise, a proposer could get slashed through a different blob sidecar header reference.
 func (s *Server) broadcastSeenBlockSidecars(
@@ -1623,10 +1626,33 @@ func (s *Server) broadcastSeenBlockSidecars(
 	b interfaces.SignedBeaconBlock,
 	blobs [][]byte,
 	kzgProofs [][]byte) error {
+	if b.Version() >= version.Fulu {
+		dataColumnSideCars, err := peerdas.ConstructDataColumnSidecars(b, blobs, kzgProofs)
+		if err != nil {
+			return errors.Wrap(err, "construct data column sidecars")
+		}
+		root, err := b.Block().HashTreeRoot()
+		if err != nil {
+			return errors.Wrap(err, "Could not hash tree root")
+		}
+
+		_, err = rpcHelpers.BroadcastDataColumnSidecars(
+			ctx,
+			dataColumnSideCars,
+			root,
+			s.Broadcaster.BroadcastDataColumnSidecar,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
 	scs, err := validator.BuildBlobSidecars(b, blobs, kzgProofs)
 	if err != nil {
 		return err
 	}
+
+	// Broadcast blob sidecars with forkchoice checking
 	for _, sc := range scs {
 		r, err := sc.SignedBlockHeader.Header.HashTreeRoot()
 		if err != nil {
