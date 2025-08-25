@@ -14,6 +14,6 @@ go_library(
         "//encoding/ssz/query:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
-        "@com_github_ferranbt_fastssz//:go_default_library",
+        "@com_github_prysmaticlabs_fastssz//:go_default_library",
     ],
 )

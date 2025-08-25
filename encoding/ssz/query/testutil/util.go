@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/testing/require"
-	ssz "github.com/ferranbt/fastssz"
+	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 // DummyData is a struct that holds dummy data for testing purposes.

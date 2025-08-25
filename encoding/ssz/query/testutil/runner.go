@@ -5,7 +5,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/encoding/ssz/query"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	ssz "github.com/ferranbt/fastssz"
+	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 func RunStructTest(t *testing.T, spec TestSpec) {

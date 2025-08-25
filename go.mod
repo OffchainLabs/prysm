@@ -16,7 +16,6 @@ require (
 	github.com/emicklei/dot v0.11.0
 	github.com/ethereum/c-kzg-4844/v2 v2.1.1
 	github.com/ethereum/go-ethereum v1.15.9
-	github.com/ferranbt/fastssz v0.1.3
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-yaml/yaml v2.1.0+incompatible
@@ -139,6 +138,7 @@ require (
 	github.com/ethereum/c-kzg-4844 v1.0.0 // indirect
 	github.com/ethereum/go-verkle v0.2.2 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
+	github.com/ferranbt/fastssz v0.1.3 // indirect
 	github.com/flynn/noise v1.1.0 // indirect
 	github.com/francoispqt/gojay v1.2.13 // indirect
 	github.com/getsentry/sentry-go v0.27.0 // indirect
