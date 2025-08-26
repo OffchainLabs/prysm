@@ -394,8 +394,8 @@ func (s *Service) fetchOriginBlobs(pids []peer.ID, rob blocks.ROBlock) error {
 
 func (s *Service) fetchOriginColumns(roBlock blocks.ROBlock) error {
 	const (
-		trials = 100              // The number of trials to fetch origin columns
-		delay  = 10 * time.Second // The delay between each trial
+		maxAttempts = 100              // The max allowed number of attempts to fetch origin columns
+		delay       = 10 * time.Second // The delay between each trial
 	)
 
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
@@ -436,17 +436,17 @@ func (s *Service) fetchOriginColumns(roBlock blocks.ROBlock) error {
 
 	var verifiedRoDataColumnsByRoot map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn
 
-	for i := 0; i < trials; i++ {
+	for attempt := 0; attempt < maxAttempts; attempt++ {
 		verifiedRoDataColumnsByRoot, err = sync.FetchDataColumnSidecars(params, []blocks.ROBlock{roBlock}, info.CustodyColumns)
 		if err == nil {
 			break
 		}
 
 		log.WithError(err).WithFields(logrus.Fields{
-			"attempt":     i,
-			"maxAttempts": trials,
-			"nextTrialIn": delay,
-		}).Debug("Failed to fetch origin data column sidecars")
+			"attempt":     attempt,
+			"maxAttempts": maxAttempts,
+			"delay":       delay,
+		}).Debug("Failed to fetch origin data column sidecars, retrying later")
 
 		time.Sleep(delay)
 	}
