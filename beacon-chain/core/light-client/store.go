@@ -30,13 +30,13 @@ type Store struct {
 	cache                *cache // non finality cache
 }
 
-func NewLightClientStore(p p2p.Accessor, e event.SubscriberSender, db iface.HeadAccessDatabase) (*Store, error) {
+func NewLightClientStore(p p2p.Accessor, e event.SubscriberSender, db iface.HeadAccessDatabase) *Store {
 	return &Store{
 		beaconDB:  db,
 		p2p:       p,
 		stateFeed: e,
 		cache:     newLightClientCache(),
-	}, nil
+	}
 }
 
 func (s *Store) SaveLCData(ctx context.Context,

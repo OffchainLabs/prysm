@@ -346,9 +346,7 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 
 	if features.Get().EnableLightClient {
 		log.Debugln("Registering Light Client Store")
-		if err := beacon.registerLightClientStore(); err != nil {
-			return errors.Wrap(err, "could not register light client service")
-		}
+		beacon.registerLightClientStore()
 	}
 
 	log.Debugln("Registering Backfill Service")
@@ -1118,13 +1116,9 @@ func (b *BeaconNode) RegisterBackfillService(cliCtx *cli.Context, bfs *backfill.
 	return b.services.RegisterService(bf)
 }
 
-func (b *BeaconNode) registerLightClientStore() error {
-	lcs, err := lightclient.NewLightClientStore(b.fetchP2P(), b.StateFeed(), b.db)
-	if err != nil {
-		return errors.New("failed to create light client store")
-	}
+func (b *BeaconNode) registerLightClientStore() {
+	lcs := lightclient.NewLightClientStore(b.fetchP2P(), b.StateFeed(), b.db)
 	b.lcStore = lcs
-	return nil
 }
 
 func hasNetworkFlag(cliCtx *cli.Context) bool {
