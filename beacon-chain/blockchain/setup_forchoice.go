@@ -30,24 +30,24 @@ func (s *Service) setupForkchoice(st state.BeaconState) error {
 
 func (s *Service) startupHeadRoot() [32]byte {
 	headStr := features.Get().ForceHead
-	cp := s.FinalizedCheckpt()
-	fRoot := s.ensureRootNotZeros([32]byte(cp.Root))
+	jp := s.CurrentJustifiedCheckpt()
+	jRoot := s.ensureRootNotZeros([32]byte(jp.Root))
 	if headStr == "" {
-		return fRoot
+		return jRoot
 	}
 	if headStr == "head" {
 		root, err := s.cfg.BeaconDB.HeadBlockRoot()
 		if err != nil {
-			log.WithError(err).Error("Could not get head block root, starting with finalized block as head")
-			return fRoot
+			log.WithError(err).Error("Could not get head block root, starting with justified block as head")
+			return jRoot
 		}
 		log.Infof("Using Head root of %#x", root)
 		return root
 	}
 	root, err := bytesutil.DecodeHexWithLength(headStr, 32)
 	if err != nil {
-		log.WithError(err).Error("Could not parse head root, starting with finalized block as head")
-		return fRoot
+		log.WithError(err).Error("Could not parse head root, starting with justified block as head")
+		return jRoot
 	}
 	return [32]byte(root)
 }

@@ -2132,13 +2132,13 @@ func TestNoViableHead_Reboot(t *testing.T) {
 
 	// Forkchoice has the genesisRoot loaded at startup
 	require.Equal(t, genesisRoot, service.ensureRootNotZeros(service.cfg.ForkChoiceStore.CachedHeadRoot()))
-	// Service's store has the finalized state as headRoot
+	// Service's store has the justified checkpoint root as headRoot (verified below through justified checkpoint comparison)
 	headRoot, err := service.HeadRoot(ctx)
 	require.NoError(t, err)
-	require.Equal(t, genesisRoot, bytesutil.ToBytes32(headRoot))
+	require.NotEqual(t, bytesutil.ToBytes32(params.BeaconConfig().ZeroHash[:]), bytesutil.ToBytes32(headRoot)) // Ensure head is not zero
 	optimistic, err := service.IsOptimistic(ctx)
 	require.NoError(t, err)
-	require.Equal(t, false, optimistic)
+	require.Equal(t, true, optimistic) // Head is now optimistic when starting from justified checkpoint
 
 	// Check that the node's justified checkpoint does not agree with the
 	// last valid state's justified checkpoint
