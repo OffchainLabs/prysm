@@ -1100,7 +1100,7 @@ func (s *Server) validateBlobs(blk interfaces.SignedBeaconBlock, blobs [][]byte,
 	// Convert KZG commitments to byte slices for batch verification
 	commitments := make([][]byte, len(kzgs))
 	for i, commitment := range kzgs {
-		commitments[i] = commitment
+		copy(commitments[i], commitment)
 	}
 
 	if blk.Version() >= version.Fulu {
@@ -1111,7 +1111,6 @@ func (s *Server) validateBlobs(blk interfaces.SignedBeaconBlock, blobs [][]byte,
 			return errors.Wrap(err, "could not verify cell proofs")
 		}
 	} else {
-
 		// Use batch verification for better performance
 		if err := kzg.VerifyBlobKZGProofBatch(blobs, commitments, proofs); err != nil {
 			return errors.Wrap(err, "could not verify blob proofs")

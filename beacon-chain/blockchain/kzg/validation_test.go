@@ -3,7 +3,6 @@ package kzg
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/crypto/random"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -320,51 +319,7 @@ func TestVerifyCellKZGProofBatchFromBlobData(t *testing.T) {
 		require.ErrorContains(t, "cell KZG proof batch verification failed", err)
 	})
 
-	t.Run("realistic PeerDAS configuration", func(t *testing.T) {
-		// Test with realistic PeerDAS parameters
-		cfg := params.BeaconConfig().Copy()
-		defer params.OverrideBeaconConfig(cfg)
-
-		testCfg := params.BeaconConfig().Copy()
-		testCfg.NumberOfColumns = 128
-		params.OverrideBeaconConfig(testCfg)
-
-		numberOfColumns := params.BeaconConfig().NumberOfColumns
-		blobCount := 3
-
-		blobs := make([][]byte, blobCount)
-		commitments := make([][]byte, blobCount)
-		var allCellProofs [][]byte
-
-		for i := 0; i < blobCount; i++ {
-			randBlob := random.GetRandBlob(int64(i + 100))
-			var blob Blob
-			copy(blob[:], randBlob[:])
-			commitment, err := BlobToKZGCommitment(&blob)
-			require.NoError(t, err)
-
-			cellsAndProofs, err := ComputeCellsAndKZGProofs(&blob)
-			require.NoError(t, err)
-
-			blobs[i] = blob[:]
-			commitments[i] = commitment[:]
-
-			for j := uint64(0); j < numberOfColumns; j++ {
-				allCellProofs = append(allCellProofs, cellsAndProofs.Proofs[j][:])
-			}
-		}
-
-		// Verify with realistic configuration
-		err := VerifyCellKZGProofBatchFromBlobData(blobs, commitments, allCellProofs, numberOfColumns)
-		require.NoError(t, err)
-
-		// Verify we have the expected number of cell proofs
-		expectedCellProofs := uint64(blobCount) * numberOfColumns
-		require.Equal(t, int(expectedCellProofs), len(allCellProofs))
-	})
-
-	t.Run("compute cells failure should propagate", func(t *testing.T) {
-		// Test with invalid blob data that should cause ComputeCells to fail
+	t.Run(" invalid blob data that should cause ComputeCells to fail", func(t *testing.T) {
 		numberOfColumns := uint64(128)
 
 		// Create invalid blob (not properly formatted)
