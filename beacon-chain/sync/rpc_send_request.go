@@ -22,6 +22,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	goPeer "github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -404,11 +405,8 @@ func readChunkedBlobSidecar(stream network.Stream, encoding encoder.NetworkEncod
 // SendDataColumnSidecarsByRangeRequest sends a request for data column sidecars by range
 // and returns the fetched data column sidecars.
 func SendDataColumnSidecarsByRangeRequest(
-	ctx context.Context,
-	tor blockchain.TemporalOracle,
-	p2pApi p2p.P2P,
+	p DataColumnSidecarsParams,
 	pid peer.ID,
-	ctxMap ContextByteVersions,
 	request *ethpb.DataColumnSidecarsByRangeRequest,
 ) ([]blocks.RODataColumn, error) {
 	// Return early if nothing to request.
@@ -428,7 +426,7 @@ func SendDataColumnSidecarsByRangeRequest(
 	}
 
 	// Build the topic.
-	currentSlot := tor.CurrentSlot()
+	currentSlot := p.Tor.CurrentSlot()
 	currentEpoch := slots.ToEpoch(currentSlot)
 	topic, err := p2p.TopicFromMessage(p2p.DataColumnSidecarsByRangeName, currentEpoch)
 	if err != nil {
@@ -453,7 +451,7 @@ func SendDataColumnSidecarsByRangeRequest(
 	})
 
 	// Send the request.
-	stream, err := p2pApi.Send(ctx, request, topic, pid)
+	stream, err := p.P2P.Send(p.Ctx, request, topic, pid)
 	if err != nil {
 		return nil, errors.Wrap(err, "p2p send")
 	}
@@ -463,7 +461,7 @@ func SendDataColumnSidecarsByRangeRequest(
 	roDataColumns := make([]blocks.RODataColumn, 0, totalCount)
 	for range totalCount {
 		// Avoid reading extra chunks if the context is done.
-		if err := ctx.Err(); err != nil {
+		if err := p.Ctx.Err(); err != nil {
 			return nil, err
 		}
 
@@ -473,7 +471,7 @@ func SendDataColumnSidecarsByRangeRequest(
 		}
 
 		roDataColumn, err := readChunkedDataColumnSidecar(
-			stream, p2pApi, ctxMap,
+			stream, p.P2P, p.CtxMap,
 			validatorSlotWithinBounds,
 			isSidecarIndexRequested(request),
 		)
@@ -492,7 +490,7 @@ func SendDataColumnSidecarsByRangeRequest(
 	}
 
 	// All requested sidecars were delivered by the peer. Expecting EOF.
-	if _, err := readChunkedDataColumnSidecar(stream, p2pApi, ctxMap); !errors.Is(err, io.EOF) {
+	if _, err := readChunkedDataColumnSidecar(stream, p.P2P, p.CtxMap); !errors.Is(err, io.EOF) {
 		return nil, errors.Wrapf(errMaxResponseDataColumnSidecarsExceeded, "requestedCount=%d", totalCount)
 	}
 
@@ -539,22 +537,10 @@ func isSidecarIndexRequested(request *ethpb.DataColumnSidecarsByRangeRequest) Da
 
 // SendDataColumnSidecarsByRootRequest sends a request for data column sidecars by root
 // and returns the fetched data column sidecars.
-func SendDataColumnSidecarsByRootRequest(
-	ctx context.Context,
-	tor blockchain.TemporalOracle,
-	p2pApi p2p.P2P,
-	pid peer.ID,
-	ctxMap ContextByteVersions,
-	request p2ptypes.DataColumnsByRootIdentifiers,
-) ([]blocks.RODataColumn, error) {
-	// Return early if the request is nil.
-	if request == nil {
-		return nil, nil
-	}
-
+func SendDataColumnSidecarsByRootRequest(p DataColumnSidecarsParams, peer goPeer.ID, identifiers p2ptypes.DataColumnsByRootIdentifiers) ([]blocks.RODataColumn, error) {
 	// Compute how many sidecars are requested.
 	count := uint64(0)
-	for _, identifier := range request {
+	for _, identifier := range identifiers {
 		count += uint64(len(identifier.Columns))
 	}
 
@@ -570,13 +556,15 @@ func SendDataColumnSidecarsByRootRequest(
 	}
 
 	// Get the topic for the request.
-	topic, err := p2p.TopicFromMessage(p2p.DataColumnSidecarsByRootName, slots.ToEpoch(tor.CurrentSlot()))
+	currentSlot := p.Tor.CurrentSlot()
+	currentEpoch := slots.ToEpoch(currentSlot)
+	topic, err := p2p.TopicFromMessage(p2p.DataColumnSidecarsByRootName, currentEpoch)
 	if err != nil {
 		return nil, errors.Wrap(err, "topic from message")
 	}
 
 	// Send the request to the peer.
-	stream, err := p2pApi.Send(ctx, request, topic, pid)
+	stream, err := p.P2P.Send(p.Ctx, identifiers, topic, peer)
 	if err != nil {
 		return nil, errors.Wrap(err, "p2p api send")
 	}
@@ -587,7 +575,7 @@ func SendDataColumnSidecarsByRootRequest(
 
 	// Read the data column sidecars from the stream.
 	for range count {
-		roDataColumn, err := readChunkedDataColumnSidecar(stream, p2pApi, ctxMap, isSidecarIndexRootRequested(request))
+		roDataColumn, err := readChunkedDataColumnSidecar(stream, p.P2P, p.CtxMap, isSidecarIndexRootRequested(identifiers))
 		if errors.Is(err, io.EOF) {
 			return roDataColumns, nil
 		}
@@ -603,7 +591,7 @@ func SendDataColumnSidecarsByRootRequest(
 	}
 
 	// All requested sidecars were delivered by the peer. Expecting EOF.
-	if _, err := readChunkedDataColumnSidecar(stream, p2pApi, ctxMap); !errors.Is(err, io.EOF) {
+	if _, err := readChunkedDataColumnSidecar(stream, p.P2P, p.CtxMap); !errors.Is(err, io.EOF) {
 		return nil, errors.Wrapf(errMaxResponseDataColumnSidecarsExceeded, "requestedCount=%d", count)
 	}
 
@@ -629,11 +617,11 @@ func isSidecarIndexRootRequested(request p2ptypes.DataColumnsByRootIdentifiers) 
 		indices, ok := columnsIndexFromRoot[root]
 
 		if !ok {
-			return errors.Errorf("root #%x returned by peer but not requested", root)
+			return errors.Errorf("root %#x returned by peer but not requested", root)
 		}
 
 		if !indices[index] {
-			return errors.Errorf("index %d for root #%x returned by peer but not requested", index, root)
+			return errors.Errorf("index %d for root %#x returned by peer but not requested", index, root)
 		}
 
 		return nil

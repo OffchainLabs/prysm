@@ -9,13 +9,13 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
 	ecdsaprysm "github.com/OffchainLabs/prysm/v6/crypto/ecdsa"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v6/network"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
@@ -126,7 +126,7 @@ func (c *client) Send(
 		return nil, errors.Wrap(err, "could not open new stream")
 	}
 	// do not encode anything if we are sending a metadata request
-	if baseTopic != p2p.RPCMetaDataTopicV1 && baseTopic != p2p.RPCMetaDataTopicV2 {
+	if baseTopic != p2p.RPCMetaDataTopicV1 && baseTopic != p2p.RPCMetaDataTopicV2 && baseTopic != p2p.RPCMetaDataTopicV3 {
 		castedMsg, ok := message.(ssz.Marshaler)
 		if !ok {
 			return nil, errors.Errorf("%T does not support the ssz marshaller interface", message)
@@ -178,7 +178,7 @@ func (c *client) initializeMockChainService(ctx context.Context) (*mockChain, er
 		return nil, err
 	}
 	currEpoch := slots.ToEpoch(slots.CurrentSlot(genesisResp.GenesisTime.AsTime()))
-	currFork, err := forks.Fork(currEpoch)
+	currFork, err := params.Fork(currEpoch)
 	if err != nil {
 		return nil, err
 	}

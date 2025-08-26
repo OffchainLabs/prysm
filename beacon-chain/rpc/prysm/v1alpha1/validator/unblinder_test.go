@@ -37,7 +37,7 @@ func TestUnblinder_UnblindBlobSidecars_InvalidBundle(t *testing.T) {
 func TestUnblindBlobsSidecars_WithBlobsBundler(t *testing.T) {
 	// Test that the function accepts BlobsBundler interface
 	// This test focuses on the interface change rather than full integration
-	
+
 	t.Run("Interface compatibility with BlobsBundle", func(t *testing.T) {
 		// Create a simple pre-Deneb block that will return nil (no processing needed)
 		wBlock, err := consensusblocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockCapella{
@@ -87,7 +87,7 @@ func TestUnblindBlobsSidecars_WithBlobsBundler(t *testing.T) {
 	t.Run("Function signature accepts BlobsBundler interface", func(t *testing.T) {
 		// This test verifies that the function signature has been updated to accept BlobsBundler
 		// We test this by verifying the code compiles with both types
-		
+
 		// Create a simple pre-Deneb block for the interface test
 		wBlock, err := consensusblocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockCapella{
 			Block: &ethpb.BeaconBlockCapella{
@@ -106,7 +106,7 @@ func TestUnblindBlobsSidecars_WithBlobsBundler(t *testing.T) {
 		_, err = unblindBlobsSidecars(wBlock, regularBundle)
 		require.NoError(t, err)
 
-		// Verify function accepts BlobsBundleV2 through the interface  
+		// Verify function accepts BlobsBundleV2 through the interface
 		var bundleV2 enginev1.BlobsBundler = &enginev1.BlobsBundleV2{
 			KzgCommitments: [][]byte{make([]byte, 48)},
 			Proofs:         [][]byte{make([]byte, 48)},

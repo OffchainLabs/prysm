@@ -211,7 +211,10 @@ func (s *Service) RefreshPersistentSubnets() {
 		}
 
 		// Some data changed. Update the record and the metadata.
-		s.updateSubnetRecordWithMetadata(bitV)
+		// Not returning early here because the error comes from saving the metadata sequence number.
+		if err := s.updateSubnetRecordWithMetadata(bitV); err != nil {
+			log.WithError(err).Error("Failed to update subnet record with metadata")
+		}
 
 		// Ping all peers.
 		s.pingPeersAndLogEnr()
@@ -236,36 +239,47 @@ func (s *Service) RefreshPersistentSubnets() {
 	// Get the sync subnet bitfield in our metadata.
 	currentBitSInMetadata := s.Metadata().SyncnetsBitfield()
 
-	// Is our sync bitvector record up to date?
 	isBitSUpToDate := bytes.Equal(bitS, inRecordBitS) && bytes.Equal(bitS, currentBitSInMetadata)
 
 	// Compare current epoch with the Fulu fork epoch.
 	fuluForkEpoch := params.BeaconConfig().FuluForkEpoch
 
+	custodyGroupCount, inRecordCustodyGroupCount := uint64(0), uint64(0)
+	if params.FuluEnabled() {
+		// Get the custody group count we store in our record.
+		inRecordCustodyGroupCount, err = peerdas.CustodyGroupCountFromRecord(record)
+		if err != nil {
+			log.WithError(err).Error("Could not retrieve custody group count")
+			return
+		}
+
+		custodyGroupCount, err = s.CustodyGroupCount()
+		if err != nil {
+			log.WithError(err).Error("Could not retrieve custody group count")
+			return
+		}
+	}
+
 	// We add `1` to the current epoch because we want to prepare one epoch before the Fulu fork.
 	if currentEpoch+1 < fuluForkEpoch {
+		// Is our custody group count record up to date?
+		isCustodyGroupCountUpToDate := custodyGroupCount == inRecordCustodyGroupCount
+
 		// Altair behaviour.
-		if metadataVersion == version.Altair && isBitVUpToDate && isBitSUpToDate {
+		if metadataVersion == version.Altair && isBitVUpToDate && isBitSUpToDate && (!params.FuluEnabled() || isCustodyGroupCountUpToDate) {
 			// Nothing to do, return early.
 			return
 		}
 
 		// Some data have changed, update our record and metadata.
-		s.updateSubnetRecordWithMetadataV2(bitV, bitS)
+		// Not returning early here because the error comes from saving the metadata sequence number.
+		if err := s.updateSubnetRecordWithMetadataV2(bitV, bitS, custodyGroupCount); err != nil {
+			log.WithError(err).Error("Failed to update subnet record with metadata")
+		}
 
 		// Ping all peers to inform them of new metadata
 		s.pingPeersAndLogEnr()
 
-		return
-	}
-
-	// Get the current custody group count.
-	custodyGroupCount := s.cfg.CustodyInfo.ActualGroupCount()
-
-	// Get the custody group count we store in our record.
-	inRecordCustodyGroupCount, err := peerdas.CustodyGroupCountFromRecord(record)
-	if err != nil {
-		log.WithError(err).Error("Could not retrieve custody subnet count")
 		return
 	}
 
@@ -281,7 +295,10 @@ func (s *Service) RefreshPersistentSubnets() {
 	}
 
 	// Some data changed. Update the record and the metadata.
-	s.updateSubnetRecordWithMetadataV3(bitV, bitS, custodyGroupCount)
+	// Not returning early here because the error comes from saving the metadata sequence number.
+	if err := s.updateSubnetRecordWithMetadataV3(bitV, bitS, custodyGroupCount); err != nil {
+		log.WithError(err).Error("Failed to update subnet record with metadata")
+	}
 
 	// Ping all peers.
 	s.pingPeersAndLogEnr()
@@ -426,20 +443,27 @@ func (s *Service) findPeers(ctx context.Context, missingPeerCount uint) ([]*enod
 			return peersToDial, ctx.Err()
 		}
 
-		// Skip peer not matching the filter.
 		node := iterator.Node()
-		if !s.filterPeer(node) {
-			continue
-		}
 
 		// Remove duplicates, keeping the node with higher seq.
 		existing, ok := nodeByNodeID[node.ID()]
-		if ok && existing.Seq() > node.Seq() {
+		if ok && existing.Seq() >= node.Seq() {
+			continue // keep existing and skip.
+		}
+
+		// Treat nodes that exist in nodeByNodeID with higher seq numbers as new peers
+		// Skip peer not matching the filter.
+		if !s.filterPeer(node) {
+			if ok {
+				// this means the existing peer with the lower sequence number is no longer valid
+				delete(nodeByNodeID, existing.ID())
+				missingPeerCount++
+			}
 			continue
 		}
-		nodeByNodeID[node.ID()] = node
 
 		// We found a new peer. Decrease the missing peer count.
+		nodeByNodeID[node.ID()] = node
 		missingPeerCount--
 	}
 
@@ -565,21 +589,29 @@ func (s *Service) createLocalNode(
 		localNode.Set(quicEntry)
 	}
 
-	if params.FuluEnabled() {
-		custodyGroupCount := s.cfg.CustodyInfo.ActualGroupCount()
-		localNode.Set(peerdas.Cgc(custodyGroupCount))
-	}
-
 	localNode.SetFallbackIP(ipAddr)
 	localNode.SetFallbackUDP(udpPort)
 
-	localNode, err = addForkEntry(localNode, s.genesisTime, s.genesisValidatorsRoot)
-	if err != nil {
+	currentSlot := slots.CurrentSlot(s.genesisTime)
+	currentEpoch := slots.ToEpoch(currentSlot)
+	current := params.GetNetworkScheduleEntry(currentEpoch)
+	next := params.NextNetworkScheduleEntry(currentEpoch)
+	if err := updateENR(localNode, current, next); err != nil {
 		return nil, errors.Wrap(err, "could not add eth2 fork version entry to enr")
 	}
 
 	localNode = initializeAttSubnets(localNode)
 	localNode = initializeSyncCommSubnets(localNode)
+
+	if params.FuluEnabled() {
+		custodyGroupCount, err := s.CustodyGroupCount()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not retrieve custody group count")
+		}
+
+		custodyGroupCountEntry := peerdas.Cgc(custodyGroupCount)
+		localNode.Set(custodyGroupCountEntry)
+	}
 
 	if s.cfg != nil && s.cfg.HostAddress != "" {
 		hostIP := net.ParseIP(s.cfg.HostAddress)
@@ -685,7 +717,7 @@ func (s *Service) filterPeer(node *enode.Node) bool {
 	// Ignore nodes that don't match our fork digest.
 	nodeENR := node.Record()
 	if s.genesisValidatorsRoot != nil {
-		if err := s.compareForkENR(nodeENR); err != nil {
+		if err := compareForkENR(s.dv5Listener.LocalNode().Node().Record(), nodeENR); err != nil {
 			log.WithError(err).Trace("Fork ENR mismatches between peer and local node")
 			return false
 		}

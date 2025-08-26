@@ -18,7 +18,7 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 	}
 
 	if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
-		return errors.Wrap(err, "receive data column")
+		return errors.Wrap(err, "receive data column sidecar")
 	}
 
 	slot := sidecar.Slot()
@@ -26,7 +26,7 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 	root := sidecar.BlockRoot()
 
 	if err := s.reconstructSaveBroadcastDataColumnSidecars(ctx, slot, proposerIndex, root); err != nil {
-		return errors.Wrap(err, "reconstruct data columns")
+		return errors.Wrap(err, "reconstruct/save/broadcast data column sidecars")
 	}
 
 	return nil

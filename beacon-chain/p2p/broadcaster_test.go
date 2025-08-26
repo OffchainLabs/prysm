@@ -11,20 +11,19 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	testpb "github.com/OffchainLabs/prysm/v6/proto/testing"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
@@ -61,6 +60,7 @@ func TestService_Broadcast(t *testing.T) {
 	topic := "/eth2/%x/testing"
 	// Set a test gossip mapping for testpb.TestSimpleMessage.
 	GossipTypeMapping[reflect.TypeOf(msg)] = topic
+	p.clock = startup.NewClock(p.genesisTime, bytesutil.ToBytes32(p.genesisValidatorsRoot))
 	digest, err := p.currentForkDigest()
 	require.NoError(t, err)
 	topic = fmt.Sprintf(topic, digest)
@@ -229,6 +229,7 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		cfg:                   cfg,
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: genesisValidatorsRoot,
+		custodyInfo:           &custodyInfo{},
 	}
 	bootListener, err := s.createListener(ipAddr, pkey)
 	require.NoError(t, err)
@@ -257,6 +258,7 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 			cfg:                   cfg,
 			genesisTime:           genesisTime,
 			genesisValidatorsRoot: genesisValidatorsRoot,
+			custodyInfo:           &custodyInfo{},
 		}
 		listener, err := s.startDiscoveryV5(ipAddr, pkey)
 		// Set for 2nd peer
@@ -265,7 +267,8 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 			s.metaData = wrapper.WrappedMetadataV0(new(ethpb.MetaDataV0))
 			bitV := bitfield.NewBitvector64()
 			bitV.SetBitAt(subnet, true)
-			s.updateSubnetRecordWithMetadata(bitV)
+			err := s.updateSubnetRecordWithMetadata(bitV)
+			require.NoError(t, err)
 		}
 		assert.NoError(t, err, "Could not start discovery for node")
 		listeners = append(listeners, listener)
@@ -546,14 +549,11 @@ func TestService_BroadcastLightClientOptimisticUpdate(t *testing.T) {
 		}),
 	}
 
-	l := util.NewTestLightClient(t, version.Altair)
-	msg, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock)
+	msg, err := util.MockOptimisticUpdate()
 	require.NoError(t, err)
 
 	GossipTypeMapping[reflect.TypeOf(msg)] = LightClientOptimisticUpdateTopicFormat
-	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(msg.AttestedHeader().Beacon().Slot), p.genesisValidatorsRoot)
-	require.NoError(t, err)
-	topic := fmt.Sprintf(LightClientOptimisticUpdateTopicFormat, digest)
+	topic := fmt.Sprintf(LightClientOptimisticUpdateTopicFormat, params.ForkDigest(slots.ToEpoch(msg.AttestedHeader().Beacon().Slot)))
 
 	// External peer subscribes to the topic.
 	topic += p.Encoding().ProtocolSuffix()
@@ -613,14 +613,11 @@ func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
 		}),
 	}
 
-	l := util.NewTestLightClient(t, version.Altair)
-	msg, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+	msg, err := util.MockFinalityUpdate()
 	require.NoError(t, err)
 
 	GossipTypeMapping[reflect.TypeOf(msg)] = LightClientFinalityUpdateTopicFormat
-	digest, err := forks.ForkDigestFromEpoch(slots.ToEpoch(msg.AttestedHeader().Beacon().Slot), p.genesisValidatorsRoot)
-	require.NoError(t, err)
-	topic := fmt.Sprintf(LightClientFinalityUpdateTopicFormat, digest)
+	topic := fmt.Sprintf(LightClientFinalityUpdateTopicFormat, params.ForkDigest(slots.ToEpoch(msg.AttestedHeader().Beacon().Slot)))
 
 	// External peer subscribes to the topic.
 	topic += p.Encoding().ProtocolSuffix()
@@ -699,6 +696,7 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		subnetsLockLock:       sync.Mutex{},
 		peers:                 peers.NewStatus(t.Context(), &peers.StatusConfig{ScorerParams: &scorers.Config{}}),
+		custodyInfo:           &custodyInfo{},
 	}
 
 	// Create a listener.
@@ -718,7 +716,7 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 
 	// Attempt to broadcast nil object should fail.
 	var emptyRoot [fieldparams.RootLength]byte
-	err = service.BroadcastDataColumn(emptyRoot, subnet, nil)
+	err = service.BroadcastDataColumnSidecar(emptyRoot, subnet, nil)
 	require.ErrorContains(t, "attempted to broadcast nil", err)
 
 	// Subscribe to the topic.
@@ -729,7 +727,7 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Broadcast to peers and wait.
-	err = service.BroadcastDataColumn(emptyRoot, subnet, sidecar)
+	err = service.BroadcastDataColumnSidecar(emptyRoot, subnet, sidecar)
 	require.NoError(t, err)
 
 	// Receive the message.

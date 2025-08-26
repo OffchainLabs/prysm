@@ -289,7 +289,7 @@ func TestPeerChainState(t *testing.T) {
 	require.NoError(t, err)
 
 	finalizedEpoch := primitives.Epoch(123)
-	p.SetChainState(id, &pb.Status{FinalizedEpoch: finalizedEpoch})
+	p.SetChainState(id, &pb.StatusV2{FinalizedEpoch: finalizedEpoch})
 
 	resChainState, err := p.ChainState(id)
 	require.NoError(t, err)
@@ -324,7 +324,7 @@ func TestPeerWithNilChainState(t *testing.T) {
 
 	resChainState, err := p.ChainState(id)
 	require.Equal(t, peerdata.ErrNoPeerStatus, err)
-	var nothing *pb.Status
+	var nothing *pb.StatusV2
 	require.Equal(t, resChainState, nothing)
 }
 
@@ -616,7 +616,7 @@ func TestTrimmedOrderedPeers(t *testing.T) {
 
 	// Peer 1
 	pid1 := addPeer(t, p, peers.Connected)
-	p.SetChainState(pid1, &pb.Status{
+	p.SetChainState(pid1, &pb.StatusV2{
 		HeadSlot:       3 * params.BeaconConfig().SlotsPerEpoch,
 		FinalizedEpoch: 3,
 		FinalizedRoot:  mockroot3[:],
@@ -624,7 +624,7 @@ func TestTrimmedOrderedPeers(t *testing.T) {
 
 	// Peer 2
 	pid2 := addPeer(t, p, peers.Connected)
-	p.SetChainState(pid2, &pb.Status{
+	p.SetChainState(pid2, &pb.StatusV2{
 		HeadSlot:       4 * params.BeaconConfig().SlotsPerEpoch,
 		FinalizedEpoch: 4,
 		FinalizedRoot:  mockroot4[:],
@@ -632,7 +632,7 @@ func TestTrimmedOrderedPeers(t *testing.T) {
 
 	// Peer 3
 	pid3 := addPeer(t, p, peers.Connected)
-	p.SetChainState(pid3, &pb.Status{
+	p.SetChainState(pid3, &pb.StatusV2{
 		HeadSlot:       5 * params.BeaconConfig().SlotsPerEpoch,
 		FinalizedEpoch: 5,
 		FinalizedRoot:  mockroot5[:],
@@ -640,7 +640,7 @@ func TestTrimmedOrderedPeers(t *testing.T) {
 
 	// Peer 4
 	pid4 := addPeer(t, p, peers.Connected)
-	p.SetChainState(pid4, &pb.Status{
+	p.SetChainState(pid4, &pb.StatusV2{
 		HeadSlot:       2 * params.BeaconConfig().SlotsPerEpoch,
 		FinalizedEpoch: 2,
 		FinalizedRoot:  mockroot2[:],
@@ -648,7 +648,7 @@ func TestTrimmedOrderedPeers(t *testing.T) {
 
 	// Peer 5
 	pid5 := addPeer(t, p, peers.Connected)
-	p.SetChainState(pid5, &pb.Status{
+	p.SetChainState(pid5, &pb.StatusV2{
 		HeadSlot:       2 * params.BeaconConfig().SlotsPerEpoch,
 		FinalizedEpoch: 2,
 		FinalizedRoot:  mockroot2[:],
@@ -1012,7 +1012,7 @@ func TestStatus_BestPeer(t *testing.T) {
 				},
 			})
 			for _, peerConfig := range tt.peers {
-				p.SetChainState(addPeer(t, p, peers.Connected), &pb.Status{
+				p.SetChainState(addPeer(t, p, peers.Connected), &pb.StatusV2{
 					FinalizedEpoch: peerConfig.finalizedEpoch,
 					HeadSlot:       peerConfig.headSlot,
 				})
@@ -1039,7 +1039,7 @@ func TestBestFinalized_returnsMaxValue(t *testing.T) {
 	for i := 0; i <= maxPeers+100; i++ {
 		p.Add(new(enr.Record), peer.ID(rune(i)), nil, network.DirOutbound)
 		p.SetConnectionState(peer.ID(rune(i)), peers.Connected)
-		p.SetChainState(peer.ID(rune(i)), &pb.Status{
+		p.SetChainState(peer.ID(rune(i)), &pb.StatusV2{
 			FinalizedEpoch: 10,
 		})
 	}
@@ -1062,7 +1062,7 @@ func TestStatus_BestNonFinalized(t *testing.T) {
 	for i, headSlot := range peerSlots {
 		p.Add(new(enr.Record), peer.ID(rune(i)), nil, network.DirOutbound)
 		p.SetConnectionState(peer.ID(rune(i)), peers.Connected)
-		p.SetChainState(peer.ID(rune(i)), &pb.Status{
+		p.SetChainState(peer.ID(rune(i)), &pb.StatusV2{
 			HeadSlot: headSlot,
 		})
 	}
@@ -1085,17 +1085,17 @@ func TestStatus_CurrentEpoch(t *testing.T) {
 	})
 	// Peer 1
 	pid1 := addPeer(t, p, peers.Connected)
-	p.SetChainState(pid1, &pb.Status{
+	p.SetChainState(pid1, &pb.StatusV2{
 		HeadSlot: params.BeaconConfig().SlotsPerEpoch * 4,
 	})
 	// Peer 2
 	pid2 := addPeer(t, p, peers.Connected)
-	p.SetChainState(pid2, &pb.Status{
+	p.SetChainState(pid2, &pb.StatusV2{
 		HeadSlot: params.BeaconConfig().SlotsPerEpoch * 5,
 	})
 	// Peer 3
 	pid3 := addPeer(t, p, peers.Connected)
-	p.SetChainState(pid3, &pb.Status{
+	p.SetChainState(pid3, &pb.StatusV2{
 		HeadSlot: params.BeaconConfig().SlotsPerEpoch * 4,
 	})
 

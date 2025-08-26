@@ -14,8 +14,10 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	prysmnetwork "github.com/OffchainLabs/prysm/v6/network"
@@ -88,6 +90,15 @@ type Service struct {
 	genesisValidatorsRoot []byte
 	activeValidatorCount  uint64
 	peerDisconnectionTime *cache.Cache
+	custodyInfo           *custodyInfo
+	custodyInfoLock       sync.RWMutex // Lock access to custodyInfo
+	clock                 *startup.Clock
+	allForkDigests        map[[4]byte]struct{}
+}
+
+type custodyInfo struct {
+	earliestAvailableSlot primitives.Slot
+	groupCount            uint64
 }
 
 // NewService initializes a new p2p service compatible with shared.Service interface. No
@@ -102,7 +113,7 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 		return nil, errors.Wrapf(err, "failed to generate p2p private key")
 	}
 
-	metaData, err := metaDataFromConfig(cfg)
+	metaData, err := metaDataFromDB(ctx, cfg.DB)
 	if err != nil {
 		log.WithError(err).Error("Failed to create peer metadata")
 		return nil, err
@@ -192,6 +203,7 @@ func (s *Service) Start() {
 	// Waits until the state is initialized via an event feed.
 	// Used for fork-related data when connecting peers.
 	s.awaitStateInitialized()
+	s.setAllForkDigests()
 	s.isPreGenesis = false
 
 	var relayNodes []string
@@ -445,7 +457,7 @@ func (s *Service) awaitStateInitialized() {
 	s.genesisTime = clock.GenesisTime()
 	gvr := clock.GenesisValidatorsRoot()
 	s.genesisValidatorsRoot = gvr[:]
-	_, err = s.currentForkDigest() // initialize fork digest cache
+	_, err = s.currentForkDigest()
 	if err != nil {
 		log.WithError(err).Error("Could not initialize fork digest")
 	}

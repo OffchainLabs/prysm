@@ -48,7 +48,7 @@ func TestMinimumColumnsCountToReconstruct(t *testing.T) {
 			params.OverrideBeaconConfig(cfg)
 
 			// Compute the minimum number of columns needed to reconstruct.
-			actual := peerdas.MinimumColumnsCountToReconstruct()
+			actual := peerdas.MinimumColumnCountToReconstruct()
 			require.Equal(t, tc.expected, actual)
 		})
 	}
@@ -100,7 +100,7 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 	t.Run("not enough columns to enable reconstruction", func(t *testing.T) {
 		_, _, verifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, 3)
 
-		minimum := peerdas.MinimumColumnsCountToReconstruct()
+		minimum := peerdas.MinimumColumnCountToReconstruct()
 		_, err := peerdas.ReconstructDataColumnSidecars(verifiedRoSidecars[:minimum-1])
 		require.ErrorIs(t, err, peerdas.ErrNotEnoughDataColumnSidecars)
 	})
@@ -191,6 +191,26 @@ func TestReconstructBlobs(t *testing.T) {
 
 		// Arbitrarily change the order of the sidecars.
 		verifiedRoSidecars[3], verifiedRoSidecars[2] = verifiedRoSidecars[2], verifiedRoSidecars[3]
+
+		_, err := peerdas.ReconstructBlobs(emptyBlock, verifiedRoSidecars, []int{0})
+		require.ErrorIs(t, err, peerdas.ErrDataColumnSidecarsNotSortedByIndex)
+	})
+
+	t.Run("consecutive duplicates", func(t *testing.T) {
+		_, _, verifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, 3)
+
+		// [0, 1, 1, 3, 4, ...]
+		verifiedRoSidecars[2] = verifiedRoSidecars[1]
+
+		_, err := peerdas.ReconstructBlobs(emptyBlock, verifiedRoSidecars, []int{0})
+		require.ErrorIs(t, err, peerdas.ErrDataColumnSidecarsNotSortedByIndex)
+	})
+
+	t.Run("non-consecutive duplicates", func(t *testing.T) {
+		_, _, verifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, 3)
+
+		// [0, 1, 2, 1, 4, ...]
+		verifiedRoSidecars[3] = verifiedRoSidecars[1]
 
 		_, err := peerdas.ReconstructBlobs(emptyBlock, verifiedRoSidecars, []int{0})
 		require.ErrorIs(t, err, peerdas.ErrDataColumnSidecarsNotSortedByIndex)

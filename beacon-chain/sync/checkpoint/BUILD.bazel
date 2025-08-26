@@ -46,7 +46,6 @@ go_test(
         "//consensus-types/blocks/testing:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//encoding/ssz/detect:go_default_library",
-        "//network/forks:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//runtime/version:go_default_library",
         "//testing/require:go_default_library",

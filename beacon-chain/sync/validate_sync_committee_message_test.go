@@ -22,7 +22,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -224,8 +223,7 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 				gt := time.Now().Add(-time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(slots.PrevSlot(hState.Slot())))
 				vr := [32]byte{'A'}
 				clock := startup.NewClock(gt, vr)
-				digest, err := forks.CreateForkDigest(gt, vr[:])
-				assert.NoError(t, err)
+				digest := params.ForkDigest(slots.ToEpoch(clock.CurrentSlot()))
 				actualTopic := fmt.Sprintf(defaultTopic, digest, 5)
 
 				return s, actualTopic, clock
@@ -270,8 +268,8 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 
 				gt := time.Now().Add(-time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(slots.PrevSlot(hState.Slot())))
 				vr := [32]byte{'A'}
-				digest, err := forks.CreateForkDigest(gt, vr[:])
-				assert.NoError(t, err)
+				clock := startup.NewClock(gt, vr)
+				digest := params.ForkDigest(clock.CurrentEpoch())
 				actualTopic := fmt.Sprintf(defaultTopic, digest, 5)
 
 				return s, actualTopic, startup.NewClock(gt, vr)
@@ -324,8 +322,8 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 				// Set Topic and Subnet
 				gt := time.Now().Add(-time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(slots.PrevSlot(hState.Slot())))
 				vr := [32]byte{'A'}
-				digest, err := forks.CreateForkDigest(gt, vr[:])
-				assert.NoError(t, err)
+				clock := startup.NewClock(gt, vr)
+				digest := params.ForkDigest(slots.ToEpoch(clock.CurrentSlot()))
 				actualTopic := fmt.Sprintf(defaultTopic, digest, 5)
 
 				return s, actualTopic, startup.NewClock(gt, vr)
@@ -382,8 +380,8 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 				// Set Topic and Subnet
 				gt := time.Now().Add(-time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(slots.PrevSlot(hState.Slot())))
 				vr := [32]byte{'A'}
-				digest, err := forks.CreateForkDigest(gt, vr[:])
-				assert.NoError(t, err)
+				clock := startup.NewClock(gt, vr)
+				digest := params.ForkDigest(slots.ToEpoch(clock.CurrentSlot()))
 				actualTopic := fmt.Sprintf(defaultTopic, digest, 1)
 
 				return s, actualTopic, startup.NewClock(gt, vr)

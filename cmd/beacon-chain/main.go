@@ -15,12 +15,12 @@ import (
 	dbcommands "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/genesis"
 	jwtcommands "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/jwt"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/storage"
 	backfill "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/backfill"
 	bflags "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/backfill/flags"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/checkpoint"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/genesis"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/io/file"
 	"github.com/OffchainLabs/prysm/v6/io/logs"
@@ -59,10 +59,13 @@ var appFlags = []cli.Flag{
 	flags.BlockBatchLimitBurstFactor,
 	flags.BlobBatchLimit,
 	flags.BlobBatchLimitBurstFactor,
+	flags.DataColumnBatchLimit,
+	flags.DataColumnBatchLimitBurstFactor,
 	flags.InteropMockEth1DataVotesFlag,
 	flags.SlotsPerArchivedPoint,
 	flags.DisableDebugRPCEndpoints,
 	flags.SubscribeToAllSubnets,
+	flags.SubscribeAllDataSubnets,
 	flags.HistoricalSlasherNode,
 	flags.ChainID,
 	flags.NetworkID,
@@ -100,7 +103,6 @@ var appFlags = []cli.Flag{
 	cmd.P2PMaxPeers,
 	cmd.P2PPrivKey,
 	cmd.P2PStaticID,
-	cmd.P2PMetadata,
 	cmd.P2PAllowList,
 	cmd.P2PDenyList,
 	cmd.PubsubQueueSize,
@@ -142,6 +144,7 @@ var appFlags = []cli.Flag{
 	flags.SlasherFlag,
 	flags.JwtId,
 	storage.BlobStoragePathFlag,
+	storage.DataColumnStoragePathFlag,
 	storage.BlobRetentionEpochFlag,
 	storage.BlobStorageLayout,
 	bflags.EnableExperimentalBackfill,

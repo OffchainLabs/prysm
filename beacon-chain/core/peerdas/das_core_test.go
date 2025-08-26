@@ -17,8 +17,8 @@ func TestCustodyGroups(t *testing.T) {
 	// --------------------------------------------
 	// The happy path is unit tested in spec tests.
 	// --------------------------------------------
-	numberOfCustodyGroup := params.BeaconConfig().NumberOfCustodyGroups
-	_, err := peerdas.CustodyGroups(enode.ID{}, numberOfCustodyGroup+1)
+	numberOfCustodyGroups := params.BeaconConfig().NumberOfCustodyGroups
+	_, err := peerdas.CustodyGroups(enode.ID{}, numberOfCustodyGroups+1)
 	require.ErrorIs(t, err, peerdas.ErrCustodyGroupCountTooLarge)
 }
 
@@ -26,8 +26,8 @@ func TestComputeColumnsForCustodyGroup(t *testing.T) {
 	// --------------------------------------------
 	// The happy path is unit tested in spec tests.
 	// --------------------------------------------
-	numberOfCustodyGroup := params.BeaconConfig().NumberOfCustodyGroups
-	_, err := peerdas.ComputeColumnsForCustodyGroup(numberOfCustodyGroup)
+	numberOfCustodyGroups := params.BeaconConfig().NumberOfCustodyGroups
+	_, err := peerdas.ComputeColumnsForCustodyGroup(numberOfCustodyGroups)
 	require.ErrorIs(t, err, peerdas.ErrCustodyGroupTooLarge)
 }
 
@@ -67,6 +67,55 @@ func TestDataColumnSidecars(t *testing.T) {
 		_, err = peerdas.DataColumnSidecars(signedBeaconBlock, cellsAndProofs)
 		require.ErrorIs(t, err, peerdas.ErrSizeMismatch)
 	})
+
+	t.Run("cells array too short for column index", func(t *testing.T) {
+		// Create a Fulu block with a blob commitment.
+		signedBeaconBlockPb := util.NewBeaconBlockFulu()
+		signedBeaconBlockPb.Block.Body.BlobKzgCommitments = [][]byte{make([]byte, 48)}
+
+		// Create a signed beacon block from the protobuf.
+		signedBeaconBlock, err := blocks.NewSignedBeaconBlock(signedBeaconBlockPb)
+		require.NoError(t, err)
+
+		// Create cells and proofs with insufficient cells for the number of columns.
+		// This simulates a scenario where cellsAndProofs has fewer cells than expected columns.
+		cellsAndProofs := []kzg.CellsAndProofs{
+			{
+				Cells:  make([]kzg.Cell, 10),  // Only 10 cells
+				Proofs: make([]kzg.Proof, 10), // Only 10 proofs
+			},
+		}
+
+		// This should fail because the function will try to access columns up to NumberOfColumns
+		// but we only have 10 cells/proofs.
+		_, err = peerdas.DataColumnSidecars(signedBeaconBlock, cellsAndProofs)
+		require.ErrorContains(t, "column index", err)
+		require.ErrorContains(t, "exceeds cells length", err)
+	})
+
+	t.Run("proofs array too short for column index", func(t *testing.T) {
+		// Create a Fulu block with a blob commitment.
+		signedBeaconBlockPb := util.NewBeaconBlockFulu()
+		signedBeaconBlockPb.Block.Body.BlobKzgCommitments = [][]byte{make([]byte, 48)}
+
+		// Create a signed beacon block from the protobuf.
+		signedBeaconBlock, err := blocks.NewSignedBeaconBlock(signedBeaconBlockPb)
+		require.NoError(t, err)
+
+		// Create cells and proofs with sufficient cells but insufficient proofs.
+		numberOfColumns := params.BeaconConfig().NumberOfColumns
+		cellsAndProofs := []kzg.CellsAndProofs{
+			{
+				Cells:  make([]kzg.Cell, numberOfColumns),
+				Proofs: make([]kzg.Proof, 5), // Only 5 proofs, less than columns
+			},
+		}
+
+		// This should fail when trying to access proof beyond index 4.
+		_, err = peerdas.DataColumnSidecars(signedBeaconBlock, cellsAndProofs)
+		require.ErrorContains(t, "column index", err)
+		require.ErrorContains(t, "exceeds proofs length", err)
+	})
 }
 
 func TestComputeCustodyGroupForColumn(t *testing.T) {
@@ -102,62 +151,6 @@ func TestComputeCustodyGroupForColumn(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, expected, actual)
 	})
-}
-
-func TestCustodyGroupSamplingSize(t *testing.T) {
-	testCases := []struct {
-		name                         string
-		custodyType                  peerdas.CustodyType
-		validatorsCustodyRequirement uint64
-		toAdvertiseCustodyGroupCount uint64
-		expected                     uint64
-	}{
-		{
-			name:                         "target, lower than samples per slot",
-			custodyType:                  peerdas.Target,
-			validatorsCustodyRequirement: 2,
-			expected:                     8,
-		},
-		{
-			name:                         "target, higher than samples per slot",
-			custodyType:                  peerdas.Target,
-			validatorsCustodyRequirement: 100,
-			expected:                     100,
-		},
-		{
-			name:                         "actual, lower than samples per slot",
-			custodyType:                  peerdas.Actual,
-			validatorsCustodyRequirement: 3,
-			toAdvertiseCustodyGroupCount: 4,
-			expected:                     8,
-		},
-		{
-			name:                         "actual, higher than samples per slot",
-			custodyType:                  peerdas.Actual,
-			validatorsCustodyRequirement: 100,
-			toAdvertiseCustodyGroupCount: 101,
-			expected:                     100,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Create a custody info.
-			custodyInfo := peerdas.CustodyInfo{}
-
-			// Set the validators custody requirement for target custody group count.
-			custodyInfo.TargetGroupCount.SetValidatorsCustodyRequirement(tc.validatorsCustodyRequirement)
-
-			// Set the to advertise custody group count.
-			custodyInfo.ToAdvertiseGroupCount.Set(tc.toAdvertiseCustodyGroupCount)
-
-			// Compute the custody group sampling size.
-			actual := custodyInfo.CustodyGroupSamplingSize(tc.custodyType)
-
-			// Check the result.
-			require.Equal(t, tc.expected, actual)
-		})
-	}
 }
 
 func TestCustodyColumns(t *testing.T) {

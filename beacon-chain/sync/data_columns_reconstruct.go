@@ -21,9 +21,9 @@ const (
 	broadcastMissingDataColumnsSlack           = 2 * time.Second
 )
 
-// reconstructSaveBroadcastDataColumnSidecars reconstructs if possible and
-// needed all data column sidecars. Then, it saves into the store missing
-// sidecars. After a delay, it broadcasts in the background not seen via gossip
+// reconstructSaveBroadcastDataColumnSidecars reconstructs, if possible,
+// all data column sidecars. Then, it saves missing sidecars to the store.
+// After a delay, it broadcasts in the background not seen via gossip
 // (but reconstructed) sidecars.
 func (s *Service) reconstructSaveBroadcastDataColumnSidecars(
 	ctx context.Context,
@@ -32,30 +32,36 @@ func (s *Service) reconstructSaveBroadcastDataColumnSidecars(
 	root [fieldparams.RootLength]byte,
 ) error {
 	startTime := time.Now()
+	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
+
+	// Lock to prevent concurrent reconstructions.
+	s.reconstructionLock.Lock()
+	defer s.reconstructionLock.Unlock()
 
 	// Get the columns we store.
 	storedDataColumns := s.cfg.dataColumnStorage.Summary(root)
 	storedColumnsCount := storedDataColumns.Count()
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
-	// Lock to prevent concurrent reconstructions.
-	s.reconstructionLock.Lock()
-	defer s.reconstructionLock.Unlock()
-
 	// If reconstruction is not possible or if all columns are already stored, exit early.
-	if storedColumnsCount < peerdas.MinimumColumnsCountToReconstruct() || storedColumnsCount == numberOfColumns {
+	if storedColumnsCount < peerdas.MinimumColumnCountToReconstruct() || storedColumnsCount == numberOfColumns {
 		return nil
 	}
 
 	// Retrieve our local node info.
 	nodeID := s.cfg.p2p.NodeID()
-	custodyGroupCount := s.cfg.custodyInfo.ActualGroupCount()
-	localNodeInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
+	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount()
+	if err != nil {
+		return errors.Wrap(err, "custody group count")
+	}
+
+	samplingSize := max(custodyGroupCount, samplesPerSlot)
+	localNodeInfo, _, err := peerdas.Info(nodeID, samplingSize)
 	if err != nil {
 		return errors.Wrap(err, "peer info")
 	}
 
-	// Load all the possible data columns sidecars, to minimize reconstruction time.
+	// Load all the possible data column sidecars, to minimize reconstruction time.
 	verifiedSidecars, err := s.cfg.dataColumnStorage.Get(root, nil)
 	if err != nil {
 		return errors.Wrap(err, "get data column sidecars")
@@ -76,7 +82,7 @@ func (s *Service) reconstructSaveBroadcastDataColumnSidecars(
 		}
 	}
 
-	// Save the data columns sidecars in the database.
+	// Save the data column sidecars to the database.
 	// Note: We do not call `receiveDataColumn`, because it will ignore
 	// incoming data columns via gossip while we did not broadcast (yet) the reconstructed data columns.
 	if err := s.cfg.dataColumnStorage.Save(toSaveSidecars); err != nil {
@@ -95,7 +101,7 @@ func (s *Service) reconstructSaveBroadcastDataColumnSidecars(
 		"reconstructionAndSaveDuration": time.Since(startTime),
 	}).Debug("Data columns reconstructed and saved")
 
-	// Update reconstruction metrics
+	// Update reconstruction metrics.
 	dataColumnReconstructionHistogram.Observe(float64(time.Since(startTime).Milliseconds()))
 	dataColumnReconstructionCounter.Add(float64(len(reconstructedSidecars) - len(verifiedSidecars)))
 
@@ -121,7 +127,7 @@ func (s *Service) scheduleMissingDataColumnSidecarsBroadcast(
 	})
 
 	// Get the time corresponding to the start of the slot.
-	genesisTime := s.cfg.chain.GenesisTime()
+	genesisTime := s.cfg.clock.GenesisTime()
 	slotStartTime, err := slots.StartTime(genesisTime, slot)
 	if err != nil {
 		return errors.Wrap(err, "failed to calculate slot start time")
@@ -155,10 +161,12 @@ func (s *Service) broadcastMissingDataColumnSidecars(
 	// Get the node ID.
 	nodeID := s.cfg.p2p.NodeID()
 
-	// Get the custody group count.
-	custodyGroupCount := s.cfg.custodyInfo.ActualGroupCount()
-
 	// Retrieve the local node info.
+	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount()
+	if err != nil {
+		return errors.Wrap(err, "custody group count")
+	}
+
 	localNodeInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
 	if err != nil {
 		return errors.Wrap(err, "peerdas info")
@@ -190,7 +198,7 @@ func (s *Service) broadcastMissingDataColumnSidecars(
 		subnet := peerdas.ComputeSubnetForDataColumnSidecar(verifiedRODataColumn.Index)
 
 		// Broadcast the missing data column.
-		if err := s.cfg.p2p.BroadcastDataColumn(root, subnet, verifiedRODataColumn.DataColumnSidecar); err != nil {
+		if err := s.cfg.p2p.BroadcastDataColumnSidecar(root, subnet, verifiedRODataColumn.DataColumnSidecar); err != nil {
 			log.WithError(err).Error("Broadcast data column")
 		}
 

@@ -6,14 +6,12 @@ import (
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/genesis"
 	statenative "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v6/genesis"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
@@ -65,21 +63,21 @@ func (s *Store) StateOrError(ctx context.Context, blockRoot [32]byte) (state.Bea
 	return st, nil
 }
 
-// GenesisState returns the genesis state in beacon chain.
 func (s *Store) GenesisState(ctx context.Context) (state.BeaconState, error) {
-	ctx, span := trace.StartSpan(ctx, "BeaconDB.GenesisState")
+	st, err := genesis.State()
+	if errors.Is(err, genesis.ErrGenesisStateNotInitialized) {
+		log.WithError(err).Error("genesis state not initialized, returning nil state. this should only happen in tests")
+		return nil, nil
+	}
+	return st, err
+}
+
+// GenesisState returns the genesis state in beacon chain.
+func (s *Store) LegacyGenesisState(ctx context.Context) (state.BeaconState, error) {
+	ctx, span := trace.StartSpan(ctx, "BeaconDB.LegacyGenesisState")
 	defer span.End()
 
-	cached, err := genesis.State(params.BeaconConfig().ConfigName)
-	if err != nil {
-		tracing.AnnotateError(span, err)
-		return nil, err
-	}
-	span.SetAttributes(trace.BoolAttribute("cache_hit", cached != nil))
-	if cached != nil {
-		return cached, nil
-	}
-
+	var err error
 	var st state.BeaconState
 	err = s.db.View(func(tx *bolt.Tx) error {
 		// Retrieve genesis block's signing root from blocks bucket,
@@ -253,6 +251,10 @@ func (s *Store) saveStatesEfficientInternal(ctx context.Context, tx *bolt.Tx, bl
 			if err := s.processElectra(ctx, rawType, rt[:], bucket, valIdxBkt, validatorKeys[i]); err != nil {
 				return err
 			}
+		case *ethpb.BeaconStateFulu:
+			if err := s.processFulu(ctx, rawType, rt[:], bucket, valIdxBkt, validatorKeys[i]); err != nil {
+				return err
+			}
 		default:
 			return errors.New("invalid state type")
 		}
@@ -358,6 +360,24 @@ func (s *Store) processElectra(ctx context.Context, pbState *ethpb.BeaconStateEl
 		return err
 	}
 	encodedState := snappy.Encode(nil, append(ElectraKey, rawObj...))
+	if err := bucket.Put(rootHash, encodedState); err != nil {
+		return err
+	}
+	pbState.Validators = valEntries
+	if err := valIdxBkt.Put(rootHash, validatorKey); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Store) processFulu(ctx context.Context, pbState *ethpb.BeaconStateFulu, rootHash []byte, bucket, valIdxBkt *bolt.Bucket, validatorKey []byte) error {
+	valEntries := pbState.Validators
+	pbState.Validators = make([]*ethpb.Validator, 0)
+	rawObj, err := pbState.MarshalSSZ()
+	if err != nil {
+		return err
+	}
+	encodedState := snappy.Encode(nil, append(fuluKey, rawObj...))
 	if err := bucket.Put(rootHash, encodedState); err != nil {
 		return err
 	}

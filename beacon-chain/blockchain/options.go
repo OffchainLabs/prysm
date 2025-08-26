@@ -7,7 +7,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
 	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
@@ -36,7 +35,7 @@ func WithMaxGoroutines(x int) Option {
 // WithLCStore for light client store access.
 func WithLCStore() Option {
 	return func(s *Service) error {
-		s.lcStore = lightclient.NewLightClientStore(s.cfg.BeaconDB)
+		s.lcStore = lightclient.NewLightClientStore(s.cfg.BeaconDB, s.cfg.P2P, s.cfg.StateNotifier.StateFeed())
 		return nil
 	}
 }
@@ -231,14 +230,6 @@ func WithDataColumnStorage(b *filesystem.DataColumnStorage) Option {
 func WithSyncChecker(checker Checker) Option {
 	return func(s *Service) error {
 		s.cfg.SyncChecker = checker
-		return nil
-	}
-}
-
-// WithCustodyInfo sets the custody info for the blockchain service.
-func WithCustodyInfo(custodyInfo *peerdas.CustodyInfo) Option {
-	return func(s *Service) error {
-		s.cfg.CustodyInfo = custodyInfo
 		return nil
 	}
 }

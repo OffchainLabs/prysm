@@ -121,12 +121,13 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, ro
 	}
 
 	nodeID := s.cfg.p2p.NodeID()
+	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount()
+	if err != nil {
+		log.WithError(err).Error("Failed to get custody group count")
+		return
+	}
 
-	s.cfg.custodyInfo.Mut.RLock()
-	defer s.cfg.custodyInfo.Mut.RUnlock()
-
-	groupCount := s.cfg.custodyInfo.ActualGroupCount()
-	info, _, err := peerdas.Info(nodeID, groupCount)
+	info, _, err := peerdas.Info(nodeID, custodyGroupCount)
 	if err != nil {
 		log.WithError(err).Error("Failed to get peer info")
 		return
@@ -135,7 +136,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, ro
 	blockSlot := block.Slot()
 	proposerIndex := block.ProposerIndex()
 
-	// Broadcast and save data columns sidecars to custody but not yet received.
+	// Broadcast and save data column sidecars to custody but not yet received.
 	sidecarCount := uint64(len(sidecars))
 	for columnIndex := range info.CustodyColumns {
 		log := log.WithField("columnIndex", columnIndex)
@@ -150,7 +151,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, ro
 
 		sidecar := sidecars[columnIndex]
 
-		if err := s.cfg.p2p.BroadcastDataColumn(blockRoot, sidecar.Index, sidecar.DataColumnSidecar); err != nil {
+		if err := s.cfg.p2p.BroadcastDataColumnSidecar(blockRoot, sidecar.Index, sidecar.DataColumnSidecar); err != nil {
 			log.WithError(err).Error("Failed to broadcast data column")
 		}
 
@@ -163,7 +164,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, ro
 // processBlobSidecarsFromExecution retrieves (if available) blob sidecars data from the execution client,
 // builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
 func (s *Service) processBlobSidecarsFromExecution(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) {
-	startTime, err := slots.StartTime(s.cfg.chain.GenesisTime(), block.Block().Slot())
+	startTime, err := slots.StartTime(s.cfg.clock.GenesisTime(), block.Block().Slot())
 	if err != nil {
 		log.WithError(err).Error("Failed to convert slot to time")
 	}

@@ -7,14 +7,13 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/async/abool"
 	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 )
@@ -47,7 +46,6 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 						chain:       chainService,
 						clock:       startup.NewClock(gt, vr),
 						initialSync: &mockSync.Sync{IsSyncing: false},
-						custodyInfo: &peerdas.CustodyInfo{},
 					},
 					chainStarted: abool.New(),
 					subHandler:   newSubTopicHandler(),
@@ -83,7 +81,6 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 						chain:       chainService,
 						clock:       startup.NewClock(gt, vr),
 						initialSync: &mockSync.Sync{IsSyncing: false},
-						custodyInfo: &peerdas.CustodyInfo{},
 					},
 					chainStarted: abool.New(),
 					subHandler:   newSubTopicHandler(),
@@ -93,9 +90,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 			currEpoch: 4,
 			wantErr:   false,
 			postSvcCheck: func(t *testing.T, s *Service) {
-				genRoot := s.cfg.clock.GenesisValidatorsRoot()
-				digest, err := forks.ForkDigestFromEpoch(5, genRoot[:])
-				assert.NoError(t, err)
+				digest := params.ForkDigest(5)
 				assert.Equal(t, true, s.subHandler.digestExists(digest))
 				rpcMap := make(map[string]bool)
 				for _, p := range s.cfg.p2p.Host().Mux().Protocols() {
@@ -128,7 +123,6 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 						chain:       chainService,
 						clock:       startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
 						initialSync: &mockSync.Sync{IsSyncing: false},
-						custodyInfo: &peerdas.CustodyInfo{},
 					},
 					chainStarted: abool.New(),
 					subHandler:   newSubTopicHandler(),
@@ -138,9 +132,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 			currEpoch: 4,
 			wantErr:   false,
 			postSvcCheck: func(t *testing.T, s *Service) {
-				genRoot := s.cfg.clock.GenesisValidatorsRoot()
-				digest, err := forks.ForkDigestFromEpoch(5, genRoot[:])
-				assert.NoError(t, err)
+				digest := params.ForkDigest(5)
 				assert.Equal(t, true, s.subHandler.digestExists(digest))
 				rpcMap := make(map[string]bool)
 				for _, p := range s.cfg.p2p.Host().Mux().Protocols() {
@@ -171,7 +163,6 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 						chain:       chainService,
 						clock:       startup.NewClock(gt, vr),
 						initialSync: &mockSync.Sync{IsSyncing: false},
-						custodyInfo: &peerdas.CustodyInfo{},
 					},
 					chainStarted: abool.New(),
 					subHandler:   newSubTopicHandler(),
@@ -181,9 +172,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 			currEpoch: 4,
 			wantErr:   false,
 			postSvcCheck: func(t *testing.T, s *Service) {
-				genRoot := s.cfg.clock.GenesisValidatorsRoot()
-				digest, err := forks.ForkDigestFromEpoch(5, genRoot[:])
-				assert.NoError(t, err)
+				digest := params.ForkDigest(5)
 				assert.Equal(t, true, s.subHandler.digestExists(digest))
 				rpcMap := make(map[string]bool)
 				for _, p := range s.cfg.p2p.Host().Mux().Protocols() {
@@ -216,7 +205,6 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 						chain:       chainService,
 						clock:       startup.NewClock(gt, vr),
 						initialSync: &mockSync.Sync{IsSyncing: false},
-						custodyInfo: &peerdas.CustodyInfo{},
 					},
 					chainStarted: abool.New(),
 					subHandler:   newSubTopicHandler(),
@@ -226,9 +214,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 			currEpoch: 4,
 			wantErr:   false,
 			postSvcCheck: func(t *testing.T, s *Service) {
-				genRoot := s.cfg.clock.GenesisValidatorsRoot()
-				digest, err := forks.ForkDigestFromEpoch(5, genRoot[:])
-				assert.NoError(t, err)
+				digest := params.ForkDigest(5)
 				assert.Equal(t, true, s.subHandler.digestExists(digest))
 				rpcMap := make(map[string]bool)
 				for _, p := range s.cfg.p2p.Host().Mux().Protocols() {
@@ -261,19 +247,17 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 						chain:       chainService,
 						clock:       startup.NewClock(gt, vr),
 						initialSync: &mockSync.Sync{IsSyncing: false},
-						custodyInfo: &peerdas.CustodyInfo{},
 					},
-					chainStarted: abool.New(),
-					subHandler:   newSubTopicHandler(),
+					chainStarted:           abool.New(),
+					subHandler:             newSubTopicHandler(),
+					trackedValidatorsCache: cache.NewTrackedValidatorsCache(),
 				}
 				return r
 			},
 			currEpoch: 4,
 			wantErr:   false,
 			postSvcCheck: func(t *testing.T, s *Service) {
-				genRoot := s.cfg.clock.GenesisValidatorsRoot()
-				digest, err := forks.ForkDigestFromEpoch(5, genRoot[:])
-				assert.NoError(t, err)
+				digest := params.ForkDigest(5)
 				assert.Equal(t, true, s.subHandler.digestExists(digest))
 				rpcMap := make(map[string]bool)
 				for _, p := range s.cfg.p2p.Host().Mux().Protocols() {
@@ -392,14 +376,12 @@ func TestService_CheckForPreviousEpochFork(t *testing.T) {
 					r.registerRPC(topic, handler)
 				}
 
-				genRoot := r.cfg.clock.GenesisValidatorsRoot()
-				digest, err := forks.ForkDigestFromEpoch(0, genRoot[:])
+				digest := params.ForkDigest(0)
 				assert.NoError(t, err)
 				r.registerSubscribers(0, digest)
 				assert.Equal(t, true, r.subHandler.digestExists(digest))
 
-				digest, err = forks.ForkDigestFromEpoch(3, genRoot[:])
-				assert.NoError(t, err)
+				digest = params.ForkDigest(3)
 				r.registerSubscribers(3, digest)
 				assert.Equal(t, true, r.subHandler.digestExists(digest))
 
@@ -408,12 +390,9 @@ func TestService_CheckForPreviousEpochFork(t *testing.T) {
 			currEpoch: 4,
 			wantErr:   false,
 			postSvcCheck: func(t *testing.T, s *Service) {
-				genRoot := s.cfg.clock.GenesisValidatorsRoot()
-				digest, err := forks.ForkDigestFromEpoch(0, genRoot[:])
-				assert.NoError(t, err)
+				digest := params.ForkDigest(0)
 				assert.Equal(t, false, s.subHandler.digestExists(digest))
-				digest, err = forks.ForkDigestFromEpoch(3, genRoot[:])
-				assert.NoError(t, err)
+				digest = params.ForkDigest(3)
 				assert.Equal(t, true, s.subHandler.digestExists(digest))
 
 				ptcls := s.cfg.p2p.Host().Mux().Protocols()
@@ -460,14 +439,11 @@ func TestService_CheckForPreviousEpochFork(t *testing.T) {
 					chainStarted: abool.New(),
 					subHandler:   newSubTopicHandler(),
 				}
-				genRoot := r.cfg.clock.GenesisValidatorsRoot()
-				digest, err := forks.ForkDigestFromEpoch(1, genRoot[:])
-				assert.NoError(t, err)
+				digest := params.ForkDigest(1)
 				r.registerSubscribers(1, digest)
 				assert.Equal(t, true, r.subHandler.digestExists(digest))
 
-				digest, err = forks.ForkDigestFromEpoch(3, genRoot[:])
-				assert.NoError(t, err)
+				digest = params.ForkDigest(3)
 				r.registerSubscribers(3, digest)
 				assert.Equal(t, true, r.subHandler.digestExists(digest))
 
@@ -476,12 +452,9 @@ func TestService_CheckForPreviousEpochFork(t *testing.T) {
 			currEpoch: 4,
 			wantErr:   false,
 			postSvcCheck: func(t *testing.T, s *Service) {
-				genRoot := s.cfg.clock.GenesisValidatorsRoot()
-				digest, err := forks.ForkDigestFromEpoch(1, genRoot[:])
-				assert.NoError(t, err)
+				digest := params.ForkDigest(1)
 				assert.Equal(t, false, s.subHandler.digestExists(digest))
-				digest, err = forks.ForkDigestFromEpoch(3, genRoot[:])
-				assert.NoError(t, err)
+				digest = params.ForkDigest(3)
 				assert.Equal(t, true, s.subHandler.digestExists(digest))
 			},
 		},

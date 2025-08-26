@@ -35,6 +35,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/genesis"
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
@@ -1980,14 +1981,15 @@ func TestNoViableHead_Reboot(t *testing.T) {
 	genesisState, keys := util.DeterministicGenesisState(t, 64)
 	stateRoot, err := genesisState.HashTreeRoot(ctx)
 	require.NoError(t, err, "Could not hash genesis state")
-	genesis := blocks.NewGenesisBlock(stateRoot[:])
-	wsb, err := consensusblocks.NewSignedBeaconBlock(genesis)
+	gb := blocks.NewGenesisBlock(stateRoot[:])
+	wsb, err := consensusblocks.NewSignedBeaconBlock(gb)
 	require.NoError(t, err)
-	genesisRoot, err := genesis.Block.HashTreeRoot()
+	genesisRoot, err := gb.Block.HashTreeRoot()
 	require.NoError(t, err, "Could not get signing root")
 	require.NoError(t, service.cfg.BeaconDB.SaveBlock(ctx, wsb), "Could not save genesis block")
 	require.NoError(t, service.saveGenesisData(ctx, genesisState))
 
+	genesis.StoreStateDuringTest(t, genesisState)
 	require.NoError(t, service.cfg.BeaconDB.SaveState(ctx, genesisState, genesisRoot), "Could not save genesis state")
 	require.NoError(t, service.cfg.BeaconDB.SaveHeadBlockRoot(ctx, genesisRoot), "Could not save genesis state")
 	require.NoError(t, service.cfg.BeaconDB.SaveGenesisBlockRoot(ctx, genesisRoot), "Could not save genesis state")
@@ -2887,14 +2889,13 @@ func TestIsDataAvailable(t *testing.T) {
 	})
 
 	t.Run("Fulu - more than half of the columns in custody", func(t *testing.T) {
-		minimumColumnsCountToReconstruct := peerdas.MinimumColumnsCountToReconstruct()
+		minimumColumnsCountToReconstruct := peerdas.MinimumColumnCountToReconstruct()
 		indices := make([]uint64, 0, minimumColumnsCountToReconstruct)
 		for i := range minimumColumnsCountToReconstruct {
 			indices = append(indices, i)
 		}
 
 		params := testIsAvailableParams{
-			options:                 []Option{WithCustodyInfo(&peerdas.CustodyInfo{})},
 			columnsToSave:           indices,
 			blobKzgCommitmentsCount: 3,
 		}
@@ -2907,7 +2908,6 @@ func TestIsDataAvailable(t *testing.T) {
 
 	t.Run("Fulu - no missing data columns", func(t *testing.T) {
 		params := testIsAvailableParams{
-			options:                 []Option{WithCustodyInfo(&peerdas.CustodyInfo{})},
 			columnsToSave:           []uint64{1, 17, 19, 42, 75, 87, 102, 117, 119}, // 119 is not needed
 			blobKzgCommitmentsCount: 3,
 		}
@@ -2922,7 +2922,7 @@ func TestIsDataAvailable(t *testing.T) {
 		startWaiting := make(chan bool)
 
 		testParams := testIsAvailableParams{
-			options:       []Option{WithCustodyInfo(&peerdas.CustodyInfo{}), WithStartWaitingDataColumnSidecars(startWaiting)},
+			options:       []Option{WithStartWaitingDataColumnSidecars(startWaiting)},
 			columnsToSave: []uint64{1, 17, 19, 75, 102, 117, 119}, // 119 is not needed, 42 and 87 are missing
 
 			blobKzgCommitmentsCount: 3,
@@ -2959,6 +2959,9 @@ func TestIsDataAvailable(t *testing.T) {
 			require.NoError(t, err)
 		}()
 
+		ctx, cancel := context.WithTimeout(ctx, time.Second*2)
+		defer cancel()
+
 		err = service.isDataAvailable(ctx, root, signed)
 		require.NoError(t, err)
 	})
@@ -2971,11 +2974,7 @@ func TestIsDataAvailable(t *testing.T) {
 
 		startWaiting := make(chan bool)
 
-		var custodyInfo peerdas.CustodyInfo
-		custodyInfo.TargetGroupCount.SetValidatorsCustodyRequirement(cgc)
-		custodyInfo.ToAdvertiseGroupCount.Set(cgc)
-
-		minimumColumnsCountToReconstruct := peerdas.MinimumColumnsCountToReconstruct()
+		minimumColumnsCountToReconstruct := peerdas.MinimumColumnCountToReconstruct()
 		indices := make([]uint64, 0, minimumColumnsCountToReconstruct-missingColumns)
 
 		for i := range minimumColumnsCountToReconstruct - missingColumns {
@@ -2983,12 +2982,14 @@ func TestIsDataAvailable(t *testing.T) {
 		}
 
 		testParams := testIsAvailableParams{
-			options:                 []Option{WithCustodyInfo(&custodyInfo), WithStartWaitingDataColumnSidecars(startWaiting)},
+			options:                 []Option{WithStartWaitingDataColumnSidecars(startWaiting)},
 			columnsToSave:           indices,
 			blobKzgCommitmentsCount: 3,
 		}
 
 		ctx, _, service, root, signed := testIsAvailableSetup(t, testParams)
+		_, _, err := service.cfg.P2P.UpdateCustodyInfo(0, cgc)
+		require.NoError(t, err)
 		block := signed.Block()
 		slot := block.Slot()
 		proposerIndex := block.ProposerIndex()
@@ -3020,6 +3021,9 @@ func TestIsDataAvailable(t *testing.T) {
 			require.NoError(t, err)
 		}()
 
+		ctx, cancel := context.WithTimeout(ctx, time.Second*2)
+		defer cancel()
+
 		err = service.isDataAvailable(ctx, root, signed)
 		require.NoError(t, err)
 	})
@@ -3028,7 +3032,7 @@ func TestIsDataAvailable(t *testing.T) {
 		startWaiting := make(chan bool)
 
 		params := testIsAvailableParams{
-			options:                 []Option{WithCustodyInfo(&peerdas.CustodyInfo{}), WithStartWaitingDataColumnSidecars(startWaiting)},
+			options:                 []Option{WithStartWaitingDataColumnSidecars(startWaiting)},
 			blobKzgCommitmentsCount: 3,
 		}
 
@@ -3170,7 +3174,7 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 
 			t.Run(version.String(testVersion)+"_"+tc.name, func(t *testing.T) {
 				s.genesisTime = time.Unix(time.Now().Unix()-(int64(forkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-				s.lcStore = &lightClient.Store{}
+				s.lcStore = lightClient.NewLightClientStore(s.cfg.BeaconDB, s.cfg.P2P, s.cfg.StateNotifier.StateFeed())
 
 				var oldActualUpdate interfaces.LightClientOptimisticUpdate
 				var err error
@@ -3246,39 +3250,39 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 			expectReplace: true,
 		},
 		{
-			name:          "Old update is better - age - no supermajority",
+			name:          "Old update is better - finalized slot is higher",
 			oldOptions:    []util.LightClientOption{util.WithIncreasedFinalizedSlot(1)},
 			newOptions:    []util.LightClientOption{},
 			expectReplace: false,
 		},
 		{
-			name:          "Old update is better - age - both supermajority",
-			oldOptions:    []util.LightClientOption{util.WithIncreasedFinalizedSlot(1), util.WithSupermajority()},
-			newOptions:    []util.LightClientOption{util.WithSupermajority()},
-			expectReplace: false,
-		},
-		{
-			name:          "Old update is better - supermajority",
-			oldOptions:    []util.LightClientOption{util.WithSupermajority()},
+			name:          "Old update is better - attested slot is higher",
+			oldOptions:    []util.LightClientOption{util.WithIncreasedAttestedSlot(1)},
 			newOptions:    []util.LightClientOption{},
 			expectReplace: false,
 		},
 		{
-			name:          "New update is better - age - both supermajority",
-			oldOptions:    []util.LightClientOption{util.WithSupermajority()},
-			newOptions:    []util.LightClientOption{util.WithIncreasedFinalizedSlot(1), util.WithSupermajority()},
+			name:          "Old update is better - signature slot is higher",
+			oldOptions:    []util.LightClientOption{util.WithIncreasedSignatureSlot(1)},
+			newOptions:    []util.LightClientOption{},
+			expectReplace: false,
+		},
+		{
+			name:          "New update is better - finalized slot is higher",
+			oldOptions:    []util.LightClientOption{},
+			newOptions:    []util.LightClientOption{util.WithIncreasedAttestedSlot(1)},
 			expectReplace: true,
 		},
 		{
-			name:          "New update is better - age - no supermajority",
+			name:          "New update is better - attested slot is higher",
 			oldOptions:    []util.LightClientOption{},
-			newOptions:    []util.LightClientOption{util.WithIncreasedFinalizedSlot(1)},
+			newOptions:    []util.LightClientOption{util.WithIncreasedAttestedSlot(1)},
 			expectReplace: true,
 		},
 		{
-			name:          "New update is better - supermajority",
+			name:          "New update is better - signature slot is higher",
 			oldOptions:    []util.LightClientOption{},
-			newOptions:    []util.LightClientOption{util.WithSupermajority()},
+			newOptions:    []util.LightClientOption{util.WithIncreasedSignatureSlot(1)},
 			expectReplace: true,
 		},
 	}
@@ -3310,7 +3314,7 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 
 			t.Run(version.String(testVersion)+"_"+tc.name, func(t *testing.T) {
 				s.genesisTime = time.Unix(time.Now().Unix()-(int64(forkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-				s.lcStore = &lightClient.Store{}
+				s.lcStore = lightClient.NewLightClientStore(s.cfg.BeaconDB, s.cfg.P2P, s.cfg.StateNotifier.StateFeed())
 
 				var actualOldUpdate, actualNewUpdate interfaces.LightClientFinalityUpdate
 				var err error

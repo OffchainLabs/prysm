@@ -36,12 +36,12 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
 	// Check if the message type is the one expected.
-	ref, ok := msg.(*types.DataColumnsByRootIdentifiers)
+	ref, ok := msg.(types.DataColumnsByRootIdentifiers)
 	if !ok {
 		return notDataColumnsByRootIdentifiersError
 	}
 
-	requestedColumnIdents := *ref
+	requestedColumnIdents := ref
 	remotePeer := stream.Conn().RemotePeer()
 
 	ctx, cancel := context.WithTimeout(ctx, ttfbTimeout)
@@ -133,7 +133,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 			}
 
 			SetStreamWriteDeadline(stream, defaultWriteDuration)
-			if chunkErr := WriteDataColumnSidecarChunk(stream, s.cfg.chain, s.cfg.p2p.Encoding(), verifiedRODataColumn.DataColumnSidecar); chunkErr != nil {
+			if chunkErr := WriteDataColumnSidecarChunk(stream, s.cfg.clock, s.cfg.p2p.Encoding(), verifiedRODataColumn.DataColumnSidecar); chunkErr != nil {
 				s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
 				tracing.AnnotateError(span, chunkErr)
 				return chunkErr

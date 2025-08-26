@@ -57,6 +57,8 @@ const blobSubnetLockerVal = 110
 // chosen more than sync, attestation and blob subnet (6) combined.
 const dataColumnSubnetVal = 150
 
+const errSavingSequenceNumber = "saving sequence number after updating subnets: %w"
+
 // nodeFilter returns a function that filters nodes based on the subnet topic and subnet index.
 func (s *Service) nodeFilter(topic string, indices map[uint64]int) (func(node *enode.Node) (map[uint64]bool, error), error) {
 	switch {
@@ -132,6 +134,24 @@ func (s *Service) FindAndDialPeersWithSubnets(
 	return nil
 }
 
+// updateDefectiveSubnets updates the defective subnets map when a node with matching subnets is found.
+// It decrements the defective count for each subnet the node satisfies and removes subnets
+// that are fully satisfied (count reaches 0).
+func updateDefectiveSubnets(
+	nodeSubnets map[uint64]bool,
+	defectiveSubnets map[uint64]int,
+) {
+	for subnet := range defectiveSubnets {
+		if !nodeSubnets[subnet] {
+			continue
+		}
+		defectiveSubnets[subnet]--
+		if defectiveSubnets[subnet] == 0 {
+			delete(defectiveSubnets, subnet)
+		}
+	}
+}
+
 // findPeersWithSubnets finds peers subscribed to defective subnets in batches
 // until enough peers are found or the context is canceled.
 // It returns new peers found during the search.
@@ -167,6 +187,7 @@ func (s *Service) findPeersWithSubnets(
 
 	// Crawl the network for peers subscribed to the defective subnets.
 	nodeByNodeID := make(map[enode.ID]*enode.Node)
+
 	for len(defectiveSubnets) > 0 && iterator.Next() {
 		if err := ctx.Err(); err != nil {
 			// Convert the map to a slice.
@@ -178,14 +199,28 @@ func (s *Service) findPeersWithSubnets(
 			return peersToDial, err
 		}
 
-		// Get all needed subnets that the node is subscribed to.
-		// Skip nodes that are not subscribed to any of the defective subnets.
 		node := iterator.Node()
 
+		// Remove duplicates, keeping the node with higher seq.
+		existing, ok := nodeByNodeID[node.ID()]
+		if ok && existing.Seq() >= node.Seq() {
+			continue // keep existing and skip.
+		}
+
+		// Treat nodes that exist in nodeByNodeID with higher seq numbers as new peers
+		// Skip peer not matching the filter.
 		if !s.filterPeer(node) {
+			if ok {
+				// this means the existing peer with the lower sequence number is no longer valid
+				delete(nodeByNodeID, existing.ID())
+				// Note: We are choosing to not rollback changes to the defective subnets map in favor of calling s.defectiveSubnets once again after dialing peers.
+				// This is a case that should rarely happen and should be handled through a second iteration in FindAndDialPeersWithSubnets
+			}
 			continue
 		}
 
+		// Get all needed subnets that the node is subscribed to.
+		// Skip nodes that are not subscribed to any of the defective subnets.
 		nodeSubnets, err := filter(node)
 		if err != nil {
 			return nil, errors.Wrap(err, "filter node")
@@ -194,30 +229,14 @@ func (s *Service) findPeersWithSubnets(
 			continue
 		}
 
-		// Remove duplicates, keeping the node with higher seq.
-		existing, ok := nodeByNodeID[node.ID()]
-		if ok && existing.Seq() > node.Seq() {
-			continue
-		}
-		nodeByNodeID[node.ID()] = node
-
 		// We found a new peer. Modify the defective subnets map
 		// and the filter accordingly.
-		for subnet := range defectiveSubnets {
-			if !nodeSubnets[subnet] {
-				continue
-			}
+		nodeByNodeID[node.ID()] = node
 
-			defectiveSubnets[subnet]--
-
-			if defectiveSubnets[subnet] == 0 {
-				delete(defectiveSubnets, subnet)
-			}
-
-			filter, err = s.nodeFilter(topicFormat, defectiveSubnets)
-			if err != nil {
-				return nil, errors.Wrap(err, "node filter")
-			}
+		updateDefectiveSubnets(nodeSubnets, defectiveSubnets)
+		filter, err = s.nodeFilter(topicFormat, defectiveSubnets)
+		if err != nil {
+			return nil, errors.Wrap(err, "node filter")
 		}
 	}
 
@@ -377,29 +396,51 @@ func (s *Service) hasPeerWithSubnet(subnetTopic string) bool {
 // with a new value for a bitfield of subnets tracked. It also updates
 // the node's metadata by increasing the sequence number and the
 // subnets tracked by the node.
-func (s *Service) updateSubnetRecordWithMetadata(bitV bitfield.Bitvector64) {
+func (s *Service) updateSubnetRecordWithMetadata(bitV bitfield.Bitvector64) error {
 	entry := enr.WithEntry(attSubnetEnrKey, &bitV)
 	s.dv5Listener.LocalNode().Set(entry)
 	s.metaData = wrapper.WrappedMetadataV0(&pb.MetaDataV0{
 		SeqNumber: s.metaData.SequenceNumber() + 1,
 		Attnets:   bitV,
 	})
+
+	if err := s.saveSequenceNumberIfNeeded(); err != nil {
+		return fmt.Errorf(errSavingSequenceNumber, err)
+	}
+	return nil
 }
 
 // Updates the service's discv5 listener record's attestation subnet
 // with a new value for a bitfield of subnets tracked. It also record's
 // the sync committee subnet in the enr. It also updates the node's
 // metadata by increasing the sequence number and the subnets tracked by the node.
-func (s *Service) updateSubnetRecordWithMetadataV2(bitVAtt bitfield.Bitvector64, bitVSync bitfield.Bitvector4) {
+func (s *Service) updateSubnetRecordWithMetadataV2(
+	bitVAtt bitfield.Bitvector64,
+	bitVSync bitfield.Bitvector4,
+	custodyGroupCount uint64,
+) error {
 	entry := enr.WithEntry(attSubnetEnrKey, &bitVAtt)
 	subEntry := enr.WithEntry(syncCommsSubnetEnrKey, &bitVSync)
-	s.dv5Listener.LocalNode().Set(entry)
-	s.dv5Listener.LocalNode().Set(subEntry)
+
+	localNode := s.dv5Listener.LocalNode()
+	localNode.Set(entry)
+	localNode.Set(subEntry)
+
+	if params.FuluEnabled() {
+		custodyGroupCountEntry := enr.WithEntry(custodyGroupCountEnrKey, custodyGroupCount)
+		localNode.Set(custodyGroupCountEntry)
+	}
+
 	s.metaData = wrapper.WrappedMetadataV1(&pb.MetaDataV1{
 		SeqNumber: s.metaData.SequenceNumber() + 1,
 		Attnets:   bitVAtt,
 		Syncnets:  bitVSync,
 	})
+
+	if err := s.saveSequenceNumberIfNeeded(); err != nil {
+		return fmt.Errorf(errSavingSequenceNumber, err)
+	}
+	return nil
 }
 
 // updateSubnetRecordWithMetadataV3 updates:
@@ -411,7 +452,7 @@ func (s *Service) updateSubnetRecordWithMetadataV3(
 	bitVAtt bitfield.Bitvector64,
 	bitVSync bitfield.Bitvector4,
 	custodyGroupCount uint64,
-) {
+) error {
 	attSubnetsEntry := enr.WithEntry(attSubnetEnrKey, &bitVAtt)
 	syncSubnetsEntry := enr.WithEntry(syncCommsSubnetEnrKey, &bitVSync)
 	custodyGroupCountEntry := enr.WithEntry(custodyGroupCountEnrKey, custodyGroupCount)
@@ -421,14 +462,29 @@ func (s *Service) updateSubnetRecordWithMetadataV3(
 	localNode.Set(syncSubnetsEntry)
 	localNode.Set(custodyGroupCountEntry)
 
-	newSeqNumber := s.metaData.SequenceNumber() + 1
-
 	s.metaData = wrapper.WrappedMetadataV2(&pb.MetaDataV2{
-		SeqNumber:         newSeqNumber,
+		SeqNumber:         s.metaData.SequenceNumber() + 1,
 		Attnets:           bitVAtt,
 		Syncnets:          bitVSync,
 		CustodyGroupCount: custodyGroupCount,
 	})
+
+	if err := s.saveSequenceNumberIfNeeded(); err != nil {
+		return fmt.Errorf(errSavingSequenceNumber, err)
+	}
+	return nil
+}
+
+// saveSequenceNumberIfNeeded saves the sequence number in DB if either of the following conditions is met:
+// - the static peer ID flag is set
+// - the fulu epoch is set
+func (s *Service) saveSequenceNumberIfNeeded() error {
+	// Short-circuit if we don't need to save the sequence number.
+	if !(s.cfg.StaticPeerID || params.FuluEnabled()) {
+		return nil
+	}
+
+	return s.cfg.DB.SaveMetadataSeqNum(s.ctx, s.metaData.SequenceNumber())
 }
 
 func initializePersistentSubnets(id enode.ID, epoch primitives.Epoch) error {

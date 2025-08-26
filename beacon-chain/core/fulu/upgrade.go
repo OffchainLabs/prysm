@@ -15,7 +15,7 @@ import (
 )
 
 // UpgradeToFulu updates inputs a generic state to return the version Fulu state.
-// https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/fork.md#upgrading-the-state
+// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/fork.md#upgrading-the-state
 func UpgradeToFulu(ctx context.Context, beaconState state.BeaconState) (state.BeaconState, error) {
 	currentSyncCommittee, err := beaconState.CurrentSyncCommittee()
 	if err != nil {
