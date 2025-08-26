@@ -2,7 +2,6 @@ package sync
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
@@ -14,9 +13,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-const (
-	signatureVerificationInterval = 50 * time.Millisecond
-)
+const signatureVerificationInterval = 50 * time.Millisecond
 
 type signatureVerifier struct {
 	set     *bls.SignatureBatch
@@ -26,14 +23,6 @@ type signatureVerifier struct {
 type kzgVerifier struct {
 	dataColumns []blocks.RODataColumn
 	resChan     chan error
-}
-
-// kzgWorkerPool manages KZG verification with immediate processing and buffering
-type kzgWorkerPool struct {
-	processing    bool
-	currentBatch  []*kzgVerifier
-	pendingBuffer []*kzgVerifier
-	mutex         sync.Mutex
 }
 
 // A routine that runs in the background to perform batch
@@ -66,77 +55,46 @@ func (s *Service) verifierRoutine() {
 }
 
 // A routine that runs in the background to perform batch
-// KZG verifications using a worker pool model with immediate processing.
+// KZG verifications by draining the channel and processing all pending requests.
 func (s *Service) kzgVerifierRoutine() {
-	pool := &kzgWorkerPool{}
-
 	for {
 		select {
 		case <-s.ctx.Done():
-			pool.shutdown(s.ctx.Err())
 			return
 		case kzg := <-s.kzgChan:
-			pool.processMessage(kzg)
+			// Collect all pending KZG verifications
+			kzgBatch := []*kzgVerifier{kzg}
+			kzgBatch = append(kzgBatch, s.pullKzgChan()...)
+
+			// Check if context was cancelled during pullKzgChan
+			if len(kzgBatch) == 0 {
+				// pullKzgChan returned empty due to context cancellation
+				kzg.resChan <- s.ctx.Err()
+				continue
+			}
+
+			// Process the entire batch
+			verifyKzgBatch(kzgBatch)
 		}
 	}
 }
 
-// processMessage handles incoming KZG verification requests using worker pool model
-func (pool *kzgWorkerPool) processMessage(kzg *kzgVerifier) {
-	pool.mutex.Lock()
-	defer pool.mutex.Unlock()
+// pullKzgChan pulls KZG verifications from the channel until it is empty.
+func (s *Service) pullKzgChan() []*kzgVerifier {
+	kzgVerifiers := make([]*kzgVerifier, 0)
 
-	if !pool.processing {
-		// Start immediate processing
-		pool.processing = true
-		pool.currentBatch = []*kzgVerifier{kzg}
-		go pool.processBatch()
-	} else {
-		// Buffer the message while processing is ongoing
-		pool.pendingBuffer = append(pool.pendingBuffer, kzg)
-	}
-}
-
-// processBatch runs the actual KZG verification and handles the next batch
-func (pool *kzgWorkerPool) processBatch() {
-	var batchToProcess []*kzgVerifier
-
-	pool.mutex.Lock()
-	batchToProcess = make([]*kzgVerifier, len(pool.currentBatch))
-	copy(batchToProcess, pool.currentBatch)
-	pool.mutex.Unlock()
-
-	// Perform verification outside the lock
-	verifyKzgBatch(batchToProcess)
-
-	// Check if there are pending messages to process
-	pool.mutex.Lock()
-	defer pool.mutex.Unlock()
-
-	if len(pool.pendingBuffer) > 0 {
-		// Start next batch immediately with buffered messages
-		pool.currentBatch = make([]*kzgVerifier, len(pool.pendingBuffer))
-		copy(pool.currentBatch, pool.pendingBuffer)
-		pool.pendingBuffer = []*kzgVerifier{}
-		go pool.processBatch()
-	} else {
-		// No more messages, go idle
-		pool.processing = false
-		pool.currentBatch = nil
-	}
-}
-
-// shutdown sends error to all pending verifications
-func (pool *kzgWorkerPool) shutdown(err error) {
-	pool.mutex.Lock()
-	defer pool.mutex.Unlock()
-
-	for _, kzg := range pool.currentBatch {
-		kzg.resChan <- err
-	}
-
-	for _, kzg := range pool.pendingBuffer {
-		kzg.resChan <- err
+	for {
+		select {
+		case <-s.ctx.Done():
+			for _, kzg := range kzgVerifiers {
+				kzg.resChan <- s.ctx.Err()
+			}
+			return []*kzgVerifier{}
+		case kzg := <-s.kzgChan:
+			kzgVerifiers = append(kzgVerifiers, kzg)
+		default:
+			return kzgVerifiers
+		}
 	}
 }
 
@@ -214,7 +172,7 @@ func performBatchAggregation(aggSet *bls.SignatureBatch) (*bls.SignatureBatch, e
 	return aggSet, nil
 }
 
-func (s *Service) validateWithKzgBatchVerifier(ctx context.Context, message string, dataColumns []blocks.RODataColumn) (pubsub.ValidationResult, error) {
+func (s *Service) validateWithKzgBatchVerifier(ctx context.Context, dataColumns []blocks.RODataColumn) (pubsub.ValidationResult, error) {
 	_, span := trace.StartSpan(ctx, "sync.validateWithKzgBatchVerifier")
 	defer span.End()
 
@@ -225,10 +183,14 @@ func (s *Service) validateWithKzgBatchVerifier(ctx context.Context, message stri
 	resErr := <-resChan
 	close(resChan)
 	if resErr != nil {
-		log.WithError(resErr).Tracef("Could not perform batch verification of %s", message)
+		log.WithError(resErr).Tracef("Could not perform batch verification")
+		// Fallback to individual verification if batch verification failed.
+		// This handles cases where batch verification encounters issues
+		// (e.g., context cancellation, mixed valid/invalid proofs) but
+		// the individual data columns might still be valid.
 		err := peerdas.VerifyDataColumnsSidecarKZGProofs(dataColumns)
 		if err != nil {
-			verErr := errors.Wrapf(err, "Could not verify %s", message)
+			verErr := errors.Wrapf(err, "Could not verify")
 			tracing.AnnotateError(span, verErr)
 			return pubsub.ValidationReject, verErr
 		}

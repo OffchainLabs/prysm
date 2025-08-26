@@ -145,7 +145,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	}
 
 	// [REJECT] The sidecar's column data is valid as verified by `verify_data_column_sidecar_kzg_proofs(sidecar)`.
-	validationResult, err := s.validateWithKzgBatchVerifier(ctx, "data column KZG proof", roDataColumns)
+	validationResult, err := s.validateWithKzgBatchVerifier(ctx, roDataColumns)
 	if validationResult != pubsub.ValidationAccept {
 		return validationResult, err
 	}
