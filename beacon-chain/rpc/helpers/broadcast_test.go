@@ -39,7 +39,7 @@ func TestBroadcastDataColumnSidecars(t *testing.T) {
 			return nil
 		}
 
-		_, err := BroadcastDataColumnSidecars(ctx, sidecars, root, broadcastFunc)
+		err := BroadcastDataColumnSidecars(ctx, sidecars, root, broadcastFunc)
 		require.NoError(t, err)
 		// Verify all broadcasts called with correct parameters
 		require.Equal(t, len(sidecars), len(calls))
@@ -49,7 +49,7 @@ func TestBroadcastDataColumnSidecars(t *testing.T) {
 		}
 
 		// Test empty list
-		_, err = BroadcastDataColumnSidecars(ctx, nil, root, func([32]byte, uint64, *ethpb.DataColumnSidecar) error {
+		err = BroadcastDataColumnSidecars(ctx, nil, root, func([32]byte, uint64, *ethpb.DataColumnSidecar) error {
 			t.Fatal("should not be called")
 			return nil
 		})
@@ -60,12 +60,12 @@ func TestBroadcastDataColumnSidecars(t *testing.T) {
 		sidecar := testutil.CreateDataColumnSidecar(0, []byte{1, 2, 3})
 
 		// Test broadcast error
-		_, err := BroadcastDataColumnSidecars(ctx, []*ethpb.DataColumnSidecar{sidecar}, root,
+		err := BroadcastDataColumnSidecars(ctx, []*ethpb.DataColumnSidecar{sidecar}, root,
 			func([32]byte, uint64, *ethpb.DataColumnSidecar) error { return errors.New("broadcast error") })
 		require.ErrorContains(t, "broadcast error", err)
 
 		// Test receive error
-		_, err = BroadcastDataColumnSidecars(ctx, []*ethpb.DataColumnSidecar{sidecar}, root,
+		err = BroadcastDataColumnSidecars(ctx, []*ethpb.DataColumnSidecar{sidecar}, root,
 			func([32]byte, uint64, *ethpb.DataColumnSidecar) error { return nil },
 			WithDataColumnReceiver(func([]blocks.VerifiedRODataColumn) error { return errors.New("receive error") }))
 		require.NotNil(t, err) // May be receive error or validation error
@@ -78,7 +78,7 @@ func TestBroadcastDataColumnSidecars(t *testing.T) {
 		receiveCalled := false
 		processedCalled := false
 
-		_, _ = BroadcastDataColumnSidecars(ctx, []*ethpb.DataColumnSidecar{sidecar}, root,
+		_ = BroadcastDataColumnSidecars(ctx, []*ethpb.DataColumnSidecar{sidecar}, root,
 			func([32]byte, uint64, *ethpb.DataColumnSidecar) error { return nil },
 			WithDataColumnReceiver(func([]blocks.VerifiedRODataColumn) error {
 				receiveCalled = true

@@ -464,7 +464,7 @@ func (vs *Server) broadcastAndReceiveDataColumns(
 	root [fieldparams.RootLength]byte,
 	slot primitives.Slot,
 ) error {
-	_, err := rpcHelpers.BroadcastDataColumnSidecars(
+	err := rpcHelpers.BroadcastDataColumnSidecars(
 		ctx,
 		sidecars,
 		root,

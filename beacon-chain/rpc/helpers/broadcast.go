@@ -46,7 +46,7 @@ func BroadcastDataColumnSidecars(
 	root [32]byte,
 	broadcastFunc DataColumnBroadcastFunc,
 	options ...DataColumnOption,
-) ([]blocks.VerifiedRODataColumn, error) {
+) error {
 	opts := &dataColumnOptions{}
 	for _, opt := range options {
 		opt(opts)
@@ -58,7 +58,7 @@ func BroadcastDataColumnSidecars(
 	for _, sd := range sidecars {
 		roDataColumn, err := blocks.NewRODataColumnWithRoot(sd, root)
 		if err != nil {
-			return nil, errors.Wrap(err, "new read-only data column with root")
+			return errors.Wrap(err, "new read-only data column with root")
 		}
 
 		// We build this block ourselves, so we can upgrade the read only data column sidecar into a verified one.
@@ -85,13 +85,13 @@ func BroadcastDataColumnSidecars(
 	}
 
 	if err := eg.Wait(); err != nil {
-		return nil, errors.Wrap(err, "wait for data columns to be broadcasted")
+		return errors.Wrap(err, "wait for data columns to be broadcasted")
 	}
 
 	// Optionally receive the data columns
 	if opts.onReceiveDataColumns != nil {
 		if err := opts.onReceiveDataColumns(verifiedRODataColumns); err != nil {
-			return nil, errors.Wrap(err, "receive data column")
+			return errors.Wrap(err, "receive data column")
 		}
 	}
 
@@ -100,7 +100,7 @@ func BroadcastDataColumnSidecars(
 		opts.onDataColumnsProcessed(verifiedRODataColumns)
 	}
 
-	return verifiedRODataColumns, nil
+	return nil
 }
 
 // BlobOption configures options for broadcasting blob sidecars.
