@@ -395,7 +395,7 @@ func (s *Service) fetchOriginBlobs(pids []peer.ID, rob blocks.ROBlock) error {
 func (s *Service) fetchOriginColumns(roBlock blocks.ROBlock) error {
 	const (
 		maxAttempts = 100              // The max allowed number of attempts to fetch origin columns
-		delay       = 10 * time.Second // The delay between each trial
+		delay       = 10 * time.Second // The delay between each attempt
 	)
 
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
