@@ -528,7 +528,8 @@ func isSidecarIndexRequested(request *ethpb.DataColumnSidecarsByRangeRequest) Da
 	return func(sidecar blocks.RODataColumn) error {
 		columnIndex := sidecar.Index
 		if !requestedIndices[columnIndex] {
-			return errors.Errorf("data column sidecar index %d not found in requested indices", columnIndex)
+			requested := sortedSliceFromMap(requestedIndices)
+			return errors.Errorf("data column sidecar index %d returned by the peer but not found in requested indices %v", columnIndex, requested)
 		}
 
 		return nil
