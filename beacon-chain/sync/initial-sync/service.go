@@ -428,13 +428,13 @@ func (s *Service) fetchOriginColumns(roBlock blocks.ROBlock) error {
 		NewVerifier: s.newDataColumnsVerifier,
 	}
 
-	verfifiedRoDataColumnsByRoot, err := sync.FetchDataColumnSidecars(params, []blocks.ROBlock{roBlock}, info.CustodyColumns)
+	verifiedRoDataColumnsByRoot, err := sync.FetchDataColumnSidecars(params, []blocks.ROBlock{roBlock}, info.CustodyColumns)
 	if err != nil {
 		return errors.Wrap(err, "fetch data column sidecars")
 	}
 
 	// Save origin data columns to disk.
-	verifiedRoDataColumnsSidecars, ok := verfifiedRoDataColumnsByRoot[root]
+	verifiedRoDataColumnsSidecars, ok := verifiedRoDataColumnsByRoot[root]
 	if !ok {
 		return fmt.Errorf("cannot extract origins data column sidecars for block root %#x - should never happen", root)
 	}
