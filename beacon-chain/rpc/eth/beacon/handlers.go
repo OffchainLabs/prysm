@@ -1667,13 +1667,12 @@ func (s *Server) broadcastSeenBlockSidecars(
 			return errors.Wrap(err, "Could not hash tree root")
 		}
 
-		err = rpcHelpers.BroadcastDataColumnSidecars(
+		if err = rpcHelpers.BroadcastDataColumnSidecars(
 			ctx,
 			dataColumnSideCars,
 			root,
 			s.Broadcaster.BroadcastDataColumnSidecar,
-		)
-		if err != nil {
+		); err != nil {
 			return err
 		}
 	}

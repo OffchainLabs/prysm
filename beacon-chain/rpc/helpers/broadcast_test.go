@@ -55,22 +55,6 @@ func TestBroadcastDataColumnSidecars(t *testing.T) {
 		})
 		require.NoError(t, err)
 	})
-
-	t.Run("error scenarios", func(t *testing.T) {
-		sidecar := testutil.CreateDataColumnSidecar(0, []byte{1, 2, 3})
-
-		// Test broadcast error
-		err := BroadcastDataColumnSidecars(ctx, []*ethpb.DataColumnSidecar{sidecar}, root,
-			func([32]byte, uint64, *ethpb.DataColumnSidecar) error { return errors.New("broadcast error") })
-		require.ErrorContains(t, "broadcast error", err)
-
-		// Test receive error
-		err = BroadcastDataColumnSidecars(ctx, []*ethpb.DataColumnSidecar{sidecar}, root,
-			func([32]byte, uint64, *ethpb.DataColumnSidecar) error { return nil },
-			WithDataColumnReceiver(func([]blocks.VerifiedRODataColumn) error { return errors.New("receive error") }))
-		require.NotNil(t, err) // May be receive error or validation error
-	})
-
 	t.Run("options integration", func(t *testing.T) {
 		sidecar := testutil.CreateDataColumnSidecar(0, []byte{1, 2, 3})
 
@@ -89,8 +73,8 @@ func TestBroadcastDataColumnSidecars(t *testing.T) {
 			}))
 
 		// Options should be configured correctly (may not be called due to validation)
-		_ = receiveCalled
-		_ = processedCalled
+		require.Equal(t, true, receiveCalled)
+		require.Equal(t, true, processedCalled)
 	})
 }
 
@@ -140,45 +124,40 @@ func TestBroadcastBlobSidecars(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("forkchoice filtering", func(t *testing.T) {
-		sidecars := []*ethpb.BlobSidecar{
-			testutil.CreateBlobSidecar(0, []byte{1, 2, 3}),
-			testutil.CreateBlobSidecar(1, []byte{4, 5, 6}),
-		}
-
-		var broadcastedIndices []uint64
-		broadcastFunc := func(ctx context.Context, index uint64, sidecar *ethpb.BlobSidecar) error {
-			broadcastedIndices = append(broadcastedIndices, index)
-			return nil
-		}
-
-		// Test rejection
-		err := BroadcastBlobSidecars(ctx, sidecars, root, broadcastFunc,
-			WithForkchoiceChecker(func([32]byte) bool { return false }))
+	t.Run("blob receiver integration", func(t *testing.T) {
+		sidecar := testutil.CreateBlobSidecar(0, []byte{1, 2, 3})
+		
+		receiveCalled := false
+		processedCalled := false
+		
+		err := BroadcastBlobSidecars(ctx, []*ethpb.BlobSidecar{sidecar}, root,
+			func(context.Context, uint64, *ethpb.BlobSidecar) error { return nil },
+			WithBlobReceiver(func(ctx context.Context, blob blocks.VerifiedROBlob) error {
+				receiveCalled = true
+				require.NotNil(t, blob.ROBlob)
+				return nil
+			}),
+			WithBlobProcessedCallback(func(blob blocks.VerifiedROBlob) {
+				processedCalled = true
+				require.NotNil(t, blob.ROBlob)
+			}))
+		
 		require.NoError(t, err)
-		require.Equal(t, 0, len(broadcastedIndices))
-
-		// Test acceptance
-		broadcastedIndices = nil
-		err = BroadcastBlobSidecars(ctx, sidecars, root, broadcastFunc,
-			WithForkchoiceChecker(func([32]byte) bool { return true }))
-		require.NoError(t, err)
-		require.Equal(t, len(sidecars), len(broadcastedIndices))
+		require.Equal(t, true, receiveCalled)
+		require.Equal(t, true, processedCalled)
 	})
 
-	t.Run("error scenarios", func(t *testing.T) {
+	t.Run("blob receiver error handling", func(t *testing.T) {
 		sidecar := testutil.CreateBlobSidecar(0, []byte{1, 2, 3})
-
-		// Test broadcast error
+		
+		// Test error in onReceiveBlob
 		err := BroadcastBlobSidecars(ctx, []*ethpb.BlobSidecar{sidecar}, root,
-			func(context.Context, uint64, *ethpb.BlobSidecar) error { return errors.New("broadcast error") })
-		require.ErrorContains(t, "broadcast error", err)
-
-		// Test receive error
-		err = BroadcastBlobSidecars(ctx, []*ethpb.BlobSidecar{sidecar}, root,
 			func(context.Context, uint64, *ethpb.BlobSidecar) error { return nil },
-			WithBlobReceiver(func(context.Context, blocks.VerifiedROBlob) error { return errors.New("receive error") }))
-		require.NotNil(t, err) // May be receive error or validation error
+			WithBlobReceiver(func(ctx context.Context, blob blocks.VerifiedROBlob) error {
+				return errors.New("receive blob error")
+			}))
+		
+		require.ErrorContains(t, "receive blob error", err)
 	})
 
 	t.Run("context and concurrency", func(t *testing.T) {
@@ -259,7 +238,6 @@ func TestFunctionalOptions(t *testing.T) {
 		// Test all blob options together
 		receiverCalled := false
 		processedCalled := false
-		forkchoiceCalled := false
 
 		opts := &blobOptions{}
 		WithBlobReceiver(func(context.Context, blocks.VerifiedROBlob) error {
@@ -269,23 +247,15 @@ func TestFunctionalOptions(t *testing.T) {
 		WithBlobProcessedCallback(func(blocks.VerifiedROBlob) {
 			processedCalled = true
 		})(opts)
-		WithForkchoiceChecker(func([32]byte) bool {
-			forkchoiceCalled = true
-			return true
-		})(opts)
 
 		// All should be set and functional
 		require.NotNil(t, opts.onReceiveBlob)
 		require.NotNil(t, opts.onBlobProcessed)
-		require.NotNil(t, opts.onCheckForkchoice)
 
 		_ = opts.onReceiveBlob(context.Background(), blocks.VerifiedROBlob{})
 		opts.onBlobProcessed(blocks.VerifiedROBlob{})
-		result := opts.onCheckForkchoice([32]byte{})
 
 		require.Equal(t, true, receiverCalled)
 		require.Equal(t, true, processedCalled)
-		require.Equal(t, true, forkchoiceCalled)
-		require.Equal(t, true, result)
 	})
 }

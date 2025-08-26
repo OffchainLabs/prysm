@@ -126,13 +126,6 @@ func WithBlobProcessedCallback(fn func(blob blocks.VerifiedROBlob)) BlobOption {
 	}
 }
 
-// WithForkchoiceChecker sets the callback for checking if a block is in forkchoice.
-func WithForkchoiceChecker(fn func(root [32]byte) bool) BlobOption {
-	return func(o *blobOptions) {
-		o.onCheckForkchoice = fn
-	}
-}
-
 // BroadcastBlobSidecars broadcasts blob sidecars concurrently and optionally receives them.
 func BroadcastBlobSidecars(
 	ctx context.Context,
@@ -148,19 +141,6 @@ func BroadcastBlobSidecars(
 
 	eg, eCtx := errgroup.WithContext(ctx)
 	for i, sc := range sidecars {
-		// Check forkchoice if callback provided
-		if opts.onCheckForkchoice != nil {
-			r, err := sc.SignedBlockHeader.Header.HashTreeRoot()
-			if err != nil {
-				// Log error and continue with next sidecar
-				continue
-			}
-			if !opts.onCheckForkchoice(r) {
-				// Skip this sidecar
-				continue
-			}
-		}
-
 		// Copy the iteration instance to a local variable to give each go-routine its own copy to play with.
 		// See https://golang.org/doc/faq#closures_and_goroutines for more details.
 		subIdx := i

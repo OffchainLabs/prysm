@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
+	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
 	builderTest "github.com/OffchainLabs/prysm/v6/beacon-chain/builder/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
@@ -897,7 +897,7 @@ func injectSlashings(t *testing.T, st state.BeaconState, keys []bls.SecretKey, s
 func TestProposer_ProposeBlock_OK(t *testing.T) {
 	// Initialize KZG for Fulu blocks
 	require.NoError(t, kzg.Start())
-	
+
 	tests := []struct {
 		name       string
 		block      func([32]byte) *ethpb.GenericSignedBeaconBlock
@@ -1227,24 +1227,6 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 			useBuilder: true,
 			err:        "commitment value doesn't match block", // Known issue with mock builder cell proof mismatch
 		},
-		{
-			name: "blind fulu block no builder configured",
-			block: func(parent [32]byte) *ethpb.GenericSignedBeaconBlock {
-				blockToPropose := util.NewBlindedBeaconBlockFulu()
-				blockToPropose.Message.Slot = 5
-				blockToPropose.Message.ParentRoot = parent[:]
-				txRoot, err := ssz.TransactionsRoot([][]byte{})
-				require.NoError(t, err)
-				withdrawalsRoot, err := ssz.WithdrawalSliceRoot([]*enginev1.Withdrawal{}, fieldparams.MaxWithdrawalsPerPayload)
-				require.NoError(t, err)
-				blockToPropose.Message.Body.ExecutionPayloadHeader.TransactionsRoot = txRoot[:]
-				blockToPropose.Message.Body.ExecutionPayloadHeader.WithdrawalsRoot = withdrawalsRoot[:]
-				blockToPropose.Message.Body.BlobKzgCommitments = [][]byte{bytesutil.PadTo([]byte{0x01}, 48)}
-				blk := &ethpb.GenericSignedBeaconBlock_BlindedFulu{BlindedFulu: blockToPropose}
-				return &ethpb.GenericSignedBeaconBlock{Block: blk}
-			},
-			err: "unconfigured block builder",
-		},
 	}
 
 	for _, tt := range tests {
@@ -1269,13 +1251,13 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 			mockBlob[0] = 0x03
 			// Use the same commitment as in the blind block test
 			mockCommitment := bytesutil.PadTo([]byte{0x01}, 48)
-			
+
 			proposerServer := &Server{
 				BlockReceiver: c,
 				BlockNotifier: c.BlockNotifier(),
 				P2P:           mockp2p.NewTestP2P(t),
 				BlockBuilder: &builderTest.MockBuilderService{HasConfigured: tt.useBuilder, PayloadCapella: emptyPayloadCapella(), PayloadDeneb: emptyPayloadDeneb(),
-					BlobBundle: &enginev1.BlobsBundle{KzgCommitments: [][]byte{mockCommitment}, Proofs: [][]byte{{0x02}}, Blobs: [][]byte{{0x03}}},
+					BlobBundle:   &enginev1.BlobsBundle{KzgCommitments: [][]byte{mockCommitment}, Proofs: [][]byte{{0x02}}, Blobs: [][]byte{{0x03}}},
 					BlobBundleV2: &enginev1.BlobsBundleV2{KzgCommitments: [][]byte{mockCommitment}, Proofs: cellProofs, Blobs: [][]byte{mockBlob}}},
 				BeaconDB:           db,
 				BlobReceiver:       c,

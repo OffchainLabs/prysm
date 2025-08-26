@@ -352,7 +352,7 @@ func (vs *Server) broadcastAndReceiveSidecars(
 	dataColumnSideCars []*ethpb.DataColumnSidecar,
 ) error {
 	if block.Version() >= version.Fulu {
-		if err := vs.broadcastAndReceiveDataColumns(ctx, dataColumnSideCars, root, block.Block().Slot()); err != nil {
+		if err := vs.broadcastAndReceiveDataColumns(ctx, dataColumnSideCars, root); err != nil {
 			return errors.Wrap(err, "broadcast and receive data columns")
 		}
 		return nil
@@ -462,9 +462,8 @@ func (vs *Server) broadcastAndReceiveDataColumns(
 	ctx context.Context,
 	sidecars []*ethpb.DataColumnSidecar,
 	root [fieldparams.RootLength]byte,
-	slot primitives.Slot,
 ) error {
-	err := rpcHelpers.BroadcastDataColumnSidecars(
+	return rpcHelpers.BroadcastDataColumnSidecars(
 		ctx,
 		sidecars,
 		root,
@@ -480,7 +479,6 @@ func (vs *Server) broadcastAndReceiveDataColumns(
 			}
 		}),
 	)
-	return err
 }
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
