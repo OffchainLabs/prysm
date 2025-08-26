@@ -102,7 +102,6 @@ func VerifyCellKZGProofBatch(commitmentsBytes []Bytes48, cellIndices []uint64, c
 	for i := range cells {
 		ckzgCells[i] = ckzg4844.Cell(cells[i])
 	}
-
 	return ckzg4844.VerifyCellKZGProofBatch(commitmentsBytes, cellIndices, ckzgCells, proofsBytes)
 }
 
@@ -120,101 +119,6 @@ func RecoverCellsAndKZGProofs(cellIndices []uint64, partialCells []Cell) (CellsA
 	}
 
 	return makeCellsAndProofs(ckzgCells[:], ckzgProofs[:])
-}
-
-// VerifyBlobKZGProofBatch verifies KZG proofs for multiple blobs using batch verification.
-// This is more efficient than verifying each blob individually.
-func VerifyBlobKZGProofBatch(blobs [][]byte, commitments [][]byte, proofs [][]byte) error {
-	if len(blobs) != len(commitments) || len(blobs) != len(proofs) {
-		return errors.New("number of blobs, commitments, and proofs must match")
-	}
-
-	if len(blobs) == 0 {
-		return nil
-	}
-
-	// Convert to c-kzg-4844 types for batch verification
-	ckzgBlobs := make([]ckzg4844.Blob, len(blobs))
-	ckzgCommitments := make([]ckzg4844.Bytes48, len(commitments))
-	ckzgProofs := make([]ckzg4844.Bytes48, len(proofs))
-
-	for i := range blobs {
-		copy(ckzgBlobs[i][:], blobs[i])
-		copy(ckzgCommitments[i][:], commitments[i])
-		copy(ckzgProofs[i][:], proofs[i])
-	}
-
-	valid, err := ckzg4844.VerifyBlobKZGProofBatch(ckzgBlobs, ckzgCommitments, ckzgProofs)
-	if err != nil {
-		return errors.Wrap(err, "batch verification failed")
-	}
-	if !valid {
-		return errors.New("batch KZG proof verification failed")
-	}
-
-	return nil
-}
-
-// VerifyCellKZGProofBatchFromBlobData verifies cell KZG proofs in batch format directly from blob data.
-// This is more efficient than reconstructing data column sidecars when you have the raw blob data and cell proofs.
-// For PeerDAS/Fulu, the execution client provides cell proofs in flattened format via BlobsBundleV2.
-func VerifyCellKZGProofBatchFromBlobData(blobs [][]byte, commitments [][]byte, cellProofs [][]byte, numberOfColumns uint64) error {
-	blobCount := uint64(len(blobs))
-	expectedCellProofs := blobCount * numberOfColumns
-	
-	if len(cellProofs) != int(expectedCellProofs) {
-		return errors.Errorf("expected %d cell proofs, got %d", expectedCellProofs, len(cellProofs))
-	}
-	
-	if len(commitments) != len(blobs) {
-		return errors.Errorf("number of commitments (%d) must match number of blobs (%d)", len(commitments), len(blobs))
-	}
-
-	if blobCount == 0 {
-		return nil
-	}
-
-	// Compute cells from blobs
-	allCells := make([]Cell, 0, expectedCellProofs)
-	allCommitments := make([]Bytes48, 0, expectedCellProofs)
-	allIndices := make([]uint64, 0, expectedCellProofs)
-	allProofs := make([]Bytes48, 0, expectedCellProofs)
-
-	for blobIndex, blobData := range blobs {
-		// Convert blob to kzg.Blob type
-		var blob Blob
-		copy(blob[:], blobData)
-
-		// Compute cells for this blob
-		cells, err := ComputeCells(&blob)
-		if err != nil {
-			return errors.Wrapf(err, "failed to compute cells for blob %d", blobIndex)
-		}
-
-		// Add cells and corresponding data for each column
-		for columnIndex := uint64(0); columnIndex < numberOfColumns; columnIndex++ {
-			cellProofIndex := uint64(blobIndex)*numberOfColumns + columnIndex
-			
-			allCells = append(allCells, cells[columnIndex])
-			allCommitments = append(allCommitments, Bytes48(commitments[blobIndex]))
-			allIndices = append(allIndices, columnIndex)
-			
-			var proof Bytes48
-			copy(proof[:], cellProofs[cellProofIndex])
-			allProofs = append(allProofs, proof)
-		}
-	}
-
-	// Batch verify all cells
-	valid, err := VerifyCellKZGProofBatch(allCommitments, allIndices, allCells, allProofs)
-	if err != nil {
-		return errors.Wrap(err, "cell batch verification failed")
-	}
-	if !valid {
-		return errors.New("cell KZG proof batch verification failed")
-	}
-
-	return nil
 }
 
 // makeCellsAndProofs converts cells/proofs to the CellsAndProofs type defined in this package.
