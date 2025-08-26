@@ -1100,6 +1100,7 @@ func (s *Server) validateBlobs(blk interfaces.SignedBeaconBlock, blobs [][]byte,
 	// Convert KZG commitments to byte slices for batch verification
 	commitments := make([][]byte, len(kzgs))
 	for i, commitment := range kzgs {
+		commitments[i] = make([]byte, len(commitment))
 		copy(commitments[i], commitment)
 	}
 
