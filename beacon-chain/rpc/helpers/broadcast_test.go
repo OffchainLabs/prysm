@@ -40,7 +40,7 @@ func TestBroadcastDataColumnSidecars(t *testing.T) {
 		}
 
 		_, err := BroadcastDataColumnSidecars(ctx, sidecars, root, broadcastFunc)
-
+		require.NoError(t, err)
 		// Verify all broadcasts called with correct parameters
 		require.Equal(t, len(sidecars), len(calls))
 		for _, call := range calls {

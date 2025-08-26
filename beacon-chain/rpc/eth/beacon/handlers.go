@@ -1082,7 +1082,7 @@ func (s *Server) validateBlobs(blk interfaces.SignedBeaconBlock, blobs [][]byte,
 		// For Fulu blocks, proofs are cell proofs (blobs * numberOfColumns)
 		numberOfColumns := params.BeaconConfig().NumberOfColumns
 		expectedProofs := uint64(len(blobs)) * numberOfColumns
-		if len(proofs) != int(expectedProofs) || len(blobs) != len(kzgs) {
+		if uint64(len(proofs)) != expectedProofs || len(blobs) != len(kzgs) {
 			return fmt.Errorf("number of blobs (%d), cell proofs (%d), and commitments (%d) do not match (expected %d cell proofs)", len(blobs), len(proofs), len(kzgs), expectedProofs)
 		}
 	} else {

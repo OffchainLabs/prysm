@@ -95,7 +95,7 @@ func VerifyCellKZGProofBatchFromBlobData(blobs [][]byte, commitments [][]byte, c
 	blobCount := uint64(len(blobs))
 	expectedCellProofs := blobCount * numberOfColumns
 
-	if len(cellProofs) != int(expectedCellProofs) {
+	if uint64(len(cellProofs)) != expectedCellProofs {
 		return errors.Errorf("expected %d cell proofs, got %d", expectedCellProofs, len(cellProofs))
 	}
 
