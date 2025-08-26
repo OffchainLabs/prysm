@@ -234,7 +234,7 @@ func (s *Service) fetchOriginSidecars(peers []peer.ID) error {
 	blockVersion := roBlock.Version()
 
 	if blockVersion >= version.Fulu {
-		if err := s.fetchOriginColumns(peers, roBlock); err != nil {
+		if err := s.fetchOriginColumns(roBlock); err != nil {
 			return errors.Wrap(err, "fetch origin columns")
 		}
 		return nil
@@ -391,7 +391,7 @@ func (s *Service) fetchOriginBlobs(pids []peer.ID, rob blocks.ROBlock) error {
 	return fmt.Errorf("no connected peer able to provide blobs for checkpoint sync block %#x", r)
 }
 
-func (s *Service) fetchOriginColumns(pids []peer.ID, roBlock blocks.ROBlock) error {
+func (s *Service) fetchOriginColumns(roBlock blocks.ROBlock) error {
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 
 	// Return early if the origin block has no blob commitments.
