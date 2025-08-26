@@ -22,6 +22,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/crypto/rand"
@@ -392,6 +393,11 @@ func (s *Service) fetchOriginBlobs(pids []peer.ID, rob blocks.ROBlock) error {
 }
 
 func (s *Service) fetchOriginColumns(roBlock blocks.ROBlock) error {
+	const (
+		trials = 100              // The number of trials to fetch origin columns
+		delay  = 10 * time.Second // The delay between each trial
+	)
+
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 
 	// Return early if the origin block has no blob commitments.
@@ -428,7 +434,20 @@ func (s *Service) fetchOriginColumns(roBlock blocks.ROBlock) error {
 		NewVerifier: s.newDataColumnsVerifier,
 	}
 
-	verifiedRoDataColumnsByRoot, err := sync.FetchDataColumnSidecars(params, []blocks.ROBlock{roBlock}, info.CustodyColumns)
+	var verifiedRoDataColumnsByRoot map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn
+
+	for i := 0; i < trials; i++ {
+		verifiedRoDataColumnsByRoot, err = sync.FetchDataColumnSidecars(params, []blocks.ROBlock{roBlock}, info.CustodyColumns)
+		if err == nil {
+			break
+		}
+
+		log.WithError(err).WithFields(logrus.Fields{
+			"attempt":     i,
+			"maxAttempts": trials,
+		}).Debug("Fetch origin data column sidecars")
+	}
+
 	if err != nil {
 		return errors.Wrap(err, "fetch data column sidecars")
 	}
