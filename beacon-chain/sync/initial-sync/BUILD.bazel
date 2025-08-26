@@ -34,6 +34,7 @@ go_library(
         "//beacon-chain/verification:go_default_library",
         "//cmd/beacon-chain/flags:go_default_library",
         "//config/features:go_default_library",
+        "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/interfaces:go_default_library",
