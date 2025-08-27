@@ -31,6 +31,80 @@ func AnalyzeObject(obj any) (*sszInfo, error) {
 	return info, nil
 }
 
+// PopulateFromValue receives an actual value and fills the sszInfo dynamically.
+func PopulateFromValue(sszInfo *sszInfo, value any) error {
+	if sszInfo == nil {
+		return errors.New("sszInfo is nil")
+	}
+
+	// Short circuit: If the type is fixed-sized, we don't need to fill in the info.
+	if !sszInfo.isVariable {
+		return nil
+	}
+
+	if value == nil {
+		return errors.New("value is nil")
+	}
+
+	switch sszInfo.sszType {
+	// In List case, we have to set the actual length of the list.
+	case List:
+		listInfo, err := sszInfo.ListInfo()
+		if err != nil {
+			return fmt.Errorf("could not get list info: %w", err)
+		}
+
+		val := reflect.ValueOf(value)
+		if val.Kind() != reflect.Slice {
+			return fmt.Errorf("expected slice for List type, got %v", val.Kind())
+		}
+
+		length := uint64(val.Len())
+		if err := listInfo.SetLength(length); err != nil {
+			return fmt.Errorf("could not set list length: %w", err)
+		}
+
+		return nil
+	// In Container case, we need to recursively populate variable-sized fields.
+	case Container:
+		containerInfo, err := sszInfo.ContainerInfo()
+		if err != nil {
+			return fmt.Errorf("could not get container info: %w", err)
+		}
+
+		// Start with the fixed size of this Container.
+		currentActualOffset := sszInfo.FixedSize()
+
+		for _, fieldName := range containerInfo.order {
+			fieldInfo := containerInfo.fields[fieldName]
+			childSszInfo := fieldInfo.sszInfo
+			if childSszInfo == nil {
+				return fmt.Errorf("sszInfo is nil for field %s", fieldName)
+			}
+
+			// Skip fixed-size fields.
+			if !childSszInfo.isVariable {
+				continue
+			}
+
+			// Set the actual offset for variable-sized fields.
+			fieldInfo.actualOffset = currentActualOffset
+
+			// Recursively populate variable-sized fields.
+			fieldValue := dereferencePointer(value).FieldByName(fieldInfo.goFieldName)
+			if err := PopulateFromValue(childSszInfo, fieldValue.Interface()); err != nil {
+				return fmt.Errorf("could not populate from value for field %s: %w", fieldName, err)
+			}
+
+			currentActualOffset += childSszInfo.Size()
+		}
+
+		return nil
+	default:
+		return fmt.Errorf("unsupported SSZ type for variable size info: %s", sszInfo.sszType)
+	}
+}
+
 // analyzeType is an entry point that inspects a reflect.Type and computes its SSZ layout information.
 func analyzeType(typ reflect.Type, tag *reflect.StructTag) (*sszInfo, error) {
 	switch typ.Kind() {

@@ -14,6 +14,9 @@ func RunStructTest(t *testing.T, spec TestSpec) {
 		require.NoError(t, err)
 
 		testInstance := spec.Instance
+		err = query.PopulateFromValue(info, testInstance)
+		require.NoError(t, err, "PopulateFromValue should not return an error")
+
 		marshaller, ok := testInstance.(ssz.Marshaler)
 		require.Equal(t, true, ok, "Test instance must implement ssz.Marshaler, got %T", testInstance)
 
