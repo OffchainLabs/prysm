@@ -222,8 +222,9 @@ func analyzeContainerType(typ reflect.Type) (*sszInfo, error) {
 
 		// Store nested struct info.
 		fields[fieldName] = &fieldInfo{
-			sszInfo: info,
-			offset:  currentOffset,
+			sszInfo:     info,
+			offset:      currentOffset,
+			goFieldName: field.Name,
 		}
 		// Persist order
 		order = append(order, fieldName)

@@ -13,4 +13,9 @@ type fieldInfo struct {
 	sszInfo *sszInfo
 	// offset is the offset of the field within the parent struct.
 	offset uint64
+	// actualOffset is the actual offset for variable-sized fields,
+	// which is dynamically determined with the actual value.
+	actualOffset uint64
+	// goFieldName is the name of the field in Go struct.
+	goFieldName string
 }

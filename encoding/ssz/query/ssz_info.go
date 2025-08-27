@@ -50,6 +50,17 @@ func (info *sszInfo) Size() uint64 {
 
 		return length * elementSize
 
+	case Container:
+		size := info.fixedSize
+		for _, fieldInfo := range info.containerInfo.fields {
+			if !fieldInfo.sszInfo.isVariable {
+				continue
+			}
+
+			size += fieldInfo.sszInfo.Size()
+		}
+		return size
+
 	default:
 		// NOTE: Handle other variable-sized types.
 		return 0
