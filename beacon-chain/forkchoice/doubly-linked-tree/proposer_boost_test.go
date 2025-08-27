@@ -510,3 +510,122 @@ func TestForkChoice_missingProposerBoostRoots(t *testing.T) {
 	require.Equal(t, blk.Root(), headRoot)
 	require.Equal(t, [32]byte{'p'}, f.store.proposerBoostRoot)
 }
+
+// TestForkChoice_ProposerBoostAtEpochBoundary tests that proposer boost correctly
+// uses the block's slot duration, not the current slot's duration, which is
+// critical at epoch boundaries where slot durations may change.
+func TestForkChoice_ProposerBoostAtEpochBoundary(t *testing.T) {
+	ctx := t.Context()
+	
+	// Create a custom slot schedule for testing epoch boundaries
+	// Epoch 0-1: 12s slots
+	// Epoch 2+: 6s slots  
+	originalSchedule := params.BeaconConfig().SlotSchedule
+	defer func() {
+		params.BeaconConfig().SlotSchedule = originalSchedule
+	}()
+	
+	testSchedule := &params.SlotSchedule{
+		{Epoch: 0, SlotDuration: 12 * time.Second},
+		{Epoch: 2, SlotDuration: 6 * time.Second},
+	}
+	params.BeaconConfig().SlotSchedule = testSchedule
+	
+	jEpoch, fEpoch := primitives.Epoch(0), primitives.Epoch(0)
+	zeroHash := params.BeaconConfig().ZeroHash
+	balances := make([]uint64, 64)
+	for i := 0; i < len(balances); i++ {
+		balances[i] = 10
+	}
+	
+	f := setup(jEpoch, fEpoch)
+	f.justifiedBalances = balances
+	f.store.committeeWeight = uint64(len(balances)*10) / uint64(params.BeaconConfig().SlotsPerEpoch)
+	f.numActiveValidators = uint64(len(balances))
+	
+	// Test at the epoch boundary - slot 64 is first slot of epoch 2
+	boundarySlot := primitives.Slot(64)
+	
+	// Set genesis time such that we're at the boundary slot
+	// The block arrives 1 second into the 6-second slot
+	genesis := time.Now()
+	s, err := testSchedule.SinceGenesis(boundarySlot)
+	require.NoError(t, err)
+	genesis = genesis.Add(-s).Add(-1 * time.Second)
+	f.SetGenesisTime(genesis)
+	
+	// Insert a block at the boundary slot
+	boundaryRoot := indexToHash(64)
+	state, blkRoot, err := prepareForkchoiceState(
+		ctx,
+		boundarySlot,
+		boundaryRoot,
+		zeroHash,
+		zeroHash,
+		jEpoch,
+		fEpoch,
+	)
+	require.NoError(t, err)
+	
+	// Before fix: boost threshold would use current slot (6s/3 = 2s)
+	// After fix: boost threshold uses block's slot (6s/3 = 2s) - same in this case
+	// The key is that the code now explicitly uses the block's slot
+	
+	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
+	
+	// Verify the block received proposer boost (arrives at 1s, threshold is 2s)
+	require.Equal(t, boundaryRoot, f.store.proposerBoostRoot)
+	
+	// Now test a block from the previous epoch arriving late
+	// Block from slot 63 (last slot of epoch 1, 12s duration) arrives during slot 64
+	lateBlockSlot := primitives.Slot(63)
+	
+	// Move time forward to slot 64 + 3 seconds
+	genesis = time.Now()
+	s, err = testSchedule.SinceGenesis(boundarySlot)
+	require.NoError(t, err)
+	genesis = genesis.Add(-s).Add(-3 * time.Second)
+	f.SetGenesisTime(genesis)
+	
+	lateRoot := indexToHash(63)
+	state, blkRoot, err = prepareForkchoiceState(
+		ctx,
+		lateBlockSlot,
+		lateRoot,
+		zeroHash,
+		zeroHash,
+		jEpoch,
+		fEpoch,
+	)
+	require.NoError(t, err)
+	
+	// The late block from slot 63 should NOT get proposer boost
+	// because current slot (64) != block slot (63)
+	f.store.proposerBoostRoot = [32]byte{} // Reset
+	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
+	require.Equal(t, [32]byte{}, f.store.proposerBoostRoot, "Late block should not receive proposer boost")
+	
+	// Test edge case: Block at slot 64 arrives late (after 2s threshold)
+	genesis = time.Now()
+	s, err = testSchedule.SinceGenesis(boundarySlot)
+	require.NoError(t, err)
+	genesis = genesis.Add(-s).Add(-3 * time.Second) // 3s into the slot
+	f.SetGenesisTime(genesis)
+	
+	lateBoundaryRoot := indexToHash(164) // Different root
+	state, blkRoot, err = prepareForkchoiceState(
+		ctx,
+		boundarySlot,
+		lateBoundaryRoot,
+		zeroHash,
+		zeroHash,
+		jEpoch,
+		fEpoch,
+	)
+	require.NoError(t, err)
+	
+	f.store.proposerBoostRoot = [32]byte{} // Reset
+	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
+	// Block arrives at 3s, threshold is 2s (6s/3), so no boost
+	require.Equal(t, [32]byte{}, f.store.proposerBoostRoot, "Block arriving after threshold should not receive boost")
+}

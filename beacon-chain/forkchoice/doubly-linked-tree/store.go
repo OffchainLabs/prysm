@@ -137,7 +137,9 @@ func (s *Store) insert(ctx context.Context,
 		if err != nil {
 			return nil, fmt.Errorf("could not determine time since current slot started: %w", err)
 		}
-		boostThreshold := params.BeaconConfig().SlotSchedule.SlotDuration(currentSlot) / time.Duration(params.BeaconConfig().IntervalsPerSlot)
+		// Use the block's slot duration for the boost threshold, not the current slot's duration.
+		// This is important at epoch boundaries where slot durations may change.
+		boostThreshold := params.BeaconConfig().SlotSchedule.SlotDuration(slot) / time.Duration(params.BeaconConfig().IntervalsPerSlot)
 		isFirstBlock := s.proposerBoostRoot == [32]byte{}
 		if currentSlot == slot && sss < boostThreshold && isFirstBlock {
 			s.proposerBoostRoot = root
