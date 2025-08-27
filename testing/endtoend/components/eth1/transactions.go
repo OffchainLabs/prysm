@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/crypto/rand"
 	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
@@ -136,44 +137,56 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 	if expectedPrice.Cmp(gasPrice) > 0 {
 		gasPrice = expectedPrice
 	}
+	
+	// Check if we're post-Fulu fork to disable blob transactions
+	currentSlot := slots.CurrentSlot(e2e.TestParams.CLGenesisTime)
+	currentEpoch := slots.ToEpoch(currentSlot)
+	isPostFulu := currentEpoch >= params.BeaconConfig().FuluForkEpoch
+	
 	g, _ := errgroup.WithContext(context.Background())
 	txs := make([]*types.Transaction, 10)
-	for i := uint64(0); i < 10; i++ {
-		index := i
-		g.Go(func() error {
-			tx, err := RandomBlobTx(client, f, fundedAccount.Address, nonce+index, gasPrice, chainid, al)
-			if err != nil {
-				logrus.WithError(err).Error("Could not create blob tx")
-				// In the event the transaction constructed is not valid, we continue with the routine
-				// rather than complete stop it.
-				//nolint:nilerr
+	
+	// Only send blob transactions if we're NOT post-Fulu
+	if !isPostFulu {
+		for i := uint64(0); i < 10; i++ {
+			index := i
+			g.Go(func() error {
+				tx, err := RandomBlobTx(client, f, fundedAccount.Address, nonce+index, gasPrice, chainid, al)
+				if err != nil {
+					logrus.WithError(err).Error("Could not create blob tx")
+					// In the event the transaction constructed is not valid, we continue with the routine
+					// rather than complete stop it.
+					//nolint:nilerr
+					return nil
+				}
+				signedTx, err := types.SignTx(tx, types.NewCancunSigner(chainid), fundedAccount.PrivateKey)
+				if err != nil {
+					logrus.WithError(err).Error("Could not sign blob tx")
+					// We continue on in the event there is a reason we can't sign this
+					// transaction(unlikely).
+					//nolint:nilerr
+					return nil
+				}
+				txs[index] = signedTx
 				return nil
-			}
-			signedTx, err := types.SignTx(tx, types.NewCancunSigner(chainid), fundedAccount.PrivateKey)
-			if err != nil {
-				logrus.WithError(err).Error("Could not sign blob tx")
-				// We continue on in the event there is a reason we can't sign this
-				// transaction(unlikely).
-				//nolint:nilerr
-				return nil
-			}
-			txs[index] = signedTx
-			return nil
-		})
-	}
+			})
+		}
 
-	if err := g.Wait(); err != nil {
-		return err
-	}
-	for _, tx := range txs {
-		if tx == nil {
-			continue
+		if err := g.Wait(); err != nil {
+			return err
 		}
-		err = backend.SendTransaction(context.Background(), tx)
-		if err != nil {
-			// Do nothing
-			continue
+		for _, tx := range txs {
+			if tx == nil {
+				continue
+			}
+			err = backend.SendTransaction(context.Background(), tx)
+			if err != nil {
+				// Do nothing
+				continue
+			}
 		}
+	} else {
+		logrus.Info("Skipping blob transactions after Fulu fork")
 	}
 
 	nonce, err = backend.PendingNonceAt(context.Background(), sender)

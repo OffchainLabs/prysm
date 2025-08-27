@@ -1,14 +1,12 @@
 package params
 
-import "math"
-
 const (
 	AltairE2EForkEpoch    = 6
 	BellatrixE2EForkEpoch = 8
 	CapellaE2EForkEpoch   = 10
 	DenebE2EForkEpoch     = 12
 	ElectraE2EForkEpoch   = 14
-	FuluE2EForkEpoch      = math.MaxUint64
+	FuluE2EForkEpoch      = 16
 )
 
 // E2ETestConfig retrieves the configurations made specifically for E2E testing.
