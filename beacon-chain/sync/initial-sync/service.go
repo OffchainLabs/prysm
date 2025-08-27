@@ -210,10 +210,7 @@ func (s *Service) Start() {
 
 // fetchOriginSidecars fetches origin sidecars
 func (s *Service) fetchOriginSidecars(peers []peer.ID) error {
-	const (
-		maxAttempts = 100              // The max allowed number of attempts to fetch origin data column sidecars
-		delay       = 10 * time.Second // The delay between each attempt
-	)
+	const delay = 10 * time.Second // The delay between each attempt to fetch origin data column sidecars
 
 	blockRoot, err := s.cfg.DB.OriginCheckpointBlockRoot(s.ctx)
 	if errors.Is(err, db.ErrNotFoundOriginBlockRoot) {
@@ -240,7 +237,7 @@ func (s *Service) fetchOriginSidecars(peers []peer.ID) error {
 	blockVersion := roBlock.Version()
 
 	if blockVersion >= version.Fulu {
-		if err := s.fetchOriginColumns(roBlock, maxAttempts, delay); err != nil {
+		if err := s.fetchOriginColumns(roBlock, delay); err != nil {
 			return errors.Wrap(err, "fetch origin columns")
 		}
 		return nil
@@ -397,7 +394,11 @@ func (s *Service) fetchOriginBlobs(pids []peer.ID, rob blocks.ROBlock) error {
 	return fmt.Errorf("no connected peer able to provide blobs for checkpoint sync block %#x", r)
 }
 
-func (s *Service) fetchOriginColumns(roBlock blocks.ROBlock, maxAttempts int, delay time.Duration) error {
+func (s *Service) fetchOriginColumns(roBlock blocks.ROBlock, delay time.Duration) error {
+	const (
+		errorMessage     = "Failed to fetch origin data column sidecars"
+		warningIteration = 10
+	)
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 
 	// Return early if the origin block has no blob commitments.
@@ -426,33 +427,36 @@ func (s *Service) fetchOriginColumns(roBlock blocks.ROBlock, maxAttempts int, de
 	root := roBlock.Root()
 
 	params := sync.DataColumnSidecarsParams{
-		Ctx:         s.ctx,
-		Tor:         s.clock,
-		P2P:         s.cfg.P2P,
-		CtxMap:      s.ctxMap,
-		Storage:     s.cfg.DataColumnStorage,
-		NewVerifier: s.newDataColumnsVerifier,
+		Ctx:                     s.ctx,
+		Tor:                     s.clock,
+		P2P:                     s.cfg.P2P,
+		CtxMap:                  s.ctxMap,
+		Storage:                 s.cfg.DataColumnStorage,
+		NewVerifier:             s.newDataColumnsVerifier,
+		DownscorePeerOnRPCFault: true,
 	}
 
 	var verifiedRoDataColumnsByRoot map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn
-
-	for attempt := range maxAttempts {
+	for attempt := uint64(0); ; attempt++ {
 		verifiedRoDataColumnsByRoot, err = sync.FetchDataColumnSidecars(params, []blocks.ROBlock{roBlock}, info.CustodyColumns)
 		if err == nil {
 			break
 		}
 
-		log.WithError(err).WithFields(logrus.Fields{
-			"attempt":     attempt,
-			"maxAttempts": maxAttempts,
-			"delay":       delay,
-		}).Debug("Failed to fetch origin data column sidecars, retrying later")
+		log := log.WithError(err).WithFields(logrus.Fields{
+			"attempt": attempt,
+			"delay":   delay,
+		})
 
+		if attempt%warningIteration == 0 && attempt > 0 {
+			log.Warning(errorMessage)
+			time.Sleep(delay)
+
+			continue
+		}
+
+		log.Debug(errorMessage)
 		time.Sleep(delay)
-	}
-
-	if err != nil {
-		return errors.Wrap(err, "fetch data column sidecars")
 	}
 
 	// Save origin data columns to disk.
@@ -469,7 +473,7 @@ func (s *Service) fetchOriginColumns(roBlock blocks.ROBlock, maxAttempts int, de
 		"blockRoot":   fmt.Sprintf("%#x", roBlock.Root()),
 		"blobCount":   len(commitments),
 		"columnCount": len(verifiedRoDataColumnsSidecars),
-	}).Info("Successfully downloaded data columns for checkpoint sync block")
+	}).Info("Successfully downloaded data column sidecars for checkpoint sync block")
 
 	return nil
 }

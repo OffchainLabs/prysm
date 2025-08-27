@@ -685,9 +685,8 @@ func TestFetchOriginColumns(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	const (
-		maxAttempts = 2
-		delay       = 0
-		blobCount   = 1
+		delay     = 0
+		blobCount = 1
 	)
 
 	t.Run("block has no commitments", func(t *testing.T) {
@@ -700,27 +699,8 @@ func TestFetchOriginColumns(t *testing.T) {
 		roBlock, err := blocks.NewROBlock(signedBlock)
 		require.NoError(t, err)
 
-		err = service.fetchOriginColumns(roBlock, maxAttempts, delay)
+		err = service.fetchOriginColumns(roBlock, delay)
 		require.NoError(t, err)
-	})
-
-	t.Run("all attempts to FetchDataColumnSidecars fail", func(t *testing.T) {
-		storage := filesystem.NewEphemeralDataColumnStorage(t)
-		p2p := p2ptest.NewTestP2P(t)
-
-		service := &Service{
-			cfg: &Config{
-				P2P:               p2p,
-				DataColumnStorage: storage,
-			},
-		}
-
-		// Create a block with blob commitments but don't store any sidecars
-		roBlock, _, _ := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
-
-		// Since we have no peers and no stored sidecars, this should fail
-		err := service.fetchOriginColumns(roBlock, maxAttempts, delay)
-		require.NotNil(t, err)
 	})
 
 	t.Run("FetchDataColumnSidecars succeeds immediately", func(t *testing.T) {
@@ -741,7 +721,7 @@ func TestFetchOriginColumns(t *testing.T) {
 		err := storage.Save(verifiedSidecars)
 		require.NoError(t, err)
 
-		err = service.fetchOriginColumns(roBlock, maxAttempts, delay)
+		err = service.fetchOriginColumns(roBlock, delay)
 		require.NoError(t, err)
 	})
 
@@ -826,7 +806,7 @@ func TestFetchOriginColumns(t *testing.T) {
 			assert.NoError(t, err)
 		})
 
-		err = service.fetchOriginColumns(roBlock, maxAttempts, delay)
+		err = service.fetchOriginColumns(roBlock, delay)
 		require.NoError(t, err)
 
 		// Check all corresponding sidecars are saved in the store.
