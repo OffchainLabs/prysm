@@ -436,7 +436,7 @@ func (s *Service) fetchOriginColumns(roBlock blocks.ROBlock, maxAttempts int, de
 
 	var verifiedRoDataColumnsByRoot map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn
 
-	for attempt := 0; attempt < maxAttempts; attempt++ {
+	for attempt := range maxAttempts {
 		verifiedRoDataColumnsByRoot, err = sync.FetchDataColumnSidecars(params, []blocks.ROBlock{roBlock}, info.CustodyColumns)
 		if err == nil {
 			break
