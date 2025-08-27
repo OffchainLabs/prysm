@@ -177,11 +177,12 @@ func analyzeContainerType(typ reflect.Type) (*sszInfo, error) {
 		return nil, fmt.Errorf("can only analyze struct types, got %v", typ.Kind())
 	}
 
+	fields := make(map[string]*fieldInfo)
+	order := make([]string, 0, typ.NumField())
+
 	sszInfo := &sszInfo{
 		sszType: Container,
 		typ:     typ,
-
-		containerInfo: make(map[string]*fieldInfo),
 	}
 	var currentOffset uint64
 
@@ -220,16 +221,22 @@ func analyzeContainerType(typ reflect.Type) (*sszInfo, error) {
 		}
 
 		// Store nested struct info.
-		sszInfo.containerInfo[fieldName] = &fieldInfo{
+		fields[fieldName] = &fieldInfo{
 			sszInfo: info,
 			offset:  currentOffset,
 		}
+		// Persist order
+		order = append(order, fieldName)
 
 		// Update the current offset based on the field's fixed size.
 		currentOffset += info.fixedSize
 	}
 
 	sszInfo.fixedSize = currentOffset
+	sszInfo.containerInfo = &containerInfo{
+		fields: fields,
+		order:  order,
+	}
 
 	return sszInfo, nil
 }

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"sort"
 	"strings"
 )
 
@@ -21,7 +20,7 @@ type sszInfo struct {
 	fixedSize uint64
 
 	// For Container types.
-	containerInfo containerInfo
+	containerInfo *containerInfo
 
 	// For List types.
 	listInfo *listInfo
@@ -57,7 +56,7 @@ func (info *sszInfo) Size() uint64 {
 	}
 }
 
-func (info *sszInfo) ContainerInfo() (containerInfo, error) {
+func (info *sszInfo) ContainerInfo() (*containerInfo, error) {
 	if info == nil {
 		return nil, errors.New("sszInfo is nil")
 	}
@@ -110,32 +109,28 @@ func printRecursive(info *sszInfo, builder *strings.Builder, prefix string) {
 	switch info.sszType {
 	case Container:
 		builder.WriteString(fmt.Sprintf("%s: %s (%s / fixed size: %d, total size: %d)\n", info.sszType, info.typ.Name(), sizeDesc, info.FixedSize(), info.Size()))
+
+		for i, key := range info.containerInfo.order {
+			connector := "├─"
+			nextPrefix := prefix + "│  "
+			if i == len(info.containerInfo.order)-1 {
+				connector = "└─"
+				nextPrefix = prefix + "   "
+			}
+
+			builder.WriteString(fmt.Sprintf("%s%s %s (offset: %d) ", prefix, connector, key, info.containerInfo.fields[key].offset))
+
+			if nestedInfo := info.containerInfo.fields[key].sszInfo; nestedInfo != nil {
+				printRecursive(nestedInfo, builder, nextPrefix)
+			} else {
+				builder.WriteString("\n")
+			}
+		}
+
 	case List:
 		builder.WriteString(fmt.Sprintf("%s[%s] (%s / limit: %d, length: %d, size: %d)\n", info.sszType, info.listInfo.element.typ.Name(), sizeDesc, info.listInfo.limit, info.listInfo.length, info.Size()))
+
 	default:
 		builder.WriteString(fmt.Sprintf("%s (%s / size: %d)\n", info.sszType, sizeDesc, info.Size()))
-	}
-
-	keys := make([]string, 0, len(info.containerInfo))
-	for k := range info.containerInfo {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	for i, key := range keys {
-		connector := "├─"
-		nextPrefix := prefix + "│  "
-		if i == len(keys)-1 {
-			connector = "└─"
-			nextPrefix = prefix + "   "
-		}
-
-		builder.WriteString(fmt.Sprintf("%s%s %s (offset: %d) ", prefix, connector, key, info.containerInfo[key].offset))
-
-		if nestedInfo := info.containerInfo[key].sszInfo; nestedInfo != nil {
-			printRecursive(nestedInfo, builder, nextPrefix)
-		} else {
-			builder.WriteString("\n")
-		}
 	}
 }
