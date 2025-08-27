@@ -210,6 +210,11 @@ func (s *Service) Start() {
 
 // fetchOriginSidecars fetches origin sidecars
 func (s *Service) fetchOriginSidecars(peers []peer.ID) error {
+	const (
+		maxAttempts = 100              // The max allowed number of attempts to fetch origin data column sidecars
+		delay       = 10 * time.Second // The delay between each attempt
+	)
+
 	blockRoot, err := s.cfg.DB.OriginCheckpointBlockRoot(s.ctx)
 	if errors.Is(err, db.ErrNotFoundOriginBlockRoot) {
 		return nil
@@ -235,7 +240,7 @@ func (s *Service) fetchOriginSidecars(peers []peer.ID) error {
 	blockVersion := roBlock.Version()
 
 	if blockVersion >= version.Fulu {
-		if err := s.fetchOriginColumns(roBlock); err != nil {
+		if err := s.fetchOriginColumns(roBlock, maxAttempts, delay); err != nil {
 			return errors.Wrap(err, "fetch origin columns")
 		}
 		return nil
@@ -392,12 +397,7 @@ func (s *Service) fetchOriginBlobs(pids []peer.ID, rob blocks.ROBlock) error {
 	return fmt.Errorf("no connected peer able to provide blobs for checkpoint sync block %#x", r)
 }
 
-func (s *Service) fetchOriginColumns(roBlock blocks.ROBlock) error {
-	const (
-		maxAttempts = 100              // The max allowed number of attempts to fetch origin columns
-		delay       = 10 * time.Second // The delay between each attempt
-	)
-
+func (s *Service) fetchOriginColumns(roBlock blocks.ROBlock, maxAttempts int, delay time.Duration) error {
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 
 	// Return early if the origin block has no blob commitments.
