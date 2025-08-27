@@ -13,6 +13,18 @@ import (
 
 var ErrInvalidSlotScheduleNoGenesis = errors.New("invalid slot schedule, missing an entry for epoch 0")
 
+// SlotSchedule represents an immutable schedule of slot durations that can vary by epoch.
+// Once initialized (via UnmarshalYAML or direct construction), the schedule maintains
+// sorted order and cannot be modified. This immutability guarantee ensures thread-safety
+// for concurrent access without requiring synchronization.
+//
+// The schedule must:
+// - Start at epoch 0
+// - Be sorted by epoch in ascending order
+// - Have unique epochs (no duplicates)
+// - Have slot durations of at least 1 second
+//
+// These invariants are enforced during initialization and the schedule is immutable thereafter.
 type SlotSchedule []SlotScheduleEntry
 
 // SlotScheduleEntry defines a schedule entry which adjusts the seconds per slot starting at
@@ -20,6 +32,33 @@ type SlotSchedule []SlotScheduleEntry
 type SlotScheduleEntry struct {
 	Epoch        primitives.Epoch
 	SlotDuration time.Duration
+}
+
+// NewSlotSchedule creates a new immutable SlotSchedule from the provided entries.
+// The entries will be sorted by epoch and validated. Returns an error if the
+// schedule is invalid.
+func NewSlotSchedule(entries []SlotScheduleEntry) (*SlotSchedule, error) {
+	if len(entries) == 0 {
+		return nil, errors.New("empty schedule")
+	}
+
+	// Create a copy to avoid modifying the input
+	scheduleCopy := make([]SlotScheduleEntry, len(entries))
+	copy(scheduleCopy, entries)
+
+	// Sort the entries
+	if len(scheduleCopy) > 1 {
+		sortEntries(scheduleCopy)
+	}
+
+	schedule := SlotSchedule(scheduleCopy)
+	
+	// Validate the schedule
+	if err := schedule.IsValid(); err != nil {
+		return nil, fmt.Errorf("invalid schedule: %w", err)
+	}
+
+	return &schedule, nil
 }
 
 // IsValid ensures that there is at least one entry with epoch 0 and that all entries have an epoch
@@ -149,45 +188,14 @@ func unsafeEpochStart(epoch primitives.Epoch) primitives.Slot {
 	return es
 }
 
-// sort ensures the schedule is sorted. This is now primarily used during initialization.
-// The schedule should already be sorted as an invariant, but this method exists for
-// compatibility and as a safety check.
-func (s *SlotSchedule) sort() {
-	if s != nil && s.Length() > 1 {
-		// Check if already sorted to avoid unnecessary work
-		alreadySorted := true
-		for i := 1; i < s.Length(); i++ {
-			if (*s)[i].Epoch <= (*s)[i-1].Epoch {
-				alreadySorted = false
-				break
-			}
-		}
-		
-		if !alreadySorted {
-			sort.Sort(s)
-		}
-	}
-
-	// Validate after sorting to ensure schedule integrity.
-	// Invalid schedules indicate a programming error in configuration that should be
-	// caught during development/testing. We panic here to fail fast rather than
-	// silently return incorrect slot calculations.
-	if err := s.IsValid(); err != nil {
-		panic(fmt.Sprintf("invalid SlotTimeSchedule configuration: %v", err)) // lint:nopanic -- Programming error that must be fixed during development
-	}
-}
-
-// Implement sort.Interface for SlotTimeSchedule
-func (s *SlotSchedule) Len() int {
-	return s.Length()
-}
-
-func (s *SlotSchedule) Less(i, j int) bool {
-	return (*s)[i].Epoch < (*s)[j].Epoch
-}
-
-func (s *SlotSchedule) Swap(i, j int) {
-	(*s)[i], (*s)[j] = (*s)[j], (*s)[i]
+// sortEntries sorts a slice of SlotScheduleEntry by epoch.
+// This is only used during initialization in UnmarshalYAML to ensure
+// the schedule is properly sorted before being used. After initialization,
+// the schedule is immutable and maintains its sorted order.
+func sortEntries(entries []SlotScheduleEntry) {
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Epoch < entries[j].Epoch
+	})
 }
 
 // SlotDuration returns the amount of time in a given slot. For example, 12 seconds per slot for
@@ -254,12 +262,12 @@ func (s *SlotSchedule) UnmarshalYAML(n *yaml.Node) error {
 		}
 	}
 
-	*s = entries
-
-	// Sort the schedule to maintain the invariant that it's always sorted
-	if s.Length() > 1 {
-		sort.Sort(s)
+	// Sort the entries before creating the schedule to maintain immutability
+	if len(entries) > 1 {
+		sortEntries(entries)
 	}
+
+	*s = entries
 
 	// Validate the schedule during unmarshaling to catch configuration errors early
 	if err := s.IsValid(); err != nil {

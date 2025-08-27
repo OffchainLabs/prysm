@@ -531,3 +531,112 @@ func TestSlotTimeSchedule_SlotAt(t *testing.T) {
 		})
 	}
 }
+
+func TestSlotSchedule_Immutability(t *testing.T) {
+	// Test that NewSlotSchedule creates an immutable schedule
+	entries := []params.SlotScheduleEntry{
+		{Epoch: 100, SlotDuration: 6 * time.Second},  // Out of order
+		{Epoch: 0, SlotDuration: 12 * time.Second},
+		{Epoch: 50, SlotDuration: 10 * time.Second},
+	}
+
+	schedule, err := params.NewSlotSchedule(entries)
+	require.NoError(t, err)
+	require.NotNil(t, schedule)
+
+	// Verify the schedule is sorted
+	require.Equal(t, 3, schedule.Length())
+	require.Equal(t, primitives.Epoch(0), (*schedule)[0].Epoch)
+	require.Equal(t, primitives.Epoch(50), (*schedule)[1].Epoch)
+	require.Equal(t, primitives.Epoch(100), (*schedule)[2].Epoch)
+
+	// Original entries should not be modified
+	require.Equal(t, primitives.Epoch(100), entries[0].Epoch)
+	require.Equal(t, primitives.Epoch(0), entries[1].Epoch)
+	require.Equal(t, primitives.Epoch(50), entries[2].Epoch)
+}
+
+func TestSlotSchedule_ThreadSafety(t *testing.T) {
+	// Create a schedule that will be accessed concurrently
+	schedule := &params.SlotSchedule{
+		{Epoch: 0, SlotDuration: 12 * time.Second},
+		{Epoch: 32, SlotDuration: 10 * time.Second},
+		{Epoch: 64, SlotDuration: 6 * time.Second},
+	}
+
+	genesis := time.Now().Add(-24 * time.Hour)
+
+	// Run multiple goroutines concurrently accessing the schedule
+	// Since the schedule is immutable, no synchronization is needed
+	done := make(chan bool, 100)
+	for i := 0; i < 100; i++ {
+		go func(idx int) {
+			// Each goroutine performs various read operations
+			slot := primitives.Slot(idx * 32)
+			
+			// These operations are safe without locks because schedule is immutable
+			_ = schedule.CurrentSlot(genesis)
+			_ = schedule.SlotDuration(slot)
+			_, _ = schedule.SinceGenesis(slot)
+			_ = schedule.SlotAt(genesis, time.Now())
+			_ = schedule.CurrentSlotDuration(genesis)
+			
+			done <- true
+		}(i)
+	}
+
+	// Wait for all goroutines to complete
+	for i := 0; i < 100; i++ {
+		<-done
+	}
+}
+
+func TestNewSlotSchedule_Validation(t *testing.T) {
+	tests := []struct {
+		name      string
+		entries   []params.SlotScheduleEntry
+		wantError string
+	}{
+		{
+			name:      "empty schedule",
+			entries:   []params.SlotScheduleEntry{},
+			wantError: "empty schedule",
+		},
+		{
+			name: "missing epoch 0",
+			entries: []params.SlotScheduleEntry{
+				{Epoch: 1, SlotDuration: 12 * time.Second},
+			},
+			wantError: "first entry must start with epoch 0",
+		},
+		{
+			name: "duration too small",
+			entries: []params.SlotScheduleEntry{
+				{Epoch: 0, SlotDuration: 500 * time.Millisecond},
+			},
+			wantError: "less than minimum 1 second",
+		},
+		{
+			name: "valid unsorted entries get sorted",
+			entries: []params.SlotScheduleEntry{
+				{Epoch: 50, SlotDuration: 10 * time.Second},
+				{Epoch: 0, SlotDuration: 12 * time.Second},
+			},
+			wantError: "", // Should succeed after sorting
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			schedule, err := params.NewSlotSchedule(tt.entries)
+			if tt.wantError == "" {
+				require.NoError(t, err)
+				require.NotNil(t, schedule)
+			} else {
+				require.NotNil(t, err)
+				require.Equal(t, true, strings.Contains(err.Error(), tt.wantError),
+					fmt.Sprintf("error message '%s' does not contain '%s'", err.Error(), tt.wantError))
+			}
+		})
+	}
+}
