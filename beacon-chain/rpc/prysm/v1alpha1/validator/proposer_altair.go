@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -140,17 +141,18 @@ func (vs *Server) aggregatedSyncCommitteeMessages(ctx context.Context, slot prim
 			messageSigs = append(messageSigs, msg.Signature)
 		}
 	}
-	headSyncCommitteeIndices := make([][]primitives.CommitteeIndex, len(messageIndices))
-	for i, vi := range messageIndices {
-		headSyncCommitteeIndices[i], err = vs.HeadFetcher.HeadSyncCommitteeIndices(ctx, vi, slot)
-		if err != nil {
-			return nil, errors.Wrapf(err, "could not get head sync committee indices for validator index %d", vi)
-		}
+	st, err := vs.HeadFetcher.HeadState(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get head state")
+	}
+	positions, err := helpers.CurrentPeriodPositions(st, messageIndices)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get sync committee positions")
 	}
 
 	// Based on committee position(s), set the appropriate subcommittee bit and signature.
-	for i, indices := range headSyncCommitteeIndices {
-		for _, index := range indices {
+	for i, ci := range positions {
+		for _, index := range ci {
 			k := uint64(index)
 			subnetIndex := k / subcommitteeSize
 			indexMod := k % subcommitteeSize
