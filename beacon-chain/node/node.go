@@ -318,6 +318,7 @@ func startBaseServices(cliCtx *cli.Context, beacon *BeaconNode, depositAddress s
 	}
 
 	beacon.BlobStorage.WarmCache()
+	beacon.DataColumnStorage.WarmCache()
 
 	log.Debugln("Starting Slashing DB")
 	if err := beacon.startSlasherDB(cliCtx, clearer); err != nil {
@@ -967,6 +968,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		Router:                    router,
 		ClockWaiter:               b.clockWaiter,
 		BlobStorage:               b.BlobStorage,
+		DataColumnStorage:         b.DataColumnStorage,
 		TrackedValidatorsCache:    b.trackedValidatorsCache,
 		PayloadIDCache:            b.payloadIDCache,
 		LCStore:                   b.lcStore,

@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package ssz_query;
+
+import "proto/eth/ext/options.proto";
+
+option go_package = "github.com/OffchainLabs/prysm/v6/proto/ssz_query";
+
+
+// ===== FIXED-SIZE TEST CONTAINERS =====
+// These containers are designed to test SSZ query functionality with comprehensive coverage
+// of all fixed-size SSZ types according to the SSZ specification.
+
+// FixedNestedContainer - nested container for testing nested field access
+// Tests: nested container navigation, field offset calculations within nested structures
+message FixedNestedContainer {
+  uint64 value1 = 1;  // Test: uint64 basic type, offset calculation in nested context
+  bytes value2 = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];  // Test: fixed-size bytes in nested container
+}
+
+// FixedTestContainer - comprehensive fixed-size container for SSZ query testing
+// Tests: All basic fixed-size SSZ types, nested containers, vectors, offset/length calculations
+// Total size: 333 bytes (4+8+1+32+40+192+56)
+message FixedTestContainer {
+  // Basic integer types - test different integer sizes and their SSZ serialization
+  uint32 field_uint32 = 3;  // Test: uint32 basic type, offset: 0
+  uint64 field_uint64 = 4;  // Test: uint64 basic type, offset: 4
+  
+  // Boolean type - test boolean serialization (1 byte in SSZ)
+  bool field_bool = 5;      // Test: boolean basic type, offset: 12
+  
+  // Fixed-size bytes - test byte array
+  bytes field_bytes32 = 8 [ (ethereum.eth.ext.ssz_size) = "32" ]; // Test: 32-byte array, offset: 13
+  
+  // Nested container - test container nesting and field access
+  FixedNestedContainer nested = 9;  // Test: nested container navigation (8+32=40 bytes), offset: 45
+  
+  // Vector type - test fixed-size array of basic elements  
+  repeated uint64 vector_field = 10 [ (ethereum.eth.ext.ssz_size) = "24" ];  // Test: Vector[24] of uint64 (24*8=192 bytes), offset: 85
+  
+  // Additional bytes field - test field ordering and offset calculation
+  bytes trailing_field = 11 [ (ethereum.eth.ext.ssz_size) = "56" ]; // Test: trailing field after vector, offset: 277
+}
