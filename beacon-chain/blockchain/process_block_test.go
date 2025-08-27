@@ -380,25 +380,25 @@ func TestFillForkChoiceMissingBlocks_ErrorCases(t *testing.T) {
 		name           string
 		finalizedEpoch primitives.Epoch
 		justifiedEpoch primitives.Epoch
-		expectedError  string
+		expectedError  error
 	}{
 		{
 			name:           "finalized epoch greater than justified epoch",
 			finalizedEpoch: 5,
 			justifiedEpoch: 3,
-			expectedError:  "finalized checkpoint cannot be greater than justified checkpoint",
+			expectedError:  ErrInvalidCheckpointArgs,
 		},
 		{
 			name:           "valid case - finalized equal to justified",
 			finalizedEpoch: 3,
 			justifiedEpoch: 3,
-			expectedError:  "", // No error expected for valid case
+			expectedError:  nil,
 		},
 		{
 			name:           "valid case - finalized less than justified",
 			finalizedEpoch: 2,
 			justifiedEpoch: 3,
-			expectedError:  "", // No error expected for valid case
+			expectedError:  nil,
 		},
 	}
 
@@ -437,12 +437,12 @@ func TestFillForkChoiceMissingBlocks_ErrorCases(t *testing.T) {
 			err = service.fillInForkChoiceMissingBlocks(
 				t.Context(), wsb, finalizedCheckpoint, justifiedCheckpoint)
 
-			if tt.expectedError != "" {
-				require.ErrorContains(t, tt.expectedError, err)
+			if tt.expectedError != nil {
+				require.ErrorIs(t, err, tt.expectedError)
 			} else {
 				// For valid cases, we might get other errors (like block not being descendant of finalized)
 				// but we shouldn't get the checkpoint validation error
-				if err != nil && err.Error() == "finalized checkpoint cannot be greater than justified checkpoint" {
+				if err != nil && errors.Is(err, tt.expectedError) {
 					t.Errorf("Unexpected checkpoint validation error: %v", err)
 				}
 			}
