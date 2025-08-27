@@ -100,6 +100,7 @@ func TestCalculateOffsetAndLength(t *testing.T) {
 func TestRoundTripSszInfo(t *testing.T) {
 	specs := []testutil.TestSpec{
 		getFixedTestContainerSpec(),
+		getVariableTestContainerSpec(),
 	}
 
 	for _, spec := range specs {
@@ -191,6 +192,74 @@ func getFixedTestContainerSpec() testutil.TestSpec {
 				Expected: testContainer.VectorField,
 			},
 			// Trailing field
+			{
+				Path:     ".trailing_field",
+				Expected: testContainer.TrailingField,
+			},
+		},
+	}
+}
+
+func createVariableTestContainer() any {
+	leadingField := make([]byte, 32)
+	for i := range leadingField {
+		leadingField[i] = byte(i + 100)
+	}
+
+	trailingField := make([]byte, 56)
+	for i := range trailingField {
+		trailingField[i] = byte(i + 150)
+	}
+
+	nestedContainers := make([]*sszquerypb.FixedNestedContainer, 3)
+	for i := range nestedContainers {
+		value2 := make([]byte, 32)
+		for j := range value2 {
+			value2[j] = byte(j + i*32)
+		}
+		nestedContainers[i] = &sszquerypb.FixedNestedContainer{
+			Value1: uint64(1000 + i),
+			Value2: value2,
+		}
+	}
+
+	return &sszquerypb.VariableTestContainer{
+		// Fixed leading field
+		LeadingField: leadingField,
+
+		// Variable-size lists
+		FieldListUint64:    []uint64{100, 200, 300, 400, 500},
+		FieldListContainer: nestedContainers,
+
+		// Fixed trailing field
+		TrailingField: trailingField,
+	}
+}
+
+func getVariableTestContainerSpec() testutil.TestSpec {
+	testContainer := createVariableTestContainer().(*sszquerypb.VariableTestContainer)
+
+	return testutil.TestSpec{
+		Name:     "VariableTestContainer",
+		Type:     sszquerypb.VariableTestContainer{},
+		Instance: testContainer,
+		PathTests: []testutil.PathTest{
+			// Fixed leading field
+			{
+				Path:     ".leading_field",
+				Expected: testContainer.LeadingField,
+			},
+			// Variable-size list of uint64
+			{
+				Path:     ".field_list_uint64",
+				Expected: testContainer.FieldListUint64,
+			},
+			// Variable-size list of (fixed-size) containers
+			{
+				Path:     ".field_list_container",
+				Expected: testContainer.FieldListContainer,
+			},
+			// Fixed trailing field
 			{
 				Path:     ".trailing_field",
 				Expected: testContainer.TrailingField,

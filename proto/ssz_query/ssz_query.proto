@@ -41,3 +41,13 @@ message FixedTestContainer {
   // Additional bytes field - test field ordering and offset calculation
   bytes trailing_field = 11 [ (ethereum.eth.ext.ssz_size) = "56" ]; // Test: trailing field after vector, offset: 277
 }
+
+
+message VariableTestContainer {
+  bytes leading_field = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+
+  repeated uint64 field_list_uint64 = 2 [ (ethereum.eth.ext.ssz_max) = "2048" ];
+  repeated FixedNestedContainer field_list_container = 3 [ (ethereum.eth.ext.ssz_max) = "128" ];
+
+  bytes trailing_field = 4 [ (ethereum.eth.ext.ssz_size) = "56" ];
+}
