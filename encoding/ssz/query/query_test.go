@@ -12,89 +12,145 @@ import (
 )
 
 func TestCalculateOffsetAndLength(t *testing.T) {
-	tests := []struct {
+	type testCase struct {
 		name           string
 		path           string
 		expectedOffset uint64
 		expectedLength uint64
-	}{
-		// Basic integer types
-		{
-			name:           "field_uint32",
-			path:           ".field_uint32",
-			expectedOffset: 0,
-			expectedLength: 4,
-		},
-		{
-			name:           "field_uint64",
-			path:           ".field_uint64",
-			expectedOffset: 4,
-			expectedLength: 8,
-		},
-		// Boolean type
-		{
-			name:           "field_bool",
-			path:           ".field_bool",
-			expectedOffset: 12,
-			expectedLength: 1,
-		},
-		// Fixed-size bytes
-		{
-			name:           "field_bytes32",
-			path:           ".field_bytes32",
-			expectedOffset: 13,
-			expectedLength: 32,
-		},
-		// Nested container
-		{
-			name:           "nested container",
-			path:           ".nested",
-			expectedOffset: 45,
-			expectedLength: 40,
-		},
-		{
-			name:           "nested value1",
-			path:           ".nested.value1",
-			expectedOffset: 45,
-			expectedLength: 8,
-		},
-		{
-			name:           "nested value2",
-			path:           ".nested.value2",
-			expectedOffset: 53,
-			expectedLength: 32,
-		},
-		// Vector field
-		{
-			name:           "vector field",
-			path:           ".vector_field",
-			expectedOffset: 85,
-			expectedLength: 192, // 24 * 8 bytes
-		},
-		// Trailing field
-		{
-			name:           "trailing_field",
-			path:           ".trailing_field",
-			expectedOffset: 277,
-			expectedLength: 56,
-		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			path, err := query.ParsePath(tt.path)
-			require.NoError(t, err)
+	t.Run("FixedTestContainer", func(t *testing.T) {
+		tests := []testCase{
+			// Basic integer types
+			{
+				name:           "field_uint32",
+				path:           ".field_uint32",
+				expectedOffset: 0,
+				expectedLength: 4,
+			},
+			{
+				name:           "field_uint64",
+				path:           ".field_uint64",
+				expectedOffset: 4,
+				expectedLength: 8,
+			},
+			// Boolean type
+			{
+				name:           "field_bool",
+				path:           ".field_bool",
+				expectedOffset: 12,
+				expectedLength: 1,
+			},
+			// Fixed-size bytes
+			{
+				name:           "field_bytes32",
+				path:           ".field_bytes32",
+				expectedOffset: 13,
+				expectedLength: 32,
+			},
+			// Nested container
+			{
+				name:           "nested container",
+				path:           ".nested",
+				expectedOffset: 45,
+				expectedLength: 40,
+			},
+			{
+				name:           "nested value1",
+				path:           ".nested.value1",
+				expectedOffset: 45,
+				expectedLength: 8,
+			},
+			{
+				name:           "nested value2",
+				path:           ".nested.value2",
+				expectedOffset: 53,
+				expectedLength: 32,
+			},
+			// Vector field
+			{
+				name:           "vector field",
+				path:           ".vector_field",
+				expectedOffset: 85,
+				expectedLength: 192, // 24 * 8 bytes
+			},
+			// Trailing field
+			{
+				name:           "trailing_field",
+				path:           ".trailing_field",
+				expectedOffset: 277,
+				expectedLength: 56,
+			},
+		}
 
-			info, err := query.AnalyzeObject(&sszquerypb.FixedTestContainer{})
-			require.NoError(t, err)
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				path, err := query.ParsePath(tt.path)
+				require.NoError(t, err)
 
-			_, offset, length, err := query.CalculateOffsetAndLength(info, path)
-			require.NoError(t, err)
+				info, err := query.AnalyzeObject(&sszquerypb.FixedTestContainer{})
+				require.NoError(t, err)
 
-			require.Equal(t, tt.expectedOffset, offset, "Expected offset to be %d", tt.expectedOffset)
-			require.Equal(t, tt.expectedLength, length, "Expected length to be %d", tt.expectedLength)
-		})
-	}
+				_, offset, length, err := query.CalculateOffsetAndLength(info, path)
+				require.NoError(t, err)
+
+				require.Equal(t, tt.expectedOffset, offset, "Expected offset to be %d", tt.expectedOffset)
+				require.Equal(t, tt.expectedLength, length, "Expected length to be %d", tt.expectedLength)
+			})
+		}
+	})
+
+	t.Run("VariableTestContainer", func(t *testing.T) {
+		tests := []testCase{
+			// Fixed leading field
+			{
+				name:           "leading_field",
+				path:           ".leading_field",
+				expectedOffset: 0,
+				expectedLength: 32,
+			},
+			// Variable-size list fields
+			{
+				name:           "field_list_uint64",
+				path:           ".field_list_uint64",
+				expectedOffset: 96, // First part of variable-sized type.
+				expectedLength: 40, // 5 elements * uint64 (8 bytes each)
+			},
+			{
+				name:           "field_list_container",
+				path:           ".field_list_container",
+				expectedOffset: 136, // Second part of variable-sized type.
+				expectedLength: 120, // 3 elements * FixedNestedContainer (40 bytes each)
+			},
+			// Fixed trailing field
+			{
+				name:           "trailing_field",
+				path:           ".trailing_field",
+				expectedOffset: 40, // After leading_field + 2 offset pointers
+				expectedLength: 56,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				path, err := query.ParsePath(tt.path)
+				require.NoError(t, err)
+
+				info, err := query.AnalyzeObject(&sszquerypb.VariableTestContainer{})
+				require.NoError(t, err)
+
+				testContainer := createVariableTestContainer()
+				err = query.PopulateFromValue(info, testContainer)
+				require.NoError(t, err, "PopulateFromValue should not return an error")
+
+				_, offset, length, err := query.CalculateOffsetAndLength(info, path)
+				require.NoError(t, err)
+
+				require.Equal(t, tt.expectedOffset, offset, "Expected offset to be %d", tt.expectedOffset)
+				require.Equal(t, tt.expectedLength, length, "Expected length to be %d", tt.expectedLength)
+			})
+		}
+	})
 }
 
 func TestRoundTripSszInfo(t *testing.T) {
@@ -108,7 +164,7 @@ func TestRoundTripSszInfo(t *testing.T) {
 	}
 }
 
-func createFixedTestContainer() any {
+func createFixedTestContainer() *ssz_query.FixedTestContainer {
 	fieldBytes32 := make([]byte, 32)
 	for i := range fieldBytes32 {
 		fieldBytes32[i] = byte(i + 24)
@@ -148,7 +204,7 @@ func createFixedTestContainer() any {
 }
 
 func getFixedTestContainerSpec() testutil.TestSpec {
-	testContainer := createFixedTestContainer().(*sszquerypb.FixedTestContainer)
+	testContainer := createFixedTestContainer()
 
 	return testutil.TestSpec{
 		Name:     "FixedTestContainer",
@@ -200,7 +256,7 @@ func getFixedTestContainerSpec() testutil.TestSpec {
 	}
 }
 
-func createVariableTestContainer() any {
+func createVariableTestContainer() *sszquerypb.VariableTestContainer {
 	leadingField := make([]byte, 32)
 	for i := range leadingField {
 		leadingField[i] = byte(i + 100)
@@ -237,7 +293,7 @@ func createVariableTestContainer() any {
 }
 
 func getVariableTestContainerSpec() testutil.TestSpec {
-	testContainer := createVariableTestContainer().(*sszquerypb.VariableTestContainer)
+	testContainer := createVariableTestContainer()
 
 	return testutil.TestSpec{
 		Name:     "VariableTestContainer",
