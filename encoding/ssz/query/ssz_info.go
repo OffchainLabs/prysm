@@ -1,6 +1,7 @@
 package query
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -21,6 +22,9 @@ type sszInfo struct {
 
 	// For Container types.
 	containerInfo containerInfo
+
+	// For List types.
+	listInfo *listInfo
 }
 
 func (info *sszInfo) FixedSize() uint64 {
@@ -40,13 +44,22 @@ func (info *sszInfo) Size() uint64 {
 		return info.fixedSize
 	}
 
-	// NOTE: Handle variable-sized types.
-	return 0
+	switch info.sszType {
+	case List:
+		length := info.listInfo.length
+		elementSize := info.listInfo.element.Size()
+
+		return length * elementSize
+
+	default:
+		// NOTE: Handle other variable-sized types.
+		return 0
+	}
 }
 
 func (info *sszInfo) ContainerInfo() (containerInfo, error) {
 	if info == nil {
-		return nil, fmt.Errorf("sszInfo is nil")
+		return nil, errors.New("sszInfo is nil")
 	}
 
 	if info.sszType != Container {
@@ -54,10 +67,26 @@ func (info *sszInfo) ContainerInfo() (containerInfo, error) {
 	}
 
 	if info.containerInfo == nil {
-		return nil, fmt.Errorf("sszInfo.containerInfo is nil")
+		return nil, errors.New("sszInfo.containerInfo is nil")
 	}
 
 	return info.containerInfo, nil
+}
+
+func (info *sszInfo) ListInfo() (*listInfo, error) {
+	if info == nil {
+		return nil, errors.New("sszInfo is nil")
+	}
+
+	if info.sszType != List {
+		return nil, fmt.Errorf("sszInfo is not a List type, got %s", info.sszType)
+	}
+
+	if info.listInfo == nil {
+		return nil, errors.New("sszInfo.listInfo is nil")
+	}
+
+	return info.listInfo, nil
 }
 
 // Print returns a string representation of the sszInfo, which is useful for debugging.
@@ -81,6 +110,8 @@ func printRecursive(info *sszInfo, builder *strings.Builder, prefix string) {
 	switch info.sszType {
 	case Container:
 		builder.WriteString(fmt.Sprintf("%s: %s (%s / fixed size: %d, total size: %d)\n", info.sszType, info.typ.Name(), sizeDesc, info.FixedSize(), info.Size()))
+	case List:
+		builder.WriteString(fmt.Sprintf("%s[%s] (%s / limit: %d, length: %d, size: %d)\n", info.sszType, info.listInfo.element.typ.Name(), sizeDesc, info.listInfo.limit, info.listInfo.length, info.Size()))
 	default:
 		builder.WriteString(fmt.Sprintf("%s (%s / size: %d)\n", info.sszType, sizeDesc, info.Size()))
 	}

@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "analyzer.go",
         "container.go",
+        "list.go",
         "path.go",
         "query.go",
         "ssz_info.go",
