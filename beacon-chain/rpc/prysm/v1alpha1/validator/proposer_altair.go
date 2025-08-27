@@ -3,7 +3,6 @@ package validator
 import (
 	"bytes"
 	"context"
-	"sync"
 
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
@@ -55,8 +54,6 @@ func (vs *Server) getSyncAggregate(ctx context.Context, slot primitives.Slot, ro
 		return nil, errors.New("sync committee pool is nil")
 	}
 
-	subcommitteeCount := params.BeaconConfig().SyncCommitteeSubnetCount
-
 	poolContributions, err := vs.SyncCommitteePool.SyncCommitteeContributions(slot)
 	if err != nil {
 		return nil, err
@@ -70,7 +67,7 @@ func (vs *Server) getSyncAggregate(ctx context.Context, slot primitives.Slot, ro
 	}
 	proposerContributions = append(proposerContributions, aggregatedContributions...)
 
-	// Each sync subcommittee is 128 bits and the sync committee is 512 bits for mainnet.
+	subcommitteeCount := params.BeaconConfig().SyncCommitteeSubnetCount
 	var bitsHolder [][]byte
 	for i := uint64(0); i < subcommitteeCount; i++ {
 		bitsHolder = append(bitsHolder, ethpb.NewSyncCommitteeAggregationBits())
@@ -164,44 +161,45 @@ func (vs *Server) aggregatedSyncCommitteeMessages(ctx context.Context, slot prim
 		}
 	}
 
-	// Aggregate. To improve performance, we aggregate messages for each subcommittee in parallel.
-	// Using a channel is safer than a slice because appending to a slice is not thread-safe.
-	contributionsChan := make(chan *ethpb.SyncCommitteeContribution, subcommitteeCount)
-	var wg sync.WaitGroup
-	wg.Add(int(subcommitteeCount)) // lint:ignore uintcast -- Subcommittee count will never exceed maxint
+	// Aggregate.
+	result := make([]*ethpb.SyncCommitteeContribution, 0, subcommitteeCount)
 	for i := uint64(0); i < subcommitteeCount; i++ {
-		go func() {
-			defer wg.Done()
-
-			aggregatedSig := make([]byte, 96)
-			aggregatedSig[0] = 0xC0
-			if len(sigsPerSubcommittee[i]) != 0 {
-				uncompressedSigs := make([]bls.Signature, len(sigsPerSubcommittee[i]))
-				for j, sig := range sigsPerSubcommittee[i] {
-					uncompressedSigs[j], err = bls.SignatureFromBytesNoValidation(sig)
-					if err != nil {
-						log.WithError(err).Error("Could not create sync committee signature from bytes")
-						// Skip aggregating this subcommittee
-						return
-					}
-				}
-				contributionsChan <- &ethpb.SyncCommitteeContribution{
-					Slot:              slot,
-					BlockRoot:         root[:],
-					SubcommitteeIndex: i,
-					AggregationBits:   bitsPerSubcommittee[i].Bytes(),
-					Signature:         bls.AggregateSignatures(uncompressedSigs).Marshal(),
-				}
+		aggregatedSig := make([]byte, 96)
+		aggregatedSig[0] = 0xC0
+		if len(sigsPerSubcommittee[i]) != 0 {
+			contrib, err := aggregateSyncSubcommitteeMessages(slot, root, i, bitsPerSubcommittee[i], sigsPerSubcommittee[i])
+			if err != nil {
+				// Skip aggregating this subcommittee
+				log.WithError(err).Error("Could not aggregate sync subcommittee messages")
+				continue
 			}
-		}()
-	}
-	wg.Wait()
-	close(contributionsChan)
-
-	result := make([]*ethpb.SyncCommitteeContribution, 0, len(contributionsChan))
-	for c := range contributionsChan {
-		result = append(result, c)
+			result = append(result, contrib)
+		}
 	}
 
 	return result, nil
+}
+
+func aggregateSyncSubcommitteeMessages(
+	slot primitives.Slot,
+	root [32]byte,
+	subcommitteeIndex uint64,
+	bits bitfield.Bitfield,
+	sigs [][]byte,
+) (*ethpb.SyncCommitteeContribution, error) {
+	var err error
+	uncompressedSigs := make([]bls.Signature, len(sigs))
+	for i, sig := range sigs {
+		uncompressedSigs[i], err = bls.SignatureFromBytesNoValidation(sig)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not create signature from bytes")
+		}
+	}
+	return &ethpb.SyncCommitteeContribution{
+		Slot:              slot,
+		BlockRoot:         root[:],
+		SubcommitteeIndex: subcommitteeIndex,
+		AggregationBits:   bits.Bytes(),
+		Signature:         bls.AggregateSignatures(uncompressedSigs).Marshal(),
+	}, nil
 }

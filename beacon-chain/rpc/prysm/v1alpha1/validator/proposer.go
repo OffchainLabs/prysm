@@ -187,7 +187,7 @@ func (vs *Server) getParentState(ctx context.Context, slot primitives.Slot) (sta
 func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei) (*ethpb.GenericBeaconBlock, error) {
 	// Build consensus fields in background
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 
@@ -226,9 +226,6 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 
 		// Set bls to execution change. New in Capella.
 		vs.setBlsToExecData(sBlk, head)
-	}()
-	go func() {
-		defer wg.Done()
 
 		// Set sync aggregate. New in Altair.
 		vs.setSyncAggregate(ctx, sBlk)
