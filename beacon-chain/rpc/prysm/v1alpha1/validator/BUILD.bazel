@@ -1,3 +1,5 @@
+# gazelle:ignore
+
 load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
@@ -63,8 +65,8 @@ go_library(
         "//beacon-chain/rpc/core:go_default_library",
         "//beacon-chain/startup:go_default_library",
         "//beacon-chain/state:go_default_library",
-        "//beacon-chain/state/stategen:go_default_library",
         "//beacon-chain/state/state-native:go_default_library",
+        "//beacon-chain/state/stategen:go_default_library",
         "//beacon-chain/sync:go_default_library",
         "//config/features:go_default_library",
         "//config/fieldparams:go_default_library",
@@ -81,7 +83,7 @@ go_library(
         "//crypto/rand:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//encoding/ssz:go_default_library",
-	"//genesis:go_default_library",
+        "//genesis:go_default_library",
         "//math:go_default_library",
         "//monitoring/tracing:go_default_library",
         "//monitoring/tracing/trace:go_default_library",
@@ -181,7 +183,6 @@ common_deps = [
     "@org_golang_google_protobuf//types/known/emptypb:go_default_library",
 ]
 
-# gazelle:ignore
 go_test(
     name = "go_default_test",
     timeout = "moderate",

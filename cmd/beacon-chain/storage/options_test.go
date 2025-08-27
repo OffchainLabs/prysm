@@ -61,3 +61,12 @@ func TestConfigureBlobRetentionEpoch(t *testing.T) {
 	_, err = blobRetentionEpoch(cliCtx)
 	require.ErrorIs(t, err, errInvalidBlobRetentionEpochs)
 }
+func TestDataColumnStoragePath_FlagSpecified(t *testing.T) {
+	app := cli.App{}
+	set := flag.NewFlagSet("test", 0)
+	set.String(DataColumnStoragePathFlag.Name, "/blah/blah", DataColumnStoragePathFlag.Usage)
+	cliCtx := cli.NewContext(&app, set, nil)
+	storagePath := dataColumnStoragePath(cliCtx)
+
+	assert.Equal(t, "/blah/blah", storagePath)
+}
