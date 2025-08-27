@@ -145,6 +145,14 @@ func analyzeListType(typ reflect.Type, elementInfo *sszInfo, limit uint64) (*ssz
 
 		fixedSize:  offsetBytes,
 		isVariable: true,
+
+		listInfo: &listInfo{
+			limit:   limit,
+			element: elementInfo,
+			// NOTE: Length is not known until unmarshalling.
+			// This will be set later in `PopulateFromValue`.
+			length: 0,
+		},
 	}, nil
 }
 
