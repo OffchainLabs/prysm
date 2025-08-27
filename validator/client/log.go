@@ -3,7 +3,6 @@ package client
 import (
 	"fmt"
 	"strconv"
-	"sync/atomic"
 
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
@@ -138,9 +137,11 @@ func (v *validator) LogSubmittedAtts(slot primitives.Slot) {
 
 // LogSubmittedSyncCommitteeMessages logs info about submitted sync committee messages.
 func (v *validator) LogSubmittedSyncCommitteeMessages() {
-	if v.syncCommitteeStats.totalMessagesSubmitted > 0 {
-		log.WithField("messages", v.syncCommitteeStats.totalMessagesSubmitted).Debug("Submitted sync committee messages successfully to beacon node")
+	if count := v.syncCommitteeStats.totalMessagesSubmitted.Load(); count > 0 {
+		log.WithField("messages", count).
+			Debug("Submitted sync committee messages successfully to beacon node")
+
 		// Reset the amount.
-		atomic.StoreUint64(&v.syncCommitteeStats.totalMessagesSubmitted, 0)
+		v.syncCommitteeStats.totalMessagesSubmitted.Store(0)
 	}
 }

@@ -20,7 +20,7 @@ func (s *Service) setupForkchoice(st state.BeaconState) error {
 		return errors.Wrap(err, "could not set up forkchoice checkpoints")
 	}
 	if err := s.setupForkchoiceTree(st); err != nil {
-		return errors.Wrap(err, "could not set up forkchoice root")
+		return errors.Wrap(err, "could not set up forkchoice tree")
 	}
 	if err := s.initializeHead(s.ctx, st); err != nil {
 		return errors.Wrap(err, "could not initialize head from db")
