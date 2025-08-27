@@ -1,14 +1,17 @@
 package query
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 func CalculateOffsetAndLength(sszInfo *sszInfo, path []PathElement) (*sszInfo, uint64, uint64, error) {
 	if sszInfo == nil {
-		return nil, 0, 0, fmt.Errorf("sszInfo is nil")
+		return nil, 0, 0, errors.New("sszInfo is nil")
 	}
 
 	if len(path) == 0 {
-		return nil, 0, 0, fmt.Errorf("path is empty")
+		return nil, 0, 0, errors.New("path is empty")
 	}
 
 	walk := sszInfo
@@ -30,7 +33,7 @@ func CalculateOffsetAndLength(sszInfo *sszInfo, path []PathElement) (*sszInfo, u
 	}
 
 	if walk.isVariable {
-		return nil, 0, 0, fmt.Errorf("cannot calculate length for variable-sized type")
+		return nil, 0, 0, errors.New("cannot calculate length for variable-sized type")
 	}
 
 	return walk, currentOffset, walk.Size(), nil

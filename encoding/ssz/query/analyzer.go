@@ -1,6 +1,7 @@
 package query
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -93,7 +94,7 @@ func analyzeHomogeneousColType(typ reflect.Type, tag *reflect.StructTag) (*sszIn
 	}
 
 	if tag == nil {
-		return nil, fmt.Errorf("tag is required for slice types")
+		return nil, errors.New("tag is required for slice types")
 	}
 
 	elementInfo, err := analyzeType(typ.Elem(), nil)
@@ -135,7 +136,7 @@ func analyzeHomogeneousColType(typ reflect.Type, tag *reflect.StructTag) (*sszIn
 // analyzeListType analyzes SSZ List type and returns its SSZ info.
 func analyzeListType(typ reflect.Type, elementInfo *sszInfo, limit uint64) (*sszInfo, error) {
 	if elementInfo == nil {
-		return nil, fmt.Errorf("element info is required for List")
+		return nil, errors.New("element info is required for List")
 	}
 
 	return &sszInfo{
@@ -150,7 +151,7 @@ func analyzeListType(typ reflect.Type, elementInfo *sszInfo, limit uint64) (*ssz
 // analyzeVectorType analyzes SSZ Vector type and returns its SSZ info.
 func analyzeVectorType(typ reflect.Type, elementInfo *sszInfo, length uint64) (*sszInfo, error) {
 	if elementInfo == nil {
-		return nil, fmt.Errorf("element info is required for Vector")
+		return nil, errors.New("element info is required for Vector")
 	}
 
 	return &sszInfo{
