@@ -42,12 +42,24 @@ message FixedTestContainer {
   bytes trailing_field = 11 [ (ethereum.eth.ext.ssz_size) = "56" ]; // Test: trailing field after vector, offset: 277
 }
 
+// ===== VARIABLE-SIZE TEST CONTAINERS =====
 
+// VariableTestContainer - comprehensive variable-size container for SSZ query testing
+// Tests: Variable-size lists, offsets in variable containers, mixed fixed/variable fields
 message VariableTestContainer {
-  bytes leading_field = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  // Fixed-size leading field - test fixed field before variable fields
+  // Acts as a baseline to verify offset calculations start correctly
+  bytes leading_field = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];  // Test: fixed 32-byte field at start, offset: 0
 
-  repeated uint64 field_list_uint64 = 2 [ (ethereum.eth.ext.ssz_max) = "2048" ];
-  repeated FixedNestedContainer field_list_container = 3 [ (ethereum.eth.ext.ssz_max) = "128" ];
+  // Variable-size list of basic type - test list with primitive elements
+  // SSZ uses 4-byte offset pointer, actual data stored after all fixed fields
+  repeated uint64 field_list_uint64 = 2 [ (ethereum.eth.ext.ssz_max) = "2048" ];  // Test: List[uint64, 2048] (max 2048 elements)
+  
+  // Variable-size list of containers - test list with composite elements  
+  // Each container is fixed-size (40 bytes), but list itself is variable
+  repeated FixedNestedContainer field_list_container = 3 [ (ethereum.eth.ext.ssz_max) = "128" ];  // Test: List[FixedNestedContainer, 128]
 
-  bytes trailing_field = 4 [ (ethereum.eth.ext.ssz_size) = "56" ];
+  // Fixed-size trailing field - test fixed field after variable fields
+  // Verifies correct offset calculation after variable-size fields
+  bytes trailing_field = 4 [ (ethereum.eth.ext.ssz_size) = "56" ];  // Test: fixed 56-byte field at end, offset: 32 + 4 + 4 = 40
 }
