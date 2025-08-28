@@ -281,7 +281,7 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSignedBeaconBlock) (*ethpb.ProposeResponse, error) {
 	var (
 		blobSidecars       []*ethpb.BlobSidecar
-		dataColumnSideCars []*ethpb.DataColumnSidecar
+		dataColumnSidecars []*ethpb.DataColumnSidecar
 	)
 
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.ProposeBeaconBlock")
@@ -312,7 +312,7 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	if block.IsBlinded() {
 		block, blobSidecars, err = vs.handleBlindedBlock(ctx, block)
 	} else if block.Version() >= version.Deneb {
-		blobSidecars, dataColumnSideCars, err = vs.handleUnblindedBlock(block, req)
+		blobSidecars, dataColumnSidecars, err = vs.handleUnblindedBlock(block, req)
 	}
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "%s: %v", "handle block failed", err)
@@ -331,7 +331,7 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 		errChan <- nil
 	}()
 
-	if err := vs.broadcastAndReceiveSidecars(ctx, block, root, blobSidecars, dataColumnSideCars); err != nil {
+	if err := vs.broadcastAndReceiveSidecars(ctx, block, root, blobSidecars, dataColumnSidecars); err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive sidecars: %v", err)
 	}
 	wg.Wait()

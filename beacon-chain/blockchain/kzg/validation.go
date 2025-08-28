@@ -1,6 +1,8 @@
 package kzg
 
 import (
+	"fmt"
+
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	GoKZG "github.com/crate-crypto/go-kzg-4844"
 	ckzg4844 "github.com/ethereum/c-kzg-4844/v2/bindings/go"
@@ -71,9 +73,18 @@ func VerifyBlobKZGProofBatch(blobs [][]byte, commitments [][]byte, proofs [][]by
 	ckzgProofs := make([]ckzg4844.Bytes48, len(proofs))
 
 	for i := range blobs {
-		copy(ckzgBlobs[i][:], blobs[i])
-		copy(ckzgCommitments[i][:], commitments[i])
-		copy(ckzgProofs[i][:], proofs[i])
+		if len(blobs[i]) != len(ckzg4844.Blob{}) {
+			return fmt.Errorf("blobs len (%d) differs from expected (%d)", len(blobs[i]), len(ckzg4844.Blob{}))
+		}
+		if len(commitments[i]) != len(ckzg4844.Bytes48{}) {
+			return fmt.Errorf("commitments len (%d) differs from expected (%d)", len(commitments[i]), len(ckzg4844.Blob{}))
+		}
+		if len(proofs[i]) != len(ckzg4844.Bytes48{}) {
+			return fmt.Errorf("proofs len (%d) differs from expected (%d)", len(proofs[i]), len(ckzg4844.Blob{}))
+		}
+		ckzgBlobs[i] = ckzg4844.Blob(blobs[i])
+		ckzgCommitments[i] = ckzg4844.Bytes48(commitments[i])
+		ckzgProofs[i] = ckzg4844.Bytes48(proofs[i])
 	}
 
 	valid, err := ckzg4844.VerifyBlobKZGProofBatch(ckzgBlobs, ckzgCommitments, ckzgProofs)
@@ -113,10 +124,12 @@ func VerifyCellKZGProofBatchFromBlobData(blobs [][]byte, commitments [][]byte, c
 	allIndices := make([]uint64, 0, expectedCellProofs)
 	allProofs := make([]Bytes48, 0, expectedCellProofs)
 
-	for blobIndex, blobData := range blobs {
+	for blobIndex := range blobs {
+		if len(blobs[blobIndex]) != len(Blob{}) {
+			return fmt.Errorf("blobs len (%d) differs from expected (%d)", len(blobs[blobIndex]), len(Blob{}))
+		}
 		// Convert blob to kzg.Blob type
-		var blob Blob
-		copy(blob[:], blobData)
+		blob := Blob(blobs[blobIndex])
 
 		// Compute cells for this blob
 		cells, err := ComputeCells(&blob)
@@ -127,14 +140,17 @@ func VerifyCellKZGProofBatchFromBlobData(blobs [][]byte, commitments [][]byte, c
 		// Add cells and corresponding data for each column
 		for columnIndex := range numberOfColumns {
 			cellProofIndex := uint64(blobIndex)*numberOfColumns + columnIndex
-
+			if len(commitments[blobIndex]) != len(Bytes48{}) {
+				return fmt.Errorf("commitments len (%d) differs from expected (%d)", len(commitments[blobIndex]), len(Bytes48{}))
+			}
+			if len(cellProofs[cellProofIndex]) != len(Bytes48{}) {
+				return fmt.Errorf("proofs len (%d) differs from expected (%d)", len(cellProofs[cellProofIndex]), len(Bytes48{}))
+			}
 			allCells = append(allCells, cells[columnIndex])
 			allCommitments = append(allCommitments, Bytes48(commitments[blobIndex]))
 			allIndices = append(allIndices, columnIndex)
 
-			var proof Bytes48
-			copy(proof[:], cellProofs[cellProofIndex])
-			allProofs = append(allProofs, proof)
+			allProofs = append(allProofs, Bytes48(cellProofs[cellProofIndex]))
 		}
 	}
 

@@ -100,14 +100,14 @@ func TestVerifyBlobKZGProofBatch(t *testing.T) {
 			[][]byte{},
 			[][]byte{proof[:]},
 		)
-		require.ErrorContains(t, "number of blobs, commitments, and proofs must match", err)
+		require.ErrorContains(t, "number of blobs (1), commitments (0), and proofs (1) must match", err)
 
 		err = VerifyBlobKZGProofBatch(
 			[][]byte{blob[:], blob[:]},
 			[][]byte{commitment[:]},
 			[][]byte{proof[:], proof[:]},
 		)
-		require.ErrorContains(t, "number of blobs, commitments, and proofs must match", err)
+		require.ErrorContains(t, "number of blobs (2), commitments (1), and proofs (2) must match", err)
 	})
 
 	t.Run("invalid commitment should fail", func(t *testing.T) {
@@ -169,11 +169,11 @@ func TestVerifyBlobKZGProofBatch(t *testing.T) {
 		// Create multiple blobs with mismatched commitments and proofs to trigger batch verification failure
 		blob1 := random.GetRandBlob(123)
 		blob2 := random.GetRandBlob(456)
-		
+
 		// Generate valid proof for blob1
 		commitment1, proof1, err := GenerateCommitmentAndProof(blob1)
 		require.NoError(t, err)
-		
+
 		// Generate valid proof for blob2 but use wrong commitment (from blob1)
 		_, proof2, err := GenerateCommitmentAndProof(blob2)
 		require.NoError(t, err)
@@ -357,6 +357,121 @@ func TestVerifyCellKZGProofBatchFromBlobData(t *testing.T) {
 
 		err := VerifyCellKZGProofBatchFromBlobData(blobs, commitments, cellProofs, numberOfColumns)
 		require.NotNil(t, err)
-		require.ErrorContains(t, "cell batch verification", err)
+		require.ErrorContains(t, "blobs len (10) differs from expected (131072)", err)
+	})
+
+	t.Run("invalid commitment size should fail", func(t *testing.T) {
+		numberOfColumns := uint64(128)
+
+		randBlob := random.GetRandBlob(123)
+		var blob Blob
+		copy(blob[:], randBlob[:])
+		
+		// Create invalid commitment (wrong size)
+		invalidCommitment := make([]byte, 32) // Should be 48 bytes
+		cellProofs := make([][]byte, numberOfColumns)
+		for i := range numberOfColumns {
+			cellProofs[i] = make([]byte, 48)
+		}
+
+		blobs := [][]byte{blob[:]}
+		commitments := [][]byte{invalidCommitment}
+
+		err := VerifyCellKZGProofBatchFromBlobData(blobs, commitments, cellProofs, numberOfColumns)
+		require.ErrorContains(t, "commitments len (32) differs from expected (48)", err)
+	})
+
+	t.Run("invalid cell proof size should fail", func(t *testing.T) {
+		numberOfColumns := uint64(128)
+
+		randBlob := random.GetRandBlob(123)
+		var blob Blob
+		copy(blob[:], randBlob[:])
+		commitment, err := BlobToKZGCommitment(&blob)
+		require.NoError(t, err)
+
+		// Create invalid cell proofs (wrong size)
+		invalidCellProofs := make([][]byte, numberOfColumns)
+		for i := range numberOfColumns {
+			if i == 0 {
+				invalidCellProofs[i] = make([]byte, 32) // Wrong size - should be 48
+			} else {
+				invalidCellProofs[i] = make([]byte, 48)
+			}
+		}
+
+		blobs := [][]byte{blob[:]}
+		commitments := [][]byte{commitment[:]}
+
+		err = VerifyCellKZGProofBatchFromBlobData(blobs, commitments, invalidCellProofs, numberOfColumns)
+		require.ErrorContains(t, "proofs len (32) differs from expected (48)", err)
+	})
+
+	t.Run("multiple blobs with mixed invalid commitments", func(t *testing.T) {
+		numberOfColumns := uint64(128)
+		blobCount := 2
+
+		blobs := make([][]byte, blobCount)
+		commitments := make([][]byte, blobCount)
+		var allCellProofs [][]byte
+
+		// First blob - valid
+		randBlob1 := random.GetRandBlob(123)
+		var blob1 Blob
+		copy(blob1[:], randBlob1[:])
+		commitment1, err := BlobToKZGCommitment(&blob1)
+		require.NoError(t, err)
+		blobs[0] = blob1[:]
+		commitments[0] = commitment1[:]
+
+		// Second blob - use invalid commitment size
+		randBlob2 := random.GetRandBlob(456)
+		var blob2 Blob
+		copy(blob2[:], randBlob2[:])
+		blobs[1] = blob2[:]
+		commitments[1] = make([]byte, 32) // Wrong size
+
+		// Add cell proofs for both blobs
+		for i := 0; i < blobCount; i++ {
+			for j := uint64(0); j < numberOfColumns; j++ {
+				allCellProofs = append(allCellProofs, make([]byte, 48))
+			}
+		}
+
+		err = VerifyCellKZGProofBatchFromBlobData(blobs, commitments, allCellProofs, numberOfColumns)
+		require.ErrorContains(t, "commitments len (32) differs from expected (48)", err)
+	})
+
+	t.Run("multiple blobs with mixed invalid cell proof sizes", func(t *testing.T) {
+		numberOfColumns := uint64(128)
+		blobCount := 2
+
+		blobs := make([][]byte, blobCount)
+		commitments := make([][]byte, blobCount)
+		var allCellProofs [][]byte
+
+		for i := 0; i < blobCount; i++ {
+			randBlob := random.GetRandBlob(int64(i))
+			var blob Blob
+			copy(blob[:], randBlob[:])
+			commitment, err := BlobToKZGCommitment(&blob)
+			require.NoError(t, err)
+			
+			blobs[i] = blob[:]
+			commitments[i] = commitment[:]
+			
+			// Add cell proofs - make some invalid in the second blob
+			for j := uint64(0); j < numberOfColumns; j++ {
+				if i == 1 && j == 64 {
+					// Invalid proof size in middle of second blob's proofs
+					allCellProofs = append(allCellProofs, make([]byte, 20))
+				} else {
+					allCellProofs = append(allCellProofs, make([]byte, 48))
+				}
+			}
+		}
+
+		err := VerifyCellKZGProofBatchFromBlobData(blobs, commitments, allCellProofs, numberOfColumns)
+		require.ErrorContains(t, "proofs len (20) differs from expected (48)", err)
 	})
 }
