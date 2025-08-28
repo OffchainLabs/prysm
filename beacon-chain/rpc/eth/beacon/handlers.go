@@ -1649,7 +1649,7 @@ func (s *Server) GetDepositSnapshot(w http.ResponseWriter, r *http.Request) {
 	)
 }
 
-// Broadcast datacolumn sidecars or blob sidecars  even if the block of the same slot has been imported.
+// Broadcast data column sidecars or blob sidecars even if the block of the same slot has been imported.
 // To ensure safety, we will only broadcast blob sidecars if the header references the same block that was previously seen.
 // Otherwise, a proposer could get slashed through a different blob sidecar header reference.
 func (s *Server) broadcastSeenBlockSidecars(
