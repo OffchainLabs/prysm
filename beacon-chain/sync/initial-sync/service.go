@@ -237,14 +237,14 @@ func (s *Service) fetchOriginSidecars(peers []peer.ID) error {
 	blockVersion := roBlock.Version()
 
 	if blockVersion >= version.Fulu {
-		if err := s.fetchOriginColumns(roBlock, delay); err != nil {
+		if err := s.fetchOriginDataColumnSidecars(roBlock, delay); err != nil {
 			return errors.Wrap(err, "fetch origin columns")
 		}
 		return nil
 	}
 
 	if blockVersion >= version.Deneb {
-		if err := s.fetchOriginBlobs(peers, roBlock); err != nil {
+		if err := s.fetchOriginBlobSidecars(peers, roBlock); err != nil {
 			return errors.Wrap(err, "fetch origin blobs")
 		}
 	}
@@ -356,7 +356,7 @@ func missingBlobRequest(blk blocks.ROBlock, store *filesystem.BlobStorage) (p2pt
 	return req, nil
 }
 
-func (s *Service) fetchOriginBlobs(pids []peer.ID, rob blocks.ROBlock) error {
+func (s *Service) fetchOriginBlobSidecars(pids []peer.ID, rob blocks.ROBlock) error {
 	r := rob.Root()
 
 	req, err := missingBlobRequest(rob, s.cfg.BlobStorage)
@@ -394,7 +394,7 @@ func (s *Service) fetchOriginBlobs(pids []peer.ID, rob blocks.ROBlock) error {
 	return fmt.Errorf("no connected peer able to provide blobs for checkpoint sync block %#x", r)
 }
 
-func (s *Service) fetchOriginColumns(roBlock blocks.ROBlock, delay time.Duration) error {
+func (s *Service) fetchOriginDataColumnSidecars(roBlock blocks.ROBlock, delay time.Duration) error {
 	const (
 		errorMessage     = "Failed to fetch origin data column sidecars"
 		warningIteration = 10
@@ -436,16 +436,29 @@ func (s *Service) fetchOriginColumns(roBlock blocks.ROBlock, delay time.Duration
 		DownscorePeerOnRPCFault: true,
 	}
 
-	var verifiedRoDataColumnsByRoot map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn
+	var (
+		verifiedRoDataColumnsByRoot map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn
+		missingIndicesByRoot        map[[fieldparams.RootLength]byte]map[uint64]bool
+	)
 	for attempt := uint64(0); ; attempt++ {
-		verifiedRoDataColumnsByRoot, err = sync.FetchDataColumnSidecars(params, []blocks.ROBlock{roBlock}, info.CustodyColumns)
-		if err == nil {
+		verifiedRoDataColumnsByRoot, missingIndicesByRoot, err = sync.FetchDataColumnSidecars(params, []blocks.ROBlock{roBlock}, info.CustodyColumns)
+		if err == nil && len(missingIndicesByRoot) == 0 {
 			break
 		}
 
-		log := log.WithError(err).WithFields(logrus.Fields{
-			"attempt": attempt,
-			"delay":   delay,
+		log := log
+		if err != nil {
+			log = log.WithError(err)
+		}
+
+		missingSidecarsCount := 0
+		for _, missing := range missingIndicesByRoot {
+			missingSidecarsCount += len(missing)
+		}
+		log = log.WithFields(logrus.Fields{
+			"attempt":              attempt,
+			"missingSidecarsCount": missingSidecarsCount,
+			"delay":                delay,
 		})
 
 		if attempt%warningIteration == 0 && attempt > 0 {

@@ -699,7 +699,7 @@ func TestFetchOriginColumns(t *testing.T) {
 		roBlock, err := blocks.NewROBlock(signedBlock)
 		require.NoError(t, err)
 
-		err = service.fetchOriginColumns(roBlock, delay)
+		err = service.fetchOriginDataColumnSidecars(roBlock, delay)
 		require.NoError(t, err)
 	})
 
@@ -721,7 +721,7 @@ func TestFetchOriginColumns(t *testing.T) {
 		err := storage.Save(verifiedSidecars)
 		require.NoError(t, err)
 
-		err = service.fetchOriginColumns(roBlock, delay)
+		err = service.fetchOriginDataColumnSidecars(roBlock, delay)
 		require.NoError(t, err)
 	})
 
@@ -806,7 +806,7 @@ func TestFetchOriginColumns(t *testing.T) {
 			assert.NoError(t, err)
 		})
 
-		err = service.fetchOriginColumns(roBlock, delay)
+		err = service.fetchOriginDataColumnSidecars(roBlock, delay)
 		require.NoError(t, err)
 
 		// Check all corresponding sidecars are saved in the store.
