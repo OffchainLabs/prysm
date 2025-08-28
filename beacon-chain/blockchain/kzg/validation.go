@@ -50,7 +50,7 @@ func Verify(blobSidecars ...blocks.ROBlob) error {
 // For single blob verification, it uses the optimized single verification path.
 func VerifyBlobKZGProofBatch(blobs [][]byte, commitments [][]byte, proofs [][]byte) error {
 	if len(blobs) != len(commitments) || len(blobs) != len(proofs) {
-		return errors.New("number of blobs, commitments, and proofs must match")
+		return errors.Errorf("number of blobs (%d), commitments (%d), and proofs (%d) must match", len(blobs), len(commitments), len(proofs))
 	}
 
 	if len(blobs) == 0 {
