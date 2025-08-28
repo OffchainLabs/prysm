@@ -16,12 +16,10 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
 	corehelpers "github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filters"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
-	rpcHelpers "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/v1alpha1/validator"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -944,14 +942,13 @@ func decodePhase0JSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 // broadcastSidecarsIfSupported broadcasts blob sidecars when an equivocated block occurs.
 func broadcastSidecarsIfSupported(ctx context.Context, s *Server, b interfaces.SignedBeaconBlock, gb *eth.GenericSignedBeaconBlock, versionHeader string) error {
 	switch versionHeader {
-	case version.String(version.Fulu):
-		return s.broadcastSeenBlockSidecars(ctx, b, gb.GetFulu().Blobs, gb.GetFulu().KzgProofs)
 	case version.String(version.Electra):
 		return s.broadcastSeenBlockSidecars(ctx, b, gb.GetElectra().Blobs, gb.GetElectra().KzgProofs)
 	case version.String(version.Deneb):
 		return s.broadcastSeenBlockSidecars(ctx, b, gb.GetDeneb().Blobs, gb.GetDeneb().KzgProofs)
 	default:
 		// other forks before Deneb do not support blob sidecars
+		// forks after fulu do not support blob sidecars, instead support data columns, no need to rebroadcast
 		return nil
 	}
 }
@@ -1635,7 +1632,7 @@ func (s *Server) GetDepositSnapshot(w http.ResponseWriter, r *http.Request) {
 	)
 }
 
-// Broadcast data column sidecars or blob sidecars even if the block of the same slot has been imported.
+// Broadcast blob sidecars even if the block of the same slot has been imported.
 // To ensure safety, we will only broadcast blob sidecars if the header references the same block that was previously seen.
 // Otherwise, a proposer could get slashed through a different blob sidecar header reference.
 func (s *Server) broadcastSeenBlockSidecars(
@@ -1643,25 +1640,6 @@ func (s *Server) broadcastSeenBlockSidecars(
 	b interfaces.SignedBeaconBlock,
 	blobs [][]byte,
 	kzgProofs [][]byte) error {
-	if b.Version() >= version.Fulu {
-		dataColumnSideCars, err := peerdas.ConstructDataColumnSidecars(b, blobs, kzgProofs)
-		if err != nil {
-			return errors.Wrap(err, "construct data column sidecars")
-		}
-		root, err := b.Block().HashTreeRoot()
-		if err != nil {
-			return errors.Wrap(err, "Could not hash tree root")
-		}
-
-		if err = rpcHelpers.BroadcastDataColumnSidecars(
-			ctx,
-			dataColumnSideCars,
-			root,
-			s.Broadcaster.BroadcastDataColumnSidecar,
-		); err != nil {
-			return err
-		}
-	}
 
 	scs, err := validator.BuildBlobSidecars(b, blobs, kzgProofs)
 	if err != nil {

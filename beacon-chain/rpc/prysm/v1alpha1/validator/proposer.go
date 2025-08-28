@@ -18,7 +18,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
-	rpcHelpers "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -35,6 +34,7 @@ import (
 	emptypb "github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -441,19 +441,28 @@ func (vs *Server) broadcastReceiveBlock(ctx context.Context, block interfaces.Si
 
 // broadcastAndReceiveBlobs handles the broadcasting and reception of blob sidecars.
 func (vs *Server) broadcastAndReceiveBlobs(ctx context.Context, sidecars []*ethpb.BlobSidecar, root [fieldparams.RootLength]byte) error {
-	return rpcHelpers.BroadcastBlobSidecars(
-		ctx,
-		sidecars,
-		root,
-		vs.P2P.BroadcastBlob,
-		rpcHelpers.WithBlobReceiver(vs.BlobReceiver.ReceiveBlob),
-		rpcHelpers.WithBlobProcessedCallback(func(blob blocks.VerifiedROBlob) {
+	eg, eCtx := errgroup.WithContext(ctx)
+	for subIdx, sc := range sidecars {
+		eg.Go(func() error {
+			if err := vs.P2P.BroadcastBlob(eCtx, uint64(subIdx), sc); err != nil {
+				return errors.Wrap(err, "broadcast blob failed")
+			}
+			readOnlySc, err := blocks.NewROBlobWithRoot(sc, root)
+			if err != nil {
+				return errors.Wrap(err, "ROBlob creation failed")
+			}
+			verifiedBlob := blocks.NewVerifiedROBlob(readOnlySc)
+			if err := vs.BlobReceiver.ReceiveBlob(ctx, verifiedBlob); err != nil {
+				return errors.Wrap(err, "receive blob failed")
+			}
 			vs.OperationNotifier.OperationFeed().Send(&feed.Event{
 				Type: operation.BlobSidecarReceived,
-				Data: &operation.BlobSidecarReceivedData{Blob: &blob},
+				Data: &operation.BlobSidecarReceivedData{Blob: &verifiedBlob},
 			})
-		}),
-	)
+			return nil
+		})
+	}
+	return eg.Wait()
 }
 
 // broadcastAndReceiveDataColumns handles the broadcasting and reception of data columns sidecars.
@@ -462,22 +471,46 @@ func (vs *Server) broadcastAndReceiveDataColumns(
 	sidecars []*ethpb.DataColumnSidecar,
 	root [fieldparams.RootLength]byte,
 ) error {
-	return rpcHelpers.BroadcastDataColumnSidecars(
-		ctx,
-		sidecars,
-		root,
-		vs.P2P.BroadcastDataColumnSidecar,
-		rpcHelpers.WithDataColumnReceiver(vs.DataColumnReceiver.ReceiveDataColumns),
-		rpcHelpers.WithDataColumnProcessedCallback(func(columns []blocks.VerifiedRODataColumn) {
-			for _, col := range columns {
-				colCopy := col
-				vs.OperationNotifier.OperationFeed().Send(&feed.Event{
-					Type: operation.DataColumnSidecarReceived,
-					Data: &operation.DataColumnSidecarReceivedData{DataColumn: &colCopy},
-				})
+	verifiedRODataColumns := make([]blocks.VerifiedRODataColumn, 0, len(sidecars))
+	eg, _ := errgroup.WithContext(ctx)
+	for _, sidecar := range sidecars {
+		roDataColumn, err := blocks.NewRODataColumnWithRoot(sidecar, root)
+		if err != nil {
+			return errors.Wrap(err, "new read-only data column with root")
+		}
+
+		// We build this block ourselves, so we can upgrade the read only data column sidecar into a verified one.
+		verifiedRODataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
+		verifiedRODataColumns = append(verifiedRODataColumns, verifiedRODataColumn)
+
+		eg.Go(func() error {
+
+			// Compute the subnet index based on the column index.
+			subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
+
+			if err := vs.P2P.BroadcastDataColumnSidecar(root, subnet, sidecar); err != nil {
+				return errors.Wrap(err, "broadcast data column")
 			}
-		}),
-	)
+
+			return nil
+		})
+	}
+
+	if err := eg.Wait(); err != nil {
+		return errors.Wrap(err, "wait for data columns to be broadcasted")
+	}
+
+	if err := vs.DataColumnReceiver.ReceiveDataColumns(verifiedRODataColumns); err != nil {
+		return errors.Wrap(err, "receive data column")
+	}
+
+	for _, verifiedRODataColumn := range verifiedRODataColumns {
+		vs.OperationNotifier.OperationFeed().Send(&feed.Event{
+			Type: operation.DataColumnSidecarReceived,
+			Data: &operation.DataColumnSidecarReceivedData{DataColumn: &verifiedRODataColumn}, // #nosec G601
+		})
+	}
+	return nil
 }
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
