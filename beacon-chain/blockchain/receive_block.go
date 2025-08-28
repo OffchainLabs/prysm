@@ -320,7 +320,12 @@ func (s *Service) executePostFinalizationTasks(ctx context.Context, finalizedSta
 	if features.Get().EnableLightClient {
 		// Save a light client bootstrap for the finalized checkpoint
 		go func() {
-			err := s.lcStore.SaveLightClientBootstrap(s.ctx, finalized.Root)
+			st, err := s.cfg.StateGen.StateByRoot(ctx, finalized.Root)
+			if err != nil {
+				log.WithError(err).Error("Could not retrieve state for finalized root to save light client bootstrap")
+				return
+			}
+			err = s.lcStore.SaveLightClientBootstrap(s.ctx, finalized.Root, st)
 			if err != nil {
 				log.WithError(err).Error("Could not save light client bootstrap by block root")
 			} else {
