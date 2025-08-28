@@ -7,6 +7,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/core/peerdas:go_default_library",
+        "//config/fieldparams:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
