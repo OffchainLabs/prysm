@@ -186,7 +186,7 @@ func TestVerifyCellKZGProofBatchFromBlobData(t *testing.T) {
 
 		// Create flattened cell proofs (like execution client format)
 		cellProofs := make([][]byte, numberOfColumns)
-		for i := uint64(0); i < numberOfColumns; i++ {
+		for i := range numberOfColumns {
 			cellProofs[i] = cellsAndProofs.Proofs[i][:]
 		}
 
@@ -205,7 +205,7 @@ func TestVerifyCellKZGProofBatchFromBlobData(t *testing.T) {
 		commitments := make([][]byte, blobCount)
 		var allCellProofs [][]byte
 
-		for i := 0; i < blobCount; i++ {
+		for i := range blobCount {
 			// Generate blob and commitment
 			randBlob := random.GetRandBlob(int64(i))
 			var blob Blob
@@ -221,7 +221,7 @@ func TestVerifyCellKZGProofBatchFromBlobData(t *testing.T) {
 			commitments[i] = commitment[:]
 
 			// Add cell proofs for this blob
-			for j := uint64(0); j < numberOfColumns; j++ {
+			for j := range numberOfColumns {
 				allCellProofs = append(allCellProofs, cellsAndProofs.Proofs[j][:])
 			}
 		}
@@ -282,7 +282,7 @@ func TestVerifyCellKZGProofBatchFromBlobData(t *testing.T) {
 
 		// Create invalid cell proofs (all zeros)
 		invalidCellProofs := make([][]byte, numberOfColumns)
-		for i := uint64(0); i < numberOfColumns; i++ {
+		for i := range numberOfColumns {
 			invalidCellProofs[i] = make([]byte, 48) // All zeros
 		}
 
@@ -308,7 +308,7 @@ func TestVerifyCellKZGProofBatchFromBlobData(t *testing.T) {
 		require.NoError(t, err)
 
 		cellProofs := make([][]byte, numberOfColumns)
-		for i := uint64(0); i < numberOfColumns; i++ {
+		for i := range numberOfColumns {
 			cellProofs[i] = cellsAndProofs.Proofs[i][:]
 		}
 
@@ -319,14 +319,14 @@ func TestVerifyCellKZGProofBatchFromBlobData(t *testing.T) {
 		require.ErrorContains(t, "cell KZG proof batch verification failed", err)
 	})
 
-	t.Run(" invalid blob data that should cause ComputeCells to fail", func(t *testing.T) {
+	t.Run("invalid blob data that should cause ComputeCells to fail", func(t *testing.T) {
 		numberOfColumns := uint64(128)
 
 		// Create invalid blob (not properly formatted)
 		invalidBlobData := make([]byte, 10) // Too short
 		commitment := make([]byte, 48)      // Dummy commitment
 		cellProofs := make([][]byte, numberOfColumns)
-		for i := uint64(0); i < numberOfColumns; i++ {
+		for i := range numberOfColumns {
 			cellProofs[i] = make([]byte, 48)
 		}
 

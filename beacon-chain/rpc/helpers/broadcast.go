@@ -5,25 +5,36 @@ import (
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
 
-// DataColumnBroadcastFunc is a function for broadcasting data column sidecars.
-type DataColumnBroadcastFunc func(root [32]byte, subnet uint64, sidecar *ethpb.DataColumnSidecar) error
+type (
+	// DataColumnBroadcastFunc is a function for broadcasting data column sidecars.
+	DataColumnBroadcastFunc func(root [fieldparams.RootLength]byte, subnet uint64, sidecar *ethpb.DataColumnSidecar) error
 
-// BlobBroadcastFunc is a function for broadcasting blob sidecars.
-type BlobBroadcastFunc func(ctx context.Context, index uint64, sidecar *ethpb.BlobSidecar) error
+	// BlobBroadcastFunc is a function for broadcasting blob sidecars.
+	BlobBroadcastFunc func(ctx context.Context, index uint64, sidecar *ethpb.BlobSidecar) error
 
-// DataColumnOption configures options for broadcasting data column sidecars.
-type DataColumnOption func(*dataColumnOptions)
+	// DataColumnOption configures options for broadcasting data column sidecars.
+	DataColumnOption func(*dataColumnOptions)
 
-type dataColumnOptions struct {
-	onReceiveDataColumns   func(columns []blocks.VerifiedRODataColumn) error
-	onDataColumnsProcessed func(columns []blocks.VerifiedRODataColumn)
-}
+	dataColumnOptions struct {
+		onReceiveDataColumns   func(columns []blocks.VerifiedRODataColumn) error
+		onDataColumnsProcessed func(columns []blocks.VerifiedRODataColumn)
+	}
+
+	// BlobOption configures options for broadcasting blob sidecars.
+	BlobOption func(*blobOptions)
+
+	blobOptions struct {
+		onReceiveBlob   func(ctx context.Context, blob blocks.VerifiedROBlob) error
+		onBlobProcessed func(blob blocks.VerifiedROBlob)
+	}
+)
 
 // WithDataColumnReceiver sets the callback for receiving data columns.
 func WithDataColumnReceiver(fn func(columns []blocks.VerifiedRODataColumn) error) DataColumnOption {
@@ -43,7 +54,7 @@ func WithDataColumnProcessedCallback(fn func(columns []blocks.VerifiedRODataColu
 func BroadcastDataColumnSidecars(
 	ctx context.Context,
 	sidecars []*ethpb.DataColumnSidecar,
-	root [32]byte,
+	root [fieldparams.RootLength]byte,
 	broadcastFunc DataColumnBroadcastFunc,
 	options ...DataColumnOption,
 ) error {
@@ -68,10 +79,7 @@ func BroadcastDataColumnSidecars(
 
 	// Broadcast data columns concurrently
 	eg, _ := errgroup.WithContext(ctx)
-	for _, sd := range sidecars {
-		// Copy the iteration instance to a local variable to give each go-routine its own copy to play with.
-		// See https://golang.org/doc/faq#closures_and_goroutines for more details.
-		sidecar := sd
+	for _, sidecar := range sidecars {
 		eg.Go(func() error {
 			// Compute the subnet index based on the column index.
 			subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
@@ -103,14 +111,6 @@ func BroadcastDataColumnSidecars(
 	return nil
 }
 
-// BlobOption configures options for broadcasting blob sidecars.
-type BlobOption func(*blobOptions)
-
-type blobOptions struct {
-	onReceiveBlob   func(ctx context.Context, blob blocks.VerifiedROBlob) error
-	onBlobProcessed func(blob blocks.VerifiedROBlob)
-}
-
 // WithBlobReceiver sets the callback for receiving blobs.
 func WithBlobReceiver(fn func(ctx context.Context, blob blocks.VerifiedROBlob) error) BlobOption {
 	return func(o *blobOptions) {
@@ -129,7 +129,7 @@ func WithBlobProcessedCallback(fn func(blob blocks.VerifiedROBlob)) BlobOption {
 func BroadcastBlobSidecars(
 	ctx context.Context,
 	sidecars []*ethpb.BlobSidecar,
-	root [32]byte,
+	root [fieldparams.RootLength]byte,
 	broadcastFunc BlobBroadcastFunc,
 	options ...BlobOption,
 ) error {
@@ -139,19 +139,15 @@ func BroadcastBlobSidecars(
 	}
 
 	eg, eCtx := errgroup.WithContext(ctx)
-	for i, sc := range sidecars {
-		// Copy the iteration instance to a local variable to give each go-routine its own copy to play with.
-		// See https://golang.org/doc/faq#closures_and_goroutines for more details.
-		subIdx := i
-		sCar := sc
+	for i, sidecar := range sidecars {
 		eg.Go(func() error {
-			if err := broadcastFunc(eCtx, uint64(subIdx), sCar); err != nil {
-				return errors.Wrap(err, fmt.Sprintf("broadcast blob failed for index %d", subIdx))
+			if err := broadcastFunc(eCtx, uint64(i), sidecar); err != nil {
+				return errors.Wrap(err, fmt.Sprintf("broadcast blob failed for index %d", i))
 			}
 
 			// Optionally receive the blob
 			if opts.onReceiveBlob != nil {
-				readOnlySc, err := blocks.NewROBlobWithRoot(sCar, root)
+				readOnlySc, err := blocks.NewROBlobWithRoot(sidecar, root)
 				if err != nil {
 					return errors.Wrap(err, "ROBlob creation failed")
 				}

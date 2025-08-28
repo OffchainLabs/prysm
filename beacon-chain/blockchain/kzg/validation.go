@@ -78,7 +78,7 @@ func VerifyBlobKZGProofBatch(blobs [][]byte, commitments [][]byte, proofs [][]by
 
 	valid, err := ckzg4844.VerifyBlobKZGProofBatch(ckzgBlobs, ckzgCommitments, ckzgProofs)
 	if err != nil {
-		return errors.Wrap(err, "batch verification failed")
+		return errors.Wrap(err, "batch verification")
 	}
 	if !valid {
 		return errors.New("batch KZG proof verification failed")
@@ -125,7 +125,7 @@ func VerifyCellKZGProofBatchFromBlobData(blobs [][]byte, commitments [][]byte, c
 		}
 
 		// Add cells and corresponding data for each column
-		for columnIndex := uint64(0); columnIndex < numberOfColumns; columnIndex++ {
+		for columnIndex := range numberOfColumns {
 			cellProofIndex := uint64(blobIndex)*numberOfColumns + columnIndex
 
 			allCells = append(allCells, cells[columnIndex])
@@ -141,7 +141,7 @@ func VerifyCellKZGProofBatchFromBlobData(blobs [][]byte, commitments [][]byte, c
 	// Batch verify all cells
 	valid, err := VerifyCellKZGProofBatch(allCommitments, allIndices, allCells, allProofs)
 	if err != nil {
-		return errors.Wrap(err, "cell batch verification failed")
+		return errors.Wrap(err, "cell batch verification")
 	}
 	if !valid {
 		return errors.New("cell KZG proof batch verification failed")

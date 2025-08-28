@@ -1073,45 +1073,31 @@ func (s *Server) validateBlobs(blk interfaces.SignedBeaconBlock, blobs [][]byte,
 	if blk.Version() < version.Deneb {
 		return nil
 	}
-	kzgs, err := blk.Block().Body().BlobKzgCommitments()
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
+	commitments, err := blk.Block().Body().BlobKzgCommitments()
 	if err != nil {
 		return errors.Wrap(err, "could not get blob kzg commitments")
 	}
-	// Validate counts based on block version
-	if blk.Version() >= version.Fulu {
-		// For Fulu blocks, proofs are cell proofs (blobs * numberOfColumns)
-		numberOfColumns := params.BeaconConfig().NumberOfColumns
-		expectedProofs := uint64(len(blobs)) * numberOfColumns
-		if uint64(len(proofs)) != expectedProofs || len(blobs) != len(kzgs) {
-			return fmt.Errorf("number of blobs (%d), cell proofs (%d), and commitments (%d) do not match (expected %d cell proofs)", len(blobs), len(proofs), len(kzgs), expectedProofs)
-		}
-	} else {
-		// For pre-Fulu blocks, proofs are blob proofs (1:1 with blobs)
-		if len(blobs) != len(proofs) || len(blobs) != len(kzgs) {
-			return errors.New("number of blobs, proofs, and commitments do not match")
-		}
-	}
-
 	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(blk.Block().Slot())
 	if len(blobs) > maxBlobsPerBlock {
 		return fmt.Errorf("number of blobs over max, %d > %d", len(blobs), maxBlobsPerBlock)
 	}
-
-	// Convert KZG commitments to byte slices for batch verification
-	commitments := make([][]byte, len(kzgs))
-	for i, commitment := range kzgs {
-		commitments[i] = make([]byte, len(commitment))
-		copy(commitments[i], commitment)
-	}
-
 	if blk.Version() >= version.Fulu {
+		// For Fulu blocks, proofs are cell proofs (blobs * numberOfColumns)
+		expectedProofsCount := uint64(len(blobs)) * numberOfColumns
+		if uint64(len(proofs)) != expectedProofsCount || len(blobs) != len(commitments) {
+			return fmt.Errorf("number of blobs (%d), cell proofs (%d), and commitments (%d) do not match (expected %d cell proofs)", len(blobs), len(proofs), len(commitments), expectedProofsCount)
+		}
 		// For Fulu blocks, proofs are cell proofs from execution client's BlobsBundleV2
 		// Verify cell proofs directly without reconstructing data column sidecars
-		numberOfColumns := params.BeaconConfig().NumberOfColumns
 		if err := kzg.VerifyCellKZGProofBatchFromBlobData(blobs, commitments, proofs, numberOfColumns); err != nil {
 			return errors.Wrap(err, "could not verify cell proofs")
 		}
 	} else {
+		// For pre-Fulu blocks, proofs are blob proofs (1:1 with blobs)
+		if len(blobs) != len(proofs) || len(blobs) != len(commitments) {
+			return errors.New("number of blobs, proofs, and commitments do not match")
+		}
 		// Use batch verification for better performance
 		if err := kzg.VerifyBlobKZGProofBatch(blobs, commitments, proofs); err != nil {
 			return errors.Wrap(err, "could not verify blob proofs")
