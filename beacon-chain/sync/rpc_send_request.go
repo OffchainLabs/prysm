@@ -453,6 +453,10 @@ func SendDataColumnSidecarsByRangeRequest(
 	// Send the request.
 	stream, err := p.P2P.Send(p.Ctx, request, topic, pid)
 	if err != nil {
+		if p.DownscorePeerOnRPCFault {
+			downscorePeer(p.P2P, pid, "cannotSendDataColumnSidecarsByRangeRequest")
+		}
+
 		return nil, errors.Wrap(err, "p2p send")
 	}
 	defer closeStream(stream, log)
@@ -467,6 +471,10 @@ func SendDataColumnSidecarsByRangeRequest(
 
 		validatorSlotWithinBounds, err := isSidecarSlotWithinBounds(request)
 		if err != nil {
+			if p.DownscorePeerOnRPCFault {
+				downscorePeer(p.P2P, pid, "servedSidecarSlotOutOfBounds")
+			}
+
 			return nil, errors.Wrap(err, "is sidecar slot within bounds")
 		}
 
@@ -476,9 +484,17 @@ func SendDataColumnSidecarsByRangeRequest(
 			isSidecarIndexRequested(request),
 		)
 		if errors.Is(err, io.EOF) {
+			if p.DownscorePeerOnRPCFault && len(roDataColumns) == 0 {
+				downscorePeer(p.P2P, pid, "noReturnedSidecar")
+			}
+
 			return roDataColumns, nil
 		}
 		if err != nil {
+			if p.DownscorePeerOnRPCFault {
+				downscorePeer(p.P2P, pid, "readChunkedDataColumnSidecarError")
+			}
+
 			return nil, errors.Wrap(err, "read chunked data column sidecar")
 		}
 
@@ -491,6 +507,10 @@ func SendDataColumnSidecarsByRangeRequest(
 
 	// All requested sidecars were delivered by the peer. Expecting EOF.
 	if _, err := readChunkedDataColumnSidecar(stream, p.P2P, p.CtxMap); !errors.Is(err, io.EOF) {
+		if p.DownscorePeerOnRPCFault {
+			downscorePeer(p.P2P, pid, "tooManyResponseDataColumnSidecars")
+		}
+
 		return nil, errors.Wrapf(errMaxResponseDataColumnSidecarsExceeded, "requestedCount=%d", totalCount)
 	}
 
@@ -528,7 +548,8 @@ func isSidecarIndexRequested(request *ethpb.DataColumnSidecarsByRangeRequest) Da
 	return func(sidecar blocks.RODataColumn) error {
 		columnIndex := sidecar.Index
 		if !requestedIndices[columnIndex] {
-			return errors.Errorf("data column sidecar index %d not found in requested indices", columnIndex)
+			requested := sortedSliceFromMap(requestedIndices)
+			return errors.Errorf("data column sidecar index %d returned by the peer but not found in requested indices %v", columnIndex, requested)
 		}
 
 		return nil
@@ -566,6 +587,10 @@ func SendDataColumnSidecarsByRootRequest(p DataColumnSidecarsParams, peer goPeer
 	// Send the request to the peer.
 	stream, err := p.P2P.Send(p.Ctx, identifiers, topic, peer)
 	if err != nil {
+		if p.DownscorePeerOnRPCFault {
+			downscorePeer(p.P2P, peer, "cannotSendDataColumnSidecarsByRootRequest")
+		}
+
 		return nil, errors.Wrap(err, "p2p api send")
 	}
 	defer closeStream(stream, log)
@@ -577,9 +602,17 @@ func SendDataColumnSidecarsByRootRequest(p DataColumnSidecarsParams, peer goPeer
 	for range count {
 		roDataColumn, err := readChunkedDataColumnSidecar(stream, p.P2P, p.CtxMap, isSidecarIndexRootRequested(identifiers))
 		if errors.Is(err, io.EOF) {
+			if p.DownscorePeerOnRPCFault && len(roDataColumns) == 0 {
+				downscorePeer(p.P2P, peer, "noReturnedSidecar")
+			}
+
 			return roDataColumns, nil
 		}
 		if err != nil {
+			if p.DownscorePeerOnRPCFault {
+				downscorePeer(p.P2P, peer, "readChunkedDataColumnSidecarError")
+			}
+
 			return nil, errors.Wrap(err, "read chunked data column sidecar")
 		}
 
@@ -592,6 +625,10 @@ func SendDataColumnSidecarsByRootRequest(p DataColumnSidecarsParams, peer goPeer
 
 	// All requested sidecars were delivered by the peer. Expecting EOF.
 	if _, err := readChunkedDataColumnSidecar(stream, p.P2P, p.CtxMap); !errors.Is(err, io.EOF) {
+		if p.DownscorePeerOnRPCFault {
+			downscorePeer(p.P2P, peer, "tooManyResponseDataColumnSidecars")
+		}
+
 		return nil, errors.Wrapf(errMaxResponseDataColumnSidecarsExceeded, "requestedCount=%d", count)
 	}
 
@@ -688,4 +725,14 @@ func readChunkedDataColumnSidecar(
 	}
 
 	return &roDataColumn, nil
+}
+
+func downscorePeer(p2p p2p.P2P, peerID peer.ID, reason string, fields ...logrus.Fields) {
+	log := log
+	for _, field := range fields {
+		log = log.WithFields(field)
+	}
+
+	newScore := p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }
