@@ -484,7 +484,6 @@ func (vs *Server) broadcastAndReceiveDataColumns(
 		verifiedRODataColumns = append(verifiedRODataColumns, verifiedRODataColumn)
 
 		eg.Go(func() error {
-
 			// Compute the subnet index based on the column index.
 			subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
 

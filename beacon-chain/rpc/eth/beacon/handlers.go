@@ -1640,7 +1640,6 @@ func (s *Server) broadcastSeenBlockSidecars(
 	b interfaces.SignedBeaconBlock,
 	blobs [][]byte,
 	kzgProofs [][]byte) error {
-
 	scs, err := validator.BuildBlobSidecars(b, blobs, kzgProofs)
 	if err != nil {
 		return err
