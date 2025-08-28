@@ -19,7 +19,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
@@ -195,7 +194,7 @@ func (s *Server) PublishBlobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	currentSlot := slots.CurrentSlot(s.TimeFetcher.GenesisTime())
-	if slots.ToEpoch(currentSlot) >= version.Fulu {
+	if slots.ToEpoch(currentSlot) >= params.BeaconConfig().FuluForkEpoch {
 		httputil.HandleError(w, "This endpoint is no longer supported post Fulu fork", http.StatusBadRequest)
 		return
 	}
