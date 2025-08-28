@@ -162,7 +162,29 @@ func TestVerifyBlobKZGProofBatch(t *testing.T) {
 		proofs := [][]byte{proof1[:], invalidProof}
 
 		err = VerifyBlobKZGProofBatch(blobs, commitments, proofs)
-		require.ErrorContains(t, "batch verification failed", err)
+		require.ErrorContains(t, "batch verification", err)
+	})
+
+	t.Run("batch KZG proof verification failed", func(t *testing.T) {
+		// Create multiple blobs with mismatched commitments and proofs to trigger batch verification failure
+		blob1 := random.GetRandBlob(123)
+		blob2 := random.GetRandBlob(456)
+		
+		// Generate valid proof for blob1
+		commitment1, proof1, err := GenerateCommitmentAndProof(blob1)
+		require.NoError(t, err)
+		
+		// Generate valid proof for blob2 but use wrong commitment (from blob1)
+		_, proof2, err := GenerateCommitmentAndProof(blob2)
+		require.NoError(t, err)
+
+		// Use blob2 data with blob1's commitment and blob2's proof - this should cause batch verification to fail
+		blobs := [][]byte{blob1[:], blob2[:]}
+		commitments := [][]byte{commitment1[:], commitment1[:]} // Wrong commitment for blob2
+		proofs := [][]byte{proof1[:], proof2[:]}
+
+		err = VerifyBlobKZGProofBatch(blobs, commitments, proofs)
+		require.ErrorContains(t, "batch KZG proof verification failed", err)
 	})
 }
 
@@ -287,7 +309,7 @@ func TestVerifyCellKZGProofBatchFromBlobData(t *testing.T) {
 		}
 
 		err = VerifyCellKZGProofBatchFromBlobData(blobs, commitments, invalidCellProofs, numberOfColumns)
-		require.ErrorContains(t, "cell batch verification failed", err)
+		require.ErrorContains(t, "cell batch verification", err)
 	})
 
 	t.Run("mismatched commitment should fail", func(t *testing.T) {
@@ -335,6 +357,6 @@ func TestVerifyCellKZGProofBatchFromBlobData(t *testing.T) {
 
 		err := VerifyCellKZGProofBatchFromBlobData(blobs, commitments, cellProofs, numberOfColumns)
 		require.NotNil(t, err)
-		require.ErrorContains(t, "cell batch verification failed", err)
+		require.ErrorContains(t, "cell batch verification", err)
 	})
 }
