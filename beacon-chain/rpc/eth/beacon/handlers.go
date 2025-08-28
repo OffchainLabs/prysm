@@ -1093,7 +1093,7 @@ func (s *Server) validateBlobs(blk interfaces.SignedBeaconBlock, blobs [][]byte,
 	} else {
 		// For pre-Fulu blocks, proofs are blob proofs (1:1 with blobs)
 		if len(blobs) != len(proofs) || len(blobs) != len(commitments) {
-			return errors.New("number of blobs, proofs, and commitments do not match")
+			return errors.Errorf("number of blobs (%d), proofs (%d), and commitments (%d) do not match", len(blobs), len(proofs), len(commitments))
 		}
 		// Use batch verification for better performance
 		if err := kzg.VerifyBlobKZGProofBatch(blobs, commitments, proofs); err != nil {
