@@ -1230,6 +1230,7 @@ func (s *Service) prysmBeaconEndpoints(
 			methods: []string{http.MethodGet},
 		},
 		{
+			// Deprecated:  post fulu fork
 			template: "/prysm/v1/beacon/blobs",
 			name:     namespace + ".PublishBlobs",
 			middleware: []middleware.Middleware{

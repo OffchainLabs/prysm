@@ -19,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
@@ -186,13 +187,18 @@ func (s *Server) GetChainHead(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJson(w, response)
 }
 
+// Deprecated: no longer supported post Fulu fork
 func (s *Server) PublishBlobs(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.PublishBlobs")
 	defer span.End()
 	if shared.IsSyncing(r.Context(), w, s.SyncChecker, s.HeadFetcher, s.TimeFetcher, s.OptimisticModeFetcher) {
 		return
 	}
-
+	currentSlot := slots.CurrentSlot(s.TimeFetcher.GenesisTime())
+	if slots.ToEpoch(currentSlot) >= version.Fulu {
+		httputil.HandleError(w, "This endpoint is no longer supported post Fulu fork", http.StatusBadRequest)
+		return
+	}
 	var req structs.PublishBlobsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.HandleError(w, "Could not decode JSON request body", http.StatusBadRequest)
