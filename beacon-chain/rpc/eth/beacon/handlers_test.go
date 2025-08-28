@@ -4799,7 +4799,7 @@ func Test_validateBlobs(t *testing.T) {
 	s := &Server{}
 	require.NoError(t, s.validateBlobs(b, [][]byte{blob[:]}, [][]byte{proof[:]}))
 
-	require.ErrorContains(t, "number of blobs, proofs, and commitments do not match", s.validateBlobs(b, [][]byte{blob[:]}, [][]byte{}))
+	require.ErrorContains(t, "number of blobs (1), proofs (0), and commitments (1) do not match", s.validateBlobs(b, [][]byte{blob[:]}, [][]byte{}))
 
 	sk, err := bls.RandKey()
 	require.NoError(t, err)
