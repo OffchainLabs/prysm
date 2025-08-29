@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	chainmock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/synccommittee"
 	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -89,6 +90,7 @@ func TestProposer_GetSyncAggregate_IncludesSyncCommitteeMessages(t *testing.T) {
 
 	subcommitteeSize := params.BeaconConfig().SyncCommitteeSize / params.BeaconConfig().SyncCommitteeSubnetCount
 
+	helpers.ClearCache()
 	st, err := util.NewBeaconStateAltair()
 	require.NoError(t, err)
 	vals := make([]*ethpb.Validator, 4)
@@ -149,6 +151,7 @@ func TestProposer_GetSyncAggregate_IncludesSyncCommitteeMessages(t *testing.T) {
 }
 
 func Test_aggregatedSyncCommitteeMessages_NoIntersectionWithPoolContributions(t *testing.T) {
+	helpers.ClearCache()
 	st, err := util.NewBeaconStateAltair()
 	require.NoError(t, err)
 	vals := make([]*ethpb.Validator, 4)
