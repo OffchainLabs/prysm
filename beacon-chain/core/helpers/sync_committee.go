@@ -21,7 +21,7 @@ var (
 	syncCommitteeCache = cache.NewSyncCommittee()
 )
 
-// TODO doc
+// CurrentPeriodPositions returns committee indices of the current period sync committee for input validators.
 func CurrentPeriodPositions(st state.BeaconState, indices []primitives.ValidatorIndex) ([][]primitives.CommitteeIndex, error) {
 	root, err := SyncPeriodBoundaryRoot(st)
 	if err != nil {

@@ -8,7 +8,6 @@ import (
 	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -86,13 +85,27 @@ func TestProposer_GetSyncAggregate_IncludesSyncCommitteeMessages(t *testing.T) {
 	// - sync committee aggregates in the pool have index 3 set for both subcommittees
 
 	subcommitteeSize := params.BeaconConfig().SyncCommitteeSize / params.BeaconConfig().SyncCommitteeSubnetCount
-	scIndices := make(map[primitives.ValidatorIndex][]primitives.CommitteeIndex)
-	scIndices[0] = []primitives.CommitteeIndex{0, 1}
-	scIndices[1] = []primitives.CommitteeIndex{2}
-	scIndices[2] = []primitives.CommitteeIndex{primitives.CommitteeIndex(subcommitteeSize), primitives.CommitteeIndex(subcommitteeSize + 1)}
-	scIndices[3] = []primitives.CommitteeIndex{primitives.CommitteeIndex(subcommitteeSize + 2)}
+
+	st, err := util.NewBeaconStateAltair()
+	require.NoError(t, err)
+	vals := make([]*ethpb.Validator, 4)
+	vals[0] = &ethpb.Validator{PublicKey: bytesutil.PadTo([]byte{0xf0}, 48)}
+	vals[1] = &ethpb.Validator{PublicKey: bytesutil.PadTo([]byte{0xf1}, 48)}
+	vals[2] = &ethpb.Validator{PublicKey: bytesutil.PadTo([]byte{0xf2}, 48)}
+	vals[3] = &ethpb.Validator{PublicKey: bytesutil.PadTo([]byte{0xf3}, 48)}
+	require.NoError(t, st.SetValidators(vals))
+	sc := &ethpb.SyncCommittee{
+		Pubkeys: make([][]byte, params.BeaconConfig().SyncCommitteeSize),
+	}
+	sc.Pubkeys[0] = vals[0].PublicKey
+	sc.Pubkeys[1] = vals[0].PublicKey
+	sc.Pubkeys[2] = vals[1].PublicKey
+	sc.Pubkeys[subcommitteeSize] = vals[2].PublicKey
+	sc.Pubkeys[subcommitteeSize+1] = vals[2].PublicKey
+	sc.Pubkeys[subcommitteeSize+2] = vals[3].PublicKey
+	require.NoError(t, st.SetCurrentSyncCommittee(sc))
 	proposerServer := &Server{
-		HeadFetcher:       &chainmock.ChainService{SyncCommitteeIndicesPerValidator: scIndices},
+		HeadFetcher:       &chainmock.ChainService{State: st},
 		SyncChecker:       &mockSync.Sync{IsSyncing: false},
 		SyncCommitteePool: synccommittee.NewStore(),
 	}
@@ -130,4 +143,53 @@ func TestProposer_GetSyncAggregate_IncludesSyncCommitteeMessages(t *testing.T) {
 	assert.Equal(t, true, sa.SyncCommitteeBits.BitAt(subcommitteeSize+1))
 	assert.Equal(t, true, sa.SyncCommitteeBits.BitAt(subcommitteeSize+2))
 	assert.Equal(t, true, sa.SyncCommitteeBits.BitAt(subcommitteeSize+3))
+}
+
+func Test_aggregatedSyncCommitteeMessages_NoIntersectionWithPoolContributions(t *testing.T) {
+	st, err := util.NewBeaconStateAltair()
+	require.NoError(t, err)
+	vals := make([]*ethpb.Validator, 4)
+	vals[0] = &ethpb.Validator{PublicKey: bytesutil.PadTo([]byte{0xf0}, 48)}
+	vals[1] = &ethpb.Validator{PublicKey: bytesutil.PadTo([]byte{0xf1}, 48)}
+	vals[2] = &ethpb.Validator{PublicKey: bytesutil.PadTo([]byte{0xf2}, 48)}
+	vals[3] = &ethpb.Validator{PublicKey: bytesutil.PadTo([]byte{0xf3}, 48)}
+	require.NoError(t, st.SetValidators(vals))
+	sc := &ethpb.SyncCommittee{
+		Pubkeys: make([][]byte, params.BeaconConfig().SyncCommitteeSize),
+	}
+	sc.Pubkeys[0] = vals[0].PublicKey
+	sc.Pubkeys[1] = vals[1].PublicKey
+	sc.Pubkeys[2] = vals[2].PublicKey
+	sc.Pubkeys[3] = vals[3].PublicKey
+	require.NoError(t, st.SetCurrentSyncCommittee(sc))
+	proposerServer := &Server{
+		HeadFetcher:       &chainmock.ChainService{State: st},
+		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		SyncCommitteePool: synccommittee.NewStore(),
+	}
+
+	r := params.BeaconConfig().ZeroHash
+	msgs := []*ethpb.SyncCommitteeMessage{
+		{Slot: 1, BlockRoot: r[:], ValidatorIndex: 0, Signature: bls.NewAggregateSignature().Marshal()},
+		{Slot: 1, BlockRoot: r[:], ValidatorIndex: 1, Signature: bls.NewAggregateSignature().Marshal()},
+		{Slot: 1, BlockRoot: r[:], ValidatorIndex: 2, Signature: bls.NewAggregateSignature().Marshal()},
+		{Slot: 1, BlockRoot: r[:], ValidatorIndex: 3, Signature: bls.NewAggregateSignature().Marshal()},
+	}
+	for _, msg := range msgs {
+		require.NoError(t, proposerServer.SyncCommitteePool.SaveSyncCommitteeMessage(msg))
+	}
+	subcommitteeAggBits := ethpb.NewSyncCommitteeAggregationBits()
+	subcommitteeAggBits.SetBitAt(3, true)
+	cont := &ethpb.SyncCommitteeContribution{
+		Slot:              1,
+		SubcommitteeIndex: 0,
+		Signature:         bls.NewAggregateSignature().Marshal(),
+		AggregationBits:   subcommitteeAggBits,
+		BlockRoot:         r[:],
+	}
+
+	aggregated, err := proposerServer.aggregatedSyncCommitteeMessages(t.Context(), 1, r, []*ethpb.SyncCommitteeContribution{cont})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(aggregated))
+	assert.Equal(t, false, aggregated[0].AggregationBits.BitAt(3))
 }

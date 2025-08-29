@@ -62,7 +62,7 @@ func (vs *Server) getSyncAggregate(ctx context.Context, slot primitives.Slot, ro
 	// Contributions have to match the input root
 	proposerContributions := proposerSyncContributions(poolContributions).filterByBlockRoot(root)
 
-	aggregatedContributions, err := vs.aggregatedSyncCommitteeMessages(ctx, slot, root)
+	aggregatedContributions, err := vs.aggregatedSyncCommitteeMessages(ctx, slot, root, poolContributions)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get aggregated sync committee messages")
 	}
@@ -118,7 +118,12 @@ func (vs *Server) getSyncAggregate(ctx context.Context, slot primitives.Slot, ro
 	}, nil
 }
 
-func (vs *Server) aggregatedSyncCommitteeMessages(ctx context.Context, slot primitives.Slot, root [32]byte) ([]*ethpb.SyncCommitteeContribution, error) {
+func (vs *Server) aggregatedSyncCommitteeMessages(
+	ctx context.Context,
+	slot primitives.Slot,
+	root [32]byte,
+	poolContributions []*ethpb.SyncCommitteeContribution,
+) ([]*ethpb.SyncCommitteeContribution, error) {
 	subcommitteeCount := params.BeaconConfig().SyncCommitteeSubnetCount
 	subcommitteeSize := params.BeaconConfig().SyncCommitteeSize / subcommitteeCount
 	sigsPerSubcommittee := make([][][]byte, subcommitteeCount)
@@ -156,7 +161,18 @@ func (vs *Server) aggregatedSyncCommitteeMessages(ctx context.Context, slot prim
 			k := uint64(index)
 			subnetIndex := k / subcommitteeSize
 			indexMod := k % subcommitteeSize
-			if !bitsPerSubcommittee[subnetIndex].BitAt(indexMod) {
+
+			// Existing aggregated contributions from the pool intersecting with aggregates
+			// created from single sync committee messages can result in bit intersections
+			// that fail to produce the best possible final aggregate. Ignoring bits that are
+			// already set in pool contributions makes intersections impossible.
+			intersects := false
+			for _, poolContrib := range poolContributions {
+				if poolContrib.SubcommitteeIndex == subnetIndex && poolContrib.AggregationBits.BitAt(indexMod) {
+					intersects = true
+				}
+			}
+			if !intersects && !bitsPerSubcommittee[subnetIndex].BitAt(indexMod) {
 				bitsPerSubcommittee[subnetIndex].SetBitAt(indexMod, true)
 				sigsPerSubcommittee[subnetIndex] = append(sigsPerSubcommittee[subnetIndex], messageSigs[i])
 			}
@@ -172,7 +188,7 @@ func (vs *Server) aggregatedSyncCommitteeMessages(ctx context.Context, slot prim
 			contrib, err := aggregateSyncSubcommitteeMessages(slot, root, i, bitsPerSubcommittee[i], sigsPerSubcommittee[i])
 			if err != nil {
 				// Skip aggregating this subcommittee
-				log.WithError(err).Error("Could not aggregate sync subcommittee messages")
+				log.WithError(err).Errorf("Could not aggregate sync messages for subcommittee %d", i)
 				continue
 			}
 			result = append(result, contrib)
