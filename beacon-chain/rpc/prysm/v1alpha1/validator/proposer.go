@@ -61,28 +61,31 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	if err != nil {
 		log.WithError(err).Error("Could not convert slot to time")
 	}
-	log.WithFields(logrus.Fields{
-		"slot":               req.Slot,
-		"sinceSlotStartTime": time.Since(t),
-	}).Info("Begin building block")
+
+	log := log.WithField("slot", req.Slot)
+	log.WithField("sinceSlotStartTime", time.Since(t)).Info("Begin building block")
 
 	// A syncing validator should not produce a block.
 	if vs.SyncChecker.Syncing() {
+		log.Error("Fail to build block: node is syncing")
 		return nil, status.Error(codes.Unavailable, "Syncing to latest head, not ready to respond")
 	}
 	// An optimistic validator MUST NOT produce a block (i.e., sign across the DOMAIN_BEACON_PROPOSER domain).
 	if slots.ToEpoch(req.Slot) >= params.BeaconConfig().BellatrixForkEpoch {
 		if err := vs.optimisticStatus(ctx); err != nil {
+			log.WithError(err).Error("Fail to build block: node is optimistic")
 			return nil, status.Errorf(codes.Unavailable, "Validator is not ready to propose: %v", err)
 		}
 	}
 
 	head, parentRoot, err := vs.getParentState(ctx, req.Slot)
 	if err != nil {
+		log.WithError(err).Error("Fail to build block: could not get parent state")
 		return nil, err
 	}
 	sBlk, err := getEmptyBlock(req.Slot)
 	if err != nil {
+		log.WithError(err).Error("Fail to build block: could not get empty block")
 		return nil, status.Errorf(codes.Internal, "Could not prepare block: %v", err)
 	}
 	// Set slot, graffiti, randao reveal, and parent root.
@@ -104,8 +107,7 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	}
 
 	resp, err := vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor)
-	log := log.WithFields(logrus.Fields{
-		"slot":               req.Slot,
+	log = log.WithFields(logrus.Fields{
 		"sinceSlotStartTime": time.Since(t),
 		"validator":          sBlk.Block().ProposerIndex(),
 	})
@@ -280,7 +282,7 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSignedBeaconBlock) (*ethpb.ProposeResponse, error) {
 	var (
 		blobSidecars       []*ethpb.BlobSidecar
-		dataColumnSideCars []*ethpb.DataColumnSidecar
+		dataColumnSidecars []*ethpb.DataColumnSidecar
 	)
 
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.ProposeBeaconBlock")
@@ -312,7 +314,7 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	if block.IsBlinded() {
 		block, blobSidecars, err = vs.handleBlindedBlock(ctx, block)
 	} else if block.Version() >= version.Deneb {
-		blobSidecars, dataColumnSideCars, err = vs.handleUnblindedBlock(block, req)
+		blobSidecars, dataColumnSidecars, err = vs.handleUnblindedBlock(block, req)
 	}
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "%s: %v", "handle block failed", err)
@@ -330,10 +332,9 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 		errChan <- nil
 	}()
 
-	if err := vs.broadcastAndReceiveSidecars(ctx, block, root, blobSidecars, dataColumnSideCars); err != nil {
+	if err := vs.broadcastAndReceiveSidecars(ctx, block, root, blobSidecars, dataColumnSidecars); err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive sidecars: %v", err)
 	}
-
 	wg.Wait()
 	if err := <-errChan; err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive block: %v", err)
@@ -370,6 +371,7 @@ func (vs *Server) handleBlindedBlock(ctx context.Context, block interfaces.Signe
 	if block.Version() < version.Bellatrix {
 		return nil, nil, errors.New("pre-Bellatrix blinded block")
 	}
+
 	if vs.BlockBuilder == nil || !vs.BlockBuilder.Configured() {
 		return nil, nil, errors.New("unconfigured block builder")
 	}
@@ -423,7 +425,7 @@ func (vs *Server) handleUnblindedBlock(
 }
 
 // broadcastReceiveBlock broadcasts a block and handles its reception.
-func (vs *Server) broadcastReceiveBlock(ctx context.Context, block interfaces.SignedBeaconBlock, root [32]byte) error {
+func (vs *Server) broadcastReceiveBlock(ctx context.Context, block interfaces.SignedBeaconBlock, root [fieldparams.RootLength]byte) error {
 	protoBlock, err := block.Proto()
 	if err != nil {
 		return errors.Wrap(err, "protobuf conversion failed")
@@ -439,18 +441,14 @@ func (vs *Server) broadcastReceiveBlock(ctx context.Context, block interfaces.Si
 }
 
 // broadcastAndReceiveBlobs handles the broadcasting and reception of blob sidecars.
-func (vs *Server) broadcastAndReceiveBlobs(ctx context.Context, sidecars []*ethpb.BlobSidecar, root [32]byte) error {
+func (vs *Server) broadcastAndReceiveBlobs(ctx context.Context, sidecars []*ethpb.BlobSidecar, root [fieldparams.RootLength]byte) error {
 	eg, eCtx := errgroup.WithContext(ctx)
-	for i, sc := range sidecars {
-		// Copy the iteration instance to a local variable to give each go-routine its own copy to play with.
-		// See https://golang.org/doc/faq#closures_and_goroutines for more details.
-		subIdx := i
-		sCar := sc
+	for subIdx, sc := range sidecars {
 		eg.Go(func() error {
-			if err := vs.P2P.BroadcastBlob(eCtx, uint64(subIdx), sCar); err != nil {
+			if err := vs.P2P.BroadcastBlob(eCtx, uint64(subIdx), sc); err != nil {
 				return errors.Wrap(err, "broadcast blob failed")
 			}
-			readOnlySc, err := blocks.NewROBlobWithRoot(sCar, root)
+			readOnlySc, err := blocks.NewROBlobWithRoot(sc, root)
 			if err != nil {
 				return errors.Wrap(err, "ROBlob creation failed")
 			}

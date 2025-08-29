@@ -24,10 +24,10 @@ func ErrNotSupported(funcName string, ver int) error {
 
 // ThreadSafeEnumerator is a thread-safe counter of all objects created since the node's start.
 type ThreadSafeEnumerator struct {
-	counter uint64
+	counter atomic.Uint64
 }
 
 // Inc increments the enumerator and returns the new object count.
 func (c *ThreadSafeEnumerator) Inc() uint64 {
-	return atomic.AddUint64(&c.counter, 1)
+	return c.counter.Add(1)
 }

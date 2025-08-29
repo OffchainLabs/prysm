@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"sync/atomic"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
@@ -94,7 +93,7 @@ func (v *validator) SubmitSyncCommitteeMessage(ctx context.Context, slot primiti
 		"blockRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(msg.BlockRoot)),
 		"validatorIndex":     msg.ValidatorIndex,
 	}).Info("Submitted new sync message")
-	atomic.AddUint64(&v.syncCommitteeStats.totalMessagesSubmitted, 1)
+	v.syncCommitteeStats.totalMessagesSubmitted.Add(1)
 }
 
 // SubmitSignedContributionAndProof submits the signed sync committee contribution and proof to the beacon chain.

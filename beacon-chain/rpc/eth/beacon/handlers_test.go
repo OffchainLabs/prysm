@@ -14,6 +14,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	chainMock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
@@ -40,7 +41,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
-	GoKZG "github.com/crate-crypto/go-kzg-4844"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
@@ -4781,25 +4781,329 @@ func TestServer_broadcastBlobSidecars(t *testing.T) {
 	require.LogsContain(t, hook, "Broadcasted blob sidecar for already seen block")
 }
 
-func Test_validateBlobSidecars(t *testing.T) {
+func Test_validateBlobs(t *testing.T) {
+	require.NoError(t, kzg.Start())
+
 	blob := util.GetRandBlob(123)
-	commitment := GoKZG.KZGCommitment{180, 218, 156, 194, 59, 20, 10, 189, 186, 254, 132, 93, 7, 127, 104, 172, 238, 240, 237, 70, 83, 89, 1, 152, 99, 0, 165, 65, 143, 62, 20, 215, 230, 14, 205, 95, 28, 245, 54, 25, 160, 16, 178, 31, 232, 207, 38, 85}
-	proof := GoKZG.KZGProof{128, 110, 116, 170, 56, 111, 126, 87, 229, 234, 211, 42, 110, 150, 129, 206, 73, 142, 167, 243, 90, 149, 240, 240, 236, 204, 143, 182, 229, 249, 81, 27, 153, 171, 83, 70, 144, 250, 42, 1, 188, 215, 71, 235, 30, 7, 175, 86}
+	// Generate proper commitment and proof for the blob
+	var kzgBlob kzg.Blob
+	copy(kzgBlob[:], blob[:])
+	commitment, err := kzg.BlobToKZGCommitment(&kzgBlob)
+	require.NoError(t, err)
+	proof, err := kzg.ComputeBlobKZGProof(&kzgBlob, commitment)
+	require.NoError(t, err)
 	blk := util.NewBeaconBlockDeneb()
 	blk.Block.Body.BlobKzgCommitments = [][]byte{commitment[:]}
 	b, err := blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
 	s := &Server{}
-	require.NoError(t, s.validateBlobSidecars(b, [][]byte{blob[:]}, [][]byte{proof[:]}))
+	require.NoError(t, s.validateBlobs(b, [][]byte{blob[:]}, [][]byte{proof[:]}))
 
-	require.ErrorContains(t, "number of blobs, proofs, and commitments do not match", s.validateBlobSidecars(b, [][]byte{blob[:]}, [][]byte{}))
+	require.ErrorContains(t, "number of blobs (1), proofs (0), and commitments (1) do not match", s.validateBlobs(b, [][]byte{blob[:]}, [][]byte{}))
 
 	sk, err := bls.RandKey()
 	require.NoError(t, err)
 	blk.Block.Body.BlobKzgCommitments = [][]byte{sk.PublicKey().Marshal()}
 	b, err = blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
-	require.ErrorContains(t, "could not verify blob proof: can't verify opening proof", s.validateBlobSidecars(b, [][]byte{blob[:]}, [][]byte{proof[:]}))
+	require.ErrorContains(t, "could not verify blob proofs", s.validateBlobs(b, [][]byte{blob[:]}, [][]byte{proof[:]}))
+
+	blobs := [][]byte{}
+	commitments := [][]byte{}
+	proofs := [][]byte{}
+	for i := 0; i < 10; i++ {
+		blobs = append(blobs, blob[:])
+		commitments = append(commitments, commitment[:])
+		proofs = append(proofs, proof[:])
+	}
+	t.Run("pre-Deneb block should return early", func(t *testing.T) {
+		// Create a pre-Deneb block (e.g., Capella)
+		blk := util.NewBeaconBlockCapella()
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		s := &Server{}
+		// Should return nil for pre-Deneb blocks regardless of blobs
+		require.NoError(t, s.validateBlobs(b, [][]byte{}, [][]byte{}))
+		require.NoError(t, s.validateBlobs(b, blobs[:1], proofs[:1]))
+	})
+
+	t.Run("Deneb block with valid single blob", func(t *testing.T) {
+		blk := util.NewBeaconBlockDeneb()
+		blk.Block.Body.BlobKzgCommitments = [][]byte{commitment[:]}
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		s := &Server{}
+		require.NoError(t, s.validateBlobs(b, [][]byte{blob[:]}, [][]byte{proof[:]}))
+	})
+
+	t.Run("Deneb block with max blobs (6)", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		defer params.OverrideBeaconConfig(cfg)
+
+		testCfg := params.BeaconConfig().Copy()
+		testCfg.DenebForkEpoch = 0
+		testCfg.ElectraForkEpoch = 100
+		testCfg.DeprecatedMaxBlobsPerBlock = 6
+		params.OverrideBeaconConfig(testCfg)
+
+		blk := util.NewBeaconBlockDeneb()
+		blk.Block.Slot = 10 // Deneb slot
+		blk.Block.Body.BlobKzgCommitments = commitments[:6]
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		s := &Server{}
+		// Should pass with exactly 6 blobs
+		require.NoError(t, s.validateBlobs(b, blobs[:6], proofs[:6]))
+	})
+
+	t.Run("Deneb block exceeding max blobs", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		defer params.OverrideBeaconConfig(cfg)
+
+		testCfg := params.BeaconConfig().Copy()
+		testCfg.DenebForkEpoch = 0
+		testCfg.ElectraForkEpoch = 100
+		testCfg.DeprecatedMaxBlobsPerBlock = 6
+		params.OverrideBeaconConfig(testCfg)
+
+		blk := util.NewBeaconBlockDeneb()
+		blk.Block.Slot = 10 // Deneb slot
+		blk.Block.Body.BlobKzgCommitments = commitments[:7]
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		s := &Server{}
+		// Should fail with 7 blobs when max is 6
+		err = s.validateBlobs(b, blobs[:7], proofs[:7])
+		require.ErrorContains(t, "number of blobs over max, 7 > 6", err)
+	})
+
+	t.Run("Electra block with valid blobs", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		defer params.OverrideBeaconConfig(cfg)
+
+		// Set up Electra config with max 9 blobs
+		testCfg := params.BeaconConfig().Copy()
+		testCfg.DenebForkEpoch = 0
+		testCfg.ElectraForkEpoch = 5
+		testCfg.DeprecatedMaxBlobsPerBlock = 6
+		testCfg.DeprecatedMaxBlobsPerBlockElectra = 9
+		params.OverrideBeaconConfig(testCfg)
+
+		blk := util.NewBeaconBlockElectra()
+		blk.Block.Slot = 160 // Electra slot (epoch 5+)
+		blk.Block.Body.BlobKzgCommitments = commitments[:9]
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		s := &Server{}
+		// Should pass with 9 blobs in Electra
+		require.NoError(t, s.validateBlobs(b, blobs[:9], proofs[:9]))
+	})
+
+	t.Run("Electra block exceeding max blobs", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		defer params.OverrideBeaconConfig(cfg)
+
+		// Set up Electra config with max 9 blobs
+		testCfg := params.BeaconConfig().Copy()
+		testCfg.DenebForkEpoch = 0
+		testCfg.ElectraForkEpoch = 5
+		testCfg.DeprecatedMaxBlobsPerBlock = 6
+		testCfg.DeprecatedMaxBlobsPerBlockElectra = 9
+		params.OverrideBeaconConfig(testCfg)
+
+		blk := util.NewBeaconBlockElectra()
+		blk.Block.Slot = 160 // Electra slot
+		blk.Block.Body.BlobKzgCommitments = commitments[:10]
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		s := &Server{}
+		// Should fail with 10 blobs when max is 9
+		err = s.validateBlobs(b, blobs[:10], proofs[:10])
+		require.ErrorContains(t, "number of blobs over max, 10 > 9", err)
+	})
+
+	t.Run("Fulu block with valid cell proofs", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		defer params.OverrideBeaconConfig(cfg)
+
+		testCfg := params.BeaconConfig().Copy()
+		testCfg.DenebForkEpoch = 0
+		testCfg.ElectraForkEpoch = 5
+		testCfg.FuluForkEpoch = 10
+		testCfg.DeprecatedMaxBlobsPerBlock = 6
+		testCfg.DeprecatedMaxBlobsPerBlockElectra = 9
+		testCfg.NumberOfColumns = 128 // Standard PeerDAS configuration
+		params.OverrideBeaconConfig(testCfg)
+
+		// Create Fulu block with proper cell proofs
+		blk := util.NewBeaconBlockFulu()
+		blk.Block.Slot = 320 // Epoch 10 (Fulu fork)
+
+		// Generate valid commitments and cell proofs for testing
+		blobCount := 2
+		commitments := make([][]byte, blobCount)
+		fuluBlobs := make([][]byte, blobCount)
+		var kzgBlobs []kzg.Blob
+
+		for i := 0; i < blobCount; i++ {
+			blob := util.GetRandBlob(int64(i))
+			fuluBlobs[i] = blob[:]
+			var kzgBlob kzg.Blob
+			copy(kzgBlob[:], blob[:])
+			kzgBlobs = append(kzgBlobs, kzgBlob)
+
+			// Generate commitment
+			commitment, err := kzg.BlobToKZGCommitment(&kzgBlob)
+			require.NoError(t, err)
+			commitments[i] = commitment[:]
+		}
+
+		blk.Block.Body.BlobKzgCommitments = commitments
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+
+		// Generate cell proofs for the blobs (flattened format like execution client)
+		numberOfColumns := params.BeaconConfig().NumberOfColumns
+		cellProofs := make([][]byte, uint64(blobCount)*numberOfColumns)
+		for blobIdx := 0; blobIdx < blobCount; blobIdx++ {
+			cellsAndProofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlobs[blobIdx])
+			require.NoError(t, err)
+
+			for colIdx := uint64(0); colIdx < numberOfColumns; colIdx++ {
+				cellProofIdx := uint64(blobIdx)*numberOfColumns + colIdx
+				cellProofs[cellProofIdx] = cellsAndProofs.Proofs[colIdx][:]
+			}
+		}
+
+		s := &Server{}
+		// Should use cell batch verification for Fulu blocks
+		require.NoError(t, s.validateBlobs(b, fuluBlobs, cellProofs))
+	})
+
+	t.Run("Fulu block with invalid cell proof count", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		defer params.OverrideBeaconConfig(cfg)
+
+		testCfg := params.BeaconConfig().Copy()
+		testCfg.DenebForkEpoch = 0
+		testCfg.ElectraForkEpoch = 5
+		testCfg.FuluForkEpoch = 10
+		testCfg.NumberOfColumns = 128
+		params.OverrideBeaconConfig(testCfg)
+
+		blk := util.NewBeaconBlockFulu()
+		blk.Block.Slot = 320 // Epoch 10 (Fulu fork)
+
+		// Create valid commitments but wrong number of cell proofs
+		blobCount := 2
+		commitments := make([][]byte, blobCount)
+		fuluBlobs := make([][]byte, blobCount)
+		for i := 0; i < blobCount; i++ {
+			blob := util.GetRandBlob(int64(i))
+			fuluBlobs[i] = blob[:]
+
+			var kzgBlob kzg.Blob
+			copy(kzgBlob[:], blob[:])
+			commitment, err := kzg.BlobToKZGCommitment(&kzgBlob)
+			require.NoError(t, err)
+			commitments[i] = commitment[:]
+		}
+
+		blk.Block.Body.BlobKzgCommitments = commitments
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+
+		// Wrong number of cell proofs (should be blobCount * numberOfColumns)
+		wrongCellProofs := make([][]byte, 10) // Too few proofs
+
+		s := &Server{}
+		err = s.validateBlobs(b, fuluBlobs, wrongCellProofs)
+		require.ErrorContains(t, "do not match", err)
+	})
+
+	t.Run("Deneb block with invalid blob proof", func(t *testing.T) {
+		blob := util.GetRandBlob(123)
+		invalidProof := make([]byte, 48) // All zeros - invalid proof
+
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+
+		blk := util.NewBeaconBlockDeneb()
+		blk.Block.Body.BlobKzgCommitments = [][]byte{sk.PublicKey().Marshal()}
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+
+		s := &Server{}
+		err = s.validateBlobs(b, [][]byte{blob[:]}, [][]byte{invalidProof})
+		require.ErrorContains(t, "could not verify blob proofs", err)
+	})
+
+	t.Run("empty blobs and proofs should pass", func(t *testing.T) {
+		blk := util.NewBeaconBlockDeneb()
+		blk.Block.Body.BlobKzgCommitments = [][]byte{}
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+
+		s := &Server{}
+		require.NoError(t, s.validateBlobs(b, [][]byte{}, [][]byte{}))
+	})
+
+	t.Run("BlobSchedule with progressive increases (BPO)", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		defer params.OverrideBeaconConfig(cfg)
+
+		// Set up config with BlobSchedule (BPO - Blob Production Optimization)
+		testCfg := params.BeaconConfig().Copy()
+		testCfg.DenebForkEpoch = 0
+		testCfg.ElectraForkEpoch = 100
+		testCfg.FuluForkEpoch = 200
+		testCfg.DeprecatedMaxBlobsPerBlock = 6
+		testCfg.DeprecatedMaxBlobsPerBlockElectra = 9
+		// Define blob schedule with progressive increases
+		testCfg.BlobSchedule = []params.BlobScheduleEntry{
+			{Epoch: 0, MaxBlobsPerBlock: 3},  // Start with 3 blobs
+			{Epoch: 10, MaxBlobsPerBlock: 5}, // Increase to 5 at epoch 10
+			{Epoch: 20, MaxBlobsPerBlock: 7}, // Increase to 7 at epoch 20
+			{Epoch: 30, MaxBlobsPerBlock: 9}, // Increase to 9 at epoch 30
+		}
+		params.OverrideBeaconConfig(testCfg)
+
+		s := &Server{}
+
+		// Test epoch 0-9: max 3 blobs
+		t.Run("epoch 0-9: max 3 blobs", func(t *testing.T) {
+			blk := util.NewBeaconBlockDeneb()
+			blk.Block.Slot = 5 // Epoch 0
+			blk.Block.Body.BlobKzgCommitments = commitments[:3]
+			b, err := blocks.NewSignedBeaconBlock(blk)
+			require.NoError(t, err)
+			require.NoError(t, s.validateBlobs(b, blobs[:3], proofs[:3]))
+
+			// Should fail with 4 blobs
+			blk.Block.Body.BlobKzgCommitments = commitments[:4]
+			b, err = blocks.NewSignedBeaconBlock(blk)
+			require.NoError(t, err)
+			err = s.validateBlobs(b, blobs[:4], proofs[:4])
+			require.ErrorContains(t, "number of blobs over max, 4 > 3", err)
+		})
+
+		// Test epoch 30+: max 9 blobs
+		t.Run("epoch 30+: max 9 blobs", func(t *testing.T) {
+			blk := util.NewBeaconBlockDeneb()
+			blk.Block.Slot = 960 // Epoch 30
+			blk.Block.Body.BlobKzgCommitments = commitments[:9]
+			b, err := blocks.NewSignedBeaconBlock(blk)
+			require.NoError(t, err)
+			require.NoError(t, s.validateBlobs(b, blobs[:9], proofs[:9]))
+
+			// Should fail with 10 blobs
+			blk.Block.Body.BlobKzgCommitments = commitments[:10]
+			b, err = blocks.NewSignedBeaconBlock(blk)
+			require.NoError(t, err)
+			err = s.validateBlobs(b, blobs[:10], proofs[:10])
+			require.ErrorContains(t, "number of blobs over max, 10 > 9", err)
+		})
+	})
 }
 
 func TestGetPendingConsolidations(t *testing.T) {
