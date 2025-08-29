@@ -18,7 +18,10 @@ import (
 )
 
 func TestProposer_GetSyncAggregate_OK(t *testing.T) {
+	st, err := util.NewBeaconStateAltair()
+	require.NoError(t, err)
 	proposerServer := &Server{
+		HeadFetcher:       &chainmock.ChainService{State: st},
 		SyncChecker:       &mockSync.Sync{IsSyncing: false},
 		SyncCommitteePool: synccommittee.NewStore(),
 	}
