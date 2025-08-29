@@ -186,7 +186,7 @@ func (s *Server) GetChainHead(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJson(w, response)
 }
 
-// Deprecated: no longer supported post Fulu fork
+// Warning: no longer supported post Fulu blobs
 func (s *Server) PublishBlobs(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.PublishBlobs")
 	defer span.End()
@@ -194,8 +194,8 @@ func (s *Server) PublishBlobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	currentSlot := slots.CurrentSlot(s.TimeFetcher.GenesisTime())
-	if slots.ToEpoch(currentSlot) >= params.BeaconConfig().FuluForkEpoch {
-		httputil.HandleError(w, "This endpoint is no longer supported post Fulu fork", http.StatusBadRequest)
+	if slots.ToEpoch(currentSlot) < params.BeaconConfig().DenebForkEpoch {
+		httputil.HandleError(w, "This endpoint is not supported pre deneb", http.StatusBadRequest)
 		return
 	}
 	var req structs.PublishBlobsRequest
@@ -218,6 +218,11 @@ func (s *Server) PublishBlobs(w http.ResponseWriter, r *http.Request) {
 		sc, err := blobSidecar.ToConsensus()
 		if err != nil {
 			httputil.HandleError(w, "Could not decode blob sidecar: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if slots.ToEpoch(sc.SignedBlockHeader.Header.Slot) > params.BeaconConfig().FuluForkEpoch {
+			httputil.HandleError(w, "Blob sidecars not supported for post fulu blobs", http.StatusBadRequest)
 			return
 		}
 
