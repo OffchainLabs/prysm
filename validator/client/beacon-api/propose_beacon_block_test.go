@@ -12,7 +12,7 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-func TestProposeBeaconBlock_Error(t *testing.T) {
+func TestProposeBeaconBlock_SSZ_Error(t *testing.T) {
 	testSuites := []struct {
 		name                 string
 		returnedError        error
@@ -106,16 +106,33 @@ func TestProposeBeaconBlock_Error(t *testing.T) {
 				ctx := t.Context()
 				jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
-				headers := map[string]string{"Eth-Consensus-Version": testCase.consensusVersion}
-				jsonRestHandler.EXPECT().Post(
+				// Expect PostSSZ to be called first with SSZ data
+				headers := map[string]string{
+					"Eth-Consensus-Version": testCase.consensusVersion,
+					"Content-Type": "application/octet-stream",
+				}
+				jsonRestHandler.EXPECT().PostSSZ(
 					gomock.Any(),
 					testCase.endpoint,
 					headers,
 					gomock.Any(),
-					nil,
 				).Return(
-					testSuite.returnedError,
+					nil, nil, testSuite.returnedError,
 				).Times(1)
+				
+				// If PostSSZ fails, expect fallback to JSON Post
+				if testSuite.returnedError != nil {
+					jsonHeaders := map[string]string{"Eth-Consensus-Version": testCase.consensusVersion}
+					jsonRestHandler.EXPECT().Post(
+						gomock.Any(),
+						testCase.endpoint,
+						jsonHeaders,
+						gomock.Any(),
+						nil,
+					).Return(
+						testSuite.returnedError,
+					).Times(1)
+				}
 
 				validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
 				_, err := validatorClient.proposeBeaconBlock(ctx, testCase.block)
@@ -129,4 +146,125 @@ func TestProposeBeaconBlock_UnsupportedBlockType(t *testing.T) {
 	validatorClient := &beaconApiValidatorClient{}
 	_, err := validatorClient.proposeBeaconBlock(t.Context(), &ethpb.GenericSignedBeaconBlock{})
 	assert.ErrorContains(t, "unsupported block type", err)
+}
+
+func TestProposeBeaconBlock_SSZSuccess_NoFallback(t *testing.T) {
+	testCases := []struct {
+		name             string
+		consensusVersion string
+		endpoint         string
+		block            *ethpb.GenericSignedBeaconBlock
+	}{
+		{
+			name:             "phase0",
+			consensusVersion: "phase0",
+			endpoint:         "/eth/v2/beacon/blocks",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedPhase0Block(),
+			},
+		},
+		{
+			name:             "altair",
+			consensusVersion: "altair",
+			endpoint:         "/eth/v2/beacon/blocks",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedAltairBlock(),
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			ctx := t.Context()
+			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+
+			// Expect PostSSZ to be called and succeed
+			headers := map[string]string{
+				"Eth-Consensus-Version": testCase.consensusVersion,
+				"Content-Type": "application/octet-stream",
+			}
+			jsonRestHandler.EXPECT().PostSSZ(
+				gomock.Any(),
+				testCase.endpoint,
+				headers,
+				gomock.Any(),
+			).Return(
+				nil, nil, nil,
+			).Times(1)
+
+			// Post should NOT be called when PostSSZ succeeds
+			jsonRestHandler.EXPECT().Post(
+				gomock.Any(),
+				gomock.Any(),
+				gomock.Any(),
+				gomock.Any(),
+				gomock.Any(),
+			).Times(0)
+
+			validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+			_, err := validatorClient.proposeBeaconBlock(ctx, testCase.block)
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestProposeBeaconBlock_SSZFails_FallbackToJSON(t *testing.T) {
+	testCases := []struct {
+		name             string
+		consensusVersion string
+		endpoint         string
+		block            *ethpb.GenericSignedBeaconBlock
+	}{
+		{
+			name:             "phase0",
+			consensusVersion: "phase0",
+			endpoint:         "/eth/v2/beacon/blocks",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedPhase0Block(),
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			ctx := t.Context()
+			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+
+			// Expect PostSSZ to be called first and fail
+			sszHeaders := map[string]string{
+				"Eth-Consensus-Version": testCase.consensusVersion,
+				"Content-Type": "application/octet-stream",
+			}
+			jsonRestHandler.EXPECT().PostSSZ(
+				gomock.Any(),
+				testCase.endpoint,
+				sszHeaders,
+				gomock.Any(),
+			).Return(
+				nil, nil, errors.New("SSZ not supported"),
+			).Times(1)
+
+			// Expect fallback to JSON Post
+			jsonHeaders := map[string]string{"Eth-Consensus-Version": testCase.consensusVersion}
+			jsonRestHandler.EXPECT().Post(
+				gomock.Any(),
+				testCase.endpoint,
+				jsonHeaders,
+				gomock.Any(),
+				nil,
+			).Return(
+				nil,
+			).Times(1)
+
+			validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+			_, err := validatorClient.proposeBeaconBlock(ctx, testCase.block)
+			assert.NoError(t, err)
+		})
+	}
 }
