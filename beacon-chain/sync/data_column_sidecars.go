@@ -366,12 +366,6 @@ func tryReconstructFromStorageAndPeers(
 				result[root] = append(result[root], sidecar)
 			}
 		}
-
-		// Compute indices by root by peers with the updated missing indices and connected peers.
-		indicesByRootByPeer, err = computeIndicesByRootByPeer(p.P2P, slotByRoot, missingIndicesByRoot, connectedPeers)
-		if err != nil {
-			return nil, errors.Wrap(err, "explore peers")
-		}
 	}
 
 	log.WithFields(logrus.Fields{
@@ -474,98 +468,6 @@ func updateResults(
 	}
 
 	return verifiedSidecarsByRoot
-}
-
-// selectPeers selects peers to query the sidecars.
-// It begins by randomly selecting a peer in `origIndicesByRootByPeer` that has enough bandwidth,
-// and assigns to it all its available sidecars. Then, it randomly select an other peer, until
-// all sidecars in `missingIndicesByRoot` are covered.
-func selectPeers(
-	p DataColumnSidecarsParams,
-	randomSource *rand.Rand,
-	count int,
-	origIndicesByRootByPeer map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool,
-) (map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool, error) {
-	const randomPeerTimeout = 30 * time.Second
-
-	// Select peers to query the missing sidecars from.
-	indicesByRootByPeer := copyIndicesByRootByPeer(origIndicesByRootByPeer)
-	internalIndicesByRootByPeer := copyIndicesByRootByPeer(indicesByRootByPeer)
-	indicesByRootByPeerToQuery := make(map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool)
-	for len(internalIndicesByRootByPeer) > 0 {
-		// Randomly select a peer with enough bandwidth.
-		peer, err := func() (goPeer.ID, error) {
-			ctx, cancel := context.WithTimeout(p.Ctx, randomPeerTimeout)
-			defer cancel()
-
-			peer, err := randomPeer(ctx, randomSource, p.RateLimiter, count, internalIndicesByRootByPeer)
-			if err != nil {
-				return "", errors.Wrap(err, "select random peer")
-			}
-
-			return peer, err
-		}()
-		if err != nil {
-			return nil, err
-		}
-
-		// Query all the sidecars that peer can offer us.
-		newIndicesByRoot, ok := internalIndicesByRootByPeer[peer]
-		if !ok {
-			return nil, errors.Errorf("peer %s not found in internal indices by root by peer map", peer)
-		}
-
-		indicesByRootByPeerToQuery[peer] = newIndicesByRoot
-
-		// Remove this peer from the maps to avoid re-selection.
-		delete(indicesByRootByPeer, peer)
-		delete(internalIndicesByRootByPeer, peer)
-
-		// Delete the corresponding sidecars from other peers in the internal map
-		// to avoid re-selection during this iteration.
-		for peer, indicesByRoot := range internalIndicesByRootByPeer {
-			for root, indices := range indicesByRoot {
-				newIndices := newIndicesByRoot[root]
-				for index := range newIndices {
-					delete(indices, index)
-				}
-				if len(indices) == 0 {
-					delete(indicesByRoot, root)
-				}
-			}
-			if len(indicesByRoot) == 0 {
-				delete(internalIndicesByRootByPeer, peer)
-			}
-		}
-	}
-
-	return indicesByRootByPeerToQuery, nil
-}
-
-// updateResults updates the missing indices and verified sidecars maps based on the newly verified sidecars.
-func updateResults(
-	verifiedSidecars []blocks.VerifiedRODataColumn,
-	origMissingIndicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
-) (map[[fieldparams.RootLength]byte]map[uint64]bool, map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn) {
-	// Copy the original map to avoid modifying it directly.
-	missingIndicesByRoot := copyIndicesByRoot(origMissingIndicesByRoot)
-	verifiedSidecarsByRoot := make(map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn)
-	for _, verifiedSidecar := range verifiedSidecars {
-		blockRoot := verifiedSidecar.BlockRoot()
-		index := verifiedSidecar.Index
-
-		// Add to the result map grouped by block root
-		verifiedSidecarsByRoot[blockRoot] = append(verifiedSidecarsByRoot[blockRoot], verifiedSidecar)
-
-		if indices, ok := missingIndicesByRoot[blockRoot]; ok {
-			delete(indices, index)
-			if len(indices) == 0 {
-				delete(missingIndicesByRoot, blockRoot)
-			}
-		}
-	}
-
-	return missingIndicesByRoot, verifiedSidecarsByRoot
 }
 
 // fetchDataColumnSidecarsFromPeers retrieves data column sidecars from peers.
