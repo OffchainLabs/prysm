@@ -92,10 +92,6 @@ func (info *sszInfo) ListInfo() (*listInfo, error) {
 		return nil, fmt.Errorf("sszInfo is not a List type, got %s", info.sszType)
 	}
 
-	if info.listInfo == nil {
-		return nil, errors.New("sszInfo.listInfo is nil")
-	}
-
 	return info.listInfo, nil
 }
 

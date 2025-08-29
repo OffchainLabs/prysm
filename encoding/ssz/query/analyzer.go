@@ -31,19 +31,21 @@ func AnalyzeObject(obj any) (*sszInfo, error) {
 	return info, nil
 }
 
-// PopulateFromValue receives an actual value and fills the sszInfo dynamically.
-func PopulateFromValue(sszInfo *sszInfo, value any) error {
+// PopulateVariableLengthInfo populates runtime information for SSZ fields of variable-sized types.
+// This function updates the sszInfo structure with actual lengths and offsets that can only
+// be determined at runtime for variable-sized items like Lists and variable-sized Container fields.
+func PopulateVariableLengthInfo(sszInfo *sszInfo, value any) error {
 	if sszInfo == nil {
 		return errors.New("sszInfo is nil")
+	}
+
+	if value == nil {
+		return errors.New("value is nil")
 	}
 
 	// Short circuit: If the type is fixed-sized, we don't need to fill in the info.
 	if !sszInfo.isVariable {
 		return nil
-	}
-
-	if value == nil {
-		return errors.New("value is nil")
 	}
 
 	switch sszInfo.sszType {
@@ -52,6 +54,10 @@ func PopulateFromValue(sszInfo *sszInfo, value any) error {
 		listInfo, err := sszInfo.ListInfo()
 		if err != nil {
 			return fmt.Errorf("could not get list info: %w", err)
+		}
+
+		if listInfo == nil {
+			return errors.New("listInfo is nil")
 		}
 
 		val := reflect.ValueOf(value)
@@ -72,6 +78,9 @@ func PopulateFromValue(sszInfo *sszInfo, value any) error {
 			return fmt.Errorf("could not get container info: %w", err)
 		}
 
+		// Dereference first in case value is a pointer.
+		derefValue := dereferencePointer(value)
+
 		// Start with the fixed size of this Container.
 		currentActualOffset := sszInfo.FixedSize()
 
@@ -91,8 +100,8 @@ func PopulateFromValue(sszInfo *sszInfo, value any) error {
 			fieldInfo.actualOffset = currentActualOffset
 
 			// Recursively populate variable-sized fields.
-			fieldValue := dereferencePointer(value).FieldByName(fieldInfo.goFieldName)
-			if err := PopulateFromValue(childSszInfo, fieldValue.Interface()); err != nil {
+			fieldValue := derefValue.FieldByName(fieldInfo.goFieldName)
+			if err := PopulateVariableLengthInfo(childSszInfo, fieldValue.Interface()); err != nil {
 				return fmt.Errorf("could not populate from value for field %s: %w", fieldName, err)
 			}
 
@@ -101,7 +110,7 @@ func PopulateFromValue(sszInfo *sszInfo, value any) error {
 
 		return nil
 	default:
-		return fmt.Errorf("unsupported SSZ type for variable size info: %s", sszInfo.sszType)
+		return fmt.Errorf("unsupported SSZ type (%s) for variable size info", sszInfo.sszType)
 	}
 }
 
@@ -223,9 +232,6 @@ func analyzeListType(typ reflect.Type, elementInfo *sszInfo, limit uint64) (*ssz
 		listInfo: &listInfo{
 			limit:   limit,
 			element: elementInfo,
-			// NOTE: Length is not known until unmarshalling.
-			// This will be set later in `PopulateFromValue`.
-			length: 0,
 		},
 	}, nil
 }

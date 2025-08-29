@@ -140,8 +140,8 @@ func TestCalculateOffsetAndLength(t *testing.T) {
 				require.NoError(t, err)
 
 				testContainer := createVariableTestContainer()
-				err = query.PopulateFromValue(info, testContainer)
-				require.NoError(t, err, "PopulateFromValue should not return an error")
+				err = query.PopulateVariableLengthInfo(info, testContainer)
+				require.NoError(t, err)
 
 				_, offset, length, err := query.CalculateOffsetAndLength(info, path)
 				require.NoError(t, err)
