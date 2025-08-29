@@ -228,11 +228,11 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 		// Set exits.
 		sBlk.SetVoluntaryExits(vs.getExits(head, sBlk.Block().Slot()))
 
-		// Set bls to execution change. New in Capella.
-		vs.setBlsToExecData(sBlk, head)
-
 		// Set sync aggregate. New in Altair.
 		vs.setSyncAggregate(ctx, sBlk)
+
+		// Set bls to execution change. New in Capella.
+		vs.setBlsToExecData(sBlk, head)
 	}()
 
 	winningBid := primitives.ZeroWei()

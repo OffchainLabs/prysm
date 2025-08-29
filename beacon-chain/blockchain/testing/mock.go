@@ -510,7 +510,7 @@ func (s *ChainService) HeadValidatorIndexToPublicKey(_ context.Context, _ primit
 }
 
 // HeadSyncCommitteeIndices mocks HeadSyncCommitteeIndices and always return `HeadNextSyncCommitteeIndices`.
-func (s *ChainService) HeadSyncCommitteeIndices(_ context.Context, index primitives.ValidatorIndex, _ primitives.Slot) ([]primitives.CommitteeIndex, error) {
+func (s *ChainService) HeadSyncCommitteeIndices(_ context.Context, _ primitives.ValidatorIndex, _ primitives.Slot) ([]primitives.CommitteeIndex, error) {
 	return s.SyncCommitteeIndices, nil
 }
 
