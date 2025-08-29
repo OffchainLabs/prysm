@@ -323,7 +323,7 @@ func BeaconProposerIndexAtSlot(ctx context.Context, state state.ReadOnlyBeaconSt
 	e := slots.ToEpoch(slot)
 	stateEpoch := slots.ToEpoch(state.Slot())
 	// Even if the state is post Fulu, we may request a past proposer index.
-	if state.Version() >= version.Fulu && e >= params.BeaconConfig().FuluForkEpoch {
+	if state.Version() >= version.Fulu {
 		// We can use the cached lookahead only for the current and the next epoch.
 		if e == stateEpoch || e == stateEpoch+1 {
 			return beaconProposerIndexAtSlotFulu(state, slot)
