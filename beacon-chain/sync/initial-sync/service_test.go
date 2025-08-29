@@ -747,10 +747,22 @@ func TestFetchOriginColumns(t *testing.T) {
 		other.ENR().Set(peerdas.Cgc(numberOfCustodyGroups))
 		p2p.Peers().UpdateENR(other.ENR(), other.PeerID())
 
-		expectedRequest := &ethpb.DataColumnSidecarsByRangeRequest{
-			StartSlot: 0,
-			Count:     1,
-			Columns:   []uint64{1, 17, 19, 42, 75, 87, 102, 117},
+		expectedRequests := []*ethpb.DataColumnSidecarsByRangeRequest{
+			{
+				StartSlot: 0,
+				Count:     1,
+				Columns:   []uint64{1, 17, 19, 42, 75, 87, 102, 117},
+			},
+			{
+				StartSlot: 0,
+				Count:     1,
+				Columns:   []uint64{1, 17, 19, 75, 87, 102, 117},
+			},
+		}
+
+		toRespondByAttempt := [][]uint64{
+			{42},
+			{1, 17, 19, 75, 87, 102, 117},
 		}
 
 		clock := startup.NewClock(time.Now(), [fieldparams.RootLength]byte{})
@@ -783,27 +795,22 @@ func TestFetchOriginColumns(t *testing.T) {
 		}
 
 		// Do not respond any sidecar on the first attempt, and respond everything requested on the second one.
-		firstAttempt := true
+		attempt := 0
 		other.SetStreamHandler(protocol, func(stream network.Stream) {
 			actualRequest := new(ethpb.DataColumnSidecarsByRangeRequest)
 			err := other.Encoding().DecodeWithMaxLength(stream, actualRequest)
 			assert.NoError(t, err)
-			assert.DeepEqual(t, expectedRequest, actualRequest)
+			assert.DeepEqual(t, expectedRequests[attempt], actualRequest)
 
-			if firstAttempt {
-				firstAttempt = false
-				err = stream.CloseWrite()
-				assert.NoError(t, err)
-				return
-			}
-
-			for _, column := range actualRequest.Columns {
+			for _, column := range toRespondByAttempt[attempt] {
 				err = prysmSync.WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedRoSidecars[column].DataColumnSidecar)
 				assert.NoError(t, err)
 			}
 
 			err = stream.CloseWrite()
 			assert.NoError(t, err)
+
+			attempt++
 		})
 
 		err = service.fetchOriginDataColumnSidecars(roBlock, delay)
@@ -811,8 +818,10 @@ func TestFetchOriginColumns(t *testing.T) {
 
 		// Check all corresponding sidecars are saved in the store.
 		summary := storage.Summary(roBlock.Root())
-		for _, index := range expectedRequest.Columns {
-			require.Equal(t, true, summary.HasIndex(index))
+		for _, indices := range toRespondByAttempt {
+			for _, index := range indices {
+				require.Equal(t, true, summary.HasIndex(index))
+			}
 		}
 	})
 }
