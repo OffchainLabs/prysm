@@ -253,16 +253,16 @@ filegroup(
     url = "https://github.com/ethereum/EIPs/archive/5480440fe51742ed23342b68cf106cefd427e39d.tar.gz",
 )
 
-consensus_spec_version = "v1.6.0-alpha.4"
+consensus_spec_version = "v1.6.0-alpha.5"
 
 load("@prysm//tools:download_spectests.bzl", "consensus_spec_tests")
 
 consensus_spec_tests(
     name = "consensus_spec_tests",
     flavors = {
-        "general": "sha256-MaN4zu3o0vWZypUHS5r4D8WzJF4wANoadM8qm6iyDs4=",
-        "minimal": "sha256-aZGNPp/bBvJgq3Wf6vyR0H6G3DOkbSuggEmOL4jEmtg=",
-        "mainnet": "sha256-C7jjosvpzUgw3GPajlsWBV02ZbkZ5Uv4ikmOqfDGajI=",
+        "general": "sha256-BXuEb1XbeSft0qzVFnoB8KC0YR1qM3ybT5lKUDbUWn8=",
+        "minimal": "sha256-EjwSHgBbWSoy5hm9V+A/bVMabyojaKsBNPrRtuPVq4k=",
+        "mainnet": "sha256-OGWMzarzaV1B9mVpy48/DCUbhjfX+b64pAxWwPLWhAs=",
     },
     version = consensus_spec_version,
 )
@@ -278,7 +278,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-qreawRS77l8CebiNww8z727qUItw7KlHY1Xqj7IrPdk=",
+    integrity = "sha256-FQWR5EZuVcQGR0ol9vpd7eunnfGexJ/7J3xycrFEJbU=",
     strip_prefix = "consensus-specs-" + consensus_spec_version[1:],
     url = "https://github.com/ethereum/consensus-specs/archive/refs/tags/%s.tar.gz" % consensus_spec_version,
 )

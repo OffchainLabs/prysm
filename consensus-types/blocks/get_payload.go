@@ -10,7 +10,7 @@ import (
 )
 
 // GetPayloadResponse represents the result of unmarshaling an execution engine
-// GetPayloadResponseV(1|2|3|4) value.
+// GetPayloadResponseV(1|2|3|4|5) value.
 type GetPayloadResponse struct {
 	ExecutionData   interfaces.ExecutionData
 	BlobsBundler    pb.BlobsBundler

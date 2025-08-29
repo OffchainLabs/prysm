@@ -127,6 +127,7 @@ var appHelpFlagGroups = []flagGroup{
 			storage.BlobRetentionEpochFlag,
 			storage.BlobStorageLayout,
 			storage.BlobStoragePathFlag,
+			storage.DataColumnStoragePathFlag,
 		},
 	},
 	{ // Flags relevant to configuring local block production or external builders such as mev-boost.

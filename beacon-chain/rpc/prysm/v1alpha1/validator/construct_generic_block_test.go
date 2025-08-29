@@ -29,12 +29,19 @@ func TestConstructGenericBeaconBlock(t *testing.T) {
 		require.NoError(t, err)
 		r1, err := eb.Block.HashTreeRoot()
 		require.NoError(t, err)
-		result, err := vs.constructGenericBeaconBlock(b, nil, primitives.ZeroWei())
+		bundle := &enginev1.BlobsBundleV2{
+			KzgCommitments: [][]byte{{1, 2, 3}},
+			Proofs:         [][]byte{{4, 5, 6}},
+			Blobs:          [][]byte{{7, 8, 9}},
+		}
+		result, err := vs.constructGenericBeaconBlock(b, bundle, primitives.ZeroWei())
 		require.NoError(t, err)
 		r2, err := result.GetFulu().Block.HashTreeRoot()
 		require.NoError(t, err)
 		require.Equal(t, r1, r2)
 		require.Equal(t, result.IsBlinded, false)
+		require.DeepEqual(t, bundle.Blobs, result.GetFulu().GetBlobs())
+		require.DeepEqual(t, bundle.Proofs, result.GetFulu().GetKzgProofs())
 	})
 
 	// Test for Electra version
