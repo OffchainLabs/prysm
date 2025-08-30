@@ -44,6 +44,13 @@ message FixedTestContainer {
 
 // ===== VARIABLE-SIZE TEST CONTAINERS =====
 
+// VariableNestedContainer - nested container for testing nested field access
+// Tests: nested container navigation, field offset calculations within nested structures
+message VariableNestedContainer {
+  uint64 value1 = 1;  
+  repeated uint64 field_list_uint64 = 2 [ (ethereum.eth.ext.ssz_max) = "100" ];
+}
+
 // VariableTestContainer - comprehensive variable-size container for SSZ query testing
 // Tests: Variable-size lists, offsets in variable containers, mixed fixed/variable fields
 message VariableTestContainer {
@@ -59,7 +66,10 @@ message VariableTestContainer {
   // Each container is fixed-size (40 bytes), but list itself is variable
   repeated FixedNestedContainer field_list_container = 3 [ (ethereum.eth.ext.ssz_max) = "128" ];  // Test: List[FixedNestedContainer, 128]
 
+  // Variable nested container - test nested container access within variable container
+  VariableNestedContainer nested = 4;
+
   // Fixed-size trailing field - test fixed field after variable fields
   // Verifies correct offset calculation after variable-size fields
-  bytes trailing_field = 4 [ (ethereum.eth.ext.ssz_size) = "56" ];  // Test: fixed 56-byte field at end, offset: 32 + 4 + 4 = 40
+  bytes trailing_field = 5 [ (ethereum.eth.ext.ssz_size) = "56" ];  // Test: fixed 56-byte field at end, offset: 32 + 4 + 4 + 4 = 44
 }

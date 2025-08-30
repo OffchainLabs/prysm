@@ -113,20 +113,43 @@ func TestCalculateOffsetAndLength(t *testing.T) {
 			{
 				name:           "field_list_uint64",
 				path:           ".field_list_uint64",
-				expectedOffset: 96, // First part of variable-sized type.
-				expectedLength: 40, // 5 elements * uint64 (8 bytes each)
+				expectedOffset: 100, // First part of variable-sized type.
+				expectedLength: 40,  // 5 elements * uint64 (8 bytes each)
 			},
 			{
 				name:           "field_list_container",
 				path:           ".field_list_container",
-				expectedOffset: 136, // Second part of variable-sized type.
+				expectedOffset: 140, // Second part of variable-sized type.
 				expectedLength: 120, // 3 elements * FixedNestedContainer (40 bytes each)
+			},
+			// Nested paths
+			{
+				name:           "nested",
+				path:           ".nested",
+				expectedOffset: 260,
+				// Calculated with:
+				// - Value1: 8 bytes
+				// - field_list_uint64 offset: 4 bytes
+				// - field_list_uint64 length: 40 bytes
+				expectedLength: 52,
+			},
+			{
+				name:           "nested.value1",
+				path:           ".nested.value1",
+				expectedOffset: 260,
+				expectedLength: 8,
+			},
+			{
+				name:           "nested.field_list_uint64",
+				path:           ".nested.field_list_uint64",
+				expectedOffset: 272,
+				expectedLength: 40,
 			},
 			// Fixed trailing field
 			{
 				name:           "trailing_field",
 				path:           ".trailing_field",
-				expectedOffset: 40, // After leading_field + 2 offset pointers
+				expectedOffset: 44, // After leading_field + 2 offset pointers
 				expectedLength: 56,
 			},
 		}
@@ -287,6 +310,12 @@ func createVariableTestContainer() *sszquerypb.VariableTestContainer {
 		FieldListUint64:    []uint64{100, 200, 300, 400, 500},
 		FieldListContainer: nestedContainers,
 
+		// Variable nested container
+		Nested: &sszquerypb.VariableNestedContainer{
+			Value1:          42,
+			FieldListUint64: []uint64{1, 2, 3, 4, 5},
+		},
+
 		// Fixed trailing field
 		TrailingField: trailingField,
 	}
@@ -314,6 +343,19 @@ func getVariableTestContainerSpec() testutil.TestSpec {
 			{
 				Path:     ".field_list_container",
 				Expected: testContainer.FieldListContainer,
+			},
+			// Variable nested container with every path
+			{
+				Path:     ".nested",
+				Expected: testContainer.Nested,
+			},
+			{
+				Path:     ".nested.value1",
+				Expected: testContainer.Nested.Value1,
+			},
+			{
+				Path:     ".nested.field_list_uint64",
+				Expected: testContainer.Nested.FieldListUint64,
 			},
 			// Fixed trailing field
 			{
