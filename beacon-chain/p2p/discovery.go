@@ -684,7 +684,7 @@ func (s *Service) filterPeer(node *enode.Node) bool {
 
 	peerData, multiAddrs, err := convertToAddrInfo(node)
 	if err != nil {
-		log.WithError(err).Debug("Could not convert to peer data")
+		log.WithError(err).WithField("node", node.String()).Debug("Could not convert to peer data")
 		return false
 	}
 
@@ -851,7 +851,7 @@ func convertToMultiAddr(nodes []*enode.Node) []ma.Multiaddr {
 func convertToAddrInfo(node *enode.Node) (*peer.AddrInfo, []ma.Multiaddr, error) {
 	multiAddrs, err := retrieveMultiAddrsFromNode(node)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, errors.Wrap(err, "retrieve multiaddrs from node")
 	}
 
 	if len(multiAddrs) == 0 {

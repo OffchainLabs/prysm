@@ -1029,8 +1029,8 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 			httputil.HandleError(w, fmt.Sprintf("Could not get head state: %v ", err), http.StatusInternalServerError)
 			return
 		}
-		// Advance state with empty transitions up to the requested epoch start slot for pre fulu state only. Fulu state utilizes proposer look ahead field.
-		if st.Slot() < epochStartSlot && st.Version() != version.Fulu {
+		// Notice that even for Fulu requests for the next epoch, we are only advancing the state to the start of the current epoch.
+		if st.Slot() < epochStartSlot {
 			headRoot, err := s.HeadFetcher.HeadRoot(ctx)
 			if err != nil {
 				httputil.HandleError(w, fmt.Sprintf("Could not get head root: %v ", err), http.StatusInternalServerError)
