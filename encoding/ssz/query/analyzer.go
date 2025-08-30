@@ -82,7 +82,7 @@ func PopulateVariableLengthInfo(sszInfo *sszInfo, value any) error {
 		derefValue := dereferencePointer(value)
 
 		// Start with the fixed size of this Container.
-		currentActualOffset := sszInfo.FixedSize()
+		currentOffset := sszInfo.FixedSize()
 
 		for _, fieldName := range containerInfo.order {
 			fieldInfo := containerInfo.fields[fieldName]
@@ -97,7 +97,7 @@ func PopulateVariableLengthInfo(sszInfo *sszInfo, value any) error {
 			}
 
 			// Set the actual offset for variable-sized fields.
-			fieldInfo.actualOffset = currentActualOffset
+			fieldInfo.offset = currentOffset
 
 			// Recursively populate variable-sized fields.
 			fieldValue := derefValue.FieldByName(fieldInfo.goFieldName)
@@ -105,7 +105,7 @@ func PopulateVariableLengthInfo(sszInfo *sszInfo, value any) error {
 				return fmt.Errorf("could not populate from value for field %s: %w", fieldName, err)
 			}
 
-			currentActualOffset += childSszInfo.Size()
+			currentOffset += childSszInfo.Size()
 		}
 
 		return nil

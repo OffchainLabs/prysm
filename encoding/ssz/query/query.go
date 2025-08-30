@@ -17,7 +17,7 @@ func CalculateOffsetAndLength(sszInfo *sszInfo, path []PathElement) (*sszInfo, u
 	}
 
 	walk := sszInfo
-	actualOffset, currentOffset := uint64(0), uint64(0)
+	offset := uint64(0)
 
 	for _, elem := range path {
 		containerInfo, err := walk.ContainerInfo()
@@ -30,15 +30,8 @@ func CalculateOffsetAndLength(sszInfo *sszInfo, path []PathElement) (*sszInfo, u
 			return nil, 0, 0, fmt.Errorf("field %s not found in containerInfo", elem.Name)
 		}
 
-		currentOffset += fieldInfo.offset
-		actualOffset = fieldInfo.actualOffset
+		offset += fieldInfo.offset
 		walk = fieldInfo.sszInfo
-	}
-
-	// Determine the final offset based on fixed-size/variable-size.
-	offset := currentOffset
-	if walk.isVariable {
-		offset = actualOffset
 	}
 
 	return walk, offset, walk.Size(), nil
