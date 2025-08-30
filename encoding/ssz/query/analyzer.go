@@ -294,12 +294,6 @@ func analyzeContainerType(typ reflect.Type) (*sszInfo, error) {
 			return nil, fmt.Errorf("could not analyze type for field %s: %w", fieldName, err)
 		}
 
-		// If one of the fields is variable-sized,
-		// the entire struct is considered variable-sized.
-		if info.isVariable {
-			sszInfo.isVariable = true
-		}
-
 		// Store nested struct info.
 		fields[fieldName] = &fieldInfo{
 			sszInfo:     info,
@@ -309,8 +303,15 @@ func analyzeContainerType(typ reflect.Type) (*sszInfo, error) {
 		// Persist order
 		order = append(order, fieldName)
 
-		// Update the current offset based on the field's fixed size.
-		currentOffset += info.fixedSize
+		// Update the current offset depending on whether the field is variable-sized.
+		if info.isVariable {
+			// If one of the fields is variable-sized,
+			// the entire struct is considered variable-sized.
+			sszInfo.isVariable = true
+			currentOffset += offsetBytes
+		} else {
+			currentOffset += info.fixedSize
+		}
 	}
 
 	sszInfo.fixedSize = currentOffset
