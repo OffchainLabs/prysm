@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
+	testp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
@@ -269,6 +270,7 @@ func TestCustodyGroupCountFromPeer(t *testing.T) {
 			service := &Service{
 				peers:    peers,
 				metaData: tc.metadata,
+				host:     testp2p.NewTestP2P(t).Host(),
 			}
 
 			// Retrieve the custody count from the remote peer.
@@ -329,6 +331,7 @@ func TestCustodyGroupCountFromPeerENR(t *testing.T) {
 
 			service := &Service{
 				peers: peers,
+				host:  testp2p.NewTestP2P(t).Host(),
 			}
 
 			actual := service.custodyGroupCountFromPeerENR(pid)
