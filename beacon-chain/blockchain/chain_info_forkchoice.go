@@ -71,8 +71,8 @@ func (s *Service) NewSlot(ctx context.Context, slot primitives.Slot) error {
 
 // ProposerBoost wraps the corresponding method from forkchoice
 func (s *Service) ProposerBoost() [32]byte {
-	s.cfg.ForkChoiceStore.Lock()
-	defer s.cfg.ForkChoiceStore.Unlock()
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
 	return s.cfg.ForkChoiceStore.ProposerBoost()
 }
 
