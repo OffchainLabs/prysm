@@ -13,6 +13,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
 	corehelpers "github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
@@ -32,7 +33,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/sirupsen/logrus"
@@ -942,14 +942,13 @@ func decodePhase0JSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 // broadcastSidecarsIfSupported broadcasts blob sidecars when an equivocated block occurs.
 func broadcastSidecarsIfSupported(ctx context.Context, s *Server, b interfaces.SignedBeaconBlock, gb *eth.GenericSignedBeaconBlock, versionHeader string) error {
 	switch versionHeader {
-	case version.String(version.Fulu):
-		return s.broadcastSeenBlockSidecars(ctx, b, gb.GetFulu().Blobs, gb.GetFulu().KzgProofs)
 	case version.String(version.Electra):
 		return s.broadcastSeenBlockSidecars(ctx, b, gb.GetElectra().Blobs, gb.GetElectra().KzgProofs)
 	case version.String(version.Deneb):
 		return s.broadcastSeenBlockSidecars(ctx, b, gb.GetDeneb().Blobs, gb.GetDeneb().KzgProofs)
 	default:
 		// other forks before Deneb do not support blob sidecars
+		// forks after fulu do not support blob sidecars, instead support data columns, no need to rebroadcast
 		return nil
 	}
 }
@@ -1053,7 +1052,7 @@ func (s *Server) validateConsensus(ctx context.Context, b *eth.GenericSignedBeac
 		return nil
 	}
 
-	if err := s.validateBlobSidecars(blk, blobs, proofs); err != nil {
+	if err := s.validateBlobs(blk, blobs, proofs); err != nil {
 		return err
 	}
 
@@ -1067,23 +1066,41 @@ func (s *Server) validateEquivocation(blk interfaces.ReadOnlyBeaconBlock) error 
 	return nil
 }
 
-func (s *Server) validateBlobSidecars(blk interfaces.SignedBeaconBlock, blobs [][]byte, proofs [][]byte) error {
+func (s *Server) validateBlobs(blk interfaces.SignedBeaconBlock, blobs [][]byte, proofs [][]byte) error {
 	if blk.Version() < version.Deneb {
 		return nil
 	}
-	kzgs, err := blk.Block().Body().BlobKzgCommitments()
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
+	commitments, err := blk.Block().Body().BlobKzgCommitments()
 	if err != nil {
 		return errors.Wrap(err, "could not get blob kzg commitments")
 	}
-	if len(blobs) != len(proofs) || len(blobs) != len(kzgs) {
-		return errors.New("number of blobs, proofs, and commitments do not match")
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(blk.Block().Slot())
+	if len(blobs) > maxBlobsPerBlock {
+		return fmt.Errorf("number of blobs over max, %d > %d", len(blobs), maxBlobsPerBlock)
 	}
-	for i, blob := range blobs {
-		b := kzg4844.Blob(blob)
-		if err := kzg4844.VerifyBlobProof(&b, kzg4844.Commitment(kzgs[i]), kzg4844.Proof(proofs[i])); err != nil {
-			return errors.Wrap(err, "could not verify blob proof")
+	if blk.Version() >= version.Fulu {
+		// For Fulu blocks, proofs are cell proofs (blobs * numberOfColumns)
+		expectedProofsCount := uint64(len(blobs)) * numberOfColumns
+		if uint64(len(proofs)) != expectedProofsCount || len(blobs) != len(commitments) {
+			return fmt.Errorf("number of blobs (%d), cell proofs (%d), and commitments (%d) do not match (expected %d cell proofs)", len(blobs), len(proofs), len(commitments), expectedProofsCount)
+		}
+		// For Fulu blocks, proofs are cell proofs from execution client's BlobsBundleV2
+		// Verify cell proofs directly without reconstructing data column sidecars
+		if err := kzg.VerifyCellKZGProofBatchFromBlobData(blobs, commitments, proofs, numberOfColumns); err != nil {
+			return errors.Wrap(err, "could not verify cell proofs")
+		}
+	} else {
+		// For pre-Fulu blocks, proofs are blob proofs (1:1 with blobs)
+		if len(blobs) != len(proofs) || len(blobs) != len(commitments) {
+			return errors.Errorf("number of blobs (%d), proofs (%d), and commitments (%d) do not match", len(blobs), len(proofs), len(commitments))
+		}
+		// Use batch verification for better performance
+		if err := kzg.VerifyBlobKZGProofBatch(blobs, commitments, proofs); err != nil {
+			return errors.Wrap(err, "could not verify blob proofs")
 		}
 	}
+
 	return nil
 }
 
@@ -1627,6 +1644,8 @@ func (s *Server) broadcastSeenBlockSidecars(
 	if err != nil {
 		return err
 	}
+
+	// Broadcast blob sidecars with forkchoice checking
 	for _, sc := range scs {
 		r, err := sc.SignedBlockHeader.Header.HashTreeRoot()
 		if err != nil {
