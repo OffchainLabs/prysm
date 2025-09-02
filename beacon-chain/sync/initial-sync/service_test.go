@@ -747,11 +747,23 @@ func TestFetchOriginColumns(t *testing.T) {
 		other.ENR().Set(peerdas.Cgc(numberOfCustodyGroups))
 		p2p.Peers().UpdateENR(other.ENR(), other.PeerID())
 
+		allBut42 := make([]uint64, 0, numberOfCustodyGroups-1)
+		for i := range numberOfCustodyGroups {
+			if i != 42 {
+				allBut42 = append(allBut42, i)
+			}
+		}
+
 		expectedRequests := []*ethpb.DataColumnSidecarsByRangeRequest{
 			{
 				StartSlot: 0,
 				Count:     1,
 				Columns:   []uint64{1, 17, 19, 42, 75, 87, 102, 117},
+			},
+			{
+				StartSlot: 0,
+				Count:     1,
+				Columns:   allBut42,
 			},
 			{
 				StartSlot: 0,
@@ -762,6 +774,7 @@ func TestFetchOriginColumns(t *testing.T) {
 
 		toRespondByAttempt := [][]uint64{
 			{42},
+			{},
 			{1, 17, 19, 75, 87, 102, 117},
 		}
 
