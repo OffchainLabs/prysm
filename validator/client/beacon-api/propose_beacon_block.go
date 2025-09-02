@@ -64,7 +64,7 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 	}
 
 	headers := map[string]string{"Eth-Consensus-Version": res.consensusVersion}
-	
+
 	// Try PostSSZ first with SSZ data
 	if res.marshalledSSZ != nil {
 		headers["Content-Type"] = "application/octet-stream"
