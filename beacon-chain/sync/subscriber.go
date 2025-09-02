@@ -225,11 +225,12 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 	// New gossip topic in Fulu.
 	if params.BeaconConfig().FuluForkEpoch <= epoch {
 		s.subscribeWithParameters(subscribeParameters{
-			topicFormat:      p2p.DataColumnSubnetTopicFormat,
-			validate:         s.validateDataColumn,
-			handle:           s.dataColumnSubscriber,
-			digest:           digest,
-			getSubnetsToJoin: s.dataColumnSubnetIndices,
+			topicFormat:              p2p.DataColumnSubnetTopicFormat,
+			validate:                 s.validateDataColumn,
+			handle:                   s.dataColumnSubscriber,
+			digest:                   digest,
+			getSubnetsToJoin:         s.dataColumnSubnetIndices,
+			getSubnetsRequiringPeers: s.allDataColumnSubnets,
 		})
 	}
 }
