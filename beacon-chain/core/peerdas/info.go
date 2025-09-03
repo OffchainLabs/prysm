@@ -168,7 +168,7 @@ func (ci ColumnIndices) ToMap() map[uint64]bool {
 // ToSlice converts a ColumnIndices into a slice of uint64 indices.
 func (ci ColumnIndices) ToSlice() []uint64 {
 	indices := make([]uint64, 0, len(ci))
-	for index, _ := range ci { // lint:gofmt -- this linter doesn't understand custom types?
+	for index := range ci {
 		indices = append(indices, index)
 	}
 	return indices

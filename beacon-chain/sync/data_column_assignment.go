@@ -70,7 +70,7 @@ func (c *DASPeerCache) NewPicker(pids []peer.ID, toCustody peerdas.ColumnIndices
 			log.WithField("peerID", pid).WithError(err).Debug("Failed to convert peer ID to node ID.")
 			continue
 		}
-		for col, _ := range peer.custodied { // lint:gofmt -- this linter doesn't understand custom types?
+		for col := range peer.custodied {
 			if toCustody.Has(col) {
 				custodians[col] = append(custodians[col], peer)
 			}
@@ -204,7 +204,7 @@ type rarityRanker struct {
 func newRarityRanker(toCustody peerdas.ColumnIndices, custodians map[uint64][]*dasPeer) *rarityRanker {
 	rarity := make(map[uint64]float64, len(toCustody))
 	asc := make([]uint64, 0, len(toCustody))
-	for col, _ := range toCustody {
+	for col := range toCustody {
 		rarity[col] = 1 / max(1, float64(len(custodians[col])))
 		asc = append(asc, col)
 	}
@@ -229,7 +229,7 @@ func (rr *rarityRanker) ascendingRarity(cols peerdas.ColumnIndices) []uint64 {
 // score peers based on the set intersection of their custodied indices and the indices we need to request.
 func (rr *rarityRanker) score(coverage peerdas.ColumnIndices) float64 {
 	score := 0.0
-	for col, _ := range coverage {
+	for col := range coverage {
 		score += rr.rarity[col]
 	}
 	return score
