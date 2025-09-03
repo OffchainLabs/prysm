@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	runtimeDebug "runtime/debug"
 
@@ -263,7 +262,6 @@ func main() {
 }
 
 func startNode(ctx *cli.Context, cancel context.CancelFunc) error {
-	spawnDlvIfEnv(ctx.Context)
 	// Fix data dir for Windows users.
 	outdatedDataDir := filepath.Join(file.HomeDir(), "AppData", "Roaming", "Eth2")
 	currentDataDir := ctx.String(cmd.DataDirFlag.Name)
@@ -336,48 +334,4 @@ func startNode(ctx *cli.Context, cancel context.CancelFunc) error {
 	}
 	beacon.Start()
 	return nil
-}
-
-func spawnDlvIfEnv(ctx context.Context) {
-	dlvPort := os.Getenv("DLV_DAP_PORT")
-	if dlvPort == "" {
-		return
-	}
-	go spawnDlv(ctx, dlvPort)
-}
-
-func spawnDlv(ctx context.Context, port string) {
-	pid := os.Getpid()
-	outFile, err := os.CreateTemp("", "dlv-log-stdout")
-	if err != nil {
-		log.WithField("port", port).WithField("pid", pid).Error("Failed to create temp file for stdout")
-		return
-	}
-	errFile, err := os.CreateTemp("", "dlv-log-stderr")
-	if err != nil {
-		log.WithField("port", port).WithField("pid", pid).Error("Failed to create temp file for stderr")
-		return
-	}
-	stdoutPath := outFile.Name()
-	stderrPath := errFile.Name()
-	defer func() {
-		if err := outFile.Close(); err != nil {
-			log.WithField("path", stdoutPath).Error("Failed to close temp file for dlv stdout")
-		}
-		if err := errFile.Close(); err != nil {
-			log.WithField("path", stderrPath).Error("Failed to close temp file for dlv stderr")
-		}
-	}()
-	args := []string{"--listen=:" + port, "--headless=true", "--api-version=2", "attach", fmt.Sprintf("%d", pid)}
-	log.WithField("port", port).WithField("pid", pid).WithField("stdoutPath", stdoutPath).WithField("stderrPath", stderrPath).Info("Starting Delve remote debugger")
-	cmd := exec.CommandContext(ctx, "dlv", args...)
-	cmd.Stdout = outFile
-	cmd.Stderr = errFile
-	if err := cmd.Start(); err != nil {
-		log.WithField("args", args).WithError(err).Error("Failed to start dlv")
-		return
-	}
-	if err := cmd.Wait(); err != nil {
-		log.WithField("args", args).WithError(err).Error("CommandContext ended in error, dlv")
-	}
 }
