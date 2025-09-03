@@ -128,7 +128,6 @@ require (
 	github.com/crate-crypto/go-ipa v0.0.0-20240724233137-53bbb0ceb27a // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c // indirect
-	github.com/dchest/siphash v1.2.3 // indirect
 	github.com/deckarep/golang-set/v2 v2.6.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0 // indirect
 	github.com/deepmap/oapi-codegen v1.8.2 // indirect
@@ -287,3 +286,6 @@ require (
 )
 
 replace github.com/json-iterator/go => github.com/prestonvanloon/go v1.1.7-0.20190722034630-4f2e55fcf87b
+
+// Temporarily use fusaka-devnet-3 branch for go-ethereum to get engine_getPayloadV5 support
+replace github.com/ethereum/go-ethereum => github.com/ethereum/go-ethereum v1.16.2-0.20250722121312-5f2355acf3cf

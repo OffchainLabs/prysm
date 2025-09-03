@@ -99,7 +99,7 @@ func GethCancunTime(genesisTime time.Time, cfg *clparams.BeaconChainConfig) *uin
 }
 
 // GethPragueTime calculates the absolute time of the prague (aka electra) fork block
-// by adding the relative time of the capella the fork epoch to the given genesis timestamp.
+// by adding the relative time of the electra the fork epoch to the given genesis timestamp.
 func GethPragueTime(genesisTime time.Time, cfg *clparams.BeaconChainConfig) *uint64 {
 	var pragueTime *uint64
 	if cfg.ElectraForkEpoch != math.MaxUint64 {
@@ -111,6 +111,21 @@ func GethPragueTime(genesisTime time.Time, cfg *clparams.BeaconChainConfig) *uin
 		}
 	}
 	return pragueTime
+}
+
+// GethOsakaTime calculates the absolute time of the osaka (aka fulu) fork block
+// by adding the relative time of the fulu the fork epoch to the given genesis timestamp.
+func GethOsakaTime(genesisTime time.Time, cfg *clparams.BeaconChainConfig) *uint64 {
+	var osakaTime *uint64
+	if cfg.FuluForkEpoch != math.MaxUint64 {
+		startSlot, err := slots.EpochStart(cfg.FuluForkEpoch)
+		if err == nil {
+			startTime := slots.UnsafeStartTime(genesisTime, startSlot)
+			newTime := uint64(startTime.Unix())
+			osakaTime = &newTime
+		}
+	}
+	return osakaTime
 }
 
 // GethTestnetGenesis creates a genesis.json for eth1 clients with a set of defaults suitable for ephemeral testnets,
@@ -129,6 +144,10 @@ func GethTestnetGenesis(genesis time.Time, cfg *clparams.BeaconChainConfig) *cor
 	pragueTime := GethPragueTime(genesis, cfg)
 	if cfg.ElectraForkEpoch == 0 {
 		pragueTime = &genesisTime
+	}
+	osakaTime := GethOsakaTime(genesis, cfg)
+	if cfg.FuluForkEpoch == 0 {
+		osakaTime = &genesisTime
 	}
 	cc := &params.ChainConfig{
 		ChainID:                 big.NewInt(defaultTestChainId),
@@ -151,6 +170,7 @@ func GethTestnetGenesis(genesis time.Time, cfg *clparams.BeaconChainConfig) *cor
 		ShanghaiTime:            shanghaiTime,
 		CancunTime:              cancunTime,
 		PragueTime:              pragueTime,
+		OsakaTime:               osakaTime,
 		DepositContractAddress:  common.HexToAddress(cfg.DepositContractAddress),
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Cancun: &params.BlobConfig{
