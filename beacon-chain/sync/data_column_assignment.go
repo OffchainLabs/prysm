@@ -70,7 +70,7 @@ func (c *DASPeerCache) NewPicker(pids []peer.ID, toCustody peerdas.ColumnIndices
 			log.WithField("peerID", pid).WithError(err).Debug("Failed to convert peer ID to node ID.")
 			continue
 		}
-		for col, _ := range peer.custodied {
+		for col, _ := range peer.custodied { // lint:gofmt -- this linter doesn't understand custom types?
 			if toCustody.Has(col) {
 				custodians[col] = append(custodians[col], peer)
 			}
