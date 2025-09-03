@@ -76,7 +76,7 @@ func newColumnSync(b batch, blks verifiedROBlocks, current primitives.Slot, p p2
 	return &columnSync{
 		columnBatch: cb,
 		current:     current,
-		store:       das.NewLazilyPersistentStoreColumn(cfg.cfs, cfg.ndcv, p.NodeID(), cgc, bisector),
+		store:       das.NewLazilyPersistentStoreColumn(cfg.colStore, cfg.newVC, p.NodeID(), cgc, bisector),
 		bisector:    bisector,
 	}, nil
 }
@@ -101,7 +101,6 @@ func (cs *columnSync) request(reqCols []uint64) *ethpb.DataColumnSidecarsByRange
 
 type validatingColumnRequest struct {
 	req        *ethpb.DataColumnSidecarsByRangeRequest
-	columns    map[uint64]bool
 	columnSync *columnSync
 	bisector   *columnBisector
 }

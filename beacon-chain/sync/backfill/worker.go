@@ -18,13 +18,13 @@ import (
 type peerDownscorer func(peer.ID, string, error)
 
 type workerCfg struct {
-	c         *startup.Clock
-	v         *verifier
-	cm        sync.ContextByteVersions
-	nbv       verification.NewBlobVerifier
-	ndcv      verification.NewDataColumnsVerifier
-	bfs       *filesystem.BlobStorage
-	cfs       *filesystem.DataColumnStorage
+	clock     *startup.Clock
+	verifier  *verifier
+	ctxMap    sync.ContextByteVersions
+	newVB     verification.NewBlobVerifier
+	newVC     verification.NewDataColumnsVerifier
+	blobStore *filesystem.BlobStorage
+	colStore  *filesystem.DataColumnStorage
 	downscore peerDownscorer
 }
 
@@ -50,10 +50,10 @@ func initWorkerCfg(ctx context.Context, cfg *workerCfg, vw InitializerWaiter, st
 	if err != nil {
 		return nil, errors.Wrapf(err, "newBackfillVerifier failed")
 	}
-	cfg.v = v
-	cfg.cm = cm
-	cfg.nbv = newBlobVerifierFromInitializer(vi)
-	cfg.ndcv = newDataColumnVerifierFromInitializer(vi)
+	cfg.verifier = v
+	cfg.ctxMap = cm
+	cfg.newVB = newBlobVerifierFromInitializer(vi)
+	cfg.newVC = newDataColumnVerifierFromInitializer(vi)
 	return cfg, nil
 }
 
@@ -125,7 +125,7 @@ func resetRetryableColumns(b batch) batch {
 }
 
 func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
-	current := w.cfg.c.CurrentSlot()
+	current := w.cfg.clock.CurrentSlot()
 	// TODO: refactor all the blob and column setup stuff.
 	// we know the slot when we first set up the batch, so we should be able to determine if we need the blob setup bits at all
 	// before we fetch the blocks. Same goes for the column dependencies.
@@ -135,7 +135,7 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 	}
 	b.blockPid = b.peer
 	start := time.Now()
-	results, err := sync.SendBeaconBlocksByRangeRequest(ctx, w.cfg.c, w.p2p, b.blockPid, b.blockRequest(), blockValidationMetrics)
+	results, err := sync.SendBeaconBlocksByRangeRequest(ctx, w.cfg.clock, w.p2p, b.blockPid, b.blockRequest(), blockValidationMetrics)
 	if err != nil {
 		log.WithError(err).WithFields(b.logFields()).Debug("Batch requesting failed")
 		return b.withRetryableError(err)
@@ -148,7 +148,7 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 		return b.withRetryableError(err)
 	}
 
-	vb, err := w.cfg.v.verify(toVerify)
+	vb, err := w.cfg.verifier.verify(toVerify)
 	blockVerifyMs.Observe(float64(time.Since(dlt).Milliseconds()))
 	if err != nil {
 		log.WithError(err).WithFields(b.logFields()).Debug("Batch validation failed")
@@ -163,7 +163,7 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 	}
 	blockDownloadBytesApprox.Add(float64(bdl))
 	log.WithFields(b.logFields()).WithField("dlbytes", bdl).Debug("Backfill batch block bytes downloaded")
-	bscfg := &blobSyncConfig{retentionStart: blobRetentionStart, nbv: w.cfg.nbv, store: w.cfg.bfs}
+	bscfg := &blobSyncConfig{retentionStart: blobRetentionStart, nbv: w.cfg.newVB, store: w.cfg.blobStore}
 	bs, err := newBlobSync(current, vb, bscfg)
 	if err != nil {
 		return b.withRetryableError(err)
@@ -183,7 +183,7 @@ func (w *p2pWorker) handleBlobs(ctx context.Context, b batch) batch {
 	start := time.Now()
 	// we don't need to use the response for anything other than metrics, because blobResponseValidation
 	// adds each of them to a batch AvailabilityStore once it is checked.
-	blobs, err := sync.SendBlobsByRangeRequest(ctx, w.cfg.c, w.p2p, b.blobs.pid, w.cfg.cm, b.blobRequest(), b.blobs.validateNext, blobValidationMetrics)
+	blobs, err := sync.SendBlobsByRangeRequest(ctx, w.cfg.clock, w.p2p, b.blobs.pid, w.cfg.ctxMap, b.blobRequest(), b.blobs.validateNext, blobValidationMetrics)
 	if err != nil {
 		b.blobs = nil
 		return b.withRetryableError(err)
@@ -219,10 +219,10 @@ func (w *p2pWorker) handleColumns(ctx context.Context, b batch) batch {
 	// SendDataColumnSidecarsByRangeRequest.
 	p := sync.DataColumnSidecarsParams{
 		Ctx: ctx,
-		Tor: w.cfg.c,
+		Tor: w.cfg.clock,
 		P2P: w.p2p,
 		//RateLimiter *leakybucket.Collector
-		CtxMap: w.cfg.cm,
+		CtxMap: w.cfg.ctxMap,
 		//Storage:     w.cfg.cfs,
 		//NewVerifier: vr.validate,
 	}

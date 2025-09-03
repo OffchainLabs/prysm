@@ -282,9 +282,9 @@ func (s *Service) Start() {
 
 	if s.workerCfg == nil {
 		s.workerCfg = &workerCfg{
-			c:         s.clock,
-			bfs:       s.blobStore,
-			cfs:       s.dcStore,
+			clock:     s.clock,
+			blobStore: s.blobStore,
+			colStore:  s.dcStore,
 			downscore: s.downscorePeer,
 		}
 		s.workerCfg, err = initWorkerCfg(ctx, s.workerCfg, s.verifierWaiter, s.store)

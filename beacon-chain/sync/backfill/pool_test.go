@@ -54,7 +54,7 @@ func TestPoolDetectAllEnded(t *testing.T) {
 	ctxMap, err := sync.ContextByteVersionsForValRoot(bytesutil.ToBytes32(st.GenesisValidatorsRoot()))
 	require.NoError(t, err)
 	bfs := filesystem.NewEphemeralBlobStorage(t)
-	wcfg := &workerCfg{c: startup.NewClock(time.Now(), [32]byte{}), nbv: mockNewBlobVerifier, v: v, cm: ctxMap, bfs: bfs}
+	wcfg := &workerCfg{clock: startup.NewClock(time.Now(), [32]byte{}), newVB: mockNewBlobVerifier, verifier: v, ctxMap: ctxMap, blobStore: bfs}
 	pool.spawn(ctx, nw, ma, wcfg)
 	br := batcher{min: 10, size: 10}
 	endSeq := br.before(0)
