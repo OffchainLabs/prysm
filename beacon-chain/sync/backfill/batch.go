@@ -6,7 +6,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -197,7 +196,6 @@ func (b batch) validatingColumnRequest(cb *columnBisector) *validatingColumnRequ
 	}
 	return &validatingColumnRequest{
 		req:        req,
-		columns:    peerdas.NewColumnIndicesFromSlice(b.nextReqCols),
 		columnSync: b.columns,
 		bisector:   cb,
 	}

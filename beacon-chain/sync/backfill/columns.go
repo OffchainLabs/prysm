@@ -19,12 +19,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-var (
-	errInvalidResponseOrder         = errors.New("out of order DataColumnSidecar response")
-	errColumnResponseSlotOutOfRange = errors.New("slot out of range for DataColumnSidecar response")
-	errColumnIndexNotRequested      = errors.New("index in DataColumnSidecar response not requested")
-)
-
 type columnBatch struct {
 	first         primitives.Slot
 	last          primitives.Slot
@@ -106,7 +100,6 @@ func (cs *columnSync) request(reqCols []uint64) *ethpb.DataColumnSidecarsByRange
 }
 
 type validatingColumnRequest struct {
-	last       primitives.Slot
 	req        *ethpb.DataColumnSidecarsByRangeRequest
 	columns    map[uint64]bool
 	columnSync *columnSync

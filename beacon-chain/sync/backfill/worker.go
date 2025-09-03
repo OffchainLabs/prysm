@@ -235,7 +235,7 @@ func (w *p2pWorker) handleColumns(ctx context.Context, b batch) batch {
 		}
 		return b.withRetryableError(errors.Wrap(err, "failed to request data column sidecars"))
 	}
-	dataColumnSidecarDownloadMs.Observe(float64(time.Now().Sub(start).Milliseconds()))
+	dataColumnSidecarDownloadMs.Observe(float64(time.Since(start).Milliseconds()))
 	return b.transitionToNext()
 }
 

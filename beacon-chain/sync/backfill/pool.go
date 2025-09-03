@@ -35,21 +35,20 @@ func defaultNewWorker(p p2p.P2P) newWorker {
 const minReqInterval = time.Second
 
 type p2pBatchWorkerPool struct {
-	maxBatches        int
-	newWorker         newWorker
-	toWorkers         chan batch
-	fromWorkers       chan batch
-	toRouter          chan batch
-	fromRouter        chan batch
-	shutdownErr       chan error
-	endSeq            []batch
-	ctx               context.Context
-	cancel            func()
-	earliest          primitives.Slot
-	peerCache         *sync.DASPeerCache
-	p2p               p2p.P2P
-	timeLastScheduled time.Time
-	peerFailLogger    *intervalLogger
+	maxBatches     int
+	newWorker      newWorker
+	toWorkers      chan batch
+	fromWorkers    chan batch
+	toRouter       chan batch
+	fromRouter     chan batch
+	shutdownErr    chan error
+	endSeq         []batch
+	ctx            context.Context
+	cancel         func()
+	earliest       primitives.Slot
+	peerCache      *sync.DASPeerCache
+	p2p            p2p.P2P
+	peerFailLogger *intervalLogger
 }
 
 var _ batchWorkerPool = &p2pBatchWorkerPool{}

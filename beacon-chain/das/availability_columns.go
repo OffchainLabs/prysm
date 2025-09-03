@@ -20,7 +20,6 @@ import (
 // block, at which time they will undergo full verification and be saved to the disk.
 type LazilyPersistentStoreColumn struct {
 	store                  *filesystem.DataColumnStorage
-	nodeID                 enode.ID
 	cache                  *dataColumnCache
 	newDataColumnsVerifier verification.NewDataColumnsVerifier
 	custody                *custodyRequirement
@@ -122,10 +121,6 @@ func (s *LazilyPersistentStoreColumn) required(block blocks.ROBlock, current pri
 	}
 
 	return s.custody.required(current)
-}
-
-func NewColumnBatchError() *columnBatchError {
-	return &columnBatchError{errors: make(map[[32]byte]error)}
 }
 
 func (s *LazilyPersistentStoreColumn) verifyAndSave(columns []blocks.RODataColumn) error {
