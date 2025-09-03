@@ -121,7 +121,10 @@ func handlePhase0BlockSSZ(block *ethpb.GenericSignedBeaconBlock_Phase0) (*blockP
 	res.beaconBlockRoot = beaconBlockRoot
 
 	// Marshal SSZ
-	res.marshalledSSZ, _ = block.Phase0.MarshalSSZ()
+	res.marshalledSSZ, err = block.Phase0.MarshalSSZ()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to serialize block for phase0 beacon block")
+	}
 
 	// Set up JSON marshalling function for fallback
 	res.marshalJSON = func() ([]byte, error) {
@@ -148,7 +151,10 @@ func handleAltairBlockSSZ(block *ethpb.GenericSignedBeaconBlock_Altair) (*blockP
 	res.beaconBlockRoot = beaconBlockRoot
 
 	// Marshal SSZ
-	res.marshalledSSZ, _ = block.Altair.MarshalSSZ()
+	res.marshalledSSZ, err = block.Altair.MarshalSSZ()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to serialize block for altair beacon block")
+	}
 
 	// Set up JSON marshalling function for fallback
 	res.marshalJSON = func() ([]byte, error) {
@@ -175,7 +181,10 @@ func handleBellatrixBlockSSZ(block *ethpb.GenericSignedBeaconBlock_Bellatrix) (*
 	res.beaconBlockRoot = beaconBlockRoot
 
 	// Marshal SSZ
-	res.marshalledSSZ, _ = block.Bellatrix.MarshalSSZ()
+	res.marshalledSSZ, err = block.Bellatrix.MarshalSSZ()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to serialize block for bellatrix beacon block")
+	}
 
 	// Set up JSON marshalling function for fallback
 	res.marshalJSON = func() ([]byte, error) {
@@ -205,7 +214,10 @@ func handleBlindedBellatrixBlockSSZ(block *ethpb.GenericSignedBeaconBlock_Blinde
 	res.beaconBlockRoot = beaconBlockRoot
 
 	// Marshal SSZ
-	res.marshalledSSZ, _ = block.BlindedBellatrix.MarshalSSZ()
+	res.marshalledSSZ, err = block.BlindedBellatrix.MarshalSSZ()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to serialize block for bellatrix beacon block")
+	}
 
 	// Set up JSON marshalling function for fallback
 	res.marshalJSON = func() ([]byte, error) {
@@ -235,7 +247,10 @@ func handleCapellaBlockSSZ(block *ethpb.GenericSignedBeaconBlock_Capella) (*bloc
 	res.beaconBlockRoot = beaconBlockRoot
 
 	// Marshal SSZ
-	res.marshalledSSZ, _ = block.Capella.MarshalSSZ()
+	res.marshalledSSZ, err = block.Capella.MarshalSSZ()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to serialize capella beacon block")
+	}
 
 	// Set up JSON marshalling function for fallback
 	res.marshalJSON = func() ([]byte, error) {
@@ -265,7 +280,10 @@ func handleBlindedCapellaBlockSSZ(block *ethpb.GenericSignedBeaconBlock_BlindedC
 	res.beaconBlockRoot = beaconBlockRoot
 
 	// Marshal SSZ
-	res.marshalledSSZ, _ = block.BlindedCapella.MarshalSSZ()
+	res.marshalledSSZ, err = block.BlindedCapella.MarshalSSZ()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to serialize blinded capella beacon block")
+	}
 
 	// Set up JSON marshalling function for fallback
 	res.marshalJSON = func() ([]byte, error) {
@@ -295,7 +313,10 @@ func handleDenebBlockContentsSSZ(block *ethpb.GenericSignedBeaconBlock_Deneb) (*
 	res.beaconBlockRoot = beaconBlockRoot
 
 	// Marshal SSZ
-	res.marshalledSSZ, _ = block.Deneb.MarshalSSZ()
+	res.marshalledSSZ, err = block.Deneb.MarshalSSZ()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to serialize deneb beacon block")
+	}
 
 	// Set up JSON marshalling function for fallback
 	res.marshalJSON = func() ([]byte, error) {
@@ -325,7 +346,10 @@ func handleBlindedDenebBlockSSZ(block *ethpb.GenericSignedBeaconBlock_BlindedDen
 	res.beaconBlockRoot = beaconBlockRoot
 
 	// Marshal SSZ
-	res.marshalledSSZ, _ = block.BlindedDeneb.MarshalSSZ()
+	res.marshalledSSZ, err = block.BlindedDeneb.MarshalSSZ()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to serialize blinded deneb  beacon block")
+	}
 
 	// Set up JSON marshalling function for fallback
 	res.marshalJSON = func() ([]byte, error) {
@@ -355,7 +379,10 @@ func handleElectraBlockContentsSSZ(block *ethpb.GenericSignedBeaconBlock_Electra
 	res.beaconBlockRoot = beaconBlockRoot
 
 	// Marshal SSZ
-	res.marshalledSSZ, _ = block.Electra.MarshalSSZ()
+	res.marshalledSSZ, err = block.Electra.MarshalSSZ()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to serialize electra beacon block")
+	}
 
 	// Set up JSON marshalling function for fallback
 	res.marshalJSON = func() ([]byte, error) {
@@ -385,7 +412,10 @@ func handleBlindedElectraBlockSSZ(block *ethpb.GenericSignedBeaconBlock_BlindedE
 	res.beaconBlockRoot = beaconBlockRoot
 
 	// Marshal SSZ
-	res.marshalledSSZ, _ = block.BlindedElectra.MarshalSSZ()
+	res.marshalledSSZ, err = block.BlindedElectra.MarshalSSZ()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to serialize blinded electra beacon block")
+	}
 
 	// Set up JSON marshalling function for fallback
 	res.marshalJSON = func() ([]byte, error) {
@@ -415,7 +445,10 @@ func handleFuluBlockContentsSSZ(block *ethpb.GenericSignedBeaconBlock_Fulu) (*bl
 	res.beaconBlockRoot = beaconBlockRoot
 
 	// Marshal SSZ
-	res.marshalledSSZ, _ = block.Fulu.MarshalSSZ()
+	res.marshalledSSZ, err = block.Fulu.MarshalSSZ()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to serialize fulu beacon block")
+	}
 
 	// Set up JSON marshalling function for fallback
 	res.marshalJSON = func() ([]byte, error) {
@@ -445,7 +478,10 @@ func handleBlindedFuluBlockSSZ(block *ethpb.GenericSignedBeaconBlock_BlindedFulu
 	res.beaconBlockRoot = beaconBlockRoot
 
 	// Marshal SSZ
-	res.marshalledSSZ, _ = block.BlindedFulu.MarshalSSZ()
+	res.marshalledSSZ, err = block.BlindedFulu.MarshalSSZ()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to serialize blinded fulu beacon block")
+	}
 
 	// Set up JSON marshalling function for fallback
 	res.marshalJSON = func() ([]byte, error) {
