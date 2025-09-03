@@ -71,6 +71,7 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 		_, _, err = c.jsonRestHandler.PostSSZ(ctx, endpoint, headers, bytes.NewBuffer(res.marshalledSSZ))
 		// If PostSSZ fails, fall back to JSON
 		if err != nil && res.marshalJSON != nil {
+			log.WithError(err).Warn("Failed to submit block ssz, falling back to JSON")
 			// Marshal JSON now that we need it
 			jsonData, jsonErr := res.marshalJSON()
 			if jsonErr != nil {
