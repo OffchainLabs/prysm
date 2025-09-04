@@ -173,16 +173,24 @@ func GethTestnetGenesis(genesis time.Time, cfg *clparams.BeaconChainConfig) *cor
 		OsakaTime:               osakaTime,
 		DepositContractAddress:  common.HexToAddress(cfg.DepositContractAddress),
 		BlobScheduleConfig: &params.BlobScheduleConfig{
-			Cancun: &params.BlobConfig{
-				Target:         3,
-				Max:            6,
-				UpdateFraction: 3338477,
-			},
-			Prague: &params.BlobConfig{
-				Target:         6,
-				Max:            9,
-				UpdateFraction: 5007716,
-			},
+			Cancun: params.DefaultCancunBlobConfig,
+			Prague: params.DefaultPragueBlobConfig,
+			Osaka:  params.DefaultOsakaBlobConfig,
+			//BPO1: &params.BlobConfig{
+			//	Target:         9,
+			//	Max:            14,
+			//	UpdateFraction: 8832827,
+			//},
+			//BPO2: &params.BlobConfig{
+			//	Target:         14,
+			//	Max:            21,
+			//	UpdateFraction: 13739630,
+			//},
+			//BPO3: &params.BlobConfig{
+			//	Target:         21,
+			//	Max:            32,
+			//	UpdateFraction: 20609697,
+			//},
 		},
 	}
 	da := defaultDepositContractAllocation(cfg.DepositContractAddress)
