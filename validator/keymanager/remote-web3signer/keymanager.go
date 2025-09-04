@@ -430,6 +430,11 @@ func getSignRequestJson(ctx context.Context, validator *validator.Validate, requ
 		return handleBlockElectra(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_BlindedBlockElectra:
 		return handleBlindedBlockElectra(ctx, validator, request, genesisValidatorsRoot)
+	case *validatorpb.SignRequest_BlockFulu:
+		return handleBlockFulu(ctx, validator, request, genesisValidatorsRoot)
+	case *validatorpb.SignRequest_BlindedBlockFulu:
+		return handleBlindedBlockFulu(ctx, validator, request, genesisValidatorsRoot)
+
 	// We do not support "DEPOSIT" type.
 	/*
 		case *validatorpb.:
@@ -620,6 +625,30 @@ func handleBlindedBlockElectra(ctx context.Context, validator *validator.Validat
 	}
 	remoteBlockSignRequestsTotal.WithLabelValues("electra", "true").Inc()
 	return json.Marshal(blindedBlockv2ElectraSignRequest)
+}
+
+func handleBlockFulu(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
+	blockv2FuluSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	if err = validator.StructCtx(ctx, blockv2FuluSignRequest); err != nil {
+		return nil, err
+	}
+	remoteBlockSignRequestsTotal.WithLabelValues("fulu", "false").Inc()
+	return json.Marshal(blockv2FuluSignRequest)
+}
+
+func handleBlindedBlockFulu(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
+	blindedBlockv2FuluSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	if err = validator.StructCtx(ctx, blindedBlockv2FuluSignRequest); err != nil {
+		return nil, err
+	}
+	remoteBlockSignRequestsTotal.WithLabelValues("fulu", "true").Inc()
+	return json.Marshal(blindedBlockv2FuluSignRequest)
 }
 
 func handleRandaoReveal(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
