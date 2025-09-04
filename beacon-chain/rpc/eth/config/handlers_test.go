@@ -170,6 +170,8 @@ func TestGetSpec(t *testing.T) {
 	config.SyncMessageDueBPS = 103
 	config.BuilderWithdrawalPrefixByte = byte('b')
 	config.BuilderIndexSelfBuild = primitives.BuilderIndex(125)
+	config.BuilderPaymentThresholdNumerator = 104
+	config.BuilderPaymentThresholdDenominator = 105
 
 	var dbp [4]byte
 	copy(dbp[:], []byte{'0', '0', '0', '1'})
@@ -210,7 +212,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 178, len(data))
+	assert.Equal(t, 180, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -588,6 +590,10 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "102", v)
 			case "SYNC_MESSAGE_DUE_BPS":
 				assert.Equal(t, "103", v)
+			case "BUILDER_PAYMENT_THRESHOLD_NUMERATOR":
+				assert.Equal(t, "104", v)
+			case "BUILDER_PAYMENT_THRESHOLD_DENOMINATOR":
+				assert.Equal(t, "105", v)
 			case "BLOB_SCHEDULE":
 				blobSchedule, ok := v.([]any)
 				assert.Equal(t, true, ok)

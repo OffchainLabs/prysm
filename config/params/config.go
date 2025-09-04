@@ -293,6 +293,10 @@ type BeaconChainConfig struct {
 	ValidatorCustodyRequirement           uint64           `yaml:"VALIDATOR_CUSTODY_REQUIREMENT" spec:"true"`                // ValidatorCustodyRequirement is the minimum number of custody groups an honest node with validators attached custodies and serves samples from
 	BalancePerAdditionalCustodyGroup      uint64           `yaml:"BALANCE_PER_ADDITIONAL_CUSTODY_GROUP" spec:"true"`         // BalancePerAdditionalCustodyGroup is the balance increment corresponding to one additional group to custody.
 
+	// Values introduced in Gloas upgrade
+	BuilderPaymentThresholdNumerator   uint64 `yaml:"BUILDER_PAYMENT_THRESHOLD_NUMERATOR" spec:"true"`   // BuilderPaymentThresholdNumerator is the numerator for builder payment quorum threshold calculation.
+	BuilderPaymentThresholdDenominator uint64 `yaml:"BUILDER_PAYMENT_THRESHOLD_DENOMINATOR" spec:"true"` // BuilderPaymentThresholdDenominator is the denominator for builder payment quorum threshold calculation.
+
 	// Networking Specific Parameters
 	MaxPayloadSize                  uint64          `yaml:"MAX_PAYLOAD_SIZE" spec:"true"`                   // MAX_PAYLOAD_SIZE is the maximum allowed size of uncompressed payload in gossip messages and rpc chunks.
 	AttestationSubnetCount          uint64          `yaml:"ATTESTATION_SUBNET_COUNT" spec:"true"`           // AttestationSubnetCount is the number of attestation subnets used in the gossipsub protocol.
