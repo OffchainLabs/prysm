@@ -155,6 +155,7 @@ func (s *Service) custodyGroupCountFromPeerENR(pid peer.ID) uint64 {
 	log := log.WithFields(logrus.Fields{
 		"peerID":       pid,
 		"defaultValue": custodyRequirement,
+		"agent":        agentString(pid, s.Host()),
 	})
 
 	// Retrieve the ENR of the peer.

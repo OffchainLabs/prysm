@@ -32,7 +32,7 @@ func Test_startupHeadRoot(t *testing.T) {
 		})
 		defer resetCfg()
 		require.Equal(t, service.startupHeadRoot(), gr)
-		require.LogsContain(t, hook, "Could not get head block root, starting with finalized block as head")
+		require.LogsContain(t, hook, "Could not get head block root, starting with justified block as head")
 	})
 
 	st, _ := util.DeterministicGenesisState(t, 64)
