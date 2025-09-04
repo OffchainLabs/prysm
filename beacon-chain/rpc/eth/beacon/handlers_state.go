@@ -112,7 +112,7 @@ func (s *Server) GetRandao(w http.ResponseWriter, r *http.Request) {
 	if uint64(stEpoch) > uint64(st.RandaoMixesLength()) {
 		randaoEpochLowerBound = uint64(stEpoch) - uint64(st.RandaoMixesLength())
 	}
-	if epoch > stEpoch || uint64(epoch) < randaoEpochLowerBound+1 {
+	if epoch > stEpoch || (uint64(epoch) < randaoEpochLowerBound && randaoEpochLowerBound > 0) {
 		httputil.HandleError(w, "Epoch is out of range for the randao mixes of the state", http.StatusBadRequest)
 		return
 	}
