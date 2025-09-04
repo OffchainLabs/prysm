@@ -286,6 +286,3 @@ require (
 )
 
 replace github.com/json-iterator/go => github.com/prestonvanloon/go v1.1.7-0.20190722034630-4f2e55fcf87b
-
-// Temporarily use fusaka-devnet-3 branch for go-ethereum to get engine_getPayloadV5 support
-replace github.com/ethereum/go-ethereum => github.com/ethereum/go-ethereum v1.16.2-0.20250722121312-5f2355acf3cf

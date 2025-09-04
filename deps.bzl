@@ -301,8 +301,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_bits_and_blooms_bitset",
         importpath = "github.com/bits-and-blooms/bitset",
-        sum = "h1:1X2TS7aHz1ELcC0yU1y2stUs/0ig5oMU6STFZGrhvHI=",
-        version = "v1.17.0",
+        sum = "h1:2F+rfL86jE2d/bmw7OhqUg2Sj/1rURkBn3MdfoPyRVU=",
+        version = "v1.20.0",
     )
     go_repository(
         name = "com_github_bradfitz_go_smtpd",
@@ -482,8 +482,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_cockroachdb_pebble",
         importpath = "github.com/cockroachdb/pebble",
-        sum = "h1:CUh2IPtR4swHlEj48Rhfzw6l/d0qA31fItcIszQVIsA=",
-        version = "v1.1.2",
+        sum = "h1:5AAWCBWbat0uE0blr8qzufZP5tBjkRyy/jWe1QWLnvw=",
+        version = "v1.1.5",
     )
     go_repository(
         name = "com_github_cockroachdb_redact",
@@ -512,14 +512,14 @@ def prysm_deps():
     go_repository(
         name = "com_github_consensys_bavard",
         importpath = "github.com/consensys/bavard",
-        sum = "h1:Uw2CGvbXSZWhqK59X0VG/zOjpTFuOMcPLStrp1ihI0A=",
-        version = "v0.1.22",
+        sum = "h1:dTlIwEdFQmldzFf5F6bbTcYWhvnAgZai2g8eq3Wwxqg=",
+        version = "v0.1.31-0.20250406004941-2db259e4b582",
     )
     go_repository(
         name = "com_github_consensys_gnark_crypto",
         importpath = "github.com/consensys/gnark-crypto",
-        sum = "h1:DDBdl4HaBtdQsq/wfMwJvZNE80sHidrK3Nfrefatm0E=",
-        version = "v0.14.0",
+        sum = "h1:vIye/FqI50VeAr0B3dx+YjeIvmc3LWz4yEfbWBpTUf0=",
+        version = "v0.18.0",
     )
     go_repository(
         name = "com_github_containerd_cgroups",
@@ -557,6 +557,12 @@ def prysm_deps():
         importpath = "github.com/cpuguy83/go-md2man/v2",
         sum = "h1:ZtcqGrnekaHpVLArFSe4HK5DoKx1T0rq2DwVB0alcyc=",
         version = "v2.0.5",
+    )
+    go_repository(
+        name = "com_github_crate_crypto_go_eth_kzg",
+        importpath = "github.com/crate-crypto/go-eth-kzg",
+        sum = "h1:05GrhASN9kDAidaFJOda6A4BEvgvuXbazXg/0E3OOdI=",
+        version = "v1.3.0",
     )
     go_repository(
         name = "com_github_crate_crypto_go_ipa",
@@ -605,6 +611,12 @@ def prysm_deps():
         importpath = "github.com/davidlazar/go-crypto",
         sum = "h1:pFUpOrbxDR6AkioZ1ySsx5yxlDQZ8stG2b88gTPxgJU=",
         version = "v0.0.0-20200604182044-b73af7476f6c",
+    )
+    go_repository(
+        name = "com_github_dchest_siphash",
+        importpath = "github.com/dchest/siphash",
+        sum = "h1:QXwFc8cFOR2dSa/gE6o/HokBMWtLUaNDVd+22aKHeEA=",
+        version = "v1.2.3",
     )
     go_repository(
         name = "com_github_deckarep_golang_set_v2",
@@ -735,8 +747,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_emicklei_dot",
         importpath = "github.com/emicklei/dot",
-        sum = "h1:Ase39UD9T9fRBOb5ptgpixrxfx8abVzNWZi2+lr53PI=",
-        version = "v0.11.0",
+        sum = "h1:08GN+DD79cy/tzN6uLCT84+2Wk9u+wvqP+Hkx/dIR8A=",
+        version = "v1.6.2",
     )
     go_repository(
         name = "com_github_emicklei_go_restful_v3",
@@ -790,8 +802,8 @@ def prysm_deps():
         patches = [
             "//third_party:com_github_ethereum_go_ethereum_secp256k1.patch",
         ],
-        sum = "h1:bRra1zi+/q+qyXZ6fylZOrlaF8kDdnlTtzNTmNHfX+g=",
-        version = "v1.15.9",
+        sum = "h1:nDoBSrmsrPbrDIVLTkDQCy1U9KdHN+F2PzvMbDoS42Q=",
+        version = "v1.16.3",
     )
     go_repository(
         name = "com_github_ethereum_go_verkle",
@@ -832,8 +844,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_ferranbt_fastssz",
         importpath = "github.com/ferranbt/fastssz",
-        sum = "h1:ZI+z3JH05h4kgmFXdHuR1aWYsgrg7o+Fw7/NCzM16Mo=",
-        version = "v0.1.3",
+        sum = "h1:OCDB+dYDEQDvAgtAGnTSidK1Pe2tW3nFV40XyMkTeDY=",
+        version = "v0.1.4",
     )
     go_repository(
         name = "com_github_fjl_gencodec",
@@ -1138,8 +1150,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_gofrs_flock",
         importpath = "github.com/gofrs/flock",
-        sum = "h1:+gYjHKf32LDeiEEFhQaotPbLuUXjY5ZqxKgXy7n59aw=",
-        version = "v0.8.1",
+        sum = "h1:MTLVXXHf8ekldpJk3AKicLij9MdwOWkZ+a/jHHZby9E=",
+        version = "v0.12.1",
     )
     go_repository(
         name = "com_github_gogo_googleapis",
@@ -1280,12 +1292,6 @@ def prysm_deps():
         importpath = "github.com/google/renameio",
         sum = "h1:GOZbcHa3HfsPKPlmyPyN2KEohoMXOhdMbHrvbpl2QaA=",
         version = "v0.1.0",
-    )
-    go_repository(
-        name = "com_github_google_subcommands",
-        importpath = "github.com/google/subcommands",
-        sum = "h1:vWQspBTo2nEqTUFita5/KeEWlUL8kQObDFbub/EN9oE=",
-        version = "v1.2.0",
     )
     go_repository(
         name = "com_github_google_uuid",
@@ -2279,12 +2285,6 @@ def prysm_deps():
         version = "v0.4.0",
     )
     go_repository(
-        name = "com_github_mmcloughlin_profile",
-        importpath = "github.com/mmcloughlin/profile",
-        sum = "h1:jhDmAqPyebOsVDOCICJoINoLb/AnLBaUw58nFzxWS2w=",
-        version = "v0.1.1",
-    )
-    go_repository(
         name = "com_github_moby_spdystream",
         importpath = "github.com/moby/spdystream",
         sum = "h1:cjW1zVyyoiM0T7b6UoySUFqzXMoqRckQtXwGPiBhOM8=",
@@ -3243,8 +3243,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_spf13_pflag",
         importpath = "github.com/spf13/pflag",
-        sum = "h1:iy+VFUOCP1a+8yFto/drg2CJ5u0yRoB7fZw3DKv/JXA=",
-        version = "v1.0.5",
+        sum = "h1:jFzHGLGAlb3ruxLB8MhbI6A8+AQX/2eW4qeyNZXNp2o=",
+        version = "v1.0.6",
     )
     go_repository(
         name = "com_github_spf13_viper",
@@ -3383,12 +3383,6 @@ def prysm_deps():
         importpath = "github.com/ugorji/go/codec",
         sum = "h1:YPXUKf7fYbp/y8xloBqZOw2qaVggbfwMlI8WM3wZUJ0=",
         version = "v1.2.7",
-    )
-    go_repository(
-        name = "com_github_umbracle_gohashtree",
-        importpath = "github.com/umbracle/gohashtree",
-        sum = "h1:CQh33pStIp/E30b7TxDlXfM0145bn2e8boI30IxAhTg=",
-        version = "v0.0.2-alpha.0.20230207094856-5b775a815c10",
     )
     go_repository(
         name = "com_github_urfave_cli",
