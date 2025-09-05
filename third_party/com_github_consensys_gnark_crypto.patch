@@ -1,0 +1,106 @@
+diff --git a/ecc/bls12-381/fp/BUILD.bazel b/ecc/bls12-381/fp/BUILD.bazel
+index 4d57841..5b1dec4 100644
+--- a/ecc/bls12-381/fp/BUILD.bazel
++++ b/ecc/bls12-381/fp/BUILD.bazel
+@@ -7,15 +7,21 @@ go_library(
+         "arith.go",
+         "doc.go",
+         "element.go",
+-        "element_amd64.go",
+-        "element_amd64.s",
+-        "element_arm64.go",
+-        "element_arm64.s",
+         "element_exp.go",
+         "element_purego.go",
+         "vector.go",
+         "vector_purego.go",
+-    ],
++    ] + select({
++        "@io_bazel_rules_go//go/platform:amd64": [
++          "element_amd64.go",
++          "//field/asm/element_6w:element_6w_amd64"
++        ],
++        "@io_bazel_rules_go//go/platform:arm64": [
++          "element_arm64.go",
++          "//field/asm/element_6w:element_6w_arm64"
++        ],
++        "//conditions:default": [],
++    }),
+     importpath = "github.com/consensys/gnark-crypto/ecc/bls12-381/fp",
+     visibility = ["//visibility:public"],
+     deps = [
+diff --git a/ecc/bls12-381/fr/BUILD.bazel b/ecc/bls12-381/fr/BUILD.bazel
+index e24b29b..6beeb04 100644
+--- a/ecc/bls12-381/fr/BUILD.bazel
++++ b/ecc/bls12-381/fr/BUILD.bazel
+@@ -7,17 +7,24 @@ go_library(
+         "arith.go",
+         "doc.go",
+         "element.go",
+-        "element_amd64.go",
+-        "element_amd64.s",
+-        "element_arm64.go",
+-        "element_arm64.s",
+         "element_exp.go",
+         "element_purego.go",
+         "generator.go",
+         "vector.go",
+-        "vector_amd64.go",
+         "vector_purego.go",
+-    ],
++    ] + select({
++        "@io_bazel_rules_go//go/platform:amd64": [
++          "element_amd64.go",
++          "//field/asm/element_4w:element_4w_amd64",
++          "vector_amd64.go",
++        ],
++        "@io_bazel_rules_go//go/platform:arm64": [
++          "element_arm64.go",
++          "//field/asm/element_4w:element_4w_arm64"
++        ],
++        "//conditions:default": [],
++    }),
++
+     importpath = "github.com/consensys/gnark-crypto/ecc/bls12-381/fr",
+     visibility = ["//visibility:public"],
+     deps = [
+diff --git a/field/asm/element_4w/BUILD.bazel b/field/asm/element_4w/BUILD.bazel
+index ef0882d..975e6f9 100644
+--- a/field/asm/element_4w/BUILD.bazel
++++ b/field/asm/element_4w/BUILD.bazel
+@@ -16,3 +16,15 @@ alias(
+     actual = ":element_4w",
+     visibility = ["//visibility:public"],
+ )
++
++filegroup(
++    name = "element_4w_amd64",
++    srcs = ["element_4w_amd64.s"],
++    visibility = ["//visibility:public"],
++)
++
++filegroup(
++    name = "element_4w_arm64",
++    srcs = ["element_4w_arm64.s"],
++    visibility = ["//visibility:public"],
++)
+diff --git a/field/asm/element_6w/BUILD.bazel b/field/asm/element_6w/BUILD.bazel
+index fbbe81c..fd99a62 100644
+--- a/field/asm/element_6w/BUILD.bazel
++++ b/field/asm/element_6w/BUILD.bazel
+@@ -16,3 +16,15 @@ alias(
+     actual = ":element_6w",
+     visibility = ["//visibility:public"],
+ )
++
++filegroup(
++    name = "element_6w_amd64",
++    srcs = ["element_6w_amd64.s"],
++    visibility = ["//visibility:public"],
++)
++
++filegroup(
++    name = "element_6w_arm64",
++    srcs = ["element_6w_arm64.s"],
++    visibility = ["//visibility:public"],
++)

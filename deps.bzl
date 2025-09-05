@@ -518,6 +518,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_consensys_gnark_crypto",
         importpath = "github.com/consensys/gnark-crypto",
+        patch_args = ["-p1"],
+        patches = ["//third_party:com_github_consensys_gnark_crypto.patch"],
         sum = "h1:vIye/FqI50VeAr0B3dx+YjeIvmc3LWz4yEfbWBpTUf0=",
         version = "v0.18.0",
     )
