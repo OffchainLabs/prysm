@@ -27,7 +27,7 @@ func TestProposeBeaconBlock_SSZ_Error(t *testing.T) {
 	}{
 		{
 			name:                 "error 202",
-			expectedErrorMessage: "block was successfully broadcast but failed validation",
+			expectedErrorMessage: "failed to submit block ssz",
 			returnedError: &httputil.DefaultJsonError{
 				Code:    http.StatusAccepted,
 				Message: "202 error",
@@ -35,7 +35,7 @@ func TestProposeBeaconBlock_SSZ_Error(t *testing.T) {
 		},
 		{
 			name:                 "error 500",
-			expectedErrorMessage: "HTTP request unsuccessful (500: foo error)",
+			expectedErrorMessage: "failed to submit block ssz",
 			returnedError: &httputil.DefaultJsonError{
 				Code:    http.StatusInternalServerError,
 				Message: "foo error",
@@ -43,7 +43,7 @@ func TestProposeBeaconBlock_SSZ_Error(t *testing.T) {
 		},
 		{
 			name:                 "other error",
-			expectedErrorMessage: "foo error",
+			expectedErrorMessage: "failed to submit block ssz",
 			returnedError:        errors.New("foo error"),
 		},
 	}
@@ -127,19 +127,7 @@ func TestProposeBeaconBlock_SSZ_Error(t *testing.T) {
 					nil, nil, testSuite.returnedError,
 				).Times(1)
 
-				// If PostSSZ fails, expect fallback to JSON Post
-				if testSuite.returnedError != nil {
-					jsonHeaders := map[string]string{"Eth-Consensus-Version": testCase.consensusVersion}
-					jsonRestHandler.EXPECT().Post(
-						gomock.Any(),
-						testCase.endpoint,
-						jsonHeaders,
-						gomock.Any(),
-						nil,
-					).Return(
-						testSuite.returnedError,
-					).Times(1)
-				}
+				// No JSON fallback expected for non-406 errors
 
 				validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
 				_, err := validatorClient.proposeBeaconBlock(ctx, testCase.block)
@@ -587,7 +575,7 @@ func generateSignedBlindedCapellaBlock() *ethpb.GenericSignedBeaconBlock_Blinded
 	}
 }
 
-func TestProposeBeaconBlock_SSZFails_FallbackToJSON(t *testing.T) {
+func TestProposeBeaconBlock_SSZFails_406_FallbackToJSON(t *testing.T) {
 	testCases := []struct {
 		name             string
 		consensusVersion string
@@ -623,7 +611,10 @@ func TestProposeBeaconBlock_SSZFails_FallbackToJSON(t *testing.T) {
 				sszHeaders,
 				gomock.Any(),
 			).Return(
-				nil, nil, errors.New("SSZ not supported"),
+				nil, nil, &httputil.DefaultJsonError{
+					Code:    http.StatusNotAcceptable,
+					Message: "SSZ not supported",
+				},
 			).Times(1)
 
 			// Expect fallback to JSON Post
@@ -641,6 +632,64 @@ func TestProposeBeaconBlock_SSZFails_FallbackToJSON(t *testing.T) {
 			validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
 			_, err := validatorClient.proposeBeaconBlock(ctx, testCase.block)
 			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestProposeBeaconBlock_SSZFails_Non406_NoFallback(t *testing.T) {
+	testCases := []struct {
+		name             string
+		consensusVersion string
+		endpoint         string
+		block            *ethpb.GenericSignedBeaconBlock
+	}{
+		{
+			name:             "phase0",
+			consensusVersion: "phase0",
+			endpoint:         "/eth/v2/beacon/blocks",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedPhase0Block(),
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			ctx := t.Context()
+			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+
+			// Expect PostSSZ to be called first and fail with non-406 error
+			sszHeaders := map[string]string{
+				"Eth-Consensus-Version": testCase.consensusVersion,
+				"Content-Type":          "application/octet-stream",
+			}
+			jsonRestHandler.EXPECT().PostSSZ(
+				gomock.Any(),
+				testCase.endpoint,
+				sszHeaders,
+				gomock.Any(),
+			).Return(
+				nil, nil, &httputil.DefaultJsonError{
+					Code:    http.StatusInternalServerError,
+					Message: "Internal server error",
+				},
+			).Times(1)
+
+			// Post should NOT be called for non-406 errors
+			jsonRestHandler.EXPECT().Post(
+				gomock.Any(),
+				gomock.Any(),
+				gomock.Any(),
+				gomock.Any(),
+				gomock.Any(),
+			).Times(0)
+
+			validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+			_, err := validatorClient.proposeBeaconBlock(ctx, testCase.block)
+			require.ErrorContains(t, "Internal server error", err)
 		})
 	}
 }

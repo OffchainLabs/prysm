@@ -69,17 +69,26 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 	if res.marshalledSSZ != nil {
 		headers["Content-Type"] = "application/octet-stream"
 		_, _, err = c.jsonRestHandler.PostSSZ(ctx, endpoint, headers, bytes.NewBuffer(res.marshalledSSZ))
-		// If PostSSZ fails, fall back to JSON
-		if err != nil && res.marshalJSON != nil {
-			log.WithError(err).Warn("Failed to submit block ssz, falling back to JSON")
-			// Marshal JSON now that we need it
-			jsonData, jsonErr := res.marshalJSON()
-			if jsonErr != nil {
-				return nil, errors.Wrap(jsonErr, "failed to marshal JSON fallback")
+		if err != nil {
+			errJson := &httputil.DefaultJsonError{}
+			// If PostSSZ fails with 406 (Not Acceptable), fall back to JSON
+			if errors.As(err, &errJson) && errJson.Code == http.StatusNotAcceptable && res.marshalJSON != nil {
+				log.WithError(err).Warn("Failed to submit block ssz, falling back to JSON")
+				jsonData, jsonErr := res.marshalJSON()
+				if jsonErr != nil {
+					return nil, errors.Wrap(jsonErr, "failed to marshal JSON fallback")
+				}
+				// Reset headers for JSON
+				headers = map[string]string{"Eth-Consensus-Version": res.consensusVersion}
+				err = c.jsonRestHandler.Post(ctx, endpoint, headers, bytes.NewBuffer(jsonData), nil)
+				// If JSON also fails, return that error; otherwise continue
+				if err != nil {
+					return nil, errors.Wrap(err, "failed to submit block via JSON fallback")
+				}
+			} else {
+				// For non-406 errors or when no JSON fallback is available, return the SSZ error
+				return nil, errors.Wrap(err, "failed to submit block ssz")
 			}
-			// Reset headers for JSON
-			headers = map[string]string{"Eth-Consensus-Version": res.consensusVersion}
-			err = c.jsonRestHandler.Post(ctx, endpoint, headers, bytes.NewBuffer(jsonData), nil)
 		}
 	} else if res.marshalJSON != nil {
 		// No SSZ data available, marshal and use JSON
