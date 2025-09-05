@@ -841,6 +841,7 @@ func TestComputeIndicesByRootByPeer(t *testing.T) {
 			[fieldparams.RootLength]byte{3}: {38: true},
 		},
 		peerIDs[3]: {
+			[fieldparams.RootLength]byte{2}: {10: true},
 			[fieldparams.RootLength]byte{3}: {10: true},
 		},
 	}

@@ -766,6 +766,8 @@ func computeIndicesByRootByPeer(
 	indicesByBlockRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
 	peers map[goPeer.ID]bool,
 ) (map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool, error) {
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+
 	// First, compute custody columns for all peers
 	peersByIndex := make(map[uint64]map[goPeer.ID]bool)
 	headSlotByPeer := make(map[goPeer.ID]primitives.Slot)
@@ -800,7 +802,10 @@ func computeIndicesByRootByPeer(
 			return nil, errors.Errorf("chain state is nil for peer %s", peer)
 		}
 
-		headSlotByPeer[peer] = peerChainState.HeadSlot
+		// Our view of the head slot of a peer is not updated in real time.
+		// We add an epoch to take into account the fact the real head slot of the peer
+		// is higher than our view of it.
+		headSlotByPeer[peer] = peerChainState.HeadSlot + slotsPerEpoch
 	}
 
 	// For each block root and its indices, find suitable peers
