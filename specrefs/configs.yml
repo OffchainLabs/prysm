@@ -18,6 +18,13 @@
     ALTAIR_FORK_VERSION: Version = '0x01000000'
     </spec>
 
+- name: AGGREGATE_DUE_BPS
+  sources: []
+  spec: |
+    <spec config_var="AGGREGATE_DUE_BPS" fork="phase0" hash="74073466">
+    AGGREGATE_DUE_BPS: uint64 = 6667
+    </spec>
+
 - name: ATTESTATION_PROPAGATION_SLOT_RANGE
   sources:
     - file: config/params/config.go
