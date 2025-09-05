@@ -173,7 +173,10 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockError_ThenPass(t *testing.T)
 		gomock.Any(),
 		gomock.Any(),
 	).Return(
-		nil, nil, errors.New("foo error"),
+		nil, nil, &httputil.DefaultJsonError{
+			Code:    http.StatusNotAcceptable,
+			Message: "SSZ not supported",
+		},
 	).Times(1)
 
 	jsonRestHandler.EXPECT().Post(
@@ -343,8 +346,8 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockHTTPErrors(t *testing.T) {
 				Code:    http.StatusAccepted,
 				Message: "block broadcast but failed validation",
 			},
-			expectJSON:   true,
-			errorMessage: "block was successfully broadcast but failed validation",
+			expectJSON:   false, // No fallback for non-406 errors
+			errorMessage: "failed to submit block ssz",
 		},
 		{
 			name: "Other HTTP error",
@@ -352,8 +355,8 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockHTTPErrors(t *testing.T) {
 				Code:    http.StatusBadRequest,
 				Message: "bad request",
 			},
-			expectJSON:   true,
-			errorMessage: "bad request",
+			expectJSON:   false, // No fallback for non-406 errors
+			errorMessage: "failed to submit block ssz",
 		},
 	}
 
@@ -506,13 +509,16 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockJSONFallback(t *testing.T) {
 			ctx := t.Context()
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
-			// SSZ call fails
+			// SSZ call fails with 406 to trigger JSON fallback
 			jsonRestHandler.EXPECT().PostSSZ(
 				gomock.Any(),
 				tt.expectedPath,
 				gomock.Any(),
 				gomock.Any(),
-			).Return(nil, nil, errors.New("ssz error")).Times(1)
+			).Return(nil, nil, &httputil.DefaultJsonError{
+				Code:    http.StatusNotAcceptable,
+				Message: "SSZ not supported",
+			}).Times(1)
 
 			// JSON fallback
 			jsonRestHandler.EXPECT().Post(
