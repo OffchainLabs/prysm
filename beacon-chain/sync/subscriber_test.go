@@ -539,7 +539,7 @@ func TestSubscribeWithSyncSubnets_DynamicOK(t *testing.T) {
 	cache.SyncSubnetIDs.AddSyncCommitteeSubnets([]byte("pubkey"), currEpoch, []uint64{0, 1}, 10*time.Second)
 	digest, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	r.subscribeWithParameters(subscribeParameters{
+	go r.subscribeWithParameters(subscribeParameters{
 		topicFormat:      p2p.SyncCommitteeSubnetTopicFormat,
 		digest:           digest,
 		getSubnetsToJoin: r.activeSyncSubnetIndices,

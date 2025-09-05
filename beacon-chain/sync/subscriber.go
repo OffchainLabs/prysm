@@ -42,21 +42,6 @@ type (
 	// subHandler represents handler for a given subscription.
 	subHandler func(context.Context, proto.Message) error
 
-	// parameters used for the `subscribeWithParameters` function.
-	subscribeParameters struct {
-		topicFormat string
-		validate    wrappedVal
-		handle      subHandler
-		digest      [4]byte
-
-		// getSubnetsToJoin is a function that returns all subnets the node should join.
-		getSubnetsToJoin func(currentSlot primitives.Slot) map[uint64]bool
-
-		// getSubnetsRequiringPeers is a function that returns all subnets that require peers to be found
-		// but for which no subscriptions are needed.
-		getSubnetsRequiringPeers func(currentSlot primitives.Slot) map[uint64]bool
-	}
-
 	subscribeToSubnetsParameters struct {
 		subscriptionBySubnet map[uint64]*pubsub.Subscription
 		topicFormat          string
@@ -66,6 +51,30 @@ type (
 		getSubnetsToJoin     func(currentSlot primitives.Slot) map[uint64]bool
 	}
 )
+
+// parameters used for the `subscribeWithParameters` function.
+type subscribeParameters struct {
+	topicFormat string
+	validate    wrappedVal
+	handle      subHandler
+	digest      [4]byte
+
+	// getSubnetsToJoin is a function that returns all subnets the node should join.
+	getSubnetsToJoin func(currentSlot primitives.Slot) map[uint64]bool
+
+	// getSubnetsRequiringPeers is a function that returns all subnets that require peers to be found
+	// but for which no subscriptions are needed.
+	getSubnetsRequiringPeers func(currentSlot primitives.Slot) map[uint64]bool
+}
+
+func (p subscribeParameters) shortTopic() string {
+	short := p.topicFormat
+	fmtLen := len(short)
+	if fmtLen >= 3 && short[fmtLen-3:] == "_%d" {
+		short = short[:fmtLen-3]
+	}
+	return fmt.Sprintf(short, p.digest)
+}
 
 var errInvalidDigest = errors.New("invalid digest")
 
@@ -114,37 +123,37 @@ func (s *Service) activeSyncSubnetIndices(currentSlot primitives.Slot) map[uint6
 
 // Register PubSub subscribers
 func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
-	s.subscribe(
+	go s.subscribe(
 		p2p.BlockSubnetTopicFormat,
 		s.validateBeaconBlockPubSub,
 		s.beaconBlockSubscriber,
 		digest,
 	)
-	s.subscribe(
+	go s.subscribe(
 		p2p.AggregateAndProofSubnetTopicFormat,
 		s.validateAggregateAndProof,
 		s.beaconAggregateProofSubscriber,
 		digest,
 	)
-	s.subscribe(
+	go s.subscribe(
 		p2p.ExitSubnetTopicFormat,
 		s.validateVoluntaryExit,
 		s.voluntaryExitSubscriber,
 		digest,
 	)
-	s.subscribe(
+	go s.subscribe(
 		p2p.ProposerSlashingSubnetTopicFormat,
 		s.validateProposerSlashing,
 		s.proposerSlashingSubscriber,
 		digest,
 	)
-	s.subscribe(
+	go s.subscribe(
 		p2p.AttesterSlashingSubnetTopicFormat,
 		s.validateAttesterSlashing,
 		s.attesterSlashingSubscriber,
 		digest,
 	)
-	s.subscribeWithParameters(subscribeParameters{
+	go s.subscribeWithParameters(subscribeParameters{
 		topicFormat:              p2p.AttestationSubnetTopicFormat,
 		validate:                 s.validateCommitteeIndexBeaconAttestation,
 		handle:                   s.committeeIndexBeaconAttestationSubscriber,
@@ -155,14 +164,14 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 
 	// New gossip topic in Altair
 	if params.BeaconConfig().AltairForkEpoch <= epoch {
-		s.subscribe(
+		go s.subscribe(
 			p2p.SyncContributionAndProofSubnetTopicFormat,
 			s.validateSyncContributionAndProof,
 			s.syncContributionAndProofSubscriber,
 			digest,
 		)
 
-		s.subscribeWithParameters(subscribeParameters{
+		go s.subscribeWithParameters(subscribeParameters{
 			topicFormat:      p2p.SyncCommitteeSubnetTopicFormat,
 			validate:         s.validateSyncCommitteeMessage,
 			handle:           s.syncCommitteeMessageSubscriber,
@@ -171,13 +180,13 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 		})
 
 		if features.Get().EnableLightClient {
-			s.subscribe(
+			go s.subscribe(
 				p2p.LightClientOptimisticUpdateTopicFormat,
 				s.validateLightClientOptimisticUpdate,
 				s.lightClientOptimisticUpdateSubscriber,
 				digest,
 			)
-			s.subscribe(
+			go s.subscribe(
 				p2p.LightClientFinalityUpdateTopicFormat,
 				s.validateLightClientFinalityUpdate,
 				s.lightClientFinalityUpdateSubscriber,
@@ -188,7 +197,7 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 
 	// New gossip topic in Capella
 	if params.BeaconConfig().CapellaForkEpoch <= epoch {
-		s.subscribe(
+		go s.subscribe(
 			p2p.BlsToExecutionChangeSubnetTopicFormat,
 			s.validateBlsToExecutionChange,
 			s.blsToExecutionChangeSubscriber,
@@ -198,7 +207,7 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 
 	// New gossip topic in Deneb, removed in Electra
 	if params.BeaconConfig().DenebForkEpoch <= epoch && epoch < params.BeaconConfig().ElectraForkEpoch {
-		s.subscribeWithParameters(subscribeParameters{
+		go s.subscribeWithParameters(subscribeParameters{
 			topicFormat: p2p.BlobSubnetTopicFormat,
 			validate:    s.validateBlob,
 			handle:      s.blobSubscriber,
@@ -211,7 +220,7 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 
 	// New gossip topic in Electra, removed in Fulu
 	if params.BeaconConfig().ElectraForkEpoch <= epoch && epoch < params.BeaconConfig().FuluForkEpoch {
-		s.subscribeWithParameters(subscribeParameters{
+		go s.subscribeWithParameters(subscribeParameters{
 			topicFormat: p2p.BlobSubnetTopicFormat,
 			validate:    s.validateBlob,
 			handle:      s.blobSubscriber,
@@ -224,7 +233,7 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 
 	// New gossip topic in Fulu.
 	if params.BeaconConfig().FuluForkEpoch <= epoch {
-		s.subscribeWithParameters(subscribeParameters{
+		go s.subscribeWithParameters(subscribeParameters{
 			topicFormat:              p2p.DataColumnSubnetTopicFormat,
 			validate:                 s.validateDataColumn,
 			handle:                   s.dataColumnSubscriber,
@@ -237,7 +246,8 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 
 // subscribe to a given topic with a given validator and subscription handler.
 // The base protobuf message is used to initialize new messages for decoding.
-func (s *Service) subscribe(topic string, validator wrappedVal, handle subHandler, digest [4]byte) *pubsub.Subscription {
+func (s *Service) subscribe(topic string, validator wrappedVal, handle subHandler, digest [4]byte) {
+	<-s.initialSyncComplete
 	_, e, err := params.ForkDataFromDigest(digest)
 	if err != nil {
 		// Impossible condition as it would mean digest does not exist.
@@ -248,7 +258,7 @@ func (s *Service) subscribe(topic string, validator wrappedVal, handle subHandle
 		// Impossible condition as it would mean topic does not exist.
 		panic(fmt.Sprintf("%s is not mapped to any message in GossipTopicMappings", topic)) // lint:nopanic -- Impossible condition.
 	}
-	return s.subscribeWithBase(s.addDigestToTopic(topic, digest), validator, handle)
+	s.subscribeWithBase(s.addDigestToTopic(topic, digest), validator, handle)
 }
 
 func (s *Service) subscribeWithBase(topic string, validator wrappedVal, handle subHandler) *pubsub.Subscription {
@@ -475,14 +485,13 @@ func (s *Service) subscribeToSubnets(p subscribeToSubnetsParameters) error {
 
 // subscribeWithParameters subscribes to a list of subnets.
 func (s *Service) subscribeWithParameters(p subscribeParameters) {
-	shortTopicFormat := p.topicFormat
-	shortTopicFormatLen := len(shortTopicFormat)
-	if shortTopicFormatLen >= 3 && shortTopicFormat[shortTopicFormatLen-3:] == "_%d" {
-		shortTopicFormat = shortTopicFormat[:shortTopicFormatLen-3]
+	slotDuration := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+	minimumPeersPerSubnet := flags.Get().MinimumPeersPerSubnet
+	logFields := logrus.Fields{
+		"topic": p.shortTopic(),
 	}
-	shortTopic := fmt.Sprintf(shortTopicFormat, p.digest)
 
-	parameters := subscribeToSubnetsParameters{
+	subP := subscribeToSubnetsParameters{
 		subscriptionBySubnet: make(map[uint64]*pubsub.Subscription),
 		topicFormat:          p.topicFormat,
 		digest:               p.digest,
@@ -490,95 +499,78 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 		handle:               p.handle,
 		getSubnetsToJoin:     p.getSubnetsToJoin,
 	}
-	err := s.subscribeToSubnets(parameters)
-	if err != nil {
-		log.WithError(err).Error("Could not subscribe to subnets")
+
+	// Try once immediately so we don't have to wait until the next slot.
+	s.ensureSubnetPeersAndSubscribe(p, subP, logFields, slotDuration, minimumPeersPerSubnet)
+
+	go s.logMinimumPeersPerSubnet(p, logFields)
+
+	slotTicker := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
+	defer slotTicker.Done()
+	for {
+		select {
+		case <-slotTicker.C():
+			s.ensureSubnetPeersAndSubscribe(p, subP, logFields, slotDuration, minimumPeersPerSubnet)
+		case <-s.ctx.Done():
+			return
+		}
+	}
+}
+
+func (s *Service) ensureSubnetPeersAndSubscribe(p subscribeParameters, subnetP subscribeToSubnetsParameters, logFields logrus.Fields, timeout time.Duration, minPeers int) {
+	currentSlot := s.cfg.clock.CurrentSlot()
+	neededSubnets := computeAllNeededSubnets(currentSlot, p.getSubnetsToJoin, p.getSubnetsRequiringPeers)
+
+	if err := s.subscribeToSubnets(subnetP); err != nil {
+		if errors.Is(err, errInvalidDigest) {
+			log.WithFields(logFields).Debug("Digest is invalid, stopping subscription")
+			return
+		}
+		log.WithFields(logFields).WithError(err).Error("Could not subscribe to subnets")
+		return
 	}
 
-	slotDuration := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+	ctx, cancel := context.WithTimeout(s.ctx, timeout)
+	defer cancel()
+	if err := s.cfg.p2p.FindAndDialPeersWithSubnets(ctx, p.topicFormat, p.digest, minPeers, neededSubnets); err != nil && !errors.Is(err, context.DeadlineExceeded) {
+		log.WithFields(logFields).WithError(err).Debug("Could not find peers with subnets")
+	}
+}
+
+func (s *Service) logMinimumPeersPerSubnet(p subscribeParameters, logFields logrus.Fields) {
 	minimumPeersPerSubnet := flags.Get().MinimumPeersPerSubnet
-	// Subscribe to expected subnets and search for peers if needed at every slot.
-	go func() {
-		currentSlot := s.cfg.clock.CurrentSlot()
-		neededSubnets := computeAllNeededSubnets(currentSlot, p.getSubnetsToJoin, p.getSubnetsRequiringPeers)
-		func() {
-			ctx, cancel := context.WithTimeout(s.ctx, slotDuration)
-			defer cancel()
-
-			if err := s.cfg.p2p.FindAndDialPeersWithSubnets(ctx, p.topicFormat, p.digest, minimumPeersPerSubnet, neededSubnets); err != nil && !errors.Is(err, context.DeadlineExceeded) {
-				log.WithError(err).Debug("Could not find peers with subnets")
-			}
-		}()
-
-		slotTicker := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
-		defer slotTicker.Done()
-
-		for {
-			select {
-			case <-slotTicker.C():
-				currentSlot := s.cfg.clock.CurrentSlot()
-				neededSubnets := computeAllNeededSubnets(currentSlot, p.getSubnetsToJoin, p.getSubnetsRequiringPeers)
-
-				if err := s.subscribeToSubnets(parameters); err != nil {
-					if errors.Is(err, errInvalidDigest) {
-						log.WithField("topics", shortTopic).Debug("Digest is invalid, stopping subscription")
-						return
-					}
-					log.WithError(err).Error("Could not subscribe to subnets")
-					continue
-				}
-
-				func() {
-					ctx, cancel := context.WithTimeout(s.ctx, slotDuration)
-					defer cancel()
-
-					if err := s.cfg.p2p.FindAndDialPeersWithSubnets(ctx, p.topicFormat, p.digest, minimumPeersPerSubnet, neededSubnets); err != nil && !errors.Is(err, context.DeadlineExceeded) {
-						log.WithError(err).Debug("Could not find peers with subnets")
-					}
-				}()
-
-			case <-s.ctx.Done():
-				return
-			}
-		}
-	}()
-
 	// Warn the user if we are not subscribed to enough peers in the subnets.
-	go func() {
-		log := log.WithField("minimum", minimumPeersPerSubnet)
-		logTicker := time.NewTicker(5 * time.Minute)
-		defer logTicker.Stop()
+	log := log.WithField("minimum", minimumPeersPerSubnet)
+	logTicker := time.NewTicker(5 * time.Minute)
+	defer logTicker.Stop()
 
-		for {
-			select {
-			case <-logTicker.C:
-				currentSlot := s.cfg.clock.CurrentSlot()
-				subnetsToFindPeersIndex := computeAllNeededSubnets(currentSlot, p.getSubnetsToJoin, p.getSubnetsRequiringPeers)
+	for {
+		select {
+		case <-logTicker.C:
+			currentSlot := s.cfg.clock.CurrentSlot()
+			subnetsToFindPeersIndex := computeAllNeededSubnets(currentSlot, p.getSubnetsToJoin, p.getSubnetsRequiringPeers)
 
-				isSubnetWithMissingPeers := false
-				// Find new peers for wanted subnets if needed.
-				for index := range subnetsToFindPeersIndex {
-					topic := fmt.Sprintf(p.topicFormat, p.digest, index)
+			isSubnetWithMissingPeers := false
+			// Find new peers for wanted subnets if needed.
+			for index := range subnetsToFindPeersIndex {
+				topic := fmt.Sprintf(p.topicFormat, p.digest, index)
 
-					// Check if we have enough peers in the subnet. Skip if we do.
-					if count := s.connectedPeersCount(topic); count < minimumPeersPerSubnet {
-						isSubnetWithMissingPeers = true
-						log.WithFields(logrus.Fields{
-							"topic":  topic,
-							"actual": count,
-						}).Warning("Not enough connected peers")
-					}
+				// Check if we have enough peers in the subnet. Skip if we do.
+				if count := s.connectedPeersCount(topic); count < minimumPeersPerSubnet {
+					isSubnetWithMissingPeers = true
+					log.WithFields(logrus.Fields{
+						"topic":  topic,
+						"actual": count,
+					}).Warning("Not enough connected peers")
 				}
-
-				if !isSubnetWithMissingPeers {
-					log.WithField("topic", shortTopic).Info("All subnets have enough connected peers")
-				}
-
-			case <-s.ctx.Done():
-				return
 			}
+			if !isSubnetWithMissingPeers {
+				log.WithFields(logFields).Info("All subnets have enough connected peers")
+			}
+		case <-s.ctx.Done():
+			return
 		}
-	}()
+	}
 }
 
 func (s *Service) unSubscribeFromTopic(topic string) {
