@@ -26,3 +26,10 @@ config_setting(
         "@prysm//proto:network": "minimal",
     },
 )
+
+config_setting(
+    name = "ssz_e2e",
+    flag_values = {
+        "@prysm//proto:network": "e2e",
+    },
+)

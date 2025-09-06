@@ -11,7 +11,10 @@ def _go_test_transition_impl(settings, attr):
         settings["@io_bazel_rules_go//go/config:tags"] = ["minimal"] + settings["@io_bazel_rules_go//go/config:tags"] 
     elif attr.eth_network == "mainnet":  # Default / optional
         settings["//proto:network"] = "mainnet"
-        settings["@io_bazel_rules_go//go/config:tags"] = ["mainnet"] + settings["@io_bazel_rules_go//go/config:tags"] 
+        settings["@io_bazel_rules_go//go/config:tags"] = ["mainnet"] + settings["@io_bazel_rules_go//go/config:tags"]
+    elif attr.eth_network == "e2e":
+        settings["//proto:network"] = "e2e"
+        settings["@io_bazel_rules_go//go/config:tags"] = ["e2e"] + settings["@io_bazel_rules_go//go/config:tags"] 
 
     if attr.gotags:
         settings["@io_bazel_rules_go//go/config:tags"] = attr.gotags + settings["@io_bazel_rules_go//go/config:tags"]
@@ -41,7 +44,7 @@ def _go_test_transition_rule(**kwargs):
     kwargs = dict(kwargs)
     attrs = dict(kwargs["attrs"])
     attrs.update({
-        "eth_network": attr.string(values = ["mainnet", "minimal"]),
+        "eth_network": attr.string(values = ["mainnet", "minimal", "e2e"]),
     })
     kwargs["attrs"] = attrs
     kwargs["cfg"] = go_test_transition
