@@ -395,6 +395,19 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []
 		return blobsPid, errors.Wrap(err, "custody info")
 	}
 
+	currentSlot := f.clock.CurrentSlot()
+	currentEpoch := slots.ToEpoch(currentSlot)
+
+	roBlocks := make([]blocks.ROBlock, 0, len(postFulu))
+	for _, blockWithSidecars := range postFulu {
+		blockSlot := blockWithSidecars.Block.Block().Slot()
+		blockEpoch := slots.ToEpoch(blockSlot)
+
+		if params.WithinDAPeriod(blockEpoch, currentEpoch) {
+			roBlocks = append(roBlocks, blockWithSidecars.Block)
+		}
+	}
+
 	params := prysmsync.DataColumnSidecarsParams{
 		Ctx:         ctx,
 		Tor:         f.clock,
@@ -403,11 +416,6 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []
 		CtxMap:      f.ctxMap,
 		Storage:     f.dcs,
 		NewVerifier: f.cv,
-	}
-
-	roBlocks := make([]blocks.ROBlock, 0, len(postFulu))
-	for _, block := range postFulu {
-		roBlocks = append(roBlocks, block.Block)
 	}
 
 	verifiedRoDataColumnsByRoot, missingIndicesByRoot, err := prysmsync.FetchDataColumnSidecars(params, roBlocks, info.CustodyColumns)
