@@ -121,125 +121,138 @@ func (s *Service) activeSyncSubnetIndices(currentSlot primitives.Slot) map[uint6
 	return mapFromSlice(subscriptions)
 }
 
+// spawn allows the Service to use a custom function for launching goroutines.
+// This is useful in tests where we can set spawner to a sync.WaitGroup and
+// wait for the spawned goroutines to finish.
+func (s *Service) spawn(f func()) {
+	if s.spawner != nil {
+		s.spawner(f)
+	} else {
+		go f()
+	}
+}
+
 // Register PubSub subscribers
 func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
-	go s.subscribe(
-		p2p.BlockSubnetTopicFormat,
-		s.validateBeaconBlockPubSub,
-		s.beaconBlockSubscriber,
-		digest,
-	)
-	go s.subscribe(
-		p2p.AggregateAndProofSubnetTopicFormat,
-		s.validateAggregateAndProof,
-		s.beaconAggregateProofSubscriber,
-		digest,
-	)
-	go s.subscribe(
-		p2p.ExitSubnetTopicFormat,
-		s.validateVoluntaryExit,
-		s.voluntaryExitSubscriber,
-		digest,
-	)
-	go s.subscribe(
-		p2p.ProposerSlashingSubnetTopicFormat,
-		s.validateProposerSlashing,
-		s.proposerSlashingSubscriber,
-		digest,
-	)
-	go s.subscribe(
-		p2p.AttesterSlashingSubnetTopicFormat,
-		s.validateAttesterSlashing,
-		s.attesterSlashingSubscriber,
-		digest,
-	)
-	go s.subscribeWithParameters(subscribeParameters{
-		topicFormat:              p2p.AttestationSubnetTopicFormat,
-		validate:                 s.validateCommitteeIndexBeaconAttestation,
-		handle:                   s.committeeIndexBeaconAttestationSubscriber,
-		digest:                   digest,
-		getSubnetsToJoin:         s.persistentAndAggregatorSubnetIndices,
-		getSubnetsRequiringPeers: attesterSubnetIndices,
+	s.spawn(func() {
+		s.subscribe(p2p.BlockSubnetTopicFormat, s.validateBeaconBlockPubSub, s.beaconBlockSubscriber, digest)
+	})
+	s.spawn(func() {
+		s.subscribe(p2p.AggregateAndProofSubnetTopicFormat, s.validateAggregateAndProof, s.beaconAggregateProofSubscriber, digest)
+	})
+	s.spawn(func() {
+		s.subscribe(p2p.ExitSubnetTopicFormat, s.validateVoluntaryExit, s.voluntaryExitSubscriber, digest)
+	})
+	s.spawn(func() {
+		s.subscribe(p2p.ProposerSlashingSubnetTopicFormat, s.validateProposerSlashing, s.proposerSlashingSubscriber, digest)
+	})
+	s.spawn(func() {
+		s.subscribe(p2p.AttesterSlashingSubnetTopicFormat, s.validateAttesterSlashing, s.attesterSlashingSubscriber, digest)
+	})
+	s.spawn(func() {
+		s.subscribeWithParameters(subscribeParameters{
+			topicFormat:              p2p.AttestationSubnetTopicFormat,
+			validate:                 s.validateCommitteeIndexBeaconAttestation,
+			handle:                   s.committeeIndexBeaconAttestationSubscriber,
+			digest:                   digest,
+			getSubnetsToJoin:         s.persistentAndAggregatorSubnetIndices,
+			getSubnetsRequiringPeers: attesterSubnetIndices,
+		})
 	})
 
 	// New gossip topic in Altair
 	if params.BeaconConfig().AltairForkEpoch <= epoch {
-		go s.subscribe(
-			p2p.SyncContributionAndProofSubnetTopicFormat,
-			s.validateSyncContributionAndProof,
-			s.syncContributionAndProofSubscriber,
-			digest,
-		)
-
-		go s.subscribeWithParameters(subscribeParameters{
-			topicFormat:      p2p.SyncCommitteeSubnetTopicFormat,
-			validate:         s.validateSyncCommitteeMessage,
-			handle:           s.syncCommitteeMessageSubscriber,
-			digest:           digest,
-			getSubnetsToJoin: s.activeSyncSubnetIndices,
+		s.spawn(func() {
+			s.subscribe(
+				p2p.SyncContributionAndProofSubnetTopicFormat,
+				s.validateSyncContributionAndProof,
+				s.syncContributionAndProofSubscriber,
+				digest,
+			)
+		})
+		s.spawn(func() {
+			s.subscribeWithParameters(subscribeParameters{
+				topicFormat:      p2p.SyncCommitteeSubnetTopicFormat,
+				validate:         s.validateSyncCommitteeMessage,
+				handle:           s.syncCommitteeMessageSubscriber,
+				digest:           digest,
+				getSubnetsToJoin: s.activeSyncSubnetIndices,
+			})
 		})
 
 		if features.Get().EnableLightClient {
-			go s.subscribe(
-				p2p.LightClientOptimisticUpdateTopicFormat,
-				s.validateLightClientOptimisticUpdate,
-				s.lightClientOptimisticUpdateSubscriber,
-				digest,
-			)
-			go s.subscribe(
-				p2p.LightClientFinalityUpdateTopicFormat,
-				s.validateLightClientFinalityUpdate,
-				s.lightClientFinalityUpdateSubscriber,
-				digest,
-			)
+			s.spawn(func() {
+				s.subscribe(
+					p2p.LightClientOptimisticUpdateTopicFormat,
+					s.validateLightClientOptimisticUpdate,
+					s.lightClientOptimisticUpdateSubscriber,
+					digest,
+				)
+			})
+			s.spawn(func() {
+				s.subscribe(
+					p2p.LightClientFinalityUpdateTopicFormat,
+					s.validateLightClientFinalityUpdate,
+					s.lightClientFinalityUpdateSubscriber,
+					digest,
+				)
+			})
 		}
 	}
 
 	// New gossip topic in Capella
 	if params.BeaconConfig().CapellaForkEpoch <= epoch {
-		go s.subscribe(
-			p2p.BlsToExecutionChangeSubnetTopicFormat,
-			s.validateBlsToExecutionChange,
-			s.blsToExecutionChangeSubscriber,
-			digest,
-		)
+		s.spawn(func() {
+			s.subscribe(
+				p2p.BlsToExecutionChangeSubnetTopicFormat,
+				s.validateBlsToExecutionChange,
+				s.blsToExecutionChangeSubscriber,
+				digest,
+			)
+		})
 	}
 
 	// New gossip topic in Deneb, removed in Electra
 	if params.BeaconConfig().DenebForkEpoch <= epoch && epoch < params.BeaconConfig().ElectraForkEpoch {
-		go s.subscribeWithParameters(subscribeParameters{
-			topicFormat: p2p.BlobSubnetTopicFormat,
-			validate:    s.validateBlob,
-			handle:      s.blobSubscriber,
-			digest:      digest,
-			getSubnetsToJoin: func(primitives.Slot) map[uint64]bool {
-				return mapFromCount(params.BeaconConfig().BlobsidecarSubnetCount)
-			},
+		s.spawn(func() {
+			s.subscribeWithParameters(subscribeParameters{
+				topicFormat: p2p.BlobSubnetTopicFormat,
+				validate:    s.validateBlob,
+				handle:      s.blobSubscriber,
+				digest:      digest,
+				getSubnetsToJoin: func(primitives.Slot) map[uint64]bool {
+					return mapFromCount(params.BeaconConfig().BlobsidecarSubnetCount)
+				},
+			})
 		})
 	}
 
 	// New gossip topic in Electra, removed in Fulu
 	if params.BeaconConfig().ElectraForkEpoch <= epoch && epoch < params.BeaconConfig().FuluForkEpoch {
-		go s.subscribeWithParameters(subscribeParameters{
-			topicFormat: p2p.BlobSubnetTopicFormat,
-			validate:    s.validateBlob,
-			handle:      s.blobSubscriber,
-			digest:      digest,
-			getSubnetsToJoin: func(currentSlot primitives.Slot) map[uint64]bool {
-				return mapFromCount(params.BeaconConfig().BlobsidecarSubnetCountElectra)
-			},
+		s.spawn(func() {
+			s.subscribeWithParameters(subscribeParameters{
+				topicFormat: p2p.BlobSubnetTopicFormat,
+				validate:    s.validateBlob,
+				handle:      s.blobSubscriber,
+				digest:      digest,
+				getSubnetsToJoin: func(currentSlot primitives.Slot) map[uint64]bool {
+					return mapFromCount(params.BeaconConfig().BlobsidecarSubnetCountElectra)
+				},
+			})
 		})
 	}
 
 	// New gossip topic in Fulu.
 	if params.BeaconConfig().FuluForkEpoch <= epoch {
-		go s.subscribeWithParameters(subscribeParameters{
-			topicFormat:              p2p.DataColumnSubnetTopicFormat,
-			validate:                 s.validateDataColumn,
-			handle:                   s.dataColumnSubscriber,
-			digest:                   digest,
-			getSubnetsToJoin:         s.dataColumnSubnetIndices,
-			getSubnetsRequiringPeers: s.allDataColumnSubnets,
+		s.spawn(func() {
+			s.subscribeWithParameters(subscribeParameters{
+				topicFormat:              p2p.DataColumnSubnetTopicFormat,
+				validate:                 s.validateDataColumn,
+				handle:                   s.dataColumnSubscriber,
+				digest:                   digest,
+				getSubnetsToJoin:         s.dataColumnSubnetIndices,
+				getSubnetsRequiringPeers: s.allDataColumnSubnets,
+			})
 		})
 	}
 }

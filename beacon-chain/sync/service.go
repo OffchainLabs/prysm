@@ -178,6 +178,7 @@ type Service struct {
 	lcStore                          *lightClient.Store
 	dataColumnLogCh                  chan dataColumnLogEntry
 	registeredNetworkEntry           params.NetworkScheduleEntry
+	spawner                          func(func())
 }
 
 // NewService initializes new regular sync service.
