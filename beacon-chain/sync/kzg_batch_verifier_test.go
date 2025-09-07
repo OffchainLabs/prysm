@@ -246,7 +246,7 @@ func TestPullKzgChan(t *testing.T) {
 		}
 
 		const numVerifications = 3
-		for i := 0; i < numVerifications; i++ {
+		for i := range numVerifications {
 			dataColumns := createValidTestDataColumns(t, 1)
 			resChan := make(chan error, 1)
 			service.kzgChan <- &kzgVerifier{dataColumns: dataColumns, resChan: resChan}
