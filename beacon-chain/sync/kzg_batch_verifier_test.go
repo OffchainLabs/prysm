@@ -113,7 +113,7 @@ func TestKzgVerifierRoutine(t *testing.T) {
 		const numRequests = 5
 		resChans := make([]chan error, numRequests)
 
-		for i := 0; i < numRequests; i++ {
+		for i := range numRequests {
 			dataColumns := createValidTestDataColumns(t, 1)
 			resChan := make(chan error, 1)
 			resChans[i] = resChan
