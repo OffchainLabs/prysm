@@ -18,11 +18,11 @@
     ALTAIR_FORK_VERSION: Version = '0x01000000'
     </spec>
 
-- name: AGGREGRATE_DUE_BPS
+- name: AGGREGATE_DUE_BPS
   sources: []
   spec: |
-    <spec config_var="AGGREGRATE_DUE_BPS" fork="phase0" hash="74073466">
-    AGGREGRATE_DUE_BPS: uint64 = 6667
+    <spec config_var="AGGREGATE_DUE_BPS" fork="phase0" hash="7eaa811a">
+    AGGREGATE_DUE_BPS: uint64 = 6667
     </spec>
 
 - name: ATTESTATION_PROPAGATION_SLOT_RANGE
