@@ -216,7 +216,7 @@ func TestKzgBatchVerifierConcurrency(t *testing.T) {
 	wg.Add(numGoroutines)
 
 	// Multiple goroutines sending verification requests simultaneously
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(goroutineID int) {
 			defer wg.Done()
 
