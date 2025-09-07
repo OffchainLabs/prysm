@@ -215,7 +215,7 @@ func verifyKzgBatch(kzgBatch []*kzgVerifier) {
 	}
 
 	// Send the same result to all verifiers in the batch
-	for i := 0; i < len(kzgBatch); i++ {
-		kzgBatch[i].resChan <- verificationErr
+	for _, verifier := range kzgBatch {
+		verifier.resChan <- verificationErr
 	}
 }
