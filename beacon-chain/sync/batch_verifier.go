@@ -203,7 +203,7 @@ func verifyKzgBatch(kzgBatch []*kzgVerifier) {
 		return
 	}
 
-	allDataColumns := make([]blocks.RODataColumn, 0)
+	allDataColumns := make([]blocks.RODataColumn, 0, len(kzgBatch))
 	for _, kzgVerifier := range kzgBatch {
 		allDataColumns = append(allDataColumns, kzgVerifier.dataColumns...)
 	}
