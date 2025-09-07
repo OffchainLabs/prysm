@@ -120,7 +120,7 @@ func TestKzgVerifierRoutine(t *testing.T) {
 			service.kzgChan <- &kzgVerifier{dataColumns: dataColumns, resChan: resChan}
 		}
 
-		for i := 0; i < numRequests; i++ {
+		for i := range numRequests {
 			select {
 			case err := <-resChans[i]:
 				require.NoError(t, err)
