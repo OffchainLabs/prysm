@@ -220,7 +220,7 @@ func TestKzgBatchVerifierConcurrency(t *testing.T) {
 		go func(goroutineID int) {
 			defer wg.Done()
 
-			for j := 0; j < numRequestsPerGoroutine; j++ {
+			for j := range numRequestsPerGoroutine {
 				dataColumns := createValidTestDataColumns(t, 1)
 				result, err := service.validateWithKzgBatchVerifier(ctx, dataColumns)
 				require.Equal(t, pubsub.ValidationAccept, result)
