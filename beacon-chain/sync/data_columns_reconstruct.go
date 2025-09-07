@@ -25,14 +25,13 @@ const (
 // all data column sidecars. Then, it saves missing sidecars to the store.
 // After a delay, it broadcasts in the background not seen via gossip
 // (but reconstructed) sidecars.
-func (s *Service) reconstructSaveBroadcastDataColumnSidecars(
-	ctx context.Context,
-	slot primitives.Slot,
-	proposerIndex primitives.ValidatorIndex,
-	root [fieldparams.RootLength]byte,
-) error {
+func (s *Service) reconstructSaveBroadcastDataColumnSidecars(ctx context.Context, sidecar blocks.VerifiedRODataColumn) error {
 	startTime := time.Now()
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
+
+	root := sidecar.BlockRoot()
+	slot := sidecar.Slot()
+	proposerIndex := sidecar.ProposerIndex()
 
 	// Lock to prevent concurrent reconstructions.
 	s.reconstructionLock.Lock()
@@ -198,7 +197,7 @@ func (s *Service) broadcastMissingDataColumnSidecars(
 		subnet := peerdas.ComputeSubnetForDataColumnSidecar(verifiedRODataColumn.Index)
 
 		// Broadcast the missing data column.
-		if err := s.cfg.p2p.BroadcastDataColumnSidecar(root, subnet, verifiedRODataColumn.DataColumnSidecar); err != nil {
+		if err := s.cfg.p2p.BroadcastDataColumnSidecar(subnet, verifiedRODataColumn); err != nil {
 			log.WithError(err).Error("Broadcast data column")
 		}
 
@@ -219,4 +218,204 @@ func (s *Service) broadcastMissingDataColumnSidecars(
 	}
 
 	return nil
+}
+
+// processDataColumnSidecarsFromExecutionFromBlock retrieves (if available) data column sidecars data from the execution client,
+// builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
+func (s *Service) processDataColumnSidecarsFromExecutionFromBlock(ctx context.Context, roBlock blocks.ROBlock) error {
+	const delay = 250 * time.Millisecond
+	secondsPerHalfSlot := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
+
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
+
+	root := roBlock.Root()
+	block := roBlock.Block()
+	slot := block.Slot()
+	proposerIndex := block.ProposerIndex()
+
+	commitments, err := block.Body().BlobKzgCommitments()
+	if err != nil {
+		return errors.Wrap(err, "blob kzg commitments")
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, secondsPerHalfSlot)
+	defer cancel()
+
+	for {
+		// Check if some data column sidecars to custody are missing.
+		missingIndices, err := s.missingDataColumnSidecars(root, commitments)
+		if err != nil {
+			return errors.Wrap(err, "missing data column sidecars")
+		}
+
+		// Return early if all needed data column sidecars are already available in storage.
+		if len(missingIndices) == 0 {
+			return nil
+		}
+
+		// Try to reconstruct data column sidecars from the execution client.
+		sidecars, err := s.cfg.executionReconstructor.ConstructDataColumnSidecarsFromBlock(ctx, roBlock)
+		if err != nil {
+			return errors.Wrap(err, "reconstruct data column sidecars")
+		}
+
+		// No sidecars are retrieved from the EL, retry later
+		sidecarCount := uint64(len(sidecars))
+		if sidecarCount == 0 {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+
+			time.Sleep(delay)
+
+			continue
+		}
+
+		// Boundary check.
+		if sidecarCount != numberOfColumns {
+			return errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", sidecarCount, numberOfColumns)
+		}
+
+		// Broadcast and save data column sidecars to custody but not yet received.
+		for index := range missingIndices {
+			if index >= sidecarCount {
+				return errors.Errorf("data column index %d >= sidecar count %d - should never happen", index, sidecarCount)
+			}
+
+			// This sidecar has been received in the meantime, skip it.
+			if s.hasSeenDataColumnIndex(slot, proposerIndex, index) {
+				continue
+			}
+
+			sidecar := sidecars[index]
+
+			if err := s.cfg.p2p.BroadcastDataColumnSidecar(sidecar.Index, sidecar); err != nil {
+				return errors.Wrap(err, "broadcast data column sidecar")
+			}
+
+			if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
+				return errors.Wrap(err, "receive data column sidecar")
+			}
+		}
+
+		return nil
+	}
+}
+
+func (s *Service) processDataColumnSidecarsFromExecutionFromColumnSidecar(ctx context.Context, sidecar blocks.VerifiedRODataColumn) error {
+	const delay = 250 * time.Millisecond
+	secondsPerHalfSlot := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
+
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
+
+	commitments := sidecar.KzgCommitments
+	root := sidecar.BlockRoot()
+
+	ctx, cancel := context.WithTimeout(ctx, secondsPerHalfSlot)
+	defer cancel()
+
+	for {
+		// Check if some data column sidecars to custody are missing.
+		missingIndices, err := s.missingDataColumnSidecars(root, commitments)
+		if err != nil {
+			return errors.Wrap(err, "missing data column sidecars")
+		}
+
+		// Return early if all needed data column sidecars are already available in storage.
+		if len(missingIndices) == 0 {
+			return nil
+		}
+
+		// Try to reconstruct data column sidecars from the execution client.
+		sidecars, err := s.cfg.executionReconstructor.ConstructDataColumnSidecarsFromColumnSidecar(ctx, sidecar)
+		if err != nil {
+			return errors.Wrap(err, "reconstruct data column sidecars")
+		}
+
+		// No sidecars are retrieved from the EL, retry later
+		sidecarCount := uint64(len(sidecars))
+		if sidecarCount == 0 {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+
+			time.Sleep(delay)
+
+			continue
+		}
+
+		// Boundary check.
+		if sidecarCount != numberOfColumns {
+			return errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", sidecarCount, numberOfColumns)
+		}
+
+		blockSlot, proposerIndex := sidecar.Slot(), sidecar.ProposerIndex()
+
+		// Broadcast and save data column sidecars to custody but not yet received.
+		for index := range missingIndices {
+			log := log.WithField("columnIndex", index)
+			if index >= sidecarCount {
+				return errors.Errorf("data column index %d >= sidecar count %d - should never happen", index, sidecarCount)
+			}
+
+			// This sidecar has been received in the meantime, skip it.
+			if s.hasSeenDataColumnIndex(blockSlot, proposerIndex, index) {
+				continue
+			}
+
+			sidecar := sidecars[index]
+
+			if err := s.cfg.p2p.BroadcastDataColumnSidecar(sidecar.Index, sidecar); err != nil {
+				log.WithError(err).Error("Failed to broadcast data column")
+			}
+
+			if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
+				log.WithError(err).Error("Failed to receive data column")
+			}
+		}
+
+		return nil
+	}
+}
+
+// missingDataColumnSidecars returns the data column indices we should custody and that are missing in our storage
+// for the given read only beacon block.
+func (s *Service) missingDataColumnSidecars(root [fieldparams.RootLength]byte, commitments [][]byte) (map[uint64]bool, error) {
+	// Return early if there is not commitments.
+	if len(commitments) == 0 {
+		return nil, nil
+	}
+
+	// Retrieve our node ID.
+	nodeID := s.cfg.p2p.NodeID()
+
+	// Get the custody group sampling size for the node.
+	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount()
+	if err != nil {
+		return nil, errors.Wrap(err, "custody group count")
+	}
+
+	// Compute the sampling size.
+	// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/das-core.md#custody-sampling
+	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
+	samplingSize := max(samplesPerSlot, custodyGroupCount)
+
+	// Get the peer info for the node.
+	peerInfo, _, err := peerdas.Info(nodeID, samplingSize)
+	if err != nil {
+		return nil, errors.Wrap(err, "peer info")
+	}
+
+	// Get the indices of the data column sidecars we have in the store.
+	storedIndices := s.cfg.dataColumnStorage.Summary(root).Stored()
+
+	// List indices we should custody and that are missing in our storage.
+	missingIndices := make(map[uint64]bool, samplingSize)
+	for index := range peerInfo.CustodyColumns {
+		if !storedIndices[index] {
+			missingIndices[index] = true
+		}
+	}
+
+	return missingIndices, nil
 }

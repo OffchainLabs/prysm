@@ -13,8 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/sync/singleflight"
-
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
@@ -164,8 +162,6 @@ type Service struct {
 	verifierWaiter          *verification.InitializerWaiter
 	blobVerifier            verification.NewBlobVerifier
 	capabilityCache         *capabilityCache
-	activeRetries           sync.Map // map[blockRoot]context.CancelFunc for tracking active retries
-	reconstructSingleflight singleflight.Group
 }
 
 // NewService sets up a new instance with an ethclient when given a web3 endpoint as a string in the config.

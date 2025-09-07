@@ -155,6 +155,7 @@ go_library(
         "@com_github_trailofbits_go_mutexasserts//:go_default_library",
         "@io_opentelemetry_go_otel_trace//:go_default_library",
         "@org_golang_google_protobuf//proto:go_default_library",
+        "@org_golang_x_sync//singleflight:go_default_library",
     ],
 )
 
@@ -194,7 +195,6 @@ go_test(
         "slot_aware_cache_test.go",
         "subscriber_beacon_aggregate_proof_test.go",
         "subscriber_beacon_blocks_test.go",
-        "subscriber_data_column_sidecar_trigger_test.go",
         "subscriber_test.go",
         "subscription_topic_handler_test.go",
         "sync_fuzz_test.go",

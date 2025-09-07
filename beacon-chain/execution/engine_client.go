@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
@@ -99,8 +100,6 @@ const (
 	GetBlobsV2 = "engine_getBlobsV2"
 	// Defines the seconds before timing out engine endpoints with non-block execution semantics.
 	defaultEngineTimeout = time.Second
-	// defaultGetBlobsRetryInterval is the default retry interval for getBlobsV2 calls.
-	defaultGetBlobsRetryInterval = 200 * time.Millisecond
 )
 
 var (
@@ -125,7 +124,8 @@ type Reconstructor interface {
 		ctx context.Context, blindedBlocks []interfaces.ReadOnlySignedBeaconBlock,
 	) ([]interfaces.SignedBeaconBlock, error)
 	ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte, hi func(uint64) bool) ([]blocks.VerifiedROBlob, error)
-	ReconstructDataColumnSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte) ([]blocks.VerifiedRODataColumn, error)
+	ConstructDataColumnSidecarsFromBlock(ctx context.Context, roblock blocks.ROBlock) ([]blocks.VerifiedRODataColumn, error)
+	ConstructDataColumnSidecarsFromColumnSidecar(ctx context.Context, sidecar blocks.VerifiedRODataColumn) ([]blocks.VerifiedRODataColumn, error)
 }
 
 // EngineCaller defines a client that can interact with an Ethereum
@@ -653,107 +653,86 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 	return verifiedBlobs, nil
 }
 
-// ReconstructDataColumnSidecars reconstructs the verified data column sidecars for a given beacon block.
-// It uses singleflight to ensure only one reconstruction per blockRoot.
-func (s *Service) ReconstructDataColumnSidecars(ctx context.Context, signedROBlock interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte) ([]blocks.VerifiedRODataColumn, error) {
-	// Use singleflight to ensure only one reconstruction per blockRoot
-	v, err, _ := s.reconstructSingleflight.Do(fmt.Sprintf("%x", blockRoot), func() (interface{}, error) {
-		// Try reconstruction once
-		result, err := s.reconstructDataColumnSidecarsOnce(ctx, signedROBlock, blockRoot)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to reconstruct data column sidecars")
-		}
-		if len(result) > 0 {
-			return result, nil // Success - return data
-		}
-
-		// Empty result - initiate retry mechanism
-
-		// Create a new context with a timeout for the retry goroutine.
-		retryCtx, cancel := context.WithTimeout(s.ctx, time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second)
-
-		// LoadOrStore atomically checks for an existing retry and stores
-		// a new one if none exists. This prevents a race condition.
-		// The stored value is the cancel function for the new context.
-		_, loaded := s.activeRetries.LoadOrStore(blockRoot, cancel)
-
-		if loaded {
-			// Another goroutine already started the retry process. The current one can exit.
-			cancel() // Cancel the context we just created as it won't be used.
-			return []blocks.VerifiedRODataColumn{}, nil
-		}
-
-		// This goroutine is now responsible for starting the retry.
-		// Perform periodic retry attempts for data column reconstruction inline.
-		go func() {
-			startTime := time.Now()
-			// Defer the cancellation of the context and the removal of the active retry tracker.
-			defer func() {
-				cancel()
-				s.activeRetries.Delete(blockRoot)
-			}()
-
-			ticker := time.NewTicker(defaultGetBlobsRetryInterval)
-			defer ticker.Stop()
-
-			attemptCount := 0
-			retryLog := log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot))
-
-			for {
-				select {
-				case <-ticker.C:
-					attemptCount++
-					getBlobsRetryAttempts.WithLabelValues("attempt").Inc()
-
-					// Retry reconstruction
-					retryLog.WithField("attempt", attemptCount).Debug("Retrying data column reconstruction")
-					result, err := s.reconstructDataColumnSidecarsOnce(retryCtx, signedROBlock, blockRoot)
-					if err != nil {
-						retryLog.WithError(err).Debug("Reconstruction attempt failed, will retry")
-						continue
-					}
-					if len(result) > 0 {
-						retryLog.WithField("attempts", attemptCount).Debug("Retry succeeded")
-						getBlobsRetryAttempts.WithLabelValues("success_reconstructed").Inc()
-						getBlobsRetryDuration.WithLabelValues("success").Observe(time.Since(startTime).Seconds())
-						// Clean up active retry tracker immediately on success
-						s.activeRetries.Delete(blockRoot)
-						return
-					}
-
-				case <-retryCtx.Done():
-					retryLog.WithField("attempts", attemptCount).Debug("Retry timeout")
-					getBlobsRetryAttempts.WithLabelValues("timeout").Inc()
-					getBlobsRetryDuration.WithLabelValues("timeout").Observe(time.Since(startTime).Seconds())
-					return
-				}
-			}
-		}()
-
-		// Return empty result for now; the background retry will handle it.
-		return []blocks.VerifiedRODataColumn{}, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-	return v.([]blocks.VerifiedRODataColumn), nil
-}
-
-// reconstructDataColumnSidecarsOnce performs a single attempt to reconstruct data column sidecars.
-func (s *Service) reconstructDataColumnSidecarsOnce(ctx context.Context, signedROBlock interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte) ([]blocks.VerifiedRODataColumn, error) {
-	block := signedROBlock.Block()
+// ConstructDataColumnSidecarsFromBlock reconstructs the verified data column sidecars for a given beacon block.
+// It retrieves the KZG commitments from the block body, fetches the associated blobs and cell proofs from the EL,
+// and constructs the corresponding verified read-only data column sidecars.
+func (s *Service) ConstructDataColumnSidecarsFromBlock(ctx context.Context, roBlock blocks.ROBlock) ([]blocks.VerifiedRODataColumn, error) {
+	root := roBlock.Root()
+	block := roBlock.Block()
 
 	log := log.WithFields(logrus.Fields{
-		"root": fmt.Sprintf("%#x", blockRoot),
-		"slot": block.Slot(),
+		"root": fmt.Sprintf("%#x", root),
+		"slot": roBlock.Block().Slot(),
 	})
 
-	kzgCommitments, err := block.Body().BlobKzgCommitments()
+	// Extract commitments from block.
+	commitments, err := block.Body().BlobKzgCommitments()
 	if err != nil {
-		return nil, wrapWithBlockRoot(err, blockRoot, "blob KZG commitments")
+		return nil, wrapWithBlockRoot(err, root, "blob kzg commitments")
 	}
 
+	// Fetch cells and proofs from the execution client using the KZG commitments from the sidecar.
+	cellsAndProofs, err := s.cellsAndProofFromExecutionClient(ctx, commitments)
+	if err != nil {
+		return nil, wrapWithBlockRoot(err, root, "fetch cells and proofs from execution client")
+	}
+
+	// Return early if nothing is returned from the EL.
+	if len(cellsAndProofs) == 0 {
+		return nil, nil
+	}
+
+	// Construct data column sidears from the signed block and cells and proofs.
+	roSidecars, err := peerdas.DataColumnSidecarsFromBlock(roBlock, cellsAndProofs)
+	if err != nil {
+		return nil, errors.Wrap(err, "data column sidcars")
+	}
+
+	// Upgrade the sidecars to verified sidecars.
+	// We trust the execution layer we are connected to, so we can upgrade the sidecar into a verified one.
+	verifiedROSidecars := upgradeSidecarsToVerifiedSidecars(roSidecars)
+
+	log.Debug("Data columns sidecars constructed from the execution client via a beacon block")
+
+	return verifiedROSidecars, nil
+}
+
+func (s *Service) ConstructDataColumnSidecarsFromColumnSidecar(ctx context.Context, sidecar blocks.VerifiedRODataColumn) ([]blocks.VerifiedRODataColumn, error) {
+	root := sidecar.BlockRoot()
+
+	log := log.WithFields(logrus.Fields{
+		"root": fmt.Sprintf("%#x", root),
+		"slot": sidecar.Slot(),
+	})
+
+	// Fetch cells and proofs from the execution client using the KZG commitments from the sidecar.
+	cellsAndProofs, err := s.cellsAndProofFromExecutionClient(ctx, sidecar.KzgCommitments)
+	if err != nil {
+		return nil, wrapWithBlockRoot(err, root, "fetch cells and proofs from execution client")
+	}
+
+	// Return early if nothing is returned from the EL.
+	if len(cellsAndProofs) == 0 {
+		return nil, nil
+	}
+
+	// Construct data column sidears from the signed block and cells and proofs.
+	roSidecars, err := peerdas.DataColumnSidecarsFromColumnSidecar(sidecar, cellsAndProofs)
+	if err != nil {
+		return nil, wrapWithBlockRoot(err, root, "data column sidcars from column sidecar")
+	}
+
+	// Upgrade the sidecars to verified sidecars.
+	// We trust the execution layer we are connected to, so we can upgrade the sidecar into a verified one.
+	verifiedROSidecars := upgradeSidecarsToVerifiedSidecars(roSidecars)
+
+	log.Debug("Data columns sidecars constructed from the execution client via a data column sidecar")
+
+	return verifiedROSidecars, nil
+}
+
+// cellsAndProofFromExecutionClient fetches cells and proofs from the execution client (using engine_getBlobsV2 execution API method)
+func (s *Service) cellsAndProofFromExecutionClient(ctx context.Context, kzgCommitments [][]byte) ([]kzg.CellsAndProofs, error) {
 	// Collect KZG hashes for all blobs.
 	versionedHashes := make([]common.Hash, 0, len(kzgCommitments))
 	for _, commitment := range kzgCommitments {
@@ -764,12 +743,11 @@ func (s *Service) reconstructDataColumnSidecarsOnce(ctx context.Context, signedR
 	// Fetch all blobsAndCellsProofs from the execution client.
 	blobAndProofV2s, err := s.GetBlobsV2(ctx, versionedHashes)
 	if err != nil {
-		return nil, wrapWithBlockRoot(err, blockRoot, "get blobs V2")
+		return nil, errors.Wrapf(err, "get blobs V2")
 	}
 
 	// Return early if nothing is returned from the EL.
 	if len(blobAndProofV2s) == 0 {
-		log.Debug("No blobs returned from execution client")
 		return nil, nil
 	}
 
@@ -777,34 +755,31 @@ func (s *Service) reconstructDataColumnSidecarsOnce(ctx context.Context, signedR
 	blobs, cellProofs := make([][]byte, 0, len(blobAndProofV2s)), make([][]byte, 0, len(blobAndProofV2s))
 	for _, blobsAndProofs := range blobAndProofV2s {
 		if blobsAndProofs == nil {
-			return nil, wrapWithBlockRoot(errMissingBlobsAndProofsFromEL, blockRoot, "")
+			return nil, errMissingBlobsAndProofsFromEL
 		}
 
-		blobs, cellProofs = append(blobs, blobsAndProofs.Blob), append(cellProofs, blobsAndProofs.KzgProofs...)
+		blobs = append(blobs, blobsAndProofs.Blob)
+		cellProofs = append(cellProofs, blobsAndProofs.KzgProofs...)
 	}
 
-	// Construct the data column sidcars from the blobs and cell proofs provided by the execution client.
-	dataColumnSidecars, err := peerdas.ConstructDataColumnSidecars(signedROBlock, blobs, cellProofs)
+	// Compute cells and proofs from the blobs and cell proofs.
+	cellsAndProofs, err := peerdas.ComputeCellsAndProofs(blobs, cellProofs)
 	if err != nil {
-		return nil, wrapWithBlockRoot(err, blockRoot, "construct data column sidecars")
+		return nil, errors.Wrap(err, "compute cells and proofs")
 	}
 
-	// Finally, construct verified RO data column sidecars.
-	// We trust the execution layer we are connected to, so we can upgrade the read only data column sidecar into a verified one.
-	verifiedRODataColumns := make([]blocks.VerifiedRODataColumn, 0, len(dataColumnSidecars))
-	for _, dataColumnSidecar := range dataColumnSidecars {
-		roDataColumn, err := blocks.NewRODataColumnWithRoot(dataColumnSidecar, blockRoot)
-		if err != nil {
-			return nil, wrapWithBlockRoot(err, blockRoot, "new read-only data column with root")
-		}
+	return cellsAndProofs, nil
+}
 
-		verifiedRODataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
+// upgradeSidecarsToVerifiedSidecars upgrades a list of data column sidecars into verified data column sidecars.
+func upgradeSidecarsToVerifiedSidecars(roSidecars []blocks.RODataColumn) []blocks.VerifiedRODataColumn {
+	verifiedRODataColumns := make([]blocks.VerifiedRODataColumn, 0, len(roSidecars))
+	for _, roSidecar := range roSidecars {
+		verifiedRODataColumn := blocks.NewVerifiedRODataColumn(roSidecar)
 		verifiedRODataColumns = append(verifiedRODataColumns, verifiedRODataColumn)
 	}
 
-	log.Debug("Data columns successfully reconstructed from the execution client")
-
-	return verifiedRODataColumns, nil
+	return verifiedRODataColumns
 }
 
 func fullPayloadFromPayloadBody(
@@ -1095,13 +1070,7 @@ func toBlockNumArg(number *big.Int) string {
 	return hexutil.EncodeBig(number)
 }
 
-// hasActiveRetry checks if there's an active retry for the given block root.
-func (s *Service) hasActiveRetry(blockRoot [fieldparams.RootLength]byte) bool {
-	_, exists := s.activeRetries.Load(blockRoot)
-	return exists
-}
-
 // wrapWithBlockRoot returns a new error with the given block root.
-func wrapWithBlockRoot(err error, blockRoot [32]byte, message string) error {
+func wrapWithBlockRoot(err error, blockRoot [fieldparams.RootLength]byte, message string) error {
 	return errors.Wrap(err, fmt.Sprintf("%s for block %#x", message, blockRoot))
 }

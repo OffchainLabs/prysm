@@ -37,21 +37,11 @@ import (
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
-
-// DataAvailabilityChecker defines an interface for checking if data is available
-// for a given block. This interface is implemented by the blockchain service
-// which has knowledge of the beacon chain's data availability requirements.
-// Returns nil if data is available, ErrDataNotAvailable if data is not available,
-// or another error for other failures.
-type DataAvailabilityChecker interface {
-	IsDataAvailable(ctx context.Context, roBlock blocks.ROBlock) error
-}
 
 // Service represents a service that handles the internal
 // logic of managing the full PoS beacon chain.
@@ -115,9 +105,6 @@ type Checker interface {
 }
 
 var ErrMissingClockSetter = errors.New("blockchain Service initialized without a startup.ClockSetter")
-
-// ErrDataNotAvailable is returned when block data is not immediately available for processing.
-var ErrDataNotAvailable = errors.New("block data is not available")
 
 type blobNotifierMap struct {
 	sync.RWMutex
@@ -529,33 +516,6 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 	}
 
 	return earliestAvailableSlot, custodyGroupCount, nil
-}
-
-// IsDataAvailable implements the DataAvailabilityChecker interface for use by the execution service.
-// It checks if all required blob and data column data is immediately available in the database without waiting.
-func (s *Service) IsDataAvailable(ctx context.Context, roBlock blocks.ROBlock) error {
-	block := roBlock.Block()
-	if block == nil {
-		return errors.New("invalid nil beacon block")
-	}
-
-	blockRoot := roBlock.Root()
-	blockVersion := block.Version()
-
-	if blockVersion >= version.Fulu {
-		if err := s.areDataColumnsImmediatelyAvailable(ctx, blockRoot, block); err != nil {
-			return errors.Wrap(ErrDataNotAvailable, err.Error())
-		}
-		return nil
-	}
-
-	if blockVersion >= version.Deneb {
-		if err := s.areBlobsImmediatelyAvailable(ctx, blockRoot, block); err != nil {
-			return errors.Wrap(ErrDataNotAvailable, err.Error())
-		}
-	}
-
-	return nil
 }
 
 func spawnCountdownIfPreGenesis(ctx context.Context, genesisTime time.Time, db db.HeadAccessDatabase) {

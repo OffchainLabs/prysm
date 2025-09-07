@@ -71,19 +71,4 @@ var (
 		Name: "execution_payload_bodies_count",
 		Help: "The number of requested payload bodies is too large",
 	})
-	getBlobsRetryAttempts = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "getblobs_retry_attempts_total",
-			Help: "Total number of getBlobsV2 retry attempts",
-		},
-		[]string{"result"},
-	)
-	getBlobsRetryDuration = promauto.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "getblobs_retry_duration_seconds",
-			Help:    "Duration of getBlobsV2 retry cycles",
-			Buckets: []float64{0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0},
-		},
-		[]string{"result"},
-	)
 )

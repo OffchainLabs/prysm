@@ -281,7 +281,7 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSignedBeaconBlock) (*ethpb.ProposeResponse, error) {
 	var (
 		blobSidecars       []*ethpb.BlobSidecar
-		dataColumnSidecars []*ethpb.DataColumnSidecar
+		dataColumnSidecars []blocks.RODataColumn
 	)
 
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.ProposeBeaconBlock")
@@ -348,10 +348,10 @@ func (vs *Server) broadcastAndReceiveSidecars(
 	block interfaces.SignedBeaconBlock,
 	root [fieldparams.RootLength]byte,
 	blobSidecars []*ethpb.BlobSidecar,
-	dataColumnSideCars []*ethpb.DataColumnSidecar,
+	dataColumnSidecars []blocks.RODataColumn,
 ) error {
 	if block.Version() >= version.Fulu {
-		if err := vs.broadcastAndReceiveDataColumns(ctx, dataColumnSideCars, root); err != nil {
+		if err := vs.broadcastAndReceiveDataColumns(ctx, dataColumnSidecars, root); err != nil {
 			return errors.Wrap(err, "broadcast and receive data columns")
 		}
 		return nil
@@ -398,24 +398,31 @@ func (vs *Server) handleBlindedBlock(ctx context.Context, block interfaces.Signe
 }
 
 func (vs *Server) handleUnblindedBlock(
-	block interfaces.SignedBeaconBlock,
+	signedRoBlock interfaces.SignedBeaconBlock,
 	req *ethpb.GenericSignedBeaconBlock,
-) ([]*ethpb.BlobSidecar, []*ethpb.DataColumnSidecar, error) {
+) ([]*ethpb.BlobSidecar, []blocks.RODataColumn, error) {
 	rawBlobs, proofs, err := blobsAndProofs(req)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if block.Version() >= version.Fulu {
-		dataColumnSideCars, err := peerdas.ConstructDataColumnSidecars(block, rawBlobs, proofs)
+	if signedRoBlock.Version() >= version.Fulu {
+		// Compute cells and proofs from the blobs and cell proofs.
+		cellsAndProofs, err := peerdas.ComputeCellsAndProofs(rawBlobs, proofs)
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "construct data column sidecars")
+			return nil, nil, errors.Wrap(err, "compute cells and proofs")
 		}
 
-		return nil, dataColumnSideCars, nil
+		// Construct data column sidears from the signed block and cells and proofs.
+		roDataColumnSidecars, err := peerdas.DataColumnSidecarsFromBlock(signedRoBlock, cellsAndProofs)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "data column sidcars")
+		}
+
+		return nil, roDataColumnSidecars, nil
 	}
 
-	blobSidecars, err := BuildBlobSidecars(block, rawBlobs, proofs)
+	blobSidecars, err := BuildBlobSidecars(signedRoBlock, rawBlobs, proofs)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "build blob sidecars")
 	}
@@ -468,26 +475,21 @@ func (vs *Server) broadcastAndReceiveBlobs(ctx context.Context, sidecars []*ethp
 // broadcastAndReceiveDataColumns handles the broadcasting and reception of data columns sidecars.
 func (vs *Server) broadcastAndReceiveDataColumns(
 	ctx context.Context,
-	sidecars []*ethpb.DataColumnSidecar,
+	roSidecars []blocks.RODataColumn,
 	root [fieldparams.RootLength]byte,
 ) error {
-	verifiedRODataColumns := make([]blocks.VerifiedRODataColumn, 0, len(sidecars))
+	verifiedRODataColumns := make([]blocks.VerifiedRODataColumn, 0, len(roSidecars))
 	eg, _ := errgroup.WithContext(ctx)
-	for _, sidecar := range sidecars {
-		roDataColumn, err := blocks.NewRODataColumnWithRoot(sidecar, root)
-		if err != nil {
-			return errors.Wrap(err, "new read-only data column with root")
-		}
-
+	for _, roSidecar := range roSidecars {
 		// We build this block ourselves, so we can upgrade the read only data column sidecar into a verified one.
-		verifiedRODataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
+		verifiedRODataColumn := blocks.NewVerifiedRODataColumn(roSidecar)
 		verifiedRODataColumns = append(verifiedRODataColumns, verifiedRODataColumn)
 
 		eg.Go(func() error {
 			// Compute the subnet index based on the column index.
-			subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
+			subnet := peerdas.ComputeSubnetForDataColumnSidecar(roSidecar.Index)
 
-			if err := vs.P2P.BroadcastDataColumnSidecar(root, subnet, sidecar); err != nil {
+			if err := vs.P2P.BroadcastDataColumnSidecar(subnet, verifiedRODataColumn); err != nil {
 				return errors.Wrap(err, "broadcast data column")
 			}
 

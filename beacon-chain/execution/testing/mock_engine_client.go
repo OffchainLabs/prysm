@@ -116,7 +116,11 @@ func (e *EngineClient) ReconstructBlobSidecars(context.Context, interfaces.ReadO
 	return e.BlobSidecars, e.ErrorBlobSidecars
 }
 
-func (e *EngineClient) ReconstructDataColumnSidecars(context.Context, interfaces.ReadOnlySignedBeaconBlock, [fieldparams.RootLength]byte) ([]blocks.VerifiedRODataColumn, error) {
+func (e *EngineClient) ConstructDataColumnSidecarsFromBlock(context.Context, blocks.ROBlock) ([]blocks.VerifiedRODataColumn, error) {
+	return e.DataColumnSidecars, e.ErrorDataColumnSidecars
+}
+
+func (e *EngineClient) ConstructDataColumnSidecarsFromColumnSidecar(context.Context, blocks.VerifiedRODataColumn) ([]blocks.VerifiedRODataColumn, error) {
 	return e.DataColumnSidecars, e.ErrorDataColumnSidecars
 }
 

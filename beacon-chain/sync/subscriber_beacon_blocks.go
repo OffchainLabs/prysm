@@ -7,7 +7,6 @@ import (
 	"path"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition/interop"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -15,8 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/io/file"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -38,7 +35,7 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		return err
 	}
 
-	go s.processSidecarsFromExecution(ctx, signed)
+	go s.processSidecarsFromExecutionFromBlock(ctx, signed)
 
 	if err := s.cfg.chain.ReceiveBlock(ctx, signed, root, nil); err != nil {
 		if blockchain.IsInvalidBlock(err) {
@@ -62,120 +59,34 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 	return err
 }
 
-// processSidecarsFromExecution retrieves (if available) sidecars data from the execution client,
+// processSidecarsFromExecutionFromBlock retrieves (if available) sidecars data from the execution client,
 // builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
-func (s *Service) processSidecarsFromExecution(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) {
+func (s *Service) processSidecarsFromExecutionFromBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) {
 	if block.Version() >= version.Fulu {
-		s.processDataColumnSidecarsFromExecution(ctx, block)
+		roBlock, err := blocks.NewROBlock(block)
+		if err != nil {
+			log.WithError(err).Error("Failed to create RO block")
+			return
+		}
+
+		key := fmt.Sprintf("%#x", roBlock.Root())
+		if _, err, _ := s.columnSidecarsExecSingleFlight.Do(key, func() (interface{}, error) {
+			if err := s.processDataColumnSidecarsFromExecutionFromBlock(ctx, roBlock); err != nil {
+				return nil, err
+			}
+
+			return nil, nil
+		}); err != nil {
+			log.WithError(err).Error("Failed to process data column sidecars from execution")
+			return
+		}
+
 		return
 	}
 
 	if block.Version() >= version.Deneb {
 		s.processBlobSidecarsFromExecution(ctx, block)
 		return
-	}
-}
-
-// processDataColumnSidecarsFromExecution retrieves (if available) data column sidecars data from the execution client,
-// builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
-func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, roSignedBlock interfaces.ReadOnlySignedBeaconBlock) {
-	block := roSignedBlock.Block()
-
-	log := log.WithFields(logrus.Fields{
-		"slot":          block.Slot(),
-		"proposerIndex": block.ProposerIndex(),
-	})
-
-	kzgCommitments, err := block.Body().BlobKzgCommitments()
-	if err != nil {
-		log.WithError(err).Error("Failed to read commitments from block")
-		return
-	}
-
-	if len(kzgCommitments) == 0 {
-		// No blobs to reconstruct.
-		return
-	}
-
-	blockRoot, err := block.HashTreeRoot()
-	if err != nil {
-		log.WithError(err).Error("Failed to calculate block root")
-		return
-	}
-
-	log = log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot))
-
-	if s.cfg.dataColumnStorage == nil {
-		log.Warning("Data column storage is not enabled, skip saving data column, but continue to reconstruct and broadcast data column")
-	}
-
-	// Check if data is already available to avoid unnecessary execution client calls
-	roBlock, err := blocks.NewROBlockWithRoot(roSignedBlock, blockRoot)
-	if err != nil {
-		log.WithError(err).Error("Failed to create ROBlock")
-		return
-	}
-	switch err := s.cfg.chain.IsDataAvailable(ctx, roBlock); {
-	case err == nil:
-		log.Debug("Data already available – skipping execution-client call")
-		return
-	case errors.Is(err, blockchain.ErrDataNotAvailable):
-		// continue
-	default:
-		log.WithError(err).Error("Failed to check data availability")
-		return
-	}
-
-	// When this function is called, it's from the time when the block is received, so in almost all situations we need to get the data column from EL instead of the blob storage.
-	sidecars, err := s.cfg.executionReconstructor.ReconstructDataColumnSidecars(ctx, roSignedBlock, blockRoot)
-	if err != nil {
-		log.WithError(err).Debug("Cannot reconstruct data column sidecars after receiving the block")
-		return
-	}
-
-	// Return early if no blobs are retrieved from the EL.
-	if len(sidecars) == 0 {
-		return
-	}
-
-	nodeID := s.cfg.p2p.NodeID()
-	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount()
-	if err != nil {
-		log.WithError(err).Error("Failed to get custody group count")
-		return
-	}
-
-	info, _, err := peerdas.Info(nodeID, custodyGroupCount)
-	if err != nil {
-		log.WithError(err).Error("Failed to get peer info")
-		return
-	}
-
-	blockSlot := block.Slot()
-	proposerIndex := block.ProposerIndex()
-
-	// Broadcast and save data column sidecars to custody but not yet received.
-	sidecarCount := uint64(len(sidecars))
-	for columnIndex := range info.CustodyColumns {
-		log := log.WithField("columnIndex", columnIndex)
-		if columnIndex >= sidecarCount {
-			log.Error("Column custody index out of range - should never happen")
-			continue
-		}
-
-		if s.hasSeenDataColumnIndex(blockSlot, proposerIndex, columnIndex) {
-			continue
-		}
-
-		sidecar := sidecars[columnIndex]
-
-		if err := s.cfg.p2p.BroadcastDataColumnSidecar(blockRoot, sidecar.Index, sidecar.DataColumnSidecar); err != nil {
-			log.WithError(err).Error("Failed to broadcast data column")
-		}
-
-		if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
-			log.WithError(err).Error("Failed to receive data column")
-		}
 	}
 }
 

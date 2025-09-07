@@ -732,11 +732,6 @@ func (c *ChainService) TargetRootForEpoch(_ [32]byte, _ primitives.Epoch) ([32]b
 	return c.TargetRoot, nil
 }
 
-// IsDataAvailable implements the data availability checker interface for testing
-func (c *ChainService) IsDataAvailable(_ context.Context, _ blocks.ROBlock) error {
-	return nil
-}
-
 // MockSyncChecker is a mock implementation of blockchain.Checker.
 // We can't make an assertion here that this is true because that would create a circular dependency.
 type MockSyncChecker struct {

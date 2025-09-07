@@ -159,15 +159,11 @@ func GenerateTestFuluBlockWithSidecars(t *testing.T, blobCount int, options ...F
 
 	cellsAndProofs := GenerateCellsAndProofs(t, blobs)
 
-	sidecars, err := peerdas.DataColumnSidecars(signedBeaconBlock, cellsAndProofs)
+	roSidecars, err := peerdas.DataColumnSidecarsFromBlock(signedBeaconBlock, cellsAndProofs)
 	require.NoError(t, err)
 
-	roSidecars := make([]blocks.RODataColumn, 0, len(sidecars))
-	verifiedRoSidecars := make([]blocks.VerifiedRODataColumn, 0, len(sidecars))
-	for _, sidecar := range sidecars {
-		roSidecar, err := blocks.NewRODataColumnWithRoot(sidecar, root)
-		require.NoError(t, err)
-
+	verifiedRoSidecars := make([]blocks.VerifiedRODataColumn, 0, len(roSidecars))
+	for _, roSidecar := range roSidecars {
 		roVerifiedSidecar := blocks.NewVerifiedRODataColumn(roSidecar)
 
 		roSidecars = append(roSidecars, roSidecar)

@@ -24,8 +24,8 @@ import (
 // These are variables that we don't use in Prysm. (i.e. future hardfork, light client... etc)
 // IMPORTANT: Use one field per line and sort these alphabetically to reduce conflicts.
 var placeholderFields = []string{
-	"AGGREGRATE_DUE_BPS",
-	"AGGREGRATE_DUE_BPS_GLOAS",
+	"AGGREGATE_DUE_BPS",
+	"AGGREGATE_DUE_BPS_GLOAS",
 	"ATTESTATION_DEADLINE",
 	"ATTESTATION_DUE_BPS",
 	"ATTESTATION_DUE_BPS_GLOAS",
@@ -42,6 +42,8 @@ var placeholderFields = []string{
 	"EIP7732_FORK_VERSION",
 	"EIP7805_FORK_EPOCH",
 	"EIP7805_FORK_VERSION",
+	"EIP7928_FORK_EPOCH",
+	"EIP7928_FORK_VERSION",
 	"EPOCHS_PER_SHUFFLING_PHASE",
 	"GLOAS_FORK_EPOCH",
 	"GLOAS_FORK_VERSION",

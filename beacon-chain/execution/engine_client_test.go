@@ -11,10 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
@@ -2559,7 +2556,7 @@ func TestReconstructBlobSidecars(t *testing.T) {
 	})
 }
 
-func TestReconstructDataColumnSidecars(t *testing.T) {
+func TestConstructDataColumnSidecarsFromBlock(t *testing.T) {
 	// Start the trusted setup.
 	err := kzg.Start()
 	require.NoError(t, err)
@@ -2573,10 +2570,7 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 	cfg.FuluForkEpoch = 4
 	params.OverrideBeaconConfig(cfg)
 
-	client := &Service{
-		ctx: context.Background(),
-		capabilityCache: &capabilityCache{},
-	}
+	client := &Service{capabilityCache: &capabilityCache{}}
 	b := util.NewBeaconBlockFulu()
 	b.Block.Slot = 4 * params.BeaconConfig().SlotsPerEpoch
 	kzgCommitments := createRandomKzgCommitments(t, 6)
@@ -2586,9 +2580,14 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 	sb, err := blocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
 
+	roBlock, err := blocks.NewROBlockWithRoot(sb, r)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
 	t.Run("GetBlobsV2 is not supported", func(t *testing.T) {
-		_, err := client.ReconstructDataColumnSidecars(client.ctx, sb, r)
-		require.ErrorContains(t, "get blobs V2 for block", err)
+		_, err := client.ConstructDataColumnSidecarsFromBlock(ctx, roBlock)
+		require.ErrorContains(t, "engine_getBlobsV2 is not supported", err)
 	})
 
 	t.Run("nothing received", func(t *testing.T) {
@@ -2598,7 +2597,7 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		dataColumns, err := client.ReconstructDataColumnSidecars(client.ctx, sb, r)
+		dataColumns, err := client.ConstructDataColumnSidecarsFromBlock(ctx, roBlock)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(dataColumns))
 	})
@@ -2611,7 +2610,7 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		dataColumns, err := client.ReconstructDataColumnSidecars(client.ctx, sb, r)
+		dataColumns, err := client.ConstructDataColumnSidecarsFromBlock(ctx, roBlock)
 		require.NoError(t, err)
 		require.Equal(t, 128, len(dataColumns))
 	})
@@ -2624,9 +2623,133 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		dataColumns, err := client.ReconstructDataColumnSidecars(client.ctx, sb, r)
+		_, err := client.ConstructDataColumnSidecarsFromBlock(ctx, roBlock)
 		require.ErrorContains(t, errMissingBlobsAndProofsFromEL.Error(), err)
+	})
+}
+
+func TestConstructDataColumnSidecarsFromSidecar(t *testing.T) {
+	// Start the trusted setup.
+	err := kzg.Start()
+	require.NoError(t, err)
+
+	// Setup right fork epoch
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.CapellaForkEpoch = 1
+	cfg.DenebForkEpoch = 2
+	cfg.ElectraForkEpoch = 3
+	cfg.FuluForkEpoch = 4
+	params.OverrideBeaconConfig(cfg)
+
+	client := &Service{capabilityCache: &capabilityCache{}}
+
+	// Create KZG commitments for the sidecar
+	kzgCommitments := createRandomKzgCommitments(t, 3)
+
+	// Create a test verified data column sidecar
+	columnData := make([][]byte, 3)
+	for i := range columnData {
+		columnData[i] = make([]byte, kzg.BytesPerCell)
+		columnData[i][0] = byte(i + 0x10)
+	}
+
+	kzgProofs := make([][]byte, 3)
+	for i := range kzgProofs {
+		kzgProofs[i] = make([]byte, 48)
+		kzgProofs[i][0] = byte(i + 0x20)
+	}
+
+	inclusionProof := make([][]byte, 4)
+	for i := range inclusionProof {
+		inclusionProof[i] = make([]byte, 32)
+		inclusionProof[i][0] = byte(i + 0x30)
+	}
+
+	// Create the input VerifiedRODataColumn sidecar using test utility
+	_, verifiedSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, []util.DataColumnParam{
+		{
+			Index:                        7, // Column index 7
+			Column:                       columnData,
+			KzgCommitments:               kzgCommitments,
+			KzgProofs:                    kzgProofs,
+			KzgCommitmentsInclusionProof: inclusionProof,
+			Slot:                         4 * params.BeaconConfig().SlotsPerEpoch, // Fulu epoch
+			ProposerIndex:                9,
+			ParentRoot:                   make([]byte, 32),
+			StateRoot:                    make([]byte, 32),
+			BodyRoot:                     make([]byte, 32),
+		},
+	})
+	require.Equal(t, 1, len(verifiedSidecars))
+	sidecar := verifiedSidecars[0]
+
+	ctx := context.Background()
+
+	t.Run("GetBlobsV2 is not supported", func(t *testing.T) {
+		_, err := client.ConstructDataColumnSidecarsFromColumnSidecar(ctx, sidecar)
+		require.NotNil(t, err)
+		require.ErrorContains(t, "engine_getBlobsV2 is not supported", err)
+	})
+
+	t.Run("nothing received", func(t *testing.T) {
+		srv := createBlobServerV2(t, 0, []bool{})
+		defer srv.Close()
+
+		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
+		defer rpcClient.Close()
+
+		dataColumns, err := client.ConstructDataColumnSidecarsFromColumnSidecar(ctx, sidecar)
+		require.NoError(t, err)
 		require.Equal(t, 0, len(dataColumns))
+	})
+
+	t.Run("receiving all blobs", func(t *testing.T) {
+		blobMasks := []bool{true, true, true}
+		srv := createBlobServerV2(t, 3, blobMasks)
+		defer srv.Close()
+
+		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
+		defer rpcClient.Close()
+
+		dataColumns, err := client.ConstructDataColumnSidecarsFromColumnSidecar(ctx, sidecar)
+		require.NoError(t, err)
+		require.Equal(t, 128, len(dataColumns)) // NumberOfColumns
+
+		// Verify each sidecar has expected structure
+		for i, sidecar := range dataColumns {
+			require.Equal(t, uint64(i), sidecar.Index)
+			require.Equal(t, 3, len(sidecar.Column))         // 3 blobs
+			require.Equal(t, 3, len(sidecar.KzgCommitments)) // 3 commitments
+			require.Equal(t, 3, len(sidecar.KzgProofs))      // 3 proofs per column
+
+			// Verify commitments are preserved
+			for j, commitment := range sidecar.KzgCommitments {
+				require.DeepEqual(t, kzgCommitments[j], commitment)
+			}
+
+			// Verify inclusion proof is preserved
+			require.Equal(t, len(inclusionProof), len(sidecar.KzgCommitmentsInclusionProof))
+			for j, proof := range sidecar.KzgCommitmentsInclusionProof {
+				require.Equal(t, byte(j+0x30), proof[0])
+			}
+
+			// Verify signed block header is preserved
+			require.Equal(t, primitives.Slot(4*params.BeaconConfig().SlotsPerEpoch), sidecar.SignedBlockHeader.Header.Slot)
+			require.Equal(t, primitives.ValidatorIndex(9), sidecar.SignedBlockHeader.Header.ProposerIndex)
+		}
+	})
+
+	t.Run("missing some blobs", func(t *testing.T) {
+		blobMasks := []bool{false, true, true}
+		srv := createBlobServerV2(t, 3, blobMasks)
+		defer srv.Close()
+
+		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
+		defer rpcClient.Close()
+
+		_, err := client.ConstructDataColumnSidecarsFromColumnSidecar(ctx, sidecar)
+		require.ErrorContains(t, errMissingBlobsAndProofsFromEL.Error(), err)
 	})
 }
 
@@ -2726,408 +2849,4 @@ func testNewBlobVerifier() verification.NewBlobVerifier {
 			},
 		}
 	}
-}
-
-// Test retry helper methods
-func TestRetryHelperMethods(t *testing.T) {
-	client := &Service{}
-	blockRoot := [32]byte{1, 2, 3}
-
-	t.Run("hasActiveRetry returns false initially", func(t *testing.T) {
-		hasActive := client.hasActiveRetry(blockRoot)
-		require.Equal(t, false, hasActive)
-	})
-
-	t.Run("hasActiveRetry returns true after storing cancel function", func(t *testing.T) {
-		_, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		client.activeRetries.Store(blockRoot, cancel)
-
-		hasActive := client.hasActiveRetry(blockRoot)
-		require.Equal(t, true, hasActive)
-
-		// Clean up
-		client.activeRetries.Delete(blockRoot)
-	})
-}
-
-// Test ReconstructDataColumnSidecars with retry logic
-func TestReconstructDataColumnSidecars_WithRetry(t *testing.T) {
-	// Start the trusted setup.
-	err := kzg.Start()
-	require.NoError(t, err)
-
-	// Setup test config
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.CapellaForkEpoch = 1
-	cfg.DenebForkEpoch = 2
-	cfg.ElectraForkEpoch = 3
-	cfg.FuluForkEpoch = 4
-	params.OverrideBeaconConfig(cfg)
-
-	// Create test block
-	kzgCommitments := createRandomKzgCommitments(t, 3)
-	sb := util.NewBeaconBlockFulu()
-	sb.Block.Body.BlobKzgCommitments = kzgCommitments
-	signedB, err := blocks.NewSignedBeaconBlock(sb)
-	require.NoError(t, err)
-	r := [32]byte{1, 2, 3}
-
-	t.Run("successful initial call does not trigger retry", func(t *testing.T) {
-		// Setup server that returns all blobs
-		blobMasks := []bool{true, true, true}
-		srv := createBlobServerV2(t, 3, blobMasks)
-		defer srv.Close()
-
-		client := &Service{ctx: context.Background()}
-		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
-		defer rpcClient.Close()
-
-		dataColumns, err := client.ReconstructDataColumnSidecars(client.ctx, signedB, r)
-		require.NoError(t, err)
-		require.Equal(t, 128, len(dataColumns))
-
-		// Should not have any active retries since initial call succeeded
-		require.Equal(t, false, client.hasActiveRetry(r))
-	})
-
-	t.Run("failed initial call triggers retry", func(t *testing.T) {
-		// Setup server that returns no blobs
-		srv := createBlobServerV2(t, 0, []bool{})
-		defer srv.Close()
-
-		client := &Service{ctx: context.Background()}
-		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
-		defer rpcClient.Close()
-
-		dataColumns, err := client.ReconstructDataColumnSidecars(client.ctx, signedB, r)
-		require.NoError(t, err)
-		require.Equal(t, 0, len(dataColumns))
-
-		// Wait a bit for the goroutine to start
-		time.Sleep(10 * time.Millisecond)
-
-		// Should have active retry since initial call returned empty
-		require.Equal(t, true, client.hasActiveRetry(r))
-
-		// Clean up
-		if cancel, ok := client.activeRetries.Load(r); ok {
-			cancel.(context.CancelFunc)()
-		}
-	})
-
-
-	t.Run("does not start duplicate retry", func(t *testing.T) {
-		// Setup server that returns no blobs
-		srv := createBlobServerV2(t, 0, []bool{})
-		defer srv.Close()
-
-		client := &Service{ctx: context.Background()}
-		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
-		defer rpcClient.Close()
-
-		// First call should start retry
-		dataColumns, err := client.ReconstructDataColumnSidecars(client.ctx, signedB, r)
-		require.NoError(t, err)
-		require.Equal(t, 0, len(dataColumns))
-
-		// Wait a bit for the goroutine to start
-		time.Sleep(10 * time.Millisecond)
-		require.Equal(t, true, client.hasActiveRetry(r))
-
-		// Second call should not start another retry
-		dataColumns, err = client.ReconstructDataColumnSidecars(client.ctx, signedB, r)
-		require.NoError(t, err)
-		require.Equal(t, 0, len(dataColumns))
-		require.Equal(t, true, client.hasActiveRetry(r))
-
-		// Clean up
-		if cancel, ok := client.activeRetries.Load(r); ok {
-			cancel.(context.CancelFunc)()
-		}
-	})
-}
-
-// Test timeout and cleanup behavior
-func TestRetryTimeout(t *testing.T) {
-	// Start the trusted setup.
-	err := kzg.Start()
-	require.NoError(t, err)
-
-	// Setup test config
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.CapellaForkEpoch = 1
-	cfg.DenebForkEpoch = 2
-	cfg.ElectraForkEpoch = 3
-	cfg.FuluForkEpoch = 4
-	params.OverrideBeaconConfig(cfg)
-
-	// Create test block
-	kzgCommitments := createRandomKzgCommitments(t, 1)
-	sb := util.NewBeaconBlockFulu()
-	sb.Block.Body.BlobKzgCommitments = kzgCommitments
-	signedB, err := blocks.NewSignedBeaconBlock(sb)
-	require.NoError(t, err)
-	r := [32]byte{1, 2, 3}
-
-	t.Run("retry cleans up after timeout", func(t *testing.T) {
-		// Setup server that always returns no blobs
-		srv := createBlobServerV2(t, 0, []bool{})
-		defer srv.Close()
-
-		ctx := context.Background()
-		client := &Service{ctx: ctx}
-		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
-		defer rpcClient.Close()
-
-		// Modify config to have very short slot time for testing
-		originalConfig := params.BeaconConfig()
-		cfg := originalConfig.Copy()
-		cfg.SecondsPerSlot = 1 // 1 second timeout for retry
-		params.OverrideBeaconConfig(cfg)
-		defer params.OverrideBeaconConfig(originalConfig)
-
-		// Call ReconstructDataColumnSidecars which will start retry internally
-		_, err := client.ReconstructDataColumnSidecars(ctx, signedB, r)
-		require.NoError(t, err) // Should not error, just return empty result
-
-		// Wait a bit for the retry goroutine to start
-		time.Sleep(10 * time.Millisecond)
-
-		// Should have active retry initially
-		require.Equal(t, true, client.hasActiveRetry(r))
-
-		// Wait for timeout (longer than the 1 second timeout we set)
-		time.Sleep(1200 * time.Millisecond)
-
-		// Should be cleaned up after timeout
-		require.Equal(t, false, client.hasActiveRetry(r))
-	})
-}
-
-// Test concurrent retry scenarios
-func TestConcurrentRetries(t *testing.T) {
-	// Start the trusted setup.
-	err := kzg.Start()
-	require.NoError(t, err)
-
-	// Setup test config
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.CapellaForkEpoch = 1
-	cfg.DenebForkEpoch = 2
-	cfg.ElectraForkEpoch = 3
-	cfg.FuluForkEpoch = 4
-	params.OverrideBeaconConfig(cfg)
-
-	t.Run("multiple blocks can have concurrent retries", func(t *testing.T) {
-		// Setup server that returns no blobs
-		srv := createBlobServerV2(t, 0, []bool{})
-		defer srv.Close()
-
-		ctx := context.Background()
-		client := &Service{ctx: ctx}
-		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
-		defer rpcClient.Close()
-
-		// Create multiple test blocks
-		testBlocks := make([]interfaces.ReadOnlySignedBeaconBlock, 3)
-		roots := make([][32]byte, 3)
-
-		for i := 0; i < 3; i++ {
-			kzgCommitments := createRandomKzgCommitments(t, 1)
-			sb := util.NewBeaconBlockFulu()
-			sb.Block.Body.BlobKzgCommitments = kzgCommitments
-			signedB, err := blocks.NewSignedBeaconBlock(sb)
-			require.NoError(t, err)
-			testBlocks[i] = signedB
-			roots[i] = [32]byte{byte(i), byte(i), byte(i)}
-		}
-
-		// Start retries for all blocks
-		for i := 0; i < 3; i++ {
-			_, err := client.ReconstructDataColumnSidecars(ctx, testBlocks[i], roots[i])
-			require.NoError(t, err)
-		}
-
-		// Wait a bit for the goroutines to start
-		time.Sleep(10 * time.Millisecond)
-
-		// All should have active retries
-		for i := 0; i < 3; i++ {
-			require.Equal(t, true, client.hasActiveRetry(roots[i]))
-		}
-
-		// Clean up
-		for i := 0; i < 3; i++ {
-			if cancel, ok := client.activeRetries.Load(roots[i]); ok {
-				cancel.(context.CancelFunc)()
-			}
-		}
-	})
-}
-
-// Test end-to-end retry behavior with data availability changes
-func TestRetryBehaviorWithDataAvailability(t *testing.T) {
-	// Start the trusted setup.
-	err := kzg.Start()
-	require.NoError(t, err)
-
-	// Setup test config
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.CapellaForkEpoch = 1
-	cfg.DenebForkEpoch = 2
-	cfg.ElectraForkEpoch = 3
-	cfg.FuluForkEpoch = 4
-	params.OverrideBeaconConfig(cfg)
-
-	// Create test block
-	kzgCommitments := createRandomKzgCommitments(t, 1)
-	sb := util.NewBeaconBlockFulu()
-	sb.Block.Body.BlobKzgCommitments = kzgCommitments
-	signedB, err := blocks.NewSignedBeaconBlock(sb)
-	require.NoError(t, err)
-	r := [32]byte{1, 2, 3}
-
-	t.Run("retry stops when data becomes available", func(t *testing.T) {
-		// Setup server that returns no blobs initially
-		srv := createBlobServerV2(t, 0, []bool{})
-		defer srv.Close()
-
-		client := &Service{ctx: context.Background()}
-		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
-		defer rpcClient.Close()
-
-		// Start the initial reconstruction which should trigger retry
-		ctx := context.Background()
-		dataColumns, err := client.ReconstructDataColumnSidecars(ctx, signedB, r)
-		require.NoError(t, err)
-		require.Equal(t, 0, len(dataColumns))
-
-		// Wait a bit for the goroutine to start
-		time.Sleep(10 * time.Millisecond)
-
-		// Verify retry started
-		require.Equal(t, true, client.hasActiveRetry(r))
-
-		// Wait for retry timeout (the retry will continue since there's no way to stop it now)
-		time.Sleep(300 * time.Millisecond)
-
-		// Retry should still be active since there's no availability check to stop it
-		require.Equal(t, true, client.hasActiveRetry(r))
-	})
-
-	t.Run("retry continues when data is not available", func(t *testing.T) {
-		// Setup server that returns no blobs
-		srv := createBlobServerV2(t, 0, []bool{})
-		defer srv.Close()
-
-		ctx := context.Background()
-		client := &Service{ctx: ctx}
-		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
-		defer rpcClient.Close()
-
-		// Start the initial reconstruction which should trigger retry
-		dataColumns, err := client.ReconstructDataColumnSidecars(ctx, signedB, r)
-		require.NoError(t, err)
-		require.Equal(t, 0, len(dataColumns))
-
-		// Wait a bit for the goroutine to start
-		time.Sleep(10 * time.Millisecond)
-
-		// Verify retry started
-		require.Equal(t, true, client.hasActiveRetry(r))
-
-		// Wait a bit - retry should still be active
-		time.Sleep(100 * time.Millisecond)
-		require.Equal(t, true, client.hasActiveRetry(r))
-
-		// Clean up
-		if cancel, ok := client.activeRetries.Load(r); ok {
-			cancel.(context.CancelFunc)()
-		}
-
-		// Wait for cleanup
-		time.Sleep(50 * time.Millisecond)
-		require.Equal(t, false, client.hasActiveRetry(r))
-	})
-}
-
-
-// TestConcurrentReconstructDataColumnSidecars tests that concurrent calls to ReconstructDataColumnSidecars
-// don't result in multiple getBlobsV2 calls for the same block root
-func TestConcurrentReconstructDataColumnSidecars(t *testing.T) {
-	t.Run("concurrent calls share result", func(t *testing.T) {
-		// Setup server that tracks call count
-		callCount := int32(0)
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			atomic.AddInt32(&callCount, 1)
-			w.Header().Set("Content-Type", "application/json")
-			// Simulate some processing time
-			time.Sleep(10 * time.Millisecond)
-
-			if strings.Contains(r.URL.RequestURI(), GetBlobsV2) {
-				// Return empty result - simulating EL doesn't have the data yet
-				resp := []interface{}{nil}
-				respJSON, _ := json.Marshal(map[string]interface{}{
-					"jsonrpc": "2.0",
-					"id":      1,
-					"result":  resp,
-				})
-				_, _ = w.Write(respJSON)
-				return
-			}
-		}))
-		defer srv.Close()
-
-		// Setup client
-		ctx := context.Background()
-		client := &Service{ctx: ctx}
-		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
-		defer rpcClient.Close()
-
-		// Create test block with KZG commitments
-		slot := primitives.Slot(100)
-		block := util.NewBeaconBlockDeneb()
-		block.Block.Slot = slot
-		commitment := [48]byte{1, 2, 3}
-		block.Block.Body.BlobKzgCommitments = [][]byte{commitment[:]}
-
-		signedBlock, err := blocks.NewSignedBeaconBlock(block)
-		require.NoError(t, err)
-
-		blockRoot, err := signedBlock.Block().HashTreeRoot()
-		require.NoError(t, err)
-
-		// Start multiple concurrent calls
-		numCalls := 5
-		var wg sync.WaitGroup
-		results := make([][]blocks.VerifiedRODataColumn, numCalls)
-		errors := make([]error, numCalls)
-
-		for i := 0; i < numCalls; i++ {
-			wg.Add(1)
-			go func(index int) {
-				defer wg.Done()
-				result, err := client.ReconstructDataColumnSidecars(ctx, signedBlock, blockRoot)
-				results[index] = result
-				errors[index] = err
-			}(i)
-		}
-
-		// Wait for all calls to complete
-		wg.Wait()
-
-		// Verify that GetBlobsV2 was called only once, not numCalls times
-		finalCallCount := atomic.LoadInt32(&callCount)
-		require.Equal(t, int32(1), finalCallCount, "Expected GetBlobsV2 to be called only once, but was called %d times", finalCallCount)
-
-		// Verify all calls got the same result length
-		for i := 1; i < numCalls; i++ {
-			require.Equal(t, len(results[0]), len(results[i]), "All concurrent calls should return same result length")
-		}
-	})
 }
