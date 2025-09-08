@@ -72,7 +72,10 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 		if err != nil {
 			errJson := &httputil.DefaultJsonError{}
 			// If PostSSZ fails with 406 (Not Acceptable), fall back to JSON
-			if errors.As(err, &errJson) && errJson.Code == http.StatusNotAcceptable && res.marshalJSON != nil {
+			if !errors.As(err, &errJson) {
+				return nil, err
+			}
+			if errJson.Code == http.StatusNotAcceptable && res.marshalJSON != nil {
 				log.WithError(err).Warn("Failed to submit block ssz, falling back to JSON")
 				jsonData, jsonErr := res.marshalJSON()
 				if jsonErr != nil {
