@@ -29,3 +29,24 @@ func RunEvery(ctx context.Context, period time.Duration, f func()) {
 		}
 	}()
 }
+
+// RunEveryDynamic runs the provided command periodically with a dynamic interval.
+// The interval is determined by calling the intervalFunc before each execution.
+// It runs in a goroutine, and can be cancelled by finishing the supplied context.
+func RunEveryDynamic(ctx context.Context, intervalFunc func() time.Duration, f func()) {
+	go func() {
+		for {
+			// Get the next interval duration
+			interval := intervalFunc()
+			timer := time.NewTimer(interval)
+
+			select {
+			case <-timer.C:
+				f()
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			}
+		}
+	}()
+}
