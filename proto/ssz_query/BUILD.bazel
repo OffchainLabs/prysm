@@ -39,6 +39,7 @@ ssz_gen_marshal(
     objs = [
         "FixedTestContainer",
         "FixedNestedContainer",
+        "VariableTestContainer",
     ],
 )
 

@@ -67,6 +67,30 @@ func (s *SyncCommitteeCache) Clear() {
 	s.cache = cache.NewFIFO(keyFn)
 }
 
+// CurrentPeriodPositions returns current period positions of validator indices with respect with
+// sync committee. If any input validator index has no assignment, an empty list will be returned
+// for that validator. If the input root does not exist in cache, `ErrNonExistingSyncCommitteeKey` is returned.
+// Manual checking of state for index position in state is recommended when `ErrNonExistingSyncCommitteeKey` is returned.
+func (s *SyncCommitteeCache) CurrentPeriodPositions(root [32]byte, indices []primitives.ValidatorIndex) ([][]primitives.CommitteeIndex, error) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
+	pos, err := s.positionsInCommittee(root, indices)
+	if err != nil {
+		return nil, err
+	}
+	result := make([][]primitives.CommitteeIndex, len(pos))
+	for i, p := range pos {
+		if p == nil {
+			result[i] = []primitives.CommitteeIndex{}
+		} else {
+			result[i] = p.currentPeriod
+		}
+	}
+
+	return result, nil
+}
+
 // CurrentPeriodIndexPosition returns current period index position of a validator index with respect with
 // sync committee. If the input validator index has no assignment, an empty list will be returned.
 // If the input root does not exist in cache, `ErrNonExistingSyncCommitteeKey` is returned.
@@ -104,11 +128,7 @@ func (s *SyncCommitteeCache) NextPeriodIndexPosition(root [32]byte, valIdx primi
 	return pos.nextPeriod, nil
 }
 
-// Helper function for `CurrentPeriodIndexPosition` and `NextPeriodIndexPosition` to return a mapping
-// of validator index to its index(s) position in the sync committee.
-func (s *SyncCommitteeCache) idxPositionInCommittee(
-	root [32]byte, valIdx primitives.ValidatorIndex,
-) (*positionInCommittee, error) {
+func (s *SyncCommitteeCache) positionsInCommittee(root [32]byte, indices []primitives.ValidatorIndex) ([]*positionInCommittee, error) {
 	obj, exists, err := s.cache.GetByKey(key(root))
 	if err != nil {
 		return nil, err
@@ -121,13 +141,33 @@ func (s *SyncCommitteeCache) idxPositionInCommittee(
 	if !ok {
 		return nil, errNotSyncCommitteeIndexPosition
 	}
-	idxInCommittee, ok := item.vIndexToPositionMap[valIdx]
-	if !ok {
-		SyncCommitteeCacheMiss.Inc()
+	result := make([]*positionInCommittee, len(indices))
+	for i, idx := range indices {
+		idxInCommittee, ok := item.vIndexToPositionMap[idx]
+		if ok {
+			SyncCommitteeCacheHit.Inc()
+			result[i] = idxInCommittee
+		} else {
+			SyncCommitteeCacheMiss.Inc()
+			result[i] = nil
+		}
+	}
+	return result, nil
+}
+
+// Helper function for `CurrentPeriodIndexPosition` and `NextPeriodIndexPosition` to return a mapping
+// of validator index to its index(s) position in the sync committee.
+func (s *SyncCommitteeCache) idxPositionInCommittee(
+	root [32]byte, valIdx primitives.ValidatorIndex,
+) (*positionInCommittee, error) {
+	positions, err := s.positionsInCommittee(root, []primitives.ValidatorIndex{valIdx})
+	if err != nil {
+		return nil, err
+	}
+	if len(positions) == 0 {
 		return nil, nil
 	}
-	SyncCommitteeCacheHit.Inc()
-	return idxInCommittee, nil
+	return positions[0], nil
 }
 
 // UpdatePositionsInCommittee updates caching of validators position in sync committee in respect to

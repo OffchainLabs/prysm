@@ -29,13 +29,14 @@ import (
 // DataColumnSidecarsParams stores the common parameters needed to
 // fetch data column sidecars from peers.
 type DataColumnSidecarsParams struct {
-	Ctx         context.Context                     // Context
-	Tor         blockchain.TemporalOracle           // Temporal oracle, useful to get the current slot
-	P2P         prysmP2P.P2P                        // P2P network interface
-	RateLimiter *leakybucket.Collector              // Rate limiter for outgoing requests
-	CtxMap      ContextByteVersions                 // Context map, useful to know if a message is mapped to the correct fork
-	Storage     filesystem.DataColumnStorageReader  // Data columns storage
-	NewVerifier verification.NewDataColumnsVerifier // Data columns verifier to check to conformity of incoming data column sidecars
+	Ctx                     context.Context                     // Context
+	Tor                     blockchain.TemporalOracle           // Temporal oracle, useful to get the current slot
+	P2P                     prysmP2P.P2P                        // P2P network interface
+	RateLimiter             *leakybucket.Collector              // Rate limiter for outgoing requests
+	CtxMap                  ContextByteVersions                 // Context map, useful to know if a message is mapped to the correct fork
+	Storage                 filesystem.DataColumnStorageReader  // Data columns storage
+	NewVerifier             verification.NewDataColumnsVerifier // Data columns verifier to check to conformity of incoming data column sidecars
+	DownscorePeerOnRPCFault bool                                // Downscore a peer if it commits an RPC fault. Not responding sidecars at all is considered as a fault.
 }
 
 // FetchDataColumnSidecars retrieves data column sidecars from storage and peers for the given
