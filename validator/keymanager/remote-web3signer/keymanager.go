@@ -15,12 +15,14 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/async/event"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/io/file"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/OffchainLabs/prysm/v6/validator/accounts/petnames"
 	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
 	"github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer/internal"
@@ -409,7 +411,13 @@ func getSignRequestJson(ctx context.Context, validator *validator.Validate, requ
 		// TODO: update to V2 sometime after release
 		return handleAggregateAttestationAndProof(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_AggregateAttestationAndProofElectra:
-		return handleAggregateAttestationAndProofV2(ctx, version.Electra, validator, request, genesisValidatorsRoot)
+		var ver int
+		if slots.ToEpoch(request.SigningSlot) >= params.BeaconConfig().FuluForkEpoch {
+			ver = version.Fulu
+		} else {
+			ver = version.Electra
+		}
+		return handleAggregateAttestationAndProofV2(ctx, ver, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_Slot:
 		return handleAggregationSlot(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_BlockAltair:
