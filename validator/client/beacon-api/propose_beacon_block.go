@@ -93,16 +93,15 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 				return nil, errors.Wrap(err, "failed to submit block ssz")
 			}
 		}
-	} else if res.marshalJSON != nil {
-		// No SSZ data available, marshal and use JSON
-		jsonData, jsonErr := res.marshalJSON()
-		if jsonErr != nil {
-			return nil, errors.Wrap(jsonErr, "failed to marshal JSON")
-		}
-		err = c.jsonRestHandler.Post(ctx, endpoint, headers, bytes.NewBuffer(jsonData), nil)
-	} else {
+	} else if res.marshalJSON == nil {
 		return nil, errors.New("no marshalling functions available")
 	}
+	// No SSZ data available, marshal and use JSON
+	jsonData, jsonErr := res.marshalJSON()
+	if jsonErr != nil {
+		return nil, errors.Wrap(jsonErr, "failed to marshal JSON")
+	}
+	err = c.jsonRestHandler.Post(ctx, endpoint, headers, bytes.NewBuffer(jsonData), nil)
 	errJson := &httputil.DefaultJsonError{}
 	if err != nil {
 		if !errors.As(err, &errJson) {
