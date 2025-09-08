@@ -69,10 +69,14 @@ message VariableTestContainer {
   // Each container is fixed-size (40 bytes), but list itself is variable
   repeated FixedNestedContainer field_list_container = 3 [ (ethereum.eth.ext.ssz_max) = "128" ];  // Test: List[FixedNestedContainer, 128]
 
+  // Variable-size list of bytes32 - test list with fixed-size byte arrays
+  // e.g., beacon_state.historical_roots
+  repeated bytes field_list_bytes32 = 4 [ (ethereum.eth.ext.ssz_size) = "?,32", (ethereum.eth.ext.ssz_max) = "100"]; // Test: List[Bytes32, 100]
+
   // Variable nested container - test nested container access within variable container
-  VariableNestedContainer nested = 4;
+  VariableNestedContainer nested = 5;
 
   // Fixed-size trailing field - test fixed field after variable fields
   // Verifies correct offset calculation after variable-size fields
-  bytes trailing_field = 5 [ (ethereum.eth.ext.ssz_size) = "56" ];  // Test: fixed 56-byte field at end, offset: 32 + 4 + 4 + 4 = 44
+  bytes trailing_field = 6 [ (ethereum.eth.ext.ssz_size) = "56" ];  // Test: fixed 56-byte field at end, offset: 32 + 4 + 4 + 4 + 4 = 48
 }
