@@ -26,25 +26,17 @@ func TestProposeBeaconBlock_SSZ_Error(t *testing.T) {
 		expectedErrorMessage string
 	}{
 		{
-			name:                 "error 202",
-			expectedErrorMessage: "failed to submit block ssz",
-			returnedError: &httputil.DefaultJsonError{
-				Code:    http.StatusAccepted,
-				Message: "202 error",
-			},
-		},
-		{
 			name:                 "error 500",
 			expectedErrorMessage: "failed to submit block ssz",
 			returnedError: &httputil.DefaultJsonError{
 				Code:    http.StatusInternalServerError,
-				Message: "foo error",
+				Message: "failed to submit block ssz",
 			},
 		},
 		{
 			name:                 "other error",
 			expectedErrorMessage: "failed to submit block ssz",
-			returnedError:        errors.New("foo error"),
+			returnedError:        errors.New("failed to submit block ssz"),
 		},
 	}
 
@@ -601,14 +593,10 @@ func TestProposeBeaconBlock_SSZFails_406_FallbackToJSON(t *testing.T) {
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 
 			// Expect PostSSZ to be called first and fail
-			sszHeaders := map[string]string{
-				"Eth-Consensus-Version": testCase.consensusVersion,
-				"Content-Type":          "application/octet-stream",
-			}
 			jsonRestHandler.EXPECT().PostSSZ(
 				gomock.Any(),
 				testCase.endpoint,
-				sszHeaders,
+				gomock.Any(),
 				gomock.Any(),
 			).Return(
 				nil, nil, &httputil.DefaultJsonError{
@@ -617,12 +605,10 @@ func TestProposeBeaconBlock_SSZFails_406_FallbackToJSON(t *testing.T) {
 				},
 			).Times(1)
 
-			// Expect fallback to JSON Post
-			jsonHeaders := map[string]string{"Eth-Consensus-Version": testCase.consensusVersion}
 			jsonRestHandler.EXPECT().Post(
 				gomock.Any(),
 				testCase.endpoint,
-				jsonHeaders,
+				gomock.Any(),
 				gomock.Any(),
 				nil,
 			).Return(

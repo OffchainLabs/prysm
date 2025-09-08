@@ -207,7 +207,7 @@ func (c *BeaconApiRestHandler) PostSSZ(
 		req.Header.Set(headerKey, headerValue)
 	}
 	if req.Header.Get("Content-Type") == "" {
-		req.Header.Set("Content-Type", api.JsonMediaType)
+		req.Header.Set("Content-Type", api.OctetStreamMediaType)
 	}
 
 	for _, o := range c.reqOverrides {

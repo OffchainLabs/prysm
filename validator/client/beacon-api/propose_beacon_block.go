@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -67,7 +68,7 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 
 	// Try PostSSZ first with SSZ data
 	if res.marshalledSSZ != nil {
-		headers["Content-Type"] = "application/octet-stream"
+		headers["Content-Type"] = api.OctetStreamMediaType
 		_, _, err = c.jsonRestHandler.PostSSZ(ctx, endpoint, headers, bytes.NewBuffer(res.marshalledSSZ))
 		if err != nil {
 			errJson := &httputil.DefaultJsonError{}
@@ -82,7 +83,7 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 					return nil, errors.Wrap(jsonErr, "failed to marshal JSON")
 				}
 				// Reset headers for JSON
-				headers = map[string]string{"Eth-Consensus-Version": res.consensusVersion}
+				headers["Content-Type"] = api.JsonMediaType
 				err = c.jsonRestHandler.Post(ctx, endpoint, headers, bytes.NewBuffer(jsonData), nil)
 				// If JSON also fails, return that error
 				if err != nil {
@@ -95,23 +96,26 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 		}
 	} else if res.marshalJSON == nil {
 		return nil, errors.New("no marshalling functions available")
-	}
-	// No SSZ data available, marshal and use JSON
-	jsonData, jsonErr := res.marshalJSON()
-	if jsonErr != nil {
-		return nil, errors.Wrap(jsonErr, "failed to marshal JSON")
-	}
-	err = c.jsonRestHandler.Post(ctx, endpoint, headers, bytes.NewBuffer(jsonData), nil)
-	errJson := &httputil.DefaultJsonError{}
-	if err != nil {
-		if !errors.As(err, &errJson) {
-			return nil, err
+	} else {
+		// No SSZ data available, marshal and use JSON
+		jsonData, jsonErr := res.marshalJSON()
+		if jsonErr != nil {
+			return nil, errors.Wrap(jsonErr, "failed to marshal JSON")
 		}
-		// Error 202 means that the block was successfully broadcast, but validation failed
-		if errJson.Code == http.StatusAccepted {
-			return nil, errors.New("block was successfully broadcast but failed validation")
+		// Reset headers for JSON
+		headers["Content-Type"] = api.JsonMediaType
+		err = c.jsonRestHandler.Post(ctx, endpoint, headers, bytes.NewBuffer(jsonData), nil)
+		errJson := &httputil.DefaultJsonError{}
+		if err != nil {
+			if !errors.As(err, &errJson) {
+				return nil, err
+			}
+			// Error 202 means that the block was successfully broadcast, but validation failed
+			if errJson.Code == http.StatusAccepted {
+				return nil, errors.New("block was successfully broadcast but failed validation")
+			}
+			return nil, errJson
 		}
-		return nil, errJson
 	}
 
 	return &ethpb.ProposeResponse{BlockRoot: res.beaconBlockRoot[:]}, nil
