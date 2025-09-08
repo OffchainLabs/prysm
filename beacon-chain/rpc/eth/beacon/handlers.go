@@ -334,26 +334,26 @@ func (s *Server) GetBlockAttestationsV2(w http.ResponseWriter, r *http.Request) 
 	consensusAtts := blk.Block().Body().Attestations()
 
 	v := blk.Block().Version()
-	var attStructs []interface{}
+	attStructs := make([]interface{}, len(consensusAtts))
 	if v >= version.Electra {
-		for _, att := range consensusAtts {
+		for index, att := range consensusAtts {
 			a, ok := att.(*eth.AttestationElectra)
 			if !ok {
 				httputil.HandleError(w, fmt.Sprintf("unable to convert consensus attestations electra of type %T", att), http.StatusInternalServerError)
 				return
 			}
 			attStruct := structs.AttElectraFromConsensus(a)
-			attStructs = append(attStructs, attStruct)
+			attStructs[index] = attStruct
 		}
 	} else {
-		for _, att := range consensusAtts {
+		for index, att := range consensusAtts {
 			a, ok := att.(*eth.Attestation)
 			if !ok {
 				httputil.HandleError(w, fmt.Sprintf("unable to convert consensus attestation of type %T", att), http.StatusInternalServerError)
 				return
 			}
 			attStruct := structs.AttFromConsensus(a)
-			attStructs = append(attStructs, attStruct)
+			attStructs[index] = attStruct
 		}
 	}
 
