@@ -13,6 +13,7 @@ go_library(
         "participation_flag_updates.go",
         "pending_consolidations.go",
         "pending_deposit_updates.go",
+        "proposer_lookahead.go",
         "randao_mixes_reset.go",
         "registry_updates.go",
         "rewards_and_penalties.go",
@@ -25,6 +26,7 @@ go_library(
     deps = [
         "//beacon-chain/core/electra:go_default_library",
         "//beacon-chain/core/epoch/precompute:go_default_library",
+        "//beacon-chain/core/fulu:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//beacon-chain/state/state-native:go_default_library",

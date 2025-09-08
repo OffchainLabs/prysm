@@ -169,6 +169,7 @@ go_test(
         "fulu__epoch_processing__participation_flag_updates_test.go",
         "fulu__epoch_processing__pending_consolidations_test.go",
         "fulu__epoch_processing__pending_deposits_updates_test.go",
+        "fulu__epoch_processing__proposer_lookahead_test.go",
         "fulu__epoch_processing__randao_mixes_reset_test.go",
         "fulu__epoch_processing__registry_updates_test.go",
         "fulu__epoch_processing__rewards_and_penalties_test.go",

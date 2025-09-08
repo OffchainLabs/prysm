@@ -6588,7 +6588,7 @@
 - name: process_proposer_lookahead
   sources:
     - file: beacon-chain/core/fulu/transition.go
-      search: func processProposerLookahead(
+      search: func ProcessProposerLookahead(
   spec: |
     <spec fn="process_proposer_lookahead" fork="fulu" hash="3ff130cc">
     def process_proposer_lookahead(state: BeaconState) -> None:
