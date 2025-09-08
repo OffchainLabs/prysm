@@ -2,6 +2,7 @@ load("@prysm//tools/go:def.bzl", "go_test")
 
 go_test(
     name = "go_default_test",
+    size = "large",
     srcs = [
         "altair__epoch_processing__effective_balance_updates_test.go",
         "altair__epoch_processing__eth1_data_reset_test.go",
