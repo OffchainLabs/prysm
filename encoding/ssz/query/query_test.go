@@ -6,7 +6,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/encoding/ssz/query"
 	"github.com/OffchainLabs/prysm/v6/encoding/ssz/query/testutil"
-	"github.com/OffchainLabs/prysm/v6/proto/ssz_query"
 	sszquerypb "github.com/OffchainLabs/prysm/v6/proto/ssz_query"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
@@ -187,7 +186,7 @@ func TestRoundTripSszInfo(t *testing.T) {
 	}
 }
 
-func createFixedTestContainer() *ssz_query.FixedTestContainer {
+func createFixedTestContainer() *sszquerypb.FixedTestContainer {
 	fieldBytes32 := make([]byte, 32)
 	for i := range fieldBytes32 {
 		fieldBytes32[i] = byte(i + 24)
@@ -203,7 +202,7 @@ func createFixedTestContainer() *ssz_query.FixedTestContainer {
 		trailingField[i] = byte(i + 88)
 	}
 
-	return &ssz_query.FixedTestContainer{
+	return &sszquerypb.FixedTestContainer{
 		// Basic types
 		FieldUint32: math.MaxUint32,
 		FieldUint64: math.MaxUint64,
