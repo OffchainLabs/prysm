@@ -41,3 +41,35 @@ message FixedTestContainer {
   // Additional bytes field - test field ordering and offset calculation
   bytes trailing_field = 11 [ (ethereum.eth.ext.ssz_size) = "56" ]; // Test: trailing field after vector, offset: 277
 }
+
+// ===== VARIABLE-SIZE TEST CONTAINERS =====
+
+// VariableNestedContainer - nested container for testing nested field access
+// Tests: nested container navigation, field offset calculations within nested structures
+message VariableNestedContainer {
+  uint64 value1 = 1;  
+  repeated uint64 field_list_uint64 = 2 [ (ethereum.eth.ext.ssz_max) = "100" ];
+}
+
+// VariableTestContainer - comprehensive variable-size container for SSZ query testing
+// Tests: Variable-size lists, offsets in variable containers, mixed fixed/variable fields
+message VariableTestContainer {
+  // Fixed-size leading field - test fixed field before variable fields
+  // Acts as a baseline to verify offset calculations start correctly
+  bytes leading_field = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];  // Test: fixed 32-byte field at start, offset: 0
+
+  // Variable-size list of basic type - test list with primitive elements
+  // SSZ uses 4-byte offset pointer, actual data stored after all fixed fields
+  repeated uint64 field_list_uint64 = 2 [ (ethereum.eth.ext.ssz_max) = "2048" ];  // Test: List[uint64, 2048] (max 2048 elements)
+  
+  // Variable-size list of containers - test list with composite elements  
+  // Each container is fixed-size (40 bytes), but list itself is variable
+  repeated FixedNestedContainer field_list_container = 3 [ (ethereum.eth.ext.ssz_max) = "128" ];  // Test: List[FixedNestedContainer, 128]
+
+  // Variable nested container - test nested container access within variable container
+  VariableNestedContainer nested = 4;
+
+  // Fixed-size trailing field - test fixed field after variable fields
+  // Verifies correct offset calculation after variable-size fields
+  bytes trailing_field = 5 [ (ethereum.eth.ext.ssz_size) = "56" ];  // Test: fixed 56-byte field at end, offset: 32 + 4 + 4 + 4 = 44
+}
