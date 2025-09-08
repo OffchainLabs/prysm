@@ -74,8 +74,9 @@ func (s *Service) allDataColumnSubnets(_ primitives.Slot) map[uint64]bool {
 
 	// When we have validators with custody requirements, we need peers in all subnets
 	// because validators need to be able to publish data columns to all subnets when proposing
-	allSubnets := make(map[uint64]bool)
-	for i := uint64(0); i < params.BeaconConfig().DataColumnSidecarSubnetCount; i++ {
+	dataColumnSidecarSubnetCount := params.BeaconConfig().DataColumnSidecarSubnetCount
+	allSubnets := make(map[uint64]bool, dataColumnSidecarSubnetCount)
+	for i := range dataColumnSidecarSubnetCount {
 		allSubnets[i] = true
 	}
 
