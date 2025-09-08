@@ -58,7 +58,7 @@ func (s *Service) receiveDataColumnSidecar(ctx context.Context, sidecar blocks.V
 // allDataColumnSubnets returns the data column subnets for which we need to find peers
 // but don't need to subscribe to. This is used to ensure we have peers available in all subnets
 // when we are serving validators. When a validator proposes a block, they need to publish data
-// columns on all subnets. This method returns a nil map when there is no validators custody
+// column sidecars on all subnets. This method returns a nil map when there is no validators custody
 // requirement.
 func (s *Service) allDataColumnSubnets(_ primitives.Slot) map[uint64]bool {
 	validatorsCustodyRequirement, err := s.validatorsCustodyRequirement()
