@@ -76,7 +76,7 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 				log.WithError(err).Warn("Failed to submit block ssz, falling back to JSON")
 				jsonData, jsonErr := res.marshalJSON()
 				if jsonErr != nil {
-					return nil, errors.Wrap(jsonErr, "failed to marshal JSON fallback")
+					return nil, errors.Wrap(jsonErr, "failed to marshal JSON")
 				}
 				// Reset headers for JSON
 				headers = map[string]string{"Eth-Consensus-Version": res.consensusVersion}
