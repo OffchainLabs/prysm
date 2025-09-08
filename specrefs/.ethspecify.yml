@@ -1,4 +1,4 @@
-version: v1.6.0-alpha.5
+version: v1.6.0-alpha.6
 style: full
 
 specrefs:
@@ -61,7 +61,7 @@ exceptions:
 
   configs:
     # Not implemented (placeholders)
-    - AGGREGRATE_DUE_BPS#phase0
+    - AGGREGATE_DUE_BPS#phase0
     - ATTESTATION_DUE_BPS#phase0
     - CONTRIBUTION_DUE_BPS#altair
     - PROPOSER_REORG_CUTOFF_BPS#phase0
@@ -69,7 +69,7 @@ exceptions:
     - SYNC_MESSAGE_DUE_BPS#altair
 
     # Not implemented: gloas (future fork)
-    - AGGREGRATE_DUE_BPS_GLOAS#gloas
+    - AGGREGATE_DUE_BPS_GLOAS#gloas
     - ATTESTATION_DUE_BPS_GLOAS#gloas
     - CONTRIBUTION_DUE_BPS_GLOAS#gloas
     - GLOAS_FORK_EPOCH#gloas
@@ -168,6 +168,7 @@ exceptions:
 
     # Not implemented: phase0
     - calculate_committee_fraction#phase0
+    - compute_fork_version#phase0
     - compute_pulled_up_tip#phase0
     - filter_block_tree#phase0
     - get_aggregate_and_proof#phase0
