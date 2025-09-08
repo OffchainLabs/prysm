@@ -24,6 +24,9 @@ type sszInfo struct {
 
 	// For List types.
 	listInfo *listInfo
+
+	// For Vector types.
+	vectorInfo *vectorInfo
 }
 
 func (info *sszInfo) FixedSize() uint64 {
@@ -95,6 +98,18 @@ func (info *sszInfo) ListInfo() (*listInfo, error) {
 	return info.listInfo, nil
 }
 
+func (info *sszInfo) VectorInfo() (*vectorInfo, error) {
+	if info == nil {
+		return nil, errors.New("sszInfo is nil")
+	}
+
+	if info.sszType != Vector {
+		return nil, fmt.Errorf("sszInfo is not a Vector type, got %s", info.sszType)
+	}
+
+	return info.vectorInfo, nil
+}
+
 // Print returns a string representation of the sszInfo, which is useful for debugging.
 func (info *sszInfo) Print() string {
 	if info == nil {
@@ -136,6 +151,9 @@ func printRecursive(info *sszInfo, builder *strings.Builder, prefix string) {
 
 	case List:
 		builder.WriteString(fmt.Sprintf("%s[%s] (%s / limit: %d, length: %d, size: %d)\n", info.sszType, info.listInfo.element.typ.Name(), sizeDesc, info.listInfo.limit, info.listInfo.length, info.Size()))
+
+	case Vector:
+		builder.WriteString(fmt.Sprintf("%s[%s] (%s / length: %d, size: %d)\n", info.sszType, info.vectorInfo.element.typ.Name(), sizeDesc, info.vectorInfo.length, info.Size()))
 
 	default:
 		builder.WriteString(fmt.Sprintf("%s (%s / size: %d)\n", info.sszType, sizeDesc, info.Size()))

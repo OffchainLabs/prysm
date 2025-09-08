@@ -242,12 +242,23 @@ func analyzeVectorType(typ reflect.Type, elementInfo *sszInfo, length uint64) (*
 		return nil, errors.New("element info is required for Vector")
 	}
 
+	// Validate the given length.
+	// https://github.com/ethereum/consensus-specs/blob/master/ssz/simple-serialize.md#illegal-types
+	if length == 0 {
+		return nil, fmt.Errorf("vector length must be greater than 0, got %d", length)
+	}
+
 	return &sszInfo{
 		sszType: Vector,
 		typ:     typ,
 
 		fixedSize:  length * elementInfo.Size(),
 		isVariable: false,
+
+		vectorInfo: &vectorInfo{
+			length:  length,
+			element: elementInfo,
+		},
 	}, nil
 }
 
