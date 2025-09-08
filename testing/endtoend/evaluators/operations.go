@@ -534,6 +534,14 @@ func validatorsVoteWithTheMajority(ec *e2etypes.EvaluationContext, conns ...*grp
 			b := blk.GetBlindedElectraBlock().Message
 			slot = b.Slot
 			vote = b.Body.Eth1Data.BlockHash
+		case *ethpb.BeaconBlockContainer_FuluBlock:
+			b := blk.GetFuluBlock().Block
+			slot = b.Slot
+			vote = b.Body.Eth1Data.BlockHash
+		case *ethpb.BeaconBlockContainer_BlindedFuluBlock:
+			b := blk.GetBlindedFuluBlock().Message
+			slot = b.Slot
+			vote = b.Body.Eth1Data.BlockHash
 		default:
 			return fmt.Errorf("block of type %T is unknown", blk.Block)
 		}
