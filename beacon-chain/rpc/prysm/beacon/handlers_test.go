@@ -878,7 +878,6 @@ func TestPublishBlobs_InvalidJson(t *testing.T) {
 		BlobReceiver: &chainMock.ChainService{},
 		Broadcaster:  &mockp2p.MockBroadcaster{},
 		SyncChecker:  &mockSync.Sync{IsSyncing: false},
-		TimeFetcher:  &chainMock.ChainService{},
 	}
 
 	request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.InvalidJson)))
@@ -897,7 +896,6 @@ func TestPublishBlobs_MissingBlob(t *testing.T) {
 		BlobReceiver: &chainMock.ChainService{},
 		Broadcaster:  &mockp2p.MockBroadcaster{},
 		SyncChecker:  &mockSync.Sync{IsSyncing: false},
-		TimeFetcher:  &chainMock.ChainService{},
 	}
 
 	request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.PublishBlobsRequestMissingBlob)))
@@ -916,7 +914,6 @@ func TestPublishBlobs_MissingSignedBlockHeader(t *testing.T) {
 		BlobReceiver: &chainMock.ChainService{},
 		Broadcaster:  &mockp2p.MockBroadcaster{},
 		SyncChecker:  &mockSync.Sync{IsSyncing: false},
-		TimeFetcher:  &chainMock.ChainService{},
 	}
 
 	request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.PublishBlobsRequestMissingSignedBlockHeader)))
@@ -935,7 +932,6 @@ func TestPublishBlobs_MissingSidecars(t *testing.T) {
 		BlobReceiver: &chainMock.ChainService{},
 		Broadcaster:  &mockp2p.MockBroadcaster{},
 		SyncChecker:  &mockSync.Sync{IsSyncing: false},
-		TimeFetcher:  &chainMock.ChainService{},
 	}
 
 	request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.PublishBlobsRequestMissingSidecars)))
@@ -954,7 +950,6 @@ func TestPublishBlobs_EmptySidecarsList(t *testing.T) {
 		BlobReceiver: &chainMock.ChainService{},
 		Broadcaster:  &mockp2p.MockBroadcaster{},
 		SyncChecker:  &mockSync.Sync{IsSyncing: false},
-		TimeFetcher:  &chainMock.ChainService{},
 	}
 
 	request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.PublishBlobsRequestEmptySidecarsList)))
@@ -972,7 +967,6 @@ func TestPublishBlobs_NullSidecar(t *testing.T) {
 		BlobReceiver: &chainMock.ChainService{},
 		Broadcaster:  &mockp2p.MockBroadcaster{},
 		SyncChecker:  &mockSync.Sync{IsSyncing: false},
-		TimeFetcher:  &chainMock.ChainService{},
 	}
 
 	request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.PublishBlobsRequestNullSidecar)))
@@ -991,7 +985,6 @@ func TestPublishBlobs_SeveralFieldsMissing(t *testing.T) {
 		BlobReceiver: &chainMock.ChainService{},
 		Broadcaster:  &mockp2p.MockBroadcaster{},
 		SyncChecker:  &mockSync.Sync{IsSyncing: false},
-		TimeFetcher:  &chainMock.ChainService{},
 	}
 
 	request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.PublishBlobsRequestSeveralFieldsMissing)))
@@ -1010,7 +1003,6 @@ func TestPublishBlobs_BadBlockRoot(t *testing.T) {
 		BlobReceiver: &chainMock.ChainService{},
 		Broadcaster:  &mockp2p.MockBroadcaster{},
 		SyncChecker:  &mockSync.Sync{IsSyncing: false},
-		TimeFetcher:  &chainMock.ChainService{},
 	}
 
 	request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.PublishBlobsRequestBadBlockRoot)))
@@ -1029,7 +1021,6 @@ func TestPublishBlobs(t *testing.T) {
 		BlobReceiver: &chainMock.ChainService{},
 		Broadcaster:  &mockp2p.MockBroadcaster{},
 		SyncChecker:  &mockSync.Sync{IsSyncing: false},
-		TimeFetcher:  &chainMock.ChainService{},
 	}
 
 	request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.PublishBlobsRequest)))
