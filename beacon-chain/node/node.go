@@ -253,10 +253,6 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 	// their initialization.
 	beacon.finalizedStateAtStartUp = nil
 
-	if features.Get().EnableLightClient {
-		beacon.lcStore = lightclient.NewLightClientStore(beacon.db, beacon.fetchP2P(), beacon.StateFeed())
-	}
-
 	return beacon, nil
 }
 
@@ -362,6 +358,10 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 	log.Debugln("Registering Attestation Pool Service")
 	if err := beacon.registerAttestationPool(); err != nil {
 		return errors.Wrap(err, "could not register attestation pool service")
+	}
+
+	if features.Get().EnableLightClient {
+		beacon.lcStore = lightclient.NewLightClientStore(beacon.db, beacon.fetchP2P(), beacon.StateFeed())
 	}
 
 	log.Debugln("Registering Blockchain Service")

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -125,6 +126,74 @@ func TestNodeStart_SyncChecker(t *testing.T) {
 	assert.NotNil(t, node.syncChecker.Svc)
 	node.Close()
 	require.LogsContain(t, hook, "Starting beacon node")
+}
+
+func TestBlockchainService_LightClientStore(t *testing.T) {
+	// Disable parallel execution to prevent global state conflicts
+	tests := []struct {
+		name              string
+		enableLightClient bool
+		expectLCStoreNil  bool
+	}{
+		{
+			name:              "Light client enabled - lcStore should not be nil",
+			enableLightClient: true,
+			expectLCStoreNil:  false,
+		},
+		{
+			name:              "Light client disabled - lcStore should be nil",
+			enableLightClient: false,
+			expectLCStoreNil:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := cli.App{}
+			tmp := fmt.Sprintf("%s/datadirtest", t.TempDir())
+			set := flag.NewFlagSet("test", 0)
+			set.Bool("test-skip-pow", true, "skip pow dial")
+			set.String("datadir", tmp, "node data directory")
+			set.String("p2p-encoding", "ssz", "p2p encoding scheme")
+			set.Bool("demo-config", true, "demo configuration")
+			set.String("deposit-contract", "0x0000000000000000000000000000000000000000", "deposit contract address")
+			set.String("suggested-fee-recipient", "0x6e35733c5af9B61374A128e6F85f553aF09ff89A", "fee recipient")
+			require.NoError(t, set.Set("suggested-fee-recipient", "0x6e35733c5af9B61374A128e6F85f553aF09ff89A"))
+
+			if tt.enableLightClient {
+				set.Bool("enable-light-client", true, "enable light client")
+				require.NoError(t, set.Set("enable-light-client", "true"))
+			}
+
+			ctx, cancel := newCliContextWithCancel(&app, set)
+
+			options := []Option{
+				WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)),
+				WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)),
+			}
+
+			node, err := New(ctx, cancel, options...)
+			require.NoError(t, err)
+			defer node.Close()
+
+			// Fetch the blockchain service from the node's service registry
+			var blockchainService *blockchain.Service
+			err = node.services.FetchService(&blockchainService)
+			require.NoError(t, err)
+
+			// Use reflection to access the private lcStore field in blockchain service
+			v := reflect.ValueOf(blockchainService).Elem()
+			lcStoreField := v.FieldByName("lcStore")
+			require.Equal(t, true, lcStoreField.IsValid(), "lcStore field should exist in blockchain service")
+
+			// Check if the lcStore in the blockchain service matches expectations
+			if tt.expectLCStoreNil {
+				assert.Equal(t, true, lcStoreField.IsNil(), "Expected blockchain service lcStore to be nil when light client is disabled")
+			} else {
+				assert.Equal(t, false, lcStoreField.IsNil(), "Expected blockchain service lcStore to be initialized when light client is enabled")
+			}
+		})
+	}
 }
 
 // TestClearDB tests clearing the database
