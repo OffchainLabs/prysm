@@ -510,37 +510,42 @@
     - file: beacon-chain/core/signing/signing_root.go
       search: func ComputeForkDigest(
   spec: |
-    <spec fn="compute_fork_digest" fork="phase0" hash="8b33f64d">
-    def compute_fork_digest(current_version: Version, genesis_validators_root: Root) -> ForkDigest:
-        """
-        Return the 4-byte fork digest for the ``current_version`` and ``genesis_validators_root``.
-        This is a digest primarily used for domain separation on the p2p layer.
-        4-bytes suffices for practical separation of forks/chains.
-        """
-        return ForkDigest(compute_fork_data_root(current_version, genesis_validators_root)[:4])
-    </spec>
-
-- name: compute_fork_digest#fulu
-  sources: []
-  spec: |
-    <spec fn="compute_fork_digest" fork="fulu" hash="24737097">
+    <spec fn="compute_fork_digest" fork="phase0" hash="e206968f">
     def compute_fork_digest(
         genesis_validators_root: Root,
-        # [New in Fulu:EIP7892]
         epoch: Epoch,
     ) -> ForkDigest:
         """
-        Return the 4-byte fork digest for the ``version`` and ``genesis_validators_root``
-        XOR'd with the hash of the blob parameters for ``epoch``.
+        Return the 4-byte fork digest for the ``genesis_validators_root`` at a given ``epoch``.
 
         This is a digest primarily used for domain separation on the p2p layer.
         4-bytes suffices for practical separation of forks/chains.
         """
         fork_version = compute_fork_version(epoch)
         base_digest = compute_fork_data_root(fork_version, genesis_validators_root)
-        blob_parameters = get_blob_parameters(epoch)
+        return ForkDigest(base_digest[:4])
+    </spec>
 
+- name: compute_fork_digest#fulu
+  sources: []
+  spec: |
+    <spec fn="compute_fork_digest" fork="fulu" hash="e916a595">
+    def compute_fork_digest(
+        genesis_validators_root: Root,
+        epoch: Epoch,
+    ) -> ForkDigest:
+        """
+        Return the 4-byte fork digest for the ``genesis_validators_root`` at a given ``epoch``.
+
+        This is a digest primarily used for domain separation on the p2p layer.
+        4-bytes suffices for practical separation of forks/chains.
+        """
+        fork_version = compute_fork_version(epoch)
+        base_digest = compute_fork_data_root(fork_version, genesis_validators_root)
+
+        # [Modified in Fulu:EIP7892]
         # Bitmask digest with hash of blob parameters
+        blob_parameters = get_blob_parameters(epoch)
         return ForkDigest(
             bytes(
                 xor(
@@ -6088,7 +6093,7 @@
     - file: beacon-chain/core/blocks/payload.go
       search: func ProcessPayload(
   spec: |
-    <spec fn="process_execution_payload" fork="fulu" hash="cc18d6ef">
+    <spec fn="process_execution_payload" fork="fulu" hash="9a872dd6">
     def process_execution_payload(
         state: BeaconState, body: BeaconBlockBody, execution_engine: ExecutionEngine
     ) -> None:
@@ -6100,7 +6105,8 @@
         assert payload.prev_randao == get_randao_mix(state, get_current_epoch(state))
         # Verify timestamp
         assert payload.timestamp == compute_time_at_slot(state, state.slot)
-        # [Modified in Fulu:EIP7892] Verify commitments are under limit
+        # [Modified in Fulu:EIP7892]
+        # Verify commitments are under limit
         assert (
             len(body.blob_kzg_commitments)
             <= get_blob_parameters(get_current_epoch(state)).max_blobs_per_block
