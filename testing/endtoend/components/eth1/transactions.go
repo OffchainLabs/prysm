@@ -137,15 +137,15 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 	if expectedPrice.Cmp(gasPrice) > 0 {
 		gasPrice = expectedPrice
 	}
-	
+
 	// Check if we're post-Fulu fork to disable blob transactions
 	currentSlot := slots.CurrentSlot(e2e.TestParams.CLGenesisTime)
 	currentEpoch := slots.ToEpoch(currentSlot)
 	isPostFulu := currentEpoch >= params.BeaconConfig().FuluForkEpoch
-	
+
 	g, _ := errgroup.WithContext(context.Background())
 	txs := make([]*types.Transaction, 10)
-	
+
 	// Only send blob transactions if we're NOT post-Fulu
 	if !isPostFulu {
 		for i := uint64(0); i < 10; i++ {
