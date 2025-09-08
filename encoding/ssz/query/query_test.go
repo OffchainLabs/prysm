@@ -73,11 +73,18 @@ func TestCalculateOffsetAndLength(t *testing.T) {
 				expectedOffset: 85,
 				expectedLength: 192, // 24 * 8 bytes
 			},
+			// 2D bytes field
+			{
+				name:           "two_dimension_bytes_field",
+				path:           ".two_dimension_bytes_field",
+				expectedOffset: 277,
+				expectedLength: 160, // 5 * 32 bytes
+			},
 			// Trailing field
 			{
 				name:           "trailing_field",
 				path:           ".trailing_field",
-				expectedOffset: 277,
+				expectedOffset: 437,
 				expectedLength: 56,
 			},
 		}
@@ -220,6 +227,15 @@ func createFixedTestContainer() *sszquerypb.FixedTestContainer {
 		// Vector field
 		VectorField: []uint64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24},
 
+		// 2D bytes field
+		TwoDimensionBytesField: [][]byte{
+			make([]byte, 32),
+			make([]byte, 32),
+			make([]byte, 32),
+			make([]byte, 32),
+			make([]byte, 32),
+		},
+
 		// Trailing field
 		TrailingField: trailingField,
 	}
@@ -268,6 +284,11 @@ func getFixedTestContainerSpec() testutil.TestSpec {
 			{
 				Path:     ".vector_field",
 				Expected: testContainer.VectorField,
+			},
+			// 2D bytes field
+			{
+				Path:     ".two_dimension_bytes_field",
+				Expected: testContainer.TwoDimensionBytesField,
 			},
 			// Trailing field
 			{
