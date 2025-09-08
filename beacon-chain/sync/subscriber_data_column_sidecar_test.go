@@ -65,10 +65,11 @@ func TestDataColumnSubnets(t *testing.T) {
 				}
 			},
 			test: func(t *testing.T, svc *Service) {
+				dataColumnSidecarSubnetCount := params.BeaconConfig().DataColumnSidecarSubnetCount
 				result := svc.allDataColumnSubnets(0)
-				assert.Equal(t, params.BeaconConfig().DataColumnSidecarSubnetCount, uint64(len(result)))
+				assert.Equal(t, dataColumnSidecarSubnetCount, uint64(len(result)))
 
-				for i := uint64(0); i < params.BeaconConfig().DataColumnSidecarSubnetCount; i++ {
+				for i := range dataColumnSidecarSubnetCount {
 					assert.Equal(t, true, result[i])
 				}
 			},
