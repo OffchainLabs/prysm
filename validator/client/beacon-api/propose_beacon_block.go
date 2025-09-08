@@ -84,7 +84,7 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 				// Reset headers for JSON
 				headers = map[string]string{"Eth-Consensus-Version": res.consensusVersion}
 				err = c.jsonRestHandler.Post(ctx, endpoint, headers, bytes.NewBuffer(jsonData), nil)
-				// If JSON also fails, return that error; otherwise continue
+				// If JSON also fails, return that error
 				if err != nil {
 					return nil, errors.Wrap(err, "failed to submit block via JSON fallback")
 				}
