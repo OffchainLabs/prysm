@@ -90,7 +90,7 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 				}
 			} else {
 				// For non-406 errors or when no JSON fallback is available, return the SSZ error
-				return nil, errors.Wrap(err, "failed to submit block ssz")
+				return nil, errors.Wrap(errJson, "failed to submit block ssz")
 			}
 		}
 	} else if res.marshalJSON == nil {
