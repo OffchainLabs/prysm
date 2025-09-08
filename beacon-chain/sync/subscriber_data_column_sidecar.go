@@ -63,7 +63,7 @@ func (s *Service) receiveDataColumnSidecar(ctx context.Context, sidecar blocks.V
 func (s *Service) allDataColumnSubnets(_ primitives.Slot) map[uint64]bool {
 	validatorsCustodyRequirement, err := s.validatorsCustodyRequirement()
 	if err != nil {
-		log.WithError(err).Debug("Could not retrieve validators custody requirement")
+		log.WithError(err).Error("Could not retrieve validators custody requirement")
 		return nil
 	}
 
