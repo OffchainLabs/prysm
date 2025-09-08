@@ -176,6 +176,7 @@ go_test(
         "fulu__epoch_processing__slashings_test.go",
         "fulu__finality__finality_test.go",
         "fulu__fork__upgrade_to_fulu_test.go",
+        "fulu__fork_transition__transition_test.go",
         "fulu__forkchoice__forkchoice_test.go",
         "fulu__merkle_proof__merkle_proof_test.go",
         "fulu__networking__custody_groups_test.go",

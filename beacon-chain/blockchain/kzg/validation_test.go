@@ -366,7 +366,7 @@ func TestVerifyCellKZGProofBatchFromBlobData(t *testing.T) {
 		randBlob := random.GetRandBlob(123)
 		var blob Blob
 		copy(blob[:], randBlob[:])
-		
+
 		// Create invalid commitment (wrong size)
 		invalidCommitment := make([]byte, 32) // Should be 48 bytes
 		cellProofs := make([][]byte, numberOfColumns)
@@ -456,10 +456,10 @@ func TestVerifyCellKZGProofBatchFromBlobData(t *testing.T) {
 			copy(blob[:], randBlob[:])
 			commitment, err := BlobToKZGCommitment(&blob)
 			require.NoError(t, err)
-			
+
 			blobs[i] = blob[:]
 			commitments[i] = commitment[:]
-			
+
 			// Add cell proofs - make some invalid in the second blob
 			for j := uint64(0); j < numberOfColumns; j++ {
 				if i == 1 && j == 64 {

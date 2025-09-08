@@ -182,6 +182,7 @@ go_test(
         "fulu__epoch_processing__sync_committee_updates_test.go",
         "fulu__finality__finality_test.go",
         "fulu__fork__upgrade_to_fulu_test.go",
+        "fulu__fork_transition__transition_test.go",
         "fulu__forkchoice__forkchoice_test.go",
         "fulu__merkle_proof__merkle_proof_test.go",
         "fulu__networking__custody_columns_test.go",
