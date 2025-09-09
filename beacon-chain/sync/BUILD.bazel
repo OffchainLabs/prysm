@@ -194,6 +194,7 @@ go_test(
         "slot_aware_cache_test.go",
         "subscriber_beacon_aggregate_proof_test.go",
         "subscriber_beacon_blocks_test.go",
+        "subscriber_data_column_sidecar_test.go",
         "subscriber_test.go",
         "subscription_topic_handler_test.go",
         "sync_fuzz_test.go",

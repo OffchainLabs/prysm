@@ -2,7 +2,7 @@
 
 Prysm is go project with many complicated dependencies, including some c++ based libraries. There
 are two parts to Prysm's dependency management. Go modules and bazel managed dependencies. Be sure 
-to read [Why Bazel?](https://github.com/OffchainLabs/documentation/issues/138) to fully
+to read [Why Bazel?](https://prysm.offchainlabs.com/docs/install-prysm/install-with-bazel/#why-bazel) to fully
 understand the reasoning behind an additional layer of build tooling via Bazel rather than a pure
 "go build" project.
 

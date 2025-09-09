@@ -116,16 +116,40 @@ func (l *periodicEpochLayout) pruneBefore(before primitives.Epoch) (*pruneSummar
 	}
 	// Roll up summaries and clean up per-epoch directories.
 	rollup := &pruneSummary{}
+
+	// Track which period directories might be empty after epoch removal
+	periodsToCheck := make(map[string]struct{})
+
 	for epoch, sum := range sums {
 		rollup.blobsPruned += sum.blobsPruned
 		rollup.failedRemovals = append(rollup.failedRemovals, sum.failedRemovals...)
 		rmdir := l.epochDir(epoch)
+		periodDir := l.periodDir(epoch)
+
 		if len(sum.failedRemovals) == 0 {
 			if err := l.fs.Remove(rmdir); err != nil {
 				log.WithField("dir", rmdir).WithError(err).Error("Failed to remove epoch directory while pruning")
+			} else {
+				periodsToCheck[periodDir] = struct{}{}
 			}
 		} else {
 			log.WithField("dir", rmdir).WithField("numFailed", len(sum.failedRemovals)).WithError(err).Error("Unable to remove epoch directory due to pruning failures")
+		}
+	}
+
+	//Clean up empty period directories
+	for periodDir := range periodsToCheck {
+		entries, err := afero.ReadDir(l.fs, periodDir)
+		if err != nil {
+			log.WithField("dir", periodDir).WithError(err).Debug("Failed to read period directory contents")
+			continue
+		}
+
+		// Only attempt to remove if directory is empty
+		if len(entries) == 0 {
+			if err := l.fs.Remove(periodDir); err != nil {
+				log.WithField("dir", periodDir).WithError(err).Error("Failed to remove empty period directory")
+			}
 		}
 	}
 
