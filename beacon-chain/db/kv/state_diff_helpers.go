@@ -23,9 +23,9 @@ var (
 )
 
 func makeKey(level int, slot uint64) []byte {
-	buf := make([]byte, 1+8)
+	buf := make([]byte, 16)
 	buf[0] = byte(level)
-	binary.BigEndian.PutUint64(buf[1:], slot)
+	binary.LittleEndian.PutUint64(buf[1:], slot)
 	return buf
 }
 
@@ -65,7 +65,7 @@ func (s *Store) getAnchorState(offset uint64, lvl int, slot primitives.Slot) (an
 	return anchor, nil
 }
 
-// ComputeLevel computes the level in the diff tree. Returns -1 in case slot should not be in tree.
+// computeLevel computes the level in the diff tree. Returns -1 in case slot should not be in tree.
 func computeLevel(offset uint64, slot primitives.Slot) int {
 	rel := uint64(slot) - offset
 	for i, exp := range params.StateHierarchyExponents() {
@@ -207,7 +207,7 @@ func (s *Store) getBaseAndDiffChain(offset uint64, slot primitives.Slot) (state.
 		diffChainIndices = appendUnique(diffChainIndices, diffSlot+offset)
 	}
 
-	baseSnapshot, err := s.getFullSnapshot(0, baseAnchorSlot)
+	baseSnapshot, err := s.getFullSnapshot(baseAnchorSlot)
 	if err != nil {
 		return nil, nil, err
 	}

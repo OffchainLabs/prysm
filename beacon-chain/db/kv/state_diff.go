@@ -12,6 +12,12 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
+const (
+	stateSuffix     = "_s"
+	validatorSuffix = "_v"
+	balancesSuffix  = "_b"
+)
+
 /*
 	We use a level-based approach to save state diffs. The levels are 0-6, where each level corresponds to an exponent of 2 (exponents[lvl]).
 	The data at level 0 is saved every 2**exponent[0] slots and always contains a full state snapshot that is used as a base for the delta saved at other levels.
@@ -40,7 +46,7 @@ func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconStat
 
 	// Save full state if level is 0.
 	if lvl == 0 {
-		return s.saveFullSnapshot(lvl, st)
+		return s.saveFullSnapshot(st)
 	}
 
 	// Get anchor state to compute the diff from.
@@ -94,15 +100,15 @@ func (s *Store) saveHdiff(lvl int, anchor, st state.ReadOnlyBeaconState) error {
 		if bucket == nil {
 			return bolt.ErrBucketNotFound
 		}
-		buf := append(key, "_s"...)
+		buf := append(key, stateSuffix...)
 		if err := bucket.Put(buf, diff.StateDiff); err != nil {
 			return err
 		}
-		buf = append(key, "_v"...)
+		buf = append(key, validatorSuffix...)
 		if err := bucket.Put(buf, diff.ValidatorDiffs); err != nil {
 			return err
 		}
-		buf = append(key, "_b"...)
+		buf = append(key, balancesSuffix...)
 		if err := bucket.Put(buf, diff.BalancesDiff); err != nil {
 			return err
 		}
@@ -124,9 +130,9 @@ func (s *Store) saveHdiff(lvl int, anchor, st state.ReadOnlyBeaconState) error {
 }
 
 // SaveFullSnapshot saves the full level 0 state snapshot to the database.
-func (s *Store) saveFullSnapshot(lvl int, st state.ReadOnlyBeaconState) error {
+func (s *Store) saveFullSnapshot(st state.ReadOnlyBeaconState) error {
 	slot := uint64(st.Slot())
-	key := makeKey(lvl, slot)
+	key := makeKey(0, slot)
 	stateBytes, err := st.MarshalSSZ()
 	if err != nil {
 		return err
@@ -154,7 +160,7 @@ func (s *Store) saveFullSnapshot(lvl int, st state.ReadOnlyBeaconState) error {
 	}
 	// Save the full state to the cache, and invalidate other levels.
 	s.stateDiffCache.clearAnchors()
-	err = s.stateDiffCache.setAnchor(lvl, st)
+	err = s.stateDiffCache.setAnchor(0, st)
 	if err != nil {
 		return err
 	}
@@ -173,17 +179,17 @@ func (s *Store) getDiff(lvl int, slot uint64) (hdiff.HdiffBytes, error) {
 		if bucket == nil {
 			return bolt.ErrBucketNotFound
 		}
-		buf := append(key, "_s"...)
+		buf := append(key, stateSuffix...)
 		stateDiff = bucket.Get(buf)
 		if stateDiff == nil {
 			return errors.New("state diff not found")
 		}
-		buf = append(key, "_v"...)
+		buf = append(key, validatorSuffix...)
 		validatorDiff = bucket.Get(buf)
 		if validatorDiff == nil {
 			return errors.New("validator diff not found")
 		}
-		buf = append(key, "_b"...)
+		buf = append(key, balancesSuffix...)
 		balancesDiff = bucket.Get(buf)
 		if balancesDiff == nil {
 			return errors.New("balances diff not found")
@@ -202,8 +208,8 @@ func (s *Store) getDiff(lvl int, slot uint64) (hdiff.HdiffBytes, error) {
 	}, nil
 }
 
-func (s *Store) getFullSnapshot(lvl int, slot uint64) (state.BeaconState, error) {
-	key := makeKey(lvl, slot)
+func (s *Store) getFullSnapshot(slot uint64) (state.BeaconState, error) {
+	key := makeKey(0, slot)
 	var enc []byte
 
 	err := s.db.View(func(tx *bolt.Tx) error {
