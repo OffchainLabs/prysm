@@ -58,6 +58,7 @@ func TestSubscribe_ReceivesValidMessage(t *testing.T) {
 		subHandler:   newSubTopicHandler(),
 		chainStarted: abool.New(),
 	}
+	markInitSyncComplete(t, &r)
 	var err error
 	p2pService.Digest, err = r.currentForkDigest()
 	require.NoError(t, err)
@@ -83,6 +84,11 @@ func TestSubscribe_ReceivesValidMessage(t *testing.T) {
 	}
 }
 
+func markInitSyncComplete(_ *testing.T, s *Service) {
+	s.initialSyncComplete = make(chan struct{})
+	close(s.initialSyncComplete)
+}
+
 func TestSubscribe_UnsubscribeTopic(t *testing.T) {
 	p2pService := p2ptest.NewTestP2P(t)
 	gt := time.Now()
@@ -101,6 +107,7 @@ func TestSubscribe_UnsubscribeTopic(t *testing.T) {
 		chainStarted: abool.New(),
 		subHandler:   newSubTopicHandler(),
 	}
+	markInitSyncComplete(t, &r)
 	var err error
 	p2pService.Digest, err = r.currentForkDigest()
 	require.NoError(t, err)
@@ -152,6 +159,7 @@ func TestSubscribe_ReceivesAttesterSlashing(t *testing.T) {
 		chainStarted:              abool.New(),
 		subHandler:                newSubTopicHandler(),
 	}
+	markInitSyncComplete(t, &r)
 	topic := "/eth2/%x/attester_slashing"
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -205,6 +213,7 @@ func TestSubscribe_ReceivesProposerSlashing(t *testing.T) {
 		chainStarted:              abool.New(),
 		subHandler:                newSubTopicHandler(),
 	}
+	markInitSyncComplete(t, &r)
 	topic := "/eth2/%x/proposer_slashing"
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -253,6 +262,8 @@ func TestSubscribe_HandlesPanic(t *testing.T) {
 		subHandler:   newSubTopicHandler(),
 		chainStarted: abool.New(),
 	}
+	markInitSyncComplete(t, &r)
+
 	var err error
 	p.Digest, err = r.currentForkDigest()
 	require.NoError(t, err)
@@ -580,6 +591,7 @@ func TestSubscribeWithSyncSubnets_DynamicSwitchFork(t *testing.T) {
 		chainStarted: abool.New(),
 		subHandler:   newSubTopicHandler(),
 	}
+	markInitSyncComplete(t, &r)
 	// Empty cache at the end of the test.
 	defer cache.SyncSubnetIDs.EmptyAllCaches()
 	cache.SyncSubnetIDs.AddSyncCommitteeSubnets([]byte("pubkey"), 0, []uint64{0, 1}, 10*time.Second)
@@ -697,6 +709,7 @@ func TestSubscribe_ReceivesLCOptimisticUpdate(t *testing.T) {
 		lcStore:      lightClient.NewLightClientStore(d, &p2ptest.FakeP2P{}, new(event.Feed)),
 		subHandler:   newSubTopicHandler(),
 	}
+	markInitSyncComplete(t, &r)
 	topic := p2p.LightClientOptimisticUpdateTopicFormat
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -764,6 +777,7 @@ func TestSubscribe_ReceivesLCFinalityUpdate(t *testing.T) {
 		lcStore:      lightClient.NewLightClientStore(d, &p2ptest.FakeP2P{}, new(event.Feed)),
 		subHandler:   newSubTopicHandler(),
 	}
+	markInitSyncComplete(t, &r)
 	topic := p2p.LightClientFinalityUpdateTopicFormat
 	var wg sync.WaitGroup
 	wg.Add(1)

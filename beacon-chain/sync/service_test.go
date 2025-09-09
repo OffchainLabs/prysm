@@ -206,6 +206,7 @@ func TestSyncService_StopCleanly(t *testing.T) {
 		clockWaiter:         gs,
 		initialSyncComplete: make(chan struct{}),
 	}
+	markInitSyncComplete(t, &r)
 
 	go r.startDiscoveryAndSubscriptions()
 	var vr [32]byte
@@ -219,9 +220,6 @@ func TestSyncService_StopCleanly(t *testing.T) {
 	// wait for chainstart to be sent
 	time.Sleep(2 * time.Second)
 	require.Equal(t, true, r.chainStarted.IsSet(), "Did not receive chain start event.")
-
-	close(r.initialSyncComplete)
-	time.Sleep(1 * time.Second)
 
 	require.NotEqual(t, 0, len(r.cfg.p2p.PubSub().GetTopics()))
 	require.NotEqual(t, 0, len(r.cfg.p2p.Host().Mux().Protocols()))
