@@ -203,7 +203,7 @@ func analyzeHomogeneousColType(typ reflect.Type, tag *reflect.StructTag) (*sszIn
 
 	// Parsing ssz tag doesn't provide enough information to determine the collection type,
 	// return an error.
-	return nil, fmt.Errorf("could not determine collection type from tags (has-size: %v, has-max: %v)", sszDimension.HasSize, sszDimension.HasMax)
+	return nil, errors.New("could not determine collection type from tags")
 }
 
 // analyzeListType analyzes SSZ List type and returns its SSZ info.
