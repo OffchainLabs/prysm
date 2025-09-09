@@ -52,9 +52,9 @@ func TestColumnSatisfyRequirement(t *testing.T) {
 	parentRoot := [fieldparams.RootLength]byte{}
 
 	columns := GenerateTestDataColumns(t, parentRoot, columnSlot, blobCount)
-	intializer := Initializer{}
+	initializer := Initializer{}
 
-	v := intializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
+	v := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
 	require.Equal(t, false, v.results.executed(RequireValidProposerSignature))
 	v.SatisfyRequirement(RequireValidProposerSignature)
 	require.Equal(t, true, v.results.executed(RequireValidProposerSignature))
