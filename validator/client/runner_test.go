@@ -380,7 +380,7 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 	defer cancel()
 
 	// This test is meant to ensure that PushProposerSettings is called successfully on a next slot event.
-	// This is a regresion test for PR 15369, however the same methodology of context checking is applied
+	// This is a regression test for PR 15369, however the same methodology of context checking is applied
 	// to many other methods as well.
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
