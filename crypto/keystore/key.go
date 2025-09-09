@@ -109,7 +109,7 @@ func (k *Key) UnmarshalJSON(j []byte) (err error) {
 
 	// Try to unmarshal the public-only form first
 	var pkOnly publicKeyOnlyJSON
-	if err = json.Unmarshal(j, &pkOnly); err == nil && pkOnly.PublicKey != "" {
+	if err = json.Unmarshal(j, &pkOnly); err == nil && pkOnly.PublicKey != "" && pkOnly.ID != "" {
 		idStr = pkOnly.ID
 		pubStr = pkOnly.PublicKey
 	} else {
