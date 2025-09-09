@@ -210,7 +210,7 @@ func (c *BeaconApiRestHandler) PostSSZ(
 	for _, o := range c.reqOverrides {
 		o(req)
 	}
-
+	req.Header.Set("Content-Type", api.OctetStreamMediaType)
 	req.Header.Set("User-Agent", version.BuildData())
 	httpResp, err := c.client.Do(req)
 	if err != nil {

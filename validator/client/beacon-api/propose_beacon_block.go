@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -68,7 +67,6 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 
 	// Try PostSSZ first with SSZ data
 	if res.marshalledSSZ != nil {
-		headers["Content-Type"] = api.OctetStreamMediaType
 		_, _, err = c.jsonRestHandler.PostSSZ(ctx, endpoint, headers, bytes.NewBuffer(res.marshalledSSZ))
 		if err != nil {
 			errJson := &httputil.DefaultJsonError{}
@@ -83,7 +81,6 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 					return nil, errors.Wrap(jsonErr, "failed to marshal JSON")
 				}
 				// Reset headers for JSON
-				headers["Content-Type"] = api.JsonMediaType
 				err = c.jsonRestHandler.Post(ctx, endpoint, headers, bytes.NewBuffer(jsonData), nil)
 				// If JSON also fails, return that error
 				if err != nil {
@@ -103,7 +100,6 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 			return nil, errors.Wrap(jsonErr, "failed to marshal JSON")
 		}
 		// Reset headers for JSON
-		headers["Content-Type"] = api.JsonMediaType
 		err = c.jsonRestHandler.Post(ctx, endpoint, headers, bytes.NewBuffer(jsonData), nil)
 		errJson := &httputil.DefaultJsonError{}
 		if err != nil {
