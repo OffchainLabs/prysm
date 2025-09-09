@@ -56,3 +56,25 @@ func TestHashTreeRootFromBytes_Basic(t *testing.T) {
 	expected = [32]byte{0xAB}
 	assert.Equal(t, expected, root)
 }
+
+func TestHashTreeRootFromBytes_ContainerBasicTypeFields_VoluntaryExit(t *testing.T) {
+	voluntaryExit := &ethpb.VoluntaryExit{
+		Epoch:          12345,
+		ValidatorIndex: 67890,
+	}
+
+	info, err := sszquery.AnalyzeObject(voluntaryExit)
+	require.NoError(t, err)
+
+	data, err := ssz.MarshalSSZ(voluntaryExit)
+	require.NoError(t, err)
+
+	root, err := proof.HashTreeRootFromBytes(info, data)
+	require.NoError(t, err)
+
+	expected, err := voluntaryExit.HashTreeRoot()
+	require.NoError(t, err)
+
+	assert.Equal(t, expected, root)
+}
+

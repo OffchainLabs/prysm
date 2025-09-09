@@ -51,3 +51,66 @@ func computeBasicHashTreeRoot(info *sszquery.SSZInfo, data []byte) ([32]byte, er
 	return chunk, nil
 }
 
+// computeContainerHashTreeRoot computes the hash tree root for containers
+func computeContainerHashTreeRoot(info *sszquery.SSZInfo, data []byte) ([32]byte, error) {
+	// 1. For vector of composite objects or a container: merkleize([hash_tree_root(element) for element in value])
+	if info.Type() != sszquery.Container {
+		return [32]byte{}, fmt.Errorf("computeContainerHashTreeRoot called with non-container type: %s", info.Type())
+	}
+
+	containerInfo, err := info.ContainerInfo()
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("ContainerInfo: %w", err)
+	}
+
+	var elementRoots [][32]byte
+
+	// Ordered fields
+	ci := containerInfo.Fields()
+	var orderedFields []*sszquery.FieldInfo
+	for _, name := range containerInfo.Order() {
+		orderedFields = append(orderedFields, ci[name])
+	}
+
+	for _, fieldInfo := range orderedFields {
+		fieldSSZ := fieldInfo.SSZ()
+		fieldSize := fieldSSZ.FixedSize()
+		if fieldSSZ.IsVariable() {
+			// For variable-sized fields, we need to read the offset from the fixed part
+			if len(data) < int(fieldInfo.Offset()+4) {
+				return [32]byte{}, fmt.Errorf("data too short to read offset for field %s", fieldInfo.Name())
+			}
+
+			// Read the offset (4 bytes little-endian)
+			fieldOffset := binary.LittleEndian.Uint32(data[fieldInfo.Offset() : fieldInfo.Offset()+4]) // TODO: check
+
+			// Extract the variable data starting from the offset
+			if uint64(fieldOffset) >= uint64(len(data)) {
+				return [32]byte{}, fmt.Errorf("offset %d exceeds data length %d for field %s", fieldOffset, len(data), fieldInfo.Name())
+			}
+			fieldData := data[fieldOffset:]
+
+			fieldRoot, err := hashTreeRootFromBytes(fieldSSZ, fieldData)
+			if err != nil {
+				return [32]byte{}, fmt.Errorf("hashTreeRootFromBytes for field %s: %w", fieldInfo.Name(), err)
+			}
+			elementRoots = append(elementRoots, fieldRoot)
+		} else {
+			// For fixed-sized fields, extract directly using offset and size
+			if len(data) < int(fieldInfo.Offset()+fieldSize) {
+				return [32]byte{}, fmt.Errorf("data too short for fixed field %s", fieldInfo.Name())
+			}
+			fieldData := data[fieldInfo.Offset() : fieldInfo.Offset()+fieldSize]
+
+			fieldRoot, err := hashTreeRootFromBytes(fieldSSZ, fieldData)
+			if err != nil {
+				return [32]byte{}, fmt.Errorf("hashTreeRootFromBytes for field %s: %w", fieldInfo.Name(), err)
+			}
+			elementRoots = append(elementRoots, fieldRoot)
+		}
+
+	}
+
+	return merkleize(elementRoots, nil), nil
+
+}
