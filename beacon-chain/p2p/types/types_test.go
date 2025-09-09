@@ -299,7 +299,7 @@ func TestDataColumnSidecarsByRootReq_MarshalUnmarshal(t *testing.T) {
 				in = append(in, byte(0))
 				return in
 			},
-			unmarshalErr: "a is not evenly divisble by b",
+			unmarshalErr: "a is not evenly divisible by b",
 		},
 		{
 			name: "size too big",
