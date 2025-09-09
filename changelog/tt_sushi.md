@@ -1,3 +1,3 @@
 ### Changed
 
-- Optimize proposer inclusion proof calcuation by pre caching subtries
+- Optimize proposer inclusion proof calculation by pre caching subtries
