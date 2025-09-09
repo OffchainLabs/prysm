@@ -7,6 +7,9 @@ import (
 	"strings"
 )
 
+// exported sszInfo type used in Proofs package
+type SSZInfo = sszInfo
+
 // sszInfo holds the all necessary data for analyzing SSZ data types.
 type sszInfo struct {
 	// Type of the SSZ structure (Basic, Container, List, etc.).
@@ -26,11 +29,32 @@ type sszInfo struct {
 	listInfo *listInfo
 }
 
+func (info *sszInfo) Type() SSZType {
+	if info == nil {
+		return 0
+	}
+	return info.sszType
+}
+
+func (info *sszInfo) GoType() reflect.Type {
+	if info == nil {
+		return nil
+	}
+	return info.typ
+}
+
 func (info *sszInfo) FixedSize() uint64 {
 	if info == nil {
 		return 0
 	}
 	return info.fixedSize
+}
+
+func (info *SSZInfo) IsVariable() bool {
+	if info == nil {
+		return false
+	}
+	return info.isVariable
 }
 
 func (info *sszInfo) Size() uint64 {
