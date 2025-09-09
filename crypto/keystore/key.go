@@ -50,7 +50,7 @@ type Key struct {
 
 	PublicKey bls.PublicKey // Represents the public key of the user.
 
-	SecretKey bls.SecretKey // Represents the private key of the user.
+	SecretKey bls.SecretKey `json:"-"` // Represents the private key of the user.
 }
 
 type keyStore interface {
@@ -65,6 +65,11 @@ type keyStore interface {
 type plainKeyJSON struct {
 	PublicKey string `json:"address"`
 	SecretKey string `json:"privatekey"`
+	ID        string `json:"id"`
+}
+
+type publicKeyOnlyJSON struct {
+	PublicKey string `json:"address"`
 	ID        string `json:"id"`
 }
 
@@ -89,9 +94,8 @@ type cipherparamsJSON struct {
 
 // MarshalJSON marshals a key struct into a JSON blob.
 func (k *Key) MarshalJSON() (j []byte, err error) {
-	jStruct := plainKeyJSON{
+	jStruct := publicKeyOnlyJSON{
 		hex.EncodeToString(k.PublicKey.Marshal()),
-		hex.EncodeToString(k.SecretKey.Marshal()),
 		k.ID.String(),
 	}
 	j, err = json.Marshal(jStruct)
@@ -100,32 +104,37 @@ func (k *Key) MarshalJSON() (j []byte, err error) {
 
 // UnmarshalJSON unmarshals a blob into a key struct.
 func (k *Key) UnmarshalJSON(j []byte) (err error) {
-	keyJSON := new(plainKeyJSON)
-	err = json.Unmarshal(j, &keyJSON)
-	if err != nil {
-		return err
+	var idStr string
+	var pubStr string
+
+	// Try to unmarshal the public-only form first
+	var pkOnly publicKeyOnlyJSON
+	if err = json.Unmarshal(j, &pkOnly); err == nil && pkOnly.PublicKey != "" {
+		idStr = pkOnly.ID
+		pubStr = pkOnly.PublicKey
+	} else {
+		// Fallback to legacy plain form that included private key; ignore the secret key
+		var legacy plainKeyJSON
+		if err2 := json.Unmarshal(j, &legacy); err2 != nil {
+			return err
+		}
+		idStr = legacy.ID
+		pubStr = legacy.PublicKey
 	}
 
 	u := new(uuid.UUID)
-	*u = uuid.Parse(keyJSON.ID)
+	*u = uuid.Parse(idStr)
 	k.ID = *u
-	pubkey, err := hex.DecodeString(keyJSON.PublicKey)
-	if err != nil {
-		return err
-	}
-	seckey, err := hex.DecodeString(keyJSON.SecretKey)
+	pubkeyBytes, err := hex.DecodeString(pubStr)
 	if err != nil {
 		return err
 	}
 
-	k.PublicKey, err = bls.PublicKeyFromBytes(pubkey)
+	k.PublicKey, err = bls.PublicKeyFromBytes(pubkeyBytes)
 	if err != nil {
 		return err
 	}
-	k.SecretKey, err = bls.SecretKeyFromBytes(seckey)
-	if err != nil {
-		return err
-	}
+	// Intentionally do not accept or set SecretKey from JSON
 	return nil
 }
 
