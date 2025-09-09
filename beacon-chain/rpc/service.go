@@ -145,7 +145,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		log.WithError(err).Errorf("Could not listen to port in Start() %s", address)
 	}
 	s.listener = lis
-	log.WithField("address", address).Info("beacon-chain gRPC server listening")
+	log.WithField("address", address).Info("Beacon chain gRPC server listening")
 
 	opts := []grpc.ServerOption{
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),

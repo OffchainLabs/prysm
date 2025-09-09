@@ -42,7 +42,7 @@ func TestLifecycle_OK(t *testing.T) {
 
 	rpcService.Start()
 
-	require.LogsContain(t, hook, "beacon-chain gRPC server listening")
+	require.LogsContain(t, hook, "Beacon chain gRPC server listening")
 	assert.NoError(t, rpcService.Stop())
 	require.LogsContain(t, hook, "Completed graceful stop of beacon-chain gRPC server")
 }
@@ -85,7 +85,7 @@ func TestRPC_InsecureEndpoint(t *testing.T) {
 
 	rpcService.Start()
 
-	require.LogsContain(t, hook, "beacon-chain gRPC server listening")
+	require.LogsContain(t, hook, "Beacon chain gRPC server listening")
 	require.LogsContain(t, hook, "You are using an insecure gRPC server")
 	assert.NoError(t, rpcService.Stop())
 }
