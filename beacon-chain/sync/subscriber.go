@@ -175,8 +175,8 @@ func (s *Service) activeSyncSubnetIndices(currentSlot primitives.Slot) map[uint6
 // This is useful in tests where we can set spawner to a sync.WaitGroup and
 // wait for the spawned goroutines to finish.
 func (s *Service) spawn(f func()) {
-	if s.spawner != nil {
-		s.spawner(f)
+	if s.subscriptionSpawner != nil {
+		s.subscriptionSpawner(f)
 	} else {
 		go f()
 	}
