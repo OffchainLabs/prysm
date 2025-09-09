@@ -12,6 +12,12 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
+const (
+	stateSuffix     = "_s"
+	validatorSuffix = "_v"
+	balancesSuffix  = "_b"
+)
+
 /*
 	We use a level-based approach to save state diffs. The levels are 0-6, where each level corresponds to an exponent of 2 (exponents[lvl]).
 	The data at level 0 is saved every 2**exponent[0] slots and always contains a full state snapshot that is used as a base for the delta saved at other levels.
@@ -94,15 +100,15 @@ func (s *Store) saveHdiff(lvl int, anchor, st state.ReadOnlyBeaconState) error {
 		if bucket == nil {
 			return bolt.ErrBucketNotFound
 		}
-		buf := append(key, "_s"...)
+		buf := append(key, stateSuffix...)
 		if err := bucket.Put(buf, diff.StateDiff); err != nil {
 			return err
 		}
-		buf = append(key, "_v"...)
+		buf = append(key, validatorSuffix...)
 		if err := bucket.Put(buf, diff.ValidatorDiffs); err != nil {
 			return err
 		}
-		buf = append(key, "_b"...)
+		buf = append(key, balancesSuffix...)
 		if err := bucket.Put(buf, diff.BalancesDiff); err != nil {
 			return err
 		}
@@ -173,17 +179,17 @@ func (s *Store) getDiff(lvl int, slot uint64) (hdiff.HdiffBytes, error) {
 		if bucket == nil {
 			return bolt.ErrBucketNotFound
 		}
-		buf := append(key, "_s"...)
+		buf := append(key, stateSuffix...)
 		stateDiff = bucket.Get(buf)
 		if stateDiff == nil {
 			return errors.New("state diff not found")
 		}
-		buf = append(key, "_v"...)
+		buf = append(key, validatorSuffix...)
 		validatorDiff = bucket.Get(buf)
 		if validatorDiff == nil {
 			return errors.New("validator diff not found")
 		}
-		buf = append(key, "_b"...)
+		buf = append(key, balancesSuffix...)
 		balancesDiff = bucket.Get(buf)
 		if balancesDiff == nil {
 			return errors.New("balances diff not found")
