@@ -1,2 +1,2 @@
 ### Added 
-- Implement beacon API blob sidecar enpoint for Fulu.
+- Implement beacon API blob sidecar endpoint for Fulu.
