@@ -10,14 +10,14 @@ import (
 
 func TestParseSSZTag(t *testing.T) {
 	tests := []struct {
-		name             string
-		tag              string
-		wantIsVector     bool
-		wantIsList       bool
-		wantVectorLength uint64
-		wantListLimit    uint64
-		wantRemainingTag string
 		wantErr          bool
+		wantIsList       bool
+		wantIsVector     bool
+		wantListLimit    uint64
+		wantVectorLength uint64
+		wantRemainingTag string
+		tag              string
+		name             string
 	}{
 		// Vector tests
 		{
