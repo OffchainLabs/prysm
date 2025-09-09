@@ -18,32 +18,28 @@ const (
 )
 
 // SSZDimension holds parsed SSZ tag information for current dimension.
-//
-// NOTE: This struct stores raw string without parsing to uint64,
-// as it might have a wildcard ('?') indicating variable size.
+// Mutually exclusive fields indicate whether the dimension is a vector or a list.
 type SSZDimension struct {
-	SizeValue string // Current dimension for ssz-size
-	MaxValue  string // Current dimension for ssz-max
-	HasSize   bool
-	HasMax    bool
+	vectorLength *uint64
+	listLimit    *uint64
 }
 
 // ParseSSZTag parses SSZ-specific tags (like `ssz-max` and `ssz-size`)
-// and returns the first dimension and remaining tag.
+// and returns the first dimension and the remaining SSZ tags.
+// This function validates the tags and returns an error if they are malformed.
 func ParseSSZTag(tag *reflect.StructTag) (*SSZDimension, *reflect.StructTag, error) {
 	if tag == nil {
-		return nil, nil, nil
+		return nil, nil, errors.New("nil struct tag")
 	}
 
-	info := &SSZDimension{}
 	var newTagParts []string
+	var sizeStr, maxStr string
 
 	// Parse ssz-size tag
 	if sszSize := tag.Get(sszSizeTag); sszSize != "" {
 		dims := strings.Split(sszSize, ",")
-		if len(dims) > 0 && dims[0] != "" {
-			info.SizeValue = dims[0]
-			info.HasSize = true
+		if len(dims) > 0 {
+			sizeStr = dims[0]
 
 			if len(dims) > 1 {
 				remainingSize := strings.Join(dims[1:], ",")
@@ -55,9 +51,8 @@ func ParseSSZTag(tag *reflect.StructTag) (*SSZDimension, *reflect.StructTag, err
 	// Parse ssz-max tag
 	if sszMax := tag.Get(sszMaxTag); sszMax != "" {
 		dims := strings.Split(sszMax, ",")
-		if len(dims) > 0 && dims[0] != "" {
-			info.MaxValue = dims[0]
-			info.HasMax = true
+		if len(dims) > 0 {
+			maxStr = dims[0]
 
 			if len(dims) > 1 {
 				remainingMax := strings.Join(dims[1:], ",")
@@ -75,40 +70,61 @@ func ParseSSZTag(tag *reflect.StructTag) (*SSZDimension, *reflect.StructTag, err
 		newTag = &t
 	}
 
-	return info, newTag, nil
-}
+	// Parse the first dimension based on ssz-size and ssz-max rules.
+	// 1. If ssz-size is not specified (wildcard or empty), it must be a list.
+	if sizeStr == "?" || sizeStr == "" {
+		if maxStr == "?" {
+			return nil, nil, errors.New("ssz-size and ssz-max cannot both be '?'")
+		}
+		if maxStr == "" {
+			return nil, nil, errors.New("list requires ssz-max value")
+		}
 
-// ParseUint64 parses a string dimension value to uint64.
-func (info *SSZDimension) ParseUint64(value string) (uint64, error) {
-	if value == "" {
-		return 0, errors.New("empty dimension value")
+		limit, err := strconv.ParseUint(maxStr, 10, 64)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invalid ssz-max value: %w", err)
+		}
+		if limit == 0 {
+			return nil, nil, errors.New("ssz-max must be greater than 0")
+		}
+
+		return &SSZDimension{listLimit: &limit}, newTag, nil
 	}
-	return strconv.ParseUint(value, 10, 64)
+
+	// 2. If ssz-size is specified, it must be a vector.
+	length, err := strconv.ParseUint(sizeStr, 10, 64)
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid ssz-size value: %w", err)
+	}
+	if length == 0 {
+		return nil, nil, errors.New("ssz-size must be greater than 0")
+	}
+
+	return &SSZDimension{vectorLength: &length}, newTag, nil
 }
 
 // IsVector returns true if this dimension represents a vector.
-func (info *SSZDimension) IsVector() bool {
-	return info.HasSize && info.SizeValue != "" && info.SizeValue != "?"
+func (d *SSZDimension) IsVector() bool {
+	return d.vectorLength != nil
 }
 
 // IsList returns true if this dimension represents a list.
-// `ssz-size` can be a wildcard ('?') indicating variable size.
-func (info *SSZDimension) IsList() bool {
-	return info.HasMax && (!info.HasSize || info.SizeValue == "" || info.SizeValue == "?")
+func (d *SSZDimension) IsList() bool {
+	return d.listLimit != nil
 }
 
 // GetVectorLength returns the length for a vector in current dimension
-func (info *SSZDimension) GetVectorLength() (uint64, error) {
-	if !info.IsVector() {
+func (d *SSZDimension) GetVectorLength() (uint64, error) {
+	if !d.IsVector() {
 		return 0, errors.New("not a vector dimension")
 	}
-	return info.ParseUint64(info.SizeValue)
+	return *d.vectorLength, nil
 }
 
 // GetListLimit returns the limit for a list in current dimension
-func (info *SSZDimension) GetListLimit() (uint64, error) {
-	if !info.IsList() {
+func (d *SSZDimension) GetListLimit() (uint64, error) {
+	if !d.IsList() {
 		return 0, errors.New("not a list dimension")
 	}
-	return info.ParseUint64(info.MaxValue)
+	return *d.listLimit, nil
 }
