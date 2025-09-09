@@ -1,7 +1,6 @@
 package slashings
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
@@ -305,7 +304,7 @@ func TestPool_InsertAttesterSlashing(t *testing.T) {
 				}
 				var err error
 				for i := 0; i < len(tt.args.slashings); i++ {
-					err = p.InsertAttesterSlashing(context.Background(), beaconState, tt.args.slashings[i])
+					err = p.InsertAttesterSlashing(t.Context(), beaconState, tt.args.slashings[i])
 					if tt.fields.wantErr[i] {
 						assert.NotNil(t, err)
 					} else {
@@ -363,8 +362,8 @@ func TestPool_InsertAttesterSlashing_SigFailsVerify_ClearPool(t *testing.T) {
 	p := &Pool{
 		pendingAttesterSlashing: make([]*PendingAttesterSlashing, 0),
 	}
-	require.NoError(t, p.InsertAttesterSlashing(context.Background(), beaconState, slashings[0]))
-	err := p.InsertAttesterSlashing(context.Background(), beaconState, slashings[1])
+	require.NoError(t, p.InsertAttesterSlashing(t.Context(), beaconState, slashings[0]))
+	err := p.InsertAttesterSlashing(t.Context(), beaconState, slashings[1])
 	require.ErrorContains(t, "could not verify attester slashing", err, "Expected error when inserting slashing with bad sig")
 	assert.Equal(t, 1, len(p.pendingAttesterSlashing))
 }
@@ -572,7 +571,7 @@ func TestPool_PendingAttesterSlashings(t *testing.T) {
 			p := &Pool{
 				pendingAttesterSlashing: tt.fields.pending,
 			}
-			assert.DeepEqual(t, tt.want, p.PendingAttesterSlashings(context.Background(), beaconState, tt.fields.all))
+			assert.DeepEqual(t, tt.want, p.PendingAttesterSlashings(t.Context(), beaconState, tt.fields.all))
 		})
 	}
 }
@@ -636,7 +635,7 @@ func TestPool_PendingAttesterSlashings_AfterElectra(t *testing.T) {
 			p := &Pool{
 				pendingAttesterSlashing: tt.fields.pending,
 			}
-			assert.DeepEqual(t, tt.want, p.PendingAttesterSlashings(context.Background(), beaconState, tt.fields.all))
+			assert.DeepEqual(t, tt.want, p.PendingAttesterSlashings(t.Context(), beaconState, tt.fields.all))
 		})
 	}
 }
@@ -707,7 +706,7 @@ func TestPool_PendingAttesterSlashings_Slashed(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := &Pool{pendingAttesterSlashing: tt.fields.pending}
-			assert.DeepEqual(t, tt.want, p.PendingAttesterSlashings(context.Background(), beaconState, tt.fields.all /*noLimit*/))
+			assert.DeepEqual(t, tt.want, p.PendingAttesterSlashings(t.Context(), beaconState, tt.fields.all /*noLimit*/))
 		})
 	}
 }
@@ -735,5 +734,5 @@ func TestPool_PendingAttesterSlashings_NoDuplicates(t *testing.T) {
 	p := &Pool{
 		pendingAttesterSlashing: pendingSlashings,
 	}
-	assert.DeepEqual(t, slashings[0:2], p.PendingAttesterSlashings(context.Background(), beaconState, false /*noLimit*/))
+	assert.DeepEqual(t, slashings[0:2], p.PendingAttesterSlashings(t.Context(), beaconState, false /*noLimit*/))
 }

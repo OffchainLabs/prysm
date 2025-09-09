@@ -2,6 +2,7 @@ package interop
 
 import (
 	"context"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
@@ -24,7 +25,7 @@ import (
 var errUnsupportedVersion = errors.New("schema version not supported by PremineGenesisConfig")
 
 type PremineGenesisConfig struct {
-	GenesisTime     uint64
+	GenesisTime     time.Time
 	NVals           uint64
 	PregenesisCreds uint64
 	Version         int          // as in "github.com/OffchainLabs/prysm/v6/runtime/version"
@@ -49,9 +50,9 @@ func WithDepositData(dds []*ethpb.Deposit_Data, roots [][]byte) PremineGenesisOp
 }
 
 // NewPreminedGenesis creates a genesis BeaconState at the given fork version, suitable for using as an e2e genesis.
-func NewPreminedGenesis(ctx context.Context, t, nvals, pCreds uint64, version int, gb *types.Block, opts ...PremineGenesisOpt) (state.BeaconState, error) {
+func NewPreminedGenesis(ctx context.Context, genesis time.Time, nvals, pCreds uint64, version int, gb *types.Block, opts ...PremineGenesisOpt) (state.BeaconState, error) {
 	cfg := &PremineGenesisConfig{
-		GenesisTime:     t,
+		GenesisTime:     genesis,
 		NVals:           nvals,
 		PregenesisCreds: pCreds,
 		Version:         version,
@@ -160,7 +161,7 @@ func (s *PremineGenesisConfig) empty() (state.BeaconState, error) {
 			return nil, err
 		}
 	case version.Fulu:
-		e, err = state_native.InitializeFromProtoFulu(&ethpb.BeaconStateElectra{})
+		e, err = state_native.InitializeFromProtoFulu(&ethpb.BeaconStateFulu{})
 		if err != nil {
 			return nil, err
 		}

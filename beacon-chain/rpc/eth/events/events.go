@@ -37,7 +37,6 @@ import (
 )
 
 const DefaultEventFeedDepth = 1000
-const payloadAttributeTimeout = 2 * time.Second
 
 const (
 	InvalidTopic = "__invalid__"
@@ -73,6 +72,8 @@ const (
 	LightClientFinalityUpdateTopic = "light_client_finality_update"
 	// LightClientOptimisticUpdateTopic represents a new light client optimistic update event topic.
 	LightClientOptimisticUpdateTopic = "light_client_optimistic_update"
+	// DataColumnTopic represents a data column sidecar event topic
+	DataColumnTopic = "data_column_sidecar"
 )
 
 var (
@@ -106,6 +107,7 @@ var opsFeedEventTopics = map[feed.EventType]string{
 	operation.AttesterSlashingReceived:          AttesterSlashingTopic,
 	operation.ProposerSlashingReceived:          ProposerSlashingTopic,
 	operation.BlockGossipReceived:               BlockGossipTopic,
+	operation.DataColumnReceived:                DataColumnTopic,
 }
 
 var stateFeedEventTopics = map[feed.EventType]string{
@@ -462,6 +464,8 @@ func topicForEvent(event *feed.Event) string {
 		return BlockTopic
 	case payloadattribute.EventData:
 		return PayloadAttributesTopic
+	case *operation.DataColumnReceivedData:
+		return DataColumnTopic
 	default:
 		return InvalidTopic
 	}
@@ -495,6 +499,19 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 				Block: hexutil.Encode(blockRoot[:]),
 			}
 			return jsonMarshalReader(eventName, blk)
+		}, nil
+	case *operation.DataColumnReceivedData:
+		return func() io.Reader {
+			kzgCommitments := make([]string, len(v.KzgCommitments))
+			for i, kzgCommitment := range v.KzgCommitments {
+				kzgCommitments[i] = hexutil.Encode(kzgCommitment)
+			}
+			return jsonMarshalReader(eventName, &structs.DataColumnGossipEvent{
+				Slot:           fmt.Sprintf("%d", v.Slot),
+				Index:          fmt.Sprintf("%d", v.Index),
+				BlockRoot:      hexutil.Encode(v.BlockRoot[:]),
+				KzgCommitments: kzgCommitments,
+			})
 		}, nil
 	case *operation.AggregatedAttReceivedData:
 		switch att := v.Attestation.AggregateVal().(type) {
@@ -627,6 +644,7 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 }
 
 var errUnsupportedPayloadAttribute = errors.New("cannot compute payload attributes pre-Bellatrix")
+var errPayloadAttributeExpired = errors.New("skipping payload attribute event for past slot")
 
 func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnlyBeaconState, root [32]byte, proposer primitives.ValidatorIndex, timestamp uint64, randao []byte) (payloadattribute.Attributer, error) {
 	v := st.Version()
@@ -681,48 +699,48 @@ var zeroRoot [32]byte
 // needsFill allows tests to provide filled EventData values. An ordinary event data value fired by the blockchain package will have
 // all of the checked fields empty, so the logical short circuit should hit immediately.
 func needsFill(ev payloadattribute.EventData) bool {
-	return ev.HeadState == nil || ev.HeadState.IsNil() || ev.HeadState.LatestBlockHeader() == nil ||
-		ev.HeadBlock == nil || ev.HeadBlock.IsNil() ||
-		ev.HeadRoot == zeroRoot || len(ev.ParentBlockRoot) == 0 || len(ev.ParentBlockHash) == 0 ||
+	return len(ev.ParentBlockHash) == 0 ||
 		ev.Attributer == nil || ev.Attributer.IsEmpty()
 }
 
 func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventData) (payloadattribute.EventData, error) {
-	var err error
-
 	if !needsFill(ev) {
 		return ev, nil
 	}
-
-	ev.HeadState, err = s.HeadFetcher.HeadState(ctx)
-	if err != nil {
-		return ev, errors.Wrap(err, "could not get head state")
+	if ev.HeadBlock == nil || ev.HeadBlock.IsNil() {
+		return ev, errors.New("head block is nil")
+	}
+	if ev.HeadRoot == zeroRoot {
+		return ev, errors.New("head root is empty")
 	}
 
-	ev.HeadBlock, err = s.HeadFetcher.HeadBlock(ctx)
-	if err != nil {
-		return ev, errors.Wrap(err, "could not look up head block")
-	}
-	ev.HeadRoot, err = ev.HeadBlock.Block().HashTreeRoot()
-	if err != nil {
-		return ev, errors.Wrap(err, "could not compute head block root")
-	}
-	pr := ev.HeadBlock.Block().ParentRoot()
-	ev.ParentBlockRoot = pr[:]
+	var err error
+	var st state.BeaconState
 
-	hsr, err := ev.HeadState.LatestBlockHeader().HashTreeRoot()
-	if err != nil {
-		return ev, errors.Wrap(err, "could not compute latest block header root")
-	}
-
+	// If head is in the same block as the proposal slot, we can use the "read only" state cache.
 	pse := slots.ToEpoch(ev.ProposalSlot)
-	st := ev.HeadState
-	if slots.ToEpoch(st.Slot()) != pse {
-		st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, hsr[:], ev.ProposalSlot)
+	if slots.ToEpoch(ev.HeadBlock.Block().Slot()) == pse {
+		st = s.StateGen.StateByRootIfCachedNoCopy(ev.HeadRoot)
+	}
+	// If st is nil, we couldn't get the state from the cache, or it isn't in the same epoch.
+	if st == nil || st.IsNil() {
+		st, err = s.StateGen.StateByRoot(ctx, ev.HeadRoot)
 		if err != nil {
-			return ev, errors.Wrap(err, "could not run process blocks on head state into the proposal slot epoch")
+			return ev, errors.Wrap(err, "could not get head state")
+		}
+		// double check that we need to process_slots, just in case we got here via a hot state cache miss.
+		if slots.ToEpoch(st.Slot()) < pse {
+			start, err := slots.EpochStart(pse)
+			if err != nil {
+				return ev, errors.Wrap(err, "invalid state slot; could not compute epoch start")
+			}
+			st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, ev.HeadRoot[:], start)
+			if err != nil {
+				return ev, errors.Wrap(err, "could not run process blocks on head state into the proposal slot epoch")
+			}
 		}
 	}
+
 	ev.ProposerIndex, err = helpers.BeaconProposerIndexAtSlot(ctx, st, ev.ProposalSlot)
 	if err != nil {
 		return ev, errors.Wrap(err, "failed to compute proposer index")
@@ -739,18 +757,25 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 	ev.ParentBlockHash = payload.BlockHash()
 	ev.ParentBlockNumber = payload.BlockNumber()
 
-	t, err := slots.ToTime(st.GenesisTime(), ev.ProposalSlot)
+	t, err := slots.StartTime(st.GenesisTime(), ev.ProposalSlot)
 	if err != nil {
 		return ev, errors.Wrap(err, "could not get head state slot time")
 	}
-	ev.Attributer, err = s.computePayloadAttributes(ctx, st, hsr, ev.ProposerIndex, uint64(t.Unix()), randao)
+	ev.Attributer, err = s.computePayloadAttributes(ctx, st, ev.HeadRoot, ev.ProposerIndex, uint64(t.Unix()), randao)
 	return ev, err
 }
 
 // This event stream is intended to be used by builders and relays.
 // Parent fields are based on state at N_{current_slot}, while the rest of fields are based on state of N_{current_slot + 1}
 func (s *Server) payloadAttributesReader(ctx context.Context, ev payloadattribute.EventData) (lazyReader, error) {
-	ctx, cancel := context.WithTimeout(ctx, payloadAttributeTimeout)
+	deadline, err := slots.StartTime(s.ChainInfoFetcher.GenesisTime(), ev.ProposalSlot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine slot start time: %w", err)
+	}
+	if deadline.Before(time.Now()) {
+		return nil, errors.Wrapf(errPayloadAttributeExpired, "proposal slot time %d", deadline.Unix())
+	}
+	ctx, cancel := context.WithDeadline(ctx, deadline)
 	edc := make(chan asyncPayloadAttrData)
 	go func() {
 		d := asyncPayloadAttrData{}
@@ -772,7 +797,7 @@ func (s *Server) payloadAttributesReader(ctx context.Context, ev payloadattribut
 			ProposerIndex:     strconv.FormatUint(uint64(ev.ProposerIndex), 10),
 			ProposalSlot:      strconv.FormatUint(uint64(ev.ProposalSlot), 10),
 			ParentBlockNumber: strconv.FormatUint(ev.ParentBlockNumber, 10),
-			ParentBlockRoot:   hexutil.Encode(ev.ParentBlockRoot),
+			ParentBlockRoot:   hexutil.Encode(ev.HeadRoot[:]),
 			ParentBlockHash:   hexutil.Encode(ev.ParentBlockHash),
 			PayloadAttributes: attributesBytes,
 		})

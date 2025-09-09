@@ -54,7 +54,12 @@ func TestNodeClose_OK(t *testing.T) {
 	cmd.ValidatorMonitorIndicesFlag.Value.SetInt(1)
 	ctx, cancel := newCliContextWithCancel(&app, set)
 
-	node, err := New(ctx, cancel, WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)))
+	options := []Option{
+		WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)),
+		WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)),
+	}
+
+	node, err := New(ctx, cancel, options...)
 	require.NoError(t, err)
 
 	node.Close()
@@ -72,10 +77,16 @@ func TestNodeStart_Ok(t *testing.T) {
 	require.NoError(t, set.Set("suggested-fee-recipient", "0x6e35733c5af9B61374A128e6F85f553aF09ff89A"))
 
 	ctx, cancel := newCliContextWithCancel(&app, set)
-	node, err := New(ctx, cancel, WithBlockchainFlagOptions([]blockchain.Option{}),
+
+	options := []Option{
+		WithBlockchainFlagOptions([]blockchain.Option{}),
 		WithBuilderFlagOptions([]builder.Option{}),
 		WithExecutionChainOptions([]execution.Option{}),
-		WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)))
+		WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)),
+		WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)),
+	}
+
+	node, err := New(ctx, cancel, options...)
 	require.NoError(t, err)
 	node.services = &runtime.ServiceRegistry{}
 	go func() {
@@ -96,10 +107,16 @@ func TestNodeStart_SyncChecker(t *testing.T) {
 	require.NoError(t, set.Set("suggested-fee-recipient", "0x6e35733c5af9B61374A128e6F85f553aF09ff89A"))
 
 	ctx, cancel := newCliContextWithCancel(&app, set)
-	node, err := New(ctx, cancel, WithBlockchainFlagOptions([]blockchain.Option{}),
+
+	options := []Option{
+		WithBlockchainFlagOptions([]blockchain.Option{}),
 		WithBuilderFlagOptions([]builder.Option{}),
 		WithExecutionChainOptions([]execution.Option{}),
-		WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)))
+		WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)),
+		WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)),
+	}
+
+	node, err := New(ctx, cancel, options...)
 	require.NoError(t, err)
 	go func() {
 		node.Start()
@@ -128,10 +145,13 @@ func TestClearDB(t *testing.T) {
 	set.String("suggested-fee-recipient", "0x6e35733c5af9B61374A128e6F85f553aF09ff89A", "fee recipient")
 	require.NoError(t, set.Set("suggested-fee-recipient", "0x6e35733c5af9B61374A128e6F85f553aF09ff89A"))
 	context, cancel := newCliContextWithCancel(&app, set)
+
 	options := []Option{
 		WithExecutionChainOptions([]execution.Option{execution.WithHttpEndpoint(endpoint)}),
 		WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)),
+		WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)),
 	}
+
 	_, err = New(context, cancel, options...)
 	require.NoError(t, err)
 	require.LogsContain(t, hook, "Removing database")

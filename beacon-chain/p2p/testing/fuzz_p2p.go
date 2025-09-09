@@ -5,8 +5,12 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/control"
@@ -55,14 +59,19 @@ func (*FakeP2P) ENR() *enr.Record {
 	return new(enr.Record)
 }
 
+// NodeID returns the node id of the local peer.
+func (*FakeP2P) NodeID() enode.ID {
+	return enode.ID{}
+}
+
 // DiscoveryAddresses -- fake
 func (*FakeP2P) DiscoveryAddresses() ([]multiaddr.Multiaddr, error) {
 	return nil, nil
 }
 
-// FindPeersWithSubnet mocks the p2p func.
-func (*FakeP2P) FindPeersWithSubnet(_ context.Context, _ string, _ uint64, _ int) (bool, error) {
-	return false, nil
+// FindAndDialPeersWithSubnets mocks the p2p func.
+func (*FakeP2P) FindAndDialPeersWithSubnets(ctx context.Context, topicFormat string, digest [fieldparams.VersionLength]byte, minimumPeersPerSubnet int, subnets map[uint64]bool) error {
+	return nil
 }
 
 // RefreshPersistentSubnets mocks the p2p func.
@@ -148,6 +157,21 @@ func (*FakeP2P) BroadcastBlob(_ context.Context, _ uint64, _ *ethpb.BlobSidecar)
 	return nil
 }
 
+// BroadcastLightClientOptimisticUpdate -- fake.
+func (*FakeP2P) BroadcastLightClientOptimisticUpdate(_ context.Context, _ interfaces.LightClientOptimisticUpdate) error {
+	return nil
+}
+
+// BroadcastLightClientFinalityUpdate -- fake.
+func (*FakeP2P) BroadcastLightClientFinalityUpdate(_ context.Context, _ interfaces.LightClientFinalityUpdate) error {
+	return nil
+}
+
+// BroadcastDataColumnSidecar -- fake.
+func (*FakeP2P) BroadcastDataColumnSidecar(_ [fieldparams.RootLength]byte, _ uint64, _ *ethpb.DataColumnSidecar) error {
+	return nil
+}
+
 // InterceptPeerDial -- fake.
 func (*FakeP2P) InterceptPeerDial(peer.ID) (allow bool) {
 	return true
@@ -171,4 +195,24 @@ func (*FakeP2P) InterceptSecured(network.Direction, peer.ID, network.ConnMultiad
 // InterceptUpgraded -- fake.
 func (*FakeP2P) InterceptUpgraded(network.Conn) (allow bool, reason control.DisconnectReason) {
 	return true, 0
+}
+
+// EarliestAvailableSlot -- fake.
+func (*FakeP2P) EarliestAvailableSlot() (primitives.Slot, error) {
+	return 0, nil
+}
+
+// CustodyGroupCount -- fake.
+func (*FakeP2P) CustodyGroupCount() (uint64, error) {
+	return 0, nil
+}
+
+// UpdateCustodyInfo -- fake.
+func (s *FakeP2P) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
+	return earliestAvailableSlot, custodyGroupCount, nil
+}
+
+// CustodyGroupCountFromPeer -- fake.
+func (*FakeP2P) CustodyGroupCountFromPeer(peer.ID) uint64 {
+	return 0
 }

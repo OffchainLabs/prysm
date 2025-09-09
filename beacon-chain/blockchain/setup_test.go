@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/async/event"
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
@@ -20,10 +21,16 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/blstoexec"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	p2pTesting "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -46,6 +53,12 @@ type mockBroadcaster struct {
 	broadcastCalled bool
 }
 
+type mockAccessor struct {
+	mockBroadcaster
+	mockCustodyManager
+	p2pTesting.MockPeerManager
+}
+
 func (mb *mockBroadcaster) Broadcast(_ context.Context, _ proto.Message) error {
 	mb.broadcastCalled = true
 	return nil
@@ -66,10 +79,62 @@ func (mb *mockBroadcaster) BroadcastBlob(_ context.Context, _ uint64, _ *ethpb.B
 	return nil
 }
 
+func (mb *mockBroadcaster) BroadcastLightClientOptimisticUpdate(_ context.Context, _ interfaces.LightClientOptimisticUpdate) error {
+	mb.broadcastCalled = true
+	return nil
+}
+
+func (mb *mockBroadcaster) BroadcastLightClientFinalityUpdate(_ context.Context, _ interfaces.LightClientFinalityUpdate) error {
+	mb.broadcastCalled = true
+	return nil
+}
+
+func (mb *mockBroadcaster) BroadcastDataColumnSidecar(_ [fieldparams.RootLength]byte, _ uint64, _ *ethpb.DataColumnSidecar) error {
+	mb.broadcastCalled = true
+	return nil
+}
+
 func (mb *mockBroadcaster) BroadcastBLSChanges(_ context.Context, _ []*ethpb.SignedBLSToExecutionChange) {
 }
 
 var _ p2p.Broadcaster = (*mockBroadcaster)(nil)
+
+// mockCustodyManager is a mock implementation of p2p.CustodyManager
+type mockCustodyManager struct {
+	mut                   sync.RWMutex
+	earliestAvailableSlot primitives.Slot
+	custodyGroupCount     uint64
+}
+
+func (dch *mockCustodyManager) EarliestAvailableSlot() (primitives.Slot, error) {
+	dch.mut.RLock()
+	defer dch.mut.RUnlock()
+
+	return dch.earliestAvailableSlot, nil
+}
+
+func (dch *mockCustodyManager) CustodyGroupCount() (uint64, error) {
+	dch.mut.RLock()
+	defer dch.mut.RUnlock()
+
+	return dch.custodyGroupCount, nil
+}
+
+func (dch *mockCustodyManager) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
+	dch.mut.Lock()
+	defer dch.mut.Unlock()
+
+	dch.earliestAvailableSlot = earliestAvailableSlot
+	dch.custodyGroupCount = custodyGroupCount
+
+	return earliestAvailableSlot, custodyGroupCount, nil
+}
+
+func (dch *mockCustodyManager) CustodyGroupCountFromPeer(peer.ID) uint64 {
+	return 0
+}
+
+var _ p2p.CustodyManager = (*mockCustodyManager)(nil)
 
 type testServiceRequirements struct {
 	ctx     context.Context
@@ -85,9 +150,11 @@ type testServiceRequirements struct {
 }
 
 func minimalTestService(t *testing.T, opts ...Option) (*Service, *testServiceRequirements) {
-	ctx := context.Background()
+	ctx := t.Context()
+	genesis := time.Now().Add(-1 * 4 * time.Duration(params.BeaconConfig().SlotsPerEpoch*primitives.Slot(params.BeaconConfig().SecondsPerSlot)) * time.Second) // Genesis was 4 epochs ago.
 	beaconDB := testDB.SetupDB(t)
 	fcs := doublylinkedtree.New()
+	fcs.SetGenesisTime(genesis)
 	sg := stategen.New(beaconDB, fcs)
 	notif := &mockBeaconNode{}
 	fcs.SetBalancesByRooter(sg.ActiveNonSlashedBalancesByRoot)
@@ -121,9 +188,12 @@ func minimalTestService(t *testing.T, opts ...Option) (*Service, *testServiceReq
 		WithDepositCache(dc),
 		WithTrackedValidatorsCache(cache.NewTrackedValidatorsCache()),
 		WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)),
+		WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)),
 		WithSyncChecker(mock.MockChecker{}),
 		WithExecutionEngineCaller(&mockExecution.EngineClient{}),
+		WithP2PBroadcaster(&mockAccessor{}),
 		WithLightClientStore(&lightclient.Store{}),
+		WithGenesisTime(genesis),
 	}
 	// append the variadic opts so they override the defaults by being processed afterwards
 	opts = append(defOpts, opts...)

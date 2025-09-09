@@ -303,7 +303,7 @@ var stateTransitionCommand = &cli.Command{
 
 func main() {
 	customFormatter := new(prefixed.TextFormatter)
-	customFormatter.TimestampFormat = time.DateTime
+	customFormatter.TimestampFormat = "2006-01-02 15:04:05.00"
 	customFormatter.FullTimestamp = true
 	log.SetFormatter(customFormatter)
 	app := cli.App{}
@@ -393,7 +393,7 @@ func benchmarkHash(sszPath string, sszType string) {
 		runtime.ReadMemStats(stat)
 		root, err := stateTrieState.HashTreeRoot(context.Background())
 		if err != nil {
-			log.Fatal("couldn't hash")
+			log.Fatal("Couldn't hash")
 		}
 		newStat := &runtime.MemStats{}
 		runtime.ReadMemStats(newStat)

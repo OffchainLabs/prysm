@@ -26,8 +26,8 @@ option java_package = "org.ethereum.eth.v1alpha1";
 option php_namespace = "Ethereum\\Eth\\v1alpha1";
 
 message DataColumnSidecar {
-  uint64 column_index = 1;
-  repeated bytes data_column = 2 [
+  uint64 index = 1;
+  repeated bytes column = 2 [
     (ethereum.eth.ext.ssz_size) = "?,bytes_per_cell.size",
     (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
   ];
@@ -35,7 +35,7 @@ message DataColumnSidecar {
     (ethereum.eth.ext.ssz_size) = "?,48",
     (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
   ];
-  repeated bytes kzg_proof = 4 [
+  repeated bytes kzg_proofs = 4 [
     (ethereum.eth.ext.ssz_size) = "?,48",
     (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
   ];
@@ -45,7 +45,7 @@ message DataColumnSidecar {
             "kzg_commitments_inclusion_proof_depth.size,32" ];
 }
 
-message DataColumnIdentifier {
+message DataColumnsByRootIdentifier {
   bytes block_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
-  uint64 column_index = 2;
+  repeated uint64 columns = 2  [ (ethereum.eth.ext.ssz_max) = "128" ];
 }

@@ -136,12 +136,12 @@ var appHelpFlagGroups = []flagGroup{
 	{
 		Name: "misc",
 		Flags: []cli.Flag{
-			flags.EnableWebFlag,
 			flags.DisablePenaltyRewardLogFlag,
 			flags.DisableAccountMetricsFlag,
 			flags.EnableDistributed,
 			flags.AuthTokenPathFlag,
 			flags.DisableDutiesPolling,
+			flags.MaxHealthChecksFlag,
 		},
 	},
 	{

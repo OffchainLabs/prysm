@@ -7,7 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -78,6 +78,12 @@ type optimisticUpdateAltair struct {
 	attestedHeader interfaces.LightClientHeader
 }
 
+// NewEmptyOptimisticUpdateAltair normally should never be called and NewOptimisticUpdateFromUpdate should be used instead.
+// This function exists only for scenarios where an empty struct is required.
+func NewEmptyOptimisticUpdateAltair() interfaces.LightClientOptimisticUpdate {
+	return &optimisticUpdateAltair{}
+}
+
 func (u *optimisticUpdateAltair) IsNil() bool {
 	return u == nil || u.p == nil
 }
@@ -133,7 +139,7 @@ func (u *optimisticUpdateAltair) Proto() proto.Message {
 }
 
 func (u *optimisticUpdateAltair) Version() int {
-	return version.Altair
+	return slots.ToForkVersion(u.attestedHeader.Beacon().Slot)
 }
 
 func (u *optimisticUpdateAltair) AttestedHeader() interfaces.LightClientHeader {
@@ -154,6 +160,12 @@ func (u *optimisticUpdateAltair) SignatureSlot() primitives.Slot {
 type optimisticUpdateCapella struct {
 	p              *pb.LightClientOptimisticUpdateCapella
 	attestedHeader interfaces.LightClientHeader
+}
+
+// NewEmptyOptimisticUpdateCapella normally should never be called and NewOptimisticUpdateFromUpdate should be used instead.
+// This function exists only for scenarios where an empty struct is required.
+func NewEmptyOptimisticUpdateCapella() interfaces.LightClientOptimisticUpdate {
+	return &optimisticUpdateCapella{}
 }
 
 func (u *optimisticUpdateCapella) IsNil() bool {
@@ -211,7 +223,7 @@ func (u *optimisticUpdateCapella) Proto() proto.Message {
 }
 
 func (u *optimisticUpdateCapella) Version() int {
-	return version.Capella
+	return slots.ToForkVersion(u.attestedHeader.Beacon().Slot)
 }
 
 func (u *optimisticUpdateCapella) AttestedHeader() interfaces.LightClientHeader {
@@ -232,6 +244,12 @@ func (u *optimisticUpdateCapella) SignatureSlot() primitives.Slot {
 type optimisticUpdateDeneb struct {
 	p              *pb.LightClientOptimisticUpdateDeneb
 	attestedHeader interfaces.LightClientHeader
+}
+
+// NewEmptyOptimisticUpdateDeneb normally should never be called and NewOptimisticUpdateFromUpdate should be used instead.
+// This function exists only for scenarios where an empty struct is required.
+func NewEmptyOptimisticUpdateDeneb() interfaces.LightClientOptimisticUpdate {
+	return &optimisticUpdateDeneb{}
 }
 
 func (u *optimisticUpdateDeneb) IsNil() bool {
@@ -289,7 +307,7 @@ func (u *optimisticUpdateDeneb) Proto() proto.Message {
 }
 
 func (u *optimisticUpdateDeneb) Version() int {
-	return version.Deneb
+	return slots.ToForkVersion(u.attestedHeader.Beacon().Slot)
 }
 
 func (u *optimisticUpdateDeneb) AttestedHeader() interfaces.LightClientHeader {

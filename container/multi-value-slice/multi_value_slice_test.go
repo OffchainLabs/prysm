@@ -476,6 +476,20 @@ func TestFragmentation_IndividualAndAppendedReferences(t *testing.T) {
 	assert.Equal(t, true, s.IsFragmented())
 }
 
+func TestNil(t *testing.T) {
+	obj := &testObject{}
+
+	s := &Slice[int]{}
+	s.Init(nil)
+	assert.Equal(t, 0, s.Len(obj))
+	assert.DeepEqual(t, []int{}, s.Value(obj))
+	_, err := s.At(obj, 0)
+	assert.NotNil(t, err)
+	s.Append(obj, 1)
+	assert.Equal(t, 1, s.Len(obj))
+	assert.DeepEqual(t, []int{1}, s.Value(obj))
+}
+
 // Share the slice between 2 objects.
 // Index 0: Shared value
 // Index 1: Different individual value

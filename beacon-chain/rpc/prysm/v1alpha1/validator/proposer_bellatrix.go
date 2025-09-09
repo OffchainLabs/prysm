@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"strings"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/api/client/builder"
@@ -19,7 +18,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -54,7 +52,7 @@ const blockBuilderTimeout = 1 * time.Second
 const gasLimitAdjustmentFactor = 1024
 
 // Sets the execution data for the block. Execution data can come from local EL client or remote builder depends on validator registration and circuit breaker conditions.
-func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, local *blocks.GetPayloadResponse, bid builder.Bid, builderBoostFactor primitives.Gwei) (primitives.Wei, *enginev1.BlobsBundle, error) {
+func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, local *blocks.GetPayloadResponse, bid builder.Bid, builderBoostFactor primitives.Gwei) (primitives.Wei, enginev1.BlobsBundler, error) {
 	_, span := trace.StartSpan(ctx, "ProposerServer.setExecutionData")
 	defer span.End()
 
@@ -69,13 +67,13 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 
 	// Use local payload if builder payload is nil.
 	if bid == nil {
-		return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
+		return local.Bid, local.BlobsBundler, setLocalExecution(blk, local)
 	}
 
 	builderPayload, err := bid.Header()
 	if err != nil {
 		log.WithError(err).Warn("Proposer: failed to retrieve header from BuilderBid")
-		return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
+		return local.Bid, local.BlobsBundler, setLocalExecution(blk, local)
 	}
 
 	switch {
@@ -84,7 +82,7 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 		if err != nil {
 			tracing.AnnotateError(span, err)
 			log.WithError(err).Warn("Proposer: failed to match withdrawals root")
-			return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
+			return local.Bid, local.BlobsBundler, setLocalExecution(blk, local)
 		}
 
 		// Compare payload values between local and builder. Default to the local value if it is higher.
@@ -97,7 +95,7 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 				"minBuilderBid":    minBid,
 				"builderGweiValue": builderValueGwei,
 			}).Warn("Proposer: using local execution payload because min bid not attained")
-			return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
+			return local.Bid, local.BlobsBundler, setLocalExecution(blk, local)
 		}
 
 		// Use local block if min difference is not attained
@@ -108,7 +106,7 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 				"minBidDiff":       minDiff,
 				"builderGweiValue": builderValueGwei,
 			}).Warn("Proposer: using local execution payload because min difference with local value was not attained")
-			return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
+			return local.Bid, local.BlobsBundler, setLocalExecution(blk, local)
 		}
 
 		// Use builder payload if the following in true:
@@ -132,8 +130,8 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 			if bid.Version() >= version.Deneb {
 				bidDeneb, ok := bid.(builder.BidDeneb)
 				if !ok {
-					log.Warnf("bid type %T does not implement builder.BidDeneb", bid)
-					return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
+					log.Warnf("Bid type %T does not implement builder.BidDeneb", bid)
+					return local.Bid, local.BlobsBundler, setLocalExecution(blk, local)
 				} else {
 					builderKzgCommitments = bidDeneb.BlobKzgCommitments()
 				}
@@ -143,15 +141,15 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 			if bid.Version() >= version.Electra {
 				bidElectra, ok := bid.(builder.BidElectra)
 				if !ok {
-					log.Warnf("bid type %T does not implement builder.BidElectra", bid)
-					return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
+					log.Warnf("Bid type %T does not implement builder.BidElectra", bid)
+					return local.Bid, local.BlobsBundler, setLocalExecution(blk, local)
 				} else {
 					executionRequests = bidElectra.ExecutionRequests()
 				}
 			}
 			if err := setBuilderExecution(blk, builderPayload, builderKzgCommitments, executionRequests); err != nil {
 				log.WithError(err).Warn("Proposer: failed to set builder payload")
-				return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
+				return local.Bid, local.BlobsBundler, setLocalExecution(blk, local)
 			} else {
 				return bid.Value(), nil, nil
 			}
@@ -171,11 +169,11 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 			trace.Int64Attribute("builderGweiValue", int64(builderValueGwei)),     // lint:ignore uintcast -- This is OK for tracing.
 			trace.Int64Attribute("builderBoostFactor", int64(builderBoostFactor)), // lint:ignore uintcast -- This is OK for tracing.
 		)
-		return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
+		return local.Bid, local.BlobsBundler, setLocalExecution(blk, local)
 	default: // Bellatrix case.
 		if err := setBuilderExecution(blk, builderPayload, nil, nil); err != nil {
 			log.WithError(err).Warn("Proposer: failed to set builder payload")
-			return local.Bid, local.BlobsBundle, setLocalExecution(blk, local)
+			return local.Bid, local.BlobsBundler, setLocalExecution(blk, local)
 		} else {
 			return bid.Value(), nil, nil
 		}
@@ -220,16 +218,12 @@ func (vs *Server) getPayloadHeaderFromBuilder(
 	if signedBid == nil || signedBid.IsNil() {
 		return nil, errors.New("builder returned nil bid")
 	}
-	fork, err := forks.Fork(slots.ToEpoch(slot))
-	if err != nil {
-		return nil, errors.Wrap(err, "unable to get fork information")
-	}
-	forkName, ok := params.BeaconConfig().ForkVersionNames[bytesutil.ToBytes4(fork.CurrentVersion)]
-	if !ok {
-		return nil, errors.New("unable to find current fork in schedule")
-	}
-	if !strings.EqualFold(version.String(signedBid.Version()), forkName) {
-		return nil, fmt.Errorf("builder bid response version: %d is different from head block version: %d for epoch %d", signedBid.Version(), b.Version(), slots.ToEpoch(slot))
+	bidVersion := signedBid.Version()
+	epoch := slots.ToEpoch(slot)
+	entry := params.GetNetworkScheduleEntry(epoch)
+	forkVersion := entry.VersionEnum
+	if !isVersionCompatible(bidVersion, forkVersion) {
+		return nil, fmt.Errorf("builder bid response version: %d is not compatible with expected version: %d for epoch %d", bidVersion, forkVersion, epoch)
 	}
 
 	bid, err := signedBid.Message()
@@ -271,7 +265,7 @@ func (vs *Server) getPayloadHeaderFromBuilder(
 		}
 	}
 
-	t, err := slots.ToTime(uint64(vs.TimeFetcher.GenesisTime().Unix()), slot)
+	t, err := slots.StartTime(vs.TimeFetcher.GenesisTime(), slot)
 	if err != nil {
 		return nil, err
 	}
@@ -375,8 +369,8 @@ func matchingWithdrawalsRoot(local, builder interfaces.ExecutionData) (bool, err
 // It delegates to setExecution for the actual work.
 func setLocalExecution(blk interfaces.SignedBeaconBlock, local *blocks.GetPayloadResponse) error {
 	var kzgCommitments [][]byte
-	if local.BlobsBundle != nil {
-		kzgCommitments = local.BlobsBundle.KzgCommitments
+	if local.BlobsBundler != nil {
+		kzgCommitments = local.BlobsBundler.GetKzgCommitments()
 	}
 	if local.ExecutionRequests != nil {
 		if err := blk.SetExecutionRequests(local.ExecutionRequests); err != nil {
@@ -465,4 +459,20 @@ func expectedGasLimit(parentGasLimit, proposerGasLimit uint64) uint64 {
 		return parentGasLimit - maxGasLimitDiff
 	}
 	return proposerGasLimit
+}
+
+// isVersionCompatible checks if a builder bid version is compatible with the head block version.
+func isVersionCompatible(bidVersion, headBlockVersion int) bool {
+	// Exact version match is always compatible
+	if bidVersion == headBlockVersion {
+		return true
+	}
+
+	// Allow Electra bids for Fulu blocks - they have compatible payload formats
+	if bidVersion == version.Electra && headBlockVersion == version.Fulu {
+		return true
+	}
+
+	// For all other cases, require exact version match
+	return false
 }

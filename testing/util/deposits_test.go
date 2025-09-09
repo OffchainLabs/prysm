@@ -2,7 +2,6 @@ package util
 
 import (
 	"bytes"
-	"context"
 	"encoding/hex"
 	"testing"
 
@@ -255,7 +254,7 @@ func TestSetupInitialDeposits_1024Entries_PartialDeposits(t *testing.T) {
 func TestDeterministicGenesisState_100Validators(t *testing.T) {
 	validatorCount := uint64(100)
 	beaconState, privKeys := DeterministicGenesisState(t, validatorCount)
-	activeValidators, err := helpers.ActiveValidatorCount(context.Background(), beaconState, 0)
+	activeValidators, err := helpers.ActiveValidatorCount(t.Context(), beaconState, 0)
 	require.NoError(t, err)
 
 	// lint:ignore uintcast -- test code

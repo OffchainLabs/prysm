@@ -7,10 +7,10 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/crypto/hash"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/golang/snappy"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
@@ -18,28 +18,27 @@ import (
 
 func TestMsgID_HashesCorrectly(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	genesisValidatorsRoot := bytesutil.PadTo([]byte{'A'}, 32)
-	d, err := forks.CreateForkDigest(time.Now(), genesisValidatorsRoot)
-	assert.NoError(t, err)
+	clock := startup.NewClock(time.Now(), bytesutil.ToBytes32([]byte{'A'}))
+	valRoot := clock.GenesisValidatorsRoot()
+	d := params.ForkDigest(clock.CurrentEpoch())
 	tpc := fmt.Sprintf(p2p.BlockSubnetTopicFormat, d)
 	invalidSnappy := [32]byte{'J', 'U', 'N', 'K'}
 	pMsg := &pubsubpb.Message{Data: invalidSnappy[:], Topic: &tpc}
 	hashedData := hash.Hash(append(params.BeaconConfig().MessageDomainInvalidSnappy[:], pMsg.Data...))
 	msgID := string(hashedData[:20])
-	assert.Equal(t, msgID, p2p.MsgID(genesisValidatorsRoot, pMsg), "Got incorrect msg id")
+	assert.Equal(t, msgID, p2p.MsgID(valRoot[:], pMsg), "Got incorrect msg id")
 
 	validObj := [32]byte{'v', 'a', 'l', 'i', 'd'}
 	enc := snappy.Encode(nil, validObj[:])
 	nMsg := &pubsubpb.Message{Data: enc, Topic: &tpc}
 	hashedData = hash.Hash(append(params.BeaconConfig().MessageDomainValidSnappy[:], validObj[:]...))
 	msgID = string(hashedData[:20])
-	assert.Equal(t, msgID, p2p.MsgID(genesisValidatorsRoot, nMsg), "Got incorrect msg id")
+	assert.Equal(t, msgID, p2p.MsgID(valRoot[:], nMsg), "Got incorrect msg id")
 }
 
 func TestMessageIDFunction_HashesCorrectlyAltair(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	genesisValidatorsRoot := bytesutil.PadTo([]byte{'A'}, 32)
-	d, err := signing.ComputeForkDigest(params.BeaconConfig().AltairForkVersion, genesisValidatorsRoot)
+	d, err := signing.ComputeForkDigest(params.BeaconConfig().AltairForkVersion, params.BeaconConfig().GenesisValidatorsRoot[:])
 	assert.NoError(t, err)
 	tpc := fmt.Sprintf(p2p.BlockSubnetTopicFormat, d)
 	topicLen := uint64(len(tpc))
@@ -52,7 +51,7 @@ func TestMessageIDFunction_HashesCorrectlyAltair(t *testing.T) {
 	combinedObj = append(combinedObj, pMsg.Data...)
 	hashedData := hash.Hash(combinedObj)
 	msgID := string(hashedData[:20])
-	assert.Equal(t, msgID, p2p.MsgID(genesisValidatorsRoot, pMsg), "Got incorrect msg id")
+	assert.Equal(t, msgID, p2p.MsgID(params.BeaconConfig().GenesisValidatorsRoot[:], pMsg), "Got incorrect msg id")
 
 	validObj := [32]byte{'v', 'a', 'l', 'i', 'd'}
 	enc := snappy.Encode(nil, validObj[:])
@@ -63,13 +62,12 @@ func TestMessageIDFunction_HashesCorrectlyAltair(t *testing.T) {
 	combinedObj = append(combinedObj, validObj[:]...)
 	hashedData = hash.Hash(combinedObj)
 	msgID = string(hashedData[:20])
-	assert.Equal(t, msgID, p2p.MsgID(genesisValidatorsRoot, nMsg), "Got incorrect msg id")
+	assert.Equal(t, msgID, p2p.MsgID(params.BeaconConfig().GenesisValidatorsRoot[:], nMsg), "Got incorrect msg id")
 }
 
 func TestMessageIDFunction_HashesCorrectlyBellatrix(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	genesisValidatorsRoot := bytesutil.PadTo([]byte{'A'}, 32)
-	d, err := signing.ComputeForkDigest(params.BeaconConfig().BellatrixForkVersion, genesisValidatorsRoot)
+	d, err := signing.ComputeForkDigest(params.BeaconConfig().BellatrixForkVersion, params.BeaconConfig().GenesisValidatorsRoot[:])
 	assert.NoError(t, err)
 	tpc := fmt.Sprintf(p2p.BlockSubnetTopicFormat, d)
 	topicLen := uint64(len(tpc))
@@ -82,7 +80,7 @@ func TestMessageIDFunction_HashesCorrectlyBellatrix(t *testing.T) {
 	combinedObj = append(combinedObj, pMsg.Data...)
 	hashedData := hash.Hash(combinedObj)
 	msgID := string(hashedData[:20])
-	assert.Equal(t, msgID, p2p.MsgID(genesisValidatorsRoot, pMsg), "Got incorrect msg id")
+	assert.Equal(t, msgID, p2p.MsgID(params.BeaconConfig().GenesisValidatorsRoot[:], pMsg), "Got incorrect msg id")
 
 	validObj := [32]byte{'v', 'a', 'l', 'i', 'd'}
 	enc := snappy.Encode(nil, validObj[:])
@@ -93,7 +91,7 @@ func TestMessageIDFunction_HashesCorrectlyBellatrix(t *testing.T) {
 	combinedObj = append(combinedObj, validObj[:]...)
 	hashedData = hash.Hash(combinedObj)
 	msgID = string(hashedData[:20])
-	assert.Equal(t, msgID, p2p.MsgID(genesisValidatorsRoot, nMsg), "Got incorrect msg id")
+	assert.Equal(t, msgID, p2p.MsgID(params.BeaconConfig().GenesisValidatorsRoot[:], nMsg), "Got incorrect msg id")
 }
 
 func TestMsgID_WithNilTopic(t *testing.T) {

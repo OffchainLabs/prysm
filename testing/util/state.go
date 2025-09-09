@@ -71,19 +71,6 @@ func FillRootsNaturalOptCapella(state *ethpb.BeaconStateCapella) error {
 	return nil
 }
 
-// FillRootsNaturalOptDeneb is meant to be used as an option when calling NewBeaconStateDeneb.
-// It fills state and block roots with hex representations of natural numbers starting with 0.
-// Example: 16 becomes 0x00...0f.
-func FillRootsNaturalOptDeneb(state *ethpb.BeaconStateDeneb) error {
-	roots, err := PrepareRoots(int(params.BeaconConfig().SlotsPerHistoricalRoot))
-	if err != nil {
-		return err
-	}
-	state.StateRoots = roots
-	state.BlockRoots = roots
-	return nil
-}
-
 type NewBeaconStateOption func(state *ethpb.BeaconState) error
 
 // NewBeaconState creates a beacon state with minimum marshalable fields.
@@ -455,13 +442,13 @@ func NewBeaconStateElectra(options ...func(state *ethpb.BeaconStateElectra) erro
 }
 
 // NewBeaconStateFulu creates a beacon state with minimum marshalable fields.
-func NewBeaconStateFulu(options ...func(state *ethpb.BeaconStateElectra) error) (state.BeaconState, error) {
+func NewBeaconStateFulu(options ...func(state *ethpb.BeaconStateFulu) error) (state.BeaconState, error) {
 	pubkeys := make([][]byte, 512)
 	for i := range pubkeys {
 		pubkeys[i] = make([]byte, 48)
 	}
 
-	seed := &ethpb.BeaconStateElectra{
+	seed := &ethpb.BeaconStateFulu{
 		BlockRoots:                 filledByteSlice2D(uint64(params.BeaconConfig().SlotsPerHistoricalRoot), 32),
 		StateRoots:                 filledByteSlice2D(uint64(params.BeaconConfig().SlotsPerHistoricalRoot), 32),
 		Slashings:                  make([]uint64, params.BeaconConfig().EpochsPerSlashingsVector),
@@ -505,6 +492,7 @@ func NewBeaconStateFulu(options ...func(state *ethpb.BeaconStateElectra) error) 
 			TransactionsRoot: make([]byte, 32),
 			WithdrawalsRoot:  make([]byte, 32),
 		},
+		ProposerLookahead: make([]uint64, 64),
 	}
 
 	for _, opt := range options {

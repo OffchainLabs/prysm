@@ -22,13 +22,13 @@ type beaconApiValidatorClient struct {
 	genesisProvider         GenesisProvider
 	dutiesProvider          dutiesProvider
 	stateValidatorsProvider StateValidatorsProvider
-	jsonRestHandler         JsonRestHandler
+	jsonRestHandler         RestHandler
 	beaconBlockConverter    BeaconBlockConverter
 	prysmChainClient        iface.PrysmChainClient
 	isEventStreamRunning    bool
 }
 
-func NewBeaconApiValidatorClient(jsonRestHandler JsonRestHandler, opts ...ValidatorClientOpt) iface.ValidatorClient {
+func NewBeaconApiValidatorClient(jsonRestHandler RestHandler, opts ...ValidatorClientOpt) iface.ValidatorClient {
 	c := &beaconApiValidatorClient{
 		genesisProvider:         &beaconApiGenesisProvider{jsonRestHandler: jsonRestHandler},
 		dutiesProvider:          beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler},

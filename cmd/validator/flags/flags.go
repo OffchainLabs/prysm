@@ -19,6 +19,8 @@ const (
 	WalletDefaultDirName = "prysm-wallet-v2"
 	// DefaultHTTPServerHost for the validator client.
 	DefaultHTTPServerHost = "127.0.0.1"
+
+	DefaultMaxHealthChecks = 0
 )
 
 var (
@@ -32,7 +34,7 @@ var (
 	// BeaconRPCProviderFlag defines a beacon node RPC endpoint.
 	BeaconRPCProviderFlag = &cli.StringFlag{
 		Name: "beacon-rpc-provider",
-		Usage: `WARNING: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+		Usage: `WARNING: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API..
 		Beacon node RPC provider endpoint.`,
 		Value: "127.0.0.1:4000",
 	}
@@ -90,21 +92,21 @@ var (
 	// GRPCRetriesFlag defines the number of times to retry a failed gRPC request.
 	GRPCRetriesFlag = &cli.UintFlag{
 		Name: "grpc-retries",
-		Usage: `WARNING: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+		Usage: `WARNING: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API..
 		Number of attempts to retry gRPC requests.`,
 		Value: 5,
 	}
 	// GRPCRetryDelayFlag defines the interval to retry a failed gRPC request.
 	GRPCRetryDelayFlag = &cli.DurationFlag{
 		Name: "grpc-retry-delay",
-		Usage: `WARNING: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+		Usage: `WARNING: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API..
 		Amount of time between gRPC retry requests.`,
 		Value: 1 * time.Second,
 	}
 	// GRPCHeadersFlag defines a list of headers to send with all gRPC requests.
 	GRPCHeadersFlag = &cli.StringFlag{
 		Name: "grpc-headers",
-		Usage: `WARNING: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+		Usage: `WARNING: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API..
 		Comma separated list of key value pairs to pass as gRPC headers for all gRPC calls.
 		Example: --grpc-headers=key=value`,
 	}
@@ -325,12 +327,7 @@ var (
 		Usage: "Skips the y/n confirmation userprompt for sending a deposit to the deposit contract.",
 		Value: false,
 	}
-	// EnableWebFlag enables controlling the validator client via the Prysm web ui. This is a work in progress.
-	EnableWebFlag = &cli.BoolFlag{
-		Name:  "web",
-		Usage: "(Work in progress): Enables the web portal for the validator client.",
-		Value: false,
-	}
+
 	// SlashingProtectionExportDirFlag allows specifying the output directory
 	// for a validator's slashing protection history.
 	SlashingProtectionExportDirFlag = &cli.StringFlag{
@@ -398,6 +395,13 @@ var (
 		Name:  "disable-duties-polling",
 		Usage: "Disables polling of duties on dependent root changes.",
 		Value: false,
+	}
+
+	// MaxHealthChecksFlag sets a maximum amount of times to check for beacon node health before validator client times out and shuts down
+	MaxHealthChecksFlag = &cli.IntFlag{
+		Name:  "max-health-checks",
+		Usage: "Maximum number of health checks to perform before exiting if not healthy. Set to 0 or a negative number for indefinite checks.",
+		Value: DefaultMaxHealthChecks,
 	}
 )
 

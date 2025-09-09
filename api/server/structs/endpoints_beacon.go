@@ -263,6 +263,13 @@ type ChainHead struct {
 	OptimisticStatus           bool   `json:"optimistic_status"`
 }
 
+type GetPendingConsolidationsResponse struct {
+	Version             string                  `json:"version"`
+	ExecutionOptimistic bool                    `json:"execution_optimistic"`
+	Finalized           bool                    `json:"finalized"`
+	Data                []*PendingConsolidation `json:"data"`
+}
+
 type GetPendingDepositsResponse struct {
 	Version             string            `json:"version"`
 	ExecutionOptimistic bool              `json:"execution_optimistic"`
@@ -275,4 +282,11 @@ type GetPendingPartialWithdrawalsResponse struct {
 	ExecutionOptimistic bool                        `json:"execution_optimistic"`
 	Finalized           bool                        `json:"finalized"`
 	Data                []*PendingPartialWithdrawal `json:"data"`
+}
+
+type GetProposerLookaheadResponse struct {
+	Version             string   `json:"version"`
+	ExecutionOptimistic bool     `json:"execution_optimistic"`
+	Finalized           bool     `json:"finalized"`
+	Data                []string `json:"data"` // validator indexes
 }

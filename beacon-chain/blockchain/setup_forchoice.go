@@ -20,7 +20,7 @@ func (s *Service) setupForkchoice(st state.BeaconState) error {
 		return errors.Wrap(err, "could not set up forkchoice checkpoints")
 	}
 	if err := s.setupForkchoiceTree(st); err != nil {
-		return errors.Wrap(err, "could not set up forkchoice root")
+		return errors.Wrap(err, "could not set up forkchoice tree")
 	}
 	if err := s.initializeHead(s.ctx, st); err != nil {
 		return errors.Wrap(err, "could not initialize head from db")
@@ -30,24 +30,24 @@ func (s *Service) setupForkchoice(st state.BeaconState) error {
 
 func (s *Service) startupHeadRoot() [32]byte {
 	headStr := features.Get().ForceHead
-	cp := s.FinalizedCheckpt()
-	fRoot := s.ensureRootNotZeros([32]byte(cp.Root))
+	jp := s.CurrentJustifiedCheckpt()
+	jRoot := s.ensureRootNotZeros([32]byte(jp.Root))
 	if headStr == "" {
-		return fRoot
+		return jRoot
 	}
 	if headStr == "head" {
 		root, err := s.cfg.BeaconDB.HeadBlockRoot()
 		if err != nil {
-			log.WithError(err).Error("could not get head block root, starting with finalized block as head")
-			return fRoot
+			log.WithError(err).Error("Could not get head block root, starting with justified block as head")
+			return jRoot
 		}
 		log.Infof("Using Head root of %#x", root)
 		return root
 	}
 	root, err := bytesutil.DecodeHexWithLength(headStr, 32)
 	if err != nil {
-		log.WithError(err).Error("could not parse head root, starting with finalized block as head")
-		return fRoot
+		log.WithError(err).Error("Could not parse head root, starting with justified block as head")
+		return jRoot
 	}
 	return [32]byte(root)
 }
@@ -64,16 +64,16 @@ func (s *Service) setupForkchoiceTree(st state.BeaconState) error {
 	}
 	blk, err := s.cfg.BeaconDB.Block(s.ctx, headRoot)
 	if err != nil {
-		log.WithError(err).Error("could not get head block, starting with finalized block as head")
+		log.WithError(err).Error("Could not get head block, starting with finalized block as head")
 		return nil
 	}
 	if slots.ToEpoch(blk.Block().Slot()) < cp.Epoch {
-		log.WithField("headRoot", fmt.Sprintf("%#x", headRoot)).Error("head block is older than finalized block, starting with finalized block as head")
+		log.WithField("headRoot", fmt.Sprintf("%#x", headRoot)).Error("Head block is older than finalized block, starting with finalized block as head")
 		return nil
 	}
 	chain, err := s.buildForkchoiceChain(s.ctx, blk)
 	if err != nil {
-		log.WithError(err).Error("could not build forkchoice chain, starting with finalized block as head")
+		log.WithError(err).Error("Could not build forkchoice chain, starting with finalized block as head")
 		return nil
 	}
 	s.cfg.ForkChoiceStore.Lock()
@@ -170,6 +170,6 @@ func (s *Service) setupForkchoiceCheckpoints() error {
 		Root: fRoot}); err != nil {
 		return errors.Wrap(err, "could not update forkchoice's finalized checkpoint")
 	}
-	s.cfg.ForkChoiceStore.SetGenesisTime(uint64(s.genesisTime.Unix()))
+	s.cfg.ForkChoiceStore.SetGenesisTime(s.genesisTime)
 	return nil
 }

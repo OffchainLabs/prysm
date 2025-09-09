@@ -1,7 +1,6 @@
 package state_native_test
 
 import (
-	"context"
 	"reflect"
 	"strconv"
 	"testing"
@@ -20,7 +19,7 @@ import (
 
 func TestBeaconState_ProtoBeaconStateCompatibility(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	genesis := setupGenesisState(t, 64)
 	customState, err := statenative.InitializeFromProtoPhase0(genesis)
 	require.NoError(t, err)
@@ -33,7 +32,7 @@ func TestBeaconState_ProtoBeaconStateCompatibility(t *testing.T) {
 	require.NoError(t, err)
 	beaconState, err := statenative.InitializeFromProtoPhase0(genesis)
 	require.NoError(t, err)
-	r2, err := beaconState.HashTreeRoot(context.Background())
+	r2, err := beaconState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, r1, r2, "Mismatched roots")
 
@@ -46,14 +45,14 @@ func TestBeaconState_ProtoBeaconStateCompatibility(t *testing.T) {
 	genesis.Balances = balances
 	beaconState, err = statenative.InitializeFromProtoPhase0(genesis)
 	require.NoError(t, err)
-	r2, err = beaconState.HashTreeRoot(context.Background())
+	r2, err = beaconState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, r1, r2, "Mismatched roots")
 }
 
-func setupGenesisState(tb testing.TB, count uint64) *ethpb.BeaconState {
-	genesisState, _, err := interop.GenerateGenesisState(context.Background(), 0, count)
-	require.NoError(tb, err, "Could not generate genesis beacon state")
+func setupGenesisState(t testing.TB, count uint64) *ethpb.BeaconState {
+	genesisState, _, err := interop.GenerateGenesisState(t.Context(), 0, count)
+	require.NoError(t, err, "Could not generate genesis beacon state")
 	for i := uint64(1); i < count; i++ {
 		var someRoot [32]byte
 		var someKey [fieldparams.BLSPubkeyLength]byte

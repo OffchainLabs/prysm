@@ -5,6 +5,12 @@ import (
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 )
 
+// GenericConverter defines any struct that can be converted to a generic beacon block.
+// We assume all your versioned block structs implement this method.
+type GenericConverter interface {
+	ToGeneric() (*GenericBeaconBlock, error)
+}
+
 // ----------------------------------------------------------------------------
 // Phase 0
 // ----------------------------------------------------------------------------

@@ -41,9 +41,14 @@ func (g *Clock) CurrentSlot() types.Slot {
 	return slots.Duration(g.t, now)
 }
 
+// CurrentEpoch returns the current epoch relative to the time.Time value that Clock embeds.
+func (g *Clock) CurrentEpoch() types.Epoch {
+	return slots.ToEpoch(g.CurrentSlot())
+}
+
 // SlotStart computes the time the given slot begins.
-func (g *Clock) SlotStart(slot types.Slot) time.Time {
-	return slots.BeginsAt(slot, g.t)
+func (g *Clock) SlotStart(slot types.Slot) (time.Time, error) {
+	return slots.StartTime(g.t, slot)
 }
 
 // Now provides a value for time.Now() that can be overridden in tests.

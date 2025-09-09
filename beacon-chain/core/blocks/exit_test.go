@@ -1,7 +1,6 @@
 package blocks_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
@@ -47,7 +46,7 @@ func TestProcessVoluntaryExits_NotActiveLongEnoughToExit(t *testing.T) {
 	}
 
 	want := "validator has not been active long enough to exit"
-	_, err = blocks.ProcessVoluntaryExits(context.Background(), state, b.Block.Body.VoluntaryExits)
+	_, err = blocks.ProcessVoluntaryExits(t.Context(), state, b.Block.Body.VoluntaryExits)
 	assert.ErrorContains(t, want, err)
 }
 
@@ -77,7 +76,7 @@ func TestProcessVoluntaryExits_ExitAlreadySubmitted(t *testing.T) {
 	}
 
 	want := "validator with index 0 has already submitted an exit, which will take place at epoch: 10"
-	_, err = blocks.ProcessVoluntaryExits(context.Background(), state, b.Block.Body.VoluntaryExits)
+	_, err = blocks.ProcessVoluntaryExits(t.Context(), state, b.Block.Body.VoluntaryExits)
 	assert.ErrorContains(t, want, err)
 }
 
@@ -125,7 +124,7 @@ func TestProcessVoluntaryExits_AppliesCorrectStatus(t *testing.T) {
 		},
 	}
 
-	newState, err := blocks.ProcessVoluntaryExits(context.Background(), state, b.Block.Body.VoluntaryExits)
+	newState, err := blocks.ProcessVoluntaryExits(t.Context(), state, b.Block.Body.VoluntaryExits)
 	require.NoError(t, err, "Could not process exits")
 	newRegistry := newState.Validators()
 	if newRegistry[0].ExitEpoch != helpers.ActivationExitEpoch(primitives.Epoch(state.Slot()/params.BeaconConfig().SlotsPerEpoch)) {

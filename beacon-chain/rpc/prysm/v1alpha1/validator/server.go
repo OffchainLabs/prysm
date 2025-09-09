@@ -4,6 +4,7 @@
 package validator
 
 import (
+	"bytes"
 	"context"
 	"time"
 
@@ -28,10 +29,11 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
+	"github.com/OffchainLabs/prysm/v6/genesis"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -67,6 +69,7 @@ type Server struct {
 	SyncCommitteePool       synccommittee.Pool
 	BlockReceiver           blockchain.BlockReceiver
 	BlobReceiver            blockchain.BlobReceiver
+	DataColumnReceiver      blockchain.DataColumnReceiver
 	MockEth1Votes           bool
 	Eth1BlockFetcher        execution.POWBlockFetcher
 	PendingDepositsFetcher  depositsnapshot.PendingDepositsFetcher
@@ -82,7 +85,7 @@ type Server struct {
 	AttestationStateFetcher blockchain.AttestationStateFetcher
 }
 
-// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // WaitForActivation checks if a validator public key exists in the active validator registry of the current
 // beacon state, if not, then it creates a stream which listens for canonical states which contain
@@ -132,7 +135,7 @@ func (vs *Server) WaitForActivation(req *ethpb.ValidatorActivationRequest, strea
 	}
 }
 
-// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // ValidatorIndex is called by a validator to get its index location in the beacon state.
 func (vs *Server) ValidatorIndex(ctx context.Context, req *ethpb.ValidatorIndexRequest) (*ethpb.ValidatorIndexResponse, error) {
@@ -151,39 +154,38 @@ func (vs *Server) ValidatorIndex(ctx context.Context, req *ethpb.ValidatorIndexR
 	return &ethpb.ValidatorIndexResponse{Index: index}, nil
 }
 
-// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // DomainData fetches the current domain version information from the beacon state.
 func (vs *Server) DomainData(ctx context.Context, request *ethpb.DomainRequest) (*ethpb.DomainResponse, error) {
-	fork, err := forks.Fork(request.Epoch)
-	if err != nil {
-		return nil, err
-	}
-	headGenesisValidatorsRoot := vs.HeadFetcher.HeadGenesisValidatorsRoot()
-	isExitDomain := [4]byte(request.Domain) == params.BeaconConfig().DomainVoluntaryExit
-	if isExitDomain {
+	epoch := request.Epoch
+	rd := bytesutil.ToBytes4(request.Domain)
+	if bytes.Equal(request.Domain, params.BeaconConfig().DomainVoluntaryExit[:]) {
 		hs, err := vs.HeadFetcher.HeadStateReadOnly(ctx)
 		if err != nil {
 			return nil, err
 		}
-		if hs.Version() >= version.Deneb {
-			fork = &ethpb.Fork{
+		if slots.ToEpoch(hs.Slot()) >= params.BeaconConfig().DenebForkEpoch {
+			return computeDomainData(rd, epoch, &ethpb.Fork{
 				PreviousVersion: params.BeaconConfig().CapellaForkVersion,
 				CurrentVersion:  params.BeaconConfig().CapellaForkVersion,
 				Epoch:           params.BeaconConfig().CapellaForkEpoch,
-			}
+			})
 		}
 	}
-	dv, err := signing.Domain(fork, request.Epoch, bytesutil.ToBytes4(request.Domain), headGenesisValidatorsRoot[:])
+	return computeDomainData(rd, epoch, params.ForkFromConfig(params.BeaconConfig(), epoch))
+}
+
+func computeDomainData(domain [4]byte, epoch primitives.Epoch, fork *ethpb.Fork) (*ethpb.DomainResponse, error) {
+	gvr := genesis.ValidatorsRoot()
+	domainData, err := signing.Domain(fork, epoch, domain, gvr[:])
 	if err != nil {
 		return nil, err
 	}
-	return &ethpb.DomainResponse{
-		SignatureDomain: dv,
-	}, nil
+	return &ethpb.DomainResponse{SignatureDomain: domainData}, nil
 }
 
-// Deprecated: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // WaitForChainStart queries the logs of the Deposit Contract in order to verify the beacon chain
 // has started its runtime and validators begin their responsibilities. If it has not, it then
@@ -197,7 +199,7 @@ func (vs *Server) WaitForChainStart(_ *emptypb.Empty, stream ethpb.BeaconNodeVal
 	if head != nil && !head.IsNil() {
 		res := &ethpb.ChainStartResponse{
 			Started:               true,
-			GenesisTime:           head.GenesisTime(),
+			GenesisTime:           uint64(head.GenesisTime().Unix()),
 			GenesisValidatorsRoot: head.GenesisValidatorsRoot(),
 		}
 		return stream.Send(res)

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
 	builderTest "github.com/OffchainLabs/prysm/v6/beacon-chain/builder/testing"
@@ -59,7 +60,7 @@ import (
 
 func TestServer_GetBeaconBlock_Phase0(t *testing.T) {
 	db := dbutil.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	beaconState, privKeys := util.DeterministicGenesisState(t, 64)
 	stateRoot, err := beaconState.HashTreeRoot(ctx)
@@ -119,7 +120,7 @@ func TestServer_GetBeaconBlock_Phase0(t *testing.T) {
 
 func TestServer_GetBeaconBlock_Altair(t *testing.T) {
 	db := dbutil.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -193,7 +194,7 @@ func TestServer_GetBeaconBlock_Altair(t *testing.T) {
 
 func TestServer_GetBeaconBlock_Bellatrix(t *testing.T) {
 	db := dbutil.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	terminalBlockHash := bytesutil.PadTo([]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 		0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, 32)
@@ -255,7 +256,7 @@ func TestServer_GetBeaconBlock_Bellatrix(t *testing.T) {
 	c.HashesByHeight[0] = terminalBlockHash
 	random, err := helpers.RandaoMix(beaconState, slots.ToEpoch(beaconState.Slot()))
 	require.NoError(t, err)
-	timeStamp, err := slots.ToTime(beaconState.GenesisTime(), bellatrixSlot+1)
+	timeStamp, err := slots.StartTime(beaconState.GenesisTime(), bellatrixSlot+1)
 	require.NoError(t, err)
 
 	payload := &enginev1.ExecutionPayload{
@@ -320,7 +321,7 @@ func TestServer_GetBeaconBlock_Bellatrix(t *testing.T) {
 
 func TestServer_GetBeaconBlock_Capella(t *testing.T) {
 	db := dbutil.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	transition.SkipSlotCache.Disable()
 
 	params.SetupTestConfigCleanup(t)
@@ -381,7 +382,7 @@ func TestServer_GetBeaconBlock_Capella(t *testing.T) {
 
 	random, err := helpers.RandaoMix(beaconState, slots.ToEpoch(beaconState.Slot()))
 	require.NoError(t, err)
-	timeStamp, err := slots.ToTime(beaconState.GenesisTime(), capellaSlot+1)
+	timeStamp, err := slots.StartTime(beaconState.GenesisTime(), capellaSlot+1)
 	require.NoError(t, err)
 	payload := &enginev1.ExecutionPayloadCapella{
 		ParentHash:    make([]byte, fieldparams.RootLength),
@@ -435,7 +436,7 @@ func TestServer_GetBeaconBlock_Capella(t *testing.T) {
 
 func TestServer_GetBeaconBlock_Deneb(t *testing.T) {
 	db := dbutil.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	transition.SkipSlotCache.Disable()
 
 	params.SetupTestConfigCleanup(t)
@@ -494,7 +495,7 @@ func TestServer_GetBeaconBlock_Deneb(t *testing.T) {
 
 	random, err := helpers.RandaoMix(beaconState, slots.ToEpoch(beaconState.Slot()))
 	require.NoError(t, err)
-	timeStamp, err := slots.ToTime(beaconState.GenesisTime(), denebSlot+1)
+	timeStamp, err := slots.StartTime(beaconState.GenesisTime(), denebSlot+1)
 	require.NoError(t, err)
 	payload := &enginev1.ExecutionPayloadDeneb{
 		ParentHash:    make([]byte, fieldparams.RootLength),
@@ -529,7 +530,7 @@ func TestServer_GetBeaconBlock_Deneb(t *testing.T) {
 		PayloadIDBytes: &enginev1.PayloadIDBytes{1},
 		GetPayloadResponse: &blocks.GetPayloadResponse{
 			ExecutionData: ed,
-			BlobsBundle:   bundle,
+			BlobsBundler:  bundle,
 		},
 	}
 
@@ -558,7 +559,7 @@ func TestServer_GetBeaconBlock_Deneb(t *testing.T) {
 
 func TestServer_GetBeaconBlock_Electra(t *testing.T) {
 	db := dbutil.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	transition.SkipSlotCache.Disable()
 
 	params.SetupTestConfigCleanup(t)
@@ -644,7 +645,7 @@ func TestServer_GetBeaconBlock_Electra(t *testing.T) {
 
 	random, err := helpers.RandaoMix(beaconState, slots.ToEpoch(beaconState.Slot()))
 	require.NoError(t, err)
-	timeStamp, err := slots.ToTime(beaconState.GenesisTime(), electraSlot+1)
+	timeStamp, err := slots.StartTime(beaconState.GenesisTime(), electraSlot+1)
 	require.NoError(t, err)
 	payload := &enginev1.ExecutionPayloadDeneb{
 		Timestamp:     uint64(timeStamp.Unix()),
@@ -686,7 +687,7 @@ func TestServer_GetBeaconBlock_Electra(t *testing.T) {
 
 func TestServer_GetBeaconBlock_Fulu(t *testing.T) {
 	db := dbutil.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	transition.SkipSlotCache.Disable()
 
 	params.SetupTestConfigCleanup(t)
@@ -773,7 +774,7 @@ func TestServer_GetBeaconBlock_Fulu(t *testing.T) {
 
 	random, err := helpers.RandaoMix(beaconState, slots.ToEpoch(beaconState.Slot()))
 	require.NoError(t, err)
-	timeStamp, err := slots.ToTime(beaconState.GenesisTime(), fuluSlot+1)
+	timeStamp, err := slots.StartTime(beaconState.GenesisTime(), fuluSlot+1)
 	require.NoError(t, err)
 	payload := &enginev1.ExecutionPayloadDeneb{
 		Timestamp:     uint64(timeStamp.Unix()),
@@ -833,7 +834,7 @@ func TestServer_GetBeaconBlock_Optimistic(t *testing.T) {
 	req := &ethpb.BlockRequest{
 		Slot: bellatrixSlot + 1,
 	}
-	_, err = proposerServer.GetBeaconBlock(context.Background(), req)
+	_, err = proposerServer.GetBeaconBlock(t.Context(), req)
 	s, ok := status.FromError(err)
 	require.Equal(t, true, ok)
 	require.DeepEqual(t, codes.Unavailable, s.Code())
@@ -876,7 +877,7 @@ func injectSlashings(t *testing.T, st state.BeaconState, keys []bls.SecretKey, s
 		proposerSlashing, err := util.GenerateProposerSlashingForValidator(st, keys[i], i /* validator index */)
 		require.NoError(t, err)
 		proposerSlashings[i] = proposerSlashing
-		err = server.SlashingsPool.InsertProposerSlashing(context.Background(), st, proposerSlashing)
+		err = server.SlashingsPool.InsertProposerSlashing(t.Context(), st, proposerSlashing)
 		require.NoError(t, err)
 	}
 
@@ -887,13 +888,16 @@ func injectSlashings(t *testing.T, st state.BeaconState, keys []bls.SecretKey, s
 		attesterSlashing, ok := generatedAttesterSlashing.(*ethpb.AttesterSlashing)
 		require.Equal(t, true, ok, "Attester slashing has the wrong type (expected %T, got %T)", &ethpb.AttesterSlashing{}, generatedAttesterSlashing)
 		attSlashings[i] = attesterSlashing
-		err = server.SlashingsPool.InsertAttesterSlashing(context.Background(), st, generatedAttesterSlashing.(*ethpb.AttesterSlashing))
+		err = server.SlashingsPool.InsertAttesterSlashing(t.Context(), st, generatedAttesterSlashing.(*ethpb.AttesterSlashing))
 		require.NoError(t, err)
 	}
 	return proposerSlashings, attSlashings
 }
 
 func TestProposer_ProposeBlock_OK(t *testing.T) {
+	// Initialize KZG for Fulu blocks
+	require.NoError(t, kzg.Start())
+
 	tests := []struct {
 		name       string
 		block      func([32]byte) *ethpb.GenericSignedBeaconBlock
@@ -1098,11 +1102,136 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 			},
 			err: "blob KZG commitments don't match number of blobs or KZG proofs",
 		},
+		{
+			name: "fulu block no blob",
+			block: func(parent [32]byte) *ethpb.GenericSignedBeaconBlock {
+				sb := &ethpb.SignedBeaconBlockContentsFulu{
+					Block: &ethpb.SignedBeaconBlockFulu{
+						Block: &ethpb.BeaconBlockElectra{Slot: 5, ParentRoot: parent[:], Body: util.HydrateBeaconBlockBodyElectra(&ethpb.BeaconBlockBodyElectra{})},
+					},
+				}
+				blk := &ethpb.GenericSignedBeaconBlock_Fulu{Fulu: sb}
+				return &ethpb.GenericSignedBeaconBlock{Block: blk, IsBlinded: false}
+			},
+		},
+		{
+			name: "fulu block with single blob and cell proofs",
+			block: func(parent [32]byte) *ethpb.GenericSignedBeaconBlock {
+				numberOfColumns := uint64(128)
+				// For Fulu, we have cell proofs (blobs * numberOfColumns)
+				cellProofs := make([][]byte, numberOfColumns)
+				for i := uint64(0); i < numberOfColumns; i++ {
+					cellProofs[i] = bytesutil.PadTo([]byte{byte(i)}, 48)
+				}
+				// Blob must be exactly 131072 bytes
+				blob := make([]byte, 131072)
+				blob[0] = 0x01
+				sb := &ethpb.SignedBeaconBlockContentsFulu{
+					Block: &ethpb.SignedBeaconBlockFulu{
+						Block: &ethpb.BeaconBlockElectra{
+							Slot: 5, ParentRoot: parent[:],
+							Body: util.HydrateBeaconBlockBodyElectra(&ethpb.BeaconBlockBodyElectra{
+								BlobKzgCommitments: [][]byte{bytesutil.PadTo([]byte("kc"), 48)},
+							}),
+						},
+					},
+					KzgProofs: cellProofs,
+					Blobs:     [][]byte{blob},
+				}
+				blk := &ethpb.GenericSignedBeaconBlock_Fulu{Fulu: sb}
+				return &ethpb.GenericSignedBeaconBlock{Block: blk, IsBlinded: false}
+			},
+		},
+		{
+			name: "fulu block with multiple blobs and cell proofs",
+			block: func(parent [32]byte) *ethpb.GenericSignedBeaconBlock {
+				numberOfColumns := uint64(128)
+				blobCount := 3
+				// For Fulu, we have cell proofs (blobs * numberOfColumns)
+				cellProofs := make([][]byte, uint64(blobCount)*numberOfColumns)
+				for i := range cellProofs {
+					cellProofs[i] = bytesutil.PadTo([]byte{byte(i % 256)}, 48)
+				}
+				// Create properly sized blobs (131072 bytes each)
+				blobs := make([][]byte, blobCount)
+				for i := 0; i < blobCount; i++ {
+					blob := make([]byte, 131072)
+					blob[0] = byte(i + 1)
+					blobs[i] = blob
+				}
+				sb := &ethpb.SignedBeaconBlockContentsFulu{
+					Block: &ethpb.SignedBeaconBlockFulu{
+						Block: &ethpb.BeaconBlockElectra{
+							Slot: 5, ParentRoot: parent[:],
+							Body: util.HydrateBeaconBlockBodyElectra(&ethpb.BeaconBlockBodyElectra{
+								BlobKzgCommitments: [][]byte{
+									bytesutil.PadTo([]byte("kc"), 48),
+									bytesutil.PadTo([]byte("kc1"), 48),
+									bytesutil.PadTo([]byte("kc2"), 48),
+								},
+							}),
+						},
+					},
+					KzgProofs: cellProofs,
+					Blobs:     blobs,
+				}
+				blk := &ethpb.GenericSignedBeaconBlock_Fulu{Fulu: sb}
+				return &ethpb.GenericSignedBeaconBlock{Block: blk, IsBlinded: false}
+			},
+		},
+		{
+			name: "fulu block wrong cell proof count (should be blobs * 128)",
+			block: func(parent [32]byte) *ethpb.GenericSignedBeaconBlock {
+				// Wrong number of cell proofs - should be 2 * 128 = 256, but providing only 2
+				// Create properly sized blobs
+				blob1 := make([]byte, 131072)
+				blob1[0] = 0x01
+				blob2 := make([]byte, 131072)
+				blob2[0] = 0x02
+				sb := &ethpb.SignedBeaconBlockContentsFulu{
+					Block: &ethpb.SignedBeaconBlockFulu{
+						Block: &ethpb.BeaconBlockElectra{
+							Slot: 5, ParentRoot: parent[:],
+							Body: util.HydrateBeaconBlockBodyElectra(&ethpb.BeaconBlockBodyElectra{
+								BlobKzgCommitments: [][]byte{
+									bytesutil.PadTo([]byte("kc"), 48),
+									bytesutil.PadTo([]byte("kc1"), 48),
+								},
+							}),
+						},
+					},
+					KzgProofs: [][]byte{{0x01}, {0x02}}, // Wrong: should be 256 cell proofs
+					Blobs:     [][]byte{blob1, blob2},
+				}
+				blk := &ethpb.GenericSignedBeaconBlock_Fulu{Fulu: sb}
+				return &ethpb.GenericSignedBeaconBlock{Block: blk, IsBlinded: false}
+			},
+			err: "blobs and cells proofs mismatch",
+		},
+		{
+			name: "blind fulu block with blob commitments",
+			block: func(parent [32]byte) *ethpb.GenericSignedBeaconBlock {
+				blockToPropose := util.NewBlindedBeaconBlockFulu()
+				blockToPropose.Message.Slot = 5
+				blockToPropose.Message.ParentRoot = parent[:]
+				txRoot, err := ssz.TransactionsRoot([][]byte{})
+				require.NoError(t, err)
+				withdrawalsRoot, err := ssz.WithdrawalSliceRoot([]*enginev1.Withdrawal{}, fieldparams.MaxWithdrawalsPerPayload)
+				require.NoError(t, err)
+				blockToPropose.Message.Body.ExecutionPayloadHeader.TransactionsRoot = txRoot[:]
+				blockToPropose.Message.Body.ExecutionPayloadHeader.WithdrawalsRoot = withdrawalsRoot[:]
+				blockToPropose.Message.Body.BlobKzgCommitments = [][]byte{bytesutil.PadTo([]byte{0x01}, 48)}
+				blk := &ethpb.GenericSignedBeaconBlock_BlindedFulu{BlindedFulu: blockToPropose}
+				return &ethpb.GenericSignedBeaconBlock{Block: blk}
+			},
+			useBuilder: true,
+			err:        "commitment value doesn't match block", // Known issue with mock builder cell proof mismatch
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 
 			numDeposits := uint64(64)
 			beaconState, _ := util.DeterministicGenesisState(t, numDeposits)
@@ -1111,18 +1240,32 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 
 			c := &mock.ChainService{Root: bsRoot[:], State: beaconState}
 			db := dbutil.SetupDB(t)
+			// Create cell proofs for Fulu blocks (128 proofs per blob)
+			numberOfColumns := uint64(128)
+			cellProofs := make([][]byte, numberOfColumns)
+			for i := uint64(0); i < numberOfColumns; i++ {
+				cellProofs[i] = bytesutil.PadTo([]byte{byte(i)}, 48)
+			}
+			// Create properly sized blob for mock builder
+			mockBlob := make([]byte, 131072)
+			mockBlob[0] = 0x03
+			// Use the same commitment as in the blind block test
+			mockCommitment := bytesutil.PadTo([]byte{0x01}, 48)
+
 			proposerServer := &Server{
 				BlockReceiver: c,
 				BlockNotifier: c.BlockNotifier(),
 				P2P:           mockp2p.NewTestP2P(t),
 				BlockBuilder: &builderTest.MockBuilderService{HasConfigured: tt.useBuilder, PayloadCapella: emptyPayloadCapella(), PayloadDeneb: emptyPayloadDeneb(),
-					BlobBundle: &enginev1.BlobsBundle{KzgCommitments: [][]byte{bytesutil.PadTo([]byte{0x01}, 48)}, Proofs: [][]byte{{0x02}}, Blobs: [][]byte{{0x03}}}},
-				BeaconDB:          db,
-				BlobReceiver:      c,
-				OperationNotifier: c.OperationNotifier(),
+					BlobBundle:   &enginev1.BlobsBundle{KzgCommitments: [][]byte{mockCommitment}, Proofs: [][]byte{{0x02}}, Blobs: [][]byte{{0x03}}},
+					BlobBundleV2: &enginev1.BlobsBundleV2{KzgCommitments: [][]byte{mockCommitment}, Proofs: cellProofs, Blobs: [][]byte{mockBlob}}},
+				BeaconDB:           db,
+				BlobReceiver:       c,
+				DataColumnReceiver: c, // Add DataColumnReceiver for Fulu blocks
+				OperationNotifier:  c.OperationNotifier(),
 			}
 			blockToPropose := tt.block(bsRoot)
-			res, err := proposerServer.ProposeBeaconBlock(context.Background(), blockToPropose)
+			res, err := proposerServer.ProposeBeaconBlock(t.Context(), blockToPropose)
 			if tt.err != "" { // Expecting an error
 				require.ErrorContains(t, tt.err, err)
 			} else {
@@ -1137,7 +1280,7 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 
 func TestProposer_ComputeStateRoot_OK(t *testing.T) {
 	db := dbutil.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	beaconState, parentRoot, privKeys := util.DeterministicGenesisStateWithGenesisBlock(t, ctx, db, 100)
 
@@ -1164,12 +1307,12 @@ func TestProposer_ComputeStateRoot_OK(t *testing.T) {
 
 	wsb, err := blocks.NewSignedBeaconBlock(req)
 	require.NoError(t, err)
-	_, err = proposerServer.computeStateRoot(context.Background(), wsb)
+	_, err = proposerServer.computeStateRoot(t.Context(), wsb)
 	require.NoError(t, err)
 }
 
 func TestProposer_PendingDeposits_Eth1DataVoteOK(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	height := big.NewInt(int64(params.BeaconConfig().Eth1FollowDistance))
 	newHeight := big.NewInt(height.Int64() + 11000)
@@ -1249,7 +1392,7 @@ func TestProposer_PendingDeposits_Eth1DataVoteOK(t *testing.T) {
 }
 
 func TestProposer_PendingDeposits_OutsideEth1FollowWindow(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	height := big.NewInt(int64(params.BeaconConfig().Eth1FollowDistance))
 	p := &mockExecution.Chain{
@@ -1367,7 +1510,7 @@ func TestProposer_PendingDeposits_OutsideEth1FollowWindow(t *testing.T) {
 }
 
 func TestProposer_PendingDeposits_FollowsCorrectEth1Block(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	height := big.NewInt(int64(params.BeaconConfig().Eth1FollowDistance))
 	newHeight := big.NewInt(height.Int64() + 11000)
@@ -1501,7 +1644,7 @@ func TestProposer_PendingDeposits_FollowsCorrectEth1Block(t *testing.T) {
 }
 
 func TestProposer_PendingDeposits_CantReturnBelowStateEth1DepositIndex(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	height := big.NewInt(int64(params.BeaconConfig().Eth1FollowDistance))
 	p := &mockExecution.Chain{
 		LatestBlockNumber: height,
@@ -1600,7 +1743,7 @@ func TestProposer_PendingDeposits_CantReturnBelowStateEth1DepositIndex(t *testin
 }
 
 func TestProposer_PendingDeposits_CantReturnMoreThanMax(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	height := big.NewInt(int64(params.BeaconConfig().Eth1FollowDistance))
 	p := &mockExecution.Chain{
@@ -1698,7 +1841,7 @@ func TestProposer_PendingDeposits_CantReturnMoreThanMax(t *testing.T) {
 }
 
 func TestProposer_PendingDeposits_CantReturnMoreThanDepositCount(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	height := big.NewInt(int64(params.BeaconConfig().Eth1FollowDistance))
 	p := &mockExecution.Chain{
@@ -1796,7 +1939,7 @@ func TestProposer_PendingDeposits_CantReturnMoreThanDepositCount(t *testing.T) {
 }
 
 func TestProposer_DepositTrie_UtilizesCachedFinalizedDeposits(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	height := big.NewInt(int64(params.BeaconConfig().Eth1FollowDistance))
 	p := &mockExecution.Chain{
@@ -1912,7 +2055,7 @@ func TestProposer_DepositTrie_UtilizesCachedFinalizedDeposits(t *testing.T) {
 }
 
 func TestProposer_DepositTrie_RebuildTrie(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	height := big.NewInt(int64(params.BeaconConfig().Eth1FollowDistance))
 	p := &mockExecution.Chain{
@@ -2116,7 +2259,7 @@ func TestProposer_ValidateDepositTrie(t *testing.T) {
 }
 
 func TestProposer_Eth1Data_MajorityVote_SpansGenesis(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	// Voting period will span genesis, causing the special case for pre-mined genesis to kick in.
 	// In other words some part of the valid time range is before genesis, so querying the block cache would fail
 	// without the special case added to allow this for testnets.
@@ -2173,7 +2316,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 	require.NoError(t, err)
 	root, err := depositTrie.HashTreeRoot()
 	require.NoError(t, err)
-	assert.NoError(t, depositCache.InsertDeposit(context.Background(), dc.Deposit, dc.Eth1BlockHeight, dc.Index, root))
+	assert.NoError(t, depositCache.InsertDeposit(t.Context(), dc.Deposit, dc.Eth1BlockHeight, dc.Index, root))
 
 	t.Run("choose highest count", func(t *testing.T) {
 		t.Skip()
@@ -2202,7 +2345,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{DepositCount: 1}},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2238,7 +2381,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{DepositCount: 1}},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2274,7 +2417,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{DepositCount: 1}},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2311,7 +2454,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{DepositCount: 1}},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2348,7 +2491,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{DepositCount: 1}},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2385,7 +2528,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{DepositCount: 1}},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2415,7 +2558,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: currentEth1Data},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2450,7 +2593,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{DepositCount: 1}},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2480,7 +2623,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{DepositCount: 1}},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2512,7 +2655,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: currentEth1Data},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2548,7 +2691,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{DepositCount: 1}},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2585,7 +2728,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{DepositCount: 1}},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2616,7 +2759,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{DepositCount: 1}},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2650,7 +2793,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{DepositCount: 1}},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2689,7 +2832,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			HeadFetcher:       &mock.ChainService{ETH1Data: &ethpb.Eth1Data{DepositCount: 0}},
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2724,7 +2867,7 @@ func TestProposer_Eth1Data_MajorityVote(t *testing.T) {
 			DepositFetcher:    depositCache,
 		}
 
-		ctx := context.Background()
+		ctx := t.Context()
 		majorityVoteEth1Data, err := ps.eth1DataMajorityVote(ctx, beaconState)
 		require.NoError(t, err)
 
@@ -2789,7 +2932,7 @@ func TestProposer_FilterAttestation(t *testing.T) {
 						},
 						AggregationBits: bitfield.Bitlist{0b00010010},
 					})
-					committee, err := helpers.BeaconCommitteeFromState(context.Background(), st, atts[i].GetData().Slot, atts[i].GetData().CommitteeIndex)
+					committee, err := helpers.BeaconCommitteeFromState(t.Context(), st, atts[i].GetData().Slot, atts[i].GetData().CommitteeIndex)
 					assert.NoError(t, err)
 					attestingIndices, err := attestation.AttestingIndices(atts[i], committee)
 					require.NoError(t, err)
@@ -2823,14 +2966,14 @@ func TestProposer_FilterAttestation(t *testing.T) {
 				HeadFetcher: &mock.ChainService{State: st, Root: genesisRoot[:]},
 			}
 			atts := tt.inputAtts()
-			received := proposerServer.validateAndDeleteAttsInPool(context.Background(), st, atts)
+			received := proposerServer.validateAndDeleteAttsInPool(t.Context(), st, atts)
 			assert.DeepEqual(t, tt.expectedAtts(atts), received)
 		})
 	}
 }
 
 func TestProposer_Deposits_ReturnsEmptyList_IfLatestEth1DataEqGenesisEth1Block(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	height := big.NewInt(int64(params.BeaconConfig().Eth1FollowDistance))
 	p := &mockExecution.Chain{
@@ -2947,53 +3090,10 @@ func TestProposer_DeleteAttsInPool_Aggregated(t *testing.T) {
 
 	aa, err := attaggregation.Aggregate(aggregatedAtts)
 	require.NoError(t, err)
-	require.NoError(t, s.deleteAttsInPool(context.Background(), append(aa, unaggregatedAtts...)))
+	require.NoError(t, s.deleteAttsInPool(t.Context(), append(aa, unaggregatedAtts...)))
 	assert.Equal(t, 0, len(s.AttPool.AggregatedAttestations()), "Did not delete aggregated attestation")
 	atts := s.AttPool.UnaggregatedAttestations()
 	assert.Equal(t, 0, len(atts), "Did not delete unaggregated attestation")
-}
-
-func TestProposer_GetSyncAggregate_OK(t *testing.T) {
-	proposerServer := &Server{
-		SyncChecker:       &mockSync.Sync{IsSyncing: false},
-		SyncCommitteePool: synccommittee.NewStore(),
-	}
-
-	r := params.BeaconConfig().ZeroHash
-	conts := []*ethpb.SyncCommitteeContribution{
-		{Slot: 1, SubcommitteeIndex: 0, Signature: bls.NewAggregateSignature().Marshal(), AggregationBits: []byte{0b0001}, BlockRoot: r[:]},
-		{Slot: 1, SubcommitteeIndex: 0, Signature: bls.NewAggregateSignature().Marshal(), AggregationBits: []byte{0b1001}, BlockRoot: r[:]},
-		{Slot: 1, SubcommitteeIndex: 0, Signature: bls.NewAggregateSignature().Marshal(), AggregationBits: []byte{0b1110}, BlockRoot: r[:]},
-		{Slot: 1, SubcommitteeIndex: 1, Signature: bls.NewAggregateSignature().Marshal(), AggregationBits: []byte{0b0001}, BlockRoot: r[:]},
-		{Slot: 1, SubcommitteeIndex: 1, Signature: bls.NewAggregateSignature().Marshal(), AggregationBits: []byte{0b1001}, BlockRoot: r[:]},
-		{Slot: 1, SubcommitteeIndex: 1, Signature: bls.NewAggregateSignature().Marshal(), AggregationBits: []byte{0b1110}, BlockRoot: r[:]},
-		{Slot: 1, SubcommitteeIndex: 2, Signature: bls.NewAggregateSignature().Marshal(), AggregationBits: []byte{0b0001}, BlockRoot: r[:]},
-		{Slot: 1, SubcommitteeIndex: 2, Signature: bls.NewAggregateSignature().Marshal(), AggregationBits: []byte{0b1001}, BlockRoot: r[:]},
-		{Slot: 1, SubcommitteeIndex: 2, Signature: bls.NewAggregateSignature().Marshal(), AggregationBits: []byte{0b1110}, BlockRoot: r[:]},
-		{Slot: 1, SubcommitteeIndex: 3, Signature: bls.NewAggregateSignature().Marshal(), AggregationBits: []byte{0b0001}, BlockRoot: r[:]},
-		{Slot: 1, SubcommitteeIndex: 3, Signature: bls.NewAggregateSignature().Marshal(), AggregationBits: []byte{0b1001}, BlockRoot: r[:]},
-		{Slot: 1, SubcommitteeIndex: 3, Signature: bls.NewAggregateSignature().Marshal(), AggregationBits: []byte{0b1110}, BlockRoot: r[:]},
-		{Slot: 2, SubcommitteeIndex: 0, Signature: bls.NewAggregateSignature().Marshal(), AggregationBits: []byte{0b10101010}, BlockRoot: r[:]},
-		{Slot: 2, SubcommitteeIndex: 1, Signature: bls.NewAggregateSignature().Marshal(), AggregationBits: []byte{0b10101010}, BlockRoot: r[:]},
-		{Slot: 2, SubcommitteeIndex: 2, Signature: bls.NewAggregateSignature().Marshal(), AggregationBits: []byte{0b10101010}, BlockRoot: r[:]},
-		{Slot: 2, SubcommitteeIndex: 3, Signature: bls.NewAggregateSignature().Marshal(), AggregationBits: []byte{0b10101010}, BlockRoot: r[:]},
-	}
-
-	for _, cont := range conts {
-		require.NoError(t, proposerServer.SyncCommitteePool.SaveSyncCommitteeContribution(cont))
-	}
-
-	aggregate, err := proposerServer.getSyncAggregate(context.Background(), 1, bytesutil.ToBytes32(conts[0].BlockRoot))
-	require.NoError(t, err)
-	require.DeepEqual(t, bitfield.Bitvector32{0xf, 0xf, 0xf, 0xf}, aggregate.SyncCommitteeBits)
-
-	aggregate, err = proposerServer.getSyncAggregate(context.Background(), 2, bytesutil.ToBytes32(conts[0].BlockRoot))
-	require.NoError(t, err)
-	require.DeepEqual(t, bitfield.Bitvector32{0xaa, 0xaa, 0xaa, 0xaa}, aggregate.SyncCommitteeBits)
-
-	aggregate, err = proposerServer.getSyncAggregate(context.Background(), 3, bytesutil.ToBytes32(conts[0].BlockRoot))
-	require.NoError(t, err)
-	require.DeepEqual(t, bitfield.NewBitvector32(), aggregate.SyncCommitteeBits)
 }
 
 func TestProposer_PrepareBeaconProposer(t *testing.T) {
@@ -3037,7 +3137,7 @@ func TestProposer_PrepareBeaconProposer(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := dbutil.SetupDB(t)
-			ctx := context.Background()
+			ctx := t.Context()
 			proposerServer := &Server{
 				BeaconDB:               db,
 				TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
@@ -3062,7 +3162,7 @@ func TestProposer_PrepareBeaconProposer(t *testing.T) {
 func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 	hook := logTest.NewGlobal()
 	db := dbutil.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	proposerServer := &Server{
 		BeaconDB:               db,
 		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
@@ -3119,7 +3219,7 @@ func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 
 func BenchmarkServer_PrepareBeaconProposer(b *testing.B) {
 	db := dbutil.SetupDB(b)
-	ctx := context.Background()
+	ctx := b.Context()
 	proposerServer := &Server{
 		BeaconDB:               db,
 		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
@@ -3143,7 +3243,7 @@ func BenchmarkServer_PrepareBeaconProposer(b *testing.B) {
 }
 
 func TestProposer_SubmitValidatorRegistrations(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	proposerServer := &Server{}
 	reg := &ethpb.SignedValidatorRegistrationsV1{}
 	_, err := proposerServer.SubmitValidatorRegistrations(ctx, reg)
@@ -3170,7 +3270,7 @@ func majorityVoteBoundaryTime(slot primitives.Slot) (uint64, uint64) {
 
 func TestProposer_GetFeeRecipientByPubKey(t *testing.T) {
 	db := dbutil.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	numDeposits := uint64(64)
 	beaconState, _ := util.DeterministicGenesisState(t, numDeposits)
 	bsRoot, err := beaconState.HashTreeRoot(ctx)
@@ -3210,7 +3310,7 @@ func TestProposer_GetFeeRecipientByPubKey(t *testing.T) {
 
 func TestProposer_GetParentHeadState(t *testing.T) {
 	db := dbutil.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	parentState, parentRoot, _ := util.DeterministicGenesisStateWithGenesisBlock(t, ctx, db, 100)
 	headState, headRoot, _ := util.DeterministicGenesisStateWithGenesisBlock(t, ctx, db, 50)
@@ -3271,7 +3371,7 @@ func TestProposer_GetParentHeadState(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, [32]byte(str), [32]byte(headStr))
 		require.NotEqual(t, [32]byte(str), [32]byte(genesisStr))
-		require.LogsContain(t, hook, "late block attempted reorg failed")
+		require.LogsContain(t, hook, "Late block attempted reorg failed")
 	})
 }
 
@@ -3285,4 +3385,253 @@ func TestProposer_ElectraBlobsAndProofs(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 10, len(blobs))
 	require.Equal(t, 10, len(proofs))
+}
+
+func TestServer_ProposeBeaconBlock_PostFuluBlindedBlock(t *testing.T) {
+	db := dbutil.SetupDB(t)
+	ctx := t.Context()
+
+	beaconState, parentRoot, _ := util.DeterministicGenesisStateWithGenesisBlock(t, ctx, db, 100)
+	require.NoError(t, beaconState.SetSlot(1))
+
+	t.Run("post-Fulu blinded block - early return success", func(t *testing.T) {
+		// Set up config with Fulu fork at epoch 5
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.FuluForkEpoch = 5
+		params.OverrideBeaconConfig(cfg)
+
+		mockBuilder := &builderTest.MockBuilderService{
+			HasConfigured:                 true,
+			Cfg:                           &builderTest.Config{BeaconDB: db},
+			ErrSubmitBlindedBlockPostFulu: nil, // Success case
+		}
+
+		c := &mock.ChainService{State: beaconState, Root: parentRoot[:]}
+		proposerServer := &Server{
+			ChainStartFetcher: &mockExecution.Chain{},
+			Eth1InfoFetcher:   &mockExecution.Chain{},
+			Eth1BlockFetcher:  &mockExecution.Chain{},
+			BlockReceiver:     c,
+			BlobReceiver:      c,
+			HeadFetcher:       c,
+			BlockNotifier:     c.BlockNotifier(),
+			OperationNotifier: c.OperationNotifier(),
+			StateGen:          stategen.New(db, doublylinkedtree.New()),
+			TimeFetcher:       c,
+			SyncChecker:       &mockSync.Sync{IsSyncing: false},
+			BeaconDB:          db,
+			BlockBuilder:      mockBuilder,
+			P2P:               &mockp2p.MockBroadcaster{},
+		}
+
+		// Create a blinded block at slot 160 (epoch 5, which is >= FuluForkEpoch)
+		blindedBlock := util.NewBlindedBeaconBlockDeneb()
+		blindedBlock.Message.Slot = 160 // This puts us at epoch 5 (160/32 = 5)
+		blindedBlock.Message.ProposerIndex = 0
+		blindedBlock.Message.ParentRoot = parentRoot[:]
+		blindedBlock.Message.StateRoot = make([]byte, 32)
+
+		req := &ethpb.GenericSignedBeaconBlock{
+			Block: &ethpb.GenericSignedBeaconBlock_BlindedDeneb{BlindedDeneb: blindedBlock},
+		}
+
+		// This should trigger the post-Fulu early return path
+		res, err := proposerServer.ProposeBeaconBlock(ctx, req)
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		require.NotEmpty(t, res.BlockRoot)
+	})
+
+	t.Run("post-Fulu blinded block - builder submission error", func(t *testing.T) {
+		// Set up config with Fulu fork at epoch 5
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.FuluForkEpoch = 5
+		params.OverrideBeaconConfig(cfg)
+
+		mockBuilder := &builderTest.MockBuilderService{
+			HasConfigured:                 true,
+			Cfg:                           &builderTest.Config{BeaconDB: db},
+			ErrSubmitBlindedBlockPostFulu: errors.New("post-Fulu builder submission failed"),
+		}
+
+		c := &mock.ChainService{State: beaconState, Root: parentRoot[:]}
+		proposerServer := &Server{
+			ChainStartFetcher: &mockExecution.Chain{},
+			Eth1InfoFetcher:   &mockExecution.Chain{},
+			Eth1BlockFetcher:  &mockExecution.Chain{},
+			BlockReceiver:     c,
+			BlobReceiver:      c,
+			HeadFetcher:       c,
+			BlockNotifier:     c.BlockNotifier(),
+			OperationNotifier: c.OperationNotifier(),
+			StateGen:          stategen.New(db, doublylinkedtree.New()),
+			TimeFetcher:       c,
+			SyncChecker:       &mockSync.Sync{IsSyncing: false},
+			BeaconDB:          db,
+			BlockBuilder:      mockBuilder,
+			P2P:               &mockp2p.MockBroadcaster{},
+		}
+
+		// Create a blinded block at slot 160 (epoch 5)
+		blindedBlock := util.NewBlindedBeaconBlockDeneb()
+		blindedBlock.Message.Slot = 160
+		blindedBlock.Message.ProposerIndex = 0
+		blindedBlock.Message.ParentRoot = parentRoot[:]
+		blindedBlock.Message.StateRoot = make([]byte, 32)
+
+		req := &ethpb.GenericSignedBeaconBlock{
+			Block: &ethpb.GenericSignedBeaconBlock_BlindedDeneb{BlindedDeneb: blindedBlock},
+		}
+
+		_, err := proposerServer.ProposeBeaconBlock(ctx, req)
+		require.ErrorContains(t, "Could not submit blinded block post-Fulu", err)
+		require.ErrorContains(t, "post-Fulu builder submission failed", err)
+	})
+
+	t.Run("pre-Fulu blinded block - uses regular handleBlindedBlock path", func(t *testing.T) {
+		// Set up config with Fulu fork at epoch 10 (future)
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.FuluForkEpoch = 10
+		params.OverrideBeaconConfig(cfg)
+
+		mockBuilder := &builderTest.MockBuilderService{
+			HasConfigured: true,
+			Cfg:           &builderTest.Config{BeaconDB: db},
+			PayloadDeneb:  &enginev1.ExecutionPayloadDeneb{},
+			BlobBundle:    &enginev1.BlobsBundle{},
+		}
+
+		c := &mock.ChainService{State: beaconState, Root: parentRoot[:]}
+		proposerServer := &Server{
+			ChainStartFetcher: &mockExecution.Chain{},
+			Eth1InfoFetcher:   &mockExecution.Chain{},
+			Eth1BlockFetcher:  &mockExecution.Chain{},
+			BlockReceiver:     c,
+			BlobReceiver:      c,
+			HeadFetcher:       c,
+			BlockNotifier:     c.BlockNotifier(),
+			OperationNotifier: c.OperationNotifier(),
+			StateGen:          stategen.New(db, doublylinkedtree.New()),
+			TimeFetcher:       c,
+			SyncChecker:       &mockSync.Sync{IsSyncing: false},
+			BeaconDB:          db,
+			BlockBuilder:      mockBuilder,
+			P2P:               &mockp2p.MockBroadcaster{},
+		}
+
+		// Create a blinded block at slot 160 (epoch 5, which is < FuluForkEpoch=10)
+		blindedBlock := util.NewBlindedBeaconBlockDeneb()
+		blindedBlock.Message.Slot = 160
+		blindedBlock.Message.ProposerIndex = 0
+		blindedBlock.Message.ParentRoot = parentRoot[:]
+		blindedBlock.Message.StateRoot = make([]byte, 32)
+
+		req := &ethpb.GenericSignedBeaconBlock{
+			Block: &ethpb.GenericSignedBeaconBlock_BlindedDeneb{BlindedDeneb: blindedBlock},
+		}
+
+		// This should NOT trigger the post-Fulu early return path, but use handleBlindedBlock instead
+		res, err := proposerServer.ProposeBeaconBlock(ctx, req)
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		require.NotEmpty(t, res.BlockRoot)
+	})
+
+	t.Run("boundary test - exactly at Fulu fork epoch", func(t *testing.T) {
+		// Set up config with Fulu fork at epoch 5
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.FuluForkEpoch = 5
+		params.OverrideBeaconConfig(cfg)
+
+		mockBuilder := &builderTest.MockBuilderService{
+			HasConfigured:                 true,
+			Cfg:                           &builderTest.Config{BeaconDB: db},
+			ErrSubmitBlindedBlockPostFulu: nil,
+		}
+
+		c := &mock.ChainService{State: beaconState, Root: parentRoot[:]}
+		proposerServer := &Server{
+			ChainStartFetcher: &mockExecution.Chain{},
+			Eth1InfoFetcher:   &mockExecution.Chain{},
+			Eth1BlockFetcher:  &mockExecution.Chain{},
+			BlockReceiver:     c,
+			BlobReceiver:      c,
+			HeadFetcher:       c,
+			BlockNotifier:     c.BlockNotifier(),
+			OperationNotifier: c.OperationNotifier(),
+			StateGen:          stategen.New(db, doublylinkedtree.New()),
+			TimeFetcher:       c,
+			SyncChecker:       &mockSync.Sync{IsSyncing: false},
+			BeaconDB:          db,
+			BlockBuilder:      mockBuilder,
+			P2P:               &mockp2p.MockBroadcaster{},
+		}
+
+		// Create a blinded block at slot 160 (exactly epoch 5)
+		blindedBlock := util.NewBlindedBeaconBlockDeneb()
+		blindedBlock.Message.Slot = 160 // 160/32 = 5 (exactly at FuluForkEpoch)
+		blindedBlock.Message.ProposerIndex = 0
+		blindedBlock.Message.ParentRoot = parentRoot[:]
+		blindedBlock.Message.StateRoot = make([]byte, 32)
+
+		req := &ethpb.GenericSignedBeaconBlock{
+			Block: &ethpb.GenericSignedBeaconBlock_BlindedDeneb{BlindedDeneb: blindedBlock},
+		}
+
+		// Should trigger post-Fulu path since epoch 5 >= FuluForkEpoch (5)
+		res, err := proposerServer.ProposeBeaconBlock(ctx, req)
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		require.NotEmpty(t, res.BlockRoot)
+	})
+
+	t.Run("unblinded block - not affected by post-Fulu condition", func(t *testing.T) {
+		// Set up config with Fulu fork at epoch 5
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.FuluForkEpoch = 5
+		params.OverrideBeaconConfig(cfg)
+
+		c := &mock.ChainService{State: beaconState, Root: parentRoot[:]}
+		proposerServer := &Server{
+			ChainStartFetcher: &mockExecution.Chain{},
+			Eth1InfoFetcher:   &mockExecution.Chain{},
+			Eth1BlockFetcher:  &mockExecution.Chain{},
+			BlockReceiver:     c,
+			BlobReceiver:      c,
+			HeadFetcher:       c,
+			BlockNotifier:     c.BlockNotifier(),
+			OperationNotifier: c.OperationNotifier(),
+			StateGen:          stategen.New(db, doublylinkedtree.New()),
+			TimeFetcher:       c,
+			SyncChecker:       &mockSync.Sync{IsSyncing: false},
+			BeaconDB:          db,
+			P2P:               &mockp2p.MockBroadcaster{},
+		}
+
+		// Create an unblinded block at slot 160 (epoch 5)
+		unblindeBlock := util.NewBeaconBlockDeneb()
+		unblindeBlock.Block.Slot = 160
+		unblindeBlock.Block.ProposerIndex = 0
+		unblindeBlock.Block.ParentRoot = parentRoot[:]
+		unblindeBlock.Block.StateRoot = make([]byte, 32)
+
+		req := &ethpb.GenericSignedBeaconBlock{
+			Block: &ethpb.GenericSignedBeaconBlock_Deneb{
+				Deneb: &ethpb.SignedBeaconBlockContentsDeneb{
+					Block: unblindeBlock,
+				},
+			},
+		}
+
+		// Unblinded blocks should not trigger post-Fulu condition, even at epoch >= FuluForkEpoch
+		res, err := proposerServer.ProposeBeaconBlock(ctx, req)
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		require.NotEmpty(t, res.BlockRoot)
+	})
 }

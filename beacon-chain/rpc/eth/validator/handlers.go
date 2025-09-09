@@ -26,9 +26,9 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
-	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	validator2 "github.com/OffchainLabs/prysm/v6/consensus-types/validator"
+	mvslice "github.com/OffchainLabs/prysm/v6/container/multi-value-slice"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
@@ -98,6 +98,39 @@ func (s *Server) GetAggregateAttestationV2(w http.ResponseWriter, r *http.Reques
 	if agg == nil {
 		return
 	}
+
+	if httputil.RespondWithSsz(r) {
+		var data []byte
+		var err error
+		if v >= version.Electra {
+			typedAgg, ok := agg.(*ethpbalpha.AttestationElectra)
+			if !ok {
+				httputil.HandleError(w, fmt.Sprintf("Attestation is not of type %T", &ethpbalpha.AttestationElectra{}), http.StatusInternalServerError)
+				return
+			}
+			data, err = typedAgg.MarshalSSZ()
+			if err != nil {
+				httputil.HandleError(w, "Could not marshal attestation: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		} else {
+			typedAgg, ok := agg.(*ethpbalpha.Attestation)
+			if !ok {
+				httputil.HandleError(w, fmt.Sprintf("Attestation is not of type %T", &ethpbalpha.Attestation{}), http.StatusInternalServerError)
+				return
+			}
+			data, err = typedAgg.MarshalSSZ()
+			if err != nil {
+				httputil.HandleError(w, "Could not marshal attestation: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+
+		w.Header().Set(api.VersionHeader, version.String(v))
+		httputil.WriteSsz(w, data)
+		return
+	}
+
 	resp := &structs.AggregateAttestationResponse{
 		Version: version.String(v),
 	}
@@ -537,7 +570,7 @@ func (s *Server) SubmitBeaconCommitteeSubscription(w http.ResponseWriter, r *htt
 		subscriptions[i] = consensusItem
 		val, err := st.ValidatorAtIndexReadOnly(consensusItem.ValidatorIndex)
 		if err != nil {
-			if errors.Is(err, consensus_types.ErrOutOfBounds) {
+			if errors.Is(err, mvslice.ErrOutOfBounds) {
 				httputil.HandleError(w, "Could not get validator: "+err.Error(), http.StatusBadRequest)
 				return
 			}
@@ -607,6 +640,16 @@ func (s *Server) GetAttestationData(w http.ResponseWriter, r *http.Request) {
 
 	if rpcError != nil {
 		httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
+		return
+	}
+
+	if httputil.RespondWithSsz(r) {
+		data, err := attestationData.MarshalSSZ()
+		if err != nil {
+			httputil.HandleError(w, "Could not marshal attestation data: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		httputil.WriteSsz(w, data)
 		return
 	}
 
@@ -776,7 +819,7 @@ func (s *Server) PrepareBeaconProposer(w http.ResponseWriter, r *http.Request) {
 		if feeRecipient == primitives.ExecutionAddress([20]byte{}) {
 			feeRecipient = primitives.ExecutionAddress(params.BeaconConfig().DefaultFeeRecipient)
 			if feeRecipient == primitives.ExecutionAddress([20]byte{}) {
-				log.WithField("validatorIndex", validatorIndex).Warn("fee recipient is the burn address")
+				log.WithField("validatorIndex", validatorIndex).Warn("Fee recipient is the burn address")
 			}
 		}
 		val := cache.TrackedValidator{
@@ -986,7 +1029,7 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 			httputil.HandleError(w, fmt.Sprintf("Could not get head state: %v ", err), http.StatusInternalServerError)
 			return
 		}
-		// Advance state with empty transitions up to the requested epoch start slot.
+		// Notice that even for Fulu requests for the next epoch, we are only advancing the state to the start of the current epoch.
 		if st.Slot() < epochStartSlot {
 			headRoot, err := s.HeadFetcher.HeadRoot(ctx)
 			if err != nil {

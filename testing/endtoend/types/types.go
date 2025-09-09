@@ -6,9 +6,11 @@ import (
 	"context"
 	"os"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 
@@ -54,6 +56,14 @@ func WithValidatorRESTApi() E2EConfigOpt {
 func WithBuilder() E2EConfigOpt {
 	return func(cfg *E2EConfig) {
 		cfg.UseBuilder = true
+	}
+}
+
+func WithSSZOnly() E2EConfigOpt {
+	return func(cfg *E2EConfig) {
+		if err := os.Setenv(params.EnvNameOverrideAccept, api.OctetStreamMediaType); err != nil {
+			logrus.Fatal(err)
+		}
 	}
 }
 

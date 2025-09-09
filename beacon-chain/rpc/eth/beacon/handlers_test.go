@@ -14,6 +14,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	chainMock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
@@ -40,9 +41,9 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
-	GoKZG "github.com/crate-crypto/go-kzg-4844"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/go-bitfield"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/mock"
@@ -907,6 +908,100 @@ func TestGetBlockAttestations(t *testing.T) {
 				assert.Equal(t, false, resp.ExecutionOptimistic)
 				assert.Equal(t, "phase0", resp.Version)
 			})
+		})
+	})
+
+	t.Run("empty-attestations", func(t *testing.T) {
+		t.Run("v1", func(t *testing.T) {
+			b := util.NewBeaconBlock()
+			b.Block.Body.Attestations = []*eth.Attestation{} // Explicitly set empty attestations
+			sb, err := blocks.NewSignedBeaconBlock(b)
+			require.NoError(t, err)
+
+			mockChainService := &chainMock.ChainService{
+				FinalizedRoots: map[[32]byte]bool{},
+			}
+
+			s := &Server{
+				OptimisticModeFetcher: mockChainService,
+				FinalizationFetcher:   mockChainService,
+				Blocker:               &testutil.MockBlocker{BlockToReturn: sb},
+			}
+
+			request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/beacon/blocks/{block_id}/attestations", nil)
+			request.SetPathValue("block_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetBlockAttestations(writer, request)
+			require.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.GetBlockAttestationsResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+
+			// Ensure data is empty array, not null
+			require.NotNil(t, resp.Data)
+			assert.Equal(t, 0, len(resp.Data))
+		})
+
+		t.Run("v2-pre-electra", func(t *testing.T) {
+			b := util.NewBeaconBlock()
+			b.Block.Body.Attestations = []*eth.Attestation{} // Explicitly set empty attestations
+			sb, err := blocks.NewSignedBeaconBlock(b)
+			require.NoError(t, err)
+			mockChainService := &chainMock.ChainService{
+				FinalizedRoots: map[[32]byte]bool{},
+			}
+
+			s := &Server{
+				OptimisticModeFetcher: mockChainService,
+				FinalizationFetcher:   mockChainService,
+				Blocker:               &testutil.MockBlocker{BlockToReturn: sb},
+			}
+
+			request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v2/beacon/blocks/{block_id}/attestations", nil)
+			request.SetPathValue("block_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetBlockAttestationsV2(writer, request)
+			require.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.GetBlockAttestationsV2Response{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+			// Ensure data is "[]", not null
+			require.NotNil(t, resp.Data)
+			assert.Equal(t, string(json.RawMessage("[]")), string(resp.Data))
+		})
+
+		t.Run("v2-electra", func(t *testing.T) {
+			eb := util.NewBeaconBlockFulu()
+			eb.Block.Body.Attestations = []*eth.AttestationElectra{} // Explicitly set empty attestations
+			esb, err := blocks.NewSignedBeaconBlock(eb)
+			require.NoError(t, err)
+
+			mockChainService := &chainMock.ChainService{
+				FinalizedRoots: map[[32]byte]bool{},
+			}
+
+			s := &Server{
+				OptimisticModeFetcher: mockChainService,
+				FinalizationFetcher:   mockChainService,
+				Blocker:               &testutil.MockBlocker{BlockToReturn: esb},
+			}
+
+			request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v2/beacon/blocks/{block_id}/attestations", nil)
+			request.SetPathValue("block_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetBlockAttestationsV2(writer, request)
+			require.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.GetBlockAttestationsV2Response{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+
+			// Ensure data is "[]", not null
+			require.NotNil(t, resp.Data)
+			assert.Equal(t, string(json.RawMessage("[]")), string(resp.Data))
+			assert.Equal(t, "fulu", resp.Version)
 		})
 	})
 }
@@ -3490,7 +3585,7 @@ func TestPublishBlindedBlockV2SSZ(t *testing.T) {
 }
 
 func TestValidateConsensus(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	parentState, privs := util.DeterministicGenesisState(t, params.MinimalSpecConfig().MinGenesisActiveValidatorCount)
 	parentBlock, err := util.GenerateFullBlock(parentState, privs, util.DefaultBlockGenConfig(), parentState.Slot())
@@ -3503,9 +3598,14 @@ func TestValidateConsensus(t *testing.T) {
 	require.NoError(t, err)
 	parentRoot, err := parentSbb.Block().HashTreeRoot()
 	require.NoError(t, err)
+	mockChainService := &chainMock.ChainService{
+		State: parentState,
+		Root:  parentRoot[:],
+	}
 	server := &Server{
-		Blocker: &testutil.MockBlocker{RootBlockMap: map[[32]byte]interfaces.ReadOnlySignedBeaconBlock{parentRoot: parentSbb}},
-		Stater:  &testutil.MockStater{StatesByRoot: map[[32]byte]state.BeaconState{bytesutil.ToBytes32(parentBlock.Block.StateRoot): parentState}},
+		Blocker:     &testutil.MockBlocker{RootBlockMap: map[[32]byte]interfaces.ReadOnlySignedBeaconBlock{parentRoot: parentSbb}},
+		Stater:      &testutil.MockStater{StatesByRoot: map[[32]byte]state.BeaconState{bytesutil.ToBytes32(parentBlock.Block.StateRoot): parentState}},
+		HeadFetcher: mockChainService,
 	}
 
 	require.NoError(t, server.validateConsensus(ctx, &eth.GenericSignedBeaconBlock{
@@ -3525,7 +3625,7 @@ func TestValidateEquivocation(t *testing.T) {
 		roblock, err := blocks.NewROBlockWithRoot(blk, bytesutil.ToBytes32([]byte("root")))
 		require.NoError(t, err)
 		fc := doublylinkedtree.New()
-		require.NoError(t, fc.InsertNode(context.Background(), st, roblock))
+		require.NoError(t, fc.InsertNode(t.Context(), st, roblock))
 		server := &Server{
 			ForkchoiceFetcher: &chainMock.ChainService{ForkChoiceStore: fc},
 		}
@@ -3544,7 +3644,7 @@ func TestValidateEquivocation(t *testing.T) {
 		require.NoError(t, err)
 
 		fc := doublylinkedtree.New()
-		require.NoError(t, fc.InsertNode(context.Background(), st, roblock))
+		require.NoError(t, fc.InsertNode(t.Context(), st, roblock))
 		server := &Server{
 			ForkchoiceFetcher: &chainMock.ChainService{ForkChoiceStore: fc},
 		}
@@ -3556,7 +3656,7 @@ func TestValidateEquivocation(t *testing.T) {
 
 func TestServer_GetBlockRoot(t *testing.T) {
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	url := "http://example.com/eth/v1/beacon/blocks/{block_id}/root"
 	genBlk, blkContainers := fillDBTestBlocks(ctx, t, beaconDB)
@@ -3767,7 +3867,7 @@ func TestServer_GetBlockRoot(t *testing.T) {
 }
 
 func TestGetStateFork(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/beacon/states/{state_id}/fork", nil)
 	request.SetPathValue("state_id", "head")
 	request.Header.Set("Accept", "application/octet-stream")
@@ -3877,7 +3977,7 @@ func TestGetStateFork(t *testing.T) {
 
 func TestGetCommittees(t *testing.T) {
 	db := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	url := "http://example.com/eth/v1/beacon/states/{state_id}/committees"
 
 	var st state.BeaconState
@@ -4078,11 +4178,52 @@ func TestGetCommittees(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, true, resp.Finalized)
 	})
+
+	t.Run("Invalid slot for given epoch", func(t *testing.T) {
+		cases := []struct {
+			name      string
+			epoch     string
+			slot      string
+			expectMsg string
+		}{
+			{
+				name:      "Slot after the specified epoch",
+				epoch:     "10",
+				slot:      "400",
+				expectMsg: "Slot 400 does not belong in epoch 10",
+			},
+			{
+				name:      "Slot before the specified epoch",
+				epoch:     "10",
+				slot:      "300",
+				expectMsg: "Slot 300 does not belong in epoch 10",
+			},
+		}
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				query := url + "?epoch=" + tc.epoch + "&slot=" + tc.slot
+				request := httptest.NewRequest(http.MethodGet, query, nil)
+				request.SetPathValue("state_id", "head")
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+				s.GetCommittees(writer, request)
+				assert.Equal(t, http.StatusBadRequest, writer.Code)
+				var resp struct {
+					Message string `json:"message"`
+					Code    int    `json:"code"`
+				}
+				err := json.Unmarshal(writer.Body.Bytes(), &resp)
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectMsg, resp.Message)
+			})
+		}
+	})
 }
 
 func TestGetBlockHeaders(t *testing.T) {
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	_, blkContainers := fillDBTestBlocks(ctx, t, beaconDB)
 	headBlock := blkContainers[len(blkContainers)-1]
@@ -4674,7 +4815,7 @@ func TestGetDepositSnapshot(t *testing.T) {
 	chainData := &eth.ETH1ChainData{
 		DepositSnapshot: snapshot.ToProto(),
 	}
-	err = beaconDB.SaveExecutionChainData(context.Background(), chainData)
+	err = beaconDB.SaveExecutionChainData(t.Context(), chainData)
 	require.NoError(t, err)
 	s := Server{
 		BeaconDB: beaconDB,
@@ -4726,33 +4867,522 @@ func TestServer_broadcastBlobSidecars(t *testing.T) {
 
 	blk, err := blocks.NewSignedBeaconBlock(b.Block)
 	require.NoError(t, err)
-	require.NoError(t, server.broadcastSeenBlockSidecars(context.Background(), blk, b.GetDeneb().Blobs, b.GetDeneb().KzgProofs))
+	require.NoError(t, server.broadcastSeenBlockSidecars(t.Context(), blk, b.GetDeneb().Blobs, b.GetDeneb().KzgProofs))
 	require.LogsDoNotContain(t, hook, "Broadcasted blob sidecar for already seen block")
 
 	server.FinalizationFetcher = &chainMock.ChainService{NotFinalized: false}
-	require.NoError(t, server.broadcastSeenBlockSidecars(context.Background(), blk, b.GetDeneb().Blobs, b.GetDeneb().KzgProofs))
+	require.NoError(t, server.broadcastSeenBlockSidecars(t.Context(), blk, b.GetDeneb().Blobs, b.GetDeneb().KzgProofs))
 	require.LogsContain(t, hook, "Broadcasted blob sidecar for already seen block")
 }
 
-func Test_validateBlobSidecars(t *testing.T) {
+func Test_validateBlobs(t *testing.T) {
+	require.NoError(t, kzg.Start())
+
 	blob := util.GetRandBlob(123)
-	commitment := GoKZG.KZGCommitment{180, 218, 156, 194, 59, 20, 10, 189, 186, 254, 132, 93, 7, 127, 104, 172, 238, 240, 237, 70, 83, 89, 1, 152, 99, 0, 165, 65, 143, 62, 20, 215, 230, 14, 205, 95, 28, 245, 54, 25, 160, 16, 178, 31, 232, 207, 38, 85}
-	proof := GoKZG.KZGProof{128, 110, 116, 170, 56, 111, 126, 87, 229, 234, 211, 42, 110, 150, 129, 206, 73, 142, 167, 243, 90, 149, 240, 240, 236, 204, 143, 182, 229, 249, 81, 27, 153, 171, 83, 70, 144, 250, 42, 1, 188, 215, 71, 235, 30, 7, 175, 86}
+	// Generate proper commitment and proof for the blob
+	var kzgBlob kzg.Blob
+	copy(kzgBlob[:], blob[:])
+	commitment, err := kzg.BlobToKZGCommitment(&kzgBlob)
+	require.NoError(t, err)
+	proof, err := kzg.ComputeBlobKZGProof(&kzgBlob, commitment)
+	require.NoError(t, err)
 	blk := util.NewBeaconBlockDeneb()
 	blk.Block.Body.BlobKzgCommitments = [][]byte{commitment[:]}
 	b, err := blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
 	s := &Server{}
-	require.NoError(t, s.validateBlobSidecars(b, [][]byte{blob[:]}, [][]byte{proof[:]}))
+	require.NoError(t, s.validateBlobs(b, [][]byte{blob[:]}, [][]byte{proof[:]}))
 
-	require.ErrorContains(t, "number of blobs, proofs, and commitments do not match", s.validateBlobSidecars(b, [][]byte{blob[:]}, [][]byte{}))
+	require.ErrorContains(t, "number of blobs (1), proofs (0), and commitments (1) do not match", s.validateBlobs(b, [][]byte{blob[:]}, [][]byte{}))
 
 	sk, err := bls.RandKey()
 	require.NoError(t, err)
 	blk.Block.Body.BlobKzgCommitments = [][]byte{sk.PublicKey().Marshal()}
 	b, err = blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
-	require.ErrorContains(t, "could not verify blob proof: can't verify opening proof", s.validateBlobSidecars(b, [][]byte{blob[:]}, [][]byte{proof[:]}))
+	require.ErrorContains(t, "could not verify blob proofs", s.validateBlobs(b, [][]byte{blob[:]}, [][]byte{proof[:]}))
+
+	blobs := [][]byte{}
+	commitments := [][]byte{}
+	proofs := [][]byte{}
+	for i := 0; i < 10; i++ {
+		blobs = append(blobs, blob[:])
+		commitments = append(commitments, commitment[:])
+		proofs = append(proofs, proof[:])
+	}
+	t.Run("pre-Deneb block should return early", func(t *testing.T) {
+		// Create a pre-Deneb block (e.g., Capella)
+		blk := util.NewBeaconBlockCapella()
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		s := &Server{}
+		// Should return nil for pre-Deneb blocks regardless of blobs
+		require.NoError(t, s.validateBlobs(b, [][]byte{}, [][]byte{}))
+		require.NoError(t, s.validateBlobs(b, blobs[:1], proofs[:1]))
+	})
+
+	t.Run("Deneb block with valid single blob", func(t *testing.T) {
+		blk := util.NewBeaconBlockDeneb()
+		blk.Block.Body.BlobKzgCommitments = [][]byte{commitment[:]}
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		s := &Server{}
+		require.NoError(t, s.validateBlobs(b, [][]byte{blob[:]}, [][]byte{proof[:]}))
+	})
+
+	t.Run("Deneb block with max blobs (6)", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		defer params.OverrideBeaconConfig(cfg)
+
+		testCfg := params.BeaconConfig().Copy()
+		testCfg.DenebForkEpoch = 0
+		testCfg.ElectraForkEpoch = 100
+		testCfg.DeprecatedMaxBlobsPerBlock = 6
+		params.OverrideBeaconConfig(testCfg)
+
+		blk := util.NewBeaconBlockDeneb()
+		blk.Block.Slot = 10 // Deneb slot
+		blk.Block.Body.BlobKzgCommitments = commitments[:6]
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		s := &Server{}
+		// Should pass with exactly 6 blobs
+		require.NoError(t, s.validateBlobs(b, blobs[:6], proofs[:6]))
+	})
+
+	t.Run("Deneb block exceeding max blobs", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		defer params.OverrideBeaconConfig(cfg)
+
+		testCfg := params.BeaconConfig().Copy()
+		testCfg.DenebForkEpoch = 0
+		testCfg.ElectraForkEpoch = 100
+		testCfg.DeprecatedMaxBlobsPerBlock = 6
+		params.OverrideBeaconConfig(testCfg)
+
+		blk := util.NewBeaconBlockDeneb()
+		blk.Block.Slot = 10 // Deneb slot
+		blk.Block.Body.BlobKzgCommitments = commitments[:7]
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		s := &Server{}
+		// Should fail with 7 blobs when max is 6
+		err = s.validateBlobs(b, blobs[:7], proofs[:7])
+		require.ErrorContains(t, "number of blobs over max, 7 > 6", err)
+	})
+
+	t.Run("Electra block with valid blobs", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		defer params.OverrideBeaconConfig(cfg)
+
+		// Set up Electra config with max 9 blobs
+		testCfg := params.BeaconConfig().Copy()
+		testCfg.DenebForkEpoch = 0
+		testCfg.ElectraForkEpoch = 5
+		testCfg.DeprecatedMaxBlobsPerBlock = 6
+		testCfg.DeprecatedMaxBlobsPerBlockElectra = 9
+		params.OverrideBeaconConfig(testCfg)
+
+		blk := util.NewBeaconBlockElectra()
+		blk.Block.Slot = 160 // Electra slot (epoch 5+)
+		blk.Block.Body.BlobKzgCommitments = commitments[:9]
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		s := &Server{}
+		// Should pass with 9 blobs in Electra
+		require.NoError(t, s.validateBlobs(b, blobs[:9], proofs[:9]))
+	})
+
+	t.Run("Electra block exceeding max blobs", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		defer params.OverrideBeaconConfig(cfg)
+
+		// Set up Electra config with max 9 blobs
+		testCfg := params.BeaconConfig().Copy()
+		testCfg.DenebForkEpoch = 0
+		testCfg.ElectraForkEpoch = 5
+		testCfg.DeprecatedMaxBlobsPerBlock = 6
+		testCfg.DeprecatedMaxBlobsPerBlockElectra = 9
+		params.OverrideBeaconConfig(testCfg)
+
+		blk := util.NewBeaconBlockElectra()
+		blk.Block.Slot = 160 // Electra slot
+		blk.Block.Body.BlobKzgCommitments = commitments[:10]
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		s := &Server{}
+		// Should fail with 10 blobs when max is 9
+		err = s.validateBlobs(b, blobs[:10], proofs[:10])
+		require.ErrorContains(t, "number of blobs over max, 10 > 9", err)
+	})
+
+	t.Run("Fulu block with valid cell proofs", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		defer params.OverrideBeaconConfig(cfg)
+
+		testCfg := params.BeaconConfig().Copy()
+		testCfg.DenebForkEpoch = 0
+		testCfg.ElectraForkEpoch = 5
+		testCfg.FuluForkEpoch = 10
+		testCfg.DeprecatedMaxBlobsPerBlock = 6
+		testCfg.DeprecatedMaxBlobsPerBlockElectra = 9
+		testCfg.NumberOfColumns = 128 // Standard PeerDAS configuration
+		params.OverrideBeaconConfig(testCfg)
+
+		// Create Fulu block with proper cell proofs
+		blk := util.NewBeaconBlockFulu()
+		blk.Block.Slot = 320 // Epoch 10 (Fulu fork)
+
+		// Generate valid commitments and cell proofs for testing
+		blobCount := 2
+		commitments := make([][]byte, blobCount)
+		fuluBlobs := make([][]byte, blobCount)
+		var kzgBlobs []kzg.Blob
+
+		for i := 0; i < blobCount; i++ {
+			blob := util.GetRandBlob(int64(i))
+			fuluBlobs[i] = blob[:]
+			var kzgBlob kzg.Blob
+			copy(kzgBlob[:], blob[:])
+			kzgBlobs = append(kzgBlobs, kzgBlob)
+
+			// Generate commitment
+			commitment, err := kzg.BlobToKZGCommitment(&kzgBlob)
+			require.NoError(t, err)
+			commitments[i] = commitment[:]
+		}
+
+		blk.Block.Body.BlobKzgCommitments = commitments
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+
+		// Generate cell proofs for the blobs (flattened format like execution client)
+		numberOfColumns := params.BeaconConfig().NumberOfColumns
+		cellProofs := make([][]byte, uint64(blobCount)*numberOfColumns)
+		for blobIdx := 0; blobIdx < blobCount; blobIdx++ {
+			cellsAndProofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlobs[blobIdx])
+			require.NoError(t, err)
+
+			for colIdx := uint64(0); colIdx < numberOfColumns; colIdx++ {
+				cellProofIdx := uint64(blobIdx)*numberOfColumns + colIdx
+				cellProofs[cellProofIdx] = cellsAndProofs.Proofs[colIdx][:]
+			}
+		}
+
+		s := &Server{}
+		// Should use cell batch verification for Fulu blocks
+		require.NoError(t, s.validateBlobs(b, fuluBlobs, cellProofs))
+	})
+
+	t.Run("Fulu block with invalid cell proof count", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		defer params.OverrideBeaconConfig(cfg)
+
+		testCfg := params.BeaconConfig().Copy()
+		testCfg.DenebForkEpoch = 0
+		testCfg.ElectraForkEpoch = 5
+		testCfg.FuluForkEpoch = 10
+		testCfg.NumberOfColumns = 128
+		params.OverrideBeaconConfig(testCfg)
+
+		blk := util.NewBeaconBlockFulu()
+		blk.Block.Slot = 320 // Epoch 10 (Fulu fork)
+
+		// Create valid commitments but wrong number of cell proofs
+		blobCount := 2
+		commitments := make([][]byte, blobCount)
+		fuluBlobs := make([][]byte, blobCount)
+		for i := 0; i < blobCount; i++ {
+			blob := util.GetRandBlob(int64(i))
+			fuluBlobs[i] = blob[:]
+
+			var kzgBlob kzg.Blob
+			copy(kzgBlob[:], blob[:])
+			commitment, err := kzg.BlobToKZGCommitment(&kzgBlob)
+			require.NoError(t, err)
+			commitments[i] = commitment[:]
+		}
+
+		blk.Block.Body.BlobKzgCommitments = commitments
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+
+		// Wrong number of cell proofs (should be blobCount * numberOfColumns)
+		wrongCellProofs := make([][]byte, 10) // Too few proofs
+
+		s := &Server{}
+		err = s.validateBlobs(b, fuluBlobs, wrongCellProofs)
+		require.ErrorContains(t, "do not match", err)
+	})
+
+	t.Run("Deneb block with invalid blob proof", func(t *testing.T) {
+		blob := util.GetRandBlob(123)
+		invalidProof := make([]byte, 48) // All zeros - invalid proof
+
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+
+		blk := util.NewBeaconBlockDeneb()
+		blk.Block.Body.BlobKzgCommitments = [][]byte{sk.PublicKey().Marshal()}
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+
+		s := &Server{}
+		err = s.validateBlobs(b, [][]byte{blob[:]}, [][]byte{invalidProof})
+		require.ErrorContains(t, "could not verify blob proofs", err)
+	})
+
+	t.Run("empty blobs and proofs should pass", func(t *testing.T) {
+		blk := util.NewBeaconBlockDeneb()
+		blk.Block.Body.BlobKzgCommitments = [][]byte{}
+		b, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+
+		s := &Server{}
+		require.NoError(t, s.validateBlobs(b, [][]byte{}, [][]byte{}))
+	})
+
+	t.Run("BlobSchedule with progressive increases (BPO)", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		defer params.OverrideBeaconConfig(cfg)
+
+		// Set up config with BlobSchedule (BPO - Blob Production Optimization)
+		testCfg := params.BeaconConfig().Copy()
+		testCfg.DenebForkEpoch = 0
+		testCfg.ElectraForkEpoch = 100
+		testCfg.FuluForkEpoch = 200
+		testCfg.DeprecatedMaxBlobsPerBlock = 6
+		testCfg.DeprecatedMaxBlobsPerBlockElectra = 9
+		// Define blob schedule with progressive increases
+		testCfg.BlobSchedule = []params.BlobScheduleEntry{
+			{Epoch: 0, MaxBlobsPerBlock: 3},  // Start with 3 blobs
+			{Epoch: 10, MaxBlobsPerBlock: 5}, // Increase to 5 at epoch 10
+			{Epoch: 20, MaxBlobsPerBlock: 7}, // Increase to 7 at epoch 20
+			{Epoch: 30, MaxBlobsPerBlock: 9}, // Increase to 9 at epoch 30
+		}
+		params.OverrideBeaconConfig(testCfg)
+
+		s := &Server{}
+
+		// Test epoch 0-9: max 3 blobs
+		t.Run("epoch 0-9: max 3 blobs", func(t *testing.T) {
+			blk := util.NewBeaconBlockDeneb()
+			blk.Block.Slot = 5 // Epoch 0
+			blk.Block.Body.BlobKzgCommitments = commitments[:3]
+			b, err := blocks.NewSignedBeaconBlock(blk)
+			require.NoError(t, err)
+			require.NoError(t, s.validateBlobs(b, blobs[:3], proofs[:3]))
+
+			// Should fail with 4 blobs
+			blk.Block.Body.BlobKzgCommitments = commitments[:4]
+			b, err = blocks.NewSignedBeaconBlock(blk)
+			require.NoError(t, err)
+			err = s.validateBlobs(b, blobs[:4], proofs[:4])
+			require.ErrorContains(t, "number of blobs over max, 4 > 3", err)
+		})
+
+		// Test epoch 30+: max 9 blobs
+		t.Run("epoch 30+: max 9 blobs", func(t *testing.T) {
+			blk := util.NewBeaconBlockDeneb()
+			blk.Block.Slot = 960 // Epoch 30
+			blk.Block.Body.BlobKzgCommitments = commitments[:9]
+			b, err := blocks.NewSignedBeaconBlock(blk)
+			require.NoError(t, err)
+			require.NoError(t, s.validateBlobs(b, blobs[:9], proofs[:9]))
+
+			// Should fail with 10 blobs
+			blk.Block.Body.BlobKzgCommitments = commitments[:10]
+			b, err = blocks.NewSignedBeaconBlock(blk)
+			require.NoError(t, err)
+			err = s.validateBlobs(b, blobs[:10], proofs[:10])
+			require.ErrorContains(t, "number of blobs over max, 10 > 9", err)
+		})
+	})
+}
+
+func TestGetPendingConsolidations(t *testing.T) {
+	st, _ := util.DeterministicGenesisStateElectra(t, 10)
+
+	cs := make([]*eth.PendingConsolidation, 10)
+	for i := 0; i < len(cs); i += 1 {
+		cs[i] = &eth.PendingConsolidation{
+			SourceIndex: primitives.ValidatorIndex(i),
+			TargetIndex: primitives.ValidatorIndex(i + 1),
+		}
+	}
+	require.NoError(t, st.SetPendingConsolidations(cs))
+
+	chainService := &chainMock.ChainService{
+		Optimistic:     false,
+		FinalizedRoots: map[[32]byte]bool{},
+	}
+	server := &Server{
+		Stater: &testutil.MockStater{
+			BeaconState: st,
+		},
+		OptimisticModeFetcher: chainService,
+		FinalizationFetcher:   chainService,
+	}
+
+	t.Run("json response", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/pending_consolidations", nil)
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		server.GetPendingConsolidations(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, "electra", rec.Header().Get(api.VersionHeader))
+
+		var resp structs.GetPendingConsolidationsResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+
+		expectedVersion := version.String(st.Version())
+		require.Equal(t, expectedVersion, resp.Version)
+
+		require.Equal(t, false, resp.ExecutionOptimistic)
+		require.Equal(t, false, resp.Finalized)
+
+		expectedConsolidations := structs.PendingConsolidationsFromConsensus(cs)
+		require.DeepEqual(t, expectedConsolidations, resp.Data)
+	})
+	t.Run("ssz response", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/pending_consolidations", nil)
+		req.Header.Set("Accept", "application/octet-stream")
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		server.GetPendingConsolidations(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, "electra", rec.Header().Get(api.VersionHeader))
+
+		responseBytes := rec.Body.Bytes()
+		var recoveredConsolidations []*eth.PendingConsolidation
+
+		// Verify total size matches expected number of deposits
+		consolidationSize := (&eth.PendingConsolidation{}).SizeSSZ()
+		require.Equal(t, len(responseBytes), consolidationSize*len(cs))
+
+		for i := 0; i < len(cs); i++ {
+			start := i * consolidationSize
+			end := start + consolidationSize
+
+			var c eth.PendingConsolidation
+			require.NoError(t, c.UnmarshalSSZ(responseBytes[start:end]))
+			recoveredConsolidations = append(recoveredConsolidations, &c)
+		}
+		require.DeepEqual(t, cs, recoveredConsolidations)
+	})
+	t.Run("pre electra state", func(t *testing.T) {
+		preElectraSt, _ := util.DeterministicGenesisStateDeneb(t, 1)
+		preElectraServer := &Server{
+			Stater: &testutil.MockStater{
+				BeaconState: preElectraSt,
+			},
+			OptimisticModeFetcher: chainService,
+			FinalizationFetcher:   chainService,
+		}
+
+		// Test JSON request
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/pending_consolidations", nil)
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		preElectraServer.GetPendingConsolidations(rec, req)
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+
+		var errResp struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &errResp))
+		require.Equal(t, "state_id is prior to electra", errResp.Message)
+
+		// Test SSZ request
+		sszReq := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/pending_consolidations", nil)
+		sszReq.Header.Set("Accept", "application/octet-stream")
+		sszReq.SetPathValue("state_id", "head")
+		sszRec := httptest.NewRecorder()
+		sszRec.Body = new(bytes.Buffer)
+
+		preElectraServer.GetPendingConsolidations(sszRec, sszReq)
+		require.Equal(t, http.StatusBadRequest, sszRec.Code)
+
+		var sszErrResp struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		}
+		require.NoError(t, json.Unmarshal(sszRec.Body.Bytes(), &sszErrResp))
+		require.Equal(t, "state_id is prior to electra", sszErrResp.Message)
+	})
+	t.Run("missing state_id parameter", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/pending_consolidations", nil)
+		// Intentionally not setting state_id
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		server.GetPendingConsolidations(rec, req)
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+
+		var errResp struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &errResp))
+		require.Equal(t, "state_id is required in URL params", errResp.Message)
+	})
+	t.Run("optimistic node", func(t *testing.T) {
+		optimisticChainService := &chainMock.ChainService{
+			Optimistic:     true,
+			FinalizedRoots: map[[32]byte]bool{},
+		}
+		optimisticServer := &Server{
+			Stater:                server.Stater,
+			OptimisticModeFetcher: optimisticChainService,
+			FinalizationFetcher:   optimisticChainService,
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/pending_consolidations", nil)
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		optimisticServer.GetPendingConsolidations(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var resp structs.GetPendingConsolidationsResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		require.Equal(t, true, resp.ExecutionOptimistic)
+	})
+
+	t.Run("finalized node", func(t *testing.T) {
+		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		require.NoError(t, err)
+
+		finalizedChainService := &chainMock.ChainService{
+			Optimistic:     false,
+			FinalizedRoots: map[[32]byte]bool{blockRoot: true},
+		}
+		finalizedServer := &Server{
+			Stater:                server.Stater,
+			OptimisticModeFetcher: finalizedChainService,
+			FinalizationFetcher:   finalizedChainService,
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/pending_consolidations", nil)
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		finalizedServer.GetPendingConsolidations(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var resp structs.GetPendingConsolidationsResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		require.Equal(t, true, resp.Finalized)
+	})
 }
 
 func TestGetPendingDeposits(t *testing.T) {
@@ -5133,6 +5763,193 @@ func TestGetPendingPartialWithdrawals(t *testing.T) {
 		require.Equal(t, http.StatusOK, rec.Code)
 
 		var resp structs.GetPendingPartialWithdrawalsResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		require.Equal(t, true, resp.Finalized)
+	})
+}
+
+func TestGetProposerLookahead(t *testing.T) {
+	numValidators := 50
+	// Create a Fulu state with proposer lookahead data
+	st, _ := util.DeterministicGenesisStateFulu(t, uint64(numValidators))
+	lookaheadSize := int(params.BeaconConfig().MinSeedLookahead+1) * int(params.BeaconConfig().SlotsPerEpoch)
+	lookahead := make([]primitives.ValidatorIndex, lookaheadSize)
+	for i := 0; i < lookaheadSize; i++ {
+		lookahead[i] = primitives.ValidatorIndex(i % numValidators) // Cycle through validators
+	}
+
+	require.NoError(t, st.SetProposerLookahead(lookahead))
+
+	chainService := &chainMock.ChainService{
+		Optimistic:     false,
+		FinalizedRoots: map[[32]byte]bool{},
+	}
+	server := &Server{
+		Stater: &testutil.MockStater{
+			BeaconState: st,
+		},
+		OptimisticModeFetcher: chainService,
+		FinalizationFetcher:   chainService,
+	}
+
+	t.Run("json response", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/proposer_lookahead", nil)
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		server.GetProposerLookahead(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, "fulu", rec.Header().Get(api.VersionHeader))
+
+		var resp structs.GetProposerLookaheadResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+
+		expectedVersion := version.String(st.Version())
+		require.Equal(t, expectedVersion, resp.Version)
+		require.Equal(t, false, resp.ExecutionOptimistic)
+		require.Equal(t, false, resp.Finalized)
+
+		// Verify the data
+		require.Equal(t, lookaheadSize, len(resp.Data))
+		for i := 0; i < lookaheadSize; i++ {
+			expectedIdx := strconv.FormatUint(uint64(i%numValidators), 10)
+			require.Equal(t, expectedIdx, resp.Data[i])
+		}
+	})
+
+	t.Run("ssz response", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/proposer_lookahead", nil)
+		req.Header.Set("Accept", "application/octet-stream")
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		server.GetProposerLookahead(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, "fulu", rec.Header().Get(api.VersionHeader))
+		responseBytes := rec.Body.Bytes()
+		validatorIndexSize := (*primitives.ValidatorIndex)(nil).SizeSSZ()
+		require.Equal(t, len(responseBytes), validatorIndexSize*lookaheadSize)
+
+		recoveredIndices := make([]primitives.ValidatorIndex, lookaheadSize)
+		for i := 0; i < lookaheadSize; i++ {
+			start := i * validatorIndexSize
+			end := start + validatorIndexSize
+
+			idx := ssz.UnmarshallUint64(responseBytes[start:end])
+			recoveredIndices[i] = primitives.ValidatorIndex(idx)
+		}
+		require.DeepEqual(t, lookahead, recoveredIndices)
+	})
+
+	t.Run("pre fulu state", func(t *testing.T) {
+		preEplusSt, _ := util.DeterministicGenesisStateElectra(t, 1)
+		preFuluServer := &Server{
+			Stater: &testutil.MockStater{
+				BeaconState: preEplusSt,
+			},
+			OptimisticModeFetcher: chainService,
+			FinalizationFetcher:   chainService,
+		}
+
+		// Test JSON request
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/proposer_lookahead", nil)
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		preFuluServer.GetProposerLookahead(rec, req)
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+
+		var errResp struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &errResp))
+		require.Equal(t, "state_id is prior to fulu", errResp.Message)
+
+		// Test SSZ request
+		sszReq := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/proposer_lookahead", nil)
+		sszReq.Header.Set("Accept", "application/octet-stream")
+		sszReq.SetPathValue("state_id", "head")
+		sszRec := httptest.NewRecorder()
+		sszRec.Body = new(bytes.Buffer)
+
+		preFuluServer.GetProposerLookahead(sszRec, sszReq)
+		require.Equal(t, http.StatusBadRequest, sszRec.Code)
+
+		var sszErrResp struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		}
+		require.NoError(t, json.Unmarshal(sszRec.Body.Bytes(), &sszErrResp))
+		require.Equal(t, "state_id is prior to fulu", sszErrResp.Message)
+	})
+
+	t.Run("missing state_id parameter", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/proposer_lookahead", nil)
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		server.GetProposerLookahead(rec, req)
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+
+		var errResp struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &errResp))
+		require.Equal(t, "state_id is required in URL params", errResp.Message)
+	})
+
+	t.Run("optimistic node", func(t *testing.T) {
+		optimisticChainService := &chainMock.ChainService{
+			Optimistic:     true,
+			FinalizedRoots: map[[32]byte]bool{},
+		}
+		optimisticServer := &Server{
+			Stater:                server.Stater,
+			OptimisticModeFetcher: optimisticChainService,
+			FinalizationFetcher:   optimisticChainService,
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/proposer_lookahead", nil)
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		optimisticServer.GetProposerLookahead(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var resp structs.GetProposerLookaheadResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		require.Equal(t, true, resp.ExecutionOptimistic)
+	})
+
+	t.Run("finalized node", func(t *testing.T) {
+		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		require.NoError(t, err)
+
+		finalizedChainService := &chainMock.ChainService{
+			Optimistic:     false,
+			FinalizedRoots: map[[32]byte]bool{blockRoot: true},
+		}
+		finalizedServer := &Server{
+			Stater:                server.Stater,
+			OptimisticModeFetcher: finalizedChainService,
+			FinalizationFetcher:   finalizedChainService,
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/proposer_lookahead", nil)
+		req.SetPathValue("state_id", "head")
+		rec := httptest.NewRecorder()
+		rec.Body = new(bytes.Buffer)
+
+		finalizedServer.GetProposerLookahead(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var resp structs.GetProposerLookaheadResponse
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 		require.Equal(t, true, resp.Finalized)
 	})

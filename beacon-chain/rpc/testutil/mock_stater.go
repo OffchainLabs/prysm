@@ -15,10 +15,14 @@ type MockStater struct {
 	BeaconStateRoot   []byte
 	StatesBySlot      map[primitives.Slot]state.BeaconState
 	StatesByRoot      map[[32]byte]state.BeaconState
+	CustomError       error
 }
 
 // State --
 func (m *MockStater) State(ctx context.Context, id []byte) (state.BeaconState, error) {
+	if m.CustomError != nil {
+		return nil, m.CustomError
+	}
 	if m.StateProviderFunc != nil {
 		return m.StateProviderFunc(ctx, id)
 	}

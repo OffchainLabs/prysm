@@ -2,7 +2,6 @@ package beacon
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -95,7 +94,7 @@ func addDefaultReplayerBuilder(s *Server, h stategen.HistoryAccessor) {
 
 func TestServer_GetIndividualVotes_ValidatorsDontExist(t *testing.T) {
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	var slot primitives.Slot = 0
 	validators := uint64(64)
@@ -212,7 +211,7 @@ func TestServer_GetIndividualVotes_ValidatorsDontExist(t *testing.T) {
 func TestServer_GetIndividualVotes_Working(t *testing.T) {
 	helpers.ClearCache()
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	validators := uint64(32)
 	stateWithValidators, _ := util.DeterministicGenesisState(t, validators)
@@ -298,7 +297,7 @@ func TestServer_GetIndividualVotes_Working(t *testing.T) {
 func TestServer_GetIndividualVotes_WorkingAltair(t *testing.T) {
 	helpers.ClearCache()
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	var slot primitives.Slot = 0
 	validators := uint64(32)
@@ -380,7 +379,7 @@ func TestServer_GetIndividualVotes_AltairEndOfEpoch(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.BeaconConfig())
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	validators := uint64(32)
 	beaconState, _ := util.DeterministicGenesisStateAltair(t, validators)
@@ -477,7 +476,7 @@ func TestServer_GetIndividualVotes_BellatrixEndOfEpoch(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.BeaconConfig())
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	validators := uint64(32)
 	beaconState, _ := util.DeterministicGenesisStateBellatrix(t, validators)
@@ -574,7 +573,7 @@ func TestServer_GetIndividualVotes_CapellaEndOfEpoch(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.BeaconConfig())
 	beaconDB := dbTest.SetupDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	validators := uint64(32)
 	beaconState, _ := util.DeterministicGenesisStateCapella(t, validators)
@@ -676,7 +675,7 @@ func TestServer_GetChainHead_NoGenesis(t *testing.T) {
 
 	genBlock := util.NewBeaconBlock()
 	genBlock.Block.ParentRoot = bytesutil.PadTo([]byte{'G'}, fieldparams.RootLength)
-	util.SaveBlock(t, context.Background(), db, genBlock)
+	util.SaveBlock(t, t.Context(), db, genBlock)
 	gRoot, err := genBlock.Block.HashTreeRoot()
 	require.NoError(t, err)
 	cases := []struct {
@@ -744,10 +743,10 @@ func TestServer_GetChainHead_NoFinalizedBlock(t *testing.T) {
 
 	genBlock := util.NewBeaconBlock()
 	genBlock.Block.ParentRoot = bytesutil.PadTo([]byte{'G'}, fieldparams.RootLength)
-	util.SaveBlock(t, context.Background(), db, genBlock)
+	util.SaveBlock(t, t.Context(), db, genBlock)
 	gRoot, err := genBlock.Block.HashTreeRoot()
 	require.NoError(t, err)
-	require.NoError(t, db.SaveGenesisBlockRoot(context.Background(), gRoot))
+	require.NoError(t, db.SaveGenesisBlockRoot(t.Context(), gRoot))
 
 	wsb, err := blocks.NewSignedBeaconBlock(genBlock)
 	require.NoError(t, err)
@@ -798,29 +797,29 @@ func TestServer_GetChainHead(t *testing.T) {
 	db := dbTest.SetupDB(t)
 	genBlock := util.NewBeaconBlock()
 	genBlock.Block.ParentRoot = bytesutil.PadTo([]byte{'G'}, fieldparams.RootLength)
-	util.SaveBlock(t, context.Background(), db, genBlock)
+	util.SaveBlock(t, t.Context(), db, genBlock)
 	gRoot, err := genBlock.Block.HashTreeRoot()
 	require.NoError(t, err)
-	require.NoError(t, db.SaveGenesisBlockRoot(context.Background(), gRoot))
+	require.NoError(t, db.SaveGenesisBlockRoot(t.Context(), gRoot))
 
 	finalizedBlock := util.NewBeaconBlock()
 	finalizedBlock.Block.Slot = 1
 	finalizedBlock.Block.ParentRoot = bytesutil.PadTo([]byte{'A'}, fieldparams.RootLength)
-	util.SaveBlock(t, context.Background(), db, finalizedBlock)
+	util.SaveBlock(t, t.Context(), db, finalizedBlock)
 	fRoot, err := finalizedBlock.Block.HashTreeRoot()
 	require.NoError(t, err)
 
 	justifiedBlock := util.NewBeaconBlock()
 	justifiedBlock.Block.Slot = 2
 	justifiedBlock.Block.ParentRoot = bytesutil.PadTo([]byte{'B'}, fieldparams.RootLength)
-	util.SaveBlock(t, context.Background(), db, justifiedBlock)
+	util.SaveBlock(t, t.Context(), db, justifiedBlock)
 	jRoot, err := justifiedBlock.Block.HashTreeRoot()
 	require.NoError(t, err)
 
 	prevJustifiedBlock := util.NewBeaconBlock()
 	prevJustifiedBlock.Block.Slot = 3
 	prevJustifiedBlock.Block.ParentRoot = bytesutil.PadTo([]byte{'C'}, fieldparams.RootLength)
-	util.SaveBlock(t, context.Background(), db, prevJustifiedBlock)
+	util.SaveBlock(t, t.Context(), db, prevJustifiedBlock)
 	pjRoot, err := prevJustifiedBlock.Block.HashTreeRoot()
 	require.NoError(t, err)
 

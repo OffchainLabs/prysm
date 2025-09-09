@@ -21,6 +21,27 @@ import (
 	"github.com/pkg/errors"
 )
 
+type FetchStateError struct {
+	message string
+	cause   error
+}
+
+func NewFetchStateError(cause error) *FetchStateError {
+	return &FetchStateError{
+		message: "could not fetch state",
+		cause:   cause,
+	}
+}
+
+func (e *FetchStateError) Error() string {
+	if e.cause != nil {
+		return e.message + ": " + e.cause.Error()
+	}
+	return e.message
+}
+
+func (e *FetchStateError) Unwrap() error { return e.cause }
+
 // StateIdParseError represents an error scenario where a state ID could not be parsed.
 type StateIdParseError struct {
 	message string
@@ -44,9 +65,9 @@ type StateNotFoundError struct {
 }
 
 // NewStateNotFoundError creates a new error instance.
-func NewStateNotFoundError(stateRootsSize int) StateNotFoundError {
+func NewStateNotFoundError(stateRootsSize int, stateRoot []byte) StateNotFoundError {
 	return StateNotFoundError{
-		message: fmt.Sprintf("state not found in the last %d state roots", stateRootsSize),
+		message: fmt.Sprintf("state not found in the last %d state roots, looking for state root: %#x", stateRootsSize, stateRoot),
 	}
 }
 
@@ -221,7 +242,7 @@ func (p *BeaconDbStater) stateByRoot(ctx context.Context, stateRoot []byte) (sta
 		}
 	}
 
-	stateNotFoundErr := NewStateNotFoundError(len(headState.StateRoots()))
+	stateNotFoundErr := NewStateNotFoundError(len(headState.StateRoots()), stateRoot)
 	return nil, &stateNotFoundErr
 }
 

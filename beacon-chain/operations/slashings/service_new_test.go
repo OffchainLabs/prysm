@@ -1,7 +1,6 @@
 package slashings
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -15,7 +14,7 @@ import (
 )
 
 func TestConvertToElectraWithTimer(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	cfg := params.BeaconConfig().Copy()
 	cfg.ElectraForkEpoch = 1

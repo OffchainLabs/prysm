@@ -2,12 +2,10 @@ package state_native_test
 
 import (
 	"bytes"
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	statenative "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -484,7 +482,7 @@ func TestBeaconState_HashTreeRoot(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			testState, err = tt.stateModify(testState)
 			assert.NoError(t, err)
-			root, err := testState.HashTreeRoot(context.Background())
+			root, err := testState.HashTreeRoot(t.Context())
 			if err == nil && tt.error != "" {
 				t.Errorf("Expected error, expected %v, received %v", tt.error, err)
 			}
@@ -512,7 +510,7 @@ func BenchmarkBeaconState(b *testing.B) {
 	b.Run("Vectorized SHA256", func(b *testing.B) {
 		st, err := statenative.InitializeFromProtoUnsafePhase0(pbState)
 		require.NoError(b, err)
-		_, err = st.HashTreeRoot(context.Background())
+		_, err = st.HashTreeRoot(b.Context())
 		assert.NoError(b, err)
 	})
 
@@ -571,7 +569,7 @@ func TestBeaconState_HashTreeRoot_FieldTrie(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			testState, err = tt.stateModify(testState)
 			assert.NoError(t, err)
-			root, err := testState.HashTreeRoot(context.Background())
+			root, err := testState.HashTreeRoot(t.Context())
 			if err == nil && tt.error != "" {
 				t.Errorf("Expected error, expected %v, received %v", tt.error, err)
 			}
@@ -611,12 +609,12 @@ func TestBeaconState_ValidatorMutation_Phase0(t *testing.T) {
 	testState, err = statenative.InitializeFromProtoPhase0(pbState)
 	require.NoError(t, err)
 
-	_, err = testState.HashTreeRoot(context.Background())
+	_, err = testState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 
 	// Reset tries
 	require.NoError(t, testState.UpdateValidatorAtIndex(200, new(ethpb.Validator)))
-	_, err = testState.HashTreeRoot(context.Background())
+	_, err = testState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 
 	newState1 := testState.Copy()
@@ -633,7 +631,7 @@ func TestBeaconState_ValidatorMutation_Phase0(t *testing.T) {
 		WithdrawableEpoch:          1117,
 	}))
 
-	rt, err := testState.HashTreeRoot(context.Background())
+	rt, err := testState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 	pbState, err = statenative.ProtobufBeaconStatePhase0(testState.ToProtoUnsafe())
 	require.NoError(t, err)
@@ -641,7 +639,7 @@ func TestBeaconState_ValidatorMutation_Phase0(t *testing.T) {
 	copiedTestState, err := statenative.InitializeFromProtoPhase0(pbState)
 	require.NoError(t, err)
 
-	rt2, err := copiedTestState.HashTreeRoot(context.Background())
+	rt2, err := copiedTestState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 
 	assert.Equal(t, rt, rt2)
@@ -657,7 +655,7 @@ func TestBeaconState_ValidatorMutation_Phase0(t *testing.T) {
 		WithdrawableEpoch:          2117,
 	}))
 
-	rt, err = newState1.HashTreeRoot(context.Background())
+	rt, err = newState1.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 	pbState, err = statenative.ProtobufBeaconStatePhase0(newState1.ToProtoUnsafe())
 	require.NoError(t, err)
@@ -665,7 +663,7 @@ func TestBeaconState_ValidatorMutation_Phase0(t *testing.T) {
 	copiedTestState, err = statenative.InitializeFromProtoPhase0(pbState)
 	require.NoError(t, err)
 
-	rt2, err = copiedTestState.HashTreeRoot(context.Background())
+	rt2, err = copiedTestState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 
 	assert.Equal(t, rt, rt2)
@@ -678,12 +676,12 @@ func TestBeaconState_ValidatorMutation_Altair(t *testing.T) {
 	testState, err = statenative.InitializeFromProtoAltair(pbState)
 	require.NoError(t, err)
 
-	_, err = testState.HashTreeRoot(context.Background())
+	_, err = testState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 
 	// Reset tries
 	require.NoError(t, testState.UpdateValidatorAtIndex(200, new(ethpb.Validator)))
-	_, err = testState.HashTreeRoot(context.Background())
+	_, err = testState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 
 	newState1 := testState.Copy()
@@ -700,7 +698,7 @@ func TestBeaconState_ValidatorMutation_Altair(t *testing.T) {
 		WithdrawableEpoch:          1117,
 	}))
 
-	rt, err := testState.HashTreeRoot(context.Background())
+	rt, err := testState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 	pbState, err = statenative.ProtobufBeaconStateAltair(testState.ToProtoUnsafe())
 	require.NoError(t, err)
@@ -708,7 +706,7 @@ func TestBeaconState_ValidatorMutation_Altair(t *testing.T) {
 	copiedTestState, err := statenative.InitializeFromProtoAltair(pbState)
 	require.NoError(t, err)
 
-	rt2, err := copiedTestState.HashTreeRoot(context.Background())
+	rt2, err := copiedTestState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 
 	assert.Equal(t, rt, rt2)
@@ -724,7 +722,7 @@ func TestBeaconState_ValidatorMutation_Altair(t *testing.T) {
 		WithdrawableEpoch:          2117,
 	}))
 
-	rt, err = newState1.HashTreeRoot(context.Background())
+	rt, err = newState1.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 	pbState, err = statenative.ProtobufBeaconStateAltair(newState1.ToProtoUnsafe())
 	require.NoError(t, err)
@@ -732,7 +730,7 @@ func TestBeaconState_ValidatorMutation_Altair(t *testing.T) {
 	copiedTestState, err = statenative.InitializeFromProtoAltair(pbState)
 	require.NoError(t, err)
 
-	rt2, err = copiedTestState.HashTreeRoot(context.Background())
+	rt2, err = copiedTestState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 
 	assert.Equal(t, rt, rt2)
@@ -745,12 +743,12 @@ func TestBeaconState_ValidatorMutation_Bellatrix(t *testing.T) {
 	testState, err = statenative.InitializeFromProtoBellatrix(pbState)
 	require.NoError(t, err)
 
-	_, err = testState.HashTreeRoot(context.Background())
+	_, err = testState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 
 	// Reset tries
 	require.NoError(t, testState.UpdateValidatorAtIndex(200, new(ethpb.Validator)))
-	_, err = testState.HashTreeRoot(context.Background())
+	_, err = testState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 
 	newState1 := testState.Copy()
@@ -767,7 +765,7 @@ func TestBeaconState_ValidatorMutation_Bellatrix(t *testing.T) {
 		WithdrawableEpoch:          1117,
 	}))
 
-	rt, err := testState.HashTreeRoot(context.Background())
+	rt, err := testState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 	pbState, err = statenative.ProtobufBeaconStateBellatrix(testState.ToProtoUnsafe())
 	require.NoError(t, err)
@@ -775,7 +773,7 @@ func TestBeaconState_ValidatorMutation_Bellatrix(t *testing.T) {
 	copiedTestState, err := statenative.InitializeFromProtoBellatrix(pbState)
 	require.NoError(t, err)
 
-	rt2, err := copiedTestState.HashTreeRoot(context.Background())
+	rt2, err := copiedTestState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 
 	assert.Equal(t, rt, rt2)
@@ -791,7 +789,7 @@ func TestBeaconState_ValidatorMutation_Bellatrix(t *testing.T) {
 		WithdrawableEpoch:          2117,
 	}))
 
-	rt, err = newState1.HashTreeRoot(context.Background())
+	rt, err = newState1.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 	pbState, err = statenative.ProtobufBeaconStateBellatrix(newState1.ToProtoUnsafe())
 	require.NoError(t, err)
@@ -799,19 +797,15 @@ func TestBeaconState_ValidatorMutation_Bellatrix(t *testing.T) {
 	copiedTestState, err = statenative.InitializeFromProtoBellatrix(pbState)
 	require.NoError(t, err)
 
-	rt2, err = copiedTestState.HashTreeRoot(context.Background())
+	rt2, err = copiedTestState.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 
 	assert.Equal(t, rt, rt2)
 }
 
 func TestBeaconState_InitializeInactivityScoresCorrectly_Deneb(t *testing.T) {
-	resetCfg := features.InitWithReset(&features.Flags{
-		EnableExperimentalState: true,
-	})
-	defer resetCfg()
 	st, _ := util.DeterministicGenesisStateDeneb(t, 200)
-	_, err := st.HashTreeRoot(context.Background())
+	_, err := st.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 	ic, err := st.InactivityScores()
 	require.NoError(t, err)
@@ -821,13 +815,13 @@ func TestBeaconState_InitializeInactivityScoresCorrectly_Deneb(t *testing.T) {
 	err = st.SetInactivityScores(ic)
 	require.NoError(t, err)
 
-	_, err = st.HashTreeRoot(context.Background())
+	_, err = st.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 
 	ic[150] = 2390239
 	err = st.SetInactivityScores(ic)
 	require.NoError(t, err)
-	rt, err := st.HashTreeRoot(context.Background())
+	rt, err := st.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 
 	copiedSt, ok := st.ToProtoUnsafe().(*ethpb.BeaconStateDeneb)
@@ -837,7 +831,7 @@ func TestBeaconState_InitializeInactivityScoresCorrectly_Deneb(t *testing.T) {
 	newSt, err := statenative.InitializeFromProtoUnsafeDeneb(copiedSt)
 	require.NoError(t, err)
 
-	newRt, err := newSt.HashTreeRoot(context.Background())
+	newRt, err := newSt.HashTreeRoot(t.Context())
 	require.NoError(t, err)
 
 	require.DeepSSZEqual(t, rt, newRt)

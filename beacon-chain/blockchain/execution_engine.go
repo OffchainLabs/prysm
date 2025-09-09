@@ -141,7 +141,7 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 			}
 
 			if err := s.saveHead(ctx, r, b, st); err != nil {
-				log.WithError(err).Error("could not save head after pruning invalid blocks")
+				log.WithError(err).Error("Could not save head after pruning invalid blocks")
 			}
 
 			log.WithFields(logrus.Fields{
@@ -174,6 +174,7 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 			"payloadID": fmt.Sprintf("%#x", bytesutil.Trunc(payloadID[:])),
 		}).Info("Forkchoice updated with payload attributes for proposal")
 		s.cfg.PayloadIDCache.Set(nextSlot, arg.headRoot, pId)
+		go s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), arg.headBlock, arg.headRoot, nextSlot)
 	} else if hasAttr && payloadID == nil && !features.Get().PrepareAllPayloads {
 		log.WithFields(logrus.Fields{
 			"blockHash": fmt.Sprintf("%#x", headPayload.BlockHash()),
@@ -184,13 +185,17 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 	return payloadID, nil
 }
 
-func firePayloadAttributesEvent(_ context.Context, f event.SubscriberSender, nextSlot primitives.Slot) {
+func (s *Service) firePayloadAttributesEvent(f event.SubscriberSender, block interfaces.ReadOnlySignedBeaconBlock, root [32]byte, nextSlot primitives.Slot) {
+	// If we're syncing a block in the past and init-sync is still running, we shouldn't fire this event.
+	if !s.cfg.SyncChecker.Synced() {
+		return
+	}
 	// the fcu args have differing amounts of completeness based on the code path,
 	// and there is work we only want to do if a client is actually listening to the events beacon api endpoint.
 	// temporary solution: just fire a blank event and fill in the details in the api handler.
 	f.Send(&feed.Event{
 		Type: statefeed.PayloadAttributes,
-		Data: payloadattribute.EventData{ProposalSlot: nextSlot},
+		Data: payloadattribute.EventData{HeadBlock: block, HeadRoot: root, ProposalSlot: nextSlot},
 	})
 }
 
@@ -350,7 +355,7 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 	}
 
 	// Get timestamp.
-	t, err := slots.ToTime(uint64(s.genesisTime.Unix()), slot)
+	t, err := slots.StartTime(s.genesisTime, slot)
 	if err != nil {
 		log.WithError(err).Error("Could not get timestamp to get payload attribute")
 		return emptyAttri
@@ -434,6 +439,9 @@ func (s *Service) removeInvalidBlockAndState(ctx context.Context, blkRoots [][32
 		if err := s.blobStorage.Remove(root); err != nil {
 			// Blobs may not exist for some blocks, leading to deletion failures. Log such errors at debug level.
 			log.WithError(err).Debug("Could not remove blob from blob storage")
+		}
+		if err := s.dataColumnStorage.Remove(root); err != nil {
+			log.WithError(err).Errorf("Could not remove data columns from data column storage for root %#x", root)
 		}
 	}
 	return nil

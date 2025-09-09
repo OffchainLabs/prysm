@@ -158,12 +158,6 @@ var (
 		Usage: "Enables the peer id of the node to be fixed by saving the generated network key to the default key path.",
 		Value: false,
 	}
-	// P2PMetadata defines a flag to specify the location of the peer metadata file.
-	P2PMetadata = &cli.StringFlag{
-		Name:  "p2p-metadata",
-		Usage: "The file containing the metadata to communicate with other peers.",
-		Value: "",
-	}
 	// P2PMaxPeers defines a flag to specify the max number of peers in libp2p.
 	P2PMaxPeers = &cli.IntFlag{
 		Name:  "p2p-max-peers",
@@ -236,7 +230,7 @@ var (
 	// GrpcMaxCallRecvMsgSizeFlag defines the max call message size for GRPC
 	GrpcMaxCallRecvMsgSizeFlag = &cli.IntFlag{
 		Name: "grpc-max-msg-size",
-		Usage: `WARNING: gRPC API will still be supported for some time, most likely until v8 in 2026, but will be eventually removed in favor of REST API.
+		Usage: `WARNING: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API..
 		Integer to define max receive message call size (in bytes).
 		If serving a public gRPC server, set this to a more reasonable size to avoid
 		resource exhaustion from large messages. 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/api/client/beacon/health"
 	"github.com/OffchainLabs/prysm/v6/api/client/event"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/proposer"
@@ -36,14 +35,16 @@ const (
 // Validator interface defines the primary methods of a validator client.
 type Validator interface {
 	Done()
+	GenesisTime() time.Time
+	EventsChan() <-chan *event.Event
+	AccountsChangedChan() <-chan [][fieldparams.BLSPubkeyLength]byte
 	WaitForChainStart(ctx context.Context) error
 	WaitForSync(ctx context.Context) error
-	WaitForActivation(ctx context.Context, accountsChangedChan chan [][fieldparams.BLSPubkeyLength]byte) error
-	CanonicalHeadSlot(ctx context.Context) (primitives.Slot, error)
+	WaitForActivation(ctx context.Context) error
 	NextSlot() <-chan primitives.Slot
 	SlotDeadline(slot primitives.Slot) time.Time
 	LogValidatorGainsAndLosses(ctx context.Context, slot primitives.Slot) error
-	UpdateDuties(ctx context.Context, slot primitives.Slot) error
+	UpdateDuties(ctx context.Context) error
 	RolesAt(ctx context.Context, slot primitives.Slot) (map[[fieldparams.BLSPubkeyLength]byte][]ValidatorRole, error) // validator pubKey -> roles
 	SubmitAttestation(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte)
 	ProposeBlock(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte)
@@ -57,9 +58,9 @@ type Validator interface {
 	Keymanager() (keymanager.IKeymanager, error)
 	HandleKeyReload(ctx context.Context, currentKeys [][fieldparams.BLSPubkeyLength]byte) (bool, error)
 	CheckDoppelGanger(ctx context.Context) error
-	PushProposerSettings(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, forceFullPush bool) error
+	PushProposerSettings(ctx context.Context, slot primitives.Slot, forceFullPush bool) error
 	SignValidatorRegistrationRequest(ctx context.Context, signer SigningFunc, newValidatorRegistration *ethpb.ValidatorRegistrationV1) (*ethpb.SignedValidatorRegistrationV1, bool /* isCached */, error)
-	StartEventStream(ctx context.Context, topics []string, eventsChan chan<- *event.Event)
+	StartEventStream(ctx context.Context, topics []string)
 	EventStreamIsRunning() bool
 	ProcessEvent(ctx context.Context, event *event.Event)
 	ProposerSettings() *proposer.Settings
@@ -67,9 +68,9 @@ type Validator interface {
 	Graffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) ([]byte, error)
 	SetGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, graffiti []byte) error
 	DeleteGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) error
-	HealthTracker() health.Tracker
 	Host() string
-	ChangeHost()
+	FindHealthyHost(ctx context.Context) bool
+	SetTicker()
 }
 
 // SigningFunc interface defines a type for the function that signs a message

@@ -22,7 +22,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -35,7 +34,7 @@ import (
 
 func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 	beaconDB := testingdb.SetupDB(t)
-	headRoot, keys := fillUpBlocksAndState(context.Background(), t, beaconDB)
+	headRoot, keys := fillUpBlocksAndState(t.Context(), t, beaconDB)
 	defaultTopic := p2p.SyncCommitteeSubnetTopicFormat
 	fakeDigest := []byte{0xAB, 0x00, 0xCC, 0x9E}
 	defaultTopic = defaultTopic + "/" + encoder.ProtocolSuffixSSZSnappy
@@ -207,7 +206,7 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 				s.cfg.beaconDB = beaconDB
 				s.initCaches()
 				msg.BlockRoot = headRoot[:]
-				hState, err := beaconDB.State(context.Background(), headRoot)
+				hState, err := beaconDB.State(t.Context(), headRoot)
 				assert.NoError(t, err)
 				s.cfg.chain = &mockChain.ChainService{
 					SyncCommitteeIndices: []primitives.CommitteeIndex{0},
@@ -224,8 +223,7 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 				gt := time.Now().Add(-time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(slots.PrevSlot(hState.Slot())))
 				vr := [32]byte{'A'}
 				clock := startup.NewClock(gt, vr)
-				digest, err := forks.CreateForkDigest(gt, vr[:])
-				assert.NoError(t, err)
+				digest := params.ForkDigest(slots.ToEpoch(clock.CurrentSlot()))
 				actualTopic := fmt.Sprintf(defaultTopic, digest, 5)
 
 				return s, actualTopic, clock
@@ -254,7 +252,7 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 				s.cfg.beaconDB = beaconDB
 				s.initCaches()
 				msg.BlockRoot = headRoot[:]
-				hState, err := beaconDB.State(context.Background(), headRoot)
+				hState, err := beaconDB.State(t.Context(), headRoot)
 				assert.NoError(t, err)
 				s.cfg.chain = &mockChain.ChainService{
 					Genesis: time.Now(),
@@ -270,8 +268,8 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 
 				gt := time.Now().Add(-time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(slots.PrevSlot(hState.Slot())))
 				vr := [32]byte{'A'}
-				digest, err := forks.CreateForkDigest(gt, vr[:])
-				assert.NoError(t, err)
+				clock := startup.NewClock(gt, vr)
+				digest := params.ForkDigest(clock.CurrentEpoch())
 				actualTopic := fmt.Sprintf(defaultTopic, digest, 5)
 
 				return s, actualTopic, startup.NewClock(gt, vr)
@@ -300,7 +298,7 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 				s.cfg.beaconDB = beaconDB
 				s.initCaches()
 				msg.BlockRoot = headRoot[:]
-				hState, err := beaconDB.State(context.Background(), headRoot)
+				hState, err := beaconDB.State(t.Context(), headRoot)
 				assert.NoError(t, err)
 
 				numOfVals := hState.NumValidators()
@@ -324,8 +322,8 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 				// Set Topic and Subnet
 				gt := time.Now().Add(-time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(slots.PrevSlot(hState.Slot())))
 				vr := [32]byte{'A'}
-				digest, err := forks.CreateForkDigest(gt, vr[:])
-				assert.NoError(t, err)
+				clock := startup.NewClock(gt, vr)
+				digest := params.ForkDigest(slots.ToEpoch(clock.CurrentSlot()))
 				actualTopic := fmt.Sprintf(defaultTopic, digest, 5)
 
 				return s, actualTopic, startup.NewClock(gt, vr)
@@ -354,7 +352,7 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 				s.cfg.beaconDB = beaconDB
 				s.initCaches()
 				msg.BlockRoot = headRoot[:]
-				hState, err := beaconDB.State(context.Background(), headRoot)
+				hState, err := beaconDB.State(t.Context(), headRoot)
 				assert.NoError(t, err)
 				subCommitteeSize := params.BeaconConfig().SyncCommitteeSize / params.BeaconConfig().SyncCommitteeSubnetCount
 
@@ -382,8 +380,8 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 				// Set Topic and Subnet
 				gt := time.Now().Add(-time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(slots.PrevSlot(hState.Slot())))
 				vr := [32]byte{'A'}
-				digest, err := forks.CreateForkDigest(gt, vr[:])
-				assert.NoError(t, err)
+				clock := startup.NewClock(gt, vr)
+				digest := params.ForkDigest(slots.ToEpoch(clock.CurrentSlot()))
 				actualTopic := fmt.Sprintf(defaultTopic, digest, 1)
 
 				return s, actualTopic, startup.NewClock(gt, vr)
@@ -402,7 +400,7 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
 
@@ -487,8 +485,8 @@ func TestService_ignoreHasSeenSyncMsg(t *testing.T) {
 				cfg: &config{chain: &mockChain.ChainService{}},
 			}
 			s, _ = tt.setupSvc(s, tt.msg, "")
-			f := s.ignoreHasSeenSyncMsg(context.Background(), tt.msg, tt.committee)
-			result, err := f(context.Background())
+			f := s.ignoreHasSeenSyncMsg(t.Context(), tt.msg, tt.committee)
+			result, err := f(t.Context())
 			_ = err
 			require.Equal(t, tt.want, result)
 		})
@@ -541,7 +539,7 @@ func TestService_rejectIncorrectSyncCommittee(t *testing.T) {
 			}
 			topic := tt.setupTopic(s)
 			f := s.rejectIncorrectSyncCommittee(tt.committeeIndices, topic)
-			result, err := f(context.Background())
+			result, err := f(t.Context())
 			_ = err
 			require.Equal(t, tt.want, result)
 		})
@@ -573,7 +571,7 @@ func Test_ignoreEmptyCommittee(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			f := ignoreEmptyCommittee(tt.committee)
-			result, err := f(context.Background())
+			result, err := f(t.Context())
 			_ = err
 			require.Equal(t, tt.want, result)
 		})

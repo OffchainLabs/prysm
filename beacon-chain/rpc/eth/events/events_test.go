@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen/mock"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -30,7 +31,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/ethereum/go-ethereum/common"
-	sse "github.com/r3labs/sse/v2"
+	"github.com/r3labs/sse/v2"
 	"github.com/sirupsen/logrus"
 )
 
@@ -39,7 +40,7 @@ var testEventWriteTimeout = 100 * time.Millisecond
 func requireAllEventsReceived(t *testing.T, stn, opn *mockChain.EventFeedWrapper, events []*feed.Event, req *topicRequest, s *Server, w *StreamingResponseWriterRecorder, logs chan *logrus.Entry) {
 	// maxBufferSize param copied from sse lib client code
 	sseR := sse.NewEventStreamReader(w.Body(), 1<<24)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
 
 	expected := make(map[string]bool)
@@ -47,7 +48,7 @@ func requireAllEventsReceived(t *testing.T, stn, opn *mockChain.EventFeedWrapper
 		ev := events[i]
 		// serialize the event the same way the server will so that we can compare expectation to results.
 		top := topicForEvent(ev)
-		eb, err := s.lazyReaderForEvent(context.Background(), ev, req)
+		eb, err := s.lazyReaderForEvent(t.Context(), ev, req)
 		require.NoError(t, err)
 		exb, err := io.ReadAll(eb())
 		require.NoError(t, err)
@@ -120,6 +121,7 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 		AttesterSlashingTopic,
 		ProposerSlashingTopic,
 		BlockGossipTopic,
+		DataColumnTopic,
 	})
 	require.NoError(t, err)
 	ro, err := blocks.NewROBlob(util.HydrateBlobSidecar(&eth.BlobSidecar{}))
@@ -300,6 +302,15 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 				SignedBlock: signedBlock,
 			},
 		},
+		{
+			Type: operation.DataColumnReceived,
+			Data: &operation.DataColumnReceivedData{
+				Slot:           1,
+				Index:          2,
+				BlockRoot:      [32]byte{'a'},
+				KzgCommitments: [][]byte{{'a'}, {'b'}, {'c'}},
+			},
+		},
 	}
 }
 
@@ -330,7 +341,7 @@ func newStreamTestSync(t *testing.T) *streamTestSync {
 	logChan := make(chan *logrus.Entry, 100)
 	cew := util.NewChannelEntryWriter(logChan)
 	undo := util.RegisterHookWithUndo(logger, cew)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	return &streamTestSync{
 		t:      t,
 		ctx:    ctx,
@@ -518,19 +529,27 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 				st := tc.getState()
 				v := &eth.Validator{ExitEpoch: math.MaxUint64, EffectiveBalance: params.BeaconConfig().MinActivationBalance, WithdrawalCredentials: make([]byte, 32)}
 				require.NoError(t, st.SetValidators([]*eth.Validator{v}))
+				require.NoError(t, st.SetBalances([]uint64{0}))
 				currentSlot := primitives.Slot(0)
 				// to avoid slot processing
 				require.NoError(t, st.SetSlot(currentSlot+1))
 				b := tc.getBlock()
+				genesis := time.Now()
+				require.NoError(t, st.SetGenesisTime(genesis))
 				mockChainService := &mockChain.ChainService{
-					Root:  make([]byte, 32),
-					State: st,
-					Block: b,
-					Slot:  &currentSlot,
+					Root:    make([]byte, 32),
+					State:   st,
+					Block:   b,
+					Slot:    &currentSlot,
+					Genesis: genesis,
 				}
+				headRoot, err := b.Block().HashTreeRoot()
+				require.NoError(t, err)
 
 				stn := mockChain.NewEventFeedWrapper()
 				opn := mockChain.NewEventFeedWrapper()
+				stategen := mock.NewService()
+				stategen.AddStateForRoot(st, headRoot)
 				s := &Server{
 					StateNotifier:          &mockChain.SimpleNotifier{Feed: stn},
 					OperationNotifier:      &mockChain.SimpleNotifier{Feed: opn},
@@ -538,6 +557,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 					ChainInfoFetcher:       mockChainService,
 					TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
 					EventWriteTimeout:      testEventWriteTimeout,
+					StateGen:               stategen,
 				}
 				if tc.SetTrackedValidatorsCache != nil {
 					tc.SetTrackedValidatorsCache(s.TrackedValidatorsCache)
@@ -551,13 +571,11 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 						Type: statefeed.PayloadAttributes,
 						Data: payloadattribute.EventData{
 							ProposerIndex:     0,
-							ProposalSlot:      0,
+							ProposalSlot:      mockChainService.CurrentSlot() + 1,
 							ParentBlockNumber: 0,
-							ParentBlockRoot:   make([]byte, 32),
 							ParentBlockHash:   make([]byte, 32),
-							HeadState:         st,
 							HeadBlock:         b,
-							HeadRoot:          [fieldparams.RootLength]byte{},
+							HeadRoot:          headRoot,
 						},
 					},
 				}
@@ -573,10 +591,8 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 }
 
 func TestFillEventData(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	t.Run("AlreadyFilledData_ShouldShortCircuitWithoutError", func(t *testing.T) {
-		st, err := util.NewBeaconStateBellatrix()
-		require.NoError(t, err)
 		b, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockBellatrix(&eth.SignedBeaconBlockBellatrix{}))
 		require.NoError(t, err)
 		attributor, err := payloadattribute.New(&enginev1.PayloadAttributes{
@@ -584,11 +600,9 @@ func TestFillEventData(t *testing.T) {
 		})
 		require.NoError(t, err)
 		alreadyFilled := payloadattribute.EventData{
-			HeadState:       st,
 			HeadBlock:       b,
 			HeadRoot:        [32]byte{1, 2, 3},
 			Attributer:      attributor,
-			ParentBlockRoot: []byte{1, 2, 3},
 			ParentBlockHash: []byte{4, 5, 6},
 		}
 		srv := &Server{} // No real HeadFetcher needed here since it won't be called.
@@ -612,12 +626,14 @@ func TestFillEventData(t *testing.T) {
 			Timestamp: uint64(time.Now().Unix()),
 		})
 		require.NoError(t, err)
+		headRoot, err := b.Block().HashTreeRoot()
+		require.NoError(t, err)
 		// Create an event data object missing certain fields:
 		partial := payloadattribute.EventData{
-			// The presence of a nil HeadState, nil HeadBlock, zeroed HeadRoot, etc.
-			// will cause fillEventData to try to fill the values.
 			ProposalSlot: 42,         // different epoch from current slot
 			Attributer:   attributor, // Must be Bellatrix or later
+			HeadBlock:    b,
+			HeadRoot:     headRoot,
 		}
 		currentSlot := primitives.Slot(0)
 		// to avoid slot processing
@@ -629,6 +645,8 @@ func TestFillEventData(t *testing.T) {
 			Slot:  &currentSlot,
 		}
 
+		stategen := mock.NewService()
+		stategen.AddStateForRoot(st, headRoot)
 		stn := mockChain.NewEventFeedWrapper()
 		opn := mockChain.NewEventFeedWrapper()
 		srv := &Server{
@@ -638,16 +656,15 @@ func TestFillEventData(t *testing.T) {
 			ChainInfoFetcher:       mockChainService,
 			TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
 			EventWriteTimeout:      testEventWriteTimeout,
+			StateGen:               stategen,
 		}
 
 		filled, err := srv.fillEventData(ctx, partial)
 		require.NoError(t, err, "expected successful fill of partial event data")
 
 		// Verify that fields have been updated from the mock data:
-		require.NotNil(t, filled.HeadState, "HeadState should be assigned")
 		require.NotNil(t, filled.HeadBlock, "HeadBlock should be assigned")
 		require.NotEqual(t, [32]byte{}, filled.HeadRoot, "HeadRoot should no longer be zero")
-		require.NotEmpty(t, filled.ParentBlockRoot, "ParentBlockRoot should be filled")
 		require.NotEmpty(t, filled.ParentBlockHash, "ParentBlockHash should be filled")
 		require.Equal(t, uint64(0), filled.ParentBlockNumber, "ParentBlockNumber must match mock block")
 
@@ -703,7 +720,7 @@ func TestStuckReaderScenarios(t *testing.T) {
 
 func wedgedWriterTestCase(t *testing.T, queueDepth func([]*feed.Event) int) {
 	topics, events := operationEventsFixtures(t)
-	require.Equal(t, 11, len(events))
+	require.Equal(t, 12, len(events))
 
 	// set eventFeedDepth to a number lower than the events we intend to send to force the server to drop the reader.
 	stn := mockChain.NewEventFeedWrapper()
@@ -715,7 +732,7 @@ func wedgedWriterTestCase(t *testing.T, queueDepth func([]*feed.Event) int) {
 		EventFeedDepth:    queueDepth(events),
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	eventsWritten := make(chan struct{})
 	go func() {

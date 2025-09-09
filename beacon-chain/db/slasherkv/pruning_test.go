@@ -1,7 +1,6 @@
 package slasherkv
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -16,7 +15,7 @@ import (
 )
 
 func TestStore_PruneProposalsAtEpoch(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// If the lowest stored epoch in the database is >= the end epoch of the pruning process,
 	// there is nothing to prune, so we also expect exiting early.
@@ -112,7 +111,7 @@ func TestStore_PruneProposalsAtEpoch(t *testing.T) {
 }
 
 func TestStore_PruneAttestations_OK(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// If the lowest stored epoch in the database is >= the end epoch of the pruning process,
 	// there is nothing to prune, so we also expect exiting early.

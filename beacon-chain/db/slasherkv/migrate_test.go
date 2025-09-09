@@ -1,7 +1,6 @@
 package slasherkv
 
 import (
-	"context"
 	"encoding/binary"
 	"testing"
 
@@ -120,7 +119,7 @@ func TestMigrate(t *testing.T) {
 	}
 
 	// Create a new context.
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Setup a test database.
 	beaconDB := setupDB(t)

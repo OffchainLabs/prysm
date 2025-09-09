@@ -77,7 +77,7 @@ func setupValidAttesterSlashing(t *testing.T) (*ethpb.AttesterSlashing, state.Be
 
 func TestValidateAttesterSlashing_ValidSlashing(t *testing.T) {
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	slashing, s := setupValidAttesterSlashing(t)
 
@@ -118,7 +118,7 @@ func TestValidateAttesterSlashing_ValidSlashing(t *testing.T) {
 
 func TestValidateAttesterSlashing_ValidOldSlashing(t *testing.T) {
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	slashing, s := setupValidAttesterSlashing(t)
 	vals := s.Validators()
@@ -162,7 +162,7 @@ func TestValidateAttesterSlashing_ValidOldSlashing(t *testing.T) {
 
 func TestValidateAttesterSlashing_InvalidSlashing_WithdrawableEpoch(t *testing.T) {
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	slashing, s := setupValidAttesterSlashing(t)
 	// Set only one of the  validators as withdrawn
@@ -220,7 +220,7 @@ func TestValidateAttesterSlashing_InvalidSlashing_WithdrawableEpoch(t *testing.T
 
 func TestValidateAttesterSlashing_CanFilter(t *testing.T) {
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	chain := &mock.ChainService{Genesis: time.Now()}
 	r := &Service{
@@ -290,7 +290,7 @@ func TestValidateAttesterSlashing_ContextTimeout(t *testing.T) {
 	slashing, s := setupValidAttesterSlashing(t)
 	slashing.Attestation_1.Data.Target.Epoch = 100000000
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 
 	chain := &mock.ChainService{State: s}
@@ -323,7 +323,7 @@ func TestValidateAttesterSlashing_ContextTimeout(t *testing.T) {
 
 func TestValidateAttesterSlashing_Syncing(t *testing.T) {
 	p := p2ptest.NewTestP2P(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	slashing, s := setupValidAttesterSlashing(t)
 

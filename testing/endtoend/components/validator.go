@@ -221,13 +221,13 @@ func (v *ValidatorNode) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	portFlagName := "grpc-gateway-port" // TODO: replace port flag name with flags.HTTPServerPort.Name in a future release
 	args := []string{
+
 		fmt.Sprintf("--%s=%s/eth2-val-%d", cmdshared.DataDirFlag.Name, e2e.TestParams.TestPath, index),
 		fmt.Sprintf("--%s=%s", cmdshared.LogFileName.Name, logFile.Name()),
 		fmt.Sprintf("--%s=%s", flags.GraffitiFileFlag.Name, gFile),
 		fmt.Sprintf("--%s=%d", flags.MonitoringPortFlag.Name, e2e.TestParams.Ports.ValidatorMetricsPort+index),
-		fmt.Sprintf("--%s=%d", portFlagName, e2e.TestParams.Ports.ValidatorHTTPPort+index),
+		fmt.Sprintf("--%s=%d", flags.HTTPServerPort.Name, e2e.TestParams.Ports.ValidatorHTTPPort+index),
 		fmt.Sprintf("--%s=localhost:%d", flags.BeaconRPCProviderFlag.Name, beaconRPCPort),
 
 		fmt.Sprintf("--%s=%s", flags.GRPCHeadersFlag.Name, "dummy=value,foo=bar"), // Sending random headers shouldn't break anything.

@@ -1,7 +1,6 @@
 package util
 
 import (
-	"context"
 	"sync"
 	"testing"
 
@@ -264,7 +263,7 @@ func DeterministicGenesisState(t testing.TB, numValidators uint64) (state.Beacon
 	if err != nil {
 		t.Fatal(errors.Wrapf(err, "failed to get eth1data for %d deposits", numValidators))
 	}
-	beaconState, err := transition.GenesisBeaconState(context.Background(), deposits, uint64(0), eth1Data)
+	beaconState, err := transition.GenesisBeaconState(t.Context(), deposits, uint64(0), eth1Data)
 	if err != nil {
 		t.Fatal(errors.Wrapf(err, "failed to get genesis beacon state of %d validators", numValidators))
 	}

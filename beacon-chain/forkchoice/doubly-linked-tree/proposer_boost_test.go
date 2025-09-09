@@ -1,7 +1,6 @@
 package doublylinkedtree
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -13,8 +12,12 @@ import (
 
 // Helper function to simulate the block being on time or delayed for proposer
 // boost. It alters the genesisTime tracked by the store.
-func driftGenesisTime(f *ForkChoice, slot primitives.Slot, delay uint64) {
-	f.SetGenesisTime(uint64(time.Now().Unix()) - uint64(slot)*params.BeaconConfig().SecondsPerSlot - delay)
+func driftGenesisTime(f *ForkChoice, slot primitives.Slot, delay time.Duration) {
+	genesis := time.Now()
+	s := time.Duration(slot*primitives.Slot(params.BeaconConfig().SecondsPerSlot)) * time.Second
+	genesis = genesis.Add(-1 * s)
+	genesis = genesis.Add(-1 * delay.Abs())
+	f.SetGenesisTime(genesis)
 }
 
 // Simple, ex-ante attack mitigation using proposer boost.
@@ -24,7 +27,7 @@ func driftGenesisTime(f *ForkChoice, slot primitives.Slot, delay uint64) {
 // and release their withheld block of slot n+2 in an attempt to win fork choice.
 // If the honest proposal is boosted at slot n+2, it will win against this attacker.
 func TestForkChoice_BoostProposerRoot_PreventsExAnteAttack(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	jEpoch, fEpoch := primitives.Epoch(0), primitives.Epoch(0)
 	zeroHash := params.BeaconConfig().ZeroHash
 	balances := make([]uint64, 64) // 64 active validators.
@@ -428,7 +431,7 @@ func TestForkChoice_BoostProposerRoot_PreventsExAnteAttack(t *testing.T) {
 }
 
 func TestForkChoice_BoostProposerRoot(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	root := [32]byte{'A'}
 	var zeroHash [32]byte
 
@@ -446,7 +449,7 @@ func TestForkChoice_BoostProposerRoot(t *testing.T) {
 		f := setup(0, 0)
 		slot := primitives.Slot(1)
 		currentSlot := primitives.Slot(1)
-		driftGenesisTime(f, currentSlot, params.BeaconConfig().SecondsPerSlot-1)
+		driftGenesisTime(f, currentSlot, time.Duration(params.BeaconConfig().SecondsPerSlot-1)*time.Second)
 		state, blkRoot, err := prepareForkchoiceState(ctx, slot, root, zeroHash, zeroHash, 0, 0)
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, state, blkRoot))
@@ -466,7 +469,7 @@ func TestForkChoice_BoostProposerRoot(t *testing.T) {
 		f := setup(0, 0)
 		slot := primitives.Slot(1)
 		currentSlot := primitives.Slot(1)
-		driftGenesisTime(f, currentSlot, 1)
+		driftGenesisTime(f, currentSlot, time.Second)
 		state, blkRoot, err := prepareForkchoiceState(ctx, slot, root, zeroHash, zeroHash, 0, 0)
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, state, blkRoot))
@@ -476,7 +479,7 @@ func TestForkChoice_BoostProposerRoot(t *testing.T) {
 
 // Regression test (11053)
 func TestForkChoice_missingProposerBoostRoots(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := setup(1, 1)
 	balances := make([]uint64, 64) // 64 active validators.
 	for i := 0; i < len(balances); i++ {

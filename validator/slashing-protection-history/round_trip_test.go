@@ -2,7 +2,6 @@ package history_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -23,13 +22,13 @@ import (
 // it does not keep track of attestation and proposal histories, and thus cannot
 // export the same data it imported.
 func TestImportExport_RoundTrip(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	numValidators := 10
 	publicKeys, err := slashtest.CreateRandomPubKeys(numValidators)
 	require.NoError(t, err)
 
 	isSlashingProtectionMinimal := false
-	validatorDB := dbtest.SetupDB(t, publicKeys, isSlashingProtectionMinimal)
+	validatorDB := dbtest.SetupDB(t, t.TempDir(), publicKeys, isSlashingProtectionMinimal)
 
 	// First we setup some mock attesting and proposal histories and create a mock
 	// standard slashing protection format JSON struct.
@@ -92,13 +91,13 @@ func TestImportExport_RoundTrip(t *testing.T) {
 // it does not keep track of attestation and proposal histories, and thus cannot
 // export the same data it imported.
 func TestImportExport_RoundTrip_SkippedAttestationEpochs(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	numValidators := 1
 	pubKeys, err := slashtest.CreateRandomPubKeys(numValidators)
 	require.NoError(t, err)
 
 	isSlashingProtectionMinimal := false
-	validatorDB := dbtest.SetupDB(t, pubKeys, isSlashingProtectionMinimal)
+	validatorDB := dbtest.SetupDB(t, t.TempDir(), pubKeys, isSlashingProtectionMinimal)
 	wanted := &format.EIPSlashingProtectionFormat{
 		Metadata: struct {
 			InterchangeFormatVersion string `json:"interchange_format_version"`
@@ -158,13 +157,13 @@ func TestImportExport_RoundTrip_SkippedAttestationEpochs(t *testing.T) {
 // it does not keep track of attestation and proposal histories, and thus cannot
 // export the same data it imported.
 func TestImportExport_FilterKeys(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	numValidators := 10
 	publicKeys, err := slashtest.CreateRandomPubKeys(numValidators)
 	require.NoError(t, err)
 
 	isSlashingProtectionMinimal := false
-	validatorDB := dbtest.SetupDB(t, publicKeys, isSlashingProtectionMinimal)
+	validatorDB := dbtest.SetupDB(t, t.TempDir(), publicKeys, isSlashingProtectionMinimal)
 
 	// First we setup some mock attesting and proposal histories and create a mock
 	// standard slashing protection format JSON struct.
@@ -203,13 +202,13 @@ func TestImportExport_FilterKeys(t *testing.T) {
 // it does not keep track of attestation and proposal histories, and thus cannot
 // export the same data it imported.
 func TestImportInterchangeData_OK(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	numValidators := 10
 	publicKeys, err := slashtest.CreateRandomPubKeys(numValidators)
 	require.NoError(t, err)
 
 	isSlashingProtectionMinimal := false
-	validatorDB := dbtest.SetupDB(t, publicKeys, isSlashingProtectionMinimal)
+	validatorDB := dbtest.SetupDB(t, t.TempDir(), publicKeys, isSlashingProtectionMinimal)
 
 	// First we setup some mock attesting and proposal histories and create a mock
 	// standard slashing protection format JSON struct.
@@ -273,13 +272,13 @@ func TestImportInterchangeData_OK(t *testing.T) {
 // it does not keep track of attestation and proposal histories, and thus cannot
 // export the same data it imported.
 func TestImportInterchangeData_OK_SavesBlacklistedPublicKeys(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	numValidators := 3
 	publicKeys, err := slashtest.CreateRandomPubKeys(numValidators)
 	require.NoError(t, err)
 
 	isSlashingProtectionMinimal := false
-	validatorDB := dbtest.SetupDB(t, publicKeys, isSlashingProtectionMinimal)
+	validatorDB := dbtest.SetupDB(t, t.TempDir(), publicKeys, isSlashingProtectionMinimal)
 
 	// First we setup some mock attesting and proposal histories and create a mock
 	// standard slashing protection format JSON struct.
@@ -368,13 +367,13 @@ func TestImportInterchangeData_OK_SavesBlacklistedPublicKeys(t *testing.T) {
 // it does not keep track of attestation and proposal histories, and thus cannot
 // export the same data it imported.
 func TestStore_ImportInterchangeData_BadFormat_PreventsDBWrites(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	numValidators := 5
 	publicKeys, err := slashtest.CreateRandomPubKeys(numValidators)
 	require.NoError(t, err)
 
 	isSlashingProtectionMinimal := false
-	validatorDB := dbtest.SetupDB(t, publicKeys, isSlashingProtectionMinimal)
+	validatorDB := dbtest.SetupDB(t, t.TempDir(), publicKeys, isSlashingProtectionMinimal)
 
 	// First we setup some mock attesting and proposal histories and create a mock
 	// standard slashing protection format JSON struct.

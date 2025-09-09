@@ -6,13 +6,19 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -44,16 +50,20 @@ const (
 
 // TestP2P represents a p2p implementation that can be used for testing.
 type TestP2P struct {
-	t               *testing.T
-	BHost           host.Host
-	EnodeID         enode.ID
-	pubsub          *pubsub.PubSub
-	joinedTopics    map[string]*pubsub.Topic
-	BroadcastCalled atomic.Bool
-	DelaySend       bool
-	Digest          [4]byte
-	peers           *peers.Status
-	LocalMetadata   metadata.Metadata
+	t                     *testing.T
+	BHost                 host.Host
+	EnodeID               enode.ID
+	pubsub                *pubsub.PubSub
+	joinedTopics          map[string]*pubsub.Topic
+	BroadcastCalled       atomic.Bool
+	DelaySend             bool
+	Digest                [4]byte
+	peers                 *peers.Status
+	LocalMetadata         metadata.Metadata
+	custodyInfoMut        sync.RWMutex // protects custodyGroupCount and earliestAvailableSlot
+	earliestAvailableSlot primitives.Slot
+	custodyGroupCount     uint64
+	enr                   *enr.Record
 }
 
 // NewTestP2P initializes a new p2p test service.
@@ -94,6 +104,7 @@ func NewTestP2P(t *testing.T, userOptions ...config.Option) *TestP2P {
 		pubsub:       ps,
 		joinedTopics: map[string]*pubsub.Topic{},
 		peers:        peerStatuses,
+		enr:          new(enr.Record),
 	}
 }
 
@@ -207,6 +218,24 @@ func (p *TestP2P) BroadcastBlob(context.Context, uint64, *ethpb.BlobSidecar) err
 	return nil
 }
 
+// BroadcastLightClientOptimisticUpdate broadcasts an optimistic update for mock.
+func (p *TestP2P) BroadcastLightClientOptimisticUpdate(_ context.Context, _ interfaces.LightClientOptimisticUpdate) error {
+	p.BroadcastCalled.Store(true)
+	return nil
+}
+
+// BroadcastLightClientFinalityUpdate broadcasts a finality update for mock.
+func (p *TestP2P) BroadcastLightClientFinalityUpdate(_ context.Context, _ interfaces.LightClientFinalityUpdate) error {
+	p.BroadcastCalled.Store(true)
+	return nil
+}
+
+// BroadcastDataColumnSidecar broadcasts a data column for mock.
+func (p *TestP2P) BroadcastDataColumnSidecar([fieldparams.RootLength]byte, uint64, *ethpb.DataColumnSidecar) error {
+	p.BroadcastCalled.Store(true)
+	return nil
+}
+
 // SetStreamHandler for RPC.
 func (p *TestP2P) SetStreamHandler(topic string, handler network.StreamHandler) {
 	p.BHost.SetStreamHandler(protocol.ID(topic), handler)
@@ -283,8 +312,8 @@ func (p *TestP2P) Host() host.Host {
 }
 
 // ENR returns the enr of the local peer.
-func (*TestP2P) ENR() *enr.Record {
-	return new(enr.Record)
+func (p *TestP2P) ENR() *enr.Record {
+	return p.enr
 }
 
 // NodeID returns the node id of the local peer.
@@ -386,9 +415,9 @@ func (p *TestP2P) Peers() *peers.Status {
 	return p.peers
 }
 
-// FindPeersWithSubnet mocks the p2p func.
-func (*TestP2P) FindPeersWithSubnet(_ context.Context, _ string, _ uint64, _ int) (bool, error) {
-	return false, nil
+// FindAndDialPeersWithSubnets mocks the p2p func.
+func (*TestP2P) FindAndDialPeersWithSubnets(ctx context.Context, topicFormat string, digest [fieldparams.VersionLength]byte, minimumPeersPerSubnet int, subnets map[uint64]bool) error {
+	return nil
 }
 
 // RefreshPersistentSubnets mocks the p2p func.
@@ -437,4 +466,51 @@ func (*TestP2P) InterceptSecured(network.Direction, peer.ID, network.ConnMultiad
 // InterceptUpgraded .
 func (*TestP2P) InterceptUpgraded(network.Conn) (allow bool, reason control.DisconnectReason) {
 	return true, 0
+}
+
+// EarliestAvailableSlot .
+func (s *TestP2P) EarliestAvailableSlot() (primitives.Slot, error) {
+	s.custodyInfoMut.RLock()
+	defer s.custodyInfoMut.RUnlock()
+
+	return s.earliestAvailableSlot, nil
+}
+
+// CustodyGroupCount .
+func (s *TestP2P) CustodyGroupCount() (uint64, error) {
+	s.custodyInfoMut.RLock()
+	defer s.custodyInfoMut.RUnlock()
+
+	return s.custodyGroupCount, nil
+}
+
+// UpdateCustodyInfo .
+func (s *TestP2P) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
+	s.custodyInfoMut.Lock()
+	defer s.custodyInfoMut.Unlock()
+
+	s.earliestAvailableSlot = earliestAvailableSlot
+	s.custodyGroupCount = custodyGroupCount
+
+	return s.earliestAvailableSlot, s.custodyGroupCount, nil
+}
+
+// CustodyGroupCountFromPeer .
+func (s *TestP2P) CustodyGroupCountFromPeer(pid peer.ID) uint64 {
+	// By default, we assume the peer custodies the minimum number of groups.
+	custodyRequirement := params.BeaconConfig().CustodyRequirement
+
+	// Retrieve the ENR of the peer.
+	record, err := s.peers.ENR(pid)
+	if err != nil {
+		return custodyRequirement
+	}
+
+	// Retrieve the custody subnets count from the ENR.
+	custodyGroupCount, err := peerdas.CustodyGroupCountFromRecord(record)
+	if err != nil {
+		return custodyRequirement
+	}
+
+	return custodyGroupCount
 }

@@ -9,14 +9,6 @@ import (
 	"sync"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	libp2pcore "github.com/libp2p/go-libp2p/core"
-	"github.com/libp2p/go-libp2p/core/peer"
-	gcache "github.com/patrickmn/go-cache"
-	"github.com/pkg/errors"
-	"github.com/trailofbits/go-mutexasserts"
-
 	"github.com/OffchainLabs/prysm/v6/async"
 	"github.com/OffchainLabs/prysm/v6/async/abool"
 	"github.com/OffchainLabs/prysm/v6/async/event"
@@ -25,6 +17,7 @@ import (
 	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
@@ -34,6 +27,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/synccommittee"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/voluntaryexits"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/backfill/coverage"
@@ -43,10 +37,19 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/crypto/rand"
 	"github.com/OffchainLabs/prysm/v6/runtime"
 	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
+	lru "github.com/hashicorp/golang-lru"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	libp2pcore "github.com/libp2p/go-libp2p/core"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	gcache "github.com/patrickmn/go-cache"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+	"github.com/trailofbits/go-mutexasserts"
 )
 
 var _ runtime.Service = (*Service)(nil)
@@ -54,7 +57,6 @@ var _ runtime.Service = (*Service)(nil)
 const (
 	rangeLimit               uint64 = 1024
 	seenBlockSize                   = 1000
-	seenBlobSize                    = seenBlockSize * 6   // Each block can have max 6 blobs.
 	seenDataColumnSize              = seenBlockSize * 128 // Each block can have max 128 data columns.
 	seenUnaggregatedAttSize         = 20000
 	seenAggregatedAttSize           = 16384
@@ -102,12 +104,15 @@ type config struct {
 	clock                   *startup.Clock
 	stateNotifier           statefeed.Notifier
 	blobStorage             *filesystem.BlobStorage
+	dataColumnStorage       *filesystem.DataColumnStorage
+	batchVerifierLimit      int
 }
 
 // This defines the interface for interacting with block chain service
 type blockchainService interface {
 	blockchain.BlockReceiver
 	blockchain.BlobReceiver
+	blockchain.DataColumnReceiver
 	blockchain.HeadFetcher
 	blockchain.FinalizationFetcher
 	blockchain.ForkFetcher
@@ -128,7 +133,7 @@ type Service struct {
 	cancel                           context.CancelFunc
 	slotToPendingBlocks              *gcache.Cache
 	seenPendingBlocks                map[[32]byte]bool
-	blkRootToPendingAtts             map[[32]byte][]ethpb.SignedAggregateAttAndProof
+	blkRootToPendingAtts             map[[32]byte][]any
 	subHandler                       *subTopicHandler
 	pendingAttsLock                  sync.RWMutex
 	pendingQueueLock                 sync.RWMutex
@@ -139,6 +144,7 @@ type Service struct {
 	seenBlockCache                   *lru.Cache
 	seenBlobLock                     sync.RWMutex
 	seenBlobCache                    *lru.Cache
+	seenDataColumnCache              *slotAwareCache
 	seenAggregatedAttestationLock    sync.RWMutex
 	seenAggregatedAttestationCache   *lru.Cache
 	seenUnAggregatedAttestationLock  sync.RWMutex
@@ -162,23 +168,31 @@ type Service struct {
 	initialSyncComplete              chan struct{}
 	verifierWaiter                   *verification.InitializerWaiter
 	newBlobVerifier                  verification.NewBlobVerifier
+	newColumnsVerifier               verification.NewDataColumnsVerifier
 	availableBlocker                 coverage.AvailableBlocker
+	reconstructionLock               sync.Mutex
+	reconstructionRandGen            *rand.Rand
+	trackedValidatorsCache           *cache.TrackedValidatorsCache
 	ctxMap                           ContextByteVersions
 	slasherEnabled                   bool
+	lcStore                          *lightClient.Store
+	dataColumnLogCh                  chan dataColumnLogEntry
+	registeredNetworkEntry           params.NetworkScheduleEntry
 }
 
 // NewService initializes new regular sync service.
 func NewService(ctx context.Context, opts ...Option) *Service {
 	ctx, cancel := context.WithCancel(ctx)
 	r := &Service{
-		ctx:                  ctx,
-		cancel:               cancel,
-		chainStarted:         abool.New(),
-		cfg:                  &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
-		slotToPendingBlocks:  gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
-		seenPendingBlocks:    make(map[[32]byte]bool),
-		blkRootToPendingAtts: make(map[[32]byte][]ethpb.SignedAggregateAttAndProof),
-		signatureChan:        make(chan *signatureVerifier, verifierLimit),
+		ctx:                   ctx,
+		cancel:                cancel,
+		chainStarted:          abool.New(),
+		cfg:                   &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
+		slotToPendingBlocks:   gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
+		seenPendingBlocks:     make(map[[32]byte]bool),
+		blkRootToPendingAtts:  make(map[[32]byte][]any),
+		dataColumnLogCh:       make(chan dataColumnLogEntry, 1000),
+		reconstructionRandGen: rand.NewGenerator(),
 	}
 
 	for _, opt := range opts {
@@ -186,6 +200,8 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 			return nil
 		}
 	}
+	// Initialize signature channel with configured limit
+	r.signatureChan = make(chan *signatureVerifier, r.cfg.batchVerifierLimit)
 	// Correctly remove it from our seen pending block map.
 	// The eviction method always assumes that the mutex is held.
 	r.slotToPendingBlocks.OnEvicted(func(s string, i interface{}) {
@@ -221,6 +237,12 @@ func newBlobVerifierFromInitializer(ini *verification.Initializer) verification.
 	}
 }
 
+func newDataColumnsVerifierFromInitializer(ini *verification.Initializer) verification.NewDataColumnsVerifier {
+	return func(roDataColumns []blocks.RODataColumn, reqs []verification.Requirement) verification.DataColumnsVerifier {
+		return ini.NewDataColumnsVerifier(roDataColumns, reqs)
+	}
+}
+
 // Start the regular sync service.
 func (s *Service) Start() {
 	v, err := s.verifierWaiter.WaitForInitializer(s.ctx)
@@ -229,9 +251,11 @@ func (s *Service) Start() {
 		return
 	}
 	s.newBlobVerifier = newBlobVerifierFromInitializer(v)
+	s.newColumnsVerifier = newDataColumnsVerifierFromInitializer(v)
 
 	go s.verifierRoutine()
 	go s.startTasksPostInitialSync()
+	go s.processDataColumnLogs()
 
 	s.cfg.p2p.AddConnectionHandler(s.reValidatePeer, s.sendGoodbye)
 	s.cfg.p2p.AddDisconnectionHandler(func(_ context.Context, _ peer.ID) error {
@@ -239,31 +263,61 @@ func (s *Service) Start() {
 		return nil
 	})
 	s.cfg.p2p.AddPingMethod(s.sendPingRequest)
+
 	s.processPendingBlocksQueue()
-	s.processPendingAttsQueue()
+	s.runPendingAttsQueue()
 	s.maintainPeerStatuses()
+
+	if params.FuluEnabled() {
+		s.maintainCustodyInfo()
+	}
+
 	s.resyncIfBehind()
 
 	// Update sync metrics.
 	async.RunEvery(s.ctx, syncMetricsInterval, s.updateMetrics)
+
+	// Prune data column cache periodically on finalization.
+	async.RunEvery(s.ctx, 30*time.Second, s.pruneDataColumnCache)
 }
 
 // Stop the regular sync service.
 func (s *Service) Stop() error {
 	defer func() {
+		s.cancel()
+
 		if s.rateLimiter != nil {
 			s.rateLimiter.free()
 		}
 	}()
-	// Removing RPC Stream handlers.
+
+	// Create context with timeout to prevent hanging
+	goodbyeCtx, cancel := context.WithTimeout(s.ctx, 10*time.Second)
+	defer cancel()
+
+	// Use WaitGroup to ensure all goodbye messages complete
+	var wg sync.WaitGroup
+	for _, peerID := range s.cfg.p2p.Peers().Connected() {
+		if s.cfg.p2p.Host().Network().Connectedness(peerID) == network.Connected {
+			wg.Add(1)
+			go func(pid peer.ID) {
+				defer wg.Done()
+				if err := s.sendGoodByeAndDisconnect(goodbyeCtx, p2ptypes.GoodbyeCodeClientShutdown, pid); err != nil {
+					log.WithError(err).WithField("peerID", pid).Error("Failed to send goodbye message")
+				}
+			}(peerID)
+		}
+	}
+	wg.Wait()
+	log.Debug("All goodbye messages sent successfully")
+
+	// Now safe to remove handlers / unsubscribe.
 	for _, p := range s.cfg.p2p.Host().Mux().Protocols() {
 		s.cfg.p2p.Host().RemoveStreamHandler(p)
 	}
-	// Deregister Topic Subscribers.
 	for _, t := range s.cfg.p2p.PubSub().GetTopics() {
 		s.unSubscribeFromTopic(t)
 	}
-	defer s.cancel()
 	return nil
 }
 
@@ -282,7 +336,8 @@ func (s *Service) Status() error {
 // and prevent DoS.
 func (s *Service) initCaches() {
 	s.seenBlockCache = lruwrpr.New(seenBlockSize)
-	s.seenBlobCache = lruwrpr.New(seenBlobSize)
+	s.seenBlobCache = lruwrpr.New(seenBlockSize * params.BeaconConfig().DeprecatedMaxBlobsPerBlockElectra)
+	s.seenDataColumnCache = newSlotAwareCache(seenDataColumnSize)
 	s.seenAggregatedAttestationCache = lruwrpr.New(seenAggregatedAttSize)
 	s.seenUnAggregatedAttestationCache = lruwrpr.New(seenUnaggregatedAttSize)
 	s.seenSyncMessageCache = lruwrpr.New(seenSyncMsgSize)
@@ -297,7 +352,7 @@ func (s *Service) initCaches() {
 func (s *Service) waitForChainStart() {
 	clock, err := s.clockWaiter.WaitForClock(s.ctx)
 	if err != nil {
-		log.WithError(err).Error("sync service failed to receive genesis data")
+		log.WithError(err).Error("Sync service failed to receive genesis data")
 		return
 	}
 	s.cfg.clock = clock
@@ -309,7 +364,7 @@ func (s *Service) waitForChainStart() {
 		log.
 			WithError(err).
 			WithField("genesisValidatorRoot", clock.GenesisValidatorsRoot()).
-			Error("sync service failed to initialize context version map")
+			Error("Sync service failed to initialize context version map")
 		return
 	}
 	s.ctxMap = ctxMap
@@ -336,7 +391,7 @@ func (s *Service) startTasksPostInitialSync() {
 	select {
 	case <-s.initialSyncComplete:
 		// Compute the current epoch.
-		currentSlot := slots.CurrentSlot(uint64(s.cfg.clock.GenesisTime().Unix()))
+		currentSlot := slots.CurrentSlot(s.cfg.clock.GenesisTime())
 		currentEpoch := slots.ToEpoch(currentSlot)
 
 		// Compute the current fork forkDigest.
@@ -368,6 +423,24 @@ func (s *Service) setRateCollector(topic string, c *leakybucket.Collector) {
 // marks the chain as having started.
 func (s *Service) markForChainStart() {
 	s.chainStarted.Set()
+}
+
+// pruneDataColumnCache removes entries from the data column cache that are older than the finalized slot.
+func (s *Service) pruneDataColumnCache() {
+	finalizedCheckpoint := s.cfg.chain.FinalizedCheckpt()
+	finalizedSlot, err := slots.EpochStart(finalizedCheckpoint.Epoch)
+	if err != nil {
+		log.WithError(err).Error("Could not calculate finalized slot for cache pruning")
+		return
+	}
+
+	pruned := s.seenDataColumnCache.pruneSlotsBefore(finalizedSlot)
+	if pruned > 0 {
+		log.WithFields(logrus.Fields{
+			"finalizedSlot": finalizedSlot,
+			"prunedEntries": pruned,
+		}).Debug("Pruned data column cache entries before finalized slot")
+	}
 }
 
 func (s *Service) chainIsStarted() bool {

@@ -16,11 +16,11 @@ var ErrNotFoundOriginBlockRoot = errors.Wrap(ErrNotFound, "OriginBlockRoot")
 // ErrNotFoundGenesisBlockRoot means no genesis block root was found, indicating the db was not initialized with genesis
 var ErrNotFoundGenesisBlockRoot = errors.Wrap(ErrNotFound, "OriginGenesisRoot")
 
-// ErrNotFoundBackfillBlockRoot is an error specifically for the origin block root getter
-var ErrNotFoundBackfillBlockRoot = errors.Wrap(ErrNotFound, "BackfillBlockRoot")
-
 // ErrNotFoundFeeRecipient is a not found error specifically for the fee recipient getter
 var ErrNotFoundFeeRecipient = errors.Wrap(ErrNotFound, "fee recipient")
+
+// ErrNotFoundMetadataSeqNum is a not found error specifically for the metadata sequence number getter
+var ErrNotFoundMetadataSeqNum = errors.Wrap(ErrNotFound, "metadata sequence number")
 
 var errEmptyBlockSlice = errors.New("[]blocks.ROBlock is empty")
 var errIncorrectBlockParent = errors.New("unexpected missing or forked blocks in a []ROBlock")

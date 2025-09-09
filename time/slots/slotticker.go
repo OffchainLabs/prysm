@@ -153,10 +153,10 @@ func (s *SlotIntervalTicker) startWithIntervals(
 	after func(time.Duration) <-chan time.Time,
 	intervals []time.Duration) {
 	go func() {
-		slot := Since(genesisTime)
+		slot := CurrentSlot(genesisTime)
 		slot++
 		interval := 0
-		nextTickTime := startFromTime(genesisTime, slot).Add(intervals[0])
+		nextTickTime := UnsafeStartTime(genesisTime, slot).Add(intervals[0])
 
 		for {
 			waitTime := until(nextTickTime)
@@ -168,7 +168,7 @@ func (s *SlotIntervalTicker) startWithIntervals(
 					interval = 0
 					slot++
 				}
-				nextTickTime = startFromTime(genesisTime, slot).Add(intervals[interval])
+				nextTickTime = UnsafeStartTime(genesisTime, slot).Add(intervals[interval])
 			case <-s.done:
 				return
 			}

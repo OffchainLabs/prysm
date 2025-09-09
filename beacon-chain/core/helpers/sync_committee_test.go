@@ -17,6 +17,38 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
+func TestCurrentPeriodPositions(t *testing.T) {
+	helpers.ClearCache()
+
+	validators := make([]*ethpb.Validator, params.BeaconConfig().SyncCommitteeSize)
+	syncCommittee := &ethpb.SyncCommittee{
+		Pubkeys: make([][]byte, params.BeaconConfig().SyncCommitteeSize),
+	}
+	for i := 0; i < len(validators); i++ {
+		k := make([]byte, 48)
+		copy(k, strconv.Itoa(i))
+		validators[i] = &ethpb.Validator{
+			PublicKey: k,
+		}
+		syncCommittee.Pubkeys[i] = bytesutil.PadTo(k, 48)
+	}
+	state, err := state_native.InitializeFromProtoAltair(&ethpb.BeaconStateAltair{
+		Validators: validators,
+	})
+	require.NoError(t, err)
+	require.NoError(t, state.SetCurrentSyncCommittee(syncCommittee))
+	require.NoError(t, state.SetNextSyncCommittee(syncCommittee))
+	require.NoError(t, err, helpers.SyncCommitteeCache().UpdatePositionsInCommittee([32]byte{}, state))
+
+	positions, err := helpers.CurrentPeriodPositions(state, []primitives.ValidatorIndex{0, 1})
+	require.NoError(t, err)
+	require.Equal(t, 2, len(positions))
+	require.Equal(t, 1, len(positions[0]))
+	assert.Equal(t, primitives.CommitteeIndex(0), positions[0][0])
+	require.Equal(t, 1, len(positions[1]))
+	assert.Equal(t, primitives.CommitteeIndex(1), positions[1][0])
+}
+
 func TestIsCurrentEpochSyncCommittee_UsingCache(t *testing.T) {
 	helpers.ClearCache()
 
@@ -78,6 +110,7 @@ func TestIsCurrentEpochSyncCommittee_UsingCommittee(t *testing.T) {
 
 func TestIsCurrentEpochSyncCommittee_DoesNotExist(t *testing.T) {
 	helpers.ClearCache()
+	params.SetupTestConfigCleanup(t)
 
 	validators := make([]*ethpb.Validator, params.BeaconConfig().SyncCommitteeSize)
 	syncCommittee := &ethpb.SyncCommittee{
@@ -100,7 +133,7 @@ func TestIsCurrentEpochSyncCommittee_DoesNotExist(t *testing.T) {
 	require.NoError(t, state.SetNextSyncCommittee(syncCommittee))
 
 	ok, err := helpers.IsCurrentPeriodSyncCommittee(state, 12390192)
-	require.ErrorContains(t, "validator index 12390192 does not exist", err)
+	require.ErrorContains(t, "index 12390192 out of bounds", err)
 	require.Equal(t, false, ok)
 }
 
@@ -187,7 +220,7 @@ func TestIsNextEpochSyncCommittee_DoesNotExist(t *testing.T) {
 	require.NoError(t, state.SetNextSyncCommittee(syncCommittee))
 
 	ok, err := helpers.IsNextPeriodSyncCommittee(state, 120391029)
-	require.ErrorContains(t, "validator index 120391029 does not exist", err)
+	require.ErrorContains(t, "index 120391029 out of bounds", err)
 	require.Equal(t, false, ok)
 }
 
@@ -264,6 +297,7 @@ func TestCurrentEpochSyncSubcommitteeIndices_UsingCommittee(t *testing.T) {
 }
 
 func TestCurrentEpochSyncSubcommitteeIndices_DoesNotExist(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
 	helpers.ClearCache()
 
 	validators := make([]*ethpb.Validator, params.BeaconConfig().SyncCommitteeSize)
@@ -287,7 +321,7 @@ func TestCurrentEpochSyncSubcommitteeIndices_DoesNotExist(t *testing.T) {
 	require.NoError(t, state.SetNextSyncCommittee(syncCommittee))
 
 	index, err := helpers.CurrentPeriodSyncSubcommitteeIndices(state, 129301923)
-	require.ErrorContains(t, "validator index 129301923 does not exist", err)
+	require.ErrorContains(t, "index 129301923 out of bounds", err)
 	require.DeepEqual(t, []primitives.CommitteeIndex(nil), index)
 }
 
@@ -374,7 +408,7 @@ func TestNextEpochSyncSubcommitteeIndices_DoesNotExist(t *testing.T) {
 	require.NoError(t, state.SetNextSyncCommittee(syncCommittee))
 
 	index, err := helpers.NextPeriodSyncSubcommitteeIndices(state, 21093019)
-	require.ErrorContains(t, "validator index 21093019 does not exist", err)
+	require.ErrorContains(t, "index 21093019 out of bounds", err)
 	require.DeepEqual(t, []primitives.CommitteeIndex(nil), index)
 }
 

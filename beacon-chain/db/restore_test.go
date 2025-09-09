@@ -1,7 +1,6 @@
 package db
 
 import (
-	"context"
 	"flag"
 	"os"
 	"path"
@@ -20,9 +19,9 @@ import (
 
 func TestRestore(t *testing.T) {
 	logHook := logTest.NewGlobal()
-	ctx := context.Background()
+	ctx := t.Context()
 
-	backupDb, err := kv.NewKVStore(context.Background(), t.TempDir())
+	backupDb, err := kv.NewKVStore(t.Context(), t.TempDir())
 	require.NoError(t, err)
 	head := util.NewBeaconBlock()
 	head.Block.Slot = 5000
@@ -58,7 +57,7 @@ func TestRestore(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(files))
 	assert.Equal(t, kv.DatabaseFileName, files[0].Name())
-	restoredDb, err := kv.NewKVStore(context.Background(), path.Join(restoreDir, kv.BeaconNodeDbDirName))
+	restoredDb, err := kv.NewKVStore(t.Context(), path.Join(restoreDir, kv.BeaconNodeDbDirName))
 	defer func() {
 		require.NoError(t, restoredDb.Close())
 	}()

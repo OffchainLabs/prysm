@@ -21,7 +21,7 @@ import (
 )
 
 func TestSlasher_receiveAttestations_OK(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	s := &Service{
 		serviceCfg: &ServiceConfig{
 			IndexedAttestationsFeed: new(event.Feed),
@@ -55,7 +55,7 @@ func TestSlasher_receiveAttestations_OK(t *testing.T) {
 }
 
 func TestService_pruneSlasherDataWithinSlidingWindow_AttestationsPruned(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	params := DefaultParams()
 	params.historyLength = 4 // 4 epochs worth of history.
 	slasherDB := dbtest.SetupSlasherDB(t)
@@ -127,7 +127,7 @@ func TestService_pruneSlasherDataWithinSlidingWindow_AttestationsPruned(t *testi
 }
 
 func TestService_pruneSlasherDataWithinSlidingWindow_ProposalsPruned(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Override beacon config to 1 slot per epoch for easier testing.
 	params2.SetupTestConfigCleanup(t)
@@ -206,7 +206,7 @@ func TestService_pruneSlasherDataWithinSlidingWindow_ProposalsPruned(t *testing.
 }
 
 func TestSlasher_receiveAttestations_OnlyValidAttestations(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	s := &Service{
 		serviceCfg: &ServiceConfig{
 			IndexedAttestationsFeed: new(event.Feed),
@@ -246,7 +246,7 @@ func TestSlasher_receiveAttestations_OnlyValidAttestations(t *testing.T) {
 }
 
 func TestSlasher_receiveBlocks_OK(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	s := &Service{
 		serviceCfg: &ServiceConfig{
 			BeaconBlockHeadersFeed: new(event.Feed),
@@ -301,7 +301,7 @@ func TestService_processQueuedBlocks(t *testing.T) {
 	s.blksQueue.extend([]*slashertypes.SignedBlockHeaderWrapper{
 		createProposalWrapper(t, 0, 1, nil),
 	})
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	tickerChan := make(chan primitives.Slot)
 	s.wg.Add(1)
 	go func() {

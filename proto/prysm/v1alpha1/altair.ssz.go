@@ -2,7 +2,7 @@
 package eth
 
 import (
-	github_com_prysmaticlabs_prysm_v5_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ssz "github.com/prysmaticlabs/fastssz"
 )
 
@@ -172,10 +172,10 @@ func (b *BeaconBlockAltair) UnmarshalSSZ(buf []byte) error {
 	var o4 uint64
 
 	// Field (0) 'Slot'
-	b.Slot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	b.Slot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Field (1) 'ProposerIndex'
-	b.ProposerIndex = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
+	b.ProposerIndex = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
 
 	// Field (2) 'ParentRoot'
 	if cap(b.ParentRoot) == 0 {
@@ -1059,7 +1059,7 @@ func (b *BeaconStateAltair) UnmarshalSSZ(buf []byte) error {
 	b.GenesisValidatorsRoot = append(b.GenesisValidatorsRoot, buf[8:40]...)
 
 	// Field (2) 'Slot'
-	b.Slot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[40:48]))
+	b.Slot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[40:48]))
 
 	// Field (3) 'Fork'
 	if b.Fork == nil {
@@ -1713,7 +1713,7 @@ func (s *SyncAggregatorSelectionData) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'Slot'
-	s.Slot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	s.Slot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Field (1) 'SubcommitteeIndex'
 	s.SubcommitteeIndex = ssz.UnmarshallUint64(buf[8:16])
@@ -2001,7 +2001,7 @@ func (l *LightClientUpdateAltair) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (6) 'SignatureSlot'
-	l.SignatureSlot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[25360:25368]))
+	l.SignatureSlot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[25360:25368]))
 
 	return err
 }
@@ -2176,7 +2176,7 @@ func (l *LightClientFinalityUpdateAltair) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (4) 'SignatureSlot'
-	l.SignatureSlot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[576:584]))
+	l.SignatureSlot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[576:584]))
 
 	return err
 }
@@ -2291,7 +2291,7 @@ func (l *LightClientOptimisticUpdateAltair) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (2) 'SignatureSlot'
-	l.SignatureSlot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[272:280]))
+	l.SignatureSlot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[272:280]))
 
 	return err
 }
@@ -2432,7 +2432,7 @@ func (s *SyncCommitteeMessage) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'Slot'
-	s.Slot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	s.Slot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Field (1) 'BlockRoot'
 	if cap(s.BlockRoot) == 0 {
@@ -2441,7 +2441,7 @@ func (s *SyncCommitteeMessage) UnmarshalSSZ(buf []byte) error {
 	s.BlockRoot = append(s.BlockRoot, buf[8:40]...)
 
 	// Field (2) 'ValidatorIndex'
-	s.ValidatorIndex = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[40:48]))
+	s.ValidatorIndex = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[40:48]))
 
 	// Field (3) 'Signature'
 	if cap(s.Signature) == 0 {
@@ -2613,7 +2613,7 @@ func (c *ContributionAndProof) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'AggregatorIndex'
-	c.AggregatorIndex = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[0:8]))
+	c.AggregatorIndex = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Field (1) 'Contribution'
 	if c.Contribution == nil {
@@ -2714,7 +2714,7 @@ func (s *SyncCommitteeContribution) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'Slot'
-	s.Slot = github_com_prysmaticlabs_prysm_v5_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	s.Slot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Field (1) 'BlockRoot'
 	if cap(s.BlockRoot) == 0 {

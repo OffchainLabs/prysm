@@ -1,7 +1,6 @@
 package filesystem
 
 import (
-	"context"
 	"testing"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -16,7 +15,7 @@ import (
 
 func TestStore_ProposalHistoryForPubKey(t *testing.T) {
 	var slot uint64 = 42
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range []struct {
 		name                        string
@@ -73,7 +72,7 @@ func TestStore_SaveProposalHistoryForSlot(t *testing.T) {
 		slot43 uint64 = 43
 	)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range []struct {
 		name                                string
@@ -164,7 +163,7 @@ func TestStore_ProposedPublicKeys(t *testing.T) {
 
 	// We check the public keys
 	expected := pubkeys
-	actual, err := s.ProposedPublicKeys(context.Background())
+	actual, err := s.ProposedPublicKeys(t.Context())
 	require.NoError(t, err, "publicKeys should not return an error")
 
 	// We cannot compare the slices directly because the order is not guaranteed,
@@ -183,7 +182,7 @@ func TestStore_ProposedPublicKeys(t *testing.T) {
 }
 
 func Test_slashableProposalCheck_PreventsLowerThanMinProposal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// We get a database path
 	databasePath := t.TempDir()
@@ -214,7 +213,7 @@ func Test_slashableProposalCheck_PreventsLowerThanMinProposal(t *testing.T) {
 	}
 	wsb, err := blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
-	err = s.SlashableProposalCheck(context.Background(), pubkey, wsb, [32]byte{4}, false, nil)
+	err = s.SlashableProposalCheck(t.Context(), pubkey, wsb, [32]byte{4}, false, nil)
 	require.ErrorContains(t, common.FailedBlockSignLocalErr, err)
 
 	// We expect the same block with a slot equal to the lowest
@@ -229,14 +228,14 @@ func Test_slashableProposalCheck_PreventsLowerThanMinProposal(t *testing.T) {
 	}
 	wsb, err = blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
-	err = s.SlashableProposalCheck(context.Background(), pubkey, wsb, [32]byte{1}, false, nil)
+	err = s.SlashableProposalCheck(t.Context(), pubkey, wsb, [32]byte{1}, false, nil)
 	require.ErrorContains(t, common.FailedBlockSignLocalErr, err)
 
 	// We expect the same block with a slot equal to the lowest
 	// signed slot to fail validation if signing roots are different.
 	wsb, err = blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
-	err = s.SlashableProposalCheck(context.Background(), pubkey, wsb, [32]byte{4}, false, nil)
+	err = s.SlashableProposalCheck(t.Context(), pubkey, wsb, [32]byte{4}, false, nil)
 	require.ErrorContains(t, common.FailedBlockSignLocalErr, err)
 
 	// We expect the same block with a slot > than the lowest
@@ -252,12 +251,12 @@ func Test_slashableProposalCheck_PreventsLowerThanMinProposal(t *testing.T) {
 
 	wsb, err = blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
-	err = s.SlashableProposalCheck(context.Background(), pubkey, wsb, [32]byte{3}, false, nil)
+	err = s.SlashableProposalCheck(t.Context(), pubkey, wsb, [32]byte{3}, false, nil)
 	require.NoError(t, err)
 }
 
 func Test_slashableProposalCheck(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// We get a database path
 	databasePath := t.TempDir()
@@ -291,11 +290,11 @@ func Test_slashableProposalCheck(t *testing.T) {
 	require.NoError(t, err)
 
 	// We expect the same block sent out should be slasahble.
-	err = s.SlashableProposalCheck(context.Background(), pubkey, sBlock, dummySigningRoot, false, nil)
+	err = s.SlashableProposalCheck(t.Context(), pubkey, sBlock, dummySigningRoot, false, nil)
 	require.ErrorContains(t, common.FailedBlockSignLocalErr, err)
 
 	// We expect the same block sent out with a different signing root should be slashable.
-	err = s.SlashableProposalCheck(context.Background(), pubkey, sBlock, [32]byte{2}, false, nil)
+	err = s.SlashableProposalCheck(t.Context(), pubkey, sBlock, [32]byte{2}, false, nil)
 	require.ErrorContains(t, common.FailedBlockSignLocalErr, err)
 
 	// We save a proposal at slot 11 with a nil signing root.
@@ -307,7 +306,7 @@ func Test_slashableProposalCheck(t *testing.T) {
 
 	// We expect the same block sent out should return slashable error even
 	// if we had a nil signing root stored in the database.
-	err = s.SlashableProposalCheck(context.Background(), pubkey, sBlock, [32]byte{2}, false, nil)
+	err = s.SlashableProposalCheck(t.Context(), pubkey, sBlock, [32]byte{2}, false, nil)
 	require.ErrorContains(t, common.FailedBlockSignLocalErr, err)
 
 	// A block with a different slot for which we do not have a proposing history
@@ -315,7 +314,7 @@ func Test_slashableProposalCheck(t *testing.T) {
 	blk.Block.Slot = 9
 	sBlock, err = blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
-	err = s.SlashableProposalCheck(context.Background(), pubkey, sBlock, [32]byte{3}, false, nil)
+	err = s.SlashableProposalCheck(t.Context(), pubkey, sBlock, [32]byte{3}, false, nil)
 	require.ErrorContains(t, common.FailedBlockSignLocalErr, err)
 }
 
@@ -336,6 +335,6 @@ func Test_slashableProposalCheck_RemoteProtection(t *testing.T) {
 	sBlock, err := blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
 
-	err = s.SlashableProposalCheck(context.Background(), pubkey, sBlock, [32]byte{2}, false, nil)
+	err = s.SlashableProposalCheck(t.Context(), pubkey, sBlock, [32]byte{2}, false, nil)
 	require.NoError(t, err, "Expected allowed block not to throw error")
 }

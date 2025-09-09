@@ -9,9 +9,11 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
 	corehelpers "github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
@@ -31,7 +33,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/sirupsen/logrus"
@@ -333,26 +334,26 @@ func (s *Server) GetBlockAttestationsV2(w http.ResponseWriter, r *http.Request) 
 	consensusAtts := blk.Block().Body().Attestations()
 
 	v := blk.Block().Version()
-	var attStructs []interface{}
+	attStructs := make([]interface{}, len(consensusAtts))
 	if v >= version.Electra {
-		for _, att := range consensusAtts {
+		for index, att := range consensusAtts {
 			a, ok := att.(*eth.AttestationElectra)
 			if !ok {
 				httputil.HandleError(w, fmt.Sprintf("unable to convert consensus attestations electra of type %T", att), http.StatusInternalServerError)
 				return
 			}
 			attStruct := structs.AttElectraFromConsensus(a)
-			attStructs = append(attStructs, attStruct)
+			attStructs[index] = attStruct
 		}
 	} else {
-		for _, att := range consensusAtts {
+		for index, att := range consensusAtts {
 			a, ok := att.(*eth.Attestation)
 			if !ok {
 				httputil.HandleError(w, fmt.Sprintf("unable to convert consensus attestation of type %T", att), http.StatusInternalServerError)
 				return
 			}
 			attStruct := structs.AttFromConsensus(a)
-			attStructs = append(attStructs, attStruct)
+			attStructs[index] = attStruct
 		}
 	}
 
@@ -658,6 +659,12 @@ func (s *Server) PublishBlock(w http.ResponseWriter, r *http.Request) {
 // broadcast all given signed blobs. The broadcast behaviour may be adjusted via the
 // `broadcast_validation` query parameter.
 func (s *Server) PublishBlockV2(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	defer func() {
+		duration := time.Since(start).Milliseconds()
+		publishBlockV2Duration.Observe(float64(duration))
+	}()
+
 	ctx, span := trace.StartSpan(r.Context(), "beacon.PublishBlockV2")
 	defer span.End()
 	if shared.IsSyncing(r.Context(), w, s.SyncChecker, s.HeadFetcher, s.TimeFetcher, s.OptimisticModeFetcher) {
@@ -694,7 +701,7 @@ func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *
 	// Validate and optionally broadcast sidecars on equivocation.
 	if err := s.validateBroadcast(ctx, r, genericBlock); err != nil {
 		if errors.Is(err, errEquivocatedBlock) {
-			b, err := blocks.NewSignedBeaconBlock(genericBlock)
+			b, err := blocks.NewSignedBeaconBlock(genericBlock.Block)
 			if err != nil {
 				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 				return
@@ -848,7 +855,7 @@ func (s *Server) publishBlock(ctx context.Context, w http.ResponseWriter, r *htt
 	// Validate and optionally broadcast sidecars on equivocation.
 	if err := s.validateBroadcast(ctx, r, genericBlock); err != nil {
 		if errors.Is(err, errEquivocatedBlock) {
-			b, err := blocks.NewSignedBeaconBlock(genericBlock)
+			b, err := blocks.NewSignedBeaconBlock(genericBlock.Block)
 			if err != nil {
 				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 				return
@@ -935,14 +942,13 @@ func decodePhase0JSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 // broadcastSidecarsIfSupported broadcasts blob sidecars when an equivocated block occurs.
 func broadcastSidecarsIfSupported(ctx context.Context, s *Server, b interfaces.SignedBeaconBlock, gb *eth.GenericSignedBeaconBlock, versionHeader string) error {
 	switch versionHeader {
-	case version.String(version.Fulu):
-		return s.broadcastSeenBlockSidecars(ctx, b, gb.GetFulu().Blobs, gb.GetFulu().KzgProofs)
 	case version.String(version.Electra):
 		return s.broadcastSeenBlockSidecars(ctx, b, gb.GetElectra().Blobs, gb.GetElectra().KzgProofs)
 	case version.String(version.Deneb):
 		return s.broadcastSeenBlockSidecars(ctx, b, gb.GetDeneb().Blobs, gb.GetDeneb().KzgProofs)
 	default:
 		// other forks before Deneb do not support blob sidecars
+		// forks after fulu do not support blob sidecars, instead support data columns, no need to rebroadcast
 		return nil
 	}
 }
@@ -1001,9 +1007,29 @@ func (s *Server) validateConsensus(ctx context.Context, b *eth.GenericSignedBeac
 	}
 
 	parentStateRoot := parentBlock.Block().StateRoot()
-	parentState, err := s.Stater.State(ctx, parentStateRoot[:])
-	if err != nil {
-		return errors.Wrap(err, "could not get parent state")
+	// Check if the state is already cached
+	parentState := transition.NextSlotState(parentBlockRoot[:], blk.Block().Slot())
+	if parentState == nil {
+		// The state is not advanced in the NSC, check first if the parent post-state is head
+		headRoot, err := s.HeadFetcher.HeadRoot(ctx)
+		if err != nil {
+			return errors.Wrap(err, "could not get head root")
+		}
+		if bytes.Equal(headRoot, parentBlockRoot[:]) {
+			parentState, err = s.HeadFetcher.HeadState(ctx)
+			if err != nil {
+				return errors.Wrap(err, "could not get head state")
+			}
+			parentState, err = transition.ProcessSlots(ctx, parentState, blk.Block().Slot())
+			if err != nil {
+				return errors.Wrap(err, "could not process slots to get parent state")
+			}
+		} else {
+			parentState, err = s.Stater.State(ctx, parentStateRoot[:])
+			if err != nil {
+				return errors.Wrap(err, "could not get parent state")
+			}
+		}
 	}
 	_, err = transition.ExecuteStateTransition(ctx, parentState, blk)
 	if err != nil {
@@ -1026,7 +1052,7 @@ func (s *Server) validateConsensus(ctx context.Context, b *eth.GenericSignedBeac
 		return nil
 	}
 
-	if err := s.validateBlobSidecars(blk, blobs, proofs); err != nil {
+	if err := s.validateBlobs(blk, blobs, proofs); err != nil {
 		return err
 	}
 
@@ -1040,23 +1066,41 @@ func (s *Server) validateEquivocation(blk interfaces.ReadOnlyBeaconBlock) error 
 	return nil
 }
 
-func (s *Server) validateBlobSidecars(blk interfaces.SignedBeaconBlock, blobs [][]byte, proofs [][]byte) error {
+func (s *Server) validateBlobs(blk interfaces.SignedBeaconBlock, blobs [][]byte, proofs [][]byte) error {
 	if blk.Version() < version.Deneb {
 		return nil
 	}
-	kzgs, err := blk.Block().Body().BlobKzgCommitments()
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
+	commitments, err := blk.Block().Body().BlobKzgCommitments()
 	if err != nil {
 		return errors.Wrap(err, "could not get blob kzg commitments")
 	}
-	if len(blobs) != len(proofs) || len(blobs) != len(kzgs) {
-		return errors.New("number of blobs, proofs, and commitments do not match")
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(blk.Block().Slot())
+	if len(blobs) > maxBlobsPerBlock {
+		return fmt.Errorf("number of blobs over max, %d > %d", len(blobs), maxBlobsPerBlock)
 	}
-	for i, blob := range blobs {
-		b := kzg4844.Blob(blob)
-		if err := kzg4844.VerifyBlobProof(&b, kzg4844.Commitment(kzgs[i]), kzg4844.Proof(proofs[i])); err != nil {
-			return errors.Wrap(err, "could not verify blob proof")
+	if blk.Version() >= version.Fulu {
+		// For Fulu blocks, proofs are cell proofs (blobs * numberOfColumns)
+		expectedProofsCount := uint64(len(blobs)) * numberOfColumns
+		if uint64(len(proofs)) != expectedProofsCount || len(blobs) != len(commitments) {
+			return fmt.Errorf("number of blobs (%d), cell proofs (%d), and commitments (%d) do not match (expected %d cell proofs)", len(blobs), len(proofs), len(commitments), expectedProofsCount)
+		}
+		// For Fulu blocks, proofs are cell proofs from execution client's BlobsBundleV2
+		// Verify cell proofs directly without reconstructing data column sidecars
+		if err := kzg.VerifyCellKZGProofBatchFromBlobData(blobs, commitments, proofs, numberOfColumns); err != nil {
+			return errors.Wrap(err, "could not verify cell proofs")
+		}
+	} else {
+		// For pre-Fulu blocks, proofs are blob proofs (1:1 with blobs)
+		if len(blobs) != len(proofs) || len(blobs) != len(commitments) {
+			return errors.Errorf("number of blobs (%d), proofs (%d), and commitments (%d) do not match", len(blobs), len(proofs), len(commitments))
+		}
+		// Use batch verification for better performance
+		if err := kzg.VerifyBlobKZGProofBatch(blobs, commitments, proofs); err != nil {
+			return errors.Wrap(err, "could not verify blob proofs")
 		}
 	}
+
 	return nil
 }
 
@@ -1193,7 +1237,7 @@ func (s *Server) GetStateFork(w http.ResponseWriter, r *http.Request) {
 	fork := st.Fork()
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status"+err.Error(), http.StatusInternalServerError)
+		helpers.HandleIsOptimisticError(w, err)
 		return
 	}
 	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
@@ -1265,6 +1309,15 @@ func (s *Server) GetCommittees(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Could not get epoch end slot: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	// Validate that the provided slot belongs to the specified epoch, as required by the Beacon API spec.
+	if rawSlot != "" {
+		if sl < uint64(startSlot) || sl > uint64(endSlot) {
+			httputil.HandleError(w, fmt.Sprintf("Slot %d does not belong in epoch %d", sl, epoch), http.StatusBadRequest)
+			return
+		}
+	}
+
 	committeesPerSlot := corehelpers.SlotCommitteeCount(activeCount)
 	committees := make([]*structs.Committee, 0)
 	for slot := startSlot; slot <= endSlot; slot++ {
@@ -1295,7 +1348,7 @@ func (s *Server) GetCommittees(w http.ResponseWriter, r *http.Request) {
 
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		helpers.HandleIsOptimisticError(w, err)
 		return
 	}
 
@@ -1476,7 +1529,7 @@ func (s *Server) GetFinalityCheckpoints(w http.ResponseWriter, r *http.Request) 
 	}
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		helpers.HandleIsOptimisticError(w, err)
 		return
 	}
 	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
@@ -1591,6 +1644,8 @@ func (s *Server) broadcastSeenBlockSidecars(
 	if err != nil {
 		return err
 	}
+
+	// Broadcast blob sidecars with forkchoice checking
 	for _, sc := range scs {
 		r, err := sc.SignedBlockHeader.Header.HashTreeRoot()
 		if err != nil {
@@ -1611,6 +1666,62 @@ func (s *Server) broadcastSeenBlockSidecars(
 		}).Info("Broadcasted blob sidecar for already seen block")
 	}
 	return nil
+}
+
+// GetPendingConsolidations returns pending deposits for state with given 'stateId'.
+// Should return 400 if the state retrieved is prior to Electra.
+// Supports both JSON and SSZ responses based on Accept header.
+func (s *Server) GetPendingConsolidations(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "beacon.GetPendingDeposits")
+	defer span.End()
+
+	stateId := r.PathValue("state_id")
+	if stateId == "" {
+		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		return
+	}
+	st, err := s.Stater.State(ctx, []byte(stateId))
+	if err != nil {
+		shared.WriteStateFetchError(w, err)
+		return
+	}
+	if st.Version() < version.Electra {
+		httputil.HandleError(w, "state_id is prior to electra", http.StatusBadRequest)
+		return
+	}
+	pd, err := st.PendingConsolidations()
+	if err != nil {
+		httputil.HandleError(w, "Could not get pending consolidations: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(api.VersionHeader, version.String(st.Version()))
+	if httputil.RespondWithSsz(r) {
+		sszData, err := serializeItems(pd)
+		if err != nil {
+			httputil.HandleError(w, "Failed to serialize pending consolidations: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		httputil.WriteSsz(w, sszData)
+	} else {
+		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
+		if err != nil {
+			helpers.HandleIsOptimisticError(w, err)
+			return
+		}
+		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		if err != nil {
+			httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
+		resp := structs.GetPendingConsolidationsResponse{
+			Version:             version.String(st.Version()),
+			ExecutionOptimistic: isOptimistic,
+			Finalized:           isFinalized,
+			Data:                structs.PendingConsolidationsFromConsensus(pd),
+		}
+		httputil.WriteJson(w, resp)
+	}
 }
 
 // GetPendingDeposits returns pending deposits for state with given 'stateId'.
@@ -1650,7 +1761,7 @@ func (s *Server) GetPendingDeposits(w http.ResponseWriter, r *http.Request) {
 	} else {
 		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 		if err != nil {
-			httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+			helpers.HandleIsOptimisticError(w, err)
 			return
 		}
 		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
@@ -1706,7 +1817,7 @@ func (s *Server) GetPendingPartialWithdrawals(w http.ResponseWriter, r *http.Req
 	} else {
 		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 		if err != nil {
-			httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+			helpers.HandleIsOptimisticError(w, err)
 			return
 		}
 		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
@@ -1720,6 +1831,63 @@ func (s *Server) GetPendingPartialWithdrawals(w http.ResponseWriter, r *http.Req
 			ExecutionOptimistic: isOptimistic,
 			Finalized:           isFinalized,
 			Data:                structs.PendingPartialWithdrawalsFromConsensus(ppw),
+		}
+		httputil.WriteJson(w, resp)
+	}
+}
+
+func (s *Server) GetProposerLookahead(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "beacon.GetProposerLookahead")
+	defer span.End()
+
+	stateId := r.PathValue("state_id")
+	if stateId == "" {
+		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		return
+	}
+	st, err := s.Stater.State(ctx, []byte(stateId))
+	if err != nil {
+		shared.WriteStateFetchError(w, err)
+		return
+	}
+	if st.Version() < version.Fulu {
+		httputil.HandleError(w, "state_id is prior to fulu", http.StatusBadRequest)
+		return
+	}
+	pl, err := st.ProposerLookahead()
+	if err != nil {
+		httputil.HandleError(w, "Could not get proposer look ahead: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(api.VersionHeader, version.String(st.Version()))
+	if httputil.RespondWithSsz(r) {
+		sszLen := (*primitives.ValidatorIndex)(nil).SizeSSZ()
+		sszData := make([]byte, len(pl)*sszLen)
+		for i, idx := range pl {
+			copy(sszData[i*sszLen:(i+1)*sszLen], ssz.MarshalUint64([]byte{}, uint64(idx)))
+		}
+		httputil.WriteSsz(w, sszData)
+	} else {
+		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
+		if err != nil {
+			helpers.HandleIsOptimisticError(w, err)
+			return
+		}
+		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		if err != nil {
+			httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
+		vi := make([]string, len(pl))
+		for i, v := range pl {
+			vi[i] = strconv.FormatUint(uint64(v), 10)
+		}
+		resp := structs.GetProposerLookaheadResponse{
+			Version:             version.String(st.Version()),
+			ExecutionOptimistic: isOptimistic,
+			Finalized:           isFinalized,
+			Data:                vi,
 		}
 		httputil.WriteJson(w, resp)
 	}

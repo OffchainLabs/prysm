@@ -1,13 +1,34 @@
 package middleware
 
 import (
+	"bytes"
+	"compress/gzip"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
+	log "github.com/sirupsen/logrus"
 )
+
+// frozenHeaderRecorder allows asserting that response headers were not modified
+// after the call to WriteHeader.
+//
+// Its purpose is to have a regression test for https://github.com/OffchainLabs/prysm/pull/15499.
+type frozenHeaderRecorder struct {
+	*httptest.ResponseRecorder
+	frozenHeader http.Header
+}
+
+func (r *frozenHeaderRecorder) WriteHeader(code int) {
+	if r.frozenHeader != nil {
+		return
+	}
+	r.ResponseRecorder.WriteHeader(code)
+	r.frozenHeader = r.ResponseRecorder.Header().Clone()
+}
 
 func TestNormalizeQueryValuesHandler(t *testing.T) {
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -119,6 +140,90 @@ func TestContentTypeHandler(t *testing.T) {
 
 			if status := rr.Code; status != tt.expectedStatusCode {
 				t.Errorf("handler returned wrong status code: got %v want %v", status, tt.expectedStatusCode)
+			}
+		})
+	}
+}
+
+func TestAcceptEncodingHeaderHandler(t *testing.T) {
+	dummyContent := "Test gzip middleware content"
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", r.Header.Get("Accept"))
+		w.WriteHeader(http.StatusOK)
+		_, err := w.Write([]byte(dummyContent))
+		require.NoError(t, err)
+	})
+
+	handler := AcceptEncodingHeaderHandler()(nextHandler)
+
+	tests := []struct {
+		name             string
+		accept           string
+		acceptEncoding   string
+		expectCompressed bool
+	}{
+		{
+			name:             "Accept gzip",
+			accept:           api.JsonMediaType,
+			acceptEncoding:   "gzip",
+			expectCompressed: true,
+		},
+		{
+			name:             "Accept multiple encodings",
+			accept:           api.JsonMediaType,
+			acceptEncoding:   "deflate, gzip",
+			expectCompressed: true,
+		},
+		{
+			name:             "Accept unsupported encoding",
+			accept:           api.JsonMediaType,
+			acceptEncoding:   "deflate",
+			expectCompressed: false,
+		},
+		{
+			name:             "No accept encoding header",
+			accept:           api.JsonMediaType,
+			acceptEncoding:   "",
+			expectCompressed: false,
+		},
+		{
+			name:             "SSZ",
+			accept:           api.OctetStreamMediaType,
+			acceptEncoding:   "gzip",
+			expectCompressed: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.Header.Set("Accept", tt.accept)
+			if tt.acceptEncoding != "" {
+				req.Header.Set("Accept-Encoding", tt.acceptEncoding)
+			}
+			rr := &frozenHeaderRecorder{ResponseRecorder: httptest.NewRecorder()}
+
+			handler.ServeHTTP(rr, req)
+
+			if tt.expectCompressed {
+				require.Equal(t, "gzip", rr.frozenHeader.Get("Content-Encoding"), "Expected Content-Encoding header to be 'gzip'")
+
+				compressedBody := rr.Body.Bytes()
+				require.NotEqual(t, dummyContent, string(compressedBody), "Response body should be compressed and differ from the original")
+
+				gzReader, err := gzip.NewReader(bytes.NewReader(compressedBody))
+				require.NoError(t, err, "Failed to create gzipReader")
+				defer func() {
+					if err := gzReader.Close(); err != nil {
+						log.WithError(err).Error("Failed to close gzip reader")
+					}
+				}()
+
+				decompressedBody, err := io.ReadAll(gzReader)
+				require.NoError(t, err, "Failed to decompress response body")
+				require.Equal(t, dummyContent, string(decompressedBody), "Decompressed content should match the original")
+			} else {
+				require.Equal(t, dummyContent, rr.Body.String(), "Response body should be uncompressed and match the original")
 			}
 		})
 	}

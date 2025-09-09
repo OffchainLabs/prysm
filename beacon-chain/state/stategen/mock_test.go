@@ -21,7 +21,7 @@ import (
 )
 
 func TestMockHistoryStates(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	var begin, middle, end primitives.Slot = 100, 150, 155
 	specs := []mockHistorySpec{
 		{slot: begin},
@@ -60,7 +60,7 @@ func TestMockHistoryStates(t *testing.T) {
 }
 
 func TestMockHistoryParentRoot(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	var begin, middle, end primitives.Slot = 100, 150, 155
 	specs := []mockHistorySpec{
 		{slot: begin},
@@ -108,9 +108,9 @@ func (m slotList) Swap(i, j int) {
 
 var errFallThroughOverride = errors.New("override yielding control back to real HighestRootsBelowSlot")
 
-func (m *mockHistory) HighestRootsBelowSlot(_ context.Context, slot primitives.Slot) (primitives.Slot, [][32]byte, error) {
+func (m *mockHistory) HighestRootsBelowSlot(ctx context.Context, slot primitives.Slot) (primitives.Slot, [][32]byte, error) {
 	if m.overrideHighestSlotBlocksBelow != nil {
-		s, r, err := m.overrideHighestSlotBlocksBelow(context.Background(), slot)
+		s, r, err := m.overrideHighestSlotBlocksBelow(ctx, slot)
 		if !errors.Is(err, errFallThroughOverride) {
 			return s, r, err
 		}
@@ -196,7 +196,7 @@ func (h *mockHistory) validateRoots() error {
 }
 
 func newMockHistory(t *testing.T, hist []mockHistorySpec, current primitives.Slot) *mockHistory {
-	ctx := context.Background()
+	ctx := t.Context()
 	mh := &mockHistory{
 		blocks:       map[[32]byte]interfaces.ReadOnlySignedBeaconBlock{},
 		canonical:    map[[32]byte]bool{},
