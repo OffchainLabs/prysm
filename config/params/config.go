@@ -776,18 +776,18 @@ func WithinDAPeriod(block, current primitives.Epoch) bool {
 }
 
 // EpochsDuration returns the time duration of the given number of epochs.
-func EpochsDuration(epochs primitives.Epoch, b *BeaconChainConfig) time.Duration {
-	return SlotsDuration(SlotsForEpochs(epochs, b), b)
+func EpochsDuration(count primitives.Epoch, b *BeaconChainConfig) time.Duration {
+	return SlotsDuration(SlotsForEpochs(count, b), b)
 }
 
 // SlotsForEpochs returns the number of slots in the given number of epochs.
-func SlotsForEpochs(epochs primitives.Epoch, b *BeaconChainConfig) primitives.Slot {
-	return primitives.Slot(epochs) * b.SlotsPerEpoch
+func SlotsForEpochs(count primitives.Epoch, b *BeaconChainConfig) primitives.Slot {
+	return primitives.Slot(count) * b.SlotsPerEpoch
 }
 
 // SlotsDuration returns the time duration of the given number of slots.
-func SlotsDuration(slots primitives.Slot, b *BeaconChainConfig) time.Duration {
-	return time.Duration(slots) * SecondsPerSlot(b)
+func SlotsDuration(count primitives.Slot, b *BeaconChainConfig) time.Duration {
+	return time.Duration(count) * SecondsPerSlot(b)
 }
 
 // SecondsPerSlot returns the time duration of a single slot.
