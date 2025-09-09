@@ -67,6 +67,7 @@ func WithNower(n Nower) ClockOpt {
 	}
 }
 
+// WithTimeAsNow will create a Nower based on the given time.Time and set it as the Now() implementation.
 func WithTimeAsNow(t time.Time) ClockOpt {
 	return func(g *Clock) {
 		g.now = func() time.Time { return t }
