@@ -37,7 +37,7 @@ func ReconstructDataColumnSidecars(inVerifiedRoSidecars []blocks.VerifiedRODataC
 	// Safely retrieve the first sidecar as a reference.
 	referenceSidecar := inVerifiedRoSidecars[0]
 
-	// Check if all columns have the same length and are commmitted to the same block.
+	// Check if all columns have the same length and are committed to the same block.
 	blobCount := len(referenceSidecar.Column)
 	blockRoot := referenceSidecar.BlockRoot()
 	for _, sidecar := range inVerifiedRoSidecars[1:] {
