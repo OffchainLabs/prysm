@@ -321,7 +321,14 @@ func TestRevalidateSubscription_CorrectlyFormatsTopic(t *testing.T) {
 	subscriptions[2], err = r.cfg.p2p.SubscribeToTopic(fullTopic)
 	require.NoError(t, err)
 
-	r.pruneSubscriptions(subscriptions, map[uint64]bool{2: true}, defaultTopic, digest)
+	tracker := &subnetTracker{
+		subscriptions: subscriptions,
+		subscribeParameters: subscribeParameters{
+			topicFormat: defaultTopic,
+			digest:      digest,
+		},
+	}
+	r.pruneSubscriptions(tracker, map[uint64]bool{2: true})
 	require.LogsDoNotContain(t, hook, "Could not unregister topic validator")
 }
 
@@ -601,11 +608,13 @@ func TestSubscribeWithSyncSubnets_DynamicSwitchFork(t *testing.T) {
 	require.Equal(t, [4]byte(params.BeaconConfig().DenebForkVersion), version)
 	require.Equal(t, params.BeaconConfig().DenebForkEpoch, e)
 
-	sp := subscribeToSubnetsParameters{
-		subscriptionBySubnet: make(map[uint64]*pubsub.Subscription),
-		topicFormat:          p2p.SyncCommitteeSubnetTopicFormat,
-		digest:               digest,
-		getSubnetsToJoin:     r.activeSyncSubnetIndices,
+	sp := &subnetTracker{
+		subscriptions: make(map[uint64]*pubsub.Subscription),
+		subscribeParameters: subscribeParameters{
+			topicFormat:      p2p.SyncCommitteeSubnetTopicFormat,
+			digest:           digest,
+			getSubnetsToJoin: r.activeSyncSubnetIndices,
+		},
 	}
 	require.NoError(t, r.subscribeToSubnets(sp))
 	assert.Equal(t, 2, len(r.cfg.p2p.PubSub().GetTopics()))

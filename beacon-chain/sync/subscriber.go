@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
@@ -35,38 +36,29 @@ import (
 
 const pubsubMessageTimeout = 30 * time.Second
 
-type (
-	// wrappedVal represents a gossip validator which also returns an error along with the result.
-	wrappedVal func(context.Context, peer.ID, *pubsub.Message) (pubsub.ValidationResult, error)
+var errInvalidDigest = errors.New("invalid digest")
 
-	// subHandler represents handler for a given subscription.
-	subHandler func(context.Context, proto.Message) error
+// wrappedVal represents a gossip validator which also returns an error along with the result.
+type wrappedVal func(context.Context, peer.ID, *pubsub.Message) (pubsub.ValidationResult, error)
 
-	subscribeToSubnetsParameters struct {
-		subscriptionBySubnet map[uint64]*pubsub.Subscription
-		topicFormat          string
-		digest               [4]byte
-		validate             wrappedVal
-		handle               subHandler
-		getSubnetsToJoin     func(currentSlot primitives.Slot) map[uint64]bool
-	}
-)
+// subHandler represents handler for a given subscription.
+type subHandler func(context.Context, proto.Message) error
 
-// parameters used for the `subscribeWithParameters` function.
+// subscribeParameters holds the parameters that are needed to construct a set of subscriptions topics for a given
+// set of gossipsub subnets.
 type subscribeParameters struct {
 	topicFormat string
 	validate    wrappedVal
 	handle      subHandler
 	digest      [4]byte
-
 	// getSubnetsToJoin is a function that returns all subnets the node should join.
 	getSubnetsToJoin func(currentSlot primitives.Slot) map[uint64]bool
-
 	// getSubnetsRequiringPeers is a function that returns all subnets that require peers to be found
 	// but for which no subscriptions are needed.
 	getSubnetsRequiringPeers func(currentSlot primitives.Slot) map[uint64]bool
 }
 
+// shortTopic is a less verbose version of topic strings used for logging.
 func (p subscribeParameters) shortTopic() string {
 	short := p.topicFormat
 	fmtLen := len(short)
@@ -76,7 +68,65 @@ func (p subscribeParameters) shortTopic() string {
 	return fmt.Sprintf(short, p.digest)
 }
 
-var errInvalidDigest = errors.New("invalid digest")
+// fullTopic is the fully qualified topic string, given to gossipsub.
+func (p subscribeParameters) fullTopic(subnet uint64, suffix string) string {
+	return fmt.Sprintf(p.topicFormat, p.digest, subnet) + suffix
+}
+
+// subnetTracker keeps track of which subnets we are subscribed to, out of the set of
+// possible subnets described by a `subscribeParameters`.
+type subnetTracker struct {
+	subscribeParameters
+	mu            sync.RWMutex
+	subscriptions map[uint64]*pubsub.Subscription
+}
+
+// unwanted takes a list of wanted subnets and returns a list of currently subscribed subnets that are not included.
+func (t *subnetTracker) unwanted(wanted map[uint64]bool) []uint64 {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	unwanted := make([]uint64, 0, len(t.subscriptions))
+	for subnet := range t.subscriptions {
+		if wanted == nil || !wanted[subnet] {
+			unwanted = append(unwanted, subnet)
+		}
+	}
+	return unwanted
+}
+
+// missing takes a list of wanted subnets and returns a list of wanted subnets that are not currently tracked.
+func (t *subnetTracker) missing(wanted map[uint64]bool) []uint64 {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	missing := make([]uint64, 0, len(wanted))
+	for subnet := range wanted {
+		if _, ok := t.subscriptions[subnet]; !ok {
+			missing = append(missing, subnet)
+		}
+	}
+	return missing
+}
+
+// cancelSubscription cancels and removes the subscription for a given subnet.
+func (t *subnetTracker) cancelSubscription(subnet uint64) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	sub, ok := t.subscriptions[subnet]
+	if !ok {
+		return
+	}
+	sub.Cancel()
+	delete(t.subscriptions, subnet)
+}
+
+// track asks subscriptionTracker to hold on to the subscription for a given subnet so
+// that we can remember that it is tracked and cancel its context when it's time to unsubscribe.
+func (t *subnetTracker) track(subnet uint64, sub *pubsub.Subscription) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.subscriptions[subnet] = sub
+}
 
 // noopValidator is a no-op that only decodes the message, but does not check its contents.
 func (s *Service) noopValidator(_ context.Context, _ peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
@@ -436,61 +486,38 @@ func (s *Service) wrapAndReportValidation(topic string, v wrappedVal) (string, p
 // pruneSubscriptions unsubscribes from topics we are currently subscribed to but that are
 // not in the list of wanted subnets.
 // This function mutates the `subscriptionBySubnet` map, which is used to keep track of the current subscriptions.
-func (s *Service) pruneSubscriptions(
-	subscriptionBySubnet map[uint64]*pubsub.Subscription,
-	wantedSubnets map[uint64]bool,
-	topicFormat string,
-	digest [4]byte,
-) {
-	for subnet, subscription := range subscriptionBySubnet {
-		if subscription == nil {
-			// Should not happen, but just in case.
-			delete(subscriptionBySubnet, subnet)
-			continue
-		}
-
-		if wantedSubnets[subnet] {
-			// Nothing to prune.
-			continue
-		}
-
-		// We are subscribed to a subnet that is no longer wanted.
-		subscription.Cancel()
-		fullTopic := fmt.Sprintf(topicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
-		s.unSubscribeFromTopic(fullTopic)
-		delete(subscriptionBySubnet, subnet)
+func (s *Service) pruneSubscriptions(t *subnetTracker, wantedSubnets map[uint64]bool) {
+	for _, subnet := range t.unwanted(wantedSubnets) {
+		t.cancelSubscription(subnet)
+		s.unSubscribeFromTopic(t.fullTopic(subnet, s.cfg.p2p.Encoding().ProtocolSuffix()))
 	}
 }
 
 // subscribeToSubnets subscribes to needed subnets and unsubscribe from unneeded ones.
 // This functions mutates the `subscriptionBySubnet` map, which is used to keep track of the current subscriptions.
-func (s *Service) subscribeToSubnets(p subscribeToSubnetsParameters) error {
+func (s *Service) subscribeToSubnets(t *subnetTracker) error {
 	// Do not subscribe if not synced.
 	if s.chainStarted.IsSet() && s.cfg.initialSync.Syncing() {
 		return nil
 	}
 
-	valid, err := isDigestValid(p.digest, s.cfg.clock)
+	valid, err := isDigestValid(t.digest, s.cfg.clock)
 	if err != nil {
 		return errors.Wrap(err, "is digest valid")
 	}
 
 	// Unsubscribe from all subnets if digest is not valid. It's likely to be the case after a hard fork.
 	if !valid {
-		wantedSubnets := map[uint64]bool{}
-		s.pruneSubscriptions(p.subscriptionBySubnet, wantedSubnets, p.topicFormat, p.digest)
+		s.pruneSubscriptions(t, nil)
 		return errInvalidDigest
 	}
 
-	subnetsToJoin := p.getSubnetsToJoin(s.cfg.clock.CurrentSlot())
-	s.pruneSubscriptions(p.subscriptionBySubnet, subnetsToJoin, p.topicFormat, p.digest)
-	for subnet := range subnetsToJoin {
-		subnetTopic := fmt.Sprintf(p.topicFormat, p.digest, subnet)
-
-		if _, exists := p.subscriptionBySubnet[subnet]; !exists {
-			subscription := s.subscribeWithBase(subnetTopic, p.validate, p.handle)
-			p.subscriptionBySubnet[subnet] = subscription
-		}
+	subnetsToJoin := t.getSubnetsToJoin(s.cfg.clock.CurrentSlot())
+	s.pruneSubscriptions(t, subnetsToJoin)
+	for _, subnet := range t.missing(subnetsToJoin) {
+		// TODO: subscribeWithBase appends the protocol suffix, other methods don't. Make this consistent.
+		topic := t.fullTopic(subnet, "")
+		t.track(subnet, s.subscribeWithBase(topic, t.validate, t.handle))
 	}
 
 	return nil
@@ -504,17 +531,13 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 		"topic": p.shortTopic(),
 	}
 
-	subP := subscribeToSubnetsParameters{
-		subscriptionBySubnet: make(map[uint64]*pubsub.Subscription),
-		topicFormat:          p.topicFormat,
-		digest:               p.digest,
-		validate:             p.validate,
-		handle:               p.handle,
-		getSubnetsToJoin:     p.getSubnetsToJoin,
+	tracker := &subnetTracker{
+		subscriptions:       make(map[uint64]*pubsub.Subscription),
+		subscribeParameters: p,
 	}
 
 	// Try once immediately so we don't have to wait until the next slot.
-	s.ensureSubnetPeersAndSubscribe(p, subP, logFields, slotDuration, minimumPeersPerSubnet)
+	s.ensureSubnetPeersAndSubscribe(p, tracker, logFields, slotDuration, minimumPeersPerSubnet)
 
 	go s.logMinimumPeersPerSubnet(p, logFields)
 
@@ -523,18 +546,18 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 	for {
 		select {
 		case <-slotTicker.C():
-			s.ensureSubnetPeersAndSubscribe(p, subP, logFields, slotDuration, minimumPeersPerSubnet)
+			s.ensureSubnetPeersAndSubscribe(p, tracker, logFields, slotDuration, minimumPeersPerSubnet)
 		case <-s.ctx.Done():
 			return
 		}
 	}
 }
 
-func (s *Service) ensureSubnetPeersAndSubscribe(p subscribeParameters, subnetP subscribeToSubnetsParameters, logFields logrus.Fields, timeout time.Duration, minPeers int) {
+func (s *Service) ensureSubnetPeersAndSubscribe(p subscribeParameters, tracker *subnetTracker, logFields logrus.Fields, timeout time.Duration, minPeers int) {
 	currentSlot := s.cfg.clock.CurrentSlot()
 	neededSubnets := computeAllNeededSubnets(currentSlot, p.getSubnetsToJoin, p.getSubnetsRequiringPeers)
 
-	if err := s.subscribeToSubnets(subnetP); err != nil {
+	if err := s.subscribeToSubnets(tracker); err != nil {
 		if errors.Is(err, errInvalidDigest) {
 			log.WithFields(logFields).Debug("Digest is invalid, stopping subscription")
 			return
@@ -578,7 +601,7 @@ func (s *Service) logMinimumPeersPerSubnet(p subscribeParameters, logFields logr
 				}
 			}
 			if !isSubnetWithMissingPeers {
-				log.WithFields(logFields).Info("All subnets have enough connected peers")
+				log.WithFields(logFields).Debug("All subnets have enough connected peers")
 			}
 		case <-s.ctx.Done():
 			return
