@@ -303,32 +303,33 @@ func TestRevalidateSubscription_CorrectlyFormatsTopic(t *testing.T) {
 	}
 	digest, err := r.currentForkDigest()
 	require.NoError(t, err)
-	subscriptions := make(map[uint64]*pubsub.Subscription, params.BeaconConfig().MaxCommitteesPerSlot)
 
-	defaultTopic := "/eth2/testing/%#x/committee%d"
+	params := subscribeParameters{
+		topicFormat: "/eth2/testing/%#x/committee%d",
+		digest:      digest,
+	}
+	tracker := newSubnetTracker(params)
+
 	// committee index 1
-	fullTopic := fmt.Sprintf(defaultTopic, digest, 1) + r.cfg.p2p.Encoding().ProtocolSuffix()
+	c1 := uint64(1)
+	fullTopic := params.fullTopic(c1, r.cfg.p2p.Encoding().ProtocolSuffix())
 	_, topVal := r.wrapAndReportValidation(fullTopic, r.noopValidator)
 	require.NoError(t, r.cfg.p2p.PubSub().RegisterTopicValidator(fullTopic, topVal))
-	subscriptions[1], err = r.cfg.p2p.SubscribeToTopic(fullTopic)
+	sub1, err := r.cfg.p2p.SubscribeToTopic(fullTopic)
 	require.NoError(t, err)
+	tracker.track(c1, sub1)
 
 	// committee index 2
-	fullTopic = fmt.Sprintf(defaultTopic, digest, 2) + r.cfg.p2p.Encoding().ProtocolSuffix()
+	c2 := uint64(2)
+	fullTopic = params.fullTopic(c2, r.cfg.p2p.Encoding().ProtocolSuffix())
 	_, topVal = r.wrapAndReportValidation(fullTopic, r.noopValidator)
 	err = r.cfg.p2p.PubSub().RegisterTopicValidator(fullTopic, topVal)
 	require.NoError(t, err)
-	subscriptions[2], err = r.cfg.p2p.SubscribeToTopic(fullTopic)
+	sub2, err := r.cfg.p2p.SubscribeToTopic(fullTopic)
 	require.NoError(t, err)
+	tracker.track(c2, sub2)
 
-	tracker := &subnetTracker{
-		subscriptions: subscriptions,
-		subscribeParameters: subscribeParameters{
-			topicFormat: defaultTopic,
-			digest:      digest,
-		},
-	}
-	r.pruneSubscriptions(tracker, map[uint64]bool{2: true})
+	r.pruneSubscriptions(tracker, map[uint64]bool{c2: true})
 	require.LogsDoNotContain(t, hook, "Could not unregister topic validator")
 }
 
@@ -608,14 +609,11 @@ func TestSubscribeWithSyncSubnets_DynamicSwitchFork(t *testing.T) {
 	require.Equal(t, [4]byte(params.BeaconConfig().DenebForkVersion), version)
 	require.Equal(t, params.BeaconConfig().DenebForkEpoch, e)
 
-	sp := &subnetTracker{
-		subscriptions: make(map[uint64]*pubsub.Subscription),
-		subscribeParameters: subscribeParameters{
-			topicFormat:      p2p.SyncCommitteeSubnetTopicFormat,
-			digest:           digest,
-			getSubnetsToJoin: r.activeSyncSubnetIndices,
-		},
-	}
+	sp := newSubnetTracker(subscribeParameters{
+		topicFormat:      p2p.SyncCommitteeSubnetTopicFormat,
+		digest:           digest,
+		getSubnetsToJoin: r.activeSyncSubnetIndices,
+	})
 	require.NoError(t, r.subscribeToSubnets(sp))
 	assert.Equal(t, 2, len(r.cfg.p2p.PubSub().GetTopics()))
 	topicMap := map[string]bool{}

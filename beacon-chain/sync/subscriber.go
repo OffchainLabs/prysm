@@ -68,6 +68,12 @@ func (p subscribeParameters) shortTopic() string {
 	return fmt.Sprintf(short, p.digest)
 }
 
+func (p subscribeParameters) logFields() logrus.Fields {
+	return logrus.Fields{
+		"topic": p.shortTopic(),
+	}
+}
+
 // fullTopic is the fully qualified topic string, given to gossipsub.
 func (p subscribeParameters) fullTopic(subnet uint64, suffix string) string {
 	return fmt.Sprintf(p.topicFormat, p.digest, subnet) + suffix
@@ -79,6 +85,13 @@ type subnetTracker struct {
 	subscribeParameters
 	mu            sync.RWMutex
 	subscriptions map[uint64]*pubsub.Subscription
+}
+
+func newSubnetTracker(p subscribeParameters) *subnetTracker {
+	return &subnetTracker{
+		subscribeParameters: p,
+		subscriptions:       make(map[uint64]*pubsub.Subscription),
+	}
 }
 
 // unwanted takes a list of wanted subnets and returns a list of currently subscribed subnets that are not included.
@@ -111,18 +124,21 @@ func (t *subnetTracker) missing(wanted map[uint64]bool) []uint64 {
 func (t *subnetTracker) cancelSubscription(subnet uint64) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	defer delete(t.subscriptions, subnet)
 
-	sub, ok := t.subscriptions[subnet]
-	if !ok {
+	sub := t.subscriptions[subnet]
+	if sub == nil {
 		return
 	}
 	sub.Cancel()
-	delete(t.subscriptions, subnet)
 }
 
 // track asks subscriptionTracker to hold on to the subscription for a given subnet so
 // that we can remember that it is tracked and cancel its context when it's time to unsubscribe.
 func (t *subnetTracker) track(subnet uint64, sub *pubsub.Subscription) {
+	if sub == nil {
+		return
+	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.subscriptions[subnet] = sub
@@ -525,37 +541,29 @@ func (s *Service) subscribeToSubnets(t *subnetTracker) error {
 
 // subscribeWithParameters subscribes to a list of subnets.
 func (s *Service) subscribeWithParameters(p subscribeParameters) {
-	slotDuration := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
-	minimumPeersPerSubnet := flags.Get().MinimumPeersPerSubnet
-	logFields := logrus.Fields{
-		"topic": p.shortTopic(),
-	}
-
-	tracker := &subnetTracker{
-		subscriptions:       make(map[uint64]*pubsub.Subscription),
-		subscribeParameters: p,
-	}
-
+	tracker := newSubnetTracker(p)
 	// Try once immediately so we don't have to wait until the next slot.
-	s.ensureSubnetPeersAndSubscribe(p, tracker, logFields, slotDuration, minimumPeersPerSubnet)
+	s.ensureSubnetPeersAndSubscribe(tracker)
 
-	go s.logMinimumPeersPerSubnet(p, logFields)
+	go s.logMinimumPeersPerSubnet(p)
 
 	slotTicker := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
 	defer slotTicker.Done()
 	for {
 		select {
 		case <-slotTicker.C():
-			s.ensureSubnetPeersAndSubscribe(p, tracker, logFields, slotDuration, minimumPeersPerSubnet)
+			s.ensureSubnetPeersAndSubscribe(tracker)
 		case <-s.ctx.Done():
 			return
 		}
 	}
 }
 
-func (s *Service) ensureSubnetPeersAndSubscribe(p subscribeParameters, tracker *subnetTracker, logFields logrus.Fields, timeout time.Duration, minPeers int) {
-	currentSlot := s.cfg.clock.CurrentSlot()
-	neededSubnets := computeAllNeededSubnets(currentSlot, p.getSubnetsToJoin, p.getSubnetsRequiringPeers)
+func (s *Service) ensureSubnetPeersAndSubscribe(tracker *subnetTracker) {
+	timeout := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+	minPeers := flags.Get().MinimumPeersPerSubnet
+	logFields := tracker.logFields()
+	neededSubnets := computeAllNeededSubnets(s.cfg.clock.CurrentSlot(), tracker.getSubnetsToJoin, tracker.getSubnetsRequiringPeers)
 
 	if err := s.subscribeToSubnets(tracker); err != nil {
 		if errors.Is(err, errInvalidDigest) {
@@ -568,12 +576,13 @@ func (s *Service) ensureSubnetPeersAndSubscribe(p subscribeParameters, tracker *
 
 	ctx, cancel := context.WithTimeout(s.ctx, timeout)
 	defer cancel()
-	if err := s.cfg.p2p.FindAndDialPeersWithSubnets(ctx, p.topicFormat, p.digest, minPeers, neededSubnets); err != nil && !errors.Is(err, context.DeadlineExceeded) {
+	if err := s.cfg.p2p.FindAndDialPeersWithSubnets(ctx, tracker.topicFormat, tracker.digest, minPeers, neededSubnets); err != nil && !errors.Is(err, context.DeadlineExceeded) {
 		log.WithFields(logFields).WithError(err).Debug("Could not find peers with subnets")
 	}
 }
 
-func (s *Service) logMinimumPeersPerSubnet(p subscribeParameters, logFields logrus.Fields) {
+func (s *Service) logMinimumPeersPerSubnet(p subscribeParameters) {
+	logFields := p.logFields()
 	minimumPeersPerSubnet := flags.Get().MinimumPeersPerSubnet
 	// Warn the user if we are not subscribed to enough peers in the subnets.
 	log := log.WithField("minimum", minimumPeersPerSubnet)
