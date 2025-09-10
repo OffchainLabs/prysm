@@ -477,7 +477,7 @@ func TestGetBlockV2BlindedSignRequest(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "Happy Path Test blinded Electra",
+			name: "Happy Path Test blinded Fulu",
 			args: args{
 				request:               mock.GetMockSignRequest("BLOCK_V2_BLINDED_FULU"),
 				genesisValidatorsRoot: make([]byte, fieldparams.RootLength),
