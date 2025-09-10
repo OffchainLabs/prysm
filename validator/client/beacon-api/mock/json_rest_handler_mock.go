@@ -114,6 +114,22 @@ func (mr *MockJsonRestHandlerMockRecorder) Post(ctx, endpoint, headers, data, re
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Post", reflect.TypeOf((*MockJsonRestHandler)(nil).Post), ctx, endpoint, headers, data, resp)
 }
 
+// Post mocks base method.
+func (m *MockJsonRestHandler) PostSSZ(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer) ([]byte, http.Header, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PostSSZ", ctx, endpoint, headers, data)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(http.Header)
+	ret2, _ := ret[2].(error)
+	return ret0,ret1,ret2
+}
+
+// Post indicates an expected call of Post.
+func (mr *MockJsonRestHandlerMockRecorder) PostSSZ(ctx, endpoint, headers, data any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PostSSZ", reflect.TypeOf((*MockJsonRestHandler)(nil).PostSSZ), ctx, endpoint, headers, data)
+}
+
 // SetHost mocks base method.
 func (m *MockJsonRestHandler) SetHost(host string) {
 	m.ctrl.T.Helper()
