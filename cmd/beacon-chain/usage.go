@@ -84,6 +84,7 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.NoDiscovery,
 			cmd.P2PAllowList,
 			cmd.P2PDenyList,
+			cmd.P2PColocationWhitelist,
 			cmd.P2PHost,
 			cmd.P2PHostDNS,
 			cmd.P2PIP,
