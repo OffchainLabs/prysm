@@ -96,7 +96,7 @@ func FetchDataColumnSidecars(
 	}
 
 	// Merge sidecars in storage and those received from peers. Reconstruct if needed.
-	mergedSidecarsByRoot, err := mergeStorageAndInputs(params.Storage, storedIndicesByRoot, directSidecarsByRoot, requestedIndices, incompleteRoots)
+	mergedSidecarsByRoot, err := mergeStorageAndInputs(params.Storage, requestedIndices, storedIndicesByRoot, incompleteRoots, directSidecarsByRoot)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "try merge storage and mandatory inputs")
 	}
@@ -117,7 +117,7 @@ func FetchDataColumnSidecars(
 	}
 
 	// Merge sidecars in storage and those received from peers. Reconstruct if needed.
-	mergedSidecarsByRoot, err = mergeStorageAndInputs(params.Storage, storedIndicesByRoot, indirectSidecarsByRoot, requestedIndices, incompleteRoots)
+	mergedSidecarsByRoot, err = mergeStorageAndInputs(params.Storage, requestedIndices, storedIndicesByRoot, incompleteRoots, indirectSidecarsByRoot)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "try merge storage and all inputs")
 	}
@@ -511,10 +511,10 @@ func requestIndirectSidecarsFromPeers(
 // for which all requested sidecars were successfully retrieved.
 func mergeStorageAndInputs(
 	storage filesystem.DataColumnStorageReader,
-	storedIndicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
-	alreadyAvailableByRoot map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn,
 	requestedIndices map[uint64]bool,
+	storedIndicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
 	roots map[[fieldparams.RootLength]byte]bool,
+	alreadyAvailableByRoot map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn,
 ) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
 	minimumColumnsCountToReconstruct := peerdas.MinimumColumnCountToReconstruct()
 
