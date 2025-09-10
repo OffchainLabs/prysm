@@ -1,2 +1,3 @@
-## Fixed
+### Fixed
+
 - fix boundary in TestStore_IsFinalizedBlock non-finalized range (#15675)
