@@ -132,7 +132,7 @@ func FetchDataColumnSidecars(
 	}
 
 	// For remaining incomplete roots, assemble what is available.
-	incompleteSidecarsByRoot, missingByRoot, err := assembleAvailableSidecars(incompleteRoots, params.Storage, requestedIndices, directSidecarsByRoot)
+	incompleteSidecarsByRoot, missingByRoot, err := assembleAvailableSidecars(params.Storage, requestedIndices, incompleteRoots, directSidecarsByRoot)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "assemble available sidecars for incomplete roots")
 	}
@@ -598,8 +598,8 @@ func mergeStorageAndInputs(
 // and in `alreadyAvailableByRoot` corresponding to `roots`.
 // It also returns all missing indices by root.
 func assembleAvailableSidecars(
-	roots map[[fieldparams.RootLength]byte]bool,
 	storage filesystem.DataColumnStorageReader,
+	roots map[[fieldparams.RootLength]byte]bool,
 	requestedIndices map[uint64]bool,
 	alreadyAvailableByRoot map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn,
 ) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, map[[fieldparams.RootLength]byte]map[uint64]bool, error) {
