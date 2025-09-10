@@ -113,6 +113,15 @@ func computeContainerHashTreeRoot(info *sszquery.SSZInfo, data []byte) ([32]byte
 	return ssz.MerkleizeVector(elementRoots, uint64(len(elementRoots))), nil
 }
 
+// computeVectorHashTreeRoot computes the hash tree root for vectors
+func computeVectorHashTreeRoot(info *sszquery.SSZInfo, data []byte) ([32]byte, error) {
+	if info.Type() != sszquery.Vector {
+		return [32]byte{}, fmt.Errorf("computeVectorHashTreeRoot called with non-vector type: %s", info.Type())
+	}
+
+	return computeBasicHashTreeRoot(info, data)
+}
+
 
 	}
 
