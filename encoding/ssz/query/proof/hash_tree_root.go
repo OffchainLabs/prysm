@@ -126,6 +126,5 @@ func computeVectorHashTreeRoot(info *sszquery.SSZInfo, data []byte) ([32]byte, e
 
 	}
 
-	return merkleize(elementRoots, nil), nil
 
 }
