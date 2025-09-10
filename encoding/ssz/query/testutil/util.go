@@ -14,8 +14,12 @@ func marshalAny(value any) ([]byte, error) {
 		return marshaler.MarshalSSZ()
 	}
 
-	// Handle custom type aliases by checking if they're based on primitive types
 	valueType := reflect.TypeOf(value)
+	if valueType.Kind() == reflect.Slice && valueType.Elem().Kind() != reflect.Uint8 {
+		return marshalSlice(value)
+	}
+
+	// Handle custom type aliases by checking if they're based on primitive types
 	if valueType.PkgPath() != "" {
 		switch valueType.Kind() {
 		case reflect.Uint64:
@@ -46,4 +50,26 @@ func marshalAny(value any) ([]byte, error) {
 	default:
 		return nil, fmt.Errorf("unsupported type for SSZ marshalling: %T", value)
 	}
+}
+
+func marshalSlice(value any) ([]byte, error) {
+	valueType := reflect.TypeOf(value)
+
+	if valueType.Kind() != reflect.Slice {
+		return nil, fmt.Errorf("expected slice, got %T", value)
+	}
+
+	sliceValue := reflect.ValueOf(value)
+	var result []byte
+
+	// Marshal each element recursively
+	for i := 0; i < sliceValue.Len(); i++ {
+		elem := sliceValue.Index(i).Interface()
+		data, err := marshalAny(elem)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal slice element at index %d: %w", i, err)
+		}
+		result = append(result, data...)
+	}
+	return result, nil
 }

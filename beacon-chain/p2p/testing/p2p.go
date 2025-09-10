@@ -50,6 +50,7 @@ const (
 
 // TestP2P represents a p2p implementation that can be used for testing.
 type TestP2P struct {
+	mu                    sync.Mutex
 	t                     *testing.T
 	BHost                 host.Host
 	EnodeID               enode.ID
@@ -243,6 +244,8 @@ func (p *TestP2P) SetStreamHandler(topic string, handler network.StreamHandler) 
 
 // JoinTopic will join PubSub topic, if not already joined.
 func (p *TestP2P) JoinTopic(topic string, opts ...pubsub.TopicOpt) (*pubsub.Topic, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if _, ok := p.joinedTopics[topic]; !ok {
 		joinedTopic, err := p.pubsub.Join(topic, opts...)
 		if err != nil {

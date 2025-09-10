@@ -1,37 +1,38 @@
 package query
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
+// CalculateOffsetAndLength calculates the offset and length of a given path within the SSZ object.
+// By walking the given path, it accumulates the offsets based on sszInfo.
 func CalculateOffsetAndLength(sszInfo *sszInfo, path []PathElement) (*sszInfo, uint64, uint64, error) {
 	if sszInfo == nil {
-		return nil, 0, 0, fmt.Errorf("sszInfo is nil")
+		return nil, 0, 0, errors.New("sszInfo is nil")
 	}
 
 	if len(path) == 0 {
-		return nil, 0, 0, fmt.Errorf("path is empty")
+		return nil, 0, 0, errors.New("path is empty")
 	}
 
 	walk := sszInfo
-	currentOffset := uint64(0)
+	offset := uint64(0)
 
 	for _, elem := range path {
-		fieldInfos, err := walk.ContainerInfo()
+		containerInfo, err := walk.ContainerInfo()
 		if err != nil {
 			return nil, 0, 0, fmt.Errorf("could not get field infos: %w", err)
 		}
 
-		fieldInfo, exists := fieldInfos[elem.Name]
+		fieldInfo, exists := containerInfo.fields[elem.Name]
 		if !exists {
-			return nil, 0, 0, fmt.Errorf("field %s not found in fieldInfos", elem.Name)
+			return nil, 0, 0, fmt.Errorf("field %s not found in containerInfo", elem.Name)
 		}
 
-		currentOffset += fieldInfo.offset
+		offset += fieldInfo.offset
 		walk = fieldInfo.sszInfo
 	}
 
-	if walk.isVariable {
-		return nil, 0, 0, fmt.Errorf("cannot calculate length for variable-sized type")
-	}
-
-	return walk, currentOffset, walk.Size(), nil
+	return walk, offset, walk.Size(), nil
 }
