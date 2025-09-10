@@ -142,7 +142,7 @@ func (s *Store) decodeStateSnapshot(enc []byte) (state.BeaconState, error) {
 	switch {
 	case hasFuluKey(enc):
 		var fuluState ethpb.BeaconStateFulu
-		if err := fuluState.UnmarshalSSZ(enc[len(ElectraKey):]); err != nil {
+		if err := fuluState.UnmarshalSSZ(enc[len(fuluKey):]); err != nil {
 			return nil, err
 		}
 		return state_native.InitializeFromProtoUnsafeFulu(&fuluState)

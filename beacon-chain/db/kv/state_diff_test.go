@@ -147,7 +147,7 @@ func TestStateDiff_SaveFullSnapshot(t *testing.T) {
 
 func TestStateDiff_SaveAndReadFullSnapshot(t *testing.T) {
 	// test for every version
-	for v := 0; v < 6; v++ {
+	for v := 0; v <= 6; v++ {
 		t.Run(version.String(v), func(t *testing.T) {
 			db := setupDB(t)
 
@@ -168,6 +168,7 @@ func TestStateDiff_SaveAndReadFullSnapshot(t *testing.T) {
 			readStSSZ, err := readSt.MarshalSSZ()
 			require.NoError(t, err)
 			require.DeepSSZEqual(t, stSSZ, readStSSZ)
+			require.Equal(t, v, readSt.Version())
 		})
 	}
 }
@@ -519,6 +520,15 @@ func createState(t *testing.T, slot primitives.Slot, v int) (state.ReadOnlyBeaco
 			PreviousVersion: p.DenebForkVersion,
 			CurrentVersion:  p.ElectraForkVersion,
 			Epoch:           p.ElectraForkEpoch,
+		})
+		require.NoError(t, err)
+	case version.Fulu:
+		st, err = util.NewBeaconStateFulu()
+		require.NoError(t, err)
+		err = st.SetFork(&ethpb.Fork{
+			PreviousVersion: p.ElectraForkVersion,
+			CurrentVersion:  p.FuluForkVersion,
+			Epoch:           p.FuluForkEpoch,
 		})
 		require.NoError(t, err)
 	default:
