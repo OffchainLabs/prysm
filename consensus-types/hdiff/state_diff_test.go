@@ -4,16 +4,18 @@ import (
 	"bytes"
 	"encoding/binary"
 	"flag"
-	"fmt" 
+	"fmt"
 	"os"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/golang/snappy"
@@ -160,11 +162,11 @@ func Test_newHdiff(t *testing.T) {
 	source, _ := util.DeterministicGenesisStateElectra(t, 32)
 	target := source.Copy()
 	require.NoError(t, target.SetSlot(source.Slot()+1))
-	
+
 	// Create a valid diff
 	diffBytes, err := Diff(source, target)
 	require.NoError(t, err)
-	
+
 	// Test successful deserialization
 	hdiff, err := newHdiff(diffBytes)
 	require.NoError(t, err)
@@ -173,7 +175,7 @@ func Test_newHdiff(t *testing.T) {
 	require.NotNil(t, hdiff.validatorDiffs)
 	require.NotNil(t, hdiff.balancesDiff)
 	require.Equal(t, target.Slot(), hdiff.stateDiff.slot)
-	
+
 	// Test with invalid state diff data
 	invalidDiff := HdiffBytes{
 		StateDiff:      []byte{0x01, 0x02}, // too small
@@ -182,7 +184,7 @@ func Test_newHdiff(t *testing.T) {
 	}
 	_, err = newHdiff(invalidDiff)
 	require.ErrorContains(t, "failed to create state diff", err)
-	
+
 	// Test with invalid validator diff data
 	invalidDiff = HdiffBytes{
 		StateDiff:      diffBytes.StateDiff,
@@ -191,7 +193,7 @@ func Test_newHdiff(t *testing.T) {
 	}
 	_, err = newHdiff(invalidDiff)
 	require.ErrorContains(t, "failed to create validator diffs", err)
-	
+
 	// Test with invalid balances diff data
 	invalidDiff = HdiffBytes{
 		StateDiff:      diffBytes.StateDiff,
@@ -204,9 +206,9 @@ func Test_newHdiff(t *testing.T) {
 
 // Test_diffInternal tests the internal diff computation logic
 func Test_diffInternal(t *testing.T) {
-	source, keys := util.DeterministicGenesisStateElectra(t, 32)
+	source, keys := util.DeterministicGenesisStateFulu(t, 32)
 	target := source.Copy()
-	
+
 	t.Run("same state", func(t *testing.T) {
 		hdiff, err := diffInternal(source, source)
 		require.NoError(t, err)
@@ -218,7 +220,7 @@ func Test_diffInternal(t *testing.T) {
 			require.Equal(t, int64(0), diff)
 		}
 	})
-	
+
 	t.Run("slot change", func(t *testing.T) {
 		require.NoError(t, target.SetSlot(source.Slot()+5))
 		hdiff, err := diffInternal(source, target)
@@ -227,16 +229,30 @@ func Test_diffInternal(t *testing.T) {
 		require.Equal(t, target.Slot(), hdiff.stateDiff.slot)
 		require.Equal(t, target.Version(), hdiff.stateDiff.targetVersion)
 	})
-	
+
+	t.Run("lookahead change", func(t *testing.T) {
+		proposerLookahead, err := source.ProposerLookahead()
+		require.NoError(t, err)
+		proposerLookahead[0] = proposerLookahead[0] + 1
+		require.NoError(t, target.SetProposerLookahead(proposerLookahead))
+		hdiff, err := diffInternal(source, target)
+		require.NoError(t, err)
+		require.NotNil(t, hdiff)
+		require.Equal(t, len(proposerLookahead), len(hdiff.stateDiff.proposerLookahead))
+		for i, v := range proposerLookahead {
+			require.Equal(t, uint64(v), hdiff.stateDiff.proposerLookahead[i])
+		}
+	})
+
 	t.Run("with block transition", func(t *testing.T) {
-		blk, err := util.GenerateFullBlockElectra(source, keys, util.DefaultBlockGenConfig(), 1)
+		blk, err := util.GenerateFullBlockFulu(source, keys, util.DefaultBlockGenConfig(), 1)
 		require.NoError(t, err)
 		wsb, err := blocks.NewSignedBeaconBlock(blk)
 		require.NoError(t, err)
 		ctx := t.Context()
 		target, err := transition.ExecuteStateTransition(ctx, source, wsb)
 		require.NoError(t, err)
-		
+
 		hdiff, err := diffInternal(source, target)
 		require.NoError(t, err)
 		require.NotNil(t, hdiff)
@@ -248,11 +264,11 @@ func Test_diffInternal(t *testing.T) {
 // Test_validatorsEqual tests the validator comparison function
 func Test_validatorsEqual(t *testing.T) {
 	source, _ := util.DeterministicGenesisStateElectra(t, 32)
-	
+
 	t.Run("nil validators", func(t *testing.T) {
 		require.Equal(t, true, validatorsEqual(nil, nil))
 	})
-	
+
 	// Create two different states to test validator comparison
 	target := source.Copy()
 	targetVals := target.Validators()
@@ -269,29 +285,38 @@ func Test_validatorsEqual(t *testing.T) {
 	modifiedVal.Slashed = !targetVals[0].Slashed
 	targetVals[0] = modifiedVal
 	require.NoError(t, target.SetValidators(targetVals))
-	
+
 	// Test that different validators are detected as different
 	sourceDiffs, err := diffToVals(source, target)
 	require.NoError(t, err)
 	require.NotEqual(t, 0, len(sourceDiffs), "Should detect validator differences")
 }
 
-// Test_updateToVersion tests the version upgrade functionality 
+// Test_updateToVersion tests the version upgrade functionality
 func Test_updateToVersion(t *testing.T) {
 	ctx := t.Context()
-	
+
 	t.Run("no upgrade needed", func(t *testing.T) {
-		source, _ := util.DeterministicGenesisStateElectra(t, 32)
+		source, _ := util.DeterministicGenesisStateFulu(t, 32)
 		targetVersion := source.Version()
-		
+
 		result, err := updateToVersion(ctx, source, targetVersion)
 		require.NoError(t, err)
 		require.Equal(t, targetVersion, result.Version())
 		require.Equal(t, source.Slot(), result.Slot())
 	})
-	
-	// Note: Testing actual version upgrades would require complex fork transition logic
-	// and specific fork epoch configurations that are beyond the scope of unit tests
+	t.Run("upgrade to Fulu", func(t *testing.T) {
+		source, _ := util.DeterministicGenesisStateElectra(t, 32)
+		targetVersion := version.Fulu
+
+		result, err := updateToVersion(ctx, source, targetVersion)
+		require.NoError(t, err)
+		require.Equal(t, targetVersion, result.Version())
+		require.Equal(t, source.Slot(), result.Slot())
+		lookahead, err := result.ProposerLookahead()
+		require.NoError(t, err)
+		require.Equal(t, 2*fieldparams.SlotsPerEpoch, len(lookahead))
+	})
 }
 
 func TestApplyDiffMainnetComplete(t *testing.T) {
@@ -304,7 +329,7 @@ func TestApplyDiffMainnetComplete(t *testing.T) {
 	require.NoError(t, err)
 	source, err = ApplyDiff(t.Context(), source, hdiff)
 	require.NoError(t, err)
-	
+
 	sBals := source.Balances()
 	tBals := target.Balances()
 	require.Equal(t, len(sBals), len(tBals))
@@ -323,36 +348,36 @@ func TestApplyDiffMainnetComplete(t *testing.T) {
 func Test_diffToVals(t *testing.T) {
 	source, _ := util.DeterministicGenesisStateElectra(t, 32)
 	target := source.Copy()
-	
+
 	t.Run("no validator changes", func(t *testing.T) {
 		diffs, err := diffToVals(source, target)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(diffs))
 	})
-	
+
 	t.Run("validator slashed", func(t *testing.T) {
 		vals := target.Validators()
 		modifiedVal := &ethpb.Validator{
-		PublicKey:                  vals[0].PublicKey,
-		WithdrawalCredentials:      vals[0].WithdrawalCredentials,
-		EffectiveBalance:           vals[0].EffectiveBalance,
-		Slashed:                    vals[0].Slashed,
-		ActivationEligibilityEpoch: vals[0].ActivationEligibilityEpoch,
-		ActivationEpoch:            vals[0].ActivationEpoch,
-		ExitEpoch:                  vals[0].ExitEpoch,
-		WithdrawableEpoch:          vals[0].WithdrawableEpoch,
-	}
+			PublicKey:                  vals[0].PublicKey,
+			WithdrawalCredentials:      vals[0].WithdrawalCredentials,
+			EffectiveBalance:           vals[0].EffectiveBalance,
+			Slashed:                    vals[0].Slashed,
+			ActivationEligibilityEpoch: vals[0].ActivationEligibilityEpoch,
+			ActivationEpoch:            vals[0].ActivationEpoch,
+			ExitEpoch:                  vals[0].ExitEpoch,
+			WithdrawableEpoch:          vals[0].WithdrawableEpoch,
+		}
 		modifiedVal.Slashed = true
 		vals[0] = modifiedVal
 		require.NoError(t, target.SetValidators(vals))
-		
+
 		diffs, err := diffToVals(source, target)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(diffs))
 		require.Equal(t, uint32(0), diffs[0].index)
 		require.Equal(t, true, diffs[0].Slashed)
 	})
-	
+
 	t.Run("validator effective balance changed", func(t *testing.T) {
 		vals := target.Validators()
 		modifiedVal := &ethpb.Validator{
@@ -368,7 +393,7 @@ func Test_diffToVals(t *testing.T) {
 		modifiedVal.EffectiveBalance = vals[1].EffectiveBalance + 1000
 		vals[1] = modifiedVal
 		require.NoError(t, target.SetValidators(vals))
-		
+
 		diffs, err := diffToVals(source, target)
 		require.NoError(t, err)
 		found := false
@@ -387,7 +412,7 @@ func Test_diffToVals(t *testing.T) {
 func Test_newValidatorDiffs(t *testing.T) {
 	source, _ := util.DeterministicGenesisStateElectra(t, 32)
 	target := source.Copy()
-	
+
 	// Modify a validator to create diffs
 	vals := target.Validators()
 	modifiedVal := &ethpb.Validator{
@@ -403,24 +428,24 @@ func Test_newValidatorDiffs(t *testing.T) {
 	modifiedVal.Slashed = true
 	vals[0] = modifiedVal
 	require.NoError(t, target.SetValidators(vals))
-	
+
 	// Create diff and serialize
 	originalDiffs, err := diffToVals(source, target)
 	require.NoError(t, err)
-	
+
 	hdiffBytes, err := Diff(source, target)
 	require.NoError(t, err)
-	
+
 	// Test deserialization
 	deserializedDiffs, err := newValidatorDiffs(hdiffBytes.ValidatorDiffs)
 	require.NoError(t, err)
 	require.Equal(t, len(originalDiffs), len(deserializedDiffs))
-	
+
 	if len(originalDiffs) > 0 {
 		require.Equal(t, originalDiffs[0].index, deserializedDiffs[0].index)
 		require.Equal(t, originalDiffs[0].Slashed, deserializedDiffs[0].Slashed)
 	}
-	
+
 	// Test with invalid data
 	_, err = newValidatorDiffs([]byte{0x01, 0x02})
 	require.NotNil(t, err)
@@ -430,7 +455,7 @@ func Test_newValidatorDiffs(t *testing.T) {
 func Test_applyValidatorDiff(t *testing.T) {
 	source, _ := util.DeterministicGenesisStateElectra(t, 32)
 	target := source.Copy()
-	
+
 	// Modify validators in target
 	vals := target.Validators()
 	modifiedVal := &ethpb.Validator{
@@ -447,20 +472,20 @@ func Test_applyValidatorDiff(t *testing.T) {
 	modifiedVal.EffectiveBalance = vals[0].EffectiveBalance + 1000
 	vals[0] = modifiedVal
 	require.NoError(t, target.SetValidators(vals))
-	
+
 	// Create validator diffs
 	diffs, err := diffToVals(source, target)
 	require.NoError(t, err)
-	
+
 	// Apply diffs to source
 	result, err := applyValidatorDiff(source, diffs)
 	require.NoError(t, err)
-	
+
 	// Verify result matches target
 	resultVals := result.Validators()
 	targetVals := target.Validators()
 	require.Equal(t, len(targetVals), len(resultVals))
-	
+
 	for i, val := range resultVals {
 		require.Equal(t, targetVals[i].Slashed, val.Slashed)
 		require.Equal(t, targetVals[i].EffectiveBalance, val.EffectiveBalance)
@@ -471,7 +496,7 @@ func Test_applyValidatorDiff(t *testing.T) {
 func Test_diffToBalances(t *testing.T) {
 	source, _ := util.DeterministicGenesisStateElectra(t, 32)
 	target := source.Copy()
-	
+
 	t.Run("no balance changes", func(t *testing.T) {
 		diffs, err := diffToBalances(source, target)
 		require.NoError(t, err)
@@ -481,20 +506,20 @@ func Test_diffToBalances(t *testing.T) {
 			require.Equal(t, int64(0), diff)
 		}
 	})
-	
+
 	t.Run("balance changes", func(t *testing.T) {
 		bals := target.Balances()
 		bals[0] += 1000
 		bals[1] -= 500
 		bals[5] += 2000
 		require.NoError(t, target.SetBalances(bals))
-		
+
 		diffs, err := diffToBalances(source, target)
 		require.NoError(t, err)
-		
+
 		// Should have diffs for changed balances only
 		require.NotEqual(t, 0, len(diffs))
-		
+
 		// Apply diffs to verify correctness
 		sourceBals := source.Balances()
 		for i, diff := range diffs {
@@ -502,7 +527,7 @@ func Test_diffToBalances(t *testing.T) {
 				sourceBals[i] += uint64(diff)
 			}
 		}
-		
+
 		targetBals := target.Balances()
 		for i := 0; i < len(sourceBals); i++ {
 			require.Equal(t, targetBals[i], sourceBals[i], "balance mismatch at index %d", i)
@@ -514,29 +539,29 @@ func Test_diffToBalances(t *testing.T) {
 func Test_newBalancesDiff(t *testing.T) {
 	source, _ := util.DeterministicGenesisStateElectra(t, 32)
 	target := source.Copy()
-	
+
 	// Modify balances to create diffs
 	bals := target.Balances()
 	bals[0] += 1000
 	bals[1] -= 500
 	require.NoError(t, target.SetBalances(bals))
-	
+
 	// Create diff and serialize
 	originalDiffs, err := diffToBalances(source, target)
 	require.NoError(t, err)
-	
+
 	hdiffBytes, err := Diff(source, target)
 	require.NoError(t, err)
-	
+
 	// Test deserialization
 	deserializedDiffs, err := newBalancesDiff(hdiffBytes.BalancesDiff)
 	require.NoError(t, err)
 	require.Equal(t, len(originalDiffs), len(deserializedDiffs))
-	
+
 	for i, diff := range originalDiffs {
 		require.Equal(t, diff, deserializedDiffs[i])
 	}
-	
+
 	// Test with invalid data
 	_, err = newBalancesDiff([]byte{0x01, 0x02})
 	require.NotNil(t, err)
@@ -546,27 +571,27 @@ func Test_newBalancesDiff(t *testing.T) {
 func Test_applyBalancesDiff(t *testing.T) {
 	source, _ := util.DeterministicGenesisStateElectra(t, 32)
 	target := source.Copy()
-	
+
 	// Modify balances in target
 	bals := target.Balances()
 	bals[0] += 1000
 	bals[1] -= 500
 	bals[5] += 2000
 	require.NoError(t, target.SetBalances(bals))
-	
+
 	// Create balance diffs
 	diffs, err := diffToBalances(source, target)
 	require.NoError(t, err)
-	
+
 	// Apply diffs to source
 	result, err := applyBalancesDiff(source, diffs)
 	require.NoError(t, err)
-	
+
 	// Verify result matches target
 	resultBals := result.Balances()
 	targetBals := target.Balances()
 	require.Equal(t, len(targetBals), len(resultBals))
-	
+
 	for i, bal := range resultBals {
 		require.Equal(t, targetBals[i], bal, "balance mismatch at index %d", i)
 	}
@@ -577,22 +602,22 @@ func Test_newStateDiff(t *testing.T) {
 	source, _ := util.DeterministicGenesisStateElectra(t, 32)
 	target := source.Copy()
 	require.NoError(t, target.SetSlot(source.Slot()+5))
-	
+
 	// Create diff and serialize
 	hdiffBytes, err := Diff(source, target)
 	require.NoError(t, err)
-	
+
 	// Test successful deserialization
 	stateDiff, err := newStateDiff(hdiffBytes.StateDiff)
 	require.NoError(t, err)
 	require.NotNil(t, stateDiff)
 	require.Equal(t, target.Slot(), stateDiff.slot)
 	require.Equal(t, target.Version(), stateDiff.targetVersion)
-	
+
 	// Test with invalid data (too small)
 	_, err = newStateDiff([]byte{0x01, 0x02})
 	require.ErrorContains(t, "failed to decode snappy", err)
-	
+
 	// Test with valid snappy data but insufficient content (need 8 bytes for targetVersion)
 	insuffData := []byte{0x01, 0x02, 0x03, 0x04} // only 4 bytes
 	validSnappyButInsufficientData := snappy.Encode(nil, insuffData)
@@ -605,18 +630,18 @@ func Test_applyStateDiff(t *testing.T) {
 	ctx := t.Context()
 	source, _ := util.DeterministicGenesisStateElectra(t, 32)
 	target := source.Copy()
-	
+
 	// Modify target state
 	require.NoError(t, target.SetSlot(source.Slot()+5))
-	
+
 	// Create state diff
 	stateDiff, err := diffToState(source, target)
 	require.NoError(t, err)
-	
+
 	// Apply diff to source
 	result, err := applyStateDiff(ctx, source, stateDiff)
 	require.NoError(t, err)
-	
+
 	// Verify result matches target
 	require.Equal(t, target.Slot(), result.Slot())
 	require.Equal(t, target.Version(), result.Version())
@@ -638,7 +663,7 @@ func Test_computeLPS(t *testing.T) {
 		}
 		return *a == *b
 	}
-	
+
 	t.Run("simple pattern", func(t *testing.T) {
 		pattern := []*int{intSlice[0], intSlice[1], intSlice[0]}
 		lps := computeLPS(pattern, integerEquals)
@@ -648,7 +673,7 @@ func Test_computeLPS(t *testing.T) {
 			require.Equal(t, exp, lps[i])
 		}
 	})
-	
+
 	t.Run("repeating pattern", func(t *testing.T) {
 		pattern := []*int{intSlice[0], intSlice[0], intSlice[0]}
 		lps := computeLPS(pattern, integerEquals)
@@ -658,7 +683,7 @@ func Test_computeLPS(t *testing.T) {
 			require.Equal(t, exp, lps[i])
 		}
 	})
-	
+
 	t.Run("complex pattern", func(t *testing.T) {
 		pattern := []*int{intSlice[0], intSlice[1], intSlice[0], intSlice[1], intSlice[0]}
 		lps := computeLPS(pattern, integerEquals)
@@ -668,7 +693,7 @@ func Test_computeLPS(t *testing.T) {
 			require.Equal(t, exp, lps[i])
 		}
 	})
-	
+
 	t.Run("no repetition", func(t *testing.T) {
 		pattern := []*int{intSlice[0], intSlice[1], intSlice[2], intSlice[3]}
 		lps := computeLPS(pattern, integerEquals)
@@ -683,7 +708,7 @@ func Test_computeLPS(t *testing.T) {
 // Test field-specific diff functions
 func Test_diffJustificationBits(t *testing.T) {
 	source, _ := util.DeterministicGenesisStateElectra(t, 32)
-	
+
 	// Test justification bits extraction
 	bits := diffJustificationBits(source)
 	sourceBits := source.JustificationBits()
@@ -693,17 +718,17 @@ func Test_diffJustificationBits(t *testing.T) {
 func Test_diffBlockRoots(t *testing.T) {
 	source, _ := util.DeterministicGenesisStateElectra(t, 32)
 	target := source.Copy()
-	
+
 	// Modify block roots in target
 	blockRoots := target.BlockRoots()
 	copy(blockRoots[0], []byte{0x01, 0x02, 0x03})
 	copy(blockRoots[1], []byte{0x04, 0x05, 0x06})
 	require.NoError(t, target.SetBlockRoots(blockRoots))
-	
+
 	// Create diff
 	diff := &stateDiff{}
 	diffBlockRoots(diff, source, target)
-	
+
 	// Verify diff contains changes
 	require.NotEqual(t, [32]byte{}, diff.blockRoots[0])
 	require.NotEqual(t, [32]byte{}, diff.blockRoots[1])
@@ -712,17 +737,17 @@ func Test_diffBlockRoots(t *testing.T) {
 func Test_diffStateRoots(t *testing.T) {
 	source, _ := util.DeterministicGenesisStateElectra(t, 32)
 	target := source.Copy()
-	
+
 	// Modify state roots in target
 	stateRoots := target.StateRoots()
 	copy(stateRoots[0], []byte{0x01, 0x02, 0x03})
 	copy(stateRoots[1], []byte{0x04, 0x05, 0x06})
 	require.NoError(t, target.SetStateRoots(stateRoots))
-	
+
 	// Create diff
 	diff := &stateDiff{}
 	diffStateRoots(diff, source, target)
-	
+
 	// Verify diff contains changes
 	require.NotEqual(t, [32]byte{}, diff.stateRoots[0])
 	require.NotEqual(t, [32]byte{}, diff.stateRoots[1])
@@ -733,14 +758,14 @@ func Test_shouldAppendEth1DataVotes(t *testing.T) {
 	root1 := make([]byte, 32)
 	root1[0] = 0x01
 	require.Equal(t, true, shouldAppendEth1DataVotes([]*ethpb.Eth1Data{}, []*ethpb.Eth1Data{{BlockHash: root1}}))
-	
+
 	// Test appending to existing votes
 	root2 := make([]byte, 32)
 	root2[0] = 0x02
 	sourceVotes := []*ethpb.Eth1Data{{BlockHash: root1}}
 	targetVotes := []*ethpb.Eth1Data{{BlockHash: root1}, {BlockHash: root2}}
 	require.Equal(t, true, shouldAppendEth1DataVotes(sourceVotes, targetVotes))
-	
+
 	// Test complete replacement
 	root3 := make([]byte, 32)
 	root3[0] = 0x03
@@ -754,15 +779,15 @@ func Test_stateDiff_serialize(t *testing.T) {
 	source, _ := util.DeterministicGenesisStateElectra(t, 32)
 	target := source.Copy()
 	require.NoError(t, target.SetSlot(source.Slot()+5))
-	
+
 	// Create state diff
 	stateDiff, err := diffToState(source, target)
 	require.NoError(t, err)
-	
+
 	// Serialize
 	serialized := stateDiff.serialize()
 	require.Equal(t, true, len(serialized) > 0)
-	
+
 	// Verify it can be deserialized back (need to compress with snappy first)
 	compressed := snappy.Encode(nil, serialized)
 	deserializedDiff, err := newStateDiff(compressed)
@@ -775,17 +800,17 @@ func Test_hdiff_serialize(t *testing.T) {
 	source, _ := util.DeterministicGenesisStateElectra(t, 32)
 	target := source.Copy()
 	require.NoError(t, target.SetSlot(source.Slot()+5))
-	
+
 	// Create hdiff
 	hdiff, err := diffInternal(source, target)
 	require.NoError(t, err)
-	
+
 	// Serialize
 	serialized := hdiff.serialize()
 	require.Equal(t, true, len(serialized.StateDiff) > 0)
 	require.Equal(t, true, len(serialized.ValidatorDiffs) >= 0)
 	require.Equal(t, true, len(serialized.BalancesDiff) >= 0)
-	
+
 	// Verify it can be deserialized back
 	deserializedHdiff, err := newHdiff(serialized)
 	require.NoError(t, err)
@@ -796,7 +821,7 @@ func Test_hdiff_serialize(t *testing.T) {
 // Test some key read methods
 func Test_readTargetVersion(t *testing.T) {
 	diff := &stateDiff{}
-	
+
 	// Test successful read
 	data := make([]byte, 8)
 	binary.LittleEndian.PutUint64(data, 5)
@@ -804,7 +829,7 @@ func Test_readTargetVersion(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 5, diff.targetVersion)
 	require.Equal(t, 0, len(data))
-	
+
 	// Test insufficient data
 	data = []byte{0x01, 0x02}
 	err = diff.readTargetVersion(&data)
@@ -813,7 +838,7 @@ func Test_readTargetVersion(t *testing.T) {
 
 func Test_readSlot(t *testing.T) {
 	diff := &stateDiff{}
-	
+
 	// Test successful read
 	data := make([]byte, 8)
 	binary.LittleEndian.PutUint64(data, 100)
@@ -821,7 +846,7 @@ func Test_readSlot(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, primitives.Slot(100), diff.slot)
 	require.Equal(t, 0, len(data))
-	
+
 	// Test insufficient data
 	data = []byte{0x01, 0x02}
 	err = diff.readSlot(&data)
@@ -831,17 +856,17 @@ func Test_readSlot(t *testing.T) {
 // Test a sample apply method
 func Test_applySlashingsDiff(t *testing.T) {
 	source, _ := util.DeterministicGenesisStateElectra(t, 32)
-	
+
 	// Create a diff with slashing changes
 	diff := &stateDiff{}
 	originalSlashings := source.Slashings()
 	diff.slashings[0] = 1000 // Algebraic diff
-	diff.slashings[1] = 500 // Algebraic diff (positive to avoid underflow)
-	
+	diff.slashings[1] = 500  // Algebraic diff (positive to avoid underflow)
+
 	// Apply the diff
 	err := applySlashingsDiff(source, diff)
 	require.NoError(t, err)
-	
+
 	// Verify the changes were applied
 	resultSlashings := source.Slashings()
 	require.Equal(t, originalSlashings[0]+1000, resultSlashings[0])
@@ -889,13 +914,13 @@ func BenchmarkApplyDiff(b *testing.B) {
 // BenchmarkDiffCreation measures the time to create diffs of various sizes
 func BenchmarkDiffCreation(b *testing.B) {
 	sizes := []uint64{32, 64, 128, 256, 512, 1024}
-	
+
 	for _, size := range sizes {
 		b.Run(fmt.Sprintf("validators_%d", size), func(b *testing.B) {
 			source, _ := util.DeterministicGenesisStateElectra(b, size)
 			target := source.Copy()
 			_ = target.SetSlot(source.Slot() + 1)
-			
+
 			// Modify some validators
 			validators := target.Validators()
 			for i := 0; i < int(size/10); i++ {
@@ -904,7 +929,7 @@ func BenchmarkDiffCreation(b *testing.B) {
 				}
 			}
 			_ = target.SetValidators(validators)
-			
+
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				_, err := Diff(source, target)
@@ -920,19 +945,19 @@ func BenchmarkDiffCreation(b *testing.B) {
 func BenchmarkDiffApplication(b *testing.B) {
 	sizes := []uint64{32, 64, 128, 256, 512}
 	ctx := b.Context()
-	
+
 	for _, size := range sizes {
 		b.Run(fmt.Sprintf("validators_%d", size), func(b *testing.B) {
 			source, _ := util.DeterministicGenesisStateElectra(b, size)
 			target := source.Copy()
 			_ = target.SetSlot(source.Slot() + 10)
-			
+
 			// Create diff once
 			diff, err := Diff(source, target)
 			if err != nil {
 				b.Fatal(err)
 			}
-			
+
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				// Need fresh source for each iteration
@@ -951,12 +976,12 @@ func BenchmarkSerialization(b *testing.B) {
 	source, _ := util.DeterministicGenesisStateElectra(b, 256)
 	target := source.Copy()
 	_ = target.SetSlot(source.Slot() + 5)
-	
+
 	hdiff, err := diffInternal(source, target)
 	if err != nil {
 		b.Fatal(err)
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = hdiff.serialize()
@@ -968,13 +993,13 @@ func BenchmarkDeserialization(b *testing.B) {
 	source, _ := util.DeterministicGenesisStateElectra(b, 256)
 	target := source.Copy()
 	_ = target.SetSlot(source.Slot() + 5)
-	
+
 	// Create serialized diff
 	diff, err := Diff(source, target)
 	if err != nil {
 		b.Fatal(err)
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err := newHdiff(diff)
@@ -987,19 +1012,19 @@ func BenchmarkDeserialization(b *testing.B) {
 // BenchmarkBalanceDiff measures balance diff computation
 func BenchmarkBalanceDiff(b *testing.B) {
 	sizes := []uint64{100, 500, 1000, 5000, 10000}
-	
+
 	for _, size := range sizes {
 		b.Run(fmt.Sprintf("balances_%d", size), func(b *testing.B) {
 			source, _ := util.DeterministicGenesisStateElectra(b, size)
 			target := source.Copy()
-			
+
 			// Modify all balances
 			balances := target.Balances()
 			for i := range balances {
 				balances[i] += uint64(i % 1000)
 			}
 			_ = target.SetBalances(balances)
-			
+
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				_, err := diffToBalances(source, target)
@@ -1014,12 +1039,12 @@ func BenchmarkBalanceDiff(b *testing.B) {
 // BenchmarkValidatorDiff measures validator diff computation
 func BenchmarkValidatorDiff(b *testing.B) {
 	sizes := []uint64{100, 500, 1000, 2000}
-	
+
 	for _, size := range sizes {
 		b.Run(fmt.Sprintf("validators_%d", size), func(b *testing.B) {
 			source, _ := util.DeterministicGenesisStateElectra(b, size)
 			target := source.Copy()
-			
+
 			// Modify some validators
 			validators := target.Validators()
 			for i := 0; i < int(size/10); i++ {
@@ -1029,7 +1054,7 @@ func BenchmarkValidatorDiff(b *testing.B) {
 				}
 			}
 			_ = target.SetValidators(validators)
-			
+
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				_, err := diffToVals(source, target)
@@ -1045,13 +1070,13 @@ func BenchmarkValidatorDiff(b *testing.B) {
 func BenchmarkKMPAlgorithm(b *testing.B) {
 	patternSizes := []int{10, 50, 100, 500}
 	textSizes := []int{100, 500, 1000, 5000}
-	
+
 	for _, pSize := range patternSizes {
 		for _, tSize := range textSizes {
 			if pSize > tSize {
 				continue
 			}
-			
+
 			b.Run(fmt.Sprintf("pattern_%d_text_%d", pSize, tSize), func(b *testing.B) {
 				// Create pattern and text
 				pattern := make([]*int, pSize)
@@ -1059,16 +1084,16 @@ func BenchmarkKMPAlgorithm(b *testing.B) {
 					val := i % 10
 					pattern[i] = &val
 				}
-				
+
 				text := make([]*int, tSize)
 				for i := range text {
 					val := i % 10
 					text[i] = &val
 				}
-				
+
 				// Add pattern to end of text
 				text = append(text, pattern...)
-				
+
 				intEquals := func(a, b *int) bool {
 					if a == nil && b == nil {
 						return true
@@ -1078,7 +1103,7 @@ func BenchmarkKMPAlgorithm(b *testing.B) {
 					}
 					return *a == *b
 				}
-				
+
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
 					_ = kmpIndex(len(pattern), text, intEquals)
@@ -1093,10 +1118,10 @@ func BenchmarkCompressionRatio(b *testing.B) {
 	source, _ := util.DeterministicGenesisStateElectra(b, 512)
 	target := source.Copy()
 	_ = target.SetSlot(source.Slot() + 1)
-	
+
 	// Create different types of changes
 	testCases := []struct {
-		name string
+		name     string
 		modifier func(target state.BeaconState)
 	}{
 		{
@@ -1130,31 +1155,31 @@ func BenchmarkCompressionRatio(b *testing.B) {
 			},
 		},
 	}
-	
+
 	for _, tc := range testCases {
 		b.Run(tc.name, func(b *testing.B) {
 			testTarget := target.Copy()
 			tc.modifier(testTarget)
-			
+
 			// Get full state size
 			fullStateSSZ, err := testTarget.MarshalSSZ()
 			if err != nil {
 				b.Fatal(err)
 			}
-			
+
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				diff, err := Diff(source, testTarget)
 				if err != nil {
 					b.Fatal(err)
 				}
-				
+
 				diffSize := len(diff.StateDiff) + len(diff.ValidatorDiffs) + len(diff.BalancesDiff)
-				
+
 				// Report compression ratio in the first iteration
 				if i == 0 {
 					ratio := float64(len(fullStateSSZ)) / float64(diffSize)
-					b.Logf("Compression ratio: %.2fx (full: %d bytes, diff: %d bytes)", 
+					b.Logf("Compression ratio: %.2fx (full: %d bytes, diff: %d bytes)",
 						ratio, len(fullStateSSZ), diffSize)
 				}
 			}
@@ -1167,7 +1192,7 @@ func BenchmarkMemoryUsage(b *testing.B) {
 	source, _ := util.DeterministicGenesisStateElectra(b, 256)
 	target := source.Copy()
 	_ = target.SetSlot(source.Slot() + 10)
-	
+
 	// Modify some data
 	validators := target.Validators()
 	for i := 0; i < 25; i++ {
@@ -1176,16 +1201,16 @@ func BenchmarkMemoryUsage(b *testing.B) {
 		}
 	}
 	_ = target.SetValidators(validators)
-	
+
 	b.ReportAllocs()
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		diff, err := Diff(source, target)
 		if err != nil {
 			b.Fatal(err)
 		}
-		
+
 		_, err = ApplyDiff(b.Context(), source.Copy(), diff)
 		if err != nil {
 			b.Fatal(err)

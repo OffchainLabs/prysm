@@ -17,6 +17,35 @@ import (
 // UpgradeToFulu updates inputs a generic state to return the version Fulu state.
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/fork.md#upgrading-the-state
 func UpgradeToFulu(ctx context.Context, beaconState state.BeaconState) (state.BeaconState, error) {
+	s, err := convertToFuluPB(beaconState)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not convert to fulu")
+	}
+	proposerLookahead, err := helpers.InitializeProposerLookahead(ctx, beaconState, slots.ToEpoch(beaconState.Slot()))
+	if err != nil {
+		return nil, err
+	}
+	s.ProposerLookahead = proposerLookahead
+	post, err := state_native.InitializeFromProtoUnsafeFulu(s)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to initialize post fulu beaconState")
+	}
+	return post, nil
+}
+
+func ConvertToFulu(beaconState state.BeaconState) (state.BeaconState, error) {
+	s, err := convertToFuluPB(beaconState)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not convert to fulu pb")
+	}
+	post, err := state_native.InitializeFromProtoUnsafeFulu(s)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to initialize post fulu beaconState")
+	}
+	return post, nil
+}
+
+func convertToFuluPB(beaconState state.BeaconState) (*ethpb.BeaconStateFulu, error) {
 	currentSyncCommittee, err := beaconState.CurrentSyncCommittee()
 	if err != nil {
 		return nil, err
@@ -105,11 +134,6 @@ func UpgradeToFulu(ctx context.Context, beaconState state.BeaconState) (state.Be
 	if err != nil {
 		return nil, err
 	}
-	proposerLookahead, err := helpers.InitializeProposerLookahead(ctx, beaconState, slots.ToEpoch(beaconState.Slot()))
-	if err != nil {
-		return nil, err
-	}
-
 	s := &ethpb.BeaconStateFulu{
 		GenesisTime:           uint64(beaconState.GenesisTime().Unix()),
 		GenesisValidatorsRoot: beaconState.GenesisValidatorsRoot(),
@@ -171,14 +195,6 @@ func UpgradeToFulu(ctx context.Context, beaconState state.BeaconState) (state.Be
 		PendingDeposits:               pendingDeposits,
 		PendingPartialWithdrawals:     pendingPartialWithdrawals,
 		PendingConsolidations:         pendingConsolidations,
-		ProposerLookahead:             proposerLookahead,
 	}
-
-	// Need to cast the beaconState to use in helper functions
-	post, err := state_native.InitializeFromProtoUnsafeFulu(s)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to initialize post fulu beaconState")
-	}
-
-	return post, nil
+	return s, nil
 }
