@@ -85,7 +85,7 @@ func FetchDataColumnSidecars(
 	log := log.WithField("initialMissingRootCount", initialMissingRootCount)
 
 	if len(incompleteRoots) == 0 {
-		log.WithField("finalMissingRootCount", len(incompleteRoots)).Debug("Fetched data column sidecars from storage")
+		log.WithField("finalMissingRootCount", 0).Debug("Fetched data column sidecars from storage")
 		return result, nil, nil
 	}
 
