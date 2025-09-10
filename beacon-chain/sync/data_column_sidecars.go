@@ -90,7 +90,7 @@ func FetchDataColumnSidecars(
 	}
 
 	// Request direct sidecars from peers.
-	directSidecarsByRoot, err := requestDirectSidecarsFromPeers(params, roBlocks, slotsWithCommitments, storedIndicesByRoot, requestedIndices, incompleteRoots)
+	directSidecarsByRoot, err := requestDirectSidecarsFromPeers(params, roBlocks, requestedIndices, slotsWithCommitments, storedIndicesByRoot, incompleteRoots)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "request direct sidecars from peers")
 	}
@@ -266,9 +266,9 @@ func requestSidecarsFromStorage(
 func requestDirectSidecarsFromPeers(
 	params DataColumnSidecarsParams,
 	roBlocks []blocks.ROBlock,
+	requestedIndices map[uint64]bool,
 	slotsWithCommitments map[primitives.Slot]bool,
 	storedIndicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
-	requestedIndices map[uint64]bool,
 	incompleteRoots map[[fieldparams.RootLength]byte]bool,
 ) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
 	start := time.Now()
