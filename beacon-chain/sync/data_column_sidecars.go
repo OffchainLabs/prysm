@@ -226,21 +226,21 @@ func requestSidecarsFromStorage(
 		}
 
 		// Enough columns are available for reconstruction. Retrieve all stored columns.
-		allStoredColumns, err := storage.Get(root, nil)
+		allStoredSidecars, err := storage.Get(root, nil)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to get all stored columns for reconstruction for block root %#x", root)
 		}
 
 		// Attempt reconstruction.
-		reconstructedColumns, err := peerdas.ReconstructDataColumnSidecars(allStoredColumns)
+		reconstructedVerifiedRoSidecars, err := peerdas.ReconstructDataColumnSidecars(allStoredSidecars)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to reconstruct data columns for block root %#x", root)
 		}
 
 		// Health check: ensure we have the expected number of columns.
 		numberOfColumns := params.BeaconConfig().NumberOfColumns
-		if uint64(len(reconstructedColumns)) != numberOfColumns {
-			return nil, errors.Errorf("reconstructed %d columns but expected %d for block root %#x", len(reconstructedColumns), numberOfColumns, root)
+		if uint64(len(reconstructedVerifiedRoSidecars)) != numberOfColumns {
+			return nil, errors.Errorf("reconstructed %d columns but expected %d for block root %#x", len(reconstructedVerifiedRoSidecars), numberOfColumns, root)
 		}
 
 		// Extract only the requested indices from reconstructed data using direct indexing.
@@ -248,7 +248,7 @@ func requestSidecarsFromStorage(
 			if index >= numberOfColumns {
 				return nil, errors.Errorf("requested column index %d exceeds maximum %d for block root %#x", index, numberOfColumns-1, root)
 			}
-			result[root] = append(result[root], reconstructedColumns[index])
+			result[root] = append(result[root], reconstructedVerifiedRoSidecars[index])
 		}
 
 		delete(roots, root)
