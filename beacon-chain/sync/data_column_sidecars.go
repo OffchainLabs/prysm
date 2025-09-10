@@ -127,7 +127,7 @@ func FetchDataColumnSidecars(
 	}
 
 	if len(incompleteRoots) == 0 {
-		log.WithField("finalMissingRootCount", len(incompleteRoots)).Debug("Fetched data column sidecars from storage and peers using rescue mode")
+		log.WithField("finalMissingRootCount", 0).Debug("Fetched data column sidecars from storage and peers using rescue mode")
 		return result, nil, nil
 	}
 
