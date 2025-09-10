@@ -406,9 +406,7 @@ func getSignRequestJson(ctx context.Context, validator *validator.Validate, requ
 		return handleBlock(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_AttestationData:
 		return handleAttestationData(ctx, validator, request, genesisValidatorsRoot)
-	case *validatorpb.SignRequest_AggregateAttestationAndProof:
-		return handleAggregateAttestationAndProofV2(ctx, ver, validator, request, genesisValidatorsRoot)
-	case *validatorpb.SignRequest_AggregateAttestationAndProofElectra:
+	case *validatorpb.SignRequest_AggregateAttestationAndProof, *validatorpb.SignRequest_AggregateAttestationAndProofElectra:
 		return handleAggregateAttestationAndProofV2(ctx, ver, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_Slot:
 		return handleAggregationSlot(ctx, validator, request, genesisValidatorsRoot)
