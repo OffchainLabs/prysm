@@ -87,6 +87,11 @@ func TotalActiveBalance(s state.ReadOnlyBeaconState) (uint64, error) {
 	return total, nil
 }
 
+// UpdateTotalActiveBalanceCache updates the cache with the given total active balance.
+func UpdateTotalActiveBalanceCache(s state.BeaconState, total uint64) error {
+	return balanceCache.AddTotalEffectiveBalance(s, total)
+}
+
 // IncreaseBalance increases validator with the given 'index' balance by 'delta' in Gwei.
 //
 // Spec pseudocode definition:
