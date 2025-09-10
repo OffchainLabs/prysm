@@ -578,14 +578,10 @@ func mergeAvailableSidecars(
 		}
 
 		// Reconstruction is not needed, simply assemble what is available in storage and already available.
-		stored, err := storage.Get(root, sortedSliceFromMap(requestedIndices))
+		allAvailable, err := assembleAvailableSidecarsForRoot(storage, alreadyAvailableByRoot, root, requestedIndices)
 		if err != nil {
-			return nil, errors.Wrapf(err, "storage get for root %#x", root)
+			return nil, errors.Wrap(err, "assemble available sidecars")
 		}
-
-		allAvailable := make([]blocks.VerifiedRODataColumn, 0, len(stored)+len(alreadyAvailable))
-		allAvailable = append(allAvailable, stored...)
-		allAvailable = append(allAvailable, alreadyAvailable...)
 
 		result[root] = allAvailable
 		delete(roots, root)
@@ -606,16 +602,10 @@ func assembleAvailableSidecars(
 	// Assemble results.
 	result := make(map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, len(roots))
 	for root := range roots {
-		stored, err := storage.Get(root, sortedSliceFromMap(requestedIndices))
+		allAvailable, err := assembleAvailableSidecarsForRoot(storage, alreadyAvailableByRoot, root, requestedIndices)
 		if err != nil {
-			return nil, nil, errors.Wrapf(err, "storage get for root %#x", root)
+			return nil, nil, errors.Wrap(err, "assemble sidecars for root")
 		}
-
-		alreadyAvailable := alreadyAvailableByRoot[root]
-
-		allAvailable := make([]blocks.VerifiedRODataColumn, 0, len(stored)+len(alreadyAvailable))
-		allAvailable = append(allAvailable, stored...)
-		allAvailable = append(allAvailable, alreadyAvailable...)
 
 		if len(allAvailable) > 0 {
 			result[root] = allAvailable
@@ -641,6 +631,28 @@ func assembleAvailableSidecars(
 	}
 
 	return result, missingByRoot, nil
+}
+
+// assembleAvailableSidecarsForRoot assembles all sidecars available in storage
+// and in `alreadyAvailableByRoot` corresponding to `root` and `indices`.
+func assembleAvailableSidecarsForRoot(
+	storage filesystem.DataColumnStorageReader,
+	alreadyAvailableByRoot map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn,
+	root [fieldparams.RootLength]byte,
+	indices map[uint64]bool,
+) ([]blocks.VerifiedRODataColumn, error) {
+	stored, err := storage.Get(root, sortedSliceFromMap(indices))
+	if err != nil {
+		return nil, errors.Wrapf(err, "storage get for root %#x", root)
+	}
+
+	alreadyAvailable := alreadyAvailableByRoot[root]
+
+	allAvailable := make([]blocks.VerifiedRODataColumn, 0, len(stored)+len(alreadyAvailable))
+	allAvailable = append(allAvailable, stored...)
+	allAvailable = append(allAvailable, alreadyAvailable...)
+
+	return allAvailable, nil
 }
 
 // selectPeers selects peers to query the sidecars.
