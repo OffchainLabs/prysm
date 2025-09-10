@@ -82,16 +82,15 @@ func computeContainerHashTreeRoot(info *sszquery.SSZInfo, data []byte) ([32]byte
 			if len(data) < int(fieldInfo.Offset()+4) {
 				return [32]byte{}, fmt.Errorf("data too short to read offset for field %s", fieldInfo.Name())
 			}
-
 			// Read the offset (4 bytes little-endian)
 			fieldOffset := binary.LittleEndian.Uint32(data[fieldInfo.Offset() : fieldInfo.Offset()+4])
-
+			// Get the length of the variable field
+			fieldLength := fieldSSZ.Size()
 			// Extract the variable data starting from the offset
-			if uint64(fieldOffset) >= uint64(len(data)) {
-				return [32]byte{}, fmt.Errorf("offset %d exceeds data length %d for field %s", fieldOffset, len(data), fieldInfo.Name())
+			if uint64(fieldOffset)+fieldLength >= uint64(len(data)) {
+				return [32]byte{}, fmt.Errorf("offset + field length %d exceeds data length %d for field %s", uint64(fieldOffset)+fieldLength, len(data), fieldInfo.Name())
 			}
-			fieldData := data[fieldOffset:] // TODO: Am I missing the final delimiter? data[fieldOffset:fieldOffset+FIELD_LENGTH]
-
+			fieldData := data[fieldOffset : uint64(fieldOffset)+fieldLength]
 			fieldRoot, err := hashTreeRootFromBytes(fieldSSZ, fieldData)
 			if err != nil {
 				return [32]byte{}, fmt.Errorf("hashTreeRootFromBytes for field %s: %w", fieldInfo.Name(), err)
@@ -103,7 +102,6 @@ func computeContainerHashTreeRoot(info *sszquery.SSZInfo, data []byte) ([32]byte
 				return [32]byte{}, fmt.Errorf("data too short for fixed field %s", fieldInfo.Name())
 			}
 			fieldData := data[fieldInfo.Offset() : fieldInfo.Offset()+fieldSize]
-
 			fieldRoot, err := hashTreeRootFromBytes(fieldSSZ, fieldData)
 			if err != nil {
 				return [32]byte{}, fmt.Errorf("hashTreeRootFromBytes for field %s: %w", fieldInfo.Name(), err)
