@@ -68,10 +68,38 @@ func FetchDataColumnSidecars(
 		return nil, nil, nil
 	}
 
-	// Extract slots and roots corresponding to blocks with commitments.
-	slotsWithCommitments, storedIndicesByRoot, incompleteRoots, err := commitmentsInfo(params.Storage, roBlocks)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "commitments info")
+	blockCount := len(roBlocks)
+
+	// We first consider all requested roots as incomplete, and remove roots from this
+	// set as we retrieve them.
+	incompleteRoots := make(map[[fieldparams.RootLength]byte]bool, blockCount)
+	slotsWithCommitments := make(map[primitives.Slot]bool, blockCount)
+	slotByRoot := make(map[[fieldparams.RootLength]byte]primitives.Slot, blockCount)
+	storedIndicesByRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool, blockCount)
+
+	for _, roBlock := range roBlocks {
+		block := roBlock.Block()
+
+		commitments, err := block.Body().BlobKzgCommitments()
+		if err != nil {
+			return nil, nil, errors.Wrapf(err, "get blob kzg commitments for block root %#x", roBlock.Root())
+		}
+
+		if len(commitments) == 0 {
+			continue
+		}
+
+		root := roBlock.Root()
+		slot := block.Slot()
+
+		incompleteRoots[root] = true
+		slotByRoot[root] = slot
+		slotsWithCommitments[slot] = true
+
+		storedIndices := params.Storage.Summary(root).Stored()
+		if len(storedIndices) > 0 {
+			storedIndicesByRoot[root] = storedIndices
+		}
 	}
 
 	initialMissingRootCount := len(incompleteRoots)
@@ -90,7 +118,7 @@ func FetchDataColumnSidecars(
 	}
 
 	// Request direct sidecars from peers.
-	directSidecarsByRoot, err := requestDirectSidecarsFromPeers(params, roBlocks, requestedIndices, slotsWithCommitments, storedIndicesByRoot, incompleteRoots)
+	directSidecarsByRoot, err := requestDirectSidecarsFromPeers(params, slotByRoot, requestedIndices, slotsWithCommitments, storedIndicesByRoot, incompleteRoots)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "request direct sidecars from peers")
 	}
@@ -111,7 +139,7 @@ func FetchDataColumnSidecars(
 	}
 
 	// Request all possible indirect sidecars from peers which are neither stored nor in `directSidecarsByRoot`
-	indirectSidecarsByRoot, err := requestIndirectSidecarsFromPeers(params, roBlocks, slotsWithCommitments, storedIndicesByRoot, directSidecarsByRoot, requestedIndices, incompleteRoots)
+	indirectSidecarsByRoot, err := requestIndirectSidecarsFromPeers(params, slotByRoot, slotsWithCommitments, storedIndicesByRoot, directSidecarsByRoot, requestedIndices, incompleteRoots)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "request all sidecars from peers")
 	}
@@ -143,38 +171,6 @@ func FetchDataColumnSidecars(
 
 	log.WithField("finalMissingRootCount", len(incompleteRoots)).Debug("Failed to fetch data column sidecars from storage and peers using rescue mode")
 	return result, missingByRoot, nil
-}
-
-// commitmentsInfo returns:
-// - a set of slots for blocks with commitments,
-// - a map root->stored indices for blocks with commitments, and
-// - a set of roots for blocks with commitments.
-func commitmentsInfo(storage filesystem.DataColumnStorageReader, roBlocks []blocks.ROBlock) (map[primitives.Slot]bool, map[[fieldparams.RootLength]byte]map[uint64]bool, map[[fieldparams.RootLength]byte]bool, error) {
-	blockCount := len(roBlocks)
-
-	slotsWithCommitments := make(map[primitives.Slot]bool, blockCount)
-	storedIndicesByRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool, blockCount)
-	roots := make(map[[fieldparams.RootLength]byte]bool, blockCount)
-	for _, roBlock := range roBlocks {
-		block := roBlock.Block()
-
-		commitments, err := block.Body().BlobKzgCommitments()
-		if err != nil {
-			return nil, nil, nil, errors.Wrapf(err, "get blob kzg commitments for block root %#x", roBlock.Root())
-		}
-
-		if len(commitments) == 0 {
-			continue
-		}
-
-		slotsWithCommitments[block.Slot()] = true
-
-		root := roBlock.Root()
-		roots[root] = true
-		storedIndicesByRoot[root] = storage.Summary(root).Stored()
-	}
-
-	return slotsWithCommitments, storedIndicesByRoot, roots, nil
 }
 
 // requestSidecarsFromStorage attempts to retrieve data column sidecars for each block root in `roots`
@@ -265,7 +261,7 @@ func requestSidecarsFromStorage(
 // It returns a map from each root to its successfully retrieved sidecars.
 func requestDirectSidecarsFromPeers(
 	params DataColumnSidecarsParams,
-	roBlocks []blocks.ROBlock,
+	slotByRoot map[[fieldparams.RootLength]byte]primitives.Slot,
 	requestedIndices map[uint64]bool,
 	slotsWithCommitments map[primitives.Slot]bool,
 	storedIndicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
@@ -275,9 +271,6 @@ func requestDirectSidecarsFromPeers(
 
 	// Create a new random source for peer selection.
 	randomSource := rand.NewGenerator()
-
-	// Compute slots by block root.
-	slotByRoot := computeSlotByBlockRoot(roBlocks)
 
 	// Determine all sidecars each peers are expected to custody.
 	connectedPeersSlice := params.P2P.Peers().Connected()
@@ -362,7 +355,7 @@ func requestDirectSidecarsFromPeers(
 // - all peers are exhausted.
 func requestIndirectSidecarsFromPeers(
 	p DataColumnSidecarsParams,
-	roBlocks []blocks.ROBlock,
+	slotByRoot map[[fieldparams.RootLength]byte]primitives.Slot,
 	slotsWithCommitments map[primitives.Slot]bool,
 	storedIndicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
 	alreadyAvailableByRoot map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn,
@@ -376,9 +369,6 @@ func requestIndirectSidecarsFromPeers(
 
 	// Create a new random source for peer selection.
 	randomSource := rand.NewGenerator()
-
-	// Compute slots by block root.
-	slotByRoot := computeSlotByBlockRoot(roBlocks)
 
 	// For each root compute all possible data column sidecar indices excluding
 	// those already stored or already available.
@@ -1224,15 +1214,6 @@ func sortedSliceFromMap(m map[uint64]bool) []uint64 {
 
 	slices.Sort(result)
 	return result
-}
-
-// computeSlotByBlockRoot maps each block root to its corresponding slot.
-func computeSlotByBlockRoot(roBlocks []blocks.ROBlock) map[[fieldparams.RootLength]byte]primitives.Slot {
-	slotByBlockRoot := make(map[[fieldparams.RootLength]byte]primitives.Slot, len(roBlocks))
-	for _, roBlock := range roBlocks {
-		slotByBlockRoot[roBlock.Root()] = roBlock.Block().Slot()
-	}
-	return slotByBlockRoot
 }
 
 // computeTotalCount calculates the total count of indices across all roots.

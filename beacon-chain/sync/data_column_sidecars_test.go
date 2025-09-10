@@ -1031,39 +1031,6 @@ func TestSlortedSliceFromMap(t *testing.T) {
 	require.DeepEqual(t, expected, actual)
 }
 
-func TestComputeSlotByBlockRoot(t *testing.T) {
-	const (
-		count      = 3
-		multiplier = 10
-	)
-
-	roBlocks := make([]blocks.ROBlock, 0, count)
-	for i := range count {
-		signedBlock := util.NewBeaconBlock()
-		signedBlock.Block.Slot = primitives.Slot(i).Mul(multiplier)
-		roSignedBlock, err := blocks.NewSignedBeaconBlock(signedBlock)
-		require.NoError(t, err)
-
-		roBlock, err := blocks.NewROBlockWithRoot(roSignedBlock, [fieldparams.RootLength]byte{byte(i)})
-		require.NoError(t, err)
-
-		roBlocks = append(roBlocks, roBlock)
-	}
-
-	expected := map[[fieldparams.RootLength]byte]primitives.Slot{
-		[fieldparams.RootLength]byte{0}: primitives.Slot(0),
-		[fieldparams.RootLength]byte{1}: primitives.Slot(10),
-		[fieldparams.RootLength]byte{2}: primitives.Slot(20),
-	}
-
-	actual := computeSlotByBlockRoot(roBlocks)
-
-	require.Equal(t, len(expected), len(actual))
-	for k, v := range expected {
-		require.Equal(t, v, actual[k])
-	}
-}
-
 func TestComputeTotalCount(t *testing.T) {
 	input := map[[fieldparams.RootLength]byte]map[uint64]bool{
 		[fieldparams.RootLength]byte{1}: {1: true, 3: true},
