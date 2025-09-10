@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	ssz "github.com/OffchainLabs/prysm/v6/encoding/ssz"
 	sszquery "github.com/OffchainLabs/prysm/v6/encoding/ssz/query"
 )
 // Public function to compute the hash tree root for a given sszInfo struct
@@ -82,13 +83,13 @@ func computeContainerHashTreeRoot(info *sszquery.SSZInfo, data []byte) ([32]byte
 			}
 
 			// Read the offset (4 bytes little-endian)
-			fieldOffset := binary.LittleEndian.Uint32(data[fieldInfo.Offset() : fieldInfo.Offset()+4]) // TODO: check
+			fieldOffset := binary.LittleEndian.Uint32(data[fieldInfo.Offset() : fieldInfo.Offset()+4])
 
 			// Extract the variable data starting from the offset
 			if uint64(fieldOffset) >= uint64(len(data)) {
 				return [32]byte{}, fmt.Errorf("offset %d exceeds data length %d for field %s", fieldOffset, len(data), fieldInfo.Name())
 			}
-			fieldData := data[fieldOffset:]
+			fieldData := data[fieldOffset:] // TODO: Am I missing the final delimiter? data[fieldOffset:fieldOffset+FIELD_LENGTH]
 
 			fieldRoot, err := hashTreeRootFromBytes(fieldSSZ, fieldData)
 			if err != nil {
@@ -108,6 +109,10 @@ func computeContainerHashTreeRoot(info *sszquery.SSZInfo, data []byte) ([32]byte
 			}
 			elementRoots = append(elementRoots, fieldRoot)
 		}
+	}
+	return ssz.MerkleizeVector(elementRoots, uint64(len(elementRoots))), nil
+}
+
 
 	}
 

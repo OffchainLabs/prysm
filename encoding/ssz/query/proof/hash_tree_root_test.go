@@ -2,12 +2,15 @@ package proof_test
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"testing"
 
 	sszquery "github.com/OffchainLabs/prysm/v6/encoding/ssz/query"
 	proof "github.com/OffchainLabs/prysm/v6/encoding/ssz/query/proof"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
+	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 func TestHashTreeRootFromBytes_Basic(t *testing.T) {
@@ -78,3 +81,39 @@ func TestHashTreeRootFromBytes_ContainerBasicTypeFields_VoluntaryExit(t *testing
 	assert.Equal(t, expected, root)
 }
 
+func TestHashTreeRootFromBytes_Container(t *testing.T) {
+	// BeaconBlockHeader fields are fixed-size; the three roots are Bytes32.
+	parentRoot := make([]byte, 32)
+	stateRoot := make([]byte, 32)
+	bodyRoot := make([]byte, 32)
+	copy(parentRoot, []byte{0x01, 0x02, 0x03})
+	copy(stateRoot, []byte{0x04, 0x05, 0x06})
+	copy(bodyRoot, []byte{0x07, 0x08, 0x09})
+
+	beaconBlockHeader := &ethpb.BeaconBlockHeader{
+		Slot:          12345,
+		ProposerIndex: 67890,
+		ParentRoot:    parentRoot,
+		StateRoot:     stateRoot,
+		BodyRoot:      bodyRoot,
+	}
+
+	info, err := sszquery.AnalyzeObject(beaconBlockHeader)
+	require.NoError(t, err)
+
+	data, err := ssz.MarshalSSZ(beaconBlockHeader)
+	require.NoError(t, err)
+
+	hexData := hex.EncodeToString(data)
+	t.Logf("SSZ data: %s", hexData)
+
+	root, err := proof.HashTreeRootFromBytes(info, data)
+	require.NoError(t, err)
+	t.Logf("HashTreeRoot: %x", root[:])
+
+	expected, err := beaconBlockHeader.HashTreeRoot()
+	t.Logf("Expected:     %x", expected[:])
+	require.NoError(t, err)
+
+	assert.Equal(t, expected, root)
+}
