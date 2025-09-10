@@ -1,7 +1,6 @@
 package proof
 
 import (
-	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 
@@ -51,6 +50,12 @@ func computeBasicHashTreeRoot(info *sszquery.SSZInfo, data []byte) ([32]byte, er
 	var chunk [32]byte
 	copy(chunk[:], data[:info.FixedSize()])
 	return chunk, nil
+}
+
+// computeBitHashTreeRoot computes the hash tree root for bitvector/bitlist
+// Placeholder
+func computeBitHashTreeRoot(_ *sszquery.SSZInfo, _ []byte) ([32]byte, error) {
+	return [32]byte{}, fmt.Errorf("computeBitHashTreeRoot not implemented yet")
 }
 
 // computeContainerHashTreeRoot computes the hash tree root for containers
@@ -121,8 +126,8 @@ func computeVectorHashTreeRoot(info *sszquery.SSZInfo, data []byte) ([32]byte, e
 	return computeBasicHashTreeRoot(info, data)
 }
 
-
-	}
-
-
+// computeUnionHashTreeRoot computes the hash tree root for unions
+// Placeholder
+func computeUnionHashTreeRoot(_ *sszquery.SSZInfo, _ []byte) ([32]byte, error) {
+	return [32]byte{}, fmt.Errorf("computeUnionHashTreeRoot not implemented yet")
 }
