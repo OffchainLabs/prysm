@@ -3737,8 +3737,6 @@
   sources:
     - file: beacon-chain/core/validators/validator.go
       search: func InitiateValidatorExit(
-    - file: beacon-chain/core/validators/validator.go
-      search: if s.Version() < version.Electra {
   spec: |
     <spec fn="initiate_validator_exit" fork="phase0" hash="0483a058">
     def initiate_validator_exit(state: BeaconState, index: ValidatorIndex) -> None:
