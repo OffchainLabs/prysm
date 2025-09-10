@@ -77,7 +77,7 @@ func FetchDataColumnSidecars(
 	initialMissingRootCount := len(incompleteRoots)
 
 	// Request sidecars from storage (by reconstructing them from other available sidecars if needed).
-	result, err := requestSidecarsFromStorage(params.Storage, incompleteRoots, storedIndicesByRoot, requestedIndices)
+	result, err := requestSidecarsFromStorage(params.Storage, storedIndicesByRoot, requestedIndices, incompleteRoots)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "request sidecars from storage")
 	}
@@ -188,9 +188,9 @@ func commitmentsInfo(storage filesystem.DataColumnStorageReader, roBlocks []bloc
 // were successfully retrieved.
 func requestSidecarsFromStorage(
 	storage filesystem.DataColumnStorageReader,
-	roots map[[fieldparams.RootLength]byte]bool,
 	storedIndicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
 	requestedIndicesMap map[uint64]bool,
+	roots map[[fieldparams.RootLength]byte]bool,
 ) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
 	requestedIndices := sortedSliceFromMap(requestedIndicesMap)
 
