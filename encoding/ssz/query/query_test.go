@@ -166,8 +166,7 @@ func TestCalculateOffsetAndLength(t *testing.T) {
 				_, offset, length, err := query.CalculateOffsetAndLength(info, path)
 				require.NoError(t, err)
 
-				require.Equal(t, tt.expectedOffset, offset, "Expected offset to be %d",
-					tt.expectedOffset)
+				require.Equal(t, tt.expectedOffset, offset, "Expected offset to be %d", tt.expectedOffset)
 				require.Equal(t, tt.expectedLength, length, "Expected length to be %d", tt.expectedLength)
 			})
 		}
