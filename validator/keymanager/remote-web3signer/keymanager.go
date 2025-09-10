@@ -20,7 +20,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/io/file"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/OffchainLabs/prysm/v6/validator/accounts/petnames"
 	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
@@ -408,14 +407,8 @@ func getSignRequestJson(ctx context.Context, validator *validator.Validate, requ
 	case *validatorpb.SignRequest_AttestationData:
 		return handleAttestationData(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_AggregateAttestationAndProof:
-		if ver >= version.Electra {
-			return nil, fmt.Errorf("unsupported fork version for SignRequest_AggregateAttestationAndProof: %v", ver)
-		}
 		return handleAggregateAttestationAndProofV2(ctx, ver, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_AggregateAttestationAndProofElectra:
-		if ver < version.Electra {
-			return nil, fmt.Errorf("unsupported fork version for SignRequest_AggregateAttestationAndProofElectra: %v", ver)
-		}
 		return handleAggregateAttestationAndProofV2(ctx, ver, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_Slot:
 		return handleAggregationSlot(ctx, validator, request, genesisValidatorsRoot)
@@ -488,18 +481,6 @@ func handleAttestationData(ctx context.Context, validator *validator.Validate, r
 	}
 	attestationSignRequestsTotal.Inc()
 	return json.Marshal(attestationSignRequest)
-}
-
-func handleAggregateAttestationAndProof(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	aggregateAndProofSignRequest, err := types.GetAggregateAndProofSignRequest(request, genesisValidatorsRoot)
-	if err != nil {
-		return nil, err
-	}
-	if err = validator.StructCtx(ctx, aggregateAndProofSignRequest); err != nil {
-		return nil, err
-	}
-	aggregateAndProofSignRequestsTotal.Inc()
-	return json.Marshal(aggregateAndProofSignRequest)
 }
 
 func handleAggregateAttestationAndProofV2(ctx context.Context, fork int, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
