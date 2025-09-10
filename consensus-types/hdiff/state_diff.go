@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/deneb"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/electra"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/execution"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/fulu"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -114,6 +115,8 @@ type stateDiff struct {
 	pendingDepositDiff             []*ethpb.PendingDeposit
 	pendingPartialWithdrawalsDiff  []*ethpb.PendingPartialWithdrawal
 	pendingConsolidationsDiffs     []*ethpb.PendingConsolidation
+	// Fulu
+	proposerLookahead []uint64 // override
 }
 
 type hdiff struct {
@@ -152,6 +155,7 @@ const (
 	pendingDepositLength           = fieldparams.BLSPubkeyLength + fieldparams.RootLength + 8 + fieldparams.BLSSignatureLength + 8
 	pendingPartialWithdrawalLength = 8 + 8 + 8
 	pendingConsolidationLength     = 8 + 8
+	proposerLookaheadLength        = 8 * 2 * fieldparams.SlotsPerEpoch
 )
 
 // newHdiff desrializes a new Hdiff object from the given seialized data.
@@ -572,7 +576,7 @@ func (ret *stateDiff) readExecutionPayloadHeader(data *[]byte) error {
 		header = &enginev1.ExecutionPayloadHeader{}
 	case version.Capella:
 		header = &enginev1.ExecutionPayloadHeaderCapella{}
-	case version.Deneb, version.Electra:
+	case version.Deneb, version.Electra, version.Fulu:
 		header = &enginev1.ExecutionPayloadHeaderDeneb{}
 	default:
 		return errors.Errorf("unknown target version %d", ret.targetVersion)
@@ -708,6 +712,20 @@ func (ret *stateDiff) readPendingConsolidations(data *[]byte) error {
 	return nil
 }
 
+func (ret *stateDiff) readProposerLookahead(data *[]byte) error {
+	if len(*data) < proposerLookaheadLength {
+		return errors.Wrap(errDataSmall, "proposerLookahead data")
+	}
+	// Read the proposer lookahead (2 * SlotsPerEpoch uint64 values)
+	numProposers := 2 * fieldparams.SlotsPerEpoch
+	ret.proposerLookahead = make([]uint64, numProposers)
+	for i := 0; i < numProposers; i++ {
+		ret.proposerLookahead[i] = binary.LittleEndian.Uint64((*data)[i*8 : (i+1)*8])
+	}
+	*data = (*data)[proposerLookaheadLength:]
+	return nil
+}
+
 // newStateDiff deserializes a new StateDiff object from the given data.
 func newStateDiff(input []byte) (*stateDiff, error) {
 	data, err := snappy.Decode(nil, input)
@@ -808,7 +826,11 @@ func newStateDiff(input []byte) (*stateDiff, error) {
 	if err := ret.readPendingConsolidations(&data); err != nil {
 		return nil, err
 	}
-
+	if ret.targetVersion >= version.Fulu {
+		if err := ret.readProposerLookahead(&data); err != nil {
+			return nil, err
+		}
+	}
 	if len(data) > 0 {
 		return nil, errors.Errorf("data is too large, exceeded by %d bytes", len(data))
 	}
@@ -1101,6 +1123,12 @@ func (s *stateDiff) serialize() []byte {
 		ret = binary.LittleEndian.AppendUint64(ret, uint64(d.SourceIndex))
 		ret = binary.LittleEndian.AppendUint64(ret, uint64(d.TargetIndex))
 	}
+	// Fulu: Proposer lookahead (override strategy - always fixed size)
+	if s.targetVersion >= version.Fulu {
+		for _, proposer := range s.proposerLookahead {
+			ret = binary.LittleEndian.AppendUint64(ret, proposer)
+		}
+	}
 	return ret
 }
 
@@ -1351,6 +1379,21 @@ func diffToState(source, target state.ReadOnlyBeaconState) (*stateDiff, error) {
 	if err := diffElectraFields(ret, source, target); err != nil {
 		return nil, err
 	}
+	if target.Version() < version.Fulu {
+		return ret, nil
+	}
+
+	// Fulu: Proposer lookahead (override strategy - always use target's lookahead)
+	proposerLookahead, err := target.ProposerLookahead()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get proposer lookahead from Fulu target state")
+	}
+	// Convert []primitives.ValidatorIndex to []uint64
+	ret.proposerLookahead = make([]uint64, len(proposerLookahead))
+	for i, idx := range proposerLookahead {
+		ret.proposerLookahead[i] = uint64(idx)
+	}
+
 	return ret, nil
 }
 
@@ -1847,6 +1890,12 @@ func applyStateDiff(ctx context.Context, source state.BeaconState, diff *stateDi
 	if err := applyPendingConsolidationsDiff(source, diff); err != nil {
 		return nil, errors.Wrap(err, "failed to apply pending consolidations diff")
 	}
+	if diff.targetVersion < version.Fulu {
+		return source, nil
+	}
+	if err := applyProposerLookaheadDiff(source, diff); err != nil {
+		return nil, errors.Wrap(err, "failed to apply proposer lookahead diff")
+	}
 	return source, nil
 }
 
@@ -2011,6 +2060,16 @@ func applyBlockRootsDiff(source state.BeaconState, diff *stateDiff) error {
 	return source.SetBlockRoots(sRoots)
 }
 
+// applyProposerLookaheadDiff applies the proposer lookahead diff to the source state in place.
+func applyProposerLookaheadDiff(source state.BeaconState, diff *stateDiff) error {
+	// Fulu: Proposer lookahead (override strategy - always use target's lookahead)
+	proposerIndices := make([]primitives.ValidatorIndex, len(diff.proposerLookahead))
+	for i, idx := range diff.proposerLookahead {
+		proposerIndices[i] = primitives.ValidatorIndex(idx)
+	}
+	return source.SetProposerLookahead(proposerIndices)
+}
+
 // updateToVersion updates the state to the given version in place.
 func updateToVersion(ctx context.Context, source state.BeaconState, target int) (ret state.BeaconState, err error) {
 	if source.Version() == target {
@@ -2030,6 +2089,8 @@ func updateToVersion(ctx context.Context, source state.BeaconState, target int) 
 		ret, err = deneb.UpgradeToDeneb(source)
 	case version.Deneb:
 		ret, err = electra.ConvertToElectra(source)
+	case version.Electra:
+		ret, err = fulu.ConvertToFulu(source)
 	default:
 		return nil, errors.Errorf("unsupported version %s", version.String(source.Version()))
 	}
