@@ -40,10 +40,6 @@ func (f *FieldInfo) Offset() uint64 {
 	return f.offset
 }
 
-func (f *FieldInfo) ActualOffset() uint64 {
-	return f.offset
-}
-
 func (f *FieldInfo) Name() string {
 	return f.goFieldName
 }
