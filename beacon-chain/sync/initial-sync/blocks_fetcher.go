@@ -456,6 +456,9 @@ func (f *blocksFetcher) fetchBlocksFromPeer(
 				"count":     req.Count,
 				"step":      req.Step,
 			}).WithError(err).Debug("Could not request blocks by range from peer")
+			if errors.Is(err, prysmsync.ErrInvalidFetchedData) {
+				f.p2p.Peers().Scorers().BadResponsesScorer().Increment(p)
+			}
 			continue
 		}
 		f.p2p.Peers().Scorers().BlockProviderScorer().Touch(p)
