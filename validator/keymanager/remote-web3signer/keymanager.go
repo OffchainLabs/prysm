@@ -15,7 +15,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/async/event"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/io/file"
@@ -402,20 +401,20 @@ func getSignRequestJson(ctx context.Context, validator *validator.Validate, requ
 	if !bytesutil.IsValidRoot(genesisValidatorsRoot) {
 		return nil, fmt.Errorf("invalid genesis validators root length, genesis root: %v", genesisValidatorsRoot)
 	}
+	ver := slots.ToForkVersion(request.SigningSlot)
 	switch request.Object.(type) {
 	case *validatorpb.SignRequest_Block:
 		return handleBlock(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_AttestationData:
 		return handleAttestationData(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_AggregateAttestationAndProof:
-		// TODO: update to V2 sometime after release
-		return handleAggregateAttestationAndProof(ctx, validator, request, genesisValidatorsRoot)
+		if ver >= version.Electra {
+			return nil, fmt.Errorf("unsupported fork version for SignRequest_AggregateAttestationAndProof: %v", ver)
+		}
+		return handleAggregateAttestationAndProofV2(ctx, ver, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_AggregateAttestationAndProofElectra:
-		var ver int
-		if slots.ToEpoch(request.SigningSlot) >= params.BeaconConfig().FuluForkEpoch {
-			ver = version.Fulu
-		} else {
-			ver = version.Electra
+		if ver < version.Electra {
+			return nil, fmt.Errorf("unsupported fork version for SignRequest_AggregateAttestationAndProofElectra: %v", ver)
 		}
 		return handleAggregateAttestationAndProofV2(ctx, ver, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_Slot:
