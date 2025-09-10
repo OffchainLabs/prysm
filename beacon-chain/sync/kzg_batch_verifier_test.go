@@ -74,7 +74,7 @@ func TestValidateWithKzgBatchVerifier(t *testing.T) {
 	}
 }
 
-func TestKzgVerifierRoutine(t *testing.T) {
+func TestVerifierRoutine(t *testing.T) {
 	err := kzg.Start()
 	require.NoError(t, err)
 
@@ -230,44 +230,6 @@ func TestKzgBatchVerifierConcurrency(t *testing.T) {
 	}
 
 	wg.Wait()
-}
-
-func TestPullKzgChan(t *testing.T) {
-	err := kzg.Start()
-	require.NoError(t, err)
-
-	t.Run("pulls multiple pending verifications", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		service := &Service{
-			ctx:     ctx,
-			kzgChan: make(chan *kzgVerifier, 10),
-		}
-
-		const numVerifications = 3
-		for range numVerifications {
-			dataColumns := createValidTestDataColumns(t, 1)
-			resChan := make(chan error, 1)
-			service.kzgChan <- &kzgVerifier{dataColumns: dataColumns, resChan: resChan}
-		}
-
-		pulled := service.pullKzgChan()
-		require.Equal(t, numVerifications, len(pulled))
-	})
-
-	t.Run("returns empty slice when channel is empty", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		service := &Service{
-			ctx:     ctx,
-			kzgChan: make(chan *kzgVerifier, 10),
-		}
-
-		pulled := service.pullKzgChan()
-		require.Equal(t, 0, len(pulled))
-	})
 }
 
 func TestKzgBatchVerifierFallback(t *testing.T) {

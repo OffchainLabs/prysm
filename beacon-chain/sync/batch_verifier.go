@@ -58,42 +58,24 @@ func (s *Service) verifierRoutine() {
 // KZG verifications by draining the channel and processing all pending requests.
 func (s *Service) kzgVerifierRoutine() {
 	for {
+		kzgBatch := make([]*kzgVerifier, 0, 1)
 		select {
 		case <-s.ctx.Done():
 			return
 		case kzg := <-s.kzgChan:
-			// Collect all pending KZG verifications
-			kzgBatch := []*kzgVerifier{kzg}
-			kzgBatch = append(kzgBatch, s.pullKzgChan()...)
-
-			// Check if context was cancelled during pullKzgChan
-			if len(kzgBatch) == 0 {
-				// pullKzgChan returned empty due to context cancellation
-				kzg.resChan <- s.ctx.Err()
-				continue
-			}
-
-			// Process the entire batch
-			verifyKzgBatch(kzgBatch)
+			kzgBatch = append(kzgBatch, kzg)
 		}
-	}
-}
-
-// pullKzgChan pulls KZG verifications from the channel until it is empty.
-func (s *Service) pullKzgChan() []*kzgVerifier {
-	kzgVerifiers := make([]*kzgVerifier, 0)
-
-	for {
-		select {
-		case <-s.ctx.Done():
-			for _, kzg := range kzgVerifiers {
-				kzg.resChan <- s.ctx.Err()
+		for {
+			select {
+			case <-s.ctx.Done():
+				return
+			case kzg := <-s.kzgChan:
+				kzgBatch = append(kzgBatch, kzg)
+				continue
+			default:
+				verifyKzgBatch(kzgBatch)
 			}
-			return []*kzgVerifier{}
-		case kzg := <-s.kzgChan:
-			kzgVerifiers = append(kzgVerifiers, kzg)
-		default:
-			return kzgVerifiers
+			break
 		}
 	}
 }
@@ -107,7 +89,6 @@ func (s *Service) validateWithBatchVerifier(ctx context.Context, message string,
 	s.signatureChan <- verificationSet
 
 	resErr := <-resChan
-	close(resChan)
 	// If verification fails we fallback to individual verification
 	// of each signature set.
 	if resErr != nil {
@@ -178,22 +159,32 @@ func (s *Service) validateWithKzgBatchVerifier(ctx context.Context, dataColumns 
 
 	resChan := make(chan error)
 	verificationSet := &kzgVerifier{dataColumns: dataColumns, resChan: resChan}
+	timeout := 100 * time.Millisecond
 	s.kzgChan <- verificationSet
-
-	resErr := <-resChan
-	close(resChan)
-	if resErr != nil {
-		log.WithError(resErr).Tracef("Could not perform batch verification")
-		// Fallback to individual verification if batch verification failed.
-		// This handles cases where batch verification encounters issues
-		// (e.g., context cancellation, mixed valid/invalid proofs) but
-		// the individual data columns might still be valid.
-		err := peerdas.VerifyDataColumnsSidecarKZGProofs(dataColumns)
+	select {
+	case <-ctx.Done():
+		return pubsub.ValidationIgnore, ctx.Err() // parent context canceled, give up
+	case <-time.After(timeout):
+		log.WithField("timeout", timeout.String()).Trace("DataColumnSidecar kzg proof batch verification timeout")
+		tracing.AnnotateError(span, errors.New("timeout in validateWithKzgBatchVerifier"))
+		return s.validateUnbatchedColumnsKzg(ctx, dataColumns)
+	case err := <-resChan:
 		if err != nil {
-			verErr := errors.Wrapf(err, "Could not verify")
-			tracing.AnnotateError(span, verErr)
-			return pubsub.ValidationReject, verErr
+			log.WithError(err).Trace("Could not perform batch verification")
+			tracing.AnnotateError(span, err)
+			return s.validateUnbatchedColumnsKzg(ctx, dataColumns)
 		}
+	}
+	return pubsub.ValidationAccept, nil
+}
+
+func (s *Service) validateUnbatchedColumnsKzg(ctx context.Context, columns []blocks.RODataColumn) (pubsub.ValidationResult, error) {
+	_, span := trace.StartSpan(ctx, "sync.validateUnbatchedColumnsKzg")
+	defer span.End()
+	if err := peerdas.VerifyDataColumnsSidecarKZGProofs(columns); err != nil {
+		err = errors.Wrap(err, "could not verify")
+		tracing.AnnotateError(span, err)
+		return pubsub.ValidationReject, err
 	}
 	return pubsub.ValidationAccept, nil
 }
