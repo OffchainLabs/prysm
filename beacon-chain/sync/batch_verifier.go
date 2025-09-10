@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
@@ -157,17 +158,18 @@ func (s *Service) validateWithKzgBatchVerifier(ctx context.Context, dataColumns 
 	_, span := trace.StartSpan(ctx, "sync.validateWithKzgBatchVerifier")
 	defer span.End()
 
+	timeout := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+
 	resChan := make(chan error)
 	verificationSet := &kzgVerifier{dataColumns: dataColumns, resChan: resChan}
-	timeout := 100 * time.Millisecond
 	s.kzgChan <- verificationSet
+
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
 	select {
 	case <-ctx.Done():
 		return pubsub.ValidationIgnore, ctx.Err() // parent context canceled, give up
-	case <-time.After(timeout):
-		log.WithField("timeout", timeout.String()).Trace("DataColumnSidecar kzg proof batch verification timeout")
-		tracing.AnnotateError(span, errors.New("timeout in validateWithKzgBatchVerifier"))
-		return s.validateUnbatchedColumnsKzg(ctx, dataColumns)
 	case err := <-resChan:
 		if err != nil {
 			log.WithError(err).Trace("Could not perform batch verification")
