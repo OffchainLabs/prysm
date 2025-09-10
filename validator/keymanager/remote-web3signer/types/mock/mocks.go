@@ -432,7 +432,7 @@ func GetMockSignRequest(t string) *validatorpb.SignRequest {
 			SigningRoot:     make([]byte, fieldparams.RootLength),
 			SignatureDomain: make([]byte, 4),
 			Object: &validatorpb.SignRequest_BlockFulu{
-				BlockFulu: util.HydrateBeaconBlockElectra(&eth.BeaconBlockElectra{}),
+				BlockFulu: util.HydrateBeaconBlockFulu(&eth.BeaconBlockElectra{}),
 			},
 		}
 	case "BLOCK_V2_BLINDED_FULU":
