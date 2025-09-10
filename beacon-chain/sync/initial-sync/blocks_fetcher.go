@@ -408,6 +408,12 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []
 		}
 	}
 
+	// Return early if there are no blocks that need data column sidecars.
+	if len(roBlocks) == 0 {
+		return blobsPid, nil
+	}
+
+	// Some blocks neesd data column sidecars, fetch them.
 	params := prysmsync.DataColumnSidecarsParams{
 		Ctx:         ctx,
 		Tor:         f.clock,
