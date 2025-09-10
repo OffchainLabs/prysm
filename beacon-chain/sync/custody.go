@@ -106,6 +106,9 @@ func (s *Service) custodyGroupCount() (uint64, error) {
 // validatorsCustodyRequirements computes the custody requirements based on the
 // finalized state and the tracked validators.
 func (s *Service) validatorsCustodyRequirement() (uint64, error) {
+	if s.trackedValidatorsCache == nil {
+		return 0, nil
+	}
 	// Get the indices of the tracked validators.
 	indices := s.trackedValidatorsCache.Indices()
 

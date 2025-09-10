@@ -297,3 +297,30 @@ func TestIncreaseBadBalance_NotOK(t *testing.T) {
 		require.ErrorContains(t, "addition overflows", helpers.IncreaseBalance(state, test.i, test.nb))
 	}
 }
+
+func TestUpdateTotalActiveBalanceCache(t *testing.T) {
+	helpers.ClearCache()
+
+	// Create a test state with some validators
+	validators := []*ethpb.Validator{
+		{EffectiveBalance: 32 * 1e9, ExitEpoch: params.BeaconConfig().FarFutureEpoch, ActivationEpoch: 0},
+		{EffectiveBalance: 32 * 1e9, ExitEpoch: params.BeaconConfig().FarFutureEpoch, ActivationEpoch: 0},
+		{EffectiveBalance: 31 * 1e9, ExitEpoch: params.BeaconConfig().FarFutureEpoch, ActivationEpoch: 0},
+	}
+	state, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+		Validators: validators,
+		Slot:       0,
+	})
+	require.NoError(t, err)
+
+	// Test updating cache with a specific total
+	testTotal := uint64(95 * 1e9) // 32 + 32 + 31 = 95
+	err = helpers.UpdateTotalActiveBalanceCache(state, testTotal)
+	require.NoError(t, err)
+
+	// Verify the cache was updated by retrieving the total active balance
+	// which should now return the cached value
+	cachedTotal, err := helpers.TotalActiveBalance(state)
+	require.NoError(t, err)
+	assert.Equal(t, testTotal, cachedTotal, "Cache should return the updated total")
+}

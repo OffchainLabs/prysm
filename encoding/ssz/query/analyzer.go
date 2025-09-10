@@ -4,20 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"strconv"
 	"strings"
 )
 
-const (
-	offsetBytes = 4
-
-	// sszMaxTag specifies the maximum capacity of a variable-sized collection, like an SSZ List.
-	sszMaxTag = "ssz-max"
-
-	// sszSizeTag specifies the length of a fixed-sized collection, like an SSZ Vector.
-	// A wildcard ('?') indicates that the dimension is variable-sized (a List).
-	sszSizeTag = "ssz-size"
-)
+const offsetBytes = 4
 
 // AnalyzeObject analyzes given object and returns its SSZ information.
 func AnalyzeObject(obj any) (*sszInfo, error) {
@@ -176,44 +166,44 @@ func analyzeHomogeneousColType(typ reflect.Type, tag *reflect.StructTag) (*sszIn
 		return nil, fmt.Errorf("can only analyze slice types, got %v", typ.Kind())
 	}
 
-	if tag == nil {
-		return nil, errors.New("tag is required for slice types")
+	// Parse the first dimension from the tag and get remaining tag for element
+	sszDimension, remainingTag, err := ParseSSZTag(tag)
+	if err != nil {
+		return nil, fmt.Errorf("could not parse SSZ tag: %w", err)
+	}
+	if sszDimension == nil {
+		return nil, errors.New("ssz tag is required for slice types")
 	}
 
-	elementInfo, err := analyzeType(typ.Elem(), nil)
+	// Analyze element type with remaining dimensions
+	elementInfo, err := analyzeType(typ.Elem(), remainingTag)
 	if err != nil {
 		return nil, fmt.Errorf("could not analyze element type for homogeneous collection: %w", err)
 	}
 
-	// 1. Check if the type is List/Bitlist by checking `ssz-max` tag.
-	sszMax := tag.Get(sszMaxTag)
-	if sszMax != "" {
-		dims := strings.Split(sszMax, ",")
-		if len(dims) > 1 {
-			return nil, fmt.Errorf("multi-dimensional lists are not supported, got %d dimensions", len(dims))
-		}
-
-		limit, err := strconv.ParseUint(dims[0], 10, 64)
+	// 1. Handle List/Bitlist type
+	if sszDimension.IsList() {
+		limit, err := sszDimension.GetListLimit()
 		if err != nil {
-			return nil, fmt.Errorf("invalid ssz-max tag (%s): %w", sszMax, err)
+			return nil, fmt.Errorf("could not get list limit: %w", err)
 		}
 
 		return analyzeListType(typ, elementInfo, limit)
 	}
 
-	// 2. Handle Vector/Bitvector type.
-	sszSize := tag.Get(sszSizeTag)
-	dims := strings.Split(sszSize, ",")
-	if len(dims) > 1 {
-		return nil, fmt.Errorf("multi-dimensional vectors are not supported, got %d dimensions", len(dims))
+	// 2. Handle Vector/Bitvector type
+	if sszDimension.IsVector() {
+		length, err := sszDimension.GetVectorLength()
+		if err != nil {
+			return nil, fmt.Errorf("could not get vector length: %w", err)
+		}
+
+		return analyzeVectorType(typ, elementInfo, length)
 	}
 
-	length, err := strconv.ParseUint(dims[0], 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid ssz-size tag (%s): %w", sszSize, err)
-	}
-
-	return analyzeVectorType(typ, elementInfo, length)
+	// Parsing ssz tag doesn't provide enough information to determine the collection type,
+	// return an error.
+	return nil, errors.New("could not determine collection type from tags")
 }
 
 // analyzeListType analyzes SSZ List type and returns its SSZ info.
@@ -242,12 +232,23 @@ func analyzeVectorType(typ reflect.Type, elementInfo *sszInfo, length uint64) (*
 		return nil, errors.New("element info is required for Vector")
 	}
 
+	// Validate the given length.
+	// https://github.com/ethereum/consensus-specs/blob/master/ssz/simple-serialize.md#illegal-types
+	if length == 0 {
+		return nil, fmt.Errorf("vector length must be greater than 0, got %d", length)
+	}
+
 	return &sszInfo{
 		sszType: Vector,
 		typ:     typ,
 
 		fixedSize:  length * elementInfo.Size(),
 		isVariable: false,
+
+		vectorInfo: &vectorInfo{
+			length:  length,
+			element: elementInfo,
+		},
 	}, nil
 }
 
