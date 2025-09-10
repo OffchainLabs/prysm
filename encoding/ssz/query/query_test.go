@@ -73,11 +73,18 @@ func TestCalculateOffsetAndLength(t *testing.T) {
 				expectedOffset: 85,
 				expectedLength: 192, // 24 * 8 bytes
 			},
+			// 2D bytes field
+			{
+				name:           "two_dimension_bytes_field",
+				path:           ".two_dimension_bytes_field",
+				expectedOffset: 277,
+				expectedLength: 160, // 5 * 32 bytes
+			},
 			// Trailing field
 			{
 				name:           "trailing_field",
 				path:           ".trailing_field",
-				expectedOffset: 277,
+				expectedOffset: 437,
 				expectedLength: 56,
 			},
 		}
@@ -112,20 +119,26 @@ func TestCalculateOffsetAndLength(t *testing.T) {
 			{
 				name:           "field_list_uint64",
 				path:           ".field_list_uint64",
-				expectedOffset: 100, // First part of variable-sized type.
+				expectedOffset: 104, // First part of variable-sized type.
 				expectedLength: 40,  // 5 elements * uint64 (8 bytes each)
 			},
 			{
 				name:           "field_list_container",
 				path:           ".field_list_container",
-				expectedOffset: 140, // Second part of variable-sized type.
+				expectedOffset: 144, // Second part of variable-sized type.
 				expectedLength: 120, // 3 elements * FixedNestedContainer (40 bytes each)
+			},
+			{
+				name:           "field_list_bytes32",
+				path:           ".field_list_bytes32",
+				expectedOffset: 264,
+				expectedLength: 96, // 3 elements * 32 bytes each
 			},
 			// Nested paths
 			{
 				name:           "nested",
 				path:           ".nested",
-				expectedOffset: 260,
+				expectedOffset: 360,
 				// Calculated with:
 				// - Value1: 8 bytes
 				// - field_list_uint64 offset: 4 bytes
@@ -135,20 +148,20 @@ func TestCalculateOffsetAndLength(t *testing.T) {
 			{
 				name:           "nested.value1",
 				path:           ".nested.value1",
-				expectedOffset: 260,
+				expectedOffset: 360,
 				expectedLength: 8,
 			},
 			{
 				name:           "nested.field_list_uint64",
 				path:           ".nested.field_list_uint64",
-				expectedOffset: 272,
+				expectedOffset: 372,
 				expectedLength: 40,
 			},
 			// Fixed trailing field
 			{
 				name:           "trailing_field",
 				path:           ".trailing_field",
-				expectedOffset: 44, // After leading_field + 2 offset pointers
+				expectedOffset: 48, // After leading_field + 4 offset pointers
 				expectedLength: 56,
 			},
 		}
@@ -220,6 +233,15 @@ func createFixedTestContainer() *sszquerypb.FixedTestContainer {
 		// Vector field
 		VectorField: []uint64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24},
 
+		// 2D bytes field
+		TwoDimensionBytesField: [][]byte{
+			make([]byte, 32),
+			make([]byte, 32),
+			make([]byte, 32),
+			make([]byte, 32),
+			make([]byte, 32),
+		},
+
 		// Trailing field
 		TrailingField: trailingField,
 	}
@@ -269,6 +291,11 @@ func getFixedTestContainerSpec() testutil.TestSpec {
 				Path:     ".vector_field",
 				Expected: testContainer.VectorField,
 			},
+			// 2D bytes field
+			{
+				Path:     ".two_dimension_bytes_field",
+				Expected: testContainer.TwoDimensionBytesField,
+			},
 			// Trailing field
 			{
 				Path:     ".trailing_field",
@@ -308,6 +335,11 @@ func createVariableTestContainer() *sszquerypb.VariableTestContainer {
 		// Variable-size lists
 		FieldListUint64:    []uint64{100, 200, 300, 400, 500},
 		FieldListContainer: nestedContainers,
+		FieldListBytes32: [][]byte{
+			make([]byte, 32),
+			make([]byte, 32),
+			make([]byte, 32),
+		},
 
 		// Variable nested container
 		Nested: &sszquerypb.VariableNestedContainer{
@@ -342,6 +374,11 @@ func getVariableTestContainerSpec() testutil.TestSpec {
 			{
 				Path:     ".field_list_container",
 				Expected: testContainer.FieldListContainer,
+			},
+			// Variable-size list of bytes32
+			{
+				Path:     ".field_list_bytes32",
+				Expected: testContainer.FieldListBytes32,
 			},
 			// Variable nested container with every path
 			{
