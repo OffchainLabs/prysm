@@ -96,7 +96,7 @@ func FetchDataColumnSidecars(
 	}
 
 	// Merge sidecars in storage and those received from peers. Reconstruct if needed.
-	mergedSidecarsByRoot, err := mergeStorageAndInputs(params.Storage, requestedIndices, storedIndicesByRoot, incompleteRoots, directSidecarsByRoot)
+	mergedSidecarsByRoot, err := mergeAvailableSidecars(params.Storage, requestedIndices, storedIndicesByRoot, incompleteRoots, directSidecarsByRoot)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "try merge storage and mandatory inputs")
 	}
@@ -117,7 +117,7 @@ func FetchDataColumnSidecars(
 	}
 
 	// Merge sidecars in storage and those received from peers. Reconstruct if needed.
-	mergedSidecarsByRoot, err = mergeStorageAndInputs(params.Storage, requestedIndices, storedIndicesByRoot, incompleteRoots, indirectSidecarsByRoot)
+	mergedSidecarsByRoot, err = mergeAvailableSidecars(params.Storage, requestedIndices, storedIndicesByRoot, incompleteRoots, indirectSidecarsByRoot)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "try merge storage and all inputs")
 	}
@@ -493,7 +493,7 @@ func requestIndirectSidecarsFromPeers(
 	return result, nil
 }
 
-// mergeStorageAndInputs retrieves missing data column sidecars by combining
+// mergeAvailableSidecars retrieves missing data column sidecars by combining
 // what is available in storage with the sidecars provided in `alreadyAvailableByRoot`,
 // reconstructing them when necessary.
 //
@@ -509,7 +509,7 @@ func requestIndirectSidecarsFromPeers(
 //
 // WARNING: This function mutates `roots`, removing any block roots
 // for which all requested sidecars were successfully retrieved.
-func mergeStorageAndInputs(
+func mergeAvailableSidecars(
 	storage filesystem.DataColumnStorageReader,
 	requestedIndices map[uint64]bool,
 	storedIndicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
@@ -599,8 +599,8 @@ func mergeStorageAndInputs(
 // It also returns all missing indices by root.
 func assembleAvailableSidecars(
 	storage filesystem.DataColumnStorageReader,
-	roots map[[fieldparams.RootLength]byte]bool,
 	requestedIndices map[uint64]bool,
+	roots map[[fieldparams.RootLength]byte]bool,
 	alreadyAvailableByRoot map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn,
 ) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, map[[fieldparams.RootLength]byte]map[uint64]bool, error) {
 	// Assemble results.
