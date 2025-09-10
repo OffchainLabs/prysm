@@ -174,8 +174,7 @@ func FetchDataColumnSidecars(
 }
 
 // requestSidecarsFromStorage attempts to retrieve data column sidecars for each block root in `roots`
-// and for all indices specified in `requestedIndices`. If some requested sidecars are missing from storage
-// but can be reconstructed from other available sidecars, the function will try to reconstruct them.
+// and for all indices specified in `requestedIndices`.
 //
 // If not all requested sidecars can be obtained for a given root, that root is excluded from the result.
 // It returns a map from each root to its successfully retrieved sidecars.
@@ -191,62 +190,31 @@ func requestSidecarsFromStorage(
 	requestedIndices := sortedSliceFromMap(requestedIndicesMap)
 
 	result := make(map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, len(roots))
+
 	for root := range roots {
 		storedIndices := storedIndicesByRoot[root]
-		storedIndiceCount := uint64(len(storedIndices))
 
-		// Check if reconstruction is needed.
-		reconstructionNeeded := false
+		// Check if all requested indices are stored.
+		allAvailable := true
 		for index := range requestedIndicesMap {
 			if !storedIndices[index] {
-				reconstructionNeeded = true
+				allAvailable = false
 				break
 			}
 		}
 
-		// If reconstruction is not needed, retrieve sidecars directly from storage and return them.
-		if !reconstructionNeeded {
-			verifiedRoSidecars, err := storage.Get(root, requestedIndices)
-			if err != nil {
-				return nil, errors.Wrapf(err, "storage get for block root %#x", root)
-			}
-
-			result[root] = verifiedRoSidecars
-			delete(roots, root)
+		// Skip if not all requested indices are stored.
+		if !allAvailable {
 			continue
 		}
 
-		// Reconstruction is needed. Check if reconstruction is possible. If not, skip this root.
-		if storedIndiceCount < peerdas.MinimumColumnCountToReconstruct() {
-			continue
-		}
-
-		// Enough columns are available for reconstruction. Retrieve all stored columns.
-		allStoredSidecars, err := storage.Get(root, nil)
+		// All requested indices are stored, retrieve them.
+		verifiedRoSidecars, err := storage.Get(root, requestedIndices)
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to get all stored columns for reconstruction for block root %#x", root)
+			return nil, errors.Wrapf(err, "storage get for block root %#x", root)
 		}
 
-		// Attempt reconstruction.
-		reconstructedVerifiedRoSidecars, err := peerdas.ReconstructDataColumnSidecars(allStoredSidecars)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to reconstruct data columns for block root %#x", root)
-		}
-
-		// Health check: ensure we have the expected number of columns.
-		numberOfColumns := params.BeaconConfig().NumberOfColumns
-		if uint64(len(reconstructedVerifiedRoSidecars)) != numberOfColumns {
-			return nil, errors.Errorf("reconstructed %d columns but expected %d for block root %#x", len(reconstructedVerifiedRoSidecars), numberOfColumns, root)
-		}
-
-		// Extract only the requested indices from reconstructed data using direct indexing.
-		for _, index := range requestedIndices {
-			if index >= numberOfColumns {
-				return nil, errors.Errorf("requested column index %d exceeds maximum %d for block root %#x", index, numberOfColumns-1, root)
-			}
-			result[root] = append(result[root], reconstructedVerifiedRoSidecars[index])
-		}
-
+		result[root] = verifiedRoSidecars
 		delete(roots, root)
 	}
 

@@ -37,12 +37,11 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
 	// Slot 1: All needed sidecars are available in storage ==> Retrieval from storage only.
 	// Slot 2: No commitment ==> Nothing to do.
-	// Slot 3: All sidecars are saved excepted the needed ones ==> Reconstruction from storage.
-	// Slot 4: Some sidecars are in the storage, other have to be retrieved from peers ==> Retrieval from storage and peers.
-	// Slot 5: Some sidecars are in the storage, other have to be retrieved from peers but peers do not deliver all requested sidecars ==> Retrieval from storage and peers then reconstruction.
-	// Slot 6: Some sidecars are in the storage, other have to be retrieved from peers ==> Retrieval from storage and peers but peers do not respond all needed on first attempt and respond needed sidecars on second attempt ==> Retrieval from storage and peers.
-	// Slot 7: Some sidecars are in the storage, other have to be retrieved from peers ==> Retrieval from storage and peers but peers do not respond all needed on first attempt and respond not needed sidecars on second attempt ==> Retrieval from storage and peers then reconstruction.
-	// Slot 8: Some sidecars are in the storage, other have to be retrieved from peers but peers do not send anything ==> Still missing.
+	// Slot 3: Some sidecars are in the storage, other have to be retrieved from peers ==> Retrieval from storage and peers.
+	// Slot 4: Some sidecars are in the storage, other have to be retrieved from peers but peers do not deliver all requested sidecars ==> Retrieval from storage and peers then reconstruction.
+	// Slot 5: Some sidecars are in the storage, other have to be retrieved from peers ==> Retrieval from storage and peers but peers do not respond all needed on first attempt and respond needed sidecars on second attempt ==> Retrieval from storage and peers.
+	// Slot 6: Some sidecars are in the storage, other have to be retrieved from peers ==> Retrieval from storage and peers but peers do not respond all needed on first attempt and respond not needed sidecars on second attempt ==> Retrieval from storage and peers then reconstruction.
+	// Slot 7: Some sidecars are in the storage, other have to be retrieved from peers but peers do not send anything ==> Still missing.
 
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -80,42 +79,35 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 	// Block 3
 	block3, _, verifiedSidecars3 := util.GenerateTestFuluBlockWithSidecars(t, blobCount, util.WithSlot(3))
 	root3 := block3.Root()
-
-	toStore3 := make([]blocks.VerifiedRODataColumn, 0, numberOfColumns-uint64(len(indices)))
-	for i := range numberOfColumns {
-		if !indices[i] {
-			sidecar := verifiedSidecars3[i]
-			toStore3 = append(toStore3, sidecar)
-		}
-	}
+	toStore3 := []blocks.VerifiedRODataColumn{verifiedSidecars3[106]}
 
 	err = storage.Save(toStore3)
 	require.NoError(t, err)
 
 	// Block 4
+	minimumColumnsCountToReconstruct := peerdas.MinimumColumnCountToReconstruct()
 	block4, _, verifiedSidecars4 := util.GenerateTestFuluBlockWithSidecars(t, blobCount, util.WithSlot(4))
 	root4 := block4.Root()
-	toStore4 := []blocks.VerifiedRODataColumn{verifiedSidecars4[106]}
+
+	toStoreCount := minimumColumnsCountToReconstruct - 1
+	toStore4 := make([]blocks.VerifiedRODataColumn, 0, toStoreCount)
+
+	for i := uint64(0); uint64(len(toStore4)) < toStoreCount; i++ {
+		sidecar := verifiedSidecars4[minimumColumnsCountToReconstruct+i]
+		if sidecar.Index == 81 {
+			continue
+		}
+
+		toStore4 = append(toStore4, sidecar)
+	}
 
 	err = storage.Save(toStore4)
 	require.NoError(t, err)
 
 	// Block 5
-	minimumColumnsCountToReconstruct := peerdas.MinimumColumnCountToReconstruct()
 	block5, _, verifiedSidecars5 := util.GenerateTestFuluBlockWithSidecars(t, blobCount, util.WithSlot(5))
 	root5 := block5.Root()
-
-	toStoreCount := minimumColumnsCountToReconstruct - 1
-	toStore5 := make([]blocks.VerifiedRODataColumn, 0, toStoreCount)
-
-	for i := uint64(0); uint64(len(toStore5)) < toStoreCount; i++ {
-		sidecar := verifiedSidecars5[minimumColumnsCountToReconstruct+i]
-		if sidecar.Index == 81 {
-			continue
-		}
-
-		toStore5 = append(toStore5, sidecar)
-	}
+	toStore5 := []blocks.VerifiedRODataColumn{verifiedSidecars5[106]}
 
 	err = storage.Save(toStore5)
 	require.NoError(t, err)
@@ -134,14 +126,6 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 	toStore7 := []blocks.VerifiedRODataColumn{verifiedSidecars7[106]}
 
 	err = storage.Save(toStore7)
-	require.NoError(t, err)
-
-	// Block 8
-	block8, _, verifiedSidecars8 := util.GenerateTestFuluBlockWithSidecars(t, blobCount, util.WithSlot(8))
-	root8 := block8.Root()
-	toStore8 := []blocks.VerifiedRODataColumn{verifiedSidecars8[106]}
-
-	err = storage.Save(toStore8)
 	require.NoError(t, err)
 
 	// Peers
@@ -178,7 +162,7 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 
 	other.SetStreamHandler(byRangeProtocol, func(stream network.Stream) {
 		expectedRequest := &ethpb.DataColumnSidecarsByRangeRequest{
-			StartSlot: 4,
+			StartSlot: 3,
 			Count:     5,
 			Columns:   []uint64{31, 81},
 		}
@@ -188,19 +172,19 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 		assert.NoError(t, err)
 		assert.DeepEqual(t, expectedRequest, actualRequest)
 
-		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars4[31].DataColumnSidecar)
+		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars3[31].DataColumnSidecar)
+		assert.NoError(t, err)
+
+		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars3[81].DataColumnSidecar)
 		assert.NoError(t, err)
 
 		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars4[81].DataColumnSidecar)
 		assert.NoError(t, err)
 
-		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars5[81].DataColumnSidecar)
+		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars5[31].DataColumnSidecar)
 		assert.NoError(t, err)
 
 		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars6[31].DataColumnSidecar)
-		assert.NoError(t, err)
-
-		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars7[31].DataColumnSidecar)
 		assert.NoError(t, err)
 
 		err = stream.CloseWrite()
@@ -227,11 +211,11 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 		expectedRequest := &p2ptypes.DataColumnsByRootIdentifiers{
 			{
 				BlockRoot: root7[:],
-				Columns:   allBut31And106,
+				Columns:   allBut106,
 			},
 			{
-				BlockRoot: root8[:],
-				Columns:   allBut106,
+				BlockRoot: root5[:],
+				Columns:   allBut31And106,
 			},
 			{
 				BlockRoot: root6[:],
@@ -244,11 +228,11 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 		assert.NoError(t, err)
 		assert.DeepEqual(t, expectedRequest, actualRequest)
 
-		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars6[81].DataColumnSidecar)
+		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars5[81].DataColumnSidecar)
 		assert.NoError(t, err)
 
 		for _, index := range allBut31And81And106 {
-			err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars7[index].DataColumnSidecar)
+			err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars6[index].DataColumnSidecar)
 			assert.NoError(t, err)
 		}
 
@@ -269,19 +253,18 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 	expectedResult := map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn{
 		root1: {verifiedSidecars1[31], verifiedSidecars1[81], verifiedSidecars1[106]},
 		// no root2 (no commitments in this block)
-		root3: {verifiedSidecars3[31], verifiedSidecars3[81], verifiedSidecars3[106]},
-		root4: {verifiedSidecars4[106], verifiedSidecars4[31], verifiedSidecars4[81]},
-		root5: {verifiedSidecars5[31], verifiedSidecars5[81], verifiedSidecars5[106]},
-		root6: {verifiedSidecars6[106], verifiedSidecars6[31], verifiedSidecars6[81]},
-		root7: {verifiedSidecars7[31], verifiedSidecars7[81], verifiedSidecars7[106]},
-		root8: {verifiedSidecars8[106]},
+		root3: {verifiedSidecars3[106], verifiedSidecars3[31], verifiedSidecars3[81]},
+		root4: {verifiedSidecars4[31], verifiedSidecars4[81], verifiedSidecars4[106]},
+		root5: {verifiedSidecars5[106], verifiedSidecars5[31], verifiedSidecars5[81]},
+		root6: {verifiedSidecars6[31], verifiedSidecars6[81], verifiedSidecars6[106]},
+		root7: {verifiedSidecars7[106]},
 	}
 
 	expectedMissingIndicesBYRoots := map[[fieldparams.RootLength]byte]map[uint64]bool{
-		root8: {31: true, 81: true},
+		root7: {31: true, 81: true},
 	}
 
-	blocks := []blocks.ROBlock{block1, block2, block3, block4, block5, block6, block7, block8}
+	blocks := []blocks.ROBlock{block1, block2, block3, block4, block5, block6, block7}
 	actualResult, actualMissingRoots, err := FetchDataColumnSidecars(params, blocks, indices)
 	require.NoError(t, err)
 
