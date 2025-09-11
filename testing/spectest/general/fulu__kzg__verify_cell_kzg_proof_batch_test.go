@@ -43,7 +43,7 @@ func TestVerifyCellKZGProofBatch(t *testing.T) {
 			for _, commitmentRaw := range commitmentsRaw {
 				commitment, err := hexutil.Decode(commitmentRaw)
 				require.NoError(t, err)
-				if len(commitment) < 48 {
+				if len(commitment) != 48 {
 					require.Equal(t, false, test.Output)
 					return
 				}
@@ -61,7 +61,7 @@ func TestVerifyCellKZGProofBatch(t *testing.T) {
 			for _, cellRaw := range cellsRaw {
 				cell, err := hexutil.Decode(cellRaw)
 				require.NoError(t, err)
-				if len(cell) < kzgPrysm.BytesPerCell {
+				if len(cell) != kzgPrysm.BytesPerCell {
 					require.Equal(t, false, test.Output)
 					return
 				}
@@ -72,7 +72,7 @@ func TestVerifyCellKZGProofBatch(t *testing.T) {
 			for _, proofRaw := range proofsRaw {
 				proof, err := hexutil.Decode(proofRaw)
 				require.NoError(t, err)
-				if len(proof) < 48 {
+				if len(proof) != 48 {
 					require.Equal(t, false, test.Output)
 					return
 				}
@@ -83,9 +83,7 @@ func TestVerifyCellKZGProofBatch(t *testing.T) {
 				require.Equal(t, true, ok)
 				require.NoError(t, err)
 			} else {
-
 				require.Equal(t, false, ok)
-
 			}
 		})
 	}
