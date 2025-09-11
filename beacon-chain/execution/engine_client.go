@@ -58,6 +58,11 @@ var (
 		GetPayloadMethodV5,
 		GetBlobsV2,
 	}
+
+	gloasEngineEndpoints = []string{
+		NewPayloadMethodV5,
+		GetPayloadMethodV6,
+	}
 )
 
 const (
@@ -68,6 +73,8 @@ const (
 	NewPayloadMethodV3 = "engine_newPayloadV3"
 	// NewPayloadMethodV4 is the engine_newPayloadVX method added at Electra.
 	NewPayloadMethodV4 = "engine_newPayloadV4"
+	// NewPayloadMethodV5 is the engine_newPayloadVX method added at Gloas.
+	NewPayloadMethodV5 = "engine_newPayloadV5"
 	// ForkchoiceUpdatedMethod v1 request string for JSON-RPC.
 	ForkchoiceUpdatedMethod = "engine_forkchoiceUpdatedV1"
 	// ForkchoiceUpdatedMethodV2 v2 request string for JSON-RPC.
@@ -84,6 +91,8 @@ const (
 	GetPayloadMethodV4 = "engine_getPayloadV4"
 	// GetPayloadMethodV5 is the get payload method added for fulu
 	GetPayloadMethodV5 = "engine_getPayloadV5"
+	// GetPayloadMethodV6 is the get payload method added for gloas
+	GetPayloadMethodV6 = "engine_getPayloadV6"
 	// BlockByHashMethod request string for JSON-RPC.
 	BlockByHashMethod = "eth_getBlockByHash"
 	// BlockByNumberMethod request string for JSON-RPC.
@@ -177,6 +186,18 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 			if err != nil {
 				return nil, handleRPCError(err)
 			}
+		}
+	case *pb.ExecutionPayloadGloas:
+		if executionRequests == nil {
+			return nil, errors.New("execution requests are required for gloas execution payload")
+		}
+		flattenedRequests, err := pb.EncodeExecutionRequests(executionRequests)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to encode execution requests")
+		}
+		err = s.rpcClient.CallContext(ctx, result, NewPayloadMethodV5, payloadPb, versionedHashes, parentBlockRoot, flattenedRequests)
+		if err != nil {
+			return nil, handleRPCError(err)
 		}
 	default:
 		return nil, errors.New("unknown execution data type")
@@ -273,6 +294,9 @@ func (s *Service) ForkchoiceUpdated(
 
 func getPayloadMethodAndMessage(slot primitives.Slot) (string, proto.Message) {
 	epoch := slots.ToEpoch(slot)
+	if epoch >= params.BeaconConfig().GloasForkEpoch {
+		return GetPayloadMethodV6, &pb.ExecutionBundleGloas{}
+	}
 	if epoch >= params.BeaconConfig().FuluForkEpoch {
 		return GetPayloadMethodV5, &pb.ExecutionBundleFulu{}
 	}
@@ -323,6 +347,10 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 
 	if params.FuluEnabled() {
 		supportedEngineEndpoints = append(supportedEngineEndpoints, fuluEngineEndpoints...)
+	}
+
+	if params.GloasEnabled() {
+		supportedEngineEndpoints = append(supportedEngineEndpoints, gloasEngineEndpoints...)
 	}
 
 	elSupportedEndpointsSlice := make([]string, len(supportedEngineEndpoints))

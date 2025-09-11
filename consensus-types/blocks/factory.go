@@ -82,6 +82,10 @@ func NewSignedBeaconBlock(i interface{}) (interfaces.SignedBeaconBlock, error) {
 		return initBlindedSignedBlockFromProtoFulu(b)
 	case *eth.GenericSignedBeaconBlock_BlindedFulu:
 		return initBlindedSignedBlockFromProtoFulu(b.BlindedFulu)
+	case *eth.GenericSignedBeaconBlock_Gloas:
+		return initSignedBlockFromProtoGloas(b.Gloas.Block)
+	case *eth.SignedBeaconBlockGloas:
+		return initSignedBlockFromProtoGloas(b)
 	default:
 		return nil, errors.Wrapf(ErrUnsupportedSignedBeaconBlock, "unable to create block from type %T", i)
 	}
@@ -138,6 +142,10 @@ func NewBeaconBlock(i interface{}) (interfaces.ReadOnlyBeaconBlock, error) {
 		return initBlindedBlockFromProtoFulu(b)
 	case *eth.GenericBeaconBlock_BlindedFulu:
 		return initBlindedBlockFromProtoFulu(b.BlindedFulu)
+	case *eth.GenericBeaconBlock_Gloas:
+		return initBlockFromProtoGloas(b.Gloas.Block)
+	case *eth.BeaconBlockGloas:
+		return initBlockFromProtoGloas(b)
 	default:
 		return nil, errors.Wrapf(errUnsupportedBeaconBlock, "unable to create block from type %T", i)
 	}
@@ -260,6 +268,19 @@ func BuildSignedBeaconBlock(blk interfaces.ReadOnlyBeaconBlock, signature []byte
 			return nil, errIncorrectBlockVersion
 		}
 		return NewSignedBeaconBlock(&eth.SignedBeaconBlockFulu{Block: pb, Signature: signature})
+	case version.Gloas:
+		if blk.IsBlinded() {
+			pb, ok := pb.(*eth.BlindedBeaconBlockFulu)
+			if !ok {
+				return nil, errIncorrectBlockVersion
+			}
+			return NewSignedBeaconBlock(&eth.SignedBlindedBeaconBlockFulu{Message: pb, Signature: signature})
+		}
+		pb, ok := pb.(*eth.BeaconBlockGloas)
+		if !ok {
+			return nil, errIncorrectBlockVersion
+		}
+		return NewSignedBeaconBlock(&eth.SignedBeaconBlockGloas{Block: pb, Signature: signature})
 	default:
 		return nil, errUnsupportedBeaconBlock
 	}
@@ -273,6 +294,8 @@ func getWrappedPayload(payload interface{}) (wrappedPayload interfaces.Execution
 		wrappedPayload, wrapErr = WrappedExecutionPayloadCapella(p)
 	case *enginev1.ExecutionPayloadDeneb:
 		wrappedPayload, wrapErr = WrappedExecutionPayloadDeneb(p)
+	case *enginev1.ExecutionPayloadGloas:
+		wrappedPayload, wrapErr = WrappedExecutionPayloadGloas(p)
 	default:
 		wrappedPayload, wrapErr = nil, fmt.Errorf("%T is not a type of execution payload", p)
 	}
@@ -622,6 +645,89 @@ func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBea
 					VoluntaryExits:        b.Body().VoluntaryExits(),
 					SyncAggregate:         syncAgg,
 					ExecutionPayload:      p,
+					BlsToExecutionChanges: blsToExecutionChanges,
+					BlobKzgCommitments:    commitments,
+					ExecutionRequests:     er,
+				},
+			},
+			Signature: sig[:],
+		}
+	case version.Gloas:
+		p, ok := payload.(*enginev1.ExecutionPayloadGloas)
+		if !ok {
+			return nil, fmt.Errorf("payload has wrong type (expected %T, got %T)", &enginev1.ExecutionPayloadGloas{}, payload)
+		}
+		blsToExecutionChanges, err := b.Body().BLSToExecutionChanges()
+		if err != nil {
+			return nil, err
+		}
+		commitments, err := b.Body().BlobKzgCommitments()
+		if err != nil {
+			return nil, err
+		}
+		var atts []*eth.AttestationElectra
+		if b.Body().Attestations() != nil {
+			atts = make([]*eth.AttestationElectra, len(b.Body().Attestations()))
+			for i, att := range b.Body().Attestations() {
+				a, ok := att.(*eth.AttestationElectra)
+				if !ok {
+					return nil, fmt.Errorf("attestation has wrong type (expected %T, got %T)", &eth.AttestationElectra{}, att)
+				}
+				atts[i] = a
+			}
+		}
+		var attSlashings []*eth.AttesterSlashingElectra
+		if b.Body().AttesterSlashings() != nil {
+			attSlashings = make([]*eth.AttesterSlashingElectra, len(b.Body().AttesterSlashings()))
+			for i, slashing := range b.Body().AttesterSlashings() {
+				s, ok := slashing.(*eth.AttesterSlashingElectra)
+				if !ok {
+					return nil, fmt.Errorf("attester slashing has wrong type (expected %T, got %T)", &eth.AttesterSlashingElectra{}, slashing)
+				}
+				attSlashings[i] = s
+			}
+		}
+
+		er, err := b.Body().ExecutionRequests()
+		if err != nil {
+			return nil, err
+		}
+
+		fullBlock = &eth.SignedBeaconBlockFulu{
+			Block: &eth.BeaconBlockElectra{
+				Slot:          b.Slot(),
+				ProposerIndex: b.ProposerIndex(),
+				ParentRoot:    parentRoot[:],
+				StateRoot:     stateRoot[:],
+				Body: &eth.BeaconBlockBodyElectra{
+					RandaoReveal:      randaoReveal[:],
+					Eth1Data:          b.Body().Eth1Data(),
+					Graffiti:          graffiti[:],
+					ProposerSlashings: b.Body().ProposerSlashings(),
+					AttesterSlashings: attSlashings,
+					Attestations:      atts,
+					Deposits:          b.Body().Deposits(),
+					VoluntaryExits:    b.Body().VoluntaryExits(),
+					SyncAggregate:     syncAgg,
+					ExecutionPayload: &enginev1.ExecutionPayloadDeneb{
+						ParentHash:    p.ParentHash,
+						FeeRecipient:  p.FeeRecipient,
+						StateRoot:     p.StateRoot,
+						ReceiptsRoot:  p.ReceiptsRoot,
+						LogsBloom:     p.LogsBloom,
+						PrevRandao:    p.PrevRandao,
+						BlockNumber:   p.BlockNumber,
+						GasLimit:      p.GasLimit,
+						GasUsed:       p.GasUsed,
+						Timestamp:     p.Timestamp,
+						ExtraData:     p.ExtraData,
+						BaseFeePerGas: p.BaseFeePerGas,
+						BlockHash:     p.BlockHash,
+						Transactions:  p.Transactions,
+						Withdrawals:   p.Withdrawals,
+						BlobGasUsed:   p.BlobGasUsed,
+						ExcessBlobGas: p.ExcessBlobGas,
+					},
 					BlsToExecutionChanges: blsToExecutionChanges,
 					BlobKzgCommitments:    commitments,
 					ExecutionRequests:     er,

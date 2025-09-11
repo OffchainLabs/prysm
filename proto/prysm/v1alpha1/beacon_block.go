@@ -695,3 +695,54 @@ func (sigBlock *SignedBeaconBlockFulu) Copy() *SignedBeaconBlockFulu {
 		Signature: bytesutil.SafeCopyBytes(sigBlock.Signature),
 	}
 }
+
+// ----------------------------------------------------------------------------
+// Gloas
+// ----------------------------------------------------------------------------
+
+// Copy --
+func (sigBlock *SignedBeaconBlockGloas) Copy() *SignedBeaconBlockGloas {
+	if sigBlock == nil {
+		return nil
+	}
+	return &SignedBeaconBlockGloas{
+		Block:     sigBlock.Block.Copy(),
+		Signature: bytesutil.SafeCopyBytes(sigBlock.Signature),
+	}
+}
+
+// Copy --
+func (block *BeaconBlockGloas) Copy() *BeaconBlockGloas {
+	if block == nil {
+		return nil
+	}
+	return &BeaconBlockGloas{
+		Slot:          block.Slot,
+		ProposerIndex: block.ProposerIndex,
+		ParentRoot:    bytesutil.SafeCopyBytes(block.ParentRoot),
+		StateRoot:     bytesutil.SafeCopyBytes(block.StateRoot),
+		Body:          block.Body.Copy(),
+	}
+}
+
+// Copy --
+func (body *BeaconBlockBodyGloas) Copy() *BeaconBlockBodyGloas {
+	if body == nil {
+		return nil
+	}
+	return &BeaconBlockBodyGloas{
+		RandaoReveal:          bytesutil.SafeCopyBytes(body.RandaoReveal),
+		Eth1Data:              body.Eth1Data.Copy(),
+		Graffiti:              bytesutil.SafeCopyBytes(body.Graffiti),
+		ProposerSlashings:     CopySlice(body.ProposerSlashings),
+		AttesterSlashings:     CopySlice(body.AttesterSlashings),
+		Attestations:          CopySlice(body.Attestations),
+		Deposits:              CopySlice(body.Deposits),
+		VoluntaryExits:        CopySlice(body.VoluntaryExits),
+		SyncAggregate:         body.SyncAggregate.Copy(),
+		ExecutionPayload:      body.ExecutionPayload.Copy(),
+		BlsToExecutionChanges: CopySlice(body.BlsToExecutionChanges),
+		BlobKzgCommitments:    CopyBlobKZGs(body.BlobKzgCommitments),
+		ExecutionRequests:     CopyExecutionRequests(body.ExecutionRequests),
+	}
+}

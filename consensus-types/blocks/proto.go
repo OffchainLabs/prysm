@@ -185,6 +185,33 @@ func (b *SignedBeaconBlock) Proto() (proto.Message, error) { // nolint:gocognit
 			Block:     block,
 			Signature: b.signature[:],
 		}, nil
+	case version.Gloas:
+		if b.IsBlinded() {
+			var block *eth.BlindedBeaconBlockFulu
+			if blockMessage != nil {
+				var ok bool
+				block, ok = blockMessage.(*eth.BlindedBeaconBlockFulu)
+				if !ok {
+					return nil, errIncorrectBlockVersion
+				}
+			}
+			return &eth.SignedBlindedBeaconBlockFulu{
+				Message:   block,
+				Signature: b.signature[:],
+			}, nil
+		}
+		var block *eth.BeaconBlockGloas
+		if blockMessage != nil {
+			var ok bool
+			block, ok = blockMessage.(*eth.BeaconBlockGloas)
+			if !ok {
+				return nil, errIncorrectBlockVersion
+			}
+		}
+		return &eth.SignedBeaconBlockGloas{
+			Block:     block,
+			Signature: b.signature[:],
+		}, nil
 	default:
 		return nil, errors.New("unsupported signed beacon block version")
 	}
@@ -393,6 +420,39 @@ func (b *BeaconBlock) Proto() (proto.Message, error) { // nolint:gocognit
 			}
 		}
 		return &eth.BeaconBlockElectra{
+			Slot:          b.slot,
+			ProposerIndex: b.proposerIndex,
+			ParentRoot:    b.parentRoot[:],
+			StateRoot:     b.stateRoot[:],
+			Body:          body,
+		}, nil
+	case version.Gloas:
+		if b.IsBlinded() {
+			var body *eth.BlindedBeaconBlockBodyElectra
+			if bodyMessage != nil {
+				var ok bool
+				body, ok = bodyMessage.(*eth.BlindedBeaconBlockBodyElectra)
+				if !ok {
+					return nil, errIncorrectBodyVersion
+				}
+			}
+			return &eth.BlindedBeaconBlockFulu{
+				Slot:          b.slot,
+				ProposerIndex: b.proposerIndex,
+				ParentRoot:    b.parentRoot[:],
+				StateRoot:     b.stateRoot[:],
+				Body:          body,
+			}, nil
+		}
+		var body *eth.BeaconBlockBodyGloas
+		if bodyMessage != nil {
+			var ok bool
+			body, ok = bodyMessage.(*eth.BeaconBlockBodyGloas)
+			if !ok {
+				return nil, errIncorrectBodyVersion
+			}
+		}
+		return &eth.BeaconBlockGloas{
 			Slot:          b.slot,
 			ProposerIndex: b.proposerIndex,
 			ParentRoot:    b.parentRoot[:],
@@ -654,6 +714,78 @@ func (b *BeaconBlockBody) Proto() (proto.Message, error) {
 			}
 		}
 		return &eth.BeaconBlockBodyElectra{
+			RandaoReveal:          b.randaoReveal[:],
+			Eth1Data:              b.eth1Data,
+			Graffiti:              b.graffiti[:],
+			ProposerSlashings:     b.proposerSlashings,
+			AttesterSlashings:     b.attesterSlashingsElectra,
+			Attestations:          b.attestationsElectra,
+			Deposits:              b.deposits,
+			VoluntaryExits:        b.voluntaryExits,
+			SyncAggregate:         b.syncAggregate,
+			ExecutionPayload:      p,
+			BlsToExecutionChanges: b.blsToExecutionChanges,
+			BlobKzgCommitments:    b.blobKzgCommitments,
+			ExecutionRequests:     b.executionRequests,
+		}, nil
+	case version.Gloas:
+		if b.IsBlinded() {
+			var ph *enginev1.ExecutionPayloadHeaderGloas
+			var ok bool
+			if b.executionPayloadHeader != nil {
+				ph, ok = b.executionPayloadHeader.Proto().(*enginev1.ExecutionPayloadHeaderGloas)
+				if !ok {
+					return nil, errPayloadHeaderWrongType
+				}
+			}
+			// Use Electra body for now until Gloas-specific blinded body is created
+			denebHeader := &enginev1.ExecutionPayloadHeaderDeneb{}
+			if ph != nil {
+				denebHeader = &enginev1.ExecutionPayloadHeaderDeneb{
+					ParentHash:       ph.ParentHash,
+					FeeRecipient:     ph.FeeRecipient,
+					StateRoot:        ph.StateRoot,
+					ReceiptsRoot:     ph.ReceiptsRoot,
+					LogsBloom:        ph.LogsBloom,
+					PrevRandao:       ph.PrevRandao,
+					BlockNumber:      ph.BlockNumber,
+					GasLimit:         ph.GasLimit,
+					GasUsed:          ph.GasUsed,
+					Timestamp:        ph.Timestamp,
+					ExtraData:        ph.ExtraData,
+					BaseFeePerGas:    ph.BaseFeePerGas,
+					BlockHash:        ph.BlockHash,
+					TransactionsRoot: ph.TransactionsRoot,
+					WithdrawalsRoot:  ph.WithdrawalsRoot,
+					BlobGasUsed:      ph.BlobGasUsed,
+					ExcessBlobGas:    ph.ExcessBlobGas,
+				}
+			}
+			return &eth.BlindedBeaconBlockBodyElectra{
+				RandaoReveal:           b.randaoReveal[:],
+				Eth1Data:               b.eth1Data,
+				Graffiti:               b.graffiti[:],
+				ProposerSlashings:      b.proposerSlashings,
+				AttesterSlashings:      b.attesterSlashingsElectra,
+				Attestations:           b.attestationsElectra,
+				Deposits:               b.deposits,
+				VoluntaryExits:         b.voluntaryExits,
+				SyncAggregate:          b.syncAggregate,
+				ExecutionPayloadHeader: denebHeader,
+				BlsToExecutionChanges:  b.blsToExecutionChanges,
+				BlobKzgCommitments:     b.blobKzgCommitments,
+				ExecutionRequests:      b.executionRequests,
+			}, nil
+		}
+		var p *enginev1.ExecutionPayloadGloas
+		var ok bool
+		if b.executionPayload != nil {
+			p, ok = b.executionPayload.Proto().(*enginev1.ExecutionPayloadGloas)
+			if !ok {
+				return nil, errPayloadWrongType
+			}
+		}
+		return &eth.BeaconBlockBodyGloas{
 			RandaoReveal:          b.randaoReveal[:],
 			Eth1Data:              b.eth1Data,
 			Graffiti:              b.graffiti[:],
@@ -1412,6 +1544,43 @@ func initBlindedBlockFromProtoFulu(pb *eth.BlindedBeaconBlockFulu) (*BeaconBlock
 	return b, nil
 }
 
+func initSignedBlockFromProtoGloas(pb *eth.SignedBeaconBlockGloas) (*SignedBeaconBlock, error) {
+	if pb == nil {
+		return nil, errNilBlock
+	}
+
+	block, err := initBlockFromProtoGloas(pb.Block)
+	if err != nil {
+		return nil, err
+	}
+	b := &SignedBeaconBlock{
+		version:   version.Gloas,
+		block:     block,
+		signature: bytesutil.ToBytes96(pb.Signature),
+	}
+	return b, nil
+}
+
+func initBlockFromProtoGloas(pb *eth.BeaconBlockGloas) (*BeaconBlock, error) {
+	if pb == nil {
+		return nil, errNilBlock
+	}
+
+	body, err := initBlockBodyFromProtoGloas(pb.Body)
+	if err != nil {
+		return nil, err
+	}
+	b := &BeaconBlock{
+		version:       version.Gloas,
+		slot:          pb.Slot,
+		proposerIndex: pb.ProposerIndex,
+		parentRoot:    bytesutil.ToBytes32(pb.ParentRoot),
+		stateRoot:     bytesutil.ToBytes32(pb.StateRoot),
+		body:          body,
+	}
+	return b, nil
+}
+
 func initBlockBodyFromProtoFulu(pb *eth.BeaconBlockBodyElectra) (*BeaconBlockBody, error) {
 	if pb == nil {
 		return nil, errNilBlockBody
@@ -1471,6 +1640,39 @@ func initBlindedBlockBodyFromProtoFulu(pb *eth.BlindedBeaconBlockBodyElectra) (*
 		voluntaryExits:           pb.VoluntaryExits,
 		syncAggregate:            pb.SyncAggregate,
 		executionPayloadHeader:   ph,
+		blsToExecutionChanges:    pb.BlsToExecutionChanges,
+		blobKzgCommitments:       pb.BlobKzgCommitments,
+		executionRequests:        er,
+	}
+	return b, nil
+}
+
+func initBlockBodyFromProtoGloas(pb *eth.BeaconBlockBodyGloas) (*BeaconBlockBody, error) {
+	if pb == nil {
+		return nil, errNilBlockBody
+	}
+
+	p, err := WrappedExecutionPayloadGloas(pb.ExecutionPayload)
+	// We allow the payload to be nil
+	if err != nil && !errors.Is(err, consensus_types.ErrNilObjectWrapped) {
+		return nil, err
+	}
+	er := pb.ExecutionRequests
+	if er == nil {
+		er = &enginev1.ExecutionRequests{}
+	}
+	b := &BeaconBlockBody{
+		version:                  version.Gloas,
+		randaoReveal:             bytesutil.ToBytes96(pb.RandaoReveal),
+		eth1Data:                 pb.Eth1Data,
+		graffiti:                 bytesutil.ToBytes32(pb.Graffiti),
+		proposerSlashings:        pb.ProposerSlashings,
+		attesterSlashingsElectra: pb.AttesterSlashings,
+		attestationsElectra:      pb.Attestations,
+		deposits:                 pb.Deposits,
+		voluntaryExits:           pb.VoluntaryExits,
+		syncAggregate:            pb.SyncAggregate,
+		executionPayload:         p,
 		blsToExecutionChanges:    pb.BlsToExecutionChanges,
 		blobKzgCommitments:       pb.BlobKzgCommitments,
 		executionRequests:        er,

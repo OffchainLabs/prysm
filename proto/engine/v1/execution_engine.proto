@@ -92,6 +92,53 @@ message ExecutionPayloadDeneb {
   uint64 excess_blob_gas = 17;
 }
 
+message ExecutionPayloadGloas {
+  bytes parent_hash = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes fee_recipient = 2 [ (ethereum.eth.ext.ssz_size) = "20" ];
+  bytes state_root = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes receipts_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes logs_bloom = 5 [ (ethereum.eth.ext.ssz_size) = "logs_bloom.size" ];
+  bytes prev_randao = 6 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  uint64 block_number = 7;
+  uint64 gas_limit = 8;
+  uint64 gas_used = 9;
+  uint64 timestamp = 10;
+  bytes extra_data = 11 [ (ethereum.eth.ext.ssz_max) = "extra_data.size" ];
+  bytes base_fee_per_gas = 12 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes block_hash = 13 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  repeated bytes transactions = 14 [
+    (ethereum.eth.ext.ssz_size) = "?,?",
+    (ethereum.eth.ext.ssz_max) = "1048576,1073741824"
+  ];
+  // MAX_WITHDRAWALS_PER_PAYLOAD
+  repeated Withdrawal withdrawals = 15
+  [ (ethereum.eth.ext.ssz_max) = "withdrawal.size" ];
+  uint64 blob_gas_used = 16;
+  uint64 excess_blob_gas = 17;
+  bytes block_access_list = 18 [ (ethereum.eth.ext.ssz_max) = "1073741824" ];
+}
+
+message ExecutionPayloadHeaderGloas {
+  bytes parent_hash = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes fee_recipient = 2 [ (ethereum.eth.ext.ssz_size) = "20" ];
+  bytes state_root = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes receipts_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes logs_bloom = 5 [ (ethereum.eth.ext.ssz_size) = "logs_bloom.size" ];
+  bytes prev_randao = 6 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  uint64 block_number = 7;
+  uint64 gas_limit = 8;
+  uint64 gas_used = 9;
+  uint64 timestamp = 10;
+  bytes extra_data = 11 [ (ethereum.eth.ext.ssz_max) = "extra_data.size" ];
+  bytes base_fee_per_gas = 12 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes block_hash = 13 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes transactions_root = 14 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes withdrawals_root = 15 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  uint64 blob_gas_used = 16;
+  uint64 excess_blob_gas = 17;
+  bytes block_access_list_root = 18 [ (ethereum.eth.ext.ssz_size) = "32" ];
+}
+
 message ExecutionPayloadCapellaWithValue {
   ExecutionPayloadCapella payload = 1;
   bytes value = 2;
