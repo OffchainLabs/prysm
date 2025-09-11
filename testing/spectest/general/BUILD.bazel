@@ -4,6 +4,7 @@ go_test(
     name = "go_default_test",
     srcs = [
         "deneb__kzg__verify_blob_kzg_proof_batch_test.go",
+        "fulu__kzg__recover_cells_and_kzg_proofs_test.go",
         "fulu__kzg__verify_cell_kzg_proof_batch_test.go",
     ],
     data = ["@consensus_spec_tests//:test_data"],
