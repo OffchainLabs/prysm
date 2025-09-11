@@ -67,6 +67,13 @@ func WithNower(n Nower) ClockOpt {
 	}
 }
 
+// WithTimeAsNow will create a Nower based on the given time.Time and set it as the Now() implementation.
+func WithTimeAsNow(t time.Time) ClockOpt {
+	return func(g *Clock) {
+		g.now = func() time.Time { return t }
+	}
+}
+
 // NewClock constructs a Clock value from a genesis timestamp (t) and a Genesis Validator Root (vr).
 // The WithNower ClockOpt can be used in tests to specify an alternate `time.Now` implementation,
 // for instance to return a value for `Now` spanning a certain number of slots from genesis time, to control the current slot.

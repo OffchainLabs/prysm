@@ -265,6 +265,7 @@ type WriteOnlyEth1Data interface {
 	AppendEth1DataVotes(val *ethpb.Eth1Data) error
 	SetEth1DepositIndex(val uint64) error
 	ExitEpochAndUpdateChurn(exitBalance primitives.Gwei) (primitives.Epoch, error)
+	ExitEpochAndUpdateChurnForTotalBal(totalActiveBalance primitives.Gwei, exitBalance primitives.Gwei) (primitives.Epoch, error)
 }
 
 // WriteOnlyValidators defines a struct which only has write access to validators methods.

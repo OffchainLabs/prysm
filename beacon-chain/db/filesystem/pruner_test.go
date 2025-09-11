@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -192,6 +193,51 @@ func TestLayoutPruneBefore(t *testing.T) {
 			require.Equal(t, c.sum.blobsPruned, sum.blobsPruned)
 			require.Equal(t, len(c.pruned), sum.blobsPruned)
 			require.Equal(t, len(c.sum.failedRemovals), len(sum.failedRemovals))
+		})
+	}
+}
+
+func TestLayoutByEpochPruneBefore(t *testing.T) {
+	roots := testRoots(10)
+	cases := []struct {
+		name   string
+		pruned []testIdent
+		remain []testIdent
+		err    error
+		sum    pruneSummary
+	}{
+		{
+			name: "single epoch period cleanup",
+			pruned: []testIdent{
+				{offset: 0, blobIdent: blobIdent{root: roots[0], epoch: 367076, index: 0}},
+			},
+			remain: []testIdent{
+				{offset: 0, blobIdent: blobIdent{root: roots[1], epoch: 371176, index: 0}}, // Different period
+			},
+			sum: pruneSummary{blobsPruned: 1},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			fs, bs := NewEphemeralBlobStorageAndFs(t, WithLayout(LayoutNameByEpoch))
+			pruned := testSetupBlobIdentPaths(t, fs, bs, c.pruned)
+			remain := testSetupBlobIdentPaths(t, fs, bs, c.remain)
+
+			time.Sleep(1 * time.Second)
+			for _, id := range pruned {
+				_, err := fs.Stat(bs.layout.sszPath(id))
+				require.Equal(t, true, os.IsNotExist(err))
+
+				dirs := bs.layout.blockParentDirs(id)
+				for i := len(dirs) - 1; i > 0; i-- {
+					_, err = fs.Stat(dirs[i])
+					require.Equal(t, true, os.IsNotExist(err))
+				}
+			}
+			for _, id := range remain {
+				_, err := fs.Stat(bs.layout.sszPath(id))
+				require.NoError(t, err)
+			}
 		})
 	}
 }

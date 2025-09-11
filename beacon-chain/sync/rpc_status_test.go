@@ -316,11 +316,14 @@ func TestHandshakeHandlers_Roundtrip(t *testing.T) {
 			clock:         startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
 			beaconDB:      db,
 			stateNotifier: chain.StateNotifier(),
+			initialSync:   &mockSync.Sync{IsSyncing: false},
 		},
 		rateLimiter:  newRateLimiter(p1),
 		clockWaiter:  cw,
 		chainStarted: abool.New(),
+		subHandler:   newSubTopicHandler(),
 	}
+	markInitSyncComplete(t, r)
 	clock := startup.NewClockSynchronizer()
 	require.NoError(t, clock.SetClock(startup.NewClock(time.Now(), [32]byte{})))
 	r.verifierWaiter = verification.NewInitializerWaiter(clock, chain.ForkChoiceStore, r.cfg.stateGen)
@@ -337,9 +340,12 @@ func TestHandshakeHandlers_Roundtrip(t *testing.T) {
 			clock:         startup.NewClock(chain2.Genesis, chain2.ValidatorsRoot),
 			p2p:           p2,
 			stateNotifier: chain.StateNotifier(),
+			initialSync:   &mockSync.Sync{IsSyncing: false},
 		},
 		rateLimiter: newRateLimiter(p2),
+		subHandler:  newSubTopicHandler(),
 	}
+	markInitSyncComplete(t, r2)
 	clock = startup.NewClockSynchronizer()
 	require.NoError(t, clock.SetClock(startup.NewClock(time.Now(), [32]byte{})))
 	r2.verifierWaiter = verification.NewInitializerWaiter(clock, chain2.ForkChoiceStore, r2.cfg.stateGen)
@@ -909,13 +915,16 @@ func TestStatusRPCRequest_BadPeerHandshake(t *testing.T) {
 			p2p:           p1,
 			chain:         chain,
 			stateNotifier: chain.StateNotifier(),
+			initialSync:   &mockSync.Sync{IsSyncing: false},
 		},
 
 		ctx:          ctx,
 		rateLimiter:  newRateLimiter(p1),
 		clockWaiter:  cw,
 		chainStarted: abool.New(),
+		subHandler:   newSubTopicHandler(),
 	}
+	markInitSyncComplete(t, r)
 	clock := startup.NewClockSynchronizer()
 	require.NoError(t, clock.SetClock(startup.NewClock(time.Now(), [32]byte{})))
 	r.verifierWaiter = verification.NewInitializerWaiter(clock, chain.ForkChoiceStore, r.cfg.stateGen)

@@ -1,14 +1,18 @@
 package beacon_api
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	rpctesting "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared/testing"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -136,15 +140,14 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockValid(t *testing.T) {
 	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Post(
+	jsonRestHandler.EXPECT().PostSSZ(
 		gomock.Any(),
 		"/eth/v2/beacon/blocks",
-		map[string]string{"Eth-Consensus-Version": "phase0"},
 		gomock.Any(),
-		nil,
+		gomock.Any(),
 	).Return(
-		nil,
-	).Times(2)
+		nil, nil, nil,
+	).Times(1)
 
 	validatorClient := beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
 	expectedResp, expectedErr := validatorClient.proposeBeaconBlock(
@@ -153,34 +156,38 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockValid(t *testing.T) {
 			Block: generateSignedPhase0Block(),
 		},
 	)
-
-	resp, err := validatorClient.ProposeBeaconBlock(
-		ctx,
-		&ethpb.GenericSignedBeaconBlock{
-			Block: generateSignedPhase0Block(),
-		},
-	)
-
-	assert.DeepEqual(t, expectedErr, err)
-	assert.DeepEqual(t, expectedResp, resp)
+	require.NoError(t, expectedErr)
+	require.NotNil(t, expectedResp)
 }
 
-func TestBeaconApiValidatorClient_ProposeBeaconBlockError(t *testing.T) {
+func TestBeaconApiValidatorClient_ProposeBeaconBlockError_ThenPass(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	jsonRestHandler.EXPECT().PostSSZ(
+		gomock.Any(),
+		"/eth/v2/beacon/blocks",
+		gomock.Any(),
+		gomock.Any(),
+	).Return(
+		nil, nil, &httputil.DefaultJsonError{
+			Code:    http.StatusNotAcceptable,
+			Message: "SSZ not supported",
+		},
+	).Times(1)
+
 	jsonRestHandler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v2/beacon/blocks",
-		map[string]string{"Eth-Consensus-Version": "phase0"},
 		gomock.Any(),
-		nil,
+		gomock.Any(),
+		gomock.Any(),
 	).Return(
-		errors.New("foo error"),
-	).Times(2)
+		nil,
+	).Times(1)
 
 	validatorClient := beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
 	expectedResp, expectedErr := validatorClient.proposeBeaconBlock(
@@ -189,16 +196,351 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockError(t *testing.T) {
 			Block: generateSignedPhase0Block(),
 		},
 	)
+	require.NoError(t, expectedErr)
+	require.NotNil(t, expectedResp)
+}
 
-	resp, err := validatorClient.ProposeBeaconBlock(
-		ctx,
-		&ethpb.GenericSignedBeaconBlock{
-			Block: generateSignedPhase0Block(),
+func TestBeaconApiValidatorClient_ProposeBeaconBlockAllTypes(t *testing.T) {
+	tests := []struct {
+		name          string
+		block         *ethpb.GenericSignedBeaconBlock
+		expectedPath  string
+		wantErr       bool
+		errorMessage string
+	}{
+		{
+			name: "Phase0 block",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedPhase0Block(),
+			},
+			expectedPath: "/eth/v2/beacon/blocks",
 		},
-	)
+		{
+			name: "Altair block",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedAltairBlock(),
+			},
+			expectedPath: "/eth/v2/beacon/blocks",
+		},
+		{
+			name: "Bellatrix block",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedBellatrixBlock(),
+			},
+			expectedPath: "/eth/v2/beacon/blocks",
+		},
+		{
+			name: "Capella block",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedCapellaBlock(),
+			},
+			expectedPath: "/eth/v2/beacon/blocks",
+		},
+		{
+			name: "Blinded Bellatrix block",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedBlindedBellatrixBlock(),
+			},
+			expectedPath: "/eth/v2/beacon/blinded_blocks",
+		},
+		{
+			name: "Blinded Capella block",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedBlindedCapellaBlock(),
+			},
+			expectedPath: "/eth/v2/beacon/blinded_blocks",
+		},
+		{
+			name: "Deneb block",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedDenebBlock(),
+			},
+			expectedPath: "/eth/v2/beacon/blocks",
+		},
+		{
+			name: "Blinded Deneb block",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedBlindedDenebBlock(),
+			},
+			expectedPath: "/eth/v2/beacon/blinded_blocks",
+		},
+		{
+			name: "Electra block",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedElectraBlock(),
+			},
+			expectedPath: "/eth/v2/beacon/blocks",
+		},
+		{
+			name: "Blinded Electra block",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedBlindedElectraBlock(),
+			},
+			expectedPath: "/eth/v2/beacon/blinded_blocks",
+		},
+		{
+			name: "Fulu block",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedFuluBlock(),
+			},
+			expectedPath: "/eth/v2/beacon/blocks",
+		},
+		{
+			name: "Blinded Fulu block",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedBlindedFuluBlock(),
+			},
+			expectedPath: "/eth/v2/beacon/blinded_blocks",
+		},
+		{
+			name: "Unsupported block type",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: nil,
+			},
+			wantErr:      true,
+			errorMessage: "unsupported block type",
+		},
+	}
 
-	assert.ErrorContains(t, expectedErr.Error(), err)
-	assert.DeepEqual(t, expectedResp, resp)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			ctx := t.Context()
+			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+
+			if !tt.wantErr {
+				jsonRestHandler.EXPECT().PostSSZ(
+					gomock.Any(),
+					tt.expectedPath,
+					gomock.Any(),
+					gomock.Any(),
+				).Return(nil, nil, nil).Times(1)
+			}
+
+			validatorClient := beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+			resp, err := validatorClient.proposeBeaconBlock(ctx, tt.block)
+
+			if tt.wantErr {
+				require.ErrorContains(t, tt.errorMessage, err)
+				assert.Equal(t, (*ethpb.ProposeResponse)(nil), resp)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, resp)
+			}
+		})
+	}
+}
+
+func TestBeaconApiValidatorClient_ProposeBeaconBlockHTTPErrors(t *testing.T) {
+	tests := []struct {
+		name         string
+		sszError     error
+		expectJSON   bool
+		errorMessage string
+	}{
+		{
+			name: "HTTP 202 Accepted - block broadcast but failed validation",
+			sszError: &httputil.DefaultJsonError{
+				Code:    http.StatusAccepted,
+				Message: "block broadcast but failed validation",
+			},
+			expectJSON:   false, // No fallback for non-406 errors
+			errorMessage: "failed to submit block ssz",
+		},
+		{
+			name: "Other HTTP error",
+			sszError: &httputil.DefaultJsonError{
+				Code:    http.StatusBadRequest,
+				Message: "bad request",
+			},
+			expectJSON:   false, // No fallback for non-406 errors
+			errorMessage: "failed to submit block ssz",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			ctx := t.Context()
+			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+
+			jsonRestHandler.EXPECT().PostSSZ(
+				gomock.Any(),
+				"/eth/v2/beacon/blocks",
+				gomock.Any(),
+				gomock.Any(),
+			).Return(nil, nil, tt.sszError).Times(1)
+			
+			if tt.expectJSON {
+				// When SSZ fails, it falls back to JSON
+				jsonRestHandler.EXPECT().Post(
+					gomock.Any(),
+					"/eth/v2/beacon/blocks",
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+				).Return(tt.sszError).Times(1)
+			}
+
+			validatorClient := beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+			_, err := validatorClient.proposeBeaconBlock(
+				ctx,
+				&ethpb.GenericSignedBeaconBlock{
+					Block: generateSignedPhase0Block(),
+				},
+			)
+			require.ErrorContains(t, tt.errorMessage, err)
+		})
+	}
+}
+
+func TestBeaconApiValidatorClient_ProposeBeaconBlockJSONFallback(t *testing.T) {
+	tests := []struct {
+		name         string
+		block        *ethpb.GenericSignedBeaconBlock
+		expectedPath string
+		jsonError    error
+		wantErr      bool
+	}{
+		{
+			name: "Phase0 block JSON fallback success",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedPhase0Block(),
+			},
+			expectedPath: "/eth/v2/beacon/blocks",
+		},
+		{
+			name: "Altair block JSON fallback success",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedAltairBlock(),
+			},
+			expectedPath: "/eth/v2/beacon/blocks",
+		},
+		{
+			name: "Bellatrix block JSON fallback success",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedBellatrixBlock(),
+			},
+			expectedPath: "/eth/v2/beacon/blocks",
+		},
+		{
+			name: "Capella block JSON fallback success",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedCapellaBlock(),
+			},
+			expectedPath: "/eth/v2/beacon/blocks",
+		},
+		{
+			name: "Blinded Bellatrix block JSON fallback success",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedBlindedBellatrixBlock(),
+			},
+			expectedPath: "/eth/v2/beacon/blinded_blocks",
+		},
+		{
+			name: "Blinded Capella block JSON fallback success",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedBlindedCapellaBlock(),
+			},
+			expectedPath: "/eth/v2/beacon/blinded_blocks",
+		},
+		{
+			name: "Deneb block JSON fallback success",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedDenebBlock(),
+			},
+			expectedPath: "/eth/v2/beacon/blocks",
+		},
+		{
+			name: "Blinded Deneb block JSON fallback success",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedBlindedDenebBlock(),
+			},
+			expectedPath: "/eth/v2/beacon/blinded_blocks",
+		},
+		{
+			name: "Electra block JSON fallback success",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedElectraBlock(),
+			},
+			expectedPath: "/eth/v2/beacon/blocks",
+		},
+		{
+			name: "Blinded Electra block JSON fallback success",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedBlindedElectraBlock(),
+			},
+			expectedPath: "/eth/v2/beacon/blinded_blocks",
+		},
+		{
+			name: "Fulu block JSON fallback success",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedFuluBlock(),
+			},
+			expectedPath: "/eth/v2/beacon/blocks",
+		},
+		{
+			name: "Blinded Fulu block JSON fallback success",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedBlindedFuluBlock(),
+			},
+			expectedPath: "/eth/v2/beacon/blinded_blocks",
+		},
+		{
+			name: "JSON fallback fails",
+			block: &ethpb.GenericSignedBeaconBlock{
+				Block: generateSignedPhase0Block(),
+			},
+			expectedPath: "/eth/v2/beacon/blocks",
+			jsonError:    errors.New("json post failed"),
+			wantErr:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			ctx := t.Context()
+			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+
+			// SSZ call fails with 406 to trigger JSON fallback
+			jsonRestHandler.EXPECT().PostSSZ(
+				gomock.Any(),
+				tt.expectedPath,
+				gomock.Any(),
+				gomock.Any(),
+			).Return(nil, nil, &httputil.DefaultJsonError{
+				Code:    http.StatusNotAcceptable,
+				Message: "SSZ not supported",
+			}).Times(1)
+
+			// JSON fallback
+			jsonRestHandler.EXPECT().Post(
+				gomock.Any(),
+				tt.expectedPath,
+				gomock.Any(),
+				gomock.Any(),
+				gomock.Any(),
+			).Return(tt.jsonError).Times(1)
+
+			validatorClient := beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+			resp, err := validatorClient.proposeBeaconBlock(ctx, tt.block)
+
+			if tt.wantErr {
+				assert.NotNil(t, err)
+				assert.Equal(t, (*ethpb.ProposeResponse)(nil), resp)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, resp)
+			}
+		})
+	}
 }
 
 func TestBeaconApiValidatorClient_Host(t *testing.T) {
@@ -228,4 +570,89 @@ func TestBeaconApiValidatorClient_Host(t *testing.T) {
 	validatorClient.SetHost(hosts[1])
 	host = validatorClient.Host()
 	require.Equal(t, hosts[1], host)
+}
+
+// Helper functions for generating test blocks for newer consensus versions
+func generateSignedDenebBlock() *ethpb.GenericSignedBeaconBlock_Deneb {
+	var blockContents structs.SignedBeaconBlockContentsDeneb
+	if err := json.Unmarshal([]byte(rpctesting.DenebBlockContents), &blockContents); err != nil {
+		panic(err)
+	}
+	genericBlock, err := blockContents.ToGeneric()
+	if err != nil {
+		panic(err)
+	}
+	return &ethpb.GenericSignedBeaconBlock_Deneb{
+		Deneb: genericBlock.GetDeneb(),
+	}
+}
+
+func generateSignedBlindedDenebBlock() *ethpb.GenericSignedBeaconBlock_BlindedDeneb {
+	var blindedBlock structs.SignedBlindedBeaconBlockDeneb
+	if err := json.Unmarshal([]byte(rpctesting.BlindedDenebBlock), &blindedBlock); err != nil {
+		panic(err)
+	}
+	genericBlock, err := blindedBlock.ToGeneric()
+	if err != nil {
+		panic(err)
+	}
+	return &ethpb.GenericSignedBeaconBlock_BlindedDeneb{
+		BlindedDeneb: genericBlock.GetBlindedDeneb(),
+	}
+}
+
+func generateSignedElectraBlock() *ethpb.GenericSignedBeaconBlock_Electra {
+	var blockContents structs.SignedBeaconBlockContentsElectra
+	if err := json.Unmarshal([]byte(rpctesting.ElectraBlockContents), &blockContents); err != nil {
+		panic(err)
+	}
+	genericBlock, err := blockContents.ToGeneric()
+	if err != nil {
+		panic(err)
+	}
+	return &ethpb.GenericSignedBeaconBlock_Electra{
+		Electra: genericBlock.GetElectra(),
+	}
+}
+
+func generateSignedBlindedElectraBlock() *ethpb.GenericSignedBeaconBlock_BlindedElectra {
+	var blindedBlock structs.SignedBlindedBeaconBlockElectra
+	if err := json.Unmarshal([]byte(rpctesting.BlindedElectraBlock), &blindedBlock); err != nil {
+		panic(err)
+	}
+	genericBlock, err := blindedBlock.ToGeneric()
+	if err != nil {
+		panic(err)
+	}
+	return &ethpb.GenericSignedBeaconBlock_BlindedElectra{
+		BlindedElectra: genericBlock.GetBlindedElectra(),
+	}
+}
+
+func generateSignedFuluBlock() *ethpb.GenericSignedBeaconBlock_Fulu {
+	var blockContents structs.SignedBeaconBlockContentsFulu
+	if err := json.Unmarshal([]byte(rpctesting.FuluBlockContents), &blockContents); err != nil {
+		panic(err)
+	}
+	genericBlock, err := blockContents.ToGeneric()
+	if err != nil {
+		panic(err)
+	}
+	return &ethpb.GenericSignedBeaconBlock_Fulu{
+		Fulu: genericBlock.GetFulu(),
+	}
+}
+
+func generateSignedBlindedFuluBlock() *ethpb.GenericSignedBeaconBlock_BlindedFulu {
+	var blindedBlock structs.SignedBlindedBeaconBlockFulu
+	if err := json.Unmarshal([]byte(rpctesting.BlindedFuluBlock), &blindedBlock); err != nil {
+		panic(err)
+	}
+	genericBlock, err := blindedBlock.ToGeneric()
+	if err != nil {
+		panic(err)
+	}
+	return &ethpb.GenericSignedBeaconBlock_BlindedFulu{
+		BlindedFulu: genericBlock.GetBlindedFulu(),
+	}
 }

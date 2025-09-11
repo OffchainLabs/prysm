@@ -6,13 +6,14 @@ import (
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer/types"
 	"github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer/types/mock"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-func TestGetAggregateAndProofSignRequest(t *testing.T) {
+func TestGetAggregateAndProofV2SignRequest(t *testing.T) {
 	type args struct {
 		request               *validatorpb.SignRequest
 		genesisValidatorsRoot []byte
@@ -20,28 +21,28 @@ func TestGetAggregateAndProofSignRequest(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *types.AggregateAndProofSignRequest
+		want    *types.AggregateAndProofV2SignRequest
 		wantErr bool
 	}{
 		{
 			name: "Happy Path Test",
 			args: args{
-				request:               mock.GetMockSignRequest("AGGREGATE_AND_PROOF"),
+				request:               mock.GetMockSignRequest("AGGREGATE_AND_PROOF_V2"),
 				genesisValidatorsRoot: make([]byte, fieldparams.RootLength),
 			},
-			want:    mock.AggregateAndProofSignRequest(),
+			want:    mock.AggregateAndProofV2SignRequest(version.Electra),
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := types.GetAggregateAndProofSignRequest(tt.args.request, tt.args.genesisValidatorsRoot)
+			got, err := types.GetAggregateAndProofV2SignRequest(version.Electra, tt.args.request, tt.args.genesisValidatorsRoot)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("GetAggregateAndProofSignRequest() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("GetAggregateAndProofV2SignRequest() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("GetAggregateAndProofSignRequest() got = %v, want %v", got, tt.want)
+				t.Errorf("GetAggregateAndProofV2SignRequest() got = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -474,6 +475,32 @@ func TestGetBlockV2BlindedSignRequest(t *testing.T) {
 				require.NoError(t, err)
 				return bytevalue
 			}(t), "ELECTRA"),
+			wantErr: false,
+		},
+		{
+			name: "Happy Path Test non blinded Fulu",
+			args: args{
+				request:               mock.GetMockSignRequest("BLOCK_V2_FULU"),
+				genesisValidatorsRoot: make([]byte, fieldparams.RootLength),
+			},
+			want: mock.BlockV2BlindedSignRequest(func(t *testing.T) []byte {
+				bytevalue, err := hexutil.Decode("0xca4f98890bc98a59f015d06375a5e00546b8f2ac1e88d31b1774ea28d4b3e7d1")
+				require.NoError(t, err)
+				return bytevalue
+			}(t), "FULU"),
+			wantErr: false,
+		},
+		{
+			name: "Happy Path Test blinded Fulu",
+			args: args{
+				request:               mock.GetMockSignRequest("BLOCK_V2_BLINDED_FULU"),
+				genesisValidatorsRoot: make([]byte, fieldparams.RootLength),
+			},
+			want: mock.BlockV2BlindedSignRequest(func(t *testing.T) []byte {
+				bytevalue, err := hexutil.Decode("0x60cd4e8a557e64d00f63777b53f18c10cc122997c55f40a37cb19dc2edd3b0c7")
+				require.NoError(t, err)
+				return bytevalue
+			}(t), "FULU"),
 			wantErr: false,
 		},
 	}

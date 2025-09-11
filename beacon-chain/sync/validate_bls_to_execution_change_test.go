@@ -427,6 +427,7 @@ func TestService_ValidateBlsToExecutionChange(t *testing.T) {
 			cw := startup.NewClockSynchronizer()
 			opts := []Option{WithClockWaiter(cw)}
 			svc := NewService(ctx, append(opts, tt.svcopts...)...)
+			markInitSyncComplete(t, svc)
 			svc, tt.args.topic = tt.setupSvc(svc, tt.args.msg, tt.args.topic)
 			go svc.Start()
 			if tt.clock == nil {
